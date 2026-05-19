@@ -23,4 +23,5 @@ plugins {
 
 rootProject.name = "kitepdf-root"
 include(":kitepdf")
+include(":kitepdf-compose")
 include(":sample")

@@ -9,10 +9,19 @@ import com.yuroyami.kitepdf.core.PdfFormatException
  * Drives a [Lexer] one token at a time. Handles the tricky one-token lookahead
  * needed to distinguish "N G obj" headers, "N G R" references, and bare numbers
  * inside arrays — see [readArray] for the gory details.
+ *
+ * Pass a [resolver] (typically the owning [com.yuroyami.kitepdf.PdfDocument]) when
+ * parsing in a context where indirect references in stream dictionaries must be
+ * resolved on the fly — most importantly when `/Length` is an indirect reference,
+ * which MuPDF's pdf_stream_length() handles via pdf_dict_get_int64().
  */
-class Parser(private val lexer: Lexer) {
+class Parser(
+    private val lexer: Lexer,
+    private val resolver: IndirectResolver? = null,
+) {
 
     constructor(bytes: ByteArray) : this(Lexer(ByteReader(bytes)))
+    constructor(bytes: ByteArray, resolver: IndirectResolver?) : this(Lexer(ByteReader(bytes)), resolver)
 
     private val reader: ByteReader get() = lexer.reader
 
@@ -54,11 +63,9 @@ class Parser(private val lexer: Lexer) {
             if (third is Token.Keyword && third.value == "R") {
                 return PdfReference(first.value, second.value.toInt())
             }
-            // Not a reference — rewind to before [second].
             reader.seek(checkpoint)
             return PdfInt(first.value)
         }
-        // Not a reference — rewind to before [second].
         reader.seek(checkpoint)
         return PdfInt(first.value)
     }
@@ -87,36 +94,55 @@ class Parser(private val lexer: Lexer) {
 
     /**
      * After reading a "<<...>>" we have to peek for the optional "stream"
-     * keyword that turns it into a PdfStream. The byte length of the stream
-     * is given by /Length in the dict (which itself may be an indirect ref).
-     * Indirect /Length is resolved by the document, not here — so this
-     * method only handles direct integers; indirect ones are deferred.
+     * keyword that turns it into a [PdfStream]. The byte length of the stream
+     * is given by /Length in the dict — which may itself be an indirect
+     * reference (MuPDF: pdf_stream_length()). If a [resolver] was provided
+     * we follow the reference; otherwise we throw with a clear hint.
      */
     private fun readDictionaryThenMaybeStream(): PdfObject {
         val dict = readDictionary()
         val checkpoint = reader.pos()
         val next = lexer.nextToken()
-        if (next is Token.Keyword && next.value == "stream") {
-            // PDF says stream keyword is followed by EOL (CRLF or LF, NOT bare CR).
-            consumeStreamEol()
-            val streamStart = reader.pos()
-            val length = dict.getInt("Length")
-                ?: throw PdfFormatException("/Length missing or indirect — caller must resolve before stream parse")
-            if (length < 0) throw PdfFormatException("Negative stream /Length: $length")
-            if (streamStart + length > reader.size) {
-                throw PdfFormatException("Stream length $length runs past EOF from $streamStart")
-            }
-            val raw = reader.readBytes(length.toInt())
-            // Expect "endstream" keyword (allowing whitespace before).
-            val endTok = lexer.nextToken()
-            if (endTok !is Token.Keyword || endTok.value != "endstream") {
-                throw PdfFormatException("Expected 'endstream' after stream body, got $endTok")
-            }
-            return PdfStream(dict, raw)
+        if (next !is Token.Keyword || next.value != "stream") {
+            reader.seek(checkpoint)
+            return dict
         }
-        // Not a stream — rewind.
-        reader.seek(checkpoint)
-        return dict
+        consumeStreamEol()
+        val streamStart = reader.pos()
+        val length = resolveStreamLength(dict)
+        if (length < 0) throw PdfFormatException("Negative stream /Length: $length")
+        if (streamStart + length > reader.size) {
+            throw PdfFormatException("Stream length $length runs past EOF from $streamStart")
+        }
+        val raw = reader.readBytes(length.toInt())
+        val endTok = lexer.nextToken()
+        if (endTok !is Token.Keyword || endTok.value != "endstream") {
+            throw PdfFormatException("Expected 'endstream' after stream body, got $endTok")
+        }
+        return PdfStream(dict, raw)
+    }
+
+    private fun resolveStreamLength(dict: PdfDictionary): Long {
+        return when (val raw = dict["Length"]) {
+            is PdfInt -> raw.value
+            is PdfReference -> {
+                val r = resolver
+                    ?: throw PdfFormatException(
+                        "/Length is indirect (${raw.objectNumber} ${raw.generation} R) but " +
+                            "this Parser was created without an IndirectResolver",
+                    )
+                val resolvedPosBefore = reader.pos()
+                val resolved = r.resolve(raw)
+                    ?: throw PdfFormatException("Indirect /Length $raw could not be resolved")
+                // The resolver may have moved the reader (it parses other objects).
+                // Restore so we keep reading the stream body from where we were.
+                reader.seek(resolvedPosBefore)
+                (resolved as? PdfInt)?.value
+                    ?: throw PdfFormatException("Indirect /Length resolved to non-integer: $resolved")
+            }
+            null -> throw PdfFormatException("/Length missing in stream dict: $dict")
+            else -> throw PdfFormatException("/Length must be integer or reference, got $raw")
+        }
     }
 
     private fun consumeStreamEol() {
@@ -147,11 +173,11 @@ class Parser(private val lexer: Lexer) {
             throw PdfFormatException("Expected 'obj' keyword, got $objTok")
         }
         val payload = readObject()
-        // Stream objects swallow their own 'endstream' — only check for 'endobj' if it wasn't a stream
-        // whose endobj we already passed. Easiest: peek and accept either endobj or EOF.
-        val maybeEnd = lexer.nextToken()
+        // Some producers omit 'endobj' or put trailing whitespace. We're lenient.
+        val checkpoint = reader.pos()
+        val maybeEnd = runCatching { lexer.nextToken() }.getOrNull()
         if (maybeEnd !is Token.Keyword || maybeEnd.value != "endobj") {
-            // Some PDFs are slack here. We don't fail.
+            reader.seek(checkpoint)
         }
         return IndirectObject(numTok.value, genTok.value.toInt(), payload)
     }

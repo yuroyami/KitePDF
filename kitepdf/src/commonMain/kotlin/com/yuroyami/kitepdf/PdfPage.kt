@@ -9,6 +9,9 @@ import com.yuroyami.kitepdf.parser.PdfInt
 import com.yuroyami.kitepdf.parser.PdfReal
 import com.yuroyami.kitepdf.parser.PdfReference
 import com.yuroyami.kitepdf.parser.PdfStream
+import com.yuroyami.kitepdf.render.Matrix
+import com.yuroyami.kitepdf.render.PageRenderer
+import com.yuroyami.kitepdf.render.PdfCanvas
 import com.yuroyami.kitepdf.text.TextExtractor
 
 /**
@@ -72,6 +75,32 @@ class PdfPage internal constructor(
 
     /** Extract page text using the naive Tj/TJ/' / " operator scan. */
     fun extractText(): String = TextExtractor.extract(this)
+
+    /**
+     * Annotations attached to this page (links, highlights, etc.). Parsed from
+     * the page's `/Annots` array; empty when the page has none.
+     */
+    val annotations: List<PdfAnnotation> by lazy {
+        val arr = node.getArray("Annots", document) ?: return@lazy emptyList()
+        arr.mapNotNull { item ->
+            val dict = when (item) {
+                is PdfDictionary -> item
+                is PdfReference -> document.resolve(item) as? PdfDictionary
+                else -> null
+            } ?: return@mapNotNull null
+            PdfAnnotation.parse(dict, document)
+        }
+    }
+
+    /**
+     * Render this page into a [PdfCanvas] (typically the Compose binding's
+     * `ComposeCanvas`). [deviceCtm] is applied on top of user-space — pass an
+     * identity matrix for a 1pt = 1pt rendering, or a scaled / Y-flipped
+     * matrix to fit a UI surface.
+     */
+    fun renderTo(canvas: PdfCanvas, deviceCtm: Matrix = Matrix.IDENTITY) {
+        PageRenderer(canvas, document).render(this, deviceCtm)
+    }
 }
 
 /** PDF rectangle: [left, bottom, right, top] in user-space units. */

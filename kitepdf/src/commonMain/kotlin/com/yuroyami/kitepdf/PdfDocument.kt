@@ -2,8 +2,9 @@ package com.yuroyami.kitepdf
 
 import com.yuroyami.kitepdf.core.ByteReader
 import com.yuroyami.kitepdf.core.PdfFormatException
+import com.yuroyami.kitepdf.crypto.Decryptor
+import com.yuroyami.kitepdf.crypto.StandardSecurityHandler
 import com.yuroyami.kitepdf.filters.FilterChain
-import com.yuroyami.kitepdf.parser.IndirectObject
 import com.yuroyami.kitepdf.parser.IndirectResolver
 import com.yuroyami.kitepdf.parser.Lexer
 import com.yuroyami.kitepdf.parser.Parser
@@ -35,7 +36,14 @@ class PdfDocument private constructor(
     val bytes: ByteArray,
     val xref: Map<Long, XrefEntry>,
     val trailer: PdfDictionary,
+    private val security: StandardSecurityHandler?,
 ) : IndirectResolver {
+
+    /** True if the document is encrypted. */
+    val isEncrypted: Boolean get() = security != null
+
+    /** True if [open] (or [openEncrypted]) found a working password for an encrypted doc. */
+    val isAuthenticated: Boolean get() = security?.isAuthenticated ?: true
 
     private val reader = ByteReader(bytes)
     private val objectCache = HashMap<Long, PdfObject?>()
@@ -68,25 +76,31 @@ class PdfDocument private constructor(
         return resolved
     }
 
+    /**
+     * Re-entrancy guard: if we're already resolving an indirect /Length, we
+     * must not recurse into the same resolver path (the second seek would
+     * clobber the first one's position). The guard set is checked before any
+     * /Length resolution dispatch.
+     */
+    private val activelyResolving = HashSet<Long>()
+
     private fun resolveInPlace(entry: XrefEntry.InUse): PdfObject {
         reader.seek(entry.byteOffset)
-        val parser = Parser(Lexer(reader))
-        val indirect = parser.readIndirectObject()
-        return inflateIndirectLengthIfNeeded(indirect).value
+        activelyResolving.add(entry.objectNumber)
+        try {
+            val parser = Parser(Lexer(reader), resolver = this)
+            val indirect = parser.readIndirectObject()
+            return maybeDecrypt(indirect.number, indirect.generation, indirect.value)
+        } finally {
+            activelyResolving.remove(entry.objectNumber)
+        }
     }
 
-    /**
-     * If the parsed object is a stream whose dict has /Length as an indirect
-     * reference, the streaming parser would have failed. We recover by reading
-     * just the dict, resolving /Length, and re-reading the stream body with
-     * the resolved length.
-     *
-     * (Our current Parser eagerly resolves direct /Length; for indirect /Length
-     * it throws. That throw is what brought us here, conceptually. But to keep
-     * the path simple this method is a passthrough — the Parser already
-     * succeeded with a direct /Length. Indirect /Length is a session-2 TODO.)
-     */
-    private fun inflateIndirectLengthIfNeeded(indirect: IndirectObject): IndirectObject = indirect
+    private fun maybeDecrypt(objNum: Long, genNum: Int, value: PdfObject): PdfObject {
+        val s = security ?: return value
+        if (!s.isAuthenticated) return value
+        return Decryptor.decryptIndirect(objNum, genNum, value, s)
+    }
 
     private fun resolveFromObjectStream(entry: XrefEntry.Compressed): PdfObject? {
         val members = objStreamCache.getOrPut(entry.containingObjectStream) {
@@ -106,7 +120,7 @@ class PdfDocument private constructor(
         val entry = xref[objStreamRef] as? XrefEntry.InUse
             ?: throw PdfFormatException("ObjStm $objStreamRef not in xref as in-use")
         reader.seek(entry.byteOffset)
-        val parser = Parser(Lexer(reader))
+        val parser = Parser(Lexer(reader), resolver = this)
         val indirect = parser.readIndirectObject()
         val stream = indirect.value as? PdfStream
             ?: throw PdfFormatException("ObjStm $objStreamRef is not a stream")
@@ -191,14 +205,97 @@ class PdfDocument private constructor(
 
     companion object {
 
-        fun open(bytes: ByteArray): PdfDocument {
+        fun open(bytes: ByteArray, password: ByteArray = byteArrayOf()): PdfDocument {
             val reader = ByteReader(bytes)
             val version = parseHeader(reader)
-            val xref = XrefParser(reader).parse()
-            // /Prev chaining (later sessions): for now, single xref section.
-            // TODO(session-2): follow trailer["Prev"] and merge older sections.
-            return PdfDocument(version, bytes, xref.entries, xref.trailer)
+            val merged = parseWithPrevChain(reader)
+            val security = buildSecurityHandler(merged.trailer, bytes, password)
+            return PdfDocument(version, bytes, merged.entries, merged.trailer, security)
         }
+
+        /**
+         * Build a [StandardSecurityHandler] if /Encrypt is present in the trailer.
+         * Returns null for unencrypted documents.
+         */
+        private fun buildSecurityHandler(
+            trailer: PdfDictionary,
+            bytes: ByteArray,
+            password: ByteArray,
+        ): StandardSecurityHandler? {
+            val encryptObj = trailer["Encrypt"] ?: return null
+            val encryptDict = when (encryptObj) {
+                is PdfDictionary -> encryptObj
+                is PdfReference -> {
+                    // Resolve manually — we don't have a PdfDocument yet.
+                    val entry = parseLooseEncryptionRef(bytes, trailer, encryptObj) ?: return null
+                    entry
+                }
+                else -> return null
+            }
+            val fileIdFirst = (trailer["ID"] as? PdfArray)?.let {
+                (it.firstOrNull() as? com.yuroyami.kitepdf.parser.PdfString)?.bytes
+            } ?: ByteArray(0)
+            return StandardSecurityHandler(encryptDict, fileIdFirst, password)
+        }
+
+        /**
+         * Resolve an /Encrypt reference without a full document. We re-parse the
+         * referenced object directly from the byte buffer. Streams in /Encrypt
+         * itself are never permitted (it must be a dictionary).
+         */
+        private fun parseLooseEncryptionRef(
+            bytes: ByteArray,
+            trailer: PdfDictionary,
+            ref: PdfReference,
+        ): PdfDictionary? {
+            // Walk the xref entries to find the byte offset.
+            // The merged xref isn't in scope here, so reparse the trailer's startxref.
+            // This is a minor inefficiency we accept to keep the encryption setup
+            // self-contained and not chicken-and-egg with PdfDocument's resolver.
+            val reader = ByteReader(bytes)
+            val startxref = XrefParser.findStartXref(reader)
+            val xref = XrefParser(reader).parseFromOffset(startxref)
+            val entry = xref.entries[ref.objectNumber] as? XrefEntry.InUse ?: return null
+            reader.seek(entry.byteOffset)
+            val parser = Parser(Lexer(reader))
+            return parser.readIndirectObject().value as? PdfDictionary
+        }
+
+        /**
+         * Walk the xref-section chain via /Prev links (ISO 32000-1 §7.5.6).
+         *
+         * PDFs with incremental updates store newer changes in appended xref
+         * sections whose trailers point back to the previous one with /Prev.
+         * The most-recent entry for an object number wins; older sections fill
+         * in objects the newer sections didn't touch. We also pick up /Root
+         * from the newest trailer that defines it.
+         */
+        private fun parseWithPrevChain(reader: ByteReader): com.yuroyami.kitepdf.parser.XrefAndTrailer {
+            val visited = HashSet<Int>()
+            val merged = HashMap<Long, XrefEntry>()
+            var newestTrailer: PdfDictionary? = null
+
+            var startOffset = XrefParser.findStartXref(reader)
+            var safetyCounter = 0
+            while (startOffset >= 0 && safetyCounter < MAX_PREV_HOPS) {
+                if (!visited.add(startOffset)) break   // cycle guard
+                val section = XrefParser(reader).parseFromOffset(startOffset)
+                // Newer sections were visited first; fill in gaps from older ones.
+                for ((num, entry) in section.entries) {
+                    if (num !in merged) merged[num] = entry
+                }
+                if (newestTrailer == null) newestTrailer = section.trailer
+                val prev = section.trailer.getInt("Prev")?.toInt() ?: -1
+                startOffset = prev
+                safetyCounter++
+            }
+            val trailer = newestTrailer
+                ?: throw PdfFormatException("No xref section yielded a trailer")
+            return com.yuroyami.kitepdf.parser.XrefAndTrailer(merged, trailer)
+        }
+
+        /** Bound on /Prev chain length — generous; cycle guard catches the rest. */
+        private const val MAX_PREV_HOPS = 32
 
         private fun parseHeader(reader: ByteReader): String {
             // The header may have up to 1024 leading bytes of garbage before %PDF-.

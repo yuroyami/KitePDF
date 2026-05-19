@@ -76,6 +76,8 @@ object FilterChain {
         "A85" to Ascii85Filter,
         "RunLengthDecode" to RunLengthFilter,
         "RL" to RunLengthFilter,
+        "LZWDecode" to LzwFilter,
+        "LZW" to LzwFilter,
     )
 }
 

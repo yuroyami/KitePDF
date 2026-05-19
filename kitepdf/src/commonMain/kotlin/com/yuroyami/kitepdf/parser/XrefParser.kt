@@ -23,27 +23,11 @@ import com.yuroyami.kitepdf.core.PdfFormatException
 class XrefParser(private val reader: ByteReader) {
 
     fun parse(): XrefAndTrailer {
-        val startXref = findStartXref()
+        val startXref = findStartXref(reader)
         return parseFromOffset(startXref)
     }
 
-    /** Walks back from EOF to find "startxref OFFSET". */
-    private fun findStartXref(): Int {
-        val tail = (reader.size - 2048).coerceAtLeast(0)
-        val startXrefBytes = "startxref".encodeToByteArray()
-        val idx = reader.lastIndexOf(startXrefBytes, reader.size - 1)
-        if (idx < tail) {
-            throw PdfFormatException("startxref not found in last 2048 bytes")
-        }
-        reader.seek(idx + startXrefBytes.size)
-        // skip whitespace, then read integer until whitespace/EOF
-        val lexer = Lexer(reader)
-        val tok = lexer.nextToken()
-        if (tok !is Token.Integer) throw PdfFormatException("Expected integer after startxref, got $tok")
-        return tok.value.toInt()
-    }
-
-    private fun parseFromOffset(offset: Int): XrefAndTrailer {
+    fun parseFromOffset(offset: Int): XrefAndTrailer {
         reader.seek(offset)
         // Peek: classic "xref" keyword OR an indirect object (xref stream).
         val savedPos = reader.pos()
@@ -193,6 +177,23 @@ class XrefParser(private val reader: ByteReader) {
             v = (v shl 8) or (data[offset + i].toLong() and 0xFF)
         }
         return v
+    }
+
+    companion object {
+        /** Walks back from EOF to find "startxref OFFSET". Returns the OFFSET. */
+        fun findStartXref(reader: ByteReader): Int {
+            val tail = (reader.size - 2048).coerceAtLeast(0)
+            val startXrefBytes = "startxref".encodeToByteArray()
+            val idx = reader.lastIndexOf(startXrefBytes, reader.size - 1)
+            if (idx < tail) {
+                throw PdfFormatException("startxref not found in last 2048 bytes")
+            }
+            reader.seek(idx + startXrefBytes.size)
+            val lexer = Lexer(reader)
+            val tok = lexer.nextToken()
+            if (tok !is Token.Integer) throw PdfFormatException("Expected integer after startxref, got $tok")
+            return tok.value.toInt()
+        }
     }
 }
 
