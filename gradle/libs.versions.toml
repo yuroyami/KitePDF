@@ -1,0 +1,39 @@
+[versions] #######################################################################################
+# Toolchain
+kotlin = "2.3.20"
+agp = "9.1.1"
+
+# Compose Multiplatform — only used by :sample. :kitepdf stays pure-Kotlin-stdlib.
+composeMultiplatform = "1.11.0"
+composeMaterial3 = "1.11.0-alpha06"
+
+# Android platform bridge (sample only)
+activityCompose = "1.13.0"
+
+[libraries] ######################################################################################
+# Compose Multiplatform — sample app ONLY. The :kitepdf module must NEVER depend on these.
+compose-runtime = { module = "org.jetbrains.compose.runtime:runtime", version.ref = "composeMultiplatform" }
+compose-foundation = { module = "org.jetbrains.compose.foundation:foundation", version.ref = "composeMultiplatform" }
+compose-ui = { module = "org.jetbrains.compose.ui:ui", version.ref = "composeMultiplatform" }
+compose-components-resources = { module = "org.jetbrains.compose.components:components-resources", version.ref = "composeMultiplatform" }
+compose-material3 = { module = "org.jetbrains.compose.material3:material3", version.ref = "composeMaterial3" }
+compose-desktop-currentOs = { module = "org.jetbrains.compose.desktop:desktop", version.ref = "composeMultiplatform" }
+
+# Android (sample only)
+android-activity-compose = { module = "androidx.activity:activity-compose", version.ref = "activityCompose" }
+
+[bundles] ########################################################################################
+compose-multiplatform = [
+    "compose-runtime", "compose-foundation", "compose-ui",
+    "compose-components-resources", "compose-material3",
+]
+
+[plugins] ########################################################################################
+kotlin-multiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref = "kotlin" }
+kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
+
+compose-compiler = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
+compose-plugin = { id = "org.jetbrains.compose", version.ref = "composeMultiplatform" }
+
+android-application = { id = "com.android.application", version.ref = "agp" }
+android-kmp-library = { id = "com.android.kotlin.multiplatform.library", version.ref = "agp" }
