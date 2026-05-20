@@ -273,9 +273,11 @@ class AwtCanvas(private val g: Graphics2D) : PdfCanvas {
             // PDF image is in the unit square (0..1)² with Y flipped already by deviceCtm.
             // We draw at (0, -1) sized (1, 1) — the Y-flip in CTM puts it upright.
             val drawOp = AffineTransform().apply {
-                // Bitmap row 0 is the image's TOP; the image unit square is Y-up.
-                // Negative Y-scale lands the top row at the top of the [-1,0] strip
-                // the CTM expects — without it the image renders mirrored.
+                // Map the bitmap onto the PDF image unit square [0,1]²: row 0 (top)
+                // → v=1, last row → v=0. So translate up by 1, then flip Y. Mapping
+                // into [-1,0] instead places the image one image-height too low —
+                // invisible when it sits inside a tight clip (the Maths banner).
+                translate(0.0, 1.0)
                 scale(1.0 / bitmap.width, -1.0 / bitmap.height)
             }
             withComposite(PdfBlendMode.Normal, alpha) {
@@ -288,12 +290,89 @@ class AwtCanvas(private val g: Graphics2D) : PdfCanvas {
 
     private fun decodeImage(image: ImageXObject): BufferedImage? = try {
         when (image.kind) {
-            ImageXObject.Kind.JPEG, ImageXObject.Kind.JPEG2000 ->
-                ImageIO.read(image.encodedBytes.inputStream())
+            ImageXObject.Kind.JPEG, ImageXObject.Kind.JPEG2000 -> decodeJpeg(image.encodedBytes)
             else -> null
         }
     } catch (t: Throwable) {
         null
+    }
+
+    /**
+     * Decode a JPEG. ImageIO handles 3-channel (YCbCr) JPEGs correctly, but
+     * 4-channel CMYK / YCCK JPEGs (Adobe, APP14 marker) come back inverted or
+     * rejected — so for those we read the raw raster and convert ourselves.
+     */
+    private fun decodeJpeg(bytes: ByteArray): BufferedImage? {
+        val iis = ImageIO.createImageInputStream(java.io.ByteArrayInputStream(bytes))
+            ?: return ImageIO.read(java.io.ByteArrayInputStream(bytes))
+        val readers = ImageIO.getImageReaders(iis)
+        if (!readers.hasNext()) { iis.close(); return ImageIO.read(java.io.ByteArrayInputStream(bytes)) }
+        val reader = readers.next()
+        try {
+            reader.setInput(iis)
+            val raster = reader.readRaster(0, null)
+            if (raster.numBands < 4) return ImageIO.read(java.io.ByteArrayInputStream(bytes))
+
+            // 4-channel CMYK / YCCK. Adobe stores the channels inverted, so the
+            // raster already holds (255-C, 255-M, 255-Y, 255-K) → RGB = inv*invK/255.
+            val transform = adobeTransform(bytes) // 2 = YCCK (bands 0-2 are YCbCr)
+            val w = raster.width
+            val h = raster.height
+            val out = BufferedImage(w, h, BufferedImage.TYPE_INT_RGB)
+            val p = IntArray(4)
+            for (y in 0 until h) {
+                for (x in 0 until w) {
+                    raster.getPixel(x, y, p)
+                    val invC: Int
+                    val invM: Int
+                    val invY: Int
+                    val kMul: Int // black multiplier: 255 = no black ink, 0 = full black
+                    if (transform == 2) {
+                        // YCCK: bands 0-2 are YCbCr of the (inverted) CMY → RGB;
+                        // band 3 is K stored DIRECTLY, so the multiplier is 255-K.
+                        val yy = p[0].toDouble(); val cb = p[1] - 128.0; val cr = p[2] - 128.0
+                        invC = (yy + 1.402 * cr).toInt().coerceIn(0, 255)
+                        invM = (yy - 0.344136 * cb - 0.714136 * cr).toInt().coerceIn(0, 255)
+                        invY = (yy + 1.772 * cb).toInt().coerceIn(0, 255)
+                        kMul = 255 - p[3]
+                    } else {
+                        // Adobe CMYK stored inverted: raster = (255-C,255-M,255-Y,255-K).
+                        invC = p[0]; invM = p[1]; invY = p[2]; kMul = p[3]
+                    }
+                    val r = invC * kMul / 255
+                    val g2 = invM * kMul / 255
+                    val b = invY * kMul / 255
+                    out.setRGB(x, y, (r shl 16) or (g2 shl 8) or b)
+                }
+            }
+            return out
+        } catch (t: Throwable) {
+            return try { ImageIO.read(java.io.ByteArrayInputStream(bytes)) } catch (e: Throwable) { null }
+        } finally {
+            reader.dispose()
+            try { iis.close() } catch (_: Throwable) {}
+        }
+    }
+
+    /** APP14 Adobe `transform` byte: -1 none, 0 CMYK, 1 YCbCr, 2 YCCK. */
+    private fun adobeTransform(bytes: ByteArray): Int {
+        var i = 2
+        while (i + 4 < bytes.size) {
+            if (bytes[i].toInt() and 0xFF != 0xFF) { i++; continue }
+            when (val marker = bytes[i + 1].toInt() and 0xFF) {
+                0xEE -> {
+                    val len = ((bytes[i + 2].toInt() and 0xFF) shl 8) or (bytes[i + 3].toInt() and 0xFF)
+                    return if (len >= 14 && i + 2 + len <= bytes.size) bytes[i + 2 + len - 1].toInt() and 0xFF else -1
+                }
+                0xDA, 0xD9 -> return -1
+                in 0xD0..0xD8 -> i += 2
+                else -> {
+                    val len = ((bytes[i + 2].toInt() and 0xFF) shl 8) or (bytes[i + 3].toInt() and 0xFF)
+                    i += 2 + len
+                }
+            }
+        }
+        return -1
     }
 
     private fun drawPlaceholder(ctm: PdfMatrix) {
