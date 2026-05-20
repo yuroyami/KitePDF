@@ -192,7 +192,16 @@ class AwtCanvas(private val g: Graphics2D) : PdfCanvas {
             withComposite(blendMode, alpha) {
                 g.color = fillColor.toAwt()
                 g.font = systemFontFor(font, renderedSize.toFloat())
-                g.drawString(text, 0f, 0f) // AWT places the baseline at the origin
+                // Position each glyph by the PDF's OWN advance widths (1/1000 em),
+                // not the substitute font's natural metrics — otherwise spacing
+                // drifts and glyphs crowd together / overlap.
+                var penX = 0.0
+                val advScale = renderedSize / 1000.0
+                for (glyph in font.layoutBytes(bytes)) {
+                    val t = glyph.text
+                    if (t.isNotEmpty() && t != " ") g.drawString(t, penX.toFloat(), 0f)
+                    penX += glyph.advanceWidth * advScale
+                }
             }
         } finally {
             g.transform = saved

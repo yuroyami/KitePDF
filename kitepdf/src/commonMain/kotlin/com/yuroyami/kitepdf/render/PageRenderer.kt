@@ -34,6 +34,13 @@ class PageRenderer(
     private val resolver: IndirectResolver,
 ) {
 
+    // W/W* push a clip on the canvas, but the canvas keeps its own clip stack
+    // separate from the PDF q/Q graphics-state stack. Track how many clips are
+    // active so Q can pop exactly the ones pushed since its matching q —
+    // otherwise clips leak past Q and can wrongly clip the rest of the page.
+    private var activeClipCount = 0
+    private val clipSaveStack = ArrayDeque<Int>()
+
     fun render(page: PdfPage, deviceCtm: Matrix = defaultDeviceCtm(page)) {
         val fonts = loadFonts(page.resources)
         val xobjects = loadXObjects(page.resources)
@@ -42,6 +49,8 @@ class PageRenderer(
         val shadings = loadShadings(page.resources)
         val patterns = loadPatterns(page.resources, shadings)
         val state = GraphicsStack(GraphicsState(ctm = deviceCtm))
+        activeClipCount = 0
+        clipSaveStack.clear()
         val pathBuilder = PdfPath.Builder()
         val ops = ContentStreamParser.parse(page.contentBytes)
 
@@ -274,8 +283,12 @@ class PageRenderer(
         val a = op.operands
         when (op.operator) {
             // ─── State stack ──────────────────────────────────────────────
-            "q" -> state.save()
-            "Q" -> state.restore()
+            "q" -> { state.save(); clipSaveStack.addLast(activeClipCount) }
+            "Q" -> {
+                state.restore()
+                val target = clipSaveStack.removeLastOrNull() ?: 0
+                while (activeClipCount > target) { canvas.popClip(); activeClipCount-- }
+            }
             "cm" -> {
                 val m = Matrix(num(a, 0), num(a, 1), num(a, 2), num(a, 3), num(a, 4), num(a, 5))
                 state.replace(state.current.copy(ctm = state.current.ctm.concat(m)))
@@ -334,8 +347,8 @@ class PageRenderer(
             "n" -> path.reset()
 
             // ─── Clipping (push, applied on the *next* paint per spec) ────
-            "W" -> if (!path.isEmpty()) canvas.pushClip(path.build(), state.current.ctm, false)
-            "W*" -> if (!path.isEmpty()) canvas.pushClip(path.build(), state.current.ctm, true)
+            "W" -> if (!path.isEmpty()) { canvas.pushClip(path.build(), state.current.ctm, false); activeClipCount++ }
+            "W*" -> if (!path.isEmpty()) { canvas.pushClip(path.build(), state.current.ctm, true); activeClipCount++ }
 
             // ─── Text state ──────────────────────────────────────────────
             "BT" -> state.mutateText { TextState(font = it.font, fontSize = it.fontSize) }
