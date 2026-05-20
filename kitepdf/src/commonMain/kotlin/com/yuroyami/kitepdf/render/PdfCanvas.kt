@@ -40,7 +40,26 @@ interface PdfCanvas {
     fun strokePath(
         path: PdfPath, ctm: Matrix, color: RgbColor, lineWidth: Double,
         alpha: Double = 1.0, blendMode: BlendMode = BlendMode.Normal,
+        dashArray: List<Double>? = null, dashPhase: Double = 0.0,
     )
+
+    /**
+     * Fill [clipPath] (under [ctm]) with the gradient defined by [shading].
+     * If [clipPath] is `null` the shading covers the current clip region
+     * (or the page, when no clip is active) — the spec's `sh` operator.
+     *
+     * Default impl falls back to a flat-colour fill using the midpoint
+     * sample; backends that can render real gradients override.
+     */
+    fun fillShading(
+        shading: PdfShading, ctm: Matrix, clipPath: PdfPath?,
+        alpha: Double = 1.0, blendMode: BlendMode = BlendMode.Normal,
+    ) {
+        if (clipPath == null) return
+        val stops = shading.sampleStops(2) ?: return
+        val mid = stops.colors[stops.colors.size / 2]
+        fillPath(clipPath, ctm, mid, evenOdd = false, alpha = alpha, blendMode = blendMode)
+    }
 
     /**
      * Draw the show-text run [bytes] (verbatim from a `Tj` / `TJ` operand)
@@ -88,6 +107,29 @@ interface PdfCanvas {
         alpha: Double = 1.0, blendMode: BlendMode = BlendMode.Normal,
     ) { /* opt-in default */ }
     fun endTransparencyGroup() { /* opt-in default */ }
+
+    /**
+     * Apply a soft mask to the content rendered inside [render] (ISO 32000-1
+     * §11.6.5). The default implementation just calls [render] — backends
+     * without offscreen compositing fall back to painting through the mask.
+     *
+     * Concrete implementations: open a saveLayer for the content,
+     * `render()` it, then over-paint via [renderMask] using `DstIn` blend
+     * mode so the mask's alpha determines the visible region.
+     *
+     * Honest scope: KitePDF v0.0.x's ComposeCanvas implements the
+     * `Alpha` SMask kind correctly and approximates `Luminosity` as if it
+     * were alpha. True luminosity-to-alpha conversion requires a custom
+     * shader and is on the roadmap.
+     */
+    fun applySoftMask(
+        kind: SoftMask.Kind,
+        maskBBox: Rectangle, maskCtm: Matrix,
+        render: () -> Unit,
+        renderMask: (PdfCanvas) -> Unit,
+    ) {
+        render()
+    }
 }
 
 /** A rectangle in PDF user-space — re-exposed here for the [PdfCanvas] surface. */
@@ -98,7 +140,7 @@ object NoopCanvas : PdfCanvas {
     override fun beginPage(widthPt: Double, heightPt: Double, deviceCtm: Matrix) {}
     override fun endPage() {}
     override fun fillPath(path: PdfPath, ctm: Matrix, color: RgbColor, evenOdd: Boolean, alpha: Double, blendMode: BlendMode) {}
-    override fun strokePath(path: PdfPath, ctm: Matrix, color: RgbColor, lineWidth: Double, alpha: Double, blendMode: BlendMode) {}
+    override fun strokePath(path: PdfPath, ctm: Matrix, color: RgbColor, lineWidth: Double, alpha: Double, blendMode: BlendMode, dashArray: List<Double>?, dashPhase: Double) {}
     override fun drawText(bytes: ByteArray, font: PdfFont, fontSize: Double, textMatrix: Matrix, fillColor: RgbColor, alpha: Double, blendMode: BlendMode) {}
     override fun pushClip(path: PdfPath, ctm: Matrix, evenOdd: Boolean) {}
     override fun popClip() {}
@@ -153,7 +195,7 @@ class RecordingCanvas : PdfCanvas {
     override fun fillPath(path: PdfPath, ctm: Matrix, color: RgbColor, evenOdd: Boolean, alpha: Double, blendMode: BlendMode) {
         calls.add(Call.Fill(path, ctm, color, evenOdd, alpha, blendMode))
     }
-    override fun strokePath(path: PdfPath, ctm: Matrix, color: RgbColor, lineWidth: Double, alpha: Double, blendMode: BlendMode) {
+    override fun strokePath(path: PdfPath, ctm: Matrix, color: RgbColor, lineWidth: Double, alpha: Double, blendMode: BlendMode, dashArray: List<Double>?, dashPhase: Double) {
         calls.add(Call.Stroke(path, ctm, color, lineWidth, alpha, blendMode))
     }
     override fun drawText(bytes: ByteArray, font: PdfFont, fontSize: Double, textMatrix: Matrix, fillColor: RgbColor, alpha: Double, blendMode: BlendMode) {

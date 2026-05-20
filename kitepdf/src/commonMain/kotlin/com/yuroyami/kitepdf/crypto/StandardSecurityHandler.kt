@@ -25,14 +25,16 @@ class StandardSecurityHandler(
 ) {
 
     private val v: Int = encryptDict.getInt("V")?.toInt() ?: 1
-    private val r: Int = encryptDict.getInt("R")?.toInt() ?: 2
+    /** Revision number — exposed so the public permissions API can pick the right bit semantics. */
+    val r: Int = encryptDict.getInt("R")?.toInt() ?: 2
     private val keyLengthBits: Int = encryptDict.getInt("Length")?.toInt()
         ?: when (v) { 1 -> 40; 4 -> 128; 5 -> 256; else -> 40 }
     private val o: ByteArray = (encryptDict["O"] as? com.yuroyami.kitepdf.parser.PdfString)?.bytes
         ?: throw PdfFormatException("/Encrypt missing /O")
     private val u: ByteArray = (encryptDict["U"] as? com.yuroyami.kitepdf.parser.PdfString)?.bytes
         ?: throw PdfFormatException("/Encrypt missing /U")
-    private val p: Int = encryptDict.getInt("P")?.toInt() ?: -1
+    /** Raw `/P` bit-flags. Negative because the high bit is set on permissive PDFs. */
+    val p: Int = encryptDict.getInt("P")?.toInt() ?: -1
     private val encryptMetadata: Boolean = (encryptDict["EncryptMetadata"]
         as? com.yuroyami.kitepdf.parser.PdfBoolean)?.value ?: true
 

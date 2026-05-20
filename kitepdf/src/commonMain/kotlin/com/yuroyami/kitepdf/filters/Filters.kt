@@ -78,6 +78,8 @@ object FilterChain {
         "RL" to RunLengthFilter,
         "LZWDecode" to LzwFilter,
         "LZW" to LzwFilter,
+        "CCITTFaxDecode" to CcittFaxFilter,
+        "CCF" to CcittFaxFilter,
     )
 }
 

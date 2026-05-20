@@ -37,6 +37,10 @@ data class PdfAnnotation(
     val color: RgbColor?,
     /** Link annotation: URL for /A /URI actions; null otherwise. */
     val uri: String?,
+    /** Parsed `/A` action (typed). `null` when the annotation has no action dict. */
+    val action: PdfAction?,
+    /** Raw `/Dest` value on link annotations — pass through [PdfDocument.resolveDestination]. */
+    val rawDestination: com.yuroyami.kitepdf.parser.PdfObject?,
     /** /AP /N appearance Form XObject, or null. */
     val appearanceStream: PdfStream?,
     /** The raw dict — for callers that need fields we didn't extract. */
@@ -60,11 +64,23 @@ data class PdfAnnotation(
                 else -> ""
             }
             val color = (dict.getArray("C", refs))?.let { parseColor(it) }
-            val uri = parseUri(dict, refs)
+            val action = PdfAction.parse(dict.getDict("A", refs), refs)
+            val uri = (action as? PdfAction.Uri)?.uri ?: legacyUriFallback(dict, refs)
+            val rawDest = dict["Dest"]
             val appearanceStream = (dict.getDict("AP", refs))?.let { ap ->
                 (ap["N"]?.resolve(refs)) as? PdfStream
             }
-            return PdfAnnotation(subtype, rect, contents, color, uri, appearanceStream, dict)
+            return PdfAnnotation(subtype, rect, contents, color, uri, action, rawDest, appearanceStream, dict)
+        }
+
+        /**
+         * Edge case: annotations whose /A dict lacks the spec-required /S
+         * type entry but still carries a /URI string. The action parser
+         * returns [PdfAction.Unknown] for these; surface the URL anyway.
+         */
+        private fun legacyUriFallback(dict: PdfDictionary, refs: IndirectResolver): String? {
+            val action = dict.getDict("A", refs) ?: return null
+            return (action["URI"] as? PdfString)?.asText()
         }
 
         private fun parseSubtype(name: String): Subtype = when (name) {
@@ -108,13 +124,6 @@ data class PdfAnnotation(
                     .toRgb(doubleArrayOf(n(0), n(1), n(2), n(3)))
                 else -> null
             }
-        }
-
-        private fun parseUri(dict: PdfDictionary, refs: IndirectResolver): String? {
-            val action = dict.getDict("A", refs) ?: return null
-            val s = action.getName("S") ?: return null
-            if (s != "URI") return null
-            return (action["URI"] as? PdfString)?.asText()
         }
 
         private fun rectFromArray(arr: PdfArray): com.yuroyami.kitepdf.Rectangle {

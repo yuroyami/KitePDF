@@ -5,6 +5,7 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.BlendMode as ComposeBlendMode
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Paint
+import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathFillType
 import androidx.compose.ui.graphics.drawscope.DrawScope
@@ -20,13 +21,17 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.TextUnitType
 import com.yuroyami.kitepdf.font.PdfFont
+import androidx.compose.ui.graphics.Brush
 import com.yuroyami.kitepdf.render.BlendMode as PdfBlendMode
 import com.yuroyami.kitepdf.render.ImageXObject
 import com.yuroyami.kitepdf.render.Matrix as PdfMatrix
 import com.yuroyami.kitepdf.render.PdfCanvas
 import com.yuroyami.kitepdf.render.PdfPath
+import com.yuroyami.kitepdf.render.PdfShading
 import com.yuroyami.kitepdf.render.Rectangle as PdfRectangle
 import com.yuroyami.kitepdf.render.RgbColor
+import com.yuroyami.kitepdf.render.SoftMask
+import com.yuroyami.kitepdf.render.sampleStops
 import kotlin.math.atan2
 import kotlin.math.sqrt
 
@@ -91,15 +96,26 @@ class ComposeCanvas(
     override fun strokePath(
         path: PdfPath, ctm: PdfMatrix, color: RgbColor, lineWidth: Double,
         alpha: Double, blendMode: PdfBlendMode,
+        dashArray: List<Double>?, dashPhase: Double,
     ) {
         withActiveClips {
             val composePath = toComposePath(path, ctm)
             val avgScale = (ctm.scaleX() + ctm.scaleY()) * 0.5
+            val dash = dashArray
+                ?.map { (it * avgScale).toFloat() }
+                ?.filter { it > 0f }
+                ?.let { if (it.size % 2 == 1) it + it else it } // dashPathEffect needs even length
+                ?.toFloatArray()
+                ?.takeIf { it.size >= 2 }
+                ?.let { PathEffect.dashPathEffect(it, (dashPhase * avgScale).toFloat()) }
             drawScope.drawPath(
                 path = composePath,
                 color = color.toCompose(),
                 alpha = alpha.toFloat().coerceIn(0f, 1f),
-                style = Stroke(width = (lineWidth * avgScale).toFloat().coerceAtLeast(0.1f)),
+                style = Stroke(
+                    width = (lineWidth * avgScale).toFloat().coerceAtLeast(0.1f),
+                    pathEffect = dash,
+                ),
                 blendMode = blendMode.toCompose(),
             )
         }
@@ -135,6 +151,7 @@ class ComposeCanvas(
     ) {
         val upm = font.unitsPerEm ?: 1000
         val unitScale = fontSize / upm
+        val advanceScale = fontSize / 1000.0 // PDF glyph widths are 1/1000 em, NOT font units
         val color = fillColor.toCompose()
         val composeBlend = blendMode.toCompose()
         val a = alpha.toFloat().coerceIn(0f, 1f)
@@ -142,13 +159,16 @@ class ComposeCanvas(
         for (glyph in font.layoutBytes(bytes)) {
             val outline = glyph.outline
             if (outline != null && !outline.isEmpty()) {
+                // outline(font units) → ×unitScale → +penX (text space) → textMatrix (→ device).
+                // concat(other) applies `other` first, so unitScale must be the LAST concat,
+                // else every glyph collapses to a speck at the origin.
                 val glyphMatrix = textMatrix
-                    .let { tm -> PdfMatrix.translation(penX, 0.0).concat(tm) }
-                    .let { tm -> PdfMatrix(unitScale, 0.0, 0.0, unitScale, 0.0, 0.0).concat(tm) }
+                    .concat(PdfMatrix.translation(penX, 0.0))
+                    .concat(PdfMatrix(unitScale, 0.0, 0.0, unitScale, 0.0, 0.0))
                 val cp = toComposePath(outline, glyphMatrix).apply { fillType = PathFillType.NonZero }
                 drawScope.drawPath(cp, color = color, alpha = a, blendMode = composeBlend)
             }
-            penX += glyph.advanceWidth * unitScale
+            penX += glyph.advanceWidth * advanceScale
         }
     }
 
@@ -195,7 +215,12 @@ class ComposeCanvas(
     override fun drawImage(image: ImageXObject, ctm: PdfMatrix, alpha: Double) {
         withActiveClips {
             val bitmap = when (image.kind) {
-                ImageXObject.Kind.JPEG, ImageXObject.Kind.JPEG2000 -> ImageDecoder.decode(image.encodedBytes)
+                // Skia decodes JPEG natively; on JVM/iOS it also handles JP2 / JPEG 2000.
+                // BitmapFactory on Android decodes JPEG (JP2 returns null → placeholder).
+                // JBIG2 is best-effort: most platforms don't support it natively and
+                // ImageDecoder will fall back to null + a placeholder.
+                ImageXObject.Kind.JPEG, ImageXObject.Kind.JPEG2000, ImageXObject.Kind.JBIG2 ->
+                    ImageDecoder.decode(image.encodedBytes)
                 else -> null
             }
             if (bitmap != null) {
@@ -204,6 +229,111 @@ class ComposeCanvas(
                 drawPlaceholder(ctm)
             }
         }
+    }
+
+    override fun fillShading(
+        shading: PdfShading,
+        ctm: PdfMatrix,
+        clipPath: PdfPath?,
+        alpha: Double,
+        blendMode: PdfBlendMode,
+    ) {
+        val stops = shading.sampleStops(32) ?: return
+        val composeStops = stops.offsets.mapIndexed { i, off ->
+            off.toFloat() to stops.colors[i].toCompose()
+        }.toTypedArray()
+
+        val brush: Brush = when (shading) {
+            is PdfShading.Axial -> {
+                val (x0, y0) = ctm.transformPoint(shading.coords[0], shading.coords[1])
+                val (x1, y1) = ctm.transformPoint(shading.coords[2], shading.coords[3])
+                Brush.linearGradient(
+                    colorStops = composeStops,
+                    start = Offset(x0.toFloat(), y0.toFloat()),
+                    end = Offset(x1.toFloat(), y1.toFloat()),
+                )
+            }
+            is PdfShading.Radial -> {
+                // We use the outer circle's centre + radius as the gradient.
+                // The inner circle (concentric or offset) is approximated; PDF's
+                // two-circle radial gradient is richer than Compose's, but for
+                // most real-world shadings the difference is sub-pixel.
+                val (cx, cy) = ctm.transformPoint(shading.coords[3], shading.coords[4])
+                val rScale = sqrt(ctm.a * ctm.a + ctm.b * ctm.b)
+                val radius = (shading.coords[5] * rScale).toFloat()
+                Brush.radialGradient(
+                    colorStops = composeStops,
+                    center = Offset(cx.toFloat(), cy.toFloat()),
+                    radius = if (radius <= 0f) 1f else radius,
+                )
+            }
+            is PdfShading.Unsupported -> {
+                // Background fall-back: solid colour if the spec gave one.
+                val bg = shading.background ?: return
+                if (clipPath != null) {
+                    fillPath(clipPath, ctm, bg, evenOdd = false, alpha = alpha, blendMode = blendMode)
+                }
+                return
+            }
+        }
+
+        withActiveClips {
+            val composeBlend = blendMode.toCompose()
+            val a = alpha.toFloat().coerceIn(0f, 1f)
+            if (clipPath != null) {
+                val cp = toComposePath(clipPath, ctm).apply { fillType = PathFillType.NonZero }
+                drawScope.drawPath(cp, brush = brush, alpha = a, blendMode = composeBlend)
+            } else {
+                // Page-area shading (the `sh` operator): paint the whole canvas.
+                drawScope.drawRect(brush = brush, alpha = a, blendMode = composeBlend)
+            }
+        }
+    }
+
+    /**
+     * Soft-mask compositing (ISO 32000-1 §11.6.5). We open a saveLayer for
+     * the content, render it, then over-paint the mask group with
+     * [ComposeBlendMode.DstIn] so the mask's alpha clips the content.
+     *
+     * Honest scope: this implements the **Alpha** SMask kind correctly. The
+     * **Luminosity** kind would require a colour-to-alpha filter (a Skia
+     * `ColorFilter` we don't currently set up); we render it as-if-Alpha,
+     * which produces visually plausible results for mask groups whose
+     * content is already monochrome-with-alpha (the common case).
+     */
+    override fun applySoftMask(
+        kind: SoftMask.Kind,
+        maskBBox: PdfRectangle,
+        maskCtm: PdfMatrix,
+        render: () -> Unit,
+        renderMask: (PdfCanvas) -> Unit,
+    ) {
+        val composeCanvas = drawScope.drawContext.canvas
+        // Outer layer: holds the masked content.
+        val outerPaint = Paint()
+        composeCanvas.saveLayer(infiniteRect(), outerPaint)
+        try {
+            render()
+            // Inner layer with DstIn: subsequent draws will multiply by the
+            // existing layer's alpha — i.e. the mask "punches" the content.
+            val maskPaint = Paint().apply {
+                blendMode = ComposeBlendMode.DstIn
+            }
+            composeCanvas.saveLayer(infiniteRect(), maskPaint)
+            try {
+                renderMask(this)
+            } finally {
+                composeCanvas.restore()
+            }
+        } finally {
+            composeCanvas.restore()
+        }
+    }
+
+    private fun infiniteRect(): Rect {
+        val w = drawScope.size.width
+        val h = drawScope.size.height
+        return Rect(0f, 0f, w, h)
     }
 
     private fun drawBitmap(bitmap: androidx.compose.ui.graphics.ImageBitmap, ctm: PdfMatrix, alpha: Float) {

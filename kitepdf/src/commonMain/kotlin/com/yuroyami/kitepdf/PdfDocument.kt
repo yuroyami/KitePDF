@@ -14,6 +14,7 @@ import com.yuroyami.kitepdf.parser.PdfInt
 import com.yuroyami.kitepdf.parser.PdfObject
 import com.yuroyami.kitepdf.parser.PdfReference
 import com.yuroyami.kitepdf.parser.PdfStream
+import com.yuroyami.kitepdf.parser.PdfString
 import com.yuroyami.kitepdf.parser.Token
 import com.yuroyami.kitepdf.parser.XrefEntry
 import com.yuroyami.kitepdf.parser.XrefParser
@@ -57,10 +58,185 @@ class PdfDocument private constructor(
             ?: throw PdfFormatException("/Root did not resolve to a dictionary")
     }
 
+    /**
+     * Document /Info dictionary (title, author, dates, …). Returns an empty
+     * info object if the trailer has no /Info or it doesn't resolve.
+     */
+    val info: PdfDocumentInfo by lazy {
+        val raw = trailer["Info"] ?: return@lazy PdfDocumentInfo()
+        val dict = when (raw) {
+            is PdfReference -> resolve(raw) as? PdfDictionary
+            is PdfDictionary -> raw
+            else -> null
+        } ?: return@lazy PdfDocumentInfo()
+        PdfDocumentInfo.parse(dict)
+    }
+
+    /**
+     * Document permissions (ISO 32000-1 §7.6.3.2 Table 22). Always allow-all
+     * for unencrypted documents; reflects the `/P` bit-flags from the security
+     * handler otherwise.
+     */
+    val permissions: PdfPermissions by lazy {
+        PdfPermissions.from(security)
+    }
+
+    /**
+     * Raw XMP metadata packet as a UTF-8 string, or `null` if the catalog has
+     * no `/Metadata` stream (or it doesn't resolve to one).
+     */
+    val xmpMetadataXml: String? by lazy {
+        val raw = catalog["Metadata"] ?: return@lazy null
+        val stream = when (raw) {
+            is PdfReference -> resolve(raw) as? PdfStream
+            is PdfStream -> raw
+            else -> null
+        } ?: return@lazy null
+        val bytes = com.yuroyami.kitepdf.filters.FilterChain.decode(stream)
+        // XMP packets are UTF-8. Skip a leading BOM if present.
+        val start = if (bytes.size >= 3 &&
+            bytes[0] == 0xEF.toByte() && bytes[1] == 0xBB.toByte() && bytes[2] == 0xBF.toByte()
+        ) 3 else 0
+        bytes.decodeToString(start)
+    }
+
+    /**
+     * Parsed XMP metadata. Extracts the common Dublin Core / Adobe PDF /
+     * XMP-basic properties. Falls back to the trailer `/Info` dict when XMP
+     * is absent — call [info] explicitly if you need both views.
+     */
+    val xmp: PdfXmpMetadata? by lazy {
+        xmpMetadataXml?.let { PdfXmpMetadata.parse(it) }
+    }
+
     /** All pages in document order (lazily built from the catalog's /Pages tree). */
     val pages: List<PdfPage> by lazy { buildPageList() }
 
     val pageCount: Int get() = pages.size
+
+    /** Indirect-object-number → zero-based page index. Built alongside [pages]. */
+    private val pageRefToIndex = HashMap<Long, Int>()
+
+    /**
+     * Parsed `/PageLabels` number tree, or empty if the catalog doesn't have
+     * one. Drives [PdfPage.label].
+     */
+    internal val pageLabels: PageLabelTree by lazy {
+        val labels = catalog.getDict("PageLabels", this) ?: return@lazy PageLabelTree.EMPTY
+        PageLabelTree.parse(labels, this)
+    }
+
+    /**
+     * Named-destination catalog (`/Dests` legacy dict + `/Names /Dests` name
+     * tree). Used by [resolveDestination].
+     */
+    private val destCatalog: DestinationCatalog by lazy {
+        DestinationCatalog.build(catalog, this)
+    }
+
+    /**
+     * Document outline (bookmarks). Top-level entries from the catalog
+     * `/Outlines /First` chain; empty list if the document has no outline.
+     */
+    val outlines: List<PdfOutline> by lazy {
+        PdfOutline.buildTree(catalog, this)
+    }
+
+    /** Initial UI panel hint (`/PageMode`). [PageMode.UseNone] when absent. */
+    val pageMode: PageMode get() = PageMode.fromName(catalog.getName("PageMode"))
+
+    /** Initial page-layout hint (`/PageLayout`). [PageLayout.SinglePage] when absent. */
+    val pageLayout: PageLayout get() = PageLayout.fromName(catalog.getName("PageLayout"))
+
+    /**
+     * Viewer-preferences hints (`/ViewerPreferences`). Returns
+     * [PdfViewerPreferences.DEFAULT] when the catalog doesn't carry the dict.
+     */
+    val viewerPreferences: PdfViewerPreferences by lazy {
+        val dict = catalog.getDict("ViewerPreferences", this) ?: return@lazy PdfViewerPreferences.DEFAULT
+        PdfViewerPreferences.parse(dict, this)
+    }
+
+    /**
+     * Article threads (`/Threads`). Each thread is a reading-order sequence
+     * of bead rectangles on pages — used by readers to jump between columns
+     * in a multi-column layout. Empty list when the catalog has no /Threads.
+     */
+    val articleThreads: List<PdfArticleThread> by lazy {
+        pages  // touch to populate pageRefToIndex
+        PdfArticleThread.parseAll(catalog, this, pageRefToIndex)
+    }
+
+    /** Document language tag (BCP 47), e.g. "en-US", "fr-CA". `null` when /Lang is absent. */
+    val language: String? get() = (catalog["Lang"] as? PdfString)?.asText()
+
+    /**
+     * Document-level JavaScript scripts from `/Names /JavaScript`. Map keys
+     * are the script names; values are the JS source. Empty when none.
+     */
+    val documentJavaScripts: Map<String, String> by lazy {
+        val names = catalog.getDict("Names", this) ?: return@lazy emptyMap()
+        val jsTree = names.getDict("JavaScript", this) ?: return@lazy emptyMap()
+        val entries = com.yuroyami.kitepdf.parser.NameTreeWalker.collect(jsTree, this)
+        val out = LinkedHashMap<String, String>()
+        for ((name, value) in entries) {
+            val dict = when (value) {
+                is PdfReference -> resolve(value) as? PdfDictionary
+                is PdfDictionary -> value
+                else -> null
+            } ?: continue
+            val action = PdfAction.parse(dict, this)
+            if (action is PdfAction.JavaScript) out[name] = action.script
+        }
+        out
+    }
+
+    /**
+     * Embedded file attachments — typically the document author's
+     * supplementary files: source artwork, datasets, XML schemas, etc.
+     * Empty list when the document has no /EmbeddedFiles name tree.
+     */
+    val attachments: List<PdfAttachment> by lazy {
+        PdfAttachment.parseAll(catalog, this)
+    }
+
+    /**
+     * Tagged-PDF accessibility metadata. `null` when the document has no
+     * `/MarkInfo` dict — i.e. it is not tagged.
+     */
+    val markInfo: PdfMarkInfo? by lazy {
+        PdfMarkInfo.parse(catalog.getDict("MarkInfo", this))
+    }
+
+    /**
+     * Optional Content / layers metadata (read-only). `null` when the
+     * catalog has no `/OCProperties`.
+     */
+    val optionalContent: PdfOptionalContent? by lazy {
+        PdfOptionalContent.parse(catalog, this)
+    }
+
+    /**
+     * Interactive form (AcroForm) catalog metadata. `null` when the
+     * catalog has no `/AcroForm` entry — the document carries no
+     * interactive form fields.
+     */
+    val acroForm: PdfAcroForm? by lazy {
+        PdfAcroForm.parse(catalog, this)
+    }
+
+    /**
+     * Resolve a `/Dest` (on a Link annotation or outline) or `/A /D` (a GoTo
+     * action's destination) to a typed [PdfDestination]. Accepts any of:
+     * an explicit array, a name pointing into the catalog's name-tree, or a
+     * dict containing `/D` (a wrapped destination). Returns `null` when the
+     * destination can't be resolved.
+     */
+    fun resolveDestination(raw: PdfObject?): PdfDestination? {
+        // Touch [pages] to ensure pageRefToIndex is populated.
+        pages
+        return DestinationParser.resolve(raw, destCatalog, this, pageRefToIndex)
+    }
 
     /* ─── IndirectResolver ───────────────────────────────────────────────── */
 
@@ -170,19 +346,31 @@ class PdfDocument private constructor(
         return acc
     }
 
-    private fun walkPageTree(node: PdfDictionary, inherited: PageInheritable, out: MutableList<PdfPage>) {
+    private fun walkPageTree(
+        node: PdfDictionary,
+        inherited: PageInheritable,
+        out: MutableList<PdfPage>,
+        sourceRef: PdfReference? = null,
+    ) {
         val merged = inherited.merge(node)
         when (node.getName("Type")) {
-            "Page" -> out.add(PdfPage(this, node, merged))
+            "Page" -> {
+                val index = out.size
+                out.add(PdfPage(this, node, merged, index))
+                if (sourceRef != null) pageRefToIndex[sourceRef.objectNumber] = index
+            }
             "Pages" -> {
                 val kids = node.getArray("Kids", this)
                     ?: throw PdfFormatException("/Pages node missing /Kids")
                 for (kidObj in kids) {
-                    val kidDict = (kidObj as? PdfReference)?.let { resolve(it) } ?: kidObj
+                    val (kidDict, kidRef) = when (kidObj) {
+                        is PdfReference -> (resolve(kidObj) to kidObj)
+                        else -> (kidObj to null)
+                    }
                     walkPageTree(
                         kidDict as? PdfDictionary
                             ?: throw PdfFormatException("/Kids entry not a dict"),
-                        merged, out,
+                        merged, out, kidRef,
                     )
                 }
             }

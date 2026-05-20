@@ -10,7 +10,22 @@ composeMaterial3 = "1.11.0-alpha06"
 # Android platform bridge (sample only)
 activityCompose = "1.13.0"
 
+# Skiko — JetBrains' Skia bindings. Used by :kitepdf-skia. Compose Multiplatform
+# rides on Skiko under the hood on JVM Desktop + iOS, so this gives us the same
+# renderer Compose uses, without the Compose runtime sitting on top.
+skiko = "0.9.18"
+
 [libraries] ######################################################################################
+# Skia (no Compose) — used by :kitepdf-skia. `skiko-awt` is the API jar;
+# the per-platform native runtime is selected at build time below.
+skiko-awt = { module = "org.jetbrains.skiko:skiko-awt", version.ref = "skiko" }
+skiko-awt-runtime-macos-arm64 = { module = "org.jetbrains.skiko:skiko-awt-runtime-macos-arm64", version.ref = "skiko" }
+skiko-awt-runtime-macos-x64 = { module = "org.jetbrains.skiko:skiko-awt-runtime-macos-x64", version.ref = "skiko" }
+skiko-awt-runtime-linux-x64 = { module = "org.jetbrains.skiko:skiko-awt-runtime-linux-x64", version.ref = "skiko" }
+skiko-awt-runtime-linux-arm64 = { module = "org.jetbrains.skiko:skiko-awt-runtime-linux-arm64", version.ref = "skiko" }
+skiko-awt-runtime-windows-x64 = { module = "org.jetbrains.skiko:skiko-awt-runtime-windows-x64", version.ref = "skiko" }
+skiko-awt-runtime-windows-arm64 = { module = "org.jetbrains.skiko:skiko-awt-runtime-windows-arm64", version.ref = "skiko" }
+
 # Compose Multiplatform — sample app ONLY. The :kitepdf module must NEVER depend on these.
 compose-runtime = { module = "org.jetbrains.compose.runtime:runtime", version.ref = "composeMultiplatform" }
 compose-foundation = { module = "org.jetbrains.compose.foundation:foundation", version.ref = "composeMultiplatform" }

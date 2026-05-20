@@ -39,17 +39,45 @@ class PageRenderer(
         val xobjects = loadXObjects(page.resources)
         val colorSpaces = loadColorSpaces(page.resources)
         val extGStates = loadExtGStates(page.resources)
+        val shadings = loadShadings(page.resources)
+        val patterns = loadPatterns(page.resources, shadings)
         val state = GraphicsStack(GraphicsState(ctm = deviceCtm))
         val pathBuilder = PdfPath.Builder()
         val ops = ContentStreamParser.parse(page.contentBytes)
 
         canvas.beginPage(page.width, page.height, deviceCtm)
         try {
-            for (op in ops) dispatch(op, state, pathBuilder, fonts, xobjects, colorSpaces, extGStates)
+            for (op in ops) dispatch(op, state, pathBuilder, fonts, xobjects, colorSpaces, extGStates, shadings, patterns)
             renderAnnotations(page, state)
         } finally {
             canvas.endPage()
         }
+    }
+
+    /** Named shadings declared in /Resources /Shading. */
+    private fun loadShadings(resources: PdfDictionary?): Map<String, PdfShading> {
+        val dict = resources?.getDict("Shading", resolver) ?: return emptyMap()
+        return dict.map.mapNotNull { (name, value) ->
+            val sh = PdfShading.parse(value, resolver) ?: return@mapNotNull null
+            name to sh
+        }.toMap()
+    }
+
+    /**
+     * Named patterns declared in /Resources /Pattern. PatternType 2
+     * (shading pattern) is the case KitePDF renders today; PatternType 1
+     * (tiling pattern) parses to [PdfPattern.Tiling] but the renderer
+     * still falls back to its background colour.
+     */
+    private fun loadPatterns(
+        resources: PdfDictionary?,
+        shadings: Map<String, PdfShading>,
+    ): Map<String, PdfPattern> {
+        val dict = resources?.getDict("Pattern", resolver) ?: return emptyMap()
+        return dict.map.mapNotNull { (name, value) ->
+            val p = PdfPattern.parse(value, resolver, shadings) ?: return@mapNotNull null
+            name to p
+        }.toMap()
     }
 
     /** Named extended graphics states declared in /Resources /ExtGState. */
@@ -174,6 +202,8 @@ class PageRenderer(
         val childXObjects = loadXObjects(resources)
         val childColorSpaces = loadColorSpaces(resources)
         val childExtGStates = loadExtGStates(resources)
+        val childShadings = loadShadings(resources)
+        val childPatterns = loadPatterns(resources, childShadings)
         val groupDict = formStream.dict.getDict("Group", resolver)
         val isTransparencyGroup = groupDict?.getName("S") == "Transparency"
         val isolated = (groupDict?.get("I") as? com.yuroyami.kitepdf.parser.PdfBoolean)?.value ?: false
@@ -196,7 +226,7 @@ class PageRenderer(
             val bytes = com.yuroyami.kitepdf.filters.FilterChain.decode(formStream)
             val ops = ContentStreamParser.parse(bytes)
             val pathBuilder = PdfPath.Builder()
-            for (op in ops) dispatch(op, parentState, pathBuilder, childFonts, childXObjects, childColorSpaces, childExtGStates)
+            for (op in ops) dispatch(op, parentState, pathBuilder, childFonts, childXObjects, childColorSpaces, childExtGStates, childShadings, childPatterns)
         } finally {
             if (groupOpened) canvas.endTransparencyGroup()
             parentState.restore()
@@ -238,6 +268,8 @@ class PageRenderer(
         xobjects: Map<String, PdfStream>,
         colorSpaces: Map<String, ColorSpace>,
         extGStates: Map<String, ExtGState>,
+        shadings: Map<String, PdfShading>,
+        patterns: Map<String, PdfPattern>,
     ) {
         val a = op.operands
         when (op.operator) {
@@ -249,15 +281,36 @@ class PageRenderer(
                 state.replace(state.current.copy(ctm = state.current.ctm.concat(m)))
             }
             "w" -> state.replace(state.current.copy(lineWidth = num(a, 0)))
+            "d" -> {
+                // dash: [ array ] phase d  — array of on/off lengths (user units).
+                val arr = a.getOrNull(0) as? com.yuroyami.kitepdf.parser.PdfArray
+                val dashes = arr?.let { ar -> List(ar.size) { ar.getOrNull(it).toDouble() } }
+                state.replace(state.current.copy(
+                    dashArray = dashes?.takeIf { ds -> ds.isNotEmpty() && ds.any { it > 0.0 } },
+                    dashPhase = num(a, 1),
+                ))
+            }
 
             // ─── Color ────────────────────────────────────────────────────
-            "g" -> state.replace(state.current.copy(fillColor = RgbColor.gray(num(a, 0))))
-            "G" -> state.replace(state.current.copy(strokeColor = RgbColor.gray(num(a, 0))))
+            "g" -> state.replace(state.current.copy(fillColor = RgbColor.gray(num(a, 0)), fillPattern = null))
+            "G" -> state.replace(state.current.copy(strokeColor = RgbColor.gray(num(a, 0)), strokePattern = null))
             "rg" -> state.replace(state.current.copy(
-                fillColor = RgbColor(num(a, 0), num(a, 1), num(a, 2)),
+                fillColor = RgbColor(num(a, 0), num(a, 1), num(a, 2)), fillPattern = null,
             ))
             "RG" -> state.replace(state.current.copy(
-                strokeColor = RgbColor(num(a, 0), num(a, 1), num(a, 2)),
+                strokeColor = RgbColor(num(a, 0), num(a, 1), num(a, 2)), strokePattern = null,
+            ))
+            "k" -> state.replace(state.current.copy(
+                fillColor = ColorSpace.DeviceCMYK.toRgb(
+                    doubleArrayOf(num(a, 0), num(a, 1), num(a, 2), num(a, 3)),
+                ),
+                fillPattern = null,
+            ))
+            "K" -> state.replace(state.current.copy(
+                strokeColor = ColorSpace.DeviceCMYK.toRgb(
+                    doubleArrayOf(num(a, 0), num(a, 1), num(a, 2), num(a, 3)),
+                ),
+                strokePattern = null,
             ))
 
             // ─── Path construction ───────────────────────────────────────
@@ -340,12 +393,35 @@ class PageRenderer(
                 val name = (a.firstOrNull() as? PdfName)?.value ?: return
                 val stream = xobjects[name] ?: return
                 when (stream.dict.getName("Subtype")) {
-                    "Image" -> canvas.drawImage(ImageXObject.from(stream), state.current.ctm, state.current.fillAlpha)
+                    "Image" -> withSoftMask(state.current) {
+                        canvas.drawImage(ImageXObject.from(stream), state.current.ctm, state.current.fillAlpha)
+                    }
                     "Form" -> renderFormXObject(stream, state)
                 }
             }
 
-            // Other operators (shading sh, marked-content BDC/BMC/EMC, etc.)
+            // ─── Shading fill (`sh <name>`) ──────────────────────────────
+            "sh" -> {
+                val name = (a.firstOrNull() as? PdfName)?.value ?: return
+                val shading = shadings[name] ?: return
+                val s = state.current
+                canvas.fillShading(
+                    shading, s.ctm, clipPath = null,
+                    alpha = s.fillAlpha, blendMode = s.blendMode,
+                )
+            }
+
+            // ─── Colour-space-aware fill/stroke ──────────────────────────
+            // SCN/scn with a Pattern colour space pushes a pattern name as
+            // the last operand. We sniff that here and stash a Shading
+            // pattern as the current fill source; non-pattern operands fall
+            // back to the existing rgb/cmyk/gray paths.
+            "scn" -> handleScnFill(a, patterns, state, stroke = false)
+            "SCN" -> handleScnFill(a, patterns, state, stroke = true)
+            "sc" -> handleScFill(a, state, stroke = false)
+            "SC" -> handleScFill(a, state, stroke = true)
+
+            // Other operators (marked-content BDC/BMC/EMC, etc.)
             // are silently skipped — see ROADMAP.
             else -> { /* unknown */ }
         }
@@ -354,18 +430,162 @@ class PageRenderer(
     private fun paintFill(path: PdfPath.Builder, state: GraphicsStack, evenOdd: Boolean) {
         if (path.isEmpty()) return
         val s = state.current
-        canvas.fillPath(
-            path.build(), s.ctm, s.fillColor, evenOdd,
-            alpha = s.fillAlpha, blendMode = s.blendMode,
-        )
+        val built = path.build()
+        withSoftMask(s) {
+            val pat = s.fillPattern
+            when {
+                pat is PdfPattern.Shading -> canvas.fillShading(
+                    pat.shading, s.ctm.concat(pat.matrix), clipPath = built,
+                    alpha = s.fillAlpha, blendMode = s.blendMode,
+                )
+                pat != null -> {
+                    // Tiling / unsupported pattern — not renderable yet. Skip
+                    // rather than paint the default colour, which would flood
+                    // e.g. a full-page background pattern solid black.
+                }
+                else -> canvas.fillPath(
+                    built, s.ctm, s.fillColor, evenOdd,
+                    alpha = s.fillAlpha, blendMode = s.blendMode,
+                )
+            }
+        }
     }
 
     private fun paintStroke(path: PdfPath.Builder, state: GraphicsStack) {
         if (path.isEmpty()) return
         val s = state.current
-        canvas.strokePath(
-            path.build(), s.ctm, s.strokeColor, s.lineWidth,
-            alpha = s.strokeAlpha, blendMode = s.blendMode,
+        withSoftMask(s) {
+            canvas.strokePath(
+                path.build(), s.ctm, s.strokeColor, s.lineWidth,
+                alpha = s.strokeAlpha, blendMode = s.blendMode,
+                dashArray = s.dashArray, dashPhase = s.dashPhase,
+            )
+        }
+    }
+
+    /**
+     * Wrap [paint] in a soft-mask layer when the current graphics state has
+     * one active. Without an SMask the lambda is invoked directly. With an
+     * SMask, the canvas's [PdfCanvas.applySoftMask] gets two callbacks:
+     * one that draws the content, one that re-renders the mask group into
+     * a separate layer, blended via `DstIn`.
+     */
+    private fun withSoftMask(state: GraphicsState, paint: () -> Unit) {
+        val mask = state.softMask as? SoftMask.MaskGroup
+        if (mask == null) {
+            paint(); return
+        }
+        // The mask group has its own /BBox + /Matrix the renderer should
+        // honour. We pass them along so the backend's saveLayer can size
+        // the offscreen correctly.
+        val maskBBox = mask.group.dict.getArray("BBox")?.let { arr ->
+            com.yuroyami.kitepdf.Rectangle(
+                arr.getOrNull(0).toDouble(), arr.getOrNull(1).toDouble(),
+                arr.getOrNull(2).toDouble(), arr.getOrNull(3).toDouble(),
+            )
+        } ?: com.yuroyami.kitepdf.Rectangle(0.0, 0.0, 0.0, 0.0)
+        val maskMatrix = mask.group.dict.getArray("Matrix")?.let { arr ->
+            Matrix(
+                arr.getOrNull(0).toDouble(), arr.getOrNull(1).toDouble(),
+                arr.getOrNull(2).toDouble(), arr.getOrNull(3).toDouble(),
+                arr.getOrNull(4).toDouble(), arr.getOrNull(5).toDouble(),
+            )
+        } ?: Matrix.IDENTITY
+        canvas.applySoftMask(
+            kind = mask.kind,
+            maskBBox = maskBBox,
+            maskCtm = state.ctm.concat(maskMatrix),
+            render = paint,
+            renderMask = { childCanvas ->
+                // Recurse into the same renderer pipeline but onto whatever
+                // canvas the backend handed us. The mask group's content
+                // stream is rendered with a fresh graphics state — the spec
+                // says soft masks render onto a transparent backdrop with
+                // their own state stack (§11.6.5).
+                renderMaskGroup(mask.group, childCanvas, maskMatrix)
+            },
+        )
+    }
+
+    private fun renderMaskGroup(formStream: PdfStream, target: PdfCanvas, formMatrix: Matrix) {
+        // We need a sub-renderer so the mask paints into [target] rather
+        // than the page canvas. The cleanest thing is to construct a
+        // throwaway PageRenderer instance and let it run the form-xobject
+        // pipeline; that reuses every operator handler and resource walk.
+        val sub = PageRenderer(target, resolver)
+        val parentState = GraphicsStack(GraphicsState(ctm = Matrix.IDENTITY.concat(formMatrix)))
+        sub.renderFormXObjectExternally(formStream, parentState)
+    }
+
+    /**
+     * Public entry to render a form xobject onto this renderer's canvas
+     * from an outer caller (the soft-mask path). Body delegates to the
+     * existing [renderFormXObject] private path so we don't duplicate
+     * resource loading + group setup.
+     */
+    internal fun renderFormXObjectExternally(formStream: PdfStream, state: GraphicsStack) {
+        renderFormXObject(formStream, state)
+    }
+
+    /**
+     * Handle `scn` (fill) / `SCN` (stroke). When the corresponding colour
+     * space is `/Pattern`, the last operand is a `/PatternName`; we look
+     * it up and stash it on the graphics state. For non-pattern colour
+     * spaces we promote the components to RGB via the active colour space.
+     */
+    private fun handleScnFill(
+        a: List<com.yuroyami.kitepdf.parser.PdfObject>,
+        patterns: Map<String, PdfPattern>,
+        state: GraphicsStack,
+        stroke: Boolean,
+    ) {
+        // Pattern name is always the last operand for Pattern colour-space.
+        val nameOp = a.lastOrNull() as? PdfName
+        if (nameOp != null) {
+            // Use the parsed pattern when we have it; otherwise mark it
+            // Unsupported so the fill is skipped rather than collapsing to the
+            // default (black) colour and flooding the region.
+            val pat = patterns[nameOp.value] ?: PdfPattern.Unsupported
+            state.replace(
+                if (stroke) state.current.copy(strokePattern = pat)
+                else state.current.copy(fillPattern = pat),
+            )
+            return
+        }
+        // Numeric operands: dispatch through the active colour space.
+        val cs = if (stroke) state.current.strokeColorSpace else state.current.fillColorSpace
+        val comps = DoubleArray(a.size) { i ->
+            when (val v = a[i]) {
+                is com.yuroyami.kitepdf.parser.PdfInt -> v.value.toDouble()
+                is com.yuroyami.kitepdf.parser.PdfReal -> v.value
+                else -> 0.0
+            }
+        }
+        val rgb = cs.toRgb(comps)
+        state.replace(
+            if (stroke) state.current.copy(strokeColor = rgb, strokePattern = null)
+            else state.current.copy(fillColor = rgb, fillPattern = null),
+        )
+    }
+
+    private fun handleScFill(
+        a: List<com.yuroyami.kitepdf.parser.PdfObject>,
+        state: GraphicsStack,
+        stroke: Boolean,
+    ) {
+        // `sc` / `SC` only carry numeric components (no Pattern colour-space).
+        val cs = if (stroke) state.current.strokeColorSpace else state.current.fillColorSpace
+        val comps = DoubleArray(a.size) { i ->
+            when (val v = a[i]) {
+                is com.yuroyami.kitepdf.parser.PdfInt -> v.value.toDouble()
+                is com.yuroyami.kitepdf.parser.PdfReal -> v.value
+                else -> 0.0
+            }
+        }
+        val rgb = cs.toRgb(comps)
+        state.replace(
+            if (stroke) state.current.copy(strokeColor = rgb, strokePattern = null)
+            else state.current.copy(fillColor = rgb, fillPattern = null),
         )
     }
 
@@ -393,13 +613,19 @@ class PageRenderer(
         //   baked in to the per-glyph advance.
         val pageMatrix = state.current.ctm
         val textMatrix = t.textMatrix
-        val finalMatrix = textMatrix.concat(pageMatrix)
+        // text-space → device = text matrix THEN current CTM. Since
+        // concat(other) applies `other` first, that's pageMatrix.concat(textMatrix)
+        // (NOT the reverse, which would apply the device matrix first and fling
+        // the text off-page).
+        val finalMatrix = pageMatrix.concat(textMatrix)
             .translate(0.0, t.rise)
 
-        canvas.drawText(
-            bytes, font, t.fontSize, finalMatrix, state.current.fillColor,
-            alpha = state.current.fillAlpha, blendMode = state.current.blendMode,
-        )
+        withSoftMask(state.current) {
+            canvas.drawText(
+                bytes, font, t.fontSize, finalMatrix, state.current.fillColor,
+                alpha = state.current.fillAlpha, blendMode = state.current.blendMode,
+            )
+        }
 
         // Advance Tm by the total width of this run.
         val totalAdvance = totalAdvance(bytes, t, font)
