@@ -1,13 +1,34 @@
 package com.yuroyami.kitepdf.compression
 
+import com.yuroyami.kitepdf.core.ByteArrayBuilder
+
 /**
- * zlib (RFC 1950) wrapper around [Inflate].
+ * zlib (RFC 1950) wrapper around [Inflate]/[Deflate].
  *
  * PDF's FlateDecode filter stores zlib-wrapped DEFLATE data, not bare DEFLATE.
  * The wrapper is: 2-byte CMF/FLG header, DEFLATE payload, 4-byte big-endian
  * Adler-32 trailer. We verify both header validity and the Adler checksum.
  */
 object Zlib {
+
+    /**
+     * zlib-wrap a DEFLATE compression of [data] (PDF FlateDecode form). Header
+     * is the conventional `0x78 0x9C` (32 KiB window, default level, no preset
+     * dictionary; passes the mod-31 check), and the Adler-32 of the original
+     * data is appended big-endian. Round-trips through [decode].
+     */
+    fun encode(data: ByteArray): ByteArray {
+        val out = ByteArrayBuilder(data.size / 2 + 16)
+        out.append(0x78.toByte())
+        out.append(0x9C.toByte())
+        out.append(Deflate.encode(data))
+        val adler = adler32(data)
+        out.append(((adler ushr 24) and 0xFF).toByte())
+        out.append(((adler ushr 16) and 0xFF).toByte())
+        out.append(((adler ushr 8) and 0xFF).toByte())
+        out.append((adler and 0xFF).toByte())
+        return out.toByteArray()
+    }
 
     fun decode(input: ByteArray, verifyChecksum: Boolean = true): ByteArray {
         if (input.size < 6) throw InflateException("Zlib stream too short: ${input.size} bytes")

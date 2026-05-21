@@ -23,7 +23,16 @@ class PdfPage internal constructor(
     private val inherited: PageInheritable,
     /** Zero-based position in the document's flat page list. */
     val index: Int,
+    /**
+     * The page's own indirect reference (its entry in the parent's `/Kids`).
+     * `null` only for the unusual case of a page dict inlined directly in
+     * `/Kids`. The writer needs this to target the page object for edits.
+     */
+    val reference: PdfReference? = null,
 ) {
+
+    /** The raw page dictionary — used by the writer to rebuild the page on edit. */
+    internal val dictionary: PdfDictionary get() = node
 
     /**
      * Display label from `/PageLabels` (e.g. "iii", "A-1", "12"). Falls back

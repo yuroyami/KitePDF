@@ -19,7 +19,35 @@ import com.yuroyami.kitepdf.parser.Token
  * a future renderer. Text extraction in this session only inspects which
  * operators were emitted with which operands.
  */
-data class Operation(val operator: String, val operands: List<PdfObject>)
+/**
+ * One content-stream operation: an [operator] and its [operands].
+ *
+ * Inline images (`BI … ID … EI`) are NOT operand-based — their data is binary
+ * and not tokenizable — so they are represented as a single operation with
+ * operator `"BI"` and their entire `BI…EI` source captured in [inlineImage].
+ * Re-serialization writes [inlineImage] back verbatim. Regular operations leave
+ * it null.
+ */
+data class Operation(
+    val operator: String,
+    val operands: List<PdfObject>,
+    val inlineImage: ByteArray? = null,
+) {
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (other !is Operation) return false
+        if (operator != other.operator || operands != other.operands) return false
+        return if (inlineImage == null) other.inlineImage == null
+        else other.inlineImage != null && inlineImage.contentEquals(other.inlineImage)
+    }
+
+    override fun hashCode(): Int {
+        var r = operator.hashCode()
+        r = 31 * r + operands.hashCode()
+        r = 31 * r + (inlineImage?.contentHashCode() ?: 0)
+        return r
+    }
+}
 
 object ContentStreamParser {
 
@@ -38,6 +66,9 @@ object ContentStreamParser {
                     // Inline images need special handling — "BI ... ID ... EI" is a mini stream.
                     if (tok.value == "BI") {
                         consumeInlineImage(reader)
+                        // Capture the whole "BI…EI" run verbatim so it survives a
+                        // parse → edit → re-serialize round-trip.
+                        ops.add(Operation("BI", emptyList(), bytes.copyOfRange(tok.offset, reader.pos())))
                         operandStack.clear()
                     } else {
                         ops.add(Operation(tok.value, operandStack.toList()))

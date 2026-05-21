@@ -18,6 +18,7 @@ import com.yuroyami.kitepdf.parser.PdfString
 import com.yuroyami.kitepdf.parser.Token
 import com.yuroyami.kitepdf.parser.XrefEntry
 import com.yuroyami.kitepdf.parser.XrefParser
+import com.yuroyami.kitepdf.writer.PdfEditor
 
 /**
  * Top-level KitePDF entry point.
@@ -226,6 +227,19 @@ class PdfDocument private constructor(
     }
 
     /**
+     * Flattened interactive-form fields (the AcroForm field tree's terminal
+     * fields, with inheritable attributes resolved). Empty when the document
+     * has no form. Drives form-filling via [com.yuroyami.kitepdf.writer.PdfEditor].
+     */
+    val formFields: List<PdfFormField> by lazy {
+        PdfFormField.collect(catalog, this)
+    }
+
+    /** Look up a form field by its fully-qualified name; null if not present. */
+    fun formField(fullyQualifiedName: String): PdfFormField? =
+        formFields.firstOrNull { it.fullyQualifiedName == fullyQualifiedName }
+
+    /**
      * Resolve a `/Dest` (on a Link annotation or outline) or `/A /D` (a GoTo
      * action's destination) to a typed [PdfDestination]. Accepts any of:
      * an explicit array, a name pointing into the catalog's name-tree, or a
@@ -237,6 +251,15 @@ class PdfDocument private constructor(
         pages
         return DestinationParser.resolve(raw, destCatalog, this, pageRefToIndex)
     }
+
+    /* ─── Editing / writing ──────────────────────────────────────────────── */
+
+    /**
+     * Open an incremental-update editor over this document. Edits are saved by
+     * appending to the original bytes (see [PdfEditor]); this document instance
+     * itself is never mutated.
+     */
+    fun edit(): PdfEditor = PdfEditor(this)
 
     /* ─── IndirectResolver ───────────────────────────────────────────────── */
 
@@ -356,7 +379,7 @@ class PdfDocument private constructor(
         when (node.getName("Type")) {
             "Page" -> {
                 val index = out.size
-                out.add(PdfPage(this, node, merged, index))
+                out.add(PdfPage(this, node, merged, index, sourceRef))
                 if (sourceRef != null) pageRefToIndex[sourceRef.objectNumber] = index
             }
             "Pages" -> {
