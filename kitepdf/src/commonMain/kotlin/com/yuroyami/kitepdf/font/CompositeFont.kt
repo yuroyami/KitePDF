@@ -97,7 +97,7 @@ internal class CompositeFont(
             val cff = if (ttf == null) descriptor?.let { loadCff(it, refs) } else null
 
             val cidToGid = CidToGidMap.from(descendant["CIDToGIDMap"]?.resolve(refs))
-            val widths = CidWidthTable.from(descendant)
+            val widths = CidWidthTable.from(descendant, refs)
             val toUnicode = loadToUnicodeOnParent(parentDict, refs)
             val baseFont = parentDict.getName("BaseFont") ?: descendant.getName("BaseFont") ?: "Unknown"
 
@@ -189,11 +189,14 @@ internal class CidWidthTable private constructor(
     }
 
     companion object {
-        fun from(descendant: PdfDictionary): CidWidthTable {
+        fun from(descendant: PdfDictionary, refs: IndirectResolver): CidWidthTable {
             val defaultW = (descendant.getInt("DW")?.toInt()?.toDouble())
                 ?: (descendant.getReal("DW"))
                 ?: 1000.0
-            val arr = descendant.getArray("W") ?: return empty(defaultW)
+            // /W is frequently an INDIRECT reference (Word emits it that way), so
+            // it must be resolved — otherwise every CID falls back to /DW and the
+            // text spreads out (broken Arabic joining, spaced-out Latin/Cyrillic).
+            val arr = descendant.getArray("W", refs) ?: return empty(defaultW)
 
             val starts = mutableListOf<Int>()
             val ends = mutableListOf<Int>()

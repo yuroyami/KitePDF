@@ -284,7 +284,7 @@ class PdfFont private constructor(
                 GlyphList.unicodeFor(gn) ?: 0
             }
             val toUnicode = loadToUnicode(dict, refs)
-            val (widths, defaultWidth) = resolveWidths(dict, baseFont, nameTable)
+            val (widths, defaultWidth) = resolveWidths(dict, baseFont, nameTable, refs)
 
             val descriptor = dict["FontDescriptor"]?.resolve(refs) as? PdfDictionary
             val embeddedTtf = descriptor?.let { loadEmbeddedTtf(it, refs) }
@@ -378,6 +378,7 @@ class PdfFont private constructor(
             dict: PdfDictionary,
             baseFont: String,
             nameTable: Array<String?>,
+            refs: IndirectResolver,
         ): Pair<IntArray, Int> {
             val widths = IntArray(256)
             for (i in 0..255) {
@@ -385,7 +386,7 @@ class PdfFont private constructor(
                 widths[i] = Standard14Widths.widthOf(baseFont, gn) ?: 0
             }
             val firstChar = dict.getInt("FirstChar")?.toInt() ?: -1
-            val arr = dict.getArray("Widths")
+            val arr = dict.getArray("Widths", refs) // /Widths is often an indirect reference
             if (firstChar in 0..255 && arr != null) {
                 for ((idx, w) in arr.withIndex()) {
                     val code = firstChar + idx
