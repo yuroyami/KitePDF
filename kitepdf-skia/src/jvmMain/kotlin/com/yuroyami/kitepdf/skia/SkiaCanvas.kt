@@ -18,6 +18,7 @@ import org.jetbrains.skia.Image
 import org.jetbrains.skia.Matrix33
 import org.jetbrains.skia.Paint
 import org.jetbrains.skia.PaintMode
+import org.jetbrains.skia.PathEffect
 import org.jetbrains.skia.Path as SkPath
 import org.jetbrains.skia.PathFillMode
 import org.jetbrains.skia.Point
@@ -77,6 +78,7 @@ class SkiaCanvas(private val canvas: SkCanvas) : PdfCanvas {
     override fun strokePath(
         path: PdfPath, ctm: PdfMatrix, color: RgbColor, lineWidth: Double,
         alpha: Double, blendMode: PdfBlendMode,
+        dashArray: List<Double>?, dashPhase: Double,
     ) {
         val sk = toSkPath(path, ctm)
         val avgScale = (ctm.scaleX() + ctm.scaleY()) * 0.5
@@ -86,6 +88,16 @@ class SkiaCanvas(private val canvas: SkCanvas) : PdfCanvas {
             this.strokeWidth = (lineWidth * avgScale).toFloat().coerceAtLeast(0.1f)
             this.isAntiAlias = true
             this.blendMode = blendMode.toSkia()
+            // Dashed strokes: dash lengths are in user units, so scale them the
+            // same way as the line width. Skia needs an even-length, positive
+            // interval array.
+            dashArray?.let { da ->
+                val scaled = da.map { (it * avgScale).toFloat().coerceAtLeast(0f) }
+                val intervals = if (scaled.size % 2 == 0) scaled else scaled + scaled
+                if (intervals.isNotEmpty() && intervals.sum() > 0f) {
+                    this.pathEffect = PathEffect.makeDash(intervals.toFloatArray(), (dashPhase * avgScale).toFloat())
+                }
+            }
         }
         canvas.drawPath(sk, paint)
     }

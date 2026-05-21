@@ -20,7 +20,7 @@ object Corpus {
         val inputs = File(outDir, "inputs").apply { mkdirs() }
         val entries = mutableListOf<Entry>()
 
-        for (fx in SyntheticPdfs.all()) {
+        for (fx in SyntheticPdfs.all() + GeneratedPdfs.all()) {
             val f = File(inputs, "${fx.name}.pdf")
             f.writeBytes(fx.bytes)
             entries += Entry(fx.name, f, synthetic = true)

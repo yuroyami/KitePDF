@@ -17,7 +17,9 @@ import javax.imageio.ImageIO
 object DiffHarness {
 
     const val DEFAULT_DPI = 96
-    const val MAX_PAGES_PER_DOC = 3
+
+    /** Pages scored per doc. Override with -Dkitepdf.diff.maxpages; default 6. */
+    val MAX_PAGES_PER_DOC: Int get() = System.getProperty("kitepdf.diff.maxpages")?.toIntOrNull() ?: 6
 
     data class PageResult(
         val doc: String,
