@@ -6,6 +6,7 @@ import com.yuroyami.kitepdf.parser.PdfInt
 import com.yuroyami.kitepdf.parser.PdfName
 import com.yuroyami.kitepdf.parser.PdfStream
 import com.yuroyami.kitepdf.render.ImageXObject
+import com.yuroyami.kitepdf.render.toRgbaBytes
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
@@ -82,6 +83,53 @@ class ImageXObjectTest {
             ),
         )
         assertEquals("ICCBased", image.colorSpace)
+    }
+
+    @Test
+    fun smask_is_parsed_and_applied_as_per_pixel_alpha() {
+        // 2×1 DeviceGray /SMask: pixel0 transparent (0x00), pixel1 opaque (0xFF).
+        val smask = PdfStream(
+            dict = PdfDictionary(linkedMapOf(
+                "Type" to PdfName("XObject"),
+                "Subtype" to PdfName("Image"),
+                "Width" to PdfInt(2),
+                "Height" to PdfInt(1),
+                "BitsPerComponent" to PdfInt(8),
+                "ColorSpace" to PdfName("DeviceGray"),
+                "Length" to PdfInt(2),
+            )),
+            rawBytes = byteArrayOf(0x00, 0xFF.toByte()),
+        )
+        // 2×1 DeviceRGB base (red, green), embedded SMask carries the transparency.
+        val base = PdfStream(
+            dict = PdfDictionary(linkedMapOf(
+                "Type" to PdfName("XObject"),
+                "Subtype" to PdfName("Image"),
+                "Width" to PdfInt(2),
+                "Height" to PdfInt(1),
+                "BitsPerComponent" to PdfInt(8),
+                "ColorSpace" to PdfName("DeviceRGB"),
+                "Length" to PdfInt(6),
+                "SMask" to smask,
+            )),
+            rawBytes = byteArrayOf(
+                0xFF.toByte(), 0x00, 0x00, // pixel0 red
+                0x00, 0xFF.toByte(), 0x00, // pixel1 green
+            ),
+        )
+
+        val image = ImageXObject.from(base)
+        assertEquals(ImageXObject.Kind.RAW, image.kind)
+        assertEquals(2, image.softMaskWidth)
+        assertEquals(1, image.softMaskHeight)
+
+        val rgba = image.toRgbaBytes()!!
+        // Alpha comes from the SMask: pixel0 transparent, pixel1 opaque.
+        assertEquals(0x00, rgba[3].toInt() and 0xFF)
+        assertEquals(0xFF, rgba[7].toInt() and 0xFF)
+        // RGB is preserved.
+        assertEquals(0xFF, rgba[0].toInt() and 0xFF) // pixel0 red
+        assertEquals(0xFF, rgba[5].toInt() and 0xFF) // pixel1 green
     }
 
     private fun stream(

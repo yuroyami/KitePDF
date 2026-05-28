@@ -325,6 +325,21 @@ class PageRenderer(
                 ),
                 strokePattern = null,
             ))
+            // cs/CS select the colour space for subsequent sc/scn/SC/SCN. Without them a
+            // non-device space (e.g. CoreGraphics' ICCBased-RGB on iOS-generated PDFs) stayed
+            // at the default DeviceGray, so `r g b SCN` was read as gray(r) — turning the pink
+            // ECG grid white. Per ISO 32000-1 §8.6.8 selecting a space resets the colour to its
+            // initial value (black) until the next sc/scn sets components.
+            "cs" -> {
+                val csp = (a.firstOrNull() as? com.yuroyami.kitepdf.parser.PdfName)
+                    ?.let { namedColorSpace(it.value, colorSpaces) } ?: ColorSpace.DeviceGray
+                state.replace(state.current.copy(fillColorSpace = csp, fillColor = csp.defaultColor(), fillPattern = null))
+            }
+            "CS" -> {
+                val csp = (a.firstOrNull() as? com.yuroyami.kitepdf.parser.PdfName)
+                    ?.let { namedColorSpace(it.value, colorSpaces) } ?: ColorSpace.DeviceGray
+                state.replace(state.current.copy(strokeColorSpace = csp, strokeColor = csp.defaultColor(), strokePattern = null))
+            }
 
             // ─── Path construction ───────────────────────────────────────
             "m" -> path.moveTo(num(a, 0), num(a, 1))
@@ -407,7 +422,7 @@ class PageRenderer(
                 val stream = xobjects[name] ?: return
                 when (stream.dict.getName("Subtype")) {
                     "Image" -> withSoftMask(state.current) {
-                        canvas.drawImage(ImageXObject.from(stream), state.current.ctm, state.current.fillAlpha)
+                        canvas.drawImage(ImageXObject.from(stream, resolver), state.current.ctm, state.current.fillAlpha)
                     }
                     "Form" -> renderFormXObject(stream, state)
                 }
@@ -606,7 +621,13 @@ class PageRenderer(
 
     private fun moveText(state: GraphicsStack, tx: Double, ty: Double, setLeading: Boolean) {
         state.mutateText { t ->
-            val moved = Matrix.translation(tx, ty).concat(t.lineMatrix)
+            // ISO 32000-1 §9.4.2: Tlm_new = translate(tx,ty) × Tlm (row-vector form),
+            // i.e. the offset is in UNSCALED TEXT SPACE — apply the translation first,
+            // then the line matrix, so its scale/rotation transform the offset. (concat
+            // applies its argument first, so this is lineMatrix.concat(translation).)
+            // The reverse order silently works only when Tm has unit scale; with the
+            // font size baked into Tm (Tf size 1, scale in Tm) it collapsed line spacing.
+            val moved = t.lineMatrix.concat(Matrix.translation(tx, ty))
             t.copy(
                 lineMatrix = moved,
                 textMatrix = moved,
@@ -640,10 +661,12 @@ class PageRenderer(
             )
         }
 
-        // Advance Tm by the total width of this run.
+        // Advance Tm by the total width of this run. The advance is in text space,
+        // so translate first then apply the text matrix (see moveText) — otherwise a
+        // size-in-Tm run advances in output space and the next run on the line overlaps.
         val totalAdvance = totalAdvance(bytes, t, font)
         state.mutateText {
-            it.copy(textMatrix = Matrix.translation(totalAdvance, 0.0).concat(it.textMatrix))
+            it.copy(textMatrix = it.textMatrix.concat(Matrix.translation(totalAdvance, 0.0)))
         }
     }
 
@@ -652,7 +675,8 @@ class PageRenderer(
         val t = state.current.text
         val tx = thousandthsOfEm / 1000.0 * t.fontSize * (t.horizontalScaling / 100.0)
         state.mutateText {
-            it.copy(textMatrix = Matrix.translation(tx, 0.0).concat(it.textMatrix))
+            // Text-space offset: translate first, then the text matrix (see moveText).
+            it.copy(textMatrix = it.textMatrix.concat(Matrix.translation(tx, 0.0)))
         }
     }
 

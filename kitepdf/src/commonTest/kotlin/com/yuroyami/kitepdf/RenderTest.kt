@@ -84,6 +84,54 @@ class RenderTest {
         )
     }
 
+    @Test
+    fun line_move_is_scaled_by_text_matrix() {
+        // Font size baked into Tm (Tf 1, Tm scale 20): a `Td 0 -1` must move the line
+        // 20 user-units down (scaled by Tm), not 1. Regression for the concat-order bug
+        // that collapsed line spacing on size-in-Tm PDFs (e.g. Android-generated reports).
+        val pdf = singlePagePdf("BT /F1 1 Tf 20 0 0 20 100 700 Tm (A) Tj 0 -1 Td (B) Tj ET")
+        val doc = KitePDF.open(pdf)
+        val canvas = RecordingCanvas()
+        doc.pages[0].renderTo(canvas, Matrix.IDENTITY)
+        val texts = canvas.calls.filterIsInstance<RecordingCanvas.Call.Text>()
+        assertEquals(2, texts.size)
+        assertEquals(700.0, texts[0].textMatrix.f, 1e-6)
+        assertEquals(680.0, texts[1].textMatrix.f, 1e-6) // 700 - (1 × 20), NOT 700 - 1
+        assertEquals(100.0, texts[1].textMatrix.e, 1e-6)
+    }
+
+    @Test
+    fun run_advance_is_scaled_by_text_matrix() {
+        // Same size-in-Tm setup: the advance between two Tj runs on a line is in text
+        // space, so it must be scaled by Tm (×10 here) → a gap of ~13 units, not ~1.3.
+        val pdf = singlePagePdf("BT /F1 1 Tf 10 0 0 10 50 500 Tm (AB) Tj (CD) Tj ET")
+        val doc = KitePDF.open(pdf)
+        val canvas = RecordingCanvas()
+        doc.pages[0].renderTo(canvas, Matrix.IDENTITY)
+        val texts = canvas.calls.filterIsInstance<RecordingCanvas.Call.Text>()
+        assertEquals(2, texts.size)
+        assertTrue(
+            texts[1].textMatrix.e - texts[0].textMatrix.e > 10.0,
+            "run advance not scaled by Tm: ${texts[0].textMatrix.e} -> ${texts[1].textMatrix.e}",
+        )
+    }
+
+    @Test
+    fun cs_selects_color_space_so_scn_reads_all_components() {
+        // `CS` must select the stroke colour space so SCN reads all components. Without a cs/CS
+        // handler the space stayed DeviceGray and `1 0 0 SCN` was read as gray(1)=white — the
+        // iOS ECG-grid-rendered-white bug (CoreGraphics uses ICCBased-RGB + CS/SCN, not rg).
+        val pdf = singlePagePdf("/DeviceRGB CS 1 0 0 SCN 0 0 m 100 100 l S")
+        val doc = KitePDF.open(pdf)
+        val canvas = RecordingCanvas()
+        doc.pages[0].renderTo(canvas, Matrix.IDENTITY)
+        val strokes = canvas.calls.filterIsInstance<RecordingCanvas.Call.Stroke>()
+        assertEquals(1, strokes.size)
+        assertEquals(1.0, strokes[0].color.r, 1e-6)
+        assertEquals(0.0, strokes[0].color.g, 1e-6)
+        assertEquals(0.0, strokes[0].color.b, 1e-6) // would be (1,1,1) white without the CS handler
+    }
+
     private fun singlePagePdf(contentStream: String): ByteArray {
         val buf = ByteArrayBuilder()
         val offsets = mutableListOf<Int>()

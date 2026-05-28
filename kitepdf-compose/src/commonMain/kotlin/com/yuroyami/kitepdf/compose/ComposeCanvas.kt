@@ -24,6 +24,7 @@ import com.yuroyami.kitepdf.font.PdfFont
 import androidx.compose.ui.graphics.Brush
 import com.yuroyami.kitepdf.render.BlendMode as PdfBlendMode
 import com.yuroyami.kitepdf.render.ImageXObject
+import com.yuroyami.kitepdf.render.toRgbaBytes
 import com.yuroyami.kitepdf.render.Matrix as PdfMatrix
 import com.yuroyami.kitepdf.render.PdfCanvas
 import com.yuroyami.kitepdf.render.PdfPath
@@ -113,7 +114,10 @@ class ComposeCanvas(
                 color = color.toCompose(),
                 alpha = alpha.toFloat().coerceIn(0f, 1f),
                 style = Stroke(
-                    width = (lineWidth * avgScale).toFloat().coerceAtLeast(0.1f),
+                    // Hairline minimum: a stroke thinner than ~1 device pixel must still
+                    // render as a visible 1px line, not vanish (ISO 32000-1 §8.4.3.2; cf.
+                    // MuPDF draw-device.c clamping linewidth up to the anti-alias unit).
+                    width = (lineWidth * avgScale).toFloat().coerceAtLeast(1.0f),
                     pathEffect = dash,
                 ),
                 blendMode = blendMode.toCompose(),
@@ -190,10 +194,19 @@ class ComposeCanvas(
         val rotationDegrees = (rotationRadians * 180.0 / PI).toFloat()
         val renderedSize = fontSize * sy
 
+        // renderedSize is already in DEVICE PIXELS (font size × text-matrix scale, which
+        // includes the page raster scale). A Compose `Sp` size is re-multiplied by the device
+        // density AND the user's accessibility font scale when measured — so on a real device
+        // (density 2–3×) the text rendered that many times too large, and on high-density
+        // Android the oversized runs overlapped ("collapsed"). Divide both back out so the
+        // glyph lands at exactly renderedSize px on every platform. (JVM test density is 1×,
+        // which is why this stayed invisible in the golden tests.)
+        val spValue = (renderedSize / (drawScope.density * drawScope.fontScale)).toFloat()
+
         val color = fillColor.toCompose().copy(alpha = alpha.toFloat().coerceIn(0f, 1f))
         val style = TextStyle(
             color = color,
-            fontSize = TextUnit(renderedSize.toFloat(), TextUnitType.Sp),
+            fontSize = TextUnit(spValue, TextUnitType.Sp),
             fontFamily = font.toComposeFamily(),
             fontWeight = font.toComposeWeight(),
             fontStyle = font.toComposeStyle(),
@@ -221,6 +234,10 @@ class ComposeCanvas(
                 // ImageDecoder will fall back to null + a placeholder.
                 ImageXObject.Kind.JPEG, ImageXObject.Kind.JPEG2000, ImageXObject.Kind.JBIG2 ->
                     ImageDecoder.decode(image.encodedBytes)
+                // RAW (FlateDecode etc.): samples are already inflated — assemble RGBA
+                // and build a bitmap directly. Covers the common embedded-PNG case.
+                ImageXObject.Kind.RAW ->
+                    image.toRgbaBytes()?.let { ImageDecoder.decodeRaw(it, image.width, image.height) }
                 else -> null
             }
             if (bitmap != null) {

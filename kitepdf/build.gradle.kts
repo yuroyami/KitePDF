@@ -3,6 +3,7 @@ import org.jetbrains.kotlin.gradle.ExperimentalKotlinGradlePluginApi
 plugins {
     alias(libs.plugins.kotlin.multiplatform)
     alias(libs.plugins.android.kmp.library)
+    alias(libs.plugins.vanniktech.publish)
 }
 
 /*
@@ -56,3 +57,7 @@ kotlin {
         }
     }
 }
+
+// Publishing is configured by the vanniktech plugin from gradle.properties:
+// shared coordinates/POM/signing in the root gradle.properties, this module's
+// POM_NAME + POM_DESCRIPTION in kitepdf/gradle.properties.

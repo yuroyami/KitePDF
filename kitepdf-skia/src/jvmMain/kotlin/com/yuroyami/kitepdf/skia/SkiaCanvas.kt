@@ -11,10 +11,18 @@ import com.yuroyami.kitepdf.render.PdfShading
 import com.yuroyami.kitepdf.render.RgbColor
 import com.yuroyami.kitepdf.render.SoftMask
 import com.yuroyami.kitepdf.render.sampleStops
+import com.yuroyami.kitepdf.render.toRgbaBytes
 import org.jetbrains.skia.BlendMode as SkiaBlendMode
 import org.jetbrains.skia.Canvas as SkCanvas
 import org.jetbrains.skia.Color
+import org.jetbrains.skia.ColorAlphaType
+import org.jetbrains.skia.ColorType
+import org.jetbrains.skia.Font
+import org.jetbrains.skia.FontMgr
+import org.jetbrains.skia.FontStyle
 import org.jetbrains.skia.Image
+import org.jetbrains.skia.ImageInfo
+import org.jetbrains.skia.Typeface
 import org.jetbrains.skia.Matrix33
 import org.jetbrains.skia.Paint
 import org.jetbrains.skia.PaintMode
@@ -85,7 +93,9 @@ class SkiaCanvas(private val canvas: SkCanvas) : PdfCanvas {
         val paint = Paint().apply {
             this.color = color.toArgb(alpha)
             this.mode = PaintMode.STROKE
-            this.strokeWidth = (lineWidth * avgScale).toFloat().coerceAtLeast(0.1f)
+            // Hairline minimum: sub-pixel strokes must still render as a visible ~1px
+            // line (ISO 32000-1 §8.4.3.2; MuPDF clamps to the anti-alias unit, draw-device.c:800).
+            this.strokeWidth = (lineWidth * avgScale).toFloat().coerceAtLeast(1.0f)
             this.isAntiAlias = true
             this.blendMode = blendMode.toSkia()
             // Dashed strokes: dash lengths are in user units, so scale them the
@@ -112,7 +122,10 @@ class SkiaCanvas(private val canvas: SkCanvas) : PdfCanvas {
         blendMode: PdfBlendMode,
     ) {
         if (bytes.isEmpty()) return
-        if (!font.hasEmbeddedOutlines) return  // system-font fallback isn't wired in v1.
+        if (!font.hasEmbeddedOutlines) {
+            drawTextViaSystemFont(bytes, font, fontSize, textMatrix, fillColor, alpha, blendMode)
+            return
+        }
 
         val upm = font.unitsPerEm ?: 1000
         val unitScale = fontSize / upm
@@ -133,6 +146,64 @@ class SkiaCanvas(private val canvas: SkCanvas) : PdfCanvas {
                 canvas.drawPath(sk, paint)
             }
             penX += glyph.advanceWidth * unitScale
+        }
+    }
+
+    /**
+     * System-font fallback for fonts without embedded outlines (Standard-14
+     * Helvetica/Times/Courier etc). Decode to text, pick a host typeface by
+     * family, and draw the run with the text matrix's scale/rotation applied
+     * (baseline at the matrix origin). Mirrors ComposeCanvas.drawTextViaSystemFont.
+     */
+    private fun drawTextViaSystemFont(
+        bytes: ByteArray, font: PdfFont, fontSize: Double,
+        textMatrix: PdfMatrix, fillColor: RgbColor, alpha: Double, blendMode: PdfBlendMode,
+    ) {
+        val text = font.decode(bytes)
+        if (text.isEmpty()) return
+        val sx = kotlin.math.sqrt(textMatrix.a * textMatrix.a + textMatrix.b * textMatrix.b)
+        val sy = kotlin.math.sqrt(textMatrix.c * textMatrix.c + textMatrix.d * textMatrix.d)
+        val renderedSize = (fontSize * sy).toFloat()
+        if (renderedSize <= 0f) return
+        val rotationDeg = (kotlin.math.atan2(textMatrix.b, textMatrix.a) * 180.0 / kotlin.math.PI).toFloat()
+
+        val paint = Paint().apply {
+            color = fillColor.toArgb(alpha)
+            mode = PaintMode.FILL
+            isAntiAlias = true
+            this.blendMode = blendMode.toSkia()
+        }
+        val skFont = Font(systemTypeface(font), renderedSize)
+        canvas.save()
+        try {
+            canvas.translate(textMatrix.e.toFloat(), textMatrix.f.toFloat())
+            if (rotationDeg != 0f) canvas.rotate(rotationDeg)
+            if (sx != sy && sy != 0.0) canvas.scale((sx / sy).toFloat(), 1f)
+            canvas.drawString(text, 0f, 0f, skFont, paint)
+        } finally {
+            canvas.restore()
+        }
+    }
+
+    private fun systemTypeface(font: PdfFont): Typeface? {
+        val name = font.baseFont
+        val bold = "Bold" in name
+        val italic = "Italic" in name || "Oblique" in name
+        val style = when {
+            bold && italic -> FontStyle.BOLD_ITALIC
+            bold -> FontStyle.BOLD
+            italic -> FontStyle.ITALIC
+            else -> FontStyle.NORMAL
+        }
+        val family = when {
+            name.startsWith("Times") -> "Times New Roman"
+            name.startsWith("Courier") -> "Courier New"
+            else -> "Helvetica"
+        }
+        return try {
+            FontMgr.default.matchFamilyStyle(family, style) ?: FontMgr.default.matchFamilyStyle(null, style)
+        } catch (t: Throwable) {
+            null
         }
     }
 
@@ -211,6 +282,13 @@ class SkiaCanvas(private val canvas: SkCanvas) : PdfCanvas {
         val sk = when (image.kind) {
             ImageXObject.Kind.JPEG, ImageXObject.Kind.JPEG2000, ImageXObject.Kind.JBIG2 -> try {
                 Image.makeFromEncoded(image.encodedBytes)
+            } catch (t: Throwable) {
+                null
+            }
+            ImageXObject.Kind.RAW -> try {
+                image.toRgbaBytes()?.let {
+                    Image.makeRaster(ImageInfo(image.width, image.height, ColorType.RGBA_8888, ColorAlphaType.OPAQUE), it, image.width * 4)
+                }
             } catch (t: Throwable) {
                 null
             }

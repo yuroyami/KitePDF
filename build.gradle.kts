@@ -6,3 +6,8 @@ plugins {
     alias(libs.plugins.android.application).apply(false)
     alias(libs.plugins.android.kmp.library).apply(false)
 }
+
+allprojects {
+    group = "com.yuroyami.kitepdf"
+    version = "0.0.1"
+}

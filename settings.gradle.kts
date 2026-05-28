@@ -21,7 +21,7 @@ plugins {
     id("org.gradle.toolchains.foojay-resolver-convention") version "1.0.0"
 }
 
-rootProject.name = "kitepdf-root"
+rootProject.name = "kitepdf-KMP"
 include(":kitepdf")
 include(":kitepdf-compose")
 include(":kitepdf-skia")

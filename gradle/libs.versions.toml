@@ -2,6 +2,7 @@
 # Toolchain
 kotlin = "2.3.20"
 agp = "9.1.1"
+vanniktechPublish = "0.30.0"
 
 # Compose Multiplatform — only used by :sample. :kitepdf stays pure-Kotlin-stdlib.
 composeMultiplatform = "1.11.0"
@@ -52,3 +53,4 @@ compose-plugin = { id = "org.jetbrains.compose", version.ref = "composeMultiplat
 
 android-application = { id = "com.android.application", version.ref = "agp" }
 android-kmp-library = { id = "com.android.kotlin.multiplatform.library", version.ref = "agp" }
+vanniktech-publish = { id = "com.vanniktech.maven.publish", version.ref = "vanniktechPublish" }

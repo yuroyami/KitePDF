@@ -14,4 +14,12 @@ import androidx.compose.ui.graphics.ImageBitmap
  */
 expect object ImageDecoder {
     fun decode(bytes: ByteArray): ImageBitmap?
+
+    /**
+     * Build a bitmap from already-decoded RGBA8888 pixels (R,G,B,A per pixel,
+     * row-major, [width]*[height]*4 bytes). Unlike [decode] this is fully
+     * synchronous on every platform — the samples are already in hand — so it
+     * works on JS too. Used for RAW (FlateDecode) PDF images.
+     */
+    fun decodeRaw(rgba: ByteArray, width: Int, height: Int): ImageBitmap?
 }
