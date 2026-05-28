@@ -9,8 +9,8 @@ import kotlin.math.absoluteValue
  * Reads the subset of SFNT tables needed to render glyphs: `head`, `maxp`,
  * `hhea`, `hmtx`, `cmap`, `loca`, `glyf`. Composite glyphs are supported with
  * argument transforms; emoji-style colour tables (`COLR`/`CPAL`/`sbix`/`CBDT`)
- * are out of scope for v0.0.3 — those are extras layered on top of plain
- * outline data anyway, so absent them you still get monochrome shapes.
+ * are not yet handled — those are extras layered on top of plain outline
+ * data, so without them you still get monochrome shapes.
  *
  * The font keeps the original byte buffer alive; lookups are lazy and cached
  * via [Cache]. That keeps memory flat — most PDFs reference 50–200 glyphs

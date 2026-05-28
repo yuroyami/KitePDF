@@ -4,9 +4,9 @@ package com.yuroyami.kitepdf.font
  * Built-in CMaps named in `/Encoding` of Type 0 composite fonts.
  *
  * The PDF spec defines a long list of predefined CMaps (Identity-H/V plus
- * 35 or so CJK ones like GBK-EUC-H, UniJIS-UTF16-H). v0.0.5 ships
- * Identity-H and Identity-V (universal — used by virtually every modern
- * Asian PDF) and falls back to Identity-H for the named CJK variants.
+ * 35 or so CJK ones like GBK-EUC-H, UniJIS-UTF16-H). We ship Identity-H
+ * and Identity-V (universal — used by virtually every modern Asian PDF) and
+ * fall back to Identity-H for the named CJK variants.
  *
  * Identity-H / Identity-V interpret the byte stream as a sequence of
  * 2-byte big-endian unsigned integers; each integer IS the CID. There's

@@ -22,9 +22,9 @@ import com.yuroyami.kitepdf.render.PdfPath
  * prepended. After we strip those, the bytes are Type 1 charstring
  * bytecodes for [Type1CharstringInterpreter].
  *
- * v0.0.5 scope: rendering. We extract enough to give every charstring its
- * outline; we don't interpret PostScript expressions or hints that don't
- * matter for vector painting.
+ * Scope: rendering only. We extract enough to give every charstring its
+ * outline; PostScript expressions and hints that don't affect vector
+ * painting are not interpreted.
  */
 internal class Type1Font private constructor(
     val name: String,

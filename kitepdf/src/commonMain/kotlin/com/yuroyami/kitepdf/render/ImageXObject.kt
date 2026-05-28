@@ -13,14 +13,13 @@ import com.yuroyami.kitepdf.parser.PdfStream
  *
  * The decoded byte buffer's interpretation depends on the filter chain:
  *
- *   - `DCTDecode` → JPEG file in [encodedBytes] (we expose it raw because most
- *     platform image loaders can decode it directly; we don't ship our own
- *     JPEG decoder in v0.0.3).
+ *   - `DCTDecode` → JPEG file in [encodedBytes]; decoded by the host platform's
+ *     image loader (see `ImageDecoder` in `:kitepdf-compose`).
  *   - `FlateDecode` → raw pixel data already inflated; [pixelBytes] gives the
  *     pre-decoded buffer in DeviceRGB / DeviceGray order according to
  *     [colorSpace] and [bitsPerComponent].
  *   - `CCITTFaxDecode`, `JBIG2Decode`, `JPXDecode` — recognised but not
- *     decoded yet (Session 4+); [encodedBytes] holds the raw payload.
+ *     decoded yet; [encodedBytes] holds the raw payload.
  *
  * Callers should switch on [kind] to pick the right rendering path.
  */
@@ -49,7 +48,7 @@ class ImageXObject internal constructor(
         RAW,
         /** JPEG-encoded; [encodedBytes] is a complete JFIF/EXIF file. */
         JPEG,
-        /** CCITT Group 3/4 fax-encoded; not decoded by KitePDF v0.0.3. */
+        /** CCITT Group 3/4 fax-encoded; not decoded yet. */
         CCITT,
         /** JBIG2-encoded; not decoded yet. */
         JBIG2,

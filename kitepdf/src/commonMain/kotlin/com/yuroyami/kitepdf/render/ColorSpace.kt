@@ -13,11 +13,11 @@ import com.yuroyami.kitepdf.filters.FilterChain
 /**
  * Colour-space resolution + sample-to-RGB conversion (ISO 32000-1 §8.6).
  *
- * v0.0.4 supported families:
+ * Supported families:
  *   - DeviceGray / DeviceRGB / DeviceCMYK (the device families)
  *   - Indexed (palette lookup; base is one of the device families)
  *   - ICCBased — *falls back* to DeviceRGB / DeviceCMYK / DeviceGray based
- *     on `/N` component count (we don't apply the ICC profile yet).
+ *     on `/N` component count (the ICC profile is not applied).
  *   - CalGray, CalRGB, Lab — treated as their device equivalent (no
  *     gamma / whitepoint correction); good enough for visual approximation.
  *

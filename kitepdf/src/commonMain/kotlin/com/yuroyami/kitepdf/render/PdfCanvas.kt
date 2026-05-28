@@ -3,18 +3,20 @@ package com.yuroyami.kitepdf.render
 import com.yuroyami.kitepdf.font.PdfFont
 
 /**
- * High-level drawing target — modelled after MuPDF's `fz_device` interface
- * rather than a thin "PostScript op" relay.
+ * High-level drawing target. Implement this to add a new render backend;
+ * use [PdfPage.renderTo] to drive an existing one.
  *
  * The [PageRenderer] walks the content stream, maintains the graphics-state
  * stack, accumulates paths, and finally calls one of these device methods
- * with a complete, ready-to-paint primitive. That means the canvas never
- * needs to track the CTM, the current path, or text positioning — it just
- * receives the final geometry plus the transform to apply.
+ * with a complete, ready-to-paint primitive. Backends therefore don't need
+ * to track the CTM, the current path, or text positioning — they just
+ * receive the final geometry plus the transform to apply.
  *
- * Concrete implementations:
- *   - `ComposeCanvas` (in :kitepdf-compose) — paints into a Compose `DrawScope`.
- *   - A noop / recording canvas — useful for tests.
+ * Concrete implementations shipped:
+ *   - `ComposeCanvas` (`:kitepdf-compose`) — paints into a Compose `DrawScope`.
+ *   - `SkiaCanvas` (`:kitepdf-skia`) — paints into a Skia `Canvas` for JVM.
+ *   - `AwtCanvas` / `AndroidNativeCanvas` / `CoreGraphicsCanvas` / `Canvas2dCanvas`
+ *     (`:kitepdf-native-renderer`) — host-platform raster backends.
  */
 interface PdfCanvas {
 

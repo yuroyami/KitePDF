@@ -3,247 +3,241 @@
 ![status](https://img.shields.io/badge/status-experimental-orange)
 ![kotlin](https://img.shields.io/badge/Kotlin-2.3.20-7F52FF?logo=kotlin&logoColor=white)
 ![multiplatform](https://img.shields.io/badge/Kotlin-Multiplatform-7F52FF)
-![compose](https://img.shields.io/badge/Compose%20Multiplatform-1.11-4285F4)
-![dependencies](https://img.shields.io/badge/core%20deps-kotlin--stdlib%20only-2EA44F)
-![tests](https://img.shields.io/badge/tests-92%20passing-2EA44F)
+![core deps](https://img.shields.io/badge/core%20deps-kotlin--stdlib%20only-2EA44F)
 ![license](https://img.shields.io/badge/license-Apache--2.0-blue)
 
-> A **pure-Kotlin** Multiplatform PDF library — parses, decrypts, renders real glyphs, draws Compose UI. No `java.util.zip`, no FreeType, no native crypto, no PDFBox.
+A Kotlin Multiplatform library for **reading, rendering, editing and writing PDFs**.
 
-KitePDF parses, **decrypts**, **renders TrueType + CFF outlines**, decodes images via platform image loaders, and paints all of it into Compose Multiplatform. Core stays at `kotlin-stdlib` only.
+- **Pure-Kotlin core** — no platform PDF engine under the hood. The same code paths run on JVM, Android, iOS and Browser/JS.
+- **Zero runtime deps** for the core. The `:kitepdf` artifact only requires `kotlin-stdlib`.
+- **Drop-in Compose UI** — render a page with one `@Composable`.
+- **Headless rasterizers** for server-side / CI use cases (PDF → PNG / JPEG).
 
-## Why
+## Modules
 
-Every Kotlin Multiplatform team that wants PDFs hits the same wall: the good libraries (PDFBox, iText, MuPDF) are JVM/native-only and don't compose with iOS or JS. The KMP-friendly wrappers all delegate to platform PDF kits (Android `PdfRenderer`, iOS `PDFKit`, browser PDF.js), and you end up shipping four parallel implementations.
+KitePDF is published as four artifacts so you only pull in what you need.
 
-KitePDF takes the other path: implement the PDF spec itself in Kotlin, share **one** codebase across every target. We use MuPDF as architectural reference (the cleanest open-source PDF engine) but every line is our own.
+| Artifact | What it gives you | Depends on |
+|---|---|---|
+| `com.yuroyami.kitepdf:kitepdf` | Core: parse / decrypt / render / extract text / edit / write. Headless. | `kotlin-stdlib` |
+| `com.yuroyami.kitepdf:kitepdf-compose` | `@Composable PdfPageView(page)` for Compose Multiplatform. | core + Compose |
+| `com.yuroyami.kitepdf:kitepdf-skia` | `PdfPageRasterizer` — render a page to a Skia `Image` or PNG bytes (JVM). | core + Skiko |
+| `com.yuroyami.kitepdf:kitepdf-native-renderer` | Per-platform raster backends: AWT (JVM), `android.graphics.Canvas` (Android), CoreGraphics (iOS), Canvas2D (JS). | core |
 
-## Status — v0.0.6
-
-| Area | Status | Notes |
-| --- | --- | --- |
-| **Parsing** | | |
-| RFC 1951 DEFLATE inflater | ✅ | Pure Kotlin, no `java.util.zip` |
-| RFC 1950 zlib wrapper | ✅ | With Adler-32 verification |
-| PDF lexer, parser, classic xref + xref-streams + `/Prev` | ✅ | |
-| Indirect `/Length`, ObjStm | ✅ | |
-| **Filters** | | |
-| FlateDecode + TIFF + PNG predictors | ✅ | |
-| ASCIIHex / ASCII85 / RunLength | ✅ | |
-| **LZWDecode** | ✅ | **NEW v0.0.4** — variable-width, MSB-packed |
-| CCITTFax / JBIG2 | ❌ | Roadmap |
-| **Colour spaces** | | |
-| DeviceGray / DeviceRGB | ✅ | |
-| **DeviceCMYK** (`k` / `K` operators + colourspace family) | ✅ | **NEW** — naïve subtractive conversion |
-| **Indexed (palette)** | ✅ | **NEW** — for indexed images / shadings |
-| CalGray / CalRGB / Lab / ICCBased | 🟡 | Fall back to a sensible device family |
-| DeviceN / Separation / Pattern | ❌ | |
-| **Encryption (NEW v0.0.4)** | | |
-| Standard Security Handler V1 / V2 (RC4) | ✅ | **NEW** — round-trip tested |
-| Standard Security Handler V4 (AES-128) | ✅ | **NEW** |
-| Standard Security Handler V5 / V6 (AES-256) | ✅ | **NEW** — SHA-256 key derivation |
-| Pure-Kotlin RC4 / MD5 / SHA-256 / AES-128 / AES-256 | ✅ | **NEW** — verified against NIST + RFC vectors |
-| Per-object key derivation + `/Crypt` filter routing | ✅ | **NEW** |
-| Public-key security | ❌ | |
-| **Fonts** | | |
-| Standard 14 widths (URW-derived) | ✅ | |
-| Adobe Glyph List → Unicode (4 200 entries) | ✅ | |
-| `/Encoding` (WinAnsi / MacRoman / Standard) + `/Differences` | ✅ | |
-| `/ToUnicode` CMap | ✅ | |
-| TrueType outline parser (`/FontFile2`) | ✅ | head / maxp / hhea / hmtx / cmap (0/4/6/12) / loca / glyf simple + composite |
-| CFF / OpenType-CFF (`/FontFile3`) | ✅ | Type 1C + CIDFontType0C; full Type 2 charstring interpreter |
-| **Type 1 (`/FontFile`) outlines** | ✅ | **NEW v0.0.5** — PostScript header scan + eexec decrypt + Type 1 charstring interpreter |
-| **Type 0 composite fonts** (`/Type0` + CIDFontType0/2) | ✅ | **NEW v0.0.5** — Identity-H/V CMap, `/CIDToGIDMap` (Identity + stream), `/W` widths (both forms), per-CID glyph walk |
-| Type 3 (synthetic) | ❌ | Rare; each glyph is its own content stream |
-| **Rendering** | | |
-| `PdfCanvas` device interface + GraphicsStack + CTM | ✅ | |
-| Path + paint operators + colour | ✅ | |
-| Full text state machine | ✅ | |
-| Per-glyph outline rendering (TTF + CFF) | ✅ | |
-| Clipping (`W` / `W*`) | ✅ | |
-| **Form XObject recursion (`Do` for `/Subtype /Form`)** | ✅ | **NEW v0.0.4** — child resources + matrix concat |
-| **Image XObject + JPEG decoding** | ✅ | **NEW** — `expect/actual` decoder per platform; JVM uses Skia, Android uses BitmapFactory, iOS uses Skia; JS draws placeholder |
-| CCITTFax / JBIG2 / JPEG 2000 images | ❌ | Placeholder for now |
-| **Annotations (NEW v0.0.4)** | ✅ | |
-| `PdfAnnotation` model + 24 subtypes parsed | ✅ | **NEW** |
-| Link / Highlight / Underline / StrikeOut rendered | ✅ | **NEW** — fallback drawing when `/AP` is absent |
-| Custom appearance streams (`/AP /N`) rendered | ✅ | **NEW** — via Form XObject path |
-| Action / URI / GoTo parsing | 🟡 | URI link parsing in; GoTo destinations are Session 5 |
-| **Compose Multiplatform binding** | | |
-| `@Composable PdfPageView(page)` | ✅ | |
-| ComposeCanvas with embedded glyph rendering | ✅ | |
-| Clipping via `clipPath` | ✅ | |
-| Image bitmap painting via `ImageDecoder` expect/actual | ✅ | **NEW** |
-| **Transparency (NEW v0.0.6)** | | |
-| Extended Graphics State (`gs` operator, `/ExtGState`) | ✅ | **NEW** — `/ca` fill alpha, `/CA` stroke alpha, `/BM` blend mode, `/SMask`, `/LW` |
-| All 16 PDF blend modes (Normal/Multiply/Screen/Overlay/Darken/Lighten/ColorDodge/ColorBurn/HardLight/SoftLight/Difference/Exclusion/Hue/Saturation/Color/Luminosity) | ✅ | **NEW** — 1:1 mapping to Compose `BlendMode` |
-| Per-object alpha (multiplied through fill/stroke/text/image) | ✅ | **NEW** |
-| Transparency groups (Form XObject `/Group /S /Transparency`) | ✅ | **NEW** — Compose `Canvas.saveLayer` / `restore` with paint blend mode + alpha |
-| Soft masks (`/SMask`) | 🟡 partial | Parsed and tracked; mask compositing on the backend is a Session-8 deliverable |
-| **Roadmap** | | |
-| AcroForm reading + field appearance generation | ❌ | |
-| XFA forms | ❌ | |
-| Digital signatures (parse PKCS#7) | ❌ | |
-| Full soft mask compositing (render mask group → DstIn) | ❌ | |
-| Tiling + shading patterns | ❌ | |
-| Document outlines / bookmarks | ❌ | |
-| Linearization (progressive load) | ❌ | |
-| Type 1 (`/FontFile`) outlines | ❌ | |
-| Xref recovery for malformed files | ❌ | |
-| PDF writing | ❌ | |
-
-## Architecture
-
-```
-+--------------------------------------------------------------------------+
-|                  :sample (Compose Multiplatform demo)                    |
-+--------------------------------------------------------------------------+
-                                ↓
-+--------------------------------------------------------------------------+
-|                              :kitepdf-compose                            |
-|   ComposeCanvas — paths + glyphs (TTF & CFF) + clipping                  |
-|   ImageDecoder (expect/actual) — JVM/Android/iOS use platform decoders   |
-|   @Composable PdfPageView(page)                                          |
-+--------------------------------------------------------------------------+
-                                ↓
-+--------------------------------------------------------------------------+
-|                            :kitepdf  (pure Kotlin)                       |
-|                                                                          |
-|   PdfDocument.open(bytes, password?) → pages → renderTo() / extractText  |
-|                                                                          |
-|   ┌─ render ────────────────────────────────────────────────────────┐    |
-|   │  PageRenderer + GraphicsStack + Matrix + PdfPath                │    |
-|   │  ColorSpace (Gray / RGB / CMYK / Indexed) + ImageXObject        │    |
-|   │  Form XObject recursion + Annotation rendering                  │    |
-|   └─────────────────────────────────────────────────────────────────┘    |
-|   ┌─ font ──────────────────────────────────────────────────────────┐    |
-|   │  PdfFont (Standard 14 widths + AGL + encodings)                 │    |
-|   │  TrueTypeFont + TtfCMap + GlyphOutline                          │    |
-|   │  CffFont + CharstringInterpreter  ← NEW                          │    |
-|   │  ToUnicode CMap                                                 │    |
-|   └─────────────────────────────────────────────────────────────────┘    |
-|   ┌─ crypto  ← NEW ─────────────────────────────────────────────────┐    |
-|   │  MD5 + SHA-256 + RC4 + AES-128 + AES-256 (pure Kotlin)          │    |
-|   │  StandardSecurityHandler (V1/V2/V4/V5/V6)                       │    |
-|   │  Decryptor (walks objects, decrypts strings + streams)          │    |
-|   └─────────────────────────────────────────────────────────────────┘    |
-|   ┌─ parser ────────────────────────────────────────────────────────┐    |
-|   │  Lexer + Parser + XrefParser + PdfObject hierarchy              │    |
-|   └─────────────────────────────────────────────────────────────────┘    |
-|   ┌─ filters + compression + core ──────────────────────────────────┐    |
-|   │  Flate / ASCIIHex / ASCII85 / RLE / LZW / predictors            │    |
-|   │  Inflate (RFC 1951) + Zlib (RFC 1950)                           │    |
-|   └─────────────────────────────────────────────────────────────────┘    |
-+--------------------------------------------------------------------------+
+```kotlin
+// Gradle (Kotlin DSL)
+dependencies {
+    implementation("com.yuroyami.kitepdf:kitepdf:0.0.1")
+    // optional:
+    implementation("com.yuroyami.kitepdf:kitepdf-compose:0.0.1")
+}
 ```
 
-## Usage
+## Quick start
+
+### Read a PDF
+
+```kotlin
+import com.yuroyami.kitepdf.PdfDocument
+
+val doc = PdfDocument.open(pdfBytes)
+println("${doc.pageCount} pages — PDF ${doc.version}")
+println(doc.pages[0].extractText())
+```
 
 ### Open an encrypted PDF
 
 ```kotlin
-import com.yuroyami.kitepdf.KitePDF
-
-val doc = KitePDF.open(pdfBytes, password = "secret".encodeToByteArray())
-if (!doc.isAuthenticated) {
-    println("Wrong password — document is still readable but content stays encrypted.")
-}
-println("PDF ${doc.version} — ${doc.pageCount} page(s)")
-println(doc.pages[0].extractText())
+val doc = PdfDocument.open(pdfBytes, password = "secret".encodeToByteArray())
+if (!doc.isAuthenticated) error("Wrong password")
 ```
 
-### Inspect annotations
-
-```kotlin
-for (annot in doc.pages[0].annotations) {
-    when (annot.subtype) {
-        PdfAnnotation.Subtype.Link -> println("Link: ${annot.uri} @ ${annot.rect}")
-        PdfAnnotation.Subtype.Highlight -> println("Highlight: ${annot.contents}")
-        else -> {}
-    }
-}
-```
-
-### Compose rendering
+### Render a page (Compose Multiplatform)
 
 ```kotlin
 @Composable
-fun MyScreen(pdfBytes: ByteArray) {
-    val doc = remember(pdfBytes) { KitePDF.open(pdfBytes) }
+fun MyPdfScreen(pdfBytes: ByteArray) {
+    val doc = remember(pdfBytes) { PdfDocument.open(pdfBytes) }
     PdfPageView(page = doc.pages[0], modifier = Modifier.fillMaxWidth())
 }
 ```
 
-## Tests
+### Render a page to PNG (server-side, no UI)
 
-```bash
-./gradlew :kitepdf:jvmTest         # 74 tests, JVM
-./gradlew :kitepdf:allTests        # All targets that have a runner
+```kotlin
+import com.yuroyami.kitepdf.nativerenderer.AwtPdfRasterizer
+
+val png: ByteArray = AwtPdfRasterizer.encodeToPng(doc.pages[0], scale = 2.0)
+File("page1.png").writeBytes(png)
 ```
 
-Highlights:
-- **Encryption integration**: builds an encrypted PDF using our own crypto, opens it with KitePDF, verifies decrypted text.
-- **Crypto primitives**: NIST + RFC test vectors for MD5, SHA-256, RC4, AES-128, AES-256.
-- **Inflate**: real zlib bytes for stored, fixed Huffman, and dynamic Huffman with LZ77 back-references.
-- **Foundation fixes**: `/Prev` chain merging, indirect `/Length` resolution.
-- **TrueType**: binary reader, glyph outline → PdfPath conversion (on-curve, off-curve, implied midpoint).
-- **Annotations**: link parsing with URI extraction; highlight colour decoding.
+### Edit an existing PDF (incremental update)
 
-## Session 6 highlights — transparency + blend modes
+`edit()` opens a writer that **appends** changes to the original bytes — the
+original is preserved verbatim, which is also what makes this the right
+foundation for digital signing later on.
 
-PDF transparency is the spec's compositing model: every paint produces a
-`(colour, alpha)` source that's blended onto a `backdrop` via a per-state
-blend function. v0.0.6 wires the whole pipeline:
+```kotlin
+val editor = doc.edit()
 
-1. **`ExtGState` parsing** — every `/ExtGState /<name>` entry now produces a
-   typed [ExtGState] data class with `/ca` fill alpha, `/CA` stroke alpha,
-   `/BM` blend mode, `/SMask`, `/LW`.
-2. **`gs` operator** — looks up the named ExtGState and merges its non-null
-   fields into the current [GraphicsState]; only the entries the dict
-   actually sets override (spec semantics, not full replacement).
-3. **Alpha + blend mode plumbed through every paint** — `fillPath`,
-   `strokePath`, `drawText` and `drawImage` now carry `alpha` + `blendMode`
-   params. [PageRenderer] reads them off the live `GraphicsState` and
-   passes through; backends paint accordingly.
-4. **All 16 PDF blend modes** map 1:1 to Compose `BlendMode` (Multiply,
-   Screen, Overlay, Darken, Lighten, ColorDodge, ColorBurn, HardLight,
-   SoftLight, Difference, Exclusion, Hue, Saturation, Color, Luminosity).
-5. **Transparency groups** — Form XObjects with `/Group /S /Transparency`
-   open a Compose `Canvas.saveLayer` with a Paint carrying the requested
-   alpha + blend mode; matching `endTransparencyGroup` calls `restore`,
-   which composites the layer back onto the parent.
+// Change metadata
+editor.setInfo(title = "Reviewed", author = "Alice")
 
-Soft masks (`/SMask`) are parsed and propagated through the graphics state
-but the backend mask compositing (render mask group to luminosity → apply
-as DstIn) is a Session-8 deliverable. Annotations + sample PDFs that use
-plain alpha + blend modes now render correctly.
+// Fill a form field
+val nameField = doc.formField("ApplicantName")!!
+editor.setTextFieldValue(nameField, "Jane Doe")
 
-## Session 5 highlights — fonts are a closed problem
+// Overlay a watermark
+editor.stampPage(doc.pages[0]) {
+    setFillRgb(0.8, 0.1, 0.1)
+    text(StandardFont.HelveticaBold, 48.0, x = 120.0, y = 400.0, "DRAFT")
+}
 
-KitePDF now parses **every embedded outline format the PDF spec describes**:
+val updatedBytes: ByteArray = editor.saveIncremental()
+```
 
-1. **Type 1 (`/FontFile`)** — the legacy PostScript format. Header scan for `/Encoding`, eexec stream-cipher decryption with the canonical 55665 seed, charstring decryption with the 4330 seed and `/lenIV` strip, then a Type 1 charstring interpreter (rmoveto / rlineto / rrcurveto / vhcurveto / hvcurveto / closepath / endchar / callsubr / OtherSubr 0–3 for flex).
-2. **Type 0 composite fonts** — proper `bytes → CID → GID → outline` pipeline instead of routing everything through Unicode cmap. Identity-H / Identity-V byte-pair CMap, `/CIDToGIDMap` (`/Identity` or an explicit u16 stream), `/W` widths in both the `[cid [w1 w2 …]]` array form and the `[cidStart cidEnd width]` range form.
-3. **New `TextGlyph` + `PdfFont.layoutBytes()` API** — replaces per-byte iteration with a code-unit-aware walker so composite fonts contribute one glyph per CID (typically 2 bytes), not one per byte. `ComposeCanvas` and `PageRenderer` both walk this iterator.
+### Redact a region (true content removal)
 
-The full v0.0.4 mega-push from last session is unchanged:
+Unlike a black box drawn on top, this removes the underlying text/image bytes
+from the file so they cannot be extracted or recovered.
 
-- Encryption: pure-Kotlin RC4 / AES-128 / AES-256 / MD5 / SHA-256, Standard Security Handler V1–V6, encrypted-PDF round-trip tested.
-- JPEG via `expect/actual` (Skia on JVM/iOS, `BitmapFactory` on Android, placeholder on JS).
-- CFF / OpenType-CFF (`/FontFile3`) parser + Type 2 charstring interpreter.
-- DeviceCMYK + Indexed colour spaces.
-- Form XObject recursion.
-- LZW filter.
-- Annotations: 24 subtypes parsed, Link / Highlight / Underline / StrikeOut rendered with fallback drawing.
+```kotlin
+editor.redactRegion(doc.pages[0], Rectangle(left = 72.0, bottom = 700.0, right = 320.0, top = 720.0))
+val safeBytes = editor.saveRewritten()   // full rewrite, original bytes dropped
+```
+
+### Build a new PDF from scratch
+
+```kotlin
+import com.yuroyami.kitepdf.writer.PdfBuilder
+import com.yuroyami.kitepdf.writer.StandardFont
+
+val bytes = PdfBuilder()
+    .setInfo(title = "Hello", author = "KitePDF")
+    .page(width = 612.0, height = 792.0) {
+        text(StandardFont.HelveticaBold, size = 24.0, x = 72.0, y = 720.0, "Hello, world!")
+        setFillRgb(0.9, 0.95, 1.0); rectangle(72.0, 600.0, 200.0, 80.0); fill()
+    }
+    .build()
+```
+
+## Feature matrix
+
+Legend: ✅ done · 🟡 partial · ❌ not yet.
+
+### Reading
+
+| | |
+|---|---|
+| Lexer / parser, classic xref + xref-streams, `/Prev` chain, object streams | ✅ |
+| Filters: FlateDecode (+ PNG/TIFF predictors), ASCIIHex, ASCII85, RunLength, LZW | ✅ |
+| Filters: CCITTFax, JBIG2, JPEG 2000 | ❌ |
+| Encryption: Standard Security Handler V1 / V2 / V4 / V5 / V6 (RC4, AES-128, AES-256) | ✅ |
+| Encryption: public-key | ❌ |
+| Colour: DeviceGray / DeviceRGB / DeviceCMYK / Indexed | ✅ |
+| Colour: Cal* / Lab / ICCBased | 🟡 (fall back to a sensible device family) |
+| Colour: Pattern / Separation / DeviceN | ❌ |
+| Fonts: Standard 14, WinAnsi/MacRoman/Standard + `/Differences`, `/ToUnicode` | ✅ |
+| Fonts: TrueType (`/FontFile2`), CFF / OpenType-CFF (`/FontFile3`), Type 1 (`/FontFile`) | ✅ |
+| Fonts: Type 0 composite (Identity-H/V, `/CIDToGIDMap`, `/W` widths) | ✅ |
+| Fonts: Type 3 (synthetic) | ❌ |
+| Images: JPEG (incl. CMYK / YCCK) | ✅ |
+| Images: CCITTFax / JBIG2 / JPEG 2000 / soft masks / `/Decode` invert | 🟡 |
+| Annotations (24 subtypes parsed; Link / Highlight / Underline / StrikeOut rendered; custom `/AP` rendered) | ✅ |
+| AcroForm (read-only) | ✅ |
+| Outlines, named destinations, page labels, page boxes, attachments, OCG, XMP metadata | ✅ |
+| Transparency: ExtGState, all 16 blend modes, transparency groups | ✅ |
+| Transparency: soft-mask compositing | 🟡 |
+
+### Rendering
+
+| | |
+|---|---|
+| Path / paint / text operators, full text state machine, clipping (`W` / `W*`) | ✅ |
+| Per-glyph outline rendering (TrueType, CFF, Type 1) | ✅ |
+| Form XObject recursion | ✅ |
+| Tiling / shading patterns | ❌ |
+| Backends: Compose Canvas, AWT, Skia, `android.graphics.Canvas`, CoreGraphics, Canvas2D | ✅ |
+
+### Editing & writing
+
+| | |
+|---|---|
+| Incremental update writer (append-only; original bytes preserved) | ✅ |
+| Full from-scratch builder (`PdfBuilder` + `ContentStreamBuilder`) | ✅ |
+| `/Info` metadata edit | ✅ |
+| Form filling: text (`/Tx`) | ✅ |
+| Form filling: buttons / choices (`/Btn`, `/Ch`) | ❌ |
+| Watermark / overlay (`stampPage`) | ✅ |
+| True region redaction (text bytes removed, intersecting images dropped) | ✅ |
+| Encrypted-write, digital signing (PKCS#7) | ❌ |
+| Linearization (progressive load) | ❌ |
+
+## Architecture
+
+```
++----------------------------------------------------------------------+
+| :sample          Compose Multiplatform demo app                      |
++----------------------------------------------------------------------+
+                                ↓
++----------------------------------------------------------------------+
+| :kitepdf-compose / :kitepdf-skia / :kitepdf-native-renderer          |
+|   Backend bindings — paint paths/glyphs/images into the host canvas. |
++----------------------------------------------------------------------+
+                                ↓
++----------------------------------------------------------------------+
+| :kitepdf      (pure Kotlin, kotlin-stdlib only)                      |
+|                                                                      |
+|   PdfDocument.open(bytes, password?) → pages / extractText / edit()  |
+|   PdfPage.renderTo(canvas)                                           |
+|   PdfBuilder().page { … }.build()                                    |
+|                                                                      |
+|   ┌─ render ──── PageRenderer · GraphicsStack · Matrix · PdfPath ─┐  |
+|   ┌─ font ────── TrueType · CFF · Type 1 · Type 0 / CIDFont ──────┐  |
+|   ┌─ writer ──── PdfEditor (incremental) · PdfBuilder · ContentSt ┐  |
+|   ┌─ crypto ──── MD5 / SHA-256 / RC4 / AES-128 / AES-256 (pure) ──┐  |
+|   ┌─ parser ──── Lexer · Parser · XrefParser · PdfObject ─────────┐  |
+|   ┌─ filters ─── Flate · ASCIIHex · ASCII85 · RLE · LZW ──────────┐  |
++----------------------------------------------------------------------+
+```
+
+`:kitepdf` is intentionally headless and dependency-free so it can ship into
+CLI tools, servers and Compose iOS frameworks without dragging Skia or a
+platform PDF kit along with it. The backend modules are opt-in.
+
+## Running tests
+
+```bash
+./gradlew :kitepdf:jvmTest        # core suite
+./gradlew :kitepdf:allTests       # all KMP targets that have a runner
+```
+
+The `:kitepdf-native-renderer` module ships a **differential test harness**
+that renders PDFs with both KitePDF and MuPDF and compares pixel diffs to
+catch rendering regressions. Drop real-world PDFs into
+`kitepdf-native-renderer/corpus/` (they are gitignored) and run:
+
+```bash
+brew install mupdf-tools   # one-time — provides the `mutool` oracle
+MUTOOL="$(which mutool)" ./gradlew :kitepdf-native-renderer:jvmTest --tests "*DifferentialTest*"
+# → kitepdf-native-renderer/build/difftest/report.md
+```
+
+## Status
+
+Pre-1.0, API may shift. Tracked correctness gaps are listed in the feature
+matrix above. PDF is a deep spec — see [Acknowledgements](#acknowledgements)
+for what KitePDF deliberately defers to other formats / future work.
 
 ## License
 
-Apache 2.0. Encoding tables retain their AGPL-3.0 headers in source comments (ported from MuPDF).
+Apache 2.0. A small number of encoding tables are ported from MuPDF and
+retain their AGPL-3.0 headers in the relevant source files.
 
 ## Acknowledgements
 
-Architectural inspiration from **MuPDF** by Artifex Software (AGPL-3.0). Encoding tables and glyph list data ported from MuPDF source. Standard 14 font widths derived from URW++ AFM files MuPDF ships. CFF + Type 2 charstring impl from Adobe Tech Notes 5176 + 5177. Standard Security Handler from ISO 32000-1 §7.6.
-
----
-
-*KitePDF is built and maintained by [yuroyami](https://github.com/yuroyami). Started as "could we do this without leaning on PDFBox?"; turns out you can — it's just a lot of careful Kotlin.*
+Architectural reference: [MuPDF](https://mupdf.com/) by Artifex Software.
+Encoding tables and the Adobe Glyph List are ported from MuPDF. Standard 14
+font widths derive from URW++ AFM files that ship with MuPDF. CFF / Type 2
+charstring decoder follows Adobe Tech Notes 5176 + 5177. Standard Security
+Handler follows ISO 32000-1 §7.6.

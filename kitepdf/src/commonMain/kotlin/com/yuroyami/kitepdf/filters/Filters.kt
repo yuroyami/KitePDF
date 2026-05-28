@@ -17,11 +17,12 @@ import com.yuroyami.kitepdf.parser.PdfStream
  * first). The list is in the stream dict's /Filter entry, either a single
  * /Name or an array of /Names. Per-filter parameters live under /DecodeParms.
  *
- * Session-1 scope:
- *   - FlateDecode (with TIFF + PNG predictors) — implemented
- *   - ASCIIHexDecode, ASCII85Decode, RunLengthDecode — implemented
- *   - LZWDecode, CCITTFaxDecode, JBIG2Decode, DCTDecode, JPXDecode,
- *     Crypt — throw UnsupportedFilterException
+ * Filter coverage:
+ *   - FlateDecode (with TIFF + PNG predictors), ASCIIHexDecode, ASCII85Decode,
+ *     RunLengthDecode, LZWDecode — implemented.
+ *   - DCTDecode (JPEG) — handled at the image-XObject layer.
+ *   - CCITTFaxDecode, JBIG2Decode, JPXDecode (JPEG 2000), Crypt — throw
+ *     [UnsupportedFilterException].
  */
 class UnsupportedFilterException(val filterName: String) :
     RuntimeException("Filter not yet implemented: /$filterName")

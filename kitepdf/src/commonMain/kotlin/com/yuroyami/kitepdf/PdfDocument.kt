@@ -21,17 +21,23 @@ import com.yuroyami.kitepdf.parser.XrefParser
 import com.yuroyami.kitepdf.writer.PdfEditor
 
 /**
- * Top-level KitePDF entry point.
+ * A loaded PDF document. Construct with [open].
  *
  * ```
- * val doc = PdfDocument.open(bytes)
- * println("${doc.pageCount} pages, PDF ${doc.version}")
+ * val doc = PdfDocument.open(bytes)                        // unencrypted
+ * val doc = PdfDocument.open(bytes, "secret".encodeToByteArray())
+ *
+ * println("${doc.pageCount} pages — PDF ${doc.version}")
  * println(doc.pages[0].extractText())
+ *
+ * // Editing returns a writer; the document itself is immutable.
+ * val editor = doc.edit()
+ * editor.setInfo(title = "Reviewed")
+ * val updated: ByteArray = editor.saveIncremental()
  * ```
  *
- * Holds the raw byte buffer plus the xref table; resolves indirect objects
- * lazily via [resolve]. Object stream lookups are cached so repeated access
- * doesn't re-decode the same stream.
+ * Holds the raw byte buffer plus the xref table; pages and indirect objects
+ * are resolved lazily and cached.
  */
 class PdfDocument private constructor(
     val version: String,

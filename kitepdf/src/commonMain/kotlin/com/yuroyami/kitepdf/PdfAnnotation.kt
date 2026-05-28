@@ -14,7 +14,7 @@ import com.yuroyami.kitepdf.render.RgbColor
  * One PDF annotation (ISO 32000-1 §12.5).
  *
  * The [subtype] discriminates between the 20+ annotation types defined in
- * the spec. v0.0.4 has first-class support for:
+ * the spec. First-class support is provided for:
  *   - [Subtype.Link] — URL or named-destination hyperlinks
  *   - [Subtype.Highlight] — text highlight (yellow overlay)
  *   - [Subtype.Underline] — underline marker

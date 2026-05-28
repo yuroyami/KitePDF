@@ -10,7 +10,7 @@ import com.yuroyami.kitepdf.render.PdfPath
  * index into local / global INDEX tables with a bias adjustment that depends
  * on the table size (Tech Note 5176, Appendix D).
  *
- * v0.0.4 scope:
+ * Coverage:
  *   - All path-construction operators (`rmoveto`, `hmoveto`, `vmoveto`,
  *     `rlineto`, `hlineto`, `vlineto`, `rrcurveto`, `hhcurveto`, `vvcurveto`,
  *     `hvcurveto`, `vhcurveto`, `rcurveline`, `rlinecurve`).

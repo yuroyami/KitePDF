@@ -87,7 +87,7 @@ internal class CompositeFont(
             val descendant = descendants.firstOrNull()?.resolve(refs) as? PdfDictionary ?: return null
             val descendantSubtype = descendant.getName("Subtype") ?: return null
 
-            // Resolve /Encoding — name (Identity-H/V) or CMap stream (we use named only in v0.0.5).
+            // Resolve /Encoding — name (Identity-H/V) or CMap stream (named only for now).
             val encodingName = (parentDict["Encoding"]?.resolve(refs) as? PdfName)?.value
             val codeReader = PredefinedCMaps.reader(encodingName)
 

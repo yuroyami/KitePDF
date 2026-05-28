@@ -15,7 +15,17 @@ import com.yuroyami.kitepdf.render.PdfCanvas
 import com.yuroyami.kitepdf.text.TextExtractor
 
 /**
- * A single PDF page. Built by [PdfDocument]; not meant to be constructed directly.
+ * A single PDF page. Obtained from [PdfDocument.pages]; not constructed directly.
+ *
+ * ```
+ * val page = doc.pages[0]
+ * println("${page.width} x ${page.height} pt, rotation ${page.rotation}°")
+ * println(page.extractText())
+ * for (link in page.annotations) { /* … */ }
+ *
+ * // Paint into any backend implementing PdfCanvas (see :kitepdf-compose etc.):
+ * page.renderTo(canvas, deviceCtm = Matrix.IDENTITY)
+ * ```
  */
 class PdfPage internal constructor(
     private val document: PdfDocument,

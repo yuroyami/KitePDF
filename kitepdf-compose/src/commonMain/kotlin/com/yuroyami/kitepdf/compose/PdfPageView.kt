@@ -2,13 +2,18 @@ package com.yuroyami.kitepdf.compose
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
 import com.yuroyami.kitepdf.PdfDocument
 import com.yuroyami.kitepdf.PdfPage
 import com.yuroyami.kitepdf.render.Matrix as PdfMatrix
@@ -58,28 +63,25 @@ fun PdfPageView(
 }
 
 /**
- * Convenience for rendering a whole document into a column of pages.
- * Lays out one [PdfPageView] per page; the caller wraps in a [androidx.compose.foundation.lazy.LazyColumn]
- * if they care about lazy materialisation on long docs.
+ * Convenience for rendering a whole document into a vertical column of pages.
+ * Eagerly lays out every page; for long documents prefer wrapping
+ * [PdfPageView] in your own `LazyColumn` so off-screen pages aren't measured.
+ *
+ * @param pageSpacing vertical gap between consecutive pages.
+ * @param pageModifier modifier applied to each individual [PdfPageView]
+ *   (the page already fills the available width at its natural aspect ratio).
  */
 @Composable
 fun PdfDocumentPages(
     document: PdfDocument,
     modifier: Modifier = Modifier,
+    pageSpacing: Dp = 8.dp,
+    pageModifier: Modifier = Modifier.fillMaxWidth(),
 ) {
-    androidx.compose.foundation.layout.Column(modifier = modifier) {
-        for (page in document.pages) {
-            PdfPageView(
-                page = page,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .let { Modifier },
-            )
-            androidx.compose.foundation.layout.Spacer(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .let { it },
-            )
+    Column(modifier = modifier) {
+        for ((i, page) in document.pages.withIndex()) {
+            if (i > 0) Spacer(modifier = Modifier.height(pageSpacing))
+            PdfPageView(page = page, modifier = pageModifier)
         }
     }
 }

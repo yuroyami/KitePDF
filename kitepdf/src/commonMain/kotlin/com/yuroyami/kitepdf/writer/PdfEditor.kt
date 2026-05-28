@@ -21,32 +21,32 @@ import com.yuroyami.kitepdf.parser.XrefParser
 import kotlin.math.abs
 
 /**
- * Incremental-update writer (ISO 32000-1 §7.5.6).
+ * Writer for edits to an existing PDF. Open one with [PdfDocument.edit].
  *
- * Edits to a PDF are saved by **appending** to the original file, never
- * rewriting it: the original bytes are preserved verbatim, the changed/new
- * objects are written after them, and a fresh cross-reference section + trailer
- * (whose `/Prev` points back to the document's previous xref) is appended last.
- *
- * This is the safest writer architecture for correctness — the original is
- * untouched, so a reader that ignores the update still sees the original
- * document — and it is the foundation for digital signing (which signs the
- * appended byte range). KitePDF's own reader already follows `/Prev` chains,
- * so a saved document re-opens with the edits applied and the originals intact.
- *
- * Usage:
  * ```
  * val editor = doc.edit()
  * editor.setInfo(title = "New Title")
- * val newRef = editor.addObject(PdfDictionary(mapOf("Type" to PdfName("Foo"))))
+ * editor.stampPage(doc.pages[0]) {
+ *     setFillRgb(0.8, 0.1, 0.1)
+ *     text(StandardFont.HelveticaBold, 48.0, 120.0, 400.0, "DRAFT")
+ * }
  * val bytes = editor.saveIncremental()
  * ```
  *
- * Object numbers for [addObject] are allocated above the document's current
- * `/Size`. Use [addFlateStream]/[PdfStreams] to control stream compression.
- * Incrementally writing **encrypted** documents is not yet supported — newly
- * written strings/streams would need to be encrypted to match the document's
- * security handler.
+ * Two save modes:
+ *
+ *  - [saveIncremental] **appends** changes to the original bytes (ISO 32000-1
+ *    §7.5.6). The original content is preserved verbatim, only the new/changed
+ *    objects, a fresh xref section and a trailer pointing back via `/Prev` are
+ *    written at the end. This is the right mode for ordinary edits and the
+ *    foundation for digital signing (which signs the appended byte range).
+ *  - [saveRewritten] writes a fresh, garbage-collected file containing only
+ *    objects reachable from the catalog, with edits applied and unreachable
+ *    objects dropped. Required for **redaction**, since removed content is
+ *    truly gone rather than retained in the original byte prefix.
+ *
+ * Editing **encrypted** documents is not yet supported (the writer would need
+ * to encrypt newly written strings/streams to match the security handler).
  */
 class PdfEditor internal constructor(private val base: PdfDocument) {
 

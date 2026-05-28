@@ -9,13 +9,12 @@ import com.yuroyami.kitepdf.core.PdfFormatException
  * `/Subtype /CIDFontType0C` (CFF CIDFont). About half the embedded fonts in
  * modern PDFs land here rather than as TrueType (which uses `/FontFile2`).
  *
- * v0.0.4 scope:
+ * Coverage:
  *   - Header + Name INDEX + Top DICT + String INDEX + Global/Local Subrs.
  *   - CharStrings INDEX with Type 2 charstring → [com.yuroyami.kitepdf.render.PdfPath]
  *     conversion (see [CharstringInterpreter]).
  *   - Charsets format 0/1/2 → glyph-name lookup.
- *   - Encodings format 0/1 — currently only for non-CIDFonts (we map byte
- *     codes through the encoding to SIDs to glyph names to GIDs).
+ *   - Encodings format 0/1 — for non-CIDFonts only (byte → SID → glyph name → GID).
  *   - CID-keyed fonts via FDSelect/FDArray (format 0 and 3).
  *
  * Not yet handled: hint operators are skipped (we don't rasterize, so hints

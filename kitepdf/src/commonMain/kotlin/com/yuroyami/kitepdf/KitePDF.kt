@@ -1,19 +1,20 @@
 package com.yuroyami.kitepdf
 
 /**
- * KitePDF — a pure-Kotlin Multiplatform PDF library.
+ * One-call entry point. Equivalent to [PdfDocument.open] — exists so
+ * `KitePDF.open(bytes)` reads nicely at call sites. For passwords, encryption
+ * checks, editing, etc. use [PdfDocument] directly.
  *
- * Convenience facade. The full API lives on [PdfDocument] and [PdfPage].
- *
- *   val doc = KitePDF.open(bytes)
- *   for (page in doc.pages) println(page.extractText())
- *
- * No external runtime dependencies — only kotlin-stdlib.
+ * ```
+ * val doc = KitePDF.open(bytes)
+ * for (page in doc.pages) println(page.extractText())
+ * ```
  */
 object KitePDF {
 
     /** Library version (kept in sync with the Gradle group/version). */
     const val VERSION = "0.0.1-SNAPSHOT"
 
+    /** Parse [bytes] as a PDF document. See [PdfDocument.open] for the password overload. */
     fun open(bytes: ByteArray): PdfDocument = PdfDocument.open(bytes)
 }

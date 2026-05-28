@@ -15,7 +15,7 @@ import com.yuroyami.kitepdf.core.PdfFormatException
  *      /Prev pointers.
  *   4. Following /Prev to chain through any update sections.
  *
- * Session-1 scope: classic xref tables work. Xref streams are parsed as a
+ * Classic xref tables are fully supported. Xref streams are parsed as a
  * regular stream object and walked, but only Type-1 (uncompressed in-file)
  * and Type-2 (compressed inside an object stream) entries are decoded.
  * Type-0 (free) entries are recognized but skipped.
