@@ -20,12 +20,7 @@ fun MyScreen() {
 
 ## Why
 
-Almost every other Kotlin / KMP "PDF library" is not actually a PDF library — it's a thin `expect/actual` (or JNI) wrapper around the **platform's** PDF engine: `PdfRenderer` on Android, `PDFKit` on iOS, PDF.js in the browser, PDFBox on the JVM. That sounds fine on paper. In practice it means:
-
-- **Four totally different engines under the hood.** The same PDF renders four different ways, and "we fixed that bug" means "Apple fixed it in iOS 17."
-- **You inherit upstream limits.** Can't redact? Can't fill that form? Can't decode that font? The wrapper can only do what the host SDK exposes — and you're stuck waiting on Google / Apple / Mozilla for the fix.
-- **Surprise dependencies.** JNI binaries, CocoaPods, PDF.js workers, glue that breaks on the next AGP / Xcode / Skiko bump.
-- **They're usually not real composables.** Most drop an `AndroidView` / `UIViewController` / `<iframe>` into your layout — fine until you want to overlay your own UI, animate, zoom, or nest inside a `LazyColumn`.
+Almost every other Kotlin / KMP "PDF library" is not actually a PDF library — it's a thin `expect/actual` (or JNI) wrapper around the **platform's** PDF engine: `PdfRenderer` on Android, `PDFKit` on iOS, PDF.js in the browser, PDFBox on the JVM.
 
 KitePDF is the opposite. It's a **standalone PDF engine written entirely in Kotlin** — parser, renderer, editor, writer, crypto, fonts, the whole stack. No platform engine, no JNI, no native binary, nothing to fall back on.
 
