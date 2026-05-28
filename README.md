@@ -20,35 +20,59 @@ fun MyScreen() {
 
 ## Why
 
-If you've tried to add PDF support to a Kotlin Multiplatform app, you've probably hit one of these:
+Almost every other Kotlin / KMP "PDF library" is not actually a PDF library — it's a thin `expect/actual` (or JNI) wrapper around the **platform's** PDF engine: `PdfRenderer` on Android, `PDFKit` on iOS, PDF.js in the browser, PDFBox on the JVM. That sounds fine on paper. In practice it means:
 
-- **Android only:** `PdfRenderer` is great… until you try to ship the same code to iOS.
-- **iOS only:** `PDFKit` is great… until you try to ship the same code to Android.
-- **Per-platform glue:** you end up writing four `expect/actual` wrappers around four totally different engines, with four totally different bugs.
-- **Heavy native deps:** dragging MuPDF or PDFBox into a multiplatform app is painful, especially on iOS and JS.
+- **Four totally different engines under the hood.** The same PDF renders four different ways, and "we fixed that bug" means "Apple fixed it in iOS 17."
+- **You inherit upstream limits.** Can't redact? Can't fill that form? Can't decode that font? The wrapper can only do what the host SDK exposes — and you're stuck waiting on Google / Apple / Mozilla for the fix.
+- **Surprise dependencies.** JNI binaries, CocoaPods, PDF.js workers, glue that breaks on the next AGP / Xcode / Skiko bump.
+- **They're usually not real composables.** Most drop an `AndroidView` / `UIViewController` / `<iframe>` into your layout — fine until you want to overlay your own UI, animate, zoom, or nest inside a `LazyColumn`.
 
-KitePDF is written in pure Kotlin so you write your PDF code once and it just works on every target. No NDK, no CocoaPods, no `java.awt`, no PDF.js bridge.
+KitePDF is the opposite. It's a **standalone PDF engine written entirely in Kotlin** — parser, renderer, editor, writer, crypto, fonts, the whole stack. No platform engine, no JNI, no native binary, nothing to fall back on.
+
+And the Compose binding draws **directly into a Compose `DrawScope`**. No `AndroidView`, no `UIKitView`, no embedded web view. A PDF page is just another composable: it scrolls, animates, zooms and composes with your own UI like anything else you'd put on a `Canvas`.
+
+One codebase. Every target. Bugs are ours to fix.
 
 ## Install
 
-```kotlin
-dependencies {
-    // Core: open, read, edit, save. Headless. kotlin-stdlib only.
-    implementation("com.yuroyami.kitepdf:kitepdf:0.0.1")
+KitePDF is published as four Kotlin Multiplatform artifacts on Maven Central. Add the core to `commonMain` and pick whichever extras you need:
 
-    // Compose Multiplatform binding — adds @Composable PdfPageView.
-    implementation("com.yuroyami.kitepdf:kitepdf-compose:0.0.1")
+```kotlin
+kotlin {
+    sourceSets {
+        commonMain.dependencies {
+            // The PDF engine itself. Always.
+            implementation("com.yuroyami.kitepdf:kitepdf:0.0.1")
+
+            // Optional — Compose Multiplatform binding (@Composable PdfPageView).
+            implementation("com.yuroyami.kitepdf:kitepdf-compose:0.0.1")
+
+            // Optional — headless platform-native rasterizers (no Compose).
+            // Pulls in the right backend for each target: AWT on JVM,
+            // android.graphics.Canvas on Android, CoreGraphics on iOS,
+            // Canvas2D on JS. You use it from common code; Gradle picks
+            // the right one per target.
+            implementation("com.yuroyami.kitepdf:kitepdf-native-renderer:0.0.1")
+        }
+
+        // Optional — JVM-only Skia rasterizer (server-side PNG generation).
+        jvmMain.dependencies {
+            implementation("com.yuroyami.kitepdf:kitepdf-skia:0.0.1")
+        }
+    }
 }
 ```
 
-Pick the modules you actually need:
+If you're on a plain Android / JVM project (not KMP), just add `kitepdf` (+ whichever extras you want) to your normal `dependencies { }` block — the artifacts ship Android / JVM variants alongside the multiplatform ones.
 
-| Module | What you get | When to add it |
+### What each artifact gives you
+
+| Artifact | What's in it | Targets |
 |---|---|---|
-| `kitepdf` | The reader / editor / writer. Returns text, page geometry, byte arrays. | Always. |
-| `kitepdf-compose` | `PdfPageView` + `PdfDocumentPages` composables. | You're using Compose Multiplatform. |
-| `kitepdf-native-renderer` | Headless renderers using the host's native canvas (AWT / Android Canvas / CoreGraphics / Canvas2D). | You need a `Bitmap` / `BufferedImage` / PNG without Compose. |
-| `kitepdf-skia` | Headless Skia rasterizer for JVM. | Server-side PNG generation. |
+| `kitepdf` | Open, read, decrypt, extract text, edit, save, build from scratch. Headless. Only depends on `kotlin-stdlib`. | Android · iOS · JVM · JS |
+| `kitepdf-compose` | `PdfPageView` + `PdfDocumentPages` — draw a page **directly into Compose**, no native-view wrapping. | Android · iOS · JVM (Desktop) · JS |
+| `kitepdf-native-renderer` | `PdfPage → Bitmap / BufferedImage / PNG bytes` using each platform's own 2D canvas. For non-Compose apps and server use. | Android · iOS · JVM · JS |
+| `kitepdf-skia` | Same idea as above but via Skia directly (Skiko). Headless. | JVM |
 
 ## What you can do
 
@@ -129,9 +153,9 @@ val bytes = PdfBuilder()
 | Android | ✅ | ✅ | ✅ | ✅ |
 | iOS (arm64 / sim) | ✅ | ✅ | ✅ | ✅ |
 | JVM (Desktop / Server) | ✅ | ✅ | ✅ | ✅ |
-| JS (Browser / Node) | ✅ | ✅ (Canvas2D / Compose) | ✅ | ✅ |
+| JS (Browser / Node) | ✅ | ✅ | ✅ | ✅ |
 
-The core (parsing, editing, writing) is **the same Kotlin code on every target**. Rendering uses each platform's native 2D canvas under the hood (Compose / Android Canvas / CoreGraphics / Skia / Canvas2D), so it looks native and stays fast.
+Parsing, editing and writing run **the same Kotlin code on every target** — no per-platform branches. Rendering has two paths: the Compose binding draws straight into a Compose `DrawScope` (one composable, everywhere Compose runs); the optional `kitepdf-native-renderer` module gives you a no-Compose path that uses each platform's own 2D canvas (AWT, `android.graphics.Canvas`, CoreGraphics, Canvas2D).
 
 ## Status
 
