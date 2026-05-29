@@ -37,22 +37,22 @@ kotlin {
     sourceSets {
         commonMain.dependencies {
             // The PDF engine itself. Always.
-            implementation("com.yuroyami.kitepdf:kitepdf:0.0.1")
+            implementation("io.github.yuroyami:kitepdf:0.0.1")
 
             // Optional — Compose Multiplatform binding (@Composable PdfPageView).
-            implementation("com.yuroyami.kitepdf:kitepdf-compose:0.0.1")
+            implementation("io.github.yuroyami:kitepdf-compose:0.0.1")
 
             // Optional — headless platform-native rasterizers (no Compose).
             // Pulls in the right backend for each target: AWT on JVM,
             // android.graphics.Canvas on Android, CoreGraphics on iOS,
             // Canvas2D on JS. You use it from common code; Gradle picks
             // the right one per target.
-            implementation("com.yuroyami.kitepdf:kitepdf-native-renderer:0.0.1")
+            implementation("io.github.yuroyami:kitepdf-native-renderer:0.0.1")
         }
 
         // Optional — JVM-only Skia rasterizer (server-side PNG generation).
         jvmMain.dependencies {
-            implementation("com.yuroyami.kitepdf:kitepdf-skia:0.0.1")
+            implementation("io.github.yuroyami:kitepdf-skia:0.0.1")
         }
     }
 }

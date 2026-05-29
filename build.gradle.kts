@@ -8,6 +8,6 @@ plugins {
 }
 
 allprojects {
-    group = "com.yuroyami.kitepdf"
+    group = "io.github.yuroyami"
     version = "0.0.1"
 }
