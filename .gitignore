@@ -1,0 +1,15 @@
+.gradle/
+build/
+.kotlin/
+.idea/
+.DS_Store
+local.properties
+captures/
+*.iml
+xcuserdata/
+**/Pods/
+**/Podfile.lock
+mupdf-master/
+
+# Test corpora — drop your own PDFs here; never commit them.
+kitepdf-native-renderer/corpus/*.pdf

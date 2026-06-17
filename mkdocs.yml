@@ -1,0 +1,97 @@
+site_name: KitePDF
+site_url: https://yuroyami.github.io/KitePDF/
+site_description: >-
+  Read, view, edit and create PDFs from Kotlin Multiplatform. One pure-Kotlin
+  engine, every platform: no JNI, no platform PDF engine, no native binary.
+site_author: yuroyami
+copyright: Copyright &copy; 2026 yuroyami, Apache-2.0
+
+repo_name: yuroyami/KitePDF
+repo_url: https://github.com/yuroyami/KitePDF
+edit_uri: edit/main/docs/
+
+docs_dir: docs
+
+theme:
+  name: material
+  language: en
+  icon:
+    repo: fontawesome/brands/github
+    logo: material/file-pdf-box
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: deep purple
+      accent: deep purple
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: deep purple
+      accent: deep purple
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.top
+    - navigation.tracking
+    - navigation.indexes
+    - navigation.footer
+    - toc.follow
+    - search.suggest
+    - search.highlight
+    - search.share
+    - content.code.copy
+    - content.code.annotate
+    - content.tabs.link
+    - content.action.edit
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html
+  - tables
+  - footnotes
+  - toc:
+      permalink: true
+      title: On this page
+  - pymdownx.highlight:
+      anchor_linenums: true
+      use_pygments: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.details
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+
+plugins:
+  - search
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/yuroyami/KitePDF
+    - icon: material/package-variant-closed
+      link: https://central.sonatype.com/namespace/io.github.yuroyami
+
+nav:
+  - Home: index.md
+  - Getting Started: getting-started.md
+  - Guides:
+      - Compose viewer: compose-viewer.md
+      - Reading PDFs: reading.md
+      - Creating PDFs: writing.md
+      - Editing & redaction: editing.md
+      - Headless rendering: rendering.md
+  - Reference:
+      - Recipes: recipes.md
+      - Platform support: platforms.md
+      - About & status: about.md
+      - API reference ▸: https://yuroyami.github.io/KitePDF/api/
