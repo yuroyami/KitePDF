@@ -119,6 +119,7 @@ class CoreGraphicsCanvas(private val ctx: CGContextRef) : PdfCanvas {
         path: PdfPath, ctm: PdfMatrix, color: RgbColor, lineWidth: Double,
         alpha: Double, blendMode: PdfBlendMode,
         dashArray: List<Double>?, dashPhase: Double,
+        lineCap: Int, lineJoin: Int, miterLimit: Double,
     ) {
         CGContextSaveGState(ctx)
         try {
@@ -126,6 +127,19 @@ class CoreGraphicsCanvas(private val ctx: CGContextRef) : PdfCanvas {
             CGContextSetRGBStrokeColor(ctx, color.r, color.g, color.b, alpha)
             val avgScale = (ctm.scaleX() + ctm.scaleY()) * 0.5
             CGContextSetLineWidth(ctx, (lineWidth * avgScale).coerceAtLeast(0.1))
+            // PDF cap/join codes match Core Graphics' enum ordinals (butt/round/square,
+            // miter/round/bevel).
+            platform.CoreGraphics.CGContextSetLineCap(ctx, when (lineCap) {
+                1 -> platform.CoreGraphics.CGLineCap.kCGLineCapRound
+                2 -> platform.CoreGraphics.CGLineCap.kCGLineCapSquare
+                else -> platform.CoreGraphics.CGLineCap.kCGLineCapButt
+            })
+            platform.CoreGraphics.CGContextSetLineJoin(ctx, when (lineJoin) {
+                1 -> platform.CoreGraphics.CGLineJoin.kCGLineJoinRound
+                2 -> platform.CoreGraphics.CGLineJoin.kCGLineJoinBevel
+                else -> platform.CoreGraphics.CGLineJoin.kCGLineJoinMiter
+            })
+            platform.CoreGraphics.CGContextSetMiterLimit(ctx, miterLimit.coerceAtLeast(1.0))
             if (!dashArray.isNullOrEmpty()) {
                 // Dash lengths are user-space units; device px = unit × scale.
                 memScoped {
@@ -215,12 +229,16 @@ class CoreGraphicsCanvas(private val ctx: CGContextRef) : PdfCanvas {
                                 CGContextDrawLinearGradient(ctx, gradient, start, end, drawOpts)
                             }
                             is PdfShading.Radial -> {
-                                val (cx, cy) = ctm.transformPoint(shading.coords[3], shading.coords[4])
-                                val r = (shading.coords[5] * kotlin.math.sqrt(ctm.a * ctm.a + ctm.b * ctm.b))
-                                    .coerceAtLeast(0.1)
-                                val centre = cValue<CGPoint> { x = cx; y = cy }
+                                // True PDF two-circle radial — Core Graphics takes both.
+                                val sc = kotlin.math.sqrt(ctm.a * ctm.a + ctm.b * ctm.b)
+                                val (x0, y0) = ctm.transformPoint(shading.coords[0], shading.coords[1])
+                                val r0 = (shading.coords[2] * sc).coerceAtLeast(0.0)
+                                val (x1, y1) = ctm.transformPoint(shading.coords[3], shading.coords[4])
+                                val r1 = (shading.coords[5] * sc).coerceAtLeast(0.1)
+                                val startC = cValue<CGPoint> { x = x0; y = y0 }
+                                val endC = cValue<CGPoint> { x = x1; y = y1 }
                                 CGContextDrawRadialGradient(
-                                    ctx, gradient, centre, 0.0, centre, r, drawOpts,
+                                    ctx, gradient, startC, r0, endC, r1, drawOpts,
                                 )
                             }
                             is PdfShading.Unsupported -> Unit

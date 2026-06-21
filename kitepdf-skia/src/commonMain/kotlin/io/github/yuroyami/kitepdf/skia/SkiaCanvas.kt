@@ -89,6 +89,7 @@ class SkiaCanvas(private val canvas: SkCanvas) : PdfCanvas {
         path: PdfPath, ctm: PdfMatrix, color: RgbColor, lineWidth: Double,
         alpha: Double, blendMode: PdfBlendMode,
         dashArray: List<Double>?, dashPhase: Double,
+        lineCap: Int, lineJoin: Int, miterLimit: Double,
     ) {
         val sk = toSkPath(path, ctm)
         val avgScale = (ctm.scaleX() + ctm.scaleY()) * 0.5
@@ -100,6 +101,17 @@ class SkiaCanvas(private val canvas: SkCanvas) : PdfCanvas {
             this.strokeWidth = (lineWidth * avgScale).toFloat().coerceAtLeast(1.0f)
             this.isAntiAlias = true
             this.blendMode = blendMode.toSkia()
+            this.strokeCap = when (lineCap) {
+                1 -> org.jetbrains.skia.PaintStrokeCap.ROUND
+                2 -> org.jetbrains.skia.PaintStrokeCap.SQUARE
+                else -> org.jetbrains.skia.PaintStrokeCap.BUTT
+            }
+            this.strokeJoin = when (lineJoin) {
+                1 -> org.jetbrains.skia.PaintStrokeJoin.ROUND
+                2 -> org.jetbrains.skia.PaintStrokeJoin.BEVEL
+                else -> org.jetbrains.skia.PaintStrokeJoin.MITER
+            }
+            this.strokeMiter = miterLimit.toFloat().coerceAtLeast(1f)
             // Dashed strokes: dash lengths are in user units, so scale them the
             // same way as the line width. Skia needs an even-length, positive
             // interval array.
@@ -238,10 +250,17 @@ class SkiaCanvas(private val canvas: SkCanvas) : PdfCanvas {
                 )
             }
             is PdfShading.Radial -> {
-                val (cx, cy) = ctm.transformPoint(shading.coords[3], shading.coords[4])
-                val r = (shading.coords[5] * kotlin.math.sqrt(ctm.a * ctm.a + ctm.b * ctm.b))
-                    .toFloat().coerceAtLeast(0.1f)
-                Shader.makeRadialGradient(cx.toFloat(), cy.toFloat(), r, gradient)
+                // True PDF two-circle radial via a two-point conical gradient.
+                val sc = kotlin.math.sqrt(ctm.a * ctm.a + ctm.b * ctm.b)
+                val (x0, y0) = ctm.transformPoint(shading.coords[0], shading.coords[1])
+                val r0 = (shading.coords[2] * sc).toFloat().coerceAtLeast(0f)
+                val (x1, y1) = ctm.transformPoint(shading.coords[3], shading.coords[4])
+                val r1 = (shading.coords[5] * sc).toFloat().coerceAtLeast(0.1f)
+                Shader.makeTwoPointConicalGradient(
+                    x0.toFloat(), y0.toFloat(), r0,
+                    x1.toFloat(), y1.toFloat(), r1,
+                    gradient,
+                )
             }
             is PdfShading.Unsupported -> return
         }

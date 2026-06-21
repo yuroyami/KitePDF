@@ -86,10 +86,14 @@ class AwtCanvas(private val g: Graphics2D) : PdfCanvas {
         path: PdfPath, ctm: PdfMatrix, color: RgbColor, lineWidth: Double,
         alpha: Double, blendMode: PdfBlendMode,
         dashArray: List<Double>?, dashPhase: Double,
+        lineCap: Int, lineJoin: Int, miterLimit: Double,
     ) {
         val awt = toAwtPath(path, ctm)
         val avgScale = (ctm.scaleX() + ctm.scaleY()) * 0.5
         val width = (lineWidth * avgScale).toFloat().coerceAtLeast(0.1f)
+        val cap = when (lineCap) { 1 -> BasicStroke.CAP_ROUND; 2 -> BasicStroke.CAP_SQUARE; else -> BasicStroke.CAP_BUTT }
+        val join = when (lineJoin) { 1 -> BasicStroke.JOIN_ROUND; 2 -> BasicStroke.JOIN_BEVEL; else -> BasicStroke.JOIN_MITER }
+        val miter = miterLimit.toFloat().coerceAtLeast(1f)
         val dash = dashArray
             ?.map { (it * avgScale).toFloat() }
             ?.filter { it > 0f }
@@ -98,12 +102,9 @@ class AwtCanvas(private val g: Graphics2D) : PdfCanvas {
         withComposite(blendMode, alpha) {
             g.color = color.toAwt()
             g.stroke = if (dash != null) {
-                BasicStroke(
-                    width, BasicStroke.CAP_BUTT, BasicStroke.JOIN_MITER, 10f,
-                    dash, (dashPhase * avgScale).toFloat().coerceAtLeast(0f),
-                )
+                BasicStroke(width, cap, join, miter, dash, (dashPhase * avgScale).toFloat().coerceAtLeast(0f))
             } else {
-                BasicStroke(width, BasicStroke.CAP_BUTT, BasicStroke.JOIN_MITER)
+                BasicStroke(width, cap, join, miter)
             }
             g.draw(awt)
         }
@@ -240,12 +241,30 @@ class AwtCanvas(private val g: Graphics2D) : PdfCanvas {
                 )
             }
             is PdfShading.Radial -> {
-                val (cx, cy) = ctm.transformPoint(shading.coords[3], shading.coords[4])
-                val r = (shading.coords[5] * kotlin.math.sqrt(ctm.a * ctm.a + ctm.b * ctm.b))
-                    .toFloat().coerceAtLeast(0.1f)
+                // PDF two-circle radial (§8.7.4.5.4): circle0 at t0, circle1 at t1.
+                // RadialGradientPaint models one bounding circle + a focus point,
+                // exact when the inner radius is 0 (point→circle). Use the larger
+                // circle as the bounding one and the smaller circle's centre as the
+                // focus, reversing the colours when circle0 is the larger.
+                val sc = kotlin.math.sqrt(ctm.a * ctm.a + ctm.b * ctm.b)
+                val (ax, ay) = ctm.transformPoint(shading.coords[0], shading.coords[1])
+                val ar = shading.coords[2] * sc
+                val (bx, by) = ctm.transformPoint(shading.coords[3], shading.coords[4])
+                val br = shading.coords[5] * sc
+                val outerIsB = br >= ar
+                val cx = if (outerIsB) bx else ax
+                val cy = if (outerIsB) by else ay
+                val radius = (if (outerIsB) br else ar).toFloat().coerceAtLeast(0.1f)
+                var fx = if (outerIsB) ax else bx
+                var fy = if (outerIsB) ay else by
+                // Focus must lie inside the bounding circle for AWT.
+                val ddx = fx - cx; val ddy = fy - cy
+                val dist = kotlin.math.sqrt(ddx * ddx + ddy * ddy)
+                if (dist > radius * 0.99) { val k = radius * 0.99 / dist; fx = cx + ddx * k; fy = cy + ddy * k }
+                val cols = if (outerIsB) colors else colors.reversedArray()
                 RadialGradientPaint(
-                    Point2D.Double(cx, cy), r,
-                    fractions, colors,
+                    Point2D.Double(cx, cy), radius, Point2D.Double(fx, fy),
+                    fractions, cols,
                     MultipleGradientPaint.CycleMethod.NO_CYCLE,
                 )
             }

@@ -46,6 +46,8 @@ sealed class PdfPattern {
         val xStep: Double,
         val yStep: Double,
         val contentBytes: ByteArray,
+        /** The pattern cell's own `/Resources` (fonts, colours, XObjects…). */
+        val resources: PdfDictionary? = null,
         val baseColor: RgbColor = RgbColor(0.5, 0.5, 0.5),
     ) : PdfPattern() {
         override fun equals(other: Any?): Boolean = other is Tiling &&
@@ -101,6 +103,7 @@ sealed class PdfPattern {
                     Tiling(
                         matrix, ext, paintType, tilingType, bbox, xStep, yStep,
                         io.github.yuroyami.kitepdf.filters.FilterChain.decode(stream),
+                        resources = dict.getDict("Resources", refs),
                     )
                 }
                 else -> null

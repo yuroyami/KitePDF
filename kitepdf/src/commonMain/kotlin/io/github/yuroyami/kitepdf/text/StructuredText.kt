@@ -268,7 +268,7 @@ private class TextCollectorCanvas : PdfCanvas {
     override fun beginPage(widthPt: Double, heightPt: Double, deviceCtm: Matrix) {}
     override fun endPage() {}
     override fun fillPath(path: PdfPath, ctm: Matrix, color: RgbColor, evenOdd: Boolean, alpha: Double, blendMode: BlendMode) {}
-    override fun strokePath(path: PdfPath, ctm: Matrix, color: RgbColor, lineWidth: Double, alpha: Double, blendMode: BlendMode, dashArray: List<Double>?, dashPhase: Double) {}
+    override fun strokePath(path: PdfPath, ctm: Matrix, color: RgbColor, lineWidth: Double, alpha: Double, blendMode: BlendMode, dashArray: List<Double>?, dashPhase: Double, lineCap: Int, lineJoin: Int, miterLimit: Double) {}
     override fun drawText(
         bytes: ByteArray, font: PdfFont, fontSize: Double, textMatrix: Matrix,
         fillColor: RgbColor, alpha: Double, blendMode: BlendMode,

@@ -109,54 +109,78 @@ class Parser(
         }
         consumeStreamEol()
         val streamStart = reader.pos()
-        val length = resolveStreamLength(dict)
-        if (length < 0) throw PdfFormatException("Negative stream /Length: $length")
-        if (streamStart + length > reader.size) {
-            throw PdfFormatException("Stream length $length runs past EOF from $streamStart")
+
+        // Determine the stream body length. The declared /Length is preferred, but
+        // real-world PDFs frequently carry a wrong or missing /Length (or an indirect
+        // /Length we can't resolve in this context), so we fall back to scanning for
+        // the "endstream" keyword — mirroring MuPDF's pdf_load_raw_stream recovery.
+        val declared = resolveStreamLengthOrNull(dict)
+        var bodyEnd = -1
+        if (declared != null && declared in 0..(reader.size - streamStart).toLong()) {
+            val candidate = streamStart + declared.toInt()
+            if (endstreamAppearsAt(candidate)) bodyEnd = candidate
         }
-        val raw = reader.readBytes(length.toInt())
-        val endTok = lexer.nextToken()
-        if (endTok !is Token.Keyword || endTok.value != "endstream") {
-            throw PdfFormatException("Expected 'endstream' after stream body, got $endTok")
+        if (bodyEnd < 0) {
+            val es = reader.indexOf(ENDSTREAM, streamStart)
+            if (es < 0) throw PdfFormatException("Stream from $streamStart has no 'endstream'")
+            // The EOL immediately before "endstream" is part of the keyword delimiter,
+            // not the stream data (§7.3.8.1). Strip one trailing CR, LF, or CRLF.
+            var e = es
+            if (e > streamStart && reader.bytes[e - 1] == '\n'.code.toByte()) {
+                e--
+                if (e > streamStart && reader.bytes[e - 1] == '\r'.code.toByte()) e--
+            } else if (e > streamStart && reader.bytes[e - 1] == '\r'.code.toByte()) {
+                e--
+            }
+            bodyEnd = e
         }
+
+        val raw = reader.bytes.copyOfRange(streamStart, bodyEnd)
+        reader.seek(bodyEnd)
+        // Consume up to and including the "endstream" keyword, leniently.
+        skipToAfterEndstream()
+        // Optional trailing "endobj" is handled by readIndirectObject.
         return PdfStream(dict, raw)
     }
 
-    private fun resolveStreamLength(dict: PdfDictionary): Long {
+    /** True if (after optional whitespace) "endstream" starts at/just after [at]. */
+    private fun endstreamAppearsAt(at: Int): Boolean {
+        var p = at
+        val b = reader.bytes
+        // Allow a small run of whitespace between the body and the keyword.
+        var slack = 0
+        while (p < b.size && slack < 3 && Lexer.isWhitespace(b[p].toInt() and 0xFF)) { p++; slack++ }
+        return reader.matches(ENDSTREAM, p)
+    }
+
+    /** Advance the reader past the next "endstream" keyword (best effort). */
+    private fun skipToAfterEndstream() {
+        val es = reader.indexOf(ENDSTREAM, reader.pos())
+        if (es >= 0) reader.seek(es + ENDSTREAM.size)
+    }
+
+    /** Resolve /Length to a Long, or null if missing/indirect-unresolvable/non-integer. */
+    private fun resolveStreamLengthOrNull(dict: PdfDictionary): Long? {
         return when (val raw = dict["Length"]) {
             is PdfInt -> raw.value
             is PdfReference -> {
-                val r = resolver
-                    ?: throw PdfFormatException(
-                        "/Length is indirect (${raw.objectNumber} ${raw.generation} R) but " +
-                            "this Parser was created without an IndirectResolver",
-                    )
+                val r = resolver ?: return null
                 val resolvedPosBefore = reader.pos()
-                val resolved = r.resolve(raw)
-                    ?: throw PdfFormatException("Indirect /Length $raw could not be resolved")
-                // The resolver may have moved the reader (it parses other objects).
-                // Restore so we keep reading the stream body from where we were.
+                val resolved = runCatching { r.resolve(raw) }.getOrNull()
+                // The resolver may have moved the reader; restore our position.
                 reader.seek(resolvedPosBefore)
                 (resolved as? PdfInt)?.value
-                    ?: throw PdfFormatException("Indirect /Length resolved to non-integer: $resolved")
             }
-            null -> throw PdfFormatException("/Length missing in stream dict: $dict")
-            else -> throw PdfFormatException("/Length must be integer or reference, got $raw")
+            else -> null
         }
     }
 
     private fun consumeStreamEol() {
-        // ISO 32000-1 §7.3.8.1: stream keyword must be followed by CRLF or LF (not CR alone).
-        val c = reader.readByte()
-        when (c) {
-            '\n'.code -> return
-            '\r'.code -> {
-                if (reader.peek() == '\n'.code) reader.readByte()
-            }
-            else -> throw PdfFormatException(
-                "stream keyword must be followed by EOL, got byte 0x${c.toString(16)}",
-            )
-        }
+        // ISO 32000-1 §7.3.8.1: "stream" should be followed by CRLF or LF. We are
+        // lenient: eat an optional CR and/or LF, but never throw if a producer
+        // botched it — the body offset is taken from wherever we land.
+        if (reader.peek() == '\r'.code) reader.readByte()
+        if (reader.peek() == '\n'.code) reader.readByte()
     }
 
     /**
@@ -180,6 +204,10 @@ class Parser(
             reader.seek(checkpoint)
         }
         return IndirectObject(numTok.value, genTok.value.toInt(), payload)
+    }
+
+    private companion object {
+        val ENDSTREAM = "endstream".encodeToByteArray()
     }
 }
 

@@ -45,6 +45,12 @@ data class GraphicsState(
     val dashArray: List<Double>? = null,
     /** Dash phase offset (`d` operator), user-space units. */
     val dashPhase: Double = 0.0,
+    /** Line cap (`J`): 0 butt, 1 round, 2 projecting square. */
+    val lineCap: Int = 0,
+    /** Line join (`j`): 0 miter, 1 round, 2 bevel. */
+    val lineJoin: Int = 0,
+    /** Miter limit (`M`). */
+    val miterLimit: Double = 10.0,
 )
 
 /** Per-`BT/ET` block text state — reset at BT, mutated by text operators. */
@@ -93,6 +99,9 @@ fun GraphicsState.applyExtGState(ext: ExtGState): GraphicsState = copy(
         null -> softMask
     },
     lineWidth = ext.lineWidth ?: lineWidth,
+    lineCap = ext.lineCap ?: lineCap,
+    lineJoin = ext.lineJoin ?: lineJoin,
+    miterLimit = ext.miterLimit ?: miterLimit,
 )
 
 /**

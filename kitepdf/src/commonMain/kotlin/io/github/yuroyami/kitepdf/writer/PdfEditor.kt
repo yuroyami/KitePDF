@@ -286,6 +286,135 @@ class PdfEditor internal constructor(private val base: PdfDocument) {
         clearNeedAppearances()
     }
 
+    /**
+     * Set a button field (`/Btn`) to a named export value — the mechanism behind
+     * checkboxes and radio groups. The field's `/V` becomes the chosen on-state
+     * name; every widget's `/AS` is set to that name when the widget defines it
+     * as an appearance state, or to `/Off` otherwise (so sibling radios in the
+     * group are cleared). Pass `"Off"` to clear the field.
+     */
+    fun setButtonValue(field: PdfFormField, exportValue: String) {
+        require(field.type == PdfFormField.FieldType.Button) {
+            "setButtonValue supports button (/Btn) fields only, not ${field.type}"
+        }
+        val fieldRef = field.fieldReference
+            ?: throw IllegalArgumentException("Field '${field.fullyQualifiedName}' has no indirect reference")
+
+        // Stage per-object overrides, merging so a merged field+widget gets both
+        // /V and /AS in one updated dictionary.
+        val pending = LinkedHashMap<Long, Pair<PdfReference, LinkedHashMap<String, PdfObject>>>()
+        fun put(ref: PdfReference, baseDict: PdfDictionary, key: String, value: PdfObject) {
+            val e = pending.getOrPut(ref.objectNumber) { ref to LinkedHashMap(baseDict.map) }
+            e.second[key] = value
+        }
+
+        put(fieldRef, field.fieldDict, "V", PdfName(exportValue))
+        for ((wref, wdict) in buttonWidgets(field)) {
+            val states = appearanceStateNames(wdict)
+            val asName = if (exportValue in states) exportValue else "Off"
+            put(wref, wdict, "AS", PdfName(asName))
+        }
+        for ((_, e) in pending) updateObject(e.first, PdfDictionary(e.second))
+        clearNeedAppearances()
+    }
+
+    /**
+     * Check or uncheck a checkbox field. The "on" state name is taken from the
+     * widget's `/AP /N` keys (the non-`Off` one, e.g. `/Yes`), so the value
+     * matches whatever the document author defined.
+     */
+    fun setCheckbox(field: PdfFormField, checked: Boolean) {
+        val on = checkboxOnState(field) ?: "On"
+        setButtonValue(field, if (checked) on else "Off")
+    }
+
+    /**
+     * Set a choice field (`/Ch` — combo box or list box) to [value]. Sets `/V`,
+     * sets `/I` (selected index) when the value is found in `/Opt`, and
+     * regenerates the widget appearance so the selection is visible.
+     */
+    fun setChoiceValue(field: PdfFormField, value: String) {
+        require(field.type == PdfFormField.FieldType.Choice) {
+            "setChoiceValue supports choice (/Ch) fields only, not ${field.type}"
+        }
+        val fieldRef = field.fieldReference
+            ?: throw IllegalArgumentException("Field '${field.fullyQualifiedName}' has no indirect reference")
+        val vStr = PdfString(PdfText.encodeTextString(value))
+
+        // Build the appearance (same path as a text field shows its value).
+        val apDict = field.rect?.let { rect ->
+            val fontRef = addObject(PdfDictionary(linkedMapOf(
+                "Type" to PdfName("Font"), "Subtype" to PdfName("Type1"), "BaseFont" to PdfName("Helvetica"),
+            )))
+            val da = FieldAppearance.parseDA(field.defaultAppearance)
+            val ap = FieldAppearance.build(value, abs(rect.width), abs(rect.height), da, fontRef)
+            PdfDictionary(linkedMapOf("N" to (addObject(ap) as PdfObject)))
+        }
+
+        // /I selected-index, when the value is one of /Opt.
+        val selectedIndex = optionIndex(field, value)
+
+        val widgetRef = field.widgetReference ?: fieldRef
+        if (widgetRef == fieldRef) {
+            val d = LinkedHashMap(field.fieldDict.map)
+            d["V"] = vStr
+            if (selectedIndex >= 0) d["I"] = io.github.yuroyami.kitepdf.parser.PdfArray(listOf(PdfInt(selectedIndex.toLong())))
+            if (apDict != null) d["AP"] = apDict
+            updateObject(fieldRef, PdfDictionary(d))
+        } else {
+            val fd = LinkedHashMap(field.fieldDict.map)
+            fd["V"] = vStr
+            if (selectedIndex >= 0) fd["I"] = io.github.yuroyami.kitepdf.parser.PdfArray(listOf(PdfInt(selectedIndex.toLong())))
+            updateObject(fieldRef, PdfDictionary(fd))
+            if (apDict != null) updateObject(widgetRef, withEntry(field.widgetDict, "AP", apDict))
+        }
+        clearNeedAppearances()
+    }
+
+    /** Widget annotations of a button field: its /Kids, or the merged field itself. */
+    private fun buttonWidgets(field: PdfFormField): List<Pair<PdfReference, PdfDictionary>> {
+        val kids = field.fieldDict.getArray("Kids", base)
+        if (kids != null && kids.isNotEmpty()) {
+            return kids.mapNotNull { k ->
+                val r = k as? PdfReference ?: return@mapNotNull null
+                val d = base.resolve(r) as? PdfDictionary ?: return@mapNotNull null
+                r to d
+            }
+        }
+        val ref = field.widgetReference ?: field.fieldReference ?: return emptyList()
+        return listOf(ref to field.widgetDict)
+    }
+
+    /** The appearance-state names declared under a widget's /AP /N. */
+    private fun appearanceStateNames(widget: PdfDictionary): Set<String> {
+        val n = widget.getDict("AP", base)?.get("N")?.resolve(base) as? PdfDictionary ?: return emptySet()
+        return n.keys
+    }
+
+    /** The checkbox "on" state — the first non-Off /AP /N appearance name. */
+    private fun checkboxOnState(field: PdfFormField): String? {
+        for ((_, w) in buttonWidgets(field)) {
+            appearanceStateNames(w).firstOrNull { it != "Off" }?.let { return it }
+        }
+        return null
+    }
+
+    /** Index of [value] within the field's /Opt array, or -1. /Opt entries may be
+     *  strings or [export, display] pairs. */
+    private fun optionIndex(field: PdfFormField, value: String): Int {
+        val opt = field.fieldDict.getArray("Opt", base) ?: return -1
+        opt.forEachIndexed { i, entry ->
+            val text = when (val e = entry.resolve(base)) {
+                is PdfString -> e.asText()
+                is io.github.yuroyami.kitepdf.parser.PdfArray ->
+                    (e.getOrNull(0) as? PdfString)?.asText() ?: (e.getOrNull(1) as? PdfString)?.asText()
+                else -> null
+            }
+            if (text == value) return i
+        }
+        return -1
+    }
+
     /** If the AcroForm has `/NeedAppearances true`, flip it false so our `/AP` is used. */
     private fun clearNeedAppearances() {
         val acroRef = base.catalog["AcroForm"] as? PdfReference ?: return
@@ -294,6 +423,164 @@ class PdfEditor internal constructor(private val base: PdfDocument) {
             updateObject(acroRef, withEntry(acro, "NeedAppearances", PdfBoolean(false)))
         }
     }
+
+    /* ─── Page operations ────────────────────────────────────────────────── */
+
+    /** Tracked page order, seeded from the base document on first structural op. */
+    private var pageOrderState: MutableList<PdfReference>? = null
+
+    private fun currentOrder(): MutableList<PdfReference> =
+        pageOrderState ?: base.pages.mapNotNull { it.reference }.toMutableList().also { pageOrderState = it }
+
+    /**
+     * Set the page `/Rotate` (clockwise, must be a multiple of 90). Normalised to
+     * 0/90/180/270.
+     */
+    fun rotatePage(page: PdfPage, degrees: Int) {
+        require(degrees % 90 == 0) { "Rotation must be a multiple of 90, got $degrees" }
+        val ref = pageReference(page)
+        val norm = ((degrees % 360) + 360) % 360
+        updateObject(ref, withEntry(effectivePageDict(ref), "Rotate", PdfInt(norm.toLong())))
+    }
+
+    /**
+     * Replace the document's page order with exactly [orderedPageRefs]. Rebuilds a
+     * single flat `/Pages` node (kids + /Count), re-parents every page to it, and
+     * keeps the catalog pointing at it. This is the engine behind delete, reorder,
+     * insert and merge: omit a ref to delete, permute to reorder, append a grafted
+     * ref to insert. Pages no longer referenced are dropped by [saveRewritten].
+     */
+    fun setPageOrder(orderedPageRefs: List<PdfReference>) {
+        require(orderedPageRefs.isNotEmpty()) { "A document must have at least one page" }
+        pageOrderState = orderedPageRefs.toMutableList()
+        applyPageOrder()
+    }
+
+    /** Remove [page] from the document. */
+    fun removePage(page: PdfPage) {
+        val target = page.reference?.objectNumber
+            ?: throw IllegalArgumentException("Page ${page.index} has no indirect reference")
+        val order = currentOrder()
+        order.removeAll { it.objectNumber == target }
+        require(order.isNotEmpty()) { "Cannot remove the last page" }
+        applyPageOrder()
+    }
+
+    /** Append a page deep-copied from [source] (see [graftPage]); returns its new ref. */
+    fun appendPage(source: PdfDocument, sourceIndex: Int): PdfReference {
+        val ref = graftPage(source, sourceIndex)
+        currentOrder().add(ref)
+        applyPageOrder()
+        return ref
+    }
+
+    /** Insert a (grafted) page reference at zero-based [position]. */
+    fun insertPageAt(position: Int, pageRef: PdfReference) {
+        val order = currentOrder()
+        order.add(position.coerceIn(0, order.size), pageRef)
+        applyPageOrder()
+    }
+
+    /** Append every page of [source] to this document (cross-document merge). */
+    fun mergeDocument(source: PdfDocument) {
+        val refs = source.pages.indices.map { graftPage(source, it) }
+        currentOrder().addAll(refs)
+        applyPageOrder()
+    }
+
+    /** Rebuild the flat `/Pages` node + re-parent from the tracked order. */
+    private fun applyPageOrder() {
+        val order = currentOrder()
+        val pagesRef = base.catalog.getRef("Pages")
+            ?: throw IllegalStateException("Catalog /Pages is not an indirect reference; cannot reorganise pages")
+        updateObject(
+            pagesRef,
+            PdfDictionary(linkedMapOf(
+                "Type" to PdfName("Pages"),
+                "Kids" to io.github.yuroyami.kitepdf.parser.PdfArray(order.toList()),
+                "Count" to PdfInt(order.size.toLong()),
+            )),
+        )
+        // Flattening to one /Pages node can strip attributes a leaf page inherited
+        // from an intermediate node — so bake the resolved MediaBox/Resources/Rotate
+        // onto each base page that doesn't carry its own.
+        val baseByNum = base.pages.mapNotNull { p -> p.reference?.let { it.objectNumber to p } }.toMap()
+        for (pref in order) {
+            val pd = effectiveObject(pref.objectNumber) as? PdfDictionary ?: continue
+            val m = LinkedHashMap(pd.map)
+            m["Parent"] = pagesRef
+            baseByNum[pref.objectNumber]?.let { bp ->
+                if ("MediaBox" !in m) m["MediaBox"] = rectToArray(bp.mediaBox)
+                if ("Resources" !in m) bp.resources?.let { r -> m["Resources"] = r }
+                if ("Rotate" !in m && bp.rotation != 0) m["Rotate"] = PdfInt(bp.rotation.toLong())
+            }
+            updateObject(pref, PdfDictionary(m))
+        }
+    }
+
+    /**
+     * Deep-copy one page (and its full transitive object graph: resources, fonts,
+     * content streams, XObjects) from [source] into this editor under fresh object
+     * numbers, returning the new page reference. Inherited `/MediaBox`,
+     * `/Resources`, `/Rotate` are baked onto the copied page so it is
+     * self-contained, and `/Parent` is dropped (set later by [applyPageOrder]).
+     * Mirrors MuPDF's `pdf_graft_page`.
+     */
+    fun graftPage(source: PdfDocument, sourceIndex: Int): PdfReference {
+        val page = source.pages.getOrNull(sourceIndex)
+            ?: throw IllegalArgumentException("Source has no page $sourceIndex")
+        val srcPageNum = page.reference?.objectNumber
+            ?: throw IllegalArgumentException("Source page $sourceIndex has no indirect reference")
+
+        val effective = graftablePageDict(page)
+
+        // BFS the source graph, allocating a new number per visited source object.
+        val refMap = HashMap<Long, Long>()
+        val queue = ArrayDeque<Long>()
+        fun enqueue(srcNum: Long) {
+            if (srcNum !in refMap) { refMap[srcNum] = allocateReference().objectNumber; queue.addLast(srcNum) }
+        }
+        val newPageNum = allocateReference().objectNumber
+        refMap[srcPageNum] = newPageNum
+        collectReferences(effective) { enqueue(it) }
+        while (queue.isNotEmpty()) {
+            val obj = source.resolve(PdfReference(queue.removeFirst(), 0)) ?: continue
+            collectReferences(obj) { enqueue(it) }
+        }
+
+        // Stage remapped copies of the page and every reachable object.
+        staged[newPageNum] = Staged(0, remapReferences(effective, refMap))
+        for ((srcNum, newNum) in refMap) {
+            if (newNum == newPageNum) continue
+            val obj = source.resolve(PdfReference(srcNum, 0)) ?: continue
+            staged[newNum] = Staged(0, remapReferences(obj, refMap))
+        }
+        return PdfReference(newPageNum, 0)
+    }
+
+    /** A self-contained copy of a page dict: inheritance baked in, /Parent removed. */
+    private fun graftablePageDict(page: PdfPage): PdfDictionary {
+        val m = LinkedHashMap(page.dictionary.map)
+        m.remove("Parent")
+        m["Type"] = PdfName("Page")
+        if ("MediaBox" !in m) m["MediaBox"] = rectToArray(page.mediaBox)
+        if ("Resources" !in m) page.resources?.let { m["Resources"] = it }
+        if ("Rotate" !in m && page.rotation != 0) m["Rotate"] = PdfInt(page.rotation.toLong())
+        return PdfDictionary(m)
+    }
+
+    private fun rectToArray(r: Rectangle): io.github.yuroyami.kitepdf.parser.PdfArray =
+        io.github.yuroyami.kitepdf.parser.PdfArray(listOf(
+            io.github.yuroyami.kitepdf.parser.PdfReal(r.left),
+            io.github.yuroyami.kitepdf.parser.PdfReal(r.bottom),
+            io.github.yuroyami.kitepdf.parser.PdfReal(r.right),
+            io.github.yuroyami.kitepdf.parser.PdfReal(r.top),
+        ))
+
+    /** Effective (staged-or-base) page dictionary for [ref]. */
+    private fun effectivePageDict(ref: PdfReference): PdfDictionary =
+        effectiveObject(ref.objectNumber) as? PdfDictionary
+            ?: throw IllegalArgumentException("Page ${ref.objectNumber} did not resolve to a dictionary")
 
     /* ─── Redaction ──────────────────────────────────────────────────────── */
 
@@ -422,7 +709,8 @@ class PdfEditor internal constructor(private val base: PdfDocument) {
         base.trailer["Root"]?.let { dict["Root"] = it }
         base.trailer["Info"]?.let { dict["Info"] = it }
         base.trailer["Encrypt"]?.let { dict["Encrypt"] = it }
-        base.trailer["ID"]?.let { dict["ID"] = it }
+        // Preserve the original /ID (signing/encryption invariant) or synthesize one.
+        dict["ID"] = base.trailer["ID"] ?: DocumentId.generate(base.bytes)
         dict["Prev"] = PdfInt(prevXref.toLong())
         for ((k, v) in trailerOverrides) dict[k] = v
 
@@ -441,7 +729,7 @@ class PdfEditor internal constructor(private val base: PdfDocument) {
      * an edit) are dropped — which is what makes it the correct vehicle for
      * **redaction** (the removed content is truly gone, not just superseded).
      */
-    fun saveRewritten(): ByteArray {
+    fun saveRewritten(useObjectStreams: Boolean = false): ByteArray {
         val roots = buildList {
             for (key in listOf("Root", "Info")) {
                 ((trailerOverrides[key] ?: base.trailer[key]) as? PdfReference)?.let { add(it) }
@@ -466,11 +754,29 @@ class PdfEditor internal constructor(private val base: PdfDocument) {
         val remap = HashMap<Long, Long>(ordered.size)
         ordered.forEachIndexed { i, old -> remap[old] = (i + 1).toLong() }
 
-        val out = ByteArrayBuilder(base.bytes.size)
-        out.append("%PDF-1.7\n".encodeToByteArray())
+        return if (useObjectStreams) {
+            writeWithObjectStreams(ordered, remap)
+        } else {
+            writeWithClassicXref(ordered, remap)
+        }
+    }
+
+    private fun fileHeader(out: ByteArrayBuilder, version: String) {
+        out.append("%PDF-$version\n".encodeToByteArray())
         out.append('%'.code.toByte())
         out.append(byteArrayOf(0xE2.toByte(), 0xE3.toByte(), 0xCF.toByte(), 0xD3.toByte()))
         out.append('\n'.code.toByte())
+    }
+
+    private fun newRootRef(remap: Map<Long, Long>, key: String): PdfReference? {
+        val ref = (trailerOverrides[key] ?: base.trailer[key]) as? PdfReference ?: return null
+        return remap[ref.objectNumber]?.let { PdfReference(it, 0) }
+    }
+
+    /** Full rewrite with a classic xref table (PDF 1.4-shaped output). */
+    private fun writeWithClassicXref(ordered: List<Long>, remap: Map<Long, Long>): ByteArray {
+        val out = ByteArrayBuilder(base.bytes.size)
+        fileHeader(out, "1.7")
 
         val xrefEntries = ArrayList<ClassicXrefWriter.Entry>(ordered.size)
         for (old in ordered) {
@@ -487,13 +793,75 @@ class PdfEditor internal constructor(private val base: PdfDocument) {
 
         val trailer = LinkedHashMap<String, PdfObject>()
         trailer["Size"] = PdfInt(ordered.size + 1L)
-        for (key in listOf("Root", "Info")) {
-            val ref = (trailerOverrides[key] ?: base.trailer[key]) as? PdfReference ?: continue
-            remap[ref.objectNumber]?.let { trailer[key] = PdfReference(it, 0) }
-        }
+        newRootRef(remap, "Root")?.let { trailer["Root"] = it }
+        newRootRef(remap, "Info")?.let { trailer["Info"] = it }
+        trailer["ID"] = base.trailer["ID"] ?: DocumentId.generate(base.bytes)
         out.append("trailer\n".encodeToByteArray())
         PdfObjectWriter.writeObject(PdfDictionary(trailer), out)
         out.append("\nstartxref\n$xrefOffset\n%%EOF\n".encodeToByteArray())
+        return out.toByteArray()
+    }
+
+    /**
+     * Full rewrite with object streams + a cross-reference stream (PDF 1.5+
+     * compact output): non-stream objects are packed into one `/ObjStm`, stream
+     * objects stay in-file, and a single `/Type /XRef` stream replaces the
+     * classic table and trailer.
+     */
+    private fun writeWithObjectStreams(ordered: List<Long>, remap: Map<Long, Long>): ByteArray {
+        // Partition: stream objects must stay in-file; everything else is packable.
+        val streamObjs = ArrayList<Long>()
+        val packable = ArrayList<Long>()
+        for (old in ordered) {
+            if (effectiveObject(old) is PdfStream) streamObjs.add(old) else packable.add(old)
+        }
+        val maxNew = (ordered.size).toLong()
+        val objStmNum = maxNew + 1
+        val xrefStmNum = maxNew + 2
+
+        val out = ByteArrayBuilder(base.bytes.size)
+        fileHeader(out, "1.5")
+        val entries = ArrayList<XRefStreamWriter.XEntry>(ordered.size + 3)
+        entries.add(XRefStreamWriter.XEntry(0, 0, 0, 0))   // free-list head
+
+        // In-file (type 1) stream objects.
+        for (old in streamObjs) {
+            val obj = effectiveObject(old) ?: continue
+            val newNum = remap.getValue(old)
+            entries.add(XRefStreamWriter.XEntry(newNum, 1, out.size().toLong(), 0))
+            out.append("$newNum 0 obj\n".encodeToByteArray())
+            PdfObjectWriter.writeObject(remapReferences(obj, remap), out)
+            out.append("\nendobj\n".encodeToByteArray())
+        }
+
+        // Pack the remaining objects into one ObjStm (type 2 entries).
+        if (packable.isNotEmpty()) {
+            val members = packable.map { old ->
+                remap.getValue(old) to remapReferences(effectiveObject(old)!!, remap)
+            }
+            members.forEachIndexed { index, (newNum, _) ->
+                entries.add(XRefStreamWriter.XEntry(newNum, 2, objStmNum, index.toLong()))
+            }
+            val objStm = ObjectStreamWriter.build(members)
+            entries.add(XRefStreamWriter.XEntry(objStmNum, 1, out.size().toLong(), 0))
+            out.append("$objStmNum 0 obj\n".encodeToByteArray())
+            PdfObjectWriter.writeObject(objStm, out)
+            out.append("\nendobj\n".encodeToByteArray())
+        }
+
+        // The cross-reference stream is itself an in-file object.
+        val xrefOffset = out.size()
+        entries.add(XRefStreamWriter.XEntry(xrefStmNum, 1, xrefOffset.toLong(), 0))
+        val root = newRootRef(remap, "Root")
+            ?: throw IllegalStateException("Cannot write document with no /Root")
+        val xrefStream = XRefStreamWriter.build(
+            entries, size = xrefStmNum + 1, root = root, info = newRootRef(remap, "Info"), prev = null,
+            id = base.trailer["ID"] ?: DocumentId.generate(base.bytes),
+        )
+        out.append("$xrefStmNum 0 obj\n".encodeToByteArray())
+        PdfObjectWriter.writeObject(xrefStream, out)
+        out.append("\nendobj\n".encodeToByteArray())
+        out.append("startxref\n$xrefOffset\n%%EOF\n".encodeToByteArray())
         return out.toByteArray()
     }
 

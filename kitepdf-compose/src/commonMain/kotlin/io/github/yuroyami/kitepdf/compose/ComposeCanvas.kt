@@ -106,6 +106,7 @@ class ComposeCanvas(
         path: PdfPath, ctm: PdfMatrix, color: RgbColor, lineWidth: Double,
         alpha: Double, blendMode: PdfBlendMode,
         dashArray: List<Double>?, dashPhase: Double,
+        lineCap: Int, lineJoin: Int, miterLimit: Double,
     ) {
         withActiveClips {
             val composePath = toComposePath(path, ctm)
@@ -117,6 +118,16 @@ class ComposeCanvas(
                 ?.toFloatArray()
                 ?.takeIf { it.size >= 2 }
                 ?.let { PathEffect.dashPathEffect(it, (dashPhase * avgScale).toFloat()) }
+            val cap = when (lineCap) {
+                1 -> androidx.compose.ui.graphics.StrokeCap.Round
+                2 -> androidx.compose.ui.graphics.StrokeCap.Square
+                else -> androidx.compose.ui.graphics.StrokeCap.Butt
+            }
+            val join = when (lineJoin) {
+                1 -> androidx.compose.ui.graphics.StrokeJoin.Round
+                2 -> androidx.compose.ui.graphics.StrokeJoin.Bevel
+                else -> androidx.compose.ui.graphics.StrokeJoin.Miter
+            }
             drawScope.drawPath(
                 path = composePath,
                 color = color.toCompose(),
@@ -128,6 +139,9 @@ class ComposeCanvas(
                     // The floor is configurable so supersampled rasters can keep
                     // hairlines ≥1 px at their final on-screen scale.
                     width = (lineWidth * avgScale).toFloat().coerceAtLeast(hairlineWidthPx),
+                    cap = cap,
+                    join = join,
+                    miter = miterLimit.toFloat().coerceAtLeast(1f),
                     pathEffect = dash,
                 ),
                 blendMode = blendMode.toCompose(),

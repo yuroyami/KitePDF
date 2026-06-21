@@ -31,6 +31,9 @@ data class ExtGState(
     val blendMode: BlendMode? = null,
     val softMask: SoftMask? = null,
     val lineWidth: Double? = null,
+    val lineCap: Int? = null,
+    val lineJoin: Int? = null,
+    val miterLimit: Double? = null,
 ) {
 
     companion object {
@@ -51,6 +54,9 @@ data class ExtGState(
                 blendMode = blendMode,
                 softMask = smask,
                 lineWidth = lw,
+                lineCap = dict.getInt("LC")?.toInt(),
+                lineJoin = dict.getInt("LJ")?.toInt(),
+                miterLimit = dict.getReal("ML"),
             )
         }
 

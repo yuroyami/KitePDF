@@ -365,6 +365,91 @@ class WriterOracleTest {
         return buf.toByteArray()
     }
 
+    @Test
+    fun mutool_accepts_object_stream_and_xref_stream_output() {
+        val tool = MuPdfOracle.binary
+        if (tool == null) {
+            println("[WriterOracleTest] mutool not found — skipping object-stream oracle validation.")
+            return
+        }
+
+        // From-scratch doc → rewrite with object streams + a cross-reference stream.
+        val src = PdfBuilder()
+            .setInfo(title = "ObjStm Oracle 99", author = "KitePDF Writer")
+            .page { text(StandardFont.Helvetica, 20.0, 72.0, 700.0, "Compressed by KitePDF") }
+            .page { text(StandardFont.TimesRoman, 16.0, 72.0, 700.0, "Second compact page") }
+            .build()
+        val compact = KitePDF.open(src).edit().saveRewritten(useObjectStreams = true)
+
+        // Our reader round-trips the compact form.
+        val viaKite = KitePDF.open(compact)
+        assertEquals(2, viaKite.pageCount)
+        assertContains(viaKite.pages[0].extractText(), "Compressed by KitePDF")
+
+        val pdf = File.createTempFile("kite-objstm-", ".pdf").apply { writeBytes(compact) }
+        val png = File.createTempFile("kite-objstm-", ".png")
+        try {
+            // mutool must render the page — proving it walks our /XRef stream and
+            // resolves objects out of our /ObjStm.
+            val draw = runMutool(
+                tool, "draw", "-r", "72", "-F", "png", "-o", png.absolutePath, pdf.absolutePath, "1",
+            )
+            assertEquals(0, draw.exitCode, "mutool draw failed on object-stream output:\n${draw.output}")
+            assertTrue(png.exists() && png.length() > 0L, "mutool produced no PNG")
+
+            // mutool resolves /Info — which lives inside the object stream.
+            val info = runMutool(tool, "info", pdf.absolutePath)
+            assertEquals(0, info.exitCode, "mutool info failed:\n${info.output}")
+            assertTrue(
+                info.output.contains("ObjStm Oracle 99"),
+                "mutool didn't resolve /Info from the object stream:\n${info.output}",
+            )
+        } finally {
+            pdf.delete()
+            png.delete()
+        }
+    }
+
+    @Test
+    fun mutool_renders_merged_and_grafted_document() {
+        val tool = MuPdfOracle.binary
+        if (tool == null) {
+            println("[WriterOracleTest] mutool not found — skipping page-ops oracle validation.")
+            return
+        }
+
+        val docA = PdfBuilder()
+            .page { text(StandardFont.Helvetica, 20.0, 72.0, 700.0, "Merge Source A page 1") }
+            .page { text(StandardFont.Helvetica, 20.0, 72.0, 700.0, "Merge Source A page 2") }
+            .build()
+        val docB = PdfBuilder()
+            .page { text(StandardFont.TimesRoman, 20.0, 72.0, 700.0, "Merge Source B page 1") }
+            .build()
+
+        // Merge B into A → 3 pages, then write a compact (object-stream) file.
+        val a = KitePDF.open(docA)
+        val merged = a.edit().apply { mergeDocument(KitePDF.open(docB)) }.saveRewritten(useObjectStreams = true)
+
+        val viaKite = KitePDF.open(merged)
+        assertEquals(3, viaKite.pageCount)
+        assertContains(viaKite.pages[2].extractText(), "Merge Source B")
+
+        val pdf = File.createTempFile("kite-merge-", ".pdf").apply { writeBytes(merged) }
+        val pngs = (1..3).map { File.createTempFile("kite-merge-$it-", ".png") }
+        try {
+            for ((page, png) in (1..3).zip(pngs)) {
+                val draw = runMutool(
+                    tool, "draw", "-r", "72", "-F", "png", "-o", png.absolutePath, pdf.absolutePath, page.toString(),
+                )
+                assertEquals(0, draw.exitCode, "mutool draw page $page failed:\n${draw.output}")
+                assertTrue(png.exists() && png.length() > 0L, "mutool produced no PNG for page $page")
+            }
+        } finally {
+            pdf.delete()
+            pngs.forEach { it.delete() }
+        }
+    }
+
     private data class MutoolResult(val exitCode: Int, val output: String)
 
     private fun runMutool(tool: File, vararg args: String): MutoolResult {

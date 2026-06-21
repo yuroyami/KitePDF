@@ -1,5 +1,6 @@
 package io.github.yuroyami.kitepdf.render
 
+import io.github.yuroyami.kitepdf.PdfAnnotation.Subtype
 import io.github.yuroyami.kitepdf.PdfPage
 import io.github.yuroyami.kitepdf.content.ContentStreamParser
 import io.github.yuroyami.kitepdf.content.Operation
@@ -50,8 +51,28 @@ class PageRenderer(
         val extGStates: Map<String, ExtGState>,
         val shadings: Map<String, PdfShading>,
         val patterns: Map<String, PdfPattern>,
+        val properties: Map<String, PdfObject>,
     )
     private val formResourceCache = HashMap<PdfStream, FormResources>()
+
+    // ─── Optional content (layers) ───────────────────────────────────────────
+    // Marked-content sections introduced by `BDC /OC <ocg>` are suppressed when
+    // the referenced OCG/OCMD is hidden in the document's default configuration
+    // (ISO 32000-1 §8.11). markedContentStack tracks every open BMC/BDC so EMC
+    // pops the matching one; ocHiddenDepth counts how many open sections are
+    // currently hiding content — painting is skipped while it is > 0.
+    private val markedContentStack = ArrayDeque<Boolean>()
+    private var ocHiddenDepth = 0
+    private var optionalContent: io.github.yuroyami.kitepdf.PdfOptionalContent? = null
+
+    /** The page's default (initial) CTM — pattern matrices are relative to it. */
+    private var pageBaseCtm: Matrix = Matrix.IDENTITY
+
+    /** Form-XObject nesting depth — guards self/transitively-recursive `Do`. */
+    private var formDepth = 0
+
+    /** True while content must not be painted (inside a hidden OC section). */
+    private fun ocHidden(): Boolean = ocHiddenDepth > 0
 
     fun render(page: PdfPage, deviceCtm: Matrix = defaultDeviceCtm(page)) {
         val fonts = loadFonts(page.resources)
@@ -60,18 +81,74 @@ class PageRenderer(
         val extGStates = loadExtGStates(page.resources)
         val shadings = loadShadings(page.resources)
         val patterns = loadPatterns(page.resources, shadings)
+        val properties = loadProperties(page.resources)
         val state = GraphicsStack(GraphicsState(ctm = deviceCtm))
         activeClipCount = 0
         clipSaveStack.clear()
+        pageBaseCtm = deviceCtm
+        formDepth = 0
+        optionalContent = page.internalDocument.optionalContent
+        markedContentStack.clear()
+        ocHiddenDepth = 0
         val pathBuilder = PdfPath.Builder()
         val ops = ContentStreamParser.parse(page.contentBytes)
 
         canvas.beginPage(page.width, page.height, deviceCtm)
         try {
-            for (op in ops) dispatch(op, state, pathBuilder, fonts, xobjects, colorSpaces, extGStates, shadings, patterns)
+            for (op in ops) dispatch(op, state, pathBuilder, fonts, xobjects, colorSpaces, extGStates, shadings, patterns, properties)
             renderAnnotations(page, state)
         } finally {
             canvas.endPage()
+        }
+    }
+
+    /** Named property lists declared in /Resources /Properties (for `BDC /OC`). */
+    private fun loadProperties(resources: PdfDictionary?): Map<String, PdfObject> =
+        resources?.getDict("Properties", resolver)?.map ?: emptyMap()
+
+    /* ─── Optional-content visibility ────────────────────────────────────────── */
+
+    /** Whether a `BDC /OC <operand>` introduces a hidden section. */
+    private fun isOcOperandHidden(operand: PdfObject?, properties: Map<String, PdfObject>): Boolean {
+        val oc = optionalContent ?: return false
+        val target = when (operand) {
+            is PdfName -> properties[operand.value]
+            else -> operand
+        } ?: return false
+        return !isOcObjectVisible(target, oc)
+    }
+
+    /** Whether an XObject's own `/OC` entry (if any) is currently visible. */
+    private fun isXObjectOcHidden(stream: PdfStream): Boolean {
+        val oc = optionalContent ?: return false
+        val ocObj = stream.dict["OC"] ?: return false
+        return !isOcObjectVisible(ocObj, oc)
+    }
+
+    /** Resolve an OCG or OCMD object and decide if it is visible by default. */
+    private fun isOcObjectVisible(obj: PdfObject, oc: io.github.yuroyami.kitepdf.PdfOptionalContent): Boolean {
+        val dict = obj.resolve(resolver) as? PdfDictionary ?: return true
+        if (dict.getName("Type") == "OCMD") return evalOcmd(dict, oc)
+        // Plain OCG: hidden only if explicitly OFF in the default configuration.
+        val id = (obj as? io.github.yuroyami.kitepdf.parser.PdfReference)?.objectNumber?.toString()
+            ?: return true
+        return id !in oc.offByDefault
+    }
+
+    /** Evaluate an OCMD (§8.11.2.2) membership policy over its member OCGs. */
+    private fun evalOcmd(dict: PdfDictionary, oc: io.github.yuroyami.kitepdf.PdfOptionalContent): Boolean {
+        val ocgsRaw = dict["OCGs"]
+        val refs: List<io.github.yuroyami.kitepdf.parser.PdfReference> = when (val r = ocgsRaw?.resolve(resolver)) {
+            is PdfArray -> r.mapNotNull { it as? io.github.yuroyami.kitepdf.parser.PdfReference }
+            else -> listOfNotNull(ocgsRaw as? io.github.yuroyami.kitepdf.parser.PdfReference)
+        }
+        if (refs.isEmpty()) return true
+        val visible = refs.map { it.objectNumber.toString() !in oc.offByDefault }
+        return when (dict.getName("P")) {
+            "AllOn" -> visible.all { it }
+            "AnyOff" -> visible.any { !it }
+            "AllOff" -> visible.all { !it }
+            else -> visible.any { it }   // AnyOn (default)
         }
     }
 
@@ -121,11 +198,15 @@ class PageRenderer(
      */
     private fun renderAnnotations(page: io.github.yuroyami.kitepdf.PdfPage, state: GraphicsStack) {
         for (annot in page.annotations) {
+            if (annot.isHidden) continue   // /F Hidden or NoView (§12.5.3)
+            // Popup annotations are only shown when their parent is opened — never
+            // painted inline by a viewer.
+            if (annot.subtype == io.github.yuroyami.kitepdf.PdfAnnotation.Subtype.Popup) continue
             val stream = annot.appearanceStream
             if (stream != null) {
                 renderAppearanceForRect(stream, annot.rect, state)
             } else {
-                renderAnnotationPlaceholder(annot, state)
+                synthesizeAppearance(annot, state)
             }
         }
     }
@@ -160,33 +241,114 @@ class PageRenderer(
         }
     }
 
-    private fun renderAnnotationPlaceholder(
+    /**
+     * Synthesize an annotation's appearance when it has no `/AP` stream
+     * (ISO 32000-1 §12.5.5 says a conforming viewer "should" generate one). Uses
+     * the annotation's own geometry (`/QuadPoints`, `/Vertices`/`/L`, `/InkList`)
+     * so markup lands on the marked text/region rather than the whole /Rect.
+     */
+    private fun synthesizeAppearance(
         annot: io.github.yuroyami.kitepdf.PdfAnnotation,
         state: GraphicsStack,
     ) {
+        val ctm = state.current.ctm
         val rect = annot.rect
-        val rectPath = PdfPath.Builder().apply {
-            rectangle(rect.left, rect.bottom, rect.width, rect.height)
-        }.build()
+        val quads = annot.quadPoints
         when (annot.subtype) {
-            io.github.yuroyami.kitepdf.PdfAnnotation.Subtype.Highlight -> {
-                // Yellow translucent fill.
-                canvas.fillPath(rectPath, state.current.ctm, annot.color ?: RgbColor(1.0, 1.0, 0.0), false)
+            Subtype.Highlight -> {
+                val color = annot.color ?: RgbColor(1.0, 1.0, 0.0)
+                forEachQuad(quads, rect) { x0, y0, x1, y1 ->
+                    val p = PdfPath.Builder().apply { rectangle(x0, y0, x1 - x0, y1 - y0) }.build()
+                    // Highlights multiply onto the page; approximate with alpha.
+                    canvas.fillPath(p, ctm, color, false, alpha = 0.4)
+                }
             }
-            io.github.yuroyami.kitepdf.PdfAnnotation.Subtype.Underline,
-            io.github.yuroyami.kitepdf.PdfAnnotation.Subtype.StrikeOut -> {
-                val line = PdfPath.Builder().apply {
-                    val y = if (annot.subtype == io.github.yuroyami.kitepdf.PdfAnnotation.Subtype.Underline) rect.bottom else (rect.bottom + rect.height / 2)
-                    moveTo(rect.left, y); lineTo(rect.left + rect.width, y)
-                }.build()
-                canvas.strokePath(line, state.current.ctm, annot.color ?: RgbColor.BLACK, 1.0)
+            Subtype.Underline, Subtype.StrikeOut, Subtype.Squiggly -> {
+                val color = annot.color ?: RgbColor.BLACK
+                forEachQuad(quads, rect) { x0, y0, x1, y1 ->
+                    val frac = if (annot.subtype == Subtype.StrikeOut) 0.5 else 0.08
+                    val y = y0 + (y1 - y0) * frac
+                    val line = PdfPath.Builder().apply { moveTo(x0, y); lineTo(x1, y) }.build()
+                    canvas.strokePath(line, ctm, color, ((y1 - y0) * 0.06).coerceAtLeast(0.6))
+                }
             }
-            io.github.yuroyami.kitepdf.PdfAnnotation.Subtype.Link -> {
-                // Thin border so the user can see the clickable area.
-                canvas.strokePath(rectPath, state.current.ctm, annot.color ?: RgbColor(0.0, 0.3, 0.8), 0.5)
+            Subtype.Square -> {
+                val p = PdfPath.Builder().apply { rectangle(rect.left, rect.bottom, rect.width, rect.height) }.build()
+                annot.interiorColor?.let { canvas.fillPath(p, ctm, it, false) }
+                canvas.strokePath(p, ctm, annot.color ?: RgbColor.BLACK, 1.0)
             }
-            else -> { /* other annotations: render nothing without /AP */ }
+            Subtype.Circle -> {
+                val p = ellipsePath(rect)
+                annot.interiorColor?.let { canvas.fillPath(p, ctm, it, false) }
+                canvas.strokePath(p, ctm, annot.color ?: RgbColor.BLACK, 1.0)
+            }
+            Subtype.Line -> annot.vertices?.let { v ->
+                if (v.size >= 4) {
+                    val line = PdfPath.Builder().apply { moveTo(v[0], v[1]); lineTo(v[2], v[3]) }.build()
+                    canvas.strokePath(line, ctm, annot.color ?: RgbColor.BLACK, 1.0)
+                }
+            }
+            Subtype.Polygon, Subtype.PolyLine -> annot.vertices?.let { v ->
+                val p = polyPath(v, close = annot.subtype == Subtype.Polygon)
+                if (p != null) {
+                    if (annot.subtype == Subtype.Polygon) annot.interiorColor?.let { canvas.fillPath(p, ctm, it, false) }
+                    canvas.strokePath(p, ctm, annot.color ?: RgbColor.BLACK, 1.0)
+                }
+            }
+            Subtype.Ink -> annot.inkLists?.forEach { stroke ->
+                polyPath(stroke, close = false)?.let { canvas.strokePath(it, ctm, annot.color ?: RgbColor.BLACK, 1.0) }
+            }
+            Subtype.Link -> {
+                val p = PdfPath.Builder().apply { rectangle(rect.left, rect.bottom, rect.width, rect.height) }.build()
+                canvas.strokePath(p, ctm, annot.color ?: RgbColor(0.0, 0.3, 0.8), 0.5)
+            }
+            else -> { /* other annotations: nothing without /AP */ }
         }
+    }
+
+    /** Invoke [block] once per /QuadPoints quad (as a min/max box), or once over
+     *  the whole [rect] when no quads are present. */
+    private inline fun forEachQuad(
+        quads: List<Double>?, rect: io.github.yuroyami.kitepdf.Rectangle,
+        block: (x0: Double, y0: Double, x1: Double, y1: Double) -> Unit,
+    ) {
+        if (quads != null && quads.size >= 8) {
+            var i = 0
+            while (i + 7 < quads.size) {
+                val xs = listOf(quads[i], quads[i + 2], quads[i + 4], quads[i + 6])
+                val ys = listOf(quads[i + 1], quads[i + 3], quads[i + 5], quads[i + 7])
+                block(xs.min(), ys.min(), xs.max(), ys.max())
+                i += 8
+            }
+        } else {
+            block(rect.left, rect.bottom, rect.left + rect.width, rect.bottom + rect.height)
+        }
+    }
+
+    /** Four-Bézier ellipse inscribed in [rect]. */
+    private fun ellipsePath(rect: io.github.yuroyami.kitepdf.Rectangle): PdfPath {
+        val cx = rect.left + rect.width / 2; val cy = rect.bottom + rect.height / 2
+        val rx = rect.width / 2; val ry = rect.height / 2
+        val k = 0.5522847498
+        return PdfPath.Builder().apply {
+            moveTo(cx + rx, cy)
+            curveTo(cx + rx, cy + ry * k, cx + rx * k, cy + ry, cx, cy + ry)
+            curveTo(cx - rx * k, cy + ry, cx - rx, cy + ry * k, cx - rx, cy)
+            curveTo(cx - rx, cy - ry * k, cx - rx * k, cy - ry, cx, cy - ry)
+            curveTo(cx + rx * k, cy - ry, cx + rx, cy - ry * k, cx + rx, cy)
+            close()
+        }.build()
+    }
+
+    /** Build a polyline/polygon path from alternating x/y values. */
+    private fun polyPath(coords: List<Double>, close: Boolean): PdfPath? {
+        if (coords.size < 4) return null
+        val b = PdfPath.Builder()
+        b.moveTo(coords[0], coords[1])
+        var i = 2
+        while (i + 1 < coords.size) { b.lineTo(coords[i], coords[i + 1]); i += 2 }
+        if (close) b.close()
+        return b.build()
     }
 
     /** Named colour spaces declared in /Resources /ColorSpace. */
@@ -196,12 +358,70 @@ class PageRenderer(
     }
 
     /**
+     * Decode an inline image captured verbatim as `BI … ID <data> EI` (§8.9.7).
+     * Parses the abbreviated dictionary, slices the raw data, and builds an
+     * [ImageXObject] driven through the normal raster path. [fillColor] tints an
+     * inline `/ImageMask` stencil.
+     */
+    private fun decodeInlineImage(blob: ByteArray, fillColor: RgbColor): ImageXObject? {
+        if (blob.size < 4) return null
+        val reader = io.github.yuroyami.kitepdf.core.ByteReader(blob)
+        reader.seek(2) // skip "BI"
+        val lexer = io.github.yuroyami.kitepdf.parser.Lexer(reader)
+        val parser = io.github.yuroyami.kitepdf.parser.Parser(lexer)
+        val entries = LinkedHashMap<String, PdfObject>()
+        while (true) {
+            val tok = lexer.nextToken()
+            if (tok is io.github.yuroyami.kitepdf.parser.Token.Keyword && tok.value == "ID") break
+            if (tok == io.github.yuroyami.kitepdf.parser.Token.EndOfFile) return null
+            if (tok !is io.github.yuroyami.kitepdf.parser.Token.Name) return null
+            entries[normalizeInlineKey(tok.value)] = runCatching { parser.readObject() }.getOrNull() ?: return null
+        }
+        var dataStart = reader.pos()
+        val w0 = if (dataStart < blob.size) blob[dataStart].toInt() and 0xFF else -1
+        if (w0 == ' '.code || w0 == '\n'.code || w0 == '\r'.code || w0 == '\t'.code) dataStart++
+        var dataEnd = blob.size - 2 // before the trailing "EI"
+        while (dataEnd > dataStart) {
+            val c = blob[dataEnd - 1].toInt() and 0xFF
+            if (c == ' '.code || c == '\n'.code || c == '\r'.code || c == '\t'.code) dataEnd-- else break
+        }
+        if (dataEnd < dataStart) return null
+        val data = blob.copyOfRange(dataStart, dataEnd)
+        entries["Length"] = PdfInt(data.size.toLong())
+        val stream = PdfStream(PdfDictionary(entries), data)
+        return runCatching { ImageXObject.from(stream, resolver, fillColor) }.getOrNull()
+    }
+
+    /** Expand the abbreviated inline-image dictionary keys (§8.9.7 Table 92). */
+    private fun normalizeInlineKey(k: String): String = when (k) {
+        "W" -> "Width"; "H" -> "Height"; "BPC" -> "BitsPerComponent"
+        "CS" -> "ColorSpace"; "F" -> "Filter"; "IM" -> "ImageMask"
+        "D" -> "Decode"; "DP" -> "DecodeParms"; "I" -> "Interpolate"
+        else -> k
+    }
+
+    /**
      * Render a child content stream inside a Form XObject (ISO 32000-1 §8.10).
      * When the form has a `/Group` dict with `/S /Transparency`, the
      * rendering is wrapped in a transparency group so its compositing
      * happens onto an offscreen layer that's blended back at the end.
      */
     private fun renderFormXObject(
+        formStream: PdfStream,
+        parentState: GraphicsStack,
+    ) {
+        // Recursion guard: a form that (transitively) draws itself would overflow
+        // the native stack on malformed/malicious input.
+        if (formDepth >= MAX_FORM_DEPTH) return
+        formDepth++
+        try {
+            renderFormXObjectInner(formStream, parentState)
+        } finally {
+            formDepth--
+        }
+    }
+
+    private fun renderFormXObjectInner(
         formStream: PdfStream,
         parentState: GraphicsStack,
     ) {
@@ -228,6 +448,7 @@ class PageRenderer(
                 extGStates = loadExtGStates(resources),
                 shadings = sh,
                 patterns = loadPatterns(resources, sh),
+                properties = loadProperties(resources),
             )
         }
         val childFonts = res.fonts
@@ -236,6 +457,7 @@ class PageRenderer(
         val childExtGStates = res.extGStates
         val childShadings = res.shadings
         val childPatterns = res.patterns
+        val childProperties = res.properties
         val groupDict = formStream.dict.getDict("Group", resolver)
         val isTransparencyGroup = groupDict?.getName("S") == "Transparency"
         val isolated = (groupDict?.get("I") as? io.github.yuroyami.kitepdf.parser.PdfBoolean)?.value ?: false
@@ -254,12 +476,22 @@ class PageRenderer(
                 blendMode = parentState.current.blendMode,
             )
         }
+        // Clip the form's content to its /BBox (§8.10.1) so it cannot overdraw
+        // outside the intended region.
+        val bboxPath = PdfPath.Builder().apply {
+            rectangle(bbox.left, bbox.bottom, bbox.right - bbox.left, bbox.top - bbox.bottom)
+        }.build()
+        canvas.pushClip(bboxPath, parentState.current.ctm, false)
+        val clipBase = activeClipCount
         try {
             val bytes = io.github.yuroyami.kitepdf.filters.FilterChain.decode(formStream)
             val ops = ContentStreamParser.parse(bytes)
             val pathBuilder = PdfPath.Builder()
-            for (op in ops) dispatch(op, parentState, pathBuilder, childFonts, childXObjects, childColorSpaces, childExtGStates, childShadings, childPatterns)
+            for (op in ops) dispatch(op, parentState, pathBuilder, childFonts, childXObjects, childColorSpaces, childExtGStates, childShadings, childPatterns, childProperties)
         } finally {
+            // Drop any clips the form's content left unbalanced, then the BBox clip.
+            while (activeClipCount > clipBase) { canvas.popClip(); activeClipCount-- }
+            canvas.popClip()
             if (groupOpened) canvas.endTransparencyGroup()
             parentState.restore()
         }
@@ -302,6 +534,7 @@ class PageRenderer(
         extGStates: Map<String, ExtGState>,
         shadings: Map<String, PdfShading>,
         patterns: Map<String, PdfPattern>,
+        properties: Map<String, PdfObject>,
     ) {
         val a = op.operands
         when (op.operator) {
@@ -317,6 +550,9 @@ class PageRenderer(
                 state.replace(state.current.copy(ctm = state.current.ctm.concat(m)))
             }
             "w" -> state.replace(state.current.copy(lineWidth = num(a, 0)))
+            "J" -> state.replace(state.current.copy(lineCap = num(a, 0).toInt()))
+            "j" -> state.replace(state.current.copy(lineJoin = num(a, 0).toInt()))
+            "M" -> state.replace(state.current.copy(miterLimit = num(a, 0)))
             "d" -> {
                 // dash: [ array ] phase d  — array of on/off lengths (user units).
                 val arr = a.getOrNull(0) as? io.github.yuroyami.kitepdf.parser.PdfArray
@@ -373,15 +609,15 @@ class PageRenderer(
             "h" -> path.close()
             "re" -> path.rectangle(num(a, 0), num(a, 1), num(a, 2), num(a, 3))
 
-            // ─── Path painting ────────────────────────────────────────────
-            "S" -> { paintStroke(path, state); path.reset() }
-            "s" -> { path.close(); paintStroke(path, state); path.reset() }
-            "f", "F" -> { paintFill(path, state, evenOdd = false); path.reset() }
-            "f*" -> { paintFill(path, state, evenOdd = true); path.reset() }
-            "B" -> { paintFill(path, state, false); paintStroke(path, state); path.reset() }
-            "B*" -> { paintFill(path, state, true); paintStroke(path, state); path.reset() }
-            "b" -> { path.close(); paintFill(path, state, false); paintStroke(path, state); path.reset() }
-            "b*" -> { path.close(); paintFill(path, state, true); paintStroke(path, state); path.reset() }
+            // ─── Path painting (suppressed inside hidden optional content) ──
+            "S" -> { if (!ocHidden()) paintStroke(path, state); path.reset() }
+            "s" -> { path.close(); if (!ocHidden()) paintStroke(path, state); path.reset() }
+            "f", "F" -> { if (!ocHidden()) paintFill(path, state, evenOdd = false); path.reset() }
+            "f*" -> { if (!ocHidden()) paintFill(path, state, evenOdd = true); path.reset() }
+            "B" -> { if (!ocHidden()) { paintFill(path, state, false); paintStroke(path, state) }; path.reset() }
+            "B*" -> { if (!ocHidden()) { paintFill(path, state, true); paintStroke(path, state) }; path.reset() }
+            "b" -> { path.close(); if (!ocHidden()) { paintFill(path, state, false); paintStroke(path, state) }; path.reset() }
+            "b*" -> { path.close(); if (!ocHidden()) { paintFill(path, state, true); paintStroke(path, state) }; path.reset() }
             "n" -> path.reset()
 
             // ─── Clipping (push, applied on the *next* paint per spec) ────
@@ -443,9 +679,14 @@ class PageRenderer(
             "Do" -> {
                 val name = (a.firstOrNull() as? PdfName)?.value ?: return
                 val stream = xobjects[name] ?: return
+                // Skip when inside a hidden OC section or the XObject's own /OC is off.
+                if (ocHidden() || isXObjectOcHidden(stream)) return
                 when (stream.dict.getName("Subtype")) {
                     "Image" -> withSoftMask(state.current) {
-                        canvas.drawImage(ImageXObject.from(stream, resolver), state.current.ctm, state.current.fillAlpha)
+                        canvas.drawImage(
+                            ImageXObject.from(stream, resolver, fillColor = state.current.fillColor),
+                            state.current.ctm, state.current.fillAlpha,
+                        )
                     }
                     "Form" -> renderFormXObject(stream, state)
                 }
@@ -453,6 +694,7 @@ class PageRenderer(
 
             // ─── Shading fill (`sh <name>`) ──────────────────────────────
             "sh" -> {
+                if (ocHidden()) return
                 val name = (a.firstOrNull() as? PdfName)?.value ?: return
                 val shading = shadings[name] ?: return
                 val s = state.current
@@ -460,6 +702,29 @@ class PageRenderer(
                     shading, s.ctm, clipPath = null,
                     alpha = s.fillAlpha, blendMode = s.blendMode,
                 )
+            }
+
+            // ─── Inline image (BI … ID … EI) ─────────────────────────────
+            "BI" -> {
+                if (ocHidden()) return
+                val blob = op.inlineImage ?: return
+                val img = decodeInlineImage(blob, state.current.fillColor) ?: return
+                withSoftMask(state.current) {
+                    canvas.drawImage(img, state.current.ctm, state.current.fillAlpha)
+                }
+            }
+
+            // ─── Marked content (optional-content visibility) ────────────
+            "BDC" -> {
+                val tag = a.getOrNull(0) as? PdfName
+                val hidden = tag?.value == "OC" && isOcOperandHidden(a.getOrNull(1), properties)
+                markedContentStack.addLast(hidden)
+                if (hidden) ocHiddenDepth++
+            }
+            "BMC" -> markedContentStack.addLast(false)
+            "EMC" -> {
+                val wasHidden = markedContentStack.removeLastOrNull() ?: false
+                if (wasHidden && ocHiddenDepth > 0) ocHiddenDepth--
             }
 
             // ─── Colour-space-aware fill/stroke ──────────────────────────
@@ -489,10 +754,10 @@ class PageRenderer(
                     pat.shading, s.ctm.concat(pat.matrix), clipPath = built,
                     alpha = s.fillAlpha, blendMode = s.blendMode,
                 )
+                pat is PdfPattern.Tiling -> renderTilingPattern(pat, built, s, evenOdd)
                 pat != null -> {
-                    // Tiling / unsupported pattern — not renderable yet. Skip
-                    // rather than paint the default colour, which would flood
-                    // e.g. a full-page background pattern solid black.
+                    // Unsupported pattern — skip rather than paint the default
+                    // colour, which would flood e.g. a full-page background black.
                 }
                 else -> canvas.fillPath(
                     built, s.ctm, s.fillColor, evenOdd,
@@ -510,8 +775,93 @@ class PageRenderer(
                 path.build(), s.ctm, s.strokeColor, s.lineWidth,
                 alpha = s.strokeAlpha, blendMode = s.blendMode,
                 dashArray = s.dashArray, dashPhase = s.dashPhase,
+                lineCap = s.lineCap, lineJoin = s.lineJoin, miterLimit = s.miterLimit,
             )
         }
+    }
+
+    /**
+     * Fill [clipPath] with a tiling pattern (ISO 32000-1 §8.7.3): clip to the
+     * region, then replay the pattern cell's content stream at every
+     * `/XStep`,`/YStep` offset that intersects the region. The pattern matrix is
+     * relative to the page's default coordinate system. Uncolored patterns
+     * (PaintType 2) are painted in the current fill colour.
+     */
+    private fun renderTilingPattern(
+        pat: PdfPattern.Tiling, clipPath: PdfPath, s: GraphicsState, evenOdd: Boolean,
+    ) {
+        val xs = pat.xStep
+        val ys = pat.yStep
+        if (xs == 0.0 || ys == 0.0) return
+        val patternCtm = pageBaseCtm.concat(pat.matrix)
+        val toPattern = patternCtm.invert() ?: return
+        val dev = deviceBounds(clipPath, s.ctm) ?: return
+
+        // Map the region's device-space corners into pattern space to find the
+        // range of tile indices that can intersect it.
+        val corners = listOf(
+            toPattern.transformPoint(dev[0], dev[1]), toPattern.transformPoint(dev[2], dev[1]),
+            toPattern.transformPoint(dev[0], dev[3]), toPattern.transformPoint(dev[2], dev[3]),
+        )
+        val pMinX = corners.minOf { it.first }; val pMaxX = corners.maxOf { it.first }
+        val pMinY = corners.minOf { it.second }; val pMaxY = corners.maxOf { it.second }
+        val axs = kotlin.math.abs(xs); val ays = kotlin.math.abs(ys)
+        val i0 = kotlin.math.floor((pMinX - pat.bbox.right) / axs).toInt()
+        val i1 = kotlin.math.ceil((pMaxX - pat.bbox.left) / axs).toInt()
+        val j0 = kotlin.math.floor((pMinY - pat.bbox.top) / ays).toInt()
+        val j1 = kotlin.math.ceil((pMaxY - pat.bbox.bottom) / ays).toInt()
+        val tiles = (i1 - i0 + 1).toLong() * (j1 - j0 + 1).toLong()
+        if (tiles <= 0 || tiles > MAX_TILES) return
+
+        val res = pat.resources
+        val fonts = loadFonts(res)
+        val xobjects = loadXObjects(res)
+        val colorSpaces = loadColorSpaces(res)
+        val extGStates = loadExtGStates(res)
+        val shadings = loadShadings(res)
+        val patterns = loadPatterns(res, shadings)
+        val properties = loadProperties(res)
+        val ops = ContentStreamParser.parse(pat.contentBytes)
+        val uncolored = pat.paintType == 2
+
+        canvas.pushClip(clipPath, s.ctm, evenOdd)
+        val clipBase = activeClipCount
+        try {
+            for (j in j0..j1) for (i in i0..i1) {
+                val tileCtm = patternCtm.concat(Matrix.translation(i * xs, j * ys))
+                val tileState = GraphicsStack(
+                    if (uncolored) GraphicsState(ctm = tileCtm, fillColor = s.fillColor, strokeColor = s.fillColor)
+                    else GraphicsState(ctm = tileCtm),
+                )
+                val tilePath = PdfPath.Builder()
+                for (op in ops) dispatch(op, tileState, tilePath, fonts, xobjects, colorSpaces, extGStates, shadings, patterns, properties)
+                // Drop any clips the tile's content left unbalanced.
+                while (activeClipCount > clipBase) { canvas.popClip(); activeClipCount-- }
+            }
+        } finally {
+            canvas.popClip()
+        }
+    }
+
+    /** Axis-aligned device-space bounds of [path] under [ctm], or null if empty. */
+    private fun deviceBounds(path: PdfPath, ctm: Matrix): DoubleArray? {
+        var minX = Double.POSITIVE_INFINITY; var minY = Double.POSITIVE_INFINITY
+        var maxX = Double.NEGATIVE_INFINITY; var maxY = Double.NEGATIVE_INFINITY
+        var any = false
+        fun acc(x: Double, y: Double) {
+            val (dx, dy) = ctm.transformPoint(x, y)
+            if (dx < minX) minX = dx; if (dx > maxX) maxX = dx
+            if (dy < minY) minY = dy; if (dy > maxY) maxY = dy
+            any = true
+        }
+        for (seg in path.segments) when (seg) {
+            is PdfPath.Segment.MoveTo -> acc(seg.x, seg.y)
+            is PdfPath.Segment.LineTo -> acc(seg.x, seg.y)
+            is PdfPath.Segment.CurveTo -> { acc(seg.x1, seg.y1); acc(seg.x2, seg.y2); acc(seg.x3, seg.y3) }
+            is PdfPath.Segment.QuadTo -> { acc(seg.x1, seg.y1); acc(seg.x2, seg.y2) }
+            PdfPath.Segment.Close -> {}
+        }
+        return if (any) doubleArrayOf(minX, minY, maxX, maxY) else null
     }
 
     /**
@@ -673,15 +1023,24 @@ class PageRenderer(
         // text-space → device = text matrix THEN current CTM. Since
         // concat(other) applies `other` first, that's pageMatrix.concat(textMatrix)
         // (NOT the reverse, which would apply the device matrix first and fling
-        // the text off-page).
+        // the text off-page). The text-space pre-transform bakes in the horizontal
+        // scaling (Tz) on x and the rise (Ts) on y, so condensed/expanded type
+        // renders at the right glyph proportions, not just the right spacing.
+        val hScale = t.horizontalScaling / 100.0
         val finalMatrix = pageMatrix.concat(textMatrix)
-            .translate(0.0, t.rise)
+            .concat(Matrix(hScale, 0.0, 0.0, 1.0, 0.0, t.rise))
 
-        withSoftMask(state.current) {
-            canvas.drawText(
-                bytes, font, t.fontSize, finalMatrix, state.current.fillColor,
-                alpha = state.current.fillAlpha, blendMode = state.current.blendMode,
-            )
+        // Text render mode (Tr): 3 and 7 are invisible (used for OCR text layers).
+        val invisible = t.renderingMode == 3 || t.renderingMode == 7
+        // Suppress glyph painting inside a hidden OC section, but still advance Tm
+        // below so any following visible text on the line stays correctly placed.
+        if (!ocHidden() && !invisible) {
+            withSoftMask(state.current) {
+                canvas.drawText(
+                    bytes, font, t.fontSize, finalMatrix, state.current.fillColor,
+                    alpha = state.current.fillAlpha, blendMode = state.current.blendMode,
+                )
+            }
         }
 
         // Advance Tm by the total width of this run. The advance is in text space,
@@ -737,4 +1096,11 @@ class PageRenderer(
             "DeviceCMYK", "CMYK" -> ColorSpace.DeviceCMYK
             else -> dict[name] ?: ColorSpace.DeviceGray
         }
+
+    private companion object {
+        /** Safety cap on tiling-pattern tile count to bound adversarial inputs. */
+        const val MAX_TILES = 20_000L
+        /** Max Form-XObject nesting depth before bailing (recursion guard). */
+        const val MAX_FORM_DEPTH = 15
+    }
 }

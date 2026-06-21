@@ -55,14 +55,99 @@ class ImageXObjectTest {
     }
 
     @Test
-    fun ccitt_filter_classifies_as_ccitt() {
+    fun ccitt_filter_now_decodes_as_raw() {
+        // CCITTFaxDecode is in the filter chain, so the image is RAW pixel data
+        // (decoded by FilterChain), not a deferred-codec kind.
         val image = ImageXObject.from(
             stream(
                 width = 10, height = 10, bpc = 1, colorSpace = "DeviceGray",
                 filter = PdfName("CCITTFaxDecode"), bytes = ByteArray(4),
             ),
         )
-        assertEquals(ImageXObject.Kind.CCITT, image.kind)
+        assertEquals(ImageXObject.Kind.RAW, image.kind)
+    }
+
+    @Test
+    fun indexed_image_resolves_palette_colors() {
+        // [/Indexed /DeviceRGB 1 <FF0000 00FF00>] — index 0 = red, 1 = green.
+        val palette = byteArrayOf(0xFF.toByte(), 0, 0, 0, 0xFF.toByte(), 0)
+        val base = PdfStream(
+            dict = PdfDictionary(linkedMapOf(
+                "Type" to PdfName("XObject"), "Subtype" to PdfName("Image"),
+                "Width" to PdfInt(2), "Height" to PdfInt(1),
+                "BitsPerComponent" to PdfInt(8),
+                "ColorSpace" to PdfArray(listOf(
+                    PdfName("Indexed"), PdfName("DeviceRGB"), PdfInt(1),
+                    io.github.yuroyami.kitepdf.parser.PdfString(palette),
+                )),
+                "Length" to PdfInt(2),
+            )),
+            rawBytes = byteArrayOf(0x00, 0x01),
+        )
+        val image = ImageXObject.from(base, refs = { null })
+        val rgba = image.toRgbaBytes()!!
+        assertEquals(0xFF, rgba[0].toInt() and 0xFF) // pixel0 red R
+        assertEquals(0x00, rgba[1].toInt() and 0xFF)
+        assertEquals(0x00, rgba[6].toInt() and 0xFF) // pixel1 green R
+        assertEquals(0xFF, rgba[5].toInt() and 0xFF) // pixel1 green G
+    }
+
+    @Test
+    fun image_mask_paints_fill_color_where_sample_is_zero() {
+        // 8×1 /ImageMask, one byte 0b10101010: MSB(bit0)=1→transparent, bit1=0→paint.
+        val base = PdfStream(
+            dict = PdfDictionary(linkedMapOf(
+                "Type" to PdfName("XObject"), "Subtype" to PdfName("Image"),
+                "Width" to PdfInt(8), "Height" to PdfInt(1),
+                "ImageMask" to io.github.yuroyami.kitepdf.parser.PdfBoolean(true),
+                "Length" to PdfInt(1),
+            )),
+            rawBytes = byteArrayOf(0b10101010.toByte()),
+        )
+        val blue = io.github.yuroyami.kitepdf.render.RgbColor(0.0, 0.0, 1.0)
+        val rgba = ImageXObject.from(base, fillColor = blue).toRgbaBytes()!!
+        // pixel0 (bit 1) → transparent
+        assertEquals(0x00, rgba[3].toInt() and 0xFF)
+        // pixel1 (bit 0) → painted blue, opaque
+        assertEquals(0xFF, rgba[7].toInt() and 0xFF)
+        assertEquals(0xFF, rgba[6].toInt() and 0xFF) // blue channel of pixel1
+    }
+
+    @Test
+    fun four_bit_gray_unpacks_per_sample() {
+        // 4×1 DeviceGray @ 4bpc: samples 0,15,15,0 packed in [0x0F, 0xF0].
+        val base = PdfStream(
+            dict = PdfDictionary(linkedMapOf(
+                "Type" to PdfName("XObject"), "Subtype" to PdfName("Image"),
+                "Width" to PdfInt(4), "Height" to PdfInt(1),
+                "BitsPerComponent" to PdfInt(4), "ColorSpace" to PdfName("DeviceGray"),
+                "Length" to PdfInt(2),
+            )),
+            rawBytes = byteArrayOf(0x0F, 0xF0.toByte()),
+        )
+        val rgba = ImageXObject.from(base, refs = { null }).toRgbaBytes()!!
+        assertEquals(0x00, rgba[0].toInt() and 0xFF)  // sample 0 → black
+        assertEquals(0xFF, rgba[4].toInt() and 0xFF)  // sample 15 → white
+        assertEquals(0xFF, rgba[8].toInt() and 0xFF)  // sample 15 → white
+        assertEquals(0x00, rgba[12].toInt() and 0xFF) // sample 0 → black
+    }
+
+    @Test
+    fun decode_array_inverts_gray() {
+        // DeviceGray with /Decode [1 0]: sample 0 → white, 255 → black.
+        val base = PdfStream(
+            dict = PdfDictionary(linkedMapOf(
+                "Type" to PdfName("XObject"), "Subtype" to PdfName("Image"),
+                "Width" to PdfInt(2), "Height" to PdfInt(1),
+                "BitsPerComponent" to PdfInt(8), "ColorSpace" to PdfName("DeviceGray"),
+                "Decode" to PdfArray(listOf(PdfInt(1), PdfInt(0))),
+                "Length" to PdfInt(2),
+            )),
+            rawBytes = byteArrayOf(0x00, 0xFF.toByte()),
+        )
+        val rgba = ImageXObject.from(base, refs = { null }).toRgbaBytes()!!
+        assertEquals(0xFF, rgba[0].toInt() and 0xFF) // sample 0 → white
+        assertEquals(0x00, rgba[4].toInt() and 0xFF) // sample 255 → black
     }
 
     @Test

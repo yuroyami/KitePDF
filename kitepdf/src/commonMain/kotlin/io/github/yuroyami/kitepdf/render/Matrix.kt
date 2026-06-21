@@ -47,6 +47,17 @@ data class Matrix(
     fun translate(tx: Double, ty: Double): Matrix = translation(tx, ty).concat(this)
     fun scale(sx: Double, sy: Double): Matrix = scaling(sx, sy).concat(this)
 
+    /** Inverse transform, or null when the matrix is singular (det ≈ 0). */
+    fun invert(): Matrix? {
+        val det = a * d - b * c
+        if (kotlin.math.abs(det) < 1e-12) return null
+        val ia = d / det
+        val ib = -b / det
+        val ic = -c / det
+        val id = a / det
+        return Matrix(ia, ib, ic, id, -(e * ia + f * ic), -(e * ib + f * id))
+    }
+
     companion object {
         val IDENTITY = Matrix(1.0, 0.0, 0.0, 1.0, 0.0, 0.0)
 

@@ -268,6 +268,8 @@ class PdfBuilder {
         trailer["Size"] = PdfInt(maxObjNum + 1)
         trailer["Root"] = PdfReference(catalogNum, 0)
         if (infoNum != null) trailer["Info"] = PdfReference(infoNum, 0)
+        // A fingerprint of the body so the file carries a /ID (validators expect one).
+        trailer["ID"] = DocumentId.generate(out.toByteArray())
         out.append("trailer\n".encodeToByteArray())
         PdfObjectWriter.writeObject(PdfDictionary(trailer), out)
         out.append("\nstartxref\n$xrefOffset\n%%EOF\n".encodeToByteArray())

@@ -2,6 +2,7 @@ package io.github.yuroyami.kitepdf.render
 
 import io.github.yuroyami.kitepdf.parser.IndirectResolver
 import io.github.yuroyami.kitepdf.parser.PdfArray
+import io.github.yuroyami.kitepdf.parser.PdfDictionary
 import io.github.yuroyami.kitepdf.parser.PdfInt
 import io.github.yuroyami.kitepdf.parser.PdfName
 import io.github.yuroyami.kitepdf.parser.PdfObject
@@ -9,6 +10,7 @@ import io.github.yuroyami.kitepdf.parser.PdfReal
 import io.github.yuroyami.kitepdf.parser.PdfStream
 import io.github.yuroyami.kitepdf.parser.PdfString
 import io.github.yuroyami.kitepdf.filters.FilterChain
+import kotlin.math.pow
 
 /**
  * Colour-space resolution + sample-to-RGB conversion (ISO 32000-1 §8.6).
@@ -116,6 +118,66 @@ sealed class ColorSpace {
             val idx = (components.getOrElse(0) { 0.0 } * hival).toInt().coerceIn(0, hival)
             return lut[idx]
         }
+
+        /** Direct palette lookup by integer index (for image samples, which are
+         *  raw indices rather than normalised fractions). Clamped to the palette. */
+        fun colorAt(index: Int): RgbColor = lut[index.coerceIn(0, hival)]
+    }
+
+    /**
+     * Separation / DeviceN colour space (§8.6.6.4). [componentCount] tint values
+     * are fed through [tintTransform] to produce colours in [alternate], which
+     * converts them to RGB. Separation is the n=1 special case.
+     */
+    class DeviceN(
+        override val componentCount: Int,
+        val alternate: ColorSpace,
+        val tintTransform: PdfFunction,
+        /** Colorant names; a single "None" Separation paints nothing. */
+        val names: List<String>,
+    ) : ColorSpace() {
+        private val isNone = names.size == 1 && names[0] == "None"
+        override fun toRgb(components: DoubleArray): RgbColor {
+            if (isNone) return RgbColor.WHITE
+            val tint = tintTransform.evaluate(components)
+            return alternate.toRgb(tint)
+        }
+        // A separation at full tint (1.0) is its "solid" colour; default to that.
+        override fun defaultColor(): RgbColor =
+            if (isNone) RgbColor.WHITE else alternate.toRgb(tintTransform.evaluate(DoubleArray(componentCount) { 1.0 }))
+    }
+
+    /**
+     * CIE 1976 L*a*b* colour space (§8.6.5.4). Components are actual L (0..100)
+     * and a/b (per /Range), converted via XYZ to sRGB using the /WhitePoint.
+     */
+    class Lab(
+        private val whitePoint: DoubleArray,
+        private val rangeAB: DoubleArray,
+    ) : ColorSpace() {
+        override val componentCount = 3
+        override fun toRgb(components: DoubleArray): RgbColor {
+            val L = components.getOrElse(0) { 0.0 }.coerceIn(0.0, 100.0)
+            val a = components.getOrElse(1) { 0.0 }.coerceIn(rangeAB[0], rangeAB[1])
+            val bb = components.getOrElse(2) { 0.0 }.coerceIn(rangeAB[2], rangeAB[3])
+            val fy = (L + 16.0) / 116.0
+            val fx = fy + a / 500.0
+            val fz = fy - bb / 200.0
+            fun g(t: Double): Double { val t3 = t * t * t; return if (t3 > 0.008856) t3 else (t - 16.0 / 116.0) / 7.787 }
+            val x = whitePoint[0] * g(fx)
+            val y = whitePoint[1] * g(fy)
+            val z = whitePoint[2] * g(fz)
+            // XYZ (D65-ish) → linear sRGB → gamma.
+            var r = x * 3.2406 - y * 1.5372 - z * 0.4986
+            var gr = -x * 0.9689 + y * 1.8758 + z * 0.0415
+            var b = x * 0.0557 - y * 0.2040 + z * 1.0570
+            fun gamma(c: Double): Double {
+                val cc = c.coerceIn(0.0, 1.0)
+                return if (cc <= 0.0031308) 12.92 * cc else 1.055 * cc.pow(1.0 / 2.4) - 0.055
+            }
+            r = gamma(r); gr = gamma(gr); b = gamma(b)
+            return RgbColor(r.coerceIn(0.0, 1.0), gr.coerceIn(0.0, 1.0), b.coerceIn(0.0, 1.0))
+        }
     }
 
     /** Fallback for spaces we don't fully model. Routes to grey. */
@@ -154,7 +216,7 @@ sealed class ColorSpace {
                 "DeviceCMYK", "CMYK" -> DeviceCMYK
                 "CalGray" -> DeviceGray
                 "CalRGB" -> DeviceRGB
-                "Lab" -> DeviceRGB
+                "Lab" -> resolveLab(arr, refs)
                 "ICCBased" -> {
                     // /ICCBased [/ICCBased <stream>] — stream dict carries /N.
                     val streamObj = arr.getOrNull(1)?.resolve(refs) as? PdfStream
@@ -166,9 +228,42 @@ sealed class ColorSpace {
                     }
                 }
                 "Indexed" -> resolveIndexed(arr, refs)
-                "Pattern", "DeviceN", "Separation" -> Unsupported(tag, 1)
+                "Separation" -> resolveSeparation(arr, refs)
+                "DeviceN" -> resolveDeviceN(arr, refs)
+                "Pattern" -> Unsupported(tag, 1)
                 else -> DeviceGray
             }
+        }
+
+        private fun resolveSeparation(arr: PdfArray, refs: IndirectResolver): ColorSpace {
+            // [/Separation name alternateSpace tintTransform]
+            val name = (arr.getOrNull(1)?.resolve(refs) as? PdfName)?.value ?: ""
+            val alternate = resolve(arr.getOrNull(2), refs)
+            val tint = PdfFunction.parse(arr.getOrNull(3), refs) ?: return Unsupported("Separation", 1)
+            return DeviceN(1, alternate, tint, listOf(name))
+        }
+
+        private fun resolveDeviceN(arr: PdfArray, refs: IndirectResolver): ColorSpace {
+            // [/DeviceN names alternateSpace tintTransform (attributes)]
+            val namesArr = arr.getOrNull(1)?.resolve(refs) as? PdfArray ?: return Unsupported("DeviceN", 1)
+            val names = namesArr.mapNotNull { (it as? PdfName)?.value }
+            if (names.isEmpty()) return Unsupported("DeviceN", 1)
+            val alternate = resolve(arr.getOrNull(2), refs)
+            val tint = PdfFunction.parse(arr.getOrNull(3), refs) ?: return Unsupported("DeviceN", names.size)
+            return DeviceN(names.size, alternate, tint, names)
+        }
+
+        private fun resolveLab(arr: PdfArray, refs: IndirectResolver): ColorSpace {
+            val params = arr.getOrNull(1)?.resolve(refs) as? PdfDictionary
+            val wp = params?.getArray("WhitePoint")?.let { wpArr ->
+                DoubleArray(3) { i -> (wpArr.getOrNull(i) as? PdfReal)?.value
+                    ?: (wpArr.getOrNull(i) as? PdfInt)?.value?.toDouble() ?: 1.0 }
+            } ?: doubleArrayOf(0.9505, 1.0, 1.089)   // D65 default
+            val range = params?.getArray("Range")?.let { rArr ->
+                DoubleArray(4) { i -> (rArr.getOrNull(i) as? PdfReal)?.value
+                    ?: (rArr.getOrNull(i) as? PdfInt)?.value?.toDouble() ?: 0.0 }
+            } ?: doubleArrayOf(-100.0, 100.0, -100.0, 100.0)
+            return Lab(wp, range)
         }
 
         private fun resolveIndexed(arr: PdfArray, refs: IndirectResolver): ColorSpace {

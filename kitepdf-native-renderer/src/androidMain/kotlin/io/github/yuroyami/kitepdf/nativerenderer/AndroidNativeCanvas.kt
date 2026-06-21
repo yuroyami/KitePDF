@@ -73,6 +73,7 @@ class AndroidNativeCanvas(private val canvas: AndroidCanvas) : PdfCanvas {
         path: PdfPath, ctm: PdfMatrix, color: RgbColor, lineWidth: Double,
         alpha: Double, blendMode: PdfBlendMode,
         dashArray: List<Double>?, dashPhase: Double,
+        lineCap: Int, lineJoin: Int, miterLimit: Double,
     ) {
         val p = toAndroidPath(path, ctm)
         val avgScale = (ctm.scaleX() + ctm.scaleY()) * 0.5
@@ -81,6 +82,9 @@ class AndroidNativeCanvas(private val canvas: AndroidCanvas) : PdfCanvas {
             style = Paint.Style.STROKE
             this.color = color.toArgb(alpha)
             strokeWidth = (lineWidth * avgScale).toFloat().coerceAtLeast(0.1f)
+            strokeCap = when (lineCap) { 1 -> Paint.Cap.ROUND; 2 -> Paint.Cap.SQUARE; else -> Paint.Cap.BUTT }
+            strokeJoin = when (lineJoin) { 1 -> Paint.Join.ROUND; 2 -> Paint.Join.BEVEL; else -> Paint.Join.MITER }
+            strokeMiter = miterLimit.toFloat().coerceAtLeast(1f)
             if (!dashArray.isNullOrEmpty()) {
                 // Dash lengths are user-space units; device px = unit × scale.
                 val intervals = FloatArray(dashArray.size) { (dashArray[it] * avgScale).toFloat() }

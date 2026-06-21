@@ -71,6 +71,7 @@ class Canvas2dCanvas(private val ctx: CanvasRenderingContext2D) : PdfCanvas {
         path: PdfPath, ctm: PdfMatrix, color: RgbColor, lineWidth: Double,
         alpha: Double, blendMode: PdfBlendMode,
         dashArray: List<Double>?, dashPhase: Double,
+        lineCap: Int, lineJoin: Int, miterLimit: Double,
     ) {
         val p = toPath2D(path, ctm)
         ctx.save()
@@ -78,6 +79,10 @@ class Canvas2dCanvas(private val ctx: CanvasRenderingContext2D) : PdfCanvas {
             ctx.strokeStyle = color.toCssRgba(alpha)
             val avgScale = (ctm.scaleX() + ctm.scaleY()) * 0.5
             ctx.lineWidth = (lineWidth * avgScale).coerceAtLeast(0.1)
+            // lineCap/lineJoin are JS string-union types; assign the raw strings.
+            ctx.asDynamic().lineCap = when (lineCap) { 1 -> "round"; 2 -> "square"; else -> "butt" }
+            ctx.asDynamic().lineJoin = when (lineJoin) { 1 -> "round"; 2 -> "bevel"; else -> "miter" }
+            ctx.miterLimit = miterLimit.coerceAtLeast(1.0)
             if (!dashArray.isNullOrEmpty()) {
                 // Dash lengths are user-space units; device px = unit × scale.
                 ctx.setLineDash(dashArray.map { it * avgScale }.toTypedArray())
@@ -133,10 +138,13 @@ class Canvas2dCanvas(private val ctx: CanvasRenderingContext2D) : PdfCanvas {
                 ctx.createLinearGradient(x0, y0, x1, y1)
             }
             is PdfShading.Radial -> {
-                val (cx, cy) = ctm.transformPoint(shading.coords[3], shading.coords[4])
-                val r = (shading.coords[5] * kotlin.math.sqrt(ctm.a * ctm.a + ctm.b * ctm.b))
-                    .coerceAtLeast(0.1)
-                ctx.createRadialGradient(cx, cy, 0.0, cx, cy, r)
+                // True PDF two-circle radial — Canvas2D supports both circles.
+                val sc = kotlin.math.sqrt(ctm.a * ctm.a + ctm.b * ctm.b)
+                val (x0, y0) = ctm.transformPoint(shading.coords[0], shading.coords[1])
+                val r0 = (shading.coords[2] * sc).coerceAtLeast(0.0)
+                val (x1, y1) = ctm.transformPoint(shading.coords[3], shading.coords[4])
+                val r1 = (shading.coords[5] * sc).coerceAtLeast(0.1)
+                ctx.createRadialGradient(x0, y0, r0, x1, y1, r1)
             }
             is PdfShading.Unsupported -> return
         }

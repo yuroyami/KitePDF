@@ -38,11 +38,13 @@ interface PdfCanvas {
         alpha: Double = 1.0, blendMode: BlendMode = BlendMode.Normal,
     )
 
-    /** Stroke [path] under [ctm] with [color] at [lineWidth] user-units, [alpha], [blendMode]. */
+    /** Stroke [path] under [ctm] with [color] at [lineWidth] user-units, [alpha], [blendMode].
+     *  [lineCap] 0/1/2 = butt/round/square; [lineJoin] 0/1/2 = miter/round/bevel. */
     fun strokePath(
         path: PdfPath, ctm: Matrix, color: RgbColor, lineWidth: Double,
         alpha: Double = 1.0, blendMode: BlendMode = BlendMode.Normal,
         dashArray: List<Double>? = null, dashPhase: Double = 0.0,
+        lineCap: Int = 0, lineJoin: Int = 0, miterLimit: Double = 10.0,
     )
 
     /**
@@ -142,7 +144,7 @@ object NoopCanvas : PdfCanvas {
     override fun beginPage(widthPt: Double, heightPt: Double, deviceCtm: Matrix) {}
     override fun endPage() {}
     override fun fillPath(path: PdfPath, ctm: Matrix, color: RgbColor, evenOdd: Boolean, alpha: Double, blendMode: BlendMode) {}
-    override fun strokePath(path: PdfPath, ctm: Matrix, color: RgbColor, lineWidth: Double, alpha: Double, blendMode: BlendMode, dashArray: List<Double>?, dashPhase: Double) {}
+    override fun strokePath(path: PdfPath, ctm: Matrix, color: RgbColor, lineWidth: Double, alpha: Double, blendMode: BlendMode, dashArray: List<Double>?, dashPhase: Double, lineCap: Int, lineJoin: Int, miterLimit: Double) {}
     override fun drawText(bytes: ByteArray, font: PdfFont, fontSize: Double, textMatrix: Matrix, fillColor: RgbColor, alpha: Double, blendMode: BlendMode) {}
     override fun pushClip(path: PdfPath, ctm: Matrix, evenOdd: Boolean) {}
     override fun popClip() {}
@@ -160,6 +162,7 @@ class RecordingCanvas : PdfCanvas {
         data class Stroke(
             val path: PdfPath, val ctm: Matrix, val color: RgbColor, val lineWidth: Double,
             val alpha: Double = 1.0, val blendMode: BlendMode = BlendMode.Normal,
+            val lineCap: Int = 0, val lineJoin: Int = 0, val miterLimit: Double = 10.0,
         ) : Call()
         data class Text(
             val bytes: ByteArray, val font: PdfFont, val fontSize: Double,
@@ -197,8 +200,8 @@ class RecordingCanvas : PdfCanvas {
     override fun fillPath(path: PdfPath, ctm: Matrix, color: RgbColor, evenOdd: Boolean, alpha: Double, blendMode: BlendMode) {
         calls.add(Call.Fill(path, ctm, color, evenOdd, alpha, blendMode))
     }
-    override fun strokePath(path: PdfPath, ctm: Matrix, color: RgbColor, lineWidth: Double, alpha: Double, blendMode: BlendMode, dashArray: List<Double>?, dashPhase: Double) {
-        calls.add(Call.Stroke(path, ctm, color, lineWidth, alpha, blendMode))
+    override fun strokePath(path: PdfPath, ctm: Matrix, color: RgbColor, lineWidth: Double, alpha: Double, blendMode: BlendMode, dashArray: List<Double>?, dashPhase: Double, lineCap: Int, lineJoin: Int, miterLimit: Double) {
+        calls.add(Call.Stroke(path, ctm, color, lineWidth, alpha, blendMode, lineCap, lineJoin, miterLimit))
     }
     override fun drawText(bytes: ByteArray, font: PdfFont, fontSize: Double, textMatrix: Matrix, fillColor: RgbColor, alpha: Double, blendMode: BlendMode) {
         calls.add(Call.Text(bytes, font, fontSize, textMatrix, fillColor, alpha, blendMode))

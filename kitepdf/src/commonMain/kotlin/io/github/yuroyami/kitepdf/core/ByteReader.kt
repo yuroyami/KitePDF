@@ -92,6 +92,18 @@ class ByteReader(val bytes: ByteArray) {
         }
         return -1
     }
+
+    /** Find the FIRST occurrence of [needle] at or after [from]. Returns -1 if not found. */
+    fun indexOf(needle: ByteArray, from: Int = 0): Int {
+        if (needle.isEmpty()) return from.coerceAtLeast(0)
+        var i = from.coerceAtLeast(0)
+        val last = bytes.size - needle.size
+        while (i <= last) {
+            if (matches(needle, i)) return i
+            i++
+        }
+        return -1
+    }
 }
 
 /** Raised for any structural PDF error: bad header, truncated stream, malformed xref, etc. */

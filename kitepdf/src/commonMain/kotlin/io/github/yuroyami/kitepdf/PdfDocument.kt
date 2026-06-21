@@ -13,6 +13,7 @@ import io.github.yuroyami.kitepdf.parser.PdfDictionary
 import io.github.yuroyami.kitepdf.parser.PdfInt
 import io.github.yuroyami.kitepdf.parser.PdfObject
 import io.github.yuroyami.kitepdf.parser.PdfReference
+import io.github.yuroyami.kitepdf.parser.PdfRepair
 import io.github.yuroyami.kitepdf.parser.PdfStream
 import io.github.yuroyami.kitepdf.parser.PdfString
 import io.github.yuroyami.kitepdf.parser.Token
@@ -272,11 +273,16 @@ class PdfDocument private constructor(
     override fun resolve(ref: PdfReference): PdfObject? {
         objectCache[ref.objectNumber]?.let { return it }
         val entry = xref[ref.objectNumber] ?: return null
-        val resolved: PdfObject? = when (entry) {
-            is XrefEntry.Free -> null
-            is XrefEntry.InUse -> resolveInPlace(entry)
-            is XrefEntry.Compressed -> resolveFromObjectStream(entry)
-        }
+        // Lenient salvage: a single corrupt object must not abort the whole
+        // document (MuPDF resolves objects best-effort). On any parse failure we
+        // cache null and keep going; the page walk and renderers tolerate nulls.
+        val resolved: PdfObject? = runCatching {
+            when (entry) {
+                is XrefEntry.Free -> null
+                is XrefEntry.InUse -> resolveInPlace(entry)
+                is XrefEntry.Compressed -> resolveFromObjectStream(entry)
+            }
+        }.getOrNull()
         objectCache[ref.objectNumber] = resolved
         return resolved
     }
@@ -371,50 +377,43 @@ class PdfDocument private constructor(
         val rootNode = resolve(pagesRef) as? PdfDictionary
             ?: throw PdfFormatException("/Pages did not resolve to a dictionary")
         val acc = mutableListOf<PdfPage>()
-        walkPageTree(rootNode, inherited = PageInheritable(), out = acc)
+        walkPageTree(rootNode, inherited = PageInheritable(), out = acc, visited = HashSet(), depth = 0)
         return acc
     }
 
+    /**
+     * Recursively flatten the page tree. Guarded against cyclic and pathologically
+     * deep `/Kids` graphs (malformed/adversarial input) by a visited-ref set and a
+     * depth cap; bad kids are skipped rather than aborting the whole document.
+     */
     private fun walkPageTree(
         node: PdfDictionary,
         inherited: PageInheritable,
         out: MutableList<PdfPage>,
+        visited: HashSet<Long>,
+        depth: Int,
         sourceRef: PdfReference? = null,
     ) {
+        if (depth > MAX_PAGE_TREE_DEPTH) return
         val merged = inherited.merge(node)
-        when (node.getName("Type")) {
-            "Page" -> {
+        val type = node.getName("Type")
+        when {
+            type == "Page" -> {
                 val index = out.size
                 out.add(PdfPage(this, node, merged, index, sourceRef))
                 if (sourceRef != null) pageRefToIndex[sourceRef.objectNumber] = index
             }
-            "Pages" -> {
-                val kids = node.getArray("Kids", this)
-                    ?: throw PdfFormatException("/Pages node missing /Kids")
+            type == "Pages" || (type == null && node["Kids"] != null) -> {
+                val kids = node.getArray("Kids", this) ?: return
                 for (kidObj in kids) {
-                    val (kidDict, kidRef) = when (kidObj) {
-                        is PdfReference -> (resolve(kidObj) to kidObj)
-                        else -> (kidObj to null)
-                    }
-                    walkPageTree(
-                        kidDict as? PdfDictionary
-                            ?: throw PdfFormatException("/Kids entry not a dict"),
-                        merged, out, kidRef,
-                    )
+                    val kidRef = kidObj as? PdfReference
+                    if (kidRef != null && !visited.add(kidRef.objectNumber)) continue  // cycle guard
+                    val kidDict = (if (kidRef != null) resolve(kidRef) else kidObj) as? PdfDictionary
+                        ?: continue  // skip unresolvable / non-dict kids
+                    walkPageTree(kidDict, merged, out, visited, depth + 1, kidRef)
                 }
             }
-            null -> {
-                // Some old PDFs omit /Type on root /Pages node. Treat as Pages if it has /Kids.
-                if (node["Kids"] != null) {
-                    walkPageTree(
-                        PdfDictionary(node.map + ("Type" to io.github.yuroyami.kitepdf.parser.PdfName("Pages"))),
-                        inherited, out,
-                    )
-                } else {
-                    throw PdfFormatException("Page tree node missing /Type")
-                }
-            }
-            else -> throw PdfFormatException("Unknown page tree /Type: ${node.getName("Type")}")
+            // Unknown / typeless leaf with no /Kids: skip leniently.
         }
     }
 
@@ -424,17 +423,44 @@ class PdfDocument private constructor(
 
         fun open(bytes: ByteArray, password: ByteArray = byteArrayOf()): PdfDocument {
             val reader = ByteReader(bytes)
-            val version = parseHeader(reader)
-            val merged = parseWithPrevChain(reader)
-            val security = buildSecurityHandler(merged.trailer, bytes, password)
-            return PdfDocument(version, bytes, merged.entries, merged.trailer, security)
+            // Header garbage is tolerated; a missing %PDF- marker is not fatal.
+            val version = runCatching { parseHeader(reader) }.getOrElse { "1.4" }
+
+            // Fast path: trust the cross-reference chain, but validate that it
+            // actually yields a resolvable catalog + page tree. A wrong-offset or
+            // truncated xref silently produces garbage, so we probe before trusting.
+            val normal = runCatching {
+                val m = parseWithPrevChain(reader)
+                val sec = buildSecurityHandler(m.entries, m.trailer, bytes, password)
+                val doc = PdfDocument(version, bytes, m.entries, m.trailer, sec)
+                require(isStructurallyUsable(doc)) { "xref did not resolve a page tree" }
+                doc
+            }.getOrNull()
+            if (normal != null) return normal
+
+            // Recovery path: rebuild the xref by scanning the raw bytes.
+            val repaired = PdfRepair.rebuild(reader)
+            val sec = buildSecurityHandler(repaired.entries, repaired.trailer, bytes, password)
+            return PdfDocument(version, bytes, repaired.entries, repaired.trailer, sec)
         }
 
         /**
+         * Cheap structural probe used to decide whether the parsed xref is good
+         * enough or we must fall back to repair. Resolves /Root and the /Pages
+         * root node only (not the full tree), keeping lazy-open semantics.
+         */
+        private fun isStructurallyUsable(doc: PdfDocument): Boolean = runCatching {
+            val pagesRef = doc.catalog.getRef("Pages") ?: return@runCatching false
+            doc.resolve(pagesRef) is PdfDictionary
+        }.getOrDefault(false)
+
+        /**
          * Build a [StandardSecurityHandler] if /Encrypt is present in the trailer.
-         * Returns null for unencrypted documents.
+         * Returns null for unencrypted documents. The /Encrypt object is resolved
+         * via the already-merged xref [entries] (works for repaired docs too).
          */
         private fun buildSecurityHandler(
+            entries: Map<Long, XrefEntry>,
             trailer: PdfDictionary,
             bytes: ByteArray,
             password: ByteArray,
@@ -442,11 +468,7 @@ class PdfDocument private constructor(
             val encryptObj = trailer["Encrypt"] ?: return null
             val encryptDict = when (encryptObj) {
                 is PdfDictionary -> encryptObj
-                is PdfReference -> {
-                    // Resolve manually — we don't have a PdfDocument yet.
-                    val entry = parseLooseEncryptionRef(bytes, trailer, encryptObj) ?: return null
-                    entry
-                }
+                is PdfReference -> resolveDictDirect(bytes, entries, encryptObj) ?: return null
                 else -> return null
             }
             val fileIdFirst = (trailer["ID"] as? PdfArray)?.let {
@@ -456,26 +478,21 @@ class PdfDocument private constructor(
         }
 
         /**
-         * Resolve an /Encrypt reference without a full document. We re-parse the
-         * referenced object directly from the byte buffer. Streams in /Encrypt
-         * itself are never permitted (it must be a dictionary).
+         * Resolve a direct (in-file) indirect reference to a dictionary using the
+         * merged xref, without a full [PdfDocument] resolver. Used for /Encrypt,
+         * which must be an unencrypted in-file dictionary (never in an ObjStm).
          */
-        private fun parseLooseEncryptionRef(
+        private fun resolveDictDirect(
             bytes: ByteArray,
-            trailer: PdfDictionary,
+            entries: Map<Long, XrefEntry>,
             ref: PdfReference,
         ): PdfDictionary? {
-            // Walk the xref entries to find the byte offset.
-            // The merged xref isn't in scope here, so reparse the trailer's startxref.
-            // This is a minor inefficiency we accept to keep the encryption setup
-            // self-contained and not chicken-and-egg with PdfDocument's resolver.
+            val entry = entries[ref.objectNumber] as? XrefEntry.InUse ?: return null
             val reader = ByteReader(bytes)
-            val startxref = XrefParser.findStartXref(reader)
-            val xref = XrefParser(reader).parseFromOffset(startxref)
-            val entry = xref.entries[ref.objectNumber] as? XrefEntry.InUse ?: return null
             reader.seek(entry.byteOffset)
-            val parser = Parser(Lexer(reader))
-            return parser.readIndirectObject().value as? PdfDictionary
+            return runCatching {
+                Parser(Lexer(reader)).readIndirectObject().value as? PdfDictionary
+            }.getOrNull()
         }
 
         /**
@@ -497,8 +514,27 @@ class PdfDocument private constructor(
             while (startOffset >= 0 && safetyCounter < MAX_PREV_HOPS) {
                 if (!visited.add(startOffset)) break   // cycle guard
                 val section = XrefParser(reader).parseFromOffset(startOffset)
+
+                // Hybrid-reference files (§7.5.8.4): a classic xref section may carry
+                // a /XRefStm pointing at a cross-reference stream that holds the
+                // entries for compressed objects (listed as free in the classic
+                // table). Overlay those onto this section before merging.
+                var sectionEntries: Map<Long, XrefEntry> = section.entries
+                val xrefStm = section.trailer.getInt("XRefStm")?.toInt()
+                if (xrefStm != null && xrefStm >= 0 && visited.add(xrefStm)) {
+                    val stm = runCatching { XrefParser(reader).parseFromOffset(xrefStm) }.getOrNull()
+                    if (stm != null) {
+                        val combined = HashMap(section.entries)
+                        for ((num, e) in stm.entries) {
+                            val existing = combined[num]
+                            if (existing == null || existing is XrefEntry.Free) combined[num] = e
+                        }
+                        sectionEntries = combined
+                    }
+                }
+
                 // Newer sections were visited first; fill in gaps from older ones.
-                for ((num, entry) in section.entries) {
+                for ((num, entry) in sectionEntries) {
                     if (num !in merged) merged[num] = entry
                 }
                 if (newestTrailer == null) newestTrailer = section.trailer
@@ -513,6 +549,9 @@ class PdfDocument private constructor(
 
         /** Bound on /Prev chain length — generous; cycle guard catches the rest. */
         private const val MAX_PREV_HOPS = 32
+
+        /** Bound on page-tree recursion depth — guards adversarial/cyclic /Kids. */
+        private const val MAX_PAGE_TREE_DEPTH = 50
 
         private fun parseHeader(reader: ByteReader): String {
             // The header may have up to 1024 leading bytes of garbage before %PDF-.
