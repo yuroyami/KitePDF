@@ -6,6 +6,7 @@ import io.github.yuroyami.kitepdf.nativerenderer.AwtPdfRasterizer
 import io.github.yuroyami.kitepdf.writer.EmbeddedFont
 import io.github.yuroyami.kitepdf.writer.PdfBuilder
 import java.io.File
+import org.junit.Assume.assumeTrue
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertTrue
@@ -40,11 +41,9 @@ class CffEmbedOracleTest {
 
     @Test
     fun cff_otf_subsets_embeds_and_renders_correctly() {
-        val otf = otfFile() ?: run {
-            println("[CffEmbedOracleTest] NotoSans-Regular.otf not found — skipping.")
-            return
-        }
-        val bytes = otf.readBytes()
+        val otf = otfFile()
+        assumeTrue("NotoSans-Regular.otf not found — skipping.", otf != null)
+        val bytes = otf!!.readBytes()
 
         // Sanity: this really is a CFF font and the glyphs we draw are real (non-.notdef).
         assertTrue(EmbeddedFont.load(bytes).isCff, "expected a CFF/OTTO font")
@@ -72,11 +71,7 @@ class CffEmbedOracleTest {
         // Reader recovers the text via /ToUnicode.
         assertContains(KitePDF.open(subsetPdf).pages[0].extractText(), text)
 
-        val tool = MuPdfOracle.binary
-        if (tool == null) {
-            println("[CffEmbedOracleTest] mutool not found — skipping render oracle.")
-            return
-        }
+        assumeTrue("mutool not found — skipping render oracle.", MuPdfOracle.binary != null)
         val subFile = File.createTempFile("kite-cff-sub-", ".pdf").apply { writeBytes(subsetPdf) }
         val fullFile = File.createTempFile("kite-cff-full-", ".pdf").apply { writeBytes(fullPdf) }
         try {

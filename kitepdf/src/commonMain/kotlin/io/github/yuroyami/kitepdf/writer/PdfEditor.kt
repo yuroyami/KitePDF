@@ -597,17 +597,27 @@ class PdfEditor internal constructor(private val base: PdfDocument) {
      * region. It does not merely paint over still-present content.
      *
      * Conservative by design — a run touching a region is removed wholesale, so
-     * partial overlaps over-remove. Current limits ([RedactionEngine]): vector
-     * paths in the region are left as-is, content inside referenced form
-     * XObjects isn't recursed into, and a dropped image's data object is not yet
-     * purged from the file (it's no longer drawn or referenced by content).
+     * partial overlaps over-remove. Content inside referenced form XObjects IS
+     * recursed into (redacted in the form's own coordinate space); a dropped
+     * image's XObject entry is pruned from `/Resources /XObject` so
+     * [saveRewritten]'s reachability GC drops the image stream; and annotations
+     * whose `/Rect` intersects a region are removed from the page `/Annots`.
+     *
+     * Current limit ([RedactionEngine]): vector paths in the region are left as-is.
      */
     fun redactRegions(page: PdfPage, rectangles: List<Rectangle>) {
         if (rectangles.isEmpty()) return
         val ref = pageReference(page)
 
         val ops = ContentStreamParser.parse(page.contentBytes)
-        val filtered = RedactionEngine(loadPageFonts(page), loadImageXObjectNames(page), rectangles).run(ops)
+        val engine = RedactionEngine(
+            loadPageFonts(page.resources),
+            loadImageXObjectNames(page.resources),
+            loadFormXObjectNames(page.resources),
+            rectangles,
+        )
+        engine.formMatrices = loadFormMatrices(page.resources)
+        val filtered = engine.run(ops)
         val body = ContentStreamWriter.serialize(filtered)
 
         val out = ByteArrayBuilder(body.size + 64)
@@ -619,23 +629,202 @@ class PdfEditor internal constructor(private val base: PdfDocument) {
             out.append(box.encodeToByteArray())
         }
         val streamRef = addObject(PdfStreams.flate(out.toByteArray()))
-        updateObject(ref, withEntry(page.dictionary, "Contents", streamRef))
+
+        // Recurse into every intersecting form XObject: redact its own content so
+        // sensitive text/graphics inside it are genuinely removed, not retained.
+        recurseIntoForms(page.resources, engine.formXObjectHits)
+
+        // Rebuild the page dict: new /Contents, pruned /XObject, filtered /Annots.
+        var newPage = withEntry(page.dictionary, "Contents", streamRef)
+        // Resources may be inherited from an ancestor /Pages node rather than present
+        // on the leaf dict. Bake the effective resources onto the page before pruning
+        // so the image XObject entry is actually removed (otherwise the pruning of a
+        // missing local /Resources silently no-ops and the image stream survives).
+        if ("Resources" !in newPage.map) {
+            page.resources?.let { newPage = withEntry(newPage, "Resources", it) }
+        }
+        newPage = prunePageResourceXObjects(newPage, engine.droppedImageNames, engine.survivingImageNames)
+        newPage = pruneIntersectingAnnots(newPage, rectangles)
+        updateObject(ref, newPage)
         redactionStaged = true
     }
 
-    private fun loadPageFonts(page: PdfPage): Map<String, PdfFont> {
-        val fontDict = page.resources?.getDict("Font", base) ?: return emptyMap()
+    /**
+     * Recurse redaction into form XObjects invoked by the page whose area overlaps
+     * a region. Each is re-parsed, redacted in its own coordinate space (using the
+     * rectangles the engine mapped there), rewritten as a fresh stream, and staged
+     * as a replacement so [saveRewritten] emits the redacted form and drops the
+     * original. Guards against cycles/repeats via [redactedForms].
+     */
+    private fun recurseIntoForms(pageResources: PdfDictionary?, hits: List<RedactionEngine.FormHit>) {
+        val xobjects = pageResources?.getDict("XObject", base) ?: return
+        for (hit in hits) {
+            val formRef = xobjects.getRef(hit.name) ?: continue
+            redactFormXObject(formRef, hit.formRects)
+        }
+    }
+
+    /** Object numbers of form XObjects already redacted, to avoid cycles/double work. */
+    private val redactedForms = HashSet<Long>()
+
+    /**
+     * Redact [rectangles] (in the form's OWN coordinate space) inside the form
+     * XObject at [formRef], recursing into any nested forms it invokes. The
+     * rewritten form stream is staged as a replacement for [formRef].
+     */
+    private fun redactFormXObject(formRef: PdfReference, rectangles: List<Rectangle>) {
+        if (rectangles.isEmpty()) return
+        if (!redactedForms.add(formRef.objectNumber)) return
+        val stream = effectiveObject(formRef.objectNumber) as? PdfStream ?: return
+        val formResources = stream.dict.getDict("Resources", base)
+
+        val content = io.github.yuroyami.kitepdf.filters.FilterChain.decode(stream)
+        val ops = ContentStreamParser.parse(content)
+        val engine = RedactionEngine(
+            loadPageFonts(formResources),
+            loadImageXObjectNames(formResources),
+            loadFormXObjectNames(formResources),
+            rectangles,
+        )
+        engine.formMatrices = loadFormMatrices(formResources)
+        val filtered = engine.run(ops)
+        val body = ContentStreamWriter.serialize(filtered)
+
+        // Recurse into nested forms first (they may share this form's resource dict).
+        recurseIntoForms(formResources, engine.formXObjectHits)
+
+        // Rebuild the form stream dict: prune dropped image XObjects from its own
+        // /Resources so the GC drops the image streams. Keep every other dict entry
+        // (/BBox, /Matrix, /Group, /Type, /Subtype) intact; extraFrom() strips the
+        // encoding entries (/Filter, /Length, ...) before we re-flate the content.
+        val newDict = prunePageResourceXObjects(
+            stream.dict, engine.droppedImageNames, engine.survivingImageNames,
+        )
+        val newStream = PdfStreams.flate(body, extraFrom(newDict))
+        updateObject(formRef, newStream)
+    }
+
+    /** Carry a form stream dict's non-stream entries onto a fresh /FlateDecode stream. */
+    private fun extraFrom(dict: PdfDictionary): Map<String, PdfObject> {
+        val extra = LinkedHashMap<String, PdfObject>()
+        for ((k, v) in dict.map) {
+            if (k == "Length" || k == "Filter" || k == "DecodeParms" || k == "DL") continue
+            extra[k] = v
+        }
+        return extra
+    }
+
+    /**
+     * Remove entries in the dict's `/Resources /XObject` for image XObjects that
+     * were dropped from the content AND are not still drawn elsewhere on the page.
+     * Without this the image stream stays reachable and its data survives the GC.
+     */
+    private fun prunePageResourceXObjects(
+        dict: PdfDictionary,
+        droppedNames: Set<String>,
+        survivingNames: Set<String>,
+    ): PdfDictionary {
+        val toPrune = droppedNames - survivingNames
+        if (toPrune.isEmpty()) return dict
+        val resources = dict.getDict("Resources", base) ?: return dict
+        val xobjects = resources.getDict("XObject", base) ?: return dict
+        val remaining = LinkedHashMap(xobjects.map)
+        var changed = false
+        for (n in toPrune) if (remaining.remove(n) != null) changed = true
+        if (!changed) return dict
+
+        val newResources = LinkedHashMap(resources.map)
+        newResources["XObject"] = PdfDictionary(remaining)
+        return withEntry(dict, "Resources", PdfDictionary(newResources))
+    }
+
+    /**
+     * Drop annotations from the page `/Annots` whose `/Rect` intersects any
+     * redaction rectangle. FreeText contents, widget values, and stamp appearance
+     * streams inside a redacted region are otherwise left intact and extractable.
+     * Annotations with no resolvable `/Rect` are kept (they draw nothing spatial).
+     */
+    private fun pruneIntersectingAnnots(dict: PdfDictionary, rectangles: List<Rectangle>): PdfDictionary {
+        val annots = dict.getArray("Annots", base) ?: return dict
+        val kept = ArrayList<PdfObject>(annots.items.size)
+        var changed = false
+        for (item in annots.items) {
+            val annotDict = when (val resolved = item.resolve(base)) {
+                is PdfDictionary -> resolved
+                else -> null
+            }
+            val rect = annotDict?.let { annotRect(it) }
+            if (rect != null && rectangles.any { rectsIntersect(it, rect) }) {
+                changed = true // drop it
+            } else {
+                kept.add(item)
+            }
+        }
+        if (!changed) return dict
+        return withEntry(dict, "Annots", io.github.yuroyami.kitepdf.parser.PdfArray(kept))
+    }
+
+    /** Normalised `/Rect` of an annotation, or null when absent/malformed. */
+    private fun annotRect(annot: PdfDictionary): Rectangle? {
+        val arr = annot.getArray("Rect", base) ?: return null
+        if (arr.size < 4) return null
+        fun n(i: Int): Double? = when (val v = arr[i].resolve(base)) {
+            is PdfInt -> v.value.toDouble()
+            is io.github.yuroyami.kitepdf.parser.PdfReal -> v.value
+            else -> null
+        }
+        val x0 = n(0) ?: return null
+        val y0 = n(1) ?: return null
+        val x1 = n(2) ?: return null
+        val y1 = n(3) ?: return null
+        return Rectangle(minOf(x0, x1), minOf(y0, y1), maxOf(x0, x1), maxOf(y0, y1))
+    }
+
+    private fun rectsIntersect(a: Rectangle, b: Rectangle): Boolean =
+        a.left < b.right && a.right > b.left && a.bottom < b.top && a.top > b.bottom
+
+    private fun loadPageFonts(resources: PdfDictionary?): Map<String, PdfFont> {
+        val fontDict = resources?.getDict("Font", base) ?: return emptyMap()
         val out = LinkedHashMap<String, PdfFont>()
         for ((name, value) in fontDict.map) out[name] = PdfFont.from(value, base)
         return out
     }
 
-    private fun loadImageXObjectNames(page: PdfPage): Set<String> {
-        val xobjects = page.resources?.getDict("XObject", base) ?: return emptySet()
+    private fun loadImageXObjectNames(resources: PdfDictionary?): Set<String> {
+        val xobjects = resources?.getDict("XObject", base) ?: return emptySet()
         val out = HashSet<String>()
         for ((name, value) in xobjects.map) {
             val stream = value.resolve(base) as? PdfStream ?: continue
             if (stream.dict.getName("Subtype") == "Image") out.add(name)
+        }
+        return out
+    }
+
+    private fun loadFormXObjectNames(resources: PdfDictionary?): Set<String> {
+        val xobjects = resources?.getDict("XObject", base) ?: return emptySet()
+        val out = HashSet<String>()
+        for ((name, value) in xobjects.map) {
+            val stream = value.resolve(base) as? PdfStream ?: continue
+            if (stream.dict.getName("Subtype") == "Form") out.add(name)
+        }
+        return out
+    }
+
+    /** Per-name form `/Matrix` (default identity when absent). */
+    private fun loadFormMatrices(resources: PdfDictionary?): Map<String, io.github.yuroyami.kitepdf.render.Matrix> {
+        val xobjects = resources?.getDict("XObject", base) ?: return emptyMap()
+        val out = LinkedHashMap<String, io.github.yuroyami.kitepdf.render.Matrix>()
+        for ((name, value) in xobjects.map) {
+            val stream = value.resolve(base) as? PdfStream ?: continue
+            if (stream.dict.getName("Subtype") != "Form") continue
+            val m = stream.dict.getArray("Matrix", base) ?: continue
+            if (m.size < 6) continue
+            fun n(i: Int): Double = when (val v = m[i].resolve(base)) {
+                is PdfInt -> v.value.toDouble()
+                is io.github.yuroyami.kitepdf.parser.PdfReal -> v.value
+                else -> 0.0
+            }
+            out[name] = io.github.yuroyami.kitepdf.render.Matrix(n(0), n(1), n(2), n(3), n(4), n(5))
         }
         return out
     }

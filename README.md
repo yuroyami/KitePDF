@@ -1,6 +1,6 @@
 # KitePDF
 
-[![Maven Central](https://img.shields.io/badge/Maven%20Central-0.1.0-blue)](https://central.sonatype.com/namespace/io.github.yuroyami)
+[![Maven Central](https://img.shields.io/maven-central/v/io.github.yuroyami/kitepdf?label=Maven%20Central)](https://central.sonatype.com/artifact/io.github.yuroyami/kitepdf)
 [![Docs](https://img.shields.io/badge/docs-yuroyami.github.io-1f6feb)](https://yuroyami.github.io/KitePDF/)
 ![status](https://img.shields.io/badge/status-pre--1.0-orange)
 ![kotlin](https://img.shields.io/badge/Kotlin-2.4.0-7F52FF?logo=kotlin&logoColor=white)

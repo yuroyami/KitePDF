@@ -2,6 +2,7 @@ package io.github.yuroyami.kitepdf
 
 import io.github.yuroyami.kitepdf.core.ByteReader
 import io.github.yuroyami.kitepdf.core.PdfFormatException
+import io.github.yuroyami.kitepdf.core.WrongPasswordException
 import io.github.yuroyami.kitepdf.crypto.Decryptor
 import io.github.yuroyami.kitepdf.crypto.StandardSecurityHandler
 import io.github.yuroyami.kitepdf.filters.FilterChain
@@ -51,7 +52,7 @@ class PdfDocument private constructor(
     /** True if the document is encrypted. */
     val isEncrypted: Boolean get() = security != null
 
-    /** True if [open] (or [openEncrypted]) found a working password for an encrypted doc. */
+    /** True if [open] found a working password for an encrypted doc. */
     val isAuthenticated: Boolean get() = security?.isAuthenticated ?: true
 
     private val reader = ByteReader(bytes)
@@ -296,11 +297,25 @@ class PdfDocument private constructor(
     private val activelyResolving = HashSet<Long>()
 
     private fun resolveInPlace(entry: XrefEntry.InUse): PdfObject {
+        // H6: cyclic indirect /Length (A->B->A) would recurse to a StackOverflow
+        // (a hard crash on Kotlin/Native). If we're already resolving this object,
+        // break the cycle by throwing — resolve()'s runCatching caches null.
+        if (entry.objectNumber in activelyResolving) {
+            throw PdfFormatException("cyclic object reference ${entry.objectNumber}")
+        }
         reader.seek(entry.byteOffset)
         activelyResolving.add(entry.objectNumber)
         try {
             val parser = Parser(Lexer(reader), resolver = this)
             val indirect = parser.readIndirectObject()
+            // M9: a stale/wrong xref offset can land us on a different object.
+            // Reject a number mismatch (throw -> cached null) rather than silently
+            // returning the WRONG object under the requested object number.
+            if (indirect.number != entry.objectNumber) {
+                throw PdfFormatException(
+                    "xref offset for object ${entry.objectNumber} parsed object ${indirect.number}"
+                )
+            }
             return maybeDecrypt(indirect.number, indirect.generation, indirect.value)
         } finally {
             activelyResolving.remove(entry.objectNumber)
@@ -421,14 +436,33 @@ class PdfDocument private constructor(
 
     companion object {
 
-        fun open(bytes: ByteArray, password: ByteArray = byteArrayOf()): PdfDocument {
+        fun open(
+            bytes: ByteArray,
+            password: ByteArray = byteArrayOf(),
+            allowInvalidPassword: Boolean = false,
+        ): PdfDocument {
             val reader = ByteReader(bytes)
             // Header garbage is tolerated; a missing %PDF- marker is not fatal.
             val version = runCatching { parseHeader(reader) }.getOrElse { "1.4" }
 
+            // A structurally-good but unauthenticated encrypted document must NOT
+            // be handed back silently; its streams/strings decode to ciphertext
+            // garbage. Signal it unless the caller opted into read-only access.
+            fun finish(doc: PdfDocument): PdfDocument {
+                if (doc.isEncrypted && !doc.isAuthenticated && !allowInvalidPassword) {
+                    throw WrongPasswordException(
+                        "PDF is encrypted and the supplied password did not authenticate " +
+                            "(pass allowInvalidPassword=true to open read-only)."
+                    )
+                }
+                return doc
+            }
+
             // Fast path: trust the cross-reference chain, but validate that it
             // actually yields a resolvable catalog + page tree. A wrong-offset or
             // truncated xref silently produces garbage, so we probe before trusting.
+            // Note: the auth check runs OUTSIDE this runCatching so a wrong password
+            // on a structurally-good doc throws rather than falling to repair.
             val normal = runCatching {
                 val m = parseWithPrevChain(reader)
                 val sec = buildSecurityHandler(m.entries, m.trailer, bytes, password)
@@ -436,12 +470,12 @@ class PdfDocument private constructor(
                 require(isStructurallyUsable(doc)) { "xref did not resolve a page tree" }
                 doc
             }.getOrNull()
-            if (normal != null) return normal
+            if (normal != null) return finish(normal)
 
             // Recovery path: rebuild the xref by scanning the raw bytes.
             val repaired = PdfRepair.rebuild(reader)
             val sec = buildSecurityHandler(repaired.entries, repaired.trailer, bytes, password)
-            return PdfDocument(version, bytes, repaired.entries, repaired.trailer, sec)
+            return finish(PdfDocument(version, bytes, repaired.entries, repaired.trailer, sec))
         }
 
         /**
@@ -474,7 +508,14 @@ class PdfDocument private constructor(
             val fileIdFirst = (trailer["ID"] as? PdfArray)?.let {
                 (it.firstOrNull() as? io.github.yuroyami.kitepdf.parser.PdfString)?.bytes
             } ?: ByteArray(0)
-            return StandardSecurityHandler(encryptDict, fileIdFirst, password)
+            // The single password the user supplies is tried as BOTH the user and
+            // the owner password (either one authenticates the document).
+            return StandardSecurityHandler(
+                encryptDict,
+                fileIdFirst,
+                userPassword = password,
+                ownerPassword = password,
+            )
         }
 
         /**

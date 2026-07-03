@@ -7,6 +7,7 @@ import java.awt.image.BufferedImage
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.util.concurrent.TimeUnit
+import org.junit.Assume.assumeTrue
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
@@ -48,11 +49,8 @@ class EmbeddedFontOracleTest {
     @Test
     fun embeds_truetype_and_round_trips_unicode_through_reader() {
         val ttf = fontFile()
-        if (ttf == null) {
-            println("[EmbeddedFontOracleTest] DroidSansFallback.ttf not found — skipping.")
-            return
-        }
-        val font = EmbeddedFont.load(ttf.readBytes())
+        assumeTrue("DroidSansFallback.ttf not found — skipping.", ttf != null)
+        val font = EmbeddedFont.load(ttf!!.readBytes())
 
         val bytes = PdfBuilder()
             .page { text(font, 24.0, 72.0, 700.0, cjk) }
@@ -73,17 +71,11 @@ class EmbeddedFontOracleTest {
 
     @Test
     fun mutool_renders_embedded_truetype_cjk() {
-        val tool = MuPdfOracle.binary
-        if (tool == null) {
-            println("[EmbeddedFontOracleTest] mutool not found — skipping oracle validation.")
-            return
-        }
+        assumeTrue("mutool not found — skipping oracle validation.", MuPdfOracle.binary != null)
+        val tool = MuPdfOracle.binary!!
         val ttf = fontFile()
-        if (ttf == null) {
-            println("[EmbeddedFontOracleTest] DroidSansFallback.ttf not found — skipping.")
-            return
-        }
-        val font = EmbeddedFont.load(ttf.readBytes())
+        assumeTrue("DroidSansFallback.ttf not found — skipping.", ttf != null)
+        val font = EmbeddedFont.load(ttf!!.readBytes())
 
         val bytes = PdfBuilder()
             .setInfo(title = "Embedded CJK 77")
@@ -120,11 +112,8 @@ class EmbeddedFontOracleTest {
     @Test
     fun subset_embed_is_small_renders_and_round_trips() {
         val ttf = fontFile()
-        if (ttf == null) {
-            println("[EmbeddedFontOracleTest] DroidSansFallback.ttf not found — skipping.")
-            return
-        }
-        val bytes = ttf.readBytes()
+        assumeTrue("DroidSansFallback.ttf not found — skipping.", ttf != null)
+        val bytes = ttf!!.readBytes()
 
         // Same text, subset (default) vs full embed.
         val subsetPdf = PdfBuilder()
@@ -153,11 +142,7 @@ class EmbeddedFontOracleTest {
         // the full embed. Same text + same font, so any difference means the glyf/loca
         // renumber or the /CIDToGIDMap is wrong (wrong glyph drawn, or .notdef boxes) —
         // which a mere "did it produce a PNG?" check would miss.
-        val tool = MuPdfOracle.binary
-        if (tool == null) {
-            println("[EmbeddedFontOracleTest] mutool not found — skipping render half.")
-            return
-        }
+        assumeTrue("mutool not found — skipping render half.", MuPdfOracle.binary != null)
         val subFile = File.createTempFile("kite-subset-", ".pdf").apply { writeBytes(subsetPdf) }
         val fullFile = File.createTempFile("kite-full-", ".pdf").apply { writeBytes(fullPdf) }
         try {

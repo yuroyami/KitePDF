@@ -17,9 +17,11 @@ object Aes {
     /** Decrypt CBC-mode ciphertext. The first 16 bytes are the IV. */
     fun decryptCbc(key: ByteArray, ciphertext: ByteArray, removePadding: Boolean = true): ByteArray {
         require(key.size == 16 || key.size == 32) { "AES key must be 16 or 32 bytes" }
-        require(ciphertext.size >= 16 && ciphertext.size % 16 == 0) {
-            "Ciphertext must be ≥16 bytes and a multiple of 16 (got ${ciphertext.size})"
-        }
+        // A malformed / empty encrypted string (e.g. the literal `()`) must not
+        // throw and null out the whole containing object. Fewer than one block,
+        // or a non-block-multiple length, cannot be validly decrypted — return
+        // empty rather than raising IllegalArgumentException.
+        if (ciphertext.size < 16 || ciphertext.size % 16 != 0) return ByteArray(0)
         val expanded = expandKey(key)
         val out = ByteArray(ciphertext.size - 16)
         var prev = ciphertext.copyOfRange(0, 16)   // IV
@@ -54,6 +56,30 @@ object Aes {
             val block = ByteArray(16) { i -> (padded[pos + i].toInt() xor prev[i].toInt()).toByte() }
             val encrypted = encryptBlock(block, expanded)
             encrypted.copyInto(out, 16 + pos)
+            prev = encrypted
+            pos += 16
+        }
+        return out
+    }
+
+    /**
+     * Encrypt CBC-mode plaintext with NO padding and NO IV-prepend. The output
+     * is exactly the same length as the input, which must already be a multiple
+     * of 16 bytes. Used by the R6 Algorithm 2.B hardening loop, which encrypts a
+     * length-multiple-of-16 buffer and inspects the raw ciphertext.
+     */
+    fun encryptCbcNoPadding(key: ByteArray, iv: ByteArray, data: ByteArray): ByteArray {
+        require(key.size == 16 || key.size == 32) { "AES key must be 16 or 32 bytes" }
+        require(iv.size == 16) { "AES IV must be 16 bytes" }
+        require(data.size % 16 == 0) { "data must be a multiple of 16 bytes (got ${data.size})" }
+        val expanded = expandKey(key)
+        val out = ByteArray(data.size)
+        var prev = iv
+        var pos = 0
+        while (pos < data.size) {
+            val block = ByteArray(16) { i -> (data[pos + i].toInt() xor prev[i].toInt()).toByte() }
+            val encrypted = encryptBlock(block, expanded)
+            encrypted.copyInto(out, pos)
             prev = encrypted
             pos += 16
         }

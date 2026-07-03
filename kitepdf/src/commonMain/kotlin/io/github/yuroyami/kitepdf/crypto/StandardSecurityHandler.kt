@@ -35,7 +35,12 @@ class StandardSecurityHandler(
         ?: throw PdfFormatException("/Encrypt missing /U")
     /** Raw `/P` bit-flags. Negative because the high bit is set on permissive PDFs. */
     val p: Int = encryptDict.getInt("P")?.toInt() ?: -1
-    private val encryptMetadata: Boolean = (encryptDict["EncryptMetadata"]
+    /**
+     * Whether the /Metadata stream is encrypted. When false (V4+ with
+     * /EncryptMetadata false), the metadata stream is left as clear text and
+     * [Decryptor] must skip it. Exposed for that reason.
+     */
+    val encryptMetadata: Boolean = (encryptDict["EncryptMetadata"]
         as? io.github.yuroyami.kitepdf.parser.PdfBoolean)?.value ?: true
 
     /** V5/V6 only — 32-byte SHA-256 derivation salts. */
@@ -43,10 +48,12 @@ class StandardSecurityHandler(
     private val oe: ByteArray = (encryptDict["OE"] as? io.github.yuroyami.kitepdf.parser.PdfString)?.bytes ?: byteArrayOf()
 
     /**
-     * For V4: per-filter algorithm. /CFM /V2 = RC4, /CFM /AESV2 = AES-128.
-     * Looked up via /CF /<name>.
+     * For V4: per-filter algorithm. /CFM /V2 = RC4, /CFM /AESV2 = AES-128,
+     * /CFM none or /Identity = NONE (passthrough). Streams use /StmF, strings
+     * use /StrF, and the two can differ — hence two separate fields.
      */
-    private val v4Algorithm: V4Algo = detectV4Algorithm(encryptDict)
+    private val stmAlgorithm: V4Algo = detectV4Algorithm(encryptDict, "StmF")
+    private val strAlgorithm: V4Algo = detectV4Algorithm(encryptDict, "StrF")
 
     /** File encryption key — null if authentication failed. */
     private val fileKey: ByteArray? = run {
@@ -54,8 +61,9 @@ class StandardSecurityHandler(
         if (v >= 5) {
             deriveV5Key(userPassword, ownerPassword)
         } else {
-            // Try user password first, then empty.
+            // Try user password, then owner password, then empty (in that order).
             tryUserPassword(userPassword, fileIdFirst)
+                ?: tryOwnerPassword(ownerPassword, fileIdFirst)
                 ?: tryUserPassword(byteArrayOf(), fileIdFirst)
         }
     }
@@ -78,9 +86,12 @@ class StandardSecurityHandler(
             // V5/V6: file key is used directly to AES-256-CBC decrypt; no per-object derivation.
             return Aes.decryptCbc(key, ciphertext)
         }
-        // V1/V2/V4: derive a per-object key.
-        val objKey = derivePerObjectKey(key, objNum, genNum, useAesV2 = (v4Algorithm == V4Algo.AESV2) && isString.let { true })
-        return when (v4Algorithm) {
+        // V1/V2/V4: route strings through /StrF, streams through /StmF.
+        val algorithm = if (isString) strAlgorithm else stmAlgorithm
+        // /Identity (or /CFM none): data is not encrypted — return it unchanged.
+        if (algorithm == V4Algo.NONE) return ciphertext
+        val objKey = derivePerObjectKey(key, objNum, genNum, useAesV2 = algorithm == V4Algo.AESV2)
+        return when (algorithm) {
             V4Algo.AESV2 -> Aes.decryptCbc(objKey, ciphertext)
             else -> Rc4.process(objKey, ciphertext)
         }
@@ -98,6 +109,38 @@ class StandardSecurityHandler(
             else -> expected.take(16).toByteArray().contentEquals(u.copyOf(16))
         }
         return if (matched) key else null
+    }
+
+    /**
+     * Algorithm 7 (ISO 32000-1 §7.6.4.4.8): authenticate an owner password.
+     * Compute the RC4 key from the padded owner password, decrypt /O to recover
+     * the user password padding, then feed that back through the user-password
+     * key computation and validate against /U.
+     */
+    private fun tryOwnerPassword(ownerPassword: ByteArray, fileId: ByteArray): ByteArray? {
+        // (a) RC4 key = MD5(pad(ownerPw)); for R>=3, 50 extra MD5 rounds; take n bytes.
+        val padded = padPassword(ownerPassword)
+        var digest = Md5.hash(padded)
+        val n = keyLengthBits / 8
+        if (r >= 3) {
+            repeat(50) { digest = Md5.hash(digest.copyOf(n)) }
+        }
+        val rc4Key = digest.copyOf(n)
+
+        // (b) Decrypt /O to recover the padded user password.
+        val recovered: ByteArray = if (r == 2) {
+            Rc4.process(rc4Key, o)
+        } else {
+            var data = o
+            for (round in 19 downTo 0) {
+                val rotatedKey = ByteArray(rc4Key.size) { (rc4Key[it].toInt() xor round).toByte() }
+                data = Rc4.process(rotatedKey, data)
+            }
+            data
+        }
+
+        // (c) Feed the recovered user password bytes into the user-password path.
+        return tryUserPassword(recovered, fileId)
     }
 
     private fun computeFileKey(password: ByteArray, fileId: ByteArray): ByteArray {
@@ -168,29 +211,74 @@ class StandardSecurityHandler(
         // Try owner password first, then user password, then empty.
         if (u.size < 48 || o.size < 48) return null
 
-        for (pw in listOf(ownerPassword, userPassword, byteArrayOf())) {
+        for (raw in listOf(ownerPassword, userPassword, byteArrayOf())) {
+            // Algorithm 2.A: truncate the UTF-8 password bytes to 127 bytes.
+            // NOTE: SASLprep (RFC 4013) normalization is not yet applied here;
+            // only the length truncation step is implemented.
+            val pw = if (raw.size > 127) raw.copyOf(127) else raw
+
             // Try as user password.
             val userValidationSalt = u.copyOfRange(32, 40)
             val userKeySalt = u.copyOfRange(40, 48)
-            val userValidate = Sha256.hash(pw + userValidationSalt)
+            val userValidate = hash2B(pw, userValidationSalt, udata = byteArrayOf())
             if (userValidate.contentEquals(u.copyOfRange(0, 32))) {
                 if (ue.size >= 32) {
-                    val intermediate = Sha256.hash(pw + userKeySalt)
+                    val intermediate = hash2B(pw, userKeySalt, udata = byteArrayOf())
                     return Aes.decryptCbc(intermediate, byteArrayOf(0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0) + ue, removePadding = false)
                 }
             }
             // Try as owner password.
             val ownerValidationSalt = o.copyOfRange(32, 40)
             val ownerKeySalt = o.copyOfRange(40, 48)
-            val ownerValidate = Sha256.hash(pw + ownerValidationSalt + u.copyOfRange(0, 48))
+            val u48 = u.copyOfRange(0, 48)
+            val ownerValidate = hash2B(pw, ownerValidationSalt, udata = u48)
             if (ownerValidate.contentEquals(o.copyOfRange(0, 32))) {
                 if (oe.size >= 32) {
-                    val intermediate = Sha256.hash(pw + ownerKeySalt + u.copyOfRange(0, 48))
+                    val intermediate = hash2B(pw, ownerKeySalt, udata = u48)
                     return Aes.decryptCbc(intermediate, byteArrayOf(0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0) + oe, removePadding = false)
                 }
             }
         }
         return null
+    }
+
+    /**
+     * R5: plain SHA-256(password ++ salt [++ udata]).
+     * R6 (PDF 2.0): Algorithm 2.B iterated hardening on top of that initial hash.
+     * [udata] is the 48-byte /U value when validating an owner password, empty
+     * for a user password.
+     */
+    private fun hash2B(password: ByteArray, salt: ByteArray, udata: ByteArray): ByteArray {
+        var k = Sha256.hash(password + salt + udata)
+        if (r != 6) return k  // R5 (and any non-R6 V5) stops at the single SHA-256.
+
+        // Algorithm 2.B (ISO 32000-2 §7.6.4.3.4). `round` counts rounds already
+        // completed; the loop runs at least 64 rounds and keeps going until the
+        // last byte of E is <= round - 32.
+        var round = 0
+        var lastE = 0
+        while (round < 64 || (lastE and 0xFF) > round - 32) {
+            // K1 = (password ++ K ++ udata) repeated 64 times.
+            val block = password + k + udata
+            val k1 = ByteArray(block.size * 64)
+            for (i in 0 until 64) block.copyInto(k1, i * block.size)
+
+            // E = AES-128-CBC(no-pad) with key=K[0:16], iv=K[16:32].
+            val e = Aes.encryptCbcNoPadding(k.copyOfRange(0, 16), k.copyOfRange(16, 32), k1)
+
+            // modulus = (sum of first 16 bytes of E) mod 3.
+            var sum = 0
+            for (i in 0 until 16) sum += e[i].toInt() and 0xFF
+            k = when (sum % 3) {
+                0 -> Sha256.hash(e)
+                1 -> Sha512.hash384(e)
+                else -> Sha512.hash(e)
+            }
+
+            lastE = e[e.size - 1].toInt()
+            round++
+        }
+        return k.copyOf(32)
     }
 
     /* ─── Helpers ─────────────────────────────────────────────────────────── */
@@ -203,17 +291,25 @@ class StandardSecurityHandler(
         return out
     }
 
-    private fun detectV4Algorithm(dict: PdfDictionary): V4Algo {
+    /**
+     * Resolve the crypt-filter algorithm for a given filter-name key ("StmF"
+     * for streams, "StrF" for strings). V1/V2 always use RC4; V4 looks the
+     * named filter up in /CF and reads its /CFM. /Identity or /CFM none means
+     * passthrough (NONE).
+     */
+    private fun detectV4Algorithm(dict: PdfDictionary, filterKey: String): V4Algo {
         if (v != 4) return if (v == 1 || v == 2) V4Algo.RC4 else V4Algo.NONE
-        // V4 specifies per-filter algorithms in /CF dict. The default for streams
-        // is named by /StmF. /CF /<StmF>/CFM = /V2 (RC4) or /AESV2.
-        val stmF = (dict["StmF"] as? PdfName)?.value ?: return V4Algo.RC4
-        if (stmF == "Identity") return V4Algo.NONE
+        // V4 specifies per-filter algorithms in /CF dict. The filter used is
+        // named by /StmF (streams) or /StrF (strings). /CF /<name>/CFM = /V2
+        // (RC4), /AESV2, or None.
+        val filterName = (dict[filterKey] as? PdfName)?.value ?: return V4Algo.RC4
+        if (filterName == "Identity") return V4Algo.NONE
         val cf = dict.getDict("CF") ?: return V4Algo.RC4
-        val filter = cf.map[stmF] as? PdfDictionary ?: return V4Algo.RC4
+        val filter = cf.map[filterName] as? PdfDictionary ?: return V4Algo.RC4
         return when (filter.getName("CFM")) {
             "AESV2" -> V4Algo.AESV2
             "V2" -> V4Algo.RC4
+            "None" -> V4Algo.NONE
             else -> V4Algo.RC4
         }
     }

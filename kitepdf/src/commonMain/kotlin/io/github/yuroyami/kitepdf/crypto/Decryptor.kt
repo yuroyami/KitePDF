@@ -39,6 +39,7 @@ object Decryptor {
         // Streams marked as /XRef or /Metadata (when EncryptMetadata=false) are not encrypted.
         val type = stream.dict.getName("Type")
         if (type == "XRef") return stream
+        if (type == "Metadata" && !handler.encryptMetadata) return stream
         val decryptedDict = decryptDict(objNum, genNum, stream.dict, handler)
         val decryptedBytes = handler.decryptStream(objNum, genNum, stream.rawBytes)
         return PdfStream(decryptedDict, decryptedBytes)
