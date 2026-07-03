@@ -24,8 +24,18 @@ class ContentStreamBuilder internal constructor(
             "drawImage() is only available via PdfBuilder.page { }; this context doesn't register image resources.",
         )
     },
+    private val embeddedResolver: (EmbeddedFont) -> EmbeddedBinding = {
+        throw UnsupportedOperationException(
+            "Embedded fonts are only available via PdfBuilder.page { }; this context doesn't register font resources.",
+        )
+    },
 ) {
     private val out = ByteArrayBuilder(128)
+
+    // When the current font is an embedded one, show strings are encoded as
+    // Identity-H 2-byte glyph codes instead of single-byte text. Null = a
+    // standard-14 font is selected (the default single-byte path).
+    private var currentEmbedded: EmbeddedBinding? = null
 
     /* ─── Graphics state ─────────────────────────────────────────────────── */
 
@@ -98,20 +108,42 @@ class ContentStreamBuilder internal constructor(
     fun beginText(): ContentStreamBuilder = op("BT")
     fun endText(): ContentStreamBuilder = op("ET")
     fun setFont(font: StandardFont, size: Double): ContentStreamBuilder {
+        currentEmbedded = null
         name(fontResolver(font)); num(size); return op("Tf")
+    }
+
+    /**
+     * Select an embedded custom [font] at [size]. Subsequent [showText] calls
+     * encode their text as Identity-H 2-byte glyph codes for this font, so any
+     * Unicode the font covers (CJK included) renders. The font is registered
+     * with the owning [PdfBuilder] on first use.
+     */
+    fun setFont(font: EmbeddedFont, size: Double): ContentStreamBuilder {
+        val binding = embeddedResolver(font)
+        currentEmbedded = binding
+        name(binding.resourceName); num(size); return op("Tf")
     }
     fun setLeading(leading: Double): ContentStreamBuilder { num(leading); return op("TL") }
     fun setCharSpacing(spacing: Double): ContentStreamBuilder { num(spacing); return op("Tc") }
     fun setWordSpacing(spacing: Double): ContentStreamBuilder { num(spacing); return op("Tw") }
     fun moveText(tx: Double, ty: Double): ContentStreamBuilder { num(tx); num(ty); return op("Td") }
     fun nextLine(): ContentStreamBuilder = op("T*")
-    fun showText(text: String): ContentStreamBuilder { string(text); return op("Tj") }
+    fun showText(text: String): ContentStreamBuilder {
+        val emb = currentEmbedded
+        if (emb != null) embeddedString(emb, text) else string(text)
+        return op("Tj")
+    }
 
     /**
      * Convenience: draw a single line of [text] in [font] at [size], with its
      * baseline at ([x], [y]). Wraps `BT/Tf/Td/Tj/ET`.
      */
     fun text(font: StandardFont, size: Double, x: Double, y: Double, text: String): ContentStreamBuilder {
+        beginText(); setFont(font, size); moveText(x, y); showText(text); return endText()
+    }
+
+    /** As [text], but with an embedded custom [font] (Identity-H encoded). */
+    fun text(font: EmbeddedFont, size: Double, x: Double, y: Double, text: String): ContentStreamBuilder {
         beginText(); setFont(font, size); moveText(x, y); showText(text); return endText()
     }
 
@@ -127,6 +159,37 @@ class ContentStreamBuilder internal constructor(
     private fun num(d: Double) { out.appendAscii(PdfObjectWriter.formatReal(d)); sp() }
     private fun name(n: String) { PdfObjectWriter.writeObject(PdfName(n), out); sp() }
     private fun string(s: String) { PdfObjectWriter.writeObject(PdfString(PdfText.encodeContentString(s)), out); sp() }
+
+    /**
+     * Emit [text] as a show string for the embedded [binding]: each Unicode code
+     * point becomes its 2-byte big-endian glyph id (the Identity-H code), and the
+     * glyph is recorded so the builder can emit its width and ToUnicode mapping.
+     */
+    private fun embeddedString(binding: EmbeddedBinding, text: String) {
+        val bytes = ByteArrayBuilder(text.length * 2)
+        forEachCodePoint(text) { cp ->
+            val gid = binding.font.glyphIdForCodePoint(cp)
+            binding.usage.record(gid, cp)
+            bytes.append((gid ushr 8).toByte())
+            bytes.append((gid and 0xFF).toByte())
+        }
+        PdfObjectWriter.writeObject(PdfString(bytes.toByteArray()), out); sp()
+    }
+
+    /** Iterate Unicode code points, combining surrogate pairs into one value. */
+    private inline fun forEachCodePoint(s: String, action: (Int) -> Unit) {
+        var i = 0
+        while (i < s.length) {
+            val c = s[i]
+            if (c.isHighSurrogate() && i + 1 < s.length && s[i + 1].isLowSurrogate()) {
+                action(0x10000 + ((c.code - 0xD800) shl 10) + (s[i + 1].code - 0xDC00))
+                i += 2
+            } else {
+                action(c.code)
+                i++
+            }
+        }
+    }
     private fun op(operator: String): ContentStreamBuilder { out.appendAscii(operator); return nl() }
     private fun sp() { out.append(' '.code.toByte()) }
     private fun nl(): ContentStreamBuilder { out.append('\n'.code.toByte()); return this }

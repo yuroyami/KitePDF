@@ -32,6 +32,7 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
@@ -100,6 +101,10 @@ import kotlinx.coroutines.flow.collectLatest
  *   [BoxScope] for alignment. Widgets here float above the pages —
  *   [PdfNavigationControls], [PdfPageIndicator], [PdfThumbnailStrip] or
  *   anything of your own.
+ * @param onTap single-tap on the page, reported with the tap position. The tap
+ *   does not consume pan/swipe, so it coexists with navigation — typical use is
+ *   toggling a HUD's visibility. Held back until the double-tap window lapses
+ *   only when [PdfZoomSpec.doubleTapEnabled] is on.
  */
 @Composable
 fun PdfView(
@@ -114,6 +119,7 @@ fun PdfView(
     onPageRendered: ((pageIndex: Int, image: ImageBitmap) -> Unit)? = null,
     pagePlaceholder: (@Composable (pageIndex: Int) -> Unit)? = null,
     overlay: (@Composable BoxScope.(PdfViewState) -> Unit)? = null,
+    onTap: ((Offset) -> Unit)? = null,
 ) {
     SideEffect {
         state.zoomRange = zoomSpec.minZoom..zoomSpec.maxZoom
@@ -152,15 +158,15 @@ fun PdfView(
             when (layout) {
                 is PdfLayout.Continuous -> ContinuousLayout(
                     state, layout, zoomSpec, renderSpec, colors, pageSpacing,
-                    userScrollEnabled, settledZoom, onPageRendered, pagePlaceholder,
+                    userScrollEnabled, settledZoom, onPageRendered, pagePlaceholder, onTap,
                 )
                 is PdfLayout.Paged -> PagedLayout(
                     state, layout, zoomSpec, renderSpec, colors, pageSpacing,
-                    userScrollEnabled, settledZoom, onPageRendered, pagePlaceholder,
+                    userScrollEnabled, settledZoom, onPageRendered, pagePlaceholder, onTap,
                 )
                 is PdfLayout.SinglePage -> SinglePageLayout(
                     state, layout, zoomSpec, renderSpec, colors,
-                    settledZoom, onPageRendered, pagePlaceholder,
+                    settledZoom, onPageRendered, pagePlaceholder, onTap,
                 )
             }
         }
@@ -216,6 +222,7 @@ private fun ContinuousLayout(
     settledZoom: Float,
     onPageRendered: ((Int, ImageBitmap) -> Unit)?,
     pagePlaceholder: (@Composable (Int) -> Unit)?,
+    onTap: ((Offset) -> Unit)?,
 ) {
     val listState = rememberLazyListState(
         initialFirstVisibleItemIndex = state.pendingPage.coerceIn(0, state.pageCount - 1),
@@ -237,7 +244,7 @@ private fun ContinuousLayout(
     Box(
         Modifier
             .fillMaxSize()
-            .pdfTransformGestures(state, zoomSpec, scope)
+            .pdfTransformGestures(state, zoomSpec, scope, onTap)
             .graphicsLayer {
                 scaleX = state.zoom
                 scaleY = state.zoom
@@ -337,6 +344,7 @@ private fun PagedLayout(
     settledZoom: Float,
     onPageRendered: ((Int, ImageBitmap) -> Unit)?,
     pagePlaceholder: (@Composable (Int) -> Unit)?,
+    onTap: ((Offset) -> Unit)?,
 ) {
     val pagerState = rememberPagerState(
         initialPage = state.pendingPage.coerceIn(0, state.pageCount - 1),
@@ -366,7 +374,7 @@ private fun PagedLayout(
             zoom = if (isCurrent) state.zoom else 1f,
             pan = if (isCurrent) state.panOffset else androidx.compose.ui.geometry.Offset.Zero,
             gestures = if (isCurrent) {
-                Modifier.pdfTransformGestures(state, zoomSpec, scope)
+                Modifier.pdfTransformGestures(state, zoomSpec, scope, onTap)
             } else Modifier,
             settledZoom = if (isCurrent) settledZoom else 1f,
             renderSpec = renderSpec,
@@ -408,6 +416,7 @@ private fun SinglePageLayout(
     settledZoom: Float,
     onPageRendered: ((Int, ImageBitmap) -> Unit)?,
     pagePlaceholder: (@Composable (Int) -> Unit)?,
+    onTap: ((Offset) -> Unit)?,
 ) {
     require(layout.pageIndex in 0 until state.pageCount) {
         "page ${layout.pageIndex} is out of bounds (document has ${state.pageCount} page(s))"
@@ -423,7 +432,7 @@ private fun SinglePageLayout(
         pageIndex = layout.pageIndex,
         zoom = state.zoom,
         pan = state.panOffset,
-        gestures = Modifier.pdfTransformGestures(state, zoomSpec, scope),
+        gestures = Modifier.pdfTransformGestures(state, zoomSpec, scope, onTap),
         settledZoom = settledZoom,
         renderSpec = renderSpec,
         colors = colors,

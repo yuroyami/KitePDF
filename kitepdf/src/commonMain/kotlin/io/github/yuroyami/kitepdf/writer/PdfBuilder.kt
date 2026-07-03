@@ -33,12 +33,25 @@ class PdfBuilder {
 
     private val pages = ArrayList<PageSpec>()
     private val fontResourceNames = LinkedHashMap<StandardFont, String>()
+    private val embeddedFontNames = LinkedHashMap<EmbeddedFont, String>()
+    private val embeddedUsage = LinkedHashMap<EmbeddedFont, EmbeddedFontUsage>()
     private val imageResourceNames = LinkedHashMap<PdfImage, String>()
     private val infoEntries = LinkedHashMap<String, PdfObject>()
 
     /** Map a font to its `/Resources` name, assigning F1, F2, … on first use. */
     private fun resolveFont(font: StandardFont): String =
         fontResourceNames.getOrPut(font) { "F${fontResourceNames.size + 1}" }
+
+    /**
+     * Map an embedded font to its `/Resources` name (CF1, CF2, …) and a usage
+     * sink, registering both on first use. CF-prefixed so it can't collide with
+     * the standard-14 F-names.
+     */
+    private fun resolveEmbedded(font: EmbeddedFont): EmbeddedBinding {
+        val name = embeddedFontNames.getOrPut(font) { "CF${embeddedFontNames.size + 1}" }
+        val usage = embeddedUsage.getOrPut(font) { EmbeddedFontUsage() }
+        return EmbeddedBinding(name, font, usage)
+    }
 
     /** Map an image to its `/Resources` name, assigning Im1, Im2, … on first use. */
     private fun resolveImage(image: PdfImage): String =
@@ -66,7 +79,7 @@ class PdfBuilder {
      * synchronous block can't host. Fonts/images used here are registered when
      * [addPage] commits the builder.
      */
-    fun newPageContent(): ContentStreamBuilder = ContentStreamBuilder(::resolveFont, ::resolveImage)
+    fun newPageContent(): ContentStreamBuilder = ContentStreamBuilder(::resolveFont, ::resolveImage, ::resolveEmbedded)
 
     /**
      * Commit a page sized [width]×[height] points from [content] (obtained via
@@ -128,6 +141,17 @@ class PdfBuilder {
             )
         }
 
+        // One Type0 font subtree per used embedded font; the returned number is
+        // the top-level Type0 dict that the resources dict references.
+        val embeddedTypeNum = LinkedHashMap<EmbeddedFont, Long>()
+        for (font in embeddedFontNames.keys) {
+            embeddedTypeNum[font] = FontEmbedder.embed(
+                font,
+                embeddedUsage.getValue(font),
+                ::alloc,
+            ) { n, obj -> objects.add(n to obj) }
+        }
+
         // One image XObject per used image (plus a /SMask sub-image when the
         // image carries an alpha channel). Allocated before the resources dict
         // so it can reference them.
@@ -178,6 +202,9 @@ class PdfBuilder {
         val fontDict = LinkedHashMap<String, PdfObject>()
         for ((font, resName) in fontResourceNames) {
             fontDict[resName] = PdfReference(fontNum.getValue(font), 0)
+        }
+        for ((font, resName) in embeddedFontNames) {
+            fontDict[resName] = PdfReference(embeddedTypeNum.getValue(font), 0)
         }
         val resourcesMap = LinkedHashMap<String, PdfObject>()
         resourcesMap["Font"] = PdfDictionary(fontDict)

@@ -33,6 +33,9 @@ import kotlinx.coroutines.launch
  *    axis.
  *  - **Double-tap** toggles between min zoom and [PdfZoomSpec.doubleTapZoom],
  *    anchored at the tap position.
+ *  - **Single-tap** ([onTap]) is reported without consuming pan/swipe — a host
+ *    uses it to toggle a HUD. When double-tap is also on, the tap is held back
+ *    until the double-tap window lapses; otherwise it fires immediately.
  *  - At minimum zoom with one finger down, nothing is consumed: swipes and
  *    flings reach the pager/list untouched.
  */
@@ -40,16 +43,20 @@ internal fun Modifier.pdfTransformGestures(
     state: PdfViewState,
     spec: PdfZoomSpec,
     scope: CoroutineScope,
+    onTap: ((Offset) -> Unit)? = null,
 ): Modifier {
-    if (!spec.pinchEnabled && !spec.doubleTapEnabled && !spec.panEnabled) return this
+    if (!spec.pinchEnabled && !spec.doubleTapEnabled && !spec.panEnabled && onTap == null) return this
     return this
-        .pointerInput(state, spec.doubleTapEnabled, spec.doubleTapZoom, spec.minZoom) {
-            if (!spec.doubleTapEnabled) return@pointerInput
+        .pointerInput(state, spec.doubleTapEnabled, spec.doubleTapZoom, spec.minZoom, onTap != null) {
+            if (!spec.doubleTapEnabled && onTap == null) return@pointerInput
             detectTapGestures(
-                onDoubleTap = { tapPosition ->
-                    val target = if (state.isZoomed) spec.minZoom else spec.doubleTapZoom
-                    scope.launch { state.animateZoomTo(target, focal = tapPosition) }
-                },
+                onTap = onTap,
+                onDoubleTap = if (spec.doubleTapEnabled) {
+                    { tapPosition ->
+                        val target = if (state.isZoomed) spec.minZoom else spec.doubleTapZoom
+                        scope.launch { state.animateZoomTo(target, focal = tapPosition) }
+                    }
+                } else null,
             )
         }
         .pointerInput(state, spec.pinchEnabled) {

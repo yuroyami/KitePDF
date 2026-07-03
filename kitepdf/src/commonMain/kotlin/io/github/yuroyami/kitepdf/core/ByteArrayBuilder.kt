@@ -63,6 +63,20 @@ class ByteArrayBuilder(initialCapacity: Int = 64) {
         written += total
     }
 
+    /** Append a 16-bit value big-endian (network order) — for SFNT/binary writers. */
+    fun appendU16BE(value: Int) {
+        append((value ushr 8).toByte())
+        append(value.toByte())
+    }
+
+    /** Append a 32-bit value big-endian (network order) — for SFNT/binary writers. */
+    fun appendU32BE(value: Int) {
+        append((value ushr 24).toByte())
+        append((value ushr 16).toByte())
+        append((value ushr 8).toByte())
+        append(value.toByte())
+    }
+
     /** Append [count] copies of [b] in one reserved span (no per-byte grow check). */
     fun appendFill(b: Byte, count: Int) {
         if (count <= 0) return

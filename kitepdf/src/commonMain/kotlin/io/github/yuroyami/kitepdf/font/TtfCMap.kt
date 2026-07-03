@@ -17,6 +17,9 @@ class TtfCMap private constructor(private val subtable: Subtable) {
     fun glyphIdFor(codePoint: Int): Int = subtable.glyphId(codePoint)
 
     companion object {
+        /** A cmap that maps every code point to `.notdef` — for CID-keyed fonts that ship no `cmap`. */
+        fun empty(): TtfCMap = TtfCMap(EmptySubtable)
+
         fun parse(reader: TtfReader, table: Table): TtfCMap {
             reader.seek(table.offset)
             reader.skip(2)  // version

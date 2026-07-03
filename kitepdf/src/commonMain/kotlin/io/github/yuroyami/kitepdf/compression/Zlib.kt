@@ -62,10 +62,12 @@ object Zlib {
 
     /** RFC 1950 §9: Adler-32, mod 65521 over the decoded data. */
     fun adler32(data: ByteArray): Int {
-        var a = 1
-        var b = 0
-        // NMAX = largest run of bytes before (b) can overflow a signed int; defer
-        // the modulo to once per block instead of twice per byte.
+        // Accumulate in Long. NMAX (5552) is the C zlib run length before `b`
+        // overflows an *unsigned* 32-bit int; within it `b` reaches ~3.9e9, which
+        // overflows a signed Int (max ~2.1e9) and corrupted the checksum on large
+        // inputs (small ones stayed under 2^31, so the bug hid). Long has headroom.
+        var a = 1L
+        var b = 0L
         var i = 0
         val n = data.size
         while (i < n) {
@@ -77,7 +79,7 @@ object Zlib {
             a %= MOD_ADLER
             b %= MOD_ADLER
         }
-        return (b shl 16) or a
+        return ((b shl 16) or a).toInt()
     }
 
     private const val MOD_ADLER = 65_521

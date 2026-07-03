@@ -42,6 +42,58 @@ class TrueTypeFont private constructor(
     /** Glyph advance width in font design units. */
     fun advanceWidth(glyphId: Int): Int = hmtx.advanceWidth(glyphId)
 
+    /**
+     * Raw bytes of the SFNT table [tag] (e.g. `"name"`, `"OS/2"`, `"glyf"`), or
+     * null if the font has no such table. Lets the writer's font-embedding path
+     * read tables the renderer itself doesn't parse.
+     */
+    internal fun rawTable(tag: String): ByteArray? =
+        tables[tag]?.let { reader.slice(it.offset, it.length) }
+
+    /**
+     * Raw `glyf` bytes for [glyphId] (empty for an empty/zero-length glyph), used
+     * by the subsetter to copy a glyph verbatim into a new font. Does not move the
+     * shared reader position ([TtfReader.slice] copies by absolute offset).
+     */
+    internal fun glyfBytes(glyphId: Int): ByteArray {
+        if (glyphId < 0 || glyphId >= maxp.numGlyphs) return EMPTY
+        val start = locaOffsets[glyphId]
+        val end = locaOffsets[glyphId + 1]
+        if (end <= start) return EMPTY
+        val glyf = tables["glyf"] ?: return EMPTY
+        return reader.slice(glyf.offset + start, end - start)
+    }
+
+    /**
+     * The component glyph ids a composite [glyphId] references (empty for a simple
+     * or empty glyph). The subsetter uses this to pull a composite's dependencies
+     * into the subset and to renumber the references.
+     */
+    internal fun compositeChildGids(glyphId: Int): List<Int> {
+        val b = glyfBytes(glyphId)
+        if (b.size < 10) return emptyList()
+        // numberOfContours < 0 marks a composite glyph.
+        if (u16(b, 0).toShort() >= 0) return emptyList()
+        val children = ArrayList<Int>(2)
+        var pos = 10
+        while (pos + 4 <= b.size) {
+            val flags = u16(b, pos)
+            children.add(u16(b, pos + 2))
+            pos += 4
+            pos += if (flags and 0x0001 != 0) 4 else 2   // ARGS_ARE_WORDS
+            pos += when {                                 // transform
+                flags and 0x0008 != 0 -> 2                // WE_HAVE_A_SCALE
+                flags and 0x0040 != 0 -> 4                // X_AND_Y_SCALE
+                flags and 0x0080 != 0 -> 8                // TWO_BY_TWO
+                else -> 0
+            }
+            if (flags and 0x0020 == 0) break              // MORE_COMPONENTS
+        }
+        return children
+    }
+
+    private fun u16(b: ByteArray, p: Int): Int = ((b[p].toInt() and 0xFF) shl 8) or (b[p + 1].toInt() and 0xFF)
+
     /** Get the outline for [glyphId], or null if the glyph slot is empty (zero-length). */
     fun outline(glyphId: Int): GlyphOutline? {
         cache[glyphId]?.let { return it }
@@ -225,6 +277,8 @@ class TrueTypeFont private constructor(
 
     companion object {
 
+        private val EMPTY = ByteArray(0)
+
         /** Parse a font from a raw `.ttf` / `.otf` byte buffer. */
         fun parse(bytes: ByteArray): TrueTypeFont {
             val reader = TtfReader(bytes)
@@ -253,8 +307,14 @@ class TrueTypeFont private constructor(
             val maxp = parseMaxp(reader, tables.required("maxp"))
             val hhea = parseHhea(reader, tables.required("hhea"))
             val hmtx = parseHmtx(reader, tables.required("hmtx"), hhea.numberOfHMetrics, maxp.numGlyphs)
-            val cmap = TtfCMap.parse(reader, tables.required("cmap"))
-            val locaOffsets = parseLoca(reader, tables.required("loca"), head.indexToLocFormat, maxp.numGlyphs)
+            // cmap is optional: CID-keyed fonts (incl. our own subsets) select glyphs
+            // via the PDF's /CIDToGIDMap, not the font's cmap, and ship none.
+            val cmap = tables["cmap"]?.let { TtfCMap.parse(reader, it) } ?: TtfCMap.empty()
+            // glyf/loca are optional too: OpenType/CFF (.otf) fonts carry outlines in a
+            // CFF table instead, but still expose cmap/hmtx/head/hhea metrics here.
+            val locaOffsets = tables["loca"]
+                ?.let { parseLoca(reader, it, head.indexToLocFormat, maxp.numGlyphs) }
+                ?: IntArray(0)
 
             return TrueTypeFont(reader, tables, head, maxp, hhea, hmtx, cmap, locaOffsets)
         }

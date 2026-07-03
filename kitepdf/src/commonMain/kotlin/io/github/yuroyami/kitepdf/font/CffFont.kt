@@ -40,7 +40,14 @@ class CffFont private constructor(
     internal val defaultWidthX: Double,
     /** Nominal width offset (from Private DICT, nominalWidthX). */
     internal val nominalWidthX: Double,
+    /** True when the font uses CFF CIDFont operators (ROS / FDArray / FDSelect). */
+    internal val isCidKeyed: Boolean,
+    /** Per-FontDict private data (one entry for a non-CID font) — for re-emission by the subsetter. */
+    internal val fdPrivates: List<FdPrivate>,
 ) {
+
+    /** The bits of a Private DICT the subsetter re-emits (hints are dropped). */
+    internal class FdPrivate(val defaultWidthX: Double, val nominalWidthX: Double)
 
     val numGlyphs: Int get() = charStrings.size
 
@@ -167,20 +174,21 @@ class CffFont private constructor(
             }
 
             // ── Private DICT + Local Subrs (per FontDict for CID-keyed) ───
-            val (localSubrsPerFd, defaultWidthX, nominalWidthX, fdSelect) =
-                parsePrivateAndFdData(reader, topDict, isCidKeyed, numGlyphs)
+            val priv = parsePrivateAndFdData(reader, topDict, isCidKeyed, numGlyphs)
 
             return CffFont(
                 reader = reader,
                 name = name,
                 charStrings = charStringsIndex,
                 globalSubrs = globalSubrs,
-                localSubrsPerFd = localSubrsPerFd,
-                fdSelect = fdSelect,
+                localSubrsPerFd = priv.localSubrsPerFd,
+                fdSelect = priv.fdSelect,
                 glyphNames = glyphNames,
                 nameToGid = nameToGid,
-                defaultWidthX = defaultWidthX,
-                nominalWidthX = nominalWidthX,
+                defaultWidthX = priv.defaultWidthX,
+                nominalWidthX = priv.nominalWidthX,
+                isCidKeyed = isCidKeyed,
+                fdPrivates = priv.fdPrivates,
             )
         }
 
@@ -333,6 +341,7 @@ class CffFont private constructor(
             val defaultWidthX: Double,
             val nominalWidthX: Double,
             val fdSelect: IntArray,
+            val fdPrivates: List<FdPrivate>,
         )
 
         private fun parsePrivateAndFdData(
@@ -346,6 +355,7 @@ class CffFont private constructor(
                 val fdSelectOffset = (topDict[0x0C25]?.firstOrNull() as? Double)?.toInt() ?: 0
                 val fdSelect = if (fdSelectOffset > 0) readFdSelect(reader, fdSelectOffset, numGlyphs) else IntArray(numGlyphs)
                 val locals = mutableListOf<List<ByteArray>>()
+                val fdPrivates = mutableListOf<FdPrivate>()
                 var defaultW = 0.0; var nominalW = 0.0
                 if (fdArrayOffset > 0) {
                     reader.seek(fdArrayOffset)
@@ -354,14 +364,15 @@ class CffFont private constructor(
                         val dict = parseDict(entry)
                         val (subrs, dW, nW) = readPrivate(reader, dict)
                         locals.add(subrs)
+                        fdPrivates.add(FdPrivate(dW, nW))
                         if (defaultW == 0.0) defaultW = dW
                         if (nominalW == 0.0) nominalW = nW
                     }
                 }
-                return PrivateData(locals, defaultW, nominalW, fdSelect)
+                return PrivateData(locals, defaultW, nominalW, fdSelect, fdPrivates)
             } else {
                 val (subrs, dW, nW) = readPrivate(reader, topDict)
-                return PrivateData(listOf(subrs), dW, nW, IntArray(0))
+                return PrivateData(listOf(subrs), dW, nW, IntArray(0), listOf(FdPrivate(dW, nW)))
             }
         }
 
