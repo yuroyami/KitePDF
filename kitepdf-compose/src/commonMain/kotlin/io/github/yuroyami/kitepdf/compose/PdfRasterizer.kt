@@ -55,16 +55,17 @@ class PdfRasterizer(
     ): ImageBitmap {
         val w = widthPx.coerceAtLeast(1)
         val h = heightPx.coerceAtLeast(1)
-        val scale = w / page.width
+        // Fit scale from the *rotated* display box: pageToDeviceBase() already maps
+        // unscaled user space into a top-left, Y-down device box of
+        // [0,rotatedWidth] x [0,rotatedHeight] (accounting for the display-box origin
+        // and normalized /Rotate). Scaling it by `s` in device space gives the final
+        // CTM; no manual Y-flip here, the base transform already flipped.
+        val s = w / page.rotatedWidth
         val bitmap = ImageBitmap(w, h)
         CanvasDrawScope().draw(density, layoutDirection, Canvas(bitmap), Size(w.toFloat(), h.toFloat())) {
             drawRect(background, size = size)
-            // PDF user space is Y-up from bottom-left; flip to device Y-down + scale.
-            val deviceCtm = PdfMatrix(
-                a = scale, b = 0.0,
-                c = 0.0, d = -scale,
-                e = 0.0, f = h.toDouble(),
-            )
+            // concat(b) applies b FIRST, so pageToDeviceBase() runs before the scale.
+            val deviceCtm = PdfMatrix.scaling(s, s).concat(page.pageToDeviceBase())
             page.renderTo(ComposeCanvas(this, textMeasurer, hairlineWidthPx), deviceCtm)
         }
         return bitmap
@@ -82,9 +83,13 @@ fun rememberPdfRasterizer(): PdfRasterizer {
     }
 }
 
-/** Page aspect ratio (w/h), guarded against degenerate boxes. */
+/**
+ * Page aspect ratio (w/h), guarded against degenerate boxes. Uses the *rotated*
+ * display box so landscape /Rotate 90/270 pages report the on-screen aspect the
+ * rasterized bitmap actually has, not the unrotated MediaBox aspect.
+ */
 internal fun pdfPageAspect(page: PdfPage): Float =
-    (page.width / page.height).toFloat().let { if (it.isFinite() && it > 0f) it else 1f }
+    (page.rotatedWidth / page.rotatedHeight).toFloat().let { if (it.isFinite() && it > 0f) it else 1f }
 
 /**
  * Largest size with aspect ratio [aspect] (w/h) that fits inside [boxW]×[boxH],

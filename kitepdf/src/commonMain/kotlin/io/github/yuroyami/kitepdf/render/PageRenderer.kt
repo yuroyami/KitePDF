@@ -42,6 +42,12 @@ class PageRenderer(
     private var activeClipCount = 0
     private val clipSaveStack = ArrayDeque<Int>()
 
+    // W/W* mark the current path as a *pending* clip; per §8.5.4 the clip only
+    // takes effect AFTER the next path-painting operator (S/f/B/n/…) has painted.
+    // 0 = none, 1 = W (nonzero), 2 = W* (even-odd). Applied and cleared by the
+    // painting op via [applyPendingClip].
+    private var pendingClip = 0
+
     /** Parsed form-XObject resources, memoized by form-stream identity so a form
      *  drawn N times (repeated stamps/icons) parses its fonts/colorspaces once. */
     private class FormResources(
@@ -85,6 +91,7 @@ class PageRenderer(
         val state = GraphicsStack(GraphicsState(ctm = deviceCtm))
         activeClipCount = 0
         clipSaveStack.clear()
+        pendingClip = 0
         pageBaseCtm = deviceCtm
         formDepth = 0
         optionalContent = page.internalDocument.optionalContent
@@ -93,10 +100,18 @@ class PageRenderer(
         val pathBuilder = PdfPath.Builder()
         val ops = ContentStreamParser.parse(page.contentBytes)
 
-        canvas.beginPage(page.width, page.height, deviceCtm)
+        // Size the device surface for the ROTATED page: pageToDeviceBase() maps
+        // into [0,rotatedWidth] x [0,rotatedHeight], so width/height must be
+        // swapped for /Rotate 90/270 to match.
+        canvas.beginPage(page.rotatedWidth, page.rotatedHeight, deviceCtm)
         try {
             for (op in ops) dispatch(op, state, pathBuilder, fonts, xobjects, colorSpaces, extGStates, shadings, patterns, properties)
-            renderAnnotations(page, state)
+            // Page content may leave the graphics stack unbalanced (a stray `cm`
+            // with no matching q/Q). Annotations must render on a clean page CTM,
+            // not that leftover state, else an unbalanced cm skews every annotation.
+            // Also drop any clips the page content left active.
+            while (activeClipCount > 0) { canvas.popClip(); activeClipCount-- }
+            renderAnnotations(page, GraphicsStack(GraphicsState(ctm = deviceCtm)))
         } finally {
             canvas.endPage()
         }
@@ -135,8 +150,15 @@ class PageRenderer(
         return id !in oc.offByDefault
     }
 
-    /** Evaluate an OCMD (§8.11.2.2) membership policy over its member OCGs. */
+    /**
+     * Evaluate an OCMD (§8.11.2.2). A /VE visibility expression, when present,
+     * takes precedence over the /OCGs + /P membership dictionary; only if there
+     * is no /VE do we fall back to /OCGs and the /P policy.
+     */
     private fun evalOcmd(dict: PdfDictionary, oc: io.github.yuroyami.kitepdf.PdfOptionalContent): Boolean {
+        (dict["VE"]?.resolve(resolver) as? PdfArray)?.let { ve ->
+            return evalVisibilityExpr(ve, oc)
+        }
         val ocgsRaw = dict["OCGs"]
         val refs: List<io.github.yuroyami.kitepdf.parser.PdfReference> = when (val r = ocgsRaw?.resolve(resolver)) {
             is PdfArray -> r.mapNotNull { it as? io.github.yuroyami.kitepdf.parser.PdfReference }
@@ -149,6 +171,31 @@ class PageRenderer(
             "AnyOff" -> visible.any { !it }
             "AllOff" -> visible.all { !it }
             else -> visible.any { it }   // AnyOn (default)
+        }
+    }
+
+    /**
+     * Evaluate an OCMD /VE visibility expression (§8.11.2.2): an array whose
+     * first element is /And, /Or, or /Not and whose remaining elements are
+     * either OCG references or nested /VE arrays. Returns whether the expression
+     * is currently satisfied (i.e. the content is visible).
+     */
+    private fun evalVisibilityExpr(expr: PdfArray, oc: io.github.yuroyami.kitepdf.PdfOptionalContent): Boolean {
+        val opName = (expr.getOrNull(0) as? PdfName)?.value ?: return true
+        val operands = (1 until expr.size).mapNotNull { expr.getOrNull(it) }
+        fun evalOperand(o: PdfObject): Boolean = when (val r = o.resolve(resolver)) {
+            is PdfArray -> evalVisibilityExpr(r, oc)
+            else -> {
+                // A bare OCG reference: visible unless OFF in the default config.
+                val id = (o as? io.github.yuroyami.kitepdf.parser.PdfReference)?.objectNumber?.toString()
+                id == null || id !in oc.offByDefault
+            }
+        }
+        return when (opName) {
+            "Not" -> operands.firstOrNull()?.let { !evalOperand(it) } ?: true
+            "Or" -> operands.any { evalOperand(it) }
+            "And" -> operands.all { evalOperand(it) }
+            else -> true
         }
     }
 
@@ -212,9 +259,16 @@ class PageRenderer(
     }
 
     /**
-     * Map a Form XObject appearance to fill the annotation's /Rect. We compute
-     * the affine that takes the appearance /BBox to the annotation /Rect (spec
-     * §12.5.5, Algorithm 14) and concatenate it into the CTM.
+     * Map a Form XObject appearance to fill the annotation's /Rect, per
+     * ISO 32000-1 §12.5.5 Algorithm 8.1:
+     *   1. Transform the appearance /BBox corners by the appearance /Matrix.
+     *   2. Take the smallest upright rectangle enclosing those corners — the
+     *      "transformed appearance box".
+     *   3. Compute matrix A mapping that transformed box onto /Rect.
+     * We concat A into the CTM; the form's own /Matrix is then applied by
+     * [renderFormXObjectInner] when it draws the content (so the two compose to
+     * BBox → transformed-box → Rect). Previously /Matrix was ignored, so a
+     * rotated/skewed appearance landed off its /Rect.
      */
     private fun renderAppearanceForRect(
         appearance: PdfStream,
@@ -228,9 +282,29 @@ class PageRenderer(
             )
         } ?: io.github.yuroyami.kitepdf.Rectangle(0.0, 0.0, rect.width, rect.height)
 
-        val sx = if (bbox.width != 0.0) rect.width / bbox.width else 1.0
-        val sy = if (bbox.height != 0.0) rect.height / bbox.height else 1.0
-        val mapping = Matrix(sx, 0.0, 0.0, sy, rect.left - bbox.left * sx, rect.bottom - bbox.bottom * sy)
+        val matrix = appearance.dict.getArray("Matrix")?.let { arr ->
+            Matrix(
+                arr.getOrNull(0).toDouble(), arr.getOrNull(1).toDouble(),
+                arr.getOrNull(2).toDouble(), arr.getOrNull(3).toDouble(),
+                arr.getOrNull(4).toDouble(), arr.getOrNull(5).toDouble(),
+            )
+        } ?: Matrix.IDENTITY
+
+        // Step 1+2: transform the four BBox corners by /Matrix, enclose upright.
+        val corners = listOf(
+            matrix.transformPoint(bbox.left, bbox.bottom),
+            matrix.transformPoint(bbox.right, bbox.bottom),
+            matrix.transformPoint(bbox.right, bbox.top),
+            matrix.transformPoint(bbox.left, bbox.top),
+        )
+        val tbLeft = corners.minOf { it.first }; val tbRight = corners.maxOf { it.first }
+        val tbBottom = corners.minOf { it.second }; val tbTop = corners.maxOf { it.second }
+        val tbW = tbRight - tbLeft; val tbH = tbTop - tbBottom
+
+        // Step 3: A maps the transformed appearance box onto /Rect.
+        val sx = if (tbW != 0.0) rect.width / tbW else 1.0
+        val sy = if (tbH != 0.0) rect.height / tbH else 1.0
+        val mapping = Matrix(sx, 0.0, 0.0, sy, rect.left - tbLeft * sx, rect.bottom - tbBottom * sy)
 
         state.save()
         state.replace(state.current.copy(ctm = state.current.ctm.concat(mapping)))
@@ -469,12 +543,21 @@ class PageRenderer(
         ))
         val groupOpened = isTransparencyGroup
         if (groupOpened) {
+            // The group's constant alpha + blend mode apply ONCE, to the composite
+            // of the whole group onto the backdrop (§11.4.5). If we also left them
+            // on the state, every paint inside would multiply them again (double
+            // application). Hand them to beginTransparencyGroup and reset the
+            // in-group state to alpha=1 / Normal so inner paints composite plainly
+            // onto the group's transparent backdrop.
             canvas.beginTransparencyGroup(
                 bbox = bbox, ctm = parentState.current.ctm,
                 isolated = isolated, knockout = knockout,
                 alpha = parentState.current.fillAlpha,
                 blendMode = parentState.current.blendMode,
             )
+            parentState.replace(parentState.current.copy(
+                fillAlpha = 1.0, strokeAlpha = 1.0, blendMode = BlendMode.Normal,
+            ))
         }
         // Clip the form's content to its /BBox (§8.10.1) so it cannot overdraw
         // outside the intended region.
@@ -483,12 +566,17 @@ class PageRenderer(
         }.build()
         canvas.pushClip(bboxPath, parentState.current.ctm, false)
         val clipBase = activeClipCount
+        // A pending W/W* is scoped to the content stream that issued it; don't let
+        // one leak in from (or out to) the caller across the form boundary.
+        val savedPendingClip = pendingClip
+        pendingClip = 0
         try {
             val bytes = io.github.yuroyami.kitepdf.filters.FilterChain.decode(formStream)
             val ops = ContentStreamParser.parse(bytes)
             val pathBuilder = PdfPath.Builder()
             for (op in ops) dispatch(op, parentState, pathBuilder, childFonts, childXObjects, childColorSpaces, childExtGStates, childShadings, childPatterns, childProperties)
         } finally {
+            pendingClip = savedPendingClip
             // Drop any clips the form's content left unbalanced, then the BBox clip.
             while (activeClipCount > clipBase) { canvas.popClip(); activeClipCount-- }
             canvas.popClip()
@@ -518,9 +606,15 @@ class PageRenderer(
         }.toMap()
     }
 
-    /** Default device transform: flip Y so origin is top-left, no scaling. */
+    /**
+     * Default device transform: unscaled user-space → device with the origin at
+     * the TOP-LEFT (y-down), honouring the display box origin and normalized
+     * /Rotate. Delegates to [PdfPage.pageToDeviceBase] so /Rotate, a non-zero
+     * MediaBox origin, and CropBox are all folded in (they were previously
+     * ignored by the old `Matrix(1,0,0,-1,0,height)`).
+     */
     private fun defaultDeviceCtm(page: PdfPage): Matrix =
-        Matrix(1.0, 0.0, 0.0, -1.0, 0.0, page.height)
+        page.pageToDeviceBase()
 
     /* ─── Operator dispatch ──────────────────────────────────────────────── */
 
@@ -549,7 +643,10 @@ class PageRenderer(
                 val m = Matrix(num(a, 0), num(a, 1), num(a, 2), num(a, 3), num(a, 4), num(a, 5))
                 state.replace(state.current.copy(ctm = state.current.ctm.concat(m)))
             }
-            "w" -> state.replace(state.current.copy(lineWidth = num(a, 0)))
+            // A bare `w` (no operand) must keep the current width, not reset to 0
+            // (which would render every subsequent stroke as a hairline). Only
+            // update when an operand is actually present.
+            "w" -> if (a.isNotEmpty()) state.replace(state.current.copy(lineWidth = num(a, 0)))
             "J" -> state.replace(state.current.copy(lineCap = num(a, 0).toInt()))
             "j" -> state.replace(state.current.copy(lineJoin = num(a, 0).toInt()))
             "M" -> state.replace(state.current.copy(miterLimit = num(a, 0)))
@@ -564,25 +661,37 @@ class PageRenderer(
             }
 
             // ─── Color ────────────────────────────────────────────────────
-            "g" -> state.replace(state.current.copy(fillColor = RgbColor.gray(num(a, 0)), fillPattern = null))
-            "G" -> state.replace(state.current.copy(strokeColor = RgbColor.gray(num(a, 0)), strokePattern = null))
+            // g/rg/k (and stroke variants) also RESET the active colour space
+            // to the corresponding device family (§8.6.8). Otherwise a later bare
+            // `sc`/`scn` would still see a stale non-device space and misread the
+            // component count.
+            "g" -> state.replace(state.current.copy(
+                fillColor = RgbColor.gray(num(a, 0)),
+                fillColorSpace = ColorSpace.DeviceGray, fillPattern = null,
+            ))
+            "G" -> state.replace(state.current.copy(
+                strokeColor = RgbColor.gray(num(a, 0)),
+                strokeColorSpace = ColorSpace.DeviceGray, strokePattern = null,
+            ))
             "rg" -> state.replace(state.current.copy(
-                fillColor = RgbColor(num(a, 0), num(a, 1), num(a, 2)), fillPattern = null,
+                fillColor = RgbColor(num(a, 0), num(a, 1), num(a, 2)),
+                fillColorSpace = ColorSpace.DeviceRGB, fillPattern = null,
             ))
             "RG" -> state.replace(state.current.copy(
-                strokeColor = RgbColor(num(a, 0), num(a, 1), num(a, 2)), strokePattern = null,
+                strokeColor = RgbColor(num(a, 0), num(a, 1), num(a, 2)),
+                strokeColorSpace = ColorSpace.DeviceRGB, strokePattern = null,
             ))
             "k" -> state.replace(state.current.copy(
                 fillColor = ColorSpace.DeviceCMYK.toRgb(
                     doubleArrayOf(num(a, 0), num(a, 1), num(a, 2), num(a, 3)),
                 ),
-                fillPattern = null,
+                fillColorSpace = ColorSpace.DeviceCMYK, fillPattern = null,
             ))
             "K" -> state.replace(state.current.copy(
                 strokeColor = ColorSpace.DeviceCMYK.toRgb(
                     doubleArrayOf(num(a, 0), num(a, 1), num(a, 2), num(a, 3)),
                 ),
-                strokePattern = null,
+                strokeColorSpace = ColorSpace.DeviceCMYK, strokePattern = null,
             ))
             // cs/CS select the colour space for subsequent sc/scn/SC/SCN. Without them a
             // non-device space (e.g. CoreGraphics' ICCBased-RGB on iOS-generated PDFs) stayed
@@ -610,22 +719,31 @@ class PageRenderer(
             "re" -> path.rectangle(num(a, 0), num(a, 1), num(a, 2), num(a, 3))
 
             // ─── Path painting (suppressed inside hidden optional content) ──
-            "S" -> { if (!ocHidden()) paintStroke(path, state); path.reset() }
-            "s" -> { path.close(); if (!ocHidden()) paintStroke(path, state); path.reset() }
-            "f", "F" -> { if (!ocHidden()) paintFill(path, state, evenOdd = false); path.reset() }
-            "f*" -> { if (!ocHidden()) paintFill(path, state, evenOdd = true); path.reset() }
-            "B" -> { if (!ocHidden()) { paintFill(path, state, false); paintStroke(path, state) }; path.reset() }
-            "B*" -> { if (!ocHidden()) { paintFill(path, state, true); paintStroke(path, state) }; path.reset() }
-            "b" -> { path.close(); if (!ocHidden()) { paintFill(path, state, false); paintStroke(path, state) }; path.reset() }
-            "b*" -> { path.close(); if (!ocHidden()) { paintFill(path, state, true); paintStroke(path, state) }; path.reset() }
-            "n" -> path.reset()
+            // Each painting operator ends the path object: it paints, then applies
+            // any pending W/W* clip (§8.5.4 — the clip uses this same path), then
+            // clears the path. `n` paints nothing but still ends the path object.
+            "S" -> { if (!ocHidden()) paintStroke(path, state); applyPendingClip(path, state); path.reset() }
+            "s" -> { path.close(); if (!ocHidden()) paintStroke(path, state); applyPendingClip(path, state); path.reset() }
+            "f", "F" -> { if (!ocHidden()) paintFill(path, state, evenOdd = false); applyPendingClip(path, state); path.reset() }
+            "f*" -> { if (!ocHidden()) paintFill(path, state, evenOdd = true); applyPendingClip(path, state); path.reset() }
+            "B" -> { if (!ocHidden()) { paintFill(path, state, false); paintStroke(path, state) }; applyPendingClip(path, state); path.reset() }
+            "B*" -> { if (!ocHidden()) { paintFill(path, state, true); paintStroke(path, state) }; applyPendingClip(path, state); path.reset() }
+            "b" -> { path.close(); if (!ocHidden()) { paintFill(path, state, false); paintStroke(path, state) }; applyPendingClip(path, state); path.reset() }
+            "b*" -> { path.close(); if (!ocHidden()) { paintFill(path, state, true); paintStroke(path, state) }; applyPendingClip(path, state); path.reset() }
+            "n" -> { applyPendingClip(path, state); path.reset() }
 
-            // ─── Clipping (push, applied on the *next* paint per spec) ────
-            "W" -> if (!path.isEmpty()) { canvas.pushClip(path.build(), state.current.ctm, false); activeClipCount++ }
-            "W*" -> if (!path.isEmpty()) { canvas.pushClip(path.build(), state.current.ctm, true); activeClipCount++ }
+            // ─── Clipping (marked pending; applied after the *next* paint) ──
+            "W" -> if (!path.isEmpty()) pendingClip = 1
+            "W*" -> if (!path.isEmpty()) pendingClip = 2
 
             // ─── Text state ──────────────────────────────────────────────
-            "BT" -> state.mutateText { TextState(font = it.font, fontSize = it.fontSize) }
+            // BT resets ONLY the text matrices (Tm/Tlm → identity, §9.4.1). All
+            // other text-state params — char/word spacing, horizontal scale,
+            // leading, rise, render mode, plus the current font/size — persist
+            // across text objects (§9.3.1); they belong to the graphics state.
+            "BT" -> state.mutateText {
+                it.copy(textMatrix = Matrix.IDENTITY, lineMatrix = Matrix.IDENTITY)
+            }
             "ET" -> { /* no-op: text state stays in current GraphicsState */ }
             "Tf" -> {
                 val fontName = (a.getOrNull(0) as? PdfName)?.value
@@ -743,6 +861,20 @@ class PageRenderer(
         }
     }
 
+    /**
+     * Apply a clip marked by a preceding W/W* now that the path-painting
+     * operator has run (§8.5.4). The clip uses the current path at the CTM in
+     * effect and intersects the existing clip. Cleared afterwards.
+     */
+    private fun applyPendingClip(path: PdfPath.Builder, state: GraphicsStack) {
+        if (pendingClip == 0) return
+        val evenOdd = pendingClip == 2
+        pendingClip = 0
+        if (path.isEmpty()) return
+        canvas.pushClip(path.build(), state.current.ctm, evenOdd)
+        activeClipCount++
+    }
+
     private fun paintFill(path: PdfPath.Builder, state: GraphicsStack, evenOdd: Boolean) {
         if (path.isEmpty()) return
         val s = state.current
@@ -750,8 +882,11 @@ class PageRenderer(
         withSoftMask(s) {
             val pat = s.fillPattern
             when {
+                // The pattern /Matrix maps pattern space to the page's DEFAULT
+                // coordinate system, not the current user space (§8.7.3.1). Use
+                // pageBaseCtm — matching the tiling path below — instead of s.ctm.
                 pat is PdfPattern.Shading -> canvas.fillShading(
-                    pat.shading, s.ctm.concat(pat.matrix), clipPath = built,
+                    pat.shading, pageBaseCtm.concat(pat.matrix), clipPath = built,
                     alpha = s.fillAlpha, blendMode = s.blendMode,
                 )
                 pat is PdfPattern.Tiling -> renderTilingPattern(pat, built, s, evenOdd)
@@ -770,13 +905,29 @@ class PageRenderer(
     private fun paintStroke(path: PdfPath.Builder, state: GraphicsStack) {
         if (path.isEmpty()) return
         val s = state.current
+        val built = path.build()
         withSoftMask(s) {
-            canvas.strokePath(
-                path.build(), s.ctm, s.strokeColor, s.lineWidth,
-                alpha = s.strokeAlpha, blendMode = s.blendMode,
-                dashArray = s.dashArray, dashPhase = s.dashPhase,
-                lineCap = s.lineCap, lineJoin = s.lineJoin, miterLimit = s.miterLimit,
-            )
+            val pat = s.strokePattern
+            when {
+                // A pattern stroke paints the pattern clipped to the stroked
+                // region. We approximate the stroke region by its outline path
+                // and fill the pattern into it (mirror of the fill-pattern path).
+                // The pattern /Matrix is relative to the page default CTM.
+                pat is PdfPattern.Shading -> canvas.fillShading(
+                    pat.shading, pageBaseCtm.concat(pat.matrix), clipPath = built,
+                    alpha = s.strokeAlpha, blendMode = s.blendMode,
+                )
+                pat is PdfPattern.Tiling -> renderTilingPattern(pat, built, s, evenOdd = false)
+                pat != null -> {
+                    // Unsupported pattern — skip rather than paint a stale colour.
+                }
+                else -> canvas.strokePath(
+                    built, s.ctm, s.strokeColor, s.lineWidth,
+                    alpha = s.strokeAlpha, blendMode = s.blendMode,
+                    dashArray = s.dashArray, dashPhase = s.dashPhase,
+                    lineCap = s.lineCap, lineJoin = s.lineJoin, miterLimit = s.miterLimit,
+                )
+            }
         }
     }
 
@@ -826,6 +977,9 @@ class PageRenderer(
 
         canvas.pushClip(clipPath, s.ctm, evenOdd)
         val clipBase = activeClipCount
+        // A pending W/W* belongs to the enclosing stream, not the tile cell.
+        val savedPendingClip = pendingClip
+        pendingClip = 0
         try {
             for (j in j0..j1) for (i in i0..i1) {
                 val tileCtm = patternCtm.concat(Matrix.translation(i * xs, j * ys))
@@ -837,8 +991,10 @@ class PageRenderer(
                 for (op in ops) dispatch(op, tileState, tilePath, fonts, xobjects, colorSpaces, extGStates, shadings, patterns, properties)
                 // Drop any clips the tile's content left unbalanced.
                 while (activeClipCount > clipBase) { canvas.popClip(); activeClipCount-- }
+                pendingClip = 0
             }
         } finally {
+            pendingClip = savedPendingClip
             canvas.popClip()
         }
     }
@@ -1012,8 +1168,21 @@ class PageRenderer(
     /** Show one byte string, calling the canvas per text run and advancing Tm. */
     private fun showText(state: GraphicsStack, bytes: ByteArray) {
         val t = state.current.text
-        val font = t.font ?: return
         if (bytes.isEmpty()) return
+        val hScale = t.horizontalScaling / 100.0
+
+        val font = t.font
+        if (font == null) {
+            // Tf named an absent font, so we have no metrics or glyphs. Rather
+            // than return WITHOUT advancing Tm (which collapses every following
+            // run onto this position), advance by an estimated width of ~0.5em
+            // per byte so subsequent text does not overlap. Nothing is painted.
+            val estimated = bytes.size * 0.5 * t.fontSize * hScale
+            state.mutateText {
+                it.copy(textMatrix = it.textMatrix.concat(Matrix.translation(estimated, 0.0)))
+            }
+            return
+        }
 
         // Combined text-space-to-user-space matrix:
         //   text matrix × CTM, with font size + horizontal scale already
@@ -1026,20 +1195,35 @@ class PageRenderer(
         // the text off-page). The text-space pre-transform bakes in the horizontal
         // scaling (Tz) on x and the rise (Ts) on y, so condensed/expanded type
         // renders at the right glyph proportions, not just the right spacing.
-        val hScale = t.horizontalScaling / 100.0
-        val finalMatrix = pageMatrix.concat(textMatrix)
-            .concat(Matrix(hScale, 0.0, 0.0, 1.0, 0.0, t.rise))
+        // text-space → user-space (Tm + Tz + Ts, without the CTM). Stroking uses
+        // this + s.ctm separately so the stroke width scales by the CTM only, as
+        // the spec prescribes; drawText takes the fully-combined finalMatrix.
+        val textToUser = textMatrix.concat(Matrix(hScale, 0.0, 0.0, 1.0, 0.0, t.rise))
+        val finalMatrix = pageMatrix.concat(textToUser)
 
-        // Text render mode (Tr): 3 and 7 are invisible (used for OCR text layers).
-        val invisible = t.renderingMode == 3 || t.renderingMode == 7
-        // Suppress glyph painting inside a hidden OC section, but still advance Tm
-        // below so any following visible text on the line stays correctly placed.
-        if (!ocHidden() && !invisible) {
-            withSoftMask(state.current) {
-                canvas.drawText(
-                    bytes, font, t.fontSize, finalMatrix, state.current.fillColor,
-                    alpha = state.current.fillAlpha, blendMode = state.current.blendMode,
-                )
+        // Text render mode (Tr, §9.3.3): 3 = invisible; 7 = clip only (no paint).
+        //   fill component:   modes 0,2,4,6
+        //   stroke component: modes 1,2,5,6
+        //   clip component:   modes 4,5,6,7  (accumulate glyph outlines to clip)
+        val mode = t.renderingMode
+        val doFill = mode == 0 || mode == 2 || mode == 4 || mode == 6
+        val doStroke = mode == 1 || mode == 2 || mode == 5 || mode == 6
+        // TODO(text-clip): modes 4-7 (mode in 4..7) must add the glyph outlines to the clip path
+        // (§9.3.3). The canvas has no text-clip accumulation API yet, so glyph
+        // clipping is not applied — mode 7 currently paints nothing (correct for
+        // "no fill/stroke") but also does not clip. Wire up when a text-clip
+        // device path exists.
+        if (!ocHidden()) {
+            if (doFill) {
+                withSoftMask(state.current) {
+                    canvas.drawText(
+                        bytes, font, t.fontSize, finalMatrix, state.current.fillColor,
+                        alpha = state.current.fillAlpha, blendMode = state.current.blendMode,
+                    )
+                }
+            }
+            if (doStroke) {
+                strokeTextGlyphs(state, font, t, bytes, textToUser)
             }
         }
 
@@ -1050,6 +1234,70 @@ class PageRenderer(
         state.mutateText {
             it.copy(textMatrix = it.textMatrix.concat(Matrix.translation(totalAdvance, 0.0)))
         }
+    }
+
+    /**
+     * Stroke the glyph outlines for the current run (render modes 1/2/5/6).
+     * Builds each glyph's outline into user space (glyph units → unitScale →
+     * pen advance → [textToUser]) and strokes it under s.ctm with the current
+     * stroke colour/width, so modes 1/2 actually stroke rather than falling back
+     * to a plain fill. Fonts without embedded outlines contribute nothing here.
+     */
+    private fun strokeTextGlyphs(
+        state: GraphicsStack,
+        font: PdfFont,
+        t: TextState,
+        bytes: ByteArray,
+        textToUser: Matrix,
+    ) {
+        if (!font.hasEmbeddedOutlines) return
+        val upm = font.unitsPerEm ?: 1000
+        val unitScale = t.fontSize / upm
+        val advanceScale = t.fontSize / 1000.0
+        val s = state.current
+        var penX = 0.0
+        // Build each glyph outline into USER space (glyph units → unitScale →
+        // pen advance → text-to-user), then stroke it with s.ctm so the stroke
+        // width scales by the CTM only — the pure user-space width the spec wants.
+        val glyphs = font.layoutBytes(bytes)
+        for (glyph in glyphs) {
+            val outline = glyph.outline
+            if (outline != null && !outline.isEmpty()) {
+                val glyphMatrix = textToUser
+                    .concat(Matrix.translation(penX, 0.0))
+                    .concat(Matrix(unitScale, 0.0, 0.0, unitScale, 0.0, 0.0))
+                val userPath = transformPath(outline, glyphMatrix)
+                withSoftMask(s) {
+                    canvas.strokePath(
+                        userPath, s.ctm, s.strokeColor, s.lineWidth,
+                        alpha = s.strokeAlpha, blendMode = s.blendMode,
+                        dashArray = s.dashArray, dashPhase = s.dashPhase,
+                        lineCap = s.lineCap, lineJoin = s.lineJoin, miterLimit = s.miterLimit,
+                    )
+                }
+            }
+            penX += glyph.advanceWidth * advanceScale
+        }
+    }
+
+    /** Apply [m] to every coordinate of [path], returning a new path. */
+    private fun transformPath(path: PdfPath, m: Matrix): PdfPath {
+        val b = PdfPath.Builder()
+        fun p(x: Double, y: Double): Pair<Double, Double> = m.transformPoint(x, y)
+        for (seg in path.segments) when (seg) {
+            is PdfPath.Segment.MoveTo -> { val (x, y) = p(seg.x, seg.y); b.moveTo(x, y) }
+            is PdfPath.Segment.LineTo -> { val (x, y) = p(seg.x, seg.y); b.lineTo(x, y) }
+            is PdfPath.Segment.CurveTo -> {
+                val (x1, y1) = p(seg.x1, seg.y1); val (x2, y2) = p(seg.x2, seg.y2); val (x3, y3) = p(seg.x3, seg.y3)
+                b.curveTo(x1, y1, x2, y2, x3, y3)
+            }
+            is PdfPath.Segment.QuadTo -> {
+                val (x1, y1) = p(seg.x1, seg.y1); val (x2, y2) = p(seg.x2, seg.y2)
+                b.quadTo(x1, y1, x2, y2)
+            }
+            PdfPath.Segment.Close -> b.close()
+        }
+        return b.build()
     }
 
     /** TJ numeric adjustment: shift the text-cursor by [thousandthsOfEm] of em. */

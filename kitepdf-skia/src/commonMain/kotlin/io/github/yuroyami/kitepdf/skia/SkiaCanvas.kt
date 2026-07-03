@@ -229,13 +229,54 @@ class SkiaCanvas(private val canvas: SkCanvas) : PdfCanvas {
         blendMode: PdfBlendMode,
     ) {
         val stops = shading.sampleStops(32) ?: return
+
+        // PDF /Extend [start end] controls whether the shading keeps painting
+        // past t<0 (start) and t>1 (end) with the terminal colours. Skia's
+        // gradient tile mode is a single flag covering both ends:
+        //   CLAMP → both ends extend with the terminal colour (t outside [0,1]).
+        //   DECAL → nothing is painted outside [0,1] (transparent).
+        // We can express both-extend and neither-extend exactly. A one-sided
+        // extend can't be captured by a single tile mode, so we approximate:
+        // give the extending side its colour by adding a transparent stop just
+        // past the non-extending end (so that end fades out) and keep CLAMP —
+        // CLAMP then holds the extending end's colour and the injected
+        // transparent stop suppresses the other end.
+        val (extendStart, extendEnd) = when (shading) {
+            is PdfShading.Axial -> shading.extendStart to shading.extendEnd
+            is PdfShading.Radial -> shading.extendStart to shading.extendEnd
+            is PdfShading.Unsupported -> return
+        }
+
+        val offsets = ArrayList<Float>(stops.offsets.size + 2)
+        val colors = ArrayList<Color4f>(stops.colors.size + 2)
+        val tileMode: FilterTileMode = if (!extendStart && !extendEnd) {
+            FilterTileMode.DECAL
+        } else {
+            FilterTileMode.CLAMP
+        }
+        // For a one-sided extend under CLAMP, inject a fully-transparent stop
+        // just outside the non-extending end so CLAMP holds transparency there
+        // instead of the terminal colour. Both-extend / both-decal need no pad.
+        if (tileMode == FilterTileMode.CLAMP && !extendStart && extendEnd) {
+            offsets += -0.0001f
+            colors += Color4f(0f, 0f, 0f, 0f)
+        }
+        for (i in stops.offsets.indices) {
+            offsets += stops.offsets[i].toFloat()
+            colors += Color4f(stops.colors[i].toArgb(alpha))
+        }
+        if (tileMode == FilterTileMode.CLAMP && extendStart && !extendEnd) {
+            offsets += 1.0001f
+            colors += Color4f(0f, 0f, 0f, 0f)
+        }
+
         // skiko 0.148 moved gradient colours/positions into Gradient(Gradient.Colors(...)),
-        // taking Color4f[] (default tile-mode CLAMP + sRGB colour space).
+        // taking Color4f[] (+ sRGB colour space by default).
         val gradient = Gradient(
             Gradient.Colors(
-                Array(stops.colors.size) { Color4f(stops.colors[it].toArgb(alpha)) },
-                FloatArray(stops.offsets.size) { stops.offsets[it].toFloat() },
-                FilterTileMode.CLAMP,
+                colors.toTypedArray(),
+                offsets.toFloatArray(),
+                tileMode,
             ),
         )
 
@@ -307,7 +348,11 @@ class SkiaCanvas(private val canvas: SkCanvas) : PdfCanvas {
             }
             ImageXObject.Kind.RAW -> try {
                 image.toRgbaBytes()?.let {
-                    Image.makeRaster(ImageInfo(image.width, image.height, ColorType.RGBA_8888, ColorAlphaType.OPAQUE), it, image.width * 4)
+                    // toRgbaBytes() emits straight (non-premultiplied) R,G,B,A
+                    // per pixel, matching RGBA_8888. UNPREMUL honours the alpha
+                    // channel (SMask alpha, ImageMask stencil transparency);
+                    // OPAQUE would discard it, rendering masks as solid black.
+                    Image.makeRaster(ImageInfo(image.width, image.height, ColorType.RGBA_8888, ColorAlphaType.UNPREMUL), it, image.width * 4)
                 }
             } catch (t: Throwable) {
                 null
@@ -318,20 +363,22 @@ class SkiaCanvas(private val canvas: SkCanvas) : PdfCanvas {
             drawPlaceholder(ctm)
             return
         }
-        // PDF image space is the unit square (0,0)-(1,1) before the CTM.
-        // CTM maps that to device coords. We translate to (e,f) - height,
-        // then scale by the matrix' magnitudes.
+        // PDF image space is the unit square (0,0)-(1,1) before the CTM; the
+        // CTM maps that square to device coords. Below we lay the bitmap into
+        // that unit square (upright) and let the concatenated CTM place it.
         canvas.save()
         openLayers++
         val matrix = pdfMatrixToSkia(ctm)
         canvas.concat(matrix)
-        // The image's destination rect is (0, -1)..(1, 0) in PDF user-space —
-        // PDF image origin is top-left of the unit square but PDF Y is up.
-        // We flip Y so the bitmap is upright after the matrix.
+        // Map the bitmap onto the PDF image unit square [0,1]². The bitmap's
+        // row 0 is its top edge (v=1), last row is v=0. So translate up by 1
+        // then flip Y (negative Y scale) to land the image upright inside the
+        // unit square — matching AwtCanvas' documented mapping. The earlier
+        // translate(0,-1)+positive-Y scale both mis-placed and flipped it.
         val paint = Paint().apply { this.alpha = alpha.toFloat().coerceIn(0f, 1f).let { (it * 255).toInt() } }
         canvas.save()
-        canvas.translate(0f, -1f)
-        canvas.scale(1f / sk.width, 1f / sk.height)
+        canvas.translate(0f, 1f)
+        canvas.scale(1f / sk.width, -1f / sk.height)
         canvas.drawImage(sk, 0f, 0f, paint)
         canvas.restore()
         canvas.restore()
@@ -378,15 +425,35 @@ class SkiaCanvas(private val canvas: SkCanvas) : PdfCanvas {
         renderMask: (PdfCanvas) -> Unit,
     ) {
         // Outer layer captures the content. Inner layer paints the mask
-        // group on top with DstIn so the mask alpha clips the content.
+        // group on top with DstIn so the mask's alpha clips the content.
         canvas.saveLayer(null, Paint())
         openLayers++
         try {
             render()
-            val maskPaint = Paint().apply { blendMode = SkiaBlendMode.DST_IN }
+
+            // The mask layer resolves to alpha via DstIn. For an Alpha mask we
+            // use the mask group's own alpha directly. For a Luminosity mask,
+            // the spec (ISO 32000-1 §11.6.5.2) composites the mask group over a
+            // fully-opaque BLACK backdrop and derives alpha from the result's
+            // luminance — so unpainted areas (luminance 0) mask fully out. We
+            // realise that with the LUMA colour filter, which maps each pixel's
+            // luminance into its alpha, applied as the layer's restore paint.
+            val maskPaint = Paint().apply {
+                blendMode = SkiaBlendMode.DST_IN
+                if (kind == SoftMask.Kind.Luminosity) {
+                    colorFilter = org.jetbrains.skia.ColorFilter.luma
+                }
+            }
             canvas.saveLayer(null, maskPaint)
             openLayers++
             try {
+                // Opaque black backdrop for the luminosity group: unpainted
+                // pixels stay luminance 0 → alpha 0. (Harmless for Alpha masks,
+                // where LUMA isn't applied; but only paint it for Luminosity to
+                // avoid tinting an alpha mask's own colours.)
+                if (kind == SoftMask.Kind.Luminosity) {
+                    canvas.clear(Color.BLACK)
+                }
                 renderMask(this)
             } finally {
                 canvas.restore()

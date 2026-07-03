@@ -52,16 +52,36 @@ class PdfPage internal constructor(
     val label: String
         get() = document.pageLabels.labelOf(index) ?: (index + 1).toString()
 
+    /**
+     * Tolerant box reader: resolves the named array through the document
+     * resolver (so an INDIRECT /MediaBox etc. is honoured), then resolves each
+     * of the four coordinate entries through the resolver to a number. A
+     * missing or non-numeric coordinate defaults to 0.0 rather than throwing —
+     * a single garbage entry must not sink a whole page (lenient-salvage).
+     */
+    private fun readBox(key: String): Rectangle? {
+        val arr = node.getArray(key, document) ?: return null
+        if (arr.size < 4) return null
+        fun coord(i: Int): Double {
+            val raw = arr[i]
+            val v = if (raw is PdfReference) document.resolve(raw) else raw
+            return when (v) {
+                is PdfReal -> v.value
+                is PdfInt -> v.value.toDouble()
+                else -> 0.0
+            }
+        }
+        return Rectangle(coord(0), coord(1), coord(2), coord(3))
+    }
+
     /** Page box in PDF user-space units (1/72 inch). [left, bottom, right, top]. */
     val mediaBox: Rectangle by lazy {
-        val arr = node.getArray("MediaBox") ?: inherited.mediaBox
+        readBox("MediaBox") ?: inherited.mediaBox?.let(Rectangle::fromPdfArray)
             ?: throw PdfFormatException("Page has no /MediaBox")
-        Rectangle.fromPdfArray(arr)
     }
 
     val cropBox: Rectangle by lazy {
-        val arr = node.getArray("CropBox") ?: inherited.cropBox
-        arr?.let(Rectangle::fromPdfArray) ?: mediaBox
+        readBox("CropBox") ?: inherited.cropBox?.let(Rectangle::fromPdfArray) ?: mediaBox
     }
 
     /**
@@ -70,20 +90,31 @@ class PdfPage internal constructor(
      * absent. ISO 32000-1 §14.11.2.
      */
     val bleedBox: Rectangle by lazy {
-        node.getArray("BleedBox")?.let(Rectangle::fromPdfArray) ?: cropBox
+        readBox("BleedBox") ?: cropBox
     }
 
     /** Intended dimensions of the finished page after trimming. Defaults to [cropBox]. */
     val trimBox: Rectangle by lazy {
-        node.getArray("TrimBox")?.let(Rectangle::fromPdfArray) ?: cropBox
+        readBox("TrimBox") ?: cropBox
     }
 
     /** Extent of meaningful content (excluding margins, crop marks). Defaults to [cropBox]. */
     val artBox: Rectangle by lazy {
-        node.getArray("ArtBox")?.let(Rectangle::fromPdfArray) ?: cropBox
+        readBox("ArtBox") ?: cropBox
     }
 
     val rotation: Int get() = (node.getInt("Rotate") ?: inherited.rotate ?: 0).toInt()
+
+    /**
+     * [rotation] normalised into `{0, 90, 180, 270}`: reduced modulo 360 into
+     * `[0, 360)` then snapped to the nearest right angle (defensive — in
+     * practice the value is already a multiple of 90).
+     */
+    val rotationNormalized: Int
+        get() {
+            val r = ((rotation % 360) + 360) % 360
+            return (((r + 45) / 90) * 90) % 360
+        }
 
     val resources: PdfDictionary? get() = node.getDict("Resources", document) ?: inherited.resources
 
@@ -99,6 +130,51 @@ class PdfPage internal constructor(
     val height: Double get() = mediaBox.top - mediaBox.bottom
 
     /**
+     * The region to display: [cropBox] clamped to [mediaBox] bounds (their
+     * intersection). Falls back to [mediaBox] when the intersection is empty or
+     * degenerate (zero/negative width or height).
+     */
+    val displayBox: Rectangle by lazy {
+        val m = mediaBox
+        val c = cropBox
+        val left = maxOf(m.left, c.left)
+        val bottom = maxOf(m.bottom, c.bottom)
+        val right = minOf(m.right, c.right)
+        val top = minOf(m.top, c.top)
+        if (right > left && top > bottom) Rectangle(left, bottom, right, top) else m
+    }
+
+    /** Width of [displayBox] after applying [rotationNormalized] (dimensions swap at 90/270). */
+    val rotatedWidth: Double
+        get() = if (rotationNormalized == 90 || rotationNormalized == 270) displayBox.height else displayBox.width
+
+    /** Height of [displayBox] after applying [rotationNormalized] (dimensions swap at 90/270). */
+    val rotatedHeight: Double
+        get() = if (rotationNormalized == 90 || rotationNormalized == 270) displayBox.width else displayBox.height
+
+    /**
+     * The unscaled user-space -> device base transform, with the device origin
+     * at the top-left and y growing downward. The resulting device box is
+     * `[0, rotatedWidth] x [0, rotatedHeight]`. Compose additional scaling on
+     * top of this to fit a target surface.
+     *
+     * Verified against pdf.js viewport math for [Matrix]`(a, b, c, d, e, f)`.
+     */
+    fun pageToDeviceBase(): Matrix {
+        val b = displayBox
+        val x0 = b.left
+        val y0 = b.bottom
+        val x1 = b.right
+        val y1 = b.top
+        return when (rotationNormalized) {
+            90 -> Matrix(0.0, 1.0, 1.0, 0.0, -y0, -x0)
+            180 -> Matrix(-1.0, 0.0, 0.0, 1.0, x1, -y0)
+            270 -> Matrix(0.0, -1.0, -1.0, 0.0, y1, x1)
+            else -> Matrix(1.0, 0.0, 0.0, -1.0, -x0, y1)
+        }
+    }
+
+    /**
      * Decoded content-stream bytes (FlateDecode etc. applied). May be empty.
      * If /Contents is an array, the chunks are concatenated with a separating
      * newline (per ISO 32000-1 §7.8.2: "The effect is as if all of the streams
@@ -107,15 +183,20 @@ class PdfPage internal constructor(
     val contentBytes: ByteArray by lazy {
         when (val c = node["Contents"]) {
             null -> ByteArray(0)
-            is PdfReference -> streamBytesOf(c)
+            is PdfReference -> streamBytesOf(c) ?: ByteArray(0)
             is PdfStream -> FilterChain.decode(c)
             is PdfArray -> {
                 val buf = ByteArrayBuilder(4096)
-                for ((i, part) in c.withIndex()) {
-                    if (i > 0) buf.append('\n'.code.toByte())
-                    val ref = part as? PdfReference
-                        ?: throw PdfFormatException("/Contents array must contain references")
-                    buf.append(streamBytesOf(ref))
+                var first = true
+                for (part in c) {
+                    // Lenient salvage: skip members that aren't references or
+                    // don't resolve to a stream; one bad chunk must not kill
+                    // the whole page.
+                    val ref = part as? PdfReference ?: continue
+                    val bytes = streamBytesOf(ref) ?: continue
+                    if (!first) buf.append('\n'.code.toByte())
+                    buf.append(bytes)
+                    first = false
                 }
                 buf.toByteArray()
             }
@@ -123,9 +204,9 @@ class PdfPage internal constructor(
         }
     }
 
-    private fun streamBytesOf(ref: PdfReference): ByteArray {
-        val stream = document.resolve(ref) as? PdfStream
-            ?: throw PdfFormatException("/Contents ref ${ref.objectNumber} not a stream")
+    /** Decoded stream bytes for a content reference, or null if it doesn't resolve to a stream. */
+    private fun streamBytesOf(ref: PdfReference): ByteArray? {
+        val stream = document.resolve(ref) as? PdfStream ?: return null
         return FilterChain.decode(stream)
     }
 
@@ -178,12 +259,18 @@ data class Rectangle(val left: Double, val bottom: Double, val right: Double, va
     val height get() = top - bottom
 
     companion object {
+        /**
+         * Parse a 4-element PDF rectangle array. Tolerant: a non-numeric entry
+         * defaults to 0.0 rather than throwing (lenient salvage). For arrays
+         * whose entries may be indirect references, route through
+         * [PdfPage.readBox] instead, which resolves each coordinate.
+         */
         fun fromPdfArray(arr: PdfArray): Rectangle {
-            require(arr.size >= 4) { "MediaBox needs 4 numbers, got ${arr.size}" }
+            require(arr.size >= 4) { "Rectangle needs 4 numbers, got ${arr.size}" }
             fun n(i: Int): Double = when (val v = arr[i]) {
                 is PdfReal -> v.value
                 is PdfInt -> v.value.toDouble()
-                else -> error("MediaBox entry $i is not a number: $v")
+                else -> 0.0
             }
             return Rectangle(n(0), n(1), n(2), n(3))
         }

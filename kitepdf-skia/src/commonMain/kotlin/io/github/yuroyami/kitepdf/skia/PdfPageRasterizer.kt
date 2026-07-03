@@ -35,16 +35,21 @@ object PdfPageRasterizer {
         scale: Double = 1.0,
         background: Int = Color.WHITE,
     ): Image {
-        val widthPx = (page.width * scale).toInt().coerceAtLeast(1)
-        val heightPx = (page.height * scale).toInt().coerceAtLeast(1)
+        // Size to the ROTATED display box (width/height swapped for /Rotate 90
+        // or 270), so rotated pages get a correctly-shaped bitmap.
+        val widthPx = kotlin.math.ceil(page.rotatedWidth * scale).toInt().coerceAtLeast(1)
+        val heightPx = kotlin.math.ceil(page.rotatedHeight * scale).toInt().coerceAtLeast(1)
         val surface = Surface.makeRasterN32Premul(widthPx, heightPx)
         try {
             val skCanvas = surface.canvas
             if (background != 0) skCanvas.clear(background)
 
-            // PDF Y axis goes up from the bottom-left; Skia (and every UI
-            // toolkit) puts (0,0) at top-left with Y down. Flip + scale.
-            val deviceCtm = PdfMatrix(scale, 0.0, 0.0, -scale, 0.0, page.height * scale)
+            // pageToDeviceBase() already maps unscaled user-space to a
+            // top-left-origin, Y-down device box [0,rotatedWidth]×[0,rotatedHeight],
+            // honouring the display-box origin and normalized /Rotate. Scale it
+            // up by `scale` in device space: scaling FIRST-applies the base
+            // (a.concat(b) applies b then a).
+            val deviceCtm = PdfMatrix.scaling(scale, scale).concat(page.pageToDeviceBase())
             val pdfCanvas = SkiaCanvas(skCanvas)
             page.renderTo(pdfCanvas, deviceCtm)
             return surface.makeImageSnapshot()

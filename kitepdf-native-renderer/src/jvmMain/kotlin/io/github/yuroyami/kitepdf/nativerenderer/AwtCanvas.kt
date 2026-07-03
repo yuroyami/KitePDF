@@ -11,6 +11,7 @@ import io.github.yuroyami.kitepdf.render.PdfShading
 import io.github.yuroyami.kitepdf.render.RgbColor
 import io.github.yuroyami.kitepdf.render.SoftMask
 import io.github.yuroyami.kitepdf.render.sampleStops
+import io.github.yuroyami.kitepdf.render.toRgbaBytes
 import java.awt.AlphaComposite
 import java.awt.BasicStroke
 import java.awt.Color
@@ -230,10 +231,19 @@ class AwtCanvas(private val g: Graphics2D) : PdfCanvas {
         val fractions = FloatArray(stops.offsets.size) { stops.offsets[it].toFloat() }
         val colors = Array(stops.colors.size) { stops.colors[it].toAwt() }
 
+        // AWT gradients only offer NO_CYCLE, which *clamps* — i.e. always extends
+        // the endpoint colours to infinity. PDF's `Extend [s e]` may forbid that on
+        // either side. When a side isn't extended we intersect the fill region with
+        // an "extent" shape so no pixels are painted past that end. Null = unbounded.
+        var extentClip: java.awt.geom.Area? = null
+
         val paint: java.awt.Paint = when (shading) {
             is PdfShading.Axial -> {
                 val (x0, y0) = ctm.transformPoint(shading.coords[0], shading.coords[1])
                 val (x1, y1) = ctm.transformPoint(shading.coords[2], shading.coords[3])
+                if (!shading.extendStart || !shading.extendEnd) {
+                    extentClip = axialExtent(x0, y0, x1, y1, shading.extendStart, shading.extendEnd)
+                }
                 LinearGradientPaint(
                     Point2D.Double(x0, y0), Point2D.Double(x1, y1),
                     fractions, colors,
@@ -262,6 +272,21 @@ class AwtCanvas(private val g: Graphics2D) : PdfCanvas {
                 val dist = kotlin.math.sqrt(ddx * ddx + ddy * ddy)
                 if (dist > radius * 0.99) { val k = radius * 0.99 / dist; fx = cx + ddx * k; fy = cy + ddy * k }
                 val cols = if (outerIsB) colors else colors.reversedArray()
+                // Extend: the outer circle (larger radius) carries the t-end that
+                // extends outward; the inner circle the t-end that extends inward.
+                // extend=false on the outer end → don't paint outside the outer disk;
+                // on the inner end → don't paint inside the inner disk.
+                val outerExtend = if (outerIsB) shading.extendEnd else shading.extendStart
+                val innerExtend = if (outerIsB) shading.extendStart else shading.extendEnd
+                val innerCx = if (outerIsB) ax else bx
+                val innerCy = if (outerIsB) ay else by
+                val innerR = (if (outerIsB) ar else br).coerceAtLeast(0.0)
+                if (!outerExtend || !innerExtend) {
+                    extentClip = radialExtent(
+                        cx, cy, radius.toDouble(), outerExtend,
+                        innerCx, innerCy, innerR, innerExtend,
+                    )
+                }
                 RadialGradientPaint(
                     Point2D.Double(cx, cy), radius, Point2D.Double(fx, fy),
                     fractions, cols,
@@ -271,16 +296,84 @@ class AwtCanvas(private val g: Graphics2D) : PdfCanvas {
             is PdfShading.Unsupported -> return
         }
 
+        val extent = extentClip
         withComposite(blendMode, alpha) {
             g.paint = paint
-            if (clipPath != null) {
-                val awt = toAwtPath(clipPath, ctm).apply { windingRule = Path2D.WIND_NON_ZERO }
-                g.fill(awt)
+            // Base fill region: the caller's shading clip path, else the device clip.
+            val region: java.awt.Shape = if (clipPath != null) {
+                toAwtPath(clipPath, ctm).apply { windingRule = Path2D.WIND_NON_ZERO }
             } else {
-                val clip = g.clipBounds ?: java.awt.Rectangle(0, 0, 10_000, 10_000)
-                g.fill(clip)
+                g.clipBounds ?: java.awt.Rectangle(0, 0, 10_000, 10_000)
+            }
+            if (extent != null) {
+                // Honour Extend=false: paint only inside the gradient's extent.
+                val area = java.awt.geom.Area(region)
+                area.intersect(extent)
+                g.fill(area)
+            } else {
+                g.fill(region)
             }
         }
+    }
+
+    /**
+     * Extent region for an axial gradient with [Extend] false on one/both ends.
+     * Builds the half-plane band bounded by the perpendiculars through P0 and P1,
+     * extended sideways to cover any plausible device area. A side that IS extended
+     * is left unbounded (the band runs to +/- a large distance there).
+     */
+    private fun axialExtent(
+        x0: Double, y0: Double, x1: Double, y1: Double,
+        extendStart: Boolean, extendEnd: Boolean,
+    ): java.awt.geom.Area {
+        val dx = x1 - x0; val dy = y1 - y0
+        val len = kotlin.math.sqrt(dx * dx + dy * dy)
+        val big = 1.0e6
+        if (len < 1e-9) {
+            // Degenerate axis — nothing sensible to bound; allow everything.
+            return java.awt.geom.Area(java.awt.geom.Rectangle2D.Double(-big, -big, 2 * big, 2 * big))
+        }
+        val ux = dx / len; val uy = dy / len            // axis unit vector (P0→P1)
+        val px = -uy; val py = ux                        // perpendicular unit vector
+        // Along-axis start/end offsets from P0: extended sides run out to `big`.
+        val s0 = if (extendStart) -big else 0.0
+        val s1 = if (extendEnd) len + big else len
+        val hw = big                                     // perpendicular half-width
+        fun pt(along: Double, side: Double) = Point2D.Double(
+            x0 + ux * along + px * side,
+            y0 + uy * along + py * side,
+        )
+        val path = Path2D.Double()
+        val p00 = pt(s0, -hw); val p01 = pt(s1, -hw); val p11 = pt(s1, hw); val p10 = pt(s0, hw)
+        path.moveTo(p00.x, p00.y); path.lineTo(p01.x, p01.y)
+        path.lineTo(p11.x, p11.y); path.lineTo(p10.x, p10.y); path.closePath()
+        return java.awt.geom.Area(path)
+    }
+
+    /**
+     * Extent region for a radial gradient with [Extend] false on one/both ends.
+     * Starts from the outer disk (bounded when the outer end isn't extended, else a
+     * huge disk) and subtracts the inner disk when the inner end isn't extended.
+     */
+    private fun radialExtent(
+        outerCx: Double, outerCy: Double, outerR: Double, outerExtend: Boolean,
+        innerCx: Double, innerCy: Double, innerR: Double, innerExtend: Boolean,
+    ): java.awt.geom.Area {
+        val big = 1.0e6
+        val outer = if (outerExtend) {
+            java.awt.geom.Ellipse2D.Double(outerCx - big, outerCy - big, 2 * big, 2 * big)
+        } else {
+            java.awt.geom.Ellipse2D.Double(outerCx - outerR, outerCy - outerR, 2 * outerR, 2 * outerR)
+        }
+        val area = java.awt.geom.Area(outer)
+        if (!innerExtend && innerR > 0.0) {
+            area.subtract(
+                java.awt.geom.Area(
+                    java.awt.geom.Ellipse2D.Double(innerCx - innerR, innerCy - innerR, 2 * innerR, 2 * innerR),
+                ),
+            )
+        }
+        return area
     }
 
     override fun drawImage(image: ImageXObject, ctm: PdfMatrix, alpha: Double) {
@@ -310,10 +403,40 @@ class AwtCanvas(private val g: Graphics2D) : PdfCanvas {
     private fun decodeImage(image: ImageXObject): BufferedImage? = try {
         when (image.kind) {
             ImageXObject.Kind.JPEG, ImageXObject.Kind.JPEG2000 -> decodeJpeg(image.encodedBytes)
-            else -> null
+            // Every other kind — RAW (Flate/LZW/CCITT/PNG-predictor decoded) and
+            // ImageMask stencils — is assembled into a flat RGBA8888 buffer by the
+            // shared rasterizer (the same path the Compose/Skia backends use). Wrap
+            // it in an ARGB BufferedImage so ImageMask + SMask alpha survive.
+            else -> image.toRgbaBytes()?.let { rgbaToBufferedImage(it, image.width, image.height) }
         }
     } catch (t: Throwable) {
         null
+    }
+
+    /**
+     * Wrap a flat RGBA8888 buffer (R,G,B,A per pixel, row-major, no padding — as
+     * produced by [ImageXObject.toRgbaBytes]) in a [BufferedImage]. Uses
+     * TYPE_INT_ARGB (not OPAQUE) so per-pixel alpha from `/ImageMask` stencils and
+     * `/SMask` soft masks — already baked into the A channel by the rasterizer —
+     * is preserved when the bitmap is composited.
+     */
+    private fun rgbaToBufferedImage(rgba: ByteArray, width: Int, height: Int): BufferedImage? {
+        if (width <= 0 || height <= 0) return null
+        val expected = width * height * 4
+        if (rgba.size < expected) return null
+        val argb = IntArray(width * height)
+        var s = 0
+        for (i in argb.indices) {
+            val r = rgba[s].toInt() and 0xFF
+            val g2 = rgba[s + 1].toInt() and 0xFF
+            val b = rgba[s + 2].toInt() and 0xFF
+            val a = rgba[s + 3].toInt() and 0xFF
+            argb[i] = (a shl 24) or (r shl 16) or (g2 shl 8) or b
+            s += 4
+        }
+        val img = BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB)
+        img.setRGB(0, 0, width, height, argb, 0, width)
+        return img
     }
 
     /**
@@ -445,9 +568,12 @@ class AwtCanvas(private val g: Graphics2D) : PdfCanvas {
     }
 
     /**
-     * Soft mask via offscreen compositing. We render the content layer onto
-     * an offscreen BufferedImage, render the mask group onto a second one,
-     * apply DST_IN, then blit the result onto the underlying Graphics2D.
+     * Soft mask (ISO 32000-1 §11.6.5). Content is painted on the live surface,
+     * then gated by the mask group:
+     *   - [SoftMask.Kind.Alpha] — the mask group's alpha, applied via `DST_IN`.
+     *   - [SoftMask.Kind.Luminosity] — the mask group is rendered offscreen over
+     *     a black backdrop, its per-pixel luminance is converted to alpha, and
+     *     that alpha map is `DST_IN`-composited onto the content.
      */
     override fun applySoftMask(
         kind: SoftMask.Kind,
@@ -455,17 +581,77 @@ class AwtCanvas(private val g: Graphics2D) : PdfCanvas {
         render: () -> Unit,
         renderMask: (PdfCanvas) -> Unit,
     ) {
-        // Best-effort with Java2D: use AlphaComposite.DST_IN on the active
-        // surface. Equivalent to Compose / Skia's "DstIn" wrapping pattern.
-        val savedComposite = g.composite
-        try {
-            // Render content normally.
-            render()
-            // Apply mask as DST_IN — the mask group's alpha clips the content.
-            g.composite = AlphaComposite.DstIn
-            renderMask(this)
-        } finally {
-            g.composite = savedComposite
+        // Render the masked content normally onto the live surface first.
+        render()
+
+        when (kind) {
+            SoftMask.Kind.Alpha -> {
+                // The mask group's own *alpha* is the mask. DST_IN keeps only the
+                // content pixels the mask covers. (ISO 32000-1 §11.6.5.2)
+                val savedComposite = g.composite
+                try {
+                    g.composite = AlphaComposite.DstIn
+                    renderMask(this)
+                } finally {
+                    g.composite = savedComposite
+                }
+            }
+            SoftMask.Kind.Luminosity -> {
+                // The mask group's *luminance* (not its alpha) is the mask, over a
+                // black backdrop (§11.6.5.2). Render the mask group offscreen onto
+                // an opaque black background, convert each pixel's luminance → alpha,
+                // then DST_IN that alpha map onto the live surface.
+                // Device-space bounds: transform the (user-space) clip through g's
+                // transform so the offscreen surface covers the right pixels even
+                // when the host installed a non-identity transform on g.
+                val userClip = g.clip ?: java.awt.Rectangle(0, 0, 10_000, 10_000)
+                val bounds = g.transform.createTransformedShape(userClip).bounds
+                if (bounds.width <= 0 || bounds.height <= 0) return
+                val maskImg = BufferedImage(bounds.width, bounds.height, BufferedImage.TYPE_INT_ARGB)
+                val mg = maskImg.createGraphics()
+                try {
+                    // Black backdrop: pixels the mask group never paints stay black
+                    // → luminance 0 → alpha 0 → content fully masked out there.
+                    mg.color = Color.BLACK
+                    mg.fillRect(0, 0, bounds.width, bounds.height)
+                    // Match the live surface's rendering hints + coordinate space so
+                    // the mask lands exactly over the content it gates. The main g's
+                    // transform already includes the device CTM; shift its origin to
+                    // the offscreen image's (0,0) by subtracting the clip origin.
+                    mg.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
+                    mg.setRenderingHint(RenderingHints.KEY_STROKE_CONTROL, RenderingHints.VALUE_STROKE_PURE)
+                    mg.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON)
+                    mg.translate(-bounds.x, -bounds.y)
+                    mg.transform(g.transform)
+                    renderMask(AwtCanvas(mg))
+                } finally {
+                    mg.dispose()
+                }
+                // Convert luminance → alpha in place: A = 0.3R + 0.59G + 0.11B.
+                val w = maskImg.width; val h = maskImg.height
+                val px = maskImg.getRGB(0, 0, w, h, null, 0, w)
+                for (i in px.indices) {
+                    val p = px[i]
+                    val r = (p ushr 16) and 0xFF
+                    val gg = (p ushr 8) and 0xFF
+                    val b = p and 0xFF
+                    val lum = (r * 77 + gg * 150 + b * 29) ushr 8 // /256, integer luma
+                    px[i] = (lum shl 24) // pure alpha, colour irrelevant for DST_IN
+                }
+                maskImg.setRGB(0, 0, w, h, px, 0, w)
+                // Blit the alpha map with DST_IN using device coordinates (bypass the
+                // active CTM) so it aligns pixel-for-pixel with the offscreen render.
+                val savedComposite = g.composite
+                val savedTransform = g.transform
+                try {
+                    g.transform = AffineTransform()
+                    g.composite = AlphaComposite.DstIn
+                    g.drawImage(maskImg, bounds.x, bounds.y, null)
+                } finally {
+                    g.composite = savedComposite
+                    g.transform = savedTransform
+                }
+            }
         }
     }
 
