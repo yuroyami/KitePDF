@@ -67,6 +67,21 @@ raster path via `AwtCanvas`:
 Still missing: a spec-valid book corpus (`epub3-samples`/Readium + `epubcheck`), a mean-MAE trend,
 and golden-image regression baselines.
 
+### Phase 6 — navigation + metadata (done; search/a11y next)
+
+- `Opf.kt` — one-pass structured parse of the OPF (manifest items with properties, spine order +
+  `page-progression-direction` + `toc` ref, Dublin Core metadata, unique-identifier). Replaces
+  the ad-hoc spine/uid scans.
+- `EpubDocument.metadata` (`EpubMetadata`) — title, creators, language, identifier, cover-image
+  path (via `properties="cover-image"` or legacy `<meta name="cover">`), and reading direction
+  (`rtl`).
+- `TocParser`/`TableOfContents`/`TocEntry` — EPUB 3 `nav.xhtml` (`<nav epub:type="toc">`) and
+  EPUB 2 `toc.ncx` (`navMap`) parsed with the same `HtmlParser` tree into a nested TOC; each
+  entry's href resolved to a spine index + fragment. Exposed as `EpubDocument.tableOfContents`.
+
+Still open in Phase 6: **text extraction / search / selection** (a structured-text model with
+per-glyph boxes; promote the PDF stext model to core) and accessibility reading order.
+
 ---
 
 ## (historical) Phases 1, 2 & 3 landed
@@ -242,8 +257,8 @@ Three files, ~450 lines. It opens a real EPUB and paints text through the core C
 |---|---|---|---|
 | OCF unzip (stored+deflate) | ✅ | ✅ (+ZIP64, obfuscation) | 1,4 |
 | container → OPF → spine | ✅ basic | ✅ (props, linear, multiple renditions) | 1,6 |
-| Metadata (dc:*, cover, dir) | ❌ | ✅ | 6 |
-| Navigation (nav.xhtml / NCX) → TOC | ❌ | ✅ | 6 |
+| Metadata (dc:*, cover, dir) | ✅ | ✅ | ~~6~~ done |
+| Navigation (nav.xhtml / NCX) → TOC | ✅ | ✅ | ~~6~~ done |
 | XHTML parse (blocks) | ✅ DOM tree | ✅ DOM tree | ~~1~~ done |
 | Inline runs (b/i/a/span/sup) | ✅ | ✅ | ~~1~~ done |
 | Real font metrics | ✅ Standard-14 | ✅ | ~~1~~ done |

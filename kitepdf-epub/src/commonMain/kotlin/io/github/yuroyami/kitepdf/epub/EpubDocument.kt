@@ -27,6 +27,10 @@ class EpubDocument private constructor(
     private val root: BlockBox,
     internal val zip: ZipReader,
     private val fonts: FontRegistry,
+    /** Publication metadata (title, authors, cover, reading direction). */
+    val metadata: EpubMetadata,
+    /** Navigation tree from EPUB 3 nav.xhtml or EPUB 2 toc.ncx (empty if none). */
+    val tableOfContents: TableOfContents,
     val pageWidth: Double,
     val pageHeight: Double,
     val fontSize: Double,
@@ -58,7 +62,8 @@ class EpubDocument private constructor(
         ): EpubDocument? {
             val zip = ZipReader(bytes)
             val opfPath = containerOpfPath(zip) ?: return null
-            val contentPaths = spineContentPaths(zip, opfPath)
+            val opf = Opf.parse(zip, opfPath) ?: return null
+            val contentPaths = opf.spineIdrefs.mapNotNull { opf.itemsById[it]?.href }.map { resolvePath(opf.baseDir, it) }
             if (contentPaths.isEmpty()) return null
 
             val contentWidth = pageWidth - 2 * margin
@@ -75,16 +80,31 @@ class EpubDocument private constructor(
             }
             if (docRoots.isEmpty()) return null
 
-            val fonts = buildFontRegistry(zip, opfPath, faceRules)
+            val fonts = buildFontRegistry(zip, opf, faceRules)
+            val metadata = buildMetadata(opf)
+            val toc = TocParser.parse(zip, opf, contentPaths) { base, href -> resolvePath(base, href) }
             val superRoot = BlockBox(ComputedStyle.initial(fontSize), docRoots)
-            return EpubDocument(superRoot, zip, fonts, pageWidth, pageHeight, fontSize, margin)
+            return EpubDocument(superRoot, zip, fonts, metadata, toc, pageWidth, pageHeight, fontSize, margin)
+        }
+
+        private fun buildMetadata(opf: OpfPackage): EpubMetadata {
+            val coverHref = opf.items.firstOrNull { it.hasProperty("cover-image") }?.href
+                ?: opf.metaCoverId?.let { opf.itemsById[it]?.href }
+            return EpubMetadata(
+                title = opf.title,
+                creators = opf.creators,
+                language = opf.language,
+                identifier = opf.uniqueId,
+                coverImagePath = coverHref?.let { resolvePath(opf.baseDir, it) },
+                rightToLeft = opf.direction?.lowercase() == "rtl",
+            )
         }
 
         /** Load every `@font-face`'s TrueType file from the zip (deobfuscating mangled ones). */
-        private fun buildFontRegistry(zip: ZipReader, opfPath: String, faceRules: List<Pair<FontFaceRule, String>>): FontRegistry {
+        private fun buildFontRegistry(zip: ZipReader, opf: OpfPackage, faceRules: List<Pair<FontFaceRule, String>>): FontRegistry {
             if (faceRules.isEmpty()) return FontRegistry.EMPTY
             val obf = parseEncryption(zip)
-            val uid = opfUniqueId(zip, opfPath) ?: ""
+            val uid = opf.uniqueId ?: ""
             val faces = ArrayList<EmbeddedFace>()
             for ((rule, docDir) in faceRules) {
                 val url = rule.srcUrls.firstOrNull { it.endsWith(".ttf", true) || it.endsWith(".otf", true) } ?: rule.srcUrls.firstOrNull() ?: continue
@@ -109,21 +129,6 @@ class EpubDocument private constructor(
             return map
         }
 
-        /** The OPF package's unique identifier value (the font-obfuscation key source). */
-        private fun opfUniqueId(zip: ZipReader, opfPath: String): String? {
-            val opf = zip.readText(opfPath) ?: return null
-            val tokens = MiniXml.tokenize(opf)
-            val uidRef = tokens.firstNotNullOfOrNull { (it as? XmlToken.Open)?.takeIf { o -> o.name == "package" }?.attrs?.get("unique-identifier") }
-            var capture = false
-            for (t in tokens) when {
-                t is XmlToken.Open && t.name == "identifier" && (uidRef == null || t.attrs["id"] == uidRef) -> capture = true
-                capture && t is XmlToken.Text -> return t.text.trim()
-                t is XmlToken.Close && t.name == "identifier" -> capture = false
-                else -> {}
-            }
-            return null
-        }
-
         /** META-INF/container.xml -> the OPF package path. */
         private fun containerOpfPath(zip: ZipReader): String? {
             val xml = zip.readText("META-INF/container.xml") ?: return null
@@ -131,22 +136,6 @@ class EpubDocument private constructor(
                 if (t is XmlToken.Open && t.name == "rootfile") t.attrs["full-path"]?.let { return it }
             }
             return null
-        }
-
-        /** OPF manifest + spine -> ordered content-document paths (zip-absolute). */
-        private fun spineContentPaths(zip: ZipReader, opfPath: String): List<String> {
-            val opf = zip.readText(opfPath) ?: return emptyList()
-            val baseDir = opfPath.substringBeforeLast('/', "")
-            val manifest = HashMap<String, String>()
-            val spine = ArrayList<String>()
-            for (t in MiniXml.tokenize(opf)) {
-                if (t !is XmlToken.Open) continue
-                when (t.name) {
-                    "item" -> { val id = t.attrs["id"]; val href = t.attrs["href"]; if (id != null && href != null) manifest[id] = href }
-                    "itemref" -> t.attrs["idref"]?.let { spine.add(it) }
-                }
-            }
-            return spine.mapNotNull { manifest[it] }.map { resolvePath(baseDir, it) }
         }
 
         /** Gather author CSS in document order: linked stylesheets then `<style>` blocks. */
