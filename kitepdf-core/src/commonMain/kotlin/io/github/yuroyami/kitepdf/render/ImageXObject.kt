@@ -124,6 +124,56 @@ class ImageXObject internal constructor(
             }
         }
 
+        /**
+         * Build an image from a self-contained encoded file, as shipped by EPUB /
+         * CBZ / SVG `<image>` (rather than pulled from a PDF `/XObject` stream).
+         * The format and pixel dimensions are sniffed from the bytes.
+         *
+         * PNG is decoded here in pure Kotlin ([PngDecoder]) into a [Kind.RAW] image
+         * that renders on every backend. JPEG defers to the host platform's image
+         * loader (identical to a PDF `DCTDecode` image — [Kind.JPEG] with the file
+         * in [encodedBytes]). GIF and other formats are not handled yet and return
+         * null, so callers degrade gracefully by skipping the image.
+         */
+        fun fromEncodedImage(bytes: ByteArray): ImageXObject? {
+            if (PngDecoder.isPng(bytes)) return PngDecoder.decode(bytes)
+            val (w, h) = jpegSize(bytes) ?: return null
+            if (w <= 0 || h <= 0) return null
+            return ImageXObject(
+                width = w, height = h, bitsPerComponent = 8,
+                colorSpace = "DeviceRGB", kind = Kind.JPEG, encodedBytes = bytes,
+            )
+        }
+
+        /**
+         * Pixel size of a JPEG from its first SOF marker, or null if [b] is not a
+         * JPEG. Walks the segment markers rather than assuming SOF sits right after
+         * SOI (real files carry APPn/DQT segments first).
+         */
+        private fun jpegSize(b: ByteArray): Pair<Int, Int>? {
+            if (b.size < 4 || (b[0].toInt() and 0xFF) != 0xFF || (b[1].toInt() and 0xFF) != 0xD8) return null
+            var i = 2
+            while (i + 1 < b.size) {
+                if ((b[i].toInt() and 0xFF) != 0xFF) { i++; continue }
+                var marker = b[i + 1].toInt() and 0xFF
+                i += 2
+                while (marker == 0xFF && i < b.size) { marker = b[i].toInt() and 0xFF; i++ } // fill bytes
+                if (marker == 0xD8 || marker == 0xD9 || marker in 0xD0..0xD7) continue // no length payload
+                if (i + 1 >= b.size) break
+                val len = ((b[i].toInt() and 0xFF) shl 8) or (b[i + 1].toInt() and 0xFF)
+                // SOF0..SOF15 carry the frame size, except DHT(C4)/JPG(C8)/DAC(CC).
+                if (marker in 0xC0..0xCF && marker != 0xC4 && marker != 0xC8 && marker != 0xCC) {
+                    if (i + 6 >= b.size) return null
+                    val height = ((b[i + 3].toInt() and 0xFF) shl 8) or (b[i + 4].toInt() and 0xFF)
+                    val width = ((b[i + 5].toInt() and 0xFF) shl 8) or (b[i + 6].toInt() and 0xFF)
+                    return width to height
+                }
+                if (len < 2) break
+                i += len
+            }
+            return null
+        }
+
         private fun resolveColorSpace(obj: PdfObject?, refs: IndirectResolver?): ColorSpace? {
             if (obj == null) return null
             return if (refs != null) {
