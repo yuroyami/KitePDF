@@ -142,7 +142,7 @@ class AwtCanvas(private val g: Graphics2D) : PdfCanvas {
                     // outline(font units) → ×unitScale → +penX (text space) → finalMatrix (→ device).
                     // concat(other) applies `other` first, so the scale must be the LAST concat.
                     val glyphMatrix = textToDevice
-                        .concat(PdfMatrix.translation(penX, 0.0))
+                        .concat(PdfMatrix.translation(penX + glyph.xOffset * unitScale, glyph.yOffset * unitScale))
                         .concat(PdfMatrix(unitScale, 0.0, 0.0, unitScale, 0.0, 0.0))
                     val awt = toAwtPath(outline, glyphMatrix).apply { windingRule = Path2D.WIND_NON_ZERO }
                     g.fill(awt)

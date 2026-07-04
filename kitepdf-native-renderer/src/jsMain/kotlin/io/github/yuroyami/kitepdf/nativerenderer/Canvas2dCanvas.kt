@@ -126,7 +126,7 @@ class Canvas2dCanvas(private val ctx: CanvasRenderingContext2D) : PdfCanvas {
                 val outline = glyph.outline
                 if (outline != null && !outline.isEmpty()) {
                     val glyphMatrix = textToDevice
-                        .let { tm -> PdfMatrix.translation(penX, 0.0).concat(tm) }
+                        .let { tm -> PdfMatrix.translation(penX + glyph.xOffset * unitScale, glyph.yOffset * unitScale).concat(tm) }
                         .let { tm -> PdfMatrix(unitScale, 0.0, 0.0, unitScale, 0.0, 0.0).concat(tm) }
                     val p = toPath2D(outline, glyphMatrix)
                     ctx.asDynamic().fill(p, "nonzero")

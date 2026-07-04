@@ -56,6 +56,11 @@ internal class TextBlockBox(
 internal class ImageBox(
     override val style: ComputedStyle,
     val zipPath: String,
+    /** Pre-parsed inline `<svg>` content; null for raster images / `.svg` file refs. */
+    var svg: SvgImage? = null,
+    /** Presentational `width`/`height` HTML attributes in px (CSS width/height wins over these). */
+    val attrWidth: Double? = null,
+    val attrHeight: Double? = null,
 ) : LayoutBox() {
     var image: ImageXObject? = null
     var drawWidth: Double = 0.0

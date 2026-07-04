@@ -11,6 +11,15 @@ xcuserdata/
 **/Podfile.lock
 mupdf-master/
 
-# Test corpora — drop your own PDFs here; never commit them.
-kitepdf-native-renderer/corpus/*.pdf
+# Test corpora — drop your own PDFs/EPUBs under corpus/{pdf,epub}; never commit
+# them (large / copyrighted). The README + .gitkeep files stay tracked so the
+# structure exists out of the box.
+corpus/*
+!corpus/README.md
+!corpus/pdf/
+!corpus/epub/
+corpus/pdf/*
+corpus/epub/*
+!corpus/pdf/.gitkeep
+!corpus/epub/.gitkeep
 readium-kt-toolkit/

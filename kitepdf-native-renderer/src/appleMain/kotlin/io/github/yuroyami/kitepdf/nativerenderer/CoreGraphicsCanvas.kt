@@ -181,7 +181,7 @@ class CoreGraphicsCanvas(private val ctx: CGContextRef) : PdfCanvas {
                 val outline = glyph.outline
                 if (outline != null && !outline.isEmpty()) {
                     val glyphMatrix = textToDevice
-                        .let { tm -> PdfMatrix.translation(penX, 0.0).concat(tm) }
+                        .let { tm -> PdfMatrix.translation(penX + glyph.xOffset * unitScale, glyph.yOffset * unitScale).concat(tm) }
                         .let { tm -> PdfMatrix(unitScale, 0.0, 0.0, unitScale, 0.0, 0.0).concat(tm) }
                     buildPath(outline, glyphMatrix)
                     CGContextFillPath(ctx)

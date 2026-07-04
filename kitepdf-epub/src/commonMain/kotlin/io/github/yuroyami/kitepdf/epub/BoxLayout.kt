@@ -1,8 +1,10 @@
 package io.github.yuroyami.kitepdf.epub
 
 import io.github.yuroyami.kitepdf.epub.css.ComputedStyle
+import io.github.yuroyami.kitepdf.epub.css.CssPosition
 import io.github.yuroyami.kitepdf.epub.css.CssVAlign
 import io.github.yuroyami.kitepdf.epub.css.Direction
+import io.github.yuroyami.kitepdf.epub.css.ObjectFit
 import io.github.yuroyami.kitepdf.epub.css.GenericFont
 import io.github.yuroyami.kitepdf.epub.css.TextAlign
 import io.github.yuroyami.kitepdf.epub.css.WhiteSpaceMode
@@ -13,6 +15,10 @@ import io.github.yuroyami.kitepdf.font.TextGlyph
 import io.github.yuroyami.kitepdf.render.ImageXObject
 import io.github.yuroyami.kitepdf.render.RgbColor
 import io.github.yuroyami.kitepdf.text.Hyphenator
+
+// GSUB ligature features, applied required-first: Arabic lam-alef (`rlig`) then
+// discretionary Latin ligatures like fi/fl (`liga`).
+private val LIG_FEATURES = listOf("rlig", "liga")
 
 /**
  * Positions the [LayoutBox] tree in document space (x from content-left, y down).
@@ -25,6 +31,7 @@ import io.github.yuroyami.kitepdf.text.Hyphenator
  */
 internal class BoxLayout(
     private val loadImage: (String) -> ImageXObject? = { null },
+    private val loadSvg: (String) -> SvgImage? = { null },
     private val maxImageHeight: Double = Double.MAX_VALUE,
     private val fonts: FontRegistry = FontRegistry.EMPTY,
 ) {
@@ -55,6 +62,13 @@ internal class BoxLayout(
         var prevBottom = 0.0
         var first = true
         for (child in box.children) {
+            // Out-of-flow (position:absolute/fixed): place at its insets relative to
+            // this containing block; it does NOT advance the normal-flow cursor. Used
+            // mainly by fixed-layout pages to overlay panels/captions.
+            val pos = (child as? BlockBox)?.style?.position
+            if (pos == CssPosition.ABSOLUTE || pos == CssPosition.FIXED) {
+                layoutAbsolute(child, contentLeft, contentTop, contentW); continue
+            }
             // Anonymous text boxes carry no margins; real block children do.
             val topMargin = if (child is BlockBox) child.style.marginTopPt else 0.0
             val botMargin = if (child is BlockBox) child.style.marginBottomPt else 0.0
@@ -69,6 +83,22 @@ internal class BoxLayout(
         var contentH = cursorY - contentTop
         s.heightPt?.let { contentH = it }
         box.borderBoxHeight = s.borderTop.effective + s.paddingTopPt + contentH + s.paddingBottomPt + s.borderBottom.effective
+    }
+
+    /**
+     * Place a position:absolute/fixed block at its `left`/`top` insets within the
+     * containing block's content box, sizing from `width` (or `left`+`right`), then
+     * lay out its subtree there. Out of flow, so it never shifts sibling content.
+     */
+    private fun layoutAbsolute(box: BlockBox, cbLeft: Double, cbTop: Double, cbWidth: Double) {
+        val s = box.style
+        val extra = s.borderLeft.effective + s.borderRight.effective + s.paddingLeftPt + s.paddingRightPt
+        val contentW = s.widthPt
+            ?: if (s.leftPt != null && s.rightPt != null) (cbWidth - s.leftPt - s.rightPt - extra).coerceAtLeast(0.0)
+            else (cbWidth - extra).coerceAtLeast(0.0)
+        val x = cbLeft + (s.leftPt ?: 0.0)
+        val y = cbTop + (s.topPt ?: 0.0)
+        layoutBlock(box, x, contentW + extra, y)
     }
 
     private fun layoutChild(child: LayoutBox, contentLeft: Double, contentW: Double, topY: Double): kotlin.Unit = when (child) {
@@ -88,14 +118,38 @@ internal class BoxLayout(
     }
 
     private fun layoutImage(box: ImageBox, contentLeft: Double, contentW: Double, topY: Double) {
-        val img = loadImage(box.zipPath)
-        if (img == null || img.width <= 0 || img.height <= 0) {
-            box.x = contentLeft; box.y = topY; box.borderBoxWidth = 0.0; box.borderBoxHeight = 0.0; return
+        // SVG (inline <svg> preset, or a .svg file reference) sizes from its intrinsic
+        // viewport and paints as vectors; raster images decode to an ImageXObject.
+        val svg = box.svg ?: if (box.zipPath.endsWith(".svg", true)) loadSvg(box.zipPath)?.also { box.svg = it } else null
+        val intrinsicW: Double; val intrinsicH: Double
+        if (svg != null) {
+            intrinsicW = svg.width; intrinsicH = svg.height
+        } else {
+            val img = loadImage(box.zipPath)
+            if (img == null || img.width <= 0 || img.height <= 0) {
+                box.x = contentLeft; box.y = topY; box.borderBoxWidth = 0.0; box.borderBoxHeight = 0.0; return
+            }
+            box.image = img
+            intrinsicW = img.width.toDouble(); intrinsicH = img.height.toDouble()
         }
-        box.image = img
-        val aspect = img.height.toDouble() / img.width
-        var w = contentW; var h = w * aspect
-        if (h > maxImageHeight) { h = maxImageHeight; w = h / aspect }
+        val aspect = intrinsicH / intrinsicW
+        // Honour explicit CSS width/height (then the HTML width/height attributes),
+        // deriving the missing dimension from the intrinsic aspect ratio; fall back
+        // to full content width. Scale down proportionally past max-width / content /
+        // max-height so the image never overflows its column.
+        val ew = box.style.widthPt ?: box.attrWidth
+        val eh = box.style.heightPt ?: box.attrHeight
+        var w = ew ?: (eh?.let { it / aspect } ?: contentW)
+        var h = eh ?: (w * aspect)
+        // object-fit: contain — when both dimensions are fixed, letterbox the image to
+        // preserve its aspect ratio inside the box (default `fill` stretches to w×h).
+        if (ew != null && eh != null && box.style.objectFit == ObjectFit.CONTAIN) {
+            val scale = minOf(ew / intrinsicW, eh / intrinsicH)
+            w = intrinsicW * scale; h = intrinsicH * scale
+        }
+        val cap = minOf(box.style.maxWidthPt ?: Double.MAX_VALUE, contentW)
+        if (w > cap) { val s = cap / w; w = cap; h *= s }
+        if (h > maxImageHeight) { val s = maxImageHeight / h; h = maxImageHeight; w *= s }
         box.drawWidth = w; box.drawHeight = h
         box.x = contentLeft + (contentW - w) / 2.0
         box.y = topY
@@ -314,9 +368,13 @@ internal class BoxLayout(
     }
 
     private class Cell(
-        val ch: Char, val width: Double, val fontSize: Double,
+        val ch: Char, var width: Double, val fontSize: Double,
         val spec: FontSpec, val color: RgbColor, val shift: Double, val underline: Boolean,
-        val face: EmbeddedFace? = null, val gid: Int = -1,
+        val face: EmbeddedFace? = null, var gid: Int = -1,
+        // Kerning to the next glyph (1/1000 em), folded into this glyph's advance.
+        var kernAfter1000: Int = 0,
+        // GPOS mark attachment offset in font design units (0 for non-marks).
+        var glyphXOffset: Double = 0.0, var glyphYOffset: Double = 0.0,
     )
 
     private sealed class Token {
@@ -332,12 +390,21 @@ internal class BoxLayout(
         var softHyphens = ArrayList<Int>()
         fun endWord() {
             if (word.isNotEmpty()) {
-                val pts = LinkedHashSet(softHyphens)
-                if (hyphensAuto && word.size >= 5 && word.all { it.ch.isLetter() }) {
-                    val text = buildString { word.forEach { append(it.ch) } }
-                    pts.addAll(hyphenator.hyphenate(text))
+                shapeArabic(word)               // contextual joining (1:1 gid remap)
+                val ligated = applyLigatures(word) // liga/rlig (may collapse cells)
+                positionMarks(word)             // GPOS mark-to-base attachment
+                kernWord(word)
+                // Skip hyphenation when a ligature collapsed cells (soft-hyphen indices
+                // + the reconstructed word text would no longer line up).
+                val pts = if (ligated) emptyList() else {
+                    val s = LinkedHashSet(softHyphens)
+                    if (hyphensAuto && word.size >= 5 && word.all { it.ch.isLetter() }) {
+                        val text = buildString { word.forEach { append(it.ch) } }
+                        s.addAll(hyphenator.hyphenate(text))
+                    }
+                    s.sorted()
                 }
-                tokens.add(Token.Word(word, wordW, pts.sorted()))
+                tokens.add(Token.Word(word, word.sumOf { it.width }, pts))
                 word = ArrayList(); wordW = 0.0; softHyphens = ArrayList()
             }
         }
@@ -383,6 +450,102 @@ internal class BoxLayout(
         }
         endWord()
         return tokens
+    }
+
+    /**
+     * Arabic contextual joining: remap each letter's glyph to its initial/medial/
+     * final/isolated form via the matching GSUB feature. 1:1, so cell count and
+     * hyphenation indices are unchanged. Single-face words only (the common case).
+     */
+    private fun shapeArabic(cells: MutableList<Cell>) {
+        val face = cells.firstOrNull()?.face ?: return
+        if (!face.hasArabicJoining || cells.any { it.face !== face }) return
+        val cps = IntArray(cells.size) { cells[it].ch.code }
+        if (!ArabicJoining.hasArabic(cps)) return
+        val forms = ArabicJoining.forms(cps)
+        for (i in cells.indices) {
+            val c = cells[i]
+            if (c.gid < 0) continue
+            val newGid = face.substSingle(ArabicJoining.feature(forms[i]), c.gid)
+            if (newGid != c.gid) {
+                c.gid = newGid
+                c.width = face.advance1000(newGid) * c.fontSize / 1000.0
+            }
+        }
+    }
+
+    /**
+     * Apply GSUB ligatures (`rlig` then `liga`) greedily, longest match first,
+     * collapsing a run of component glyphs into one ligature cell. Returns true if
+     * anything changed. Single-face words only.
+     */
+    private fun applyLigatures(cells: MutableList<Cell>): Boolean {
+        val face = cells.firstOrNull()?.face ?: return false
+        if (cells.any { it.face !== face }) return false
+        var changed = false
+        var i = 0
+        while (i < cells.size) {
+            val first = cells[i]
+            if (first.gid < 0) { i++; continue }
+            val rule = LIG_FEATURES.firstNotNullOfOrNull { feat ->
+                face.ligatures(feat, first.gid)?.firstOrNull { r ->
+                    i + r.rest.size < cells.size &&
+                        r.rest.indices.all { j -> cells[i + 1 + j].gid == r.rest[j] }
+                }
+            }
+            if (rule != null) {
+                val ligGid = rule.lig
+                val lig = Cell(
+                    first.ch, face.advance1000(ligGid) * first.fontSize / 1000.0, first.fontSize,
+                    first.spec, first.color, first.shift, first.underline, face, ligGid,
+                )
+                repeat(rule.rest.size + 1) { cells.removeAt(i) }
+                cells.add(i, lig)
+                changed = true
+            }
+            i++
+        }
+        return changed
+    }
+
+    /**
+     * GPOS mark-to-base positioning: attach each combining mark to the current base
+     * glyph via its anchor offset (font units), correcting for how far the pen has
+     * advanced since the base. Marks are zero-advance, so several stack on one base.
+     */
+    private fun positionMarks(cells: List<Cell>) {
+        var base: Cell? = null
+        var advSinceBase = 0.0 // font units from the base origin to the current pen
+        for (c in cells) {
+            val face = c.face
+            val b = base
+            if (face != null && b != null && b.face === face && c.gid >= 0) {
+                val off = face.markOffset(b.gid, c.gid)
+                if (off != null) {
+                    c.glyphXOffset = off.first - advSinceBase
+                    c.glyphYOffset = off.second
+                    advSinceBase += face.advanceRaw(c.gid) // usually 0 for a mark
+                    continue // still attached to the same base
+                }
+            }
+            base = c
+            advSinceBase = if (face != null && c.gid >= 0) face.advanceRaw(c.gid).toDouble() else 0.0
+        }
+    }
+
+    /**
+     * Apply horizontal kerning between adjacent same-face glyphs in a word: fold
+     * the pair adjustment into the left glyph's advance (both its wrap [Cell.width]
+     * and its drawn [Cell.kernAfter1000], kept in sync).
+     */
+    private fun kernWord(cells: List<Cell>) {
+        for (i in 0 until cells.size - 1) {
+            val a = cells[i]; val b = cells[i + 1]
+            val face = a.face ?: continue
+            if (face !== b.face || a.gid < 0 || b.gid < 0) continue
+            val k = face.kern1000(a.gid, b.gid)
+            if (k != 0) { a.kernAfter1000 = k; a.width += k * a.fontSize / 1000.0 }
+        }
     }
 
     private fun wrap(tokens: List<Token>, avail: Double, preserve: Boolean): List<List<Cell>> {
@@ -483,7 +646,11 @@ internal class BoxLayout(
         val face = c.face ?: return glyph(c.ch, c.spec)
         return TextGlyph(
             byteOffset = 0, byteCount = 1, gid = c.gid, text = c.ch.toString(),
-            advanceWidth = face.advance1000(c.gid).toDouble(), outline = face.outline(c.gid), isWordSpace = c.ch == ' ',
+            // Pair kerning to the next glyph is folded into this glyph's advance so
+            // the drawn pen movement matches the wrap width.
+            advanceWidth = (face.advance1000(c.gid) + c.kernAfter1000).toDouble(),
+            outline = face.outline(c.gid), isWordSpace = c.ch == ' ',
+            xOffset = c.glyphXOffset, yOffset = c.glyphYOffset,
         )
     }
 

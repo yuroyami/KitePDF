@@ -51,7 +51,18 @@ internal class BoxBuilder(
                 if (child.tag == "br") { inl.addBreak(); continue }
                 if (child.tag == "img" || child.tag == "image") {
                     val src = child.attrs["src"] ?: child.attrs["href"] ?: child.attrs["xlink:href"]
-                    if (src != null && src.isNotBlank()) { flush(); children.add(ImageBox(resolver.compute(child, childAncestors, style), resolveHref(src))) }
+                    if (src != null && src.isNotBlank()) {
+                        flush()
+                        val aw = child.attrs["width"]?.trim()?.removeSuffix("px")?.toDoubleOrNull()
+                        val ah = child.attrs["height"]?.trim()?.removeSuffix("px")?.toDoubleOrNull()
+                        children.add(ImageBox(resolver.compute(child, childAncestors, style), resolveHref(src), attrWidth = aw, attrHeight = ah))
+                    }
+                    continue
+                }
+                if (child.tag == "svg") { // inline SVG: paint as a vector image box
+                    SvgImage.fromElement(child)?.let {
+                        flush(); children.add(ImageBox(resolver.compute(child, childAncestors, style), "", it))
+                    }
                     continue
                 }
                 val cs = resolver.compute(child, childAncestors, style)

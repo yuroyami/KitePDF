@@ -18,9 +18,108 @@ picked up in a fresh session with zero prior context.
 
 ---
 
-## 0. Status — Phases 1-3 done; Phase 4 started (2026-07-04)
+## 0. Status — Phases 1-4 done; Phase 5 well underway: SVG + GIF + img-sizing + fixed-layout (2026-07-04)
 
-### Phase 4 — typography (done, minus GSUB/GPOS shaping + WOFF)
+### Phase 5 — rich content (SVG + GIF + image sizing + fixed-layout DONE 2026-07-04, UNCOMMITTED)
+
+**SVG renders in books, as vectors (crisp at any zoom), not a rasterised bitmap.**
+- `epub/SvgImage.kt` — a from-scratch SVG renderer: parses the SVG XML into the shared `HtmlNode`
+  tree and paints straight into the core `PdfCanvas`. Covers `<svg>` (width/height/**viewBox**), `<g>`,
+  `<path>` (full `d` grammar incl. S/T smooth reflection + **elliptical arcs** → béziers), `<rect>`
+  (+rx/ry), `<circle>`, `<ellipse>`, `<line>`, `<polyline>`, `<polygon>`; `fill`/`stroke`/`stroke-width`/
+  `opacity`/`fill-rule` with inheritance + `currentColor`; `transform` (translate/scale/rotate/skew/
+  matrix, composed). Reuses `css/CssValues.color`.
+- Wired into the layout via the existing `ImageBox` (added a `svg` field — reuses the whole
+  collect/paginate/atomic pipeline): `img src=*.svg` (file, `loadSvg` from the zip) AND **inline `<svg>`**
+  in XHTML (`SvgImage.fromElement`). `BoxLayout.layoutImage` sizes from the SVG intrinsic viewport;
+  `EpubPage` paints it with a y-flipped CTM mapping the SVG viewport onto the box's device rect.
+- ⚠️ **Promote the reusable renderer to core / a `:kitepdf-svg` handler later** — it currently lives in
+  `:kitepdf-epub` (reusing its `HtmlParser`/`MiniXml`); core has no XML parser yet. The path/transform/
+  shape code is format-neutral and wants extracting when the SVG handler is built.
+- Tests: `SvgImageTest` (9 — shapes, path data, arcs, viewBox scale, group transform, + 2 end-to-end
+  through the EPUB pipeline). Not yet: `<text>`, gradients/patterns (fall back to the inherited solid),
+  clipPath, filters, `<use>`, nested `<image>`.
+
+**GIF DONE (2026-07-04):** `core/render/GifDecoder.kt` — pure-Kotlin GIF87a/89a first-frame (variable-
+width LSB LZW, global/local palette, interlace, single-index transparency → soft mask). Wired into
+`ImageXObject.fromEncodedImage`. **Raster coverage now complete: PNG + JPEG + GIF + SVG.** Verified
+exact-match vs ImageIO (`GifDecoderTest`, native-renderer jvmTest, ImageIO-generated fixture).
+
+**Explicit image sizing DONE (2026-07-04):** `BoxLayout.layoutImage` now honours CSS `width`/`height`/
+`max-width` then the HTML `width`/`height` attributes (raster + SVG), deriving the missing dimension
+from the intrinsic aspect and scaling down past the column / max-height. Was: images always forced to
+full content width. (`SvgImageTest.explicit_width_height_attrs_size_the_image`.)
+
+**Fixed-layout EPUB DONE (2026-07-04):** `rendition:layout=pre-paginated` (global `<meta property>` /
+legacy `name=`, + per-`<itemref>` `properties` override — all in `Opf.fixedLayoutAt`) → each spine is
+ONE page at its own `<meta name=viewport>` size (or a root `<svg>`'s), NO reflow. The reflow model was
+generalised: `PageRender` now carries per-page `pageWidth`/`pageHeight`/`margin` (so pages size
+independently), `EpubPage` reads them, `Paginator.paginateFixed` emits one page per already-laid-out
+spine tree, and `EpubDocument` builds `FixedSpine`s + lays each out at its viewport width (margin 0).
+`EpubDocument.isFixedLayout` exposed. Verified: `FixedLayoutTest` (2 — page-per-spine at 800x1200 +
+per-page paint). ⚠️ Scope: the dominant full-bleed-image/SVG-per-page case works; arbitrary CSS
+`position:absolute` element placement inside a fixed page is NOT yet honoured (a further layout feature).
+
+**CSS position + object-fit DONE (2026-07-04):** `ComputedStyle` gained `position`/`left`/`top`/`right`/
+`bottom`, `object-fit`, `writing-mode` (parsed in `StyleResolver`). `position:absolute`/`fixed` blocks are
+placed out-of-flow at their insets within the containing block (`BoxLayout.layoutAbsolute`, cursor not
+advanced) — sharpens fixed-layout element placement. `object-fit:contain` letterboxes a both-dimensions-
+fixed image to preserve aspect (default `fill` stretches). `CssTailTest` (2). (`writing-mode` is parsed
+but vertical layout isn't wired yet — see below.)
+
+**STILL TODO in Phase 5:** **vertical writing** (`writing-mode:vertical-rl` parsed but not laid out — a
+whole layout mode: CJK columns right-to-left + glyph rotation), **inline-flow images** (`BoxBuilder`
+skips img inside an inline formatting context — needs an inline image atom with baseline alignment),
+`object-fit:cover` (needs clipping), **MathML** (a presentation-math layout subsystem — stretch).
+
+### Phase 4 — typography (done: CFF + WOFF + kerning + Arabic joining + ligatures, 2026-07-04)
+
+### Phase 4 — typography (CFF/OTF + WOFF 1.0 + kerning DONE; GSUB substitution shaping still deferred)
+
+**Latest slice (2026-07-04, UNCOMMITTED) — the font-format + positioning gaps closed:**
+- **OpenType-CFF (`.otf`) `@font-face`** — `EmbeddedFace` now holds an optional core `CffFont`
+  (parsed from the SFNT `CFF ` table when there's no `glyf`); `outline(gid) = ttf.outlinePath ?: cff.outline`.
+  Advances/cmap/unitsPerEm still come from the SFNT (`hmtx`/`cmap`/`head`) via `TrueTypeFont`, so the
+  old "CFF advances aren't exposed" concern DOESN'T apply to SFNT-wrapped `.otf`. `CffFontRenderTest` (2).
+- **WOFF 1.0** — `epub/Woff.kt` unwraps the zlib-per-table WOFF container back to a bare SFNT
+  (reusing core `Zlib`), then the normal TTF/OTF path runs. `FontRegistry.face` unwraps first;
+  `EpubDocument` prefers `.ttf/.otf` → `.woff` src, skips `.woff2` (brotli, not handled). `WoffTest` (2,
+  byte-identical round-trip of a WOFF-encoded DroidSans + full render).
+- **Kerning** — `core/font/OpenTypeKern.kt` (public): legacy `kern` table (format 0) + **GPOS pair
+  adjustment** (lookup type 2, formats 1 & 2, Coverage + ClassDef), reads horizontal `xAdvance` of the
+  `kern` feature. `EmbeddedFace.kern1000(l,r)`; `BoxLayout.kernWord` folds the pair adjustment into the
+  left glyph's advance (both wrap width + drawn `TextGlyph.advanceWidth`). `KerningTest` (2, verified vs
+  the DroidSans `kern` table / Noto OTF `GPOS`). EPUB jvmTest 124 green; PDF difftest mean 0.0039 unchanged.
+
+**GSUB shaping DONE (2026-07-04, UNCOMMITTED):** `core/font/OpenTypeGsub.kt` (public) parses GSUB
+type 1 (single) + type 4 (ligature), unwraps type 7 (extension), indexed by feature tag.
+- **Arabic contextual joining** — `epub/ArabicJoining.kt` (Unicode joining algorithm + joining-class
+  data for U+0600–06FF + Supplement: right-joining set explicit, marks transparent, tatweel/ZWJ causing,
+  else dual). `BoxLayout.shapeArabic` (a per-word 1:1 gid-remap post-pass like `kernWord`) picks
+  isol/init/medi/fina and applies the matching GSUB single-sub. Verified vs `NotoNaskhArabic-Regular.otf`:
+  mid-word letters get their medial glyph, the isolated form disappears (`ShapingTest`).
+- **Ligatures** — `BoxLayout.applyLigatures` greedily collapses `rlig` (Arabic lam-alef, required) then
+  `liga` (fi/fl) component runs into one glyph; hyphenation skipped for a word that ligated (indices
+  shift). Runs before kerning so kern sees final gids.
+- EPUB jvmTest 126 green; core 55; PDF difftest 0.0039.
+
+**Mark positioning DONE (2026-07-04):** `core/font/OpenTypeMarks.kt` parses GPOS lookup type 4
+(mark-to-base) — anchor per mark class, formats 1/2/3 — and returns the base-minus-mark offset in font
+units. `TextGlyph` gained `xOffset`/`yOffset` (font units, scaled by the same `fontSize/unitsPerEm` as
+the outline, applied in the glyph translation across ALL SIX backends: AWT/Skia/Compose/Android/CG/JS).
+`BoxLayout.positionMarks` (a per-word post-pass after joining/ligatures) attaches each combining mark to
+the running base, correcting for the pen advance since the base (marks are zero-advance, so several
+stack). `EmbeddedFace.markOffset`/`advanceRaw`. Verified: `ShapingTest` (+2, parser + end-to-end that a
+fatha gets a non-zero GPOS offset in `بَحَرَ`). **Arabic shaping is now complete: joining + ligatures +
+kerning + marks.** ⚠️ Pixel placement isn't oracle-verified here (needs an Arabic book in the difftest
+corpus); the offset math + plumbing are structurally verified.
+
+**STILL DEFERRED:** mark-to-mark/ligature (GPOS 5/6, stacked diacritics), contextual/chaining GSUB
+(types 5/6, Indic reordering), **WOFF2** (brotli + glyf transform — no encoder/fixture in this env, same
+oracle blocker as JBIG2/JPX), **vertical writing** (a whole layout mode: columns + glyph rotation), full
+per-language hyphenation pattern data.
+
+### (historical) Phase 4 — typography (done, minus GSUB/GPOS shaping + WOFF)
 
 **World scripts + hyphenation now work:**
 - **Bidi** — `core/text/Bidi.kt`, the implicit Unicode Bidirectional Algorithm (W/N/I rules +

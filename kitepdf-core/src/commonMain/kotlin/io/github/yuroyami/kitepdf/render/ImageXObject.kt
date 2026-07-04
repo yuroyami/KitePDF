@@ -113,8 +113,47 @@ class ImageXObject internal constructor(
                     resolvedColorSpace = resolvedCs, decode = decodeArr,
                     isImageMask = isMask, maskFill = fillColor,
                 )
-                // For encoded kinds, hand the raw bytes through — platform code
-                // (or a future native decoder) will interpret them.
+                // JPEG (`DCTDecode`): decode in pure Kotlin to a colour-managed
+                // RAW image so it renders on every backend AND picks up the
+                // `/SMask` alpha via [toRgbaBytes] (the old platform path ignored
+                // it). Falls back to the encoded [Kind.JPEG] path when the native
+                // decoder can't handle the stream (arithmetic / 12-bit / etc.).
+                Kind.JPEG -> {
+                    val raw = runCatching { JpegDecoder.decode(stream.rawBytes) }.getOrNull()
+                    if (raw != null) ImageXObject(
+                        raw.width, raw.height, 8, raw.colorSpace, Kind.RAW,
+                        encodedBytes = ByteArray(0), pixelBytes = raw.pixelBytes,
+                        softMaskAlpha = alpha, softMaskWidth = smW, softMaskHeight = smH,
+                        resolvedColorSpace = raw.resolvedColorSpace,
+                        isImageMask = isMask, maskFill = fillColor,
+                    ) else ImageXObject(
+                        width, height, bpc, cs, kind, stream.rawBytes,
+                        softMaskAlpha = alpha, softMaskWidth = smW, softMaskHeight = smH,
+                        resolvedColorSpace = resolvedCs, decode = decodeArr,
+                        isImageMask = isMask, maskFill = fillColor,
+                    )
+                }
+                // JBIG2 (`JBIG2Decode`): pure-Kotlin bilevel decode (§6 arithmetic path)
+                // into a 1-bpc DeviceGray RAW image. Needs the shared `/JBIG2Globals`
+                // stream from `/DecodeParms`. Falls back to the encoded kind on failure.
+                Kind.JBIG2 -> {
+                    val globals = loadJbig2Globals(dict, refs)
+                    val decoded = runCatching { Jbig2Decoder.decode(stream.rawBytes, globals, width, height) }.getOrNull()
+                    if (decoded != null) ImageXObject(
+                        width, height, 1, "DeviceGray", Kind.RAW,
+                        encodedBytes = ByteArray(0), pixelBytes = decoded,
+                        softMaskAlpha = alpha, softMaskWidth = smW, softMaskHeight = smH,
+                        resolvedColorSpace = if (isMask) null else ColorSpace.DeviceGray,
+                        decode = decodeArr, isImageMask = isMask, maskFill = fillColor,
+                    ) else ImageXObject(
+                        width, height, bpc, cs, kind, stream.rawBytes,
+                        softMaskAlpha = alpha, softMaskWidth = smW, softMaskHeight = smH,
+                        resolvedColorSpace = resolvedCs, decode = decodeArr,
+                        isImageMask = isMask, maskFill = fillColor,
+                    )
+                }
+                // For the remaining encoded kinds, hand the raw bytes through —
+                // platform code (or a future native decoder) interprets them.
                 else -> ImageXObject(
                     width, height, bpc, cs, kind, stream.rawBytes,
                     softMaskAlpha = alpha, softMaskWidth = smW, softMaskHeight = smH,
@@ -129,20 +168,26 @@ class ImageXObject internal constructor(
          * CBZ / SVG `<image>` (rather than pulled from a PDF `/XObject` stream).
          * The format and pixel dimensions are sniffed from the bytes.
          *
-         * PNG is decoded here in pure Kotlin ([PngDecoder]) into a [Kind.RAW] image
-         * that renders on every backend. JPEG defers to the host platform's image
-         * loader (identical to a PDF `DCTDecode` image — [Kind.JPEG] with the file
-         * in [encodedBytes]). GIF and other formats are not handled yet and return
-         * null, so callers degrade gracefully by skipping the image.
+         * PNG, GIF and JPEG are decoded here in pure Kotlin ([PngDecoder] /
+         * [GifDecoder] / [JpegDecoder]) into a [Kind.RAW] image that renders on
+         * every backend. A JPEG the native decoder can't handle (arithmetic coding,
+         * 12-bit) falls back to the host platform's loader ([Kind.JPEG] with the
+         * file in [encodedBytes]). Unrecognised formats return null, so callers
+         * degrade gracefully by skipping the image.
          */
         fun fromEncodedImage(bytes: ByteArray): ImageXObject? {
             if (PngDecoder.isPng(bytes)) return PngDecoder.decode(bytes)
-            val (w, h) = jpegSize(bytes) ?: return null
-            if (w <= 0 || h <= 0) return null
-            return ImageXObject(
-                width = w, height = h, bitsPerComponent = 8,
-                colorSpace = "DeviceRGB", kind = Kind.JPEG, encodedBytes = bytes,
-            )
+            if (GifDecoder.isGif(bytes)) return GifDecoder.decode(bytes)
+            if (JpegDecoder.isJpeg(bytes)) {
+                JpegDecoder.decode(bytes)?.let { return it }
+                val (w, h) = jpegSize(bytes) ?: return null
+                if (w <= 0 || h <= 0) return null
+                return ImageXObject(
+                    width = w, height = h, bitsPerComponent = 8,
+                    colorSpace = "DeviceRGB", kind = Kind.JPEG, encodedBytes = bytes,
+                )
+            }
+            return null
         }
 
         /**
@@ -249,6 +294,19 @@ class ImageXObject internal constructor(
                 }
             }
             return out
+        }
+
+        /** The shared JBIG2 globals stream (`/DecodeParms /JBIG2Globals`), decoded. */
+        private fun loadJbig2Globals(dict: PdfDictionary, refs: IndirectResolver?): ByteArray? {
+            val dp = dict["DecodeParms"] ?: dict["DP"] ?: return null
+            fun res(o: PdfObject?) = if (refs != null && o != null) o.resolve(refs) else o
+            val parms = when (val d = res(dp)) {
+                is PdfDictionary -> d
+                is PdfArray -> d.mapNotNull { res(it) as? PdfDictionary }.firstOrNull { it["JBIG2Globals"] != null }
+                else -> null
+            } ?: return null
+            val gs = res(parms["JBIG2Globals"]) as? PdfStream ?: return null
+            return runCatching { FilterChain.decode(gs) }.getOrNull() ?: gs.rawBytes
         }
 
         private fun colorSpaceName(obj: PdfObject?): String = when (obj) {

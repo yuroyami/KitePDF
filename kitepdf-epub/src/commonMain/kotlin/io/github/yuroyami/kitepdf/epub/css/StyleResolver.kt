@@ -119,6 +119,22 @@ internal class StyleResolver(
             "break-inside", "page-break-inside" -> b.breakInsideAvoid = v.trim().lowercase() == "avoid"
             "direction" -> when (v.trim().lowercase()) { "rtl" -> b.direction = Direction.RTL; "ltr" -> b.direction = Direction.LTR }
             "hyphens", "-webkit-hyphens", "-epub-hyphens" -> b.hyphensAuto = v.trim().lowercase() == "auto"
+            "position" -> b.position = when (v.trim().lowercase()) {
+                "absolute" -> CssPosition.ABSOLUTE; "fixed" -> CssPosition.FIXED
+                "relative" -> CssPosition.RELATIVE; else -> CssPosition.STATIC
+            }
+            "left" -> b.leftPt = sizeValue(b, v, refWidthPt)
+            "top" -> b.topPt = sizeValue(b, v, refWidthPt)
+            "right" -> b.rightPt = sizeValue(b, v, refWidthPt)
+            "bottom" -> b.bottomPt = sizeValue(b, v, refWidthPt)
+            "object-fit" -> b.objectFit = when (v.trim().lowercase()) {
+                "contain" -> ObjectFit.CONTAIN; "cover" -> ObjectFit.COVER; else -> ObjectFit.FILL
+            }
+            "writing-mode", "-webkit-writing-mode", "-epub-writing-mode" -> b.writingMode = when (v.trim().lowercase()) {
+                "vertical-rl", "tb-rl", "tb" -> WritingMode.VERTICAL_RL
+                "vertical-lr" -> WritingMode.VERTICAL_LR
+                else -> WritingMode.HORIZONTAL
+            }
         }
     }
 
@@ -274,6 +290,10 @@ internal class StyleResolver(
         var fontFamilyName = parent.fontFamilyName
         var direction = parent.direction
         var hyphensAuto = parent.hyphensAuto
+        var position = CssPosition.STATIC // not inherited
+        var leftPt: Double? = null; var topPt: Double? = null; var rightPt: Double? = null; var bottomPt: Double? = null
+        var objectFit = ObjectFit.FILL // not inherited
+        var writingMode = parent.writingMode // inherited
 
         fun build() = ComputedStyle(
             display, fontSizePt, bold, italic, fontFamily, color, backgroundColor,
@@ -291,6 +311,7 @@ internal class StyleResolver(
             fontFamilyName,
             direction,
             hyphensAuto,
+            position, leftPt, topPt, rightPt, bottomPt, objectFit, writingMode,
         )
     }
 

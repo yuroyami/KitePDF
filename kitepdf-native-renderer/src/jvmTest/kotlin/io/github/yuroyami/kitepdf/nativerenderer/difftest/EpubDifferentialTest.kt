@@ -33,17 +33,22 @@ class EpubDifferentialTest {
 
         val corpus = ArrayList<Pair<String, ByteArray>>().apply {
             addAll(EpubCorpus.synthetic())
-            System.getProperty("kitepdf.epub.corpus")?.let { dir ->
-                File(dir).listFiles { f -> f.isFile && f.extension.equals("epub", ignoreCase = true) }
-                    ?.sortedBy { it.name }?.forEach { add(it.nameWithoutExtension to it.readBytes()) }
-            }
+            // Real books from the git-ignored repo-root corpus/epub (or -Dkitepdf.epub.corpus).
+            val dir = System.getProperty("kitepdf.epub.corpus")?.let { File(it) } ?: Corpus.repoCorpus("epub")
+            dir?.listFiles { f -> f.isFile && f.extension.equals("epub", ignoreCase = true) }
+                ?.sortedBy { it.name }?.forEach { add(it.nameWithoutExtension to it.readBytes()) }
         }
 
         val lines = ArrayList<String>()
         var failures = 0
         var blanks = 0
+        var syntheticBlanks = 0
         var pages = 0
         var worstMae = 0.0
+
+        // Only the synthetic fixtures are authored to always paint; real corpus books
+        // legitimately contain blank pages (part dividers, verso blanks).
+        val syntheticNames = EpubCorpus.synthetic().map { it.first }.toSet()
 
         for ((name, bytes) in corpus) {
             val doc = try {
@@ -60,7 +65,10 @@ class EpubDifferentialTest {
                 } catch (e: Throwable) {
                     failures++; lines.add("- $name p$i: render() THREW ${e.message}"); continue
                 }
-                if (ImageDiff.nonBackgroundPixels(img) == 0L) { blanks++; lines.add("- $name p$i: BLANK") }
+                if (ImageDiff.nonBackgroundPixels(img) == 0L) {
+                    blanks++; if (name in syntheticNames) syntheticBlanks++
+                    lines.add("- $name p$i: BLANK" + if (name in syntheticNames) " (SYNTHETIC — gated)" else " (corpus — informational)")
+                }
                 if (i == 0 && MuPdfOracle.available) {
                     oracleRef(bytes, dpi)?.let { ref ->
                         val mae = ImageDiff.compare(img, ref).score
@@ -84,8 +92,9 @@ class EpubDifferentialTest {
 
         // Gate 1 — every page of every book renders without throwing.
         assertEquals(0, failures, "EPUB render failures:\n" + lines.filter { "THREW" in it || "null" in it }.joinToString("\n"))
-        // Gate 2 — synthetic content pages are never blank.
-        assertEquals(0, blanks, "blank EPUB pages:\n" + lines.filter { "BLANK" in it }.joinToString("\n"))
+        // Gate 2 — synthetic content pages are never blank (real corpus books may
+        // legitimately have blank pages, reported informationally above).
+        assertEquals(0, syntheticBlanks, "blank SYNTHETIC EPUB pages:\n" + lines.filter { "SYNTHETIC" in it }.joinToString("\n"))
     }
 
     private fun oracleRef(epubBytes: ByteArray, dpi: Int): BufferedImage? {

@@ -194,7 +194,7 @@ class ComposeCanvas(
                 // concat(other) applies `other` first, so unitScale must be the LAST concat,
                 // else every glyph collapses to a speck at the origin.
                 val glyphMatrix = textMatrix
-                    .concat(PdfMatrix.translation(penX, 0.0))
+                    .concat(PdfMatrix.translation(penX + glyph.xOffset * unitScale, glyph.yOffset * unitScale))
                     .concat(PdfMatrix(unitScale, 0.0, 0.0, unitScale, 0.0, 0.0))
                 val cp = toComposePath(outline, glyphMatrix).apply { fillType = PathFillType.NonZero }
                 drawScope.drawPath(cp, color = color, alpha = a, blendMode = composeBlend)

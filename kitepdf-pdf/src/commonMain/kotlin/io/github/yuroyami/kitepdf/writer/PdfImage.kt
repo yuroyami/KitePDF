@@ -84,5 +84,9 @@ class PdfImage private constructor(
                 if (grayscale) "DeviceGray" else "DeviceRGB",
                 8, "DCTDecode", jpegBytes, null,
             )
+
+        /** Embed a JPEG 2000 (`.jp2`) codestream directly via `/JPXDecode` (no re-encode). */
+        fun jpx(jp2Bytes: ByteArray, width: Int, height: Int): PdfImage =
+            PdfImage(width, height, "DeviceRGB", 8, "JPXDecode", jp2Bytes, null)
     }
 }

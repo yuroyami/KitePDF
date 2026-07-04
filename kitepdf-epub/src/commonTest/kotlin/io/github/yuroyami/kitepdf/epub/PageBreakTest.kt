@@ -36,7 +36,7 @@ class PageBreakTest {
     fun orphans_push_a_lone_first_line() {
         // Filler(1) + P(4); page fits filler + 1 P line — that lone P line is pushed.
         val (root, ps) = build(listOf(base to 1, base to 4))
-        val pages = Paginator.paginate(root, 25.0)
+        val pages = Paginator.paginate(root, 1000.0, 25.0, 0.0)
         assertTrue(pages[0].lines.all { it.owner === ps[0] }, "page 0 holds only the filler")
         assertEquals(0, pages[1].lines.first().ownerIndex, "P starts fresh on page 2")
     }
@@ -45,7 +45,7 @@ class PageBreakTest {
     fun widows_keep_two_lines_together() {
         // Filler(1) + P(3); a naive break would leave 1 widow — pull one more line over.
         val (root, ps) = build(listOf(base to 1, base to 3))
-        val pages = Paginator.paginate(root, 35.0)
+        val pages = Paginator.paginate(root, 1000.0, 35.0, 0.0)
         assertTrue(pages[1].lines.count { it.owner === ps[1] } >= 2, "at least 2 widow lines on page 2")
     }
 
@@ -53,7 +53,7 @@ class PageBreakTest {
     fun break_inside_avoid_moves_block_whole() {
         // Filler(1) + D(3, avoid); D would split (onPage=2, no orphan/widow pull) but avoid moves all of it.
         val (root, ps) = build(listOf(base to 1, base.copy(breakInsideAvoid = true) to 3))
-        val pages = Paginator.paginate(root, 35.0)
+        val pages = Paginator.paginate(root, 1000.0, 35.0, 0.0)
         assertTrue(pages[0].lines.none { it.owner === ps[1] }, "avoid block wholly on the next page")
         assertEquals(3, pages[1].lines.count { it.owner === ps[1] })
     }
@@ -62,7 +62,7 @@ class PageBreakTest {
     fun break_inside_avoid_too_tall_still_splits() {
         // A block taller than a page can't be kept whole — it must still split (no infinite loop).
         val (root, _) = build(listOf(base to 1, base.copy(breakInsideAvoid = true) to 12))
-        val pages = Paginator.paginate(root, 35.0)
+        val pages = Paginator.paginate(root, 1000.0, 35.0, 0.0)
         assertTrue(pages.size >= 3, "oversized avoid block splits across pages")
     }
 

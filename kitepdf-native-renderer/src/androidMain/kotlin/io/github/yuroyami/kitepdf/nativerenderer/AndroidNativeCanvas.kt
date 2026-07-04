@@ -129,7 +129,7 @@ class AndroidNativeCanvas(private val canvas: AndroidCanvas) : PdfCanvas {
             val outline = glyph.outline
             if (outline != null && !outline.isEmpty()) {
                 val glyphMatrix = textToDevice
-                    .let { tm -> PdfMatrix.translation(penX, 0.0).concat(tm) }
+                    .let { tm -> PdfMatrix.translation(penX + glyph.xOffset * unitScale, glyph.yOffset * unitScale).concat(tm) }
                     .let { tm -> PdfMatrix(unitScale, 0.0, 0.0, unitScale, 0.0, 0.0).concat(tm) }
                 val p = toAndroidPath(outline, glyphMatrix).apply { fillType = Path.FillType.WINDING }
                 canvas.drawPath(p, paint)

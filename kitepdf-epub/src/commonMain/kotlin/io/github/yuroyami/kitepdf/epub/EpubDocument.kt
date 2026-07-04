@@ -36,13 +36,23 @@ class EpubDocument private constructor(
     val pageHeight: Double,
     val fontSize: Double,
     val margin: Double,
+    /** Fixed-layout spines (one page each at its viewport size); null = reflowable. */
+    private val fixedSpines: List<FixedSpine>? = null,
 ) {
     private val contentWidth = pageWidth - 2 * margin
     private val pageContentHeight = pageHeight - 2 * margin
 
+    /** True for a pre-paginated (fixed-layout) book: one page per spine, no reflow. */
+    val isFixedLayout: Boolean get() = fixedSpines != null
+
     private val pageRenders: List<PageRender> by lazy {
-        BoxLayout(::loadImage, pageContentHeight, fonts).layout(root, contentWidth)
-        Paginator.paginate(root, pageContentHeight)
+        val fx = fixedSpines
+        if (fx != null) return@lazy fx.map { spine ->
+            BoxLayout(::loadImage, ::loadSvg, spine.height, fonts).layout(spine.root, spine.width)
+            Paginator.paginateFixed(spine.root, spine.width, spine.height)
+        }
+        BoxLayout(::loadImage, ::loadSvg, pageContentHeight, fonts).layout(root, contentWidth)
+        Paginator.paginate(root, pageWidth, pageHeight, margin)
     }
 
     /** The reflowed pages, ready to render. */
@@ -52,6 +62,9 @@ class EpubDocument private constructor(
 
     private fun loadImage(zipPath: String): ImageXObject? =
         zip.read(zipPath)?.let { ImageXObject.fromEncodedImage(it) }
+
+    private fun loadSvg(zipPath: String): SvgImage? =
+        zip.read(zipPath)?.let { SvgImage.parse(it) }
 
     companion object {
         fun open(
@@ -67,9 +80,13 @@ class EpubDocument private constructor(
             val contentPaths = opf.spineIdrefs.mapNotNull { opf.itemsById[it]?.href }.map { resolvePath(opf.baseDir, it) }
             if (contentPaths.isEmpty()) return null
 
+            val fixedLayout = opf.renditionLayout == "pre-paginated" ||
+                contentPaths.indices.all { opf.fixedLayoutAt(it) }
+            // Fixed-layout content is laid out at its own viewport, not the reflow column.
             val contentWidth = pageWidth - 2 * margin
             val baseDir = if (opf.direction?.lowercase() == "rtl") Direction.RTL else Direction.LTR
-            val docRoots = ArrayList<LayoutBox>()
+            val docRoots = ArrayList<BlockBox>()
+            val viewports = ArrayList<Pair<Double, Double>>()
             val faceRules = ArrayList<Pair<FontFaceRule, String>>() // rule + the doc dir its src resolves against
             for (path in contentPaths) {
                 val xhtml = zip.readText(path) ?: continue
@@ -77,7 +94,11 @@ class EpubDocument private constructor(
                 val tree = HtmlParser.parse(xhtml)
                 val parsed = CssParser.parseAll(collectAuthorCss(zip, tree, docDir), Origin.AUTHOR)
                 for (face in parsed.fontFaces) faceRules.add(face to docDir)
-                val resolver = StyleResolver(parsed.rules, fontSize, contentWidth, baseDir)
+                val vp = parseViewport(tree) ?: (pageWidth to pageHeight)
+                viewports.add(vp)
+                // Fixed pages lay out at their full viewport width (no page margin).
+                val layoutWidth = if (fixedLayout) vp.first else contentWidth
+                val resolver = StyleResolver(parsed.rules, fontSize, layoutWidth, baseDir)
                 docRoots.add(BoxBuilder(resolver) { href -> resolvePath(docDir, href) }.build(tree))
             }
             if (docRoots.isEmpty()) return null
@@ -86,7 +107,10 @@ class EpubDocument private constructor(
             val metadata = buildMetadata(opf)
             val toc = TocParser.parse(zip, opf, contentPaths) { base, href -> resolvePath(base, href) }
             val superRoot = BlockBox(ComputedStyle.initial(fontSize, direction = baseDir), docRoots)
-            return EpubDocument(superRoot, zip, fonts, metadata, toc, pageWidth, pageHeight, fontSize, margin)
+            val fixed = if (fixedLayout) {
+                docRoots.indices.map { FixedSpine(docRoots[it], viewports[it].first, viewports[it].second) }
+            } else null
+            return EpubDocument(superRoot, zip, fonts, metadata, toc, pageWidth, pageHeight, fontSize, margin, fixed)
         }
 
         private fun buildMetadata(opf: OpfPackage): EpubMetadata {
@@ -109,7 +133,13 @@ class EpubDocument private constructor(
             val uid = opf.uniqueId ?: ""
             val faces = ArrayList<EmbeddedFace>()
             for ((rule, docDir) in faceRules) {
-                val url = rule.srcUrls.firstOrNull { it.endsWith(".ttf", true) || it.endsWith(".otf", true) } ?: rule.srcUrls.firstOrNull() ?: continue
+                // Prefer a format we can parse: raw SFNT (.ttf/.otf), then WOFF 1.0
+                // (.woff, zlib-unwrapped). A .woff2-only face falls through and is
+                // skipped (brotli not supported). Fall back to the first src otherwise.
+                val url = rule.srcUrls.firstOrNull { it.endsWith(".ttf", true) || it.endsWith(".otf", true) }
+                    ?: rule.srcUrls.firstOrNull { it.endsWith(".woff", true) }
+                    ?: rule.srcUrls.firstOrNull { !it.endsWith(".woff2", true) }
+                    ?: continue
                 val zipPath = resolvePath(docDir, url)
                 val raw = zip.read(zipPath) ?: continue
                 val bytes = obf[zipPath]?.let { Deobfuscate.deobfuscate(raw, it, uid) } ?: raw
@@ -158,6 +188,32 @@ class EpubDocument private constructor(
             return sb.toString()
         }
 
+        /** Fixed-layout page size: the `<meta name=viewport>` width/height, else a root `<svg>`'s. */
+        private fun parseViewport(tree: HtmlNode.Element): Pair<Double, Double>? {
+            var result: Pair<Double, Double>? = null
+            var svgSize: Pair<Double, Double>? = null
+            fun px(s: String?) = s?.trim()?.removeSuffix("px")?.toDoubleOrNull()
+            fun walk(el: HtmlNode.Element) {
+                if (el.tag == "meta" && el.attrs["name"]?.lowercase() == "viewport") {
+                    var w: Double? = null; var h: Double? = null
+                    for (part in (el.attrs["content"] ?: "").split(',', ';')) {
+                        val kv = part.split('=')
+                        if (kv.size == 2) when (kv[0].trim().lowercase()) {
+                            "width" -> w = px(kv[1]); "height" -> h = px(kv[1])
+                        }
+                    }
+                    if (w != null && h != null && w > 0 && h > 0) result = w to h
+                }
+                if (svgSize == null && el.tag.equals("svg", true)) {
+                    val w = px(el.attrs["width"]); val h = px(el.attrs["height"])
+                    if (w != null && h != null && w > 0 && h > 0) svgSize = w to h
+                }
+                for (c in el.children) if (c is HtmlNode.Element) walk(c)
+            }
+            walk(tree)
+            return result ?: svgSize
+        }
+
         /** Resolve a relative href against [baseDir], normalizing `.`/`..` + percent-decode. */
         internal fun resolvePath(baseDir: String, href: String): String {
             val clean = percentDecode(href.substringBefore('#').substringBefore('?'))
@@ -193,17 +249,20 @@ class EpubDocument private constructor(
     }
 }
 
+/** One fixed-layout spine: its box tree plus the declared viewport it renders at. */
+internal class FixedSpine(val root: BlockBox, val width: Double, val height: Double)
+
 /** One reflowed EPUB page: paints backgrounds/borders, then text lines and images. */
 class EpubPage internal constructor(
     private val page: PageRender,
     private val doc: EpubDocument,
 ) {
-    val width: Double get() = doc.pageWidth
-    val height: Double get() = doc.pageHeight
+    val width: Double get() = page.pageWidth
+    val height: Double get() = page.pageHeight
 
     fun renderTo(canvas: PdfCanvas, deviceCtm: Matrix = Matrix.IDENTITY) {
         canvas.beginPage(width, height, deviceCtm)
-        val margin = doc.margin
+        val margin = page.margin
         val startY = page.startY
         val contentTopYUp = height - margin
         val bandBottom = startY + (height - 2 * margin)
@@ -224,6 +283,17 @@ class EpubPage internal constructor(
         }
 
         for (box in page.images) {
+            val svg = box.svg
+            if (svg != null) {
+                // Map the SVG viewport (origin top-left, y-down) onto the box's device
+                // rect (y-up): negative y-scale, translate to the box's top edge.
+                val m = Matrix(
+                    box.drawWidth / svg.width, 0.0, 0.0, -box.drawHeight / svg.height,
+                    margin + box.x, yUp(box.bottom) + box.drawHeight,
+                )
+                svg.render(canvas, deviceCtm.concat(m))
+                continue
+            }
             val img = box.image ?: continue
             val m = Matrix(box.drawWidth, 0.0, 0.0, box.drawHeight, margin + box.x, yUp(box.bottom))
             canvas.drawImage(img, deviceCtm.concat(m))

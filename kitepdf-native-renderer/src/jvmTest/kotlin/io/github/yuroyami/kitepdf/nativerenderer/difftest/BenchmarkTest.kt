@@ -175,16 +175,7 @@ class BenchmarkTest {
     private fun fmt(ms: Double): String = if (ms.isNaN()) "—" else "%.2f".format(ms)
 
     private fun corpusFiles(): List<File> {
-        val dir = System.getProperty("kitepdf.corpus")?.let { File(it) }
-            ?: run {
-                var d: File? = File(System.getProperty("user.dir")).absoluteFile
-                var found: File? = null
-                while (d != null && found == null) {
-                    if (File(d, "settings.gradle.kts").exists()) found = File(d, "kitepdf-native-renderer/corpus")
-                    d = d.parentFile
-                }
-                found
-            }
+        val dir = System.getProperty("kitepdf.corpus")?.let { File(it) } ?: Corpus.repoCorpus("pdf")
         return dir?.takeIf { it.isDirectory }
             ?.listFiles { f -> f.extension.equals("pdf", true) }
             ?.sortedBy { it.name } ?: emptyList()

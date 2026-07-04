@@ -10,6 +10,10 @@ internal class PageRender(
     val images: List<ImageBox>,
     /** Boxes with a background or visible border intersecting this page. */
     val decoBoxes: List<LayoutBox>,
+    /** This page's dimensions — per-page so fixed-layout spreads size independently. */
+    val pageWidth: Double,
+    val pageHeight: Double,
+    val margin: Double,
 )
 
 /**
@@ -26,7 +30,21 @@ internal object Paginator {
     private const val ORPHANS = 2
     private const val WIDOWS = 2
 
-    fun paginate(root: BlockBox, pageContentHeight: Double): List<PageRender> {
+    /**
+     * Fixed-layout: one spine document = one page at its declared viewport size, with
+     * NO reflow splitting (the content is authored to fit). Collects the whole tree
+     * onto a single [PageRender].
+     */
+    fun paginateFixed(root: BlockBox, pageWidth: Double, pageHeight: Double): PageRender {
+        val lines = ArrayList<PositionedLine>()
+        val images = ArrayList<ImageBox>()
+        val deco = ArrayList<LayoutBox>()
+        collect(root, lines, images, deco)
+        return PageRender(0.0, lines, images, deco, pageWidth, pageHeight, margin = 0.0)
+    }
+
+    fun paginate(root: BlockBox, pageWidth: Double, pageHeight: Double, margin: Double): List<PageRender> {
+        val pageContentHeight = pageHeight - 2 * margin
         val lines = ArrayList<PositionedLine>()
         val images = ArrayList<ImageBox>()
         val deco = ArrayList<LayoutBox>()
@@ -67,6 +85,12 @@ internal object Paginator {
         }
         starts.add(curStart); buckets.add(cur)
 
+        // Drop a trailing empty page: content ending exactly on a page boundary or a
+        // final break-after would otherwise emit a spurious unit-less last page.
+        while (buckets.size > 1 && buckets.last().isEmpty()) {
+            buckets.removeAt(buckets.lastIndex); starts.removeAt(starts.lastIndex)
+        }
+
         return starts.indices.map { p ->
             val start = starts[p]; val end = start + pageContentHeight
             val us = buckets[p]
@@ -75,6 +99,7 @@ internal object Paginator {
                 lines = us.mapNotNull { it.line },
                 images = us.mapNotNull { it.image },
                 decoBoxes = deco.filter { it.y < end && it.bottom > start },
+                pageWidth = pageWidth, pageHeight = pageHeight, margin = margin,
             )
         }
     }

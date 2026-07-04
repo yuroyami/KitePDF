@@ -9,6 +9,9 @@ internal enum class GenericFont { SERIF, SANS, MONO }
 internal enum class CssVAlign { BASELINE, SUPER, SUB }
 internal enum class ListType { DISC, CIRCLE, SQUARE, DECIMAL, LOWER_ROMAN, UPPER_ROMAN, LOWER_ALPHA, UPPER_ALPHA, NONE }
 internal enum class Direction { LTR, RTL }
+internal enum class CssPosition { STATIC, RELATIVE, ABSOLUTE, FIXED }
+internal enum class ObjectFit { FILL, CONTAIN, COVER }
+internal enum class WritingMode { HORIZONTAL, VERTICAL_RL, VERTICAL_LR }
 
 /** One border edge. Painted only when [visible] (`border-style` not none/hidden). */
 internal class Edge(val width: Double, val color: RgbColor, val visible: Boolean) {
@@ -72,6 +75,16 @@ internal data class ComputedStyle(
     val direction: Direction,
     /** `hyphens: auto` — allow the line-breaker to hyphenate long words. */
     val hyphensAuto: Boolean,
+    /** `position` + insets (px→pt), for out-of-flow placement (mainly fixed-layout). */
+    val position: CssPosition,
+    val leftPt: Double?,
+    val topPt: Double?,
+    val rightPt: Double?,
+    val bottomPt: Double?,
+    /** `object-fit` for replaced content (images/SVG) in a fixed box. */
+    val objectFit: ObjectFit,
+    /** `writing-mode` — vertical CJK text lays out in columns right-to-left / left-to-right. */
+    val writingMode: WritingMode,
 ) {
     val mono: Boolean get() = fontFamily == GenericFont.MONO
 
@@ -94,6 +107,10 @@ internal data class ComputedStyle(
             fontFamilyName = null,
             direction = direction,
             hyphensAuto = false,
+            position = CssPosition.STATIC,
+            leftPt = null, topPt = null, rightPt = null, bottomPt = null,
+            objectFit = ObjectFit.FILL,
+            writingMode = WritingMode.HORIZONTAL,
         )
     }
 }

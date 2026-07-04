@@ -28,4 +28,11 @@ data class TextGlyph(
     val outline: PdfPath?,
     /** True iff this code unit corresponds to ASCII space (0x20) — needed for Tw word spacing. */
     val isWordSpace: Boolean,
+    /**
+     * Positioning offset in font design units (GPOS mark attachment), applied to
+     * this glyph's origin without affecting the pen advance. Scaled by the same
+     * `fontSize/unitsPerEm` as the outline. Zero for normal glyphs.
+     */
+    val xOffset: Double = 0.0,
+    val yOffset: Double = 0.0,
 )
