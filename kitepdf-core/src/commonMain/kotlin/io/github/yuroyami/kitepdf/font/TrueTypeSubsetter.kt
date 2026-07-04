@@ -16,7 +16,7 @@ import io.github.yuroyami.kitepdf.core.ByteArrayBuilder
  * everything else (a CIDFontType2 with an Identity encoding + `/CIDToGIDMap`
  * needs no `cmap`/`name`/`post`). Assembly + checksums are [SfntWriter]'s job.
  */
-internal object TrueTypeSubsetter {
+object TrueTypeSubsetter {
 
     // Tables copied unchanged when present (no glyph-id-indexed data, so safe).
     // NOT cmap (maps Unicode→old gid — renumbering invalidates it) and NOT post

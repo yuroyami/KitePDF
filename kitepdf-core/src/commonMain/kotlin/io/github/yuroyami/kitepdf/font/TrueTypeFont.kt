@@ -47,7 +47,7 @@ class TrueTypeFont private constructor(
      * null if the font has no such table. Lets the writer's font-embedding path
      * read tables the renderer itself doesn't parse.
      */
-    internal fun rawTable(tag: String): ByteArray? =
+    fun rawTable(tag: String): ByteArray? =
         tables[tag]?.let { reader.slice(it.offset, it.length) }
 
     /**

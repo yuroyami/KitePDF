@@ -252,27 +252,3 @@ class PdfPage internal constructor(
         PageRenderer(canvas, document).render(this, deviceCtm)
     }
 }
-
-/** PDF rectangle: [left, bottom, right, top] in user-space units. */
-data class Rectangle(val left: Double, val bottom: Double, val right: Double, val top: Double) {
-    val width get() = right - left
-    val height get() = top - bottom
-
-    companion object {
-        /**
-         * Parse a 4-element PDF rectangle array. Tolerant: a non-numeric entry
-         * defaults to 0.0 rather than throwing (lenient salvage). For arrays
-         * whose entries may be indirect references, route through
-         * [PdfPage.readBox] instead, which resolves each coordinate.
-         */
-        fun fromPdfArray(arr: PdfArray): Rectangle {
-            require(arr.size >= 4) { "Rectangle needs 4 numbers, got ${arr.size}" }
-            fun n(i: Int): Double = when (val v = arr[i]) {
-                is PdfReal -> v.value
-                is PdfInt -> v.value.toDouble()
-                else -> 0.0
-            }
-            return Rectangle(n(0), n(1), n(2), n(3))
-        }
-    }
-}

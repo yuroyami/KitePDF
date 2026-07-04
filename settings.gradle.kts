@@ -23,6 +23,7 @@ plugins {
 
 rootProject.name = "kitepdf-KMP"
 include(":kitepdf")
+include(":kitepdf-core")
 include(":kitepdf-compose")
 include(":kitepdf-skia")
 include(":kitepdf-native-renderer")
