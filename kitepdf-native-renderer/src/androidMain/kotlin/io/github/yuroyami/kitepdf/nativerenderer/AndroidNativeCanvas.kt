@@ -11,8 +11,11 @@ import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.RadialGradient
 import android.graphics.Shader
+import android.graphics.Typeface
 import io.github.yuroyami.kitepdf.Rectangle
-import io.github.yuroyami.kitepdf.font.PdfFont
+import io.github.yuroyami.kitepdf.font.FontFamily
+import io.github.yuroyami.kitepdf.font.FontSpec
+import io.github.yuroyami.kitepdf.font.TextGlyph
 import io.github.yuroyami.kitepdf.render.BlendMode as PdfBlendMode
 import io.github.yuroyami.kitepdf.render.ImageXObject
 import io.github.yuroyami.kitepdf.render.Matrix as PdfMatrix
@@ -95,33 +98,122 @@ class AndroidNativeCanvas(private val canvas: AndroidCanvas) : PdfCanvas {
         canvas.drawPath(p, paint)
     }
 
-    override fun drawText(
-        bytes: ByteArray, font: PdfFont, fontSize: Double, textMatrix: PdfMatrix,
-        fillColor: RgbColor, alpha: Double, blendMode: PdfBlendMode,
+    override fun drawGlyphs(
+        glyphs: List<TextGlyph>,
+        fontSize: Double,
+        unitsPerEm: Int,
+        hasOutlines: Boolean,
+        fontSpec: FontSpec,
+        textToDevice: PdfMatrix,
+        color: RgbColor,
+        alpha: Double,
+        blendMode: PdfBlendMode,
     ) {
-        if (bytes.isEmpty()) return
-        if (!font.hasEmbeddedOutlines) return  // system-font fallback deferred
+        if (glyphs.isEmpty()) return
+        if (!hasOutlines) {
+            drawTextViaSystemFont(glyphs, fontSize, fontSpec, textToDevice, color, alpha, blendMode)
+            return
+        }
 
-        val upm = font.unitsPerEm ?: 1000
-        val unitScale = fontSize / upm
+        val unitScale = fontSize / unitsPerEm
         val paint = Paint().apply {
             isAntiAlias = true
             style = Paint.Style.FILL
-            this.color = fillColor.toArgb(alpha)
+            this.color = color.toArgb(alpha)
             applyBlendMode(blendMode)
         }
+        var drewAny = false
         var penX = 0.0
-        for (glyph in font.layoutBytes(bytes)) {
+        for (glyph in glyphs) {
             val outline = glyph.outline
             if (outline != null && !outline.isEmpty()) {
-                val glyphMatrix = textMatrix
+                val glyphMatrix = textToDevice
                     .let { tm -> PdfMatrix.translation(penX, 0.0).concat(tm) }
                     .let { tm -> PdfMatrix(unitScale, 0.0, 0.0, unitScale, 0.0, 0.0).concat(tm) }
                 val p = toAndroidPath(outline, glyphMatrix).apply { fillType = Path.FillType.WINDING }
                 canvas.drawPath(p, paint)
+                drewAny = true
             }
             penX += glyph.advanceWidth * unitScale
         }
+        // Embedded font present but produced no glyphs (e.g. a subset we can't
+        // decode) — fall back to a system font rather than rendering blank.
+        if (!drewAny && glyphs.any { it.text.isNotBlank() }) {
+            drawTextViaSystemFont(glyphs, fontSize, fontSpec, textToDevice, color, alpha, blendMode)
+        }
+    }
+
+    /**
+     * Fallback for non-embedded fonts (e.g. the Standard-14). Renders with a
+     * platform logical font — zero bundled bytes, since Android already ships
+     * Serif / SansSerif / Monospace faces that are metric-compatible stand-ins
+     * for Times / Helvetica / Courier. Mirrors AwtCanvas / ComposeCanvas.
+     */
+    private fun drawTextViaSystemFont(
+        glyphs: List<TextGlyph>,
+        fontSize: Double,
+        fontSpec: FontSpec,
+        textMatrix: PdfMatrix,
+        color: RgbColor,
+        alpha: Double,
+        blendMode: PdfBlendMode,
+    ) {
+        val text = glyphs.joinToString("") { it.text }
+        if (text.isBlank()) return
+
+        // Decompose the (text-space → device) matrix like the Compose path:
+        // translation + rotation + *positive* scale magnitudes, so the device
+        // Y-flip baked into the matrix doesn't render the glyphs mirrored.
+        val sx = kotlin.math.sqrt(textMatrix.a * textMatrix.a + textMatrix.b * textMatrix.b)
+        val sy = kotlin.math.sqrt(textMatrix.c * textMatrix.c + textMatrix.d * textMatrix.d)
+        if (sy == 0.0) return
+        val rotation = kotlin.math.atan2(textMatrix.b, textMatrix.a)
+        val renderedSize = (fontSize * sy).coerceAtLeast(0.01)
+
+        canvas.save()
+        openLayers++
+        try {
+            canvas.translate(textMatrix.e.toFloat(), textMatrix.f.toFloat())
+            if (rotation != 0.0) canvas.rotate(Math.toDegrees(rotation).toFloat())
+            if (sx != sy) canvas.scale((sx / sy).toFloat(), 1f)
+            val paint = Paint().apply {
+                isAntiAlias = true
+                style = Paint.Style.FILL
+                this.color = color.toArgb(alpha)
+                typeface = systemFontFor(fontSpec)
+                textSize = renderedSize.toFloat()
+                applyBlendMode(blendMode)
+            }
+            // Position each glyph by the PDF's OWN advance widths (1/1000 em),
+            // not the substitute font's natural metrics — otherwise spacing
+            // drifts and glyphs crowd together / overlap.
+            var penX = 0.0
+            val advScale = renderedSize / 1000.0
+            for (glyph in glyphs) {
+                val t = glyph.text
+                if (t.isNotEmpty() && t != " ") canvas.drawText(t, penX.toFloat(), 0f, paint)
+                penX += glyph.advanceWidth * advScale
+            }
+        } finally {
+            canvas.restore()
+            openLayers--
+        }
+    }
+
+    /** Map a non-embedded PDF font to an Android logical font (mirrors AwtCanvas's family/style choice). */
+    private fun systemFontFor(spec: FontSpec): Typeface {
+        val base = when (spec.family) {
+            FontFamily.Serif -> Typeface.SERIF
+            FontFamily.Monospace -> Typeface.MONOSPACE
+            FontFamily.SansSerif -> Typeface.SANS_SERIF
+        }
+        val style = when {
+            spec.bold && spec.italic -> Typeface.BOLD_ITALIC
+            spec.bold -> Typeface.BOLD
+            spec.italic -> Typeface.ITALIC
+            else -> Typeface.NORMAL
+        }
+        return Typeface.create(base, style)
     }
 
     override fun fillShading(

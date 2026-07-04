@@ -16,13 +16,13 @@ class RenderTest {
         val doc = KitePDF.open(pdf)
         val canvas = RecordingCanvas()
         doc.pages[0].renderTo(canvas, Matrix.IDENTITY)
-        val texts = canvas.calls.filterIsInstance<RecordingCanvas.Call.Text>()
+        val texts = canvas.calls.filterIsInstance<RecordingCanvas.Call.Glyphs>()
         assertEquals(1, texts.size)
         assertEquals("Hello", texts[0].text)
         assertEquals(18.0, texts[0].fontSize)
         // Text origin lands at (100, 700) — translated by Td.
-        assertEquals(100.0, texts[0].textMatrix.e)
-        assertEquals(700.0, texts[0].textMatrix.f)
+        assertEquals(100.0, texts[0].textToDevice.e)
+        assertEquals(700.0, texts[0].textToDevice.f)
     }
 
     @Test
@@ -76,11 +76,11 @@ class RenderTest {
         val doc = KitePDF.open(pdf)
         val canvas = RecordingCanvas()
         doc.pages[0].renderTo(canvas, Matrix.IDENTITY)
-        val texts = canvas.calls.filterIsInstance<RecordingCanvas.Call.Text>()
+        val texts = canvas.calls.filterIsInstance<RecordingCanvas.Call.Glyphs>()
         assertEquals(2, texts.size)
         assertTrue(
-            texts[1].textMatrix.e > texts[0].textMatrix.e,
-            "Second show-text should advance past first: ${texts[0].textMatrix.e} → ${texts[1].textMatrix.e}",
+            texts[1].textToDevice.e > texts[0].textToDevice.e,
+            "Second show-text should advance past first: ${texts[0].textToDevice.e} → ${texts[1].textToDevice.e}",
         )
     }
 
@@ -93,11 +93,11 @@ class RenderTest {
         val doc = KitePDF.open(pdf)
         val canvas = RecordingCanvas()
         doc.pages[0].renderTo(canvas, Matrix.IDENTITY)
-        val texts = canvas.calls.filterIsInstance<RecordingCanvas.Call.Text>()
+        val texts = canvas.calls.filterIsInstance<RecordingCanvas.Call.Glyphs>()
         assertEquals(2, texts.size)
-        assertEquals(700.0, texts[0].textMatrix.f, 1e-6)
-        assertEquals(680.0, texts[1].textMatrix.f, 1e-6) // 700 - (1 × 20), NOT 700 - 1
-        assertEquals(100.0, texts[1].textMatrix.e, 1e-6)
+        assertEquals(700.0, texts[0].textToDevice.f, 1e-6)
+        assertEquals(680.0, texts[1].textToDevice.f, 1e-6) // 700 - (1 × 20), NOT 700 - 1
+        assertEquals(100.0, texts[1].textToDevice.e, 1e-6)
     }
 
     @Test
@@ -108,11 +108,11 @@ class RenderTest {
         val doc = KitePDF.open(pdf)
         val canvas = RecordingCanvas()
         doc.pages[0].renderTo(canvas, Matrix.IDENTITY)
-        val texts = canvas.calls.filterIsInstance<RecordingCanvas.Call.Text>()
+        val texts = canvas.calls.filterIsInstance<RecordingCanvas.Call.Glyphs>()
         assertEquals(2, texts.size)
         assertTrue(
-            texts[1].textMatrix.e - texts[0].textMatrix.e > 10.0,
-            "run advance not scaled by Tm: ${texts[0].textMatrix.e} -> ${texts[1].textMatrix.e}",
+            texts[1].textToDevice.e - texts[0].textToDevice.e > 10.0,
+            "run advance not scaled by Tm: ${texts[0].textToDevice.e} -> ${texts[1].textToDevice.e}",
         )
     }
 

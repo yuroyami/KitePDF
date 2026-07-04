@@ -20,7 +20,9 @@ import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.TextUnitType
-import io.github.yuroyami.kitepdf.font.PdfFont
+import io.github.yuroyami.kitepdf.font.FontFamily as KiteFontFamily
+import io.github.yuroyami.kitepdf.font.FontSpec
+import io.github.yuroyami.kitepdf.font.TextGlyph
 import androidx.compose.ui.graphics.Brush
 import io.github.yuroyami.kitepdf.render.BlendMode as PdfBlendMode
 import io.github.yuroyami.kitepdf.render.ImageXObject
@@ -41,7 +43,7 @@ import kotlin.math.sqrt
  *
  * Three rendering paths:
  *
- *   - **Embedded outlines** — when [PdfFont.hasEmbeddedOutlines] is true,
+ *   - **Embedded outlines** — when `hasOutlines` is true,
  *     each byte/CID becomes a Compose `Path` filled at the right position.
  *   - **System-font fallback** — when no outlines available, decode to text
  *     and hand to Compose's `TextMeasurer`.
@@ -149,42 +151,43 @@ class ComposeCanvas(
         }
     }
 
-    override fun drawText(
-        bytes: ByteArray,
-        font: PdfFont,
+    override fun drawGlyphs(
+        glyphs: List<TextGlyph>,
         fontSize: Double,
-        textMatrix: PdfMatrix,
-        fillColor: RgbColor,
+        unitsPerEm: Int,
+        hasOutlines: Boolean,
+        fontSpec: FontSpec,
+        textToDevice: PdfMatrix,
+        color: RgbColor,
         alpha: Double,
         blendMode: PdfBlendMode,
     ) {
-        if (bytes.isEmpty()) return
+        if (glyphs.isEmpty()) return
         withActiveClips {
-            if (font.hasEmbeddedOutlines) {
-                drawTextViaOutlines(bytes, font, fontSize, textMatrix, fillColor, alpha, blendMode)
+            if (hasOutlines) {
+                drawTextViaOutlines(glyphs, fontSize, unitsPerEm, textToDevice, color, alpha, blendMode)
             } else {
-                drawTextViaSystemFont(bytes, font, fontSize, textMatrix, fillColor, alpha, blendMode)
+                drawTextViaSystemFont(glyphs, fontSize, fontSpec, textToDevice, color, alpha, blendMode)
             }
         }
     }
 
     private fun drawTextViaOutlines(
-        bytes: ByteArray,
-        font: PdfFont,
+        glyphs: List<TextGlyph>,
         fontSize: Double,
+        unitsPerEm: Int,
         textMatrix: PdfMatrix,
-        fillColor: RgbColor,
+        color: RgbColor,
         alpha: Double,
         blendMode: PdfBlendMode,
     ) {
-        val upm = font.unitsPerEm ?: 1000
-        val unitScale = fontSize / upm
+        val unitScale = fontSize / unitsPerEm
         val advanceScale = fontSize / 1000.0 // PDF glyph widths are 1/1000 em, NOT font units
-        val color = fillColor.toCompose()
+        val color = color.toCompose()
         val composeBlend = blendMode.toCompose()
         val a = alpha.toFloat().coerceIn(0f, 1f)
         var penX = 0.0
-        for (glyph in font.layoutBytes(bytes)) {
+        for (glyph in glyphs) {
             val outline = glyph.outline
             if (outline != null && !outline.isEmpty()) {
                 // outline(font units) → ×unitScale → +penX (text space) → textMatrix (→ device).
@@ -201,15 +204,15 @@ class ComposeCanvas(
     }
 
     private fun drawTextViaSystemFont(
-        bytes: ByteArray,
-        font: PdfFont,
+        glyphs: List<TextGlyph>,
         fontSize: Double,
+        fontSpec: FontSpec,
         textMatrix: PdfMatrix,
-        fillColor: RgbColor,
+        color: RgbColor,
         alpha: Double,
         blendMode: PdfBlendMode,
     ) {
-        val text = font.decode(bytes)
+        val text = glyphs.joinToString("") { it.text }
         if (text.isEmpty()) return
 
         val sx = sqrt(textMatrix.a * textMatrix.a + textMatrix.b * textMatrix.b)
@@ -227,13 +230,13 @@ class ComposeCanvas(
         // which is why this stayed invisible in the golden tests.)
         val spValue = (renderedSize / (drawScope.density * drawScope.fontScale)).toFloat()
 
-        val color = fillColor.toCompose().copy(alpha = alpha.toFloat().coerceIn(0f, 1f))
+        val composeColor = color.toCompose().copy(alpha = alpha.toFloat().coerceIn(0f, 1f))
         val style = TextStyle(
-            color = color,
+            color = composeColor,
             fontSize = TextUnit(spValue, TextUnitType.Sp),
-            fontFamily = font.toComposeFamily(),
-            fontWeight = font.toComposeWeight(),
-            fontStyle = font.toComposeStyle(),
+            fontFamily = fontSpec.toComposeFamily(),
+            fontWeight = fontSpec.toComposeWeight(),
+            fontStyle = fontSpec.toComposeStyle(),
         )
         val layout = textMeasurer.measure(text = text, style = style)
 
@@ -527,19 +530,17 @@ class ComposeCanvas(
         PdfBlendMode.Luminosity -> ComposeBlendMode.Luminosity
     }
 
-    private fun PdfFont.toComposeFamily(): FontFamily = when {
-        baseFont.startsWith("Times") -> FontFamily.Serif
-        baseFont.startsWith("Courier") -> FontFamily.Monospace
-        baseFont.startsWith("Symbol") -> FontFamily.SansSerif
-        baseFont.startsWith("ZapfDingbats") -> FontFamily.SansSerif
-        else -> FontFamily.SansSerif
+    private fun FontSpec.toComposeFamily(): FontFamily = when (family) {
+        KiteFontFamily.Serif -> FontFamily.Serif
+        KiteFontFamily.Monospace -> FontFamily.Monospace
+        KiteFontFamily.SansSerif -> FontFamily.SansSerif
     }
 
-    private fun PdfFont.toComposeWeight(): FontWeight =
-        if ("Bold" in baseFont) FontWeight.Bold else FontWeight.Normal
+    private fun FontSpec.toComposeWeight(): FontWeight =
+        if (bold) FontWeight.Bold else FontWeight.Normal
 
-    private fun PdfFont.toComposeStyle(): FontStyle =
-        if ("Italic" in baseFont || "Oblique" in baseFont) FontStyle.Italic else FontStyle.Normal
+    private fun FontSpec.toComposeStyle(): FontStyle =
+        if (italic) FontStyle.Italic else FontStyle.Normal
 
     private val PI = kotlin.math.PI
 

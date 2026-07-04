@@ -1215,9 +1215,12 @@ class PageRenderer(
         // device path exists.
         if (!ocHidden()) {
             if (doFill) {
+                val glyphs = font.layoutBytes(bytes, canvas.resolvesGlyphOutlines)
                 withSoftMask(state.current) {
-                    canvas.drawText(
-                        bytes, font, t.fontSize, finalMatrix, state.current.fillColor,
+                    canvas.drawGlyphs(
+                        glyphs, t.fontSize, font.unitsPerEm ?: 1000,
+                        font.hasEmbeddedOutlines, font.fontSpec, finalMatrix,
+                        state.current.fillColor,
                         alpha = state.current.fillAlpha, blendMode = state.current.blendMode,
                     )
                 }

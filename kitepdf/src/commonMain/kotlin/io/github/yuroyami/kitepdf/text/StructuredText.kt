@@ -3,7 +3,8 @@ package io.github.yuroyami.kitepdf.text
 import io.github.yuroyami.kitepdf.PdfDocument
 import io.github.yuroyami.kitepdf.PdfPage
 import io.github.yuroyami.kitepdf.Rectangle
-import io.github.yuroyami.kitepdf.font.PdfFont
+import io.github.yuroyami.kitepdf.font.FontSpec
+import io.github.yuroyami.kitepdf.font.TextGlyph
 import io.github.yuroyami.kitepdf.render.BlendMode
 import io.github.yuroyami.kitepdf.render.ImageXObject
 import io.github.yuroyami.kitepdf.render.Matrix
@@ -92,7 +93,7 @@ data class PdfTextLine(
  */
 data class PdfTextSpan(
     val text: String,
-    val font: PdfFont,
+    val fontSpec: FontSpec,
     val fontSize: Double,
     /** Baseline-space origin in PDF user units. */
     val origin: Pair<Double, Double>,
@@ -228,8 +229,8 @@ internal object StructuredTextExtractor {
  */
 private class TextCollectorCanvas : PdfCanvas {
     data class TextRun(
-        val bytes: ByteArray,
-        val font: PdfFont,
+        val glyphs: List<TextGlyph>,
+        val fontSpec: FontSpec,
         val fontSize: Double,
         val textMatrix: Matrix,
         /** Character spacing Tc, in unscaled text-space units (default 0). */
@@ -240,9 +241,6 @@ private class TextCollectorCanvas : PdfCanvas {
         val horizScale: Double = 1.0,
     ) {
         fun toSpan(): PdfTextSpan? {
-            // Text extraction needs advances + decoded text only — not glyph
-            // shapes — so skip outline resolution entirely.
-            val glyphs = font.layoutBytes(bytes, resolveOutlines = false)
             if (glyphs.isEmpty()) return null
 
             // Advance per ISO 32000-1 §9.4.4: for each glyph the displacement is
@@ -253,13 +251,11 @@ private class TextCollectorCanvas : PdfCanvas {
             // Tw applies only to single-byte code 32 in simple fonts. A simple
             // font decodes one byte per glyph, so bytes.size == glyphs.size marks
             // the single-byte case; composite fonts never receive Tw.
-            val singleByte = bytes.size == glyphs.size
+            val singleByte = glyphs.all { it.byteCount == 1 }
             var advance = 0.0
-            for ((i, g) in glyphs.withIndex()) {
+            for (g in glyphs) {
                 var glyphAdvance = g.advanceWidth * fontSize / 1000.0 + charSpacing
-                if (singleByte && wordSpacing != 0.0 &&
-                    i in bytes.indices && (bytes[i].toInt() and 0xFF) == 0x20
-                ) {
+                if (singleByte && wordSpacing != 0.0 && g.isWordSpace) {
                     glyphAdvance += wordSpacing
                 }
                 advance += glyphAdvance
@@ -291,7 +287,7 @@ private class TextCollectorCanvas : PdfCanvas {
             val text = glyphs.joinToString("") { it.text }
             return PdfTextSpan(
                 text = text,
-                font = font,
+                fontSpec = fontSpec,
                 fontSize = fontSize,
                 origin = originX to originY,
                 bounds = Rectangle(
@@ -310,11 +306,12 @@ private class TextCollectorCanvas : PdfCanvas {
     override fun endPage() {}
     override fun fillPath(path: PdfPath, ctm: Matrix, color: RgbColor, evenOdd: Boolean, alpha: Double, blendMode: BlendMode) {}
     override fun strokePath(path: PdfPath, ctm: Matrix, color: RgbColor, lineWidth: Double, alpha: Double, blendMode: BlendMode, dashArray: List<Double>?, dashPhase: Double, lineCap: Int, lineJoin: Int, miterLimit: Double) {}
-    override fun drawText(
-        bytes: ByteArray, font: PdfFont, fontSize: Double, textMatrix: Matrix,
-        fillColor: RgbColor, alpha: Double, blendMode: BlendMode,
+    override val resolvesGlyphOutlines: Boolean get() = false
+    override fun drawGlyphs(
+        glyphs: List<TextGlyph>, fontSize: Double, unitsPerEm: Int, hasOutlines: Boolean,
+        fontSpec: FontSpec, textToDevice: Matrix, color: RgbColor, alpha: Double, blendMode: BlendMode,
     ) {
-        runs.add(TextRun(bytes, font, fontSize, textMatrix))
+        runs.add(TextRun(glyphs, fontSpec, fontSize, textToDevice))
     }
     override fun pushClip(path: PdfPath, ctm: Matrix, evenOdd: Boolean) {}
     override fun popClip() {}

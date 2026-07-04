@@ -1,6 +1,7 @@
 package io.github.yuroyami.kitepdf.render
 
-import io.github.yuroyami.kitepdf.font.PdfFont
+import io.github.yuroyami.kitepdf.font.FontSpec
+import io.github.yuroyami.kitepdf.font.TextGlyph
 
 /**
  * High-level drawing target. Implement this to add a new render backend;
@@ -66,15 +67,32 @@ interface PdfCanvas {
     }
 
     /**
-     * Draw the show-text run [bytes] (verbatim from a `Tj` / `TJ` operand)
-     * at the position implied by [textMatrix].
+     * True when this canvas needs resolved glyph outlines ([TextGlyph.outline]),
+     * i.e. it actually paints (a render backend). Extraction canvases that only
+     * read text + advances override this to `false`, letting the driver skip the
+     * cost of resolving glyph outlines.
      */
-    fun drawText(
-        bytes: ByteArray,
-        font: PdfFont,
+    val resolvesGlyphOutlines: Boolean get() = true
+
+    /**
+     * Paint one text run, already laid out into [glyphs] by the document handler.
+     * Format-neutral: no PDF (or other) font object crosses the seam, so every
+     * handler — PDF, EPUB, ... — drives text the same way.
+     *
+     * Embedded fonts ([hasOutlines] = true) carry a resolved [TextGlyph.outline]
+     * per glyph; scale each by [fontSize]/[unitsPerEm], advance the pen by
+     * [TextGlyph.advanceWidth] (1/1000 em), and paint under [textToDevice].
+     * Non-embedded fonts ([hasOutlines] = false) carry no outlines; render
+     * [TextGlyph.text] through a host typeface chosen from [fontSpec].
+     */
+    fun drawGlyphs(
+        glyphs: List<TextGlyph>,
         fontSize: Double,
-        textMatrix: Matrix,
-        fillColor: RgbColor,
+        unitsPerEm: Int,
+        hasOutlines: Boolean,
+        fontSpec: FontSpec,
+        textToDevice: Matrix,
+        color: RgbColor,
         alpha: Double = 1.0,
         blendMode: BlendMode = BlendMode.Normal,
     )
@@ -145,7 +163,7 @@ object NoopCanvas : PdfCanvas {
     override fun endPage() {}
     override fun fillPath(path: PdfPath, ctm: Matrix, color: RgbColor, evenOdd: Boolean, alpha: Double, blendMode: BlendMode) {}
     override fun strokePath(path: PdfPath, ctm: Matrix, color: RgbColor, lineWidth: Double, alpha: Double, blendMode: BlendMode, dashArray: List<Double>?, dashPhase: Double, lineCap: Int, lineJoin: Int, miterLimit: Double) {}
-    override fun drawText(bytes: ByteArray, font: PdfFont, fontSize: Double, textMatrix: Matrix, fillColor: RgbColor, alpha: Double, blendMode: BlendMode) {}
+    override fun drawGlyphs(glyphs: List<TextGlyph>, fontSize: Double, unitsPerEm: Int, hasOutlines: Boolean, fontSpec: FontSpec, textToDevice: Matrix, color: RgbColor, alpha: Double, blendMode: BlendMode) {}
     override fun pushClip(path: PdfPath, ctm: Matrix, evenOdd: Boolean) {}
     override fun popClip() {}
 }
@@ -164,22 +182,22 @@ class RecordingCanvas : PdfCanvas {
             val alpha: Double = 1.0, val blendMode: BlendMode = BlendMode.Normal,
             val lineCap: Int = 0, val lineJoin: Int = 0, val miterLimit: Double = 10.0,
         ) : Call()
-        data class Text(
-            val bytes: ByteArray, val font: PdfFont, val fontSize: Double,
-            val textMatrix: Matrix, val fillColor: RgbColor,
-            val alpha: Double = 1.0, val blendMode: BlendMode = BlendMode.Normal,
+        data class Glyphs(
+            val glyphs: List<TextGlyph>, val fontSize: Double, val unitsPerEm: Int,
+            val hasOutlines: Boolean, val fontSpec: FontSpec, val textToDevice: Matrix,
+            val color: RgbColor, val alpha: Double = 1.0, val blendMode: BlendMode = BlendMode.Normal,
         ) : Call() {
-            val text: String get() = font.decode(bytes)
+            /** Decoded text of the run: the concatenated per-glyph unicode. */
+            val text: String get() = glyphs.joinToString("") { it.text }
             override fun equals(other: Any?): Boolean =
-                other is Text && bytes.contentEquals(other.bytes) && font == other.font &&
-                    fontSize == other.fontSize && textMatrix == other.textMatrix && fillColor == other.fillColor &&
+                other is Glyphs && text == other.text &&
+                    fontSize == other.fontSize && textToDevice == other.textToDevice && color == other.color &&
                     alpha == other.alpha && blendMode == other.blendMode
             override fun hashCode(): Int {
-                var h = bytes.contentHashCode()
-                h = 31 * h + font.hashCode()
+                var h = text.hashCode()
                 h = 31 * h + fontSize.hashCode()
-                h = 31 * h + textMatrix.hashCode()
-                h = 31 * h + fillColor.hashCode()
+                h = 31 * h + textToDevice.hashCode()
+                h = 31 * h + color.hashCode()
                 h = 31 * h + alpha.hashCode()
                 h = 31 * h + blendMode.hashCode()
                 return h
@@ -203,8 +221,8 @@ class RecordingCanvas : PdfCanvas {
     override fun strokePath(path: PdfPath, ctm: Matrix, color: RgbColor, lineWidth: Double, alpha: Double, blendMode: BlendMode, dashArray: List<Double>?, dashPhase: Double, lineCap: Int, lineJoin: Int, miterLimit: Double) {
         calls.add(Call.Stroke(path, ctm, color, lineWidth, alpha, blendMode, lineCap, lineJoin, miterLimit))
     }
-    override fun drawText(bytes: ByteArray, font: PdfFont, fontSize: Double, textMatrix: Matrix, fillColor: RgbColor, alpha: Double, blendMode: BlendMode) {
-        calls.add(Call.Text(bytes, font, fontSize, textMatrix, fillColor, alpha, blendMode))
+    override fun drawGlyphs(glyphs: List<TextGlyph>, fontSize: Double, unitsPerEm: Int, hasOutlines: Boolean, fontSpec: FontSpec, textToDevice: Matrix, color: RgbColor, alpha: Double, blendMode: BlendMode) {
+        calls.add(Call.Glyphs(glyphs, fontSize, unitsPerEm, hasOutlines, fontSpec, textToDevice, color, alpha, blendMode))
     }
     override fun pushClip(path: PdfPath, ctm: Matrix, evenOdd: Boolean) {
         calls.add(Call.PushClip(path, ctm, evenOdd))

@@ -72,6 +72,23 @@ class PdfFont private constructor(
             ?: composite?.ttf?.unitsPerEm
             ?: (embeddedCff ?: embeddedType1 ?: composite?.cff)?.let { 1000 }
 
+    /**
+     * Platform-neutral substitute-font descriptor, derived from [baseFont], for
+     * canvases that render non-embedded fonts through a host typeface. Centralises
+     * the family/style choice the render backends used to each make inline.
+     */
+    val fontSpec: FontSpec
+        get() = FontSpec(
+            family = when {
+                baseFont.startsWith("Times") -> FontFamily.Serif
+                baseFont.startsWith("Courier") -> FontFamily.Monospace
+                else -> FontFamily.SansSerif
+            },
+            bold = "Bold" in baseFont,
+            italic = "Italic" in baseFont || "Oblique" in baseFont,
+            name = baseFont,
+        )
+
     /* ─── Decoding + layout ──────────────────────────────────────────────── */
 
     /** Decode show-text bytes (from a `Tj` / `TJ` operand) to unicode text. */

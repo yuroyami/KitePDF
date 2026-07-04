@@ -1,7 +1,9 @@
 package io.github.yuroyami.kitepdf.nativerenderer
 
 import io.github.yuroyami.kitepdf.Rectangle
-import io.github.yuroyami.kitepdf.font.PdfFont
+import io.github.yuroyami.kitepdf.font.FontFamily
+import io.github.yuroyami.kitepdf.font.FontSpec
+import io.github.yuroyami.kitepdf.font.TextGlyph
 import io.github.yuroyami.kitepdf.render.BlendMode as PdfBlendMode
 import io.github.yuroyami.kitepdf.render.ImageXObject
 import io.github.yuroyami.kitepdf.render.Matrix as PdfMatrix
@@ -95,34 +97,113 @@ class Canvas2dCanvas(private val ctx: CanvasRenderingContext2D) : PdfCanvas {
         }
     }
 
-    override fun drawText(
-        bytes: ByteArray, font: PdfFont, fontSize: Double, textMatrix: PdfMatrix,
-        fillColor: RgbColor, alpha: Double, blendMode: PdfBlendMode,
+    override fun drawGlyphs(
+        glyphs: List<TextGlyph>,
+        fontSize: Double,
+        unitsPerEm: Int,
+        hasOutlines: Boolean,
+        fontSpec: FontSpec,
+        textToDevice: PdfMatrix,
+        color: RgbColor,
+        alpha: Double,
+        blendMode: PdfBlendMode,
     ) {
-        if (bytes.isEmpty()) return
-        if (!font.hasEmbeddedOutlines) return  // system-font fallback deferred
+        if (glyphs.isEmpty()) return
+        if (!hasOutlines) {
+            drawTextViaSystemFont(glyphs, fontSize, fontSpec, textToDevice, color, alpha, blendMode)
+            return
+        }
 
-        val upm = font.unitsPerEm ?: 1000
-        val unitScale = fontSize / upm
+        val unitScale = fontSize / unitsPerEm   // glyph outlines: font units → text space
+        var drewAny = false
         ctx.save()
         try {
-            ctx.fillStyle = fillColor.toCssRgba(alpha)
+            ctx.fillStyle = color.toCssRgba(alpha)
             ctx.globalCompositeOperation = blendMode.toCanvas()
             var penX = 0.0
-            for (glyph in font.layoutBytes(bytes)) {
+            for (glyph in glyphs) {
                 val outline = glyph.outline
                 if (outline != null && !outline.isEmpty()) {
-                    val glyphMatrix = textMatrix
+                    val glyphMatrix = textToDevice
                         .let { tm -> PdfMatrix.translation(penX, 0.0).concat(tm) }
                         .let { tm -> PdfMatrix(unitScale, 0.0, 0.0, unitScale, 0.0, 0.0).concat(tm) }
                     val p = toPath2D(outline, glyphMatrix)
                     ctx.asDynamic().fill(p, "nonzero")
+                    drewAny = true
                 }
                 penX += glyph.advanceWidth * unitScale
             }
         } finally {
             ctx.restore()
         }
+        // Embedded font present but produced no glyphs (e.g. a subset we can't
+        // decode) — fall back to a system font rather than rendering blank.
+        if (!drewAny && glyphs.any { it.text.isNotBlank() }) {
+            drawTextViaSystemFont(glyphs, fontSize, fontSpec, textToDevice, color, alpha, blendMode)
+        }
+    }
+
+    /**
+     * Fallback for non-embedded fonts (e.g. the Standard-14). Renders with a
+     * platform logical font via a CSS `font` string — zero bundled bytes, since
+     * the browser already ships serif / sans-serif / monospace faces that are
+     * metric-compatible stand-ins for Times / Helvetica / Courier. Mirrors the
+     * AWT / Compose backends.
+     */
+    private fun drawTextViaSystemFont(
+        glyphs: List<TextGlyph>,
+        fontSize: Double,
+        fontSpec: FontSpec,
+        textMatrix: PdfMatrix,
+        color: RgbColor,
+        alpha: Double,
+        blendMode: PdfBlendMode,
+    ) {
+        val text = glyphs.joinToString("") { it.text }
+        if (text.isBlank()) return
+
+        // Decompose the (text-space → device) matrix like the Compose/AWT path:
+        // translation + rotation + *positive* scale magnitudes, so the device
+        // Y-flip baked into the matrix doesn't render the glyphs mirrored.
+        val sx = kotlin.math.sqrt(textMatrix.a * textMatrix.a + textMatrix.b * textMatrix.b)
+        val sy = kotlin.math.sqrt(textMatrix.c * textMatrix.c + textMatrix.d * textMatrix.d)
+        if (sy == 0.0) return
+        val rotation = kotlin.math.atan2(textMatrix.b, textMatrix.a)
+        val renderedSize = (fontSize * sy).coerceAtLeast(0.01)
+
+        ctx.save()
+        try {
+            ctx.translate(textMatrix.e, textMatrix.f)
+            if (rotation != 0.0) ctx.rotate(rotation)
+            if (sx != sy) ctx.scale(sx / sy, 1.0)
+            ctx.fillStyle = color.toCssRgba(alpha)
+            ctx.globalCompositeOperation = blendMode.toCanvas()
+            ctx.font = systemFontFor(fontSpec, renderedSize)
+            // Position each glyph by the PDF's OWN advance widths (1/1000 em),
+            // not the substitute font's natural metrics — otherwise spacing
+            // drifts and glyphs crowd together / overlap.
+            var penX = 0.0
+            val advScale = renderedSize / 1000.0
+            for (glyph in glyphs) {
+                val t = glyph.text
+                if (t.isNotEmpty() && t != " ") ctx.fillText(t, penX, 0.0)
+                penX += glyph.advanceWidth * advScale
+            }
+        } finally {
+            ctx.restore()
+        }
+    }
+
+    /** Map a non-embedded PDF font to a CSS `font` string (mirrors AwtCanvas's family/style choice). */
+    private fun systemFontFor(spec: FontSpec, sizePx: Double): String {
+        val family = when (spec.family) {
+            FontFamily.Serif -> "serif"
+            FontFamily.Monospace -> "monospace"
+            FontFamily.SansSerif -> "sans-serif"
+        }
+        val bold = if (spec.bold) "bold " else ""
+        val italic = if (spec.italic) "italic " else ""
+        return "$italic$bold${sizePx}px $family"
     }
 
     override fun fillShading(

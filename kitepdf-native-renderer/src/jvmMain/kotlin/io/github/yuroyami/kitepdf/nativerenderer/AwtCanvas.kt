@@ -1,7 +1,9 @@
 package io.github.yuroyami.kitepdf.nativerenderer
 
 import io.github.yuroyami.kitepdf.Rectangle
-import io.github.yuroyami.kitepdf.font.PdfFont
+import io.github.yuroyami.kitepdf.font.FontFamily
+import io.github.yuroyami.kitepdf.font.FontSpec
+import io.github.yuroyami.kitepdf.font.TextGlyph
 import io.github.yuroyami.kitepdf.render.BlendMode as PdfBlendMode
 import io.github.yuroyami.kitepdf.render.ImageXObject
 import io.github.yuroyami.kitepdf.render.Matrix as PdfMatrix
@@ -111,34 +113,35 @@ class AwtCanvas(private val g: Graphics2D) : PdfCanvas {
         }
     }
 
-    override fun drawText(
-        bytes: ByteArray,
-        font: PdfFont,
+    override fun drawGlyphs(
+        glyphs: List<TextGlyph>,
         fontSize: Double,
-        textMatrix: PdfMatrix,
-        fillColor: RgbColor,
+        unitsPerEm: Int,
+        hasOutlines: Boolean,
+        fontSpec: FontSpec,
+        textToDevice: PdfMatrix,
+        color: RgbColor,
         alpha: Double,
         blendMode: PdfBlendMode,
     ) {
-        if (bytes.isEmpty()) return
-        if (!font.hasEmbeddedOutlines) {
-            drawTextViaSystemFont(bytes, font, fontSize, textMatrix, fillColor, alpha, blendMode)
+        if (glyphs.isEmpty()) return
+        if (!hasOutlines) {
+            drawTextViaSystemFont(glyphs, fontSize, fontSpec, textToDevice, color, alpha, blendMode)
             return
         }
 
-        val upm = font.unitsPerEm ?: 1000
-        val unitScale = fontSize / upm          // glyph outlines: font units → text space
+        val unitScale = fontSize / unitsPerEm   // glyph outlines: font units → text space
         val advanceScale = fontSize / 1000.0    // PDF glyph widths are 1/1000 em, NOT font units
         var drewAny = false
         withComposite(blendMode, alpha) {
-            g.color = fillColor.toAwt()
+            g.color = color.toAwt()
             var penX = 0.0
-            for (glyph in font.layoutBytes(bytes)) {
+            for (glyph in glyphs) {
                 val outline = glyph.outline
                 if (outline != null && !outline.isEmpty()) {
                     // outline(font units) → ×unitScale → +penX (text space) → finalMatrix (→ device).
                     // concat(other) applies `other` first, so the scale must be the LAST concat.
-                    val glyphMatrix = textMatrix
+                    val glyphMatrix = textToDevice
                         .concat(PdfMatrix.translation(penX, 0.0))
                         .concat(PdfMatrix(unitScale, 0.0, 0.0, unitScale, 0.0, 0.0))
                     val awt = toAwtPath(outline, glyphMatrix).apply { windingRule = Path2D.WIND_NON_ZERO }
@@ -150,8 +153,8 @@ class AwtCanvas(private val g: Graphics2D) : PdfCanvas {
         }
         // Embedded font present but produced no glyphs (e.g. a subset we can't
         // decode) — fall back to a system font rather than rendering blank.
-        if (!drewAny && font.decode(bytes).isNotBlank()) {
-            drawTextViaSystemFont(bytes, font, fontSize, textMatrix, fillColor, alpha, blendMode)
+        if (!drewAny && glyphs.any { it.text.isNotBlank() }) {
+            drawTextViaSystemFont(glyphs, fontSize, fontSpec, textToDevice, color, alpha, blendMode)
         }
     }
 
@@ -163,15 +166,15 @@ class AwtCanvas(private val g: Graphics2D) : PdfCanvas {
      * own Compose backend handle the case; we mirror ComposeCanvas here.
      */
     private fun drawTextViaSystemFont(
-        bytes: ByteArray,
-        font: PdfFont,
+        glyphs: List<TextGlyph>,
         fontSize: Double,
+        fontSpec: FontSpec,
         textMatrix: PdfMatrix,
-        fillColor: RgbColor,
+        color: RgbColor,
         alpha: Double,
         blendMode: PdfBlendMode,
     ) {
-        val text = font.decode(bytes)
+        val text = glyphs.joinToString("") { it.text }
         if (text.isBlank()) return
 
         // Decompose the (text-space → device) matrix like the Compose path:
@@ -192,14 +195,14 @@ class AwtCanvas(private val g: Graphics2D) : PdfCanvas {
         try {
             g.transform(tx)
             withComposite(blendMode, alpha) {
-                g.color = fillColor.toAwt()
-                g.font = systemFontFor(font, renderedSize.toFloat())
+                g.color = color.toAwt()
+                g.font = systemFontFor(fontSpec, renderedSize.toFloat())
                 // Position each glyph by the PDF's OWN advance widths (1/1000 em),
                 // not the substitute font's natural metrics — otherwise spacing
                 // drifts and glyphs crowd together / overlap.
                 var penX = 0.0
                 val advScale = renderedSize / 1000.0
-                for (glyph in font.layoutBytes(bytes)) {
+                for (glyph in glyphs) {
                     val t = glyph.text
                     if (t.isNotEmpty() && t != " ") g.drawString(t, penX.toFloat(), 0f)
                     penX += glyph.advanceWidth * advScale
@@ -211,15 +214,15 @@ class AwtCanvas(private val g: Graphics2D) : PdfCanvas {
     }
 
     /** Map a non-embedded PDF font to a JVM logical font (mirrors ComposeCanvas's family/style choice). */
-    private fun systemFontFor(font: PdfFont, sizePx: Float): Font {
-        val family = when {
-            font.baseFont.startsWith("Times") -> Font.SERIF
-            font.baseFont.startsWith("Courier") -> Font.MONOSPACED
-            else -> Font.SANS_SERIF
+    private fun systemFontFor(spec: FontSpec, sizePx: Float): Font {
+        val family = when (spec.family) {
+            FontFamily.Serif -> Font.SERIF
+            FontFamily.Monospace -> Font.MONOSPACED
+            FontFamily.SansSerif -> Font.SANS_SERIF
         }
         var style = Font.PLAIN
-        if ("Bold" in font.baseFont) style = style or Font.BOLD
-        if ("Italic" in font.baseFont || "Oblique" in font.baseFont) style = style or Font.ITALIC
+        if (spec.bold) style = style or Font.BOLD
+        if (spec.italic) style = style or Font.ITALIC
         return Font(family, style, 1).deriveFont(sizePx)
     }
 

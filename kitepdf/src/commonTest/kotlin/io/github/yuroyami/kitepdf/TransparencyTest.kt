@@ -119,7 +119,7 @@ class TransparencyTest {
         val doc = KitePDF.open(pdf)
         val canvas = RecordingCanvas()
         doc.pages[0].renderTo(canvas, Matrix.IDENTITY)
-        val texts = canvas.calls.filterIsInstance<RecordingCanvas.Call.Text>()
+        val texts = canvas.calls.filterIsInstance<RecordingCanvas.Call.Glyphs>()
         assertEquals(1, texts.size)
         assertEquals(0.3, texts[0].alpha)
         assertTrue(texts[0].text.contains("translucent"))

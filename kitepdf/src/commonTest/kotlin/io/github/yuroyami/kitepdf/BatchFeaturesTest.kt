@@ -51,15 +51,15 @@ class BatchFeaturesTest {
 
     @Test fun invisible_text_mode_3_not_drawn() {
         val hidden = render(page("BT /F1 12 Tf 3 Tr 100 700 Td (secret) Tj ET".encodeToByteArray()))
-        assertEquals(0, hidden.calls.filterIsInstance<RecordingCanvas.Call.Text>().size)
+        assertEquals(0, hidden.calls.filterIsInstance<RecordingCanvas.Call.Glyphs>().size)
         val visible = render(page("BT /F1 12 Tf 0 Tr 100 700 Td (shown) Tj ET".encodeToByteArray()))
-        assertEquals(1, visible.calls.filterIsInstance<RecordingCanvas.Call.Text>().size)
+        assertEquals(1, visible.calls.filterIsInstance<RecordingCanvas.Call.Glyphs>().size)
     }
 
     @Test fun tz_scaling_bakes_into_text_matrix() {
         val c = render(page("BT /F1 12 Tf 50 Tz 100 700 Td (x) Tj ET".encodeToByteArray()))
-        val text = c.calls.filterIsInstance<RecordingCanvas.Call.Text>().single()
-        assertEquals(0.5, text.textMatrix.a, 0.001) // 50% horizontal scale on the x axis
+        val text = c.calls.filterIsInstance<RecordingCanvas.Call.Glyphs>().single()
+        assertEquals(0.5, text.textToDevice.a, 0.001) // 50% horizontal scale on the x axis
     }
 
     @Test fun line_cap_and_join_reach_the_stroke() {

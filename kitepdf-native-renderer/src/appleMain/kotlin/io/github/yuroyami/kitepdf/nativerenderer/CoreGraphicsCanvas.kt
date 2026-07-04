@@ -1,7 +1,8 @@
 package io.github.yuroyami.kitepdf.nativerenderer
 
 import io.github.yuroyami.kitepdf.Rectangle
-import io.github.yuroyami.kitepdf.font.PdfFont
+import io.github.yuroyami.kitepdf.font.FontSpec
+import io.github.yuroyami.kitepdf.font.TextGlyph
 import io.github.yuroyami.kitepdf.render.BlendMode as PdfBlendMode
 import io.github.yuroyami.kitepdf.render.ImageXObject
 import io.github.yuroyami.kitepdf.render.Matrix as PdfMatrix
@@ -155,24 +156,30 @@ class CoreGraphicsCanvas(private val ctx: CGContextRef) : PdfCanvas {
         }
     }
 
-    override fun drawText(
-        bytes: ByteArray, font: PdfFont, fontSize: Double, textMatrix: PdfMatrix,
-        fillColor: RgbColor, alpha: Double, blendMode: PdfBlendMode,
+    override fun drawGlyphs(
+        glyphs: List<TextGlyph>,
+        fontSize: Double,
+        unitsPerEm: Int,
+        hasOutlines: Boolean,
+        fontSpec: FontSpec,
+        textToDevice: PdfMatrix,
+        color: RgbColor,
+        alpha: Double,
+        blendMode: PdfBlendMode,
     ) {
-        if (bytes.isEmpty()) return
-        if (!font.hasEmbeddedOutlines) return  // system-font fallback deferred
+        if (glyphs.isEmpty()) return
+        if (!hasOutlines) return  // system-font fallback deferred
 
-        val upm = font.unitsPerEm ?: 1000
-        val unitScale = fontSize / upm
+        val unitScale = fontSize / unitsPerEm
         CGContextSaveGState(ctx)
         try {
             CGContextSetBlendMode(ctx, blendMode.toCG())
-            CGContextSetRGBFillColor(ctx, fillColor.r, fillColor.g, fillColor.b, alpha)
+            CGContextSetRGBFillColor(ctx, color.r, color.g, color.b, alpha)
             var penX = 0.0
-            for (glyph in font.layoutBytes(bytes)) {
+            for (glyph in glyphs) {
                 val outline = glyph.outline
                 if (outline != null && !outline.isEmpty()) {
-                    val glyphMatrix = textMatrix
+                    val glyphMatrix = textToDevice
                         .let { tm -> PdfMatrix.translation(penX, 0.0).concat(tm) }
                         .let { tm -> PdfMatrix(unitScale, 0.0, 0.0, unitScale, 0.0, 0.0).concat(tm) }
                     buildPath(outline, glyphMatrix)
