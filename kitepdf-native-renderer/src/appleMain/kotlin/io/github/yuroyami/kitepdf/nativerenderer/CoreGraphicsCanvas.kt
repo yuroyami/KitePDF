@@ -170,7 +170,8 @@ class CoreGraphicsCanvas(private val ctx: CGContextRef) : PdfCanvas {
         if (glyphs.isEmpty()) return
         if (!hasOutlines) return  // system-font fallback deferred
 
-        val unitScale = fontSize / unitsPerEm
+        val unitScale = fontSize / unitsPerEm  // glyph outlines: font units → text space
+        val advanceScale = fontSize / 1000.0   // advances are 1/1000 em, not font units
         CGContextSaveGState(ctx)
         try {
             CGContextSetBlendMode(ctx, blendMode.toCG())
@@ -185,7 +186,7 @@ class CoreGraphicsCanvas(private val ctx: CGContextRef) : PdfCanvas {
                     buildPath(outline, glyphMatrix)
                     CGContextFillPath(ctx)
                 }
-                penX += glyph.advanceWidth * unitScale
+                penX += glyph.advanceWidth * advanceScale
             }
         } finally {
             CGContextRestoreGState(ctx)

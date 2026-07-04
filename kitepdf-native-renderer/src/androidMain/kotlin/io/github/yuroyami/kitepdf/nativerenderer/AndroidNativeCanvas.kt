@@ -115,7 +115,8 @@ class AndroidNativeCanvas(private val canvas: AndroidCanvas) : PdfCanvas {
             return
         }
 
-        val unitScale = fontSize / unitsPerEm
+        val unitScale = fontSize / unitsPerEm  // glyph outlines: font units → text space
+        val advanceScale = fontSize / 1000.0   // advances are 1/1000 em, not font units
         val paint = Paint().apply {
             isAntiAlias = true
             style = Paint.Style.FILL
@@ -134,7 +135,7 @@ class AndroidNativeCanvas(private val canvas: AndroidCanvas) : PdfCanvas {
                 canvas.drawPath(p, paint)
                 drewAny = true
             }
-            penX += glyph.advanceWidth * unitScale
+            penX += glyph.advanceWidth * advanceScale
         }
         // Embedded font present but produced no glyphs (e.g. a subset we can't
         // decode) — fall back to a system font rather than rendering blank.

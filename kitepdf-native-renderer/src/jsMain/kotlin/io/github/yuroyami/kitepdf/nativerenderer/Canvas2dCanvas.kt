@@ -115,6 +115,7 @@ class Canvas2dCanvas(private val ctx: CanvasRenderingContext2D) : PdfCanvas {
         }
 
         val unitScale = fontSize / unitsPerEm   // glyph outlines: font units → text space
+        val advanceScale = fontSize / 1000.0    // advances are 1/1000 em, not font units
         var drewAny = false
         ctx.save()
         try {
@@ -131,7 +132,7 @@ class Canvas2dCanvas(private val ctx: CanvasRenderingContext2D) : PdfCanvas {
                     ctx.asDynamic().fill(p, "nonzero")
                     drewAny = true
                 }
-                penX += glyph.advanceWidth * unitScale
+                penX += glyph.advanceWidth * advanceScale
             }
         } finally {
             ctx.restore()

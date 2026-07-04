@@ -145,7 +145,8 @@ class SkiaCanvas(private val canvas: SkCanvas) : PdfCanvas {
             return
         }
 
-        val unitScale = fontSize / unitsPerEm
+        val unitScale = fontSize / unitsPerEm  // glyph outlines: font units → text space
+        val advanceScale = fontSize / 1000.0   // advances are 1/1000 em, not font units
         val argb = color.toArgb(alpha)
         val paint = Paint().apply {
             this.color = argb
@@ -163,7 +164,7 @@ class SkiaCanvas(private val canvas: SkCanvas) : PdfCanvas {
                 val sk = toSkPath(outline, glyphMatrix).apply { fillMode = PathFillMode.WINDING }
                 canvas.drawPath(sk, paint)
             }
-            penX += glyph.advanceWidth * unitScale
+            penX += glyph.advanceWidth * advanceScale
         }
     }
 
