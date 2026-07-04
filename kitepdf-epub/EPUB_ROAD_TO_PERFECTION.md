@@ -48,6 +48,25 @@ doesn't expose them), WOFF/WOFF2 (per-table inflate / brotli), **bidi** (Arabic/
 **CJK** line-breaking + vertical writing, **hyphenation** (Knuth-Liang), **shaping** (GSUB/GPOS
 ligatures/kerning). Those are the rest of Phase 4.
 
+### Rendering harness (Phase 7 testing, started)
+
+The ~130 unit tests record the Canvas call stream but never paint. Two JVM gates in
+`:kitepdf-native-renderer` (a test-only dependency on `:kitepdf-epub`) now exercise the real
+raster path via `AwtCanvas`:
+
+- **`EpubRasterTest`** — rasterises `EpubPage` to a `BufferedImage` and asserts on pixels: text
+  leaves ink, headings sit near the top, `background-color` fills a region, borders paint edges,
+  backgrounds sit behind text, images blit their pixels. Catches coordinate-flip / paint-order /
+  outline / `fillPath` bugs the RecordingCanvas tests can't.
+- **`EpubDifferentialTest`** — renders a synthetic corpus (plus any `-Dkitepdf.epub.corpus` dir)
+  through the raster path; **Gate 1** no render throws, **Gate 2** no blank content page. With
+  `mutool` present it also records a per-book page-0 MAE vs the oracle (synthetic MAEs currently
+  0.002-0.13). That MAE is **informational** — EPUB reflow/pagination diverge from mutool, so
+  pixel parity is a real gate only for fixed-layout books (Phase 5), not reflowable ones.
+
+Still missing: a spec-valid book corpus (`epub3-samples`/Readium + `epubcheck`), a mean-MAE trend,
+and golden-image regression baselines.
+
 ---
 
 ## (historical) Phases 1, 2 & 3 landed

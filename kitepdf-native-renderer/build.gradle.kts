@@ -72,5 +72,12 @@ kotlin {
         commonTest.dependencies {
             implementation(kotlin("test"))
         }
+
+        // The EPUB handler is a test-only dependency: it lets the JVM difftest
+        // rasterise EpubPage through AwtCanvas without coupling the renderer's
+        // production code to a second handler.
+        jvmTest.dependencies {
+            implementation(projects.kitepdfEpub)
+        }
     }
 }
