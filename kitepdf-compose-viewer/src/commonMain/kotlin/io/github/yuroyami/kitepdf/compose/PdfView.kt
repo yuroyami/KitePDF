@@ -44,8 +44,8 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
+import io.github.yuroyami.kitepdf.KitePage
 import io.github.yuroyami.kitepdf.PdfDocument
-import io.github.yuroyami.kitepdf.PdfPage
 import io.github.yuroyami.kitepdf.render.Matrix as PdfMatrix
 import kotlin.math.max
 import kotlin.math.roundToInt
@@ -288,7 +288,7 @@ private fun ContinuousLayout(
 /** One page in the strip: fills the cross axis at its natural aspect ratio. */
 @Composable
 private fun androidx.compose.foundation.lazy.LazyItemScope.ContinuousPageItem(
-    page: PdfPage,
+    page: KitePage,
     pageIndex: Int,
     orientation: Orientation,
     settledZoom: Float,
@@ -309,12 +309,12 @@ private fun androidx.compose.foundation.lazy.LazyItemScope.ContinuousPageItem(
         val baseSize = when (orientation) {
             Orientation.Vertical -> {
                 val w = if (constraints.hasBoundedWidth) constraints.maxWidth
-                else with(density) { page.width.dp.roundToPx() }
+                else with(density) { page.displayWidth.dp.roundToPx() }
                 IntSize(w, (w / aspect).roundToInt().coerceAtLeast(1))
             }
             Orientation.Horizontal -> {
                 val h = if (constraints.hasBoundedHeight) constraints.maxHeight
-                else with(density) { page.height.dp.roundToPx() }
+                else with(density) { page.displayHeight.dp.roundToPx() }
                 IntSize((h * aspect).roundToInt().coerceAtLeast(1), h)
             }
         }
@@ -445,7 +445,7 @@ private fun SinglePageLayout(
 
 @Composable
 private fun PageBox(
-    page: PdfPage,
+    page: KitePage,
     pageIndex: Int,
     zoom: Float,
     pan: androidx.compose.ui.geometry.Offset,
@@ -494,7 +494,7 @@ private fun PageBox(
  */
 @Composable
 private fun PdfPageRaster(
-    page: PdfPage,
+    page: KitePage,
     pageIndex: Int,
     baseSize: IntSize,
     settledZoom: Float,
@@ -523,14 +523,14 @@ private fun PdfPageRaster(
         max(1f, raster.width / visualWidth)
     } else 1f
 
-    val bitmap by produceState<ImageBitmap?>(null, page, raster, colors.pageBackground, hairline) {
+    val bitmap by produceState<ImageBitmap?>(null, page, raster, colors.pageBackground, colors.theme, hairline) {
         // Post-frame, main thread (Compose text measurement isn't thread-safe on
         // every platform). The jitter on a page turn is avoided not by moving
         // this off-thread but by prefetching neighbours (PdfLayout.Paged
         // offscreenPages) so the incoming page is already cached before the swipe
         // — this raster then only runs while idle, never mid-gesture.
         value = if (raster == IntSize.Zero) null
-        else rasterizer.rasterize(page, raster.width, raster.height, colors.pageBackground, hairline)
+        else rasterizer.rasterize(page, raster.width, raster.height, colors.pageBackground, hairline, colors.theme)
     }
 
     // Fade the bitmap in once it lands instead of popping (and keep the previous
@@ -573,25 +573,24 @@ private fun PdfPageRaster(
  */
 @Composable
 private fun PdfPageVector(
-    page: PdfPage,
+    page: KitePage,
     spec: PdfRenderSpec.Vectorized,
     colors: PdfViewColors,
     modifier: Modifier,
 ) {
     val textMeasurer = rememberTextMeasurer()
+    val theme = colors.theme
     Canvas(modifier) {
-        drawRect(colors.pageBackground)
+        drawRect(theme?.background?.let { Color(it.r.toFloat(), it.g.toFloat(), it.b.toFloat()) } ?: colors.pageBackground)
         val w = size.width
         val h = size.height
-        val scale = if (page.width > 0.0) w / page.width else 0.0
+        val scale = if (page.displayWidth > 0.0) w / page.displayWidth else 0.0
         if (!scale.isFinite() || scale <= 0.0 || w <= 0f || h <= 0f) return@Canvas
-        // PDF user space is Y-up from bottom-left; flip to device Y-down + scale.
-        val deviceCtm = PdfMatrix(
-            a = scale, b = 0.0,
-            c = 0.0, d = -scale,
-            e = 0.0, f = h.toDouble(),
-        )
-        page.renderTo(ComposeCanvas(this, textMeasurer, spec.hairlineWidthPx), deviceCtm)
+        // displayToDeviceBase() maps page space onto a top-left, Y-down device box
+        // (PDF folds in the display-box origin + /Rotate; EPUB its top-left flip).
+        val deviceCtm = PdfMatrix.scaling(scale, scale).concat(page.displayToDeviceBase())
+        val base = ComposeCanvas(this, textMeasurer, spec.hairlineWidthPx)
+        page.renderTo(theme?.wrap(base) ?: base, deviceCtm)
     }
 }
 

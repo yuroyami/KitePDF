@@ -77,6 +77,7 @@ kotlin {
 
         commonMain.dependencies {
             implementation(projects.kitepdfPdf)
+            implementation(projects.kitepdfEpub)
             // What consumers of :kitepdf-skia compile against — resolves to
             // skiko-awt on JVM, native klibs on Apple/Linux, CanvasKit on web.
             api(libs.skiko)

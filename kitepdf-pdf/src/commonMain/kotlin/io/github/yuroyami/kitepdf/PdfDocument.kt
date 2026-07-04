@@ -47,7 +47,7 @@ class PdfDocument private constructor(
     val xref: Map<Long, XrefEntry>,
     val trailer: PdfDictionary,
     private val security: StandardSecurityHandler?,
-) : IndirectResolver {
+) : IndirectResolver, KiteDocument {
 
     /** True if the document is encrypted. */
     val isEncrypted: Boolean get() = security != null
@@ -119,9 +119,9 @@ class PdfDocument private constructor(
     }
 
     /** All pages in document order (lazily built from the catalog's /Pages tree). */
-    val pages: List<PdfPage> by lazy { buildPageList() }
+    override val pages: List<PdfPage> by lazy { buildPageList() }
 
-    val pageCount: Int get() = pages.size
+    override val pageCount: Int get() = pages.size
 
     /** Indirect-object-number → zero-based page index. Built alongside [pages]. */
     private val pageRefToIndex = HashMap<Long, Int>()

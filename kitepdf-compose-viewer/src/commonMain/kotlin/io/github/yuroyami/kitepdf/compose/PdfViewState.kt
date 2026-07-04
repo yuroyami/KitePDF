@@ -15,6 +15,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.isSpecified
 import androidx.compose.ui.unit.IntSize
+import io.github.yuroyami.kitepdf.KiteDocument
 import io.github.yuroyami.kitepdf.PdfDocument
 import kotlin.math.abs
 
@@ -41,7 +42,7 @@ fun rememberPdfViewState(document: PdfDocument, initialPage: Int = 0): PdfViewSt
  */
 @Stable
 class PdfViewState(
-    val document: PdfDocument,
+    val document: KiteDocument,
     initialPage: Int = 0,
 ) {
     val pageCount: Int get() = document.pageCount

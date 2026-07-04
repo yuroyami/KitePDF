@@ -6,6 +6,9 @@ import io.github.yuroyami.kitepdf.epub.css.Direction
 import io.github.yuroyami.kitepdf.epub.css.FontFaceRule
 import io.github.yuroyami.kitepdf.epub.css.Origin
 import io.github.yuroyami.kitepdf.epub.css.StyleResolver
+import io.github.yuroyami.kitepdf.epub.css.StyleRule
+import io.github.yuroyami.kitepdf.KiteDocument
+import io.github.yuroyami.kitepdf.KitePage
 import io.github.yuroyami.kitepdf.render.BlendMode
 import io.github.yuroyami.kitepdf.render.ImageXObject
 import io.github.yuroyami.kitepdf.render.Matrix
@@ -24,47 +27,88 @@ import io.github.yuroyami.kitepdf.render.RgbColor
  * geometry; [Paginator] slices it into pages; and [EpubPage] paints backgrounds,
  * borders, text and images. See EPUB_ROAD_TO_PERFECTION.md.
  */
-class EpubDocument private constructor(
-    private val root: BlockBox,
-    internal val zip: ZipReader,
-    private val fonts: FontRegistry,
+class EpubDocument internal constructor(
+    private val parsed: ParsedEpub,
+    /** Page size, font size and margin. Change at runtime via [withSettings]. */
+    val settings: EpubSettings,
+) : KiteDocument {
+
+    internal val zip: ZipReader get() = parsed.zip
+
     /** Publication metadata (title, authors, cover, reading direction). */
-    val metadata: EpubMetadata,
+    val metadata: EpubMetadata get() = parsed.metadata
+
     /** Navigation tree from EPUB 3 nav.xhtml or EPUB 2 toc.ncx (empty if none). */
-    val tableOfContents: TableOfContents,
-    val pageWidth: Double,
-    val pageHeight: Double,
-    val fontSize: Double,
-    val margin: Double,
-    /** Fixed-layout spines (one page each at its viewport size); null = reflowable. */
-    private val fixedSpines: List<FixedSpine>? = null,
-) {
-    private val contentWidth = pageWidth - 2 * margin
-    private val pageContentHeight = pageHeight - 2 * margin
+    val tableOfContents: TableOfContents get() = parsed.toc
+
+    val pageWidth: Double get() = settings.pageWidth
+    val pageHeight: Double get() = settings.pageHeight
+    val fontSize: Double get() = settings.fontSize
+    val margin: Double get() = settings.margin
+
+    private val contentWidth: Double get() = settings.pageWidth - 2 * settings.margin
+    private val pageContentHeight: Double get() = settings.pageHeight - 2 * settings.margin
 
     /** True for a pre-paginated (fixed-layout) book: one page per spine, no reflow. */
-    val isFixedLayout: Boolean get() = fixedSpines != null
+    val isFixedLayout: Boolean get() = parsed.fixedLayout
+
+    // Box tree per spine — depends on font size + column width, so it is rebuilt
+    // from the (already parsed) DOM + CSS whenever settings change. The expensive
+    // parse (unzip, HTML, CSS, fonts) is done once and lives in ParsedEpub.
+    private val docRoots: List<BlockBox> by lazy {
+        parsed.spines.map { sp ->
+            val layoutWidth = if (parsed.fixedLayout) sp.viewport.first else contentWidth
+            val resolver = StyleResolver(sp.rules, settings.fontSize, layoutWidth, parsed.baseDir)
+            BoxBuilder(resolver) { href -> resolvePath(sp.docDir, href) }.build(sp.tree)
+        }
+    }
+
+    private val root: BlockBox by lazy {
+        BlockBox(ComputedStyle.initial(settings.fontSize, direction = parsed.baseDir), docRoots)
+    }
+
+    private val fixedSpines: List<FixedSpine>? by lazy {
+        if (!parsed.fixedLayout) null
+        else docRoots.indices.map { FixedSpine(docRoots[it], parsed.spines[it].viewport.first, parsed.spines[it].viewport.second) }
+    }
 
     private val pageRenders: List<PageRender> by lazy {
         val fx = fixedSpines
         if (fx != null) return@lazy fx.map { spine ->
-            BoxLayout(::loadImage, ::loadSvg, spine.height, fonts).layout(spine.root, spine.width)
+            BoxLayout(::loadImage, ::loadSvg, spine.height, parsed.fonts).layout(spine.root, spine.width)
             Paginator.paginateFixed(spine.root, spine.width, spine.height)
         }
-        BoxLayout(::loadImage, ::loadSvg, pageContentHeight, fonts).layout(root, contentWidth)
-        Paginator.paginate(root, pageWidth, pageHeight, margin)
+        BoxLayout(::loadImage, ::loadSvg, pageContentHeight, parsed.fonts).layout(root, contentWidth)
+        Paginator.paginate(root, settings.pageWidth, settings.pageHeight, settings.margin)
     }
 
     /** The reflowed pages, ready to render. */
-    val pages: List<EpubPage> by lazy { pageRenders.map { EpubPage(it, this) } }
+    override val pages: List<EpubPage> by lazy { pageRenders.map { EpubPage(it, this) } }
 
-    val pageCount: Int get() = pages.size
+    override val pageCount: Int get() = pages.size
+
+    /**
+     * A copy of this book re-laid-out with new [settings], reusing the parse (no
+     * re-unzip / re-parse of HTML, CSS or fonts). Use for reader controls that
+     * change font size, margins or page size at runtime — cheap next to [open].
+     */
+    fun withSettings(settings: EpubSettings): EpubDocument = EpubDocument(parsed, settings)
+
+    /** Shorthand for [withSettings] changing only the body font size (points). */
+    fun withFontSize(fontSize: Double): EpubDocument = withSettings(settings.copy(fontSize = fontSize))
+
+    /** Shorthand for [withSettings] changing the page size — e.g. on resize / rotation. */
+    fun withPageSize(pageWidth: Double, pageHeight: Double): EpubDocument =
+        withSettings(settings.copy(pageWidth = pageWidth, pageHeight = pageHeight))
+
+    /** Shorthand for [withSettings] changing only the page margin (points). */
+    fun withMargin(margin: Double): EpubDocument = withSettings(settings.copy(margin = margin))
 
     private fun loadImage(zipPath: String): ImageXObject? =
-        zip.read(zipPath)?.let { ImageXObject.fromEncodedImage(it) }
+        parsed.zip.read(zipPath)?.let { ImageXObject.fromEncodedImage(it) }
 
     private fun loadSvg(zipPath: String): SvgImage? =
-        zip.read(zipPath)?.let { SvgImage.parse(it) }
+        parsed.zip.read(zipPath)?.let { SvgImage.parse(it) }
 
     companion object {
         fun open(
@@ -73,7 +117,21 @@ class EpubDocument private constructor(
             pageHeight: Double = 640.0,
             fontSize: Double = 12.0,
             margin: Double = 36.0,
-        ): EpubDocument? {
+        ): EpubDocument? = open(bytes, EpubSettings(pageWidth, pageHeight, fontSize, margin))
+
+        /** Parse [bytes] and lay out at [settings]. Null on an unreadable / spineless book. */
+        fun open(bytes: ByteArray, settings: EpubSettings): EpubDocument? {
+            val parsed = parse(bytes, settings) ?: return null
+            return EpubDocument(parsed, settings)
+        }
+
+        /**
+         * The font-size-independent parse: unzip + OPF + per-spine DOM/CSS +
+         * fonts + metadata + TOC. Everything here is reused across re-layouts, so
+         * [EpubDocument.withSettings] never re-runs it. [settings] is read only
+         * for the default viewport fallback of a spine with no `<meta viewport>`.
+         */
+        private fun parse(bytes: ByteArray, settings: EpubSettings): ParsedEpub? {
             val zip = ZipReader(bytes)
             val opfPath = containerOpfPath(zip) ?: return null
             val opf = Opf.parse(zip, opfPath) ?: return null
@@ -82,35 +140,29 @@ class EpubDocument private constructor(
 
             val fixedLayout = opf.renditionLayout == "pre-paginated" ||
                 contentPaths.indices.all { opf.fixedLayoutAt(it) }
-            // Fixed-layout content is laid out at its own viewport, not the reflow column.
-            val contentWidth = pageWidth - 2 * margin
             val baseDir = if (opf.direction?.lowercase() == "rtl") Direction.RTL else Direction.LTR
-            val docRoots = ArrayList<BlockBox>()
-            val viewports = ArrayList<Pair<Double, Double>>()
+            val spines = ArrayList<ParsedSpine>()
             val faceRules = ArrayList<Pair<FontFaceRule, String>>() // rule + the doc dir its src resolves against
             for (path in contentPaths) {
                 val xhtml = zip.readText(path) ?: continue
                 val docDir = path.substringBeforeLast('/', "")
                 val tree = HtmlParser.parse(xhtml)
-                val parsed = CssParser.parseAll(collectAuthorCss(zip, tree, docDir), Origin.AUTHOR)
-                for (face in parsed.fontFaces) faceRules.add(face to docDir)
-                val vp = parseViewport(tree) ?: (pageWidth to pageHeight)
-                viewports.add(vp)
-                // Fixed pages lay out at their full viewport width (no page margin).
-                val layoutWidth = if (fixedLayout) vp.first else contentWidth
-                val resolver = StyleResolver(parsed.rules, fontSize, layoutWidth, baseDir)
-                docRoots.add(BoxBuilder(resolver) { href -> resolvePath(docDir, href) }.build(tree))
+                val css = CssParser.parseAll(collectAuthorCss(zip, tree, docDir), Origin.AUTHOR)
+                for (face in css.fontFaces) faceRules.add(face to docDir)
+                val vp = parseViewport(tree) ?: (settings.pageWidth to settings.pageHeight)
+                spines.add(ParsedSpine(tree, css.rules, docDir, vp))
             }
-            if (docRoots.isEmpty()) return null
+            if (spines.isEmpty()) return null
 
-            val fonts = buildFontRegistry(zip, opf, faceRules)
-            val metadata = buildMetadata(opf)
-            val toc = TocParser.parse(zip, opf, contentPaths) { base, href -> resolvePath(base, href) }
-            val superRoot = BlockBox(ComputedStyle.initial(fontSize, direction = baseDir), docRoots)
-            val fixed = if (fixedLayout) {
-                docRoots.indices.map { FixedSpine(docRoots[it], viewports[it].first, viewports[it].second) }
-            } else null
-            return EpubDocument(superRoot, zip, fonts, metadata, toc, pageWidth, pageHeight, fontSize, margin, fixed)
+            return ParsedEpub(
+                spines = spines,
+                zip = zip,
+                fonts = buildFontRegistry(zip, opf, faceRules),
+                metadata = buildMetadata(opf),
+                toc = TocParser.parse(zip, opf, contentPaths) { base, href -> resolvePath(base, href) },
+                baseDir = baseDir,
+                fixedLayout = fixedLayout,
+            )
         }
 
         private fun buildMetadata(opf: OpfPackage): EpubMetadata {
@@ -252,15 +304,59 @@ class EpubDocument private constructor(
 /** One fixed-layout spine: its box tree plus the declared viewport it renders at. */
 internal class FixedSpine(val root: BlockBox, val width: Double, val height: Double)
 
+/**
+ * Reader layout settings. All values in points. Change them at runtime with
+ * [EpubDocument.withSettings] (or the `withFontSize`/`withPageSize`/`withMargin`
+ * shorthands) to re-flow without re-parsing the book.
+ */
+data class EpubSettings(
+    val pageWidth: Double = 400.0,
+    val pageHeight: Double = 640.0,
+    /** Body font size in points; author CSS scales relative to it. */
+    val fontSize: Double = 12.0,
+    /** Uniform page margin in points (reflowable books only). */
+    val margin: Double = 36.0,
+)
+
+/** One spine document's font-size-independent parse: its DOM, author CSS rules, base dir and viewport. */
+internal class ParsedSpine(
+    val tree: HtmlNode.Element,
+    val rules: List<StyleRule>,
+    val docDir: String,
+    val viewport: Pair<Double, Double>,
+)
+
+/**
+ * The reusable, font-size-independent parse of a book (unzip + per-spine DOM/CSS
+ * + fonts + metadata + TOC). One [ParsedEpub] backs any number of [EpubDocument]s
+ * at different [EpubSettings], so re-flowing on a settings change is just a
+ * re-layout, never a re-parse.
+ */
+internal class ParsedEpub(
+    val spines: List<ParsedSpine>,
+    val zip: ZipReader,
+    val fonts: FontRegistry,
+    val metadata: EpubMetadata,
+    val toc: TableOfContents,
+    val baseDir: Direction,
+    val fixedLayout: Boolean,
+)
+
 /** One reflowed EPUB page: paints backgrounds/borders, then text lines and images. */
 class EpubPage internal constructor(
     private val page: PageRender,
     private val doc: EpubDocument,
-) {
+) : KitePage {
     val width: Double get() = page.pageWidth
     val height: Double get() = page.pageHeight
 
-    fun renderTo(canvas: PdfCanvas, deviceCtm: Matrix = Matrix.IDENTITY) {
+    override val displayWidth: Double get() = width
+    override val displayHeight: Double get() = height
+
+    /** EPUB is y-down from top-left, so the base is a straight vertical flip. */
+    override fun displayToDeviceBase(): Matrix = Matrix(1.0, 0.0, 0.0, -1.0, 0.0, height)
+
+    override fun renderTo(canvas: PdfCanvas, deviceCtm: Matrix) {
         canvas.beginPage(width, height, deviceCtm)
         val margin = page.margin
         val startY = page.startY

@@ -3,6 +3,7 @@ package io.github.yuroyami.kitepdf.compose
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.runtime.Immutable
 import androidx.compose.ui.graphics.Color
+import io.github.yuroyami.kitepdf.render.ReaderTheme
 
 /**
  * How [PdfView] lays its pages out and how the user moves between them.
@@ -166,11 +167,17 @@ sealed interface PdfRenderSpec {
  * Colours used by [PdfView].
  *
  * @param pageBackground painted behind page content (most PDFs assume white
- *   paper and paint nothing themselves).
+ *   paper and paint nothing themselves). Ignored when [theme] is set — the
+ *   theme owns the paper colour then.
  * @param viewportBackground the letterbox/gutter colour around pages.
+ * @param theme optional reading theme ([ReaderTheme.Dark]/[ReaderTheme.Sepia]/
+ *   [ReaderTheme.Light]). When set, page content colours are remapped (text,
+ *   borders, backgrounds — not images) and the paper uses the theme background.
+ *   Reflowable EPUB especially benefits: night mode without re-laying-out.
  */
 @Immutable
 data class PdfViewColors(
     val pageBackground: Color = Color.White,
     val viewportBackground: Color = Color.Transparent,
+    val theme: ReaderTheme? = null,
 )

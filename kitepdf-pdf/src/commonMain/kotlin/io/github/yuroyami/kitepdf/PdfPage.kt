@@ -39,7 +39,7 @@ class PdfPage internal constructor(
      * `/Kids`. The writer needs this to target the page object for edits.
      */
     val reference: PdfReference? = null,
-) {
+) : KitePage {
 
     /** The raw page dictionary — used by the writer to rebuild the page on edit. */
     internal val dictionary: PdfDictionary get() = node
@@ -152,6 +152,12 @@ class PdfPage internal constructor(
     val rotatedHeight: Double
         get() = if (rotationNormalized == 90 || rotationNormalized == 270) displayBox.width else displayBox.height
 
+    // KitePage: display geometry is the rotated box, and the base transform is
+    // the already-verified pageToDeviceBase().
+    override val displayWidth: Double get() = rotatedWidth
+    override val displayHeight: Double get() = rotatedHeight
+    override fun displayToDeviceBase(): Matrix = pageToDeviceBase()
+
     /**
      * The unscaled user-space -> device base transform, with the device origin
      * at the top-left and y growing downward. The resulting device box is
@@ -248,7 +254,7 @@ class PdfPage internal constructor(
      * identity matrix for a 1pt = 1pt rendering, or a scaled / Y-flipped
      * matrix to fit a UI surface.
      */
-    fun renderTo(canvas: PdfCanvas, deviceCtm: Matrix = Matrix.IDENTITY) {
+    override fun renderTo(canvas: PdfCanvas, deviceCtm: Matrix) {
         PageRenderer(canvas, document).render(this, deviceCtm)
     }
 }

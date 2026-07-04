@@ -15,8 +15,9 @@ import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.LayoutDirection
-import io.github.yuroyami.kitepdf.PdfPage
+import io.github.yuroyami.kitepdf.KitePage
 import io.github.yuroyami.kitepdf.render.Matrix as PdfMatrix
+import io.github.yuroyami.kitepdf.render.ReaderTheme
 
 /**
  * Imperative page → [ImageBitmap] pipeline. This is the raster engine behind
@@ -47,26 +48,30 @@ class PdfRasterizer(
      *   supersampled so sub-pixel strokes survive the downscale.
      */
     fun rasterize(
-        page: PdfPage,
+        page: KitePage,
         widthPx: Int,
         heightPx: Int,
         background: Color = Color.White,
         hairlineWidthPx: Float = 1f,
+        theme: ReaderTheme? = null,
     ): ImageBitmap {
         val w = widthPx.coerceAtLeast(1)
         val h = heightPx.coerceAtLeast(1)
-        // Fit scale from the *rotated* display box: pageToDeviceBase() already maps
-        // unscaled user space into a top-left, Y-down device box of
-        // [0,rotatedWidth] x [0,rotatedHeight] (accounting for the display-box origin
-        // and normalized /Rotate). Scaling it by `s` in device space gives the final
-        // CTM; no manual Y-flip here, the base transform already flipped.
-        val s = w / page.rotatedWidth
+        // Fit scale from the display box: displayToDeviceBase() already maps
+        // unscaled page space into a top-left, Y-down device box of
+        // [0,displayWidth] x [0,displayHeight] (PDF folds in the display-box origin
+        // and normalized /Rotate; EPUB folds in its top-left flip). Scaling it by
+        // `s` in device space gives the final CTM; no manual Y-flip here.
+        val s = w / page.displayWidth
+        // The theme owns the paper colour when set; else use `background`.
+        val bg = theme?.background?.let { Color(it.r.toFloat(), it.g.toFloat(), it.b.toFloat()) } ?: background
         val bitmap = ImageBitmap(w, h)
         CanvasDrawScope().draw(density, layoutDirection, Canvas(bitmap), Size(w.toFloat(), h.toFloat())) {
-            drawRect(background, size = size)
-            // concat(b) applies b FIRST, so pageToDeviceBase() runs before the scale.
-            val deviceCtm = PdfMatrix.scaling(s, s).concat(page.pageToDeviceBase())
-            page.renderTo(ComposeCanvas(this, textMeasurer, hairlineWidthPx), deviceCtm)
+            drawRect(bg, size = size)
+            // concat(b) applies b FIRST, so displayToDeviceBase() runs before the scale.
+            val deviceCtm = PdfMatrix.scaling(s, s).concat(page.displayToDeviceBase())
+            val base = ComposeCanvas(this, textMeasurer, hairlineWidthPx)
+            page.renderTo(theme?.wrap(base) ?: base, deviceCtm)
         }
         return bitmap
     }
@@ -84,12 +89,12 @@ fun rememberPdfRasterizer(): PdfRasterizer {
 }
 
 /**
- * Page aspect ratio (w/h), guarded against degenerate boxes. Uses the *rotated*
- * display box so landscape /Rotate 90/270 pages report the on-screen aspect the
+ * Page aspect ratio (w/h), guarded against degenerate boxes. Uses the display
+ * box so landscape /Rotate 90/270 PDF pages report the on-screen aspect the
  * rasterized bitmap actually has, not the unrotated MediaBox aspect.
  */
-internal fun pdfPageAspect(page: PdfPage): Float =
-    (page.rotatedWidth / page.rotatedHeight).toFloat().let { if (it.isFinite() && it > 0f) it else 1f }
+internal fun pdfPageAspect(page: KitePage): Float =
+    (page.displayWidth / page.displayHeight).toFloat().let { if (it.isFinite() && it > 0f) it else 1f }
 
 /**
  * Largest size with aspect ratio [aspect] (w/h) that fits inside [boxW]×[boxH],
