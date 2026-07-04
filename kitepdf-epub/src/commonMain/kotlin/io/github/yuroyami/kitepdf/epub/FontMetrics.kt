@@ -59,12 +59,20 @@ internal object FontMetrics {
 
     /** Advance of [cp] in 1/1000 em for the selected base-14 face. */
     fun advance1000(cp: Int, bold: Boolean = false, italic: Boolean = false, family: GenericFont = GenericFont.SERIF): Int {
+        if (isWide(cp)) return 1000 // CJK ideographs and full-width forms are one em
         val glyph = uniToGlyph[cp]
         if (glyph != null) {
             Standard14Widths.widthOf(baseFont(bold, italic, family), glyph)?.let { return it }
         }
         return if (family == GenericFont.MONO) MONO_WIDTH else FALLBACK_WIDTH
     }
+
+    /** True for CJK/full-width code points (one em wide, break between them). */
+    fun isWide(cp: Int): Boolean =
+        cp in 0x1100..0x115F || cp in 0x2E80..0x303E || cp in 0x3041..0x33FF ||
+            cp in 0x3400..0x4DBF || cp in 0x4E00..0x9FFF || cp in 0xA000..0xA4CF ||
+            cp in 0xAC00..0xD7A3 || cp in 0xF900..0xFAFF || cp in 0xFE30..0xFE4F ||
+            cp in 0xFF00..0xFF60 || cp in 0xFFE0..0xFFE6
 
     /** Advance of [ch] in points at [fontSize]. */
     fun advancePt(ch: Char, fontSize: Double, bold: Boolean = false, italic: Boolean = false, family: GenericFont = GenericFont.SERIF): Double =

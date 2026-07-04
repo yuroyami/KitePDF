@@ -20,7 +20,29 @@ picked up in a fresh session with zero prior context.
 
 ## 0. Status — Phases 1-3 done; Phase 4 started (2026-07-04)
 
-### Phase 4 — typography (embedded fonts done; bidi/CJK/hyphenation next)
+### Phase 4 — typography (done, minus GSUB/GPOS shaping + WOFF)
+
+**World scripts + hyphenation now work:**
+- **Bidi** — `core/text/Bidi.kt`, the implicit Unicode Bidirectional Algorithm (W/N/I rules +
+  L2 reordering, range-based classification for Latin/Hebrew/Arabic/numbers). In core so PDF
+  text extraction can reuse it. EPUB threads a base `direction` (CSS `direction` / HTML `dir` /
+  `page-progression-direction`) and reorders each wrapped line from logical to visual order;
+  RTL paragraphs right-align.
+- **CJK** — `FontMetrics.isWide` gives ideographs/full-width forms a 1em advance, and the
+  line-breaker breaks between them (basic no-break-before kinsoku for closing punctuation).
+- **Hyphenation** — `core/text/Hyphenator.kt`, the Knuth-Liang algorithm (engine + a small
+  en-US pattern set; bundle full `hyph-*` files like fonts for quality). Wired into the wrapper:
+  soft hyphens (U+00AD) always, and `hyphens:auto` words, split with a drawn hyphen.
+- **Font matching** — `FontRegistry.match` relaxes weight then style to the family's available
+  embedded face before dropping to the Standard-14 (synthesised bold/italic) fallback.
+
+Deferred (each genuinely large, and low-value for the common book): **GSUB/GPOS shaping**
+(ligatures/kerning, Arabic contextual forms), **WOFF/WOFF2** (per-table inflate / brotli),
+**OpenType-CFF advances** (core `CffFont` gap), **vertical writing**, and full per-language
+hyphenation pattern data. The prior slice of Phase 4 (advance-scale fix + embedded TrueType) is
+under §"Phase 4 — typography (embedded fonts…)" below.
+
+### Phase 4 — typography (embedded fonts prerequisite + slice)
 
 **The cross-backend advance-scale bug is fixed** (the §5 landmine / Phase-4 prerequisite):
 `advanceWidth` is always 1/1000 em, so every `drawGlyphs` backend now advances by
@@ -269,10 +291,10 @@ Three files, ~450 lines. It opens a real EPUB and paints text through the core C
 | text-align / justify / indent | ✅ | ✅ | ~~2,3~~ done |
 | Page-break control, widows/orphans | ✅ | ✅ | ~~3~~ done |
 | Embedded fonts (@font-face + deobfuscation) | 🟡 TrueType | ✅ | 4 (CFF/WOFF) |
-| Bidi / RTL | ❌ | ✅ | 4 |
-| CJK + vertical writing | ❌ | ✅ | 4 |
-| Hyphenation | ❌ | ✅ | 4 |
-| Shaping (ligatures/kerning, GSUB/GPOS) | ❌ | 🟡 | 4 |
+| Bidi / RTL | ✅ | ✅ | ~~4~~ done |
+| CJK + vertical writing | 🟡 horizontal | ✅ | 4 (vertical) |
+| Hyphenation | ✅ | ✅ | ~~4~~ done |
+| Shaping (ligatures/kerning, GSUB/GPOS) | ❌ | 🟡 | 4 (deferred) |
 | SVG content + inline SVG | ❌ | ✅ | 5 |
 | MathML | ❌ | 🟡 | 5 |
 | Fixed-layout EPUB | ❌ | ✅ | 5 |

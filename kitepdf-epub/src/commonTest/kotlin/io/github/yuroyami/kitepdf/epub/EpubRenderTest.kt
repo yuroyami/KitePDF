@@ -181,6 +181,27 @@ class EpubRenderTest {
         assertTrue(padded > plain + 25.0, "padding-left pushes content right ($padded vs $plain)")
     }
 
+    // ---- Phase 4: bidi ------------------------------------------------------
+
+    @Test
+    fun bidi_reverses_a_hebrew_run() {
+        // Latin then Hebrew alef-bet-gimel; the Hebrew must draw in visual (reversed) order.
+        val text = renderRuns("<p>abcאבג</p>").joinToString("") { it.text }
+        assertTrue("גבא" in text, "Hebrew drawn reversed (visual order): <<$text>>")
+        assertTrue("אבג" !in text, "not in logical order")
+        assertTrue(text.startsWith("abc"), "Latin stays leftmost, in logical order")
+    }
+
+    @Test
+    fun rtl_paragraph_places_first_word_rightmost() {
+        // dir=rtl: the Hebrew word (first logical) sits to the right of the Latin word.
+        val runs = renderRuns("<p dir=\"rtl\">שלום world</p>")
+        val hebrew = runs.firstOrNull { r -> r.text.any { it.code in 0x0590..0x05FF } }
+        val latin = runs.firstOrNull { it.text.contains("world") }
+        assertNotNull(hebrew); assertNotNull(latin)
+        assertTrue(hebrew.textToDevice.e > latin.textToDevice.e, "RTL base: Hebrew is right of Latin")
+    }
+
     @Test
     fun missing_container_returns_null() {
         // A zip with no META-INF/container.xml is not a readable EPUB.

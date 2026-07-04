@@ -96,6 +96,45 @@ class BoxLayoutTest {
     }
 
     @Test
+    fun cjk_text_wraps_per_character() {
+        // 30 CJK ideographs at 12pt = 360pt of text in a 100pt column -> several lines.
+        val cjk = "中文字符测试换行内容排版".repeat(3)
+        val p = layout("<p>$cjk</p>", width = 100.0).child(0).firstText()
+        assertTrue(p.lines.size >= 3, "CJK breaks between ideographs (got ${p.lines.size} lines)")
+    }
+
+    @Test
+    fun long_latin_word_does_not_break_per_character() {
+        // A single long word has no break opportunity; it stays on one (overflowing) line.
+        val p = layout("<p>supercalifragilisticexpialidocious</p>", width = 40.0).child(0).firstText()
+        assertEquals(1, p.lines.size, "Latin words break at spaces, not mid-word")
+    }
+
+    private fun lineText(line: PositionedLine) = line.runs.flatMap { it.glyphs }.joinToString("") { it.text }
+
+    @Test
+    fun soft_hyphen_splits_a_long_word() {
+        val sh = Char(0xAD).toString() // soft hyphen (U+00AD)
+        val word = listOf("super", "cali", "fragi", "listic", "expi", "ali", "docious").joinToString(sh)
+        val p = layout("<p>$word</p>", width = 60.0).child(0).firstText()
+        assertTrue(p.lines.size > 1, "soft hyphens let the long word wrap (${p.lines.size} lines)")
+        assertTrue(p.lines.dropLast(1).any { lineText(it).endsWith("-") }, "a broken line ends with a hyphen")
+    }
+
+    @Test
+    fun hyphens_auto_breaks_long_words() {
+        val p = layout("""<p style="hyphens:auto">hyphenation hyphenation hyphenation</p>""", width = 55.0).child(0).firstText()
+        assertTrue(p.lines.dropLast(1).any { lineText(it).endsWith("-") }, "auto hyphenation splits a long word")
+    }
+
+    @Test
+    fun no_hyphenation_without_soft_hyphens_or_auto() {
+        // Default hyphens:manual and no soft hyphens -> the long word overflows on one line.
+        val p = layout("<p>hyphenationhyphenation</p>", width = 55.0).child(0).firstText()
+        assertTrue(p.lines.none { lineText(it).endsWith("-") }, "no automatic hyphenation by default")
+    }
+
+    @Test
     fun center_align_offsets_line() {
         val p = layout("""<p style="text-align:center">hi</p>""", width = 200.0).child(0).firstText()
         assertEquals(TextAlign.CENTER, p.style.textAlign)

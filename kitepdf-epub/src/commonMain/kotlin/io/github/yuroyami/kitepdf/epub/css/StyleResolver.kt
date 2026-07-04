@@ -18,10 +18,11 @@ internal class StyleResolver(
     authorRules: List<StyleRule>,
     private val rootFontSizePt: Double,
     private val refWidthPt: Double,
+    private val baseDirection: Direction = Direction.LTR,
 ) {
     private val rules: List<StyleRule> = UaStylesheet.rules + authorRules
 
-    fun initial(): ComputedStyle = ComputedStyle.initial(rootFontSizePt)
+    fun initial(): ComputedStyle = ComputedStyle.initial(rootFontSizePt, direction = baseDirection)
 
     /** [ancestors]: immediate parent first, outward to the root. [parent] = its computed style. */
     fun compute(el: HtmlNode.Element, ancestors: List<HtmlNode.Element>, parent: ComputedStyle): ComputedStyle {
@@ -42,7 +43,13 @@ internal class StyleResolver(
             val decls = CssParser.parse("*{$inline}", Origin.INLINE).firstOrNull()?.declarations.orEmpty()
             for (d in decls) offer(d.property, d.value, weight(Origin.INLINE, d.important, INLINE_SPEC, rules.size + 1))
         }
-        return build(parent, value)
+        val cs = build(parent, value)
+        // The HTML `dir` attribute wins over the CSS `direction` property.
+        return when (el.attrs["dir"]?.lowercase()) {
+            "rtl" -> cs.copy(direction = Direction.RTL)
+            "ltr" -> cs.copy(direction = Direction.LTR)
+            else -> cs
+        }
     }
 
     private fun build(parent: ComputedStyle, values: Map<String, String>): ComputedStyle {
@@ -110,6 +117,8 @@ internal class StyleResolver(
             "break-before", "page-break-before" -> b.breakBefore = forcesBreak(v)
             "break-after", "page-break-after" -> b.breakAfter = forcesBreak(v)
             "break-inside", "page-break-inside" -> b.breakInsideAvoid = v.trim().lowercase() == "avoid"
+            "direction" -> when (v.trim().lowercase()) { "rtl" -> b.direction = Direction.RTL; "ltr" -> b.direction = Direction.LTR }
+            "hyphens", "-webkit-hyphens", "-epub-hyphens" -> b.hyphensAuto = v.trim().lowercase() == "auto"
         }
     }
 
@@ -263,6 +272,8 @@ internal class StyleResolver(
         var breakBefore = false; var breakAfter = false; var breakInsideAvoid = false
         var marginLeftAuto = false; var marginRightAuto = false
         var fontFamilyName = parent.fontFamilyName
+        var direction = parent.direction
+        var hyphensAuto = parent.hyphensAuto
 
         fun build() = ComputedStyle(
             display, fontSizePt, bold, italic, fontFamily, color, backgroundColor,
@@ -278,6 +289,8 @@ internal class StyleResolver(
             breakBefore, breakAfter, breakInsideAvoid,
             marginLeftAuto, marginRightAuto,
             fontFamilyName,
+            direction,
+            hyphensAuto,
         )
     }
 

@@ -39,8 +39,15 @@ class FontMetricsTest {
 
     @Test
     fun unmapped_char_falls_back() {
-        // A CJK ideograph has no Standard-14 glyph; width falls back, not crashes.
-        assertEquals(500, FontMetrics.advance1000(0x4E2D), "fallback width for unmapped char")
+        // A snowman (U+2603) has no Standard-14 glyph and isn't wide; width falls back.
+        assertEquals(500, FontMetrics.advance1000(0x2603), "fallback width for unmapped char")
+    }
+
+    @Test
+    fun cjk_is_full_width() {
+        assertTrue(FontMetrics.isWide(0x4E2D), "中 is a wide CJK ideograph")
+        assertTrue(!FontMetrics.isWide('a'.code), "Latin is not wide")
+        assertEquals(1000, FontMetrics.advance1000(0x4E2D), "CJK ideographs advance one em")
     }
 
     @Test

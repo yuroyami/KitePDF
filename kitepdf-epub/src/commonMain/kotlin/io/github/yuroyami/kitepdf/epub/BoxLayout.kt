@@ -2,14 +2,17 @@ package io.github.yuroyami.kitepdf.epub
 
 import io.github.yuroyami.kitepdf.epub.css.ComputedStyle
 import io.github.yuroyami.kitepdf.epub.css.CssVAlign
+import io.github.yuroyami.kitepdf.epub.css.Direction
 import io.github.yuroyami.kitepdf.epub.css.GenericFont
 import io.github.yuroyami.kitepdf.epub.css.TextAlign
 import io.github.yuroyami.kitepdf.epub.css.WhiteSpaceMode
+import io.github.yuroyami.kitepdf.text.Bidi
 import io.github.yuroyami.kitepdf.font.FontFamily
 import io.github.yuroyami.kitepdf.font.FontSpec
 import io.github.yuroyami.kitepdf.font.TextGlyph
 import io.github.yuroyami.kitepdf.render.ImageXObject
 import io.github.yuroyami.kitepdf.render.RgbColor
+import io.github.yuroyami.kitepdf.text.Hyphenator
 
 /**
  * Positions the [LayoutBox] tree in document space (x from content-left, y down).
@@ -25,6 +28,8 @@ internal class BoxLayout(
     private val maxImageHeight: Double = Double.MAX_VALUE,
     private val fonts: FontRegistry = FontRegistry.EMPTY,
 ) {
+    private val hyphenator by lazy { Hyphenator.enUs() }
+
     /** Lay out [root] to fill [contentWidth]; returns total document height. */
     fun layout(root: BlockBox, contentWidth: Double): Double {
         layoutBlock(root, xLeft = 0.0, availWidth = contentWidth, topY = 0.0)
@@ -242,10 +247,14 @@ internal class BoxLayout(
         style: ComputedStyle, marker: String?, markerColor: RgbColor,
     ): List<PositionedLine> {
         val preserve = style.whiteSpace != WhiteSpaceMode.NORMAL && style.whiteSpace != WhiteSpaceMode.NOWRAP
-        val cellLines = wrap(tokenize(runs), contentW, preserve)
+        val baseLevel = if (style.direction == Direction.RTL) 1 else 0
+        // `start` alignment resolves to the base direction's edge.
+        val align = if (style.direction == Direction.RTL && style.textAlign == TextAlign.LEFT) TextAlign.RIGHT else style.textAlign
+        val cellLines = wrap(tokenize(runs, style.hyphensAuto), contentW, preserve)
         val out = ArrayList<PositionedLine>(cellLines.size)
         var y = topY
-        cellLines.forEachIndexed { i, cells ->
+        cellLines.forEachIndexed { i, logical ->
+            val cells = bidiReorder(logical, baseLevel) // logical → visual order (UAX #9 L2)
             val maxFs = cells.maxOfOrNull { it.fontSize }?.takeIf { it > 0.0 } ?: style.fontSizePt
             val lineHeight = style.lineHeightPt ?: maxFs * 1.4
             val ascent = maxFs * 0.8
@@ -253,12 +262,12 @@ internal class BoxLayout(
             val (lineWidth, interiorSpaces) = measure(cells)
             val firstIndent = if (i == 0) style.textIndentPt else 0.0
             val slack = (contentW - lineWidth - firstIndent).coerceAtLeast(0.0)
-            val justify = style.textAlign == TextAlign.JUSTIFY && i != cellLines.lastIndex && interiorSpaces > 0
+            val justify = align == TextAlign.JUSTIFY && i != cellLines.lastIndex && interiorSpaces > 0
             val extraPerSpace = if (justify) slack / interiorSpaces else 0.0
             val alignOffset = when {
                 justify -> 0.0
-                style.textAlign == TextAlign.RIGHT -> slack
-                style.textAlign == TextAlign.CENTER -> slack / 2
+                align == TextAlign.RIGHT -> slack
+                align == TextAlign.CENTER -> slack / 2
                 else -> 0.0
             }
             val xStart = contentLeft + firstIndent + alignOffset
@@ -274,6 +283,15 @@ internal class BoxLayout(
             out.add(PositionedLine(emptyList(), topY, h, style.fontSizePt * 0.8))
         }
         return out
+    }
+
+    /** Reorder a line's cells from logical to visual order (bidi L2); identity for pure-LTR lines. */
+    private fun bidiReorder(cells: List<Cell>, baseLevel: Int): List<Cell> {
+        if (cells.isEmpty()) return cells
+        if (baseLevel == 0 && cells.none { val c = Bidi.classify(it.ch.code); c == Bidi.R || c == Bidi.AL }) return cells
+        val cps = IntArray(cells.size) { cells[it].ch.code }
+        val order = Bidi.reorderVisually(Bidi.resolveLevels(cps, baseLevel))
+        return order.map { cells[it] }
     }
 
     /** Line content width (trailing spaces excluded) + interior space count (for justify). */
@@ -302,16 +320,27 @@ internal class BoxLayout(
     )
 
     private sealed class Token {
-        class Word(val cells: List<Cell>, val width: Double) : Token()
+        class Word(val cells: List<Cell>, val width: Double, val hyphenPoints: List<Int> = emptyList()) : Token()
         class Space(val width: Double) : Token()
         object Break : Token()
     }
 
-    private fun tokenize(runs: List<InlineRun>): List<Token> {
+    private fun tokenize(runs: List<InlineRun>, hyphensAuto: Boolean): List<Token> {
         val tokens = ArrayList<Token>()
         var word = ArrayList<Cell>()
         var wordW = 0.0
-        fun endWord() { if (word.isNotEmpty()) { tokens.add(Token.Word(word, wordW)); word = ArrayList(); wordW = 0.0 } }
+        var softHyphens = ArrayList<Int>()
+        fun endWord() {
+            if (word.isNotEmpty()) {
+                val pts = LinkedHashSet(softHyphens)
+                if (hyphensAuto && word.size >= 5 && word.all { it.ch.isLetter() }) {
+                    val text = buildString { word.forEach { append(it.ch) } }
+                    pts.addAll(hyphenator.hyphenate(text))
+                }
+                tokens.add(Token.Word(word, wordW, pts.sorted()))
+                word = ArrayList(); wordW = 0.0; softHyphens = ArrayList()
+            }
+        }
         for (run in runs) {
             if (run.hardBreak) { endWord(); tokens.add(Token.Break); continue }
             val fs = run.fontSizePt
@@ -322,25 +351,34 @@ internal class BoxLayout(
             }
             val spec = fontSpec(run.family, run.bold, run.italic)
             val face = fonts.match(run.fontFamilyName, run.bold, run.italic)
+            fun cellFor(ch: Char): Cell = if (face != null) {
+                val gid = face.gidFor(ch.code)
+                Cell(ch, face.advance1000(gid) * fs / 1000.0, fs, spec, run.color, shift, run.underline, face, gid)
+            } else {
+                Cell(ch, FontMetrics.advancePt(ch, fs, run.bold, run.italic, run.family), fs, spec, run.color, shift, run.underline)
+            }
             for (ch in run.text) when {
                 ch == '\n' -> { endWord(); tokens.add(Token.Break) }
                 ch == '\r' -> {}
+                ch.code == 0x00AD -> softHyphens.add(word.size) // soft hyphen: a break point, drawn only if used
                 ch.isWhitespace() -> {
                     endWord()
                     val sw = if (face != null) face.advance1000(face.gidFor(' '.code)) * fs / 1000.0
                     else FontMetrics.advancePt(' ', fs, run.bold, run.italic, run.family)
                     tokens.add(Token.Space(sw))
                 }
-                else -> {
-                    if (face != null) {
-                        val gid = face.gidFor(ch.code)
-                        val w = face.advance1000(gid) * fs / 1000.0
-                        word.add(Cell(ch, w, fs, spec, run.color, shift, run.underline, face, gid)); wordW += w
+                FontMetrics.isWide(ch.code) -> {
+                    // CJK ideographs break per character; a closing punctuation stays with the char before it.
+                    endWord()
+                    val cell = cellFor(ch)
+                    val last = tokens.lastOrNull()
+                    if (isCloser(ch.code) && last is Token.Word) {
+                        tokens[tokens.lastIndex] = Token.Word(last.cells + cell, last.width + cell.width)
                     } else {
-                        val w = FontMetrics.advancePt(ch, fs, run.bold, run.italic, run.family)
-                        word.add(Cell(ch, w, fs, spec, run.color, shift, run.underline)); wordW += w
+                        tokens.add(Token.Word(listOf(cell), cell.width))
                     }
                 }
+                else -> { val c = cellFor(ch); word.add(c); wordW += c.width }
             }
         }
         endWord()
@@ -360,10 +398,43 @@ internal class BoxLayout(
                 line.isNotEmpty() -> pendingSpace += tok.width
             }
             is Token.Word -> {
-                if (line.isNotEmpty() && lineW + pendingSpace + tok.width > avail) commit()
-                if (line.isNotEmpty() && pendingSpace > 0.0) { line.add(spacer(pendingSpace)); lineW += pendingSpace }
+                var cells: List<Cell> = tok.cells
+                var points: List<Int> = tok.hyphenPoints
+                var space = pendingSpace
                 pendingSpace = 0.0
-                line.addAll(tok.cells); lineW += tok.width
+                while (true) {
+                    val leading = if (line.isNotEmpty()) space else 0.0
+                    val w = cells.sumOf { it.width }
+                    if (lineW + leading + w <= avail || (line.isEmpty() && points.isEmpty())) {
+                        if (line.isNotEmpty() && space > 0.0) { line.add(spacer(space)); lineW += space }
+                        line.addAll(cells); lineW += w
+                        break
+                    }
+                    // Largest hyphenation point whose prefix + hyphen still fits the current line.
+                    var split = -1
+                    var splitHyphenW = 0.0
+                    val budget = avail - lineW - leading
+                    for (p in points) {
+                        if (p <= 0 || p >= cells.size) continue
+                        val hw = hyphenWidth(cells[p - 1])
+                        if (cells.subList(0, p).sumOf { it.width } + hw <= budget) { split = p; splitHyphenW = hw } else break
+                    }
+                    if (split > 0) {
+                        if (line.isNotEmpty() && space > 0.0) { line.add(spacer(space)); lineW += space }
+                        val prefix = cells.subList(0, split)
+                        line.addAll(prefix); lineW += prefix.sumOf { it.width }
+                        line.add(hyphenCell(cells[split - 1])); lineW += splitHyphenW
+                        commit()
+                        cells = cells.subList(split, cells.size)
+                        points = points.mapNotNull { if (it > split) it - split else null }
+                        space = 0.0
+                    } else if (line.isEmpty()) {
+                        line.addAll(cells); lineW += w // unsplittable + nothing before: overflow rather than loop
+                        break
+                    } else {
+                        commit(); space = 0.0 // retry on a fresh line
+                    }
+                }
             }
         }
         if (line.isNotEmpty() || lines.isEmpty()) lines.add(line)
@@ -371,6 +442,21 @@ internal class BoxLayout(
     }
 
     private fun spacer(width: Double) = Cell(' ', width, 0.0, EMPTY_SPEC, BLACK, 0.0, false)
+
+    private fun hyphenWidth(c: Cell): Double = c.face?.let { it.advance1000(it.gidFor('-'.code)) * c.fontSize / 1000.0 }
+        ?: FontMetrics.advancePt('-', c.fontSize, c.spec.bold, c.spec.italic, genericOf(c.spec))
+
+    private fun hyphenCell(c: Cell): Cell {
+        val face = c.face
+        return if (face != null) Cell('-', hyphenWidth(c), c.fontSize, c.spec, c.color, c.shift, c.underline, face, face.gidFor('-'.code))
+        else Cell('-', hyphenWidth(c), c.fontSize, c.spec, c.color, c.shift, c.underline)
+    }
+
+    private fun genericOf(spec: FontSpec): GenericFont = when (spec.family) {
+        FontFamily.Monospace -> GenericFont.MONO
+        FontFamily.SansSerif -> GenericFont.SANS
+        else -> GenericFont.SERIF
+    }
 
     private fun placeRuns(cells: List<Cell>, xStart: Double, extraPerSpace: Double): List<PlacedRun> {
         val out = ArrayList<PlacedRun>()
@@ -423,8 +509,17 @@ internal class BoxLayout(
         )
     }
 
+    /** CJK closing punctuation that must not start a line (basic kinsoku, no-break-before). */
+    private fun isCloser(cp: Int): Boolean = cp in CJK_CLOSERS
+
     private companion object {
         val BLACK = RgbColor(0.0, 0.0, 0.0)
         val EMPTY_SPEC = FontSpec(FontFamily.Serif, bold = false, italic = false)
+        val CJK_CLOSERS = setOf(
+            0x3001, 0x3002, // 、 。
+            0xFF0C, 0xFF0E, 0xFF01, 0xFF1F, 0xFF1B, 0xFF1A, // fullwidth , . ! ? ; :
+            0x300D, 0x300F, 0x3011, 0x3015, 0x3009, 0x300B, 0x3017, // 」 』 】 〕 〉 》 〗
+            0xFF09, 0xFF3D, 0xFF5D, // ） ］ ｝
+        )
     }
 }

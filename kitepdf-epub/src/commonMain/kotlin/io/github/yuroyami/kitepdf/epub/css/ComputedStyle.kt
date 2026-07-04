@@ -8,6 +8,7 @@ internal enum class WhiteSpaceMode { NORMAL, PRE, NOWRAP, PRE_WRAP, PRE_LINE }
 internal enum class GenericFont { SERIF, SANS, MONO }
 internal enum class CssVAlign { BASELINE, SUPER, SUB }
 internal enum class ListType { DISC, CIRCLE, SQUARE, DECIMAL, LOWER_ROMAN, UPPER_ROMAN, LOWER_ALPHA, UPPER_ALPHA, NONE }
+internal enum class Direction { LTR, RTL }
 
 /** One border edge. Painted only when [visible] (`border-style` not none/hidden). */
 internal class Edge(val width: Double, val color: RgbColor, val visible: Boolean) {
@@ -67,12 +68,16 @@ internal data class ComputedStyle(
     val marginRightAuto: Boolean,
     /** First non-generic `font-family` name, for matching an `@font-face`; null if all generic. */
     val fontFamilyName: String?,
+    /** Inline base direction (from `direction`/`dir`), for the bidi algorithm. */
+    val direction: Direction,
+    /** `hyphens: auto` — allow the line-breaker to hyphenate long words. */
+    val hyphensAuto: Boolean,
 ) {
     val mono: Boolean get() = fontFamily == GenericFont.MONO
 
     companion object {
-        /** The initial (root) style before any rule applies. */
-        fun initial(rootFontSizePt: Double, color: RgbColor = RgbColor(0.0, 0.0, 0.0)) = ComputedStyle(
+        /** The initial (root) style before any rule applies. [direction] is the publication base. */
+        fun initial(rootFontSizePt: Double, color: RgbColor = RgbColor(0.0, 0.0, 0.0), direction: Direction = Direction.LTR) = ComputedStyle(
             display = Display.BLOCK,
             fontSizePt = rootFontSizePt,
             bold = false, italic = false, fontFamily = GenericFont.SERIF,
@@ -87,6 +92,8 @@ internal data class ComputedStyle(
             breakBefore = false, breakAfter = false, breakInsideAvoid = false,
             marginLeftAuto = false, marginRightAuto = false,
             fontFamilyName = null,
+            direction = direction,
+            hyphensAuto = false,
         )
     }
 }

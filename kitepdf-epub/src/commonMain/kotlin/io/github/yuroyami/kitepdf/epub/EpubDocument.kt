@@ -2,6 +2,7 @@ package io.github.yuroyami.kitepdf.epub
 
 import io.github.yuroyami.kitepdf.epub.css.ComputedStyle
 import io.github.yuroyami.kitepdf.epub.css.CssParser
+import io.github.yuroyami.kitepdf.epub.css.Direction
 import io.github.yuroyami.kitepdf.epub.css.FontFaceRule
 import io.github.yuroyami.kitepdf.epub.css.Origin
 import io.github.yuroyami.kitepdf.epub.css.StyleResolver
@@ -67,6 +68,7 @@ class EpubDocument private constructor(
             if (contentPaths.isEmpty()) return null
 
             val contentWidth = pageWidth - 2 * margin
+            val baseDir = if (opf.direction?.lowercase() == "rtl") Direction.RTL else Direction.LTR
             val docRoots = ArrayList<LayoutBox>()
             val faceRules = ArrayList<Pair<FontFaceRule, String>>() // rule + the doc dir its src resolves against
             for (path in contentPaths) {
@@ -75,7 +77,7 @@ class EpubDocument private constructor(
                 val tree = HtmlParser.parse(xhtml)
                 val parsed = CssParser.parseAll(collectAuthorCss(zip, tree, docDir), Origin.AUTHOR)
                 for (face in parsed.fontFaces) faceRules.add(face to docDir)
-                val resolver = StyleResolver(parsed.rules, fontSize, contentWidth)
+                val resolver = StyleResolver(parsed.rules, fontSize, contentWidth, baseDir)
                 docRoots.add(BoxBuilder(resolver) { href -> resolvePath(docDir, href) }.build(tree))
             }
             if (docRoots.isEmpty()) return null
@@ -83,7 +85,7 @@ class EpubDocument private constructor(
             val fonts = buildFontRegistry(zip, opf, faceRules)
             val metadata = buildMetadata(opf)
             val toc = TocParser.parse(zip, opf, contentPaths) { base, href -> resolvePath(base, href) }
-            val superRoot = BlockBox(ComputedStyle.initial(fontSize), docRoots)
+            val superRoot = BlockBox(ComputedStyle.initial(fontSize, direction = baseDir), docRoots)
             return EpubDocument(superRoot, zip, fonts, metadata, toc, pageWidth, pageHeight, fontSize, margin)
         }
 

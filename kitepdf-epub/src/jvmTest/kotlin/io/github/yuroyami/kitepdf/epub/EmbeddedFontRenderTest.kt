@@ -4,6 +4,8 @@ import io.github.yuroyami.kitepdf.render.RecordingCanvas
 import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertNotNull
+import kotlin.test.assertNull
+import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
 /**
@@ -48,6 +50,18 @@ class EmbeddedFontRenderTest {
         val css = "@font-face{font-family:'Embedded';src:url(font.ttf)}"
         val runs = glyphRuns("<body><style>$css</style><p>hello world</p></body>", ttf)
         assertTrue(runs.isNotEmpty() && runs.none { it.hasOutlines }, "no font-family match keeps the Standard-14 path")
+    }
+
+    @Test
+    fun font_matching_relaxes_weight_and_style() {
+        val ttf = droidSans() ?: return
+        val face = FontRegistry.face("book", bold = false, italic = false, ttf)
+        assertNotNull(face)
+        val registry = FontRegistry(listOf(face))
+        assertSame(face, registry.match("book", bold = false, italic = false), "exact match")
+        assertSame(face, registry.match("book", bold = true, italic = false), "relaxes to the family's only weight")
+        assertSame(face, registry.match("book", bold = true, italic = true), "relaxes weight + style")
+        assertNull(registry.match("othername", bold = false, italic = false), "unknown family -> Standard-14 fallback")
     }
 
     @Test
