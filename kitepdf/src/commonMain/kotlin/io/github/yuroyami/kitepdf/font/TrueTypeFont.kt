@@ -96,11 +96,14 @@ class TrueTypeFont private constructor(
 
     /** Get the outline for [glyphId], or null if the glyph slot is empty (zero-length). */
     fun outline(glyphId: Int): GlyphOutline? {
-        cache[glyphId]?.let { return it }
-        val parsed = parseGlyph(glyphId)
+        if (cache.containsKey(glyphId)) return cache[glyphId]
+        val parsed = parseGlyph(glyphId, depth = 0, active = HashSet())
         cache[glyphId] = parsed
         return parsed
     }
+
+    /** Maximum composite-glyph nesting depth before we abort (malformed-font guard). */
+    private val maxCompositeDepth = 8
 
     /**
      * Outline as a [PdfPath], cached — the `GlyphOutline → PdfPath` conversion
@@ -113,8 +116,9 @@ class TrueTypeFont private constructor(
         return p
     }
 
-    private fun parseGlyph(glyphId: Int): GlyphOutline? {
+    private fun parseGlyph(glyphId: Int, depth: Int, active: HashSet<Int>): GlyphOutline? {
         if (glyphId < 0 || glyphId >= maxp.numGlyphs) return null
+        if (locaOffsets.size <= glyphId + 1) return null
         val start = locaOffsets[glyphId]
         val end = locaOffsets[glyphId + 1]
         if (end <= start) return null   // empty glyph (space, .notdef in many fonts)
@@ -131,7 +135,7 @@ class TrueTypeFont private constructor(
         return if (numberOfContours >= 0) {
             parseSimpleGlyph(numberOfContours, bbox)
         } else {
-            parseCompositeGlyph(bbox)
+            parseCompositeGlyph(glyphId, bbox, depth, active)
         }
     }
 
@@ -199,57 +203,120 @@ class TrueTypeFont private constructor(
      * + accent). We resolve each child via [outline] recursively and apply
      * the embedded 2×3 transform.
      */
-    private fun parseCompositeGlyph(bbox: GlyphBbox): GlyphOutline {
-        val merged = mutableListOf<Contour>()
-        while (true) {
-            val flags = reader.u16()
-            val childGlyphId = reader.u16()
-
-            // Read the two arguments — they're either x/y offsets or anchor points.
-            val (argX, argY) = if (flags and CG_ARGS_ARE_WORDS != 0) {
-                if (flags and CG_ARGS_ARE_XY_VALUES != 0) reader.s16() to reader.s16()
-                else reader.u16() to reader.u16()
-            } else {
-                if (flags and CG_ARGS_ARE_XY_VALUES != 0) reader.s8() to reader.s8()
-                else reader.u8() to reader.u8()
-            }
-            // Read scale matrix.
-            val (sx, sy01, sy10, sy) = when {
-                flags and CG_WE_HAVE_A_SCALE != 0 -> {
-                    val s = readF2Dot14()
-                    arrayOf(s, 0.0, 0.0, s)
-                }
-                flags and CG_WE_HAVE_X_AND_Y_SCALE != 0 -> {
-                    val xS = readF2Dot14(); val yS = readF2Dot14()
-                    arrayOf(xS, 0.0, 0.0, yS)
-                }
-                flags and CG_WE_HAVE_TWO_BY_TWO != 0 -> {
-                    val a = readF2Dot14(); val b = readF2Dot14()
-                    val c = readF2Dot14(); val d = readF2Dot14()
-                    arrayOf(a, b, c, d)
-                }
-                else -> arrayOf(1.0, 0.0, 0.0, 1.0)
-            }
-
-            // Save reader position; outline() will jump around in the file.
-            val savedPos = reader.pos()
-            val child = outline(childGlyphId)
-            reader.seek(savedPos)
-
-            child?.let { c ->
-                for (contour in c.contours) {
-                    val transformed = contour.points.map {
-                        val x = (sx * it.x + sy10 * it.y + argX).toInt()
-                        val y = (sy01 * it.x + sy * it.y + argY).toInt()
-                        GlyphPoint(x, y, it.onCurve)
-                    }
-                    merged.add(Contour(transformed))
-                }
-            }
-
-            if (flags and CG_MORE_COMPONENTS == 0) break
+    private fun parseCompositeGlyph(
+        glyphId: Int,
+        bbox: GlyphBbox,
+        depth: Int,
+        active: HashSet<Int>,
+    ): GlyphOutline {
+        // Cycle / runaway-recursion guard: a self-referencing or cyclic composite
+        // (a malformed-font DoS) would otherwise recurse until StackOverflowError.
+        // The public glyph cache is only written after a full parse, so it does
+        // not break the cycle on its own — track the active chain here instead.
+        if (depth >= maxCompositeDepth || !active.add(glyphId)) {
+            return GlyphOutline(emptyList(), bbox)
         }
-        return GlyphOutline(merged, bbox)
+        try {
+            val merged = mutableListOf<Contour>()
+            while (true) {
+                val flags = reader.u16()
+                val childGlyphId = reader.u16()
+
+                // Read the two arguments — they're either x/y offsets (ARGS_ARE_XY_VALUES
+                // set) or a pair of point indices for point-matching (flag clear).
+                val (arg1, arg2) = if (flags and CG_ARGS_ARE_WORDS != 0) {
+                    if (flags and CG_ARGS_ARE_XY_VALUES != 0) reader.s16() to reader.s16()
+                    else reader.u16() to reader.u16()
+                } else {
+                    if (flags and CG_ARGS_ARE_XY_VALUES != 0) reader.s8() to reader.s8()
+                    else reader.u8() to reader.u8()
+                }
+                // Read scale matrix.
+                val (sx, sy01, sy10, sy) = when {
+                    flags and CG_WE_HAVE_A_SCALE != 0 -> {
+                        val s = readF2Dot14()
+                        arrayOf(s, 0.0, 0.0, s)
+                    }
+                    flags and CG_WE_HAVE_X_AND_Y_SCALE != 0 -> {
+                        val xS = readF2Dot14(); val yS = readF2Dot14()
+                        arrayOf(xS, 0.0, 0.0, yS)
+                    }
+                    flags and CG_WE_HAVE_TWO_BY_TWO != 0 -> {
+                        val a = readF2Dot14(); val b = readF2Dot14()
+                        val c = readF2Dot14(); val d = readF2Dot14()
+                        arrayOf(a, b, c, d)
+                    }
+                    else -> arrayOf(1.0, 0.0, 0.0, 1.0)
+                }
+
+                // Save reader position; parseGlyph() will jump around in the file.
+                val savedPos = reader.pos()
+                val child = parseGlyph(childGlyphId, depth + 1, active)
+                reader.seek(savedPos)
+
+                child?.let { c ->
+                    // Transform the child's points through the 2×2 scale first;
+                    // the translation depends on whether we're offsetting or
+                    // point-matching, so resolve that below.
+                    val scaled = c.contours.map { contour ->
+                        contour.points.map {
+                            val x = sx * it.x + sy10 * it.y
+                            val y = sy01 * it.x + sy * it.y
+                            GlyphPoint(x.toInt(), y.toInt(), it.onCurve)
+                        }
+                    }
+
+                    val (dx, dy) = if (flags and CG_ARGS_ARE_XY_VALUES != 0) {
+                        // arg1/arg2 are x/y offsets in the child's (already scaled)
+                        // coordinate space — the plain, common case.
+                        arg1.toDouble() to arg2.toDouble()
+                    } else {
+                        // Point-matching: arg1 is a point index into the parent
+                        // (points placed so far), arg2 is a point index into this
+                        // child. Align so the child point coincides with the parent
+                        // point. Indices out of range → no offset (best effort).
+                        val parentPt = pointAt(merged.map { it.points }, arg1)
+                        val childPt = pointAt(scaled, arg2)
+                        if (parentPt != null && childPt != null) {
+                            (parentPt.first - childPt.first).toDouble() to
+                                (parentPt.second - childPt.second).toDouble()
+                        } else {
+                            0.0 to 0.0
+                        }
+                    }
+
+                    for (contour in scaled) {
+                        val translated = contour.map {
+                            GlyphPoint((it.x + dx).toInt(), (it.y + dy).toInt(), it.onCurve)
+                        }
+                        merged.add(Contour(translated))
+                    }
+                }
+
+                if (flags and CG_MORE_COMPONENTS == 0) break
+            }
+            return GlyphOutline(merged, bbox)
+        } finally {
+            active.remove(glyphId)
+        }
+    }
+
+    /**
+     * The [n]-th point across all [contours] in order (composite point-matching
+     * numbers points sequentially over the whole glyph so far), or null if out of
+     * range. Returns raw (x, y) in font design units.
+     */
+    private fun pointAt(contours: List<List<GlyphPoint>>, n: Int): Pair<Int, Int>? {
+        if (n < 0) return null
+        var idx = n
+        for (pts in contours) {
+            if (idx < pts.size) {
+                val p = pts[idx]
+                return p.x to p.y
+            }
+            idx -= pts.size
+        }
+        return null
     }
 
     private fun readF2Dot14(): Double {

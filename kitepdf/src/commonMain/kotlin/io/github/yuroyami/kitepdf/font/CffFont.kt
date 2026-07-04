@@ -115,7 +115,8 @@ class CffFont private constructor(
             reader.u8()  // minor
             val hdrSize = reader.u8()
             reader.u8()  // offSize
-            if (major !in 1..2) throw PdfFormatException("CFF: unsupported major version $major")
+            if (major == 2) throw PdfFormatException("CFF: CFF2 (OpenType CFF2) is not supported")
+            if (major != 1) throw PdfFormatException("CFF: unsupported major version $major")
             reader.seek(hdrSize)
 
             val nameIndex = readIndex(reader)
@@ -400,9 +401,17 @@ class CffFont private constructor(
             return when (format) {
                 0 -> IntArray(numGlyphs) { reader.u8() }
                 3 -> {
+                    // Format 3 ranges are interleaved {first: u16, fd: u8} pairs,
+                    // then a sentinel u16 (gid past the last range). Reading all
+                    // firsts then all fds (as before) only worked for nRanges==1
+                    // and gave every glyph the wrong FontDict on multi-FD CID CFF.
                     val nRanges = reader.u16()
-                    val firsts = IntArray(nRanges) { reader.u16() }
-                    val fds = IntArray(nRanges) { reader.u8() }
+                    val firsts = IntArray(nRanges)
+                    val fds = IntArray(nRanges)
+                    for (i in 0 until nRanges) {
+                        firsts[i] = reader.u16()
+                        fds[i] = reader.u8()
+                    }
                     val sentinel = reader.u16()   // gid past the last range
                     val out = IntArray(numGlyphs)
                     for (i in 0 until nRanges) {

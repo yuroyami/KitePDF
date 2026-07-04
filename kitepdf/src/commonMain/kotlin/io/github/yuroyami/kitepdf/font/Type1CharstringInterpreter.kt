@@ -20,6 +20,13 @@ import io.github.yuroyami.kitepdf.render.PdfPath
 internal class Type1CharstringInterpreter(
     private val charstring: ByteArray,
     private val subrs: List<ByteArray>,
+    /**
+     * Resolver for `seac` composite glyphs: given a StandardEncoding code, return
+     * the *decrypted* charstring bytes for that glyph (base or accent), or null if
+     * unavailable. When null, seac is skipped (previous behaviour). This is wired
+     * by [Type1Font] which owns the CharStrings + StandardEncoding tables.
+     */
+    private val seacResolver: ((Int) -> ByteArray?)? = null,
 ) {
 
     private val pathBuilder = PdfPath.Builder()
@@ -29,6 +36,15 @@ internal class Type1CharstringInterpreter(
     private var y = 0.0
     private var done = false
     private var depth = 0
+
+    /** Left sidebearing x set by hsbw/sbw — needed for seac accent placement. */
+    private var sbx = 0.0
+
+    /* ─── Flex state (OtherSubrs 0/1/2) ──────────────────────────────────── */
+    /** True between OtherSubr 1 (flex begin) and OtherSubr 0 (flex end). */
+    private var inFlex = false
+    /** The reference points collected from the 7 flex rmoveto's (x then y). */
+    private val flexPts = ArrayList<Double>(14)
 
     fun interpret(): PdfPath {
         execute(charstring)
@@ -88,7 +104,8 @@ internal class Type1CharstringInterpreter(
             1, 3 -> stack.clear()                      // hstem / vstem (ignored)
             4 -> {                                     // vmoveto: dy
                 if (stack.isNotEmpty()) y += stack.removeLast()
-                pathBuilder.moveTo(x, y); stack.clear()
+                if (inFlex) { flexPts.add(x); flexPts.add(y) } else pathBuilder.moveTo(x, y)
+                stack.clear()
             }
             5 -> {                                     // rlineto: dx dy
                 if (stack.size >= 2) {
@@ -126,12 +143,13 @@ internal class Type1CharstringInterpreter(
                 val sub = subrs.getOrNull(idx) ?: return
                 execute(sub)
             }
-            11 -> { depth--; done = false; return }    // return
+            11 -> { done = false; return }             // return (depth is decremented by execute's finally)
             13 -> {                                    // hsbw: sbx wx
                 if (stack.size >= 2) {
                     /* wx = */ stack.removeLast()
-                    val sbx = stack.removeLast()
-                    x = sbx; y = 0.0
+                    val sb = stack.removeLast()
+                    sbx = sb
+                    x = sb; y = 0.0
                 }
                 stack.clear()
             }
@@ -144,11 +162,13 @@ internal class Type1CharstringInterpreter(
                     val dy = stack.removeLast(); val dx = stack.removeLast()
                     x += dx; y += dy
                 }
-                pathBuilder.moveTo(x, y); stack.clear()
+                if (inFlex) { flexPts.add(x); flexPts.add(y) } else pathBuilder.moveTo(x, y)
+                stack.clear()
             }
             22 -> {                                    // hmoveto: dx
                 if (stack.isNotEmpty()) x += stack.removeLast()
-                pathBuilder.moveTo(x, y); stack.clear()
+                if (inFlex) { flexPts.add(x); flexPts.add(y) } else pathBuilder.moveTo(x, y)
+                stack.clear()
             }
             30 -> {                                    // vhcurveto: dy1 dx2 dy2 dx3
                 if (stack.size >= 4) {
@@ -189,8 +209,9 @@ internal class Type1CharstringInterpreter(
                     /* wy = */ stack.removeLast()
                     /* wx = */ stack.removeLast()
                     val sby = stack.removeLast()
-                    val sbx = stack.removeLast()
-                    x = sbx; y = sby
+                    val sb = stack.removeLast()
+                    sbx = sb
+                    x = sb; y = sby
                 }
                 stack.clear()
             }
@@ -227,30 +248,99 @@ internal class Type1CharstringInterpreter(
     }
 
     private fun handleOtherSubr(num: Int, args: List<Double>) {
-        // OtherSubrs 0..4 are Adobe's flex/hint machinery. We push the
-        // appropriate values onto the PS stack so subsequent "pop" operators
-        // see them. For non-rendering purposes most are no-ops.
+        // OtherSubrs 0..3 are Adobe's flex/hint machinery (Black Book §8).
         when (num) {
+            1 -> {
+                // Begin flex. The following 7 rmoveto's set the reference point
+                // and 6 Bezier points; they must NOT emit real moves — collect them.
+                inFlex = true
+                flexPts.clear()
+            }
+            2 -> {
+                // Mid-flex marker between rmoveto's — nothing to do; points are
+                // gathered by the rmoveto handler while inFlex is true.
+            }
             0 -> {
-                // End of flex: push end x, y, flexHeight (3 values) — but for
-                // pure vector output we treat flex as straight segments already
-                // drawn by the OtherSubr 1 setup. Push the last point.
-                psStack.addLast(y); psStack.addLast(x); psStack.addLast(0.0)
+                // End flex: args = [flexHeight, endX, endY]. Emit the two curves
+                // through the 6 collected control/end points (skipping the first
+                // reference point at flexPts[0..1]), then leave (endX, endY) on the
+                // PS stack for the canonical "pop pop setcurrentpoint".
+                inFlex = false
+                if (flexPts.size >= 14) {
+                    val x1 = flexPts[2];  val y1 = flexPts[3]
+                    val x2 = flexPts[4];  val y2 = flexPts[5]
+                    val x3 = flexPts[6];  val y3 = flexPts[7]
+                    val x4 = flexPts[8];  val y4 = flexPts[9]
+                    val x5 = flexPts[10]; val y5 = flexPts[11]
+                    val x6 = flexPts[12]; val y6 = flexPts[13]
+                    pathBuilder.curveTo(x1, y1, x2, y2, x3, y3)
+                    pathBuilder.curveTo(x4, y4, x5, y5, x6, y6)
+                    x = x6; y = y6
+                }
+                flexPts.clear()
+                // endX, endY come from args when present; fall back to current point.
+                val endX = if (args.size >= 3) args[1] else x
+                val endY = if (args.size >= 3) args[2] else y
+                x = endX; y = endY
+                // Push so that: pop -> endX (top), pop -> endY; setcurrentpoint reads y=endY, x=endX.
+                psStack.addLast(endY)
+                psStack.addLast(endX)
             }
-            1, 2 -> { /* start flex / mid flex — handled by drawn segments */ }
             3 -> {
-                // Counter control / hint replacement — push subr 3.
-                psStack.addLast(3.0)
+                // Hint replacement: no-op for outlines. The call form is
+                // "subr# 1 3 callothersubr pop callsubr"; leave subr# for the pop.
+                psStack.addLast(if (args.isNotEmpty()) args[0] else 3.0)
             }
-            else -> args.forEach { psStack.addLast(it) }
+            else -> {
+                // Unknown OtherSubr: preserve PostScript stack semantics by
+                // returning the arguments in reverse (each `pop` peels the top).
+                for (a in args) psStack.addLast(a)
+            }
         }
     }
 
     private fun seac() {
-        // Composite glyph: asb adx ady bchar achar — we'd recursively render
-        // bchar and achar from the same font's CharStrings. We don't have a
-        // way to look up by char code here without the encoding context, so
-        // we silently skip — affects only a handful of accented glyphs.
+        // Composite (accented) glyph: `asb adx ady bchar achar seac`.
+        // bchar/achar are StandardEncoding codes. Render the base glyph at its
+        // own origin, then the accent translated by (sbx + adx - asb, ady) where
+        // sbx is the composite's own left sidebearing (from its hsbw). This is
+        // the standard Type 1 accented-glyph mechanism (Black Book §6.4).
+        val resolver = seacResolver
+        if (stack.size < 5 || resolver == null) { stack.clear(); return }
+        val achar = stack.removeLast().toInt()
+        val bchar = stack.removeLast().toInt()
+        val ady = stack.removeLast()
+        val adx = stack.removeLast()
+        val asb = stack.removeLast()
         stack.clear()
+
+        val baseCs = resolver(bchar)
+        val accentCs = resolver(achar)
+
+        // Base glyph: rendered at its natural position.
+        if (baseCs != null) appendGlyph(baseCs, 0.0, 0.0)
+        // Accent glyph: offset. The accent's own hsbw sets its origin to asb-adjusted
+        // sidebearing; the net translation per spec is (sbx + adx - asb, ady).
+        if (accentCs != null) appendGlyph(accentCs, sbx + adx - asb, ady)
+
+        done = true
+    }
+
+    /** Render [cs] with a fresh interpreter and append its outline, translated by (dx, dy). */
+    private fun appendGlyph(cs: ByteArray, dx: Double, dy: Double) {
+        val sub = Type1CharstringInterpreter(cs, subrs, seacResolver).interpret()
+        for (seg in sub.segments) {
+            when (seg) {
+                is PdfPath.Segment.MoveTo -> pathBuilder.moveTo(seg.x + dx, seg.y + dy)
+                is PdfPath.Segment.LineTo -> pathBuilder.lineTo(seg.x + dx, seg.y + dy)
+                is PdfPath.Segment.CurveTo -> pathBuilder.curveTo(
+                    seg.x1 + dx, seg.y1 + dy, seg.x2 + dx, seg.y2 + dy, seg.x3 + dx, seg.y3 + dy,
+                )
+                is PdfPath.Segment.QuadTo -> pathBuilder.quadTo(
+                    seg.x1 + dx, seg.y1 + dy, seg.x2 + dx, seg.y2 + dy,
+                )
+                is PdfPath.Segment.Close -> pathBuilder.close()
+            }
+        }
     }
 }

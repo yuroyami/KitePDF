@@ -232,21 +232,62 @@ private class TextCollectorCanvas : PdfCanvas {
         val font: PdfFont,
         val fontSize: Double,
         val textMatrix: Matrix,
+        /** Character spacing Tc, in unscaled text-space units (default 0). */
+        val charSpacing: Double = 0.0,
+        /** Word spacing Tw, in unscaled text-space units (default 0). */
+        val wordSpacing: Double = 0.0,
+        /** Horizontal scaling Tz as a fraction (100% ⇒ 1.0, default 1.0). */
+        val horizScale: Double = 1.0,
     ) {
         fun toSpan(): PdfTextSpan? {
             // Text extraction needs advances + decoded text only — not glyph
             // shapes — so skip outline resolution entirely.
             val glyphs = font.layoutBytes(bytes, resolveOutlines = false)
             if (glyphs.isEmpty()) return null
-            // Total advance × fontSize / 1000 == width in user units (the spec's
-            // glyph-design-unit scaling rule for simple/composite fonts alike).
-            val totalAdvance = glyphs.sumOf { it.advanceWidth } * fontSize / 1000.0
+
+            // Advance per ISO 32000-1 §9.4.4: for each glyph the displacement is
+            //   ((w0 - Tj/1000) * Tfs + Tc + Tw) * Th
+            // where Th is the horizontal scale (Tz/100). Here there is no per-glyph
+            // Tj (that lives in TJ arrays the renderer already applied), so we sum
+            //   (w0 * Tfs/1000 + Tc + Tw?) * Th.
+            // Tw applies only to single-byte code 32 in simple fonts. A simple
+            // font decodes one byte per glyph, so bytes.size == glyphs.size marks
+            // the single-byte case; composite fonts never receive Tw.
+            val singleByte = bytes.size == glyphs.size
+            var advance = 0.0
+            for ((i, g) in glyphs.withIndex()) {
+                var glyphAdvance = g.advanceWidth * fontSize / 1000.0 + charSpacing
+                if (singleByte && wordSpacing != 0.0 &&
+                    i in bytes.indices && (bytes[i].toInt() and 0xFF) == 0x20
+                ) {
+                    glyphAdvance += wordSpacing
+                }
+                advance += glyphAdvance
+            }
+            advance *= horizScale
+
+            // Origin and bounds come from the *full* text-rendering matrix, so
+            // rotation/skew (b, c) and non-uniform scale are honoured — not just
+            // e/f and scaleX. Build the local box in text space then map its
+            // corners through the matrix and take the axis-aligned hull.
             val originX = textMatrix.e
             val originY = textMatrix.f
-            val width = totalAdvance * textMatrix.scaleX()
-            // Vertical extent: heuristic — fontSize ascender, ~0.25 descender.
-            val ascender = fontSize * 0.8 * textMatrix.scaleY()
-            val descender = fontSize * 0.2 * textMatrix.scaleY()
+            val ascender = fontSize * 0.8
+            val descender = fontSize * 0.2
+
+            // Local (text-space) corners of the glyph run box: x in [0, advance],
+            // y in [-descender, ascender]. Map each through the matrix.
+            val corners = listOf(
+                textMatrix.transformPoint(0.0, -descender),
+                textMatrix.transformPoint(advance, -descender),
+                textMatrix.transformPoint(advance, ascender),
+                textMatrix.transformPoint(0.0, ascender),
+            )
+            val left = corners.minOf { it.first }
+            val right = corners.maxOf { it.first }
+            val bottom = corners.minOf { it.second }
+            val top = corners.maxOf { it.second }
+
             val text = glyphs.joinToString("") { it.text }
             return PdfTextSpan(
                 text = text,
@@ -254,10 +295,10 @@ private class TextCollectorCanvas : PdfCanvas {
                 fontSize = fontSize,
                 origin = originX to originY,
                 bounds = Rectangle(
-                    left = originX,
-                    bottom = originY - descender,
-                    right = originX + width,
-                    top = originY + ascender,
+                    left = left,
+                    bottom = bottom,
+                    right = right,
+                    top = top,
                 ),
             )
         }

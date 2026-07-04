@@ -37,6 +37,13 @@ internal class CompositeFont(
     val cff: CffFont?,
     /** Byte stream → code unit reader (Identity-H by default for CIDFonts). */
     val codeReader: CodeUnitReader,
+    /**
+     * Embedded `/Encoding` CMap *stream* (ISO 32000-1 §9.7.5.3), when /Encoding
+     * was a stream rather than a predefined name. It performs codespace-correct
+     * segmentation AND real code→CID mapping via its cidchar/cidrange tables;
+     * when present it takes precedence over [codeReader].
+     */
+    val encodingCMap: CMap?,
     /** CID → GID mapping. Default identity for CIDFontType0; explicit for CIDFontType2. */
     val cidToGid: CidToGidMap,
     /** CID-keyed widths from /W + /DW. */
@@ -45,8 +52,25 @@ internal class CompositeFont(
     val toUnicode: CMap?,
 ) {
 
+    /**
+     * Segment [bytes] at [offset] into one (cid, byteCount) code unit, using the
+     * embedded /Encoding CMap when present, else the predefined [codeReader].
+     * The single point of truth for composite code-unit segmentation, so every
+     * caller (layout, advance, word-spacing) splits bytes identically.
+     */
+    fun nextCodeUnit(bytes: ByteArray, offset: Int): Pair<Int, Int>? {
+        encodingCMap?.let { return it.codeUnitAt(bytes, offset) }
+        return codeReader.next(bytes, offset)
+    }
+
     /** Walk [bytes] into a sequence of (CID, byteCount). */
     fun codeUnits(bytes: ByteArray): Sequence<CidUnit> = sequence {
+        encodingCMap?.let { cmap ->
+            for (u in cmap.codeUnits(bytes)) {
+                yield(CidUnit(cid = u.cid, byteOffset = u.byteOffset, byteCount = u.byteCount))
+            }
+            return@sequence
+        }
         var offset = 0
         while (offset < bytes.size) {
             val (cid, consumed) = codeReader.next(bytes, offset) ?: break
@@ -87,8 +111,15 @@ internal class CompositeFont(
             val descendant = descendants.firstOrNull()?.resolve(refs) as? PdfDictionary ?: return null
             val descendantSubtype = descendant.getName("Subtype") ?: return null
 
-            // Resolve /Encoding — name (Identity-H/V) or CMap stream (named only for now).
-            val encodingName = (parentDict["Encoding"]?.resolve(refs) as? PdfName)?.value
+            // Resolve /Encoding — either a predefined name (Identity-H/V, CJK) or
+            // an embedded CMap stream (ISO 32000-1 §9.7.5.3). A stream gives us
+            // real codespace segmentation + code→CID mapping; a name resolves to
+            // a predefined [CodeUnitReader] (Identity exact, CJK degraded).
+            val encodingObj = parentDict["Encoding"]?.resolve(refs)
+            val encodingName = (encodingObj as? PdfName)?.value
+            val encodingCMap = (encodingObj as? PdfStream)?.let {
+                runCatching { CMap.parse(FilterChain.decode(it)) }.getOrNull()
+            }
             val codeReader = PredefinedCMaps.reader(encodingName)
 
             // Resolve descendant's embedded outlines.
@@ -101,7 +132,7 @@ internal class CompositeFont(
             val toUnicode = loadToUnicodeOnParent(parentDict, refs)
             val baseFont = parentDict.getName("BaseFont") ?: descendant.getName("BaseFont") ?: "Unknown"
 
-            return CompositeFont(baseFont, descendantSubtype, ttf, cff, codeReader, cidToGid, widths, toUnicode)
+            return CompositeFont(baseFont, descendantSubtype, ttf, cff, codeReader, encodingCMap, cidToGid, widths, toUnicode)
         }
 
         private fun loadTtf(descriptor: PdfDictionary, refs: IndirectResolver): TrueTypeFont? {

@@ -7,6 +7,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
 import kotlin.test.assertSame
+import kotlin.test.assertTrue
 
 /**
  * Tests for the code-unit readers + composite-font helpers. The full Type 0
@@ -57,10 +58,30 @@ class CompositeFontTest {
     fun predefined_cmap_resolution() {
         assertSame(IdentityCodeUnitReader, PredefinedCMaps.reader("Identity-H"))
         assertSame(IdentityCodeUnitReader, PredefinedCMaps.reader("Identity-V"))
-        // CJK CMaps fall back to Identity-H since they're all 2-byte.
-        assertSame(IdentityCodeUnitReader, PredefinedCMaps.reader("GBK-EUC-H"))
-        assertSame(IdentityCodeUnitReader, PredefinedCMaps.reader("UniJIS-UTF16-H"))
         assertSame(SingleByteCodeUnitReader, PredefinedCMaps.reader(null))
         assertSame(SingleByteCodeUnitReader, PredefinedCMaps.reader("WeirdUnknown"))
+        // Non-Identity CJK CMaps now segment by codespace (mixed 1-/2-byte) and
+        // DEGRADE the CID mapping (no bundled Adobe resource data), rather than
+        // faking Identity-H and mis-segmenting ASCII+kanji streams.
+        val gbk = PredefinedCMaps.reader("GBK-EUC-H")
+        assertTrue(gbk.degraded)
+        assertTrue(gbk !== IdentityCodeUnitReader && gbk !== SingleByteCodeUnitReader)
+        val utf16 = PredefinedCMaps.reader("UniJIS-UTF16-H")
+        assertTrue(utf16.degraded)
+    }
+
+    @Test
+    fun cjk_reader_segments_mixed_width_ascii_and_kanji() {
+        // 90ms-RKSJ-H is Shift-JIS: ASCII 'A' (0x41) is 1 byte, a kanji lead
+        // 0x88 0x9F is 2 bytes. Widest-first would have swallowed 0x41 0x88.
+        val reader = PredefinedCMaps.reader("90ms-RKSJ-H")
+        val bytes = byteArrayOf(0x41, 0x88.toByte(), 0x9F.toByte(), 0x42)
+        var offset = 0
+        val widths = mutableListOf<Int>()
+        while (true) {
+            val pair = reader.next(bytes, offset) ?: break
+            widths.add(pair.second); offset += pair.second
+        }
+        assertEquals(listOf(1, 2, 1), widths)
     }
 }

@@ -21,14 +21,23 @@ internal object TrueTypeSubsetter {
     // Tables copied unchanged when present (no glyph-id-indexed data, so safe).
     // NOT cmap (maps Unicode→old gid — renumbering invalidates it) and NOT post
     // (format 2.0 is glyph-id-indexed, so a verbatim copy would mismatch the subset).
-    private val COPY_VERBATIM = listOf("name", "OS/2")
+    //
+    // cvt/fpgm/prep are the hinting-program tables: `fpgm` defines functions and
+    // `prep`/`cvt` set up the control-value table that per-glyph instructions rely
+    // on. We copy the `glyf` bytes verbatim (instructions included), so we MUST keep
+    // these three or strict hinting rasterisers reference missing functions/CVT
+    // entries and mis-render or reject the font. They carry no glyph-id-indexed data,
+    // so a verbatim copy is safe.
+    private val COPY_VERBATIM = listOf("name", "OS/2", "cvt ", "fpgm", "prep")
 
     class Subset(val fontBytes: ByteArray, val oldToNew: Map<Int, Int>)
 
     fun subset(font: TrueTypeFont, usedGids: Set<Int>): Subset {
-        // 1. Transitive glyph closure, always including .notdef (gid 0).
+        // 1. Transitive glyph closure, always including .notdef (gid 0). Gid 0 is
+        //    queued like any other seed (not pre-added to the closure) so that its
+        //    own composite children — if .notdef is a composite glyph — are pulled
+        //    in transitively too.
         val closure = HashSet<Int>()
-        closure.add(0)
         val work = ArrayDeque<Int>()
         work.addLast(0)
         usedGids.forEach { work.addLast(it) }
@@ -73,6 +82,11 @@ internal object TrueTypeSubsetter {
         // 5. Copy head/maxp/hhea and patch the fields the subset changes.
         val head = font.rawTable("head")!!.copyOf()
         u16(head, 50, 1)                       // indexToLocFormat = long
+        // The other maxp v1.0 stats (maxPoints, maxContours, maxComposite*, etc.)
+        // are copied verbatim. They were computed over the FULL font, so they are
+        // upper bounds for any subset of it — a rasteriser sizing scratch buffers
+        // from them over-allocates at worst, never under-allocates. Only numGlyphs
+        // must shrink to stay consistent with loca/glyf; we patch just that.
         val maxp = font.rawTable("maxp")!!.copyOf()
         u16(maxp, 4, numGlyphs)                // maxp.numGlyphs
         val hhea = font.rawTable("hhea")!!.copyOf()

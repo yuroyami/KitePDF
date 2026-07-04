@@ -41,10 +41,21 @@ internal class Type1Font private constructor(
         if (outlineCache.containsKey(glyphName)) return outlineCache[glyphName]
         val cs = charStrings[glyphName]
         val path = if (cs == null) null else runCatching {
-            Type1CharstringInterpreter(decryptCharstring(cs, lenIV), subrs).interpret()
+            Type1CharstringInterpreter(decryptCharstring(cs, lenIV), subrs, ::seacCharstring).interpret()
         }.getOrNull()
         outlineCache[glyphName] = path
         return path
+    }
+
+    /**
+     * seac resolver: map a StandardEncoding code to that glyph's *decrypted*
+     * charstring bytes, or null if the font lacks it. Used by the interpreter to
+     * compose accented glyphs (`seac`).
+     */
+    private fun seacCharstring(stdCode: Int): ByteArray? {
+        val name = Encodings.standardEncoding.getOrNull(stdCode and 0xFF) ?: return null
+        val cs = charStrings[name] ?: return null
+        return decryptCharstring(cs, lenIV)
     }
 
     /** Look up a glyph by byte code via the font's built-in /Encoding. */
@@ -59,17 +70,27 @@ internal class Type1Font private constructor(
     companion object {
 
         fun parse(fontFile: ByteArray, length1: Int, length2: Int): Type1Font {
+            // PFB container: 0x80-prefixed segments (1=ASCII, 2=binary, 3=EOF).
+            // Concatenate the ASCII+binary segments into a flat PFA-style stream and
+            // derive length1/length2 from the segment sizes (the caller's /Length1,
+            // /Length2 refer to the flat form and may not match a PFB layout).
+            val (flat, l1, l2) = if (isPfb(fontFile)) {
+                unpackPfb(fontFile)
+            } else {
+                Triple(fontFile, length1, length2)
+            }
+
             // Section 1: cleartext PostScript.
-            val header = fontFile.copyOfRange(0, minOf(length1, fontFile.size))
+            val header = flat.copyOfRange(0, minOf(l1, flat.size))
             val encoding = parseEncoding(header)
             val fontName = parseFontName(header)
 
             // Section 2: eexec-encrypted block — decrypt the WHOLE thing then
             // parse the Private dict and its CharStrings + Subrs entries from
             // the decrypted PostScript.
-            val eexecBegin = minOf(length1, fontFile.size)
-            val eexecEnd = minOf(length1 + length2, fontFile.size)
-            val eexec = fontFile.copyOfRange(eexecBegin, eexecEnd)
+            val eexecBegin = minOf(l1, flat.size)
+            val eexecEnd = minOf(l1 + l2, flat.size)
+            val eexec = flat.copyOfRange(eexecBegin, eexecEnd)
             val decryptedEexec = decryptEexec(eexec)
             val plaintext = decryptedEexec.copyOfRange(4, decryptedEexec.size)  // strip 4 random bytes
 
@@ -78,6 +99,58 @@ internal class Type1Font private constructor(
             val charStrings = parseCharStrings(plaintext)
 
             return Type1Font(fontName, subrs, charStrings, encoding, lenIV)
+        }
+
+        /* ─── PFB container ──────────────────────────────────────────────── */
+
+        /** PFB starts with a segment header: 0x80 followed by type 1 (ASCII). */
+        private fun isPfb(bytes: ByteArray): Boolean =
+            bytes.size >= 6 && (bytes[0].toInt() and 0xFF) == 0x80 && (bytes[1].toInt() and 0xFF) == 1
+
+        /**
+         * Unpack a PFB (PostScript Font Binary) container into a flat stream.
+         * Each segment is `0x80 <type> <len:uint32-LE> <len bytes>` where type
+         * 1 = ASCII, 2 = binary (the eexec block), 3 = EOF marker (no length).
+         * Returns the concatenated payload plus the total ASCII length preceding
+         * the first binary segment (length1) and the total binary length (length2).
+         */
+        private fun unpackPfb(bytes: ByteArray): Triple<ByteArray, Int, Int> {
+            // Collect (start, end, type) for each payload segment.
+            val segments = ArrayList<Triple<Int, Int, Int>>()
+            var i = 0
+            var total = 0
+            while (i + 1 < bytes.size) {
+                if ((bytes[i].toInt() and 0xFF) != 0x80) break
+                val type = bytes[i + 1].toInt() and 0xFF
+                if (type == 3) break  // EOF
+                if (i + 6 > bytes.size) break
+                val len = (bytes[i + 2].toInt() and 0xFF) or
+                    ((bytes[i + 3].toInt() and 0xFF) shl 8) or
+                    ((bytes[i + 4].toInt() and 0xFF) shl 16) or
+                    ((bytes[i + 5].toInt() and 0xFF) shl 24)
+                val dataStart = i + 6
+                val dataEnd = minOf(dataStart + len, bytes.size)
+                if (dataEnd > dataStart) {
+                    segments.add(Triple(dataStart, dataEnd, type))
+                    total += dataEnd - dataStart
+                }
+                i = dataEnd
+            }
+            val out = ByteArray(total)
+            var pos = 0
+            var length1 = 0
+            var length2 = 0
+            var sawBinary = false
+            for ((start, end, type) in segments) {
+                val n = end - start
+                bytes.copyInto(out, pos, start, end)
+                pos += n
+                when (type) {
+                    1 -> if (!sawBinary) length1 += n
+                    2 -> { sawBinary = true; length2 += n }
+                }
+            }
+            return Triple(out, length1, length2)
         }
 
         /* ─── PostScript header scanning ─────────────────────────────────── */
@@ -141,16 +214,25 @@ internal class Type1Font private constructor(
             val countStr = readNumberAfter(plaintext, subrsMark + "/Subrs".length)
             val count = countStr?.toIntOrNull() ?: return emptyList()
             val out = arrayOfNulls<ByteArray>(count)
+            // Subrs always precede /CharStrings in the Private dict; use that as a
+            // real structural bound instead of an arbitrary byte budget that would
+            // truncate large Private dicts (many subrs / long charstrings).
+            val subrsLimit = indexOfBytes(plaintext, "/CharStrings".encodeToByteArray(), subrsMark)
+                ?: plaintext.size
             var cursor = subrsMark
-            while (cursor < plaintext.size) {
+            var filled = 0
+            while (cursor < plaintext.size && filled < count) {
                 val dup = indexOfBytes(plaintext, "dup ".encodeToByteArray(), cursor) ?: break
-                if (dup > subrsMark + 2000 + count * 50) break   // safety bound
+                if (dup >= subrsLimit) break   // left the Subrs section
                 val nums = readTwoNumbersAfter(plaintext, dup + 4) ?: break
                 val (idx, len) = nums.first to nums.second
                 // Find the RD or -| operator + single space + bytes.
                 val rdEnd = findRdMarker(plaintext, dup + 4) ?: break
                 if (rdEnd + len > plaintext.size) break
-                if (idx in 0 until count) out[idx] = plaintext.copyOfRange(rdEnd, rdEnd + len)
+                if (idx in 0 until count) {
+                    if (out[idx] == null) filled++
+                    out[idx] = plaintext.copyOfRange(rdEnd, rdEnd + len)
+                }
                 cursor = rdEnd + len
             }
             return out.map { it ?: ByteArray(0) }
@@ -276,12 +358,21 @@ internal class Type1Font private constructor(
 
         private fun findRdMarker(buf: ByteArray, from: Int): Int? {
             // Find " RD " or " -| " — the operator that signals "next <len> bytes are encrypted charstring".
+            // Position-sensitive: take whichever marker appears FIRST after `from`, NOT a
+            // global search that always prefers RD. A coincidental " RD " byte sequence inside
+            // earlier binary charstring data must not win over the real, nearer " -| " marker
+            // (dvips '-|' fonts). We pick the nearest by offset.
             val patterns = listOf(" RD ".encodeToByteArray(), " -| ".encodeToByteArray())
+            var bestStart = Int.MAX_VALUE
+            var bestEnd: Int? = null
             for (p in patterns) {
-                val idx = indexOfBytes(buf, p, from)
-                if (idx != null) return idx + p.size
+                val idx = indexOfBytes(buf, p, from) ?: continue
+                if (idx < bestStart) {
+                    bestStart = idx
+                    bestEnd = idx + p.size
+                }
             }
-            return null
+            return bestEnd
         }
 
         private fun findNextGlyphNameAfter(buf: ByteArray, from: Int): Int? {
