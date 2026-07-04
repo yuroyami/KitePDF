@@ -13,3 +13,4 @@ mupdf-master/
 
 # Test corpora — drop your own PDFs here; never commit them.
 kitepdf-native-renderer/corpus/*.pdf
+readium-kt-toolkit/

@@ -18,7 +18,159 @@ picked up in a fresh session with zero prior context.
 
 ---
 
-## 1. Current state — audit (what exists today)
+## 0. Status — Phases 1-3 done; Phase 4 started (2026-07-04)
+
+### Phase 4 — typography (embedded fonts done; bidi/CJK/hyphenation next)
+
+**The cross-backend advance-scale bug is fixed** (the §5 landmine / Phase-4 prerequisite):
+`advanceWidth` is always 1/1000 em, so every `drawGlyphs` backend now advances by
+`advanceWidth * fontSize/1000` (Skia/Android/CoreGraphics/Canvas2D were dividing by
+`unitsPerEm`); outline scale stays `fontSize/unitsPerEm`. PDF difftest re-run green
+(`:kitepdf-native-renderer:jvmTest`, incl. the embedded-font oracle tests).
+
+**Embedded `@font-face` fonts render with real outlines:**
+- `CssParser.parseAll` now collects `@font-face` rules (family, `src` url list, weight, style);
+  `@font-face` inside `@media` is captured too.
+- `Sha1.kt` (pure Kotlin) + `Deobfuscate.kt` — **IDPF** (SHA-1 of the whitespace-stripped
+  package unique-id, XOR first 1040 bytes) and **Adobe** (UUID-hex key, XOR first 1024) font
+  de-mangling, dispatched from `META-INF/encryption.xml`.
+- `FontRegistry`/`EmbeddedFace` — load each face's TrueType file from the zip (deobfuscating
+  when listed), parse via core `TrueTypeFont`, and match a run's `font-family` + weight/style
+  to a face (exact → relaxed weight → any of the family), else Standard-14 fallback.
+- The cascade carries the specific `font-family` name (`ComputedStyle.fontFamilyName`); layout
+  uses embedded `hmtx` advances (normalised to 1/1000 em) for wrapping and emits `TextGlyph`s
+  with real outlines + the face's `unitsPerEm`, drawn via `drawGlyphs(hasOutlines=true)`.
+- 104 EPUB tests (SHA-1 vectors, IDPF/Adobe round-trips, `@font-face` parse, and a JVM
+  end-to-end render with the in-repo `DroidSansFallback.ttf` incl. an IDPF-obfuscated case).
+
+**Scope:** TrueType (`glyf`) faces only for now. Not yet: OpenType-CFF advances (core `CffFont`
+doesn't expose them), WOFF/WOFF2 (per-table inflate / brotli), **bidi** (Arabic/Hebrew reorder),
+**CJK** line-breaking + vertical writing, **hyphenation** (Knuth-Liang), **shaping** (GSUB/GPOS
+ligatures/kerning). Those are the rest of Phase 4.
+
+---
+
+## (historical) Phases 1, 2 & 3 landed
+
+### Phase 3 — box-model layout (done)
+
+**A real CSS box tree replaces the flat block list.** The Phase-2 walker flattened to a
+linear list, which can't express a container's background/border wrapping its children;
+Phase 3 builds a nested box tree, resolves the full box model to geometry, and paints it.
+
+- `LayoutBox.kt` — the box tree: `BlockBox` (container), `TextBlockBox` (anonymous inline
+  formatting context holding runs → line boxes), `ImageBox`; each carries resolved geometry
+  (border-box x/y/w/h) in document space (y grows down across all pages).
+- `BoxBuilder.kt` (replaces `StyledWalker`) — DOM+cascade → box tree; inline content gathers
+  into anonymous `TextBlockBox`es interleaved with child block boxes; markers, whitespace.
+- `BoxLayout.kt` — resolves margin/border/padding/width (auto-fill, explicit, `max-width`),
+  **collapses adjacent sibling margins**, stacks children, and lays inline content into lines
+  with **`text-align: justify`** (inter-word stretch), first-line `text-indent`, `line-height`,
+  sup/sub. Anonymous boxes carry no decorations (their `BlockBox` owns them).
+- `Paginator.kt` — slices the positioned tree into pages; lines/images never split; background/
+  border boxes attach to every page they span.
+- `EpubDocument`/`EpubPage` rewired — paints **backgrounds + per-side borders** via `fillPath`
+  (clipped to the page band, document-y → y-up), then text via `drawGlyphs`, images via
+  `drawImage`. Cascade now resolves per-side `border` (width/style/color, `medium` default,
+  paints only when style ≠ none) + `width`/`height`/`max-width`.
+
+- `BoxLayout.layoutTable` + `TableBox`/`TableRowBox` — **auto table layout**: measure each
+  cell's preferred (unwrapped) and minimum (longest word) width, size columns (shrink-to-fit /
+  proportional distribute / min-overflow), lay cells at their column width, row height = tallest
+  cell, cells stretched to the row. Flattens `thead/tbody/tfoot`. (No row/col spans yet.)
+- `Paginator` page-break control — forced `break-before`/`break-after` (`page`/`always`) start a
+  new page; `break-inside: avoid` moves a block whole to the next page when it fits there;
+  **orphans/widows** (min 2) stop a paragraph leaving a single dangling line at a page edge.
+
+Now painted: block/inline layout, margins (+collapse), padding, borders, backgrounds, justify,
+width/max-width, nested-box geometry, **tables**, **page-break control (force + widows/orphans +
+break-inside)**, multi-doc continuous pagination. 91 EPUB tests (box geometry 9, box tree 17,
+cascade 21, render+paint 15, tables 6, page-break 6, …).
+
+Phase-3 polish also done: **table `colspan`/`rowspan`** (occupancy-grid placement, columns
+topped-up by spanning cells, rowspan cells stretched over their rows) and **auto-margin
+centering** (`margin:0 auto` centers a width-constrained block or shrink-to-fit table). 94 EPUB
+tests. Tiny nits still open: `border-collapse` separate-spacing model, fixed `table-layout`,
+cell `vertical-align`.
+
+**Phase 3 is complete. Next: Phase 4 (typography)** — embedded `@font-face` fonts + IDPF/Adobe
+deobfuscation (⚠️ fix the cross-backend advance-scale bug first, see §5), bidi (Arabic/Hebrew),
+CJK line-breaking, hyphenation.
+
+---
+
+### Phase 2 — CSS engine (done)
+
+**A real pure-Kotlin CSS cascade now drives layout**; the Phase-1 hard-coded tag styling is
+gone. New `css/` package:
+
+- `CssValues.kt` — lengths→pt (px×0.75, pt/em/rem/%/ex/in/cm/mm/pc + font-size keywords),
+  colours (#hex, `rgb()/rgba()`, ~50 named).
+- `Selector.kt` — type/`*`/`.class`/`#id`/`[attr op val]`, descendant + child `>`, grouping;
+  specificity; right-to-left matching against the ancestor chain; pseudo-elements drop the rule.
+- `Css.kt` + `CssParser.kt` — forgiving parser: strip comments, brace-match rules, `!important`,
+  shorthand expansion (`margin`/`padding`/`list-style`); `@media` flattened, `@font-face`/`@page`
+  skipped.
+- `UaStylesheet.kt` — EPUB UA defaults adapted from MuPDF's `html_default_css` (the oracle).
+- `ComputedStyle.kt` + `StyleResolver.kt` — the cascade: match → pick winner per property by
+  (origin/importance, specificity, order) → apply onto parent-inherited seed → resolve lengths
+  against the element's own font size. Inline `style=""` beats selectors.
+- `StyledWalker.kt` (replaces `DomFlattener`) — `display` decides block/inline/list-item/none;
+  font/colour/weight/style/family/valign/white-space from computed style; **indent accumulates**
+  margin-left+padding-left down the tree; block spacing = sibling-collapsed vertical margins;
+  markers from `list-style-type` + ordinal (decimal/roman/alpha/disc/circle/square, `start`).
+- `Layout.kt` reworked — per-run font size **and family** (Times/Helvetica/Courier base-14),
+  colour, **`text-align`** left/right/center (justify→left, Phase 3), first-line **`text-indent`**.
+- `FontMetrics.kt` — added Helvetica (sans) metrics alongside Times/Courier.
+
+Applied now: display, font size/weight/style/family, colour, text-align, text-indent,
+line-height, margins (spacing+indent), white-space (pre), list markers, sup/sub. Computed but
+**not painted yet** (Phase 3 box model): padding, borders, backgrounds, `background-color`,
+justify, real tables. 62 EPUB tests total (cascade 17, walker 17, render/CSS 11, +metrics/parser/path).
+
+**Next: Phase 3 (box-model layout)** — backgrounds + borders via `fillPath`, padding, justified
+text, list/table grids, page-break control. The computed values are already resolved and waiting.
+
+---
+
+### Phase 1 — reflow engine (done)
+
+**Phase 1 is done** (DOM + inline runs + real metrics + images + headings/emphasis). The
+proof-of-concept is now a real reflow engine for a plain novel. What shipped:
+
+- `Dom.kt` + `HtmlParser.kt` — MiniXml tokens folded into an `HtmlNode` tree with tag-soup
+  recovery (void elements; optional end tags for `p`/`li`/`dd`/`dt`/`tr`/`td`, barrier-aware
+  so nested lists don't mis-close).
+- `InlineRun.kt` — `DomFlattener` walks the tree into a styled `Block` stream: emphasis
+  (`b/strong`, `i/em`, `code`→mono, `a` link, `sup`/`sub`), headings (UA scale + bold),
+  blockquote indent, list markers (`•` / `1.`), `<pre>` whitespace, HTML whitespace collapse.
+- `FontMetrics.kt` — **`advanceEm` is gone.** Real Standard-14 (Times/Courier) AFM advances
+  via char→glyph-name (WinAnsi/Standard + AGL)→width, driving both wrap and backend advances.
+- `Layout.kt` — `LayoutEngine`: greedy wrap by real advances, per-run bold/italic/mono
+  `FontSpec` on the Canvas fallback path, sup/sub shrink+shift, list-marker gutter, page
+  fill that never splits a line and collapses top-of-page gaps.
+- `EpubDocument.kt` — reworked pipeline (parse→flatten→layout→paginate); href resolution with
+  `.`/`..` normalization + percent-decode; images via `img@src`.
+- Images: new **public** core factory `ImageXObject.fromEncodedImage(bytes)` (sniffs format).
+  **PNG** is decoded in pure Kotlin (`render/PngDecoder.kt`, reuses core `Zlib`) into a
+  `Kind.RAW` image → renders on every backend with no backend change. **JPEG** works
+  (delegated to the platform decoder, exactly like PDF `DCTDecode`). **GIF returns null and is
+  skipped.** PngDecoder covers colour types 0/2/3/4/6 at bit depths 1/2/4/8/16, all five
+  filters, palette + alpha `tRNS`; not yet: Adam7 interlace, colour-key `tRNS` on gray/RGB.
+- Tests: 34 EPUB + 13 core (`commonTest`, all targets), covering parser tag-soup, whitespace,
+  emphasis/heading render, metrics, path resolution, pagination, `img`→`drawImage`, and
+  pixel-accurate PNG decode (grey/RGB/RGBA/palette, Sub/Up/Paeth filters, 1-bit, interlace-null).
+
+**Immediate next step (before the rest of Phase 2):** GIF decode (or drop it — rare in EPUB),
+then start **Phase 2 (CSS engine)**. A pure-Kotlin baseline **JPEG decoder in core** (so JPEG
+too renders without a platform loader, closing the shared PDF/EPUB JPEG gap) is the other
+loose end, tracked as its own core-codec task.
+
+---
+
+## 1. Current state — audit (original proof-of-concept, pre-Phase-1)
+
+> Superseded by §0. Kept for the record of where this started.
 
 Three files, ~450 lines. It opens a real EPUB and paints text through the core Canvas
 (`EpubRenderTest` proves it end to end into `RecordingCanvas`). Precisely:
@@ -73,16 +225,16 @@ Three files, ~450 lines. It opens a real EPUB and paints text through the core C
 | container → OPF → spine | ✅ basic | ✅ (props, linear, multiple renditions) | 1,6 |
 | Metadata (dc:*, cover, dir) | ❌ | ✅ | 6 |
 | Navigation (nav.xhtml / NCX) → TOC | ❌ | ✅ | 6 |
-| XHTML parse (blocks) | 🟡 flat | ✅ DOM tree | 1 |
-| Inline runs (b/i/a/span/sup) | ❌ | ✅ | 1 |
-| Real font metrics | ❌ heuristic | ✅ | 1 |
-| Images (jpg/png/gif/svg) | ❌ | ✅ | 1,5 |
-| CSS parse + cascade | ❌ | ✅ common subset | 2 |
-| Box model (margin/pad/border/bg) | ❌ | ✅ | 3 |
-| Lists / tables | ❌ | ✅ | 3 |
-| text-align / justify / indent | ❌ | ✅ | 2,3 |
-| Page-break control, widows/orphans | ❌ | ✅ | 3 |
-| Embedded fonts (@font-face + deobfuscation) | ❌ | ✅ | 4 |
+| XHTML parse (blocks) | ✅ DOM tree | ✅ DOM tree | ~~1~~ done |
+| Inline runs (b/i/a/span/sup) | ✅ | ✅ | ~~1~~ done |
+| Real font metrics | ✅ Standard-14 | ✅ | ~~1~~ done |
+| Images (jpg/png/gif/svg) | 🟡 png+jpg | ✅ | 1,5 (gif/svg later) |
+| CSS parse + cascade | ✅ common subset | ✅ common subset | ~~2~~ done |
+| Box model (margin/pad/border/bg) | ✅ painted | ✅ | ~~3~~ done |
+| Lists / tables | ✅ (+ col/rowspan) | ✅ | ~~3~~ done |
+| text-align / justify / indent | ✅ | ✅ | ~~2,3~~ done |
+| Page-break control, widows/orphans | ✅ | ✅ | ~~3~~ done |
+| Embedded fonts (@font-face + deobfuscation) | 🟡 TrueType | ✅ | 4 (CFF/WOFF) |
 | Bidi / RTL | ❌ | ✅ | 4 |
 | CJK + vertical writing | ❌ | ✅ | 4 |
 | Hyphenation | ❌ | ✅ | 4 |
