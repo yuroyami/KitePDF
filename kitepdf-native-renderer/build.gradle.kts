@@ -66,7 +66,7 @@ kotlin {
         }
 
         commonMain.dependencies {
-            implementation(projects.kitepdf)
+            implementation(projects.kitepdfPdf)
         }
 
         commonTest.dependencies {

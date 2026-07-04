@@ -22,10 +22,11 @@ plugins {
 }
 
 rootProject.name = "kitepdf-KMP"
-include(":kitepdf")
-include(":kitepdf-core")
-include(":kitepdf-epub")
-include(":kitepdf-compose")
-include(":kitepdf-skia")
-include(":kitepdf-native-renderer")
+include(":kitepdf")                 // umbrella: pull every handler ("add one dep, get it all")
+include(":kitepdf-core")            // the format-agnostic substrate (the "fitz")
+include(":kitepdf-pdf")             // PDF handler
+include(":kitepdf-epub")            // EPUB handler
+include(":kitepdf-compose-viewer")  // Compose UI (PdfView)
+include(":kitepdf-skia-renderer")   // Skia rasterizer
+include(":kitepdf-native-renderer") // AWT / Android / CoreGraphics / Canvas2D rasterizers
 include(":sample")

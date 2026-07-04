@@ -45,8 +45,8 @@ kotlin {
             }
         }
         commonMain.dependencies {
-            implementation(projects.kitepdf)
-            implementation(projects.kitepdfCompose)
+            implementation(projects.kitepdfPdf)
+            implementation(projects.kitepdfComposeViewer)
             implementation(libs.bundles.compose.multiplatform)
         }
         androidMain.dependencies {

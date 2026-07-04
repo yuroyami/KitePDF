@@ -9,32 +9,37 @@ plugins {
 }
 
 /*
- * :kitepdf is the umbrella artifact. It carries no code of its own; it simply
- * re-exports every document handler so a consumer can depend on one coordinate
- * and get the whole engine (the MuPDF experience). Want only PDF, with no EPUB
- * reflow engine on the classpath? Depend on :kitepdf-pdf instead.
+ * :kitepdf is the pure-Kotlin library. NO external runtime deps.
+ * Only kotlin-stdlib is on the classpath. Tests can use kotlin-test.
+ * Compose Multiplatform lives in :sample, not here.
+ *
+ * Because the engine is 100% common Kotlin (no expect/actual, no cinterop),
+ * it compiles for every target Kotlin supports — so every target is on.
  */
 kotlin {
     jvmToolchain(21)
 
     android {
-        namespace = "io.github.yuroyami.kitepdf.bundle"
+        namespace = "io.github.yuroyami.kitepdf"
         compileSdk = 36
         minSdk = 21
     }
 
     jvm()
 
+    // Apple — iOS keeps the XCFramework binaries for direct Xcode embedding.
     listOf(
         iosSimulatorArm64(),
         iosArm64(),
         iosX64(),
     ).forEach { target ->
         target.binaries.framework {
-            baseName = "KitePDFBundle"
+            baseName = "KitePDF"
             isStatic = false
         }
     }
+    // (macosX64 / tvosX64 / watchosX64 are deprecated in Kotlin 2.3 —
+    //  "target no longer available" — so they stay off.)
     macosArm64()
     tvosArm64()
     tvosSimulatorArm64()
@@ -43,15 +48,18 @@ kotlin {
     watchosSimulatorArm64()
     watchosDeviceArm64()
 
+    // Native desktop / server
     linuxX64()
     linuxArm64()
     mingwX64()
 
+    // Android NDK
     androidNativeArm32()
     androidNativeArm64()
     androidNativeX86()
     androidNativeX64()
 
+    // Web
     @OptIn(ExperimentalKotlinGradlePluginApi::class)
     js(IR) {
         browser()
@@ -77,9 +85,16 @@ kotlin {
         }
 
         commonMain.dependencies {
-            // Re-export every handler. `api` so consumers see their whole API.
-            api(projects.kitepdfPdf)
-            api(projects.kitepdfEpub)
+            // The PDF handler stands on the format-agnostic core.
+            api(project(":kitepdf-core"))
+        }
+
+        commonTest.dependencies {
+            implementation(kotlin("test"))
         }
     }
 }
+
+// Publishing is configured by the vanniktech plugin from gradle.properties:
+// shared coordinates/POM/signing in the root gradle.properties, this module's
+// POM_NAME + POM_DESCRIPTION in kitepdf/gradle.properties.

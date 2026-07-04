@@ -75,7 +75,7 @@ kotlin {
             }
         }
         commonMain.dependencies {
-            implementation(projects.kitepdf)
+            implementation(projects.kitepdfPdf)
             implementation(libs.compose.runtime)
             implementation(libs.compose.foundation)
             implementation(libs.compose.ui)

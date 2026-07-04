@@ -17,10 +17,10 @@ allprojects {
 
 // Aggregate the published library modules into a single Dokka API reference.
 dependencies {
-    dokka(project(":kitepdf"))
-    dokka(project(":kitepdf-compose"))
+    dokka(project(":kitepdf-pdf"))
+    dokka(project(":kitepdf-compose-viewer"))
     dokka(project(":kitepdf-native-renderer"))
-    dokka(project(":kitepdf-skia"))
+    dokka(project(":kitepdf-skia-renderer"))
 }
 
 dokka {
