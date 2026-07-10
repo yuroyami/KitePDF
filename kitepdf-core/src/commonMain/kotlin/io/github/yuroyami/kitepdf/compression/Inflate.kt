@@ -33,6 +33,22 @@ object Inflate {
         Inflater(input, offset, offset + length, maxOutputBytes).inflateTo(out)
         return out.toByteArray()
     }
+
+    /**
+     * [decode] behind the platform fast path (T-10): native inflate where the
+     * target has one, this pure-Kotlin decoder otherwise (and for any stream
+     * the fast path rejects, preserving lenient errors). Same contract as
+     * [decode]; use it on hot paths (zip entries), keep [decode] where the
+     * pure implementation itself is under test.
+     */
+    fun decodePlatform(
+        input: ByteArray,
+        offset: Int = 0,
+        length: Int = input.size - offset,
+        maxOutputBytes: Int = Int.MAX_VALUE,
+    ): ByteArray =
+        PlatformFlate.inflateRawOrNull(input, offset, length, maxOutputBytes)
+            ?: decode(input, offset, length, maxOutputBytes)
 }
 
 /** Streaming inflater. Call inflateTo() with a sink; reads from the supplied input. */
