@@ -54,15 +54,28 @@ interface PdfCanvas {
      * (or the page, when no clip is active) — the spec's `sh` operator.
      *
      * Default impl falls back to a flat-colour fill using the midpoint
-     * sample; backends that can render real gradients override.
+     * sample; backends that can render real gradients override. For the
+     * whole-clip case it fills a rectangle far larger than any page under
+     * the identity matrix — the backend's active clip (or page bounds)
+     * trims it, so `sh` still paints something rather than nothing.
      */
     fun fillShading(
         shading: PdfShading, ctm: Matrix, clipPath: PdfPath?,
         alpha: Double = 1.0, blendMode: BlendMode = BlendMode.Normal,
     ) {
-        if (clipPath == null) return
         val stops = shading.sampleStops(2) ?: return
         val mid = stops.colors[stops.colors.size / 2]
+        if (clipPath == null) {
+            val huge = PdfPath.Builder().apply {
+                moveTo(-1e6, -1e6)
+                lineTo(1e6, -1e6)
+                lineTo(1e6, 1e6)
+                lineTo(-1e6, 1e6)
+                close()
+            }.build()
+            fillPath(huge, Matrix.IDENTITY, mid, evenOdd = false, alpha = alpha, blendMode = blendMode)
+            return
+        }
         fillPath(clipPath, ctm, mid, evenOdd = false, alpha = alpha, blendMode = blendMode)
     }
 
