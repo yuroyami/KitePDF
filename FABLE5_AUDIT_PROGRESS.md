@@ -230,6 +230,31 @@ Gate reference numbers at session start (2026-07-10, before any task):
 
 ---
 
+## T-69. Table completeness
+
+- **Status:** DONE
+- **Commit:** `2dc1327`
+- **What landed:** `<col>`/`<colgroup>` width pins (hard pins re-asserted
+  after distribution); `border-collapse: collapse` one-edge-wins style
+  rewrite; real `border-spacing`/`cellspacing` gutters both axes; cell
+  `vertical-align` top/middle/bottom via content shift inside the
+  stretched cell; `<caption>` extraction (it was silently DROPPED before:
+  content loss) laid above the table; HTML presentational hints
+  (`table[border]`, `cellpadding`, `cellspacing`, `valign`) as
+  author-origin specificity-0 cascade entries (beat UA, lose to any real
+  author CSS).
+- **Verification:** `TableTest` +6 golden tests (pins in pt and px,
+  collapse edge survival, valign offsets 16.8/33.6pt, caption position,
+  hints + CSS-wins). Full gate green. Sweep 4142 -> 4148 pages (+6:
+  restored captions + presentational borders reflowing older books),
+  0 failures; PDF differential unchanged (0.0115).
+- **Found during execution:** the first hint attempt used a
+  below-everything weight, which lost to the UA sheet's `td{padding:1px}`;
+  corrected to author-origin/spec-0 per CSS 2.1. Width distribution leaked
+  slack into pinned columns; fixed by re-asserting pins post-distribution.
+
+---
+
 ## Discovered during execution
 
 (nothing yet)
