@@ -310,8 +310,12 @@ internal class BoxLayout(
         cellLines.forEachIndexed { i, logical ->
             val cells = bidiReorder(logical, baseLevel) // logical → visual order (UAX #9 L2)
             val maxFs = cells.maxOfOrNull { it.fontSize }?.takeIf { it > 0.0 } ?: style.fontSizePt
-            val lineHeight = style.lineHeightPt ?: maxFs * 1.4
-            val ascent = maxFs * 0.8
+            // A line carrying ruby grows by the reading's ascent: the base text
+            // drops within the line so the overlay fits inside the line box.
+            val rubyBaseFs = cells.filter { it.rubyGroup >= 0 }.maxOfOrNull { it.fontSize } ?: 0.0
+            val rubyExtra = rubyBaseFs * RUBY_SIZE * 0.8
+            val lineHeight = (style.lineHeightPt ?: maxFs * 1.4) + rubyExtra
+            val ascent = maxFs * 0.8 + rubyExtra
 
             val (lineWidth, interiorSpaces) = measure(cells)
             val firstIndent = if (i == 0) style.textIndentPt else 0.0
@@ -353,7 +357,10 @@ internal class BoxLayout(
         var last = cells.size - 1
         while (last >= 0 && cells[last].ch == ' ') last--
         var w = 0.0; var spaces = 0
-        for (k in 0..last) { w += cells[k].width; if (cells[k].ch == ' ') spaces++ }
+        for (k in 0..last) {
+            w += cells[k].width + cells[k].padBefore + cells[k].padAfter
+            if (cells[k].ch == ' ') spaces++
+        }
         return w to spaces
     }
 
@@ -375,6 +382,12 @@ internal class BoxLayout(
         var kernAfter1000: Int = 0,
         // GPOS mark attachment offset in font design units (0 for non-marks).
         var glyphXOffset: Double = 0.0, var glyphYOffset: Double = 0.0,
+        // Ruby: the group id + reading shared by every cell of one <ruby> base.
+        val rubyGroup: Int = -1, val rubyText: String? = null,
+        // Envelope padding when the reading is wider than its base (pt). Only the
+        // group's first/last cells carry it; it widens wrap/measure and the pen
+        // walk in placeRuns without entering the glyph advance stream.
+        var padBefore: Double = 0.0, var padAfter: Double = 0.0,
     )
 
     private sealed class Token {
@@ -395,8 +408,10 @@ internal class BoxLayout(
                 positionMarks(word)             // GPOS mark-to-base attachment
                 kernWord(word)
                 // Skip hyphenation when a ligature collapsed cells (soft-hyphen indices
-                // + the reconstructed word text would no longer line up).
-                val pts = if (ligated) emptyList() else {
+                // + the reconstructed word text would no longer line up), and for ruby
+                // bases (a hyphen inside a ruby-annotated base is never wanted).
+                val isRuby = word.first().rubyGroup >= 0
+                val pts = if (ligated || isRuby) emptyList() else {
                     val s = LinkedHashSet(softHyphens)
                     if (hyphensAuto && word.size >= 5 && word.all { it.ch.isLetter() }) {
                         val text = buildString { word.forEach { append(it.ch) } }
@@ -404,12 +419,29 @@ internal class BoxLayout(
                     }
                     s.sorted()
                 }
-                tokens.add(Token.Word(word, word.sumOf { it.width }, pts))
+                // A reading wider than its base pads the base's envelope
+                // symmetrically so the overlay never collides with neighbours.
+                if (isRuby) {
+                    val rt = word.first().rubyText
+                    if (rt != null) {
+                        val rubyW = rubyGlyphs(rt, word.first()).width
+                        val baseW = word.sumOf { it.width }
+                        if (rubyW > baseW) {
+                            val pad = (rubyW - baseW) / 2
+                            word.first().padBefore += pad
+                            word.last().padAfter += pad
+                        }
+                    }
+                }
+                tokens.add(Token.Word(word, word.sumOf { it.width + it.padBefore + it.padAfter }, pts))
                 word = ArrayList(); wordW = 0.0; softHyphens = ArrayList()
             }
         }
         for (run in runs) {
             if (run.hardBreak) { endWord(); tokens.add(Token.Break); continue }
+            // Never mix ruby groups (or ruby and plain text) inside one word: the
+            // group must stay one unbreakable token with a single overlay.
+            if (word.isNotEmpty() && word.last().rubyGroup != run.rubyGroup) endWord()
             val fs = run.fontSizePt
             val shift = when (run.valign) {
                 CssVAlign.SUPER -> fs * 0.33
@@ -432,9 +464,11 @@ internal class BoxLayout(
                 }
                 return if (f != null) {
                     val gid = f.gidFor(ch.code)
-                    Cell(ch, f.advance1000(gid) * fs / 1000.0, fs, spec, run.color, shift, run.underline, f, gid)
+                    Cell(ch, f.advance1000(gid) * fs / 1000.0, fs, spec, run.color, shift, run.underline, f, gid,
+                        rubyGroup = run.rubyGroup, rubyText = run.rubyText)
                 } else {
-                    Cell(ch, FontMetrics.advancePt(ch, fs, run.bold, run.italic, run.family), fs, spec, run.color, shift, run.underline)
+                    Cell(ch, FontMetrics.advancePt(ch, fs, run.bold, run.italic, run.family), fs, spec, run.color, shift, run.underline,
+                        rubyGroup = run.rubyGroup, rubyText = run.rubyText)
                 }
             }
             for (ch in run.text) when {
@@ -447,7 +481,8 @@ internal class BoxLayout(
                     else FontMetrics.advancePt(' ', fs, run.bold, run.italic, run.family)
                     tokens.add(Token.Space(sw))
                 }
-                FontMetrics.isWide(ch.code) -> {
+                // Ruby bases do not split per CJK char: the whole base is one token.
+                FontMetrics.isWide(ch.code) && run.rubyGroup < 0 -> {
                     // CJK ideographs break per character; a closing punctuation stays with the char before it.
                     endWord()
                     val cell = cellFor(ch)
@@ -580,7 +615,7 @@ internal class BoxLayout(
                 pendingSpace = 0.0
                 while (true) {
                     val leading = if (line.isNotEmpty()) space else 0.0
-                    val w = cells.sumOf { it.width }
+                    val w = cells.sumOf { it.width + it.padBefore + it.padAfter }
                     if (lineW + leading + w <= avail || (line.isEmpty() && points.isEmpty())) {
                         if (line.isNotEmpty() && space > 0.0) { line.add(spacer(space)); lineW += space }
                         line.addAll(cells); lineW += w
@@ -638,18 +673,79 @@ internal class BoxLayout(
         val out = ArrayList<PlacedRun>()
         var x = xStart
         var i = 0
+        // Ruby envelope tracking: a group's overlay is centered over
+        // [groupStart, x-at-group-end], which spans every run of the group (a
+        // group may split into several runs on a face change) plus its padding.
+        // Groups are assumed contiguous on the line; bidi reordering of a ruby
+        // base inside RTL text is out of scope.
+        var openGroup = -1
+        var groupStart = 0.0
+        var groupCell: Cell? = null
+        fun closeGroup(end: Double) {
+            val gc = groupCell
+            if (openGroup >= 0 && gc?.rubyText != null) out.add(rubyRun(gc, groupStart, end))
+            openGroup = -1; groupCell = null
+        }
         while (i < cells.size) {
             val c = cells[i]
-            if (c.ch == ' ') { x += c.width + extraPerSpace; i++; continue }
+            if (c.ch == ' ') { closeGroup(x); x += c.width + extraPerSpace; i++; continue }
+            if (c.rubyGroup != openGroup) closeGroup(x)
+            if (c.rubyGroup >= 0 && openGroup < 0) { openGroup = c.rubyGroup; groupStart = x; groupCell = c }
+            x += c.padBefore
             val startX = x
             val spec = c.spec; val fs = c.fontSize; val col = c.color; val sh = c.shift; val ul = c.underline; val face = c.face
             val glyphs = ArrayList<TextGlyph>()
-            while (i < cells.size && cells[i].ch != ' ' && samePaint(cells[i], spec, fs, col, sh, ul, face)) {
-                glyphs.add(glyphFor(cells[i])); x += cells[i].width; i++
+            while (i < cells.size && cells[i].ch != ' ' && cells[i].rubyGroup == c.rubyGroup &&
+                samePaint(cells[i], spec, fs, col, sh, ul, face)
+            ) {
+                glyphs.add(glyphFor(cells[i])); x += cells[i].width + cells[i].padAfter; i++
             }
             out.add(PlacedRun(glyphs, startX, fs, spec, col, sh, ul, hasOutlines = face != null, unitsPerEm = face?.unitsPerEm ?: 1000))
         }
+        closeGroup(x)
         return out
+    }
+
+    /** The reading overlay for one ruby group, centered over its base envelope. */
+    private fun rubyRun(base: Cell, envStart: Double, envEnd: Double): PlacedRun {
+        val r = rubyGlyphs(base.rubyText!!, base)
+        val x = ((envStart + envEnd) / 2 - r.width / 2).coerceAtLeast(0.0)
+        return PlacedRun(
+            r.glyphs, x, base.fontSize * RUBY_SIZE, base.spec, base.color,
+            // Reading baseline sits on the base text's ascent line: the overlay's
+            // own ascent then exactly fills the rubyExtra the line grew by.
+            baselineShift = base.fontSize * 0.8,
+            underline = false,
+            hasOutlines = r.face != null, unitsPerEm = r.face?.unitsPerEm ?: 1000,
+        )
+    }
+
+    private class RubyGlyphs(val glyphs: List<TextGlyph>, val width: Double, val face: EmbeddedFace?)
+
+    /**
+     * Shape the reading at [RUBY_SIZE] of the base size. Single-face
+     * simplification: the base's own face when it covers the whole reading,
+     * else any registered face that does, else the generic system-font path.
+     */
+    private fun rubyGlyphs(reading: String, base: Cell): RubyGlyphs {
+        val fs = base.fontSize * RUBY_SIZE
+        val face = base.face?.takeIf { f -> reading.all { f.gidFor(it.code) != 0 } }
+            ?: fonts.coveringAll(reading)
+        var w = 0.0
+        val glyphs = ArrayList<TextGlyph>(reading.length)
+        for (ch in reading) {
+            if (face != null) {
+                val gid = face.gidFor(ch.code)
+                val adv = face.advance1000(gid).toDouble()
+                glyphs.add(TextGlyph(0, 1, gid, ch.toString(), adv, face.outline(gid), ch == ' '))
+                w += adv * fs / 1000.0
+            } else {
+                val g = glyph(ch, base.spec)
+                glyphs.add(g)
+                w += g.advanceWidth * fs / 1000.0
+            }
+        }
+        return RubyGlyphs(glyphs, w, face)
     }
 
     private fun samePaint(c: Cell, spec: FontSpec, fs: Double, col: RgbColor, sh: Double, ul: Boolean, face: EmbeddedFace?): Boolean =
@@ -695,6 +791,8 @@ internal class BoxLayout(
     private companion object {
         val BLACK = RgbColor(0.0, 0.0, 0.0)
         val EMPTY_SPEC = FontSpec(FontFamily.Serif, bold = false, italic = false)
+        /** Ruby reading size as a fraction of its base's font size. */
+        const val RUBY_SIZE = 0.5
         val CJK_CLOSERS = setOf(
             0x3001, 0x3002, // 、 。
             0xFF0C, 0xFF0E, 0xFF01, 0xFF1F, 0xFF1B, 0xFF1A, // fullwidth , . ! ? ; :

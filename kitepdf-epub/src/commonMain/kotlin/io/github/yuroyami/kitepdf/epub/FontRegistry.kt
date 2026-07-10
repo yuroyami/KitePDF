@@ -93,6 +93,10 @@ internal class FontRegistry(private val faces: List<EmbeddedFace>) {
         faces.firstOrNull { it.bold == bold && it.italic == italic && it.gidFor(codePoint) != 0 }
             ?: faces.firstOrNull { it.gidFor(codePoint) != 0 }
 
+    /** A face whose cmap covers every char of [text], or null (ruby readings). */
+    fun coveringAll(text: String): EmbeddedFace? =
+        faces.firstOrNull { f -> text.all { f.gidFor(it.code) != 0 } }
+
     val isEmpty: Boolean get() = faces.isEmpty()
 
     companion object {

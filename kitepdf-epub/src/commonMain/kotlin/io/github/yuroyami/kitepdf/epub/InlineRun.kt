@@ -23,6 +23,14 @@ internal data class InlineRun(
     val hardBreak: Boolean = false,
     /** CSS `font-family` name to match against an embedded `@font-face`, or null. */
     val fontFamilyName: String? = null,
+    /**
+     * Ruby membership: runs of one `<ruby>` base share a group id (>= 0) and
+     * carry the collected `<rt>` reading. The layout keeps a group unbreakable,
+     * pads a base narrower than its reading, and paints the reading centered
+     * above it at [io.github.yuroyami.kitepdf.epub.BoxLayout] RUBY_SIZE em.
+     */
+    val rubyGroup: Int = -1,
+    val rubyText: String? = null,
 ) {
     companion object {
         val BLACK = RgbColor(0.0, 0.0, 0.0)

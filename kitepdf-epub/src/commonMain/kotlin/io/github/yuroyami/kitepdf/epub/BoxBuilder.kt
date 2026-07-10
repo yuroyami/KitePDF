@@ -133,6 +133,7 @@ internal class BoxBuilder(
     }
 
     private fun processInline(el: HtmlNode.Element, style: ComputedStyle, ancestors: List<HtmlNode.Element>, inl: Inline) {
+        if (el.tag == "ruby") { processRuby(el, style, ancestors, inl); return }
         val childAncestors = listOf(el) + ancestors
         for (child in el.children) when (child) {
             is HtmlNode.Text -> inl.appendText(child.text, style)
@@ -145,12 +146,60 @@ internal class BoxBuilder(
         }
     }
 
+    /**
+     * `<ruby>`: the base (text / `<rb>` / other inline children) flows normally
+     * but tagged as one ruby group; every `<rt>` contributes to the reading
+     * painted above it; `<rp>` fallback punctuation is dropped. Multiple `<rt>`
+     * segments (jukugo ruby) merge into one reading over the whole base, a
+     * documented simplification.
+     */
+    private fun processRuby(el: HtmlNode.Element, style: ComputedStyle, ancestors: List<HtmlNode.Element>, inl: Inline) {
+        val childAncestors = listOf(el) + ancestors
+        val reading = StringBuilder()
+        fun collectText(e: HtmlNode.Element) {
+            for (c in e.children) when (c) {
+                is HtmlNode.Text -> reading.append(c.text)
+                is HtmlNode.Element -> if (c.tag != "rp") collectText(c)
+            }
+        }
+        for (c in el.children) if (c is HtmlNode.Element && c.tag == "rt") collectText(c)
+        val readingText = reading.toString().replace(WHITESPACE, " ").trim()
+
+        inl.beginRuby(readingText.takeIf { it.isNotEmpty() })
+        try {
+            for (c in el.children) when (c) {
+                is HtmlNode.Text -> inl.appendText(c.text, style)
+                is HtmlNode.Element -> when {
+                    c.tag == "rt" || c.tag == "rp" -> {}
+                    c.tag == "br" -> inl.addBreak()
+                    else -> {
+                        val cs = resolver.compute(c, childAncestors, style)
+                        if (cs.display != Display.NONE) processInline(c, cs, childAncestors, inl)
+                    }
+                }
+            }
+        } finally {
+            inl.endRuby()
+        }
+    }
+
     /** Per-block inline-run accumulator with HTML whitespace collapsing. */
     private class Inline {
         private var runs = ArrayList<InlineRun>()
         private var pendingSpace = false
         private var blockHasContent = false
         private var lastWasBreak = false
+        // Active <ruby> group: runs made between beginRuby/endRuby carry the id +
+        // reading so the layout can keep the base together and paint the reading.
+        private var rubyGroup = -1
+        private var rubyText: String? = null
+        private var nextRubyId = 0
+
+        fun beginRuby(reading: String?) {
+            if (reading != null) { rubyGroup = nextRubyId++; rubyText = reading }
+        }
+
+        fun endRuby() { rubyGroup = -1; rubyText = null }
 
         fun hasContent() = runs.any { it.text.isNotEmpty() || it.hardBreak }
 
@@ -189,6 +238,7 @@ internal class BoxBuilder(
             bold = style.bold, italic = style.italic, family = style.fontFamily,
             color = style.color, valign = style.verticalAlign, underline = style.underline,
             fontFamilyName = style.fontFamilyName,
+            rubyGroup = rubyGroup, rubyText = rubyText,
         )
     }
 
@@ -222,5 +272,6 @@ internal class BoxBuilder(
 
     private companion object {
         val BLACK = RgbColor(0.0, 0.0, 0.0)
+        val WHITESPACE = Regex("\\s+")
     }
 }
