@@ -20,7 +20,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     `float`/`clear` with exclusion bands, inline images on the baseline, and
     `position: relative`.
   - Typography: per-glyph font fallback, embedded fonts (TrueType,
-    OpenType/CFF, WOFF), Unicode bidirectional text, Knuth-Liang hyphenation
+    OpenType/CFF, WOFF, and WOFF2 via a from-scratch pure-Kotlin Brotli
+    decoder), Unicode bidirectional text, Knuth-Liang hyphenation
     with bundled TeX patterns for English, German, French, Spanish, Italian,
     Portuguese, and Dutch, CJK inter-character justification with kinsoku
     line-break rules, ruby annotations, `text-transform`, letter and word
