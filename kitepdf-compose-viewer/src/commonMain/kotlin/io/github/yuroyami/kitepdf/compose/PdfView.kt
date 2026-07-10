@@ -47,12 +47,18 @@ import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import io.github.yuroyami.kitepdf.KitePage
+import io.github.yuroyami.kitepdf.PdfAction
+import io.github.yuroyami.kitepdf.PdfAnnotation
 import io.github.yuroyami.kitepdf.PdfDocument
+import io.github.yuroyami.kitepdf.PdfPage
+import io.github.yuroyami.kitepdf.epub.EpubDocument
+import io.github.yuroyami.kitepdf.epub.EpubPage
 import io.github.yuroyami.kitepdf.render.Matrix as PdfMatrix
 import kotlin.math.max
 import kotlin.math.roundToInt
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.launch
 
 /**
  * THE KitePDF viewer composable.
@@ -106,7 +112,13 @@ import kotlinx.coroutines.flow.collectLatest
  * @param onTap single-tap on the page, reported with the tap position. The tap
  *   does not consume pan/swipe, so it coexists with navigation — typical use is
  *   toggling a HUD's visibility. Held back until the double-tap window lapses
- *   only when [PdfZoomSpec.doubleTapEnabled] is on.
+ *   only when [PdfZoomSpec.doubleTapEnabled] is on. Taps that land on a link
+ *   navigate (or go to [onLinkTap]) instead of reaching this callback.
+ * @param onLinkTap fires when a tapped link carries an action the viewer can't
+ *   perform itself — a URI, a remote GoTo, a Launch. Return true after handling
+ *   it (e.g. opening the URL in a browser); false lets the tap fall through to
+ *   [onTap]. Internal go-to-page links (PDF destinations, EPUB internal hrefs)
+ *   never reach this: the viewer scrolls to the target page directly.
  */
 @Composable
 fun PdfView(
@@ -122,6 +134,7 @@ fun PdfView(
     pagePlaceholder: (@Composable (pageIndex: Int) -> Unit)? = null,
     overlay: (@Composable BoxScope.(PdfViewState) -> Unit)? = null,
     onTap: ((Offset) -> Unit)? = null,
+    onLinkTap: ((PdfAction) -> Boolean)? = null,
 ) {
     SideEffect {
         state.zoomRange = zoomSpec.minZoom..zoomSpec.maxZoom
@@ -150,6 +163,13 @@ fun PdfView(
         }
     }
 
+    // Route taps through link hit-testing first (T-32/T-82): a tap on a link
+    // navigates (or defers to onLinkTap); anything else reaches user onTap.
+    val tapScope = rememberCoroutineScope()
+    val linkAwareTap: (Offset) -> Unit = { offset ->
+        if (!handleLinkTap(state, tapScope, onLinkTap, offset)) onTap?.invoke(offset)
+    }
+
     Box(
         modifier
             .background(colors.viewportBackground)
@@ -160,21 +180,78 @@ fun PdfView(
             when (layout) {
                 is PdfLayout.Continuous -> ContinuousLayout(
                     state, layout, zoomSpec, renderSpec, colors, pageSpacing,
-                    userScrollEnabled, settledZoom, onPageRendered, pagePlaceholder, onTap,
+                    userScrollEnabled, settledZoom, onPageRendered, pagePlaceholder, linkAwareTap,
                 )
                 is PdfLayout.Paged -> PagedLayout(
                     state, layout, zoomSpec, renderSpec, colors, pageSpacing,
-                    userScrollEnabled, settledZoom, onPageRendered, pagePlaceholder, onTap,
+                    userScrollEnabled, settledZoom, onPageRendered, pagePlaceholder, linkAwareTap,
                 )
                 is PdfLayout.SinglePage -> SinglePageLayout(
                     state, layout, zoomSpec, renderSpec, colors,
-                    settledZoom, onPageRendered, pagePlaceholder, onTap,
+                    settledZoom, onPageRendered, pagePlaceholder, linkAwareTap,
                 )
             }
         }
         overlay?.invoke(this, state)
     }
 }
+
+/**
+ * Consumes a tap that lands on a link: PDF pages hit-test their Link
+ * annotations (topmost drawn last, so scanned in reverse) in user space;
+ * EPUB pages hit-test [EpubPage.links] in display space. In-document
+ * targets animate to the target page; everything else is offered to
+ * [onLinkTap]. Returns true when the tap was consumed.
+ */
+internal fun handleLinkTap(
+    state: PdfViewState,
+    scope: kotlinx.coroutines.CoroutineScope,
+    onLinkTap: ((PdfAction) -> Boolean)?,
+    offset: Offset,
+): Boolean {
+    val hit = state.hitTest(offset) ?: return false
+    when (val page = state.document.pages.getOrNull(hit.pageIndex)) {
+        is PdfPage -> {
+            val doc = state.document as? PdfDocument ?: return false
+            for (ann in page.annotations.asReversed()) {
+                if (ann.subtype != PdfAnnotation.Subtype.Link || ann.isHidden) continue
+                val r = ann.rect
+                if (hit.x < r.left || hit.x > r.right || hit.y < r.bottom || hit.y > r.top) continue
+                val rawDest = ann.rawDestination
+                    ?: (ann.action as? PdfAction.GoTo)?.destination
+                val target = doc.resolveDestination(rawDest)?.pageIndex
+                if (target != null) {
+                    scope.launch { state.animateScrollToPage(target) }
+                    return true
+                }
+                val action = ann.action
+                    ?: ann.uri?.let { PdfAction.Uri(it, isMap = false, raw = io.github.yuroyami.kitepdf.parser.PdfDictionary(emptyMap())) }
+                    ?: return false
+                return onLinkTap?.invoke(action) == true
+            }
+            return false
+        }
+        is EpubPage -> {
+            // hitTest maps through the EPUB flip, so hit.y is y-up; links are
+            // y-down display rects. Flip back.
+            val dy = page.displayHeight - hit.y
+            for (link in page.links.asReversed()) {
+                val r = link.rect
+                if (hit.x < r.left || hit.x > r.right || dy < r.bottom || dy > r.top) continue
+                if (SCHEME_REGEX.containsMatchIn(link.href)) {
+                    return onLinkTap?.invoke(PdfAction.Uri(link.href, isMap = false, raw = io.github.yuroyami.kitepdf.parser.PdfDictionary(emptyMap()))) == true
+                }
+                val target = (state.document as? EpubDocument)?.pageOf(link.href) ?: return false
+                scope.launch { state.animateScrollToPage(target) }
+                return true
+            }
+            return false
+        }
+        else -> return false
+    }
+}
+
+private val SCHEME_REGEX = Regex("^[a-zA-Z][a-zA-Z0-9+.-]*:")
 
 /**
  * Convenience entry point: remembers its own state internally.

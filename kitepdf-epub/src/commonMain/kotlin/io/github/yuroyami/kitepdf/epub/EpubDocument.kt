@@ -256,6 +256,15 @@ class EpubDocument internal constructor(
         else anchorPages[path]
     }
 
+    /**
+     * Zero-based page of an internal href: `path.xhtml` or `path.xhtml#id`,
+     * zip-root-relative, exactly as [EpubPage.links] and [TocEntry] carry
+     * them. Null for unknown targets and external URLs; an unknown fragment
+     * falls back to its document's first page. This is the navigation half
+     * of a link tap: viewers scroll to the returned page.
+     */
+    fun pageOf(href: String): Int? = pageIndexOfHref(href)
+
     private fun loadImage(zipPath: String): ImageXObject? =
         parsed.zip.read(zipPath)?.let { ImageXObject.fromEncodedImage(it) }
 
