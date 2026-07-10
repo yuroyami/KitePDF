@@ -56,6 +56,33 @@ class EpubDocument internal constructor(
     /** True for a pre-paginated (fixed-layout) book: one page per spine, no reflow. */
     val isFixedLayout: Boolean get() = parsed.fixedLayout
 
+    /**
+     * The reader-origin cascade layer built from [settings]: universal rules
+     * that outrank author-important, so the user's font/color/justify choice
+     * always wins. Empty for all-default settings (zero cascade impact).
+     */
+    private val readerRules: List<StyleRule> by lazy {
+        val css = buildString {
+            settings.fontFamily?.let {
+                val fam = when (it) {
+                    ReaderFontFamily.SERIF -> "serif"
+                    ReaderFontFamily.SANS_SERIF -> "sans-serif"
+                    ReaderFontFamily.MONOSPACE -> "monospace"
+                }
+                append("*{font-family:$fam}")
+            }
+            settings.textColor?.let { append("*{color:${cssColor(it)}}") }
+            settings.justify?.let { append("*{text-align:${if (it) "justify" else "left"}}") }
+        }
+        if (css.isEmpty()) emptyList() else CssParser.parse(css, Origin.READER)
+    }
+
+    private fun cssColor(c: RgbColor): String {
+        fun hex(v: Double) = (v.coerceIn(0.0, 1.0) * 255.0 + 0.5).toInt()
+            .toString(16).padStart(2, '0')
+        return "#${hex(c.r)}${hex(c.g)}${hex(c.b)}"
+    }
+
     // Box tree per spine — depends on font size + column width, so it is rebuilt
     // from the (already parsed) DOM + CSS whenever settings change. The expensive
     // parse (unzip, HTML, CSS, fonts) is done once and lives in ParsedEpub.
@@ -63,7 +90,10 @@ class EpubDocument internal constructor(
         parsed.spines.map { sp ->
             val layoutWidth = if (parsed.fixedLayout) sp.viewport.first else contentWidth
             val layoutHeight = if (parsed.fixedLayout) sp.viewport.second else pageContentHeight
-            val resolver = StyleResolver(sp.rules, settings.fontSize, layoutWidth, parsed.baseDir, layoutHeight)
+            val resolver = StyleResolver(
+                sp.rules, settings.fontSize, layoutWidth, parsed.baseDir, layoutHeight,
+                readerRules = readerRules, useAuthorCss = settings.usePublisherCss,
+            )
             BoxBuilder(resolver, sp.path) { href -> resolvePath(sp.docDir, href) }.build(sp.tree)
         }
     }
@@ -100,10 +130,12 @@ class EpubDocument internal constructor(
     private val pageRenders: List<PageRender> by lazy {
         val fx = fixedSpines
         if (fx != null) return@lazy fx.map { spine ->
-            BoxLayout(::loadImage, ::loadSvg, spine.height, parsed.fonts, documentLanguage).layout(spine.root, spine.width)
+            BoxLayout(::loadImage, ::loadSvg, spine.height, parsed.fonts, documentLanguage, settings.lineHeightScale)
+                .layout(spine.root, spine.width)
             Paginator.paginateFixed(spine.root, spine.width, spine.height)
         }
-        BoxLayout(::loadImage, ::loadSvg, pageContentHeight, parsed.fonts, documentLanguage).layout(root, contentWidth)
+        BoxLayout(::loadImage, ::loadSvg, pageContentHeight, parsed.fonts, documentLanguage, settings.lineHeightScale)
+            .layout(root, contentWidth)
         Paginator.paginate(root, settings.pageWidth, settings.pageHeight, settings.margin)
     }
 
@@ -438,10 +470,18 @@ class EpubLink internal constructor(
     val href: String,
 )
 
+/** Generic font family a reader app can force via [EpubSettings.fontFamily]. */
+enum class ReaderFontFamily { SERIF, SANS_SERIF, MONOSPACE }
+
 /**
  * Reader layout settings. All values in points. Change them at runtime with
  * [EpubDocument.withSettings] (or the `withFontSize`/`withPageSize`/`withMargin`
  * shorthands) to re-flow without re-parsing the book.
+ *
+ * The typography overrides (font family, colors, justification) are applied
+ * as a reader-origin cascade layer that outranks author-important CSS: the
+ * user's explicit preference beats the publisher's stylesheet. All-default
+ * settings change nothing.
  */
 data class EpubSettings(
     val pageWidth: Double = 400.0,
@@ -450,6 +490,18 @@ data class EpubSettings(
     val fontSize: Double = 12.0,
     /** Uniform page margin in points (reflowable books only). */
     val margin: Double = 36.0,
+    /** Force every run onto a generic family (null = publisher fonts). */
+    val fontFamily: ReaderFontFamily? = null,
+    /** Multiplies every line's height (1.0 = as authored). */
+    val lineHeightScale: Double = 1.0,
+    /** Force all text to this color (night mode); null = as authored. */
+    val textColor: RgbColor? = null,
+    /** Painted under everything on every page; null = no page background. */
+    val backgroundColor: RgbColor? = null,
+    /** true forces justify, false forces left-align; null = as authored. */
+    val justify: Boolean? = null,
+    /** False drops the publisher's CSS (author rules + inline styles): UA + reader layers only. */
+    val usePublisherCss: Boolean = true,
 )
 
 /** One spine document's font-size-independent parse: its DOM, author CSS rules, base dir and viewport. */
@@ -505,6 +557,14 @@ class EpubPage internal constructor(
         val startY = page.startY
         val bandBottom = startY + (height - 2 * margin)
         fun yUp(docY: Double) = height - displayY(docY)
+
+        // Reader background (night mode): under everything, full page.
+        doc.settings.backgroundColor?.let { bg ->
+            val rect = PdfPath.Builder().apply {
+                moveTo(0.0, 0.0); lineTo(width, 0.0); lineTo(width, height); lineTo(0.0, height); close()
+            }.build()
+            canvas.fillPath(rect, deviceCtm, bg, evenOdd = false)
+        }
 
         for (box in page.decoBoxes) paintBox(box, canvas, deviceCtm, margin, startY, bandBottom, ::yUp)
 

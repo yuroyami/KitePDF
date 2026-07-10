@@ -21,8 +21,17 @@ internal class StyleResolver(
     private val baseDirection: Direction = Direction.LTR,
     /** Percentage `height`/`min-height`/`max-height` resolve against this (the page content height); 0 disables them. */
     private val refHeightPt: Double = 0.0,
+    /** Reader-app override rules ([Origin.READER]); they outrank author-important. */
+    readerRules: List<StyleRule> = emptyList(),
+    /**
+     * False drops publisher CSS entirely: author rules AND inline `style=""`
+     * attributes are ignored, leaving UA + reader rules only (the reader
+     * setting `usePublisherCss = false`).
+     */
+    private val useAuthorCss: Boolean = true,
 ) {
-    private val rules: List<StyleRule> = UaStylesheet.rules + authorRules
+    private val rules: List<StyleRule> =
+        UaStylesheet.rules + (if (useAuthorCss) authorRules else emptyList()) + readerRules
 
     fun initial(): ComputedStyle = ComputedStyle.initial(rootFontSizePt, direction = baseDirection)
 
@@ -46,7 +55,7 @@ internal class StyleResolver(
             if (spec < 0) return@forEachIndexed
             for (d in rule.declarations) offer(d.property, d.value, weight(rule.origin, d.important, spec, order))
         }
-        el.attrs["style"]?.let { inline ->
+        if (useAuthorCss) el.attrs["style"]?.let { inline ->
             val decls = CssParser.parse("*{$inline}", Origin.INLINE).firstOrNull()?.declarations.orEmpty()
             for (d in decls) offer(d.property, d.value, weight(Origin.INLINE, d.important, INLINE_SPEC, rules.size + 1))
         }
@@ -359,9 +368,10 @@ internal class StyleResolver(
     private fun weight(origin: Origin, important: Boolean, spec: Int, order: Int): Long {
         val rank = when {
             origin == Origin.UA && !important -> 0
+            origin == Origin.READER -> 3 // user preference: above author-important
             origin != Origin.UA && !important -> 1
             origin != Origin.UA && important -> 2
-            else -> 3
+            else -> 4 // UA important stays the ceiling (CSS 2.1 §6.4.2)
         }
         return (rank.toLong() shl 56) or ((spec.toLong() and 0xFFFFFF) shl 24) or (order.toLong() and 0xFFFFFF)
     }
