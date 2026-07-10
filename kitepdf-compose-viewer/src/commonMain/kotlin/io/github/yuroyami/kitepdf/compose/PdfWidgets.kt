@@ -185,7 +185,7 @@ fun PdfThumbnailStrip(
             val aspect = pdfPageAspect(page)
             val widthPx = (heightPx * aspect).roundToInt().coerceAtLeast(1)
             val bitmap by produceState<ImageBitmap?>(null, page, heightPx, pageBackground) {
-                value = rasterizer.rasterize(page, widthPx, heightPx, pageBackground)
+                value = rasterizer.rasterizeOffMain(page, widthPx, heightPx, pageBackground)
             }
             val selected = index == state.currentPage
             val shape = RoundedCornerShape(4.dp)
