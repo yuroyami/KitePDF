@@ -9,11 +9,14 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.isSpecified
+import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.unit.IntSize
 import io.github.yuroyami.kitepdf.KiteDocument
 import io.github.yuroyami.kitepdf.PdfDocument
@@ -71,6 +74,21 @@ class PdfViewState(
     internal var pendingPage: Int = initialPage.coerceAtLeast(0)
     internal var zoomRange: ClosedFloatingPointRange<Float> by mutableStateOf(1f..8f)
     internal var viewportSize: IntSize by mutableStateOf(IntSize.Zero)
+
+    /**
+     * Per-page on-screen geometry in UNTRANSFORMED viewport space (before the
+     * zoom/pan `graphicsLayer`): page slots report their rects during layout
+     * and remove them on dispose. [hitTest] inverts the layer transform onto
+     * this space, so the map never needs to update on zoom/pan alone.
+     */
+    internal val pageGeometry = mutableStateMapOf<Int, Rect>()
+
+    /**
+     * The viewport-filling content node INSIDE the zoom/pan layer, the anchor
+     * page slots measure their rects against (continuous mode; paged/single
+     * slots compute their letterbox rect directly from constraints).
+     */
+    internal var contentCoordinates: LayoutCoordinates? = null
 
     /** Pan axes the active layout allows (continuous mode keeps its scroll axis native). */
     internal var panAxes: PanAxes = PanAxes.Both
@@ -135,6 +153,36 @@ class PdfViewState(
         return Offset(offset.x.coerceIn(-maxX, maxX), offset.y.coerceIn(-maxY, maxY))
     }
 
+    /* ── hit testing ──────────────────────────────────────────────────────── */
+
+    /**
+     * Maps a viewport point (the space gesture callbacks like `onTap` report
+     * in) to the page under it, or null when it lands on background/spacing.
+     *
+     * Inverts the zoom/pan layer first (the layer scales around the viewport
+     * centre, then translates by [panOffset] — the same math [setZoom]'s focal
+     * logic composes), locates the page slot from the geometry the layout
+     * reported, then maps display-space points through the inverse of
+     * [KitePage.displayToDeviceBase] into page space: PDF pages get user
+     * space (y-up, rotation unfolded), EPUB pages their document space.
+     */
+    fun hitTest(viewportOffset: Offset): PageHit? {
+        if (viewportSize == IntSize.Zero || zoom <= 0f) return null
+        val centre = Offset(viewportSize.width / 2f, viewportSize.height / 2f)
+        val content = centre + (viewportOffset - centre - panOffset) / zoom
+        for ((index, rect) in pageGeometry) {
+            if (rect.width <= 0f || rect.height <= 0f || !rect.contains(content)) continue
+            val page = document.pages.getOrNull(index) ?: continue
+            // Slot px -> display points (the slot shows the whole display box).
+            val devX = (content.x - rect.left) / rect.width * page.displayWidth
+            val devY = (content.y - rect.top) / rect.height * page.displayHeight
+            val inv = page.displayToDeviceBase().invert() ?: return null
+            val (x, y) = inv.transformPoint(devX, devY)
+            return PageHit(index, x, y)
+        }
+        return null
+    }
+
     /* ── navigation ───────────────────────────────────────────────────────── */
 
     /** Jumps to [page] (coerced into range) without animation. */
@@ -167,6 +215,17 @@ class PdfViewState(
         const val EPSILON = 0.001f
     }
 }
+
+/**
+ * A [PdfViewState.hitTest] result: the page under a viewport point and the
+ * point in that page's own space (PDF: user space, y-up from the display
+ * box's bottom-left with rotation unfolded; EPUB: the page's document space).
+ */
+data class PageHit(
+    val pageIndex: Int,
+    val x: Double,
+    val y: Double,
+)
 
 /* ── scroll adapters: one state API over LazyList and Pager backends ──────── */
 
