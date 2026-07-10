@@ -578,6 +578,20 @@ class EpubPage internal constructor(
                     color = run.color, alpha = 1.0, blendMode = BlendMode.Normal,
                 )
             }
+            // Inline images: bottom on the baseline, next to the text runs.
+            for (im in line.images) {
+                val svg = im.svg
+                if (svg != null && svg.width > 0 && svg.height > 0) {
+                    val m = Matrix(
+                        im.width / svg.width, 0.0, 0.0, -im.height / svg.height,
+                        margin + im.x, base + im.height,
+                    )
+                    svg.render(canvas, deviceCtm.concat(m))
+                } else if (im.image != null) {
+                    val m = Matrix(im.width, 0.0, 0.0, im.height, margin + im.x, base)
+                    canvas.drawImage(im.image, deviceCtm.concat(m))
+                }
+            }
         }
 
         for (box in page.images) {

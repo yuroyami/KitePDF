@@ -112,7 +112,7 @@ class SvgImageTest {
     fun explicit_width_height_attrs_size_the_image() {
         // A 100x60 SVG placed at width=50 height=30 => the paint CTM scales x by 0.5, y by 0.5.
         val svg = """<svg width="100" height="60"><rect width="100" height="60" fill="red"/></svg>"""
-        val body = """<body><img src="p.svg" width="50" height="30"/></body>"""
+        val body = """<body><img src="p.svg" width="50" height="30" style="display:block"/></body>"""
         val fills = epubFills(body, listOf("OEBPS/p.svg" to svg.encodeToByteArray()))
         val red = fills.single { it.color.r > 0.9 && it.color.g < 0.1 }
         assertEquals(0.5, kotlin.math.abs(red.ctm.a), 1e-6, "explicit width 50 of a 100-wide SVG => x-scale 0.5")

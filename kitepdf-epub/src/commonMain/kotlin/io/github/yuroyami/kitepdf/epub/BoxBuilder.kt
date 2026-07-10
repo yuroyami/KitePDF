@@ -1,6 +1,7 @@
 package io.github.yuroyami.kitepdf.epub
 
 import io.github.yuroyami.kitepdf.epub.css.ComputedStyle
+import io.github.yuroyami.kitepdf.epub.css.CssFloat
 import io.github.yuroyami.kitepdf.epub.css.Display
 import io.github.yuroyami.kitepdf.epub.css.Edge
 import io.github.yuroyami.kitepdf.epub.css.ListType
@@ -71,10 +72,19 @@ internal class BoxBuilder(
                 if (child.tag == "img" || child.tag == "image") {
                     val src = child.attrs["src"] ?: child.attrs["href"] ?: child.attrs["xlink:href"]
                     if (src != null && src.isNotBlank()) {
-                        flush()
+                        val cs = resolver.compute(child, childAncestors, style)
                         val aw = child.attrs["width"]?.trim()?.removeSuffix("px")?.toDoubleOrNull()
                         val ah = child.attrs["height"]?.trim()?.removeSuffix("px")?.toDoubleOrNull()
-                        children.add(ImageBox(resolver.compute(child, childAncestors, style), resolveHref(src), attrWidth = aw, attrHeight = ah))
+                        // img is inline by default (CSS): it flows on the line
+                        // unless the author blocks or floats it.
+                        if ((cs.display == Display.INLINE || cs.display == Display.INLINE_BLOCK) &&
+                            cs.cssFloat == CssFloat.NONE
+                        ) {
+                            inl.addImage(resolveHref(src), style, cs.widthPt ?: aw?.times(0.75), cs.heightPt ?: ah?.times(0.75))
+                        } else {
+                            flush()
+                            children.add(ImageBox(cs, resolveHref(src), attrWidth = aw, attrHeight = ah))
+                        }
                     }
                     continue
                 }
@@ -282,7 +292,17 @@ internal class BoxBuilder(
                 is HtmlNode.Text -> inl.appendText(child.text, style)
                 is HtmlNode.Element -> {
                     if (child.tag == "br") { inl.addBreak(); continue }
-                    if (child.tag == "img" || child.tag == "image") continue // inline images: Phase 5
+                    if (child.tag == "img" || child.tag == "image") {
+                        // Inline image: flows on the line, bottom on the baseline.
+                        val src = child.attrs["src"] ?: child.attrs["href"] ?: child.attrs["xlink:href"]
+                        if (src != null && src.isNotBlank()) {
+                            val cs = resolver.compute(child, childAncestors, style)
+                            val aw = child.attrs["width"]?.trim()?.removeSuffix("px")?.toDoubleOrNull()?.times(0.75)
+                            val ah = child.attrs["height"]?.trim()?.removeSuffix("px")?.toDoubleOrNull()?.times(0.75)
+                            inl.addImage(resolveHref(src), style, cs.widthPt ?: aw, cs.heightPt ?: ah)
+                        }
+                        continue
+                    }
                     val cs = resolver.compute(child, childAncestors, style)
                     if (cs.display != Display.NONE) processInline(child, cs, childAncestors, inl, anchorSink)
                 }
@@ -387,6 +407,17 @@ internal class BoxBuilder(
         fun addBreak() {
             runs.add(InlineRun("", fontSizePt = 0.0, hardBreak = true))
             pendingSpace = false; lastWasBreak = true
+        }
+
+        /** An inline `<img>`: one U+FFFC run carrying the source + size hints. */
+        fun addImage(src: String, style: ComputedStyle, cssW: Double?, cssH: Double?) {
+            if (pendingSpace && blockHasContent && !lastWasBreak) {
+                runs.add(makeRun(" ", style))
+            }
+            pendingSpace = false; lastWasBreak = false; blockHasContent = true
+            runs.add(
+                makeRun("￼", style).copy(imageSrc = src, imageCssW = cssW, imageCssH = cssH),
+            )
         }
 
         fun appendText(raw: String, style: ComputedStyle) {

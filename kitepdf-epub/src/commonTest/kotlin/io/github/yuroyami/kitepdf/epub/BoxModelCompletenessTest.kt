@@ -113,7 +113,7 @@ class BoxModelCompletenessTest {
     @Test
     fun object_fit_cover_scales_to_fill_and_clips() {
         // A 2x1 image in a 50x50 box: cover scale = 50 -> drawn 100x50, clipped.
-        val body = """<body><p><img src="i.png" style="width:50pt;height:50pt;object-fit:cover"/></p></body>"""
+        val body = """<body><p><img src="i.png" style="display:block;width:50pt;height:50pt;object-fit:cover"/></p></body>"""
         val doc = EpubDocument.open(EpubFixtures.epub(body, listOf("OEBPS/i.png" to minimalGrayPng())))
             ?: error("fixture failed to open")
         val calls = RecordingCanvas().also { doc.pages[0].renderTo(it) }.calls

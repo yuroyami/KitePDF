@@ -83,7 +83,9 @@ class EpubRasterTest {
 
     @Test
     fun image_pixels_reach_the_raster() {
-        val doc = EpubDocument.open(EpubCorpus.epub("<p>see:</p><img src=\"pic.png\"/>", listOf("OEBPS/pic.png" to EpubCorpus.redPng())))
+        // Explicit size: since T-66 a bare <img> is inline at its intrinsic size
+        // (CSS behaviour); the tiny fixture PNG must be sized up to blit visibly.
+        val doc = EpubDocument.open(EpubCorpus.epub("<p>see:</p><img src=\"pic.png\" width=\"200\" height=\"200\"/>", listOf("OEBPS/pic.png" to EpubCorpus.redPng())))
         assertNotNull(doc)
         assertTrue(countColor(raster(doc.pages.first()), 255, 0, 0) > 1000, "the red image should blit a large red area")
     }

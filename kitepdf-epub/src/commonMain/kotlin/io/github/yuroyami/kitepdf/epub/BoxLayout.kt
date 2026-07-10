@@ -1,6 +1,8 @@
 package io.github.yuroyami.kitepdf.epub
 
 import io.github.yuroyami.kitepdf.epub.css.ComputedStyle
+import io.github.yuroyami.kitepdf.epub.css.CssClear
+import io.github.yuroyami.kitepdf.epub.css.CssFloat
 import io.github.yuroyami.kitepdf.epub.css.CssPosition
 import io.github.yuroyami.kitepdf.epub.css.CssVAlign
 import io.github.yuroyami.kitepdf.epub.css.Direction
@@ -53,8 +55,21 @@ internal class BoxLayout(
 ) {
     private val hyphenator by lazy { Hyphenator.forLanguage(language) ?: Hyphenator.enUs() }
 
+    /**
+     * A float's exclusion band: text lines whose y-range overlaps it shorten
+     * their available width on the float's side. One document-wide list
+     * (bands are y-ranged, so unrelated regions are unaffected).
+     * Simplifications, per the audit: same-side floats stack downward (never
+     * side by side), floats do not escape their containing block's height,
+     * and pagination treats a float as one unbreakable unit.
+     */
+    private class FloatBand(val left: Boolean, val xStart: Double, val xEnd: Double, val yTop: Double, val yBottom: Double)
+
+    private val activeFloats = ArrayList<FloatBand>()
+
     /** Lay out [root] to fill [contentWidth]; returns total document height. */
     fun layout(root: BlockBox, contentWidth: Double): Double {
+        activeFloats.clear()
         layoutBlock(root, xLeft = 0.0, availWidth = contentWidth, topY = 0.0)
         applyRelativeOffsets(root)
         return root.borderBoxHeight
@@ -85,7 +100,11 @@ internal class BoxLayout(
             is BlockBox -> for (c in box.children) shiftSubtree(c, dx, dy)
             is TableBox -> for (r in box.rows) shiftSubtree(r, dx, dy)
             is TableRowBox -> for (c in box.cells) shiftSubtree(c, dx, dy)
-            is TextBlockBox -> for (ln in box.lines) { ln.yTop += dy; for (r in ln.runs) r.x += dx }
+            is TextBlockBox -> for (ln in box.lines) {
+                ln.yTop += dy
+                for (r in ln.runs) r.x += dx
+                for (im in ln.images) im.x += dx
+            }
             is ImageBox -> {}
         }
     }
@@ -109,6 +128,7 @@ internal class BoxLayout(
         var cursorY = contentTop
         var prevBottom = 0.0
         var first = true
+        val floatsBefore = activeFloats.size
         for (child in box.children) {
             // Out-of-flow (position:absolute/fixed): place at its insets relative to
             // this containing block; it does NOT advance the normal-flow cursor. Used
@@ -116,6 +136,19 @@ internal class BoxLayout(
             val pos = (child as? BlockBox)?.style?.position
             if (pos == CssPosition.ABSOLUTE || pos == CssPosition.FIXED) {
                 layoutAbsolute(child, contentLeft, contentTop, contentW); continue
+            }
+            // clear: the flow cursor drops below matching floats before this
+            // child lays out (margin collapse across clearance not modelled).
+            if (child.style.clear != CssClear.NONE) {
+                cursorY = maxOf(cursorY, clearY(child.style.clear))
+            }
+            // float:left/right leaves the flow: it lays out against the content
+            // edge at the current y, registers an exclusion band that shortens
+            // overlapping text lines, and does not advance the flow cursor.
+            if (child.style.cssFloat != CssFloat.NONE && child !is TableRowBox) {
+                val topMargin = if (child is BlockBox) child.style.marginTopPt else 0.0
+                placeFloat(child, contentLeft, contentW, cursorY + topMargin)
+                continue
             }
             // Anonymous text boxes carry no margins; real block children do.
             val topMargin = if (child is BlockBox) child.style.marginTopPt else 0.0
@@ -127,6 +160,12 @@ internal class BoxLayout(
             first = false
         }
         cursorY += prevBottom
+        // A float may extend below the last in-flow child; grow the block to
+        // contain it so pagination never splits content across a float (CSS
+        // lets floats overflow their block, a deliberate simplification here).
+        for (k in floatsBefore until activeFloats.size) {
+            cursorY = maxOf(cursorY, activeFloats[k].yBottom)
+        }
 
         val natural = cursorY - contentTop
         var contentH = natural
@@ -155,6 +194,62 @@ internal class BoxLayout(
         val x = cbLeft + (s.leftPt ?: 0.0)
         val y = cbTop + (s.topPt ?: 0.0)
         layoutBlock(box, x, contentW + extra, y)
+    }
+
+    /** y below every float matching [clear] (the current cursor if none do). */
+    private fun clearY(clear: CssClear): Double {
+        var y = 0.0
+        for (f in activeFloats) {
+            val matches = clear == CssClear.BOTH || (clear == CssClear.LEFT && f.left) || (clear == CssClear.RIGHT && !f.left)
+            if (matches && f.yBottom > y) y = f.yBottom
+        }
+        return y
+    }
+
+    /**
+     * Lay out a floated child against the left/right content edge at [topY]
+     * and register its exclusion band. Width: an image floats at its natural
+     * draw size; a block floats at its explicit CSS width, else half the
+     * content width (a shrink-to-fit approximation, commented simplification).
+     */
+    private fun placeFloat(child: LayoutBox, contentLeft: Double, contentW: Double, topY: Double) {
+        val s = child.style
+        when (child) {
+            is ImageBox -> layoutImage(child, contentLeft, contentW, topY)
+            is BlockBox -> {
+                val extra = s.marginLeftPt + s.marginRightPt + s.borderLeft.effective +
+                    s.borderRight.effective + s.paddingLeftPt + s.paddingRightPt
+                val budget = (s.widthPt?.plus(extra) ?: (contentW / 2)).coerceAtMost(contentW)
+                layoutBlock(child, contentLeft, budget, topY)
+            }
+            is TableBox -> layoutTable(child, contentLeft, contentW, topY)
+            else -> return
+        }
+        // Same-side floats stack downward, never side by side: drop this one
+        // below any band it would overlap on its own side.
+        val isLeft = s.cssFloat == CssFloat.LEFT
+        var y = child.y
+        for (f in activeFloats) {
+            if (f.left == isLeft && y < f.yBottom && (y + child.borderBoxHeight) > f.yTop) y = f.yBottom
+        }
+        val x = if (isLeft) contentLeft else contentLeft + contentW - child.borderBoxWidth
+        shiftSubtree(child, x - child.x, y - child.y)
+        activeFloats.add(FloatBand(isLeft, child.x, child.x + child.borderBoxWidth, child.y, child.bottom))
+    }
+
+    /**
+     * Left/right insets carved out of `[contentLeft, contentLeft+contentW]`
+     * by floats overlapping the y-range [yTop, yBottom].
+     */
+    private fun floatInsets(contentLeft: Double, contentW: Double, yTop: Double, yBottom: Double): Pair<Double, Double> {
+        var left = 0.0
+        var right = 0.0
+        for (f in activeFloats) {
+            if (f.yBottom <= yTop || f.yTop >= yBottom) continue
+            if (f.left) left = maxOf(left, (f.xEnd - contentLeft).coerceAtLeast(0.0))
+            else right = maxOf(right, (contentLeft + contentW - f.xStart).coerceAtLeast(0.0))
+        }
+        return left to right
     }
 
     private fun layoutChild(child: LayoutBox, contentLeft: Double, contentW: Double, topY: Double): kotlin.Unit = when (child) {
@@ -401,7 +496,21 @@ internal class BoxLayout(
         val baseLevel = if (style.direction == Direction.RTL) 1 else 0
         // `start` alignment resolves to the base direction's edge.
         val align = if (style.direction == Direction.RTL && style.textAlign == TextAlign.LEFT) TextAlign.RIGHT else style.textAlign
-        val cellLines = wrap(tokenize(runs, style.hyphensAuto), contentW, preserve)
+        // Float exclusions: per-line widths use an estimated constant line
+        // height (the authored one, without ruby/image growth), so the widths
+        // the wrapper saw and the x-offsets painted below stay consistent.
+        // Ruby- or image-grown lines may drift from a band's true bottom edge
+        // by that growth; a deliberate approximation.
+        val estH = (style.lineHeightPt ?: style.fontSizePt * 1.4) * lineHeightScale
+        val hasFloats = activeFloats.isNotEmpty()
+        fun insetsFor(i: Int): Pair<Double, Double> =
+            if (!hasFloats) 0.0 to 0.0
+            else floatInsets(contentLeft, contentW, topY + i * estH, topY + (i + 1) * estH)
+        val availAt: ((Int) -> Double)? = if (!hasFloats) null else { i ->
+            val (l, r) = insetsFor(i)
+            (contentW - l - r).coerceAtLeast(1.0)
+        }
+        val cellLines = wrap(tokenize(runs, style.hyphensAuto, contentW), contentW, preserve, availAt)
         val out = ArrayList<PositionedLine>(cellLines.size)
         var y = topY
         cellLines.forEachIndexed { i, logical ->
@@ -411,12 +520,21 @@ internal class BoxLayout(
             // drops within the line so the overlay fits inside the line box.
             val rubyBaseFs = cells.filter { it.rubyGroup >= 0 }.maxOfOrNull { it.fontSize } ?: 0.0
             val rubyExtra = rubyBaseFs * RUBY_SIZE * 0.8
-            val lineHeight = (style.lineHeightPt ?: maxFs * 1.4) * lineHeightScale + rubyExtra
-            val ascent = maxFs * 0.8 + rubyExtra
+            var lineHeight = (style.lineHeightPt ?: maxFs * 1.4) * lineHeightScale + rubyExtra
+            var ascent = maxFs * 0.8 + rubyExtra
+            // An inline image grows the line: its bottom sits on the baseline,
+            // so the ascent must cover the image height (descent unchanged).
+            val imgH = cells.maxOfOrNull { it.imageHeight } ?: 0.0
+            if (imgH > ascent) {
+                lineHeight += imgH - ascent
+                ascent = imgH
+            }
 
+            val (leftInset, rightInset) = insetsFor(i)
+            val lineAvail = (contentW - leftInset - rightInset).coerceAtLeast(1.0)
             val (lineWidth, interiorSpaces) = measure(cells)
             val firstIndent = if (i == 0) style.textIndentPt else 0.0
-            val slack = (contentW - lineWidth - firstIndent).coerceAtLeast(0.0)
+            val slack = (lineAvail - lineWidth - firstIndent).coerceAtLeast(0.0)
             val justify = align == TextAlign.JUSTIFY && i != cellLines.lastIndex && interiorSpaces > 0
             val extraPerSpace = if (justify) slack / interiorSpaces else 0.0
             // Spaceless CJK lines justify between characters: with no interior
@@ -432,12 +550,13 @@ internal class BoxLayout(
                 align == TextAlign.CENTER -> slack / 2
                 else -> 0.0
             }
-            val xStart = contentLeft + firstIndent + alignOffset
+            val xStart = contentLeft + leftInset + firstIndent + alignOffset
 
             val placed = ArrayList<PlacedRun>()
+            val images = ArrayList<PlacedImage>()
             if (i == 0 && marker != null) markerRun(marker, style.fontSizePt, contentLeft, markerColor)?.let(placed::add)
-            placed.addAll(placeRuns(cells, xStart, extraPerSpace))
-            out.add(PositionedLine(placed, y, lineHeight, ascent))
+            placed.addAll(placeRuns(cells, xStart, extraPerSpace, images))
+            out.add(PositionedLine(placed, y, lineHeight, ascent, images))
             y += lineHeight
         }
         if (out.isEmpty()) {
@@ -512,6 +631,13 @@ internal class BoxLayout(
         val rubyGroup: Int = -1, val rubyText: String? = null,
         // Link target when inside <a href> (see InlineRun.href).
         val href: String? = null,
+        // Inline image cell (ch = U+FFFC): natural draw size + decoded
+        // payload. `width` is the pen advance (justification may stretch it);
+        // `imageWidth` is what the image actually draws at.
+        val imageWidth: Double = 0.0,
+        val imageHeight: Double = 0.0,
+        val image: ImageXObject? = null,
+        val svgImage: SvgImage? = null,
         // Envelope padding when the reading is wider than its base (pt). Only the
         // group's first/last cells carry it; it widens wrap/measure and the pen
         // walk in placeRuns without entering the glyph advance stream.
@@ -524,7 +650,7 @@ internal class BoxLayout(
         object Break : Token()
     }
 
-    private fun tokenize(runs: List<InlineRun>, hyphensAuto: Boolean): List<Token> {
+    private fun tokenize(runs: List<InlineRun>, hyphensAuto: Boolean, contentW: Double = Double.MAX_VALUE): List<Token> {
         val tokens = ArrayList<Token>()
         var word = ArrayList<Cell>()
         var wordW = 0.0
@@ -577,6 +703,31 @@ internal class BoxLayout(
         }
         for (run in runs) {
             if (run.hardBreak) { endWord(); tokens.add(Token.Break); continue }
+            // Inline image: one unbreakable single-cell token, sized from CSS
+            // width/height (or the HTML attributes, both already in points),
+            // else the intrinsic pixel size at 0.75pt/px, capped to the
+            // content width. Undecodable images are skipped like block ones.
+            if (run.imageSrc != null) {
+                endWord()
+                val svg = if (run.imageSrc.endsWith(".svg", true)) loadSvg(run.imageSrc) else null
+                val img = if (svg == null) loadImage(run.imageSrc) else null
+                val iw: Double; val ih: Double
+                when {
+                    svg != null && svg.width > 0 && svg.height > 0 -> { iw = svg.width; ih = svg.height }
+                    img != null && img.width > 0 && img.height > 0 -> { iw = img.width.toDouble(); ih = img.height.toDouble() }
+                    else -> continue
+                }
+                var w = run.imageCssW ?: run.imageCssH?.let { it * iw / ih } ?: (iw * 0.75)
+                var h = run.imageCssH ?: (w * ih / iw)
+                if (w > contentW) { h *= contentW / w; w = contentW }
+                val cell = Cell(
+                    '￼', w, run.fontSizePt, fontSpec(run.family, run.bold, run.italic),
+                    run.color, 0.0, false,
+                    href = run.href, imageWidth = w, imageHeight = h, image = img, svgImage = svg,
+                )
+                tokens.add(Token.Word(listOf(cell), w))
+                continue
+            }
             // Never mix ruby groups (or ruby and plain text) inside one word: the
             // group must stay one unbreakable token with a single overlay.
             if (word.isNotEmpty() && word.last().rubyGroup != run.rubyGroup) endWord()
@@ -763,12 +914,23 @@ internal class BoxLayout(
         }
     }
 
-    private fun wrap(tokens: List<Token>, avail: Double, preserve: Boolean): List<List<Cell>> {
+    /**
+     * [availAt] (when given) supplies each line's available width by line
+     * index — the float-exclusion path. Null keeps the single-width fast
+     * path, byte-identical to the pre-float behaviour.
+     */
+    private fun wrap(
+        tokens: List<Token>,
+        avail: Double,
+        preserve: Boolean,
+        availAt: ((Int) -> Double)? = null,
+    ): List<List<Cell>> {
         val lines = ArrayList<List<Cell>>()
         var line = ArrayList<Cell>()
         var lineW = 0.0
         var pendingSpace = 0.0
         fun commit() { lines.add(line); line = ArrayList(); lineW = 0.0; pendingSpace = 0.0 }
+        fun lineAvail() = availAt?.invoke(lines.size) ?: avail
         for (tok in tokens) when (tok) {
             is Token.Break -> commit()
             is Token.Space -> when {
@@ -783,7 +945,7 @@ internal class BoxLayout(
                 while (true) {
                     val leading = if (line.isNotEmpty()) space else 0.0
                     val w = cells.sumOf { it.width + it.padBefore + it.padAfter }
-                    if (lineW + leading + w <= avail || (line.isEmpty() && points.isEmpty())) {
+                    if (lineW + leading + w <= lineAvail() || (line.isEmpty() && points.isEmpty())) {
                         if (line.isNotEmpty() && space > 0.0) { line.add(spacer(space)); lineW += space }
                         line.addAll(cells); lineW += w
                         break
@@ -791,7 +953,7 @@ internal class BoxLayout(
                     // Largest hyphenation point whose prefix + hyphen still fits the current line.
                     var split = -1
                     var splitHyphenW = 0.0
-                    val budget = avail - lineW - leading
+                    val budget = lineAvail() - lineW - leading
                     for (p in points) {
                         if (p <= 0 || p >= cells.size) continue
                         val hw = hyphenWidth(cells[p - 1])
@@ -836,7 +998,12 @@ internal class BoxLayout(
         else -> GenericFont.SERIF
     }
 
-    private fun placeRuns(cells: List<Cell>, xStart: Double, extraPerSpace: Double): List<PlacedRun> {
+    private fun placeRuns(
+        cells: List<Cell>,
+        xStart: Double,
+        extraPerSpace: Double,
+        imageSink: MutableList<PlacedImage>? = null,
+    ): List<PlacedRun> {
         val out = ArrayList<PlacedRun>()
         var x = xStart
         var i = 0
@@ -856,6 +1023,14 @@ internal class BoxLayout(
         while (i < cells.size) {
             val c = cells[i]
             if (c.ch == ' ') { closeGroup(x); x += c.width + extraPerSpace; i++; continue }
+            // Inline image cell: emit a PlacedImage and advance the pen.
+            if (c.imageHeight > 0.0 && (c.image != null || c.svgImage != null)) {
+                closeGroup(x)
+                imageSink?.add(PlacedImage(x + c.padBefore, c.imageWidth, c.imageHeight, c.image, c.svgImage))
+                x += c.padBefore + c.width + c.padAfter
+                i++
+                continue
+            }
             if (c.rubyGroup != openGroup) closeGroup(x)
             if (c.rubyGroup >= 0 && openGroup < 0) { openGroup = c.rubyGroup; groupStart = x; groupCell = c }
             x += c.padBefore
