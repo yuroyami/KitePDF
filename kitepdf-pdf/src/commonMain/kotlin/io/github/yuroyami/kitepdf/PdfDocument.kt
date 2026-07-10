@@ -135,9 +135,29 @@ class PdfDocument private constructor(
     }
 
     /** All pages in document order (lazily built from the catalog's /Pages tree). */
-    override val pages: List<PdfPage> by lazy(LazyThreadSafetyMode.SYNCHRONIZED) { buildPageList() }
+    override val pages: List<PdfPage> by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
+        buildPageList().also { pagesInitialized = true }
+    }
 
-    override val pageCount: Int get() = pages.size
+    /** Set inside the [pages] initializer so [pageCount] can switch sources. */
+    private var pagesInitialized = false
+
+    /**
+     * Number of pages. Before [pages] materializes this reads the root
+     * `/Pages /Count` (T-17), so a 10,000-page document answers a UI badge
+     * without constructing 10,000 page objects; a missing/negative/lying
+     * `/Count` falls through to the real tree walk, and once [pages] exists
+     * its size is authoritative.
+     */
+    override val pageCount: Int
+        get() = if (pagesInitialized) pages.size else declaredCountOrWalk()
+
+    private fun declaredCountOrWalk(): Int {
+        val declared = runCatching {
+            catalog.getDict("Pages", this)?.getInt("Count")?.toInt()
+        }.getOrNull()
+        return if (declared != null && declared >= 0) declared else pages.size
+    }
 
     /** Indirect-object-number → zero-based page index. Built alongside [pages].
      *  Written only inside the SYNCHRONIZED [pages] lazy; readers touch [pages]
