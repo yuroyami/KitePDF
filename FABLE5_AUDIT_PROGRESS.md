@@ -353,6 +353,47 @@ kinsoku, T-73 reader settings, T-66 inline images + floats, T-47 WOFF2).
 
 ---
 
+## T-70. Language-aware hyphenation (opens milestone M1)
+
+- **Status:** DONE
+- **Commit:** (this commit)
+- **What landed:**
+  - Full TeX `hyph-utf8` pattern sets bundled in core
+    (`text/hyphen/Hyph{De,Fr,Es,It,Pt,Nl}.kt`): de-1996 (36,709 patterns),
+    fr (1,216), es (4,694), it (384), pt (427), nl (12,724). Each file
+    cites source, copyright and licence (MIT for de/fr/es/nl, MIT/LPPL
+    dual for it, BSD-3 for pt); text chunked under the 64 KiB class-file
+    string-constant limit. Per-set lefthyphenmin/righthyphenmin taken from
+    the pattern metadata (all 2/2 except pt 2/3).
+  - `Hyphenator` rewritten trie-based (same public surface, same
+    semantics): the old scan-every-pattern loop would have re-walked 37k
+    German patterns per word. `Hyphenator.forLanguage(tag)` maps the
+    primary subtag to a lazily built shared instance; unknown -> null.
+  - Language selection in `EpubDocument.documentLanguage`: first spine's
+    `html`/`body` `xml:lang`/`lang` (the parser folds both to `lang`),
+    else OPF `dc:language`, else null -> en-US patterns in `BoxLayout`
+    (old behaviour preserved). One hyphenator per document; per-spine
+    switching is the noted follow-up.
+- **Verification:**
+  - `MultilingualHyphenationTest` (core): 5 words per language assert
+    exact break-point sets computed by an independent non-trie
+    Knuth-Liang implementation over the same pattern files (an
+    implementation bug cannot self-confirm); en-US locked byte-identical
+    on 4 words; mapping/caching/null-tag semantics.
+  - `HyphenationLanguageTest` (epub): body-lang wins over dc:language,
+    dc:language fallback, null default; behavioral discriminator
+    "Krankenhaus" (de breaks Kran-ken-haus, the en-US set finds nothing)
+    hyphenates only when the book declares German.
+  - **Jar size delta (acceptance):** kitepdf-core-jvm 635,781 -> 826,186
+    bytes (+186.0 KiB for ~56k patterns); kitepdf-epub-jvm 354,710 ->
+    356,085 (+1.3 KiB). Measured against a clean worktree build of the
+    prior commit.
+  - Full gate green; sweep 4148 pages / 0 failures / worstMAE 0.267
+    unchanged (no corpus book both declares a bundled non-English
+    language and uses hyphens:auto); PDF differential unchanged (0.0115).
+
+---
+
 ## Discovered during execution
 
 (nothing yet)

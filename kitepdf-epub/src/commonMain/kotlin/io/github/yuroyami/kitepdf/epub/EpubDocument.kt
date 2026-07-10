@@ -77,13 +77,33 @@ class EpubDocument internal constructor(
         else docRoots.indices.map { FixedSpine(docRoots[it], parsed.spines[it].viewport.first, parsed.spines[it].viewport.second) }
     }
 
+    /**
+     * The document's dominant language for hyphenation pattern selection:
+     * the first spine whose `<html>` or `<body>` carries `xml:lang`/`lang`
+     * (the parser folds both onto the `lang` key), else the OPF
+     * `dc:language`. Null falls back to the en-US patterns in [BoxLayout].
+     * One language per document; per-spine switching is a noted follow-up.
+     */
+    internal val documentLanguage: String? by lazy {
+        for (sp in parsed.spines) {
+            val html = sp.tree.children.filterIsInstance<HtmlNode.Element>()
+                .firstOrNull { it.tag == "html" }
+            val body = html?.children?.filterIsInstance<HtmlNode.Element>()
+                ?.firstOrNull { it.tag == "body" }
+            val lang = html?.attrs?.get("lang")?.takeIf { it.isNotBlank() }
+                ?: body?.attrs?.get("lang")?.takeIf { it.isNotBlank() }
+            if (lang != null) return@lazy lang
+        }
+        parsed.metadata.language?.takeIf { it.isNotBlank() }
+    }
+
     private val pageRenders: List<PageRender> by lazy {
         val fx = fixedSpines
         if (fx != null) return@lazy fx.map { spine ->
-            BoxLayout(::loadImage, ::loadSvg, spine.height, parsed.fonts).layout(spine.root, spine.width)
+            BoxLayout(::loadImage, ::loadSvg, spine.height, parsed.fonts, documentLanguage).layout(spine.root, spine.width)
             Paginator.paginateFixed(spine.root, spine.width, spine.height)
         }
-        BoxLayout(::loadImage, ::loadSvg, pageContentHeight, parsed.fonts).layout(root, contentWidth)
+        BoxLayout(::loadImage, ::loadSvg, pageContentHeight, parsed.fonts, documentLanguage).layout(root, contentWidth)
         Paginator.paginate(root, settings.pageWidth, settings.pageHeight, settings.margin)
     }
 

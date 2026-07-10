@@ -4,7 +4,12 @@ package io.github.yuroyami.kitepdf.epub
 internal object EpubFixtures {
 
     /** Wrap [bodyHtml] (an entire `<body>...</body>` or just its inner markup) in an EPUB. */
-    fun epub(bodyHtml: String, extraEntries: List<Pair<String, ByteArray>> = emptyList(), uniqueId: String? = null): ByteArray {
+    fun epub(
+        bodyHtml: String,
+        extraEntries: List<Pair<String, ByteArray>> = emptyList(),
+        uniqueId: String? = null,
+        language: String? = null,
+    ): ByteArray {
         val body = if (bodyHtml.trimStart().startsWith("<body")) bodyHtml else "<body>$bodyHtml</body>"
         val container = """
             <?xml version="1.0"?>
@@ -12,8 +17,12 @@ internal object EpubFixtures {
               <rootfiles><rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/></rootfiles>
             </container>
         """.trimIndent()
-        val metadata = if (uniqueId != null) {
-            """<metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:identifier id="uid">$uniqueId</dc:identifier></metadata>"""
+        val metaItems = buildString {
+            if (uniqueId != null) append("""<dc:identifier id="uid">$uniqueId</dc:identifier>""")
+            if (language != null) append("""<dc:language>$language</dc:language>""")
+        }
+        val metadata = if (metaItems.isNotEmpty()) {
+            """<metadata xmlns:dc="http://purl.org/dc/elements/1.1/">$metaItems</metadata>"""
         } else {
             ""
         }
