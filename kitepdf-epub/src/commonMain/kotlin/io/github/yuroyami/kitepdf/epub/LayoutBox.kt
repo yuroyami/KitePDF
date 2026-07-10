@@ -91,6 +91,11 @@ internal class PlacedRun(
     /** True when [glyphs] carry embedded outlines; then [unitsPerEm] is the face's. */
     val hasOutlines: Boolean = false,
     val unitsPerEm: Int = 1000,
+    /**
+     * True for decoration runs that are not part of the reading text — a ruby
+     * reading overlay. Text extraction and search skip them.
+     */
+    val isAnnotation: Boolean = false,
 )
 
 /** A laid-out line inside a [TextBlockBox]; [yTop] is absolute document-down. */

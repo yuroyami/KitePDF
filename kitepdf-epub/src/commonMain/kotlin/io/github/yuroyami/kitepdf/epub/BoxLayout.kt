@@ -717,6 +717,7 @@ internal class BoxLayout(
             baselineShift = base.fontSize * 0.8,
             underline = false,
             hasOutlines = r.face != null, unitsPerEm = r.face?.unitsPerEm ?: 1000,
+            isAnnotation = true,
         )
     }
 

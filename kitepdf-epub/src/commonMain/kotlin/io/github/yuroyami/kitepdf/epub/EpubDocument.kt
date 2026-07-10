@@ -9,6 +9,10 @@ import io.github.yuroyami.kitepdf.epub.css.StyleResolver
 import io.github.yuroyami.kitepdf.epub.css.StyleRule
 import io.github.yuroyami.kitepdf.KiteDocument
 import io.github.yuroyami.kitepdf.KitePage
+import io.github.yuroyami.kitepdf.KiteSearchHit
+import io.github.yuroyami.kitepdf.KiteStructuredText
+import io.github.yuroyami.kitepdf.KiteTextBlock
+import io.github.yuroyami.kitepdf.KiteTextLine
 import io.github.yuroyami.kitepdf.render.BlendMode
 import io.github.yuroyami.kitepdf.render.ImageXObject
 import io.github.yuroyami.kitepdf.render.Matrix
@@ -103,6 +107,19 @@ class EpubDocument internal constructor(
 
     /** Shorthand for [withSettings] changing only the page margin (points). */
     fun withMargin(margin: Double): EpubDocument = withSettings(settings.copy(margin = margin))
+
+    /**
+     * Find [needle] across the book, lazily page by page (a UI can show
+     * incremental results). Same matching rules as [KiteStructuredText.search]:
+     * case-insensitive by default, line breaks read as one space, a
+     * hyphenated line break joins directly, matches never cross blocks.
+     */
+    fun search(needle: String, ignoreCase: Boolean = true): Sequence<KiteSearchHit> = sequence {
+        if (needle.isEmpty()) return@sequence
+        for ((i, page) in pages.withIndex()) {
+            yieldAll(page.textContent().search(needle, ignoreCase, pageIndex = i))
+        }
+    }
 
     private fun loadImage(zipPath: String): ImageXObject? =
         parsed.zip.read(zipPath)?.let { ImageXObject.fromEncodedImage(it) }
@@ -356,13 +373,19 @@ class EpubPage internal constructor(
     /** EPUB is y-down from top-left, so the base is a straight vertical flip. */
     override fun displayToDeviceBase(): Matrix = Matrix(1.0, 0.0, 0.0, -1.0, 0.0, height)
 
+    /**
+     * Display-space (top-left, y-down) y of a document-space y. The single
+     * source of the page's vertical mapping: painting ([renderTo]) flips it
+     * to y-up, extraction ([textContent]) uses it directly.
+     */
+    private fun displayY(docY: Double): Double = page.margin + (docY - page.startY)
+
     override fun renderTo(canvas: PdfCanvas, deviceCtm: Matrix) {
         canvas.beginPage(width, height, deviceCtm)
         val margin = page.margin
         val startY = page.startY
-        val contentTopYUp = height - margin
         val bandBottom = startY + (height - 2 * margin)
-        fun yUp(docY: Double) = contentTopYUp - (docY - startY)
+        fun yUp(docY: Double) = height - displayY(docY)
 
         for (box in page.decoBoxes) paintBox(box, canvas, deviceCtm, margin, startY, bandBottom, ::yUp)
 
@@ -431,5 +454,72 @@ class EpubPage internal constructor(
         if (w <= 0.0 || h <= 0.0) return
         val path = PdfPath.Builder().apply { rectangle(x, yBottom, w, h) }.build()
         canvas.fillPath(path, ctm, color, evenOdd = false, alpha = 1.0, blendMode = BlendMode.Normal)
+    }
+
+    /* ── structured text (extraction / search) ───────────────────────────── */
+
+    private val structured: KiteStructuredText by lazy { buildStructuredText() }
+
+    override fun textContent(): KiteStructuredText = structured
+
+    /**
+     * Blocks = consecutive page lines sharing one owning [TextBlockBox];
+     * lines rebuild their text from the placed runs (in x order, ruby
+     * overlays excluded), restoring the collapsed inter-word spaces from the
+     * pen gaps, since spaces are never drawn as glyphs.
+     */
+    private fun buildStructuredText(): KiteStructuredText {
+        val blocks = ArrayList<KiteTextBlock>()
+        var curOwner: TextBlockBox? = null
+        var curLines = ArrayList<KiteTextLine>()
+        fun flush() {
+            if (curLines.isNotEmpty()) { blocks.add(KiteTextBlock(curLines)); curLines = ArrayList() }
+        }
+        for (line in page.lines) {
+            if (line.owner !== curOwner) { flush(); curOwner = line.owner }
+            extractLine(line)?.let(curLines::add)
+        }
+        flush()
+        return KiteStructuredText(blocks)
+    }
+
+    private fun extractLine(line: PositionedLine): KiteTextLine? {
+        val runs = line.runs
+            .filter { !it.isAnnotation && it.glyphs.isNotEmpty() }
+            .sortedBy { it.x }
+        if (runs.isEmpty()) return null
+        val sb = StringBuilder()
+        val edges = ArrayList<Double>()
+        var penEnd = Double.NaN
+        for (run in runs) {
+            var x = page.margin + run.x
+            // Words are separate runs with a pen gap where the collapsed space
+            // was; restore it as one space char spanning the gap.
+            if (!penEnd.isNaN() && x - penEnd > run.fontSize * SPACE_GAP_EM && sb.isNotEmpty() && sb.last() != ' ') {
+                edges.add(penEnd); sb.append(' ')
+            }
+            for (g in run.glyphs) {
+                val gw = g.advanceWidth * run.fontSize / 1000.0
+                val t = g.text
+                // A ligature glyph carries several chars: split its advance evenly.
+                for (k in t.indices) { edges.add(x + gw * k / t.length); sb.append(t[k]) }
+                x += gw
+            }
+            penEnd = x
+        }
+        if (sb.isEmpty()) return null
+        edges.add(penEnd)
+        val top = displayY(line.yTop)
+        return KiteTextLine(
+            text = sb.toString(),
+            // Display-space rect: y-min lives in [Rectangle.bottom] (see KiteStructuredText).
+            bounds = io.github.yuroyami.kitepdf.Rectangle(edges.first(), top, edges.last(), top + line.height),
+            charEdges = edges.toDoubleArray(),
+        )
+    }
+
+    private companion object {
+        /** Pen-gap threshold (in em) that reads as a collapsed word space. */
+        const val SPACE_GAP_EM = 0.15
     }
 }

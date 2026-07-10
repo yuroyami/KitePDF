@@ -35,6 +35,15 @@ interface KitePage {
 
     /** Paints the page into [canvas] under [deviceCtm]. */
     fun renderTo(canvas: PdfCanvas, deviceCtm: Matrix = Matrix.IDENTITY)
+
+    /**
+     * Structured text for extraction / search / selection, in display space
+     * (see [KiteStructuredText] for the coordinate convention), or `null`
+     * when the handler does not expose it. EPUB pages implement this;
+     * the PDF adapter (bridging [io.github.yuroyami.kitepdf.text] extraction)
+     * is future work.
+     */
+    fun textContent(): KiteStructuredText? = null
 }
 
 /**
