@@ -19,6 +19,7 @@ import androidx.compose.ui.geometry.isSpecified
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.unit.IntSize
 import io.github.yuroyami.kitepdf.KiteDocument
+import io.github.yuroyami.kitepdf.KiteSearchHit
 import io.github.yuroyami.kitepdf.PdfDocument
 import kotlin.math.abs
 
@@ -60,6 +61,14 @@ class PdfViewState(
 
     /** True once zoomed in beyond the minimum (with a small epsilon). */
     val isZoomed: Boolean get() = zoom > zoomRange.start + EPSILON
+
+    /**
+     * Search hits to paint as translucent quads over their pages (colour:
+     * [PdfViewColors.searchHighlight]). Feed it from `PdfDocument.search` /
+     * `KiteStructuredText.search` (quads are display-space, as both produce);
+     * clear it by assigning an empty list.
+     */
+    var searchHighlights: List<KiteSearchHit> by mutableStateOf(emptyList())
 
     /**
      * The page the viewport currently rests on: the snapped page in paged
