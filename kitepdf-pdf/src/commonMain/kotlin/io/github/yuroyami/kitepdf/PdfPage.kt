@@ -236,6 +236,18 @@ class PdfPage internal constructor(
         io.github.yuroyami.kitepdf.text.StructuredTextExtractor.extract(this)
     }
 
+    /**
+     * Format-neutral structured text in DISPLAY space (y-down, rotation
+     * folded in): [structuredText] pushed through [pageToDeviceBase] by the
+     * T-81 adapter. Built once and memoized; powers the shared search /
+     * selection / copy path a viewer uses for every format.
+     */
+    private val kiteTextContent: KiteStructuredText by lazy {
+        io.github.yuroyami.kitepdf.text.KiteTextAdapter.toKite(structuredText, pageToDeviceBase())
+    }
+
+    override fun textContent(): KiteStructuredText = kiteTextContent
+
     /** Internal accessor used by the structured-text extractor to reach the document resolver. */
     internal val internalDocument: PdfDocument get() = document
 

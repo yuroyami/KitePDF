@@ -99,6 +99,14 @@ data class PdfTextSpan(
     val origin: Pair<Double, Double>,
     /** Approximate bounding box (baseline + ascender heuristic). */
     val bounds: Rectangle,
+    /**
+     * `text.length + 1` user-space baseline points: entry `i` is where char
+     * `i` starts, the last entry where the run ends. A multi-char glyph
+     * (ligature) splits its advance evenly across its chars. Null when the
+     * producer didn't record geometry (the [KiteTextAdapter] falls back to
+     * an even split of [bounds]).
+     */
+    val charEdgePoints: List<Pair<Double, Double>>? = null,
 )
 
 /**
@@ -253,12 +261,24 @@ private class TextCollectorCanvas : PdfCanvas {
             // the single-byte case; composite fonts never receive Tw.
             val singleByte = glyphs.all { it.byteCount == 1 }
             var advance = 0.0
+            // Local (text-space) x boundary per char, for selection/search
+            // quads. A multi-char glyph splits its advance evenly; a glyph
+            // with no text (no Unicode) widens the previous boundary.
+            val localEdges = ArrayList<Double>(glyphs.size + 1)
+            localEdges.add(0.0)
             for (g in glyphs) {
                 var glyphAdvance = g.advanceWidth * fontSize / 1000.0 + charSpacing
                 if (singleByte && wordSpacing != 0.0 && g.isWordSpace) {
                     glyphAdvance += wordSpacing
                 }
-                advance += glyphAdvance
+                val n = g.text.length
+                if (n == 0) {
+                    advance += glyphAdvance
+                    localEdges[localEdges.size - 1] = advance
+                } else {
+                    for (k in 1..n) localEdges.add(advance + glyphAdvance * k / n)
+                    advance += glyphAdvance
+                }
             }
             advance *= horizScale
 
@@ -285,6 +305,7 @@ private class TextCollectorCanvas : PdfCanvas {
             val top = corners.maxOf { it.second }
 
             val text = glyphs.joinToString("") { it.text }
+            val edgePoints = localEdges.map { textMatrix.transformPoint(it * horizScale, 0.0) }
             return PdfTextSpan(
                 text = text,
                 fontSpec = fontSpec,
@@ -296,6 +317,7 @@ private class TextCollectorCanvas : PdfCanvas {
                     right = right,
                     top = top,
                 ),
+                charEdgePoints = if (edgePoints.size == text.length + 1) edgePoints else null,
             )
         }
     }
