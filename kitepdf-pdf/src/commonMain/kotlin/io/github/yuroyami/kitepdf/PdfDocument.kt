@@ -151,6 +151,35 @@ class PdfDocument private constructor(
         PdfOutline.buildTree(catalog, this)
     }
 
+    /**
+     * Format-neutral metadata for [KiteDocument] viewers: `/Info` values,
+     * falling back to XMP where `/Info` is silent, plus the catalog `/Lang`.
+     */
+    override val metadata: KiteMetadata by lazy {
+        KiteMetadata(
+            title = info.title ?: xmp?.title,
+            authors = info.author?.let { listOf(it) } ?: xmp?.authors ?: emptyList(),
+            language = language,
+        )
+    }
+
+    /**
+     * Format-neutral outline for [KiteDocument] viewers: [outlines] with each
+     * destination resolved to a zero-based page index (null when unresolvable).
+     */
+    override val outline: List<KiteOutlineItem> by lazy {
+        fun map(nodes: List<PdfOutline>, depth: Int): List<KiteOutlineItem> =
+            if (depth > 64) emptyList()
+            else nodes.map { node ->
+                KiteOutlineItem(
+                    title = node.title,
+                    pageIndex = resolveDestination(node.rawDestination)?.pageIndex,
+                    children = map(node.children, depth + 1),
+                )
+            }
+        map(outlines, 0)
+    }
+
     /** Initial UI panel hint (`/PageMode`). [PageMode.UseNone] when absent. */
     val pageMode: PageMode get() = PageMode.fromName(catalog.getName("PageMode"))
 

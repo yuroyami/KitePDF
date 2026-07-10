@@ -40,7 +40,7 @@ class ReflowTest {
         assertNotNull(doc)
         val reflowed = doc.withMargin(8.0)
         // Same ParsedEpub backs both, so metadata is the very same instance.
-        assertSame(doc.metadata, reflowed.metadata, "re-flow must reuse the parse, not re-parse")
+        assertSame(doc.epubMetadata, reflowed.epubMetadata, "re-flow must reuse the parse, not re-parse")
         assertSame(doc.tableOfContents, reflowed.tableOfContents)
         assertEquals(8.0, reflowed.settings.margin)
         assertEquals(doc.settings.fontSize, reflowed.settings.fontSize, "only margin changed")

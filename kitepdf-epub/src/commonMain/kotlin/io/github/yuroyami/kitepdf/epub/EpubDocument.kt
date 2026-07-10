@@ -8,6 +8,8 @@ import io.github.yuroyami.kitepdf.epub.css.Origin
 import io.github.yuroyami.kitepdf.epub.css.StyleResolver
 import io.github.yuroyami.kitepdf.epub.css.StyleRule
 import io.github.yuroyami.kitepdf.KiteDocument
+import io.github.yuroyami.kitepdf.KiteMetadata
+import io.github.yuroyami.kitepdf.KiteOutlineItem
 import io.github.yuroyami.kitepdf.KitePage
 import io.github.yuroyami.kitepdf.KiteSearchHit
 import io.github.yuroyami.kitepdf.KiteStructuredText
@@ -39,11 +41,35 @@ class EpubDocument internal constructor(
 
     internal val zip: ZipReader get() = parsed.zip
 
-    /** Publication metadata (title, authors, cover, reading direction). */
-    val metadata: EpubMetadata get() = parsed.metadata
+    /** EPUB-specific metadata (title, authors, cover path, reading direction). */
+    val epubMetadata: EpubMetadata get() = parsed.metadata
 
     /** Navigation tree from EPUB 3 nav.xhtml or EPUB 2 toc.ncx (empty if none). */
     val tableOfContents: TableOfContents get() = parsed.toc
+
+    /** Format-neutral title/authors/language for [KiteDocument] viewers. */
+    override val metadata: KiteMetadata
+        get() = KiteMetadata(
+            title = parsed.metadata.title,
+            authors = parsed.metadata.creators,
+            language = parsed.metadata.language,
+        )
+
+    /**
+     * Format-neutral outline for [KiteDocument] viewers: [tableOfContents]
+     * with each href resolved to a zero-based page index through the
+     * anchor/pagination map (null for grouping labels and unknown targets).
+     */
+    override val outline: List<KiteOutlineItem> by lazy {
+        fun map(e: TocEntry): KiteOutlineItem = KiteOutlineItem(
+            title = e.label,
+            pageIndex = e.href?.let { h ->
+                pageIndexOfHref(if (e.fragment != null) "$h#${e.fragment}" else h)
+            },
+            children = e.children.map(::map),
+        )
+        parsed.toc.entries.map(::map)
+    }
 
     val pageWidth: Double get() = settings.pageWidth
     val pageHeight: Double get() = settings.pageHeight
