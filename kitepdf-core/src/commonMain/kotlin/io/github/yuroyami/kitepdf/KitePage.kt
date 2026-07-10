@@ -47,6 +47,28 @@ interface KitePage {
 }
 
 /**
+ * Format-neutral document metadata, for a viewer's title bar / info panel.
+ * PDF fills it from `/Info` and XMP; EPUB from the OPF `dc:` elements.
+ */
+data class KiteMetadata(
+    val title: String? = null,
+    val authors: List<String> = emptyList(),
+    /** BCP-47 language tag when the document declares one. */
+    val language: String? = null,
+)
+
+/**
+ * One node of a format-neutral outline (PDF bookmarks / EPUB table of
+ * contents), for a viewer's navigation panel.
+ */
+class KiteOutlineItem(
+    val title: String,
+    /** Zero-based target page, or null when the destination is unresolvable. */
+    val pageIndex: Int?,
+    val children: List<KiteOutlineItem> = emptyList(),
+)
+
+/**
  * A parsed document from any handler — the `fz_document` equivalent. Lets a
  * viewer treat a [io.github.yuroyami.kitepdf.PdfDocument] and an
  * [io.github.yuroyami.kitepdf.epub.EpubDocument] uniformly.
@@ -58,4 +80,13 @@ interface KiteDocument {
 
     /** The pages, in reading order. */
     val pages: List<KitePage>
+
+    /** Title/authors/language; defaults empty so third-party implementors don't break. */
+    val metadata: KiteMetadata get() = KiteMetadata()
+
+    /**
+     * The navigation tree (PDF bookmarks / EPUB table of contents) with
+     * destinations resolved to page indices; empty when the document has none.
+     */
+    val outline: List<KiteOutlineItem> get() = emptyList()
 }

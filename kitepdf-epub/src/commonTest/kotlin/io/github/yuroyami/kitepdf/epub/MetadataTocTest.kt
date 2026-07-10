@@ -43,7 +43,7 @@ class MetadataTocTest {
               <spine page-progression-direction="rtl"><itemref idref="c1"/></spine>
             </package>"""
         val doc = EpubDocument.open(pkg(opf, listOf("OEBPS/cover.png" to byteArrayOf(1, 2, 3), "OEBPS/ch1.xhtml" to chapter("hi"))))!!
-        val m = doc.metadata
+        val m = doc.epubMetadata
         assertEquals("My Great Book", m.title)
         assertEquals(listOf("Jane Doe", "John Smith"), m.creators)
         assertEquals("ar", m.language)
@@ -64,8 +64,8 @@ class MetadataTocTest {
               <spine><itemref idref="c1"/></spine>
             </package>"""
         val doc = EpubDocument.open(pkg(opf, listOf("OEBPS/images/c.png" to byteArrayOf(1), "OEBPS/ch1.xhtml" to chapter("hi"))))!!
-        assertEquals("OEBPS/images/c.png", doc.metadata.coverImagePath)
-        assertTrue(!doc.metadata.rightToLeft, "default is left-to-right")
+        assertEquals("OEBPS/images/c.png", doc.epubMetadata.coverImagePath)
+        assertTrue(!doc.epubMetadata.rightToLeft, "default is left-to-right")
     }
 
     @Test
