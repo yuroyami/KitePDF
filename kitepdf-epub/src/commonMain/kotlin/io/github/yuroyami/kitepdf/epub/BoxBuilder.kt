@@ -190,7 +190,7 @@ internal class BoxBuilder(
         fun key(r: Int, c: Int) = r.toLong() * 100_000L + c
         for (row in rows) for (cell in row.cells) {
             for (dr in 0 until cell.rowspan) for (dc in 0 until cell.colspan) {
-                grid.putIfAbsent(key(cell.gridRow + dr, cell.gridCol + dc), cell)
+                grid.getOrPut(key(cell.gridRow + dr, cell.gridCol + dc)) { cell }
             }
         }
         val dropTop = HashSet<BlockBox>()

@@ -135,8 +135,8 @@ class EpubDocument internal constructor(
         if (parsed.fixedLayout) {
             // One page per spine document.
             parsed.spines.forEachIndexed { i, sp ->
-                map.putIfAbsent(sp.path, i)
-                collectAnchors(docRoots[i]) { id, _ -> map.putIfAbsent("${sp.path}#$id", i) }
+                map.getOrPut(sp.path) { i }
+                collectAnchors(docRoots[i]) { id, _ -> map.getOrPut("${sp.path}#$id") { i } }
             }
         } else {
             val starts = renders.map { it.startY }
@@ -146,8 +146,8 @@ class EpubDocument internal constructor(
                 return p
             }
             parsed.spines.forEachIndexed { i, sp ->
-                map.putIfAbsent(sp.path, pageOf(docRoots[i].y))
-                collectAnchors(docRoots[i]) { id, y -> map.putIfAbsent("${sp.path}#$id", pageOf(y)) }
+                map.getOrPut(sp.path) { pageOf(docRoots[i].y) }
+                collectAnchors(docRoots[i]) { id, y -> map.getOrPut("${sp.path}#$id") { pageOf(y) } }
             }
         }
         map

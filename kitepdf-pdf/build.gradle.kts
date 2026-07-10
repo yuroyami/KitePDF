@@ -98,3 +98,4 @@ kotlin {
 // Publishing is configured by the vanniktech plugin from gradle.properties:
 // shared coordinates/POM/signing in the root gradle.properties, this module's
 // POM_NAME + POM_DESCRIPTION in kitepdf/gradle.properties.
+
