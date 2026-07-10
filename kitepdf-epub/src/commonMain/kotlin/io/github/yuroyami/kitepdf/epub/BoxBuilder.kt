@@ -2,6 +2,7 @@ package io.github.yuroyami.kitepdf.epub
 
 import io.github.yuroyami.kitepdf.epub.css.ComputedStyle
 import io.github.yuroyami.kitepdf.epub.css.Display
+import io.github.yuroyami.kitepdf.epub.css.Edge
 import io.github.yuroyami.kitepdf.epub.css.ListType
 import io.github.yuroyami.kitepdf.epub.css.PseudoContent
 import io.github.yuroyami.kitepdf.epub.css.PseudoSide
@@ -87,7 +88,7 @@ internal class BoxBuilder(
                 when (cs.display) {
                     Display.NONE -> {}
                     Display.INLINE, Display.INLINE_BLOCK -> processInline(child, cs, childAncestors, inl, inlineAnchors)
-                    Display.TABLE -> { flush(); children.add(buildTable(child, cs, childAncestors)) }
+                    Display.TABLE -> { flush(); children.addAll(buildTable(child, cs, childAncestors)) }
                     Display.LIST_ITEM -> { flush(); children.add(buildBlock(child, cs, childAncestors, marker(cs, ordinal++), cs.color)) }
                     // BLOCK, plus stray table parts outside a table: treat as blocks (no text lost).
                     else -> { flush(); children.add(buildBlock(child, cs, childAncestors, null, BLACK)) }
@@ -114,14 +115,24 @@ internal class BoxBuilder(
         return BlockBox(pc.style, listOf(TextBlockBox(pc.style, listOf(run))))
     }
 
-    /** Build a `display:table` element into a [TableBox], flattening row groups. */
-    private fun buildTable(el: HtmlNode.Element, style: ComputedStyle, ancestors: List<HtmlNode.Element>): TableBox {
+    /**
+     * Build a `display:table` element, flattening row groups. Returns the
+     * caption block (extracted, laid ABOVE the table) followed by the
+     * [TableBox]; `<col>`/`<colgroup>` widths pin their columns; under
+     * `border-collapse: collapse` each shared cell edge is painted once.
+     */
+    private fun buildTable(el: HtmlNode.Element, style: ComputedStyle, ancestors: List<HtmlNode.Element>): List<LayoutBox> {
         val rows = ArrayList<TableRowBox>()
+        var caption: BlockBox? = null
         val childAncestors = listOf(el) + ancestors
         fun addRowsFrom(container: HtmlNode.Element, containerAncestors: List<HtmlNode.Element>) {
             val anc = listOf(container) + containerAncestors
             for (c in container.children) {
                 if (c !is HtmlNode.Element) continue
+                if (c.tag == "caption" && caption == null) {
+                    caption = buildBlock(c, resolver.compute(c, anc, style), anc, null, BLACK)
+                    continue
+                }
                 val cs = resolver.compute(c, anc, style)
                 when (cs.display) {
                     Display.TABLE_ROW -> rows.add(buildRow(c, cs, anc))
@@ -132,7 +143,89 @@ internal class BoxBuilder(
         }
         addRowsFrom(el, ancestors)
         placeCells(rows)
-        return TableBox(style, rows)
+        val finalRows = if (style.borderCollapse) collapseBorders(rows) else rows
+        val table = TableBox(style, finalRows, scanColWidths(el, style, childAncestors))
+        return listOfNotNull(caption, table)
+    }
+
+    /** `<col span width>` / `<colgroup width>` -> column index -> width (pt). */
+    private fun scanColWidths(el: HtmlNode.Element, style: ComputedStyle, ancestors: List<HtmlNode.Element>): Map<Int, Double> {
+        val out = HashMap<Int, Double>()
+        var idx = 0
+        fun widthOf(c: HtmlNode.Element): Double? =
+            resolver.compute(c, ancestors, style).widthPt
+                ?: c.attrs["width"]?.trim()?.removeSuffix("px")?.toDoubleOrNull()?.let { it * 0.75 }
+        fun scan(container: HtmlNode.Element) {
+            for (c in container.children) {
+                if (c !is HtmlNode.Element) continue
+                when (c.tag) {
+                    "col" -> {
+                        val span = c.attrs["span"]?.toIntOrNull()?.coerceAtLeast(1) ?: 1
+                        val w = widthOf(c)
+                        repeat(span) { if (w != null) out[idx] = w; idx++ }
+                    }
+                    "colgroup" -> {
+                        if (c.children.any { it is HtmlNode.Element && it.tag == "col" }) scan(c)
+                        else {
+                            val span = c.attrs["span"]?.toIntOrNull()?.coerceAtLeast(1) ?: 1
+                            val w = widthOf(c)
+                            repeat(span) { if (w != null) out[idx] = w; idx++ }
+                        }
+                    }
+                }
+            }
+        }
+        scan(el)
+        return out
+    }
+
+    /**
+     * `border-collapse: collapse`: each interior shared edge paints once, the
+     * wider edge winning; the loser's edge is dropped from that cell's style.
+     * Cells are rebuilt with the adjusted styles (styles are immutable).
+     */
+    private fun collapseBorders(rows: List<TableRowBox>): List<TableRowBox> {
+        // Grid of covering cells (spans fill every slot they touch).
+        val grid = HashMap<Long, BlockBox>()
+        fun key(r: Int, c: Int) = r.toLong() * 100_000L + c
+        for (row in rows) for (cell in row.cells) {
+            for (dr in 0 until cell.rowspan) for (dc in 0 until cell.colspan) {
+                grid.putIfAbsent(key(cell.gridRow + dr, cell.gridCol + dc), cell)
+            }
+        }
+        val dropTop = HashSet<BlockBox>()
+        val dropLeft = HashSet<BlockBox>()
+        val dropBottom = HashSet<BlockBox>()
+        val dropRight = HashSet<BlockBox>()
+        for (row in rows) for (cell in row.cells) {
+            grid[key(cell.gridRow - 1, cell.gridCol)]?.takeIf { it !== cell }?.let { above ->
+                if (above.style.borderBottom.effective >= cell.style.borderTop.effective) dropTop.add(cell)
+                else dropBottom.add(above)
+            }
+            grid[key(cell.gridRow, cell.gridCol - 1)]?.takeIf { it !== cell }?.let { left ->
+                if (left.style.borderRight.effective >= cell.style.borderLeft.effective) dropLeft.add(cell)
+                else dropRight.add(left)
+            }
+        }
+        return rows.map { row ->
+            TableRowBox(
+                row.style,
+                row.cells.map { cell ->
+                    val s = cell.style
+                    val ns = s.copy(
+                        borderTop = if (cell in dropTop) Edge.NONE else s.borderTop,
+                        borderLeft = if (cell in dropLeft) Edge.NONE else s.borderLeft,
+                        borderBottom = if (cell in dropBottom) Edge.NONE else s.borderBottom,
+                        borderRight = if (cell in dropRight) Edge.NONE else s.borderRight,
+                    )
+                    if (ns === s || ns == s) cell else BlockBox(ns, cell.children).also {
+                        it.colspan = cell.colspan; it.rowspan = cell.rowspan
+                        it.gridRow = cell.gridRow; it.gridCol = cell.gridCol
+                        it.anchors += cell.anchors
+                    }
+                },
+            )
+        }
     }
 
     /** Assign each cell a grid (row, col), skipping cells occupied by rowspans from above. */

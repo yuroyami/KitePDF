@@ -6,7 +6,7 @@ internal enum class Display { BLOCK, INLINE, INLINE_BLOCK, LIST_ITEM, NONE, TABL
 internal enum class TextAlign { LEFT, RIGHT, CENTER, JUSTIFY }
 internal enum class WhiteSpaceMode { NORMAL, PRE, NOWRAP, PRE_WRAP, PRE_LINE }
 internal enum class GenericFont { SERIF, SANS, MONO }
-internal enum class CssVAlign { BASELINE, SUPER, SUB }
+internal enum class CssVAlign { BASELINE, SUPER, SUB, TOP, MIDDLE, BOTTOM }
 internal enum class ListType { DISC, CIRCLE, SQUARE, DECIMAL, LOWER_ROMAN, UPPER_ROMAN, LOWER_ALPHA, UPPER_ALPHA, NONE }
 internal enum class Direction { LTR, RTL }
 internal enum class CssPosition { STATIC, RELATIVE, ABSOLUTE, FIXED }
@@ -98,6 +98,10 @@ internal data class ComputedStyle(
     val minWidthPt: Double? = null,
     val minHeightPt: Double? = null,
     val maxHeightPt: Double? = null,
+    /** `border-collapse: collapse` (inherited; read on the table box). */
+    val borderCollapse: Boolean = false,
+    /** `border-spacing` / `cellspacing` in points (inherited; 0 under collapse). */
+    val borderSpacingPt: Double = 0.0,
 ) {
     val mono: Boolean get() = fontFamily == GenericFont.MONO
 

@@ -74,10 +74,12 @@ internal class ImageBox(
     var drawHeight: Double = 0.0
 }
 
-/** A table box: a grid of [rows] with auto column widths (no row/col spans yet). */
+/** A table box: a grid of [rows] with auto column widths plus `<col>` pins. */
 internal class TableBox(
     override val style: ComputedStyle,
     val rows: List<TableRowBox>,
+    /** Column index -> pinned width in points, from `<col>`/`<colgroup>` widths. */
+    val colWidths: Map<Int, Double> = emptyMap(),
 ) : LayoutBox()
 
 /** One table row; its [cells] are block containers laid out at their column widths. */

@@ -207,6 +207,29 @@ Gate reference numbers at session start (2026-07-10, before any task):
 
 ---
 
+## T-68. Box model completeness pass
+
+- **Status:** DONE
+- **Commit:** `0d36287`
+- **What landed:** min-width / min-height / max-height clamps (blocks +
+  images, min-wins-over-max); percentage vertical sizes against the page
+  content height (`StyleResolver.refHeightPt`); `position:relative` as a
+  post-layout subtree shift (flow untouched); `object-fit:cover`
+  scale-fill + center + clip at paint; `font:` shorthand expansion;
+  `@import` inlining (zip-relative, depth cap 8, cycle guard).
+- **The sweep caught a real regression before commit:** honoring
+  percentage heights let `html,body{height:100%}` CLIP spine bodies, so
+  stacked spines overlapped at pagination: 4143 -> 3201 pages (942 pages
+  of silent truncation). Added the book-engine rule "a declared height may
+  grow a box but never clip flowed content" (commented in `layoutBlock`)
+  and the count recovered to 4142. The remaining -1 page and the
+  worstMAE improvement 0.295 -> 0.267 trace to legitimately honoring
+  `font:` shorthand sizes that were previously ignored.
+- **Verification:** `BoxModelCompletenessTest` (8 tests, one per item plus
+  the no-clip rule); full gate green; PDF differential unchanged (0.0115).
+
+---
+
 ## Discovered during execution
 
 (nothing yet)

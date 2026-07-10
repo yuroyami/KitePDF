@@ -97,4 +97,107 @@ class TableTest {
         }.joinToString("") { it.text }
         assertTrue(listOf("A", "B", "C", "D").all { it in text }, "all cells rendered: <<$text>>")
     }
+
+    /* ── T-69: completeness ──────────────────────────────────────────────── */
+
+    @Test
+    fun col_widths_pin_their_columns() {
+        val html = "<table style=\"width:200pt\"><col style=\"width:150pt\"/><col/>" +
+            "<tr><td>A</td><td>B</td></tr></table>"
+        val t = firstTable(laidOut(html))
+        assertEquals(150.0, t.rows[0].cells[0].borderBoxWidth, 1e-6, "pinned column keeps its <col> width")
+        assertEquals(50.0, t.rows[0].cells[1].borderBoxWidth, 1e-6, "remainder goes to the free column")
+    }
+
+    @Test
+    fun colgroup_width_attribute_pins_in_px() {
+        val html = "<table style=\"width:200pt\"><colgroup width=\"100\"></colgroup><col/>" +
+            "<tr><td>A</td><td>B</td></tr></table>"
+        val t = firstTable(laidOut(html))
+        assertEquals(75.0, t.rows[0].cells[0].borderBoxWidth, 1e-6, "100px = 75pt")
+    }
+
+    @Test
+    fun border_collapse_paints_shared_edges_once() {
+        val t = firstTable(
+            laidOut(grid, "table{border-collapse:collapse} td{border:2px solid black}"),
+        )
+        val a = t.rows[0].cells[0]; val b = t.rows[0].cells[1]
+        val c = t.rows[1].cells[0]
+        assertTrue(
+            a.style.borderRight.effective > 0 && b.style.borderLeft.effective == 0.0,
+            "the vertical shared edge survives on one side only",
+        )
+        assertTrue(
+            a.style.borderBottom.effective > 0 && c.style.borderTop.effective == 0.0,
+            "the horizontal shared edge survives on one side only",
+        )
+        assertTrue(a.style.borderLeft.effective > 0, "outer edges keep their border")
+    }
+
+    @Test
+    fun cell_vertical_align_offsets_content_within_the_row() {
+        // First cell is 3 lines tall; single-line neighbours align middle/bottom/top.
+        val html = "<table><tr>" +
+            "<td>x<br/>y<br/>z</td>" +
+            "<td style=\"vertical-align:middle\">m</td>" +
+            "<td style=\"vertical-align:bottom\">b</td>" +
+            "<td>t</td></tr></table>"
+        val t = firstTable(laidOut(html))
+        fun firstLineTop(cell: BlockBox): Double {
+            var y = Double.NaN
+            fun rec(box: LayoutBox) {
+                when (box) {
+                    is TextBlockBox -> if (y.isNaN()) y = box.lines.first().yTop
+                    is BlockBox -> box.children.forEach(::rec)
+                    else -> {}
+                }
+            }
+            rec(cell); return y
+        }
+        val lineH = 16.8
+        val top = firstLineTop(t.rows[0].cells[3])
+        assertEquals(lineH, firstLineTop(t.rows[0].cells[1]) - top, 0.2, "middle: half the 2-line slack")
+        assertEquals(2 * lineH, firstLineTop(t.rows[0].cells[2]) - top, 0.2, "bottom: the full slack")
+    }
+
+    @Test
+    fun caption_lays_above_the_table() {
+        val root = laidOut("<table><caption>The Caption</caption><tr><td>A</td></tr></table>")
+        val t = firstTable(root)
+        val container = findParentOf(root, t)
+        val idx = container.children.indexOf(t)
+        assertTrue(idx > 0, "a caption block precedes the table")
+        val cap = container.children[idx - 1] as BlockBox
+        assertEquals("The Caption", cap.text())
+        assertTrue(cap.bottom <= t.y + 1e-6, "caption sits above the table")
+    }
+
+    @Test
+    fun presentational_border_cellpadding_cellspacing_apply_and_css_wins() {
+        val html = "<table border=\"1\" cellpadding=\"4\" cellspacing=\"4\">" +
+            "<tr><td>A</td><td>B</td></tr></table>"
+        val t = firstTable(laidOut(html))
+        val a = t.rows[0].cells[0]
+        assertEquals(0.75, a.style.borderTop.effective, 1e-6, "table[border] gives cells a 1px border")
+        assertEquals(3.0, a.style.paddingTopPt, 1e-6, "cellpadding 4px = 3pt")
+        val b = t.rows[0].cells[1]
+        assertEquals(3.0, b.x - (a.x + a.borderBoxWidth), 1e-6, "cells separated by the spacing gutter")
+        // Real CSS beats the hints.
+        val styled = firstTable(laidOut(html, "td{padding:0;border:none}"))
+        assertEquals(0.0, styled.rows[0].cells[0].style.paddingTopPt, 1e-6)
+        assertEquals(0.0, styled.rows[0].cells[0].style.borderTop.effective, 1e-6)
+    }
+
+    private fun findParentOf(root: BlockBox, target: LayoutBox): BlockBox {
+        var found: BlockBox? = null
+        fun rec(b: LayoutBox) {
+            if (b is BlockBox) {
+                if (b.children.any { it === target }) found = b
+                b.children.forEach(::rec)
+            }
+        }
+        rec(root)
+        return found ?: error("table has no parent block")
+    }
 }

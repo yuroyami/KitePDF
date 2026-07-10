@@ -35,6 +35,7 @@ internal class StyleResolver(
             if (prev == null || weight >= prev) { bestWeight[prop] = weight; value[prop] = v }
         }
 
+        presentationalHints(el, ancestors, ::offer)
         rules.forEachIndexed { order, rule ->
             var spec = -1
             // ::before/::after selectors style generated content ([computePseudo]),
@@ -55,6 +56,43 @@ internal class StyleResolver(
             "rtl" -> cs.copy(direction = Direction.RTL)
             "ltr" -> cs.copy(direction = Direction.LTR)
             else -> cs
+        }
+    }
+
+    /**
+     * HTML presentational hints (`table[border]`, `[cellpadding]`,
+     * `[cellspacing]`, `td/tr[valign]`) at the LOWEST cascade weight, so any
+     * real CSS declaration overrides them. Common in pre-CSS-era books.
+     */
+    private fun presentationalHints(
+        el: HtmlNode.Element,
+        ancestors: List<HtmlNode.Element>,
+        offer: (String, String, Long) -> Unit,
+    ) {
+        // Author origin at specificity 0, before every real author rule: hints
+        // beat the UA sheet but lose to any author declaration (CSS 2.1 §6.4.4).
+        val w = 1L shl 56
+        fun borderAll(px: String) {
+            for (side in listOf("top", "right", "bottom", "left")) {
+                offer("border-$side-width", px, w)
+                offer("border-$side-style", "solid", w)
+            }
+        }
+        when (el.tag) {
+            "table" -> {
+                el.attrs["border"]?.toDoubleOrNull()?.takeIf { it > 0 }?.let { borderAll("${it}px") }
+                el.attrs["cellspacing"]?.toDoubleOrNull()?.let { offer("border-spacing", "${it}px", w) }
+            }
+            "td", "th" -> {
+                val table = ancestors.firstOrNull { it.tag == "table" }
+                // table[border] gives every cell a thin border (HTML's rule).
+                table?.attrs?.get("border")?.toDoubleOrNull()?.takeIf { it > 0 }?.let { borderAll("1px") }
+                table?.attrs?.get("cellpadding")?.toDoubleOrNull()?.let { p ->
+                    for (side in listOf("top", "right", "bottom", "left")) offer("padding-$side", "${p}px", w)
+                }
+                (el.attrs["valign"] ?: ancestors.firstOrNull { it.tag == "tr" }?.attrs?.get("valign"))
+                    ?.let { offer("vertical-align", it, w) }
+            }
         }
     }
 
@@ -201,7 +239,10 @@ internal class StyleResolver(
             "vertical-align" -> when (v.trim().lowercase()) {
                 "super" -> b.verticalAlign = CssVAlign.SUPER
                 "sub" -> b.verticalAlign = CssVAlign.SUB
-                "baseline", "middle", "top", "bottom" -> b.verticalAlign = CssVAlign.BASELINE
+                "top" -> b.verticalAlign = CssVAlign.TOP
+                "middle" -> b.verticalAlign = CssVAlign.MIDDLE
+                "bottom" -> b.verticalAlign = CssVAlign.BOTTOM
+                "baseline" -> b.verticalAlign = CssVAlign.BASELINE
             }
             "text-decoration", "text-decoration-line" -> {
                 val s = v.lowercase()
@@ -263,6 +304,11 @@ internal class StyleResolver(
                 "small-caps" -> b.smallCaps = true
                 "normal", "none" -> b.smallCaps = false
             }
+            "border-collapse" -> when (v.trim().lowercase()) {
+                "collapse" -> b.borderCollapse = true
+                "separate" -> b.borderCollapse = false
+            }
+            "border-spacing" -> len(b.fontSizePt)?.let { b.borderSpacingPt = it.coerceAtLeast(0.0) }
         }
     }
 
@@ -437,6 +483,8 @@ internal class StyleResolver(
         var wordSpacingPt = parent.wordSpacingPt // inherited
         var smallCaps = parent.smallCaps // inherited
         var minWidthPt: Double? = null; var minHeightPt: Double? = null; var maxHeightPt: Double? = null
+        var borderCollapse = parent.borderCollapse // inherited
+        var borderSpacingPt = parent.borderSpacingPt // inherited
 
         fun build() = ComputedStyle(
             display, fontSizePt, bold, italic, fontFamily, color, backgroundColor,
@@ -457,6 +505,7 @@ internal class StyleResolver(
             position, leftPt, topPt, rightPt, bottomPt, objectFit, writingMode,
             textTransform, letterSpacingPt, wordSpacingPt, smallCaps,
             minWidthPt, minHeightPt, maxHeightPt,
+            borderCollapse, borderSpacingPt,
         )
     }
 

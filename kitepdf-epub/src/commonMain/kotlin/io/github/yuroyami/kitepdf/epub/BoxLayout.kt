@@ -206,6 +206,8 @@ internal class BoxLayout(
     private fun layoutTable(box: TableBox, contentLeft: Double, availWidth: Double, topY: Double) {
         val s = box.style
         val bL = s.borderLeft.effective; val bR = s.borderRight.effective
+        // border-spacing (or the cellspacing hint) separates cells; collapse zeroes it.
+        val spacing = if (s.borderCollapse) 0.0 else s.borderSpacingPt.coerceAtLeast(0.0)
         val avail = (availWidth - s.marginLeftPt - s.marginRightPt - bL - bR - s.paddingLeftPt - s.paddingRightPt).coerceAtLeast(0.0)
 
         val rowCount = box.rows.size
@@ -217,6 +219,8 @@ internal class BoxLayout(
             box.borderBoxHeight = s.borderTop.effective + s.paddingTopPt + s.paddingBottomPt + s.borderBottom.effective
             return
         }
+        val gutters = spacing * (cols + 1)
+        val availCells = (avail - gutters).coerceAtLeast(0.0)
 
         // Column widths: single-column cells set the base; spanning cells top up their columns.
         val colPref = DoubleArray(cols); val colMin = DoubleArray(cols)
@@ -230,23 +234,43 @@ internal class BoxLayout(
             spread(colPref, cell.gridCol, cell.colspan, p)
             spread(colMin, cell.gridCol, cell.colspan, m)
         }
+        // <col>/<colgroup> widths pin their columns before distribution.
+        for ((c, w) in box.colWidths) if (c in 0 until cols) { colPref[c] = w; colMin[c] = w }
 
         val totalPref = colPref.sum(); val totalMin = colMin.sum()
         val widths = DoubleArray(cols)
-        val tableW: Double
-        val target = s.widthPt
+        val target = s.widthPt?.let { (it - gutters).coerceAtLeast(0.0) }
         when {
-            target != null && target > totalMin -> { distribute(widths, colPref, colMin, target); tableW = target }
-            totalPref <= avail -> { for (c in 0 until cols) widths[c] = colPref[c]; tableW = totalPref }
-            totalMin <= avail -> {
-                val slack = avail - totalMin; val prefSlack = totalPref - totalMin
+            target != null && target > totalMin -> distribute(widths, colPref, colMin, target)
+            totalPref <= availCells -> for (c in 0 until cols) widths[c] = colPref[c]
+            totalMin <= availCells -> {
+                val slack = availCells - totalMin; val prefSlack = totalPref - totalMin
                 for (c in 0 until cols) widths[c] = colMin[c] + (if (prefSlack > 0) slack * (colPref[c] - colMin[c]) / prefSlack else slack / cols)
-                tableW = avail
             }
-            else -> { for (c in 0 until cols) widths[c] = colMin[c]; tableW = totalMin }
+            else -> for (c in 0 until cols) widths[c] = colMin[c]
         }
-        val colOffset = DoubleArray(cols + 1)
-        for (c in 0 until cols) colOffset[c + 1] = colOffset[c] + widths[c]
+        // Pins are hard: re-assert them after distribution and move the delta
+        // onto the unpinned columns (distribution slack must not leak into a
+        // pinned column).
+        val free = (0 until cols).filter { it !in box.colWidths }
+        if (box.colWidths.isNotEmpty()) {
+            var delta = 0.0
+            for ((c, w) in box.colWidths) if (c in 0 until cols) { delta += widths[c] - w; widths[c] = w }
+            if (free.isNotEmpty() && delta != 0.0) {
+                val add = delta / free.size
+                for (c in free) widths[c] = (widths[c] + add).coerceAtLeast(0.0)
+            }
+        }
+        val tableW = widths.sum() + gutters
+        // Column left offsets INCLUDING the leading + interior gutters.
+        val colX = DoubleArray(cols + 1)
+        colX[0] = spacing
+        for (c in 0 until cols) colX[c + 1] = colX[c] + widths[c] + spacing
+        fun spanWidth(col: Int, span: Int): Double {
+            var w = 0.0
+            for (c in col until (col + span).coerceAtMost(cols)) w += widths[c]
+            return w + spacing * (span - 1).coerceAtLeast(0)
+        }
 
         box.borderBoxWidth = bL + s.paddingLeftPt + tableW + s.paddingRightPt + bR
         val leftMargin = if (s.marginLeftAuto && s.marginRightAuto) maxOf(0.0, (availWidth - box.borderBoxWidth) / 2) else s.marginLeftPt
@@ -256,8 +280,7 @@ internal class BoxLayout(
 
         // Pass A: lay cells at their column width to measure heights.
         for (cell in allCells) {
-            val cw = colOffset[cell.gridCol + cell.colspan] - colOffset[cell.gridCol]
-            layoutBlock(cell, tContentLeft + colOffset[cell.gridCol], cw, tContentTop)
+            layoutBlock(cell, tContentLeft + colX[cell.gridCol], spanWidth(cell.gridCol, cell.colspan), tContentTop)
         }
         // Row heights: single-row cells set the base; rowspan cells top up their last spanned row.
         val rowHeight = DoubleArray(rowCount)
@@ -267,21 +290,35 @@ internal class BoxLayout(
             val cur = (cell.gridRow..last).sumOf { rowHeight[it] }
             if (cell.borderBoxHeight > cur) rowHeight[last] += cell.borderBoxHeight - cur
         }
-        val rowTop = DoubleArray(rowCount + 1)
-        for (r in 0 until rowCount) rowTop[r + 1] = rowTop[r] + rowHeight[r]
+        // Row top offsets INCLUDING the leading + interior gutters.
+        val rowY = DoubleArray(rowCount + 1)
+        rowY[0] = spacing
+        for (r in 0 until rowCount) rowY[r + 1] = rowY[r] + rowHeight[r] + spacing
         for ((r, row) in box.rows.withIndex()) {
-            row.x = tContentLeft; row.y = tContentTop + rowTop[r]; row.borderBoxWidth = tableW; row.borderBoxHeight = rowHeight[r]
+            row.x = tContentLeft; row.y = tContentTop + rowY[r]; row.borderBoxWidth = tableW; row.borderBoxHeight = rowHeight[r]
         }
 
-        // Pass B: place cells at their final y and stretch to the height of their spanned rows.
+        // Pass B: place cells at their final y, stretch to their spanned rows,
+        // then apply the cell's vertical-align by shifting its CONTENT down
+        // within the stretched box (backgrounds/borders stay full-cell).
         for (cell in allCells) {
-            val cw = colOffset[cell.gridCol + cell.colspan] - colOffset[cell.gridCol]
-            layoutBlock(cell, tContentLeft + colOffset[cell.gridCol], cw, tContentTop + rowTop[cell.gridRow])
+            layoutBlock(cell, tContentLeft + colX[cell.gridCol], spanWidth(cell.gridCol, cell.colspan), tContentTop + rowY[cell.gridRow])
+            val natural = cell.borderBoxHeight
             val lastRow = (cell.gridRow + cell.rowspan).coerceAtMost(rowCount)
-            cell.borderBoxHeight = rowTop[lastRow] - rowTop[cell.gridRow]
+            cell.borderBoxHeight = (rowY[lastRow] - spacing) - rowY[cell.gridRow]
+            val slack = cell.borderBoxHeight - natural
+            if (slack > 0) {
+                val factor = when (cell.style.verticalAlign) {
+                    CssVAlign.MIDDLE -> 0.5
+                    CssVAlign.BOTTOM -> 1.0
+                    else -> 0.0 // top (and baseline approximated as top)
+                }
+                if (factor > 0) for (c in cell.children) shiftSubtree(c, 0.0, slack * factor)
+            }
         }
 
-        box.borderBoxHeight = s.borderTop.effective + s.paddingTopPt + rowTop[rowCount] + s.paddingBottomPt + s.borderBottom.effective
+        val cellsBottom = rowY[rowCount] // includes the trailing gutter
+        box.borderBoxHeight = s.borderTop.effective + s.paddingTopPt + cellsBottom + s.paddingBottomPt + s.borderBottom.effective
     }
 
     private fun spread(arr: DoubleArray, start: Int, span: Int, total: Double) {
@@ -493,7 +530,8 @@ internal class BoxLayout(
             val shift = when (run.valign) {
                 CssVAlign.SUPER -> fs * 0.33
                 CssVAlign.SUB -> -fs * 0.16
-                CssVAlign.BASELINE -> 0.0
+                // TOP/MIDDLE/BOTTOM are cell alignments, not inline shifts.
+                else -> 0.0
             }
             val spec = fontSpec(run.family, run.bold, run.italic)
             val face = fonts.match(run.fontFamilyName, run.bold, run.italic)
