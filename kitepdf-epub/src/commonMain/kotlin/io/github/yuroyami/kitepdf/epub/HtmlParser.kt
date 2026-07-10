@@ -45,6 +45,7 @@ internal object HtmlParser {
             is XmlToken.Open -> {
                 implicitClose(stack, t.name)
                 val el = HtmlNode.Element(t.name, t.attrs)
+                el.parent = stack.last()
                 stack.last().children.add(el)
                 if (!t.selfClose && t.name !in VOID) stack.add(el)
             }
