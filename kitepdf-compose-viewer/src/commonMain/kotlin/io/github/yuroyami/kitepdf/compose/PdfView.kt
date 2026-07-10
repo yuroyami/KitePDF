@@ -169,6 +169,7 @@ fun PdfView(
     // navigates (or defers to onLinkTap); anything else reaches user onTap.
     val tapScope = rememberCoroutineScope()
     val linkAwareTap: (Offset) -> Unit = { offset ->
+        state.clearSelection() // tap anywhere dismisses an active selection
         if (!handleLinkTap(state, tapScope, onLinkTap, offset)) onTap?.invoke(offset)
     }
 
@@ -326,6 +327,7 @@ private fun ContinuousLayout(
         Modifier
             .fillMaxSize()
             .pdfTransformGestures(state, zoomSpec, scope, onTap)
+            .pdfSelectionGestures(state)
             .graphicsLayer {
                 scaleX = state.zoom
                 scaleY = state.zoom
@@ -413,7 +415,7 @@ private fun androidx.compose.foundation.lazy.LazyItemScope.ContinuousPageItem(
             }
         }
         val slot = Modifier.fillMaxSize()
-            .searchHighlightOverlay(state, page, pageIndex, colors.searchHighlight)
+            .searchHighlightOverlay(state, page, pageIndex, colors)
         when (renderSpec) {
             is PdfRenderSpec.Rasterized -> PdfPageRaster(
                 page, pageIndex, baseSize, settledZoom, renderSpec, colors,
@@ -470,7 +472,7 @@ private fun PagedLayout(
             zoom = if (isCurrent) state.zoom else 1f,
             pan = if (isCurrent) state.panOffset else androidx.compose.ui.geometry.Offset.Zero,
             gestures = if (isCurrent) {
-                Modifier.pdfTransformGestures(state, zoomSpec, scope, onTap)
+                Modifier.pdfTransformGestures(state, zoomSpec, scope, onTap).pdfSelectionGestures(state)
             } else Modifier,
             settledZoom = if (isCurrent) settledZoom else 1f,
             renderSpec = renderSpec,
@@ -530,7 +532,7 @@ private fun SinglePageLayout(
         pageIndex = layout.pageIndex,
         zoom = state.zoom,
         pan = state.panOffset,
-        gestures = Modifier.pdfTransformGestures(state, zoomSpec, scope, onTap),
+        gestures = Modifier.pdfTransformGestures(state, zoomSpec, scope, onTap).pdfSelectionGestures(state),
         settledZoom = settledZoom,
         renderSpec = renderSpec,
         colors = colors,
@@ -591,7 +593,7 @@ private fun PageBox(
         if (fit != IntSize.Zero) {
             val dpSize = with(density) { DpSize(fit.width.toDp(), fit.height.toDp()) }
             val slot = Modifier.size(dpSize)
-                .searchHighlightOverlay(state, page, pageIndex, colors.searchHighlight)
+                .searchHighlightOverlay(state, page, pageIndex, colors)
             when (renderSpec) {
                 is PdfRenderSpec.Rasterized -> PdfPageRaster(
                     page, pageIndex, fit, settledZoom, renderSpec, colors,
@@ -725,25 +727,25 @@ private fun Modifier.searchHighlightOverlay(
     state: PdfViewState,
     page: KitePage,
     pageIndex: Int,
-    color: Color,
+    colors: PdfViewColors,
 ): Modifier = drawWithContent {
     drawContent()
-    val hits = state.searchHighlights
-    if (hits.isEmpty() || page.displayWidth <= 0.0 || page.displayHeight <= 0.0) return@drawWithContent
+    if (page.displayWidth <= 0.0 || page.displayHeight <= 0.0) return@drawWithContent
     val sx = size.width / page.displayWidth.toFloat()
     val sy = size.height / page.displayHeight.toFloat()
-    for (hit in hits) {
+
+    fun quad(q: io.github.yuroyami.kitepdf.Rectangle, color: Color) = drawRect(
+        color = color,
+        topLeft = Offset((q.left * sx).toFloat(), (q.bottom * sy).toFloat()),
+        size = Size(((q.right - q.left) * sx).toFloat(), ((q.top - q.bottom) * sy).toFloat()),
+    )
+
+    for (hit in state.searchHighlights) {
         if (hit.pageIndex != pageIndex) continue
-        for (q in hit.quads) {
-            drawRect(
-                color = color,
-                topLeft = Offset((q.left * sx).toFloat(), (q.bottom * sy).toFloat()),
-                size = Size(
-                    ((q.right - q.left) * sx).toFloat(),
-                    ((q.top - q.bottom) * sy).toFloat(),
-                ),
-            )
-        }
+        for (q in hit.quads) quad(q, colors.searchHighlight)
+    }
+    state.selection?.takeIf { it.pageIndex == pageIndex }?.let { sel ->
+        for (q in sel.quads) quad(q, colors.selectionHighlight)
     }
 }
 

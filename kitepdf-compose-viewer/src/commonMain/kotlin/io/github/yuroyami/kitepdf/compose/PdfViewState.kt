@@ -20,6 +20,7 @@ import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.unit.IntSize
 import io.github.yuroyami.kitepdf.KiteDocument
 import io.github.yuroyami.kitepdf.KiteSearchHit
+import io.github.yuroyami.kitepdf.KiteStructuredText
 import io.github.yuroyami.kitepdf.PdfDocument
 import kotlin.math.abs
 
@@ -162,7 +163,89 @@ class PdfViewState(
         return Offset(offset.x.coerceIn(-maxX, maxX), offset.y.coerceIn(-maxY, maxY))
     }
 
+    /* ── text selection (T-80) ────────────────────────────────────────────── */
+
+    /**
+     * The active text selection, or null. Set by the long-press-drag gesture;
+     * observe via snapshot reads or [onSelectionChange]. The viewer never
+     * touches the clipboard itself — read [TextSelection.text] and copy in
+     * the app (see the sample's selection actions).
+     */
+    var selection: TextSelection? by mutableStateOf(null)
+        private set
+
+    /** Fires on every selection change, including clearing (null). */
+    var onSelectionChange: ((TextSelection?) -> Unit)? = null
+
+    /** The fixed anchor (page, flattened char index) of an active drag. */
+    private var selectionAnchor: Pair<Int, Int>? = null
+
+    fun clearSelection() {
+        selectionAnchor = null
+        if (selection != null) {
+            selection = null
+            onSelectionChange?.invoke(null)
+        }
+    }
+
+    /** Long-press: anchor the selection at the char under [viewportOffset]. */
+    internal fun beginSelection(viewportOffset: Offset) {
+        selectionAnchor = null
+        val (pageIndex, x, y) = hitTestDisplay(viewportOffset) ?: return
+        val text = document.pages.getOrNull(pageIndex)?.textContent() ?: return
+        val idx = text.charIndexAt(x, y) ?: return
+        selectionAnchor = pageIndex to idx
+        applySelection(text, pageIndex, idx, idx)
+    }
+
+    /**
+     * Drag: extend from the anchor to the char under [viewportOffset].
+     * Both ends stay on the anchor page (cross-page selection is out of
+     * scope); points past the page or off any line keep the last state.
+     */
+    internal fun extendSelection(viewportOffset: Offset) {
+        val (page, anchor) = selectionAnchor ?: return
+        val (pageIndex, x, y) = hitTestDisplay(viewportOffset) ?: return
+        if (pageIndex != page) return
+        val text = document.pages.getOrNull(page)?.textContent() ?: return
+        val idx = text.charIndexAt(x, y) ?: return
+        applySelection(text, page, minOf(anchor, idx), maxOf(anchor, idx))
+    }
+
+    private fun applySelection(text: KiteStructuredText, page: Int, start: Int, end: Int) {
+        val sel = TextSelection(
+            pageIndex = page,
+            start = start,
+            end = end,
+            text = text.textRange(start, end),
+            quads = text.quadsFor(start, end),
+        )
+        if (sel.start == selection?.start && sel.end == selection?.end && sel.pageIndex == selection?.pageIndex) return
+        selection = sel
+        onSelectionChange?.invoke(sel)
+    }
+
     /* ── hit testing ──────────────────────────────────────────────────────── */
+
+    /**
+     * Like [hitTest] but stops in DISPLAY space (y-down points, the space
+     * [io.github.yuroyami.kitepdf.KiteStructuredText] geometry lives in).
+     */
+    internal fun hitTestDisplay(viewportOffset: Offset): Triple<Int, Double, Double>? {
+        if (viewportSize == IntSize.Zero || zoom <= 0f) return null
+        val centre = Offset(viewportSize.width / 2f, viewportSize.height / 2f)
+        val content = centre + (viewportOffset - centre - panOffset) / zoom
+        for ((index, rect) in pageGeometry) {
+            if (rect.width <= 0f || rect.height <= 0f || !rect.contains(content)) continue
+            val page = document.pages.getOrNull(index) ?: continue
+            return Triple(
+                index,
+                (content.x - rect.left) / rect.width * page.displayWidth,
+                (content.y - rect.top) / rect.height * page.displayHeight,
+            )
+        }
+        return null
+    }
 
     /**
      * Maps a viewport point (the space gesture callbacks like `onTap` report
@@ -176,20 +259,11 @@ class PdfViewState(
      * space (y-up, rotation unfolded), EPUB pages their document space.
      */
     fun hitTest(viewportOffset: Offset): PageHit? {
-        if (viewportSize == IntSize.Zero || zoom <= 0f) return null
-        val centre = Offset(viewportSize.width / 2f, viewportSize.height / 2f)
-        val content = centre + (viewportOffset - centre - panOffset) / zoom
-        for ((index, rect) in pageGeometry) {
-            if (rect.width <= 0f || rect.height <= 0f || !rect.contains(content)) continue
-            val page = document.pages.getOrNull(index) ?: continue
-            // Slot px -> display points (the slot shows the whole display box).
-            val devX = (content.x - rect.left) / rect.width * page.displayWidth
-            val devY = (content.y - rect.top) / rect.height * page.displayHeight
-            val inv = page.displayToDeviceBase().invert() ?: return null
-            val (x, y) = inv.transformPoint(devX, devY)
-            return PageHit(index, x, y)
-        }
-        return null
+        val (index, devX, devY) = hitTestDisplay(viewportOffset) ?: return null
+        val page = document.pages.getOrNull(index) ?: return null
+        val inv = page.displayToDeviceBase().invert() ?: return null
+        val (x, y) = inv.transformPoint(devX, devY)
+        return PageHit(index, x, y)
     }
 
     /* ── navigation ───────────────────────────────────────────────────────── */
@@ -234,6 +308,21 @@ data class PageHit(
     val pageIndex: Int,
     val x: Double,
     val y: Double,
+)
+
+/**
+ * A finalized or in-progress text selection on one page (cross-page
+ * selection is out of scope). [start]/[end] are INCLUSIVE flattened char
+ * indices into the page's [io.github.yuroyami.kitepdf.KiteStructuredText]
+ * reading order; [text] carries `\n`/`\n\n` line/block separators exactly
+ * like the extraction text; [quads] are display-space, one per line touched.
+ */
+data class TextSelection(
+    val pageIndex: Int,
+    val start: Int,
+    val end: Int,
+    val text: String,
+    val quads: List<io.github.yuroyami.kitepdf.Rectangle>,
 )
 
 /* ── scroll adapters: one state API over LazyList and Pager backends ──────── */

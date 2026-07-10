@@ -5,6 +5,7 @@ import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.calculateCentroid
 import androidx.compose.foundation.gestures.calculatePan
 import androidx.compose.foundation.gestures.calculateZoom
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -39,6 +40,25 @@ import kotlinx.coroutines.launch
  *  - At minimum zoom with one finger down, nothing is consumed: swipes and
  *    flings reach the pager/list untouched.
  */
+/**
+ * Text-selection gesture (T-80): long-press anchors a selection at the char
+ * under the finger, dragging extends it, release keeps it. Runs through
+ * [androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress],
+ * which claims the drag exclusively once the long-press fires, so an active
+ * selection drag never fights pan/scroll; pages without `textContent()` make
+ * the whole gesture a no-op (the anchor never sets).
+ */
+internal fun Modifier.pdfSelectionGestures(state: PdfViewState): Modifier =
+    pointerInput(state) {
+        detectDragGesturesAfterLongPress(
+            onDragStart = { pos -> state.beginSelection(pos) },
+            onDrag = { change, _ ->
+                state.extendSelection(change.position)
+                change.consume()
+            },
+        )
+    }
+
 internal fun Modifier.pdfTransformGestures(
     state: PdfViewState,
     spec: PdfZoomSpec,
