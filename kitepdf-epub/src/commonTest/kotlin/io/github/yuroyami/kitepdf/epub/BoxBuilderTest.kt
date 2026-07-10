@@ -106,7 +106,8 @@ class BoxBuilderTest {
 
     @Test
     fun img_becomes_image_box() {
-        assertEquals("pic.png", build("""<p>x</p><img src="pic.png"/>""").imageBoxes().single().zipPath)
+        // display:block keeps the block ImageBox path; a bare img is inline since T-66.
+        assertEquals("pic.png", build("""<p>x</p><img src="pic.png" style="display:block"/>""").imageBoxes().single().zipPath)
     }
 
     @Test

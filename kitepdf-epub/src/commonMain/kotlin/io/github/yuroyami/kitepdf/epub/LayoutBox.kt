@@ -110,6 +110,20 @@ internal class PlacedRun(
     val href: String? = null,
 )
 
+/**
+ * An inline image placed on a line, parallel to [PlacedRun]: document-space
+ * left [x], its draw size, and the decoded payload (raster [image] or [svg]).
+ * Its bottom sits on the line's baseline (`vertical-align` baseline only).
+ */
+internal class PlacedImage(
+    /** Mutable only for the post-layout `position:relative` shift pass. */
+    var x: Double,
+    val width: Double,
+    val height: Double,
+    val image: ImageXObject?,
+    val svg: SvgImage?,
+)
+
 /** A laid-out line inside a [TextBlockBox]; [yTop] is absolute document-down. */
 internal class PositionedLine(
     val runs: List<PlacedRun>,
@@ -117,6 +131,8 @@ internal class PositionedLine(
     var yTop: Double,
     val height: Double,
     val ascent: Double,
+    /** Inline images on this line (bottom on the baseline). */
+    val images: List<PlacedImage> = emptyList(),
 ) {
     /** Owning box + line index, filled after layout, for the paginator's widows/orphans. */
     var owner: TextBlockBox? = null

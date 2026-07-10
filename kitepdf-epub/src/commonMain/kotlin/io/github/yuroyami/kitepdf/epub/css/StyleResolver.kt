@@ -282,6 +282,13 @@ internal class StyleResolver(
             "break-inside", "page-break-inside" -> b.breakInsideAvoid = v.trim().lowercase() == "avoid"
             "direction" -> when (v.trim().lowercase()) { "rtl" -> b.direction = Direction.RTL; "ltr" -> b.direction = Direction.LTR }
             "hyphens", "-webkit-hyphens", "-epub-hyphens" -> b.hyphensAuto = v.trim().lowercase() == "auto"
+            "float" -> b.cssFloat = when (v.trim().lowercase()) {
+                "left" -> CssFloat.LEFT; "right" -> CssFloat.RIGHT; else -> CssFloat.NONE
+            }
+            "clear" -> b.clear = when (v.trim().lowercase()) {
+                "left" -> CssClear.LEFT; "right" -> CssClear.RIGHT
+                "both" -> CssClear.BOTH; else -> CssClear.NONE
+            }
             "position" -> b.position = when (v.trim().lowercase()) {
                 "absolute" -> CssPosition.ABSOLUTE; "fixed" -> CssPosition.FIXED
                 "relative" -> CssPosition.RELATIVE; else -> CssPosition.STATIC
@@ -495,6 +502,8 @@ internal class StyleResolver(
         var minWidthPt: Double? = null; var minHeightPt: Double? = null; var maxHeightPt: Double? = null
         var borderCollapse = parent.borderCollapse // inherited
         var borderSpacingPt = parent.borderSpacingPt // inherited
+        var cssFloat = CssFloat.NONE // not inherited
+        var clear = CssClear.NONE // not inherited
 
         fun build() = ComputedStyle(
             display, fontSizePt, bold, italic, fontFamily, color, backgroundColor,
@@ -516,6 +525,7 @@ internal class StyleResolver(
             textTransform, letterSpacingPt, wordSpacingPt, smallCaps,
             minWidthPt, minHeightPt, maxHeightPt,
             borderCollapse, borderSpacingPt,
+            cssFloat, clear,
         )
     }
 

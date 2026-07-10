@@ -461,6 +461,58 @@ kinsoku, T-73 reader settings, T-66 inline images + floats, T-47 WOFF2).
 
 ---
 
+## T-66. Inline images and floats
+
+- **Status:** DONE
+- **Commit:** (this commit)
+- **What landed:**
+  - **Inline images:** `processInline` no longer drops `<img>` (the stale
+    "Phase 5" skip is gone), and `buildBlock` routes an img by its
+    computed display: inline (the CSS default; the resolver's initial
+    display is already INLINE) flows on the line, `display:block` or a
+    float keeps the old block `ImageBox` path. An inline image is one
+    unbreakable single-cell token sized from CSS width/height, the HTML
+    attributes (x0.75 px->pt), or the intrinsic pixel size at 0.75pt/px,
+    capped to the content width; it advances the pen, sits bottom on the
+    baseline, and grows the line's ascent to its height. Carried through
+    `PositionedLine.images` as `PlacedImage` (parallel to `PlacedRun`,
+    with the natural draw width kept separate from the possibly
+    justified pen advance) and painted next to the run loop in
+    `EpubPage.renderTo` (raster + SVG). Extraction/search skip images
+    automatically (they live outside the glyph runs).
+  - **Floats:** `float`/`clear` parsed into `ComputedStyle`. A floated
+    child lays out against the left/right content edge at the current
+    flow y and registers a `FloatBand` exclusion; the flow cursor does
+    not advance. `wrap` gained an optional per-line-width callback
+    (`availAt`, null = the exact old single-width path) and
+    `placeLines` shortens and offsets each overlapping line via
+    `floatInsets`; `clear` drops the cursor below matching floats.
+    Commented simplifications per the audit: same-side floats stack
+    downward; floats do not escape their containing block (it grows to
+    contain them, protecting pagination); a float paginates as one
+    unbreakable unit; float-band widths use the authored line-height
+    estimate (ruby/image-grown lines may drift by their growth); a
+    floated block without explicit width takes half the content width
+    as its shrink-to-fit approximation.
+- **Verification:** `InlineImageFloatTest` (6 tests): fixture A (no
+  content loss, image draws between its neighbouring words, bottom
+  exactly on the baseline by draw-ctm equality, ascent grows to the
+  40pt image), fixture B (lines beside a float:left start right of it;
+  lines below return to full width; float:right mirrors), and clear
+  (content starts below the float's 100pt band). Four existing tests
+  that relied on every img being a block were pointed at
+  `display:block` explicitly; the raster blit test sizes its tiny PNG
+  up (a bare img now draws at intrinsic size, the CSS behaviour, not
+  full-width).
+- **Sweep:** 4148 -> 4149 pages (+1), 0 failures, worstMAE 0.2666
+  (unchanged at 4 s.f.). The +1 is a real book reflowing under
+  inline-image layout; the harness prints only aggregates, so the
+  gaining book was not isolated (the per-book p0 MAE list is stable,
+  consistent with mid-chapter images moving line flow, not covers).
+  PDF differential untouched (29 pages, 0.0115).
+
+---
+
 ## Discovered during execution
 
 (nothing yet)

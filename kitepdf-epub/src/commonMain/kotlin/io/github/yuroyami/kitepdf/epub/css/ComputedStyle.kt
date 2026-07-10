@@ -12,6 +12,8 @@ internal enum class Direction { LTR, RTL }
 internal enum class CssPosition { STATIC, RELATIVE, ABSOLUTE, FIXED }
 internal enum class ObjectFit { FILL, CONTAIN, COVER }
 internal enum class WritingMode { HORIZONTAL, VERTICAL_RL, VERTICAL_LR }
+internal enum class CssFloat { NONE, LEFT, RIGHT }
+internal enum class CssClear { NONE, LEFT, RIGHT, BOTH }
 internal enum class TextTransform { NONE, UPPERCASE, LOWERCASE, CAPITALIZE }
 
 /** One border edge. Painted only when [visible] (`border-style` not none/hidden). */
@@ -102,6 +104,10 @@ internal data class ComputedStyle(
     val borderCollapse: Boolean = false,
     /** `border-spacing` / `cellspacing` in points (inherited; 0 under collapse). */
     val borderSpacingPt: Double = 0.0,
+    /** `float` — the box leaves the flow and text lines wrap beside it. Not inherited. */
+    val cssFloat: CssFloat = CssFloat.NONE,
+    /** `clear` — flow resumes below matching floats. Not inherited. */
+    val clear: CssClear = CssClear.NONE,
 ) {
     val mono: Boolean get() = fontFamily == GenericFont.MONO
 

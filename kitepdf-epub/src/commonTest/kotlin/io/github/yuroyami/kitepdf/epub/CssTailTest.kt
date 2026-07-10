@@ -22,7 +22,7 @@ class CssTailTest {
         // A 100x50 SVG (aspect 0.5) forced into an 80x80 box: contain letterboxes it
         // to 80x40, so the paint y-scale is 40/50 = 0.8 (fill would stretch to 80/50 = 1.6).
         val svg = """<svg width="100" height="50"><rect width="100" height="50" fill="red"/></svg>"""
-        val body = """<body><img src="s.svg" style="width:80px;height:80px;object-fit:contain"/></body>"""
+        val body = """<body><img src="s.svg" style="display:block;width:80px;height:80px;object-fit:contain"/></body>"""
         // 80px box = 60pt (CSS px = 0.75pt); contain scale = min(60/100, 60/50) = 0.6 → y-scale 30/50 = 0.6.
         val red = fills(body, listOf("OEBPS/s.svg" to svg.encodeToByteArray())).single { it.color.r > 0.9 && it.color.g < 0.1 }
         assertEquals(0.6, kotlin.math.abs(red.ctm.d), 1e-6, "object-fit:contain preserves aspect (fill would be 1.2)")

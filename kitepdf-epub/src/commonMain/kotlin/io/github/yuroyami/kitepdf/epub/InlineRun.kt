@@ -42,6 +42,15 @@ internal data class InlineRun(
     val wordSpacingPt: Double = 0.0,
     /** `font-variant: small-caps`. */
     val smallCaps: Boolean = false,
+    /**
+     * Inline `<img>`: the resolved zip path of the image this run stands for
+     * ([text] is then a single U+FFFC object-replacement char). Sized at
+     * layout from [imageCssW]/[imageCssH] (CSS width/height, then the HTML
+     * attributes, in points) or the intrinsic size, capped to the line width.
+     */
+    val imageSrc: String? = null,
+    val imageCssW: Double? = null,
+    val imageCssH: Double? = null,
 ) {
     companion object {
         val BLACK = RgbColor(0.0, 0.0, 0.0)
