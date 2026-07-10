@@ -367,7 +367,7 @@ CHANGELOG migration table written, tag prepared but unpushed.
 
 ## 6. MILESTONE LEDGER (tick + date on close)
 
-- [ ] M0 Foundations (T-01..T-05)
+- [x] M0 Foundations (T-01..T-05): closed 2026-07-10, numbers unchanged
 - [ ] M1 Complete Reflow Reader (T-70, T-71, T-73, T-66, T-47)
 - [ ] M2 Interactive Viewer (T-25, T-81, T-30, T-31, T-32, T-82, T-33, T-80, T-34, T-85)
 - [ ] M3 Performance Pass (T-10, T-11, T-13, T-12, T-16, T-17, T-14, T-15)

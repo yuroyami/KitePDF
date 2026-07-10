@@ -255,6 +255,104 @@ Gate reference numbers at session start (2026-07-10, before any task):
 
 ---
 
+## T-01. Decompression bomb guard in FilterChain
+
+- **Status:** DONE (opens milestone M0 of ROAD_TO_PERFECTION.md)
+- **Commit:** `d6f8c0d`
+- **What landed:** `FilterChain.MAX_DECODED_STREAM = 512 shl 20`;
+  `Inflate.decode`/`Zlib.decode` gained `maxOutputBytes` (checked on every
+  builder write, including the bulk window-copy fast path); LZW and
+  RunLength check the same cap in their loops. Beyond the audit's letter,
+  the same cap now guards the other three untrusted inflate sites: PNG
+  IDAT, EPUB zip entries, WOFF tables (all were already lenient).
+- **Leniency fix required:** `PdfPage.contentBytes` called
+  `FilterChain.decode` bare, so an InflateException ESCAPED renderTo.
+  Both the direct-stream case and `streamBytesOf` now runCatching to
+  empty/null: a bomb yields a blank page, and one bad chunk in a
+  /Contents array no longer kills its siblings.
+- **Verification:** `DecompressionBombTest` (4 tests) hand-assembles
+  fixed-Huffman DEFLATE (length-258/distance-1 matches) expanding ~537 MB
+  from ~3.4 MB; asserts the cap exception, the lenient open+render, and
+  the array-sibling survival. Test JVMs got `maxHeapSize = "3g"` in the
+  root build (Gradle's 512m default cannot hold cap + doubling copy).
+  Full gate green; sweep 4148/0 worstMAE 0.267; PDF diff 29 pages 0.0115.
+
+---
+
+## T-02. Content-stream operation budget
+
+- **Status:** DONE
+- **Commit:** `dbd9d76`
+- **What landed:** `ContentStreamParser.parse` stops leniently at
+  `MAX_OPS_PER_STREAM = 5_000_000`; `PageRenderer.dispatch` counts every
+  dispatched op (page + tiling replays + form replays, all three loops
+  funnel through `dispatch`) against `MAX_DISPATCHED_OPS = 20_000_000L`,
+  after which dispatch is a no-op; endPage/finally still run.
+- **Verification:** `OpBudgetTest`: 75 MB stream of cap+1000 `cm` ops
+  parses to exactly 5_000_000 and the page renders to NoopCanvas without
+  throwing. The dispatch budget's replay multiplication is one line of
+  arithmetic; a test tripping 20M real dispatches costs ~a minute of CI
+  and was skipped deliberately (noted here as the honest gap).
+  Full gate green; sweep and differential unchanged.
+
+---
+
+## T-03. fillShading default whole-clip fix
+
+- **Status:** DONE
+- **Commit:** `4fae8f8`
+- **What landed:** the `PdfCanvas.fillShading` interface default painted
+  NOTHING for `clipPath == null` (the `sh` operator's whole-clip case),
+  contradicting its own doc. Now fills a +/-1e6 rectangle under
+  `Matrix.IDENTITY` with the midpoint stop colour, relying on the
+  backend's clip. Shipped backends all override, so corpus is unaffected;
+  the trap for future backends is gone.
+- **Verification:** `FillShadingDefaultTest` (kitepdf-core commonTest,
+  3 tests) with a minimal fake canvas implementing only required members:
+  whole-clip fill recorded under identity, clipped case unchanged,
+  midpoint colour is a mix not an endpoint. Full gate green; numbers
+  unchanged.
+
+---
+
+## T-04. Dead code cleanup in decodeObjectStream
+
+- **Status:** DONE
+- **Commit:** `ebf1c91`
+- **What landed:** removed the never-used `containerRef` + its
+  `error("unreachable")` guard and the objNumTok touch-to-silence-lint
+  line; the header objNum is still type-checked (`!is Token.Integer`
+  throws), just not bound. Behavior identical.
+- **Verification:** `:kitepdf-pdf:jvmTest` green inside the full gate.
+
+---
+
+## T-05. Stale comment sweep in the renderer
+
+- **Status:** DONE
+- **Commit:** `a46df29`
+- **What landed:** every fixed comment was verified stale against code:
+  `loadPatterns` KDoc + PdfPattern class docs (tiling "falls back to
+  background colour"; it fully replays), Filters.kt filter-coverage list
+  (CCITT is implemented + registered; JBIG2 handled at the image layer),
+  ImageXObject header + Kind docs (JBIG2 IS decoded, arithmetic path;
+  Kind.CCITT is never produced), PdfShading header + Unsupported doc
+  (unsupported types paint nothing, since sampleStops returns null, not
+  the background colour), and two stale "v0.0.x" version pins.
+- **Verification:** comments-only change; full gate green.
+
+---
+
+## MILESTONE M0 CLOSED (2026-07-10)
+
+Exit gate: Phase 0 acceptance tests green; corpus numbers unchanged.
+Measured at close: EPUB sweep 23 books / 4148 pages / 0 failures /
+worstMAE 0.267; PDF differential 29 pages / 0 failures / mean MAE 0.0115.
+Next per ROAD_TO_PERFECTION.md: M1 (T-70 hyphenation, T-71 CJK justify +
+kinsoku, T-73 reader settings, T-66 inline images + floats, T-47 WOFF2).
+
+---
+
 ## Discovered during execution
 
 (nothing yet)
