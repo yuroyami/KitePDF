@@ -56,6 +56,15 @@ data class Operation(
 object ContentStreamParser {
 
     /**
+     * Hard cap on operations parsed from one content stream. An adversarial
+     * (or repair-path-mangled) stream with hundreds of millions of operators
+     * would otherwise allocate an unbounded operation list; past the cap we
+     * stop parsing and render what was collected — lenient, like every other
+     * salvage path here.
+     */
+    private const val MAX_OPS_PER_STREAM = 5_000_000
+
+    /**
      * Parse the decoded content-stream bytes into a flat list of operations.
      *
      * Recovery (MuPDF parity, north-star gate #1): a single malformed operand or
@@ -105,6 +114,7 @@ object ContentStreamParser {
                         ops.add(Operation(tok.value, operandStack.toList()))
                         operandStack.clear()
                     }
+                    if (ops.size >= MAX_OPS_PER_STREAM) return ops
                 }
                 Token.EndOfFile -> break
                 else -> {

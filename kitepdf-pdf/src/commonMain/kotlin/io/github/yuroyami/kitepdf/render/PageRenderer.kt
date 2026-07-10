@@ -77,6 +77,15 @@ class PageRenderer(
     /** Form-XObject nesting depth — guards self/transitively-recursive `Do`. */
     private var formDepth = 0
 
+    /**
+     * Operations dispatched for the current page, including every tiling-cell
+     * and form-XObject replay. Once past [MAX_DISPATCHED_OPS], [dispatch]
+     * becomes a no-op so an adversarial stream (millions of ops, or a small
+     * pattern replayed thousands of times) terminates instead of rendering
+     * forever. The page finishes with whatever was painted.
+     */
+    private var dispatchedOps = 0L
+
     /** True while content must not be painted (inside a hidden OC section). */
     private fun ocHidden(): Boolean = ocHiddenDepth > 0
 
@@ -94,6 +103,7 @@ class PageRenderer(
         pendingClip = 0
         pageBaseCtm = deviceCtm
         formDepth = 0
+        dispatchedOps = 0L
         optionalContent = page.internalDocument.optionalContent
         markedContentStack.clear()
         ocHiddenDepth = 0
@@ -630,6 +640,7 @@ class PageRenderer(
         patterns: Map<String, PdfPattern>,
         properties: Map<String, PdfObject>,
     ) {
+        if (++dispatchedOps > MAX_DISPATCHED_OPS) return
         val a = op.operands
         when (op.operator) {
             // ─── State stack ──────────────────────────────────────────────
@@ -1353,5 +1364,12 @@ class PageRenderer(
         const val MAX_TILES = 20_000L
         /** Max Form-XObject nesting depth before bailing (recursion guard). */
         const val MAX_FORM_DEPTH = 15
+        /**
+         * Per-page dispatched-operation budget, counting tiling-pattern and
+         * form-XObject replays. A crafted stream can stay under [MAX_TILES]
+         * and [MAX_FORM_DEPTH] yet still multiply a few million parsed ops
+         * into an effectively unbounded amount of work; this bounds the total.
+         */
+        const val MAX_DISPATCHED_OPS = 20_000_000L
     }
 }
