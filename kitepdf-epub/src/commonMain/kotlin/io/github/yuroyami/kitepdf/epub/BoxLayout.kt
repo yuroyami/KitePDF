@@ -35,8 +35,16 @@ internal class BoxLayout(
     private val loadSvg: (String) -> SvgImage? = { null },
     private val maxImageHeight: Double = Double.MAX_VALUE,
     private val fonts: FontRegistry = FontRegistry.EMPTY,
+    /**
+     * BCP-47 language tag of the document (spine `xml:lang`/`lang`, else OPF
+     * `dc:language`); selects the hyphenation pattern set. Null/unknown
+     * languages hyphenate with the en-US set, preserving the old behaviour.
+     * One hyphenator per document — per-spine language switching is a noted
+     * follow-up, not built.
+     */
+    private val language: String? = null,
 ) {
-    private val hyphenator by lazy { Hyphenator.enUs() }
+    private val hyphenator by lazy { Hyphenator.forLanguage(language) ?: Hyphenator.enUs() }
 
     /** Lay out [root] to fill [contentWidth]; returns total document height. */
     fun layout(root: BlockBox, contentWidth: Double): Double {
