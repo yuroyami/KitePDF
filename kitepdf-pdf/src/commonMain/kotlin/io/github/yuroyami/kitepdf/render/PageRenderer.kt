@@ -5,6 +5,7 @@ import io.github.yuroyami.kitepdf.PdfPage
 import io.github.yuroyami.kitepdf.content.ContentStreamParser
 import io.github.yuroyami.kitepdf.content.Operation
 import io.github.yuroyami.kitepdf.font.PdfFont
+import io.github.yuroyami.kitepdf.font.TextGlyph
 import io.github.yuroyami.kitepdf.parser.IndirectResolver
 import io.github.yuroyami.kitepdf.parser.PdfArray
 import io.github.yuroyami.kitepdf.parser.PdfDictionary
@@ -1225,9 +1226,16 @@ class PageRenderer(
         // clipping is not applied — mode 7 currently paints nothing (correct for
         // "no fill/stroke") but also does not clip. Wire up when a text-clip
         // device path exists.
-        if (!ocHidden()) {
+        // ONE glyph layout per run (T-13): fill, stroke and the Tm advance all
+        // read the same list. Outlines are resolved only when something below
+        // actually consumes them.
+        val hidden = ocHidden()
+        val resolveOutlines = !hidden &&
+            ((doFill && canvas.resolvesGlyphOutlines) || (doStroke && font.hasEmbeddedOutlines))
+        val glyphs = font.layoutBytes(bytes, resolveOutlines)
+
+        if (!hidden) {
             if (doFill) {
-                val glyphs = font.layoutBytes(bytes, canvas.resolvesGlyphOutlines)
                 withSoftMask(state.current) {
                     canvas.drawGlyphs(
                         glyphs, t.fontSize, font.unitsPerEm ?: 1000,
@@ -1238,14 +1246,14 @@ class PageRenderer(
                 }
             }
             if (doStroke) {
-                strokeTextGlyphs(state, font, t, bytes, textToUser)
+                strokeTextGlyphs(state, font, t, glyphs, textToUser)
             }
         }
 
         // Advance Tm by the total width of this run. The advance is in text space,
         // so translate first then apply the text matrix (see moveText) — otherwise a
         // size-in-Tm run advances in output space and the next run on the line overlaps.
-        val totalAdvance = totalAdvance(bytes, t, font)
+        val totalAdvance = totalAdvance(glyphs, t)
         state.mutateText {
             it.copy(textMatrix = it.textMatrix.concat(Matrix.translation(totalAdvance, 0.0)))
         }
@@ -1262,7 +1270,8 @@ class PageRenderer(
         state: GraphicsStack,
         font: PdfFont,
         t: TextState,
-        bytes: ByteArray,
+        /** The run's glyphs, laid out ONCE by [showText] (outlines resolved). */
+        glyphs: List<TextGlyph>,
         textToUser: Matrix,
     ) {
         if (!font.hasEmbeddedOutlines) return
@@ -1274,7 +1283,6 @@ class PageRenderer(
         // Build each glyph outline into USER space (glyph units → unitScale →
         // pen advance → text-to-user), then stroke it with s.ctm so the stroke
         // width scales by the CTM only — the pure user-space width the spec wants.
-        val glyphs = font.layoutBytes(bytes)
         for (glyph in glyphs) {
             val outline = glyph.outline
             if (outline != null && !outline.isEmpty()) {
@@ -1326,18 +1334,19 @@ class PageRenderer(
     }
 
     /**
-     * Sum of per-glyph advances for [bytes], including Tc/Tw/Th adjustments.
-     * Walks via [PdfFont.layoutBytes] so composite Type 0 fonts contribute
-     * one advance per CID code unit (typically 2 bytes), not one per byte.
+     * Sum of per-glyph advances, including Tc/Tw/Th adjustments, from the run's
+     * already-laid-out [glyphs] (composite Type 0 fonts contributed one glyph
+     * per CID code unit there, and [TextGlyph.isWordSpace] carries the
+     * single-byte-32 rule, so this matches `forEachGlyphAdvance` exactly).
      */
-    private fun totalAdvance(bytes: ByteArray, t: TextState, font: PdfFont): Double {
+    private fun totalAdvance(glyphs: List<TextGlyph>, t: TextState): Double {
         var advance = 0.0
         val sizeFactor = t.fontSize / 1000.0
         val hScale = t.horizontalScaling / 100.0
-        font.forEachGlyphAdvance(bytes) { width, isWordSpace ->
-            val perGlyph = width * sizeFactor +
+        for (g in glyphs) {
+            val perGlyph = g.advanceWidth * sizeFactor +
                 t.charSpacing +
-                (if (isWordSpace) t.wordSpacing else 0.0)
+                (if (g.isWordSpace) t.wordSpacing else 0.0)
             advance += perGlyph * hScale
         }
         return advance
