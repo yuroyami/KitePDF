@@ -180,4 +180,6 @@ data class PdfViewColors(
     val pageBackground: Color = Color.White,
     val viewportBackground: Color = Color.Transparent,
     val theme: ReaderTheme? = null,
+    /** Fill for [PdfViewState.searchHighlights] quads, drawn over the page. */
+    val searchHighlight: Color = Color(0x66FFEB3B),
 )

@@ -32,7 +32,9 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
@@ -410,13 +412,15 @@ private fun androidx.compose.foundation.lazy.LazyItemScope.ContinuousPageItem(
                 IntSize((h * aspect).roundToInt().coerceAtLeast(1), h)
             }
         }
+        val slot = Modifier.fillMaxSize()
+            .searchHighlightOverlay(state, page, pageIndex, colors.searchHighlight)
         when (renderSpec) {
             is PdfRenderSpec.Rasterized -> PdfPageRaster(
                 page, pageIndex, baseSize, settledZoom, renderSpec, colors,
-                onPageRendered, pagePlaceholder, Modifier.fillMaxSize(),
+                onPageRendered, pagePlaceholder, slot,
             )
             is PdfRenderSpec.Vectorized -> PdfPageVector(
-                page, renderSpec, colors, Modifier.fillMaxSize(),
+                page, renderSpec, colors, slot,
             )
         }
     }
@@ -473,6 +477,7 @@ private fun PagedLayout(
             colors = colors,
             onPageRendered = onPageRendered,
             pagePlaceholder = pagePlaceholder,
+            state = state,
             geometryInto = if (isCurrent) state else null,
         )
     }
@@ -531,6 +536,7 @@ private fun SinglePageLayout(
         colors = colors,
         onPageRendered = onPageRendered,
         pagePlaceholder = pagePlaceholder,
+        state = state,
         geometryInto = state,
     )
 }
@@ -549,6 +555,8 @@ private fun PageBox(
     colors: PdfViewColors,
     onPageRendered: ((Int, ImageBitmap) -> Unit)?,
     pagePlaceholder: (@Composable (Int) -> Unit)?,
+    /** The state whose search highlights this slot paints. */
+    state: PdfViewState,
     /** The state to report hit-test geometry into (the on-screen slot only). */
     geometryInto: PdfViewState? = null,
 ) {
@@ -582,13 +590,15 @@ private fun PageBox(
         }
         if (fit != IntSize.Zero) {
             val dpSize = with(density) { DpSize(fit.width.toDp(), fit.height.toDp()) }
+            val slot = Modifier.size(dpSize)
+                .searchHighlightOverlay(state, page, pageIndex, colors.searchHighlight)
             when (renderSpec) {
                 is PdfRenderSpec.Rasterized -> PdfPageRaster(
                     page, pageIndex, fit, settledZoom, renderSpec, colors,
-                    onPageRendered, pagePlaceholder, Modifier.size(dpSize),
+                    onPageRendered, pagePlaceholder, slot,
                 )
                 is PdfRenderSpec.Vectorized -> PdfPageVector(
-                    page, renderSpec, colors, Modifier.size(dpSize),
+                    page, renderSpec, colors, slot,
                 )
             }
         }
@@ -701,6 +711,39 @@ private fun PdfPageVector(
         val deviceCtm = PdfMatrix.scaling(scale, scale).concat(page.displayToDeviceBase())
         val base = ComposeCanvas(this, textMeasurer, spec.hairlineWidthPx)
         page.renderTo(theme?.wrap(base) ?: base, deviceCtm)
+    }
+}
+
+/**
+ * Paints [PdfViewState.searchHighlights] quads for [pageIndex] over the slot
+ * content (T-33). Quads are display-space points; the slot shows the whole
+ * display box, so the mapping is one uniform scale — the same math the
+ * vector path and [PdfViewState.hitTest] use, inverted. Display rectangles
+ * keep y-min in `bottom` (y grows downward), so `bottom` is the TOP edge.
+ */
+private fun Modifier.searchHighlightOverlay(
+    state: PdfViewState,
+    page: KitePage,
+    pageIndex: Int,
+    color: Color,
+): Modifier = drawWithContent {
+    drawContent()
+    val hits = state.searchHighlights
+    if (hits.isEmpty() || page.displayWidth <= 0.0 || page.displayHeight <= 0.0) return@drawWithContent
+    val sx = size.width / page.displayWidth.toFloat()
+    val sy = size.height / page.displayHeight.toFloat()
+    for (hit in hits) {
+        if (hit.pageIndex != pageIndex) continue
+        for (q in hit.quads) {
+            drawRect(
+                color = color,
+                topLeft = Offset((q.left * sx).toFloat(), (q.bottom * sy).toFloat()),
+                size = Size(
+                    ((q.right - q.left) * sx).toFloat(),
+                    ((q.top - q.bottom) * sy).toFloat(),
+                ),
+            )
+        }
     }
 }
 

@@ -13,12 +13,15 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
@@ -34,8 +37,12 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import io.github.yuroyami.kitepdf.KiteDocument
+import io.github.yuroyami.kitepdf.KiteOutlineItem
 import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
 
@@ -204,6 +211,80 @@ fun PdfThumbnailStrip(
                     )
                 }
             }
+        }
+    }
+}
+
+/**
+ * A navigation panel over the document's outline (PDF bookmarks / EPUB table
+ * of contents): an indented, clickable column of [KiteOutlineItem]s. Clicking
+ * an entry with a resolved page scrolls there (and calls [onNavigate]);
+ * entries without one (unresolvable destinations, grouping labels) render
+ * dimmed and unclickable. Plain foundation styling, like every widget here.
+ *
+ * @param outline defaults to the document's own [KiteDocument.outline] (T-25);
+ *   pass a subtree to scope the panel.
+ * @param onNavigate observe navigation (e.g. to close a drawer). The scroll
+ *   itself already happened.
+ */
+@Composable
+fun PdfOutlinePanel(
+    state: PdfViewState,
+    modifier: Modifier = Modifier,
+    outline: List<KiteOutlineItem> = state.document.outline,
+    contentPadding: PaddingValues = PaddingValues(8.dp),
+    textStyle: TextStyle = TextStyle(fontSize = 14.sp),
+    textColor: Color = Color(0xFF202124),
+    disabledTextColor: Color = Color(0xFF9AA0A6),
+    currentPageColor: Color = Color(0xFF4A90D9),
+    indent: Dp = 16.dp,
+    onNavigate: ((KiteOutlineItem) -> Unit)? = null,
+) {
+    val scope = rememberCoroutineScope()
+    val flat = remember(outline) {
+        buildList {
+            fun walk(items: List<KiteOutlineItem>, depth: Int) {
+                for (item in items) {
+                    add(item to depth)
+                    walk(item.children, depth + 1)
+                }
+            }
+            walk(outline, 0)
+        }
+    }
+    LazyColumn(modifier = modifier, contentPadding = contentPadding) {
+        items(flat.size) { i ->
+            val (item, depth) = flat[i]
+            val page = item.pageIndex
+            val isCurrent = page != null && page == state.currentPage
+            BasicText(
+                text = item.title,
+                style = textStyle.copy(
+                    color = when {
+                        page == null -> disabledTextColor
+                        isCurrent -> currentPageColor
+                        else -> textColor
+                    },
+                ),
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .then(
+                        if (page != null) {
+                            Modifier.clickable {
+                                scope.launch { state.animateScrollToPage(page) }
+                                onNavigate?.invoke(item)
+                            }
+                        } else Modifier,
+                    )
+                    .padding(
+                        start = indent * depth + 4.dp,
+                        top = 6.dp,
+                        bottom = 6.dp,
+                        end = 4.dp,
+                    ),
+            )
         }
     }
 }
