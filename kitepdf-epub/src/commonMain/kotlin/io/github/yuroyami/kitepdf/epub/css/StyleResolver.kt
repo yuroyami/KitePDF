@@ -35,7 +35,11 @@ internal class StyleResolver(
 
         rules.forEachIndexed { order, rule ->
             var spec = -1
-            for (sel in rule.selectors) if (sel.matches(el, ancestors)) spec = maxOf(spec, sel.specificity)
+            // ::before/::after selectors style generated content ([computePseudo]),
+            // never the element itself.
+            for (sel in rule.selectors) {
+                if (sel.pseudoElement == null && sel.matches(el, ancestors)) spec = maxOf(spec, sel.specificity)
+            }
             if (spec < 0) return@forEachIndexed
             for (d in rule.declarations) offer(d.property, d.value, weight(rule.origin, d.important, spec, order))
         }
@@ -51,6 +55,108 @@ internal class StyleResolver(
             else -> cs
         }
     }
+
+    /**
+     * Generated content for [el]'s `::before`/`::after` ([side]), or null when
+     * no rule with a usable `content:` applies. The pseudo's style inherits
+     * from its originating element ([elementStyle]), per spec. A `counter()`,
+     * `counters()` or `url()` content value makes the rule inert (we cannot
+     * synthesize those), as do `none`/`normal`.
+     */
+    fun computePseudo(
+        el: HtmlNode.Element,
+        ancestors: List<HtmlNode.Element>,
+        elementStyle: ComputedStyle,
+        side: PseudoSide,
+    ): PseudoContent? {
+        val bestWeight = HashMap<String, Long>()
+        val value = HashMap<String, String>()
+        fun offer(prop: String, v: String, weight: Long) {
+            val prev = bestWeight[prop]
+            if (prev == null || weight >= prev) { bestWeight[prop] = weight; value[prop] = v }
+        }
+        rules.forEachIndexed { order, rule ->
+            var spec = -1
+            for (sel in rule.selectors) {
+                if (sel.pseudoElement == side && sel.matches(el, ancestors)) spec = maxOf(spec, sel.specificity)
+            }
+            if (spec < 0) return@forEachIndexed
+            for (d in rule.declarations) offer(d.property, d.value, weight(rule.origin, d.important, spec, order))
+        }
+        val raw = value.remove("content") ?: return null
+        val content = parseContentValue(raw, el)?.takeIf { it.isNotEmpty() } ?: return null
+        return PseudoContent(build(elementStyle, value), content)
+    }
+
+    /**
+     * `content:` value → text: quoted strings (CSS escapes decoded) and
+     * `attr(name)` concatenate; `none`/`normal` and anything with
+     * `counter()`/`counters()`/`url()` return null (rule inert).
+     */
+    private fun parseContentValue(v: String, el: HtmlNode.Element): String? {
+        val s = v.trim()
+        val lower = s.lowercase()
+        if (lower == "none" || lower == "normal") return null
+        if ("counter(" in lower || "counters(" in lower || "url(" in lower) return null
+        val sb = StringBuilder()
+        var any = false
+        var i = 0
+        while (i < s.length) {
+            val c = s[i]
+            when {
+                c.isWhitespace() -> i++
+                c == '"' || c == '\'' -> {
+                    var j = i + 1
+                    while (j < s.length && s[j] != c) { if (s[j] == '\\' && j + 1 < s.length) j++; j++ }
+                    if (j >= s.length) return null // unterminated string
+                    sb.append(cssUnescape(s.substring(i + 1, j))); any = true
+                    i = j + 1
+                }
+                lower.startsWith("attr(", i) -> {
+                    val close = s.indexOf(')', i)
+                    if (close < 0) return null
+                    val name = s.substring(i + 5, close).trim().trim('"', '\'').lowercase()
+                    el.attrs[name]?.let(sb::append)
+                    any = true
+                    i = close + 1
+                }
+                else -> return null // unknown component: whole value inert
+            }
+        }
+        return if (any) sb.toString() else null
+    }
+
+    /** Decode CSS string escapes: `\HHHHHH` (optional trailing space) and `\c` literals. */
+    private fun cssUnescape(s: String): String {
+        if ('\\' !in s) return s
+        val sb = StringBuilder(s.length)
+        var i = 0
+        while (i < s.length) {
+            val c = s[i]
+            if (c != '\\' || i + 1 >= s.length) { sb.append(c); i++; continue }
+            val d = s[i + 1]
+            if (isHex(d)) {
+                var j = i + 1
+                val hex = StringBuilder()
+                while (j < s.length && hex.length < 6 && isHex(s[j])) { hex.append(s[j]); j++ }
+                if (j < s.length && s[j] == ' ') j++ // one terminating space is eaten
+                val cp = hex.toString().toIntOrNull(16)
+                if (cp != null && cp in 1..0x10FFFF) {
+                    if (cp < 0x10000) sb.append(cp.toChar())
+                    else {
+                        val v = cp - 0x10000
+                        sb.append(((v shr 10) + 0xD800).toChar()).append(((v and 0x3FF) + 0xDC00).toChar())
+                    }
+                }
+                i = j
+            } else {
+                sb.append(d); i += 2
+            }
+        }
+        return sb.toString()
+    }
+
+    private fun isHex(c: Char): Boolean = c in '0'..'9' || c in 'a'..'f' || c in 'A'..'F'
 
     private fun build(parent: ComputedStyle, values: Map<String, String>): ComputedStyle {
         val b = Builder(parent)
@@ -319,3 +425,6 @@ internal class StyleResolver(
         const val INLINE_SPEC = 0xFFFFFF
     }
 }
+
+/** A resolved `::before`/`::after`: its computed style plus the text to inject. */
+internal class PseudoContent(val style: ComputedStyle, val text: String)

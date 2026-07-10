@@ -7,6 +7,9 @@ import io.github.yuroyami.kitepdf.epub.previousElementSibling
 /** How a compound selector relates to the one on its left. */
 internal enum class Combinator { DESCENDANT, CHILD, NEXT_SIBLING, SUBSEQUENT_SIBLING }
 
+/** The generated-content pseudo-elements we synthesize (`::before` / `::after`). */
+internal enum class PseudoSide { BEFORE, AFTER }
+
 /** An attribute condition: `[a]`, `[a=v]`, `[a~=v]`, `[a|=v]`, `[a^=v]`, `[a$=v]`, `[a*=v]`. */
 internal class AttrCond(val name: String, val op: String?, val value: String?) {
     fun matches(el: HtmlNode.Element): Boolean {
@@ -100,7 +103,10 @@ internal class SimpleSelector(
     val classes: List<String>,
     val attrs: List<AttrCond>,
     val pseudos: List<PseudoClass>,
-    val pseudoElement: Boolean,
+    /** `::before`/`::after` on this compound, or null. */
+    val pseudoElement: PseudoSide? = null,
+    /** Any OTHER pseudo-element (`::first-line`, ...): the selector is dropped. */
+    val unsupportedPseudoElement: Boolean = false,
 ) {
     /** Specificity contribution of the pseudo-classes (the `b` bucket). */
     val pseudoClassCount: Int get() = pseudos.size
@@ -121,21 +127,25 @@ internal class SimpleSelector(
  * A complex selector: compound [parts] joined left-to-right by [combinators]
  * (size = parts-1). The rightmost part is the subject. Matching is right-to-left
  * through the DOM's parent/sibling pointers ([HtmlNode.Element.parent]), so
- * `>`, `+` and `~` all resolve against the real tree. Pseudo-elements
- * (`::before`, `:after`) make [parse] return null -- we can't synthesize their
- * content, so those rules simply don't apply.
+ * `>`, `+` and `~` all resolve against the real tree. A `::before`/`::after`
+ * on the subject survives as [pseudoElement] (the cascade routes such rules to
+ * generated content); any other pseudo-element makes [parse] return null.
  */
 internal class Selector(
     val parts: List<SimpleSelector>,
     val combinators: List<Combinator>,
 ) {
-    /** CSS specificity (ids, classes+attrs+pseudo-classes, type names). */
+    /** `::before`/`::after` on the subject compound, or null for a normal selector. */
+    val pseudoElement: PseudoSide? get() = parts.last().pseudoElement
+
+    /** CSS specificity (ids, classes+attrs+pseudo-classes, types+pseudo-elements). */
     val specificity: Int by lazy {
         var a = 0; var b = 0; var c = 0
         for (p in parts) {
             if (p.id != null) a++
             b += p.classes.size + p.attrs.size + p.pseudoClassCount
             if (p.tag != null) c++
+            if (p.pseudoElement != null) c++ // pseudo-elements count as types
         }
         (a shl 16) or (b shl 8) or c.coerceAtMost(255)
     }
@@ -189,7 +199,7 @@ internal class Selector(
                 val t = sb.toString().trim(); sb.clear()
                 if (t.isEmpty()) return true
                 val simple = parseSimple(t)
-                if (simple.pseudoElement) return false // whole selector unusable
+                if (simple.unsupportedPseudoElement) return false // whole selector unusable
                 if (parts.isNotEmpty()) combs.add(pending ?: Combinator.DESCENDANT)
                 parts.add(simple); pending = null
                 return true
@@ -222,6 +232,8 @@ internal class Selector(
             if (parts.isEmpty()) return null
             // A dangling explicit combinator (`p >`) is invalid CSS: drop the selector.
             if (pending != null) return null
+            // ::before/::after may only sit on the subject (the last compound).
+            for (k in 0 until parts.size - 1) if (parts[k].pseudoElement != null) return null
             return Selector(parts, combs)
         }
 
@@ -231,7 +243,8 @@ internal class Selector(
             val classes = ArrayList<String>()
             val attrs = ArrayList<AttrCond>()
             val pseudos = ArrayList<PseudoClass>()
-            var pseudoElement = false
+            var pseudoElement: PseudoSide? = null
+            var unsupportedPseudo = false
             var i = 0
             val n = t.length
 
@@ -256,7 +269,8 @@ internal class Selector(
                         i = if (close < 0) n else close + 1
                     }
                     ':' -> {
-                        if (i + 1 < n && t[i + 1] == ':') { pseudoElement = true; i += 2 } else i++
+                        val doubleColon = i + 1 < n && t[i + 1] == ':'
+                        if (doubleColon) i += 2 else i++
                         val j = readIdent(i)
                         val name = t.substring(i, j).lowercase()
                         i = j
@@ -274,16 +288,24 @@ internal class Selector(
                             arg = t.substring(i + 1, close.coerceAtMost(n))
                             i = if (k < n) k + 1 else n
                         }
-                        if (name == "before" || name == "after" || name == "first-line" || name == "first-letter") {
-                            pseudoElement = true
-                        } else {
-                            pseudos.add(parsePseudoClass(name, arg))
+                        when {
+                            name == "before" || name == "after" -> {
+                                val side = if (name == "before") PseudoSide.BEFORE else PseudoSide.AFTER
+                                // Two different pseudo-elements on one compound: invalid.
+                                if (pseudoElement != null && pseudoElement != side) unsupportedPseudo = true
+                                pseudoElement = side
+                            }
+                            // Every other pseudo-ELEMENT (::first-line, ::marker, ...)
+                            // drops the selector; single-colon unknown names remain
+                            // pseudo-classes (which never match).
+                            name == "first-line" || name == "first-letter" || doubleColon -> unsupportedPseudo = true
+                            else -> pseudos.add(parsePseudoClass(name, arg))
                         }
                     }
                     else -> i++ // tolerate stray chars
                 }
             }
-            return SimpleSelector(tag, id, classes, attrs, pseudos, pseudoElement)
+            return SimpleSelector(tag, id, classes, attrs, pseudos, pseudoElement, unsupportedPseudo)
         }
 
         private fun parsePseudoClass(name: String, arg: String?): PseudoClass = when (name) {
@@ -299,7 +321,9 @@ internal class Selector(
             "not" -> {
                 val inner = arg?.trim()?.takeIf { it.isNotEmpty() }?.let { parseSimple(it) }
                 // One compound argument only: an inner pseudo-anything is out of scope.
-                if (inner == null || inner.pseudoElement || inner.pseudos.isNotEmpty()) PseudoClass.Unknown
+                if (inner == null || inner.pseudoElement != null || inner.unsupportedPseudoElement ||
+                    inner.pseudos.isNotEmpty()
+                ) PseudoClass.Unknown
                 else PseudoClass.Not(inner)
             }
             // Interaction states never hold in a paginated renderer.

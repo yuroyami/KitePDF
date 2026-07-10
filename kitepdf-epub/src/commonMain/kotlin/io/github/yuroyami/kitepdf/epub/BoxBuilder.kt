@@ -3,6 +3,8 @@ package io.github.yuroyami.kitepdf.epub
 import io.github.yuroyami.kitepdf.epub.css.ComputedStyle
 import io.github.yuroyami.kitepdf.epub.css.Display
 import io.github.yuroyami.kitepdf.epub.css.ListType
+import io.github.yuroyami.kitepdf.epub.css.PseudoContent
+import io.github.yuroyami.kitepdf.epub.css.PseudoSide
 import io.github.yuroyami.kitepdf.epub.css.StyleResolver
 import io.github.yuroyami.kitepdf.epub.css.WhiteSpaceMode
 import io.github.yuroyami.kitepdf.render.RgbColor
@@ -49,6 +51,17 @@ internal class BoxBuilder(
             }
         }
 
+        // ::before generated content precedes the element's own children. A
+        // block-display pseudo becomes a synthetic block child; anything else
+        // flows inline.
+        fun injectPseudo(side: PseudoSide) {
+            if (isRoot) return
+            val pc = resolver.computePseudo(el, ancestors, style, side) ?: return
+            if (pc.style.display == Display.BLOCK) { flush(); children.add(pseudoBlock(pc)) }
+            else inl.appendText(pc.text, pc.style)
+        }
+        injectPseudo(PseudoSide.BEFORE)
+
         for (child in el.children) when (child) {
             is HtmlNode.Text -> inl.appendText(child.text, style)
             is HtmlNode.Element -> {
@@ -80,12 +93,24 @@ internal class BoxBuilder(
                 }
             }
         }
+        injectPseudo(PseudoSide.AFTER)
         flush()
         return BlockBox(style, children).also { box ->
             el.attrs["id"]?.let(box.anchors::add)
             if (el.tag == "a") el.attrs["name"]?.let(box.anchors::add) // legacy anchor
             box.anchors += inlineAnchors
         }
+    }
+
+    /** A synthetic block child holding a `display:block` pseudo's content. */
+    private fun pseudoBlock(pc: PseudoContent): BlockBox {
+        val run = InlineRun(
+            text = pc.text, fontSizePt = pc.style.fontSizePt,
+            bold = pc.style.bold, italic = pc.style.italic, family = pc.style.fontFamily,
+            color = pc.style.color, valign = pc.style.verticalAlign, underline = pc.style.underline,
+            fontFamilyName = pc.style.fontFamilyName,
+        )
+        return BlockBox(pc.style, listOf(TextBlockBox(pc.style, listOf(run))))
     }
 
     /** Build a `display:table` element into a [TableBox], flattening row groups. */
@@ -155,6 +180,9 @@ internal class BoxBuilder(
         val link = if (el.tag == "a") el.attrs["href"]?.takeIf { it.isNotBlank() }?.let(::resolveLink) else null
         if (link != null) inl.beginLink(link)
         try {
+            // Inline generated content flows with the element's own runs (a
+            // block-display pseudo inside an inline element is treated inline).
+            resolver.computePseudo(el, ancestors, style, PseudoSide.BEFORE)?.let { inl.appendText(it.text, it.style) }
             val childAncestors = listOf(el) + ancestors
             for (child in el.children) when (child) {
                 is HtmlNode.Text -> inl.appendText(child.text, style)
@@ -165,6 +193,7 @@ internal class BoxBuilder(
                     if (cs.display != Display.NONE) processInline(child, cs, childAncestors, inl, anchorSink)
                 }
             }
+            resolver.computePseudo(el, ancestors, style, PseudoSide.AFTER)?.let { inl.appendText(it.text, it.style) }
         } finally {
             if (link != null) inl.endLink()
         }
