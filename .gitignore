@@ -23,3 +23,9 @@ corpus/epub/*
 !corpus/pdf/.gitkeep
 !corpus/epub/.gitkeep
 readium-kt-toolkit/
+
+# Claude-session tracking docs (audit ledger, roadmap) — local only, never committed.
+FABLE5_AUDIT.md
+FABLE5_AUDIT_PROGRESS.md
+ROAD_TO_PERFECTION.md
+kitepdf-epub/EPUB_ROAD_TO_PERFECTION.md
