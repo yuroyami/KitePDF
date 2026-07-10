@@ -653,13 +653,13 @@ private fun PdfPageRaster(
     } else 1f
 
     val bitmap by produceState<ImageBitmap?>(null, page, raster, colors.pageBackground, colors.theme, hairline) {
-        // Post-frame, main thread (Compose text measurement isn't thread-safe on
-        // every platform). The jitter on a page turn is avoided not by moving
-        // this off-thread but by prefetching neighbours (PdfLayout.Paged
-        // offscreenPages) so the incoming page is already cached before the swipe
-        // — this raster then only runs while idle, never mid-gesture.
+        // Off the main thread (T-14): a 10-30ms page raster on the UI thread
+        // janks scroll and pinch. rasterizeOffMain serializes pages on the
+        // rasterizer's mutex (TextMeasurer's cache is not thread-safe) but the
+        // main thread stays free; neighbour prefetch (PdfLayout.Paged
+        // offscreenPages) still hides the latency across page turns.
         value = if (raster == IntSize.Zero) null
-        else rasterizer.rasterize(page, raster.width, raster.height, colors.pageBackground, hairline, colors.theme)
+        else rasterizer.rasterizeOffMain(page, raster.width, raster.height, colors.pageBackground, hairline, colors.theme)
     }
 
     // Fade the bitmap in once it lands instead of popping (and keep the previous

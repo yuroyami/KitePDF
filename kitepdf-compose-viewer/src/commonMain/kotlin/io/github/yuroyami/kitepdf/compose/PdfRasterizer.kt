@@ -18,6 +18,7 @@ import androidx.compose.ui.unit.LayoutDirection
 import io.github.yuroyami.kitepdf.KitePage
 import io.github.yuroyami.kitepdf.render.Matrix as PdfMatrix
 import io.github.yuroyami.kitepdf.render.ReaderTheme
+import kotlinx.coroutines.sync.withLock
 
 /**
  * Imperative page → [ImageBitmap] pipeline. This is the raster engine behind
@@ -28,9 +29,10 @@ import io.github.yuroyami.kitepdf.render.ReaderTheme
  * Obtain one inside composition with [rememberPdfRasterizer], or construct it
  * directly off-composition when you already hold a [TextMeasurer].
  *
- * Rasterization runs synchronously on the calling thread. Text measurement is
- * not thread-safe on every platform, so call it from the main thread; [PdfView]
- * does so post-frame to keep the cost out of the composition pass.
+ * [rasterize] runs synchronously on the calling thread; [rasterizeOffMain]
+ * moves the work to [kitepdfRasterDispatcher] (a background pool on
+ * JVM/Android/Apple, Main on JS/Wasm) so a complex page never janks scrolling
+ * or pinch — that is what [PdfView] uses (T-14).
  */
 @Stable
 class PdfRasterizer(
@@ -38,6 +40,34 @@ class PdfRasterizer(
     private val layoutDirection: LayoutDirection,
     private val textMeasurer: TextMeasurer,
 ) {
+
+    /**
+     * [TextMeasurer]'s internal cache is not documented thread-safe, and the
+     * system-font fallback path is its only consumer here. Whether a page
+     * will hit that path isn't knowable cheaply up front, so background
+     * rasters serialize on this mutex: parallelism between pages is lost,
+     * but the MAIN thread stays free, which is the point.
+     */
+    private val renderMutex = kotlinx.coroutines.sync.Mutex()
+
+    /**
+     * [rasterize], off the main thread where the platform allows. One page
+     * runs to completion once started (the synchronous renderer has no
+     * cancellation points; T-02's operation budget bounds the worst case) —
+     * cancellation takes effect between pages.
+     */
+    suspend fun rasterizeOffMain(
+        page: KitePage,
+        widthPx: Int,
+        heightPx: Int,
+        background: Color = Color.White,
+        hairlineWidthPx: Float = 1f,
+        theme: ReaderTheme? = null,
+    ): ImageBitmap = kotlinx.coroutines.withContext(kitepdfRasterDispatcher()) {
+        renderMutex.withLock {
+            rasterize(page, widthPx, heightPx, background, hairlineWidthPx, theme)
+        }
+    }
 
     /**
      * Renders [page] into a fresh [widthPx]×[heightPx] bitmap.
