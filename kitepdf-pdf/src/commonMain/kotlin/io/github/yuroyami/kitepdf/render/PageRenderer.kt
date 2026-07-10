@@ -219,10 +219,11 @@ class PageRenderer(
     }
 
     /**
-     * Named patterns declared in /Resources /Pattern. PatternType 2
-     * (shading pattern) is the case KitePDF renders today; PatternType 1
-     * (tiling pattern) parses to [PdfPattern.Tiling] but the renderer
-     * still falls back to its background colour.
+     * Named patterns declared in /Resources /Pattern. PatternType 1 (tiling)
+     * parses to [PdfPattern.Tiling] and [renderTilingPattern] replays its cell
+     * content stream across the fill region (bounded by [MAX_TILES]);
+     * PatternType 2 (shading) parses to [PdfPattern.Shading] and paints
+     * through [PdfCanvas.fillShading].
      */
     private fun loadPatterns(
         resources: PdfDictionary?,

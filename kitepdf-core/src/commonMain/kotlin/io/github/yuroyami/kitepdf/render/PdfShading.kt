@@ -17,14 +17,14 @@ import io.github.yuroyami.kitepdf.parser.PdfStream
  * transitions used as fills via the `sh` content-stream operator or via a
  * shading pattern referenced by `SCN`/`scn`.
  *
- * KitePDF v0.0.x renders:
+ * KitePDF renders:
  *   - **Type 2** axial — a linear gradient between two points
  *   - **Type 3** radial — a radial gradient between two circles
  *
  * Types 1 (function-based), 4 (free-form Gouraud), 5 (lattice-form Gouraud),
- * 6 (Coons patch), and 7 (tensor-product patch) parse to [Unsupported] and
- * render as the background color (or transparent if none); they're called
- * out in the README as future work.
+ * 6 (Coons patch), and 7 (tensor-product patch) parse to [Unsupported];
+ * [sampleStops] returns null for them, so backends paint nothing (transparent).
+ * Rendering them is roadmap work (audit T-40).
  */
 sealed class PdfShading {
 
@@ -100,7 +100,7 @@ sealed class PdfShading {
             domain.contentHashCode()
     }
 
-    /** Shading type we don't render; falls back to [background] (or transparent). */
+    /** Shading type we don't render; [sampleStops] returns null, so nothing paints. */
     data class Unsupported(
         val type: Int,
         override val colorSpace: ColorSpace,

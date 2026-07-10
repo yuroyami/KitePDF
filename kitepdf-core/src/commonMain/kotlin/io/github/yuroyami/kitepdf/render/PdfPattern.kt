@@ -12,10 +12,12 @@ import io.github.yuroyami.kitepdf.parser.PdfStream
 /**
  * Parsed `/Pattern` resource entry (ISO 32000-1 §8.7).
  *
- *   - [Tiling] (`PatternType = 1`) — content-stream-based tiling. Parsed
- *     for completeness; the renderer falls back to the pattern's [Tiling.baseColor].
- *   - [Shading] (`PatternType = 2`) — wraps a [PdfShading] under a matrix.
- *     This is the case the renderer paints as a real gradient.
+ *   - [Tiling] (`PatternType = 1`) — content-stream-based tiling. The PDF
+ *     renderer replays [Tiling.contentBytes] across the fill region (with a
+ *     tile-count bound); [Tiling.baseColor] remains as the flat fallback for
+ *     consumers that don't replay cells.
+ *   - [Shading] (`PatternType = 2`) — wraps a [PdfShading] under a matrix,
+ *     painted through [PdfCanvas.fillShading].
  */
 sealed class PdfPattern {
 
@@ -33,9 +35,10 @@ sealed class PdfPattern {
 
     /**
      * Tiling pattern (`PatternType = 1`). The content stream lives in
-     * [contentBytes]; full rendering requires laying out tiles across the
-     * filled region. We don't render that yet — callers get the dict
-     * description and an opaque grey fallback in [baseColor].
+     * [contentBytes]; the PDF renderer replays it once per tile across the
+     * filled region. [baseColor] is the flat approximation for consumers
+     * that don't replay cells (and the emergency fallback for degenerate
+     * cell geometry).
      */
     data class Tiling(
         override val matrix: Matrix,
