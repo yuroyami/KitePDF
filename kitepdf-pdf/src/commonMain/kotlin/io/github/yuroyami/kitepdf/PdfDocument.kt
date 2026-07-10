@@ -341,7 +341,6 @@ class PdfDocument private constructor(
      * concatenated. We parse the header and slice each object out.
      */
     private fun decodeObjectStream(objStreamRef: Long): Map<Int, PdfObject> {
-        val containerRef = PdfReference(objStreamRef, 0)
         // Look up directly via xref (avoid recursion through resolve cache).
         val entry = xref[objStreamRef] as? XrefEntry.InUse
             ?: throw PdfFormatException("ObjStm $objStreamRef not in xref as in-use")
@@ -357,18 +356,18 @@ class PdfDocument private constructor(
 
         val decoded = FilterChain.decode(stream)
 
-        // Parse the header (N pairs of integers) from the decoded bytes.
+        // Parse the header (N pairs of integers) from the decoded bytes. The
+        // pair's object number is validated but not stored — the member's
+        // index inside the stream is the lookup key, per XrefEntry.Compressed.
         val headerParser = Lexer(ByteReader(decoded))
         val offsets = IntArray(n)
         for (i in 0 until n) {
-            val objNumTok = headerParser.nextToken() as? Token.Integer
-                ?: throw PdfFormatException("ObjStm header: expected obj num")
+            if (headerParser.nextToken() !is Token.Integer) {
+                throw PdfFormatException("ObjStm header: expected obj num")
+            }
             val offsetTok = headerParser.nextToken() as? Token.Integer
                 ?: throw PdfFormatException("ObjStm header: expected obj offset")
-            // We don't strictly need objNumTok here — index inside stream IS our key.
             offsets[i] = offsetTok.value.toInt()
-            // touch to silence unused-warning lint (keeps shape for future use)
-            objNumTok.value
         }
 
         // For each object, parse from (first + offsets[i]). One ByteReader over
@@ -379,8 +378,6 @@ class PdfDocument private constructor(
             objReader.seek(first + offsets[i])
             out[i] = Parser(Lexer(objReader)).readObject()
         }
-        // mention containerRef so tooling sees it's intentional context
-        if (containerRef.objectNumber < 0) error("unreachable")
         return out
     }
 
