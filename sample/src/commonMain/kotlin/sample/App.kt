@@ -135,6 +135,7 @@ private fun DocumentDisplay(doc: PdfDocument, modifier: Modifier = Modifier) {
                 )
             }
         }
+        PdfSelectionActions(state)
 
         // Side-by-side: the viewer | extracted text
         Row(
@@ -223,4 +224,25 @@ private enum class Demo(val label: String, val bytes: ByteArray) {
     IMAGE("Image XObject", DemoPdf.imagePlaceholder),
     TWO_PAGE("Two pages", DemoPdf.twoPages),
     HELLO("Hello world", DemoPdf.helloWorld),
+}
+
+/**
+ * T-80's app-side half: the viewer exposes [PdfViewState.selection] (made by
+ * long-press + drag on any page) but never touches the clipboard itself —
+ * copying is the app's decision. Long-press text in the viewer, then hit Copy.
+ */
+@Composable
+private fun PdfSelectionActions(state: io.github.yuroyami.kitepdf.compose.PdfViewState) {
+    val selection = state.selection ?: return
+    val clipboard = androidx.compose.ui.platform.LocalClipboardManager.current
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        AssistChip(
+            onClick = {
+                clipboard.setText(androidx.compose.ui.text.AnnotatedString(selection.text))
+                state.clearSelection()
+            },
+            label = { Text("Copy \"${selection.text.take(24)}${if (selection.text.length > 24) "…" else ""}\"") },
+        )
+        AssistChip(onClick = { state.clearSelection() }, label = { Text("Clear") })
+    }
 }

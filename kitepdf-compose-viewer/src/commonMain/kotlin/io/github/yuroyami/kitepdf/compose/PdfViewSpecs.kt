@@ -182,4 +182,6 @@ data class PdfViewColors(
     val theme: ReaderTheme? = null,
     /** Fill for [PdfViewState.searchHighlights] quads, drawn over the page. */
     val searchHighlight: Color = Color(0x66FFEB3B),
+    /** Fill for the active [PdfViewState.selection] quads. */
+    val selectionHighlight: Color = Color(0x664285F4),
 )
