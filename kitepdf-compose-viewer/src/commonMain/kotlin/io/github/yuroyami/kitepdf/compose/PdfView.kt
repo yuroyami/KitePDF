@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -186,6 +187,10 @@ fun PdfView(
                     userScrollEnabled, settledZoom, onPageRendered, pagePlaceholder, linkAwareTap,
                 )
                 is PdfLayout.Paged -> PagedLayout(
+                    state, layout, zoomSpec, renderSpec, colors, pageSpacing,
+                    userScrollEnabled, settledZoom, onPageRendered, pagePlaceholder, linkAwareTap,
+                )
+                is PdfLayout.Spread -> SpreadLayout(
                     state, layout, zoomSpec, renderSpec, colors, pageSpacing,
                     userScrollEnabled, settledZoom, onPageRendered, pagePlaceholder, linkAwareTap,
                 )
@@ -493,6 +498,7 @@ private fun PagedLayout(
             pageSpacing = pageSpacing,
             beyondViewportPageCount = layout.offscreenPages,
             userScrollEnabled = pagerScrollEnabled,
+            reverseLayout = layout.reverseLayout,
         ) { pageContent(it) }
         Orientation.Vertical -> VerticalPager(
             state = pagerState,
@@ -500,6 +506,7 @@ private fun PagedLayout(
             pageSpacing = pageSpacing,
             beyondViewportPageCount = layout.offscreenPages,
             userScrollEnabled = pagerScrollEnabled,
+            reverseLayout = layout.reverseLayout,
         ) { pageContent(it) }
     }
 }
@@ -753,3 +760,166 @@ private const val ZOOM_SETTLE_DEBOUNCE_MS = 220L
 
 /** Fade-in duration for a freshly rasterized page bitmap. */
 private const val PAGE_FADE_MS = 160
+
+/* ── spread pager: two pages per item, like an open book (T-85) ───────────── */
+
+@Composable
+private fun SpreadLayout(
+    state: PdfViewState,
+    layout: PdfLayout.Spread,
+    zoomSpec: PdfZoomSpec,
+    renderSpec: PdfRenderSpec,
+    colors: PdfViewColors,
+    pageSpacing: Dp,
+    userScrollEnabled: Boolean,
+    settledZoom: Float,
+    onPageRendered: ((Int, ImageBitmap) -> Unit)?,
+    pagePlaceholder: (@Composable (Int) -> Unit)?,
+    onTap: ((Offset) -> Unit)?,
+) {
+    val spreadCount = (state.pageCount + 1) / 2
+    val pagerState = rememberPagerState(
+        initialPage = (state.pendingPage / 2).coerceIn(0, spreadCount - 1),
+    ) { spreadCount }
+    DisposableEffect(state, pagerState) {
+        val adapter = SpreadScrollAdapter(pagerState)
+        state.adapter = adapter
+        onDispose {
+            state.pendingPage = adapter.currentPage
+            if (state.adapter === adapter) state.adapter = null
+        }
+    }
+    LaunchedEffect(state, pagerState, zoomSpec.resetZoomOnPageChange) {
+        snapshotFlow { pagerState.settledPage }.collect {
+            state.panOffset = Offset.Zero
+            if (zoomSpec.resetZoomOnPageChange) state.resetZoom()
+        }
+    }
+
+    val scope = rememberCoroutineScope()
+    val pagerScrollEnabled = userScrollEnabled && !state.isZoomed
+    val spreadContent: @Composable (Int) -> Unit = { spread ->
+        val isCurrent = spread == pagerState.currentPage
+        SpreadBox(
+            state = state,
+            leftIndex = 2 * spread,
+            rightIndex = (2 * spread + 1).takeIf { it < state.pageCount },
+            reverseOrder = layout.reverseLayout,
+            zoom = if (isCurrent) state.zoom else 1f,
+            pan = if (isCurrent) state.panOffset else Offset.Zero,
+            gestures = if (isCurrent) {
+                Modifier.pdfTransformGestures(state, zoomSpec, scope, onTap).pdfSelectionGestures(state)
+            } else Modifier,
+            recordGeometry = isCurrent,
+            settledZoom = if (isCurrent) settledZoom else 1f,
+            renderSpec = renderSpec,
+            colors = colors,
+            onPageRendered = onPageRendered,
+            pagePlaceholder = pagePlaceholder,
+        )
+    }
+    when (layout.orientation) {
+        Orientation.Horizontal -> HorizontalPager(
+            state = pagerState,
+            modifier = Modifier.fillMaxSize(),
+            pageSpacing = pageSpacing,
+            beyondViewportPageCount = layout.offscreenPages,
+            userScrollEnabled = pagerScrollEnabled,
+            reverseLayout = layout.reverseLayout,
+        ) { spreadContent(it) }
+        Orientation.Vertical -> VerticalPager(
+            state = pagerState,
+            modifier = Modifier.fillMaxSize(),
+            pageSpacing = pageSpacing,
+            beyondViewportPageCount = layout.offscreenPages,
+            userScrollEnabled = pagerScrollEnabled,
+            reverseLayout = layout.reverseLayout,
+        ) { spreadContent(it) }
+    }
+}
+
+/**
+ * One spread: reading-order pages [leftIndex] (2k) and [rightIndex] (2k+1,
+ * null on an odd tail) letterboxed into the viewport halves. LTR shows 2k on
+ * the left; [reverseOrder] (right-to-left books) shows 2k on the RIGHT. A
+ * lone trailing page centres across the full width.
+ */
+@Composable
+private fun SpreadBox(
+    state: PdfViewState,
+    leftIndex: Int,
+    rightIndex: Int?,
+    reverseOrder: Boolean,
+    zoom: Float,
+    pan: Offset,
+    gestures: Modifier,
+    recordGeometry: Boolean,
+    settledZoom: Float,
+    renderSpec: PdfRenderSpec,
+    colors: PdfViewColors,
+    onPageRendered: ((Int, ImageBitmap) -> Unit)?,
+    pagePlaceholder: (@Composable (Int) -> Unit)?,
+) {
+    if (recordGeometry) {
+        DisposableEffect(state, leftIndex, rightIndex) {
+            onDispose {
+                state.pageGeometry.remove(leftIndex)
+                rightIndex?.let { state.pageGeometry.remove(it) }
+            }
+        }
+    }
+    BoxWithConstraints(
+        Modifier
+            .fillMaxSize()
+            .then(gestures)
+            .graphicsLayer {
+                scaleX = zoom
+                scaleY = zoom
+                translationX = pan.x
+                translationY = pan.y
+            },
+    ) {
+        val density = LocalDensity.current
+        val fullW = constraints.maxWidth
+        val fullH = constraints.maxHeight
+
+        @Composable
+        fun slot(pageIndex: Int, regionLeft: Int, regionWidth: Int) {
+            val page = state.document.pages[pageIndex]
+            val fit = fitWithin(regionWidth, fullH, pdfPageAspect(page))
+            if (fit == IntSize.Zero) return
+            val left = regionLeft + (regionWidth - fit.width) / 2f
+            val top = (fullH - fit.height) / 2f
+            if (recordGeometry) {
+                val rect = Rect(left, top, left + fit.width, top + fit.height)
+                SideEffect { state.pageGeometry[pageIndex] = rect }
+            }
+            val dpOffset = with(density) { DpSize(left.toInt().toDp(), top.toInt().toDp()) }
+            val dpSize = with(density) { DpSize(fit.width.toDp(), fit.height.toDp()) }
+            Box(
+                Modifier
+                    .padding(start = dpOffset.width, top = dpOffset.height)
+                    .size(dpSize),
+            ) {
+                val slotModifier = Modifier.fillMaxSize()
+                    .searchHighlightOverlay(state, page, pageIndex, colors)
+                when (renderSpec) {
+                    is PdfRenderSpec.Rasterized -> PdfPageRaster(
+                        page, pageIndex, fit, settledZoom, renderSpec, colors,
+                        onPageRendered, pagePlaceholder, slotModifier,
+                    )
+                    is PdfRenderSpec.Vectorized -> PdfPageVector(page, renderSpec, colors, slotModifier)
+                }
+            }
+        }
+
+        if (rightIndex == null) {
+            slot(leftIndex, 0, fullW) // odd tail: centre alone
+        } else {
+            val firstVisual = if (reverseOrder) rightIndex else leftIndex
+            val secondVisual = if (reverseOrder) leftIndex else rightIndex
+            slot(firstVisual, 0, fullW / 2)
+            slot(secondVisual, fullW / 2, fullW - fullW / 2)
+        }
+    }
+}

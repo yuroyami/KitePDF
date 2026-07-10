@@ -160,6 +160,7 @@ class PdfDocument private constructor(
             title = info.title ?: xmp?.title,
             authors = info.author?.let { listOf(it) } ?: xmp?.authors ?: emptyList(),
             language = language,
+            rightToLeft = viewerPreferences.direction == PdfViewerPreferences.ReadingDirection.RightToLeft,
         )
     }
 
