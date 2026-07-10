@@ -43,6 +43,13 @@ internal class BoxLayout(
      * follow-up, not built.
      */
     private val language: String? = null,
+    /**
+     * Reader-settings multiplier on every line's height (leading), applied at
+     * consumption so authored and default (`normal`) line heights both scale
+     * and inherited computed values are never scaled twice. Ascent is
+     * untouched: extra height is leading, as readers expect.
+     */
+    private val lineHeightScale: Double = 1.0,
 ) {
     private val hyphenator by lazy { Hyphenator.forLanguage(language) ?: Hyphenator.enUs() }
 
@@ -404,7 +411,7 @@ internal class BoxLayout(
             // drops within the line so the overlay fits inside the line box.
             val rubyBaseFs = cells.filter { it.rubyGroup >= 0 }.maxOfOrNull { it.fontSize } ?: 0.0
             val rubyExtra = rubyBaseFs * RUBY_SIZE * 0.8
-            val lineHeight = (style.lineHeightPt ?: maxFs * 1.4) + rubyExtra
+            val lineHeight = (style.lineHeightPt ?: maxFs * 1.4) * lineHeightScale + rubyExtra
             val ascent = maxFs * 0.8 + rubyExtra
 
             val (lineWidth, interiorSpaces) = measure(cells)
@@ -434,7 +441,7 @@ internal class BoxLayout(
             y += lineHeight
         }
         if (out.isEmpty()) {
-            val h = style.lineHeightPt ?: style.fontSizePt * 1.4
+            val h = (style.lineHeightPt ?: style.fontSizePt * 1.4) * lineHeightScale
             out.add(PositionedLine(emptyList(), topY, h, style.fontSizePt * 0.8))
         }
         return out

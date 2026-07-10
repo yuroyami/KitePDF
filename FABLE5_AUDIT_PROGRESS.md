@@ -425,6 +425,42 @@ kinsoku, T-73 reader settings, T-66 inline images + floats, T-47 WOFF2).
 
 ---
 
+## T-73. Reader settings surface
+
+- **Status:** DONE
+- **Commit:** (this commit)
+- **What landed:**
+  - `EpubSettings` gains `fontFamily: ReaderFontFamily?` (new public enum
+    SERIF/SANS_SERIF/MONOSPACE; the audit's `GenericFont` is internal, so
+    a public twin was introduced and mapped, noted deviation),
+    `lineHeightScale: Double = 1.0`, `textColor: RgbColor?`,
+    `backgroundColor: RgbColor?`, `justify: Boolean?`,
+    `usePublisherCss: Boolean = true`.
+  - New `Origin.READER` cascade rank: UA 0 < author 1 < author-important
+    2 < READER 3 < UA-important 4 (user preference beats
+    author-important; UA-important stays the CSS 2.1 ceiling). Reader
+    rules are synthesized universal-selector CSS from the settings and
+    appended after author rules; all-default settings synthesize nothing.
+  - `usePublisherCss = false` drops author rules AND inline `style=""`
+    attributes in `StyleResolver` (UA + reader layers only).
+  - `lineHeightScale` multiplies at consumption in `BoxLayout.placeLines`
+    (both authored and `normal` line heights scale; inherited computed
+    values are never scaled twice; ascent untouched, extra height is
+    leading).
+  - `backgroundColor` paints a full-page fill first in
+    `EpubPage.renderTo`.
+- **Verification:** `ReaderSettingsTest` (7 tests): one per setting
+  (family override beats author monospace, white-on-dark text color
+  beats author blue, background paints first and only when set, 2.0
+  scale visibly grows block gaps, justify=true fills lines to the
+  content edge while justify=false defeats an authored justify,
+  usePublisherCss=false leaves UA-black default-family text) plus
+  all-default settings producing an identical glyph draw stream. Full
+  gate green; sweep 4148 pages / 0 failures / worstMAE 0.267 and PDF
+  differential 0.0115 unchanged.
+
+---
+
 ## Discovered during execution
 
 (nothing yet)

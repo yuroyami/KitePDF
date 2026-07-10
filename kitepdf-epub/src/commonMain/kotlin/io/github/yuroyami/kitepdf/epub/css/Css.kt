@@ -1,7 +1,12 @@
 package io.github.yuroyami.kitepdf.epub.css
 
-/** Where a rule came from -- decides cascade precedence before specificity. */
-internal enum class Origin { UA, AUTHOR, INLINE }
+/**
+ * Where a rule came from -- decides cascade precedence before specificity.
+ * [READER] carries reader-app overrides built from `EpubSettings` (font
+ * family, colors, justification); it ranks above author-important, so the
+ * user's explicit preference beats the publisher's stylesheet.
+ */
+internal enum class Origin { UA, AUTHOR, INLINE, READER }
 
 /** One `property: value` pair, with its `!important` flag. */
 internal data class Declaration(val property: String, val value: String, val important: Boolean)
