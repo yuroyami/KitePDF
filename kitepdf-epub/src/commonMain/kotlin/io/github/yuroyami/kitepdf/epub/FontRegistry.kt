@@ -18,8 +18,8 @@ import io.github.yuroyami.kitepdf.render.PdfPath
  * come from the core [TrueTypeFont]; only the OUTLINE source differs — `glyf` for
  * TrueType, a [CffFont] parsed from the `CFF ` table for OpenType. (Advances still
  * come from `hmtx` even for CFF, so the CFF-charstring-width gap doesn't apply to
- * SFNT-wrapped `.otf`.) WOFF/WOFF2-compressed fonts remain a follow-up (per-table
- * inflate / brotli).
+ * SFNT-wrapped `.otf`.) WOFF 1.0 and WOFF2 wrappers are unwrapped to bare SFNT
+ * before parsing ([Woff] / [Woff2]).
  */
 internal class EmbeddedFace(
     val family: String,
@@ -108,8 +108,13 @@ internal class FontRegistry(private val faces: List<EmbeddedFace>) {
          * table is parsed for outlines; metrics still come from the SFNT `hmtx`.
          */
         fun face(family: String, bold: Boolean, italic: Boolean, bytes: ByteArray): EmbeddedFace? {
-            // WOFF 1.0 is a zlib-wrapped SFNT — unwrap to raw SFNT first (WOFF2 → null).
-            val sfnt = if (Woff.isWoff(bytes)) Woff.toSfnt(bytes) ?: return null else bytes
+            // WOFF is a wrapped SFNT: unwrap first (1.0 = zlib tables, 2.0 = brotli
+            // stream + glyf/loca transform).
+            val sfnt = when {
+                Woff.isWoff(bytes) -> Woff.toSfnt(bytes) ?: return null
+                Woff2.isWoff2(bytes) -> Woff2.toSfnt(bytes) ?: return null
+                else -> bytes
+            }
             val ttf = runCatching { TrueTypeFont.parse(sfnt) }.getOrNull() ?: return null
             val cff = if (ttf.rawTable("glyf") == null) {
                 ttf.rawTable("CFF ")?.let { runCatching { CffFont.parse(it) }.getOrNull() }

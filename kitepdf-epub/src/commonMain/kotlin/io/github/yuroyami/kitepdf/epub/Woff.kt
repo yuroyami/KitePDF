@@ -10,9 +10,8 @@ import io.github.yuroyami.kitepdf.filters.FilterChain
  * parser (and, for `.otf` flavour, [io.github.yuroyami.kitepdf.font.CffFont]) reads
  * unchanged. Reuses the core [Zlib] inflater — no new codec.
  *
- * Scope: WOFF 1.0 only. WOFF2 (brotli entropy coding + `glyf`/`loca` transforms +
- * collections) is a separate, much larger effort and is not handled here (returns
- * null so the caller skips the face / falls back).
+ * Scope: WOFF 1.0 only. WOFF2 (brotli entropy coding + `glyf`/`loca` transforms)
+ * is handled by the sibling [Woff2] decoder.
  */
 internal object Woff {
 
