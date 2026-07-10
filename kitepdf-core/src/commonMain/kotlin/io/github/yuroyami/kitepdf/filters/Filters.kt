@@ -19,10 +19,10 @@ import io.github.yuroyami.kitepdf.parser.PdfStream
  *
  * Filter coverage:
  *   - FlateDecode (with TIFF + PNG predictors), ASCIIHexDecode, ASCII85Decode,
- *     RunLengthDecode, LZWDecode — implemented.
- *   - DCTDecode (JPEG) — handled at the image-XObject layer.
- *   - CCITTFaxDecode, JBIG2Decode, JPXDecode (JPEG 2000), Crypt — throw
- *     [UnsupportedFilterException].
+ *     RunLengthDecode, LZWDecode, CCITTFaxDecode — implemented here.
+ *   - DCTDecode (JPEG) and JBIG2Decode — handled at the image-XObject layer
+ *     ([io.github.yuroyami.kitepdf.render.ImageXObject]), not through this chain.
+ *   - JPXDecode (JPEG 2000) and Crypt — throw [UnsupportedFilterException].
  */
 class UnsupportedFilterException(val filterName: String) :
     RuntimeException("Filter not yet implemented: /$filterName")

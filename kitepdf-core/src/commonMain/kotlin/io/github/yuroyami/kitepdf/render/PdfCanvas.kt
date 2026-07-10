@@ -152,10 +152,10 @@ interface PdfCanvas {
      * `render()` it, then over-paint via [renderMask] using `DstIn` blend
      * mode so the mask's alpha determines the visible region.
      *
-     * Honest scope: KitePDF v0.0.x's ComposeCanvas implements the
-     * `Alpha` SMask kind correctly and approximates `Luminosity` as if it
-     * were alpha. True luminosity-to-alpha conversion requires a custom
-     * shader and is on the roadmap.
+     * Honest scope: the shipped backends implement the `Alpha` SMask kind
+     * correctly and approximate `Luminosity` as if it were alpha. True
+     * luminosity-to-alpha conversion requires a custom shader and is on the
+     * roadmap (audit T-43).
      */
     fun applySoftMask(
         kind: SoftMask.Kind,

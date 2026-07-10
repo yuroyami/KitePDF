@@ -21,8 +21,11 @@ import io.github.yuroyami.kitepdf.parser.PdfStream
  *   - `FlateDecode` / `LZWDecode` / `CCITTFaxDecode` / ASCII / RunLength → pixel
  *     samples already decoded into [pixelBytes]; [toRgbaBytes] assembles RGBA
  *     using [resolvedColorSpace], [bitsPerComponent], and [decode].
- *   - `JBIG2Decode`, `JPXDecode` (JPEG 2000) — recognised but not decoded yet;
- *     [encodedBytes] holds the raw payload.
+ *   - `JBIG2Decode` → decoded in pure Kotlin ([Jbig2Decoder], the generic-region
+ *     arithmetic path) into a 1-bpc DeviceGray RAW image; unsupported JBIG2
+ *     flavours fall back to [Kind.JBIG2] with the payload in [encodedBytes].
+ *   - `JPXDecode` (JPEG 2000) — recognised but not decoded yet; [encodedBytes]
+ *     holds the raw payload.
  *
  * Callers should switch on [kind] to pick the right rendering path. Stencil masks
  * (`/ImageMask true`) carry [isImageMask] and are tinted by [maskFill].
@@ -64,9 +67,9 @@ class ImageXObject internal constructor(
         RAW,
         /** JPEG-encoded; [encodedBytes] is a complete JFIF/EXIF file. */
         JPEG,
-        /** CCITT Group 3/4 fax-encoded; not decoded yet. */
+        /** Unused: CCITT decodes through the filter chain into [RAW]. Kept for API stability. */
         CCITT,
-        /** JBIG2-encoded; not decoded yet. */
+        /** JBIG2-encoded payload the pure-Kotlin decoder could not handle (MMR/Huffman/halftone). */
         JBIG2,
         /** JPEG 2000-encoded; not decoded yet. */
         JPEG2000,
