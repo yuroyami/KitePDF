@@ -1,6 +1,9 @@
 package io.github.yuroyami.kitepdf
 
 import io.github.yuroyami.kitepdf.core.ByteReader
+import io.github.yuroyami.kitepdf.core.KiteLock
+import io.github.yuroyami.kitepdf.core.currentThreadId
+import io.github.yuroyami.kitepdf.core.withLock
 import io.github.yuroyami.kitepdf.core.PdfFormatException
 import io.github.yuroyami.kitepdf.core.WrongPasswordException
 import io.github.yuroyami.kitepdf.crypto.Decryptor
@@ -40,6 +43,11 @@ import io.github.yuroyami.kitepdf.writer.PdfEditor
  *
  * Holds the raw byte buffer plus the xref table; pages and indirect objects
  * are resolved lazily and cached.
+ *
+ * Thread-safe for concurrent reads and rendering after construction (T-16):
+ * object resolution parses from per-call readers and synchronizes only its
+ * caches, so multiple threads may render pages of the same document —
+ * including the same page — simultaneously.
  */
 class PdfDocument private constructor(
     val version: String,
@@ -56,6 +64,14 @@ class PdfDocument private constructor(
     val isAuthenticated: Boolean get() = security?.isAuthenticated ?: true
 
     private val reader = ByteReader(bytes)
+
+    /**
+     * Guards the resolution caches ([objectCache], [objStreamCache],
+     * [activelyResolving]) and the decoded-image cache. Parsing itself runs
+     * OUTSIDE the lock on per-call [ByteReader]s, so concurrent page renders
+     * proceed in parallel; on a race the first non-null write wins.
+     */
+    private val lock = KiteLock()
     private val objectCache = HashMap<Long, PdfObject?>()
     private val objStreamCache = HashMap<Long, Map<Int, PdfObject>>()
 
@@ -119,11 +135,13 @@ class PdfDocument private constructor(
     }
 
     /** All pages in document order (lazily built from the catalog's /Pages tree). */
-    override val pages: List<PdfPage> by lazy { buildPageList() }
+    override val pages: List<PdfPage> by lazy(LazyThreadSafetyMode.SYNCHRONIZED) { buildPageList() }
 
     override val pageCount: Int get() = pages.size
 
-    /** Indirect-object-number → zero-based page index. Built alongside [pages]. */
+    /** Indirect-object-number → zero-based page index. Built alongside [pages].
+     *  Written only inside the SYNCHRONIZED [pages] lazy; readers touch [pages]
+     *  first, so the map is complete and immutable by the time anyone reads it. */
     private val pageRefToIndex = HashMap<Long, Int>()
 
     /**
@@ -132,21 +150,33 @@ class PdfDocument private constructor(
      * Fill-colour-dependent /ImageMask stencils never enter it. Call
      * [dropDecodedImageCache] under memory pressure.
      */
-    internal val decodedImageCache = HashMap<Long, io.github.yuroyami.kitepdf.render.ImageXObject>()
+    private val decodedImageCache = HashMap<Long, io.github.yuroyami.kitepdf.render.ImageXObject>()
 
     /** Test hook: actual image decodes performed by the renderer. */
     internal var imageDecodeCount = 0
+        private set
+
+    internal fun cachedImage(objectNumber: Long): io.github.yuroyami.kitepdf.render.ImageXObject? =
+        lock.withLock { decodedImageCache[objectNumber] }
+
+    /** First writer wins; racing decoders converge on one instance. */
+    internal fun cacheImage(objectNumber: Long, image: io.github.yuroyami.kitepdf.render.ImageXObject): io.github.yuroyami.kitepdf.render.ImageXObject =
+        lock.withLock { decodedImageCache.getOrPut(objectNumber) { image } }
+
+    internal fun countImageDecode() {
+        lock.withLock { imageDecodeCount++ }
+    }
 
     /** Frees every cached decoded image (they re-decode lazily on next use). */
     internal fun dropDecodedImageCache() {
-        decodedImageCache.clear()
+        lock.withLock { decodedImageCache.clear() }
     }
 
     /**
      * Parsed `/PageLabels` number tree, or empty if the catalog doesn't have
      * one. Drives [PdfPage.label].
      */
-    internal val pageLabels: PageLabelTree by lazy {
+    internal val pageLabels: PageLabelTree by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
         val labels = catalog.getDict("PageLabels", this) ?: return@lazy PageLabelTree.EMPTY
         PageLabelTree.parse(labels, this)
     }
@@ -318,11 +348,14 @@ class PdfDocument private constructor(
     /* ─── IndirectResolver ───────────────────────────────────────────────── */
 
     override fun resolve(ref: PdfReference): PdfObject? {
-        objectCache[ref.objectNumber]?.let { return it }
+        lock.withLock { objectCache[ref.objectNumber] }?.let { return it }
         val entry = xref[ref.objectNumber] ?: return null
         // Lenient salvage: a single corrupt object must not abort the whole
         // document (MuPDF resolves objects best-effort). On any parse failure we
         // cache null and keep going; the page walk and renderers tolerate nulls.
+        // The parse runs OUTSIDE the lock (fresh readers, T-16); racing threads
+        // may parse the same object once each and the first non-null cache
+        // write wins (a cached null stays retryable, as before).
         val resolved: PdfObject? = runCatching {
             when (entry) {
                 is XrefEntry.Free -> null
@@ -330,29 +363,46 @@ class PdfDocument private constructor(
                 is XrefEntry.Compressed -> resolveFromObjectStream(entry)
             }
         }.getOrNull()
-        objectCache[ref.objectNumber] = resolved
-        return resolved
+        return lock.withLock {
+            val existing = objectCache[ref.objectNumber]
+            if (existing != null) existing
+            else {
+                objectCache[ref.objectNumber] = resolved
+                resolved
+            }
+        }
     }
 
     /**
-     * Re-entrancy guard: if we're already resolving an indirect /Length, we
-     * must not recurse into the same resolver path (the second seek would
-     * clobber the first one's position). The guard set is checked before any
-     * /Length resolution dispatch.
+     * Cycle guard: objectNumber -> owning thread id. A cycle is when the SAME
+     * thread re-enters the resolution of an object it is already parsing
+     * (A -> /Length -> A); a DIFFERENT thread resolving the same object
+     * concurrently is legitimate (both parse, the cache reconciles).
      */
-    private val activelyResolving = HashSet<Long>()
+    private val activelyResolving = HashMap<Long, Long>()
 
     private fun resolveInPlace(entry: XrefEntry.InUse): PdfObject {
         // H6: cyclic indirect /Length (A->B->A) would recurse to a StackOverflow
-        // (a hard crash on Kotlin/Native). If we're already resolving this object,
-        // break the cycle by throwing — resolve()'s runCatching caches null.
-        if (entry.objectNumber in activelyResolving) {
-            throw PdfFormatException("cyclic object reference ${entry.objectNumber}")
+        // (a hard crash on Kotlin/Native). If THIS thread is already resolving
+        // this object, break the cycle by throwing — resolve()'s runCatching
+        // caches null.
+        val me = currentThreadId()
+        val claimed = lock.withLock {
+            when (activelyResolving[entry.objectNumber]) {
+                me -> throw PdfFormatException("cyclic object reference ${entry.objectNumber}")
+                null -> {
+                    activelyResolving[entry.objectNumber] = me
+                    true
+                }
+                else -> false // another thread mid-parse: we parse too
+            }
         }
-        reader.seek(entry.byteOffset)
-        activelyResolving.add(entry.objectNumber)
+        // Per-call reader (T-16): the old shared seek-based reader interleaved
+        // positions across threads and produced garbage parses.
+        val localReader = ByteReader(bytes)
+        localReader.seek(entry.byteOffset)
         try {
-            val parser = Parser(Lexer(reader), resolver = this)
+            val parser = Parser(Lexer(localReader), resolver = this)
             val indirect = parser.readIndirectObject()
             // M9: a stale/wrong xref offset can land us on a different object.
             // Reject a number mismatch (throw -> cached null) rather than silently
@@ -364,7 +414,7 @@ class PdfDocument private constructor(
             }
             return maybeDecrypt(indirect.number, indirect.generation, indirect.value)
         } finally {
-            activelyResolving.remove(entry.objectNumber)
+            if (claimed) lock.withLock { activelyResolving.remove(entry.objectNumber) }
         }
     }
 
@@ -375,10 +425,14 @@ class PdfDocument private constructor(
     }
 
     private fun resolveFromObjectStream(entry: XrefEntry.Compressed): PdfObject? {
-        val members = objStreamCache.getOrPut(entry.containingObjectStream) {
-            decodeObjectStream(entry.containingObjectStream)
+        lock.withLock { objStreamCache[entry.containingObjectStream] }
+            ?.let { return it[entry.indexInObjectStream] }
+        val members = decodeObjectStream(entry.containingObjectStream) // outside the lock
+        val winner = lock.withLock {
+            objStreamCache[entry.containingObjectStream]
+                ?: members.also { objStreamCache[entry.containingObjectStream] = it }
         }
-        return members[entry.indexInObjectStream]
+        return winner[entry.indexInObjectStream]
     }
 
     /**
@@ -390,8 +444,9 @@ class PdfDocument private constructor(
         // Look up directly via xref (avoid recursion through resolve cache).
         val entry = xref[objStreamRef] as? XrefEntry.InUse
             ?: throw PdfFormatException("ObjStm $objStreamRef not in xref as in-use")
-        reader.seek(entry.byteOffset)
-        val parser = Parser(Lexer(reader), resolver = this)
+        val localReader = ByteReader(bytes) // per-call reader (T-16)
+        localReader.seek(entry.byteOffset)
+        val parser = Parser(Lexer(localReader), resolver = this)
         val indirect = parser.readIndirectObject()
         val stream = indirect.value as? PdfStream
             ?: throw PdfFormatException("ObjStm $objStreamRef is not a stream")
