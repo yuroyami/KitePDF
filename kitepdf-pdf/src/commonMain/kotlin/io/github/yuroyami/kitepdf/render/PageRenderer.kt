@@ -467,14 +467,12 @@ class PageRenderer(
         val key = slot.objectNumber
         val isMask = (slot.stream.dict["ImageMask"] as? io.github.yuroyami.kitepdf.parser.PdfBoolean)?.value == true
         if (doc == null || key == null || isMask) {
-            doc?.let { it.imageDecodeCount++ }
+            doc?.countImageDecode()
             return ImageXObject.from(slot.stream, resolver, fillColor)
         }
-        doc.decodedImageCache[key]?.let { return it }
-        doc.imageDecodeCount++
-        return ImageXObject.from(slot.stream, resolver, fillColor).also {
-            doc.decodedImageCache[key] = it
-        }
+        doc.cachedImage(key)?.let { return it }
+        doc.countImageDecode()
+        return doc.cacheImage(key, ImageXObject.from(slot.stream, resolver, fillColor))
     }
 
     private fun decodeInlineImage(blob: ByteArray, fillColor: RgbColor): ImageXObject? {
