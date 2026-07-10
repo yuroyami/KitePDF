@@ -394,6 +394,37 @@ kinsoku, T-73 reader settings, T-66 inline images + floats, T-47 WOFF2).
 
 ---
 
+## T-71. CJK justification + kinsoku openers
+
+- **Status:** DONE
+- **Commit:** (this commit)
+- **What landed:**
+  - Inter-character justification (`justifyCjk`): a justified, non-last
+    line with zero interior spaces and >= 2 wide (CJK) cells spreads its
+    slack evenly across the inter-cell gaps by folding it into each
+    cell's advance (`kernAfter1000` + `width`), the exact mechanism
+    letter-spacing and kerning already use, so wrap width and drawn pen
+    stay in agreement. Latin-only spaceless lines stay ragged.
+  - Kinsoku no-break-after openers: `CJK_OPENERS` (「『【〔〈《〖（［｛).
+    In `tokenize`, a wide char following an opener-ending token merges
+    into it, and `endWord` merges a Latin word following an opener
+    (hyphen indices shifted past the prefix), so an opener can never be
+    stranded at a line end.
+  - `CJK_CLOSERS` extended per JIS X 4051 / MuPDF's kinsoku table:
+    small kana (ぁぃぅぇぉっゃゅょゎ + katakana + ヵヶ), the prolonged
+    sound mark ー, and iteration marks 々ゝゞヽヾ.
+- **Verification:** `CjkJustifyTest` (6 tests): every non-last justified
+  pure-CJK line ends within 0.5pt of the 100pt content width; last line
+  ragged; a lone Latin word's advances byte-equal the unconstrained
+  layout (no accidental stretch); structural opener sweep over 6 widths
+  (no line ends with an opener); small-kana/ー no-line-start sweep over
+  5 widths; （word binding. Full gate green; sweep 4148 pages /
+  0 failures / worstMAE 0.267 and PDF differential 0.0115 both unchanged
+  (the corpus has no reflowable book whose wrapping the new merges
+  shift).
+
+---
+
 ## Discovered during execution
 
 (nothing yet)

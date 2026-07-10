@@ -412,6 +412,13 @@ internal class BoxLayout(
             val slack = (contentW - lineWidth - firstIndent).coerceAtLeast(0.0)
             val justify = align == TextAlign.JUSTIFY && i != cellLines.lastIndex && interiorSpaces > 0
             val extraPerSpace = if (justify) slack / interiorSpaces else 0.0
+            // Spaceless CJK lines justify between characters: with no interior
+            // spaces to stretch, the slack spreads across the inter-cell gaps
+            // (JIS-style inter-character expansion). Latin-only spaceless lines
+            // (one long word) are left ragged, as every real reader does.
+            if (align == TextAlign.JUSTIFY && i != cellLines.lastIndex && interiorSpaces == 0) {
+                justifyCjk(cells, slack)
+            }
             val alignOffset = when {
                 justify -> 0.0
                 align == TextAlign.RIGHT -> slack
@@ -440,6 +447,28 @@ internal class BoxLayout(
         val cps = IntArray(cells.size) { cells[it].ch.code }
         val order = Bidi.reorderVisually(Bidi.resolveLevels(cps, baseLevel))
         return order.map { cells[it] }
+    }
+
+    /**
+     * Inter-character justification for a spaceless line with at least two
+     * CJK cells: distribute [slack] evenly over the gaps between content
+     * cells by folding it into each cell's advance, exactly the mechanism
+     * letter-spacing and kerning use, so wrap width and drawn pen agree.
+     */
+    private fun justifyCjk(cells: List<Cell>, slack: Double) {
+        if (slack <= 0.0) return
+        var last = cells.size - 1
+        while (last >= 0 && cells[last].ch == ' ') last--
+        if (last < 1) return
+        if (cells.subList(0, last + 1).count { FontMetrics.isWide(it.ch.code) } < 2) return
+        val extra = slack / last // `last` = gap count between content cells
+        for (k in 0 until last) {
+            val c = cells[k]
+            if (c.fontSize <= 0.0) continue
+            val e1000 = (extra / c.fontSize * 1000.0).roundToInt()
+            c.kernAfter1000 += e1000
+            c.width += e1000 * c.fontSize / 1000.0
+        }
     }
 
     /** Line content width (trailing spaces excluded) + interior space count (for justify). */
@@ -525,7 +554,17 @@ internal class BoxLayout(
                         }
                     }
                 }
-                tokens.add(Token.Word(word, word.sumOf { it.width + it.padBefore + it.padAfter }, pts))
+                val w = word.sumOf { it.width + it.padBefore + it.padAfter }
+                val last = tokens.lastOrNull()
+                // Kinsoku no-break-after: a word following an opener token
+                // (e.g. （word) merges into it; hyphen indices shift past the
+                // opener prefix.
+                if (last is Token.Word && last.cells.isNotEmpty() && isOpener(last.cells.last().ch.code)) {
+                    tokens[tokens.lastIndex] =
+                        Token.Word(last.cells + word, last.width + w, pts.map { it + last.cells.size })
+                } else {
+                    tokens.add(Token.Word(word, w, pts))
+                }
                 word = ArrayList(); wordW = 0.0; softHyphens = ArrayList()
             }
         }
@@ -598,12 +637,17 @@ internal class BoxLayout(
                 }
                 // Ruby bases do not split per CJK char: the whole base is one token.
                 FontMetrics.isWide(ch.code) && run.rubyGroup < 0 -> {
-                    // CJK ideographs break per character; a closing punctuation stays with the char before it.
+                    // CJK ideographs break per character; kinsoku merges: a closer
+                    // stays with the char before it, and anything after an opener
+                    // stays with the opener (an opener must not end a line).
                     endWord()
                     val cell = cellFor(ch)
                     val last = tokens.lastOrNull()
-                    if (isCloser(ch.code) && last is Token.Word) {
-                        tokens[tokens.lastIndex] = Token.Word(last.cells + cell, last.width + cell.width)
+                    val bindsBack = last is Token.Word && last.cells.isNotEmpty() &&
+                        (isCloser(ch.code) || isOpener(last.cells.last().ch.code))
+                    if (bindsBack) {
+                        val lw = last as Token.Word
+                        tokens[tokens.lastIndex] = Token.Word(lw.cells + cell, lw.width + cell.width)
                     } else {
                         tokens.add(Token.Word(listOf(cell), cell.width))
                     }
@@ -910,8 +954,11 @@ internal class BoxLayout(
         )
     }
 
-    /** CJK closing punctuation that must not start a line (basic kinsoku, no-break-before). */
+    /** CJK closing punctuation that must not start a line (kinsoku, no-break-before). */
     private fun isCloser(cp: Int): Boolean = cp in CJK_CLOSERS
+
+    /** CJK opening punctuation that must not end a line (kinsoku, no-break-after). */
+    private fun isOpener(cp: Int): Boolean = cp in CJK_OPENERS
 
     private companion object {
         val BLACK = RgbColor(0.0, 0.0, 0.0)
@@ -920,11 +967,27 @@ internal class BoxLayout(
         const val RUBY_SIZE = 0.5
         /** Synthesized small-caps size (uppercase form scaled down). */
         const val SMALL_CAPS_SCALE = 0.8
+        // JIS X 4051 no-break-before set (matching MuPDF's kinsoku table):
+        // closing punctuation, plus the small kana and sound/iteration marks
+        // that bind to the preceding character.
         val CJK_CLOSERS = setOf(
             0x3001, 0x3002, // 、 。
             0xFF0C, 0xFF0E, 0xFF01, 0xFF1F, 0xFF1B, 0xFF1A, // fullwidth , . ! ? ; :
             0x300D, 0x300F, 0x3011, 0x3015, 0x3009, 0x300B, 0x3017, // 」 』 】 〕 〉 》 〗
             0xFF09, 0xFF3D, 0xFF5D, // ） ］ ｝
+            0x3005, // 々 ideographic iteration mark
+            0x309D, 0x309E, 0x30FD, 0x30FE, // ゝ ゞ ヽ ヾ kana iteration marks
+            0x30FC, // ー prolonged sound mark
+            0x3041, 0x3043, 0x3045, 0x3047, 0x3049, // small ぁぃぅぇぉ
+            0x3063, 0x3083, 0x3085, 0x3087, 0x308E, // small っゃゅょゎ
+            0x30A1, 0x30A3, 0x30A5, 0x30A7, 0x30A9, // small ァィゥェォ
+            0x30C3, 0x30E3, 0x30E5, 0x30E7, 0x30EE, // small ッャュョヮ
+            0x30F5, 0x30F6, // small ヵヶ
+        )
+        // JIS X 4051 no-break-after set: an opener binds to what follows it.
+        val CJK_OPENERS = setOf(
+            0x300C, 0x300E, 0x3010, 0x3014, 0x3008, 0x300A, 0x3016, // 「 『 【 〔 〈 《 〖
+            0xFF08, 0xFF3B, 0xFF5B, // （ ［ ｛
         )
     }
 }
