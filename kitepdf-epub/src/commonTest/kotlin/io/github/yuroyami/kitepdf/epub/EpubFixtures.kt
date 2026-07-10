@@ -36,6 +36,39 @@ internal object EpubFixtures {
         )
     }
 
+    /** Multi-spine variant: one `chapterN.xhtml` per body, all on the spine in order. */
+    fun epubMultiSpine(bodies: List<String>): ByteArray {
+        val container = """
+            <?xml version="1.0"?>
+            <container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
+              <rootfiles><rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/></rootfiles>
+            </container>
+        """.trimIndent()
+        val items = bodies.indices.joinToString("") {
+            """<item id="c${it + 1}" href="chapter${it + 1}.xhtml" media-type="application/xhtml+xml"/>"""
+        }
+        val refs = bodies.indices.joinToString("") { """<itemref idref="c${it + 1}"/>""" }
+        val opf = """
+            <?xml version="1.0"?>
+            <package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="uid">
+              <manifest>$items</manifest>
+              <spine>$refs</spine>
+            </package>
+        """.trimIndent()
+        val chapters = bodies.mapIndexed { i, raw ->
+            val body = if (raw.trimStart().startsWith("<body")) raw else "<body>$raw</body>"
+            "OEBPS/chapter${i + 1}.xhtml" to
+                """<?xml version="1.0"?><html xmlns="http://www.w3.org/1999/xhtml">$body</html>""".encodeToByteArray()
+        }
+        return storedZip(
+            listOf(
+                "mimetype" to "application/epub+zip".encodeToByteArray(),
+                "META-INF/container.xml" to container.encodeToByteArray(),
+                "OEBPS/content.opf" to opf.encodeToByteArray(),
+            ) + chapters,
+        )
+    }
+
     /** Build a STORED (uncompressed) zip. CRCs are left zero; [ZipReader] does not verify them. */
     fun storedZip(entries: List<Pair<String, ByteArray>>): ByteArray {
         val out = ArrayList<Byte>()

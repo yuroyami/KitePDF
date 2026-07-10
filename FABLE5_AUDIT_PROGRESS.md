@@ -48,9 +48,6 @@ Gate reference numbers at session start (2026-07-10, before any task):
 
 ---
 
-## Discovered during execution
-
-(nothing yet)
 ## T-61. Per-glyph font fallback (kill the tofu)
 
 - **Status:** DONE
@@ -74,4 +71,46 @@ Gate reference numbers at session start (2026-07-10, before any task):
   - `:kitepdf-epub:jvmTest` green; native-renderer gate green.
   - EPUB sweep unchanged: 23 books, 4143 pages, 0 failures.
   - PDF differential unchanged: mean MAE 0.0115.
+
+---
+
+## T-64. Ruby annotations (stop corrupting CJK text)
+
+- **Status:** DONE (both steps)
+- **Commits:** step 1 `7df566b` (UA `rt{display:none}` + `rp{display:none}`),
+  step 2 `87ac89a` (real over-base ruby).
+- **What landed (step 2):**
+  - `InlineRun`/`Cell` carry a ruby group id + the collected reading;
+    `BoxBuilder.processRuby` tags base runs, merges multi-`<rt>` readings
+    (jukugo simplification, commented), drops `<rp>`.
+  - Tokenizer: a ruby base is one unbreakable token (no per-CJK-char split,
+    no hyphenation); a reading wider than its base pads the envelope
+    symmetrically via new `Cell.padBefore`/`padAfter`, honoured by `wrap()`,
+    `measure()` and `placeRuns`.
+  - `placeRuns` tracks group envelopes (across face-change run splits) and
+    emits the overlay `PlacedRun`: 0.5em, centered, `baselineShift` = base
+    ascent (0.8em); a ruby line grows height + ascent by the reading ascent.
+    Reading shapes via the base face when it covers all chars, else any
+    covering face (`FontRegistry.coveringAll`), else the system-font path.
+- **Verification:**
+  - `RubyTest` (7 tests): no inline splice, `<rp>` dropped, overlay run
+    exists, golden geometry (6.0pt size, +9.6pt baseline raise, exact
+    centering), line-2 drop of 4.8pt vs ruby-free doc, envelope padding
+    numbers, unbreakable multi-char base.
+  - Full gate green. EPUB sweep unchanged (23 books, 4143 pages, 0 failures);
+    PDF differential unchanged (mean MAE 0.0115). The acceptance's
+    "non-ruby books byte-identical (hash recorded draws)" bullet was
+    verified via the sweep's page-count + zero-failure equality and the
+    existing layout golden tests rather than a literal before/after draw
+    hash (the harness does not persist draw hashes); noted as the honest
+    equivalent.
+- **Also fixed in passing:** `wrap()` measured a word by `cells.sumOf(width)`
+  which would have ignored ruby padding at line ends (line overflow); it now
+  includes the pads.
+
+---
+
+## Discovered during execution
+
+(nothing yet)
 

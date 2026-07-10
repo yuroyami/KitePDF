@@ -31,6 +31,11 @@ internal data class InlineRun(
      */
     val rubyGroup: Int = -1,
     val rubyText: String? = null,
+    /**
+     * Link target when this run sits inside `<a href>`: an external URL kept
+     * verbatim, or an internal target resolved to `zip/path.xhtml#fragment`.
+     */
+    val href: String? = null,
 ) {
     companion object {
         val BLACK = RgbColor(0.0, 0.0, 0.0)

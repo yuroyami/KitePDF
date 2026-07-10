@@ -17,6 +17,8 @@ import io.github.yuroyami.kitepdf.render.RgbColor
  */
 internal class BoxBuilder(
     private val resolver: StyleResolver,
+    /** Zip path of the document being built; the base for `#fragment` links. */
+    private val docPath: String = "",
     private val resolveHref: (String) -> String,
 ) {
     fun build(root: HtmlNode.Element): BlockBox =
@@ -35,6 +37,8 @@ internal class BoxBuilder(
         var pendingMarker = marker
         val childAncestors = if (isRoot) ancestors else listOf(el) + ancestors
         var ordinal = el.attrs["start"]?.toIntOrNull() ?: 1
+        // Ids of INLINE descendants (they get no box) anchor to this block.
+        val inlineAnchors = ArrayList<String>()
 
         fun flush() {
             if (inl.hasContent()) {
@@ -68,7 +72,7 @@ internal class BoxBuilder(
                 val cs = resolver.compute(child, childAncestors, style)
                 when (cs.display) {
                     Display.NONE -> {}
-                    Display.INLINE, Display.INLINE_BLOCK -> processInline(child, cs, childAncestors, inl)
+                    Display.INLINE, Display.INLINE_BLOCK -> processInline(child, cs, childAncestors, inl, inlineAnchors)
                     Display.TABLE -> { flush(); children.add(buildTable(child, cs, childAncestors)) }
                     Display.LIST_ITEM -> { flush(); children.add(buildBlock(child, cs, childAncestors, marker(cs, ordinal++), cs.color)) }
                     // BLOCK, plus stray table parts outside a table: treat as blocks (no text lost).
@@ -77,7 +81,11 @@ internal class BoxBuilder(
             }
         }
         flush()
-        return BlockBox(style, children)
+        return BlockBox(style, children).also { box ->
+            el.attrs["id"]?.let(box.anchors::add)
+            if (el.tag == "a") el.attrs["name"]?.let(box.anchors::add) // legacy anchor
+            box.anchors += inlineAnchors
+        }
     }
 
     /** Build a `display:table` element into a [TableBox], flattening row groups. */
@@ -132,18 +140,48 @@ internal class BoxBuilder(
         return TableRowBox(style, cells)
     }
 
-    private fun processInline(el: HtmlNode.Element, style: ComputedStyle, ancestors: List<HtmlNode.Element>, inl: Inline) {
-        if (el.tag == "ruby") { processRuby(el, style, ancestors, inl); return }
-        val childAncestors = listOf(el) + ancestors
-        for (child in el.children) when (child) {
-            is HtmlNode.Text -> inl.appendText(child.text, style)
-            is HtmlNode.Element -> {
-                if (child.tag == "br") { inl.addBreak(); continue }
-                if (child.tag == "img" || child.tag == "image") continue // inline images: Phase 5
-                val cs = resolver.compute(child, childAncestors, style)
-                if (cs.display != Display.NONE) processInline(child, cs, childAncestors, inl)
+    private fun processInline(
+        el: HtmlNode.Element,
+        style: ComputedStyle,
+        ancestors: List<HtmlNode.Element>,
+        inl: Inline,
+        anchorSink: MutableList<String>,
+    ) {
+        // Inline elements never get a box; their anchors attach to the block.
+        el.attrs["id"]?.let(anchorSink::add)
+        if (el.tag == "a") el.attrs["name"]?.let(anchorSink::add)
+        if (el.tag == "ruby") { processRuby(el, style, ancestors, inl, anchorSink); return }
+
+        val link = if (el.tag == "a") el.attrs["href"]?.takeIf { it.isNotBlank() }?.let(::resolveLink) else null
+        if (link != null) inl.beginLink(link)
+        try {
+            val childAncestors = listOf(el) + ancestors
+            for (child in el.children) when (child) {
+                is HtmlNode.Text -> inl.appendText(child.text, style)
+                is HtmlNode.Element -> {
+                    if (child.tag == "br") { inl.addBreak(); continue }
+                    if (child.tag == "img" || child.tag == "image") continue // inline images: Phase 5
+                    val cs = resolver.compute(child, childAncestors, style)
+                    if (cs.display != Display.NONE) processInline(child, cs, childAncestors, inl, anchorSink)
+                }
             }
+        } finally {
+            if (link != null) inl.endLink()
         }
+    }
+
+    /**
+     * Resolve an `<a href>`: external URLs (any scheme) stay verbatim; a bare
+     * `#fragment` targets this document; a relative path resolves against the
+     * document's directory, keeping its fragment.
+     */
+    private fun resolveLink(href: String): String {
+        val h = href.trim()
+        if (SCHEME.containsMatchIn(h)) return h
+        val path = h.substringBefore('#')
+        val frag = h.substringAfter('#', "")
+        val resolved = if (path.isEmpty()) docPath else resolveHref(path)
+        return if (frag.isEmpty()) resolved else "$resolved#$frag"
     }
 
     /**
@@ -153,7 +191,13 @@ internal class BoxBuilder(
      * segments (jukugo ruby) merge into one reading over the whole base, a
      * documented simplification.
      */
-    private fun processRuby(el: HtmlNode.Element, style: ComputedStyle, ancestors: List<HtmlNode.Element>, inl: Inline) {
+    private fun processRuby(
+        el: HtmlNode.Element,
+        style: ComputedStyle,
+        ancestors: List<HtmlNode.Element>,
+        inl: Inline,
+        anchorSink: MutableList<String>,
+    ) {
         val childAncestors = listOf(el) + ancestors
         val reading = StringBuilder()
         fun collectText(e: HtmlNode.Element) {
@@ -174,7 +218,7 @@ internal class BoxBuilder(
                     c.tag == "br" -> inl.addBreak()
                     else -> {
                         val cs = resolver.compute(c, childAncestors, style)
-                        if (cs.display != Display.NONE) processInline(c, cs, childAncestors, inl)
+                        if (cs.display != Display.NONE) processInline(c, cs, childAncestors, inl, anchorSink)
                     }
                 }
             }
@@ -200,6 +244,14 @@ internal class BoxBuilder(
         }
 
         fun endRuby() { rubyGroup = -1; rubyText = null }
+
+        // Active <a href>: nested anchors save/restore the enclosing target.
+        private val linkStack = ArrayDeque<String?>()
+        private var linkHref: String? = null
+
+        fun beginLink(href: String) { linkStack.addLast(linkHref); linkHref = href }
+
+        fun endLink() { linkHref = linkStack.removeLastOrNull() }
 
         fun hasContent() = runs.any { it.text.isNotEmpty() || it.hardBreak }
 
@@ -239,6 +291,7 @@ internal class BoxBuilder(
             color = style.color, valign = style.verticalAlign, underline = style.underline,
             fontFamilyName = style.fontFamilyName,
             rubyGroup = rubyGroup, rubyText = rubyText,
+            href = linkHref,
         )
     }
 
@@ -273,5 +326,7 @@ internal class BoxBuilder(
     private companion object {
         val BLACK = RgbColor(0.0, 0.0, 0.0)
         val WHITESPACE = Regex("\\s+")
+        /** A URI scheme prefix (`https:`, `mailto:`, ...): the href is external. */
+        val SCHEME = Regex("^[a-zA-Z][a-zA-Z0-9+.-]*:")
     }
 }

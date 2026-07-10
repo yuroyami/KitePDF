@@ -384,6 +384,8 @@ internal class BoxLayout(
         var glyphXOffset: Double = 0.0, var glyphYOffset: Double = 0.0,
         // Ruby: the group id + reading shared by every cell of one <ruby> base.
         val rubyGroup: Int = -1, val rubyText: String? = null,
+        // Link target when inside <a href> (see InlineRun.href).
+        val href: String? = null,
         // Envelope padding when the reading is wider than its base (pt). Only the
         // group's first/last cells carry it; it widens wrap/measure and the pen
         // walk in placeRuns without entering the glyph advance stream.
@@ -465,10 +467,10 @@ internal class BoxLayout(
                 return if (f != null) {
                     val gid = f.gidFor(ch.code)
                     Cell(ch, f.advance1000(gid) * fs / 1000.0, fs, spec, run.color, shift, run.underline, f, gid,
-                        rubyGroup = run.rubyGroup, rubyText = run.rubyText)
+                        rubyGroup = run.rubyGroup, rubyText = run.rubyText, href = run.href)
                 } else {
                     Cell(ch, FontMetrics.advancePt(ch, fs, run.bold, run.italic, run.family), fs, spec, run.color, shift, run.underline,
-                        rubyGroup = run.rubyGroup, rubyText = run.rubyText)
+                        rubyGroup = run.rubyGroup, rubyText = run.rubyText, href = run.href)
                 }
             }
             for (ch in run.text) when {
@@ -696,11 +698,15 @@ internal class BoxLayout(
             val spec = c.spec; val fs = c.fontSize; val col = c.color; val sh = c.shift; val ul = c.underline; val face = c.face
             val glyphs = ArrayList<TextGlyph>()
             while (i < cells.size && cells[i].ch != ' ' && cells[i].rubyGroup == c.rubyGroup &&
-                samePaint(cells[i], spec, fs, col, sh, ul, face)
+                cells[i].href == c.href && samePaint(cells[i], spec, fs, col, sh, ul, face)
             ) {
                 glyphs.add(glyphFor(cells[i])); x += cells[i].width + cells[i].padAfter; i++
             }
-            out.add(PlacedRun(glyphs, startX, fs, spec, col, sh, ul, hasOutlines = face != null, unitsPerEm = face?.unitsPerEm ?: 1000))
+            out.add(PlacedRun(
+                glyphs, startX, fs, spec, col, sh, ul,
+                hasOutlines = face != null, unitsPerEm = face?.unitsPerEm ?: 1000,
+                href = c.href,
+            ))
         }
         closeGroup(x)
         return out

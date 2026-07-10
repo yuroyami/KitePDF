@@ -36,6 +36,13 @@ internal class BlockBox(
     var rowspan: Int = 1
     var gridRow: Int = 0
     var gridCol: Int = 0
+
+    /**
+     * Anchor ids reachable at this box: the element's own `id` (plus legacy
+     * `<a name>`) and the ids of its INLINE descendants, which get no box of
+     * their own. Drives href-fragment -> page navigation.
+     */
+    val anchors = ArrayList<String>()
 }
 
 /**
@@ -96,6 +103,8 @@ internal class PlacedRun(
      * reading overlay. Text extraction and search skip them.
      */
     val isAnnotation: Boolean = false,
+    /** Link target when the run is inside `<a href>` (see [InlineRun.href]). */
+    val href: String? = null,
 )
 
 /** A laid-out line inside a [TextBlockBox]; [yTop] is absolute document-down. */

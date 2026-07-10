@@ -63,7 +63,7 @@ class EpubDocument internal constructor(
         parsed.spines.map { sp ->
             val layoutWidth = if (parsed.fixedLayout) sp.viewport.first else contentWidth
             val resolver = StyleResolver(sp.rules, settings.fontSize, layoutWidth, parsed.baseDir)
-            BoxBuilder(resolver) { href -> resolvePath(sp.docDir, href) }.build(sp.tree)
+            BoxBuilder(resolver, sp.path) { href -> resolvePath(sp.docDir, href) }.build(sp.tree)
         }
     }
 
@@ -121,6 +121,62 @@ class EpubDocument internal constructor(
         }
     }
 
+    /* ── href -> page navigation ─────────────────────────────────────────── */
+
+    /**
+     * `spinePath` and `spinePath#id` -> zero-based page index. Spine starts map
+     * to the page holding the spine root's top; anchors to the page holding
+     * their box's top (inline ids anchor to their enclosing block).
+     */
+    private val anchorPages: Map<String, Int> by lazy {
+        val renders = pageRenders // force layout + pagination first
+        val map = HashMap<String, Int>()
+        if (parsed.fixedLayout) {
+            // One page per spine document.
+            parsed.spines.forEachIndexed { i, sp ->
+                map.putIfAbsent(sp.path, i)
+                collectAnchors(docRoots[i]) { id, _ -> map.putIfAbsent("${sp.path}#$id", i) }
+            }
+        } else {
+            val starts = renders.map { it.startY }
+            fun pageOf(y: Double): Int {
+                var p = 0
+                for (k in starts.indices) if (starts[k] <= y + 1e-9) p = k else break
+                return p
+            }
+            parsed.spines.forEachIndexed { i, sp ->
+                map.putIfAbsent(sp.path, pageOf(docRoots[i].y))
+                collectAnchors(docRoots[i]) { id, y -> map.putIfAbsent("${sp.path}#$id", pageOf(y)) }
+            }
+        }
+        map
+    }
+
+    private fun collectAnchors(box: LayoutBox, sink: (String, Double) -> Unit) {
+        when (box) {
+            is BlockBox -> {
+                for (id in box.anchors) sink(id, box.y)
+                for (c in box.children) collectAnchors(c, sink)
+            }
+            is TableBox -> for (r in box.rows) for (cell in r.cells) collectAnchors(cell, sink)
+            else -> {}
+        }
+    }
+
+    /**
+     * Zero-based page of an internal href: `path.xhtml`, `path.xhtml#id`
+     * (paths zip-root-relative, as [EpubPage.links] and [TocEntry] carry
+     * them). Null for unknown targets and external URLs. An unknown fragment
+     * falls back to its document's first page.
+     */
+    internal fun pageIndexOfHref(href: String): Int? {
+        val clean = href.trim()
+        val path = clean.substringBefore('#')
+        val frag = clean.substringAfter('#', "")
+        return if (frag.isNotEmpty()) anchorPages["$path#$frag"] ?: anchorPages[path]
+        else anchorPages[path]
+    }
+
     private fun loadImage(zipPath: String): ImageXObject? =
         parsed.zip.read(zipPath)?.let { ImageXObject.fromEncodedImage(it) }
 
@@ -167,7 +223,7 @@ class EpubDocument internal constructor(
                 val css = CssParser.parseAll(collectAuthorCss(zip, tree, docDir), Origin.AUTHOR)
                 for (face in css.fontFaces) faceRules.add(face to docDir)
                 val vp = parseViewport(tree) ?: (settings.pageWidth to settings.pageHeight)
-                spines.add(ParsedSpine(tree, css.rules, docDir, vp))
+                spines.add(ParsedSpine(tree, css.rules, docDir, vp, path))
             }
             if (spines.isEmpty()) return null
 
@@ -322,6 +378,16 @@ class EpubDocument internal constructor(
 internal class FixedSpine(val root: BlockBox, val width: Double, val height: Double)
 
 /**
+ * A tappable link region on an [EpubPage]. [rect] is in display space (y-down;
+ * y-min stored in [Rectangle.bottom]). [href] is either `zipPath#fragment`
+ * (internal, resolve with the document's href navigation) or an external URL.
+ */
+class EpubLink internal constructor(
+    val rect: io.github.yuroyami.kitepdf.Rectangle,
+    val href: String,
+)
+
+/**
  * Reader layout settings. All values in points. Change them at runtime with
  * [EpubDocument.withSettings] (or the `withFontSize`/`withPageSize`/`withMargin`
  * shorthands) to re-flow without re-parsing the book.
@@ -341,6 +407,8 @@ internal class ParsedSpine(
     val rules: List<StyleRule>,
     val docDir: String,
     val viewport: Pair<Double, Double>,
+    /** Zip path of this spine document — the key for href -> page navigation. */
+    val path: String,
 )
 
 /**
@@ -455,6 +523,48 @@ class EpubPage internal constructor(
         val path = PdfPath.Builder().apply { rectangle(x, yBottom, w, h) }.build()
         canvas.fillPath(path, ctm, color, evenOdd = false, alpha = 1.0, blendMode = BlendMode.Normal)
     }
+
+    /* ── links ───────────────────────────────────────────────────────────── */
+
+    /**
+     * The tappable link regions on this page, in display space (same rect
+     * convention as [KiteStructuredText]: y-min in `bottom`, y-max in `top`,
+     * y measured downward). One rect per line a link touches; consecutive
+     * same-target runs on a line merge into one rect. Internal targets are
+     * `zipPath#fragment` strings resolvable via `EpubDocument.pageIndexOfHref`;
+     * external URLs are verbatim.
+     */
+    val links: List<EpubLink> by lazy {
+        val out = ArrayList<EpubLink>()
+        for (line in page.lines) {
+            val top = displayY(line.yTop)
+            val bottom = top + line.height
+            val runs = line.runs.filter { !it.isAnnotation && it.glyphs.isNotEmpty() }.sortedBy { it.x }
+            var i = 0
+            while (i < runs.size) {
+                val href = runs[i].href
+                if (href == null) { i++; continue }
+                var j = i
+                while (j + 1 < runs.size && runs[j + 1].href == href) j++
+                out.add(
+                    EpubLink(
+                        rect = io.github.yuroyami.kitepdf.Rectangle(
+                            left = page.margin + runs[i].x,
+                            bottom = top,
+                            right = runEnd(runs[j]),
+                            top = bottom,
+                        ),
+                        href = href,
+                    ),
+                )
+                i = j + 1
+            }
+        }
+        out
+    }
+
+    private fun runEnd(r: PlacedRun): Double =
+        page.margin + r.x + r.glyphs.sumOf { it.advanceWidth } * r.fontSize / 1000.0
 
     /* ── structured text (extraction / search) ───────────────────────────── */
 
