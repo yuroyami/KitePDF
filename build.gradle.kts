@@ -12,7 +12,7 @@ plugins {
 
 allprojects {
     group = "io.github.yuroyami"
-    version = "0.1.1"
+    version = "0.1.2"
 }
 
 // Aggregate the published library modules into a single Dokka API reference.
