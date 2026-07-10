@@ -1,6 +1,7 @@
 package io.github.yuroyami.kitepdf.render
 
 import io.github.yuroyami.kitepdf.compression.Zlib
+import io.github.yuroyami.kitepdf.filters.FilterChain
 import kotlin.math.abs
 
 /**
@@ -72,7 +73,9 @@ internal object PngDecoder {
         val channels = channelsOf(colorType) ?: return null
 
         val compressed = concat(bytes, idatParts)
-        val raw = runCatching { Zlib.decode(compressed, verifyChecksum = false) }.getOrNull() ?: return null
+        val raw = runCatching {
+            Zlib.decode(compressed, verifyChecksum = false, maxOutputBytes = FilterChain.MAX_DECODED_STREAM)
+        }.getOrNull() ?: return null
 
         val bitsPerPixel = channels * bitDepth
         val bpp = (bitsPerPixel + 7) / 8 // filtering unit, >= 1 byte

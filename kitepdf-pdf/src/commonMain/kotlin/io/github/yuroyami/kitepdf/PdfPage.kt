@@ -190,7 +190,10 @@ class PdfPage internal constructor(
         when (val c = node["Contents"]) {
             null -> ByteArray(0)
             is PdfReference -> streamBytesOf(c) ?: ByteArray(0)
-            is PdfStream -> FilterChain.decode(c)
+            // Lenient salvage: an undecodable stream (bad flate data, or one
+            // tripping the decompression-bomb cap) yields a blank page, not a
+            // crash — matching MuPDF's broken-content behaviour.
+            is PdfStream -> runCatching { FilterChain.decode(c) }.getOrNull() ?: ByteArray(0)
             is PdfArray -> {
                 val buf = ByteArrayBuilder(4096)
                 var first = true
@@ -210,10 +213,14 @@ class PdfPage internal constructor(
         }
     }
 
-    /** Decoded stream bytes for a content reference, or null if it doesn't resolve to a stream. */
+    /**
+     * Decoded stream bytes for a content reference, or null if it doesn't
+     * resolve to a stream or its data cannot be decoded (including streams
+     * rejected by the decompression-bomb cap).
+     */
     private fun streamBytesOf(ref: PdfReference): ByteArray? {
         val stream = document.resolve(ref) as? PdfStream ?: return null
-        return FilterChain.decode(stream)
+        return runCatching { FilterChain.decode(stream) }.getOrNull()
     }
 
     /** Extract page text using the naive Tj/TJ/' / " operator scan. */

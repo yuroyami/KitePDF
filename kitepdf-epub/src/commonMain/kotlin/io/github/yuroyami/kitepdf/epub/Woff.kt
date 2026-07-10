@@ -1,6 +1,7 @@
 package io.github.yuroyami.kitepdf.epub
 
 import io.github.yuroyami.kitepdf.compression.Zlib
+import io.github.yuroyami.kitepdf.filters.FilterChain
 
 /**
  * WOFF 1.0 (Web Open Font Format) → bare SFNT decoder. A WOFF file is an SFNT
@@ -48,7 +49,9 @@ internal object Woff {
             payloads[i] = if (e.compLen >= e.origLen) {
                 comp // stored uncompressed
             } else {
-                val out = runCatching { Zlib.decode(comp, verifyChecksum = false) }.getOrNull() ?: return null
+                val out = runCatching {
+                    Zlib.decode(comp, verifyChecksum = false, maxOutputBytes = FilterChain.MAX_DECODED_STREAM)
+                }.getOrNull() ?: return null
                 if (out.size < e.origLen) return null
                 if (out.size == e.origLen) out else out.copyOf(e.origLen)
             }
