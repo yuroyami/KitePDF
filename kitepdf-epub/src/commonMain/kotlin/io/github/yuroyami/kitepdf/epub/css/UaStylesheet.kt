@@ -44,6 +44,8 @@ internal object UaStylesheet {
         ol{display:block;list-style-type:decimal;margin:1em 0;padding:0 0 0 30pt}
         p{display:block;margin:1em 0}
         pre{display:block;font-family:monospace;margin:1em 0;white-space:pre}
+        rp{display:none}
+        rt{display:none}
         script{display:none}
         small{font-size:0.83em}
         style{display:none}
