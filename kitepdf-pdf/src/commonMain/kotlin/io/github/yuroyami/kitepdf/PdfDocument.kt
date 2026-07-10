@@ -127,6 +127,22 @@ class PdfDocument private constructor(
     private val pageRefToIndex = HashMap<Long, Int>()
 
     /**
+     * Decoded image XObjects keyed by object number (T-12): a logo stamped 40
+     * times or a background shared by every page decodes once per document.
+     * Fill-colour-dependent /ImageMask stencils never enter it. Call
+     * [dropDecodedImageCache] under memory pressure.
+     */
+    internal val decodedImageCache = HashMap<Long, io.github.yuroyami.kitepdf.render.ImageXObject>()
+
+    /** Test hook: actual image decodes performed by the renderer. */
+    internal var imageDecodeCount = 0
+
+    /** Frees every cached decoded image (they re-decode lazily on next use). */
+    internal fun dropDecodedImageCache() {
+        decodedImageCache.clear()
+    }
+
+    /**
      * Parsed `/PageLabels` number tree, or empty if the catalog doesn't have
      * one. Drives [PdfPage.label].
      */

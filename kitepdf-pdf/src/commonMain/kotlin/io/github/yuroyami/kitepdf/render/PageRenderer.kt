@@ -13,6 +13,7 @@ import io.github.yuroyami.kitepdf.parser.PdfInt
 import io.github.yuroyami.kitepdf.parser.PdfName
 import io.github.yuroyami.kitepdf.parser.PdfObject
 import io.github.yuroyami.kitepdf.parser.PdfReal
+import io.github.yuroyami.kitepdf.parser.PdfReference
 import io.github.yuroyami.kitepdf.parser.PdfStream
 import io.github.yuroyami.kitepdf.parser.PdfString
 
@@ -49,18 +50,23 @@ class PageRenderer(
     // painting op via [applyPendingClip].
     private var pendingClip = 0
 
-    /** Parsed form-XObject resources, memoized by form-stream identity so a form
-     *  drawn N times (repeated stamps/icons) parses its fonts/colorspaces once. */
+    /** An XObject with the indirect object number it resolved from (null for
+     *  the rare ref-less inline entry) — the number keys the decoded caches. */
+    class XObjectSlot(val objectNumber: Long?, val stream: PdfStream)
+
+    /** Parsed form-XObject resources, memoized by the form's object number so a
+     *  form drawn N times (repeated stamps/icons) parses its fonts/colorspaces
+     *  once. Ref-less forms rebuild each time (rare). */
     private class FormResources(
         val fonts: Map<String, PdfFont>,
-        val xobjects: Map<String, PdfStream>,
+        val xobjects: Map<String, XObjectSlot>,
         val colorSpaces: Map<String, ColorSpace>,
         val extGStates: Map<String, ExtGState>,
         val shadings: Map<String, PdfShading>,
         val patterns: Map<String, PdfPattern>,
         val properties: Map<String, PdfObject>,
     )
-    private val formResourceCache = HashMap<PdfStream, FormResources>()
+    private val formResourceCache = HashMap<Long, FormResources>()
 
     // ─── Optional content (layers) ───────────────────────────────────────────
     // Marked-content sections introduced by `BDC /OC <ocg>` are suppressed when
@@ -449,6 +455,28 @@ class PageRenderer(
      * [ImageXObject] driven through the normal raster path. [fillColor] tints an
      * inline `/ImageMask` stencil.
      */
+    /**
+     * Decode an image XObject through the per-document cache (T-12): keyed by
+     * the indirect object number, so a logo stamped 40 times (or a background
+     * shared by every page) decodes once per document. /ImageMask stencils are
+     * tinted by the CURRENT fill colour, so their decoded form is
+     * state-dependent: never cached. Ref-less images skip the cache too.
+     */
+    private fun decodeImageCached(slot: XObjectSlot, fillColor: RgbColor): ImageXObject {
+        val doc = resolver as? io.github.yuroyami.kitepdf.PdfDocument
+        val key = slot.objectNumber
+        val isMask = (slot.stream.dict["ImageMask"] as? io.github.yuroyami.kitepdf.parser.PdfBoolean)?.value == true
+        if (doc == null || key == null || isMask) {
+            doc?.let { it.imageDecodeCount++ }
+            return ImageXObject.from(slot.stream, resolver, fillColor)
+        }
+        doc.decodedImageCache[key]?.let { return it }
+        doc.imageDecodeCount++
+        return ImageXObject.from(slot.stream, resolver, fillColor).also {
+            doc.decodedImageCache[key] = it
+        }
+    }
+
     private fun decodeInlineImage(blob: ByteArray, fillColor: RgbColor): ImageXObject? {
         if (blob.size < 4) return null
         val reader = io.github.yuroyami.kitepdf.core.ByteReader(blob)
@@ -495,13 +523,16 @@ class PageRenderer(
     private fun renderFormXObject(
         formStream: PdfStream,
         parentState: GraphicsStack,
+        /** The form's indirect object number; null (annotation appearances,
+         *  ref-less entries) skips the resource cache. */
+        objectNumber: Long? = null,
     ) {
         // Recursion guard: a form that (transitively) draws itself would overflow
         // the native stack on malformed/malicious input.
         if (formDepth >= MAX_FORM_DEPTH) return
         formDepth++
         try {
-            renderFormXObjectInner(formStream, parentState)
+            renderFormXObjectInner(formStream, parentState, objectNumber)
         } finally {
             formDepth--
         }
@@ -510,6 +541,7 @@ class PageRenderer(
     private fun renderFormXObjectInner(
         formStream: PdfStream,
         parentState: GraphicsStack,
+        objectNumber: Long?,
     ) {
         val formMatrix = formStream.dict.getArray("Matrix")?.let { arr ->
             Matrix(
@@ -524,10 +556,10 @@ class PageRenderer(
                 arr.getOrNull(2).toDouble(), arr.getOrNull(3).toDouble(),
             )
         } ?: io.github.yuroyami.kitepdf.Rectangle(0.0, 0.0, 1000.0, 1000.0)
-        val res = formResourceCache.getOrPut(formStream) {
+        fun buildResources(): FormResources {
             val resources = formStream.dict.getDict("Resources", resolver)
             val sh = loadShadings(resources)
-            FormResources(
+            return FormResources(
                 fonts = loadFonts(resources),
                 xobjects = loadXObjects(resources),
                 colorSpaces = loadColorSpaces(resources),
@@ -537,6 +569,10 @@ class PageRenderer(
                 properties = loadProperties(resources),
             )
         }
+        // Keyed by object number so lookups don't deep-hash the stream's
+        // dictionary (the old PdfStream key hashed the whole map + bytes).
+        val res = objectNumber?.let { formResourceCache.getOrPut(it) { buildResources() } }
+            ?: buildResources()
         val childFonts = res.fonts
         val childXObjects = res.xobjects
         val childColorSpaces = res.colorSpaces
@@ -610,11 +646,13 @@ class PageRenderer(
     }
 
     /** Build the page resource → XObject dictionary. Each entry is a stream. */
-    private fun loadXObjects(resources: PdfDictionary?): Map<String, PdfStream> {
+    private fun loadXObjects(resources: PdfDictionary?): Map<String, XObjectSlot> {
         val xobjs = resources?.getDict("XObject", resolver) ?: return emptyMap()
         return xobjs.map.mapNotNull { (name, raw) ->
             val resolved = raw.resolve(resolver) as? PdfStream ?: return@mapNotNull null
-            name to resolved
+            // Keep the indirect object number: it keys the per-document decoded
+            // caches (T-12). Inline (ref-less) entries decode uncached.
+            name to XObjectSlot((raw as? PdfReference)?.objectNumber, resolved)
         }.toMap()
     }
 
@@ -635,7 +673,7 @@ class PageRenderer(
         state: GraphicsStack,
         path: PdfPath.Builder,
         fonts: Map<String, PdfFont>,
-        xobjects: Map<String, PdfStream>,
+        xobjects: Map<String, XObjectSlot>,
         colorSpaces: Map<String, ColorSpace>,
         extGStates: Map<String, ExtGState>,
         shadings: Map<String, PdfShading>,
@@ -809,17 +847,17 @@ class PageRenderer(
             // ─── XObject (Image / Form) ──────────────────────────────────
             "Do" -> {
                 val name = (a.firstOrNull() as? PdfName)?.value ?: return
-                val stream = xobjects[name] ?: return
+                val slot = xobjects[name] ?: return
                 // Skip when inside a hidden OC section or the XObject's own /OC is off.
-                if (ocHidden() || isXObjectOcHidden(stream)) return
-                when (stream.dict.getName("Subtype")) {
+                if (ocHidden() || isXObjectOcHidden(slot.stream)) return
+                when (slot.stream.dict.getName("Subtype")) {
                     "Image" -> withSoftMask(state.current) {
                         canvas.drawImage(
-                            ImageXObject.from(stream, resolver, fillColor = state.current.fillColor),
+                            decodeImageCached(slot, state.current.fillColor),
                             state.current.ctm, state.current.fillAlpha,
                         )
                     }
-                    "Form" -> renderFormXObject(stream, state)
+                    "Form" -> renderFormXObject(slot.stream, state, slot.objectNumber)
                 }
             }
 
