@@ -179,6 +179,34 @@ Gate reference numbers at session start (2026-07-10, before any task):
 
 ---
 
+## T-67. Inline typography: text-transform, letter/word-spacing, small-caps
+
+- **Status:** DONE
+- **Commit:** `43abee8`
+- **What landed:** four inherited `ComputedStyle` props; `text-transform`
+  applied at run build with cross-run word-boundary tracking (apostrophes
+  are not separators; pre-whitespace mode transforms separately);
+  `letter-spacing` folded into cell width + drawn advance via the kerning
+  channel (`kernWord` now accumulates instead of overwriting; the generic
+  system-font path folds `kernAfter1000` too, which it previously ignored);
+  `word-spacing` widens space tokens; both flow into justify slack via the
+  widths. `font-variant: small-caps`: real `smcp` GSUB substitution at full
+  size when the face has it, else the uppercase form synthesized at 0.8em.
+- **Verification:** `InlineTypographyTest` (7 tests): transforms incl.
+  mid-word inline split and apostrophes, letter-spacing per-advance growth
+  (charEdges deltas), word-spacing isolation to spaces, justified line
+  fills content width with nonzero letter-spacing (124pt within 0.6),
+  synthesized small-caps run sizes (12.0 / 9.6) and uppercase forms,
+  nothing-to-synthesize case. jvmTest `SmcpFeatureTest` exercises the real
+  `smcp` path when an in-repo font carries the feature and skips otherwise
+  (the audit's "synthesized GSUB table" alternative was not built; noted as
+  the honest skip). Full gate green; sweep + differential unchanged.
+- **Extraction quirk (documented in code):** synthesized small-caps cells
+  carry the uppercase char, so extraction/search see the uppercase form for
+  faces without `smcp`.
+
+---
+
 ## Discovered during execution
 
 (nothing yet)

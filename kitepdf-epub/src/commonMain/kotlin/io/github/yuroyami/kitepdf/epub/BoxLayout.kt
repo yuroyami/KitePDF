@@ -41,7 +41,38 @@ internal class BoxLayout(
     /** Lay out [root] to fill [contentWidth]; returns total document height. */
     fun layout(root: BlockBox, contentWidth: Double): Double {
         layoutBlock(root, xLeft = 0.0, availWidth = contentWidth, topY = 0.0)
+        applyRelativeOffsets(root)
         return root.borderBoxHeight
+    }
+
+    /**
+     * `position: relative` is a pure paint-time offset (CSS: the box's flow
+     * position and its siblings are unaffected), applied after layout to the
+     * box and its whole subtree. `left` wins over `right`, `top` over `bottom`.
+     */
+    private fun applyRelativeOffsets(box: LayoutBox) {
+        if (box is BlockBox && box.style.position == CssPosition.RELATIVE) {
+            val s = box.style
+            val dx = s.leftPt ?: s.rightPt?.let { -it } ?: 0.0
+            val dy = s.topPt ?: s.bottomPt?.let { -it } ?: 0.0
+            if (dx != 0.0 || dy != 0.0) shiftSubtree(box, dx, dy)
+        }
+        when (box) {
+            is BlockBox -> for (c in box.children) applyRelativeOffsets(c)
+            is TableBox -> for (r in box.rows) for (cell in r.cells) applyRelativeOffsets(cell)
+            else -> {}
+        }
+    }
+
+    private fun shiftSubtree(box: LayoutBox, dx: Double, dy: Double) {
+        box.x += dx; box.y += dy
+        when (box) {
+            is BlockBox -> for (c in box.children) shiftSubtree(c, dx, dy)
+            is TableBox -> for (r in box.rows) shiftSubtree(r, dx, dy)
+            is TableRowBox -> for (c in box.cells) shiftSubtree(c, dx, dy)
+            is TextBlockBox -> for (ln in box.lines) { ln.yTop += dy; for (r in ln.runs) r.x += dx }
+            is ImageBox -> {}
+        }
     }
 
     private fun layoutBlock(box: BlockBox, xLeft: Double, availWidth: Double, topY: Double) {
@@ -50,6 +81,7 @@ internal class BoxLayout(
         val extra = s.marginLeftPt + s.marginRightPt + bL + bR + s.paddingLeftPt + s.paddingRightPt
         var contentW = s.widthPt ?: (availWidth - extra)
         s.maxWidthPt?.let { if (contentW > it) contentW = it }
+        s.minWidthPt?.let { if (contentW < it) contentW = it } // min wins over max
         contentW = contentW.coerceAtLeast(0.0)
 
         box.borderBoxWidth = bL + s.paddingLeftPt + contentW + s.paddingRightPt + bR
@@ -81,8 +113,16 @@ internal class BoxLayout(
         }
         cursorY += prevBottom
 
-        var contentH = cursorY - contentTop
+        val natural = cursorY - contentTop
+        var contentH = natural
         s.heightPt?.let { contentH = it }
+        s.maxHeightPt?.let { if (contentH > it) contentH = it }
+        s.minHeightPt?.let { if (contentH < it) contentH = it } // min wins over max
+        // Reflow safety: a declared height may GROW a box but never clip flowed
+        // content. Clipping would make following siblings (and the next spine)
+        // overlap the overflow at pagination, silently losing book content
+        // (html,body{height:100%} is everywhere in real EPUB CSS).
+        if (contentH < natural) contentH = natural
         box.borderBoxHeight = s.borderTop.effective + s.paddingTopPt + contentH + s.paddingBottomPt + s.borderBottom.effective
     }
 
@@ -150,6 +190,10 @@ internal class BoxLayout(
         }
         val cap = minOf(box.style.maxWidthPt ?: Double.MAX_VALUE, contentW)
         if (w > cap) { val s = cap / w; w = cap; h *= s }
+        // Style clamps (proportional), then the hard page-height cap last.
+        box.style.maxHeightPt?.let { if (h > it) { val k = it / h; h = it; w *= k } }
+        box.style.minWidthPt?.let { if (w < it) { val k = it / w; w = it; h *= k } }
+        box.style.minHeightPt?.let { if (h < it) { val k = it / h; h = it; w *= k } }
         if (h > maxImageHeight) { val s = maxImageHeight / h; h = maxImageHeight; w *= s }
         box.drawWidth = w; box.drawHeight = h
         box.x = contentLeft + (contentW - w) / 2.0

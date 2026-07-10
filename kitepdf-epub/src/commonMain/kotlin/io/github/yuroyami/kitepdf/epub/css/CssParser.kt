@@ -139,8 +139,43 @@ internal object CssParser {
                 if (kw != null) emit("list-style-type", kw.lowercase())
                 emit(prop, value)
             }
+            "font" -> expandFont(value, ::emit)
             else -> emit(prop, value)
         }
+    }
+
+    /**
+     * Expand the `font:` shorthand subset:
+     * `[style || variant || weight] size[/line-height] family[, ...]`.
+     * System-font keywords (`caption`, `menu`, ...) are ignored. The size
+     * token marks the boundary: everything after it is the family list.
+     */
+    private fun expandFont(value: String, emit: (String, String) -> Unit) {
+        val words = splitWords(value)
+        if (words.isEmpty()) return
+        if (words.size == 1 && words[0].lowercase() in FONT_SYSTEM_KEYWORDS) return
+        var sizeIdx = -1
+        for ((i, w) in words.withIndex()) {
+            val head = w.substringBefore('/')
+            val low = head.lowercase()
+            val looksLikeSize = low in FONT_SIZE_KEYWORDS ||
+                (head.isNotEmpty() && (head[0].isDigit() || head[0] == '.') && head.any { it.isLetter() || it == '%' })
+            if (looksLikeSize) { sizeIdx = i; break }
+        }
+        if (sizeIdx < 0) return // no size token: invalid shorthand, drop leniently
+        for (i in 0 until sizeIdx) when (val low = words[i].lowercase()) {
+            "italic", "oblique" -> emit("font-style", low)
+            "small-caps" -> emit("font-variant", low)
+            "bold", "bolder", "lighter" -> emit("font-weight", low)
+            "normal" -> {} // could be any of the three; initial either way
+            else -> words[i].toIntOrNull()?.let { emit("font-weight", words[i]) }
+        }
+        val sizeTok = words[sizeIdx]
+        val size = sizeTok.substringBefore('/')
+        emit("font-size", size)
+        if ('/' in sizeTok) sizeTok.substringAfter('/').takeIf { it.isNotEmpty() }?.let { emit("line-height", it) }
+        val family = words.drop(sizeIdx + 1).joinToString(" ")
+        if (family.isNotEmpty()) emit("font-family", family)
     }
 
     /** Expand a `border[-side]: <width> <style> <color>` shorthand for [sides]. */
@@ -227,6 +262,10 @@ internal object CssParser {
     )
 
     private val SIDES = listOf("top", "right", "bottom", "left")
+    private val FONT_SYSTEM_KEYWORDS = setOf("caption", "icon", "menu", "message-box", "small-caption", "status-bar")
+    private val FONT_SIZE_KEYWORDS = setOf(
+        "xx-small", "x-small", "small", "medium", "large", "x-large", "xx-large", "smaller", "larger",
+    )
     private val BORDER_STYLES = setOf(
         "none", "hidden", "solid", "dotted", "dashed", "double", "groove", "ridge", "inset", "outset",
     )

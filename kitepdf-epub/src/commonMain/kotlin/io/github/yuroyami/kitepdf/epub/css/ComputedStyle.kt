@@ -94,6 +94,10 @@ internal data class ComputedStyle(
     val wordSpacingPt: Double = 0.0,
     /** `font-variant: small-caps` (smcp GSUB when the face has it, else synthesized). Inherited. */
     val smallCaps: Boolean = false,
+    /** Size clamps, or null when unset. Min wins over max per CSS. */
+    val minWidthPt: Double? = null,
+    val minHeightPt: Double? = null,
+    val maxHeightPt: Double? = null,
 ) {
     val mono: Boolean get() = fontFamily == GenericFont.MONO
 

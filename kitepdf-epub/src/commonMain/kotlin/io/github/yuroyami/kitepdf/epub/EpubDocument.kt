@@ -62,7 +62,8 @@ class EpubDocument internal constructor(
     private val docRoots: List<BlockBox> by lazy {
         parsed.spines.map { sp ->
             val layoutWidth = if (parsed.fixedLayout) sp.viewport.first else contentWidth
-            val resolver = StyleResolver(sp.rules, settings.fontSize, layoutWidth, parsed.baseDir)
+            val layoutHeight = if (parsed.fixedLayout) sp.viewport.second else pageContentHeight
+            val resolver = StyleResolver(sp.rules, settings.fontSize, layoutWidth, parsed.baseDir, layoutHeight)
             BoxBuilder(resolver, sp.path) { href -> resolvePath(sp.docDir, href) }.build(sp.tree)
         }
     }
@@ -303,15 +304,45 @@ class EpubDocument internal constructor(
                     "link" -> {
                         val rel = el.attrs["rel"]?.lowercase() ?: ""
                         val href = el.attrs["href"]
-                        if ("stylesheet" in rel && href != null) zip.readText(resolvePath(docDir, href))?.let { sb.append(it).append('\n') }
+                        if ("stylesheet" in rel && href != null) {
+                            val path = resolvePath(docDir, href)
+                            zip.readText(path)?.let {
+                                sb.append(inlineImports(zip, it, dirOf(path), 0, hashSetOf(path))).append('\n')
+                            }
+                        }
                     }
-                    "style" -> { for (c in el.children) if (c is HtmlNode.Text) sb.append(c.text); sb.append('\n') }
+                    "style" -> {
+                        val text = buildString { for (c in el.children) if (c is HtmlNode.Text) append(c.text) }
+                        sb.append(inlineImports(zip, text, docDir, 0, HashSet())).append('\n')
+                    }
                     else -> for (c in el.children) if (c is HtmlNode.Element) walk(c)
                 }
             }
             walk(tree)
             return sb.toString()
         }
+
+        /**
+         * Replace `@import url(...)` / `@import "..."` with the imported
+         * sheet's content, resolved zip-relative, recursively (depth cap 8,
+         * visited-set cycle guard). Media conditions after the target are
+         * ignored, matching the parser's always-on `@media` flattening.
+         */
+        private fun inlineImports(zip: ZipReader, css: String, baseDir: String, depth: Int, visited: MutableSet<String>): String {
+            if (depth >= 8 || "@import" !in css) return css
+            return IMPORT_RE.replace(css) { m ->
+                val path = resolvePath(baseDir, m.groupValues[1])
+                if (!visited.add(path)) ""
+                else zip.readText(path)?.let { inlineImports(zip, it, dirOf(path), depth + 1, visited) } ?: ""
+            }
+        }
+
+        private fun dirOf(path: String): String = path.substringBeforeLast('/', "")
+
+        private val IMPORT_RE = Regex(
+            """@import\s+(?:url\(\s*)?["']?([^"')\s;]+)["']?\s*\)?[^;{]*;""",
+            RegexOption.IGNORE_CASE,
+        )
 
         /** Fixed-layout page size: the `<meta name=viewport>` width/height, else a root `<svg>`'s. */
         private fun parseViewport(tree: HtmlNode.Element): Pair<Double, Double>? {
@@ -482,6 +513,25 @@ class EpubPage internal constructor(
                 continue
             }
             val img = box.image ?: continue
+            // object-fit: cover — scale to FILL the box preserving aspect,
+            // center, and clip the overflow to the box rect.
+            if (box.style.objectFit == io.github.yuroyami.kitepdf.epub.css.ObjectFit.COVER &&
+                img.width > 0 && img.height > 0
+            ) {
+                val scale = maxOf(box.drawWidth / img.width, box.drawHeight / img.height)
+                val dw = img.width * scale
+                val dh = img.height * scale
+                val dx = (box.drawWidth - dw) / 2.0
+                val dy = (box.drawHeight - dh) / 2.0
+                val clip = PdfPath.Builder()
+                    .apply { rectangle(margin + box.x, yUp(box.bottom), box.drawWidth, box.drawHeight) }
+                    .build()
+                canvas.pushClip(clip, deviceCtm, evenOdd = false)
+                val m = Matrix(dw, 0.0, 0.0, dh, margin + box.x + dx, yUp(box.bottom) + dy)
+                canvas.drawImage(img, deviceCtm.concat(m))
+                canvas.popClip()
+                continue
+            }
             val m = Matrix(box.drawWidth, 0.0, 0.0, box.drawHeight, margin + box.x, yUp(box.bottom))
             canvas.drawImage(img, deviceCtm.concat(m))
         }

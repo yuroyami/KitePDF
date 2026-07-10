@@ -89,7 +89,8 @@ internal class TableRowBox(
 /** One inline run positioned on a line: glyphs + paint + document-space left [x]. */
 internal class PlacedRun(
     val glyphs: List<TextGlyph>,
-    val x: Double,
+    /** Mutable only for the post-layout `position:relative` shift pass. */
+    var x: Double,
     val fontSize: Double,
     val fontSpec: FontSpec,
     val color: RgbColor,
@@ -110,7 +111,8 @@ internal class PlacedRun(
 /** A laid-out line inside a [TextBlockBox]; [yTop] is absolute document-down. */
 internal class PositionedLine(
     val runs: List<PlacedRun>,
-    val yTop: Double,
+    /** Mutable only for the post-layout `position:relative` shift pass. */
+    var yTop: Double,
     val height: Double,
     val ascent: Double,
 ) {

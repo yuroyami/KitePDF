@@ -19,6 +19,8 @@ internal class StyleResolver(
     private val rootFontSizePt: Double,
     private val refWidthPt: Double,
     private val baseDirection: Direction = Direction.LTR,
+    /** Percentage `height`/`min-height`/`max-height` resolve against this (the page content height); 0 disables them. */
+    private val refHeightPt: Double = 0.0,
 ) {
     private val rules: List<StyleRule> = UaStylesheet.rules + authorRules
 
@@ -219,7 +221,12 @@ internal class StyleResolver(
             "border-left-color" -> CssValues.color(v)?.let { b.borderLeftColor = it }
             "width" -> b.widthPt = sizeValue(b, v, refWidthPt)
             "max-width" -> b.maxWidthPt = sizeValue(b, v, refWidthPt)
-            "height" -> b.heightPt = if (v.trim().endsWith("%")) null else sizeValue(b, v, refWidthPt)
+            "min-width" -> b.minWidthPt = sizeValue(b, v, refWidthPt)
+            // Percentage heights resolve against the page CONTENT height (the
+            // nearest definite vertical reference in a paginated reader).
+            "height" -> b.heightPt = heightValue(b, v)
+            "min-height" -> b.minHeightPt = heightValue(b, v)
+            "max-height" -> b.maxHeightPt = heightValue(b, v)
             "break-before", "page-break-before" -> b.breakBefore = forcesBreak(v)
             "break-after", "page-break-after" -> b.breakAfter = forcesBreak(v)
             "break-inside", "page-break-inside" -> b.breakInsideAvoid = v.trim().lowercase() == "avoid"
@@ -274,6 +281,16 @@ internal class StyleResolver(
     private fun sizeValue(b: Builder, v: String, ref: Double): Double? = when (v.trim().lowercase()) {
         "auto", "none", "inherit" -> null
         else -> CssValues.length(v, b.fontSizePt, rootFontSizePt, ref)
+    }
+
+    /** Vertical size: percentages against [refHeightPt] (null when it is 0). */
+    private fun heightValue(b: Builder, v: String): Double? {
+        val s = v.trim()
+        if (s.endsWith("%")) {
+            if (refHeightPt <= 0.0) return null
+            return s.dropLast(1).toDoubleOrNull()?.let { it / 100.0 * refHeightPt }
+        }
+        return sizeValue(b, s, refHeightPt)
     }
 
     private fun resolveFontSize(v: String, parentPt: Double): Double {
@@ -419,6 +436,7 @@ internal class StyleResolver(
         var letterSpacingPt = parent.letterSpacingPt // inherited
         var wordSpacingPt = parent.wordSpacingPt // inherited
         var smallCaps = parent.smallCaps // inherited
+        var minWidthPt: Double? = null; var minHeightPt: Double? = null; var maxHeightPt: Double? = null
 
         fun build() = ComputedStyle(
             display, fontSizePt, bold, italic, fontFamily, color, backgroundColor,
@@ -438,6 +456,7 @@ internal class StyleResolver(
             hyphensAuto,
             position, leftPt, topPt, rightPt, bottomPt, objectFit, writingMode,
             textTransform, letterSpacingPt, wordSpacingPt, smallCaps,
+            minWidthPt, minHeightPt, maxHeightPt,
         )
     }
 
