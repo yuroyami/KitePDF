@@ -6,6 +6,7 @@ import io.github.yuroyami.kitepdf.epub.css.ListType
 import io.github.yuroyami.kitepdf.epub.css.PseudoContent
 import io.github.yuroyami.kitepdf.epub.css.PseudoSide
 import io.github.yuroyami.kitepdf.epub.css.StyleResolver
+import io.github.yuroyami.kitepdf.epub.css.TextTransform
 import io.github.yuroyami.kitepdf.epub.css.WhiteSpaceMode
 import io.github.yuroyami.kitepdf.render.RgbColor
 
@@ -298,7 +299,8 @@ internal class BoxBuilder(
         fun appendText(raw: String, style: ComputedStyle) {
             if (raw.isEmpty()) return
             if (style.whiteSpace == WhiteSpaceMode.PRE || style.whiteSpace == WhiteSpaceMode.PRE_WRAP || style.whiteSpace == WhiteSpaceMode.PRE_LINE) {
-                runs.add(makeRun(raw, style)); blockHasContent = true; pendingSpace = false; lastWasBreak = false
+                runs.add(makeRun(transformPre(raw, style.textTransform), style))
+                blockHasContent = true; pendingSpace = false; lastWasBreak = false
                 return
             }
             val b = StringBuilder(raw.length)
@@ -306,12 +308,34 @@ internal class BoxBuilder(
                 if (ch.isWhitespace()) {
                     pendingSpace = true
                 } else {
+                    // Word boundary BEFORE consuming pendingSpace: capitalize needs it,
+                    // and it must survive across appendText calls (runs split mid-word).
+                    val boundary = pendingSpace || !blockHasContent || lastWasBreak
                     if (pendingSpace && blockHasContent && !lastWasBreak) b.append(' ')
                     pendingSpace = false; lastWasBreak = false
-                    b.append(ch); blockHasContent = true
+                    b.append(transformChar(ch, style.textTransform, boundary)); blockHasContent = true
                 }
             }
             if (b.isNotEmpty()) runs.add(makeRun(b.toString(), style))
+        }
+
+        private fun transformChar(ch: Char, tt: TextTransform, wordBoundary: Boolean): Char = when (tt) {
+            TextTransform.NONE -> ch
+            TextTransform.UPPERCASE -> ch.uppercaseChar()
+            TextTransform.LOWERCASE -> ch.lowercaseChar()
+            TextTransform.CAPITALIZE -> if (wordBoundary) ch.uppercaseChar() else ch
+        }
+
+        /** Transform preserved-whitespace text: word boundaries follow whitespace. */
+        private fun transformPre(raw: String, tt: TextTransform): String {
+            if (tt == TextTransform.NONE) return raw
+            val sb = StringBuilder(raw.length)
+            var boundary = true
+            for (ch in raw) {
+                sb.append(transformChar(ch, tt, boundary))
+                boundary = ch.isWhitespace()
+            }
+            return sb.toString()
         }
 
         private fun makeRun(text: String, style: ComputedStyle) = InlineRun(
@@ -321,6 +345,8 @@ internal class BoxBuilder(
             fontFamilyName = style.fontFamilyName,
             rubyGroup = rubyGroup, rubyText = rubyText,
             href = linkHref,
+            letterSpacingPt = style.letterSpacingPt, wordSpacingPt = style.wordSpacingPt,
+            smallCaps = style.smallCaps,
         )
     }
 

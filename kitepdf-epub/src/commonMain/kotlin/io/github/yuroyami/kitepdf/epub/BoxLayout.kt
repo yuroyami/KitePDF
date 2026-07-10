@@ -15,6 +15,7 @@ import io.github.yuroyami.kitepdf.font.TextGlyph
 import io.github.yuroyami.kitepdf.render.ImageXObject
 import io.github.yuroyami.kitepdf.render.RgbColor
 import io.github.yuroyami.kitepdf.text.Hyphenator
+import kotlin.math.roundToInt
 
 // GSUB ligature features, applied required-first: Arabic lam-alef (`rlig`) then
 // discretionary Latin ligatures like fi/fl (`liga`).
@@ -453,6 +454,18 @@ internal class BoxLayout(
             val spec = fontSpec(run.family, run.bold, run.italic)
             val face = fonts.match(run.fontFamilyName, run.bold, run.italic)
             fun cellFor(ch: Char): Cell {
+                // font-variant: small-caps. Prefer the face's real `smcp` glyph;
+                // otherwise synthesize: the UPPERCASE form at 0.8x size (the cell
+                // then carries the uppercase char, a documented extraction quirk).
+                var c = ch
+                var cellFs = fs
+                var smcpGid = -1
+                if (run.smallCaps && ch.isLowerCase()) {
+                    val g0 = face?.gidFor(ch.code) ?: 0
+                    val s = if (g0 != 0) face!!.substSingle("smcp", g0) else 0
+                    if (g0 != 0 && s != g0) smcpGid = s
+                    else { c = ch.uppercaseChar(); cellFs = fs * SMALL_CAPS_SCALE }
+                }
                 // Per-glyph fallback: a codepoint missing from the matched face
                 // (cmap -> gid 0, `.notdef`) must not paint tofu. Try any other
                 // registered face that has it; failing that, the generic
@@ -461,17 +474,26 @@ internal class BoxLayout(
                 // multi-face words and placeRuns splits runs on a face change.
                 val f = when {
                     face == null -> null
-                    face.gidFor(ch.code) != 0 -> face
-                    else -> fonts.fallbackFor(ch.code, run.bold, run.italic)
+                    smcpGid >= 0 -> face
+                    face.gidFor(c.code) != 0 -> face
+                    else -> fonts.fallbackFor(c.code, run.bold, run.italic)
                 }
-                return if (f != null) {
-                    val gid = f.gidFor(ch.code)
-                    Cell(ch, f.advance1000(gid) * fs / 1000.0, fs, spec, run.color, shift, run.underline, f, gid,
+                val cell = if (f != null) {
+                    val gid = if (smcpGid >= 0) smcpGid else f.gidFor(c.code)
+                    Cell(c, f.advance1000(gid) * cellFs / 1000.0, cellFs, spec, run.color, shift, run.underline, f, gid,
                         rubyGroup = run.rubyGroup, rubyText = run.rubyText, href = run.href)
                 } else {
-                    Cell(ch, FontMetrics.advancePt(ch, fs, run.bold, run.italic, run.family), fs, spec, run.color, shift, run.underline,
+                    Cell(c, FontMetrics.advancePt(c, cellFs, run.bold, run.italic, run.family), cellFs, spec, run.color, shift, run.underline,
                         rubyGroup = run.rubyGroup, rubyText = run.rubyText, href = run.href)
                 }
+                // letter-spacing: added to every glyph advance, kept in sync
+                // between the wrap width and the drawn advance (like kerning).
+                if (run.letterSpacingPt != 0.0) {
+                    val ls1000 = (run.letterSpacingPt / cellFs * 1000.0).roundToInt()
+                    cell.kernAfter1000 += ls1000
+                    cell.width += ls1000 * cellFs / 1000.0
+                }
+                return cell
             }
             for (ch in run.text) when {
                 ch == '\n' -> { endWord(); tokens.add(Token.Break) }
@@ -481,7 +503,8 @@ internal class BoxLayout(
                     endWord()
                     val sw = if (face != null) face.advance1000(face.gidFor(' '.code)) * fs / 1000.0
                     else FontMetrics.advancePt(' ', fs, run.bold, run.italic, run.family)
-                    tokens.add(Token.Space(sw))
+                    // word-spacing adds to spaces; letter-spacing to every advance.
+                    tokens.add(Token.Space(sw + run.wordSpacingPt + run.letterSpacingPt))
                 }
                 // Ruby bases do not split per CJK char: the whole base is one token.
                 FontMetrics.isWide(ch.code) && run.rubyGroup < 0 -> {
@@ -594,7 +617,8 @@ internal class BoxLayout(
             val face = a.face ?: continue
             if (face !== b.face || a.gid < 0 || b.gid < 0) continue
             val k = face.kern1000(a.gid, b.gid)
-            if (k != 0) { a.kernAfter1000 = k; a.width += k * a.fontSize / 1000.0 }
+            // Accumulate: the cell may already carry letter-spacing.
+            if (k != 0) { a.kernAfter1000 += k; a.width += k * a.fontSize / 1000.0 }
         }
     }
 
@@ -759,7 +783,11 @@ internal class BoxLayout(
         c.spec == spec && c.fontSize == fs && c.color == col && c.shift == sh && c.underline == ul && c.face === face
 
     private fun glyphFor(c: Cell): TextGlyph {
-        val face = c.face ?: return glyph(c.ch, c.spec)
+        val face = c.face ?: return glyph(c.ch, c.spec).let { g ->
+            // Generic cells fold letter-spacing (kernAfter1000) into the drawn
+            // advance the same way embedded-face cells do below.
+            if (c.kernAfter1000 != 0) g.copy(advanceWidth = g.advanceWidth + c.kernAfter1000) else g
+        }
         return TextGlyph(
             byteOffset = 0, byteCount = 1, gid = c.gid, text = c.ch.toString(),
             // Pair kerning to the next glyph is folded into this glyph's advance so
@@ -800,6 +828,8 @@ internal class BoxLayout(
         val EMPTY_SPEC = FontSpec(FontFamily.Serif, bold = false, italic = false)
         /** Ruby reading size as a fraction of its base's font size. */
         const val RUBY_SIZE = 0.5
+        /** Synthesized small-caps size (uppercase form scaled down). */
+        const val SMALL_CAPS_SCALE = 0.8
         val CJK_CLOSERS = setOf(
             0x3001, 0x3002, // 、 。
             0xFF0C, 0xFF0E, 0xFF01, 0xFF1F, 0xFF1B, 0xFF1A, // fullwidth , . ! ? ; :

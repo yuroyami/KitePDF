@@ -12,6 +12,7 @@ internal enum class Direction { LTR, RTL }
 internal enum class CssPosition { STATIC, RELATIVE, ABSOLUTE, FIXED }
 internal enum class ObjectFit { FILL, CONTAIN, COVER }
 internal enum class WritingMode { HORIZONTAL, VERTICAL_RL, VERTICAL_LR }
+internal enum class TextTransform { NONE, UPPERCASE, LOWERCASE, CAPITALIZE }
 
 /** One border edge. Painted only when [visible] (`border-style` not none/hidden). */
 internal class Edge(val width: Double, val color: RgbColor, val visible: Boolean) {
@@ -85,6 +86,14 @@ internal data class ComputedStyle(
     val objectFit: ObjectFit,
     /** `writing-mode` — vertical CJK text lays out in columns right-to-left / left-to-right. */
     val writingMode: WritingMode,
+    /** `text-transform`, applied when inline runs are built. Inherited. */
+    val textTransform: TextTransform = TextTransform.NONE,
+    /** `letter-spacing` in points, added to every glyph advance. Inherited. */
+    val letterSpacingPt: Double = 0.0,
+    /** `word-spacing` in points, added to every space advance. Inherited. */
+    val wordSpacingPt: Double = 0.0,
+    /** `font-variant: small-caps` (smcp GSUB when the face has it, else synthesized). Inherited. */
+    val smallCaps: Boolean = false,
 ) {
     val mono: Boolean get() = fontFamily == GenericFont.MONO
 

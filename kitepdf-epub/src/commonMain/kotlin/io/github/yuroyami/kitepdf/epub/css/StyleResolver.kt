@@ -241,6 +241,21 @@ internal class StyleResolver(
                 "vertical-lr" -> WritingMode.VERTICAL_LR
                 else -> WritingMode.HORIZONTAL
             }
+            "text-transform" -> b.textTransform = when (v.trim().lowercase()) {
+                "uppercase" -> TextTransform.UPPERCASE
+                "lowercase" -> TextTransform.LOWERCASE
+                "capitalize" -> TextTransform.CAPITALIZE
+                "none" -> TextTransform.NONE
+                else -> b.textTransform
+            }
+            "letter-spacing" -> b.letterSpacingPt =
+                if (v.trim().lowercase() == "normal") 0.0 else len(b.fontSizePt) ?: b.letterSpacingPt
+            "word-spacing" -> b.wordSpacingPt =
+                if (v.trim().lowercase() == "normal") 0.0 else len(b.fontSizePt) ?: b.wordSpacingPt
+            "font-variant", "font-variant-caps" -> when (v.trim().lowercase()) {
+                "small-caps" -> b.smallCaps = true
+                "normal", "none" -> b.smallCaps = false
+            }
         }
     }
 
@@ -400,6 +415,10 @@ internal class StyleResolver(
         var leftPt: Double? = null; var topPt: Double? = null; var rightPt: Double? = null; var bottomPt: Double? = null
         var objectFit = ObjectFit.FILL // not inherited
         var writingMode = parent.writingMode // inherited
+        var textTransform = parent.textTransform // inherited
+        var letterSpacingPt = parent.letterSpacingPt // inherited
+        var wordSpacingPt = parent.wordSpacingPt // inherited
+        var smallCaps = parent.smallCaps // inherited
 
         fun build() = ComputedStyle(
             display, fontSizePt, bold, italic, fontFamily, color, backgroundColor,
@@ -418,6 +437,7 @@ internal class StyleResolver(
             direction,
             hyphensAuto,
             position, leftPt, topPt, rightPt, bottomPt, objectFit, writingMode,
+            textTransform, letterSpacingPt, wordSpacingPt, smallCaps,
         )
     }
 

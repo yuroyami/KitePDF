@@ -36,6 +36,12 @@ internal data class InlineRun(
      * verbatim, or an internal target resolved to `zip/path.xhtml#fragment`.
      */
     val href: String? = null,
+    /** `letter-spacing` in points, added to every glyph advance. */
+    val letterSpacingPt: Double = 0.0,
+    /** `word-spacing` in points, added to every space advance. */
+    val wordSpacingPt: Double = 0.0,
+    /** `font-variant: small-caps`. */
+    val smallCaps: Boolean = false,
 ) {
     companion object {
         val BLACK = RgbColor(0.0, 0.0, 0.0)

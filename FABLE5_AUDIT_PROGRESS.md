@@ -110,6 +110,75 @@ Gate reference numbers at session start (2026-07-10, before any task):
 
 ---
 
+## T-62. EPUB structured text + search
+
+- **Status:** DONE
+- **Commit:** `c8760e9`
+- **What landed:** core `KiteStructuredText` (blocks -> lines, display-space
+  rects with the documented y-min-in-bottom convention, per-char x edges) +
+  `KitePage.textContent()` default-null seam; `EpubPage` implements it from
+  placed runs (x-ordered, ruby overlays excluded via `PlacedRun.isAnnotation`,
+  collapsed spaces restored from pen gaps, ligature advances split per char);
+  the page's vertical doc-to-display mapping extracted into one shared
+  `displayY` helper used by paint + extraction. `KiteStructuredText.search`
+  (in core, reusable by the future PDF adapter): case-insensitive via
+  regionMatches, line break = one space, hyphenated break joins with the
+  hyphen dropped, no cross-block matches, one quad per line touched.
+  `EpubDocument.search` walks pages lazily as a `Sequence`.
+- **Verification:** `EpubTextContentTest` (7 tests): block/word restoration,
+  charEdges invariants, case-insensitive match, cross-line match (2 quads),
+  soft-hyphen rejoin, quads-inside-page, ruby exclusion. Full gate green;
+  sweep + differential unchanged.
+
+---
+
+## T-63. Anchors, internal links and href-to-page mapping
+
+- **Status:** DONE
+- **Commit:** `7dfc4b8`
+- **What landed:** `InlineRun.href` -> `Cell.href` -> `PlacedRun.href`
+  (run splitting on href change); `BoxBuilder` resolves `<a href>` targets
+  (scheme = verbatim external, `#frag` = own document, relative = zip path +
+  fragment, via the spine's new `ParsedSpine.path`); `EpubPage.links`
+  exposes merged display-space rects per line. Anchor ids (`id` +
+  legacy `<a name>`) recorded on `BlockBox.anchors` (inline ids attach to
+  the enclosing block); `EpubDocument.pageIndexOfHref` maps `path` /
+  `path#id` to exact pages via the paginated `startY` list (fixed-layout:
+  spine index), unknown fragment falls back to the document start.
+- **Verification:** `EpubLinkTest` (6 tests) incl. the acceptance case: a
+  deep anchor in spine 3 resolves to a page strictly past the spine's first
+  page; link rect covers exactly the anchor text; fragment-only links;
+  external URLs verbatim + non-navigable; inline/legacy anchors; unknown
+  fragment fallback. Multi-spine fixture builder added to `EpubFixtures`.
+  Full gate green; sweep + differential unchanged.
+- **Note for T-25/T-32:** `pageIndexOfHref` is the exact-page hook those
+  tasks should consume (TOC fragments + viewer EPUB link taps).
+
+---
+
+## T-65. Generated content: ::before / ::after
+
+- **Status:** DONE
+- **Commit:** `3d20153`
+- **What landed:** `PseudoSide` on selectors (subject compound only; other
+  pseudo-elements still drop the selector; type-bucket specificity),
+  `StyleResolver.computePseudo` (own cascade, inherits from the originating
+  element, `content:` strings with CSS escape decoding + `attr(x)`;
+  `none`/`normal`/`counter()`/`counters()`/`url()` inert), `BoxBuilder`
+  injection as first/last inline run or a synthetic block child for
+  `display:block` pseudos. Normal element styling now explicitly skips
+  pseudo-element selectors.
+- **Verification:** `PseudoContentTest` (9 tests): quote-mark wrapping via
+  `\201C` escapes, block prepend, `attr()`, inert values, legacy
+  single-colon syntax, `::first-line` still dropped, block-display pseudo
+  as its own block, searchability of generated text, cascade order.
+  Full gate green; EPUB sweep page-for-page unchanged (4143 pages),
+  confirming no corpus book currently relies on generated content.
+- **Note:** test assertions read `textContent().plainText` (T-62), since
+  space glyphs are never drawn; a render pass still runs per fixture.
+
+---
+
 ## Discovered during execution
 
 (nothing yet)
