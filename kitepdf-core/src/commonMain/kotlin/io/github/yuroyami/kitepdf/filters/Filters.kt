@@ -34,6 +34,16 @@ interface PdfFilter {
 
 object FilterChain {
 
+    /**
+     * Hard ceiling on any single filter's decoded output (512 MiB).
+     *
+     * A kilobyte of crafted FlateDecode/LZW/RunLength data can expand to
+     * gigabytes and OOM the host app; MuPDF caps this and so do we. Exceeding
+     * the cap throws, which the document's lenient resolve path turns into a
+     * null object / placeholder image, so the file still opens.
+     */
+    const val MAX_DECODED_STREAM: Int = 512 shl 20
+
     /** Apply every filter in this stream's /Filter chain to its raw bytes. */
     fun decode(stream: PdfStream): ByteArray {
         val dict = stream.dict
@@ -90,7 +100,7 @@ object FlateFilter : PdfFilter {
     override val name = "FlateDecode"
 
     override fun decode(input: ByteArray, params: PdfDictionary?): ByteArray {
-        val inflated = Zlib.decode(input, verifyChecksum = false)
+        val inflated = Zlib.decode(input, verifyChecksum = false, maxOutputBytes = FilterChain.MAX_DECODED_STREAM)
         val predictor = (params?.getInt("Predictor")?.toInt()) ?: 1
         if (predictor == 1) return inflated
         val columns = (params?.getInt("Columns")?.toInt()) ?: 1
@@ -212,6 +222,9 @@ object RunLengthFilter : PdfFilter {
                     out.appendFill(input[i++], n)
                 }
                 length == -128 -> return out.toByteArray()  // EOD marker
+            }
+            if (out.size() > FilterChain.MAX_DECODED_STREAM) {
+                throw PdfFormatException("RLE output exceeds cap (${FilterChain.MAX_DECODED_STREAM} bytes)")
             }
         }
         return out.toByteArray()

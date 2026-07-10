@@ -86,6 +86,10 @@ object LzwFilter : PdfFilter {
                 else -> throw PdfFormatException("LZW: code $code out of range (next=$nextCode)")
             }
 
+            if (out.size() > FilterChain.MAX_DECODED_STREAM) {
+                throw PdfFormatException("LZW output exceeds cap (${FilterChain.MAX_DECODED_STREAM} bytes)")
+            }
+
             if (previous >= 0 && nextCode < 4096) {
                 prefix[nextCode] = previous
                 suffix[nextCode] = curFirst.toByte()

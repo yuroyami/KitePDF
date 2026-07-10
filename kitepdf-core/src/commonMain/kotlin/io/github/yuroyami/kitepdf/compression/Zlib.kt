@@ -30,7 +30,15 @@ object Zlib {
         return out.toByteArray()
     }
 
-    fun decode(input: ByteArray, verifyChecksum: Boolean = true): ByteArray {
+    /**
+     * Unwrap and inflate a zlib stream. [maxOutputBytes] caps the decoded size
+     * (see [Inflate.decode]); exceeding it throws [InflateException].
+     */
+    fun decode(
+        input: ByteArray,
+        verifyChecksum: Boolean = true,
+        maxOutputBytes: Int = Int.MAX_VALUE,
+    ): ByteArray {
         if (input.size < 6) throw InflateException("Zlib stream too short: ${input.size} bytes")
 
         val cmf = input[0].toInt() and 0xFF
@@ -43,7 +51,7 @@ object Zlib {
 
         // Inflate the DEFLATE payload that sits between the 2-byte header and the
         // 4-byte Adler trailer — read in place, no slice.
-        val decoded = Inflate.decode(input, offset = 2, length = input.size - 6)
+        val decoded = Inflate.decode(input, offset = 2, length = input.size - 6, maxOutputBytes = maxOutputBytes)
 
         if (verifyChecksum) {
             val n = input.size

@@ -1,6 +1,7 @@
 package io.github.yuroyami.kitepdf.epub
 
 import io.github.yuroyami.kitepdf.compression.Inflate
+import io.github.yuroyami.kitepdf.filters.FilterChain
 
 /**
  * Minimal ZIP reader for EPUB / OCF containers. Parses the central directory,
@@ -37,7 +38,9 @@ class ZipReader(private val bytes: ByteArray) {
         if (dataStart < 0 || dataStart + csize > bytes.size) return null
         return when (e.method) {
             0 -> bytes.copyOfRange(dataStart, dataStart + csize)   // STORED
-            8 -> runCatching { Inflate.decode(bytes, dataStart, csize) }.getOrNull()
+            8 -> runCatching {
+                Inflate.decode(bytes, dataStart, csize, maxOutputBytes = FilterChain.MAX_DECODED_STREAM)
+            }.getOrNull()
             else -> null
         }
     }

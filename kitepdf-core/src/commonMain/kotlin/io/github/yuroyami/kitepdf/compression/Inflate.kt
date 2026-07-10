@@ -18,10 +18,19 @@ object Inflate {
      * One-shot: inflate the DEFLATE payload in [input] starting at [offset] for
      * [length] bytes (defaults to the whole array). The offset/length window lets
      * callers (e.g. the zlib wrapper) skip header/trailer bytes without slicing.
+     *
+     * [maxOutputBytes] caps the decoded size; exceeding it throws
+     * [InflateException]. A kilobyte of crafted DEFLATE can expand to gigabytes,
+     * so callers decoding untrusted streams must pass a cap.
      */
-    fun decode(input: ByteArray, offset: Int = 0, length: Int = input.size - offset): ByteArray {
+    fun decode(
+        input: ByteArray,
+        offset: Int = 0,
+        length: Int = input.size - offset,
+        maxOutputBytes: Int = Int.MAX_VALUE,
+    ): ByteArray {
         val out = ByteArrayBuilder(initialCapacity = length * 2)
-        Inflater(input, offset, offset + length).inflateTo(out)
+        Inflater(input, offset, offset + length, maxOutputBytes).inflateTo(out)
         return out.toByteArray()
     }
 }
@@ -31,6 +40,7 @@ internal class Inflater(
     private val src: ByteArray,
     start: Int = 0,
     private val end: Int = src.size,
+    private val maxOutputBytes: Int = Int.MAX_VALUE,
 ) {
 
     private var bytePos = start
@@ -206,9 +216,13 @@ internal class Inflater(
     private fun writeByte(out: ByteArrayBuilder, byte: Int) {
         val b = (byte and 0xFF).toByte()
         out.append(b)
+        if (out.size() > maxOutputBytes) throw bombError(out.size())
         window[windowPos] = b
         windowPos = (windowPos + 1) and (WINDOW_SIZE - 1)
     }
+
+    private fun bombError(size: Int) =
+        InflateException("inflate output exceeds cap ($size > $maxOutputBytes bytes)")
 
     private fun copyFromWindow(out: ByteArrayBuilder, distance: Int, length: Int) {
         if (distance < 1 || distance > WINDOW_SIZE) {
@@ -223,6 +237,7 @@ internal class Inflater(
             windowPos + length <= WINDOW_SIZE
         ) {
             out.append(window, srcStart, length)
+            if (out.size() > maxOutputBytes) throw bombError(out.size())
             window.copyInto(window, windowPos, srcStart, srcStart + length)
             windowPos = (windowPos + length) and (WINDOW_SIZE - 1)
             return
