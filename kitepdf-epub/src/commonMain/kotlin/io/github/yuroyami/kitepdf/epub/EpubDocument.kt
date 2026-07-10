@@ -311,12 +311,14 @@ class EpubDocument internal constructor(
             val uid = opf.uniqueId ?: ""
             val faces = ArrayList<EmbeddedFace>()
             for ((rule, docDir) in faceRules) {
-                // Prefer a format we can parse: raw SFNT (.ttf/.otf), then WOFF 1.0
-                // (.woff, zlib-unwrapped). A .woff2-only face falls through and is
-                // skipped (brotli not supported). Fall back to the first src otherwise.
+                // Prefer the cheapest format to unpack: raw SFNT (.ttf/.otf), then
+                // WOFF 1.0 (zlib tables), then WOFF2 (brotli + glyf transform).
+                // Fall back to the first src otherwise and let signature sniffing
+                // in FontRegistry.face sort it out.
                 val url = rule.srcUrls.firstOrNull { it.endsWith(".ttf", true) || it.endsWith(".otf", true) }
                     ?: rule.srcUrls.firstOrNull { it.endsWith(".woff", true) }
-                    ?: rule.srcUrls.firstOrNull { !it.endsWith(".woff2", true) }
+                    ?: rule.srcUrls.firstOrNull { it.endsWith(".woff2", true) }
+                    ?: rule.srcUrls.firstOrNull()
                     ?: continue
                 val zipPath = resolvePath(docDir, url)
                 val raw = zip.read(zipPath) ?: continue
