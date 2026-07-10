@@ -18,6 +18,11 @@ object Zlib {
      * data is appended big-endian. Round-trips through [decode].
      */
     fun encode(data: ByteArray): ByteArray {
+        // Platform fast path (T-10): native zlib at level 6 emits the whole
+        // RFC 1950 stream (header + Adler) and compresses far better than the
+        // pure-Kotlin encoder. Null means no fast path on this target.
+        PlatformFlate.deflateOrNull(data, level = 6)?.let { return it }
+
         val out = ByteArrayBuilder(data.size / 2 + 16)
         out.append(0x78.toByte())
         out.append(0x9C.toByte())
@@ -48,6 +53,13 @@ object Zlib {
         if ((cmf and 0x0F) != 8) throw InflateException("Zlib: not DEFLATE (CM=${cmf and 0x0F})")
         if (((cmf shl 8) or flg) % 31 != 0) throw InflateException("Zlib: header checksum failed")
         if ((flg and 0x20) != 0) throw InflateException("Zlib: preset dictionary not supported")
+
+        // Platform fast path (T-10): hand the native inflater the whole stream
+        // (it parses the header and verifies the Adler trailer itself, so no
+        // re-verification below). Null — malformed, truncated, over the cap —
+        // falls through to the pure-Kotlin path for its lenient behaviour and
+        // proper error messages.
+        PlatformFlate.inflateOrNull(input, 0, input.size, maxOutputBytes)?.let { return it }
 
         // Inflate the DEFLATE payload that sits between the 2-byte header and the
         // 4-byte Adler trailer — read in place, no slice.

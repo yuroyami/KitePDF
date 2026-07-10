@@ -39,7 +39,7 @@ class ZipReader(private val bytes: ByteArray) {
         return when (e.method) {
             0 -> bytes.copyOfRange(dataStart, dataStart + csize)   // STORED
             8 -> runCatching {
-                Inflate.decode(bytes, dataStart, csize, maxOutputBytes = FilterChain.MAX_DECODED_STREAM)
+                Inflate.decodePlatform(bytes, dataStart, csize, maxOutputBytes = FilterChain.MAX_DECODED_STREAM)
             }.getOrNull()
             else -> null
         }
