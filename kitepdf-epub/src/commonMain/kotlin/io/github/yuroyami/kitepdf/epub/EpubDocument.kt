@@ -53,6 +53,7 @@ class EpubDocument internal constructor(
             title = parsed.metadata.title,
             authors = parsed.metadata.creators,
             language = parsed.metadata.language,
+            rightToLeft = parsed.metadata.rightToLeft,
         )
 
     /**

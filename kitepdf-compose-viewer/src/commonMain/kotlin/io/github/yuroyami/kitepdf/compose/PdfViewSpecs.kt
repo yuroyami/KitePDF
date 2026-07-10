@@ -39,6 +39,29 @@ sealed interface PdfLayout {
     data class Paged(
         val orientation: Orientation = Orientation.Horizontal,
         val offscreenPages: Int = 1,
+        /**
+         * Reverses the paging direction so page N+1 sits visually LEFT of
+         * page N (up in a vertical pager) — right-to-left books (manga,
+         * Arabic/Hebrew). Navigation stays logical: `nextPage()` is always
+         * index +1. See [pagedFor] for automatic selection.
+         */
+        val reverseLayout: Boolean = false,
+    ) : PdfLayout
+
+    /**
+     * Two-page spreads: one snap-pager item shows pages (2k, 2k+1) side by
+     * side, like an open book; an odd trailing page centres alone.
+     * [reverseLayout] swaps both the swipe direction and the in-spread
+     * visual order (page 2k on the right), for right-to-left books.
+     * Navigation stays logical (`nextPage()` = index +1; the visible spread
+     * advances every second step). Meant for fixed-layout content (PDF,
+     * pre-paginated EPUB); reflowable EPUB gains nothing from it.
+     */
+    @Immutable
+    data class Spread(
+        val orientation: Orientation = Orientation.Horizontal,
+        val offscreenPages: Int = 1,
+        val reverseLayout: Boolean = false,
     ) : PdfLayout
 
     /** Exactly one fixed page, letterboxed to fit the viewport. */
@@ -47,6 +70,14 @@ sealed interface PdfLayout {
 
     companion object {
         val Default: PdfLayout = Continuous()
+
+        /**
+         * A horizontal pager following the document's page-progression
+         * direction: right-to-left books ([io.github.yuroyami.kitepdf.KiteMetadata.rightToLeft])
+         * get a reversed pager, everything else the plain one.
+         */
+        fun pagedFor(document: io.github.yuroyami.kitepdf.KiteDocument): Paged =
+            Paged(reverseLayout = document.metadata.rightToLeft)
     }
 }
 

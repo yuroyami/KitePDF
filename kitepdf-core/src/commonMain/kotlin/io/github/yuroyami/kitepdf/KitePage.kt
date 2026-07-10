@@ -55,6 +55,12 @@ data class KiteMetadata(
     val authors: List<String> = emptyList(),
     /** BCP-47 language tag when the document declares one. */
     val language: String? = null,
+    /**
+     * True when pages progress right-to-left (EPUB
+     * `page-progression-direction="rtl"`, PDF `/ViewerPreferences /Direction
+     * /R2L`) — a paged viewer should put page N+1 visually LEFT of page N.
+     */
+    val rightToLeft: Boolean = false,
 )
 
 /**

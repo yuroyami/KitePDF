@@ -355,6 +355,36 @@ internal class PagerScrollAdapter(private val pagerState: PagerState) : PdfScrol
     override suspend fun animateScrollToPage(page: Int) = pagerState.animateScrollToPage(page)
 }
 
+/**
+ * Spread mode: pager items are page PAIRS. Logical page indices stay the
+ * public currency ([PdfViewState.scrollToPage] etc.); this adapter maps them
+ * to spread items ("current" reports the spread's first page in reading
+ * order), so nextPage()/previousPage() remain plain index +1/-1 and the
+ * visible spread advances every second step.
+ */
+internal class SpreadScrollAdapter(private val pagerState: PagerState) : PdfScrollAdapter {
+    /**
+     * The last logically-requested page. Within one spread, +1 must actually
+     * advance (0 -> 1 stays on spread 0, the next +1 reaches spread 1), so
+     * the adapter remembers it; a user swipe onto another spread supersedes
+     * it and "current" snaps back to that spread's first page.
+     */
+    private var logical = pagerState.currentPage * 2
+
+    override val currentPage: Int
+        get() = if (logical / 2 == pagerState.currentPage) logical else pagerState.currentPage * 2
+
+    override suspend fun scrollToPage(page: Int) {
+        logical = page
+        pagerState.scrollToPage(page / 2)
+    }
+
+    override suspend fun animateScrollToPage(page: Int) {
+        logical = page
+        pagerState.animateScrollToPage(page / 2)
+    }
+}
+
 /** Single-page mode: no scrolling at all. */
 internal class FixedPageAdapter(private val pageIndex: Int) : PdfScrollAdapter {
     override val currentPage: Int get() = pageIndex
