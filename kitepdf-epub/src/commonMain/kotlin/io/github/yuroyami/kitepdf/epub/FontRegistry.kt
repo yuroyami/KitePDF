@@ -82,6 +82,17 @@ internal class FontRegistry(private val faces: List<EmbeddedFace>) {
             ?: faces.firstOrNull { it.family == fam }
     }
 
+    /**
+     * Per-glyph fallback when the matched face has no glyph for [codePoint]
+     * (its cmap returns gid 0, `.notdef`): any other registered face that
+     * actually carries the codepoint, preferring the requested style. Null
+     * means no embedded face can draw it and the caller should use the
+     * generic system-font path instead of painting tofu.
+     */
+    fun fallbackFor(codePoint: Int, bold: Boolean, italic: Boolean): EmbeddedFace? =
+        faces.firstOrNull { it.bold == bold && it.italic == italic && it.gidFor(codePoint) != 0 }
+            ?: faces.firstOrNull { it.gidFor(codePoint) != 0 }
+
     val isEmpty: Boolean get() = faces.isEmpty()
 
     companion object {

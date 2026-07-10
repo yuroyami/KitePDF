@@ -51,3 +51,27 @@ Gate reference numbers at session start (2026-07-10, before any task):
 ## Discovered during execution
 
 (nothing yet)
+## T-61. Per-glyph font fallback (kill the tofu)
+
+- **Status:** DONE
+- **Commit:** (this commit)
+- **What landed:**
+  - `FontRegistry.fallbackFor(codePoint, bold, italic)`: any registered face
+    whose cmap carries the codepoint, preferring the requested style.
+  - `BoxLayout.tokenize`'s `cellFor`: when the matched face returns gid 0
+    (`.notdef`) the cell re-resolves through `fallbackFor`; with no carrier
+    face anywhere it becomes the generic `FontMetrics` cell (face null,
+    gid -1) so the system-font path draws it. Mixed-face words degrade
+    gracefully by design: shaping passes skip multi-face words and
+    `placeRuns` splits runs on a face change.
+- **Verification:**
+  - New jvmTest `FontFallbackTest` (4 tests, all executed against the in-repo
+    NotoSans-Regular.otf Latin face + DroidSansFallback.ttf CJK face):
+    cross-face fallback draws the CJK char with real outlines and no gid 0;
+    no-carrier case rides the generic path with gid -1; `fallbackFor` unit
+    semantics; and a real corpus book renders with zero `.notdef` glyphs in
+    any embedded-outline run.
+  - `:kitepdf-epub:jvmTest` green; native-renderer gate green.
+  - EPUB sweep unchanged: 23 books, 4143 pages, 0 failures.
+  - PDF differential unchanged: mean MAE 0.0115.
+

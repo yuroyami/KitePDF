@@ -418,11 +418,24 @@ internal class BoxLayout(
             }
             val spec = fontSpec(run.family, run.bold, run.italic)
             val face = fonts.match(run.fontFamilyName, run.bold, run.italic)
-            fun cellFor(ch: Char): Cell = if (face != null) {
-                val gid = face.gidFor(ch.code)
-                Cell(ch, face.advance1000(gid) * fs / 1000.0, fs, spec, run.color, shift, run.underline, face, gid)
-            } else {
-                Cell(ch, FontMetrics.advancePt(ch, fs, run.bold, run.italic, run.family), fs, spec, run.color, shift, run.underline)
+            fun cellFor(ch: Char): Cell {
+                // Per-glyph fallback: a codepoint missing from the matched face
+                // (cmap -> gid 0, `.notdef`) must not paint tofu. Try any other
+                // registered face that has it; failing that, the generic
+                // FontMetrics cell (face null) rides the system-font path.
+                // Mixed-face words degrade gracefully: the shaping passes skip
+                // multi-face words and placeRuns splits runs on a face change.
+                val f = when {
+                    face == null -> null
+                    face.gidFor(ch.code) != 0 -> face
+                    else -> fonts.fallbackFor(ch.code, run.bold, run.italic)
+                }
+                return if (f != null) {
+                    val gid = f.gidFor(ch.code)
+                    Cell(ch, f.advance1000(gid) * fs / 1000.0, fs, spec, run.color, shift, run.underline, f, gid)
+                } else {
+                    Cell(ch, FontMetrics.advancePt(ch, fs, run.bold, run.italic, run.family), fs, spec, run.color, shift, run.underline)
+                }
             }
             for (ch in run.text) when {
                 ch == '\n' -> { endWord(); tokens.add(Token.Break) }
