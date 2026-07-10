@@ -36,7 +36,9 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.rememberTextMeasurer
@@ -254,6 +256,7 @@ private fun ContinuousLayout(
     ) {
         val pageItem: @Composable androidx.compose.foundation.lazy.LazyItemScope.(Int) -> Unit = { index ->
             ContinuousPageItem(
+                state = state,
                 page = state.document.pages[index],
                 pageIndex = index,
                 orientation = layout.orientation,
@@ -264,9 +267,13 @@ private fun ContinuousLayout(
                 pagePlaceholder = pagePlaceholder,
             )
         }
+        // The list is the untransformed-space anchor page slots measure their
+        // hit-test geometry against (it sits inside the layer, so its
+        // coordinates never see zoom/pan).
+        val anchored = Modifier.fillMaxSize().onGloballyPositioned { state.contentCoordinates = it }
         when (layout.orientation) {
             Orientation.Vertical -> LazyColumn(
-                modifier = Modifier.fillMaxSize(),
+                modifier = anchored,
                 state = listState,
                 verticalArrangement = Arrangement.spacedBy(pageSpacing),
                 userScrollEnabled = userScrollEnabled,
@@ -274,7 +281,7 @@ private fun ContinuousLayout(
                 items(count = state.pageCount, key = { it }) { pageItem(it) }
             }
             Orientation.Horizontal -> LazyRow(
-                modifier = Modifier.fillMaxSize(),
+                modifier = anchored,
                 state = listState,
                 horizontalArrangement = Arrangement.spacedBy(pageSpacing),
                 userScrollEnabled = userScrollEnabled,
@@ -288,6 +295,7 @@ private fun ContinuousLayout(
 /** One page in the strip: fills the cross axis at its natural aspect ratio. */
 @Composable
 private fun androidx.compose.foundation.lazy.LazyItemScope.ContinuousPageItem(
+    state: PdfViewState,
     page: KitePage,
     pageIndex: Int,
     orientation: Orientation,
@@ -302,7 +310,14 @@ private fun androidx.compose.foundation.lazy.LazyItemScope.ContinuousPageItem(
         Orientation.Vertical -> Modifier.fillParentMaxWidth().aspectRatio(aspect)
         Orientation.Horizontal -> Modifier.fillParentMaxHeight().aspectRatio(aspect)
     }
-    BoxWithConstraints(sizing) {
+    DisposableEffect(state, pageIndex) {
+        onDispose { state.pageGeometry.remove(pageIndex) }
+    }
+    val reportGeometry = Modifier.onGloballyPositioned { coords ->
+        val anchor = state.contentCoordinates?.takeIf { it.isAttached } ?: return@onGloballyPositioned
+        state.pageGeometry[pageIndex] = anchor.localBoundingBoxOf(coords, clipBounds = false)
+    }
+    BoxWithConstraints(sizing.then(reportGeometry)) {
         val density = LocalDensity.current
         // fillParentMax* + aspectRatio normally give tight constraints; the
         // fallback covers unbounded hosts.
@@ -381,6 +396,7 @@ private fun PagedLayout(
             colors = colors,
             onPageRendered = onPageRendered,
             pagePlaceholder = pagePlaceholder,
+            geometryInto = if (isCurrent) state else null,
         )
     }
     // While zoomed, the pager's own swipe is off so one-finger drags pan the
@@ -438,6 +454,7 @@ private fun SinglePageLayout(
         colors = colors,
         onPageRendered = onPageRendered,
         pagePlaceholder = pagePlaceholder,
+        geometryInto = state,
     )
 }
 
@@ -455,7 +472,14 @@ private fun PageBox(
     colors: PdfViewColors,
     onPageRendered: ((Int, ImageBitmap) -> Unit)?,
     pagePlaceholder: (@Composable (Int) -> Unit)?,
+    /** The state to report hit-test geometry into (the on-screen slot only). */
+    geometryInto: PdfViewState? = null,
 ) {
+    if (geometryInto != null) {
+        DisposableEffect(geometryInto, pageIndex) {
+            onDispose { geometryInto.pageGeometry.remove(pageIndex) }
+        }
+    }
     BoxWithConstraints(
         Modifier
             .fillMaxSize()
@@ -470,6 +494,15 @@ private fun PageBox(
     ) {
         val density = LocalDensity.current
         val fit = fitWithin(constraints.maxWidth, constraints.maxHeight, pdfPageAspect(page))
+        if (geometryInto != null && fit != IntSize.Zero) {
+            // Centered letterbox: the page rect in untransformed viewport
+            // space follows directly from the constraints, no coordinates
+            // walk needed (the layer above never affects it).
+            val left = (constraints.maxWidth - fit.width) / 2f
+            val top = (constraints.maxHeight - fit.height) / 2f
+            val rect = Rect(left, top, left + fit.width, top + fit.height)
+            SideEffect { geometryInto.pageGeometry[pageIndex] = rect }
+        }
         if (fit != IntSize.Zero) {
             val dpSize = with(density) { DpSize(fit.width.toDp(), fit.height.toDp()) }
             when (renderSpec) {
