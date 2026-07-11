@@ -27,85 +27,11 @@ internal object Jbig2Decoder {
     fun decode(data: ByteArray, globals: ByteArray?, width: Int, height: Int): ByteArray? =
         runCatching { Ctx().decodeEmbedded(data, globals, width, height) }.getOrNull()
 
-    // ---- MQ arithmetic decoder (T.88 Annex E / T.82) ------------------------
-
-    private val QE = intArrayOf(
-        0x5601, 0x3401, 0x1801, 0x0AC1, 0x0521, 0x0221, 0x5601, 0x5401, 0x4801, 0x3801,
-        0x3001, 0x2401, 0x1C01, 0x1601, 0x5601, 0x5401, 0x5101, 0x4801, 0x3801, 0x3401,
-        0x3001, 0x2801, 0x2401, 0x2201, 0x1C01, 0x1801, 0x1601, 0x1401, 0x1201, 0x1101,
-        0x0AC1, 0x09C1, 0x08A1, 0x0521, 0x0441, 0x02A1, 0x0221, 0x0141, 0x0111, 0x0085,
-        0x0049, 0x0025, 0x0015, 0x0009, 0x0005, 0x0001, 0x5601,
-    )
-    private val NMPS = intArrayOf(
-        1, 2, 3, 4, 5, 38, 7, 8, 9, 10, 11, 12, 13, 29, 15, 16, 17, 18, 19, 20, 21, 22, 23,
-        24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 45, 46,
-    )
-    private val NLPS = intArrayOf(
-        1, 6, 9, 12, 29, 33, 6, 14, 14, 14, 17, 18, 20, 21, 14, 14, 15, 16, 17, 18, 19, 19, 20,
-        21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 46,
-    )
-    private val SW = intArrayOf(
-        1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    )
-
-    private class MQ(val d: ByteArray, start: Int, val end: Int) {
-        var bp = start
-        var chigh = if (start < d.size) d[start].toInt() and 0xFF else 0xFF
-        var clow = 0
-        var a = 0
-        var ct = 0
-
-        init {
-            byteIn()
-            chigh = ((chigh shl 7) and 0xFFFF) or ((clow shr 9) and 0x7F)
-            clow = (clow shl 7) and 0xFFFF
-            ct -= 7
-            a = 0x8000
-        }
-
-        private fun byteIn() {
-            if (bp < end && (d[bp].toInt() and 0xFF) == 0xFF) {
-                val b1 = if (bp + 1 < end) d[bp + 1].toInt() and 0xFF else 0xFF
-                if (b1 > 0x8F) { clow += 0xFF00; ct = 8 } else { bp++; clow += b1 shl 9; ct = 7 }
-            } else {
-                bp++
-                clow += if (bp < end) (d[bp].toInt() and 0xFF) shl 8 else 0xFF00
-                ct = 8
-            }
-            if (clow > 0xFFFF) { chigh += clow shr 16; clow = clow and 0xFFFF }
-        }
-
-        /** Decode one bit against context store [cx] at index [pos]. */
-        fun bit(cx: IntArray, pos: Int): Int {
-            var i = cx[pos] shr 1
-            var mps = cx[pos] and 1
-            val qe = QE[i]
-            a -= qe
-            val d: Int
-            if (chigh < qe) {
-                if (a < qe) { a = qe; d = mps; i = NMPS[i] }
-                else { a = qe; d = 1 xor mps; if (SW[i] == 1) mps = d; i = NLPS[i] }
-            } else {
-                chigh -= qe
-                if ((a and 0x8000) != 0) { cx[pos] = (i shl 1) or mps; return mps }
-                if (a < qe) { d = 1 xor mps; if (SW[i] == 1) mps = d; i = NLPS[i] }
-                else { d = mps; i = NMPS[i] }
-            }
-            do {
-                if (ct == 0) byteIn()
-                a = a shl 1
-                chigh = ((chigh shl 1) and 0xFFFF) or ((clow shr 15) and 1)
-                clow = (clow shl 1) and 0xFFFF
-                ct--
-            } while ((a and 0x8000) == 0)
-            cx[pos] = (i shl 1) or mps
-            return d
-        }
-    }
+    // The MQ arithmetic decoder (T.88 Annex E) lives in the shared [MqDecoder],
+    // which JPEG 2000 tier-1 coding reuses (the two specs define one coder).
 
     /** Arithmetic integer decoding (Annex A). [cx] is a 512-entry context store per IAx procedure. */
-    private fun decodeInt(mq: MQ, cx: IntArray): Int? {
+    private fun decodeInt(mq: MqDecoder, cx: IntArray): Int? {
         var prev = 1
         fun bit(): Int {
             val b = mq.bit(cx, prev)
@@ -132,7 +58,7 @@ internal object Jbig2Decoder {
         }
     }
 
-    private fun decodeIAID(mq: MQ, cx: IntArray, codeLen: Int): Int {
+    private fun decodeIAID(mq: MqDecoder, cx: IntArray, codeLen: Int): Int {
         var prev = 1
         repeat(codeLen) { prev = (prev shl 1) or mq.bit(cx, prev) }
         return prev - (1 shl codeLen)
@@ -292,7 +218,7 @@ internal object Jbig2Decoder {
 
     /** Generic region decoding (6.2.5.7), arithmetic, templates 0-3 with TPGDON and SKIP. */
     private fun decodeGeneric(
-        mq: MQ, cx: IntArray, w: Int, h: Int, template: Int, at: Array<Point>, tpgdon: Boolean,
+        mq: MqDecoder, cx: IntArray, w: Int, h: Int, template: Int, at: Array<Point>, tpgdon: Boolean,
         skip: Bitmap? = null,
     ): Bitmap {
         val bmp = Bitmap(w, h)
@@ -341,7 +267,7 @@ internal object Jbig2Decoder {
      * [ref] is read at (x - dx, y - dy); context layouts follow T.88 figures 12-14.
      */
     private fun decodeRefinement(
-        mq: MQ, cx: IntArray, w: Int, h: Int, template: Int,
+        mq: MqDecoder, cx: IntArray, w: Int, h: Int, template: Int,
         ref: Bitmap, dx: Int, dy: Int, at: Array<Point>, tpgron: Boolean,
     ): Bitmap {
         val bmp = Bitmap(w, h)
@@ -501,7 +427,7 @@ internal object Jbig2Decoder {
                 return
             }
             val at = readAt(r, template)
-            val mq = MQ(s.data, r.pos, s.end)
+            val mq = MqDecoder(s.data, r.pos, s.end)
             val bmp = decodeGeneric(mq, newCx(), ri.w, ri.h, template, at, tpgdon == 1)
             blit(bmp, ri)
         }
@@ -552,7 +478,7 @@ internal object Jbig2Decoder {
             val pg = ensurePage(ri.x + ri.w, ri.y + ri.h)
             val ref = Bitmap(ri.w, ri.h)
             for (y in 0 until ri.h) for (x in 0 until ri.w) ref.set(x, y, pg.get(ri.x + x, ri.y + y))
-            val mq = MQ(s.data, r.pos, s.end)
+            val mq = MqDecoder(s.data, r.pos, s.end)
             val bmp = decodeRefinement(mq, newCx(), ri.w, ri.h, template, ref, 0, 0, at, tpgron == 1)
             blit(bmp, ri)
         }
@@ -572,7 +498,7 @@ internal object Jbig2Decoder {
                 decodeMmr(s.data, r.pos, s.end, w, hdph) ?: return emptyList()
             } else {
                 val at = arrayOf(Point(-hdpw, 0), Point(-3, -1), Point(2, -2), Point(-2, -2))
-                decodeGeneric(MQ(s.data, r.pos, s.end), newCx(), w, hdph, template, at, false)
+                decodeGeneric(MqDecoder(s.data, r.pos, s.end), newCx(), w, hdph, template, at, false)
             }
             return List(grayMax + 1) { coll.slice(it * hdpw, hdpw) }
         }
@@ -616,7 +542,7 @@ internal object Jbig2Decoder {
                 }
             } else {
                 val at = arrayOf(Point(if (template <= 1) 3 else 2, -1), Point(-3, -1), Point(2, -2), Point(-2, -2))
-                val mq = MQ(s.data, r.pos, s.end)
+                val mq = MqDecoder(s.data, r.pos, s.end)
                 val cx = newCx()
                 for (j in hbpp - 1 downTo 0) {
                     planes[j] = decodeGeneric(mq, cx, hgw, hgh, template, at, false, skip)
@@ -704,7 +630,7 @@ internal object Jbig2Decoder {
                 return decodeSymbolDictHuffman(s, r, flags, input, numExSyms, numNewSyms)
             }
 
-            val mq = MQ(s.data, r.pos, s.end)
+            val mq = MqDecoder(s.data, r.pos, s.end)
             val iadh = newIntCx(); val iadw = newIntCx(); val iaex = newIntCx(); val iaai = newIntCx()
             val iardx = newIntCx(); val iardy = newIntCx()
             val genCx = newCx()
@@ -919,14 +845,14 @@ internal object Jbig2Decoder {
                         val bmSize = tRSIZE!!.decode(hr) ?: 0
                         hr.align()
                         val end = if (bmSize > 0) minOf(s.end, hr.pos + bmSize) else s.end
-                        val out = refineSymbol(MQ(s.data, hr.pos, end), refCx, sym, rdw, rdh, rdx, rdy, rTemplate, refAt)
+                        val out = refineSymbol(MqDecoder(s.data, hr.pos, end), refCx, sym, rdw, rdh, rdx, rdy, rTemplate, refAt)
                         hr.advance(bmSize)
                         out
                     },
                 )
             } else {
                 val symCodeLen = maxOf(1, ceilLog2(maxOf(1, syms.size)))
-                val mq = MQ(s.data, r.pos, s.end)
+                val mq = MqDecoder(s.data, r.pos, s.end)
                 val iadt = newIntCx(); val iafs = newIntCx(); val iads = newIntCx(); val iait = newIntCx()
                 val iari = newIntCx(); val iardw = newIntCx(); val iardh = newIntCx()
                 val iardx = newIntCx(); val iardy = newIntCx()
@@ -954,7 +880,7 @@ internal object Jbig2Decoder {
 
         /** Refine a text-region symbol (6.4.11, Table 12). */
         private fun refineSymbol(
-            mq: MQ, cx: IntArray, sym: Bitmap, rdw: Int, rdh: Int, rdx: Int, rdy: Int,
+            mq: MqDecoder, cx: IntArray, sym: Bitmap, rdw: Int, rdh: Int, rdx: Int, rdy: Int,
             template: Int, at: Array<Point>,
         ): Bitmap {
             val w = sym.w + rdw
