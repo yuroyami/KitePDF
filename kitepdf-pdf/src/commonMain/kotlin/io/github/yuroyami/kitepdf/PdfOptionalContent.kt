@@ -13,10 +13,10 @@ import io.github.yuroyami.kitepdf.core.parser.PdfString
  * be selectively shown or hidden via /OC marked-content sections and
  * Form XObjects with /OC entries.
  *
- * KitePDF v0.0.x exposes the OCG topology and default visibility state
- * (read-only). The renderer doesn't yet honour /OC visibility — that's a
- * future round. Until then this view lets you build a layer-toggle UI
- * even if the underlying renderer still draws everything.
+ * This view exposes the OCG topology and default visibility state
+ * (read-only). The renderer honours /OC visibility: marked-content
+ * sections and XObjects whose OCG is hidden in the default configuration
+ * are skipped while drawing.
  */
 public data class PdfOptionalContent(
     /** All OCGs declared in /OCProperties /OCGs. */

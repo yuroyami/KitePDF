@@ -406,8 +406,8 @@ Freshly rasterized pages fade in smoothly rather than popping (160 ms by default
 ## Performance notes
 
 - **Lazy composition**: Continuous mode composes only visible pages and their immediate offscreen neighbours (paged mode pre-renders `offscreenPages` on each side). Millions of pages are supported; only visible ones cost anything.
-- **Rasterization is post-frame**: In rasterized mode, the bitmap is rendered on the main thread after composition settles, so it doesn't block layout or paint. The jitter on a page turn is avoided by pre-fetching neighbours while idle.
-- **Text measurement is not thread-safe**: `PdfRasterizer.rasterize()` runs synchronously on the calling thread. In `PdfView`, this is post-frame on the main thread. For off-composition rasterization, call from the main thread.
+- **Rasterization is off the main thread**: `PdfView` renders page bitmaps through `PdfRasterizer.rasterizeOffMain()` on a background pool after composition settles, so scrolling and input stay responsive; results land through a page-bitmap LRU cache. The jitter on a page turn is avoided by pre-fetching neighbours while idle.
+- **Synchronous escape hatch**: `PdfRasterizer.rasterize()` still runs on the calling thread for callers that need a bitmap right now; text measurement inside it is serialized internally, so either entry point is safe to use.
 - **Zoom settle debounce**: By default, `rerasterizeOnZoom=true` waits approximately 220 ms after zoom stops before re-rendering, so quick pinch-and-release doesn't thrash the rasterizer.
 
 ## See also

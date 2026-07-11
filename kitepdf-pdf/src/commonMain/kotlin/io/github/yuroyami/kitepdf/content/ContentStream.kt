@@ -19,9 +19,10 @@ import io.github.yuroyami.kitepdf.core.parser.Token
  * as the body), gather operands on a small stack, and emit one [Operation]
  * per operator we encounter.
  *
- * NOTE: this is just *parsing* — the actual graphics state machine lives in
- * a future renderer. Text extraction in this session only inspects which
- * operators were emitted with which operands.
+ * NOTE: this is just *parsing* — the graphics state machine lives in
+ * [io.github.yuroyami.kitepdf.render.PageRenderer], which consumes these
+ * operations. Text extraction only inspects which operators were emitted
+ * with which operands.
  */
 /**
  * One content-stream operation: an [operator] and its [operands].

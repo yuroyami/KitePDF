@@ -23,8 +23,9 @@ import kotlin.math.pow
  *   - CalGray, CalRGB, Lab — treated as their device equivalent (no
  *     gamma / whitepoint correction); good enough for visual approximation.
  *
- * Not yet handled: DeviceN, Separation, Pattern. Those degrade to grey for
- * stroke / fill operands.
+ * Separation / DeviceN resolve through their tint-transform function (see
+ * [DeviceN] below). The Pattern colour space is handled by the renderer,
+ * which paints the pattern cell / shading instead of a flat colour.
  *
  * Conversion always lands in [RgbColor] for the renderer; sRGB component
  * values 0..1. Out-of-gamut colours are clamped, never thrown.

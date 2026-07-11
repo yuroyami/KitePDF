@@ -63,6 +63,9 @@ import io.github.yuroyami.kitepdf.PdfDocument
 val doc = PdfDocument.open(bytes, "secret".encodeToByteArray())
 ```
 
+!!! tip "EPUB books"
+    The same dependency graph reads EPUBs: add `io.github.yuroyami:kitepdf-epub:0.2.0` and call `EpubDocument.open(bytes)`. See the [EPUB guide](epub.md).
+
 ## Step 3: Show it on screen in Compose
 
 The `kitepdf-compose-viewer` artifact provides `PdfView`: a Compose-Multiplatform viewer supporting pinch zoom, paging, continuous scroll, and more.

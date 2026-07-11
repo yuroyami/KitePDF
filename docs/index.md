@@ -1,6 +1,6 @@
 # KitePDF
 
-**One pure-Kotlin PDF engine for Kotlin Multiplatform.** Read, create, edit and render PDFs from `commonMain`, with the exact same code on every target: Android, iOS, desktop, web and Kotlin/Native.
+**One pure-Kotlin document engine for Kotlin Multiplatform.** Read, create, edit and render PDFs, and read EPUBs, from `commonMain`, with the exact same code on every target: Android, iOS, desktop, web and Kotlin/Native.
 
 ```kotlin
 // commonMain. Nothing platform-specific. This runs everywhere Kotlin runs.
@@ -19,7 +19,8 @@ val fresh = PdfBuilder()                     // create
 <div class="grid cards" markdown>
 
 - :material-rocket-launch: **New here?** [Get started in 5 minutes](getting-started.md)
-- :material-book-open-variant: **Browse the guides** below, or jump to the [API reference](https://yuroyami.github.io/KitePDF/api/)
+- :material-book-open-variant: **Reading EPUBs too?** The same core paginates and renders [reflowable EPUB 2/3 books](epub.md)
+- :material-code-braces: **Browse the guides** below, or jump to the [API reference](https://yuroyami.github.io/KitePDF/api/)
 
 </div>
 
