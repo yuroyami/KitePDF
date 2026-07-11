@@ -159,7 +159,29 @@ content.endText()
 ```
 
 !!! note
-    Text with code points above U+00FF (outside Latin-1) will substitute `?` because standard fonts are single-byte encoded. Arbitrary Unicode requires an embedded font (a future feature).
+    Text with code points above U+00FF (outside Latin-1) will substitute `?` because standard fonts are single-byte encoded. For arbitrary Unicode (CJK, Arabic, emoji fonts, ...) embed a font of your own; see below.
+
+### Custom embedded fonts
+
+Load a TrueType (`.ttf`) or OpenType/CFF (`.otf`) font and draw with it the
+same way as a standard font. The program is embedded as a composite Type0
+font (Identity-H) with a generated `/ToUnicode` map, so text extraction
+round-trips back to Unicode:
+
+```kotlin
+val notoSans = EmbeddedFont.load(fontBytes)  // subset = true by default
+
+val pdf = PdfBuilder()
+    .page {
+        text(notoSans, 16.0, 72.0, 700.0, "你好世界")
+    }
+    .build()
+```
+
+With `subset = true` (the default) only the glyphs the document actually
+draws are embedded, with the standard six-letter subset tag on `/BaseFont`;
+pass `subset = false` to embed the whole program. TrueType Collections
+(`.ttc`) are not supported; extract a single face first.
 
 ## Colors and graphics
 
