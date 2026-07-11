@@ -1,5 +1,6 @@
 package io.github.yuroyami.kitepdf.filters
 
+import io.github.yuroyami.kitepdf.core.kiteWarn
 import io.github.yuroyami.kitepdf.core.ByteArrayBuilder
 import io.github.yuroyami.kitepdf.compression.Zlib
 import io.github.yuroyami.kitepdf.core.PdfFormatException
@@ -54,8 +55,16 @@ public object FilterChain {
 
         var current = stream.rawBytes
         for ((i, name) in filterNames.withIndex()) {
-            val filter = registry[name] ?: throw UnsupportedFilterException(name)
-            current = filter.decode(current, paramsList[i])
+            val filter = registry[name] ?: run {
+                kiteWarn { "filter: $name is not supported" }
+                throw UnsupportedFilterException(name)
+            }
+            current = try {
+                filter.decode(current, paramsList[i])
+            } catch (e: Exception) {
+                kiteWarn { "filter: $name failed: ${e.message}" }
+                throw e
+            }
         }
         return current
     }

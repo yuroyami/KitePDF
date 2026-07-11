@@ -1,5 +1,6 @@
 package io.github.yuroyami.kitepdf.render
 
+import io.github.yuroyami.kitepdf.core.kiteWarn
 import io.github.yuroyami.kitepdf.PdfAnnotation.Subtype
 import io.github.yuroyami.kitepdf.PdfPage
 import io.github.yuroyami.kitepdf.content.ContentStreamParser
@@ -886,7 +887,10 @@ public class PageRenderer(
             // ─── XObject (Image / Form) ──────────────────────────────────
             "Do" -> {
                 val name = (a.firstOrNull() as? PdfName)?.value ?: return
-                val slot = xobjects[name] ?: return
+                val slot = xobjects[name] ?: run {
+                    kiteWarn { "render: XObject $name missing from /Resources" }
+                    return
+                }
                 // Skip when inside a hidden OC section or the XObject's own /OC is off.
                 if (ocHidden() || isXObjectOcHidden(slot.stream)) return
                 when (slot.stream.dict.getName("Subtype")) {

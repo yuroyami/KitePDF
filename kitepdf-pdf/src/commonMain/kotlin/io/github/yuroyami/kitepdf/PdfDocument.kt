@@ -7,6 +7,7 @@ import io.github.yuroyami.kitepdf.core.currentThreadId
 import io.github.yuroyami.kitepdf.core.withLock
 import io.github.yuroyami.kitepdf.core.PdfFormatException
 import io.github.yuroyami.kitepdf.core.WrongPasswordException
+import io.github.yuroyami.kitepdf.core.kiteWarn
 import io.github.yuroyami.kitepdf.crypto.Decryptor
 import io.github.yuroyami.kitepdf.crypto.StandardSecurityHandler
 import io.github.yuroyami.kitepdf.filters.FilterChain
@@ -389,6 +390,8 @@ public class PdfDocument private constructor(
                 is XrefEntry.InUse -> resolveInPlace(entry)
                 is XrefEntry.Compressed -> resolveFromObjectStream(entry)
             }
+        }.onFailure { e ->
+            kiteWarn { "resolve: object ${ref.objectNumber} failed: ${e.message}" }
         }.getOrNull()
         return lock.withLock {
             val existing = objectCache[ref.objectNumber]
@@ -549,7 +552,11 @@ public class PdfDocument private constructor(
                     val kidRef = kidObj as? PdfReference
                     if (kidRef != null && !visited.add(kidRef.objectNumber)) continue  // cycle guard
                     val kidDict = (if (kidRef != null) resolve(kidRef) else kidObj) as? PdfDictionary
-                        ?: continue  // skip unresolvable / non-dict kids
+                    if (kidDict == null) {
+                        // Skip unresolvable / non-dict kids leniently, but say so.
+                        kiteWarn { "pages: kid ${kidRef?.objectNumber ?: "inline"} skipped: unresolvable or not a dictionary" }
+                        continue
+                    }
                     walkPageTree(kidDict, merged, out, visited, depth + 1, kidRef)
                 }
             }
@@ -598,6 +605,7 @@ public class PdfDocument private constructor(
             if (normal != null) return finish(normal)
 
             // Recovery path: rebuild the xref by scanning the raw bytes.
+            kiteWarn { "open: xref chain unusable, rebuilding by byte scan" }
             val repaired = PdfRepair.rebuild(reader)
             val sec = buildSecurityHandler(repaired.entries, repaired.trailer, bytes, password)
             return finish(PdfDocument(version, bytes, repaired.entries, repaired.trailer, sec))
