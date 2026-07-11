@@ -1,6 +1,7 @@
 package io.github.yuroyami.kitepdf.writer
 
 import io.github.yuroyami.kitepdf.PdfDocument
+import io.github.yuroyami.kitepdf.core.KiteRawApi
 import io.github.yuroyami.kitepdf.PdfFormField
 import io.github.yuroyami.kitepdf.PdfPage
 import io.github.yuroyami.kitepdf.Rectangle
@@ -97,9 +98,11 @@ public class PdfEditor internal constructor(
     }
 
     /** Reserve the next free object number (generation 0). */
+    @KiteRawApi
     public fun allocateReference(): PdfReference = PdfReference(nextObjectNumber++, 0)
 
     /** Stage a brand-new indirect object; returns the reference to it. */
+    @KiteRawApi
     public fun addObject(value: PdfObject): PdfReference {
         val ref = allocateReference()
         staged[ref.objectNumber] = Staged(ref.generation, value)
@@ -107,6 +110,7 @@ public class PdfEditor internal constructor(
     }
 
     /** Stage a replacement for an existing object (keeps [ref]'s generation). */
+    @KiteRawApi
     public fun updateObject(ref: PdfReference, value: PdfObject) {
         staged[ref.objectNumber] = Staged(ref.generation, value)
     }
@@ -119,6 +123,7 @@ public class PdfEditor internal constructor(
         addObject(PdfStreams.flate(data, extra))
 
     /** Set or replace a trailer entry (e.g. `/Root`, `/Info`) in the new section. */
+    @KiteRawApi
     public fun setTrailerEntry(key: String, value: PdfObject) {
         trailerOverrides[key] = value
     }

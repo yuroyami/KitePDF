@@ -2,6 +2,7 @@ package io.github.yuroyami.kitepdf
 
 import io.github.yuroyami.kitepdf.core.ByteReader
 import io.github.yuroyami.kitepdf.core.KiteLock
+import io.github.yuroyami.kitepdf.core.KiteRawApi
 import io.github.yuroyami.kitepdf.core.currentThreadId
 import io.github.yuroyami.kitepdf.core.withLock
 import io.github.yuroyami.kitepdf.core.PdfFormatException
@@ -52,8 +53,8 @@ import io.github.yuroyami.kitepdf.writer.PdfEditor
 public class PdfDocument private constructor(
     public val version: String,
     public val bytes: ByteArray,
-    public val xref: Map<Long, XrefEntry>,
-    public val trailer: PdfDictionary,
+    @property:KiteRawApi public val xref: Map<Long, XrefEntry>,
+    @property:KiteRawApi public val trailer: PdfDictionary,
     private val security: StandardSecurityHandler?,
 ) : IndirectResolver, KiteDocument {
 
@@ -372,6 +373,7 @@ public class PdfDocument private constructor(
 
     /* ─── IndirectResolver ───────────────────────────────────────────────── */
 
+    @KiteRawApi
     override fun resolve(ref: PdfReference): PdfObject? {
         lock.withLock { objectCache[ref.objectNumber] }?.let { return it }
         val entry = xref[ref.objectNumber] ?: return null

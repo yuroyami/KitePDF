@@ -38,6 +38,7 @@ class WriterOracleTest {
         // Build → open → edit (/Info title + a new object) → save incrementally.
         val original = buildMinimalPdf()
         val doc = KitePDF.open(original)
+        @OptIn(io.github.yuroyami.kitepdf.core.KiteRawApi::class)
         val edited = doc.edit().apply {
             setInfo(title = "KiteEditedMarker", author = "KitePDF Writer")
             addObject(
@@ -106,6 +107,7 @@ class WriterOracleTest {
         val original = buildMinimalPdf()
         val doc = KitePDF.open(original)
         // Replace the page's content stream (5 0 R) with the compressed one.
+        @OptIn(io.github.yuroyami.kitepdf.core.KiteRawApi::class)
         val edited = doc.edit().apply { updateObject(PdfReference(5, 0), flateStream) }.saveIncremental()
 
         // (0) Our own reader must decode our flate through the real filter chain.
