@@ -63,6 +63,9 @@ interface PdfCanvas {
         shading: PdfShading, ctm: Matrix, clipPath: PdfPath?,
         alpha: Double = 1.0, blendMode: BlendMode = BlendMode.Normal,
     ) {
+        // T-40 types (function-based, meshes, patches) render through shared
+        // fillPath emission; axial/radial fall through to the midpoint fill.
+        if (paintComplexShading(shading, ctm, clipPath, alpha, blendMode)) return
         val stops = shading.sampleStops(2) ?: return
         val mid = stops.colors[stops.colors.size / 2]
         if (clipPath == null) {
