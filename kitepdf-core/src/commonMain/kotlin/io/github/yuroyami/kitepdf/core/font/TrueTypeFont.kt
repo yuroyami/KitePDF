@@ -204,10 +204,14 @@ public class TrueTypeFont private constructor(
             ys[k] = y
         }
 
-        // Slice points into contours by endPts.
+        // Slice points into contours by endPts. A malformed font can carry
+        // NON-MONOTONIC endPts (an interior entry larger than the last one,
+        // which sizes the point arrays) — clamp instead of crashing.
         val contours = mutableListOf<Contour>()
         var startPt = 0
-        for (endPt in endPts) {
+        for (endPtRaw in endPts) {
+            val endPt = endPtRaw.coerceAtMost(numPoints - 1)
+            if (endPt < startPt) continue
             val pts = mutableListOf<GlyphPoint>()
             for (k in startPt..endPt) {
                 pts.add(GlyphPoint(xs[k], ys[k], onCurve = (flags[k] and FLAG_ON_CURVE) != 0))
