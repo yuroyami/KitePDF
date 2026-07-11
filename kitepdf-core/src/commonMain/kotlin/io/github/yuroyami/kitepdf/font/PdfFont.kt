@@ -9,7 +9,7 @@ import io.github.yuroyami.kitepdf.parser.PdfName
 import io.github.yuroyami.kitepdf.parser.PdfReal
 import io.github.yuroyami.kitepdf.parser.PdfReference
 import io.github.yuroyami.kitepdf.parser.PdfStream
-import io.github.yuroyami.kitepdf.render.PdfPath
+import io.github.yuroyami.kitepdf.render.KitePath
 
 /**
  * A resolved PDF font.
@@ -203,7 +203,7 @@ public class PdfFont private constructor(
      * pre-date the [layoutBytes] iterator; [layoutBytes] is the right path
      * for any new code so composite Type 0 fonts work correctly.
      */
-    public fun outlineForByte(code: Int): PdfPath? = simpleOutline(code)
+    public fun outlineForByte(code: Int): KitePath? = simpleOutline(code)
 
     /**
      * Glyph id for a single byte code in a simple font. Returns 0 for
@@ -243,7 +243,7 @@ public class PdfFont private constructor(
         return gid
     }
 
-    private fun simpleOutline(code: Int): PdfPath? {
+    private fun simpleOutline(code: Int): KitePath? {
         if (composite != null) return null
         embeddedTtf?.let { ttf -> return ttf.outlinePath(simpleGid(code)) }
         embeddedCff?.let { cff -> return cff.outline(simpleGid(code)) }

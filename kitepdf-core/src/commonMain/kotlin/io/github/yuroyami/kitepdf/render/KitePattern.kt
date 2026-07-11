@@ -16,10 +16,10 @@ import io.github.yuroyami.kitepdf.parser.PdfStream
  *     renderer replays [Tiling.contentBytes] across the fill region (with a
  *     tile-count bound); [Tiling.baseColor] remains as the flat fallback for
  *     consumers that don't replay cells.
- *   - [Shading] (`PatternType = 2`) — wraps a [PdfShading] under a matrix,
- *     painted through [PdfCanvas.fillShading].
+ *   - [Shading] (`PatternType = 2`) — wraps a [KiteShading] under a matrix,
+ *     painted through [KiteCanvas.fillShading].
  */
-public sealed class PdfPattern {
+public sealed class KitePattern {
 
     /** Pattern-space-to-default-space transform (`/Matrix`). */
     public abstract val matrix: Matrix
@@ -30,8 +30,8 @@ public sealed class PdfPattern {
     public data class Shading(
         override val matrix: Matrix,
         override val extGState: ExtGState?,
-        val shading: PdfShading,
-    ) : PdfPattern()
+        val shading: KiteShading,
+    ) : KitePattern()
 
     /**
      * Tiling pattern (`PatternType = 1`). The content stream lives in
@@ -52,7 +52,7 @@ public sealed class PdfPattern {
         /** The pattern cell's own `/Resources` (fonts, colours, XObjects…). */
         val resources: PdfDictionary? = null,
         val baseColor: RgbColor = RgbColor(0.5, 0.5, 0.5),
-    ) : PdfPattern() {
+    ) : KitePattern() {
         override fun equals(other: Any?): Boolean = other is Tiling &&
             matrix == other.matrix && paintType == other.paintType &&
             tilingType == other.tilingType && bbox == other.bbox &&
@@ -67,7 +67,7 @@ public sealed class PdfPattern {
      * the default colour — which would flood, say, a full-page background
      * pattern solid black.
      */
-    public object Unsupported : PdfPattern() {
+    public object Unsupported : KitePattern() {
         override val matrix: Matrix = Matrix.IDENTITY
         override val extGState: ExtGState? = null
     }
@@ -76,8 +76,8 @@ public sealed class PdfPattern {
         public fun parse(
             obj: PdfObject?,
             refs: IndirectResolver,
-            shadings: Map<String, PdfShading>,
-        ): PdfPattern? {
+            shadings: Map<String, KiteShading>,
+        ): KitePattern? {
             val resolved = when (obj) {
                 is PdfReference -> refs.resolve(obj)
                 else -> obj
@@ -92,7 +92,7 @@ public sealed class PdfPattern {
             val ext = dict.getDict("ExtGState", refs)?.let { ExtGState.parse(it, refs) }
             return when (patternType) {
                 2 -> {
-                    val sh = PdfShading.parse(dict["Shading"], refs) ?: return null
+                    val sh = KiteShading.parse(dict["Shading"], refs) ?: return null
                     Shading(matrix, ext, sh)
                 }
                 1 -> {

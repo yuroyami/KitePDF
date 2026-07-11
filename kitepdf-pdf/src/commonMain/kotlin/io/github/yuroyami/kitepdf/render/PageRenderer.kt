@@ -20,13 +20,13 @@ import io.github.yuroyami.kitepdf.parser.PdfString
 
 /**
  * The content-stream interpreter — translates parsed [Operation]s into
- * `PdfCanvas` draw calls while maintaining the full PDF graphics-state stack
+ * `KiteCanvas` draw calls while maintaining the full PDF graphics-state stack
  * (ISO 32000-1 §8 + §9).
  *
  * Architecture mirrors MuPDF's pdf_processor / pdf_op_run.c:
  *   1. Walk operations one by one.
  *   2. Mutate the [GraphicsStack] for state-changing ops.
- *   3. Accumulate path construction in a [PdfPath.Builder].
+ *   3. Accumulate path construction in a [KitePath.Builder].
  *   4. On paint operators, hand the path off to the device.
  *   5. Inside `BT…ET`, run the text state machine (Tm/Tlm/Tj/TJ/'/" etc.).
  *
@@ -34,7 +34,7 @@ import io.github.yuroyami.kitepdf.parser.PdfString
  * call to [render] starts with a fresh state stack.
  */
 public class PageRenderer(
-    private val canvas: PdfCanvas,
+    private val canvas: KiteCanvas,
     private val resolver: IndirectResolver,
 ) {
 
@@ -62,7 +62,7 @@ public class PageRenderer(
     // space across the whole BT..ET block; ET intersects the union with the
     // clip (§9.3.3: the text clip applies after the text object ends and
     // persists to the enclosing Q, which activeClipCount already models).
-    private var pendingTextClip: PdfPath.Builder? = null
+    private var pendingTextClip: KitePath.Builder? = null
 
     /** An XObject with the indirect object number it resolved from (null for
      *  the rare ref-less inline entry) — the number keys the decoded caches. */
@@ -76,8 +76,8 @@ public class PageRenderer(
         val xobjects: Map<String, XObjectSlot>,
         val colorSpaces: Map<String, ColorSpace>,
         val extGStates: Map<String, ExtGState>,
-        val shadings: Map<String, PdfShading>,
-        val patterns: Map<String, PdfPattern>,
+        val shadings: Map<String, KiteShading>,
+        val patterns: Map<String, KitePattern>,
         val properties: Map<String, PdfObject>,
     )
     private val formResourceCache = HashMap<Long, FormResources>()
@@ -128,7 +128,7 @@ public class PageRenderer(
         optionalContent = page.internalDocument.optionalContent
         markedContentStack.clear()
         ocHiddenDepth = 0
-        val pathBuilder = PdfPath.Builder()
+        val pathBuilder = KitePath.Builder()
         val ops = ContentStreamParser.parse(page.contentBytes)
 
         // Size the device surface for the ROTATED page: pageToDeviceBase() maps
@@ -231,28 +231,28 @@ public class PageRenderer(
     }
 
     /** Named shadings declared in /Resources /Shading. */
-    private fun loadShadings(resources: PdfDictionary?): Map<String, PdfShading> {
+    private fun loadShadings(resources: PdfDictionary?): Map<String, KiteShading> {
         val dict = resources?.getDict("Shading", resolver) ?: return emptyMap()
         return dict.map.mapNotNull { (name, value) ->
-            val sh = PdfShading.parse(value, resolver) ?: return@mapNotNull null
+            val sh = KiteShading.parse(value, resolver) ?: return@mapNotNull null
             name to sh
         }.toMap()
     }
 
     /**
      * Named patterns declared in /Resources /Pattern. PatternType 1 (tiling)
-     * parses to [PdfPattern.Tiling] and [renderTilingPattern] replays its cell
+     * parses to [KitePattern.Tiling] and [renderTilingPattern] replays its cell
      * content stream across the fill region (bounded by [MAX_TILES]);
-     * PatternType 2 (shading) parses to [PdfPattern.Shading] and paints
-     * through [PdfCanvas.fillShading].
+     * PatternType 2 (shading) parses to [KitePattern.Shading] and paints
+     * through [KiteCanvas.fillShading].
      */
     private fun loadPatterns(
         resources: PdfDictionary?,
-        shadings: Map<String, PdfShading>,
-    ): Map<String, PdfPattern> {
+        shadings: Map<String, KiteShading>,
+    ): Map<String, KitePattern> {
         val dict = resources?.getDict("Pattern", resolver) ?: return emptyMap()
         return dict.map.mapNotNull { (name, value) ->
-            val p = PdfPattern.parse(value, resolver, shadings) ?: return@mapNotNull null
+            val p = KitePattern.parse(value, resolver, shadings) ?: return@mapNotNull null
             name to p
         }.toMap()
     }
@@ -364,7 +364,7 @@ public class PageRenderer(
             Subtype.Highlight -> {
                 val color = annot.color ?: RgbColor(1.0, 1.0, 0.0)
                 forEachQuad(quads, rect) { x0, y0, x1, y1 ->
-                    val p = PdfPath.Builder().apply { rectangle(x0, y0, x1 - x0, y1 - y0) }.build()
+                    val p = KitePath.Builder().apply { rectangle(x0, y0, x1 - x0, y1 - y0) }.build()
                     // Highlights multiply onto the page; approximate with alpha.
                     canvas.fillPath(p, ctm, color, false, alpha = 0.4)
                 }
@@ -374,12 +374,12 @@ public class PageRenderer(
                 forEachQuad(quads, rect) { x0, y0, x1, y1 ->
                     val frac = if (annot.subtype == Subtype.StrikeOut) 0.5 else 0.08
                     val y = y0 + (y1 - y0) * frac
-                    val line = PdfPath.Builder().apply { moveTo(x0, y); lineTo(x1, y) }.build()
+                    val line = KitePath.Builder().apply { moveTo(x0, y); lineTo(x1, y) }.build()
                     canvas.strokePath(line, ctm, color, ((y1 - y0) * 0.06).coerceAtLeast(0.6))
                 }
             }
             Subtype.Square -> {
-                val p = PdfPath.Builder().apply { rectangle(rect.left, rect.bottom, rect.width, rect.height) }.build()
+                val p = KitePath.Builder().apply { rectangle(rect.left, rect.bottom, rect.width, rect.height) }.build()
                 annot.interiorColor?.let { canvas.fillPath(p, ctm, it, false) }
                 canvas.strokePath(p, ctm, annot.color ?: RgbColor.BLACK, 1.0)
             }
@@ -390,7 +390,7 @@ public class PageRenderer(
             }
             Subtype.Line -> annot.vertices?.let { v ->
                 if (v.size >= 4) {
-                    val line = PdfPath.Builder().apply { moveTo(v[0], v[1]); lineTo(v[2], v[3]) }.build()
+                    val line = KitePath.Builder().apply { moveTo(v[0], v[1]); lineTo(v[2], v[3]) }.build()
                     canvas.strokePath(line, ctm, annot.color ?: RgbColor.BLACK, 1.0)
                 }
             }
@@ -405,7 +405,7 @@ public class PageRenderer(
                 polyPath(stroke, close = false)?.let { canvas.strokePath(it, ctm, annot.color ?: RgbColor.BLACK, 1.0) }
             }
             Subtype.Link -> {
-                val p = PdfPath.Builder().apply { rectangle(rect.left, rect.bottom, rect.width, rect.height) }.build()
+                val p = KitePath.Builder().apply { rectangle(rect.left, rect.bottom, rect.width, rect.height) }.build()
                 canvas.strokePath(p, ctm, annot.color ?: RgbColor(0.0, 0.3, 0.8), 0.5)
             }
             else -> { /* other annotations: nothing without /AP */ }
@@ -432,11 +432,11 @@ public class PageRenderer(
     }
 
     /** Four-Bézier ellipse inscribed in [rect]. */
-    private fun ellipsePath(rect: io.github.yuroyami.kitepdf.Rectangle): PdfPath {
+    private fun ellipsePath(rect: io.github.yuroyami.kitepdf.Rectangle): KitePath {
         val cx = rect.left + rect.width / 2; val cy = rect.bottom + rect.height / 2
         val rx = rect.width / 2; val ry = rect.height / 2
         val k = 0.5522847498
-        return PdfPath.Builder().apply {
+        return KitePath.Builder().apply {
             moveTo(cx + rx, cy)
             curveTo(cx + rx, cy + ry * k, cx + rx * k, cy + ry, cx, cy + ry)
             curveTo(cx - rx * k, cy + ry, cx - rx, cy + ry * k, cx - rx, cy)
@@ -447,9 +447,9 @@ public class PageRenderer(
     }
 
     /** Build a polyline/polygon path from alternating x/y values. */
-    private fun polyPath(coords: List<Double>, close: Boolean): PdfPath? {
+    private fun polyPath(coords: List<Double>, close: Boolean): KitePath? {
         if (coords.size < 4) return null
-        val b = PdfPath.Builder()
+        val b = KitePath.Builder()
         b.moveTo(coords[0], coords[1])
         var i = 2
         while (i + 1 < coords.size) { b.lineTo(coords[i], coords[i + 1]); i += 2 }
@@ -621,7 +621,7 @@ public class PageRenderer(
         }
         // Clip the form's content to its /BBox (§8.10.1) so it cannot overdraw
         // outside the intended region.
-        val bboxPath = PdfPath.Builder().apply {
+        val bboxPath = KitePath.Builder().apply {
             rectangle(bbox.left, bbox.bottom, bbox.right - bbox.left, bbox.top - bbox.bottom)
         }.build()
         canvas.pushClip(bboxPath, parentState.current.ctm, false)
@@ -633,7 +633,7 @@ public class PageRenderer(
         try {
             val bytes = io.github.yuroyami.kitepdf.filters.FilterChain.decode(formStream)
             val ops = ContentStreamParser.parse(bytes)
-            val pathBuilder = PdfPath.Builder()
+            val pathBuilder = KitePath.Builder()
             for (op in ops) dispatch(op, parentState, pathBuilder, childFonts, childXObjects, childColorSpaces, childExtGStates, childShadings, childPatterns, childProperties)
         } finally {
             pendingClip = savedPendingClip
@@ -690,13 +690,13 @@ public class PageRenderer(
     private fun dispatch(
         op: Operation,
         state: GraphicsStack,
-        path: PdfPath.Builder,
+        path: KitePath.Builder,
         fonts: Map<String, PdfFont>,
         xobjects: Map<String, XObjectSlot>,
         colorSpaces: Map<String, ColorSpace>,
         extGStates: Map<String, ExtGState>,
-        shadings: Map<String, PdfShading>,
-        patterns: Map<String, PdfPattern>,
+        shadings: Map<String, KiteShading>,
+        patterns: Map<String, KitePattern>,
         properties: Map<String, PdfObject>,
     ) {
         if (++dispatchedOps > MAX_DISPATCHED_OPS) return
@@ -960,7 +960,7 @@ public class PageRenderer(
      * operator has run (§8.5.4). The clip uses the current path at the CTM in
      * effect and intersects the existing clip. Cleared afterwards.
      */
-    private fun applyPendingClip(path: PdfPath.Builder, state: GraphicsStack) {
+    private fun applyPendingClip(path: KitePath.Builder, state: GraphicsStack) {
         if (pendingClip == 0) return
         val evenOdd = pendingClip == 2
         pendingClip = 0
@@ -969,7 +969,7 @@ public class PageRenderer(
         activeClipCount++
     }
 
-    private fun paintFill(path: PdfPath.Builder, state: GraphicsStack, evenOdd: Boolean) {
+    private fun paintFill(path: KitePath.Builder, state: GraphicsStack, evenOdd: Boolean) {
         if (path.isEmpty()) return
         val s = state.current
         val built = path.build()
@@ -979,11 +979,11 @@ public class PageRenderer(
                 // The pattern /Matrix maps pattern space to the page's DEFAULT
                 // coordinate system, not the current user space (§8.7.3.1). Use
                 // pageBaseCtm — matching the tiling path below — instead of s.ctm.
-                pat is PdfPattern.Shading -> canvas.fillShading(
+                pat is KitePattern.Shading -> canvas.fillShading(
                     pat.shading, pageBaseCtm.concat(pat.matrix), clipPath = built,
                     alpha = s.fillAlpha, blendMode = s.blendMode,
                 )
-                pat is PdfPattern.Tiling -> renderTilingPattern(pat, built, s, evenOdd)
+                pat is KitePattern.Tiling -> renderTilingPattern(pat, built, s, evenOdd)
                 pat != null -> {
                     // Unsupported pattern — skip rather than paint the default
                     // colour, which would flood e.g. a full-page background black.
@@ -996,7 +996,7 @@ public class PageRenderer(
         }
     }
 
-    private fun paintStroke(path: PdfPath.Builder, state: GraphicsStack) {
+    private fun paintStroke(path: KitePath.Builder, state: GraphicsStack) {
         if (path.isEmpty()) return
         val s = state.current
         val built = path.build()
@@ -1007,11 +1007,11 @@ public class PageRenderer(
                 // region. We approximate the stroke region by its outline path
                 // and fill the pattern into it (mirror of the fill-pattern path).
                 // The pattern /Matrix is relative to the page default CTM.
-                pat is PdfPattern.Shading -> canvas.fillShading(
+                pat is KitePattern.Shading -> canvas.fillShading(
                     pat.shading, pageBaseCtm.concat(pat.matrix), clipPath = built,
                     alpha = s.strokeAlpha, blendMode = s.blendMode,
                 )
-                pat is PdfPattern.Tiling -> renderTilingPattern(pat, built, s, evenOdd = false)
+                pat is KitePattern.Tiling -> renderTilingPattern(pat, built, s, evenOdd = false)
                 pat != null -> {
                     // Unsupported pattern — skip rather than paint a stale colour.
                 }
@@ -1033,7 +1033,7 @@ public class PageRenderer(
      * (PaintType 2) are painted in the current fill colour.
      */
     private fun renderTilingPattern(
-        pat: PdfPattern.Tiling, clipPath: PdfPath, s: GraphicsState, evenOdd: Boolean,
+        pat: KitePattern.Tiling, clipPath: KitePath, s: GraphicsState, evenOdd: Boolean,
     ) {
         val xs = pat.xStep
         val ys = pat.yStep
@@ -1081,7 +1081,7 @@ public class PageRenderer(
                     if (uncolored) GraphicsState(ctm = tileCtm, fillColor = s.fillColor, strokeColor = s.fillColor)
                     else GraphicsState(ctm = tileCtm),
                 )
-                val tilePath = PdfPath.Builder()
+                val tilePath = KitePath.Builder()
                 for (op in ops) dispatch(op, tileState, tilePath, fonts, xobjects, colorSpaces, extGStates, shadings, patterns, properties)
                 // Drop any clips the tile's content left unbalanced.
                 while (activeClipCount > clipBase) { canvas.popClip(); activeClipCount-- }
@@ -1094,7 +1094,7 @@ public class PageRenderer(
     }
 
     /** Axis-aligned device-space bounds of [path] under [ctm], or null if empty. */
-    private fun deviceBounds(path: PdfPath, ctm: Matrix): DoubleArray? {
+    private fun deviceBounds(path: KitePath, ctm: Matrix): DoubleArray? {
         var minX = Double.POSITIVE_INFINITY; var minY = Double.POSITIVE_INFINITY
         var maxX = Double.NEGATIVE_INFINITY; var maxY = Double.NEGATIVE_INFINITY
         var any = false
@@ -1105,11 +1105,11 @@ public class PageRenderer(
             any = true
         }
         for (seg in path.segments) when (seg) {
-            is PdfPath.Segment.MoveTo -> acc(seg.x, seg.y)
-            is PdfPath.Segment.LineTo -> acc(seg.x, seg.y)
-            is PdfPath.Segment.CurveTo -> { acc(seg.x1, seg.y1); acc(seg.x2, seg.y2); acc(seg.x3, seg.y3) }
-            is PdfPath.Segment.QuadTo -> { acc(seg.x1, seg.y1); acc(seg.x2, seg.y2) }
-            PdfPath.Segment.Close -> {}
+            is KitePath.Segment.MoveTo -> acc(seg.x, seg.y)
+            is KitePath.Segment.LineTo -> acc(seg.x, seg.y)
+            is KitePath.Segment.CurveTo -> { acc(seg.x1, seg.y1); acc(seg.x2, seg.y2); acc(seg.x3, seg.y3) }
+            is KitePath.Segment.QuadTo -> { acc(seg.x1, seg.y1); acc(seg.x2, seg.y2) }
+            KitePath.Segment.Close -> {}
         }
         return if (any) doubleArrayOf(minX, minY, maxX, maxY) else null
     }
@@ -1117,7 +1117,7 @@ public class PageRenderer(
     /**
      * Wrap [paint] in a soft-mask layer when the current graphics state has
      * one active. Without an SMask the lambda is invoked directly. With an
-     * SMask, the canvas's [PdfCanvas.applySoftMask] gets two callbacks:
+     * SMask, the canvas's [KiteCanvas.applySoftMask] gets two callbacks:
      * one that draws the content, one that re-renders the mask group into
      * a separate layer, blended via `DstIn`.
      */
@@ -1158,7 +1158,7 @@ public class PageRenderer(
         )
     }
 
-    private fun renderMaskGroup(formStream: PdfStream, target: PdfCanvas, baseCtm: Matrix) {
+    private fun renderMaskGroup(formStream: PdfStream, target: KiteCanvas, baseCtm: Matrix) {
         // We need a sub-renderer so the mask paints into [target] rather
         // than the page canvas. The cleanest thing is to construct a
         // throwaway PageRenderer instance and let it run the form-xobject
@@ -1191,7 +1191,7 @@ public class PageRenderer(
      */
     private fun handleScnFill(
         a: List<io.github.yuroyami.kitepdf.parser.PdfObject>,
-        patterns: Map<String, PdfPattern>,
+        patterns: Map<String, KitePattern>,
         state: GraphicsStack,
         stroke: Boolean,
     ) {
@@ -1201,7 +1201,7 @@ public class PageRenderer(
             // Use the parsed pattern when we have it; otherwise mark it
             // Unsupported so the fill is skipped rather than collapsing to the
             // default (black) colour and flooding the region.
-            val pat = patterns[nameOp.value] ?: PdfPattern.Unsupported
+            val pat = patterns[nameOp.value] ?: KitePattern.Unsupported
             state.replace(
                 if (stroke) state.current.copy(strokePattern = pat)
                 else state.current.copy(fillPattern = pat),
@@ -1408,7 +1408,7 @@ public class PageRenderer(
         t: TextState,
         textToUser: Matrix,
     ) {
-        val builder = pendingTextClip ?: PdfPath.Builder().also { pendingTextClip = it }
+        val builder = pendingTextClip ?: KitePath.Builder().also { pendingTextClip = it }
         val upm = font.unitsPerEm ?: 1000
         val unitScale = t.fontSize / upm
         val advanceScale = t.fontSize / 1000.0
@@ -1423,7 +1423,7 @@ public class PageRenderer(
                 )
             } else if (glyph.advanceWidth > 0.0) {
                 val w = glyph.advanceWidth * advanceScale
-                val box = PdfPath.Builder().apply {
+                val box = KitePath.Builder().apply {
                     rectangle(0.0, -0.2 * t.fontSize, w, t.fontSize)
                 }.build()
                 appendPath(builder, transformPath(box, penMatrix))
@@ -1433,32 +1433,32 @@ public class PageRenderer(
     }
 
     /** Append every segment of [path] to [b] (subpaths stay separate). */
-    private fun appendPath(b: PdfPath.Builder, path: PdfPath) {
+    private fun appendPath(b: KitePath.Builder, path: KitePath) {
         for (seg in path.segments) when (seg) {
-            is PdfPath.Segment.MoveTo -> b.moveTo(seg.x, seg.y)
-            is PdfPath.Segment.LineTo -> b.lineTo(seg.x, seg.y)
-            is PdfPath.Segment.CurveTo -> b.curveTo(seg.x1, seg.y1, seg.x2, seg.y2, seg.x3, seg.y3)
-            is PdfPath.Segment.QuadTo -> b.quadTo(seg.x1, seg.y1, seg.x2, seg.y2)
-            PdfPath.Segment.Close -> b.close()
+            is KitePath.Segment.MoveTo -> b.moveTo(seg.x, seg.y)
+            is KitePath.Segment.LineTo -> b.lineTo(seg.x, seg.y)
+            is KitePath.Segment.CurveTo -> b.curveTo(seg.x1, seg.y1, seg.x2, seg.y2, seg.x3, seg.y3)
+            is KitePath.Segment.QuadTo -> b.quadTo(seg.x1, seg.y1, seg.x2, seg.y2)
+            KitePath.Segment.Close -> b.close()
         }
     }
 
     /** Apply [m] to every coordinate of [path], returning a new path. */
-    private fun transformPath(path: PdfPath, m: Matrix): PdfPath {
-        val b = PdfPath.Builder()
+    private fun transformPath(path: KitePath, m: Matrix): KitePath {
+        val b = KitePath.Builder()
         fun p(x: Double, y: Double): Pair<Double, Double> = m.transformPoint(x, y)
         for (seg in path.segments) when (seg) {
-            is PdfPath.Segment.MoveTo -> { val (x, y) = p(seg.x, seg.y); b.moveTo(x, y) }
-            is PdfPath.Segment.LineTo -> { val (x, y) = p(seg.x, seg.y); b.lineTo(x, y) }
-            is PdfPath.Segment.CurveTo -> {
+            is KitePath.Segment.MoveTo -> { val (x, y) = p(seg.x, seg.y); b.moveTo(x, y) }
+            is KitePath.Segment.LineTo -> { val (x, y) = p(seg.x, seg.y); b.lineTo(x, y) }
+            is KitePath.Segment.CurveTo -> {
                 val (x1, y1) = p(seg.x1, seg.y1); val (x2, y2) = p(seg.x2, seg.y2); val (x3, y3) = p(seg.x3, seg.y3)
                 b.curveTo(x1, y1, x2, y2, x3, y3)
             }
-            is PdfPath.Segment.QuadTo -> {
+            is KitePath.Segment.QuadTo -> {
                 val (x1, y1) = p(seg.x1, seg.y1); val (x2, y2) = p(seg.x2, seg.y2)
                 b.quadTo(x1, y1, x2, y2)
             }
-            PdfPath.Segment.Close -> b.close()
+            KitePath.Segment.Close -> b.close()
         }
         return b.build()
     }
@@ -1563,7 +1563,7 @@ public class PageRenderer(
             val ops = ContentStreamParser.parse(
                 io.github.yuroyami.kitepdf.filters.FilterChain.decode(proc),
             )
-            val pathBuilder = PdfPath.Builder()
+            val pathBuilder = KitePath.Builder()
             for (op in ops) dispatch(op, parentState, pathBuilder, fonts, xobjects, colorSpaces, extGStates, sh, patterns, properties)
         } finally {
             type3IgnoreColor = savedIgnore

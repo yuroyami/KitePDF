@@ -9,7 +9,7 @@ package io.github.yuroyami.kitepdf.render
  * the [GraphicsState.ctm] in effect when the path is painted is the relevant
  * transform.
  */
-public data class PdfPath(val segments: List<Segment>) {
+public data class KitePath(val segments: List<Segment>) {
 
     public fun isEmpty(): Boolean = segments.isEmpty()
 
@@ -80,12 +80,12 @@ public data class PdfPath(val segments: List<Segment>) {
             close()
         }
 
-        public fun build(): PdfPath = PdfPath(segments.toList())
+        public fun build(): KitePath = KitePath(segments.toList())
         public fun reset() { segments.clear(); lastX = 0.0; lastY = 0.0 }
         public fun isEmpty(): Boolean = segments.isEmpty()
     }
 
     public companion object {
-        public val EMPTY: PdfPath = PdfPath(emptyList())
+        public val EMPTY: KitePath = KitePath(emptyList())
     }
 }

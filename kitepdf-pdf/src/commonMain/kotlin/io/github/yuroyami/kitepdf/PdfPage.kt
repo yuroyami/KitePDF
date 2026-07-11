@@ -11,7 +11,7 @@ import io.github.yuroyami.kitepdf.parser.PdfReference
 import io.github.yuroyami.kitepdf.parser.PdfStream
 import io.github.yuroyami.kitepdf.render.Matrix
 import io.github.yuroyami.kitepdf.render.PageRenderer
-import io.github.yuroyami.kitepdf.render.PdfCanvas
+import io.github.yuroyami.kitepdf.render.KiteCanvas
 import io.github.yuroyami.kitepdf.text.TextExtractor
 
 /**
@@ -23,7 +23,7 @@ import io.github.yuroyami.kitepdf.text.TextExtractor
  * println(page.extractText())
  * for (link in page.annotations) { /* … */ }
  *
- * // Paint into any backend implementing PdfCanvas (see :kitepdf-compose etc.):
+ * // Paint into any backend implementing KiteCanvas (see :kitepdf-compose etc.):
  * page.renderTo(canvas, deviceCtm = Matrix.IDENTITY)
  * ```
  */
@@ -268,12 +268,12 @@ public class PdfPage internal constructor(
     }
 
     /**
-     * Render this page into a [PdfCanvas] (typically the Compose binding's
+     * Render this page into a [KiteCanvas] (typically the Compose binding's
      * `ComposeCanvas`). [deviceCtm] is applied on top of user-space — pass an
      * identity matrix for a 1pt = 1pt rendering, or a scaled / Y-flipped
      * matrix to fit a UI surface.
      */
-    override fun renderTo(canvas: PdfCanvas, deviceCtm: Matrix) {
+    override fun renderTo(canvas: KiteCanvas, deviceCtm: Matrix) {
         PageRenderer(canvas, document).render(this, deviceCtm)
     }
 }

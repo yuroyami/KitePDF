@@ -8,7 +8,7 @@ import io.github.yuroyami.kitepdf.parser.PdfInt
 import io.github.yuroyami.kitepdf.parser.PdfName
 import io.github.yuroyami.kitepdf.parser.PdfReal
 import io.github.yuroyami.kitepdf.parser.PdfStream
-import io.github.yuroyami.kitepdf.render.PdfPath
+import io.github.yuroyami.kitepdf.render.KitePath
 
 /**
  * Type 0 composite font (ISO 32000-1 §9.7) — wraps a CIDFont descendant
@@ -80,7 +80,7 @@ internal class CompositeFont(
     }
 
     /** Resolve a CID to a glyph outline, or null if neither embedded font has it. */
-    fun outline(cid: Int): PdfPath? {
+    fun outline(cid: Int): KitePath? {
         val gid = cidToGid.map(cid)
         ttf?.let { return it.outlinePath(gid) }
         cff?.let { return it.outline(gid) }

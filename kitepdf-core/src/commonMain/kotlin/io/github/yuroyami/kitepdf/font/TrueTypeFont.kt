@@ -1,6 +1,6 @@
 package io.github.yuroyami.kitepdf.font
 
-import io.github.yuroyami.kitepdf.render.PdfPath
+import io.github.yuroyami.kitepdf.render.KitePath
 import kotlin.math.absoluteValue
 
 /**
@@ -34,7 +34,7 @@ public class TrueTypeFont private constructor(
     public val numGlyphs: Int get() = maxp.numGlyphs
 
     private val cache = HashMap<Int, GlyphOutline?>()
-    private val pathCache = HashMap<Int, PdfPath?>()
+    private val pathCache = HashMap<Int, KitePath?>()
 
     /** Convert a unicode codepoint to a glyph index, or 0 (.notdef) if unmapped. */
     public fun glyphIdForCodePoint(codePoint: Int): Int = cmap.glyphIdFor(codePoint)
@@ -127,10 +127,10 @@ public class TrueTypeFont private constructor(
     private val maxCompositeDepth = 8
 
     /**
-     * Outline as a [PdfPath], cached — the `GlyphOutline → PdfPath` conversion
+     * Outline as a [KitePath], cached — the `GlyphOutline → KitePath` conversion
      * is built once per glyph, not on every draw.
      */
-    public fun outlinePath(glyphId: Int): PdfPath? {
+    public fun outlinePath(glyphId: Int): KitePath? {
         if (pathCache.containsKey(glyphId)) return pathCache[glyphId]
         val p = outline(glyphId)?.toPdfPath()
         pathCache[glyphId] = p
@@ -533,15 +533,15 @@ public data class GlyphBbox(val xMin: Int, val yMin: Int, val xMax: Int, val yMa
  */
 public data class GlyphOutline(val contours: List<Contour>, val bbox: GlyphBbox) {
 
-    public fun toPdfPath(): PdfPath {
-        val b = PdfPath.Builder()
+    public fun toPdfPath(): KitePath {
+        val b = KitePath.Builder()
         for (contour in contours) {
             renderContour(contour.points, b)
         }
         return b.build()
     }
 
-    private fun renderContour(points: List<GlyphPoint>, b: PdfPath.Builder) {
+    private fun renderContour(points: List<GlyphPoint>, b: KitePath.Builder) {
         if (points.isEmpty()) return
 
         // Find a starting on-curve point: if the first point is off-curve we

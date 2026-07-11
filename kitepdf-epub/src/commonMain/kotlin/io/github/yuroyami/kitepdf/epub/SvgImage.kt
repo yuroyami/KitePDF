@@ -3,8 +3,8 @@ package io.github.yuroyami.kitepdf.epub
 import io.github.yuroyami.kitepdf.epub.css.CssValues
 import io.github.yuroyami.kitepdf.render.BlendMode
 import io.github.yuroyami.kitepdf.render.Matrix
-import io.github.yuroyami.kitepdf.render.PdfCanvas
-import io.github.yuroyami.kitepdf.render.PdfPath
+import io.github.yuroyami.kitepdf.render.KiteCanvas
+import io.github.yuroyami.kitepdf.render.KitePath
 import io.github.yuroyami.kitepdf.render.RgbColor
 import kotlin.math.abs
 import kotlin.math.ceil
@@ -18,7 +18,7 @@ import kotlin.math.PI
  * and diagrams that ship in EPUBs (and to seed a future `:kitepdf-svg` handler;
  * the reusable path/transform parsing wants promoting to core then). Parses the
  * SVG XML into the shared [HtmlNode] tree and paints shapes straight into the
- * core [PdfCanvas] as vectors (crisp at any scale), not a rasterised bitmap.
+ * core [KiteCanvas] as vectors (crisp at any scale), not a rasterised bitmap.
  *
  * Supported: `<svg>` (width/height/viewBox), `<g>`, `<path>` (all `d` commands
  * incl. elliptical arcs), `<rect>` (+ rx/ry), `<circle>`, `<ellipse>`, `<line>`,
@@ -36,7 +36,7 @@ internal class SvgImage private constructor(
 ) {
 
     /** Paint the SVG into [canvas]; [ctm] maps the (0,0)-(width,height) viewport to device. */
-    fun render(canvas: PdfCanvas, ctm: Matrix) {
+    fun render(canvas: KiteCanvas, ctm: Matrix) {
         val vb = viewBox
         val base = if (vb != null && vb[2] > 0 && vb[3] > 0) {
             // viewBox coords -> viewport: translate(-min) then scale(size/vb).
@@ -65,7 +65,7 @@ internal class SvgImage private constructor(
             "circle" -> paintShape(ellipse(num(el, "cx"), num(el, "cy"), num(el, "r"), num(el, "r")), ctm, paint)
             "ellipse" -> paintShape(ellipse(num(el, "cx"), num(el, "cy"), num(el, "rx"), num(el, "ry")), ctm, paint)
             "line" -> paintShape(
-                PdfPath.Builder().apply { moveTo(num(el, "x1"), num(el, "y1")); lineTo(num(el, "x2"), num(el, "y2")) }.build(),
+                KitePath.Builder().apply { moveTo(num(el, "x1"), num(el, "y1")); lineTo(num(el, "x2"), num(el, "y2")) }.build(),
                 ctm, paint, forceStroke = true,
             )
             "polyline" -> el.attrs["points"]?.let { paintShape(polyline(it, close = false), ctm, paint) }
@@ -73,7 +73,7 @@ internal class SvgImage private constructor(
         }
     }
 
-    private fun paintShape(path: PdfPath, ctm: Matrix, paint: Paint, forceStroke: Boolean = false) {
+    private fun paintShape(path: KitePath, ctm: Matrix, paint: Paint, forceStroke: Boolean = false) {
         if (path.segments.isEmpty()) return
         paint.fill?.let { if (!forceStroke) canvas0?.let { c -> c.fillPath(path, ctm, it, paint.evenOdd, paint.opacity, BlendMode.Normal) } }
         val sc = paint.stroke ?: if (forceStroke) RgbColor.BLACK else null
@@ -81,7 +81,7 @@ internal class SvgImage private constructor(
     }
 
     // paintShape needs the canvas; thread it via a field set for the duration of render().
-    private var canvas0: PdfCanvas? = null
+    private var canvas0: KiteCanvas? = null
 
     private fun resolvePaint(a: Map<String, String>, p: Paint): Paint {
         val current = a["color"]?.let { CssValues.color(it) } ?: p.current
@@ -105,14 +105,14 @@ internal class SvgImage private constructor(
 
     // ---- shape builders (user coordinates) ----------------------------------
 
-    private fun rect(a: Map<String, String>): PdfPath {
+    private fun rect(a: Map<String, String>): KitePath {
         val x = pLen(a, "x"); val y = pLen(a, "y"); val w = pLen(a, "width"); val h = pLen(a, "height")
         var rx = a["rx"]?.let { parseLen(it) } ?: -1.0
         var ry = a["ry"]?.let { parseLen(it) } ?: -1.0
         if (rx < 0 && ry >= 0) rx = ry
         if (ry < 0 && rx >= 0) ry = rx
         rx = rx.coerceIn(0.0, w / 2); ry = ry.coerceIn(0.0, h / 2)
-        val b = PdfPath.Builder()
+        val b = KitePath.Builder()
         if (rx <= 0.0 || ry <= 0.0) {
             b.moveTo(x, y); b.lineTo(x + w, y); b.lineTo(x + w, y + h); b.lineTo(x, y + h); b.close()
         } else {
@@ -127,10 +127,10 @@ internal class SvgImage private constructor(
         return b.build()
     }
 
-    private fun ellipse(cx: Double, cy: Double, rx: Double, ry: Double): PdfPath {
-        if (rx <= 0 || ry <= 0) return PdfPath(emptyList())
+    private fun ellipse(cx: Double, cy: Double, rx: Double, ry: Double): KitePath {
+        if (rx <= 0 || ry <= 0) return KitePath(emptyList())
         val k = 0.5522847498
-        val b = PdfPath.Builder()
+        val b = KitePath.Builder()
         b.moveTo(cx + rx, cy)
         b.curveTo(cx + rx, cy + ry * k, cx + rx * k, cy + ry, cx, cy + ry)
         b.curveTo(cx - rx * k, cy + ry, cx - rx, cy + ry * k, cx - rx, cy)
@@ -140,9 +140,9 @@ internal class SvgImage private constructor(
         return b.build()
     }
 
-    private fun polyline(points: String, close: Boolean): PdfPath {
+    private fun polyline(points: String, close: Boolean): KitePath {
         val nums = numbers(points)
-        val b = PdfPath.Builder()
+        val b = KitePath.Builder()
         var i = 0
         var first = true
         while (i + 1 < nums.size) {
@@ -257,8 +257,8 @@ internal class SvgImage private constructor(
 
         // ---- SVG path `d` parser --------------------------------------------
 
-        private fun parsePath(d: String): PdfPath {
-            val b = PdfPath.Builder()
+        private fun parsePath(d: String): KitePath {
+            val b = KitePath.Builder()
             val t = PathScanner(d)
             var cx = 0.0; var cy = 0.0     // current point
             var sx = 0.0; var sy = 0.0     // subpath start
@@ -321,7 +321,7 @@ internal class SvgImage private constructor(
 
         /** Append an elliptical arc (SVG endpoint parameterisation) as cubic béziers. */
         private fun arcTo(
-            b: PdfPath.Builder, x0: Double, y0: Double, rxIn: Double, ryIn: Double,
+            b: KitePath.Builder, x0: Double, y0: Double, rxIn: Double, ryIn: Double,
             rotDeg: Double, large: Boolean, sweep: Boolean, x: Double, y: Double,
         ) {
             var rx = abs(rxIn); var ry = abs(ryIn)

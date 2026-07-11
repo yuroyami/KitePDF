@@ -8,9 +8,9 @@ import io.github.yuroyami.kitepdf.font.TextGlyph
 import io.github.yuroyami.kitepdf.render.BlendMode as PdfBlendMode
 import io.github.yuroyami.kitepdf.render.ImageXObject
 import io.github.yuroyami.kitepdf.render.Matrix as PdfMatrix
-import io.github.yuroyami.kitepdf.render.PdfCanvas
-import io.github.yuroyami.kitepdf.render.PdfPath
-import io.github.yuroyami.kitepdf.render.PdfShading
+import io.github.yuroyami.kitepdf.render.KiteCanvas
+import io.github.yuroyami.kitepdf.render.KitePath
+import io.github.yuroyami.kitepdf.render.KiteShading
 import io.github.yuroyami.kitepdf.render.RgbColor
 import io.github.yuroyami.kitepdf.render.SoftMask
 import io.github.yuroyami.kitepdf.render.sampleStops
@@ -23,7 +23,7 @@ import org.w3c.files.Blob
 import org.w3c.files.BlobPropertyBag
 
 /**
- * [PdfCanvas] backed by a browser-side `CanvasRenderingContext2D`. Pure
+ * [KiteCanvas] backed by a browser-side `CanvasRenderingContext2D`. Pure
  * Kotlin/JS + DOM — no Compose for Web, no Skia/WASM bundle.
  *
  * The right choice for in-browser PDF viewers that want minimal bundle
@@ -40,7 +40,7 @@ import org.w3c.files.BlobPropertyBag
  *    renderer's synchronous draw pass. v1 paints placeholders for image
  *    XObjects; an async render path is roadmapped.
  */
-public class Canvas2dCanvas(private val ctx: CanvasRenderingContext2D) : PdfCanvas {
+public class Canvas2dCanvas(private val ctx: CanvasRenderingContext2D) : KiteCanvas {
 
     private var openLayers = 0
 
@@ -55,7 +55,7 @@ public class Canvas2dCanvas(private val ctx: CanvasRenderingContext2D) : PdfCanv
     }
 
     override fun fillPath(
-        path: PdfPath, ctm: PdfMatrix, color: RgbColor, evenOdd: Boolean,
+        path: KitePath, ctm: PdfMatrix, color: RgbColor, evenOdd: Boolean,
         alpha: Double, blendMode: PdfBlendMode,
     ) {
         val p = toPath2D(path, ctm)
@@ -71,7 +71,7 @@ public class Canvas2dCanvas(private val ctx: CanvasRenderingContext2D) : PdfCanv
     }
 
     override fun strokePath(
-        path: PdfPath, ctm: PdfMatrix, color: RgbColor, lineWidth: Double,
+        path: KitePath, ctm: PdfMatrix, color: RgbColor, lineWidth: Double,
         alpha: Double, blendMode: PdfBlendMode,
         dashArray: List<Double>?, dashPhase: Double,
         lineCap: Int, lineJoin: Int, miterLimit: Double,
@@ -209,19 +209,19 @@ public class Canvas2dCanvas(private val ctx: CanvasRenderingContext2D) : PdfCanv
     }
 
     override fun fillShading(
-        shading: PdfShading, ctm: PdfMatrix, clipPath: PdfPath?,
+        shading: KiteShading, ctm: PdfMatrix, clipPath: KitePath?,
         alpha: Double, blendMode: PdfBlendMode,
     ) {
         if (paintComplexShading(shading, ctm, clipPath, alpha, blendMode)) return
         val stops = shading.sampleStops(32) ?: return
 
         val gradient = when (shading) {
-            is PdfShading.Axial -> {
+            is KiteShading.Axial -> {
                 val (x0, y0) = ctm.transformPoint(shading.coords[0], shading.coords[1])
                 val (x1, y1) = ctm.transformPoint(shading.coords[2], shading.coords[3])
                 ctx.createLinearGradient(x0, y0, x1, y1)
             }
-            is PdfShading.Radial -> {
+            is KiteShading.Radial -> {
                 // True PDF two-circle radial — Canvas2D supports both circles.
                 val sc = kotlin.math.sqrt(ctm.a * ctm.a + ctm.b * ctm.b)
                 val (x0, y0) = ctm.transformPoint(shading.coords[0], shading.coords[1])
@@ -230,7 +230,7 @@ public class Canvas2dCanvas(private val ctx: CanvasRenderingContext2D) : PdfCanv
                 val r1 = (shading.coords[5] * sc).coerceAtLeast(0.1)
                 ctx.createRadialGradient(x0, y0, r0, x1, y1, r1)
             }
-            is PdfShading.Unsupported -> return
+            is KiteShading.Unsupported -> return
             else -> return // T-40 types already handled by paintComplexShading
         }
         for (i in stops.colors.indices) {
@@ -252,7 +252,7 @@ public class Canvas2dCanvas(private val ctx: CanvasRenderingContext2D) : PdfCanv
         }
     }
 
-    override fun pushClip(path: PdfPath, ctm: PdfMatrix, evenOdd: Boolean) {
+    override fun pushClip(path: KitePath, ctm: PdfMatrix, evenOdd: Boolean) {
         ctx.save()
         openLayers++
         val p = toPath2D(path, ctm)
@@ -312,7 +312,7 @@ public class Canvas2dCanvas(private val ctx: CanvasRenderingContext2D) : PdfCanv
         kind: SoftMask.Kind,
         maskBBox: Rectangle, maskCtm: PdfMatrix,
         render: () -> Unit,
-        renderMask: (PdfCanvas) -> Unit,
+        renderMask: (KiteCanvas) -> Unit,
     ) {
         // Render content, then over-paint the mask group with
         // `destination-in` so the mask's alpha clips the content.
@@ -330,30 +330,30 @@ public class Canvas2dCanvas(private val ctx: CanvasRenderingContext2D) : PdfCanv
 
     /* ─── Helpers ─────────────────────────────────────────────────────────── */
 
-    private fun toPath2D(src: PdfPath, ctm: PdfMatrix): Path2D {
+    private fun toPath2D(src: KitePath, ctm: PdfMatrix): Path2D {
         val p = Path2D()
         for (seg in src.segments) {
             when (seg) {
-                is PdfPath.Segment.MoveTo -> {
+                is KitePath.Segment.MoveTo -> {
                     val (x, y) = ctm.transformPoint(seg.x, seg.y)
                     p.moveTo(x, y)
                 }
-                is PdfPath.Segment.LineTo -> {
+                is KitePath.Segment.LineTo -> {
                     val (x, y) = ctm.transformPoint(seg.x, seg.y)
                     p.lineTo(x, y)
                 }
-                is PdfPath.Segment.CurveTo -> {
+                is KitePath.Segment.CurveTo -> {
                     val (x1, y1) = ctm.transformPoint(seg.x1, seg.y1)
                     val (x2, y2) = ctm.transformPoint(seg.x2, seg.y2)
                     val (x3, y3) = ctm.transformPoint(seg.x3, seg.y3)
                     p.bezierCurveTo(x1, y1, x2, y2, x3, y3)
                 }
-                is PdfPath.Segment.QuadTo -> {
+                is KitePath.Segment.QuadTo -> {
                     val (x1, y1) = ctm.transformPoint(seg.x1, seg.y1)
                     val (x2, y2) = ctm.transformPoint(seg.x2, seg.y2)
                     p.quadraticCurveTo(x1, y1, x2, y2)
                 }
-                PdfPath.Segment.Close -> p.closePath()
+                KitePath.Segment.Close -> p.closePath()
             }
         }
         return p

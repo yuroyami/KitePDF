@@ -11,7 +11,7 @@ import io.github.yuroyami.kitepdf.core.PdfFormatException
  *
  * Coverage:
  *   - Header + Name INDEX + Top DICT + String INDEX + Global/Local Subrs.
- *   - CharStrings INDEX with Type 2 charstring → [io.github.yuroyami.kitepdf.render.PdfPath]
+ *   - CharStrings INDEX with Type 2 charstring → [io.github.yuroyami.kitepdf.render.KitePath]
  *     conversion (see [CharstringInterpreter]).
  *   - Charsets format 0/1/2 → glyph-name lookup.
  *   - Encodings format 0/1 — for non-CIDFonts only (byte → SID → glyph name → GID).
@@ -51,14 +51,14 @@ public class CffFont private constructor(
 
     public val numGlyphs: Int get() = charStrings.size
 
-    private val outlineCache = HashMap<Int, io.github.yuroyami.kitepdf.render.PdfPath?>()
+    private val outlineCache = HashMap<Int, io.github.yuroyami.kitepdf.render.KitePath?>()
 
     /**
      * Returns the outline of [glyphId], or null if it's empty / unparseable.
      * Decoded outlines are cached: a glyph drawn N times runs the Type 2
      * charstring interpreter once, not N times.
      */
-    public fun outline(glyphId: Int): io.github.yuroyami.kitepdf.render.PdfPath? {
+    public fun outline(glyphId: Int): io.github.yuroyami.kitepdf.render.KitePath? {
         if (glyphId < 0 || glyphId >= charStrings.size) return null
         if (outlineCache.containsKey(glyphId)) return outlineCache[glyphId]
         val cs = charStrings[glyphId]

@@ -11,7 +11,7 @@ import org.jetbrains.skia.Surface
 
 /**
  * Headless raster output for an [EpubPage] using Skia (no Compose) — the EPUB
- * twin of [PdfPageRasterizer]. Both draw through the shared core [PdfCanvas]
+ * twin of [PdfPageRasterizer]. Both draw through the shared core [KiteCanvas]
  * seam ([SkiaCanvas]), so one Skiko backend serves PDF and EPUB alike on every
  * target (JVM, Android, iOS, macOS, Linux, JS/Wasm).
  *

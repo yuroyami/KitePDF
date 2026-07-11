@@ -1,6 +1,6 @@
 package io.github.yuroyami.kitepdf.font
 
-import io.github.yuroyami.kitepdf.render.PdfPath
+import io.github.yuroyami.kitepdf.render.KitePath
 
 /**
  * Type 1 (PostScript) font parser — handles `/FontFile` embedded fonts
@@ -35,9 +35,9 @@ internal class Type1Font private constructor(
     private val lenIV: Int,
 ) {
 
-    private val outlineCache = HashMap<String, PdfPath?>()
+    private val outlineCache = HashMap<String, KitePath?>()
 
-    fun outlineForGlyphName(glyphName: String): PdfPath? {
+    fun outlineForGlyphName(glyphName: String): KitePath? {
         if (outlineCache.containsKey(glyphName)) return outlineCache[glyphName]
         val cs = charStrings[glyphName]
         val path = if (cs == null) null else runCatching {
@@ -59,7 +59,7 @@ internal class Type1Font private constructor(
     }
 
     /** Look up a glyph by byte code via the font's built-in /Encoding. */
-    fun outlineForByte(code: Int): PdfPath? {
+    fun outlineForByte(code: Int): KitePath? {
         val name = encoding.getOrNull(code and 0xFF) ?: return null
         return outlineForGlyphName(name)
     }

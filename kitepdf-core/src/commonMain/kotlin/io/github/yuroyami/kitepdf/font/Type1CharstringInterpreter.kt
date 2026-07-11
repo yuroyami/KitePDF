@@ -1,9 +1,9 @@
 package io.github.yuroyami.kitepdf.font
 
-import io.github.yuroyami.kitepdf.render.PdfPath
+import io.github.yuroyami.kitepdf.render.KitePath
 
 /**
- * Type 1 charstring → [PdfPath] interpreter (Adobe Type 1 Font Format §6.4).
+ * Type 1 charstring → [KitePath] interpreter (Adobe Type 1 Font Format §6.4).
  *
  * The bytecode is conceptually simpler than Type 2: no flex sub-program in
  * the language proper (it's done via callothersubr), no hintmasks, no
@@ -29,7 +29,7 @@ internal class Type1CharstringInterpreter(
     private val seacResolver: ((Int) -> ByteArray?)? = null,
 ) {
 
-    private val pathBuilder = PdfPath.Builder()
+    private val pathBuilder = KitePath.Builder()
     private val stack = ArrayDeque<Double>()
     private val psStack = ArrayDeque<Double>()  // OtherSubrs "PostScript stack"
     private var x = 0.0
@@ -46,7 +46,7 @@ internal class Type1CharstringInterpreter(
     /** The reference points collected from the 7 flex rmoveto's (x then y). */
     private val flexPts = ArrayList<Double>(14)
 
-    fun interpret(): PdfPath {
+    fun interpret(): KitePath {
         execute(charstring)
         return pathBuilder.build()
     }
@@ -331,15 +331,15 @@ internal class Type1CharstringInterpreter(
         val sub = Type1CharstringInterpreter(cs, subrs, seacResolver).interpret()
         for (seg in sub.segments) {
             when (seg) {
-                is PdfPath.Segment.MoveTo -> pathBuilder.moveTo(seg.x + dx, seg.y + dy)
-                is PdfPath.Segment.LineTo -> pathBuilder.lineTo(seg.x + dx, seg.y + dy)
-                is PdfPath.Segment.CurveTo -> pathBuilder.curveTo(
+                is KitePath.Segment.MoveTo -> pathBuilder.moveTo(seg.x + dx, seg.y + dy)
+                is KitePath.Segment.LineTo -> pathBuilder.lineTo(seg.x + dx, seg.y + dy)
+                is KitePath.Segment.CurveTo -> pathBuilder.curveTo(
                     seg.x1 + dx, seg.y1 + dy, seg.x2 + dx, seg.y2 + dy, seg.x3 + dx, seg.y3 + dy,
                 )
-                is PdfPath.Segment.QuadTo -> pathBuilder.quadTo(
+                is KitePath.Segment.QuadTo -> pathBuilder.quadTo(
                     seg.x1 + dx, seg.y1 + dy, seg.x2 + dx, seg.y2 + dy,
                 )
-                is PdfPath.Segment.Close -> pathBuilder.close()
+                is KitePath.Segment.Close -> pathBuilder.close()
             }
         }
     }

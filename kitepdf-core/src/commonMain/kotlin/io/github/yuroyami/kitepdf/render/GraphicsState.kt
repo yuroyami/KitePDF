@@ -38,9 +38,9 @@ public data class GraphicsState(
      * route through the canvas's gradient/tile path. Cleared by any plain
      * colour setter (`g`, `rg`, `k`, `cs`, `sc`).
      */
-    val fillPattern: PdfPattern? = null,
+    val fillPattern: KitePattern? = null,
     /** Active stroke pattern — same semantics as [fillPattern] for `SCN`. */
-    val strokePattern: PdfPattern? = null,
+    val strokePattern: KitePattern? = null,
     /** Dash pattern (`d` operator): on/off lengths in user-space units; null/empty = solid. */
     val dashArray: List<Double>? = null,
     /** Dash phase offset (`d` operator), user-space units. */

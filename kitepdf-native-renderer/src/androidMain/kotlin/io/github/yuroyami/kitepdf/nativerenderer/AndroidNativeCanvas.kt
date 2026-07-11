@@ -19,16 +19,16 @@ import io.github.yuroyami.kitepdf.font.TextGlyph
 import io.github.yuroyami.kitepdf.render.BlendMode as PdfBlendMode
 import io.github.yuroyami.kitepdf.render.ImageXObject
 import io.github.yuroyami.kitepdf.render.Matrix as PdfMatrix
-import io.github.yuroyami.kitepdf.render.PdfCanvas
-import io.github.yuroyami.kitepdf.render.PdfPath
-import io.github.yuroyami.kitepdf.render.PdfShading
+import io.github.yuroyami.kitepdf.render.KiteCanvas
+import io.github.yuroyami.kitepdf.render.KitePath
+import io.github.yuroyami.kitepdf.render.KiteShading
 import io.github.yuroyami.kitepdf.render.RgbColor
 import io.github.yuroyami.kitepdf.render.SoftMask
 import io.github.yuroyami.kitepdf.render.paintComplexShading
 import io.github.yuroyami.kitepdf.render.sampleStops
 
 /**
- * [PdfCanvas] backed by [android.graphics.Canvas].
+ * [KiteCanvas] backed by [android.graphics.Canvas].
  *
  * This is the right choice on Android when you don't want Compose: pass a
  * `Canvas` from your custom View's `onDraw(Canvas)` override straight into
@@ -40,7 +40,7 @@ import io.github.yuroyami.kitepdf.render.sampleStops
  * Blend modes require API 29+ (`Paint.setBlendMode`). The module's minSdk
  * is bumped to 29 to match — see :kitepdf-native build.gradle.kts.
  */
-public class AndroidNativeCanvas(private val canvas: AndroidCanvas) : PdfCanvas {
+public class AndroidNativeCanvas(private val canvas: AndroidCanvas) : KiteCanvas {
 
     /** Open layers from clip pushes + transparency groups. */
     private var openLayers = 0
@@ -58,7 +58,7 @@ public class AndroidNativeCanvas(private val canvas: AndroidCanvas) : PdfCanvas 
     }
 
     override fun fillPath(
-        path: PdfPath, ctm: PdfMatrix, color: RgbColor, evenOdd: Boolean,
+        path: KitePath, ctm: PdfMatrix, color: RgbColor, evenOdd: Boolean,
         alpha: Double, blendMode: PdfBlendMode,
     ) {
         val p = toAndroidPath(path, ctm).apply {
@@ -74,7 +74,7 @@ public class AndroidNativeCanvas(private val canvas: AndroidCanvas) : PdfCanvas 
     }
 
     override fun strokePath(
-        path: PdfPath, ctm: PdfMatrix, color: RgbColor, lineWidth: Double,
+        path: KitePath, ctm: PdfMatrix, color: RgbColor, lineWidth: Double,
         alpha: Double, blendMode: PdfBlendMode,
         dashArray: List<Double>?, dashPhase: Double,
         lineCap: Int, lineJoin: Int, miterLimit: Double,
@@ -219,7 +219,7 @@ public class AndroidNativeCanvas(private val canvas: AndroidCanvas) : PdfCanvas 
     }
 
     override fun fillShading(
-        shading: PdfShading, ctm: PdfMatrix, clipPath: PdfPath?,
+        shading: KiteShading, ctm: PdfMatrix, clipPath: KitePath?,
         alpha: Double, blendMode: PdfBlendMode,
     ) {
         if (paintComplexShading(shading, ctm, clipPath, alpha, blendMode)) return
@@ -228,7 +228,7 @@ public class AndroidNativeCanvas(private val canvas: AndroidCanvas) : PdfCanvas 
         val positions = FloatArray(stops.offsets.size) { stops.offsets[it].toFloat() }
 
         val shader: Shader = when (shading) {
-            is PdfShading.Axial -> {
+            is KiteShading.Axial -> {
                 val (x0, y0) = ctm.transformPoint(shading.coords[0], shading.coords[1])
                 val (x1, y1) = ctm.transformPoint(shading.coords[2], shading.coords[3])
                 LinearGradient(
@@ -236,13 +236,13 @@ public class AndroidNativeCanvas(private val canvas: AndroidCanvas) : PdfCanvas 
                     colors, positions, Shader.TileMode.CLAMP,
                 )
             }
-            is PdfShading.Radial -> {
+            is KiteShading.Radial -> {
                 val (cx, cy) = ctm.transformPoint(shading.coords[3], shading.coords[4])
                 val r = (shading.coords[5] * kotlin.math.sqrt(ctm.a * ctm.a + ctm.b * ctm.b))
                     .toFloat().coerceAtLeast(0.1f)
                 RadialGradient(cx.toFloat(), cy.toFloat(), r, colors, positions, Shader.TileMode.CLAMP)
             }
-            is PdfShading.Unsupported -> return
+            is KiteShading.Unsupported -> return
             else -> return // T-40 types already handled by paintComplexShading
         }
         val paint = Paint().apply {
@@ -259,7 +259,7 @@ public class AndroidNativeCanvas(private val canvas: AndroidCanvas) : PdfCanvas 
         }
     }
 
-    override fun pushClip(path: PdfPath, ctm: PdfMatrix, evenOdd: Boolean) {
+    override fun pushClip(path: KitePath, ctm: PdfMatrix, evenOdd: Boolean) {
         canvas.save()
         openLayers++
         val p = toAndroidPath(path, ctm).apply {
@@ -345,7 +345,7 @@ public class AndroidNativeCanvas(private val canvas: AndroidCanvas) : PdfCanvas 
         kind: SoftMask.Kind,
         maskBBox: Rectangle, maskCtm: PdfMatrix,
         render: () -> Unit,
-        renderMask: (PdfCanvas) -> Unit,
+        renderMask: (KiteCanvas) -> Unit,
     ) {
         canvas.saveLayer(null, Paint())
         openLayers++
@@ -368,30 +368,30 @@ public class AndroidNativeCanvas(private val canvas: AndroidCanvas) : PdfCanvas 
 
     /* ─── Helpers ─────────────────────────────────────────────────────────── */
 
-    private fun toAndroidPath(src: PdfPath, ctm: PdfMatrix): Path {
+    private fun toAndroidPath(src: KitePath, ctm: PdfMatrix): Path {
         val out = Path()
         for (seg in src.segments) {
             when (seg) {
-                is PdfPath.Segment.MoveTo -> {
+                is KitePath.Segment.MoveTo -> {
                     val (x, y) = ctm.transformPoint(seg.x, seg.y)
                     out.moveTo(x.toFloat(), y.toFloat())
                 }
-                is PdfPath.Segment.LineTo -> {
+                is KitePath.Segment.LineTo -> {
                     val (x, y) = ctm.transformPoint(seg.x, seg.y)
                     out.lineTo(x.toFloat(), y.toFloat())
                 }
-                is PdfPath.Segment.CurveTo -> {
+                is KitePath.Segment.CurveTo -> {
                     val (x1, y1) = ctm.transformPoint(seg.x1, seg.y1)
                     val (x2, y2) = ctm.transformPoint(seg.x2, seg.y2)
                     val (x3, y3) = ctm.transformPoint(seg.x3, seg.y3)
                     out.cubicTo(x1.toFloat(), y1.toFloat(), x2.toFloat(), y2.toFloat(), x3.toFloat(), y3.toFloat())
                 }
-                is PdfPath.Segment.QuadTo -> {
+                is KitePath.Segment.QuadTo -> {
                     val (x1, y1) = ctm.transformPoint(seg.x1, seg.y1)
                     val (x2, y2) = ctm.transformPoint(seg.x2, seg.y2)
                     out.quadTo(x1.toFloat(), y1.toFloat(), x2.toFloat(), y2.toFloat())
                 }
-                PdfPath.Segment.Close -> out.close()
+                KitePath.Segment.Close -> out.close()
             }
         }
         return out

@@ -10,8 +10,8 @@ import io.github.yuroyami.kitepdf.parser.PdfStream
 
 /**
  * T-40: parsing of the stream-based mesh shadings (ISO 32000-1 §8.7.4.5):
- * types 4/5 (Gouraud triangles) into [PdfShading.TriangleMesh] and types 6/7
- * (Coons / tensor patches) into a pre-tessellated [PdfShading.PatchMesh].
+ * types 4/5 (Gouraud triangles) into [KiteShading.TriangleMesh] and types 6/7
+ * (Coons / tensor patches) into a pre-tessellated [KiteShading.PatchMesh].
  *
  * Vertex data is a continuous big-endian bit stream: per-value widths come
  * from /BitsPerFlag, /BitsPerCoordinate and /BitsPerComponent, and raw values
@@ -45,7 +45,7 @@ internal object MeshShadingParser {
         val bpc = dict.getInt("BitsPerCoordinate")?.toInt() ?: 16
         val bpcomp = dict.getInt("BitsPerComponent")?.toInt() ?: 8
         val bpf = dict.getInt("BitsPerFlag")?.toInt() ?: 8
-        val function: PdfFunction? = PdfFunction.parse(dict["Function"], refs)
+        val function: KiteFunction? = KiteFunction.parse(dict["Function"], refs)
         val ncomp = if (function != null) 1 else cs.componentCount
         val decode: DoubleArray
 
@@ -82,13 +82,13 @@ internal object MeshShadingParser {
     fun parseTriangles(
         type: Int, dict: PdfDictionary, stream: PdfStream,
         cs: ColorSpace, bg: RgbColor?, bbox: Rectangle?, refs: IndirectResolver,
-    ): PdfShading? {
+    ): KiteShading? {
         val layout = Layout(dict, refs, cs)
         val bs = BitStream(FilterChain.decode(stream))
         val minVertexBits = layout.bpc * 2L + layout.bpcomp * layout.ncomp
-        val triangles = ArrayList<PdfShading.MeshTriangle>()
+        val triangles = ArrayList<KiteShading.MeshTriangle>()
 
-        fun tri(a: Vertex, b: Vertex, c: Vertex) = PdfShading.MeshTriangle(
+        fun tri(a: Vertex, b: Vertex, c: Vertex) = KiteShading.MeshTriangle(
             doubleArrayOf(a.x, b.x, c.x),
             doubleArrayOf(a.y, b.y, c.y),
             arrayOf(a.color, b.color, c.color),
@@ -149,17 +149,17 @@ internal object MeshShadingParser {
             }
         }
         if (triangles.isEmpty()) return null
-        return PdfShading.TriangleMesh(cs, bg, bbox, triangles)
+        return KiteShading.TriangleMesh(cs, bg, bbox, triangles)
     }
 
     fun parsePatches(
         type: Int, dict: PdfDictionary, stream: PdfStream,
         cs: ColorSpace, bg: RgbColor?, bbox: Rectangle?, refs: IndirectResolver,
-    ): PdfShading? {
+    ): KiteShading? {
         val layout = Layout(dict, refs, cs)
         val bs = BitStream(FilterChain.decode(stream))
         val pointsPerPatch = if (type == 7) 16 else 12
-        val quads = ArrayList<PdfShading.FlatQuad>()
+        val quads = ArrayList<KiteShading.FlatQuad>()
 
         // Previous patch state for edge sharing (12-point Coons numbering:
         // p1..p12 counterclockwise from the bottom-left corner; colours at
@@ -222,7 +222,7 @@ internal object MeshShadingParser {
             px = x; py = y; pc = colors
         }
         if (quads.isEmpty()) return null
-        return PdfShading.PatchMesh(cs, bg, bbox, quads)
+        return KiteShading.PatchMesh(cs, bg, bbox, quads)
     }
 
     /** Cubic Bézier point. */
@@ -252,7 +252,7 @@ internal object MeshShadingParser {
 
     private fun tessellateCoons(
         x: DoubleArray, y: DoubleArray, corners: Array<RgbColor>,
-        out: MutableList<PdfShading.FlatQuad>,
+        out: MutableList<KiteShading.FlatQuad>,
     ) {
         val n = PATCH_GRID
         // Grid points (n+1)^2 via Coons evaluation.
@@ -274,7 +274,7 @@ internal object MeshShadingParser {
             val top = lerp(corners[3], corners[2], u)
             val color = lerp(bottom, top, v)
             out.add(
-                PdfShading.FlatQuad(
+                KiteShading.FlatQuad(
                     doubleArrayOf(gx[i][j], gx[i + 1][j], gx[i + 1][j + 1], gx[i][j + 1]),
                     doubleArrayOf(gy[i][j], gy[i + 1][j], gy[i + 1][j + 1], gy[i][j + 1]),
                     color,
@@ -295,30 +295,30 @@ private fun io.github.yuroyami.kitepdf.parser.PdfArray.numAt(i: Int): Double = w
 }
 
 /**
- * Renders the T-40 shading types through plain [PdfCanvas.fillPath] calls, so
+ * Renders the T-40 shading types through plain [KiteCanvas.fillPath] calls, so
  * every backend supports them identically with zero bespoke code:
  *
- *  - [PdfShading.FunctionBased]: a 64x64 cell grid over the domain, each cell
+ *  - [KiteShading.FunctionBased]: a 64x64 cell grid over the domain, each cell
  *    filled with the function's colour at its centre, mapped by the shading
  *    /Matrix.
- *  - [PdfShading.TriangleMesh]: each triangle recursively subdivided (depth
+ *  - [KiteShading.TriangleMesh]: each triangle recursively subdivided (depth
  *    3, 64 sub-triangles) with vertex-colour interpolation — a backend-free
  *    Gouraud approximation smoother than per-triangle flat fill.
- *  - [PdfShading.PatchMesh]: the pre-tessellated flat quads.
+ *  - [KiteShading.PatchMesh]: the pre-tessellated flat quads.
  *
  * Returns false for axial/radial/unsupported so the caller proceeds to its
  * native gradient path. [clipPath] (the pattern/`sh` fill region) and the
  * shading /BBox clip via push/popClip around the cells.
  */
-public fun PdfCanvas.paintComplexShading(
-    shading: PdfShading,
+public fun KiteCanvas.paintComplexShading(
+    shading: KiteShading,
     ctm: Matrix,
-    clipPath: PdfPath?,
+    clipPath: KitePath?,
     alpha: Double = 1.0,
     blendMode: BlendMode = BlendMode.Normal,
 ): Boolean {
     when (shading) {
-        is PdfShading.FunctionBased, is PdfShading.TriangleMesh, is PdfShading.PatchMesh -> Unit
+        is KiteShading.FunctionBased, is KiteShading.TriangleMesh, is KiteShading.PatchMesh -> Unit
         else -> return false
     }
     var clips = 0
@@ -327,7 +327,7 @@ public fun PdfCanvas.paintComplexShading(
         clips++
     }
     shading.bbox?.let { b ->
-        val p = PdfPath.Builder().apply {
+        val p = KitePath.Builder().apply {
             rectangle(b.left, b.bottom, b.right - b.left, b.top - b.bottom)
         }.build()
         pushClip(p, ctm, evenOdd = false)
@@ -335,7 +335,7 @@ public fun PdfCanvas.paintComplexShading(
     }
     try {
         when (shading) {
-            is PdfShading.FunctionBased -> {
+            is KiteShading.FunctionBased -> {
                 val n = 64
                 val x0 = shading.domain[0]
                 val x1 = shading.domain[1]
@@ -348,13 +348,13 @@ public fun PdfCanvas.paintComplexShading(
                     val cy0 = y0 + (y1 - y0) * j / n
                     val cy1 = y0 + (y1 - y0) * (j + 1) / n
                     val color = shading.colorAt((cx0 + cx1) / 2, (cy0 + cy1) / 2)
-                    val cell = PdfPath.Builder().apply {
+                    val cell = KitePath.Builder().apply {
                         rectangle(cx0, cy0, cx1 - cx0, cy1 - cy0)
                     }.build()
                     fillPath(cell, cellCtm, color, evenOdd = false, alpha = alpha, blendMode = blendMode)
                 }
             }
-            is PdfShading.TriangleMesh -> {
+            is KiteShading.TriangleMesh -> {
                 for (t in shading.triangles) {
                     subdivideAndFill(
                         t.x[0], t.y[0], t.colors[0],
@@ -364,9 +364,9 @@ public fun PdfCanvas.paintComplexShading(
                     )
                 }
             }
-            is PdfShading.PatchMesh -> {
+            is KiteShading.PatchMesh -> {
                 for (q in shading.quads) {
-                    val p = PdfPath.Builder().apply {
+                    val p = KitePath.Builder().apply {
                         moveTo(q.xs[0], q.ys[0])
                         lineTo(q.xs[1], q.ys[1])
                         lineTo(q.xs[2], q.ys[2])
@@ -384,7 +384,7 @@ public fun PdfCanvas.paintComplexShading(
     return true
 }
 
-private fun PdfCanvas.subdivideAndFill(
+private fun KiteCanvas.subdivideAndFill(
     x0: Double, y0: Double, c0: RgbColor,
     x1: Double, y1: Double, c1: RgbColor,
     x2: Double, y2: Double, c2: RgbColor,
@@ -392,7 +392,7 @@ private fun PdfCanvas.subdivideAndFill(
 ) {
     if (depth == 0) {
         val color = RgbColor((c0.r + c1.r + c2.r) / 3, (c0.g + c1.g + c2.g) / 3, (c0.b + c1.b + c2.b) / 3)
-        val p = PdfPath.Builder().apply {
+        val p = KitePath.Builder().apply {
             moveTo(x0, y0)
             lineTo(x1, y1)
             lineTo(x2, y2)

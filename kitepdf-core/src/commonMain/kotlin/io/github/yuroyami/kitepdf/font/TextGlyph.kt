@@ -1,6 +1,6 @@
 package io.github.yuroyami.kitepdf.font
 
-import io.github.yuroyami.kitepdf.render.PdfPath
+import io.github.yuroyami.kitepdf.render.KitePath
 
 /**
  * One glyph laid out from a `Tj` / `TJ` show-text byte string.
@@ -25,7 +25,7 @@ public data class TextGlyph(
     /** Glyph advance width in font design units (1/1000 em for most fonts). */
     val advanceWidth: Double,
     /** Outline ready to draw (TTF/CFF/Type 1 already resolved), or null if no embedded font. */
-    val outline: PdfPath?,
+    val outline: KitePath?,
     /** True iff this code unit corresponds to ASCII space (0x20) — needed for Tw word spacing. */
     val isWordSpace: Boolean,
     /**
