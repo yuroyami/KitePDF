@@ -12,8 +12,8 @@ package io.github.yuroyami.kitepdf
  */
 public object KitePDF {
 
-    /** Library version (kept in sync with the Gradle group/version). */
-    public const val VERSION: String = "0.1.1"
+    /** Library version. Generated from the Gradle project version at build time. */
+    public const val VERSION: String = KITEPDF_VERSION
 
     /** Parse [bytes] as a PDF document. See [PdfDocument.open] for the password overload. */
     public fun open(bytes: ByteArray): PdfDocument = PdfDocument.open(bytes)
