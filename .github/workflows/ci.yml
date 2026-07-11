@@ -1,9 +1,15 @@
 name: CI
 
-# Build + test gate. The JVM target is the canonical build of commonMain, so
-# compiling and testing it exercises the whole engine without the flakiness of
-# spinning up all 25 KMP targets in CI. The oracle tests need mutool (mupdf-tools)
-# to actually run their differential checks — otherwise they report as SKIPPED.
+# Build + test gates (T-50).
+#
+# - `build` (Linux JVM) is the REQUIRED gate: the JVM target is the canonical
+#   build of commonMain, and the differential/oracle suites run here (they
+#   need mutool from mupdf-tools; without it they report as SKIPPED).
+#   It runs on every push and pull request.
+# - `apple` and `js` prove the non-JVM targets compile AND pass the common
+#   tests. Minutes choice: they run only on pushes to main (not on PRs) to
+#   keep PR feedback fast and macOS minutes bounded; a regression lands at
+#   most one merge late and still blocks main immediately.
 
 on:
   push:
@@ -38,16 +44,92 @@ jobs:
       - name: Compile commonMain (JVM)
         run: ./gradlew :kitepdf:compileKotlinJvm --stacktrace
 
-      - name: Test :kitepdf (JVM)
-        run: ./gradlew :kitepdf:jvmTest --stacktrace
+      - name: Test every module (JVM)
+        run: >
+          ./gradlew
+          :kitepdf-core:jvmTest :kitepdf-pdf:jvmTest :kitepdf-epub:jvmTest
+          :kitepdf-skia-renderer:jvmTest :kitepdf-compose-viewer:jvmTest
+          :kitepdf:jvmTest --stacktrace
 
-      - name: Test :kitepdf-native-renderer (JVM oracle tests)
+      - name: Test :kitepdf-native-renderer (JVM oracle + fuzz tests)
         run: ./gradlew :kitepdf-native-renderer:jvmTest --stacktrace
 
       - name: Upload test reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: test-reports
+          name: test-reports-jvm
+          path: '**/build/reports/tests/**'
+          if-no-files-found: ignore
+
+  apple:
+    # Pushes to main only; see the minutes note at the top.
+    if: github.event_name == 'push'
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Cache Konan (native compiler + prebuilt deps)
+        uses: actions/cache@v4
+        with:
+          path: ~/.konan
+          key: konan-${{ runner.os }}-${{ hashFiles('gradle/libs.versions.toml') }}
+          restore-keys: konan-${{ runner.os }}-
+
+      - name: Test iOS simulator (core, pdf, epub)
+        run: >
+          ./gradlew
+          :kitepdf-core:iosSimulatorArm64Test
+          :kitepdf-pdf:iosSimulatorArm64Test
+          :kitepdf-epub:iosSimulatorArm64Test --stacktrace
+
+      - name: Test macOS arm64 (core, pdf, epub)
+        run: >
+          ./gradlew
+          :kitepdf-core:macosArm64Test
+          :kitepdf-pdf:macosArm64Test
+          :kitepdf-epub:macosArm64Test --stacktrace
+
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-reports-apple
+          path: '**/build/reports/tests/**'
+          if-no-files-found: ignore
+
+  js:
+    # Pushes to main only; see the minutes note at the top.
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Test JS on Node (core, pdf)
+        run: ./gradlew :kitepdf-core:jsNodeTest :kitepdf-pdf:jsNodeTest --stacktrace
+
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-reports-js
           path: '**/build/reports/tests/**'
           if-no-files-found: ignore
