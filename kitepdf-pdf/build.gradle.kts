@@ -86,7 +86,15 @@ kotlin {
     @OptIn(ExperimentalKotlinGradlePluginApi::class)
     js(IR) {
         browser()
-        nodejs()
+        nodejs {
+            testTask {
+                useMocha {
+                    // AES-256 key derivation and the op-budget bombs run far
+                    // past mocha's 2s default on Node.
+                    timeout = "120s"
+                }
+            }
+        }
         binaries.library()
     }
     @OptIn(ExperimentalWasmDsl::class)
