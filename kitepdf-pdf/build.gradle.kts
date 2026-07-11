@@ -81,6 +81,7 @@ kotlin {
         all {
             languageSettings {
                 optIn("kotlin.RequiresOptIn")
+                optIn("io.github.yuroyami.kitepdf.core.KiteRawApi")
                 optIn("kotlin.experimental.ExperimentalNativeApi")
             }
         }
