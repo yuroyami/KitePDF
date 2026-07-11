@@ -1,5 +1,6 @@
 package io.github.yuroyami.kitepdf.nativerenderer
 
+import io.github.yuroyami.kitepdf.render.paintComplexShading
 import io.github.yuroyami.kitepdf.Rectangle
 import io.github.yuroyami.kitepdf.font.FontFamily
 import io.github.yuroyami.kitepdf.font.FontSpec
@@ -230,6 +231,7 @@ class AwtCanvas(private val g: Graphics2D) : PdfCanvas {
         shading: PdfShading, ctm: PdfMatrix, clipPath: PdfPath?,
         alpha: Double, blendMode: PdfBlendMode,
     ) {
+        if (paintComplexShading(shading, ctm, clipPath, alpha, blendMode)) return
         val stops = shading.sampleStops(32) ?: return
         val fractions = FloatArray(stops.offsets.size) { stops.offsets[it].toFloat() }
         val colors = Array(stops.colors.size) { stops.colors[it].toAwt() }
@@ -297,6 +299,7 @@ class AwtCanvas(private val g: Graphics2D) : PdfCanvas {
                 )
             }
             is PdfShading.Unsupported -> return
+            else -> return // T-40 types already handled by paintComplexShading
         }
 
         val extent = extentClip

@@ -1,5 +1,6 @@
 package io.github.yuroyami.kitepdf.skia
 
+import io.github.yuroyami.kitepdf.render.paintComplexShading
 import io.github.yuroyami.kitepdf.Rectangle
 import io.github.yuroyami.kitepdf.font.FontFamily
 import io.github.yuroyami.kitepdf.font.FontSpec
@@ -231,6 +232,7 @@ class SkiaCanvas(private val canvas: SkCanvas) : PdfCanvas {
         alpha: Double,
         blendMode: PdfBlendMode,
     ) {
+        if (paintComplexShading(shading, ctm, clipPath, alpha, blendMode)) return
         val stops = shading.sampleStops(32) ?: return
 
         // PDF /Extend [start end] controls whether the shading keeps painting
@@ -248,6 +250,7 @@ class SkiaCanvas(private val canvas: SkCanvas) : PdfCanvas {
             is PdfShading.Axial -> shading.extendStart to shading.extendEnd
             is PdfShading.Radial -> shading.extendStart to shading.extendEnd
             is PdfShading.Unsupported -> return
+            else -> return // T-40 types already handled by paintComplexShading
         }
 
         val offsets = ArrayList<Float>(stops.offsets.size + 2)
@@ -307,6 +310,7 @@ class SkiaCanvas(private val canvas: SkCanvas) : PdfCanvas {
                 )
             }
             is PdfShading.Unsupported -> return
+            else -> return // T-40 types already handled by paintComplexShading
         }
 
         val paint = Paint().apply {

@@ -1,5 +1,6 @@
 package io.github.yuroyami.kitepdf.compose
 
+import io.github.yuroyami.kitepdf.render.paintComplexShading
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.BlendMode as ComposeBlendMode
@@ -282,6 +283,7 @@ class ComposeCanvas(
         alpha: Double,
         blendMode: PdfBlendMode,
     ) {
+        if (paintComplexShading(shading, ctm, clipPath, alpha, blendMode)) return
         val stops = shading.sampleStops(32) ?: return
         val composeStops = stops.offsets.mapIndexed { i, off ->
             off.toFloat() to stops.colors[i].toCompose()
@@ -319,6 +321,7 @@ class ComposeCanvas(
                 }
                 return
             }
+            else -> return // T-40 types already handled by paintComplexShading
         }
 
         withActiveClips {

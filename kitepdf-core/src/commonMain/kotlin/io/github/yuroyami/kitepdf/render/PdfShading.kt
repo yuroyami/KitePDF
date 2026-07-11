@@ -18,13 +18,20 @@ import io.github.yuroyami.kitepdf.parser.PdfStream
  * shading pattern referenced by `SCN`/`scn`.
  *
  * KitePDF renders:
+ *   - **Type 1** function-based — a colour function over a 2D domain,
+ *     rasterized as a grid of cells (T-40)
  *   - **Type 2** axial — a linear gradient between two points
  *   - **Type 3** radial — a radial gradient between two circles
+ *   - **Types 4/5** Gouraud triangle meshes — smoothed by recursive
+ *     subdivision with vertex-colour interpolation (T-40)
+ *   - **Types 6/7** Coons / tensor patches — tessellated into flat-coloured
+ *     quads via Coons boundary evaluation + bilinear corner colours; the
+ *     tensor type's four interior points are read but ignored, the documented
+ *     MuPDF-level approximation (T-40)
  *
- * Types 1 (function-based), 4 (free-form Gouraud), 5 (lattice-form Gouraud),
- * 6 (Coons patch), and 7 (tensor-product patch) parse to [Unsupported];
- * [sampleStops] returns null for them, so backends paint nothing (transparent).
- * Rendering them is roadmap work (audit T-40).
+ * Types 1/4/5/6/7 render through [paintComplexShading], shared by every
+ * backend (pure `fillPath` emission); 2/3 keep the backends' native gradient
+ * brushes. Unparseable shadings become [Unsupported] and paint nothing.
  */
 sealed class PdfShading {
 
@@ -100,6 +107,54 @@ sealed class PdfShading {
             domain.contentHashCode()
     }
 
+    /**
+     * Type 1: colour as a function of (x, y) over [domain] (x0 x1 y0 y1),
+     * mapped into user space by [matrix]. Rendered as a grid of coloured
+     * cells by [paintComplexShading].
+     */
+    class FunctionBased(
+        override val colorSpace: ColorSpace,
+        override val background: RgbColor?,
+        override val bbox: Rectangle?,
+        /** [x0, x1, y0, y1]. */
+        val domain: DoubleArray,
+        val matrix: Matrix,
+        private val function: PdfFunction,
+    ) : PdfShading() {
+        fun colorAt(x: Double, y: Double): RgbColor =
+            colorSpace.toRgb(function.evaluate(doubleArrayOf(x, y)))
+    }
+
+    /** One Gouraud triangle: three shading-space vertices with colours. */
+    class MeshTriangle(
+        val x: DoubleArray,
+        val y: DoubleArray,
+        val colors: Array<RgbColor>,
+    )
+
+    /** Types 4/5: a triangle mesh with per-vertex colours. */
+    class TriangleMesh(
+        override val colorSpace: ColorSpace,
+        override val background: RgbColor?,
+        override val bbox: Rectangle?,
+        val triangles: List<MeshTriangle>,
+    ) : PdfShading()
+
+    /** A flat-coloured tessellation quad from a Coons/tensor patch. */
+    class FlatQuad(
+        val xs: DoubleArray,
+        val ys: DoubleArray,
+        val color: RgbColor,
+    )
+
+    /** Types 6/7, pre-tessellated at parse time. */
+    class PatchMesh(
+        override val colorSpace: ColorSpace,
+        override val background: RgbColor?,
+        override val bbox: Rectangle?,
+        val quads: List<FlatQuad>,
+    ) : PdfShading()
+
     /** Shading type we don't render; [sampleStops] returns null, so nothing paints. */
     data class Unsupported(
         val type: Int,
@@ -116,15 +171,14 @@ sealed class PdfShading {
                 is PdfReference -> refs.resolve(obj)
                 else -> obj
             } ?: return null
-            val dict = when (resolved) {
-                is PdfDictionary -> resolved
-                is PdfStream -> resolved.dict
-                else -> return null
+            return when (resolved) {
+                is PdfDictionary -> parseDict(resolved, null, refs)
+                is PdfStream -> parseDict(resolved.dict, resolved, refs)
+                else -> null
             }
-            return parseDict(dict, refs)
         }
 
-        private fun parseDict(dict: PdfDictionary, refs: IndirectResolver): PdfShading? {
+        private fun parseDict(dict: PdfDictionary, stream: PdfStream?, refs: IndirectResolver): PdfShading? {
             val type = dict.getInt("ShadingType")?.toInt() ?: return null
             val cs = ColorSpace.resolve(dict["ColorSpace"], refs)
             val bbox = (dict.getArray("BBox"))?.let { arr ->
@@ -135,11 +189,31 @@ sealed class PdfShading {
                 val comps = DoubleArray(arr.size) { i -> arr.num(i) }
                 cs.toRgb(comps)
             }
-            return when (type) {
-                2 -> parseAxial(dict, cs, bg, bbox, refs)
-                3 -> parseRadial(dict, cs, bg, bbox, refs)
-                else -> Unsupported(type, cs, bg, bbox)
-            }
+            return runCatching {
+                when (type) {
+                    1 -> parseFunctionBased(dict, cs, bg, bbox, refs)
+                    2 -> parseAxial(dict, cs, bg, bbox, refs)
+                    3 -> parseRadial(dict, cs, bg, bbox, refs)
+                    4, 5 -> stream?.let { MeshShadingParser.parseTriangles(type, dict, it, cs, bg, bbox, refs) }
+                    6, 7 -> stream?.let { MeshShadingParser.parsePatches(type, dict, it, cs, bg, bbox, refs) }
+                    else -> null
+                }
+            }.getOrNull() ?: Unsupported(type, cs, bg, bbox)
+        }
+
+        private fun parseFunctionBased(
+            dict: PdfDictionary, cs: ColorSpace, bg: RgbColor?,
+            bbox: Rectangle?, refs: IndirectResolver,
+        ): PdfShading? {
+            val function = PdfFunction.parse(dict["Function"], refs) ?: return null
+            val domain = (dict.getArray("Domain"))?.let { arr ->
+                if (arr.size >= 4) DoubleArray(4) { arr.num(it) } else null
+            } ?: doubleArrayOf(0.0, 1.0, 0.0, 1.0)
+            val matrix = (dict.getArray("Matrix"))?.let { arr ->
+                if (arr.size >= 6) Matrix(arr.num(0), arr.num(1), arr.num(2), arr.num(3), arr.num(4), arr.num(5))
+                else null
+            } ?: Matrix.IDENTITY
+            return FunctionBased(cs, bg, bbox, domain, matrix, function)
         }
 
         private fun parseAxial(
@@ -200,7 +274,7 @@ fun PdfShading.sampleStops(count: Int = 32): GradientStops? {
     when (this) {
         is PdfShading.Axial -> { function = this.function; domain = this.domain; cs = this.colorSpace }
         is PdfShading.Radial -> { function = this.function; domain = this.domain; cs = this.colorSpace }
-        is PdfShading.Unsupported -> return null
+        else -> return null // 1/4/5/6/7 render via paintComplexShading; Unsupported paints nothing
     }
     val n = count.coerceAtLeast(2)
     val ts = DoubleArray(n)
