@@ -28,7 +28,36 @@ object SyntheticPdfs {
         Fixture("syn-shading5-lattice", shadingLattice()),
         Fixture("syn-shading6-coons", shadingCoons()),
         Fixture("syn-shading7-tensor", shadingTensor()),
+        Fixture("syn-type3-font", type3Font()),
     )
+
+    /** T-42: a hand-written Type3 font (square + triangle glyphs, d1-style). */
+    private fun type3Font(): ByteArray {
+        val p = Pdf()
+        p.obj("<< /Type /Catalog /Pages 2 0 R >>")                              // 1
+        p.obj("<< /Type /Pages /Kids [3 0 R] /Count 1 >>")                      // 2
+        p.obj(
+            "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 200] " +
+                "/Resources << /Font << /F3 5 0 R >> >> /Contents 4 0 R >>",
+        )                                                                       // 3
+        p.stream(
+            "",
+            (
+                "0 0 1 rg BT /F3 48 Tf 30 100 Td (abab) Tj ET\n" +
+                    "1 0 0 rg BT /F3 24 Tf 30 40 Td (ba) Tj ET"
+                ).encodeToByteArray(),
+        )                                                                       // 4
+        p.obj(
+            "<< /Type /Font /Subtype /Type3 /FontBBox [0 0 1000 1000] " +
+                "/FontMatrix [0.001 0 0 0.001 0 0] " +
+                "/CharProcs << /a 6 0 R /b 7 0 R >> " +
+                "/Encoding << /Type /Encoding /Differences [97 /a /b] >> " +
+                "/FirstChar 97 /LastChar 98 /Widths [1100 1100] >>",
+        )                                                                       // 5
+        p.stream("", "1100 0 0 0 1000 1000 d1 0 0 1000 1000 re f".encodeToByteArray())          // 6
+        p.stream("", "1100 0 0 0 1000 1000 d1 0 0 m 1000 0 l 500 1000 l f".encodeToByteArray()) // 7
+        return p.build(1)
+    }
 
     /* ─── T-40 shading fixtures ─────────────────────────────────────────── */
 
