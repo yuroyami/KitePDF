@@ -49,14 +49,14 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
-import io.github.yuroyami.kitepdf.KitePage
+import io.github.yuroyami.kitepdf.core.KitePage
 import io.github.yuroyami.kitepdf.PdfAction
 import io.github.yuroyami.kitepdf.PdfAnnotation
 import io.github.yuroyami.kitepdf.PdfDocument
 import io.github.yuroyami.kitepdf.PdfPage
 import io.github.yuroyami.kitepdf.epub.EpubDocument
 import io.github.yuroyami.kitepdf.epub.EpubPage
-import io.github.yuroyami.kitepdf.render.Matrix as PdfMatrix
+import io.github.yuroyami.kitepdf.core.render.Matrix as PdfMatrix
 import kotlin.math.max
 import kotlin.math.roundToInt
 import kotlinx.coroutines.delay
@@ -234,7 +234,7 @@ internal fun handleLinkTap(
                     return true
                 }
                 val action = ann.action
-                    ?: ann.uri?.let { PdfAction.Uri(it, isMap = false, raw = io.github.yuroyami.kitepdf.parser.PdfDictionary(emptyMap())) }
+                    ?: ann.uri?.let { PdfAction.Uri(it, isMap = false, raw = io.github.yuroyami.kitepdf.core.parser.PdfDictionary(emptyMap())) }
                     ?: return false
                 return onLinkTap?.invoke(action) == true
             }
@@ -248,7 +248,7 @@ internal fun handleLinkTap(
                 val r = link.rect
                 if (hit.x < r.left || hit.x > r.right || dy < r.bottom || dy > r.top) continue
                 if (SCHEME_REGEX.containsMatchIn(link.href)) {
-                    return onLinkTap?.invoke(PdfAction.Uri(link.href, isMap = false, raw = io.github.yuroyami.kitepdf.parser.PdfDictionary(emptyMap()))) == true
+                    return onLinkTap?.invoke(PdfAction.Uri(link.href, isMap = false, raw = io.github.yuroyami.kitepdf.core.parser.PdfDictionary(emptyMap()))) == true
                 }
                 val target = (state.document as? EpubDocument)?.pageOf(link.href) ?: return false
                 scope.launch { state.animateScrollToPage(target) }
@@ -750,7 +750,7 @@ private fun Modifier.searchHighlightOverlay(
     val sx = size.width / page.displayWidth.toFloat()
     val sy = size.height / page.displayHeight.toFloat()
 
-    fun quad(q: io.github.yuroyami.kitepdf.Rectangle, color: Color) = drawRect(
+    fun quad(q: io.github.yuroyami.kitepdf.core.Rectangle, color: Color) = drawRect(
         color = color,
         topLeft = Offset((q.left * sx).toFloat(), (q.bottom * sy).toFloat()),
         size = Size(((q.right - q.left) * sx).toFloat(), ((q.top - q.bottom) * sy).toFloat()),

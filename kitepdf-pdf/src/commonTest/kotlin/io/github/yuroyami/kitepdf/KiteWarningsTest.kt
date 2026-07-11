@@ -2,7 +2,7 @@ package io.github.yuroyami.kitepdf
 
 import io.github.yuroyami.kitepdf.core.ByteArrayBuilder
 import io.github.yuroyami.kitepdf.core.KiteWarnings
-import io.github.yuroyami.kitepdf.render.RecordingCanvas
+import io.github.yuroyami.kitepdf.core.render.RecordingCanvas
 import io.github.yuroyami.kitepdf.writer.PdfBuilder
 import io.github.yuroyami.kitepdf.writer.StandardFont
 import kotlin.test.AfterTest

@@ -1,8 +1,8 @@
 package io.github.yuroyami.kitepdf.writer
 
 import io.github.yuroyami.kitepdf.crypto.Md5
-import io.github.yuroyami.kitepdf.parser.PdfArray
-import io.github.yuroyami.kitepdf.parser.PdfString
+import io.github.yuroyami.kitepdf.core.parser.PdfArray
+import io.github.yuroyami.kitepdf.core.parser.PdfString
 
 /**
  * Generates a document `/ID` (ISO 32000-1 §14.4) — a two-element array of

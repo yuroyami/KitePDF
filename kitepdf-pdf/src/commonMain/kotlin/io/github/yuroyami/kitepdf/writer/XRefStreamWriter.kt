@@ -1,12 +1,12 @@
 package io.github.yuroyami.kitepdf.writer
 
 import io.github.yuroyami.kitepdf.core.ByteArrayBuilder
-import io.github.yuroyami.kitepdf.parser.PdfArray
-import io.github.yuroyami.kitepdf.parser.PdfInt
-import io.github.yuroyami.kitepdf.parser.PdfName
-import io.github.yuroyami.kitepdf.parser.PdfObject
-import io.github.yuroyami.kitepdf.parser.PdfReference
-import io.github.yuroyami.kitepdf.parser.PdfStream
+import io.github.yuroyami.kitepdf.core.parser.PdfArray
+import io.github.yuroyami.kitepdf.core.parser.PdfInt
+import io.github.yuroyami.kitepdf.core.parser.PdfName
+import io.github.yuroyami.kitepdf.core.parser.PdfObject
+import io.github.yuroyami.kitepdf.core.parser.PdfReference
+import io.github.yuroyami.kitepdf.core.parser.PdfStream
 
 /**
  * Emits a PDF 1.5+ cross-reference stream (ISO 32000-1 §7.5.8) — the compact,

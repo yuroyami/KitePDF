@@ -4,20 +4,20 @@ import io.github.yuroyami.kitepdf.PdfDocument
 import io.github.yuroyami.kitepdf.core.KiteRawApi
 import io.github.yuroyami.kitepdf.PdfFormField
 import io.github.yuroyami.kitepdf.PdfPage
-import io.github.yuroyami.kitepdf.Rectangle
+import io.github.yuroyami.kitepdf.core.Rectangle
 import io.github.yuroyami.kitepdf.content.ContentStreamParser
 import io.github.yuroyami.kitepdf.content.Operation
 import io.github.yuroyami.kitepdf.core.ByteArrayBuilder
 import io.github.yuroyami.kitepdf.core.ByteReader
-import io.github.yuroyami.kitepdf.font.PdfFont
-import io.github.yuroyami.kitepdf.parser.PdfBoolean
-import io.github.yuroyami.kitepdf.parser.PdfDictionary
-import io.github.yuroyami.kitepdf.parser.PdfInt
-import io.github.yuroyami.kitepdf.parser.PdfName
-import io.github.yuroyami.kitepdf.parser.PdfObject
-import io.github.yuroyami.kitepdf.parser.PdfReference
-import io.github.yuroyami.kitepdf.parser.PdfStream
-import io.github.yuroyami.kitepdf.parser.PdfString
+import io.github.yuroyami.kitepdf.core.font.PdfFont
+import io.github.yuroyami.kitepdf.core.parser.PdfBoolean
+import io.github.yuroyami.kitepdf.core.parser.PdfDictionary
+import io.github.yuroyami.kitepdf.core.parser.PdfInt
+import io.github.yuroyami.kitepdf.core.parser.PdfName
+import io.github.yuroyami.kitepdf.core.parser.PdfObject
+import io.github.yuroyami.kitepdf.core.parser.PdfReference
+import io.github.yuroyami.kitepdf.core.parser.PdfStream
+import io.github.yuroyami.kitepdf.core.parser.PdfString
 import io.github.yuroyami.kitepdf.parser.XrefParser
 import kotlin.math.abs
 
@@ -383,13 +383,13 @@ public class PdfEditor internal constructor(
         if (widgetRef == fieldRef) {
             val d = LinkedHashMap(field.fieldDict.map)
             d["V"] = vStr
-            if (selectedIndex >= 0) d["I"] = io.github.yuroyami.kitepdf.parser.PdfArray(listOf(PdfInt(selectedIndex.toLong())))
+            if (selectedIndex >= 0) d["I"] = io.github.yuroyami.kitepdf.core.parser.PdfArray(listOf(PdfInt(selectedIndex.toLong())))
             if (apDict != null) d["AP"] = apDict
             updateObject(fieldRef, PdfDictionary(d))
         } else {
             val fd = LinkedHashMap(field.fieldDict.map)
             fd["V"] = vStr
-            if (selectedIndex >= 0) fd["I"] = io.github.yuroyami.kitepdf.parser.PdfArray(listOf(PdfInt(selectedIndex.toLong())))
+            if (selectedIndex >= 0) fd["I"] = io.github.yuroyami.kitepdf.core.parser.PdfArray(listOf(PdfInt(selectedIndex.toLong())))
             updateObject(fieldRef, PdfDictionary(fd))
             if (apDict != null) updateObject(widgetRef, withEntry(field.widgetDict, "AP", apDict))
         }
@@ -431,7 +431,7 @@ public class PdfEditor internal constructor(
         opt.forEachIndexed { i, entry ->
             val text = when (val e = entry.resolve(base)) {
                 is PdfString -> e.asText()
-                is io.github.yuroyami.kitepdf.parser.PdfArray ->
+                is io.github.yuroyami.kitepdf.core.parser.PdfArray ->
                     (e.getOrNull(0) as? PdfString)?.asText() ?: (e.getOrNull(1) as? PdfString)?.asText()
                 else -> null
             }
@@ -522,7 +522,7 @@ public class PdfEditor internal constructor(
             pagesRef,
             PdfDictionary(linkedMapOf(
                 "Type" to PdfName("Pages"),
-                "Kids" to io.github.yuroyami.kitepdf.parser.PdfArray(order.toList()),
+                "Kids" to io.github.yuroyami.kitepdf.core.parser.PdfArray(order.toList()),
                 "Count" to PdfInt(order.size.toLong()),
             )),
         )
@@ -594,12 +594,12 @@ public class PdfEditor internal constructor(
         return PdfDictionary(m)
     }
 
-    private fun rectToArray(r: Rectangle): io.github.yuroyami.kitepdf.parser.PdfArray =
-        io.github.yuroyami.kitepdf.parser.PdfArray(listOf(
-            io.github.yuroyami.kitepdf.parser.PdfReal(r.left),
-            io.github.yuroyami.kitepdf.parser.PdfReal(r.bottom),
-            io.github.yuroyami.kitepdf.parser.PdfReal(r.right),
-            io.github.yuroyami.kitepdf.parser.PdfReal(r.top),
+    private fun rectToArray(r: Rectangle): io.github.yuroyami.kitepdf.core.parser.PdfArray =
+        io.github.yuroyami.kitepdf.core.parser.PdfArray(listOf(
+            io.github.yuroyami.kitepdf.core.parser.PdfReal(r.left),
+            io.github.yuroyami.kitepdf.core.parser.PdfReal(r.bottom),
+            io.github.yuroyami.kitepdf.core.parser.PdfReal(r.right),
+            io.github.yuroyami.kitepdf.core.parser.PdfReal(r.top),
         ))
 
     /** Effective (staged-or-base) page dictionary for [ref]. */
@@ -703,7 +703,7 @@ public class PdfEditor internal constructor(
         val stream = effectiveObject(formRef.objectNumber) as? PdfStream ?: return
         val formResources = stream.dict.getDict("Resources", base)
 
-        val content = io.github.yuroyami.kitepdf.filters.FilterChain.decode(stream)
+        val content = io.github.yuroyami.kitepdf.core.filters.FilterChain.decode(stream)
         val ops = ContentStreamParser.parse(content)
         val engine = RedactionEngine(
             loadPageFonts(formResources),
@@ -786,7 +786,7 @@ public class PdfEditor internal constructor(
             }
         }
         if (!changed) return dict
-        return withEntry(dict, "Annots", io.github.yuroyami.kitepdf.parser.PdfArray(kept))
+        return withEntry(dict, "Annots", io.github.yuroyami.kitepdf.core.parser.PdfArray(kept))
     }
 
     /** Normalised `/Rect` of an annotation, or null when absent/malformed. */
@@ -795,7 +795,7 @@ public class PdfEditor internal constructor(
         if (arr.size < 4) return null
         fun n(i: Int): Double? = when (val v = arr[i].resolve(base)) {
             is PdfInt -> v.value.toDouble()
-            is io.github.yuroyami.kitepdf.parser.PdfReal -> v.value
+            is io.github.yuroyami.kitepdf.core.parser.PdfReal -> v.value
             else -> null
         }
         val x0 = n(0) ?: return null
@@ -836,9 +836,9 @@ public class PdfEditor internal constructor(
     }
 
     /** Per-name form `/Matrix` (default identity when absent). */
-    private fun loadFormMatrices(resources: PdfDictionary?): Map<String, io.github.yuroyami.kitepdf.render.Matrix> {
+    private fun loadFormMatrices(resources: PdfDictionary?): Map<String, io.github.yuroyami.kitepdf.core.render.Matrix> {
         val xobjects = resources?.getDict("XObject", base) ?: return emptyMap()
-        val out = LinkedHashMap<String, io.github.yuroyami.kitepdf.render.Matrix>()
+        val out = LinkedHashMap<String, io.github.yuroyami.kitepdf.core.render.Matrix>()
         for ((name, value) in xobjects.map) {
             val stream = value.resolve(base) as? PdfStream ?: continue
             if (stream.dict.getName("Subtype") != "Form") continue
@@ -846,10 +846,10 @@ public class PdfEditor internal constructor(
             if (m.size < 6) continue
             fun n(i: Int): Double = when (val v = m[i].resolve(base)) {
                 is PdfInt -> v.value.toDouble()
-                is io.github.yuroyami.kitepdf.parser.PdfReal -> v.value
+                is io.github.yuroyami.kitepdf.core.parser.PdfReal -> v.value
                 else -> 0.0
             }
-            out[name] = io.github.yuroyami.kitepdf.render.Matrix(n(0), n(1), n(2), n(3), n(4), n(5))
+            out[name] = io.github.yuroyami.kitepdf.core.render.Matrix(n(0), n(1), n(2), n(3), n(4), n(5))
         }
         return out
     }
@@ -1089,7 +1089,7 @@ public class PdfEditor internal constructor(
     private fun collectReferences(obj: PdfObject, visit: (Long) -> Unit) {
         when (obj) {
             is PdfReference -> visit(obj.objectNumber)
-            is io.github.yuroyami.kitepdf.parser.PdfArray -> obj.items.forEach { collectReferences(it, visit) }
+            is io.github.yuroyami.kitepdf.core.parser.PdfArray -> obj.items.forEach { collectReferences(it, visit) }
             is PdfDictionary -> obj.map.values.forEach { collectReferences(it, visit) }
             is PdfStream -> obj.dict.map.values.forEach { collectReferences(it, visit) }
             else -> {}
@@ -1098,9 +1098,9 @@ public class PdfEditor internal constructor(
 
     private fun remapReferences(obj: PdfObject, remap: Map<Long, Long>): PdfObject = when (obj) {
         is PdfReference -> remap[obj.objectNumber]?.let { PdfReference(it, 0) }
-            ?: io.github.yuroyami.kitepdf.parser.PdfNull
-        is io.github.yuroyami.kitepdf.parser.PdfArray ->
-            io.github.yuroyami.kitepdf.parser.PdfArray(obj.items.map { remapReferences(it, remap) })
+            ?: io.github.yuroyami.kitepdf.core.parser.PdfNull
+        is io.github.yuroyami.kitepdf.core.parser.PdfArray ->
+            io.github.yuroyami.kitepdf.core.parser.PdfArray(obj.items.map { remapReferences(it, remap) })
         is PdfDictionary -> PdfDictionary(
             LinkedHashMap<String, PdfObject>().also { m -> obj.map.forEach { (k, v) -> m[k] = remapReferences(v, remap) } },
         )

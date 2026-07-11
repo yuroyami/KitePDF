@@ -1,6 +1,6 @@
 package io.github.yuroyami.kitepdf.epub
 
-import io.github.yuroyami.kitepdf.KiteDocument
+import io.github.yuroyami.kitepdf.core.KiteDocument
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull

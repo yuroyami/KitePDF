@@ -7,9 +7,9 @@ import androidx.compose.ui.graphics.toComposeImageBitmap
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.use
-import io.github.yuroyami.kitepdf.KiteSearchHit
+import io.github.yuroyami.kitepdf.core.KiteSearchHit
 import io.github.yuroyami.kitepdf.KitePDF
-import io.github.yuroyami.kitepdf.Rectangle
+import io.github.yuroyami.kitepdf.core.Rectangle
 import io.github.yuroyami.kitepdf.writer.PdfBuilder
 import kotlin.math.abs
 import kotlin.test.Test

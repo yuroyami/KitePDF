@@ -1,7 +1,7 @@
 package io.github.yuroyami.kitepdf
 
-import io.github.yuroyami.kitepdf.parser.PdfBoolean
-import io.github.yuroyami.kitepdf.parser.PdfDictionary
+import io.github.yuroyami.kitepdf.core.parser.PdfBoolean
+import io.github.yuroyami.kitepdf.core.parser.PdfDictionary
 
 /**
  * Catalog `/MarkInfo` dictionary (ISO 32000-1 §14.7.1).

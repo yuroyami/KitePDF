@@ -1,7 +1,7 @@
 package io.github.yuroyami.kitepdf.writer
 
-import io.github.yuroyami.kitepdf.font.Encodings
-import io.github.yuroyami.kitepdf.font.Standard14Widths
+import io.github.yuroyami.kitepdf.core.font.Encodings
+import io.github.yuroyami.kitepdf.core.font.Standard14Widths
 
 /**
  * Width of [text] set in this [StandardFont] at [fontSize], in text-space units

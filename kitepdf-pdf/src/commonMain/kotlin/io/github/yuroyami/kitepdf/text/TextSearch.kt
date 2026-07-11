@@ -1,12 +1,12 @@
 package io.github.yuroyami.kitepdf.text
 
-import io.github.yuroyami.kitepdf.KiteSearchHit
+import io.github.yuroyami.kitepdf.core.KiteSearchHit
 import io.github.yuroyami.kitepdf.PdfDocument
 import io.github.yuroyami.kitepdf.PdfPage
 
 /**
  * T-30/T-81: text search over PDF pages, as a thin delegate to the shared
- * core walker on [io.github.yuroyami.kitepdf.KiteStructuredText] (the same
+ * core walker on [io.github.yuroyami.kitepdf.core.KiteStructuredText] (the same
  * engine EPUB search uses). A hit is a [KiteSearchHit]: display-space quads
  * (one per line touched) plus the matched text and page index.
  */

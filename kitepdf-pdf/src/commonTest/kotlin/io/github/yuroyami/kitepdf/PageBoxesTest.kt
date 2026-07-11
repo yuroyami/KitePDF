@@ -1,5 +1,7 @@
 package io.github.yuroyami.kitepdf
 
+import io.github.yuroyami.kitepdf.core.Rectangle
+
 import io.github.yuroyami.kitepdf.core.ByteArrayBuilder
 import kotlin.test.Test
 import kotlin.test.assertEquals

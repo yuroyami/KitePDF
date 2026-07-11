@@ -2,7 +2,7 @@ package io.github.yuroyami.kitepdf.nativerenderer.difftest
 
 import io.github.yuroyami.kitepdf.epub.EpubPage
 import io.github.yuroyami.kitepdf.nativerenderer.AwtCanvas
-import io.github.yuroyami.kitepdf.render.Matrix
+import io.github.yuroyami.kitepdf.core.render.Matrix
 import java.awt.Color
 import java.awt.image.BufferedImage
 

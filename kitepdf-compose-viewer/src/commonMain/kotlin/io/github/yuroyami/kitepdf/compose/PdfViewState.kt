@@ -18,9 +18,9 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.isSpecified
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.unit.IntSize
-import io.github.yuroyami.kitepdf.KiteDocument
-import io.github.yuroyami.kitepdf.KiteSearchHit
-import io.github.yuroyami.kitepdf.KiteStructuredText
+import io.github.yuroyami.kitepdf.core.KiteDocument
+import io.github.yuroyami.kitepdf.core.KiteSearchHit
+import io.github.yuroyami.kitepdf.core.KiteStructuredText
 import io.github.yuroyami.kitepdf.PdfDocument
 import kotlin.math.abs
 
@@ -245,7 +245,7 @@ public class PdfViewState(
 
     /**
      * Like [hitTest] but stops in DISPLAY space (y-down points, the space
-     * [io.github.yuroyami.kitepdf.KiteStructuredText] geometry lives in).
+     * [io.github.yuroyami.kitepdf.core.KiteStructuredText] geometry lives in).
      */
     internal fun hitTestDisplay(viewportOffset: Offset): Triple<Int, Double, Double>? {
         if (viewportSize == IntSize.Zero || zoom <= 0f) return null
@@ -329,7 +329,7 @@ public data class PageHit(
 /**
  * A finalized or in-progress text selection on one page (cross-page
  * selection is out of scope). [start]/[end] are INCLUSIVE flattened char
- * indices into the page's [io.github.yuroyami.kitepdf.KiteStructuredText]
+ * indices into the page's [io.github.yuroyami.kitepdf.core.KiteStructuredText]
  * reading order; [text] carries `\n`/`\n\n` line/block separators exactly
  * like the extraction text; [quads] are display-space, one per line touched.
  */
@@ -338,7 +338,7 @@ public data class TextSelection(
     val start: Int,
     val end: Int,
     val text: String,
-    val quads: List<io.github.yuroyami.kitepdf.Rectangle>,
+    val quads: List<io.github.yuroyami.kitepdf.core.Rectangle>,
 )
 
 /* ── scroll adapters: one state API over LazyList and Pager backends ──────── */

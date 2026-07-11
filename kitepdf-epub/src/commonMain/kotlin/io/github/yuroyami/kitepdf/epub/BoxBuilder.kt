@@ -10,7 +10,7 @@ import io.github.yuroyami.kitepdf.epub.css.PseudoSide
 import io.github.yuroyami.kitepdf.epub.css.StyleResolver
 import io.github.yuroyami.kitepdf.epub.css.TextTransform
 import io.github.yuroyami.kitepdf.epub.css.WhiteSpaceMode
-import io.github.yuroyami.kitepdf.render.RgbColor
+import io.github.yuroyami.kitepdf.core.render.RgbColor
 
 /**
  * Builds the CSS [LayoutBox] tree from the DOM, driven by the cascade

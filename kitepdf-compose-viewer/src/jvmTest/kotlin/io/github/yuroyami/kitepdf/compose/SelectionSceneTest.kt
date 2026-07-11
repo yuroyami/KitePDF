@@ -52,7 +52,7 @@ class SelectionSceneTest {
             driver.pumpUntil { state.pageGeometry.isNotEmpty() }
 
             // Display space == viewport space here (200pt page, 200px slot).
-            fun mid(line: io.github.yuroyami.kitepdf.KiteTextLine, edge: Int) = Offset(
+            fun mid(line: io.github.yuroyami.kitepdf.core.KiteTextLine, edge: Int) = Offset(
                 line.charEdges[edge].toFloat(),
                 ((line.bounds.bottom + line.bounds.top) / 2).toFloat(),
             )

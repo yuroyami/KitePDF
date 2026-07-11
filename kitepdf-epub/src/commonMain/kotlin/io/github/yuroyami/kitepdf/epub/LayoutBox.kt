@@ -1,10 +1,10 @@
 package io.github.yuroyami.kitepdf.epub
 
 import io.github.yuroyami.kitepdf.epub.css.ComputedStyle
-import io.github.yuroyami.kitepdf.font.FontSpec
-import io.github.yuroyami.kitepdf.font.TextGlyph
-import io.github.yuroyami.kitepdf.render.ImageXObject
-import io.github.yuroyami.kitepdf.render.RgbColor
+import io.github.yuroyami.kitepdf.core.font.FontSpec
+import io.github.yuroyami.kitepdf.core.font.TextGlyph
+import io.github.yuroyami.kitepdf.core.render.ImageXObject
+import io.github.yuroyami.kitepdf.core.render.RgbColor
 
 /**
  * The CSS box tree the Phase-3 layout engine positions and paints. Unlike the

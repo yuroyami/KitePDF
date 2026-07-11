@@ -16,7 +16,7 @@ internal object PdfText {
     /**
      * Encode a text string (§7.9.2.2): pure-ASCII stays single-byte
      * (PDFDocEncoding-compatible); anything else becomes UTF-16BE with a BOM,
-     * which [io.github.yuroyami.kitepdf.parser.PdfString.asText] decodes back.
+     * which [io.github.yuroyami.kitepdf.core.parser.PdfString.asText] decodes back.
      */
     fun encodeTextString(s: String): ByteArray {
         if (s.all { it.code < 0x80 }) {

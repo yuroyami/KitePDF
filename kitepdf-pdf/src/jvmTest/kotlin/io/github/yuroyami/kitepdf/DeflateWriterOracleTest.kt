@@ -1,7 +1,7 @@
 package io.github.yuroyami.kitepdf
 
-import io.github.yuroyami.kitepdf.compression.Deflate
-import io.github.yuroyami.kitepdf.compression.Zlib
+import io.github.yuroyami.kitepdf.core.compression.Deflate
+import io.github.yuroyami.kitepdf.core.compression.Zlib
 import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertEquals

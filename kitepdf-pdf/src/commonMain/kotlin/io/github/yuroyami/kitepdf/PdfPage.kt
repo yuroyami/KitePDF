@@ -1,17 +1,22 @@
 package io.github.yuroyami.kitepdf
 
+import io.github.yuroyami.kitepdf.core.Rectangle
+
+import io.github.yuroyami.kitepdf.core.KitePage
+import io.github.yuroyami.kitepdf.core.KiteStructuredText
+
 import io.github.yuroyami.kitepdf.core.ByteArrayBuilder
 import io.github.yuroyami.kitepdf.core.PdfFormatException
-import io.github.yuroyami.kitepdf.filters.FilterChain
-import io.github.yuroyami.kitepdf.parser.PdfArray
-import io.github.yuroyami.kitepdf.parser.PdfDictionary
-import io.github.yuroyami.kitepdf.parser.PdfInt
-import io.github.yuroyami.kitepdf.parser.PdfReal
-import io.github.yuroyami.kitepdf.parser.PdfReference
-import io.github.yuroyami.kitepdf.parser.PdfStream
-import io.github.yuroyami.kitepdf.render.Matrix
+import io.github.yuroyami.kitepdf.core.filters.FilterChain
+import io.github.yuroyami.kitepdf.core.parser.PdfArray
+import io.github.yuroyami.kitepdf.core.parser.PdfDictionary
+import io.github.yuroyami.kitepdf.core.parser.PdfInt
+import io.github.yuroyami.kitepdf.core.parser.PdfReal
+import io.github.yuroyami.kitepdf.core.parser.PdfReference
+import io.github.yuroyami.kitepdf.core.parser.PdfStream
+import io.github.yuroyami.kitepdf.core.render.Matrix
 import io.github.yuroyami.kitepdf.render.PageRenderer
-import io.github.yuroyami.kitepdf.render.KiteCanvas
+import io.github.yuroyami.kitepdf.core.render.KiteCanvas
 import io.github.yuroyami.kitepdf.text.TextExtractor
 
 /**

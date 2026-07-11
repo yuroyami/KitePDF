@@ -1,8 +1,8 @@
 package io.github.yuroyami.kitepdf.nativerenderer.difftest
 
 import io.github.yuroyami.kitepdf.KitePDF
-import io.github.yuroyami.kitepdf.Rectangle
-import io.github.yuroyami.kitepdf.parser.PdfReference
+import io.github.yuroyami.kitepdf.core.Rectangle
+import io.github.yuroyami.kitepdf.core.parser.PdfReference
 import io.github.yuroyami.kitepdf.writer.PdfBuilder
 import io.github.yuroyami.kitepdf.writer.PdfStreams
 import io.github.yuroyami.kitepdf.writer.StandardFont
@@ -42,10 +42,10 @@ class WriterOracleTest {
         val edited = doc.edit().apply {
             setInfo(title = "KiteEditedMarker", author = "KitePDF Writer")
             addObject(
-                io.github.yuroyami.kitepdf.parser.PdfDictionary(
+                io.github.yuroyami.kitepdf.core.parser.PdfDictionary(
                     linkedMapOf(
-                        "Type" to io.github.yuroyami.kitepdf.parser.PdfName("KiteMarker"),
-                        "Value" to io.github.yuroyami.kitepdf.parser.PdfInt(7),
+                        "Type" to io.github.yuroyami.kitepdf.core.parser.PdfName("KiteMarker"),
+                        "Value" to io.github.yuroyami.kitepdf.core.parser.PdfInt(7),
                     ),
                 ),
             )

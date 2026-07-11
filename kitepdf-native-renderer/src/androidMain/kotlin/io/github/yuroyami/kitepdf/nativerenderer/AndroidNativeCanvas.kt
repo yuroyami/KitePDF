@@ -12,20 +12,20 @@ import android.graphics.Path
 import android.graphics.RadialGradient
 import android.graphics.Shader
 import android.graphics.Typeface
-import io.github.yuroyami.kitepdf.Rectangle
-import io.github.yuroyami.kitepdf.font.FontFamily
-import io.github.yuroyami.kitepdf.font.FontSpec
-import io.github.yuroyami.kitepdf.font.TextGlyph
-import io.github.yuroyami.kitepdf.render.BlendMode as PdfBlendMode
-import io.github.yuroyami.kitepdf.render.ImageXObject
-import io.github.yuroyami.kitepdf.render.Matrix as PdfMatrix
-import io.github.yuroyami.kitepdf.render.KiteCanvas
-import io.github.yuroyami.kitepdf.render.KitePath
-import io.github.yuroyami.kitepdf.render.KiteShading
-import io.github.yuroyami.kitepdf.render.RgbColor
-import io.github.yuroyami.kitepdf.render.SoftMask
-import io.github.yuroyami.kitepdf.render.paintComplexShading
-import io.github.yuroyami.kitepdf.render.sampleStops
+import io.github.yuroyami.kitepdf.core.Rectangle
+import io.github.yuroyami.kitepdf.core.font.FontFamily
+import io.github.yuroyami.kitepdf.core.font.FontSpec
+import io.github.yuroyami.kitepdf.core.font.TextGlyph
+import io.github.yuroyami.kitepdf.core.render.BlendMode as PdfBlendMode
+import io.github.yuroyami.kitepdf.core.render.ImageXObject
+import io.github.yuroyami.kitepdf.core.render.Matrix as PdfMatrix
+import io.github.yuroyami.kitepdf.core.render.KiteCanvas
+import io.github.yuroyami.kitepdf.core.render.KitePath
+import io.github.yuroyami.kitepdf.core.render.KiteShading
+import io.github.yuroyami.kitepdf.core.render.RgbColor
+import io.github.yuroyami.kitepdf.core.render.SoftMask
+import io.github.yuroyami.kitepdf.core.render.paintComplexShading
+import io.github.yuroyami.kitepdf.core.render.sampleStops
 
 /**
  * [KiteCanvas] backed by [android.graphics.Canvas].

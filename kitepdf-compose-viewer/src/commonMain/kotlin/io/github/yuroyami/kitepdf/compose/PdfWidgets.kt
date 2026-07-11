@@ -41,8 +41,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import io.github.yuroyami.kitepdf.KiteDocument
-import io.github.yuroyami.kitepdf.KiteOutlineItem
+import io.github.yuroyami.kitepdf.core.KiteDocument
+import io.github.yuroyami.kitepdf.core.KiteOutlineItem
 import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
 

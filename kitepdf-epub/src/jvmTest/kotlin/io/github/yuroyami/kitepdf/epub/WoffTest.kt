@@ -1,7 +1,7 @@
 package io.github.yuroyami.kitepdf.epub
 
-import io.github.yuroyami.kitepdf.compression.Zlib
-import io.github.yuroyami.kitepdf.render.RecordingCanvas
+import io.github.yuroyami.kitepdf.core.compression.Zlib
+import io.github.yuroyami.kitepdf.core.render.RecordingCanvas
 import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertEquals

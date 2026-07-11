@@ -1,19 +1,21 @@
 package io.github.yuroyami.kitepdf.render
 
-import io.github.yuroyami.kitepdf.parser.IndirectResolver
-import io.github.yuroyami.kitepdf.parser.PdfArray
-import io.github.yuroyami.kitepdf.parser.PdfDictionary
-import io.github.yuroyami.kitepdf.parser.PdfInt
-import io.github.yuroyami.kitepdf.parser.PdfName
-import io.github.yuroyami.kitepdf.parser.PdfReal
-import io.github.yuroyami.kitepdf.parser.PdfStream
+import io.github.yuroyami.kitepdf.core.render.Matrix
+
+import io.github.yuroyami.kitepdf.core.parser.IndirectResolver
+import io.github.yuroyami.kitepdf.core.parser.PdfArray
+import io.github.yuroyami.kitepdf.core.parser.PdfDictionary
+import io.github.yuroyami.kitepdf.core.parser.PdfInt
+import io.github.yuroyami.kitepdf.core.parser.PdfName
+import io.github.yuroyami.kitepdf.core.parser.PdfReal
+import io.github.yuroyami.kitepdf.core.parser.PdfStream
 
 /**
  * The renderer-side view of a /Subtype /Type3 font (ISO 32000-1 §9.6.5,
  * T-42): glyphs are content streams ([charProcs]) drawn in glyph space and
  * mapped by [fontMatrix]; widths live in GLYPH space (unlike every other
  * font's 1/1000 em). Text extraction still runs through the ordinary
- * [io.github.yuroyami.kitepdf.font.PdfFont] pipeline (its /Encoding
+ * [io.github.yuroyami.kitepdf.core.font.PdfFont] pipeline (its /Encoding
  * /Differences handling is shared); this class only feeds the paint path.
  */
 internal class Type3Data(

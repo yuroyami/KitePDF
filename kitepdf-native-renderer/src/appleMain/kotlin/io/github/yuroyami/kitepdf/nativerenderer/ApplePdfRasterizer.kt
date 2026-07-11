@@ -1,7 +1,7 @@
 package io.github.yuroyami.kitepdf.nativerenderer
 
 import io.github.yuroyami.kitepdf.PdfPage
-import io.github.yuroyami.kitepdf.render.Matrix as PdfMatrix
+import io.github.yuroyami.kitepdf.core.render.Matrix as PdfMatrix
 import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.cinterop.alloc
 import kotlinx.cinterop.memScoped

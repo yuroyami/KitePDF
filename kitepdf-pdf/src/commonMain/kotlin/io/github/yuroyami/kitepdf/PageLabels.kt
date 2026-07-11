@@ -1,12 +1,12 @@
 package io.github.yuroyami.kitepdf
 
-import io.github.yuroyami.kitepdf.parser.IndirectResolver
-import io.github.yuroyami.kitepdf.parser.PdfArray
-import io.github.yuroyami.kitepdf.parser.PdfDictionary
-import io.github.yuroyami.kitepdf.parser.PdfInt
-import io.github.yuroyami.kitepdf.parser.PdfName
-import io.github.yuroyami.kitepdf.parser.PdfReference
-import io.github.yuroyami.kitepdf.parser.PdfString
+import io.github.yuroyami.kitepdf.core.parser.IndirectResolver
+import io.github.yuroyami.kitepdf.core.parser.PdfArray
+import io.github.yuroyami.kitepdf.core.parser.PdfDictionary
+import io.github.yuroyami.kitepdf.core.parser.PdfInt
+import io.github.yuroyami.kitepdf.core.parser.PdfName
+import io.github.yuroyami.kitepdf.core.parser.PdfReference
+import io.github.yuroyami.kitepdf.core.parser.PdfString
 
 /**
  * One `/PageLabels` range entry (ISO 32000-1 §12.4.2 Table 159).

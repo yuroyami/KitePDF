@@ -1,8 +1,8 @@
 package io.github.yuroyami.kitepdf.nativerenderer.difftest
 
 import io.github.yuroyami.kitepdf.epub.EpubDocument
-import io.github.yuroyami.kitepdf.render.Matrix
-import io.github.yuroyami.kitepdf.render.RecordingCanvas
+import io.github.yuroyami.kitepdf.core.render.Matrix
+import io.github.yuroyami.kitepdf.core.render.RecordingCanvas
 import java.io.File
 import java.security.MessageDigest
 import kotlin.test.Test

@@ -1,5 +1,12 @@
 package io.github.yuroyami.kitepdf.parser
 
+import io.github.yuroyami.kitepdf.core.parser.IndirectResolver
+import io.github.yuroyami.kitepdf.core.parser.PdfDictionary
+import io.github.yuroyami.kitepdf.core.parser.PdfInt
+import io.github.yuroyami.kitepdf.core.parser.PdfObject
+import io.github.yuroyami.kitepdf.core.parser.PdfReference
+import io.github.yuroyami.kitepdf.core.parser.PdfString
+
 /**
  * Walker for PDF name trees (ISO 32000-1 §7.9.6). A name tree is a
  * balanced B-tree whose leaves are `/Names` arrays of `[key1 value1 key2

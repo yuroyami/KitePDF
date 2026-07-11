@@ -1,13 +1,13 @@
 package io.github.yuroyami.kitepdf
 
 import io.github.yuroyami.kitepdf.core.ByteArrayBuilder
-import io.github.yuroyami.kitepdf.parser.IndirectResolver
-import io.github.yuroyami.kitepdf.parser.PdfArray
-import io.github.yuroyami.kitepdf.parser.PdfDictionary
-import io.github.yuroyami.kitepdf.parser.PdfName
-import io.github.yuroyami.kitepdf.parser.PdfObject
-import io.github.yuroyami.kitepdf.parser.PdfReference
-import io.github.yuroyami.kitepdf.parser.PdfString
+import io.github.yuroyami.kitepdf.core.parser.IndirectResolver
+import io.github.yuroyami.kitepdf.core.parser.PdfArray
+import io.github.yuroyami.kitepdf.core.parser.PdfDictionary
+import io.github.yuroyami.kitepdf.core.parser.PdfName
+import io.github.yuroyami.kitepdf.core.parser.PdfObject
+import io.github.yuroyami.kitepdf.core.parser.PdfReference
+import io.github.yuroyami.kitepdf.core.parser.PdfString
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
@@ -40,8 +40,8 @@ class ActionTest {
         val dict = dict(
             "S" to PdfName("GoToR"),
             "F" to PdfString("../other.pdf".encodeToByteArray()),
-            "D" to PdfArray(listOf(io.github.yuroyami.kitepdf.parser.PdfInt(2), PdfName("Fit"))),
-            "NewWindow" to io.github.yuroyami.kitepdf.parser.PdfBoolean(true),
+            "D" to PdfArray(listOf(io.github.yuroyami.kitepdf.core.parser.PdfInt(2), PdfName("Fit"))),
+            "NewWindow" to io.github.yuroyami.kitepdf.core.parser.PdfBoolean(true),
         )
         val a = PdfAction.parse(dict, noResolver)
         assertTrue(a is PdfAction.GoToR)
@@ -67,7 +67,7 @@ class ActionTest {
         val dict = dict(
             "S" to PdfName("URI"),
             "URI" to PdfString("https://example.com".encodeToByteArray()),
-            "IsMap" to io.github.yuroyami.kitepdf.parser.PdfBoolean(true),
+            "IsMap" to io.github.yuroyami.kitepdf.core.parser.PdfBoolean(true),
         )
         val a = PdfAction.parse(dict, noResolver)
         assertTrue(a is PdfAction.Uri)
@@ -111,7 +111,7 @@ class ActionTest {
                 "S" to PdfName("SubmitForm"),
                 "F" to PdfString("https://forms.example.com/submit".encodeToByteArray()),
                 "Fields" to PdfArray(listOf(PdfString("name".encodeToByteArray()))),
-                "Flags" to io.github.yuroyami.kitepdf.parser.PdfInt(4),
+                "Flags" to io.github.yuroyami.kitepdf.core.parser.PdfInt(4),
             ),
             noResolver,
         )
@@ -121,7 +121,7 @@ class ActionTest {
         assertEquals(4, submit.flags)
 
         val reset = PdfAction.parse(
-            dict("S" to PdfName("ResetForm"), "Flags" to io.github.yuroyami.kitepdf.parser.PdfInt(0)),
+            dict("S" to PdfName("ResetForm"), "Flags" to io.github.yuroyami.kitepdf.core.parser.PdfInt(0)),
             noResolver,
         )
         assertTrue(reset is PdfAction.ResetForm)
@@ -130,7 +130,7 @@ class ActionTest {
 
     @Test
     fun unknown_action_type_falls_through_to_unknown() {
-        val dict = dict("S" to PdfName("Sound"), "Volume" to io.github.yuroyami.kitepdf.parser.PdfReal(0.7))
+        val dict = dict("S" to PdfName("Sound"), "Volume" to io.github.yuroyami.kitepdf.core.parser.PdfReal(0.7))
         val a = PdfAction.parse(dict, noResolver)
         assertTrue(a is PdfAction.Unknown)
         assertEquals("Sound", a.type)

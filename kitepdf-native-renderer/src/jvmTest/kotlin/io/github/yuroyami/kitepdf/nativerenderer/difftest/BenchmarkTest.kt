@@ -1,7 +1,7 @@
 package io.github.yuroyami.kitepdf.nativerenderer.difftest
 
 import io.github.yuroyami.kitepdf.KitePDF
-import io.github.yuroyami.kitepdf.compression.Zlib
+import io.github.yuroyami.kitepdf.core.compression.Zlib
 import io.github.yuroyami.kitepdf.nativerenderer.AwtPdfRasterizer
 import io.github.yuroyami.kitepdf.writer.PdfBuilder
 import io.github.yuroyami.kitepdf.writer.StandardFont

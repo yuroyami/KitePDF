@@ -1,0 +1,139 @@
+package io.github.yuroyami.kitepdf.core.render
+
+import io.github.yuroyami.kitepdf.core.parser.IndirectResolver
+import io.github.yuroyami.kitepdf.core.parser.PdfArray
+import io.github.yuroyami.kitepdf.core.parser.PdfDictionary
+import io.github.yuroyami.kitepdf.core.parser.PdfInt
+import io.github.yuroyami.kitepdf.core.parser.PdfObject
+import io.github.yuroyami.kitepdf.core.parser.PdfReal
+import io.github.yuroyami.kitepdf.core.parser.PdfReference
+import io.github.yuroyami.kitepdf.core.parser.PdfStream
+
+/**
+ * Parsed `/Pattern` resource entry (ISO 32000-1 §8.7).
+ *
+ *   - [Tiling] (`PatternType = 1`) — content-stream-based tiling. The PDF
+ *     renderer replays [Tiling.contentBytes] across the fill region (with a
+ *     tile-count bound); [Tiling.baseColor] remains as the flat fallback for
+ *     consumers that don't replay cells.
+ *   - [Shading] (`PatternType = 2`) — wraps a [KiteShading] under a matrix,
+ *     painted through [KiteCanvas.fillShading].
+ */
+public sealed class KitePattern {
+
+    /** Pattern-space-to-default-space transform (`/Matrix`). */
+    public abstract val matrix: Matrix
+
+    /** Optional ExtGState applied while painting the pattern. */
+    public abstract val extGState: ExtGState?
+
+    public data class Shading(
+        override val matrix: Matrix,
+        override val extGState: ExtGState?,
+        val shading: KiteShading,
+    ) : KitePattern()
+
+    /**
+     * Tiling pattern (`PatternType = 1`). The content stream lives in
+     * [contentBytes]; the PDF renderer replays it once per tile across the
+     * filled region. [baseColor] is the flat approximation for consumers
+     * that don't replay cells (and the emergency fallback for degenerate
+     * cell geometry).
+     */
+    public data class Tiling(
+        override val matrix: Matrix,
+        override val extGState: ExtGState?,
+        val paintType: Int,
+        val tilingType: Int,
+        val bbox: io.github.yuroyami.kitepdf.core.Rectangle,
+        val xStep: Double,
+        val yStep: Double,
+        val contentBytes: ByteArray,
+        /** The pattern cell's own `/Resources` (fonts, colours, XObjects…). */
+        val resources: PdfDictionary? = null,
+        val baseColor: RgbColor = RgbColor(0.5, 0.5, 0.5),
+    ) : KitePattern() {
+        override fun equals(other: Any?): Boolean = other is Tiling &&
+            matrix == other.matrix && paintType == other.paintType &&
+            tilingType == other.tilingType && bbox == other.bbox &&
+            xStep == other.xStep && yStep == other.yStep &&
+            contentBytes.contentEquals(other.contentBytes)
+        override fun hashCode(): Int = 31 * matrix.hashCode() + contentBytes.contentHashCode()
+    }
+
+    /**
+     * A pattern we recognise but can't render yet (e.g. tiling, or one that
+     * failed to resolve). Fills using it are skipped rather than collapsing to
+     * the default colour — which would flood, say, a full-page background
+     * pattern solid black.
+     */
+    public object Unsupported : KitePattern() {
+        override val matrix: Matrix = Matrix.IDENTITY
+        override val extGState: ExtGState? = null
+    }
+
+    public companion object {
+        public fun parse(
+            obj: PdfObject?,
+            refs: IndirectResolver,
+            shadings: Map<String, KiteShading>,
+        ): KitePattern? {
+            val resolved = when (obj) {
+                is PdfReference -> refs.resolve(obj)
+                else -> obj
+            } ?: return null
+            val dict = when (resolved) {
+                is PdfDictionary -> resolved
+                is PdfStream -> resolved.dict
+                else -> return null
+            }
+            val patternType = dict.getInt("PatternType")?.toInt() ?: return null
+            val matrix = (dict.getArray("Matrix"))?.toMatrix() ?: Matrix.IDENTITY
+            val ext = dict.getDict("ExtGState", refs)?.let { ExtGState.parse(it, refs) }
+            return when (patternType) {
+                2 -> {
+                    val sh = KiteShading.parse(dict["Shading"], refs) ?: return null
+                    Shading(matrix, ext, sh)
+                }
+                1 -> {
+                    val stream = resolved as? PdfStream ?: return null
+                    val bbox = (dict.getArray("BBox"))?.toRectangle()
+                        ?: return null
+                    val xStep = (dict.getReal("XStep")) ?: 1.0
+                    val yStep = (dict.getReal("YStep")) ?: 1.0
+                    val paintType = dict.getInt("PaintType")?.toInt() ?: 1
+                    val tilingType = dict.getInt("TilingType")?.toInt() ?: 1
+                    Tiling(
+                        matrix, ext, paintType, tilingType, bbox, xStep, yStep,
+                        io.github.yuroyami.kitepdf.core.filters.FilterChain.decode(stream),
+                        resources = dict.getDict("Resources", refs),
+                    )
+                }
+                else -> null
+            }.also {
+                // Cross-ref the shading by name when the resource map provided one
+                // (some PDFs reference shadings indirectly). Touch the unused arg.
+                if (shadings.isEmpty()) Unit
+            }
+        }
+
+        private fun PdfArray.toMatrix(): Matrix {
+            fun n(i: Int) = when (val v = this.getOrNull(i)) {
+                is PdfReal -> v.value
+                is PdfInt -> v.value.toDouble()
+                else -> 0.0
+            }
+            return Matrix(n(0), n(1), n(2), n(3), n(4), n(5))
+        }
+
+        private fun PdfArray.toRectangle(): io.github.yuroyami.kitepdf.core.Rectangle? {
+            if (size < 4) return null
+            fun n(i: Int) = when (val v = this[i]) {
+                is PdfReal -> v.value
+                is PdfInt -> v.value.toDouble()
+                else -> 0.0
+            }
+            return io.github.yuroyami.kitepdf.core.Rectangle(n(0), n(1), n(2), n(3))
+        }
+    }
+}

@@ -10,13 +10,13 @@ import io.github.yuroyami.kitepdf.epub.css.ObjectFit
 import io.github.yuroyami.kitepdf.epub.css.GenericFont
 import io.github.yuroyami.kitepdf.epub.css.TextAlign
 import io.github.yuroyami.kitepdf.epub.css.WhiteSpaceMode
-import io.github.yuroyami.kitepdf.text.Bidi
-import io.github.yuroyami.kitepdf.font.FontFamily
-import io.github.yuroyami.kitepdf.font.FontSpec
-import io.github.yuroyami.kitepdf.font.TextGlyph
-import io.github.yuroyami.kitepdf.render.ImageXObject
-import io.github.yuroyami.kitepdf.render.RgbColor
-import io.github.yuroyami.kitepdf.text.Hyphenator
+import io.github.yuroyami.kitepdf.core.text.Bidi
+import io.github.yuroyami.kitepdf.core.font.FontFamily
+import io.github.yuroyami.kitepdf.core.font.FontSpec
+import io.github.yuroyami.kitepdf.core.font.TextGlyph
+import io.github.yuroyami.kitepdf.core.render.ImageXObject
+import io.github.yuroyami.kitepdf.core.render.RgbColor
+import io.github.yuroyami.kitepdf.core.text.Hyphenator
 import kotlin.math.roundToInt
 
 // GSUB ligature features, applied required-first: Arabic lam-alef (`rlig`) then

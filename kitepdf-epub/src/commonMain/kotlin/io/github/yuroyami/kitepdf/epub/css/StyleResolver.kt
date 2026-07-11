@@ -1,7 +1,7 @@
 package io.github.yuroyami.kitepdf.epub.css
 
 import io.github.yuroyami.kitepdf.epub.HtmlNode
-import io.github.yuroyami.kitepdf.render.RgbColor
+import io.github.yuroyami.kitepdf.core.render.RgbColor
 
 /**
  * The cascade. Given the UA sheet plus the document's author CSS, computes a

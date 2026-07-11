@@ -1,8 +1,8 @@
 package io.github.yuroyami.kitepdf
 
-import io.github.yuroyami.kitepdf.parser.PdfDictionary
-import io.github.yuroyami.kitepdf.parser.PdfName
-import io.github.yuroyami.kitepdf.parser.PdfString
+import io.github.yuroyami.kitepdf.core.parser.PdfDictionary
+import io.github.yuroyami.kitepdf.core.parser.PdfName
+import io.github.yuroyami.kitepdf.core.parser.PdfString
 
 /**
  * Contents of the trailer's `/Info` dictionary (ISO 32000-1 §14.3.3).

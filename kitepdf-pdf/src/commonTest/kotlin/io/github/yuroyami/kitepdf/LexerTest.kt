@@ -1,8 +1,8 @@
 package io.github.yuroyami.kitepdf
 
 import io.github.yuroyami.kitepdf.core.ByteReader
-import io.github.yuroyami.kitepdf.parser.Lexer
-import io.github.yuroyami.kitepdf.parser.Token
+import io.github.yuroyami.kitepdf.core.parser.Lexer
+import io.github.yuroyami.kitepdf.core.parser.Token
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals

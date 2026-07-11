@@ -1,7 +1,7 @@
 package io.github.yuroyami.kitepdf.epub
 
-import io.github.yuroyami.kitepdf.compression.Inflate
-import io.github.yuroyami.kitepdf.filters.FilterChain
+import io.github.yuroyami.kitepdf.core.compression.Inflate
+import io.github.yuroyami.kitepdf.core.filters.FilterChain
 
 /**
  * Minimal ZIP reader for EPUB / OCF containers. Parses the central directory,

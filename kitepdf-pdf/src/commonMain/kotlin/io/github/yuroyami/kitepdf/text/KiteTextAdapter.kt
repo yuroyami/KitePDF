@@ -1,10 +1,10 @@
 package io.github.yuroyami.kitepdf.text
 
-import io.github.yuroyami.kitepdf.KiteStructuredText
-import io.github.yuroyami.kitepdf.KiteTextBlock
-import io.github.yuroyami.kitepdf.KiteTextLine
-import io.github.yuroyami.kitepdf.Rectangle
-import io.github.yuroyami.kitepdf.render.Matrix
+import io.github.yuroyami.kitepdf.core.KiteStructuredText
+import io.github.yuroyami.kitepdf.core.KiteTextBlock
+import io.github.yuroyami.kitepdf.core.KiteTextLine
+import io.github.yuroyami.kitepdf.core.Rectangle
+import io.github.yuroyami.kitepdf.core.render.Matrix
 import kotlin.math.abs
 
 /**

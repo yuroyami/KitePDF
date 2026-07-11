@@ -1,6 +1,6 @@
 package io.github.yuroyami.kitepdf.epub.css
 
-import io.github.yuroyami.kitepdf.render.RgbColor
+import io.github.yuroyami.kitepdf.core.render.RgbColor
 
 internal enum class Display { BLOCK, INLINE, INLINE_BLOCK, LIST_ITEM, NONE, TABLE, TABLE_ROW, TABLE_CELL, TABLE_ROW_GROUP }
 internal enum class TextAlign { LEFT, RIGHT, CENTER, JUSTIFY }

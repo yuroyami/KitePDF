@@ -1,14 +1,14 @@
 package io.github.yuroyami.kitepdf
 
-import io.github.yuroyami.kitepdf.parser.IndirectResolver
-import io.github.yuroyami.kitepdf.parser.PdfArray
-import io.github.yuroyami.kitepdf.parser.PdfDictionary
-import io.github.yuroyami.kitepdf.parser.PdfInt
-import io.github.yuroyami.kitepdf.parser.PdfName
-import io.github.yuroyami.kitepdf.parser.PdfReal
-import io.github.yuroyami.kitepdf.parser.PdfStream
-import io.github.yuroyami.kitepdf.parser.PdfString
-import io.github.yuroyami.kitepdf.render.RgbColor
+import io.github.yuroyami.kitepdf.core.parser.IndirectResolver
+import io.github.yuroyami.kitepdf.core.parser.PdfArray
+import io.github.yuroyami.kitepdf.core.parser.PdfDictionary
+import io.github.yuroyami.kitepdf.core.parser.PdfInt
+import io.github.yuroyami.kitepdf.core.parser.PdfName
+import io.github.yuroyami.kitepdf.core.parser.PdfReal
+import io.github.yuroyami.kitepdf.core.parser.PdfStream
+import io.github.yuroyami.kitepdf.core.parser.PdfString
+import io.github.yuroyami.kitepdf.core.render.RgbColor
 
 /**
  * One PDF annotation (ISO 32000-1 §12.5).
@@ -31,7 +31,7 @@ import io.github.yuroyami.kitepdf.render.RgbColor
  */
 public data class PdfAnnotation(
     val subtype: Subtype,
-    val rect: io.github.yuroyami.kitepdf.Rectangle,
+    val rect: io.github.yuroyami.kitepdf.core.Rectangle,
     val contents: String,
     /** Border / highlight / underline colour, or null when /C is omitted. */
     val color: RgbColor?,
@@ -40,7 +40,7 @@ public data class PdfAnnotation(
     /** Parsed `/A` action (typed). `null` when the annotation has no action dict. */
     val action: PdfAction?,
     /** Raw `/Dest` value on link annotations — pass through [PdfDocument.resolveDestination]. */
-    val rawDestination: io.github.yuroyami.kitepdf.parser.PdfObject?,
+    val rawDestination: io.github.yuroyami.kitepdf.core.parser.PdfObject?,
     /** /AP /N appearance Form XObject, or null. */
     val appearanceStream: PdfStream?,
     /** Annotation flags (`/F`): bit 2 = Hidden, bit 6 = NoView, etc. (§12.5.3). */
@@ -169,19 +169,19 @@ public data class PdfAnnotation(
             return when (arr.size) {
                 1 -> RgbColor.gray(n(0))
                 3 -> RgbColor(n(0), n(1), n(2))
-                4 -> io.github.yuroyami.kitepdf.render.ColorSpace.DeviceCMYK
+                4 -> io.github.yuroyami.kitepdf.core.render.ColorSpace.DeviceCMYK
                     .toRgb(doubleArrayOf(n(0), n(1), n(2), n(3)))
                 else -> null
             }
         }
 
-        private fun rectFromArray(arr: PdfArray): io.github.yuroyami.kitepdf.Rectangle {
+        private fun rectFromArray(arr: PdfArray): io.github.yuroyami.kitepdf.core.Rectangle {
             fun n(idx: Int) = when (val v = arr.getOrNull(idx)) {
                 is PdfReal -> v.value
                 is PdfInt -> v.value.toDouble()
                 else -> 0.0
             }
-            return io.github.yuroyami.kitepdf.Rectangle(n(0), n(1), n(2), n(3))
+            return io.github.yuroyami.kitepdf.core.Rectangle(n(0), n(1), n(2), n(3))
         }
     }
 }

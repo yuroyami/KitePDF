@@ -8,7 +8,7 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import io.github.yuroyami.kitepdf.epub.EpubDocument
-import io.github.yuroyami.kitepdf.render.ReaderTheme
+import io.github.yuroyami.kitepdf.core.render.ReaderTheme
 
 /**
  * Remembers a [PdfViewState] for an EPUB [document]. Hoist it to drive an
@@ -17,7 +17,7 @@ import io.github.yuroyami.kitepdf.render.ReaderTheme
  *
  * The state type is shared with PDF ([rememberPdfViewState]): both a
  * [io.github.yuroyami.kitepdf.PdfDocument] and an [EpubDocument] are
- * [io.github.yuroyami.kitepdf.KiteDocument]s, so one viewer path serves both.
+ * [io.github.yuroyami.kitepdf.core.KiteDocument]s, so one viewer path serves both.
  */
 @Composable
 public fun rememberEpubViewState(document: EpubDocument, initialPage: Int = 0): PdfViewState =

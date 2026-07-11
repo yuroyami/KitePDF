@@ -1,7 +1,7 @@
 package io.github.yuroyami.kitepdf.epub
 
 import io.github.yuroyami.kitepdf.epub.brotli.Brotli
-import io.github.yuroyami.kitepdf.filters.FilterChain
+import io.github.yuroyami.kitepdf.core.filters.FilterChain
 
 /**
  * WOFF2 (W3C Web Open Font Format 2.0) → bare SFNT decoder. A WOFF2 file is
@@ -12,7 +12,7 @@ import io.github.yuroyami.kitepdf.filters.FilterChain
  * Brotli-decompresses the data block, reconstructs transformed `glyf`
  * (rebuilding `loca` from the actual glyph offsets) and transformed `hmtx`
  * (lsb = glyph xMin), and reassembles a plain SFNT that the core
- * [io.github.yuroyami.kitepdf.font.TrueTypeFont] parser reads unchanged.
+ * [io.github.yuroyami.kitepdf.core.font.TrueTypeFont] parser reads unchanged.
  *
  * Scope: single fonts only; WOFF2 collections (`ttcf` flavor) return null.
  */

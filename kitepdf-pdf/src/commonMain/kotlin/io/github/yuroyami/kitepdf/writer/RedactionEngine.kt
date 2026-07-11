@@ -1,15 +1,15 @@
 package io.github.yuroyami.kitepdf.writer
 
-import io.github.yuroyami.kitepdf.Rectangle
+import io.github.yuroyami.kitepdf.core.Rectangle
 import io.github.yuroyami.kitepdf.content.Operation
-import io.github.yuroyami.kitepdf.font.PdfFont
-import io.github.yuroyami.kitepdf.render.Matrix
-import io.github.yuroyami.kitepdf.parser.PdfArray
-import io.github.yuroyami.kitepdf.parser.PdfInt
-import io.github.yuroyami.kitepdf.parser.PdfName
-import io.github.yuroyami.kitepdf.parser.PdfObject
-import io.github.yuroyami.kitepdf.parser.PdfReal
-import io.github.yuroyami.kitepdf.parser.PdfString
+import io.github.yuroyami.kitepdf.core.font.PdfFont
+import io.github.yuroyami.kitepdf.core.render.Matrix
+import io.github.yuroyami.kitepdf.core.parser.PdfArray
+import io.github.yuroyami.kitepdf.core.parser.PdfInt
+import io.github.yuroyami.kitepdf.core.parser.PdfName
+import io.github.yuroyami.kitepdf.core.parser.PdfObject
+import io.github.yuroyami.kitepdf.core.parser.PdfReal
+import io.github.yuroyami.kitepdf.core.parser.PdfString
 
 /**
  * The content-stream transform behind true region redaction.

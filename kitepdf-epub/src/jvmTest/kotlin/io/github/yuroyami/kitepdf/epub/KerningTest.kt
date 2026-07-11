@@ -1,13 +1,13 @@
 package io.github.yuroyami.kitepdf.epub
 
-import io.github.yuroyami.kitepdf.render.RecordingCanvas
+import io.github.yuroyami.kitepdf.core.render.RecordingCanvas
 import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 /**
- * Horizontal kerning ([io.github.yuroyami.kitepdf.font.OpenTypeKern], wired through
+ * Horizontal kerning ([io.github.yuroyami.kitepdf.core.font.OpenTypeKern], wired through
  * [EmbeddedFace.kern1000] + [BoxLayout]). Verified against the in-repo fonts: the
  * DroidSans `kern` table and the Noto OTF `GPOS` pair-adjustment tables. Asserts
  * both that a font yields a non-zero pair adjustment AND that the EPUB layout folds

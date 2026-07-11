@@ -92,8 +92,8 @@ class TableTest {
     fun table_cell_text_reaches_canvas() {
         val doc = EpubDocument.open(EpubFixtures.epub("<body>$grid</body>"))
         val text = doc.pages.flatMap { p ->
-            io.github.yuroyami.kitepdf.render.RecordingCanvas().also { p.renderTo(it) }.calls
-                .filterIsInstance<io.github.yuroyami.kitepdf.render.RecordingCanvas.Call.Glyphs>()
+            io.github.yuroyami.kitepdf.core.render.RecordingCanvas().also { p.renderTo(it) }.calls
+                .filterIsInstance<io.github.yuroyami.kitepdf.core.render.RecordingCanvas.Call.Glyphs>()
         }.joinToString("") { it.text }
         assertTrue(listOf("A", "B", "C", "D").all { it in text }, "all cells rendered: <<$text>>")
     }

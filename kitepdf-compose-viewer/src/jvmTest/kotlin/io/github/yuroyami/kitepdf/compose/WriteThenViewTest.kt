@@ -11,7 +11,7 @@ import androidx.compose.ui.text.font.createFontFamilyResolver
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
 import io.github.yuroyami.kitepdf.KitePDF
-import io.github.yuroyami.kitepdf.render.Matrix as PdfMatrix
+import io.github.yuroyami.kitepdf.core.render.Matrix as PdfMatrix
 import io.github.yuroyami.kitepdf.writer.PdfBuilder
 import io.github.yuroyami.kitepdf.writer.PdfImage
 import kotlin.test.Test

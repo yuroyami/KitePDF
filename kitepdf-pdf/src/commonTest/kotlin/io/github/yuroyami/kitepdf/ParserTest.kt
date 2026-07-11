@@ -1,14 +1,14 @@
 package io.github.yuroyami.kitepdf
 
 import io.github.yuroyami.kitepdf.parser.Parser
-import io.github.yuroyami.kitepdf.parser.PdfArray
-import io.github.yuroyami.kitepdf.parser.PdfBoolean
-import io.github.yuroyami.kitepdf.parser.PdfDictionary
-import io.github.yuroyami.kitepdf.parser.PdfInt
-import io.github.yuroyami.kitepdf.parser.PdfName
-import io.github.yuroyami.kitepdf.parser.PdfNull
-import io.github.yuroyami.kitepdf.parser.PdfReal
-import io.github.yuroyami.kitepdf.parser.PdfReference
+import io.github.yuroyami.kitepdf.core.parser.PdfArray
+import io.github.yuroyami.kitepdf.core.parser.PdfBoolean
+import io.github.yuroyami.kitepdf.core.parser.PdfDictionary
+import io.github.yuroyami.kitepdf.core.parser.PdfInt
+import io.github.yuroyami.kitepdf.core.parser.PdfName
+import io.github.yuroyami.kitepdf.core.parser.PdfNull
+import io.github.yuroyami.kitepdf.core.parser.PdfReal
+import io.github.yuroyami.kitepdf.core.parser.PdfReference
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
