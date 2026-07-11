@@ -103,6 +103,22 @@ class PdfViewState(
     /** Pan axes the active layout allows (continuous mode keeps its scroll axis native). */
     internal var panAxes: PanAxes = PanAxes.Both
 
+    /**
+     * The page-bitmap LRU (T-15): outlives individual page composables, dies
+     * with the state. Recreated when the render spec's budget changes.
+     */
+    private var bitmapCache: PageBitmapCache? = null
+    private var bitmapCacheBudget = -1L
+
+    internal fun bitmapCacheFor(budgetBytes: Long): PageBitmapCache? {
+        if (budgetBytes <= 0L) return null
+        if (bitmapCacheBudget != budgetBytes) {
+            bitmapCache = PageBitmapCache(budgetBytes)
+            bitmapCacheBudget = budgetBytes
+        }
+        return bitmapCache
+    }
+
     /* ── zoom ─────────────────────────────────────────────────────────────── */
 
     /**

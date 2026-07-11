@@ -7,6 +7,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Canvas
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.drawscope.CanvasDrawScope
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
@@ -66,6 +67,44 @@ class PdfRasterizer(
     ): ImageBitmap = kotlinx.coroutines.withContext(kitepdfRasterDispatcher()) {
         renderMutex.withLock {
             rasterize(page, widthPx, heightPx, background, hairlineWidthPx, theme)
+        }
+    }
+
+    /**
+     * [rasterizeOffMain] through [cache] (T-15): a hit returns the cached
+     * bitmap, a miss rasterizes and inserts. The cache is touched only under
+     * [renderMutex], honouring its single-owner contract. Second value of the
+     * pair: true when this call actually rasterized (drives `onPageRendered`,
+     * which must not re-fire on cache hits).
+     */
+    internal suspend fun rasterizeCachedOffMain(
+        cache: PageBitmapCache?,
+        page: KitePage,
+        widthPx: Int,
+        heightPx: Int,
+        background: Color,
+        hairlineWidthPx: Float,
+        theme: ReaderTheme?,
+    ): Pair<ImageBitmap, Boolean> = kotlinx.coroutines.withContext(kitepdfRasterDispatcher()) {
+        renderMutex.withLock {
+            if (cache == null) {
+                rasterize(page, widthPx, heightPx, background, hairlineWidthPx, theme) to true
+            } else {
+                var fresh = false
+                val key = PageBitmapCache.Key(
+                    pageIdentity = page,
+                    w = widthPx,
+                    h = heightPx,
+                    bgArgb = background.toArgb(),
+                    themeId = theme?.hashCode() ?: 0,
+                    hairlineBits = hairlineWidthPx.toRawBits(),
+                )
+                val bmp = cache.getOrPut(key) {
+                    fresh = true
+                    rasterize(page, widthPx, heightPx, background, hairlineWidthPx, theme)
+                }
+                bmp to fresh
+            }
         }
     }
 

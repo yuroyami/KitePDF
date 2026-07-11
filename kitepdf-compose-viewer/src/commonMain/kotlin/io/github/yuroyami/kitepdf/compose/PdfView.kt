@@ -104,8 +104,9 @@ import kotlinx.coroutines.launch
  * @param pageSpacing gap between pages (continuous gutter / pager spacing).
  * @param userScrollEnabled gesture scrolling/swiping of the layout itself.
  *   Disable to drive paging exclusively through [PdfViewState] (nav buttons).
- * @param onPageRendered fires whenever a page finishes rasterizing, with the
- *   bitmap ready for export — e.g. via [encodeToPng].
+ * @param onPageRendered fires whenever a page finishes a FRESH rasterization,
+ *   with the bitmap ready for export — e.g. via [encodeToPng]. Cache hits from
+ *   the T-15 bitmap LRU do not re-fire it.
  * @param pagePlaceholder shown in a page's slot until its raster is ready.
  *   Defaults to a plain [PdfViewColors.pageBackground] box.
  * @param overlay HUD layer drawn over the viewport; receives [state] and a
@@ -425,6 +426,7 @@ private fun androidx.compose.foundation.lazy.LazyItemScope.ContinuousPageItem(
             is PdfRenderSpec.Rasterized -> PdfPageRaster(
                 page, pageIndex, baseSize, settledZoom, renderSpec, colors,
                 onPageRendered, pagePlaceholder, slot,
+                cache = state.bitmapCacheFor(renderSpec.cacheBudgetBytes),
             )
             is PdfRenderSpec.Vectorized -> PdfPageVector(
                 page, renderSpec, colors, slot,
@@ -605,6 +607,7 @@ private fun PageBox(
                 is PdfRenderSpec.Rasterized -> PdfPageRaster(
                     page, pageIndex, fit, settledZoom, renderSpec, colors,
                     onPageRendered, pagePlaceholder, slot,
+                    cache = state.bitmapCacheFor(renderSpec.cacheBudgetBytes),
                 )
                 is PdfRenderSpec.Vectorized -> PdfPageVector(
                     page, renderSpec, colors, slot,
@@ -632,6 +635,8 @@ private fun PdfPageRaster(
     onPageRendered: ((Int, ImageBitmap) -> Unit)?,
     pagePlaceholder: (@Composable (Int) -> Unit)?,
     modifier: Modifier,
+    /** The state-owned bitmap LRU (T-15); null renders uncached. */
+    cache: PageBitmapCache? = null,
 ) {
     val rasterizer = rememberPdfRasterizer()
     val onRendered by rememberUpdatedState(onPageRendered)
@@ -652,20 +657,24 @@ private fun PdfPageRaster(
         max(1f, raster.width / visualWidth)
     } else 1f
 
-    val bitmap by produceState<ImageBitmap?>(null, page, raster, colors.pageBackground, colors.theme, hairline) {
+    val rastered by produceState<Pair<ImageBitmap, Boolean>?>(null, page, raster, colors.pageBackground, colors.theme, hairline, cache) {
         // Off the main thread (T-14): a 10-30ms page raster on the UI thread
-        // janks scroll and pinch. rasterizeOffMain serializes pages on the
-        // rasterizer's mutex (TextMeasurer's cache is not thread-safe) but the
-        // main thread stays free; neighbour prefetch (PdfLayout.Paged
-        // offscreenPages) still hides the latency across page turns.
+        // janks scroll and pinch. The rasterizer serializes pages on its mutex
+        // (TextMeasurer's cache is not thread-safe) but the main thread stays
+        // free; the T-15 cache turns scroll-back into a lookup, and neighbour
+        // prefetch (PdfLayout.Paged offscreenPages) hides first-render latency.
         value = if (raster == IntSize.Zero) null
-        else rasterizer.rasterizeOffMain(page, raster.width, raster.height, colors.pageBackground, hairline, colors.theme)
+        else rasterizer.rasterizeCachedOffMain(cache, page, raster.width, raster.height, colors.pageBackground, hairline, colors.theme)
     }
+    val bitmap = rastered?.first
 
     // Fade the bitmap in once it lands instead of popping (and keep the previous
     // frame visible across a re-raster), so the placeholder→page hand-off and any
     // crisp-zoom refresh read as a smooth dissolve rather than a flash.
-    LaunchedEffect(bitmap) { bitmap?.let { onRendered?.invoke(pageIndex, it) } }
+    // onPageRendered fires only on FRESH rasterization, never on cache hits.
+    LaunchedEffect(rastered) {
+        rastered?.let { (bmp, fresh) -> if (fresh) onRendered?.invoke(pageIndex, bmp) }
+    }
     Crossfade(
         targetState = bitmap,
         animationSpec = tween(durationMillis = PAGE_FADE_MS),
@@ -907,6 +916,7 @@ private fun SpreadBox(
                     is PdfRenderSpec.Rasterized -> PdfPageRaster(
                         page, pageIndex, fit, settledZoom, renderSpec, colors,
                         onPageRendered, pagePlaceholder, slotModifier,
+                        cache = state.bitmapCacheFor(renderSpec.cacheBudgetBytes),
                     )
                     is PdfRenderSpec.Vectorized -> PdfPageVector(page, renderSpec, colors, slotModifier)
                 }
