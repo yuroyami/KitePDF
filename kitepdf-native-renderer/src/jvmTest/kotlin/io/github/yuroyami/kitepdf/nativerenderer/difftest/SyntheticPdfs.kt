@@ -29,7 +29,27 @@ object SyntheticPdfs {
         Fixture("syn-shading6-coons", shadingCoons()),
         Fixture("syn-shading7-tensor", shadingTensor()),
         Fixture("syn-type3-font", type3Font()),
+        Fixture("syn-smask-luminosity", smaskLuminosity()),
     )
+
+    /** T-43: a luminosity soft mask (white box on black) gating a red fill. */
+    private fun smaskLuminosity(): ByteArray {
+        val p = Pdf()
+        p.obj("<< /Type /Catalog /Pages 2 0 R >>")                              // 1
+        p.obj("<< /Type /Pages /Kids [3 0 R] /Count 1 >>")                      // 2
+        p.obj(
+            "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] " +
+                "/Resources << /ExtGState << /GS0 5 0 R >> >> /Contents 4 0 R >>",
+        )                                                                       // 3
+        p.stream("", "q /GS0 gs 1 0 0 rg 0 0 200 200 re f Q".encodeToByteArray()) // 4
+        p.obj("<< /Type /ExtGState /SMask << /Type /Mask /S /Luminosity /G 6 0 R >> >>") // 5
+        p.stream(
+            "/Type /XObject /Subtype /Form /BBox [0 0 200 200] " +
+                "/Group << /S /Transparency /CS /DeviceGray >>",
+            "1 g 40 90 80 60 re f".encodeToByteArray(), // off-centre: flip/scale bugs cannot hide
+        )                                                                       // 6
+        return p.build(1)
+    }
 
     /** T-42: a hand-written Type3 font (square + triangle glyphs, d1-style). */
     private fun type3Font(): ByteArray {

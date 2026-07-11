@@ -363,11 +363,32 @@ class ComposeCanvas(
             render()
             // Inner layer with DstIn: subsequent draws will multiply by the
             // existing layer's alpha — i.e. the mask "punches" the content.
+            // For a Luminosity mask (§11.6.5.2) the mask group composites over
+            // an opaque BLACK backdrop and its LUMINANCE becomes the alpha:
+            // a colour-matrix filter moves 0.299R+0.587G+0.114B into A at the
+            // layer restore (T-43), mirroring the Skia backend's LUMA filter.
             val maskPaint = Paint().apply {
                 blendMode = ComposeBlendMode.DstIn
+                if (kind == SoftMask.Kind.Luminosity) {
+                    colorFilter = androidx.compose.ui.graphics.ColorFilter.colorMatrix(
+                        androidx.compose.ui.graphics.ColorMatrix(
+                            floatArrayOf(
+                                0f, 0f, 0f, 0f, 0f,
+                                0f, 0f, 0f, 0f, 0f,
+                                0f, 0f, 0f, 0f, 0f,
+                                0.299f, 0.587f, 0.114f, 0f, 0f,
+                            ),
+                        ),
+                    )
+                }
             }
             composeCanvas.saveLayer(infiniteRect(), maskPaint)
             try {
+                if (kind == SoftMask.Kind.Luminosity) {
+                    // Unpainted mask pixels stay black -> luminance 0 -> fully
+                    // masked out, per the spec's black-backdrop rule.
+                    drawScope.drawRect(Color.Black, size = drawScope.size)
+                }
                 renderMask(this)
             } finally {
                 composeCanvas.restore()

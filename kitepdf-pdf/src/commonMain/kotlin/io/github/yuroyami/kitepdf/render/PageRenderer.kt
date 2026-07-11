@@ -1149,18 +1149,23 @@ class PageRenderer(
                 // stream is rendered with a fresh graphics state — the spec
                 // says soft masks render onto a transparent backdrop with
                 // their own state stack (§11.6.5).
-                renderMaskGroup(mask.group, childCanvas, maskMatrix)
+                renderMaskGroup(mask.group, childCanvas, state.ctm)
             },
         )
     }
 
-    private fun renderMaskGroup(formStream: PdfStream, target: PdfCanvas, formMatrix: Matrix) {
+    private fun renderMaskGroup(formStream: PdfStream, target: PdfCanvas, baseCtm: Matrix) {
         // We need a sub-renderer so the mask paints into [target] rather
         // than the page canvas. The cleanest thing is to construct a
         // throwaway PageRenderer instance and let it run the form-xobject
         // pipeline; that reuses every operator handler and resource walk.
+        // The state starts from the CALLER's CTM (device transform included —
+        // starting from IDENTITY rendered the mask unflipped and unscaled,
+        // which a symmetric 72-dpi fixture hid and the 96-dpi harness caught);
+        // the group's own /Matrix is applied by the form pipeline itself, so
+        // pre-concatenating it here would double it.
         val sub = PageRenderer(target, resolver)
-        val parentState = GraphicsStack(GraphicsState(ctm = Matrix.IDENTITY.concat(formMatrix)))
+        val parentState = GraphicsStack(GraphicsState(ctm = baseCtm))
         sub.renderFormXObjectExternally(formStream, parentState)
     }
 

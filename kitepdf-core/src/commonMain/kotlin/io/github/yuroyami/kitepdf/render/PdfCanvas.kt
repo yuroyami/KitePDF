@@ -155,10 +155,11 @@ interface PdfCanvas {
      * `render()` it, then over-paint via [renderMask] using `DstIn` blend
      * mode so the mask's alpha determines the visible region.
      *
-     * Honest scope: the shipped backends implement the `Alpha` SMask kind
-     * correctly and approximate `Luminosity` as if it were alpha. True
-     * luminosity-to-alpha conversion requires a custom shader and is on the
-     * roadmap (audit T-43).
+     * The shipped backends implement both SMask kinds: `Alpha` uses the mask
+     * group's own alpha, and `Luminosity` composites the group over an opaque
+     * black backdrop and converts luminance to alpha (Skia's LUMA filter, a
+     * Compose colour-matrix filter, a per-pixel pass on AWT) per §11.6.5.2
+     * (T-43).
      */
     fun applySoftMask(
         kind: SoftMask.Kind,
