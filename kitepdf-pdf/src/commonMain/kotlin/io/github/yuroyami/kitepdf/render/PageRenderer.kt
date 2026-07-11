@@ -50,6 +50,12 @@ class PageRenderer(
     // painting op via [applyPendingClip].
     private var pendingClip = 0
 
+    // Text render modes 4..7 (T-41): glyph outlines accumulate here in USER
+    // space across the whole BT..ET block; ET intersects the union with the
+    // clip (§9.3.3: the text clip applies after the text object ends and
+    // persists to the enclosing Q, which activeClipCount already models).
+    private var pendingTextClip: PdfPath.Builder? = null
+
     /** An XObject with the indirect object number it resolved from (null for
      *  the rare ref-less inline entry) — the number keys the decoded caches. */
     class XObjectSlot(val objectNumber: Long?, val stream: PdfStream)
@@ -790,10 +796,24 @@ class PageRenderer(
             // other text-state params — char/word spacing, horizontal scale,
             // leading, rise, render mode, plus the current font/size — persist
             // across text objects (§9.3.1); they belong to the graphics state.
-            "BT" -> state.mutateText {
-                it.copy(textMatrix = Matrix.IDENTITY, lineMatrix = Matrix.IDENTITY)
+            "BT" -> {
+                pendingTextClip = null
+                state.mutateText {
+                    it.copy(textMatrix = Matrix.IDENTITY, lineMatrix = Matrix.IDENTITY)
+                }
             }
-            "ET" -> { /* no-op: text state stays in current GraphicsState */ }
+            "ET" -> {
+                // Apply the accumulated modes-4..7 text clip (T-41).
+                val clip = pendingTextClip
+                pendingTextClip = null
+                if (clip != null) {
+                    val built = clip.build()
+                    if (!built.isEmpty()) {
+                        canvas.pushClip(built, state.current.ctm, evenOdd = false)
+                        activeClipCount++
+                    }
+                }
+            }
             "Tf" -> {
                 val fontName = (a.getOrNull(0) as? PdfName)?.value
                 val fontSize = num(a, 1)
@@ -1257,20 +1277,20 @@ class PageRenderer(
         val mode = t.renderingMode
         val doFill = mode == 0 || mode == 2 || mode == 4 || mode == 6
         val doStroke = mode == 1 || mode == 2 || mode == 5 || mode == 6
-        // TODO(text-clip): modes 4-7 (mode in 4..7) must add the glyph outlines to the clip path
-        // (§9.3.3). The canvas has no text-clip accumulation API yet, so glyph
-        // clipping is not applied — mode 7 currently paints nothing (correct for
-        // "no fill/stroke") but also does not clip. Wire up when a text-clip
-        // device path exists.
-        // ONE glyph layout per run (T-13): fill, stroke and the Tm advance all
-        // read the same list. Outlines are resolved only when something below
-        // actually consumes them.
+        // Modes 4..7 accumulate the glyph outlines into a clip applied at ET
+        // (§9.3.3, T-41). Mode 7 clips without painting.
+        val doClip = mode >= 4
+        // ONE glyph layout per run (T-13): fill, stroke, clip and the Tm
+        // advance all read the same list. Outlines are resolved only when
+        // something below actually consumes them.
         val hidden = ocHidden()
         val resolveOutlines = !hidden &&
-            ((doFill && canvas.resolvesGlyphOutlines) || (doStroke && font.hasEmbeddedOutlines))
+            ((doFill && canvas.resolvesGlyphOutlines) ||
+                ((doStroke || doClip) && font.hasEmbeddedOutlines))
         val glyphs = font.layoutBytes(bytes, resolveOutlines)
 
         if (!hidden) {
+            if (doClip) accumulateTextClip(glyphs, font, t, textToUser)
             if (doFill) {
                 withSoftMask(state.current) {
                     canvas.drawGlyphs(
@@ -1336,6 +1356,54 @@ class PageRenderer(
                 }
             }
             penX += glyph.advanceWidth * advanceScale
+        }
+    }
+
+    /**
+     * Modes 4..7: add this run's glyph shapes to [pendingTextClip] in USER
+     * space (same math as [strokeTextGlyphs]). Glyphs without outlines (the
+     * system-font fallback) contribute their advance x em box instead — an
+     * approximation, but a non-empty clip beats silently clipping everything
+     * away. The CTM applies when ET pushes the accumulated path.
+     */
+    private fun accumulateTextClip(
+        glyphs: List<TextGlyph>,
+        font: PdfFont,
+        t: TextState,
+        textToUser: Matrix,
+    ) {
+        val builder = pendingTextClip ?: PdfPath.Builder().also { pendingTextClip = it }
+        val upm = font.unitsPerEm ?: 1000
+        val unitScale = t.fontSize / upm
+        val advanceScale = t.fontSize / 1000.0
+        var penX = 0.0
+        for (glyph in glyphs) {
+            val penMatrix = textToUser.concat(Matrix.translation(penX, 0.0))
+            val outline = glyph.outline
+            if (outline != null && !outline.isEmpty()) {
+                appendPath(
+                    builder,
+                    transformPath(outline, penMatrix.concat(Matrix(unitScale, 0.0, 0.0, unitScale, 0.0, 0.0))),
+                )
+            } else if (glyph.advanceWidth > 0.0) {
+                val w = glyph.advanceWidth * advanceScale
+                val box = PdfPath.Builder().apply {
+                    rectangle(0.0, -0.2 * t.fontSize, w, t.fontSize)
+                }.build()
+                appendPath(builder, transformPath(box, penMatrix))
+            }
+            penX += glyph.advanceWidth * advanceScale
+        }
+    }
+
+    /** Append every segment of [path] to [b] (subpaths stay separate). */
+    private fun appendPath(b: PdfPath.Builder, path: PdfPath) {
+        for (seg in path.segments) when (seg) {
+            is PdfPath.Segment.MoveTo -> b.moveTo(seg.x, seg.y)
+            is PdfPath.Segment.LineTo -> b.lineTo(seg.x, seg.y)
+            is PdfPath.Segment.CurveTo -> b.curveTo(seg.x1, seg.y1, seg.x2, seg.y2, seg.x3, seg.y3)
+            is PdfPath.Segment.QuadTo -> b.quadTo(seg.x1, seg.y1, seg.x2, seg.y2)
+            PdfPath.Segment.Close -> b.close()
         }
     }
 
