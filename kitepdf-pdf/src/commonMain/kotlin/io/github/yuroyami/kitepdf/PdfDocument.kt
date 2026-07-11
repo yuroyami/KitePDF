@@ -603,6 +603,17 @@ public class PdfDocument private constructor(
             return finish(PdfDocument(version, bytes, repaired.entries, repaired.trailer, sec))
         }
 
+        /** [open], but null instead of an exception on a malformed or unauthenticated file. */
+        public fun openOrNull(
+            bytes: ByteArray,
+            password: ByteArray = byteArrayOf(),
+            allowInvalidPassword: Boolean = false,
+        ): PdfDocument? = try {
+            open(bytes, password, allowInvalidPassword)
+        } catch (_: Exception) {
+            null
+        }
+
         /**
          * Cheap structural probe used to decide whether the parsed xref is good
          * enough or we must fall back to repair. Resolves /Root and the /Pages

@@ -105,6 +105,3 @@ public class ByteReader(public val bytes: ByteArray) {
         return -1
     }
 }
-
-/** Raised for any structural PDF error: bad header, truncated stream, malformed xref, etc. */
-public class PdfFormatException(message: String, cause: Throwable? = null) : RuntimeException(message, cause)

@@ -35,7 +35,7 @@ class InlineImageFloatTest {
         EpubDocument.open(
             EpubFixtures.epub(body, extraEntries = listOf("OEBPS/pic.png" to tinyPng())),
             EpubSettings(pageWidth = pageWidth, pageHeight = 640.0),
-        ) ?: error("fixture failed to open")
+        )
 
     /* ─── Fixture A: inline image ────────────────────────────────────────── */
 

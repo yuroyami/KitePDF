@@ -51,7 +51,7 @@ class ShapingTest {
         val css = "@font-face{font-family:'AR';src:url(f.otf)}p{font-family:'AR'}"
         val doc = EpubDocument.open(
             EpubFixtures.epub("<body><style>$css</style><p>$text</p></body>", listOf("OEBPS/f.otf" to otf)),
-        ) ?: return
+        )
         val gids = doc.pages.flatMap { page ->
             RecordingCanvas().also { page.renderTo(it) }.calls
                 .filterIsInstance<RecordingCanvas.Call.Glyphs>()
@@ -87,7 +87,7 @@ class ShapingTest {
         val css = "@font-face{font-family:'AR';src:url(f.otf)}p{font-family:'AR'}"
         val doc = EpubDocument.open(
             EpubFixtures.epub("<body><style>$css</style><p>$text</p></body>", listOf("OEBPS/f.otf" to otf)),
-        ) ?: return
+        )
         val glyphs = doc.pages.flatMap { page ->
             RecordingCanvas().also { page.renderTo(it) }.calls
                 .filterIsInstance<RecordingCanvas.Call.Glyphs>()

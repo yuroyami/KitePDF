@@ -26,6 +26,14 @@ class DocumentTest {
     }
 
     @Test
+    fun openOrNull_mirrors_open_without_throwing() {
+        // T-22: a good file opens; hopeless bytes give null instead of a throw.
+        val good = PdfDocument.openOrNull(buildMinimalPdf("(ok)"))
+        assertEquals(1, good?.pageCount)
+        assertEquals(null, PdfDocument.openOrNull(byteArrayOf(1, 2, 3)))
+    }
+
+    @Test
     fun mediabox_inherited_from_parent_pages_node() {
         val bytes = buildMinimalPdf("(child)", omitMediaBoxOnPage = true, parentHasMediaBox = true)
         val doc = KitePDF.open(bytes)

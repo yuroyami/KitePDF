@@ -19,7 +19,7 @@ class ReaderSettingsTest {
         """<body><p style="font-family:monospace; color:#0000ff">Alpha beta gamma delta epsilon zeta eta theta</p></body>"""
 
     private fun open(settings: EpubSettings, bodyHtml: String = body): EpubDocument =
-        EpubDocument.open(EpubFixtures.epub(bodyHtml), settings) ?: error("fixture failed to open")
+        EpubDocument.open(EpubFixtures.epub(bodyHtml), settings)
 
     private fun glyphCalls(doc: EpubDocument): List<RecordingCanvas.Call.Glyphs> {
         val canvas = RecordingCanvas()

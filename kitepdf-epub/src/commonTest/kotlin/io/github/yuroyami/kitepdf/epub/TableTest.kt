@@ -91,7 +91,7 @@ class TableTest {
     @Test
     fun table_cell_text_reaches_canvas() {
         val doc = EpubDocument.open(EpubFixtures.epub("<body>$grid</body>"))
-        val text = doc!!.pages.flatMap { p ->
+        val text = doc.pages.flatMap { p ->
             io.github.yuroyami.kitepdf.render.RecordingCanvas().also { p.renderTo(it) }.calls
                 .filterIsInstance<io.github.yuroyami.kitepdf.render.RecordingCanvas.Call.Glyphs>()
         }.joinToString("") { it.text }

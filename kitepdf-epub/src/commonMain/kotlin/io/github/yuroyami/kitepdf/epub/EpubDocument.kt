@@ -311,13 +311,21 @@ public class EpubDocument internal constructor(
             pageHeight: Double = 640.0,
             fontSize: Double = 12.0,
             margin: Double = 36.0,
-        ): EpubDocument? = open(bytes, EpubSettings(pageWidth, pageHeight, fontSize, margin))
+        ): EpubDocument = open(bytes, EpubSettings(pageWidth, pageHeight, fontSize, margin))
 
-        /** Parse [bytes] and lay out at [settings]. Null on an unreadable / spineless book. */
-        public fun open(bytes: ByteArray, settings: EpubSettings): EpubDocument? {
-            val parsed = parse(bytes, settings) ?: return null
-            return EpubDocument(parsed, settings)
-        }
+        /**
+         * Parse [bytes] and lay out at [settings].
+         *
+         * @throws EpubFormatException when the bytes are not a readable EPUB,
+         *   with a message naming the first structural failure (missing
+         *   container.xml, missing OPF, empty spine, no readable documents).
+         */
+        public fun open(bytes: ByteArray, settings: EpubSettings): EpubDocument =
+            EpubDocument(parse(bytes, settings), settings)
+
+        /** [open], but null instead of [EpubFormatException] on a malformed book. */
+        public fun openOrNull(bytes: ByteArray, settings: EpubSettings = EpubSettings()): EpubDocument? =
+            try { open(bytes, settings) } catch (_: EpubFormatException) { null }
 
         /**
          * The font-size-independent parse: unzip + OPF + per-spine DOM/CSS +
@@ -325,12 +333,14 @@ public class EpubDocument internal constructor(
          * [EpubDocument.withSettings] never re-runs it. [settings] is read only
          * for the default viewport fallback of a spine with no `<meta viewport>`.
          */
-        private fun parse(bytes: ByteArray, settings: EpubSettings): ParsedEpub? {
+        private fun parse(bytes: ByteArray, settings: EpubSettings): ParsedEpub {
             val zip = ZipReader(bytes)
-            val opfPath = containerOpfPath(zip) ?: return null
-            val opf = Opf.parse(zip, opfPath) ?: return null
+            val opfPath = containerOpfPath(zip)
+                ?: throw EpubFormatException("META-INF/container.xml missing or unreadable")
+            val opf = Opf.parse(zip, opfPath)
+                ?: throw EpubFormatException("OPF not found at $opfPath")
             val contentPaths = opf.spineIdrefs.mapNotNull { opf.itemsById[it]?.href }.map { resolvePath(opf.baseDir, it) }
-            if (contentPaths.isEmpty()) return null
+            if (contentPaths.isEmpty()) throw EpubFormatException("spine is empty in $opfPath")
 
             val fixedLayout = opf.renditionLayout == "pre-paginated" ||
                 contentPaths.indices.all { opf.fixedLayoutAt(it) }
@@ -346,7 +356,7 @@ public class EpubDocument internal constructor(
                 val vp = parseViewport(tree) ?: (settings.pageWidth to settings.pageHeight)
                 spines.add(ParsedSpine(tree, css.rules, docDir, vp, path))
             }
-            if (spines.isEmpty()) return null
+            if (spines.isEmpty()) throw EpubFormatException("spine has no readable documents")
 
             return ParsedEpub(
                 spines = spines,
