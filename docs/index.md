@@ -46,7 +46,18 @@ kotlin {
 }
 ```
 
-Its only dependency is `kotlin-stdlib`, and it works on every Kotlin target. Rendering bindings are opt-in; see [Show it on screen](#show-it-on-screen) below.
+Its only dependency is `kotlin-stdlib`, and it works on every Kotlin target.
+
+Drawing a page to the screen is the one job that needs a platform, so the rendering bindings are separate, opt-in artifacts. Add the one that matches how you draw:
+
+| Artifact | Add it when you want |
+|---|---|
+| `io.github.yuroyami:kitepdf` | The engine: read / write / edit PDFs **and** read EPUBs. Pure `kotlin-stdlib`, every Kotlin target. |
+| `io.github.yuroyami:kitepdf-compose-viewer` | A Compose `PdfView` / `EpubView`, drawn straight into a `DrawScope`. |
+| `io.github.yuroyami:kitepdf-native-renderer` | Headless page → image through the platform canvas (AWT, CoreGraphics, `android.graphics`, Canvas2D). |
+| `io.github.yuroyami:kitepdf-skia-renderer` | Headless page → image through Skia / Skiko: one API on JVM, Android, Apple, Linux and web. |
+
+Every artifact is at `0.2.0`. Want a single format instead of the umbrella? `kitepdf-pdf` is the PDF handler alone and `kitepdf-epub` the EPUB reader alone; `kitepdf` pulls in both. See [Show it on screen](#show-it-on-screen) for each binding in use.
 
 !!! note "Not using Kotlin Multiplatform?"
     The same artifact works in a plain Android or JVM project. Add `io.github.yuroyami:kitepdf:0.2.0` to your normal `dependencies { }` block.
@@ -103,6 +114,10 @@ The engine is headless. Rendering is the one job that needs a platform, so it li
 A PDF page is just another composable, drawn straight into a Compose `DrawScope`.
 
 ```kotlin
+implementation("io.github.yuroyami:kitepdf-compose-viewer:0.2.0")
+```
+
+```kotlin
 val state = rememberPdfViewState(doc)
 
 PdfView(
@@ -123,6 +138,10 @@ See **[the Compose viewer guide](compose-viewer.md)**.
 For servers, CI and thumbnails, render a page straight to image bytes with no UI:
 
 ```kotlin
+implementation("io.github.yuroyami:kitepdf-native-renderer:0.2.0")  // or kitepdf-skia-renderer
+```
+
+```kotlin
 val png = AwtPdfRasterizer.encodeToPng(doc.pages[0], scale = 2.0)
 ```
 
@@ -135,6 +154,7 @@ See **[Headless rendering](rendering.md)**.
 | **[Getting started](getting-started.md)** | Open your first PDF and display it, step by step. |
 | **[Compose viewer](compose-viewer.md)** | `PdfView`: layouts, zoom, render modes, navigation, export. |
 | **[Reading PDFs](reading.md)** | Text, metadata, outlines, annotations, forms, encryption. |
+| **[Reading EPUBs](epub.md)** | Reflowable EPUB 2/3: pagination, reader settings, search, typography. |
 | **[Creating PDFs](writing.md)** | Build from scratch with the content DSL. |
 | **[Editing & redaction](editing.md)** | Fill forms, stamp pages, redact, save. |
 | **[Headless rendering](rendering.md)** | Page to PNG / Bitmap without a UI. |

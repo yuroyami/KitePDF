@@ -57,7 +57,16 @@ That is it for reading, writing, editing, redacting, encryption, text extraction
 
 Not using Kotlin Multiplatform? The same artifact works in a plain Android or JVM project. Add `io.github.yuroyami:kitepdf:0.2.0` to your normal `dependencies { }` block.
 
-Rendering bindings are opt-in and covered under [Putting pixels on screen](#putting-pixels-on-screen).
+Drawing a page to the screen is the one job that needs a platform, so the rendering bindings are separate, opt-in artifacts. Add the one that matches how you draw:
+
+| Artifact | Add it when you want |
+|---|---|
+| `io.github.yuroyami:kitepdf` | The engine: read / write / edit PDFs **and** read EPUBs. Pure `kotlin-stdlib`, every Kotlin target. |
+| `io.github.yuroyami:kitepdf-compose-viewer` | A Compose `PdfView` / `EpubView`, drawn straight into a `DrawScope`. |
+| `io.github.yuroyami:kitepdf-native-renderer` | Headless page → image through the platform canvas (AWT, CoreGraphics, `android.graphics`, Canvas2D). |
+| `io.github.yuroyami:kitepdf-skia-renderer` | Headless page → image through Skia / Skiko: one API on JVM, Android, Apple, Linux and web. |
+
+Every artifact is at `0.2.0`. Want a single format instead of the umbrella? `kitepdf-pdf` is the PDF handler alone and `kitepdf-epub` the EPUB reader alone; `kitepdf` pulls in both. The [pixels-on-screen section](#putting-pixels-on-screen) below shows each binding in use.
 
 ## What it does
 
@@ -120,6 +129,10 @@ The engine is headless. Showing a PDF is the one job that needs a platform, so i
 A PDF page is just another composable. `PdfView` draws into a Compose `DrawScope`, so it scrolls, zooms and composes with your UI like anything else on a `Canvas`. No `AndroidView`, no `UIKitView`, no embedded web view.
 
 ```kotlin
+implementation("io.github.yuroyami:kitepdf-compose-viewer:0.2.0")
+```
+
+```kotlin
 // commonMain of a Compose Multiplatform app
 val state = rememberPdfViewState(doc)
 
@@ -141,6 +154,10 @@ See **[the viewer guide](https://yuroyami.github.io/KitePDF/compose-viewer/)** f
 ### Headless rasterizers: `kitepdf-native-renderer` and `kitepdf-skia-renderer`
 
 For servers, CI, thumbnails, or non-Compose UIs, render a page straight to image bytes.
+
+```kotlin
+implementation("io.github.yuroyami:kitepdf-native-renderer:0.2.0")  // or kitepdf-skia-renderer
+```
 
 ```kotlin
 // kitepdf-native-renderer, JVM (AWT). Also CoreGraphics (Apple), android.graphics, Canvas2D (JS).
