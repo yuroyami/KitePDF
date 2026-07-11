@@ -16,7 +16,7 @@ class InlineTypographyTest {
         EpubDocument.open(
             EpubFixtures.epub("<body><style>$css</style>$body</body>"),
             EpubSettings(pageWidth = pageWidth, pageHeight = 640.0),
-        ) ?: error("fixture failed to open")
+        )
 
     private fun firstLine(doc: EpubDocument) = doc.pages[0].textContent().blocks[0].lines[0]
 

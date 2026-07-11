@@ -203,10 +203,11 @@ class EpubRenderTest {
     }
 
     @Test
-    fun missing_container_returns_null() {
-        // A zip with no META-INF/container.xml is not a readable EPUB.
+    fun missing_container_is_not_a_readable_epub() {
+        // A zip with no META-INF/container.xml is not a readable EPUB (T-22:
+        // open throws, openOrNull maps it to null).
         val notEpub = storedZip(listOf("random.txt" to "nothing here".encodeToByteArray()))
-        assertTrue(EpubDocument.open(notEpub) == null)
+        assertTrue(EpubDocument.openOrNull(notEpub) == null)
     }
 
     // ---- fixtures -----------------------------------------------------------

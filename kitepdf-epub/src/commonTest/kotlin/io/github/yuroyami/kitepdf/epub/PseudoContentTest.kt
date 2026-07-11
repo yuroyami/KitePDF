@@ -20,7 +20,7 @@ class PseudoContentTest {
      */
     private fun drawnText(body: String, css: String): String {
         val doc = EpubDocument.open(EpubFixtures.epub("<body><style>$css</style>$body</body>"))
-            ?: error("fixture failed to open")
+           
         for (page in doc.pages) RecordingCanvas().also { page.renderTo(it) }
         return doc.pages.joinToString("\n") { it.textContent().plainText }
     }
@@ -76,7 +76,7 @@ class PseudoContentTest {
             EpubFixtures.epub(
                 """<body><style>p::before{content:"HEAD";display:block}</style><p>body text</p></body>""",
             ),
-        ) ?: error("fixture failed to open")
+        )
         val blocks = doc.pages[0].textContent().blocks
         assertEquals(2, blocks.size, "the block pseudo is its own text block")
         assertEquals("HEAD", blocks[0].lines.single().text)
@@ -89,7 +89,7 @@ class PseudoContentTest {
             EpubFixtures.epub(
                 """<body><style>h2::before{content:"Chapter "}</style><h2>One</h2></body>""",
             ),
-        ) ?: error("fixture failed to open")
+        )
         assertTrue(doc.search("Chapter One").toList().isNotEmpty())
     }
 

@@ -111,7 +111,7 @@ class WoffTest {
             EpubFixtures.epub("<body><style>$css</style><p>中文字</p></body>", listOf("OEBPS/font.woff" to woff)),
         )
         assertNotNull(doc)
-        val runs = doc!!.pages.flatMap { page ->
+        val runs = doc.pages.flatMap { page ->
             RecordingCanvas().also { page.renderTo(it) }.calls.filterIsInstance<RecordingCanvas.Call.Glyphs>()
         }
         assertTrue(

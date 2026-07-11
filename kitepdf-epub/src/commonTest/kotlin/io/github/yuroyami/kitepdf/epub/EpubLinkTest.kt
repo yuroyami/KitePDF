@@ -23,7 +23,7 @@ class EpubLinkTest {
                     filler(2) + """<h2 id="deep">Deep</h2>""",
                 ),
             ),
-        ) ?: error("fixture failed to open")
+        )
         val links = doc.pages[0].links
         assertEquals(1, links.size)
         assertEquals("OEBPS/chapter2.xhtml#deep", links[0].href, "relative href resolves to a zip path + fragment")
@@ -48,7 +48,7 @@ class EpubLinkTest {
                     filler(60) + """<h2 id="deep">Deep target</h2>""",
                 ),
             ),
-        ) ?: error("fixture failed to open")
+        )
         val spineStart = doc.pageIndexOfHref("OEBPS/chapter3.xhtml")
         val deep = doc.pageIndexOfHref("OEBPS/chapter3.xhtml#deep")
         assertTrue(spineStart != null && deep != null)
@@ -60,7 +60,7 @@ class EpubLinkTest {
     fun fragment_only_link_targets_its_own_document() {
         val doc = EpubDocument.open(
             EpubFixtures.epub("<body><p><a href=\"#local\">jump</a></p>" + filler(60) + "<p id=\"local\">target</p></body>"),
-        ) ?: error("fixture failed to open")
+        )
         assertEquals("OEBPS/chapter1.xhtml#local", doc.pages[0].links.single().href)
         val target = doc.pageIndexOfHref("OEBPS/chapter1.xhtml#local")
         assertTrue(target != null && target > 0, "the local anchor sits pages later (got $target)")
@@ -70,7 +70,7 @@ class EpubLinkTest {
     fun external_urls_stay_verbatim_and_do_not_navigate() {
         val doc = EpubDocument.open(
             EpubFixtures.epub("""<body><p><a href="https://example.com/a#b">out</a></p></body>"""),
-        ) ?: error("fixture failed to open")
+        )
         assertEquals("https://example.com/a#b", doc.pages[0].links.single().href)
         assertNull(doc.pageIndexOfHref("https://example.com/a#b"))
     }
@@ -83,7 +83,7 @@ class EpubLinkTest {
                     "<p>x <span id=\"spanchor\">y</span> z</p>" +
                     "<p>legacy <a name=\"named\">anchor</a></p></body>",
             ),
-        ) ?: error("fixture failed to open")
+        )
         val spanPage = doc.pageIndexOfHref("OEBPS/chapter1.xhtml#spanchor")
         val namedPage = doc.pageIndexOfHref("OEBPS/chapter1.xhtml#named")
         assertTrue(spanPage != null && spanPage > 0, "inline id resolves past page 0 (got $spanPage)")
@@ -94,7 +94,7 @@ class EpubLinkTest {
     fun unknown_fragment_falls_back_to_the_document_start() {
         val doc = EpubDocument.open(
             EpubFixtures.epubMultiSpine(listOf(filler(3), filler(3))),
-        ) ?: error("fixture failed to open")
+        )
         val start = doc.pageIndexOfHref("OEBPS/chapter2.xhtml")
         assertEquals(start, doc.pageIndexOfHref("OEBPS/chapter2.xhtml#no-such-id"))
         assertNull(doc.pageIndexOfHref("OEBPS/nope.xhtml"))

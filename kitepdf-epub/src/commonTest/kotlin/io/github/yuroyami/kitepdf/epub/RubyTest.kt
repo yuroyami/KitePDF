@@ -16,7 +16,7 @@ import kotlin.test.assertTrue
 class RubyTest {
 
     private fun glyphCalls(body: String): List<RecordingCanvas.Call.Glyphs> {
-        val doc = EpubDocument.open(EpubFixtures.epub(body)) ?: error("fixture failed to open")
+        val doc = EpubDocument.open(EpubFixtures.epub(body))
         return doc.pages.flatMap { page ->
             RecordingCanvas().also { page.renderTo(it) }.calls
                 .filterIsInstance<RecordingCanvas.Call.Glyphs>()

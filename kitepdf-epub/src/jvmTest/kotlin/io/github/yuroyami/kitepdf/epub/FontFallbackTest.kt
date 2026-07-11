@@ -67,7 +67,7 @@ class FontFallbackTest {
                 "<body><style>$css</style><p>a中b</p></body>",
                 listOf("OEBPS/main.otf" to latin, "OEBPS/cjk.ttf" to cjk),
             ),
-        ) ?: error("fixture book failed to open")
+        )
         val runs = glyphRuns(doc)
         val hanRun = runs.firstOrNull { r -> r.glyphs.any { it.text == "中" } }
             ?: error("the CJK char was not drawn at all")
@@ -87,7 +87,7 @@ class FontFallbackTest {
                 "<body><style>$css</style><p>a中b</p></body>",
                 listOf("OEBPS/main.otf" to latin),
             ),
-        ) ?: error("fixture book failed to open")
+        )
         val runs = glyphRuns(doc)
         val hanRun = runs.firstOrNull { r -> r.glyphs.any { it.text == "中" } }
             ?: error("the CJK char was not drawn at all")
@@ -102,7 +102,7 @@ class FontFallbackTest {
         while (d != null && !File(d, "settings.gradle.kts").exists()) d = d.parentFile
         val book = d?.let { File(it, "corpus/epub") }?.listFiles { f -> f.extension == "epub" }
             ?.minByOrNull { it.length() } ?: return // corpus not present: skip
-        val doc = EpubDocument.open(book.readBytes()) ?: return
+        val doc = EpubDocument.open(book.readBytes())
         for (page in doc.pages) {
             val calls = RecordingCanvas().also { page.renderTo(it) }.calls
             for (run in calls.filterIsInstance<RecordingCanvas.Call.Glyphs>()) {

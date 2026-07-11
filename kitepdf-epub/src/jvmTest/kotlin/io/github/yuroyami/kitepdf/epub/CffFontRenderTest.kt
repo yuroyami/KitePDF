@@ -62,7 +62,7 @@ class CffFontRenderTest {
                 "<body><style>$css</style><p>$text</p></body>",
                 listOf("OEBPS/font.otf" to bytes),
             )
-            val doc = EpubDocument.open(epub) ?: continue
+            val doc = EpubDocument.open(epub)
             val runs = doc.pages.flatMap { page ->
                 RecordingCanvas().also { page.renderTo(it) }.calls
                     .filterIsInstance<RecordingCanvas.Call.Glyphs>()

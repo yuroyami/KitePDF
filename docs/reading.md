@@ -14,6 +14,12 @@ val doc = PdfDocument.open(bytes)
 println("${doc.pageCount} pages: PDF ${doc.version}")
 ```
 
+`open` throws (`PdfFormatException`, `WrongPasswordException`) on files it
+cannot read. When null-on-failure fits your call site better, use
+`PdfDocument.openOrNull(bytes)`; the EPUB handler has the matching pair
+(`EpubDocument.open` throws `EpubFormatException` with a message naming the
+first structural failure, `EpubDocument.openOrNull` returns null instead).
+
 ### Encrypted PDFs
 
 PDF encryption is transparent; pass the password to unlock it:

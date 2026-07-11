@@ -78,7 +78,7 @@ class KerningTest {
             val css = "@font-face{font-family:'K';src:url(font.$ext)}p{font-family:'K'}"
             val doc = EpubDocument.open(
                 EpubFixtures.epub("<body><style>$css</style><p>$text</p></body>", listOf("OEBPS/font.$ext" to bytes)),
-            ) ?: continue
+            )
             val glyphs = doc.pages.flatMap { page ->
                 RecordingCanvas().also { page.renderTo(it) }.calls
                     .filterIsInstance<RecordingCanvas.Call.Glyphs>()

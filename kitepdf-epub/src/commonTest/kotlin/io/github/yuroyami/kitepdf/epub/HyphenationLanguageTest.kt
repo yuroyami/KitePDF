@@ -18,7 +18,7 @@ class HyphenationLanguageTest {
         EpubDocument.open(
             EpubFixtures.epub(body, language = language),
             EpubSettings(pageWidth = pageWidth, pageHeight = 640.0),
-        ) ?: error("fixture failed to open")
+        )
 
     @Test
     fun body_lang_attribute_wins() {

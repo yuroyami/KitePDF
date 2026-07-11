@@ -69,7 +69,7 @@ class PageBreakTest {
     // ---- forced breaks, end-to-end -----------------------------------------
 
     private fun pageTexts(bytes: ByteArray): List<String> {
-        val doc = EpubDocument.open(bytes, pageHeight = 2000.0)!!
+        val doc = EpubDocument.open(bytes, pageHeight = 2000.0)
         return doc.pages.map { page ->
             RecordingCanvas().also { page.renderTo(it) }.calls
                 .filterIsInstance<RecordingCanvas.Call.Glyphs>().joinToString("") { it.text }

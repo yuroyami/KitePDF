@@ -103,7 +103,7 @@ class BoxModelCompletenessTest {
                     "OEBPS/cycle.css" to cycle.encodeToByteArray(),
                 ),
             ),
-        ) ?: error("fixture failed to open")
+        )
         val runs = doc.pages.flatMap { page ->
             RecordingCanvas().also { page.renderTo(it) }.calls.filterIsInstance<RecordingCanvas.Call.Glyphs>()
         }
@@ -115,7 +115,7 @@ class BoxModelCompletenessTest {
         // A 2x1 image in a 50x50 box: cover scale = 50 -> drawn 100x50, clipped.
         val body = """<body><p><img src="i.png" style="display:block;width:50pt;height:50pt;object-fit:cover"/></p></body>"""
         val doc = EpubDocument.open(EpubFixtures.epub(body, listOf("OEBPS/i.png" to minimalGrayPng())))
-            ?: error("fixture failed to open")
+           
         val calls = RecordingCanvas().also { doc.pages[0].renderTo(it) }.calls
         val clipIdx = calls.indexOfFirst { it is RecordingCanvas.Call.PushClip }
         val img = calls.filterIsInstance<RecordingCanvas.Call.Image>().single()

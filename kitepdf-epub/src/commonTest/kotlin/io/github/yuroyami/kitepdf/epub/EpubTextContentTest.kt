@@ -15,7 +15,7 @@ class EpubTextContentTest {
 
     private fun open(body: String, pageWidth: Double = 400.0): EpubDocument =
         EpubDocument.open(EpubFixtures.epub(body), EpubSettings(pageWidth = pageWidth, pageHeight = 640.0))
-            ?: error("fixture failed to open")
+           
 
     @Test
     fun extraction_restores_words_and_blocks() {

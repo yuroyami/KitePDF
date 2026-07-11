@@ -42,7 +42,7 @@ class MetadataTocTest {
               </manifest>
               <spine page-progression-direction="rtl"><itemref idref="c1"/></spine>
             </package>"""
-        val doc = EpubDocument.open(pkg(opf, listOf("OEBPS/cover.png" to byteArrayOf(1, 2, 3), "OEBPS/ch1.xhtml" to chapter("hi"))))!!
+        val doc = EpubDocument.open(pkg(opf, listOf("OEBPS/cover.png" to byteArrayOf(1, 2, 3), "OEBPS/ch1.xhtml" to chapter("hi"))))
         val m = doc.epubMetadata
         assertEquals("My Great Book", m.title)
         assertEquals(listOf("Jane Doe", "John Smith"), m.creators)
@@ -63,7 +63,7 @@ class MetadataTocTest {
               </manifest>
               <spine><itemref idref="c1"/></spine>
             </package>"""
-        val doc = EpubDocument.open(pkg(opf, listOf("OEBPS/images/c.png" to byteArrayOf(1), "OEBPS/ch1.xhtml" to chapter("hi"))))!!
+        val doc = EpubDocument.open(pkg(opf, listOf("OEBPS/images/c.png" to byteArrayOf(1), "OEBPS/ch1.xhtml" to chapter("hi"))))
         assertEquals("OEBPS/images/c.png", doc.epubMetadata.coverImagePath)
         assertTrue(!doc.epubMetadata.rightToLeft, "default is left-to-right")
     }
@@ -87,7 +87,7 @@ class MetadataTocTest {
               <li><a href="ch2.xhtml#top">Chapter Two</a></li>
             </ol></nav>
             </body></html>""")
-        val doc = EpubDocument.open(pkg(opf, listOf("OEBPS/nav.xhtml" to nav, "OEBPS/ch1.xhtml" to chapter("a"), "OEBPS/ch2.xhtml" to chapter("b"))))!!
+        val doc = EpubDocument.open(pkg(opf, listOf("OEBPS/nav.xhtml" to nav, "OEBPS/ch1.xhtml" to chapter("a"), "OEBPS/ch2.xhtml" to chapter("b"))))
         val toc = doc.tableOfContents
         assertEquals(2, toc.entries.size, "the toc nav is used, not landmarks")
         assertEquals("Chapter One", toc.entries[0].label)
@@ -116,7 +116,7 @@ class MetadataTocTest {
             </navPoint>
             <navPoint><navLabel><text>Two</text></navLabel><content src="ch2.xhtml"/></navPoint>
             </navMap></ncx>""")
-        val doc = EpubDocument.open(pkg(opf, listOf("OEBPS/toc.ncx" to ncx, "OEBPS/ch1.xhtml" to chapter("a"), "OEBPS/ch2.xhtml" to chapter("b"))))!!
+        val doc = EpubDocument.open(pkg(opf, listOf("OEBPS/toc.ncx" to ncx, "OEBPS/ch1.xhtml" to chapter("a"), "OEBPS/ch2.xhtml" to chapter("b"))))
         val toc = doc.tableOfContents
         assertEquals(2, toc.entries.size)
         assertEquals("One", toc.entries[0].label)
@@ -135,7 +135,7 @@ class MetadataTocTest {
               <manifest><item id="c1" href="ch1.xhtml" media-type="application/xhtml+xml"/></manifest>
               <spine><itemref idref="c1"/></spine>
             </package>"""
-        val doc = EpubDocument.open(pkg(opf, listOf("OEBPS/ch1.xhtml" to chapter("hi"))))!!
+        val doc = EpubDocument.open(pkg(opf, listOf("OEBPS/ch1.xhtml" to chapter("hi"))))
         assertTrue(doc.tableOfContents.isEmpty)
     }
 }
