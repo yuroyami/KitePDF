@@ -97,6 +97,40 @@ class StandardSecurityHandler(
         }
     }
 
+    /* ─── Write-side encrypt API (T-83) ──────────────────────────────────── */
+
+    /**
+     * Whether [Encryptor] can produce new objects matching this handler's
+     * parameters: the document must be authenticated and use AES (V4 /AESV2
+     * or V5/V6). Legacy RC4 documents are read-only.
+     */
+    val supportsWrite: Boolean
+        get() = fileKey != null && (
+            v >= 5 || (v == 4 && stmAlgorithm != V4Algo.RC4 && strAlgorithm != V4Algo.RC4)
+            )
+
+    /** Encrypt a stream's raw bytes with a caller-supplied 16-byte [iv]. */
+    internal fun encryptStream(objNum: Long, genNum: Int, plaintext: ByteArray, iv: ByteArray): ByteArray =
+        encrypt(objNum, genNum, plaintext, isString = false, iv = iv)
+
+    /** Encrypt a literal string's bytes with a caller-supplied 16-byte [iv]. */
+    internal fun encryptString(objNum: Long, genNum: Int, plaintext: ByteArray, iv: ByteArray): ByteArray =
+        encrypt(objNum, genNum, plaintext, isString = true, iv = iv)
+
+    private fun encrypt(objNum: Long, genNum: Int, plaintext: ByteArray, isString: Boolean, iv: ByteArray): ByteArray {
+        val key = fileKey ?: throw IllegalStateException("cannot encrypt: document not authenticated")
+        if (v >= 5) return Aes.encryptCbc(key, iv, plaintext)
+        val algorithm = if (isString) strAlgorithm else stmAlgorithm
+        return when (algorithm) {
+            V4Algo.NONE -> plaintext
+            V4Algo.AESV2 -> {
+                val objKey = derivePerObjectKey(key, objNum, genNum, useAesV2 = true)
+                Aes.encryptCbc(objKey, iv, plaintext)
+            }
+            V4Algo.RC4 -> throw IllegalStateException("RC4 write support is intentionally absent")
+        }
+    }
+
     /* ─── V1/V2/V4 derivation (Algorithm 2, ISO 32000-1 §7.6.4.3.2) ──────── */
 
     private fun tryUserPassword(password: ByteArray, fileId: ByteArray): ByteArray? {
@@ -242,44 +276,8 @@ class StandardSecurityHandler(
         return null
     }
 
-    /**
-     * R5: plain SHA-256(password ++ salt [++ udata]).
-     * R6 (PDF 2.0): Algorithm 2.B iterated hardening on top of that initial hash.
-     * [udata] is the 48-byte /U value when validating an owner password, empty
-     * for a user password.
-     */
-    private fun hash2B(password: ByteArray, salt: ByteArray, udata: ByteArray): ByteArray {
-        var k = Sha256.hash(password + salt + udata)
-        if (r != 6) return k  // R5 (and any non-R6 V5) stops at the single SHA-256.
-
-        // Algorithm 2.B (ISO 32000-2 §7.6.4.3.4). `round` counts rounds already
-        // completed; the loop runs at least 64 rounds and keeps going until the
-        // last byte of E is <= round - 32.
-        var round = 0
-        var lastE = 0
-        while (round < 64 || (lastE and 0xFF) > round - 32) {
-            // K1 = (password ++ K ++ udata) repeated 64 times.
-            val block = password + k + udata
-            val k1 = ByteArray(block.size * 64)
-            for (i in 0 until 64) block.copyInto(k1, i * block.size)
-
-            // E = AES-128-CBC(no-pad) with key=K[0:16], iv=K[16:32].
-            val e = Aes.encryptCbcNoPadding(k.copyOfRange(0, 16), k.copyOfRange(16, 32), k1)
-
-            // modulus = (sum of first 16 bytes of E) mod 3.
-            var sum = 0
-            for (i in 0 until 16) sum += e[i].toInt() and 0xFF
-            k = when (sum % 3) {
-                0 -> Sha256.hash(e)
-                1 -> Sha512.hash384(e)
-                else -> Sha512.hash(e)
-            }
-
-            lastE = e[e.size - 1].toInt()
-            round++
-        }
-        return k.copyOf(32)
-    }
+    private fun hash2B(password: ByteArray, salt: ByteArray, udata: ByteArray): ByteArray =
+        hash2B(password, salt, udata, r6 = r == 6)
 
     /* ─── Helpers ─────────────────────────────────────────────────────────── */
 
@@ -317,6 +315,46 @@ class StandardSecurityHandler(
     private enum class V4Algo { RC4, AESV2, NONE }
 
     companion object {
+        /**
+         * R5: plain SHA-256(password ++ salt [++ udata]).
+         * R6 (PDF 2.0): Algorithm 2.B iterated hardening on top of that initial
+         * hash. [udata] is the 48-byte /U value when the password being hashed
+         * is the owner password, empty for a user password. Shared with the
+         * write side ([Encryptor] creates V5 R6 material with the same math).
+         */
+        internal fun hash2B(password: ByteArray, salt: ByteArray, udata: ByteArray, r6: Boolean): ByteArray {
+            var k = Sha256.hash(password + salt + udata)
+            if (!r6) return k  // R5 (and any non-R6 V5) stops at the single SHA-256.
+
+            // Algorithm 2.B (ISO 32000-2 §7.6.4.3.4). `round` counts rounds already
+            // completed; the loop runs at least 64 rounds and keeps going until the
+            // last byte of E is <= round - 32.
+            var round = 0
+            var lastE = 0
+            while (round < 64 || (lastE and 0xFF) > round - 32) {
+                // K1 = (password ++ K ++ udata) repeated 64 times.
+                val block = password + k + udata
+                val k1 = ByteArray(block.size * 64)
+                for (i in 0 until 64) block.copyInto(k1, i * block.size)
+
+                // E = AES-128-CBC(no-pad) with key=K[0:16], iv=K[16:32].
+                val e = Aes.encryptCbcNoPadding(k.copyOfRange(0, 16), k.copyOfRange(16, 32), k1)
+
+                // modulus = (sum of first 16 bytes of E) mod 3.
+                var sum = 0
+                for (i in 0 until 16) sum += e[i].toInt() and 0xFF
+                k = when (sum % 3) {
+                    0 -> Sha256.hash(e)
+                    1 -> Sha512.hash384(e)
+                    else -> Sha512.hash(e)
+                }
+
+                lastE = e[e.size - 1].toInt()
+                round++
+            }
+            return k.copyOf(32)
+        }
+
         /** 32-byte standard padding string from ISO 32000-1 §7.6.4.3. */
         private val PAD = byteArrayOf(
             0x28, 0xBF.toByte(), 0x4E, 0x5E, 0x4E, 0x75, 0x8A.toByte(), 0x41,

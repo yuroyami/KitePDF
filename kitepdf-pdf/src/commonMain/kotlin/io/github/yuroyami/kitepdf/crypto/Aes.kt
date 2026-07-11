@@ -42,6 +42,12 @@ object Aes {
         return decryptBlock(block, expandKey(key))
     }
 
+    /** Encrypt one ECB block (used for the V5 /Perms entry, Algorithm 10). */
+    fun encryptEcb(key: ByteArray, block: ByteArray): ByteArray {
+        require(block.size == 16) { "AES ECB block must be 16 bytes" }
+        return encryptBlock(block, expandKey(key))
+    }
+
     /** Encrypt CBC-mode plaintext, prepending the IV. PKCS#7 padding. */
     fun encryptCbc(key: ByteArray, iv: ByteArray, plaintext: ByteArray): ByteArray {
         require(key.size == 16 || key.size == 32)
