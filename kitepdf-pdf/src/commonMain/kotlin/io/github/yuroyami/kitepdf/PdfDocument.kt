@@ -603,6 +603,47 @@ public class PdfDocument private constructor(
             return finish(PdfDocument(version, bytes, repaired.entries, repaired.trailer, sec))
         }
 
+        /**
+         * [open] with a String password.
+         *
+         * Encoding rule (follows MuPDF): the password is tried as raw UTF-8
+         * bytes first. ISO 32000-2 nominally wants SASLprep for R6/V5, but
+         * every real implementation, MuPDF included, uses plain UTF-8. If
+         * UTF-8 fails to authenticate and the string contains non-ASCII
+         * characters, the same string is retried once encoded as Latin-1
+         * (code points above U+00FF become '?'), which is the practical
+         * PDFDocEncoding rule legacy R<=4 files expect. The ByteArray
+         * overload remains the escape hatch for exotic encodings.
+         */
+        public fun open(
+            bytes: ByteArray,
+            password: String,
+            allowInvalidPassword: Boolean = false,
+        ): PdfDocument {
+            val utf8 = password.encodeToByteArray()
+            if (password.all { it.code <= 0x7F }) return open(bytes, utf8, allowInvalidPassword)
+            val latin1 = ByteArray(password.length) { i ->
+                val c = password[i].code
+                (if (c <= 0xFF) c else '?'.code).toByte()
+            }
+            val first = try {
+                open(bytes, utf8, allowInvalidPassword)
+            } catch (e: WrongPasswordException) {
+                return try {
+                    open(bytes, latin1, allowInvalidPassword)
+                } catch (_: WrongPasswordException) {
+                    throw e
+                }
+            }
+            if (first.isEncrypted && !first.isAuthenticated) {
+                // allowInvalidPassword=true path: the UTF-8 attempt opened
+                // read-only without authenticating; give Latin-1 one shot.
+                val second = open(bytes, latin1, allowInvalidPassword = true)
+                if (second.isAuthenticated) return second
+            }
+            return first
+        }
+
         /** [open], but null instead of an exception on a malformed or unauthenticated file. */
         public fun openOrNull(
             bytes: ByteArray,

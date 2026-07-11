@@ -31,12 +31,48 @@ class EncryptionIntegrationTest {
         assertContains(doc.pages[0].extractText(), "Encrypted hello")
     }
 
+    /* ─── T-27: String password overload ─────────────────────────────────── */
+
+    @Test
+    fun string_overload_opens_rc4_with_ascii_password() {
+        val bytes = buildEncryptedPdf(
+            visibleContent = "BT /F1 18 Tf 72 720 Td (Legacy secret) Tj ET",
+            userPassword = "secret".encodeToByteArray(),
+        )
+        val doc = PdfDocument.open(bytes, "secret")
+        assertTrue(doc.isEncrypted && doc.isAuthenticated, "ASCII String password authenticates R2/RC4")
+        assertContains(doc.pages[0].extractText(), "Legacy secret")
+    }
+
+    @Test
+    fun string_overload_opens_aes256_with_non_ascii_password() {
+        val bytes = io.github.yuroyami.kitepdf.writer.PdfBuilder()
+            .page { text(io.github.yuroyami.kitepdf.writer.StandardFont.Helvetica, 18.0, 72.0, 720.0, "Tres secret") }
+            .encrypt(userPassword = "h\u00e9llo", random = kotlin.random.Random(7))
+            .build()
+        val doc = PdfDocument.open(bytes, "h\u00e9llo")
+        assertTrue(doc.isEncrypted && doc.isAuthenticated, "non-ASCII String password authenticates V5/R6 via UTF-8")
+        assertContains(doc.pages[0].extractText(), "Tres secret")
+
+        var wrong = false
+        try {
+            PdfDocument.open(bytes, "h\u00e8llo")
+        } catch (_: io.github.yuroyami.kitepdf.core.WrongPasswordException) {
+            wrong = true
+        }
+        assertTrue(wrong, "a different non-ASCII password must not authenticate")
+    }
+
     /* ─── Encrypted-PDF builder ──────────────────────────────────────────── */
 
-    private fun buildEncryptedPdf(visibleContent: String): ByteArray {
+    private fun buildEncryptedPdf(visibleContent: String, userPassword: ByteArray = byteArrayOf()): ByteArray {
         // ── Encryption parameters (V=1, R=2, Length=40) ────────────────────
         val padding = standardPadding
-        val paddedPassword = ByteArray(32).also { padding.copyInto(it, 0) }   // empty user pwd
+        val paddedPassword = ByteArray(32).also {
+            val n = minOf(userPassword.size, 32)
+            userPassword.copyInto(it, 0, 0, n)
+            padding.copyInto(it, n, 0, 32 - n)
+        }
         val paddedOwner = ByteArray(32).also { padding.copyInto(it, 0) }      // empty owner pwd
         val permissions = -1
         val fileId = ByteArray(16) { it.toByte() }                            // arbitrary 16-byte ID
