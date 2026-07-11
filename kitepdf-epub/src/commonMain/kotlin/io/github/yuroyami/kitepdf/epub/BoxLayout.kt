@@ -52,8 +52,20 @@ internal class BoxLayout(
      * untouched: extra height is leading, as readers expect.
      */
     private val lineHeightScale: Double = 1.0,
+    /**
+     * Vertical writing (T-72, `writing-mode: vertical-rl`). Layout keeps its
+     * logical axes (the "width" passed to [layout] is the page content
+     * HEIGHT); only glyph advances change: upright full-width glyphs use the
+     * face's `vmtx` advance (else 1em). The paint side rotates the result.
+     */
+    private val vertical: Boolean = false,
 ) {
     private val hyphenator by lazy { Hyphenator.forLanguage(language) ?: Hyphenator.enUs() }
+
+    /** Logical pen advance of [gid] in 1/1000 em, honouring vertical mode for upright glyphs. */
+    private fun penAdvance1000(face: EmbeddedFace, gid: Int, ch: Char): Int =
+        if (vertical && FontMetrics.isWide(ch.code)) face.advanceHeight1000(gid) ?: 1000
+        else face.advance1000(gid)
 
     /**
      * A float's exclusion band: text lines whose y-range overlaps it shorten
@@ -767,7 +779,7 @@ internal class BoxLayout(
                 }
                 val cell = if (f != null) {
                     val gid = if (smcpGid >= 0) smcpGid else f.gidFor(c.code)
-                    Cell(c, f.advance1000(gid) * cellFs / 1000.0, cellFs, spec, run.color, shift, run.underline, f, gid,
+                    Cell(c, penAdvance1000(f, gid, c) * cellFs / 1000.0, cellFs, spec, run.color, shift, run.underline, f, gid,
                         rubyGroup = run.rubyGroup, rubyText = run.rubyText, href = run.href)
                 } else {
                     Cell(c, FontMetrics.advancePt(c, cellFs, run.bold, run.italic, run.family), cellFs, spec, run.color, shift, run.underline,
@@ -1083,7 +1095,7 @@ internal class BoxLayout(
         for (ch in reading) {
             if (face != null) {
                 val gid = face.gidFor(ch.code)
-                val adv = face.advance1000(gid).toDouble()
+                val adv = penAdvance1000(face, gid, ch).toDouble()
                 glyphs.add(TextGlyph(0, 1, gid, ch.toString(), adv, face.outline(gid), ch == ' '))
                 w += adv * fs / 1000.0
             } else {
@@ -1108,7 +1120,7 @@ internal class BoxLayout(
             byteOffset = 0, byteCount = 1, gid = c.gid, text = c.ch.toString(),
             // Pair kerning to the next glyph is folded into this glyph's advance so
             // the drawn pen movement matches the wrap width.
-            advanceWidth = (face.advance1000(c.gid) + c.kernAfter1000).toDouble(),
+            advanceWidth = (penAdvance1000(face, c.gid, c.ch) + c.kernAfter1000).toDouble(),
             outline = face.outline(c.gid), isWordSpace = c.ch == ' ',
             xOffset = c.glyphXOffset, yOffset = c.glyphYOffset,
         )

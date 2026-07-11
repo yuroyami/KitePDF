@@ -129,6 +129,32 @@ class EpubDocument internal constructor(
         BlockBox(ComputedStyle.initial(settings.fontSize, direction = parsed.baseDir), docRoots)
     }
 
+    /**
+     * Vertical writing (T-72): true when the first spine root resolves
+     * `writing-mode: vertical-rl` (Japanese tategaki). One mode per document;
+     * mixed horizontal/vertical spines follow the first (a noted limit).
+     * Fixed-layout books stay on the pre-paginated path regardless.
+     */
+    internal val isVertical: Boolean by lazy {
+        if (parsed.fixedLayout) return@lazy false
+        // The spine root box wraps the document node (initial style); the html
+        // element's computed style sits one level down and body's below that,
+        // so walk the first-child chain a few levels.
+        var box: LayoutBox? = docRoots.firstOrNull()
+        var depth = 0
+        while (box != null && depth < 4) {
+            val s = when (box) {
+                is BlockBox -> box.style
+                is TextBlockBox -> box.style
+                else -> null
+            }
+            if (s?.writingMode == io.github.yuroyami.kitepdf.epub.css.WritingMode.VERTICAL_RL) return@lazy true
+            box = (box as? BlockBox)?.children?.firstOrNull()
+            depth++
+        }
+        false
+    }
+
     private val fixedSpines: List<FixedSpine>? by lazy {
         if (!parsed.fixedLayout) null
         else docRoots.indices.map { FixedSpine(docRoots[it], parsed.spines[it].viewport.first, parsed.spines[it].viewport.second) }
@@ -161,9 +187,15 @@ class EpubDocument internal constructor(
                 .layout(spine.root, spine.width)
             Paginator.paginateFixed(spine.root, spine.width, spine.height)
         }
-        BoxLayout(::loadImage, ::loadSvg, pageContentHeight, parsed.fonts, documentLanguage, settings.lineHeightScale)
-            .layout(root, contentWidth)
-        Paginator.paginate(root, settings.pageWidth, settings.pageHeight, settings.margin)
+        // Vertical writing swaps the budgets: the inline (line-length) budget is
+        // the page content HEIGHT and each page holds contentWidth of columns.
+        val inlineBudget = if (isVertical) pageContentHeight else contentWidth
+        val blockBudget = if (isVertical) contentWidth else pageContentHeight
+        BoxLayout(
+            ::loadImage, ::loadSvg, blockBudget, parsed.fonts, documentLanguage,
+            settings.lineHeightScale, vertical = isVertical,
+        ).layout(root, inlineBudget)
+        Paginator.paginate(root, settings.pageWidth, settings.pageHeight, settings.margin, vertical = isVertical)
     }
 
     /** The reflowed pages, ready to render. */
@@ -590,6 +622,10 @@ class EpubPage internal constructor(
     private fun displayY(docY: Double): Double = page.margin + (docY - page.startY)
 
     override fun renderTo(canvas: PdfCanvas, deviceCtm: Matrix) {
+        if (page.vertical) {
+            renderVerticalTo(canvas, deviceCtm)
+            return
+        }
         canvas.beginPage(width, height, deviceCtm)
         val margin = page.margin
         val startY = page.startY
@@ -668,6 +704,138 @@ class EpubPage internal constructor(
             canvas.drawImage(img, deviceCtm.concat(m))
         }
         canvas.endPage()
+    }
+
+    /**
+     * Vertical-rl painting (T-72): the logical layout maps onto physical
+     * columns advancing right-to-left, the inline axis running down the page.
+     * Full-width glyphs stand upright, centred on the column's em axis;
+     * everything else rotates 90 degrees clockwise around the shared baseline.
+     */
+    private fun renderVerticalTo(canvas: PdfCanvas, deviceCtm: Matrix) {
+        canvas.beginPage(width, height, deviceCtm)
+        val margin = page.margin
+        val startY = page.startY
+        val bandBottom = startY + (width - 2 * margin)
+        // Logical block position -> the column's physical x (canvas space).
+        fun colX(v: Double) = width - margin - (v - startY)
+
+        doc.settings.backgroundColor?.let { bg ->
+            val rect = PdfPath.Builder().apply {
+                moveTo(0.0, 0.0); lineTo(width, 0.0); lineTo(width, height); lineTo(0.0, height); close()
+            }.build()
+            canvas.fillPath(rect, deviceCtm, bg, evenOdd = false)
+        }
+
+        for (box in page.decoBoxes) paintBoxVertical(box, canvas, deviceCtm, margin, startY, bandBottom, ::colX)
+
+        for (line in page.lines) {
+            for (run in line.runs) {
+                // The horizontal baseline maps to a vertical em axis at this x
+                // (a positive baselineShift moves toward the line-over side, so
+                // ruby lands to the RIGHT of its base column).
+                val xAxis = colX(line.yTop + line.ascent - run.baselineShift)
+                var pen = margin + run.x // display-y pen, running down the page
+                var k = 0
+                while (k < run.glyphs.size) {
+                    val g = run.glyphs[k]
+                    if (isUpright(g)) {
+                        val advPt = g.advanceWidth * run.fontSize / 1000.0
+                        // Counter-rotated in place: centred on the em axis, the em
+                        // box straddling the axis by the nominal ascent/descent.
+                        val x0 = xAxis + UPRIGHT_CENTER * run.fontSize - advPt / 2.0
+                        val baseline = pen + advPt / 2.0 + UPRIGHT_CENTER * run.fontSize
+                        canvas.drawGlyphs(
+                            run.glyphs.subList(k, k + 1), run.fontSize, unitsPerEm = run.unitsPerEm,
+                            hasOutlines = run.hasOutlines, fontSpec = run.fontSpec,
+                            textToDevice = deviceCtm.concat(Matrix.translation(x0, height - baseline)),
+                            color = run.color, alpha = 1.0, blendMode = BlendMode.Normal,
+                        )
+                        pen += advPt
+                        k++
+                    } else {
+                        // Rotated segment: one call whose pen advances down the page.
+                        var j = k
+                        var segAdv = 0.0
+                        while (j < run.glyphs.size && !isUpright(run.glyphs[j])) {
+                            segAdv += run.glyphs[j].advanceWidth * run.fontSize / 1000.0
+                            j++
+                        }
+                        val tm = Matrix(0.0, -1.0, 1.0, 0.0, xAxis, height - pen)
+                        canvas.drawGlyphs(
+                            run.glyphs.subList(k, j), run.fontSize, unitsPerEm = run.unitsPerEm,
+                            hasOutlines = run.hasOutlines, fontSpec = run.fontSpec,
+                            textToDevice = deviceCtm.concat(tm),
+                            color = run.color, alpha = 1.0, blendMode = BlendMode.Normal,
+                        )
+                        pen += segAdv
+                        k = j
+                    }
+                }
+            }
+            // Inline images rotate with the flow: the inline extent runs down
+            // the page, the height extends left of the baseline axis.
+            for (im in line.images) {
+                val xAxis = colX(line.yTop + line.ascent)
+                val top = margin + im.x
+                val svg = im.svg
+                if (svg != null && svg.width > 0 && svg.height > 0) {
+                    val m = Matrix(0.0, -im.width / svg.width, -im.height / svg.height, 0.0, xAxis + im.height, height - top)
+                    svg.render(canvas, deviceCtm.concat(m))
+                } else if (im.image != null) {
+                    val m = Matrix(0.0, -im.width, im.height, 0.0, xAxis, height - top)
+                    canvas.drawImage(im.image, deviceCtm.concat(m))
+                }
+            }
+        }
+
+        for (box in page.images) {
+            val left = colX(box.bottom)
+            val top = margin + box.x
+            val svg = box.svg
+            if (svg != null) {
+                val m = Matrix(0.0, -box.drawWidth / svg.width, -box.drawHeight / svg.height, 0.0, left + box.drawHeight, height - top)
+                svg.render(canvas, deviceCtm.concat(m))
+                continue
+            }
+            val img = box.image ?: continue
+            val m = Matrix(0.0, -box.drawWidth, box.drawHeight, 0.0, left, height - top)
+            canvas.drawImage(img, deviceCtm.concat(m))
+        }
+        canvas.endPage()
+    }
+
+    /** Upright in vertical flow: the full-width (CJK) codepoints; the rest rotate. */
+    private fun isUpright(g: io.github.yuroyami.kitepdf.font.TextGlyph): Boolean =
+        g.text.isNotEmpty() && FontMetrics.isWide(g.text[0].code)
+
+    /** [paintBox] under the vertical mapping: block spans columns, inline runs down. */
+    private fun paintBoxVertical(
+        box: LayoutBox, canvas: PdfCanvas, ctm: Matrix, margin: Double,
+        startY: Double, bandBottom: Double, colX: (Double) -> Double,
+    ) {
+        val s = box.style
+        val w = box.borderBoxWidth // inline extent (runs down the page)
+        val topDoc = maxOf(box.y, startY)
+        val botDoc = minOf(box.bottom, bandBottom)
+        if (botDoc <= topDoc || w <= 0.0) return
+        val yTopDisp = margin + box.x
+
+        fun fill(vFrom: Double, vTo: Double, uFrom: Double, uLen: Double, color: RgbColor) {
+            if (vTo <= vFrom || uLen <= 0.0) return
+            rectFill(canvas, ctm, colX(vTo), height - (uFrom + uLen), vTo - vFrom, uLen, color)
+        }
+
+        s.backgroundColor?.let { fill(topDoc, botDoc, yTopDisp, w, it) }
+
+        val eT = s.borderTop.effective; val eB = s.borderBottom.effective
+        val eL = s.borderLeft.effective; val eR = s.borderRight.effective
+        // Block-start (logical top) edge is the rightmost column edge; the
+        // inline-start/-end edges run across the clipped column band.
+        if (eT > 0) fill(maxOf(box.y, startY), minOf(box.y + eT, bandBottom), yTopDisp, w, s.borderTop.color)
+        if (eB > 0) fill(maxOf(box.bottom - eB, startY), minOf(box.bottom, bandBottom), yTopDisp, w, s.borderBottom.color)
+        if (eL > 0) fill(topDoc, botDoc, yTopDisp, eL, s.borderLeft.color)
+        if (eR > 0) fill(topDoc, botDoc, yTopDisp + w - eR, eR, s.borderRight.color)
     }
 
     private fun paintBox(
@@ -813,5 +981,12 @@ class EpubPage internal constructor(
     private companion object {
         /** Pen-gap threshold (in em) that reads as a collapsed word space. */
         const val SPACE_GAP_EM = 0.15
+
+        /**
+         * Vertical writing: offset (in em) from the mapped baseline axis to the
+         * em-box centre an upright glyph is centred on, assuming the nominal
+         * 0.88/0.12 ascent/descent split: (0.88 - 0.12) / 2.
+         */
+        const val UPRIGHT_CENTER = 0.38
     }
 }
