@@ -50,6 +50,13 @@ class PageRenderer(
     // painting op via [applyPendingClip].
     private var pendingClip = 0
 
+    // Type3 fonts (T-42): parsed char-proc data per font instance, plus the
+    // d1-uncolored flag — while true (inside a d1 glyph proc) every colour
+    // operator is a spec no-op so the glyph paints with the caller's fill
+    // colour (§9.6.5).
+    private val type3Data = HashMap<PdfFont, Type3Data?>()
+    private var type3IgnoreColor = false
+
     // Text render modes 4..7 (T-41): glyph outlines accumulate here in USER
     // space across the whole BT..ET block; ET intersects the union with the
     // clip (§9.3.3: the text clip applies after the text object ends and
@@ -646,7 +653,14 @@ class PageRenderer(
     /** Build the page resource → font dictionary, lazily resolving each entry. */
     private fun loadFonts(resources: PdfDictionary?): Map<String, PdfFont> {
         val fonts = resources?.getDict("Font", resolver) ?: return emptyMap()
-        return fonts.map.mapValues { (_, ref) -> PdfFont.from(ref, resolver) }
+        return fonts.map.mapValues { (_, ref) ->
+            val font = PdfFont.from(ref, resolver)
+            if (font.subtype == "Type3" && font !in type3Data) {
+                val dict = ref.resolve(resolver) as? PdfDictionary
+                type3Data[font] = dict?.let { Type3Data.parse(it, resolver) }
+            }
+            font
+        }
     }
 
     /** Build the page resource → XObject dictionary. Each entry is a stream. */
@@ -685,8 +699,15 @@ class PageRenderer(
         properties: Map<String, PdfObject>,
     ) {
         if (++dispatchedOps > MAX_DISPATCHED_OPS) return
+        // d1 (uncolored) Type3 glyph procs must not change colour state.
+        if (type3IgnoreColor && op.operator in TYPE3_COLOR_OPS) return
         val a = op.operands
         when (op.operator) {
+            // Type3 glyph metrics operators (§9.6.5): d0 declares a coloured
+            // glyph (nothing to do — wx/wy come from /Widths); d1 declares an
+            // uncoloured one, so colour operators are ignored from here on.
+            "d0" -> Unit
+            "d1" -> type3IgnoreColor = true
             // ─── State stack ──────────────────────────────────────────────
             "q" -> { state.save(); clipSaveStack.addLast(activeClipCount) }
             "Q" -> {
@@ -1270,6 +1291,12 @@ class PageRenderer(
         val textToUser = textMatrix.concat(Matrix(hScale, 0.0, 0.0, 1.0, 0.0, t.rise))
         val finalMatrix = pageMatrix.concat(textToUser)
 
+        // Type3 fonts draw by replaying char-proc content streams (T-42).
+        type3Data[font]?.let { data ->
+            showTextType3(state, bytes, t, data, textToUser)
+            return
+        }
+
         // Text render mode (Tr, §9.3.3): 3 = invisible; 7 = clip only (no paint).
         //   fill component:   modes 0,2,4,6
         //   stroke component: modes 1,2,5,6
@@ -1456,6 +1483,87 @@ class PageRenderer(
         return advance
     }
 
+    /**
+     * T-42: show a text run in a Type3 font. Each byte's glyph is a content
+     * stream replayed like a small form XObject under
+     * `CTM x textToUser x pen x fontSize x FontMatrix`, with the font's own
+     * /Resources (absent /Resources fall back to EMPTY maps — the spec's
+     * page-resource fallback is a rarely-exercised corner, noted in the
+     * ledger). The pen advances by `width x FontMatrix.a x fontSize` plus
+     * Tc/Tw, matching §9.6.5's glyph-space widths.
+     */
+    private fun showTextType3(
+        state: GraphicsStack,
+        bytes: ByteArray,
+        t: TextState,
+        data: Type3Data,
+        textToUser: Matrix,
+    ) {
+        val hidden = ocHidden()
+        var penX = 0.0
+        for (b in bytes) {
+            val code = b.toInt() and 0xFF
+            val proc = data.nameForCode[code]?.let { data.charProcs[it] }
+            if (!hidden && proc != null && formDepth < MAX_FORM_DEPTH) {
+                formDepth++
+                try {
+                    val glyphToUser = textToUser
+                        .concat(Matrix.translation(penX, 0.0))
+                        .concat(Matrix.scaling(t.fontSize, t.fontSize))
+                        .concat(data.fontMatrix)
+                    replayType3Proc(proc, data, state, glyphToUser)
+                } finally {
+                    formDepth--
+                }
+            }
+            var adv = data.widthFor(code) * data.fontMatrix.a * t.fontSize + t.charSpacing
+            if (code == 0x20) adv += t.wordSpacing
+            penX += adv
+        }
+        val hScale = t.horizontalScaling / 100.0
+        state.mutateText {
+            it.copy(textMatrix = it.textMatrix.concat(Matrix.translation(penX * hScale, 0.0)))
+        }
+    }
+
+    private fun replayType3Proc(
+        proc: PdfStream,
+        data: Type3Data,
+        parentState: GraphicsStack,
+        glyphToUser: Matrix,
+    ) {
+        val res = data.resources
+        val sh = loadShadings(res)
+        val fonts = loadFonts(res)
+        val xobjects = loadXObjects(res)
+        val colorSpaces = loadColorSpaces(res)
+        val extGStates = loadExtGStates(res)
+        val patterns = loadPatterns(res, sh)
+        val properties = loadProperties(res)
+
+        parentState.save()
+        parentState.replace(parentState.current.copy(
+            ctm = parentState.current.ctm.concat(glyphToUser),
+        ))
+        val savedPendingClip = pendingClip
+        pendingClip = 0
+        val savedIgnore = type3IgnoreColor
+        type3IgnoreColor = false // each proc decides via its own d1
+        val clipBase = activeClipCount
+        try {
+            val ops = ContentStreamParser.parse(
+                io.github.yuroyami.kitepdf.filters.FilterChain.decode(proc),
+            )
+            val pathBuilder = PdfPath.Builder()
+            for (op in ops) dispatch(op, parentState, pathBuilder, fonts, xobjects, colorSpaces, extGStates, sh, patterns, properties)
+        } finally {
+            type3IgnoreColor = savedIgnore
+            pendingClip = savedPendingClip
+            while (activeClipCount > clipBase) { canvas.popClip(); activeClipCount-- }
+            parentState.restore()
+        }
+    }
+
     /* ─── Helpers ────────────────────────────────────────────────────────── */
 
     private fun num(list: List<PdfObject>, idx: Int): Double = when (val v = list.getOrNull(idx)) {
@@ -1478,6 +1586,9 @@ class PageRenderer(
         const val MAX_TILES = 20_000L
         /** Max Form-XObject nesting depth before bailing (recursion guard). */
         const val MAX_FORM_DEPTH = 15
+
+        /** Colour operators ignored inside a d1 (uncolored) Type3 glyph (T-42). */
+        val TYPE3_COLOR_OPS = setOf("g", "G", "rg", "RG", "k", "K", "cs", "CS", "sc", "SC", "scn", "SCN")
         /**
          * Per-page dispatched-operation budget, counting tiling-pattern and
          * form-XObject replays. A crafted stream can stay under [MAX_TILES]
