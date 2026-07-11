@@ -24,8 +24,9 @@ import io.github.yuroyami.kitepdf.parser.PdfStream
  *   - `JBIG2Decode` → decoded in pure Kotlin ([Jbig2Decoder], the generic-region
  *     arithmetic path) into a 1-bpc DeviceGray RAW image; unsupported JBIG2
  *     flavours fall back to [Kind.JBIG2] with the payload in [encodedBytes].
- *   - `JPXDecode` (JPEG 2000) — recognised but not decoded yet; [encodedBytes]
- *     holds the raw payload.
+ *   - `JPXDecode` (JPEG 2000) → decoded in pure Kotlin ([JpxDecoder], part 1
+ *     baseline) into an 8-bpc RAW image; unsupported flavours fall back to
+ *     [Kind.JPEG2000] with the payload in [encodedBytes].
  *
  * Callers should switch on [kind] to pick the right rendering path. Stencil masks
  * (`/ImageMask true`) carry [isImageMask] and are tinted by [maskFill].
@@ -149,6 +150,35 @@ class ImageXObject internal constructor(
                         resolvedColorSpace = if (isMask) null else ColorSpace.DeviceGray,
                         decode = decodeArr, isImageMask = isMask, maskFill = fillColor,
                     ) else ImageXObject(
+                        width, height, bpc, cs, kind, stream.rawBytes,
+                        softMaskAlpha = alpha, softMaskWidth = smW, softMaskHeight = smH,
+                        resolvedColorSpace = resolvedCs, decode = decodeArr,
+                        isImageMask = isMask, maskFill = fillColor,
+                    )
+                }
+                // JPX (`JPXDecode`): pure-Kotlin JPEG 2000 decode (T-44) into an
+                // 8-bpc RAW image. A cdef opacity channel becomes the soft-mask
+                // alpha when /SMaskInData asks for it. Unsupported flavours fall
+                // back to the encoded kind (platform code may still handle them).
+                Kind.JPEG2000 -> {
+                    val raw = JpxDecoder.decode(stream.rawBytes)
+                    if (raw != null) {
+                        val smaskRaw = dict["SMaskInData"]
+                        val smaskInData = ((if (smaskRaw is io.github.yuroyami.kitepdf.parser.PdfReference) refs?.resolve(smaskRaw) else smaskRaw) as? PdfInt)
+                            ?.value?.toInt() ?: 0
+                        val useAlpha = smaskInData != 0 && raw.alpha != null
+                        ImageXObject(
+                            raw.width, raw.height, 8, raw.colorSpace, Kind.RAW,
+                            encodedBytes = ByteArray(0), pixelBytes = raw.pixelBytes,
+                            softMaskAlpha = if (useAlpha) raw.alpha else alpha,
+                            softMaskWidth = if (useAlpha) raw.width else smW,
+                            softMaskHeight = if (useAlpha) raw.height else smH,
+                            resolvedColorSpace = if (isMask) null else {
+                                if (raw.colorSpace == "DeviceRGB") ColorSpace.DeviceRGB else ColorSpace.DeviceGray
+                            },
+                            isImageMask = isMask, maskFill = fillColor,
+                        )
+                    } else ImageXObject(
                         width, height, bpc, cs, kind, stream.rawBytes,
                         softMaskAlpha = alpha, softMaskWidth = smW, softMaskHeight = smH,
                         resolvedColorSpace = resolvedCs, decode = decodeArr,
