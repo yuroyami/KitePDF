@@ -6,7 +6,7 @@ Render, extract, edit, or build PDFs across Android, iOS, JVM, web, and native d
 
 KitePDF's core engine (read, parse, edit, write, decrypt) is 100% common Kotlin and compiles for every target the Kotlin compiler supports. Rendering depends on which binding artifact ships for your platform:
 
-| Platform | Engine (`kitepdf`) | Compose (`kitepdf-compose`) | Native Renderer (`kitepdf-native-renderer`) | Skia (`kitepdf-skia`) |
+| Platform | Engine (`kitepdf`) | Compose (`kitepdf-compose-viewer`) | Native Renderer (`kitepdf-native-renderer`) | Skia (`kitepdf-skia-renderer`) |
 |---|:-:|:-:|:-:|:-:|
 | **Android** (API 21+) | ✓ | ✓ | ✓ | ✓ |
 | **iOS arm64** | ✓ | ✓ | ✓ | ✓ |
@@ -21,6 +21,14 @@ KitePDF's core engine (read, parse, edit, write, decrypt) is 100% common Kotlin 
 | **Windows** (mingwX64) | ✓ | – | – | – |
 | **Android NDK** (arm32/64, x86/64) | ✓ | – | – | – |
 | **WASI** | ✓ | – | – | – |
+
+!!! note "What CI actually tests"
+    Every push and pull request runs the full JVM test suite (all modules,
+    including the mutool differential oracle and the mutation fuzzer) on
+    Linux. Pushes to `main` additionally run the common test suites on the
+    iOS simulator (arm64) and macOS (arm64) for the core/pdf/epub modules,
+    plus the JS test suites on Node for core/pdf. The remaining targets are
+    compile-verified.
 
 ## What each binding does
 
@@ -40,7 +48,7 @@ val doc = PdfDocument.open(pdfBytes)
 println(doc.pages[0].extractText())
 ```
 
-### `kitepdf-compose`: Compose Multiplatform viewer
+### `kitepdf-compose-viewer`: Compose Multiplatform viewer
 
 A full interactive `PdfView` composable: paginated or continuous scrolling, pinch/zoom, double-tap, panning, and hoisted state for external navigation. Draw PDFs as first-class UI elements alongside your app's own composables. Add it to your Compose projects on Android, iOS, macOS, Desktop (JVM), or the web:
 
@@ -93,7 +101,7 @@ File("preview.png").writeBytes(png)
 !!! warning
     **No watchOS:** The watchOS ABI (`arm64_32`) makes `CGFloat` and `size_t` 32-bit, which is incompatible with CoreGraphics. The core engine works on watchOS; rendering does not.
 
-### `kitepdf-skia`: Skia (Skiko) rasterizer
+### `kitepdf-skia-renderer`: Skia (Skiko) rasterizer
 
 Render PDFs through Skia with one common headless API everywhere Skiko ships; no Compose needed. Use for:
 
@@ -142,7 +150,7 @@ Parsing, editing, writing, and text extraction use the same Kotlin code on every
 Compose Multiplatform publishes only `iosArm64()`, `iosSimulatorArm64()`, and `macosArm64()`. This reflects the Kotlin toolchain's deprecation of Intel x64 Apple variants. If you're on an Intel Mac and need to test on simulator:
 
 - Upgrade to Apple Silicon, or
-- Use the core engine + native renderer binding directly (skip `kitepdf-compose`)
+- Use the core engine + native renderer binding directly (skip `kitepdf-compose-viewer`)
 
 ### watchOS is engine-only
 
@@ -169,16 +177,16 @@ The core engine compiles for Android NDK (`androidNativeArm32`, `androidNativeAr
 
     ```kotlin
     // The core engine (always add this)
-    implementation("io.github.yuroyami:kitepdf:0.1.0")
+    implementation("io.github.yuroyami:kitepdf:0.2.0")
 
     // Optional: Compose viewer
-    implementation("io.github.yuroyami:kitepdf-compose:0.1.0")
+    implementation("io.github.yuroyami:kitepdf-compose-viewer:0.2.0")
 
     // Optional: platform-native rasterizer (no Compose)
-    implementation("io.github.yuroyami:kitepdf-native-renderer:0.1.0")
+    implementation("io.github.yuroyami:kitepdf-native-renderer:0.2.0")
 
     // Optional: Skia rasterizer (headless, one common API)
-    implementation("io.github.yuroyami:kitepdf-skia:0.1.0")
+    implementation("io.github.yuroyami:kitepdf-skia-renderer:0.2.0")
     ```
 
 === "Android / JVM only"
@@ -186,10 +194,10 @@ The core engine compiles for Android NDK (`androidNativeArm32`, `androidNativeAr
     Add to your regular `dependencies { }` block:
 
     ```kotlin
-    implementation("io.github.yuroyami:kitepdf:0.1.0")
-    implementation("io.github.yuroyami:kitepdf-native-renderer:0.1.0")
+    implementation("io.github.yuroyami:kitepdf:0.2.0")
+    implementation("io.github.yuroyami:kitepdf-native-renderer:0.2.0")
     // or
-    implementation("io.github.yuroyami:kitepdf-skia:0.1.0")
+    implementation("io.github.yuroyami:kitepdf-skia-renderer:0.2.0")
     ```
 
 ## Related

@@ -5,7 +5,52 @@ All notable changes to KitePDF are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.2.0] - 2026-07-11
+
+The multi-format, API-perfection release: the engine becomes a MuPDF-style
+core + handlers architecture, gains a complete EPUB reader, closes the PDF
+completeness gaps (shadings, Type3, JPX, JBIG2, CJK CMaps, soft masks), and
+lands the breaking API cleanup that 0.2.0 exists for.
+
+### Breaking changes and migration
+
+Explicit API mode is enabled everywhere, the format-neutral core types lost
+their `Pdf` prefix, and every `:kitepdf-core` package moved under
+`io.github.yuroyami.kitepdf.core.*` to eliminate split packages (which broke
+JPMS consumers and confused R8). `:kitepdf-pdf` keeps the root package.
+
+| old import | new import |
+|---|---|
+| `io.github.yuroyami.kitepdf.render.PdfCanvas` | `io.github.yuroyami.kitepdf.core.render.KiteCanvas` |
+| `io.github.yuroyami.kitepdf.render.PdfPath` | `io.github.yuroyami.kitepdf.core.render.KitePath` |
+| `io.github.yuroyami.kitepdf.render.PdfShading` | `io.github.yuroyami.kitepdf.core.render.KiteShading` |
+| `io.github.yuroyami.kitepdf.render.PdfPattern` | `io.github.yuroyami.kitepdf.core.render.KitePattern` |
+| `io.github.yuroyami.kitepdf.render.PdfFunction` | `io.github.yuroyami.kitepdf.core.render.KiteFunction` |
+| `io.github.yuroyami.kitepdf.render.Matrix` | `io.github.yuroyami.kitepdf.core.render.Matrix` |
+| `io.github.yuroyami.kitepdf.Rectangle` | `io.github.yuroyami.kitepdf.core.Rectangle` |
+| `io.github.yuroyami.kitepdf.KitePage` (and `KiteDocument`, `KiteMetadata`, `KiteOutlineItem`, `KiteStructuredText`) | `io.github.yuroyami.kitepdf.core.*` |
+| `io.github.yuroyami.kitepdf.parser.{Lexer, PdfObject, ...}` (core files) | `io.github.yuroyami.kitepdf.core.parser.*` |
+| `io.github.yuroyami.kitepdf.font.*` | `io.github.yuroyami.kitepdf.core.font.*` |
+| `io.github.yuroyami.kitepdf.{compression, filters, text}.*` | `io.github.yuroyami.kitepdf.core.{compression, filters, text}.*` |
+
+Deprecated `typealias`es for the five renamed types ship in `:kitepdf-pdf`
+(`PdfCanvas = KiteCanvas`, ...) for this release cycle only.
+
+Other breaking changes:
+
+- `EpubDocument.open` now returns a non-null document or throws
+  `EpubFormatException` naming the first structural failure; use
+  `EpubDocument.openOrNull` (and the new `PdfDocument.openOrNull`) for
+  null-on-failure call sites. `PdfFormatException` and `EpubFormatException`
+  share the new `KiteFormatException` supertype in core.
+- `Parser`, `XrefParser` (pdf) and `LzwFilter`, `Predictors` (core) are now
+  `internal`.
+- The raw object-model surface (`PdfDocument.xref`/`trailer`/`resolve`,
+  `PdfEditor.addObject`/`updateObject`/`allocateReference`/`setTrailerEntry`)
+  now requires opting in to `@KiteRawApi` (a warning, not an error: stable
+  file format, unstable Kotlin surface).
+- `EpubDocument.metadata` was renamed `epubMetadata`; the format-neutral
+  `metadata` (title/authors/language/cover) comes from `KiteDocument`.
 
 ### Added
 
@@ -82,6 +127,50 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   passing) when `mutool` or a test font was absent now use JUnit assumptions, so
   they report as skipped instead of silently green. No real assertion was weakened.
 
+### Added since the EPUB milestone (M2-M5)
+
+- Viewer feature set: engine-level text search with per-page highlight quads,
+  viewport hit testing, link taps (PDF link annotations and EPUB hrefs) with
+  internal go-to-page handling, outline/TOC panels, text selection with
+  long-press drag handles, page thumbnails, RTL reading progression, and
+  two-page spreads.
+- Format-neutral document seam: `KiteDocument` exposes metadata, outlines,
+  structured text, and search for both handlers; `PdfPage.textContent()`
+  adapts PDF structured text to it.
+- Performance and concurrency (M3): platform zlib fast paths on JVM/Android
+  with a dynamic-Huffman pure-Kotlin deflate elsewhere, one glyph-layout pass
+  per text run, a per-document decoded-image cache, thread-safe
+  `PdfDocument` (concurrent page rendering), lazy `pageCount` from `/Count`,
+  off-main-thread rasterization, and a page-bitmap LRU in the viewer. Corpus
+  mean render time: 9.7ms/page on the reference machine.
+- PDF completeness (M4): text clipping modes 4-7; shading types 1, 4, 5 and
+  6/7 (approximated); Type 3 fonts; luminosity soft masks; 47 predefined CJK
+  CMaps; complete JBIG2 (MMR, Huffman symbol dictionaries and text regions,
+  refinement, pattern/halftone regions); a from-scratch JPEG 2000 (JPX)
+  decoder, byte-exact against OpenJPEG on lossless configurations; encrypted
+  PDF creation and editing (AES-256/R6 write support in `PdfBuilder.encrypt`
+  and `PdfEditor`); vertical writing (tategaki) for EPUB; and a digital
+  signature scaffold (`PdfSigner`: prepare, ByteRange, embed; the CMS blob
+  comes from the application).
+- API perfection (M5): explicit API mode across all published modules;
+  `KitePDF.VERSION` generated from the Gradle version; a `String` password
+  overload with the documented UTF-8-then-Latin-1 rule; `KiteWarnings`, a
+  process-global warning sink for the lenient salvage paths; CMYK color
+  operators in the writer's content builder.
+- Test hardening: a deterministic mutation fuzzer (2600 seeded mutants per
+  run, wired into every build) and seeded writer round-trip property tests;
+  CI now also tests iOS simulator, macOS, and JS(Node) targets on main.
+
+### Fixed since the EPUB milestone
+
+- A latent AWT soft-mask perf bug (an unclipped surface allocated a
+  100-megapixel offscreen buffer per luminosity mask, ~1.1s per page).
+- Non-exhaustive shading dispatch on the JS, Apple, and Android native
+  canvases (they had not compiled since the shading work landed).
+- A glyf-parser crash on fonts with non-monotonic contour end points (found
+  by the mutation fuzzer).
+- mocha's 2-second default timeout killing slow crypto tests on JS.
+
 ## [0.1.0] - 2026-06-17
 
 - Initial public release, published to Maven Central under
@@ -90,5 +179,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   editor, encryption, and font handling, callable from `commonMain` and running
   unchanged across Android, iOS, JVM, JS, Wasm, and Kotlin/Native.
 
-[Unreleased]: https://github.com/yuroyami/KitePDF/compare/v0.1.0...HEAD
+[0.2.0]: https://github.com/yuroyami/KitePDF/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/yuroyami/KitePDF/releases/tag/v0.1.0

@@ -169,7 +169,7 @@ writeFile("watermarked.pdf", bytes)
 ## Redact a rectangular region and save
 
 ```kotlin
-import io.github.yuroyami.kitepdf.Rectangle
+import io.github.yuroyami.kitepdf.core.Rectangle
 
 val editor = doc.edit()
 
@@ -334,7 +334,7 @@ println(field?.value)
 ```kotlin
 val perms = doc.permissions
 
-if (!perms.canPrintFull) {
+if (!perms.canPrint) {
     println("User cannot print this document")
 }
 ```

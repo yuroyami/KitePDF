@@ -39,7 +39,7 @@ The engine is a single dependency. Add it to `commonMain` and you have everythin
 kotlin {
     sourceSets {
         commonMain.dependencies {
-            implementation("io.github.yuroyami:kitepdf:0.1.0")
+            implementation("io.github.yuroyami:kitepdf:0.2.0")
         }
     }
 }
@@ -48,7 +48,7 @@ kotlin {
 Its only dependency is `kotlin-stdlib`, and it works on every Kotlin target. Rendering bindings are opt-in; see [Show it on screen](#show-it-on-screen) below.
 
 !!! note "Not using Kotlin Multiplatform?"
-    The same artifact works in a plain Android or JVM project. Add `io.github.yuroyami:kitepdf:0.1.0` to your normal `dependencies { }` block.
+    The same artifact works in a plain Android or JVM project. Add `io.github.yuroyami:kitepdf:0.2.0` to your normal `dependencies { }` block.
 
 ## What you can do
 
@@ -97,7 +97,7 @@ Build from scratch with a content DSL, fill forms, stamp and watermark, and reda
 
 The engine is headless. Rendering is the one job that needs a platform, so it lives in separate, optional artifacts.
 
-### Compose Multiplatform: `kitepdf-compose`
+### Compose Multiplatform: `kitepdf-compose-viewer`
 
 A PDF page is just another composable, drawn straight into a Compose `DrawScope`.
 
@@ -117,7 +117,7 @@ PdfThumbnailStrip(state)
 
 See **[the Compose viewer guide](compose-viewer.md)**.
 
-### Headless: `kitepdf-native-renderer` and `kitepdf-skia`
+### Headless: `kitepdf-native-renderer` and `kitepdf-skia-renderer`
 
 For servers, CI and thumbnails, render a page straight to image bytes with no UI:
 

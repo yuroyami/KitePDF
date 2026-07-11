@@ -4,14 +4,14 @@ Build a full-featured PDF viewer in Compose with a single composable. The `PdfVi
 
 ## Installation
 
-Add the `kitepdf-compose` artifact to your Gradle dependencies:
+Add the `kitepdf-compose-viewer` artifact to your Gradle dependencies:
 
 === "Kotlin (KMP)"
 
     ```kotlin
     // commonMain
     dependencies {
-        implementation("io.github.yuroyami:kitepdf-compose:0.1.0")
+        implementation("io.github.yuroyami:kitepdf-compose-viewer:0.2.0")
     }
     ```
 
@@ -19,7 +19,7 @@ Add the `kitepdf-compose` artifact to your Gradle dependencies:
 
     ```gradle
     dependencies {
-        implementation("io.github.yuroyami:kitepdf-compose:0.1.0")
+        implementation("io.github.yuroyami:kitepdf-compose-viewer:0.2.0")
     }
     ```
 
@@ -28,7 +28,7 @@ Add the `kitepdf-compose` artifact to your Gradle dependencies:
 The simplest viewer: a whole document in a continuous vertical scroll.
 
 ```kotlin
-val document = rememberPdfDocument("path/to/file.pdf")
+val document = remember { PdfDocument.open(bytes) }
 PdfView(document, modifier = Modifier.fillMaxSize())
 ```
 
@@ -72,15 +72,17 @@ val state = rememberPdfViewState(document)
 All navigation methods are suspending; call them from a coroutine scope:
 
 ```kotlin
-// Jump to a page (immediately)
-state.scrollToPage(2)
+scope.launch {
+    // Jump to a page (immediately)
+    state.scrollToPage(2)
 
-// Animate to a page (smooth scroll)
-state.animateScrollToPage(2)
+    // Animate to a page (smooth scroll)
+    state.animateScrollToPage(2)
 
-// One page at a time
-state.nextPage()
-state.previousPage()
+    // One page at a time
+    state.nextPage()
+    state.previousPage()
+}
 ```
 
 Call these in a `LaunchedEffect` or from a coroutine scope (e.g. a button's `onClick` via `rememberCoroutineScope()`):
@@ -99,7 +101,7 @@ Button(onClick = { scope.launch { state.nextPage() } }) {
 state.setZoom(2.5f)
 
 // Animate to a zoom level (e.g. double-tap at a position)
-state.animateZoomTo(3f, focal = tapPosition)
+scope.launch { state.animateZoomTo(3f, focal = tapPosition) }
 
 // Reset to minimum zoom and center
 state.resetZoom()

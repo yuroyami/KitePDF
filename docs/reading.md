@@ -132,7 +132,7 @@ for (block in structured.blocks) {
     for (line in block.lines) {
         for (span in line.spans) {
             println("${span.text} at (${span.origin.first}, ${span.origin.second})")
-            println("  Font: ${span.font.name}, size: ${span.fontSize}pt")
+            println("  Font: ${span.fontSpec}, size: ${span.fontSize}pt")
             println("  Bounds: ${span.bounds}")
         }
     }
@@ -146,7 +146,7 @@ Structured text clusters character runs into:
 
 Each `PdfTextSpan` carries:
 - `text`: the decoded string
-- `font`: the `PdfFont` used
+- `fontSpec`: family/weight/style of the font used
 - `fontSize`: point size
 - `origin`: baseline position in PDF user units (x, y) as a `Pair<Double, Double>`
 - `bounds`: bounding rectangle (heuristic: ascender + descender estimates)
@@ -197,8 +197,8 @@ Parsed XMP (Dublin Core + Adobe PDF + XMP-basic properties):
 ```kotlin
 val xmp = doc.xmp  // PdfXmpMetadata? (null if no XMP stream)
 if (xmp != null) {
-    println("Creator: ${xmp.creator}")
-    println("Dates: created ${xmp.createdDate}, modified ${xmp.modifiedDate}")
+    println("Creator tool: ${xmp.creatorTool}")
+    println("Dates: created ${xmp.createDate}, modified ${xmp.modifyDate}")
 }
 ```
 
@@ -233,8 +233,9 @@ To resolve a bookmark destination to a page index:
 ```kotlin
 for (outline in doc.outlines) {
     val dest = doc.resolveDestination(outline.rawDestination)
-    if (dest is PdfDestination.Xyz) {
-        println("Jumps to page ${dest.pageIndex}, position (${dest.x}, ${dest.y})")
+    val view = dest?.view
+    if (view is PdfDestination.ViewFit.XYZ) {
+        println("Jumps to page ${dest.pageIndex}, position (${view.left}, ${view.top})")
     }
 }
 ```
@@ -315,7 +316,8 @@ To fill form fields, use the editor (see the [editing guide](editing.md)):
 
 ```kotlin
 val editor = doc.edit()
-editor.setFieldValue("employee.name", "Jane Doe")
+val field = doc.formField("employee.name")!!
+editor.setTextFieldValue(field, "Jane Doe")
 val updated = editor.saveIncremental()
 ```
 
@@ -359,7 +361,7 @@ Embedded files supplementary to the document:
 
 ```kotlin
 for (attachment in doc.attachments) {
-    println("${attachment.filename}: ${attachment.filesize} bytes")
+    println("${attachment.filename}: ${attachment.size} bytes")
 }
 ```
 
@@ -399,7 +401,7 @@ Add KitePDF to your `build.gradle.kts`:
 
     ```kotlin
     dependencies {
-        commonMainImplementation("io.github.yuroyami:kitepdf:0.1.0")
+        commonMainImplementation("io.github.yuroyami:kitepdf:0.2.0")
     }
     ```
 
@@ -407,7 +409,7 @@ Add KitePDF to your `build.gradle.kts`:
 
     ```kotlin
     dependencies {
-        implementation("io.github.yuroyami:kitepdf:0.1.0")
+        implementation("io.github.yuroyami:kitepdf:0.2.0")
     }
     ```
 
