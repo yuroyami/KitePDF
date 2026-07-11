@@ -52,7 +52,7 @@ import kotlin.math.abs
  * Note [saveRewritten] instead emits a DECRYPTED file: the rewrite drops the
  * `/Encrypt` dictionary and writes the resolved plain-text objects.
  */
-class PdfEditor internal constructor(
+public class PdfEditor internal constructor(
     private val base: PdfDocument,
     random: kotlin.random.Random = kotlin.random.Random.Default,
 ) {
@@ -97,17 +97,17 @@ class PdfEditor internal constructor(
     }
 
     /** Reserve the next free object number (generation 0). */
-    fun allocateReference(): PdfReference = PdfReference(nextObjectNumber++, 0)
+    public fun allocateReference(): PdfReference = PdfReference(nextObjectNumber++, 0)
 
     /** Stage a brand-new indirect object; returns the reference to it. */
-    fun addObject(value: PdfObject): PdfReference {
+    public fun addObject(value: PdfObject): PdfReference {
         val ref = allocateReference()
         staged[ref.objectNumber] = Staged(ref.generation, value)
         return ref
     }
 
     /** Stage a replacement for an existing object (keeps [ref]'s generation). */
-    fun updateObject(ref: PdfReference, value: PdfObject) {
+    public fun updateObject(ref: PdfReference, value: PdfObject) {
         staged[ref.objectNumber] = Staged(ref.generation, value)
     }
 
@@ -115,16 +115,16 @@ class PdfEditor internal constructor(
      * Stage a new `/FlateDecode`-compressed stream from uncompressed [data]
      * (see [PdfStreams.flate]); returns the reference to it.
      */
-    fun addFlateStream(data: ByteArray, extra: Map<String, PdfObject> = emptyMap()): PdfReference =
+    public fun addFlateStream(data: ByteArray, extra: Map<String, PdfObject> = emptyMap()): PdfReference =
         addObject(PdfStreams.flate(data, extra))
 
     /** Set or replace a trailer entry (e.g. `/Root`, `/Info`) in the new section. */
-    fun setTrailerEntry(key: String, value: PdfObject) {
+    public fun setTrailerEntry(key: String, value: PdfObject) {
         trailerOverrides[key] = value
     }
 
     /** Number of objects staged for writing. */
-    val pendingObjectCount: Int get() = staged.size
+    public val pendingObjectCount: Int get() = staged.size
 
     /**
      * Set document metadata (`/Info`). Only non-null fields are changed; any
@@ -133,7 +133,7 @@ class PdfEditor internal constructor(
      * creates a new `/Info` object and points the trailer at it. Returns the
      * reference to the (possibly newly created) `/Info` dictionary.
      */
-    fun setInfo(
+    public fun setInfo(
         title: String? = null,
         author: String? = null,
         subject: String? = null,
@@ -184,7 +184,7 @@ class PdfEditor internal constructor(
      * doesn't introduce new resource dependencies. To overlay new content (with
      * its own fonts), use [stampPage].
      */
-    fun editPageContent(page: PdfPage, transform: (List<Operation>) -> List<Operation>) {
+    public fun editPageContent(page: PdfPage, transform: (List<Operation>) -> List<Operation>) {
         val ref = pageReference(page)
         val ops = ContentStreamParser.parse(page.contentBytes)
         val newContent = ContentStreamWriter.serialize(transform(ops))
@@ -200,7 +200,7 @@ class PdfEditor internal constructor(
      * True redaction (removing only content within an area, including images)
      * needs text-position tracking and is a later feature.
      */
-    fun removeAllText(page: PdfPage) {
+    public fun removeAllText(page: PdfPage) {
         editPageContent(page) { ops -> ops.filter { it.operator !in TEXT_SHOW_OPERATORS } }
     }
 
@@ -211,7 +211,7 @@ class PdfEditor internal constructor(
      * its own `q`/`Q`, and any standard fonts the overlay uses are merged into
      * the page's `/Resources` under fresh, non-colliding names.
      */
-    fun stampPage(page: PdfPage, block: ContentStreamBuilder.() -> Unit) {
+    public fun stampPage(page: PdfPage, block: ContentStreamBuilder.() -> Unit) {
         val ref = pageReference(page)
 
         val existingFonts = page.resources?.getDict("Font", base)
@@ -269,7 +269,7 @@ class PdfEditor internal constructor(
      *
      * Only `/Tx` (text) fields are supported; buttons/choices come later.
      */
-    fun setTextFieldValue(field: PdfFormField, value: String) {
+    public fun setTextFieldValue(field: PdfFormField, value: String) {
         require(field.type == PdfFormField.FieldType.Text) {
             "setTextFieldValue supports text (/Tx) fields only, not ${field.type}"
         }
@@ -313,7 +313,7 @@ class PdfEditor internal constructor(
      * as an appearance state, or to `/Off` otherwise (so sibling radios in the
      * group are cleared). Pass `"Off"` to clear the field.
      */
-    fun setButtonValue(field: PdfFormField, exportValue: String) {
+    public fun setButtonValue(field: PdfFormField, exportValue: String) {
         require(field.type == PdfFormField.FieldType.Button) {
             "setButtonValue supports button (/Btn) fields only, not ${field.type}"
         }
@@ -343,7 +343,7 @@ class PdfEditor internal constructor(
      * widget's `/AP /N` keys (the non-`Off` one, e.g. `/Yes`), so the value
      * matches whatever the document author defined.
      */
-    fun setCheckbox(field: PdfFormField, checked: Boolean) {
+    public fun setCheckbox(field: PdfFormField, checked: Boolean) {
         val on = checkboxOnState(field) ?: "On"
         setButtonValue(field, if (checked) on else "Off")
     }
@@ -353,7 +353,7 @@ class PdfEditor internal constructor(
      * sets `/I` (selected index) when the value is found in `/Opt`, and
      * regenerates the widget appearance so the selection is visible.
      */
-    fun setChoiceValue(field: PdfFormField, value: String) {
+    public fun setChoiceValue(field: PdfFormField, value: String) {
         require(field.type == PdfFormField.FieldType.Choice) {
             "setChoiceValue supports choice (/Ch) fields only, not ${field.type}"
         }
@@ -456,7 +456,7 @@ class PdfEditor internal constructor(
      * Set the page `/Rotate` (clockwise, must be a multiple of 90). Normalised to
      * 0/90/180/270.
      */
-    fun rotatePage(page: PdfPage, degrees: Int) {
+    public fun rotatePage(page: PdfPage, degrees: Int) {
         require(degrees % 90 == 0) { "Rotation must be a multiple of 90, got $degrees" }
         val ref = pageReference(page)
         val norm = ((degrees % 360) + 360) % 360
@@ -470,14 +470,14 @@ class PdfEditor internal constructor(
      * insert and merge: omit a ref to delete, permute to reorder, append a grafted
      * ref to insert. Pages no longer referenced are dropped by [saveRewritten].
      */
-    fun setPageOrder(orderedPageRefs: List<PdfReference>) {
+    public fun setPageOrder(orderedPageRefs: List<PdfReference>) {
         require(orderedPageRefs.isNotEmpty()) { "A document must have at least one page" }
         pageOrderState = orderedPageRefs.toMutableList()
         applyPageOrder()
     }
 
     /** Remove [page] from the document. */
-    fun removePage(page: PdfPage) {
+    public fun removePage(page: PdfPage) {
         val target = page.reference?.objectNumber
             ?: throw IllegalArgumentException("Page ${page.index} has no indirect reference")
         val order = currentOrder()
@@ -487,7 +487,7 @@ class PdfEditor internal constructor(
     }
 
     /** Append a page deep-copied from [source] (see [graftPage]); returns its new ref. */
-    fun appendPage(source: PdfDocument, sourceIndex: Int): PdfReference {
+    public fun appendPage(source: PdfDocument, sourceIndex: Int): PdfReference {
         val ref = graftPage(source, sourceIndex)
         currentOrder().add(ref)
         applyPageOrder()
@@ -495,14 +495,14 @@ class PdfEditor internal constructor(
     }
 
     /** Insert a (grafted) page reference at zero-based [position]. */
-    fun insertPageAt(position: Int, pageRef: PdfReference) {
+    public fun insertPageAt(position: Int, pageRef: PdfReference) {
         val order = currentOrder()
         order.add(position.coerceIn(0, order.size), pageRef)
         applyPageOrder()
     }
 
     /** Append every page of [source] to this document (cross-document merge). */
-    fun mergeDocument(source: PdfDocument) {
+    public fun mergeDocument(source: PdfDocument) {
         val refs = source.pages.indices.map { graftPage(source, it) }
         currentOrder().addAll(refs)
         applyPageOrder()
@@ -546,7 +546,7 @@ class PdfEditor internal constructor(
      * self-contained, and `/Parent` is dropped (set later by [applyPageOrder]).
      * Mirrors MuPDF's `pdf_graft_page`.
      */
-    fun graftPage(source: PdfDocument, sourceIndex: Int): PdfReference {
+    public fun graftPage(source: PdfDocument, sourceIndex: Int): PdfReference {
         val page = source.pages.getOrNull(sourceIndex)
             ?: throw IllegalArgumentException("Source has no page $sourceIndex")
         val srcPageNum = page.reference?.objectNumber
@@ -605,7 +605,7 @@ class PdfEditor internal constructor(
     /* ─── Redaction ──────────────────────────────────────────────────────── */
 
     /** Redact a single rectangular region of [page] (see [redactRegions]). */
-    fun redactRegion(page: PdfPage, rectangle: Rectangle) = redactRegions(page, listOf(rectangle))
+    public fun redactRegion(page: PdfPage, rectangle: Rectangle): Unit = redactRegions(page, listOf(rectangle))
 
     /**
      * Redact rectangular regions of [page] (rectangles in page user space).
@@ -625,7 +625,7 @@ class PdfEditor internal constructor(
      *
      * Current limit ([RedactionEngine]): vector paths in the region are left as-is.
      */
-    fun redactRegions(page: PdfPage, rectangles: List<Rectangle>) {
+    public fun redactRegions(page: PdfPage, rectangles: List<Rectangle>) {
         if (rectangles.isEmpty()) return
         val ref = pageReference(page)
 
@@ -862,7 +862,7 @@ class PdfEditor internal constructor(
      * xref section + trailer. When nothing was staged or overridden this is a
      * verbatim copy of the original.
      */
-    fun saveIncremental(): ByteArray {
+    public fun saveIncremental(): ByteArray {
         check(!redactionStaged) {
             "Redaction was staged; call saveRewritten() instead — an incremental save " +
                 "would leave the original, unredacted content recoverable in the file."
@@ -941,7 +941,7 @@ class PdfEditor internal constructor(
      * an edit) are dropped — which is what makes it the correct vehicle for
      * **redaction** (the removed content is truly gone, not just superseded).
      */
-    fun saveRewritten(useObjectStreams: Boolean = false): ByteArray {
+    public fun saveRewritten(useObjectStreams: Boolean = false): ByteArray {
         val roots = buildList {
             for (key in listOf("Root", "Info")) {
                 ((trailerOverrides[key] ?: base.trailer[key]) as? PdfReference)?.let { add(it) }

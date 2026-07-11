@@ -15,18 +15,18 @@ import io.github.yuroyami.kitepdf.core.PdfFormatException
  * resolved on the fly — most importantly when `/Length` is an indirect reference,
  * which MuPDF's pdf_stream_length() handles via pdf_dict_get_int64().
  */
-class Parser(
+internal class Parser(
     private val lexer: Lexer,
     private val resolver: IndirectResolver? = null,
 ) {
 
-    constructor(bytes: ByteArray) : this(Lexer(ByteReader(bytes)))
-    constructor(bytes: ByteArray, resolver: IndirectResolver?) : this(Lexer(ByteReader(bytes)), resolver)
+    public constructor(bytes: ByteArray) : this(Lexer(ByteReader(bytes)))
+    public constructor(bytes: ByteArray, resolver: IndirectResolver?) : this(Lexer(ByteReader(bytes)), resolver)
 
     private val reader: ByteReader get() = lexer.reader
 
     /** Read exactly one PDF object from the current position. */
-    fun readObject(): PdfObject {
+    public fun readObject(): PdfObject {
         return readObject(lexer.nextToken())
     }
 
@@ -187,7 +187,7 @@ class Parser(
      * Parse a full indirect object: "N G obj <object> endobj".
      * The reader must currently sit at the start of "N G obj".
      */
-    fun readIndirectObject(): IndirectObject {
+    public fun readIndirectObject(): IndirectObject {
         val numTok = lexer.nextToken() as? Token.Integer
             ?: throw PdfFormatException("Expected object number")
         val genTok = lexer.nextToken() as? Token.Integer
@@ -212,4 +212,4 @@ class Parser(
 }
 
 /** An object as it appears in the body: number, generation, and the value. */
-data class IndirectObject(val number: Long, val generation: Int, val value: PdfObject)
+public data class IndirectObject(val number: Long, val generation: Int, val value: PdfObject)

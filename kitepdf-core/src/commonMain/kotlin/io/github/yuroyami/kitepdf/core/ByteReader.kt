@@ -11,50 +11,50 @@ package io.github.yuroyami.kitepdf.core
  * streams and strings, so we never call String(...) on the underlying bytes
  * outside controlled paths.
  */
-class ByteReader(val bytes: ByteArray) {
+public class ByteReader(public val bytes: ByteArray) {
 
     private var position: Int = 0
 
-    val size: Int get() = bytes.size
+    public val size: Int get() = bytes.size
 
-    fun pos(): Int = position
+    public fun pos(): Int = position
 
-    fun seek(offset: Int) {
+    public fun seek(offset: Int) {
         if (offset < 0 || offset > bytes.size) {
             throw PdfFormatException("Seek out of bounds: $offset (size=${bytes.size})")
         }
         position = offset
     }
 
-    fun isAtEnd(): Boolean = position >= bytes.size
+    public fun isAtEnd(): Boolean = position >= bytes.size
 
-    fun remaining(): Int = bytes.size - position
+    public fun remaining(): Int = bytes.size - position
 
     /** Read one byte and advance; returns -1 at EOF. */
-    fun readByte(): Int {
+    public fun readByte(): Int {
         if (position >= bytes.size) return -1
         return bytes[position++].toInt() and 0xFF
     }
 
     /** Peek one byte without advancing; returns -1 at EOF. */
-    fun peek(): Int {
+    public fun peek(): Int {
         if (position >= bytes.size) return -1
         return bytes[position].toInt() and 0xFF
     }
 
     /** Peek byte at [offset] bytes ahead without advancing; returns -1 at EOF. */
-    fun peek(offset: Int): Int {
+    public fun peek(offset: Int): Int {
         val idx = position + offset
         if (idx < 0 || idx >= bytes.size) return -1
         return bytes[idx].toInt() and 0xFF
     }
 
     /** Step back one byte. Used by lexer for "I read too far" lookahead. */
-    fun unread() {
+    public fun unread() {
         if (position > 0) position--
     }
 
-    fun advance(n: Int) {
+    public fun advance(n: Int) {
         val target = position + n
         if (target < 0 || target > bytes.size) {
             throw PdfFormatException("Advance out of bounds: $target")
@@ -63,7 +63,7 @@ class ByteReader(val bytes: ByteArray) {
     }
 
     /** Read [length] bytes from current position into a new array and advance. */
-    fun readBytes(length: Int): ByteArray {
+    public fun readBytes(length: Int): ByteArray {
         if (length < 0) throw PdfFormatException("Negative read length: $length")
         if (position + length > bytes.size) {
             throw PdfFormatException("Read past EOF: pos=$position len=$length size=${bytes.size}")
@@ -74,7 +74,7 @@ class ByteReader(val bytes: ByteArray) {
     }
 
     /** True if the next bytes match [needle] (ASCII), without advancing. */
-    fun matches(needle: ByteArray, at: Int = position): Boolean {
+    public fun matches(needle: ByteArray, at: Int = position): Boolean {
         if (at + needle.size > bytes.size) return false
         for (i in needle.indices) {
             if (bytes[at + i] != needle[i]) return false
@@ -83,7 +83,7 @@ class ByteReader(val bytes: ByteArray) {
     }
 
     /** Find the LAST occurrence of [needle] at or before [from]. Returns -1 if not found. */
-    fun lastIndexOf(needle: ByteArray, from: Int = bytes.size - needle.size): Int {
+    public fun lastIndexOf(needle: ByteArray, from: Int = bytes.size - needle.size): Int {
         if (needle.isEmpty()) return from
         var i = from.coerceAtMost(bytes.size - needle.size)
         while (i >= 0) {
@@ -94,7 +94,7 @@ class ByteReader(val bytes: ByteArray) {
     }
 
     /** Find the FIRST occurrence of [needle] at or after [from]. Returns -1 if not found. */
-    fun indexOf(needle: ByteArray, from: Int = 0): Int {
+    public fun indexOf(needle: ByteArray, from: Int = 0): Int {
         if (needle.isEmpty()) return from.coerceAtLeast(0)
         var i = from.coerceAtLeast(0)
         val last = bytes.size - needle.size
@@ -107,4 +107,4 @@ class ByteReader(val bytes: ByteArray) {
 }
 
 /** Raised for any structural PDF error: bad header, truncated stream, malformed xref, etc. */
-class PdfFormatException(message: String, cause: Throwable? = null) : RuntimeException(message, cause)
+public class PdfFormatException(message: String, cause: Throwable? = null) : RuntimeException(message, cause)

@@ -1,21 +1,21 @@
 package io.github.yuroyami.kitepdf.epub
 
 /** One table-of-contents node. [spineIndex] is -1 when the target isn't in the spine. */
-class TocEntry internal constructor(
-    val label: String,
+public class TocEntry internal constructor(
+    public val label: String,
     /** Zip-absolute path of the target document, or null (a pure grouping label). */
-    val href: String?,
-    val spineIndex: Int,
-    val fragment: String?,
-    val children: List<TocEntry>,
+    public val href: String?,
+    public val spineIndex: Int,
+    public val fragment: String?,
+    public val children: List<TocEntry>,
 )
 
 /** A publication's navigation tree, from EPUB 3 `nav.xhtml` or EPUB 2 `toc.ncx`. */
-class TableOfContents internal constructor(val entries: List<TocEntry>) {
-    val isEmpty: Boolean get() = entries.isEmpty()
+public class TableOfContents internal constructor(public val entries: List<TocEntry>) {
+    public val isEmpty: Boolean get() = entries.isEmpty()
 
     /** Depth-first flatten, useful for a flat outline list. */
-    fun flatten(): List<TocEntry> {
+    public fun flatten(): List<TocEntry> {
         val out = ArrayList<TocEntry>()
         fun rec(e: TocEntry) { out.add(e); e.children.forEach(::rec) }
         entries.forEach(::rec)

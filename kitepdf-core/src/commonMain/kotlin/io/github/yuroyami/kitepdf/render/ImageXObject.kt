@@ -31,39 +31,39 @@ import io.github.yuroyami.kitepdf.parser.PdfStream
  * Callers should switch on [kind] to pick the right rendering path. Stencil masks
  * (`/ImageMask true`) carry [isImageMask] and are tinted by [maskFill].
  */
-class ImageXObject internal constructor(
-    val width: Int,
-    val height: Int,
-    val bitsPerComponent: Int,
-    val colorSpace: String,
-    val kind: Kind,
+public class ImageXObject internal constructor(
+    public val width: Int,
+    public val height: Int,
+    public val bitsPerComponent: Int,
+    public val colorSpace: String,
+    public val kind: Kind,
     /** Encoded bytes — for kinds that defer decoding to a platform image loader. */
-    val encodedBytes: ByteArray,
+    public val encodedBytes: ByteArray,
     /** Pixel bytes — populated for [Kind.RAW] (already run through the filter chain). */
-    val pixelBytes: ByteArray? = null,
+    public val pixelBytes: ByteArray? = null,
     /**
      * Soft-mask alpha (ISO 32000-1 §11.6.5.2), normalised to 8-bit grayscale —
      * one byte per pixel, 0 = transparent, 255 = opaque, row-major over
      * [softMaskWidth]×[softMaskHeight]. Null when the image carries no `/SMask`.
      */
-    val softMaskAlpha: ByteArray? = null,
-    val softMaskWidth: Int = 0,
-    val softMaskHeight: Int = 0,
+    public val softMaskAlpha: ByteArray? = null,
+    public val softMaskWidth: Int = 0,
+    public val softMaskHeight: Int = 0,
     /**
      * The image's colour space resolved against the document (Indexed palettes,
      * ICCBased component counts, etc.). Null for stencil masks and when it could
      * not be resolved (then [toRgbaBytes] infers a device space from the data).
      */
-    val resolvedColorSpace: ColorSpace? = null,
+    public val resolvedColorSpace: ColorSpace? = null,
     /** `/Decode` array (per-component min/max remap), or null for the identity map. */
-    val decode: DoubleArray? = null,
+    public val decode: DoubleArray? = null,
     /** True for `/ImageMask` stencils — 1-bpc, painted with [maskFill]. */
-    val isImageMask: Boolean = false,
+    public val isImageMask: Boolean = false,
     /** Fill colour to tint an [isImageMask] stencil (the graphics-state fill colour). */
-    val maskFill: RgbColor? = null,
+    public val maskFill: RgbColor? = null,
 ) {
 
-    enum class Kind {
+    public enum class Kind {
         /** Pixel data already flat in [pixelBytes] (Flate/LZW/CCITT/ASCII/RLE). */
         RAW,
         /** JPEG-encoded; [encodedBytes] is a complete JFIF/EXIF file. */
@@ -78,7 +78,7 @@ class ImageXObject internal constructor(
         UNKNOWN,
     }
 
-    companion object {
+    public companion object {
 
         /**
          * Pull a stream from a /XObject /Image resource entry into an [ImageXObject].
@@ -86,7 +86,7 @@ class ImageXObject internal constructor(
          * references; [fillColor] tints `/ImageMask` stencils (pass the current
          * graphics-state fill colour).
          */
-        fun from(
+        public fun from(
             stream: PdfStream,
             refs: IndirectResolver? = null,
             fillColor: RgbColor? = null,
@@ -208,7 +208,7 @@ class ImageXObject internal constructor(
          * file in [encodedBytes]). Unrecognised formats return null, so callers
          * degrade gracefully by skipping the image.
          */
-        fun fromEncodedImage(bytes: ByteArray): ImageXObject? {
+        public fun fromEncodedImage(bytes: ByteArray): ImageXObject? {
             if (PngDecoder.isPng(bytes)) return PngDecoder.decode(bytes)
             if (GifDecoder.isGif(bytes)) return GifDecoder.decode(bytes)
             if (JpegDecoder.isJpeg(bytes)) {

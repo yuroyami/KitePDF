@@ -18,9 +18,9 @@ import io.github.yuroyami.kitepdf.render.Matrix as PdfMatrix
  *  - Pre-rendering pages off the main thread (call from a coroutine on
  *    Dispatchers.Default).
  */
-object AndroidPdfBitmapRenderer {
+public object AndroidPdfBitmapRenderer {
 
-    fun renderToBitmap(
+    public fun renderToBitmap(
         page: PdfPage,
         scale: Double = 1.0,
         background: Int = Color.WHITE,

@@ -31,7 +31,7 @@ import io.github.yuroyami.kitepdf.render.RgbColor
  * For a raw concatenated string, [PdfPage.extractText] is still simpler
  * and cheaper.
  */
-data class PdfStructuredText(
+public data class PdfStructuredText(
     val pageWidth: Double,
     val pageHeight: Double,
     val blocks: List<PdfTextBlock>,
@@ -54,7 +54,7 @@ data class PdfStructuredText(
  * what readers consider "paragraph breaks" in the absence of structure
  * tagging.
  */
-data class PdfTextBlock(
+public data class PdfTextBlock(
     val bounds: Rectangle,
     val lines: List<PdfTextLine>,
 )
@@ -63,7 +63,7 @@ data class PdfTextBlock(
  * One line of text: spans whose Y origins cluster within [Y_CLUSTER_TOL]
  * × font size. Spans are stored left-to-right.
  */
-data class PdfTextLine(
+public data class PdfTextLine(
     val bounds: Rectangle,
     val spans: List<PdfTextSpan>,
 ) {
@@ -91,7 +91,7 @@ data class PdfTextLine(
  * baseline. Position is the device-space origin (where the baseline
  * starts).
  */
-data class PdfTextSpan(
+public data class PdfTextSpan(
     val text: String,
     val fontSpec: FontSpec,
     val fontSize: Double,

@@ -1,9 +1,9 @@
 package io.github.yuroyami.kitepdf.core
 
 /** Single-threaded target: locking is a no-op. */
-actual class KiteLock actual constructor() {
-    actual fun lock() {}
-    actual fun unlock() {}
+public actual class KiteLock actual constructor() {
+    public actual fun lock() {}
+    public actual fun unlock() {}
 }
 
-actual fun currentThreadId(): Long = 0L
+public actual fun currentThreadId(): Long = 0L

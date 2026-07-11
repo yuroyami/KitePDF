@@ -22,10 +22,10 @@ import io.github.yuroyami.kitepdf.core.ByteArrayBuilder
  * the length/distance extra bits) are packed least-significant-bit-first,
  * while Huffman codes are packed most-significant-bit-first.
  */
-object Deflate {
+public object Deflate {
 
     /** Compress [data] to a bare DEFLATE stream (no zlib wrapper). */
-    fun encode(data: ByteArray): ByteArray = Deflater().encode(data)
+    public fun encode(data: ByteArray): ByteArray = Deflater().encode(data)
 }
 
 private class Deflater {

@@ -14,6 +14,7 @@ plugins {
  * every render backend depends on it. NO external runtime deps beyond stdlib.
  */
 kotlin {
+    explicitApi()
     jvmToolchain(21)
 
     android {

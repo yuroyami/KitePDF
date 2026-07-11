@@ -7,7 +7,7 @@ package io.github.yuroyami.kitepdf.font
  * Stored as a packed string ("name=HEX;") and parsed lazily on first lookup so
  * the Kotlin compiler does not have to constant-fold 4000+ map entries.
  */
-object GlyphList {
+public object GlyphList {
 
     private val packed: String =
         "A=0041;AE=00C6;AEacute=01FC;AEmacron=01E2;AEsmall=F7E6;Aacute=00C1;Aacutesmall=F7E1;Abreve=0102;Abre" +
@@ -764,5 +764,5 @@ object GlyphList {
     }
 
     /** Returns the unicode codepoint for [glyphName], or null if unknown. */
-    fun unicodeFor(glyphName: String): Int? = map[glyphName]
+    public fun unicodeFor(glyphName: String): Int? = map[glyphName]
 }

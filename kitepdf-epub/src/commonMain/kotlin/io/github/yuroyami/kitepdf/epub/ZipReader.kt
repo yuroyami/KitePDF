@@ -11,7 +11,7 @@ import io.github.yuroyami.kitepdf.filters.FilterChain
  * streaming data descriptors (sizes come from the central directory). Not a
  * general-purpose ZIP implementation.
  */
-class ZipReader(private val bytes: ByteArray) {
+public class ZipReader(private val bytes: ByteArray) {
 
     private data class Entry(
         val method: Int,
@@ -22,10 +22,10 @@ class ZipReader(private val bytes: ByteArray) {
     private val entries: Map<String, Entry> = parseCentralDirectory()
 
     /** Entry names, in central-directory order. */
-    val names: Set<String> get() = entries.keys
+    public val names: Set<String> get() = entries.keys
 
     /** Decompressed bytes of [name], or null if absent / unreadable. */
-    fun read(name: String): ByteArray? {
+    public fun read(name: String): ByteArray? {
         val e = entries[name] ?: return null
         // Local file header: sig(4) ver(2) flags(2) method(2) time(2) date(2)
         // crc(4) csize(4) usize(4) nameLen(2) extraLen(2), then name+extra, then data.
@@ -46,7 +46,7 @@ class ZipReader(private val bytes: ByteArray) {
     }
 
     /** UTF-8 text of [name], or null. */
-    fun readText(name: String): String? = read(name)?.decodeToString()
+    public fun readText(name: String): String? = read(name)?.decodeToString()
 
     private fun parseCentralDirectory(): Map<String, Entry> {
         val eocd = findEocd() ?: return emptyMap()

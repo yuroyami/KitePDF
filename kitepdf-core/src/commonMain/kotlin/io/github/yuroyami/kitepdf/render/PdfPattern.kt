@@ -19,15 +19,15 @@ import io.github.yuroyami.kitepdf.parser.PdfStream
  *   - [Shading] (`PatternType = 2`) — wraps a [PdfShading] under a matrix,
  *     painted through [PdfCanvas.fillShading].
  */
-sealed class PdfPattern {
+public sealed class PdfPattern {
 
     /** Pattern-space-to-default-space transform (`/Matrix`). */
-    abstract val matrix: Matrix
+    public abstract val matrix: Matrix
 
     /** Optional ExtGState applied while painting the pattern. */
-    abstract val extGState: ExtGState?
+    public abstract val extGState: ExtGState?
 
-    data class Shading(
+    public data class Shading(
         override val matrix: Matrix,
         override val extGState: ExtGState?,
         val shading: PdfShading,
@@ -40,7 +40,7 @@ sealed class PdfPattern {
      * that don't replay cells (and the emergency fallback for degenerate
      * cell geometry).
      */
-    data class Tiling(
+    public data class Tiling(
         override val matrix: Matrix,
         override val extGState: ExtGState?,
         val paintType: Int,
@@ -67,13 +67,13 @@ sealed class PdfPattern {
      * the default colour — which would flood, say, a full-page background
      * pattern solid black.
      */
-    object Unsupported : PdfPattern() {
+    public object Unsupported : PdfPattern() {
         override val matrix: Matrix = Matrix.IDENTITY
         override val extGState: ExtGState? = null
     }
 
-    companion object {
-        fun parse(
+    public companion object {
+        public fun parse(
             obj: PdfObject?,
             refs: IndirectResolver,
             shadings: Map<String, PdfShading>,

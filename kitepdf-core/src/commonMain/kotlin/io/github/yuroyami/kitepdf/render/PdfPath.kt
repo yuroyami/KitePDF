@@ -9,43 +9,43 @@ package io.github.yuroyami.kitepdf.render
  * the [GraphicsState.ctm] in effect when the path is painted is the relevant
  * transform.
  */
-data class PdfPath(val segments: List<Segment>) {
+public data class PdfPath(val segments: List<Segment>) {
 
-    fun isEmpty(): Boolean = segments.isEmpty()
+    public fun isEmpty(): Boolean = segments.isEmpty()
 
-    sealed class Segment {
-        data class MoveTo(val x: Double, val y: Double) : Segment()
-        data class LineTo(val x: Double, val y: Double) : Segment()
+    public sealed class Segment {
+        public data class MoveTo(val x: Double, val y: Double) : Segment()
+        public data class LineTo(val x: Double, val y: Double) : Segment()
         /** Cubic Bézier — used by PDF content streams (operators `c`, `v`, `y`). */
-        data class CurveTo(
+        public data class CurveTo(
             val x1: Double, val y1: Double,
             val x2: Double, val y2: Double,
             val x3: Double, val y3: Double,
         ) : Segment()
         /** Quadratic Bézier — TrueType glyph outlines emit these directly. */
-        data class QuadTo(
+        public data class QuadTo(
             val x1: Double, val y1: Double,
             val x2: Double, val y2: Double,
         ) : Segment()
-        data object Close : Segment()
+        public data object Close : Segment()
     }
 
-    class Builder {
+    public class Builder {
         private val segments = mutableListOf<Segment>()
         private var lastX = 0.0
         private var lastY = 0.0
 
-        fun moveTo(x: Double, y: Double) {
+        public fun moveTo(x: Double, y: Double) {
             segments.add(Segment.MoveTo(x, y))
             lastX = x; lastY = y
         }
 
-        fun lineTo(x: Double, y: Double) {
+        public fun lineTo(x: Double, y: Double) {
             segments.add(Segment.LineTo(x, y))
             lastX = x; lastY = y
         }
 
-        fun curveTo(
+        public fun curveTo(
             x1: Double, y1: Double,
             x2: Double, y2: Double,
             x3: Double, y3: Double,
@@ -55,24 +55,24 @@ data class PdfPath(val segments: List<Segment>) {
         }
 
         /** PDF `v` — first control point is the current point. */
-        fun curveToV(x2: Double, y2: Double, x3: Double, y3: Double) =
+        public fun curveToV(x2: Double, y2: Double, x3: Double, y3: Double): Unit =
             curveTo(lastX, lastY, x2, y2, x3, y3)
 
         /** PDF `y` — second control point is the end point. */
-        fun curveToY(x1: Double, y1: Double, x3: Double, y3: Double) =
+        public fun curveToY(x1: Double, y1: Double, x3: Double, y3: Double): Unit =
             curveTo(x1, y1, x3, y3, x3, y3)
 
         /** Quadratic Bézier — TrueType outlines emit these. */
-        fun quadTo(x1: Double, y1: Double, x2: Double, y2: Double) {
+        public fun quadTo(x1: Double, y1: Double, x2: Double, y2: Double) {
             segments.add(Segment.QuadTo(x1, y1, x2, y2))
             lastX = x2; lastY = y2
         }
 
-        fun close() {
+        public fun close() {
             segments.add(Segment.Close)
         }
 
-        fun rectangle(x: Double, y: Double, w: Double, h: Double) {
+        public fun rectangle(x: Double, y: Double, w: Double, h: Double) {
             moveTo(x, y)
             lineTo(x + w, y)
             lineTo(x + w, y + h)
@@ -80,12 +80,12 @@ data class PdfPath(val segments: List<Segment>) {
             close()
         }
 
-        fun build(): PdfPath = PdfPath(segments.toList())
-        fun reset() { segments.clear(); lastX = 0.0; lastY = 0.0 }
-        fun isEmpty(): Boolean = segments.isEmpty()
+        public fun build(): PdfPath = PdfPath(segments.toList())
+        public fun reset() { segments.clear(); lastX = 0.0; lastY = 0.0 }
+        public fun isEmpty(): Boolean = segments.isEmpty()
     }
 
-    companion object {
-        val EMPTY = PdfPath(emptyList())
+    public companion object {
+        public val EMPTY: PdfPath = PdfPath(emptyList())
     }
 }

@@ -47,14 +47,14 @@ import platform.UniformTypeIdentifiers.UTTypePNG
  * the rasterizer is for off-screen output.
  */
 @OptIn(ExperimentalForeignApi::class)
-object ApplePdfRasterizer {
+public object ApplePdfRasterizer {
 
     /**
      * Render a page into a PNG-encoded NSData. Returns null if the
      * underlying CGBitmapContext or PNG encoder can't be created (very
      * rare; would indicate a system-level resource failure).
      */
-    fun renderToPngData(
+    public fun renderToPngData(
         page: PdfPage,
         scale: Double = 1.0,
         backgroundR: Double = 1.0,
@@ -125,4 +125,4 @@ object ApplePdfRasterizer {
 
 /** Old name from 0.0.2, when this only shipped for iOS. */
 @Deprecated("Renamed to ApplePdfRasterizer (now also macOS/tvOS)", ReplaceWith("ApplePdfRasterizer"))
-typealias IosPdfRasterizer = ApplePdfRasterizer
+public typealias IosPdfRasterizer = ApplePdfRasterizer

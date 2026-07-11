@@ -17,7 +17,7 @@ import io.github.yuroyami.kitepdf.crypto.StandardSecurityHandler
  * readers. KitePDF surfaces them so applications built on top can honour
  * the document author's intent; the library itself does not enforce them.
  */
-data class PdfPermissions(
+public data class PdfPermissions(
     val canPrint: Boolean,
     val canModifyContents: Boolean,
     val canCopyContents: Boolean,
@@ -30,19 +30,19 @@ data class PdfPermissions(
     val rawFlags: Int,
 ) {
 
-    companion object {
+    public companion object {
         // 1-based spec bit positions translated to 0-based shifts.
-        const val BIT_PRINT = 1 shl (3 - 1)            // 0x004
-        const val BIT_MODIFY = 1 shl (4 - 1)           // 0x008
-        const val BIT_COPY = 1 shl (5 - 1)             // 0x010
-        const val BIT_ANNOTATE = 1 shl (6 - 1)         // 0x020
-        const val BIT_FILL_FORMS = 1 shl (9 - 1)       // 0x100
-        const val BIT_ACCESSIBILITY = 1 shl (10 - 1)   // 0x200
-        const val BIT_ASSEMBLE = 1 shl (11 - 1)        // 0x400
-        const val BIT_PRINT_HIGHRES = 1 shl (12 - 1)   // 0x800
+        public const val BIT_PRINT: Int = 1 shl (3 - 1)            // 0x004
+        public const val BIT_MODIFY: Int = 1 shl (4 - 1)           // 0x008
+        public const val BIT_COPY: Int = 1 shl (5 - 1)             // 0x010
+        public const val BIT_ANNOTATE: Int = 1 shl (6 - 1)         // 0x020
+        public const val BIT_FILL_FORMS: Int = 1 shl (9 - 1)       // 0x100
+        public const val BIT_ACCESSIBILITY: Int = 1 shl (10 - 1)   // 0x200
+        public const val BIT_ASSEMBLE: Int = 1 shl (11 - 1)        // 0x400
+        public const val BIT_PRINT_HIGHRES: Int = 1 shl (12 - 1)   // 0x800
 
         /** Everything allowed — the default for unencrypted docs. */
-        val allowAll: PdfPermissions = PdfPermissions(
+        public val allowAll: PdfPermissions = PdfPermissions(
             canPrint = true,
             canModifyContents = true,
             canCopyContents = true,

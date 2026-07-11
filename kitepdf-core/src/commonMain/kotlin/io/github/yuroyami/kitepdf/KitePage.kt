@@ -14,13 +14,13 @@ import io.github.yuroyami.kitepdf.render.PdfCanvas
  * rotation; EPUB is y-down from top-left) behind a single mapping onto a
  * top-left-origin, y-down device box `[0, displayWidth] x [0, displayHeight]`.
  */
-interface KitePage {
+public interface KitePage {
 
     /** On-screen page width in points, after any page rotation. */
-    val displayWidth: Double
+    public val displayWidth: Double
 
     /** On-screen page height in points, after any page rotation. */
-    val displayHeight: Double
+    public val displayHeight: Double
 
     /**
      * Maps unscaled display space onto a top-left-origin, y-down device box
@@ -31,10 +31,10 @@ interface KitePage {
      * page.renderTo(canvas, ctm)
      * ```
      */
-    fun displayToDeviceBase(): Matrix
+    public fun displayToDeviceBase(): Matrix
 
     /** Paints the page into [canvas] under [deviceCtm]. */
-    fun renderTo(canvas: PdfCanvas, deviceCtm: Matrix = Matrix.IDENTITY)
+    public fun renderTo(canvas: PdfCanvas, deviceCtm: Matrix = Matrix.IDENTITY)
 
     /**
      * Structured text for extraction / search / selection, in display space
@@ -43,14 +43,14 @@ interface KitePage {
      * the PDF adapter (bridging [io.github.yuroyami.kitepdf.text] extraction)
      * is future work.
      */
-    fun textContent(): KiteStructuredText? = null
+    public fun textContent(): KiteStructuredText? = null
 }
 
 /**
  * Format-neutral document metadata, for a viewer's title bar / info panel.
  * PDF fills it from `/Info` and XMP; EPUB from the OPF `dc:` elements.
  */
-data class KiteMetadata(
+public data class KiteMetadata(
     val title: String? = null,
     val authors: List<String> = emptyList(),
     /** BCP-47 language tag when the document declares one. */
@@ -67,11 +67,11 @@ data class KiteMetadata(
  * One node of a format-neutral outline (PDF bookmarks / EPUB table of
  * contents), for a viewer's navigation panel.
  */
-class KiteOutlineItem(
-    val title: String,
+public class KiteOutlineItem(
+    public val title: String,
     /** Zero-based target page, or null when the destination is unresolvable. */
-    val pageIndex: Int?,
-    val children: List<KiteOutlineItem> = emptyList(),
+    public val pageIndex: Int?,
+    public val children: List<KiteOutlineItem> = emptyList(),
 )
 
 /**
@@ -79,20 +79,20 @@ class KiteOutlineItem(
  * viewer treat a [io.github.yuroyami.kitepdf.PdfDocument] and an
  * [io.github.yuroyami.kitepdf.epub.EpubDocument] uniformly.
  */
-interface KiteDocument {
+public interface KiteDocument {
 
     /** Number of pages. */
-    val pageCount: Int
+    public val pageCount: Int
 
     /** The pages, in reading order. */
-    val pages: List<KitePage>
+    public val pages: List<KitePage>
 
     /** Title/authors/language; defaults empty so third-party implementors don't break. */
-    val metadata: KiteMetadata get() = KiteMetadata()
+    public val metadata: KiteMetadata get() = KiteMetadata()
 
     /**
      * The navigation tree (PDF bookmarks / EPUB table of contents) with
      * destinations resolved to page indices; empty when the document has none.
      */
-    val outline: List<KiteOutlineItem> get() = emptyList()
+    public val outline: List<KiteOutlineItem> get() = emptyList()
 }

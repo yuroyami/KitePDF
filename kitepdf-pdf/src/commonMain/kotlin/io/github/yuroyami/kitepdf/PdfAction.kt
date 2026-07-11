@@ -31,16 +31,16 @@ import io.github.yuroyami.kitepdf.parser.PdfString
  * Each variant carries the source [raw] dict so callers can pick up fields
  * we didn't extract (notably the `/Next` chain for compound actions).
  */
-sealed class PdfAction {
-    abstract val raw: PdfDictionary
+public sealed class PdfAction {
+    public abstract val raw: PdfDictionary
 
-    data class GoTo(
+    public data class GoTo(
         /** Unresolved /D — pass through [PdfDocument.resolveDestination] for the typed view. */
         val destination: PdfObject,
         override val raw: PdfDictionary,
     ) : PdfAction()
 
-    data class GoToR(
+    public data class GoToR(
         /** Target file path (PDFDocEncoded text). */
         val filename: String,
         val destination: PdfObject?,
@@ -48,7 +48,7 @@ sealed class PdfAction {
         override val raw: PdfDictionary,
     ) : PdfAction()
 
-    data class GoToE(
+    public data class GoToE(
         /** Target /T spec for the embedded file. Kept raw — embedded-target chains are rare. */
         val target: PdfDictionary?,
         val destination: PdfObject?,
@@ -56,33 +56,33 @@ sealed class PdfAction {
         override val raw: PdfDictionary,
     ) : PdfAction()
 
-    data class Launch(
+    public data class Launch(
         val filename: String,
         val newWindow: Boolean,
         override val raw: PdfDictionary,
     ) : PdfAction()
 
-    data class Uri(
+    public data class Uri(
         val uri: String,
         /** /IsMap — true if the URL is an image-map and the click point should be appended. */
         val isMap: Boolean,
         override val raw: PdfDictionary,
     ) : PdfAction()
 
-    data class Named(
+    public data class Named(
         val name: NamedActionType,
         /** Original /N name string (preserved for [NamedActionType.Other] cases). */
         val nameRaw: String,
         override val raw: PdfDictionary,
     ) : PdfAction()
 
-    data class JavaScript(
+    public data class JavaScript(
         /** Script source (decoded from /JS string or stream). */
         val script: String,
         override val raw: PdfDictionary,
     ) : PdfAction()
 
-    data class SubmitForm(
+    public data class SubmitForm(
         val url: String?,
         /** Field names or refs the action targets — null means "all fields". */
         val fields: List<PdfObject>?,
@@ -90,13 +90,13 @@ sealed class PdfAction {
         override val raw: PdfDictionary,
     ) : PdfAction()
 
-    data class ResetForm(
+    public data class ResetForm(
         val fields: List<PdfObject>?,
         val flags: Int,
         override val raw: PdfDictionary,
     ) : PdfAction()
 
-    data class Thread(
+    public data class Thread(
         /** Reference to the article thread; can be a /Th dict or an integer index into /Threads. */
         val threadRef: PdfObject?,
         /** Optional bead reference within the thread. */
@@ -108,21 +108,21 @@ sealed class PdfAction {
      * Any action whose /S is unknown to this version of the parser, or which
      * we decided not to fully model. The dict is preserved verbatim.
      */
-    data class Unknown(val type: String, override val raw: PdfDictionary) : PdfAction()
+    public data class Unknown(val type: String, override val raw: PdfDictionary) : PdfAction()
 
     /** Standard /Named action types (ISO 32000-1 §12.6.4.11 Table 211). */
-    enum class NamedActionType {
+    public enum class NamedActionType {
         NextPage, PrevPage, FirstPage, LastPage, Print, Other,
     }
 
-    companion object {
+    public companion object {
 
         /**
          * Parse an /A action dict (or anything that has `/S` and the right
          * shape for the chosen subtype). Returns `null` only when [dict] is
          * `null`; an unknown `/S` falls through to [Unknown].
          */
-        fun parse(dict: PdfDictionary?, refs: IndirectResolver): PdfAction? {
+        public fun parse(dict: PdfDictionary?, refs: IndirectResolver): PdfAction? {
             if (dict == null) return null
             val s = dict.getName("S") ?: return Unknown("", dict)
             return when (s) {

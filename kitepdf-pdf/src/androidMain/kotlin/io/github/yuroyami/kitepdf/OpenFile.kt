@@ -10,7 +10,7 @@ import java.io.File
  * @throws WrongPasswordException when the document is encrypted and
  *   [password] doesn't authenticate.
  */
-fun PdfDocument.Companion.openFile(
+public fun PdfDocument.Companion.openFile(
     path: String,
     password: ByteArray = byteArrayOf(),
 ): PdfDocument = open(File(path).readBytes(), password)

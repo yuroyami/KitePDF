@@ -36,7 +36,7 @@ import kotlinx.coroutines.sync.withLock
  * or pinch — that is what [PdfView] uses (T-14).
  */
 @Stable
-class PdfRasterizer(
+public class PdfRasterizer(
     private val density: Density,
     private val layoutDirection: LayoutDirection,
     private val textMeasurer: TextMeasurer,
@@ -57,7 +57,7 @@ class PdfRasterizer(
      * cancellation points; T-02's operation budget bounds the worst case) —
      * cancellation takes effect between pages.
      */
-    suspend fun rasterizeOffMain(
+    public suspend fun rasterizeOffMain(
         page: KitePage,
         widthPx: Int,
         heightPx: Int,
@@ -116,7 +116,7 @@ class PdfRasterizer(
      *   [ComposeCanvas]. Pass the raster:on-screen ratio (>1) when rendering
      *   supersampled so sub-pixel strokes survive the downscale.
      */
-    fun rasterize(
+    public fun rasterize(
         page: KitePage,
         widthPx: Int,
         heightPx: Int,
@@ -148,7 +148,7 @@ class PdfRasterizer(
 
 /** [PdfRasterizer] wired to the composition's density, layout direction and font resolver. */
 @Composable
-fun rememberPdfRasterizer(): PdfRasterizer {
+public fun rememberPdfRasterizer(): PdfRasterizer {
     val density = LocalDensity.current
     val layoutDirection = LocalLayoutDirection.current
     val textMeasurer = rememberTextMeasurer()

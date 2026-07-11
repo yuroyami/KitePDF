@@ -40,16 +40,16 @@ internal class OpfPackage(
  * Publication metadata surfaced to a reader UI: Dublin Core fields plus the cover
  * image and reading direction. Paths are zip-absolute.
  */
-class EpubMetadata internal constructor(
-    val title: String?,
-    val creators: List<String>,
-    val language: String?,
-    val identifier: String?,
-    val coverImagePath: String?,
+public class EpubMetadata internal constructor(
+    public val title: String?,
+    public val creators: List<String>,
+    public val language: String?,
+    public val identifier: String?,
+    public val coverImagePath: String?,
     /** True for `page-progression-direction="rtl"` books (Arabic/Hebrew/vertical CJK). */
-    val rightToLeft: Boolean,
+    public val rightToLeft: Boolean,
 ) {
-    companion object {
+    public companion object {
         internal val EMPTY = EpubMetadata(null, emptyList(), null, null, null, false)
     }
 }

@@ -125,7 +125,7 @@ import kotlinx.coroutines.launch
  *   never reach this: the viewer scrolls to the target page directly.
  */
 @Composable
-fun PdfView(
+public fun PdfView(
     state: PdfViewState,
     modifier: Modifier = Modifier,
     layout: PdfLayout = PdfLayout.Default,
@@ -275,7 +275,7 @@ private val SCHEME_REGEX = Regex("^[a-zA-Z][a-zA-Z0-9+.-]*:")
  * @param background colour painted behind page content.
  */
 @Composable
-fun PdfView(
+public fun PdfView(
     document: PdfDocument,
     modifier: Modifier = Modifier,
     page: Int? = null,

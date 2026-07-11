@@ -9,9 +9,9 @@ import io.github.yuroyami.kitepdf.core.ByteArrayBuilder
  * its operands (space-separated, via [PdfObjectWriter]) then the operator
  * keyword; inline images are written back verbatim from their captured source.
  */
-object ContentStreamWriter {
+public object ContentStreamWriter {
 
-    fun serialize(operations: List<Operation>): ByteArray {
+    public fun serialize(operations: List<Operation>): ByteArray {
         val out = ByteArrayBuilder(256)
         for (op in operations) {
             val inline = op.inlineImage

@@ -15,9 +15,9 @@ import javax.imageio.ImageIO
  *  - Embedded thumbnails inside JavaFX / Swing apps
  *  - "I just need a BufferedImage" use cases
  */
-object AwtPdfRasterizer {
+public object AwtPdfRasterizer {
 
-    fun renderToImage(
+    public fun renderToImage(
         page: PdfPage,
         scale: Double = 1.0,
         background: Color = Color.WHITE,
@@ -29,6 +29,9 @@ object AwtPdfRasterizer {
         try {
             g.color = background
             g.fillRect(0, 0, w, h)
+            // Top-level clip = the surface: offscreen passes (soft masks) size
+            // their buffers from g.clip, and image graphics report no device bounds.
+            g.clip = java.awt.Rectangle(0, 0, w, h)
             val canvas = AwtCanvas(g)
             val deviceCtm = PdfMatrix(scale, 0.0, 0.0, -scale, 0.0, page.height * scale)
             page.renderTo(canvas, deviceCtm)
@@ -39,7 +42,7 @@ object AwtPdfRasterizer {
     }
 
     /** Returns PNG bytes ready to write to disk / a network response. */
-    fun encodeToPng(page: PdfPage, scale: Double = 1.0, background: Color = Color.WHITE): ByteArray {
+    public fun encodeToPng(page: PdfPage, scale: Double = 1.0, background: Color = Color.WHITE): ByteArray {
         val img = renderToImage(page, scale, background)
         val baos = ByteArrayOutputStream()
         ImageIO.write(img, "png", baos)
@@ -47,7 +50,7 @@ object AwtPdfRasterizer {
     }
 
     /** Returns JPEG bytes. Quality is JDK default; tweak with custom ImageWriter when needed. */
-    fun encodeToJpeg(page: PdfPage, scale: Double = 1.0, background: Color = Color.WHITE): ByteArray {
+    public fun encodeToJpeg(page: PdfPage, scale: Double = 1.0, background: Color = Color.WHITE): ByteArray {
         // JPEG doesn't support alpha; force opaque RGB.
         val src = renderToImage(page, scale, background)
         val rgb = BufferedImage(src.width, src.height, BufferedImage.TYPE_INT_RGB)

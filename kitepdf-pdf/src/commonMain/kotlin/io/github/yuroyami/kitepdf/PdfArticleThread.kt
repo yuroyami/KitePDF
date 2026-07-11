@@ -17,7 +17,7 @@ import io.github.yuroyami.kitepdf.parser.PdfString
  * Metadata fields (title/author/etc.) come from the thread's /I info dict,
  * which is optional and may be missing or partially populated.
  */
-data class PdfArticleThread(
+public data class PdfArticleThread(
     val title: String? = null,
     val author: String? = null,
     val subject: String? = null,
@@ -31,12 +31,12 @@ data class PdfArticleThread(
      * [pageIndex] is `null` only when the bead's /P doesn't resolve to a
      * known page (rare; usually a malformed PDF).
      */
-    data class ArticleBead(
+    public data class ArticleBead(
         val pageIndex: Int?,
         val rect: Rectangle,
     )
 
-    companion object {
+    public companion object {
 
         internal fun parseAll(
             catalog: PdfDictionary,

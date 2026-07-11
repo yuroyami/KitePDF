@@ -56,7 +56,7 @@ import kotlin.math.sqrt
  * groups use the lower-level `Canvas.saveLayer` so they can span multiple
  * `DrawScope` operations.
  */
-class ComposeCanvas(
+public class ComposeCanvas(
     private val drawScope: DrawScope,
     private val textMeasurer: TextMeasurer,
     /**

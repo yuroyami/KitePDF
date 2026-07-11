@@ -27,7 +27,7 @@ import io.github.yuroyami.kitepdf.parser.PdfString
  * val signed = PdfSigner.embedSignature(target.bytes, target.byteRange, cms)
  * ```
  */
-class PdfSigner(
+public class PdfSigner(
     private val doc: PdfDocument,
     private val editor: PdfEditor,
     /** Reserved size of the `/Contents` placeholder in bytes (DER CMS must fit). */
@@ -35,7 +35,7 @@ class PdfSigner(
 ) {
 
     /** The signed bytes plus the exact `/ByteRange` the CMS must cover. */
-    class SigningTarget(val bytes: ByteArray, val byteRange: IntArray)
+    public class SigningTarget(public val bytes: ByteArray, public val byteRange: IntArray)
 
     private var prepared = false
 
@@ -45,7 +45,7 @@ class PdfSigner(
      * field+widget on page [pageIndex] (invisible when [rect] is null), and
      * the AcroForm wiring (`/SigFlags 3`).
      */
-    fun prepareSignature(fieldName: String, rect: Rectangle? = null, pageIndex: Int = 0) {
+    public fun prepareSignature(fieldName: String, rect: Rectangle? = null, pageIndex: Int = 0) {
         check(!prepared) { "prepareSignature was already called" }
         require(!doc.isEncrypted) { "Signing encrypted documents is not supported." }
         val page = doc.pages.getOrNull(pageIndex)
@@ -121,7 +121,7 @@ class PdfSigner(
      * moves), and return the bytes plus the range: `[0, start]` and
      * `[end, size-end]` cover the whole file except the hex string itself.
      */
-    fun saveForSigning(): SigningTarget {
+    public fun saveForSigning(): SigningTarget {
         check(prepared) { "call prepareSignature first" }
         val bytes = editor.saveIncremental()
 
@@ -161,7 +161,7 @@ class PdfSigner(
         return -1
     }
 
-    companion object {
+    public companion object {
         // 10 digits: wide enough for any offset the writer can produce.
         private const val RESERVED = 9999999999L
 
@@ -171,7 +171,7 @@ class PdfSigner(
          * the reserved placeholder; the tail keeps its zero padding, which
          * PKCS#7 validators ignore by convention.
          */
-        fun embedSignature(bytes: ByteArray, byteRange: IntArray, cms: ByteArray): ByteArray {
+        public fun embedSignature(bytes: ByteArray, byteRange: IntArray, cms: ByteArray): ByteArray {
             val start = byteRange[1] + 1 // past '<'
             val capacity = (byteRange[2] - 1) - start
             require(cms.size * 2 <= capacity) {

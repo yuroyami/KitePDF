@@ -14,26 +14,26 @@ package io.github.yuroyami.kitepdf.font
  * "apply feature X to this glyph". Type 7 (extension) is unwrapped. Contextual /
  * chaining lookups (types 5/6/8) and GPOS mark positioning are out of scope.
  */
-class OpenTypeGsub private constructor(
+public class OpenTypeGsub private constructor(
     private val single: Map<String, MutableMap<Int, Int>>,
     private val liga: Map<String, MutableMap<Int, MutableList<LigRule>>>,
 ) {
     /** A ligature rule: [rest] are the 2nd..nth component glyph ids, [lig] the result. */
-    class LigRule(val rest: IntArray, val lig: Int)
+    public class LigRule(public val rest: IntArray, public val lig: Int)
 
     /** The single-substitution glyph for [gid] under [feature], or null. */
-    fun single(feature: String, gid: Int): Int? = single[feature]?.get(gid)
+    public fun single(feature: String, gid: Int): Int? = single[feature]?.get(gid)
 
     /** Ligature rules whose first component is [firstGid] under [feature], longest first. */
-    fun ligatures(feature: String, firstGid: Int): List<LigRule>? = liga[feature]?.get(firstGid)
+    public fun ligatures(feature: String, firstGid: Int): List<LigRule>? = liga[feature]?.get(firstGid)
 
-    val hasArabicJoining: Boolean
+    public val hasArabicJoining: Boolean
         get() = single.keys.any { it == "init" || it == "medi" || it == "fina" }
 
-    companion object {
+    public companion object {
         private val WANT = setOf("init", "medi", "fina", "isol", "liga", "rlig", "calt")
 
-        fun from(gsub: ByteArray?): OpenTypeGsub? {
+        public fun from(gsub: ByteArray?): OpenTypeGsub? {
             gsub ?: return null
             return runCatching { parse(gsub) }.getOrNull()
         }

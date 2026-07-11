@@ -5,9 +5,9 @@ package io.github.yuroyami.kitepdf.crypto
  *
  * Used by PDF Standard Security Handler V5/V6 for password-to-key derivation.
  */
-object Sha256 {
+public object Sha256 {
 
-    fun hash(input: ByteArray): ByteArray {
+    public fun hash(input: ByteArray): ByteArray {
         val state = ShaState()
         state.update(input)
         state.finish()
@@ -126,12 +126,12 @@ object Sha256 {
  * Used by PDF Standard Security Handler R6 (PDF 2.0) Algorithm 2.B, which
  * selects SHA-256/384/512 per iteration based on the running state.
  */
-object Sha512 {
+public object Sha512 {
 
-    fun hash(input: ByteArray): ByteArray = digest(input, IV_512, 64)
+    public fun hash(input: ByteArray): ByteArray = digest(input, IV_512, 64)
 
     /** SHA-384 = SHA-512 with a different IV, output truncated to 48 bytes. */
-    fun hash384(input: ByteArray): ByteArray = digest(input, IV_384, 48)
+    public fun hash384(input: ByteArray): ByteArray = digest(input, IV_384, 48)
 
     private fun digest(input: ByteArray, iv: LongArray, outLen: Int): ByteArray {
         val h = iv.copyOf()

@@ -16,7 +16,7 @@ import io.github.yuroyami.kitepdf.core.ByteArrayBuilder
  * everything else (a CIDFontType2 with an Identity encoding + `/CIDToGIDMap`
  * needs no `cmap`/`name`/`post`). Assembly + checksums are [SfntWriter]'s job.
  */
-object TrueTypeSubsetter {
+public object TrueTypeSubsetter {
 
     // Tables copied unchanged when present (no glyph-id-indexed data, so safe).
     // NOT cmap (maps Unicode→old gid — renumbering invalidates it) and NOT post
@@ -30,9 +30,9 @@ object TrueTypeSubsetter {
     // so a verbatim copy is safe.
     private val COPY_VERBATIM = listOf("name", "OS/2", "cvt ", "fpgm", "prep")
 
-    class Subset(val fontBytes: ByteArray, val oldToNew: Map<Int, Int>)
+    public class Subset(public val fontBytes: ByteArray, public val oldToNew: Map<Int, Int>)
 
-    fun subset(font: TrueTypeFont, usedGids: Set<Int>): Subset {
+    public fun subset(font: TrueTypeFont, usedGids: Set<Int>): Subset {
         // 1. Transitive glyph closure, always including .notdef (gid 0). Gid 0 is
         //    queued like any other seed (not pre-added to the closure) so that its
         //    own composite children — if .notdef is a composite glyph — are pulled

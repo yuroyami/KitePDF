@@ -14,14 +14,14 @@ import io.github.yuroyami.kitepdf.core.PdfFormatException
  * The lexer does NOT decide what's an "obj" header or what's an operator — it
  * just classifies tokens. The parser interprets them.
  */
-class Lexer(val reader: ByteReader) {
+public class Lexer(public val reader: ByteReader) {
 
     // Reused across tokens: names, keywords and reals accumulate here instead of
     // allocating a fresh StringBuilder per token. nextToken() is single-threaded
     // and fully consumes each token before the next, so sharing is safe.
     private val tokenBuf = StringBuilder()
 
-    fun nextToken(): Token {
+    public fun nextToken(): Token {
         skipWhitespaceAndComments()
         if (reader.isAtEnd()) return Token.EndOfFile
 
@@ -54,7 +54,7 @@ class Lexer(val reader: ByteReader) {
     }
 
     /** Read raw bytes from the current position — used by parser after a "stream" keyword. */
-    fun rawReader(): ByteReader = reader
+    public fun rawReader(): ByteReader = reader
 
     /* ─── Whitespace ──────────────────────────────────────────────────────── */
 
@@ -256,17 +256,17 @@ class Lexer(val reader: ByteReader) {
         return Token.Keyword(sb.toString(), start)
     }
 
-    companion object {
-        fun isWhitespace(c: Int): Boolean =
+    public companion object {
+        public fun isWhitespace(c: Int): Boolean =
             c == 0 || c == 9 || c == 10 || c == 12 || c == 13 || c == 32
 
-        fun isDelimiter(c: Int): Boolean = when (c) {
+        public fun isDelimiter(c: Int): Boolean = when (c) {
             '('.code, ')'.code, '<'.code, '>'.code, '['.code, ']'.code,
             '{'.code, '}'.code, '/'.code, '%'.code -> true
             else -> false
         }
 
-        fun hexDigit(c: Int): Int? = when (c) {
+        public fun hexDigit(c: Int): Int? = when (c) {
             in '0'.code..'9'.code -> c - '0'.code
             in 'a'.code..'f'.code -> c - 'a'.code + 10
             in 'A'.code..'F'.code -> c - 'A'.code + 10
@@ -275,19 +275,19 @@ class Lexer(val reader: ByteReader) {
     }
 }
 
-sealed class Token {
-    data class Integer(val value: Long, val offset: Int) : Token()
-    data class Real(val value: Double, val offset: Int) : Token()
-    data class StringLiteral(val bytes: ByteArray, val offset: Int) : Token() {
+public sealed class Token {
+    public data class Integer(val value: Long, val offset: Int) : Token()
+    public data class Real(val value: Double, val offset: Int) : Token()
+    public data class StringLiteral(val bytes: ByteArray, val offset: Int) : Token() {
         override fun equals(other: Any?): Boolean =
             other is StringLiteral && offset == other.offset && bytes.contentEquals(other.bytes)
         override fun hashCode(): Int = 31 * offset + bytes.contentHashCode()
     }
-    data class Name(val value: String, val offset: Int) : Token()
-    data class Keyword(val value: String, val offset: Int) : Token()
-    data object ArrayOpen : Token()
-    data object ArrayClose : Token()
-    data object DictOpen : Token()
-    data object DictClose : Token()
-    data object EndOfFile : Token()
+    public data class Name(val value: String, val offset: Int) : Token()
+    public data class Keyword(val value: String, val offset: Int) : Token()
+    public data object ArrayOpen : Token()
+    public data object ArrayClose : Token()
+    public data object DictOpen : Token()
+    public data object DictClose : Token()
+    public data object EndOfFile : Token()
 }

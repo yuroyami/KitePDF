@@ -16,31 +16,31 @@ import kotlin.math.absoluteValue
  * via [Cache]. That keeps memory flat — most PDFs reference 50–200 glyphs
  * from a font containing thousands.
  */
-class TrueTypeFont private constructor(
+public class TrueTypeFont private constructor(
     private val reader: TtfReader,
     private val tables: Map<String, Table>,
-    val head: Head,
-    val maxp: Maxp,
-    val hhea: Hhea,
-    val hmtx: Hmtx,
-    val cmap: TtfCMap,
+    public val head: Head,
+    public val maxp: Maxp,
+    public val hhea: Hhea,
+    public val hmtx: Hmtx,
+    public val cmap: TtfCMap,
     private val locaOffsets: IntArray,
 ) {
 
     /** SFNT version: 0x00010000 (TrueType outlines) or "OTTO" / "true" / "typ1". */
     // Coerce to the spec's valid range (16..16384); a bad value would make
     // fontSize/unitsPerEm blow up to Infinity and render glyphs invisibly.
-    val unitsPerEm: Int get() = head.unitsPerEm.takeIf { it in 16..16384 } ?: 1000
-    val numGlyphs: Int get() = maxp.numGlyphs
+    public val unitsPerEm: Int get() = head.unitsPerEm.takeIf { it in 16..16384 } ?: 1000
+    public val numGlyphs: Int get() = maxp.numGlyphs
 
     private val cache = HashMap<Int, GlyphOutline?>()
     private val pathCache = HashMap<Int, PdfPath?>()
 
     /** Convert a unicode codepoint to a glyph index, or 0 (.notdef) if unmapped. */
-    fun glyphIdForCodePoint(codePoint: Int): Int = cmap.glyphIdFor(codePoint)
+    public fun glyphIdForCodePoint(codePoint: Int): Int = cmap.glyphIdFor(codePoint)
 
     /** Glyph advance width in font design units. */
-    fun advanceWidth(glyphId: Int): Int = hmtx.advanceWidth(glyphId)
+    public fun advanceWidth(glyphId: Int): Int = hmtx.advanceWidth(glyphId)
 
     /**
      * Long vertical advances from `vhea`/`vmtx` (T-72 vertical writing).
@@ -57,7 +57,7 @@ class TrueTypeFont private constructor(
     }
 
     /** Glyph advance height in font design units, or null without `vhea`/`vmtx`. */
-    fun advanceHeight(glyphId: Int): Int? {
+    public fun advanceHeight(glyphId: Int): Int? {
         val v = vmtxAdvances ?: return null
         if (v.isEmpty() || glyphId < 0) return null
         return if (glyphId < v.size) v[glyphId] else v[v.size - 1]
@@ -68,7 +68,7 @@ class TrueTypeFont private constructor(
      * null if the font has no such table. Lets the writer's font-embedding path
      * read tables the renderer itself doesn't parse.
      */
-    fun rawTable(tag: String): ByteArray? =
+    public fun rawTable(tag: String): ByteArray? =
         tables[tag]?.let { reader.slice(it.offset, it.length) }
 
     /**
@@ -116,7 +116,7 @@ class TrueTypeFont private constructor(
     private fun u16(b: ByteArray, p: Int): Int = ((b[p].toInt() and 0xFF) shl 8) or (b[p + 1].toInt() and 0xFF)
 
     /** Get the outline for [glyphId], or null if the glyph slot is empty (zero-length). */
-    fun outline(glyphId: Int): GlyphOutline? {
+    public fun outline(glyphId: Int): GlyphOutline? {
         if (cache.containsKey(glyphId)) return cache[glyphId]
         val parsed = parseGlyph(glyphId, depth = 0, active = HashSet())
         cache[glyphId] = parsed
@@ -130,7 +130,7 @@ class TrueTypeFont private constructor(
      * Outline as a [PdfPath], cached — the `GlyphOutline → PdfPath` conversion
      * is built once per glyph, not on every draw.
      */
-    fun outlinePath(glyphId: Int): PdfPath? {
+    public fun outlinePath(glyphId: Int): PdfPath? {
         if (pathCache.containsKey(glyphId)) return pathCache[glyphId]
         val p = outline(glyphId)?.toPdfPath()
         pathCache[glyphId] = p
@@ -363,12 +363,12 @@ class TrueTypeFont private constructor(
 
     /* ─── Companion: parse(bytes) ─────────────────────────────────────────── */
 
-    companion object {
+    public companion object {
 
         private val EMPTY = ByteArray(0)
 
         /** Parse a font from a raw `.ttf` / `.otf` byte buffer. */
-        fun parse(bytes: ByteArray): TrueTypeFont {
+        public fun parse(bytes: ByteArray): TrueTypeFont {
             val reader = TtfReader(bytes)
             // ── sfnt header ───────────────────────────────────────────────
             val scalerType = reader.u32()
@@ -492,9 +492,9 @@ class TrueTypeFont private constructor(
 }
 
 /** SFNT table location in the byte buffer. Public so [TtfCMap] can take one as a parameter. */
-data class Table(val tag: String, val offset: Int, val length: Int)
+public data class Table(val tag: String, val offset: Int, val length: Int)
 
-data class Head(
+public data class Head(
     val flags: Int,
     val unitsPerEm: Int,
     val xMin: Int, val yMin: Int, val xMax: Int, val yMax: Int,
@@ -502,22 +502,22 @@ data class Head(
     val indexToLocFormat: Int,
 )
 
-data class Maxp(val numGlyphs: Int)
+public data class Maxp(val numGlyphs: Int)
 
-data class Hhea(val ascent: Int, val descent: Int, val lineGap: Int, val numberOfHMetrics: Int)
+public data class Hhea(val ascent: Int, val descent: Int, val lineGap: Int, val numberOfHMetrics: Int)
 
-class Hmtx(private val widths: IntArray) {
-    fun advanceWidth(glyphId: Int): Int =
+public class Hmtx(private val widths: IntArray) {
+    public fun advanceWidth(glyphId: Int): Int =
         if (glyphId < 0 || glyphId >= widths.size) 0 else widths[glyphId]
 }
 
 /** A single glyph point in font design units. */
-data class GlyphPoint(val x: Int, val y: Int, val onCurve: Boolean)
+public data class GlyphPoint(val x: Int, val y: Int, val onCurve: Boolean)
 
 /** One contour = sequence of points around a closed loop. */
-data class Contour(val points: List<GlyphPoint>)
+public data class Contour(val points: List<GlyphPoint>)
 
-data class GlyphBbox(val xMin: Int, val yMin: Int, val xMax: Int, val yMax: Int)
+public data class GlyphBbox(val xMin: Int, val yMin: Int, val xMax: Int, val yMax: Int)
 
 /**
  * Parsed glyph outline. TrueType outlines are sequences of contours, where
@@ -531,9 +531,9 @@ data class GlyphBbox(val xMin: Int, val yMin: Int, val xMax: Int, val yMax: Int)
  * The outline is in font design units (multiply by `fontSize / unitsPerEm`
  * to get PDF user-space units). Y is positive-up — typical TrueType convention.
  */
-data class GlyphOutline(val contours: List<Contour>, val bbox: GlyphBbox) {
+public data class GlyphOutline(val contours: List<Contour>, val bbox: GlyphBbox) {
 
-    fun toPdfPath(): PdfPath {
+    public fun toPdfPath(): PdfPath {
         val b = PdfPath.Builder()
         for (contour in contours) {
             renderContour(contour.points, b)

@@ -17,6 +17,7 @@ plugins {
  * it compiles for every target Kotlin supports — so every target is on.
  */
 kotlin {
+    explicitApi()
     jvmToolchain(21)
 
     android {

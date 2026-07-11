@@ -12,16 +12,16 @@ package io.github.yuroyami.kitepdf.font
  * (type 5) are not handled yet. All type-4 subtables are consulted (the `mark`
  * feature is on by default), so no feature filtering is needed.
  */
-class OpenTypeMarks private constructor(private val subtables: List<MarkBase>) {
+public class OpenTypeMarks private constructor(private val subtables: List<MarkBase>) {
 
     /** Attachment offset (font units) placing [markGid] on [baseGid], or null. */
-    fun offset(baseGid: Int, markGid: Int): Pair<Double, Double>? {
+    public fun offset(baseGid: Int, markGid: Int): Pair<Double, Double>? {
         for (st in subtables) st.offset(baseGid, markGid)?.let { return it }
         return null
     }
 
-    companion object {
-        fun from(gpos: ByteArray?): OpenTypeMarks? {
+    public companion object {
+        public fun from(gpos: ByteArray?): OpenTypeMarks? {
             gpos ?: return null
             val subs = runCatching { parse(gpos) }.getOrNull() ?: return null
             return if (subs.isEmpty()) null else OpenTypeMarks(subs)

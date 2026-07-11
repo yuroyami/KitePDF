@@ -49,19 +49,19 @@ import io.github.yuroyami.kitepdf.writer.PdfEditor
  * caches, so multiple threads may render pages of the same document —
  * including the same page — simultaneously.
  */
-class PdfDocument private constructor(
-    val version: String,
-    val bytes: ByteArray,
-    val xref: Map<Long, XrefEntry>,
-    val trailer: PdfDictionary,
+public class PdfDocument private constructor(
+    public val version: String,
+    public val bytes: ByteArray,
+    public val xref: Map<Long, XrefEntry>,
+    public val trailer: PdfDictionary,
     private val security: StandardSecurityHandler?,
 ) : IndirectResolver, KiteDocument {
 
     /** True if the document is encrypted. */
-    val isEncrypted: Boolean get() = security != null
+    public val isEncrypted: Boolean get() = security != null
 
     /** True if [open] found a working password for an encrypted doc. */
-    val isAuthenticated: Boolean get() = security?.isAuthenticated ?: true
+    public val isAuthenticated: Boolean get() = security?.isAuthenticated ?: true
 
     /** The security handler, for the write path ([PdfEditor] re-encrypts staged objects). */
     internal val securityHandler: StandardSecurityHandler? get() = security
@@ -79,7 +79,7 @@ class PdfDocument private constructor(
     private val objStreamCache = HashMap<Long, Map<Int, PdfObject>>()
 
     /** The document catalog (/Root in the trailer). */
-    val catalog: PdfDictionary by lazy {
+    public val catalog: PdfDictionary by lazy {
         val rootRef = trailer.getRef("Root")
             ?: throw PdfFormatException("Trailer has no /Root reference")
         resolve(rootRef) as? PdfDictionary
@@ -90,7 +90,7 @@ class PdfDocument private constructor(
      * Document /Info dictionary (title, author, dates, …). Returns an empty
      * info object if the trailer has no /Info or it doesn't resolve.
      */
-    val info: PdfDocumentInfo by lazy {
+    public val info: PdfDocumentInfo by lazy {
         val raw = trailer["Info"] ?: return@lazy PdfDocumentInfo()
         val dict = when (raw) {
             is PdfReference -> resolve(raw) as? PdfDictionary
@@ -105,7 +105,7 @@ class PdfDocument private constructor(
      * for unencrypted documents; reflects the `/P` bit-flags from the security
      * handler otherwise.
      */
-    val permissions: PdfPermissions by lazy {
+    public val permissions: PdfPermissions by lazy {
         PdfPermissions.from(security)
     }
 
@@ -113,7 +113,7 @@ class PdfDocument private constructor(
      * Raw XMP metadata packet as a UTF-8 string, or `null` if the catalog has
      * no `/Metadata` stream (or it doesn't resolve to one).
      */
-    val xmpMetadataXml: String? by lazy {
+    public val xmpMetadataXml: String? by lazy {
         val raw = catalog["Metadata"] ?: return@lazy null
         val stream = when (raw) {
             is PdfReference -> resolve(raw) as? PdfStream
@@ -133,7 +133,7 @@ class PdfDocument private constructor(
      * XMP-basic properties. Falls back to the trailer `/Info` dict when XMP
      * is absent — call [info] explicitly if you need both views.
      */
-    val xmp: PdfXmpMetadata? by lazy {
+    public val xmp: PdfXmpMetadata? by lazy {
         xmpMetadataXml?.let { PdfXmpMetadata.parse(it) }
     }
 
@@ -216,7 +216,7 @@ class PdfDocument private constructor(
      * Document outline (bookmarks). Top-level entries from the catalog
      * `/Outlines /First` chain; empty list if the document has no outline.
      */
-    val outlines: List<PdfOutline> by lazy {
+    public val outlines: List<PdfOutline> by lazy {
         PdfOutline.buildTree(catalog, this)
     }
 
@@ -251,16 +251,16 @@ class PdfDocument private constructor(
     }
 
     /** Initial UI panel hint (`/PageMode`). [PageMode.UseNone] when absent. */
-    val pageMode: PageMode get() = PageMode.fromName(catalog.getName("PageMode"))
+    public val pageMode: PageMode get() = PageMode.fromName(catalog.getName("PageMode"))
 
     /** Initial page-layout hint (`/PageLayout`). [PageLayout.SinglePage] when absent. */
-    val pageLayout: PageLayout get() = PageLayout.fromName(catalog.getName("PageLayout"))
+    public val pageLayout: PageLayout get() = PageLayout.fromName(catalog.getName("PageLayout"))
 
     /**
      * Viewer-preferences hints (`/ViewerPreferences`). Returns
      * [PdfViewerPreferences.DEFAULT] when the catalog doesn't carry the dict.
      */
-    val viewerPreferences: PdfViewerPreferences by lazy {
+    public val viewerPreferences: PdfViewerPreferences by lazy {
         val dict = catalog.getDict("ViewerPreferences", this) ?: return@lazy PdfViewerPreferences.DEFAULT
         PdfViewerPreferences.parse(dict, this)
     }
@@ -270,19 +270,19 @@ class PdfDocument private constructor(
      * of bead rectangles on pages — used by readers to jump between columns
      * in a multi-column layout. Empty list when the catalog has no /Threads.
      */
-    val articleThreads: List<PdfArticleThread> by lazy {
+    public val articleThreads: List<PdfArticleThread> by lazy {
         pages  // touch to populate pageRefToIndex
         PdfArticleThread.parseAll(catalog, this, pageRefToIndex)
     }
 
     /** Document language tag (BCP 47), e.g. "en-US", "fr-CA". `null` when /Lang is absent. */
-    val language: String? get() = (catalog["Lang"] as? PdfString)?.asText()
+    public val language: String? get() = (catalog["Lang"] as? PdfString)?.asText()
 
     /**
      * Document-level JavaScript scripts from `/Names /JavaScript`. Map keys
      * are the script names; values are the JS source. Empty when none.
      */
-    val documentJavaScripts: Map<String, String> by lazy {
+    public val documentJavaScripts: Map<String, String> by lazy {
         val names = catalog.getDict("Names", this) ?: return@lazy emptyMap()
         val jsTree = names.getDict("JavaScript", this) ?: return@lazy emptyMap()
         val entries = io.github.yuroyami.kitepdf.parser.NameTreeWalker.collect(jsTree, this)
@@ -304,7 +304,7 @@ class PdfDocument private constructor(
      * supplementary files: source artwork, datasets, XML schemas, etc.
      * Empty list when the document has no /EmbeddedFiles name tree.
      */
-    val attachments: List<PdfAttachment> by lazy {
+    public val attachments: List<PdfAttachment> by lazy {
         PdfAttachment.parseAll(catalog, this)
     }
 
@@ -312,7 +312,7 @@ class PdfDocument private constructor(
      * Tagged-PDF accessibility metadata. `null` when the document has no
      * `/MarkInfo` dict — i.e. it is not tagged.
      */
-    val markInfo: PdfMarkInfo? by lazy {
+    public val markInfo: PdfMarkInfo? by lazy {
         PdfMarkInfo.parse(catalog.getDict("MarkInfo", this))
     }
 
@@ -320,7 +320,7 @@ class PdfDocument private constructor(
      * Optional Content / layers metadata (read-only). `null` when the
      * catalog has no `/OCProperties`.
      */
-    val optionalContent: PdfOptionalContent? by lazy {
+    public val optionalContent: PdfOptionalContent? by lazy {
         PdfOptionalContent.parse(catalog, this)
     }
 
@@ -329,7 +329,7 @@ class PdfDocument private constructor(
      * catalog has no `/AcroForm` entry — the document carries no
      * interactive form fields.
      */
-    val acroForm: PdfAcroForm? by lazy {
+    public val acroForm: PdfAcroForm? by lazy {
         PdfAcroForm.parse(catalog, this)
     }
 
@@ -338,12 +338,12 @@ class PdfDocument private constructor(
      * fields, with inheritable attributes resolved). Empty when the document
      * has no form. Drives form-filling via [io.github.yuroyami.kitepdf.writer.PdfEditor].
      */
-    val formFields: List<PdfFormField> by lazy {
+    public val formFields: List<PdfFormField> by lazy {
         PdfFormField.collect(catalog, this)
     }
 
     /** Look up a form field by its fully-qualified name; null if not present. */
-    fun formField(fullyQualifiedName: String): PdfFormField? =
+    public fun formField(fullyQualifiedName: String): PdfFormField? =
         formFields.firstOrNull { it.fullyQualifiedName == fullyQualifiedName }
 
     /**
@@ -353,7 +353,7 @@ class PdfDocument private constructor(
      * dict containing `/D` (a wrapped destination). Returns `null` when the
      * destination can't be resolved.
      */
-    fun resolveDestination(raw: PdfObject?): PdfDestination? {
+    public fun resolveDestination(raw: PdfObject?): PdfDestination? {
         // Touch [pages] to ensure pageRefToIndex is populated.
         pages
         return DestinationParser.resolve(raw, destCatalog, this, pageRefToIndex)
@@ -368,7 +368,7 @@ class PdfDocument private constructor(
      * staged objects to match; [random] feeds the per-object IVs (seed it for
      * reproducible output in tests).
      */
-    fun edit(random: kotlin.random.Random = kotlin.random.Random.Default): PdfEditor = PdfEditor(this, random)
+    public fun edit(random: kotlin.random.Random = kotlin.random.Random.Default): PdfEditor = PdfEditor(this, random)
 
     /* ─── IndirectResolver ───────────────────────────────────────────────── */
 
@@ -557,9 +557,9 @@ class PdfDocument private constructor(
 
     /* ─── Companion: open() ──────────────────────────────────────────────── */
 
-    companion object {
+    public companion object {
 
-        fun open(
+        public fun open(
             bytes: ByteArray,
             password: ByteArray = byteArrayOf(),
             allowInvalidPassword: Boolean = false,

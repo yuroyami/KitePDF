@@ -14,7 +14,7 @@ package io.github.yuroyami.kitepdf
  * Date fields are exposed as raw ISO 8601 strings (XMP uses 8601 rather
  * than PDF's `D:YYYYMMDDHHmmSS...` form).
  */
-data class PdfXmpMetadata(
+public data class PdfXmpMetadata(
     /** dc:title — language alternative; the x-default (or first) value. */
     val title: String? = null,
     /** dc:creator — ordered sequence of author names. */
@@ -41,8 +41,8 @@ data class PdfXmpMetadata(
     val xml: String,
 ) {
 
-    companion object {
-        fun parse(xml: String): PdfXmpMetadata = XmpExtractor.extract(xml)
+    public companion object {
+        public fun parse(xml: String): PdfXmpMetadata = XmpExtractor.extract(xml)
     }
 }
 

@@ -50,7 +50,7 @@ import javax.imageio.ImageIO
  * (Multiply, Screen, …) require a custom `java.awt.Composite` — we ship a
  * pixel-level [PdfBlendComposite] that implements all 16 modes for fidelity.
  */
-class AwtCanvas(private val g: Graphics2D) : PdfCanvas {
+public class AwtCanvas(private val g: Graphics2D) : PdfCanvas {
 
     /** Save-state stack — mirrors clip + transform + composite per push. */
     private val saveStack = ArrayDeque<SavedState>()

@@ -27,18 +27,18 @@ import io.github.yuroyami.kitepdf.text.TextExtractor
  * page.renderTo(canvas, deviceCtm = Matrix.IDENTITY)
  * ```
  */
-class PdfPage internal constructor(
+public class PdfPage internal constructor(
     private val document: PdfDocument,
     private val node: PdfDictionary,
     private val inherited: PageInheritable,
     /** Zero-based position in the document's flat page list. */
-    val index: Int,
+    public val index: Int,
     /**
      * The page's own indirect reference (its entry in the parent's `/Kids`).
      * `null` only for the unusual case of a page dict inlined directly in
      * `/Kids`. The writer needs this to target the page object for edits.
      */
-    val reference: PdfReference? = null,
+    public val reference: PdfReference? = null,
 ) : KitePage {
 
     /** The raw page dictionary — used by the writer to rebuild the page on edit. */
@@ -49,7 +49,7 @@ class PdfPage internal constructor(
      * to the one-based index as a string when the document doesn't define
      * its own labels.
      */
-    val label: String
+    public val label: String
         get() = document.pageLabels.labelOf(index) ?: (index + 1).toString()
 
     /**
@@ -75,12 +75,12 @@ class PdfPage internal constructor(
     }
 
     /** Page box in PDF user-space units (1/72 inch). [left, bottom, right, top]. */
-    val mediaBox: Rectangle by lazy {
+    public val mediaBox: Rectangle by lazy {
         readBox("MediaBox") ?: inherited.mediaBox?.let(Rectangle::fromPdfArray)
             ?: throw PdfFormatException("Page has no /MediaBox")
     }
 
-    val cropBox: Rectangle by lazy {
+    public val cropBox: Rectangle by lazy {
         readBox("CropBox") ?: inherited.cropBox?.let(Rectangle::fromPdfArray) ?: mediaBox
     }
 
@@ -89,34 +89,34 @@ class PdfPage internal constructor(
      * (printing with bleed). Defaults to [cropBox] when `/BleedBox` is
      * absent. ISO 32000-1 §14.11.2.
      */
-    val bleedBox: Rectangle by lazy {
+    public val bleedBox: Rectangle by lazy {
         readBox("BleedBox") ?: cropBox
     }
 
     /** Intended dimensions of the finished page after trimming. Defaults to [cropBox]. */
-    val trimBox: Rectangle by lazy {
+    public val trimBox: Rectangle by lazy {
         readBox("TrimBox") ?: cropBox
     }
 
     /** Extent of meaningful content (excluding margins, crop marks). Defaults to [cropBox]. */
-    val artBox: Rectangle by lazy {
+    public val artBox: Rectangle by lazy {
         readBox("ArtBox") ?: cropBox
     }
 
-    val rotation: Int get() = (node.getInt("Rotate") ?: inherited.rotate ?: 0).toInt()
+    public val rotation: Int get() = (node.getInt("Rotate") ?: inherited.rotate ?: 0).toInt()
 
     /**
      * [rotation] normalised into `{0, 90, 180, 270}`: reduced modulo 360 into
      * `[0, 360)` then snapped to the nearest right angle (defensive — in
      * practice the value is already a multiple of 90).
      */
-    val rotationNormalized: Int
+    public val rotationNormalized: Int
         get() {
             val r = ((rotation % 360) + 360) % 360
             return (((r + 45) / 90) * 90) % 360
         }
 
-    val resources: PdfDictionary? get() = node.getDict("Resources", document) ?: inherited.resources
+    public val resources: PdfDictionary? get() = node.getDict("Resources", document) ?: inherited.resources
 
     /**
      * Multiplier for user-space units on this page (PDF 1.6+, §14.8.1). Default
@@ -124,17 +124,17 @@ class PdfPage internal constructor(
      * 2/72 inch, doubling the effective page size for the same coordinate
      * stream. Useful for very large pages (architectural drawings, posters).
      */
-    val userUnit: Double get() = node.getReal("UserUnit") ?: 1.0
+    public val userUnit: Double get() = node.getReal("UserUnit") ?: 1.0
 
-    val width: Double get() = mediaBox.right - mediaBox.left
-    val height: Double get() = mediaBox.top - mediaBox.bottom
+    public val width: Double get() = mediaBox.right - mediaBox.left
+    public val height: Double get() = mediaBox.top - mediaBox.bottom
 
     /**
      * The region to display: [cropBox] clamped to [mediaBox] bounds (their
      * intersection). Falls back to [mediaBox] when the intersection is empty or
      * degenerate (zero/negative width or height).
      */
-    val displayBox: Rectangle by lazy {
+    public val displayBox: Rectangle by lazy {
         val m = mediaBox
         val c = cropBox
         val left = maxOf(m.left, c.left)
@@ -145,11 +145,11 @@ class PdfPage internal constructor(
     }
 
     /** Width of [displayBox] after applying [rotationNormalized] (dimensions swap at 90/270). */
-    val rotatedWidth: Double
+    public val rotatedWidth: Double
         get() = if (rotationNormalized == 90 || rotationNormalized == 270) displayBox.height else displayBox.width
 
     /** Height of [displayBox] after applying [rotationNormalized] (dimensions swap at 90/270). */
-    val rotatedHeight: Double
+    public val rotatedHeight: Double
         get() = if (rotationNormalized == 90 || rotationNormalized == 270) displayBox.width else displayBox.height
 
     // KitePage: display geometry is the rotated box, and the base transform is
@@ -166,7 +166,7 @@ class PdfPage internal constructor(
      *
      * Verified against pdf.js viewport math for [Matrix]`(a, b, c, d, e, f)`.
      */
-    fun pageToDeviceBase(): Matrix {
+    public fun pageToDeviceBase(): Matrix {
         val b = displayBox
         val x0 = b.left
         val y0 = b.bottom
@@ -186,7 +186,7 @@ class PdfPage internal constructor(
      * newline (per ISO 32000-1 §7.8.2: "The effect is as if all of the streams
      * in the array were concatenated").
      */
-    val contentBytes: ByteArray by lazy {
+    public val contentBytes: ByteArray by lazy {
         when (val c = node["Contents"]) {
             null -> ByteArray(0)
             is PdfReference -> streamBytesOf(c) ?: ByteArray(0)
@@ -224,7 +224,7 @@ class PdfPage internal constructor(
     }
 
     /** Extract page text using the naive Tj/TJ/' / " operator scan. */
-    fun extractText(): String = TextExtractor.extract(this)
+    public fun extractText(): String = TextExtractor.extract(this)
 
     /**
      * Structured text — spans clustered into lines, lines clustered into
@@ -232,7 +232,7 @@ class PdfPage internal constructor(
      * search highlights) alongside the text. For a plain string, prefer
      * [extractText].
      */
-    val structuredText: io.github.yuroyami.kitepdf.text.PdfStructuredText by lazy {
+    public val structuredText: io.github.yuroyami.kitepdf.text.PdfStructuredText by lazy {
         io.github.yuroyami.kitepdf.text.StructuredTextExtractor.extract(this)
     }
 
@@ -255,7 +255,7 @@ class PdfPage internal constructor(
      * Annotations attached to this page (links, highlights, etc.). Parsed from
      * the page's `/Annots` array; empty when the page has none.
      */
-    val annotations: List<PdfAnnotation> by lazy {
+    public val annotations: List<PdfAnnotation> by lazy {
         val arr = node.getArray("Annots", document) ?: return@lazy emptyList()
         arr.mapNotNull { item ->
             val dict = when (item) {

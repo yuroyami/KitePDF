@@ -18,8 +18,8 @@ import io.github.yuroyami.kitepdf.parser.PdfDictionary
  * per row. The bit polarity matches the spec default: 0 = black/foreground,
  * 1 = white/background — unless /BlackIs1 is true.
  */
-object CcittFaxFilter : PdfFilter {
-    override val name = "CCITTFaxDecode"
+public object CcittFaxFilter : PdfFilter {
+    override val name: String = "CCITTFaxDecode"
 
     override fun decode(input: ByteArray, params: PdfDictionary?): ByteArray {
         val k = params?.getInt("K")?.toInt() ?: 0

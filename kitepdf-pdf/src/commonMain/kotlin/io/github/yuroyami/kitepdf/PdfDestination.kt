@@ -21,22 +21,22 @@ import io.github.yuroyami.kitepdf.parser.PdfString
  * 3. A name-string referring into the `/Names /Dests` name tree (PDF 1.2+)
  * 4. A dictionary with `/D` pointing at any of the above
  */
-data class PdfDestination(
+public data class PdfDestination(
     val view: ViewFit,
     /** Zero-based page index, or `null` if the page reference didn't resolve. */
     val pageIndex: Int?,
     /** Page-space coordinate args used by the fit mode. Empty for /Fit. */
     val args: DoubleArray,
 ) {
-    sealed class ViewFit {
-        object Fit : ViewFit()
-        object FitB : ViewFit()
-        data class XYZ(val left: Double?, val top: Double?, val zoom: Double?) : ViewFit()
-        data class FitH(val top: Double?) : ViewFit()
-        data class FitBH(val top: Double?) : ViewFit()
-        data class FitV(val left: Double?) : ViewFit()
-        data class FitBV(val left: Double?) : ViewFit()
-        data class FitR(val left: Double, val bottom: Double, val right: Double, val top: Double) : ViewFit()
+    public sealed class ViewFit {
+        public object Fit : ViewFit()
+        public object FitB : ViewFit()
+        public data class XYZ(val left: Double?, val top: Double?, val zoom: Double?) : ViewFit()
+        public data class FitH(val top: Double?) : ViewFit()
+        public data class FitBH(val top: Double?) : ViewFit()
+        public data class FitV(val left: Double?) : ViewFit()
+        public data class FitBV(val left: Double?) : ViewFit()
+        public data class FitR(val left: Double, val bottom: Double, val right: Double, val top: Double) : ViewFit()
     }
 
     override fun equals(other: Any?): Boolean =

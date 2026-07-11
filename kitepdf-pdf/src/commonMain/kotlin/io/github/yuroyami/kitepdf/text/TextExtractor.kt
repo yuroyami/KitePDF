@@ -28,15 +28,15 @@ import io.github.yuroyami.kitepdf.parser.PdfString
  * Line breaks are inserted on `BT/ET`, `Td`, `TD`, `T*`, `Tm` heuristics
  * because PDF text positioning is geometric, not line-based.
  */
-object TextExtractor {
+public object TextExtractor {
 
-    fun extract(page: PdfPage): String {
+    public fun extract(page: PdfPage): String {
         val ops = ContentStreamParser.parse(page.contentBytes)
         return extract(ops, loadFonts(page))
     }
 
     /** Font-blind overload for callers that have operations but no resources. */
-    fun extract(ops: List<Operation>): String = extract(ops, emptyMap())
+    public fun extract(ops: List<Operation>): String = extract(ops, emptyMap())
 
     private fun extract(ops: List<Operation>, fonts: Map<String, PdfFont>): String {
         val sb = StringBuilder()

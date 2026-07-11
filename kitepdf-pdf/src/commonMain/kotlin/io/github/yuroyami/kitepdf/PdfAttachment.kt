@@ -20,7 +20,7 @@ import io.github.yuroyami.kitepdf.parser.PdfString
  * We resolve the bytes lazily — large attachments shouldn't be decoded
  * until the caller asks for them.
  */
-data class PdfAttachment(
+public data class PdfAttachment(
     /** Name-tree key (often the same as [filename] but not always). */
     val name: String,
     /** Author-supplied filename. */
@@ -37,7 +37,7 @@ data class PdfAttachment(
     /** Convenience for callers who want eager-but-cached bytes. */
     val bytes: ByteArray by lazy { bytesProvider() }
 
-    companion object {
+    public companion object {
         internal fun parseAll(
             catalog: PdfDictionary,
             refs: IndirectResolver,

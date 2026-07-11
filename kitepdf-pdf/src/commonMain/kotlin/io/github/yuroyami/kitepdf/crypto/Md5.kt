@@ -10,9 +10,9 @@ package io.github.yuroyami.kitepdf.crypto
  * the four registers rotated each step. Reads (and verifies) cleanly against
  * the spec, which the earlier multi-round-loop form did not.
  */
-object Md5 {
+public object Md5 {
 
-    fun hash(input: ByteArray): ByteArray {
+    public fun hash(input: ByteArray): ByteArray {
         val state = State()
         state.update(input)
         state.finish()

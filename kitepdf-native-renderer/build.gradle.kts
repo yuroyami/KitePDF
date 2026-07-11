@@ -22,6 +22,7 @@ plugins {
  *     Android View, an AWT JComponent.paintComponent override, …)
  */
 kotlin {
+    explicitApi()
     jvmToolchain(21)
 
     android {

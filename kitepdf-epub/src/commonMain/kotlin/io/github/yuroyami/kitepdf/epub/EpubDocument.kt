@@ -33,19 +33,19 @@ import io.github.yuroyami.kitepdf.render.RgbColor
  * geometry; [Paginator] slices it into pages; and [EpubPage] paints backgrounds,
  * borders, text and images. See EPUB_ROAD_TO_PERFECTION.md.
  */
-class EpubDocument internal constructor(
+public class EpubDocument internal constructor(
     private val parsed: ParsedEpub,
     /** Page size, font size and margin. Change at runtime via [withSettings]. */
-    val settings: EpubSettings,
+    public val settings: EpubSettings,
 ) : KiteDocument {
 
     internal val zip: ZipReader get() = parsed.zip
 
     /** EPUB-specific metadata (title, authors, cover path, reading direction). */
-    val epubMetadata: EpubMetadata get() = parsed.metadata
+    public val epubMetadata: EpubMetadata get() = parsed.metadata
 
     /** Navigation tree from EPUB 3 nav.xhtml or EPUB 2 toc.ncx (empty if none). */
-    val tableOfContents: TableOfContents get() = parsed.toc
+    public val tableOfContents: TableOfContents get() = parsed.toc
 
     /** Format-neutral title/authors/language for [KiteDocument] viewers. */
     override val metadata: KiteMetadata
@@ -72,16 +72,16 @@ class EpubDocument internal constructor(
         parsed.toc.entries.map(::map)
     }
 
-    val pageWidth: Double get() = settings.pageWidth
-    val pageHeight: Double get() = settings.pageHeight
-    val fontSize: Double get() = settings.fontSize
-    val margin: Double get() = settings.margin
+    public val pageWidth: Double get() = settings.pageWidth
+    public val pageHeight: Double get() = settings.pageHeight
+    public val fontSize: Double get() = settings.fontSize
+    public val margin: Double get() = settings.margin
 
     private val contentWidth: Double get() = settings.pageWidth - 2 * settings.margin
     private val pageContentHeight: Double get() = settings.pageHeight - 2 * settings.margin
 
     /** True for a pre-paginated (fixed-layout) book: one page per spine, no reflow. */
-    val isFixedLayout: Boolean get() = parsed.fixedLayout
+    public val isFixedLayout: Boolean get() = parsed.fixedLayout
 
     /**
      * The reader-origin cascade layer built from [settings]: universal rules
@@ -208,17 +208,17 @@ class EpubDocument internal constructor(
      * re-unzip / re-parse of HTML, CSS or fonts). Use for reader controls that
      * change font size, margins or page size at runtime — cheap next to [open].
      */
-    fun withSettings(settings: EpubSettings): EpubDocument = EpubDocument(parsed, settings)
+    public fun withSettings(settings: EpubSettings): EpubDocument = EpubDocument(parsed, settings)
 
     /** Shorthand for [withSettings] changing only the body font size (points). */
-    fun withFontSize(fontSize: Double): EpubDocument = withSettings(settings.copy(fontSize = fontSize))
+    public fun withFontSize(fontSize: Double): EpubDocument = withSettings(settings.copy(fontSize = fontSize))
 
     /** Shorthand for [withSettings] changing the page size — e.g. on resize / rotation. */
-    fun withPageSize(pageWidth: Double, pageHeight: Double): EpubDocument =
+    public fun withPageSize(pageWidth: Double, pageHeight: Double): EpubDocument =
         withSettings(settings.copy(pageWidth = pageWidth, pageHeight = pageHeight))
 
     /** Shorthand for [withSettings] changing only the page margin (points). */
-    fun withMargin(margin: Double): EpubDocument = withSettings(settings.copy(margin = margin))
+    public fun withMargin(margin: Double): EpubDocument = withSettings(settings.copy(margin = margin))
 
     /**
      * Find [needle] across the book, lazily page by page (a UI can show
@@ -226,7 +226,7 @@ class EpubDocument internal constructor(
      * case-insensitive by default, line breaks read as one space, a
      * hyphenated line break joins directly, matches never cross blocks.
      */
-    fun search(needle: String, ignoreCase: Boolean = true): Sequence<KiteSearchHit> = sequence {
+    public fun search(needle: String, ignoreCase: Boolean = true): Sequence<KiteSearchHit> = sequence {
         if (needle.isEmpty()) return@sequence
         for ((i, page) in pages.withIndex()) {
             yieldAll(page.textContent().search(needle, ignoreCase, pageIndex = i))
@@ -296,7 +296,7 @@ class EpubDocument internal constructor(
      * falls back to its document's first page. This is the navigation half
      * of a link tap: viewers scroll to the returned page.
      */
-    fun pageOf(href: String): Int? = pageIndexOfHref(href)
+    public fun pageOf(href: String): Int? = pageIndexOfHref(href)
 
     private fun loadImage(zipPath: String): ImageXObject? =
         parsed.zip.read(zipPath)?.let { ImageXObject.fromEncodedImage(it) }
@@ -304,8 +304,8 @@ class EpubDocument internal constructor(
     private fun loadSvg(zipPath: String): SvgImage? =
         parsed.zip.read(zipPath)?.let { SvgImage.parse(it) }
 
-    companion object {
-        fun open(
+    public companion object {
+        public fun open(
             bytes: ByteArray,
             pageWidth: Double = 400.0,
             pageHeight: Double = 640.0,
@@ -314,7 +314,7 @@ class EpubDocument internal constructor(
         ): EpubDocument? = open(bytes, EpubSettings(pageWidth, pageHeight, fontSize, margin))
 
         /** Parse [bytes] and lay out at [settings]. Null on an unreadable / spineless book. */
-        fun open(bytes: ByteArray, settings: EpubSettings): EpubDocument? {
+        public fun open(bytes: ByteArray, settings: EpubSettings): EpubDocument? {
             val parsed = parse(bytes, settings) ?: return null
             return EpubDocument(parsed, settings)
         }
@@ -535,13 +535,13 @@ internal class FixedSpine(val root: BlockBox, val width: Double, val height: Dou
  * y-min stored in [Rectangle.bottom]). [href] is either `zipPath#fragment`
  * (internal, resolve with the document's href navigation) or an external URL.
  */
-class EpubLink internal constructor(
-    val rect: io.github.yuroyami.kitepdf.Rectangle,
-    val href: String,
+public class EpubLink internal constructor(
+    public val rect: io.github.yuroyami.kitepdf.Rectangle,
+    public val href: String,
 )
 
 /** Generic font family a reader app can force via [EpubSettings.fontFamily]. */
-enum class ReaderFontFamily { SERIF, SANS_SERIF, MONOSPACE }
+public enum class ReaderFontFamily { SERIF, SANS_SERIF, MONOSPACE }
 
 /**
  * Reader layout settings. All values in points. Change them at runtime with
@@ -553,7 +553,7 @@ enum class ReaderFontFamily { SERIF, SANS_SERIF, MONOSPACE }
  * user's explicit preference beats the publisher's stylesheet. All-default
  * settings change nothing.
  */
-data class EpubSettings(
+public data class EpubSettings(
     val pageWidth: Double = 400.0,
     val pageHeight: Double = 640.0,
     /** Body font size in points; author CSS scales relative to it. */
@@ -601,12 +601,12 @@ internal class ParsedEpub(
 )
 
 /** One reflowed EPUB page: paints backgrounds/borders, then text lines and images. */
-class EpubPage internal constructor(
+public class EpubPage internal constructor(
     private val page: PageRender,
     private val doc: EpubDocument,
 ) : KitePage {
-    val width: Double get() = page.pageWidth
-    val height: Double get() = page.pageHeight
+    public val width: Double get() = page.pageWidth
+    public val height: Double get() = page.pageHeight
 
     override val displayWidth: Double get() = width
     override val displayHeight: Double get() = height
@@ -884,7 +884,7 @@ class EpubPage internal constructor(
      * `zipPath#fragment` strings resolvable via `EpubDocument.pageIndexOfHref`;
      * external URLs are verbatim.
      */
-    val links: List<EpubLink> by lazy {
+    public val links: List<EpubLink> by lazy {
         val out = ArrayList<EpubLink>()
         for (line in page.lines) {
             val top = displayY(line.yTop)

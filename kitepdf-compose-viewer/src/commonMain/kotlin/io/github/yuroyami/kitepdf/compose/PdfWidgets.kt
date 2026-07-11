@@ -61,7 +61,7 @@ import kotlinx.coroutines.launch
  * @param format full control over the text, e.g. `{ c, t -> "Page ${c + 1} of $t" }`.
  */
 @Composable
-fun PdfPageIndicator(
+public fun PdfPageIndicator(
     state: PdfViewState,
     modifier: Modifier = Modifier,
     textStyle: TextStyle = TextStyle.Default,
@@ -84,7 +84,7 @@ fun PdfPageIndicator(
  * …or place it anywhere outside the viewport — it only needs the state.
  */
 @Composable
-fun PdfNavigationControls(
+public fun PdfNavigationControls(
     state: PdfViewState,
     modifier: Modifier = Modifier,
     contentColor: Color = Color.White,
@@ -161,7 +161,7 @@ private fun ChevronButton(
  * the main view's rasters.
  */
 @Composable
-fun PdfThumbnailStrip(
+public fun PdfThumbnailStrip(
     state: PdfViewState,
     modifier: Modifier = Modifier,
     thumbnailHeight: Dp = 72.dp,
@@ -228,7 +228,7 @@ fun PdfThumbnailStrip(
  *   itself already happened.
  */
 @Composable
-fun PdfOutlinePanel(
+public fun PdfOutlinePanel(
     state: PdfViewState,
     modifier: Modifier = Modifier,
     outline: List<KiteOutlineItem> = state.document.outline,

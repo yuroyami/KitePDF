@@ -14,7 +14,7 @@ import io.github.yuroyami.kitepdf.font.PdfFont
  * Text state (Tm, Tlm, font, size, spacing) is tracked separately on
  * [TextState] and lives only inside `BT…ET` blocks.
  */
-data class GraphicsState(
+public data class GraphicsState(
     val ctm: Matrix = Matrix.IDENTITY,
     val strokeColor: RgbColor = RgbColor.BLACK,
     val fillColor: RgbColor = RgbColor.BLACK,
@@ -54,7 +54,7 @@ data class GraphicsState(
 )
 
 /** Per-`BT/ET` block text state — reset at BT, mutated by text operators. */
-data class TextState(
+public data class TextState(
     val font: PdfFont? = null,
     val fontSize: Double = 12.0,
     /** Tm: maps text-space (glyph origin units) to user-space. */
@@ -76,11 +76,11 @@ data class TextState(
 )
 
 /** Simple RGB colour in [0,1]³. Greyscale collapses to all-equal channels. */
-data class RgbColor(val r: Double, val g: Double, val b: Double) {
-    companion object {
-        val BLACK = RgbColor(0.0, 0.0, 0.0)
-        val WHITE = RgbColor(1.0, 1.0, 1.0)
-        fun gray(g: Double) = RgbColor(g, g, g)
+public data class RgbColor(val r: Double, val g: Double, val b: Double) {
+    public companion object {
+        public val BLACK: RgbColor = RgbColor(0.0, 0.0, 0.0)
+        public val WHITE: RgbColor = RgbColor(1.0, 1.0, 1.0)
+        public fun gray(g: Double): RgbColor = RgbColor(g, g, g)
     }
 }
 
@@ -89,7 +89,7 @@ data class RgbColor(val r: Double, val g: Double, val b: Double) {
  * `gs <name>`: only entries present in the ExtGState override; everything
  * else passes through.
  */
-fun GraphicsState.applyExtGState(ext: ExtGState): GraphicsState = copy(
+public fun GraphicsState.applyExtGState(ext: ExtGState): GraphicsState = copy(
     fillAlpha = ext.fillAlpha ?: fillAlpha,
     strokeAlpha = ext.strokeAlpha ?: strokeAlpha,
     blendMode = ext.blendMode ?: blendMode,
@@ -111,26 +111,26 @@ fun GraphicsState.applyExtGState(ext: ExtGState): GraphicsState = copy(
  * or read the current state directly. The stack is bounded by [maxDepth] to
  * defend against pathological PDFs that q-spam without Q.
  */
-class GraphicsStack(initial: GraphicsState = GraphicsState(), private val maxDepth: Int = 64) {
+public class GraphicsStack(initial: GraphicsState = GraphicsState(), private val maxDepth: Int = 64) {
     private val stack = ArrayDeque<GraphicsState>().apply { addLast(initial) }
 
-    val current: GraphicsState
+    public val current: GraphicsState
         get() = stack.last()
 
-    fun save() {
+    public fun save() {
         if (stack.size >= maxDepth) return  // silent clamp; production PDFs never need this
         stack.addLast(current)
     }
 
-    fun restore() {
+    public fun restore() {
         if (stack.size > 1) stack.removeLast()
     }
 
-    fun replace(next: GraphicsState) {
+    public fun replace(next: GraphicsState) {
         stack[stack.size - 1] = next
     }
 
-    fun mutateText(block: (TextState) -> TextState) {
+    public fun mutateText(block: (TextState) -> TextState) {
         replace(current.copy(text = block(current.text)))
     }
 }

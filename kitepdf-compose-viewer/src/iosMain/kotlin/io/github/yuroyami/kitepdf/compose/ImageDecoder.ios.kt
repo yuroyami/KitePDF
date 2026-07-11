@@ -9,15 +9,15 @@ import org.jetbrains.skia.EncodedImageFormat
 import org.jetbrains.skia.Image
 import org.jetbrains.skia.ImageInfo
 
-actual object ImageDecoder {
-    actual fun decode(bytes: ByteArray): ImageBitmap? = try {
+public actual object ImageDecoder {
+    public actual fun decode(bytes: ByteArray): ImageBitmap? = try {
         // Compose Multiplatform on iOS ships Skiko; Skia loads JPEG natively.
         Image.makeFromEncoded(bytes).toComposeImageBitmap()
     } catch (t: Throwable) {
         null
     }
 
-    actual fun decodeRaw(rgba: ByteArray, width: Int, height: Int): ImageBitmap? = try {
+    public actual fun decodeRaw(rgba: ByteArray, width: Int, height: Int): ImageBitmap? = try {
         // UNPREMUL, not OPAQUE: the core writes straight (non-premultiplied) alpha from the
         // image's /SMask. OPAQUE made Skia ignore that alpha, so transparent logo backgrounds
         // rendered as their opaque base RGB (the grey box).
@@ -28,7 +28,7 @@ actual object ImageDecoder {
     }
 }
 
-actual fun ImageBitmap.encodeToPng(): ByteArray? = try {
+public actual fun ImageBitmap.encodeToPng(): ByteArray? = try {
     Image.makeFromBitmap(asSkiaBitmap()).encodeToData(EncodedImageFormat.PNG)?.bytes
 } catch (t: Throwable) {
     null

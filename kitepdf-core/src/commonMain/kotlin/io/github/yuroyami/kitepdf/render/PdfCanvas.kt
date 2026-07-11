@@ -19,29 +19,29 @@ import io.github.yuroyami.kitepdf.font.TextGlyph
  *   - `AwtCanvas` / `AndroidNativeCanvas` / `CoreGraphicsCanvas` / `Canvas2dCanvas`
  *     (`:kitepdf-native-renderer`) — host-platform raster backends.
  */
-interface PdfCanvas {
+public interface PdfCanvas {
 
     /**
      * Set up for a page render — called once before any draw call, with the
      * page dimensions (in PDF user units, 1pt = 1/72 inch) and the desired
      * device CTM (e.g. flip Y and scale to fit a target rectangle).
      */
-    fun beginPage(widthPt: Double, heightPt: Double, deviceCtm: Matrix)
-    fun endPage()
+    public fun beginPage(widthPt: Double, heightPt: Double, deviceCtm: Matrix)
+    public fun endPage()
 
     /**
      * Fill [path] under [ctm] with [color] at [alpha] (0..1) under the given
      * [blendMode]. The default `alpha = 1.0` + `blendMode = Normal` is the
      * plain over-paint that PDF assumes when no ExtGState modifies the state.
      */
-    fun fillPath(
+    public fun fillPath(
         path: PdfPath, ctm: Matrix, color: RgbColor, evenOdd: Boolean,
         alpha: Double = 1.0, blendMode: BlendMode = BlendMode.Normal,
     )
 
     /** Stroke [path] under [ctm] with [color] at [lineWidth] user-units, [alpha], [blendMode].
      *  [lineCap] 0/1/2 = butt/round/square; [lineJoin] 0/1/2 = miter/round/bevel. */
-    fun strokePath(
+    public fun strokePath(
         path: PdfPath, ctm: Matrix, color: RgbColor, lineWidth: Double,
         alpha: Double = 1.0, blendMode: BlendMode = BlendMode.Normal,
         dashArray: List<Double>? = null, dashPhase: Double = 0.0,
@@ -59,7 +59,7 @@ interface PdfCanvas {
      * the identity matrix — the backend's active clip (or page bounds)
      * trims it, so `sh` still paints something rather than nothing.
      */
-    fun fillShading(
+    public fun fillShading(
         shading: PdfShading, ctm: Matrix, clipPath: PdfPath?,
         alpha: Double = 1.0, blendMode: BlendMode = BlendMode.Normal,
     ) {
@@ -88,7 +88,7 @@ interface PdfCanvas {
      * read text + advances override this to `false`, letting the driver skip the
      * cost of resolving glyph outlines.
      */
-    val resolvesGlyphOutlines: Boolean get() = true
+    public val resolvesGlyphOutlines: Boolean get() = true
 
     /**
      * Paint one text run, already laid out into [glyphs] by the document handler.
@@ -101,7 +101,7 @@ interface PdfCanvas {
      * Non-embedded fonts ([hasOutlines] = false) carry no outlines; render
      * [TextGlyph.text] through a host typeface chosen from [fontSpec].
      */
-    fun drawGlyphs(
+    public fun drawGlyphs(
         glyphs: List<TextGlyph>,
         fontSize: Double,
         unitsPerEm: Int,
@@ -114,8 +114,8 @@ interface PdfCanvas {
     )
 
     /** Push a clip to [path] under [ctm]. Matched 1:1 by [popClip]. */
-    fun pushClip(path: PdfPath, ctm: Matrix, evenOdd: Boolean)
-    fun popClip()
+    public fun pushClip(path: PdfPath, ctm: Matrix, evenOdd: Boolean)
+    public fun popClip()
 
     /**
      * Paint an XObject Image under [ctm]. PDF defines the image's bounds as
@@ -123,7 +123,7 @@ interface PdfCanvas {
      * position. Backends that can decode [image] paint the pixels; others
      * draw a placeholder rather than throw.
      */
-    fun drawImage(image: ImageXObject, ctm: Matrix, alpha: Double = 1.0) { /* opt-in default */ }
+    public fun drawImage(image: ImageXObject, ctm: Matrix, alpha: Double = 1.0) { /* opt-in default */ }
 
     /**
      * Open a transparency group (ISO 32000-1 §11.4). Subsequent paints
@@ -139,12 +139,12 @@ interface PdfCanvas {
      * groups still render their content (just without isolation). That's
      * incorrect for fancy compositing but produces something visible.
      */
-    fun beginTransparencyGroup(
+    public fun beginTransparencyGroup(
         bbox: Rectangle, ctm: Matrix,
         isolated: Boolean = false, knockout: Boolean = false,
         alpha: Double = 1.0, blendMode: BlendMode = BlendMode.Normal,
     ) { /* opt-in default */ }
-    fun endTransparencyGroup() { /* opt-in default */ }
+    public fun endTransparencyGroup() { /* opt-in default */ }
 
     /**
      * Apply a soft mask to the content rendered inside [render] (ISO 32000-1
@@ -161,7 +161,7 @@ interface PdfCanvas {
      * Compose colour-matrix filter, a per-pixel pass on AWT) per §11.6.5.2
      * (T-43).
      */
-    fun applySoftMask(
+    public fun applySoftMask(
         kind: SoftMask.Kind,
         maskBBox: Rectangle, maskCtm: Matrix,
         render: () -> Unit,
@@ -172,10 +172,10 @@ interface PdfCanvas {
 }
 
 /** A rectangle in PDF user-space — re-exposed here for the [PdfCanvas] surface. */
-typealias Rectangle = io.github.yuroyami.kitepdf.Rectangle
+public typealias Rectangle = io.github.yuroyami.kitepdf.Rectangle
 
 /** Backend that ignores everything — handy for benchmarks and content-stream sanity tests. */
-object NoopCanvas : PdfCanvas {
+public object NoopCanvas : PdfCanvas {
     override fun beginPage(widthPt: Double, heightPt: Double, deviceCtm: Matrix) {}
     override fun endPage() {}
     override fun fillPath(path: PdfPath, ctm: Matrix, color: RgbColor, evenOdd: Boolean, alpha: Double, blendMode: BlendMode) {}
@@ -186,20 +186,20 @@ object NoopCanvas : PdfCanvas {
 }
 
 /** Records every device call — useful for tests + verifying operator dispatch. */
-class RecordingCanvas : PdfCanvas {
-    sealed class Call {
-        data class BeginPage(val w: Double, val h: Double, val ctm: Matrix) : Call()
-        data object EndPage : Call()
-        data class Fill(
+public class RecordingCanvas : PdfCanvas {
+    public sealed class Call {
+        public data class BeginPage(val w: Double, val h: Double, val ctm: Matrix) : Call()
+        public data object EndPage : Call()
+        public data class Fill(
             val path: PdfPath, val ctm: Matrix, val color: RgbColor, val evenOdd: Boolean,
             val alpha: Double = 1.0, val blendMode: BlendMode = BlendMode.Normal,
         ) : Call()
-        data class Stroke(
+        public data class Stroke(
             val path: PdfPath, val ctm: Matrix, val color: RgbColor, val lineWidth: Double,
             val alpha: Double = 1.0, val blendMode: BlendMode = BlendMode.Normal,
             val lineCap: Int = 0, val lineJoin: Int = 0, val miterLimit: Double = 10.0,
         ) : Call()
-        data class Glyphs(
+        public data class Glyphs(
             val glyphs: List<TextGlyph>, val fontSize: Double, val unitsPerEm: Int,
             val hasOutlines: Boolean, val fontSpec: FontSpec, val textToDevice: Matrix,
             val color: RgbColor, val alpha: Double = 1.0, val blendMode: BlendMode = BlendMode.Normal,
@@ -220,16 +220,16 @@ class RecordingCanvas : PdfCanvas {
                 return h
             }
         }
-        data class PushClip(val path: PdfPath, val ctm: Matrix, val evenOdd: Boolean) : Call()
-        data object PopClip : Call()
-        data class Image(val image: ImageXObject, val ctm: Matrix, val alpha: Double = 1.0) : Call()
-        data class PushGroup(val bbox: Rectangle, val ctm: Matrix, val isolated: Boolean, val knockout: Boolean, val alpha: Double, val blendMode: BlendMode) : Call()
-        data object PopGroup : Call()
+        public data class PushClip(val path: PdfPath, val ctm: Matrix, val evenOdd: Boolean) : Call()
+        public data object PopClip : Call()
+        public data class Image(val image: ImageXObject, val ctm: Matrix, val alpha: Double = 1.0) : Call()
+        public data class PushGroup(val bbox: Rectangle, val ctm: Matrix, val isolated: Boolean, val knockout: Boolean, val alpha: Double, val blendMode: BlendMode) : Call()
+        public data object PopGroup : Call()
     }
 
-    val calls = mutableListOf<Call>()
+    public val calls: MutableList<Call> = mutableListOf()
 
-    override fun beginPage(widthPt: Double, heightPt: Double, deviceCtm: Matrix) =
+    override fun beginPage(widthPt: Double, heightPt: Double, deviceCtm: Matrix): Unit =
         calls.add(Call.BeginPage(widthPt, heightPt, deviceCtm)).let { }
     override fun endPage() { calls.add(Call.EndPage) }
     override fun fillPath(path: PdfPath, ctm: Matrix, color: RgbColor, evenOdd: Boolean, alpha: Double, blendMode: BlendMode) {

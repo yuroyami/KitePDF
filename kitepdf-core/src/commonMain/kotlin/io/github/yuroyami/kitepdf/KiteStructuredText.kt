@@ -12,10 +12,10 @@ package io.github.yuroyami.kitepdf
  * [Rectangle.bottom] and the y-MAX in [Rectangle.top], keeping
  * `width`/`height` positive.
  */
-class KiteStructuredText(val blocks: List<KiteTextBlock>) {
+public class KiteStructuredText(public val blocks: List<KiteTextBlock>) {
 
     /** Flattened plain text: line breaks become `\n`, block breaks `\n\n`. */
-    val plainText: String by lazy {
+    public val plainText: String by lazy {
         blocks.joinToString("\n\n") { b -> b.lines.joinToString("\n") { it.text } }
     }
 
@@ -29,7 +29,7 @@ class KiteStructuredText(val blocks: List<KiteTextBlock>) {
      *
      * @param pageIndex stamped onto each hit (the model itself is page-local).
      */
-    fun search(needle: String, ignoreCase: Boolean = true, pageIndex: Int = -1): List<KiteSearchHit> {
+    public fun search(needle: String, ignoreCase: Boolean = true, pageIndex: Int = -1): List<KiteSearchHit> {
         if (needle.isEmpty()) return emptyList()
         val hits = ArrayList<KiteSearchHit>()
         for (block in blocks) {
@@ -81,14 +81,14 @@ class KiteStructuredText(val blocks: List<KiteTextBlock>) {
     }
 
     /** Number of positioned chars ([charIndexAt]'s index space). */
-    val charCount: Int get() = flatChars.size
+    public val charCount: Int get() = flatChars.size
 
     /**
      * The flattened index of the char at a display-space point, or null when
      * the point is on no text line. Within a line, x clamps to the nearest
      * char, which is what a selection drag wants at the line's ends.
      */
-    fun charIndexAt(x: Double, y: Double): Int? {
+    public fun charIndexAt(x: Double, y: Double): Int? {
         var best = -1
         var bestDx = Double.MAX_VALUE
         for ((i, ref) in flatChars.withIndex()) {
@@ -111,7 +111,7 @@ class KiteStructuredText(val blocks: List<KiteTextBlock>) {
      * The text of the inclusive flattened range [start]..[endInclusive], with
      * line breaks as `\n` and block breaks as `\n\n` (matching [plainText]).
      */
-    fun textRange(start: Int, endInclusive: Int): String {
+    public fun textRange(start: Int, endInclusive: Int): String {
         if (flatChars.isEmpty()) return ""
         val a = start.coerceIn(0, flatChars.size - 1)
         val b = endInclusive.coerceIn(a, flatChars.size - 1)
@@ -134,7 +134,7 @@ class KiteStructuredText(val blocks: List<KiteTextBlock>) {
      * Display-space quads (one per line touched) for the inclusive flattened
      * range — the same walker search hits use.
      */
-    fun quadsFor(start: Int, endInclusive: Int): List<Rectangle> {
+    public fun quadsFor(start: Int, endInclusive: Int): List<Rectangle> {
         if (flatChars.isEmpty()) return emptyList()
         val a = start.coerceIn(0, flatChars.size - 1)
         val b = endInclusive.coerceIn(a, flatChars.size - 1)
@@ -177,17 +177,17 @@ class KiteStructuredText(val blocks: List<KiteTextBlock>) {
 }
 
 /** A paragraph-ish group of consecutive lines from one layout block. */
-class KiteTextBlock(val lines: List<KiteTextLine>)
+public class KiteTextBlock(public val lines: List<KiteTextLine>)
 
 /**
  * One laid-out line. [charEdges] has `text.length + 1` display-space x
  * boundaries: `charEdges[i]` is the left edge of char `i`, the final entry
  * the line's right edge — enough to build sub-line highlight quads.
  */
-class KiteTextLine(
-    val text: String,
-    val bounds: Rectangle,
-    val charEdges: DoubleArray,
+public class KiteTextLine(
+    public val text: String,
+    public val bounds: Rectangle,
+    public val charEdges: DoubleArray,
 ) {
     init {
         require(charEdges.size == text.length + 1) {
@@ -197,8 +197,8 @@ class KiteTextLine(
 }
 
 /** One search match: display-space [quads] (one per line touched) on page [pageIndex]. */
-class KiteSearchHit(
-    val pageIndex: Int,
-    val quads: List<Rectangle>,
-    val text: String,
+public class KiteSearchHit(
+    public val pageIndex: Int,
+    public val quads: List<Rectangle>,
+    public val text: String,
 )

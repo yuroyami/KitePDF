@@ -11,12 +11,12 @@ import platform.posix.pthread_self
  * Spinning is acceptable because every critical section under this lock is a
  * few map operations; the parse work itself runs outside it (T-16).
  */
-actual class KiteLock actual constructor() {
+public actual class KiteLock actual constructor() {
     /** 0 = unlocked, else the owning thread's id. */
     private val owner = AtomicLong(0)
     private var depth = 0
 
-    actual fun lock() {
+    public actual fun lock() {
         val me = currentThreadId()
         if (owner.value == me) {
             depth++
@@ -28,7 +28,7 @@ actual class KiteLock actual constructor() {
         depth = 1
     }
 
-    actual fun unlock() {
+    public actual fun unlock() {
         if (--depth == 0) owner.value = 0
     }
 }
@@ -38,7 +38,7 @@ actual class KiteLock actual constructor() {
 // reference" null-cache if two colliding threads race the same object —
 // lenient degradation, astronomically unlikely. 0 is reserved for "unlocked".
 @OptIn(ExperimentalForeignApi::class)
-actual fun currentThreadId(): Long {
+public actual fun currentThreadId(): Long {
     val h = pthread_self().hashCode().toLong()
     return if (h == 0L) 1L else h
 }

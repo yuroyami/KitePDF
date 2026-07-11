@@ -10,9 +10,9 @@ import io.github.yuroyami.kitepdf.core.ByteArrayBuilder
  *
  * Throws InflateException on malformed input. Not thread-safe; create one per stream.
  */
-class InflateException(message: String, cause: Throwable? = null) : RuntimeException(message, cause)
+public class InflateException(message: String, cause: Throwable? = null) : RuntimeException(message, cause)
 
-object Inflate {
+public object Inflate {
 
     /**
      * One-shot: inflate the DEFLATE payload in [input] starting at [offset] for
@@ -23,7 +23,7 @@ object Inflate {
      * [InflateException]. A kilobyte of crafted DEFLATE can expand to gigabytes,
      * so callers decoding untrusted streams must pass a cap.
      */
-    fun decode(
+    public fun decode(
         input: ByteArray,
         offset: Int = 0,
         length: Int = input.size - offset,
@@ -41,7 +41,7 @@ object Inflate {
      * [decode]; use it on hot paths (zip entries), keep [decode] where the
      * pure implementation itself is under test.
      */
-    fun decodePlatform(
+    public fun decodePlatform(
         input: ByteArray,
         offset: Int = 0,
         length: Int = input.size - offset,

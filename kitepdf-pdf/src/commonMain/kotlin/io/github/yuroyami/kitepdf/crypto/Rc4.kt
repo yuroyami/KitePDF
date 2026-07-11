@@ -7,10 +7,10 @@ package io.github.yuroyami.kitepdf.crypto
  * is symmetric: same routine for encrypt + decrypt. Don't use this anywhere
  * else — RC4 has well-known weaknesses; PDF kept it for back-compat.
  */
-object Rc4 {
+public object Rc4 {
 
     /** Returns the [data] XOR-ed with the RC4 keystream derived from [key]. */
-    fun process(key: ByteArray, data: ByteArray): ByteArray {
+    public fun process(key: ByteArray, data: ByteArray): ByteArray {
         val s = ksa(key)
         return prga(s, data)
     }

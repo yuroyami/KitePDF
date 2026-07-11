@@ -13,7 +13,7 @@ import io.github.yuroyami.kitepdf.render.PdfPath
  * Simple fonts produce one [TextGlyph] per byte; CIDFonts produce one per
  * (1- or 2-byte) code unit consumed from the input.
  */
-data class TextGlyph(
+public data class TextGlyph(
     /** Byte offset in the input where this code unit started. */
     val byteOffset: Int,
     /** How many bytes this code unit consumed (1 for simple, 2 for Identity-H). */

@@ -13,10 +13,10 @@ import io.github.yuroyami.kitepdf.parser.PdfStream
  * `/Length` is informational here — [PdfObjectWriter] always rewrites it to the
  * actual serialized payload size — but it's set for a self-consistent dict.
  */
-object PdfStreams {
+public object PdfStreams {
 
     /** A stream with no encoding filter, holding [data] verbatim. */
-    fun raw(data: ByteArray, extra: Map<String, PdfObject> = emptyMap()): PdfStream {
+    public fun raw(data: ByteArray, extra: Map<String, PdfObject> = emptyMap()): PdfStream {
         val dict = LinkedHashMap<String, PdfObject>()
         dict.putAll(extra)
         dict["Length"] = PdfInt(data.size.toLong())
@@ -31,7 +31,7 @@ object PdfStreams {
      * Note: very small or high-entropy inputs may compress to *more* bytes than
      * the original (zlib + block overhead); use [raw] when that matters.
      */
-    fun flate(data: ByteArray, extra: Map<String, PdfObject> = emptyMap()): PdfStream {
+    public fun flate(data: ByteArray, extra: Map<String, PdfObject> = emptyMap()): PdfStream {
         val compressed = Zlib.encode(data)
         val dict = LinkedHashMap<String, PdfObject>()
         dict.putAll(extra)

@@ -24,6 +24,7 @@ import io.github.yuroyami.kitepdf.render.PdfPath
 import io.github.yuroyami.kitepdf.render.PdfShading
 import io.github.yuroyami.kitepdf.render.RgbColor
 import io.github.yuroyami.kitepdf.render.SoftMask
+import io.github.yuroyami.kitepdf.render.paintComplexShading
 import io.github.yuroyami.kitepdf.render.sampleStops
 
 /**
@@ -39,7 +40,7 @@ import io.github.yuroyami.kitepdf.render.sampleStops
  * Blend modes require API 29+ (`Paint.setBlendMode`). The module's minSdk
  * is bumped to 29 to match — see :kitepdf-native build.gradle.kts.
  */
-class AndroidNativeCanvas(private val canvas: AndroidCanvas) : PdfCanvas {
+public class AndroidNativeCanvas(private val canvas: AndroidCanvas) : PdfCanvas {
 
     /** Open layers from clip pushes + transparency groups. */
     private var openLayers = 0
@@ -221,6 +222,7 @@ class AndroidNativeCanvas(private val canvas: AndroidCanvas) : PdfCanvas {
         shading: PdfShading, ctm: PdfMatrix, clipPath: PdfPath?,
         alpha: Double, blendMode: PdfBlendMode,
     ) {
+        if (paintComplexShading(shading, ctm, clipPath, alpha, blendMode)) return
         val stops = shading.sampleStops(32) ?: return
         val colors = IntArray(stops.colors.size) { stops.colors[it].toArgb(alpha) }
         val positions = FloatArray(stops.offsets.size) { stops.offsets[it].toFloat() }
@@ -241,6 +243,7 @@ class AndroidNativeCanvas(private val canvas: AndroidCanvas) : PdfCanvas {
                 RadialGradient(cx.toFloat(), cy.toFloat(), r, colors, positions, Shader.TileMode.CLAMP)
             }
             is PdfShading.Unsupported -> return
+            else -> return // T-40 types already handled by paintComplexShading
         }
         val paint = Paint().apply {
             isAntiAlias = true

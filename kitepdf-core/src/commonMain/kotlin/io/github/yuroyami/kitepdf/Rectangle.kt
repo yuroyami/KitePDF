@@ -5,18 +5,18 @@ import io.github.yuroyami.kitepdf.parser.PdfInt
 import io.github.yuroyami.kitepdf.parser.PdfReal
 
 /** PDF rectangle: [left, bottom, right, top] in user-space units. */
-data class Rectangle(val left: Double, val bottom: Double, val right: Double, val top: Double) {
-    val width get() = right - left
-    val height get() = top - bottom
+public data class Rectangle(val left: Double, val bottom: Double, val right: Double, val top: Double) {
+    public val width: Double get() = right - left
+    public val height: Double get() = top - bottom
 
-    companion object {
+    public companion object {
         /**
          * Parse a 4-element PDF rectangle array. Tolerant: a non-numeric entry
          * defaults to 0.0 rather than throwing (lenient salvage). For arrays
          * whose entries may be indirect references, route through the page's
          * box reader instead, which resolves each coordinate.
          */
-        fun fromPdfArray(arr: PdfArray): Rectangle {
+        public fun fromPdfArray(arr: PdfArray): Rectangle {
             require(arr.size >= 4) { "Rectangle needs 4 numbers, got ${arr.size}" }
             fun n(i: Int): Double = when (val v = arr[i]) {
                 is PdfReal -> v.value

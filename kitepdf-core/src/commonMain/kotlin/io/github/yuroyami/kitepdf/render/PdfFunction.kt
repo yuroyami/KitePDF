@@ -39,19 +39,19 @@ import kotlin.math.truncate
  * An array of n single-output functions (as some shadings / tint transforms
  * use) is wrapped in [ArrayCombination].
  */
-sealed class PdfFunction {
+public sealed class PdfFunction {
 
     /** Input bounds — paired `[min0, max0, min1, max1, …]`. */
-    abstract val domain: DoubleArray
+    public abstract val domain: DoubleArray
 
     /** Optional output bounds; null = unclipped. */
-    abstract val range: DoubleArray?
+    public abstract val range: DoubleArray?
 
     /** Number of output components. */
-    abstract val outputCount: Int
+    public abstract val outputCount: Int
 
     /** Evaluate `f(input) → output`. The output length is [outputCount]. */
-    fun evaluate(input: DoubleArray): DoubleArray {
+    public fun evaluate(input: DoubleArray): DoubleArray {
         val clamped = DoubleArray(input.size)
         for (i in input.indices) {
             val lo = domain.getOrElse(2 * i) { 0.0 }
@@ -75,7 +75,7 @@ sealed class PdfFunction {
      * grid point) interpolated multilinearly. The common case is 1 input
      * (shading colour ramps) but tint transforms use up to 4.
      */
-    class Type0(
+    public class Type0(
         override val domain: DoubleArray,
         override val range: DoubleArray?,
         private val size: IntArray,
@@ -155,12 +155,12 @@ sealed class PdfFunction {
     /**
      * Exponential interpolation: `c0 + x^N * (c1 - c0)` per output channel.
      */
-    class Type2(
+    public class Type2(
         override val domain: DoubleArray,
         override val range: DoubleArray?,
-        val c0: DoubleArray,
-        val c1: DoubleArray,
-        val n: Double,
+        public val c0: DoubleArray,
+        public val c1: DoubleArray,
+        public val n: Double,
     ) : PdfFunction() {
         override val outputCount: Int get() = c0.size
         override fun evaluateInternal(input: DoubleArray): DoubleArray {
@@ -174,12 +174,12 @@ sealed class PdfFunction {
      * Stitching function: delegates to one of [functions] by `x`'s position
      * relative to [bounds], remapping `x` via [encode].
      */
-    class Type3(
+    public class Type3(
         override val domain: DoubleArray,
         override val range: DoubleArray?,
-        val functions: List<PdfFunction>,
-        val bounds: DoubleArray,
-        val encode: DoubleArray,
+        public val functions: List<PdfFunction>,
+        public val bounds: DoubleArray,
+        public val encode: DoubleArray,
     ) : PdfFunction() {
         override val outputCount: Int get() = functions.firstOrNull()?.outputCount ?: 0
         override fun evaluateInternal(input: DoubleArray): DoubleArray {
@@ -202,7 +202,7 @@ sealed class PdfFunction {
      * Type 4 PostScript calculator function. The program is compiled once into
      * a nested token tree; [evaluateInternal] runs it on a small operand stack.
      */
-    class Type4(
+    public class Type4(
         override val domain: DoubleArray,
         override val range: DoubleArray?,
         private val program: List<Any>,
@@ -227,7 +227,7 @@ sealed class PdfFunction {
      * An array of single-output functions evaluated in parallel, producing one
      * output component each (shadings / tint transforms sometimes use this form).
      */
-    class ArrayCombination(
+    public class ArrayCombination(
         override val domain: DoubleArray,
         private val parts: List<PdfFunction>,
     ) : PdfFunction() {
@@ -238,8 +238,8 @@ sealed class PdfFunction {
     }
 
     /** Function type we don't model; returns zeros of the right length. */
-    class Unsupported(
-        val type: Int,
+    public class Unsupported(
+        public val type: Int,
         override val domain: DoubleArray,
         override val range: DoubleArray?,
         override val outputCount: Int,
@@ -247,10 +247,10 @@ sealed class PdfFunction {
         override fun evaluateInternal(input: DoubleArray): DoubleArray = DoubleArray(outputCount)
     }
 
-    companion object {
+    public companion object {
 
         /** Parse a /Function entry (dict, stream, or an array of functions). */
-        fun parse(obj: PdfObject?, refs: IndirectResolver): PdfFunction? {
+        public fun parse(obj: PdfObject?, refs: IndirectResolver): PdfFunction? {
             val resolved = when (obj) {
                 is PdfReference -> refs.resolve(obj)
                 else -> obj

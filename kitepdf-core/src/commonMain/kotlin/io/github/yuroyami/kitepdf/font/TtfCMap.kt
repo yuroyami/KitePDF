@@ -12,15 +12,15 @@ package io.github.yuroyami.kitepdf.font
  * Glyph index 0 is the special `.notdef` glyph — we return it for any
  * unmapped codepoint so callers always get something drawable.
  */
-class TtfCMap private constructor(private val subtable: Subtable) {
+public class TtfCMap private constructor(private val subtable: Subtable) {
 
-    fun glyphIdFor(codePoint: Int): Int = subtable.glyphId(codePoint)
+    public fun glyphIdFor(codePoint: Int): Int = subtable.glyphId(codePoint)
 
-    companion object {
+    public companion object {
         /** A cmap that maps every code point to `.notdef` — for CID-keyed fonts that ship no `cmap`. */
-        fun empty(): TtfCMap = TtfCMap(EmptySubtable)
+        public fun empty(): TtfCMap = TtfCMap(EmptySubtable)
 
-        fun parse(reader: TtfReader, table: Table): TtfCMap {
+        public fun parse(reader: TtfReader, table: Table): TtfCMap {
             reader.seek(table.offset)
             reader.skip(2)  // version
             val numSubtables = reader.u16()

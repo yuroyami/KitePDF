@@ -32,7 +32,7 @@ import io.github.yuroyami.kitepdf.parser.PdfString
  * The interpreter is *single-pass and stateless w.r.t. previous pages*: every
  * call to [render] starts with a fresh state stack.
  */
-class PageRenderer(
+public class PageRenderer(
     private val canvas: PdfCanvas,
     private val resolver: IndirectResolver,
 ) {
@@ -65,7 +65,7 @@ class PageRenderer(
 
     /** An XObject with the indirect object number it resolved from (null for
      *  the rare ref-less inline entry) — the number keys the decoded caches. */
-    class XObjectSlot(val objectNumber: Long?, val stream: PdfStream)
+    public class XObjectSlot(public val objectNumber: Long?, public val stream: PdfStream)
 
     /** Parsed form-XObject resources, memoized by the form's object number so a
      *  form drawn N times (repeated stamps/icons) parses its fonts/colorspaces
@@ -109,7 +109,7 @@ class PageRenderer(
     /** True while content must not be painted (inside a hidden OC section). */
     private fun ocHidden(): Boolean = ocHiddenDepth > 0
 
-    fun render(page: PdfPage, deviceCtm: Matrix = defaultDeviceCtm(page)) {
+    public fun render(page: PdfPage, deviceCtm: Matrix = defaultDeviceCtm(page)) {
         val fonts = loadFonts(page.resources)
         val xobjects = loadXObjects(page.resources)
         val colorSpaces = loadColorSpaces(page.resources)
