@@ -12,7 +12,7 @@ plugins {
 
 allprojects {
     group = "io.github.yuroyami"
-    version = "0.1.2"
+    version = "0.2.0"
 
     // The decompression-bomb tests intentionally inflate up to the 512 MiB
     // FilterChain cap; Gradle's default 512m test heap cannot hold that plus
