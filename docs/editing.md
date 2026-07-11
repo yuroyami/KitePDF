@@ -56,7 +56,7 @@ The method:
 - Updates the field's `/V` (value) entry.
 - Regenerates the widget's `/AP /N` (normal appearance), using the field's `/DA` (default appearance) string to recover font, size, and colour.
 - Clears the form's `/NeedAppearances` flag so conforming viewers use the appearance we generated.
-- Works only with `/Tx` (text) fields. Buttons and choice fields are not yet supported.
+- Buttons and choice fields have their own methods: `setCheckbox(field, checked)`, `setButtonValue(field, exportValue)` for radio groups, and `setChoiceValue(field, value)` for dropdowns and list boxes.
 
 !!! warning
     Text fields without a widget `/Rect` or indirect reference cannot be filled; the editor needs these to construct and store the appearance stream.
@@ -326,16 +326,15 @@ The editor's incremental-save mode is the foundation for digital signature workf
 3. Sign that byte range (typically `[0, savedBytes.size)`) with a cryptographic signature algorithm.
 4. Write the signature object into the document (another incremental append).
 
-KitePDF does not yet provide signing utilities, but the incremental framework is ready. Unsigned PDFs produced by incremental edits are valid inputs to any external PDF signing library.
+`PdfSigner` implements this flow: `prepareSignature(fieldName)` stages the signature field and placeholder, `saveForSigning()` returns the bytes plus the exact `/ByteRange` to sign, and `PdfSigner.embedSignature(bytes, byteRange, cms)` patches your DER `SignedData` in without moving a byte. KitePDF does no signature cryptography itself; the CMS blob comes from your application (on the JVM, `java.security` builds one in a few lines).
 
 ## Encrypted documents
 
-Editing encrypted PDFs is not yet supported. To modify an encrypted PDF, decrypt it first (pass the password to [`PdfDocument.open()`](reading.md#encrypted-pdfs)), then edit and save:
+AES-encrypted documents (V4/AESV2 and V5/AES-256) can be edited directly: open with the password, edit, save. The editor re-encrypts every staged object to match the document's security handler, so the output opens with the same password:
 
 ```kotlin
-// Editing encrypted documents is not yet supported
 val doc = PdfDocument.open(encryptedBytes, "password".encodeToByteArray())
-// editor.setInfo(...) would raise an error
+val out = doc.edit().apply { setInfo(title = "Reviewed") }.saveIncremental()
 ```
 
-Once support is added, the writer will encrypt newly written strings and streams to match the document's security handler.
+Documents encrypted with legacy RC4 (V1/V2) are refused for editing; decrypt-and-rebuild those first. Creating new encrypted documents works too: `PdfBuilder.encrypt(userPassword, ownerPassword)` produces an AES-256 (R6) file.

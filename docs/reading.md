@@ -120,7 +120,7 @@ val text = page.extractText()
 This walks the content stream for text-showing operators (`Tj`, `TJ`, `'`, `"`), decodes strings using PDFDocEncoding (or UTF-16BE if a BOM is present), and joins them with line breaks heuristically inserted on text-positioning commands.
 
 !!! note
-    Naive text extraction is a best-effort approximation. Full fidelity requires resolving each font's `/Encoding` and `/ToUnicode` CMap: that is a future enhancement. The current output works well for documents using standard fonts with WinAnsi/PDFDocEncoding.
+    Extraction decodes each show string through the font that draws it, resolving `/Encoding` (with `/Differences`) and the `/ToUnicode` CMap, including composite Type0/CID fonts and the predefined CJK CMaps. Text without any Unicode mapping (some symbolic subsets) falls back to a best-effort byte interpretation.
 
 ### Structured Text
 

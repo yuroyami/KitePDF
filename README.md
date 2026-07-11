@@ -6,12 +6,12 @@
 ![kotlin](https://img.shields.io/badge/Kotlin-2.4.0-7F52FF?logo=kotlin&logoColor=white)
 ![license](https://img.shields.io/badge/license-Apache--2.0-blue)
 
-**One pure-Kotlin PDF engine for Kotlin Multiplatform. Read, create, edit and render PDFs from `commonMain`, with the exact same code on every target.**
+**One pure-Kotlin document engine for Kotlin Multiplatform. Read, create, edit and render PDFs, and read reflowable EPUBs, from `commonMain`, with the exact same code on every target.**
 
 > ## 📖 [Read the documentation →](https://yuroyami.github.io/KitePDF/)
 > Getting started, guides, recipes, and the full API reference. **If you read one thing, read this.**
 
-KitePDF is a complete PDF engine written from scratch in Kotlin: parser, renderer, writer, editor, encryption, fonts, the whole stack. You call it from common code and it runs unchanged on Android, iOS, desktop (JVM), the web (JS / Wasm) and Kotlin/Native. There is no platform PDF engine underneath, no `expect`/`actual`, no JNI, no native binary.
+KitePDF is a complete PDF engine written from scratch in Kotlin: parser, renderer, writer, editor, encryption, fonts, the whole stack. The same core also drives a full reflowable EPUB 2/3 reader (`kitepdf-epub`): CSS cascade, embedded fonts including WOFF2, hyphenation, CJK typography and vertical writing, paginated to any page size. You call it all from common code and it runs unchanged on Android, iOS, desktop (JVM), the web (JS / Wasm) and Kotlin/Native. There is no platform PDF engine underneath, no `expect`/`actual`, no JNI, no native binary.
 
 ```kotlin
 // commonMain. Nothing platform-specific. This runs everywhere Kotlin runs.

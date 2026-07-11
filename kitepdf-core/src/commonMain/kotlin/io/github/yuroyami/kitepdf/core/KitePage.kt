@@ -39,9 +39,8 @@ public interface KitePage {
     /**
      * Structured text for extraction / search / selection, in display space
      * (see [KiteStructuredText] for the coordinate convention), or `null`
-     * when the handler does not expose it. EPUB pages implement this;
-     * the PDF adapter (bridging [io.github.yuroyami.kitepdf.text] extraction)
-     * is future work.
+     * when the handler does not expose it. Both handlers implement this:
+     * EPUB pages natively, PDF pages by adapting their structured text.
      */
     public fun textContent(): KiteStructuredText? = null
 }

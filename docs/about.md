@@ -1,6 +1,6 @@
 # About KitePDF
 
-**A pure-Kotlin PDF engine for every platform.** KitePDF is a standalone, multiplatform PDF library: no platform wrappers, no native binaries. One Kotlin codebase handles reading, viewing, editing, and building PDFs across Android, iOS, JVM, web, and beyond.
+**A pure-Kotlin document engine for every platform.** KitePDF is a standalone, multiplatform library: no platform wrappers, no native binaries. One Kotlin codebase handles reading, viewing, editing, and building PDFs, plus a complete reflowable EPUB reader, across Android, iOS, JVM, web, and beyond.
 
 ## Philosophy
 
@@ -12,22 +12,25 @@ This also means the Compose binding draws directly into a `DrawScope`. Pages scr
 
 ## Current Status
 
-KitePDF is **pre-1.0** and experimental. The core features are solid and in production use:
+KitePDF is **pre-1.0**. The core features are solid and verified page-by-page against MuPDF:
 
-- **Viewing** - Compose viewer with continuous/paged layouts, pinch-zoom, pan, double-tap, and GPU-cheap layer transforms  
-- **Text extraction** - grab text from any page  
-- **Forms** - read and fill text/choice fields  
+- **Viewing** - Compose viewer with continuous/paged layouts, two-page spreads, RTL progression, pinch-zoom, pan, double-tap, text selection, search highlights, outline panels, and link taps  
+- **Text** - extraction, structured text with geometry, and engine-level search for both formats  
+- **EPUB** - a full reflowable EPUB 2/3 reader on the same core: CSS cascade, embedded fonts (TTF/OTF/WOFF/WOFF2), hyphenation in seven languages, CJK justification, ruby, vertical writing, floats, tables, and reader settings  
+- **Forms** - read and fill text, checkbox, radio, and choice fields  
 - **Annotations** - view and interact with highlights, links, and comments  
-- **Encryption** - open and authenticate password-protected PDFs  
-- **Editing & saving** - fill forms, stamp watermarks, redact (real removal, not just hiding), rebuild the file  
-- **Building from scratch** - compose PDFs programmatically with text, shapes, and colors  
+- **Encryption** - open, authenticate, EDIT, and CREATE password-protected PDFs (AES-256/R6 write support)  
+- **Editing & saving** - fill forms, stamp watermarks, redact (real removal, not just hiding), incremental save or full rebuild  
+- **Building from scratch** - text (standard or custom embedded fonts, with subsetting), shapes, images, and colors  
+- **Image codecs** - pure-Kotlin PNG, JPEG, GIF, JBIG2 (full profile), and JPEG 2000  
+- **Signing scaffold** - `/ByteRange` preparation and CMS embedding; the cryptography stays in your application  
 
 On the roadmap:
 
-- Digital signatures (validation and signing)  
-- Image codecs: JBIG2, JPEG 2000  
-- Advanced color management (Lab, spot colors, rendering intents)  
+- Signature validation  
+- Advanced color management (ICC application, rendering intents)  
 - Less common form widgets (media players, rich text)  
+- More handlers on the shared core (XPS, CBZ, SVG)  
 
 ## Reporting Bad Renderings
 

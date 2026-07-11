@@ -87,6 +87,7 @@ nav:
   - Guides:
       - Compose viewer: compose-viewer.md
       - Reading PDFs: reading.md
+      - Reading EPUBs: epub.md
       - Creating PDFs: writing.md
       - Editing & redaction: editing.md
       - Headless rendering: rendering.md
