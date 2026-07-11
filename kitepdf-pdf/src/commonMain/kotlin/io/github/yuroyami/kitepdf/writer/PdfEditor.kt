@@ -45,10 +45,17 @@ import kotlin.math.abs
  *    objects dropped. Required for **redaction**, since removed content is
  *    truly gone rather than retained in the original byte prefix.
  *
- * Editing **encrypted** documents is not yet supported (the writer would need
- * to encrypt newly written strings/streams to match the security handler).
+ * **Encrypted** documents (V4 AES-128 and V5 AES-256) are supported when the
+ * password authenticated: every staged object is encrypted with the SAME
+ * parameters as the base document at [saveIncremental] time and the trailer
+ * keeps the original `/Encrypt`. Legacy RC4 documents are refused (read-only).
+ * Note [saveRewritten] instead emits a DECRYPTED file: the rewrite drops the
+ * `/Encrypt` dictionary and writes the resolved plain-text objects.
  */
-class PdfEditor internal constructor(private val base: PdfDocument) {
+class PdfEditor internal constructor(
+    private val base: PdfDocument,
+    random: kotlin.random.Random = kotlin.random.Random.Default,
+) {
 
     private class Staged(val generation: Int, val value: PdfObject)
 
@@ -67,9 +74,22 @@ class PdfEditor internal constructor(private val base: PdfDocument) {
 
     private var nextObjectNumber: Long
 
+    /** Re-encrypts staged objects for an encrypted base document; null for plain docs. */
+    private val encryptor: io.github.yuroyami.kitepdf.crypto.Encryptor?
+
     init {
-        require(!base.isEncrypted) {
-            "Incremental writing of encrypted PDFs is not yet supported."
+        val handler = base.securityHandler
+        encryptor = if (handler == null) {
+            null
+        } else {
+            require(handler.isAuthenticated) {
+                "Cannot edit an encrypted PDF that did not authenticate; reopen it with the password."
+            }
+            require(handler.supportsWrite) {
+                "Editing RC4-encrypted PDFs is not supported (legacy write support is intentionally absent); " +
+                    "AES-128 (V4) and AES-256 (V5) documents can be edited."
+            }
+            io.github.yuroyami.kitepdf.crypto.Encryptor(handler, random)
         }
         val maxInXref = base.xref.keys.maxOrNull() ?: 0L
         val sizeFloor = (base.trailer.getInt("Size") ?: 0L) - 1
@@ -862,7 +882,10 @@ class PdfEditor internal constructor(private val base: PdfDocument) {
         for ((num, s) in staged.entries.sortedBy { it.key }) {
             offsets[num] = out.size()
             out.append("$num ${s.generation} obj\n".encodeToByteArray())
-            PdfObjectWriter.writeObject(s.value, out)
+            // Staged objects live in plain text; an encrypted base document
+            // needs them encrypted with its own parameters on the way out.
+            val value = encryptor?.encryptIndirect(num, s.generation, s.value) ?: s.value
+            PdfObjectWriter.writeObject(value, out)
             out.append("\nendobj\n".encodeToByteArray())
         }
 

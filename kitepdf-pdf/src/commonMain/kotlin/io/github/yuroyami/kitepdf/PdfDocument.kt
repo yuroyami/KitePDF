@@ -63,6 +63,9 @@ class PdfDocument private constructor(
     /** True if [open] found a working password for an encrypted doc. */
     val isAuthenticated: Boolean get() = security?.isAuthenticated ?: true
 
+    /** The security handler, for the write path ([PdfEditor] re-encrypts staged objects). */
+    internal val securityHandler: StandardSecurityHandler? get() = security
+
     private val reader = ByteReader(bytes)
 
     /**
@@ -361,9 +364,11 @@ class PdfDocument private constructor(
     /**
      * Open an incremental-update editor over this document. Edits are saved by
      * appending to the original bytes (see [PdfEditor]); this document instance
-     * itself is never mutated.
+     * itself is never mutated. For AES-encrypted documents the editor encrypts
+     * staged objects to match; [random] feeds the per-object IVs (seed it for
+     * reproducible output in tests).
      */
-    fun edit(): PdfEditor = PdfEditor(this)
+    fun edit(random: kotlin.random.Random = kotlin.random.Random.Default): PdfEditor = PdfEditor(this, random)
 
     /* ─── IndirectResolver ───────────────────────────────────────────────── */
 

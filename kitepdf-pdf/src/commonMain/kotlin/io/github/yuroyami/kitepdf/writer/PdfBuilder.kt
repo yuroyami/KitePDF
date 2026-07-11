@@ -38,6 +38,58 @@ class PdfBuilder {
     private val imageResourceNames = LinkedHashMap<PdfImage, String>()
     private val infoEntries = LinkedHashMap<String, PdfObject>()
 
+    private class EncryptSpec(
+        val userPassword: ByteArray,
+        val ownerPassword: ByteArray,
+        val permissions: Int,
+        val encryptMetadata: Boolean,
+        val random: kotlin.random.Random,
+    )
+
+    private var encryptSpec: EncryptSpec? = null
+
+    /**
+     * Encrypt the document with the V5/AES-256 (R6, PDF 2.0) Standard Security
+     * Handler. Every string and stream is encrypted; the file opens with either
+     * password. [permissions] maps to the advisory `/P` flags. [random] feeds
+     * the file key, salts and per-object IVs; seed it for reproducible bytes in
+     * tests. Only AES-256 is offered on the create path: there is no reason to
+     * mint new documents with weaker legacy schemes.
+     */
+    fun encrypt(
+        userPassword: String,
+        ownerPassword: String = userPassword,
+        permissions: io.github.yuroyami.kitepdf.PdfPermissions = io.github.yuroyami.kitepdf.PdfPermissions.allowAll,
+        encryptMetadata: Boolean = true,
+        random: kotlin.random.Random = kotlin.random.Random.Default,
+    ): PdfBuilder {
+        encryptSpec = EncryptSpec(
+            userPassword.encodeToByteArray(),
+            ownerPassword.encodeToByteArray(),
+            permissionsToP(permissions),
+            encryptMetadata,
+            random,
+        )
+        return this
+    }
+
+    /**
+     * `/P` from the typed permissions: bits 1-2 clear, bits 7-8 and 13-32 set
+     * (reserved, "shall be 1"), permission bits from the flags (Table 22).
+     */
+    private fun permissionsToP(p: io.github.yuroyami.kitepdf.PdfPermissions): Int {
+        var v = 0xFFFFF0C0.toInt()
+        if (p.canPrint) v = v or io.github.yuroyami.kitepdf.PdfPermissions.BIT_PRINT
+        if (p.canModifyContents) v = v or io.github.yuroyami.kitepdf.PdfPermissions.BIT_MODIFY
+        if (p.canCopyContents) v = v or io.github.yuroyami.kitepdf.PdfPermissions.BIT_COPY
+        if (p.canModifyAnnotations) v = v or io.github.yuroyami.kitepdf.PdfPermissions.BIT_ANNOTATE
+        if (p.canFillForms) v = v or io.github.yuroyami.kitepdf.PdfPermissions.BIT_FILL_FORMS
+        if (p.canExtractForAccessibility) v = v or io.github.yuroyami.kitepdf.PdfPermissions.BIT_ACCESSIBILITY
+        if (p.canAssembleDocument) v = v or io.github.yuroyami.kitepdf.PdfPermissions.BIT_ASSEMBLE
+        if (p.canPrintHighResolution) v = v or io.github.yuroyami.kitepdf.PdfPermissions.BIT_PRINT_HIGHRES
+        return v
+    }
+
     /** Map a font to its `/Resources` name, assigning F1, F2, … on first use. */
     private fun resolveFont(font: StandardFont): String =
         fontResourceNames.getOrPut(font) { "F${fontResourceNames.size + 1}" }
@@ -272,6 +324,25 @@ class PdfBuilder {
         infoNum: Long?,
         maxObjNum: Long,
     ): ByteArray {
+        // Encryption: derive the V5 material, then round-trip it through the
+        // read-side handler. Authenticating our own dictionary both validates
+        // the creation math and hands back the object-encryption machinery.
+        val spec = encryptSpec
+        var encryptNum: Long? = null
+        var encryptDict: PdfDictionary? = null
+        var encryptor: io.github.yuroyami.kitepdf.crypto.Encryptor? = null
+        if (spec != null) {
+            encryptDict = io.github.yuroyami.kitepdf.crypto.Encryptor.createV5(
+                spec.userPassword, spec.ownerPassword, spec.permissions, spec.encryptMetadata, spec.random,
+            )
+            val handler = io.github.yuroyami.kitepdf.crypto.StandardSecurityHandler(
+                encryptDict, fileIdFirst = byteArrayOf(), userPassword = spec.userPassword,
+            )
+            check(handler.isAuthenticated) { "freshly created /Encrypt material failed to authenticate" }
+            encryptor = io.github.yuroyami.kitepdf.crypto.Encryptor(handler, spec.random)
+            encryptNum = maxObjNum + 1
+        }
+
         val out = ByteArrayBuilder(1024)
         out.append("%PDF-1.7\n".encodeToByteArray())
         // Binary marker comment: four bytes >= 0x80 so tools treat the file as
@@ -284,7 +355,14 @@ class PdfBuilder {
         for ((num, value) in objects.sortedBy { it.first }) {
             xrefEntries.add(ClassicXrefWriter.Entry(num, out.size(), 0))
             out.append("$num 0 obj\n".encodeToByteArray())
-            PdfObjectWriter.writeObject(value, out)
+            PdfObjectWriter.writeObject(encryptor?.encryptIndirect(num, 0, value) ?: value, out)
+            out.append("\nendobj\n".encodeToByteArray())
+        }
+        // The /Encrypt dictionary itself is never encrypted.
+        if (encryptNum != null && encryptDict != null) {
+            xrefEntries.add(ClassicXrefWriter.Entry(encryptNum, out.size(), 0))
+            out.append("$encryptNum 0 obj\n".encodeToByteArray())
+            PdfObjectWriter.writeObject(encryptDict, out)
             out.append("\nendobj\n".encodeToByteArray())
         }
 
@@ -292,10 +370,12 @@ class PdfBuilder {
         ClassicXrefWriter.write(out, xrefEntries)
 
         val trailer = LinkedHashMap<String, PdfObject>()
-        trailer["Size"] = PdfInt(maxObjNum + 1)
+        trailer["Size"] = PdfInt((encryptNum ?: maxObjNum) + 1)
         trailer["Root"] = PdfReference(catalogNum, 0)
         if (infoNum != null) trailer["Info"] = PdfReference(infoNum, 0)
-        // A fingerprint of the body so the file carries a /ID (validators expect one).
+        if (encryptNum != null) trailer["Encrypt"] = PdfReference(encryptNum, 0)
+        // A fingerprint of the body so the file carries a /ID (validators expect
+        // one, and encrypted files require it).
         trailer["ID"] = DocumentId.generate(out.toByteArray())
         out.append("trailer\n".encodeToByteArray())
         PdfObjectWriter.writeObject(PdfDictionary(trailer), out)
