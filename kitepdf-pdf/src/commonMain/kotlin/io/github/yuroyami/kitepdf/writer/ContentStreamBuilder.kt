@@ -55,6 +55,8 @@ public class ContentStreamBuilder internal constructor(
     public fun setStrokeRgb(r: Double, g: Double, b: Double): ContentStreamBuilder { num(r); num(g); num(b); return op("RG") }
     public fun setFillGray(g: Double): ContentStreamBuilder { num(g); return op("g") }
     public fun setStrokeGray(g: Double): ContentStreamBuilder { num(g); return op("G") }
+    public fun setFillCmyk(c: Double, m: Double, y: Double, k: Double): ContentStreamBuilder { num(c); num(m); num(y); num(k); return op("k") }
+    public fun setStrokeCmyk(c: Double, m: Double, y: Double, k: Double): ContentStreamBuilder { num(c); num(m); num(y); num(k); return op("K") }
 
     /* ─── Paths ──────────────────────────────────────────────────────────── */
 
