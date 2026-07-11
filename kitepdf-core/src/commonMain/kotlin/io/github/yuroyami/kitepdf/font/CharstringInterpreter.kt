@@ -1,11 +1,11 @@
 package io.github.yuroyami.kitepdf.font
 
-import io.github.yuroyami.kitepdf.render.PdfPath
+import io.github.yuroyami.kitepdf.render.KitePath
 import kotlin.math.abs
 import kotlin.math.sqrt
 
 /**
- * Type 2 charstring → [PdfPath] interpreter (Adobe Tech Note 5177).
+ * Type 2 charstring → [KitePath] interpreter (Adobe Tech Note 5177).
  *
  * Type 2 is a stack-based bytecode that drives a pen across the glyph. Each
  * charstring is independent; subroutine calls (`callsubr`, `callgsubr`)
@@ -45,10 +45,10 @@ internal class CharstringInterpreter(
      * segments to [into]. When null, `seac` is ignored (glyph renders as its own
      * outline only). Kept additive so existing callers stay source-compatible.
      */
-    private val seacRenderer: ((baseCode: Int, accentCode: Int, adx: Double, ady: Double, into: PdfPath.Builder) -> Unit)? = null,
+    private val seacRenderer: ((baseCode: Int, accentCode: Int, adx: Double, ady: Double, into: KitePath.Builder) -> Unit)? = null,
 ) {
 
-    private val pathBuilder = PdfPath.Builder()
+    private val pathBuilder = KitePath.Builder()
     private val stack = ArrayDeque<Double>()
     /** Transient array (`put`/`get`), 32 slots per TN5177. */
     private val transient = DoubleArray(32)
@@ -70,7 +70,7 @@ internal class CharstringInterpreter(
     /** Recursion depth — Type 2 spec mandates ≤10. */
     private var depth = 0
 
-    fun interpret(): PdfPath {
+    fun interpret(): KitePath {
         execute(charstring)
         return pathBuilder.build()
     }

@@ -29,9 +29,9 @@ import io.github.yuroyami.kitepdf.render.BlendMode as PdfBlendMode
 import io.github.yuroyami.kitepdf.render.ImageXObject
 import io.github.yuroyami.kitepdf.render.toRgbaBytes
 import io.github.yuroyami.kitepdf.render.Matrix as PdfMatrix
-import io.github.yuroyami.kitepdf.render.PdfCanvas
-import io.github.yuroyami.kitepdf.render.PdfPath
-import io.github.yuroyami.kitepdf.render.PdfShading
+import io.github.yuroyami.kitepdf.render.KiteCanvas
+import io.github.yuroyami.kitepdf.render.KitePath
+import io.github.yuroyami.kitepdf.render.KiteShading
 import io.github.yuroyami.kitepdf.render.Rectangle as PdfRectangle
 import io.github.yuroyami.kitepdf.render.RgbColor
 import io.github.yuroyami.kitepdf.render.SoftMask
@@ -40,7 +40,7 @@ import kotlin.math.atan2
 import kotlin.math.sqrt
 
 /**
- * [PdfCanvas] backed by a Compose Multiplatform [DrawScope].
+ * [KiteCanvas] backed by a Compose Multiplatform [DrawScope].
  *
  * Three rendering paths:
  *
@@ -67,7 +67,7 @@ public class ComposeCanvas(
      * (e.g. 0.1-width ECG traces) would vanish.
      */
     private val hairlineWidthPx: Float = 1f,
-) : PdfCanvas {
+) : KiteCanvas {
 
     private val clipStack = ArrayDeque<ClipFrame>()
     /** Count of open transparency groups — for matching beginGroup/endGroup pairs. */
@@ -89,7 +89,7 @@ public class ComposeCanvas(
     }
 
     override fun fillPath(
-        path: PdfPath, ctm: PdfMatrix, color: RgbColor, evenOdd: Boolean,
+        path: KitePath, ctm: PdfMatrix, color: RgbColor, evenOdd: Boolean,
         alpha: Double, blendMode: PdfBlendMode,
     ) {
         withActiveClips {
@@ -106,7 +106,7 @@ public class ComposeCanvas(
     }
 
     override fun strokePath(
-        path: PdfPath, ctm: PdfMatrix, color: RgbColor, lineWidth: Double,
+        path: KitePath, ctm: PdfMatrix, color: RgbColor, lineWidth: Double,
         alpha: Double, blendMode: PdfBlendMode,
         dashArray: List<Double>?, dashPhase: Double,
         lineCap: Int, lineJoin: Int, miterLimit: Double,
@@ -277,9 +277,9 @@ public class ComposeCanvas(
     }
 
     override fun fillShading(
-        shading: PdfShading,
+        shading: KiteShading,
         ctm: PdfMatrix,
-        clipPath: PdfPath?,
+        clipPath: KitePath?,
         alpha: Double,
         blendMode: PdfBlendMode,
     ) {
@@ -290,7 +290,7 @@ public class ComposeCanvas(
         }.toTypedArray()
 
         val brush: Brush = when (shading) {
-            is PdfShading.Axial -> {
+            is KiteShading.Axial -> {
                 val (x0, y0) = ctm.transformPoint(shading.coords[0], shading.coords[1])
                 val (x1, y1) = ctm.transformPoint(shading.coords[2], shading.coords[3])
                 Brush.linearGradient(
@@ -299,7 +299,7 @@ public class ComposeCanvas(
                     end = Offset(x1.toFloat(), y1.toFloat()),
                 )
             }
-            is PdfShading.Radial -> {
+            is KiteShading.Radial -> {
                 // We use the outer circle's centre + radius as the gradient.
                 // The inner circle (concentric or offset) is approximated; PDF's
                 // two-circle radial gradient is richer than Compose's, but for
@@ -313,7 +313,7 @@ public class ComposeCanvas(
                     radius = if (radius <= 0f) 1f else radius,
                 )
             }
-            is PdfShading.Unsupported -> {
+            is KiteShading.Unsupported -> {
                 // Background fall-back: solid colour if the spec gave one.
                 val bg = shading.background ?: return
                 if (clipPath != null) {
@@ -353,7 +353,7 @@ public class ComposeCanvas(
         maskBBox: PdfRectangle,
         maskCtm: PdfMatrix,
         render: () -> Unit,
-        renderMask: (PdfCanvas) -> Unit,
+        renderMask: (KiteCanvas) -> Unit,
     ) {
         val composeCanvas = drawScope.drawContext.canvas
         // Outer layer: holds the masked content.
@@ -419,11 +419,11 @@ public class ComposeCanvas(
     }
 
     private fun drawPlaceholder(ctm: PdfMatrix) {
-        val rectPath = PdfPath.Builder().apply { rectangle(0.0, 0.0, 1.0, 1.0) }.build()
+        val rectPath = KitePath.Builder().apply { rectangle(0.0, 0.0, 1.0, 1.0) }.build()
         val composeRect = toComposePath(rectPath, ctm).apply { fillType = PathFillType.NonZero }
         drawScope.drawPath(composeRect, color = Color(0xFFE0E0E0.toInt()))
         drawScope.drawPath(composeRect, color = Color(0xFF888888.toInt()), style = Stroke(width = 1f))
-        val diagonal = PdfPath.Builder().apply {
+        val diagonal = KitePath.Builder().apply {
             moveTo(0.0, 0.0); lineTo(1.0, 1.0)
             moveTo(0.0, 1.0); lineTo(1.0, 0.0)
         }.build()
@@ -434,7 +434,7 @@ public class ComposeCanvas(
         )
     }
 
-    override fun pushClip(path: PdfPath, ctm: PdfMatrix, evenOdd: Boolean) {
+    override fun pushClip(path: KitePath, ctm: PdfMatrix, evenOdd: Boolean) {
         val composePath = toComposePath(path, ctm).apply {
             fillType = if (evenOdd) PathFillType.EvenOdd else PathFillType.NonZero
         }
@@ -500,30 +500,30 @@ public class ComposeCanvas(
         }
     }
 
-    private fun toComposePath(src: PdfPath, ctm: PdfMatrix): Path {
+    private fun toComposePath(src: KitePath, ctm: PdfMatrix): Path {
         val out = Path()
         for (seg in src.segments) {
             when (seg) {
-                is PdfPath.Segment.MoveTo -> {
+                is KitePath.Segment.MoveTo -> {
                     val (x, y) = ctm.transformPoint(seg.x, seg.y)
                     out.moveTo(x.toFloat(), y.toFloat())
                 }
-                is PdfPath.Segment.LineTo -> {
+                is KitePath.Segment.LineTo -> {
                     val (x, y) = ctm.transformPoint(seg.x, seg.y)
                     out.lineTo(x.toFloat(), y.toFloat())
                 }
-                is PdfPath.Segment.CurveTo -> {
+                is KitePath.Segment.CurveTo -> {
                     val (x1, y1) = ctm.transformPoint(seg.x1, seg.y1)
                     val (x2, y2) = ctm.transformPoint(seg.x2, seg.y2)
                     val (x3, y3) = ctm.transformPoint(seg.x3, seg.y3)
                     out.cubicTo(x1.toFloat(), y1.toFloat(), x2.toFloat(), y2.toFloat(), x3.toFloat(), y3.toFloat())
                 }
-                is PdfPath.Segment.QuadTo -> {
+                is KitePath.Segment.QuadTo -> {
                     val (x1, y1) = ctm.transformPoint(seg.x1, seg.y1)
                     val (x2, y2) = ctm.transformPoint(seg.x2, seg.y2)
                     out.quadraticTo(x1.toFloat(), y1.toFloat(), x2.toFloat(), y2.toFloat())
                 }
-                PdfPath.Segment.Close -> out.close()
+                KitePath.Segment.Close -> out.close()
             }
         }
         return out

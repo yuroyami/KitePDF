@@ -132,7 +132,7 @@ public sealed class ColorSpace {
     public class DeviceN(
         override val componentCount: Int,
         public val alternate: ColorSpace,
-        public val tintTransform: PdfFunction,
+        public val tintTransform: KiteFunction,
         /** Colorant names; a single "None" Separation paints nothing. */
         public val names: List<String>,
     ) : ColorSpace() {
@@ -239,7 +239,7 @@ public sealed class ColorSpace {
             // [/Separation name alternateSpace tintTransform]
             val name = (arr.getOrNull(1)?.resolve(refs) as? PdfName)?.value ?: ""
             val alternate = resolve(arr.getOrNull(2), refs)
-            val tint = PdfFunction.parse(arr.getOrNull(3), refs) ?: return Unsupported("Separation", 1)
+            val tint = KiteFunction.parse(arr.getOrNull(3), refs) ?: return Unsupported("Separation", 1)
             return DeviceN(1, alternate, tint, listOf(name))
         }
 
@@ -249,7 +249,7 @@ public sealed class ColorSpace {
             val names = namesArr.mapNotNull { (it as? PdfName)?.value }
             if (names.isEmpty()) return Unsupported("DeviceN", 1)
             val alternate = resolve(arr.getOrNull(2), refs)
-            val tint = PdfFunction.parse(arr.getOrNull(3), refs) ?: return Unsupported("DeviceN", names.size)
+            val tint = KiteFunction.parse(arr.getOrNull(3), refs) ?: return Unsupported("DeviceN", names.size)
             return DeviceN(names.size, alternate, tint, names)
         }
 

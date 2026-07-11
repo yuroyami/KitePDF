@@ -7,7 +7,7 @@ import kotlin.test.assertTrue
 /** [ReaderTheme] / [ThemedCanvas]: content colours are remapped, paper follows the theme. */
 class ThemedCanvasTest {
 
-    private fun rect() = PdfPath.Builder().apply { rectangle(0.0, 0.0, 10.0, 10.0) }.build()
+    private fun rect() = KitePath.Builder().apply { rectangle(0.0, 0.0, 10.0, 10.0) }.build()
 
     private fun fillColorThrough(theme: ReaderTheme, input: RgbColor): RgbColor {
         val rec = RecordingCanvas()

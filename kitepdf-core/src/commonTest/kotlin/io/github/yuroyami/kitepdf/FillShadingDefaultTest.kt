@@ -5,17 +5,17 @@ import io.github.yuroyami.kitepdf.font.TextGlyph
 import io.github.yuroyami.kitepdf.render.BlendMode
 import io.github.yuroyami.kitepdf.render.ColorSpace
 import io.github.yuroyami.kitepdf.render.Matrix
-import io.github.yuroyami.kitepdf.render.PdfCanvas
-import io.github.yuroyami.kitepdf.render.PdfFunction
-import io.github.yuroyami.kitepdf.render.PdfPath
-import io.github.yuroyami.kitepdf.render.PdfShading
+import io.github.yuroyami.kitepdf.render.KiteCanvas
+import io.github.yuroyami.kitepdf.render.KiteFunction
+import io.github.yuroyami.kitepdf.render.KitePath
+import io.github.yuroyami.kitepdf.render.KiteShading
 import io.github.yuroyami.kitepdf.render.RgbColor
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 /**
- * The interface-default [PdfCanvas.fillShading] must paint SOMETHING for the
+ * The interface-default [KiteCanvas.fillShading] must paint SOMETHING for the
  * whole-clip case (`sh` passes `clipPath = null`, meaning "cover the current
  * clip / page"), not silently return (T-03). All shipped backends override
  * the default, so this exercises a minimal fake canvas that does not.
@@ -23,26 +23,26 @@ import kotlin.test.assertTrue
 class FillShadingDefaultTest {
 
     /** Implements only the required members; fillShading stays the default. */
-    private class MinimalCanvas : PdfCanvas {
-        val fills = mutableListOf<Triple<PdfPath, Matrix, RgbColor>>()
+    private class MinimalCanvas : KiteCanvas {
+        val fills = mutableListOf<Triple<KitePath, Matrix, RgbColor>>()
         override fun beginPage(widthPt: Double, heightPt: Double, deviceCtm: Matrix) {}
         override fun endPage() {}
-        override fun fillPath(path: PdfPath, ctm: Matrix, color: RgbColor, evenOdd: Boolean, alpha: Double, blendMode: BlendMode) {
+        override fun fillPath(path: KitePath, ctm: Matrix, color: RgbColor, evenOdd: Boolean, alpha: Double, blendMode: BlendMode) {
             fills.add(Triple(path, ctm, color))
         }
-        override fun strokePath(path: PdfPath, ctm: Matrix, color: RgbColor, lineWidth: Double, alpha: Double, blendMode: BlendMode, dashArray: List<Double>?, dashPhase: Double, lineCap: Int, lineJoin: Int, miterLimit: Double) {}
+        override fun strokePath(path: KitePath, ctm: Matrix, color: RgbColor, lineWidth: Double, alpha: Double, blendMode: BlendMode, dashArray: List<Double>?, dashPhase: Double, lineCap: Int, lineJoin: Int, miterLimit: Double) {}
         override fun drawGlyphs(glyphs: List<TextGlyph>, fontSize: Double, unitsPerEm: Int, hasOutlines: Boolean, fontSpec: FontSpec, textToDevice: Matrix, color: RgbColor, alpha: Double, blendMode: BlendMode) {}
-        override fun pushClip(path: PdfPath, ctm: Matrix, evenOdd: Boolean) {}
+        override fun pushClip(path: KitePath, ctm: Matrix, evenOdd: Boolean) {}
         override fun popClip() {}
     }
 
-    private fun redToBlueAxial() = PdfShading.Axial(
+    private fun redToBlueAxial() = KiteShading.Axial(
         colorSpace = ColorSpace.DeviceRGB,
         background = null,
         bbox = null,
         coords = doubleArrayOf(0.0, 0.0, 100.0, 0.0),
         domain = doubleArrayOf(0.0, 1.0),
-        function = PdfFunction.Type2(
+        function = KiteFunction.Type2(
             domain = doubleArrayOf(0.0, 1.0),
             range = null,
             c0 = doubleArrayOf(1.0, 0.0, 0.0),
@@ -68,7 +68,7 @@ class FillShadingDefaultTest {
     @Test
     fun clipped_case_still_fills_the_clip_path() {
         val canvas = MinimalCanvas()
-        val clip = PdfPath.Builder().apply {
+        val clip = KitePath.Builder().apply {
             moveTo(0.0, 0.0); lineTo(50.0, 0.0); lineTo(50.0, 50.0); close()
         }.build()
         val ctm = Matrix(1.0, 0.0, 0.0, 1.0, 10.0, 10.0)

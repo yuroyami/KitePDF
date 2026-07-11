@@ -33,7 +33,7 @@ import io.github.yuroyami.kitepdf.parser.PdfStream
  * backend (pure `fillPath` emission); 2/3 keep the backends' native gradient
  * brushes. Unparseable shadings become [Unsupported] and paint nothing.
  */
-public sealed class PdfShading {
+public sealed class KiteShading {
 
     /** The shading's colour space (DeviceGray / DeviceRGB / DeviceCMYK / Indexed). */
     public abstract val colorSpace: ColorSpace
@@ -62,11 +62,11 @@ public sealed class PdfShading {
         val coords: DoubleArray,
         /** [t0, t1] — domain of [function]. */
         val domain: DoubleArray,
-        val function: PdfFunction,
+        val function: KiteFunction,
         /** Extend the gradient beyond t0 / t1 with the endpoint colours. */
         val extendStart: Boolean,
         val extendEnd: Boolean,
-    ) : PdfShading() {
+    ) : KiteShading() {
         override fun equals(other: Any?): Boolean = other is Axial &&
             colorSpace == other.colorSpace && background == other.background && bbox == other.bbox &&
             coords.contentEquals(other.coords) && domain.contentEquals(other.domain) &&
@@ -95,10 +95,10 @@ public sealed class PdfShading {
         /** [x0, y0, r0, x1, y1, r1] in shading-space. */
         val coords: DoubleArray,
         val domain: DoubleArray,
-        val function: PdfFunction,
+        val function: KiteFunction,
         val extendStart: Boolean,
         val extendEnd: Boolean,
-    ) : PdfShading() {
+    ) : KiteShading() {
         override fun equals(other: Any?): Boolean = other is Radial &&
             colorSpace == other.colorSpace && background == other.background && bbox == other.bbox &&
             coords.contentEquals(other.coords) && domain.contentEquals(other.domain) &&
@@ -119,8 +119,8 @@ public sealed class PdfShading {
         /** [x0, x1, y0, y1]. */
         public val domain: DoubleArray,
         public val matrix: Matrix,
-        private val function: PdfFunction,
-    ) : PdfShading() {
+        private val function: KiteFunction,
+    ) : KiteShading() {
         public fun colorAt(x: Double, y: Double): RgbColor =
             colorSpace.toRgb(function.evaluate(doubleArrayOf(x, y)))
     }
@@ -138,7 +138,7 @@ public sealed class PdfShading {
         override val background: RgbColor?,
         override val bbox: Rectangle?,
         public val triangles: List<MeshTriangle>,
-    ) : PdfShading()
+    ) : KiteShading()
 
     /** A flat-coloured tessellation quad from a Coons/tensor patch. */
     public class FlatQuad(
@@ -153,7 +153,7 @@ public sealed class PdfShading {
         override val background: RgbColor?,
         override val bbox: Rectangle?,
         public val quads: List<FlatQuad>,
-    ) : PdfShading()
+    ) : KiteShading()
 
     /** Shading type we don't render; [sampleStops] returns null, so nothing paints. */
     public data class Unsupported(
@@ -161,12 +161,12 @@ public sealed class PdfShading {
         override val colorSpace: ColorSpace,
         override val background: RgbColor?,
         override val bbox: Rectangle?,
-    ) : PdfShading()
+    ) : KiteShading()
 
     public companion object {
 
         /** Parse a /Shading object (dict or stream — stream is only for Types 4–7). */
-        public fun parse(obj: PdfObject?, refs: IndirectResolver): PdfShading? {
+        public fun parse(obj: PdfObject?, refs: IndirectResolver): KiteShading? {
             val resolved = when (obj) {
                 is PdfReference -> refs.resolve(obj)
                 else -> obj
@@ -178,7 +178,7 @@ public sealed class PdfShading {
             }
         }
 
-        private fun parseDict(dict: PdfDictionary, stream: PdfStream?, refs: IndirectResolver): PdfShading? {
+        private fun parseDict(dict: PdfDictionary, stream: PdfStream?, refs: IndirectResolver): KiteShading? {
             val type = dict.getInt("ShadingType")?.toInt() ?: return null
             val cs = ColorSpace.resolve(dict["ColorSpace"], refs)
             val bbox = (dict.getArray("BBox"))?.let { arr ->
@@ -204,8 +204,8 @@ public sealed class PdfShading {
         private fun parseFunctionBased(
             dict: PdfDictionary, cs: ColorSpace, bg: RgbColor?,
             bbox: Rectangle?, refs: IndirectResolver,
-        ): PdfShading? {
-            val function = PdfFunction.parse(dict["Function"], refs) ?: return null
+        ): KiteShading? {
+            val function = KiteFunction.parse(dict["Function"], refs) ?: return null
             val domain = (dict.getArray("Domain"))?.let { arr ->
                 if (arr.size >= 4) DoubleArray(4) { arr.num(it) } else null
             } ?: doubleArrayOf(0.0, 1.0, 0.0, 1.0)
@@ -219,14 +219,14 @@ public sealed class PdfShading {
         private fun parseAxial(
             dict: PdfDictionary, cs: ColorSpace, bg: RgbColor?,
             bbox: Rectangle?, refs: IndirectResolver,
-        ): PdfShading? {
+        ): KiteShading? {
             val coords = (dict.getArray("Coords"))?.let { arr ->
                 if (arr.size >= 4) DoubleArray(4) { arr.num(it) } else null
             } ?: return null
             val domain = (dict.getArray("Domain"))?.let { arr ->
                 if (arr.size >= 2) DoubleArray(2) { arr.num(it) } else null
             } ?: doubleArrayOf(0.0, 1.0)
-            val function = PdfFunction.parse(dict["Function"], refs) ?: return null
+            val function = KiteFunction.parse(dict["Function"], refs) ?: return null
             val extend = (dict.getArray("Extend"))?.let { arr ->
                 if (arr.size >= 2)
                     Pair((arr[0] as? PdfBoolean)?.value ?: false, (arr[1] as? PdfBoolean)?.value ?: false)
@@ -238,14 +238,14 @@ public sealed class PdfShading {
         private fun parseRadial(
             dict: PdfDictionary, cs: ColorSpace, bg: RgbColor?,
             bbox: Rectangle?, refs: IndirectResolver,
-        ): PdfShading? {
+        ): KiteShading? {
             val coords = (dict.getArray("Coords"))?.let { arr ->
                 if (arr.size >= 6) DoubleArray(6) { arr.num(it) } else null
             } ?: return null
             val domain = (dict.getArray("Domain"))?.let { arr ->
                 if (arr.size >= 2) DoubleArray(2) { arr.num(it) } else null
             } ?: doubleArrayOf(0.0, 1.0)
-            val function = PdfFunction.parse(dict["Function"], refs) ?: return null
+            val function = KiteFunction.parse(dict["Function"], refs) ?: return null
             val extend = (dict.getArray("Extend"))?.let { arr ->
                 if (arr.size >= 2)
                     Pair((arr[0] as? PdfBoolean)?.value ?: false, (arr[1] as? PdfBoolean)?.value ?: false)
@@ -263,17 +263,17 @@ private fun PdfArray.num(i: Int): Double = when (val v = this[i]) {
 }
 
 /**
- * Sample a [PdfShading.Axial] or [PdfShading.Radial] at evenly-spaced
+ * Sample a [KiteShading.Axial] or [KiteShading.Radial] at evenly-spaced
  * stops between `domain[0]` and `domain[1]`. Returns parallel `t` and
  * RGB arrays the backend uses to build a gradient brush.
  */
-public fun PdfShading.sampleStops(count: Int = 32): GradientStops? {
-    val function: PdfFunction
+public fun KiteShading.sampleStops(count: Int = 32): GradientStops? {
+    val function: KiteFunction
     val domain: DoubleArray
     val cs: ColorSpace
     when (this) {
-        is PdfShading.Axial -> { function = this.function; domain = this.domain; cs = this.colorSpace }
-        is PdfShading.Radial -> { function = this.function; domain = this.domain; cs = this.colorSpace }
+        is KiteShading.Axial -> { function = this.function; domain = this.domain; cs = this.colorSpace }
+        is KiteShading.Radial -> { function = this.function; domain = this.domain; cs = this.colorSpace }
         else -> return null // 1/4/5/6/7 render via paintComplexShading; Unsupported paints nothing
     }
     val n = count.coerceAtLeast(2)

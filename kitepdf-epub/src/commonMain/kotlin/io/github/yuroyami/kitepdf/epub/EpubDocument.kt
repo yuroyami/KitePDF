@@ -18,13 +18,13 @@ import io.github.yuroyami.kitepdf.KiteTextLine
 import io.github.yuroyami.kitepdf.render.BlendMode
 import io.github.yuroyami.kitepdf.render.ImageXObject
 import io.github.yuroyami.kitepdf.render.Matrix
-import io.github.yuroyami.kitepdf.render.PdfCanvas
-import io.github.yuroyami.kitepdf.render.PdfPath
+import io.github.yuroyami.kitepdf.render.KiteCanvas
+import io.github.yuroyami.kitepdf.render.KitePath
 import io.github.yuroyami.kitepdf.render.RgbColor
 
 /**
  * A parsed EPUB, reflowed onto fixed-size pages and rendered through the shared
- * [PdfCanvas] the PDF engine uses. The second document handler on :kitepdf-core.
+ * [KiteCanvas] the PDF engine uses. The second document handler on :kitepdf-core.
  *
  * Pipeline: [ZipReader] unzips the OCF container; [HtmlParser] builds a DOM per
  * spine document; the CSS cascade ([StyleResolver], via [BoxBuilder]) turns each
@@ -631,7 +631,7 @@ public class EpubPage internal constructor(
      */
     private fun displayY(docY: Double): Double = page.margin + (docY - page.startY)
 
-    override fun renderTo(canvas: PdfCanvas, deviceCtm: Matrix) {
+    override fun renderTo(canvas: KiteCanvas, deviceCtm: Matrix) {
         if (page.vertical) {
             renderVerticalTo(canvas, deviceCtm)
             return
@@ -644,7 +644,7 @@ public class EpubPage internal constructor(
 
         // Reader background (night mode): under everything, full page.
         doc.settings.backgroundColor?.let { bg ->
-            val rect = PdfPath.Builder().apply {
+            val rect = KitePath.Builder().apply {
                 moveTo(0.0, 0.0); lineTo(width, 0.0); lineTo(width, height); lineTo(0.0, height); close()
             }.build()
             canvas.fillPath(rect, deviceCtm, bg, evenOdd = false)
@@ -701,7 +701,7 @@ public class EpubPage internal constructor(
                 val dh = img.height * scale
                 val dx = (box.drawWidth - dw) / 2.0
                 val dy = (box.drawHeight - dh) / 2.0
-                val clip = PdfPath.Builder()
+                val clip = KitePath.Builder()
                     .apply { rectangle(margin + box.x, yUp(box.bottom), box.drawWidth, box.drawHeight) }
                     .build()
                 canvas.pushClip(clip, deviceCtm, evenOdd = false)
@@ -722,7 +722,7 @@ public class EpubPage internal constructor(
      * Full-width glyphs stand upright, centred on the column's em axis;
      * everything else rotates 90 degrees clockwise around the shared baseline.
      */
-    private fun renderVerticalTo(canvas: PdfCanvas, deviceCtm: Matrix) {
+    private fun renderVerticalTo(canvas: KiteCanvas, deviceCtm: Matrix) {
         canvas.beginPage(width, height, deviceCtm)
         val margin = page.margin
         val startY = page.startY
@@ -731,7 +731,7 @@ public class EpubPage internal constructor(
         fun colX(v: Double) = width - margin - (v - startY)
 
         doc.settings.backgroundColor?.let { bg ->
-            val rect = PdfPath.Builder().apply {
+            val rect = KitePath.Builder().apply {
                 moveTo(0.0, 0.0); lineTo(width, 0.0); lineTo(width, height); lineTo(0.0, height); close()
             }.build()
             canvas.fillPath(rect, deviceCtm, bg, evenOdd = false)
@@ -821,7 +821,7 @@ public class EpubPage internal constructor(
 
     /** [paintBox] under the vertical mapping: block spans columns, inline runs down. */
     private fun paintBoxVertical(
-        box: LayoutBox, canvas: PdfCanvas, ctm: Matrix, margin: Double,
+        box: LayoutBox, canvas: KiteCanvas, ctm: Matrix, margin: Double,
         startY: Double, bandBottom: Double, colX: (Double) -> Double,
     ) {
         val s = box.style
@@ -849,7 +849,7 @@ public class EpubPage internal constructor(
     }
 
     private fun paintBox(
-        box: LayoutBox, canvas: PdfCanvas, ctm: Matrix, margin: Double,
+        box: LayoutBox, canvas: KiteCanvas, ctm: Matrix, margin: Double,
         startY: Double, bandBottom: Double, yUp: (Double) -> Double,
     ) {
         val s = box.style
@@ -870,7 +870,7 @@ public class EpubPage internal constructor(
     }
 
     private fun horizontalEdge(
-        canvas: PdfCanvas, ctm: Matrix, xDev: Double, w: Double, y0Doc: Double, y1Doc: Double,
+        canvas: KiteCanvas, ctm: Matrix, xDev: Double, w: Double, y0Doc: Double, y1Doc: Double,
         startY: Double, bandBottom: Double, yUp: (Double) -> Double, color: RgbColor,
     ) {
         val t = maxOf(y0Doc, startY); val b = minOf(y1Doc, bandBottom)
@@ -878,9 +878,9 @@ public class EpubPage internal constructor(
         rectFill(canvas, ctm, xDev, yUp(b), w, yUp(t) - yUp(b), color)
     }
 
-    private fun rectFill(canvas: PdfCanvas, ctm: Matrix, x: Double, yBottom: Double, w: Double, h: Double, color: RgbColor) {
+    private fun rectFill(canvas: KiteCanvas, ctm: Matrix, x: Double, yBottom: Double, w: Double, h: Double, color: RgbColor) {
         if (w <= 0.0 || h <= 0.0) return
-        val path = PdfPath.Builder().apply { rectangle(x, yBottom, w, h) }.build()
+        val path = KitePath.Builder().apply { rectangle(x, yBottom, w, h) }.build()
         canvas.fillPath(path, ctm, color, evenOdd = false, alpha = 1.0, blendMode = BlendMode.Normal)
     }
 

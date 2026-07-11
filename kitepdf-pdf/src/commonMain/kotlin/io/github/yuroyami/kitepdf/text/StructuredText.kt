@@ -9,8 +9,8 @@ import io.github.yuroyami.kitepdf.render.BlendMode
 import io.github.yuroyami.kitepdf.render.ImageXObject
 import io.github.yuroyami.kitepdf.render.Matrix
 import io.github.yuroyami.kitepdf.render.PageRenderer
-import io.github.yuroyami.kitepdf.render.PdfCanvas
-import io.github.yuroyami.kitepdf.render.PdfPath
+import io.github.yuroyami.kitepdf.render.KiteCanvas
+import io.github.yuroyami.kitepdf.render.KitePath
 import io.github.yuroyami.kitepdf.render.RgbColor
 
 /**
@@ -235,7 +235,7 @@ internal object StructuredTextExtractor {
  * Canvas that records every `drawText` call. Path and image ops are
  * dropped — they don't contribute to text extraction.
  */
-private class TextCollectorCanvas : PdfCanvas {
+private class TextCollectorCanvas : KiteCanvas {
     data class TextRun(
         val glyphs: List<TextGlyph>,
         val fontSpec: FontSpec,
@@ -326,8 +326,8 @@ private class TextCollectorCanvas : PdfCanvas {
 
     override fun beginPage(widthPt: Double, heightPt: Double, deviceCtm: Matrix) {}
     override fun endPage() {}
-    override fun fillPath(path: PdfPath, ctm: Matrix, color: RgbColor, evenOdd: Boolean, alpha: Double, blendMode: BlendMode) {}
-    override fun strokePath(path: PdfPath, ctm: Matrix, color: RgbColor, lineWidth: Double, alpha: Double, blendMode: BlendMode, dashArray: List<Double>?, dashPhase: Double, lineCap: Int, lineJoin: Int, miterLimit: Double) {}
+    override fun fillPath(path: KitePath, ctm: Matrix, color: RgbColor, evenOdd: Boolean, alpha: Double, blendMode: BlendMode) {}
+    override fun strokePath(path: KitePath, ctm: Matrix, color: RgbColor, lineWidth: Double, alpha: Double, blendMode: BlendMode, dashArray: List<Double>?, dashPhase: Double, lineCap: Int, lineJoin: Int, miterLimit: Double) {}
     override val resolvesGlyphOutlines: Boolean get() = false
     override fun drawGlyphs(
         glyphs: List<TextGlyph>, fontSize: Double, unitsPerEm: Int, hasOutlines: Boolean,
@@ -335,7 +335,7 @@ private class TextCollectorCanvas : PdfCanvas {
     ) {
         runs.add(TextRun(glyphs, fontSpec, fontSize, textToDevice))
     }
-    override fun pushClip(path: PdfPath, ctm: Matrix, evenOdd: Boolean) {}
+    override fun pushClip(path: KitePath, ctm: Matrix, evenOdd: Boolean) {}
     override fun popClip() {}
     override fun drawImage(image: ImageXObject, ctm: Matrix, alpha: Double) {}
 }

@@ -7,7 +7,7 @@ import io.github.yuroyami.kitepdf.parser.PdfName
 import io.github.yuroyami.kitepdf.parser.PdfObject
 import io.github.yuroyami.kitepdf.parser.PdfReal
 import io.github.yuroyami.kitepdf.parser.PdfStream
-import io.github.yuroyami.kitepdf.render.PdfFunction
+import io.github.yuroyami.kitepdf.render.KiteFunction
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
@@ -34,7 +34,7 @@ class FunctionEvalTest {
             )),
             rawBytes = byteArrayOf(0x00, 0xFF.toByte()),
         )
-        val f = PdfFunction.parse(stream, nilRefs)
+        val f = KiteFunction.parse(stream, nilRefs)
         assertNotNull(f)
         assertEquals(0.0, f.evaluate(doubleArrayOf(0.0))[0], 0.001)
         assertEquals(1.0, f.evaluate(doubleArrayOf(1.0))[0], 0.001)
@@ -55,13 +55,13 @@ class FunctionEvalTest {
             )),
             rawBytes = byteArrayOf(0x00, 0xFF.toByte(), 0xFF.toByte(), 0x00),
         )
-        val f = PdfFunction.parse(stream, nilRefs)!!
+        val f = KiteFunction.parse(stream, nilRefs)!!
         assertEquals(0.0, f.evaluate(doubleArrayOf(0.0, 0.0))[0], 0.01)
         assertEquals(1.0, f.evaluate(doubleArrayOf(1.0, 0.0))[0], 0.01)
         assertEquals(0.5, f.evaluate(doubleArrayOf(0.5, 0.5))[0], 0.02) // centre = mean of corners
     }
 
-    private fun ps(program: String, range: PdfArray, domain: PdfArray = reals(0.0, 100.0)): PdfFunction {
+    private fun ps(program: String, range: PdfArray, domain: PdfArray = reals(0.0, 100.0)): KiteFunction {
         val bytes = program.encodeToByteArray()
         val stream = PdfStream(
             dict = PdfDictionary(linkedMapOf(
@@ -72,7 +72,7 @@ class FunctionEvalTest {
             )),
             rawBytes = bytes,
         )
-        return PdfFunction.parse(stream, nilRefs)!!
+        return KiteFunction.parse(stream, nilRefs)!!
     }
 
     @Test fun type4_arithmetic() {
@@ -107,7 +107,7 @@ class FunctionEvalTest {
             "C0" to reals(c0), "C1" to reals(c1), "N" to PdfInt(1),
         ))
         val arr = PdfArray(listOf(t2(0.0, 1.0), t2(1.0, 0.0)))
-        val f = PdfFunction.parse(arr, nilRefs)!!
+        val f = KiteFunction.parse(arr, nilRefs)!!
         assertEquals(2, f.outputCount)
         val out = f.evaluate(doubleArrayOf(0.25))
         assertEquals(0.25, out[0], 0.001)

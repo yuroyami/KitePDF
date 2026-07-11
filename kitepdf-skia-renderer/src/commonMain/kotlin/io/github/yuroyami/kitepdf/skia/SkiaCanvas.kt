@@ -8,9 +8,9 @@ import io.github.yuroyami.kitepdf.font.TextGlyph
 import io.github.yuroyami.kitepdf.render.BlendMode as PdfBlendMode
 import io.github.yuroyami.kitepdf.render.ImageXObject
 import io.github.yuroyami.kitepdf.render.Matrix as PdfMatrix
-import io.github.yuroyami.kitepdf.render.PdfCanvas
-import io.github.yuroyami.kitepdf.render.PdfPath
-import io.github.yuroyami.kitepdf.render.PdfShading
+import io.github.yuroyami.kitepdf.render.KiteCanvas
+import io.github.yuroyami.kitepdf.render.KitePath
+import io.github.yuroyami.kitepdf.render.KiteShading
 import io.github.yuroyami.kitepdf.render.RgbColor
 import io.github.yuroyami.kitepdf.render.SoftMask
 import io.github.yuroyami.kitepdf.render.sampleStops
@@ -39,7 +39,7 @@ import org.jetbrains.skia.Color4f
 import org.jetbrains.skia.FilterTileMode
 
 /**
- * [PdfCanvas] backed by a raw [org.jetbrains.skia.Canvas] (Skiko).
+ * [KiteCanvas] backed by a raw [org.jetbrains.skia.Canvas] (Skiko).
  *
  * Same rendering engine Compose Multiplatform rides on for JVM Desktop and
  * iOS — minus the Compose runtime. Pure-Skia means this adapter is the
@@ -55,7 +55,7 @@ import org.jetbrains.skia.FilterTileMode
  * Pair with [PdfPageRasterizer] for the common "give me a `ByteArray` of a
  * page's PNG" use case.
  */
-public class SkiaCanvas(private val canvas: SkCanvas) : PdfCanvas {
+public class SkiaCanvas(private val canvas: SkCanvas) : KiteCanvas {
 
     /** Count of open transparency groups + soft-mask layers — for endPage cleanup. */
     private var openLayers = 0
@@ -73,7 +73,7 @@ public class SkiaCanvas(private val canvas: SkCanvas) : PdfCanvas {
     }
 
     override fun fillPath(
-        path: PdfPath, ctm: PdfMatrix, color: RgbColor, evenOdd: Boolean,
+        path: KitePath, ctm: PdfMatrix, color: RgbColor, evenOdd: Boolean,
         alpha: Double, blendMode: PdfBlendMode,
     ) {
         val sk = toSkPath(path, ctm).apply {
@@ -89,7 +89,7 @@ public class SkiaCanvas(private val canvas: SkCanvas) : PdfCanvas {
     }
 
     override fun strokePath(
-        path: PdfPath, ctm: PdfMatrix, color: RgbColor, lineWidth: Double,
+        path: KitePath, ctm: PdfMatrix, color: RgbColor, lineWidth: Double,
         alpha: Double, blendMode: PdfBlendMode,
         dashArray: List<Double>?, dashPhase: Double,
         lineCap: Int, lineJoin: Int, miterLimit: Double,
@@ -226,9 +226,9 @@ public class SkiaCanvas(private val canvas: SkCanvas) : PdfCanvas {
     }
 
     override fun fillShading(
-        shading: PdfShading,
+        shading: KiteShading,
         ctm: PdfMatrix,
-        clipPath: PdfPath?,
+        clipPath: KitePath?,
         alpha: Double,
         blendMode: PdfBlendMode,
     ) {
@@ -247,9 +247,9 @@ public class SkiaCanvas(private val canvas: SkCanvas) : PdfCanvas {
         // CLAMP then holds the extending end's colour and the injected
         // transparent stop suppresses the other end.
         val (extendStart, extendEnd) = when (shading) {
-            is PdfShading.Axial -> shading.extendStart to shading.extendEnd
-            is PdfShading.Radial -> shading.extendStart to shading.extendEnd
-            is PdfShading.Unsupported -> return
+            is KiteShading.Axial -> shading.extendStart to shading.extendEnd
+            is KiteShading.Radial -> shading.extendStart to shading.extendEnd
+            is KiteShading.Unsupported -> return
             else -> return // T-40 types already handled by paintComplexShading
         }
 
@@ -287,7 +287,7 @@ public class SkiaCanvas(private val canvas: SkCanvas) : PdfCanvas {
         )
 
         val shader: Shader = when (shading) {
-            is PdfShading.Axial -> {
+            is KiteShading.Axial -> {
                 val (x0, y0) = ctm.transformPoint(shading.coords[0], shading.coords[1])
                 val (x1, y1) = ctm.transformPoint(shading.coords[2], shading.coords[3])
                 Shader.makeLinearGradient(
@@ -296,7 +296,7 @@ public class SkiaCanvas(private val canvas: SkCanvas) : PdfCanvas {
                     gradient,
                 )
             }
-            is PdfShading.Radial -> {
+            is KiteShading.Radial -> {
                 // True PDF two-circle radial via a two-point conical gradient.
                 val sc = kotlin.math.sqrt(ctm.a * ctm.a + ctm.b * ctm.b)
                 val (x0, y0) = ctm.transformPoint(shading.coords[0], shading.coords[1])
@@ -309,7 +309,7 @@ public class SkiaCanvas(private val canvas: SkCanvas) : PdfCanvas {
                     gradient,
                 )
             }
-            is PdfShading.Unsupported -> return
+            is KiteShading.Unsupported -> return
             else -> return // T-40 types already handled by paintComplexShading
         }
 
@@ -328,7 +328,7 @@ public class SkiaCanvas(private val canvas: SkCanvas) : PdfCanvas {
         }
     }
 
-    override fun pushClip(path: PdfPath, ctm: PdfMatrix, evenOdd: Boolean) {
+    override fun pushClip(path: KitePath, ctm: PdfMatrix, evenOdd: Boolean) {
         canvas.save()
         openLayers++
         val sk = toSkPath(path, ctm).apply {
@@ -429,7 +429,7 @@ public class SkiaCanvas(private val canvas: SkCanvas) : PdfCanvas {
         kind: SoftMask.Kind,
         maskBBox: Rectangle, maskCtm: PdfMatrix,
         render: () -> Unit,
-        renderMask: (PdfCanvas) -> Unit,
+        renderMask: (KiteCanvas) -> Unit,
     ) {
         // Outer layer captures the content. Inner layer paints the mask
         // group on top with DstIn so the mask's alpha clips the content.
@@ -474,20 +474,20 @@ public class SkiaCanvas(private val canvas: SkCanvas) : PdfCanvas {
 
     /* ─── Helpers ─────────────────────────────────────────────────────────── */
 
-    private fun toSkPath(src: PdfPath, ctm: PdfMatrix): SkPath {
+    private fun toSkPath(src: KitePath, ctm: PdfMatrix): SkPath {
         // skiko 0.148: Path is immutable; build via PathBuilder then snapshot().
         val b = PathBuilder()
         for (seg in src.segments) {
             when (seg) {
-                is PdfPath.Segment.MoveTo -> {
+                is KitePath.Segment.MoveTo -> {
                     val (x, y) = ctm.transformPoint(seg.x, seg.y)
                     b.moveTo(x.toFloat(), y.toFloat())
                 }
-                is PdfPath.Segment.LineTo -> {
+                is KitePath.Segment.LineTo -> {
                     val (x, y) = ctm.transformPoint(seg.x, seg.y)
                     b.lineTo(x.toFloat(), y.toFloat())
                 }
-                is PdfPath.Segment.CurveTo -> {
+                is KitePath.Segment.CurveTo -> {
                     val (x1, y1) = ctm.transformPoint(seg.x1, seg.y1)
                     val (x2, y2) = ctm.transformPoint(seg.x2, seg.y2)
                     val (x3, y3) = ctm.transformPoint(seg.x3, seg.y3)
@@ -497,12 +497,12 @@ public class SkiaCanvas(private val canvas: SkCanvas) : PdfCanvas {
                         x3.toFloat(), y3.toFloat(),
                     )
                 }
-                is PdfPath.Segment.QuadTo -> {
+                is KitePath.Segment.QuadTo -> {
                     val (x1, y1) = ctm.transformPoint(seg.x1, seg.y1)
                     val (x2, y2) = ctm.transformPoint(seg.x2, seg.y2)
                     b.quadTo(x1.toFloat(), y1.toFloat(), x2.toFloat(), y2.toFloat())
                 }
-                PdfPath.Segment.Close -> b.closePath()
+                KitePath.Segment.Close -> b.closePath()
             }
         }
         return b.snapshot()

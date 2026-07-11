@@ -39,7 +39,7 @@ import kotlin.math.truncate
  * An array of n single-output functions (as some shadings / tint transforms
  * use) is wrapped in [ArrayCombination].
  */
-public sealed class PdfFunction {
+public sealed class KiteFunction {
 
     /** Input bounds — paired `[min0, max0, min1, max1, …]`. */
     public abstract val domain: DoubleArray
@@ -83,7 +83,7 @@ public sealed class PdfFunction {
         private val encode: DoubleArray,
         private val decode: DoubleArray,
         private val samples: ByteArray,
-    ) : PdfFunction() {
+    ) : KiteFunction() {
         private val m = size.size
         private val n = (range?.size ?: 2) / 2
         override val outputCount: Int get() = n
@@ -161,7 +161,7 @@ public sealed class PdfFunction {
         public val c0: DoubleArray,
         public val c1: DoubleArray,
         public val n: Double,
-    ) : PdfFunction() {
+    ) : KiteFunction() {
         override val outputCount: Int get() = c0.size
         override fun evaluateInternal(input: DoubleArray): DoubleArray {
             val x = input.getOrElse(0) { 0.0 }
@@ -177,10 +177,10 @@ public sealed class PdfFunction {
     public class Type3(
         override val domain: DoubleArray,
         override val range: DoubleArray?,
-        public val functions: List<PdfFunction>,
+        public val functions: List<KiteFunction>,
         public val bounds: DoubleArray,
         public val encode: DoubleArray,
-    ) : PdfFunction() {
+    ) : KiteFunction() {
         override val outputCount: Int get() = functions.firstOrNull()?.outputCount ?: 0
         override fun evaluateInternal(input: DoubleArray): DoubleArray {
             val x = input.getOrElse(0) { 0.0 }
@@ -206,7 +206,7 @@ public sealed class PdfFunction {
         override val domain: DoubleArray,
         override val range: DoubleArray?,
         private val program: List<Any>,
-    ) : PdfFunction() {
+    ) : KiteFunction() {
         override val outputCount: Int get() = (range?.size ?: 2) / 2
 
         override fun evaluateInternal(input: DoubleArray): DoubleArray {
@@ -229,8 +229,8 @@ public sealed class PdfFunction {
      */
     public class ArrayCombination(
         override val domain: DoubleArray,
-        private val parts: List<PdfFunction>,
-    ) : PdfFunction() {
+        private val parts: List<KiteFunction>,
+    ) : KiteFunction() {
         override val range: DoubleArray? = null
         override val outputCount: Int get() = parts.size
         override fun evaluateInternal(input: DoubleArray): DoubleArray =
@@ -243,14 +243,14 @@ public sealed class PdfFunction {
         override val domain: DoubleArray,
         override val range: DoubleArray?,
         override val outputCount: Int,
-    ) : PdfFunction() {
+    ) : KiteFunction() {
         override fun evaluateInternal(input: DoubleArray): DoubleArray = DoubleArray(outputCount)
     }
 
     public companion object {
 
         /** Parse a /Function entry (dict, stream, or an array of functions). */
-        public fun parse(obj: PdfObject?, refs: IndirectResolver): PdfFunction? {
+        public fun parse(obj: PdfObject?, refs: IndirectResolver): KiteFunction? {
             val resolved = when (obj) {
                 is PdfReference -> refs.resolve(obj)
                 else -> obj
@@ -267,7 +267,7 @@ public sealed class PdfFunction {
             }
         }
 
-        private fun parseTyped(dict: PdfDictionary, stream: PdfStream?, refs: IndirectResolver): PdfFunction? {
+        private fun parseTyped(dict: PdfDictionary, stream: PdfStream?, refs: IndirectResolver): KiteFunction? {
             val type = dict.getInt("FunctionType")?.toInt() ?: return null
             val domain = dict.getArray("Domain")?.toDoubleArrayOrNull() ?: doubleArrayOf(0.0, 1.0)
             val range = dict.getArray("Range")?.toDoubleArrayOrNull()

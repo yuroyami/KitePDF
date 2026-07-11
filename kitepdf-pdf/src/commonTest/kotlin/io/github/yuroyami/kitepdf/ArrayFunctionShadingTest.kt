@@ -8,7 +8,7 @@ import io.github.yuroyami.kitepdf.parser.PdfInt
 import io.github.yuroyami.kitepdf.parser.PdfName
 import io.github.yuroyami.kitepdf.parser.PdfObject
 import io.github.yuroyami.kitepdf.parser.PdfReal
-import io.github.yuroyami.kitepdf.render.PdfShading
+import io.github.yuroyami.kitepdf.render.KiteShading
 import io.github.yuroyami.kitepdf.render.sampleStops
 import kotlin.test.Test
 import kotlin.test.assertNotNull
@@ -31,7 +31,7 @@ class ArrayFunctionShadingTest {
     ))
 
     @Test fun axial_with_array_function_samples_black_to_white() {
-        val shading = PdfShading.parse(
+        val shading = KiteShading.parse(
             PdfDictionary(linkedMapOf(
                 "ShadingType" to PdfInt(2),
                 "ColorSpace" to PdfName("DeviceRGB"),

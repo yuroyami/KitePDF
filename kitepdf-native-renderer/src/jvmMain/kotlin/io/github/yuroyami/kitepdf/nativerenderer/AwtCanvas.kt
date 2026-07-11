@@ -8,9 +8,9 @@ import io.github.yuroyami.kitepdf.font.TextGlyph
 import io.github.yuroyami.kitepdf.render.BlendMode as PdfBlendMode
 import io.github.yuroyami.kitepdf.render.ImageXObject
 import io.github.yuroyami.kitepdf.render.Matrix as PdfMatrix
-import io.github.yuroyami.kitepdf.render.PdfCanvas
-import io.github.yuroyami.kitepdf.render.PdfPath
-import io.github.yuroyami.kitepdf.render.PdfShading
+import io.github.yuroyami.kitepdf.render.KiteCanvas
+import io.github.yuroyami.kitepdf.render.KitePath
+import io.github.yuroyami.kitepdf.render.KiteShading
 import io.github.yuroyami.kitepdf.render.RgbColor
 import io.github.yuroyami.kitepdf.render.SoftMask
 import io.github.yuroyami.kitepdf.render.sampleStops
@@ -31,7 +31,7 @@ import java.awt.image.BufferedImage
 import javax.imageio.ImageIO
 
 /**
- * [PdfCanvas] backed by [java.awt.Graphics2D]. Pure JRE — no Skia, no
+ * [KiteCanvas] backed by [java.awt.Graphics2D]. Pure JRE — no Skia, no
  * Compose, no native binaries.
  *
  * The right choice when:
@@ -50,7 +50,7 @@ import javax.imageio.ImageIO
  * (Multiply, Screen, …) require a custom `java.awt.Composite` — we ship a
  * pixel-level [PdfBlendComposite] that implements all 16 modes for fidelity.
  */
-public class AwtCanvas(private val g: Graphics2D) : PdfCanvas {
+public class AwtCanvas(private val g: Graphics2D) : KiteCanvas {
 
     /** Save-state stack — mirrors clip + transform + composite per push. */
     private val saveStack = ArrayDeque<SavedState>()
@@ -74,7 +74,7 @@ public class AwtCanvas(private val g: Graphics2D) : PdfCanvas {
     }
 
     override fun fillPath(
-        path: PdfPath, ctm: PdfMatrix, color: RgbColor, evenOdd: Boolean,
+        path: KitePath, ctm: PdfMatrix, color: RgbColor, evenOdd: Boolean,
         alpha: Double, blendMode: PdfBlendMode,
     ) {
         val awt = toAwtPath(path, ctm).apply {
@@ -87,7 +87,7 @@ public class AwtCanvas(private val g: Graphics2D) : PdfCanvas {
     }
 
     override fun strokePath(
-        path: PdfPath, ctm: PdfMatrix, color: RgbColor, lineWidth: Double,
+        path: KitePath, ctm: PdfMatrix, color: RgbColor, lineWidth: Double,
         alpha: Double, blendMode: PdfBlendMode,
         dashArray: List<Double>?, dashPhase: Double,
         lineCap: Int, lineJoin: Int, miterLimit: Double,
@@ -228,7 +228,7 @@ public class AwtCanvas(private val g: Graphics2D) : PdfCanvas {
     }
 
     override fun fillShading(
-        shading: PdfShading, ctm: PdfMatrix, clipPath: PdfPath?,
+        shading: KiteShading, ctm: PdfMatrix, clipPath: KitePath?,
         alpha: Double, blendMode: PdfBlendMode,
     ) {
         if (paintComplexShading(shading, ctm, clipPath, alpha, blendMode)) return
@@ -243,7 +243,7 @@ public class AwtCanvas(private val g: Graphics2D) : PdfCanvas {
         var extentClip: java.awt.geom.Area? = null
 
         val paint: java.awt.Paint = when (shading) {
-            is PdfShading.Axial -> {
+            is KiteShading.Axial -> {
                 val (x0, y0) = ctm.transformPoint(shading.coords[0], shading.coords[1])
                 val (x1, y1) = ctm.transformPoint(shading.coords[2], shading.coords[3])
                 if (!shading.extendStart || !shading.extendEnd) {
@@ -255,7 +255,7 @@ public class AwtCanvas(private val g: Graphics2D) : PdfCanvas {
                     MultipleGradientPaint.CycleMethod.NO_CYCLE,
                 )
             }
-            is PdfShading.Radial -> {
+            is KiteShading.Radial -> {
                 // PDF two-circle radial (§8.7.4.5.4): circle0 at t0, circle1 at t1.
                 // RadialGradientPaint models one bounding circle + a focus point,
                 // exact when the inner radius is 0 (point→circle). Use the larger
@@ -298,7 +298,7 @@ public class AwtCanvas(private val g: Graphics2D) : PdfCanvas {
                     MultipleGradientPaint.CycleMethod.NO_CYCLE,
                 )
             }
-            is PdfShading.Unsupported -> return
+            is KiteShading.Unsupported -> return
             else -> return // T-40 types already handled by paintComplexShading
         }
 
@@ -538,7 +538,7 @@ public class AwtCanvas(private val g: Graphics2D) : PdfCanvas {
         }
     }
 
-    override fun pushClip(path: PdfPath, ctm: PdfMatrix, evenOdd: Boolean) {
+    override fun pushClip(path: KitePath, ctm: PdfMatrix, evenOdd: Boolean) {
         saveStack.addLast(SavedState.snapshot(g))
         val awt = toAwtPath(path, ctm).apply {
             windingRule = if (evenOdd) Path2D.WIND_EVEN_ODD else Path2D.WIND_NON_ZERO
@@ -585,7 +585,7 @@ public class AwtCanvas(private val g: Graphics2D) : PdfCanvas {
         kind: SoftMask.Kind,
         maskBBox: Rectangle, maskCtm: PdfMatrix,
         render: () -> Unit,
-        renderMask: (PdfCanvas) -> Unit,
+        renderMask: (KiteCanvas) -> Unit,
     ) {
         // Render the masked content normally onto the live surface first.
         render()
@@ -671,30 +671,30 @@ public class AwtCanvas(private val g: Graphics2D) : PdfCanvas {
         try { block() } finally { g.composite = saved }
     }
 
-    private fun toAwtPath(src: PdfPath, ctm: PdfMatrix): Path2D.Double {
+    private fun toAwtPath(src: KitePath, ctm: PdfMatrix): Path2D.Double {
         val out = Path2D.Double()
         for (seg in src.segments) {
             when (seg) {
-                is PdfPath.Segment.MoveTo -> {
+                is KitePath.Segment.MoveTo -> {
                     val (x, y) = ctm.transformPoint(seg.x, seg.y)
                     out.moveTo(x, y)
                 }
-                is PdfPath.Segment.LineTo -> {
+                is KitePath.Segment.LineTo -> {
                     val (x, y) = ctm.transformPoint(seg.x, seg.y)
                     out.lineTo(x, y)
                 }
-                is PdfPath.Segment.CurveTo -> {
+                is KitePath.Segment.CurveTo -> {
                     val (x1, y1) = ctm.transformPoint(seg.x1, seg.y1)
                     val (x2, y2) = ctm.transformPoint(seg.x2, seg.y2)
                     val (x3, y3) = ctm.transformPoint(seg.x3, seg.y3)
                     out.curveTo(x1, y1, x2, y2, x3, y3)
                 }
-                is PdfPath.Segment.QuadTo -> {
+                is KitePath.Segment.QuadTo -> {
                     val (x1, y1) = ctm.transformPoint(seg.x1, seg.y1)
                     val (x2, y2) = ctm.transformPoint(seg.x2, seg.y2)
                     out.quadTo(x1, y1, x2, y2)
                 }
-                PdfPath.Segment.Close -> out.closePath()
+                KitePath.Segment.Close -> out.closePath()
             }
         }
         return out

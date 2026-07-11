@@ -8,8 +8,8 @@ import io.github.yuroyami.kitepdf.parser.PdfName
 import io.github.yuroyami.kitepdf.parser.PdfObject
 import io.github.yuroyami.kitepdf.parser.PdfReal
 import io.github.yuroyami.kitepdf.parser.PdfReference
-import io.github.yuroyami.kitepdf.render.PdfFunction
-import io.github.yuroyami.kitepdf.render.PdfShading
+import io.github.yuroyami.kitepdf.render.KiteFunction
+import io.github.yuroyami.kitepdf.render.KiteShading
 import io.github.yuroyami.kitepdf.render.sampleStops
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -22,7 +22,7 @@ class FunctionShadingTest {
 
     @Test
     fun type2_function_interpolates_linearly() {
-        val fn = PdfFunction.Type2(
+        val fn = KiteFunction.Type2(
             domain = doubleArrayOf(0.0, 1.0),
             range = null,
             c0 = doubleArrayOf(0.0, 0.0, 0.0),
@@ -43,7 +43,7 @@ class FunctionShadingTest {
 
     @Test
     fun type2_function_with_n_squared_biases_to_c0() {
-        val fn = PdfFunction.Type2(
+        val fn = KiteFunction.Type2(
             domain = doubleArrayOf(0.0, 1.0),
             range = null,
             c0 = doubleArrayOf(0.0),
@@ -56,17 +56,17 @@ class FunctionShadingTest {
 
     @Test
     fun type3_stitching_dispatches_to_correct_subfunction() {
-        val left = PdfFunction.Type2(
+        val left = KiteFunction.Type2(
             domain = doubleArrayOf(0.0, 1.0), range = null,
             c0 = doubleArrayOf(0.0), c1 = doubleArrayOf(1.0), n = 1.0,
         )
-        val right = PdfFunction.Type2(
+        val right = KiteFunction.Type2(
             domain = doubleArrayOf(0.0, 1.0), range = null,
             c0 = doubleArrayOf(1.0), c1 = doubleArrayOf(0.0), n = 1.0,
         )
         // Domain 0..1 split at 0.5; left subfunction in [0, 0.5], right in [0.5, 1].
         // Encode maps the whole domain into each subfunction's [0, 1].
-        val stitched = PdfFunction.Type3(
+        val stitched = KiteFunction.Type3(
             domain = doubleArrayOf(0.0, 1.0), range = null,
             functions = listOf(left, right),
             bounds = doubleArrayOf(0.5),
@@ -82,7 +82,7 @@ class FunctionShadingTest {
 
     @Test
     fun function_input_is_clamped_to_domain() {
-        val fn = PdfFunction.Type2(
+        val fn = KiteFunction.Type2(
             domain = doubleArrayOf(0.0, 1.0), range = null,
             c0 = doubleArrayOf(0.0), c1 = doubleArrayOf(1.0), n = 1.0,
         )
@@ -92,7 +92,7 @@ class FunctionShadingTest {
 
     @Test
     fun function_output_is_clamped_to_range() {
-        val fn = PdfFunction.Type2(
+        val fn = KiteFunction.Type2(
             domain = doubleArrayOf(0.0, 1.0),
             range = doubleArrayOf(0.2, 0.8),
             c0 = doubleArrayOf(0.0), c1 = doubleArrayOf(1.0), n = 1.0,
@@ -114,15 +114,15 @@ class FunctionShadingTest {
                 "N" to PdfReal(1.0),
             ),
         )
-        val fn = PdfFunction.parse(dict, noResolver)
-        assertTrue(fn is PdfFunction.Type2)
+        val fn = KiteFunction.parse(dict, noResolver)
+        assertTrue(fn is KiteFunction.Type2)
         assertEquals(3, fn.outputCount)
         assertEquals(0.5, fn.evaluate(doubleArrayOf(1.0))[1], 1e-9)
     }
 
     @Test
     fun axial_shading_samples_endpoint_colors() {
-        val axial = PdfShading.parse(
+        val axial = KiteShading.parse(
             shadingDict(
                 shadingType = 2,
                 coords = listOf(0.0, 0.0, 100.0, 0.0),
@@ -131,7 +131,7 @@ class FunctionShadingTest {
             ),
             noResolver,
         )
-        assertTrue(axial is PdfShading.Axial)
+        assertTrue(axial is KiteShading.Axial)
         val stops = axial.sampleStops(2)
         assertNotNull(stops)
         // First stop = red, last stop = blue.
@@ -143,7 +143,7 @@ class FunctionShadingTest {
 
     @Test
     fun radial_shading_samples_endpoint_colors() {
-        val radial = PdfShading.parse(
+        val radial = KiteShading.parse(
             shadingDict(
                 shadingType = 3,
                 coords = listOf(50.0, 50.0, 0.0, 50.0, 50.0, 50.0),
@@ -152,7 +152,7 @@ class FunctionShadingTest {
             ),
             noResolver,
         )
-        assertTrue(radial is PdfShading.Radial)
+        assertTrue(radial is KiteShading.Radial)
         val stops = radial.sampleStops()
         assertNotNull(stops)
         // White at centre (t=0), black at edge (t=1).
@@ -163,18 +163,18 @@ class FunctionShadingTest {
 
     @Test
     fun unsupported_shading_type_returns_unsupported() {
-        val sh = PdfShading.parse(
+        val sh = KiteShading.parse(
             shadingDict(shadingType = 4, coords = listOf()),
             noResolver,
         )
-        assertTrue(sh is PdfShading.Unsupported)
+        assertTrue(sh is KiteShading.Unsupported)
         assertEquals(4, sh.type)
     }
 
     @Test
     fun number_array_returned_for_known_colorspace() {
         // Ensure DeviceRGB colourspace gets picked up from the dict.
-        val sh = PdfShading.parse(
+        val sh = KiteShading.parse(
             shadingDict(
                 shadingType = 2,
                 coords = listOf(0.0, 0.0, 1.0, 0.0),
@@ -184,7 +184,7 @@ class FunctionShadingTest {
             ),
             noResolver,
         )
-        assertTrue(sh is PdfShading.Axial)
+        assertTrue(sh is KiteShading.Axial)
         assertEquals(3, sh.colorSpace.componentCount)
     }
 

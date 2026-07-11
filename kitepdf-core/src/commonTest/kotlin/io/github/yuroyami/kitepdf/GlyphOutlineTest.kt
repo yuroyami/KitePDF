@@ -4,7 +4,7 @@ import io.github.yuroyami.kitepdf.font.Contour
 import io.github.yuroyami.kitepdf.font.GlyphBbox
 import io.github.yuroyami.kitepdf.font.GlyphOutline
 import io.github.yuroyami.kitepdf.font.GlyphPoint
-import io.github.yuroyami.kitepdf.render.PdfPath
+import io.github.yuroyami.kitepdf.render.KitePath
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
@@ -33,9 +33,9 @@ class GlyphOutlineTest {
         )
         val path = outline.toPdfPath()
         // Expect MoveTo + 3 LineTo (or 4 if the loop emits one extra) + Close.
-        val moves = path.segments.filterIsInstance<PdfPath.Segment.MoveTo>()
-        val lines = path.segments.filterIsInstance<PdfPath.Segment.LineTo>()
-        val closes = path.segments.filterIsInstance<PdfPath.Segment.Close>()
+        val moves = path.segments.filterIsInstance<KitePath.Segment.MoveTo>()
+        val lines = path.segments.filterIsInstance<KitePath.Segment.LineTo>()
+        val closes = path.segments.filterIsInstance<KitePath.Segment.Close>()
         assertEquals(1, moves.size)
         assertEquals(1, closes.size)
         // Three LineTos after the implicit MoveTo to the first on-curve point,
@@ -55,7 +55,7 @@ class GlyphOutlineTest {
             GlyphBbox(0, 0, 100, 100),
         )
         val path = outline.toPdfPath()
-        val quads = path.segments.filterIsInstance<PdfPath.Segment.QuadTo>()
+        val quads = path.segments.filterIsInstance<KitePath.Segment.QuadTo>()
         assertTrue(quads.isNotEmpty(), "Expected ≥1 QuadTo for off-curve point")
         val quad = quads.first()
         assertEquals(50.0, quad.x1)
@@ -77,7 +77,7 @@ class GlyphOutlineTest {
             GlyphBbox(0, 0, 100, 100),
         )
         val path = outline.toPdfPath()
-        val quads = path.segments.filterIsInstance<PdfPath.Segment.QuadTo>()
+        val quads = path.segments.filterIsInstance<KitePath.Segment.QuadTo>()
         assertTrue(quads.size >= 2, "Expected ≥2 QuadTos with implied midpoint, got ${quads.size}")
         // Second quad's start (= first quad's end) should land at the midpoint
         // (75, 100) — but Builder only exposes segments so we read it from

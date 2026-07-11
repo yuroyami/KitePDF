@@ -5,7 +5,7 @@ import io.github.yuroyami.kitepdf.font.OpenTypeGsub
 import io.github.yuroyami.kitepdf.font.OpenTypeKern
 import io.github.yuroyami.kitepdf.font.OpenTypeMarks
 import io.github.yuroyami.kitepdf.font.TrueTypeFont
-import io.github.yuroyami.kitepdf.render.PdfPath
+import io.github.yuroyami.kitepdf.render.KitePath
 
 /**
  * One embedded `@font-face`, wrapping a parsed core [TrueTypeFont]. Provides the
@@ -53,7 +53,7 @@ internal class EmbeddedFace(
 
     // TrueType `glyf` outline when present; else the OpenType `CFF ` outline. The
     // glyph id is the shared SFNT glyph order (== the CFF CharStrings index in .otf).
-    fun outline(gid: Int): PdfPath? = ttf.outlinePath(gid) ?: cff?.outline(gid)
+    fun outline(gid: Int): KitePath? = ttf.outlinePath(gid) ?: cff?.outline(gid)
 
     /** Advance of [gid] in 1/1000 em. */
     fun advance1000(gid: Int): Int = to1000(ttf.advanceWidth(gid))

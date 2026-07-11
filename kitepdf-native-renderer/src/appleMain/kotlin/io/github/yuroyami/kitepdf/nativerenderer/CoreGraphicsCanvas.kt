@@ -6,10 +6,10 @@ import io.github.yuroyami.kitepdf.font.TextGlyph
 import io.github.yuroyami.kitepdf.render.BlendMode as PdfBlendMode
 import io.github.yuroyami.kitepdf.render.ImageXObject
 import io.github.yuroyami.kitepdf.render.Matrix as PdfMatrix
-import io.github.yuroyami.kitepdf.render.PdfCanvas
-import io.github.yuroyami.kitepdf.render.PdfPath
+import io.github.yuroyami.kitepdf.render.KiteCanvas
+import io.github.yuroyami.kitepdf.render.KitePath
 import io.github.yuroyami.kitepdf.render.paintComplexShading
-import io.github.yuroyami.kitepdf.render.PdfShading
+import io.github.yuroyami.kitepdf.render.KiteShading
 import io.github.yuroyami.kitepdf.render.RgbColor
 import io.github.yuroyami.kitepdf.render.SoftMask
 import io.github.yuroyami.kitepdf.render.sampleStops
@@ -74,7 +74,7 @@ import platform.ImageIO.CGImageSourceCreateImageAtIndex
 import platform.ImageIO.CGImageSourceCreateWithData
 
 /**
- * [PdfCanvas] backed by an iOS / macOS [CGContextRef]. Pure CoreGraphics —
+ * [KiteCanvas] backed by an iOS / macOS [CGContextRef]. Pure CoreGraphics —
  * no Compose, no Skia. The natural choice for native iOS apps using UIKit
  * or SwiftUI; pass the context from your custom UIView's `drawRect:` or
  * the `UIGraphicsImageRenderer.image { ctx in … }` block straight in.
@@ -87,7 +87,7 @@ import platform.ImageIO.CGImageSourceCreateWithData
  * to caller code.
  */
 @OptIn(ExperimentalForeignApi::class)
-public class CoreGraphicsCanvas(private val ctx: CGContextRef) : PdfCanvas {
+public class CoreGraphicsCanvas(private val ctx: CGContextRef) : KiteCanvas {
 
     private var openLayers = 0
 
@@ -103,7 +103,7 @@ public class CoreGraphicsCanvas(private val ctx: CGContextRef) : PdfCanvas {
     }
 
     override fun fillPath(
-        path: PdfPath, ctm: PdfMatrix, color: RgbColor, evenOdd: Boolean,
+        path: KitePath, ctm: PdfMatrix, color: RgbColor, evenOdd: Boolean,
         alpha: Double, blendMode: PdfBlendMode,
     ) {
         CGContextSaveGState(ctx)
@@ -118,7 +118,7 @@ public class CoreGraphicsCanvas(private val ctx: CGContextRef) : PdfCanvas {
     }
 
     override fun strokePath(
-        path: PdfPath, ctm: PdfMatrix, color: RgbColor, lineWidth: Double,
+        path: KitePath, ctm: PdfMatrix, color: RgbColor, lineWidth: Double,
         alpha: Double, blendMode: PdfBlendMode,
         dashArray: List<Double>?, dashPhase: Double,
         lineCap: Int, lineJoin: Int, miterLimit: Double,
@@ -195,7 +195,7 @@ public class CoreGraphicsCanvas(private val ctx: CGContextRef) : PdfCanvas {
     }
 
     override fun fillShading(
-        shading: PdfShading, ctm: PdfMatrix, clipPath: PdfPath?,
+        shading: KiteShading, ctm: PdfMatrix, clipPath: KitePath?,
         alpha: Double, blendMode: PdfBlendMode,
     ) {
         if (paintComplexShading(shading, ctm, clipPath, alpha, blendMode)) return
@@ -231,14 +231,14 @@ public class CoreGraphicsCanvas(private val ctx: CGContextRef) : PdfCanvas {
                         val drawOpts: CGGradientDrawingOptions =
                             kCGGradientDrawsBeforeStartLocation or kCGGradientDrawsAfterEndLocation
                         when (shading) {
-                            is PdfShading.Axial -> {
+                            is KiteShading.Axial -> {
                                 val (x0, y0) = ctm.transformPoint(shading.coords[0], shading.coords[1])
                                 val (x1, y1) = ctm.transformPoint(shading.coords[2], shading.coords[3])
                                 val start = cValue<CGPoint> { x = x0; y = y0 }
                                 val end = cValue<CGPoint> { x = x1; y = y1 }
                                 CGContextDrawLinearGradient(ctx, gradient, start, end, drawOpts)
                             }
-                            is PdfShading.Radial -> {
+                            is KiteShading.Radial -> {
                                 // True PDF two-circle radial — Core Graphics takes both.
                                 val sc = kotlin.math.sqrt(ctm.a * ctm.a + ctm.b * ctm.b)
                                 val (x0, y0) = ctm.transformPoint(shading.coords[0], shading.coords[1])
@@ -251,7 +251,7 @@ public class CoreGraphicsCanvas(private val ctx: CGContextRef) : PdfCanvas {
                                     ctx, gradient, startC, r0, endC, r1, drawOpts,
                                 )
                             }
-                            is PdfShading.Unsupported -> Unit
+                            is KiteShading.Unsupported -> Unit
                             else -> Unit // T-40 types already handled by paintComplexShading
                         }
                     } finally {
@@ -266,7 +266,7 @@ public class CoreGraphicsCanvas(private val ctx: CGContextRef) : PdfCanvas {
         }
     }
 
-    override fun pushClip(path: PdfPath, ctm: PdfMatrix, evenOdd: Boolean) {
+    override fun pushClip(path: KitePath, ctm: PdfMatrix, evenOdd: Boolean) {
         CGContextSaveGState(ctx)
         openLayers++
         buildPath(path, ctm)
@@ -363,7 +363,7 @@ public class CoreGraphicsCanvas(private val ctx: CGContextRef) : PdfCanvas {
         kind: SoftMask.Kind,
         maskBBox: Rectangle, maskCtm: PdfMatrix,
         render: () -> Unit,
-        renderMask: (PdfCanvas) -> Unit,
+        renderMask: (KiteCanvas) -> Unit,
     ) {
         CGContextSaveGState(ctx)
         CGContextBeginTransparencyLayer(ctx, null)
@@ -379,30 +379,30 @@ public class CoreGraphicsCanvas(private val ctx: CGContextRef) : PdfCanvas {
 
     /* ─── Helpers ─────────────────────────────────────────────────────────── */
 
-    private fun buildPath(src: PdfPath, ctm: PdfMatrix) {
+    private fun buildPath(src: KitePath, ctm: PdfMatrix) {
         CGContextBeginPath(ctx)
         for (seg in src.segments) {
             when (seg) {
-                is PdfPath.Segment.MoveTo -> {
+                is KitePath.Segment.MoveTo -> {
                     val (x, y) = ctm.transformPoint(seg.x, seg.y)
                     CGContextMoveToPoint(ctx, x, y)
                 }
-                is PdfPath.Segment.LineTo -> {
+                is KitePath.Segment.LineTo -> {
                     val (x, y) = ctm.transformPoint(seg.x, seg.y)
                     CGContextAddLineToPoint(ctx, x, y)
                 }
-                is PdfPath.Segment.CurveTo -> {
+                is KitePath.Segment.CurveTo -> {
                     val (x1, y1) = ctm.transformPoint(seg.x1, seg.y1)
                     val (x2, y2) = ctm.transformPoint(seg.x2, seg.y2)
                     val (x3, y3) = ctm.transformPoint(seg.x3, seg.y3)
                     CGContextAddCurveToPoint(ctx, x1, y1, x2, y2, x3, y3)
                 }
-                is PdfPath.Segment.QuadTo -> {
+                is KitePath.Segment.QuadTo -> {
                     val (x1, y1) = ctm.transformPoint(seg.x1, seg.y1)
                     val (x2, y2) = ctm.transformPoint(seg.x2, seg.y2)
                     CGContextAddQuadCurveToPoint(ctx, x1, y1, x2, y2)
                 }
-                PdfPath.Segment.Close -> CGContextClosePath(ctx)
+                KitePath.Segment.Close -> CGContextClosePath(ctx)
             }
         }
     }

@@ -8,7 +8,7 @@ import io.github.yuroyami.kitepdf.font.TextGlyph
  * every text / vector / border / CSS-background colour a page paints. Images and
  * gradients pass through untouched, so photos never invert.
  *
- * Format-neutral — it themes any [PdfCanvas] (PDF or EPUB). Hand a theme to a
+ * Format-neutral — it themes any [KiteCanvas] (PDF or EPUB). Hand a theme to a
  * rasterizer, or wrap a canvas yourself:
  *
  * ```kotlin
@@ -22,7 +22,7 @@ public class ReaderTheme(
     public val mapColor: (RgbColor) -> RgbColor,
 ) {
     /** Decorate [canvas] so its content colours are themed. Returns it unchanged for [Light]. */
-    public fun wrap(canvas: PdfCanvas): PdfCanvas =
+    public fun wrap(canvas: KiteCanvas): KiteCanvas =
         if (this === Light) canvas else ThemedCanvas(canvas, mapColor)
 
     public companion object {
@@ -57,15 +57,15 @@ public class ReaderTheme(
 }
 
 /**
- * A [PdfCanvas] decorator that remaps every content colour through [mapColor]
+ * A [KiteCanvas] decorator that remaps every content colour through [mapColor]
  * before forwarding to [inner]. Fill / stroke / glyph colours (text, vector art,
  * borders, CSS backgrounds) are themed; images, gradients, clips, groups and
  * soft masks pass through so photos keep their real colours. Drives [ReaderTheme].
  */
 internal class ThemedCanvas(
-    private val inner: PdfCanvas,
+    private val inner: KiteCanvas,
     private val mapColor: (RgbColor) -> RgbColor,
-) : PdfCanvas {
+) : KiteCanvas {
 
     override val resolvesGlyphOutlines: Boolean get() = inner.resolvesGlyphOutlines
 
@@ -74,16 +74,16 @@ internal class ThemedCanvas(
 
     override fun endPage() = inner.endPage()
 
-    override fun fillPath(path: PdfPath, ctm: Matrix, color: RgbColor, evenOdd: Boolean, alpha: Double, blendMode: BlendMode) =
+    override fun fillPath(path: KitePath, ctm: Matrix, color: RgbColor, evenOdd: Boolean, alpha: Double, blendMode: BlendMode) =
         inner.fillPath(path, ctm, mapColor(color), evenOdd, alpha, blendMode)
 
     override fun strokePath(
-        path: PdfPath, ctm: Matrix, color: RgbColor, lineWidth: Double, alpha: Double, blendMode: BlendMode,
+        path: KitePath, ctm: Matrix, color: RgbColor, lineWidth: Double, alpha: Double, blendMode: BlendMode,
         dashArray: List<Double>?, dashPhase: Double, lineCap: Int, lineJoin: Int, miterLimit: Double,
     ) = inner.strokePath(path, ctm, mapColor(color), lineWidth, alpha, blendMode, dashArray, dashPhase, lineCap, lineJoin, miterLimit)
 
     // Gradients pass through unthemed (rare in books; their colours live inside the shading).
-    override fun fillShading(shading: PdfShading, ctm: Matrix, clipPath: PdfPath?, alpha: Double, blendMode: BlendMode) =
+    override fun fillShading(shading: KiteShading, ctm: Matrix, clipPath: KitePath?, alpha: Double, blendMode: BlendMode) =
         inner.fillShading(shading, ctm, clipPath, alpha, blendMode)
 
     override fun drawGlyphs(
@@ -91,7 +91,7 @@ internal class ThemedCanvas(
         textToDevice: Matrix, color: RgbColor, alpha: Double, blendMode: BlendMode,
     ) = inner.drawGlyphs(glyphs, fontSize, unitsPerEm, hasOutlines, fontSpec, textToDevice, mapColor(color), alpha, blendMode)
 
-    override fun pushClip(path: PdfPath, ctm: Matrix, evenOdd: Boolean) = inner.pushClip(path, ctm, evenOdd)
+    override fun pushClip(path: KitePath, ctm: Matrix, evenOdd: Boolean) = inner.pushClip(path, ctm, evenOdd)
     override fun popClip() = inner.popClip()
 
     // Images are NOT themed — photos should keep their real colours.
@@ -102,6 +102,6 @@ internal class ThemedCanvas(
 
     override fun endTransparencyGroup() = inner.endTransparencyGroup()
 
-    override fun applySoftMask(kind: SoftMask.Kind, maskBBox: Rectangle, maskCtm: Matrix, render: () -> Unit, renderMask: (PdfCanvas) -> Unit) =
+    override fun applySoftMask(kind: SoftMask.Kind, maskBBox: Rectangle, maskCtm: Matrix, render: () -> Unit, renderMask: (KiteCanvas) -> Unit) =
         inner.applySoftMask(kind, maskBBox, maskCtm, render, renderMask)
 }

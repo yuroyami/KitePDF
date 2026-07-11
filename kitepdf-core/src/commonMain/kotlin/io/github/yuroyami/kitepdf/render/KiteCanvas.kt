@@ -19,7 +19,7 @@ import io.github.yuroyami.kitepdf.font.TextGlyph
  *   - `AwtCanvas` / `AndroidNativeCanvas` / `CoreGraphicsCanvas` / `Canvas2dCanvas`
  *     (`:kitepdf-native-renderer`) — host-platform raster backends.
  */
-public interface PdfCanvas {
+public interface KiteCanvas {
 
     /**
      * Set up for a page render — called once before any draw call, with the
@@ -35,14 +35,14 @@ public interface PdfCanvas {
      * plain over-paint that PDF assumes when no ExtGState modifies the state.
      */
     public fun fillPath(
-        path: PdfPath, ctm: Matrix, color: RgbColor, evenOdd: Boolean,
+        path: KitePath, ctm: Matrix, color: RgbColor, evenOdd: Boolean,
         alpha: Double = 1.0, blendMode: BlendMode = BlendMode.Normal,
     )
 
     /** Stroke [path] under [ctm] with [color] at [lineWidth] user-units, [alpha], [blendMode].
      *  [lineCap] 0/1/2 = butt/round/square; [lineJoin] 0/1/2 = miter/round/bevel. */
     public fun strokePath(
-        path: PdfPath, ctm: Matrix, color: RgbColor, lineWidth: Double,
+        path: KitePath, ctm: Matrix, color: RgbColor, lineWidth: Double,
         alpha: Double = 1.0, blendMode: BlendMode = BlendMode.Normal,
         dashArray: List<Double>? = null, dashPhase: Double = 0.0,
         lineCap: Int = 0, lineJoin: Int = 0, miterLimit: Double = 10.0,
@@ -60,7 +60,7 @@ public interface PdfCanvas {
      * trims it, so `sh` still paints something rather than nothing.
      */
     public fun fillShading(
-        shading: PdfShading, ctm: Matrix, clipPath: PdfPath?,
+        shading: KiteShading, ctm: Matrix, clipPath: KitePath?,
         alpha: Double = 1.0, blendMode: BlendMode = BlendMode.Normal,
     ) {
         // T-40 types (function-based, meshes, patches) render through shared
@@ -69,7 +69,7 @@ public interface PdfCanvas {
         val stops = shading.sampleStops(2) ?: return
         val mid = stops.colors[stops.colors.size / 2]
         if (clipPath == null) {
-            val huge = PdfPath.Builder().apply {
+            val huge = KitePath.Builder().apply {
                 moveTo(-1e6, -1e6)
                 lineTo(1e6, -1e6)
                 lineTo(1e6, 1e6)
@@ -114,7 +114,7 @@ public interface PdfCanvas {
     )
 
     /** Push a clip to [path] under [ctm]. Matched 1:1 by [popClip]. */
-    public fun pushClip(path: PdfPath, ctm: Matrix, evenOdd: Boolean)
+    public fun pushClip(path: KitePath, ctm: Matrix, evenOdd: Boolean)
     public fun popClip()
 
     /**
@@ -165,37 +165,37 @@ public interface PdfCanvas {
         kind: SoftMask.Kind,
         maskBBox: Rectangle, maskCtm: Matrix,
         render: () -> Unit,
-        renderMask: (PdfCanvas) -> Unit,
+        renderMask: (KiteCanvas) -> Unit,
     ) {
         render()
     }
 }
 
-/** A rectangle in PDF user-space — re-exposed here for the [PdfCanvas] surface. */
+/** A rectangle in PDF user-space — re-exposed here for the [KiteCanvas] surface. */
 public typealias Rectangle = io.github.yuroyami.kitepdf.Rectangle
 
 /** Backend that ignores everything — handy for benchmarks and content-stream sanity tests. */
-public object NoopCanvas : PdfCanvas {
+public object NoopCanvas : KiteCanvas {
     override fun beginPage(widthPt: Double, heightPt: Double, deviceCtm: Matrix) {}
     override fun endPage() {}
-    override fun fillPath(path: PdfPath, ctm: Matrix, color: RgbColor, evenOdd: Boolean, alpha: Double, blendMode: BlendMode) {}
-    override fun strokePath(path: PdfPath, ctm: Matrix, color: RgbColor, lineWidth: Double, alpha: Double, blendMode: BlendMode, dashArray: List<Double>?, dashPhase: Double, lineCap: Int, lineJoin: Int, miterLimit: Double) {}
+    override fun fillPath(path: KitePath, ctm: Matrix, color: RgbColor, evenOdd: Boolean, alpha: Double, blendMode: BlendMode) {}
+    override fun strokePath(path: KitePath, ctm: Matrix, color: RgbColor, lineWidth: Double, alpha: Double, blendMode: BlendMode, dashArray: List<Double>?, dashPhase: Double, lineCap: Int, lineJoin: Int, miterLimit: Double) {}
     override fun drawGlyphs(glyphs: List<TextGlyph>, fontSize: Double, unitsPerEm: Int, hasOutlines: Boolean, fontSpec: FontSpec, textToDevice: Matrix, color: RgbColor, alpha: Double, blendMode: BlendMode) {}
-    override fun pushClip(path: PdfPath, ctm: Matrix, evenOdd: Boolean) {}
+    override fun pushClip(path: KitePath, ctm: Matrix, evenOdd: Boolean) {}
     override fun popClip() {}
 }
 
 /** Records every device call — useful for tests + verifying operator dispatch. */
-public class RecordingCanvas : PdfCanvas {
+public class RecordingCanvas : KiteCanvas {
     public sealed class Call {
         public data class BeginPage(val w: Double, val h: Double, val ctm: Matrix) : Call()
         public data object EndPage : Call()
         public data class Fill(
-            val path: PdfPath, val ctm: Matrix, val color: RgbColor, val evenOdd: Boolean,
+            val path: KitePath, val ctm: Matrix, val color: RgbColor, val evenOdd: Boolean,
             val alpha: Double = 1.0, val blendMode: BlendMode = BlendMode.Normal,
         ) : Call()
         public data class Stroke(
-            val path: PdfPath, val ctm: Matrix, val color: RgbColor, val lineWidth: Double,
+            val path: KitePath, val ctm: Matrix, val color: RgbColor, val lineWidth: Double,
             val alpha: Double = 1.0, val blendMode: BlendMode = BlendMode.Normal,
             val lineCap: Int = 0, val lineJoin: Int = 0, val miterLimit: Double = 10.0,
         ) : Call()
@@ -220,7 +220,7 @@ public class RecordingCanvas : PdfCanvas {
                 return h
             }
         }
-        public data class PushClip(val path: PdfPath, val ctm: Matrix, val evenOdd: Boolean) : Call()
+        public data class PushClip(val path: KitePath, val ctm: Matrix, val evenOdd: Boolean) : Call()
         public data object PopClip : Call()
         public data class Image(val image: ImageXObject, val ctm: Matrix, val alpha: Double = 1.0) : Call()
         public data class PushGroup(val bbox: Rectangle, val ctm: Matrix, val isolated: Boolean, val knockout: Boolean, val alpha: Double, val blendMode: BlendMode) : Call()
@@ -232,16 +232,16 @@ public class RecordingCanvas : PdfCanvas {
     override fun beginPage(widthPt: Double, heightPt: Double, deviceCtm: Matrix): Unit =
         calls.add(Call.BeginPage(widthPt, heightPt, deviceCtm)).let { }
     override fun endPage() { calls.add(Call.EndPage) }
-    override fun fillPath(path: PdfPath, ctm: Matrix, color: RgbColor, evenOdd: Boolean, alpha: Double, blendMode: BlendMode) {
+    override fun fillPath(path: KitePath, ctm: Matrix, color: RgbColor, evenOdd: Boolean, alpha: Double, blendMode: BlendMode) {
         calls.add(Call.Fill(path, ctm, color, evenOdd, alpha, blendMode))
     }
-    override fun strokePath(path: PdfPath, ctm: Matrix, color: RgbColor, lineWidth: Double, alpha: Double, blendMode: BlendMode, dashArray: List<Double>?, dashPhase: Double, lineCap: Int, lineJoin: Int, miterLimit: Double) {
+    override fun strokePath(path: KitePath, ctm: Matrix, color: RgbColor, lineWidth: Double, alpha: Double, blendMode: BlendMode, dashArray: List<Double>?, dashPhase: Double, lineCap: Int, lineJoin: Int, miterLimit: Double) {
         calls.add(Call.Stroke(path, ctm, color, lineWidth, alpha, blendMode, lineCap, lineJoin, miterLimit))
     }
     override fun drawGlyphs(glyphs: List<TextGlyph>, fontSize: Double, unitsPerEm: Int, hasOutlines: Boolean, fontSpec: FontSpec, textToDevice: Matrix, color: RgbColor, alpha: Double, blendMode: BlendMode) {
         calls.add(Call.Glyphs(glyphs, fontSize, unitsPerEm, hasOutlines, fontSpec, textToDevice, color, alpha, blendMode))
     }
-    override fun pushClip(path: PdfPath, ctm: Matrix, evenOdd: Boolean) {
+    override fun pushClip(path: KitePath, ctm: Matrix, evenOdd: Boolean) {
         calls.add(Call.PushClip(path, ctm, evenOdd))
     }
     override fun popClip() { calls.add(Call.PopClip) }

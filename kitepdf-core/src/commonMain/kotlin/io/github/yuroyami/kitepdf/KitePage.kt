@@ -1,7 +1,7 @@
 package io.github.yuroyami.kitepdf
 
 import io.github.yuroyami.kitepdf.render.Matrix
-import io.github.yuroyami.kitepdf.render.PdfCanvas
+import io.github.yuroyami.kitepdf.render.KiteCanvas
 
 /**
  * A renderable page from any document handler — the format-neutral
@@ -34,7 +34,7 @@ public interface KitePage {
     public fun displayToDeviceBase(): Matrix
 
     /** Paints the page into [canvas] under [deviceCtm]. */
-    public fun renderTo(canvas: PdfCanvas, deviceCtm: Matrix = Matrix.IDENTITY)
+    public fun renderTo(canvas: KiteCanvas, deviceCtm: Matrix = Matrix.IDENTITY)
 
     /**
      * Structured text for extraction / search / selection, in display space
