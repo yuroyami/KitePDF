@@ -157,6 +157,13 @@ sealed interface PdfRenderSpec {
         val maxBitmapLongSide: Int = 4096,
         val rerasterizeOnZoom: Boolean = true,
         val preserveHairlines: Boolean = true,
+        /**
+         * Byte budget of the per-[PdfViewState] page-bitmap LRU (T-15), so
+         * scrolling back is a cache hit instead of a re-raster. 0 disables
+         * caching (every slot re-rasterizes on recomposition, the pre-cache
+         * behaviour).
+         */
+        val cacheBudgetBytes: Long = 96L * 1024 * 1024,
     ) : PdfRenderSpec {
         init {
             require(quality > 0f) { "quality must be > 0 (was $quality)" }
