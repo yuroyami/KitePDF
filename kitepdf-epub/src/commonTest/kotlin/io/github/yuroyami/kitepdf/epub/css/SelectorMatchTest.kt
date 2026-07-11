@@ -2,7 +2,7 @@ package io.github.yuroyami.kitepdf.epub.css
 
 import io.github.yuroyami.kitepdf.epub.HtmlNode
 import io.github.yuroyami.kitepdf.epub.HtmlParser
-import io.github.yuroyami.kitepdf.render.RgbColor
+import io.github.yuroyami.kitepdf.core.render.RgbColor
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue

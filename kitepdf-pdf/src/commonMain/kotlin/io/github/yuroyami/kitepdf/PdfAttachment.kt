@@ -1,13 +1,13 @@
 package io.github.yuroyami.kitepdf
 
-import io.github.yuroyami.kitepdf.filters.FilterChain
-import io.github.yuroyami.kitepdf.parser.IndirectResolver
+import io.github.yuroyami.kitepdf.core.filters.FilterChain
+import io.github.yuroyami.kitepdf.core.parser.IndirectResolver
 import io.github.yuroyami.kitepdf.parser.NameTreeWalker
-import io.github.yuroyami.kitepdf.parser.PdfDictionary
-import io.github.yuroyami.kitepdf.parser.PdfInt
-import io.github.yuroyami.kitepdf.parser.PdfReference
-import io.github.yuroyami.kitepdf.parser.PdfStream
-import io.github.yuroyami.kitepdf.parser.PdfString
+import io.github.yuroyami.kitepdf.core.parser.PdfDictionary
+import io.github.yuroyami.kitepdf.core.parser.PdfInt
+import io.github.yuroyami.kitepdf.core.parser.PdfReference
+import io.github.yuroyami.kitepdf.core.parser.PdfStream
+import io.github.yuroyami.kitepdf.core.parser.PdfString
 
 /**
  * One embedded file attachment from the document — ISO 32000-1 §7.11.4.

@@ -2,8 +2,8 @@ package io.github.yuroyami.kitepdf
 
 import io.github.yuroyami.kitepdf.content.ContentStreamParser
 import io.github.yuroyami.kitepdf.core.ByteArrayBuilder
-import io.github.yuroyami.kitepdf.render.Matrix
-import io.github.yuroyami.kitepdf.render.NoopCanvas
+import io.github.yuroyami.kitepdf.core.render.Matrix
+import io.github.yuroyami.kitepdf.core.render.NoopCanvas
 import kotlin.test.Test
 import kotlin.test.assertEquals
 

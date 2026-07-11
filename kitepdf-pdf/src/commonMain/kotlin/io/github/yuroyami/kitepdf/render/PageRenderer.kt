@@ -1,22 +1,39 @@
 package io.github.yuroyami.kitepdf.render
 
+import io.github.yuroyami.kitepdf.core.render.applyExtGState
+
+import io.github.yuroyami.kitepdf.core.render.BlendMode
+import io.github.yuroyami.kitepdf.core.render.ColorSpace
+import io.github.yuroyami.kitepdf.core.render.ExtGState
+import io.github.yuroyami.kitepdf.core.render.GraphicsStack
+import io.github.yuroyami.kitepdf.core.render.GraphicsState
+import io.github.yuroyami.kitepdf.core.render.ImageXObject
+import io.github.yuroyami.kitepdf.core.render.KiteCanvas
+import io.github.yuroyami.kitepdf.core.render.KitePath
+import io.github.yuroyami.kitepdf.core.render.KitePattern
+import io.github.yuroyami.kitepdf.core.render.KiteShading
+import io.github.yuroyami.kitepdf.core.render.Matrix
+import io.github.yuroyami.kitepdf.core.render.RgbColor
+import io.github.yuroyami.kitepdf.core.render.SoftMask
+import io.github.yuroyami.kitepdf.core.render.TextState
+
 import io.github.yuroyami.kitepdf.core.kiteWarn
 import io.github.yuroyami.kitepdf.PdfAnnotation.Subtype
 import io.github.yuroyami.kitepdf.PdfPage
 import io.github.yuroyami.kitepdf.content.ContentStreamParser
 import io.github.yuroyami.kitepdf.content.Operation
-import io.github.yuroyami.kitepdf.font.PdfFont
-import io.github.yuroyami.kitepdf.font.TextGlyph
-import io.github.yuroyami.kitepdf.parser.IndirectResolver
-import io.github.yuroyami.kitepdf.parser.PdfArray
-import io.github.yuroyami.kitepdf.parser.PdfDictionary
-import io.github.yuroyami.kitepdf.parser.PdfInt
-import io.github.yuroyami.kitepdf.parser.PdfName
-import io.github.yuroyami.kitepdf.parser.PdfObject
-import io.github.yuroyami.kitepdf.parser.PdfReal
-import io.github.yuroyami.kitepdf.parser.PdfReference
-import io.github.yuroyami.kitepdf.parser.PdfStream
-import io.github.yuroyami.kitepdf.parser.PdfString
+import io.github.yuroyami.kitepdf.core.font.PdfFont
+import io.github.yuroyami.kitepdf.core.font.TextGlyph
+import io.github.yuroyami.kitepdf.core.parser.IndirectResolver
+import io.github.yuroyami.kitepdf.core.parser.PdfArray
+import io.github.yuroyami.kitepdf.core.parser.PdfDictionary
+import io.github.yuroyami.kitepdf.core.parser.PdfInt
+import io.github.yuroyami.kitepdf.core.parser.PdfName
+import io.github.yuroyami.kitepdf.core.parser.PdfObject
+import io.github.yuroyami.kitepdf.core.parser.PdfReal
+import io.github.yuroyami.kitepdf.core.parser.PdfReference
+import io.github.yuroyami.kitepdf.core.parser.PdfStream
+import io.github.yuroyami.kitepdf.core.parser.PdfString
 
 /**
  * The content-stream interpreter — translates parsed [Operation]s into
@@ -176,7 +193,7 @@ public class PageRenderer(
         val dict = obj.resolve(resolver) as? PdfDictionary ?: return true
         if (dict.getName("Type") == "OCMD") return evalOcmd(dict, oc)
         // Plain OCG: hidden only if explicitly OFF in the default configuration.
-        val id = (obj as? io.github.yuroyami.kitepdf.parser.PdfReference)?.objectNumber?.toString()
+        val id = (obj as? io.github.yuroyami.kitepdf.core.parser.PdfReference)?.objectNumber?.toString()
             ?: return true
         return id !in oc.offByDefault
     }
@@ -191,9 +208,9 @@ public class PageRenderer(
             return evalVisibilityExpr(ve, oc)
         }
         val ocgsRaw = dict["OCGs"]
-        val refs: List<io.github.yuroyami.kitepdf.parser.PdfReference> = when (val r = ocgsRaw?.resolve(resolver)) {
-            is PdfArray -> r.mapNotNull { it as? io.github.yuroyami.kitepdf.parser.PdfReference }
-            else -> listOfNotNull(ocgsRaw as? io.github.yuroyami.kitepdf.parser.PdfReference)
+        val refs: List<io.github.yuroyami.kitepdf.core.parser.PdfReference> = when (val r = ocgsRaw?.resolve(resolver)) {
+            is PdfArray -> r.mapNotNull { it as? io.github.yuroyami.kitepdf.core.parser.PdfReference }
+            else -> listOfNotNull(ocgsRaw as? io.github.yuroyami.kitepdf.core.parser.PdfReference)
         }
         if (refs.isEmpty()) return true
         val visible = refs.map { it.objectNumber.toString() !in oc.offByDefault }
@@ -218,7 +235,7 @@ public class PageRenderer(
             is PdfArray -> evalVisibilityExpr(r, oc)
             else -> {
                 // A bare OCG reference: visible unless OFF in the default config.
-                val id = (o as? io.github.yuroyami.kitepdf.parser.PdfReference)?.objectNumber?.toString()
+                val id = (o as? io.github.yuroyami.kitepdf.core.parser.PdfReference)?.objectNumber?.toString()
                 id == null || id !in oc.offByDefault
             }
         }
@@ -304,15 +321,15 @@ public class PageRenderer(
      */
     private fun renderAppearanceForRect(
         appearance: PdfStream,
-        rect: io.github.yuroyami.kitepdf.Rectangle,
+        rect: io.github.yuroyami.kitepdf.core.Rectangle,
         state: GraphicsStack,
     ) {
         val bbox = appearance.dict.getArray("BBox")?.let { arr ->
-            io.github.yuroyami.kitepdf.Rectangle(
+            io.github.yuroyami.kitepdf.core.Rectangle(
                 arr.getOrNull(0).toDouble(), arr.getOrNull(1).toDouble(),
                 arr.getOrNull(2).toDouble(), arr.getOrNull(3).toDouble(),
             )
-        } ?: io.github.yuroyami.kitepdf.Rectangle(0.0, 0.0, rect.width, rect.height)
+        } ?: io.github.yuroyami.kitepdf.core.Rectangle(0.0, 0.0, rect.width, rect.height)
 
         val matrix = appearance.dict.getArray("Matrix")?.let { arr ->
             Matrix(
@@ -415,7 +432,7 @@ public class PageRenderer(
     /** Invoke [block] once per /QuadPoints quad (as a min/max box), or once over
      *  the whole [rect] when no quads are present. */
     private inline fun forEachQuad(
-        quads: List<Double>?, rect: io.github.yuroyami.kitepdf.Rectangle,
+        quads: List<Double>?, rect: io.github.yuroyami.kitepdf.core.Rectangle,
         block: (x0: Double, y0: Double, x1: Double, y1: Double) -> Unit,
     ) {
         if (quads != null && quads.size >= 8) {
@@ -432,7 +449,7 @@ public class PageRenderer(
     }
 
     /** Four-Bézier ellipse inscribed in [rect]. */
-    private fun ellipsePath(rect: io.github.yuroyami.kitepdf.Rectangle): KitePath {
+    private fun ellipsePath(rect: io.github.yuroyami.kitepdf.core.Rectangle): KitePath {
         val cx = rect.left + rect.width / 2; val cy = rect.bottom + rect.height / 2
         val rx = rect.width / 2; val ry = rect.height / 2
         val k = 0.5522847498
@@ -479,7 +496,7 @@ public class PageRenderer(
     private fun decodeImageCached(slot: XObjectSlot, fillColor: RgbColor): ImageXObject {
         val doc = resolver as? io.github.yuroyami.kitepdf.PdfDocument
         val key = slot.objectNumber
-        val isMask = (slot.stream.dict["ImageMask"] as? io.github.yuroyami.kitepdf.parser.PdfBoolean)?.value == true
+        val isMask = (slot.stream.dict["ImageMask"] as? io.github.yuroyami.kitepdf.core.parser.PdfBoolean)?.value == true
         if (doc == null || key == null || isMask) {
             doc?.countImageDecode()
             return ImageXObject.from(slot.stream, resolver, fillColor)
@@ -493,14 +510,14 @@ public class PageRenderer(
         if (blob.size < 4) return null
         val reader = io.github.yuroyami.kitepdf.core.ByteReader(blob)
         reader.seek(2) // skip "BI"
-        val lexer = io.github.yuroyami.kitepdf.parser.Lexer(reader)
+        val lexer = io.github.yuroyami.kitepdf.core.parser.Lexer(reader)
         val parser = io.github.yuroyami.kitepdf.parser.Parser(lexer)
         val entries = LinkedHashMap<String, PdfObject>()
         while (true) {
             val tok = lexer.nextToken()
-            if (tok is io.github.yuroyami.kitepdf.parser.Token.Keyword && tok.value == "ID") break
-            if (tok == io.github.yuroyami.kitepdf.parser.Token.EndOfFile) return null
-            if (tok !is io.github.yuroyami.kitepdf.parser.Token.Name) return null
+            if (tok is io.github.yuroyami.kitepdf.core.parser.Token.Keyword && tok.value == "ID") break
+            if (tok == io.github.yuroyami.kitepdf.core.parser.Token.EndOfFile) return null
+            if (tok !is io.github.yuroyami.kitepdf.core.parser.Token.Name) return null
             entries[normalizeInlineKey(tok.value)] = runCatching { parser.readObject() }.getOrNull() ?: return null
         }
         var dataStart = reader.pos()
@@ -563,11 +580,11 @@ public class PageRenderer(
             )
         } ?: Matrix.IDENTITY
         val bbox = formStream.dict.getArray("BBox")?.let { arr ->
-            io.github.yuroyami.kitepdf.Rectangle(
+            io.github.yuroyami.kitepdf.core.Rectangle(
                 arr.getOrNull(0).toDouble(), arr.getOrNull(1).toDouble(),
                 arr.getOrNull(2).toDouble(), arr.getOrNull(3).toDouble(),
             )
-        } ?: io.github.yuroyami.kitepdf.Rectangle(0.0, 0.0, 1000.0, 1000.0)
+        } ?: io.github.yuroyami.kitepdf.core.Rectangle(0.0, 0.0, 1000.0, 1000.0)
         fun buildResources(): FormResources {
             val resources = formStream.dict.getDict("Resources", resolver)
             val sh = loadShadings(resources)
@@ -594,8 +611,8 @@ public class PageRenderer(
         val childProperties = res.properties
         val groupDict = formStream.dict.getDict("Group", resolver)
         val isTransparencyGroup = groupDict?.getName("S") == "Transparency"
-        val isolated = (groupDict?.get("I") as? io.github.yuroyami.kitepdf.parser.PdfBoolean)?.value ?: false
-        val knockout = (groupDict?.get("K") as? io.github.yuroyami.kitepdf.parser.PdfBoolean)?.value ?: false
+        val isolated = (groupDict?.get("I") as? io.github.yuroyami.kitepdf.core.parser.PdfBoolean)?.value ?: false
+        val knockout = (groupDict?.get("K") as? io.github.yuroyami.kitepdf.core.parser.PdfBoolean)?.value ?: false
 
         parentState.save()
         parentState.replace(parentState.current.copy(
@@ -631,7 +648,7 @@ public class PageRenderer(
         val savedPendingClip = pendingClip
         pendingClip = 0
         try {
-            val bytes = io.github.yuroyami.kitepdf.filters.FilterChain.decode(formStream)
+            val bytes = io.github.yuroyami.kitepdf.core.filters.FilterChain.decode(formStream)
             val ops = ContentStreamParser.parse(bytes)
             val pathBuilder = KitePath.Builder()
             for (op in ops) dispatch(op, parentState, pathBuilder, childFonts, childXObjects, childColorSpaces, childExtGStates, childShadings, childPatterns, childProperties)
@@ -729,7 +746,7 @@ public class PageRenderer(
             "M" -> state.replace(state.current.copy(miterLimit = num(a, 0)))
             "d" -> {
                 // dash: [ array ] phase d  — array of on/off lengths (user units).
-                val arr = a.getOrNull(0) as? io.github.yuroyami.kitepdf.parser.PdfArray
+                val arr = a.getOrNull(0) as? io.github.yuroyami.kitepdf.core.parser.PdfArray
                 val dashes = arr?.let { ar -> List(ar.size) { ar.getOrNull(it).toDouble() } }
                 state.replace(state.current.copy(
                     dashArray = dashes?.takeIf { ds -> ds.isNotEmpty() && ds.any { it > 0.0 } },
@@ -776,12 +793,12 @@ public class PageRenderer(
             // ECG grid white. Per ISO 32000-1 §8.6.8 selecting a space resets the colour to its
             // initial value (black) until the next sc/scn sets components.
             "cs" -> {
-                val csp = (a.firstOrNull() as? io.github.yuroyami.kitepdf.parser.PdfName)
+                val csp = (a.firstOrNull() as? io.github.yuroyami.kitepdf.core.parser.PdfName)
                     ?.let { namedColorSpace(it.value, colorSpaces) } ?: ColorSpace.DeviceGray
                 state.replace(state.current.copy(fillColorSpace = csp, fillColor = csp.defaultColor(), fillPattern = null))
             }
             "CS" -> {
-                val csp = (a.firstOrNull() as? io.github.yuroyami.kitepdf.parser.PdfName)
+                val csp = (a.firstOrNull() as? io.github.yuroyami.kitepdf.core.parser.PdfName)
                     ?.let { namedColorSpace(it.value, colorSpaces) } ?: ColorSpace.DeviceGray
                 state.replace(state.current.copy(strokeColorSpace = csp, strokeColor = csp.defaultColor(), strokePattern = null))
             }
@@ -1130,11 +1147,11 @@ public class PageRenderer(
         // honour. We pass them along so the backend's saveLayer can size
         // the offscreen correctly.
         val maskBBox = mask.group.dict.getArray("BBox")?.let { arr ->
-            io.github.yuroyami.kitepdf.Rectangle(
+            io.github.yuroyami.kitepdf.core.Rectangle(
                 arr.getOrNull(0).toDouble(), arr.getOrNull(1).toDouble(),
                 arr.getOrNull(2).toDouble(), arr.getOrNull(3).toDouble(),
             )
-        } ?: io.github.yuroyami.kitepdf.Rectangle(0.0, 0.0, 0.0, 0.0)
+        } ?: io.github.yuroyami.kitepdf.core.Rectangle(0.0, 0.0, 0.0, 0.0)
         val maskMatrix = mask.group.dict.getArray("Matrix")?.let { arr ->
             Matrix(
                 arr.getOrNull(0).toDouble(), arr.getOrNull(1).toDouble(),
@@ -1190,7 +1207,7 @@ public class PageRenderer(
      * spaces we promote the components to RGB via the active colour space.
      */
     private fun handleScnFill(
-        a: List<io.github.yuroyami.kitepdf.parser.PdfObject>,
+        a: List<io.github.yuroyami.kitepdf.core.parser.PdfObject>,
         patterns: Map<String, KitePattern>,
         state: GraphicsStack,
         stroke: Boolean,
@@ -1212,8 +1229,8 @@ public class PageRenderer(
         val cs = if (stroke) state.current.strokeColorSpace else state.current.fillColorSpace
         val comps = DoubleArray(a.size) { i ->
             when (val v = a[i]) {
-                is io.github.yuroyami.kitepdf.parser.PdfInt -> v.value.toDouble()
-                is io.github.yuroyami.kitepdf.parser.PdfReal -> v.value
+                is io.github.yuroyami.kitepdf.core.parser.PdfInt -> v.value.toDouble()
+                is io.github.yuroyami.kitepdf.core.parser.PdfReal -> v.value
                 else -> 0.0
             }
         }
@@ -1225,7 +1242,7 @@ public class PageRenderer(
     }
 
     private fun handleScFill(
-        a: List<io.github.yuroyami.kitepdf.parser.PdfObject>,
+        a: List<io.github.yuroyami.kitepdf.core.parser.PdfObject>,
         state: GraphicsStack,
         stroke: Boolean,
     ) {
@@ -1233,8 +1250,8 @@ public class PageRenderer(
         val cs = if (stroke) state.current.strokeColorSpace else state.current.fillColorSpace
         val comps = DoubleArray(a.size) { i ->
             when (val v = a[i]) {
-                is io.github.yuroyami.kitepdf.parser.PdfInt -> v.value.toDouble()
-                is io.github.yuroyami.kitepdf.parser.PdfReal -> v.value
+                is io.github.yuroyami.kitepdf.core.parser.PdfInt -> v.value.toDouble()
+                is io.github.yuroyami.kitepdf.core.parser.PdfReal -> v.value
                 else -> 0.0
             }
         }
@@ -1561,7 +1578,7 @@ public class PageRenderer(
         val clipBase = activeClipCount
         try {
             val ops = ContentStreamParser.parse(
-                io.github.yuroyami.kitepdf.filters.FilterChain.decode(proc),
+                io.github.yuroyami.kitepdf.core.filters.FilterChain.decode(proc),
             )
             val pathBuilder = KitePath.Builder()
             for (op in ops) dispatch(op, parentState, pathBuilder, fonts, xobjects, colorSpaces, extGStates, sh, patterns, properties)

@@ -2,7 +2,7 @@ package io.github.yuroyami.kitepdf.epub
 
 import io.github.yuroyami.kitepdf.epub.css.CssVAlign
 import io.github.yuroyami.kitepdf.epub.css.GenericFont
-import io.github.yuroyami.kitepdf.render.RgbColor
+import io.github.yuroyami.kitepdf.core.render.RgbColor
 
 /**
  * A maximal span of text sharing one computed inline style. Everything the layout

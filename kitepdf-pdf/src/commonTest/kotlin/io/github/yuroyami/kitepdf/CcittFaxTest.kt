@@ -1,10 +1,10 @@
 package io.github.yuroyami.kitepdf
 
-import io.github.yuroyami.kitepdf.filters.CcittFaxFilter
-import io.github.yuroyami.kitepdf.parser.PdfBoolean
-import io.github.yuroyami.kitepdf.parser.PdfDictionary
-import io.github.yuroyami.kitepdf.parser.PdfInt
-import io.github.yuroyami.kitepdf.parser.PdfObject
+import io.github.yuroyami.kitepdf.core.filters.CcittFaxFilter
+import io.github.yuroyami.kitepdf.core.parser.PdfBoolean
+import io.github.yuroyami.kitepdf.core.parser.PdfDictionary
+import io.github.yuroyami.kitepdf.core.parser.PdfInt
+import io.github.yuroyami.kitepdf.core.parser.PdfObject
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals

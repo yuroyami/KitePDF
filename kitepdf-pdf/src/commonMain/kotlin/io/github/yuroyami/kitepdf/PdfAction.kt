@@ -1,15 +1,15 @@
 package io.github.yuroyami.kitepdf
 
-import io.github.yuroyami.kitepdf.parser.IndirectResolver
-import io.github.yuroyami.kitepdf.parser.PdfArray
-import io.github.yuroyami.kitepdf.parser.PdfBoolean
-import io.github.yuroyami.kitepdf.parser.PdfDictionary
-import io.github.yuroyami.kitepdf.parser.PdfInt
-import io.github.yuroyami.kitepdf.parser.PdfName
-import io.github.yuroyami.kitepdf.parser.PdfObject
-import io.github.yuroyami.kitepdf.parser.PdfReference
-import io.github.yuroyami.kitepdf.parser.PdfStream
-import io.github.yuroyami.kitepdf.parser.PdfString
+import io.github.yuroyami.kitepdf.core.parser.IndirectResolver
+import io.github.yuroyami.kitepdf.core.parser.PdfArray
+import io.github.yuroyami.kitepdf.core.parser.PdfBoolean
+import io.github.yuroyami.kitepdf.core.parser.PdfDictionary
+import io.github.yuroyami.kitepdf.core.parser.PdfInt
+import io.github.yuroyami.kitepdf.core.parser.PdfName
+import io.github.yuroyami.kitepdf.core.parser.PdfObject
+import io.github.yuroyami.kitepdf.core.parser.PdfReference
+import io.github.yuroyami.kitepdf.core.parser.PdfStream
+import io.github.yuroyami.kitepdf.core.parser.PdfString
 
 /**
  * A PDF action — ISO 32000-1 §12.6. Actions describe what happens when the
@@ -167,10 +167,10 @@ public sealed class PdfAction {
                 "JavaScript" -> {
                     val script = when (val js = dict["JS"]) {
                         is PdfString -> js.asText()
-                        is PdfStream -> io.github.yuroyami.kitepdf.filters.FilterChain.decode(js).decodeToString()
+                        is PdfStream -> io.github.yuroyami.kitepdf.core.filters.FilterChain.decode(js).decodeToString()
                         is PdfReference -> when (val resolved = refs.resolve(js)) {
                             is PdfString -> resolved.asText()
-                            is PdfStream -> io.github.yuroyami.kitepdf.filters.FilterChain.decode(resolved).decodeToString()
+                            is PdfStream -> io.github.yuroyami.kitepdf.core.filters.FilterChain.decode(resolved).decodeToString()
                             else -> ""
                         }
                         else -> ""

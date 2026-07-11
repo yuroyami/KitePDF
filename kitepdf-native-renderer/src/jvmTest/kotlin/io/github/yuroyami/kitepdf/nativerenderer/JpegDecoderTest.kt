@@ -1,7 +1,7 @@
 package io.github.yuroyami.kitepdf.nativerenderer
 
-import io.github.yuroyami.kitepdf.render.ImageXObject
-import io.github.yuroyami.kitepdf.render.toRgbaBytes
+import io.github.yuroyami.kitepdf.core.render.ImageXObject
+import io.github.yuroyami.kitepdf.core.render.toRgbaBytes
 import java.awt.image.BufferedImage
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream

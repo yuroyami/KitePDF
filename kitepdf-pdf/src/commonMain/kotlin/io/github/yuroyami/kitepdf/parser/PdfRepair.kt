@@ -1,8 +1,15 @@
 package io.github.yuroyami.kitepdf.parser
 
+import io.github.yuroyami.kitepdf.core.parser.Lexer
+import io.github.yuroyami.kitepdf.core.parser.PdfDictionary
+import io.github.yuroyami.kitepdf.core.parser.PdfObject
+import io.github.yuroyami.kitepdf.core.parser.PdfReference
+import io.github.yuroyami.kitepdf.core.parser.PdfStream
+import io.github.yuroyami.kitepdf.core.parser.Token
+
 import io.github.yuroyami.kitepdf.core.ByteReader
 import io.github.yuroyami.kitepdf.core.PdfFormatException
-import io.github.yuroyami.kitepdf.filters.FilterChain
+import io.github.yuroyami.kitepdf.core.filters.FilterChain
 
 /**
  * Malformed-file recovery (ISO 32000-1 has no formal spec for this — it mirrors

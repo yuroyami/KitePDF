@@ -1,5 +1,12 @@
 package io.github.yuroyami.kitepdf.parser
 
+import io.github.yuroyami.kitepdf.core.parser.Lexer
+import io.github.yuroyami.kitepdf.core.parser.PdfDictionary
+import io.github.yuroyami.kitepdf.core.parser.PdfInt
+import io.github.yuroyami.kitepdf.core.parser.PdfObject
+import io.github.yuroyami.kitepdf.core.parser.PdfStream
+import io.github.yuroyami.kitepdf.core.parser.Token
+
 import io.github.yuroyami.kitepdf.core.ByteReader
 import io.github.yuroyami.kitepdf.core.PdfFormatException
 
@@ -136,7 +143,7 @@ internal class XrefParser(private val reader: ByteReader) {
             ?: listOf(0L, size)
 
         // Decode the stream body using our filter chain.
-        val decoded = io.github.yuroyami.kitepdf.filters.FilterChain.decode(stream)
+        val decoded = io.github.yuroyami.kitepdf.core.filters.FilterChain.decode(stream)
         val rowSize = fieldWidths.sum()
         if (rowSize == 0) throw PdfFormatException("Xref stream row size is zero")
 

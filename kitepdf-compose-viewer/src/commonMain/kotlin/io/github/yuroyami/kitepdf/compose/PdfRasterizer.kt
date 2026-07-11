@@ -16,9 +16,9 @@ import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.LayoutDirection
-import io.github.yuroyami.kitepdf.KitePage
-import io.github.yuroyami.kitepdf.render.Matrix as PdfMatrix
-import io.github.yuroyami.kitepdf.render.ReaderTheme
+import io.github.yuroyami.kitepdf.core.KitePage
+import io.github.yuroyami.kitepdf.core.render.Matrix as PdfMatrix
+import io.github.yuroyami.kitepdf.core.render.ReaderTheme
 import kotlinx.coroutines.sync.withLock
 
 /**

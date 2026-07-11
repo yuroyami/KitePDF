@@ -1,13 +1,13 @@
 package io.github.yuroyami.kitepdf.epub
 
-import io.github.yuroyami.kitepdf.compression.Zlib
-import io.github.yuroyami.kitepdf.filters.FilterChain
+import io.github.yuroyami.kitepdf.core.compression.Zlib
+import io.github.yuroyami.kitepdf.core.filters.FilterChain
 
 /**
  * WOFF 1.0 (Web Open Font Format) → bare SFNT decoder. A WOFF file is an SFNT
  * (`.ttf`/`.otf`) whose tables are individually zlib-compressed (or stored); this
- * unwraps it back to an SFNT byte blob that the core [io.github.yuroyami.kitepdf.font.TrueTypeFont]
- * parser (and, for `.otf` flavour, [io.github.yuroyami.kitepdf.font.CffFont]) reads
+ * unwraps it back to an SFNT byte blob that the core [io.github.yuroyami.kitepdf.core.font.TrueTypeFont]
+ * parser (and, for `.otf` flavour, [io.github.yuroyami.kitepdf.core.font.CffFont]) reads
  * unchanged. Reuses the core [Zlib] inflater — no new codec.
  *
  * Scope: WOFF 1.0 only. WOFF2 (brotli entropy coding + `glyf`/`loca` transforms)

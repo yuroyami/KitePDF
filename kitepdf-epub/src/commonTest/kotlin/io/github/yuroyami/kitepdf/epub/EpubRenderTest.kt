@@ -1,8 +1,8 @@
 package io.github.yuroyami.kitepdf.epub
 
-import io.github.yuroyami.kitepdf.render.Matrix
-import io.github.yuroyami.kitepdf.render.RecordingCanvas
-import io.github.yuroyami.kitepdf.render.RgbColor
+import io.github.yuroyami.kitepdf.core.render.Matrix
+import io.github.yuroyami.kitepdf.core.render.RecordingCanvas
+import io.github.yuroyami.kitepdf.core.render.RgbColor
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
@@ -102,7 +102,7 @@ class EpubRenderTest {
         assertEquals(1, images.size)
         val img = images.single().image
         assertEquals(2, img.width); assertEquals(1, img.height)
-        assertEquals(io.github.yuroyami.kitepdf.render.ImageXObject.Kind.RAW, img.kind, "PNG decodes to RAW pixels in core")
+        assertEquals(io.github.yuroyami.kitepdf.core.render.ImageXObject.Kind.RAW, img.kind, "PNG decodes to RAW pixels in core")
     }
 
     // ---- Phase 2: CSS reaching the canvas -----------------------------------
@@ -143,7 +143,7 @@ class EpubRenderTest {
     @Test
     fun sans_serif_css_selects_sans_face() {
         val runs = renderRuns("""<p style="font-family:sans-serif">abc</p>""")
-        assertTrue(runs.any { "abc" in it.text && it.fontSpec.family == io.github.yuroyami.kitepdf.font.FontFamily.SansSerif })
+        assertTrue(runs.any { "abc" in it.text && it.fontSpec.family == io.github.yuroyami.kitepdf.core.font.FontFamily.SansSerif })
     }
 
     // ---- Phase 3: box model painting ----------------------------------------

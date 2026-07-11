@@ -1,5 +1,7 @@
 package io.github.yuroyami.kitepdf
 
+import io.github.yuroyami.kitepdf.core.Rectangle
+
 import io.github.yuroyami.kitepdf.writer.PdfBuilder
 import io.github.yuroyami.kitepdf.writer.StandardFont
 import kotlin.test.Test

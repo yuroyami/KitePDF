@@ -1,15 +1,15 @@
 package io.github.yuroyami.kitepdf.content
 
 import io.github.yuroyami.kitepdf.core.ByteReader
-import io.github.yuroyami.kitepdf.parser.Lexer
+import io.github.yuroyami.kitepdf.core.parser.Lexer
 import io.github.yuroyami.kitepdf.parser.Parser
-import io.github.yuroyami.kitepdf.parser.PdfArray
-import io.github.yuroyami.kitepdf.parser.PdfBoolean
-import io.github.yuroyami.kitepdf.parser.PdfDictionary
-import io.github.yuroyami.kitepdf.parser.PdfInt
-import io.github.yuroyami.kitepdf.parser.PdfName
-import io.github.yuroyami.kitepdf.parser.PdfObject
-import io.github.yuroyami.kitepdf.parser.Token
+import io.github.yuroyami.kitepdf.core.parser.PdfArray
+import io.github.yuroyami.kitepdf.core.parser.PdfBoolean
+import io.github.yuroyami.kitepdf.core.parser.PdfDictionary
+import io.github.yuroyami.kitepdf.core.parser.PdfInt
+import io.github.yuroyami.kitepdf.core.parser.PdfName
+import io.github.yuroyami.kitepdf.core.parser.PdfObject
+import io.github.yuroyami.kitepdf.core.parser.Token
 
 /**
  * Content stream parsing (ISO 32000-1 §7.8 + §8 + §9).

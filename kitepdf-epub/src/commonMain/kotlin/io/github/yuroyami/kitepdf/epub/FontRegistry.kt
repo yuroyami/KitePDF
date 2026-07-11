@@ -1,11 +1,11 @@
 package io.github.yuroyami.kitepdf.epub
 
-import io.github.yuroyami.kitepdf.font.CffFont
-import io.github.yuroyami.kitepdf.font.OpenTypeGsub
-import io.github.yuroyami.kitepdf.font.OpenTypeKern
-import io.github.yuroyami.kitepdf.font.OpenTypeMarks
-import io.github.yuroyami.kitepdf.font.TrueTypeFont
-import io.github.yuroyami.kitepdf.render.KitePath
+import io.github.yuroyami.kitepdf.core.font.CffFont
+import io.github.yuroyami.kitepdf.core.font.OpenTypeGsub
+import io.github.yuroyami.kitepdf.core.font.OpenTypeKern
+import io.github.yuroyami.kitepdf.core.font.OpenTypeMarks
+import io.github.yuroyami.kitepdf.core.font.TrueTypeFont
+import io.github.yuroyami.kitepdf.core.render.KitePath
 
 /**
  * One embedded `@font-face`, wrapping a parsed core [TrueTypeFont]. Provides the

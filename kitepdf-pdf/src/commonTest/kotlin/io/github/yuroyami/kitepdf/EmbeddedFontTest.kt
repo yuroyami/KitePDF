@@ -1,6 +1,6 @@
 package io.github.yuroyami.kitepdf
 
-import io.github.yuroyami.kitepdf.font.TtfFormatException
+import io.github.yuroyami.kitepdf.core.font.TtfFormatException
 import io.github.yuroyami.kitepdf.writer.EmbeddedFont
 import kotlin.test.Test
 import kotlin.test.assertFailsWith

@@ -1,13 +1,13 @@
 package io.github.yuroyami.kitepdf
 
-import io.github.yuroyami.kitepdf.parser.PdfArray
-import io.github.yuroyami.kitepdf.parser.PdfDictionary
-import io.github.yuroyami.kitepdf.parser.PdfInt
-import io.github.yuroyami.kitepdf.parser.PdfName
-import io.github.yuroyami.kitepdf.parser.PdfObject
-import io.github.yuroyami.kitepdf.parser.PdfReal
-import io.github.yuroyami.kitepdf.parser.PdfStream
-import io.github.yuroyami.kitepdf.render.KiteFunction
+import io.github.yuroyami.kitepdf.core.parser.PdfArray
+import io.github.yuroyami.kitepdf.core.parser.PdfDictionary
+import io.github.yuroyami.kitepdf.core.parser.PdfInt
+import io.github.yuroyami.kitepdf.core.parser.PdfName
+import io.github.yuroyami.kitepdf.core.parser.PdfObject
+import io.github.yuroyami.kitepdf.core.parser.PdfReal
+import io.github.yuroyami.kitepdf.core.parser.PdfStream
+import io.github.yuroyami.kitepdf.core.render.KiteFunction
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
@@ -17,7 +17,7 @@ import kotlin.test.assertTrue
  *  the array-of-functions combination form. */
 class FunctionEvalTest {
 
-    private val nilRefs = io.github.yuroyami.kitepdf.parser.IndirectResolver { null }
+    private val nilRefs = io.github.yuroyami.kitepdf.core.parser.IndirectResolver { null }
     private fun ints(vararg v: Int) = PdfArray(v.map { PdfInt(it.toLong()) })
     private fun reals(vararg v: Double) = PdfArray(v.map { PdfReal(it) })
 

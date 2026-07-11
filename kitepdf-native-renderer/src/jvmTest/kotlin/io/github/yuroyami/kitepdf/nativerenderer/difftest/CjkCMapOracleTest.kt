@@ -1,7 +1,7 @@
 package io.github.yuroyami.kitepdf.nativerenderer.difftest
 
 import io.github.yuroyami.kitepdf.KitePDF
-import io.github.yuroyami.kitepdf.font.TrueTypeFont
+import io.github.yuroyami.kitepdf.core.font.TrueTypeFont
 import io.github.yuroyami.kitepdf.nativerenderer.AwtPdfRasterizer
 import java.io.ByteArrayOutputStream
 import java.io.File

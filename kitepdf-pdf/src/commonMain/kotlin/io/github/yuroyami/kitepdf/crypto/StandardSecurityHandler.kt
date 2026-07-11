@@ -1,8 +1,8 @@
 package io.github.yuroyami.kitepdf.crypto
 
 import io.github.yuroyami.kitepdf.core.PdfFormatException
-import io.github.yuroyami.kitepdf.parser.PdfDictionary
-import io.github.yuroyami.kitepdf.parser.PdfName
+import io.github.yuroyami.kitepdf.core.parser.PdfDictionary
+import io.github.yuroyami.kitepdf.core.parser.PdfName
 
 /**
  * PDF Standard Security Handler (ISO 32000-1 §7.6.4).
@@ -29,9 +29,9 @@ public class StandardSecurityHandler(
     public val r: Int = encryptDict.getInt("R")?.toInt() ?: 2
     private val keyLengthBits: Int = encryptDict.getInt("Length")?.toInt()
         ?: when (v) { 1 -> 40; 4 -> 128; 5 -> 256; else -> 40 }
-    private val o: ByteArray = (encryptDict["O"] as? io.github.yuroyami.kitepdf.parser.PdfString)?.bytes
+    private val o: ByteArray = (encryptDict["O"] as? io.github.yuroyami.kitepdf.core.parser.PdfString)?.bytes
         ?: throw PdfFormatException("/Encrypt missing /O")
-    private val u: ByteArray = (encryptDict["U"] as? io.github.yuroyami.kitepdf.parser.PdfString)?.bytes
+    private val u: ByteArray = (encryptDict["U"] as? io.github.yuroyami.kitepdf.core.parser.PdfString)?.bytes
         ?: throw PdfFormatException("/Encrypt missing /U")
     /** Raw `/P` bit-flags. Negative because the high bit is set on permissive PDFs. */
     public val p: Int = encryptDict.getInt("P")?.toInt() ?: -1
@@ -41,11 +41,11 @@ public class StandardSecurityHandler(
      * [Decryptor] must skip it. Exposed for that reason.
      */
     public val encryptMetadata: Boolean = (encryptDict["EncryptMetadata"]
-        as? io.github.yuroyami.kitepdf.parser.PdfBoolean)?.value ?: true
+        as? io.github.yuroyami.kitepdf.core.parser.PdfBoolean)?.value ?: true
 
     /** V5/V6 only — 32-byte SHA-256 derivation salts. */
-    private val ue: ByteArray = (encryptDict["UE"] as? io.github.yuroyami.kitepdf.parser.PdfString)?.bytes ?: byteArrayOf()
-    private val oe: ByteArray = (encryptDict["OE"] as? io.github.yuroyami.kitepdf.parser.PdfString)?.bytes ?: byteArrayOf()
+    private val ue: ByteArray = (encryptDict["UE"] as? io.github.yuroyami.kitepdf.core.parser.PdfString)?.bytes ?: byteArrayOf()
+    private val oe: ByteArray = (encryptDict["OE"] as? io.github.yuroyami.kitepdf.core.parser.PdfString)?.bytes ?: byteArrayOf()
 
     /**
      * For V4: per-filter algorithm. /CFM /V2 = RC4, /CFM /AESV2 = AES-128,

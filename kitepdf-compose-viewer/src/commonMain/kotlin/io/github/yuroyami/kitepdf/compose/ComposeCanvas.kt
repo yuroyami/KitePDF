@@ -1,6 +1,6 @@
 package io.github.yuroyami.kitepdf.compose
 
-import io.github.yuroyami.kitepdf.render.paintComplexShading
+import io.github.yuroyami.kitepdf.core.render.paintComplexShading
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.BlendMode as ComposeBlendMode
@@ -21,21 +21,21 @@ import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.TextUnitType
-import io.github.yuroyami.kitepdf.font.FontFamily as KiteFontFamily
-import io.github.yuroyami.kitepdf.font.FontSpec
-import io.github.yuroyami.kitepdf.font.TextGlyph
+import io.github.yuroyami.kitepdf.core.font.FontFamily as KiteFontFamily
+import io.github.yuroyami.kitepdf.core.font.FontSpec
+import io.github.yuroyami.kitepdf.core.font.TextGlyph
 import androidx.compose.ui.graphics.Brush
-import io.github.yuroyami.kitepdf.render.BlendMode as PdfBlendMode
-import io.github.yuroyami.kitepdf.render.ImageXObject
-import io.github.yuroyami.kitepdf.render.toRgbaBytes
-import io.github.yuroyami.kitepdf.render.Matrix as PdfMatrix
-import io.github.yuroyami.kitepdf.render.KiteCanvas
-import io.github.yuroyami.kitepdf.render.KitePath
-import io.github.yuroyami.kitepdf.render.KiteShading
-import io.github.yuroyami.kitepdf.render.Rectangle as PdfRectangle
-import io.github.yuroyami.kitepdf.render.RgbColor
-import io.github.yuroyami.kitepdf.render.SoftMask
-import io.github.yuroyami.kitepdf.render.sampleStops
+import io.github.yuroyami.kitepdf.core.render.BlendMode as PdfBlendMode
+import io.github.yuroyami.kitepdf.core.render.ImageXObject
+import io.github.yuroyami.kitepdf.core.render.toRgbaBytes
+import io.github.yuroyami.kitepdf.core.render.Matrix as PdfMatrix
+import io.github.yuroyami.kitepdf.core.render.KiteCanvas
+import io.github.yuroyami.kitepdf.core.render.KitePath
+import io.github.yuroyami.kitepdf.core.render.KiteShading
+import io.github.yuroyami.kitepdf.core.render.Rectangle as PdfRectangle
+import io.github.yuroyami.kitepdf.core.render.RgbColor
+import io.github.yuroyami.kitepdf.core.render.SoftMask
+import io.github.yuroyami.kitepdf.core.render.sampleStops
 import kotlin.math.atan2
 import kotlin.math.sqrt
 

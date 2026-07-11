@@ -1,13 +1,13 @@
 package io.github.yuroyami.kitepdf
 
-import io.github.yuroyami.kitepdf.parser.IndirectResolver
-import io.github.yuroyami.kitepdf.parser.PdfArray
-import io.github.yuroyami.kitepdf.parser.PdfDictionary
-import io.github.yuroyami.kitepdf.parser.PdfInt
-import io.github.yuroyami.kitepdf.parser.PdfName
-import io.github.yuroyami.kitepdf.parser.PdfObject
-import io.github.yuroyami.kitepdf.parser.PdfReal
-import io.github.yuroyami.kitepdf.render.ColorSpace
+import io.github.yuroyami.kitepdf.core.parser.IndirectResolver
+import io.github.yuroyami.kitepdf.core.parser.PdfArray
+import io.github.yuroyami.kitepdf.core.parser.PdfDictionary
+import io.github.yuroyami.kitepdf.core.parser.PdfInt
+import io.github.yuroyami.kitepdf.core.parser.PdfName
+import io.github.yuroyami.kitepdf.core.parser.PdfObject
+import io.github.yuroyami.kitepdf.core.parser.PdfReal
+import io.github.yuroyami.kitepdf.core.render.ColorSpace
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -76,7 +76,7 @@ class SeparationLabTest {
         val bytes = program.encodeToByteArray()
         val domain = DoubleArray(inputs * 2) { if (it % 2 == 0) 0.0 else 1.0 }
         val range = DoubleArray(outputs * 2) { if (it % 2 == 0) 0.0 else 1.0 }
-        return io.github.yuroyami.kitepdf.parser.PdfStream(
+        return io.github.yuroyami.kitepdf.core.parser.PdfStream(
             dict = PdfDictionary(linkedMapOf(
                 "FunctionType" to PdfInt(4),
                 "Domain" to PdfArray(domain.map { PdfReal(it) }),

@@ -4,7 +4,7 @@ import android.graphics.Bitmap
 import android.graphics.Canvas as AndroidCanvas
 import android.graphics.Color
 import io.github.yuroyami.kitepdf.PdfPage
-import io.github.yuroyami.kitepdf.render.Matrix as PdfMatrix
+import io.github.yuroyami.kitepdf.core.render.Matrix as PdfMatrix
 
 /**
  * Headless rendering on Android — produces an ARGB_8888 [Bitmap] sized to

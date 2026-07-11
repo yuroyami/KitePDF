@@ -1,7 +1,7 @@
 package io.github.yuroyami.kitepdf.writer
 
-import io.github.yuroyami.kitepdf.font.CffFont
-import io.github.yuroyami.kitepdf.font.TrueTypeFont
+import io.github.yuroyami.kitepdf.core.font.CffFont
+import io.github.yuroyami.kitepdf.core.font.TrueTypeFont
 
 /**
  * A TrueType font loaded for *embedding* into a PDF the writer produces.

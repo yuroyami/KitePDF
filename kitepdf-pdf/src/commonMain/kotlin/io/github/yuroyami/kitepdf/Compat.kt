@@ -2,11 +2,11 @@
 
 package io.github.yuroyami.kitepdf
 
-import io.github.yuroyami.kitepdf.render.KiteCanvas
-import io.github.yuroyami.kitepdf.render.KiteFunction
-import io.github.yuroyami.kitepdf.render.KitePath
-import io.github.yuroyami.kitepdf.render.KitePattern
-import io.github.yuroyami.kitepdf.render.KiteShading
+import io.github.yuroyami.kitepdf.core.render.KiteCanvas
+import io.github.yuroyami.kitepdf.core.render.KiteFunction
+import io.github.yuroyami.kitepdf.core.render.KitePath
+import io.github.yuroyami.kitepdf.core.render.KitePattern
+import io.github.yuroyami.kitepdf.core.render.KiteShading
 
 /*
  * T-23 migration aliases, one release cycle only: the core substrate types
@@ -15,17 +15,17 @@ import io.github.yuroyami.kitepdf.render.KiteShading
  * stays clean.
  */
 
-@Deprecated("Renamed to KiteCanvas", ReplaceWith("KiteCanvas", "io.github.yuroyami.kitepdf.render.KiteCanvas"))
+@Deprecated("Renamed to KiteCanvas", ReplaceWith("KiteCanvas", "io.github.yuroyami.kitepdf.core.render.KiteCanvas"))
 public typealias PdfCanvas = KiteCanvas
 
-@Deprecated("Renamed to KitePath", ReplaceWith("KitePath", "io.github.yuroyami.kitepdf.render.KitePath"))
+@Deprecated("Renamed to KitePath", ReplaceWith("KitePath", "io.github.yuroyami.kitepdf.core.render.KitePath"))
 public typealias PdfPath = KitePath
 
-@Deprecated("Renamed to KiteShading", ReplaceWith("KiteShading", "io.github.yuroyami.kitepdf.render.KiteShading"))
+@Deprecated("Renamed to KiteShading", ReplaceWith("KiteShading", "io.github.yuroyami.kitepdf.core.render.KiteShading"))
 public typealias PdfShading = KiteShading
 
-@Deprecated("Renamed to KitePattern", ReplaceWith("KitePattern", "io.github.yuroyami.kitepdf.render.KitePattern"))
+@Deprecated("Renamed to KitePattern", ReplaceWith("KitePattern", "io.github.yuroyami.kitepdf.core.render.KitePattern"))
 public typealias PdfPattern = KitePattern
 
-@Deprecated("Renamed to KiteFunction", ReplaceWith("KiteFunction", "io.github.yuroyami.kitepdf.render.KiteFunction"))
+@Deprecated("Renamed to KiteFunction", ReplaceWith("KiteFunction", "io.github.yuroyami.kitepdf.core.render.KiteFunction"))
 public typealias PdfFunction = KiteFunction

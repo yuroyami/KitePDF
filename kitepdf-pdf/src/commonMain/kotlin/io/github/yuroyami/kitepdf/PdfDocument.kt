@@ -1,5 +1,9 @@
 package io.github.yuroyami.kitepdf
 
+import io.github.yuroyami.kitepdf.core.KiteDocument
+import io.github.yuroyami.kitepdf.core.KiteMetadata
+import io.github.yuroyami.kitepdf.core.KiteOutlineItem
+
 import io.github.yuroyami.kitepdf.core.ByteReader
 import io.github.yuroyami.kitepdf.core.KiteLock
 import io.github.yuroyami.kitepdf.core.KiteRawApi
@@ -10,19 +14,19 @@ import io.github.yuroyami.kitepdf.core.WrongPasswordException
 import io.github.yuroyami.kitepdf.core.kiteWarn
 import io.github.yuroyami.kitepdf.crypto.Decryptor
 import io.github.yuroyami.kitepdf.crypto.StandardSecurityHandler
-import io.github.yuroyami.kitepdf.filters.FilterChain
-import io.github.yuroyami.kitepdf.parser.IndirectResolver
-import io.github.yuroyami.kitepdf.parser.Lexer
+import io.github.yuroyami.kitepdf.core.filters.FilterChain
+import io.github.yuroyami.kitepdf.core.parser.IndirectResolver
+import io.github.yuroyami.kitepdf.core.parser.Lexer
 import io.github.yuroyami.kitepdf.parser.Parser
-import io.github.yuroyami.kitepdf.parser.PdfArray
-import io.github.yuroyami.kitepdf.parser.PdfDictionary
-import io.github.yuroyami.kitepdf.parser.PdfInt
-import io.github.yuroyami.kitepdf.parser.PdfObject
-import io.github.yuroyami.kitepdf.parser.PdfReference
+import io.github.yuroyami.kitepdf.core.parser.PdfArray
+import io.github.yuroyami.kitepdf.core.parser.PdfDictionary
+import io.github.yuroyami.kitepdf.core.parser.PdfInt
+import io.github.yuroyami.kitepdf.core.parser.PdfObject
+import io.github.yuroyami.kitepdf.core.parser.PdfReference
 import io.github.yuroyami.kitepdf.parser.PdfRepair
-import io.github.yuroyami.kitepdf.parser.PdfStream
-import io.github.yuroyami.kitepdf.parser.PdfString
-import io.github.yuroyami.kitepdf.parser.Token
+import io.github.yuroyami.kitepdf.core.parser.PdfStream
+import io.github.yuroyami.kitepdf.core.parser.PdfString
+import io.github.yuroyami.kitepdf.core.parser.Token
 import io.github.yuroyami.kitepdf.parser.XrefEntry
 import io.github.yuroyami.kitepdf.parser.XrefParser
 import io.github.yuroyami.kitepdf.writer.PdfEditor
@@ -122,7 +126,7 @@ public class PdfDocument private constructor(
             is PdfStream -> raw
             else -> null
         } ?: return@lazy null
-        val bytes = io.github.yuroyami.kitepdf.filters.FilterChain.decode(stream)
+        val bytes = io.github.yuroyami.kitepdf.core.filters.FilterChain.decode(stream)
         // XMP packets are UTF-8. Skip a leading BOM if present.
         val start = if (bytes.size >= 3 &&
             bytes[0] == 0xEF.toByte() && bytes[1] == 0xBB.toByte() && bytes[2] == 0xBF.toByte()
@@ -175,17 +179,17 @@ public class PdfDocument private constructor(
      * Fill-colour-dependent /ImageMask stencils never enter it. Call
      * [dropDecodedImageCache] under memory pressure.
      */
-    private val decodedImageCache = HashMap<Long, io.github.yuroyami.kitepdf.render.ImageXObject>()
+    private val decodedImageCache = HashMap<Long, io.github.yuroyami.kitepdf.core.render.ImageXObject>()
 
     /** Test hook: actual image decodes performed by the renderer. */
     internal var imageDecodeCount = 0
         private set
 
-    internal fun cachedImage(objectNumber: Long): io.github.yuroyami.kitepdf.render.ImageXObject? =
+    internal fun cachedImage(objectNumber: Long): io.github.yuroyami.kitepdf.core.render.ImageXObject? =
         lock.withLock { decodedImageCache[objectNumber] }
 
     /** First writer wins; racing decoders converge on one instance. */
-    internal fun cacheImage(objectNumber: Long, image: io.github.yuroyami.kitepdf.render.ImageXObject): io.github.yuroyami.kitepdf.render.ImageXObject =
+    internal fun cacheImage(objectNumber: Long, image: io.github.yuroyami.kitepdf.core.render.ImageXObject): io.github.yuroyami.kitepdf.core.render.ImageXObject =
         lock.withLock { decodedImageCache.getOrPut(objectNumber) { image } }
 
     internal fun countImageDecode() {
@@ -691,7 +695,7 @@ public class PdfDocument private constructor(
                 else -> return null
             }
             val fileIdFirst = (trailer["ID"] as? PdfArray)?.let {
-                (it.firstOrNull() as? io.github.yuroyami.kitepdf.parser.PdfString)?.bytes
+                (it.firstOrNull() as? io.github.yuroyami.kitepdf.core.parser.PdfString)?.bytes
             } ?: ByteArray(0)
             // The single password the user supplies is tried as BOTH the user and
             // the owner password (either one authenticates the document).

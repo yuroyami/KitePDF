@@ -2,16 +2,16 @@ package io.github.yuroyami.kitepdf.text
 
 import io.github.yuroyami.kitepdf.PdfDocument
 import io.github.yuroyami.kitepdf.PdfPage
-import io.github.yuroyami.kitepdf.Rectangle
-import io.github.yuroyami.kitepdf.font.FontSpec
-import io.github.yuroyami.kitepdf.font.TextGlyph
-import io.github.yuroyami.kitepdf.render.BlendMode
-import io.github.yuroyami.kitepdf.render.ImageXObject
-import io.github.yuroyami.kitepdf.render.Matrix
+import io.github.yuroyami.kitepdf.core.Rectangle
+import io.github.yuroyami.kitepdf.core.font.FontSpec
+import io.github.yuroyami.kitepdf.core.font.TextGlyph
+import io.github.yuroyami.kitepdf.core.render.BlendMode
+import io.github.yuroyami.kitepdf.core.render.ImageXObject
+import io.github.yuroyami.kitepdf.core.render.Matrix
 import io.github.yuroyami.kitepdf.render.PageRenderer
-import io.github.yuroyami.kitepdf.render.KiteCanvas
-import io.github.yuroyami.kitepdf.render.KitePath
-import io.github.yuroyami.kitepdf.render.RgbColor
+import io.github.yuroyami.kitepdf.core.render.KiteCanvas
+import io.github.yuroyami.kitepdf.core.render.KitePath
+import io.github.yuroyami.kitepdf.core.render.RgbColor
 
 /**
  * Structured text — `pageGlyphs → spans → lines → blocks` (ISO 32000-1

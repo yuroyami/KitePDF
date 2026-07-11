@@ -1,6 +1,6 @@
 package io.github.yuroyami.kitepdf.nativerenderer.difftest
 
-import io.github.yuroyami.kitepdf.compression.Zlib
+import io.github.yuroyami.kitepdf.core.compression.Zlib
 import java.io.ByteArrayOutputStream
 import java.util.zip.Inflater
 import kotlin.test.Test

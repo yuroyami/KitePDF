@@ -3,7 +3,7 @@ package io.github.yuroyami.kitepdf.compose
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.runtime.Immutable
 import androidx.compose.ui.graphics.Color
-import io.github.yuroyami.kitepdf.render.ReaderTheme
+import io.github.yuroyami.kitepdf.core.render.ReaderTheme
 
 /**
  * How [PdfView] lays its pages out and how the user moves between them.
@@ -73,10 +73,10 @@ public sealed interface PdfLayout {
 
         /**
          * A horizontal pager following the document's page-progression
-         * direction: right-to-left books ([io.github.yuroyami.kitepdf.KiteMetadata.rightToLeft])
+         * direction: right-to-left books ([io.github.yuroyami.kitepdf.core.KiteMetadata.rightToLeft])
          * get a reversed pager, everything else the plain one.
          */
-        public fun pagedFor(document: io.github.yuroyami.kitepdf.KiteDocument): Paged =
+        public fun pagedFor(document: io.github.yuroyami.kitepdf.core.KiteDocument): Paged =
             Paged(reverseLayout = document.metadata.rightToLeft)
     }
 }

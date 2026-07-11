@@ -1,11 +1,11 @@
 package io.github.yuroyami.kitepdf
 
-import io.github.yuroyami.kitepdf.parser.IndirectResolver
-import io.github.yuroyami.kitepdf.parser.PdfArray
-import io.github.yuroyami.kitepdf.parser.PdfDictionary
-import io.github.yuroyami.kitepdf.parser.PdfName
-import io.github.yuroyami.kitepdf.parser.PdfReference
-import io.github.yuroyami.kitepdf.parser.PdfString
+import io.github.yuroyami.kitepdf.core.parser.IndirectResolver
+import io.github.yuroyami.kitepdf.core.parser.PdfArray
+import io.github.yuroyami.kitepdf.core.parser.PdfDictionary
+import io.github.yuroyami.kitepdf.core.parser.PdfName
+import io.github.yuroyami.kitepdf.core.parser.PdfReference
+import io.github.yuroyami.kitepdf.core.parser.PdfString
 
 /**
  * Optional Content metadata — ISO 32000-1 §8.11. Optional Content Groups
@@ -96,7 +96,7 @@ public data class PdfOptionalContent(
             return PdfOptionalContent(ocgs, onIds, offIds, defaultName)
         }
 
-        private fun unwrap(obj: io.github.yuroyami.kitepdf.parser.PdfObject, refs: IndirectResolver): Pair<PdfDictionary, String>? {
+        private fun unwrap(obj: io.github.yuroyami.kitepdf.core.parser.PdfObject, refs: IndirectResolver): Pair<PdfDictionary, String>? {
             return when (obj) {
                 is PdfReference -> {
                     val d = refs.resolve(obj) as? PdfDictionary ?: return null
@@ -107,7 +107,7 @@ public data class PdfOptionalContent(
             }
         }
 
-        private fun parseIntent(obj: io.github.yuroyami.kitepdf.parser.PdfObject?): List<String> = when (obj) {
+        private fun parseIntent(obj: io.github.yuroyami.kitepdf.core.parser.PdfObject?): List<String> = when (obj) {
             null -> emptyList()
             is PdfName -> listOf(obj.value)
             is PdfArray -> obj.mapNotNull { (it as? PdfName)?.value }

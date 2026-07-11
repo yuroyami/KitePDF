@@ -1,6 +1,6 @@
 package io.github.yuroyami.kitepdf.nativerenderer
 
-import io.github.yuroyami.kitepdf.render.BlendMode
+import io.github.yuroyami.kitepdf.core.render.BlendMode
 import java.awt.Composite
 import java.awt.CompositeContext
 import java.awt.RenderingHints

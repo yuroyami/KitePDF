@@ -1,5 +1,8 @@
 package io.github.yuroyami.kitepdf.font
 
+import io.github.yuroyami.kitepdf.core.font.TrueTypeFont
+import io.github.yuroyami.kitepdf.core.font.TrueTypeSubsetter
+
 import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertEquals

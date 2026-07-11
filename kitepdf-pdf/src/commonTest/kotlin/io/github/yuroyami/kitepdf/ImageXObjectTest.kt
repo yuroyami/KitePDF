@@ -1,12 +1,12 @@
 package io.github.yuroyami.kitepdf
 
-import io.github.yuroyami.kitepdf.parser.PdfArray
-import io.github.yuroyami.kitepdf.parser.PdfDictionary
-import io.github.yuroyami.kitepdf.parser.PdfInt
-import io.github.yuroyami.kitepdf.parser.PdfName
-import io.github.yuroyami.kitepdf.parser.PdfStream
-import io.github.yuroyami.kitepdf.render.ImageXObject
-import io.github.yuroyami.kitepdf.render.toRgbaBytes
+import io.github.yuroyami.kitepdf.core.parser.PdfArray
+import io.github.yuroyami.kitepdf.core.parser.PdfDictionary
+import io.github.yuroyami.kitepdf.core.parser.PdfInt
+import io.github.yuroyami.kitepdf.core.parser.PdfName
+import io.github.yuroyami.kitepdf.core.parser.PdfStream
+import io.github.yuroyami.kitepdf.core.render.ImageXObject
+import io.github.yuroyami.kitepdf.core.render.toRgbaBytes
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
@@ -78,7 +78,7 @@ class ImageXObjectTest {
                 "BitsPerComponent" to PdfInt(8),
                 "ColorSpace" to PdfArray(listOf(
                     PdfName("Indexed"), PdfName("DeviceRGB"), PdfInt(1),
-                    io.github.yuroyami.kitepdf.parser.PdfString(palette),
+                    io.github.yuroyami.kitepdf.core.parser.PdfString(palette),
                 )),
                 "Length" to PdfInt(2),
             )),
@@ -99,12 +99,12 @@ class ImageXObjectTest {
             dict = PdfDictionary(linkedMapOf(
                 "Type" to PdfName("XObject"), "Subtype" to PdfName("Image"),
                 "Width" to PdfInt(8), "Height" to PdfInt(1),
-                "ImageMask" to io.github.yuroyami.kitepdf.parser.PdfBoolean(true),
+                "ImageMask" to io.github.yuroyami.kitepdf.core.parser.PdfBoolean(true),
                 "Length" to PdfInt(1),
             )),
             rawBytes = byteArrayOf(0b10101010.toByte()),
         )
-        val blue = io.github.yuroyami.kitepdf.render.RgbColor(0.0, 0.0, 1.0)
+        val blue = io.github.yuroyami.kitepdf.core.render.RgbColor(0.0, 0.0, 1.0)
         val rgba = ImageXObject.from(base, fillColor = blue).toRgbaBytes()!!
         // pixel0 (bit 1) → transparent
         assertEquals(0x00, rgba[3].toInt() and 0xFF)

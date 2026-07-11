@@ -1,9 +1,9 @@
 package io.github.yuroyami.kitepdf.epub
 
 import io.github.yuroyami.kitepdf.epub.css.GenericFont
-import io.github.yuroyami.kitepdf.font.Encodings
-import io.github.yuroyami.kitepdf.font.GlyphList
-import io.github.yuroyami.kitepdf.font.Standard14Widths
+import io.github.yuroyami.kitepdf.core.font.Encodings
+import io.github.yuroyami.kitepdf.core.font.GlyphList
+import io.github.yuroyami.kitepdf.core.font.Standard14Widths
 
 /**
  * Real per-character advance widths, replacing the old `advanceEm` heuristic.

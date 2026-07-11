@@ -1,11 +1,11 @@
 package io.github.yuroyami.kitepdf.writer
 
-import io.github.yuroyami.kitepdf.compression.Zlib
-import io.github.yuroyami.kitepdf.parser.PdfDictionary
-import io.github.yuroyami.kitepdf.parser.PdfInt
-import io.github.yuroyami.kitepdf.parser.PdfName
-import io.github.yuroyami.kitepdf.parser.PdfObject
-import io.github.yuroyami.kitepdf.parser.PdfStream
+import io.github.yuroyami.kitepdf.core.compression.Zlib
+import io.github.yuroyami.kitepdf.core.parser.PdfDictionary
+import io.github.yuroyami.kitepdf.core.parser.PdfInt
+import io.github.yuroyami.kitepdf.core.parser.PdfName
+import io.github.yuroyami.kitepdf.core.parser.PdfObject
+import io.github.yuroyami.kitepdf.core.parser.PdfStream
 
 /**
  * Builders for stream objects to hand to the writer ([PdfEditor]).

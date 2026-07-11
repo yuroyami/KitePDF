@@ -1,6 +1,6 @@
 package io.github.yuroyami.kitepdf.epub.css
 
-import io.github.yuroyami.kitepdf.render.RgbColor
+import io.github.yuroyami.kitepdf.core.render.RgbColor
 
 /**
  * Value parsers shared by the cascade: CSS lengths → points, and CSS colours →

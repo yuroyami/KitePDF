@@ -1,7 +1,7 @@
 package io.github.yuroyami.kitepdf
 
-import io.github.yuroyami.kitepdf.compression.Inflate
-import io.github.yuroyami.kitepdf.compression.Zlib
+import io.github.yuroyami.kitepdf.core.compression.Inflate
+import io.github.yuroyami.kitepdf.core.compression.Zlib
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
@@ -55,7 +55,7 @@ class InflateTest {
             'l'.code.toByte(), 'l'.code.toByte(), 'o'.code.toByte(),
             0x00, 0x00, 0x00, 0x00,                              // wrong checksum
         )
-        assertFailsWith<io.github.yuroyami.kitepdf.compression.InflateException> {
+        assertFailsWith<io.github.yuroyami.kitepdf.core.compression.InflateException> {
             Zlib.decode(bytes)
         }
     }

@@ -7,20 +7,20 @@ import io.github.yuroyami.kitepdf.epub.css.FontFaceRule
 import io.github.yuroyami.kitepdf.epub.css.Origin
 import io.github.yuroyami.kitepdf.epub.css.StyleResolver
 import io.github.yuroyami.kitepdf.epub.css.StyleRule
-import io.github.yuroyami.kitepdf.KiteDocument
-import io.github.yuroyami.kitepdf.KiteMetadata
-import io.github.yuroyami.kitepdf.KiteOutlineItem
-import io.github.yuroyami.kitepdf.KitePage
-import io.github.yuroyami.kitepdf.KiteSearchHit
-import io.github.yuroyami.kitepdf.KiteStructuredText
-import io.github.yuroyami.kitepdf.KiteTextBlock
-import io.github.yuroyami.kitepdf.KiteTextLine
-import io.github.yuroyami.kitepdf.render.BlendMode
-import io.github.yuroyami.kitepdf.render.ImageXObject
-import io.github.yuroyami.kitepdf.render.Matrix
-import io.github.yuroyami.kitepdf.render.KiteCanvas
-import io.github.yuroyami.kitepdf.render.KitePath
-import io.github.yuroyami.kitepdf.render.RgbColor
+import io.github.yuroyami.kitepdf.core.KiteDocument
+import io.github.yuroyami.kitepdf.core.KiteMetadata
+import io.github.yuroyami.kitepdf.core.KiteOutlineItem
+import io.github.yuroyami.kitepdf.core.KitePage
+import io.github.yuroyami.kitepdf.core.KiteSearchHit
+import io.github.yuroyami.kitepdf.core.KiteStructuredText
+import io.github.yuroyami.kitepdf.core.KiteTextBlock
+import io.github.yuroyami.kitepdf.core.KiteTextLine
+import io.github.yuroyami.kitepdf.core.render.BlendMode
+import io.github.yuroyami.kitepdf.core.render.ImageXObject
+import io.github.yuroyami.kitepdf.core.render.Matrix
+import io.github.yuroyami.kitepdf.core.render.KiteCanvas
+import io.github.yuroyami.kitepdf.core.render.KitePath
+import io.github.yuroyami.kitepdf.core.render.RgbColor
 
 /**
  * A parsed EPUB, reflowed onto fixed-size pages and rendered through the shared
@@ -546,7 +546,7 @@ internal class FixedSpine(val root: BlockBox, val width: Double, val height: Dou
  * (internal, resolve with the document's href navigation) or an external URL.
  */
 public class EpubLink internal constructor(
-    public val rect: io.github.yuroyami.kitepdf.Rectangle,
+    public val rect: io.github.yuroyami.kitepdf.core.Rectangle,
     public val href: String,
 )
 
@@ -816,7 +816,7 @@ public class EpubPage internal constructor(
     }
 
     /** Upright in vertical flow: the full-width (CJK) codepoints; the rest rotate. */
-    private fun isUpright(g: io.github.yuroyami.kitepdf.font.TextGlyph): Boolean =
+    private fun isUpright(g: io.github.yuroyami.kitepdf.core.font.TextGlyph): Boolean =
         g.text.isNotEmpty() && FontMetrics.isWide(g.text[0].code)
 
     /** [paintBox] under the vertical mapping: block spans columns, inline runs down. */
@@ -908,7 +908,7 @@ public class EpubPage internal constructor(
                 while (j + 1 < runs.size && runs[j + 1].href == href) j++
                 out.add(
                     EpubLink(
-                        rect = io.github.yuroyami.kitepdf.Rectangle(
+                        rect = io.github.yuroyami.kitepdf.core.Rectangle(
                             left = page.margin + runs[i].x,
                             bottom = top,
                             right = runEnd(runs[j]),
@@ -983,7 +983,7 @@ public class EpubPage internal constructor(
         return KiteTextLine(
             text = sb.toString(),
             // Display-space rect: y-min lives in [Rectangle.bottom] (see KiteStructuredText).
-            bounds = io.github.yuroyami.kitepdf.Rectangle(edges.first(), top, edges.last(), top + line.height),
+            bounds = io.github.yuroyami.kitepdf.core.Rectangle(edges.first(), top, edges.last(), top + line.height),
             charEdges = edges.toDoubleArray(),
         )
     }
