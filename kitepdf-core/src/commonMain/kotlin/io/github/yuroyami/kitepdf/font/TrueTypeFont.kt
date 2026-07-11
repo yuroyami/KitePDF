@@ -43,6 +43,27 @@ class TrueTypeFont private constructor(
     fun advanceWidth(glyphId: Int): Int = hmtx.advanceWidth(glyphId)
 
     /**
+     * Long vertical advances from `vhea`/`vmtx` (T-72 vertical writing).
+     * Glyphs past `numOfLongVerMetrics` share the last listed advance, per
+     * the spec. Null when the face carries no vertical metrics.
+     */
+    private val vmtxAdvances: IntArray? by lazy {
+        val vhea = rawTable("vhea") ?: return@lazy null
+        val vmtx = rawTable("vmtx") ?: return@lazy null
+        if (vhea.size < 36) return@lazy null
+        val numLong = ((vhea[34].toInt() and 0xFF) shl 8) or (vhea[35].toInt() and 0xFF)
+        if (numLong <= 0 || vmtx.size < numLong * 4) return@lazy null
+        IntArray(numLong) { i -> ((vmtx[i * 4].toInt() and 0xFF) shl 8) or (vmtx[i * 4 + 1].toInt() and 0xFF) }
+    }
+
+    /** Glyph advance height in font design units, or null without `vhea`/`vmtx`. */
+    fun advanceHeight(glyphId: Int): Int? {
+        val v = vmtxAdvances ?: return null
+        if (v.isEmpty() || glyphId < 0) return null
+        return if (glyphId < v.size) v[glyphId] else v[v.size - 1]
+    }
+
+    /**
      * Raw bytes of the SFNT table [tag] (e.g. `"name"`, `"OS/2"`, `"glyf"`), or
      * null if the font has no such table. Lets the writer's font-embedding path
      * read tables the renderer itself doesn't parse.

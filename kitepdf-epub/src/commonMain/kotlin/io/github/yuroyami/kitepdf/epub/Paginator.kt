@@ -14,6 +14,13 @@ internal class PageRender(
     val pageWidth: Double,
     val pageHeight: Double,
     val margin: Double,
+    /**
+     * Vertical writing (T-72): the layout's logical block axis maps to
+     * physical columns advancing right-to-left, and its inline axis runs down
+     * the page. [startY] is then the logical block offset of the page's FIRST
+     * (rightmost) column.
+     */
+    val vertical: Boolean = false,
 )
 
 /**
@@ -43,8 +50,13 @@ internal object Paginator {
         return PageRender(0.0, lines, images, deco, pageWidth, pageHeight, margin = 0.0)
     }
 
-    fun paginate(root: BlockBox, pageWidth: Double, pageHeight: Double, margin: Double): List<PageRender> {
-        val pageContentHeight = pageHeight - 2 * margin
+    fun paginate(
+        root: BlockBox, pageWidth: Double, pageHeight: Double, margin: Double,
+        vertical: Boolean = false,
+    ): List<PageRender> {
+        // In vertical mode pages are sliced along the logical block axis too,
+        // but the per-page budget is the physical page WIDTH (columns).
+        val pageContentHeight = (if (vertical) pageWidth else pageHeight) - 2 * margin
         val lines = ArrayList<PositionedLine>()
         val images = ArrayList<ImageBox>()
         val deco = ArrayList<LayoutBox>()
@@ -100,6 +112,7 @@ internal object Paginator {
                 images = us.mapNotNull { it.image },
                 decoBoxes = deco.filter { it.y < end && it.bottom > start },
                 pageWidth = pageWidth, pageHeight = pageHeight, margin = margin,
+                vertical = vertical,
             )
         }
     }

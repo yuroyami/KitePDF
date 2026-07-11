@@ -58,6 +58,9 @@ internal class EmbeddedFace(
     /** Advance of [gid] in 1/1000 em. */
     fun advance1000(gid: Int): Int = to1000(ttf.advanceWidth(gid))
 
+    /** Vertical advance of [gid] in 1/1000 em, or null without `vhea`/`vmtx` (T-72). */
+    fun advanceHeight1000(gid: Int): Int? = ttf.advanceHeight(gid)?.let { to1000(it) }
+
     /** Kerning adjustment between [left] and [right] in 1/1000 em (0 if none). */
     fun kern1000(left: Int, right: Int): Int {
         val k = kern ?: return 0
