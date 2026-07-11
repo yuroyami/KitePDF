@@ -20,7 +20,7 @@ import io.github.yuroyami.kitepdf.text.hyphen.HyphPt
  * patterns, which the previous scan-every-pattern approach would re-walk per
  * word.
  */
-class Hyphenator(
+public class Hyphenator(
     patterns: List<String>,
     private val minPrefix: Int = 2,
     private val minSuffix: Int = 3,
@@ -51,7 +51,7 @@ class Hyphenator(
     }
 
     /** Indices in [word] where a hyphen may be inserted (`word[0,i)` + `-` + `word[i,)`). */
-    fun hyphenate(word: String): List<Int> {
+    public fun hyphenate(word: String): List<Int> {
         if (word.length < minPrefix + minSuffix) return emptyList()
         val w = ".${word.lowercase()}."
         val values = IntArray(w.length + 1)
@@ -74,9 +74,9 @@ class Hyphenator(
         return breaks
     }
 
-    companion object {
+    public companion object {
         /** A small English pattern set for common words. Replace with the full `hyph-en-us` set for quality. */
-        fun enUs(): Hyphenator = EN_US_SHARED
+        public fun enUs(): Hyphenator = EN_US_SHARED
 
         /**
          * The bundled hyphenator for a BCP-47-ish language tag (`"de"`,
@@ -87,7 +87,7 @@ class Hyphenator(
          * Instances are shared and built lazily on first use (the German trie
          * alone compiles ~37k patterns).
          */
-        fun forLanguage(tag: String?): Hyphenator? = when (primarySubtag(tag)) {
+        public fun forLanguage(tag: String?): Hyphenator? = when (primarySubtag(tag)) {
             "en" -> EN_US_SHARED
             "de" -> DE
             "fr" -> FR

@@ -1,5 +1,6 @@
 package io.github.yuroyami.kitepdf.nativerenderer
 
+import io.github.yuroyami.kitepdf.render.paintComplexShading
 import io.github.yuroyami.kitepdf.Rectangle
 import io.github.yuroyami.kitepdf.font.FontFamily
 import io.github.yuroyami.kitepdf.font.FontSpec
@@ -39,7 +40,7 @@ import org.w3c.files.BlobPropertyBag
  *    renderer's synchronous draw pass. v1 paints placeholders for image
  *    XObjects; an async render path is roadmapped.
  */
-class Canvas2dCanvas(private val ctx: CanvasRenderingContext2D) : PdfCanvas {
+public class Canvas2dCanvas(private val ctx: CanvasRenderingContext2D) : PdfCanvas {
 
     private var openLayers = 0
 
@@ -211,6 +212,7 @@ class Canvas2dCanvas(private val ctx: CanvasRenderingContext2D) : PdfCanvas {
         shading: PdfShading, ctm: PdfMatrix, clipPath: PdfPath?,
         alpha: Double, blendMode: PdfBlendMode,
     ) {
+        if (paintComplexShading(shading, ctm, clipPath, alpha, blendMode)) return
         val stops = shading.sampleStops(32) ?: return
 
         val gradient = when (shading) {
@@ -229,6 +231,7 @@ class Canvas2dCanvas(private val ctx: CanvasRenderingContext2D) : PdfCanvas {
                 ctx.createRadialGradient(x0, y0, r0, x1, y1, r1)
             }
             is PdfShading.Unsupported -> return
+            else -> return // T-40 types already handled by paintComplexShading
         }
         for (i in stops.colors.indices) {
             gradient.addColorStop(stops.offsets[i], stops.colors[i].toCssRgba(alpha))

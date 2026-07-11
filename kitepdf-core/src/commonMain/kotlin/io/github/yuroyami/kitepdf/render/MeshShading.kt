@@ -310,7 +310,7 @@ private fun io.github.yuroyami.kitepdf.parser.PdfArray.numAt(i: Int): Double = w
  * native gradient path. [clipPath] (the pattern/`sh` fill region) and the
  * shading /BBox clip via push/popClip around the cells.
  */
-fun PdfCanvas.paintComplexShading(
+public fun PdfCanvas.paintComplexShading(
     shading: PdfShading,
     ctm: Matrix,
     clipPath: PdfPath?,

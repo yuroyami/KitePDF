@@ -24,24 +24,24 @@ import io.github.yuroyami.kitepdf.font.TrueTypeFont
  * (`.otf`, sfnt tag "OTTO") and glyph subsetting are later milestones; [load]
  * rejects CFF fonts with a clear error rather than embedding something broken.
  */
-class EmbeddedFont private constructor(
+public class EmbeddedFont private constructor(
     internal val fontBytes: ByteArray,
     internal val ttf: TrueTypeFont,
     /** The CFF program when this is an OpenType/CFF (`.otf`) font; null for TrueType (`glyf`). */
     internal val cff: CffFont?,
     /** PostScript name written as `/BaseFont` and `/FontName`. */
-    val postScriptName: String,
+    public val postScriptName: String,
     /** When true, only the glyphs the document uses are embedded (a subset tag is added). */
-    val subset: Boolean,
+    public val subset: Boolean,
 ) {
 
     /** True for OpenType/CFF (`.otf`) fonts (embedded as CIDFontType0); false for TrueType. */
-    val isCff: Boolean get() = cff != null
+    public val isCff: Boolean get() = cff != null
 
     /** Map a Unicode code point to a glyph id (0 = `.notdef` when unmapped). */
     internal fun glyphIdForCodePoint(codePoint: Int): Int = ttf.glyphIdForCodePoint(codePoint)
 
-    companion object {
+    public companion object {
         private const val SCALER_TTCF = 0x74746366L   // TrueType Collection
 
         /**
@@ -53,7 +53,7 @@ class EmbeddedFont private constructor(
          *
          * @throws UnsupportedOperationException for a TrueType Collection (`.ttc`).
          */
-        fun load(fontBytes: ByteArray, name: String? = null, subset: Boolean = true): EmbeddedFont {
+        public fun load(fontBytes: ByteArray, name: String? = null, subset: Boolean = true): EmbeddedFont {
             require(fontBytes.size >= 12) { "Not a font file: only ${fontBytes.size} bytes" }
             if (scaler(fontBytes) == SCALER_TTCF) throw UnsupportedOperationException(
                 "TrueType Collections (.ttc) are not supported; extract a single .ttf/.otf first",

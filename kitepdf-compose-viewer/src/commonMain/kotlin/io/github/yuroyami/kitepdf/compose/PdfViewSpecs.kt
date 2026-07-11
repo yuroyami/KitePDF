@@ -9,7 +9,7 @@ import io.github.yuroyami.kitepdf.render.ReaderTheme
  * How [PdfView] lays its pages out and how the user moves between them.
  */
 @Immutable
-sealed interface PdfLayout {
+public sealed interface PdfLayout {
 
     /**
      * All pages in one continuous scrollable strip (lazy — offscreen pages are
@@ -21,7 +21,7 @@ sealed interface PdfLayout {
      * axis keeps scrolling the (scaled) strip natively.
      */
     @Immutable
-    data class Continuous(
+    public data class Continuous(
         val orientation: Orientation = Orientation.Vertical,
     ) : PdfLayout
 
@@ -36,7 +36,7 @@ sealed interface PdfLayout {
      *   memory at the cost of a first-swipe render.
      */
     @Immutable
-    data class Paged(
+    public data class Paged(
         val orientation: Orientation = Orientation.Horizontal,
         val offscreenPages: Int = 1,
         /**
@@ -58,7 +58,7 @@ sealed interface PdfLayout {
      * pre-paginated EPUB); reflowable EPUB gains nothing from it.
      */
     @Immutable
-    data class Spread(
+    public data class Spread(
         val orientation: Orientation = Orientation.Horizontal,
         val offscreenPages: Int = 1,
         val reverseLayout: Boolean = false,
@@ -66,17 +66,17 @@ sealed interface PdfLayout {
 
     /** Exactly one fixed page, letterboxed to fit the viewport. */
     @Immutable
-    data class SinglePage(val pageIndex: Int) : PdfLayout
+    public data class SinglePage(val pageIndex: Int) : PdfLayout
 
-    companion object {
-        val Default: PdfLayout = Continuous()
+    public companion object {
+        public val Default: PdfLayout = Continuous()
 
         /**
          * A horizontal pager following the document's page-progression
          * direction: right-to-left books ([io.github.yuroyami.kitepdf.KiteMetadata.rightToLeft])
          * get a reversed pager, everything else the plain one.
          */
-        fun pagedFor(document: io.github.yuroyami.kitepdf.KiteDocument): Paged =
+        public fun pagedFor(document: io.github.yuroyami.kitepdf.KiteDocument): Paged =
             Paged(reverseLayout = document.metadata.rightToLeft)
     }
 }
@@ -96,7 +96,7 @@ sealed interface PdfLayout {
  *   externally and should persist across pages.
  */
 @Immutable
-data class PdfZoomSpec(
+public data class PdfZoomSpec(
     val pinchEnabled: Boolean = true,
     val doubleTapEnabled: Boolean = true,
     val panEnabled: Boolean = true,
@@ -110,9 +110,9 @@ data class PdfZoomSpec(
         require(maxZoom >= minZoom) { "maxZoom ($maxZoom) must be >= minZoom ($minZoom)" }
     }
 
-    companion object {
+    public companion object {
         /** No zoom at all: gestures off, range pinned to 1. */
-        val Disabled = PdfZoomSpec(
+        public val Disabled: PdfZoomSpec = PdfZoomSpec(
             pinchEnabled = false,
             doubleTapEnabled = false,
             panEnabled = false,
@@ -128,7 +128,7 @@ data class PdfZoomSpec(
  * nothing. Defaults to [Rasterized] via [PdfRenderSpec.Default].
  */
 @Immutable
-sealed interface PdfRenderSpec {
+public sealed interface PdfRenderSpec {
 
     /**
      * Vector-render each page once into a bitmap per size/zoom bucket, then draw
@@ -152,7 +152,7 @@ sealed interface PdfRenderSpec {
      *   ECG traces, fine table rules) never vanish when the bitmap is downscaled.
      */
     @Immutable
-    data class Rasterized(
+    public data class Rasterized(
         val quality: Float = 1f,
         val maxBitmapLongSide: Int = 4096,
         val rerasterizeOnZoom: Boolean = true,
@@ -187,7 +187,7 @@ sealed interface PdfRenderSpec {
      *   vector output is already resolution-independent.
      */
     @Immutable
-    data class Vectorized(
+    public data class Vectorized(
         val hairlineWidthPx: Float = 1f,
     ) : PdfRenderSpec {
         init {
@@ -195,9 +195,9 @@ sealed interface PdfRenderSpec {
         }
     }
 
-    companion object {
+    public companion object {
         /** Default: rasterized at display resolution — the historical behaviour. */
-        val Default: PdfRenderSpec = Rasterized()
+        public val Default: PdfRenderSpec = Rasterized()
     }
 }
 
@@ -214,7 +214,7 @@ sealed interface PdfRenderSpec {
  *   Reflowable EPUB especially benefits: night mode without re-laying-out.
  */
 @Immutable
-data class PdfViewColors(
+public data class PdfViewColors(
     val pageBackground: Color = Color.White,
     val viewportBackground: Color = Color.Transparent,
     val theme: ReaderTheme? = null,

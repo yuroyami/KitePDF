@@ -27,7 +27,7 @@ import io.github.yuroyami.kitepdf.parser.PdfString
  *
  * Content streams are FlateDecode-compressed by default (see [build]).
  */
-class PdfBuilder {
+public class PdfBuilder {
 
     private class PageSpec(val width: Double, val height: Double, val content: ByteArray)
 
@@ -56,7 +56,7 @@ class PdfBuilder {
      * tests. Only AES-256 is offered on the create path: there is no reason to
      * mint new documents with weaker legacy schemes.
      */
-    fun encrypt(
+    public fun encrypt(
         userPassword: String,
         ownerPassword: String = userPassword,
         permissions: io.github.yuroyami.kitepdf.PdfPermissions = io.github.yuroyami.kitepdf.PdfPermissions.allowAll,
@@ -114,7 +114,7 @@ class PdfBuilder {
      * [block]. The block runs immediately, so fonts it uses are registered
      * before [build].
      */
-    fun page(
+    public fun page(
         width: Double = 612.0,
         height: Double = 792.0,
         block: ContentStreamBuilder.() -> Unit,
@@ -131,19 +131,19 @@ class PdfBuilder {
      * synchronous block can't host. Fonts/images used here are registered when
      * [addPage] commits the builder.
      */
-    fun newPageContent(): ContentStreamBuilder = ContentStreamBuilder(::resolveFont, ::resolveImage, ::resolveEmbedded)
+    public fun newPageContent(): ContentStreamBuilder = ContentStreamBuilder(::resolveFont, ::resolveImage, ::resolveEmbedded)
 
     /**
      * Commit a page sized [width]×[height] points from [content] (obtained via
      * [newPageContent]). Pages appear in call order.
      */
-    fun addPage(width: Double = 612.0, height: Double = 792.0, content: ContentStreamBuilder): PdfBuilder {
+    public fun addPage(width: Double = 612.0, height: Double = 792.0, content: ContentStreamBuilder): PdfBuilder {
         pages.add(PageSpec(width, height, content.toByteArray()))
         return this
     }
 
     /** Set document metadata (`/Info`). Only non-null fields are written. */
-    fun setInfo(
+    public fun setInfo(
         title: String? = null,
         author: String? = null,
         subject: String? = null,
@@ -167,7 +167,7 @@ class PdfBuilder {
      * Serialize the document. When [compress] is true (default), each page's
      * content stream is FlateDecode-compressed.
      */
-    fun build(compress: Boolean = true): ByteArray {
+    public fun build(compress: Boolean = true): ByteArray {
         require(pages.isNotEmpty()) { "A PDF must have at least one page." }
 
         val objects = ArrayList<Pair<Long, PdfObject>>()

@@ -22,7 +22,7 @@ import io.github.yuroyami.kitepdf.render.RgbColor
  * The flag bits ([italic], [bold]) and node colour come from the spec's
  * /F and /C entries; readers may render bookmarks accordingly.
  */
-data class PdfOutline(
+public data class PdfOutline(
     val title: String,
     val children: List<PdfOutline>,
     /** Raw destination value as found in /Dest or /A/D, or `null`. Use [PdfDocument.resolveDestination]. */
@@ -39,7 +39,7 @@ data class PdfOutline(
     /** True if this node is open by default. Closed nodes report a negative [count]. */
     val isOpen: Boolean get() = count >= 0
 
-    companion object {
+    public companion object {
 
         /**
          * Parse the catalog's `/Outlines` root into a list of top-level

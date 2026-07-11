@@ -24,14 +24,14 @@ import org.jetbrains.skia.Surface
  * The result is an sRGB raster sized to the page in points multiplied by
  * [scale]. Pass `scale = 2.0` for retina / "2× density" output.
  */
-object EpubPageRasterizer {
+public object EpubPageRasterizer {
 
     /**
      * Render [page] into a freshly-allocated Skia [Image]. The caller owns the
      * returned object and should call `close()` (or use [encodeToPng]) once
      * done — Skia images hold off-heap memory.
      */
-    fun renderToImage(
+    public fun renderToImage(
         page: EpubPage,
         scale: Double = 1.0,
         background: Int = Color.WHITE,
@@ -59,7 +59,7 @@ object EpubPageRasterizer {
     }
 
     /** Convenience: render and return PNG bytes. */
-    fun encodeToPng(page: EpubPage, scale: Double = 1.0, background: Int = Color.WHITE, theme: ReaderTheme? = null): ByteArray {
+    public fun encodeToPng(page: EpubPage, scale: Double = 1.0, background: Int = Color.WHITE, theme: ReaderTheme? = null): ByteArray {
         val image = renderToImage(page, scale, background, theme)
         try {
             val data = image.encodeToData(EncodedImageFormat.PNG)

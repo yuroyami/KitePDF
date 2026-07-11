@@ -15,6 +15,7 @@ plugins {
  * reflow engine on the classpath? Depend on :kitepdf-pdf instead.
  */
 kotlin {
+    explicitApi()
     jvmToolchain(21)
 
     android {

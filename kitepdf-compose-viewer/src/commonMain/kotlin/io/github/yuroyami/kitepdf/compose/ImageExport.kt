@@ -11,4 +11,4 @@ import androidx.compose.ui.graphics.ImageBitmap
  * @return PNG bytes, or `null` if the platform failed to encode (corrupt or
  *   zero-sized bitmap — not expected for bitmaps produced by [PdfView]).
  */
-expect fun ImageBitmap.encodeToPng(): ByteArray?
+public expect fun ImageBitmap.encodeToPng(): ByteArray?

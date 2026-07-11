@@ -16,7 +16,7 @@ import io.github.yuroyami.kitepdf.parser.PdfString
  * the document catalog. We still surface /Info because almost every PDF in
  * the wild uses it; XMP support is a separate session.
  */
-data class PdfDocumentInfo(
+public data class PdfDocumentInfo(
     val title: String? = null,
     val author: String? = null,
     val subject: String? = null,
@@ -30,9 +30,9 @@ data class PdfDocumentInfo(
     val custom: Map<String, String> = emptyMap(),
 ) {
 
-    enum class Trapped { True, False, Unknown }
+    public enum class Trapped { True, False, Unknown }
 
-    companion object {
+    public companion object {
         private val STANDARD_KEYS = setOf(
             "Title", "Author", "Subject", "Keywords",
             "Creator", "Producer", "CreationDate", "ModDate", "Trapped",
@@ -81,7 +81,7 @@ data class PdfDocumentInfo(
  * [tzSign] is one of `'+'`, `'-'`, `'Z'`. `'Z'` means UTC and forces the
  * hour/minute offsets to zero.
  */
-data class PdfDate(
+public data class PdfDate(
     val year: Int,
     val month: Int,
     val day: Int,
@@ -112,8 +112,8 @@ data class PdfDate(
         }
     }
 
-    companion object {
-        fun parse(raw: String): PdfDate? {
+    public companion object {
+        public fun parse(raw: String): PdfDate? {
             val s = raw.removePrefix("D:")
             if (s.length < 4) return null
 

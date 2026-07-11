@@ -55,7 +55,7 @@ import org.jetbrains.skia.FilterTileMode
  * Pair with [PdfPageRasterizer] for the common "give me a `ByteArray` of a
  * page's PNG" use case.
  */
-class SkiaCanvas(private val canvas: SkCanvas) : PdfCanvas {
+public class SkiaCanvas(private val canvas: SkCanvas) : PdfCanvas {
 
     /** Count of open transparency groups + soft-mask layers — for endPage cleanup. */
     private var openLayers = 0

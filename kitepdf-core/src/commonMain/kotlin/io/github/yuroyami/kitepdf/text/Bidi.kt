@@ -12,24 +12,24 @@ package io.github.yuroyami.kitepdf.text
  * paired-bracket resolution (N0). Arabic/Hebrew combining marks are folded into
  * their base script's strong class, which reorders acceptably.
  */
-object Bidi {
+public object Bidi {
 
     // Bidi classes used by the implicit algorithm.
-    const val L = 0
-    const val R = 1
-    const val AL = 2
-    const val EN = 3
-    const val ES = 4
-    const val ET = 5
-    const val AN = 6
-    const val CS = 7
-    const val B = 8
-    const val S = 9
-    const val WS = 10
-    const val ON = 11
+    public const val L: Int = 0
+    public const val R: Int = 1
+    public const val AL: Int = 2
+    public const val EN: Int = 3
+    public const val ES: Int = 4
+    public const val ET: Int = 5
+    public const val AN: Int = 6
+    public const val CS: Int = 7
+    public const val B: Int = 8
+    public const val S: Int = 9
+    public const val WS: Int = 10
+    public const val ON: Int = 11
 
     /** Bidi class of a code point (range-based; covers Latin/Hebrew/Arabic/numbers/neutrals). */
-    fun classify(cp: Int): Int = when {
+    public fun classify(cp: Int): Int = when {
         cp == 0x0A || cp == 0x0D || cp == 0x2029 -> B
         cp == 0x09 || cp == 0x0B -> S
         cp == 0x20 || cp == 0x0C || cp == 0x2028 || cp == 0x3000 || cp in 0x2000..0x200A -> WS
@@ -45,7 +45,7 @@ object Bidi {
     }
 
     /** Base paragraph level: [explicit] 0/1 if forced, else the first strong char (UAX rule P2/P3). */
-    fun baseLevel(cps: IntArray, explicit: Int? = null): Int {
+    public fun baseLevel(cps: IntArray, explicit: Int? = null): Int {
         if (explicit == 0 || explicit == 1) return explicit
         for (cp in cps) when (classify(cp)) {
             L -> return 0
@@ -55,7 +55,7 @@ object Bidi {
     }
 
     /** Resolve an embedding level per code point for one paragraph at [paraLevel]. */
-    fun resolveLevels(cps: IntArray, paraLevel: Int): IntArray {
+    public fun resolveLevels(cps: IntArray, paraLevel: Int): IntArray {
         val n = cps.size
         val t = IntArray(n) { classify(cps[it]) }
         val e = paraLevel
@@ -122,7 +122,7 @@ object Bidi {
      * permutation `order` where `order[visualSlot]` is the logical index to place
      * there (left to right).
      */
-    fun reorderVisually(levels: IntArray): IntArray {
+    public fun reorderVisually(levels: IntArray): IntArray {
         val n = levels.size
         val order = IntArray(n) { it }
         if (n == 0) return order

@@ -18,7 +18,7 @@ import io.github.yuroyami.kitepdf.parser.PdfString
  * generation* as a coherent feature rather than dribble fields in piece
  * by piece.
  */
-data class PdfAcroForm(
+public data class PdfAcroForm(
     /** Number of root fields (top of the field tree). */
     val fieldCount: Int,
     /**
@@ -55,7 +55,7 @@ data class PdfAcroForm(
      */
     val hasXfa: Boolean get() = raw["XFA"] != null
 
-    companion object {
+    public companion object {
         internal fun parse(catalog: PdfDictionary, refs: IndirectResolver): PdfAcroForm? {
             val dict = catalog.getDict("AcroForm", refs) ?: return null
             val fields = dict.getArray("Fields", refs)?.size ?: 0

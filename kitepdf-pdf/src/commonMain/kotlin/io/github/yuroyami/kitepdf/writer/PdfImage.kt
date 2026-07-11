@@ -20,7 +20,7 @@ package io.github.yuroyami.kitepdf.writer
  * Pixels are laid out top row first, left to right — the natural raster order.
  * The PDF image-space flip is handled by [ContentStreamBuilder.drawImage].
  */
-class PdfImage private constructor(
+public class PdfImage private constructor(
     internal val width: Int,
     internal val height: Int,
     internal val colorSpace: String,
@@ -36,12 +36,12 @@ class PdfImage private constructor(
         require(width > 0 && height > 0) { "image must be non-empty (was ${width}x$height)" }
     }
 
-    companion object {
+    public companion object {
         /**
          * 8-bit RGBA, 4 bytes per pixel (R,G,B,A). The alpha channel becomes a
          * `/SMask`; if every pixel is fully opaque the mask is omitted.
          */
-        fun rgba(pixels: ByteArray, width: Int, height: Int): PdfImage {
+        public fun rgba(pixels: ByteArray, width: Int, height: Int): PdfImage {
             val n = width * height
             require(pixels.size == n * 4) { "rgba expects ${n * 4} bytes (${width}x$height×4), got ${pixels.size}" }
             val rgb = ByteArray(n * 3)
@@ -60,14 +60,14 @@ class PdfImage private constructor(
         }
 
         /** 8-bit RGB, 3 bytes per pixel (R,G,B). No transparency. */
-        fun rgb(pixels: ByteArray, width: Int, height: Int): PdfImage {
+        public fun rgb(pixels: ByteArray, width: Int, height: Int): PdfImage {
             val expected = width * height * 3
             require(pixels.size == expected) { "rgb expects $expected bytes (${width}x$height×3), got ${pixels.size}" }
             return PdfImage(width, height, "DeviceRGB", 8, null, pixels, null)
         }
 
         /** 8-bit grayscale, 1 byte per pixel. No transparency. */
-        fun gray(pixels: ByteArray, width: Int, height: Int): PdfImage {
+        public fun gray(pixels: ByteArray, width: Int, height: Int): PdfImage {
             val expected = width * height
             require(pixels.size == expected) { "gray expects $expected bytes (${width}x$height), got ${pixels.size}" }
             return PdfImage(width, height, "DeviceGray", 8, null, pixels, null)
@@ -78,7 +78,7 @@ class PdfImage private constructor(
          * [width]/[height] must match the JPEG's own dimensions. Set [grayscale]
          * for a single-component (DeviceGray) JPEG.
          */
-        fun jpeg(jpegBytes: ByteArray, width: Int, height: Int, grayscale: Boolean = false): PdfImage =
+        public fun jpeg(jpegBytes: ByteArray, width: Int, height: Int, grayscale: Boolean = false): PdfImage =
             PdfImage(
                 width, height,
                 if (grayscale) "DeviceGray" else "DeviceRGB",
@@ -86,7 +86,7 @@ class PdfImage private constructor(
             )
 
         /** Embed a JPEG 2000 (`.jp2`) codestream directly via `/JPXDecode` (no re-encode). */
-        fun jpx(jp2Bytes: ByteArray, width: Int, height: Int): PdfImage =
+        public fun jpx(jp2Bytes: ByteArray, width: Int, height: Int): PdfImage =
             PdfImage(width, height, "DeviceRGB", 8, "JPXDecode", jp2Bytes, null)
     }
 }

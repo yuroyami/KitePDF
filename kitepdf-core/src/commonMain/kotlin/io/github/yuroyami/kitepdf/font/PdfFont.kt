@@ -32,9 +32,9 @@ import io.github.yuroyami.kitepdf.render.PdfPath
  * Order tried matches what real fonts actually carry; falls back to the host
  * system font (via [baseFont]) when no outlines are available.
  */
-class PdfFont private constructor(
-    val baseFont: String,
-    val subtype: String,
+public class PdfFont private constructor(
+    public val baseFont: String,
+    public val subtype: String,
     /** /Differences-aware glyph-name table for byte codes 0..255 (simple fonts). */
     private val glyphNameForByte: Array<String?>,
     /** Decoded unicode for each byte slot (0 when unknown). */
@@ -60,14 +60,14 @@ class PdfFont private constructor(
     private val composite: CompositeFont?,
 ) {
 
-    val isComposite: Boolean get() = composite != null
+    public val isComposite: Boolean get() = composite != null
 
-    val hasEmbeddedOutlines: Boolean
+    public val hasEmbeddedOutlines: Boolean
         get() = embeddedTtf != null || embeddedCff != null || embeddedType1 != null ||
             composite?.let { it.ttf != null || it.cff != null } == true
 
     /** Units-per-em: TTF reports its own; CFF + Type 1 default to 1000. */
-    val unitsPerEm: Int?
+    public val unitsPerEm: Int?
         get() = embeddedTtf?.unitsPerEm
             ?: composite?.ttf?.unitsPerEm
             ?: (embeddedCff ?: embeddedType1 ?: composite?.cff)?.let { 1000 }
@@ -77,7 +77,7 @@ class PdfFont private constructor(
      * canvases that render non-embedded fonts through a host typeface. Centralises
      * the family/style choice the render backends used to each make inline.
      */
-    val fontSpec: FontSpec
+    public val fontSpec: FontSpec
         get() = FontSpec(
             family = when {
                 baseFont.startsWith("Times") -> FontFamily.Serif
@@ -92,7 +92,7 @@ class PdfFont private constructor(
     /* ─── Decoding + layout ──────────────────────────────────────────────── */
 
     /** Decode show-text bytes (from a `Tj` / `TJ` operand) to unicode text. */
-    fun decode(bytes: ByteArray): String {
+    public fun decode(bytes: ByteArray): String {
         composite?.let { return it.decode(bytes) }
         toUnicode?.let { return it.decodeAll(bytes) }
         val sb = StringBuilder(bytes.size)
@@ -115,7 +115,7 @@ class PdfFont private constructor(
      * Walk [bytes] one glyph at a time, dispatching to the right code-unit
      * width (1 for simple fonts, usually 2 for Identity-H composites).
      */
-    fun layoutBytes(bytes: ByteArray, resolveOutlines: Boolean = true): List<TextGlyph> {
+    public fun layoutBytes(bytes: ByteArray, resolveOutlines: Boolean = true): List<TextGlyph> {
         composite?.let { return layoutComposite(it, bytes, resolveOutlines) }
         return layoutSimple(bytes, resolveOutlines)
     }
@@ -164,7 +164,7 @@ class PdfFont private constructor(
      * width sums) where glyph shapes aren't needed — used by the renderer's
      * advance calc, text extraction, and redaction layout.
      */
-    fun forEachGlyphAdvance(bytes: ByteArray, action: (advanceWidth: Double, isWordSpace: Boolean) -> Unit) {
+    public fun forEachGlyphAdvance(bytes: ByteArray, action: (advanceWidth: Double, isWordSpace: Boolean) -> Unit) {
         composite?.let { c ->
             var offset = 0
             while (offset < bytes.size) {
@@ -187,7 +187,7 @@ class PdfFont private constructor(
     /* ─── Width-only fast paths (kept for callers that already had byte codes) ─── */
 
     /** Width (1/1000 em) for a single byte code in a simple font. Composite use [layoutBytes]. */
-    fun widthOf(byteCode: Int): Int {
+    public fun widthOf(byteCode: Int): Int {
         val code = byteCode and 0xFF
         // A DEFINED width wins even when it is exactly 0 (e.g. combining marks);
         // only a truly absent entry falls back to /MissingWidth (defaultWidth).
@@ -195,7 +195,7 @@ class PdfFont private constructor(
     }
 
     /** True iff the underlying embedded font has its own advance metrics. */
-    fun embeddedAdvanceWidth(byteCode: Int): Int? =
+    public fun embeddedAdvanceWidth(byteCode: Int): Int? =
         embeddedTtf?.advanceWidth(simpleGid(byteCode))
 
     /**
@@ -203,13 +203,13 @@ class PdfFont private constructor(
      * pre-date the [layoutBytes] iterator; [layoutBytes] is the right path
      * for any new code so composite Type 0 fonts work correctly.
      */
-    fun outlineForByte(code: Int): PdfPath? = simpleOutline(code)
+    public fun outlineForByte(code: Int): PdfPath? = simpleOutline(code)
 
     /**
      * Glyph id for a single byte code in a simple font. Returns 0 for
      * composite fonts (their glyph IDs come from CIDs, not byte codes).
      */
-    fun glyphIdForByte(byteCode: Int): Int = simpleGid(byteCode)
+    public fun glyphIdForByte(byteCode: Int): Int = simpleGid(byteCode)
 
     /* ─── Simple-font helpers (Type 1 / TrueType / Type1C subtypes) ──────── */
 
@@ -305,13 +305,13 @@ class PdfFont private constructor(
         else -> null
     }
 
-    companion object {
+    public companion object {
 
         /**
          * Build a [PdfFont] from one resource entry. [refs] resolves indirect
          * references inside font / encoding / ToUnicode / descendant dicts.
          */
-        fun from(fontObj: Any, refs: IndirectResolver): PdfFont {
+        public fun from(fontObj: Any, refs: IndirectResolver): PdfFont {
             val dict: PdfDictionary = when (fontObj) {
                 is PdfDictionary -> fontObj
                 is PdfReference -> refs.resolve(fontObj) as? PdfDictionary ?: return fallback()

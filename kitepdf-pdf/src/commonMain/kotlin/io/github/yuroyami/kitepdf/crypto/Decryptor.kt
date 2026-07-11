@@ -15,9 +15,9 @@ import io.github.yuroyami.kitepdf.parser.PdfString
  * /Encrypt and /XRef objects are skipped — those are part of the security
  * machinery itself and must not be re-decrypted.
  */
-object Decryptor {
+public object Decryptor {
 
-    fun decryptIndirect(
+    public fun decryptIndirect(
         objNum: Long,
         genNum: Int,
         value: PdfObject,

@@ -5,7 +5,7 @@ package io.github.yuroyami.kitepdf.writer
  * reader provides, so they need no embedding. [baseFont] is the `/BaseFont`
  * name written into the font dictionary.
  */
-enum class StandardFont(val baseFont: String) {
+public enum class StandardFont(public val baseFont: String) {
     Helvetica("Helvetica"),
     HelveticaBold("Helvetica-Bold"),
     HelveticaOblique("Helvetica-Oblique"),

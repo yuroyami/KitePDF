@@ -10,11 +10,11 @@ package io.github.yuroyami.kitepdf
  * for (page in doc.pages) println(page.extractText())
  * ```
  */
-object KitePDF {
+public object KitePDF {
 
     /** Library version (kept in sync with the Gradle group/version). */
-    const val VERSION = "0.1.1"
+    public const val VERSION: String = "0.1.1"
 
     /** Parse [bytes] as a PDF document. See [PdfDocument.open] for the password overload. */
-    fun open(bytes: ByteArray): PdfDocument = PdfDocument.open(bytes)
+    public fun open(bytes: ByteArray): PdfDocument = PdfDocument.open(bytes)
 }

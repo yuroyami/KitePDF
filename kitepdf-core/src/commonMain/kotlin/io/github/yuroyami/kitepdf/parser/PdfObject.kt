@@ -10,25 +10,25 @@ import io.github.yuroyami.kitepdf.core.PdfFormatException
  * sequences interpreted via a font's encoding, so the user (or a text
  * extractor) decides how to decode them.
  */
-sealed class PdfObject {
+public sealed class PdfObject {
 
     /** Resolve indirect refs against [refs]; non-refs return themselves. */
-    open fun resolve(refs: IndirectResolver): PdfObject = this
+    public open fun resolve(refs: IndirectResolver): PdfObject = this
 }
 
-object PdfNull : PdfObject() {
+public object PdfNull : PdfObject() {
     override fun toString(): String = "null"
 }
 
-data class PdfBoolean(val value: Boolean) : PdfObject() {
+public data class PdfBoolean(val value: Boolean) : PdfObject() {
     override fun toString(): String = value.toString()
 }
 
-data class PdfInt(val value: Long) : PdfObject() {
+public data class PdfInt(val value: Long) : PdfObject() {
     override fun toString(): String = value.toString()
 }
 
-data class PdfReal(val value: Double) : PdfObject() {
+public data class PdfReal(val value: Double) : PdfObject() {
     override fun toString(): String = value.toString()
 }
 
@@ -41,9 +41,9 @@ data class PdfReal(val value: Double) : PdfObject() {
  * encoding is determined by context. asAsciiOrNull() is a convenience for the
  * common case of trailer strings, names of fonts, etc.
  */
-data class PdfString(val bytes: ByteArray) : PdfObject() {
+public data class PdfString(val bytes: ByteArray) : PdfObject() {
 
-    fun asAsciiOrNull(): String? {
+    public fun asAsciiOrNull(): String? {
         val sb = StringBuilder(bytes.size)
         for (b in bytes) {
             val i = b.toInt() and 0xFF
@@ -58,7 +58,7 @@ data class PdfString(val bytes: ByteArray) : PdfObject() {
      * the first two bytes are 0xFE 0xFF), otherwise falls back to PDFDocEncoding
      * (close enough to latin-1 for the ASCII range; full table is in §D.2).
      */
-    fun asText(): String {
+    public fun asText(): String {
         if (bytes.size >= 2 && bytes[0] == 0xFE.toByte() && bytes[1] == 0xFF.toByte()) {
             val sb = StringBuilder((bytes.size - 2) / 2)
             var i = 2
@@ -84,34 +84,34 @@ data class PdfString(val bytes: ByteArray) : PdfObject() {
 }
 
 /** PDF Name (always starts with "/"). Stored without the leading slash. */
-data class PdfName(val value: String) : PdfObject() {
+public data class PdfName(val value: String) : PdfObject() {
     override fun toString(): String = "/$value"
 }
 
-data class PdfArray(val items: List<PdfObject>) : PdfObject(), List<PdfObject> by items {
+public data class PdfArray(val items: List<PdfObject>) : PdfObject(), List<PdfObject> by items {
     override fun toString(): String = items.joinToString(prefix = "[", postfix = "]", separator = " ")
 }
 
-data class PdfDictionary(val map: Map<String, PdfObject>) : PdfObject(), Map<String, PdfObject> by map {
+public data class PdfDictionary(val map: Map<String, PdfObject>) : PdfObject(), Map<String, PdfObject> by map {
 
-    fun getName(key: String): String? = (map[key] as? PdfName)?.value
-    fun getInt(key: String): Long? = (map[key] as? PdfInt)?.value
-    fun getReal(key: String): Double? = when (val v = map[key]) {
+    public fun getName(key: String): String? = (map[key] as? PdfName)?.value
+    public fun getInt(key: String): Long? = (map[key] as? PdfInt)?.value
+    public fun getReal(key: String): Double? = when (val v = map[key]) {
         is PdfReal -> v.value
         is PdfInt -> v.value.toDouble()
         else -> null
     }
-    fun getDict(key: String, refs: IndirectResolver? = null): PdfDictionary? {
+    public fun getDict(key: String, refs: IndirectResolver? = null): PdfDictionary? {
         val raw = map[key] ?: return null
         val resolved = refs?.let { raw.resolve(it) } ?: raw
         return resolved as? PdfDictionary
     }
-    fun getArray(key: String, refs: IndirectResolver? = null): PdfArray? {
+    public fun getArray(key: String, refs: IndirectResolver? = null): PdfArray? {
         val raw = map[key] ?: return null
         val resolved = refs?.let { raw.resolve(it) } ?: raw
         return resolved as? PdfArray
     }
-    fun getRef(key: String): PdfReference? = map[key] as? PdfReference
+    public fun getRef(key: String): PdfReference? = map[key] as? PdfReference
 
     override fun toString(): String = map.entries.joinToString(
         prefix = "<<", postfix = ">>", separator = " ",
@@ -122,7 +122,7 @@ data class PdfDictionary(val map: Map<String, PdfObject>) : PdfObject(), Map<Str
  * A stream object: a dictionary describing the stream + the raw (still-encoded)
  * bytes. Decoding is deferred until someone calls a filter on it.
  */
-data class PdfStream(
+public data class PdfStream(
     val dict: PdfDictionary,
     val rawBytes: ByteArray,
 ) : PdfObject() {
@@ -136,7 +136,7 @@ data class PdfStream(
 }
 
 /** "N G R" — an indirect object reference. Use [resolve] with the document's resolver. */
-data class PdfReference(val objectNumber: Long, val generation: Int) : PdfObject() {
+public data class PdfReference(val objectNumber: Long, val generation: Int) : PdfObject() {
 
     override fun resolve(refs: IndirectResolver): PdfObject =
         refs.resolve(this) ?: throw PdfFormatException("Dangling reference $objectNumber $generation R")
@@ -145,6 +145,6 @@ data class PdfReference(val objectNumber: Long, val generation: Int) : PdfObject
 }
 
 /** Functional interface implemented by the document's xref-driven object cache. */
-fun interface IndirectResolver {
-    fun resolve(ref: PdfReference): PdfObject?
+public fun interface IndirectResolver {
+    public fun resolve(ref: PdfReference): PdfObject?
 }

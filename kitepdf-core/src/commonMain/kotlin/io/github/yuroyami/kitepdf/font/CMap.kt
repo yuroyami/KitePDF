@@ -36,13 +36,13 @@ import io.github.yuroyami.kitepdf.parser.Token
  * CMap stream on a Type 0 font: [codeUnits] performs codespace-correct byte
  * segmentation and maps each code to a CID via the cidchar/cidrange sections.
  */
-class CMap private constructor(
+public class CMap private constructor(
     /**
      * Maximum byte length of one source code (1–4). Inferred from
      * codespacerange; used only as a hint / legacy accessor. Segmentation
      * itself is driven by [codespaces], not this width.
      */
-    val codeWidth: Int,
+    public val codeWidth: Int,
     /**
      * Codespace ranges (low/high byte patterns per width) in declaration
      * order. Empty when the CMap declared none (then we behave as if a single
@@ -120,7 +120,7 @@ class CMap private constructor(
      * for the segmented code. Segmentation is codespace-driven so mixed
      * 1-/2-byte streams are split correctly.
      */
-    fun decode(bytes: ByteArray, offset: Int): Pair<String, Int>? {
+    public fun decode(bytes: ByteArray, offset: Int): Pair<String, Int>? {
         if (offset >= bytes.size) return null
         val (code, width) = segment(bytes, offset)
         val text = lookup(code) ?: return null
@@ -128,7 +128,7 @@ class CMap private constructor(
     }
 
     /** Decode an entire byte string to a Kotlin String via repeated [decode]. */
-    fun decodeAll(bytes: ByteArray): String {
+    public fun decodeAll(bytes: ByteArray): String {
         val out = StringBuilder()
         var i = 0
         while (i < bytes.size) {
@@ -155,7 +155,7 @@ class CMap private constructor(
      * split by matching codespace ranges. When no cidchar/cidrange maps a code
      * we fall back to CID == code (last resort; see [PredefinedCMaps]).
      */
-    fun codeUnits(bytes: ByteArray): List<CodeUnit> {
+    public fun codeUnits(bytes: ByteArray): List<CodeUnit> {
         val out = ArrayList<CodeUnit>(bytes.size)
         var i = 0
         while (i < bytes.size) {
@@ -171,16 +171,16 @@ class CMap private constructor(
      * Returns (cid, byteCount) or null at/after EOF. Used on the hot advance
      * path so we don't re-scan the tail of the byte string per glyph.
      */
-    fun codeUnitAt(bytes: ByteArray, offset: Int): Pair<Int, Int>? {
+    public fun codeUnitAt(bytes: ByteArray, offset: Int): Pair<Int, Int>? {
         if (offset >= bytes.size) return null
         val (code, width) = segment(bytes, offset)
         return (lookupCid(code) ?: code) to width
     }
 
     /** True iff this CMap carries CID mappings (embedded /Encoding), not just ToUnicode. */
-    val hasCidMappings: Boolean get() = cidChars.isNotEmpty() || cidRanges.isNotEmpty()
+    public val hasCidMappings: Boolean get() = cidChars.isNotEmpty() || cidRanges.isNotEmpty()
 
-    data class CodeUnit(val cid: Int, val code: Int, val byteOffset: Int, val byteCount: Int)
+    public data class CodeUnit(val cid: Int, val code: Int, val byteOffset: Int, val byteCount: Int)
 
     private fun lookupCid(code: Int): Int? {
         cidChars[code]?.let { return it }
@@ -222,10 +222,10 @@ class CMap private constructor(
 
     internal data class CidRange(val lo: Int, val hi: Int, val baseCid: Int)
 
-    companion object {
+    public companion object {
 
         /** Parse a CMap stream (decoded bytes). Robust to unknown sections. */
-        fun parse(bytes: ByteArray): CMap {
+        public fun parse(bytes: ByteArray): CMap {
             val lexer = Lexer(ByteReader(bytes))
             val bfChars = HashMap<Int, String>()
             val bfRanges = mutableListOf<BfRange>()

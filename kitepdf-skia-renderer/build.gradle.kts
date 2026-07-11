@@ -40,6 +40,7 @@ fun currentOsSkikoRuntime(): Provider<MinimalExternalModuleDependency> {
  * Intel-Apple ones). No Skiko variant exists for Windows-native or watchOS.
  */
 kotlin {
+    explicitApi()
     jvmToolchain(21)
 
     jvm()

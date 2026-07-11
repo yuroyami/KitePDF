@@ -25,7 +25,7 @@ import io.github.yuroyami.kitepdf.parser.PdfStream
  * Missing fields stay at their previous values; that's the spec's
  * "ExtGState modifies the current state" rule.
  */
-data class ExtGState(
+public data class ExtGState(
     val fillAlpha: Double? = null,
     val strokeAlpha: Double? = null,
     val blendMode: BlendMode? = null,
@@ -36,9 +36,9 @@ data class ExtGState(
     val miterLimit: Double? = null,
 ) {
 
-    companion object {
+    public companion object {
 
-        fun parse(dict: PdfDictionary, refs: IndirectResolver): ExtGState {
+        public fun parse(dict: PdfDictionary, refs: IndirectResolver): ExtGState {
             val fillAlpha = dict.getReal("ca")
             val strokeAlpha = dict.getReal("CA")
             val blendMode = when (val bm = dict["BM"]) {
@@ -88,8 +88,8 @@ data class ExtGState(
  * or a [MaskGroup] containing a Form XObject whose rendered luminosity or
  * alpha channel becomes the per-pixel mask.
  */
-sealed class SoftMask {
-    object None : SoftMask()
-    data class MaskGroup(val kind: Kind, val group: PdfStream) : SoftMask()
-    enum class Kind { Luminosity, Alpha }
+public sealed class SoftMask {
+    public object None : SoftMask()
+    public data class MaskGroup(val kind: Kind, val group: PdfStream) : SoftMask()
+    public enum class Kind { Luminosity, Alpha }
 }

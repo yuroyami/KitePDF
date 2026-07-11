@@ -13,7 +13,7 @@ import io.github.yuroyami.kitepdf.parser.PdfDictionary
  * `null` from [PdfDocument.markInfo] means the document doesn't carry a
  * /MarkInfo dict at all — i.e. it's not tagged.
  */
-data class PdfMarkInfo(
+public data class PdfMarkInfo(
     /** True if the document conforms to Tagged PDF (logical structure tree present). */
     val marked: Boolean = false,
     /** True if structure elements carry user property attributes (PDF 1.6+). */
@@ -21,7 +21,7 @@ data class PdfMarkInfo(
     /** True if some structure elements have unreliable mappings to content (PDF 1.6+). */
     val suspects: Boolean = false,
 ) {
-    companion object {
+    public companion object {
         internal fun parse(dict: PdfDictionary?): PdfMarkInfo? {
             if (dict == null) return null
             fun b(key: String) = (dict[key] as? PdfBoolean)?.value ?: false

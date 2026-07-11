@@ -12,8 +12,8 @@ import androidx.compose.ui.graphics.ImageBitmap
  * If a platform can't decode the bytes (corrupt JPEG, unsupported format),
  * the actual returns null and the renderer paints a placeholder rectangle.
  */
-expect object ImageDecoder {
-    fun decode(bytes: ByteArray): ImageBitmap?
+public expect object ImageDecoder {
+    public fun decode(bytes: ByteArray): ImageBitmap?
 
     /**
      * Build a bitmap from already-decoded RGBA8888 pixels (R,G,B,A per pixel,
@@ -21,5 +21,5 @@ expect object ImageDecoder {
      * synchronous on every platform — the samples are already in hand — so it
      * works on JS too. Used for RAW (FlateDecode) PDF images.
      */
-    fun decodeRaw(rgba: ByteArray, width: Int, height: Int): ImageBitmap?
+    public fun decodeRaw(rgba: ByteArray, width: Int, height: Int): ImageBitmap?
 }

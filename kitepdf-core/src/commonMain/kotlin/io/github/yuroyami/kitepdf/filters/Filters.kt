@@ -24,15 +24,15 @@ import io.github.yuroyami.kitepdf.parser.PdfStream
  *     ([io.github.yuroyami.kitepdf.render.ImageXObject]), not through this chain.
  *   - JPXDecode (JPEG 2000) and Crypt — throw [UnsupportedFilterException].
  */
-class UnsupportedFilterException(val filterName: String) :
+public class UnsupportedFilterException(public val filterName: String) :
     RuntimeException("Filter not yet implemented: /$filterName")
 
-interface PdfFilter {
-    val name: String
-    fun decode(input: ByteArray, params: PdfDictionary?): ByteArray
+public interface PdfFilter {
+    public val name: String
+    public fun decode(input: ByteArray, params: PdfDictionary?): ByteArray
 }
 
-object FilterChain {
+public object FilterChain {
 
     /**
      * Hard ceiling on any single filter's decoded output (512 MiB).
@@ -42,10 +42,10 @@ object FilterChain {
      * the cap throws, which the document's lenient resolve path turns into a
      * null object / placeholder image, so the file still opens.
      */
-    const val MAX_DECODED_STREAM: Int = 512 shl 20
+    public const val MAX_DECODED_STREAM: Int = 512 shl 20
 
     /** Apply every filter in this stream's /Filter chain to its raw bytes. */
-    fun decode(stream: PdfStream): ByteArray {
+    public fun decode(stream: PdfStream): ByteArray {
         val dict = stream.dict
         val filterNames = extractFilterNames(dict["Filter"])
         if (filterNames.isEmpty()) return stream.rawBytes
@@ -96,8 +96,8 @@ object FilterChain {
 
 /* ─── FlateDecode ─────────────────────────────────────────────────────────── */
 
-object FlateFilter : PdfFilter {
-    override val name = "FlateDecode"
+public object FlateFilter : PdfFilter {
+    override val name: String = "FlateDecode"
 
     override fun decode(input: ByteArray, params: PdfDictionary?): ByteArray {
         val inflated = Zlib.decode(input, verifyChecksum = false, maxOutputBytes = FilterChain.MAX_DECODED_STREAM)
@@ -112,8 +112,8 @@ object FlateFilter : PdfFilter {
 
 /* ─── ASCIIHexDecode ──────────────────────────────────────────────────────── */
 
-object AsciiHexFilter : PdfFilter {
-    override val name = "ASCIIHexDecode"
+public object AsciiHexFilter : PdfFilter {
+    override val name: String = "ASCIIHexDecode"
 
     override fun decode(input: ByteArray, params: PdfDictionary?): ByteArray {
         val out = ByteArrayBuilder(input.size / 2)
@@ -145,8 +145,8 @@ object AsciiHexFilter : PdfFilter {
 
 /* ─── ASCII85Decode ───────────────────────────────────────────────────────── */
 
-object Ascii85Filter : PdfFilter {
-    override val name = "ASCII85Decode"
+public object Ascii85Filter : PdfFilter {
+    override val name: String = "ASCII85Decode"
 
     override fun decode(input: ByteArray, params: PdfDictionary?): ByteArray {
         val out = ByteArrayBuilder(input.size * 4 / 5 + 4)
@@ -201,8 +201,8 @@ object Ascii85Filter : PdfFilter {
 
 /* ─── RunLengthDecode ─────────────────────────────────────────────────────── */
 
-object RunLengthFilter : PdfFilter {
-    override val name = "RunLengthDecode"
+public object RunLengthFilter : PdfFilter {
+    override val name: String = "RunLengthDecode"
 
     override fun decode(input: ByteArray, params: PdfDictionary?): ByteArray {
         val out = ByteArrayBuilder(input.size * 2)

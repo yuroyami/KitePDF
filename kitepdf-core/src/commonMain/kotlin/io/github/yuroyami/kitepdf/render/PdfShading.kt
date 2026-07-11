@@ -33,20 +33,20 @@ import io.github.yuroyami.kitepdf.parser.PdfStream
  * backend (pure `fillPath` emission); 2/3 keep the backends' native gradient
  * brushes. Unparseable shadings become [Unsupported] and paint nothing.
  */
-sealed class PdfShading {
+public sealed class PdfShading {
 
     /** The shading's colour space (DeviceGray / DeviceRGB / DeviceCMYK / Indexed). */
-    abstract val colorSpace: ColorSpace
+    public abstract val colorSpace: ColorSpace
 
     /**
      * Optional `/Background` colour — used for regions outside the shading
      * domain when `Extend` is false on the relevant side. Per spec the
      * background is in [colorSpace]; we eager-convert to RGB.
      */
-    abstract val background: RgbColor?
+    public abstract val background: RgbColor?
 
     /** Optional clipping rectangle (`/BBox`) in shading-space. */
-    abstract val bbox: Rectangle?
+    public abstract val bbox: Rectangle?
 
     /**
      * Type 2 axial shading. Linear gradient between `(x0, y0)` and
@@ -54,7 +54,7 @@ sealed class PdfShading {
      * colour per `t` value; we sample it at a fixed number of stops and
      * hand those to the backend.
      */
-    data class Axial(
+    public data class Axial(
         override val colorSpace: ColorSpace,
         override val background: RgbColor?,
         override val bbox: Rectangle?,
@@ -88,7 +88,7 @@ sealed class PdfShading {
      * Type 3 radial shading. Gradient between two circles:
      * `(x0, y0, r0)` and `(x1, y1, r1)` with `t` running across [domain].
      */
-    data class Radial(
+    public data class Radial(
         override val colorSpace: ColorSpace,
         override val background: RgbColor?,
         override val bbox: Rectangle?,
@@ -112,61 +112,61 @@ sealed class PdfShading {
      * mapped into user space by [matrix]. Rendered as a grid of coloured
      * cells by [paintComplexShading].
      */
-    class FunctionBased(
+    public class FunctionBased(
         override val colorSpace: ColorSpace,
         override val background: RgbColor?,
         override val bbox: Rectangle?,
         /** [x0, x1, y0, y1]. */
-        val domain: DoubleArray,
-        val matrix: Matrix,
+        public val domain: DoubleArray,
+        public val matrix: Matrix,
         private val function: PdfFunction,
     ) : PdfShading() {
-        fun colorAt(x: Double, y: Double): RgbColor =
+        public fun colorAt(x: Double, y: Double): RgbColor =
             colorSpace.toRgb(function.evaluate(doubleArrayOf(x, y)))
     }
 
     /** One Gouraud triangle: three shading-space vertices with colours. */
-    class MeshTriangle(
-        val x: DoubleArray,
-        val y: DoubleArray,
-        val colors: Array<RgbColor>,
+    public class MeshTriangle(
+        public val x: DoubleArray,
+        public val y: DoubleArray,
+        public val colors: Array<RgbColor>,
     )
 
     /** Types 4/5: a triangle mesh with per-vertex colours. */
-    class TriangleMesh(
+    public class TriangleMesh(
         override val colorSpace: ColorSpace,
         override val background: RgbColor?,
         override val bbox: Rectangle?,
-        val triangles: List<MeshTriangle>,
+        public val triangles: List<MeshTriangle>,
     ) : PdfShading()
 
     /** A flat-coloured tessellation quad from a Coons/tensor patch. */
-    class FlatQuad(
-        val xs: DoubleArray,
-        val ys: DoubleArray,
-        val color: RgbColor,
+    public class FlatQuad(
+        public val xs: DoubleArray,
+        public val ys: DoubleArray,
+        public val color: RgbColor,
     )
 
     /** Types 6/7, pre-tessellated at parse time. */
-    class PatchMesh(
+    public class PatchMesh(
         override val colorSpace: ColorSpace,
         override val background: RgbColor?,
         override val bbox: Rectangle?,
-        val quads: List<FlatQuad>,
+        public val quads: List<FlatQuad>,
     ) : PdfShading()
 
     /** Shading type we don't render; [sampleStops] returns null, so nothing paints. */
-    data class Unsupported(
+    public data class Unsupported(
         val type: Int,
         override val colorSpace: ColorSpace,
         override val background: RgbColor?,
         override val bbox: Rectangle?,
     ) : PdfShading()
 
-    companion object {
+    public companion object {
 
         /** Parse a /Shading object (dict or stream — stream is only for Types 4–7). */
-        fun parse(obj: PdfObject?, refs: IndirectResolver): PdfShading? {
+        public fun parse(obj: PdfObject?, refs: IndirectResolver): PdfShading? {
             val resolved = when (obj) {
                 is PdfReference -> refs.resolve(obj)
                 else -> obj
@@ -267,7 +267,7 @@ private fun PdfArray.num(i: Int): Double = when (val v = this[i]) {
  * stops between `domain[0]` and `domain[1]`. Returns parallel `t` and
  * RGB arrays the backend uses to build a gradient brush.
  */
-fun PdfShading.sampleStops(count: Int = 32): GradientStops? {
+public fun PdfShading.sampleStops(count: Int = 32): GradientStops? {
     val function: PdfFunction
     val domain: DoubleArray
     val cs: ColorSpace
@@ -293,7 +293,7 @@ fun PdfShading.sampleStops(count: Int = 32): GradientStops? {
 }
 
 /** Parallel offset/colour arrays describing a sampled gradient. */
-data class GradientStops(val offsets: DoubleArray, val colors: Array<RgbColor>) {
+public data class GradientStops(val offsets: DoubleArray, val colors: Array<RgbColor>) {
     override fun equals(other: Any?): Boolean = other is GradientStops &&
         offsets.contentEquals(other.offsets) && colors.contentEquals(other.colors)
     override fun hashCode(): Int = 31 * offsets.contentHashCode() + colors.contentHashCode()

@@ -14,6 +14,7 @@ plugins {
  * work; everything below it (fonts, codecs, drawing, every platform) is shared.
  */
 kotlin {
+    explicitApi()
     jvmToolchain(21)
 
     android {

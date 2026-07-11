@@ -21,9 +21,9 @@ import kotlin.math.abs
  *   14  PNG Paeth      (filter byte = 4)
  *   15  PNG Optimum    (per-row filter byte selects 0..4)
  */
-object Predictors {
+internal object Predictors {
 
-    fun apply(
+    public fun apply(
         input: ByteArray,
         predictor: Int,
         columns: Int,

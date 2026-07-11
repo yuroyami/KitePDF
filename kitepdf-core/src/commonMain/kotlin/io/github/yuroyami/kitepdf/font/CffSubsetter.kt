@@ -20,11 +20,11 @@ import io.github.yuroyami.kitepdf.core.ByteArrayBuilder
  * `endchar` accent composition is not followed, so a glyph built that way would
  * lose its components — CID-keyed fonts don't use it.
  */
-object CffSubsetter {
+public object CffSubsetter {
 
-    class Subset(val cff: ByteArray, val oldToNew: Map<Int, Int>)
+    public class Subset(public val cff: ByteArray, public val oldToNew: Map<Int, Int>)
 
-    fun subset(cff: CffFont, usedGids: Set<Int>): Subset {
+    public fun subset(cff: CffFont, usedGids: Set<Int>): Subset {
         val numGlyphsOrig = cff.numGlyphs
 
         // Closure = used glyphs + .notdef, renumbered densely in ascending order.

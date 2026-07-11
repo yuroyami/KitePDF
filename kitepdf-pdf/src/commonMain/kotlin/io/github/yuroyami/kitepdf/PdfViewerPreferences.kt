@@ -16,7 +16,7 @@ import io.github.yuroyami.kitepdf.parser.PdfInt
  * "Hint" is the operative word — viewers may ignore any or all of these.
  * KitePDF doesn't enforce them; it just exposes them.
  */
-data class PdfViewerPreferences(
+public data class PdfViewerPreferences(
     /** Hide the toolbar. Default false. */
     val hideToolbar: Boolean = false,
     /** Hide the menubar. Default false. */
@@ -56,17 +56,17 @@ data class PdfViewerPreferences(
     val printPageRange: List<IntRange> = emptyList(),
 ) {
 
-    enum class ReadingDirection {
+    public enum class ReadingDirection {
         LeftToRight, RightToLeft;
-        companion object {
-            fun fromName(n: String?): ReadingDirection = if (n == "R2L") RightToLeft else LeftToRight
+        public companion object {
+            public fun fromName(n: String?): ReadingDirection = if (n == "R2L") RightToLeft else LeftToRight
         }
     }
 
-    enum class PageBoxName {
+    public enum class PageBoxName {
         MediaBox, CropBox, BleedBox, TrimBox, ArtBox;
-        companion object {
-            fun fromName(n: String?): PageBoxName = when (n) {
+        public companion object {
+            public fun fromName(n: String?): PageBoxName = when (n) {
                 "MediaBox" -> MediaBox
                 "BleedBox" -> BleedBox
                 "TrimBox" -> TrimBox
@@ -76,20 +76,20 @@ data class PdfViewerPreferences(
         }
     }
 
-    enum class PrintScaling {
+    public enum class PrintScaling {
         /** No automatic scaling — print at 100%. */
         None,
         /** Use the viewer's default. */
         AppDefault;
-        companion object {
-            fun fromName(n: String?): PrintScaling = if (n == "None") None else AppDefault
+        public companion object {
+            public fun fromName(n: String?): PrintScaling = if (n == "None") None else AppDefault
         }
     }
 
-    enum class Duplex {
+    public enum class Duplex {
         Simplex, DuplexFlipShortEdge, DuplexFlipLongEdge;
-        companion object {
-            fun fromName(n: String?): Duplex = when (n) {
+        public companion object {
+            public fun fromName(n: String?): Duplex = when (n) {
                 "DuplexFlipShortEdge" -> DuplexFlipShortEdge
                 "DuplexFlipLongEdge" -> DuplexFlipLongEdge
                 else -> Simplex
@@ -97,9 +97,9 @@ data class PdfViewerPreferences(
         }
     }
 
-    companion object {
+    public companion object {
         /** Wholly-default preferences — used when the catalog has no /ViewerPreferences. */
-        val DEFAULT = PdfViewerPreferences()
+        public val DEFAULT: PdfViewerPreferences = PdfViewerPreferences()
 
         internal fun parse(dict: PdfDictionary, refs: IndirectResolver): PdfViewerPreferences {
             fun bool(key: String, default: Boolean = false): Boolean =

@@ -10,7 +10,7 @@ import io.github.yuroyami.kitepdf.PdfPage
  * engine EPUB search uses). A hit is a [KiteSearchHit]: display-space quads
  * (one per line touched) plus the matched text and page index.
  */
-typealias PdfSearchHit = KiteSearchHit
+public typealias PdfSearchHit = KiteSearchHit
 
 /**
  * Find [needle] on this page. Matches may cross line boundaries inside a
@@ -24,7 +24,7 @@ typealias PdfSearchHit = KiteSearchHit
  * Quads are in DISPLAY space: the y-down `[0, displayWidth] x
  * [0, displayHeight]` box with page rotation folded in.
  */
-fun PdfPage.search(needle: String, ignoreCase: Boolean = true): List<PdfSearchHit> =
+public fun PdfPage.search(needle: String, ignoreCase: Boolean = true): List<PdfSearchHit> =
     textContent().search(needle, ignoreCase, pageIndex = index)
 
 /**
@@ -32,5 +32,5 @@ fun PdfPage.search(needle: String, ignoreCase: Boolean = true): List<PdfSearchHi
  * lazy [Sequence], so a UI can surface incremental hits while later pages
  * are still being extracted. See [PdfPage.search] for matching rules.
  */
-fun PdfDocument.search(needle: String, ignoreCase: Boolean = true): Sequence<PdfSearchHit> =
+public fun PdfDocument.search(needle: String, ignoreCase: Boolean = true): Sequence<PdfSearchHit> =
     pages.asSequence().flatMap { it.search(needle, ignoreCase) }

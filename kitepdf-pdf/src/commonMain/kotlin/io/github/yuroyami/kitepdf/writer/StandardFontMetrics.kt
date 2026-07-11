@@ -16,7 +16,7 @@ import io.github.yuroyami.kitepdf.font.Standard14Widths
  * Use it to lay out or truncate text before drawing — e.g. fit a string into a
  * column and append an ellipsis when it overflows.
  */
-fun StandardFont.stringWidth(text: String, fontSize: Double, fallbackWidth: Int = 500): Double {
+public fun StandardFont.stringWidth(text: String, fontSize: Double, fallbackWidth: Int = 500): Double {
     var total = 0
     for (ch in text) {
         val code = ch.code

@@ -33,6 +33,7 @@ fun currentOsSkikoRuntime(): Provider<MinimalExternalModuleDependency> {
  * pull in any UI dependencies. Anything Compose-specific lives here.
  */
 kotlin {
+    explicitApi()
     jvmToolchain(21)
 
     android {

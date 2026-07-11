@@ -18,7 +18,7 @@ package io.github.yuroyami.kitepdf.render
  * Immutable: every operation returns a fresh Matrix. The page renderer keeps
  * a single state per gsave level and re-assigns rather than mutating.
  */
-data class Matrix(
+public data class Matrix(
     val a: Double,
     val b: Double,
     val c: Double,
@@ -28,7 +28,7 @@ data class Matrix(
 ) {
 
     /** PDF `cm` semantics: returns `other × this`. */
-    fun concat(other: Matrix): Matrix = Matrix(
+    public fun concat(other: Matrix): Matrix = Matrix(
         a = other.a * a + other.b * c,
         b = other.a * b + other.b * d,
         c = other.c * a + other.d * c,
@@ -37,18 +37,18 @@ data class Matrix(
         f = other.e * b + other.f * d + f,
     )
 
-    fun transformPoint(x: Double, y: Double): Pair<Double, Double> =
+    public fun transformPoint(x: Double, y: Double): Pair<Double, Double> =
         (a * x + c * y + e) to (b * x + d * y + f)
 
     /** X-component of the unit vector after this transform — useful for scaled font sizes. */
-    fun scaleX(): Double = kotlin.math.sqrt(a * a + b * b)
-    fun scaleY(): Double = kotlin.math.sqrt(c * c + d * d)
+    public fun scaleX(): Double = kotlin.math.sqrt(a * a + b * b)
+    public fun scaleY(): Double = kotlin.math.sqrt(c * c + d * d)
 
-    fun translate(tx: Double, ty: Double): Matrix = translation(tx, ty).concat(this)
-    fun scale(sx: Double, sy: Double): Matrix = scaling(sx, sy).concat(this)
+    public fun translate(tx: Double, ty: Double): Matrix = translation(tx, ty).concat(this)
+    public fun scale(sx: Double, sy: Double): Matrix = scaling(sx, sy).concat(this)
 
     /** Inverse transform, or null when the matrix is singular (det ≈ 0). */
-    fun invert(): Matrix? {
+    public fun invert(): Matrix? {
         val det = a * d - b * c
         if (kotlin.math.abs(det) < 1e-12) return null
         val ia = d / det
@@ -58,10 +58,10 @@ data class Matrix(
         return Matrix(ia, ib, ic, id, -(e * ia + f * ic), -(e * ib + f * id))
     }
 
-    companion object {
-        val IDENTITY = Matrix(1.0, 0.0, 0.0, 1.0, 0.0, 0.0)
+    public companion object {
+        public val IDENTITY: Matrix = Matrix(1.0, 0.0, 0.0, 1.0, 0.0, 0.0)
 
-        fun translation(tx: Double, ty: Double) = Matrix(1.0, 0.0, 0.0, 1.0, tx, ty)
-        fun scaling(sx: Double, sy: Double) = Matrix(sx, 0.0, 0.0, sy, 0.0, 0.0)
+        public fun translation(tx: Double, ty: Double): Matrix = Matrix(1.0, 0.0, 0.0, 1.0, tx, ty)
+        public fun scaling(sx: Double, sy: Double): Matrix = Matrix(sx, 0.0, 0.0, sy, 0.0, 0.0)
     }
 }

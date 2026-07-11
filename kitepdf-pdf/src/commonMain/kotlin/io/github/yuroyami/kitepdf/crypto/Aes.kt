@@ -12,10 +12,10 @@ package io.github.yuroyami.kitepdf.crypto
  * because PDF needs decryption to *open* the document; the underlying threat
  * model is "rightful owner who has the password," not "attacker with timing."
  */
-object Aes {
+public object Aes {
 
     /** Decrypt CBC-mode ciphertext. The first 16 bytes are the IV. */
-    fun decryptCbc(key: ByteArray, ciphertext: ByteArray, removePadding: Boolean = true): ByteArray {
+    public fun decryptCbc(key: ByteArray, ciphertext: ByteArray, removePadding: Boolean = true): ByteArray {
         require(key.size == 16 || key.size == 32) { "AES key must be 16 or 32 bytes" }
         // A malformed / empty encrypted string (e.g. the literal `()`) must not
         // throw and null out the whole containing object. Fewer than one block,
@@ -37,19 +37,19 @@ object Aes {
     }
 
     /** Decrypt one ECB block (used for the key-string encryption in V4). */
-    fun decryptEcb(key: ByteArray, block: ByteArray): ByteArray {
+    public fun decryptEcb(key: ByteArray, block: ByteArray): ByteArray {
         require(block.size == 16) { "AES ECB block must be 16 bytes" }
         return decryptBlock(block, expandKey(key))
     }
 
     /** Encrypt one ECB block (used for the V5 /Perms entry, Algorithm 10). */
-    fun encryptEcb(key: ByteArray, block: ByteArray): ByteArray {
+    public fun encryptEcb(key: ByteArray, block: ByteArray): ByteArray {
         require(block.size == 16) { "AES ECB block must be 16 bytes" }
         return encryptBlock(block, expandKey(key))
     }
 
     /** Encrypt CBC-mode plaintext, prepending the IV. PKCS#7 padding. */
-    fun encryptCbc(key: ByteArray, iv: ByteArray, plaintext: ByteArray): ByteArray {
+    public fun encryptCbc(key: ByteArray, iv: ByteArray, plaintext: ByteArray): ByteArray {
         require(key.size == 16 || key.size == 32)
         require(iv.size == 16)
         val expanded = expandKey(key)
@@ -74,7 +74,7 @@ object Aes {
      * of 16 bytes. Used by the R6 Algorithm 2.B hardening loop, which encrypts a
      * length-multiple-of-16 buffer and inspects the raw ciphertext.
      */
-    fun encryptCbcNoPadding(key: ByteArray, iv: ByteArray, data: ByteArray): ByteArray {
+    public fun encryptCbcNoPadding(key: ByteArray, iv: ByteArray, data: ByteArray): ByteArray {
         require(key.size == 16 || key.size == 32) { "AES key must be 16 or 32 bytes" }
         require(iv.size == 16) { "AES IV must be 16 bytes" }
         require(data.size % 16 == 0) { "data must be a multiple of 16 bytes (got ${data.size})" }

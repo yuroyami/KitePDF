@@ -34,14 +34,14 @@ import io.github.yuroyami.kitepdf.parser.PdfString
  * Streams are written with a `/Length` that always matches the raw byte count,
  * overriding any stale or indirect `/Length` in the source dictionary.
  */
-object PdfObjectWriter {
+public object PdfObjectWriter {
 
     /** Serialize a single object to a fresh byte array. */
-    fun toBytes(obj: PdfObject): ByteArray =
+    public fun toBytes(obj: PdfObject): ByteArray =
         ByteArrayBuilder().also { writeObject(obj, it) }.toByteArray()
 
     /** Serialize [obj] into [out], with no surrounding whitespace. */
-    fun writeObject(obj: PdfObject, out: ByteArrayBuilder) {
+    public fun writeObject(obj: PdfObject, out: ByteArrayBuilder) {
         when (obj) {
             PdfNull -> out.ascii("null")
             is PdfBoolean -> out.ascii(if (obj.value) "true" else "false")
@@ -67,7 +67,7 @@ object PdfObjectWriter {
      * coordinates and matrices) with trailing zeros trimmed. NaN/Infinity are
      * not representable in PDF, so they degrade to "0".
      */
-    fun formatReal(d: Double): String {
+    public fun formatReal(d: Double): String {
         if (d.isNaN() || d.isInfinite() || d == 0.0) return "0"
         val neg = d < 0.0
         val v = if (neg) -d else d

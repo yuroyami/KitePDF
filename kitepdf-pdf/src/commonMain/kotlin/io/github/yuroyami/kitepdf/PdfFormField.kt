@@ -19,40 +19,40 @@ import io.github.yuroyami.kitepdf.parser.PdfString
  * form-fill uses these references plus [rect] (the widget's `/Rect`) to set the
  * value and regenerate the appearance.
  */
-class PdfFormField internal constructor(
+public class PdfFormField internal constructor(
     /** Fully-qualified name: ancestor partial names joined by '.'. */
-    val fullyQualifiedName: String,
+    public val fullyQualifiedName: String,
     /** This field's own `/T`, or null for an anonymous node. */
-    val partialName: String?,
-    val type: FieldType,
+    public val partialName: String?,
+    public val type: FieldType,
     /** `/V` rendered as text (text fields) or the selected name (buttons/choices). */
-    val value: String?,
+    public val value: String?,
     /** Variable-text default appearance string (`/DA`), inherited if absent. */
-    val defaultAppearance: String?,
+    public val defaultAppearance: String?,
     /** Field flags (`/Ff`), inherited if absent. */
-    val flags: Int,
+    public val flags: Int,
     /** Quadding for variable text (`/Q`): 0 left, 1 centre, 2 right. */
-    val quadding: Int,
+    public val quadding: Int,
     /** The widget's `/Rect`, or null when this terminal field has no widget. */
-    val rect: Rectangle?,
+    public val rect: Rectangle?,
     /** Indirect reference to the field dictionary, for editing. */
-    val fieldReference: PdfReference?,
+    public val fieldReference: PdfReference?,
     /** Indirect reference to the widget annotation (== [fieldReference] when merged). */
-    val widgetReference: PdfReference?,
+    public val widgetReference: PdfReference?,
     internal val fieldDict: PdfDictionary,
     internal val widgetDict: PdfDictionary,
 ) {
-    enum class FieldType { Text, Button, Choice, Signature, Unknown }
+    public enum class FieldType { Text, Button, Choice, Signature, Unknown }
 
     /** `/Ff` bit 1 — the field is read-only. */
-    val isReadOnly: Boolean get() = (flags and 0b1) != 0
+    public val isReadOnly: Boolean get() = (flags and 0b1) != 0
 
     /** `/Ff` bit 13 (text fields) — multi-line. */
-    val isMultiline: Boolean get() = type == FieldType.Text && (flags and (1 shl 12)) != 0
+    public val isMultiline: Boolean get() = type == FieldType.Text && (flags and (1 shl 12)) != 0
 
     override fun toString(): String = "PdfFormField($fullyQualifiedName, $type, value=$value)"
 
-    companion object {
+    public companion object {
 
         internal fun collect(catalog: PdfDictionary, refs: IndirectResolver): List<PdfFormField> {
             val acro = catalog.getDict("AcroForm", refs) ?: return emptyList()

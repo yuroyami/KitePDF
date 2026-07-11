@@ -20,14 +20,14 @@ import io.github.yuroyami.kitepdf.core.PdfFormatException
  * and Type-2 (compressed inside an object stream) entries are decoded.
  * Type-0 (free) entries are recognized but skipped.
  */
-class XrefParser(private val reader: ByteReader) {
+internal class XrefParser(private val reader: ByteReader) {
 
-    fun parse(): XrefAndTrailer {
+    public fun parse(): XrefAndTrailer {
         val startXref = findStartXref(reader)
         return parseFromOffset(startXref)
     }
 
-    fun parseFromOffset(offset: Int): XrefAndTrailer {
+    public fun parseFromOffset(offset: Int): XrefAndTrailer {
         reader.seek(offset)
         // Peek: classic "xref" keyword OR an indirect object (xref stream).
         val savedPos = reader.pos()
@@ -179,9 +179,9 @@ class XrefParser(private val reader: ByteReader) {
         return v
     }
 
-    companion object {
+    public companion object {
         /** Walks back from EOF to find "startxref OFFSET". Returns the OFFSET. */
-        fun findStartXref(reader: ByteReader): Int {
+        public fun findStartXref(reader: ByteReader): Int {
             val tail = (reader.size - 2048).coerceAtLeast(0)
             val startXrefBytes = "startxref".encodeToByteArray()
             val idx = reader.lastIndexOf(startXrefBytes, reader.size - 1)
@@ -198,24 +198,24 @@ class XrefParser(private val reader: ByteReader) {
 }
 
 /** A cross-reference entry. Distinct subtypes for the three xref-entry kinds. */
-sealed class XrefEntry {
-    abstract val objectNumber: Long
+public sealed class XrefEntry {
+    public abstract val objectNumber: Long
 
     /** Live object stored at [byteOffset] in the file with [generation] N. */
-    data class InUse(
+    public data class InUse(
         override val objectNumber: Long,
         val generation: Int,
         val byteOffset: Int,
     ) : XrefEntry()
 
     /** Object number is unused / freed. */
-    data class Free(override val objectNumber: Long) : XrefEntry()
+    public data class Free(override val objectNumber: Long) : XrefEntry()
 
     /**
      * Object stored inside an object-stream (PDF 1.5+ §7.5.7). Caller must
      * fetch the containing object stream and look up [indexInObjectStream].
      */
-    data class Compressed(
+    public data class Compressed(
         override val objectNumber: Long,
         val containingObjectStream: Long,
         val indexInObjectStream: Int,
@@ -223,7 +223,7 @@ sealed class XrefEntry {
 }
 
 /** What [XrefParser.parse] returns: the merged entry table and the trailer dict. */
-data class XrefAndTrailer(
+public data class XrefAndTrailer(
     val entries: Map<Long, XrefEntry>,
     val trailer: PdfDictionary,
 )

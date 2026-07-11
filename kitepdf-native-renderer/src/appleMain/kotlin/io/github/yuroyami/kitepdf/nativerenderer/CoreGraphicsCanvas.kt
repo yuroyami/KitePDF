@@ -8,6 +8,7 @@ import io.github.yuroyami.kitepdf.render.ImageXObject
 import io.github.yuroyami.kitepdf.render.Matrix as PdfMatrix
 import io.github.yuroyami.kitepdf.render.PdfCanvas
 import io.github.yuroyami.kitepdf.render.PdfPath
+import io.github.yuroyami.kitepdf.render.paintComplexShading
 import io.github.yuroyami.kitepdf.render.PdfShading
 import io.github.yuroyami.kitepdf.render.RgbColor
 import io.github.yuroyami.kitepdf.render.SoftMask
@@ -86,7 +87,7 @@ import platform.ImageIO.CGImageSourceCreateWithData
  * to caller code.
  */
 @OptIn(ExperimentalForeignApi::class)
-class CoreGraphicsCanvas(private val ctx: CGContextRef) : PdfCanvas {
+public class CoreGraphicsCanvas(private val ctx: CGContextRef) : PdfCanvas {
 
     private var openLayers = 0
 
@@ -197,6 +198,7 @@ class CoreGraphicsCanvas(private val ctx: CGContextRef) : PdfCanvas {
         shading: PdfShading, ctm: PdfMatrix, clipPath: PdfPath?,
         alpha: Double, blendMode: PdfBlendMode,
     ) {
+        if (paintComplexShading(shading, ctm, clipPath, alpha, blendMode)) return
         val stops = shading.sampleStops(32) ?: return
 
         CGContextSaveGState(ctx)
@@ -250,6 +252,7 @@ class CoreGraphicsCanvas(private val ctx: CGContextRef) : PdfCanvas {
                                 )
                             }
                             is PdfShading.Unsupported -> Unit
+                            else -> Unit // T-40 types already handled by paintComplexShading
                         }
                     } finally {
                         CGGradientRelease(gradient)

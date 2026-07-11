@@ -15,25 +15,25 @@ import io.github.yuroyami.kitepdf.font.TextGlyph
  * page.renderTo(ReaderTheme.Dark.wrap(canvas), ctm)   // paint background yourself
  * ```
  */
-class ReaderTheme(
+public class ReaderTheme(
     /** Paper colour behind the page content. */
-    val background: RgbColor,
+    public val background: RgbColor,
     /** Maps each content colour a page draws. Identity for [Light]. */
-    val mapColor: (RgbColor) -> RgbColor,
+    public val mapColor: (RgbColor) -> RgbColor,
 ) {
     /** Decorate [canvas] so its content colours are themed. Returns it unchanged for [Light]. */
-    fun wrap(canvas: PdfCanvas): PdfCanvas =
+    public fun wrap(canvas: PdfCanvas): PdfCanvas =
         if (this === Light) canvas else ThemedCanvas(canvas, mapColor)
 
-    companion object {
+    public companion object {
         /** No colour change; white paper. */
-        val Light = ReaderTheme(RgbColor.WHITE) { it }
+        public val Light: ReaderTheme = ReaderTheme(RgbColor.WHITE) { it }
 
         /** Night mode: dark paper, content colours inverted in lightness (hue preserved). */
-        val Dark = ReaderTheme(RgbColor(0.11, 0.11, 0.12), ::invertLightness)
+        public val Dark: ReaderTheme = ReaderTheme(RgbColor(0.11, 0.11, 0.12), ::invertLightness)
 
         /** Warm reading: cream paper, ink softened toward warm brown. */
-        val Sepia = ReaderTheme(RgbColor(0.93, 0.87, 0.75)) { c ->
+        public val Sepia: ReaderTheme = ReaderTheme(RgbColor(0.93, 0.87, 0.75)) { c ->
             RgbColor(minOf(c.r, 0.30), minOf(c.g, 0.24), minOf(c.b, 0.18))
         }
 

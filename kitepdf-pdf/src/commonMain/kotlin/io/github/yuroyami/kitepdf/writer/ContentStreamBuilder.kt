@@ -17,7 +17,7 @@ import io.github.yuroyami.kitepdf.parser.PdfString
  * which map a [StandardFont] / [PdfImage] to the resource name the owning
  * [PdfBuilder] will register in `/Resources`.
  */
-class ContentStreamBuilder internal constructor(
+public class ContentStreamBuilder internal constructor(
     private val fontResolver: (StandardFont) -> String,
     private val imageResolver: (PdfImage) -> String = {
         throw UnsupportedOperationException(
@@ -39,35 +39,35 @@ class ContentStreamBuilder internal constructor(
 
     /* ─── Graphics state ─────────────────────────────────────────────────── */
 
-    fun save(): ContentStreamBuilder = op("q")
-    fun restore(): ContentStreamBuilder = op("Q")
+    public fun save(): ContentStreamBuilder = op("q")
+    public fun restore(): ContentStreamBuilder = op("Q")
 
     /** Concatenate [a b c d e f] onto the current transformation matrix (`cm`). */
-    fun transform(a: Double, b: Double, c: Double, d: Double, e: Double, f: Double): ContentStreamBuilder {
+    public fun transform(a: Double, b: Double, c: Double, d: Double, e: Double, f: Double): ContentStreamBuilder {
         num(a); num(b); num(c); num(d); num(e); num(f); return op("cm")
     }
 
-    fun setLineWidth(w: Double): ContentStreamBuilder { num(w); return op("w") }
+    public fun setLineWidth(w: Double): ContentStreamBuilder { num(w); return op("w") }
 
     /* ─── Colour ─────────────────────────────────────────────────────────── */
 
-    fun setFillRgb(r: Double, g: Double, b: Double): ContentStreamBuilder { num(r); num(g); num(b); return op("rg") }
-    fun setStrokeRgb(r: Double, g: Double, b: Double): ContentStreamBuilder { num(r); num(g); num(b); return op("RG") }
-    fun setFillGray(g: Double): ContentStreamBuilder { num(g); return op("g") }
-    fun setStrokeGray(g: Double): ContentStreamBuilder { num(g); return op("G") }
+    public fun setFillRgb(r: Double, g: Double, b: Double): ContentStreamBuilder { num(r); num(g); num(b); return op("rg") }
+    public fun setStrokeRgb(r: Double, g: Double, b: Double): ContentStreamBuilder { num(r); num(g); num(b); return op("RG") }
+    public fun setFillGray(g: Double): ContentStreamBuilder { num(g); return op("g") }
+    public fun setStrokeGray(g: Double): ContentStreamBuilder { num(g); return op("G") }
 
     /* ─── Paths ──────────────────────────────────────────────────────────── */
 
-    fun moveTo(x: Double, y: Double): ContentStreamBuilder { num(x); num(y); return op("m") }
-    fun lineTo(x: Double, y: Double): ContentStreamBuilder { num(x); num(y); return op("l") }
-    fun rectangle(x: Double, y: Double, w: Double, h: Double): ContentStreamBuilder {
+    public fun moveTo(x: Double, y: Double): ContentStreamBuilder { num(x); num(y); return op("m") }
+    public fun lineTo(x: Double, y: Double): ContentStreamBuilder { num(x); num(y); return op("l") }
+    public fun rectangle(x: Double, y: Double, w: Double, h: Double): ContentStreamBuilder {
         num(x); num(y); num(w); num(h); return op("re")
     }
-    fun closePath(): ContentStreamBuilder = op("h")
-    fun stroke(): ContentStreamBuilder = op("S")
-    fun fill(): ContentStreamBuilder = op("f")
-    fun fillAndStroke(): ContentStreamBuilder = op("B")
-    fun endPath(): ContentStreamBuilder = op("n")
+    public fun closePath(): ContentStreamBuilder = op("h")
+    public fun stroke(): ContentStreamBuilder = op("S")
+    public fun fill(): ContentStreamBuilder = op("f")
+    public fun fillAndStroke(): ContentStreamBuilder = op("B")
+    public fun endPath(): ContentStreamBuilder = op("n")
 
     /* ─── Clipping ───────────────────────────────────────────────────────── */
 
@@ -77,10 +77,10 @@ class ContentStreamBuilder internal constructor(
      * call [endPath] to clip without also painting the path, e.g.
      * `rectangle(...); clip(); endPath()`.
      */
-    fun clip(): ContentStreamBuilder = op("W")
+    public fun clip(): ContentStreamBuilder = op("W")
 
     /** Like [clip], but with the even-odd rule (`W*`). */
-    fun clipEvenOdd(): ContentStreamBuilder = op("W*")
+    public fun clipEvenOdd(): ContentStreamBuilder = op("W*")
 
     /* ─── Images ─────────────────────────────────────────────────────────── */
 
@@ -92,7 +92,7 @@ class ContentStreamBuilder internal constructor(
      * Only available through [PdfBuilder.page]; other contexts throw because
      * they don't register image resources.
      */
-    fun drawImage(image: PdfImage, x: Double, y: Double, width: Double, height: Double): ContentStreamBuilder {
+    public fun drawImage(image: PdfImage, x: Double, y: Double, width: Double, height: Double): ContentStreamBuilder {
         save()
         // An image XObject is drawn in a 1×1 unit square at the origin; scale it
         // to the requested rectangle. (No Y-flip: top-first raster order is
@@ -105,9 +105,9 @@ class ContentStreamBuilder internal constructor(
 
     /* ─── Text ───────────────────────────────────────────────────────────── */
 
-    fun beginText(): ContentStreamBuilder = op("BT")
-    fun endText(): ContentStreamBuilder = op("ET")
-    fun setFont(font: StandardFont, size: Double): ContentStreamBuilder {
+    public fun beginText(): ContentStreamBuilder = op("BT")
+    public fun endText(): ContentStreamBuilder = op("ET")
+    public fun setFont(font: StandardFont, size: Double): ContentStreamBuilder {
         currentEmbedded = null
         name(fontResolver(font)); num(size); return op("Tf")
     }
@@ -118,17 +118,17 @@ class ContentStreamBuilder internal constructor(
      * Unicode the font covers (CJK included) renders. The font is registered
      * with the owning [PdfBuilder] on first use.
      */
-    fun setFont(font: EmbeddedFont, size: Double): ContentStreamBuilder {
+    public fun setFont(font: EmbeddedFont, size: Double): ContentStreamBuilder {
         val binding = embeddedResolver(font)
         currentEmbedded = binding
         name(binding.resourceName); num(size); return op("Tf")
     }
-    fun setLeading(leading: Double): ContentStreamBuilder { num(leading); return op("TL") }
-    fun setCharSpacing(spacing: Double): ContentStreamBuilder { num(spacing); return op("Tc") }
-    fun setWordSpacing(spacing: Double): ContentStreamBuilder { num(spacing); return op("Tw") }
-    fun moveText(tx: Double, ty: Double): ContentStreamBuilder { num(tx); num(ty); return op("Td") }
-    fun nextLine(): ContentStreamBuilder = op("T*")
-    fun showText(text: String): ContentStreamBuilder {
+    public fun setLeading(leading: Double): ContentStreamBuilder { num(leading); return op("TL") }
+    public fun setCharSpacing(spacing: Double): ContentStreamBuilder { num(spacing); return op("Tc") }
+    public fun setWordSpacing(spacing: Double): ContentStreamBuilder { num(spacing); return op("Tw") }
+    public fun moveText(tx: Double, ty: Double): ContentStreamBuilder { num(tx); num(ty); return op("Td") }
+    public fun nextLine(): ContentStreamBuilder = op("T*")
+    public fun showText(text: String): ContentStreamBuilder {
         val emb = currentEmbedded
         if (emb != null) embeddedString(emb, text) else string(text)
         return op("Tj")
@@ -138,17 +138,17 @@ class ContentStreamBuilder internal constructor(
      * Convenience: draw a single line of [text] in [font] at [size], with its
      * baseline at ([x], [y]). Wraps `BT/Tf/Td/Tj/ET`.
      */
-    fun text(font: StandardFont, size: Double, x: Double, y: Double, text: String): ContentStreamBuilder {
+    public fun text(font: StandardFont, size: Double, x: Double, y: Double, text: String): ContentStreamBuilder {
         beginText(); setFont(font, size); moveText(x, y); showText(text); return endText()
     }
 
     /** As [text], but with an embedded custom [font] (Identity-H encoded). */
-    fun text(font: EmbeddedFont, size: Double, x: Double, y: Double, text: String): ContentStreamBuilder {
+    public fun text(font: EmbeddedFont, size: Double, x: Double, y: Double, text: String): ContentStreamBuilder {
         beginText(); setFont(font, size); moveText(x, y); showText(text); return endText()
     }
 
     /** Escape hatch: append literal content-stream source, followed by a newline. */
-    fun raw(content: String): ContentStreamBuilder {
+    public fun raw(content: String): ContentStreamBuilder {
         out.append(content.encodeToByteArray()); return nl()
     }
 

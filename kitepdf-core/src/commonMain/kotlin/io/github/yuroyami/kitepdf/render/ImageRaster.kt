@@ -18,7 +18,7 @@ import kotlin.math.roundToInt
  * colour space that couldn't be resolved, a truncated buffer) → the caller
  * paints a placeholder.
  */
-fun ImageXObject.toRgbaBytes(): ByteArray? {
+public fun ImageXObject.toRgbaBytes(): ByteArray? {
     val w = width
     val h = height
     if (w <= 0 || h <= 0) return null

@@ -17,7 +17,7 @@ import platform.posix.memcpy
  *   [password] doesn't authenticate.
  */
 @OptIn(ExperimentalForeignApi::class)
-fun PdfDocument.Companion.openFile(
+public fun PdfDocument.Companion.openFile(
     path: String,
     password: ByteArray = byteArrayOf(),
 ): PdfDocument {

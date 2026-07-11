@@ -8,12 +8,12 @@ package io.github.yuroyami.kitepdf.core
  * Engine-internal plumbing that must cross module boundaries (the handlers
  * synchronize their document caches with it); not a public concurrency API.
  */
-expect class KiteLock() {
-    fun lock()
-    fun unlock()
+public expect class KiteLock() {
+    public fun lock()
+    public fun unlock()
 }
 
-inline fun <T> KiteLock.withLock(block: () -> T): T {
+public inline fun <T> KiteLock.withLock(block: () -> T): T {
     lock()
     try {
         return block()
@@ -27,4 +27,4 @@ inline fun <T> KiteLock.withLock(block: () -> T): T {
  * Lets cycle guards distinguish same-thread reentrancy (a real cycle) from
  * another thread legitimately resolving the same object concurrently.
  */
-expect fun currentThreadId(): Long
+public expect fun currentThreadId(): Long

@@ -20,7 +20,7 @@ import io.github.yuroyami.kitepdf.render.ReaderTheme
  * [io.github.yuroyami.kitepdf.KiteDocument]s, so one viewer path serves both.
  */
 @Composable
-fun rememberEpubViewState(document: EpubDocument, initialPage: Int = 0): PdfViewState =
+public fun rememberEpubViewState(document: EpubDocument, initialPage: Int = 0): PdfViewState =
     remember(document) { PdfViewState(document, initialPage) }
 
 /**
@@ -51,7 +51,7 @@ fun rememberEpubViewState(document: EpubDocument, initialPage: Int = 0): PdfView
  *   Applied at render, so switching is instant (no re-layout).
  */
 @Composable
-fun EpubView(
+public fun EpubView(
     document: EpubDocument,
     modifier: Modifier = Modifier,
     page: Int? = null,

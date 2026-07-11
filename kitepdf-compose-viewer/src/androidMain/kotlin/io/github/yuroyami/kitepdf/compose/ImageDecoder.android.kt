@@ -7,14 +7,14 @@ import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import java.io.ByteArrayOutputStream
 
-actual object ImageDecoder {
-    actual fun decode(bytes: ByteArray): ImageBitmap? = try {
+public actual object ImageDecoder {
+    public actual fun decode(bytes: ByteArray): ImageBitmap? = try {
         BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.asImageBitmap()
     } catch (t: Throwable) {
         null
     }
 
-    actual fun decodeRaw(rgba: ByteArray, width: Int, height: Int): ImageBitmap? = try {
+    public actual fun decodeRaw(rgba: ByteArray, width: Int, height: Int): ImageBitmap? = try {
         val argb = IntArray(width * height)
         var j = 0
         for (i in argb.indices) {
@@ -30,7 +30,7 @@ actual object ImageDecoder {
     }
 }
 
-actual fun ImageBitmap.encodeToPng(): ByteArray? = try {
+public actual fun ImageBitmap.encodeToPng(): ByteArray? = try {
     val out = ByteArrayOutputStream()
     if (asAndroidBitmap().compress(Bitmap.CompressFormat.PNG, 100, out)) out.toByteArray() else null
 } catch (t: Throwable) {

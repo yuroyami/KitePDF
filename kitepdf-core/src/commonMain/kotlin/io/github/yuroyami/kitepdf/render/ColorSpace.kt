@@ -29,27 +29,27 @@ import kotlin.math.pow
  * Conversion always lands in [RgbColor] for the renderer; sRGB component
  * values 0..1. Out-of-gamut colours are clamped, never thrown.
  */
-sealed class ColorSpace {
+public sealed class ColorSpace {
 
     /** Number of input components (1 for Gray, 3 for RGB/Lab, 4 for CMYK). */
-    abstract val componentCount: Int
+    public abstract val componentCount: Int
 
     /** Convert a sample (one float per component, all in [0,1]) to RGB. */
-    abstract fun toRgb(components: DoubleArray): RgbColor
+    public abstract fun toRgb(components: DoubleArray): RgbColor
 
     /** Default fill colour at "the colour space is set to me" — black-equivalent. */
-    open fun defaultColor(): RgbColor = RgbColor.BLACK
+    public open fun defaultColor(): RgbColor = RgbColor.BLACK
 
-    object DeviceGray : ColorSpace() {
-        override val componentCount = 1
+    public object DeviceGray : ColorSpace() {
+        override val componentCount: Int = 1
         override fun toRgb(components: DoubleArray): RgbColor {
             val g = components.getOrElse(0) { 0.0 }.coerceIn(0.0, 1.0)
             return RgbColor(g, g, g)
         }
     }
 
-    object DeviceRGB : ColorSpace() {
-        override val componentCount = 3
+    public object DeviceRGB : ColorSpace() {
+        override val componentCount: Int = 3
         override fun toRgb(components: DoubleArray): RgbColor = RgbColor(
             components.getOrElse(0) { 0.0 }.coerceIn(0.0, 1.0),
             components.getOrElse(1) { 0.0 }.coerceIn(0.0, 1.0),
@@ -57,8 +57,8 @@ sealed class ColorSpace {
         )
     }
 
-    object DeviceCMYK : ColorSpace() {
-        override val componentCount = 4
+    public object DeviceCMYK : ColorSpace() {
+        override val componentCount: Int = 4
         override fun toRgb(components: DoubleArray): RgbColor {
             val c = components.getOrElse(0) { 0.0 }.coerceIn(0.0, 1.0)
             val m = components.getOrElse(1) { 0.0 }.coerceIn(0.0, 1.0)
@@ -96,12 +96,12 @@ sealed class ColorSpace {
      * Indexed colour space. Each sample is a single byte 0..hival that indexes
      * into [palette]; the palette stores [base.componentCount] bytes per entry.
      */
-    class Indexed(
-        val base: ColorSpace,
-        val hival: Int,
-        val palette: ByteArray,
+    public class Indexed(
+        public val base: ColorSpace,
+        public val hival: Int,
+        public val palette: ByteArray,
     ) : ColorSpace() {
-        override val componentCount = 1
+        override val componentCount: Int = 1
 
         // Resolve the whole palette to RGB once, then every lookup is an array
         // index — no per-pixel/per-sample DoubleArray alloc or base conversion.
@@ -121,7 +121,7 @@ sealed class ColorSpace {
 
         /** Direct palette lookup by integer index (for image samples, which are
          *  raw indices rather than normalised fractions). Clamped to the palette. */
-        fun colorAt(index: Int): RgbColor = lut[index.coerceIn(0, hival)]
+        public fun colorAt(index: Int): RgbColor = lut[index.coerceIn(0, hival)]
     }
 
     /**
@@ -129,12 +129,12 @@ sealed class ColorSpace {
      * are fed through [tintTransform] to produce colours in [alternate], which
      * converts them to RGB. Separation is the n=1 special case.
      */
-    class DeviceN(
+    public class DeviceN(
         override val componentCount: Int,
-        val alternate: ColorSpace,
-        val tintTransform: PdfFunction,
+        public val alternate: ColorSpace,
+        public val tintTransform: PdfFunction,
         /** Colorant names; a single "None" Separation paints nothing. */
-        val names: List<String>,
+        public val names: List<String>,
     ) : ColorSpace() {
         private val isNone = names.size == 1 && names[0] == "None"
         override fun toRgb(components: DoubleArray): RgbColor {
@@ -151,11 +151,11 @@ sealed class ColorSpace {
      * CIE 1976 L*a*b* colour space (§8.6.5.4). Components are actual L (0..100)
      * and a/b (per /Range), converted via XYZ to sRGB using the /WhitePoint.
      */
-    class Lab(
+    public class Lab(
         private val whitePoint: DoubleArray,
         private val rangeAB: DoubleArray,
     ) : ColorSpace() {
-        override val componentCount = 3
+        override val componentCount: Int = 3
         override fun toRgb(components: DoubleArray): RgbColor {
             val L = components.getOrElse(0) { 0.0 }.coerceIn(0.0, 100.0)
             val a = components.getOrElse(1) { 0.0 }.coerceIn(rangeAB[0], rangeAB[1])
@@ -181,7 +181,7 @@ sealed class ColorSpace {
     }
 
     /** Fallback for spaces we don't fully model. Routes to grey. */
-    class Unsupported(val name: String, override val componentCount: Int) : ColorSpace() {
+    public class Unsupported(public val name: String, override val componentCount: Int) : ColorSpace() {
         override fun toRgb(components: DoubleArray): RgbColor {
             // Average the components as a rough grey approximation.
             val avg = components.take(componentCount).average().coerceIn(0.0, 1.0)
@@ -189,9 +189,9 @@ sealed class ColorSpace {
         }
     }
 
-    companion object {
+    public companion object {
 
-        fun resolve(obj: PdfObject?, refs: IndirectResolver): ColorSpace {
+        public fun resolve(obj: PdfObject?, refs: IndirectResolver): ColorSpace {
             val resolved = obj?.resolve(refs) ?: return DeviceGray
             return when (resolved) {
                 is PdfName -> resolveByName(resolved.value)

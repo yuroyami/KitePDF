@@ -17,7 +17,7 @@ import io.github.yuroyami.kitepdf.parser.PdfName
  * decryption returns the original bytes (so the document can still be opened
  * read-only for its public metadata).
  */
-class StandardSecurityHandler(
+public class StandardSecurityHandler(
     encryptDict: PdfDictionary,
     fileIdFirst: ByteArray,
     userPassword: ByteArray = byteArrayOf(),
@@ -26,7 +26,7 @@ class StandardSecurityHandler(
 
     private val v: Int = encryptDict.getInt("V")?.toInt() ?: 1
     /** Revision number — exposed so the public permissions API can pick the right bit semantics. */
-    val r: Int = encryptDict.getInt("R")?.toInt() ?: 2
+    public val r: Int = encryptDict.getInt("R")?.toInt() ?: 2
     private val keyLengthBits: Int = encryptDict.getInt("Length")?.toInt()
         ?: when (v) { 1 -> 40; 4 -> 128; 5 -> 256; else -> 40 }
     private val o: ByteArray = (encryptDict["O"] as? io.github.yuroyami.kitepdf.parser.PdfString)?.bytes
@@ -34,13 +34,13 @@ class StandardSecurityHandler(
     private val u: ByteArray = (encryptDict["U"] as? io.github.yuroyami.kitepdf.parser.PdfString)?.bytes
         ?: throw PdfFormatException("/Encrypt missing /U")
     /** Raw `/P` bit-flags. Negative because the high bit is set on permissive PDFs. */
-    val p: Int = encryptDict.getInt("P")?.toInt() ?: -1
+    public val p: Int = encryptDict.getInt("P")?.toInt() ?: -1
     /**
      * Whether the /Metadata stream is encrypted. When false (V4+ with
      * /EncryptMetadata false), the metadata stream is left as clear text and
      * [Decryptor] must skip it. Exposed for that reason.
      */
-    val encryptMetadata: Boolean = (encryptDict["EncryptMetadata"]
+    public val encryptMetadata: Boolean = (encryptDict["EncryptMetadata"]
         as? io.github.yuroyami.kitepdf.parser.PdfBoolean)?.value ?: true
 
     /** V5/V6 only — 32-byte SHA-256 derivation salts. */
@@ -68,16 +68,16 @@ class StandardSecurityHandler(
         }
     }
 
-    val isAuthenticated: Boolean get() = fileKey != null
+    public val isAuthenticated: Boolean get() = fileKey != null
 
     /* ─── Public decrypt API ─────────────────────────────────────────────── */
 
     /** Decrypt a stream's raw bytes (call BEFORE running the filter chain). */
-    fun decryptStream(objNum: Long, genNum: Int, ciphertext: ByteArray): ByteArray =
+    public fun decryptStream(objNum: Long, genNum: Int, ciphertext: ByteArray): ByteArray =
         decrypt(objNum, genNum, ciphertext, isString = false)
 
     /** Decrypt a literal-string's bytes (replaces PdfString.bytes in place). */
-    fun decryptString(objNum: Long, genNum: Int, ciphertext: ByteArray): ByteArray =
+    public fun decryptString(objNum: Long, genNum: Int, ciphertext: ByteArray): ByteArray =
         decrypt(objNum, genNum, ciphertext, isString = true)
 
     private fun decrypt(objNum: Long, genNum: Int, ciphertext: ByteArray, isString: Boolean): ByteArray {
@@ -104,7 +104,7 @@ class StandardSecurityHandler(
      * parameters: the document must be authenticated and use AES (V4 /AESV2
      * or V5/V6). Legacy RC4 documents are read-only.
      */
-    val supportsWrite: Boolean
+    public val supportsWrite: Boolean
         get() = fileKey != null && (
             v >= 5 || (v == 4 && stmAlgorithm != V4Algo.RC4 && strAlgorithm != V4Algo.RC4)
             )
@@ -314,7 +314,7 @@ class StandardSecurityHandler(
 
     private enum class V4Algo { RC4, AESV2, NONE }
 
-    companion object {
+    public companion object {
         /**
          * R5: plain SHA-256(password ++ salt [++ udata]).
          * R6 (PDF 2.0): Algorithm 2.B iterated hardening on top of that initial

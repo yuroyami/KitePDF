@@ -1,9 +1,9 @@
 package io.github.yuroyami.kitepdf.font
 
 /** Character encoding tables ported from MuPDF (source/fitz/encodings.h, AGPL-3.0). Each table maps a 1-byte code (0..255) to either a unicode codepoint (Int, 0 for undefined) or a PostScript glyph name (String?, null for undefined). */
-object Encodings {
+public object Encodings {
 
-    val pdfDocToUnicode: IntArray = intArrayOf(
+    public val pdfDocToUnicode: IntArray = intArrayOf(
         0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
         0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f,
         0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17,
@@ -38,7 +38,7 @@ object Encodings {
         0x00f8, 0x00f9, 0x00fa, 0x00fb, 0x00fc, 0x00fd, 0x00fe, 0x00ff
     )
 
-    val standardEncoding: Array<String?> = arrayOf(
+    public val standardEncoding: Array<String?> = arrayOf(
         null, null, null, null, null, null, null, null,
         null, null, null, null, null, null, null, null,
         null, null, null, null, null, null, null, null,
@@ -73,7 +73,7 @@ object Encodings {
         "lslash", "oslash", "oe", "germandbls", null, null, null, null
     )
 
-    val macRomanEncoding: Array<String?> = arrayOf(
+    public val macRomanEncoding: Array<String?> = arrayOf(
         null, null, null, null, null, null, null, null,
         null, null, null, null, null, null, null, null,
         null, null, null, null, null, null, null, null,
@@ -108,7 +108,7 @@ object Encodings {
         "macron", "breve", "dotaccent", "ring", "cedilla", "hungarumlaut", "ogonek", "caron"
     )
 
-    val winAnsiEncoding: Array<String?> = arrayOf(
+    public val winAnsiEncoding: Array<String?> = arrayOf(
         null, null, null, null, null, null, null, null,
         null, null, null, null, null, null, null, null,
         null, null, null, null, null, null, null, null,

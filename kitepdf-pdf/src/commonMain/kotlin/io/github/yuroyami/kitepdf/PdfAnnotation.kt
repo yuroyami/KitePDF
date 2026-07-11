@@ -29,7 +29,7 @@ import io.github.yuroyami.kitepdf.render.RgbColor
  * mandates "shall be used as the visual representation." We expose it as a
  * raw stream so PageRenderer can recursively render it.
  */
-data class PdfAnnotation(
+public data class PdfAnnotation(
     val subtype: Subtype,
     val rect: io.github.yuroyami.kitepdf.Rectangle,
     val contents: String,
@@ -60,15 +60,15 @@ data class PdfAnnotation(
     /** True when the annotation should not be displayed (Hidden or NoView set). */
     val isHidden: Boolean get() = (flags and FLAG_HIDDEN) != 0 || (flags and FLAG_NOVIEW) != 0
 
-    enum class Subtype {
+    public enum class Subtype {
         Link, Highlight, Underline, StrikeOut, Squiggly, Text, FreeText, Line, Square, Circle,
         Polygon, PolyLine, Ink, Stamp, Caret, Popup, FileAttachment, Sound, Movie, Widget,
         Screen, PrinterMark, TrapNet, Watermark, ThreeD, Other,
     }
 
-    companion object {
+    public companion object {
 
-        fun parse(dict: PdfDictionary, refs: IndirectResolver): PdfAnnotation {
+        public fun parse(dict: PdfDictionary, refs: IndirectResolver): PdfAnnotation {
             val subtypeName = dict.getName("Subtype") ?: ""
             val subtype = parseSubtype(subtypeName)
             val rect = (dict.getArray("Rect") ?: PdfArray(emptyList())).let { rectFromArray(it) }

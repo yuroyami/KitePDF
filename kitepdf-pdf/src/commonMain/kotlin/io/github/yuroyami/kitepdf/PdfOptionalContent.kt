@@ -18,7 +18,7 @@ import io.github.yuroyami.kitepdf.parser.PdfString
  * future round. Until then this view lets you build a layer-toggle UI
  * even if the underlying renderer still draws everything.
  */
-data class PdfOptionalContent(
+public data class PdfOptionalContent(
     /** All OCGs declared in /OCProperties /OCGs. */
     val groups: List<OptionalContentGroup>,
     /** Identifiers of OCGs that are ON in the default configuration. */
@@ -34,7 +34,7 @@ data class PdfOptionalContent(
      * stringified — stable inside the document and what /OC marked-content
      * sections refer to.
      */
-    data class OptionalContentGroup(
+    public data class OptionalContentGroup(
         val id: String,
         val name: String,
         /** Spec /Intent — typically "View" or "Design". Empty when not declared. */
@@ -44,10 +44,10 @@ data class PdfOptionalContent(
     )
 
     /** True if the named OCG is visible per the default configuration. */
-    fun isVisibleByDefault(id: String): Boolean = id in onByDefault && id !in offByDefault
+    public fun isVisibleByDefault(id: String): Boolean = id in onByDefault && id !in offByDefault
 
-    companion object {
-        val EMPTY = PdfOptionalContent(emptyList(), emptySet(), emptySet(), null)
+    public companion object {
+        public val EMPTY: PdfOptionalContent = PdfOptionalContent(emptyList(), emptySet(), emptySet(), null)
 
         internal fun parse(catalog: PdfDictionary, refs: IndirectResolver): PdfOptionalContent? {
             val props = catalog.getDict("OCProperties", refs) ?: return null

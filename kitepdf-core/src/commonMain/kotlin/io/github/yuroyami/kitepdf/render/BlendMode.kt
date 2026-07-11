@@ -10,16 +10,16 @@ package io.github.yuroyami.kitepdf.render
  *
  * Unknown / non-blending modes fall back to [Normal].
  */
-enum class BlendMode {
+public enum class BlendMode {
     Normal,
     Multiply, Screen, Overlay, Darken, Lighten,
     ColorDodge, ColorBurn, HardLight, SoftLight,
     Difference, Exclusion,
     Hue, Saturation, Color, Luminosity;
 
-    companion object {
+    public companion object {
         /** Parse a PDF `/BM` name. Arrays of names — take the first one we recognise. */
-        fun parse(name: String?): BlendMode = when (name) {
+        public fun parse(name: String?): BlendMode = when (name) {
             "Normal", "Compatible" -> Normal
             "Multiply" -> Multiply
             "Screen" -> Screen

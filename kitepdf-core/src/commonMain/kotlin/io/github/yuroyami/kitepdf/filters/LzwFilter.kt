@@ -15,8 +15,8 @@ import io.github.yuroyami.kitepdf.parser.PdfDictionary
  * boundary the standard way; 1 = grow one code earlier, the default per spec).
  * Also wraps the TIFF/PNG predictor pass for image streams.
  */
-object LzwFilter : PdfFilter {
-    override val name = "LZWDecode"
+internal object LzwFilter : PdfFilter {
+    override val name: String = "LZWDecode"
 
     override fun decode(input: ByteArray, params: PdfDictionary?): ByteArray {
         val earlyChange = (params?.getInt("EarlyChange")?.toInt()) ?: 1

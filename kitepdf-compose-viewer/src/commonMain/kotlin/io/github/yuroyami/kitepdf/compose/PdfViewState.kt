@@ -30,7 +30,7 @@ import kotlin.math.abs
  * overlay — the state object is the single point of control.
  */
 @Composable
-fun rememberPdfViewState(document: PdfDocument, initialPage: Int = 0): PdfViewState =
+public fun rememberPdfViewState(document: PdfDocument, initialPage: Int = 0): PdfViewState =
     remember(document) { PdfViewState(document, initialPage) }
 
 /**
@@ -46,22 +46,22 @@ fun rememberPdfViewState(document: PdfDocument, initialPage: Int = 0): PdfViewSt
  * remembered and applied on attach.
  */
 @Stable
-class PdfViewState(
-    val document: KiteDocument,
+public class PdfViewState(
+    public val document: KiteDocument,
     initialPage: Int = 0,
 ) {
-    val pageCount: Int get() = document.pageCount
+    public val pageCount: Int get() = document.pageCount
 
     /** Current zoom factor. 1 = fit. Bounded by [PdfZoomSpec.minZoom]/[maxZoom]. */
-    var zoom: Float by mutableFloatStateOf(1f)
+    public var zoom: Float by mutableFloatStateOf(1f)
         private set
 
     /** Pan translation in viewport px, applied after [zoom] around the viewport centre. */
-    var panOffset: Offset by mutableStateOf(Offset.Zero)
+    public var panOffset: Offset by mutableStateOf(Offset.Zero)
         internal set
 
     /** True once zoomed in beyond the minimum (with a small epsilon). */
-    val isZoomed: Boolean get() = zoom > zoomRange.start + EPSILON
+    public val isZoomed: Boolean get() = zoom > zoomRange.start + EPSILON
 
     /**
      * Search hits to paint as translucent quads over their pages (colour:
@@ -69,13 +69,13 @@ class PdfViewState(
      * `KiteStructuredText.search` (quads are display-space, as both produce);
      * clear it by assigning an empty list.
      */
-    var searchHighlights: List<KiteSearchHit> by mutableStateOf(emptyList())
+    public var searchHighlights: List<KiteSearchHit> by mutableStateOf(emptyList())
 
     /**
      * The page the viewport currently rests on: the snapped page in paged
      * mode, the page nearest the viewport centre in continuous mode.
      */
-    val currentPage: Int
+    public val currentPage: Int
         get() = adapter?.currentPage ?: pendingPage
 
     /* ── internal wiring (set by PdfView during composition) ─────────────── */
@@ -127,7 +127,7 @@ class PdfViewState(
      * @param focal viewport-space point to keep visually stationary (e.g. the
      *   pinch centroid or double-tap position). Unspecified = viewport centre.
      */
-    fun setZoom(zoom: Float, focal: Offset = Offset.Unspecified) {
+    public fun setZoom(zoom: Float, focal: Offset = Offset.Unspecified) {
         val new = zoom.coerceIn(zoomRange.start, zoomRange.endInclusive)
         val old = this.zoom
         if (new == old) return
@@ -143,7 +143,7 @@ class PdfViewState(
     }
 
     /** Animates zoom to [target] (clamped), keeping [focal] stationary throughout. */
-    suspend fun animateZoomTo(
+    public suspend fun animateZoomTo(
         target: Float,
         focal: Offset = Offset.Unspecified,
         animationSpec: AnimationSpec<Float> = spring(),
@@ -153,7 +153,7 @@ class PdfViewState(
     }
 
     /** Snaps back to the minimum zoom and recentres. */
-    fun resetZoom() {
+    public fun resetZoom() {
         zoom = zoomRange.start
         panOffset = Offset.Zero
     }
@@ -163,7 +163,7 @@ class PdfViewState(
      * Returns the portion actually consumed — the gesture layer hands the
      * remainder back to the underlying scroll container.
      */
-    fun panBy(delta: Offset): Offset {
+    public fun panBy(delta: Offset): Offset {
         val allowed = Offset(
             if (panAxes.x) delta.x else 0f,
             if (panAxes.y) delta.y else 0f,
@@ -187,16 +187,16 @@ class PdfViewState(
      * touches the clipboard itself — read [TextSelection.text] and copy in
      * the app (see the sample's selection actions).
      */
-    var selection: TextSelection? by mutableStateOf(null)
+    public var selection: TextSelection? by mutableStateOf(null)
         private set
 
     /** Fires on every selection change, including clearing (null). */
-    var onSelectionChange: ((TextSelection?) -> Unit)? = null
+    public var onSelectionChange: ((TextSelection?) -> Unit)? = null
 
     /** The fixed anchor (page, flattened char index) of an active drag. */
     private var selectionAnchor: Pair<Int, Int>? = null
 
-    fun clearSelection() {
+    public fun clearSelection() {
         selectionAnchor = null
         if (selection != null) {
             selection = null
@@ -274,7 +274,7 @@ class PdfViewState(
      * [KitePage.displayToDeviceBase] into page space: PDF pages get user
      * space (y-up, rotation unfolded), EPUB pages their document space.
      */
-    fun hitTest(viewportOffset: Offset): PageHit? {
+    public fun hitTest(viewportOffset: Offset): PageHit? {
         val (index, devX, devY) = hitTestDisplay(viewportOffset) ?: return null
         val page = document.pages.getOrNull(index) ?: return null
         val inv = page.displayToDeviceBase().invert() ?: return null
@@ -285,22 +285,22 @@ class PdfViewState(
     /* ── navigation ───────────────────────────────────────────────────────── */
 
     /** Jumps to [page] (coerced into range) without animation. */
-    suspend fun scrollToPage(page: Int) {
+    public suspend fun scrollToPage(page: Int) {
         val target = page.coerceIn(0, (pageCount - 1).coerceAtLeast(0))
         pendingPage = target
         adapter?.scrollToPage(target)
     }
 
     /** Animates to [page] (coerced into range). */
-    suspend fun animateScrollToPage(page: Int) {
+    public suspend fun animateScrollToPage(page: Int) {
         val target = page.coerceIn(0, (pageCount - 1).coerceAtLeast(0))
         pendingPage = target
         adapter?.animateScrollToPage(target)
     }
 
-    suspend fun nextPage() = animateScrollToPage(currentPage + 1)
+    public suspend fun nextPage(): Unit = animateScrollToPage(currentPage + 1)
 
-    suspend fun previousPage() = animateScrollToPage(currentPage - 1)
+    public suspend fun previousPage(): Unit = animateScrollToPage(currentPage - 1)
 
     internal data class PanAxes(val x: Boolean, val y: Boolean) {
         companion object {
@@ -320,7 +320,7 @@ class PdfViewState(
  * point in that page's own space (PDF: user space, y-up from the display
  * box's bottom-left with rotation unfolded; EPUB: the page's document space).
  */
-data class PageHit(
+public data class PageHit(
     val pageIndex: Int,
     val x: Double,
     val y: Double,
@@ -333,7 +333,7 @@ data class PageHit(
  * reading order; [text] carries `\n`/`\n\n` line/block separators exactly
  * like the extraction text; [quads] are display-space, one per line touched.
  */
-data class TextSelection(
+public data class TextSelection(
     val pageIndex: Int,
     val start: Int,
     val end: Int,

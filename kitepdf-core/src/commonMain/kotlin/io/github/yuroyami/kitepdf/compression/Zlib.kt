@@ -9,7 +9,7 @@ import io.github.yuroyami.kitepdf.core.ByteArrayBuilder
  * The wrapper is: 2-byte CMF/FLG header, DEFLATE payload, 4-byte big-endian
  * Adler-32 trailer. We verify both header validity and the Adler checksum.
  */
-object Zlib {
+public object Zlib {
 
     /**
      * zlib-wrap a DEFLATE compression of [data] (PDF FlateDecode form). Header
@@ -17,7 +17,7 @@ object Zlib {
      * dictionary; passes the mod-31 check), and the Adler-32 of the original
      * data is appended big-endian. Round-trips through [decode].
      */
-    fun encode(data: ByteArray): ByteArray {
+    public fun encode(data: ByteArray): ByteArray {
         // Platform fast path (T-10): native zlib at level 6 emits the whole
         // RFC 1950 stream (header + Adler) and compresses far better than the
         // pure-Kotlin encoder. Null means no fast path on this target.
@@ -39,7 +39,7 @@ object Zlib {
      * Unwrap and inflate a zlib stream. [maxOutputBytes] caps the decoded size
      * (see [Inflate.decode]); exceeding it throws [InflateException].
      */
-    fun decode(
+    public fun decode(
         input: ByteArray,
         verifyChecksum: Boolean = true,
         maxOutputBytes: Int = Int.MAX_VALUE,
@@ -81,7 +81,7 @@ object Zlib {
     }
 
     /** RFC 1950 §9: Adler-32, mod 65521 over the decoded data. */
-    fun adler32(data: ByteArray): Int {
+    public fun adler32(data: ByteArray): Int {
         // Accumulate in Long. NMAX (5552) is the C zlib run length before `b`
         // overflows an *unsigned* 32-bit int; within it `b` reaches ~3.9e9, which
         // overflows a signed Int (max ~2.1e9) and corrupted the checksum on large

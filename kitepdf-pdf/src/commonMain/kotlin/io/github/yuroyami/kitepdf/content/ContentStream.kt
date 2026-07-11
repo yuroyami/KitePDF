@@ -32,7 +32,7 @@ import io.github.yuroyami.kitepdf.parser.Token
  * Re-serialization writes [inlineImage] back verbatim. Regular operations leave
  * it null.
  */
-data class Operation(
+public data class Operation(
     val operator: String,
     val operands: List<PdfObject>,
     val inlineImage: ByteArray? = null,
@@ -53,7 +53,7 @@ data class Operation(
     }
 }
 
-object ContentStreamParser {
+public object ContentStreamParser {
 
     /**
      * Hard cap on operations parsed from one content stream. An adversarial
@@ -74,7 +74,7 @@ object ContentStreamParser {
      * path advances the reader past the position where the failure was observed,
      * so a stubbornly-bad byte can never spin the loop.
      */
-    fun parse(bytes: ByteArray): List<Operation> {
+    public fun parse(bytes: ByteArray): List<Operation> {
         val reader = ByteReader(bytes)
         val lexer = Lexer(reader)
         val parser = Parser(lexer)

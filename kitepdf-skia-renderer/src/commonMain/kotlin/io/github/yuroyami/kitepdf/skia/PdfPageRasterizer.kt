@@ -23,14 +23,14 @@ import org.jetbrains.skia.Surface
  * (`1pt = 1/72in`) multiplied by [scale]. Pass `scale = 2.0` for retina /
  * "2× density" thumbnails.
  */
-object PdfPageRasterizer {
+public object PdfPageRasterizer {
 
     /**
      * Render [page] into a freshly-allocated Skia [Image]. The caller owns
      * the returned object and should call `close()` (or use [encodeToPng])
      * once done — Skia images hold off-heap memory.
      */
-    fun renderToImage(
+    public fun renderToImage(
         page: PdfPage,
         scale: Double = 1.0,
         background: Int = Color.WHITE,
@@ -59,7 +59,7 @@ object PdfPageRasterizer {
     }
 
     /** Convenience: render and return PNG bytes. */
-    fun encodeToPng(page: PdfPage, scale: Double = 1.0, background: Int = Color.WHITE): ByteArray {
+    public fun encodeToPng(page: PdfPage, scale: Double = 1.0, background: Int = Color.WHITE): ByteArray {
         val image = renderToImage(page, scale, background)
         try {
             val data = image.encodeToData(EncodedImageFormat.PNG)

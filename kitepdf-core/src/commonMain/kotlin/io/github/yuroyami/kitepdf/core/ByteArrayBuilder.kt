@@ -8,16 +8,16 @@ package io.github.yuroyami.kitepdf.core
  * Public because consumers building or assembling byte streams (e.g. demo
  * PDF generators in tests/samples) need the same primitive.
  */
-class ByteArrayBuilder(initialCapacity: Int = 64) {
+public class ByteArrayBuilder(initialCapacity: Int = 64) {
     private var buf: ByteArray = ByteArray(initialCapacity.coerceAtLeast(16))
     private var written: Int = 0
 
-    fun append(b: Byte) {
+    public fun append(b: Byte) {
         if (written == buf.size) grow(written + 1)
         buf[written++] = b
     }
 
-    fun append(bytes: ByteArray, offset: Int = 0, length: Int = bytes.size - offset) {
+    public fun append(bytes: ByteArray, offset: Int = 0, length: Int = bytes.size - offset) {
         if (length == 0) return
         if (written + length > buf.size) grow(written + length)
         bytes.copyInto(buf, written, offset, offset + length)
@@ -29,7 +29,7 @@ class ByteArrayBuilder(initialCapacity: Int = 64) {
      * (PDF keywords, numbers, operators). Avoids the transient `ByteArray` that
      * `s.encodeToByteArray()` allocates per call. Callers must guarantee ASCII.
      */
-    fun appendAscii(s: String) {
+    public fun appendAscii(s: String) {
         val n = s.length
         if (n == 0) return
         if (written + n > buf.size) grow(written + n)
@@ -43,7 +43,7 @@ class ByteArrayBuilder(initialCapacity: Int = 64) {
      * buffer — no intermediate `String`. Used by the serializer for object
      * numbers, generations and `/Length`, which are written per object.
      */
-    fun appendLong(value: Long) {
+    public fun appendLong(value: Long) {
         if (value == 0L) { append('0'.code.toByte()); return }
         // Work in non-positive space so Long.MIN_VALUE stays representable.
         var v = if (value > 0) -value else value
@@ -64,13 +64,13 @@ class ByteArrayBuilder(initialCapacity: Int = 64) {
     }
 
     /** Append a 16-bit value big-endian (network order) — for SFNT/binary writers. */
-    fun appendU16BE(value: Int) {
+    public fun appendU16BE(value: Int) {
         append((value ushr 8).toByte())
         append(value.toByte())
     }
 
     /** Append a 32-bit value big-endian (network order) — for SFNT/binary writers. */
-    fun appendU32BE(value: Int) {
+    public fun appendU32BE(value: Int) {
         append((value ushr 24).toByte())
         append((value ushr 16).toByte())
         append((value ushr 8).toByte())
@@ -78,16 +78,16 @@ class ByteArrayBuilder(initialCapacity: Int = 64) {
     }
 
     /** Append [count] copies of [b] in one reserved span (no per-byte grow check). */
-    fun appendFill(b: Byte, count: Int) {
+    public fun appendFill(b: Byte, count: Int) {
         if (count <= 0) return
         if (written + count > buf.size) grow(written + count)
         buf.fill(b, written, written + count)
         written += count
     }
 
-    fun size(): Int = written
+    public fun size(): Int = written
 
-    fun toByteArray(): ByteArray = buf.copyOf(written)
+    public fun toByteArray(): ByteArray = buf.copyOf(written)
 
     private fun grow(minCapacity: Int) {
         var newCap = (buf.size * 2).coerceAtLeast(16)

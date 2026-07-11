@@ -21,9 +21,9 @@ import io.github.yuroyami.kitepdf.core.PdfFormatException
  * are ignored); flex operators are approximated as cubic Béziers; the
  * Encoding /Differences override comes from the PDF layer (PdfFont).
  */
-class CffFont private constructor(
+public class CffFont private constructor(
     private val reader: TtfReader,
-    val name: String,
+    public val name: String,
     /** Per-glyph charstring bytes — index = glyph ID. */
     internal val charStrings: List<ByteArray>,
     /** Global subroutines, indexable with the Type 2 subr-bias adjustment. */
@@ -49,7 +49,7 @@ class CffFont private constructor(
     /** The bits of a Private DICT the subsetter re-emits (hints are dropped). */
     internal class FdPrivate(val defaultWidthX: Double, val nominalWidthX: Double)
 
-    val numGlyphs: Int get() = charStrings.size
+    public val numGlyphs: Int get() = charStrings.size
 
     private val outlineCache = HashMap<Int, io.github.yuroyami.kitepdf.render.PdfPath?>()
 
@@ -58,7 +58,7 @@ class CffFont private constructor(
      * Decoded outlines are cached: a glyph drawn N times runs the Type 2
      * charstring interpreter once, not N times.
      */
-    fun outline(glyphId: Int): io.github.yuroyami.kitepdf.render.PdfPath? {
+    public fun outline(glyphId: Int): io.github.yuroyami.kitepdf.render.PdfPath? {
         if (glyphId < 0 || glyphId >= charStrings.size) return null
         if (outlineCache.containsKey(glyphId)) return outlineCache[glyphId]
         val cs = charStrings[glyphId]
@@ -74,10 +74,10 @@ class CffFont private constructor(
     }
 
     /** Glyph id for a PostScript glyph name; -1 if unknown. */
-    fun glyphIdForName(name: String): Int = nameToGid[name] ?: -1
+    public fun glyphIdForName(name: String): Int = nameToGid[name] ?: -1
 
     /** Glyph id for a Unicode codepoint — uses Adobe Glyph List → name → gid. */
-    fun glyphIdForCodePoint(codePoint: Int): Int {
+    public fun glyphIdForCodePoint(codePoint: Int): Int {
         // Try standard glyph name lookups for ASCII range.
         if (codePoint in 0..127) {
             standardGlyphNameForAscii(codePoint)?.let { nameToGid[it]?.let { gid -> return gid } }
@@ -106,9 +106,9 @@ class CffFont private constructor(
         else -> null
     }
 
-    companion object {
+    public companion object {
 
-        fun parse(bytes: ByteArray): CffFont {
+        public fun parse(bytes: ByteArray): CffFont {
             val reader = TtfReader(bytes)
             // ── Header ────────────────────────────────────────────────────
             val major = reader.u8()

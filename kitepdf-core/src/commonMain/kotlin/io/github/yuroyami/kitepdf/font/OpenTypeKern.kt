@@ -11,21 +11,21 @@ package io.github.yuroyami.kitepdf.font
  * Only horizontal `xAdvance` of the first glyph is read (the by-far common case);
  * mark/cursive positioning and vertical kerning are out of scope.
  */
-class OpenTypeKern private constructor(
+public class OpenTypeKern private constructor(
     private val legacy: Map<Long, Int>,          // (left shl 32 or right) -> value
     private val gpos: List<PairPosSubtable>,
 ) {
     /** Kerning adjustment (font units) applied to [left]'s advance before [right]. */
-    fun between(left: Int, right: Int): Int {
+    public fun between(left: Int, right: Int): Int {
         legacy[(left.toLong() shl 32) or right.toLong()]?.let { if (it != 0) return it }
         for (st in gpos) { val v = st.value(left, right); if (v != 0) return v }
         return 0
     }
 
-    val isEmpty: Boolean get() = legacy.isEmpty() && gpos.isEmpty()
+    public val isEmpty: Boolean get() = legacy.isEmpty() && gpos.isEmpty()
 
-    companion object {
-        fun from(kernTable: ByteArray?, gposTable: ByteArray?): OpenTypeKern? {
+    public companion object {
+        public fun from(kernTable: ByteArray?, gposTable: ByteArray?): OpenTypeKern? {
             val legacy = kernTable?.let { runCatching { parseKern(it) }.getOrNull() } ?: emptyMap()
             val gpos = gposTable?.let { runCatching { parseGposKern(it) }.getOrNull() } ?: emptyList()
             if (legacy.isEmpty() && gpos.isEmpty()) return null

@@ -6,7 +6,7 @@ package io.github.yuroyami.kitepdf
  *
  * The "Use*" naming preserves the spec's PDF-name values verbatim.
  */
-enum class PageMode {
+public enum class PageMode {
     /** No panel — page area only (default). */
     UseNone,
 
@@ -28,8 +28,8 @@ enum class PageMode {
     /** A /PageMode value we don't recognise. */
     Other;
 
-    companion object {
-        fun fromName(name: String?): PageMode = when (name) {
+    public companion object {
+        public fun fromName(name: String?): PageMode = when (name) {
             "UseNone", null -> UseNone
             "UseOutlines" -> UseOutlines
             "UseThumbs" -> UseThumbs
@@ -45,7 +45,7 @@ enum class PageMode {
  * Initial page-layout hint that tells the viewer how to lay pages out in
  * the document area (ISO 32000-1 §7.7.2 Table 28, `/PageLayout`).
  */
-enum class PageLayout {
+public enum class PageLayout {
     /** One page at a time (default). */
     SinglePage,
 
@@ -67,8 +67,8 @@ enum class PageLayout {
     /** A /PageLayout value we don't recognise. */
     Other;
 
-    companion object {
-        fun fromName(name: String?): PageLayout = when (name) {
+    public companion object {
+        public fun fromName(name: String?): PageLayout = when (name) {
             "SinglePage", null -> SinglePage
             "OneColumn" -> OneColumn
             "TwoColumnLeft" -> TwoColumnLeft
