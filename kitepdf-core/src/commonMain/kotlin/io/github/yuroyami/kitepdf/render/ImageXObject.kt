@@ -1,5 +1,6 @@
 package io.github.yuroyami.kitepdf.render
 
+import io.github.yuroyami.kitepdf.core.kiteWarn
 import io.github.yuroyami.kitepdf.filters.FilterChain
 import io.github.yuroyami.kitepdf.parser.IndirectResolver
 import io.github.yuroyami.kitepdf.parser.PdfArray
@@ -112,7 +113,9 @@ public class ImageXObject internal constructor(
                     encodedBytes = ByteArray(0),
                     // Decode failures (truncated/garbled streams) degrade to a
                     // placeholder rather than aborting the whole page.
-                    pixelBytes = runCatching { FilterChain.decode(stream) }.getOrNull(),
+                    pixelBytes = runCatching { FilterChain.decode(stream) }.onFailure { e ->
+                        kiteWarn { "image: decode fell back to placeholder: ${e.message}" }
+                    }.getOrNull(),
                     softMaskAlpha = alpha, softMaskWidth = smW, softMaskHeight = smH,
                     resolvedColorSpace = resolvedCs, decode = decodeArr,
                     isImageMask = isMask, maskFill = fillColor,
