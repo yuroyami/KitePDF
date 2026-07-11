@@ -11,10 +11,10 @@ KitePDF offers three rendering paths, each optimized for different scenarios:
 | **JVM / Server** | `kitepdf-native-renderer` (AWT) | Minimal dependencies; built-in to JDK | JVM, CI pipelines |
 | **Apple platforms** | `kitepdf-native-renderer` (CoreGraphics) | Native system framework; no binary deps | iOS, macOS, tvOS |
 | **Android** | `kitepdf-native-renderer` | Native Bitmap API | Android |
-| **Cross-platform** | `kitepdf-skia` | One common API across JVM/Apple/Android/Linux | All except JS/wasmJs |
-| **Skia on web** | `kitepdf-skia` (Skiko over WASM) | Best fidelity on JS; includes images | JS, wasmJs |
+| **Cross-platform** | `kitepdf-skia-renderer` | One common API across JVM/Apple/Android/Linux | All except JS/wasmJs |
+| **Skia on web** | `kitepdf-skia-renderer` (Skiko over WASM) | Best fidelity on JS; includes images | JS, wasmJs |
 | **Canvas2D on web** | `kitepdf-native-renderer` (Canvas2D) | Minimal JS bundle; native acceleration | JS (lightweight viewers) |
-| **Compose viewers** | `kitepdf-compose` + `ImageBitmap.encodeToPng()` | Export rendered page from UI widget | All Compose platforms |
+| **Compose viewers** | `kitepdf-compose-viewer` + `ImageBitmap.encodeToPng()` | Export rendered page from UI widget | All Compose platforms |
 
 ## JVM / Server: AWT + ImageIO
 
@@ -24,7 +24,7 @@ The AWT rasterizer is zero-dependency; it ships with the JDK and needs no native
 
 ```kotlin
 dependencies {
-    implementation("io.github.yuroyami:kitepdf-native-renderer:0.1.0")
+    implementation("io.github.yuroyami:kitepdf-native-renderer:0.2.0")
 }
 ```
 
@@ -36,8 +36,8 @@ import io.github.yuroyami.kitepdf.PdfDocument
 import java.io.File
 
 // Render page 0 to a PNG file on disk
-val pdf = PdfDocument.open(File("sample.pdf"))
-val page = pdf.getPage(0)
+val pdf = PdfDocument.openFile("sample.pdf")
+val page = pdf.pages[0]
 
 // Write PNG bytes directly to disk
 val pngBytes = AwtPdfRasterizer.encodeToPng(page, scale = 2.0)
@@ -73,7 +73,7 @@ On iOS, macOS, and tvOS, use `ApplePdfRasterizer` to render via native CoreGraph
 ```kotlin
 // In your ios/macOS sourceSet
 dependencies {
-    implementation("io.github.yuroyami:kitepdf-native-renderer:0.1.0")
+    implementation("io.github.yuroyami:kitepdf-native-renderer:0.2.0")
 }
 ```
 
@@ -82,10 +82,12 @@ dependencies {
 ```kotlin
 import io.github.yuroyami.kitepdf.nativerenderer.ApplePdfRasterizer
 import io.github.yuroyami.kitepdf.PdfDocument
+import io.github.yuroyami.kitepdf.openFile
 import platform.Foundation.NSFileManager
+import platform.Foundation.NSUserDomainMask
 
-val pdf = PdfDocument.open(fileUrl)
-val page = pdf.getPage(0)
+val pdf = PdfDocument.openFile(path)
+val page = pdf.pages[0]
 
 // Render to PNG NSData
 val pngData = ApplePdfRasterizer.renderToPngData(
@@ -98,8 +100,9 @@ val pngData = ApplePdfRasterizer.renderToPngData(
 ) ?: return  // null if CoreGraphics / encoder fails (extremely rare)
 
 // Write to Documents folder
-val docUrl = NSFileManager.defaultManager.URLsForDirectory(4u, NSUserDomainMask).first()
-val fileUrl = docUrl.URLByAppendingPathComponent("preview.png")
+val docUrl = NSFileManager.defaultManager
+    .URLsForDirectory(NSDocumentDirectory, NSUserDomainMask).first() as NSURL
+val fileUrl = docUrl.URLByAppendingPathComponent("preview.png")!!
 pngData.writeToURL(fileUrl, atomically = true)
 ```
 
@@ -121,7 +124,7 @@ On Android, `AndroidPdfBitmapRenderer` returns an ARGB_8888 `Bitmap` for use wit
 
 ```kotlin
 dependencies {
-    implementation("io.github.yuroyami:kitepdf-native-renderer:0.1.0")
+    implementation("io.github.yuroyami:kitepdf-native-renderer:0.2.0")
 }
 ```
 
@@ -133,11 +136,15 @@ import io.github.yuroyami.kitepdf.PdfDocument
 import android.graphics.Color
 import android.graphics.Bitmap
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
-// Render off the main thread
+// Render off the main thread, then draw the result once it lands.
+val imageBitmap = remember { mutableStateOf<ImageBitmap?>(null) }
 LaunchedEffect(pdf) {
     val bitmap = withContext(Dispatchers.Default) {
         AndroidPdfBitmapRenderer.renderToBitmap(
@@ -146,11 +153,9 @@ LaunchedEffect(pdf) {
             background = Color.WHITE
         )
     }
-    
-    // Now draw or cache the bitmap
-    val imageBitmap = bitmap.asImageBitmap()
-    Image(imageBitmap, contentDescription = "Page thumbnail")
+    imageBitmap.value = bitmap.asImageBitmap()
 }
+imageBitmap.value?.let { Image(it, contentDescription = "Page thumbnail") }
 ```
 
 **Parameters:**
@@ -168,13 +173,13 @@ LaunchedEffect(pdf) {
 
 ## Cross-platform: Skia (kitepdf-skia)
 
-For a single API across JVM, Android, Apple, and Linux, use `PdfPageRasterizer` from `kitepdf-skia`.
+For a single API across JVM, Android, Apple, and Linux, use `PdfPageRasterizer` from `kitepdf-skia-renderer`.
 
 **Install:**
 
 ```kotlin
 dependencies {
-    implementation("io.github.yuroyami:kitepdf-skia:0.1.0")
+    implementation("io.github.yuroyami:kitepdf-skia-renderer:0.2.0")
 }
 ```
 
@@ -186,8 +191,8 @@ import io.github.yuroyami.kitepdf.PdfDocument
 import org.jetbrains.skia.Color
 import java.io.File
 
-val pdf = PdfDocument.open(File("sample.pdf"))
-val page = pdf.getPage(0)
+val pdf = PdfDocument.openFile("sample.pdf")
+val page = pdf.pages[0]
 
 // Render to Skia Image
 val image = PdfPageRasterizer.renderToImage(
@@ -226,7 +231,7 @@ For minimal bundle size on the web, use Canvas2D rendering via `Canvas2dCanvas`.
 
 ```kotlin
 dependencies {
-    implementation("io.github.yuroyami:kitepdf-native-renderer:0.1.0")
+    implementation("io.github.yuroyami:kitepdf-native-renderer:0.2.0")
 }
 ```
 
@@ -235,7 +240,7 @@ dependencies {
 ```kotlin
 import io.github.yuroyami.kitepdf.nativerenderer.Canvas2dCanvas
 import io.github.yuroyami.kitepdf.PdfDocument
-import io.github.yuroyami.kitepdf.render.Matrix as PdfMatrix
+import io.github.yuroyami.kitepdf.core.render.Matrix as PdfMatrix
 import org.w3c.dom.CanvasRenderingContext2D
 
 // In a <canvas> context
@@ -243,7 +248,7 @@ val canvas: CanvasRenderingContext2D = /* ... */
 val pdfCanvas = Canvas2dCanvas(canvas)
 
 val pdf = PdfDocument.open(/* ... */)
-val page = pdf.getPage(0)
+val page = pdf.pages[0]
 val deviceCtm = PdfMatrix(scale, 0.0, 0.0, -scale, 0.0, page.height * scale)
 page.renderTo(pdfCanvas, deviceCtm)
 
@@ -261,7 +266,7 @@ For better image fidelity on the web (including embedded image XObjects), use Sk
 
 ```kotlin
 dependencies {
-    implementation("io.github.yuroyami:kitepdf-skia:0.1.0")
+    implementation("io.github.yuroyami:kitepdf-skia-renderer:0.2.0")
 }
 ```
 
@@ -284,13 +289,13 @@ val blob = Blob(arrayOf(pngBytes), object : BlobPropertyBag {
 
 ## Compose Multiplatform: Export from PdfView
 
-If you're using the Compose viewer (`kitepdf-compose`), export the current rendered page as a PNG via `ImageBitmap.encodeToPng()`.
+If you're using the Compose viewer (`kitepdf-compose-viewer`), export the current rendered page as a PNG via `ImageBitmap.encodeToPng()`.
 
 **Install:**
 
 ```kotlin
 dependencies {
-    implementation("io.github.yuroyami:kitepdf-compose:0.1.0")
+    implementation("io.github.yuroyami:kitepdf-compose-viewer:0.2.0")
 }
 ```
 
@@ -319,17 +324,15 @@ import io.github.yuroyami.kitepdf.PdfDocument
 import java.io.File
 
 fun renderThumbnails(pdfPath: String, outputDir: String) {
-    val pdf = PdfDocument.open(File(pdfPath))
+    val pdf = PdfDocument.openFile(pdfPath)
     val outDir = File(outputDir).apply { mkdirs() }
     
     repeat(pdf.pageCount) { pageNum ->
-        val page = pdf.getPage(pageNum)
+        val page = pdf.pages[pageNum]
         val pngBytes = AwtPdfRasterizer.encodeToPng(page, scale = 0.5)  // Half-size for quick previews
         File(outDir, "page_$pageNum.png").writeBytes(pngBytes)
         println("Rendered page $pageNum")
     }
-    
-    pdf.close()
 }
 ```
 
@@ -344,20 +347,19 @@ import kotlinx.coroutines.coroutineScope
 import java.io.File
 
 suspend fun renderThumbnailsAsync(pdfPath: String, outputDir: String) {
-    val pdf = PdfDocument.open(File(pdfPath))
+    val pdf = PdfDocument.openFile(pdfPath)
     val outDir = File(outputDir).apply { mkdirs() }
     
     coroutineScope {
         repeat(pdf.pageCount) { pageNum ->
             launch(Dispatchers.Default) {
-                val page = pdf.getPage(pageNum)
+                val page = pdf.pages[pageNum]
                 val pngBytes = AwtPdfRasterizer.encodeToPng(page, scale = 0.5)
                 File(outDir, "page_$pageNum.png").writeBytes(pngBytes)
             }
         }
     }
     
-    pdf.close()
 }
 ```
 

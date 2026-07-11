@@ -11,7 +11,7 @@ KitePDF is published to Maven Central as four artifacts. Start with the core hea
     ```gradle
     dependencies {
         commonMain.dependencies {
-            implementation("io.github.yuroyami:kitepdf:0.1.0")
+            implementation("io.github.yuroyami:kitepdf:0.2.0")
         }
     }
     ```
@@ -20,7 +20,7 @@ KitePDF is published to Maven Central as four artifacts. Start with the core hea
 
     ```gradle
     dependencies {
-        implementation("io.github.yuroyami:kitepdf:0.1.0")
+        implementation("io.github.yuroyami:kitepdf:0.2.0")
     }
     ```
 
@@ -65,14 +65,14 @@ val doc = PdfDocument.open(bytes, "secret".encodeToByteArray())
 
 ## Step 3: Show it on screen in Compose
 
-The `kitepdf-compose` artifact provides `PdfView`: a Compose-Multiplatform viewer supporting pinch zoom, paging, continuous scroll, and more.
+The `kitepdf-compose-viewer` artifact provides `PdfView`: a Compose-Multiplatform viewer supporting pinch zoom, paging, continuous scroll, and more.
 
 Add the dependency:
 
 ```gradle
 dependencies {
     commonMain.dependencies {
-        implementation("io.github.yuroyami:kitepdf-compose:0.1.0")
+        implementation("io.github.yuroyami:kitepdf-compose-viewer:0.2.0")
     }
 }
 ```
@@ -176,7 +176,7 @@ Add the dependency:
 
 ```gradle
 dependencies {
-    implementation("io.github.yuroyami:kitepdf-native-renderer:0.1.0")
+    implementation("io.github.yuroyami:kitepdf-native-renderer:0.2.0")
 }
 ```
 
@@ -206,7 +206,7 @@ val img = AwtPdfRasterizer.renderToImage(page, scale = 1.5)
 
 !!! note
 
-    The native-renderer artifact works on JVM, Android, and macOS. For other platforms (JS, wasm, iOS), use the Skia renderer (`kitepdf-skia`) or render through Compose (`kitepdf-compose`).
+    The native-renderer artifact works on JVM, Android, and macOS. For other platforms (JS, wasm, iOS), use the Skia renderer (`kitepdf-skia-renderer`) or render through Compose (`kitepdf-compose-viewer`).
 
 ## Where to next?
 

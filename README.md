@@ -47,7 +47,7 @@ The engine is one dependency. Add it to `commonMain` and you have everything exc
 kotlin {
     sourceSets {
         commonMain.dependencies {
-            implementation("io.github.yuroyami:kitepdf:0.1.0")
+            implementation("io.github.yuroyami:kitepdf:0.2.0")
         }
     }
 }
@@ -55,7 +55,7 @@ kotlin {
 
 That is it for reading, writing, editing, redacting, encryption, text extraction and building PDFs, on every Kotlin target. Its only dependency is `kotlin-stdlib`.
 
-Not using Kotlin Multiplatform? The same artifact works in a plain Android or JVM project. Add `io.github.yuroyami:kitepdf:0.1.0` to your normal `dependencies { }` block.
+Not using Kotlin Multiplatform? The same artifact works in a plain Android or JVM project. Add `io.github.yuroyami:kitepdf:0.2.0` to your normal `dependencies { }` block.
 
 Rendering bindings are opt-in and covered under [Putting pixels on screen](#putting-pixels-on-screen).
 
@@ -86,12 +86,12 @@ Everything below is pure common code from the `kitepdf` artifact. Each item link
 A few quick tastes:
 
 ```kotlin
-// Read text
-val text = doc.pages[0].extractText()
-
 // Open a password-protected PDF
 val doc = PdfDocument.open(bytes, password = "secret".encodeToByteArray())
 require(doc.isAuthenticated)
+
+// Read text
+val text = doc.pages[0].extractText()
 
 // Fill a form field and save (append-only)
 val out = doc.edit()
@@ -115,7 +115,7 @@ See the **[full documentation](https://yuroyami.github.io/KitePDF/)** for the co
 
 The engine is headless. Showing a PDF is the one job that needs a platform, so it lives in separate, optional artifacts. Pick the one that matches how you draw.
 
-### Compose Multiplatform: `kitepdf-compose`
+### Compose Multiplatform: `kitepdf-compose-viewer`
 
 A PDF page is just another composable. `PdfView` draws into a Compose `DrawScope`, so it scrolls, zooms and composes with your UI like anything else on a `Canvas`. No `AndroidView`, no `UIKitView`, no embedded web view.
 
@@ -138,16 +138,16 @@ PdfThumbnailStrip(state)       // tappable thumbnails
 
 See **[the viewer guide](https://yuroyami.github.io/KitePDF/compose-viewer/)** for layouts, zoom, render modes, navigation and export.
 
-### Headless rasterizers: `kitepdf-native-renderer` and `kitepdf-skia`
+### Headless rasterizers: `kitepdf-native-renderer` and `kitepdf-skia-renderer`
 
 For servers, CI, thumbnails, or non-Compose UIs, render a page straight to image bytes.
 
 ```kotlin
 // kitepdf-native-renderer, JVM (AWT). Also CoreGraphics (Apple), android.graphics, Canvas2D (JS).
-val png = AwtPdfRasterizer.encodeToPng(doc.pages[0], scale = 2.0)
+val awtPng = AwtPdfRasterizer.encodeToPng(doc.pages[0], scale = 2.0)
 
 // kitepdf-skia, one common API via Skiko (JVM, Android, Apple, Linux, web).
-val png = PdfPageRasterizer.encodeToPng(doc.pages[0], scale = 2.0)
+val skiaPng = PdfPageRasterizer.encodeToPng(doc.pages[0], scale = 2.0)
 ```
 
 See **[the rendering guide](https://yuroyami.github.io/KitePDF/rendering/)** to choose between them.

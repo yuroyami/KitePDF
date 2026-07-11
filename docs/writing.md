@@ -27,7 +27,7 @@ Add the `kitepdf` artifact to your build:
 
     ```kotlin
     dependencies {
-        commonMainImplementation("io.github.yuroyami:kitepdf:0.1.0")
+        commonMainImplementation("io.github.yuroyami:kitepdf:0.2.0")
     }
     ```
 
@@ -35,7 +35,7 @@ Add the `kitepdf` artifact to your build:
 
     ```gradle
     dependencies {
-        implementation("io.github.yuroyami:kitepdf:0.1.0")
+        implementation("io.github.yuroyami:kitepdf:0.2.0")
     }
     ```
 
@@ -366,7 +366,7 @@ Compressed PDFs are smaller (~40-60% for typical documents) and equally valid. U
 
 ## Rendering pages to images
 
-To convert PDF pages to rasterized images (PNG, Bitmap, etc.), see the [rendering guide](rendering.md). The `kitepdf-native-renderer` or `kitepdf-skia` modules provide platform-specific and unified APIs.
+To convert PDF pages to rasterized images (PNG, Bitmap, etc.), see the [rendering guide](rendering.md). The `kitepdf-native-renderer` or `kitepdf-skia-renderer` modules provide platform-specific and unified APIs.
 
 ## See also
 
