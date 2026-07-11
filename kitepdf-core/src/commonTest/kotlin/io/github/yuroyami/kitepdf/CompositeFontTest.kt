@@ -60,12 +60,12 @@ class CompositeFontTest {
         assertSame(IdentityCodeUnitReader, PredefinedCMaps.reader("Identity-V"))
         assertSame(SingleByteCodeUnitReader, PredefinedCMaps.reader(null))
         assertSame(SingleByteCodeUnitReader, PredefinedCMaps.reader("WeirdUnknown"))
-        // Non-Identity CJK CMaps now segment by codespace (mixed 1-/2-byte) and
-        // DEGRADE the CID mapping (no bundled Adobe resource data), rather than
-        // faking Identity-H and mis-segmenting ASCII+kanji streams.
+        // Locale CJK CMaps carry the bundled Adobe tables since T-46: real
+        // registry CIDs, not the degraded CID==code fallback.
         val gbk = PredefinedCMaps.reader("GBK-EUC-H")
-        assertTrue(gbk.degraded)
+        assertTrue(!gbk.degraded, "bundled tables are authoritative")
         assertTrue(gbk !== IdentityCodeUnitReader && gbk !== SingleByteCodeUnitReader)
+        // The Unicode-keyed CMaps stay synthesized (tables not bundled).
         val utf16 = PredefinedCMaps.reader("UniJIS-UTF16-H")
         assertTrue(utf16.degraded)
     }

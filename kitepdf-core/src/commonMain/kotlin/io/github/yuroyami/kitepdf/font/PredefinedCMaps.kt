@@ -169,6 +169,12 @@ internal object PredefinedCMaps {
         if (name == null) return SingleByteCodeUnitReader
         if (name == "Identity-H" || name == "Identity-V" || name == "Identity") return IdentityCodeUnitReader
 
+        // Bundled Adobe locale CMaps (T-46): full codespace segmentation AND
+        // real registry CID mapping through the usecmap chain. The Uni* CMaps
+        // are not bundled (see PredefinedCMapData) and keep the synthesized
+        // paths below.
+        TableCMapReader.forName(name)?.let { return it }
+
         // Unicode-keyed predefined CMaps: the code IS a Unicode code unit, so a
         // 2-byte (UCS2) or 2/4-byte (UTF16) segmentation is correct AND the code
         // doubles as a usable index; still flagged degraded (CID != code in the
@@ -202,5 +208,147 @@ internal object PredefinedCMaps {
         // assume 2-byte (the overwhelming majority) and degrade the mapping.
         if (name.endsWith("-H") || name.endsWith("-V")) return CodespaceReader(ucs2)
         return SingleByteCodeUnitReader
+    }
+}
+
+/**
+ * A [CodeUnitReader] over the bundled [PredefinedCMapData] tables: segments
+ * by the CMap's OWN codespace ranges (own + usecmap chain) and maps each
+ * code to its Adobe-registry CID through the chain. Unmapped codes resolve
+ * to CID 0 (.notdef), matching the spec. Not degraded: these are the real
+ * tables.
+ */
+internal class TableCMapReader private constructor(
+    private val chain: List<Decoded>,
+) : CodeUnitReader {
+
+    private class Decoded(
+        val codespaces: List<CodespaceReader.Range>,
+        /** Sorted single-code mappings: parallel code/cid arrays. */
+        val charCodes: IntArray,
+        val charCids: IntArray,
+        /** Sorted ranges: parallel lo/hi/cid arrays. */
+        val rangeLo: IntArray,
+        val rangeHi: IntArray,
+        val rangeCid: IntArray,
+    )
+
+    override fun next(bytes: ByteArray, offset: Int): Pair<Int, Int>? {
+        if (offset >= bytes.size) return null
+        var best: CodespaceReader.Range? = null
+        for (d in chain) for (r in d.codespaces) {
+            if (r.matches(bytes, offset) && (best == null || r.width > best!!.width)) best = r
+        }
+        val width = (best?.width ?: 1).coerceAtMost(bytes.size - offset)
+        var code = 0
+        for (i in 0 until width) code = (code shl 8) or (bytes[offset + i].toInt() and 0xFF)
+        return cidFor(code) to width
+    }
+
+    private fun cidFor(code: Int): Int {
+        for (d in chain) {
+            // Exact single-code entries first (they override ranges).
+            var lo = 0
+            var hi = d.charCodes.size - 1
+            while (lo <= hi) {
+                val mid = (lo + hi) ushr 1
+                val v = d.charCodes[mid]
+                when {
+                    v == code -> return d.charCids[mid]
+                    v < code -> lo = mid + 1
+                    else -> hi = mid - 1
+                }
+            }
+            lo = 0
+            hi = d.rangeLo.size - 1
+            while (lo <= hi) {
+                val mid = (lo + hi) ushr 1
+                when {
+                    code < d.rangeLo[mid] -> hi = mid - 1
+                    code > d.rangeHi[mid] -> lo = mid + 1
+                    else -> return d.rangeCid[mid] + (code - d.rangeLo[mid])
+                }
+            }
+        }
+        return 0 // .notdef
+    }
+
+    companion object {
+        private val cache = HashMap<String, TableCMapReader?>()
+
+        fun forName(name: String): TableCMapReader? = cache.getOrPut(name) {
+            val chain = ArrayList<Decoded>()
+            var cur: String? = name
+            var hops = 0
+            while (cur != null && hops++ < 8) {
+                val entry = PredefinedCMapData.entries[cur] ?: break
+                chain.add(decode(entry.blob))
+                cur = entry.usecmap
+            }
+            if (chain.isEmpty()) null else TableCMapReader(chain)
+        }
+
+        private fun decode(b64: String): Decoded {
+            val b = decodeBase64(b64)
+            var p = 0
+            fun u8() = b[p++].toInt() and 0xFF
+            fun u16() = (u8() shl 8) or u8()
+            fun u32() = (u16() shl 16) or u16()
+
+            val csCount = u8()
+            val codespaces = ArrayList<CodespaceReader.Range>(csCount)
+            repeat(csCount) {
+                val w = u8()
+                val low = IntArray(w) { u8() }
+                val high = IntArray(w) { u8() }
+                codespaces.add(CodespaceReader.Range(w, low, high))
+            }
+            val nChars = u32()
+            val charCodes = IntArray(nChars)
+            val charCids = IntArray(nChars)
+            for (i in 0 until nChars) {
+                charCodes[i] = u32()
+                charCids[i] = u16()
+            }
+            val nRanges = u32()
+            val rangeLo = IntArray(nRanges)
+            val rangeHi = IntArray(nRanges)
+            val rangeCid = IntArray(nRanges)
+            for (i in 0 until nRanges) {
+                rangeLo[i] = u32()
+                rangeHi[i] = u32()
+                rangeCid[i] = u16()
+            }
+            return Decoded(codespaces, charCodes, charCids, rangeLo, rangeHi, rangeCid)
+        }
+
+        private fun decodeBase64(s: String): ByteArray {
+            val out = ByteArray(s.length / 4 * 3)
+            var o = 0
+            var buf = 0
+            var bits = 0
+            var pad = 0
+            for (c in s) {
+                val v = when (c) {
+                    in 'A'..'Z' -> c - 'A'
+                    in 'a'..'z' -> c - 'a' + 26
+                    in '0'..'9' -> c - '0' + 52
+                    '+' -> 62
+                    '/' -> 63
+                    '=' -> { pad++; 0 }
+                    else -> error("bad base64")
+                }
+                buf = (buf shl 6) or v
+                bits += 6
+                if (bits == 24) {
+                    out[o++] = (buf ushr 16).toByte()
+                    out[o++] = (buf ushr 8).toByte()
+                    out[o++] = buf.toByte()
+                    buf = 0
+                    bits = 0
+                }
+            }
+            return if (pad == 0) out else out.copyOf(o - pad)
+        }
     }
 }
