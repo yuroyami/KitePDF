@@ -77,7 +77,10 @@ kotlin {
         }
 
         commonMain.dependencies {
-            // Intentionally empty. The core depends on kotlin-stdlib only.
+            // The one runtime dependency: the Kite lineage's shared image engine.
+            // Image codecs (JPEG incl. progressive, PNG, GIF, JPX, JBIG2, CCITT)
+            // live there now; everything else here stays kotlin-stdlib-only.
+            api("io.github.yuroyami:kiteimage:0.0.1-SNAPSHOT")
         }
 
         commonTest.dependencies {
