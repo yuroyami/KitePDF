@@ -128,8 +128,16 @@ class BoxModelCompletenessTest {
     /** Same 2x1 grayscale PNG as EpubRenderTest's fixture. */
     private fun minimalGrayPng(): ByteArray {
         fun be32(n: Int) = byteArrayOf((n ushr 24).toByte(), (n ushr 16).toByte(), (n ushr 8).toByte(), n.toByte())
-        fun chunk(type: String, data: ByteArray) =
-            be32(data.size) + type.encodeToByteArray() + data + byteArrayOf(0, 0, 0, 0)
+        fun chunk(type: String, data: ByteArray): ByteArray {
+            // Real CRC — the shared KiteImage PNG decoder verifies consumed chunks.
+            val body = type.encodeToByteArray() + data
+            var c = -1
+            for (b in body) {
+                c = c xor (b.toInt() and 0xFF)
+                repeat(8) { c = if (c and 1 != 0) (0xEDB88320.toInt()) xor (c ushr 1) else c ushr 1 }
+            }
+            return be32(data.size) + body + be32(c.inv())
+        }
         val scan = byteArrayOf(0, 0x40, 0xC0.toByte())
         val nlen = scan.size.inv() and 0xFFFF
         val zlib = byteArrayOf(0x78, 0x01, 0x01, (scan.size and 0xFF).toByte(), ((scan.size ushr 8) and 0xFF).toByte(), (nlen and 0xFF).toByte(), ((nlen ushr 8) and 0xFF).toByte()) +

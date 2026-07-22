@@ -1,5 +1,9 @@
 package io.github.yuroyami.kitepdf.core.render
 
+import io.github.yuroyami.kiteimage.ImageFormat
+import io.github.yuroyami.kiteimage.KiteImage
+import io.github.yuroyami.kiteimage.codec.Jbig2Decoder
+import io.github.yuroyami.kiteimage.codec.JpxDecoder
 import io.github.yuroyami.kitepdf.core.kiteWarn
 import io.github.yuroyami.kitepdf.core.filters.FilterChain
 import io.github.yuroyami.kitepdf.core.parser.IndirectResolver
@@ -126,12 +130,12 @@ public class ImageXObject internal constructor(
                 // it). Falls back to the encoded [Kind.JPEG] path when the native
                 // decoder can't handle the stream (arithmetic / 12-bit / etc.).
                 Kind.JPEG -> {
-                    val raw = runCatching { JpegDecoder.decode(stream.rawBytes) }.getOrNull()
-                    if (raw != null) ImageXObject(
-                        raw.width, raw.height, 8, raw.colorSpace, Kind.RAW,
-                        encodedBytes = ByteArray(0), pixelBytes = raw.pixelBytes,
+                    val bm = runCatching { KiteImage.decode(stream.rawBytes) }.getOrNull()
+                    if (bm != null) ImageXObject(
+                        bm.width, bm.height, 8, "DeviceRGB", Kind.RAW,
+                        encodedBytes = ByteArray(0), pixelBytes = bm.toRgbBytes(),
                         softMaskAlpha = alpha, softMaskWidth = smW, softMaskHeight = smH,
-                        resolvedColorSpace = raw.resolvedColorSpace,
+                        resolvedColorSpace = ColorSpace.DeviceRGB,
                         isImageMask = isMask, maskFill = fillColor,
                     ) else ImageXObject(
                         width, height, bpc, cs, kind, stream.rawBytes,
@@ -204,26 +208,30 @@ public class ImageXObject internal constructor(
          * CBZ / SVG `<image>` (rather than pulled from a PDF `/XObject` stream).
          * The format and pixel dimensions are sniffed from the bytes.
          *
-         * PNG, GIF and JPEG are decoded here in pure Kotlin ([PngDecoder] /
-         * [GifDecoder] / [JpegDecoder]) into a [Kind.RAW] image that renders on
+         * PNG, GIF, BMP, JPEG and JPEG 2000 are decoded in pure Kotlin by the
+         * shared KiteImage engine into a [Kind.RAW] image that renders on
          * every backend. A JPEG the native decoder can't handle (arithmetic coding,
          * 12-bit) falls back to the host platform's loader ([Kind.JPEG] with the
          * file in [encodedBytes]). Unrecognised formats return null, so callers
          * degrade gracefully by skipping the image.
          */
         public fun fromEncodedImage(bytes: ByteArray): ImageXObject? {
-            if (PngDecoder.isPng(bytes)) return PngDecoder.decode(bytes)
-            if (GifDecoder.isGif(bytes)) return GifDecoder.decode(bytes)
-            if (JpegDecoder.isJpeg(bytes)) {
-                JpegDecoder.decode(bytes)?.let { return it }
-                val (w, h) = jpegSize(bytes) ?: return null
-                if (w <= 0 || h <= 0) return null
-                return ImageXObject(
-                    width = w, height = h, bitsPerComponent = 8,
-                    colorSpace = "DeviceRGB", kind = Kind.JPEG, encodedBytes = bytes,
-                )
+            return when (ImageFormat.sniff(bytes)) {
+                ImageFormat.PNG, ImageFormat.GIF, ImageFormat.BMP, ImageFormat.JP2 ->
+                    runCatching { KiteImage.decode(bytes) }.getOrNull()?.toImageXObject()
+                ImageFormat.JPEG -> {
+                    runCatching { KiteImage.decode(bytes) }.getOrNull()?.let { return it.toImageXObject() }
+                    // Streams KiteImage can't handle (arithmetic coding, 12-bit)
+                    // defer to the host platform's loader.
+                    val (w, h) = jpegSize(bytes) ?: return null
+                    if (w <= 0 || h <= 0) return null
+                    ImageXObject(
+                        width = w, height = h, bitsPerComponent = 8,
+                        colorSpace = "DeviceRGB", kind = Kind.JPEG, encodedBytes = bytes,
+                    )
+                }
+                else -> null
             }
-            return null
         }
 
         /**

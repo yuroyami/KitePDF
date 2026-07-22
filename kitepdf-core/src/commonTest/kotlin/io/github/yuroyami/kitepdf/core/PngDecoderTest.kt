@@ -118,8 +118,17 @@ class PngDecoderTest {
 
     private fun be32(n: Int) = byteArrayOf((n ushr 24).toByte(), (n ushr 16).toByte(), (n ushr 8).toByte(), n.toByte())
 
-    private fun chunk(type: String, data: ByteArray): ByteArray =
-        be32(data.size) + type.encodeToByteArray() + data + byteArrayOf(0, 0, 0, 0) // CRC unchecked
+    private fun chunk(type: String, data: ByteArray): ByteArray {
+        // Real chunk CRC: the KiteImage decoder (the PNG path since the codec
+        // consolidation) verifies consumed chunks, so fixtures must be valid PNGs.
+        val body = type.encodeToByteArray() + data
+        var c = -1
+        for (b in body) {
+            c = c xor (b.toInt() and 0xFF)
+            repeat(8) { c = if (c and 1 != 0) (0xEDB88320.toInt()) xor (c ushr 1) else c ushr 1 }
+        }
+        return be32(data.size) + body + be32(c.inv())
+    }
 
     /** Wrap [data] in a zlib stream with a single STORED deflate block. */
     private fun zlibStore(data: ByteArray): ByteArray {
