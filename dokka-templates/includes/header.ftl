@@ -1,5 +1,5 @@
 <#--
-  Kite — Dokka header override.
+  Kite: Dokka header override.
 
   Same as Dokka 2.2.0's default header, plus a link group that gets you back to
   the guide site and the repository. Without it the API reference is a dead end:

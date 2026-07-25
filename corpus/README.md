@@ -2,7 +2,7 @@
 
 Drop real-world sample files here to grow the differential harnesses. The
 contents are **git-ignored** (this README and the `.gitkeep` files are the only
-tracked things) — samples are often large or copyrighted, so never commit them.
+tracked things). Samples are often large or copyrighted, so never commit them.
 
 ```
 corpus/
