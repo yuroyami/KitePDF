@@ -14,8 +14,8 @@ import io.github.yuroyami.kitepdf.core.font.TextGlyph
  * receive the final geometry plus the transform to apply.
  *
  * Concrete implementations shipped:
- *   - `ComposeCanvas` (`:kitepdf-compose`) — paints into a Compose `DrawScope`.
- *   - `SkiaCanvas` (`:kitepdf-skia`) — paints into a Skia `Canvas` for JVM.
+ *   - `ComposeCanvas` (`:kitepdf-compose-viewer`) — paints into a Compose `DrawScope`.
+ *   - `SkiaCanvas` (`:kitepdf-skia-renderer`) — paints into a Skia `Canvas`.
  *   - `AwtCanvas` / `AndroidNativeCanvas` / `CoreGraphicsCanvas` / `Canvas2dCanvas`
  *     (`:kitepdf-native-renderer`) — host-platform raster backends.
  */

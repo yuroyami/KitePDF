@@ -1,4 +1,3 @@
-import org.jetbrains.kotlin.gradle.ExperimentalKotlinGradlePluginApi
 import org.jetbrains.kotlin.gradle.ExperimentalWasmDsl
 
 plugins {
@@ -11,8 +10,8 @@ plugins {
 /*
  * :kitepdf is the umbrella artifact. It carries no code of its own; it simply
  * re-exports every document handler so a consumer can depend on one coordinate
- * and get the whole engine (the MuPDF experience). Want only PDF, with no EPUB
- * reflow engine on the classpath? Depend on :kitepdf-pdf instead.
+ * and get the whole engine. Want only PDF, with no EPUB reflow engine on the
+ * classpath? Depend on :kitepdf-pdf instead.
  */
 kotlin {
     explicitApi()
@@ -53,8 +52,7 @@ kotlin {
     androidNativeX86()
     androidNativeX64()
 
-    @OptIn(ExperimentalKotlinGradlePluginApi::class)
-    js(IR) {
+    js {
         browser()
         nodejs()
         binaries.library()
@@ -84,4 +82,3 @@ kotlin {
         }
     }
 }
-

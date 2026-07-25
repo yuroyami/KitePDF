@@ -10,9 +10,9 @@ import kotlin.test.assertTrue
 
 /**
  * T-40 acceptance: each shading fixture against mutool with its own budget —
- * types 1/4/5 within 0.05 MAE, the patch types 6/7 within 0.12 (tessellation
- * approximation tolerated by the audit). All five numbers print for the
- * ledger. Skips without mutool.
+ * type 1 within 0.01 MAE, types 4/5 within 0.05, and patch types 6/7 within
+ * 0.12 (tessellation approximation tolerated by the audit). All five numbers
+ * print for the ledger. Skips without mutool.
  */
 class ShadingOracleTest {
 
@@ -36,7 +36,7 @@ class ShadingOracleTest {
         assertTrue(fixtures.size == 5, "all five shading fixtures registered")
 
         val budgets = mapOf(
-            "syn-shading1-function" to 0.05,
+            "syn-shading1-function" to 0.01,
             "syn-shading4-freeform" to 0.05,
             "syn-shading5-lattice" to 0.05,
             "syn-shading6-coons" to 0.12,

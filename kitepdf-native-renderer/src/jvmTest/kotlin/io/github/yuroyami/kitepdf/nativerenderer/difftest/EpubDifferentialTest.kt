@@ -34,7 +34,11 @@ class EpubDifferentialTest {
         val corpus = ArrayList<Pair<String, ByteArray>>().apply {
             addAll(EpubCorpus.synthetic())
             // Real books from the git-ignored repo-root corpus/epub (or -Dkitepdf.epub.corpus).
-            val dir = System.getProperty("kitepdf.epub.corpus")?.let { File(it) } ?: Corpus.repoCorpus("epub")
+            val dir = Corpus.resolveCorpusDirectory(
+                propertyName = "kitepdf.epub.corpus",
+                configuredPath = System.getProperty("kitepdf.epub.corpus"),
+                fallback = Corpus.repoCorpus("epub"),
+            )
             dir?.listFiles { f -> f.isFile && f.extension.equals("epub", ignoreCase = true) }
                 ?.sortedBy { it.name }?.forEach { add(it.nameWithoutExtension to it.readBytes()) }
         }
@@ -56,7 +60,6 @@ class EpubDifferentialTest {
             } catch (e: Throwable) {
                 failures++; lines.add("- $name: open() THREW ${e.message}"); continue
             }
-            if (doc == null) { failures++; lines.add("- $name: open() returned null"); continue }
 
             for ((i, page) in doc.pages.withIndex()) {
                 pages++
@@ -71,7 +74,7 @@ class EpubDifferentialTest {
                 }
                 if (i == 0 && MuPdfOracle.available) {
                     oracleRef(bytes, dpi)?.let { ref ->
-                        val mae = ImageDiff.compare(img, ref).score
+                        val mae = ImageDiff.compare(img, ref, maxDimensionDelta = null).score
                         worstMae = maxOf(worstMae, mae)
                         lines.add("- $name p0: MAE=%.4f vs mutool (informational; reflow differs)".format(mae))
                     }
@@ -91,7 +94,7 @@ class EpubDifferentialTest {
         println("[epub-sweep] ${corpus.size} books, $pages pages, $failures failures, $blanks blanks, oracle=${MuPdfOracle.available}, worstMAE=%.3f".format(worstMae))
 
         // Gate 1 — every page of every book renders without throwing.
-        assertEquals(0, failures, "EPUB render failures:\n" + lines.filter { "THREW" in it || "null" in it }.joinToString("\n"))
+        assertEquals(0, failures, "EPUB render failures:\n" + lines.filter { "THREW" in it }.joinToString("\n"))
         // Gate 2 — synthetic content pages are never blank (real corpus books may
         // legitimately have blank pages, reported informationally above).
         assertEquals(0, syntheticBlanks, "blank SYNTHETIC EPUB pages:\n" + lines.filter { "SYNTHETIC" in it }.joinToString("\n"))

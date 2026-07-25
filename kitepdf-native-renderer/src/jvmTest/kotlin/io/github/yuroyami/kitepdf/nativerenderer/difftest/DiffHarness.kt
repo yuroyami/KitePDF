@@ -4,6 +4,7 @@ import io.github.yuroyami.kitepdf.KitePDF
 import io.github.yuroyami.kitepdf.nativerenderer.AwtPdfRasterizer
 import java.io.File
 import javax.imageio.ImageIO
+import kotlin.math.abs
 
 /**
  * Differential rendering harness. For every page of every corpus PDF it
@@ -19,7 +20,17 @@ object DiffHarness {
     const val DEFAULT_DPI = 96
 
     /** Pages scored per doc. Override with -Dkitepdf.diff.maxpages; default 6. */
-    val MAX_PAGES_PER_DOC: Int get() = System.getProperty("kitepdf.diff.maxpages")?.toIntOrNull() ?: 6
+    val MAX_PAGES_PER_DOC: Int
+        get() = parseMaxPages(System.getProperty("kitepdf.diff.maxpages"))
+
+    internal fun parseMaxPages(raw: String?): Int {
+        if (raw == null) return 6
+        val value = raw.toIntOrNull()
+        require(value != null && value >= 1) {
+            "kitepdf.diff.maxpages must be a positive integer (was '$raw')"
+        }
+        return value
+    }
 
     data class PageResult(
         val doc: String,
@@ -28,6 +39,7 @@ object DiffHarness {
         val rendered: Boolean,
         val error: String?,
         val nonBlank: Boolean,
+        val oracleError: String?,
         val score: Double?,       // null when oracle unavailable / ref render failed
         val diffFraction: Double?,
         val maxDelta: Int?,
@@ -45,6 +57,8 @@ object DiffHarness {
     ) {
         private val scored get() = results.mapNotNull { it.score }
         val meanScore: Double? get() = scored.takeIf { it.isNotEmpty() }?.average()
+        val oracleFailures: List<PageResult>
+            get() = results.filter { it.rendered && it.oracleError != null }
 
         val worstFirst: List<PageResult>
             get() = results.sortedByDescending {
@@ -60,7 +74,8 @@ object DiffHarness {
             appendLine(
                 "[difftest] pages=${results.size} " +
                     "renderFailures=${results.count { !it.rendered }} " +
-                    "blank=${results.count { it.rendered && !it.nonBlank }}",
+                    "blank=${results.count { it.rendered && !it.nonBlank }} " +
+                    "oracleComparisonFailures=${oracleFailures.size}",
             )
             if (oracleAvailable) {
                 val worst = worstFirst.firstOrNull { it.score != null }
@@ -85,6 +100,7 @@ object DiffHarness {
                 "- Pages: ${results.size} · Render failures: ${results.count { !it.rendered }} · " +
                     "Blank: ${results.count { it.rendered && !it.nonBlank }}",
             )
+            if (oracleAvailable) md.appendLine("- Oracle/comparison failures: ${oracleFailures.size}")
             meanScore?.let { md.appendLine("- Mean score (MAE vs MuPDF): ${"%.4f".format(it)}") }
             md.appendLine()
             md.appendLine("Worst-rendering pages first. Score = normalized mean abs error vs MuPDF, 0 = identical.")
@@ -103,13 +119,30 @@ object DiffHarness {
                     md.appendLine("| ↳ | | | | | | | _${r.error.take(140).replace("|", "/")}_ | | |")
                 }
             }
+            if (oracleFailures.isNotEmpty()) {
+                md.appendLine()
+                md.appendLine("## Oracle/comparison failures")
+                md.appendLine()
+                for (r in oracleFailures) {
+                    md.appendLine(
+                        "- `${r.doc} p${r.page}`: " +
+                            (r.oracleError ?: "unknown oracle failure").replace("\n", " "),
+                    )
+                }
+            }
             File(outDir, "report.md").writeText(md.toString())
         }
     }
 
-    fun run(corpus: List<Corpus.Entry>, dpi: Int = DEFAULT_DPI, outDir: File): Report {
+    internal fun run(
+        corpus: List<Corpus.Entry>,
+        dpi: Int = DEFAULT_DPI,
+        outDir: File,
+        oracle: PdfRenderOracle = MuPdfOracle,
+    ): Report {
+        require(dpi >= 1) { "dpi must be positive (was $dpi)" }
         val scale = dpi / 72.0
-        val oracle = MuPdfOracle.available
+        val oracleAvailable = oracle.available
         val results = mutableListOf<PageResult>()
 
         for (entry in corpus) {
@@ -120,7 +153,24 @@ object DiffHarness {
                 continue
             }
 
-            val pageCount = doc.pages.size.coerceAtMost(MAX_PAGES_PER_DOC)
+            val kitePageCount = doc.pages.size
+            val pageCount = kitePageCount.coerceAtMost(MAX_PAGES_PER_DOC)
+            if (pageCount == 0) {
+                results += fail(entry, 0, "document contains no renderable pages")
+                continue
+            }
+            val documentOracleError = if (oracleAvailable) {
+                when (val countResult = oracle.pageCountDetailed(entry.pdf)) {
+                    is MuPdfOracle.PageCountResult.Success ->
+                        if (countResult.count == kitePageCount) null
+                        else "page count differs: KitePDF=$kitePageCount, MuPDF=${countResult.count}"
+
+                    is MuPdfOracle.PageCountResult.Failure ->
+                        countResult.describe()
+                }
+            } else {
+                null
+            }
             val docOut = File(outDir, "out/${entry.name}").apply { mkdirs() }
 
             for (i in 0 until pageCount) {
@@ -135,26 +185,48 @@ object DiffHarness {
                     var maxDelta: Int? = null
                     var refRel: String? = null
                     var diffRel: String? = null
+                    var oracleError: String? = documentOracleError.takeIf { i == 0 }
 
-                    if (oracle) {
-                        val ref = MuPdfOracle.render(entry.pdf, i + 1, dpi)
-                        if (ref != null) {
-                            val refPng = File(docOut, "p$i.ref.png")
-                            ImageIO.write(ref, "png", refPng)
-                            val d = ImageDiff.compare(kiteImg, ref)
-                            val diffPng = File(docOut, "p$i.diff.png")
-                            ImageIO.write(d.heatmap, "png", diffPng)
-                            score = d.meanAbsError
-                            diffFrac = d.diffFraction
-                            maxDelta = d.maxChannelDelta
-                            refRel = rel(outDir, refPng)
-                            diffRel = rel(outDir, diffPng)
+                    if (oracleAvailable) {
+                        when (val oracleResult = oracle.renderDetailed(entry.pdf, i + 1, dpi)) {
+                            is MuPdfOracle.RenderResult.Success -> {
+                                val refPng = File(docOut, "p$i.ref.png")
+                                ImageIO.write(oracleResult.image, "png", refPng)
+                                refRel = rel(outDir, refPng)
+                                if (
+                                    abs(kiteImg.width - oracleResult.image.width) > 1 ||
+                                    abs(kiteImg.height - oracleResult.image.height) > 1
+                                ) {
+                                    oracleError = combineOracleErrors(
+                                        oracleError,
+                                        "page dimensions differ: KitePDF=${kiteImg.width}x${kiteImg.height}, " +
+                                            "MuPDF=${oracleResult.image.width}x${oracleResult.image.height}",
+                                    )
+                                } else {
+                                    val d = ImageDiff.compare(
+                                        kiteImg,
+                                        oracleResult.image,
+                                        maxDimensionDelta = 1,
+                                    )
+                                    val diffPng = File(docOut, "p$i.diff.png")
+                                    ImageIO.write(d.heatmap, "png", diffPng)
+                                    score = d.meanAbsError
+                                    diffFrac = d.diffFraction
+                                    maxDelta = d.maxChannelDelta
+                                    diffRel = rel(outDir, diffPng)
+                                }
+                            }
+
+                            is MuPdfOracle.RenderResult.Failure -> {
+                                oracleError = combineOracleErrors(oracleError, oracleResult.describe())
+                            }
                         }
                     }
 
                     results += PageResult(
                         doc = entry.name, page = i, synthetic = entry.synthetic,
                         rendered = true, error = null, nonBlank = nonBlank,
+                        oracleError = oracleError,
                         score = score, diffFraction = diffFrac, maxDelta = maxDelta,
                         kitePng = rel(outDir, kitePng), refPng = refRel, diffPng = diffRel,
                     )
@@ -164,16 +236,20 @@ object DiffHarness {
             }
         }
 
-        return Report(results, oracle, MuPdfOracle.describe(), dpi, outDir)
+        return Report(results, oracleAvailable, oracle.describe(), dpi, outDir)
     }
 
     private fun fail(entry: Corpus.Entry, page: Int, error: String) = PageResult(
         doc = entry.name, page = page, synthetic = entry.synthetic,
         rendered = false, error = error, nonBlank = false,
+        oracleError = null,
         score = null, diffFraction = null, maxDelta = null,
         kitePng = null, refPng = null, diffPng = null,
     )
 
     private fun rel(base: File, f: File): String =
         base.toPath().relativize(f.toPath()).toString().replace(File.separatorChar, '/')
+
+    private fun combineOracleErrors(first: String?, second: String): String =
+        if (first == null) second else "$first; $second"
 }

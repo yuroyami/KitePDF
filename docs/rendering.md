@@ -171,7 +171,7 @@ imageBitmap.value?.let { Image(it, contentDescription = "Page thumbnail") }
 !!! warning "Bitmap allocation"
     Large pages at high scale can exhaust memory. Keep an eye on bitmap dimensions: `(page.width * scale).toInt() x (page.height * scale).toInt()` pixels.
 
-## Cross-platform: Skia (kitepdf-skia)
+## Cross-platform: Skia (kitepdf-skia-renderer)
 
 For a single API across JVM, Android, Apple, and Linux, use `PdfPageRasterizer` from `kitepdf-skia-renderer`.
 
@@ -258,7 +258,7 @@ page.renderTo(pdfCanvas, deviceCtm)
 !!! warning "Image XObjects in Canvas2D"
     Embedded JPEG and JP2 images in the PDF are painted as grey placeholders (async browser decoding doesn't fit the synchronous renderer). Use Skia on JS for full image support.
 
-## Web: Skia over WASM (kitepdf-skia, JS/wasmJs)
+## Web: Skia over WASM (kitepdf-skia-renderer, JS/wasmJs)
 
 For better image fidelity on the web (including embedded image XObjects), use Skia compiled to WASM.
 

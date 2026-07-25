@@ -37,7 +37,11 @@ object Corpus {
             entries += Entry(fx.name, f, synthetic = true)
         }
 
-        val dropIn = System.getProperty("kitepdf.corpus")?.let { File(it) } ?: repoCorpus("pdf")
+        val dropIn = resolveCorpusDirectory(
+            propertyName = "kitepdf.corpus",
+            configuredPath = System.getProperty("kitepdf.corpus"),
+            fallback = repoCorpus("pdf"),
+        )
         if (dropIn != null && dropIn.isDirectory) {
             dropIn.walkTopDown()
                 .filter { it.isFile && it.extension.equals("pdf", ignoreCase = true) }
@@ -45,5 +49,18 @@ object Corpus {
                 .forEach { entries += Entry(it.nameWithoutExtension, it, synthetic = false) }
         }
         return entries
+    }
+
+    internal fun resolveCorpusDirectory(
+        propertyName: String,
+        configuredPath: String?,
+        fallback: File?,
+    ): File? {
+        if (configuredPath == null) return fallback
+        val directory = File(configuredPath)
+        require(directory.isDirectory) {
+            "$propertyName points to a missing or non-directory corpus: ${directory.absolutePath}"
+        }
+        return directory
     }
 }

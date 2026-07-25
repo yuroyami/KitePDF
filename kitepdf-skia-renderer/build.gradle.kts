@@ -61,7 +61,7 @@ kotlin {
     linuxX64()
     linuxArm64()
 
-    js(IR) {
+    js {
         browser()
     }
     @OptIn(ExperimentalWasmDsl::class)
@@ -94,4 +94,3 @@ kotlin {
         }
     }
 }
-

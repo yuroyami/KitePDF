@@ -1,5 +1,4 @@
 import org.gradle.internal.os.OperatingSystem
-import org.jetbrains.kotlin.gradle.ExperimentalKotlinGradlePluginApi
 import org.jetbrains.kotlin.gradle.ExperimentalWasmDsl
 
 plugins {
@@ -58,8 +57,7 @@ kotlin {
     // macosX64 is deprecated in Kotlin 2.3 (Intel Macs), so Apple-Silicon only.
     macosArm64()
 
-    @OptIn(ExperimentalKotlinGradlePluginApi::class)
-    js(IR) {
+    js {
         browser()
         binaries.library()
     }
@@ -92,4 +90,3 @@ kotlin {
         }
     }
 }
-

@@ -160,8 +160,8 @@ public class SkiaCanvas(private val canvas: SkCanvas) : KiteCanvas {
             val outline = glyph.outline
             if (outline != null && !outline.isEmpty()) {
                 val glyphMatrix = textToDevice
-                    .let { tm -> PdfMatrix.translation(penX + glyph.xOffset * unitScale, glyph.yOffset * unitScale).concat(tm) }
-                    .let { tm -> PdfMatrix(unitScale, 0.0, 0.0, unitScale, 0.0, 0.0).concat(tm) }
+                    .concat(PdfMatrix.translation(penX + glyph.xOffset * unitScale, glyph.yOffset * unitScale))
+                    .concat(PdfMatrix(unitScale, 0.0, 0.0, unitScale, 0.0, 0.0))
                 val sk = toSkPath(outline, glyphMatrix).apply { fillMode = PathFillMode.WINDING }
                 canvas.drawPath(sk, paint)
             }
@@ -310,7 +310,6 @@ public class SkiaCanvas(private val canvas: SkCanvas) : KiteCanvas {
                 )
             }
             is KiteShading.Unsupported -> return
-            else -> return // T-40 types already handled by paintComplexShading
         }
 
         val paint = Paint().apply {

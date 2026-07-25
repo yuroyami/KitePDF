@@ -22,7 +22,7 @@ import io.github.yuroyami.kitepdf.core.parser.PdfStream
  * The decoded byte buffer's interpretation depends on the filter chain:
  *
  *   - `DCTDecode` → JPEG file in [encodedBytes]; decoded by the host platform's
- *     image loader (see `ImageDecoder` in `:kitepdf-compose`).
+ *     image loader (see `ImageDecoder` in `:kitepdf-compose-viewer`).
  *   - `FlateDecode` / `LZWDecode` / `CCITTFaxDecode` / ASCII / RunLength → pixel
  *     samples already decoded into [pixelBytes]; [toRgbaBytes] assembles RGBA
  *     using [resolvedColorSpace], [bitsPerComponent], and [decode].

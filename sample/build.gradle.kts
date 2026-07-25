@@ -1,5 +1,4 @@
 import org.jetbrains.compose.desktop.application.dsl.TargetFormat
-import org.jetbrains.kotlin.gradle.ExperimentalKotlinGradlePluginApi
 
 plugins {
     alias(libs.plugins.kotlin.multiplatform)
@@ -27,8 +26,7 @@ kotlin {
         }
     }
 
-    @OptIn(ExperimentalKotlinGradlePluginApi::class)
-    js(IR) {
+    js {
         browser {
             commonWebpackConfig { cssSupport { enabled.set(true) } }
             binaries.executable()
@@ -70,4 +68,3 @@ compose.desktop {
         }
     }
 }
-

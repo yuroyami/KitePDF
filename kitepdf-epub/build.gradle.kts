@@ -1,10 +1,10 @@
-import org.jetbrains.kotlin.gradle.ExperimentalKotlinGradlePluginApi
 import org.jetbrains.kotlin.gradle.ExperimentalWasmDsl
 
 plugins {
     alias(libs.plugins.kotlin.multiplatform)
     alias(libs.plugins.android.kmp.library)
     alias(libs.plugins.vanniktech.publish)
+    alias(libs.plugins.dokka)
 }
 
 /*
@@ -52,8 +52,7 @@ kotlin {
     androidNativeX86()
     androidNativeX64()
 
-    @OptIn(ExperimentalKotlinGradlePluginApi::class)
-    js(IR) {
+    js {
         browser()
         nodejs()
         binaries.library()
@@ -85,4 +84,3 @@ kotlin {
         }
     }
 }
-

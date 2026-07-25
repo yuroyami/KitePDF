@@ -1,0 +1,416 @@
+/* ---------------------------------------------------------------------------
+ * Kite — shared MkDocs Material theme.
+ *
+ * Deliberately shares its palette, type scale and code-block treatment with
+ * _kite-docs/dokka/kite.css, so moving from the guide into the API reference
+ * does not feel like leaving the site.
+ *
+ * Edit this file in _kite-docs/ and run ./_kite-docs/sync.sh; do not edit the
+ * copies inside a repo.
+ * ------------------------------------------------------------------------- */
+
+/* --- 1. Palette ---------------------------------------------------------- */
+
+:root {
+    --kite-violet: #6152e8;
+    --kite-violet-bright: #7b6cff;
+    --kite-magenta: #c341d8;
+
+    --md-primary-fg-color: #14151a;
+    --md-primary-fg-color--light: #2b2d36;
+    --md-primary-fg-color--dark: #0c0d11;
+    --md-accent-fg-color: var(--kite-violet);
+    --md-typeset-a-color: var(--kite-violet);
+
+    --kite-rule: rgba(20, 21, 26, 0.1);
+    --kite-rule-strong: rgba(20, 21, 26, 0.16);
+    --kite-surface-sunk: #f7f7fa;
+    --kite-ink-faint: #71757f;
+
+    --md-code-bg-color: #f6f6f9;
+    --md-code-fg-color: #1c1e25;
+
+    --md-text-font: "JetBrains Sans", Inter, -apple-system, BlinkMacSystemFont,
+        "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --md-code-font: "JetBrains Mono", ui-monospace, SFMono-Regular, "SF Mono",
+        Menlo, Consolas, "Liberation Mono", monospace;
+}
+
+[data-md-color-scheme="slate"] {
+    --md-hue: 236;
+    --md-default-bg-color: #16171c;
+    --md-default-fg-color: #e6e7ec;
+    --md-default-fg-color--light: #a9adba;
+    --md-default-fg-color--lighter: #838895;
+
+    --kite-violet: #9b8dff;
+    --kite-violet-bright: #b0a4ff;
+    --kite-magenta: #dd7bee;
+
+    --md-primary-fg-color: #16171c;
+    --md-accent-fg-color: var(--kite-violet);
+    --md-typeset-a-color: var(--kite-violet);
+
+    --kite-rule: rgba(255, 255, 255, 0.1);
+    --kite-rule-strong: rgba(255, 255, 255, 0.17);
+    --kite-surface-sunk: #101116;
+    --kite-ink-faint: #838895;
+
+    --md-code-bg-color: #1b1d24;
+    --md-code-fg-color: #e6e7ec;
+}
+
+/* --- 2. Chrome ----------------------------------------------------------- */
+
+.md-header {
+    border-bottom: 1px solid var(--kite-rule);
+    box-shadow: none;
+}
+
+.md-header--shadow {
+    box-shadow: 0 1px 0 var(--kite-rule);
+}
+
+.md-header__title {
+    font-weight: 600;
+    letter-spacing: -0.01em;
+}
+
+.md-tabs {
+    border-bottom: 1px solid var(--kite-rule);
+}
+
+.md-tabs__link {
+    font-size: 0.74rem;
+    font-weight: 520;
+    opacity: 0.78;
+}
+
+.md-tabs__link--active,
+.md-tabs__link:hover {
+    opacity: 1;
+}
+
+.md-search__form {
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.12);
+}
+
+.md-search__form:hover {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+/* --- 3. Sidebars --------------------------------------------------------- */
+
+.md-nav {
+    font-size: 0.7rem;
+}
+
+.md-nav__title {
+    font-size: 0.66rem;
+    font-weight: 650;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--kite-ink-faint);
+}
+
+.md-nav__link {
+    border-radius: 6px;
+    padding: 3px 8px;
+    margin: 0 -8px;
+    transition: background-color 0.12s ease, color 0.12s ease;
+}
+
+.md-nav__link:hover {
+    background: color-mix(in srgb, var(--kite-violet) 9%, transparent);
+    color: var(--md-default-fg-color);
+}
+
+.md-nav__link--active,
+.md-nav__item .md-nav__link--active {
+    background: color-mix(in srgb, var(--kite-violet) 13%, transparent);
+    color: var(--kite-violet);
+    font-weight: 600;
+}
+
+.md-sidebar--secondary .md-nav__link--active {
+    background: transparent;
+}
+
+/* --- 4. Typography ------------------------------------------------------- */
+
+.md-typeset {
+    font-size: 0.79rem;
+    line-height: 1.66;
+}
+
+.md-typeset h1 {
+    font-size: 1.85rem;
+    line-height: 1.2;
+    font-weight: 660;
+    letter-spacing: -0.024em;
+    color: var(--md-default-fg-color);
+    margin-bottom: 0.8rem;
+}
+
+.md-typeset h2 {
+    font-size: 1.3rem;
+    font-weight: 640;
+    letter-spacing: -0.016em;
+    margin-top: 2.4em;
+    padding-top: 0.6em;
+    border-top: 1px solid var(--kite-rule);
+}
+
+.md-typeset h3 {
+    font-size: 1.02rem;
+    font-weight: 620;
+    letter-spacing: -0.008em;
+    margin-top: 1.8em;
+}
+
+.md-typeset h4 {
+    font-size: 0.86rem;
+    font-weight: 620;
+    color: var(--md-default-fg-color--light);
+}
+
+.md-typeset h1 code,
+.md-typeset h2 code,
+.md-typeset h3 code {
+    font-size: 0.92em;
+    padding: 0.1em 0.3em;
+}
+
+.md-typeset a {
+    text-underline-offset: 2px;
+    text-decoration-thickness: 1px;
+}
+
+/* --- 5. Code ------------------------------------------------------------- */
+
+.md-typeset code {
+    border: 1px solid var(--kite-rule);
+    border-radius: 5px;
+    padding: 0.1em 0.36em;
+    font-size: 0.84em;
+}
+
+.md-typeset pre > code {
+    border: 1px solid var(--kite-rule);
+    border-radius: 10px;
+    padding: 0.85rem 1rem;
+    font-size: 0.72rem;
+    line-height: 1.62;
+}
+
+.md-typeset .highlight,
+.md-typeset .highlighttable {
+    margin: 1.1em 0;
+}
+
+.md-typeset .highlight .filename {
+    border-radius: 10px 10px 0 0;
+    border: 1px solid var(--kite-rule);
+    border-bottom: none;
+    background: var(--kite-surface-sunk);
+    font-size: 0.66rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    color: var(--kite-ink-faint);
+}
+
+.md-typeset .highlight .filename + pre > code {
+    border-radius: 0 0 10px 10px;
+}
+
+.md-clipboard {
+    color: var(--kite-ink-faint);
+}
+
+.md-clipboard:hover {
+    color: var(--kite-violet);
+}
+
+/* --- 6. Tables ----------------------------------------------------------- */
+
+.md-typeset table:not([class]) {
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+    font-size: 0.74rem;
+}
+
+.md-typeset table:not([class]) th {
+    background: transparent;
+    color: var(--kite-ink-faint);
+    font-size: 0.66rem;
+    font-weight: 620;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    border-bottom: 1px solid var(--kite-rule-strong);
+    padding: 0.5rem 0.9rem 0.5rem 0;
+}
+
+.md-typeset table:not([class]) td {
+    border-top: none;
+    border-bottom: 1px solid var(--kite-rule);
+    padding: 0.55rem 0.9rem 0.55rem 0;
+    vertical-align: top;
+}
+
+.md-typeset table:not([class]) tr:hover {
+    background: transparent;
+}
+
+/* --- 7. Admonitions ------------------------------------------------------ */
+
+.md-typeset .admonition,
+.md-typeset details {
+    border: 1px solid var(--kite-rule);
+    border-left: 3px solid var(--kite-violet);
+    border-radius: 0 9px 9px 0;
+    box-shadow: none;
+    font-size: 0.75rem;
+}
+
+.md-typeset .admonition-title,
+.md-typeset summary {
+    background: color-mix(in srgb, var(--kite-violet) 7%, transparent);
+    font-weight: 620;
+}
+
+/* --- 8. Landing-page pieces ---------------------------------------------- */
+
+/* Used by docs/index.md. Kept small on purpose: a hero, a card grid, and a
+   status strip is all a library front page needs. */
+
+.kite-hero {
+    padding: 0.4rem 0 1.6rem;
+    border-bottom: 1px solid var(--kite-rule);
+    margin-bottom: 2rem;
+}
+
+.kite-hero h1 {
+    margin-bottom: 0.5rem !important;
+}
+
+.kite-hero p {
+    font-size: 0.94rem;
+    line-height: 1.6;
+    color: var(--md-default-fg-color--light);
+    max-width: 62ch;
+    margin: 0 0 1.1rem;
+}
+
+.kite-hero-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.md-typeset .kite-hero-actions a {
+    display: inline-block;
+    padding: 0.42rem 1rem;
+    border-radius: 8px;
+    border: 1px solid var(--kite-rule-strong);
+    font-size: 0.74rem;
+    font-weight: 580;
+    text-decoration: none;
+    color: var(--md-default-fg-color);
+    transition: border-color 0.14s ease, background-color 0.14s ease;
+}
+
+.md-typeset .kite-hero-actions a:hover {
+    border-color: var(--kite-violet);
+    background: color-mix(in srgb, var(--kite-violet) 8%, transparent);
+}
+
+.md-typeset .kite-hero-actions a.kite-primary {
+    background: var(--kite-violet);
+    border-color: var(--kite-violet);
+    color: #fff;
+}
+
+.md-typeset .kite-hero-actions a.kite-primary:hover {
+    background: var(--kite-violet-bright);
+    border-color: var(--kite-violet-bright);
+}
+
+.kite-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 0.85rem;
+    margin: 1.4rem 0;
+}
+
+.md-typeset .kite-card {
+    display: block;
+    padding: 1rem 1.1rem;
+    border: 1px solid var(--kite-rule);
+    border-radius: 11px;
+    text-decoration: none;
+    color: inherit;
+    background: var(--md-default-bg-color);
+    transition: border-color 0.14s ease, transform 0.14s ease;
+}
+
+.md-typeset .kite-card:hover {
+    border-color: var(--kite-violet);
+    transform: translateY(-1px);
+}
+
+.md-typeset .kite-card strong {
+    display: block;
+    font-size: 0.83rem;
+    font-weight: 620;
+    margin-bottom: 0.24rem;
+    color: var(--md-default-fg-color);
+}
+
+.md-typeset .kite-card span {
+    display: block;
+    font-size: 0.73rem;
+    line-height: 1.55;
+    color: var(--md-default-fg-color--light);
+}
+
+/* Target-support matrix used on install pages. */
+.kite-targets code {
+    font-size: 0.72rem;
+}
+
+/* --- 9. Footer ----------------------------------------------------------- */
+
+.md-footer {
+    border-top: 1px solid var(--kite-rule);
+    background: transparent;
+    color: var(--md-default-fg-color);
+}
+
+.md-footer-meta {
+    background: transparent;
+}
+
+.md-footer__link {
+    opacity: 0.8;
+}
+
+.md-copyright {
+    color: var(--kite-ink-faint);
+}
+
+/* --- 10. Misc ------------------------------------------------------------ */
+
+::selection {
+    background: color-mix(in srgb, var(--kite-violet) 26%, transparent);
+}
+
+.md-typeset hr {
+    border-bottom: 1px solid var(--kite-rule);
+}
+
+.md-typeset blockquote {
+    border-left: 3px solid var(--kite-violet);
+    color: var(--md-default-fg-color--light);
+}

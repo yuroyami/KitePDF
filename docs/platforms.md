@@ -34,7 +34,7 @@ KitePDF's core engine (read, parse, edit, write, decrypt) is 100% common Kotlin 
 
 ### `kitepdf`: the core engine
 
-No external dependencies beyond `kotlin-stdlib`. Parse, decrypt, extract text, edit, redact, fill forms, and build PDFs from scratch. No UI, no platform binding, no rendering; just the PDF spec in pure Kotlin. Use this when you need:
+No platform or native dependencies: only `kotlin-stdlib` and the pure-Kotlin KiteImage codec module. Parse, decrypt, extract text, edit, redact, fill forms, and build PDFs from scratch. No UI or platform binding; just the PDF spec in pure Kotlin. Use this when you need:
 
 - Server-side PDF processing (CLI tools, batch jobs, REST APIs)
 - Text extraction and metadata reading
@@ -50,7 +50,7 @@ println(doc.pages[0].extractText())
 
 ### `kitepdf-compose-viewer`: Compose Multiplatform viewer
 
-A full interactive `PdfView` composable: paginated or continuous scrolling, pinch/zoom, double-tap, panning, and hoisted state for external navigation. Draw PDFs as first-class UI elements alongside your app's own composables. Add it to your Compose projects on Android, iOS, macOS, Desktop (JVM), or the web:
+A full interactive `PdfView` composable: paginated or continuous scrolling, pinch/zoom, double-tap, panning, and hoisted state for external navigation. It is an ordinary composable, so it lays out and recomposes alongside the rest of your UI. Add it to your Compose projects on Android, iOS, macOS, Desktop (JVM), or the web:
 
 ```kotlin
 val doc = remember(bytes) { PdfDocument.open(bytes) }
@@ -143,7 +143,7 @@ renderSpec = PdfRenderSpec.Vectorized(
 
 ### The engine runs everywhere
 
-Parsing, editing, writing, and text extraction use the same Kotlin code on every target with no `expect`/`actual` branches. PDF operations work on watchOS, WASI, Android NDK, and minimal environments where no UI framework is available.
+Parsing, editing, writing, and text extraction run the same Kotlin code on every target. The only per-platform branches in the engine are the three `expect` declarations in `kitepdf-core`: `KiteLock`, `currentThreadId()` and `PlatformFlate`, the deflate/inflate hook. PDF operations work on watchOS, WASI, Android NDK, and minimal environments where no UI framework is available.
 
 ### Compose ships Apple Silicon only
 

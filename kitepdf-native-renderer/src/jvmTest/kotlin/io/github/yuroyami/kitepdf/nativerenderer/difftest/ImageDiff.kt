@@ -11,8 +11,9 @@ import kotlin.math.abs
  *
  * Both inputs are first flattened onto an opaque white background so that
  * alpha-vs-no-alpha differences between the two engines don't pollute the
- * score, then the reference is resized to the KitePDF dimensions if the two
- * engines disagree by a rounding pixel.
+ * score, then the reference is resized to the KitePDF dimensions. Fixed-layout
+ * comparisons reject geometry mismatches larger than one rounding pixel by
+ * default; reflowable formats such as EPUB can explicitly opt out.
  *
  * The score is a normalized mean-absolute-error over the RGB channels:
  *   0.0  → byte-identical
@@ -40,8 +41,23 @@ object ImageDiff {
         val score: Double get() = meanAbsError
     }
 
-    fun compare(kite: BufferedImage, reference: BufferedImage, amplify: Int = 6): DiffResult {
+    fun compare(
+        kite: BufferedImage,
+        reference: BufferedImage,
+        amplify: Int = 6,
+        maxDimensionDelta: Int? = 1,
+    ): DiffResult {
         val a = flattenOntoWhite(kite)
+        if (maxDimensionDelta != null) {
+            require(maxDimensionDelta >= 0) { "maxDimensionDelta must be non-negative" }
+            require(
+                abs(reference.width - a.width) <= maxDimensionDelta &&
+                    abs(reference.height - a.height) <= maxDimensionDelta,
+            ) {
+                "page dimensions differ: KitePDF=${a.width}x${a.height}, " +
+                    "reference=${reference.width}x${reference.height}"
+            }
+        }
         val refSized =
             if (reference.width != a.width || reference.height != a.height)
                 resizeTo(reference, a.width, a.height)

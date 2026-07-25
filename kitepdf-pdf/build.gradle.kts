@@ -1,4 +1,3 @@
-import org.jetbrains.kotlin.gradle.ExperimentalKotlinGradlePluginApi
 import org.jetbrains.kotlin.gradle.ExperimentalWasmDsl
 
 plugins {
@@ -9,12 +8,13 @@ plugins {
 }
 
 /*
- * :kitepdf is the pure-Kotlin library. NO external runtime deps.
- * Only kotlin-stdlib is on the classpath. Tests can use kotlin-test.
- * Compose Multiplatform lives in :sample, not here.
+ * :kitepdf-pdf is the PDF handler. Its only runtime dependencies are
+ * kotlin-stdlib and :kitepdf-core (which in turn brings in KiteImage for the
+ * image codecs). No UI framework: Compose Multiplatform lives in :sample and
+ * in the renderer modules, not here.
  *
- * Because the engine is 100% common Kotlin (no expect/actual, no cinterop),
- * it compiles for every target Kotlin supports — so every target is on.
+ * The handler itself is entirely common Kotlin with no cinterop, so it
+ * compiles for every target Kotlin supports — hence every target is on.
  */
 // T-26: KitePDF.VERSION is generated from the Gradle project version so the
 // two can never drift. Wired into commonMain via srcDir(taskProvider), which
@@ -83,8 +83,7 @@ kotlin {
     androidNativeX64()
 
     // Web
-    @OptIn(ExperimentalKotlinGradlePluginApi::class)
-    js(IR) {
+    js {
         browser()
         nodejs {
             testTask {
@@ -133,4 +132,3 @@ kotlin {
 // Publishing is configured by the vanniktech plugin from gradle.properties:
 // shared coordinates/POM/signing in the root gradle.properties, this module's
 // POM_NAME + POM_DESCRIPTION in kitepdf/gradle.properties.
-

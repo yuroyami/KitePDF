@@ -1,0 +1,688 @@
+/* ---------------------------------------------------------------------------
+ * Kite — shared Dokka theme.
+ *
+ * Loaded after Dokka's own stylesheets, so everything here is an override.
+ * Edit this file in _kite-docs/ and run ./_kite-docs/sync.sh to push it to
+ * every Kite repository; do not edit the copies inside a repo.
+ *
+ * The goal is one visual identity across the MkDocs guide site and the Dokka
+ * API reference, and a sidebar you can actually read at depth 5.
+ * ------------------------------------------------------------------------- */
+
+/* --- 1. Palette ---------------------------------------------------------- */
+
+:root {
+    --kite-violet: #6152e8;
+    --kite-violet-bright: #7b6cff;
+    --kite-magenta: #c341d8;
+
+    --kite-ink: #14151a;
+    --kite-ink-soft: #4a4d59;
+    --kite-ink-faint: #71757f;
+    --kite-rule: rgba(20, 21, 26, 0.1);
+    --kite-rule-strong: rgba(20, 21, 26, 0.16);
+    --kite-surface: #ffffff;
+    --kite-surface-sunk: #f7f7fa;
+    --kite-surface-raised: #ffffff;
+    --kite-code-bg: #f6f6f9;
+
+    /* Dokka's own variables, retuned. */
+    --default-font-size: 15px;
+    --default-font-family: "JetBrains Sans", Inter, -apple-system, BlinkMacSystemFont,
+        "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --default-monospace-font-family: "JetBrains Mono", ui-monospace, SFMono-Regular,
+        "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+
+    --default-font-color: var(--kite-ink);
+    --average-color: var(--kite-ink);
+    --brief-color: var(--kite-ink-soft);
+    --breadcrumb-font-color: var(--kite-ink-faint);
+    --hover-link-color: var(--kite-violet);
+    --border-color: var(--kite-rule);
+    --code-background: var(--kite-code-bg);
+    --background-color: var(--kite-surface);
+
+    --active-tab-border-color: var(--kite-violet);
+    --inactive-tab-border-color: transparent;
+    --active-section-color: var(--kite-violet);
+    --inactive-section-color: var(--kite-ink-faint);
+    --sidemenu-section-active-color: var(--kite-violet);
+    --navigation-highlight-color: rgba(97, 82, 232, 0.08);
+
+    --top-navigation-height: 60px;
+    --max-width: 1180px;
+    --horizontal-spacing-for-content: 32px;
+    --breadcrumb-margin: 16px;
+    --footer-height: 56px;
+    --footer-padding-top: 40px;
+    --footer-background: transparent;
+
+    --color-scrollbar: rgba(20, 21, 26, 0.22);
+    --color-scrollbar-track: transparent;
+
+    /* The bar is now page-coloured, so its icons must be ink, not white. */
+    --dark-mode-and-search-icon-color: var(--kite-ink);
+}
+
+/* Scoped to the root element on purpose. Dokka puts a literal class="theme-dark"
+   on the top bar regardless of the active theme, so a bare `.theme-dark` rule
+   would re-declare these dark values inside the header and strand it dark on a
+   light page. */
+html.theme-dark {
+    --kite-ink: #e6e7ec;
+    --kite-ink-soft: #a9adba;
+    --kite-ink-faint: #838895;
+    --kite-rule: rgba(255, 255, 255, 0.1);
+    --kite-rule-strong: rgba(255, 255, 255, 0.17);
+    --kite-surface: #16171c;
+    --kite-surface-sunk: #101116;
+    --kite-surface-raised: #1c1e25;
+    --kite-code-bg: #1b1d24;
+
+    --kite-violet: #9b8dff;
+    --kite-violet-bright: #b0a4ff;
+    --kite-magenta: #dd7bee;
+
+    --navigation-highlight-color: rgba(155, 141, 255, 0.13);
+    --color-scrollbar: rgba(255, 255, 255, 0.2);
+}
+
+/* --- 2. Page frame ------------------------------------------------------- */
+
+body {
+    background: var(--kite-surface);
+    color: var(--kite-ink);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+#container {
+    background: var(--kite-surface);
+}
+
+/* Dokka paints the top bar near-black regardless of theme. Match the page. */
+.navigation,
+.navigation.theme-dark {
+    background: var(--kite-surface);
+    border-bottom: 1px solid var(--kite-rule);
+    box-shadow: none;
+    padding: 0 20px;
+    min-height: var(--top-navigation-height);
+    color: var(--kite-ink);
+}
+
+.library-name--link,
+.library-name--link:hover {
+    color: var(--kite-ink);
+    font-size: 16px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    text-decoration: none;
+}
+
+.library-version {
+    color: var(--kite-ink-faint);
+    font-size: 12px;
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+    padding: 2px 8px;
+    margin-left: 2px;
+    border: 1px solid var(--kite-rule-strong);
+    border-radius: 999px;
+    line-height: 1.6;
+}
+
+/* Search is the fastest way out of a maze — give it a real target. */
+.navigation-controls--btn_search,
+#searchBar {
+    color: var(--kite-ink-soft);
+    border: 1px solid var(--kite-rule-strong);
+    border-radius: 8px;
+    padding: 5px 12px 5px 30px;
+    min-width: 148px;
+    background-position: 9px center;
+    transition: border-color 0.14s ease, color 0.14s ease;
+}
+
+.navigation-controls--btn_search:hover,
+#searchBar:hover {
+    border-color: var(--kite-violet);
+    color: var(--kite-ink);
+}
+
+/* The control glyphs are white SVG artwork drawn for Dokka's near-black bar.
+   The bar is now page-coloured, so in light mode they have to be inverted or
+   they are white-on-white. Icon buttons only — inverting #searchBar would flip
+   its border and label too. */
+.navigation-controls--btn_theme,
+.navigation-controls--btn_homepage,
+.navigation-controls--btn_toc {
+    filter: invert(1);
+}
+
+html.theme-dark .navigation-controls--btn_theme,
+html.theme-dark .navigation-controls--btn_homepage,
+html.theme-dark .navigation-controls--btn_toc {
+    filter: none;
+}
+
+/* Dokka's search is a Ring UI widget that inherits colour from this container. */
+#searchBar,
+#searchBar .search-content {
+    color: var(--kite-ink-soft);
+}
+
+/* The magnifier path carries a hardcoded fill="#fff" for the dark bar, so it
+   has to be overridden on the path itself — setting fill on the <svg> does not
+   inherit past a child's own fill attribute. Named variable rather than
+   currentColor: the icon sits inside a <button>, which does not inherit colour,
+   so currentColor resolves to black there in both themes. */
+#searchBar svg,
+#searchBar svg path {
+    fill: var(--kite-ink-soft);
+}
+
+/* --- 3. Sidebar ---------------------------------------------------------- */
+
+/* The rail is user-resizable: Dokka's script writes flex-grow inline and
+   persists it, so its width is not ours to set. Style it and leave the sizing
+   to the reader. */
+.sidebar,
+#leftColumn {
+    background: var(--kite-surface-sunk);
+    border-right: 1px solid var(--kite-rule);
+}
+
+.sidebar--inner,
+.sideMenu {
+    padding: 12px 4px 32px 8px;
+    font-size: 13px;
+}
+
+.toc--row {
+    border-radius: 7px;
+    min-height: 28px;
+    padding-right: 6px;
+    transition: background-color 0.12s ease;
+}
+
+.toc--row:hover {
+    background: var(--navigation-highlight-color);
+}
+
+.toc--link {
+    color: var(--kite-ink-soft);
+    padding: 4px 6px;
+    line-height: 1.45;
+    text-decoration: none;
+}
+
+/* Dokka splits every identifier with <wbr> at each camel-hump. Those break
+   opportunities are needed for long package names, so they stay; widen the rail
+   by dragging its edge if names wrap more than you like. What this prevents is
+   breaking mid-word at a point Dokka did not mark. */
+.toc--link,
+.toc--link span {
+    overflow-wrap: normal;
+    word-break: normal;
+    hyphens: none;
+}
+
+.toc--link:hover {
+    color: var(--kite-ink);
+    text-decoration: none;
+}
+
+.toc--part[data-nesting-level="0"] > .toc--row > .toc--link {
+    color: var(--kite-ink);
+    font-weight: 650;
+    font-size: 13px;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+/* Package rows: the level you scan for. */
+.toc--part[data-nesting-level="1"] > .toc--row > .toc--link {
+    color: var(--kite-ink);
+    font-weight: 560;
+    font-family: var(--default-monospace-font-family);
+    font-size: 12.5px;
+}
+
+/* Declarations sit in mono so signatures line up with the content pane. */
+.toc--part[data-nesting-level="2"] > .toc--row > .toc--link,
+.toc--part[data-nesting-level="3"] > .toc--row > .toc--link,
+.toc--part[data-nesting-level="4"] > .toc--row > .toc--link {
+    font-family: var(--default-monospace-font-family);
+    font-size: 12.5px;
+}
+
+/* Depth guides. Without these the tree is unreadable past level 3. */
+.toc--part[data-nesting-level="2"],
+.toc--part[data-nesting-level="3"],
+.toc--part[data-nesting-level="4"],
+.toc--part[data-nesting-level="5"] {
+    border-left: 1px solid var(--kite-rule);
+    margin-left: 11px;
+}
+
+.toc--part[data-nesting-level="2"] > .toc--row,
+.toc--part[data-nesting-level="3"] > .toc--row,
+.toc--part[data-nesting-level="4"] > .toc--row,
+.toc--part[data-nesting-level="5"] > .toc--row {
+    padding-left: 2px;
+}
+
+.toc--button {
+    opacity: 0.45;
+    border-radius: 5px;
+    transition: opacity 0.12s ease, background-color 0.12s ease;
+}
+
+.toc--row:hover .toc--button {
+    opacity: 1;
+    background: var(--kite-rule);
+}
+
+/* Current page. Dokka fills the link and the disclosure button separately with
+   a saturated blue, which reads as two adjacent boxes rather than one row.
+   Move the highlight to the row and let its contents sit on top of it. */
+.toc--part[data-active] > .toc--row {
+    background: var(--navigation-highlight-color);
+    border-radius: 7px;
+}
+
+.toc--part[data-active] > .toc--row > .toc--link,
+.toc--part[data-active] > .toc--row > .toc--button {
+    background: transparent;
+    color: var(--kite-violet);
+    font-weight: 650;
+}
+
+.toc--part[data-active] > .toc--row > .toc--button {
+    opacity: 1;
+}
+
+.toc--icon {
+    opacity: 0.72;
+}
+
+/* --- 4. Content ---------------------------------------------------------- */
+
+.main-content {
+    padding-top: 24px;
+    padding-bottom: 96px;
+}
+
+.breadcrumbs {
+    font-size: 12.5px;
+    color: var(--kite-ink-faint);
+    padding-bottom: 4px;
+}
+
+.breadcrumbs a {
+    color: var(--kite-ink-faint);
+    text-decoration: none;
+    border-bottom: 1px solid transparent;
+}
+
+.breadcrumbs a:hover {
+    color: var(--kite-violet);
+    border-bottom-color: currentColor;
+}
+
+/* Dokka ships a ~54px h1. On a page titled "Package-level declarations"
+   that is all you can see above the fold. */
+.cover h1,
+.cover h2,
+h1.cover,
+.main-content h1 {
+    font-size: 30px;
+    line-height: 1.2;
+    font-weight: 660;
+    letter-spacing: -0.022em;
+    margin: 6px 0 18px;
+    color: var(--kite-ink);
+}
+
+/* The rule above an h2 separates sections of a long page. The cover heading is
+   the page title, so it is excluded — otherwise the landing page opens with a
+   line above "All modules:". */
+.main-content h2 {
+    font-size: 21px;
+    font-weight: 640;
+    letter-spacing: -0.015em;
+    margin: 40px 0 12px;
+    padding-top: 10px;
+    border-top: 1px solid var(--kite-rule);
+    color: var(--kite-ink);
+}
+
+.cover h2,
+.main-content > .cover > h2:first-child {
+    border-top: none;
+    padding-top: 0;
+    margin-top: 0;
+}
+
+.main-content h3 {
+    font-size: 16.5px;
+    font-weight: 620;
+    margin: 26px 0 8px;
+}
+
+.main-content h4 {
+    font-size: 14.5px;
+    font-weight: 620;
+    margin: 20px 0 6px;
+    color: var(--kite-ink-soft);
+}
+
+/* Prose gets a measure; code and tables stay full width. */
+.cover > .paragraph,
+.main-content > .paragraph,
+.platform-hinted > .content > .paragraph,
+.brief-comment,
+.KDocTag {
+    max-width: 74ch;
+    line-height: 1.62;
+}
+
+p {
+    line-height: 1.62;
+}
+
+a {
+    color: var(--kite-violet);
+    text-underline-offset: 2px;
+    text-decoration-thickness: 1px;
+    text-decoration-color: color-mix(in srgb, var(--kite-violet) 38%, transparent);
+}
+
+a:hover {
+    color: var(--kite-violet-bright);
+    text-decoration-color: currentColor;
+}
+
+/* --- 5. Signatures ------------------------------------------------------- */
+
+/* The signature block is the unit people actually read. Give it a card. */
+.symbol.monospace {
+    background: var(--kite-code-bg);
+    border: 1px solid var(--kite-rule);
+    border-radius: 10px;
+    padding: 12px 14px;
+    font-size: 13px;
+    line-height: 1.6;
+    overflow-x: auto;
+}
+
+.main-content .symbol.monospace .top-right-position {
+    top: 8px;
+    right: 8px;
+}
+
+.table-row {
+    border-top: 1px solid var(--kite-rule);
+    padding: 14px 0;
+}
+
+.table-row:hover {
+    background: transparent;
+}
+
+.table-row .keyValue > div:first-child a,
+.main-subrow .inline-flex a {
+    font-family: var(--default-monospace-font-family);
+    font-size: 13.5px;
+    font-weight: 550;
+}
+
+.brief-comment {
+    color: var(--kite-ink-soft);
+    font-size: 14px;
+}
+
+/* --- 6. Code ------------------------------------------------------------- */
+
+code,
+code.lang-kotlin,
+.code,
+pre {
+    font-family: var(--default-monospace-font-family);
+    font-variant-ligatures: none;
+    tab-size: 4;
+}
+
+.sample-container,
+div.sample-container {
+    margin: 14px 0;
+}
+
+.sample-container > pre,
+pre.runnablesample,
+.main-content pre {
+    background: var(--kite-code-bg);
+    border: 1px solid var(--kite-rule);
+    border-radius: 10px;
+    padding: 14px 16px;
+    font-size: 13px;
+    line-height: 1.62;
+    overflow-x: auto;
+}
+
+/* Inline code inside prose. */
+p > code,
+li > code,
+td > code,
+.brief-comment code,
+.KDocTag code {
+    background: var(--kite-code-bg);
+    border: 1px solid var(--kite-rule);
+    border-radius: 5px;
+    padding: 0.1em 0.36em;
+    font-size: 0.88em;
+}
+
+/* Prism tokens, tuned so Kotlin reads well in both themes. */
+.token.keyword { color: #b8399e; font-weight: 500; }
+.token.function { color: #4b6ef5; }
+.token.string { color: #1a7f52; }
+.token.number { color: #b4761f; }
+.token.comment { color: var(--kite-ink-faint); font-style: normal; }
+.token.annotation, .token.builtin { color: #9161d6; }
+
+html.theme-dark .token.keyword { color: #f08fd0; }
+html.theme-dark .token.function { color: #85a9ff; }
+html.theme-dark .token.string { color: #82d6a4; }
+html.theme-dark .token.number { color: #ecc07c; }
+html.theme-dark .token.annotation, html.theme-dark .token.builtin { color: #c6a4ff; }
+
+/* --- 7. Platform tabs and filters ---------------------------------------- */
+
+/* Default Dokka renders these as saturated green blocks that outweigh the page
+   title. Every filter is on by default, so a "filled = active" treatment paints
+   the whole row solid and reads as a call to action. These are metadata: the
+   resting state is a quiet outline, and switching one OFF is what stands out. */
+.platform-tag,
+.platform-tags .platform-tag,
+.filter-section .platform-tag,
+#filter-section .platform-tag {
+    background: transparent;
+    color: var(--kite-ink-soft);
+    border: 1px solid var(--kite-rule-strong);
+    border-radius: 999px;
+    font-size: 11.5px;
+    font-weight: 550;
+    letter-spacing: 0.02em;
+    text-transform: none;
+    padding: 3px 11px;
+    box-shadow: none;
+    transition: color 0.12s ease, border-color 0.12s ease, opacity 0.12s ease;
+}
+
+.platform-tag.jvm-like,
+.platform-tag.common-like,
+.platform-tag.native-like,
+.platform-tag.js-like,
+.platform-tag.wasm-like {
+    background: transparent;
+}
+
+/* Active (the default for all of them): legible, still quiet. */
+.platform-tag[data-active] {
+    background: transparent;
+    border-color: var(--kite-violet);
+    color: var(--kite-violet);
+}
+
+/* Filtered out: clearly switched off. */
+.platform-tag:not([data-active]) {
+    opacity: 0.45;
+    border-style: dashed;
+}
+
+.platform-tag:hover {
+    border-color: var(--kite-violet);
+    color: var(--kite-violet);
+}
+
+.tabbedcontent .section-tab,
+.platform-hinted > .platform-bookmarks-row > .platform-bookmark {
+    border-radius: 7px 7px 0 0;
+    font-size: 13px;
+    font-weight: 550;
+    color: var(--kite-ink-faint);
+    background: transparent;
+    padding: 7px 13px;
+}
+
+.platform-hinted > .platform-bookmarks-row > .platform-bookmark[data-active],
+.tabbedcontent .section-tab[data-active] {
+    color: var(--kite-violet);
+    border-bottom: 2px solid var(--kite-violet);
+    background: transparent;
+}
+
+.platform-hinted {
+    border-left: none;
+    padding-left: 0;
+}
+
+/* --- 8. Tables ----------------------------------------------------------- */
+
+table,
+.table {
+    border-collapse: collapse;
+}
+
+th {
+    font-size: 12.5px;
+    font-weight: 620;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    color: var(--kite-ink-faint);
+    text-align: left;
+    padding: 8px 12px 8px 0;
+    border-bottom: 1px solid var(--kite-rule-strong);
+}
+
+td {
+    padding: 9px 12px 9px 0;
+    border-bottom: 1px solid var(--kite-rule);
+    vertical-align: top;
+    line-height: 1.55;
+}
+
+/* --- 9. Footer ----------------------------------------------------------- */
+
+.footer {
+    background: transparent;
+    border-top: 1px solid var(--kite-rule);
+    color: var(--kite-ink-faint);
+    font-size: 12.5px;
+}
+
+.footer a {
+    color: var(--kite-ink-faint);
+}
+
+/* background-color, not background: the shorthand would drop the arrow icon,
+   which Dokka supplies as a background-image on this element. */
+.footer--go-to-top,
+#go-to-top-link {
+    background-color: var(--kite-violet);
+}
+
+/* --- 10. Details, tags, misc --------------------------------------------- */
+
+/* @param / @return / @throws blocks. */
+.KDocTag {
+    display: block;
+}
+
+h4.tags-section-header,
+.main-content .kdoc-tag > b,
+.symbol + .KDocTag > b {
+    color: var(--kite-ink-faint);
+    font-weight: 620;
+}
+
+blockquote {
+    border-left: 3px solid var(--kite-violet);
+    background: var(--navigation-highlight-color);
+    border-radius: 0 8px 8px 0;
+    margin: 16px 0;
+    padding: 10px 16px;
+    color: var(--kite-ink-soft);
+}
+
+blockquote > p:last-child {
+    margin-bottom: 0;
+}
+
+hr {
+    border: none;
+    border-top: 1px solid var(--kite-rule);
+    margin: 28px 0;
+}
+
+::selection {
+    background: color-mix(in srgb, var(--kite-violet) 26%, transparent);
+}
+
+*:focus-visible {
+    outline: 2px solid var(--kite-violet);
+    outline-offset: 2px;
+    border-radius: 4px;
+}
+
+/* Kite's own header additions (see templates/includes/header.ftl). */
+.kite-nav-links {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-left: 18px;
+}
+
+.kite-nav-links a {
+    color: var(--kite-ink-soft);
+    font-size: 13.5px;
+    font-weight: 520;
+    text-decoration: none;
+    padding: 5px 10px;
+    border-radius: 7px;
+    white-space: nowrap;
+    transition: background-color 0.12s ease, color 0.12s ease;
+}
+
+.kite-nav-links a:hover {
+    background: var(--navigation-highlight-color);
+    color: var(--kite-ink);
+}
+
+@media (max-width: 900px) {
+    .kite-nav-links {
+        display: none;
+    }
+}

@@ -16,7 +16,8 @@ corpus/
   `mutool` oracle, then compared pixel-by-pixel (mean absolute error). Run:
 
   ```
-  MUTOOL="$(which mutool)" ./gradlew :kitepdf-native-renderer:jvmTest --tests "*DifferentialTest*"
+  MUTOOL="$(which mutool)" ./gradlew :kitepdf-native-renderer:jvmTest \
+    --tests "io.github.yuroyami.kitepdf.nativerenderer.difftest.DifferentialTest"
   ```
 
   Report + per-page PNGs land in `kitepdf-native-renderer/build/difftest/`.
@@ -29,9 +30,12 @@ corpus/
 Override the location with `-Dkitepdf.corpus=/abs/path` (PDF) or
 `-Dkitepdf.epub.corpus=/abs/path` (EPUB).
 
-## Unblocking the deferred codecs
+## Growing codec coverage
 
-To let KitePDF implement + verify these, drop a sample that uses each:
+KitePDF includes pure-Kotlin decoding for JBIG2 arithmetic generic regions and
+JPEG 2000 Part-1 baseline profiles, with backend fallbacks for unsupported
+variants where available. To expand real-world regression coverage, drop
+samples that use each:
 
 - **JBIG2** image → any scanned/OCR'd `corpus/pdf/*.pdf` with a `/JBIG2Decode` image.
 - **JPEG 2000 (JPX)** image → a `corpus/pdf/*.pdf` with a `/JPXDecode` image.

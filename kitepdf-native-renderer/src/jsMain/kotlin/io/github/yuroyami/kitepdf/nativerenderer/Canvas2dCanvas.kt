@@ -127,8 +127,8 @@ public class Canvas2dCanvas(private val ctx: CanvasRenderingContext2D) : KiteCan
                 val outline = glyph.outline
                 if (outline != null && !outline.isEmpty()) {
                     val glyphMatrix = textToDevice
-                        .let { tm -> PdfMatrix.translation(penX + glyph.xOffset * unitScale, glyph.yOffset * unitScale).concat(tm) }
-                        .let { tm -> PdfMatrix(unitScale, 0.0, 0.0, unitScale, 0.0, 0.0).concat(tm) }
+                        .concat(PdfMatrix.translation(penX + glyph.xOffset * unitScale, glyph.yOffset * unitScale))
+                        .concat(PdfMatrix(unitScale, 0.0, 0.0, unitScale, 0.0, 0.0))
                     val p = toPath2D(outline, glyphMatrix)
                     ctx.asDynamic().fill(p, "nonzero")
                     drewAny = true

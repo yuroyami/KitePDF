@@ -52,14 +52,37 @@ object EpubCorpus {
         )
     }
 
-    /** 2x2 solid-red truecolor PNG (STORED deflate, dummy CRCs). */
+    /** 2x2 solid-red truecolor PNG (STORED deflate, valid CRCs and Adler-32). */
     fun redPng(): ByteArray {
         fun be32(n: Int) = byteArrayOf((n ushr 24).toByte(), (n ushr 16).toByte(), (n ushr 8).toByte(), n.toByte())
-        fun chunk(t: String, d: ByteArray) = be32(d.size) + t.encodeToByteArray() + d + byteArrayOf(0, 0, 0, 0)
+        fun chunk(type: String, data: ByteArray): ByteArray {
+            val body = type.encodeToByteArray() + data
+            var crc = -1
+            for (byte in body) {
+                crc = crc xor (byte.toInt() and 0xFF)
+                repeat(8) {
+                    crc = if (crc and 1 != 0) 0xEDB88320.toInt() xor (crc ushr 1) else crc ushr 1
+                }
+            }
+            return be32(data.size) + body + be32(crc.inv())
+        }
+        fun adler32(data: ByteArray): ByteArray {
+            var a = 1
+            var b = 0
+            for (byte in data) {
+                a = (a + (byte.toInt() and 0xFF)) % 65521
+                b = (b + a) % 65521
+            }
+            return be32((b shl 16) or a)
+        }
         val row = byteArrayOf(0, 255.toByte(), 0, 0, 255.toByte(), 0, 0)
         val scan = row + row
         val nlen = scan.size.inv() and 0xFFFF
-        val zlib = byteArrayOf(0x78, 0x01, 0x01, (scan.size and 0xFF).toByte(), ((scan.size ushr 8) and 0xFF).toByte(), (nlen and 0xFF).toByte(), ((nlen ushr 8) and 0xFF).toByte()) + scan + byteArrayOf(0, 0, 0, 1)
+        val zlib = byteArrayOf(
+            0x78, 0x01, 0x01,
+            (scan.size and 0xFF).toByte(), ((scan.size ushr 8) and 0xFF).toByte(),
+            (nlen and 0xFF).toByte(), ((nlen ushr 8) and 0xFF).toByte(),
+        ) + scan + adler32(scan)
         val sig = byteArrayOf(0x89.toByte(), 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A)
         return sig + chunk("IHDR", be32(2) + be32(2) + byteArrayOf(8, 2, 0, 0, 0)) + chunk("IDAT", zlib) + chunk("IEND", ByteArray(0))
     }
