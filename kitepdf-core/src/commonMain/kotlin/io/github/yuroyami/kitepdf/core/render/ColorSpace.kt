@@ -18,9 +18,9 @@ import kotlin.math.pow
  * Supported families:
  *   - DeviceGray / DeviceRGB / DeviceCMYK (the device families)
  *   - Indexed (palette lookup; base is one of the device families)
- *   - ICCBased — *falls back* to DeviceRGB / DeviceCMYK / DeviceGray based
+ *   - ICCBased: *falls back* to DeviceRGB / DeviceCMYK / DeviceGray based
  *     on `/N` component count (the ICC profile is not applied).
- *   - CalGray, CalRGB, Lab — treated as their device equivalent (no
+ *   - CalGray, CalRGB, Lab: treated as their device equivalent (no
  *     gamma / whitepoint correction); good enough for visual approximation.
  *
  * Separation / DeviceN resolve through their tint-transform function (see
@@ -38,7 +38,7 @@ public sealed class ColorSpace {
     /** Convert a sample (one float per component, all in [0,1]) to RGB. */
     public abstract fun toRgb(components: DoubleArray): RgbColor
 
-    /** Default fill colour at "the colour space is set to me" — black-equivalent. */
+    /** Default fill colour at "the colour space is set to me": black-equivalent. */
     public open fun defaultColor(): RgbColor = RgbColor.BLACK
 
     public object DeviceGray : ColorSpace() {
@@ -105,7 +105,7 @@ public sealed class ColorSpace {
         override val componentCount: Int = 1
 
         // Resolve the whole palette to RGB once, then every lookup is an array
-        // index — no per-pixel/per-sample DoubleArray alloc or base conversion.
+        // index, with no per-pixel/per-sample DoubleArray alloc or base conversion.
         private val lut: Array<RgbColor> by lazy {
             val comp = base.componentCount
             Array(hival + 1) { idx ->
@@ -219,7 +219,7 @@ public sealed class ColorSpace {
                 "CalRGB" -> DeviceRGB
                 "Lab" -> resolveLab(arr, refs)
                 "ICCBased" -> {
-                    // /ICCBased [/ICCBased <stream>] — stream dict carries /N.
+                    // /ICCBased [/ICCBased <stream>]: stream dict carries /N.
                     val streamObj = arr.getOrNull(1)?.resolve(refs) as? PdfStream
                     val n = streamObj?.dict?.getInt("N")?.toInt() ?: 3
                     when (n) {

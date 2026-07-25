@@ -9,14 +9,14 @@ import io.github.yuroyami.kitepdf.core.font.TrueTypeFont
  * This is the from-scratch writer's path to non-Latin / custom text. The whole
  * font program is embedded as a Type0 / CIDFontType2 composite font with
  * `Identity-H` encoding plus a `/ToUnicode` map, so the output renders and
- * extracts arbitrary Unicode (including CJK). Embedding the full program — no
- * subsetting yet — matches MuPDF's default `pdf_add_cid_font` behaviour.
+ * extracts arbitrary Unicode (including CJK). Embedding the full program,
+ * without subsetting, matches MuPDF's default `pdf_add_cid_font` behaviour.
  *
  * Load once and reuse the handle across pages and documents:
  * ```
  * val font = EmbeddedFont.load(myTtfBytes)
  * val pdf = PdfBuilder()
- *     .page { text(font, 24.0, 72.0, 700.0, "日本語 — Hello") }
+ *     .page { text(font, 24.0, 72.0, 700.0, "日本語: Hello") }
  *     .build()
  * ```
  *
@@ -84,10 +84,10 @@ public class EmbeddedFont private constructor(
                 val start = storage + u16(r + 10)
                 if (len <= 0 || start < 0 || start + len > t.size) continue
                 val s = when (u16(r)) {                   // platformID
-                    1 -> buildString {                    // Macintosh — single-byte ASCII
+                    1 -> buildString {                    // Macintosh: single-byte ASCII
                         for (i in 0 until len) append((t[start + i].toInt() and 0xFF).toChar())
                     }
-                    0, 3 -> buildString {                 // Unicode / Windows — UTF-16BE
+                    0, 3 -> buildString {                 // Unicode / Windows: UTF-16BE
                         var i = 0
                         while (i + 1 < len) {
                             append((((t[start + i].toInt() and 0xFF) shl 8) or (t[start + i + 1].toInt() and 0xFF)).toChar())
@@ -96,7 +96,7 @@ public class EmbeddedFont private constructor(
                     }
                     else -> continue
                 }
-                if (u16(r) == 1) return s                 // Mac record is simplest — take it
+                if (u16(r) == 1) return s                 // Mac record is simplest, so use it
                 fallback = s
             }
             return fallback
@@ -116,7 +116,7 @@ public class EmbeddedFont private constructor(
 internal class EmbeddedFontUsage {
     val usedGids = HashSet<Int>()
 
-    /** First Unicode code point seen for each gid — drives the `/ToUnicode` map. */
+    /** First Unicode code point seen for each gid, which drives the `/ToUnicode` map. */
     val gidToUnicode = HashMap<Int, Int>()
 
     fun record(gid: Int, codePoint: Int) {

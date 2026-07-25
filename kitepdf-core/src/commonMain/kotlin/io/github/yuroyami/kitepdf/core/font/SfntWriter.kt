@@ -91,7 +91,7 @@ internal object SfntWriter {
         return sum
     }
 
-    /** floor(log2(n)) — the directory's `entrySelector`. */
+    /** floor(log2(n)): the directory's `entrySelector`. */
     private fun highBit(n: Int): Int {
         var sel = 0
         var v = 1

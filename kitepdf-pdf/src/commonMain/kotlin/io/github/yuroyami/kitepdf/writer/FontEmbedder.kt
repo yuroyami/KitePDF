@@ -27,7 +27,7 @@ internal object FontEmbedder {
     /**
      * Emit the five objects (FontFile2, FontDescriptor, CIDFont, ToUnicode,
      * Type0) through [alloc]/[emit] and return the object number of the
-     * top-level Type0 font — the value to put into `/Resources /Font`.
+     * top-level Type0 font, the value to put into `/Resources /Font`.
      */
     fun embed(
         font: EmbeddedFont,
@@ -47,7 +47,7 @@ internal object FontEmbedder {
         //    original gid → new gid (full → /Identity).
         //  - OpenType/CFF: CIDFontType0 + /FontFile3 (CIDFontType0C); re-emitted as a
         //    CID-keyed CFF whose charset maps new gid → original gid (so the charset
-        //    does the redirect — no /CIDToGIDMap). subset=false embeds all glyphs.
+        //    does the redirect, not a /CIDToGIDMap). subset=false embeds all glyphs.
         val program: ByteArray
         val baseName: String
         val descendantSubtype: String
@@ -132,7 +132,7 @@ internal object FontEmbedder {
         val cidNum = alloc()
         emit(cidNum, PdfDictionary(cidDict))
 
-        // /ToUnicode — lets readers extract and copy the original text.
+        // /ToUnicode: lets readers extract and copy the original text.
         val toUniNum = alloc()
         emit(toUniNum, PdfStreams.flate(toUnicodeCMap(usage.gidToUnicode)))
 
@@ -232,7 +232,7 @@ internal object FontEmbedder {
             .append(HEX[(v ushr 4) and 0xF]).append(HEX[v and 0xF])
     }
 
-    /** Append [cp] as UTF-16BE hex — a surrogate pair above the BMP. */
+    /** Append [cp] as UTF-16BE hex, a surrogate pair above the BMP. */
     private fun utf16Hex(sb: StringBuilder, cp: Int) {
         if (cp <= 0xFFFF) {
             hex4(sb, cp)

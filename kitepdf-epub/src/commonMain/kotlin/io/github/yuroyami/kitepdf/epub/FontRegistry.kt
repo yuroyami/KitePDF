@@ -15,7 +15,7 @@ import io.github.yuroyami.kitepdf.core.render.KitePath
  *
  * Scope: TrueType (`glyf`) AND OpenType-CFF (`.otf`) programs. Both are SFNT
  * containers, so `cmap`/`hmtx`/`head` (glyph id + advances + unitsPerEm) always
- * come from the core [TrueTypeFont]; only the OUTLINE source differs — `glyf` for
+ * come from the core [TrueTypeFont]; only the OUTLINE source differs: `glyf` for
  * TrueType, a [CffFont] parsed from the `CFF ` table for OpenType. (Advances still
  * come from `hmtx` even for CFF, so the CFF-charstring-width gap doesn't apply to
  * SFNT-wrapped `.otf`.) WOFF 1.0 and WOFF2 wrappers are unwrapped to bare SFNT

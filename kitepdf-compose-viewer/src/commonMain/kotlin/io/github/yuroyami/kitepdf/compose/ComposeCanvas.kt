@@ -44,11 +44,11 @@ import kotlin.math.sqrt
  *
  * Three rendering paths:
  *
- *   - **Embedded outlines** — when `hasOutlines` is true,
+ *   - **Embedded outlines**: when `hasOutlines` is true,
  *     each byte/CID becomes a Compose `Path` filled at the right position.
- *   - **System-font fallback** — when no outlines available, decode to text
+ *   - **System-font fallback**: when no outlines are available, decode to text
  *     and hand to Compose's `TextMeasurer`.
- *   - **Transparency groups** — open a `saveLayer` on the underlying Canvas
+ *   - **Transparency groups**: open a `saveLayer` on the underlying Canvas
  *     when the renderer requests one; later `restore` composites the layer
  *     back with the requested blend mode + alpha.
  *
@@ -60,7 +60,7 @@ public class ComposeCanvas(
     private val drawScope: DrawScope,
     private val textMeasurer: TextMeasurer,
     /**
-     * Minimum stroke width in *raster* pixels. Defaults to 1 — the ISO hairline
+     * Minimum stroke width in *raster* pixels. Defaults to 1, the ISO hairline
      * floor. When rasterizing supersampled (raster larger than its on-screen
      * size), pass the supersample factor instead: a floor of 1 raster pixel
      * would shrink below one *screen* pixel after downscale and hairlines
@@ -70,7 +70,7 @@ public class ComposeCanvas(
 ) : KiteCanvas {
 
     private val clipStack = ArrayDeque<ClipFrame>()
-    /** Count of open transparency groups — for matching beginGroup/endGroup pairs. */
+    /** Count of open transparency groups, for matching beginGroup/endGroup pairs. */
     private var openGroups = 0
 
     override fun beginPage(widthPt: Double, heightPt: Double, deviceCtm: PdfMatrix) {
@@ -79,7 +79,7 @@ public class ComposeCanvas(
     }
 
     override fun endPage() {
-        // Close any still-open transparency groups (defensive — well-formed
+        // Close any still-open transparency groups (defensive: well-formed
         // PDFs always pair them, but malformed ones leak).
         while (openGroups > 0) {
             drawScope.drawContext.canvas.restore()
@@ -224,7 +224,7 @@ public class ComposeCanvas(
 
         // renderedSize is already in DEVICE PIXELS (font size × text-matrix scale, which
         // includes the page raster scale). A Compose `Sp` size is re-multiplied by the device
-        // density AND the user's accessibility font scale when measured — so on a real device
+        // density AND the user's accessibility font scale when measured, so on a real device
         // (density 2–3×) the text rendered that many times too large, and on high-density
         // Android the oversized runs overlapped ("collapsed"). Divide both back out so the
         // glyph lands at exactly renderedSize px on every platform. (JVM test density is 1×,
@@ -262,7 +262,7 @@ public class ComposeCanvas(
                 // ImageDecoder will fall back to null + a placeholder.
                 ImageXObject.Kind.JPEG, ImageXObject.Kind.JPEG2000, ImageXObject.Kind.JBIG2 ->
                     ImageDecoder.decode(image.encodedBytes)
-                // RAW (FlateDecode etc.): samples are already inflated — assemble RGBA
+                // RAW (FlateDecode etc.): samples are already inflated. Assemble RGBA
                 // and build a bitmap directly. Covers the common embedded-PNG case.
                 ImageXObject.Kind.RAW ->
                     image.toRgbaBytes()?.let { ImageDecoder.decodeRaw(it, image.width, image.height) }
@@ -362,7 +362,7 @@ public class ComposeCanvas(
         try {
             render()
             // Inner layer with DstIn: subsequent draws will multiply by the
-            // existing layer's alpha — i.e. the mask "punches" the content.
+            // existing layer's alpha, so the mask keeps only what it covers.
             // For a Luminosity mask (§11.6.5.2) the mask group composites over
             // an opaque BLACK backdrop and its LUMINANCE becomes the alpha:
             // a colour-matrix filter moves 0.299R+0.587G+0.114B into A at the

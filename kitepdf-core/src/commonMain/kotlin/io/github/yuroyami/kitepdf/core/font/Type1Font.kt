@@ -3,7 +3,7 @@ package io.github.yuroyami.kitepdf.core.font
 import io.github.yuroyami.kitepdf.core.render.KitePath
 
 /**
- * Type 1 (PostScript) font parser — handles `/FontFile` embedded fonts
+ * Type 1 (PostScript) font parser. Handles `/FontFile` embedded fonts
  * (Adobe Type 1 Font Format, "the Black Book").
  *
  * A Type 1 font on disk is three sections:
@@ -85,7 +85,7 @@ internal class Type1Font private constructor(
             val encoding = parseEncoding(header)
             val fontName = parseFontName(header)
 
-            // Section 2: eexec-encrypted block — decrypt the WHOLE thing then
+            // Section 2: eexec-encrypted block. Decrypt the WHOLE block, then
             // parse the Private dict and its CharStrings + Subrs entries from
             // the decrypted PostScript.
             val eexecBegin = minOf(l1, flat.size)
@@ -166,7 +166,7 @@ internal class Type1Font private constructor(
         }
 
         /**
-         * Parse the `/Encoding` array — 256 entries of `dup <code> /<name> put`
+         * Parse the `/Encoding` array: 256 entries of `dup <code> /<name> put`
          * lines inside `StandardEncoding` definitions or `Encoding` rewrites.
          * If we find `/Encoding StandardEncoding def`, we use that table.
          */
@@ -270,7 +270,7 @@ internal class Type1Font private constructor(
 
         /**
          * eexec uses a fixed-seed stream cipher (initial seed 55665).
-         * The encrypted bytes may be hex-encoded ASCII (older fonts) — we
+         * The encrypted bytes may be hex-encoded ASCII (older fonts). We
          * detect that by looking at the first few bytes.
          */
         private fun decryptEexec(input: ByteArray): ByteArray {
@@ -357,7 +357,7 @@ internal class Type1Font private constructor(
         }
 
         private fun findRdMarker(buf: ByteArray, from: Int): Int? {
-            // Find " RD " or " -| " — the operator that signals "next <len> bytes are encrypted charstring".
+            // Find " RD " or " -| ": the operator that signals "next <len> bytes are encrypted charstring".
             // Position-sensitive: take whichever marker appears FIRST after `from`, NOT a
             // global search that always prefers RD. A coincidental " RD " byte sequence inside
             // earlier binary charstring data must not win over the real, nearer " -| " marker

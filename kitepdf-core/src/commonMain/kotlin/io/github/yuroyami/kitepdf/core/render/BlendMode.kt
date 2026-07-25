@@ -5,7 +5,7 @@ package io.github.yuroyami.kitepdf.core.render
  *
  * 16 standard modes: 12 *separable* (each colour channel computed independently)
  * and 4 *non-separable* (operate on HSL). The renderer maps these to the
- * backend's native blend modes — Compose Multiplatform exposes most of them
+ * backend's native blend modes. Compose Multiplatform exposes most of them
  * via `androidx.compose.ui.graphics.BlendMode`.
  *
  * Unknown / non-blending modes fall back to [Normal].
@@ -18,7 +18,7 @@ public enum class BlendMode {
     Hue, Saturation, Color, Luminosity;
 
     public companion object {
-        /** Parse a PDF `/BM` name. Arrays of names — take the first one we recognise. */
+        /** Parse a PDF `/BM` name. Arrays of names: take the first one we recognise. */
         public fun parse(name: String?): BlendMode = when (name) {
             "Normal", "Compatible" -> Normal
             "Multiply" -> Multiply

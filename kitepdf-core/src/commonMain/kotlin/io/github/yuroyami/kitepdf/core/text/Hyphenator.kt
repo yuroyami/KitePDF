@@ -16,7 +16,7 @@ import io.github.yuroyami.kitepdf.core.text.hyphen.HyphPt
  * English set for common words.
  *
  * Patterns are compiled into a trie so lookup is O(word length x max pattern
- * length) regardless of pattern-set size — the German set alone has ~37k
+ * length) regardless of pattern-set size. The German set alone has ~37k
  * patterns, which the previous scan-every-pattern approach would re-walk per
  * word.
  */
@@ -81,7 +81,7 @@ public class Hyphenator(
         /**
          * The bundled hyphenator for a BCP-47-ish language tag (`"de"`,
          * `"de-DE"`, `"fr_FR"`, ...), matched on the primary subtag. Returns
-         * null when no bundled set covers the language — callers should fall
+         * null when no bundled set covers the language. Callers should fall
          * back to [enUs] or skip hyphenation as their policy dictates.
          *
          * Instances are shared and built lazily on first use (the German trie

@@ -105,7 +105,7 @@ class FontPipelineTest {
     @Test
     fun composite_widths_form2_cid_range() {
         val resolver = MapResolver()
-        // /W [10 12 800] — CIDs 10, 11, 12 all have width 800.
+        // /W [10 12 800]: CIDs 10, 11, 12 all have width 800.
         val cidFont = PdfDictionary(linkedMapOf(
             "Subtype" to PdfName("CIDFontType2"),
             "BaseFont" to PdfName("X"),
@@ -127,7 +127,7 @@ class FontPipelineTest {
         assertEquals(800.0, glyphs[0].advanceWidth)
     }
 
-    /** Tiny IndirectResolver backed by a map — for unit-testing without a full document. */
+    /** Tiny IndirectResolver backed by a map, for unit-testing without a full document. */
     private class MapResolver : IndirectResolver {
         private val backing = HashMap<Long, PdfObject>()
         fun put(num: Long, obj: PdfObject) { backing[num] = obj }

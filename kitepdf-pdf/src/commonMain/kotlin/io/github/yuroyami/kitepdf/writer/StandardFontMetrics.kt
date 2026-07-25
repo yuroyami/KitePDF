@@ -5,7 +5,7 @@ import io.github.yuroyami.kitepdf.core.font.Standard14Widths
 
 /**
  * Width of [text] set in this [StandardFont] at [fontSize], in text-space units
- * (points when the font size is in points) — the writer-side counterpart of a
+ * (points when the font size is in points), the writer-side counterpart of a
  * reader's glyph-advance sum.
  *
  * Characters are mapped through WinAnsi (the implicit encoding for the
@@ -13,7 +13,7 @@ import io.github.yuroyami.kitepdf.core.font.Standard14Widths
  * widths in [Standard14Widths]. Characters with no WinAnsi glyph (or any glyph
  * absent from the metrics) fall back to [fallbackWidth] thousandths-of-em.
  *
- * Use it to lay out or truncate text before drawing — e.g. fit a string into a
+ * Use it to lay out or truncate text before drawing, e.g. fit a string into a
  * column and append an ellipsis when it overflows.
  */
 public fun StandardFont.stringWidth(text: String, fontSize: Double, fallbackWidth: Int = 500): Double {

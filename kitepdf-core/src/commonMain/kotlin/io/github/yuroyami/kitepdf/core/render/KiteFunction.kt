@@ -30,18 +30,18 @@ import kotlin.math.truncate
  * and halftone calculations.
  *
  * Supported types:
- *   - **Type 0** sampled (§7.10.2) — multidimensional sample table with
+ *   - **Type 0** sampled (§7.10.2): multidimensional sample table with
  *     multilinear interpolation.
  *   - **Type 2** exponential interpolation (§7.10.3).
  *   - **Type 3** stitching (§7.10.4).
- *   - **Type 4** PostScript calculator (§7.10.5) — a small stack interpreter.
+ *   - **Type 4** PostScript calculator (§7.10.5): a small stack interpreter.
  *
  * An array of n single-output functions (as some shadings / tint transforms
  * use) is wrapped in [ArrayCombination].
  */
 public sealed class KiteFunction {
 
-    /** Input bounds — paired `[min0, max0, min1, max1, …]`. */
+    /** Input bounds: paired `[min0, max0, min1, max1, …]`. */
     public abstract val domain: DoubleArray
 
     /** Optional output bounds; null = unclipped. */

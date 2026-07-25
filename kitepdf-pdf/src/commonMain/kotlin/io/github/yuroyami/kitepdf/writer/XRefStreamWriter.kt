@@ -9,7 +9,7 @@ import io.github.yuroyami.kitepdf.core.parser.PdfReference
 import io.github.yuroyami.kitepdf.core.parser.PdfStream
 
 /**
- * Emits a PDF 1.5+ cross-reference stream (ISO 32000-1 §7.5.8) — the compact,
+ * Emits a PDF 1.5+ cross-reference stream (ISO 32000-1 §7.5.8), the compact,
  * compressed alternative to a classic xref table. The trailer is folded into the
  * stream dictionary, and entries reference both in-file objects (type 1) and
  * objects packed inside object streams (type 2).

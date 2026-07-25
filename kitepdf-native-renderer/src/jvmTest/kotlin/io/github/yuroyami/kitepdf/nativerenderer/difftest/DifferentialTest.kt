@@ -39,25 +39,25 @@ class DifferentialTest {
             "differential sweep rendered zero pages — check corpus documents and kitepdf.diff.maxpages",
         )
 
-        // Gate 1 — KitePDF must not throw on any page.
+        // KitePDF must not throw on any page.
         val failures = report.results.filter { !it.rendered }
         assertTrue(
             failures.isEmpty(),
             "KitePDF failed to render:\n" + failures.joinToString("\n") { "  ${it.doc} p${it.page}: ${it.error}" },
         )
 
-        // Gate 2 — synthetic content fixtures must produce non-blank output.
+        // Synthetic content fixtures must produce non-blank output.
         val blank = report.results.filter { it.synthetic && it.rendered && !it.nonBlank }
         assertTrue(
             blank.isEmpty(),
             "Blank render for fixtures: " + blank.joinToString { "${it.doc} p${it.page}" },
         )
 
-        // Gate 3 — a discovered oracle must successfully score every page that
+        // A discovered oracle must successfully score every page that
         // KitePDF rendered. A broken mutool must never look like a zero score.
         if (report.oracleAvailable) assertOracleComplete(report)
 
-        // Gate 4 — with the oracle present, no page may exceed the regression budget.
+        // With the oracle present, no page may exceed the regression budget.
         // Default budget is deliberately lenient: Phase 0's job is the scoreboard,
         // not a tight gate. Tighten with -Dkitepdf.diff.budget as correctness improves.
         if (report.oracleAvailable) {

@@ -14,7 +14,7 @@ import io.github.yuroyami.kitepdf.core.PdfFormatException
  *   - CharStrings INDEX with Type 2 charstring → [io.github.yuroyami.kitepdf.core.render.KitePath]
  *     conversion (see [CharstringInterpreter]).
  *   - Charsets format 0/1/2 → glyph-name lookup.
- *   - Encodings format 0/1 — for non-CIDFonts only (byte → SID → glyph name → GID).
+ *   - Encodings format 0/1: for non-CIDFonts only (byte → SID → glyph name → GID).
  *   - CID-keyed fonts via FDSelect/FDArray (format 0 and 3).
  *
  * Not yet handled: hint operators are skipped (we don't rasterize, so hints
@@ -24,7 +24,7 @@ import io.github.yuroyami.kitepdf.core.PdfFormatException
 public class CffFont private constructor(
     private val reader: TtfReader,
     public val name: String,
-    /** Per-glyph charstring bytes — index = glyph ID. */
+    /** Per-glyph charstring bytes: index = glyph ID. */
     internal val charStrings: List<ByteArray>,
     /** Global subroutines, indexable with the Type 2 subr-bias adjustment. */
     internal val globalSubrs: List<ByteArray>,
@@ -42,7 +42,7 @@ public class CffFont private constructor(
     internal val nominalWidthX: Double,
     /** True when the font uses CFF CIDFont operators (ROS / FDArray / FDSelect). */
     internal val isCidKeyed: Boolean,
-    /** Per-FontDict private data (one entry for a non-CID font) — for re-emission by the subsetter. */
+    /** Per-FontDict private data (one entry for a non-CID font). The subsetter re-emits it. */
     internal val fdPrivates: List<FdPrivate>,
 ) {
 
@@ -76,7 +76,7 @@ public class CffFont private constructor(
     /** Glyph id for a PostScript glyph name; -1 if unknown. */
     public fun glyphIdForName(name: String): Int = nameToGid[name] ?: -1
 
-    /** Glyph id for a Unicode codepoint — uses Adobe Glyph List → name → gid. */
+    /** Glyph id for a Unicode codepoint. Uses Adobe Glyph List → name → gid. */
     public fun glyphIdForCodePoint(codePoint: Int): Int {
         // Try standard glyph name lookups for ASCII range.
         if (codePoint in 0..127) {
@@ -329,7 +329,7 @@ public class CffFont private constructor(
 
         /**
          * Predefined charset 0=ISOAdobe, 1=Expert, 2=ExpertSubset. We approximate
-         * by returning SIDs 1..N — the first 391 SIDs are exactly the standard
+         * by returning SIDs 1..N. The first 391 SIDs are exactly the standard
          * strings, so for fonts that use predefined charsets this still yields
          * sensible glyph names for ASCII characters.
          */
@@ -428,15 +428,15 @@ public class CffFont private constructor(
 
         /**
          * The first 391 SIDs in CFF map to a fixed standard string set.
-         * We include the subset our parser actually needs for glyph naming —
-         * the rest of the table is ".notdef" placeholders, since they're only
+         * We include the subset our parser actually needs for glyph naming.
+         * The rest of the table is ".notdef" placeholders, since they're only
          * relevant for fonts that use the full Expert charset (rare).
          */
         private val STANDARD_STRINGS: Array<String> = buildStandardStringsTable()
 
         private fun buildStandardStringsTable(): Array<String> {
             val arr = Array(391) { ".notdef" }
-            // First chunk — common glyph names. Indices match Adobe CFF spec Appendix A.
+            // First chunk: common glyph names. Indices match Adobe CFF spec Appendix A.
             val names = listOf(
                 ".notdef","space","exclam","quotedbl","numbersign","dollar","percent","ampersand",
                 "quoteright","parenleft","parenright","asterisk","plus","comma","hyphen","period",

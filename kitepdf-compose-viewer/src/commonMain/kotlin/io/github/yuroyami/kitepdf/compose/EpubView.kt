@@ -13,7 +13,7 @@ import io.github.yuroyami.kitepdf.core.render.ReaderTheme
 /**
  * Remembers a [PdfViewState] for an EPUB [document]. Hoist it to drive an
  * [EpubView] (or the shared [PdfView] state overload) from navigation buttons,
- * a page indicator, a HUD — the state object is the single point of control.
+ * a page indicator, a HUD. The state object is the single point of control.
  *
  * The state type is shared with PDF ([rememberPdfViewState]): both a
  * [io.github.yuroyami.kitepdf.PdfDocument] and an [EpubDocument] are
@@ -26,7 +26,7 @@ public fun rememberEpubViewState(document: EpubDocument, initialPage: Int = 0): 
 /**
  * Convenience viewer for a reflowed [EpubDocument]: opens the whole book as a
  * continuous vertical scroll, or a single [page]. Delegates to the shared
- * [PdfView] renderer — pages are rasterized once per (page, size) bucket and
+ * [PdfView] renderer. Pages are rasterized once per (page, size) bucket and
  * drawn as images, exactly like PDF.
  *
  * ```kotlin
@@ -46,7 +46,7 @@ public fun rememberEpubViewState(document: EpubDocument, initialPage: Int = 0): 
  *   whole book as a continuous vertical scroll.
  * @param background colour painted behind page content. Ignored when [theme] is
  *   set (the theme owns the paper colour).
- * @param theme optional reading theme — [ReaderTheme.Dark] for night mode,
+ * @param theme optional reading theme: [ReaderTheme.Dark] for night mode,
  *   [ReaderTheme.Sepia], or [ReaderTheme.Light]/null for the author's colours.
  *   Applied at render, so switching is instant (no re-layout).
  */

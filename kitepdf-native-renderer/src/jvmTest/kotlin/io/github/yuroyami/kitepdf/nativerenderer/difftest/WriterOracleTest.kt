@@ -22,8 +22,8 @@ import kotlin.test.assertTrue
  *
  * KitePDF's own reader following its own writer's output can hide a shared bug;
  * `mutool` cannot. We edit a PDF, save incrementally, and require that mutool
- * (a) renders the page — which exercises the whole resolve chain (xref → /Prev →
- * Root → Pages → Page → Contents/Font) through the appended section — and
+ * (a) renders the page, which exercises the whole resolve chain (xref → /Prev →
+ * Root → Pages → Page → Contents/Font) through the appended section, and
  * (b) reports our appended trailer (with /Prev and the edited /Info).
  *
  * Skips cleanly when no mutool is on the system (mirrors the differential harness).
@@ -65,7 +65,7 @@ class WriterOracleTest {
             assertEquals(0, draw.exitCode, "mutool draw failed:\n${draw.output}")
             assertTrue(png.exists() && png.length() > 0L, "mutool produced no PNG output")
 
-            // (b) Dump the active trailer — must be OUR appended one.
+            // (b) Dump the active trailer. It must be OUR appended one.
             val trailer = runMutool(tool, "show", pdf.absolutePath, "trailer")
             assertEquals(0, trailer.exitCode, "mutool show trailer failed:\n${trailer.output}")
             assertTrue(
@@ -118,7 +118,7 @@ class WriterOracleTest {
         val png = File.createTempFile("kite-flate-", ".png")
         val cleaned = File.createTempFile("kite-flate-clean-", ".pdf")
         try {
-            // (a) mutool renders the page — it must decode our FlateDecode stream.
+            // (a) mutool renders the page. It must decode our FlateDecode stream.
             val draw = runMutool(
                 tool, "draw", "-r", "72", "-F", "png", "-o", png.absolutePath,
                 pdf.absolutePath, "1",
@@ -371,7 +371,7 @@ class WriterOracleTest {
         val pdf = File.createTempFile("kite-objstm-", ".pdf").apply { writeBytes(compact) }
         val png = File.createTempFile("kite-objstm-", ".png")
         try {
-            // mutool must render the page — proving it walks our /XRef stream and
+            // mutool must render the page, proving it walks our /XRef stream and
             // resolves objects out of our /ObjStm.
             val draw = runMutool(
                 tool, "draw", "-r", "72", "-F", "png", "-o", png.absolutePath, pdf.absolutePath, "1",
@@ -379,7 +379,7 @@ class WriterOracleTest {
             assertEquals(0, draw.exitCode, "mutool draw failed on object-stream output:\n${draw.output}")
             assertTrue(png.exists() && png.length() > 0L, "mutool produced no PNG")
 
-            // mutool resolves /Info — which lives inside the object stream.
+            // mutool resolves /Info, which lives inside the object stream.
             val info = runMutool(tool, "info", pdf.absolutePath)
             assertEquals(0, info.exitCode, "mutool info failed:\n${info.output}")
             assertTrue(

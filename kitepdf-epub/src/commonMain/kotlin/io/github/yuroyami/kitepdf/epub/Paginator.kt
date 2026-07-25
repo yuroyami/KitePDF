@@ -10,7 +10,7 @@ internal class PageRender(
     val images: List<ImageBox>,
     /** Boxes with a background or visible border intersecting this page. */
     val decoBoxes: List<LayoutBox>,
-    /** This page's dimensions — per-page so fixed-layout spreads size independently. */
+    /** This page's dimensions, per-page so fixed-layout spreads size independently. */
     val pageWidth: Double,
     val pageHeight: Double,
     val margin: Double,
@@ -124,7 +124,7 @@ internal object Paginator {
         var onPage = 0
         var k = cur.lastIndex
         while (k >= 0 && cur[k].owner === owner) { onPage++; k-- }
-        // Nothing precedes this block on the page — pulling would just leave it blank.
+        // Nothing precedes this block on the page. Pulling would just leave it blank.
         if (onPage >= cur.size) return 0
 
         if (owner.style.breakInsideAvoid) return if (owner.borderBoxHeight <= pageContentHeight) onPage else 0

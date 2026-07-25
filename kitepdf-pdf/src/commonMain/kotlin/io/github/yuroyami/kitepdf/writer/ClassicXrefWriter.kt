@@ -8,7 +8,7 @@ import io.github.yuroyami.kitepdf.core.ByteArrayBuilder
  *
  * Consecutive object numbers are grouped into subsections, the conventional
  * free-list head (object 0) is always emitted, and every in-use entry is
- * exactly 20 bytes — the width some strict readers (and the spec) require.
+ * exactly 20 bytes, the width some strict readers (and the spec) require.
  */
 internal object ClassicXrefWriter {
 

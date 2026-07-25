@@ -9,7 +9,7 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 /**
- * T-40 acceptance: each shading fixture against mutool with its own budget —
+ * Each shading fixture is scored against mutool with its own budget:
  * type 1 within 0.01 MAE, types 4/5 within 0.05, and patch types 6/7 within
  * 0.12 (tessellation approximation tolerated by the audit). All five numbers
  * print for the ledger. Skips without mutool.

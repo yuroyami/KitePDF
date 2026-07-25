@@ -11,7 +11,7 @@ import org.jetbrains.skia.ImageInfo
 
 public actual object ImageDecoder {
     public actual fun decode(bytes: ByteArray): ImageBitmap? = try {
-        // Compose on wasm rides on Skiko/CanvasKit, which bundles image codecs —
+        // Compose on wasm uses Skiko/CanvasKit, which bundles image codecs, so
         // decoding is synchronous, no createImageBitmap Promise needed.
         Image.makeFromEncoded(bytes).toComposeImageBitmap()
     } catch (t: Throwable) {

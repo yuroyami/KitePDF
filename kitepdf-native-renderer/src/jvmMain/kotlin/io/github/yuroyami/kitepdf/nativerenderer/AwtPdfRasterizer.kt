@@ -8,7 +8,7 @@ import java.io.ByteArrayOutputStream
 import javax.imageio.ImageIO
 
 /**
- * Headless raster output using AWT + ImageIO — no Skia, no Compose, no
+ * Headless raster output using AWT + ImageIO: no Skia, no Compose, no
  * native binaries beyond what the JDK already ships. Perfect for:
  *
  *  - CI / server-side PDF → PNG / JPEG conversion

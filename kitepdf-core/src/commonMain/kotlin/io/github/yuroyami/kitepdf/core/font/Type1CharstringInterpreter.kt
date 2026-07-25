@@ -37,7 +37,7 @@ internal class Type1CharstringInterpreter(
     private var done = false
     private var depth = 0
 
-    /** Left sidebearing x set by hsbw/sbw — needed for seac accent placement. */
+    /** Left sidebearing x set by hsbw/sbw. Needed for seac accent placement. */
     private var sbx = 0.0
 
     /* ─── Flex state (OtherSubrs 0/1/2) ──────────────────────────────────── */
@@ -73,7 +73,7 @@ internal class Type1CharstringInterpreter(
                         i += 2
                     }
                     b == 255 -> {
-                        // 32-bit signed big-endian — Type 1 form (NOT Type 2's fixed-point).
+                        // 32-bit signed big-endian: Type 1 form (NOT Type 2's fixed-point).
                         if (i + 4 >= cs.size) return
                         val v = ((cs[i + 1].toInt() and 0xFF) shl 24) or
                             ((cs[i + 2].toInt() and 0xFF) shl 16) or
@@ -196,7 +196,7 @@ internal class Type1CharstringInterpreter(
                 }
                 stack.clear()
             }
-            else -> stack.clear()                      // unknown — defensive reset
+            else -> stack.clear()                      // unknown: defensive reset
         }
     }
 
@@ -230,7 +230,7 @@ internal class Type1CharstringInterpreter(
                 repeat(n) { if (stack.isNotEmpty()) args.add(0, stack.removeLast()) }
                 handleOtherSubr(otherSubr, args)
             }
-            17 -> {                                    // pop — moves PS stack top → charstring stack
+            17 -> {                                    // pop: moves PS stack top → charstring stack
                 if (psStack.isNotEmpty()) stack.addLast(psStack.removeLast())
             }
             33 -> {                                    // setcurrentpoint: x y
@@ -252,12 +252,12 @@ internal class Type1CharstringInterpreter(
         when (num) {
             1 -> {
                 // Begin flex. The following 7 rmoveto's set the reference point
-                // and 6 Bezier points; they must NOT emit real moves — collect them.
+                // and 6 Bezier points; they must NOT emit real moves. Collect them.
                 inFlex = true
                 flexPts.clear()
             }
             2 -> {
-                // Mid-flex marker between rmoveto's — nothing to do; points are
+                // Mid-flex marker between rmoveto's: nothing to do; points are
                 // gathered by the rmoveto handler while inFlex is true.
             }
             0 -> {

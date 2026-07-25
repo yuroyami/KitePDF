@@ -93,7 +93,7 @@ val page = pdf.pages[0]
 val pngData = ApplePdfRasterizer.renderToPngData(
     page,
     scale = 2.0,
-    backgroundR = 1.0,  // RGBA, 0.0–1.0
+    backgroundR = 1.0,  // RGBA, 0.0 to 1.0
     backgroundG = 1.0,
     backgroundB = 1.0,
     backgroundA = 1.0,
@@ -169,7 +169,7 @@ imageBitmap.value?.let { Image(it, contentDescription = "Page thumbnail") }
 - **`Bitmap`** : ARGB_8888 bitmap. You own the memory; the bitmap does not auto-recycle. Call `recycle()` when done with large batches.
 
 !!! warning "Bitmap allocation"
-    Large pages at high scale can exhaust memory. Keep an eye on bitmap dimensions: `(page.width * scale).toInt() x (page.height * scale).toInt()` pixels.
+    Large pages at high scale can exhaust memory. Check the bitmap dimensions: `(page.width * scale).toInt() x (page.height * scale).toInt()` pixels.
 
 ## Cross-platform: Skia (kitepdf-skia-renderer)
 
@@ -256,7 +256,7 @@ page.renderTo(pdfCanvas, deviceCtm)
 ```
 
 !!! warning "Image XObjects in Canvas2D"
-    Embedded JPEG and JP2 images in the PDF are painted as grey placeholders (async browser decoding doesn't fit the synchronous renderer). Use Skia on JS for full image support.
+    Embedded JPEG and JP2 images in the PDF are painted as gray placeholders (async browser decoding doesn't fit the synchronous renderer). Use Skia on JS for full image support.
 
 ## Web: Skia over WASM (kitepdf-skia-renderer, JS/wasmJs)
 
@@ -285,7 +285,7 @@ val blob = Blob(arrayOf(pngBytes), object : BlobPropertyBag {
 ```
 
 !!! tip "Bundle size trade-off"
-    Skia over WASM (Skiko) adds ~5–10MB to your JS bundle. For lightweight viewers, stick with Canvas2D.
+    Skia over WASM (Skiko) adds about 5 MB to 10 MB to your JS bundle. For lightweight viewers, use Canvas2D instead.
 
 ## Compose Multiplatform: Export from PdfView
 

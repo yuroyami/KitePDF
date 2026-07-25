@@ -6,7 +6,7 @@ package io.github.yuroyami.kitepdf.core.font
  * The PDF spec (ISO 32000-1 §9.7.5.2) defines Identity-H / Identity-V plus a
  * long list of predefined CJK CMaps (GBK-EUC-H, 90ms-RKSJ-H, ETen-B5-H,
  * UniJIS-UCS2-H, UniGB-UCS2-H, …). Each such CMap:
- *   1. SEGMENTS the byte stream into codes using its codespace ranges — and for
+ *   1. SEGMENTS the byte stream into codes using its codespace ranges, and for
  *      the CJK encodings those ranges are MIXED-WIDTH (ASCII is 1 byte, the CJK
  *      block is 2 bytes). Segmenting "widest-first" or "always 2 bytes" is wrong.
  *   2. MAPS each code to a CID via large lookup tables that live in Adobe's CMap
@@ -26,7 +26,7 @@ package io.github.yuroyami.kitepdf.core.font
  *     is present. Shipping the Adobe CMap resource data is TODO (see deferred).
  *
  * An EMBEDDED /Encoding CMap *stream* (as opposed to a predefined name) is fully
- * supported via [CMap.codeUnits] — see [CompositeFont]. That path does real
+ * supported via [CMap.codeUnits] (see [CompositeFont]). That path does real
  * codespace segmentation AND real cidchar/cidrange CID mapping from the stream.
  */
 internal interface CodeUnitReader {

@@ -6,7 +6,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 /**
- * Tests for catalog /Threads parsing — article threads with bead chains.
+ * Tests for catalog /Threads parsing: article threads with bead chains.
  *
  * Builds a 2-page PDF with one thread of three beads:
  *   - bead 1 on page 0, top-left column
@@ -84,10 +84,10 @@ class ArticleThreadTest {
         w("8 0 obj\n<< /Type /Page /Parent 2 0 R /Resources << >> >>\nendobj\n")
         // Pad to keep object numbers contiguous up to 11 (9, 10 unused but the xref accepts gaps via free entries).
         // To keep this simple we'll number compact: 1..8 then thread info 9.
-        // Adjust the catalog ref upstream — but we wrote 11 above. So we need to skip to 11.
+        // Adjust the catalog ref upstream, but we wrote 11 above. So we need to skip to 11.
 
         // Free 9, 10 by inserting them as free entries in xref.
-        // Object 9 (free) and 10 (free) — we'll write the xref by hand below.
+        // Object 9 (free) and 10 (free). We write the xref by hand below.
         offsets.add(buf.size())
         w("9 0 obj\n<< >>\nendobj\n")  // placeholder
         offsets.add(buf.size())

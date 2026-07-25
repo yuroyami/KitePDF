@@ -1,53 +1,53 @@
 # About KitePDF
 
-**A pure-Kotlin document engine for every platform.** KitePDF is a standalone, multiplatform library: no platform wrappers, no native binaries. One Kotlin codebase handles reading, viewing, editing, and building PDFs, plus a complete reflowable EPUB reader, across Android, iOS, JVM, web, and beyond.
+**A pure-Kotlin document engine for every platform.** KitePDF is a standalone multiplatform library. It reads, views, edits and builds PDFs, and it reads reflowable EPUB 2/3 books. One Kotlin codebase covers Android, iOS, JVM, web and Kotlin/Native. There are no platform wrappers and no native binaries.
 
-## Philosophy
+## Design
 
-Most Kotlin PDF "libraries" are thin wrappers around platform engines: `PdfRenderer` on Android, `PDFKit` on iOS, PDF.js in the browser. They're convenient but fragmented; each platform behaves differently, and bugs shift between layers.
+Most Kotlin PDF libraries are thin wrappers around a platform engine: `PdfRenderer` on Android, `PDFKit` on iOS, PDF.js in the browser. Each platform then behaves differently, and a bug can sit in any layer.
 
-KitePDF takes the other route. The whole stack — parser, renderer, editor, writer, crypto and fonts — is written in Kotlin, and almost all of it is common code. `kitepdf-core` carries three `expect` declarations (a mutex, a thread id, and the deflate/inflate hook); nothing else in the engine branches per platform. There is no JNI, no platform PDF engine to fall back on and no embedded web view.
+KitePDF uses a single engine instead. The parser, renderer, editor, writer, crypto and fonts are written in Kotlin, and almost all of that code is common. `kitepdf-core` carries three `expect` declarations: a mutex, a thread id, and the deflate/inflate hook. Nothing else in the engine branches per platform. There is no JNI, no platform PDF engine underneath and no embedded web view.
 
-The Compose binding draws directly into a `DrawScope`, so pages scroll, zoom and animate like any other composable rather than as an embedded platform view.
+The Compose binding draws into a `DrawScope`. Pages therefore scroll, zoom and animate like any other composable, not like an embedded platform view.
 
-## Current Status
+## Current status
 
-KitePDF is **pre-1.0**. The core features are solid and verified page-by-page against MuPDF:
+KitePDF is **pre-1.0**. These features work today:
 
-- **Viewing** - Compose viewer with continuous/paged layouts, two-page spreads, RTL progression, pinch-zoom, pan, double-tap, text selection, search highlights, outline panels, and link taps  
-- **Text** - extraction, structured text with geometry, and engine-level search for both formats  
-- **EPUB** - a full reflowable EPUB 2/3 reader on the same core: CSS cascade, embedded fonts (TTF/OTF/WOFF/WOFF2), hyphenation in seven languages, CJK justification, ruby, vertical writing, floats, tables, and reader settings  
-- **Forms** - read and fill text, checkbox, radio, and choice fields  
-- **Annotations** - view and interact with highlights, links, and comments  
-- **Encryption** - open, authenticate, EDIT, and CREATE password-protected PDFs (AES-256/R6 write support)  
-- **Editing & saving** - fill forms, stamp watermarks, redact (real removal, not just hiding), incremental save or full rebuild  
-- **Building from scratch** - text (standard or custom embedded fonts, with subsetting), shapes, images, and colors  
-- **Image codecs** - pure-Kotlin PNG, JPEG, GIF, the JBIG2 arithmetic generic-region path, and JPEG 2000 Part-1 baseline profiles
-- **Signing scaffold** - `/ByteRange` preparation and CMS embedding; the cryptography stays in your application  
+| Area | What works |
+| --- | --- |
+| Viewing | Compose viewer with continuous and paged layouts, two-page spreads, RTL progression, pinch-zoom, pan, double-tap, text selection, search highlights, outline panels, link taps |
+| Text | Extraction, structured text with geometry, and engine-level search for both formats |
+| EPUB | Reflowable EPUB 2/3 on the same core: CSS cascade, embedded fonts (TTF, OTF, WOFF, WOFF2), hyphenation in seven languages, CJK justification, ruby, vertical writing, floats, tables, reader settings |
+| Forms | Read and fill text, checkbox, radio and choice fields |
+| Annotations | View and interact with highlights, links and comments |
+| Encryption | Open, authenticate, edit and create password-protected PDFs (AES-256/R6 on write) |
+| Editing and saving | Fill forms, stamp watermarks, redact (the content is removed, not covered), incremental save or full rebuild |
+| Building | Text with standard or custom embedded fonts, including subsetting, plus shapes, images and colors |
+| Image codecs | Pure-Kotlin PNG, JPEG, GIF, the JBIG2 arithmetic generic-region path, and JPEG 2000 Part-1 baseline profiles |
+| Signing scaffold | `/ByteRange` preparation and CMS embedding. The cryptography stays in your application. |
 
-On the roadmap:
+Planned:
 
-- Signature validation  
-- Advanced color management (ICC application, rendering intents)  
-- Less common form widgets (media players, rich text)  
-- More handlers on the shared core (XPS, CBZ, SVG)  
+- Signature validation
+- Advanced color management (ICC application, rendering intents)
+- Less common form widgets (media players, rich text)
+- More handlers on the shared core (XPS, CBZ, SVG)
 
-## Reporting Bad Renderings
+Known limits are listed in the [README](https://github.com/yuroyami/KitePDF#limits).
 
-If a PDF renders incorrectly in KitePDF, file an issue with the file attached. The project includes a [pixel-diff harness against MuPDF](https://github.com/yuroyami/KitePDF/blob/main/kitepdf-native-renderer/DIFFTEST.md); we compare pixel-perfect output to the reference engine and add regression tests for every fix.
+## Reporting a bad rendering
+
+If a PDF renders incorrectly in KitePDF, file an issue with the file attached. The project includes a [pixel-diff harness](https://github.com/yuroyami/KitePDF/blob/main/kitepdf-native-renderer/DIFFTEST.md) for the JVM/AWT backend, and every rendering fix lands with a regression test.
 
 ## Contributing
 
-Contributions are welcome. Check the [GitHub repository](https://github.com/yuroyami/KitePDF) for open issues and the developer guide. Code changes, test additions, and rendering fixes are especially valuable.
+Contributions are welcome. Check the [GitHub repository](https://github.com/yuroyami/KitePDF) for open issues and the developer guide. Code changes, test additions and rendering fixes are especially valuable.
 
 ## License
 
-KitePDF is licensed under the **Apache License 2.0**. This means you can freely use, modify, and distribute it in commercial and open-source projects.
+KitePDF is licensed under the **Apache License 2.0**. You can use, modify and distribute it in commercial and open-source projects.
 
-A small number of source files contain encoding tables derived from [MuPDF](https://mupdf.com/) and retain their original AGPL-3.0 headers in comments. These are isolated to specific files and do not restrict the broader project. See the source comments for exact locations.
+A small number of source files contain encoding tables derived from [MuPDF](https://mupdf.com/) by Artifex Software, and those files keep their original AGPL-3.0 headers in comments. They do not restrict the rest of the project. See the source comments for the exact locations.
 
-## Acknowledgements
-
-- **MuPDF** by Artifex Software - architectural reference and rendering insights  
-- **URW++ Fonts** - standard 14 font width metrics, via AFM files  
-- **PDF specification** - thanks to all those who published the standard and reference materials that made this engine possible
+Standard-14 font width metrics come from URW++ AFM files.

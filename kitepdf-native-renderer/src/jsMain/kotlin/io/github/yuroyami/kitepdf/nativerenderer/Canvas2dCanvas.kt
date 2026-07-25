@@ -24,7 +24,7 @@ import org.w3c.files.BlobPropertyBag
 
 /**
  * [KiteCanvas] backed by a browser-side `CanvasRenderingContext2D`. Pure
- * Kotlin/JS + DOM — no Compose for Web, no Skia/WASM bundle.
+ * Kotlin/JS + DOM: no Compose for Web, no Skia/WASM bundle.
  *
  * The right choice for in-browser PDF viewers that want minimal bundle
  * size and to inherit whatever rendering acceleration the browser already
@@ -63,7 +63,7 @@ public class Canvas2dCanvas(private val ctx: CanvasRenderingContext2D) : KiteCan
         try {
             ctx.fillStyle = color.toCssRgba(alpha)
             ctx.globalCompositeOperation = blendMode.toCanvas()
-            // Path2D + fill(path, fillRule) — fillRule is "evenodd" or "nonzero"
+            // Path2D + fill(path, fillRule): fillRule is "evenodd" or "nonzero"
             ctx.asDynamic().fill(p, if (evenOdd) "evenodd" else "nonzero")
         } finally {
             ctx.restore()
@@ -139,7 +139,7 @@ public class Canvas2dCanvas(private val ctx: CanvasRenderingContext2D) : KiteCan
             ctx.restore()
         }
         // Embedded font present but produced no glyphs (e.g. a subset we can't
-        // decode) — fall back to a system font rather than rendering blank.
+        // decode). Fall back to a system font rather than rendering blank.
         if (!drewAny && glyphs.any { it.text.isNotBlank() }) {
             drawTextViaSystemFont(glyphs, fontSize, fontSpec, textToDevice, color, alpha, blendMode)
         }
@@ -147,7 +147,7 @@ public class Canvas2dCanvas(private val ctx: CanvasRenderingContext2D) : KiteCan
 
     /**
      * Fallback for non-embedded fonts (e.g. the Standard-14). Renders with a
-     * platform logical font via a CSS `font` string — zero bundled bytes, since
+     * platform logical font via a CSS `font` string: zero bundled bytes, since
      * the browser already ships serif / sans-serif / monospace faces that are
      * metric-compatible stand-ins for Times / Helvetica / Courier. Mirrors the
      * AWT / Compose backends.
@@ -182,7 +182,7 @@ public class Canvas2dCanvas(private val ctx: CanvasRenderingContext2D) : KiteCan
             ctx.globalCompositeOperation = blendMode.toCanvas()
             ctx.font = systemFontFor(fontSpec, renderedSize)
             // Position each glyph by the PDF's OWN advance widths (1/1000 em),
-            // not the substitute font's natural metrics — otherwise spacing
+            // not the substitute font's natural metrics, otherwise spacing
             // drifts and glyphs crowd together / overlap.
             var penX = 0.0
             val advScale = renderedSize / 1000.0
@@ -222,7 +222,7 @@ public class Canvas2dCanvas(private val ctx: CanvasRenderingContext2D) : KiteCan
                 ctx.createLinearGradient(x0, y0, x1, y1)
             }
             is KiteShading.Radial -> {
-                // True PDF two-circle radial — Canvas2D supports both circles.
+                // True PDF two-circle radial. Canvas2D supports both circles.
                 val sc = kotlin.math.sqrt(ctm.a * ctm.a + ctm.b * ctm.b)
                 val (x0, y0) = ctm.transformPoint(shading.coords[0], shading.coords[1])
                 val r0 = (shading.coords[2] * sc).coerceAtLeast(0.0)
@@ -266,7 +266,7 @@ public class Canvas2dCanvas(private val ctx: CanvasRenderingContext2D) : KiteCan
     }
 
     override fun drawImage(image: ImageXObject, ctm: PdfMatrix, alpha: Double) {
-        // Browser image decoding is async — paint a placeholder for now.
+        // Browser image decoding is async. This paints a placeholder instead.
         // Roadmap: an `awaitImages(): Promise<Unit>` API consumers can call
         // before render, kicking off Image() loads up front.
         drawPlaceholder(ctm, alpha)
@@ -292,7 +292,7 @@ public class Canvas2dCanvas(private val ctx: CanvasRenderingContext2D) : KiteCan
         isolated: Boolean, knockout: Boolean,
         alpha: Double, blendMode: PdfBlendMode,
     ) {
-        // Canvas2D has no `saveLayer` — we approximate by stacking
+        // Canvas2D has no `saveLayer`. We approximate by stacking
         // globalAlpha + globalCompositeOperation. True isolated/knockout
         // semantics (paint to an off-screen and composite at end) is a
         // roadmap item.
@@ -316,7 +316,7 @@ public class Canvas2dCanvas(private val ctx: CanvasRenderingContext2D) : KiteCan
     ) {
         // Render content, then over-paint the mask group with
         // `destination-in` so the mask's alpha clips the content.
-        // Canvas2D applies this to the whole context — fine for the
+        // Canvas2D applies this to the whole context, which suits the
         // common case of "this whole paint is masked".
         ctx.save()
         try {

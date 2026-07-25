@@ -16,12 +16,12 @@ import io.github.yuroyami.kitepdf.core.render.KitePath
  *
  * The font knows how to:
  *   - [decode] show-text bytes into unicode (text extraction).
- *   - [layoutBytes] walk show-text bytes into a sequence of [TextGlyph]s —
+ *   - [layoutBytes] walk show-text bytes into a sequence of [TextGlyph]s,
  *     each tagged with its outline (if any), advance, and decoded text.
  *
  * Simple fonts (Type 1, TrueType, Type1C, Type 3) consume one byte per glyph.
  * Type 0 composite fonts (CIDFontType0/2 under a Type 0 parent) consume one
- * code unit per glyph — typically 2 bytes via the Identity-H CMap, sometimes
+ * code unit per glyph: typically 2 bytes via the Identity-H CMap, sometimes
  * variable. [layoutBytes] is the unified iterator everything downstream uses.
  *
  * Embedded outlines are pulled from whichever of these is present:
@@ -50,11 +50,11 @@ public class PdfFont private constructor(
      */
     private val hasSimpleWidth: BooleanArray,
     private val defaultWidth: Int,
-    /** Embedded TrueType (/FontFile2) — for simple TrueType subtypes. */
+    /** Embedded TrueType (/FontFile2): for simple TrueType subtypes. */
     private val embeddedTtf: TrueTypeFont?,
-    /** Embedded CFF (/FontFile3) — for simple Type1C subtypes. */
+    /** Embedded CFF (/FontFile3): for simple Type1C subtypes. */
     private val embeddedCff: CffFont?,
-    /** Embedded Type 1 (/FontFile) — for simple Type1 subtypes. */
+    /** Embedded Type 1 (/FontFile): for simple Type1 subtypes. */
     private val embeddedType1: Type1Font?,
     /** Type 0 composite descendant chain (CIDFontType0/2 under a Type0 parent). */
     private val composite: CompositeFont?,
@@ -143,14 +143,14 @@ public class PdfFont private constructor(
             val outline = if (resolveOutlines) c.outline(unit.cid) else null
             val gid = c.gidFor(unit.cid)
             val width = c.widthOf(unit.cid)
-            // Text per glyph — slice the bytes for that code unit and decode.
+            // Text per glyph: slice the bytes for that code unit and decode.
             val slice = bytes.copyOfRange(unit.byteOffset, unit.byteOffset + unit.byteCount)
             val text = c.toUnicode?.decodeAll(slice) ?: ""
             out.add(TextGlyph(
                 byteOffset = unit.byteOffset, byteCount = unit.byteCount, gid = gid,
                 text = text, advanceWidth = width, outline = outline,
                 // ISO 32000-1 §9.3.3: word spacing (Tw) applies ONLY to a
-                // SINGLE-byte code equal to 32 — never to a 2-byte CID 0x20.
+                // SINGLE-byte code equal to 32, never to a 2-byte CID 0x20.
                 isWordSpace = unit.byteCount == 1 && (bytes[unit.byteOffset].toInt() and 0xFF) == 0x20,
             ))
         }
@@ -161,8 +161,8 @@ public class PdfFont private constructor(
      * Invoke [action] once per glyph with its advance width (1/1000 em) and
      * word-space flag, WITHOUT resolving any glyph outline or allocating a
      * [TextGlyph] list. The fast path for advance/measurement (text positioning,
-     * width sums) where glyph shapes aren't needed — used by the renderer's
-     * advance calc, text extraction, and redaction layout.
+     * width sums) where glyph shapes aren't needed. The renderer's advance
+     * calculation, text extraction, and redaction layout all use it.
      */
     public fun forEachGlyphAdvance(bytes: ByteArray, action: (advanceWidth: Double, isWordSpace: Boolean) -> Unit) {
         composite?.let { c ->
@@ -224,7 +224,7 @@ public class PdfFont private constructor(
                 // PDF §9.6.6.4 simple-TrueType glyph selection, with subset
                 // fallbacks (matches MuPDF): 1) code→name→Unicode via cmap
                 // (non-symbolic); 2) raw code (symbolic (1,0)/(3,1)); 3) (3,0)
-                // symbol range 0xF000+code; 4) last resort — treat the code AS
+                // symbol range 0xF000+code; 4) last resort: treat the code AS
                 // the glyph index, which subset fonts (e.g. Nitro/MS Office) rely on.
                 var g = ttf.glyphIdForCodePoint(resolveByteToUnicode(code))
                 if (g == 0) g = ttf.glyphIdForCodePoint(code and 0xFF)
@@ -256,7 +256,7 @@ public class PdfFont private constructor(
 
     private fun simpleWidth(code: Int, gid: Int): Int {
         // ISO 32000-1 §9.6.2.1 / MuPDF: the font dictionary's /Widths array is
-        // AUTHORITATIVE — a width defined there (or by standard-14 metrics) wins
+        // AUTHORITATIVE. A width defined there (or by standard-14 metrics) wins
         // over the embedded font's own advance. The embedded hmtx/CFF advance is
         // consulted ONLY as a fallback for codes with no dictionary width.
         val c = code and 0xFF
@@ -385,9 +385,9 @@ public class PdfFont private constructor(
 
         /* ─── /Encoding + /Differences ───────────────────────────────────── */
 
-        /** /Flags bit 3 (value 4) — symbolic font (ISO 32000-1 Table 121). */
+        /** /Flags bit 3 (value 4): symbolic font (ISO 32000-1 Table 121). */
         private const val FLAG_SYMBOLIC = 1 shl 2
-        /** /Flags bit 6 (value 32) — non-symbolic. */
+        /** /Flags bit 6 (value 32): non-symbolic. */
         private const val FLAG_NONSYMBOLIC = 1 shl 5
 
         private fun resolveEncoding(
@@ -424,7 +424,7 @@ public class PdfFont private constructor(
          *   standard-14 metrics and glyph names resolve instead of collapsing to
          *   500-wide, name-less glyphs).
          * - Symbolic TrueType (ISO 32000-1 §9.6.6.4): NO standard encoding is
-         *   imposed — the embedded font's own cmap ((3,0)/(1,0)) drives glyph
+         *   imposed. The embedded font's own cmap ((3,0)/(1,0)) drives glyph
          *   selection, so we return an all-null table and let [simpleGid] fall
          *   through to the raw-code / 0xF000 cmap paths.
          * - Everything else: StandardEncoding.
@@ -572,7 +572,7 @@ public class PdfFont private constructor(
                 for ((idx, w) in arr.withIndex()) {
                     val code = firstChar + idx
                     if (code !in 0..255) break
-                    // A width present in /Widths is authoritative — even a 0 (which
+                    // A width present in /Widths is authoritative, even a 0 (which
                     // is a real advance for combining marks), so mark it present.
                     when (w) {
                         is PdfInt -> { widths[code] = w.value.toInt(); present[code] = true }

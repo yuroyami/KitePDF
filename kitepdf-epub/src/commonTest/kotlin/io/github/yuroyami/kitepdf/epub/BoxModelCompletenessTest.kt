@@ -129,7 +129,7 @@ class BoxModelCompletenessTest {
     private fun minimalGrayPng(): ByteArray {
         fun be32(n: Int) = byteArrayOf((n ushr 24).toByte(), (n ushr 16).toByte(), (n ushr 8).toByte(), n.toByte())
         fun chunk(type: String, data: ByteArray): ByteArray {
-            // Real CRC — the shared KiteImage PNG decoder verifies consumed chunks.
+            // Real CRC: the shared KiteImage PNG decoder verifies consumed chunks.
             val body = type.encodeToByteArray() + data
             var c = -1
             for (b in body) {

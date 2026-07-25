@@ -8,7 +8,7 @@ import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
 /**
- * [ImageXObject.fromEncodedImage] — the public entry other handlers (EPUB, CBZ)
+ * [ImageXObject.fromEncodedImage]: the public entry other handlers (EPUB, CBZ)
  * use to build an image from a self-contained encoded file.
  */
 class ImageXObjectEncodedTest {

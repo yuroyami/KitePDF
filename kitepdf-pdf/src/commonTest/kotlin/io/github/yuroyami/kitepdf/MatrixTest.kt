@@ -33,7 +33,7 @@ class MatrixTest {
     fun concat_applies_operand_then_current() {
         // PDF `cm` operand: scale by 2 first, then translate by (10, 20).
         // Starting CTM is identity; new CTM should map (1,1) → (2,2)+? no wait,
-        // cm semantics: new = operand × current — so first the operand is
+        // cm semantics: new = operand × current, so first the operand is
         // applied (scale here), then the previously-current (identity).
         val current = Matrix.IDENTITY
         val operand = Matrix.scaling(2.0, 2.0)

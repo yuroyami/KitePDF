@@ -6,18 +6,18 @@ package io.github.yuroyami.kitepdf.writer
  *
  * Two kinds:
  *
- *  - **Raw samples** ([rgba] / [rgb] / [gray]) — uncompressed 8-bit pixel
+ *  - **Raw samples** ([rgba] / [rgb] / [gray]): uncompressed 8-bit pixel
  *    bytes. Embedded as a `DeviceRGB`/`DeviceGray` image XObject with
  *    `/FlateDecode`. [rgba] splits the alpha channel into a `/SMask` so
  *    transparency is preserved (e.g. a logo with a cut-out background).
- *  - **JPEG passthrough** ([jpeg]) — the encoded JPEG bytes are stored
+ *  - **JPEG passthrough** ([jpeg]): the encoded JPEG bytes are stored
  *    verbatim with `/DCTDecode`; every conformant PDF reader decodes JPEG
  *    natively, so nothing is re-encoded. JPEG carries no alpha.
  *
  * Instances are compared by identity: pass the same `PdfImage` to multiple
  * pages and it's embedded once and shared across them.
  *
- * Pixels are laid out top row first, left to right — the natural raster order.
+ * Pixels are laid out top row first, left to right, the natural raster order.
  * The PDF image-space flip is handled by [ContentStreamBuilder.drawImage].
  */
 public class PdfImage private constructor(

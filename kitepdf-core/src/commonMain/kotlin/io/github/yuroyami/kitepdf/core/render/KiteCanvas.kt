@@ -10,21 +10,21 @@ import io.github.yuroyami.kitepdf.core.font.TextGlyph
  * The [PageRenderer] walks the content stream, maintains the graphics-state
  * stack, accumulates paths, and finally calls one of these device methods
  * with a complete, ready-to-paint primitive. Backends therefore don't need
- * to track the CTM, the current path, or text positioning — they just
- * receive the final geometry plus the transform to apply.
+ * to track the CTM, the current path, or text positioning. They receive only
+ * the final geometry plus the transform to apply.
  *
  * Concrete implementations shipped:
- *   - `ComposeCanvas` (`:kitepdf-compose-viewer`) — paints into a Compose `DrawScope`.
- *   - `SkiaCanvas` (`:kitepdf-skia-renderer`) — paints into a Skia `Canvas`.
+ *   - `ComposeCanvas` (`:kitepdf-compose-viewer`): paints into a Compose `DrawScope`.
+ *   - `SkiaCanvas` (`:kitepdf-skia-renderer`): paints into a Skia `Canvas`.
  *   - `AwtCanvas` / `AndroidNativeCanvas` / `CoreGraphicsCanvas` / `Canvas2dCanvas`
- *     (`:kitepdf-native-renderer`) — host-platform raster backends.
+ *     (`:kitepdf-native-renderer`): host-platform raster backends.
  */
 public interface KiteCanvas {
 
     /**
-     * Set up for a page render — called once before any draw call, with the
-     * page dimensions (in PDF user units, 1pt = 1/72 inch) and the desired
-     * device CTM (e.g. flip Y and scale to fit a target rectangle).
+     * Set up for a page render. The renderer calls this once before any draw
+     * call, with the page dimensions (in PDF user units, 1pt = 1/72 inch) and
+     * the desired device CTM (e.g. flip Y and scale to fit a target rectangle).
      */
     public fun beginPage(widthPt: Double, heightPt: Double, deviceCtm: Matrix)
     public fun endPage()
@@ -51,12 +51,12 @@ public interface KiteCanvas {
     /**
      * Fill [clipPath] (under [ctm]) with the gradient defined by [shading].
      * If [clipPath] is `null` the shading covers the current clip region
-     * (or the page, when no clip is active) — the spec's `sh` operator.
+     * (or the page, when no clip is active). That is the spec's `sh` operator.
      *
      * Default impl falls back to a flat-colour fill using the midpoint
      * sample; backends that can render real gradients override. For the
      * whole-clip case it fills a rectangle far larger than any page under
-     * the identity matrix — the backend's active clip (or page bounds)
+     * the identity matrix. The backend's active clip (or page bounds)
      * trims it, so `sh` still paints something rather than nothing.
      */
     public fun fillShading(
@@ -93,7 +93,7 @@ public interface KiteCanvas {
     /**
      * Paint one text run, already laid out into [glyphs] by the document handler.
      * Format-neutral: no PDF (or other) font object crosses the seam, so every
-     * handler — PDF, EPUB, ... — drives text the same way.
+     * handler (PDF, EPUB, and others) drives text the same way.
      *
      * Embedded fonts ([hasOutlines] = true) carry a resolved [TextGlyph.outline]
      * per glyph; scale each by [fontSize]/[unitsPerEm], advance the pen by
@@ -148,7 +148,7 @@ public interface KiteCanvas {
 
     /**
      * Apply a soft mask to the content rendered inside [render] (ISO 32000-1
-     * §11.6.5). The default implementation just calls [render] — backends
+     * §11.6.5). The default implementation just calls [render]. Backends
      * without offscreen compositing fall back to painting through the mask.
      *
      * Concrete implementations: open a saveLayer for the content,
@@ -171,10 +171,10 @@ public interface KiteCanvas {
     }
 }
 
-/** A rectangle in PDF user-space — re-exposed here for the [KiteCanvas] surface. */
+/** A rectangle in PDF user-space, re-exposed here for the [KiteCanvas] surface. */
 public typealias Rectangle = io.github.yuroyami.kitepdf.core.Rectangle
 
-/** Backend that ignores everything — handy for benchmarks and content-stream sanity tests. */
+/** Backend that ignores everything, useful for benchmarks and content-stream sanity tests. */
 public object NoopCanvas : KiteCanvas {
     override fun beginPage(widthPt: Double, heightPt: Double, deviceCtm: Matrix) {}
     override fun endPage() {}
@@ -185,7 +185,7 @@ public object NoopCanvas : KiteCanvas {
     override fun popClip() {}
 }
 
-/** Records every device call — useful for tests + verifying operator dispatch. */
+/** Records every device call, useful for tests + verifying operator dispatch. */
 public class RecordingCanvas : KiteCanvas {
     public sealed class Call {
         public data class BeginPage(val w: Double, val h: Double, val ctm: Matrix) : Call()

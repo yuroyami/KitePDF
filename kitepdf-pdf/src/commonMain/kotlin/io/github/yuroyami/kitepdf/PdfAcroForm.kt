@@ -7,7 +7,7 @@ import io.github.yuroyami.kitepdf.core.parser.PdfInt
 import io.github.yuroyami.kitepdf.core.parser.PdfString
 
 /**
- * Top-level interactive form metadata — catalog `/AcroForm` (ISO 32000-1
+ * Top-level interactive form metadata: catalog `/AcroForm` (ISO 32000-1
  * §12.7.2).
  *
  * KitePDF v0.0.x exposes the catalog-level view only: how many fields,
@@ -23,7 +23,7 @@ public data class PdfAcroForm(
     val fieldCount: Int,
     /**
      * If true, the conforming reader must regenerate field appearances on
-     * open — the document's `/AP` streams are out of date. PDF readers
+     * open. The document's `/AP` streams are out of date. PDF readers
      * that don't regenerate (like our current renderer) should not display
      * stale appearance streams when this is true.
      */
@@ -38,11 +38,11 @@ public data class PdfAcroForm(
     val raw: PdfDictionary,
 ) {
 
-    /** True if /SigFlags & 1 — at least one signature field exists. */
+    /** True if /SigFlags & 1: at least one signature field exists. */
     val hasSignatures: Boolean get() = (signatureFlags and 1) != 0
 
     /**
-     * True if /SigFlags & 2 — modifications must be append-only (the
+     * True if /SigFlags & 2: modifications must be append-only (the
      * signed-bytes invariant). Save-side enforcement is on a future
      * round's docket.
      */

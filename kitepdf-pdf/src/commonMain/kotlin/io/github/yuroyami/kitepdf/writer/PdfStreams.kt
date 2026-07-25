@@ -10,8 +10,8 @@ import io.github.yuroyami.kitepdf.core.parser.PdfStream
 /**
  * Builders for stream objects to hand to the writer ([PdfEditor]).
  *
- * `/Length` is informational here — [PdfObjectWriter] always rewrites it to the
- * actual serialized payload size — but it's set for a self-consistent dict.
+ * `/Length` is informational here ([PdfObjectWriter] always rewrites it to the
+ * actual serialized payload size), but it's set for a self-consistent dict.
  */
 public object PdfStreams {
 
@@ -26,7 +26,7 @@ public object PdfStreams {
     /**
      * A `/FlateDecode` stream compressing uncompressed [data]. [extra] supplies
      * additional dictionary entries (e.g. `/Type`, `/Subtype`); do not pass
-     * `/Filter` in [extra] — this always sets it to `/FlateDecode`.
+     * `/Filter` in [extra]. The function always sets it to `/FlateDecode`.
      *
      * Note: very small or high-entropy inputs may compress to *more* bytes than
      * the original (zlib + block overhead); use [raw] when that matters.

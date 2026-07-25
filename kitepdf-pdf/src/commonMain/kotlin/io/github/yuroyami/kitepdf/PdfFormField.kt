@@ -46,10 +46,10 @@ public class PdfFormField internal constructor(
 ) {
     public enum class FieldType { Text, Button, Choice, Signature, Unknown }
 
-    /** `/Ff` bit 1 — the field is read-only. */
+    /** `/Ff` bit 1: the field is read-only. */
     public val isReadOnly: Boolean get() = (flags and 0b1) != 0
 
-    /** `/Ff` bit 13 (text fields) — multi-line. */
+    /** `/Ff` bit 13 (text fields): multi-line. */
     public val isMultiline: Boolean get() = type == FieldType.Text && (flags and (1 shl 12)) != 0
 
     override fun toString(): String = "PdfFormField($fullyQualifiedName, $type, value=$value)"

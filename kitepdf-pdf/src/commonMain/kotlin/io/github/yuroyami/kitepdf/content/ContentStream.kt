@@ -19,7 +19,7 @@ import io.github.yuroyami.kitepdf.core.parser.Token
  * as the body), gather operands on a small stack, and emit one [Operation]
  * per operator we encounter.
  *
- * NOTE: this is just *parsing* — the graphics state machine lives in
+ * NOTE: this is just *parsing*. The graphics state machine lives in
  * [io.github.yuroyami.kitepdf.render.PageRenderer], which consumes these
  * operations. Text extraction only inspects which operators were emitted
  * with which operands.
@@ -27,8 +27,8 @@ import io.github.yuroyami.kitepdf.core.parser.Token
 /**
  * One content-stream operation: an [operator] and its [operands].
  *
- * Inline images (`BI … ID … EI`) are NOT operand-based — their data is binary
- * and not tokenizable — so they are represented as a single operation with
+ * Inline images (`BI … ID … EI`) are NOT operand-based: their data is binary
+ * and not tokenizable, so they are represented as a single operation with
  * operator `"BI"` and their entire `BI…EI` source captured in [inlineImage].
  * Re-serialization writes [inlineImage] back verbatim. Regular operations leave
  * it null.
@@ -60,8 +60,8 @@ public object ContentStreamParser {
      * Hard cap on operations parsed from one content stream. An adversarial
      * (or repair-path-mangled) stream with hundreds of millions of operators
      * would otherwise allocate an unbounded operation list; past the cap we
-     * stop parsing and render what was collected — lenient, like every other
-     * salvage path here.
+     * stop parsing and render what was collected. This is lenient, like every
+     * other salvage path here.
      */
     private const val MAX_OPS_PER_STREAM = 5_000_000
 
@@ -98,7 +98,7 @@ public object ContentStreamParser {
 
             when (tok) {
                 is Token.Keyword -> {
-                    // Inline images need special handling — "BI ... ID ... EI" is a mini stream.
+                    // Inline images need special handling. "BI ... ID ... EI" is a mini stream.
                     if (tok.value == "BI") {
                         try {
                             consumeInlineImage(reader)
@@ -194,7 +194,7 @@ public object ContentStreamParser {
      *  3. Terminate the data:
      *       - UNFILTERED images: compute the exact byte length from the geometry
      *         (/W, /H, /BPC, color-space component count) and consume that many
-     *         bytes, then expect `EI` (bug #2 — no scanning through binary data).
+     *         bytes, then expect `EI` (no scanning through binary data).
      *       - FILTERED images: scan for an `EI` that sits at a token boundary
      *         (preceded by whitespace OR by the start of data, and followed by
      *         whitespace / EOF / a delimiter). Whitespace before `EI` is NOT
@@ -253,7 +253,7 @@ public object ContentStreamParser {
                     entries[keyTok.value] = value
                 }
                 else -> {
-                    // Unexpected token where a key was expected — malformed dict.
+                    // Unexpected token where a key was expected: malformed dict.
                     // Stop lexing; the reader sits just past this token.
                     return PdfDictionary(entries)
                 }
@@ -299,7 +299,7 @@ public object ContentStreamParser {
             "G", "DeviceGray", "CalGray", "I", "Indexed" -> 1
             "RGB", "DeviceRGB", "CalRGB", "Lab" -> 3
             "CMYK", "DeviceCMYK" -> 4
-            else -> null // named/resource color space — component count unknown here
+            else -> null // named/resource color space: component count unknown here
         }
     }
 
@@ -330,7 +330,7 @@ public object ContentStreamParser {
         if (reader.matches(eiMarker, reader.pos())) {
             reader.advance(2)
         } else {
-            // Length was right but EI is not where expected — recover by scanning.
+            // Length was right but EI is not where expected. Recover by scanning.
             scanForEi(reader, reader.pos())
         }
     }

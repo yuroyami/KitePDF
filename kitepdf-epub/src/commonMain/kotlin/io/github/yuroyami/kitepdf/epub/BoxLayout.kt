@@ -25,8 +25,8 @@ private val LIG_FEATURES = listOf("rlig", "liga")
 
 /**
  * Positions the [LayoutBox] tree in document space (x from content-left, y down).
- * Resolves each block's box model — margin / border / padding / width (auto-fill,
- * explicit, max-width) — collapses adjacent sibling vertical margins, stacks
+ * Resolves each block's box model: margin / border / padding / width (auto-fill,
+ * explicit, max-width). Collapses adjacent sibling vertical margins, stacks
  * children, and lays inline content into line boxes honouring `text-align`
  * (incl. **justify**), first-line `text-indent`, `line-height`, and vertical-align.
  * Anonymous [TextBlockBox]es carry no box decorations (their parent [BlockBox]
@@ -41,8 +41,8 @@ internal class BoxLayout(
      * BCP-47 language tag of the document (spine `xml:lang`/`lang`, else OPF
      * `dc:language`); selects the hyphenation pattern set. Null/unknown
      * languages hyphenate with the en-US set, preserving the old behaviour.
-     * One hyphenator per document — per-spine language switching is a noted
-     * follow-up, not built.
+     * One hyphenator per document: the language does not switch between spine
+     * documents.
      */
     private val language: String? = null,
     /**
@@ -304,7 +304,7 @@ internal class BoxLayout(
         val eh = box.style.heightPt ?: box.attrHeight
         var w = ew ?: (eh?.let { it / aspect } ?: contentW)
         var h = eh ?: (w * aspect)
-        // object-fit: contain — when both dimensions are fixed, letterbox the image to
+        // object-fit: contain. When both dimensions are fixed, letterbox the image to
         // preserve its aspect ratio inside the box (default `fill` stretches to w×h).
         if (ew != null && eh != null && box.style.objectFit == ObjectFit.CONTAIN) {
             val scale = minOf(ew / intrinsicW, eh / intrinsicH)
@@ -928,7 +928,7 @@ internal class BoxLayout(
 
     /**
      * [availAt] (when given) supplies each line's available width by line
-     * index — the float-exclusion path. Null keeps the single-width fast
+     * index, the float-exclusion path. Null keeps the single-width fast
      * path, byte-identical to the pre-float behaviour.
      */
     private fun wrap(

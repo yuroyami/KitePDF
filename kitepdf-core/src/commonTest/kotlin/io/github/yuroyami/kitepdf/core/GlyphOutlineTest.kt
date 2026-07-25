@@ -21,7 +21,7 @@ class GlyphOutlineTest {
 
     @Test
     fun all_on_curve_contour_yields_polygon() {
-        // A square (0,0) → (100,0) → (100,100) → (0,100) — all on-curve.
+        // A square (0,0) → (100,0) → (100,100) → (0,100): all on-curve.
         val outline = GlyphOutline(
             listOf(Contour(listOf(
                 GlyphPoint(0, 0, onCurve = true),
@@ -45,7 +45,7 @@ class GlyphOutlineTest {
 
     @Test
     fun off_curve_between_on_curves_yields_quad_to() {
-        // (0,0) on, (50, 100) off, (100, 0) on — single quadratic.
+        // (0,0) on, (50, 100) off, (100, 0) on: single quadratic.
         val outline = GlyphOutline(
             listOf(Contour(listOf(
                 GlyphPoint(0, 0, onCurve = true),
@@ -66,7 +66,7 @@ class GlyphOutlineTest {
     fun two_consecutive_off_curves_imply_midpoint() {
         // (0,0) on, (50, 100) off, (100, 100) off, (100, 0) on
         // Per TTF spec: an implied on-curve point appears at the midpoint
-        // between the two off-curves — (75, 100).
+        // between the two off-curves, at (75, 100).
         val outline = GlyphOutline(
             listOf(Contour(listOf(
                 GlyphPoint(0, 0, onCurve = true),
@@ -80,7 +80,7 @@ class GlyphOutlineTest {
         val quads = path.segments.filterIsInstance<KitePath.Segment.QuadTo>()
         assertTrue(quads.size >= 2, "Expected ≥2 QuadTos with implied midpoint, got ${quads.size}")
         // Second quad's start (= first quad's end) should land at the midpoint
-        // (75, 100) — but Builder only exposes segments so we read it from
+        // (75, 100), but Builder only exposes segments so we read it from
         // the first QuadTo's end coords.
         assertEquals(75.0, quads[0].x2)
         assertEquals(100.0, quads[0].y2)

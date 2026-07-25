@@ -226,7 +226,7 @@ Each `PdfOutline` entry carries:
 - `count`: visible descendant count; negative if closed by default
 - `isOpen`: true if the outline is expanded by default
 - `italic`, `bold`: style flags
-- `color`: RGB colour hint (nullable)
+- `color`: RGB color hint (nullable)
 
 To resolve a bookmark destination to a page index:
 
@@ -273,7 +273,7 @@ Each `PdfAnnotation` carries:
 - `subtype`: annotation type
 - `rect`: placement rectangle (left, bottom, right, top)
 - `contents`: text (e.g. note text or link label)
-- `color`: border/highlight colour (nullable)
+- `color`: border/highlight color (nullable)
 - `uri`: URL (Link annotations only)
 - `action`: typed action (GoTo, URI, Launch, etc.)
 - `rawDestination`: unresolved destination (Link annotations; resolve with `doc.resolveDestination()`)
@@ -308,7 +308,7 @@ Each `PdfFormField` carries:
 - `flags`: bit flags (read-only, multi-line, etc.)
 - `isReadOnly`: true if the field cannot be edited
 - `isMultiline`: true for multi-line text fields
-- `quadding`: text alignment: 0 = left, 1 = centre, 2 = right
+- `quadding`: text alignment: 0 = left, 1 = center, 2 = right
 - `rect`: widget placement rectangle (nullable)
 - `fieldReference`, `widgetReference`: indirect references (for editing via `PdfEditor`)
 

@@ -12,7 +12,7 @@ import io.github.yuroyami.kitepdf.core.render.ReaderTheme
 public sealed interface PdfLayout {
 
     /**
-     * All pages in one continuous scrollable strip (lazy — offscreen pages are
+     * All pages in one continuous scrollable strip (lazy: offscreen pages are
      * neither composed nor rasterized). Pages fill the cross axis at their
      * natural aspect ratio.
      *
@@ -30,7 +30,7 @@ public sealed interface PdfLayout {
      * via [PdfViewState]). Each page is letterboxed to fit the viewport.
      *
      * @param offscreenPages pages kept composed (and rastered) on each side of
-     *   the visible one — trade memory for instant page turns. Defaults to 1 so
+     *   the visible one. This trades memory for instant page turns. Defaults to 1 so
      *   the immediate neighbours are pre-rasterized while idle and a swipe never
      *   waits on a render; raise it to cover faster flinging, set 0 to minimise
      *   memory at the cost of a first-swipe render.
@@ -41,7 +41,7 @@ public sealed interface PdfLayout {
         val offscreenPages: Int = 1,
         /**
          * Reverses the paging direction so page N+1 sits visually LEFT of
-         * page N (up in a vertical pager) — right-to-left books (manga,
+         * page N (up in a vertical pager). Use this for right-to-left books (manga,
          * Arabic/Hebrew). Navigation stays logical: `nextPage()` is always
          * index +1. See [pagedFor] for automatic selection.
          */
@@ -85,7 +85,7 @@ public sealed interface PdfLayout {
  * Zoom & pan behaviour for [PdfView].
  *
  * [minZoom]/[maxZoom] bound *all* zoom changes, including programmatic ones
- * through [PdfViewState.setZoom] — so an app driving zoom from its own slider
+ * through [PdfViewState.setZoom], so an app driving zoom from its own slider
  * (gestures disabled) still declares its range here.
  *
  * @param pinchEnabled two-finger pinch zoom.
@@ -132,14 +132,14 @@ public sealed interface PdfRenderSpec {
 
     /**
      * Vector-render each page once into a bitmap per size/zoom bucket, then draw
-     * that bitmap and GPU-transform it during gestures — so scrolling and zoom
+     * that bitmap and GPU-transform it during gestures, so scrolling and zoom
      * never re-execute the content stream. Heavy gesturing is cheap and
      * content-independent; the costs are one rasterization hitch per bucket and
      * softness when zoomed past the raster resolution until the zoom settles and
      * it re-rasterizes. Best for slow devices and dense pages.
      *
      * @param quality supersampling multiplier over the on-screen pixel size.
-     *   1 = rasterize exactly at display resolution (sharpest *and* cheapest —
+     *   1 = rasterize exactly at display resolution (sharpest *and* cheapest,
      *   the default). >1 = oversample, e.g. for screenshots or print-ish export.
      *   <1 = undersample for cheap previews/thumbnails.
      * @param maxBitmapLongSide hard cap on the longest bitmap side, protecting
@@ -173,7 +173,7 @@ public sealed interface PdfRenderSpec {
 
     /**
      * Re-execute each page's content stream into a live `Canvas` every
-     * composition, transformed by zoom/pan via the same GPU layer — no bitmap
+     * composition, transformed by zoom/pan via the same GPU layer: no bitmap
      * (lower memory), resolution-independent quality at rest on every platform.
      * On Android the vector display list replays under the live transform, so it
      * stays crisp even mid-pinch; on Skia targets (iOS/desktop/web) the layer is
@@ -183,7 +183,7 @@ public sealed interface PdfRenderSpec {
      *
      * @param hairlineWidthPx minimum stroke width in device pixels. The engine
      *   floors thin strokes here so sub-pixel rules (ECG traces, fine borders)
-     *   stay visible; 1 = the ISO hairline. There is no supersampling knob —
+     *   stay visible; 1 = the ISO hairline. There is no supersampling knob:
      *   vector output is already resolution-independent.
      */
     @Immutable
@@ -196,7 +196,7 @@ public sealed interface PdfRenderSpec {
     }
 
     public companion object {
-        /** Default: rasterized at display resolution — the historical behaviour. */
+        /** Default: rasterized at display resolution. */
         public val Default: PdfRenderSpec = Rasterized()
     }
 }
@@ -205,12 +205,12 @@ public sealed interface PdfRenderSpec {
  * Colours used by [PdfView].
  *
  * @param pageBackground painted behind page content (most PDFs assume white
- *   paper and paint nothing themselves). Ignored when [theme] is set — the
+ *   paper and paint nothing themselves). Ignored when [theme] is set. The
  *   theme owns the paper colour then.
  * @param viewportBackground the letterbox/gutter colour around pages.
  * @param theme optional reading theme ([ReaderTheme.Dark]/[ReaderTheme.Sepia]/
  *   [ReaderTheme.Light]). When set, page content colours are remapped (text,
- *   borders, backgrounds — not images) and the paper uses the theme background.
+ *   borders, backgrounds, not images) and the paper uses the theme background.
  *   Reflowable EPUB especially benefits: night mode without re-laying-out.
  */
 @Immutable

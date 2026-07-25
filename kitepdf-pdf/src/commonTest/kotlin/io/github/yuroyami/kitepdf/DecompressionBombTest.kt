@@ -14,8 +14,8 @@ import kotlin.test.assertTrue
 /**
  * Decompression-bomb guard (T-01): a kilobyte-scale FlateDecode stream that
  * expands past [FilterChain.MAX_DECODED_STREAM] must be rejected by the
- * inflater, and the rejection must surface through the lenient salvage path —
- * the document still opens and the page renders (blank), never an OOM or an
+ * inflater, and the rejection must surface through the lenient salvage path.
+ * The document still opens and the page renders (blank), never an OOM or an
  * escaping exception.
  *
  * The bomb is hand-assembled DEFLATE: one fixed-Huffman block holding a single

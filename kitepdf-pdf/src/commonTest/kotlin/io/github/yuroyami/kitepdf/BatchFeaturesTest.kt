@@ -82,7 +82,7 @@ class BatchFeaturesTest {
     }
 
     @Test fun form_recursion_guard_terminates() {
-        // Form Fm0 draws itself — must not StackOverflow.
+        // Form Fm0 draws itself. The renderer must not overflow the stack.
         val formContent = "/Fm0 Do".encodeToByteArray()
         val form = ByteArrayBuilder().apply {
             append("6 0 obj\n<< /Type /XObject /Subtype /Form /BBox [0 0 100 100] /Resources << /XObject << /Fm0 6 0 R >> >> /Length ${formContent.size} >>\nstream\n".encodeToByteArray())

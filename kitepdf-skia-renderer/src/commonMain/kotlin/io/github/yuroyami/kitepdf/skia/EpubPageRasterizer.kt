@@ -10,7 +10,7 @@ import org.jetbrains.skia.Image
 import org.jetbrains.skia.Surface
 
 /**
- * Headless raster output for an [EpubPage] using Skia (no Compose) — the EPUB
+ * Headless raster output for an [EpubPage] using Skia (no Compose), the EPUB
  * twin of [PdfPageRasterizer]. Both draw through the shared core [KiteCanvas]
  * seam ([SkiaCanvas]), so one Skiko backend serves PDF and EPUB alike on every
  * target (JVM, Android, iOS, macOS, Linux, JS/Wasm).
@@ -29,7 +29,7 @@ public object EpubPageRasterizer {
     /**
      * Render [page] into a freshly-allocated Skia [Image]. The caller owns the
      * returned object and should call `close()` (or use [encodeToPng]) once
-     * done — Skia images hold off-heap memory.
+     * done. Skia images hold off-heap memory.
      */
     public fun renderToImage(
         page: EpubPage,

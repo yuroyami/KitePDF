@@ -17,7 +17,7 @@ class InflateTest {
         assertEquals(expected, Zlib.adler32(data))
     }
 
-    /** A stored (uncompressed) DEFLATE block — easiest to hand-craft. */
+    /** A stored (uncompressed) DEFLATE block, the easiest kind to hand-craft. */
     @Test
     fun inflate_storedBlock_hello() {
         val bytes = byteArrayOf(
@@ -84,7 +84,7 @@ class InflateTest {
         assertContentEquals("Hello, KitePDF!".encodeToByteArray(), Zlib.decode(bytes))
     }
 
-    /** Longer text — exercises LZ77 back-references (the/o repeated). */
+    /** Longer text that exercises LZ77 back-references (the/o repeated). */
     @Test
     fun zlib_realDeflate_lazyDog() {
         val bytes = byteArrayOf(

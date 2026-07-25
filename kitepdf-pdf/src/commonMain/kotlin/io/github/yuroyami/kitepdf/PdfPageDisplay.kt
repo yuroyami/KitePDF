@@ -7,7 +7,7 @@ package io.github.yuroyami.kitepdf
  * The "Use*" naming preserves the spec's PDF-name values verbatim.
  */
 public enum class PageMode {
-    /** No panel — page area only (default). */
+    /** No panel: page area only (default). */
     UseNone,
 
     /** Show the bookmarks (outlines) panel. */
@@ -19,10 +19,10 @@ public enum class PageMode {
     /** Full-screen mode, no menu bar / window controls / panel. */
     FullScreen,
 
-    /** Show the optional-content (layers) panel — PDF 1.5. */
+    /** Show the optional-content (layers) panel. Added in PDF 1.5. */
     UseOC,
 
-    /** Show the attachments panel — PDF 1.6. */
+    /** Show the attachments panel. Added in PDF 1.6. */
     UseAttachments,
 
     /** A /PageMode value we don't recognise. */
@@ -58,10 +58,10 @@ public enum class PageLayout {
     /** Two columns, odd-numbered pages on the right (RTL languages). */
     TwoColumnRight,
 
-    /** Two pages side-by-side, odd on the left — PDF 1.5. */
+    /** Two pages side-by-side, odd on the left. Added in PDF 1.5. */
     TwoPageLeft,
 
-    /** Two pages side-by-side, odd on the right — PDF 1.5. */
+    /** Two pages side-by-side, odd on the right. Added in PDF 1.5. */
     TwoPageRight,
 
     /** A /PageLayout value we don't recognise. */

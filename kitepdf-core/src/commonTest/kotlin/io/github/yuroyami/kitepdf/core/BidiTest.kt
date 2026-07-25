@@ -46,7 +46,7 @@ class BidiTest {
 
     @Test
     fun numbers_in_ltr_stay_in_place() {
-        // "a5b" — the EN resolves to L (W7), all level 0, no reordering.
+        // "a5b": the EN resolves to L (W7), all level 0, no reordering.
         assertContentEquals(intArrayOf(0, 1, 2), visualOrder(cps("a5b")))
     }
 

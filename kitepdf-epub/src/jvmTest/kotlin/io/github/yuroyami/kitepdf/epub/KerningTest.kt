@@ -53,7 +53,7 @@ class KerningTest {
     @Test
     fun a_font_yields_pair_kerning() {
         val fonts = candidateFonts()
-        if (fonts.isEmpty()) return // no fonts in this checkout — skip
+        if (fonts.isEmpty()) return // no fonts in this checkout: skip
         var verifiedName: String? = null
         for (f in fonts) {
             val face = FontRegistry.face("k", bold = false, italic = false, f.readBytes()) ?: continue

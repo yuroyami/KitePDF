@@ -69,7 +69,7 @@ public class PdfEditor internal constructor(
     /**
      * Set once a redaction is staged. Incremental save is then refused: it would
      * append the new content while leaving the original (unredacted) bytes in the
-     * file, where they remain recoverable — defeating redaction.
+     * file, where they remain recoverable, defeating redaction.
      */
     private var redactionStaged = false
 
@@ -185,7 +185,7 @@ public class PdfEditor internal constructor(
      * the page's `/Contents` is repointed at it. The original content objects
      * are left in place (orphaned) per incremental-update semantics.
      *
-     * Note: [transform] only reorders/removes/keeps existing operations — it
+     * Note: [transform] only reorders/removes/keeps existing operations. It
      * doesn't introduce new resource dependencies. To overlay new content (with
      * its own fonts), use [stampPage].
      */
@@ -312,7 +312,7 @@ public class PdfEditor internal constructor(
     }
 
     /**
-     * Set a button field (`/Btn`) to a named export value — the mechanism behind
+     * Set a button field (`/Btn`) to a named export value, the mechanism behind
      * checkboxes and radio groups. The field's `/V` becomes the chosen on-state
      * name; every widget's `/AS` is set to that name when the widget defines it
      * as an appearance state, or to `/Off` otherwise (so sibling radios in the
@@ -354,7 +354,7 @@ public class PdfEditor internal constructor(
     }
 
     /**
-     * Set a choice field (`/Ch` — combo box or list box) to [value]. Sets `/V`,
+     * Set a choice field (`/Ch`: combo box or list box) to [value]. Sets `/V`,
      * sets `/I` (selected index) when the value is found in `/Opt`, and
      * regenerates the widget appearance so the selection is visible.
      */
@@ -416,7 +416,7 @@ public class PdfEditor internal constructor(
         return n.keys
     }
 
-    /** The checkbox "on" state — the first non-Off /AP /N appearance name. */
+    /** The checkbox "on" state, the first non-Off /AP /N appearance name. */
     private fun checkboxOnState(field: PdfFormField): String? {
         for ((_, w) in buttonWidgets(field)) {
             appearanceStateNames(w).firstOrNull { it != "Off" }?.let { return it }
@@ -527,7 +527,7 @@ public class PdfEditor internal constructor(
             )),
         )
         // Flattening to one /Pages node can strip attributes a leaf page inherited
-        // from an intermediate node — so bake the resolved MediaBox/Resources/Rotate
+        // from an intermediate node, so bake the resolved MediaBox/Resources/Rotate
         // onto each base page that doesn't carry its own.
         val baseByNum = base.pages.mapNotNull { p -> p.reference?.let { it.objectNumber to p } }.toMap()
         for (pref in order) {
@@ -621,7 +621,7 @@ public class PdfEditor internal constructor(
      * dropped from the page, and an opaque black box is painted over each
      * region. It does not merely paint over still-present content.
      *
-     * Conservative by design — a run touching a region is removed wholesale, so
+     * Conservative by design. A run touching a region is removed wholesale, so
      * partial overlaps over-remove. Content inside referenced form XObjects IS
      * recursed into (redacted in the form's own coordinate space); a dropped
      * image's XObject entry is pruned from `/Resources /XObject` so
@@ -905,7 +905,7 @@ public class PdfEditor internal constructor(
     /**
      * A classic cross-reference section listing only the changed objects (plus
      * the free-list head). The incremental section need not enumerate untouched
-     * objects — the reader fills those from the `/Prev` chain.
+     * objects. The reader fills those from the `/Prev` chain.
      */
     private fun writeClassicXref(out: ByteArrayBuilder, offsets: Map<Long, Int>) {
         val entries = offsets.map { (num, off) ->
@@ -943,7 +943,7 @@ public class PdfEditor internal constructor(
      * reachable from the catalog (and `/Info`), with staged edits applied and
      * objects renumbered densely. Unlike [saveIncremental], the original bytes
      * are NOT retained and unreachable objects (e.g. content streams replaced by
-     * an edit) are dropped — which is what makes it the correct vehicle for
+     * an edit) are dropped, which is what makes it the correct method for
      * **redaction** (the removed content is truly gone, not just superseded).
      */
     public fun saveRewritten(useObjectStreams: Boolean = false): ByteArray {

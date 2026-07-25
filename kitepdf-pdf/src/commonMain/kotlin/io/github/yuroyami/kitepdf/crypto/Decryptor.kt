@@ -12,7 +12,7 @@ import io.github.yuroyami.kitepdf.core.parser.PdfString
  * using a [StandardSecurityHandler]. The object number / generation of the
  * enclosing indirect object is the per-object key seed.
  *
- * /Encrypt and /XRef objects are skipped — those are part of the security
+ * /Encrypt and /XRef objects are skipped. Those are part of the security
  * machinery itself and must not be re-decrypted.
  */
 public object Decryptor {

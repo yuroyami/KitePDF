@@ -64,7 +64,7 @@ public class TtfReader(public val bytes: ByteArray) {
         return v.toInt()
     }
 
-    /** Read a fixed-length ASCII tag (4 bytes) — table tags, version markers. */
+    /** Read a fixed-length ASCII tag (4 bytes): table tags, version markers. */
     public fun tag(): String {
         val sb = StringBuilder(4)
         repeat(4) { sb.append(u8().toChar()) }

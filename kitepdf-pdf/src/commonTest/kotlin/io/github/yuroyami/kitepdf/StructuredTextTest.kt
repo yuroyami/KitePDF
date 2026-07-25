@@ -137,7 +137,7 @@ class StructuredTextTest {
         offsets.add(buf.size())
         w("3 0 obj\n<< /Type /Page /Parent 2 0 R /Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R >>\nendobj\n")
 
-        // Build content stream — one BT/ET per run for clarity.
+        // Build content stream: one BT/ET per run for clarity.
         val sb = StringBuilder()
         for (entry in runs) {
             val x = entry.first.first

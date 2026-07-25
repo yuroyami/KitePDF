@@ -9,7 +9,7 @@ import io.github.yuroyami.kitepdf.core.parser.PdfReference
 import io.github.yuroyami.kitepdf.core.parser.PdfString
 
 /**
- * One article thread from the document — ISO 32000-1 §12.4.3.
+ * One article thread from the document (ISO 32000-1 §12.4.3).
  *
  * An "article" is a reading order superimposed on the layout: a sequence of
  * rectangular [beads], each anchored to a page region. Readers use threads
@@ -29,7 +29,7 @@ public data class PdfArticleThread(
 ) {
 
     /**
-     * One bead — a rectangular region on a page that belongs to the thread.
+     * One bead: a rectangular region on a page that belongs to the thread.
      * [pageIndex] is `null` only when the bead's /P doesn't resolve to a
      * known page (rare; usually a malformed PDF).
      */

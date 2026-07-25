@@ -5,7 +5,7 @@ import io.github.yuroyami.kitepdf.core.ByteArrayBuilder
 /**
  * Pure-Kotlin RFC 1951 DEFLATE inflater.
  *
- * No dependencies on java.util.zip — runs on every Kotlin target (JVM, Native, JS, Wasm).
+ * No dependencies on java.util.zip. It runs on every Kotlin target (JVM, Native, JS, Wasm).
  * Implements stored, fixed Huffman, and dynamic Huffman block types with LZ77 (32KB window).
  *
  * Throws InflateException on malformed input. Not thread-safe; create one per stream.
@@ -246,7 +246,7 @@ internal class Inflater(
         }
         val srcStart = (windowPos - distance) and (WINDOW_SIZE - 1)
         // Fast path: the run can't overlap the write cursor (distance >= length)
-        // and neither the source nor the destination span wraps the ring — copy
+        // and neither the source nor the destination span wraps the ring. Copy
         // the whole match into the output and the window in two bulk moves.
         if (distance >= length &&
             srcStart + length <= WINDOW_SIZE &&
@@ -270,12 +270,12 @@ internal class Inflater(
     companion object {
         private const val WINDOW_SIZE = 32_768
 
-        // RFC 1951 §3.2.7 — code-length code lengths appear in this permuted order.
+        // RFC 1951 §3.2.7: code-length code lengths appear in this permuted order.
         private val CODE_LENGTH_ORDER = intArrayOf(
             16, 17, 18, 0, 8, 7, 9, 6, 10, 5, 11, 4, 12, 3, 13, 2, 14, 1, 15,
         )
 
-        // RFC 1951 §3.2.5 — length codes 257..285.
+        // RFC 1951 §3.2.5: length codes 257..285.
         private val LENGTH_BASE = intArrayOf(
             3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 15, 17, 19, 23, 27, 31,
             35, 43, 51, 59, 67, 83, 99, 115, 131, 163, 195, 227, 258,

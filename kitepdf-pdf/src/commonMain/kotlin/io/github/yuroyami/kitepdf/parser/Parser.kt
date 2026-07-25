@@ -23,11 +23,11 @@ import io.github.yuroyami.kitepdf.core.PdfFormatException
  *
  * Drives a [Lexer] one token at a time. Handles the tricky one-token lookahead
  * needed to distinguish "N G obj" headers, "N G R" references, and bare numbers
- * inside arrays — see [readArray] for the gory details.
+ * inside arrays. See [readArray] for the details.
  *
  * Pass a [resolver] (typically the owning [io.github.yuroyami.kitepdf.PdfDocument]) when
  * parsing in a context where indirect references in stream dictionaries must be
- * resolved on the fly — most importantly when `/Length` is an indirect reference,
+ * resolved during parsing, most importantly when `/Length` is an indirect reference,
  * which MuPDF's pdf_stream_length() handles via pdf_dict_get_int64().
  */
 internal class Parser(
@@ -65,7 +65,7 @@ internal class Parser(
 
     /**
      * An integer might be the start of "N G R" (reference) or "N G obj" (object
-     * header). Only valid in specific contexts — but a bare integer inside an
+     * header). Only valid in specific contexts, but a bare integer inside an
      * array also needs to peek ahead, because "10 0 R" is three tokens that
      * become one PdfReference. We snapshot the reader position so we can
      * back out if the lookahead doesn't match.
@@ -110,7 +110,7 @@ internal class Parser(
     /**
      * After reading a "<<...>>" we have to peek for the optional "stream"
      * keyword that turns it into a [PdfStream]. The byte length of the stream
-     * is given by /Length in the dict — which may itself be an indirect
+     * is given by /Length in the dict, which may itself be an indirect
      * reference (MuPDF: pdf_stream_length()). If a [resolver] was provided
      * we follow the reference; otherwise we throw with a clear hint.
      */
@@ -128,7 +128,7 @@ internal class Parser(
         // Determine the stream body length. The declared /Length is preferred, but
         // real-world PDFs frequently carry a wrong or missing /Length (or an indirect
         // /Length we can't resolve in this context), so we fall back to scanning for
-        // the "endstream" keyword — mirroring MuPDF's pdf_load_raw_stream recovery.
+        // the "endstream" keyword, mirroring MuPDF's pdf_load_raw_stream recovery.
         val declared = resolveStreamLengthOrNull(dict)
         var bodyEnd = -1
         if (declared != null && declared in 0..(reader.size - streamStart).toLong()) {
@@ -193,7 +193,7 @@ internal class Parser(
     private fun consumeStreamEol() {
         // ISO 32000-1 §7.3.8.1: "stream" should be followed by CRLF or LF. We are
         // lenient: eat an optional CR and/or LF, but never throw if a producer
-        // botched it — the body offset is taken from wherever we land.
+        // botched it. The body starts at whatever position the reader reaches.
         if (reader.peek() == '\r'.code) reader.readByte()
         if (reader.peek() == '\n'.code) reader.readByte()
     }

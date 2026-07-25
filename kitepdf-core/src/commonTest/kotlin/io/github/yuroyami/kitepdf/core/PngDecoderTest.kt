@@ -12,7 +12,7 @@ import kotlin.test.assertTrue
  * [ImageXObject] without rasterizing it, so pixel accuracy is proven here: build
  * a PNG, decode via [ImageXObject.fromEncodedImage], assemble RGBA via
  * [toRgbaBytes], and check pixels. IDAT uses a STORED deflate block and dummy
- * CRCs — the decoder verifies neither.
+ * CRCs. The decoder verifies neither.
  */
 class PngDecoderTest {
 

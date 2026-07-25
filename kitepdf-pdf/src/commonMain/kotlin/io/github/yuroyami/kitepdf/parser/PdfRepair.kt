@@ -12,8 +12,8 @@ import io.github.yuroyami.kitepdf.core.PdfFormatException
 import io.github.yuroyami.kitepdf.core.filters.FilterChain
 
 /**
- * Malformed-file recovery (ISO 32000-1 has no formal spec for this — it mirrors
- * MuPDF's `pdf_repair_xref` in `pdf-repair.c`).
+ * Malformed-file recovery. ISO 32000-1 has no formal spec for this, so the
+ * approach mirrors MuPDF's `pdf_repair_xref` in `pdf-repair.c`.
  *
  * When the cross-reference table is missing, corrupt, truncated, or points at
  * the wrong offsets, the only reliable structure left is the object bodies

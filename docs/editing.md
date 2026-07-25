@@ -54,7 +54,7 @@ val filled = editor.saveIncremental()
 The method:
 
 - Updates the field's `/V` (value) entry.
-- Regenerates the widget's `/AP /N` (normal appearance), using the field's `/DA` (default appearance) string to recover font, size, and colour.
+- Regenerates the widget's `/AP /N` (normal appearance), using the field's `/DA` (default appearance) string to recover font, size, and color.
 - Clears the form's `/NeedAppearances` flag so conforming viewers use the appearance we generated.
 - Buttons and choice fields have their own methods: `setCheckbox(field, checked)`, `setButtonValue(field, exportValue)` for radio groups, and `setChoiceValue(field, value)` for dropdowns and list boxes.
 
@@ -106,7 +106,7 @@ editor.stampPage(doc.pages[0]) {
 The content stream builder offers a complete drawing API:
 
 - **Graphics state**: `save()`, `restore()`, `transform(a, b, c, d, e, f)`, `setLineWidth(w)`.
-- **Colour**: `setFillRgb(r, g, b)`, `setStrokeRgb(r, g, b)`, `setFillGray(g)`, `setStrokeGray(g)`.
+- **Color**: `setFillRgb(r, g, b)`, `setStrokeRgb(r, g, b)`, `setFillGray(g)`, `setStrokeGray(g)`.
 - **Paths**: `moveTo(x, y)`, `lineTo(x, y)`, `rectangle(x, y, w, h)`, `closePath()`, `stroke()`, `fill()`, `fillAndStroke()`, `endPath()`.
 - **Clipping**: `clip()`, `clipEvenOdd()`.
 - **Text**: `beginText()`, `endText()`, `setFont(font, size)`, `moveText(tx, ty)`, `showText(text)`, `setLeading(leading)`, `setCharSpacing(spacing)`, `setWordSpacing(spacing)`, `nextLine()`.

@@ -110,7 +110,7 @@ public class EpubDocument internal constructor(
         return "#${hex(c.r)}${hex(c.g)}${hex(c.b)}"
     }
 
-    // Box tree per spine — depends on font size + column width, so it is rebuilt
+    // Box tree per spine: depends on font size + column width, so it is rebuilt
     // from the (already parsed) DOM + CSS whenever settings change. The expensive
     // parse (unzip, HTML, CSS, fonts) is done once and lives in ParsedEpub.
     private val docRoots: List<BlockBox> by lazy {
@@ -206,14 +206,14 @@ public class EpubDocument internal constructor(
     /**
      * A copy of this book re-laid-out with new [settings], reusing the parse (no
      * re-unzip / re-parse of HTML, CSS or fonts). Use for reader controls that
-     * change font size, margins or page size at runtime — cheap next to [open].
+     * change font size, margins or page size at runtime, much cheaper than [open].
      */
     public fun withSettings(settings: EpubSettings): EpubDocument = EpubDocument(parsed, settings)
 
     /** Shorthand for [withSettings] changing only the body font size (points). */
     public fun withFontSize(fontSize: Double): EpubDocument = withSettings(settings.copy(fontSize = fontSize))
 
-    /** Shorthand for [withSettings] changing the page size — e.g. on resize / rotation. */
+    /** Shorthand for [withSettings] changing the page size, e.g. on resize / rotation. */
     public fun withPageSize(pageWidth: Double, pageHeight: Double): EpubDocument =
         withSettings(settings.copy(pageWidth = pageWidth, pageHeight = pageHeight))
 
@@ -590,7 +590,7 @@ internal class ParsedSpine(
     val rules: List<StyleRule>,
     val docDir: String,
     val viewport: Pair<Double, Double>,
-    /** Zip path of this spine document — the key for href -> page navigation. */
+    /** Zip path of this spine document, the key for href -> page navigation. */
     val path: String,
 )
 
@@ -691,7 +691,7 @@ public class EpubPage internal constructor(
                 continue
             }
             val img = box.image ?: continue
-            // object-fit: cover — scale to FILL the box preserving aspect,
+            // object-fit: cover. Scale to FILL the box preserving aspect,
             // center, and clip the overflow to the box rect.
             if (box.style.objectFit == io.github.yuroyami.kitepdf.epub.css.ObjectFit.COVER &&
                 img.width > 0 && img.height > 0

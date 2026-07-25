@@ -6,7 +6,7 @@ import io.github.yuroyami.kitepdf.core.PdfFormatException
  * Sealed hierarchy of PDF value types (ISO 32000-1 §7.3).
  *
  * Numbers split into Int/Real because both syntax and downstream usage care.
- * Strings keep raw bytes — PDF strings are NOT Kotlin Strings; they're byte
+ * Strings keep raw bytes. PDF strings are NOT Kotlin Strings; they're byte
  * sequences interpreted via a font's encoding, so the user (or a text
  * extractor) decides how to decode them.
  */
@@ -135,7 +135,7 @@ public data class PdfStream(
     override fun toString(): String = "stream(${rawBytes.size} bytes, dict=$dict)"
 }
 
-/** "N G R" — an indirect object reference. Use [resolve] with the document's resolver. */
+/** "N G R": an indirect object reference. Use [resolve] with the document's resolver. */
 public data class PdfReference(val objectNumber: Long, val generation: Int) : PdfObject() {
 
     override fun resolve(refs: IndirectResolver): PdfObject =

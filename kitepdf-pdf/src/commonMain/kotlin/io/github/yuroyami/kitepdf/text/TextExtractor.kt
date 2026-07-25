@@ -20,7 +20,7 @@ import io.github.yuroyami.kitepdf.core.parser.PdfString
  *   - `"`   : set spacing, move to next line, and show
  *
  * Show strings are decoded through the *current font* (set by `Tf`), so each
- * font's `/Encoding` and `/ToUnicode` CMap apply — this is what makes composite
+ * font's `/Encoding` and `/ToUnicode` CMap apply. This is what makes composite
  * Type 0 fonts (Identity-H, 2-byte codes) and embedded CJK extract correctly
  * rather than byte-for-byte. When no font is resolvable the bytes fall back to
  * `PdfString.asText()` (PDFDocEncoding / UTF-16BE BOM detection).
@@ -78,7 +78,7 @@ public object TextExtractor {
                     haveLine = true
                 }
                 "Tm" -> {
-                    // a b c d e f — f is the new line-origin Y in text space.
+                    // a b c d e f: f is the new line-origin Y in text space.
                     val newY = number(op.operands.getOrNull(5))
                     maybeBreakLine(sb, inText, newY, lineY, haveLine, fontSize)
                     lineY = newY
@@ -100,7 +100,7 @@ public object TextExtractor {
                 }
                 "\"" -> {
                     sb.append('\n')
-                    // operands: aw ac string — string is last
+                    // operands: aw ac string. The string is last.
                     val s = op.operands.lastOrNull() as? PdfString ?: continue
                     sb.append(decode(s, font))
                 }

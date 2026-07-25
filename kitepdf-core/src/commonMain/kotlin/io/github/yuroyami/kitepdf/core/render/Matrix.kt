@@ -13,7 +13,7 @@ package io.github.yuroyami.kitepdf.core.render
  *
  * The `cm` content-stream operator multiplies "new = operand × current",
  * so the new origin lands at the operand's translation rather than the
- * current one — see [concat].
+ * current one. See [concat].
  *
  * Immutable: every operation returns a fresh Matrix. The page renderer keeps
  * a single state per gsave level and re-assigns rather than mutating.
@@ -40,7 +40,7 @@ public data class Matrix(
     public fun transformPoint(x: Double, y: Double): Pair<Double, Double> =
         (a * x + c * y + e) to (b * x + d * y + f)
 
-    /** X-component of the unit vector after this transform — useful for scaled font sizes. */
+    /** X-component of the unit vector after this transform, useful for scaled font sizes. */
     public fun scaleX(): Double = kotlin.math.sqrt(a * a + b * b)
     public fun scaleY(): Double = kotlin.math.sqrt(c * c + d * d)
 

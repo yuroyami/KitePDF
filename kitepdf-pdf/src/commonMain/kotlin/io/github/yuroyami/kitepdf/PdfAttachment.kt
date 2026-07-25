@@ -10,15 +10,15 @@ import io.github.yuroyami.kitepdf.core.parser.PdfStream
 import io.github.yuroyami.kitepdf.core.parser.PdfString
 
 /**
- * One embedded file attachment from the document — ISO 32000-1 §7.11.4.
+ * One embedded file attachment from the document (ISO 32000-1 §7.11.4).
  *
  * Attachments live in the catalog's `/Names /EmbeddedFiles` name tree
  * (PDF 1.4+) and/or hang off file-attachment annotations. Each one is a
  * FileSpec dict pointing at one or more embedded-file streams; the
  * preferred one is keyed by `/UF` (Unicode filename) with `/F` as fallback.
  *
- * We resolve the bytes lazily — large attachments shouldn't be decoded
- * until the caller asks for them.
+ * We resolve the bytes lazily. We decode a large attachment only when
+ * the caller asks for it.
  */
 public data class PdfAttachment(
     /** Name-tree key (often the same as [filename] but not always). */

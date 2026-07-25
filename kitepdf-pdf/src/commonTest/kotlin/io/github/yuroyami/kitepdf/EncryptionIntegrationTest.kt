@@ -14,7 +14,7 @@ import kotlin.test.assertTrue
  * scheme (40-bit RC4 with empty password), then re-open and verify KitePDF's
  * Decryptor unwraps the plaintext.
  *
- * V1/R2 is intentional because it's the easiest to construct by hand — no
+ * V1/R2 is intentional because it's the easiest to construct by hand: no
  * SHA-256, no AES, no key salts. The unwinding logic is the same shape as
  * V2/V4 with longer keys, so a passing V1 test gives us solid signal on the
  * pipeline.

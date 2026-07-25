@@ -17,7 +17,7 @@ import kotlin.test.Test
 import kotlin.test.assertTrue
 
 /**
- * Golden render test for the ComposeCanvas backend — the path GoldenHour uses.
+ * Golden render test for the ComposeCanvas backend, the path GoldenHour uses.
  * Builds a PDF exercising every primitive that has silently broken before
  * (system-font text, a vector fill, a hairline stroke, a RAW/Flate image),
  * renders it off-screen exactly as the app does (ImageBitmap + CanvasDrawScope
@@ -75,7 +75,7 @@ class RenderGoldenTest {
     @Test
     fun system_font_text_size_is_density_independent() {
         // A Compose `Sp` font size is re-scaled by device density + accessibility font scale
-        // when measured, but the renderer's size is ALREADY in device px — so without cancelling
+        // when measured, but the renderer's size is ALREADY in device px, so without cancelling
         // them, text rendered ~density× too large (and overlapped on high-density Android).
         // Same px raster, only the Density differs: the painted text must be identical.
         val pdf = buildPdf()

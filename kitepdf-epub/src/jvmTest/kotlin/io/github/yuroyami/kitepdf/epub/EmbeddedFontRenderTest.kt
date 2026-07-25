@@ -33,7 +33,7 @@ class EmbeddedFontRenderTest {
 
     @Test
     fun embedded_font_draws_real_outlines() {
-        val ttf = droidSans() ?: return // font not present in this checkout — skip
+        val ttf = droidSans() ?: return // font not present in this checkout: skip
         val css = "@font-face{font-family:'Embedded';src:url(font.ttf)}p{font-family:'Embedded'}"
         val runs = glyphRuns("<body><style>$css</style><p>中文字</p></body>", ttf)
 

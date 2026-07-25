@@ -5,7 +5,7 @@ package io.github.yuroyami.kitepdf.crypto
  *
  * Used by PDF Standard Security Handler V1 (40-bit) and V2 (40–128-bit). RC4
  * is symmetric: same routine for encrypt + decrypt. Don't use this anywhere
- * else — RC4 has well-known weaknesses; PDF kept it for back-compat.
+ * else. RC4 has well-known weaknesses; PDF kept it for back-compat.
  */
 public object Rc4 {
 
@@ -28,8 +28,8 @@ public object Rc4 {
 
     /**
      * Pseudo-Random Generation Algorithm: XOR each plaintext byte with the
-     * keystream. Mutates [s] in place — `ksa` already returns a fresh array
-     * used nowhere else, so the previous defensive copy was dead weight.
+     * keystream. Mutates [s] in place. `ksa` already returns a fresh array
+     * used nowhere else, so no defensive copy is needed.
      */
     private fun prga(s: IntArray, data: ByteArray): ByteArray {
         var i = 0; var j = 0

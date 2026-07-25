@@ -33,7 +33,7 @@ class OutlinesTest {
 
         val ch2 = doc.outlines[1]
         assertEquals("Chapter 2", ch2.title)
-        // Chapter 2 uses /A /S /GoTo — rawDestination should be promoted.
+        // Chapter 2 uses /A /S /GoTo, so rawDestination should be promoted.
         assertNotNull(ch2.rawDestination)
     }
 
@@ -94,7 +94,7 @@ class OutlinesTest {
         //   4: /Dests           (named-destination lookup table)
         //   5: Chapter 1        (First=6, Last=6, Next=8)
         //   6: Section 1.1      (Parent=5)
-        //   7: (unused — keeps numbering simple if needed; we'll skip)
+        //   7: (unused, skipped to keep the numbering simple)
         //   8: Chapter 2        (Prev=5)
         //   10/11/12: page leaves
         // We renumber to keep contiguous: 1..9.
@@ -115,14 +115,14 @@ class OutlinesTest {
         offsets.add(buf.size())
         write("4 0 obj\n<< /sec1.1 [8 0 R /Fit] >>\nendobj\n")
 
-        // Chapter 1 outline node — explicit XYZ destination at top-left of page 0.
+        // Chapter 1 outline node: explicit XYZ destination at top-left of page 0.
         offsets.add(buf.size())
         write(
             "5 0 obj\n<< /Title (Chapter 1) /Parent 3 0 R /First 6 0 R /Last 6 0 R " +
                 "/Next 10 0 R /Count 1 /Dest [7 0 R /XYZ 0 792 null] >>\nendobj\n",
         )
 
-        // Section 1.1 — named destination (the string form).
+        // Section 1.1: named destination (the string form).
         offsets.add(buf.size())
         write("6 0 obj\n<< /Title (Section 1.1) /Parent 5 0 R /Dest (sec1.1) >>\nendobj\n")
 
@@ -134,7 +134,7 @@ class OutlinesTest {
         offsets.add(buf.size())
         write("9 0 obj\n<< /Type /Page /Parent 2 0 R /Resources << >> >>\nendobj\n")
 
-        // Chapter 2 — uses /A /GoTo action instead of /Dest directly.
+        // Chapter 2 uses the /A /GoTo action instead of /Dest directly.
         offsets.add(buf.size())
         write(
             "10 0 obj\n<< /Title (Chapter 2) /Parent 3 0 R /Prev 5 0 R " +

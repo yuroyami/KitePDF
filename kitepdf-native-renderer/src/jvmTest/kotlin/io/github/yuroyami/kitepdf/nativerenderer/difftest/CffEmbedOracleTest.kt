@@ -20,14 +20,14 @@ import kotlin.test.assertTrue
  *    independent CFF parsers + CID→glyph resolvers + rasterisers. If they render
  *    the embedded subset to near-identical pixels, the emitted CFF (INDEX/DICT
  *    layout, charset, FDSelect, offsets) is structurally and semantically sound.
- *  - **Ink present.** Rules out the "both engines drew `.notdef`/blank" trap —
+ *  - **Ink present.** Rules out the "both engines drew `.notdef`/blank" trap:
  *    a wrong charset direction collapses to `.notdef` and would show here.
  *  - **Subset == full.** The subset must render identically to the all-glyph
  *    embed (same glyphs, same positions).
  */
 class CffEmbedOracleTest {
 
-    private val text = "Hello"   // plain ASCII — no seac accent composition
+    private val text = "Hello"   // plain ASCII, no seac accent composition
 
     private fun otfFile(): File? {
         var d: File? = File(System.getProperty("user.dir")).absoluteFile
@@ -80,7 +80,7 @@ class CffEmbedOracleTest {
             val kiteSub = AwtPdfRasterizer.renderToImage(KitePDF.open(subsetPdf).pages[0], scale = 2.0)
             assertTrue(muSub != null && muFull != null, "mutool failed to render the CFF embed")
 
-            // Ink present — the glyphs actually drew (not blank / not .notdef-empty).
+            // Ink present. The glyphs actually drew (not blank / not .notdef-empty).
             assertTrue(ImageDiff.nonBackgroundPixels(kiteSub) > 1000, "KitePDF render is blank")
             assertTrue(ImageDiff.nonBackgroundPixels(muSub!!) > 1000, "mutool render is blank")
 

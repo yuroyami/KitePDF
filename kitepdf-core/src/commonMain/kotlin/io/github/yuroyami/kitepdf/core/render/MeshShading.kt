@@ -302,7 +302,7 @@ private fun io.github.yuroyami.kitepdf.core.parser.PdfArray.numAt(i: Int): Doubl
  *    filled with the function's colour at its centre, mapped by the shading
  *    /Matrix.
  *  - [KiteShading.TriangleMesh]: each triangle recursively subdivided (depth
- *    3, 64 sub-triangles) with vertex-colour interpolation — a backend-free
+ *    3, 64 sub-triangles) with vertex-colour interpolation, a backend-free
  *    Gouraud approximation smoother than per-triangle flat fill.
  *  - [KiteShading.PatchMesh]: the pre-tessellated flat quads.
  *

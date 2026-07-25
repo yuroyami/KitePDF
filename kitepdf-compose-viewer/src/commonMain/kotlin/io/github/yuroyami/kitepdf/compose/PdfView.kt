@@ -85,19 +85,19 @@ import kotlinx.coroutines.launch
  * ```
  *
  * By default ([PdfRenderSpec.Rasterized]) pages are vector-rendered once into an
- * [ImageBitmap] per (page, size, zoom bucket) and then drawn as plain images —
+ * [ImageBitmap] per (page, size, zoom bucket) and then drawn as plain images, so
  * scrolling, panning and pinching never re-execute the PDF content stream.
  * Switch to [PdfRenderSpec.Vectorized] for resolution-independent, bitmap-free
  * drawing. See [PdfRenderSpec] for the per-mode knobs and [PdfZoomSpec] for
  * gestures.
  *
- * @param state the hoisted control surface — see [rememberPdfViewState].
+ * @param state the hoisted control surface. See [rememberPdfViewState].
  * @param layout continuous strip (any orientation), snap pager (any
  *   orientation) or a single fixed page. See [PdfLayout].
  * @param zoomSpec pinch/double-tap/pan behaviour and zoom bounds. Programmatic
  *   zoom through [PdfViewState.setZoom] honours the same bounds, so external
  *   controls (sliders, loupes) work with gestures fully disabled.
- * @param renderSpec how pages become pixels — [PdfRenderSpec.Rasterized]
+ * @param renderSpec how pages become pixels: [PdfRenderSpec.Rasterized]
  *   (bitmap-cached, with quality/memory/crisp-zoom/hairline knobs) or
  *   [PdfRenderSpec.Vectorized] (live vector draw). See [PdfRenderSpec].
  * @param colors page paper + viewport letterbox colours.
@@ -105,21 +105,21 @@ import kotlinx.coroutines.launch
  * @param userScrollEnabled gesture scrolling/swiping of the layout itself.
  *   Disable to drive paging exclusively through [PdfViewState] (nav buttons).
  * @param onPageRendered fires whenever a page finishes a FRESH rasterization,
- *   with the bitmap ready for export — e.g. via [encodeToPng]. Cache hits from
+ *   with the bitmap ready for export, e.g. via [encodeToPng]. Cache hits from
  *   the T-15 bitmap LRU do not re-fire it.
  * @param pagePlaceholder shown in a page's slot until its raster is ready.
  *   Defaults to a plain [PdfViewColors.pageBackground] box.
  * @param overlay HUD layer drawn over the viewport; receives [state] and a
- *   [BoxScope] for alignment. Widgets here float above the pages —
+ *   [BoxScope] for alignment. Widgets here float above the pages:
  *   [PdfNavigationControls], [PdfPageIndicator], [PdfThumbnailStrip] or
  *   anything of your own.
  * @param onTap single-tap on the page, reported with the tap position. The tap
- *   does not consume pan/swipe, so it coexists with navigation — typical use is
+ *   does not consume pan/swipe, so it coexists with navigation. Typical use is
  *   toggling a HUD's visibility. Held back until the double-tap window lapses
  *   only when [PdfZoomSpec.doubleTapEnabled] is on. Taps that land on a link
  *   navigate (or go to [onLinkTap]) instead of reaching this callback.
  * @param onLinkTap fires when a tapped link carries an action the viewer can't
- *   perform itself — a URI, a remote GoTo, a Launch. Return true after handling
+ *   perform itself: a URI, a remote GoTo, a Launch. Return true after handling
  *   it (e.g. opening the URL in a browser); false lets the tap fall through to
  *   [onTap]. Internal go-to-page links (PDF destinations, EPUB internal hrefs)
  *   never reach this: the viewer scrolls to the target page directly.
@@ -153,7 +153,7 @@ public fun PdfView(
     }
 
     // Crisp zoom: the raster resolution follows the zoom level, but only after
-    // the gesture settles — GPU-scaling the existing bitmap in between. Only the
+    // the gesture settles, GPU-scaling the existing bitmap in between. Only the
     // rasterized path re-renders on settle; vector draws are resolution-free.
     val rerasterizeOnZoom = (renderSpec as? PdfRenderSpec.Rasterized)?.rerasterizeOnZoom == true
     val settledZoom by produceState(1f, state, rerasterizeOnZoom) {
@@ -651,7 +651,7 @@ private fun PdfPageRaster(
     // Hairline compensation: the engine floors strokes at 1 *raster* px. When
     // the raster is larger than its final on-screen size (supersampling), that
     // floor must grow by the same ratio or sub-pixel strokes vanish in the
-    // downscale. (Upscaling can only thicken them — safe to leave at 1.)
+    // downscale. (Upscaling can only thicken them, so 1 is safe.)
     val visualWidth = baseSize.width * settledZoom
     val hairline = if (spec.preserveHairlines && visualWidth > 0f) {
         max(1f, raster.width / visualWidth)
@@ -703,7 +703,7 @@ private fun PdfPageRaster(
  * at the slot's layout resolution. No intermediate bitmap, so memory stays low
  * and quality is resolution-independent. Zoom/pan are applied by the enclosing
  * `graphicsLayer` (strip-level in continuous mode, per-page in paged/single),
- * so the draw lambda re-runs on recomposition — not on every gesture frame.
+ * so the draw lambda re-runs on recomposition, not on every gesture frame.
  *
  * `onPageRendered` is intentionally not honoured here: there is no [ImageBitmap]
  * to hand back. Use [PdfRenderSpec.Rasterized] (or [PdfRasterizer] directly) if
@@ -735,7 +735,7 @@ private fun PdfPageVector(
 /**
  * Paints [PdfViewState.searchHighlights] quads for [pageIndex] over the slot
  * content (T-33). Quads are display-space points; the slot shows the whole
- * display box, so the mapping is one uniform scale — the same math the
+ * display box, so the mapping is one uniform scale. It is the same math the
  * vector path and [PdfViewState.hitTest] use, inverted. Display rectangles
  * keep y-min in `bottom` (y grows downward), so `bottom` is the TOP edge.
  */

@@ -9,11 +9,11 @@ import kotlin.math.absoluteValue
  * Reads the subset of SFNT tables needed to render glyphs: `head`, `maxp`,
  * `hhea`, `hmtx`, `cmap`, `loca`, `glyf`. Composite glyphs are supported with
  * argument transforms; emoji-style colour tables (`COLR`/`CPAL`/`sbix`/`CBDT`)
- * are not yet handled — those are extras layered on top of plain outline
+ * are not yet handled. Those are extras layered on top of plain outline
  * data, so without them you still get monochrome shapes.
  *
  * The font keeps the original byte buffer alive; lookups are lazy and cached
- * via [Cache]. That keeps memory flat — most PDFs reference 50–200 glyphs
+ * via [Cache]. That keeps memory flat. Most PDFs reference 50–200 glyphs
  * from a font containing thousands.
  */
 public class TrueTypeFont private constructor(
@@ -127,7 +127,7 @@ public class TrueTypeFont private constructor(
     private val maxCompositeDepth = 8
 
     /**
-     * Outline as a [KitePath], cached — the `GlyphOutline → KitePath` conversion
+     * Outline as a [KitePath], cached. The `GlyphOutline → KitePath` conversion
      * is built once per glyph, not on every draw.
      */
     public fun outlinePath(glyphId: Int): KitePath? {
@@ -206,7 +206,7 @@ public class TrueTypeFont private constructor(
 
         // Slice points into contours by endPts. A malformed font can carry
         // NON-MONOTONIC endPts (an interior entry larger than the last one,
-        // which sizes the point arrays) — clamp instead of crashing.
+        // which sizes the point arrays). Clamp instead of crashing.
         val contours = mutableListOf<Contour>()
         var startPt = 0
         for (endPtRaw in endPts) {
@@ -237,7 +237,7 @@ public class TrueTypeFont private constructor(
         // Cycle / runaway-recursion guard: a self-referencing or cyclic composite
         // (a malformed-font DoS) would otherwise recurse until StackOverflowError.
         // The public glyph cache is only written after a full parse, so it does
-        // not break the cycle on its own — track the active chain here instead.
+        // not break the cycle on its own. Track the active chain here instead.
         if (depth >= maxCompositeDepth || !active.add(glyphId)) {
             return GlyphOutline(emptyList(), bbox)
         }
@@ -247,7 +247,7 @@ public class TrueTypeFont private constructor(
                 val flags = reader.u16()
                 val childGlyphId = reader.u16()
 
-                // Read the two arguments — they're either x/y offsets (ARGS_ARE_XY_VALUES
+                // Read the two arguments: they're either x/y offsets (ARGS_ARE_XY_VALUES
                 // set) or a pair of point indices for point-matching (flag clear).
                 val (arg1, arg2) = if (flags and CG_ARGS_ARE_WORDS != 0) {
                     if (flags and CG_ARGS_ARE_XY_VALUES != 0) reader.s16() to reader.s16()
@@ -293,7 +293,7 @@ public class TrueTypeFont private constructor(
 
                     val (dx, dy) = if (flags and CG_ARGS_ARE_XY_VALUES != 0) {
                         // arg1/arg2 are x/y offsets in the child's (already scaled)
-                        // coordinate space — the plain, common case.
+                        // coordinate space: the plain, common case.
                         arg1.toDouble() to arg2.toDouble()
                     } else {
                         // Point-matching: arg1 is a point index into the parent
@@ -345,7 +345,7 @@ public class TrueTypeFont private constructor(
     }
 
     private fun readF2Dot14(): Double {
-        // 16-bit fixed-point 2.14 — high 2 bits integer, low 14 bits fraction.
+        // 16-bit fixed-point 2.14: high 2 bits integer, low 14 bits fraction.
         val raw = reader.s16()
         return raw / 16384.0
     }
@@ -457,7 +457,7 @@ public class TrueTypeFont private constructor(
             // Glyphs past numHMetrics share the last advance width.
             for (i in numHMetrics until numGlyphs) {
                 widths[i] = lastWidth
-                // skip remaining lsb entries — they exist but we don't need them
+                // skip remaining lsb entries: they exist but we don't need them
             }
             return Hmtx(widths)
         }
@@ -533,7 +533,7 @@ public data class GlyphBbox(val xMin: Int, val yMin: Int, val xMax: Int, val yMa
  * sequence of `moveTo`, `lineTo`, `quadTo`, `close` commands.
  *
  * The outline is in font design units (multiply by `fontSize / unitsPerEm`
- * to get PDF user-space units). Y is positive-up — typical TrueType convention.
+ * to get PDF user-space units). Y is positive-up, the typical TrueType convention.
  */
 public data class GlyphOutline(val contours: List<Contour>, val bbox: GlyphBbox) {
 
@@ -561,7 +561,7 @@ public data class GlyphOutline(val contours: List<Contour>, val bbox: GlyphBbox)
                 startX = last.x.toDouble(); startY = last.y.toDouble()
                 startIdx = 0
             } else {
-                // Both first and last off-curve — implied midpoint.
+                // Both first and last off-curve: implied midpoint.
                 startX = (first.x + last.x) / 2.0
                 startY = (first.y + last.y) / 2.0
                 startIdx = 0
@@ -608,7 +608,7 @@ public data class GlyphOutline(val contours: List<Contour>, val bbox: GlyphBbox)
         }
         b.close()
 
-        // Silence "unused" — curX/curY are kept for future use (kerning, etc).
+        // Silence "unused": curX/curY are kept for future use (kerning, etc).
         if (curX.absoluteValue < 0) error("unreachable")
         if (curY.absoluteValue < 0) error("unreachable")
     }

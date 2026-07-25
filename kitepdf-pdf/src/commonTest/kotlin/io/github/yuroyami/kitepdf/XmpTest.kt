@@ -166,7 +166,7 @@ class XmpTest {
         offsets.add(buf.size())
         write("3 0 obj\n<< /Type /Page /Parent 2 0 R /Resources << >> >>\nendobj\n")
         offsets.add(buf.size())
-        // Stream object — no filter, just raw XML bytes.
+        // Stream object: no filter, just raw XML bytes.
         write("4 0 obj\n<< /Type /Metadata /Subtype /XML /Length ${metadataBytes.size} >>\nstream\n")
         buf.append(metadataBytes)
         write("\nendstream\nendobj\n")

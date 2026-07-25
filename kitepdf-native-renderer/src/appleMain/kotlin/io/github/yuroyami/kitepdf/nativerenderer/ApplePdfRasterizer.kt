@@ -32,7 +32,7 @@ import platform.ImageIO.CGImageDestinationFinalize
 import platform.UniformTypeIdentifiers.UTTypePNG
 
 /**
- * Headless rendering on Apple platforms (iOS, macOS, tvOS) — produces a
+ * Headless rendering on Apple platforms (iOS, macOS, tvOS). Produces a
  * PNG-encoded [NSData] sized to the page in pt × [scale].
  * Pure CoreGraphics + ImageIO, no UIKit/AppKit, no Compose dependency.
  *
@@ -43,8 +43,8 @@ import platform.UniformTypeIdentifiers.UTTypePNG
  *  - CI snapshots of PDF rendering
  *
  * For drawing into a UIView's `drawRect:` (or an NSView) directly,
- * instantiate [CoreGraphicsCanvas] over the current `CGContext` instead —
- * the rasterizer is for off-screen output.
+ * instantiate [CoreGraphicsCanvas] over the current `CGContext` instead.
+ * The rasterizer is for off-screen output.
  */
 @OptIn(ExperimentalForeignApi::class)
 public object ApplePdfRasterizer {
@@ -66,7 +66,7 @@ public object ApplePdfRasterizer {
         val heightPx = (page.height * scale).toULong().coerceAtLeast(1uL)
         val space = CGColorSpaceCreateDeviceRGB() ?: return null
         try {
-            // ARGB32 premultiplied — matches what UIKit / AppKit hand out.
+            // ARGB32 premultiplied, matching the format UIKit and AppKit use.
             val bytesPerRow = widthPx.toLong() * 4
             val bitmapInfo = CGImageAlphaInfo.kCGImageAlphaPremultipliedFirst.value
             val cgContext: CGContextRef = CGBitmapContextCreate(

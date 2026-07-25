@@ -38,7 +38,7 @@ import io.github.yuroyami.kitepdf.writer.PdfEditor
  * val doc = PdfDocument.open(bytes)                        // unencrypted
  * val doc = PdfDocument.open(bytes, "secret".encodeToByteArray())
  *
- * println("${doc.pageCount} pages — PDF ${doc.version}")
+ * println("${doc.pageCount} pages, PDF ${doc.version}")
  * println(doc.pages[0].extractText())
  *
  * // Editing returns a writer; the document itself is immutable.
@@ -52,8 +52,8 @@ import io.github.yuroyami.kitepdf.writer.PdfEditor
  *
  * Thread-safe for concurrent reads and rendering after construction (T-16):
  * object resolution parses from per-call readers and synchronizes only its
- * caches, so multiple threads may render pages of the same document —
- * including the same page — simultaneously.
+ * caches, so multiple threads may render pages of the same document,
+ * including the same page, simultaneously.
  */
 public class PdfDocument private constructor(
     public val version: String,
@@ -137,7 +137,7 @@ public class PdfDocument private constructor(
     /**
      * Parsed XMP metadata. Extracts the common Dublin Core / Adobe PDF /
      * XMP-basic properties. Falls back to the trailer `/Info` dict when XMP
-     * is absent — call [info] explicitly if you need both views.
+     * is absent. Call [info] explicitly if you need both views.
      */
     public val xmp: PdfXmpMetadata? by lazy {
         xmpMetadataXml?.let { PdfXmpMetadata.parse(it) }
@@ -273,7 +273,7 @@ public class PdfDocument private constructor(
 
     /**
      * Article threads (`/Threads`). Each thread is a reading-order sequence
-     * of bead rectangles on pages — used by readers to jump between columns
+     * of bead rectangles on pages. Readers use them to jump between columns
      * in a multi-column layout. Empty list when the catalog has no /Threads.
      */
     public val articleThreads: List<PdfArticleThread> by lazy {
@@ -306,7 +306,7 @@ public class PdfDocument private constructor(
     }
 
     /**
-     * Embedded file attachments — typically the document author's
+     * Embedded file attachments. These are typically the document author's
      * supplementary files: source artwork, datasets, XML schemas, etc.
      * Empty list when the document has no /EmbeddedFiles name tree.
      */
@@ -316,7 +316,7 @@ public class PdfDocument private constructor(
 
     /**
      * Tagged-PDF accessibility metadata. `null` when the document has no
-     * `/MarkInfo` dict — i.e. it is not tagged.
+     * `/MarkInfo` dict, which means it is not tagged.
      */
     public val markInfo: PdfMarkInfo? by lazy {
         PdfMarkInfo.parse(catalog.getDict("MarkInfo", this))
@@ -332,7 +332,7 @@ public class PdfDocument private constructor(
 
     /**
      * Interactive form (AcroForm) catalog metadata. `null` when the
-     * catalog has no `/AcroForm` entry — the document carries no
+     * catalog has no `/AcroForm` entry. The document carries no
      * interactive form fields.
      */
     public val acroForm: PdfAcroForm? by lazy {
@@ -418,8 +418,8 @@ public class PdfDocument private constructor(
     private fun resolveInPlace(entry: XrefEntry.InUse): PdfObject {
         // H6: cyclic indirect /Length (A->B->A) would recurse to a StackOverflow
         // (a hard crash on Kotlin/Native). If THIS thread is already resolving
-        // this object, break the cycle by throwing — resolve()'s runCatching
-        // caches null.
+        // this object, break the cycle by throwing. The runCatching inside
+        // resolve() then caches null.
         val me = currentThreadId()
         val claimed = lock.withLock {
             when (activelyResolving[entry.objectNumber]) {
@@ -470,7 +470,7 @@ public class PdfDocument private constructor(
     }
 
     /**
-     * Decode an /ObjStm (object stream) — PDF 1.5+ §7.5.7. The decoded body
+     * Decode an /ObjStm (object stream). See PDF 1.5+ §7.5.7. The decoded body
      * starts with N pairs of (objNum, offset) integers, then the N objects
      * concatenated. We parse the header and slice each object out.
      */
@@ -492,7 +492,7 @@ public class PdfDocument private constructor(
         val decoded = FilterChain.decode(stream)
 
         // Parse the header (N pairs of integers) from the decoded bytes. The
-        // pair's object number is validated but not stored — the member's
+        // pair's object number is validated but not stored. The member's
         // index inside the stream is the lookup key, per XrefEntry.Compressed.
         val headerParser = Lexer(ByteReader(decoded))
         val offsets = IntArray(n)
@@ -506,7 +506,7 @@ public class PdfDocument private constructor(
         }
 
         // For each object, parse from (first + offsets[i]). One ByteReader over
-        // the decoded buffer, seeked per member — the members share the buffer.
+        // the decoded buffer, seeked per member. The members share the buffer.
         val out = HashMap<Int, PdfObject>(n)
         val objReader = ByteReader(decoded)
         for (i in 0 until n) {
@@ -777,10 +777,10 @@ public class PdfDocument private constructor(
             return io.github.yuroyami.kitepdf.parser.XrefAndTrailer(merged, trailer)
         }
 
-        /** Bound on /Prev chain length — generous; cycle guard catches the rest. */
+        /** Bound on /Prev chain length. The bound is generous; the cycle guard catches the rest. */
         private const val MAX_PREV_HOPS = 32
 
-        /** Bound on page-tree recursion depth — guards adversarial/cyclic /Kids. */
+        /** Bound on page-tree recursion depth. The bound guards against adversarial or cyclic /Kids. */
         private const val MAX_PAGE_TREE_DEPTH = 50
 
         private fun parseHeader(reader: ByteReader): String {

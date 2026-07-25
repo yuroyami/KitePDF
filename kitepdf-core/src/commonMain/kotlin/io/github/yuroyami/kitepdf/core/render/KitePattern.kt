@@ -12,11 +12,11 @@ import io.github.yuroyami.kitepdf.core.parser.PdfStream
 /**
  * Parsed `/Pattern` resource entry (ISO 32000-1 §8.7).
  *
- *   - [Tiling] (`PatternType = 1`) — content-stream-based tiling. The PDF
+ *   - [Tiling] (`PatternType = 1`): content-stream-based tiling. The PDF
  *     renderer replays [Tiling.contentBytes] across the fill region (with a
  *     tile-count bound); [Tiling.baseColor] remains as the flat fallback for
  *     consumers that don't replay cells.
- *   - [Shading] (`PatternType = 2`) — wraps a [KiteShading] under a matrix,
+ *   - [Shading] (`PatternType = 2`): wraps a [KiteShading] under a matrix,
  *     painted through [KiteCanvas.fillShading].
  */
 public sealed class KitePattern {
@@ -64,7 +64,7 @@ public sealed class KitePattern {
     /**
      * A pattern we recognise but can't render yet (e.g. tiling, or one that
      * failed to resolve). Fills using it are skipped rather than collapsing to
-     * the default colour — which would flood, say, a full-page background
+     * the default colour, which would flood a full-page background
      * pattern solid black.
      */
     public object Unsupported : KitePattern() {

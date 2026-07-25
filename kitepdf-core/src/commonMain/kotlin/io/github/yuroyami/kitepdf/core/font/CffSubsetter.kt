@@ -9,7 +9,7 @@ import io.github.yuroyami.kitepdf.core.ByteArrayBuilder
  * The output is always CID-keyed with a charset that maps each new glyph id to
  * its *original* glyph id (used as the CID). Under a PDF Type0 / CIDFontType0 /
  * Identity-H font that means the content stream can keep emitting the original
- * glyph id as the 2-byte code — identical to the TrueType path — and the reader
+ * glyph id as the 2-byte code (identical to the TrueType path) and the reader
  * resolves code → CID(=original gid) → new gid via this charset. So `/W` and
  * `/ToUnicode` stay keyed by the original gid too.
  *
@@ -18,7 +18,7 @@ import io.github.yuroyami.kitepdf.core.ByteArrayBuilder
  * CJK CFF the charstrings dominate, so this is the bulk of the size win without
  * the complexity (and risk) of renumbering subrs. The deprecated `seac`-via-
  * `endchar` accent composition is not followed, so a glyph built that way would
- * lose its components — CID-keyed fonts don't use it.
+ * lose its components. CID-keyed fonts don't use it.
  */
 public object CffSubsetter {
 
@@ -192,7 +192,7 @@ public object CffSubsetter {
         else -> dictInt5(v)
     }
 
-    /** Fixed 5-byte DICT integer (29 + i32) — keeps DICT sizes stable for offset backpatching. */
+    /** Fixed 5-byte DICT integer (29 + i32). Keeps DICT sizes stable for offset backpatching. */
     private fun dictInt5(v: Int): ByteArray =
         byteArrayOf(29, (v ushr 24).toByte(), (v ushr 16).toByte(), (v ushr 8).toByte(), v.toByte())
 }

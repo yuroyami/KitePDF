@@ -4,7 +4,7 @@ import io.github.yuroyami.kitepdf.core.render.Matrix
 import io.github.yuroyami.kitepdf.core.render.KiteCanvas
 
 /**
- * A renderable page from any document handler — the format-neutral
+ * A renderable page from any document handler: the format-neutral
  * `fz_page` equivalent. Both [io.github.yuroyami.kitepdf.PdfPage] and
  * [io.github.yuroyami.kitepdf.epub.EpubPage] implement it, so one viewer /
  * rasterizer path serves every format.
@@ -57,7 +57,7 @@ public data class KiteMetadata(
     /**
      * True when pages progress right-to-left (EPUB
      * `page-progression-direction="rtl"`, PDF `/ViewerPreferences /Direction
-     * /R2L`) — a paged viewer should put page N+1 visually LEFT of page N.
+     * /R2L`). A paged viewer should put page N+1 visually LEFT of page N.
      */
     val rightToLeft: Boolean = false,
 )
@@ -74,7 +74,7 @@ public class KiteOutlineItem(
 )
 
 /**
- * A parsed document from any handler — the `fz_document` equivalent. Lets a
+ * A parsed document from any handler: the `fz_document` equivalent. Lets a
  * viewer treat a [io.github.yuroyami.kitepdf.PdfDocument] and an
  * [io.github.yuroyami.kitepdf.epub.EpubDocument] uniformly.
  */

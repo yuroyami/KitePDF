@@ -25,7 +25,7 @@ public class StandardSecurityHandler(
 ) {
 
     private val v: Int = encryptDict.getInt("V")?.toInt() ?: 1
-    /** Revision number — exposed so the public permissions API can pick the right bit semantics. */
+    /** Revision number, exposed so the public permissions API can pick the right bit semantics. */
     public val r: Int = encryptDict.getInt("R")?.toInt() ?: 2
     private val keyLengthBits: Int = encryptDict.getInt("Length")?.toInt()
         ?: when (v) { 1 -> 40; 4 -> 128; 5 -> 256; else -> 40 }
@@ -43,19 +43,19 @@ public class StandardSecurityHandler(
     public val encryptMetadata: Boolean = (encryptDict["EncryptMetadata"]
         as? io.github.yuroyami.kitepdf.core.parser.PdfBoolean)?.value ?: true
 
-    /** V5/V6 only — 32-byte SHA-256 derivation salts. */
+    /** V5/V6 only: 32-byte SHA-256 derivation salts. */
     private val ue: ByteArray = (encryptDict["UE"] as? io.github.yuroyami.kitepdf.core.parser.PdfString)?.bytes ?: byteArrayOf()
     private val oe: ByteArray = (encryptDict["OE"] as? io.github.yuroyami.kitepdf.core.parser.PdfString)?.bytes ?: byteArrayOf()
 
     /**
      * For V4: per-filter algorithm. /CFM /V2 = RC4, /CFM /AESV2 = AES-128,
      * /CFM none or /Identity = NONE (passthrough). Streams use /StmF, strings
-     * use /StrF, and the two can differ — hence two separate fields.
+     * use /StrF, and the two can differ, so there are two separate fields.
      */
     private val stmAlgorithm: V4Algo = detectV4Algorithm(encryptDict, "StmF")
     private val strAlgorithm: V4Algo = detectV4Algorithm(encryptDict, "StrF")
 
-    /** File encryption key — null if authentication failed. */
+    /** File encryption key, null if authentication failed. */
     private val fileKey: ByteArray? = run {
         // V5/V6 first because their /U has a distinct structure.
         if (v >= 5) {
@@ -88,7 +88,7 @@ public class StandardSecurityHandler(
         }
         // V1/V2/V4: route strings through /StrF, streams through /StmF.
         val algorithm = if (isString) strAlgorithm else stmAlgorithm
-        // /Identity (or /CFM none): data is not encrypted — return it unchanged.
+        // /Identity (or /CFM none): data is not encrypted. Return it unchanged.
         if (algorithm == V4Algo.NONE) return ciphertext
         val objKey = derivePerObjectKey(key, objNum, genNum, useAesV2 = algorithm == V4Algo.AESV2)
         return when (algorithm) {
@@ -217,7 +217,7 @@ public class StandardSecurityHandler(
                 val rotatedKey = ByteArray(key.size) { (key[it].toInt() xor round).toByte() }
                 data = Rc4.process(rotatedKey, data)
             }
-            // Pad to 32 bytes with arbitrary data — caller compares first 16 only.
+            // Pad to 32 bytes with arbitrary data. The caller compares the first 16 only.
             ByteArray(32).also { data.copyInto(it, 0, 0, minOf(16, data.size)) }
         }
     }

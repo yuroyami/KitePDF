@@ -69,14 +69,14 @@ internal data class ComputedStyle(
     val breakBefore: Boolean,
     val breakAfter: Boolean,
     val breakInsideAvoid: Boolean,
-    /** `margin-left`/`margin-right: auto` — centers a width-constrained box. */
+    /** `margin-left`/`margin-right: auto` centers a width-constrained box. */
     val marginLeftAuto: Boolean,
     val marginRightAuto: Boolean,
     /** First non-generic `font-family` name, for matching an `@font-face`; null if all generic. */
     val fontFamilyName: String?,
     /** Inline base direction (from `direction`/`dir`), for the bidi algorithm. */
     val direction: Direction,
-    /** `hyphens: auto` — allow the line-breaker to hyphenate long words. */
+    /** `hyphens: auto` allows the line-breaker to hyphenate long words. */
     val hyphensAuto: Boolean,
     /** `position` + insets (px→pt), for out-of-flow placement (mainly fixed-layout). */
     val position: CssPosition,
@@ -86,7 +86,7 @@ internal data class ComputedStyle(
     val bottomPt: Double?,
     /** `object-fit` for replaced content (images/SVG) in a fixed box. */
     val objectFit: ObjectFit,
-    /** `writing-mode` — vertical CJK text lays out in columns right-to-left / left-to-right. */
+    /** `writing-mode`: vertical CJK text lays out in columns right-to-left / left-to-right. */
     val writingMode: WritingMode,
     /** `text-transform`, applied when inline runs are built. Inherited. */
     val textTransform: TextTransform = TextTransform.NONE,
@@ -104,9 +104,9 @@ internal data class ComputedStyle(
     val borderCollapse: Boolean = false,
     /** `border-spacing` / `cellspacing` in points (inherited; 0 under collapse). */
     val borderSpacingPt: Double = 0.0,
-    /** `float` — the box leaves the flow and text lines wrap beside it. Not inherited. */
+    /** `float`: the box leaves the flow and text lines wrap beside it. Not inherited. */
     val cssFloat: CssFloat = CssFloat.NONE,
-    /** `clear` — flow resumes below matching floats. Not inherited. */
+    /** `clear`: flow resumes below matching floats. Not inherited. */
     val clear: CssClear = CssClear.NONE,
 ) {
     val mono: Boolean get() = fontFamily == GenericFont.MONO

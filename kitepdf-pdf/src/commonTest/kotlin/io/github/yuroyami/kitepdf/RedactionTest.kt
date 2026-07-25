@@ -47,7 +47,7 @@ class RedactionTest {
 
     @Test fun redacted_text_is_not_recoverable_from_raw_bytes() {
         // Base is uncompressed, so an un-dropped original stream would leave the
-        // secret as plaintext in the output — this catches an incremental leak.
+        // secret as plaintext in the output. This test catches an incremental leak.
         val base = twoLinePdf(compress = false)
         val doc = KitePDF.open(base)
         val out = doc.edit().apply { redactRegion(doc.pages[0], secretRegion) }.saveRewritten()

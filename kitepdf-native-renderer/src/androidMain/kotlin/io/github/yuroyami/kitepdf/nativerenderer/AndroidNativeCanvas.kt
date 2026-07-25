@@ -38,7 +38,7 @@ import io.github.yuroyami.kitepdf.core.render.sampleStops
  * Bitmap" use case.
  *
  * Blend modes require API 29+ (`Paint.setBlendMode`). The module's minSdk
- * is bumped to 29 to match — see :kitepdf-native build.gradle.kts.
+ * is 29 to match. See :kitepdf-native build.gradle.kts.
  */
 public class AndroidNativeCanvas(private val canvas: AndroidCanvas) : KiteCanvas {
 
@@ -50,7 +50,7 @@ public class AndroidNativeCanvas(private val canvas: AndroidCanvas) : KiteCanvas
     }
 
     override fun endPage() {
-        // Defensive — well-formed PDFs always pair pushes with pops.
+        // Defensive: well-formed PDFs always pair pushes with pops.
         while (openLayers > 0) {
             canvas.restore()
             openLayers--
@@ -139,7 +139,7 @@ public class AndroidNativeCanvas(private val canvas: AndroidCanvas) : KiteCanvas
             penX += glyph.advanceWidth * advanceScale
         }
         // Embedded font present but produced no glyphs (e.g. a subset we can't
-        // decode) — fall back to a system font rather than rendering blank.
+        // decode). Fall back to a system font rather than rendering blank.
         if (!drewAny && glyphs.any { it.text.isNotBlank() }) {
             drawTextViaSystemFont(glyphs, fontSize, fontSpec, textToDevice, color, alpha, blendMode)
         }
@@ -147,7 +147,7 @@ public class AndroidNativeCanvas(private val canvas: AndroidCanvas) : KiteCanvas
 
     /**
      * Fallback for non-embedded fonts (e.g. the Standard-14). Renders with a
-     * platform logical font — zero bundled bytes, since Android already ships
+     * platform logical font: zero bundled bytes, since Android already ships
      * Serif / SansSerif / Monospace faces that are metric-compatible stand-ins
      * for Times / Helvetica / Courier. Mirrors AwtCanvas / ComposeCanvas.
      */
@@ -187,7 +187,7 @@ public class AndroidNativeCanvas(private val canvas: AndroidCanvas) : KiteCanvas
                 applyBlendMode(blendMode)
             }
             // Position each glyph by the PDF's OWN advance widths (1/1000 em),
-            // not the substitute font's natural metrics — otherwise spacing
+            // not the substitute font's natural metrics, otherwise spacing
             // drifts and glyphs crowd together / overlap.
             var penX = 0.0
             val advScale = renderedSize / 1000.0
@@ -415,7 +415,7 @@ public class AndroidNativeCanvas(private val canvas: AndroidCanvas) : KiteCanvas
     )
 
     private fun Paint.applyBlendMode(mode: PdfBlendMode) {
-        // API 29+ — minSdk for :kitepdf-native is 29 so this is unconditional.
+        // API 29+: minSdk for :kitepdf-native is 29, so this is unconditional.
         blendMode = when (mode) {
             PdfBlendMode.Normal -> AndroidBlendMode.SRC_OVER
             PdfBlendMode.Multiply -> AndroidBlendMode.MULTIPLY

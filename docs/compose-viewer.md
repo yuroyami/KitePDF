@@ -61,7 +61,7 @@ PdfView(
 
 ## PdfViewState: control and observation
 
-`PdfViewState` is the single point of control for all viewer behaviour. Hoist it outside the `PdfView` so navigation widgets, sliders, and external controls all drive the same state.
+`PdfViewState` is the single point of control for all viewer behavior. Hoist it outside the `PdfView` so navigation widgets, sliders, and external controls all drive the same state.
 
 ```kotlin
 val state = rememberPdfViewState(document)
@@ -122,7 +122,7 @@ Control how pages are arranged and navigated:
 
 ### `PdfLayout.Continuous` (default)
 
-All pages in one lazy-loaded strip, scrollable in a single axis. Zoom is magnifier-style: the whole strip scales around the viewport centre while scrolling stays native along the scroll axis.
+All pages in one lazy-loaded strip, scrollable in a single axis. Zoom is magnifier-style: the whole strip scales around the viewport center while scrolling stays native along the scroll axis.
 
 ```kotlin
 PdfView(
@@ -244,7 +244,7 @@ PdfView(state, renderSpec = spec)
     
     For most apps, **Rasterized with `rerasterizeOnZoom=true`** is the sweet spot: responsive gestures and crisp zoom, with a small memory footprint per page.
 
-## Colours
+## Colors
 
 Control the paper and viewport background:
 
@@ -397,7 +397,7 @@ PdfView(
 )
 ```
 
-By default, pages show a solid `pageBackground` colour until their raster lands.
+By default, pages show a solid `pageBackground` color until their raster lands.
 
 ## Crossfade on page transition
 

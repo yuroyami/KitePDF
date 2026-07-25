@@ -4,10 +4,10 @@ package io.github.yuroyami.kitepdf.core.font
  * The substitution half of OpenType shaping (`GSUB`), scoped to the two lookup
  * types that carry the highest-value features for reflowable text:
  *
- *  - **Type 1 single substitution** — drives Arabic contextual joining
+ *  - **Type 1 single substitution**: drives Arabic contextual joining
  *    (`init`/`medi`/`fina`/`isol`) and simple 1:1 alternates. A glyph maps to one
  *    replacement glyph.
- *  - **Type 4 ligature substitution** — `liga`/`rlig` (fi/fl, Arabic lam-alef): a
+ *  - **Type 4 ligature substitution**: `liga`/`rlig` (fi/fl, Arabic lam-alef). A
  *    run of component glyphs collapses to one ligature glyph.
  *
  * Lookups are indexed by the feature tag that references them, so a shaper can ask
@@ -41,7 +41,7 @@ public class OpenTypeGsub private constructor(
         private fun parse(b: ByteArray): OpenTypeGsub? {
             val r = R(b)
             r.u16(); r.u16() // major/minor
-            r.u16() // scriptListOffset (script filtering skipped — features apply broadly)
+            r.u16() // scriptListOffset (script filtering skipped: features apply broadly)
             val featureListOff = r.u16()
             val lookupListOff = r.u16()
 

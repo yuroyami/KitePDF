@@ -42,14 +42,14 @@ import org.jetbrains.skia.FilterTileMode
  * [KiteCanvas] backed by a raw [org.jetbrains.skia.Canvas] (Skiko).
  *
  * Same rendering engine Compose Multiplatform rides on for JVM Desktop and
- * iOS — minus the Compose runtime. Pure-Skia means this adapter is the
+ * iOS, minus the Compose runtime. Pure-Skia means this adapter is the
  * right choice for:
  *
- *  - **Server-side rasterization** — PDF → PNG, headless thumbnail
+ *  - **Server-side rasterization**: PDF → PNG, headless thumbnail
  *    generation, CI pipelines.
- *  - **CLI tools** — anything that wants pixels without dragging in
+ *  - **CLI tools**: anything that needs pixels without adding
  *    androidx.compose.runtime.
- *  - **Smaller dependency footprint** — Skiko alone is significantly less
+ *  - **Smaller dependency footprint**: Skiko alone is significantly less
  *    than Compose Multiplatform.
  *
  * Pair with [PdfPageRasterizer] for the common "give me a `ByteArray` of a
@@ -57,7 +57,7 @@ import org.jetbrains.skia.FilterTileMode
  */
 public class SkiaCanvas(private val canvas: SkCanvas) : KiteCanvas {
 
-    /** Count of open transparency groups + soft-mask layers — for endPage cleanup. */
+    /** Count of open transparency groups + soft-mask layers, for endPage cleanup. */
     private var openLayers = 0
 
     override fun beginPage(widthPt: Double, heightPt: Double, deviceCtm: PdfMatrix) {
@@ -243,7 +243,7 @@ public class SkiaCanvas(private val canvas: SkCanvas) : KiteCanvas {
         // We can express both-extend and neither-extend exactly. A one-sided
         // extend can't be captured by a single tile mode, so we approximate:
         // give the extending side its colour by adding a transparent stop just
-        // past the non-extending end (so that end fades out) and keep CLAMP —
+        // past the non-extending end (so that end fades out) and keep CLAMP.
         // CLAMP then holds the extending end's colour and the injected
         // transparent stop suppresses the other end.
         val (extendStart, extendEnd) = when (shading) {
@@ -322,7 +322,7 @@ public class SkiaCanvas(private val canvas: SkCanvas) : KiteCanvas {
             val sk = toSkPath(clipPath, ctm).apply { fillMode = PathFillMode.WINDING }
             canvas.drawPath(sk, paint)
         } else {
-            // `sh` operator over the whole device area — paint a huge rect.
+            // `sh` operator over the whole device area: paint a huge rect.
             canvas.drawPaint(paint)
         }
     }
@@ -379,7 +379,7 @@ public class SkiaCanvas(private val canvas: SkCanvas) : KiteCanvas {
         // Map the bitmap onto the PDF image unit square [0,1]². The bitmap's
         // row 0 is its top edge (v=1), last row is v=0. So translate up by 1
         // then flip Y (negative Y scale) to land the image upright inside the
-        // unit square — matching AwtCanvas' documented mapping. The earlier
+        // unit square, matching AwtCanvas' documented mapping. The earlier
         // translate(0,-1)+positive-Y scale both mis-placed and flipped it.
         val paint = Paint().apply { this.alpha = alpha.toFloat().coerceIn(0f, 1f).let { (it * 255).toInt() } }
         canvas.save()
@@ -441,7 +441,7 @@ public class SkiaCanvas(private val canvas: SkCanvas) : KiteCanvas {
             // use the mask group's own alpha directly. For a Luminosity mask,
             // the spec (ISO 32000-1 §11.6.5.2) composites the mask group over a
             // fully-opaque BLACK backdrop and derives alpha from the result's
-            // luminance — so unpainted areas (luminance 0) mask fully out. We
+            // luminance, so unpainted areas (luminance 0) mask fully out. We
             // realise that with the LUMA colour filter, which maps each pixel's
             // luminance into its alpha, applied as the layer's restore paint.
             val maskPaint = Paint().apply {

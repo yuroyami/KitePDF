@@ -12,7 +12,7 @@ import kotlin.test.assertTrue
  * core → AwtCanvas → BufferedImage → PNG bytes, then verify the result is
  * a valid PNG of the expected size.
  *
- * No display required — works headlessly in CI.
+ * No display required, so it works headlessly in CI.
  */
 class AwtRasterizationTest {
 
@@ -46,7 +46,7 @@ class AwtRasterizationTest {
         val pdf = buildPdf()
         val doc = KitePDF.open(pdf)
         val img = AwtPdfRasterizer.renderToImage(doc.pages[0], scale = 1.0, background = Color(0, 200, 0))
-        // Sample a far corner that no path covers — should be the background.
+        // Sample a far corner that no path covers. It should be the background.
         val argb = img.getRGB(0, 0)
         val r = (argb shr 16) and 0xFF
         val g = (argb shr 8) and 0xFF

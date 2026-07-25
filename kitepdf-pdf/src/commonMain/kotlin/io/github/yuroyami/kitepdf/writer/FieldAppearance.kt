@@ -13,7 +13,7 @@ import io.github.yuroyami.kitepdf.core.parser.PdfStream
 import io.github.yuroyami.kitepdf.core.parser.PdfString
 
 /**
- * Generates a text field's `/AP /N` appearance — the Form XObject a conforming
+ * Generates a text field's `/AP /N` appearance, the Form XObject a conforming
  * reader draws for the field (ISO 32000-1 §12.7.3.3). Without it, a viewer that
  * doesn't regenerate appearances (like KitePDF's own renderer) shows nothing.
  *

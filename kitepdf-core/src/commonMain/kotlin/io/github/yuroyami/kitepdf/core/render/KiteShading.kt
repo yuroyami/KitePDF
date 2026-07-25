@@ -18,13 +18,13 @@ import io.github.yuroyami.kitepdf.core.parser.PdfStream
  * shading pattern referenced by `SCN`/`scn`.
  *
  * KitePDF renders:
- *   - **Type 1** function-based — a colour function over a 2D domain,
+ *   - **Type 1** function-based: a colour function over a 2D domain,
  *     rasterized as a grid of cells (T-40)
- *   - **Type 2** axial — a linear gradient between two points
- *   - **Type 3** radial — a radial gradient between two circles
- *   - **Types 4/5** Gouraud triangle meshes — smoothed by recursive
+ *   - **Type 2** axial: a linear gradient between two points
+ *   - **Type 3** radial: a radial gradient between two circles
+ *   - **Types 4/5** Gouraud triangle meshes: smoothed by recursive
  *     subdivision with vertex-colour interpolation (T-40)
- *   - **Types 6/7** Coons / tensor patches — tessellated into flat-coloured
+ *   - **Types 6/7** Coons / tensor patches: tessellated into flat-coloured
  *     quads via Coons boundary evaluation + bilinear corner colours; the
  *     tensor type's four interior points are read but ignored, the documented
  *     MuPDF-level approximation (T-40)
@@ -39,7 +39,7 @@ public sealed class KiteShading {
     public abstract val colorSpace: ColorSpace
 
     /**
-     * Optional `/Background` colour — used for regions outside the shading
+     * Optional `/Background` colour, used for regions outside the shading
      * domain when `Extend` is false on the relevant side. Per spec the
      * background is in [colorSpace]; we eager-convert to RGB.
      */
@@ -60,7 +60,7 @@ public sealed class KiteShading {
         override val bbox: Rectangle?,
         /** [x0, y0, x1, y1] in shading-space. */
         val coords: DoubleArray,
-        /** [t0, t1] — domain of [function]. */
+        /** [t0, t1]: domain of [function]. */
         val domain: DoubleArray,
         val function: KiteFunction,
         /** Extend the gradient beyond t0 / t1 with the endpoint colours. */
@@ -165,7 +165,7 @@ public sealed class KiteShading {
 
     public companion object {
 
-        /** Parse a /Shading object (dict or stream — stream is only for Types 4–7). */
+        /** Parse a /Shading object (a dict, or a stream for Types 4–7 only). */
         public fun parse(obj: PdfObject?, refs: IndirectResolver): KiteShading? {
             val resolved = when (obj) {
                 is PdfReference -> refs.resolve(obj)

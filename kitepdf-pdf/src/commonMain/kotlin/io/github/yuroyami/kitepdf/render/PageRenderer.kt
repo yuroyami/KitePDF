@@ -36,7 +36,7 @@ import io.github.yuroyami.kitepdf.core.parser.PdfStream
 import io.github.yuroyami.kitepdf.core.parser.PdfString
 
 /**
- * The content-stream interpreter — translates parsed [Operation]s into
+ * The content-stream interpreter. It translates parsed [Operation]s into
  * `KiteCanvas` draw calls while maintaining the full PDF graphics-state stack
  * (ISO 32000-1 §8 + §9).
  *
@@ -57,7 +57,7 @@ public class PageRenderer(
 
     // W/W* push a clip on the canvas, but the canvas keeps its own clip stack
     // separate from the PDF q/Q graphics-state stack. Track how many clips are
-    // active so Q can pop exactly the ones pushed since its matching q —
+    // active so Q can pop exactly the ones pushed since its matching q,
     // otherwise clips leak past Q and can wrongly clip the rest of the page.
     private var activeClipCount = 0
     private val clipSaveStack = ArrayDeque<Int>()
@@ -69,7 +69,7 @@ public class PageRenderer(
     private var pendingClip = 0
 
     // Type3 fonts (T-42): parsed char-proc data per font instance, plus the
-    // d1-uncolored flag — while true (inside a d1 glyph proc) every colour
+    // d1-uncolored flag. While true (inside a d1 glyph proc) every colour
     // operator is a spec no-op so the glyph paints with the caller's fill
     // colour (§9.6.5).
     private val type3Data = HashMap<PdfFont, Type3Data?>()
@@ -82,7 +82,7 @@ public class PageRenderer(
     private var pendingTextClip: KitePath.Builder? = null
 
     /** An XObject with the indirect object number it resolved from (null for
-     *  the rare ref-less inline entry) — the number keys the decoded caches. */
+     *  the rare ref-less inline entry). The number keys the decoded caches. */
     public class XObjectSlot(public val objectNumber: Long?, public val stream: PdfStream)
 
     /** Parsed form-XObject resources, memoized by the form's object number so a
@@ -104,15 +104,15 @@ public class PageRenderer(
     // the referenced OCG/OCMD is hidden in the document's default configuration
     // (ISO 32000-1 §8.11). markedContentStack tracks every open BMC/BDC so EMC
     // pops the matching one; ocHiddenDepth counts how many open sections are
-    // currently hiding content — painting is skipped while it is > 0.
+    // currently hiding content. Painting is skipped while it is > 0.
     private val markedContentStack = ArrayDeque<Boolean>()
     private var ocHiddenDepth = 0
     private var optionalContent: io.github.yuroyami.kitepdf.PdfOptionalContent? = null
 
-    /** The page's default (initial) CTM — pattern matrices are relative to it. */
+    /** The page's default (initial) CTM. Pattern matrices are relative to it. */
     private var pageBaseCtm: Matrix = Matrix.IDENTITY
 
-    /** Form-XObject nesting depth — guards self/transitively-recursive `Do`. */
+    /** Form-XObject nesting depth. It guards self/transitively-recursive `Do`. */
     private var formDepth = 0
 
     /**
@@ -295,7 +295,7 @@ public class PageRenderer(
     private fun renderAnnotations(page: io.github.yuroyami.kitepdf.PdfPage, state: GraphicsStack) {
         for (annot in page.annotations) {
             if (annot.isHidden) continue   // /F Hidden or NoView (§12.5.3)
-            // Popup annotations are only shown when their parent is opened — never
+            // Popup annotations are only shown when their parent is opened, never
             // painted inline by a viewer.
             if (annot.subtype == io.github.yuroyami.kitepdf.PdfAnnotation.Subtype.Popup) continue
             val stream = annot.appearanceStream
@@ -311,7 +311,7 @@ public class PageRenderer(
      * Map a Form XObject appearance to fill the annotation's /Rect, per
      * ISO 32000-1 §12.5.5 Algorithm 8.1:
      *   1. Transform the appearance /BBox corners by the appearance /Matrix.
-     *   2. Take the smallest upright rectangle enclosing those corners — the
+     *   2. Take the smallest upright rectangle enclosing those corners, the
      *      "transformed appearance box".
      *   3. Compute matrix A mapping that transformed box onto /Rect.
      * We concat A into the CTM; the form's own /Matrix is then applied by
@@ -722,7 +722,7 @@ public class PageRenderer(
         val a = op.operands
         when (op.operator) {
             // Type3 glyph metrics operators (§9.6.5): d0 declares a coloured
-            // glyph (nothing to do — wx/wy come from /Widths); d1 declares an
+            // glyph (nothing to do: wx/wy come from /Widths); d1 declares an
             // uncoloured one, so colour operators are ignored from here on.
             "d0" -> Unit
             "d1" -> type3IgnoreColor = true
@@ -745,7 +745,7 @@ public class PageRenderer(
             "j" -> state.replace(state.current.copy(lineJoin = num(a, 0).toInt()))
             "M" -> state.replace(state.current.copy(miterLimit = num(a, 0)))
             "d" -> {
-                // dash: [ array ] phase d  — array of on/off lengths (user units).
+                // dash: [ array ] phase d. The array holds on/off lengths (user units).
                 val arr = a.getOrNull(0) as? io.github.yuroyami.kitepdf.core.parser.PdfArray
                 val dashes = arr?.let { ar -> List(ar.size) { ar.getOrNull(it).toDouble() } }
                 state.replace(state.current.copy(
@@ -789,7 +789,7 @@ public class PageRenderer(
             ))
             // cs/CS select the colour space for subsequent sc/scn/SC/SCN. Without them a
             // non-device space (e.g. CoreGraphics' ICCBased-RGB on iOS-generated PDFs) stayed
-            // at the default DeviceGray, so `r g b SCN` was read as gray(r) — turning the pink
+            // at the default DeviceGray, so `r g b SCN` was read as gray(r), turning the pink
             // ECG grid white. Per ISO 32000-1 §8.6.8 selecting a space resets the colour to its
             // initial value (black) until the next sc/scn sets components.
             "cs" -> {
@@ -814,7 +814,7 @@ public class PageRenderer(
 
             // ─── Path painting (suppressed inside hidden optional content) ──
             // Each painting operator ends the path object: it paints, then applies
-            // any pending W/W* clip (§8.5.4 — the clip uses this same path), then
+            // any pending W/W* clip (§8.5.4: the clip uses this same path), then
             // clears the path. `n` paints nothing but still ends the path object.
             "S" -> { if (!ocHidden()) paintStroke(path, state); applyPendingClip(path, state); path.reset() }
             "s" -> { path.close(); if (!ocHidden()) paintStroke(path, state); applyPendingClip(path, state); path.reset() }
@@ -832,8 +832,8 @@ public class PageRenderer(
 
             // ─── Text state ──────────────────────────────────────────────
             // BT resets ONLY the text matrices (Tm/Tlm → identity, §9.4.1). All
-            // other text-state params — char/word spacing, horizontal scale,
-            // leading, rise, render mode, plus the current font/size — persist
+            // other text-state params (char/word spacing, horizontal scale,
+            // leading, rise, render mode, plus the current font/size) persist
             // across text objects (§9.3.1); they belong to the graphics state.
             "BT" -> {
                 pendingTextClip = null
@@ -967,7 +967,7 @@ public class PageRenderer(
             "SC" -> handleScFill(a, state, stroke = true)
 
             // Other operators (marked-content BDC/BMC/EMC, etc.)
-            // are silently skipped — see ROADMAP.
+            // are silently skipped.
             else -> { /* unknown */ }
         }
     }
@@ -995,14 +995,14 @@ public class PageRenderer(
             when {
                 // The pattern /Matrix maps pattern space to the page's DEFAULT
                 // coordinate system, not the current user space (§8.7.3.1). Use
-                // pageBaseCtm — matching the tiling path below — instead of s.ctm.
+                // pageBaseCtm, matching the tiling path below, instead of s.ctm.
                 pat is KitePattern.Shading -> canvas.fillShading(
                     pat.shading, pageBaseCtm.concat(pat.matrix), clipPath = built,
                     alpha = s.fillAlpha, blendMode = s.blendMode,
                 )
                 pat is KitePattern.Tiling -> renderTilingPattern(pat, built, s, evenOdd)
                 pat != null -> {
-                    // Unsupported pattern — skip rather than paint the default
+                    // Unsupported pattern. Skip rather than paint the default
                     // colour, which would flood e.g. a full-page background black.
                 }
                 else -> canvas.fillPath(
@@ -1030,7 +1030,7 @@ public class PageRenderer(
                 )
                 pat is KitePattern.Tiling -> renderTilingPattern(pat, built, s, evenOdd = false)
                 pat != null -> {
-                    // Unsupported pattern — skip rather than paint a stale colour.
+                    // Unsupported pattern. Skip rather than paint a stale colour.
                 }
                 else -> canvas.strokePath(
                     built, s.ctm, s.strokeColor, s.lineWidth,
@@ -1167,7 +1167,7 @@ public class PageRenderer(
             renderMask = { childCanvas ->
                 // Recurse into the same renderer pipeline but onto whatever
                 // canvas the backend handed us. The mask group's content
-                // stream is rendered with a fresh graphics state — the spec
+                // stream is rendered with a fresh graphics state. The spec
                 // says soft masks render onto a transparent backdrop with
                 // their own state stack (§11.6.5).
                 renderMaskGroup(mask.group, childCanvas, state.ctm)
@@ -1180,7 +1180,7 @@ public class PageRenderer(
         // than the page canvas. The cleanest thing is to construct a
         // throwaway PageRenderer instance and let it run the form-xobject
         // pipeline; that reuses every operator handler and resource walk.
-        // The state starts from the CALLER's CTM (device transform included —
+        // The state starts from the CALLER's CTM (device transform included:
         // starting from IDENTITY rendered the mask unflipped and unscaled,
         // which a symmetric 72-dpi fixture hid and the 96-dpi harness caught);
         // the group's own /Matrix is applied by the form pipeline itself, so
@@ -1267,7 +1267,7 @@ public class PageRenderer(
     private fun moveText(state: GraphicsStack, tx: Double, ty: Double, setLeading: Boolean) {
         state.mutateText { t ->
             // ISO 32000-1 §9.4.2: Tlm_new = translate(tx,ty) × Tlm (row-vector form),
-            // i.e. the offset is in UNSCALED TEXT SPACE — apply the translation first,
+            // i.e. the offset is in UNSCALED TEXT SPACE. Apply the translation first,
             // then the line matrix, so its scale/rotation transform the offset. (concat
             // applies its argument first, so this is lineMatrix.concat(translation).)
             // The reverse order silently works only when Tm has unit scale; with the
@@ -1360,7 +1360,7 @@ public class PageRenderer(
         }
 
         // Advance Tm by the total width of this run. The advance is in text space,
-        // so translate first then apply the text matrix (see moveText) — otherwise a
+        // so translate first then apply the text matrix (see moveText), otherwise a
         // size-in-Tm run advances in output space and the next run on the line overlaps.
         val totalAdvance = totalAdvance(glyphs, t)
         state.mutateText {
@@ -1391,7 +1391,7 @@ public class PageRenderer(
         var penX = 0.0
         // Build each glyph outline into USER space (glyph units → unitScale →
         // pen advance → text-to-user), then stroke it with s.ctm so the stroke
-        // width scales by the CTM only — the pure user-space width the spec wants.
+        // width scales by the CTM only, the pure user-space width the spec wants.
         for (glyph in glyphs) {
             val outline = glyph.outline
             if (outline != null && !outline.isEmpty()) {
@@ -1415,7 +1415,7 @@ public class PageRenderer(
     /**
      * Modes 4..7: add this run's glyph shapes to [pendingTextClip] in USER
      * space (same math as [strokeTextGlyphs]). Glyphs without outlines (the
-     * system-font fallback) contribute their advance x em box instead — an
+     * system-font fallback) contribute their advance x em box instead. This is an
      * approximation, but a non-empty clip beats silently clipping everything
      * away. The CTM applies when ET pushes the accumulated path.
      */
@@ -1513,7 +1513,7 @@ public class PageRenderer(
      * T-42: show a text run in a Type3 font. Each byte's glyph is a content
      * stream replayed like a small form XObject under
      * `CTM x textToUser x pen x fontSize x FontMatrix`, with the font's own
-     * /Resources (absent /Resources fall back to EMPTY maps — the spec's
+     * /Resources (absent /Resources fall back to EMPTY maps: the spec's
      * page-resource fallback is a rarely-exercised corner, noted in the
      * ledger). The pen advances by `width x FontMatrix.a x fontSize` plus
      * Tc/Tw, matching §9.6.5's glyph-space widths.

@@ -10,7 +10,7 @@ import kotlin.test.assertTrue
 
 /**
  * Round-trips the [Deflate] encoder back through the existing [Inflate]/[Zlib]
- * decoder. If the encoder emits a single wrong bit, the decoder catches it —
+ * decoder. If the encoder emits a single wrong bit, the decoder catches it,
  * which also proves the encoder and decoder agree on bit-packing order and the
  * canonical fixed-Huffman code assignment.
  */

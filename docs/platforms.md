@@ -4,23 +4,28 @@ Render, extract, edit, or build PDFs across Android, iOS, JVM, web, and native d
 
 ## Target matrix
 
-KitePDF's core engine (read, parse, edit, write, decrypt) is 100% common Kotlin and compiles for every target the Kotlin compiler supports. Rendering depends on which binding artifact ships for your platform:
+The four document artifacts (`kitepdf`, `kitepdf-pdf`, `kitepdf-epub` and
+`kitepdf-core`) share one target set. The three renderers do not. That difference
+is the usual cause of a first build that will not resolve.
 
-| Platform | Engine (`kitepdf`) | Compose (`kitepdf-compose-viewer`) | Native Renderer (`kitepdf-native-renderer`) | Skia (`kitepdf-skia-renderer`) |
-|---|:-:|:-:|:-:|:-:|
-| **Android** (API 21+) | ✓ | ✓ | ✓ | ✓ |
-| **iOS arm64** | ✓ | ✓ | ✓ | ✓ |
-| **iOS Simulator** (arm64) | ✓ | ✓ | ✓ | ✓ |
-| **JVM / Desktop** | ✓ | ✓ | ✓ | ✓ |
-| **JavaScript** (Browser / Node) | ✓ | ✓ (browser) | ✓ (browser) | ✓ (browser) |
-| **wasmJs** (Browser / Node) | ✓ | ✓ (browser) | – | ✓ (browser) |
-| **macOS** (Apple Silicon) | ✓ | ✓ | ✓ | ✓ |
-| **tvOS** | ✓ | – | ✓ | ✓ |
-| **watchOS** | ✓ | – | – | – |
-| **Linux** (x64, arm64) | ✓ | – | – | ✓ |
-| **Windows** (mingwX64) | ✓ | – | – | – |
-| **Android NDK** (arm32/64, x86/64) | ✓ | – | – | – |
-| **WASI** | ✓ | – | – | – |
+| Target | `kitepdf`, `-pdf`, `-epub`, `-core` | `-compose-viewer` | `-native-renderer` | `-skia-renderer` |
+| --- | :---: | :---: | :---: | :---: |
+| Android | yes (minSdk 21) | yes (minSdk 24) | yes (minSdk 29) | yes (minSdk 21) |
+| JVM | yes | yes | yes | yes |
+| iOS arm64, simulator arm64 | yes | yes | yes | yes |
+| iOS x64 | yes | no | yes | yes |
+| macOS arm64 | yes | yes | yes | yes |
+| tvOS arm64, simulator arm64 | yes | no | yes | yes |
+| watchOS arm32, arm64, device arm64, simulator arm64 | yes | no | no | no |
+| Linux x64, arm64 | yes | no | no | yes |
+| Windows (mingwX64) | yes | no | no | no |
+| Android Native arm32, arm64, x86, x64 | yes | no | no | no |
+| JS | yes (browser, Node) | yes (browser) | yes (browser) | yes (browser) |
+| wasmJs | yes (browser, Node) | yes (browser) | no | yes (browser) |
+| wasmWasi | yes (Node) | no | no | no |
+
+Intel macOS, tvOS x64 and watchOS x64 are off everywhere. Kotlin 2.3 deprecated
+those targets.
 
 !!! note "What CI actually tests"
     Every push and pull request runs the full JVM test suite (all modules,
@@ -168,6 +173,24 @@ The core engine and native renderer (on iOS/macOS/tvOS) work fine in these envir
 ### Android NDK and WASI
 
 The core engine compiles for Android NDK (`androidNativeArm32`, `androidNativeArm64`, `androidNativeX86`, `androidNativeX64`) and WASI for headless and embedded use. No rendering bindings are published for these targets; use the engine directly for PDF operations.
+
+### The three Android minimum API levels
+
+Each artifact declares its own `minSdk`. Your app must satisfy the highest one you add.
+
+| Artifact | `minSdk` | Why |
+| --- | :---: | --- |
+| `kitepdf`, `-pdf`, `-epub`, `-core` | 21 | The engine uses no newer platform API. |
+| `kitepdf-skia-renderer` | 21 | Skiko carries its own rendering stack. |
+| `kitepdf-compose-viewer` | 24 | The Compose Multiplatform floor. |
+| `kitepdf-native-renderer` | 29 | `Paint.setBlendMode`. Below API 29, blend modes would fall back to `SRC_OVER`. |
+
+### Gaps that are not built yet
+
+Two renderer gaps come from KitePDF, not from the toolkit underneath:
+
+- The native renderer's Canvas2D backend would work on `wasmJs`, but that target is not declared.
+- The Compose viewer omits tvOS and Linux.
 
 ## Installation
 

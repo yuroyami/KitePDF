@@ -51,7 +51,7 @@ class CatalogExtrasTest {
             buildPdf(
                 extraCatalogEntries = "/Names << /EmbeddedFiles 4 0 R >>",
                 extraObjects = listOf(
-                    // 4 0 R: name tree leaf — one attachment.
+                    // 4 0 R: name tree leaf, one attachment.
                     "<< /Names [(README) 5 0 R] >>",
                     // 5 0 R: FileSpec dict.
                     "<< /Type /Filespec /F (readme.txt) /UF (readme.txt) /Desc (project readme) /EF << /F 6 0 R >> >>",

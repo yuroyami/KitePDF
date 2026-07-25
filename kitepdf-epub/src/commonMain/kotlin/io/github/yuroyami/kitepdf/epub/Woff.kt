@@ -8,7 +8,7 @@ import io.github.yuroyami.kitepdf.core.filters.FilterChain
  * (`.ttf`/`.otf`) whose tables are individually zlib-compressed (or stored); this
  * unwraps it back to an SFNT byte blob that the core [io.github.yuroyami.kitepdf.core.font.TrueTypeFont]
  * parser (and, for `.otf` flavour, [io.github.yuroyami.kitepdf.core.font.CffFont]) reads
- * unchanged. Reuses the core [Zlib] inflater — no new codec.
+ * unchanged. Reuses the core [Zlib] inflater, not a new codec.
  *
  * Scope: WOFF 1.0 only. WOFF2 (brotli entropy coding + `glyf`/`loca` transforms)
  * is handled by the sibling [Woff2] decoder.
