@@ -21,7 +21,7 @@ build/difftest/
   report.md        worst-first table with scores + image links
 ```
 
-Open `report.md` and start at the top — that's the worst-rendering page.
+Open `report.md` and start at the top. That is the worst-rendering page.
 
 ## Knobs (Gradle `-D` system properties)
 
@@ -38,7 +38,7 @@ Explicit corpus and `mutool` paths are strict: a missing directory, missing
 binary, or non-executable binary fails the test instead of silently reducing
 coverage.
 
-Example — tighten the gate and crank density once correctness improves:
+Example: tighten the gate and crank density once correctness improves:
 
 ```bash
 ./gradlew :kitepdf-native-renderer:jvmTest \
@@ -47,13 +47,13 @@ Example — tighten the gate and crank density once correctness improves:
 
 ## The gates
 
-1. **Render success** — KitePDF must not throw on any page.
-2. **Non-blank** — synthetic fixtures must produce visible output.
-3. **Oracle completeness** — when `mutool` is found, KitePDF and MuPDF must
+1. **Render success**: KitePDF must not throw on any page.
+2. **Non-blank**: synthetic fixtures must produce visible output.
+3. **Oracle completeness**: when `mutool` is found, KitePDF and MuPDF must
    report the same page count and every KitePDF-rendered page must produce a
    readable reference PNG. A mismatch, timeout, non-zero exit, or
    missing/unreadable PNG fails the gate and is recorded in `report.md`.
-4. **Regression budget** — _only when the oracle is present_ — no page may
+4. **Regression budget** (only when the oracle is present): no page may
    exceed `kitepdf.diff.budget`. The default is deliberately lenient; Phase 0's
    job is the scoreboard, not a tight gate. Lower it as the score drops.
 
@@ -61,7 +61,7 @@ Example — tighten the gate and crank density once correctness improves:
 
 - **Synthetic fixtures** (`SyntheticPdfs.kt`) always run: text, vector
   fills/strokes/curves, transparency, multi-page. Deterministic, no external
-  files, and both engines render the same bytes — so any divergence is a real
+  files, and both engines render the same bytes, so any divergence is a real
   KitePDF gap.
 - **Drop-in real-world PDFs**: put `.pdf` files in the repo-root `corpus/pdf/`
   (or point `-Dkitepdf.corpus` elsewhere). Only the first

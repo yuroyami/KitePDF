@@ -1,5 +1,5 @@
 /* ---------------------------------------------------------------------------
- * Kite — shared Dokka theme.
+ * Kite: shared Dokka theme.
  *
  * Loaded after Dokka's own stylesheets, so everything here is an override.
  * Edit this file in _kite-docs/ and run ./_kite-docs/sync.sh to push it to
@@ -60,7 +60,7 @@
     --color-scrollbar: rgba(20, 21, 26, 0.22);
     --color-scrollbar-track: transparent;
 
-    /* The bar is now page-coloured, so its icons must be ink, not white. */
+    /* The bar is now page-colored, so its icons must be ink, not white. */
     --dark-mode-and-search-icon-color: var(--kite-ink);
 }
 
@@ -137,7 +137,7 @@ body {
     width: auto;
 }
 
-/* Search is the fastest way out of a maze — give it a real target. */
+/* Search is the fastest way out of a maze, so give it a real target. */
 .navigation-controls--btn_search,
 #searchBar {
     color: var(--kite-ink-soft);
@@ -156,8 +156,8 @@ body {
 }
 
 /* The control glyphs are white SVG artwork drawn for Dokka's near-black bar.
-   The bar is now page-coloured, so in light mode they have to be inverted or
-   they are white-on-white. Icon buttons only — inverting #searchBar would flip
+   The bar is now page-colored, so in light mode they have to be inverted or
+   they are white-on-white. Icon buttons only: inverting #searchBar would flip
    its border and label too. */
 .navigation-controls--btn_theme,
 .navigation-controls--btn_homepage,
@@ -171,16 +171,16 @@ html.theme-dark .navigation-controls--btn_toc {
     filter: none;
 }
 
-/* Dokka's search is a Ring UI widget that inherits colour from this container. */
+/* Dokka's search is a Ring UI widget that inherits color from this container. */
 #searchBar,
 #searchBar .search-content {
     color: var(--kite-ink-soft);
 }
 
 /* The magnifier path carries a hardcoded fill="#fff" for the dark bar, so it
-   has to be overridden on the path itself — setting fill on the <svg> does not
+   has to be overridden on the path itself. Setting fill on the <svg> does not
    inherit past a child's own fill attribute. Named variable rather than
-   currentColor: the icon sits inside a <button>, which does not inherit colour,
+   currentColor: the icon sits inside a <button>, which does not inherit color,
    so currentColor resolves to black there in both themes. */
 #searchBar svg,
 #searchBar svg path {
@@ -351,7 +351,7 @@ h1.cover,
 }
 
 /* The rule above an h2 separates sections of a long page. The cover heading is
-   the page title, so it is excluded — otherwise the landing page opens with a
+   the page title, so it is excluded, otherwise the landing page opens with a
    line above "All modules:". */
 .main-content h2 {
     font-size: 21px;
