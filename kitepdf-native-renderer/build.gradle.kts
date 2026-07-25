@@ -33,7 +33,7 @@ kotlin {
 
     jvm()
 
-    // Apple — the backend is pure CoreGraphics/ImageIO (appleMain), so every
+    // Apple: the backend is pure CoreGraphics/ImageIO (appleMain), so every
     // Apple family ships. iOS keeps framework binaries for Xcode embedding.
     listOf(
         iosSimulatorArm64(),

@@ -10,7 +10,7 @@ plugins {
     alias(libs.plugins.dokka)
 }
 
-/** Host-OS Skiko native runtime — needed by jvmTest to rasterize an ImageBitmap headlessly. */
+/** Host-OS Skiko native runtime, needed by jvmTest to rasterize an ImageBitmap headlessly. */
 fun currentOsSkikoRuntime(): Provider<MinimalExternalModuleDependency> {
     val os = OperatingSystem.current()
     val arch = System.getProperty("os.arch").lowercase()

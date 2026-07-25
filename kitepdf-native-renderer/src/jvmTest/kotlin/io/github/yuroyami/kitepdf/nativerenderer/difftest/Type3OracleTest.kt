@@ -20,7 +20,7 @@ class Type3OracleTest {
 
     @Test
     fun type3_render_matches_mutool() {
-        assumeTrue("mutool not found — skipping.", MuPdfOracle.binary != null)
+        assumeTrue("mutool not found, skipping.", MuPdfOracle.binary != null)
         val bytes = fixture().bytes
         val doc = KitePDF.open(bytes)
         val kite = AwtPdfRasterizer.renderToImage(doc.pages[0])

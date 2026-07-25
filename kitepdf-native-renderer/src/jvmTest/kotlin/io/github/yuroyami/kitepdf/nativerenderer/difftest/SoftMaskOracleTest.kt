@@ -35,7 +35,7 @@ class SoftMaskOracleTest {
 
     @Test
     fun luminosity_mask_matches_mutool() {
-        assumeTrue("mutool not found — skipping.", MuPdfOracle.binary != null)
+        assumeTrue("mutool not found, skipping.", MuPdfOracle.binary != null)
         val bytes = fixture().bytes
         val kite = AwtPdfRasterizer.renderToImage(KitePDF.open(bytes).pages[0])
         val pdf = File.createTempFile("kite-smask", ".pdf").apply {

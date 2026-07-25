@@ -31,7 +31,7 @@ class ShadingOracleTest {
 
     @Test
     fun all_five_shading_types_within_budget() {
-        assumeTrue("mutool not found — skipping.", MuPdfOracle.binary != null)
+        assumeTrue("mutool not found, skipping.", MuPdfOracle.binary != null)
         val fixtures = SyntheticPdfs.all().filter { it.name.startsWith("syn-shading") }
         assertTrue(fixtures.size == 5, "all five shading fixtures registered")
 

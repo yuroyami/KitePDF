@@ -32,7 +32,7 @@ class WriterOracleTest {
 
     @Test
     fun mutool_accepts_incrementally_edited_pdf() {
-        assumeTrue("mutool not found — skipping oracle validation.", MuPdfOracle.binary != null)
+        assumeTrue("mutool not found, skipping oracle validation.", MuPdfOracle.binary != null)
         val tool = MuPdfOracle.binary!!
 
         // Build → open → edit (/Info title + a new object) → save incrementally.
@@ -88,7 +88,7 @@ class WriterOracleTest {
 
     @Test
     fun mutool_decodes_our_flate_compressed_content_stream() {
-        assumeTrue("mutool not found — skipping flate oracle validation.", MuPdfOracle.binary != null)
+        assumeTrue("mutool not found, skipping flate oracle validation.", MuPdfOracle.binary != null)
         val tool = MuPdfOracle.binary!!
 
         // A content stream that draws a unique marker, padded with identical
@@ -144,7 +144,7 @@ class WriterOracleTest {
 
     @Test
     fun mutool_accepts_from_scratch_pdfbuilder_document() {
-        assumeTrue("mutool not found — skipping PdfBuilder oracle validation.", MuPdfOracle.binary != null)
+        assumeTrue("mutool not found, skipping PdfBuilder oracle validation.", MuPdfOracle.binary != null)
         val tool = MuPdfOracle.binary!!
 
         val bytes = PdfBuilder()
@@ -194,7 +194,7 @@ class WriterOracleTest {
 
     @Test
     fun mutool_renders_stamped_page_with_merged_resources() {
-        assumeTrue("mutool not found — skipping stamp oracle validation.", MuPdfOracle.binary != null)
+        assumeTrue("mutool not found, skipping stamp oracle validation.", MuPdfOracle.binary != null)
         val tool = MuPdfOracle.binary!!
 
         // Create a base doc, then overlay a stamp that uses a NEW font (Courier),
@@ -240,7 +240,7 @@ class WriterOracleTest {
 
     @Test
     fun mutool_renders_filled_form_field_appearance() {
-        assumeTrue("mutool not found — skipping form-fill oracle validation.", MuPdfOracle.binary != null)
+        assumeTrue("mutool not found, skipping form-fill oracle validation.", MuPdfOracle.binary != null)
         val tool = MuPdfOracle.binary!!
 
         val original = buildFormPdf()
@@ -278,7 +278,7 @@ class WriterOracleTest {
 
     @Test
     fun mutool_accepts_redacted_document_and_secret_is_gone() {
-        assumeTrue("mutool not found — skipping redaction oracle validation.", MuPdfOracle.binary != null)
+        assumeTrue("mutool not found, skipping redaction oracle validation.", MuPdfOracle.binary != null)
         val tool = MuPdfOracle.binary!!
 
         // Uncompressed so a redaction leak would show as plaintext to mutool.
@@ -352,7 +352,7 @@ class WriterOracleTest {
 
     @Test
     fun mutool_accepts_object_stream_and_xref_stream_output() {
-        assumeTrue("mutool not found — skipping object-stream oracle validation.", MuPdfOracle.binary != null)
+        assumeTrue("mutool not found, skipping object-stream oracle validation.", MuPdfOracle.binary != null)
         val tool = MuPdfOracle.binary!!
 
         // From-scratch doc → rewrite with object streams + a cross-reference stream.
@@ -394,7 +394,7 @@ class WriterOracleTest {
 
     @Test
     fun mutool_renders_merged_and_grafted_document() {
-        assumeTrue("mutool not found — skipping page-ops oracle validation.", MuPdfOracle.binary != null)
+        assumeTrue("mutool not found, skipping page-ops oracle validation.", MuPdfOracle.binary != null)
         val tool = MuPdfOracle.binary!!
 
         val docA = PdfBuilder()

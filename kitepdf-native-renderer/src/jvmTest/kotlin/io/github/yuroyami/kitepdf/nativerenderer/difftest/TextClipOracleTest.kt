@@ -31,8 +31,8 @@ class TextClipOracleTest {
     @Test
     fun mode7_clip_matches_mutool_within_budget() {
         val ttf = fontFile()
-        assumeTrue("DroidSansFallback.ttf not found — skipping.", ttf != null)
-        assumeTrue("mutool not found — skipping.", MuPdfOracle.binary != null)
+        assumeTrue("DroidSansFallback.ttf not found, skipping.", ttf != null)
+        assumeTrue("mutool not found, skipping.", MuPdfOracle.binary != null)
         val font = EmbeddedFont.load(ttf!!.readBytes())
 
         val bytes = PdfBuilder()

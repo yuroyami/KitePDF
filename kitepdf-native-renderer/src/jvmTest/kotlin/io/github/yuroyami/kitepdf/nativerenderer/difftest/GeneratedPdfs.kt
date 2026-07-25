@@ -43,7 +43,7 @@ object GeneratedPdfs {
     private fun textSizes(): ByteArray = PdfBuilder().page {
         var y = 740.0
         for (size in listOf(6.0, 8.0, 10.0, 12.0, 16.0, 20.0, 28.0, 40.0, 56.0)) {
-            text(StandardFont.Helvetica, size, 56.0, y, "Size ${size.toInt()} — Hamburgefonstiv")
+            text(StandardFont.Helvetica, size, 56.0, y, "Size ${size.toInt()}: Hamburgefonstiv")
             y -= size + 12.0
         }
     }.build()
@@ -144,19 +144,19 @@ object GeneratedPdfs {
     }.build()
 
     private fun multipageMixed(): ByteArray = PdfBuilder()
-        .page { text(StandardFont.HelveticaBold, 26.0, 72.0, 700.0, "Page 1 — title text") }
+        .page { text(StandardFont.HelveticaBold, 26.0, 72.0, 700.0, "Page 1: title text") }
         .page {
             setFillRgb(0.2, 0.5, 0.9); rectangle(72.0, 500.0, 300.0, 160.0); fill()
-            text(StandardFont.Helvetica, 14.0, 72.0, 470.0, "Page 2 — a filled rectangle")
+            text(StandardFont.Helvetica, 14.0, 72.0, 470.0, "Page 2: a filled rectangle")
         }
         .page {
             setStrokeGray(0.0); setLineWidth(2.0)
             moveTo(72.0, 680.0); lineTo(520.0, 680.0); stroke()
-            text(StandardFont.Courier, 12.0, 72.0, 700.0, "Page 3 — courier + a rule")
+            text(StandardFont.Courier, 12.0, 72.0, 700.0, "Page 3: courier + a rule")
         }
         .page(width = 400.0, height = 600.0) {
-            text(StandardFont.TimesItalic, 18.0, 40.0, 540.0, "Page 4 — a custom-size page")
+            text(StandardFont.TimesItalic, 18.0, 40.0, 540.0, "Page 4: a custom-size page")
         }
-        .page { text(StandardFont.Helvetica, 10.0, 72.0, 700.0, "Page 5 — the end") }
+        .page { text(StandardFont.Helvetica, 10.0, 72.0, 700.0, "Page 5: the end") }
         .build()
 }
