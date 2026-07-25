@@ -1,4 +1,8 @@
 plugins {
+    // Declared here with apply false so the publish plugin's shared build service
+    // is loaded by one classloader for the whole build. Without this, applying it
+    // to sibling modules makes publishAndReleaseToMavenCentral fail.
+    alias(libs.plugins.vanniktech.publish).apply(false)
     alias(libs.plugins.kotlin.multiplatform).apply(false)
     alias(libs.plugins.kotlin.android).apply(false)
     alias(libs.plugins.compose.compiler).apply(false)
