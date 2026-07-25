@@ -3,13 +3,13 @@ package io.github.yuroyami.kitepdf
 import io.github.yuroyami.kitepdf.crypto.StandardSecurityHandler
 
 /**
- * Document usage permissions — the typed view of the Standard Security
+ * Document usage permissions: the typed view of the Standard Security
  * Handler's `/P` bit-flags (ISO 32000-1 §7.6.3.2 Table 22).
  *
  * Bit numbering in the spec is 1-based; the mask names below use the same
  * 1-based bit number (so [BIT_PRINT] = `1 shl (3 - 1)`).
  *
- * For unencrypted documents — or encrypted documents we have authenticated —
+ * For unencrypted documents, or encrypted documents we have authenticated,
  * the spec says "all operations are permitted". We model that as
  * [allowAll].
  *
@@ -41,7 +41,7 @@ public data class PdfPermissions(
         public const val BIT_ASSEMBLE: Int = 1 shl (11 - 1)        // 0x400
         public const val BIT_PRINT_HIGHRES: Int = 1 shl (12 - 1)   // 0x800
 
-        /** Everything allowed — the default for unencrypted docs. */
+        /** Everything allowed: the default for unencrypted docs. */
         public val allowAll: PdfPermissions = PdfPermissions(
             canPrint = true,
             canModifyContents = true,

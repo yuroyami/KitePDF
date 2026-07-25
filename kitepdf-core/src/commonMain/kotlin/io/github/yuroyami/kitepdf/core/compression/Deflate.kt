@@ -3,11 +3,11 @@ package io.github.yuroyami.kitepdf.core.compression
 import io.github.yuroyami.kitepdf.core.ByteArrayBuilder
 
 /**
- * Pure-Kotlin RFC 1951 DEFLATE *deflater* — the inverse of [Inflate].
+ * Pure-Kotlin RFC 1951 DEFLATE *deflater*: the inverse of [Inflate].
  *
  * LZ77 (greedy, 32 KiB window, hash-chained with bounded chain length)
  * tokenizes the input; every 64 Ki tokens form a block, and each block is
- * emitted as the cheapest of the three RFC encodings — stored (BTYPE=00),
+ * emitted as the cheapest of the three RFC encodings: stored (BTYPE=00),
  * fixed Huffman (BTYPE=01) or dynamic Huffman (BTYPE=10) with code-length
  * tables built from the block's actual token frequencies (T-11). Dynamic
  * blocks bring the pure encoder's output close to zlib's; on JVM/Android the
@@ -499,9 +499,9 @@ private class Deflater {
         }
 
         /**
-         * Assign canonical Huffman codes from code lengths (RFC 1951 §3.2.2) —
-         * the same assignment [HuffmanTable.fromLengths] decodes, so encoder and
-         * decoder agree on every code.
+         * Assign canonical Huffman codes from code lengths (RFC 1951 §3.2.2).
+         * This is the same assignment [HuffmanTable.fromLengths] decodes, so
+         * encoder and decoder agree on every code.
          */
         private fun canonicalCodes(lengths: IntArray): IntArray {
             val maxBits = 15

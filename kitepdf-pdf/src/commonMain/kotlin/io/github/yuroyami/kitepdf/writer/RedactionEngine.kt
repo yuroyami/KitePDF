@@ -16,8 +16,8 @@ import io.github.yuroyami.kitepdf.core.parser.PdfString
  *
  * It replays the renderer's graphics + text state machine (CTM via `q/Q/cm`,
  * the text matrix via `BT/Td/TD/Tm/T*`, font metrics via [PdfFont.layoutBytes])
- * to compute each shown run's box in page user space. Any run — or any string
- * inside a `TJ` array, or any image — whose box intersects a redaction
+ * to compute each shown run's box in page user space. Any run (or any string
+ * inside a `TJ` array, or any image) whose box intersects a redaction
  * rectangle has its **bytes removed** from the output and replaced by an
  * equivalent text-space advance, so the remaining text keeps its position while
  * the redacted text is genuinely gone (not merely covered).
@@ -32,7 +32,7 @@ import io.github.yuroyami.kitepdf.core.parser.PdfString
  * stream, it can't touch resource dicts or nested objects):
  *
  *  - [droppedImageNames] / [survivingImageNames]: image XObject names whose
- *    draw op was removed vs. still drawn — the caller prunes the pruned ones
+ *    draw op was removed vs. still drawn. The caller prunes the dropped ones
  *    from `/Resources /XObject` so the reachability GC drops the image stream.
  *  - [formXObjectHits]: form XObjects invoked via `Do` whose CTM-mapped area
  *    overlaps a region, together with the redaction rectangles mapped into the
@@ -237,7 +237,7 @@ internal class RedactionEngine(
      * The vertical extent is deliberately generous: tall accents (e.g. Å, Ĝ) rise
      * above a typical cap height and descenders (g, y, ç) drop below the baseline,
      * so a tight box could miss glyphs that visually overlap a region and leave
-     * them un-redacted. We over-cover with ascent ~1.0em / descent ~0.35em — for a
+     * them un-redacted. We over-cover with ascent ~1.0em / descent ~0.35em. For a
      * redaction tool, removing slightly too much is correct; missing content is not.
      */
     private fun runIntersectsRedaction(advance: Double): Boolean {
@@ -252,7 +252,7 @@ internal class RedactionEngine(
     /**
      * Handle a `Do` XObject invocation. Images intersecting a region are dropped
      * (and their name recorded so the caller can prune the resource entry); every
-     * form XObject invocation is recorded as a [FormHit] (kept in the stream — the
+     * form XObject invocation is recorded as a [FormHit] (kept in the stream: the
      * caller recurses in to redact its content, mapping the region into the form's
      * space) so nested content in a region is never silently retained.
      */
@@ -280,7 +280,7 @@ internal class RedactionEngine(
      * rect maps to empty area in form space the recursion simply finds nothing to
      * redact. If the matrix is singular we can't map cleanly, so we pass the
      * page-space rects through unchanged (over-covering) rather than silently
-     * skipping — a redaction must never no-op on content it can't reason about.
+     * skipping. A redaction must never no-op on content it can't reason about.
      */
     private fun recordFormHitIfIntersects(xobjectName: String) {
         val formMatrix = formMatrices[xobjectName] ?: Matrix.IDENTITY
@@ -290,7 +290,7 @@ internal class RedactionEngine(
         val mapped = ArrayList<Rectangle>(rectangles.size)
         for (r in rectangles) {
             if (inv == null) {
-                // Can't map into form space — pass the page-space rect through so
+                // Can't map into form space. Pass the page-space rect through so
                 // the recursion still attempts redaction (conservative).
                 mapped.add(r)
                 continue

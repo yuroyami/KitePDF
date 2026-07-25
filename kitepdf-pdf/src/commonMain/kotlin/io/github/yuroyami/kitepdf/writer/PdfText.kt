@@ -6,7 +6,7 @@ import io.github.yuroyami.kitepdf.core.ByteArrayBuilder
  * Encoders for the two distinct kinds of PDF string the writer produces.
  *
  * They are NOT interchangeable: a *text string* (metadata, outlines, form
- * values — §7.9.2.2) is decoded by the consumer via UTF-16BE/PDFDocEncoding
+ * values, per §7.9.2.2) is decoded by the consumer via UTF-16BE/PDFDocEncoding
  * auto-detection, whereas a *content-stream show string* (the operand of `Tj`)
  * is decoded byte-by-byte through the current font's single-byte encoding, so
  * UTF-16BE there would render as garbage.

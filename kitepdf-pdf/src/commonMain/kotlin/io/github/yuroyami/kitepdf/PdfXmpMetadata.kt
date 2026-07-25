@@ -9,33 +9,33 @@ package io.github.yuroyami.kitepdf
  *
  * We extract the most common Dublin Core / Adobe PDF / XMP-basic
  * properties. Anything else can be pulled from the [xml] string by the
- * caller using their preferred XML tool — we don't ship a full XML parser.
+ * caller using their preferred XML tool. We don't ship a full XML parser.
  *
  * Date fields are exposed as raw ISO 8601 strings (XMP uses 8601 rather
  * than PDF's `D:YYYYMMDDHHmmSS...` form).
  */
 public data class PdfXmpMetadata(
-    /** dc:title — language alternative; the x-default (or first) value. */
+    /** dc:title. Language alternative; the x-default (or first) value. */
     val title: String? = null,
-    /** dc:creator — ordered sequence of author names. */
+    /** dc:creator. Ordered sequence of author names. */
     val authors: List<String> = emptyList(),
-    /** dc:description — language alternative; the x-default (or first) value. */
+    /** dc:description. Language alternative; the x-default (or first) value. */
     val description: String? = null,
-    /** pdf:Keywords — flat string, semicolons or commas at the author's discretion. */
+    /** pdf:Keywords. Flat string, semicolons or commas at the author's discretion. */
     val keywords: String? = null,
-    /** dc:subject — unordered Bag of subject tags. */
+    /** dc:subject. Unordered Bag of subject tags. */
     val subjects: List<String> = emptyList(),
-    /** pdf:Producer — the producing tool. */
+    /** pdf:Producer. The producing tool. */
     val producer: String? = null,
-    /** xmp:CreatorTool — the originating authoring tool. */
+    /** xmp:CreatorTool. The originating authoring tool. */
     val creatorTool: String? = null,
-    /** xmp:CreateDate — ISO 8601. */
+    /** xmp:CreateDate. ISO 8601. */
     val createDate: String? = null,
-    /** xmp:ModifyDate — ISO 8601. */
+    /** xmp:ModifyDate. ISO 8601. */
     val modifyDate: String? = null,
-    /** xmp:MetadataDate — ISO 8601; when the XMP packet itself was last modified. */
+    /** xmp:MetadataDate. ISO 8601; when the XMP packet itself was last modified. */
     val metadataDate: String? = null,
-    /** pdf:PDFVersion — e.g. "1.7" or "2.0". */
+    /** pdf:PDFVersion. For example "1.7" or "2.0". */
     val pdfVersion: String? = null,
     /** Raw XML packet (UTF-8 decoded). */
     val xml: String,

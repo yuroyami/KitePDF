@@ -13,7 +13,7 @@ import io.github.yuroyami.kitepdf.core.parser.PdfInt
  * All fields are optional in the spec and have a documented default; we
  * surface those defaults here so callers never have to check for `null`.
  *
- * "Hint" is the operative word — viewers may ignore any or all of these.
+ * "Hint" is the operative word. Viewers may ignore any or all of these.
  * KitePDF doesn't enforce them; it just exposes them.
  */
 public data class PdfViewerPreferences(
@@ -41,17 +41,17 @@ public data class PdfViewerPreferences(
     val printArea: PageBoxName = PageBoxName.CropBox,
     /** Box to clip the printed page to. Default [PageBoxName.CropBox]. */
     val printClip: PageBoxName = PageBoxName.CropBox,
-    /** Print scaling preference — PDF 1.6+. Default [PrintScaling.AppDefault]. */
+    /** Print scaling preference. Added in PDF 1.6. Default [PrintScaling.AppDefault]. */
     val printScaling: PrintScaling = PrintScaling.AppDefault,
-    /** Duplex preference — PDF 1.7+. Default [Duplex.Simplex]. */
+    /** Duplex preference. Added in PDF 1.7. Default [Duplex.Simplex]. */
     val duplex: Duplex = Duplex.Simplex,
-    /** Pick the paper tray by PDF page size — PDF 1.7. Default false. */
+    /** Pick the paper tray by PDF page size. Added in PDF 1.7. Default false. */
     val pickTrayByPdfSize: Boolean = false,
-    /** Default number of copies when printing — PDF 1.7. Default 1. */
+    /** Default number of copies when printing. Added in PDF 1.7. Default 1. */
     val numCopies: Int = 1,
     /**
      * Default page ranges to print as `[firstA lastA firstB lastB …]` (one-based,
-     * inclusive). Empty when /PrintPageRange is absent — PDF 1.7.
+     * inclusive). Empty when /PrintPageRange is absent. Added in PDF 1.7.
      */
     val printPageRange: List<IntRange> = emptyList(),
 ) {
@@ -77,7 +77,7 @@ public data class PdfViewerPreferences(
     }
 
     public enum class PrintScaling {
-        /** No automatic scaling — print at 100%. */
+        /** No automatic scaling: print at 100%. */
         None,
         /** Use the viewer's default. */
         AppDefault;
@@ -98,7 +98,7 @@ public data class PdfViewerPreferences(
     }
 
     public companion object {
-        /** Wholly-default preferences — used when the catalog has no /ViewerPreferences. */
+        /** Wholly-default preferences, used when the catalog has no /ViewerPreferences. */
         public val DEFAULT: PdfViewerPreferences = PdfViewerPreferences()
 
         internal fun parse(dict: PdfDictionary, refs: IndirectResolver): PdfViewerPreferences {

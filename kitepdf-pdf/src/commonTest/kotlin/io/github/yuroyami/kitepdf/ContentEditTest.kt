@@ -75,7 +75,7 @@ class ContentEditTest {
     @Test fun stamp_page_with_new_font_merges_resources() {
         val base = onePagePdf("Body in Helvetica")
         val doc = KitePDF.open(base)
-        // Stamp uses Courier — a font not in the original page resources.
+        // Stamp uses Courier, a font not in the original page resources.
         val out = doc.edit().apply {
             stampPage(doc.pages[0]) { text(StandardFont.Courier, 10.0, 72.0, 100.0, "stamped courier") }
         }.saveIncremental()

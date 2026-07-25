@@ -46,7 +46,7 @@ val canvas = AwtCanvas(graphics2d)
 book.pages[0].renderTo(canvas)
 ```
 
-In Compose, `EpubView` is the drop-in viewer:
+In Compose, `EpubView` is the ready-made viewer:
 
 ```kotlin
 EpubView(document = book, modifier = Modifier.fillMaxSize())
@@ -121,6 +121,8 @@ The layout engine covers what real books use:
   never shows tofu.
 - **Hyphenation**: Knuth-Liang patterns for English, German, French,
   Spanish, Italian, Portuguese, and Dutch, selected by the book's language.
+  Six of those languages ship a full pattern set. English ships a small
+  common-word set rather than the full `hyph-en-us` data.
 - **CJK**: inter-character justification with kinsoku line-break rules, ruby
   annotations, and vertical writing (`writing-mode: vertical-rl`) with
   upright CJK and rotated Latin.

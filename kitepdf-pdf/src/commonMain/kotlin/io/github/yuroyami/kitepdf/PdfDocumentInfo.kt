@@ -9,8 +9,8 @@ import io.github.yuroyami.kitepdf.core.parser.PdfString
  *
  * Every field is optional in the spec; missing entries are `null`. Custom
  * (non-standard) string entries are preserved in [custom] so callers can
- * inspect them. `/Trapped` is a `/Name` per spec — exposed as the typed
- * [Trapped] enum.
+ * inspect them. `/Trapped` is a `/Name` per spec. We expose it as the
+ * typed [Trapped] enum.
  *
  * Note: PDF 2.0 deprecates /Info in favour of the XMP metadata stream on
  * the document catalog. We still surface /Info because almost every PDF in

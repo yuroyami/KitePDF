@@ -67,7 +67,7 @@ internal class CharstringInterpreter(
     var advanceWidth: Double? = null
         private set
 
-    /** Recursion depth — Type 2 spec mandates ≤10. */
+    /** Recursion depth. The Type 2 spec mandates ≤10. */
     private var depth = 0
 
     fun interpret(): KitePath {
@@ -157,7 +157,7 @@ internal class CharstringInterpreter(
                                 execute(sub)
                             }
                             11 -> return               // return (depth decremented in finally)
-                            else -> stack.clear()      // unknown — defensive reset
+                            else -> stack.clear()      // unknown: defensive reset
                         }
                     }
                 }
@@ -177,7 +177,7 @@ internal class CharstringInterpreter(
             14 -> unOp { -it }                                  // neg
             9  -> unOp { abs(it) }                              // abs
             26 -> unOp { if (it >= 0.0) sqrt(it) else 0.0 }     // sqrt
-            23 -> stack.addLast(0.5)                            // random — deterministic stub
+            23 -> stack.addLast(0.5)                            // random: deterministic stub
             // ── Stack ops ─────────────────────────────────────────────────
             18 -> { if (stack.isNotEmpty()) stack.removeLast() }             // drop
             27 -> { if (stack.isNotEmpty()) stack.addLast(stack.last()) }    // dup
@@ -224,10 +224,10 @@ internal class CharstringInterpreter(
                 }
             }
             // ── Flex family (TN5177 §4.3) ─────────────────────────────────
-            34 -> hflex()   // op 12 34 — 7 args
-            35 -> flex()    // op 12 35 — 13 args
-            36 -> hflex1()  // op 12 36 — 9 args
-            37 -> flex1()   // op 12 37 — 11 args
+            34 -> hflex()   // op 12 34: 7 args
+            35 -> flex()    // op 12 35: 13 args
+            36 -> hflex1()  // op 12 36: 9 args
+            37 -> flex1()   // op 12 37: 11 args
             // Unknown two-byte ops just clear the stack.
             else -> stack.clear()
         }

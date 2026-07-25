@@ -18,7 +18,7 @@ import kotlin.test.assertTrue
  * Verifies the pure-Kotlin core [ImageXObject.fromEncodedImage] JPEG path
  * (via `JpegDecoder`) against the JVM's libjpeg-backed `ImageIO` decoder as the
  * oracle. Both decode the SAME encoded bytes, so any per-channel difference is
- * only IDCT rounding + chroma upsampling — kept small by the assertions.
+ * only IDCT rounding + chroma upsampling, kept small by the assertions.
  */
 class JpegDecoderTest {
 

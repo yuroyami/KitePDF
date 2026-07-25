@@ -2,12 +2,12 @@ package io.github.yuroyami.kitepdf.core.font
 
 /**
  * GPOS mark-to-base attachment (lookup type 4): the positioning offset that places
- * a combining mark's anchor onto its base glyph's anchor — Arabic harakat, Hebrew
- * points, Latin/Vietnamese diacritics. The offset is returned in font design units
+ * a combining mark's anchor onto its base glyph's anchor (Arabic harakat, Hebrew
+ * points, Latin/Vietnamese diacritics). The offset is returned in font design units
  * (base anchor − mark anchor); the caller applies it to the mark glyph's origin
  * without touching the pen advance (marks are zero-advance).
  *
- * Scope: mark-to-base (type 4), anchor formats 1/2/3 (device tables ignored — the
+ * Scope: mark-to-base (type 4), anchor formats 1/2/3 (device tables ignored: the
  * x/y coordinate is used). Mark-to-mark stacking (type 6) and mark-to-ligature
  * (type 5) are not handled yet. All type-4 subtables are consulted (the `mark`
  * feature is on by default), so no feature filtering is needed.
@@ -85,7 +85,7 @@ public class OpenTypeMarks private constructor(private val subtables: List<MarkB
 
         private fun readAnchor(b: ByteArray, off: Int): Pair<Double, Double> {
             val r = R(b); r.seek(off)
-            r.u16() // anchorFormat (1/2/3) — device tables in 3 ignored
+            r.u16() // anchorFormat (1/2/3): device tables in 3 ignored
             val x = r.s16(); val y = r.s16()
             return x.toDouble() to y.toDouble()
         }

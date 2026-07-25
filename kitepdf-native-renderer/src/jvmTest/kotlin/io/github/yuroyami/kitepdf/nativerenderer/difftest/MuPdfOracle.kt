@@ -18,7 +18,7 @@ internal interface PdfRenderOracle {
 
 /**
  * Reference rasteriser backed by MuPDF's `mutool draw`. MuPDF is the in-repo
- * oracle (`mupdf-master/`) — the cleanest open-source PDF engine — so the
+ * oracle (`mupdf-master/`), the cleanest open-source PDF engine, so the
  * differential harness scores KitePDF against "what MuPDF would draw."
  *
  * The tool is located, in priority order, from:

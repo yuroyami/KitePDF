@@ -33,7 +33,7 @@ import kotlinx.coroutines.sync.withLock
  * [rasterize] runs synchronously on the calling thread; [rasterizeOffMain]
  * moves the work to [kitepdfRasterDispatcher] (a background pool on
  * JVM/Android/Apple, Main on JS/Wasm) so a complex page never janks scrolling
- * or pinch — that is what [PdfView] uses (T-14).
+ * or pinch. [PdfView] uses that path.
  */
 @Stable
 public class PdfRasterizer(
@@ -54,7 +54,7 @@ public class PdfRasterizer(
     /**
      * [rasterize], off the main thread where the platform allows. One page
      * runs to completion once started (the synchronous renderer has no
-     * cancellation points; T-02's operation budget bounds the worst case) —
+     * cancellation points; the operation budget bounds the worst case), so
      * cancellation takes effect between pages.
      */
     public suspend fun rasterizeOffMain(
@@ -112,7 +112,7 @@ public class PdfRasterizer(
      * Renders [page] into a fresh [widthPx]×[heightPx] bitmap.
      *
      * @param background colour painted before page content (PDFs assume paper).
-     * @param hairlineWidthPx minimum stroke width in raster pixels — see
+     * @param hairlineWidthPx minimum stroke width in raster pixels. See
      *   [ComposeCanvas]. Pass the raster:on-screen ratio (>1) when rendering
      *   supersampled so sub-pixel strokes survive the downscale.
      */

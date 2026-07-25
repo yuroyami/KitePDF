@@ -4,7 +4,7 @@ import io.github.yuroyami.kitepdf.content.Operation
 import io.github.yuroyami.kitepdf.core.ByteArrayBuilder
 
 /**
- * Serializes a list of [Operation]s back to content-stream bytes — the inverse
+ * Serializes a list of [Operation]s back to content-stream bytes, the inverse
  * of [io.github.yuroyami.kitepdf.content.ContentStreamParser]. Each operation writes
  * its operands (space-separated, via [PdfObjectWriter]) then the operator
  * keyword; inline images are written back verbatim from their captured source.

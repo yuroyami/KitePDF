@@ -5,10 +5,10 @@ import kotlin.test.assertEquals
 import kotlin.test.assertNull
 
 /**
- * T-80: the selection support on [KiteStructuredText] — flattened char
- * indexing ([KiteStructuredText.charIndexAt]), range text with line/block
- * separators ([KiteStructuredText.textRange]) and the shared per-line quad
- * walker ([KiteStructuredText.quadsFor]).
+ * Selection support on [KiteStructuredText]: flattened char indexing
+ * ([KiteStructuredText.charIndexAt]), range text with line/block separators
+ * ([KiteStructuredText.textRange]) and the shared per-line quad walker
+ * ([KiteStructuredText.quadsFor]).
  */
 class KiteSelectionTest {
 

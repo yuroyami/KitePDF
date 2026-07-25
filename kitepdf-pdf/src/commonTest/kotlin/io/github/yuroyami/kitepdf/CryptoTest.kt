@@ -22,8 +22,8 @@ class CryptoTest {
     @Test fun md5_abc() = assertHex("900150983cd24fb0d6963f7d28e17f72", Md5.hash("abc".encodeToByteArray()))
     @Test
     fun md5_long_message() {
-        // RFC 1321 §A.5: uppercase first, then lowercase, then digits — 62 bytes,
-        // forces the two-block padding path.
+        // RFC 1321 §A.5: uppercase first, then lowercase, then digits. These 62 bytes
+        // force the two-block padding path.
         assertHex(
             "d174ab98d277d9f5a5611c2c9f419d9f",
             Md5.hash("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789".encodeToByteArray()),
@@ -62,7 +62,7 @@ class CryptoTest {
 
     @Test
     fun aes128_decrypt_appendix_c() {
-        // FIPS 197 Appendix C.1 — 128-bit cipher key and ciphertext.
+        // FIPS 197 Appendix C.1: 128-bit cipher key and ciphertext.
         val key = hexToBytes("000102030405060708090a0b0c0d0e0f")
         val ciphertext = hexToBytes("69c4e0d86a7b0430d8cdb78070b4c55a")
         val plaintext = Aes.decryptEcb(key, ciphertext)
@@ -71,7 +71,7 @@ class CryptoTest {
 
     @Test
     fun aes256_decrypt_appendix_c() {
-        // FIPS 197 Appendix C.3 — 256-bit cipher key.
+        // FIPS 197 Appendix C.3: 256-bit cipher key.
         val key = hexToBytes("000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f")
         val ciphertext = hexToBytes("8ea2b7ca516745bfeafc49904b496089")
         val plaintext = Aes.decryptEcb(key, ciphertext)

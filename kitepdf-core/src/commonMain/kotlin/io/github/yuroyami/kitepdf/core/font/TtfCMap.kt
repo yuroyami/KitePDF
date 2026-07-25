@@ -1,7 +1,7 @@
 package io.github.yuroyami.kitepdf.core.font
 
 /**
- * TrueType / OpenType `cmap` table — character-code → glyph-index lookup.
+ * TrueType / OpenType `cmap` table: character-code → glyph-index lookup.
  *
  * The `cmap` table has multiple subtables for different encodings; we pick the
  * best one (Unicode > Microsoft Unicode > everything else) and route lookups
@@ -9,7 +9,7 @@ package io.github.yuroyami.kitepdf.core.font
  * Unicode; format 12 (segmented coverage) handles supplementary planes;
  * formats 0 and 6 are legacy but still appear in older fonts.
  *
- * Glyph index 0 is the special `.notdef` glyph — we return it for any
+ * Glyph index 0 is the special `.notdef` glyph. We return it for any
  * unmapped codepoint so callers always get something drawable.
  */
 public class TtfCMap private constructor(private val subtable: Subtable) {
@@ -17,7 +17,7 @@ public class TtfCMap private constructor(private val subtable: Subtable) {
     public fun glyphIdFor(codePoint: Int): Int = subtable.glyphId(codePoint)
 
     public companion object {
-        /** A cmap that maps every code point to `.notdef` — for CID-keyed fonts that ship no `cmap`. */
+        /** A cmap that maps every code point to `.notdef`: for CID-keyed fonts that ship no `cmap`. */
         public fun empty(): TtfCMap = TtfCMap(EmptySubtable)
 
         public fun parse(reader: TtfReader, table: Table): TtfCMap {
@@ -100,7 +100,7 @@ public class TtfCMap private constructor(private val subtable: Subtable) {
         }
 
         /**
-         * Format 2: high-byte mapping through table — the classic CJK encoding
+         * Format 2: high-byte mapping through table, the classic CJK encoding
          * (Shift-JIS, Big5, etc.). A 256-entry subHeaderKeys array routes each
          * lead byte either to single-byte handling (key 0) or to one of several
          * subHeaders covering a range of trailing bytes.
@@ -108,7 +108,7 @@ public class TtfCMap private constructor(private val subtable: Subtable) {
         private fun parseFormat2(reader: TtfReader, base: Int): Subtable {
             reader.skip(2)  // length
             reader.skip(2)  // language
-            // subHeaderKeys[256] — each is (subHeader index * 8).
+            // subHeaderKeys[256]: each is (subHeader index * 8).
             val keys = IntArray(256) { reader.u16() / 8 }
             var maxSub = 0
             for (k in keys) if (k > maxSub) maxSub = k
@@ -275,7 +275,7 @@ public class TtfCMap private constructor(private val subtable: Subtable) {
                 ((codePoint + idDelta[i]) and 0xFFFF)
             } else {
                 // The spec defines the offset arithmetic relative to the
-                // idRangeOffset field's own location — translating that to a
+                // idRangeOffset field's own location. Translating that to a
                 // local index into our snapshot:
                 //   byteOffset = rangeOffsetLocal + 2*i + idRangeOffset[i]
                 //                + 2*(c - startCount[i])

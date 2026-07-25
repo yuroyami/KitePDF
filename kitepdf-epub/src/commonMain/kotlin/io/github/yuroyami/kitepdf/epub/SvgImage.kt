@@ -14,7 +14,7 @@ import kotlin.math.sqrt
 import kotlin.math.PI
 
 /**
- * A minimal SVG document renderer — enough to draw the illustrations, cover art
+ * A minimal SVG document renderer: enough to draw the illustrations, cover art
  * and diagrams that ship in EPUBs (and to seed a future `:kitepdf-svg` handler;
  * the reusable path/transform parsing wants promoting to core then). Parses the
  * SVG XML into the shared [HtmlNode] tree and paints shapes straight into the

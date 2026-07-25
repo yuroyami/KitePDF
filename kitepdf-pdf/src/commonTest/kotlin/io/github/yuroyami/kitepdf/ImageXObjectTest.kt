@@ -29,7 +29,7 @@ class ImageXObjectTest {
 
     @Test
     fun flate_alone_classifies_as_raw() {
-        // FlateDecode of literal "ABC" — the bytes don't matter for classification.
+        // FlateDecode of literal "ABC". The bytes don't matter for classification.
         val image = ImageXObject.from(
             stream(
                 width = 1, height = 1, bpc = 8, colorSpace = "DeviceGray",
@@ -69,7 +69,7 @@ class ImageXObjectTest {
 
     @Test
     fun indexed_image_resolves_palette_colors() {
-        // [/Indexed /DeviceRGB 1 <FF0000 00FF00>] — index 0 = red, 1 = green.
+        // [/Indexed /DeviceRGB 1 <FF0000 00FF00>]: index 0 = red, 1 = green.
         val palette = byteArrayOf(0xFF.toByte(), 0, 0, 0, 0xFF.toByte(), 0)
         val base = PdfStream(
             dict = PdfDictionary(linkedMapOf(

@@ -10,12 +10,12 @@ import kotlin.test.assertTrue
 /**
  * Regression: [Zlib.encode] must produce streams a *strict* zlib decoder
  * accepts. KitePDF's own [Zlib.decode] recomputes the Adler-32 the same way it
- * was written, so it can't catch a checksum bug — `java.util.zip.Inflater`
+ * was written, so it can't catch a checksum bug. `java.util.zip.Inflater`
  * (which verifies the trailer against the inflated bytes) can.
  *
  * The historical bug: Adler-32's `b` accumulator overflowed a signed Kotlin
  * `Int` within an NMAX run, corrupting the checksum on inputs larger than a few
- * MB — exactly the size of an embedded font program. Small inputs hid it.
+ * MB, exactly the size of an embedded font program. Small inputs hid it.
  */
 class ZlibAdlerRegressionTest {
 

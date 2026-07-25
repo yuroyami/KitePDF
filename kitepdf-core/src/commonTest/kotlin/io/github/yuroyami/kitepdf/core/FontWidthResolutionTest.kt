@@ -16,7 +16,7 @@ import kotlin.test.assertEquals
  * Regression for indirect width-array resolution. Word and many other
  * producers store a font's `/W` (Type0/CID) or `/Widths` (simple font) as an
  * INDIRECT reference. If the loader doesn't resolve it, every glyph falls back
- * to the default width — which spreads text out and breaks Arabic cursive
+ * to the default width, which spreads text out and breaks Arabic cursive
  * joining (diagnosed on the corpus: `benyoub`/`math`/`69_10`).
  */
 class FontWidthResolutionTest {

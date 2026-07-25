@@ -13,12 +13,12 @@ import io.github.yuroyami.kitepdf.core.parser.Token
  * the unicode codepoints to use when extracting/copying text." It uses these
  * section types:
  *
- *   begincodespacerange  …  endcodespacerange       — declares the valid byte patterns
- *   beginbfchar          …  endbfchar               — `<src> <utf16BE-bytes>` pairs
- *   beginbfrange         …  endbfrange              — `<srcLo> <srcHi> <utf16BE-start>`
- *                                                   — `<srcLo> <srcHi> [ <utf> <utf> … ]`
- *   begincidchar         …  endcidchar              — `<src> cid`   (embedded /Encoding CMaps)
- *   begincidrange        …  endcidrange             — `<srcLo> <srcHi> cid`
+ *   begincodespacerange  …  endcodespacerange       : declares the valid byte patterns
+ *   beginbfchar          …  endbfchar               : `<src> <utf16BE-bytes>` pairs
+ *   beginbfrange         …  endbfrange              : `<srcLo> <srcHi> <utf16BE-start>`
+ *                                                   : `<srcLo> <srcHi> [ <utf> <utf> … ]`
+ *   begincidchar         …  endcidchar              : `<src> cid`   (embedded /Encoding CMaps)
+ *   begincidrange        …  endcidrange             : `<srcLo> <srcHi> cid`
  *
  * Source codes are 1-byte (most simple fonts), 2-byte (CIDFonts, Identity-H),
  * or a *mix* (many CJK CMaps: ASCII stays 1-byte, kanji goes 2-byte). The mix
@@ -29,7 +29,7 @@ import io.github.yuroyami.kitepdf.core.parser.Token
  *
  * We mirror MuPDF's pdf-cmap-parse.c approach: tokenize with our regular PDF
  * [Lexer], then walk section keywords. Anything outside known sections
- * (CIDSystemInfo, /Registry strings, etc.) is silently skipped — robustness
+ * (CIDSystemInfo, /Registry strings, etc.) is silently skipped: robustness
  * over strictness, per the spec recommendation.
  *
  * Besides ToUnicode, this class doubles as a decoder for an EMBEDDED /Encoding
@@ -57,7 +57,7 @@ public class CMap private constructor(
 ) {
 
     /**
-     * A single `begincodespacerange` entry — a per-byte low/high pattern of
+     * A single `begincodespacerange` entry: a per-byte low/high pattern of
      * width [width]. A byte sequence matches when, for every byte position, the
      * input byte is within `[low[i], high[i]]`.
      */
@@ -102,7 +102,7 @@ public class CMap private constructor(
             val w = minWidth.coerceAtMost(bytes.size - offset).coerceAtLeast(1)
             return readCode(bytes, offset, w) to w
         }
-        // No codespaces declared — fall back to the inferred fixed width.
+        // No codespaces declared. Fall back to the inferred fixed width.
         val w = codeWidth.coerceAtMost(bytes.size - offset).coerceAtLeast(1)
         return readCode(bytes, offset, w) to w
     }
@@ -138,7 +138,7 @@ public class CMap private constructor(
                 out.append(text)
                 i += width
             } else {
-                // No mapping — emit replacement and advance by ONE byte so we
+                // No mapping. Emit replacement and advance by ONE byte so we
                 // don't desync a mixed-width stream on an unmapped code.
                 out.append('�')
                 i += 1
@@ -320,7 +320,7 @@ public class CMap private constructor(
                         }
                         out.add(BfRange(lo, hi, base = null, replacements = reps))
                     }
-                    else -> { /* unrecognized destination — skip */ }
+                    else -> { /* unrecognized destination: skip */ }
                 }
             }
         }

@@ -26,15 +26,15 @@ import kotlinx.coroutines.launch
  *  - **Pinch** is watched on the *Initial* pointer pass; while two or more
  *    fingers are down (and pinch is enabled) all changes are consumed up
  *    front, so the list/pager beneath never interprets a pinch as a fling.
- *  - **Single-finger pan while zoomed** runs on the *Main* pass — i.e. *after*
- *    the inner scrollable — and only consumes what that scrollable left over,
+ *  - **Single-finger pan while zoomed** runs on the *Main* pass (*after*
+ *    the inner scrollable) and only consumes what that scrollable left over,
  *    clamped to the zoomed content bounds via [PdfViewState.panBy]. In paged
  *    mode (pager scroll disabled while zoomed) it owns both axes; in
  *    continuous mode the scroll axis stays native and pan covers the cross
  *    axis.
  *  - **Double-tap** toggles between min zoom and [PdfZoomSpec.doubleTapZoom],
  *    anchored at the tap position.
- *  - **Single-tap** ([onTap]) is reported without consuming pan/swipe — a host
+ *  - **Single-tap** ([onTap]) is reported without consuming pan/swipe. A host
  *    uses it to toggle a HUD. When double-tap is also on, the tap is held back
  *    until the double-tap window lapses; otherwise it fires immediately.
  *  - At minimum zoom with one finger down, nothing is consumed: swipes and

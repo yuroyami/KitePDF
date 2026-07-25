@@ -56,13 +56,13 @@ public object Zlib {
 
         // Platform fast path (T-10): hand the native inflater the whole stream
         // (it parses the header and verifies the Adler trailer itself, so no
-        // re-verification below). Null — malformed, truncated, over the cap —
+        // re-verification below). Null (malformed, truncated, over the cap)
         // falls through to the pure-Kotlin path for its lenient behaviour and
         // proper error messages.
         PlatformFlate.inflateOrNull(input, 0, input.size, maxOutputBytes)?.let { return it }
 
         // Inflate the DEFLATE payload that sits between the 2-byte header and the
-        // 4-byte Adler trailer — read in place, no slice.
+        // 4-byte Adler trailer, reading in place with no slice.
         val decoded = Inflate.decode(input, offset = 2, length = input.size - 6, maxOutputBytes = maxOutputBytes)
 
         if (verifyChecksum) {

@@ -49,7 +49,7 @@ import kotlinx.coroutines.launch
 /*
  * Ready-made navigation widgets. Every widget takes a [PdfViewState], so they
  * work from anywhere in the tree: inside the viewport through [PdfView]'s
- * `overlay` slot (HUD style), in your app bar, in a side panel — wherever.
+ * `overlay` slot (HUD style), in your app bar, or in a side panel.
  * They are foundation-only (no Material dependency) and deliberately
  * plain-looking; for an exact visual match with your design system, treat
  * them as references and build your own on top of [PdfViewState].
@@ -81,7 +81,7 @@ public fun PdfPageIndicator(
  * ```kotlin
  * overlay = { s -> PdfNavigationControls(s, Modifier.align(Alignment.BottomCenter).padding(16.dp)) }
  * ```
- * …or place it anywhere outside the viewport — it only needs the state.
+ * …or place it anywhere outside the viewport. It only needs the state.
  */
 @Composable
 public fun PdfNavigationControls(

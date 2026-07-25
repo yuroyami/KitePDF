@@ -14,7 +14,7 @@ import io.github.yuroyami.kitepdf.core.parser.PdfString
  * A resolved page destination (ISO 32000-1 §12.3.2). Holds the destination's
  * target page (when we can resolve it) and the view-fit parameters.
  *
- * Construct via [PdfDocument.resolveDestination] — it handles all four forms:
+ * Construct via [PdfDocument.resolveDestination]. It handles all four forms:
  *
  * 1. An explicit array `[page /XYZ left top zoom]`
  * 2. A name-string referring into the catalog `/Dests` dict (PDF 1.1)

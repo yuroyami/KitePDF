@@ -14,7 +14,7 @@ import io.github.yuroyami.kitepdf.core.render.KitePath
 import io.github.yuroyami.kitepdf.core.render.RgbColor
 
 /**
- * Structured text — `pageGlyphs → spans → lines → blocks` (ISO 32000-1
+ * Structured text: `pageGlyphs → spans → lines → blocks` (ISO 32000-1
  * §14.8 is the spec basis; MuPDF's `fz_stext_page` is the architectural
  * reference).
  *
@@ -36,7 +36,7 @@ public data class PdfStructuredText(
     val pageHeight: Double,
     val blocks: List<PdfTextBlock>,
 ) {
-    /** Flattened plain text — paragraph breaks become `\n\n`, line breaks `\n`. */
+    /** Flattened plain text. Paragraph breaks become `\n\n`, line breaks `\n`. */
     val plainText: String by lazy {
         blocks.joinToString(separator = "\n\n") { block ->
             block.lines.joinToString(separator = "\n") { it.text }
@@ -50,7 +50,7 @@ public data class PdfStructuredText(
 /**
  * One paragraph-ish chunk: a vertical run of lines with no big gap.
  * Block boundaries fall where vertical spacing exceeds [GAP_TO_NEW_BLOCK]
- * × the median line height — heuristic, not authoritative, but matches
+ * × the median line height. It is a heuristic, not authoritative, but matches
  * what readers consider "paragraph breaks" in the absence of structure
  * tagging.
  */
@@ -111,7 +111,7 @@ public data class PdfTextSpan(
 
 /**
  * Tunables for the structured-text clustering pass. PDF text has no
- * inherent line/paragraph notion — these heuristics work well for the
+ * inherent line/paragraph notion. These heuristics work well for the
  * common case (running text in horizontal writing mode) and degrade
  * gracefully for headings, tabular data, and rotated runs.
  */
@@ -121,7 +121,7 @@ internal object StructuredTextTuning {
 
     /**
      * Vertical gap (× median line height) above which we open a new block.
-     * 1.0 means "more than one full line of empty space" — empirically a
+     * 1.0 means "more than one full line of empty space". Empirically this is a
      * solid paragraph-break indicator for running text.
      */
     const val GAP_TO_NEW_BLOCK = 1.0
@@ -148,7 +148,7 @@ internal object StructuredTextExtractor {
     }
 
     private fun accessDocument(page: PdfPage): PdfDocument {
-        // Tiny visibility shim — PdfPage's `document` field is private. Use
+        // Visibility shim. PdfPage's `document` field is private. Use
         // the public reflection-free path: the page's resources resolver
         // already routes through the document.
         // We just need the document for the PageRenderer constructor.
@@ -196,8 +196,8 @@ internal object StructuredTextExtractor {
     private fun clusterBlocks(lines: List<PdfTextLine>): List<PdfTextBlock> {
         if (lines.isEmpty()) return emptyList()
         // Threshold derives from the line height (≈ font size), not the gap
-        // distribution — the gap-based approach was self-referential and
-        // broke down for 2-line documents (single gap == its own median).
+        // distribution. A gap-based threshold is self-referential and breaks
+        // down for 2-line documents (single gap == its own median).
         // "More than one full line of empty space" is the rule of thumb.
         val medianHeight = lines.map { it.bounds.height }.sorted()
             .let { if (it.isEmpty()) 0.0 else it[it.size / 2] }
@@ -233,7 +233,7 @@ internal object StructuredTextExtractor {
 
 /**
  * Canvas that records every `drawText` call. Path and image ops are
- * dropped — they don't contribute to text extraction.
+ * dropped. They don't contribute to text extraction.
  */
 private class TextCollectorCanvas : KiteCanvas {
     data class TextRun(
@@ -283,7 +283,7 @@ private class TextCollectorCanvas : KiteCanvas {
             advance *= horizScale
 
             // Origin and bounds come from the *full* text-rendering matrix, so
-            // rotation/skew (b, c) and non-uniform scale are honoured — not just
+            // rotation/skew (b, c) and non-uniform scale are honoured, not just
             // e/f and scaleX. Build the local box in text space then map its
             // corners through the matrix and take the axis-aligned hull.
             val originX = textMatrix.e

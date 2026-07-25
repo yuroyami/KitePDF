@@ -28,7 +28,7 @@ public object PdfPageRasterizer {
     /**
      * Render [page] into a freshly-allocated Skia [Image]. The caller owns
      * the returned object and should call `close()` (or use [encodeToPng])
-     * once done — Skia images hold off-heap memory.
+     * once done. Skia images hold off-heap memory.
      */
     public fun renderToImage(
         page: PdfPage,

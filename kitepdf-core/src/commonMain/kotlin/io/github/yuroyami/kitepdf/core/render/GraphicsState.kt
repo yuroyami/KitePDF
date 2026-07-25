@@ -8,8 +8,8 @@ import io.github.yuroyami.kitepdf.core.font.PdfFont
  * Every PDF content stream runs inside a stack of graphics states. `q` pushes
  * a copy; `Q` pops back. `cm`, color setters, font setters etc. mutate the
  * top of the stack. We model this with an immutable [GraphicsState] data
- * class and a stack on the side (see [GraphicsStack]) — easier to reason
- * about than a mutable struct, and the cost is a small allocation per `q`.
+ * class and a stack on the side (see [GraphicsStack]). That is easier to reason
+ * about than a mutable struct, and it costs one small allocation per `q`.
  *
  * Text state (Tm, Tlm, font, size, spacing) is tracked separately on
  * [TextState] and lives only inside `BT…ET` blocks.
@@ -33,13 +33,13 @@ public data class GraphicsState(
     /** Active soft mask (ExtGState `/SMask`); null when none. */
     val softMask: SoftMask? = null,
     /**
-     * Active fill pattern — set by `scn` when the fill colour-space is
+     * Active fill pattern, set by `scn` when the fill colour-space is
      * `/Pattern`. When non-null, [fillColor] is ignored and paint operators
      * route through the canvas's gradient/tile path. Cleared by any plain
      * colour setter (`g`, `rg`, `k`, `cs`, `sc`).
      */
     val fillPattern: KitePattern? = null,
-    /** Active stroke pattern — same semantics as [fillPattern] for `SCN`. */
+    /** Active stroke pattern: same semantics as [fillPattern] for `SCN`. */
     val strokePattern: KitePattern? = null,
     /** Dash pattern (`d` operator): on/off lengths in user-space units; null/empty = solid. */
     val dashArray: List<Double>? = null,
@@ -53,13 +53,13 @@ public data class GraphicsState(
     val miterLimit: Double = 10.0,
 )
 
-/** Per-`BT/ET` block text state — reset at BT, mutated by text operators. */
+/** Per-`BT/ET` block text state, reset at BT and mutated by text operators. */
 public data class TextState(
     val font: PdfFont? = null,
     val fontSize: Double = 12.0,
     /** Tm: maps text-space (glyph origin units) to user-space. */
     val textMatrix: Matrix = Matrix.IDENTITY,
-    /** Tlm: starting matrix for the *next* line — separate from textMatrix. */
+    /** Tlm: starting matrix for the *next* line, separate from textMatrix. */
     val lineMatrix: Matrix = Matrix.IDENTITY,
     /** Tc: extra spacing added after each glyph, in unscaled text-space. */
     val charSpacing: Double = 0.0,

@@ -15,12 +15,12 @@ import io.github.yuroyami.kitepdf.core.parser.PdfStream
  * The `gs` content-stream operator merges them into the current
  * [GraphicsState]. We extract only the fields we actually act on:
  *
- *   - `/CA` — stroke alpha (0..1)
- *   - `/ca` — fill alpha (0..1)
- *   - `/BM` — blend mode (name or array of names)
- *   - `/SMask` — soft-mask dict ("None" / Mask dict)
- *   - `/LW` `/LC` `/LJ` `/ML` `/D` — line state we honor where Compose has equivalents
- *   - `/AIS`, `/SA`, `/OP`, `/op`, `/OPM`, `/Font`, `/RI` — accepted but ignored (rare)
+ *   - `/CA`: stroke alpha (0..1)
+ *   - `/ca`: fill alpha (0..1)
+ *   - `/BM`: blend mode (name or array of names)
+ *   - `/SMask`: soft-mask dict ("None" / Mask dict)
+ *   - `/LW` `/LC` `/LJ` `/ML` `/D`: line state we honor where Compose has equivalents
+ *   - `/AIS`, `/SA`, `/OP`, `/op`, `/OPM`, `/Font`, `/RI`: accepted but ignored (rare)
  *
  * Missing fields stay at their previous values; that's the spec's
  * "ExtGState modifies the current state" rule.

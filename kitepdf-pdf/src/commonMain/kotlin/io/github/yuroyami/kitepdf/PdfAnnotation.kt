@@ -15,17 +15,17 @@ import io.github.yuroyami.kitepdf.core.render.RgbColor
  *
  * The [subtype] discriminates between the 20+ annotation types defined in
  * the spec. First-class support is provided for:
- *   - [Subtype.Link] — URL or named-destination hyperlinks
- *   - [Subtype.Highlight] — text highlight (yellow overlay)
- *   - [Subtype.Underline] — underline marker
- *   - [Subtype.StrikeOut] — strikethrough marker
- *   - [Subtype.Text] — sticky-note popup
+ *   - [Subtype.Link]: URL or named-destination hyperlinks
+ *   - [Subtype.Highlight]: text highlight (yellow overlay)
+ *   - [Subtype.Underline]: underline marker
+ *   - [Subtype.StrikeOut]: strikethrough marker
+ *   - [Subtype.Text]: sticky-note popup
  *
  * Other subtypes are parsed into [Subtype.Other] and exposed in [raw] so
  * callers can pattern-match. The rectangle and contents are always there.
  *
  * For rendering, [appearanceStream] (the /AP /N stream when present) is the
- * canonical way to draw the annotation — it's a Form XObject the spec
+ * canonical way to draw the annotation. It is a Form XObject the spec
  * mandates "shall be used as the visual representation." We expose it as a
  * raw stream so PageRenderer can recursively render it.
  */
@@ -39,7 +39,7 @@ public data class PdfAnnotation(
     val uri: String?,
     /** Parsed `/A` action (typed). `null` when the annotation has no action dict. */
     val action: PdfAction?,
-    /** Raw `/Dest` value on link annotations — pass through [PdfDocument.resolveDestination]. */
+    /** Raw `/Dest` value on link annotations. Pass through [PdfDocument.resolveDestination]. */
     val rawDestination: io.github.yuroyami.kitepdf.core.parser.PdfObject?,
     /** /AP /N appearance Form XObject, or null. */
     val appearanceStream: PdfStream?,
@@ -47,13 +47,13 @@ public data class PdfAnnotation(
     val flags: Int = 0,
     /** `/QuadPoints` (8 numbers per quad) for text-markup annotations. */
     val quadPoints: List<Double>? = null,
-    /** `/InkList` — one list of alternating x/y per ink stroke. */
+    /** `/InkList`: one list of alternating x/y per ink stroke. */
     val inkLists: List<List<Double>>? = null,
-    /** `/Vertices` (Polygon/PolyLine) or `/L` (Line) — alternating x/y. */
+    /** `/Vertices` (Polygon/PolyLine) or `/L` (Line): alternating x/y. */
     val vertices: List<Double>? = null,
     /** `/IC` interior (fill) colour for Square/Circle/Line/Polygon. */
     val interiorColor: RgbColor? = null,
-    /** The raw dict — for callers that need fields we didn't extract. */
+    /** The raw dict, for callers that need fields we didn't extract. */
     val raw: PdfDictionary,
 ) {
 
@@ -96,7 +96,7 @@ public data class PdfAnnotation(
         /**
          * Resolve the annotation's normal (`/N`) appearance. When `/AP /N` is a
          * Form XObject stream, use it directly. When it is a sub-dictionary of
-         * named appearance states (checkbox/radio widgets — `/N << /On … /Off … >>`),
+         * named appearance states (checkbox/radio widgets: `/N << /On … /Off … >>`),
          * select the entry named by `/AS`; without it, fall back to `/Off`, then
          * the first state (§12.5.5, §12.7.4.2). Returning null here is what made
          * checkbox/radio widgets render blank before.

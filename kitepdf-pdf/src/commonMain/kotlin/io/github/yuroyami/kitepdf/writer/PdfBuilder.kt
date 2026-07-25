@@ -11,7 +11,7 @@ import io.github.yuroyami.kitepdf.core.parser.PdfReference
 import io.github.yuroyami.kitepdf.core.parser.PdfString
 
 /**
- * Creates a brand-new PDF from scratch — the full (non-incremental) write path.
+ * Creates a brand-new PDF from scratch, the full (non-incremental) write path.
  *
  * ```
  * val bytes = PdfBuilder()
@@ -127,7 +127,7 @@ public class PdfBuilder {
     /**
      * A fresh [ContentStreamBuilder] wired to this builder's font/image
      * resources. Pair with [addPage] when page drawing must be driven
-     * imperatively — e.g. from a `suspend` layout routine that [page]'s
+     * imperatively, e.g. from a `suspend` layout routine that [page]'s
      * synchronous block can't host. Fonts/images used here are registered when
      * [addPage] commits the builder.
      */

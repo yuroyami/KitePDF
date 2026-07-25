@@ -6,8 +6,8 @@ import kotlin.test.assertContains
 import kotlin.test.assertEquals
 
 /**
- * Regression tests for the Session-2 foundation fixes — these PDFs would have
- * blown up in Session 1.
+ * Regression tests for two parser fixes: indirect stream lengths and xref
+ * sections chained via /Prev.
  */
 class FoundationFixesTest {
 
@@ -48,7 +48,7 @@ class FoundationFixesTest {
     }
 
     /**
-     * Two xref sections chained via /Prev — simulates an incremental update.
+     * Two xref sections chained via /Prev simulate an incremental update.
      * The newer section replaces obj 5's content stream; older sections still
      * provide objs 1–4.
      */

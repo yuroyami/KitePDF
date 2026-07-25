@@ -50,7 +50,7 @@ class FunctionShadingTest {
             c1 = doubleArrayOf(1.0),
             n = 2.0,
         )
-        // n=2 → output = x^2 — at x=0.5 the result is 0.25, not 0.5.
+        // n=2 → output = x^2. At x=0.5 the result is 0.25, not 0.5.
         assertEquals(0.25, fn.evaluate(doubleArrayOf(0.5))[0], 1e-9)
     }
 

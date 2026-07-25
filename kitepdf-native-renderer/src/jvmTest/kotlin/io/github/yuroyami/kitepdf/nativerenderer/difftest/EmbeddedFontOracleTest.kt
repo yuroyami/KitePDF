@@ -88,7 +88,7 @@ class EmbeddedFontOracleTest {
         val pdf = File.createTempFile("kite-embed-", ".pdf").apply { writeBytes(bytes) }
         val png = File.createTempFile("kite-embed-", ".png")
         try {
-            // mutool must rasterise the page — a malformed FontFile2 or font dict
+            // mutool must rasterise the page. A malformed FontFile2 or font dict
             // would fail here, not silently substitute.
             val draw = runMutool(
                 tool, "draw", "-r", "72", "-F", "png", "-o", png.absolutePath, pdf.absolutePath, "1",
@@ -140,7 +140,7 @@ class EmbeddedFontOracleTest {
 
         // The decisive correctness check: the subset must render PIXEL-IDENTICAL to
         // the full embed. Same text + same font, so any difference means the glyf/loca
-        // renumber or the /CIDToGIDMap is wrong (wrong glyph drawn, or .notdef boxes) —
+        // renumber or the /CIDToGIDMap is wrong (wrong glyph drawn, or .notdef boxes),
         // which a mere "did it produce a PNG?" check would miss.
         assumeTrue("mutool not found — skipping render half.", MuPdfOracle.binary != null)
         val subFile = File.createTempFile("kite-subset-", ".pdf").apply { writeBytes(subsetPdf) }

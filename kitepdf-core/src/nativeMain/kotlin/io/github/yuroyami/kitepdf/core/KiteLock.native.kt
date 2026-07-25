@@ -35,7 +35,7 @@ public actual class KiteLock actual constructor() {
 
 // pthread_t is a pointer on Apple and an integer elsewhere; hashCode is the
 // one portable projection. A collision merely risks one spurious "cyclic
-// reference" null-cache if two colliding threads race the same object —
+// reference" null-cache if two colliding threads race the same object:
 // lenient degradation, astronomically unlikely. 0 is reserved for "unlocked".
 @OptIn(ExperimentalForeignApi::class)
 public actual fun currentThreadId(): Long {

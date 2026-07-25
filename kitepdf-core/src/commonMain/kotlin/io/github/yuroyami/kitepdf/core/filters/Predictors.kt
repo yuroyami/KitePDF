@@ -7,7 +7,7 @@ import kotlin.math.abs
  * TIFF + PNG predictors for FlateDecode (ISO 32000-1 §7.4.4.4).
  *
  * Predictors are a post-decode pass that undoes a per-row delta encoding the
- * producer applied before compression — they help DEFLATE compress smoothly
+ * producer applied before compression. They help DEFLATE compress smoothly
  * varying data (like a grayscale gradient) much better. Almost every PDF 1.5+
  * xref stream uses predictor 12 (PNG Up).
  *
@@ -57,7 +57,7 @@ internal object Predictors {
             val inData = rowStart + 1
             val outRow = r * bytesPerRow
             // The previous decoded row lives contiguously in `out` directly above
-            // this one, so read "up"/"upLeft" from there — no separate prevRow
+            // this one, so read "up"/"upLeft" from there, with no separate prevRow
             // buffer and no per-row copy. The first row's predecessor is all zeros.
             val prevRow = outRow - bytesPerRow
             val filterType = input[rowStart].toInt() and 0xFF

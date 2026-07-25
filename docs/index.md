@@ -26,11 +26,11 @@ val fresh = PdfBuilder()                     // create
 
 ## Why KitePDF
 
-Most "Kotlin PDF libraries" are thin `expect`/`actual` wrappers around the platform's own engine: `PdfRenderer` on Android, `PDFKit` on iOS, PDF.js in the browser, PDFBox on the JVM. You inherit four engines, four sets of bugs, and four feature sets that never line up.
+Most "Kotlin PDF libraries" are thin `expect`/`actual` wrappers around the platform's own engine: `PdfRenderer` on Android, `PDFKit` on iOS, PDF.js in the browser, PDFBox on the JVM. You then depend on four engines. Each one has its own bugs and its own feature set.
 
 KitePDF is a single standalone engine, written in Kotlin and almost entirely in common code. Parser, renderer, writer, editor, encryption and fonts are all included, and `kitepdf-core` carries just three `expect` declarations (a mutex, a thread id, and the deflate/inflate hook). Write your PDF code once in `commonMain` and the same implementation runs on every target.
 
-Drawing to a screen is the only thing that needs a platform, and KitePDF keeps that cleanly separate so the engine stays pure and portable.
+Drawing to a screen is the only job that needs a platform. KitePDF keeps that job in separate artifacts, so the engine itself stays portable.
 
 ## Install
 
@@ -46,18 +46,18 @@ kotlin {
 }
 ```
 
-Its runtime dependencies are `kotlin-stdlib` and the pure-Kotlin KiteImage codec engine, and it works on every Kotlin target.
+Its runtime dependencies are `kotlin-stdlib` and the pure-Kotlin KiteImage codec engine. It runs on every target listed under [Platform support](platforms.md).
 
 Drawing a page to the screen is the one job that needs a platform, so the rendering bindings are separate, opt-in artifacts. Add the one that matches how you draw:
 
 | Artifact | Add it when you want |
 |---|---|
-| `io.github.yuroyami:kitepdf` | The engine: read / write / edit PDFs **and** read EPUBs. Pure Kotlin (stdlib + KiteImage codecs), every Kotlin target. |
+| `io.github.yuroyami:kitepdf` | The engine: read, write and edit PDFs, **and** read EPUBs. Pure Kotlin (stdlib plus KiteImage codecs). |
 | `io.github.yuroyami:kitepdf-compose-viewer` | A Compose `PdfView` / `EpubView`, drawn straight into a `DrawScope`. |
 | `io.github.yuroyami:kitepdf-native-renderer` | Headless page → image through the platform canvas (AWT, CoreGraphics, `android.graphics`, Canvas2D). |
 | `io.github.yuroyami:kitepdf-skia-renderer` | Headless page → image through Skia / Skiko: one API on JVM, Android, Apple, Linux and web. |
 
-Every artifact is at `0.2.0`. Want a single format instead of the umbrella? `kitepdf-pdf` is the PDF handler alone and `kitepdf-epub` the EPUB reader alone; `kitepdf` pulls in both. See [Show it on screen](#show-it-on-screen) for each binding in use.
+Every artifact is at `0.2.0`. For a single format, add `kitepdf-pdf` (the PDF handler alone) or `kitepdf-epub` (the EPUB reader alone). The `kitepdf` umbrella contains both. See [Show it on screen](#show-it-on-screen) for each binding in use.
 
 !!! note "Not using Kotlin Multiplatform?"
     The same artifact works in a plain Android or JVM project. Add `io.github.yuroyami:kitepdf:0.2.0` to your normal `dependencies { }` block.
@@ -163,6 +163,6 @@ See **[Headless rendering](rendering.md)**.
 
 ## Status
 
-KitePDF is pre-1.0 and actively developed. Reading, text extraction, metadata, outlines, annotations, forms, encrypted documents, the Compose viewer, headless rendering, editing, redaction, signing preparation, PDF creation, and the supported JBIG2/JPEG 2000 profiles all work today. Signature validation, less common form widgets, advanced colour management, broader image-codec profiles, and more document handlers are on the way.
+KitePDF is pre-1.0 and actively developed. Reading, text extraction, metadata, outlines, annotations, forms, encrypted documents, the Compose viewer, headless rendering, editing, redaction, signing preparation, PDF creation, and the supported JBIG2/JPEG 2000 profiles all work today. Signature validation, less common form widgets, advanced color management, broader image-codec profiles, and more document handlers are on the way.
 
-If a PDF renders incorrectly, [open an issue](https://github.com/yuroyami/KitePDF/issues) with the file attached. Every fix lands as a regression test against a MuPDF pixel-diff harness.
+If a PDF renders incorrectly, [open an issue](https://github.com/yuroyami/KitePDF/issues) with the file attached. Every rendering fix ships with a regression test.

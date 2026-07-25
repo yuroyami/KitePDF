@@ -193,8 +193,8 @@ private fun ImageXObject.applySoftMaskAlpha(rgba: ByteArray) {
     val mh = softMaskHeight
     if (mw <= 0 || mh <= 0) return
     var a = 3
-    // Common case: mask matches image resolution — walk it linearly, no per-pixel
-    // integer divides for the (mx, my) remap.
+    // Common case: mask matches image resolution. Walk it linearly, with no
+    // per-pixel integer divides for the (mx, my) remap.
     if (mw == width && mh == height) {
         val n = width * height
         var m = 0

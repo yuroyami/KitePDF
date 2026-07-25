@@ -8,7 +8,7 @@ public enum class FontFamily { Serif, SansSerif, Monospace }
  * document font ships no embedded outlines (e.g. the PDF Standard-14, or a CSS
  * font with no `@font-face` file). Render backends map [family] + [bold] +
  * [italic] to a host typeface. No PDF (or other format) types cross the canvas
- * seam, so every document handler — PDF, EPUB, ... — feeds the same [FontSpec].
+ * seam, so every document handler (PDF, EPUB, ...) feeds the same [FontSpec].
  */
 public data class FontSpec(
     val family: FontFamily,

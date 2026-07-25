@@ -63,12 +63,12 @@ class SkiaDifferentialTest {
                 textGap.joinToString { "${it.name} p${it.page}" })
         }
 
-        // Gate 1 — Skia must render (not throw on) every page.
+        // Skia must render (not throw on) every page.
         assertTrue(results.all { it.rendered }, "Skia failed to render: " + results.filter { !it.rendered }.map { "${it.name} p${it.page}" })
-        // Gate 2 — vector/colour generated fixtures must be non-blank.
+        // Vector/colour generated fixtures must be non-blank.
         val blank = results.filter { it.name.startsWith("gen-") && !it.name.startsWith("gen-text") && !it.nonBlank }
         assertTrue(blank.isEmpty(), "blank Skia render: " + blank.map { "${it.name} p${it.page}" })
-        // Gate 3 — with the oracle, stay under budget on what we DO render.
+        // With the oracle, the pages we render must stay under budget.
         if (mutool != null) {
             val over = results.filter { (it.score ?: 0.0) > budget }
             assertTrue(over.isEmpty(), "Skia pages over budget ($budget): " + over.map { "${it.name} p${it.page}=${"%.4f".format(it.score)}" })
@@ -92,7 +92,7 @@ class SkiaDifferentialTest {
 
     private fun inputs(): List<Pair<String, ByteArray>> {
         val list = mutableListOf<Pair<String, ByteArray>>()
-        // Pure base-14 text — currently a KNOWN GAP on the Skia backend (blank).
+        // Pure base-14 text, a known gap on the Skia backend (renders blank).
         list += "gen-text-base14" to PdfBuilder()
             .page { text(StandardFont.Helvetica, 24.0, 72.0, 700.0, "Skia backend differential") }
             .build()

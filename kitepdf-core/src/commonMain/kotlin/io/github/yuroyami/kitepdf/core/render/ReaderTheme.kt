@@ -8,7 +8,7 @@ import io.github.yuroyami.kitepdf.core.font.TextGlyph
  * every text / vector / border / CSS-background colour a page paints. Images and
  * gradients pass through untouched, so photos never invert.
  *
- * Format-neutral — it themes any [KiteCanvas] (PDF or EPUB). Hand a theme to a
+ * Format-neutral: it themes any [KiteCanvas] (PDF or EPUB). Hand a theme to a
  * rasterizer, or wrap a canvas yourself:
  *
  * ```kotlin
@@ -94,7 +94,7 @@ internal class ThemedCanvas(
     override fun pushClip(path: KitePath, ctm: Matrix, evenOdd: Boolean) = inner.pushClip(path, ctm, evenOdd)
     override fun popClip() = inner.popClip()
 
-    // Images are NOT themed — photos should keep their real colours.
+    // Images are NOT themed. Photos should keep their real colours.
     override fun drawImage(image: ImageXObject, ctm: Matrix, alpha: Double) = inner.drawImage(image, ctm, alpha)
 
     override fun beginTransparencyGroup(bbox: Rectangle, ctm: Matrix, isolated: Boolean, knockout: Boolean, alpha: Double, blendMode: BlendMode) =

@@ -7,7 +7,7 @@ package io.github.yuroyami.kitepdf.core
  * end-of-file, jump to the xref table, then resolve indirect objects by seeking
  * to byte offsets. So the reader exposes seek/pos/peek/read, not a stream API.
  *
- * Everything is byte-level — PDF syntax is ASCII-ish but binary-safe inside
+ * Everything is byte-level. PDF syntax is ASCII-ish but binary-safe inside
  * streams and strings, so we never call String(...) on the underlying bytes
  * outside controlled paths.
  */

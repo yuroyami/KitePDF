@@ -75,8 +75,8 @@ public class ContentStreamBuilder internal constructor(
 
     /**
      * Intersect the clipping path with the current path using the nonzero
-     * winding rule (`W`). Per the spec, a path-painting operator must follow —
-     * call [endPath] to clip without also painting the path, e.g.
+     * winding rule (`W`). Per the spec, a path-painting operator must follow.
+     * Call [endPath] to clip without also painting the path, e.g.
      * `rectangle(...); clip(); endPath()`.
      */
     public fun clip(): ContentStreamBuilder = op("W")

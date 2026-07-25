@@ -7,7 +7,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 /**
- * GSUB shaping — Arabic contextual joining ([ArabicJoining] + the GSUB `init`/
+ * GSUB shaping: Arabic contextual joining ([ArabicJoining] + the GSUB `init`/
  * `medi`/`fina` single substitutions) wired through [BoxLayout]. The pure joining
  * algorithm is asserted directly; the end-to-end path is checked against the
  * in-repo `NotoNaskhArabic-Regular.otf` (verify: the medial glyph of a mid-word
@@ -47,7 +47,7 @@ class ShapingTest {
         val mediHah = face.substSingle("medi", isolHah)
         assertTrue(mediHah != isolHah, "the font provides a distinct medial form for hah")
 
-        val text = "بحر" // بحر — beh, hah, reh
+        val text = "بحر" // بحر: beh, hah, reh
         val css = "@font-face{font-family:'AR';src:url(f.otf)}p{font-family:'AR'}"
         val doc = EpubDocument.open(
             EpubFixtures.epub("<body><style>$css</style><p>$text</p></body>", listOf("OEBPS/f.otf" to otf)),

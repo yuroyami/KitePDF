@@ -115,7 +115,7 @@ public object Md5 {
         private fun rotl(v: Int, n: Int): Int = (v shl n) or (v ushr (32 - n))
     }
 
-    /** Per-step shift values — repeat-4 within each round. */
+    /** Per-step shift values: repeat-4 within each round. */
     private val S = intArrayOf(
         7, 12, 17, 22, 7, 12, 17, 22, 7, 12, 17, 22, 7, 12, 17, 22,
         5, 9, 14, 20, 5, 9, 14, 20, 5, 9, 14, 20, 5, 9, 14, 20,
@@ -123,7 +123,7 @@ public object Md5 {
         6, 10, 15, 21, 6, 10, 15, 21, 6, 10, 15, 21, 6, 10, 15, 21,
     )
 
-    /** T[i] = floor(2^32 × |sin(i+1)|) — RFC 1321 §3.4. */
+    /** T[i] = floor(2^32 × |sin(i+1)|), from RFC 1321 §3.4. */
     private val T = intArrayOf(
         0xD76AA478.toInt(), 0xE8C7B756.toInt(), 0x242070DB,         0xC1BDCEEE.toInt(),
         0xF57C0FAF.toInt(), 0x4787C62A,         0xA8304613.toInt(), 0xFD469501.toInt(),

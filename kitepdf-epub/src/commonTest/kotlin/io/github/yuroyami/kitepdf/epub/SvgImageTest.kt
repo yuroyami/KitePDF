@@ -7,7 +7,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
-/** The SVG renderer ([SvgImage]) — shapes, path data, fill/stroke, viewBox, transforms. */
+/** The SVG renderer ([SvgImage]): shapes, path data, fill/stroke, viewBox, transforms. */
 class SvgImageTest {
 
     private fun calls(svg: String): List<RecordingCanvas.Call> {

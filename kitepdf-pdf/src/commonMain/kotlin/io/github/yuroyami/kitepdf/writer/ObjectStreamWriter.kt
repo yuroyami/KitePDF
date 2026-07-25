@@ -8,7 +8,7 @@ import io.github.yuroyami.kitepdf.core.parser.PdfStream
 
 /**
  * Packs non-stream indirect objects into a single object stream (`/Type /ObjStm`,
- * ISO 32000-1 §7.5.7) — the compression that lets modern PDFs store dozens of
+ * ISO 32000-1 §7.5.7), the compression that lets modern PDFs store dozens of
  * small dictionaries in one Flate-compressed stream. The inverse of the reader's
  * `decodeObjectStream`.
  *

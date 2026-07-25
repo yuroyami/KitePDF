@@ -11,7 +11,7 @@ import org.jetbrains.skia.ImageInfo
 
 public actual object ImageDecoder {
     /**
-     * Compose/JS rides on Skiko (CanvasKit), which bundles Skia's image codecs —
+     * Compose/JS uses Skiko (CanvasKit), which bundles Skia's image codecs,
      * so decoding is synchronous here too, no `createImageBitmap` Promise dance.
      * Falls back to null (→ placeholder rectangle) if Skia can't parse the bytes.
      */

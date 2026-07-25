@@ -20,7 +20,7 @@ class RenderTest {
         assertEquals(1, texts.size)
         assertEquals("Hello", texts[0].text)
         assertEquals(18.0, texts[0].fontSize)
-        // Text origin lands at (100, 700) — translated by Td.
+        // Text origin lands at (100, 700), translated by Td.
         assertEquals(100.0, texts[0].textToDevice.e)
         assertEquals(700.0, texts[0].textToDevice.f)
     }
@@ -119,7 +119,7 @@ class RenderTest {
     @Test
     fun cs_selects_color_space_so_scn_reads_all_components() {
         // `CS` must select the stroke colour space so SCN reads all components. Without a cs/CS
-        // handler the space stayed DeviceGray and `1 0 0 SCN` was read as gray(1)=white — the
+        // handler the space stayed DeviceGray and `1 0 0 SCN` was read as gray(1)=white, the
         // iOS ECG-grid-rendered-white bug (CoreGraphics uses ICCBased-RGB + CS/SCN, not rg).
         val pdf = singlePagePdf("/DeviceRGB CS 1 0 0 SCN 0 0 m 100 100 l S")
         val doc = KitePDF.open(pdf)

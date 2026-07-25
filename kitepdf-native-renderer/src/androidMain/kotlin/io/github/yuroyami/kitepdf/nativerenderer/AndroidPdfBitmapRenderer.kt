@@ -7,7 +7,7 @@ import io.github.yuroyami.kitepdf.PdfPage
 import io.github.yuroyami.kitepdf.core.render.Matrix as PdfMatrix
 
 /**
- * Headless rendering on Android — produces an ARGB_8888 [Bitmap] sized to
+ * Headless rendering on Android. Produces an ARGB_8888 [Bitmap] sized to
  * the page in pt units multiplied by [scale]. No Compose dependency.
  *
  * Typical uses:

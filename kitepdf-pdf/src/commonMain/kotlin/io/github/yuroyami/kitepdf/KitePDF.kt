@@ -1,7 +1,7 @@
 package io.github.yuroyami.kitepdf
 
 /**
- * One-call entry point. Equivalent to [PdfDocument.open] — exists so
+ * One-call entry point. Equivalent to [PdfDocument.open]. It exists so
  * `KitePDF.open(bytes)` reads nicely at call sites. For passwords, encryption
  * checks, editing, etc. use [PdfDocument] directly.
  *

@@ -11,7 +11,7 @@ import io.github.yuroyami.kitepdf.core.parser.PdfString
 import io.github.yuroyami.kitepdf.core.render.RgbColor
 
 /**
- * One node in the document outline (a.k.a. bookmarks) tree — ISO 32000-1
+ * One node in the document outline (a.k.a. bookmarks) tree. See ISO 32000-1
  * §12.3.3.
  *
  * Each node has a [title] (UTF-16BE or PDFDocEncoding text), zero or more
@@ -29,7 +29,7 @@ public data class PdfOutline(
     val rawDestination: PdfObject?,
     /** Parsed /A action (typed). `null` when the outline has no /A entry. */
     val action: PdfAction?,
-    /** /Count from the spec — sum of visible descendants. Sign indicates open (>0) or closed (<0). 0 = leaf. */
+    /** /Count from the spec: sum of visible descendants. Sign indicates open (>0) or closed (<0). 0 = leaf. */
     val count: Int,
     val italic: Boolean,
     val bold: Boolean,

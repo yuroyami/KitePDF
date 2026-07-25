@@ -7,7 +7,7 @@ package io.github.yuroyami.kitepdf.crypto
  * PDF V4 encrypts streams with AES-128-CBC using an IV prepended to the
  * ciphertext (first 16 bytes). PDF V5/V6 uses AES-256-CBC the same way.
  *
- * **Not for general use.** This is a textbook implementation — no
+ * **Not for general use.** This is a textbook implementation: no
  * side-channel hardening, no timing-attack resistance, no AES-NI. It's here
  * because PDF needs decryption to *open* the document; the underlying threat
  * model is "rightful owner who has the password," not "attacker with timing."
@@ -19,7 +19,7 @@ public object Aes {
         require(key.size == 16 || key.size == 32) { "AES key must be 16 or 32 bytes" }
         // A malformed / empty encrypted string (e.g. the literal `()`) must not
         // throw and null out the whole containing object. Fewer than one block,
-        // or a non-block-multiple length, cannot be validly decrypted — return
+        // or a non-block-multiple length, cannot be validly decrypted. Return
         // empty rather than raising IllegalArgumentException.
         if (ciphertext.size < 16 || ciphertext.size % 16 != 0) return ByteArray(0)
         val expanded = expandKey(key)
@@ -204,7 +204,7 @@ public object Aes {
         }
     }
 
-    // Precomputed GF(2^8) multiply tables (built once via gmul) — turn each
+    // Precomputed GF(2^8) multiply tables, built once via gmul. They turn each
     // MixColumns/InvMixColumns multiply into a single array index instead of the
     // 8-iteration shift/xor loop. (AES decrypts every encrypted stream/string.)
     private val MUL2 = IntArray(256) { gmul(it, 2) }
@@ -214,7 +214,7 @@ public object Aes {
     private val MUL13 = IntArray(256) { gmul(it, 0x0D) }
     private val MUL14 = IntArray(256) { gmul(it, 0x0E) }
 
-    /** Galois Field (2^8) multiplication — used to build the MUL* tables above. */
+    /** Galois Field (2^8) multiplication, used to build the MUL* tables above. */
     private fun gmul(a: Int, b: Int): Int {
         var p = 0
         var x = a and 0xFF

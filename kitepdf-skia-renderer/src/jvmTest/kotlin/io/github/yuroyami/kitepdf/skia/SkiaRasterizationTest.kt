@@ -10,7 +10,7 @@ import kotlin.test.assertTrue
  * End-to-end test: build a minimal PDF in memory, feed it through KitePDF +
  * the Skia adapter, and verify we get a valid PNG bitmap out the other side.
  *
- * Pixel-level correctness is deliberately NOT asserted here — that would
+ * This test deliberately does not assert pixel-level correctness. That would
  * couple the test to specific Skia rasterization behaviour. We just verify
  * the pipeline is wired end-to-end and produces a non-trivial output.
  */

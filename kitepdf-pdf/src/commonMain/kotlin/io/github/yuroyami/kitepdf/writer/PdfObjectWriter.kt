@@ -16,7 +16,7 @@ import io.github.yuroyami.kitepdf.core.parser.PdfString
 
 /**
  * Serializes the [PdfObject] model back to spec-compliant PDF syntax
- * (ISO 32000-1 §7.3) — the inverse of [io.github.yuroyami.kitepdf.parser.Parser].
+ * (ISO 32000-1 §7.3), the inverse of [io.github.yuroyami.kitepdf.parser.Parser].
  *
  * The output is designed to round-trip exactly through KitePDF's own
  * [Lexer]/[io.github.yuroyami.kitepdf.parser.Parser] and to be accepted by other
@@ -63,7 +63,7 @@ public object PdfObjectWriter {
 
     /**
      * Format a double as a PDF real: a sign, digits, an optional dot, and more
-     * digits — **never** an exponent. Rounded to 6 decimal places (ample for
+     * digits, **never** an exponent. Rounded to 6 decimal places (ample for
      * coordinates and matrices) with trailing zeros trimmed. NaN/Infinity are
      * not representable in PDF, so they degrade to "0".
      */
@@ -151,7 +151,7 @@ public object PdfObjectWriter {
     private fun writeStream(stream: PdfStream, out: ByteArrayBuilder) {
         // /Length must reflect the actual payload; overwrite whatever was there
         // (including an indirect reference, which would dangle once relocated).
-        // Written inline — no map clone / PdfInt / PdfDictionary wrapper — while
+        // Written inline (no map clone / PdfInt / PdfDictionary wrapper) while
         // emitting byte-identical output (Length keeps its original slot if present).
         out.ascii("<<")
         var wroteLength = false

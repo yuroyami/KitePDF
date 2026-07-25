@@ -8,7 +8,7 @@ import io.github.yuroyami.kitepdf.core.parser.PdfReference
 import io.github.yuroyami.kitepdf.core.parser.PdfString
 
 /**
- * Optional Content metadata — ISO 32000-1 §8.11. Optional Content Groups
+ * Optional Content metadata (ISO 32000-1 §8.11). Optional Content Groups
  * (OCGs) are the PDF spec's name for "layers": chunks of content that can
  * be selectively shown or hidden via /OC marked-content sections and
  * Form XObjects with /OC entries.
@@ -31,15 +31,15 @@ public data class PdfOptionalContent(
 
     /**
      * One Optional Content Group. The [id] is the OCG's PDF object number
-     * stringified — stable inside the document and what /OC marked-content
-     * sections refer to.
+     * stringified. It is stable inside the document, and /OC marked-content
+     * sections refer to it.
      */
     public data class OptionalContentGroup(
         val id: String,
         val name: String,
-        /** Spec /Intent — typically "View" or "Design". Empty when not declared. */
+        /** Spec /Intent: typically "View" or "Design". Empty when not declared. */
         val intent: List<String>,
-        /** /Usage dict for purpose-specific defaults (Print, Export, View). Raw — opaque to us. */
+        /** /Usage dict for purpose-specific defaults (Print, Export, View). Raw: opaque to us. */
         val usage: PdfDictionary?,
     )
 

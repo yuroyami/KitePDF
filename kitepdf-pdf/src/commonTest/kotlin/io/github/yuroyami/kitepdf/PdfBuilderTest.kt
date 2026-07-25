@@ -11,7 +11,7 @@ import kotlin.test.assertTrue
 /**
  * Tests the from-scratch full writer ([PdfBuilder]): documents it creates must
  * re-open through KitePDF's own reader with the expected pages, sizes, text,
- * and metadata — both compressed and uncompressed.
+ * and metadata, both compressed and uncompressed.
  */
 class PdfBuilderTest {
 

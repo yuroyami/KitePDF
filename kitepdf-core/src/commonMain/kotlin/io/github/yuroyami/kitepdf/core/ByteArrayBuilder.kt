@@ -2,7 +2,7 @@ package io.github.yuroyami.kitepdf.core
 
 /**
  * Grow-on-demand byte buffer. Pure Kotlin (no platform OutputStream classes),
- * so it works in commonMain across all targets — and it's faster than
+ * so it works in commonMain across all targets, and it's faster than
  * `mutableListOf<Byte>()` because it stores into a contiguous primitive array.
  *
  * Public because consumers building or assembling byte streams (e.g. demo
@@ -25,7 +25,7 @@ public class ByteArrayBuilder(initialCapacity: Int = 64) {
     }
 
     /**
-     * Append the low byte of each char in [s] directly — for pure-ASCII tokens
+     * Append the low byte of each char in [s] directly, for pure-ASCII tokens
      * (PDF keywords, numbers, operators). Avoids the transient `ByteArray` that
      * `s.encodeToByteArray()` allocates per call. Callers must guarantee ASCII.
      */
@@ -40,7 +40,7 @@ public class ByteArrayBuilder(initialCapacity: Int = 64) {
 
     /**
      * Append the base-10 ASCII representation of [value] directly into the
-     * buffer — no intermediate `String`. Used by the serializer for object
+     * buffer, with no intermediate `String`. Used by the serializer for object
      * numbers, generations and `/Length`, which are written per object.
      */
     public fun appendLong(value: Long) {
@@ -63,13 +63,13 @@ public class ByteArrayBuilder(initialCapacity: Int = 64) {
         written += total
     }
 
-    /** Append a 16-bit value big-endian (network order) — for SFNT/binary writers. */
+    /** Append a 16-bit value big-endian (network order), for SFNT/binary writers. */
     public fun appendU16BE(value: Int) {
         append((value ushr 8).toByte())
         append(value.toByte())
     }
 
-    /** Append a 32-bit value big-endian (network order) — for SFNT/binary writers. */
+    /** Append a 32-bit value big-endian (network order), for SFNT/binary writers. */
     public fun appendU32BE(value: Int) {
         append((value ushr 24).toByte())
         append((value ushr 16).toByte())

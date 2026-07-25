@@ -40,7 +40,7 @@ fun PdfViewer(doc: PdfDocument) {
 }
 ```
 
-Users scroll vertically by default; swiping and pinch-zoom work out of the box.
+Users scroll vertically by default. Swiping and pinch-zoom need no extra setup.
 
 ## View a single page in Compose
 

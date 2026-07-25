@@ -4,7 +4,7 @@ package io.github.yuroyami.kitepdf.core.font
  * Horizontal kerning for an SFNT font, from either the legacy `kern` table
  * (format 0) or OpenType `GPOS` pair adjustment (lookup type 2, the `kern`
  * feature). Returns the x-advance adjustment between two glyphs in font design
- * units — callers normalise to 1/1000 em like every other advance.
+ * units. Callers normalise to 1/1000 em like every other advance.
  *
  * This is the positioning half of OpenType shaping; the substitution half
  * (`GSUB`: ligatures, Arabic contextual joining) is a separate, larger effort.

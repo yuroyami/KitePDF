@@ -45,7 +45,7 @@ import io.github.yuroyami.kitepdf.compose.encodeToPng
 import io.github.yuroyami.kitepdf.compose.rememberPdfViewState
 
 /**
- * KitePDF sample — the whole document through the one [PdfView] composable,
+ * KitePDF sample: the whole document through the one [PdfView] composable,
  * plus the export callback wired to [encodeToPng].
  */
 @Composable
@@ -113,7 +113,7 @@ private enum class LayoutChoice(val label: String, val layout: PdfLayout) {
 
 @Composable
 private fun DocumentDisplay(doc: PdfDocument, modifier: Modifier = Modifier) {
-    // Fed by PdfView's onPageRendered callback below — proves the export path.
+    // PdfView's onPageRendered callback below feeds this. It proves the export path.
     var exportNote by remember(doc) { mutableStateOf("rendering…") }
     var layoutChoice by remember { mutableStateOf(LayoutChoice.VERTICAL) }
     val state = rememberPdfViewState(doc)
@@ -227,9 +227,9 @@ private enum class Demo(val label: String, val bytes: ByteArray) {
 }
 
 /**
- * T-80's app-side half: the viewer exposes [PdfViewState.selection] (made by
- * long-press + drag on any page) but never touches the clipboard itself —
- * copying is the app's decision. Long-press text in the viewer, then hit Copy.
+ * The app-side half of text selection: the viewer exposes [PdfViewState.selection]
+ * (made by long-press + drag on any page) but never touches the clipboard itself.
+ * Copying is the app's decision. Long-press text in the viewer, then press Copy.
  */
 @Composable
 private fun PdfSelectionActions(state: io.github.yuroyami.kitepdf.compose.PdfViewState) {

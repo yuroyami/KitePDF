@@ -12,17 +12,17 @@ import io.github.yuroyami.kitepdf.core.parser.PdfStream
 import io.github.yuroyami.kitepdf.core.parser.PdfString
 
 /**
- * A PDF action — ISO 32000-1 §12.6. Actions describe what happens when the
+ * A PDF action (ISO 32000-1 §12.6). Actions describe what happens when the
  * user activates a link, button, form field, or document open/close event.
  *
  * Common variants:
- *  - [GoTo] — jump to a destination in this document
- *  - [GoToR] — jump to a destination in another PDF
- *  - [Launch] — open an external file/application
- *  - [Uri] — open a URL
- *  - [Named] — execute a predefined viewer action (NextPage, Print, …)
- *  - [JavaScript] — run an embedded script
- *  - [SubmitForm] / [ResetForm] — interactive-form actions
+ *  - [GoTo]: jump to a destination in this document
+ *  - [GoToR]: jump to a destination in another PDF
+ *  - [Launch]: open an external file/application
+ *  - [Uri]: open a URL
+ *  - [Named]: execute a predefined viewer action (NextPage, Print, …)
+ *  - [JavaScript]: run an embedded script
+ *  - [SubmitForm] / [ResetForm]: interactive-form actions
  *
  * Any action type we don't classify (Sound, Movie, Hide, SetOCGState,
  * SetState, Trans, GoTo3DView, Rendition, ImportData, …) is exposed as
@@ -35,7 +35,7 @@ public sealed class PdfAction {
     public abstract val raw: PdfDictionary
 
     public data class GoTo(
-        /** Unresolved /D — pass through [PdfDocument.resolveDestination] for the typed view. */
+        /** Unresolved /D. Pass through [PdfDocument.resolveDestination] for the typed view. */
         val destination: PdfObject,
         override val raw: PdfDictionary,
     ) : PdfAction()
@@ -49,7 +49,7 @@ public sealed class PdfAction {
     ) : PdfAction()
 
     public data class GoToE(
-        /** Target /T spec for the embedded file. Kept raw — embedded-target chains are rare. */
+        /** Target /T spec for the embedded file. Kept raw. Embedded-target chains are rare. */
         val target: PdfDictionary?,
         val destination: PdfObject?,
         val newWindow: Boolean,
@@ -64,7 +64,7 @@ public sealed class PdfAction {
 
     public data class Uri(
         val uri: String,
-        /** /IsMap — true if the URL is an image-map and the click point should be appended. */
+        /** /IsMap: true if the URL is an image-map and the click point should be appended. */
         val isMap: Boolean,
         override val raw: PdfDictionary,
     ) : PdfAction()
@@ -84,7 +84,7 @@ public sealed class PdfAction {
 
     public data class SubmitForm(
         val url: String?,
-        /** Field names or refs the action targets — null means "all fields". */
+        /** Field names or refs the action targets. A null list means "all fields". */
         val fields: List<PdfObject>?,
         val flags: Int,
         override val raw: PdfDictionary,

@@ -11,7 +11,7 @@ import io.github.yuroyami.kitepdf.core.PdfFormatException
  * higher-level parser can also seek inside the same buffer (e.g. into the body
  * of a stream after reading "stream\n"). Whitespace and comments are skipped.
  *
- * The lexer does NOT decide what's an "obj" header or what's an operator — it
+ * The lexer does NOT decide what's an "obj" header or what's an operator. It
  * just classifies tokens. The parser interprets them.
  */
 public class Lexer(public val reader: ByteReader) {
@@ -53,7 +53,7 @@ public class Lexer(public val reader: ByteReader) {
         }
     }
 
-    /** Read raw bytes from the current position — used by parser after a "stream" keyword. */
+    /** Read raw bytes from the current position, used by the parser after a "stream" keyword. */
     public fun rawReader(): ByteReader = reader
 
     /* ─── Whitespace ──────────────────────────────────────────────────────── */
@@ -102,7 +102,7 @@ public class Lexer(public val reader: ByteReader) {
                         'f'.code -> out.append(0x0C)
                         '('.code, ')'.code, '\\'.code -> out.append(esc.toByte())
                         '\r'.code -> if (reader.peek() == '\n'.code) reader.readByte()  // CRLF eaten
-                        '\n'.code -> { /* line continuation — eat */ }
+                        '\n'.code -> { /* line continuation: eat it */ }
                         in '0'.code..'7'.code -> {
                             // up to 3 octal digits
                             var v = esc - '0'.code
@@ -140,7 +140,7 @@ public class Lexer(public val reader: ByteReader) {
             if (b == -1) throw PdfFormatException("Unterminated hex string at $start")
             if (b == '>'.code) {
                 if (pendingHi >= 0) {
-                    // Odd number of hex digits — treat trailing as if followed by '0'.
+                    // Odd number of hex digits: treat trailing as if followed by '0'.
                     out.append(((pendingHi shl 4) and 0xFF).toByte())
                 }
                 return Token.StringLiteral(out.toByteArray(), start)
@@ -215,7 +215,7 @@ public class Lexer(public val reader: ByteReader) {
             val d = text.toDoubleOrNull() ?: throw PdfFormatException("Bad real '$text' at $start")
             Token.Real(d, start)
         } else {
-            // Integer fast path: accumulate directly from the buffer — no String
+            // Integer fast path: accumulate directly from the buffer with no String
             // allocation. Object refs, lengths and xref offsets are all integers.
             Token.Integer(parseLongFromBuf(sb, start), start)
         }

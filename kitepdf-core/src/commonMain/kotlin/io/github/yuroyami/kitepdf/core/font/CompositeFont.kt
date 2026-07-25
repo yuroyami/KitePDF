@@ -11,7 +11,7 @@ import io.github.yuroyami.kitepdf.core.parser.PdfStream
 import io.github.yuroyami.kitepdf.core.render.KitePath
 
 /**
- * Type 0 composite font (ISO 32000-1 §9.7) — wraps a CIDFont descendant
+ * Type 0 composite font (ISO 32000-1 §9.7). Wraps a CIDFont descendant
  * with an `/Encoding` CMap that turns byte sequences into CIDs.
  *
  * The flow:
@@ -93,7 +93,7 @@ internal class CompositeFont(
     /** Decode the full byte run to unicode via ToUnicode CMap (preferred) or codepoint guess. */
     fun decode(bytes: ByteArray): String {
         toUnicode?.let { return it.decodeAll(bytes) }
-        // No ToUnicode — emit replacement chars per code unit. Better than nothing.
+        // No ToUnicode. Emit one replacement character per code unit.
         return buildString { codeUnits(bytes).forEach { append('�') } }
     }
 
@@ -111,7 +111,7 @@ internal class CompositeFont(
             val descendant = descendants.firstOrNull()?.resolve(refs) as? PdfDictionary ?: return null
             val descendantSubtype = descendant.getName("Subtype") ?: return null
 
-            // Resolve /Encoding — either a predefined name (Identity-H/V, CJK) or
+            // Resolve /Encoding: either a predefined name (Identity-H/V, CJK) or
             // an embedded CMap stream (ISO 32000-1 §9.7.5.3). A stream gives us
             // real codespace segmentation + code→CID mapping; a name resolves to
             // a predefined [CodeUnitReader] (Identity exact, CJK degraded).
@@ -156,7 +156,7 @@ internal class CompositeFont(
 /* ─── /CIDToGIDMap (ISO 32000-1 §9.7.4.2) ─────────────────────────────────── */
 
 /**
- * Maps a CID → GID. Either /Identity (CID == GID — the default for
+ * Maps a CID → GID. Either /Identity (CID == GID, the default for
  * CIDFontType0) or a stream of 2N bytes where bytes[2i..2i+1] big-endian
  * gives the GID for CID i.
  */
@@ -190,7 +190,7 @@ internal class CidToGidMap private constructor(
 
 /**
  * Variable-format CID width table. We parse the array once and resolve via
- * binary search over (cidStart, cidEnd, perGlyphIndex) — most documents
+ * binary search over (cidStart, cidEnd, perGlyphIndex). Most documents
  * keep the array small (~100 entries) so the lookup is fine without an
  * interval tree.
  */
@@ -207,7 +207,7 @@ internal class CidWidthTable private constructor(
 ) {
 
     fun widthOf(cid: Int): Double {
-        // widthOf runs once per glyph laid out — for CJK pages that's thousands
+        // widthOf runs once per glyph laid out. For CJK pages that's thousands
         // of calls. When the /W ranges are ascending & disjoint (the usual case)
         // binary-search them; otherwise fall back to a linear scan for safety.
         if (sorted) {
@@ -242,7 +242,7 @@ internal class CidWidthTable private constructor(
                 ?: (descendant.getReal("DW"))
                 ?: 1000.0
             // /W is frequently an INDIRECT reference (Word emits it that way), so
-            // it must be resolved — otherwise every CID falls back to /DW and the
+            // we must resolve it, otherwise every CID falls back to /DW and the
             // text spreads out (broken Arabic joining, spaced-out Latin/Cyrillic).
             val arr = descendant.getArray("W", refs) ?: return empty(defaultW)
 

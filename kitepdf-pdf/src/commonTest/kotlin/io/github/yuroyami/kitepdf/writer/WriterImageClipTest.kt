@@ -9,7 +9,7 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 /**
- * Round-trips the two new writer primitives — image XObjects and clipping —
+ * Round-trips two writer primitives (image XObjects and clipping)
  * through the parser/renderer: build a PDF with [PdfBuilder], reopen it with
  * KitePDF, render to a [RecordingCanvas], and assert the pixels/operators
  * survive. Proves the bytes [PdfBuilder] emits are something KitePDF itself can
@@ -107,7 +107,7 @@ class WriterImageClipTest {
 
     @Test
     fun jpeg_passthrough_preserves_encoded_bytes() {
-        // Not a real JPEG — we only assert the writer stores the bytes verbatim
+        // Not a real JPEG. We only assert the writer stores the bytes verbatim
         // under /DCTDecode and the reader classifies the XObject as JPEG.
         val fakeJpeg = byteArrayOf(0xFF.toByte(), 0xD8.toByte(), 1, 2, 3, 0xFF.toByte(), 0xD9.toByte())
         val image = PdfImage.jpeg(fakeJpeg, width = 8, height = 8)

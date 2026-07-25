@@ -49,7 +49,7 @@ class TrueTypeSubsetterTest {
 
         // 2. SFNT checksum is spec-correct: the whole-font checksum (the sum of all
         //    big-endian u32 words) must equal the magic 0xB1B0AFBA. This is exactly
-        //    what head.checkSumAdjustment is set to guarantee — a wrong adjustment
+        //    what head.checkSumAdjustment is set to guarantee. A wrong adjustment
         //    fails here.
         assertEquals(0xB1B0AFBAL, wholeFontChecksum(sub.fontBytes), "head.checkSumAdjustment wrong")
 

@@ -7,7 +7,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 
 /**
- * EPUB render sweep — the robustness gate for the reflow engine. Renders a set of
+ * EPUB render sweep: the robustness gate for the reflow engine. Renders a set of
  * synthetic books (plus any external corpus) through the real AWT raster path and
  * asserts the engine never throws and never blanks a content page.
  *
@@ -93,9 +93,9 @@ class EpubDifferentialTest {
         File(outDir, "report.md").writeText(report)
         println("[epub-sweep] ${corpus.size} books, $pages pages, $failures failures, $blanks blanks, oracle=${MuPdfOracle.available}, worstMAE=%.3f".format(worstMae))
 
-        // Gate 1 — every page of every book renders without throwing.
+        // Every page of every book renders without throwing.
         assertEquals(0, failures, "EPUB render failures:\n" + lines.filter { "THREW" in it }.joinToString("\n"))
-        // Gate 2 — synthetic content pages are never blank (real corpus books may
+        // Synthetic content pages are never blank (real corpus books may
         // legitimately have blank pages, reported informationally above).
         assertEquals(0, syntheticBlanks, "blank SYNTHETIC EPUB pages:\n" + lines.filter { "SYNTHETIC" in it }.joinToString("\n"))
     }

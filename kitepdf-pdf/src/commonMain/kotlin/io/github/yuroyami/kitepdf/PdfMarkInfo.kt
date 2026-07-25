@@ -11,7 +11,7 @@ import io.github.yuroyami.kitepdf.core.parser.PdfDictionary
  * extraction, and reflow. Tagged-PDF/A files set [marked] = true.
  *
  * `null` from [PdfDocument.markInfo] means the document doesn't carry a
- * /MarkInfo dict at all — i.e. it's not tagged.
+ * /MarkInfo dict at all, which means it is not tagged.
  */
 public data class PdfMarkInfo(
     /** True if the document conforms to Tagged PDF (logical structure tree present). */

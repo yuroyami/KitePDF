@@ -12,13 +12,13 @@ import java.util.zip.Inflater
 import kotlin.test.Test
 
 /**
- * Lightweight performance benchmark — the evidence behind the "efficient"
+ * Lightweight performance benchmark: the evidence behind the "efficient"
  * claim, which was previously unmeasured.
  *
  * Measures open/parse, render, text extraction, and write throughput on
  * representative inputs, and pits KitePDF's pure-Kotlin Flate codec against the
  * JVM's native `java.util.zip` for ratio and speed. Pure-Kotlin portability is
- * the design goal, so JDK zlib being faster / tighter is expected — the point
+ * the design goal, so JDK zlib being faster / tighter is expected. The point
  * is to know by how much.
  *
  * Opt-in (it's slow + perf numbers are noisy in CI): run with
@@ -159,7 +159,7 @@ class BenchmarkTest {
     private fun bench(warmup: Int, iters: Int, block: () -> Unit): Double {
         // JIT needs far more than 2 warmups to stabilize; KITEPDF_BENCH_SCALE
         // multiplies both counts for trustworthy local measurement (CI keeps the
-        // fast default of 1). Min, not median, of the timed runs — the fastest
+        // fast default of 1). Min, not median, of the timed runs. The fastest
         // run is the one least perturbed by GC/scheduling, the cleanest estimate.
         val scale = (System.getenv("KITEPDF_BENCH_SCALE")?.toIntOrNull() ?: 1).coerceAtLeast(1)
         repeat(warmup * scale) { block() }

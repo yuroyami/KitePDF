@@ -13,7 +13,7 @@ import kotlin.math.abs
  * the kite / reference / heatmap PNGs for inspection.
  *
  * When the oracle is unavailable it still renders + writes the KitePDF rasters
- * and checks they aren't blank — a useful smoke pass on its own.
+ * and checks they aren't blank, a useful smoke pass on its own.
  */
 object DiffHarness {
 

@@ -61,7 +61,7 @@ class FillShadingDefaultTest {
         assertEquals(1, canvas.fills.size, "default fillShading must fill for the whole-clip case")
         val (path, ctm, _) = canvas.fills[0]
         assertEquals(Matrix.IDENTITY, ctm, "huge rect must be device-space (identity), not the shading ctm")
-        // 5 segments: M, L, L, L, Close — spanning far beyond any page.
+        // 5 segments: M, L, L, L, Close. The rect spans far beyond any page.
         assertEquals(5, path.segments.size)
     }
 

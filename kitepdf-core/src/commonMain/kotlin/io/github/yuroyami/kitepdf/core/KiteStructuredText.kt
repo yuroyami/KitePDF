@@ -1,7 +1,7 @@
 package io.github.yuroyami.kitepdf.core
 
 /**
- * Format-neutral structured text for a [KitePage] — the minimal
+ * Format-neutral structured text for a [KitePage]: the minimal
  * blocks → lines → text model a viewer needs for extraction, search
  * highlights and selection, without committing to a handler's internals.
  *
@@ -66,7 +66,7 @@ public class KiteStructuredText(public val blocks: List<KiteTextBlock>) {
 
     /**
      * One entry per positioned char, in reading order (blocks then lines then
-     * chars) — the index space [charIndexAt], [textRange] and [quadsFor] share.
+     * chars): the index space [charIndexAt], [textRange] and [quadsFor] share.
      */
     private class CharRef(val block: Int, val line: Int, val char: Int)
 
@@ -132,7 +132,7 @@ public class KiteStructuredText(public val blocks: List<KiteTextBlock>) {
 
     /**
      * Display-space quads (one per line touched) for the inclusive flattened
-     * range — the same walker search hits use.
+     * range. Search hits use the same walker.
      */
     public fun quadsFor(start: Int, endInclusive: Int): List<Rectangle> {
         if (flatChars.isEmpty()) return emptyList()
@@ -182,7 +182,7 @@ public class KiteTextBlock(public val lines: List<KiteTextLine>)
 /**
  * One laid-out line. [charEdges] has `text.length + 1` display-space x
  * boundaries: `charEdges[i]` is the left edge of char `i`, the final entry
- * the line's right edge — enough to build sub-line highlight quads.
+ * the line's right edge. That is enough to build sub-line highlight quads.
  */
 public class KiteTextLine(
     public val text: String,

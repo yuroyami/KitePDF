@@ -12,7 +12,7 @@ import kotlin.test.assertEquals
  */
 class Type1Test {
 
-    /** eexec decryption inverts eexec encryption — closed-loop test. */
+    /** eexec decryption inverts eexec encryption: closed-loop test. */
     @Test
     fun eexec_encrypt_then_decrypt_recovers_plaintext() {
         val plaintext = "Hello, Type 1!".encodeToByteArray()

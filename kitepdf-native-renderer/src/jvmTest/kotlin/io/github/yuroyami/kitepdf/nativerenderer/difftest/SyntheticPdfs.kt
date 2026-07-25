@@ -216,7 +216,7 @@ object SyntheticPdfs {
 
     /**
      * Type 7 tensor: a straight-edged bilinear patch whose 16 control points
-     * are bilinear grid samples — the exact tensor surface then EQUALS the
+     * are bilinear grid samples. The exact tensor surface then EQUALS the
      * Coons surface our parser approximates with, so the oracle diff isolates
      * the plumbing, not the (documented) interior-point approximation.
      */
@@ -337,7 +337,7 @@ object SyntheticPdfs {
         return p.build(1)
     }
 
-    /** DeviceCMYK fills via the `k` operator — exercises CMYK→RGB conversion. */
+    /** DeviceCMYK fills via the `k` operator. Exercises CMYK→RGB conversion. */
     private fun cmyk(): ByteArray {
         val p = Pdf()
         p.obj("<< /Type /Catalog /Pages 2 0 R >>")                              // 1
@@ -354,7 +354,7 @@ object SyntheticPdfs {
         return p.build(1)
     }
 
-    /** Rectangular clip (`W n`) then a full-page fill — only the clip window should paint. */
+    /** Rectangular clip (`W n`) then a full-page fill. Only the clip window should paint. */
     private fun clip(): ByteArray {
         val p = Pdf()
         p.obj("<< /Type /Catalog /Pages 2 0 R >>")                              // 1
@@ -371,7 +371,7 @@ object SyntheticPdfs {
         return p.build(1)
     }
 
-    /** Multiply blend mode via ExtGState — exercises the non-Normal compositing path. */
+    /** Multiply blend mode via ExtGState. Exercises the non-Normal compositing path. */
     private fun blendMultiply(): ByteArray {
         val p = Pdf()
         p.obj("<< /Type /Catalog /Pages 2 0 R >>")                              // 1
@@ -392,7 +392,7 @@ object SyntheticPdfs {
         return p.build(1)
     }
 
-    /** Dashed strokes (`d` operator) — checks whether dash patterns are honoured. */
+    /** Dashed strokes (`d` operator). Checks whether dash patterns are honoured. */
     private fun dash(): ByteArray {
         val p = Pdf()
         p.obj("<< /Type /Catalog /Pages 2 0 R >>")                              // 1

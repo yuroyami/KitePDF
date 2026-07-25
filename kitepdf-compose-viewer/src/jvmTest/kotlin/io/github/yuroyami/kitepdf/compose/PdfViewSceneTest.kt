@@ -14,8 +14,8 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 /**
- * End-to-end test of the [PdfView] composable itself — layout, the lazy
- * whole-document list, the per-page raster cache and the export callback —
+ * End-to-end test of the [PdfView] composable itself (layout, the lazy
+ * whole-document list, the per-page raster cache and the export callback),
  * run headlessly through [ImageComposeScene] (no window needed).
  *
  * The fixture document is built with KitePDF's own writer: red page, then

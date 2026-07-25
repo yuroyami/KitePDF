@@ -23,7 +23,7 @@ internal class SceneTestDriver(private val scene: ImageComposeScene) {
     /**
      * Render frames until [check] passes against the latest frame, or until the
      * frame/time budget is exhausted. Returns the last rendered frame either way
-     * — let the caller's assertions report the failure if the condition never
+     * to let the caller's assertions report the failure if the condition never
      * held.
      */
     fun pumpUntil(

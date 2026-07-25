@@ -46,7 +46,7 @@ public class PdfPage internal constructor(
     public val reference: PdfReference? = null,
 ) : KitePage {
 
-    /** The raw page dictionary — used by the writer to rebuild the page on edit. */
+    /** The raw page dictionary. The writer uses it to rebuild the page on edit. */
     internal val dictionary: PdfDictionary get() = node
 
     /**
@@ -61,8 +61,8 @@ public class PdfPage internal constructor(
      * Tolerant box reader: resolves the named array through the document
      * resolver (so an INDIRECT /MediaBox etc. is honoured), then resolves each
      * of the four coordinate entries through the resolver to a number. A
-     * missing or non-numeric coordinate defaults to 0.0 rather than throwing —
-     * a single garbage entry must not sink a whole page (lenient-salvage).
+     * missing or non-numeric coordinate defaults to 0.0 rather than throwing.
+     * A single garbage entry must not break a whole page (lenient-salvage).
      */
     private fun readBox(key: String): Rectangle? {
         val arr = node.getArray(key, document) ?: return null
@@ -112,7 +112,7 @@ public class PdfPage internal constructor(
 
     /**
      * [rotation] normalised into `{0, 90, 180, 270}`: reduced modulo 360 into
-     * `[0, 360)` then snapped to the nearest right angle (defensive — in
+     * `[0, 360)` then snapped to the nearest right angle (defensive: in
      * practice the value is already a multiple of 90).
      */
     public val rotationNormalized: Int
@@ -125,7 +125,7 @@ public class PdfPage internal constructor(
 
     /**
      * Multiplier for user-space units on this page (PDF 1.6+, §14.8.1). Default
-     * 1.0 — each unit is 1/72 inch. A `/UserUnit` of 2.0 means each unit is
+     * 1.0: each unit is 1/72 inch. A `/UserUnit` of 2.0 means each unit is
      * 2/72 inch, doubling the effective page size for the same coordinate
      * stream. Useful for very large pages (architectural drawings, posters).
      */
@@ -197,7 +197,7 @@ public class PdfPage internal constructor(
             is PdfReference -> streamBytesOf(c) ?: ByteArray(0)
             // Lenient salvage: an undecodable stream (bad flate data, or one
             // tripping the decompression-bomb cap) yields a blank page, not a
-            // crash — matching MuPDF's broken-content behaviour.
+            // crash, matching MuPDF's broken-content behaviour.
             is PdfStream -> runCatching { FilterChain.decode(c) }.getOrNull() ?: ByteArray(0)
             is PdfArray -> {
                 val buf = ByteArrayBuilder(4096)
@@ -232,7 +232,7 @@ public class PdfPage internal constructor(
     public fun extractText(): String = TextExtractor.extract(this)
 
     /**
-     * Structured text — spans clustered into lines, lines clustered into
+     * Structured text: spans clustered into lines, lines clustered into
      * blocks. Use this when you need geometry (selection rectangles,
      * search highlights) alongside the text. For a plain string, prefer
      * [extractText].
@@ -274,7 +274,7 @@ public class PdfPage internal constructor(
 
     /**
      * Render this page into a [KiteCanvas] (typically the Compose binding's
-     * `ComposeCanvas`). [deviceCtm] is applied on top of user-space — pass an
+     * `ComposeCanvas`). [deviceCtm] is applied on top of user-space. Pass an
      * identity matrix for a 1pt = 1pt rendering, or a scaled / Y-flipped
      * matrix to fit a UI surface.
      */

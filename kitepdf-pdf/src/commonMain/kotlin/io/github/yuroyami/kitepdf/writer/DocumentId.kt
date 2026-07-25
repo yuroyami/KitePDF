@@ -5,7 +5,7 @@ import io.github.yuroyami.kitepdf.core.parser.PdfArray
 import io.github.yuroyami.kitepdf.core.parser.PdfString
 
 /**
- * Generates a document `/ID` (ISO 32000-1 §14.4) — a two-element array of
+ * Generates a document `/ID` (ISO 32000-1 §14.4), a two-element array of
  * 16-byte strings (permanent + changing). Many validators warn when it is
  * absent, and it is required for encryption key derivation. We derive it
  * deterministically from a content seed via MD5 (its only use here is as a

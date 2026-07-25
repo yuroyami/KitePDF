@@ -19,7 +19,7 @@ import kotlin.test.assertTrue
 
 /**
  * The full GoldenHour loop end to end: GENERATE a PDF with KitePDF's writer
- * (image + clip + text + vectors), then VIEW it through ComposeCanvas — the
+ * (image + clip + text + vectors), then VIEW it through ComposeCanvas, the
  * same engine on both ends. Asserts the rendered pixels match what was written,
  * proving write/read consistency (the reason to generate reports with KitePDF
  * instead of per-platform PDF kits).
@@ -42,7 +42,7 @@ class WriteThenViewTest {
                 // Image in the bottom-left 100×100.
                 drawImage(img, x = 0.0, y = 0.0, width = 100.0, height = 100.0)
                 // Clipped green fill: clip to a 40×40 box at (120,120), then try to
-                // fill the whole page — only the clip window should turn green.
+                // fill the whole page. Only the clip window should turn green.
                 save()
                 rectangle(120.0, 120.0, 40.0, 40.0)
                 clip(); endPath()

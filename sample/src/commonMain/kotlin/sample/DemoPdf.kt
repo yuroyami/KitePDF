@@ -6,8 +6,8 @@ import io.github.yuroyami.kitepdf.core.ByteArrayBuilder
  * Builds tiny in-memory PDFs that exercise the KitePDF pipeline end-to-end.
  *
  * Constructing the bytes programmatically (rather than committing a hex blob)
- * keeps xref offsets correct as we tweak content — and shows roughly what a
- * minimal PDF actually looks like on the wire.
+ * keeps xref offsets correct as we tweak content, and shows roughly what a
+ * minimal PDF actually looks like.
  */
 object DemoPdf {
 
@@ -137,7 +137,7 @@ object DemoPdf {
         return b.finish(rootRef = "1 0 R")
     }
 
-    /** Two filled rectangles partially clipped by a smaller rectangle — exercises W operator. */
+    /** Two filled rectangles partially clipped by a smaller rectangle: exercises the W operator. */
     private fun buildClippedShapes(): ByteArray {
         val b = Builder("1.4")
         b.addObject("<< /Type /Catalog /Pages 2 0 R >>")
@@ -169,7 +169,7 @@ object DemoPdf {
         return b.finish(rootRef = "1 0 R")
     }
 
-    /** CMYK colours + annotations — exercises both v0.0.4 colour ops and the annotation layer. */
+    /** CMYK colours + annotations: exercises the colour operators and the annotation layer. */
     private fun buildCmykAndAnnotations(): ByteArray {
         val b = Builder("1.4")
         b.addObject("<< /Type /Catalog /Pages 2 0 R >>")
@@ -218,7 +218,7 @@ object DemoPdf {
     }
 
     /**
-     * Transparency + blend modes — exercises the `gs` operator with /ca alpha
+     * Transparency + blend modes: exercises the `gs` operator with /ca alpha
      * and /BM blend modes from a /Resources /ExtGState dict.
      */
     private fun buildTransparency(): ByteArray {
@@ -271,7 +271,7 @@ object DemoPdf {
         return b.finish(rootRef = "1 0 R")
     }
 
-    /** A page with an XObject Image reference — exercises the Do operator + ImageXObject path. */
+    /** A page with an XObject Image reference: exercises the Do operator + ImageXObject path. */
     private fun buildImagePlaceholder(): ByteArray {
         val b = Builder("1.4")
         b.addObject("<< /Type /Catalog /Pages 2 0 R >>")
@@ -285,9 +285,8 @@ object DemoPdf {
               | /Contents 6 0 R >>""".trimMargin(),
         )
         b.addObject("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>")
-        // Fake JPEG XObject — the bytes don't have to be a valid JPEG, the
-        // renderer just classifies the filter and draws a placeholder in
-        // v0.0.3 (real decoding lands in Session 4).
+        // Fake JPEG XObject. The bytes don't have to be a valid JPEG: the
+        // renderer only classifies the filter and draws a placeholder.
         val fakeJpegBytes = byteArrayOf(0xFF.toByte(), 0xD8.toByte(), 0xFF.toByte(), 0xE0.toByte())
         b.addStream(
             """<< /Type /XObject /Subtype /Image

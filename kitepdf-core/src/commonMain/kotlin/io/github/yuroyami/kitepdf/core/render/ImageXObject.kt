@@ -42,12 +42,12 @@ public class ImageXObject internal constructor(
     public val bitsPerComponent: Int,
     public val colorSpace: String,
     public val kind: Kind,
-    /** Encoded bytes — for kinds that defer decoding to a platform image loader. */
+    /** Encoded bytes, for kinds that defer decoding to a platform image loader. */
     public val encodedBytes: ByteArray,
-    /** Pixel bytes — populated for [Kind.RAW] (already run through the filter chain). */
+    /** Pixel bytes, populated for [Kind.RAW] (already run through the filter chain). */
     public val pixelBytes: ByteArray? = null,
     /**
-     * Soft-mask alpha (ISO 32000-1 §11.6.5.2), normalised to 8-bit grayscale —
+     * Soft-mask alpha (ISO 32000-1 §11.6.5.2), normalised to 8-bit grayscale:
      * one byte per pixel, 0 = transparent, 255 = opaque, row-major over
      * [softMaskWidth]×[softMaskHeight]. Null when the image carries no `/SMask`.
      */
@@ -62,7 +62,7 @@ public class ImageXObject internal constructor(
     public val resolvedColorSpace: ColorSpace? = null,
     /** `/Decode` array (per-component min/max remap), or null for the identity map. */
     public val decode: DoubleArray? = null,
-    /** True for `/ImageMask` stencils — 1-bpc, painted with [maskFill]. */
+    /** True for `/ImageMask` stencils: 1-bpc, painted with [maskFill]. */
     public val isImageMask: Boolean = false,
     /** Fill colour to tint an [isImageMask] stencil (the graphics-state fill colour). */
     public val maskFill: RgbColor? = null,
@@ -192,7 +192,7 @@ public class ImageXObject internal constructor(
                         isImageMask = isMask, maskFill = fillColor,
                     )
                 }
-                // For the remaining encoded kinds, hand the raw bytes through —
+                // For the remaining encoded kinds, hand the raw bytes through:
                 // platform code (or a future native decoder) interprets them.
                 else -> ImageXObject(
                     width, height, bpc, cs, kind, stream.rawBytes,
@@ -292,8 +292,8 @@ public class ImageXObject internal constructor(
         }
 
         /**
-         * Decode an image's `/SMask` (ISO 32000-1 §11.6.5.2) — a DeviceGray image
-         * whose samples ARE the base image's per-pixel alpha — into a normalised
+         * Decode an image's `/SMask` (ISO 32000-1 §11.6.5.2), a DeviceGray image
+         * whose samples ARE the base image's per-pixel alpha, into a normalised
          * 8-bit grayscale buffer (0 = transparent, 255 = opaque).
          *
          * Scope: RAW (Flate/LZW/CCITT/…) DeviceGray masks at 1 or 8 bpc. A
@@ -374,7 +374,7 @@ public class ImageXObject internal constructor(
                     "JPXDecode" -> return Kind.JPEG2000
                     "JBIG2Decode" -> return Kind.JBIG2
                     // CCITTFaxDecode is decoded by the filter chain → raw pixels.
-                    else -> { /* raw-wrapper or unknown — keep scanning */ }
+                    else -> { /* raw-wrapper or unknown: keep scanning */ }
                 }
             }
             return if (filters.isEmpty()) Kind.RAW

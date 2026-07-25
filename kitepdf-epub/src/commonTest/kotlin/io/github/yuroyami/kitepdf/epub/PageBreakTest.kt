@@ -34,7 +34,7 @@ class PageBreakTest {
 
     @Test
     fun orphans_push_a_lone_first_line() {
-        // Filler(1) + P(4); page fits filler + 1 P line — that lone P line is pushed.
+        // Filler(1) + P(4); page fits filler + 1 P line. That lone P line is pushed.
         val (root, ps) = build(listOf(base to 1, base to 4))
         val pages = Paginator.paginate(root, 1000.0, 25.0, 0.0)
         assertTrue(pages[0].lines.all { it.owner === ps[0] }, "page 0 holds only the filler")
@@ -43,7 +43,7 @@ class PageBreakTest {
 
     @Test
     fun widows_keep_two_lines_together() {
-        // Filler(1) + P(3); a naive break would leave 1 widow — pull one more line over.
+        // Filler(1) + P(3); a naive break would leave 1 widow. Pull one more line over.
         val (root, ps) = build(listOf(base to 1, base to 3))
         val pages = Paginator.paginate(root, 1000.0, 35.0, 0.0)
         assertTrue(pages[1].lines.count { it.owner === ps[1] } >= 2, "at least 2 widow lines on page 2")
@@ -60,7 +60,7 @@ class PageBreakTest {
 
     @Test
     fun break_inside_avoid_too_tall_still_splits() {
-        // A block taller than a page can't be kept whole — it must still split (no infinite loop).
+        // A block taller than a page can't be kept whole. It must still split (no infinite loop).
         val (root, _) = build(listOf(base to 1, base.copy(breakInsideAvoid = true) to 12))
         val pages = Paginator.paginate(root, 1000.0, 35.0, 0.0)
         assertTrue(pages.size >= 3, "oversized avoid block splits across pages")

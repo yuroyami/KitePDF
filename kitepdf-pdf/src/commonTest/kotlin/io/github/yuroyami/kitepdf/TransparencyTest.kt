@@ -95,7 +95,7 @@ class TransparencyTest {
 
     @Test
     fun gs_only_overrides_named_fields() {
-        // /GS1 sets /ca only — /CA stays at default (1.0)
+        // /GS1 sets /ca only. /CA stays at its default (1.0).
         val pdf = pdfWithGs(
             extGStateDict = "<< /ca 0.25 >>",
             content = "/GS1 gs 1 0 0 RG 0 0 0 rg 10 10 100 100 re B",

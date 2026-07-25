@@ -11,9 +11,9 @@ import io.github.yuroyami.kitepdf.core.parser.PdfString
 /**
  * One `/PageLabels` range entry (ISO 32000-1 §12.4.2 Table 159).
  *
- * - [style] — `null` means "prefix only, no number"
- * - [prefix] — concatenated in front of the formatted number
- * - [start] — first numeric value to use for the first page in this range
+ * - [style]: `null` means "prefix only, no number"
+ * - [prefix]: concatenated in front of the formatted number
+ * - [start]: first numeric value to use for the first page in this range
  *
  * The range applies to the slice of pages from this entry's key index (in the
  * number tree) up to but not including the next entry's key.

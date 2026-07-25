@@ -46,7 +46,7 @@ internal class BlockBox(
 }
 
 /**
- * A block that directly holds inline content — an inline formatting context.
+ * A block that directly holds inline content, an inline formatting context.
  * Anonymous ones (from mixed block+inline content) reuse the parent's style for
  * text but carry no box decorations. [marker] is a list-item bullet/number.
  */
@@ -102,7 +102,7 @@ internal class PlacedRun(
     val hasOutlines: Boolean = false,
     val unitsPerEm: Int = 1000,
     /**
-     * True for decoration runs that are not part of the reading text — a ruby
+     * True for decoration runs that are not part of the reading text: a ruby
      * reading overlay. Text extraction and search skip them.
      */
     val isAnnotation: Boolean = false,

@@ -31,7 +31,7 @@ import java.awt.image.BufferedImage
 import javax.imageio.ImageIO
 
 /**
- * [KiteCanvas] backed by [java.awt.Graphics2D]. Pure JRE — no Skia, no
+ * [KiteCanvas] backed by [java.awt.Graphics2D]. Pure JRE: no Skia, no
  * Compose, no native binaries.
  *
  * The right choice when:
@@ -47,12 +47,12 @@ import javax.imageio.ImageIO
  *
  * Caveats: Java2D supports a subset of PDF's 16 blend modes natively. The
  * common ones (Normal, SrcOver) are mapped to `AlphaComposite`. The rest
- * (Multiply, Screen, …) require a custom `java.awt.Composite` — we ship a
+ * (Multiply, Screen, …) require a custom `java.awt.Composite`. We ship a
  * pixel-level [PdfBlendComposite] that implements all 16 modes for fidelity.
  */
 public class AwtCanvas(private val g: Graphics2D) : KiteCanvas {
 
-    /** Save-state stack — mirrors clip + transform + composite per push. */
+    /** Save-state stack: mirrors clip + transform + composite per push. */
     private val saveStack = ArrayDeque<SavedState>()
     private var openLayers = 0
 
@@ -153,7 +153,7 @@ public class AwtCanvas(private val g: Graphics2D) : KiteCanvas {
             }
         }
         // Embedded font present but produced no glyphs (e.g. a subset we can't
-        // decode) — fall back to a system font rather than rendering blank.
+        // decode). Fall back to a system font rather than rendering blank.
         if (!drewAny && glyphs.any { it.text.isNotBlank() }) {
             drawTextViaSystemFont(glyphs, fontSize, fontSpec, textToDevice, color, alpha, blendMode)
         }
@@ -161,7 +161,7 @@ public class AwtCanvas(private val g: Graphics2D) : KiteCanvas {
 
     /**
      * Fallback for non-embedded fonts (e.g. the Standard-14). Renders with a
-     * platform logical font — zero bundled bytes, since the JVM already ships
+     * platform logical font: zero bundled bytes, since the JVM already ships
      * Serif / SansSerif / Monospaced faces that are metric-compatible stand-ins
      * for Times / Helvetica / Courier. This is how Apple's PDFKit and KitePDF's
      * own Compose backend handle the case; we mirror ComposeCanvas here.
@@ -199,7 +199,7 @@ public class AwtCanvas(private val g: Graphics2D) : KiteCanvas {
                 g.color = color.toAwt()
                 g.font = systemFontFor(fontSpec, renderedSize.toFloat())
                 // Position each glyph by the PDF's OWN advance widths (1/1000 em),
-                // not the substitute font's natural metrics — otherwise spacing
+                // not the substitute font's natural metrics, otherwise spacing
                 // drifts and glyphs crowd together / overlap.
                 var penX = 0.0
                 val advScale = renderedSize / 1000.0
@@ -236,7 +236,7 @@ public class AwtCanvas(private val g: Graphics2D) : KiteCanvas {
         val fractions = FloatArray(stops.offsets.size) { stops.offsets[it].toFloat() }
         val colors = Array(stops.colors.size) { stops.colors[it].toAwt() }
 
-        // AWT gradients only offer NO_CYCLE, which *clamps* — i.e. always extends
+        // AWT gradients only offer NO_CYCLE, which *clamps*: it always extends
         // the endpoint colours to infinity. PDF's `Extend [s e]` may forbid that on
         // either side. When a side isn't extended we intersect the fill region with
         // an "extent" shape so no pixels are painted past that end. Null = unbounded.
@@ -336,7 +336,7 @@ public class AwtCanvas(private val g: Graphics2D) : KiteCanvas {
         val len = kotlin.math.sqrt(dx * dx + dy * dy)
         val big = 1.0e6
         if (len < 1e-9) {
-            // Degenerate axis — nothing sensible to bound; allow everything.
+            // Degenerate axis: nothing sensible to bound, so allow everything.
             return java.awt.geom.Area(java.awt.geom.Rectangle2D.Double(-big, -big, 2 * big, 2 * big))
         }
         val ux = dx / len; val uy = dy / len            // axis unit vector (P0→P1)
@@ -389,12 +389,12 @@ public class AwtCanvas(private val g: Graphics2D) : KiteCanvas {
             val matrix = AffineTransform(ctm.a, ctm.b, ctm.c, ctm.d, ctm.e, ctm.f)
             g.transform = AffineTransform(g.transform).apply { concatenate(matrix) }
             // PDF image is in the unit square (0..1)² with Y flipped already by deviceCtm.
-            // We draw at (0, -1) sized (1, 1) — the Y-flip in CTM puts it upright.
+            // We draw at (0, -1) sized (1, 1). The Y-flip in CTM puts it upright.
             val drawOp = AffineTransform().apply {
                 // Map the bitmap onto the PDF image unit square [0,1]²: row 0 (top)
                 // → v=1, last row → v=0. So translate up by 1, then flip Y. Mapping
-                // into [-1,0] instead places the image one image-height too low —
-                // invisible when it sits inside a tight clip (the Maths banner).
+                // into [-1,0] instead places the image one image-height too low.
+                // The image is then invisible inside a tight clip (the Maths banner).
                 translate(0.0, 1.0)
                 scale(1.0 / bitmap.width, -1.0 / bitmap.height)
             }
@@ -409,8 +409,8 @@ public class AwtCanvas(private val g: Graphics2D) : KiteCanvas {
     private fun decodeImage(image: ImageXObject): BufferedImage? = try {
         when (image.kind) {
             ImageXObject.Kind.JPEG, ImageXObject.Kind.JPEG2000 -> decodeJpeg(image.encodedBytes)
-            // Every other kind — RAW (Flate/LZW/CCITT/PNG-predictor decoded) and
-            // ImageMask stencils — is assembled into a flat RGBA8888 buffer by the
+            // Every other kind, RAW (Flate/LZW/CCITT/PNG-predictor decoded) and
+            // ImageMask stencils, is assembled into a flat RGBA8888 buffer by the
             // shared rasterizer (the same path the Compose/Skia backends use). Wrap
             // it in an ARGB BufferedImage so ImageMask + SMask alpha survive.
             else -> image.toRgbaBytes()?.let { rgbaToBufferedImage(it, image.width, image.height) }
@@ -420,10 +420,10 @@ public class AwtCanvas(private val g: Graphics2D) : KiteCanvas {
     }
 
     /**
-     * Wrap a flat RGBA8888 buffer (R,G,B,A per pixel, row-major, no padding — as
+     * Wrap a flat RGBA8888 buffer (R,G,B,A per pixel, row-major, no padding, as
      * produced by [ImageXObject.toRgbaBytes]) in a [BufferedImage]. Uses
      * TYPE_INT_ARGB (not OPAQUE) so per-pixel alpha from `/ImageMask` stencils and
-     * `/SMask` soft masks — already baked into the A channel by the rasterizer —
+     * `/SMask` soft masks, already baked into the A channel by the rasterizer,
      * is preserved when the bitmap is composited.
      */
     private fun rgbaToBufferedImage(rgba: ByteArray, width: Int, height: Int): BufferedImage? {
@@ -448,7 +448,7 @@ public class AwtCanvas(private val g: Graphics2D) : KiteCanvas {
     /**
      * Decode a JPEG. ImageIO handles 3-channel (YCbCr) JPEGs correctly, but
      * 4-channel CMYK / YCCK JPEGs (Adobe, APP14 marker) come back inverted or
-     * rejected — so for those we read the raw raster and convert ourselves.
+     * rejected, so for those we read the raw raster and convert ourselves.
      */
     private fun decodeJpeg(bytes: ByteArray): BufferedImage? {
         val iis = ImageIO.createImageInputStream(java.io.ByteArrayInputStream(bytes))
@@ -576,8 +576,8 @@ public class AwtCanvas(private val g: Graphics2D) : KiteCanvas {
     /**
      * Soft mask (ISO 32000-1 §11.6.5). Content is painted on the live surface,
      * then gated by the mask group:
-     *   - [SoftMask.Kind.Alpha] — the mask group's alpha, applied via `DST_IN`.
-     *   - [SoftMask.Kind.Luminosity] — the mask group is rendered offscreen over
+     *   - [SoftMask.Kind.Alpha]: the mask group's alpha, applied via `DST_IN`.
+     *   - [SoftMask.Kind.Luminosity]: the mask group is rendered offscreen over
      *     a black backdrop, its per-pixel luminance is converted to alpha, and
      *     that alpha map is `DST_IN`-composited onto the content.
      */
@@ -702,7 +702,7 @@ public class AwtCanvas(private val g: Graphics2D) : KiteCanvas {
 
     /**
      * Opaque AWT colour. Constant alpha (`/ca`, `/CA`) is applied exactly once
-     * by [withComposite] — via `AlphaComposite` for Normal, or
+     * by [withComposite], via `AlphaComposite` for Normal, or
      * [PdfBlendComposite] for the other modes. Baking it into the colour too
      * would apply it twice and wash the paint out.
      */

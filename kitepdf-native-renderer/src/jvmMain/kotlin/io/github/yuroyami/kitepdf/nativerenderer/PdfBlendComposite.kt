@@ -42,7 +42,7 @@ internal class PdfBlendComposite(
             val srcPx = IntArray(4)
             val dstPx = IntArray(4)
             val out = IntArray(4)
-            // Reused per-pixel blend-result buffer — avoids allocating a Triple
+            // Reused per-pixel blend-result buffer, which avoids allocating a Triple
             // (plus boxed Floats) on every pixel of the compositing loop.
             val blendRgb = FloatArray(3)
 
@@ -81,7 +81,7 @@ internal class PdfBlendComposite(
 
         override fun dispose() {}
 
-        /** Write blend(src, dst) for [mode] into [o] (size 3) — no allocation. */
+        /** Write blend(src, dst) for [mode] into [o] (size 3) with no allocation. */
         private fun blendInto(
             sr: Float, sg: Float, sb: Float,
             dr: Float, dg: Float, db: Float,
@@ -109,7 +109,7 @@ internal class PdfBlendComposite(
                 BlendMode.Exclusion -> {
                     o[0] = dr + sr - 2 * dr * sr; o[1] = dg + sg - 2 * dg * sg; o[2] = db + sb - 2 * db * sb
                 }
-                // Non-separable modes (Hue/Saturation/Color/Luminosity) — operate
+                // Non-separable modes (Hue/Saturation/Color/Luminosity) operate
                 // on HSL triples in place. Implemented per ISO 32000-1 §11.3.5.3.
                 BlendMode.Hue -> {
                     o[0] = sr; o[1] = sg; o[2] = sb

@@ -10,8 +10,8 @@ import java.io.File
  *    (default the git-ignored repo-root `corpus/pdf`, overridable with
  *    `-Dkitepdf.corpus=/path`).
  *
- * Synthetic fixtures are materialized to `<outDir>/inputs` so that MuPDF —
- * which reads from disk — and KitePDF score the exact same bytes.
+ * Synthetic fixtures are materialized to `<outDir>/inputs` so that MuPDF,
+ * which reads from disk, and KitePDF score the exact same bytes.
  */
 object Corpus {
 

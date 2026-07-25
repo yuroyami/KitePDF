@@ -26,8 +26,8 @@ import kotlin.math.abs
 
 /**
  * Remembers a [PdfViewState] for [document]. Hoist it to drive a [PdfView]
- * from anywhere — navigation buttons in your top bar, a zoom slider, a HUD
- * overlay — the state object is the single point of control.
+ * from anywhere: navigation buttons in your top bar, a zoom slider, a HUD
+ * overlay. The state object is the single point of control.
  */
 @Composable
 public fun rememberPdfViewState(document: PdfDocument, initialPage: Int = 0): PdfViewState =
@@ -37,7 +37,7 @@ public fun rememberPdfViewState(document: PdfDocument, initialPage: Int = 0): Pd
  * Observable state + control surface of a [PdfView].
  *
  * Everything a navigation/zoom widget needs lives here, so widgets are just
- * composables that take a [PdfViewState] — place them inside the viewport
+ * composables that take a [PdfViewState]. Place them inside the viewport
  * (via [PdfView]'s `overlay` slot), next to it, or anywhere else in your tree.
  *
  * Reads ([currentPage], [zoom], [panOffset]…) are snapshot-state backed and
@@ -160,7 +160,7 @@ public class PdfViewState(
 
     /**
      * Pans by [delta] (viewport px), clamped to the zoomed content bounds.
-     * Returns the portion actually consumed — the gesture layer hands the
+     * Returns the portion actually consumed. The gesture layer hands the
      * remainder back to the underlying scroll container.
      */
     public fun panBy(delta: Offset): Offset {
@@ -184,7 +184,7 @@ public class PdfViewState(
     /**
      * The active text selection, or null. Set by the long-press-drag gesture;
      * observe via snapshot reads or [onSelectionChange]. The viewer never
-     * touches the clipboard itself — read [TextSelection.text] and copy in
+     * touches the clipboard itself. Read [TextSelection.text] and copy in
      * the app (see the sample's selection actions).
      */
     public var selection: TextSelection? by mutableStateOf(null)
@@ -268,7 +268,7 @@ public class PdfViewState(
      * in) to the page under it, or null when it lands on background/spacing.
      *
      * Inverts the zoom/pan layer first (the layer scales around the viewport
-     * centre, then translates by [panOffset] — the same math [setZoom]'s focal
+     * centre, then translates by [panOffset], the same math [setZoom]'s focal
      * logic composes), locates the page slot from the geometry the layout
      * reported, then maps display-space points through the inverse of
      * [KitePage.displayToDeviceBase] into page space: PDF pages get user

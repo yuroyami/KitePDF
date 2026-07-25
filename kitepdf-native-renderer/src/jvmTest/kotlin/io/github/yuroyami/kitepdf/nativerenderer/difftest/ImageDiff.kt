@@ -18,7 +18,7 @@ import kotlin.math.abs
  * The score is a normalized mean-absolute-error over the RGB channels:
  *   0.0  → byte-identical
  *   1.0  → maximally different (e.g. solid black vs solid white)
- * It is the primary ranking key — "show me the worst-rendering pages first."
+ * It is the primary ranking key: "show me the worst-rendering pages first."
  */
 object ImageDiff {
 
@@ -105,7 +105,7 @@ object ImageDiff {
         )
     }
 
-    /** Count of pixels that differ from the (white) page background — used for blank-render detection. */
+    /** Count of pixels that differ from the (white) page background, used for blank-render detection. */
     fun nonBackgroundPixels(img: BufferedImage): Long {
         val rgb = flattenOntoWhite(img)
         var count = 0L

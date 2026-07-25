@@ -7,8 +7,8 @@ import io.github.yuroyami.kitepdf.core.ByteArrayBuilder
  * (plus their composite-glyph dependencies and `.notdef`).
  *
  * Glyphs are renumbered to a dense 0..N-1 range, so the caller must map the
- * original glyph ids to the new ones — exposed via [Subset.oldToNew], which the
- * embedder turns into a PDF `/CIDToGIDMap` stream (the content stream keeps the
+ * original glyph ids to the new ones. [Subset.oldToNew] exposes that map, and the
+ * embedder turns it into a PDF `/CIDToGIDMap` stream (the content stream keeps the
  * *original* glyph ids as codes, and the map redirects them to the subset).
  *
  * Rebuilds `glyf` (composite child references renumbered in place), `loca`
@@ -19,7 +19,7 @@ import io.github.yuroyami.kitepdf.core.ByteArrayBuilder
 public object TrueTypeSubsetter {
 
     // Tables copied unchanged when present (no glyph-id-indexed data, so safe).
-    // NOT cmap (maps Unicode→old gid — renumbering invalidates it) and NOT post
+    // NOT cmap (maps Unicode→old gid, which renumbering invalidates) and NOT post
     // (format 2.0 is glyph-id-indexed, so a verbatim copy would mismatch the subset).
     //
     // cvt/fpgm/prep are the hinting-program tables: `fpgm` defines functions and
@@ -35,7 +35,7 @@ public object TrueTypeSubsetter {
     public fun subset(font: TrueTypeFont, usedGids: Set<Int>): Subset {
         // 1. Transitive glyph closure, always including .notdef (gid 0). Gid 0 is
         //    queued like any other seed (not pre-added to the closure) so that its
-        //    own composite children — if .notdef is a composite glyph — are pulled
+        //    own composite children, if .notdef is a composite glyph, are pulled
         //    in transitively too.
         val closure = HashSet<Int>()
         val work = ArrayDeque<Int>()
@@ -84,7 +84,7 @@ public object TrueTypeSubsetter {
         u16(head, 50, 1)                       // indexToLocFormat = long
         // The other maxp v1.0 stats (maxPoints, maxContours, maxComposite*, etc.)
         // are copied verbatim. They were computed over the FULL font, so they are
-        // upper bounds for any subset of it — a rasteriser sizing scratch buffers
+        // upper bounds for any subset of it. A rasteriser sizing scratch buffers
         // from them over-allocates at worst, never under-allocates. Only numGlyphs
         // must shrink to stay consistent with loca/glyf; we patch just that.
         val maxp = font.rawTable("maxp")!!.copyOf()
@@ -100,7 +100,7 @@ public object TrueTypeSubsetter {
             "loca" to locaBytes.toByteArray(),
             "glyf" to glyf.toByteArray(),
         )
-        // Copy name/OS/2/post verbatim when present — not required for PDF rendering
+        // Copy name/OS/2/post verbatim when present. PDF rendering does not need them
         // (the PDF drives glyphs via /CIDToGIDMap, not the font's cmap), but their
         // offsets are self-relative so copying is safe, and it keeps the embedded
         // program acceptable to stricter consumers that expect a font name.

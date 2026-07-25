@@ -6,7 +6,7 @@ import kotlin.test.Test
 import kotlin.test.assertTrue
 
 /**
- * OpenType-CFF (`.otf`) `@font-face` rendering — proves the CFF outline path added
+ * OpenType-CFF (`.otf`) `@font-face` rendering. Proves the CFF outline path added
  * to [EmbeddedFace]. The in-repo Noto `.otf` fonts are pure CFF (no `glyf` table),
  * so any non-null outline they yield must have come from the `CFF ` program, not
  * TrueType `glyf`. Runs on the JVM so it can read the fonts from disk; skips if the
@@ -30,7 +30,7 @@ class CffFontRenderTest {
     @Test
     fun otf_cff_faces_yield_outlines() {
         val otfs = otfFonts()
-        if (otfs.isEmpty()) return // no CFF fonts in this checkout — skip
+        if (otfs.isEmpty()) return // no CFF fonts in this checkout: skip
         var withOutlines = 0
         for (f in otfs.take(8)) {
             val face = FontRegistry.face("cff", bold = false, italic = false, f.readBytes()) ?: continue

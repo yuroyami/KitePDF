@@ -74,7 +74,7 @@ import platform.ImageIO.CGImageSourceCreateImageAtIndex
 import platform.ImageIO.CGImageSourceCreateWithData
 
 /**
- * [KiteCanvas] backed by an iOS / macOS [CGContextRef]. Pure CoreGraphics —
+ * [KiteCanvas] backed by an iOS / macOS [CGContextRef]. Pure CoreGraphics:
  * no Compose, no Skia. The natural choice for native iOS apps using UIKit
  * or SwiftUI; pass the context from your custom UIView's `drawRect:` or
  * the `UIGraphicsImageRenderer.image { ctx in … }` block straight in.
@@ -83,7 +83,7 @@ import platform.ImageIO.CGImageSourceCreateWithData
  *
  * Memory: every Core Foundation / Core Graphics ref we allocate (gradient,
  * colour space, image, CFData) is paired with a release call. Nothing
- * escapes — Kotlin/Native objects don't leak, and we never hand a CG ref
+ * escapes. Kotlin/Native objects don't leak, and we never hand a CG ref
  * to caller code.
  */
 @OptIn(ExperimentalForeignApi::class)
@@ -239,7 +239,7 @@ public class CoreGraphicsCanvas(private val ctx: CGContextRef) : KiteCanvas {
                                 CGContextDrawLinearGradient(ctx, gradient, start, end, drawOpts)
                             }
                             is KiteShading.Radial -> {
-                                // True PDF two-circle radial — Core Graphics takes both.
+                                // True PDF two-circle radial. Core Graphics takes both circles.
                                 val sc = kotlin.math.sqrt(ctm.a * ctm.a + ctm.b * ctm.b)
                                 val (x0, y0) = ctm.transformPoint(shading.coords[0], shading.coords[1])
                                 val r0 = (shading.coords[2] * sc).coerceAtLeast(0.0)
@@ -289,8 +289,8 @@ public class CoreGraphicsCanvas(private val ctx: CGContextRef) : KiteCanvas {
         try {
             CGContextSaveGState(ctx)
             try {
-                // Apply CTM, then place the image in the unit square (0,-1)..(1,0)
-                // — the device CTM has already flipped Y, so we flip back here.
+                // Apply CTM, then place the image in the unit square (0,-1)..(1,0).
+                // The device CTM has already flipped Y, so we flip back here.
                 CGContextConcatCTM(ctx, ctm.toCGAffine())
                 CGContextTranslateCTM(ctx, 0.0, -1.0)
                 val rect = CGRectMake(0.0, 0.0, 1.0, 1.0)
