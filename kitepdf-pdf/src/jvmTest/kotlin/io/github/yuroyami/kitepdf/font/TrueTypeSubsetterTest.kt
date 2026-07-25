@@ -32,7 +32,7 @@ class TrueTypeSubsetterTest {
     @Test
     fun subset_is_small_checksum_correct_and_reparses() {
         val file = fontFile() ?: run {
-            println("[TrueTypeSubsetterTest] DroidSansFallback.ttf not found — skipping.")
+            println("[TrueTypeSubsetterTest] DroidSansFallback.ttf not found, skipping.")
             return
         }
         val full = file.readBytes()

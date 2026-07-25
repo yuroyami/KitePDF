@@ -42,7 +42,7 @@ class CffEmbedOracleTest {
     @Test
     fun cff_otf_subsets_embeds_and_renders_correctly() {
         val otf = otfFile()
-        assumeTrue("NotoSans-Regular.otf not found — skipping.", otf != null)
+        assumeTrue("NotoSans-Regular.otf not found, skipping.", otf != null)
         val bytes = otf!!.readBytes()
 
         // Sanity: this really is a CFF font and the glyphs we draw are real (non-.notdef).
@@ -71,7 +71,7 @@ class CffEmbedOracleTest {
         // Reader recovers the text via /ToUnicode.
         assertContains(KitePDF.open(subsetPdf).pages[0].extractText(), text)
 
-        assumeTrue("mutool not found — skipping render oracle.", MuPdfOracle.binary != null)
+        assumeTrue("mutool not found, skipping render oracle.", MuPdfOracle.binary != null)
         val subFile = File.createTempFile("kite-cff-sub-", ".pdf").apply { writeBytes(subsetPdf) }
         val fullFile = File.createTempFile("kite-cff-full-", ".pdf").apply { writeBytes(fullPdf) }
         try {

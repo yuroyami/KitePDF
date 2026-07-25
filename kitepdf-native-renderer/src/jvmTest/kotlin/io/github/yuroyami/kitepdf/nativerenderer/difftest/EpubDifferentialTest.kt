@@ -70,7 +70,7 @@ class EpubDifferentialTest {
                 }
                 if (ImageDiff.nonBackgroundPixels(img) == 0L) {
                     blanks++; if (name in syntheticNames) syntheticBlanks++
-                    lines.add("- $name p$i: BLANK" + if (name in syntheticNames) " (SYNTHETIC — gated)" else " (corpus — informational)")
+                    lines.add("- $name p$i: BLANK" + if (name in syntheticNames) " (SYNTHETIC, gated)" else " (corpus, informational)")
                 }
                 if (i == 0 && MuPdfOracle.available) {
                     oracleRef(bytes, dpi)?.let { ref ->

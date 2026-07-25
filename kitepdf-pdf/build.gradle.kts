@@ -14,7 +14,7 @@ plugins {
  * in the renderer modules, not here.
  *
  * The handler itself is entirely common Kotlin with no cinterop, so it
- * compiles for every target Kotlin supports — hence every target is on.
+ * compiles for every target Kotlin supports, hence every target is on.
  */
 // T-26: KitePDF.VERSION is generated from the Gradle project version so the
 // two can never drift. Wired into commonMain via srcDir(taskProvider), which
@@ -50,7 +50,7 @@ kotlin {
 
     jvm()
 
-    // Apple — iOS keeps the XCFramework binaries for direct Xcode embedding.
+    // Apple: iOS keeps the XCFramework binaries for direct Xcode embedding.
     listOf(
         iosSimulatorArm64(),
         iosArm64(),
@@ -61,8 +61,8 @@ kotlin {
             isStatic = false
         }
     }
-    // (macosX64 / tvosX64 / watchosX64 are deprecated in Kotlin 2.3 —
-    //  "target no longer available" — so they stay off.)
+    // (macosX64 / tvosX64 / watchosX64 are deprecated in Kotlin 2.3 with
+    //  "target no longer available", so they stay off.)
     macosArm64()
     tvosArm64()
     tvosSimulatorArm64()

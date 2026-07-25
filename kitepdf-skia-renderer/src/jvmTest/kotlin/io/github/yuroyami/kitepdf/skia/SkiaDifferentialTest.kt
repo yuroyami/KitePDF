@@ -59,7 +59,7 @@ class SkiaDifferentialTest {
         // Compose backend. Vector/colour fixtures must still be non-blank.
         val textGap = results.filter { it.name.startsWith("gen-text") && !it.nonBlank }
         if (textGap.isNotEmpty()) {
-            println("[skia-difftest] KNOWN GAP — base-14 text not rendered by Skia backend (blank): " +
+            println("[skia-difftest] KNOWN GAP. Base-14 text not rendered by Skia backend (blank): " +
                 textGap.joinToString { "${it.name} p${it.page}" })
         }
 
@@ -188,7 +188,7 @@ class SkiaDifferentialTest {
         mean?.let { md.appendLine("- Mean score (MAE vs MuPDF): ${"%.4f".format(it)}") }
         md.appendLine().appendLine("| Doc | Pg | OK | Non-blank | Score |").appendLine("|---|---:|:---:|:---:|---:|")
         for (r in results.sortedByDescending { it.score ?: -1.0 }) {
-            md.appendLine("| ${r.name} | ${r.page} | ${if (r.rendered) "✅" else "❌"} | ${if (r.nonBlank) "✅" else "·"} | ${r.score?.let { "%.4f".format(it) } ?: "—"} |")
+            md.appendLine("| ${r.name} | ${r.page} | ${if (r.rendered) "✅" else "❌"} | ${if (r.nonBlank) "✅" else "·"} | ${r.score?.let { "%.4f".format(it) } ?: "n/a"} |")
         }
         File(outDir, "report.md").writeText(md.toString())
     }

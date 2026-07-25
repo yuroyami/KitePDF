@@ -869,7 +869,7 @@ public class PdfEditor internal constructor(
      */
     public fun saveIncremental(): ByteArray {
         check(!redactionStaged) {
-            "Redaction was staged; call saveRewritten() instead — an incremental save " +
+            "Redaction was staged; call saveRewritten() instead. An incremental save " +
                 "would leave the original, unredacted content recoverable in the file."
         }
         if (staged.isEmpty() && trailerOverrides.isEmpty()) return base.bytes.copyOf()

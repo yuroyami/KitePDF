@@ -32,7 +32,7 @@ class BenchmarkTest {
     fun benchmarks() {
         val enabled = System.getenv("KITEPDF_BENCH") == "true" || System.getProperty("kitepdf.bench") == "true"
         if (!enabled) {
-            println("[bench] skipped — run with KITEPDF_BENCH=true to enable the performance benchmark.")
+            println("[bench] skipped. Run with KITEPDF_BENCH=true to enable the performance benchmark.")
             return
         }
         val md = StringBuilder()
@@ -80,7 +80,7 @@ class BenchmarkTest {
         val buildMs = bench(2, 5) {
             built = PdfBuilder().apply {
                 repeat(50) { i ->
-                    page { text(StandardFont.Helvetica, 12.0, 72.0, 720.0, "Generated page ${i + 1} — benchmark body line.") }
+                    page { text(StandardFont.Helvetica, 12.0, 72.0, 720.0, "Generated page ${i + 1}, benchmark body line.") }
                 }
             }.build()
         }
@@ -100,7 +100,7 @@ class BenchmarkTest {
     /* ─── Codec: KitePDF Flate vs JDK java.util.zip ──────────────────────── */
 
     private fun benchCodec(md: StringBuilder) {
-        md.appendLine("## Flate codec — KitePDF (pure-Kotlin) vs JDK java.util.zip").appendLine()
+        md.appendLine("## Flate codec: KitePDF (pure-Kotlin) vs JDK java.util.zip").appendLine()
 
         // Realistic-ish payload: repeated extracted text + pseudo-random tail.
         val text = corpusFiles().firstOrNull()?.let {
@@ -172,7 +172,7 @@ class BenchmarkTest {
         return best
     }
 
-    private fun fmt(ms: Double): String = if (ms.isNaN()) "—" else "%.2f".format(ms)
+    private fun fmt(ms: Double): String = if (ms.isNaN()) "n/a" else "%.2f".format(ms)
 
     private fun corpusFiles(): List<File> {
         val dir = System.getProperty("kitepdf.corpus")?.let { File(it) } ?: Corpus.repoCorpus("pdf")

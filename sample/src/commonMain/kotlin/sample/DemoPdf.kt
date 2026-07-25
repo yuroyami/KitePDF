@@ -184,7 +184,7 @@ object DemoPdf {
         b.addStream(
             "<< /Length %LEN% >>",
             """BT /F1 22 Tf 0 0 0 rg 72 720 Td (CMYK + Annotations demo) Tj ET
-              |% CMYK fill ("k" operator) — cyan square
+              |% CMYK fill ("k" operator), cyan square
               |1 0 0 0 k
               |72 600 80 80 re f
               |% Magenta square

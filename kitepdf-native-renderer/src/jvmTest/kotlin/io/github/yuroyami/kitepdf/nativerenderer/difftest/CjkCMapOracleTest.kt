@@ -114,7 +114,7 @@ class CjkCMapOracleTest {
     @Test
     fun gbk_euc_h_renders_and_extracts() {
         val ttfFile = fontFile()
-        assumeTrue("DroidSansFallback.ttf not found — skipping.", ttfFile != null)
+        assumeTrue("DroidSansFallback.ttf not found, skipping.", ttfFile != null)
         val bytes = buildPdf(ttfFile!!.readBytes())
 
         val doc = KitePDF.open(bytes)
@@ -123,7 +123,7 @@ class CjkCMapOracleTest {
         val kite = AwtPdfRasterizer.renderToImage(doc.pages[0])
         assertTrue(ImageDiff.nonBackgroundPixels(kite) > 50, "the CJK glyphs painted")
 
-        assumeTrue("mutool not found — skipping oracle half.", MuPdfOracle.binary != null)
+        assumeTrue("mutool not found, skipping oracle half.", MuPdfOracle.binary != null)
         val pdf = File.createTempFile("kite-gbk", ".pdf").apply {
             deleteOnExit()
             writeBytes(bytes)

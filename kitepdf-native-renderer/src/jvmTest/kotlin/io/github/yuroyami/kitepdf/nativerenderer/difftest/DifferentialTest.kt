@@ -29,14 +29,14 @@ class DifferentialTest {
         val dpi = parseDpi(System.getProperty("kitepdf.diff.dpi"))
 
         val corpus = Corpus.assemble(outDir)
-        assertTrue(corpus.isNotEmpty(), "corpus is empty — expected synthetic fixtures at minimum")
+        assertTrue(corpus.isNotEmpty(), "corpus is empty, expected synthetic fixtures at minimum")
 
         val report = DiffHarness.run(corpus, dpi, outDir)
         report.writeMarkdown()
         println(report.summary())
         assertTrue(
             report.results.isNotEmpty(),
-            "differential sweep rendered zero pages — check corpus documents and kitepdf.diff.maxpages",
+            "differential sweep rendered zero pages: check corpus documents and kitepdf.diff.maxpages",
         )
 
         // KitePDF must not throw on any page.
@@ -72,7 +72,7 @@ class DifferentialTest {
             )
         } else {
             println(
-                "[difftest] mutool not found — KitePDF-only smoke pass. " +
+                "[difftest] mutool not found, KitePDF-only smoke pass. " +
                     "Build mupdf-master (mujs=no) or pass -Dkitepdf.mutool to enable differential scoring.",
             )
         }

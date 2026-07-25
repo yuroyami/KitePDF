@@ -84,7 +84,7 @@ private fun Header() {
             color = MaterialTheme.colorScheme.primary,
         )
         Text(
-            text = "Pure-Kotlin PDF library — v${KitePDF.VERSION}",
+            text = "Pure-Kotlin PDF library, v${KitePDF.VERSION}",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f),
         )

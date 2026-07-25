@@ -93,7 +93,7 @@ object DiffHarness {
             md.appendLine()
             md.appendLine(
                 "- Oracle: " + if (oracleAvailable) "`$oraclePath`"
-                else "**none** — KitePDF-only smoke (set `-Dkitepdf.mutool=…` or build `mupdf-master`)",
+                else "**none**: KitePDF-only smoke (set `-Dkitepdf.mutool=…` or build `mupdf-master`)",
             )
             md.appendLine("- DPI: $dpi")
             md.appendLine(
@@ -108,11 +108,11 @@ object DiffHarness {
             md.appendLine("| Doc | Pg | OK | Non-blank | Score | Diff% | MaxΔ | KitePDF | Ref | Diff |")
             md.appendLine("|---|---:|:---:|:---:|---:|---:|---:|---|---|---|")
             for (r in worstFirst) {
-                fun link(p: String?) = if (p != null) "[png]($p)" else "—"
+                fun link(p: String?) = if (p != null) "[png]($p)" else "n/a"
                 md.appendLine(
                     "| ${r.doc} | ${r.page} | ${if (r.rendered) "✅" else "❌"} | ${if (r.nonBlank) "✅" else "·"} | " +
-                        "${r.score?.let { "%.4f".format(it) } ?: "—"} | " +
-                        "${r.diffFraction?.let { "%.2f%%".format(it * 100) } ?: "—"} | ${r.maxDelta ?: "—"} | " +
+                        "${r.score?.let { "%.4f".format(it) } ?: "n/a"} | " +
+                        "${r.diffFraction?.let { "%.2f%%".format(it * 100) } ?: "n/a"} | ${r.maxDelta ?: "n/a"} | " +
                         "${link(r.kitePng)} | ${link(r.refPng)} | ${link(r.diffPng)} |",
                 )
                 if (!r.rendered && r.error != null) {
