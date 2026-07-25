@@ -6,9 +6,9 @@
 
 Most Kotlin PDF "libraries" are thin wrappers around platform engines: `PdfRenderer` on Android, `PDFKit` on iOS, PDF.js in the browser. They're convenient but fragmented; each platform behaves differently, and bugs shift between layers.
 
-KitePDF is the opposite. The entire stack: parser, renderer, editor, writer, crypto, fonts: is written in pure Kotlin. There is no JNI, no platform PDF engine to fall back on, no embedded web view. A PDF is just data; bugs are ours to fix.
+KitePDF takes the other route. The whole stack — parser, renderer, editor, writer, crypto and fonts — is written in Kotlin, and almost all of it is common code. `kitepdf-core` carries three `expect` declarations (a mutex, a thread id, and the deflate/inflate hook); nothing else in the engine branches per platform. There is no JNI, no platform PDF engine to fall back on and no embedded web view.
 
-This also means the Compose binding draws directly into a `DrawScope`. Pages scroll, zoom, and animate like any other composable, not as embedded platform views. **One codebase. Every target. Bugs are ours.**
+The Compose binding draws directly into a `DrawScope`, so pages scroll, zoom and animate like any other composable rather than as an embedded platform view.
 
 ## Current Status
 
@@ -22,7 +22,7 @@ KitePDF is **pre-1.0**. The core features are solid and verified page-by-page ag
 - **Encryption** - open, authenticate, EDIT, and CREATE password-protected PDFs (AES-256/R6 write support)  
 - **Editing & saving** - fill forms, stamp watermarks, redact (real removal, not just hiding), incremental save or full rebuild  
 - **Building from scratch** - text (standard or custom embedded fonts, with subsetting), shapes, images, and colors  
-- **Image codecs** - pure-Kotlin PNG, JPEG, GIF, JBIG2 (full profile), and JPEG 2000  
+- **Image codecs** - pure-Kotlin PNG, JPEG, GIF, the JBIG2 arithmetic generic-region path, and JPEG 2000 Part-1 baseline profiles
 - **Signing scaffold** - `/ByteRange` preparation and CMS embedding; the cryptography stays in your application  
 
 On the roadmap:

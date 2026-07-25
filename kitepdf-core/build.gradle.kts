@@ -1,17 +1,18 @@
-import org.jetbrains.kotlin.gradle.ExperimentalKotlinGradlePluginApi
 import org.jetbrains.kotlin.gradle.ExperimentalWasmDsl
 
 plugins {
     alias(libs.plugins.kotlin.multiplatform)
     alias(libs.plugins.android.kmp.library)
     alias(libs.plugins.vanniktech.publish)
+    alias(libs.plugins.dokka)
 }
 
 /*
- * :kitepdf-core is the format-agnostic substrate (the "fitz"): geometry, the
- * render Canvas, the font engine, image codecs, compression, and the shared
- * value model. Every document handler (:kitepdf-pdf, :kitepdf-epub, ...) and
- * every render backend depends on it. NO external runtime deps beyond stdlib.
+ * :kitepdf-core is the format-agnostic substrate: geometry, the render Canvas,
+ * the font engine, compression, hyphenation data, and the shared value model.
+ * Every document handler (:kitepdf-pdf, :kitepdf-epub, ...) and every render
+ * backend depends on it. Its one runtime dependency beyond kotlin-stdlib is
+ * KiteImage, declared with `api` below, which supplies the image codecs.
  */
 kotlin {
     explicitApi()
@@ -52,8 +53,7 @@ kotlin {
     androidNativeX86()
     androidNativeX64()
 
-    @OptIn(ExperimentalKotlinGradlePluginApi::class)
-    js(IR) {
+    js {
         browser()
         nodejs()
         binaries.library()
@@ -88,4 +88,3 @@ kotlin {
         }
     }
 }
-

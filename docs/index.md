@@ -28,7 +28,7 @@ val fresh = PdfBuilder()                     // create
 
 Most "Kotlin PDF libraries" are thin `expect`/`actual` wrappers around the platform's own engine: `PdfRenderer` on Android, `PDFKit` on iOS, PDF.js in the browser, PDFBox on the JVM. You inherit four engines, four sets of bugs, and four feature sets that never line up.
 
-KitePDF is a **single standalone engine, 100% common Kotlin**, with zero `expect`/`actual` in the core. Write your PDF code once in `commonMain` and it behaves identically everywhere, because it is the same code. Parser, renderer, writer, editor, encryption and fonts are all included. When something is wrong, it is one bug in one place.
+KitePDF is a single standalone engine, written in Kotlin and almost entirely in common code. Parser, renderer, writer, editor, encryption and fonts are all included, and `kitepdf-core` carries just three `expect` declarations (a mutex, a thread id, and the deflate/inflate hook). Write your PDF code once in `commonMain` and the same implementation runs on every target.
 
 Drawing to a screen is the only thing that needs a platform, and KitePDF keeps that cleanly separate so the engine stays pure and portable.
 
@@ -46,13 +46,13 @@ kotlin {
 }
 ```
 
-Its only dependency is `kotlin-stdlib`, and it works on every Kotlin target.
+Its runtime dependencies are `kotlin-stdlib` and the pure-Kotlin KiteImage codec engine, and it works on every Kotlin target.
 
 Drawing a page to the screen is the one job that needs a platform, so the rendering bindings are separate, opt-in artifacts. Add the one that matches how you draw:
 
 | Artifact | Add it when you want |
 |---|---|
-| `io.github.yuroyami:kitepdf` | The engine: read / write / edit PDFs **and** read EPUBs. Pure `kotlin-stdlib`, every Kotlin target. |
+| `io.github.yuroyami:kitepdf` | The engine: read / write / edit PDFs **and** read EPUBs. Pure Kotlin (stdlib + KiteImage codecs), every Kotlin target. |
 | `io.github.yuroyami:kitepdf-compose-viewer` | A Compose `PdfView` / `EpubView`, drawn straight into a `DrawScope`. |
 | `io.github.yuroyami:kitepdf-native-renderer` | Headless page → image through the platform canvas (AWT, CoreGraphics, `android.graphics`, Canvas2D). |
 | `io.github.yuroyami:kitepdf-skia-renderer` | Headless page → image through Skia / Skiko: one API on JVM, Android, Apple, Linux and web. |
@@ -163,6 +163,6 @@ See **[Headless rendering](rendering.md)**.
 
 ## Status
 
-KitePDF is pre-1.0 and actively developed. Reading, text extraction, metadata, outlines, annotations, forms, encrypted documents, the Compose viewer, headless rendering, editing, redaction and building from scratch all work today. Digital signatures, the JBIG2 and JPEG 2000 codecs, and advanced colour management are on the way.
+KitePDF is pre-1.0 and actively developed. Reading, text extraction, metadata, outlines, annotations, forms, encrypted documents, the Compose viewer, headless rendering, editing, redaction, signing preparation, PDF creation, and the supported JBIG2/JPEG 2000 profiles all work today. Signature validation, less common form widgets, advanced colour management, broader image-codec profiles, and more document handlers are on the way.
 
 If a PDF renders incorrectly, [open an issue](https://github.com/yuroyami/KitePDF/issues) with the file attached. Every fix lands as a regression test against a MuPDF pixel-diff harness.

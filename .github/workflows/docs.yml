@@ -12,6 +12,12 @@ on:
       - 'mkdocs.yml'
       - '**/*.kt'
       - '**/build.gradle.kts'
+      - 'settings.gradle.kts'
+      - 'gradle.properties'
+      - 'gradle/libs.versions.toml'
+      - 'gradle/wrapper/**'
+      - 'gradlew'
+      - 'gradlew.bat'
       - '.github/workflows/docs.yml'
   workflow_dispatch:
 
@@ -28,8 +34,17 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      ORG_GRADLE_PROJECT_kiteImagePath: kiteimage-source
     steps:
       - uses: actions/checkout@v4
+
+      - name: Check out the KiteImage snapshot
+        uses: actions/checkout@v4
+        with:
+          repository: yuroyami/KiteImage
+          ref: a8d81ffa0179612b0a8354f6d1c1fb1e27b87325
+          path: kiteimage-source
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -53,6 +68,15 @@ jobs:
 
       - name: Generate the Dokka API reference
         run: ./gradlew dokkaGenerate --no-configuration-cache
+
+      - name: Verify the complete API reference
+        run: |
+          for module in \
+            kitepdf kitepdf-core kitepdf-pdf kitepdf-epub \
+            kitepdf-compose-viewer kitepdf-native-renderer kitepdf-skia-renderer
+          do
+            test -f "build/dokka/html/$module/index.html"
+          done
 
       - name: Merge the API reference into the site
         run: |

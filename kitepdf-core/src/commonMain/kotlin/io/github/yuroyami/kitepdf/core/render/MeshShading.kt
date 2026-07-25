@@ -342,14 +342,47 @@ public fun KiteCanvas.paintComplexShading(
                 val y0 = shading.domain[2]
                 val y1 = shading.domain[3]
                 val cellCtm = ctm.concat(shading.matrix)
+                val xStep = (x1 - x0) / n
+                val yStep = (y1 - y0) / n
+                // Adjacent anti-aliased fills otherwise expose the page through
+                // their shared edges (a visible 64x64 hairline grid). For the
+                // normal opaque case, overlap internal edges by half a device
+                // pixel. The outer domain still lands exactly on its boundary,
+                // and non-normal/translucent paints avoid double compositing.
+                //
+                // Under shear, the scale perpendicular to an x-edge is
+                // |det|/scaleY (and vice versa), hence the inverse formulas.
+                // Cap at half a cell so near-singular/subpixel transforms do
+                // not let paint order overwhelm the sampled colour.
+                val det = kotlin.math.abs(cellCtm.a * cellCtm.d - cellCtm.b * cellCtm.c)
+                val scaleX = cellCtm.scaleX()
+                val scaleY = cellCtm.scaleY()
+                val canOverlap = alpha >= 1.0 && blendMode == BlendMode.Normal &&
+                    det.isFinite() && scaleX.isFinite() && scaleY.isFinite() && det > 1e-12
+                val overlapX = if (canOverlap) {
+                    kotlin.math.min(kotlin.math.abs(xStep) * 0.5, 0.5 * scaleY / det)
+                } else {
+                    0.0
+                }
+                val overlapY = if (canOverlap) {
+                    kotlin.math.min(kotlin.math.abs(yStep) * 0.5, 0.5 * scaleX / det)
+                } else {
+                    0.0
+                }
+                val xDirection = if (xStep < 0.0) -1.0 else 1.0
+                val yDirection = if (yStep < 0.0) -1.0 else 1.0
                 for (i in 0 until n) for (j in 0 until n) {
-                    val cx0 = x0 + (x1 - x0) * i / n
-                    val cx1 = x0 + (x1 - x0) * (i + 1) / n
-                    val cy0 = y0 + (y1 - y0) * j / n
-                    val cy1 = y0 + (y1 - y0) * (j + 1) / n
+                    val cx0 = x0 + xStep * i
+                    val cx1 = cx0 + xStep
+                    val cy0 = y0 + yStep * j
+                    val cy1 = cy0 + yStep
                     val color = shading.colorAt((cx0 + cx1) / 2, (cy0 + cy1) / 2)
+                    val left = cx0 - if (i > 0) xDirection * overlapX else 0.0
+                    val right = cx1 + if (i + 1 < n) xDirection * overlapX else 0.0
+                    val bottom = cy0 - if (j > 0) yDirection * overlapY else 0.0
+                    val top = cy1 + if (j + 1 < n) yDirection * overlapY else 0.0
                     val cell = KitePath.Builder().apply {
-                        rectangle(cx0, cy0, cx1 - cx0, cy1 - cy0)
+                        rectangle(left, bottom, right - left, top - bottom)
                     }.build()
                     fillPath(cell, cellCtm, color, evenOdd = false, alpha = alpha, blendMode = blendMode)
                 }
@@ -376,7 +409,6 @@ public fun KiteCanvas.paintComplexShading(
                     fillPath(p, ctm, q.color, evenOdd = false, alpha = alpha, blendMode = blendMode)
                 }
             }
-            else -> Unit
         }
     } finally {
         repeat(clips) { popClip() }

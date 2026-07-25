@@ -130,8 +130,8 @@ public class AndroidNativeCanvas(private val canvas: AndroidCanvas) : KiteCanvas
             val outline = glyph.outline
             if (outline != null && !outline.isEmpty()) {
                 val glyphMatrix = textToDevice
-                    .let { tm -> PdfMatrix.translation(penX + glyph.xOffset * unitScale, glyph.yOffset * unitScale).concat(tm) }
-                    .let { tm -> PdfMatrix(unitScale, 0.0, 0.0, unitScale, 0.0, 0.0).concat(tm) }
+                    .concat(PdfMatrix.translation(penX + glyph.xOffset * unitScale, glyph.yOffset * unitScale))
+                    .concat(PdfMatrix(unitScale, 0.0, 0.0, unitScale, 0.0, 0.0))
                 val p = toAndroidPath(outline, glyphMatrix).apply { fillType = Path.FillType.WINDING }
                 canvas.drawPath(p, paint)
                 drewAny = true

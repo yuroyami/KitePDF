@@ -28,7 +28,7 @@ import io.github.yuroyami.kitepdf.text.TextExtractor
  * println(page.extractText())
  * for (link in page.annotations) { /* … */ }
  *
- * // Paint into any backend implementing KiteCanvas (see :kitepdf-compose etc.):
+ * // Paint into any backend implementing KiteCanvas (see :kitepdf-compose-viewer etc.):
  * page.renderTo(canvas, deviceCtm = Matrix.IDENTITY)
  * ```
  */

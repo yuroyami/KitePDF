@@ -26,7 +26,7 @@ class DifferentialTest {
     @Test
     fun differential_sweep_against_mupdf() {
         val outDir = File(System.getProperty("kitepdf.difftest.out") ?: "build/difftest").apply { mkdirs() }
-        val dpi = System.getProperty("kitepdf.diff.dpi")?.toIntOrNull() ?: DiffHarness.DEFAULT_DPI
+        val dpi = parseDpi(System.getProperty("kitepdf.diff.dpi"))
 
         val corpus = Corpus.assemble(outDir)
         assertTrue(corpus.isNotEmpty(), "corpus is empty — expected synthetic fixtures at minimum")
@@ -34,6 +34,10 @@ class DifferentialTest {
         val report = DiffHarness.run(corpus, dpi, outDir)
         report.writeMarkdown()
         println(report.summary())
+        assertTrue(
+            report.results.isNotEmpty(),
+            "differential sweep rendered zero pages — check corpus documents and kitepdf.diff.maxpages",
+        )
 
         // Gate 1 — KitePDF must not throw on any page.
         val failures = report.results.filter { !it.rendered }
@@ -49,12 +53,18 @@ class DifferentialTest {
             "Blank render for fixtures: " + blank.joinToString { "${it.doc} p${it.page}" },
         )
 
-        // Gate 3 — with the oracle present, no page may exceed the regression budget.
+        // Gate 3 — a discovered oracle must successfully score every page that
+        // KitePDF rendered. A broken mutool must never look like a zero score.
+        if (report.oracleAvailable) assertOracleComplete(report)
+
+        // Gate 4 — with the oracle present, no page may exceed the regression budget.
         // Default budget is deliberately lenient: Phase 0's job is the scoreboard,
         // not a tight gate. Tighten with -Dkitepdf.diff.budget as correctness improves.
         if (report.oracleAvailable) {
-            val budget = System.getProperty("kitepdf.diff.budget")?.toDoubleOrNull() ?: 0.50
-            val over = report.results.filter { (it.score ?: 0.0) > budget }
+            val budget = parseBudget(System.getProperty("kitepdf.diff.budget"))
+            val over = report.results.filter { result ->
+                result.score?.let { it > budget } == true
+            }
             assertTrue(
                 over.isEmpty(),
                 "Pages over diff budget ($budget):\n" +
@@ -64,6 +74,40 @@ class DifferentialTest {
             println(
                 "[difftest] mutool not found — KitePDF-only smoke pass. " +
                     "Build mupdf-master (mujs=no) or pass -Dkitepdf.mutool to enable differential scoring.",
+            )
+        }
+    }
+
+    companion object {
+        internal fun parseDpi(raw: String?): Int {
+            if (raw == null) return DiffHarness.DEFAULT_DPI
+            val value = raw.toIntOrNull()
+            require(value != null && value >= 1) {
+                "kitepdf.diff.dpi must be a positive integer (was '$raw')"
+            }
+            return value
+        }
+
+        internal fun parseBudget(raw: String?): Double {
+            if (raw == null) return 0.50
+            val value = raw.toDoubleOrNull()
+            require(value != null && value.isFinite() && value in 0.0..1.0) {
+                "kitepdf.diff.budget must be a finite value from 0.0 to 1.0 (was '$raw')"
+            }
+            return value
+        }
+
+        internal fun assertOracleComplete(report: DiffHarness.Report) {
+            val unscored = report.results.filter { result ->
+                result.rendered &&
+                    (result.oracleError != null || result.score == null || !result.score.isFinite())
+            }
+            assertTrue(
+                unscored.isEmpty(),
+                "MuPDF oracle failed to score rendered pages:\n" +
+                    unscored.joinToString("\n") {
+                        "  ${it.doc} p${it.page}: ${it.oracleError ?: "no score or diagnostic returned"}"
+                    },
             )
         }
     }

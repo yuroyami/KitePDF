@@ -1,5 +1,8 @@
 package io.github.yuroyami.kitepdf.nativerenderer.difftest
 
+import io.github.yuroyami.kitepdf.core.render.ImageXObject
+import io.github.yuroyami.kitepdf.core.render.RecordingCanvas
+import io.github.yuroyami.kitepdf.core.render.toRgbaBytes
 import io.github.yuroyami.kitepdf.epub.EpubDocument
 import io.github.yuroyami.kitepdf.epub.EpubPage
 import java.awt.image.BufferedImage
@@ -85,9 +88,25 @@ class EpubRasterTest {
     fun image_pixels_reach_the_raster() {
         // Explicit size: since T-66 a bare <img> is inline at its intrinsic size
         // (CSS behaviour); the tiny fixture PNG must be sized up to blit visibly.
-        val doc = EpubDocument.open(EpubCorpus.epub("<p>see:</p><img src=\"pic.png\" width=\"200\" height=\"200\"/>", listOf("OEBPS/pic.png" to EpubCorpus.redPng())))
+        val encoded = EpubCorpus.redPng()
+        val decoded = ImageXObject.fromEncodedImage(encoded)
+        assertNotNull(decoded, "red PNG fixture should decode")
+        val rgba = decoded.toRgbaBytes()
+        assertNotNull(rgba, "red PNG fixture should produce RGBA pixels")
+        assertTrue(
+            (rgba[0].toInt() and 0xFF) == 255 &&
+                (rgba[1].toInt() and 0xFF) == 0 &&
+                (rgba[2].toInt() and 0xFF) == 0,
+            "red PNG fixture should decode its first pixel as red",
+        )
+
+        val doc = EpubDocument.open(EpubCorpus.epub("<p>see:</p><img src=\"pic.png\" width=\"200\" height=\"200\"/>", listOf("OEBPS/pic.png" to encoded)))
         assertNotNull(doc)
-        assertTrue(countColor(raster(doc.pages.first()), 255, 0, 0) > 1000, "the red image should blit a large red area")
+        val calls = RecordingCanvas().also { doc.pages.first().renderTo(it) }.calls
+        assertTrue(calls.any { it is RecordingCanvas.Call.Image }, "EPUB layout should emit an image draw call")
+        val rendered = raster(doc.pages.first())
+        val redPixels = countColor(rendered, 255, 0, 0)
+        assertTrue(redPixels > 1000, "the red image should blit a large red area (found $redPixels red pixels)")
     }
 
     @Test

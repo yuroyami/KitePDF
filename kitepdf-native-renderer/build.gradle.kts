@@ -1,5 +1,3 @@
-import org.jetbrains.kotlin.gradle.ExperimentalKotlinGradlePluginApi
-
 plugins {
     alias(libs.plugins.kotlin.multiplatform)
     alias(libs.plugins.android.kmp.library)
@@ -53,8 +51,7 @@ kotlin {
     // No watchOS: its mainstream arm64_32 ABI makes CGFloat/size_t 32-bit,
     // which breaks every Double-typed CoreGraphics call in this backend.
 
-    @OptIn(ExperimentalKotlinGradlePluginApi::class)
-    js(IR) {
+    js {
         browser()
         binaries.library()
     }
@@ -83,3 +80,46 @@ kotlin {
     }
 }
 
+// Gradle's `-D` properties belong to the build JVM and are not inherited by
+// forked Test workers. Forward the documented difftest knobs explicitly so
+// `-Dkitepdf.diff.dpi=…`, corpus paths, budgets, and oracle overrides actually
+// control jvmTest. Declaring them as inputs also keeps test up-to-date checks
+// honest when a knob changes.
+tasks.withType<Test>().configureEach {
+    val kitePdfProperties = System.getProperties()
+        .stringPropertyNames()
+        .filter { it.startsWith("kitepdf.") }
+        .associateWith(System::getProperty)
+    systemProperties(kitePdfProperties)
+    inputs.properties(kitePdfProperties)
+
+    // The corpus and auto-discovered oracle affect test results even when no
+    // -D knob changes. Track their bytes/presence so Gradle cannot reuse a
+    // stale green differential result after either one changes.
+    val pdfCorpus = kitePdfProperties["kitepdf.corpus"]?.let(::file)
+        ?: rootProject.file("corpus/pdf")
+    val epubCorpus = kitePdfProperties["kitepdf.epub.corpus"]?.let(::file)
+        ?: rootProject.file("corpus/epub")
+    inputs.files(fileTree(pdfCorpus) { include("**/*.pdf") })
+        .withPropertyName("kitePdfCorpus")
+        .withPathSensitivity(PathSensitivity.RELATIVE)
+    inputs.files(fileTree(epubCorpus) { include("**/*.epub") })
+        .withPropertyName("kiteEpubCorpus")
+        .withPathSensitivity(PathSensitivity.RELATIVE)
+
+    val mutoolCandidates = buildList {
+        kitePdfProperties["kitepdf.mutool"]?.let { add(file(it)) }
+        System.getenv("MUTOOL")?.takeIf(String::isNotBlank)?.let { add(file(it)) }
+        for (name in listOf("mutool", "mutool.exe")) {
+            add(rootProject.file("mupdf-master/build/release/$name"))
+            add(rootProject.file("mupdf-master/build/debug/$name"))
+            (System.getenv("PATH") ?: "")
+                .split(File.pathSeparator)
+                .filter(String::isNotBlank)
+                .forEach { add(file("$it/$name")) }
+        }
+    }.distinct()
+    inputs.files(mutoolCandidates)
+        .withPropertyName("mutoolCandidates")
+        .withPathSensitivity(PathSensitivity.NONE)
+}
