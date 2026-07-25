@@ -130,6 +130,11 @@ body {
     border: 1px solid var(--kite-rule-strong);
     border-radius: 999px;
     line-height: 1.6;
+    /* Dokka's mobile layout sets flex: 100 1 auto on this, which stretches the
+       pill to the full width of the bar around a five-character version. */
+    flex: 0 0 auto;
+    align-self: center;
+    width: auto;
 }
 
 /* Search is the fastest way out of a maze — give it a real target. */
