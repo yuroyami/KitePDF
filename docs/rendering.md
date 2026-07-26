@@ -183,6 +183,24 @@ dependencies {
 }
 ```
 
+!!! warning "Android needs an extra repository"
+
+    On Android this module resolves `org.jetbrains.skiko:skiko-android`, which
+    JetBrains publishes to the Compose dev repository rather than to Maven
+    Central. Without it the build fails with
+    `Could not find org.jetbrains.skiko:skiko-android`. Add:
+
+    ```kotlin
+    repositories {
+        maven("https://maven.pkg.jetbrains.space/public/p/compose/dev")
+    }
+    ```
+
+    Every other target resolves from Maven Central alone. On Android, prefer
+    [`kitepdf-native-renderer`](#android-bitmap-api): it draws through the
+    platform Bitmap API, needs no extra repository, and carries no Skia
+    runtime.
+
 **Usage:**
 
 ```kotlin
