@@ -5,6 +5,99 @@ All notable changes to KitePDF are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-07-25
+
+Rendering correctness and supply chain. Image decoding moves out to KiteImage,
+function-based shadings lose their seams, embedded glyph outlines get their
+transform order fixed on every canvas, and the differential harness loses every
+way it could report a false green.
+
+### Changed
+
+- `:kitepdf-core` decodes images through KiteImage
+  (`io.github.yuroyami:kiteimage:0.1.0`), declared `api`. This is the module's
+  first runtime dependency beyond `kotlin-stdlib`; everything else in it stays
+  stdlib-only. `JpegDecoder`, `PngDecoder`, `GifDecoder`, `JpxDecoder`,
+  `Jbig2Decoder` and `MqDecoder` are gone, and `CcittFaxFilter` keeps its
+  `PdfDictionary` parameter parsing while delegating the algorithm. All six were
+  `internal` in 0.2.0, so no public API was removed, but KiteImage's public API
+  now sits on the consumer compile classpath.
+- Decoder coverage widens with the move. JPEG gains progressive SOF2, restart
+  intervals, 4:1:1 and YCCK. PNG gains 1/2/4-bit depths, the Average and Paeth
+  filters, and color-key `tRNS`. GIF gains complete LZW (KwKwK and deferred
+  clear) and interlace. `ImageXObject.fromEncodedImage` sniffs the format and
+  additionally accepts BMP and JP2 from EPUB and CBZ content.
+- Deprecated Kotlin Multiplatform configuration removed:
+  `kotlin.mpp.androidSourceSetLayoutVersion` and the `js(IR)` target form.
+
+### Fixed
+
+- Function-based (type 1) shadings no longer show a hairline grid where the
+  sampled cells meet. Adjacent cells now overlap by half a device pixel, applied
+  only at full alpha under `BlendMode.Normal` with a finite non-singular CTM,
+  capped at half a cell, and computed shear-aware so the overlap stays half a
+  pixel in device space. The outer domain boundary is unchanged.
+- Embedded glyph outlines composed their transform in the wrong order on all
+  four canvases (Skia, Android, CoreGraphics and Canvas2D). Scale, then offset,
+  then device space is now applied consistently.
+- The shading-type dispatch in `paintComplexShading` is exhaustive again. The
+  `else -> Unit` catch-all that silently swallowed unhandled types is gone.
+
+### Added
+
+- MuPDF oracle hardening. `pageCountDetailed` and `renderDetailed` return sealed
+  results instead of nullables, carrying the reason a call failed. Both enforce a
+  60 second timeout with escalating termination, capture the exit code, and
+  validate the output rather than trusting a zero exit. Page-count parsing
+  tolerates diagnostics printed before the count.
+- The differential harness validates `kitepdf.diff.maxpages`, the DPI, the diff
+  budget and the corpus path, and reports oracle and comparison failures in
+  their own section instead of folding them into the score.
+- Regression suites for the paths above: `MuPdfOracleTest`,
+  `OracleFailureHandlingTest`, `DifferentialConfigurationTest`, `ImageDiffTest`,
+  `EmbeddedGlyphTransformTest` and `FunctionShadingSeamTest`. The
+  failure-handling suite pins the three false-green cases: a discovered but
+  broken oracle cannot pass as a zero score, a page-geometry mismatch cannot be
+  rescaled into a score, and a truncated page count cannot pass with finite
+  scores.
+- The EPUB PNG test fixture writes real per-chunk CRC-32 and Adler-32 values.
+  The previous fixture used dummy values that the old decoder ignored and
+  KiteImage rejects. The raster test now decodes the fixture and asserts the
+  pixels it produces.
+
+### Documentation
+
+- README rewritten for newcomers, carrying the artifact map that was missing.
+  Seven modules are published, the README listed four, and `:kitepdf-core`
+  appeared on no page at all. It now documents the trap that breaks a first
+  build, where all three renderer modules hold their engine dependency as
+  `implementation` while exposing `PdfDocument` and `PdfPage` in their own
+  signatures.
+- The "no expect/actual" claim is dropped from the README and three docs pages.
+  `:kitepdf-core` has three, and the JVM `PlatformFlate` actual is
+  `java.util.zip`. Corrected alongside it: the sample app is a JVM entry point
+  only, the engine does not compile for every Kotlin target, and the EPUB
+  hyphenation language list.
+- Shared Kite Dokka theme, `Module.md` for all seven modules, and an
+  `mkdocs.yml` aligned with the family template.
+- Em dashes removed repo-wide per KITE.md, including 687 from Kotlin comments
+  across 191 files, verified comment-only.
+
+### Build
+
+- The vanniktech publish plugin is declared at the root with `apply false`.
+  Applying it only to sibling modules loaded its shared build service under two
+  classloaders and left `publishAndReleaseToMavenCentral` unable to configure.
+- CI builds a multi-target matrix and publishes the documentation site.
+  `kotlin-js-store/yarn.lock` was refreshed so the js job stops failing
+  `kotlinStoreYarnLock` on lock drift.
+
+### Measured
+
+Differential run against `mutool` at 96 DPI: 36 pages, 0 render failures, 0 blank
+pages, 0 oracle or comparison failures, mean MAE 0.0062 versus MuPDF. JVM suites:
+769 tests across the six modules, 0 failures.
+
 ## [0.2.0] - 2026-07-11
 
 The multi-format, API-perfection release: the engine becomes a MuPDF-style
@@ -179,5 +272,6 @@ Other breaking changes:
   editor, encryption, and font handling, callable from `commonMain` and running
   unchanged across Android, iOS, JVM, JS, Wasm, and Kotlin/Native.
 
+[0.3.0]: https://github.com/yuroyami/KitePDF/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/yuroyami/KitePDF/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/yuroyami/KitePDF/releases/tag/v0.1.0

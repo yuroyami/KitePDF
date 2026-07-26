@@ -20,7 +20,7 @@ kotlin {
 
     android {
         namespace = "io.github.yuroyami.kitepdf.core"
-        compileSdk = 36
+        compileSdk = 37
         minSdk = 21
     }
 
@@ -80,7 +80,7 @@ kotlin {
             // The one runtime dependency: the Kite lineage's shared image engine.
             // Image codecs (JPEG incl. progressive, PNG, GIF, JPX, JBIG2, CCITT)
             // live there now; everything else here stays kotlin-stdlib-only.
-            api("io.github.yuroyami:kiteimage:0.0.1-SNAPSHOT")
+            api(libs.kiteimage)
         }
 
         commonTest.dependencies {

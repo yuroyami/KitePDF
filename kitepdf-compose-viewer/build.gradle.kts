@@ -37,7 +37,7 @@ kotlin {
 
     android {
         namespace = "io.github.yuroyami.kitepdf.compose"
-        compileSdk = 36
+        compileSdk = 37
         minSdk = 24
     }
 

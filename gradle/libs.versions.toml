@@ -5,20 +5,28 @@ agp = "9.2.1"
 vanniktechPublish = "0.36.0"
 dokka = "2.2.0"
 
-# Compose Multiplatform — only used by :sample. :kitepdf stays pure-Kotlin-stdlib.
+# Compose Multiplatform, used only by :sample. :kitepdf stays pure-Kotlin-stdlib.
 composeMultiplatform = "1.12.0-beta02"
 composeMaterial3 = "1.12.0-alpha03"
 
 # Android platform bridge (sample only)
 activityCompose = "1.13.0"
 
-# Skiko — JetBrains' Skia bindings. Used by :kitepdf-skia. Compose Multiplatform
+# Skiko: JetBrains' Skia bindings. Used by :kitepdf-skia. Compose Multiplatform
 # rides on Skiko under the hood on JVM Desktop + iOS, so this gives us the same
 # renderer Compose uses, without the Compose runtime sitting on top.
 skiko = "0.148.2"
 
+# KiteImage. The Kite lineage's shared image engine, and :kitepdf-core's one
+# runtime dependency beyond kotlin-stdlib.
+kiteimage = "0.1.0"
+
 [libraries] ######################################################################################
-# Skia (no Compose) — used by :kitepdf-skia. `skiko` is the multiplatform
+# KiteImage supplies every image codec :kitepdf-core decodes through: JPEG
+# (baseline and progressive), PNG, GIF, BMP, JPEG 2000, JBIG2 and CCITT.
+kiteimage = { module = "io.github.yuroyami:kiteimage", version.ref = "kiteimage" }
+
+# Skia (no Compose), used by :kitepdf-skia. `skiko` is the multiplatform
 # root (common org.jetbrains.skia API; resolves skiko-awt on JVM, native
 # klibs on Apple/Linux, CanvasKit on js/wasm). `skiko-awt` is the JVM API
 # jar; the per-platform AWT native runtime is selected at build time below.
@@ -31,7 +39,7 @@ skiko-awt-runtime-linux-arm64 = { module = "org.jetbrains.skiko:skiko-awt-runtim
 skiko-awt-runtime-windows-x64 = { module = "org.jetbrains.skiko:skiko-awt-runtime-windows-x64", version.ref = "skiko" }
 skiko-awt-runtime-windows-arm64 = { module = "org.jetbrains.skiko:skiko-awt-runtime-windows-arm64", version.ref = "skiko" }
 
-# Compose Multiplatform — sample app ONLY. The :kitepdf module must NEVER depend on these.
+# Compose Multiplatform, sample app ONLY. The :kitepdf module must NEVER depend on these.
 compose-runtime = { module = "org.jetbrains.compose.runtime:runtime", version.ref = "composeMultiplatform" }
 compose-foundation = { module = "org.jetbrains.compose.foundation:foundation", version.ref = "composeMultiplatform" }
 compose-ui = { module = "org.jetbrains.compose.ui:ui", version.ref = "composeMultiplatform" }

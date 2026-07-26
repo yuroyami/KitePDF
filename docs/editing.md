@@ -311,7 +311,7 @@ editor.setInfo(
     subject = "FY2025",
     keywords = "financial, annual",
     creator = "MyApp v1.0",
-    producer = "KitePDF 0.2.0",
+    producer = "KitePDF 0.3.0",
 )
 ```
 
