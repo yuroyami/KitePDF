@@ -200,16 +200,16 @@ Two renderer gaps come from KitePDF, not from the toolkit underneath:
 
     ```kotlin
     // The core engine (always add this)
-    implementation("io.github.yuroyami:kitepdf:0.3.0")
+    implementation("io.github.yuroyami:kitepdf:0.3.1")
 
     // Optional: Compose viewer
-    implementation("io.github.yuroyami:kitepdf-compose-viewer:0.3.0")
+    implementation("io.github.yuroyami:kitepdf-compose-viewer:0.3.1")
 
     // Optional: platform-native rasterizer (no Compose)
-    implementation("io.github.yuroyami:kitepdf-native-renderer:0.3.0")
+    implementation("io.github.yuroyami:kitepdf-native-renderer:0.3.1")
 
     // Optional: Skia rasterizer (headless, one common API)
-    implementation("io.github.yuroyami:kitepdf-skia-renderer:0.3.0")
+    implementation("io.github.yuroyami:kitepdf-skia-renderer:0.3.1")
     ```
 
 === "Android / JVM only"
@@ -217,10 +217,10 @@ Two renderer gaps come from KitePDF, not from the toolkit underneath:
     Add to your regular `dependencies { }` block:
 
     ```kotlin
-    implementation("io.github.yuroyami:kitepdf:0.3.0")
-    implementation("io.github.yuroyami:kitepdf-native-renderer:0.3.0")
+    implementation("io.github.yuroyami:kitepdf:0.3.1")
+    implementation("io.github.yuroyami:kitepdf-native-renderer:0.3.1")
     // or
-    implementation("io.github.yuroyami:kitepdf-skia-renderer:0.3.0")
+    implementation("io.github.yuroyami:kitepdf-skia-renderer:0.3.1")
     ```
 
 ## Related

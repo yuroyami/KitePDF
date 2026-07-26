@@ -240,13 +240,23 @@ public class ComposeCanvas(
             fontStyle = fontSpec.toComposeStyle(),
         )
         val layout = textMeasurer.measure(text = text, style = style)
+        val metricScale = systemFontMetricScale(
+            glyphs = glyphs,
+            renderedSize = renderedSize,
+            measuredWidthPx = layout.multiParagraph.intrinsics.maxIntrinsicWidth.toDouble(),
+        )
+        val horizontalScale = if (sy != 0.0) {
+            (sx / sy).toFloat() * metricScale
+        } else {
+            metricScale
+        }
 
         drawScope.withTransform({
             translate(textMatrix.e.toFloat(), textMatrix.f.toFloat())
             if (rotationDegrees != 0f) rotate(rotationDegrees, pivot = Offset.Zero)
             translate(0f, -layout.firstBaseline)
-            if (sx != sy && sy != 0.0) {
-                scale(scaleX = (sx / sy).toFloat(), scaleY = 1f, pivot = Offset.Zero)
+            if (horizontalScale != 1f) {
+                scale(scaleX = horizontalScale, scaleY = 1f, pivot = Offset.Zero)
             }
         }) {
             drawText(textLayoutResult = layout, blendMode = blendMode.toCompose())
@@ -569,4 +579,23 @@ public class ComposeCanvas(
     private val PI = kotlin.math.PI
 
     private data class ClipFrame(val path: Path)
+}
+
+/**
+ * Scales one shaped system-font run to the width assigned by the document
+ * layout engine. The host substitute font can have different metrics from the
+ * requested PDF or EPUB font. Keeping the run shaped as one unit preserves
+ * ligatures and combining marks while preventing adjacent runs from colliding.
+ */
+internal fun systemFontMetricScale(
+    glyphs: List<TextGlyph>,
+    renderedSize: Double,
+    measuredWidthPx: Double,
+): Float {
+    if (!renderedSize.isFinite() || renderedSize <= 0.0 || measuredWidthPx <= 0) return 1f
+    val targetWidthPx = glyphs.sumOf { it.advanceWidth } * renderedSize / 1_000.0
+    if (!targetWidthPx.isFinite() || targetWidthPx <= 0.0) return 1f
+    val scale = targetWidthPx / measuredWidthPx
+    val floatScale = scale.toFloat()
+    return if (floatScale.isFinite() && floatScale > 0f) floatScale else 1f
 }

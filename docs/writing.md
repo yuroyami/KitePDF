@@ -27,7 +27,7 @@ Add the `kitepdf` artifact to your build:
 
     ```kotlin
     dependencies {
-        commonMainImplementation("io.github.yuroyami:kitepdf:0.3.0")
+        commonMainImplementation("io.github.yuroyami:kitepdf:0.3.1")
     }
     ```
 
@@ -35,7 +35,7 @@ Add the `kitepdf` artifact to your build:
 
     ```gradle
     dependencies {
-        implementation("io.github.yuroyami:kitepdf:0.3.0")
+        implementation("io.github.yuroyami:kitepdf:0.3.1")
     }
     ```
 
@@ -89,7 +89,7 @@ PdfBuilder()
         subject = "Financial Results",
         keywords = "quarterly, revenue, forecast",
         creator = "MyApp/1.0",
-        producer = "KitePDF/0.3.0"
+        producer = "KitePDF/0.3.1"
     )
     .page { /* … */ }
     .build()

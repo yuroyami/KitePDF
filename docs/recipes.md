@@ -1,6 +1,6 @@
 # Recipes
 
-Short, working solutions to common KitePDF tasks. Each snippet is copy-pasteable and uses only real APIs from KitePDF 0.3.0.
+Short, working solutions to common KitePDF tasks. Each snippet is copy-pasteable and uses only real APIs from KitePDF 0.3.1.
 
 ## Open a password-protected PDF
 
