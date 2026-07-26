@@ -226,7 +226,13 @@ difference is the usual cause of a first build that will not resolve.
 | `kitepdf`, `-pdf`, `-epub`, `-core` | Android (minSdk 21), JVM, iOS arm64, simulator arm64 and x64, macOS arm64, tvOS, watchOS, Linux x64 and arm64, Windows (mingwX64), Android Native, JS (browser and Node), wasmJs (browser and Node), wasmWasi (Node) |
 | `-compose-viewer` | Android (minSdk 24), JVM, iOS arm64 and simulator arm64, macOS arm64, JS and wasmJs (browser) |
 | `-native-renderer` | Android (minSdk 29), JVM, iOS arm64, simulator arm64 and x64, macOS arm64, tvOS, JS (browser) |
-| `-skia-renderer` | Android (minSdk 21), JVM, iOS arm64, simulator arm64 and x64, macOS arm64, tvOS, Linux x64 and arm64, JS and wasmJs (browser) |
+| `-skia-renderer` | Android (minSdk 21, see note), JVM, iOS arm64, simulator arm64 and x64, macOS arm64, tvOS, Linux x64 and arm64, JS and wasmJs (browser) |
+
+On Android, `-skia-renderer` pulls `org.jetbrains.skiko:skiko-android`, which
+JetBrains publishes to `https://maven.pkg.jetbrains.space/public/p/compose/dev`
+rather than to Maven Central, so add that repository. Everything else here
+resolves from Maven Central alone, and `-native-renderer` is the recommended
+Android renderer.
 
 The full matrix, and the reason behind each gap, is on the
 [Platform support](https://yuroyami.github.io/KitePDF/platforms/) page.

@@ -181,7 +181,7 @@ Each artifact declares its own `minSdk`. Your app must satisfy the highest one y
 | Artifact | `minSdk` | Why |
 | --- | :---: | --- |
 | `kitepdf`, `-pdf`, `-epub`, `-core` | 21 | The engine uses no newer platform API. |
-| `kitepdf-skia-renderer` | 21 | Skiko carries its own rendering stack. |
+| `kitepdf-skia-renderer` | 21 | Skiko carries its own rendering stack. On Android it also needs the Compose dev repository, see [Headless rendering](rendering.md#cross-platform-skia-kitepdf-skia-renderer). |
 | `kitepdf-compose-viewer` | 24 | The Compose Multiplatform floor. |
 | `kitepdf-native-renderer` | 29 | `Paint.setBlendMode`. Below API 29, blend modes would fall back to `SRC_OVER`. |
 

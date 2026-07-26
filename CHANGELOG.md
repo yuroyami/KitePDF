@@ -27,6 +27,11 @@ way it could report a false green.
   filters, and color-key `tRNS`. GIF gains complete LZW (KwKwK and deferred
   clear) and interlace. `ImageXObject.fromEncodedImage` sniffs the format and
   additionally accepts BMP and JP2 from EPUB and CBZ content.
+- Android `compileSdk` moves from 36 to 37 in all eight modules, because Compose
+  Multiplatform 1.12.0-beta02 requires it. Consumers of the published Android
+  artifacts must compile against API 37 or later. `minSdk` is unchanged: 21 for
+  the engine and the Skia renderer, 24 for the Compose viewer, 29 for the native
+  renderer.
 - Deprecated Kotlin Multiplatform configuration removed:
   `kotlin.mpp.androidSourceSetLayoutVersion` and the `js(IR)` target form.
 
@@ -82,6 +87,13 @@ way it could report a false green.
   `mkdocs.yml` aligned with the family template.
 - Em dashes removed repo-wide per KITE.md, including 687 from Kotlin comments
   across 191 files, verified comment-only.
+- A long-standing packaging constraint is now written down: on Android,
+  `kitepdf-skia-renderer` resolves `org.jetbrains.skiko:skiko-android`, which
+  JetBrains publishes to the Compose dev repository rather than to Maven
+  Central, so that repository has to be added. This has been true since the
+  module first shipped and is unchanged in 0.3.0. Every other target and every
+  other artifact resolves from Maven Central alone. On Android,
+  `kitepdf-native-renderer` remains the recommended renderer.
 
 ### Build
 
