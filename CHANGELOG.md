@@ -5,6 +5,31 @@ All notable changes to KitePDF are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.1] - 2026-07-26
+
+Compose system-font fallback rendering now keeps the advance widths assigned by
+PDF and EPUB layout.
+
+### Fixed
+
+- System-font runs are shaped once and then scaled to the document glyph
+  advances. A host substitute font can have wider metrics than the requested
+  font. The old renderer painted that wider run without adjustment, which made
+  adjacent publisher-serif words collide at larger EPUB text sizes.
+- The width correction preserves ligatures, right-to-left shaping, combining
+  marks, and non-uniform text-matrix scaling. Invalid or degenerate dimensions
+  retain the previous unscaled fallback.
+
+### Added
+
+- Regression coverage for exact metric scaling, invalid dimensions, and two
+  adjacent serif runs at 21 and 29 pixels.
+
+### Measured
+
+JVM suites: 772 tests across the six tested modules, 0 failures. The Compose
+viewer also compiles for Android, iOS device and simulator, macOS, JS, and Wasm.
+
 ## [0.3.0] - 2026-07-25
 
 Rendering correctness and supply chain. Image decoding moves out to KiteImage,
@@ -284,6 +309,7 @@ Other breaking changes:
   editor, encryption, and font handling, callable from `commonMain` and running
   unchanged across Android, iOS, JVM, JS, Wasm, and Kotlin/Native.
 
+[0.3.1]: https://github.com/yuroyami/KitePDF/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/yuroyami/KitePDF/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/yuroyami/KitePDF/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/yuroyami/KitePDF/releases/tag/v0.1.0
