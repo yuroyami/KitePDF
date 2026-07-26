@@ -44,16 +44,18 @@ class SystemFontMetricScaleTest {
 
     @Test
     fun serif_fallback_respects_assigned_width_at_reader_sizes() {
+        // Keep one resolver alive for the full raster test. Recreating it per
+        // size can race Skiko's native system-font face cache during cleanup.
+        val density = Density(1f)
+        val textMeasurer = TextMeasurer(
+            createFontFamilyResolver(),
+            density,
+            LayoutDirection.Ltr,
+        )
         for (fontSize in listOf(21.0, 29.0)) {
             val targetWidth = fontSize * 2.0
             val secondOrigin = 10.0 + targetWidth + 10.0
             val bitmap = ImageBitmap(320, 100)
-            val density = Density(1f)
-            val textMeasurer = TextMeasurer(
-                createFontFamilyResolver(),
-                density,
-                LayoutDirection.Ltr,
-            )
 
             CanvasDrawScope().draw(
                 density = density,
