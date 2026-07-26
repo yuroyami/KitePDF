@@ -11,16 +11,15 @@ pluginManagement {
 
 dependencyResolutionManagement {
     repositories {
-        mavenLocal()   // kiteimage until it reaches Central
         google()
         mavenCentral()
         maven("https://maven.pkg.jetbrains.space/public/p/compose/dev")
     }
 }
 
-// CI checks out the unreleased KiteImage snapshot into the workspace and passes
-// -PkiteImagePath=... so dependency resolution is reproducible on a clean
-// runner. Local development can continue to use the mavenLocal snapshot.
+// Point at a local KiteImage checkout to develop the two repositories together:
+// ./gradlew build -PkiteImagePath=../KiteImage. Without it, KiteImage resolves
+// from Maven Central like any other dependency.
 providers.gradleProperty("kiteImagePath").orNull?.let { path ->
     includeBuild(path) {
         dependencySubstitution {

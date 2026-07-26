@@ -16,7 +16,10 @@ plugins {
 
 allprojects {
     group = "io.github.yuroyami"
-    version = "0.2.0"
+    // Single source of truth: `version` in gradle.properties. Hardcoding it here
+    // as well silently overrides that file, so a release bump in one place alone
+    // would have no effect.
+    version = providers.gradleProperty("version").get()
 
     // The decompression-bomb tests intentionally inflate up to the 512 MiB
     // FilterChain cap; Gradle's default 512m test heap cannot hold that plus
