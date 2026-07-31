@@ -13,6 +13,7 @@ import kotlin.math.roundToInt
  *   - ICCBased / CalGray / CalRGB (device-equivalent fallback)
  *   - 1/2/4/8/16 bits per component, with `/Decode` remapping
  *   - `/ImageMask` stencils tinted by the current fill colour
+ *   - `/SMask` and `/Mask` transparency, in both of `/Mask`'s forms
  *
  * Returns null only for things genuinely undecodable here (no pixel data, a
  * colour space that couldn't be resolved, a truncated buffer) → the caller
@@ -57,6 +58,9 @@ public fun ImageXObject.toRgbaBytes(): ByteArray? {
             if (!unpackGeneral(src, w, h, bpc, cs, out)) return null
         }
     }
+    // The two are mutually exclusive by construction: an image resolves either
+    // a colour-key /Mask or an alpha plane (/SMask, or a stencil /Mask), never both.
+    applyColorKeyMask(out, cs)
     applySoftMaskAlpha(out)
     return out
 }
@@ -182,10 +186,45 @@ private fun ImageXObject.inferDeviceSpace(src: ByteArray, pixelCount: Int): Colo
 }
 
 /**
+ * Colour-key masking (ISO 32000-1 §8.9.6): clear the alpha of every pixel
+ * whose components all fall inside their `/Mask` range. The comparison is made
+ * on the SOURCE samples, before `/Decode` and colour conversion, as the spec
+ * requires, so this re-reads [ImageXObject.pixelBytes] rather than judging the
+ * assembled RGB.
+ *
+ * A range list that does not match the image's component count (a JPEG the
+ * decoder handed back in another colour space, a malformed array) is ignored,
+ * leaving the image opaque.
+ */
+private fun ImageXObject.applyColorKeyMask(rgba: ByteArray, cs: ColorSpace) {
+    val ranges = colorKeyMask ?: return
+    val src = pixelBytes ?: return
+    val comps = cs.componentCount
+    if (ranges.size != 2 * comps) return
+    val bpc = bitsPerComponent
+    val rowBytes = (width * comps * bpc + 7) / 8
+    if (src.size < rowBytes.toLong() * height) return
+    var a = 3
+    for (y in 0 until height) {
+        var bit = y.toLong() * rowBytes * 8
+        for (x in 0 until width) {
+            var inside = true
+            for (c in 0 until comps) {
+                val sample = readBits(src, bit, bpc); bit += bpc
+                if (sample < ranges[2 * c] || sample > ranges[2 * c + 1]) inside = false
+            }
+            if (inside) rgba[a] = 0
+            a += 4
+        }
+    }
+}
+
+/**
  * Overwrite the alpha channel of an assembled RGBA buffer with the image's
  * soft-mask, if present. The mask is sampled with nearest-neighbour when its
  * dimensions differ from the image's (PDF permits a different-resolution mask).
- * No-op when the image has no `/SMask`, leaving every pixel opaque.
+ * Carries a stencil `/Mask` too, which arrives as the same plane. No-op when
+ * the image has neither, leaving every pixel opaque.
  */
 private fun ImageXObject.applySoftMaskAlpha(rgba: ByteArray) {
     val mask = softMaskAlpha ?: return

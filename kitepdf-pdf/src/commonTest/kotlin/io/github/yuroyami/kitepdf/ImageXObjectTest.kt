@@ -1,9 +1,11 @@
 package io.github.yuroyami.kitepdf
 
 import io.github.yuroyami.kitepdf.core.parser.PdfArray
+import io.github.yuroyami.kitepdf.core.parser.PdfBoolean
 import io.github.yuroyami.kitepdf.core.parser.PdfDictionary
 import io.github.yuroyami.kitepdf.core.parser.PdfInt
 import io.github.yuroyami.kitepdf.core.parser.PdfName
+import io.github.yuroyami.kitepdf.core.parser.PdfObject
 import io.github.yuroyami.kitepdf.core.parser.PdfStream
 import io.github.yuroyami.kitepdf.core.render.ImageXObject
 import io.github.yuroyami.kitepdf.core.render.toRgbaBytes
@@ -216,6 +218,177 @@ class ImageXObjectTest {
         assertEquals(0xFF, rgba[0].toInt() and 0xFF) // pixel0 red
         assertEquals(0xFF, rgba[5].toInt() and 0xFF) // pixel1 green
     }
+
+    /* ─── /Mask, ISO 32000-1 §8.9.6 ─────────────────────────────────────── */
+
+    @Test
+    fun stencil_mask_hides_the_samples_it_marks() {
+        // Stencil 0b10……: sample 1 masks the pixel out, sample 0 lets it paint.
+        val rgba = ImageXObject.from(grayPair(mask = stencil(2, 1, byteArrayOf(0b10000000.toByte())))).toRgbaBytes()!!
+        assertEquals(0x00, rgba[3].toInt() and 0xFF) // pixel0: masked out
+        assertEquals(0xFF, rgba[7].toInt() and 0xFF) // pixel1: painted
+        assertEquals(0x40, rgba[4].toInt() and 0xFF) // and the grey it paints survives
+    }
+
+    @Test
+    fun stencil_mask_decode_one_zero_swaps_the_polarity() {
+        val mask = stencil(2, 1, byteArrayOf(0b10000000.toByte()), decode = listOf(1, 0))
+        val rgba = ImageXObject.from(grayPair(mask = mask)).toRgbaBytes()!!
+        assertEquals(0xFF, rgba[3].toInt() and 0xFF) // pixel0: now painted
+        assertEquals(0x00, rgba[7].toInt() and 0xFF) // pixel1: now masked out
+    }
+
+    @Test
+    fun stencil_mask_finer_than_its_image_composites_on_the_stencil_grid() {
+        // 8×4 stencil over a 2×1 image, the MRC scan shape in miniature: the
+        // left half is masked out, the right half paints. The composite must
+        // keep the stencil's detail, so it lands on the stencil's grid.
+        val rows = ByteArray(4) { 0b11110000.toByte() }
+        val image = ImageXObject.from(grayPair(mask = stencil(8, 4, rows)))
+        assertEquals(8, image.width)
+        assertEquals(4, image.height)
+        val rgba = image.toRgbaBytes()!!
+        fun alphaAt(x: Int, y: Int) = rgba[(y * 8 + x) * 4 + 3].toInt() and 0xFF
+        fun grayAt(x: Int, y: Int) = rgba[(y * 8 + x) * 4].toInt() and 0xFF
+        assertEquals(0x00, alphaAt(0, 0))
+        assertEquals(0x00, alphaAt(3, 3))
+        assertEquals(0xFF, alphaAt(4, 0))
+        assertEquals(0xFF, alphaAt(7, 3))
+        assertEquals(0x00, grayAt(0, 0)) // left column samples the image's pixel0
+        assertEquals(0x40, grayAt(7, 0)) // right column samples pixel1
+    }
+
+    @Test
+    fun stencil_mask_coarser_than_its_image_is_resampled_up() {
+        // A 1×1 stencil covering a 2×1 image masks both of its pixels, and the
+        // image keeps its own grid.
+        val image = ImageXObject.from(grayPair(mask = stencil(1, 1, byteArrayOf(0b10000000.toByte()))))
+        assertEquals(2, image.width)
+        val rgba = image.toRgbaBytes()!!
+        assertEquals(0x00, rgba[3].toInt() and 0xFF)
+        assertEquals(0x00, rgba[7].toInt() and 0xFF)
+    }
+
+    @Test
+    fun color_key_mask_clears_pixels_inside_every_range() {
+        // 2×1 DeviceRGB (red, green) with /Mask [250 255 0 5 0 5]: red falls
+        // inside all three ranges, green does not.
+        val base = PdfStream(
+            dict = PdfDictionary(linkedMapOf(
+                "Type" to PdfName("XObject"), "Subtype" to PdfName("Image"),
+                "Width" to PdfInt(2), "Height" to PdfInt(1),
+                "BitsPerComponent" to PdfInt(8), "ColorSpace" to PdfName("DeviceRGB"),
+                "Mask" to PdfArray(listOf(250, 255, 0, 5, 0, 5).map { PdfInt(it.toLong()) }),
+                "Length" to PdfInt(6),
+            )),
+            rawBytes = byteArrayOf(0xFF.toByte(), 0x00, 0x00, 0x00, 0xFF.toByte(), 0x00),
+        )
+        val rgba = ImageXObject.from(base, refs = { null }).toRgbaBytes()!!
+        assertEquals(0x00, rgba[3].toInt() and 0xFF) // red keyed out
+        assertEquals(0xFF, rgba[7].toInt() and 0xFF) // green kept
+        assertEquals(0xFF, rgba[5].toInt() and 0xFF) // green channel untouched
+    }
+
+    @Test
+    fun color_key_mask_of_the_wrong_arity_is_ignored() {
+        // Two bounds for a three-component image describe nothing; the image
+        // stays opaque rather than guessing which component they belong to.
+        val base = PdfStream(
+            dict = PdfDictionary(linkedMapOf(
+                "Type" to PdfName("XObject"), "Subtype" to PdfName("Image"),
+                "Width" to PdfInt(2), "Height" to PdfInt(1),
+                "BitsPerComponent" to PdfInt(8), "ColorSpace" to PdfName("DeviceRGB"),
+                "Mask" to PdfArray(listOf(PdfInt(0), PdfInt(255))),
+                "Length" to PdfInt(6),
+            )),
+            rawBytes = byteArrayOf(0xFF.toByte(), 0x00, 0x00, 0x00, 0xFF.toByte(), 0x00),
+        )
+        val rgba = ImageXObject.from(base, refs = { null }).toRgbaBytes()!!
+        assertEquals(0xFF, rgba[3].toInt() and 0xFF)
+        assertEquals(0xFF, rgba[7].toInt() and 0xFF)
+    }
+
+    @Test
+    fun smask_wins_when_an_image_carries_both_masks() {
+        // The /SMask says "pixel0 transparent, pixel1 opaque"; the /Mask stencil
+        // says the exact opposite. The /SMask is the one that counts.
+        val smask = PdfStream(
+            dict = PdfDictionary(linkedMapOf(
+                "Type" to PdfName("XObject"), "Subtype" to PdfName("Image"),
+                "Width" to PdfInt(2), "Height" to PdfInt(1),
+                "BitsPerComponent" to PdfInt(8), "ColorSpace" to PdfName("DeviceGray"),
+                "Length" to PdfInt(2),
+            )),
+            rawBytes = byteArrayOf(0x00, 0xFF.toByte()),
+        )
+        val image = ImageXObject.from(
+            grayPair(mask = stencil(2, 1, byteArrayOf(0b01000000)), extra = mapOf("SMask" to smask)),
+        )
+        val rgba = image.toRgbaBytes()!!
+        assertEquals(0x00, rgba[3].toInt() and 0xFF)
+        assertEquals(0xFF, rgba[7].toInt() and 0xFF)
+    }
+
+    @Test
+    fun undecodable_mask_leaves_the_image_painted() {
+        // A JBIG2 stencil the decoder cannot read must degrade to "no mask",
+        // never to a blank page and never to an exception.
+        val broken = PdfStream(
+            dict = PdfDictionary(linkedMapOf(
+                "Type" to PdfName("XObject"), "Subtype" to PdfName("Image"),
+                "Width" to PdfInt(2), "Height" to PdfInt(1),
+                "ImageMask" to PdfBoolean(true), "Filter" to PdfName("JBIG2Decode"),
+                "Length" to PdfInt(4),
+            )),
+            rawBytes = byteArrayOf(0x01, 0x02, 0x03, 0x04),
+        )
+        val rgba = ImageXObject.from(grayPair(mask = broken)).toRgbaBytes()!!
+        assertEquals(0xFF, rgba[3].toInt() and 0xFF)
+        assertEquals(0xFF, rgba[7].toInt() and 0xFF)
+        assertEquals(0x00, rgba[0].toInt() and 0xFF)
+        assertEquals(0x40, rgba[4].toInt() and 0xFF)
+    }
+
+    @Test
+    fun mask_with_a_truncated_stream_leaves_the_image_painted() {
+        // Declares 8×4 but ships one byte: too short to be a stencil.
+        val short = stencil(8, 4, byteArrayOf(0b11110000.toByte()))
+        val image = ImageXObject.from(grayPair(mask = short))
+        assertEquals(2, image.width, "a rejected mask must not move the image's grid")
+        val rgba = image.toRgbaBytes()!!
+        assertEquals(0xFF, rgba[3].toInt() and 0xFF)
+        assertEquals(0xFF, rgba[7].toInt() and 0xFF)
+    }
+
+    /** A 2×1 8-bpc DeviceGray image (black, mid grey) carrying [mask] as `/Mask`. */
+    private fun grayPair(mask: PdfObject, extra: Map<String, PdfObject> = emptyMap()): PdfStream = PdfStream(
+        dict = PdfDictionary(
+            linkedMapOf<String, PdfObject>(
+                "Type" to PdfName("XObject"), "Subtype" to PdfName("Image"),
+                "Width" to PdfInt(2), "Height" to PdfInt(1),
+                "BitsPerComponent" to PdfInt(8), "ColorSpace" to PdfName("DeviceGray"),
+                "Mask" to mask, "Length" to PdfInt(2),
+            ).apply { putAll(extra) },
+        ),
+        rawBytes = byteArrayOf(0x00, 0x40),
+    )
+
+    /** A stencil-mask image XObject: 1 bpc, `/ImageMask true`, rows byte-aligned. */
+    private fun stencil(
+        width: Int, height: Int, bits: ByteArray, decode: List<Int>? = null,
+    ): PdfStream = PdfStream(
+        dict = PdfDictionary(
+            linkedMapOf<String, PdfObject>(
+                "Type" to PdfName("XObject"), "Subtype" to PdfName("Image"),
+                "Width" to PdfInt(width.toLong()), "Height" to PdfInt(height.toLong()),
+                "ImageMask" to PdfBoolean(true), "BitsPerComponent" to PdfInt(1),
+                "Length" to PdfInt(bits.size.toLong()),
+            ).apply {
+                if (decode != null) put("Decode", PdfArray(decode.map { PdfInt(it.toLong()) }))
+            },
+        ),
+        rawBytes = bits,
+    )
 
     private fun stream(
         width: Int, height: Int, bpc: Int, colorSpace: String,
