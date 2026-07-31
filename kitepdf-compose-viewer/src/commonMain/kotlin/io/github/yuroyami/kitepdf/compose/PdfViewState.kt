@@ -6,6 +6,7 @@ import androidx.compose.animation.core.spring
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.pager.PagerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -16,6 +17,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.isSpecified
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.unit.IntSize
 import io.github.yuroyami.kitepdf.core.KiteDocument
@@ -68,8 +70,32 @@ public class PdfViewState(
      * [PdfViewColors.searchHighlight]). Feed it from `PdfDocument.search` /
      * `KiteStructuredText.search` (quads are display-space, as both produce);
      * clear it by assigning an empty list.
+     *
+     * Every hit here paints in the same colour. For marks that each carry their
+     * own colour, or that want a marker in the page margin, use [highlights]
+     * instead. Both channels paint, [searchHighlights] first.
      */
     public var searchHighlights: List<KiteSearchHit> by mutableStateOf(emptyList())
+
+    /**
+     * App-owned highlights, each with its own fill colour and its own optional
+     * margin marker. Painted over the page after [searchHighlights], in list
+     * order, so later entries win where they overlap. Clear by assigning an
+     * empty list.
+     *
+     * ```kotlin
+     * state.highlights = notes.map { note ->
+     *     PdfHighlight(
+     *         hit = KiteSearchHit(note.pageIndex, note.quads, note.text),
+     *         color = note.category.tint,
+     *         edgeMarker = true,
+     *     )
+     * }
+     * ```
+     *
+     * See [PdfHighlight] for the per-entry knobs.
+     */
+    public var highlights: List<PdfHighlight> by mutableStateOf(emptyList())
 
     /**
      * The page the viewport currently rests on: the snapped page in paged
@@ -190,6 +216,25 @@ public class PdfViewState(
     public var selection: TextSelection? by mutableStateOf(null)
         private set
 
+    /**
+     * True while text selection owns the pointer, and while the selection it
+     * produced is still on screen.
+     *
+     * [PdfView] yields to it: one-finger pan and the list/pager's own scrolling
+     * are both suppressed while this is set, so a drag that began as a
+     * selection never slides the page out from under the finger, and the page
+     * stays put afterwards while the user acts on the selected text.
+     * Two-finger pinch zoom is unaffected.
+     *
+     * It goes true the instant the long press fires, which is BEFORE
+     * [selection] exists (the hit test and the text extraction still have to
+     * run), and it stays true after the finger lifts. [clearSelection] turns it
+     * off, and so does a long press that never anchored anything (an empty page
+     * region), which releases the lock when that drag ends.
+     */
+    public var isSelectionActive: Boolean by mutableStateOf(false)
+        private set
+
     /** Fires on every selection change, including clearing (null). */
     public var onSelectionChange: ((TextSelection?) -> Unit)? = null
 
@@ -198,6 +243,7 @@ public class PdfViewState(
 
     public fun clearSelection() {
         selectionAnchor = null
+        isSelectionActive = false
         if (selection != null) {
             selection = null
             onSelectionChange?.invoke(null)
@@ -207,6 +253,11 @@ public class PdfViewState(
     /** Long-press: anchor the selection at the char under [viewportOffset]. */
     internal fun beginSelection(viewportOffset: Offset) {
         selectionAnchor = null
+        // Claim the gesture up front. The hit test below can fail, and even a
+        // successful one only produces `selection` a few statements later; pan
+        // has to be off for the whole drag, not from whenever the model catches
+        // up. `endSelectionGesture` hands the lock back if nothing anchored.
+        isSelectionActive = true
         val (pageIndex, x, y) = hitTestDisplay(viewportOffset) ?: return
         val text = document.pages.getOrNull(pageIndex)?.textContent() ?: return
         val idx = text.charIndexAt(x, y) ?: return
@@ -226,6 +277,17 @@ public class PdfViewState(
         val text = document.pages.getOrNull(page)?.textContent() ?: return
         val idx = text.charIndexAt(x, y) ?: return
         applySelection(text, page, minOf(anchor, idx), maxOf(anchor, idx))
+    }
+
+    /**
+     * The long-press drag ended or was cancelled. A gesture that selected
+     * something keeps [isSelectionActive] until [clearSelection]: the page must
+     * not drift while the user reaches for a copy button. A gesture that
+     * anchored nothing (long press on a margin, or on a page with no text
+     * layer) gives pan and scrolling straight back.
+     */
+    internal fun endSelectionGesture() {
+        if (selection == null) isSelectionActive = false
     }
 
     private fun applySelection(text: KiteStructuredText, page: Int, start: Int, end: Int) {
@@ -339,6 +401,38 @@ public data class TextSelection(
     val end: Int,
     val text: String,
     val quads: List<io.github.yuroyami.kitepdf.core.Rectangle>,
+)
+
+/**
+ * One entry of [PdfViewState.highlights]: where to paint ([hit]) plus how to
+ * paint it.
+ *
+ * [KiteSearchHit] stays a pure text-search result, with no idea colours exist;
+ * this wraps one with the viewer's paint choices. Build the hit yourself from
+ * quads you already hold, or take it straight out of `PdfDocument.search` /
+ * `KiteStructuredText.search`.
+ *
+ * @param hit the page index and the display-space quads to cover.
+ * @param color fill for those quads. Null (the default) paints
+ *   [PdfViewColors.searchHighlight], exactly what [PdfViewState.searchHighlights]
+ *   does, so wrapping a plain hit changes nothing on screen.
+ * @param edgeMarker also paint a small rounded marker in the page's RIGHT
+ *   margin, level with this highlight. It tells a reader a note lives on this
+ *   page without them having to find the highlighted words. Every dimension is
+ *   a fraction of the rendered page width, so it keeps its proportions in a
+ *   thumbnail and at deep zoom alike, and its inner edge is clamped past the
+ *   highlighted quads so it never paints over the words. On a page whose text
+ *   reaches into that margin, leaving no room, nothing is drawn.
+ * @param edgeMarkerColor fill for that marker. Null (the default) falls back to
+ *   [color], and then to [PdfViewColors.searchHighlight]. A marker usually
+ *   wants a stronger, opaque colour than the translucent fill next to it.
+ */
+@Immutable
+public data class PdfHighlight(
+    val hit: KiteSearchHit,
+    val color: Color? = null,
+    val edgeMarker: Boolean = false,
+    val edgeMarkerColor: Color? = null,
 )
 
 /* ── scroll adapters: one state API over LazyList and Pager backends ──────── */

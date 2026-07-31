@@ -32,6 +32,10 @@ import kotlinx.coroutines.launch
  *    mode (pager scroll disabled while zoomed) it owns both axes; in
  *    continuous mode the scroll axis stays native and pan covers the cross
  *    axis.
+ *  - **Text selection wins over pan.** While [PdfViewState.isSelectionActive]
+ *    is set, neither pan site moves the page. Zoom itself is untouched, so a
+ *    two-finger pinch still works mid-selection; it is only the translation
+ *    that yields.
  *  - **Double-tap** toggles between min zoom and [PdfZoomSpec.doubleTapZoom],
  *    anchored at the tap position.
  *  - **Single-tap** ([onTap]) is reported without consuming pan/swipe. A host
@@ -44,14 +48,23 @@ import kotlinx.coroutines.launch
  * Text-selection gesture (T-80): long-press anchors a selection at the char
  * under the finger, dragging extends it, release keeps it. Runs through
  * [androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress],
- * which claims the drag exclusively once the long-press fires, so an active
- * selection drag never fights pan/scroll; pages without `textContent()` make
- * the whole gesture a no-op (the anchor never sets).
+ * which claims the drag once the long-press fires; pages without
+ * `textContent()` make the whole gesture a no-op (the anchor never sets).
+ *
+ * Claiming the drag is not on its own enough to stop the page moving. The
+ * pinch handler reads its pan on the *Initial* pass, before this detector has
+ * seen anything at all, and `calculatePan` ignores consumption, so both pan
+ * sites would still fire under a selection drag. [PdfViewState.beginSelection]
+ * therefore raises [PdfViewState.isSelectionActive] the moment the long press
+ * lands, and the pan sites below gate on it. [PdfViewState.endSelectionGesture]
+ * releases it again when the drag anchored nothing.
  */
 internal fun Modifier.pdfSelectionGestures(state: PdfViewState): Modifier =
     pointerInput(state) {
         detectDragGesturesAfterLongPress(
             onDragStart = { pos -> state.beginSelection(pos) },
+            onDragEnd = { state.endSelectionGesture() },
+            onDragCancel = { state.endSelectionGesture() },
             onDrag = { change, _ ->
                 state.extendSelection(change.position)
                 change.consume()
@@ -95,7 +108,11 @@ internal fun Modifier.pdfTransformGestures(
                             state.setZoom(state.zoom * zoomChange, focal = centroid)
                         }
                         val pan = event.calculatePan()
-                        if (pan != Offset.Zero && spec.panEnabled) state.panBy(pan)
+                        // Zoom still applies above; only the translation yields
+                        // to an active selection.
+                        if (pan != Offset.Zero && spec.panEnabled && !state.isSelectionActive) {
+                            state.panBy(pan)
+                        }
                         event.changes.fastForEach { it.consume() }
                     } else if (pinching) {
                         // Fingers lifting off one by one: keep eating the tail of the
@@ -114,7 +131,7 @@ internal fun Modifier.pdfTransformGestures(
                 while (true) {
                     val event = awaitPointerEvent() // Main pass: after the inner scrollable
                     val pointersDown = event.changes.count { it.pressed }
-                    if (pointersDown == 1 && state.isZoomed) {
+                    if (pointersDown == 1 && state.isZoomed && !state.isSelectionActive) {
                         val pan = event.calculatePan()
                         if (pan != Offset.Zero) {
                             val consumed = state.panBy(pan)

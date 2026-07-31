@@ -34,10 +34,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.layout.ContentScale
@@ -358,12 +360,17 @@ private fun ContinuousLayout(
         // hit-test geometry against (it sits inside the layer, so its
         // coordinates never see zoom/pan).
         val anchored = Modifier.fillMaxSize().onGloballyPositioned { state.contentCoordinates = it }
+        // The strip's own scrolling yields to a text selection, the same way
+        // the pan gesture does: a selection drag must not scroll the page out
+        // from under itself, and the page has to stay put while the user acts
+        // on the selected text.
+        val listScrollEnabled = userScrollEnabled && !state.isSelectionActive
         when (layout.orientation) {
             Orientation.Vertical -> LazyColumn(
                 modifier = anchored,
                 state = listState,
                 verticalArrangement = Arrangement.spacedBy(pageSpacing),
-                userScrollEnabled = userScrollEnabled,
+                userScrollEnabled = listScrollEnabled,
             ) {
                 items(count = state.pageCount, key = { it }) { pageItem(it) }
             }
@@ -371,7 +378,7 @@ private fun ContinuousLayout(
                 modifier = anchored,
                 state = listState,
                 horizontalArrangement = Arrangement.spacedBy(pageSpacing),
-                userScrollEnabled = userScrollEnabled,
+                userScrollEnabled = listScrollEnabled,
             ) {
                 items(count = state.pageCount, key = { it }) { pageItem(it) }
             }
@@ -421,7 +428,7 @@ private fun androidx.compose.foundation.lazy.LazyItemScope.ContinuousPageItem(
             }
         }
         val slot = Modifier.fillMaxSize()
-            .searchHighlightOverlay(state, page, pageIndex, colors)
+            .highlightOverlay(state, page, pageIndex, colors)
         when (renderSpec) {
             is PdfRenderSpec.Rasterized -> PdfPageRaster(
                 page, pageIndex, baseSize, settledZoom, renderSpec, colors,
@@ -491,8 +498,10 @@ private fun PagedLayout(
         )
     }
     // While zoomed, the pager's own swipe is off so one-finger drags pan the
-    // page; paging stays available through PdfViewState (nav widgets).
-    val pagerScrollEnabled = userScrollEnabled && !state.isZoomed
+    // page; paging stays available through PdfViewState (nav widgets). An
+    // active text selection takes the swipe away too, so the page cannot turn
+    // under a selection drag.
+    val pagerScrollEnabled = userScrollEnabled && !state.isZoomed && !state.isSelectionActive
     when (layout.orientation) {
         Orientation.Horizontal -> HorizontalPager(
             state = pagerState,
@@ -602,7 +611,7 @@ private fun PageBox(
         if (fit != IntSize.Zero) {
             val dpSize = with(density) { DpSize(fit.width.toDp(), fit.height.toDp()) }
             val slot = Modifier.size(dpSize)
-                .searchHighlightOverlay(state, page, pageIndex, colors)
+                .highlightOverlay(state, page, pageIndex, colors)
             when (renderSpec) {
                 is PdfRenderSpec.Rasterized -> PdfPageRaster(
                     page, pageIndex, fit, settledZoom, renderSpec, colors,
@@ -733,13 +742,17 @@ private fun PdfPageVector(
 }
 
 /**
- * Paints [PdfViewState.searchHighlights] quads for [pageIndex] over the slot
- * content (T-33). Quads are display-space points; the slot shows the whole
- * display box, so the mapping is one uniform scale. It is the same math the
- * vector path and [PdfViewState.hitTest] use, inverted. Display rectangles
- * keep y-min in `bottom` (y grows downward), so `bottom` is the TOP edge.
+ * Paints the overlay layer for [pageIndex] over the slot content (T-33): the
+ * single-colour [PdfViewState.searchHighlights], then the individually coloured
+ * [PdfViewState.highlights] with their optional margin markers, then the active
+ * selection on top.
+ *
+ * Quads are display-space points; the slot shows the whole display box, so the
+ * mapping is one uniform scale. It is the same math the vector path and
+ * [PdfViewState.hitTest] use, inverted. Display rectangles keep y-min in
+ * `bottom` (y grows downward), so `bottom` is the TOP edge.
  */
-private fun Modifier.searchHighlightOverlay(
+private fun Modifier.highlightOverlay(
     state: PdfViewState,
     page: KitePage,
     pageIndex: Int,
@@ -760,10 +773,75 @@ private fun Modifier.searchHighlightOverlay(
         if (hit.pageIndex != pageIndex) continue
         for (q in hit.quads) quad(q, colors.searchHighlight)
     }
+    for (highlight in state.highlights) {
+        val hit = highlight.hit
+        if (hit.pageIndex != pageIndex || hit.quads.isEmpty()) continue
+        // Null colour means "behave exactly like searchHighlights", so wrapping
+        // a plain hit in a PdfHighlight changes nothing on screen.
+        val fill = highlight.color ?: colors.searchHighlight
+        for (q in hit.quads) quad(q, fill)
+        if (highlight.edgeMarker) {
+            drawEdgeMarker(hit.quads, sx, sy, highlight.edgeMarkerColor ?: fill)
+        }
+    }
     state.selection?.takeIf { it.pageIndex == pageIndex }?.let { sel ->
         for (q in sel.quads) quad(q, colors.selectionHighlight)
     }
 }
+
+/**
+ * The margin marker for one highlight: a rounded pill against the page's outer
+ * edge, level with the highlighted text ([quads], display-space).
+ *
+ * Every dimension is a fraction of the rendered page width, so the marker keeps
+ * its proportions on a thumbnail, on a phone and at deep zoom alike. Its left
+ * edge is clamped past the rightmost quad, which keeps it in the margin instead
+ * of over the words; on a page whose text runs right into that margin, leaving
+ * no room, nothing is drawn rather than a marker across the glyphs.
+ */
+private fun DrawScope.drawEdgeMarker(
+    quads: List<io.github.yuroyami.kitepdf.core.Rectangle>,
+    sx: Float,
+    sy: Float,
+    color: Color,
+) {
+    var top = Float.MAX_VALUE
+    var bottom = -Float.MAX_VALUE
+    var textRight = 0f
+    for (q in quads) {
+        top = minOf(top, (q.bottom * sy).toFloat())
+        bottom = maxOf(bottom, (q.top * sy).toFloat())
+        textRight = maxOf(textRight, (q.right * sx).toFloat())
+    }
+    if (!top.isFinite() || !bottom.isFinite()) return
+
+    val width = size.width * EDGE_MARKER_WIDTH_FRACTION
+    val gutter = width * EDGE_MARKER_GUTTER_RATIO
+    val right = size.width - gutter
+    val left = maxOf(right - width, textRight + gutter)
+    if (left >= right) return
+
+    // A one-word highlight is only a few px tall in a thumbnail; floor the pill
+    // so it stays a visible mark rather than a dash.
+    val height = maxOf(bottom - top, width * EDGE_MARKER_MIN_HEIGHT_RATIO)
+    val slack = (size.height - height).coerceAtLeast(0f)
+    val y = ((top + bottom) / 2f - height / 2f).coerceIn(0f, slack)
+    drawRoundRect(
+        color = color,
+        topLeft = Offset(left, y),
+        size = Size(right - left, height),
+        cornerRadius = CornerRadius((right - left) / 2f),
+    )
+}
+
+/** Margin-marker width, as a fraction of the rendered page width. */
+private const val EDGE_MARKER_WIDTH_FRACTION = 0.02f
+
+/** Marker clearance from the page edge and from the text, in marker widths. */
+private const val EDGE_MARKER_GUTTER_RATIO = 0.5f
+
+/** Shortest a marker may be, in marker widths. */
+private const val EDGE_MARKER_MIN_HEIGHT_RATIO = 3f
 
 private const val ZOOM_SETTLE_DEBOUNCE_MS = 220L
 
@@ -806,7 +884,7 @@ private fun SpreadLayout(
     }
 
     val scope = rememberCoroutineScope()
-    val pagerScrollEnabled = userScrollEnabled && !state.isZoomed
+    val pagerScrollEnabled = userScrollEnabled && !state.isZoomed && !state.isSelectionActive
     val spreadContent: @Composable (Int) -> Unit = { spread ->
         val isCurrent = spread == pagerState.currentPage
         SpreadBox(
@@ -911,7 +989,7 @@ private fun SpreadBox(
                     .size(dpSize),
             ) {
                 val slotModifier = Modifier.fillMaxSize()
-                    .searchHighlightOverlay(state, page, pageIndex, colors)
+                    .highlightOverlay(state, page, pageIndex, colors)
                 when (renderSpec) {
                     is PdfRenderSpec.Rasterized -> PdfPageRaster(
                         page, pageIndex, fit, settledZoom, renderSpec, colors,
