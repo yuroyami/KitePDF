@@ -12,6 +12,7 @@ import io.github.yuroyami.kitepdf.core.parser.PdfBoolean
 import io.github.yuroyami.kitepdf.core.parser.PdfDictionary
 import io.github.yuroyami.kitepdf.core.parser.PdfInt
 import io.github.yuroyami.kitepdf.core.parser.PdfName
+import io.github.yuroyami.kitepdf.core.parser.PdfNull
 import io.github.yuroyami.kitepdf.core.parser.PdfObject
 import io.github.yuroyami.kitepdf.core.parser.PdfReal
 import io.github.yuroyami.kitepdf.core.parser.PdfStream
@@ -35,6 +36,10 @@ import io.github.yuroyami.kitepdf.core.parser.PdfStream
  *
  * Callers should switch on [kind] to pick the right rendering path. Stencil masks
  * (`/ImageMask true`) carry [isImageMask] and are tinted by [maskFill].
+ *
+ * Transparency reaches the raster path in three forms: `/SMask` and a stencil
+ * `/Mask` both arrive as [softMaskAlpha], and a colour-key `/Mask` arrives as
+ * [colorKeyMask]. `/SMask` wins when an image carries both.
  */
 public class ImageXObject internal constructor(
     public val width: Int,
@@ -49,7 +54,12 @@ public class ImageXObject internal constructor(
     /**
      * Soft-mask alpha (ISO 32000-1 §11.6.5.2), normalised to 8-bit grayscale:
      * one byte per pixel, 0 = transparent, 255 = opaque, row-major over
-     * [softMaskWidth]×[softMaskHeight]. Null when the image carries no `/SMask`.
+     * [softMaskWidth]×[softMaskHeight]. Null when the image carries neither a
+     * `/SMask` nor a stencil `/Mask`.
+     *
+     * A stencil `/Mask` (§8.9.6) is flattened into this same plane, so both
+     * masking forms composite through one path. The plane may be larger or
+     * smaller than the image; the raster path resamples it.
      */
     public val softMaskAlpha: ByteArray? = null,
     public val softMaskWidth: Int = 0,
@@ -66,6 +76,14 @@ public class ImageXObject internal constructor(
     public val isImageMask: Boolean = false,
     /** Fill colour to tint an [isImageMask] stencil (the graphics-state fill colour). */
     public val maskFill: RgbColor? = null,
+    /**
+     * Colour-key `/Mask` ranges (ISO 32000-1 §8.9.6): 2 × n integers, a min
+     * and a max per colour component, in the image's SOURCE sample values
+     * (before `/Decode` and colour conversion). A pixel whose every component
+     * falls inside its range is fully transparent. Null unless the image carries
+     * an array-valued `/Mask` and no `/SMask`.
+     */
+    public val colorKeyMask: IntArray? = null,
 ) {
 
     public enum class Kind {
@@ -87,9 +105,9 @@ public class ImageXObject internal constructor(
 
         /**
          * Pull a stream from a /XObject /Image resource entry into an [ImageXObject].
-         * [refs] (when provided) resolves indirect `/ColorSpace` and `/SMask`
-         * references; [fillColor] tints `/ImageMask` stencils (pass the current
-         * graphics-state fill colour).
+         * [refs] (when provided) resolves indirect `/ColorSpace`, `/SMask` and
+         * `/Mask` references; [fillColor] tints `/ImageMask` stencils (pass the
+         * current graphics-state fill colour).
          */
         public fun from(
             stream: PdfStream,
@@ -107,11 +125,16 @@ public class ImageXObject internal constructor(
             val resolvedCs = if (isMask) null else resolveColorSpace(csObj, refs)
             val decodeArr = readDecode(dict["Decode"] ?: dict["D"])
 
-            val (alpha, smW, smH) = loadSoftMask(dict, refs)
+            // `/SMask` wins over `/Mask` when an image carries both, so exactly
+            // one of the two masking forms is ever loaded.
+            val hasSMask = hasSoftMask(dict)
+            val (alpha, smW, smH) =
+                if (hasSMask) loadSoftMask(dict, refs) else loadStencilMask(dict, refs)
+            val colorKey = if (hasSMask) null else loadColorKeyMask(dict, refs)
 
             val filters = extractFilterNames(dict["Filter"] ?: dict["F"])
             val kind = pickKind(filters)
-            return when (kind) {
+            val image = when (kind) {
                 Kind.RAW -> ImageXObject(
                     width, height, bpc, cs, kind,
                     encodedBytes = ByteArray(0),
@@ -122,7 +145,7 @@ public class ImageXObject internal constructor(
                     }.getOrNull(),
                     softMaskAlpha = alpha, softMaskWidth = smW, softMaskHeight = smH,
                     resolvedColorSpace = resolvedCs, decode = decodeArr,
-                    isImageMask = isMask, maskFill = fillColor,
+                    isImageMask = isMask, maskFill = fillColor, colorKeyMask = colorKey,
                 )
                 // JPEG (`DCTDecode`): decode in pure Kotlin to a colour-managed
                 // RAW image so it renders on every backend AND picks up the
@@ -136,12 +159,12 @@ public class ImageXObject internal constructor(
                         encodedBytes = ByteArray(0), pixelBytes = bm.toRgbBytes(),
                         softMaskAlpha = alpha, softMaskWidth = smW, softMaskHeight = smH,
                         resolvedColorSpace = ColorSpace.DeviceRGB,
-                        isImageMask = isMask, maskFill = fillColor,
+                        isImageMask = isMask, maskFill = fillColor, colorKeyMask = colorKey,
                     ) else ImageXObject(
                         width, height, bpc, cs, kind, stream.rawBytes,
                         softMaskAlpha = alpha, softMaskWidth = smW, softMaskHeight = smH,
                         resolvedColorSpace = resolvedCs, decode = decodeArr,
-                        isImageMask = isMask, maskFill = fillColor,
+                        isImageMask = isMask, maskFill = fillColor, colorKeyMask = colorKey,
                     )
                 }
                 // JBIG2 (`JBIG2Decode`): pure-Kotlin bilevel decode (§6 arithmetic path)
@@ -155,12 +178,12 @@ public class ImageXObject internal constructor(
                         encodedBytes = ByteArray(0), pixelBytes = decoded,
                         softMaskAlpha = alpha, softMaskWidth = smW, softMaskHeight = smH,
                         resolvedColorSpace = if (isMask) null else ColorSpace.DeviceGray,
-                        decode = decodeArr, isImageMask = isMask, maskFill = fillColor,
+                        decode = decodeArr, isImageMask = isMask, maskFill = fillColor, colorKeyMask = colorKey,
                     ) else ImageXObject(
                         width, height, bpc, cs, kind, stream.rawBytes,
                         softMaskAlpha = alpha, softMaskWidth = smW, softMaskHeight = smH,
                         resolvedColorSpace = resolvedCs, decode = decodeArr,
-                        isImageMask = isMask, maskFill = fillColor,
+                        isImageMask = isMask, maskFill = fillColor, colorKeyMask = colorKey,
                     )
                 }
                 // JPX (`JPXDecode`): pure-Kotlin JPEG 2000 decode (T-44) into an
@@ -183,13 +206,13 @@ public class ImageXObject internal constructor(
                             resolvedColorSpace = if (isMask) null else {
                                 if (raw.colorSpace == "DeviceRGB") ColorSpace.DeviceRGB else ColorSpace.DeviceGray
                             },
-                            isImageMask = isMask, maskFill = fillColor,
+                            isImageMask = isMask, maskFill = fillColor, colorKeyMask = colorKey,
                         )
                     } else ImageXObject(
                         width, height, bpc, cs, kind, stream.rawBytes,
                         softMaskAlpha = alpha, softMaskWidth = smW, softMaskHeight = smH,
                         resolvedColorSpace = resolvedCs, decode = decodeArr,
-                        isImageMask = isMask, maskFill = fillColor,
+                        isImageMask = isMask, maskFill = fillColor, colorKeyMask = colorKey,
                     )
                 }
                 // For the remaining encoded kinds, hand the raw bytes through:
@@ -198,9 +221,13 @@ public class ImageXObject internal constructor(
                     width, height, bpc, cs, kind, stream.rawBytes,
                     softMaskAlpha = alpha, softMaskWidth = smW, softMaskHeight = smH,
                     resolvedColorSpace = resolvedCs, decode = decodeArr,
-                    isImageMask = isMask, maskFill = fillColor,
+                    isImageMask = isMask, maskFill = fillColor, colorKeyMask = colorKey,
                 )
             }
+            // A stencil is usually finer than the layer it masks, so the composite
+            // is built on the stencil's grid. `/SMask` images keep the behaviour
+            // they have always had.
+            return if (hasSMask) image else image.alignedToStencilGrid()
         }
 
         /**
@@ -324,6 +351,159 @@ public class ImageXObject internal constructor(
             }
             return Triple(alpha, mw, mh)
         }
+
+        /**
+         * True when the image dictionary carries a `/SMask` worth reading. A
+         * present-but-empty entry (`null`, `/None`) counts as absent, so a
+         * `/Mask` next to it is still honoured.
+         */
+        private fun hasSoftMask(dict: PdfDictionary): Boolean {
+            val v = dict["SMask"] ?: return false
+            return v !== PdfNull && (v as? PdfName)?.value != "None"
+        }
+
+        /**
+         * Decode a stencil `/Mask` (ISO 32000-1 §8.9.6) into the same 8-bit
+         * alpha plane [loadSoftMask] produces, so both masking forms composite
+         * through one tested path.
+         *
+         * The mask is a 1-bit image XObject that says which of the base image's
+         * pixels may be painted. With the default `/Decode [0 1]` a 0 sample
+         * paints (alpha 255) and a 1 sample is masked out (alpha 0); `/Decode
+         * [1 0]` on the mask stream swaps the two. The mask has its own
+         * resolution, which the raster path resamples.
+         *
+         * Scope: masks the filter chain decodes (Flate, LZW, CCITT, …) and
+         * JBIG2 masks, which is what scanner output carries. Anything else, a
+         * mask that fails to decode, or an absurd size returns no mask, leaving
+         * the image painted unmasked rather than blanking the page.
+         */
+        private fun loadStencilMask(
+            dict: PdfDictionary,
+            refs: IndirectResolver?,
+        ): Triple<ByteArray?, Int, Int> {
+            val none = Triple<ByteArray?, Int, Int>(null, 0, 0)
+            val raw = dict["Mask"] ?: return none
+            val mask = when {
+                raw is PdfStream -> raw
+                refs != null -> runCatching { raw.resolve(refs) }.getOrNull() as? PdfStream ?: return none
+                else -> return none
+            }
+            val mdict = mask.dict
+            val isStencil = (mdict["ImageMask"] as? PdfBoolean)?.value == true ||
+                (mdict["IM"] as? PdfBoolean)?.value == true
+            // §8.9.6 requires /ImageMask true; tolerate a missing flag only
+            // when the stream is 1-bit anyway, and never guess at deeper data.
+            if (!isStencil && (mdict.getInt("BitsPerComponent")?.toInt() ?: 8) != 1) return none
+            val mw = mdict.getInt("Width")?.toInt() ?: return none
+            val mh = mdict.getInt("Height")?.toInt() ?: return none
+            if (mw <= 0 || mh <= 0) return none
+            // Untrusted dimensions: refuse to allocate a plane no real scan needs.
+            if (mw.toLong() * mh > MAX_MASK_SAMPLES) return none
+            val bits = decodeStencilBits(mask, mdict, mw, mh, refs) ?: return none
+            val rowBytes = (mw + 7) / 8
+            if (bits.size < rowBytes.toLong() * mh) return none
+            val invert = readDecode(mdict["Decode"] ?: mdict["D"])
+                ?.let { it.size >= 2 && it[0] == 1.0 } == true
+            val alpha = ByteArray(mw * mh)
+            var o = 0
+            for (y in 0 until mh) {
+                val rowStart = y * rowBytes
+                for (x in 0 until mw) {
+                    val bit = (bits[rowStart + (x ushr 3)].toInt() shr (7 - (x and 7))) and 1
+                    val masked = if (invert) bit == 0 else bit == 1
+                    alpha[o++] = if (masked) 0x00 else 0xFF.toByte()
+                }
+            }
+            return Triple(alpha, mw, mh)
+        }
+
+        /** The stencil's 1-bit samples, packed MSB-first per byte-aligned row. */
+        private fun decodeStencilBits(
+            mask: PdfStream,
+            mdict: PdfDictionary,
+            mw: Int,
+            mh: Int,
+            refs: IndirectResolver?,
+        ): ByteArray? = when (pickKind(extractFilterNames(mdict["Filter"] ?: mdict["F"]))) {
+            Kind.RAW -> runCatching { FilterChain.decode(mask) }.getOrNull()
+            // JBIG2 stencils are the common case in MRC scans. The decoder
+            // already emits PDF's convention (0 = the marked, painted sample).
+            Kind.JBIG2 -> Jbig2Decoder.decode(mask.rawBytes, loadJbig2Globals(mdict, refs), mw, mh)
+            else -> null
+        }
+
+        /**
+         * Read a colour-key `/Mask` (ISO 32000-1 §8.9.6): an array of 2 × n
+         * source-sample bounds. Anything malformed (odd length, non-integer
+         * entries) is dropped, leaving the image opaque.
+         */
+        private fun loadColorKeyMask(dict: PdfDictionary, refs: IndirectResolver?): IntArray? {
+            val raw = dict["Mask"] ?: return null
+            val arr = when {
+                raw is PdfArray -> raw
+                refs != null -> runCatching { raw.resolve(refs) }.getOrNull() as? PdfArray ?: return null
+                else -> return null
+            }
+            if (arr.isEmpty() || arr.size % 2 != 0) return null
+            val out = IntArray(arr.size)
+            for (i in arr.indices) out[i] = (arr[i] as? PdfInt)?.value?.toInt() ?: return null
+            return out
+        }
+
+        /**
+         * Resample a stencil-masked image up onto the stencil's own pixel grid
+         * when the stencil is the finer of the two.
+         *
+         * Both are mapped to the same unit square, so either grid composites
+         * faithfully, but they are not equally good: MRC scans (the layered
+         * form scanners produce) put a 300 dpi stencil over a 75 dpi block of
+         * ink, and resampling the stencil DOWN to the ink would throw away the
+         * glyph shapes that carry the text. Resampling the ink UP loses
+         * nothing, because a flat ink layer holds no detail of its own.
+         *
+         * Only 8-bpc [Kind.RAW] samples move (which covers JPX, JPEG and Flate
+         * ink layers). Anything else keeps its grid and is composited by the
+         * raster path's nearest-neighbour remap, which still paints the right
+         * pixels, just more coarsely. [MAX_ALIGNED_SAMPLES] caps the work,
+         * since both sizes come from an untrusted file.
+         */
+        private fun ImageXObject.alignedToStencilGrid(): ImageXObject {
+            val src = pixelBytes ?: return this
+            if (softMaskAlpha == null || kind != Kind.RAW || isImageMask) return this
+            if (bitsPerComponent != 8 || width <= 0 || height <= 0) return this
+            val mw = softMaskWidth
+            val mh = softMaskHeight
+            if (mw <= width || mh <= height) return this
+            if (mw.toLong() * mh > MAX_ALIGNED_SAMPLES) return this
+            val comps = resolvedColorSpace?.componentCount ?: (src.size / (width * height))
+            if (comps !in 1..4 || src.size < width.toLong() * height * comps) return this
+            val out = ByteArray(mw * mh * comps)
+            // Precomputed source column per target column: one array read per
+            // pixel instead of an integer divide.
+            val colMap = IntArray(mw) { x -> x * width / mw }
+            var o = 0
+            for (y in 0 until mh) {
+                val rowBase = (y * height / mh) * width
+                for (x in 0 until mw) {
+                    var s = (rowBase + colMap[x]) * comps
+                    repeat(comps) { out[o++] = src[s++] }
+                }
+            }
+            return ImageXObject(
+                width = mw, height = mh, bitsPerComponent = 8, colorSpace = colorSpace,
+                kind = Kind.RAW, encodedBytes = ByteArray(0), pixelBytes = out,
+                softMaskAlpha = softMaskAlpha, softMaskWidth = mw, softMaskHeight = mh,
+                resolvedColorSpace = resolvedColorSpace, decode = decode,
+                isImageMask = false, maskFill = maskFill, colorKeyMask = colorKeyMask,
+            )
+        }
+
+        /** Ceiling on a stencil's sample count (a 600 dpi A4 page is ~35 M). */
+        private const val MAX_MASK_SAMPLES = 40_000_000L
+
+        /** Ceiling on the composite grid an image may be resampled up to. */
+        private const val MAX_ALIGNED_SAMPLES = 16_000_000L
 
         private fun expand1BitToGray(raw: ByteArray, w: Int, h: Int): ByteArray? {
             val rowBytes = (w + 7) / 8 // 1-bit rows are byte-aligned

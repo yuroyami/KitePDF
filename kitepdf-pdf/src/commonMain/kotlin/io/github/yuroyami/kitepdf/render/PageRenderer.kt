@@ -492,12 +492,18 @@ public class PageRenderer(
      * shared by every page) decodes once per document. /ImageMask stencils are
      * tinted by the CURRENT fill colour, so their decoded form is
      * state-dependent: never cached. Ref-less images skip the cache too.
+     *
+     * So do images carrying a `/Mask`. Those are the ink layer of an MRC scan:
+     * one use per page, resampled onto the stencil's grid, so caching them
+     * would pin tens of megabytes per page of a scanned book for a reuse that
+     * never comes. This matches how `/ImageMask` stencils are already treated.
      */
     private fun decodeImageCached(slot: XObjectSlot, fillColor: RgbColor): ImageXObject {
         val doc = resolver as? io.github.yuroyami.kitepdf.PdfDocument
         val key = slot.objectNumber
-        val isMask = (slot.stream.dict["ImageMask"] as? io.github.yuroyami.kitepdf.core.parser.PdfBoolean)?.value == true
-        if (doc == null || key == null || isMask) {
+        val masked = (slot.stream.dict["ImageMask"] as? io.github.yuroyami.kitepdf.core.parser.PdfBoolean)?.value == true ||
+            slot.stream.dict["Mask"] != null
+        if (doc == null || key == null || masked) {
             doc?.countImageDecode()
             return ImageXObject.from(slot.stream, resolver, fillColor)
         }
