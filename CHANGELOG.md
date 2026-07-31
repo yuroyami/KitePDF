@@ -5,6 +5,130 @@ All notable changes to KitePDF are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] - 2026-07-31
+
+Scanned books stop rendering as black pages. An image in a PDF may nominate a
+second image as its `/Mask`, the stencil that decides which of its pixels are
+allowed to paint, and KitePDF never read that entry. Scanners write school
+books that way: a photo of the paper underneath, a near-solid block of black
+ink on top, and a stencil in the shape of the letters that lets the ink through.
+Without the stencil the ink covered the page, and the only things left visible
+were the small figures drawn after it. Twenty-three of the 95 real documents in
+the verification corpus were unreadable for that reason and now render.
+
+0.4.0 was published to Maven Local only and never reached Maven Central, so
+0.5.0 is the release that carries both it and this fix.
+
+### Added
+
+- `/Mask` in both of its forms (ISO 32000-1 section 8.9.6). A stencil `/Mask`
+  is a 1-bit image XObject, coded with JBIG2, CCITT or Flate, whose samples say
+  which of the base image's pixels may paint: with the default `/Decode [0 1]`
+  a 0 sample paints and a 1 sample is masked out, and `/Decode [1 0]` on the
+  mask swaps the two. It is decoded into the same 8-bit alpha plane `/SMask`
+  already produces, so both masking forms composite through one tested path.
+- Colour-key `/Mask`, the array form: 2 x n bounds tested against the image's
+  source samples, before `/Decode` and colour conversion as the specification
+  requires, making every pixel that falls inside all of them transparent. The
+  ranges are public as `ImageXObject.colorKeyMask`.
+- Composite-grid alignment. A stencil is usually finer than the layer it masks:
+  a scanned textbook page pairs a 300 dpi stencil with a 75 dpi block of ink.
+  The image is resampled up onto the stencil's grid rather than the stencil
+  down onto the image's, because the ink layer holds no detail of its own to
+  lose while the stencil holds the letter shapes. Beyond a size ceiling, or for
+  sample depths other than 8 bits, the mask is instead sampled onto the image's
+  grid, which still paints the right pixels, just more coarsely.
+- Regression coverage: stencil polarity in both directions, a stencil finer than
+  its image and one coarser than it, colour-key masking and a colour-key array
+  of the wrong arity, `/SMask` winning over `/Mask`, an undecodable mask and a
+  truncated one. A synthetic PDF drives the whole path through the AWT
+  rasterizer, so the raster gate needs no corpus file.
+
+### Changed
+
+- An image carrying a `/Mask` is no longer held in the per-document decoded
+  image cache. Those are the ink layer of a scan, one use per page, and holding
+  a page-sized composite for each page of a book would cost far more than the
+  reuse it would save. `/ImageMask` stencils were already treated this way.
+
+### Fixed
+
+- `/SMask` takes precedence when an image carries both masks, which is what the
+  specification asks for. Only one of the two is ever resolved.
+- A mask that cannot be decoded, is the wrong shape, or declares an absurd size
+  leaves its image painted unmasked. A renderer fed untrusted files must degrade
+  to the old behaviour there, never blank the page and never throw.
+
+### Measured
+
+JVM suites: 791 tests across the six tested modules, 0 failures (compose-viewer
+33, core 95, epub 269, native-renderer 72, pdf 318, skia-renderer 4). The
+Compose viewer also compiles for Android, iOS device and simulator, macOS, JS,
+and Wasm. On the 95-document verification corpus, the 23 affected books went
+from 95 to 100 percent black pixels per page down to the 2 to 10 percent a page
+of text should have, and pages were checked against `mutool` renders of the
+same files.
+
+## [0.4.0] - 2026-07-31
+
+Three viewer features for apps that annotate what they display. Text selection
+now holds the page still instead of competing with pan and scroll, highlights
+can each carry their own colour, and a highlight can put a marker in the page
+margin so a reader sees that a note exists without reading the page first.
+
+### Added
+
+- `PdfViewState.isSelectionActive`, the explicit signal that text selection owns
+  the gesture. It is raised the instant the long press fires, which is before
+  `selection` exists, and it survives the finger lifting, so the page also stays
+  put while the user reaches for a copy button. `clearSelection()` lowers it,
+  and so does a long press that anchored nothing, which keeps a stray press on
+  a margin from freezing the viewer.
+- `PdfViewState.highlights`, a second overlay channel taking `PdfHighlight`
+  entries. Each carries a `KiteSearchHit` plus an optional `color`, so an app
+  can paint notes by category. A null colour paints
+  `PdfViewColors.searchHighlight`, exactly what the existing channel does, and
+  `searchHighlights` itself is unchanged. `KiteSearchHit` deliberately gains no
+  colour field; it stays a pure text-search result.
+- `PdfHighlight.edgeMarker` and `PdfHighlight.edgeMarkerColor`, a rounded marker
+  in the page's right margin, level with the highlighted text. Every dimension
+  is a fraction of the rendered page width, so it keeps its proportions in a
+  thumbnail and at deep zoom alike, and its inner edge is clamped past the
+  highlighted quads so it never paints over the words.
+- Regression coverage for all three: the selection lock across a whole gesture
+  including the window before a selection object exists, a pointer-driven
+  one-finger drag that must not pan a zoomed page under a selection, a
+  pointer-driven strip drag that must not scroll under one, per-highlight
+  colours against the unchanged default, and the marker's position, its
+  clearance from the text and its scaling at 1x and 2x.
+
+### Fixed
+
+- A drag that started as a text selection no longer pans the page underneath
+  it. Claiming the drag was never enough on its own: the pinch handler reads its
+  pan on the Initial pointer pass, before the selection detector sees anything,
+  and `calculatePan` ignores consumption, so both pan sites fired anyway. They
+  now gate on `isSelectionActive`. Zoom is untouched, so a two-finger pinch
+  still works mid-selection.
+- The continuous strip and both pagers no longer scroll under an active
+  selection. Suppressing pan alone still let the list carry the page away.
+
+### Changed
+
+- The private per-page overlay renderer is now `Modifier.highlightOverlay`
+  rather than `searchHighlightOverlay`, since it paints three channels. No
+  public API changed with it.
+- Documentation: the Compose viewer guide gains "Highlights" and "Text
+  selection" sections covering both channels, the margin marker and the
+  selection lock.
+
+### Measured
+
+JVM suites: 778 tests across the six tested modules, 0 failures (compose-viewer
+33, core 95, epub 269, native-renderer 68, pdf 309, skia-renderer 4). The
+Compose viewer also compiles for Android, iOS device and simulator, macOS, JS,
+and Wasm.
+
 ## [0.3.1] - 2026-07-26
 
 Compose system-font fallback rendering now keeps the advance widths assigned by

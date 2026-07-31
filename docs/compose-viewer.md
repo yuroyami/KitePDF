@@ -11,7 +11,7 @@ Add the `kitepdf-compose-viewer` artifact to your Gradle dependencies:
     ```kotlin
     // commonMain
     dependencies {
-        implementation("io.github.yuroyami:kitepdf-compose-viewer:0.3.1")
+        implementation("io.github.yuroyami:kitepdf-compose-viewer:0.5.0")
     }
     ```
 
@@ -19,7 +19,7 @@ Add the `kitepdf-compose-viewer` artifact to your Gradle dependencies:
 
     ```gradle
     dependencies {
-        implementation("io.github.yuroyami:kitepdf-compose-viewer:0.3.1")
+        implementation("io.github.yuroyami:kitepdf-compose-viewer:0.5.0")
     }
     ```
 
@@ -257,6 +257,51 @@ PdfView(state, colors = colors)
 ```
 
 Most PDFs assume white paper and paint nothing behind their content, so `pageBackground` typically stays white.
+
+`PdfViewColors` also carries `searchHighlight` (the fill for `state.searchHighlights`) and `selectionHighlight` (the fill for the active text selection).
+
+## Highlights
+
+`PdfViewState` has two highlight channels, and both paint over the page in the same pass.
+
+`searchHighlights` is the plain one. Every hit paints in `PdfViewColors.searchHighlight`, which is what search results want:
+
+```kotlin
+state.searchHighlights = document.search("invoice").toList()
+```
+
+`highlights` is the app-owned one. Each entry is a `PdfHighlight`, which wraps a hit with its own colour and its own optional margin marker:
+
+```kotlin
+state.highlights = notes.map { note ->
+    PdfHighlight(
+        hit = KiteSearchHit(note.pageIndex, note.quads, note.text),
+        color = note.category.tint,       // null keeps PdfViewColors.searchHighlight
+        edgeMarker = true,                // a pill in the page margin
+        edgeMarkerColor = Color(0xFFEF6C00),
+    )
+}
+```
+
+The marker sits in the page's right margin, level with the highlighted text, so a reader can tell a note lives on the page without hunting for the words. It scales with the rendered page, so it keeps its proportions in a thumbnail and at deep zoom alike, and its inner edge is clamped past the highlighted quads so it never paints over the words.
+
+Clear either channel by assigning an empty list.
+
+## Text selection
+
+A long press anchors a selection, dragging extends it, and the result lands in `state.selection` (with `state.onSelectionChange` for a callback). The viewer never touches the clipboard: read `selection.text` and copy it in your app.
+
+While a selection is live, `state.isSelectionActive` is `true`, and the viewer suppresses one-finger panning and the list or pager's own scrolling so the page cannot move out from under the selection. Two-finger pinch zoom keeps working. The flag turns on the moment the long press fires and stays on until `state.clearSelection()`, which any tap on the page also calls.
+
+```kotlin
+val state = rememberPdfViewState(document)
+state.onSelectionChange = { sel -> selectedText = sel?.text }
+
+// Elsewhere, e.g. in a selection action bar:
+if (state.isSelectionActive) {
+    Button(onClick = { clipboard.setText(state.selection?.text.orEmpty()) }) { Text("Copy") }
+}
+```
 
 ## Navigation widgets
 
