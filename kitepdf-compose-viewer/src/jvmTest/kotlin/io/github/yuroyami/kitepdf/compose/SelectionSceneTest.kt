@@ -6,6 +6,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.toComposeImageBitmap
 import androidx.compose.ui.graphics.toPixelMap
+import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.PointerType
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.use
 import io.github.yuroyami.kitepdf.KitePDF
@@ -13,6 +15,7 @@ import io.github.yuroyami.kitepdf.writer.PdfBuilder
 import io.github.yuroyami.kitepdf.writer.StandardFont
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -102,6 +105,161 @@ class SelectionSceneTest {
             // Extending without an anchor is inert too.
             state.extendSelection(Offset(50f, 60f))
             assertNull(state.selection)
+        }
+    }
+
+    /**
+     * The selection-active lock covers the whole gesture, including the window
+     * between the long press firing and a selection object existing, and it
+     * outlives the finger. A gesture that anchored nothing hands it straight
+     * back so an unlucky long press on a margin cannot freeze the viewer.
+     */
+    @Test
+    fun selection_lock_spans_the_gesture_and_releases_on_clear() {
+        val doc = twoLineDoc()
+        lateinit var state: PdfViewState
+        ImageComposeScene(width = 200, height = 200, density = Density(1f)) {
+            state = rememberPdfViewState(doc)
+            PdfView(state = state, modifier = Modifier.fillMaxSize(), layout = PdfLayout.SinglePage(0))
+        }.use { scene ->
+            SceneTestDriver(scene).pumpUntil { state.pageGeometry.isNotEmpty() }
+            assertFalse(state.isSelectionActive, "no selection at rest")
+
+            // Long press on bare paper: locked while the drag runs even though
+            // no selection ever materializes, released when the drag ends.
+            state.beginSelection(Offset(100f, 190f))
+            assertTrue(state.isSelectionActive, "the lock is on from the long press, before any selection exists")
+            assertNull(state.selection)
+            state.endSelectionGesture()
+            assertFalse(state.isSelectionActive, "a gesture that anchored nothing gives pan back")
+
+            // Long press on text: locked, and it survives the finger lifting.
+            val line = doc.pages[0].textContent().blocks.first().lines.first()
+            val onText = Offset(
+                (line.charEdges[0] + 1).toFloat(),
+                ((line.bounds.bottom + line.bounds.top) / 2).toFloat(),
+            )
+            state.beginSelection(onText)
+            assertNotNull(state.selection)
+            assertTrue(state.isSelectionActive)
+            state.endSelectionGesture()
+            assertTrue(state.isSelectionActive, "the page stays put while the selection is on screen")
+
+            state.clearSelection()
+            assertFalse(state.isSelectionActive, "clearing the selection gives pan back")
+        }
+    }
+
+    /**
+     * The actual regression: a one-finger drag pans a zoomed page, but not
+     * while a selection owns the gesture.
+     */
+    @Test
+    fun an_active_selection_stops_a_one_finger_drag_from_panning() {
+        val doc = twoLineDoc()
+        lateinit var state: PdfViewState
+        ImageComposeScene(width = 200, height = 200, density = Density(1f)) {
+            state = rememberPdfViewState(doc)
+            PdfView(state = state, modifier = Modifier.fillMaxSize(), layout = PdfLayout.SinglePage(0))
+        }.use { scene ->
+            val driver = SceneTestDriver(scene)
+            driver.pumpUntil { state.pageGeometry.isNotEmpty() }
+            // One-finger pan only engages while zoomed in.
+            state.setZoom(2f)
+            driver.pumpUntil(maxFrames = 2) { false }
+
+            /** Presses, drags 30px up, and reports the pan taken BEFORE the release. */
+            fun dragUp(): Offset {
+                state.panOffset = Offset.Zero
+                scene.sendPointerEvent(PointerEventType.Press, Offset(100f, 120f), type = PointerType.Touch)
+                driver.pumpUntil(maxFrames = 2) { false }
+                scene.sendPointerEvent(PointerEventType.Move, Offset(100f, 90f), type = PointerType.Touch)
+                driver.pumpUntil(maxFrames = 2) { false }
+                val panned = state.panOffset
+                scene.sendPointerEvent(PointerEventType.Release, Offset(100f, 90f), type = PointerType.Touch)
+                driver.pumpUntil(maxFrames = 2) { false }
+                return panned
+            }
+
+            val free = dragUp()
+            assertTrue(free.y < -1f, "a plain one-finger drag pans the zoomed page (got $free)")
+
+            val line = doc.pages[0].textContent().blocks.first().lines.first()
+            state.beginSelection(
+                Offset(
+                    (line.charEdges[0] + 1).toFloat(),
+                    ((line.bounds.bottom + line.bounds.top) / 2).toFloat(),
+                ),
+            )
+            assertTrue(state.isSelectionActive)
+            val locked = dragUp()
+            assertEquals(Offset.Zero, locked, "the page must not pan under an active selection (got $locked)")
+
+            state.clearSelection()
+            driver.pumpUntil(maxFrames = 2) { false }
+            val again = dragUp()
+            assertTrue(again.y < -1f, "clearing the selection restores panning (got $again)")
+        }
+    }
+
+    /**
+     * The strip's own scrolling yields too: suppressing pan alone would still
+     * let the list scroll the page out from under the selection.
+     */
+    @Test
+    fun an_active_selection_stops_the_continuous_strip_from_scrolling() {
+        // Page 0 red, page 1 blue, 200px each in a 200px viewport: whatever
+        // shows at the bottom of the viewport says how far the strip travelled.
+        val doc = KitePDF.open(
+            PdfBuilder()
+                .page(width = 200.0, height = 200.0) {
+                    setFillRgb(1.0, 0.0, 0.0); rectangle(0.0, 0.0, 200.0, 200.0); fill()
+                }
+                .page(width = 200.0, height = 200.0) {
+                    setFillRgb(0.0, 0.0, 1.0); rectangle(0.0, 0.0, 200.0, 200.0); fill()
+                }
+                .build(),
+        )
+        lateinit var state: PdfViewState
+        ImageComposeScene(width = 200, height = 200, density = Density(1f)) {
+            state = rememberPdfViewState(doc)
+            PdfView(state = state, modifier = Modifier.fillMaxSize())
+        }.use { scene ->
+            val driver = SceneTestDriver(scene)
+            driver.pumpUntil { px -> px[100, 190].red > 0.8f }
+
+            /** Drags the strip up ~140px, past the touch slop, in steps. */
+            fun dragUp() {
+                scene.sendPointerEvent(PointerEventType.Press, Offset(100f, 180f), type = PointerType.Touch)
+                driver.pumpUntil(maxFrames = 2) { false }
+                for (y in intArrayOf(160, 130, 100, 70, 40)) {
+                    scene.sendPointerEvent(PointerEventType.Move, Offset(100f, y.toFloat()), type = PointerType.Touch)
+                    driver.pumpUntil(maxFrames = 2) { false }
+                }
+                scene.sendPointerEvent(PointerEventType.Release, Offset(100f, 40f), type = PointerType.Touch)
+            }
+
+            // The fixture has no text layer, so this long press sets the lock
+            // without ever producing a selection: exactly the in-between state
+            // the gate has to cover.
+            state.beginSelection(Offset(100f, 100f))
+            assertTrue(state.isSelectionActive)
+            dragUp()
+            val locked = driver.pumpUntil(maxFrames = 40) { false }.toComposeImageBitmap().toPixelMap()
+            assertTrue(
+                locked[100, 190].red > 0.8f && locked[100, 190].blue < 0.2f,
+                "the strip must not scroll under an active selection (bottom pixel ${locked[100, 190]})",
+            )
+            assertEquals(0, state.currentPage)
+
+            state.clearSelection()
+            driver.pumpUntil(maxFrames = 2) { false }
+            dragUp()
+            val free = driver.pumpUntil { px -> px[100, 190].blue > 0.8f }.toComposeImageBitmap().toPixelMap()
+            assertTrue(
+                free[100, 190].blue > 0.8f,
+                "clearing the selection restores scrolling (bottom pixel ${free[100, 190]})",
+            )
         }
     }
 }
