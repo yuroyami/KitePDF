@@ -10,6 +10,8 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.isSpecified
+import androidx.compose.ui.hapticfeedback.HapticFeedback
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.util.fastAny
@@ -59,14 +61,35 @@ import kotlinx.coroutines.launch
  * lands, and the pan sites below gate on it. [PdfViewState.endSelectionGesture]
  * releases it again when the drag anchored nothing.
  */
-internal fun Modifier.pdfSelectionGestures(state: PdfViewState): Modifier =
-    pointerInput(state) {
+internal fun Modifier.pdfSelectionGestures(
+    state: PdfViewState,
+    haptics: HapticFeedback? = null,
+): Modifier =
+    pointerInput(state, haptics) {
+        // The finger is on the words it is choosing, so the words are covered.
+        // The ticks are the channel that is not: a long-press buzz when the
+        // anchor lands, then one tick per change of the selected TEXT while
+        // dragging. Text, not position: pixels change every frame of a drag,
+        // and a tick per frame is a rattle, but the selection growing by a
+        // character is exactly as often as the platform text fields tick.
+        var lastSelectedText: String? = null
         detectDragGesturesAfterLongPress(
-            onDragStart = { pos -> state.beginSelection(pos) },
+            onDragStart = { pos ->
+                state.beginSelection(pos)
+                lastSelectedText = state.selection?.text
+                if (state.isSelectionActive) {
+                    haptics?.performHapticFeedback(HapticFeedbackType.LongPress)
+                }
+            },
             onDragEnd = { state.endSelectionGesture() },
             onDragCancel = { state.endSelectionGesture() },
             onDrag = { change, _ ->
                 state.extendSelection(change.position)
+                val text = state.selection?.text
+                if (text != null && text != lastSelectedText) {
+                    lastSelectedText = text
+                    haptics?.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                }
                 change.consume()
             },
         )

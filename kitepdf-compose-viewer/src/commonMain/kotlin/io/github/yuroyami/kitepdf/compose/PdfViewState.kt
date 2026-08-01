@@ -416,8 +416,8 @@ public data class TextSelection(
  * @param color fill for those quads. Null (the default) paints
  *   [PdfViewColors.searchHighlight], exactly what [PdfViewState.searchHighlights]
  *   does, so wrapping a plain hit changes nothing on screen.
- * @param edgeMarker also paint a small rounded marker in the page's RIGHT
- *   margin, level with this highlight. It tells a reader a note lives on this
+ * @param edgeMarker also paint a small rounded marker in one page margin,
+ *   level with this highlight. It tells a reader a note lives on this
  *   page without them having to find the highlighted words. Every dimension is
  *   a fraction of the rendered page width, so it keeps its proportions in a
  *   thumbnail and at deep zoom alike, and its inner edge is clamped past the
@@ -426,6 +426,8 @@ public data class TextSelection(
  * @param edgeMarkerColor fill for that marker. Null (the default) falls back to
  *   [color], and then to [PdfViewColors.searchHighlight]. A marker usually
  *   wants a stronger, opaque colour than the translucent fill next to it.
+ * @param edgeMarkerSide which margin carries the marker. [PdfMarkerSide.End]
+ *   is the pre-0.5.1 behaviour and stays the default.
  */
 @Immutable
 public data class PdfHighlight(
@@ -433,7 +435,18 @@ public data class PdfHighlight(
     val color: Color? = null,
     val edgeMarker: Boolean = false,
     val edgeMarkerColor: Color? = null,
+    val edgeMarkerSide: PdfMarkerSide = PdfMarkerSide.End,
 )
+
+/**
+ * Which page margin an edge marker is painted in.
+ *
+ * Named Start/End rather than Left/Right deliberately: these are the page's
+ * margins in reading order, and a host that lays out RTL books can map its own
+ * notion of "outer margin" onto them without this enum lying about geometry.
+ * In the viewer's display space Start is the left margin and End is the right.
+ */
+public enum class PdfMarkerSide { Start, End }
 
 /* ── scroll adapters: one state API over LazyList and Pager backends ──────── */
 

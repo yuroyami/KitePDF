@@ -222,4 +222,11 @@ public data class PdfViewColors(
     val searchHighlight: Color = Color(0x66FFEB3B),
     /** Fill for the active [PdfViewState.selection] quads. */
     val selectionHighlight: Color = Color(0x664285F4),
+    /**
+     * The caret-and-dot markers at the selection's two boundaries. Opaque on
+     * purpose where [selectionHighlight] is translucent: the wash says "this
+     * much is selected", the handles say exactly where that starts and ends,
+     * and a see-through boundary marker would say neither.
+     */
+    val selectionHandle: Color = Color(0xFF4285F4),
 )
