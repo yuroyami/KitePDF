@@ -5,6 +5,35 @@ All notable changes to KitePDF are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.1] - 2026-08-01
+
+Selection you can feel and see, and margin markers that pick a side. Published
+to Maven Local for the EducHaiti reader work; Central publication can follow
+unchanged.
+
+### Added
+
+- Selection boundary handles: a caret down the boundary line plus a dot
+  beneath it, at the leading edge of the first selected quad and the trailing
+  edge of the last. They are indicators rather than drag targets; the
+  selection still grows by the long-press drag that created it. Styled by the
+  new `PdfViewColors.selectionHandle`, opaque by default where the selection
+  wash is translucent, and sized against the boundary line's own height so
+  they scale through thumbnails and deep zoom.
+- Selection haptics, on every platform with a haptic engine: a long-press
+  buzz when the selection anchors and one `TextHandleMove` tick each time the
+  selected TEXT changes while dragging. Ticking on text rather than on pixels
+  is what keeps a slow drag from rattling.
+- `PdfHighlight.edgeMarkerSide` with `PdfMarkerSide.Start`/`End`. `End` (the
+  right margin in display space) is the pre-0.5.1 behaviour and stays the
+  default; `Start` mirrors the same clamp into the left margin, including the
+  refusal to paint when text runs into it.
+
+### Changed
+
+- Nothing breaking. Both additions are defaulted parameters; 0.5.0 call sites
+  compile and render identically.
+
 ## [0.5.0] - 2026-07-31
 
 Scanned books stop rendering as black pages. An image in a PDF may nominate a

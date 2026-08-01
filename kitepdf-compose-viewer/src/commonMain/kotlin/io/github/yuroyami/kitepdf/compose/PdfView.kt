@@ -46,6 +46,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpSize
@@ -327,6 +328,7 @@ private fun ContinuousLayout(
     }
 
     val scope = rememberCoroutineScope()
+    val haptics = LocalHapticFeedback.current
     // Magnifier-style zoom: scale the whole strip around the viewport centre.
     // The scroll axis stays native (the list keeps scrolling while zoomed);
     // pan covers the cross axis only. Gestures sit OUTSIDE the layer so they
@@ -335,7 +337,7 @@ private fun ContinuousLayout(
         Modifier
             .fillMaxSize()
             .pdfTransformGestures(state, zoomSpec, scope, onTap)
-            .pdfSelectionGestures(state)
+            .pdfSelectionGestures(state, haptics)
             .graphicsLayer {
                 scaleX = state.zoom
                 scaleY = state.zoom
@@ -478,6 +480,7 @@ private fun PagedLayout(
     }
 
     val scope = rememberCoroutineScope()
+    val haptics = LocalHapticFeedback.current
     val pageContent: @Composable (Int) -> Unit = { index ->
         val isCurrent = index == pagerState.currentPage
         PageBox(
@@ -486,7 +489,7 @@ private fun PagedLayout(
             zoom = if (isCurrent) state.zoom else 1f,
             pan = if (isCurrent) state.panOffset else androidx.compose.ui.geometry.Offset.Zero,
             gestures = if (isCurrent) {
-                Modifier.pdfTransformGestures(state, zoomSpec, scope, onTap).pdfSelectionGestures(state)
+                Modifier.pdfTransformGestures(state, zoomSpec, scope, onTap).pdfSelectionGestures(state, haptics)
             } else Modifier,
             settledZoom = if (isCurrent) settledZoom else 1f,
             renderSpec = renderSpec,
@@ -545,12 +548,13 @@ private fun SinglePageLayout(
         onDispose { if (state.adapter === adapter) state.adapter = null }
     }
     val scope = rememberCoroutineScope()
+    val haptics = LocalHapticFeedback.current
     PageBox(
         page = state.document.pages[layout.pageIndex],
         pageIndex = layout.pageIndex,
         zoom = state.zoom,
         pan = state.panOffset,
-        gestures = Modifier.pdfTransformGestures(state, zoomSpec, scope, onTap).pdfSelectionGestures(state),
+        gestures = Modifier.pdfTransformGestures(state, zoomSpec, scope, onTap).pdfSelectionGestures(state, haptics),
         settledZoom = settledZoom,
         renderSpec = renderSpec,
         colors = colors,
@@ -781,12 +785,61 @@ private fun Modifier.highlightOverlay(
         val fill = highlight.color ?: colors.searchHighlight
         for (q in hit.quads) quad(q, fill)
         if (highlight.edgeMarker) {
-            drawEdgeMarker(hit.quads, sx, sy, highlight.edgeMarkerColor ?: fill)
+            drawEdgeMarker(hit.quads, sx, sy, highlight.edgeMarkerColor ?: fill, highlight.edgeMarkerSide)
         }
     }
     state.selection?.takeIf { it.pageIndex == pageIndex }?.let { sel ->
         for (q in sel.quads) quad(q, colors.selectionHighlight)
+        drawSelectionHandles(sel.quads, sx, sy, colors.selectionHandle)
     }
+}
+
+/**
+ * The two grab markers that bound the active selection: a caret down the full
+ * height of the boundary line plus a dot beneath it, start on the leading edge
+ * of the first quad and end on the trailing edge of the last.
+ *
+ * They are indicators, not drag targets; the selection itself still grows by
+ * the long-press drag that created it. What they buy is certainty: without
+ * them a reader who lifts a finger mid-paragraph has a wash of colour and no
+ * statement about where it begins or ends, which is exactly the complaint that
+ * added these. Sized against the boundary line's own height so they scale
+ * with the text through thumbnails and deep zoom alike.
+ */
+private fun DrawScope.drawSelectionHandles(
+    quads: List<io.github.yuroyami.kitepdf.core.Rectangle>,
+    sx: Float,
+    sy: Float,
+    color: Color,
+) {
+    val first = quads.firstOrNull() ?: return
+    val last = quads.lastOrNull() ?: return
+
+    fun handle(xPx: Float, topPx: Float, bottomPx: Float) {
+        val lineHeight = (bottomPx - topPx).coerceAtLeast(1f)
+        val radius = (lineHeight * 0.28f).coerceIn(3f, 14f)
+        val stroke = (radius * 0.5f).coerceAtLeast(1.5f)
+        drawLine(
+            color = color,
+            start = Offset(xPx, topPx),
+            end = Offset(xPx, bottomPx),
+            strokeWidth = stroke,
+        )
+        drawCircle(color = color, radius = radius, center = Offset(xPx, bottomPx + radius))
+    }
+
+    // Display rectangles keep y-min in `bottom` (y grows downward): `bottom` is
+    // the TOP edge on screen, the same convention as the quad fill above.
+    handle(
+        xPx = (first.left * sx).toFloat(),
+        topPx = (first.bottom * sy).toFloat(),
+        bottomPx = (first.top * sy).toFloat(),
+    )
+    handle(
+        xPx = (last.right * sx).toFloat(),
+        topPx = (last.bottom * sy).toFloat(),
+        bottomPx = (last.top * sy).toFloat(),
+    )
 }
 
 /**
@@ -804,21 +857,37 @@ private fun DrawScope.drawEdgeMarker(
     sx: Float,
     sy: Float,
     color: Color,
+    side: PdfMarkerSide,
 ) {
     var top = Float.MAX_VALUE
     var bottom = -Float.MAX_VALUE
     var textRight = 0f
+    var textLeft = Float.MAX_VALUE
     for (q in quads) {
         top = minOf(top, (q.bottom * sy).toFloat())
         bottom = maxOf(bottom, (q.top * sy).toFloat())
         textRight = maxOf(textRight, (q.right * sx).toFloat())
+        textLeft = minOf(textLeft, (q.left * sx).toFloat())
     }
     if (!top.isFinite() || !bottom.isFinite()) return
 
     val width = size.width * EDGE_MARKER_WIDTH_FRACTION
     val gutter = width * EDGE_MARKER_GUTTER_RATIO
-    val right = size.width - gutter
-    val left = maxOf(right - width, textRight + gutter)
+    // Same clamp on both sides, mirrored: the marker stays in its margin, and a
+    // page whose text runs into that margin gets nothing rather than a pill
+    // across the glyphs.
+    val left: Float
+    val right: Float
+    when (side) {
+        PdfMarkerSide.End -> {
+            right = size.width - gutter
+            left = maxOf(right - width, textRight + gutter)
+        }
+        PdfMarkerSide.Start -> {
+            left = gutter
+            right = minOf(left + width, textLeft - gutter)
+        }
+    }
     if (left >= right) return
 
     // A one-word highlight is only a few px tall in a thumbnail; floor the pill
@@ -884,6 +953,7 @@ private fun SpreadLayout(
     }
 
     val scope = rememberCoroutineScope()
+    val haptics = LocalHapticFeedback.current
     val pagerScrollEnabled = userScrollEnabled && !state.isZoomed && !state.isSelectionActive
     val spreadContent: @Composable (Int) -> Unit = { spread ->
         val isCurrent = spread == pagerState.currentPage
@@ -895,7 +965,7 @@ private fun SpreadLayout(
             zoom = if (isCurrent) state.zoom else 1f,
             pan = if (isCurrent) state.panOffset else Offset.Zero,
             gestures = if (isCurrent) {
-                Modifier.pdfTransformGestures(state, zoomSpec, scope, onTap).pdfSelectionGestures(state)
+                Modifier.pdfTransformGestures(state, zoomSpec, scope, onTap).pdfSelectionGestures(state, haptics)
             } else Modifier,
             recordGeometry = isCurrent,
             settledZoom = if (isCurrent) settledZoom else 1f,
