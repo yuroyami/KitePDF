@@ -3,6 +3,7 @@ package io.github.yuroyami.kitepdf.compose
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.runtime.Immutable
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.DrawScope
 import io.github.yuroyami.kitepdf.core.render.ReaderTheme
 
 /**
@@ -229,4 +230,57 @@ public data class PdfViewColors(
      * and a see-through boundary marker would say neither.
      */
     val selectionHandle: Color = Color(0xFF4285F4),
+    /**
+     * How each selection boundary marker is drawn. Null uses the built-in
+     * caret-and-dot ([PdfSelectionHandleDefaults.CaretAndDot]). The handles
+     * are canvas vector drawing, not composables: they live inside the page's
+     * draw pass so they scale, pan and zoom in lockstep with the words they
+     * bound, which an overlay composable could only approximate.
+     */
+    val selectionHandlePainter: PdfSelectionHandlePainter? = null,
 )
+
+/** Which end of the selection a handle marks, in reading order. */
+public enum class PdfSelectionHandleEdge { Start, End }
+
+/**
+ * Draws one selection boundary marker ("thumb") for [PdfView].
+ *
+ * Called once per edge inside the page's draw pass. [x] is the boundary's
+ * horizontal position; [top]/[bottom] are the boundary line's vertical extent,
+ * all in page-slot pixels. Size the marker against `bottom - top` (the line
+ * height) so it scales with the text through thumbnails and deep zoom, like
+ * [PdfSelectionHandleDefaults.CaretAndDot] does.
+ */
+public fun interface PdfSelectionHandlePainter {
+    public fun DrawScope.drawHandle(
+        edge: PdfSelectionHandleEdge,
+        x: Float,
+        top: Float,
+        bottom: Float,
+        color: Color,
+    )
+}
+
+public object PdfSelectionHandleDefaults {
+    /**
+     * The built-in marker: a caret spanning the boundary line's full height
+     * with a grab dot beneath it, sized from the line height.
+     */
+    public val CaretAndDot: PdfSelectionHandlePainter = PdfSelectionHandlePainter { _, x, top, bottom, color ->
+        val lineHeight = (bottom - top).coerceAtLeast(1f)
+        val radius = (lineHeight * 0.28f).coerceIn(3f, 14f)
+        val stroke = (radius * 0.5f).coerceAtLeast(1.5f)
+        drawLine(
+            color = color,
+            start = androidx.compose.ui.geometry.Offset(x, top),
+            end = androidx.compose.ui.geometry.Offset(x, bottom),
+            strokeWidth = stroke,
+        )
+        drawCircle(
+            color = color,
+            radius = radius,
+            center = androidx.compose.ui.geometry.Offset(x, bottom + radius),
+        )
+    }
+}

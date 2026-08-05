@@ -42,14 +42,21 @@ public class PdfRasterizer(
     private val textMeasurer: TextMeasurer,
 ) {
 
-    /**
-     * [TextMeasurer]'s internal cache is not documented thread-safe, and the
-     * system-font fallback path is its only consumer here. Whether a page
-     * will hit that path isn't knowable cheaply up front, so background
-     * rasters serialize on this mutex: parallelism between pages is lost,
-     * but the MAIN thread stays free, which is the point.
-     */
-    private val renderMutex = kotlinx.coroutines.sync.Mutex()
+    private companion object {
+        /**
+         * One mutex for the whole process, not one per rasterizer. Compose's
+         * skiko text stack keeps a PROCESS-GLOBAL style cache (a plain HashMap
+         * behind `ParagraphBuilder.makeSkTextStyle`), so two pages measuring
+         * text on different pool threads corrupt it even when each owns a
+         * private [TextMeasurer]. A per-instance mutex looked safe and was not:
+         * every page slot remembers its own rasterizer, so slots serialized
+         * against themselves and raced each other, which is exactly the
+         * ConcurrentModificationException abort seen in production (iOS,
+         * 2026-08-05). Parallelism between pages is lost, but the MAIN thread
+         * stays free, which is the point of the off-main path.
+         */
+        private val renderMutex = kotlinx.coroutines.sync.Mutex()
+    }
 
     /**
      * [rasterize], off the main thread where the platform allows. One page
