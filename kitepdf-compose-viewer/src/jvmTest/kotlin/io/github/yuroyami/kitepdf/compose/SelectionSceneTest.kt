@@ -151,6 +151,48 @@ class SelectionSceneTest {
     }
 
     /**
+     * `selectionInProgress` is the menu-gating flag: true only while the finger
+     * is still building the selection, false the moment it lifts, even though
+     * `isSelectionActive` stays true to keep the page from drifting. A menu
+     * gated on it appears exactly when the user finishes choosing.
+     */
+    @Test
+    fun selection_in_progress_tracks_the_finger_not_the_selection() {
+        val doc = twoLineDoc()
+        lateinit var state: PdfViewState
+        ImageComposeScene(width = 200, height = 200, density = Density(1f)) {
+            state = rememberPdfViewState(doc)
+            PdfView(state = state, modifier = Modifier.fillMaxSize(), layout = PdfLayout.SinglePage(0))
+        }.use { scene ->
+            SceneTestDriver(scene).pumpUntil { state.pageGeometry.isNotEmpty() }
+            assertFalse(state.selectionInProgress, "nothing in progress at rest")
+
+            val line = doc.pages[0].textContent().blocks.first().lines.first()
+            val onText = Offset(
+                (line.charEdges[0] + 1).toFloat(),
+                ((line.bounds.bottom + line.bounds.top) / 2).toFloat(),
+            )
+            state.beginSelection(onText)
+            assertTrue(state.selectionInProgress, "in progress from the long press")
+            assertNotNull(state.selection)
+
+            state.endSelectionGesture()
+            assertFalse(state.selectionInProgress, "the lift ends the drag")
+            assertTrue(state.isSelectionActive, "but the selection lock stays for the menu")
+            assertNotNull(state.selection)
+
+            // A fresh drag over the same selection goes back into progress.
+            state.beginSelection(onText)
+            assertTrue(state.selectionInProgress)
+            state.endSelectionGesture()
+            assertFalse(state.selectionInProgress)
+
+            state.clearSelection()
+            assertFalse(state.selectionInProgress)
+        }
+    }
+
+    /**
      * The actual regression: a one-finger drag pans a zoomed page, but not
      * while a selection owns the gesture.
      */

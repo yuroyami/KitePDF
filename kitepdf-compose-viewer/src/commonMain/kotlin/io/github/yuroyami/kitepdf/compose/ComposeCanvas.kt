@@ -239,7 +239,26 @@ public class ComposeCanvas(
             fontWeight = fontSpec.toComposeWeight(),
             fontStyle = fontSpec.toComposeStyle(),
         )
-        val layout = textMeasurer.measure(text = text, style = style)
+        // Compose's skiko text stack keeps a process-global style cache that is
+        // not thread-safe. The global raster mutex serializes KitePDF's own
+        // threads, but the HOST app's UI thread lays out its own text through
+        // the same cache at any moment, and that race surfaces here as a
+        // ConcurrentModificationException. Losing one text run to an abort of
+        // the whole process is a terrible trade, so retry a few times (the
+        // window is a microsecond-scale map purge) and, if the cache is truly
+        // hot, skip this run: one missing fallback-font run on one page beats
+        // a dead app.
+        var measured: androidx.compose.ui.text.TextLayoutResult? = null
+        var attempt = 0
+        while (measured == null) {
+            measured = try {
+                textMeasurer.measure(text = text, style = style)
+            } catch (race: ConcurrentModificationException) {
+                if (++attempt >= 5) return
+                null
+            }
+        }
+        val layout = measured
         val metricScale = systemFontMetricScale(
             glyphs = glyphs,
             renderedSize = renderedSize,

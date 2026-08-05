@@ -676,8 +676,32 @@ private fun PdfPageRaster(
         // (TextMeasurer's cache is not thread-safe) but the main thread stays
         // free; the T-15 cache turns scroll-back into a lookup, and neighbour
         // prefetch (PdfLayout.Paged offscreenPages) hides first-render latency.
-        value = if (raster == IntSize.Zero) null
-        else rasterizer.rasterizeCachedOffMain(cache, page, raster.width, raster.height, colors.pageBackground, hairline, colors.theme)
+        // A rasterization failure must never leave this producer: produceState
+        // has no handler, so an escaped exception (a torn page, a text-cache
+        // race, an OOM bitmap) walks straight to the platform's unhandled hook
+        // and aborts the HOST APP. One retry covers transient races; a page
+        // that fails twice keeps its placeholder, which is a bad page in a
+        // living app instead of a crash report.
+        value = if (raster == IntSize.Zero) {
+            null
+        } else {
+            var result: Pair<ImageBitmap, Boolean>? = null
+            for (attempt in 0 until 2) {
+                result = try {
+                    rasterizer.rasterizeCachedOffMain(
+                        cache, page, raster.width, raster.height,
+                        colors.pageBackground, hairline, colors.theme,
+                    )
+                } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                    throw cancelled
+                } catch (failure: Throwable) {
+                    println("KitePDF: page $pageIndex failed to rasterize (attempt ${attempt + 1}): $failure")
+                    null
+                }
+                if (result != null) break
+            }
+            result
+        }
     }
     val bitmap = rastered?.first
 
@@ -790,56 +814,54 @@ private fun Modifier.highlightOverlay(
     }
     state.selection?.takeIf { it.pageIndex == pageIndex }?.let { sel ->
         for (q in sel.quads) quad(q, colors.selectionHighlight)
-        drawSelectionHandles(sel.quads, sx, sy, colors.selectionHandle)
+        drawSelectionHandles(
+            sel.quads, sx, sy, colors.selectionHandle,
+            colors.selectionHandlePainter ?: PdfSelectionHandleDefaults.CaretAndDot,
+        )
     }
 }
 
 /**
- * The two grab markers that bound the active selection: a caret down the full
- * height of the boundary line plus a dot beneath it, start on the leading edge
- * of the first quad and end on the trailing edge of the last.
+ * The two grab markers that bound the active selection, placed on the leading
+ * edge of the first quad and the trailing edge of the last. The marker's look
+ * comes from [painter] ([PdfViewColors.selectionHandlePainter], defaulting to
+ * [PdfSelectionHandleDefaults.CaretAndDot]); this function owns only the
+ * placement math.
  *
  * They are indicators, not drag targets; the selection itself still grows by
  * the long-press drag that created it. What they buy is certainty: without
  * them a reader who lifts a finger mid-paragraph has a wash of colour and no
  * statement about where it begins or ends, which is exactly the complaint that
- * added these. Sized against the boundary line's own height so they scale
- * with the text through thumbnails and deep zoom alike.
+ * added these.
  */
 private fun DrawScope.drawSelectionHandles(
     quads: List<io.github.yuroyami.kitepdf.core.Rectangle>,
     sx: Float,
     sy: Float,
     color: Color,
+    painter: PdfSelectionHandlePainter,
 ) {
     val first = quads.firstOrNull() ?: return
     val last = quads.lastOrNull() ?: return
 
-    fun handle(xPx: Float, topPx: Float, bottomPx: Float) {
-        val lineHeight = (bottomPx - topPx).coerceAtLeast(1f)
-        val radius = (lineHeight * 0.28f).coerceIn(3f, 14f)
-        val stroke = (radius * 0.5f).coerceAtLeast(1.5f)
-        drawLine(
-            color = color,
-            start = Offset(xPx, topPx),
-            end = Offset(xPx, bottomPx),
-            strokeWidth = stroke,
-        )
-        drawCircle(color = color, radius = radius, center = Offset(xPx, bottomPx + radius))
-    }
-
     // Display rectangles keep y-min in `bottom` (y grows downward): `bottom` is
     // the TOP edge on screen, the same convention as the quad fill above.
-    handle(
-        xPx = (first.left * sx).toFloat(),
-        topPx = (first.bottom * sy).toFloat(),
-        bottomPx = (first.top * sy).toFloat(),
-    )
-    handle(
-        xPx = (last.right * sx).toFloat(),
-        topPx = (last.bottom * sy).toFloat(),
-        bottomPx = (last.top * sy).toFloat(),
-    )
+    with(painter) {
+        drawHandle(
+            edge = PdfSelectionHandleEdge.Start,
+            x = (first.left * sx).toFloat(),
+            top = (first.bottom * sy).toFloat(),
+            bottom = (first.top * sy).toFloat(),
+            color = color,
+        )
+        drawHandle(
+            edge = PdfSelectionHandleEdge.End,
+            x = (last.right * sx).toFloat(),
+            top = (last.bottom * sy).toFloat(),
+            bottom = (last.top * sy).toFloat(),
+            color = color,
+        )
+    }
 }
 
 /**

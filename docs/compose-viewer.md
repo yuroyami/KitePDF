@@ -303,6 +303,42 @@ if (state.isSelectionActive) {
 }
 ```
 
+`state.selectionInProgress` is `true` only while the finger is still down on the drag that is building the selection, and drops the moment it lifts. Gate a context menu on it: a popup shown mid-drag covers the words being chosen. `isSelectionActive` cannot tell those apart, because it deliberately stays on after the finger lifts to keep the page from drifting.
+
+### Selection menu
+
+`PdfSelectionMenu` is a ready-made context menu for the `overlay` slot. It appears when a selection exists and the drag has ended, lists your actions, and can offer a wrapping row of highlight-colour swatches:
+
+```kotlin
+PdfView(state, overlay = {
+    PdfSelectionMenu(
+        state = state,
+        items = listOf(
+            PdfSelectionMenuItem("Copy") { clipboard.setText(AnnotatedString(it.text)) },
+            PdfSelectionMenuItem("Add note", clearsSelection = false) { openNoteEditor(it) },
+        ),
+        highlightColors = listOf(Color(0xFFFFF176), Color(0xFFA5D6A7), Color(0xFF90CAF9)),
+        onHighlightColorPicked = { sel, color -> addHighlight(sel, color) },
+    )
+})
+```
+
+Every visual layer is replaceable: `container` swaps the card, `itemContent` swaps how one action renders, `colorSwatch` swaps how one colour renders, and `alignment` moves the whole menu. For a completely different menu, skip the composable and build your own against `state.selection` and `state.selectionInProgress`; the built-in one is a default, not a contract.
+
+### Selection handles
+
+The two boundary markers ("thumbs") are canvas vector drawing inside the page's draw pass, not composables, so they scale and pan in lockstep with the words they bound. Recolour them with `PdfViewColors.selectionHandle`, or replace the drawing entirely with `PdfViewColors.selectionHandlePainter`:
+
+```kotlin
+PdfView(state, colors = PdfViewColors(
+    selectionHandlePainter = PdfSelectionHandlePainter { edge, x, top, bottom, color ->
+        drawCircle(color, radius = (bottom - top) * 0.35f, center = Offset(x, bottom))
+    },
+))
+```
+
+The default is `PdfSelectionHandleDefaults.CaretAndDot`: a caret spanning the boundary line with a grab dot beneath it.
+
 ## Navigation widgets
 
 Ready-made UI components for common patterns. They all take a `PdfViewState`, so they work from anywhere in your tree; inside the viewport (via `overlay`), in your top bar, in a side panel.

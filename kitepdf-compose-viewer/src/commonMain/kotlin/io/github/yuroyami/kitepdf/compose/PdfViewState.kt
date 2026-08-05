@@ -235,6 +235,20 @@ public class PdfViewState(
     public var isSelectionActive: Boolean by mutableStateOf(false)
         private set
 
+    /**
+     * True only while the finger is still down on the long-press drag that is
+     * building the selection; false the moment it lifts.
+     *
+     * This is the flag a selection menu should gate on. [isSelectionActive]
+     * deliberately stays true after the finger lifts (it keeps the page from
+     * drifting while the user acts on the words), so it cannot distinguish
+     * "still choosing" from "chosen". A popup shown while this is true covers
+     * the very words the finger is trying to reach; [PdfSelectionMenu] waits
+     * for it to drop.
+     */
+    public var selectionInProgress: Boolean by mutableStateOf(false)
+        private set
+
     /** Fires on every selection change, including clearing (null). */
     public var onSelectionChange: ((TextSelection?) -> Unit)? = null
 
@@ -244,6 +258,7 @@ public class PdfViewState(
     public fun clearSelection() {
         selectionAnchor = null
         isSelectionActive = false
+        selectionInProgress = false
         if (selection != null) {
             selection = null
             onSelectionChange?.invoke(null)
@@ -258,6 +273,7 @@ public class PdfViewState(
         // has to be off for the whole drag, not from whenever the model catches
         // up. `endSelectionGesture` hands the lock back if nothing anchored.
         isSelectionActive = true
+        selectionInProgress = true
         val (pageIndex, x, y) = hitTestDisplay(viewportOffset) ?: return
         val text = document.pages.getOrNull(pageIndex)?.textContent() ?: return
         val idx = text.charIndexAt(x, y) ?: return
@@ -287,6 +303,7 @@ public class PdfViewState(
      * layer) gives pan and scrolling straight back.
      */
     internal fun endSelectionGesture() {
+        selectionInProgress = false
         if (selection == null) isSelectionActive = false
     }
 
