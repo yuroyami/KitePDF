@@ -15,6 +15,10 @@ public fun interface KiteWarningSink {
  * sink must be thread-safe; pages may render concurrently.
  */
 public object KiteWarnings {
+    // Volatile: installed from an app thread, read from every render/parse
+    // worker. Without the release/acquire edge a worker could keep reading a
+    // stale null (dropping diagnostics) or observe a partially published sink.
+    @kotlin.concurrent.Volatile
     public var sink: KiteWarningSink? = null
 }
 

@@ -11,7 +11,7 @@ KitePDF is published to Maven Central as seven artifacts: the `kitepdf` umbrella
     ```gradle
     dependencies {
         commonMain.dependencies {
-            implementation("io.github.yuroyami:kitepdf:0.5.0")
+            implementation("io.github.yuroyami:kitepdf:0.6.0")
         }
     }
     ```
@@ -20,7 +20,7 @@ KitePDF is published to Maven Central as seven artifacts: the `kitepdf` umbrella
 
     ```gradle
     dependencies {
-        implementation("io.github.yuroyami:kitepdf:0.5.0")
+        implementation("io.github.yuroyami:kitepdf:0.6.0")
     }
     ```
 
@@ -64,7 +64,7 @@ val doc = PdfDocument.open(bytes, "secret".encodeToByteArray())
 ```
 
 !!! tip "EPUB books"
-    The same dependency graph reads EPUBs: add `io.github.yuroyami:kitepdf-epub:0.5.0` and call `EpubDocument.open(bytes)`. See the [EPUB guide](epub.md).
+    The same dependency graph reads EPUBs: add `io.github.yuroyami:kitepdf-epub:0.6.0` and call `EpubDocument.open(bytes)`. See the [EPUB guide](epub.md).
 
 ## Step 3: Show it on screen in Compose
 
@@ -75,7 +75,7 @@ Add the dependency:
 ```gradle
 dependencies {
     commonMain.dependencies {
-        implementation("io.github.yuroyami:kitepdf-compose-viewer:0.5.0")
+        implementation("io.github.yuroyami:kitepdf-compose-viewer:0.6.0")
     }
 }
 ```
@@ -179,7 +179,7 @@ Add the dependency:
 
 ```gradle
 dependencies {
-    implementation("io.github.yuroyami:kitepdf-native-renderer:0.5.0")
+    implementation("io.github.yuroyami:kitepdf-native-renderer:0.6.0")
 }
 ```
 

@@ -67,7 +67,20 @@ public class ComposeCanvas(
      * (e.g. 0.1-width ECG traces) would vanish.
      */
     private val hairlineWidthPx: Float = 1f,
+    /**
+     * When true, system-font text runs are not measured or drawn; the canvas
+     * only records that one was encountered in [usedSystemFontText]. The
+     * off-main raster path uses this: Compose's skiko text stack shares
+     * process-global state with the host UI thread, so measuring or drawing
+     * through it is only safe on the main thread. A pool-thread render probes
+     * with this flag and, when it trips, the page is re-rendered on Main.
+     */
+    private val skipSystemFontText: Boolean = false,
 ) : KiteCanvas {
+
+    /** True once a system-font run was skipped because of [skipSystemFontText]. */
+    internal var usedSystemFontText: Boolean = false
+        private set
 
     private val clipStack = ArrayDeque<ClipFrame>()
     /** Count of open transparency groups, for matching beginGroup/endGroup pairs. */
@@ -215,6 +228,10 @@ public class ComposeCanvas(
     ) {
         val text = glyphs.joinToString("") { it.text }
         if (text.isEmpty()) return
+        if (skipSystemFontText) {
+            usedSystemFontText = true
+            return
+        }
 
         val sx = sqrt(textMatrix.a * textMatrix.a + textMatrix.b * textMatrix.b)
         val sy = sqrt(textMatrix.c * textMatrix.c + textMatrix.d * textMatrix.d)
@@ -240,14 +257,15 @@ public class ComposeCanvas(
             fontStyle = fontSpec.toComposeStyle(),
         )
         // Compose's skiko text stack keeps a process-global style cache that is
-        // not thread-safe. The global raster mutex serializes KitePDF's own
-        // threads, but the HOST app's UI thread lays out its own text through
-        // the same cache at any moment, and that race surfaces here as a
-        // ConcurrentModificationException. Losing one text run to an abort of
-        // the whole process is a terrible trade, so retry a few times (the
-        // window is a microsecond-scale map purge) and, if the cache is truly
-        // hot, skip this run: one missing fallback-font run on one page beats
-        // a dead app.
+        // not thread-safe. The library's own off-main path never reaches this
+        // point (skipSystemFontText probes on the pool, the real render runs on
+        // Main), but the public synchronous rasterize() can still be called from
+        // an arbitrary app thread while the host UI lays out its own text, and
+        // that race surfaces here as a ConcurrentModificationException. Losing
+        // one text run to an abort of the whole process is a terrible trade, so
+        // retry a few times (the window is a microsecond-scale map purge) and,
+        // if the cache is truly hot, skip this run: one missing fallback-font
+        // run on one page beats a dead app.
         var measured: androidx.compose.ui.text.TextLayoutResult? = null
         var attempt = 0
         while (measured == null) {

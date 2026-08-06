@@ -272,6 +272,9 @@ val imageJpeg = PdfImage.jpeg(jpegBytes, width = 800, height = 600)
 
 RGBA images automatically separate the alpha channel into a PDF `/SMask` for transparency. If all pixels are fully opaque, the mask is omitted.
 
+!!! warning "Array ownership"
+    `rgb`, `gray`, `jpeg` and `jpx` keep a reference to your array without copying, and only read it when `build()` serializes the document. Do not modify or reuse that array until `build()` returns. If you decode frames into one reusable scratch buffer, every page would show the last frame. `rgba` converts into fresh arrays, so it has no such constraint.
+
 ### Drawing images
 
 Only available inside `page { }` blocks:

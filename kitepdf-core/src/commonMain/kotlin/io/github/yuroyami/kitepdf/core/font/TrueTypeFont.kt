@@ -1,6 +1,8 @@
 package io.github.yuroyami.kitepdf.core.font
 
+import io.github.yuroyami.kitepdf.core.KiteLock
 import io.github.yuroyami.kitepdf.core.render.KitePath
+import io.github.yuroyami.kitepdf.core.withLock
 import kotlin.math.absoluteValue
 
 /**
@@ -35,6 +37,16 @@ public class TrueTypeFont private constructor(
 
     private val cache = HashMap<Int, GlyphOutline?>()
     private val pathCache = HashMap<Int, KitePath?>()
+
+    /**
+     * Guards [cache] and [pathCache]. One face can be shared by every
+     * document derived from a single parse (EPUB `withSettings` reuses the
+     * font registry), so two concurrent layouts memoize into the same maps.
+     * Held only across the map operations; glyph parsing runs outside it
+     * (parseGlyph uses a per-call cursor and is reentrant), so a lost race
+     * costs one duplicate parse of an identical value.
+     */
+    private val glyphLock = KiteLock()
 
     /** Convert a unicode codepoint to a glyph index, or 0 (.notdef) if unmapped. */
     public fun glyphIdForCodePoint(codePoint: Int): Int = cmap.glyphIdFor(codePoint)
@@ -117,10 +129,16 @@ public class TrueTypeFont private constructor(
 
     /** Get the outline for [glyphId], or null if the glyph slot is empty (zero-length). */
     public fun outline(glyphId: Int): GlyphOutline? {
-        if (cache.containsKey(glyphId)) return cache[glyphId]
+        glyphLock.withLock { if (cache.containsKey(glyphId)) return cache[glyphId] }
         val parsed = parseGlyph(glyphId, depth = 0, active = HashSet())
-        cache[glyphId] = parsed
-        return parsed
+        return glyphLock.withLock {
+            if (cache.containsKey(glyphId)) {
+                cache[glyphId]
+            } else {
+                cache[glyphId] = parsed
+                parsed
+            }
+        }
     }
 
     /** Maximum composite-glyph nesting depth before we abort (malformed-font guard). */
@@ -131,10 +149,16 @@ public class TrueTypeFont private constructor(
      * is built once per glyph, not on every draw.
      */
     public fun outlinePath(glyphId: Int): KitePath? {
-        if (pathCache.containsKey(glyphId)) return pathCache[glyphId]
+        glyphLock.withLock { if (pathCache.containsKey(glyphId)) return pathCache[glyphId] }
         val p = outline(glyphId)?.toPdfPath()
-        pathCache[glyphId] = p
-        return p
+        return glyphLock.withLock {
+            if (pathCache.containsKey(glyphId)) {
+                pathCache[glyphId]
+            } else {
+                pathCache[glyphId] = p
+                p
+            }
+        }
     }
 
     private fun parseGlyph(glyphId: Int, depth: Int, active: HashSet<Int>): GlyphOutline? {
@@ -145,24 +169,30 @@ public class TrueTypeFont private constructor(
         if (end <= start) return null   // empty glyph (space, .notdef in many fonts)
 
         val glyfTable = tables["glyf"] ?: return null
-        reader.seek(glyfTable.offset + start)
-        val numberOfContours = reader.s16()
-        val xMin = reader.s16()
-        val yMin = reader.s16()
-        val xMax = reader.s16()
-        val yMax = reader.s16()
+        // Per-call cursor over the shared bytes: seeking the shared reader made
+        // glyph parsing non-reentrant, so two threads decoding outlines on the
+        // same font clobbered each other's position (same fix as the cmap
+        // path in TtfCMap). Composite recursion allocates its own cursor per
+        // child, which also removes the old save/restore position dance.
+        val r = TtfReader(reader.bytes)
+        r.seek(glyfTable.offset + start)
+        val numberOfContours = r.s16()
+        val xMin = r.s16()
+        val yMin = r.s16()
+        val xMax = r.s16()
+        val yMax = r.s16()
         val bbox = GlyphBbox(xMin, yMin, xMax, yMax)
 
         return if (numberOfContours >= 0) {
-            parseSimpleGlyph(numberOfContours, bbox)
+            parseSimpleGlyph(r, numberOfContours, bbox)
         } else {
-            parseCompositeGlyph(glyphId, bbox, depth, active)
+            parseCompositeGlyph(r, glyphId, bbox, depth, active)
         }
     }
 
     /* ─── Simple glyph (most glyphs) ─────────────────────────────────────── */
 
-    private fun parseSimpleGlyph(numContours: Int, bbox: GlyphBbox): GlyphOutline {
+    private fun parseSimpleGlyph(reader: TtfReader, numContours: Int, bbox: GlyphBbox): GlyphOutline {
         if (numContours == 0) return GlyphOutline(emptyList(), bbox)
 
         // endPtsOfContours: numContours entries, last one + 1 = total point count.
@@ -193,14 +223,14 @@ public class TrueTypeFont private constructor(
         var x = 0
         for (k in 0 until numPoints) {
             val flag = flags[k]
-            x += readCoordinate(flag, FLAG_X_SHORT, FLAG_X_SAME_OR_POS)
+            x += readCoordinate(reader, flag, FLAG_X_SHORT, FLAG_X_SAME_OR_POS)
             xs[k] = x
         }
         val ys = IntArray(numPoints)
         var y = 0
         for (k in 0 until numPoints) {
             val flag = flags[k]
-            y += readCoordinate(flag, FLAG_Y_SHORT, FLAG_Y_SAME_OR_POS)
+            y += readCoordinate(reader, flag, FLAG_Y_SHORT, FLAG_Y_SAME_OR_POS)
             ys[k] = y
         }
 
@@ -229,6 +259,7 @@ public class TrueTypeFont private constructor(
      * the embedded 2×3 transform.
      */
     private fun parseCompositeGlyph(
+        reader: TtfReader,
         glyphId: Int,
         bbox: GlyphBbox,
         depth: Int,
@@ -259,25 +290,22 @@ public class TrueTypeFont private constructor(
                 // Read scale matrix.
                 val (sx, sy01, sy10, sy) = when {
                     flags and CG_WE_HAVE_A_SCALE != 0 -> {
-                        val s = readF2Dot14()
+                        val s = readF2Dot14(reader)
                         arrayOf(s, 0.0, 0.0, s)
                     }
                     flags and CG_WE_HAVE_X_AND_Y_SCALE != 0 -> {
-                        val xS = readF2Dot14(); val yS = readF2Dot14()
+                        val xS = readF2Dot14(reader); val yS = readF2Dot14(reader)
                         arrayOf(xS, 0.0, 0.0, yS)
                     }
                     flags and CG_WE_HAVE_TWO_BY_TWO != 0 -> {
-                        val a = readF2Dot14(); val b = readF2Dot14()
-                        val c = readF2Dot14(); val d = readF2Dot14()
+                        val a = readF2Dot14(reader); val b = readF2Dot14(reader)
+                        val c = readF2Dot14(reader); val d = readF2Dot14(reader)
                         arrayOf(a, b, c, d)
                     }
                     else -> arrayOf(1.0, 0.0, 0.0, 1.0)
                 }
 
-                // Save reader position; parseGlyph() will jump around in the file.
-                val savedPos = reader.pos()
                 val child = parseGlyph(childGlyphId, depth + 1, active)
-                reader.seek(savedPos)
 
                 child?.let { c ->
                     // Transform the child's points through the 2×2 scale first;
@@ -344,7 +372,7 @@ public class TrueTypeFont private constructor(
         return null
     }
 
-    private fun readF2Dot14(): Double {
+    private fun readF2Dot14(reader: TtfReader): Double {
         // 16-bit fixed-point 2.14: high 2 bits integer, low 14 bits fraction.
         val raw = reader.s16()
         return raw / 16384.0
@@ -356,7 +384,7 @@ public class TrueTypeFont private constructor(
      *   shortFlag unset  → if sameOrPos set: same as previous (delta = 0)
      *                      else: 2-byte signed delta
      */
-    private fun readCoordinate(flag: Int, shortFlag: Int, sameOrPos: Int): Int {
+    private fun readCoordinate(reader: TtfReader, flag: Int, shortFlag: Int, sameOrPos: Int): Int {
         return if (flag and shortFlag != 0) {
             val v = reader.u8()
             if (flag and sameOrPos != 0) v else -v

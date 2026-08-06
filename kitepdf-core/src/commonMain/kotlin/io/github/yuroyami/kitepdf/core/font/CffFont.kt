@@ -1,6 +1,7 @@
 package io.github.yuroyami.kitepdf.core.font
 
 import io.github.yuroyami.kitepdf.core.PdfFormatException
+import io.github.yuroyami.kitepdf.core.withLock
 
 /**
  * CFF (Compact Font Format, Adobe Tech Note 5176) parser.
@@ -54,13 +55,21 @@ public class CffFont private constructor(
     private val outlineCache = HashMap<Int, io.github.yuroyami.kitepdf.core.render.KitePath?>()
 
     /**
+     * Guards [outlineCache]; the face can be shared across documents (EPUB
+     * `withSettings`), so concurrent layouts memoize into the same map. Held
+     * only across the map operations; the interpreter runs outside it on a
+     * fresh per-call instance.
+     */
+    private val glyphLock = io.github.yuroyami.kitepdf.core.KiteLock()
+
+    /**
      * Returns the outline of [glyphId], or null if it's empty / unparseable.
      * Decoded outlines are cached: a glyph drawn N times runs the Type 2
      * charstring interpreter once, not N times.
      */
     public fun outline(glyphId: Int): io.github.yuroyami.kitepdf.core.render.KitePath? {
         if (glyphId < 0 || glyphId >= charStrings.size) return null
-        if (outlineCache.containsKey(glyphId)) return outlineCache[glyphId]
+        glyphLock.withLock { if (outlineCache.containsKey(glyphId)) return outlineCache[glyphId] }
         val cs = charStrings[glyphId]
         val path = if (cs.isEmpty()) null else {
             val fdIndex = if (fdSelect.isNotEmpty()) fdSelect[glyphId] else 0
@@ -69,8 +78,14 @@ public class CffFont private constructor(
                 CharstringInterpreter(cs, locals, globalSubrs, defaultWidthX, nominalWidthX).interpret()
             }.getOrNull()
         }
-        outlineCache[glyphId] = path
-        return path
+        return glyphLock.withLock {
+            if (outlineCache.containsKey(glyphId)) {
+                outlineCache[glyphId]
+            } else {
+                outlineCache[glyphId] = path
+                path
+            }
+        }
     }
 
     /** Glyph id for a PostScript glyph name; -1 if unknown. */
