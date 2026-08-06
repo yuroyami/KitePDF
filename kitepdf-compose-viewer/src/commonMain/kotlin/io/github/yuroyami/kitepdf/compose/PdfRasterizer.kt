@@ -56,6 +56,17 @@ public class PdfRasterizer(
          * stays free, which is the point of the off-main path.
          */
         private val renderMutex = kotlinx.coroutines.sync.Mutex()
+
+        /**
+         * True when this platform provides a usable [kotlinx.coroutines.Dispatchers.Main].
+         * A headless JVM without a Swing/JavaFX main loop has none; there the
+         * system-font re-render runs on the calling context instead.
+         */
+        private val mainDispatcherAvailable: Boolean by lazy {
+            runCatching {
+                kotlinx.coroutines.Dispatchers.Main.isDispatchNeeded(kotlin.coroutines.EmptyCoroutineContext)
+            }.isSuccess
+        }
     }
 
     /**
@@ -63,6 +74,13 @@ public class PdfRasterizer(
      * runs to completion once started (the synchronous renderer has no
      * cancellation points; the operation budget bounds the worst case), so
      * cancellation takes effect between pages.
+     *
+     * Pages that fall back to system-font text (EPUB body text, PDFs without
+     * embedded outlines) are re-rendered on [Dispatchers.Main]: skiko's text
+     * stack shares process-global state with the host UI thread, and no lock
+     * of ours can exclude that thread, so the only safe place to measure or
+     * draw through it is the main thread itself. Pages whose glyphs all have
+     * embedded outlines (the common PDF case) stay entirely on the pool.
      */
     public suspend fun rasterizeOffMain(
         page: KitePage,
@@ -71,11 +89,44 @@ public class PdfRasterizer(
         background: Color = Color.White,
         hairlineWidthPx: Float = 1f,
         theme: ReaderTheme? = null,
-    ): ImageBitmap = kotlinx.coroutines.withContext(kitepdfRasterDispatcher()) {
-        renderMutex.withLock {
-            rasterize(page, widthPx, heightPx, background, hairlineWidthPx, theme)
+    ): ImageBitmap = renderMutex.withLock {
+        rasterizeOffMainLocked(page, widthPx, heightPx, background, hairlineWidthPx, theme)
+    }
+
+    /**
+     * The off-main render body. Must be called with [renderMutex] held.
+     * Probes on the raster pool with system-font text skipped; if the page
+     * needed such text, discards the probe and re-renders fully on Main so
+     * the skiko text stack is only touched from the host UI thread.
+     */
+    private suspend fun rasterizeOffMainLocked(
+        page: KitePage,
+        widthPx: Int,
+        heightPx: Int,
+        background: Color,
+        hairlineWidthPx: Float,
+        theme: ReaderTheme?,
+    ): ImageBitmap {
+        val (probe, usedSystemFont) = kotlinx.coroutines.withContext(kitepdfRasterDispatcher()) {
+            rasterizeInternal(page, widthPx, heightPx, background, hairlineWidthPx, theme, skipSystemFontText = true)
+        }
+        if (!usedSystemFont) return probe
+        return onMainOrCaller {
+            rasterizeInternal(page, widthPx, heightPx, background, hairlineWidthPx, theme, skipSystemFontText = false).first
         }
     }
+
+    /**
+     * Runs [block] on [Dispatchers.Main] when a Main dispatcher exists on this
+     * platform, else on the calling context (headless JVM without a Swing/JavaFX
+     * main loop, where the pre-fix behaviour is also the only option).
+     */
+    private suspend fun <T> onMainOrCaller(block: () -> T): T =
+        if (mainDispatcherAvailable) {
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) { block() }
+        } else {
+            block()
+        }
 
     /**
      * [rasterizeOffMain] through [cache] (T-15): a hit returns the cached
@@ -92,27 +143,59 @@ public class PdfRasterizer(
         background: Color,
         hairlineWidthPx: Float,
         theme: ReaderTheme?,
-    ): Pair<ImageBitmap, Boolean> = kotlinx.coroutines.withContext(kitepdfRasterDispatcher()) {
-        renderMutex.withLock {
-            if (cache == null) {
-                rasterize(page, widthPx, heightPx, background, hairlineWidthPx, theme) to true
+    ): Pair<ImageBitmap, Boolean> = renderMutex.withLock {
+        if (cache == null) {
+            rasterizeOffMainLocked(page, widthPx, heightPx, background, hairlineWidthPx, theme) to true
+        } else {
+            val key = PageBitmapCache.Key(
+                pageIdentity = page,
+                w = widthPx,
+                h = heightPx,
+                bgArgb = background.toArgb(),
+                themeId = theme?.hashCode() ?: 0,
+                hairlineBits = hairlineWidthPx.toRawBits(),
+            )
+            val hit = cache.get(key)
+            if (hit != null) {
+                hit to false
             } else {
-                var fresh = false
-                val key = PageBitmapCache.Key(
-                    pageIdentity = page,
-                    w = widthPx,
-                    h = heightPx,
-                    bgArgb = background.toArgb(),
-                    themeId = theme?.hashCode() ?: 0,
-                    hairlineBits = hairlineWidthPx.toRawBits(),
-                )
-                val bmp = cache.getOrPut(key) {
-                    fresh = true
-                    rasterize(page, widthPx, heightPx, background, hairlineWidthPx, theme)
-                }
-                bmp to fresh
+                val bmp = rasterizeOffMainLocked(page, widthPx, heightPx, background, hairlineWidthPx, theme)
+                cache.put(key, bmp)
+                bmp to true
             }
         }
+    }
+
+    /**
+     * [rasterizeCachedOffMain] behind the failure guard every composable call
+     * site must use: produceState installs no exception handler, so an escaped
+     * throwable (a torn page, an OOM bitmap) walks straight to the platform's
+     * unhandled hook and aborts the HOST APP. One retry covers transient
+     * conditions; a page that fails twice reports null so its slot keeps the
+     * placeholder. CancellationException is rethrown so cancellation stays
+     * prompt. Composables must route through this instead of calling the
+     * unguarded methods, so a new call site cannot regress the guard.
+     */
+    internal suspend fun rasterizeCachedOrNull(
+        cache: PageBitmapCache?,
+        page: KitePage,
+        widthPx: Int,
+        heightPx: Int,
+        background: Color,
+        hairlineWidthPx: Float,
+        theme: ReaderTheme?,
+        pageIndex: Int,
+    ): Pair<ImageBitmap, Boolean>? {
+        for (attempt in 0 until 2) {
+            try {
+                return rasterizeCachedOffMain(cache, page, widthPx, heightPx, background, hairlineWidthPx, theme)
+            } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                throw cancelled
+            } catch (failure: Throwable) {
+                println("KitePDF: page $pageIndex failed to rasterize (attempt ${attempt + 1}): $failure")
+            }
+        }
+        return null
     }
 
     /**
@@ -130,7 +213,23 @@ public class PdfRasterizer(
         background: Color = Color.White,
         hairlineWidthPx: Float = 1f,
         theme: ReaderTheme? = null,
-    ): ImageBitmap {
+    ): ImageBitmap =
+        rasterizeInternal(page, widthPx, heightPx, background, hairlineWidthPx, theme, skipSystemFontText = false).first
+
+    /**
+     * [rasterize] plus the system-font probe flag: second value is true when
+     * the page hit the system-font fallback while [skipSystemFontText] was set
+     * (those runs were left undrawn and the bitmap is incomplete).
+     */
+    private fun rasterizeInternal(
+        page: KitePage,
+        widthPx: Int,
+        heightPx: Int,
+        background: Color,
+        hairlineWidthPx: Float,
+        theme: ReaderTheme?,
+        skipSystemFontText: Boolean,
+    ): Pair<ImageBitmap, Boolean> {
         val w = widthPx.coerceAtLeast(1)
         val h = heightPx.coerceAtLeast(1)
         // Fit scale from the display box: displayToDeviceBase() already maps
@@ -142,14 +241,16 @@ public class PdfRasterizer(
         // The theme owns the paper colour when set; else use `background`.
         val bg = theme?.background?.let { Color(it.r.toFloat(), it.g.toFloat(), it.b.toFloat()) } ?: background
         val bitmap = ImageBitmap(w, h)
+        var usedSystemFont = false
         CanvasDrawScope().draw(density, layoutDirection, Canvas(bitmap), Size(w.toFloat(), h.toFloat())) {
             drawRect(bg, size = size)
             // concat(b) applies b FIRST, so displayToDeviceBase() runs before the scale.
             val deviceCtm = PdfMatrix.scaling(s, s).concat(page.displayToDeviceBase())
-            val base = ComposeCanvas(this, textMeasurer, hairlineWidthPx)
+            val base = ComposeCanvas(this, textMeasurer, hairlineWidthPx, skipSystemFontText)
             page.renderTo(theme?.wrap(base) ?: base, deviceCtm)
+            usedSystemFont = base.usedSystemFontText
         }
-        return bitmap
+        return bitmap to usedSystemFont
     }
 }
 

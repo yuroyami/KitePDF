@@ -17,6 +17,14 @@ package io.github.yuroyami.kitepdf.writer
  * Instances are compared by identity: pass the same `PdfImage` to multiple
  * pages and it's embedded once and shared across them.
  *
+ * Array ownership: [rgb], [gray], [jpeg] and [jpx] keep a reference to the
+ * caller's array without copying (a copy would double peak memory for large
+ * images), and the bytes are only read when [PdfBuilder.build] serializes
+ * the document. Do not modify or reuse the array until `build()` returns;
+ * a caller that decodes frames into one scratch buffer would otherwise
+ * embed the last frame on every page. [rgba] converts into fresh arrays as
+ * a side effect of the SMask split, so it has no such constraint.
+ *
  * Pixels are laid out top row first, left to right, the natural raster order.
  * The PDF image-space flip is handled by [ContentStreamBuilder.drawImage].
  */

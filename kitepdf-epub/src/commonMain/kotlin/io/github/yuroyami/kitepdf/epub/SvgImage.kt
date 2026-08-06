@@ -42,8 +42,7 @@ internal class SvgImage private constructor(
             // viewBox coords -> viewport: translate(-min) then scale(size/vb).
             compose(ctm, compose(Matrix.scaling(width / vb[2], height / vb[3]), Matrix.translation(-vb[0], -vb[1])))
         } else ctm
-        canvas0 = canvas
-        try { walk(root, base, Paint()) } finally { canvas0 = null }
+        walk(root, base, Paint(), canvas)
     }
 
     private class Paint(
@@ -55,33 +54,33 @@ internal class SvgImage private constructor(
         val current: RgbColor = RgbColor.BLACK,
     )
 
-    private fun walk(el: HtmlNode.Element, parentCtm: Matrix, parent: Paint) {
+    // The canvas travels as a parameter, exactly like ctm and Paint: a field
+    // here made render() non-reentrant, so two concurrent renders of the same
+    // SvgImage hijacked each other's destination and silently dropped shapes.
+    private fun walk(el: HtmlNode.Element, parentCtm: Matrix, parent: Paint, canvas: KiteCanvas) {
         val ctm = el.attrs["transform"]?.let { compose(parentCtm, parseTransform(it)) } ?: parentCtm
         val paint = resolvePaint(el.attrs, parent)
         when (el.tag.lowercase()) {
-            "svg", "g", "a", "switch" -> for (c in el.children) if (c is HtmlNode.Element) walk(c, ctm, paint)
-            "path" -> el.attrs["d"]?.let { paintShape(parsePath(it), ctm, paint) }
-            "rect" -> paintShape(rect(el.attrs), ctm, paint)
-            "circle" -> paintShape(ellipse(num(el, "cx"), num(el, "cy"), num(el, "r"), num(el, "r")), ctm, paint)
-            "ellipse" -> paintShape(ellipse(num(el, "cx"), num(el, "cy"), num(el, "rx"), num(el, "ry")), ctm, paint)
+            "svg", "g", "a", "switch" -> for (c in el.children) if (c is HtmlNode.Element) walk(c, ctm, paint, canvas)
+            "path" -> el.attrs["d"]?.let { paintShape(parsePath(it), ctm, paint, canvas) }
+            "rect" -> paintShape(rect(el.attrs), ctm, paint, canvas)
+            "circle" -> paintShape(ellipse(num(el, "cx"), num(el, "cy"), num(el, "r"), num(el, "r")), ctm, paint, canvas)
+            "ellipse" -> paintShape(ellipse(num(el, "cx"), num(el, "cy"), num(el, "rx"), num(el, "ry")), ctm, paint, canvas)
             "line" -> paintShape(
                 KitePath.Builder().apply { moveTo(num(el, "x1"), num(el, "y1")); lineTo(num(el, "x2"), num(el, "y2")) }.build(),
-                ctm, paint, forceStroke = true,
+                ctm, paint, canvas, forceStroke = true,
             )
-            "polyline" -> el.attrs["points"]?.let { paintShape(polyline(it, close = false), ctm, paint) }
-            "polygon" -> el.attrs["points"]?.let { paintShape(polyline(it, close = true), ctm, paint) }
+            "polyline" -> el.attrs["points"]?.let { paintShape(polyline(it, close = false), ctm, paint, canvas) }
+            "polygon" -> el.attrs["points"]?.let { paintShape(polyline(it, close = true), ctm, paint, canvas) }
         }
     }
 
-    private fun paintShape(path: KitePath, ctm: Matrix, paint: Paint, forceStroke: Boolean = false) {
+    private fun paintShape(path: KitePath, ctm: Matrix, paint: Paint, canvas: KiteCanvas, forceStroke: Boolean = false) {
         if (path.segments.isEmpty()) return
-        paint.fill?.let { if (!forceStroke) canvas0?.let { c -> c.fillPath(path, ctm, it, paint.evenOdd, paint.opacity, BlendMode.Normal) } }
+        paint.fill?.let { if (!forceStroke) canvas.fillPath(path, ctm, it, paint.evenOdd, paint.opacity, BlendMode.Normal) }
         val sc = paint.stroke ?: if (forceStroke) RgbColor.BLACK else null
-        sc?.let { canvas0?.strokePath(path, ctm, it, paint.strokeW, paint.opacity, BlendMode.Normal) }
+        sc?.let { canvas.strokePath(path, ctm, it, paint.strokeW, paint.opacity, BlendMode.Normal) }
     }
-
-    // paintShape needs the canvas; thread it via a field set for the duration of render().
-    private var canvas0: KiteCanvas? = null
 
     private fun resolvePaint(a: Map<String, String>, p: Paint): Paint {
         val current = a["color"]?.let { CssValues.color(it) } ?: p.current

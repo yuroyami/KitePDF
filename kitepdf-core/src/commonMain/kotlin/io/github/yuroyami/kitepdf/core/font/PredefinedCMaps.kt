@@ -274,9 +274,21 @@ internal class TableCMapReader private constructor(
     }
 
     companion object {
-        private val cache = HashMap<String, TableCMapReader?>()
+        // One SYNCHRONIZED lazy per bundled CMap name, keyed by the fixed
+        // PredefinedCMapData key set and never mutated after construction.
+        // Composite-font construction reaches this from concurrent page
+        // renders and from the main-thread text/selection path; the previous
+        // getOrPut memo on a plain HashMap raced them, and its nullable value
+        // type made it re-decode and re-put on EVERY lookup of an unbundled
+        // name (all Uni* CMaps). Unbundled names now fall through to null
+        // without touching any state.
+        private val readers: Map<String, Lazy<TableCMapReader?>> by lazy {
+            PredefinedCMapData.entries.keys.associateWith { name -> lazy { build(name) } }
+        }
 
-        fun forName(name: String): TableCMapReader? = cache.getOrPut(name) {
+        fun forName(name: String): TableCMapReader? = readers[name]?.value
+
+        private fun build(name: String): TableCMapReader? {
             val chain = ArrayList<Decoded>()
             var cur: String? = name
             var hops = 0
@@ -285,7 +297,7 @@ internal class TableCMapReader private constructor(
                 chain.add(decode(entry.blob))
                 cur = entry.usecmap
             }
-            if (chain.isEmpty()) null else TableCMapReader(chain)
+            return if (chain.isEmpty()) null else TableCMapReader(chain)
         }
 
         private fun decode(b64: String): Decoded {

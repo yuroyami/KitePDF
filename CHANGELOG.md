@@ -5,6 +5,59 @@ All notable changes to KitePDF are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0] - 2026-08-06
+
+Thread-safety hardening across the engine, closing every confirmed finding of
+the 2026-08-06 concurrency audit. No public API changes; two behavioural
+changes are called out below.
+
+### Fixed
+
+- The 2026-08-05 iOS text-cache crash is now fixed at the root instead of
+  narrowed: skiko's text stack shares process-global state with the host UI
+  thread, which no library lock can exclude. The off-main raster now probes a
+  page on the pool with system-font text skipped and, only when that fallback
+  engages (EPUB body text, PDFs without embedded outlines), re-renders the
+  page on the main dispatcher. Pages whose glyphs all carry embedded outlines
+  keep rendering entirely off-main.
+- `Standard14Widths` and the predefined-CMap table cache are no longer
+  mutable process-global maps: both are immutable maps of per-entry lazies
+  built at init, so concurrent renders and main-thread text extraction can
+  no longer corrupt them. This also fixes a waste bug where every lookup of
+  an unbundled `Uni*` CMap name re-decoded and re-stored a null.
+- `PdfDocument`'s cycle guard was rewritten: it now tracks every thread
+  parsing an object (not just the first), covers the object-stream decode
+  path (a crafted `/ObjStm` whose `/Length` pointed back into itself
+  recursed without bound, an uncatchable crash on iOS), releases its claim
+  on every exit path (an out-of-bounds xref offset used to leak it), and
+  caps resolution depth as a backstop. New `ResolutionGuardTest` covers
+  both crafted-file cases on all targets.
+- `SvgImage.render` and TrueType glyph parsing are reentrant: the
+  destination canvas and the file cursor now travel as parameters instead
+  of instance fields, so concurrent renders of the same page or font no
+  longer hijack each other's state.
+- The glyph outline memo caches on `TrueTypeFont` and `CffFont` are guarded
+  by a per-face lock (faces are shared across every `EpubDocument` derived
+  from one parse via `withSettings`).
+- `KiteLock`'s native spinlock yields after a bounded spin instead of
+  busy-waiting forever, so a high-QoS waiter can no longer starve a
+  lower-QoS lock holder on Darwin.
+- `PdfThumbnailStrip` rasterization is routed through the same guarded
+  helper as the main view: a page that fails to rasterize keeps its
+  placeholder instead of aborting the host app.
+- `KiteWarnings.sink` is `@Volatile`, so installing a sink mid-render is
+  safely published to worker threads.
+- Switching `PdfView` layouts (Continuous to Paged/Spread and back) now
+  keeps the reading position: the incoming layout seeds from the live
+  adapter position instead of a value the outgoing layout only publishes
+  after composition, which lagged one switch behind.
+
+### Changed
+
+- `PdfImage.rgb`/`gray`/`jpeg`/`jpx` document their array ownership: the
+  caller's array is referenced, not copied, and must stay untouched until
+  `build()` returns. `rgba` is unaffected.
+
 ## [0.5.1] - 2026-08-01
 
 Selection you can feel and see, and margin markers that pick a side. Published

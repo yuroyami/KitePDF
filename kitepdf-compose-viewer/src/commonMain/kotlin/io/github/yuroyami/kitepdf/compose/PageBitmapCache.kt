@@ -38,12 +38,23 @@ internal class PageBitmapCache(private val maxBytes: Long) {
      */
     fun getOrPut(key: Key, produce: () -> ImageBitmap): ImageBitmap {
         if (maxBytes <= 0L) return produce()
-        entries.remove(key)?.let { hit ->
-            entries[key] = hit // re-insert: most recently used
-            return hit
-        }
-        val fresh = produce()
-        entries[key] = fresh
+        get(key)?.let { return it }
+        return produce().also { put(key, it) }
+    }
+
+    /** The cached bitmap for [key] refreshed as most recently used, or null. */
+    fun get(key: Key): ImageBitmap? {
+        if (maxBytes <= 0L) return null
+        val hit = entries.remove(key) ?: return null
+        entries[key] = hit // re-insert: most recently used
+        return hit
+    }
+
+    /** Inserts [bitmap] under [key] and evicts eldest entries over budget. */
+    fun put(key: Key, bitmap: ImageBitmap) {
+        if (maxBytes <= 0L) return
+        if (entries.remove(key) != null) trackedBytes -= bytesOf(key)
+        entries[key] = bitmap
         trackedBytes += bytesOf(key)
         val it = entries.keys.iterator()
         while (trackedBytes > maxBytes && it.hasNext()) {
@@ -52,7 +63,6 @@ internal class PageBitmapCache(private val maxBytes: Long) {
             it.remove()
             trackedBytes -= bytesOf(eldest)
         }
-        return fresh
     }
 
     /** True when [key] is cached (test/diagnostic aid; does not touch recency). */

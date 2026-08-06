@@ -17,6 +17,17 @@ import kotlin.test.assertTrue
 
 class MuPdfOracleTest {
 
+    private companion object {
+        /**
+         * Budget for the fake-mutool scripts. They finish in milliseconds,
+         * but a loaded host (full suite plus parallel compilation) can take
+         * over a second just to fork /bin/sh and drain its pipes, which made
+         * a 1s budget flaky. Only hung_process_is_terminated_by_timeout wants
+         * a short budget, and it keeps its own.
+         */
+        private const val SCRIPT_TIMEOUT_MS = 10_000L
+    }
+
     @Before
     fun require_posix_shell() {
         assumeTrue("fake mutool tests require /bin/sh", File("/bin/sh").canExecute())
@@ -32,7 +43,7 @@ class MuPdfOracleTest {
             "cp ${shQuote(expected.absolutePath)} \"\$7\"\necho 'fake mutool ok'",
         )
 
-        val result = MuPdfOracle.renderWith(tool, fakePdf(dir), page = 1, dpi = 96, timeoutMillis = 1_000)
+        val result = MuPdfOracle.renderWith(tool, fakePdf(dir), page = 1, dpi = 96, timeoutMillis = SCRIPT_TIMEOUT_MS)
 
         val success = assertIs<MuPdfOracle.RenderResult.Success>(result)
         assertEquals(3, success.image.width)
@@ -47,7 +58,7 @@ class MuPdfOracleTest {
             """[ "$1" = "show" ] && { echo 'repair warning' >&2; printf '7\n'; }""",
         )
 
-        val result = MuPdfOracle.pageCountWith(tool, fakePdf(dir), timeoutMillis = 1_000)
+        val result = MuPdfOracle.pageCountWith(tool, fakePdf(dir), timeoutMillis = SCRIPT_TIMEOUT_MS)
 
         val success = assertIs<MuPdfOracle.PageCountResult.Success>(result)
         assertEquals(7, success.count)
@@ -61,7 +72,7 @@ class MuPdfOracleTest {
             "echo 'decoder exploded' >&2\nexit 23",
         )
 
-        val result = MuPdfOracle.renderWith(tool, fakePdf(dir), page = 1, dpi = 96, timeoutMillis = 1_000)
+        val result = MuPdfOracle.renderWith(tool, fakePdf(dir), page = 1, dpi = 96, timeoutMillis = SCRIPT_TIMEOUT_MS)
 
         val failure = assertIs<MuPdfOracle.RenderResult.Failure>(result)
         assertEquals(23, failure.exitCode)
@@ -74,7 +85,7 @@ class MuPdfOracleTest {
     fun zero_exit_without_output_is_reported() = withTempDir { dir ->
         val tool = executableScript(dir, "empty-mutool", "echo 'rendered nothing'")
 
-        val result = MuPdfOracle.renderWith(tool, fakePdf(dir), page = 1, dpi = 96, timeoutMillis = 1_000)
+        val result = MuPdfOracle.renderWith(tool, fakePdf(dir), page = 1, dpi = 96, timeoutMillis = SCRIPT_TIMEOUT_MS)
 
         val failure = assertIs<MuPdfOracle.RenderResult.Failure>(result)
         assertEquals(0, failure.exitCode)
@@ -90,7 +101,7 @@ class MuPdfOracleTest {
             "printf 'not a png' > \"\$7\"",
         )
 
-        val result = MuPdfOracle.renderWith(tool, fakePdf(dir), page = 1, dpi = 96, timeoutMillis = 1_000)
+        val result = MuPdfOracle.renderWith(tool, fakePdf(dir), page = 1, dpi = 96, timeoutMillis = SCRIPT_TIMEOUT_MS)
 
         val failure = assertIs<MuPdfOracle.RenderResult.Failure>(result)
         assertEquals(0, failure.exitCode)

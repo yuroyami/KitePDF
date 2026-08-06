@@ -408,34 +408,68 @@ public class PdfDocument private constructor(
     }
 
     /**
-     * Cycle guard: objectNumber -> owning thread id. A cycle is when the SAME
-     * thread re-enters the resolution of an object it is already parsing
-     * (A -> /Length -> A); a DIFFERENT thread resolving the same object
-     * concurrently is legitimate (both parse, the cache reconciles).
+     * Cycle guard: objectNumber -> ids of the threads currently parsing it.
+     * A cycle is when the SAME thread re-enters the resolution of an object
+     * it is already parsing (A -> /Length -> A); a DIFFERENT thread resolving
+     * the same object concurrently is legitimate (both parse, the cache
+     * reconciles). A set per object keeps cycle detection alive for every
+     * concurrent thread; the old single-owner map left any thread that lost
+     * the claim parsing with no guard at all, so a cyclic object could still
+     * recurse that thread to a stack overflow.
      */
-    private val activelyResolving = HashMap<Long, Long>()
+    private val activelyResolving = HashMap<Long, MutableSet<Long>>()
 
-    private fun resolveInPlace(entry: XrefEntry.InUse): PdfObject {
-        // H6: cyclic indirect /Length (A->B->A) would recurse to a StackOverflow
-        // (a hard crash on Kotlin/Native). If THIS thread is already resolving
-        // this object, break the cycle by throwing. The runCatching inside
-        // resolve() then caches null.
+    /** Claims currently held per thread; doubles as that thread's resolution depth. */
+    private val resolutionDepth = HashMap<Long, Int>()
+
+    /**
+     * Runs [block] with [objectNumber] claimed for the calling thread. Throws
+     * [PdfFormatException] when this thread already holds the claim (a true
+     * cycle) or when its resolution chain is absurdly deep (a crafted file can
+     * nest indirections thousands of levels; a stack overflow is an
+     * uncatchable crash on Kotlin/Native). The claim is released on every exit
+     * path, including a throw from the first statement of [block].
+     */
+    private fun <T> withCycleClaim(objectNumber: Long, block: () -> T): T {
         val me = currentThreadId()
-        val claimed = lock.withLock {
-            when (activelyResolving[entry.objectNumber]) {
-                me -> throw PdfFormatException("cyclic object reference ${entry.objectNumber}")
-                null -> {
-                    activelyResolving[entry.objectNumber] = me
-                    true
+        lock.withLock {
+            val owners = activelyResolving.getOrPut(objectNumber) { HashSet() }
+            if (!owners.add(me)) {
+                throw PdfFormatException("cyclic object reference $objectNumber")
+            }
+            val depth = (resolutionDepth[me] ?: 0) + 1
+            if (depth > MAX_RESOLUTION_DEPTH) {
+                owners.remove(me)
+                if (owners.isEmpty()) activelyResolving.remove(objectNumber)
+                throw PdfFormatException(
+                    "object $objectNumber exceeds resolution depth $MAX_RESOLUTION_DEPTH"
+                )
+            }
+            resolutionDepth[me] = depth
+        }
+        try {
+            return block()
+        } finally {
+            lock.withLock {
+                activelyResolving[objectNumber]?.let { owners ->
+                    owners.remove(me)
+                    if (owners.isEmpty()) activelyResolving.remove(objectNumber)
                 }
-                else -> false // another thread mid-parse: we parse too
+                val d = (resolutionDepth[me] ?: 1) - 1
+                if (d <= 0) resolutionDepth.remove(me) else resolutionDepth[me] = d
             }
         }
-        // Per-call reader (T-16): the old shared seek-based reader interleaved
-        // positions across threads and produced garbage parses.
-        val localReader = ByteReader(bytes)
-        localReader.seek(entry.byteOffset)
-        try {
+    }
+
+    private fun resolveInPlace(entry: XrefEntry.InUse): PdfObject =
+        // H6: cyclic indirect /Length (A->B->A) would recurse to a StackOverflow
+        // (a hard crash on Kotlin/Native). withCycleClaim throws on same-thread
+        // re-entry; the runCatching inside resolve() then caches null.
+        withCycleClaim(entry.objectNumber) {
+            // Per-call reader (T-16): the old shared seek-based reader interleaved
+            // positions across threads and produced garbage parses.
+            val localReader = ByteReader(bytes)
+            localReader.seek(entry.byteOffset)
             val parser = Parser(Lexer(localReader), resolver = this)
             val indirect = parser.readIndirectObject()
             // M9: a stale/wrong xref offset can land us on a different object.
@@ -446,11 +480,8 @@ public class PdfDocument private constructor(
                     "xref offset for object ${entry.objectNumber} parsed object ${indirect.number}"
                 )
             }
-            return maybeDecrypt(indirect.number, indirect.generation, indirect.value)
-        } finally {
-            if (claimed) lock.withLock { activelyResolving.remove(entry.objectNumber) }
+            maybeDecrypt(indirect.number, indirect.generation, indirect.value)
         }
-    }
 
     private fun maybeDecrypt(objNum: Long, genNum: Int, value: PdfObject): PdfObject {
         val s = security ?: return value
@@ -461,7 +492,15 @@ public class PdfDocument private constructor(
     private fun resolveFromObjectStream(entry: XrefEntry.Compressed): PdfObject? {
         lock.withLock { objStreamCache[entry.containingObjectStream] }
             ?.let { return it[entry.indexInObjectStream] }
-        val members = decodeObjectStream(entry.containingObjectStream) // outside the lock
+        // Claim the container: the cache above is written only after the
+        // decode returns, so a crafted ObjStm whose /Length resolves to a
+        // member of the same stream re-enters this miss path without bound.
+        // The claim turns that re-entry into a PdfFormatException, which the
+        // parser's /Length salvage swallows (it falls back to the endstream
+        // scan) and resolve()'s runCatching turns into a cached null.
+        val members = withCycleClaim(entry.containingObjectStream) {
+            decodeObjectStream(entry.containingObjectStream) // outside the lock
+        }
         val winner = lock.withLock {
             objStreamCache[entry.containingObjectStream]
                 ?: members.also { objStreamCache[entry.containingObjectStream] = it }
@@ -571,6 +610,14 @@ public class PdfDocument private constructor(
     /* ─── Companion: open() ──────────────────────────────────────────────── */
 
     public companion object {
+
+        /**
+         * Backstop for non-cyclic but absurdly deep reference chains: a
+         * crafted file can nest indirections thousands of levels deep, and a
+         * stack overflow is an uncatchable crash on Kotlin/Native. Real
+         * documents resolve in single-digit depth.
+         */
+        private const val MAX_RESOLUTION_DEPTH = 256
 
         public fun open(
             bytes: ByteArray,

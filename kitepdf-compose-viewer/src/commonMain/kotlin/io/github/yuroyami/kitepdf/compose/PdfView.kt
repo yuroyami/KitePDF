@@ -315,8 +315,13 @@ private fun ContinuousLayout(
     pagePlaceholder: (@Composable (Int) -> Unit)?,
     onTap: ((Offset) -> Unit)?,
 ) {
+    // Seed from currentPage, not pendingPage: this runs during composition,
+    // but the outgoing layout only publishes its farewell position from
+    // onDispose (the apply phase, strictly later), so pendingPage here is
+    // always one layout switch stale. currentPage reads the still-attached
+    // outgoing adapter live and falls back to pendingPage on first composition.
     val listState = rememberLazyListState(
-        initialFirstVisibleItemIndex = state.pendingPage.coerceIn(0, state.pageCount - 1),
+        initialFirstVisibleItemIndex = state.currentPage.coerceIn(0, state.pageCount - 1),
     )
     DisposableEffect(state, listState) {
         val adapter = LazyListScrollAdapter(listState)
@@ -460,8 +465,9 @@ private fun PagedLayout(
     pagePlaceholder: (@Composable (Int) -> Unit)?,
     onTap: ((Offset) -> Unit)?,
 ) {
+    // currentPage, not pendingPage: see ContinuousLayout's seed comment.
     val pagerState = rememberPagerState(
-        initialPage = state.pendingPage.coerceIn(0, state.pageCount - 1),
+        initialPage = state.currentPage.coerceIn(0, state.pageCount - 1),
     ) { state.pageCount }
     DisposableEffect(state, pagerState) {
         val adapter = PagerScrollAdapter(pagerState)
@@ -676,31 +682,15 @@ private fun PdfPageRaster(
         // (TextMeasurer's cache is not thread-safe) but the main thread stays
         // free; the T-15 cache turns scroll-back into a lookup, and neighbour
         // prefetch (PdfLayout.Paged offscreenPages) hides first-render latency.
-        // A rasterization failure must never leave this producer: produceState
-        // has no handler, so an escaped exception (a torn page, a text-cache
-        // race, an OOM bitmap) walks straight to the platform's unhandled hook
-        // and aborts the HOST APP. One retry covers transient races; a page
-        // that fails twice keeps its placeholder, which is a bad page in a
-        // living app instead of a crash report.
+        // rasterizeCachedOrNull carries the mandatory failure guard: an
+        // exception escaping produceState aborts the HOST APP.
         value = if (raster == IntSize.Zero) {
             null
         } else {
-            var result: Pair<ImageBitmap, Boolean>? = null
-            for (attempt in 0 until 2) {
-                result = try {
-                    rasterizer.rasterizeCachedOffMain(
-                        cache, page, raster.width, raster.height,
-                        colors.pageBackground, hairline, colors.theme,
-                    )
-                } catch (cancelled: kotlinx.coroutines.CancellationException) {
-                    throw cancelled
-                } catch (failure: Throwable) {
-                    println("KitePDF: page $pageIndex failed to rasterize (attempt ${attempt + 1}): $failure")
-                    null
-                }
-                if (result != null) break
-            }
-            result
+            rasterizer.rasterizeCachedOrNull(
+                cache, page, raster.width, raster.height,
+                colors.pageBackground, hairline, colors.theme, pageIndex,
+            )
         }
     }
     val bitmap = rastered?.first
@@ -956,8 +946,9 @@ private fun SpreadLayout(
     onTap: ((Offset) -> Unit)?,
 ) {
     val spreadCount = (state.pageCount + 1) / 2
+    // currentPage, not pendingPage: see ContinuousLayout's seed comment.
     val pagerState = rememberPagerState(
-        initialPage = (state.pendingPage / 2).coerceIn(0, spreadCount - 1),
+        initialPage = (state.currentPage / 2).coerceIn(0, spreadCount - 1),
     ) { spreadCount }
     DisposableEffect(state, pagerState) {
         val adapter = SpreadScrollAdapter(pagerState)
