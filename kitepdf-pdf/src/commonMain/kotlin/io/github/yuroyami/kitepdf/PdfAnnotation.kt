@@ -53,6 +53,14 @@ public data class PdfAnnotation(
     val vertices: List<Double>? = null,
     /** `/IC` interior (fill) colour for Square/Circle/Line/Polygon. */
     val interiorColor: RgbColor? = null,
+    /**
+     * Declared border width in points, from `/BS /W` or the third element of `/Border`, or null
+     * when the annotation declares neither and the §12.5.4 default of 1 applies.
+     *
+     * A link that says `/Border [0 0 0]` is asking for no visible frame, which is the common case
+     * for links styled as coloured text. Ignoring it drew a box around them anyway.
+     */
+    val borderWidth: Double? = null,
     /** The raw dict, for callers that need fields we didn't extract. */
     val raw: PdfDictionary,
 ) {
@@ -89,8 +97,32 @@ public data class PdfAnnotation(
             val interiorColor = (dict.getArray("IC", refs))?.let { parseColor(it) }
             return PdfAnnotation(
                 subtype, rect, contents, color, uri, action, rawDest, appearanceStream,
-                flags, quadPoints, inkLists, vertices, interiorColor, dict,
+                flags, quadPoints, inkLists, vertices, interiorColor,
+                borderWidth = parseBorderWidth(dict, refs), raw = dict,
             )
+        }
+
+        /**
+         * Declared border width, `/BS /W` first and the third element of `/Border` second.
+         *
+         * §12.5.4: `/BS` supersedes `/Border` when both are present, and `/Border` is
+         * `[hRadius vRadius width …]`, so the width lives at index 2. Null means neither was
+         * declared and the caller should apply the default of 1.
+         */
+        private fun parseBorderWidth(dict: PdfDictionary, refs: IndirectResolver): Double? {
+            dict.getDict("BS", refs)?.let { bs ->
+                when (val w = bs["W"]) {
+                    is PdfReal -> return w.value
+                    is PdfInt -> return w.value.toDouble()
+                    else -> Unit
+                }
+            }
+            val border = dict.getArray("Border", refs) ?: return null
+            return when (val w = border.getOrNull(2)) {
+                is PdfReal -> w.value
+                is PdfInt -> w.value.toDouble()
+                else -> null
+            }
         }
 
         /**
@@ -175,13 +207,19 @@ public data class PdfAnnotation(
             }
         }
 
+        /**
+         * `/Rect` gives two diagonally opposite corners in any order (§7.9.5), so the result is
+         * normalised. Without it a `[x2 y2 x1 y1]` annotation produced an inverted box that no
+         * containment test could match and no border could paint, which made every link on the
+         * page silently dead.
+         */
         private fun rectFromArray(arr: PdfArray): io.github.yuroyami.kitepdf.core.Rectangle {
             fun n(idx: Int) = when (val v = arr.getOrNull(idx)) {
                 is PdfReal -> v.value
                 is PdfInt -> v.value.toDouble()
                 else -> 0.0
             }
-            return io.github.yuroyami.kitepdf.core.Rectangle(n(0), n(1), n(2), n(3))
+            return io.github.yuroyami.kitepdf.core.Rectangle(n(0), n(1), n(2), n(3)).normalized()
         }
     }
 }

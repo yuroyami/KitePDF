@@ -3,10 +3,12 @@ package io.github.yuroyami.kitepdf.compose
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import io.github.yuroyami.kitepdf.PdfAction
 import io.github.yuroyami.kitepdf.epub.EpubDocument
 import io.github.yuroyami.kitepdf.core.render.ReaderTheme
 
@@ -59,6 +61,8 @@ public fun EpubView(
     theme: ReaderTheme? = null,
     pageSpacing: Dp = 8.dp,
     onPageRendered: ((pageIndex: Int, image: ImageBitmap) -> Unit)? = null,
+    onTap: ((Offset) -> Unit)? = null,
+    onLinkTap: ((PdfAction) -> Boolean)? = null,
 ) {
     require(page == null || page in 0 until document.pageCount) {
         "page $page is out of bounds (document has ${document.pageCount} page(s))"
@@ -70,5 +74,7 @@ public fun EpubView(
         colors = PdfViewColors(pageBackground = background, theme = theme),
         pageSpacing = pageSpacing,
         onPageRendered = onPageRendered,
+        onTap = onTap,
+        onLinkTap = onLinkTap,
     )
 }

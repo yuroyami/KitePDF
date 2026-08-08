@@ -76,7 +76,9 @@ public class PdfPage internal constructor(
                 else -> 0.0
             }
         }
-        return Rectangle(coord(0), coord(1), coord(2), coord(3))
+        // Page boxes are rectangle arrays too, so the same §7.9.5 any-order rule applies. A
+        // reversed /MediaBox would otherwise give the page a negative width and height.
+        return Rectangle(coord(0), coord(1), coord(2), coord(3)).normalized()
     }
 
     /** Page box in PDF user-space units (1/72 inch). [left, bottom, right, top]. */
