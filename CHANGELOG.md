@@ -5,6 +5,42 @@ All notable changes to KitePDF are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.1] - 2026-08-08
+
+Link annotations. A consumer reported that links inside a PDF were neither
+visible nor clickable; all three causes below are additive fixes, so this is a
+drop-in upgrade from 0.6.0.
+
+### Fixed
+
+- **Rectangle corners are normalised (§7.9.5).** A rectangle array holds two
+  *diagonally opposite* corners in **any order**, and the consumer must sort
+  them. `Rectangle.fromPdfArray`, `PdfAnnotation`'s `/Rect` and `PdfPage`'s box
+  reader all took the four numbers positionally, so a producer writing
+  `[x2 y2 x1 y1]` yielded an inside-out box: `width` and `height` went negative.
+  A negative-size border painted nothing, and the viewer's containment test
+  (`y < bottom || y > top`) could not be satisfied by any point at all, so every
+  link on such a page was simultaneously invisible and untappable. The single
+  annotation fixture used a well-ordered rect, which is why no test caught it.
+  `Rectangle.normalized()` is public for callers holding a rectangle from
+  elsewhere.
+- **`/Border` and `/BS /W` are honoured (§12.5.4).** A link declaring
+  `/Border [0 0 0]` asks for no visible frame, which is what a link styled as
+  coloured text wants; the synthesized appearance drew a box around it anyway.
+  `/BS` supersedes `/Border`, and an undeclared width still falls back to a
+  hairline so nothing that used to be visible disappears.
+
+### Added
+
+- `PdfAnnotation.borderWidth`, the declared width in points, or null when the
+  annotation declares neither `/BS /W` nor `/Border`.
+- `onTap` and `onLinkTap` on the convenience `PdfView(document = …)` and
+  `EpubView(document = …)` overloads. They were only on the state-based
+  `PdfView`, so links were permanently inert in the shorthand form: the
+  dispatcher reads `onLinkTap?.invoke(action) == true`, and a null callback
+  makes that false, which sends the tap on to `onTap` as an ordinary page tap.
+  Both default to null, so this is source- and binary-compatible.
+
 ## [0.6.0] - 2026-08-06
 
 Thread-safety hardening across the engine, closing every confirmed finding of

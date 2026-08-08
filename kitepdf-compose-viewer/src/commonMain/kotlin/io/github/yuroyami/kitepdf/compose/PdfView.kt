@@ -285,6 +285,8 @@ public fun PdfView(
     background: Color = Color.White,
     pageSpacing: Dp = 8.dp,
     onPageRendered: ((pageIndex: Int, image: ImageBitmap) -> Unit)? = null,
+    onTap: ((Offset) -> Unit)? = null,
+    onLinkTap: ((PdfAction) -> Boolean)? = null,
 ) {
     require(page == null || page in 0 until document.pageCount) {
         "page $page is out of bounds (document has ${document.pageCount} page(s))"
@@ -296,6 +298,8 @@ public fun PdfView(
         colors = PdfViewColors(pageBackground = background),
         pageSpacing = pageSpacing,
         onPageRendered = onPageRendered,
+        onTap = onTap,
+        onLinkTap = onLinkTap,
     )
 }
 

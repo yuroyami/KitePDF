@@ -422,8 +422,17 @@ public class PageRenderer(
                 polyPath(stroke, close = false)?.let { canvas.strokePath(it, ctm, annot.color ?: RgbColor.BLACK, 1.0) }
             }
             Subtype.Link -> {
-                val p = KitePath.Builder().apply { rectangle(rect.left, rect.bottom, rect.width, rect.height) }.build()
-                canvas.strokePath(p, ctm, annot.color ?: RgbColor(0.0, 0.3, 0.8), 0.5)
+                // §12.5.4: a declared width of 0 means "no visible border", which is what a link
+                // styled as coloured text asks for. Drawing one anyway put a box around every such
+                // link. Null means undeclared, where the spec default of 1 applies, so it still
+                // draws. The 0.5 stroke is this renderer's own hairline for the default case.
+                val declared = annot.borderWidth
+                if (declared == null || declared > 0.0) {
+                    val p = KitePath.Builder()
+                        .apply { rectangle(rect.left, rect.bottom, rect.width, rect.height) }
+                        .build()
+                    canvas.strokePath(p, ctm, annot.color ?: RgbColor(0.0, 0.3, 0.8), declared ?: 0.5)
+                }
             }
             else -> { /* other annotations: nothing without /AP */ }
         }
