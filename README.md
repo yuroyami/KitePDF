@@ -61,7 +61,7 @@ renderer only when you draw pages.
 kotlin {
     sourceSets {
         commonMain.dependencies {
-            implementation("io.github.yuroyami:kitepdf:0.6.2")
+            implementation("io.github.yuroyami:kitepdf:0.6.3")
         }
     }
 }
@@ -84,8 +84,8 @@ build fails with unresolved references to `PdfDocument` and `PdfPage`. Declare
 both lines:
 
 ```kotlin
-implementation("io.github.yuroyami:kitepdf:0.6.2")                   // or kitepdf-pdf
-implementation("io.github.yuroyami:kitepdf-skia-renderer:0.6.2")     // exactly one renderer
+implementation("io.github.yuroyami:kitepdf:0.6.3")                   // or kitepdf-pdf
+implementation("io.github.yuroyami:kitepdf-skia-renderer:0.6.3")     // exactly one renderer
 ```
 
 The three renderers are alternative backends for the same `KiteCanvas` interface.

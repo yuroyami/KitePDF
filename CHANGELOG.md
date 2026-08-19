@@ -5,6 +5,23 @@ All notable changes to KitePDF are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.3] - 2026-08-19
+
+A switch to turn text selection off, for viewers that show a document as a
+picture rather than as prose.
+
+### Added
+
+- **`PdfView(selectionEnabled = ...)`**, on both the state-based composable and
+  the `PdfView(document = ...)` shorthand. The default, `true`, is exactly the
+  behaviour every existing caller already has. `false` removes text selection
+  outright: the long-press gesture is not attached, so it cannot compete with
+  panning; nothing anchors a selection; no wash and no thumbs are painted; and a
+  selection already on screen is dropped, which hands back the pan and scroll
+  locks it was holding. Zoom, pan, tap, links and page navigation are untouched.
+  Intended for a chart, a scan, a trace, a generated report, where selecting a
+  text label means nothing to the reader.
+
 ## [0.6.2] - 2026-08-19
 
 Draggable selection thumbs. The two markers bounding a text selection were
