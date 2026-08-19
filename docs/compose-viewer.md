@@ -11,7 +11,7 @@ Add the `kitepdf-compose-viewer` artifact to your Gradle dependencies:
     ```kotlin
     // commonMain
     dependencies {
-        implementation("io.github.yuroyami:kitepdf-compose-viewer:0.6.2")
+        implementation("io.github.yuroyami:kitepdf-compose-viewer:0.6.3")
     }
     ```
 
@@ -19,7 +19,7 @@ Add the `kitepdf-compose-viewer` artifact to your Gradle dependencies:
 
     ```gradle
     dependencies {
-        implementation("io.github.yuroyami:kitepdf-compose-viewer:0.6.2")
+        implementation("io.github.yuroyami:kitepdf-compose-viewer:0.6.3")
     }
     ```
 
@@ -304,6 +304,16 @@ if (state.isSelectionActive) {
 ```
 
 `state.selectionInProgress` is `true` only while the finger is still down on the drag that is building the selection, and drops the moment it lifts. Gate a context menu on it: a popup shown mid-drag covers the words being chosen. `isSelectionActive` cannot tell those apart, because it deliberately stays on after the finger lifts to keep the page from drifting.
+
+### Turning selection off
+
+Some documents are pictures, not prose: a chart, a scan, an ECG trace, a generated report you only ever look at. There, a long press that paints a blue wash over a label is noise, and the gesture competes with panning. Pass `selectionEnabled = false` and the whole thing goes away:
+
+```kotlin
+PdfView(state, selectionEnabled = false)
+```
+
+No long press selects, no wash is painted, no thumbs appear, and a selection already on screen is dropped (which also hands back the pan and scroll locks it was holding). The gesture is not attached at all, so it cannot compete with panning. Everything else, zoom, pan, tap, links, page navigation, is untouched. The default stays `true`.
 
 ### Selection menu
 

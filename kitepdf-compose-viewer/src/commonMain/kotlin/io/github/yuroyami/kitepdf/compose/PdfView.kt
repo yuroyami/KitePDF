@@ -105,6 +105,13 @@ import kotlinx.coroutines.launch
  *   [PdfRenderSpec.Vectorized] (live vector draw). See [PdfRenderSpec].
  * @param colors page paper + viewport letterbox colours.
  * @param pageSpacing gap between pages (continuous gutter / pager spacing).
+ * @param selectionEnabled whether the reader may select text at all. The
+ *   default, true, is the long-press-to-select behaviour with draggable
+ *   thumbs. False removes the gesture entirely: no long press selects, no wash
+ *   is painted, no thumbs appear, and a selection already on screen is dropped.
+ *   Turn it off for a document shown as a picture, a chart, a scan, a trace,
+ *   where a text selection means nothing and a stray long press only gets in
+ *   the way of panning.
  * @param userScrollEnabled gesture scrolling/swiping of the layout itself.
  *   Disable to drive paging exclusively through [PdfViewState] (nav buttons).
  * @param onPageRendered fires whenever a page finishes a FRESH rasterization,
@@ -137,6 +144,7 @@ public fun PdfView(
     colors: PdfViewColors = PdfViewColors(),
     pageSpacing: Dp = 8.dp,
     userScrollEnabled: Boolean = true,
+    selectionEnabled: Boolean = true,
     onPageRendered: ((pageIndex: Int, image: ImageBitmap) -> Unit)? = null,
     pagePlaceholder: (@Composable (pageIndex: Int) -> Unit)? = null,
     overlay: (@Composable BoxScope.(PdfViewState) -> Unit)? = null,
@@ -144,6 +152,7 @@ public fun PdfView(
     onLinkTap: ((PdfAction) -> Boolean)? = null,
 ) {
     SideEffect {
+        state.selectionEnabled = selectionEnabled
         state.zoomRange = zoomSpec.minZoom..zoomSpec.maxZoom
         state.panAxes = when (layout) {
             is PdfLayout.Continuous -> when (layout.orientation) {
@@ -276,6 +285,8 @@ private val SCHEME_REGEX = Regex("^[a-zA-Z][a-zA-Z0-9+.-]*:")
  * @param page index of the single page to show, or `null` (default) for the
  *   whole document as a continuous vertical scroll.
  * @param background colour painted behind page content.
+ * @param selectionEnabled whether the reader may select text. See the
+ *   state-based [PdfView] for what turning it off removes.
  */
 @Composable
 public fun PdfView(
@@ -284,6 +295,7 @@ public fun PdfView(
     page: Int? = null,
     background: Color = Color.White,
     pageSpacing: Dp = 8.dp,
+    selectionEnabled: Boolean = true,
     onPageRendered: ((pageIndex: Int, image: ImageBitmap) -> Unit)? = null,
     onTap: ((Offset) -> Unit)? = null,
     onLinkTap: ((PdfAction) -> Boolean)? = null,
@@ -297,6 +309,7 @@ public fun PdfView(
         layout = if (page != null) PdfLayout.SinglePage(page) else PdfLayout.Continuous(),
         colors = PdfViewColors(pageBackground = background),
         pageSpacing = pageSpacing,
+        selectionEnabled = selectionEnabled,
         onPageRendered = onPageRendered,
         onTap = onTap,
         onLinkTap = onLinkTap,

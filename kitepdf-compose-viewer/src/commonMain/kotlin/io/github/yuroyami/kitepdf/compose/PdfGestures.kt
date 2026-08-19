@@ -44,8 +44,9 @@ import kotlinx.coroutines.launch
 internal fun Modifier.pdfSelectionGestures(
     state: PdfViewState,
     haptics: HapticFeedback? = null,
-): Modifier =
-    pdfHandleDragGesture(state, haptics).pointerInput(state, haptics) {
+): Modifier {
+    if (!state.selectionEnabled) return this
+    return pdfHandleDragGesture(state, haptics).pointerInput(state, haptics) {
         // The finger is on the words it is choosing, so the words are covered.
         // The ticks are the channel that is not: a long-press buzz when the
         // anchor lands, then one tick per change of the selected TEXT while
@@ -74,6 +75,7 @@ internal fun Modifier.pdfSelectionGestures(
             },
         )
     }
+}
 
 /**
  * How far from a selection thumb a press still counts as grabbing it.

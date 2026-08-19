@@ -252,6 +252,25 @@ public class PdfViewState(
     /** Fires on every selection change, including clearing (null). */
     public var onSelectionChange: ((TextSelection?) -> Unit)? = null
 
+    private var selectionAllowed by mutableStateOf(true)
+
+    /**
+     * Whether text selection is offered at all, set from [PdfView]'s
+     * `selectionEnabled`.
+     *
+     * Off is a hard off: the long-press gesture is not attached in the first
+     * place, and the entry points below refuse as well, so nothing can produce
+     * a selection. Switching it off drops a selection already on screen, which
+     * also hands back the pan and scroll locks that selection was holding.
+     */
+    internal var selectionEnabled: Boolean
+        get() = selectionAllowed
+        set(value) {
+            if (selectionAllowed == value) return
+            selectionAllowed = value
+            if (!value) clearSelection()
+        }
+
     /** The fixed anchor (page, flattened char index) of an active drag. */
     private var selectionAnchor: Pair<Int, Int>? = null
 
@@ -267,6 +286,7 @@ public class PdfViewState(
 
     /** Long-press: anchor the selection at the char under [viewportOffset]. */
     internal fun beginSelection(viewportOffset: Offset) {
+        if (!selectionEnabled) return
         selectionAnchor = null
         // Claim the gesture up front. The hit test below can fail, and even a
         // successful one only produces `selection` a few statements later; pan
@@ -317,6 +337,7 @@ public class PdfViewState(
      * collapsing the selection. A no-op when nothing is selected.
      */
     internal fun beginHandleDrag(edge: PdfSelectionHandleEdge) {
+        if (!selectionEnabled) return
         val sel = selection ?: return
         selectionAnchor = sel.pageIndex to if (edge == PdfSelectionHandleEdge.Start) sel.end else sel.start
         isSelectionActive = true
