@@ -11,7 +11,7 @@ Add the `kitepdf-compose-viewer` artifact to your Gradle dependencies:
     ```kotlin
     // commonMain
     dependencies {
-        implementation("io.github.yuroyami:kitepdf-compose-viewer:0.6.0")
+        implementation("io.github.yuroyami:kitepdf-compose-viewer:0.6.2")
     }
     ```
 
@@ -19,7 +19,7 @@ Add the `kitepdf-compose-viewer` artifact to your Gradle dependencies:
 
     ```gradle
     dependencies {
-        implementation("io.github.yuroyami:kitepdf-compose-viewer:0.6.0")
+        implementation("io.github.yuroyami:kitepdf-compose-viewer:0.6.2")
     }
     ```
 
@@ -327,7 +327,11 @@ Every visual layer is replaceable: `container` swaps the card, `itemContent` swa
 
 ### Selection handles
 
-The two boundary markers ("thumbs") are canvas vector drawing inside the page's draw pass, not composables, so they scale and pan in lockstep with the words they bound. Recolour them with `PdfViewColors.selectionHandle`, or replace the drawing entirely with `PdfViewColors.selectionHandlePainter`:
+The two boundary markers ("thumbs") are canvas vector drawing inside the page's draw pass, not composables, so they scale and pan in lockstep with the words they bound.
+
+**They drag.** Press on a thumb and that end of the selection follows your finger while the other end stays put; haul one past the other and the two ends swap, the same as a platform text field. The rest of the gesture layer is untouched: a press that misses both thumbs is still an ordinary press, so long-press selection, tap and pan behave exactly as before. Nothing to enable, and the selection stays on one page as it always did.
+
+Recolour the markers with `PdfViewColors.selectionHandle`, or replace the drawing entirely with `PdfViewColors.selectionHandlePainter`:
 
 ```kotlin
 PdfView(state, colors = PdfViewColors(
@@ -338,6 +342,8 @@ PdfView(state, colors = PdfViewColors(
 ```
 
 The default is `PdfSelectionHandleDefaults.CaretAndDot`: a caret spanning the boundary line with a grab dot beneath it.
+
+One catch with a custom painter: the grab area is the boundary line, not the shape you paint. It is a fixed 24.dp radius in screen pixels, so the touch target stays the same size at every zoom level while the marker scales with the text. Draw your marker near its boundary and the two agree; draw it far away and readers will be grabbing empty space.
 
 ## Navigation widgets
 

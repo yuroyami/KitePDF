@@ -251,6 +251,11 @@ public enum class PdfSelectionHandleEdge { Start, End }
  * all in page-slot pixels. Size the marker against `bottom - top` (the line
  * height) so it scales with the text through thumbnails and deep zoom, like
  * [PdfSelectionHandleDefaults.CaretAndDot] does.
+ *
+ * Drawing does not move the grab target. A thumb is dragged by pressing near
+ * the boundary line, not near the shape you paint, so a marker drawn far from
+ * its boundary still answers to the boundary. Keep it close to the line and
+ * the two agree.
  */
 public fun interface PdfSelectionHandlePainter {
     public fun DrawScope.drawHandle(

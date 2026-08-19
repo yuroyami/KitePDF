@@ -822,11 +822,11 @@ private fun Modifier.highlightOverlay(
  * [PdfSelectionHandleDefaults.CaretAndDot]); this function owns only the
  * placement math.
  *
- * They are indicators, not drag targets; the selection itself still grows by
- * the long-press drag that created it. What they buy is certainty: without
- * them a reader who lifts a finger mid-paragraph has a wash of colour and no
- * statement about where it begins or ends, which is exactly the complaint that
- * added these.
+ * They are grab targets, not only indicators: a press within
+ * [HandleGrabRadius] of either marker drags that end of the selection while the
+ * other end stays anchored. The grab region is this placement, the boundary
+ * line itself, no matter what [painter] draws around it, so a custom marker
+ * cannot end up unreachable.
  */
 private fun DrawScope.drawSelectionHandles(
     quads: List<io.github.yuroyami.kitepdf.core.Rectangle>,

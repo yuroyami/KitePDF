@@ -24,7 +24,7 @@ The AWT rasterizer is zero-dependency; it ships with the JDK and needs no native
 
 ```kotlin
 dependencies {
-    implementation("io.github.yuroyami:kitepdf-native-renderer:0.5.0")
+    implementation("io.github.yuroyami:kitepdf-native-renderer:0.6.2")
 }
 ```
 
@@ -73,7 +73,7 @@ On iOS, macOS, and tvOS, use `ApplePdfRasterizer` to render via native CoreGraph
 ```kotlin
 // In your ios/macOS sourceSet
 dependencies {
-    implementation("io.github.yuroyami:kitepdf-native-renderer:0.5.0")
+    implementation("io.github.yuroyami:kitepdf-native-renderer:0.6.2")
 }
 ```
 
@@ -124,7 +124,7 @@ On Android, `AndroidPdfBitmapRenderer` returns an ARGB_8888 `Bitmap` for use wit
 
 ```kotlin
 dependencies {
-    implementation("io.github.yuroyami:kitepdf-native-renderer:0.5.0")
+    implementation("io.github.yuroyami:kitepdf-native-renderer:0.6.2")
 }
 ```
 
@@ -179,7 +179,7 @@ For a single API across JVM, Android, Apple, and Linux, use `PdfPageRasterizer` 
 
 ```kotlin
 dependencies {
-    implementation("io.github.yuroyami:kitepdf-skia-renderer:0.5.0")
+    implementation("io.github.yuroyami:kitepdf-skia-renderer:0.6.2")
 }
 ```
 
@@ -249,7 +249,7 @@ For minimal bundle size on the web, use Canvas2D rendering via `Canvas2dCanvas`.
 
 ```kotlin
 dependencies {
-    implementation("io.github.yuroyami:kitepdf-native-renderer:0.5.0")
+    implementation("io.github.yuroyami:kitepdf-native-renderer:0.6.2")
 }
 ```
 
@@ -284,7 +284,7 @@ For better image fidelity on the web (including embedded image XObjects), use Sk
 
 ```kotlin
 dependencies {
-    implementation("io.github.yuroyami:kitepdf-skia-renderer:0.5.0")
+    implementation("io.github.yuroyami:kitepdf-skia-renderer:0.6.2")
 }
 ```
 
@@ -313,7 +313,7 @@ If you're using the Compose viewer (`kitepdf-compose-viewer`), export the curren
 
 ```kotlin
 dependencies {
-    implementation("io.github.yuroyami:kitepdf-compose-viewer:0.5.0")
+    implementation("io.github.yuroyami:kitepdf-compose-viewer:0.6.2")
 }
 ```
 
