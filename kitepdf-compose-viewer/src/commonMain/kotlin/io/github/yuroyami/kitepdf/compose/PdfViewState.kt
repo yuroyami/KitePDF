@@ -307,6 +307,59 @@ public class PdfViewState(
         if (selection == null) isSelectionActive = false
     }
 
+    /**
+     * A finished selection's [edge] thumb was grabbed: that end now follows the
+     * finger and the OTHER end becomes the fixed anchor.
+     *
+     * From here the drag is the long-press drag, character for character:
+     * [extendSelection] keeps running the hit test, and because it orders the
+     * two indices, hauling one thumb past the other swaps the ends instead of
+     * collapsing the selection. A no-op when nothing is selected.
+     */
+    internal fun beginHandleDrag(edge: PdfSelectionHandleEdge) {
+        val sel = selection ?: return
+        selectionAnchor = sel.pageIndex to if (edge == PdfSelectionHandleEdge.Start) sel.end else sel.start
+        isSelectionActive = true
+        selectionInProgress = true
+    }
+
+    /**
+     * Where the [edge] thumb of the active selection sits, in viewport pixels,
+     * or null when nothing is selected (or the page has no geometry yet).
+     *
+     * The point is on the boundary line itself, at mid-height, rather than on
+     * whatever a [PdfSelectionHandlePainter] drew around it. That keeps the
+     * grab target the same for every painter, and it doubles as the text
+     * position a drag maps back to, so grabbing a thumb never nudges the
+     * selection by itself.
+     */
+    internal fun handlePoint(edge: PdfSelectionHandleEdge): Offset? {
+        val sel = selection ?: return null
+        val quad = (if (edge == PdfSelectionHandleEdge.Start) sel.quads.firstOrNull() else sel.quads.lastOrNull())
+            ?: return null
+        val x = if (edge == PdfSelectionHandleEdge.Start) quad.left else quad.right
+        return displayToViewport(sel.pageIndex, x, (quad.bottom + quad.top) / 2.0)
+    }
+
+    /**
+     * Which thumb a press at [viewportOffset] grabs, or null for a press that
+     * misses both by more than [radiusPx]. The nearer thumb wins a tie, which
+     * matters on a one-word selection where the two overlap.
+     */
+    internal fun handleAt(viewportOffset: Offset, radiusPx: Float): PdfSelectionHandleEdge? {
+        var best: PdfSelectionHandleEdge? = null
+        var bestDistance = radiusPx
+        for (edge in PdfSelectionHandleEdge.entries) {
+            val point = handlePoint(edge) ?: continue
+            val distance = (point - viewportOffset).getDistance()
+            if (distance <= bestDistance) {
+                bestDistance = distance
+                best = edge
+            }
+        }
+        return best
+    }
+
     private fun applySelection(text: KiteStructuredText, page: Int, start: Int, end: Int) {
         val sel = TextSelection(
             pageIndex = page,
@@ -321,6 +374,24 @@ public class PdfViewState(
     }
 
     /* ── hit testing ──────────────────────────────────────────────────────── */
+
+    /**
+     * [hitTestDisplay] run backwards: a display-space point on [pageIndex] to
+     * the viewport pixel it is painted at. Null when that page has no laid-out
+     * geometry.
+     */
+    internal fun displayToViewport(pageIndex: Int, x: Double, y: Double): Offset? {
+        if (viewportSize == IntSize.Zero || zoom <= 0f) return null
+        val rect = pageGeometry[pageIndex] ?: return null
+        val page = document.pages.getOrNull(pageIndex) ?: return null
+        if (rect.width <= 0f || rect.height <= 0f || page.displayWidth <= 0.0 || page.displayHeight <= 0.0) return null
+        val content = Offset(
+            rect.left + (x / page.displayWidth).toFloat() * rect.width,
+            rect.top + (y / page.displayHeight).toFloat() * rect.height,
+        )
+        val centre = Offset(viewportSize.width / 2f, viewportSize.height / 2f)
+        return centre + (content - centre) * zoom + panOffset
+    }
 
     /**
      * Like [hitTest] but stops in DISPLAY space (y-down points, the space

@@ -5,6 +5,28 @@ All notable changes to KitePDF are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.2] - 2026-08-19
+
+Draggable selection thumbs. The two markers bounding a text selection were
+paint only, which read as a broken control: they look exactly like the grab
+handles every other reader has, and they did nothing.
+
+### Changed
+
+- **The selection thumbs are grab targets.** Pressing within 24.dp of either
+  marker drags that end of the selection while the other end stays anchored,
+  and hauling one past the other swaps the two ends instead of collapsing the
+  selection. The gesture sits in front of the long-press detector and only
+  claims a press that landed on a thumb, so long-press selection, tap, pan and
+  pinch are unchanged everywhere else; the finger's offset from the boundary is
+  captured on grab, so the selection does not jump when a thumb is touched. No
+  new API and nothing to enable. A selection still lives on one page.
+- The grab region is the boundary line, not whatever a custom
+  `PdfSelectionHandlePainter` draws around it, so a replacement marker cannot
+  paint itself out of reach. It is measured in screen pixels, which keeps the
+  touch target one size at every zoom level while the marker itself keeps
+  scaling with the text.
+
 ## [0.6.1] - 2026-08-08
 
 Link annotations. A consumer reported that links inside a PDF were neither

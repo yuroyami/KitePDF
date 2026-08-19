@@ -14,38 +14,13 @@ import androidx.compose.ui.hapticfeedback.HapticFeedback
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.util.fastAny
+import androidx.compose.ui.util.fastFirstOrNull
 import androidx.compose.ui.util.fastForEach
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 
-/**
- * Zoom/pan gesture layer for [PdfView] content.
- *
- * Designed to coexist with the scroll container underneath instead of fighting
- * it:
- *
- *  - **Pinch** is watched on the *Initial* pointer pass; while two or more
- *    fingers are down (and pinch is enabled) all changes are consumed up
- *    front, so the list/pager beneath never interprets a pinch as a fling.
- *  - **Single-finger pan while zoomed** runs on the *Main* pass (*after*
- *    the inner scrollable) and only consumes what that scrollable left over,
- *    clamped to the zoomed content bounds via [PdfViewState.panBy]. In paged
- *    mode (pager scroll disabled while zoomed) it owns both axes; in
- *    continuous mode the scroll axis stays native and pan covers the cross
- *    axis.
- *  - **Text selection wins over pan.** While [PdfViewState.isSelectionActive]
- *    is set, neither pan site moves the page. Zoom itself is untouched, so a
- *    two-finger pinch still works mid-selection; it is only the translation
- *    that yields.
- *  - **Double-tap** toggles between min zoom and [PdfZoomSpec.doubleTapZoom],
- *    anchored at the tap position.
- *  - **Single-tap** ([onTap]) is reported without consuming pan/swipe. A host
- *    uses it to toggle a HUD. When double-tap is also on, the tap is held back
- *    until the double-tap window lapses; otherwise it fires immediately.
- *  - At minimum zoom with one finger down, nothing is consumed: swipes and
- *    flings reach the pager/list untouched.
- */
 /**
  * Text-selection gesture (T-80): long-press anchors a selection at the char
  * under the finger, dragging extends it, release keeps it. Runs through
@@ -60,12 +35,17 @@ import kotlinx.coroutines.launch
  * therefore raises [PdfViewState.isSelectionActive] the moment the long press
  * lands, and the pan sites below gate on it. [PdfViewState.endSelectionGesture]
  * releases it again when the drag anchored nothing.
+ *
+ * A second layer sits in front of that one: `pdfHandleDragGesture` reshapes a
+ * selection that already exists by its two thumbs. It gets the press first and
+ * only claims one that landed on a thumb, so the long-press path below is
+ * untouched everywhere else.
  */
 internal fun Modifier.pdfSelectionGestures(
     state: PdfViewState,
     haptics: HapticFeedback? = null,
 ): Modifier =
-    pointerInput(state, haptics) {
+    pdfHandleDragGesture(state, haptics).pointerInput(state, haptics) {
         // The finger is on the words it is choosing, so the words are covered.
         // The ticks are the channel that is not: a long-press buzz when the
         // anchor lands, then one tick per change of the selected TEXT while
@@ -95,6 +75,88 @@ internal fun Modifier.pdfSelectionGestures(
         )
     }
 
+/**
+ * How far from a selection thumb a press still counts as grabbing it.
+ *
+ * Viewport pixels, so the target stays the same size at any zoom while the
+ * marker itself scales with the text. It is also painter-independent: the hit
+ * region is the boundary line, not whatever a
+ * [PdfSelectionHandlePainter] drew around it.
+ */
+internal val HandleGrabRadius = 24.dp
+
+/**
+ * Reshaping a finished selection by its thumbs.
+ *
+ * Chained BEFORE the long-press detector and watching the *Initial* pass, so a
+ * press that lands on a thumb is claimed before anything else can read it: no
+ * long press starts a fresh selection, no tap clears one, and the page cannot
+ * move under the drag. A press that misses both thumbs consumes nothing and
+ * every other gesture behaves exactly as it did.
+ *
+ * The finger sits below or beside the boundary it is holding, so the offset
+ * between the press and the thumb is captured on grab and reapplied to every
+ * drag position. Without it the selection would jump to the fingertip the
+ * moment the thumb was touched.
+ */
+private fun Modifier.pdfHandleDragGesture(
+    state: PdfViewState,
+    haptics: HapticFeedback?,
+): Modifier =
+    pointerInput(state, haptics) {
+        awaitEachGesture {
+            val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+            // Read per gesture, not once per block: the block's keys do not
+            // include density, so a display change would freeze a stale radius.
+            val edge = state.handleAt(down.position, HandleGrabRadius.toPx()) ?: return@awaitEachGesture
+            val grabOffset = (state.handlePoint(edge) ?: down.position) - down.position
+            state.beginHandleDrag(edge)
+            haptics?.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+            var lastSelectedText = state.selection?.text
+            down.consume()
+            while (true) {
+                val event = awaitPointerEvent(PointerEventPass.Initial)
+                val change = event.changes.fastFirstOrNull { it.id == down.id } ?: break
+                change.consume()
+                if (!change.pressed) break
+                state.extendSelection(change.position + grabOffset)
+                val text = state.selection?.text
+                if (text != null && text != lastSelectedText) {
+                    lastSelectedText = text
+                    haptics?.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                }
+            }
+            state.endSelectionGesture()
+        }
+    }
+
+/**
+ * Zoom/pan gesture layer for [PdfView] content.
+ *
+ * Designed to coexist with the scroll container underneath instead of fighting
+ * it:
+ *
+ *  - **Pinch** is watched on the *Initial* pointer pass; while two or more
+ *    fingers are down (and pinch is enabled) all changes are consumed up
+ *    front, so the list/pager beneath never interprets a pinch as a fling.
+ *  - **Single-finger pan while zoomed** runs on the *Main* pass (*after*
+ *    the inner scrollable) and only consumes what that scrollable left over,
+ *    clamped to the zoomed content bounds via [PdfViewState.panBy]. In paged
+ *    mode (pager scroll disabled while zoomed) it owns both axes; in
+ *    continuous mode the scroll axis stays native and pan covers the cross
+ *    axis.
+ *  - **Text selection wins over pan.** While [PdfViewState.isSelectionActive]
+ *    is set, neither pan site moves the page. Zoom itself is untouched, so a
+ *    two-finger pinch still works mid-selection; it is only the translation
+ *    that yields.
+ *  - **Double-tap** toggles between min zoom and [PdfZoomSpec.doubleTapZoom],
+ *    anchored at the tap position.
+ *  - **Single-tap** ([onTap]) is reported without consuming pan/swipe. A host
+ *    uses it to toggle a HUD. When double-tap is also on, the tap is held back
+ *    until the double-tap window lapses; otherwise it fires immediately.
+ *  - At minimum zoom with one finger down, nothing is consumed: swipes and
+ *    flings reach the pager/list untouched.
+ */
 internal fun Modifier.pdfTransformGestures(
     state: PdfViewState,
     spec: PdfZoomSpec,
