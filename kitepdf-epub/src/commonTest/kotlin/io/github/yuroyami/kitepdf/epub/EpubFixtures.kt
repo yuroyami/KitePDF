@@ -45,6 +45,40 @@ internal object EpubFixtures {
         )
     }
 
+    /** Multi-spine book with an EPUB 3 nav document pointing at each chapter. */
+    fun epubWithToc(chapters: Int = 4): ByteArray {
+        val container = """<?xml version="1.0"?><container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container"><rootfiles><rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/></rootfiles></container>"""
+        val items = (0 until chapters).joinToString("") {
+            """<item id="c${it + 1}" href="chapter${it + 1}.xhtml" media-type="application/xhtml+xml"/>"""
+        }
+        val refs = (0 until chapters).joinToString("") { """<itemref idref="c${it + 1}"/>""" }
+        val opf = """<?xml version="1.0"?>
+            <package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="id">
+              <metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:identifier id="id">toc</dc:identifier></metadata>
+              <manifest><item id="nav" href="nav.xhtml" properties="nav" media-type="application/xhtml+xml"/>$items</manifest>
+              <spine>$refs</spine>
+            </package>"""
+        val links = (0 until chapters).joinToString("") {
+            """<li><a href="chapter${it + 1}.xhtml#head$it">Chapter ${it + 1}</a></li>"""
+        }
+        val nav = """<?xml version="1.0"?><html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops"><body>
+            <nav epub:type="toc"><ol>$links</ol></nav></body></html>"""
+        val chapterFiles = (0 until chapters).map { c ->
+            val body = "<h1 id=\"head$c\">Chapter ${c + 1}</h1>" +
+                (0 until 20).joinToString("") { "<p>Chapter ${c + 1} paragraph $it with a few words on it.</p>" }
+            "OEBPS/chapter${c + 1}.xhtml" to
+                """<?xml version="1.0"?><html xmlns="http://www.w3.org/1999/xhtml"><body>$body</body></html>""".encodeToByteArray()
+        }
+        return storedZip(
+            listOf(
+                "mimetype" to "application/epub+zip".encodeToByteArray(),
+                "META-INF/container.xml" to container.encodeToByteArray(),
+                "OEBPS/content.opf" to opf.encodeToByteArray(),
+                "OEBPS/nav.xhtml" to nav.encodeToByteArray(),
+            ) + chapterFiles,
+        )
+    }
+
     /** Multi-spine variant: one `chapterN.xhtml` per body, all on the spine in order. */
     fun epubMultiSpine(bodies: List<String>): ByteArray {
         val container = """
