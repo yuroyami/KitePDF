@@ -115,7 +115,9 @@ val newState = rememberKiteDocViewState(bigger, mark)
 ```
 
 The reader stays on the same paragraph, and only its chapter is re-flowed
-before the page appears.
+before the page appears. The sample app in `sample/` does exactly this: pick
+"EPUB book", then change the font size and watch the page count change while
+the words on screen do not.
 
 ### What still lays out the whole book
 
