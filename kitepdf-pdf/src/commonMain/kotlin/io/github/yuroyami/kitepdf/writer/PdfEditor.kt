@@ -688,6 +688,14 @@ public class PdfEditor internal constructor(
      * [saveRewritten]'s reachability GC drops the image stream; and annotations
      * whose `/Rect` intersects a region are removed from the page `/Annots`.
      *
+     * **The page may come out with more XObjects than it went in with.** One form
+     * XObject can be drawn in several places (ISO 32000-1, 8.10), and each place
+     * sees the region in a different part of the form. One rewritten stream cannot
+     * be right for all of them, so each place that needs a different redaction gets
+     * its OWN copy of the form, `/Resources /XObject` gains a generated name for it
+     * (the original name plus `R1`, `R2`, ...), and that one `Do` is repointed.
+     * Places that no region touches are left alone and keep drawing the original.
+     *
      * Current limit ([RedactionEngine]): vector paths in the region are left as-is.
      */
     public fun redactRegions(page: PdfPage, rectangles: List<KiteRectangle>) {
@@ -705,6 +713,7 @@ public class PdfEditor internal constructor(
             rectangles,
         )
         engine.formMatrices = loadFormMatrices(pageResources)
+        engine.formBBoxes = loadFormBBoxes(pageResources)
         val filtered = engine.run(ops)
         // Recurse into every intersecting form XObject first: it decides which `Do`
         // operands now point at a redacted clone, so it has to run before the body
@@ -738,9 +747,11 @@ public class PdfEditor internal constructor(
 
     /**
      * Form object numbers on the CURRENT recursion descent. A form reached again
-     * while it is still on this stack is a genuine cycle (a form invoking itself,
-     * directly or through a chain) and is skipped. A form invoked twice by the
-     * same parent is not a cycle, which is why this cannot be a plain visited set.
+     * while it is still on this stack is a genuine cycle: ISO 32000-1, 8.10.1 says
+     * a form XObject shall not invoke itself, directly or indirectly, so a file
+     * that does is malformed and the descent stops there (R6). A form invoked twice
+     * by the same parent is NOT a cycle, which is why this cannot be a plain
+     * visited set.
      */
     private val formDescent = ArrayDeque<Long>()
 
@@ -783,13 +794,31 @@ public class PdfEditor internal constructor(
         }
     }
 
-    private fun quantise(value: Double): Long =
-        if (value.isFinite()) kotlin.math.round(value * 1000.0).toLong() else 0L
+    /**
+     * One coordinate as a key component, in thousandths of a point.
+     *
+     * Each degenerate value gets its OWN sentinel. Folding NaN, the two infinities
+     * and an overflow into one bucket would make two mappings that differ look
+     * identical, so they would share one rewrite when they need two.
+     */
+    private fun quantise(value: Double): Long = when {
+        value.isNaN() -> Long.MIN_VALUE
+        value == Double.POSITIVE_INFINITY -> Long.MAX_VALUE
+        value == Double.NEGATIVE_INFINITY -> Long.MIN_VALUE + 1
+        // 2^53 / 1000: past here `value * 1000` can no longer separate adjacent
+        // integers, so rounding it would merge distinct coordinates.
+        value >= 9.007199254740992E12 -> Long.MAX_VALUE - 1
+        value <= -9.007199254740992E12 -> Long.MIN_VALUE + 2
+        else -> kotlin.math.round(value * 1000.0).toLong()
+    }
+
+    /** The name a `Do` operand is expected to carry, and the one it must carry instead. */
+    private class Rename(val from: String, val to: String)
 
     /** What a descent into a parent's forms asks the parent to change about itself. */
     private class FormRedaction {
-        /** Index of a `Do` in the parent's filtered stream, to the name it must now use. */
-        val renames = LinkedHashMap<Int, String>()
+        /** Index of a `Do` in the parent's filtered stream, to the rename it must take. */
+        val renames = LinkedHashMap<Int, Rename>()
 
         /** Resource entries the parent must add to its own `/XObject` dictionary. */
         val additions = LinkedHashMap<String, PdfReference>()
@@ -815,18 +844,33 @@ public class PdfEditor internal constructor(
         val result = FormRedaction()
         val xobjects = resources?.getDict("XObject", base) ?: return result
         val usedNames = HashSet(xobjects.keys)
+
+        // A form with even one invocation that paints into no region must keep its
+        // original object as it is, because that invocation goes on drawing it.
+        // Every redacting invocation of such a form gets a clone instead, so a
+        // stamp repeated across the page costs nothing when no region touches it.
+        val pristine = HashSet<Long>()
         for (hit in hits) {
+            if (hit.intersects) continue
+            xobjects.getRef(hit.name)?.let { pristine.add(it.objectNumber) }
+        }
+
+        for (hit in hits) {
+            if (!hit.intersects) continue // draws into no region: nothing to redact, nothing to repoint
             if (hit.formRects.isEmpty()) continue
             val formRef = xobjects.getRef(hit.name) ?: continue
             val key = formKey(formRef.objectNumber, hit.formRects)
-            val target = redactedFormCache[key] ?: redactFormXObject(formRef, hit.formRects, key) ?: continue
+            val claimable = formRef.objectNumber !in pristine
+            val target = redactedFormCache[key]
+                ?: redactFormXObject(formRef, hit.formRects, key, claimable)
+                ?: continue
             if (target.objectNumber == formRef.objectNumber) continue // redacted in place, name still fits
             val name = formCloneNames.getOrPut(target.objectNumber) {
                 var i = 1
                 while ("${hit.name}R$i" in usedNames) i++
                 "${hit.name}R$i".also { usedNames.add(it) }
             }
-            result.renames[hit.opIndex] = name
+            result.renames[hit.opIndex] = Rename(from = hit.name, to = name)
             result.additions[name] = target
         }
         return result
@@ -836,16 +880,23 @@ public class PdfEditor internal constructor(
      * Redact [rectangles] (in the form's OWN space) inside the form at [formRef],
      * recursing into any form it invokes in turn.
      *
-     * The first distinct rectangle set claims the original object. A later set
-     * gets a fresh one, so the two rewrites cannot overwrite each other.
+     * The first distinct rectangle set claims the original object, unless
+     * [claimable] is false because some invocation of this form paints into no
+     * region and still needs the original as it stands. A set that cannot claim,
+     * and every later set, gets a fresh object, so no two rewrites collide.
+     *
+     * Nothing is claimed, allocated or cached until the source stream has decoded,
+     * because everything after that point stages state: a cache entry pointing at
+     * an object that was never written would hand a later hit a dangling reference.
      *
      * @return the object holding this redaction, or null when the form is
-     *   unreadable or already on the current descent (a genuine cycle).
+     *   unreadable, will not decode (R6), or is already on the current descent.
      */
     private fun redactFormXObject(
         formRef: PdfReference,
         rectangles: List<KiteRectangle>,
         key: String,
+        claimable: Boolean,
     ): PdfReference? {
         if (rectangles.isEmpty()) return null
         if (formRef.objectNumber in formDescent) return null
@@ -853,14 +904,17 @@ public class PdfEditor internal constructor(
             ?: (effectiveObject(formRef.objectNumber) as? PdfStream)
                 ?.also { formSources[formRef.objectNumber] = it }
             ?: return null
+        val content = runCatching {
+            io.github.yuroyami.kitepdf.core.filters.FilterChain.decode(stream)
+        }.getOrNull() ?: return null // corrupt stream: skip this form, keep the page (R6)
 
-        val target = if (claimedForms.add(formRef.objectNumber)) formRef else allocateReference()
+        val claimed = claimable && claimedForms.add(formRef.objectNumber)
+        val target = if (claimed) formRef else allocateReference()
         redactedFormCache[key] = target
 
         formDescent.addLast(formRef.objectNumber)
         try {
             val formResources = stream.dict.getDict("Resources", base)
-            val content = io.github.yuroyami.kitepdf.core.filters.FilterChain.decode(stream)
             val ops = ContentStreamParser.parse(content)
             val engine = RedactionEngine(
                 loadPageFonts(formResources),
@@ -869,6 +923,7 @@ public class PdfEditor internal constructor(
                 rectangles,
             )
             engine.formMatrices = loadFormMatrices(formResources)
+            engine.formBBoxes = loadFormBBoxes(formResources)
             val filtered = engine.run(ops)
 
             val nested = recurseIntoForms(formResources, engine.formXObjectHits)
@@ -884,20 +939,34 @@ public class PdfEditor internal constructor(
             val newResources = withFormAdditions(newDict.getDict("Resources", base), nested)
             if (newResources != null) newDict = withEntry(newDict, "Resources", newResources)
             updateObject(target, PdfStreams.flate(body, extraFrom(newDict)))
+        } catch (e: Throwable) {
+            // Nothing was staged for [target]. Leaving the cache entry would let a
+            // later hit with this key rename a `Do` to an object that never exists.
+            redactedFormCache.remove(key)
+            if (claimed) claimedForms.remove(formRef.objectNumber)
+            throw e
         } finally {
             formDescent.removeLast()
         }
         return target
     }
 
-    /** Repoint the `Do` operands a descent asked us to clone. */
+    /**
+     * Repoint the `Do` operands a descent asked us to clone.
+     *
+     * Both the operator AND the operand are checked against what the hit recorded.
+     * The index came from the engine's own output list, so it is right by
+     * construction, but if anything ever shifts that list the check is what stops
+     * this from silently repointing a different invocation (R6).
+     */
     private fun applyFormRenames(ops: List<Operation>, redaction: FormRedaction): List<Operation> {
         if (redaction.renames.isEmpty()) return ops
         val out = ops.toMutableList()
-        for ((index, name) in redaction.renames) {
+        for ((index, rename) in redaction.renames) {
             val op = out.getOrNull(index) ?: continue
-            if (op.operator != "Do") continue // stream shifted under us; leave it alone (R6)
-            out[index] = Operation("Do", listOf(PdfName(name)))
+            if (op.operator != "Do") continue
+            if ((op.operands.firstOrNull() as? PdfName)?.value != rename.from) continue
+            out[index] = Operation("Do", listOf(PdfName(rename.to)))
         }
         return out
     }
@@ -1033,6 +1102,35 @@ public class PdfEditor internal constructor(
                 else -> 0.0
             }
             out[name] = io.github.yuroyami.kitepdf.core.render.KiteMatrix(n(0), n(1), n(2), n(3), n(4), n(5))
+        }
+        return out
+    }
+
+    /**
+     * Per-name form `/BBox`, the box outside which a form paints nothing
+     * (ISO 32000-1, 8.10.2, Table 95). A form missing a readable one is left out of
+     * the map, and [RedactionEngine] then treats every invocation of it as
+     * intersecting, which over-redacts rather than trusting a malformed form (R6).
+     */
+    private fun loadFormBBoxes(resources: PdfDictionary?): Map<String, KiteRectangle> {
+        val xobjects = resources?.getDict("XObject", base) ?: return emptyMap()
+        val out = LinkedHashMap<String, KiteRectangle>()
+        for ((name, value) in xobjects.map) {
+            val stream = value.resolve(base) as? PdfStream ?: continue
+            if (stream.dict.getName("Subtype") != "Form") continue
+            val b = stream.dict.getArray("BBox", base) ?: continue
+            if (b.size < 4) continue
+            fun n(i: Int): Double? = when (val v = b[i].resolve(base)) {
+                is PdfInt -> v.value.toDouble()
+                is io.github.yuroyami.kitepdf.core.parser.PdfReal -> v.value
+                else -> null
+            }
+            val x0 = n(0) ?: continue
+            val y0 = n(1) ?: continue
+            val x1 = n(2) ?: continue
+            val y1 = n(3) ?: continue
+            // The array is [llx lly urx ury] but writers do emit it flipped.
+            out[name] = KiteRectangle(minOf(x0, x1), minOf(y0, y1), maxOf(x0, x1), maxOf(y0, y1))
         }
         return out
     }
