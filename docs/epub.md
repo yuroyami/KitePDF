@@ -73,6 +73,11 @@ A reflowable book has to be laid out before it has pages, and laying out a
 whole novel takes seconds. KitePDF lays out one chapter at a time instead, so
 a reader resuming at chapter 20 waits for chapter 20, not for chapters 0 to 19.
 
+`EpubDocument.open` reads the container, the OPF and the table of contents, and
+stops there. It is under half a millisecond on every book in the local corpus,
+including a 9.9 MB one. A chapter's HTML is read and parsed when that chapter is
+first laid out.
+
 Save a bookmark when the reader leaves, and open at it when they come back:
 
 ```kotlin
@@ -88,6 +93,8 @@ the reader reads. A chapter landing above them does not move their page.
 
 On the local corpus this turns opening at the last chapter from 986 ms into
 3 ms for a 26-chapter book, and from 2085 ms into 71 ms for an 11-chapter one.
+End to end, including reading the file and parsing it, that 26-chapter book
+goes from 11.3 ms to 2.0 ms.
 
 ### Positions: two kinds
 
@@ -117,6 +124,18 @@ either lays every chapter out. So does `KiteDocLayout.Spread`, because it pairs
 pages by index and inserting a chapter would re-pair the book underneath the
 reader. Use `knownPageCount` with `isComplete` for a running total, and
 `pageCountIn(chapter)` for one chapter.
+
+Laying out any chapter also reads the first one. The writing mode (horizontal
+or vertical) and the hyphenation language are one decision per book, and both
+are read from chapter 1. That is one extra chapter, never the whole book.
+
+### Where embedded fonts come from
+
+An `@font-face` in a stylesheet belongs to the whole book, and its `url()`
+resolves against that stylesheet's folder. An `@font-face` inside a document's
+own `<style>` block belongs to that document only, the same as every other rule
+in a `<style>` block. Put shared fonts in a stylesheet, which is where books
+normally put them.
 
 ## Reader settings
 

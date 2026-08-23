@@ -2,8 +2,6 @@ package io.github.yuroyami.kitepdf.epub
 
 import io.github.yuroyami.kitepdf.epub.css.ComputedStyle
 import io.github.yuroyami.kitepdf.epub.css.CssParser
-import io.github.yuroyami.kitepdf.epub.css.Direction
-import io.github.yuroyami.kitepdf.epub.css.FontFaceRule
 import io.github.yuroyami.kitepdf.epub.css.Origin
 import io.github.yuroyami.kitepdf.epub.css.StyleResolver
 import io.github.yuroyami.kitepdf.epub.css.StyleRule
@@ -127,21 +125,21 @@ public class EpubDocument internal constructor(
     private val tableLock = KiteLock()
 
     /** One per chapter, held for that chapter's layout so it happens once. */
-    private val chapterLocks: Array<KiteLock> = Array(parsed.spines.size) { KiteLock() }
+    private val chapterLocks: Array<KiteLock> = Array(parsed.spineCount) { KiteLock() }
 
     /** Box trees, built on demand. Cheap next to layout, but not free. */
-    private val builtRoots = arrayOfNulls<BlockBox>(parsed.spines.size)
+    private val builtRoots = arrayOfNulls<BlockBox>(parsed.spineCount)
 
     /** Laid-out pages per chapter. Null until that chapter is prepared. */
-    private val chapterPages = arrayOfNulls<List<PageRender>>(parsed.spines.size)
+    private val chapterPages = arrayOfNulls<List<PageRender>>(parsed.spineCount)
 
     // Box tree per spine: depends on font size + column width, so it is rebuilt
-    // from the (already parsed) DOM + CSS whenever settings change. The expensive
-    // parse (unzip, HTML, CSS, fonts) is done once and lives in ParsedEpub.
+    // whenever settings change. The DOM and CSS it is built from are parsed once
+    // per chapter and live in ParsedEpub, shared by every re-layout.
     private fun buildDocRoot(chapter: Int): BlockBox {
-        val sp = parsed.spines[chapter]
-        val layoutWidth = if (parsed.fixedLayout) sp.viewport.first else contentWidth
-        val layoutHeight = if (parsed.fixedLayout) sp.viewport.second else pageContentHeight
+        val sp = parsed.spine(chapter)
+        val (layoutWidth, layoutHeight) =
+            if (parsed.fixedLayout) viewportOf(chapter) else contentWidth to pageContentHeight
         val resolver = StyleResolver(
             sp.rules, settings.fontSize, layoutWidth, parsed.baseDir, layoutHeight,
             readerRules = readerRules, useAuthorCss = settings.usePublisherCss,
@@ -178,7 +176,7 @@ public class EpubDocument internal constructor(
         // The spine root box wraps the document node (initial style); the html
         // element's computed style sits one level down and body's below that,
         // so walk the first-child chain a few levels.
-        var box: LayoutBox? = if (parsed.spines.isEmpty()) null else docRoot(0)
+        var box: LayoutBox? = if (parsed.spineCount == 0) null else docRoot(0)
         var depth = 0
         while (box != null && depth < 4) {
             val s = when (box) {
@@ -195,28 +193,44 @@ public class EpubDocument internal constructor(
 
     private fun fixedSpine(chapter: Int): FixedSpine? {
         if (!parsed.fixedLayout) return null
-        val sp = parsed.spines[chapter]
-        return FixedSpine(docRoot(chapter), sp.viewport.first, sp.viewport.second)
+        val (w, h) = viewportOf(chapter)
+        return FixedSpine(docRoot(chapter), w, h)
+    }
+
+    /** A fixed-layout chapter's page size: what it declares, else the reader's. */
+    private fun viewportOf(chapter: Int): Pair<Double, Double> =
+        parsed.spine(chapter).viewport ?: (settings.pageWidth to settings.pageHeight)
+
+    /**
+     * The document's language, for hyphenation pattern selection: the `lang` /
+     * `xml:lang` on the first chapter's `<html>` or `<body>` (the parser folds
+     * both onto the `lang` key), else the OPF `dc:language`. Null falls back to
+     * the en-US patterns in [BoxLayout].
+     *
+     * One language per document. Reading it from the first chapter only keeps it
+     * from parsing the whole book, and `dc:language` is required of every EPUB,
+     * so the fallback is normally there. Per-spine switching is a noted follow-up.
+     */
+    internal val documentLanguage: String? by lazy {
+        val tree = if (parsed.spineCount == 0) null else parsed.spine(0).tree
+        val html = tree?.children?.filterIsInstance<HtmlNode.Element>()
+            ?.firstOrNull { it.tag == "html" }
+        val body = html?.children?.filterIsInstance<HtmlNode.Element>()
+            ?.firstOrNull { it.tag == "body" }
+        html?.attrs?.get("lang")?.takeIf { it.isNotBlank() }
+            ?: body?.attrs?.get("lang")?.takeIf { it.isNotBlank() }
+            ?: parsed.metadata.language?.takeIf { it.isNotBlank() }
     }
 
     /**
-     * The document's dominant language for hyphenation pattern selection:
-     * the first spine whose `<html>` or `<body>` carries `xml:lang`/`lang`
-     * (the parser folds both onto the `lang` key), else the OPF
-     * `dc:language`. Null falls back to the en-US patterns in [BoxLayout].
-     * One language per document; per-spine switching is a noted follow-up.
+     * The faces [chapter] lays out with: the book's embedded fonts, plus any
+     * `@font-face` the chapter declares in its own inline `<style>`. Keeping the
+     * inline ones chapter-local is what makes a chapter's layout independent of
+     * which chapters were laid out before it.
      */
-    internal val documentLanguage: String? by lazy {
-        for (sp in parsed.spines) {
-            val html = sp.tree.children.filterIsInstance<HtmlNode.Element>()
-                .firstOrNull { it.tag == "html" }
-            val body = html?.children?.filterIsInstance<HtmlNode.Element>()
-                ?.firstOrNull { it.tag == "body" }
-            val lang = html?.attrs?.get("lang")?.takeIf { it.isNotBlank() }
-                ?: body?.attrs?.get("lang")?.takeIf { it.isNotBlank() }
-            if (lang != null) return@lazy lang
-        }
-        parsed.metadata.language?.takeIf { it.isNotBlank() }
+    private fun fontsFor(chapter: Int): FontRegistry {
+        val local = parsed.spine(chapter).localFaces
+        return if (local.isEmpty()) parsed.fonts else parsed.fonts.with(local)
     }
 
     /**
@@ -229,9 +243,10 @@ public class EpubDocument internal constructor(
      * chapters in any order or on any thread.
      */
     private fun paginateChapter(chapter: Int): List<PageRender> {
+        val fonts = fontsFor(chapter)
         val spine = fixedSpine(chapter)
         if (spine != null) {
-            BoxLayout(::loadImage, ::loadSvg, spine.height, parsed.fonts, documentLanguage, settings.lineHeightScale)
+            BoxLayout(::loadImage, ::loadSvg, spine.height, fonts, documentLanguage, settings.lineHeightScale)
                 .layout(spine.root, spine.width)
             return listOf(Paginator.paginateFixed(spine.root, spine.width, spine.height))
         }
@@ -241,7 +256,7 @@ public class EpubDocument internal constructor(
         val blockBudget = if (isVertical) contentWidth else pageContentHeight
         val root = chapterRoot(chapter)
         BoxLayout(
-            ::loadImage, ::loadSvg, blockBudget, parsed.fonts, documentLanguage,
+            ::loadImage, ::loadSvg, blockBudget, fonts, documentLanguage,
             settings.lineHeightScale, vertical = isVertical,
         ).layout(root, inlineBudget)
         val pages = Paginator.paginate(
@@ -256,10 +271,10 @@ public class EpubDocument internal constructor(
 
     /* ── the chapter API ──────────────────────────────────────────────────── */
 
-    override val chapterCount: Int get() = parsed.spines.size
+    override val chapterCount: Int get() = parsed.spineCount
 
     override fun isChapterReady(chapter: Int): Boolean =
-        chapter in parsed.spines.indices && tableLock.withLock { chapterPages[chapter] } != null
+        chapter in parsed.spineIndices && tableLock.withLock { chapterPages[chapter] } != null
 
     /**
      * Lays out one chapter. This is where a book's time goes, so it is also the
@@ -267,7 +282,7 @@ public class EpubDocument internal constructor(
      * chapter 20, not chapters 0 to 20.
      */
     override fun prepareChapter(chapter: Int) {
-        if (chapter !in parsed.spines.indices) return
+        if (chapter !in parsed.spineIndices) return
         if (isChapterReady(chapter)) return
         // Per-chapter lock: two callers for one chapter share a single layout,
         // two callers for different chapters do not wait on each other.
@@ -278,6 +293,12 @@ public class EpubDocument internal constructor(
         }
     }
 
+    /** Whether [chapter]'s document has been read and parsed yet. */
+    internal fun isChapterParsed(chapter: Int): Boolean = parsed.isSpineParsed(chapter)
+
+    /** How many stylesheet files this book has parsed, however many chapters link them. */
+    internal val stylesheetsParsed: Int get() = parsed.sheetsParsed
+
     /** [chapter]'s pages, laying it out first. */
     private fun renders(chapter: Int): List<PageRender> {
         prepareChapter(chapter)
@@ -285,7 +306,7 @@ public class EpubDocument internal constructor(
     }
 
     override fun pageCountIn(chapter: Int): Int =
-        if (chapter in parsed.spines.indices) renders(chapter).size else 0
+        if (chapter in parsed.spineIndices) renders(chapter).size else 0
 
     override fun page(location: KiteLocation): EpubPage {
         val pages = renders(location.chapter)
@@ -307,7 +328,7 @@ public class EpubDocument internal constructor(
      * unlaid, because the pages before it have not been counted yet.
      */
     override fun pageIndexOf(location: KiteLocation): Int? = tableLock.withLock {
-        if (location.chapter !in parsed.spines.indices) return@withLock null
+        if (location.chapter !in parsed.spineIndices) return@withLock null
         var offset = 0
         for (c in 0 until location.chapter) offset += (chapterPages[c] ?: return@withLock null).size
         val own = chapterPages[location.chapter] ?: return@withLock null
@@ -319,7 +340,7 @@ public class EpubDocument internal constructor(
     override fun locationOf(pageIndex: Int): KiteLocation? = tableLock.withLock {
         if (pageIndex < 0) return@withLock null
         var remaining = pageIndex
-        for (c in parsed.spines.indices) {
+        for (c in parsed.spineIndices) {
             val own = chapterPages[c] ?: return@withLock null
             if (remaining < own.size) return@withLock KiteLocation(c, remaining)
             remaining -= own.size
@@ -330,13 +351,13 @@ public class EpubDocument internal constructor(
     /* ── whole-document views (these lay out everything) ──────────────────── */
 
     private fun prepareAll() {
-        for (c in parsed.spines.indices) prepareChapter(c)
+        for (c in parsed.spineIndices) prepareChapter(c)
     }
 
     /** `chapterPageOffset[c]` is the global index of chapter `c`'s first page. */
     private fun chapterPageOffsets(): IntArray = tableLock.withLock {
-        val offsets = IntArray(parsed.spines.size + 1)
-        for (c in parsed.spines.indices) offsets[c + 1] = offsets[c] + (chapterPages[c]?.size ?: 0)
+        val offsets = IntArray(parsed.spineCount + 1)
+        for (c in parsed.spineIndices) offsets[c + 1] = offsets[c] + (chapterPages[c]?.size ?: 0)
         offsets
     }
 
@@ -348,7 +369,7 @@ public class EpubDocument internal constructor(
         get() {
             prepareAll()
             return buildList {
-                for (c in parsed.spines.indices) {
+                for (c in parsed.spineIndices) {
                     for (r in renders(c)) add(EpubPage(r, this@EpubDocument, c))
                 }
             }
@@ -402,10 +423,10 @@ public class EpubDocument internal constructor(
         prepareAll()
         val offsets = chapterPageOffsets()
         val map = HashMap<String, Int>()
-        parsed.spines.forEachIndexed { i, sp ->
+        parsed.spinePaths.forEachIndexed { i, path ->
             val base = offsets[i]
-            map.getOrPut(sp.path) { base + localPageOf(i, docRoot(i).y) }
-            collectAnchors(docRoot(i)) { id, y -> map.getOrPut("${sp.path}#$id") { base + localPageOf(i, y) } }
+            map.getOrPut(path) { base + localPageOf(i, docRoot(i).y) }
+            collectAnchors(docRoot(i)) { id, y -> map.getOrPut("$path#$id") { base + localPageOf(i, y) } }
         }
         map
     }
@@ -421,7 +442,7 @@ public class EpubDocument internal constructor(
 
     /** The chapter a zip path belongs to, or null when it is not on the spine. */
     private fun chapterOfPath(path: String): Int? =
-        parsed.spines.indexOfFirst { it.path == path }.takeIf { it >= 0 }
+        parsed.spinePaths.indexOfFirst { it == path }.takeIf { it >= 0 }
 
     /**
      * A reading position for an internal href (`chapter3.xhtml#part-two`), built
@@ -539,193 +560,19 @@ public class EpubDocument internal constructor(
         ): EpubDocument = open(bytes, EpubSettings(pageWidth, pageHeight, fontSize, margin))
 
         /**
-         * Parse [bytes] and lay out at [settings].
+         * Open [bytes] at [settings]. Reads the container, the OPF and the table
+         * of contents; chapters parse and lay out when something asks for them.
          *
          * @throws EpubFormatException when the bytes are not a readable EPUB,
          *   with a message naming the first structural failure (missing
          *   container.xml, missing OPF, empty spine, no readable documents).
          */
         public fun open(bytes: ByteArray, settings: EpubSettings): EpubDocument =
-            EpubDocument(parse(bytes, settings), settings)
+            EpubDocument(ParsedEpub.parse(bytes), settings)
 
         /** [open], but null instead of [EpubFormatException] on a malformed book. */
         public fun openOrNull(bytes: ByteArray, settings: EpubSettings = EpubSettings()): EpubDocument? =
             try { open(bytes, settings) } catch (_: EpubFormatException) { null }
-
-        /**
-         * The font-size-independent parse: unzip + OPF + per-spine DOM/CSS +
-         * fonts + metadata + TOC. Everything here is reused across re-layouts, so
-         * [EpubDocument.withSettings] never re-runs it. [settings] is read only
-         * for the default viewport fallback of a spine with no `<meta viewport>`.
-         */
-        private fun parse(bytes: ByteArray, settings: EpubSettings): ParsedEpub {
-            val zip = ZipReader(bytes)
-            val opfPath = containerOpfPath(zip)
-                ?: throw EpubFormatException("META-INF/container.xml missing or unreadable")
-            val opf = Opf.parse(zip, opfPath)
-                ?: throw EpubFormatException("OPF not found at $opfPath")
-            val contentPaths = opf.spineIdrefs.mapNotNull { opf.itemsById[it]?.href }.map { resolvePath(opf.baseDir, it) }
-            if (contentPaths.isEmpty()) throw EpubFormatException("spine is empty in $opfPath")
-
-            val fixedLayout = opf.renditionLayout == "pre-paginated" ||
-                contentPaths.indices.all { opf.fixedLayoutAt(it) }
-            val baseDir = if (opf.direction?.lowercase() == "rtl") Direction.RTL else Direction.LTR
-            val spines = ArrayList<ParsedSpine>()
-            val faceRules = ArrayList<Pair<FontFaceRule, String>>() // rule + the doc dir its src resolves against
-            for (path in contentPaths) {
-                val xhtml = zip.readText(path) ?: continue
-                val docDir = path.substringBeforeLast('/', "")
-                val tree = HtmlParser.parse(xhtml)
-                val css = CssParser.parseAll(collectAuthorCss(zip, tree, docDir), Origin.AUTHOR)
-                for (face in css.fontFaces) faceRules.add(face to docDir)
-                val vp = parseViewport(tree) ?: (settings.pageWidth to settings.pageHeight)
-                spines.add(ParsedSpine(tree, css.rules, docDir, vp, path))
-            }
-            if (spines.isEmpty()) throw EpubFormatException("spine has no readable documents")
-
-            return ParsedEpub(
-                spines = spines,
-                zip = zip,
-                fonts = buildFontRegistry(zip, opf, faceRules),
-                metadata = buildMetadata(opf),
-                toc = TocParser.parse(zip, opf, contentPaths) { base, href -> resolvePath(base, href) },
-                baseDir = baseDir,
-                fixedLayout = fixedLayout,
-            )
-        }
-
-        private fun buildMetadata(opf: OpfPackage): EpubMetadata {
-            val coverHref = opf.items.firstOrNull { it.hasProperty("cover-image") }?.href
-                ?: opf.metaCoverId?.let { opf.itemsById[it]?.href }
-            return EpubMetadata(
-                title = opf.title,
-                creators = opf.creators,
-                language = opf.language,
-                identifier = opf.uniqueId,
-                coverImagePath = coverHref?.let { resolvePath(opf.baseDir, it) },
-                rightToLeft = opf.direction?.lowercase() == "rtl",
-            )
-        }
-
-        /** Load every `@font-face`'s TrueType file from the zip (deobfuscating mangled ones). */
-        private fun buildFontRegistry(zip: ZipReader, opf: OpfPackage, faceRules: List<Pair<FontFaceRule, String>>): FontRegistry {
-            if (faceRules.isEmpty()) return FontRegistry.EMPTY
-            val obf = parseEncryption(zip)
-            val uid = opf.uniqueId ?: ""
-            val faces = ArrayList<EmbeddedFace>()
-            for ((rule, docDir) in faceRules) {
-                // Prefer the cheapest format to unpack: raw SFNT (.ttf/.otf), then
-                // WOFF 1.0 (zlib tables), then WOFF2 (brotli + glyf transform).
-                // Fall back to the first src otherwise and let signature sniffing
-                // in FontRegistry.face sort it out.
-                val url = rule.srcUrls.firstOrNull { it.endsWith(".ttf", true) || it.endsWith(".otf", true) }
-                    ?: rule.srcUrls.firstOrNull { it.endsWith(".woff", true) }
-                    ?: rule.srcUrls.firstOrNull { it.endsWith(".woff2", true) }
-                    ?: rule.srcUrls.firstOrNull()
-                    ?: continue
-                val zipPath = resolvePath(docDir, url)
-                val raw = zip.read(zipPath) ?: continue
-                val bytes = obf[zipPath]?.let { Deobfuscate.deobfuscate(raw, it, uid) } ?: raw
-                FontRegistry.face(rule.family, rule.bold, rule.italic, bytes)?.let { faces.add(it) }
-            }
-            return FontRegistry(faces)
-        }
-
-        /** META-INF/encryption.xml → obfuscated zip-path → algorithm URI. */
-        private fun parseEncryption(zip: ZipReader): Map<String, String> {
-            val xml = zip.readText("META-INF/encryption.xml") ?: return emptyMap()
-            val map = HashMap<String, String>()
-            var algo: String? = null
-            for (t in MiniXml.tokenize(xml)) if (t is XmlToken.Open) when (t.name) {
-                "encrypteddata" -> algo = null
-                "encryptionmethod" -> algo = t.attrs["algorithm"]
-                "cipherreference" -> { val uri = t.attrs["uri"]; val a = algo; if (uri != null && a != null) map[resolvePath("", uri)] = a }
-            }
-            return map
-        }
-
-        /** META-INF/container.xml -> the OPF package path. */
-        private fun containerOpfPath(zip: ZipReader): String? {
-            val xml = zip.readText("META-INF/container.xml") ?: return null
-            for (t in MiniXml.tokenize(xml)) {
-                if (t is XmlToken.Open && t.name == "rootfile") t.attrs["full-path"]?.let { return it }
-            }
-            return null
-        }
-
-        /** Gather author CSS in document order: linked stylesheets then `<style>` blocks. */
-        private fun collectAuthorCss(zip: ZipReader, tree: HtmlNode.Element, docDir: String): String {
-            val sb = StringBuilder()
-            fun walk(el: HtmlNode.Element) {
-                when (el.tag) {
-                    "link" -> {
-                        val rel = el.attrs["rel"]?.lowercase() ?: ""
-                        val href = el.attrs["href"]
-                        if ("stylesheet" in rel && href != null) {
-                            val path = resolvePath(docDir, href)
-                            zip.readText(path)?.let {
-                                sb.append(inlineImports(zip, it, dirOf(path), 0, hashSetOf(path))).append('\n')
-                            }
-                        }
-                    }
-                    "style" -> {
-                        val text = buildString { for (c in el.children) if (c is HtmlNode.Text) append(c.text) }
-                        sb.append(inlineImports(zip, text, docDir, 0, HashSet())).append('\n')
-                    }
-                    else -> for (c in el.children) if (c is HtmlNode.Element) walk(c)
-                }
-            }
-            walk(tree)
-            return sb.toString()
-        }
-
-        /**
-         * Replace `@import url(...)` / `@import "..."` with the imported
-         * sheet's content, resolved zip-relative, recursively (depth cap 8,
-         * visited-set cycle guard). Media conditions after the target are
-         * ignored, matching the parser's always-on `@media` flattening.
-         */
-        private fun inlineImports(zip: ZipReader, css: String, baseDir: String, depth: Int, visited: MutableSet<String>): String {
-            if (depth >= 8 || "@import" !in css) return css
-            return IMPORT_RE.replace(css) { m ->
-                val path = resolvePath(baseDir, m.groupValues[1])
-                if (!visited.add(path)) ""
-                else zip.readText(path)?.let { inlineImports(zip, it, dirOf(path), depth + 1, visited) } ?: ""
-            }
-        }
-
-        private fun dirOf(path: String): String = path.substringBeforeLast('/', "")
-
-        private val IMPORT_RE = Regex(
-            """@import\s+(?:url\(\s*)?["']?([^"')\s;]+)["']?\s*\)?[^;{]*;""",
-            RegexOption.IGNORE_CASE,
-        )
-
-        /** Fixed-layout page size: the `<meta name=viewport>` width/height, else a root `<svg>`'s. */
-        private fun parseViewport(tree: HtmlNode.Element): Pair<Double, Double>? {
-            var result: Pair<Double, Double>? = null
-            var svgSize: Pair<Double, Double>? = null
-            fun px(s: String?) = s?.trim()?.removeSuffix("px")?.toDoubleOrNull()
-            fun walk(el: HtmlNode.Element) {
-                if (el.tag == "meta" && el.attrs["name"]?.lowercase() == "viewport") {
-                    var w: Double? = null; var h: Double? = null
-                    for (part in (el.attrs["content"] ?: "").split(',', ';')) {
-                        val kv = part.split('=')
-                        if (kv.size == 2) when (kv[0].trim().lowercase()) {
-                            "width" -> w = px(kv[1]); "height" -> h = px(kv[1])
-                        }
-                    }
-                    if (w != null && h != null && w > 0 && h > 0) result = w to h
-                }
-                if (svgSize == null && el.tag.equals("svg", true)) {
-                    val w = px(el.attrs["width"]); val h = px(el.attrs["height"])
-                    if (w != null && h != null && w > 0 && h > 0) svgSize = w to h
-                }
-                for (c in el.children) if (c is HtmlNode.Element) walk(c)
-            }
-            walk(tree)
-            return result ?: svgSize
-        }
 
         /** Resolve a relative href against [baseDir], normalizing `.`/`..` + percent-decode. */
         internal fun resolvePath(baseDir: String, href: String): String {
@@ -807,32 +654,6 @@ public data class EpubSettings(
     val justify: Boolean? = null,
     /** False drops the publisher's CSS (author rules + inline styles): UA + reader layers only. */
     val usePublisherCss: Boolean = true,
-)
-
-/** One spine document's font-size-independent parse: its DOM, author CSS rules, base dir and viewport. */
-internal class ParsedSpine(
-    val tree: HtmlNode.Element,
-    val rules: List<StyleRule>,
-    val docDir: String,
-    val viewport: Pair<Double, Double>,
-    /** Zip path of this spine document, the key for href -> page navigation. */
-    val path: String,
-)
-
-/**
- * The reusable, font-size-independent parse of a book (unzip + per-spine DOM/CSS
- * + fonts + metadata + TOC). One [ParsedEpub] backs any number of [EpubDocument]s
- * at different [EpubSettings], so re-flowing on a settings change is just a
- * re-layout, never a re-parse.
- */
-internal class ParsedEpub(
-    val spines: List<ParsedSpine>,
-    val zip: ZipReader,
-    val fonts: FontRegistry,
-    val metadata: EpubMetadata,
-    val toc: TableOfContents,
-    val baseDir: Direction,
-    val fixedLayout: Boolean,
 )
 
 /** One reflowed EPUB page: paints backgrounds/borders, then text lines and images. */

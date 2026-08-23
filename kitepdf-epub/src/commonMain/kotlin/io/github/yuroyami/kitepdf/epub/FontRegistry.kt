@@ -102,6 +102,10 @@ internal class FontRegistry(private val faces: List<EmbeddedFace>) {
 
     val isEmpty: Boolean get() = faces.isEmpty()
 
+    /** This registry plus [extra], which loses every tie because it is matched last. */
+    fun with(extra: List<EmbeddedFace>): FontRegistry =
+        if (extra.isEmpty()) this else FontRegistry(faces + extra)
+
     companion object {
         val EMPTY = FontRegistry(emptyList())
 

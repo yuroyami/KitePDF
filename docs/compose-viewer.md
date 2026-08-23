@@ -365,8 +365,8 @@ One catch with a custom painter: the grab area is the boundary line, not the sha
 ## Opening at a saved position
 
 A PDF is ready the moment it opens. A reflowable EPUB is not: it has to be laid
-out before it has pages, and a whole book takes seconds. So `KiteDocView` lays
-out one chapter at a time, starting with the one the reader is on.
+out before it has pages, and a whole book takes seconds. So `KiteDocView` reads
+and lays out one chapter at a time, starting with the one the reader is on.
 
 ```kotlin
 val state = rememberKiteDocViewState(book, savedBookmark)
