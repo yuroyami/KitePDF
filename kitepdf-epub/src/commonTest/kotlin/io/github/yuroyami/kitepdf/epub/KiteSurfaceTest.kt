@@ -73,6 +73,9 @@ class KiteSurfaceTest {
         val doc = book()
         assertTrue(doc.pageCount > 2, "the long chapter must paginate (got ${doc.pageCount})")
 
+        // Global page indices exist only once the book is laid out; the outline
+        // itself no longer forces that, so ask for it here.
+        doc.pageCount
         val outline = doc.outline
         assertEquals(2, outline.size)
         assertEquals("Chapter One", outline[0].title)
