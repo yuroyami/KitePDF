@@ -64,6 +64,10 @@ class RedactionFormCloneTest {
         }
     }
 
+    /** Decoded content stream of page 0, to prove which `Do` operations survived. */
+    private fun pageContent(pdf: ByteArray): String =
+        KitePDF.open(pdf).pages[0].contentBytes.decodeToString()
+
     /** How many form XObject streams [pdf] contains, so a copy per invocation shows up. */
     @OptIn(KiteRawApi::class)
     private fun formObjectCount(pdf: ByteArray): Int {
@@ -202,5 +206,136 @@ class RedactionFormCloneTest {
         assertEquals(1, formObjectCount(out), "the descent kept going and minted a form copy per level")
         assertTrue(objectsHolding(pdf, "LOOP") == 1, "fixture is wrong, the scan proves nothing")
         assertEquals(0, objectsHolding(out, "LOOP"), "the cycle guard skipped the redaction as well as the cycle")
+    }
+
+    @Test fun an_undecodable_form_over_a_region_is_dropped_not_skipped() {
+        // /FlateDecode over bytes that are not Flate. A redaction cannot inspect
+        // this form, and it paints into the region, so leaving it would ship
+        // unexamined content inside a file the caller believes is clean.
+        val garbage = "NOT-REALLY-FLATE-SECRET".encodeToByteArray()
+        val base = RawPdf.page(
+            content = "q 1 0 0 1 100 700 cm /Fm0 Do Q".encodeToByteArray(),
+            resources = "<< /Font << /F1 4 0 R >> /XObject << /Fm0 6 0 R >> >>",
+            extra = listOf(
+                RawPdf.obj(
+                    6,
+                    "<< /Type /XObject /Subtype /Form /BBox [0 0 200 20] /Filter /FlateDecode >>",
+                    garbage,
+                ),
+            ),
+        )
+        assertTrue(RawPdf.containsBytes(base, garbage), "fixture is wrong, the scan proves nothing")
+
+        val doc = KitePDF.open(base)
+        val out = doc.edit().apply { redactRegion(doc.pages[0], highRegion) }.saveRewritten()
+
+        assertTrue(
+            !pageContent(out).contains("Do"),
+            "the undecodable form is still invoked: ${pageContent(out)}",
+        )
+        assertEquals(0, formObjectCount(out), "the dropped form's entry was left in /XObject, so the GC kept it")
+        assertTrue(!RawPdf.containsBytes(out, garbage), "the unreadable form's bytes survive the rewrite")
+    }
+
+    @Test fun two_calls_over_one_invocation_leave_no_orphan() {
+        // One invocation, two regions, redacted in two separate calls. The second
+        // call must rewrite the same object the first did, not clone it and leave
+        // the first object (still holding the second region's text) named in
+        // /XObject where the reachability GC keeps it.
+        val twoLines = (
+            "BT /F1 12 Tf 0 600 Td (AAAAA) Tj ET\n" +
+                "BT /F1 12 Tf 0 300 Td (BBBBB) Tj ET\n"
+            ).encodeToByteArray()
+        val base = RawPdf.page(
+            content = "q 1 0 0 1 100 100 cm /Fm0 Do Q".encodeToByteArray(),
+            resources = "<< /Font << /F1 4 0 R >> /XObject << /Fm0 6 0 R >> >>",
+            extra = listOf(
+                RawPdf.obj(
+                    6,
+                    "<< /Type /XObject /Subtype /Form /BBox [0 0 400 700] /Resources << /Font << /F1 4 0 R >> >> >>",
+                    twoLines,
+                ),
+            ),
+        )
+        val doc = KitePDF.open(base)
+        val out = doc.edit().apply {
+            redactRegion(doc.pages[0], KiteRectangle(90.0, 690.0, 320.0, 726.0))
+            redactRegion(doc.pages[0], KiteRectangle(90.0, 390.0, 320.0, 426.0))
+        }.saveRewritten()
+
+        assertEquals(emptyList(), drawnRuns(out), "a redacted line is still drawn")
+        assertEquals(1, objectsHolding(base, "AAAAA"), "fixture is wrong, the scan proves nothing")
+        assertEquals(0, objectsHolding(out, "AAAAA"), "the first region's text survives decoded in some object")
+        assertEquals(0, objectsHolding(out, "BBBBB"), "the second region's text survives in the orphaned original")
+        assertEquals(1, formObjectCount(out), "the second call cloned the form and left the original behind")
+    }
+
+    @Test fun an_inverted_rectangle_redacts_the_same_as_a_normal_one() {
+        // ISO 32000-1 7.9.5 lets a rectangle name its corners in either order, so an
+        // inverted one is a legal way to say the same region, not a no-op. The text
+        // is on the PAGE, not in a form: mapping a rect into form space takes the
+        // min/max of the transformed corners and so normalises on the way in, which
+        // would hide the defect.
+        val page = RawPdf.page("BT /F1 12 Tf 100 700 Td (SECRET) Tj ET".encodeToByteArray())
+        val ordered = KiteRectangle(left = 90.0, bottom = 690.0, right = 320.0, top = 726.0)
+        val inverted = KiteRectangle(left = 320.0, bottom = 726.0, right = 90.0, top = 690.0)
+
+        val a = KitePDF.open(page)
+        val fromOrdered = a.edit().apply { redactRegion(a.pages[0], ordered) }.saveRewritten()
+        val b = KitePDF.open(page)
+        val fromInverted = b.edit().apply { redactRegion(b.pages[0], inverted) }.saveRewritten()
+
+        assertEquals(emptyList(), drawnRuns(fromOrdered), "the ordered rectangle did not redact")
+        assertEquals(
+            drawnRuns(fromOrdered),
+            drawnRuns(fromInverted),
+            "the inverted rectangle redacted nothing, so the caller ships content they think is gone",
+        )
+        assertEquals(1, objectsHolding(page, "SECRET"), "fixture is wrong, the scan proves nothing")
+        assertEquals(0, objectsHolding(fromInverted, "SECRET"), "SECRET survives decoded after the inverted redaction")
+    }
+
+    @Test fun a_later_call_can_still_redact_inside_a_clone_an_earlier_call_minted() {
+        // Two invocations side by side, each drawing the same two lines. The first
+        // call redacts the left AAAAA, which mints a clone for the left invocation.
+        // The second call must be able to reach INTO that clone: it exists only in
+        // the staging map, so a lookup that only sees the base document would not
+        // recognise it as a form and would leave the left BBBBB in the file.
+        val twoLines = (
+            "BT /F1 12 Tf 0 600 Td (AAAAA) Tj ET\n" +
+                "BT /F1 12 Tf 0 300 Td (BBBBB) Tj ET\n"
+            ).encodeToByteArray()
+        val base = RawPdf.page(
+            content = (
+                "q 1 0 0 1 100 0 cm /Fm0 Do Q\n" +
+                    "q 1 0 0 1 300 0 cm /Fm0 Do Q\n"
+                ).encodeToByteArray(),
+            resources = "<< /Font << /F1 4 0 R >> /XObject << /Fm0 6 0 R >> >>",
+            extra = listOf(
+                RawPdf.obj(
+                    6,
+                    "<< /Type /XObject /Subtype /Form /BBox [0 0 400 700] /Resources << /Font << /F1 4 0 R >> >> >>",
+                    twoLines,
+                ),
+            ),
+        )
+        assertEquals(
+            listOf("AAAAA", "BBBBB", "AAAAA", "BBBBB"),
+            drawnRuns(base),
+            "fixture is wrong, both invocations must draw both lines",
+        )
+
+        val doc = KitePDF.open(base)
+        val out = doc.edit().apply {
+            redactRegion(doc.pages[0], KiteRectangle(90.0, 590.0, 250.0, 626.0)) // left AAAAA
+            redactRegion(doc.pages[0], KiteRectangle(90.0, 290.0, 250.0, 326.0)) // left BBBBB
+        }.saveRewritten()
+
+        assertEquals(
+            listOf("AAAAA", "BBBBB"),
+            drawnRuns(out),
+            "the second call could not see the clone the first call minted, so the left " +
+                "invocation still draws a line that was redacted",
+        )
     }
 }
