@@ -56,12 +56,12 @@ internal class RedactionEngine(
     val survivingImageNames = LinkedHashSet<String>()
 
     /**
-     * A form XObject invoked via 'Do' whose CTM-mapped area overlaps a region.
-     * [formRects] carries the page-space redaction rectangles mapped into the
-     * form's coordinate space (accounting for the CTM at the invocation site and
-     * the form's own `/Matrix`, which the caller supplies via [formMatrices]).
+     * One `Do` invocation of a form XObject that overlaps a region, carrying the
+     * regions mapped into that form's own space and the index of the `Do` in the
+     * FILTERED output stream. The index is what lets the caller repoint this one
+     * invocation at a redacted clone without touching its siblings.
      */
-    data class FormHit(val name: String, val formRects: List<KiteRectangle>)
+    data class FormHit(val name: String, val formRects: List<KiteRectangle>, val opIndex: Int)
 
     /** Form XObjects whose invocation overlaps a region and must be recursed into. */
     val formXObjectHits = ArrayList<FormHit>()
@@ -268,7 +268,7 @@ internal class RedactionEngine(
             return
         }
         if (xobjectName != null && xobjectName in formXObjectNames) {
-            recordFormHitIfIntersects(xobjectName)
+            recordFormHitIfIntersects(xobjectName, out.size)
         }
         out.add(op)
     }
@@ -282,7 +282,7 @@ internal class RedactionEngine(
      * page-space rects through unchanged (over-covering) rather than silently
      * skipping. A redaction must never no-op on content it can't reason about.
      */
-    private fun recordFormHitIfIntersects(xobjectName: String) {
+    private fun recordFormHitIfIntersects(xobjectName: String, opIndex: Int) {
         val formMatrix = formMatrices[xobjectName] ?: KiteMatrix.IDENTITY
         // model→page transform seen by content drawn inside the form.
         val toPage = gs.ctm.concat(formMatrix)
@@ -305,7 +305,7 @@ internal class RedactionEngine(
             val maxY = corners.maxOf { it.second }
             mapped.add(KiteRectangle(left = minX, bottom = minY, right = maxX, top = maxY))
         }
-        formXObjectHits.add(FormHit(xobjectName, mapped))
+        formXObjectHits.add(FormHit(xobjectName, mapped, opIndex))
     }
 
     /** Image XObjects (and inline images) are painted into the unit square under the CTM. */
