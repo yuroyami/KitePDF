@@ -43,9 +43,13 @@ kotlin {
             }
         }
         commonMain.dependencies {
-            implementation(projects.kitepdfPdf)
+            // The umbrella, so the sample can open a PDF or an EPUB through KiteDoc.
+            implementation(projects.kitepdf)
             implementation(projects.kitepdfComposeViewer)
             implementation(libs.bundles.compose.multiplatform)
+        }
+        commonTest.dependencies {
+            implementation(kotlin("test"))
         }
         androidMain.dependencies {
             implementation(libs.android.activity.compose)

@@ -375,6 +375,8 @@ KiteDocView(state, Modifier.fillMaxSize())
 val savedBookmark = state.currentBookmark()   // save on pause
 ```
 
+The sample app in `sample/` runs this loop against a generated 24-chapter book.
+
 The rest of the book loads in the background, nearest chapter first. A chapter
 that lands above the reader does not move their page.
 

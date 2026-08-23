@@ -35,6 +35,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.graphics.Color
 import io.github.yuroyami.kitepdf.KitePDF
 import io.github.yuroyami.kitepdf.PdfDocument
+import io.github.yuroyami.kitepdf.core.KiteBookmark
+import io.github.yuroyami.kitepdf.core.KiteDocument
+import io.github.yuroyami.kitepdf.document.KiteDoc
+import io.github.yuroyami.kitepdf.epub.EpubDocument
 import io.github.yuroyami.kitepdf.compose.KiteDocLayout
 import io.github.yuroyami.kitepdf.compose.KiteNavigationControls
 import io.github.yuroyami.kitepdf.compose.KiteThumbnailStrip
@@ -52,10 +56,16 @@ import io.github.yuroyami.kitepdf.compose.rememberKiteDocViewState
 fun App() {
     MaterialTheme(colorScheme = darkColorScheme()) {
         Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-            var demo by remember { mutableStateOf(Demo.RECT) }
-            val bytes = demo.bytes
-            val doc = remember(bytes) {
-                runCatching { KitePDF.open(bytes) }
+            var demo by remember { mutableStateOf(Demo.EPUB) }
+            // EPUB reader settings live up here: changing the font size builds a
+            // new document, so the state below has to be rebuilt with it.
+            var fontSize by remember { mutableStateOf(12.0) }
+            var resume by remember { mutableStateOf<KiteBookmark?>(null) }
+
+            val opened = remember(demo) { runCatching { KiteDoc.open(demo.bytes) } }
+            // withFontSize re-flows the same parsed book. It never re-reads the file.
+            val doc = remember(opened, fontSize) {
+                opened.map { if (it is EpubDocument && it.fontSize != fontSize) it.withFontSize(fontSize) else it }
             }
 
             Column(
@@ -65,9 +75,27 @@ fun App() {
                 verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {
                 Header()
-                DemoSelector(current = demo, onSelect = { demo = it })
+                DemoSelector(
+                    current = demo,
+                    onSelect = {
+                        resume = null
+                        demo = it
+                    },
+                )
                 doc.fold(
-                    onSuccess = { DocumentDisplay(it, Modifier.weight(1f)) },
+                    onSuccess = {
+                        DocumentDisplay(
+                            doc = it,
+                            resume = resume,
+                            fontSize = fontSize,
+                            onFontSize = { size, mark ->
+                                // Save the place first, then swap the document.
+                                resume = mark
+                                fontSize = size
+                            },
+                            modifier = Modifier.weight(1f),
+                        )
+                    },
                     onFailure = { ErrorCard(it) },
                 )
             }
@@ -112,19 +140,39 @@ private enum class LayoutChoice(val label: String, val layout: KiteDocLayout) {
 }
 
 @Composable
-private fun DocumentDisplay(doc: PdfDocument, modifier: Modifier = Modifier) {
+private fun DocumentDisplay(
+    doc: KiteDocument,
+    resume: KiteBookmark?,
+    fontSize: Double,
+    onFontSize: (Double, KiteBookmark) -> Unit,
+    modifier: Modifier = Modifier,
+) {
     // KiteDocView's onPageRendered callback below feeds this. It proves the export path.
     var exportNote by remember(doc) { mutableStateOf("rendering…") }
     var layoutChoice by remember { mutableStateOf(LayoutChoice.VERTICAL) }
-    val state = rememberKiteDocViewState(doc)
+    // A new document (a font size change) makes a new state, opened at the
+    // bookmark the reader was on.
+    val state = rememberKiteDocViewState(doc, resume ?: KiteBookmark.Page(0))
+    val book = doc as? EpubDocument
 
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        // Metadata strip
+        // Metadata strip. A reflowable book has no final page count until it is
+        // fully laid out, so the total is marked approximate until then.
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            AssistChip(onClick = {}, label = { Text("PDF ${doc.version}") })
-            AssistChip(onClick = {}, label = { Text("${doc.pageCount} page(s)") })
+            AssistChip(
+                onClick = {},
+                label = { Text(if (book != null) "EPUB" else "PDF ${(doc as PdfDocument).version}") },
+            )
+            AssistChip(
+                onClick = {},
+                label = {
+                    val total = if (state.isComplete) "${state.knownPageCount}" else "~${state.knownPageCount}"
+                    Text("$total page(s)")
+                },
+            )
             AssistChip(onClick = {}, label = { Text(exportNote) })
         }
+        if (book != null) ReaderSettings(state, fontSize, onFontSize)
         // Layout switcher: same document + state, three layouts.
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             for (c in LayoutChoice.entries) {
@@ -156,6 +204,20 @@ private fun DocumentDisplay(doc: PdfDocument, modifier: Modifier = Modifier) {
                         layout = layoutChoice.layout,
                         zoomSpec = KiteZoomSpec(maxZoom = 6f),
                         colors = KiteDocViewColors(viewportBackground = Color(0xFF1E1E1E)),
+                        // What a chapter shows while it is still being laid out.
+                        chapterPlaceholder = { chapter ->
+                            Column(
+                                modifier = Modifier.fillMaxSize(),
+                                verticalArrangement = Arrangement.Center,
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                            ) {
+                                Text(
+                                    "Chapter ${chapter + 1}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                                )
+                            }
+                        },
                         onPageRendered = { index, image ->
                             val png = image.encodeToPng()
                             exportNote = "page ${index + 1} → ${png?.size ?: 0} B PNG"
@@ -186,10 +248,16 @@ private fun DocumentDisplay(doc: PdfDocument, modifier: Modifier = Modifier) {
                         .padding(16.dp)
                         .verticalScroll(rememberScrollState()),
                 ) {
-                    Text("Extracted text:", style = MaterialTheme.typography.titleSmall)
+                    Text("Text on this page:", style = MaterialTheme.typography.titleSmall)
                     Spacer(Modifier.height(8.dp))
+                    // The page being read, not page one: asking for doc.pages
+                    // would lay out every chapter of a reflowable book.
+                    val here = state.currentLocation
                     Text(
-                        text = doc.pages.first().extractText().ifEmpty { "(empty)" },
+                        text = runCatching { doc.page(here).textContent()?.plainText }
+                            .getOrNull()
+                            ?.ifEmpty { "(empty)" }
+                            ?: "(laying out chapter ${here.chapter + 1}…)",
                         fontFamily = FontFamily.Monospace,
                         style = MaterialTheme.typography.bodyMedium,
                     )
@@ -215,7 +283,39 @@ private fun ErrorCard(t: Throwable) {
     }
 }
 
+/**
+ * Font size for a reflowable book, and the recipe that makes it not lose the
+ * reader's place: take a bookmark, rebuild the document, reopen at the bookmark.
+ * A bookmark is a position in the text, so it survives the re-flow that a
+ * different font size causes; a page number would not.
+ */
+@Composable
+private fun ReaderSettings(
+    state: io.github.yuroyami.kitepdf.compose.KiteDocViewState,
+    fontSize: Double,
+    onFontSize: (Double, KiteBookmark) -> Unit,
+) {
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text("Font", style = MaterialTheme.typography.labelLarge)
+        for (size in listOf(10.0, 12.0, 15.0, 19.0)) {
+            FilterChip(
+                selected = size == fontSize,
+                onClick = { if (size != fontSize) onFontSize(size, state.currentBookmark()) },
+                label = { Text("${size.toInt()}pt") },
+            )
+        }
+        AssistChip(
+            onClick = {},
+            label = { Text("chapter ${state.currentLocation.chapter + 1}") },
+        )
+    }
+}
+
 private enum class Demo(val label: String, val bytes: ByteArray) {
+    EPUB("EPUB book", DemoEpub.book),
     RECT("Rectangles & color", DemoPdf.rectanglesAndText),
     FONTS("Multiple fonts", DemoPdf.multipleFonts),
     CLIP("Clipping (W)", DemoPdf.clippedShapes),
