@@ -112,10 +112,6 @@ public class KiteDocViewState(
     internal fun pageAt(index: Int): KitePage? =
         (items.getOrNull(index) as? DocItem.Page)?.let { document.page(it.location) }
 
-    /** The location in slot [index], or null for a placeholder. */
-    internal fun locationAt(index: Int): KiteLocation? =
-        (items.getOrNull(index) as? DocItem.Page)?.location
-
     /** The chapter whose placeholder is in slot [index], or null for a page. */
     internal fun chapterAt(index: Int): Int? =
         (items.getOrNull(index) as? DocItem.ChapterGap)?.chapter
@@ -138,13 +134,33 @@ public class KiteDocViewState(
         items.indexOfFirst { it is DocItem.Page && it.location == location }
 
     /**
+     * Where [location] is now: its own slot, or the placeholder its chapter is
+     * still holding. -1 only when the chapter is gone. Use this to follow a
+     * reader across a change in the strip, since the slot they are on may be a
+     * placeholder that has not become pages yet.
+     */
+    internal fun slotFor(location: KiteLocation): Int {
+        val exact = indexOf(location)
+        if (exact >= 0) return exact
+        return items.indexOfFirst { it is DocItem.ChapterGap && it.chapter == location.chapter }
+    }
+
+    /**
+     * The reading position of slot [index]: a page's own location, or the first
+     * page of the chapter whose placeholder sits there. Null past the strip.
+     */
+    internal fun anchorAt(index: Int): KiteLocation? = when (val item = items.getOrNull(index)) {
+        is DocItem.Page -> item.location
+        is DocItem.ChapterGap -> KiteLocation(item.chapter, 0)
+        null -> null
+    }
+
+    /**
      * Where the reader is. Always exact, even mid-layout, unlike a global page
      * number which cannot exist until the pages before it are counted.
      */
     public val currentLocation: KiteLocation
-        get() = locationAt(currentPage)
-            ?: (items.getOrNull(currentPage) as? DocItem.ChapterGap)?.let { KiteLocation(it.chapter, 0) }
-            ?: KiteLocation.START
+        get() = anchorAt(currentPage) ?: KiteLocation.START
 
     /**
      * A position to save now and reopen with later. Survives a font size, page

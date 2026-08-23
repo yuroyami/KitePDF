@@ -1010,6 +1010,10 @@ private const val PAGE_FADE_MS = 160
  * underneath it. A [androidx.compose.foundation.pager.PagerState] tracks an
  * index, so when a chapter lands ahead of the reader every later index shifts
  * by that chapter's page count; this puts the pager back on the same location.
+ *
+ * A reader waiting on a chapter's placeholder is anchored to that chapter's
+ * first page, so the chapter landing puts them at its start rather than
+ * dragging them back to wherever they were before.
  */
 @Composable
 private fun KeepPagerOnLocation(
@@ -1026,13 +1030,13 @@ private fun KeepPagerOnLocation(
             // Anything else is the reader themselves, so follow them.
             if (gained) {
                 val was = anchor.value
-                val moved = if (was != null) state.indexOf(was) else -1
+                val moved = if (was != null) state.slotFor(was) else -1
                 if (moved >= 0 && moved != current) {
                     pagerState.scrollToPage(moved)
                     return@collect
                 }
             }
-            state.locationAt(current)?.let { anchor.value = it }
+            state.anchorAt(current)?.let { anchor.value = it }
         }
     }
 }
