@@ -112,6 +112,58 @@ internal object EpubFixtures {
         )
     }
 
+    /**
+     * A book laid out in folders the way real EPUBs are: documents under
+     * `OEBPS/Text/`, stylesheets under `OEBPS/Styles/`, everything else where the
+     * caller puts it. Every chapter links every sheet in [sheets], in order.
+     *
+     * The folders matter: a `url()` in `Styles/book.css` resolves against
+     * `OEBPS/Styles`, not against the chapter's `OEBPS/Text`.
+     */
+    fun epubFoldered(
+        bodies: List<String>,
+        sheets: List<Pair<String, String>> = emptyList(),
+        extraEntries: List<Pair<String, ByteArray>> = emptyList(),
+        missingSpineItems: List<String> = emptyList(),
+    ): ByteArray {
+        val container = """<?xml version="1.0"?><container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container"><rootfiles><rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/></rootfiles></container>"""
+        val docItems = bodies.indices.joinToString("") {
+            """<item id="c${it + 1}" href="Text/chapter${it + 1}.xhtml" media-type="application/xhtml+xml"/>"""
+        }
+        val ghostItems = missingSpineItems.joinToString("") {
+            """<item id="$it" href="Text/$it.xhtml" media-type="application/xhtml+xml"/>"""
+        }
+        val sheetItems = sheets.joinToString("") { (name, _) ->
+            """<item id="css-${name.substringBefore('.')}" href="Styles/$name" media-type="text/css"/>"""
+        }
+        val refs = (bodies.indices.map { "c${it + 1}" } + missingSpineItems)
+            .joinToString("") { """<itemref idref="$it"/>""" }
+        val opf = """<?xml version="1.0"?>
+            <package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="uid">
+              <metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:identifier id="uid">folder</dc:identifier></metadata>
+              <manifest>$docItems$ghostItems$sheetItems</manifest>
+              <spine>$refs</spine>
+            </package>"""
+        val links = sheets.joinToString("") { (name, _) ->
+            """<link rel="stylesheet" type="text/css" href="../Styles/$name"/>"""
+        }
+        val chapters = bodies.mapIndexed { i, raw ->
+            val body = if (raw.trimStart().startsWith("<body")) raw else "<body>$raw</body>"
+            "OEBPS/Text/chapter${i + 1}.xhtml" to
+                """<?xml version="1.0"?><html xmlns="http://www.w3.org/1999/xhtml"><head>$links</head>$body</html>"""
+                    .encodeToByteArray()
+        }
+        return storedZip(
+            listOf(
+                "mimetype" to "application/epub+zip".encodeToByteArray(),
+                "META-INF/container.xml" to container.encodeToByteArray(),
+                "OEBPS/content.opf" to opf.encodeToByteArray(),
+            ) + chapters +
+                sheets.map { (name, css) -> "OEBPS/Styles/$name" to css.encodeToByteArray() } +
+                extraEntries,
+        )
+    }
+
     /** Build a STORED (uncompressed) zip. CRCs are left zero; [ZipReader] does not verify them. */
     fun storedZip(entries: List<Pair<String, ByteArray>>): ByteArray {
         val out = ArrayList<Byte>()

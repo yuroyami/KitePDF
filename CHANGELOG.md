@@ -28,6 +28,24 @@ first. Resuming at the last chapter, desktop JVM, local corpus:
 The rest of the book lays out in the background, nearest chapter first, and a
 chapter landing above the reader does not move the page they are on.
 
+Chapters are also read and parsed one at a time now. Opening a book reads the
+container, the OPF and the table of contents, and nothing else. Two things paid
+for that: a chapter's HTML is parsed when that chapter is first laid out, and a
+stylesheet is parsed once per file instead of once per chapter that links it
+(one corpus book was reading and parsing the same three sheets 42 times over
+its 11 chapters).
+
+| book | chapters | open before | open after |
+|---|---|---|---|
+| 11.epub (5.0 MB) | 11 | 26.2 ms | 0.4 ms |
+| 13.epub (5.8 MB) | 7 | 18.9 ms | 0.4 ms |
+| 16.epub (6.0 MB) | 8 | 18.6 ms | 0.2 ms |
+| 6.epub (9.9 MB) | 26 | 10.2 ms | 0.1 ms |
+
+End to end, opening a book and showing its last chapter: 6.epub 11.3 ms to
+2.0 ms, 18.epub 12.1 ms to 4.3 ms, 11.epub 87.4 ms to 58.3 ms. Laying out a
+whole book costs the same as before.
+
 Closes the request in
 [issue #3](https://github.com/yuroyami/KitePDF/issues/3).
 
@@ -47,6 +65,20 @@ Closes the request in
   so it reads low until they land. `currentLocation` is the exact answer.
 - `KiteDocViewState.nextPage`/`previousPage` cross chapter boundaries and lay
   out the next chapter when they need to.
+- **An `@font-face` inside a document's own `<style>` block now belongs to that
+  document.** It used to reach every chapter in the book, which is not what a
+  `<style>` block does anywhere else. Faces declared in a stylesheet are still
+  the whole book's, which is where real books put them.
+
+### Fixed
+
+- A `url()` in a stylesheet resolves against that stylesheet's folder, as CSS
+  says. It used to resolve against the folder of whichever document linked the
+  sheet, so an `@font-face` in a book that keeps its CSS and its chapters at
+  different depths silently fell back to a system font.
+- A fixed-layout document with no `<meta name=viewport>` falls back to the
+  reader's current page size. The fallback used to be frozen at whatever the
+  book was first opened with, so `withPageSize` did not reach it.
 
 ### Added
 
@@ -74,9 +106,12 @@ Closes the request in
   what they did. Use `knownPageCount` with `isComplete` for a running total.
 - `KiteDocLayout.Spread` pairs pages by index, so it lays the document out
   fully before composing. It is meant for fixed-layout content anyway.
-- Lazy per-chapter PARSING (as opposed to layout) is not part of this. Parse is
-  1% to 15% of open time on desktop, and the font registry is built from every
-  chapter's `@font-face` rules, so it needs its own change.
+- Laying out any chapter also reads chapter 1, because the writing mode and the
+  hyphenation language are one decision per book and both come from it. That is
+  two chapters, never the whole book.
+- Byte-level streaming (reading parts of the file instead of all of it) is a
+  separate problem. Reading the bytes was never what made a book slow to open:
+  it is 0 to 11 ms on the corpus.
 
 ---
 

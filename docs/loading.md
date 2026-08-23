@@ -2,7 +2,7 @@
 
 Every source ends the same way: a `ByteArray` handed to a handler. Bytes are read whole, so a file, a stream and a download all become one array in memory before parsing starts. Everything on this page is a thin adapter around that.
 
-Reading the bytes is not what makes a big book slow to open; laying it out is, and that part IS incremental. See [Opening at a saved position](compose-viewer.md#opening-at-a-saved-position).
+Reading the bytes is not what makes a big book slow to open; parsing and laying out its chapters is, and both of those are incremental. `KiteDoc.open` on a 9.9 MB EPUB takes well under a millisecond: it reads the container, the OPF and the table of contents and stops. See [Opening at a saved position](compose-viewer.md#opening-at-a-saved-position).
 
 ## When you know the format
 
@@ -128,7 +128,7 @@ val state = rememberKiteDocViewState(doc, savedBookmark)
 val savedBookmark = state.currentBookmark()      // save this
 ```
 
-Only the bookmark's chapter is laid out before the page appears. See
+Only the bookmark's chapter is parsed and laid out before the page appears. See
 **[Reading EPUBs](epub.md)** for the detail.
 
 ## Re-flowing an EPUB after opening
@@ -140,4 +140,5 @@ val bigger = book.withFontSize(16.0)
 val resized = book.withPageSize(600.0, 900.0)
 ```
 
-The parse (unzip, OPF, CSS, fonts, TOC) is shared, so this only re-paginates.
+The parse (unzip, OPF, CSS, fonts, TOC, and whichever chapters have been read
+already) is shared, so this only re-paginates.
