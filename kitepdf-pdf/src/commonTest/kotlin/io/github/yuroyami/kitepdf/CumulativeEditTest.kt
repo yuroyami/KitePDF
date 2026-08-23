@@ -1,8 +1,12 @@
 package io.github.yuroyami.kitepdf
 
 import io.github.yuroyami.kitepdf.content.Operation
+import io.github.yuroyami.kitepdf.core.KiteRawApi
 import io.github.yuroyami.kitepdf.core.KiteRectangle
+import io.github.yuroyami.kitepdf.core.filters.FilterChain
 import io.github.yuroyami.kitepdf.core.parser.PdfInt
+import io.github.yuroyami.kitepdf.core.parser.PdfReference
+import io.github.yuroyami.kitepdf.core.parser.PdfStream
 import io.github.yuroyami.kitepdf.writer.PdfBuilder
 import io.github.yuroyami.kitepdf.writer.StandardFont
 import kotlin.test.Test
@@ -33,6 +37,22 @@ class CumulativeEditTest {
     private val alphaRegion = KiteRectangle(left = 60.0, bottom = 690.0, right = 470.0, top = 726.0)
     private val bravoRegion = KiteRectangle(left = 60.0, bottom = 490.0, right = 470.0, top = 526.0)
 
+    /**
+     * True when [needle] appears in any object of [doc] that decodes as a
+     * stream. A raw byte scan of the file can't see into a compressed
+     * `/Contents` stream (every stream this editor writes is Flate-encoded),
+     * so proving text is gone means decoding first.
+     */
+    @OptIn(KiteRawApi::class)
+    private fun decodedStreamsContain(doc: PdfDocument, needle: ByteArray): Boolean {
+        for (num in doc.xref.keys) {
+            val stream = doc.resolve(PdfReference(num, 0)) as? PdfStream ?: continue
+            val bytes = runCatching { FilterChain.decode(stream) }.getOrNull() ?: continue
+            if (RawPdf.containsBytes(bytes, needle)) return true
+        }
+        return false
+    }
+
     @Test fun two_redactions_remove_both_regions() {
         val base = threeLinePdf()
         val doc = KitePDF.open(base)
@@ -47,7 +67,7 @@ class CumulativeEditTest {
         assertContains(text, "public footer text")
     }
 
-    @Test fun neither_redacted_region_survives_in_the_raw_bytes() {
+    @Test fun neither_redacted_region_survives_in_any_decoded_stream() {
         val base = threeLinePdf()
         val doc = KitePDF.open(base)
         val out = doc.edit().apply {
@@ -55,9 +75,14 @@ class CumulativeEditTest {
             redactRegion(doc.pages[0], bravoRegion)
         }.saveRewritten()
 
-        assertTrue(RawPdf.containsBytes(base, "ALPHA".encodeToByteArray()), "fixture is wrong, the scan proves nothing")
-        assertFalse(RawPdf.containsBytes(out, "ALPHA".encodeToByteArray()), "ALPHA bytes survive the rewrite")
-        assertFalse(RawPdf.containsBytes(out, "BRAVO".encodeToByteArray()), "BRAVO bytes survive the rewrite")
+        // Positive control: the pre-redaction document must decode to both
+        // words, or a clean scan below would prove nothing.
+        assertTrue(decodedStreamsContain(doc, "ALPHA".encodeToByteArray()), "fixture is wrong, the scan proves nothing")
+        assertTrue(decodedStreamsContain(doc, "BRAVO".encodeToByteArray()), "fixture is wrong, the scan proves nothing")
+
+        val reopened = KitePDF.open(out)
+        assertFalse(decodedStreamsContain(reopened, "ALPHA".encodeToByteArray()), "ALPHA bytes survive decoded in the rewrite")
+        assertFalse(decodedStreamsContain(reopened, "BRAVO".encodeToByteArray()), "BRAVO bytes survive decoded in the rewrite")
     }
 
     @Test fun two_stamps_both_survive() {

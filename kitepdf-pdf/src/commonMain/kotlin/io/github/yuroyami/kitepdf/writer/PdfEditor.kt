@@ -656,6 +656,9 @@ public class PdfEditor internal constructor(
     private fun effectiveResources(ref: PdfReference, page: PdfPage): PdfDictionary? =
         when (val resources = effectivePageDict(ref)["Resources"]) {
             is PdfDictionary -> resources
+            // A reference that fails to resolve to a dictionary returns null here,
+            // it does not fall back to inheritance like the absent-key case below;
+            // every call site already null-checks this result.
             is PdfReference -> effectiveObject(resources.objectNumber) as? PdfDictionary
             else -> page.resources
         }
