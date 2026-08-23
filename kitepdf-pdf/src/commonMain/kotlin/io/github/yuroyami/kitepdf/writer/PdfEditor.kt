@@ -689,6 +689,7 @@ public class PdfEditor internal constructor(
      */
     public fun redactRegions(page: PdfPage, rectangles: List<KiteRectangle>) {
         if (rectangles.isEmpty()) return
+        formSources.clear()
         val ref = pageReference(page)
         val pageDict = effectivePageDict(ref)
         val pageResources = effectiveResources(ref, page)
@@ -702,7 +703,11 @@ public class PdfEditor internal constructor(
         )
         engine.formMatrices = loadFormMatrices(pageResources)
         val filtered = engine.run(ops)
-        val body = ContentStreamWriter.serialize(filtered)
+        // Recurse into every intersecting form XObject first: it decides which `Do`
+        // operands now point at a redacted clone, so it has to run before the body
+        // is serialized.
+        val formRedaction = recurseIntoForms(pageResources, engine.formXObjectHits)
+        val body = ContentStreamWriter.serialize(applyFormRenames(filtered, formRedaction))
 
         val out = ByteArrayBuilder(body.size + 64)
         out.append("q\n".encodeToByteArray())
@@ -714,19 +719,14 @@ public class PdfEditor internal constructor(
         }
         val streamRef = addObject(PdfStreams.flate(out.toByteArray()))
 
-        // Recurse into every intersecting form XObject: redact its own content so
-        // sensitive text/graphics inside it are genuinely removed, not retained.
-        recurseIntoForms(pageResources, engine.formXObjectHits)
-
         // Rebuild the page dict: new /Contents, pruned /XObject, filtered /Annots.
         var newPage = withEntry(pageDict, "Contents", streamRef)
         // Resources may be inherited from an ancestor /Pages node rather than present
-        // on the leaf dict. Bake the effective resources onto the page before pruning
-        // so the image XObject entry is actually removed (otherwise the pruning of a
-        // missing local /Resources silently no-ops and the image stream survives).
-        if ("Resources" !in newPage.map) {
-            pageResources?.let { newPage = withEntry(newPage, "Resources", it) }
-        }
+        // on the leaf dict. Bake the effective resources (plus any form clones) onto
+        // the page before pruning so the image XObject entry is actually removed
+        // (pruning a missing local /Resources no-ops and the image stream survives).
+        val resourcesWithClones = withFormAdditions(pageResources, formRedaction) ?: pageResources
+        if (resourcesWithClones != null) newPage = withEntry(newPage, "Resources", resourcesWithClones)
         newPage = prunePageResourceXObjects(newPage, engine.droppedImageNames, engine.survivingImageNames)
         newPage = pruneIntersectingAnnots(newPage, rectangles)
         updateObject(ref, newPage)
@@ -734,58 +734,179 @@ public class PdfEditor internal constructor(
     }
 
     /**
-     * Recurse redaction into form XObjects invoked by the page whose area overlaps
-     * a region. Each is re-parsed, redacted in its own coordinate space (using the
-     * rectangles the engine mapped there), rewritten as a fresh stream, and staged
-     * as a replacement so [saveRewritten] emits the redacted form and drops the
-     * original. Guards against cycles/repeats via [redactedForms].
+     * Form object numbers on the CURRENT recursion descent. A form reached again
+     * while it is still on this stack is a genuine cycle (a form invoking itself,
+     * directly or through a chain) and is skipped. A form invoked twice by the
+     * same parent is not a cycle, which is why this cannot be a plain visited set.
      */
-    private fun recurseIntoForms(pageResources: PdfDictionary?, hits: List<RedactionEngine.FormHit>) {
-        val xobjects = pageResources?.getDict("XObject", base) ?: return
-        for (hit in hits) {
-            val formRef = xobjects.getRef(hit.name) ?: continue
-            redactFormXObject(formRef, hit.formRects)
+    private val formDescent = ArrayDeque<Long>()
+
+    /** Form object numbers whose ORIGINAL object is already spoken for. */
+    private val claimedForms = HashSet<Long>()
+
+    /** Form identity (object number plus mapped rectangles) to the object holding that redaction. */
+    private val redactedFormCache = LinkedHashMap<String, PdfReference>()
+
+    /** Clone object number to the resource name minted for it, so one clone gets one name. */
+    private val formCloneNames = LinkedHashMap<Long, String>()
+
+    /**
+     * Form streams as they stood when the CURRENT redaction call began. The first
+     * invocation of a form stages its rewrite over the original object, so a
+     * sibling invocation that read the staged state would redact an already
+     * redacted stream and lose content only the first invocation's region covered.
+     * Cleared per call, so a later call still composes with this one (D-1).
+     */
+    private val formSources = LinkedHashMap<Long, PdfStream>()
+
+    /**
+     * Identity of one redaction OF one form. Two invocations of the same form
+     * that map a region to the same place can share a rewrite; two that map it
+     * elsewhere cannot, because one rewritten stream cannot be right for both.
+     * Coordinates are quantised to 1/1000 pt so float noise in the inverted CTM
+     * does not manufacture clones that are the same rewrite twice.
+     */
+    private fun formKey(objectNumber: Long, rectangles: List<KiteRectangle>): String = buildString {
+        append(objectNumber)
+        val sorted = rectangles.sortedWith(
+            compareBy({ it.left }, { it.bottom }, { it.right }, { it.top }),
+        )
+        for (r in sorted) {
+            append('|')
+            append(quantise(r.left)); append(',')
+            append(quantise(r.bottom)); append(',')
+            append(quantise(r.right)); append(',')
+            append(quantise(r.top))
         }
     }
 
-    /** Object numbers of form XObjects already redacted, to avoid cycles/double work. */
-    private val redactedForms = HashSet<Long>()
+    private fun quantise(value: Double): Long =
+        if (value.isFinite()) kotlin.math.round(value * 1000.0).toLong() else 0L
+
+    /** What a descent into a parent's forms asks the parent to change about itself. */
+    private class FormRedaction {
+        /** Index of a `Do` in the parent's filtered stream, to the name it must now use. */
+        val renames = LinkedHashMap<Int, String>()
+
+        /** Resource entries the parent must add to its own `/XObject` dictionary. */
+        val additions = LinkedHashMap<String, PdfReference>()
+    }
 
     /**
-     * Redact [rectangles] (in the form's OWN coordinate space) inside the form
-     * XObject at [formRef], recursing into any nested forms it invokes. The
-     * rewritten form stream is staged as a replacement for [formRef].
+     * Redact every form XObject an outer stream invoked over a region.
+     *
+     * A form drawn twice under different transforms maps the same page region to
+     * a DIFFERENT rectangle in its own space each time. One rewritten stream
+     * cannot serve both: rewriting against the union deletes content from an
+     * invocation that never overlapped a region, and rewriting against only the
+     * first leaves the second invocation's content intact. Each distinct
+     * (form, rectangles) pair therefore gets its own object, and the caller
+     * repoints that invocation's `Do` at it.
+     *
+     * @return what the caller must change about its own stream and resources.
      */
-    private fun redactFormXObject(formRef: PdfReference, rectangles: List<KiteRectangle>) {
-        if (rectangles.isEmpty()) return
-        if (!redactedForms.add(formRef.objectNumber)) return
-        val stream = effectiveObject(formRef.objectNumber) as? PdfStream ?: return
-        val formResources = stream.dict.getDict("Resources", base)
+    private fun recurseIntoForms(
+        resources: PdfDictionary?,
+        hits: List<RedactionEngine.FormHit>,
+    ): FormRedaction {
+        val result = FormRedaction()
+        val xobjects = resources?.getDict("XObject", base) ?: return result
+        val usedNames = HashSet(xobjects.keys)
+        for (hit in hits) {
+            if (hit.formRects.isEmpty()) continue
+            val formRef = xobjects.getRef(hit.name) ?: continue
+            val key = formKey(formRef.objectNumber, hit.formRects)
+            val target = redactedFormCache[key] ?: redactFormXObject(formRef, hit.formRects, key) ?: continue
+            if (target.objectNumber == formRef.objectNumber) continue // redacted in place, name still fits
+            val name = formCloneNames.getOrPut(target.objectNumber) {
+                var i = 1
+                while ("${hit.name}R$i" in usedNames) i++
+                "${hit.name}R$i".also { usedNames.add(it) }
+            }
+            result.renames[hit.opIndex] = name
+            result.additions[name] = target
+        }
+        return result
+    }
 
-        val content = io.github.yuroyami.kitepdf.core.filters.FilterChain.decode(stream)
-        val ops = ContentStreamParser.parse(content)
-        val engine = RedactionEngine(
-            loadPageFonts(formResources),
-            loadImageXObjectNames(formResources),
-            loadFormXObjectNames(formResources),
-            rectangles,
-        )
-        engine.formMatrices = loadFormMatrices(formResources)
-        val filtered = engine.run(ops)
-        val body = ContentStreamWriter.serialize(filtered)
+    /**
+     * Redact [rectangles] (in the form's OWN space) inside the form at [formRef],
+     * recursing into any form it invokes in turn.
+     *
+     * The first distinct rectangle set claims the original object. A later set
+     * gets a fresh one, so the two rewrites cannot overwrite each other.
+     *
+     * @return the object holding this redaction, or null when the form is
+     *   unreadable or already on the current descent (a genuine cycle).
+     */
+    private fun redactFormXObject(
+        formRef: PdfReference,
+        rectangles: List<KiteRectangle>,
+        key: String,
+    ): PdfReference? {
+        if (rectangles.isEmpty()) return null
+        if (formRef.objectNumber in formDescent) return null
+        val stream = formSources[formRef.objectNumber]
+            ?: (effectiveObject(formRef.objectNumber) as? PdfStream)
+                ?.also { formSources[formRef.objectNumber] = it }
+            ?: return null
 
-        // Recurse into nested forms first (they may share this form's resource dict).
-        recurseIntoForms(formResources, engine.formXObjectHits)
+        val target = if (claimedForms.add(formRef.objectNumber)) formRef else allocateReference()
+        redactedFormCache[key] = target
 
-        // Rebuild the form stream dict: prune dropped image XObjects from its own
-        // /Resources so the GC drops the image streams. Keep every other dict entry
-        // (/BBox, /Matrix, /Group, /Type, /Subtype) intact; extraFrom() strips the
-        // encoding entries (/Filter, /Length, ...) before we re-flate the content.
-        val newDict = prunePageResourceXObjects(
-            stream.dict, engine.droppedImageNames, engine.survivingImageNames,
-        )
-        val newStream = PdfStreams.flate(body, extraFrom(newDict))
-        updateObject(formRef, newStream)
+        formDescent.addLast(formRef.objectNumber)
+        try {
+            val formResources = stream.dict.getDict("Resources", base)
+            val content = io.github.yuroyami.kitepdf.core.filters.FilterChain.decode(stream)
+            val ops = ContentStreamParser.parse(content)
+            val engine = RedactionEngine(
+                loadPageFonts(formResources),
+                loadImageXObjectNames(formResources),
+                loadFormXObjectNames(formResources),
+                rectangles,
+            )
+            engine.formMatrices = loadFormMatrices(formResources)
+            val filtered = engine.run(ops)
+
+            val nested = recurseIntoForms(formResources, engine.formXObjectHits)
+            val finalOps = applyFormRenames(filtered, nested)
+            val body = ContentStreamWriter.serialize(finalOps)
+
+            // Keep every non-encoding dict entry (/BBox, /Matrix, /Group, /Type,
+            // /Subtype) intact, prune dropped image XObjects so the GC takes their
+            // streams, and add the clones the nested descent minted.
+            var newDict = prunePageResourceXObjects(
+                stream.dict, engine.droppedImageNames, engine.survivingImageNames,
+            )
+            val newResources = withFormAdditions(newDict.getDict("Resources", base), nested)
+            if (newResources != null) newDict = withEntry(newDict, "Resources", newResources)
+            updateObject(target, PdfStreams.flate(body, extraFrom(newDict)))
+        } finally {
+            formDescent.removeLast()
+        }
+        return target
+    }
+
+    /** Repoint the `Do` operands a descent asked us to clone. */
+    private fun applyFormRenames(ops: List<Operation>, redaction: FormRedaction): List<Operation> {
+        if (redaction.renames.isEmpty()) return ops
+        val out = ops.toMutableList()
+        for ((index, name) in redaction.renames) {
+            val op = out.getOrNull(index) ?: continue
+            if (op.operator != "Do") continue // stream shifted under us; leave it alone (R6)
+            out[index] = Operation("Do", listOf(PdfName(name)))
+        }
+        return out
+    }
+
+    /** Add cloned forms to a resource dictionary's `/XObject`, or null when there is nothing to add. */
+    private fun withFormAdditions(resources: PdfDictionary?, redaction: FormRedaction): PdfDictionary? {
+        if (redaction.additions.isEmpty()) return null
+        val xobjects = LinkedHashMap(resources?.getDict("XObject", base)?.map ?: emptyMap())
+        for ((name, ref) in redaction.additions) xobjects[name] = ref
+        val merged = LinkedHashMap(resources?.map ?: emptyMap())
+        merged["XObject"] = PdfDictionary(xobjects)
+        return PdfDictionary(merged)
     }
 
     /** Carry a form stream dict's non-stream entries onto a fresh /FlateDecode stream. */
