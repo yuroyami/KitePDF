@@ -44,6 +44,28 @@ internal class SceneTestDriver(private val scene: ImageComposeScene) {
         return img
     }
 
+    /**
+     * Render frames until [check] holds. For conditions that live in state
+     * rather than in pixels, such as a chapter finishing its layout on a
+     * background thread.
+     */
+    fun pumpUntilState(
+        maxFrames: Int = 900,
+        timeoutMs: Long = 20_000,
+        check: () -> Boolean,
+    ) {
+        scene.render(timeNanos)
+        val deadline = System.currentTimeMillis() + timeoutMs
+        var frame = 0
+        while (frame < maxFrames && System.currentTimeMillis() < deadline) {
+            if (check()) return
+            Thread.sleep(4)
+            timeNanos += FRAME_NANOS
+            scene.render(timeNanos)
+            frame++
+        }
+    }
+
     private companion object {
         const val FRAME_NANOS = 16_000_000L
     }

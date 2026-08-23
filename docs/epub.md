@@ -67,6 +67,57 @@ Paged/continuous layouts, zoom, selection, search highlights, TOC panels and
 link taps all work the same as for PDF; see the
 [Compose viewer guide](compose-viewer.md).
 
+## Opening a big book fast
+
+A reflowable book has to be laid out before it has pages, and laying out a
+whole novel takes seconds. KitePDF lays out one chapter at a time instead, so
+a reader resuming at chapter 20 waits for chapter 20, not for chapters 0 to 19.
+
+Save a bookmark when the reader leaves, and open at it when they come back:
+
+```kotlin
+val state = rememberKiteDocViewState(book, savedBookmark)
+KiteDocView(state, Modifier.fillMaxSize())
+
+// later, e.g. in onPause
+val savedBookmark = state.currentBookmark()
+```
+
+The rest of the book lays out in the background, nearest chapter first, while
+the reader reads. A chapter landing above them does not move their page.
+
+On the local corpus this turns opening at the last chapter from 986 ms into
+3 ms for a 26-chapter book, and from 2085 ms into 71 ms for an 11-chapter one.
+
+### Positions: two kinds
+
+| Type | What it is | Lives as long as |
+|---|---|---|
+| `KiteLocation(chapter, page)` | where a page is in the layout you have now | the current font size and page size |
+| `KiteBookmark` | where the reader is in the text | forever, across any re-flow |
+
+Use a location to move around, a bookmark to remember. `document.locate(bookmark)`
+turns one into the other and lays out that single chapter to do it.
+
+### Changing settings without losing the place
+
+```kotlin
+val mark = state.currentBookmark()
+val bigger = book.withFontSize(16.0)
+val newState = rememberKiteDocViewState(bigger, mark)
+```
+
+The reader stays on the same paragraph, and only its chapter is re-flowed
+before the page appears.
+
+### What still lays out the whole book
+
+`pageCount` and `pages` are the totals for the entire document, so asking for
+either lays every chapter out. So does `KiteDocLayout.Spread`, because it pairs
+pages by index and inserting a chapter would re-pair the book underneath the
+reader. Use `knownPageCount` with `isComplete` for a running total, and
+`pageCountIn(chapter)` for one chapter.
+
 ## Reader settings
 
 Everything a reading app's settings sheet needs is on `EpubSettings`. The

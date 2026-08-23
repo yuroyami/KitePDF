@@ -11,7 +11,9 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -26,6 +28,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
@@ -122,6 +125,9 @@ import kotlinx.coroutines.launch
  *   the page-bitmap LRU do not re-fire it.
  * @param pagePlaceholder shown in a page's slot until its raster is ready.
  *   Defaults to a plain [KiteDocViewColors.pageBackground] box.
+ * @param chapterPlaceholder shown in the slot a chapter holds while it is still
+ *   being laid out. Only reflowable EPUB reaches this: a PDF is never mid-layout.
+ *   Defaults to an empty page-coloured box.
  * @param overlay HUD layer drawn over the viewport; receives [state] and a
  *   [BoxScope] for alignment. Widgets here float above the pages:
  *   [KiteNavigationControls], [KitePageIndicator], [KiteThumbnailStrip] or
@@ -151,6 +157,7 @@ public fun KiteDocView(
     selectionEnabled: Boolean = true,
     onPageRendered: ((pageIndex: Int, image: ImageBitmap) -> Unit)? = null,
     pagePlaceholder: (@Composable (pageIndex: Int) -> Unit)? = null,
+    chapterPlaceholder: (@Composable (chapter: Int) -> Unit)? = null,
     overlay: (@Composable BoxScope.(KiteDocViewState) -> Unit)? = null,
     onTap: ((Offset) -> Unit)? = null,
     onLinkTap: ((KiteLinkAction) -> Boolean)? = null,
@@ -183,6 +190,23 @@ public fun KiteDocView(
         }
     }
 
+    // Lay the rest of the book out behind the reader. Restarting on the chapter
+    // being read re-prioritizes without losing what is already done.
+    val readingChapter = state.currentLocation.chapter
+    LaunchedEffect(state, state.document, readingChapter) {
+        // The saved position first, so the loader never starts from chapter 0 and
+        // shifts the strip out from under the page we are about to show.
+        state.openAt?.let { mark ->
+            state.openAt = null
+            state.scrollTo(mark)
+        }
+        val document = state.document
+        if (document.isComplete) return@LaunchedEffect
+        loadChapters(document, loadOrder(document.chapterCount, state.currentLocation.chapter)) {
+            onComposeThread { state.onChapterReady() }
+        }
+    }
+
     // Route taps through link hit-testing first: a tap on a link
     // navigates (or defers to onLinkTap); anything else reaches user onTap.
     val tapScope = rememberCoroutineScope()
@@ -197,23 +221,26 @@ public fun KiteDocView(
             .clipToBounds()
             .onSizeChanged { state.viewportSize = it },
     ) {
-        if (state.pageCount > 0) {
+        if (state.itemCount > 0) {
             when (layout) {
                 is KiteDocLayout.Continuous -> ContinuousLayout(
                     state, layout, zoomSpec, renderSpec, colors, pageSpacing,
-                    userScrollEnabled, settledZoom, onPageRendered, pagePlaceholder, linkAwareTap,
+                    userScrollEnabled, settledZoom, onPageRendered, pagePlaceholder,
+                    chapterPlaceholder, linkAwareTap,
                 )
                 is KiteDocLayout.Paged -> PagedLayout(
                     state, layout, zoomSpec, renderSpec, colors, pageSpacing,
-                    userScrollEnabled, settledZoom, onPageRendered, pagePlaceholder, linkAwareTap,
+                    userScrollEnabled, settledZoom, onPageRendered, pagePlaceholder,
+                    chapterPlaceholder, linkAwareTap,
                 )
                 is KiteDocLayout.Spread -> SpreadLayout(
                     state, layout, zoomSpec, renderSpec, colors, pageSpacing,
-                    userScrollEnabled, settledZoom, onPageRendered, pagePlaceholder, linkAwareTap,
+                    userScrollEnabled, settledZoom, onPageRendered, pagePlaceholder,
+                    chapterPlaceholder, linkAwareTap,
                 )
                 is KiteDocLayout.SinglePage -> SinglePageLayout(
                     state, layout, zoomSpec, renderSpec, colors,
-                    settledZoom, onPageRendered, pagePlaceholder, linkAwareTap,
+                    settledZoom, onPageRendered, pagePlaceholder, chapterPlaceholder, linkAwareTap,
                 )
             }
         }
@@ -235,7 +262,7 @@ internal fun handleLinkTap(
     offset: Offset,
 ): Boolean {
     val hit = state.hitTest(offset) ?: return false
-    when (val page = state.document.pages.getOrNull(hit.pageIndex)) {
+    when (val page = state.pageAt(hit.pageIndex)) {
         is PdfPage -> {
             val doc = state.document as? PdfDocument ?: return false
             for (ann in page.annotations.asReversed()) {
@@ -266,8 +293,10 @@ internal fun handleLinkTap(
                 if (SCHEME_REGEX.containsMatchIn(link.href)) {
                     return onLinkTap?.invoke(KiteLinkAction.Uri(link.href)) == true
                 }
-                val target = (state.document as? EpubDocument)?.pageOf(link.href) ?: return false
-                scope.launch { state.animateScrollToPage(target) }
+                // A bookmark needs no layout to build, and following it lays out
+                // the target chapter alone rather than the whole book.
+                val target = (state.document as? EpubDocument)?.bookmarkOf(link.href) ?: return false
+                scope.launch { state.scrollTo(target, animate = true) }
                 return true
             }
             return false
@@ -341,6 +370,7 @@ private fun ContinuousLayout(
     settledZoom: Float,
     onPageRendered: ((Int, ImageBitmap) -> Unit)?,
     pagePlaceholder: (@Composable (Int) -> Unit)?,
+    chapterPlaceholder: (@Composable (chapter: Int) -> Unit)?,
     onTap: ((Offset) -> Unit)?,
 ) {
     // Seed from currentPage, not pendingPage: this runs during composition,
@@ -349,7 +379,7 @@ private fun ContinuousLayout(
     // always one layout switch stale. currentPage reads the still-attached
     // outgoing adapter live and falls back to pendingPage on first composition.
     val listState = rememberLazyListState(
-        initialFirstVisibleItemIndex = state.currentPage.coerceIn(0, state.pageCount - 1),
+        initialFirstVisibleItemIndex = state.currentPage.coerceIn(0, (state.itemCount - 1).coerceAtLeast(0)),
     )
     DisposableEffect(state, listState) {
         val adapter = LazyListScrollAdapter(listState)
@@ -379,17 +409,22 @@ private fun ContinuousLayout(
             },
     ) {
         val pageItem: @Composable androidx.compose.foundation.lazy.LazyItemScope.(Int) -> Unit = { index ->
-            ContinuousPageItem(
-                state = state,
-                page = state.document.pages[index],
-                pageIndex = index,
-                orientation = layout.orientation,
-                settledZoom = settledZoom,
-                renderSpec = renderSpec,
-                colors = colors,
-                onPageRendered = onPageRendered,
-                pagePlaceholder = pagePlaceholder,
-            )
+            val page = state.pageAt(index)
+            if (page == null) {
+                ChapterGapSlot(state, index, layout.orientation, colors, chapterPlaceholder)
+            } else {
+                ContinuousPageItem(
+                    state = state,
+                    page = page,
+                    pageIndex = index,
+                    orientation = layout.orientation,
+                    settledZoom = settledZoom,
+                    renderSpec = renderSpec,
+                    colors = colors,
+                    onPageRendered = onPageRendered,
+                    pagePlaceholder = pagePlaceholder,
+                )
+            }
         }
         // The list is the untransformed-space anchor page slots measure their
         // hit-test geometry against (it sits inside the layer, so its
@@ -407,7 +442,7 @@ private fun ContinuousLayout(
                 verticalArrangement = Arrangement.spacedBy(pageSpacing),
                 userScrollEnabled = listScrollEnabled,
             ) {
-                items(count = state.pageCount, key = { it }) { pageItem(it) }
+                items(count = state.itemCount, key = { state.items[it].key }) { pageItem(it) }
             }
             Orientation.Horizontal -> LazyRow(
                 modifier = anchored,
@@ -415,7 +450,7 @@ private fun ContinuousLayout(
                 horizontalArrangement = Arrangement.spacedBy(pageSpacing),
                 userScrollEnabled = listScrollEnabled,
             ) {
-                items(count = state.pageCount, key = { it }) { pageItem(it) }
+                items(count = state.itemCount, key = { state.items[it].key }) { pageItem(it) }
             }
         }
     }
@@ -491,12 +526,16 @@ private fun PagedLayout(
     settledZoom: Float,
     onPageRendered: ((Int, ImageBitmap) -> Unit)?,
     pagePlaceholder: (@Composable (Int) -> Unit)?,
+    chapterPlaceholder: (@Composable (chapter: Int) -> Unit)?,
     onTap: ((Offset) -> Unit)?,
 ) {
     // currentPage, not pendingPage: see ContinuousLayout's seed comment.
     val pagerState = rememberPagerState(
-        initialPage = state.currentPage.coerceIn(0, state.pageCount - 1),
-    ) { state.pageCount }
+        initialPage = state.currentPage.coerceIn(0, (state.itemCount - 1).coerceAtLeast(0)),
+    ) { state.itemCount }
+    // A pager keeps its index, not its key, so a chapter landing ahead of the
+    // reader would slide the book under them. Follow the location instead.
+    KeepPagerOnLocation(state, pagerState)
     DisposableEffect(state, pagerState) {
         val adapter = PagerScrollAdapter(pagerState)
         state.adapter = adapter
@@ -517,8 +556,11 @@ private fun PagedLayout(
     val haptics = LocalHapticFeedback.current
     val pageContent: @Composable (Int) -> Unit = { index ->
         val isCurrent = index == pagerState.currentPage
-        PageBox(
-            page = state.document.pages[index],
+        val page = state.pageAt(index)
+        if (page == null) {
+            ChapterGapSlot(state, index, Orientation.Vertical, colors, chapterPlaceholder)
+        } else PageBox(
+            page = page,
             pageIndex = index,
             zoom = if (isCurrent) state.zoom else 1f,
             pan = if (isCurrent) state.panOffset else androidx.compose.ui.geometry.Offset.Zero,
@@ -571,10 +613,11 @@ private fun SinglePageLayout(
     settledZoom: Float,
     onPageRendered: ((Int, ImageBitmap) -> Unit)?,
     pagePlaceholder: (@Composable (Int) -> Unit)?,
+    chapterPlaceholder: (@Composable (chapter: Int) -> Unit)?,
     onTap: ((Offset) -> Unit)?,
 ) {
-    require(layout.pageIndex in 0 until state.pageCount) {
-        "page ${layout.pageIndex} is out of bounds (document has ${state.pageCount} page(s))"
+    require(layout.pageIndex in 0 until state.itemCount) {
+        "page ${layout.pageIndex} is out of bounds (document has ${state.itemCount} page(s))"
     }
     DisposableEffect(state, layout.pageIndex) {
         val adapter = FixedPageAdapter(layout.pageIndex)
@@ -583,8 +626,13 @@ private fun SinglePageLayout(
     }
     val scope = rememberCoroutineScope()
     val haptics = LocalHapticFeedback.current
+    val only = state.pageAt(layout.pageIndex)
+    if (only == null) {
+        ChapterGapSlot(state, layout.pageIndex, Orientation.Vertical, colors, chapterPlaceholder)
+        return
+    }
     PageBox(
-        page = state.document.pages[layout.pageIndex],
+        page = only,
         pageIndex = layout.pageIndex,
         zoom = state.zoom,
         pan = state.panOffset,
@@ -957,8 +1005,71 @@ private const val ZOOM_SETTLE_DEBOUNCE_MS = 220L
 /** Fade-in duration for a freshly rasterized page bitmap. */
 private const val PAGE_FADE_MS = 160
 
+/**
+ * Holds a pager on the page the reader is looking at while the strip grows
+ * underneath it. A [androidx.compose.foundation.pager.PagerState] tracks an
+ * index, so when a chapter lands ahead of the reader every later index shifts
+ * by that chapter's page count; this puts the pager back on the same location.
+ */
+@Composable
+private fun KeepPagerOnLocation(
+    state: KiteDocViewState,
+    pagerState: androidx.compose.foundation.pager.PagerState,
+) {
+    val anchor = remember { mutableStateOf<io.github.yuroyami.kitepdf.core.KiteLocation?>(null) }
+    val lastCount = remember { mutableStateOf(-1) }
+    LaunchedEffect(state, pagerState) {
+        snapshotFlow { state.itemCount to pagerState.currentPage }.collect { (count, current) ->
+            val gained = lastCount.value >= 0 && count != lastCount.value
+            lastCount.value = count
+            // Only a change in the strip can move the reader against their will.
+            // Anything else is the reader themselves, so follow them.
+            if (gained) {
+                val was = anchor.value
+                val moved = if (was != null) state.indexOf(was) else -1
+                if (moved >= 0 && moved != current) {
+                    pagerState.scrollToPage(moved)
+                    return@collect
+                }
+            }
+            state.locationAt(current)?.let { anchor.value = it }
+        }
+    }
+}
+
+/**
+ * The slot a chapter occupies while it is still being laid out: one page-shaped
+ * box, so the strip has a sensible length and scrolling into an unread part of
+ * the book does not hit a wall.
+ */
+@Composable
+private fun ChapterGapSlot(
+    state: KiteDocViewState,
+    index: Int,
+    orientation: Orientation,
+    colors: KiteDocViewColors,
+    chapterPlaceholder: (@Composable (chapter: Int) -> Unit)?,
+) {
+    val chapter = state.chapterAt(index) ?: return
+    val aspect = state.placeholderAspect()
+    Box(
+        Modifier
+            .then(if (orientation == Orientation.Vertical) Modifier.fillMaxWidth() else Modifier.fillMaxHeight())
+            .aspectRatio(aspect)
+            .background(colors.pageBackground),
+        contentAlignment = Alignment.Center,
+    ) {
+        chapterPlaceholder?.invoke(chapter)
+    }
+}
+
 /* ── spread pager: two pages per item, like an open book ───────────── */
 
+/**
+ * Two-page spreads. Pairing is by page index, so inserting a chapter would
+ * re-pair the whole book under the reader. Spreads therefore lay the document
+ * out fully before composing; they are meant for fixed-layout content anyway.
+ */
 @Composable
 private fun SpreadLayout(
     state: KiteDocViewState,
@@ -971,8 +1082,10 @@ private fun SpreadLayout(
     settledZoom: Float,
     onPageRendered: ((Int, ImageBitmap) -> Unit)?,
     pagePlaceholder: (@Composable (Int) -> Unit)?,
+    chapterPlaceholder: (@Composable (chapter: Int) -> Unit)?,
     onTap: ((Offset) -> Unit)?,
 ) {
+    // Spreads pair by index, so the strip must be final before pairing.
     val spreadCount = (state.pageCount + 1) / 2
     // currentPage, not pendingPage: see ContinuousLayout's seed comment.
     val pagerState = rememberPagerState(
@@ -1083,7 +1196,7 @@ private fun SpreadBox(
 
         @Composable
         fun slot(pageIndex: Int, regionLeft: Int, regionWidth: Int) {
-            val page = state.document.pages[pageIndex]
+            val page = state.pageAt(pageIndex) ?: return
             val fit = fitWithin(regionWidth, fullH, kitePageAspect(page))
             if (fit == IntSize.Zero) return
             val left = regionLeft + (regionWidth - fit.width) / 2f
