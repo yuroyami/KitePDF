@@ -185,16 +185,19 @@ public class PdfEditor internal constructor(
      * the page's `/Contents` is repointed at it. The original content objects
      * are left in place (orphaned) per incremental-update semantics.
      *
+     * [transform] receives the page's content as it stands after any earlier
+     * edit in this editor, so successive calls compose in call order.
+     *
      * Note: [transform] only reorders/removes/keeps existing operations. It
      * doesn't introduce new resource dependencies. To overlay new content (with
      * its own fonts), use [stampPage].
      */
     public fun editPageContent(page: PdfPage, transform: (List<Operation>) -> List<Operation>) {
         val ref = pageReference(page)
-        val ops = ContentStreamParser.parse(page.contentBytes)
+        val ops = ContentStreamParser.parse(effectiveContentBytes(ref))
         val newContent = ContentStreamWriter.serialize(transform(ops))
         val streamRef = addObject(PdfStreams.flate(newContent))
-        updateObject(ref, withEntry(page.dictionary, "Contents", streamRef))
+        updateObject(ref, withEntry(effectivePageDict(ref), "Contents", streamRef))
     }
 
     /**
@@ -215,11 +218,17 @@ public class PdfEditor internal constructor(
      * graphics state can't leak into the overlay), the overlay is appended in
      * its own `q`/`Q`, and any standard fonts the overlay uses are merged into
      * the page's `/Resources` under fresh, non-colliding names.
+     *
+     * Stamps compose: a second stamp overlays the first rather than replacing
+     * it, and gets its own font resource names.
      */
     public fun stampPage(page: PdfPage, block: ContentStreamBuilder.() -> Unit) {
         val ref = pageReference(page)
+        val pageDict = effectivePageDict(ref)
+        val pageResources = effectiveResources(ref, page)
+        val contentBytes = effectiveContentBytes(ref)
 
-        val existingFonts = page.resources?.getDict("Font", base)
+        val existingFonts = pageResources?.getDict("Font", base)
         val usedNames = HashSet<String>(existingFonts?.keys ?: emptySet())
         val stampFonts = LinkedHashMap<StandardFont, String>()
         fun resolveStampFont(font: StandardFont): String = stampFonts.getOrPut(font) {
@@ -232,9 +241,9 @@ public class PdfEditor internal constructor(
         csb.block()
         val stampBytes = csb.toByteArray()
 
-        val merged = ByteArrayBuilder(page.contentBytes.size + stampBytes.size + 16)
+        val merged = ByteArrayBuilder(contentBytes.size + stampBytes.size + 16)
         merged.append("q\n".encodeToByteArray())
-        merged.append(page.contentBytes)
+        merged.append(contentBytes)
         merged.append("\nQ\nq\n".encodeToByteArray())
         merged.append(stampBytes)
         merged.append("Q\n".encodeToByteArray())
@@ -255,10 +264,10 @@ public class PdfEditor internal constructor(
             )
         }
         val resources = LinkedHashMap<String, PdfObject>()
-        page.resources?.map?.let { resources.putAll(it) }
+        pageResources?.map?.let { resources.putAll(it) }
         resources["Font"] = PdfDictionary(fontDict)
 
-        var newPage = withEntry(page.dictionary, "Contents", streamRef)
+        var newPage = withEntry(pageDict, "Contents", streamRef)
         newPage = withEntry(newPage, "Resources", PdfDictionary(resources))
         updateObject(ref, newPage)
     }
@@ -607,6 +616,50 @@ public class PdfEditor internal constructor(
         effectiveObject(ref.objectNumber) as? PdfDictionary
             ?: throw IllegalArgumentException("Page ${ref.objectNumber} did not resolve to a dictionary")
 
+    /**
+     * Decoded page content as it stands AFTER any staged edit, so a second edit
+     * composes with the first instead of replacing it.
+     *
+     * Mirrors [PdfPage.contentBytes]: `/Contents` may be one stream reference, a
+     * direct stream, or an array of streams that concatenate into a single
+     * stream with whitespace between the parts (ISO 32000-1, 7.8.2). A member
+     * that will not decode is skipped rather than failing the page (R6).
+     */
+    private fun effectiveContentBytes(ref: PdfReference): ByteArray {
+        fun decode(stream: PdfStream): ByteArray? =
+            runCatching { io.github.yuroyami.kitepdf.core.filters.FilterChain.decode(stream) }.getOrNull()
+
+        return when (val contents = effectivePageDict(ref)["Contents"]) {
+            is PdfReference -> (effectiveObject(contents.objectNumber) as? PdfStream)?.let(::decode) ?: ByteArray(0)
+            is PdfStream -> decode(contents) ?: ByteArray(0)
+            is io.github.yuroyami.kitepdf.core.parser.PdfArray -> {
+                val buf = ByteArrayBuilder(4096)
+                var first = true
+                for (part in contents) {
+                    val partRef = part as? PdfReference ?: continue
+                    val bytes = (effectiveObject(partRef.objectNumber) as? PdfStream)?.let(::decode) ?: continue
+                    if (!first) buf.append('\n'.code.toByte())
+                    buf.append(bytes)
+                    first = false
+                }
+                buf.toByteArray()
+            }
+            else -> ByteArray(0)
+        }
+    }
+
+    /**
+     * Resource dictionary as it stands after any staged edit. A staged page dict
+     * always carries its own `/Resources`; an untouched page may inherit them
+     * from an ancestor `/Pages` node, which [PdfPage.resources] already walks.
+     */
+    private fun effectiveResources(ref: PdfReference, page: PdfPage): PdfDictionary? =
+        when (val resources = effectivePageDict(ref)["Resources"]) {
+            is PdfDictionary -> resources
+            is PdfReference -> effectiveObject(resources.objectNumber) as? PdfDictionary
+            else -> page.resources
+        }
+
     /* ─── Redaction ──────────────────────────────────────────────────────── */
 
     /** Redact a single rectangular region of [page] (see [redactRegions]). */
@@ -621,6 +674,10 @@ public class PdfEditor internal constructor(
      * dropped from the page, and an opaque black box is painted over each
      * region. It does not merely paint over still-present content.
      *
+     * Calls compose: redacting a second region does not undo the first, and a
+     * stamp or content edit staged earlier is redacted along with the original
+     * page content.
+     *
      * Conservative by design. A run touching a region is removed wholesale, so
      * partial overlaps over-remove. Content inside referenced form XObjects IS
      * recursed into (redacted in the form's own coordinate space); a dropped
@@ -633,15 +690,17 @@ public class PdfEditor internal constructor(
     public fun redactRegions(page: PdfPage, rectangles: List<KiteRectangle>) {
         if (rectangles.isEmpty()) return
         val ref = pageReference(page)
+        val pageDict = effectivePageDict(ref)
+        val pageResources = effectiveResources(ref, page)
+        val ops = ContentStreamParser.parse(effectiveContentBytes(ref))
 
-        val ops = ContentStreamParser.parse(page.contentBytes)
         val engine = RedactionEngine(
-            loadPageFonts(page.resources),
-            loadImageXObjectNames(page.resources),
-            loadFormXObjectNames(page.resources),
+            loadPageFonts(pageResources),
+            loadImageXObjectNames(pageResources),
+            loadFormXObjectNames(pageResources),
             rectangles,
         )
-        engine.formMatrices = loadFormMatrices(page.resources)
+        engine.formMatrices = loadFormMatrices(pageResources)
         val filtered = engine.run(ops)
         val body = ContentStreamWriter.serialize(filtered)
 
@@ -657,16 +716,16 @@ public class PdfEditor internal constructor(
 
         // Recurse into every intersecting form XObject: redact its own content so
         // sensitive text/graphics inside it are genuinely removed, not retained.
-        recurseIntoForms(page.resources, engine.formXObjectHits)
+        recurseIntoForms(pageResources, engine.formXObjectHits)
 
         // Rebuild the page dict: new /Contents, pruned /XObject, filtered /Annots.
-        var newPage = withEntry(page.dictionary, "Contents", streamRef)
+        var newPage = withEntry(pageDict, "Contents", streamRef)
         // Resources may be inherited from an ancestor /Pages node rather than present
         // on the leaf dict. Bake the effective resources onto the page before pruning
         // so the image XObject entry is actually removed (otherwise the pruning of a
         // missing local /Resources silently no-ops and the image stream survives).
         if ("Resources" !in newPage.map) {
-            page.resources?.let { newPage = withEntry(newPage, "Resources", it) }
+            pageResources?.let { newPage = withEntry(newPage, "Resources", it) }
         }
         newPage = prunePageResourceXObjects(newPage, engine.droppedImageNames, engine.survivingImageNames)
         newPage = pruneIntersectingAnnots(newPage, rectangles)
