@@ -46,13 +46,13 @@ class SelectionDisabledSceneTest {
     fun a_long_press_on_text_selects_nothing_when_selection_is_disabled() {
         val doc = twoLineDoc()
         val line = firstLine(doc)
-        lateinit var state: PdfViewState
+        lateinit var state: KiteDocViewState
         ImageComposeScene(width = 200, height = 200, density = Density(1f)) {
-            state = rememberPdfViewState(doc)
-            PdfView(
+            state = rememberKiteDocViewState(doc)
+            KiteDocView(
                 state = state,
                 modifier = Modifier.fillMaxSize(),
-                layout = PdfLayout.SinglePage(0),
+                layout = KiteDocLayout.SinglePage(0),
                 selectionEnabled = false,
             )
         }.use { scene ->
@@ -71,13 +71,13 @@ class SelectionDisabledSceneTest {
         val doc = twoLineDoc()
         val line = firstLine(doc)
         val enabled = mutableStateOf(true)
-        lateinit var state: PdfViewState
+        lateinit var state: KiteDocViewState
         ImageComposeScene(width = 200, height = 200, density = Density(1f)) {
-            state = rememberPdfViewState(doc)
-            PdfView(
+            state = rememberKiteDocViewState(doc)
+            KiteDocView(
                 state = state,
                 modifier = Modifier.fillMaxSize(),
-                layout = PdfLayout.SinglePage(0),
+                layout = KiteDocLayout.SinglePage(0),
                 selectionEnabled = enabled.value,
             )
         }.use { scene ->
@@ -103,10 +103,10 @@ class SelectionDisabledSceneTest {
     fun selection_stays_on_by_default() {
         val doc = twoLineDoc()
         val line = firstLine(doc)
-        lateinit var state: PdfViewState
+        lateinit var state: KiteDocViewState
         ImageComposeScene(width = 200, height = 200, density = Density(1f)) {
-            state = rememberPdfViewState(doc)
-            PdfView(state = state, modifier = Modifier.fillMaxSize(), layout = PdfLayout.SinglePage(0))
+            state = rememberKiteDocViewState(doc)
+            KiteDocView(state = state, modifier = Modifier.fillMaxSize(), layout = KiteDocLayout.SinglePage(0))
         }.use { scene ->
             SceneTestDriver(scene).pumpUntil { state.pageGeometry.isNotEmpty() }
 

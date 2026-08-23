@@ -63,7 +63,7 @@ jobs:
       - name: Verify the complete API reference
         run: |
           for module in \
-            kitepdf kitepdf-core kitepdf-pdf kitepdf-epub \
+            kitepdf kitepdf-core kitepdf-pdf kitepdf-epub kitepdf-net \
             kitepdf-compose-viewer kitepdf-native-renderer kitepdf-skia-renderer
           do
             test -f "build/dokka/html/$module/index.html"

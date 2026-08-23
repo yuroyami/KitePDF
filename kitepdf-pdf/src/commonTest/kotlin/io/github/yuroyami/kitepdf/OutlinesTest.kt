@@ -20,9 +20,9 @@ class OutlinesTest {
     @Test
     fun parses_outlines_tree() {
         val doc = KitePDF.open(buildPdfWithOutlines())
-        assertEquals(2, doc.outlines.size)
+        assertEquals(2, doc.bookmarks.size)
 
-        val ch1 = doc.outlines[0]
+        val ch1 = doc.bookmarks[0]
         assertEquals("Chapter 1", ch1.title)
         assertEquals(1, ch1.children.size)
         assertTrue(ch1.isOpen)
@@ -31,7 +31,7 @@ class OutlinesTest {
         assertEquals("Section 1.1", sec.title)
         assertEquals(0, sec.children.size)
 
-        val ch2 = doc.outlines[1]
+        val ch2 = doc.bookmarks[1]
         assertEquals("Chapter 2", ch2.title)
         // Chapter 2 uses /A /S /GoTo, so rawDestination should be promoted.
         assertNotNull(ch2.rawDestination)
@@ -40,7 +40,7 @@ class OutlinesTest {
     @Test
     fun explicit_destination_resolves_to_page_index() {
         val doc = KitePDF.open(buildPdfWithOutlines())
-        val ch1Dest = doc.resolveDestination(doc.outlines[0].rawDestination)
+        val ch1Dest = doc.resolveDestination(doc.bookmarks[0].rawDestination)
         assertNotNull(ch1Dest)
         assertEquals(0, ch1Dest.pageIndex)
         val view = ch1Dest.view
@@ -52,7 +52,7 @@ class OutlinesTest {
     @Test
     fun named_destination_resolves_through_dests_dict() {
         val doc = KitePDF.open(buildPdfWithOutlines())
-        val sec = doc.outlines[0].children[0]
+        val sec = doc.bookmarks[0].children[0]
         val dest = doc.resolveDestination(sec.rawDestination)
         assertNotNull(dest)
         assertEquals(1, dest.pageIndex)
@@ -62,7 +62,7 @@ class OutlinesTest {
     @Test
     fun goto_action_destination_resolves() {
         val doc = KitePDF.open(buildPdfWithOutlines())
-        val ch2 = doc.outlines[1]
+        val ch2 = doc.bookmarks[1]
         val dest = doc.resolveDestination(ch2.rawDestination)
         assertNotNull(dest)
         assertEquals(2, dest.pageIndex)
@@ -71,7 +71,7 @@ class OutlinesTest {
     @Test
     fun document_without_outlines_returns_empty_list() {
         val doc = KitePDF.open(MetadataPdfBuilder.simpleTwoPagePdf())
-        assertTrue(doc.outlines.isEmpty())
+        assertTrue(doc.bookmarks.isEmpty())
     }
 
     @Test

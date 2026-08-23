@@ -1,7 +1,7 @@
 package io.github.yuroyami.kitepdf
 
 import io.github.yuroyami.kitepdf.core.ByteArrayBuilder
-import io.github.yuroyami.kitepdf.core.render.Matrix
+import io.github.yuroyami.kitepdf.core.render.KiteMatrix
 import io.github.yuroyami.kitepdf.core.render.RecordingCanvas
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -16,7 +16,7 @@ class OptionalContentRenderTest {
     private fun fills(pdf: ByteArray): Int {
         val doc = KitePDF.open(pdf)
         val canvas = RecordingCanvas()
-        doc.pages[0].renderTo(canvas, Matrix.IDENTITY)
+        doc.pages[0].renderTo(canvas, KiteMatrix.IDENTITY)
         return canvas.calls.filterIsInstance<RecordingCanvas.Call.Fill>().size
     }
 

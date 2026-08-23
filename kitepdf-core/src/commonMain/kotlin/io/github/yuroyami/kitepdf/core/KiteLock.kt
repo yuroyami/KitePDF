@@ -1,7 +1,7 @@
 package io.github.yuroyami.kitepdf.core
 
 /**
- * A minimal reentrant mutual-exclusion lock (T-16). JVM/Android wrap
+ * A minimal reentrant mutual-exclusion lock. JVM/Android wrap
  * `ReentrantLock`, native targets a reentrant atomic spinlock, JS/Wasm are
  * single-threaded no-ops. Use through [withLock].
  *

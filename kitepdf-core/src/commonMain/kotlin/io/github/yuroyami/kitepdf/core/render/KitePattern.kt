@@ -1,5 +1,6 @@
 package io.github.yuroyami.kitepdf.core.render
 
+import io.github.yuroyami.kitepdf.core.KiteRectangle
 import io.github.yuroyami.kitepdf.core.parser.IndirectResolver
 import io.github.yuroyami.kitepdf.core.parser.PdfArray
 import io.github.yuroyami.kitepdf.core.parser.PdfDictionary
@@ -22,13 +23,13 @@ import io.github.yuroyami.kitepdf.core.parser.PdfStream
 public sealed class KitePattern {
 
     /** Pattern-space-to-default-space transform (`/Matrix`). */
-    public abstract val matrix: Matrix
+    public abstract val matrix: KiteMatrix
 
     /** Optional ExtGState applied while painting the pattern. */
     public abstract val extGState: ExtGState?
 
     public data class Shading(
-        override val matrix: Matrix,
+        override val matrix: KiteMatrix,
         override val extGState: ExtGState?,
         val shading: KiteShading,
     ) : KitePattern()
@@ -41,11 +42,11 @@ public sealed class KitePattern {
      * cell geometry).
      */
     public data class Tiling(
-        override val matrix: Matrix,
+        override val matrix: KiteMatrix,
         override val extGState: ExtGState?,
         val paintType: Int,
         val tilingType: Int,
-        val bbox: io.github.yuroyami.kitepdf.core.Rectangle,
+        val bbox: io.github.yuroyami.kitepdf.core.KiteRectangle,
         val xStep: Double,
         val yStep: Double,
         val contentBytes: ByteArray,
@@ -68,7 +69,7 @@ public sealed class KitePattern {
      * pattern solid black.
      */
     public object Unsupported : KitePattern() {
-        override val matrix: Matrix = Matrix.IDENTITY
+        override val matrix: KiteMatrix = KiteMatrix.IDENTITY
         override val extGState: ExtGState? = null
     }
 
@@ -88,7 +89,7 @@ public sealed class KitePattern {
                 else -> return null
             }
             val patternType = dict.getInt("PatternType")?.toInt() ?: return null
-            val matrix = (dict.getArray("Matrix"))?.toMatrix() ?: Matrix.IDENTITY
+            val matrix = (dict.getArray("Matrix"))?.toMatrix() ?: KiteMatrix.IDENTITY
             val ext = dict.getDict("ExtGState", refs)?.let { ExtGState.parse(it, refs) }
             return when (patternType) {
                 2 -> {
@@ -117,23 +118,23 @@ public sealed class KitePattern {
             }
         }
 
-        private fun PdfArray.toMatrix(): Matrix {
+        private fun PdfArray.toMatrix(): KiteMatrix {
             fun n(i: Int) = when (val v = this.getOrNull(i)) {
                 is PdfReal -> v.value
                 is PdfInt -> v.value.toDouble()
                 else -> 0.0
             }
-            return Matrix(n(0), n(1), n(2), n(3), n(4), n(5))
+            return KiteMatrix(n(0), n(1), n(2), n(3), n(4), n(5))
         }
 
-        private fun PdfArray.toRectangle(): io.github.yuroyami.kitepdf.core.Rectangle? {
+        private fun PdfArray.toRectangle(): io.github.yuroyami.kitepdf.core.KiteRectangle? {
             if (size < 4) return null
             fun n(i: Int) = when (val v = this[i]) {
                 is PdfReal -> v.value
                 is PdfInt -> v.value.toDouble()
                 else -> 0.0
             }
-            return io.github.yuroyami.kitepdf.core.Rectangle(n(0), n(1), n(2), n(3))
+            return io.github.yuroyami.kitepdf.core.KiteRectangle(n(0), n(1), n(2), n(3))
         }
     }
 }

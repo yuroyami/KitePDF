@@ -1,8 +1,9 @@
 # Module kitepdf-compose-viewer
 
-Compose Multiplatform components: `PdfView`, `EpubView`, a thumbnail strip and
-an outline panel.
+Compose Multiplatform components: `KiteDocView`, a selection menu, a thumbnail
+strip and an outline panel. One viewer path serves both PDF and EPUB.
 
-Pair it with `kitepdf` or `kitepdf-pdf`. This module holds its engine
-dependency as `implementation`, so the `PdfDocument` type it takes in its own
-signatures is not on your compile classpath unless you add the engine yourself.
+Pair it with `kitepdf` (both formats) or a single handler module. This module
+holds its engine dependency as `implementation`, so the document types it takes
+in its own signatures are not on your compile classpath unless you add the
+engine yourself.

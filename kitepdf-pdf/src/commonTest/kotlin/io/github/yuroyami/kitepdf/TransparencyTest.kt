@@ -5,9 +5,9 @@ import io.github.yuroyami.kitepdf.core.parser.IndirectResolver
 import io.github.yuroyami.kitepdf.core.parser.PdfDictionary
 import io.github.yuroyami.kitepdf.core.parser.PdfName
 import io.github.yuroyami.kitepdf.core.parser.PdfReal
-import io.github.yuroyami.kitepdf.core.render.BlendMode
+import io.github.yuroyami.kitepdf.core.render.KiteBlendMode
 import io.github.yuroyami.kitepdf.core.render.ExtGState
-import io.github.yuroyami.kitepdf.core.render.Matrix
+import io.github.yuroyami.kitepdf.core.render.KiteMatrix
 import io.github.yuroyami.kitepdf.core.render.RecordingCanvas
 import io.github.yuroyami.kitepdf.core.render.SoftMask
 import io.github.yuroyami.kitepdf.core.render.applyExtGState
@@ -22,25 +22,25 @@ class TransparencyTest {
 
     @Test
     fun blendMode_parses_all_16_names() {
-        assertEquals(BlendMode.Normal, BlendMode.parse("Normal"))
-        assertEquals(BlendMode.Normal, BlendMode.parse("Compatible"))   // legacy alias
-        assertEquals(BlendMode.Multiply, BlendMode.parse("Multiply"))
-        assertEquals(BlendMode.Screen, BlendMode.parse("Screen"))
-        assertEquals(BlendMode.Overlay, BlendMode.parse("Overlay"))
-        assertEquals(BlendMode.Darken, BlendMode.parse("Darken"))
-        assertEquals(BlendMode.Lighten, BlendMode.parse("Lighten"))
-        assertEquals(BlendMode.ColorDodge, BlendMode.parse("ColorDodge"))
-        assertEquals(BlendMode.ColorBurn, BlendMode.parse("ColorBurn"))
-        assertEquals(BlendMode.HardLight, BlendMode.parse("HardLight"))
-        assertEquals(BlendMode.SoftLight, BlendMode.parse("SoftLight"))
-        assertEquals(BlendMode.Difference, BlendMode.parse("Difference"))
-        assertEquals(BlendMode.Exclusion, BlendMode.parse("Exclusion"))
-        assertEquals(BlendMode.Hue, BlendMode.parse("Hue"))
-        assertEquals(BlendMode.Saturation, BlendMode.parse("Saturation"))
-        assertEquals(BlendMode.Color, BlendMode.parse("Color"))
-        assertEquals(BlendMode.Luminosity, BlendMode.parse("Luminosity"))
-        assertEquals(BlendMode.Normal, BlendMode.parse("BogusName"))   // fallback
-        assertEquals(BlendMode.Normal, BlendMode.parse(null))
+        assertEquals(KiteBlendMode.Normal, KiteBlendMode.parse("Normal"))
+        assertEquals(KiteBlendMode.Normal, KiteBlendMode.parse("Compatible"))   // legacy alias
+        assertEquals(KiteBlendMode.Multiply, KiteBlendMode.parse("Multiply"))
+        assertEquals(KiteBlendMode.Screen, KiteBlendMode.parse("Screen"))
+        assertEquals(KiteBlendMode.Overlay, KiteBlendMode.parse("Overlay"))
+        assertEquals(KiteBlendMode.Darken, KiteBlendMode.parse("Darken"))
+        assertEquals(KiteBlendMode.Lighten, KiteBlendMode.parse("Lighten"))
+        assertEquals(KiteBlendMode.ColorDodge, KiteBlendMode.parse("ColorDodge"))
+        assertEquals(KiteBlendMode.ColorBurn, KiteBlendMode.parse("ColorBurn"))
+        assertEquals(KiteBlendMode.HardLight, KiteBlendMode.parse("HardLight"))
+        assertEquals(KiteBlendMode.SoftLight, KiteBlendMode.parse("SoftLight"))
+        assertEquals(KiteBlendMode.Difference, KiteBlendMode.parse("Difference"))
+        assertEquals(KiteBlendMode.Exclusion, KiteBlendMode.parse("Exclusion"))
+        assertEquals(KiteBlendMode.Hue, KiteBlendMode.parse("Hue"))
+        assertEquals(KiteBlendMode.Saturation, KiteBlendMode.parse("Saturation"))
+        assertEquals(KiteBlendMode.Color, KiteBlendMode.parse("Color"))
+        assertEquals(KiteBlendMode.Luminosity, KiteBlendMode.parse("Luminosity"))
+        assertEquals(KiteBlendMode.Normal, KiteBlendMode.parse("BogusName"))   // fallback
+        assertEquals(KiteBlendMode.Normal, KiteBlendMode.parse(null))
     }
 
     @Test
@@ -54,7 +54,7 @@ class TransparencyTest {
         val gs = ExtGState.parse(dict, noopResolver)
         assertEquals(0.4, gs.fillAlpha)
         assertEquals(0.8, gs.strokeAlpha)
-        assertEquals(BlendMode.Multiply, gs.blendMode)
+        assertEquals(KiteBlendMode.Multiply, gs.blendMode)
     }
 
     @Test
@@ -69,13 +69,13 @@ class TransparencyTest {
     @Test
     fun applying_extgstate_merges_only_present_fields() {
         val base = GraphicsState(
-            fillAlpha = 0.5, strokeAlpha = 0.5, blendMode = BlendMode.Darken,
+            fillAlpha = 0.5, strokeAlpha = 0.5, blendMode = KiteBlendMode.Darken,
         )
-        val ext = ExtGState(fillAlpha = 0.3, blendMode = BlendMode.Multiply)
+        val ext = ExtGState(fillAlpha = 0.3, blendMode = KiteBlendMode.Multiply)
         val merged = base.applyExtGState(ext)
         assertEquals(0.3, merged.fillAlpha)     // overridden
         assertEquals(0.5, merged.strokeAlpha)   // preserved
-        assertEquals(BlendMode.Multiply, merged.blendMode)
+        assertEquals(KiteBlendMode.Multiply, merged.blendMode)
     }
 
     @Test
@@ -86,11 +86,11 @@ class TransparencyTest {
         )
         val doc = KitePDF.open(pdf)
         val canvas = RecordingCanvas()
-        doc.pages[0].renderTo(canvas, Matrix.IDENTITY)
+        doc.pages[0].renderTo(canvas, KiteMatrix.IDENTITY)
         val fills = canvas.calls.filterIsInstance<RecordingCanvas.Call.Fill>()
         assertEquals(1, fills.size)
         assertEquals(0.5, fills[0].alpha, "fill alpha should reflect /ca")
-        assertEquals(BlendMode.Multiply, fills[0].blendMode, "blend mode should reflect /BM")
+        assertEquals(KiteBlendMode.Multiply, fills[0].blendMode, "blend mode should reflect /BM")
     }
 
     @Test
@@ -102,7 +102,7 @@ class TransparencyTest {
         )
         val doc = KitePDF.open(pdf)
         val canvas = RecordingCanvas()
-        doc.pages[0].renderTo(canvas, Matrix.IDENTITY)
+        doc.pages[0].renderTo(canvas, KiteMatrix.IDENTITY)
         val fills = canvas.calls.filterIsInstance<RecordingCanvas.Call.Fill>()
         val strokes = canvas.calls.filterIsInstance<RecordingCanvas.Call.Stroke>()
         assertEquals(1, fills.size); assertEquals(1, strokes.size)
@@ -118,7 +118,7 @@ class TransparencyTest {
         )
         val doc = KitePDF.open(pdf)
         val canvas = RecordingCanvas()
-        doc.pages[0].renderTo(canvas, Matrix.IDENTITY)
+        doc.pages[0].renderTo(canvas, KiteMatrix.IDENTITY)
         val texts = canvas.calls.filterIsInstance<RecordingCanvas.Call.Glyphs>()
         assertEquals(1, texts.size)
         assertEquals(0.3, texts[0].alpha)

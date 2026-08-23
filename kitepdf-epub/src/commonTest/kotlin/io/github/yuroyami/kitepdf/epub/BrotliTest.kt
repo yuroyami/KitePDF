@@ -7,7 +7,7 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
 /**
- * T-47: the pure-Kotlin Brotli decoder against streams produced by the
+ * The pure-Kotlin Brotli decoder against streams produced by the
  * reference `brotli` CLI. The compressed vectors are embedded as Base64;
  * the ORIGINAL inputs are regenerated in Kotlin below (same paragraph
  * constant / same LCG), so each test is a true reference round-trip:

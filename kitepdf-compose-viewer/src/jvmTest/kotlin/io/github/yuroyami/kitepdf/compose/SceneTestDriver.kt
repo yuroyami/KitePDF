@@ -9,7 +9,7 @@ import org.jetbrains.skia.Image
 /**
  * Drives an [ImageComposeScene] until a pixel condition holds.
  *
- * [PdfView] fades a freshly rasterized page in via `Crossfade`, so a page is not
+ * [KiteDocView] fades a freshly rasterized page in via `Crossfade`, so a page is not
  * fully opaque within the handful of frames a hard-cut raster used to need. This
  * driver advances the virtual frame clock (so the fade animates) and polls after
  * each frame until the page is on screen or a timeout elapses. The frame-time

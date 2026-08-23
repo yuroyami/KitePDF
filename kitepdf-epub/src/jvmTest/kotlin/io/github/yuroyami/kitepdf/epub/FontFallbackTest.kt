@@ -9,7 +9,7 @@ import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
 /**
- * T-61: a codepoint missing from the matched face's cmap must never paint
+ * A codepoint missing from the matched face's cmap must never paint
  * `.notdef` tofu. Fallback order: another registered face carrying the glyph,
  * else the generic system-font path (face null). Uses the in-repo NotoSans
  * (Latin, no CJK) and DroidSansFallback (CJK) as a real missing/present pair;

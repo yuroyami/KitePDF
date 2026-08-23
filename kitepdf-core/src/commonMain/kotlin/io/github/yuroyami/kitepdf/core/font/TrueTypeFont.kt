@@ -55,7 +55,7 @@ public class TrueTypeFont private constructor(
     public fun advanceWidth(glyphId: Int): Int = hmtx.advanceWidth(glyphId)
 
     /**
-     * Long vertical advances from `vhea`/`vmtx` (T-72 vertical writing).
+     * Long vertical advances from `vhea`/`vmtx` (vertical writing).
      * Glyphs past `numOfLongVerMetrics` share the last listed advance, per
      * the spec. Null when the face carries no vertical metrics.
      */
@@ -150,7 +150,7 @@ public class TrueTypeFont private constructor(
      */
     public fun outlinePath(glyphId: Int): KitePath? {
         glyphLock.withLock { if (pathCache.containsKey(glyphId)) return pathCache[glyphId] }
-        val p = outline(glyphId)?.toPdfPath()
+        val p = outline(glyphId)?.toKitePath()
         return glyphLock.withLock {
             if (pathCache.containsKey(glyphId)) {
                 pathCache[glyphId]
@@ -557,7 +557,7 @@ public data class GlyphBbox(val xMin: Int, val yMin: Int, val xMax: Int, val yMa
  * quadratic Bézier control points; consecutive off-curve points imply an
  * implied on-curve point at their midpoint.
  *
- * [toPdfPath] is the canonical interpretation that turns these into a
+ * [toKitePath] is the canonical interpretation that turns these into a
  * sequence of `moveTo`, `lineTo`, `quadTo`, `close` commands.
  *
  * The outline is in font design units (multiply by `fontSize / unitsPerEm`
@@ -565,7 +565,10 @@ public data class GlyphBbox(val xMin: Int, val yMin: Int, val xMax: Int, val yMa
  */
 public data class GlyphOutline(val contours: List<Contour>, val bbox: GlyphBbox) {
 
-    public fun toPdfPath(): KitePath {
+    @Deprecated("Renamed to toKitePath", ReplaceWith("toKitePath()"))
+    public fun toPdfPath(): KitePath = toKitePath()
+
+    public fun toKitePath(): KitePath {
         val b = KitePath.Builder()
         for (contour in contours) {
             renderContour(contour.points, b)

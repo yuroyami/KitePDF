@@ -7,7 +7,7 @@ import kotlin.test.assertContentEquals
 import kotlin.test.assertTrue
 
 /**
- * T-11: the pure-Kotlin encoder's dynamic-Huffman blocks. Every payload must
+ * The pure-Kotlin encoder's dynamic-Huffman blocks. Every payload must
  * decode byte-identically through BOTH our [Inflate] and the strict
  * `java.util.zip.Inflater` (the external correctness oracle), and the output
  * ratio must land within 1.25x of zlib level 6.
@@ -81,7 +81,7 @@ class DeflateDynamicTest {
         val ours = Deflate.encode(payload)
         val jdk = jdkDeflate6(payload)
         val ratio = ours.size.toDouble() / jdk.size
-        println("[T-11 bench] 6MB pure deflate: ours=${ours.size} zlib6=${jdk.size} ratio=${(ratio * 1000).toInt() / 1000.0}")
+        println("[bench] 6MB pure deflate: ours=${ours.size} zlib6=${jdk.size} ratio=${(ratio * 1000).toInt() / 1000.0}")
         assertTrue(ratio <= 1.25, "pure encoder is ${ratio}x of zlib level 6 (budget 1.25x)")
     }
 

@@ -4,7 +4,7 @@ import io.github.yuroyami.kitepdf.core.compression.Inflate
 import io.github.yuroyami.kitepdf.core.compression.InflateException
 import io.github.yuroyami.kitepdf.core.ByteArrayBuilder
 import io.github.yuroyami.kitepdf.core.filters.FilterChain
-import io.github.yuroyami.kitepdf.core.render.Matrix
+import io.github.yuroyami.kitepdf.core.render.KiteMatrix
 import io.github.yuroyami.kitepdf.core.render.NoopCanvas
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -12,7 +12,7 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
 /**
- * Decompression-bomb guard (T-01): a kilobyte-scale FlateDecode stream that
+ * Decompression-bomb guard: a kilobyte-scale FlateDecode stream that
  * expands past [FilterChain.MAX_DECODED_STREAM] must be rejected by the
  * inflater, and the rejection must surface through the lenient salvage path.
  * The document still opens and the page renders (blank), never an OOM or an
@@ -110,7 +110,7 @@ class DecompressionBombTest {
 
         val doc = KitePDF.open(pdf)
         assertEquals(1, doc.pageCount)
-        doc.pages[0].renderTo(NoopCanvas, Matrix.IDENTITY)
+        doc.pages[0].renderTo(NoopCanvas, KiteMatrix.IDENTITY)
         assertEquals("", doc.pages[0].extractText())
     }
 
@@ -125,7 +125,7 @@ class DecompressionBombTest {
 
         val doc = KitePDF.open(pdf)
         assertEquals(1, doc.pageCount)
-        doc.pages[0].renderTo(NoopCanvas, Matrix.IDENTITY)
+        doc.pages[0].renderTo(NoopCanvas, KiteMatrix.IDENTITY)
         assertTrue("Alive" in doc.pages[0].extractText())
     }
 

@@ -8,7 +8,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 /**
- * T-60: pseudo-classes match for real and `+`/`~` are combinators. Each case
+ * Pseudo-classes match for real and `+`/`~` are combinators. Each case
  * resolves a small document against one rule and asserts exactly which
  * elements picked up the declaration.
  */

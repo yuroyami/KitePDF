@@ -3,13 +3,13 @@ package io.github.yuroyami.kitepdf.compose
 import androidx.compose.ui.graphics.ImageBitmap
 
 /**
- * LRU cache of rasterized page bitmaps (T-15), so scrolling back through a
- * lazy list re-uses pixels instead of re-executing content streams. One
- * instance lives on each [PdfViewState]; entries cost `w * h * 4` bytes and
+ * LRU cache of rasterized page bitmaps, so scrolling back through a
+ * lazy list re-uses pixels instead of redrawing pages. One
+ * instance lives on each [KiteDocViewState]; entries cost `w * h * 4` bytes and
  * the eldest are evicted until the total fits [maxBytes].
  *
  * NOT thread-safe by design: every access happens inside the raster
- * coroutine, which serializes on [PdfRasterizer]'s mutex (T-14), so adding a
+ * coroutine, which serializes on [KitePageRasterizer]'s mutex, so adding a
  * second lock here would only duplicate it.
  */
 internal class PageBitmapCache(private val maxBytes: Long) {

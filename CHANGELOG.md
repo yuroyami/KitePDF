@@ -5,6 +5,132 @@ All notable changes to KitePDF are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+An API naming pass. Two things were wrong. The viewer called itself PDF while
+serving both formats: the Compose viewer, its state, its layouts and its
+widgets were all named `Pdf*` even though every one of them drives an EPUB
+exactly as it drives a PDF. And six core types carried bare names that collide
+with Compose, Android, Skia and AWT types, which forced aliased imports at
+almost every call site.
+
+The prefix now means what it says: `Kite*` for anything that serves both
+formats, `Pdf*` and `Epub*` only where the type really is one format, and no
+shared type left with a name a host app already uses.
+
+### Breaking changes and migration
+
+Every old name still resolves, deprecated, for this release cycle. Most are
+`typealias`es or one-line wrappers, so `ReplaceWith` fixes call sites in the
+IDE.
+
+| old | new |
+|---|---|
+| `PdfView(state, ...)` | `KiteDocView(state, ...)` |
+| `PdfView(document = pdf, ...)`, `EpubView(document = book, ...)` | `KiteDocView(document = anyKiteDocument, ...)` |
+| `rememberPdfViewState(pdf)`, `rememberEpubViewState(book)` | `rememberKiteDocViewState(anyKiteDocument)` |
+| `PdfViewState` | `KiteDocViewState` |
+| `PdfViewColors` | `KiteDocViewColors` |
+| `PdfLayout` | `KiteDocLayout` |
+| `PdfZoomSpec` | `KiteZoomSpec` |
+| `PdfRenderSpec` | `KiteRenderSpec` |
+| `PdfHighlight` | `KiteHighlight` |
+| `PdfMarkerSide` | `KiteMarkerSide` |
+| `PdfSelectionMenu`, `PdfSelectionMenuItem`, `PdfSelectionMenuDefaults` | `KiteSelectionMenu`, `KiteSelectionMenuItem`, `KiteSelectionMenuDefaults` |
+| `PdfSelectionHandleEdge`, `PdfSelectionHandlePainter`, `PdfSelectionHandleDefaults` | `KiteSelectionHandleEdge`, `KiteSelectionHandlePainter`, `KiteSelectionHandleDefaults` |
+| `PdfRasterizer`, `rememberPdfRasterizer()` | `KitePageRasterizer`, `rememberKitePageRasterizer()` |
+| `PdfPageIndicator`, `PdfNavigationControls`, `PdfThumbnailStrip`, `PdfOutlinePanel` | `KitePageIndicator`, `KiteNavigationControls`, `KiteThumbnailStrip`, `KiteOutlinePanel` |
+| `PdfDocument.outlines` | `PdfDocument.bookmarks` |
+| `WrongPasswordException` | `KiteWrongPasswordException` |
+| `TrueTypeFont.GlyphOutline.toPdfPath()` | `toKitePath()` |
+
+Six core types also lost bare names that collide with types every consumer
+already imports. The codebase itself was the evidence: `Matrix` was imported
+`as PdfMatrix` in fifteen files and `BlendMode` `as PdfBlendMode` in six,
+purely to dodge the Compose, Android, Skia and AWT types of the same name.
+Those aliases are gone now.
+
+| old | new | collided with |
+|---|---|---|
+| `core.Rectangle`, `core.render.Rectangle` | `core.KiteRectangle` | `java.awt.Rectangle` |
+| `core.render.Matrix` | `core.render.KiteMatrix` | `androidx.compose.ui.graphics.Matrix`, `android.graphics.Matrix` |
+| `core.render.BlendMode` | `core.render.KiteBlendMode` | Compose, Android and Skia `BlendMode` |
+| `core.render.ColorSpace` | `core.render.KiteColorSpace` | Compose and Android `ColorSpace` |
+| `core.font.FontFamily` | `core.font.KiteFontFamily` | `androidx.compose.ui.text.font.FontFamily` |
+| `core.render.ImageXObject` | `core.render.KiteImageData` | (PDF jargon; EPUB builds these too) |
+| `compose.TextSelection` | `compose.KiteTextSelection` | |
+| `compose.PageHit` | `compose.KitePageHit` | |
+
+`Rectangle` was reachable from two packages; only `io.github.yuroyami.kitepdf.core.KiteRectangle`
+remains. One caveat on the aliases: Kotlin expands a type alias for type
+positions, constructors, companion members and enum entries, but not for
+nested classifiers, so `ImageXObject.Kind` has to become `KiteImageData.Kind`
+by hand.
+
+`KitePDF.open(bytes)` is deprecated. It read as the entry point for the whole
+library while only ever returning a `PdfDocument`; use `PdfDocument.open` for a
+PDF or `KiteDoc.open` for either format. `KitePDF.VERSION` stays.
+
+Two changes are more than a rename:
+
+- **`onLinkTap` now receives a `KiteLinkAction`, not a `PdfAction`.** An EPUB
+  href used to be wrapped in a fabricated `PdfAction.Uri` carrying an empty
+  dictionary, so an EPUB-only app had to import PDF types to read a URL back
+  out. EPUB links now arrive as `KiteLinkAction.Uri`; PDF links arrive as
+  `KiteLinkAction.Pdf` with the parsed `PdfAction` untouched, so nothing is
+  lost. Both answer `link.uri`, so opening web links needs no `when`. The
+  deprecated `PdfView`/`EpubView` wrappers keep the old callback type.
+- **`PdfDocument.outlines` is now `bookmarks`.** It sat one letter away from
+  the format-neutral `PdfDocument.outline`, with a different element type.
+
+Also removed, both long past the one cycle they were promised: the
+`PdfCanvas`/`PdfPath`/`PdfShading`/`PdfPattern`/`PdfFunction` aliases from
+0.2.0, and `IosPdfRasterizer` from 0.0.2 (use `ApplePdfRasterizer`).
+
+`EpubPage.width`/`height` are deprecated in favour of `displayWidth`/
+`displayHeight`, which every `KitePage` answers. They were the same numbers
+under a name that means something else on `PdfPage`, where `width` is the
+`/MediaBox` and ignores `/CropBox` and `/Rotate`.
+
+### Added
+
+- **`KiteDoc`, the format-neutral opener**, in `io.github.yuroyami.kitepdf.document`
+  in the `kitepdf` umbrella artifact. `KiteDoc.open(bytes)` reads the format out
+  of the bytes and returns a `KiteDocument`, and `KiteDoc.formatOf(bytes)` answers
+  `Pdf`, `Epub` or null from the header alone. Both handlers' own `open` are
+  unchanged and are still the direct route when you already know the format.
+- **More ways in than a byte array.** Every one is a thin adapter that ends in
+  the same `open(bytes)`, since the engine has no incremental reader.
+
+  | source | call | targets |
+  |---|---|---|
+  | Base64 or a `data:` URI | `KiteDoc.openBase64(text)` | all |
+  | file path | `KiteDoc.openFile(path)` | JVM, Android, Apple, Linux, Windows, Android NDK |
+  | `java.io.File`, `InputStream` | `KiteDoc.open(file)` / `open(stream)` | JVM, Android |
+  | Android content `Uri` | `KiteDoc.open(context, uri)` | Android |
+  | `NSData`, `NSURL` | `KiteDoc.open(data)` / `open(url)` | Apple |
+  | remote URL | `KiteDoc.openUrl(url, client)` | `kitepdf-net` |
+
+  The Base64 reader takes a bare payload or a whole data URI, either alphabet,
+  padded or not, and ignores line breaks.
+- **`EpubDocument.openFile(path)`** on JVM, Android and Apple, matching the
+  `PdfDocument` one that already existed.
+- **`io.github.yuroyami:kitepdf-net`**, a new optional artifact: `KiteDoc.openUrl`
+  and `KiteDoc.downloadBytes`. It is the only place Ktor enters the build, so
+  the engine artifacts keep their kotlin-stdlib + KiteImage dependency set. You
+  supply the `HttpClient`, so timeouts, auth, retries and logging stay yours.
+  Ktor does not ship for `androidNative*` or `wasmWasi`, so neither does this.
+- **`KiteDocView(document = ..., theme = ...)`.** The convenience overload takes
+  a reading theme, which used to be reachable only through `EpubView` or by
+  building `KiteDocViewColors` by hand. Themes have always worked for PDF too.
+
+### Fixed
+
+- Internal ticket codes (`T-14`, `T-80`, `T-32/T-82`, ...) are gone from the
+  KDoc and comments. They meant nothing to anyone reading the published API.
+- The Maven descriptions for `kitepdf-compose-viewer` and
+  `kitepdf-skia-renderer` said "PDF" only. Both have handled EPUB since 0.2.0.
+
 ## [0.6.3] - 2026-08-19
 
 A switch to turn text selection off, for viewers that show a document as a

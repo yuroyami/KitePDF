@@ -1,6 +1,6 @@
 package io.github.yuroyami.kitepdf.epub
 
-import io.github.yuroyami.kitepdf.core.render.Matrix
+import io.github.yuroyami.kitepdf.core.render.KiteMatrix
 import io.github.yuroyami.kitepdf.core.render.RecordingCanvas
 import io.github.yuroyami.kitepdf.core.render.RgbColor
 import kotlin.test.Test
@@ -25,7 +25,7 @@ class EpubRenderTest {
         assertTrue(doc.pageCount >= 1, "expected at least one reflowed page")
 
         val canvas = RecordingCanvas()
-        doc.pages[0].renderTo(canvas, Matrix.IDENTITY)
+        doc.pages[0].renderTo(canvas, KiteMatrix.IDENTITY)
 
         val glyphRuns = canvas.calls.filterIsInstance<RecordingCanvas.Call.Glyphs>()
         assertTrue(glyphRuns.isNotEmpty(), "page should emit drawGlyphs runs")
@@ -102,7 +102,7 @@ class EpubRenderTest {
         assertEquals(1, images.size)
         val img = images.single().image
         assertEquals(2, img.width); assertEquals(1, img.height)
-        assertEquals(io.github.yuroyami.kitepdf.core.render.ImageXObject.Kind.RAW, img.kind, "PNG decodes to RAW pixels in core")
+        assertEquals(io.github.yuroyami.kitepdf.core.render.KiteImageData.Kind.RAW, img.kind, "PNG decodes to RAW pixels in core")
     }
 
     // ---- Phase 2: CSS reaching the canvas -----------------------------------
@@ -143,7 +143,7 @@ class EpubRenderTest {
     @Test
     fun sans_serif_css_selects_sans_face() {
         val runs = renderRuns("""<p style="font-family:sans-serif">abc</p>""")
-        assertTrue(runs.any { "abc" in it.text && it.fontSpec.family == io.github.yuroyami.kitepdf.core.font.FontFamily.SansSerif })
+        assertTrue(runs.any { "abc" in it.text && it.fontSpec.family == io.github.yuroyami.kitepdf.core.font.KiteFontFamily.SansSerif })
     }
 
     // ---- Phase 3: box model painting ----------------------------------------
@@ -204,8 +204,7 @@ class EpubRenderTest {
 
     @Test
     fun missing_container_is_not_a_readable_epub() {
-        // A zip with no META-INF/container.xml is not a readable EPUB (T-22:
-        // open throws, openOrNull maps it to null).
+        // A zip with no META-INF/container.xml is not a readable EPUB (open throws, openOrNull maps it to null).
         val notEpub = storedZip(listOf("random.txt" to "nothing here".encodeToByteArray()))
         assertTrue(EpubDocument.openOrNull(notEpub) == null)
     }

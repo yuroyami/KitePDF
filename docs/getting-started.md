@@ -68,7 +68,7 @@ val doc = PdfDocument.open(bytes, "secret".encodeToByteArray())
 
 ## Step 3: Show it on screen in Compose
 
-The `kitepdf-compose-viewer` artifact provides `PdfView`: a Compose-Multiplatform viewer supporting pinch zoom, paging, continuous scroll, and more.
+The `kitepdf-compose-viewer` artifact provides `KiteDocView`: a Compose-Multiplatform viewer supporting pinch zoom, paging, continuous scroll, and more.
 
 Add the dependency:
 
@@ -86,11 +86,11 @@ dependencies {
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.Modifier
 import io.github.yuroyami.kitepdf.PdfDocument
-import io.github.yuroyami.kitepdf.compose.PdfView
+import io.github.yuroyami.kitepdf.compose.KiteDocView
 
 @Composable
 fun PdfViewer(doc: PdfDocument) {
-    PdfView(document = doc, modifier = Modifier.fillMaxSize())
+    KiteDocView(document = doc, modifier = Modifier.fillMaxSize())
 }
 ```
 
@@ -99,7 +99,7 @@ fun PdfViewer(doc: PdfDocument) {
 ```kotlin
 @Composable
 fun SinglePageView(doc: PdfDocument) {
-    PdfView(
+    KiteDocView(
         document = doc,
         page = 0,  // zero-based index
         modifier = Modifier.fillMaxSize()
@@ -118,24 +118,24 @@ import io.github.yuroyami.kitepdf.compose.*
 
 @Composable
 fun AdvancedViewer(doc: PdfDocument) {
-    val state = rememberPdfViewState(doc)
-    PdfView(
+    val state = rememberKiteDocViewState(doc)
+    KiteDocView(
         state = state,
         modifier = Modifier.fillMaxSize(),
-        layout = PdfLayout.Paged(Orientation.Horizontal),
-        zoomSpec = PdfZoomSpec(minZoom = 0.5f, maxZoom = 6f),
-        renderSpec = PdfRenderSpec.Rasterized(
+        layout = KiteDocLayout.Paged(Orientation.Horizontal),
+        zoomSpec = KiteZoomSpec(minZoom = 0.5f, maxZoom = 6f),
+        renderSpec = KiteRenderSpec.Rasterized(
             quality = 1f,
             maxBitmapLongSide = 4096,
             rerasterizeOnZoom = true,
             preserveHairlines = true
         ),
-        colors = PdfViewColors(
+        colors = KiteDocViewColors(
             pageBackground = Color.White,
             viewportBackground = Color(0xFF1E1E1E)
         ),
         overlay = { state ->
-            PdfNavigationControls(state, Modifier.align(Alignment.BottomCenter))
+            KiteNavigationControls(state, Modifier.align(Alignment.BottomCenter))
         }
     )
 }
@@ -143,7 +143,7 @@ fun AdvancedViewer(doc: PdfDocument) {
 
 !!! tip
 
-    Use `PdfRenderSpec.Rasterized()` (the default) for scrolling performance and memory efficiency. Switch to `PdfRenderSpec.Vectorized()` for resolution-independent, bitmap-free rendering: best for simple pages or when memory is tight.
+    Use `KiteRenderSpec.Rasterized()` (the default) for scrolling performance and memory efficiency. Switch to `KiteRenderSpec.Vectorized()` for resolution-independent, bitmap-free rendering: best for simple pages or when memory is tight.
 
 ## Step 4: Read text out of it
 

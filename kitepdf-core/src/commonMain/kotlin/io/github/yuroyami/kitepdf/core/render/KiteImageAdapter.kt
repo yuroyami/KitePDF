@@ -3,7 +3,7 @@ package io.github.yuroyami.kitepdf.core.render
 import io.github.yuroyami.kiteimage.KiteBitmap
 
 /**
- * Bridge from KiteImage's ARGB [KiteBitmap] to KitePDF's [ImageXObject] RAW
+ * Bridge from KiteImage's ARGB [KiteBitmap] to KitePDF's [KiteImageData] RAW
  * shape (interleaved DeviceRGB samples + an optional soft-mask alpha plane).
  * Since the codec consolidation, KitePDF decodes PNG/GIF/JPEG/JP2 through
  * KiteImage and only keeps the PDF-semantics layer (color spaces, /Decode,
@@ -24,7 +24,7 @@ internal fun KiteBitmap.toRgbBytes(): ByteArray {
 }
 
 /** Full conversion: RGB pixel bytes + alpha plane when any pixel is not opaque. */
-internal fun KiteBitmap.toImageXObject(): ImageXObject {
+internal fun KiteBitmap.toKiteImageData(): KiteImageData {
     val n = width * height
     var alpha: ByteArray? = null
     for (i in 0 until n) {
@@ -33,13 +33,13 @@ internal fun KiteBitmap.toImageXObject(): ImageXObject {
             break
         }
     }
-    return ImageXObject(
+    return KiteImageData(
         width = width, height = height, bitsPerComponent = 8,
-        colorSpace = "DeviceRGB", kind = ImageXObject.Kind.RAW,
+        colorSpace = "DeviceRGB", kind = KiteImageData.Kind.RAW,
         encodedBytes = ByteArray(0), pixelBytes = toRgbBytes(),
         softMaskAlpha = alpha,
         softMaskWidth = if (alpha != null) width else 0,
         softMaskHeight = if (alpha != null) height else 0,
-        resolvedColorSpace = ColorSpace.DeviceRGB,
+        resolvedColorSpace = KiteColorSpace.DeviceRGB,
     )
 }

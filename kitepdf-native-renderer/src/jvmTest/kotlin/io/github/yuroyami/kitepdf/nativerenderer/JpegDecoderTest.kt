@@ -1,6 +1,6 @@
 package io.github.yuroyami.kitepdf.nativerenderer
 
-import io.github.yuroyami.kitepdf.core.render.ImageXObject
+import io.github.yuroyami.kitepdf.core.render.KiteImageData
 import io.github.yuroyami.kitepdf.core.render.toRgbaBytes
 import java.awt.image.BufferedImage
 import java.io.ByteArrayInputStream
@@ -15,7 +15,7 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 /**
- * Verifies the pure-Kotlin core [ImageXObject.fromEncodedImage] JPEG path
+ * Verifies the pure-Kotlin core [KiteImageData.fromEncodedImage] JPEG path
  * (via `JpegDecoder`) against the JVM's libjpeg-backed `ImageIO` decoder as the
  * oracle. Both decode the SAME encoded bytes, so any per-channel difference is
  * only IDCT rounding + chroma upsampling, kept small by the assertions.
@@ -59,9 +59,9 @@ class JpegDecoderTest {
 
     /** Mean per-channel absolute error between our RGBA and ImageIO's RGB. */
     private fun compare(jpeg: ByteArray, w: Int, h: Int): Double {
-        val iox = ImageXObject.fromEncodedImage(jpeg)
+        val iox = KiteImageData.fromEncodedImage(jpeg)
         assertNotNull(iox, "fromEncodedImage returned null")
-        assertEquals(ImageXObject.Kind.RAW, iox.kind, "JPEG should decode to a RAW image in core")
+        assertEquals(KiteImageData.Kind.RAW, iox.kind, "JPEG should decode to a RAW image in core")
         assertEquals(w, iox.width); assertEquals(h, iox.height)
         val rgba = iox.toRgbaBytes()
         assertNotNull(rgba, "toRgbaBytes returned null")
@@ -105,9 +105,9 @@ class JpegDecoderTest {
             img.setRGB(x, y, (g shl 16) or (g shl 8) or g)
         }
         val jpeg = encode(img, 0.92f, progressive = false)
-        val iox = ImageXObject.fromEncodedImage(jpeg)
+        val iox = KiteImageData.fromEncodedImage(jpeg)
         assertNotNull(iox)
-        assertEquals(ImageXObject.Kind.RAW, iox.kind)
+        assertEquals(KiteImageData.Kind.RAW, iox.kind)
         val rgba = iox.toRgbaBytes()!!
         // Compare against the reference's RAW luma samples (readRaster), NOT getRGB:
         // a TYPE_BYTE_GRAY BufferedImage applies a linear<->sRGB gamma on getRGB that
@@ -130,7 +130,7 @@ class JpegDecoderTest {
     @Test
     fun not_blank() {
         val w = 32; val h = 32
-        val iox = ImageXObject.fromEncodedImage(encode(buildRgb(w, h), 0.9f, false))
+        val iox = KiteImageData.fromEncodedImage(encode(buildRgb(w, h), 0.9f, false))
         assertNotNull(iox)
         val rgba = iox.toRgbaBytes()!!
         // Distinct pixel values prove real content, not a flat/blank fallback.

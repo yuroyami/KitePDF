@@ -1,5 +1,6 @@
 package io.github.yuroyami.kitepdf.core.render
 
+import io.github.yuroyami.kitepdf.core.KiteRectangle
 import io.github.yuroyami.kitepdf.core.font.FontSpec
 import io.github.yuroyami.kitepdf.core.font.TextGlyph
 
@@ -69,39 +70,39 @@ internal class ThemedCanvas(
 
     override val resolvesGlyphOutlines: Boolean get() = inner.resolvesGlyphOutlines
 
-    override fun beginPage(widthPt: Double, heightPt: Double, deviceCtm: Matrix) =
+    override fun beginPage(widthPt: Double, heightPt: Double, deviceCtm: KiteMatrix) =
         inner.beginPage(widthPt, heightPt, deviceCtm)
 
     override fun endPage() = inner.endPage()
 
-    override fun fillPath(path: KitePath, ctm: Matrix, color: RgbColor, evenOdd: Boolean, alpha: Double, blendMode: BlendMode) =
+    override fun fillPath(path: KitePath, ctm: KiteMatrix, color: RgbColor, evenOdd: Boolean, alpha: Double, blendMode: KiteBlendMode) =
         inner.fillPath(path, ctm, mapColor(color), evenOdd, alpha, blendMode)
 
     override fun strokePath(
-        path: KitePath, ctm: Matrix, color: RgbColor, lineWidth: Double, alpha: Double, blendMode: BlendMode,
+        path: KitePath, ctm: KiteMatrix, color: RgbColor, lineWidth: Double, alpha: Double, blendMode: KiteBlendMode,
         dashArray: List<Double>?, dashPhase: Double, lineCap: Int, lineJoin: Int, miterLimit: Double,
     ) = inner.strokePath(path, ctm, mapColor(color), lineWidth, alpha, blendMode, dashArray, dashPhase, lineCap, lineJoin, miterLimit)
 
     // Gradients pass through unthemed (rare in books; their colours live inside the shading).
-    override fun fillShading(shading: KiteShading, ctm: Matrix, clipPath: KitePath?, alpha: Double, blendMode: BlendMode) =
+    override fun fillShading(shading: KiteShading, ctm: KiteMatrix, clipPath: KitePath?, alpha: Double, blendMode: KiteBlendMode) =
         inner.fillShading(shading, ctm, clipPath, alpha, blendMode)
 
     override fun drawGlyphs(
         glyphs: List<TextGlyph>, fontSize: Double, unitsPerEm: Int, hasOutlines: Boolean, fontSpec: FontSpec,
-        textToDevice: Matrix, color: RgbColor, alpha: Double, blendMode: BlendMode,
+        textToDevice: KiteMatrix, color: RgbColor, alpha: Double, blendMode: KiteBlendMode,
     ) = inner.drawGlyphs(glyphs, fontSize, unitsPerEm, hasOutlines, fontSpec, textToDevice, mapColor(color), alpha, blendMode)
 
-    override fun pushClip(path: KitePath, ctm: Matrix, evenOdd: Boolean) = inner.pushClip(path, ctm, evenOdd)
+    override fun pushClip(path: KitePath, ctm: KiteMatrix, evenOdd: Boolean) = inner.pushClip(path, ctm, evenOdd)
     override fun popClip() = inner.popClip()
 
     // Images are NOT themed. Photos should keep their real colours.
-    override fun drawImage(image: ImageXObject, ctm: Matrix, alpha: Double) = inner.drawImage(image, ctm, alpha)
+    override fun drawImage(image: KiteImageData, ctm: KiteMatrix, alpha: Double) = inner.drawImage(image, ctm, alpha)
 
-    override fun beginTransparencyGroup(bbox: Rectangle, ctm: Matrix, isolated: Boolean, knockout: Boolean, alpha: Double, blendMode: BlendMode) =
+    override fun beginTransparencyGroup(bbox: KiteRectangle, ctm: KiteMatrix, isolated: Boolean, knockout: Boolean, alpha: Double, blendMode: KiteBlendMode) =
         inner.beginTransparencyGroup(bbox, ctm, isolated, knockout, alpha, blendMode)
 
     override fun endTransparencyGroup() = inner.endTransparencyGroup()
 
-    override fun applySoftMask(kind: SoftMask.Kind, maskBBox: Rectangle, maskCtm: Matrix, render: () -> Unit, renderMask: (KiteCanvas) -> Unit) =
+    override fun applySoftMask(kind: SoftMask.Kind, maskBBox: KiteRectangle, maskCtm: KiteMatrix, render: () -> Unit, renderMask: (KiteCanvas) -> Unit) =
         inner.applySoftMask(kind, maskBBox, maskCtm, render, renderMask)
 }

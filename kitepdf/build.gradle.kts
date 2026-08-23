@@ -80,5 +80,16 @@ kotlin {
             api(projects.kitepdfPdf)
             api(projects.kitepdfEpub)
         }
+
+        commonTest.dependencies {
+            implementation(kotlin("test"))
+        }
+
+        // KiteDoc.openFile through stdio, for the native targets that have
+        // neither java.io nor Foundation. Apple has its own NSData version.
+        val posixFileMain by creating { dependsOn(nativeMain.get()) }
+        linuxMain.get().dependsOn(posixFileMain)
+        mingwMain.get().dependsOn(posixFileMain)
+        androidNativeMain.get().dependsOn(posixFileMain)
     }
 }

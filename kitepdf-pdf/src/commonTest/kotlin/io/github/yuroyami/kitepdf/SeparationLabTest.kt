@@ -7,7 +7,7 @@ import io.github.yuroyami.kitepdf.core.parser.PdfInt
 import io.github.yuroyami.kitepdf.core.parser.PdfName
 import io.github.yuroyami.kitepdf.core.parser.PdfObject
 import io.github.yuroyami.kitepdf.core.parser.PdfReal
-import io.github.yuroyami.kitepdf.core.render.ColorSpace
+import io.github.yuroyami.kitepdf.core.render.KiteColorSpace
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -28,7 +28,7 @@ class SeparationLabTest {
 
     @Test fun separation_runs_tint_transform_through_alternate() {
         // /Separation /Spot /DeviceCMYK { 0,0,0,0 → 0,1,1,0 } : full tint = red (M+Y).
-        val cs = ColorSpace.resolve(
+        val cs = KiteColorSpace.resolve(
             PdfArray(listOf(
                 PdfName("Separation"), PdfName("Spot"), PdfName("DeviceCMYK"),
                 type2(doubleArrayOf(0.0, 0.0, 0.0, 0.0), doubleArrayOf(0.0, 1.0, 1.0, 0.0)),
@@ -45,7 +45,7 @@ class SeparationLabTest {
     }
 
     @Test fun separation_none_paints_white() {
-        val cs = ColorSpace.resolve(
+        val cs = KiteColorSpace.resolve(
             PdfArray(listOf(
                 PdfName("Separation"), PdfName("None"), PdfName("DeviceCMYK"),
                 type2(doubleArrayOf(0.0, 0.0, 0.0, 0.0), doubleArrayOf(1.0, 1.0, 1.0, 1.0)),
@@ -57,7 +57,7 @@ class SeparationLabTest {
     }
 
     @Test fun devicen_two_components() {
-        val cs = ColorSpace.resolve(
+        val cs = KiteColorSpace.resolve(
             PdfArray(listOf(
                 PdfName("DeviceN"),
                 PdfArray(listOf(PdfName("Cyan"), PdfName("Magenta"))),
@@ -88,7 +88,7 @@ class SeparationLabTest {
     }
 
     @Test fun lab_white_black_gray() {
-        val cs = ColorSpace.resolve(
+        val cs = KiteColorSpace.resolve(
             PdfArray(listOf(PdfName("Lab"), PdfDictionary(linkedMapOf(
                 "WhitePoint" to reals(0.9505, 1.0, 1.089),
                 "Range" to reals(-128.0, 127.0, -128.0, 127.0),

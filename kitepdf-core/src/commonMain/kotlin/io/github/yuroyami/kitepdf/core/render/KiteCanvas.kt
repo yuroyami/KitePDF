@@ -1,5 +1,6 @@
 package io.github.yuroyami.kitepdf.core.render
 
+import io.github.yuroyami.kitepdf.core.KiteRectangle
 import io.github.yuroyami.kitepdf.core.font.FontSpec
 import io.github.yuroyami.kitepdf.core.font.TextGlyph
 
@@ -26,7 +27,7 @@ public interface KiteCanvas {
      * call, with the page dimensions (in PDF user units, 1pt = 1/72 inch) and
      * the desired device CTM (e.g. flip Y and scale to fit a target rectangle).
      */
-    public fun beginPage(widthPt: Double, heightPt: Double, deviceCtm: Matrix)
+    public fun beginPage(widthPt: Double, heightPt: Double, deviceCtm: KiteMatrix)
     public fun endPage()
 
     /**
@@ -35,15 +36,15 @@ public interface KiteCanvas {
      * plain over-paint that PDF assumes when no ExtGState modifies the state.
      */
     public fun fillPath(
-        path: KitePath, ctm: Matrix, color: RgbColor, evenOdd: Boolean,
-        alpha: Double = 1.0, blendMode: BlendMode = BlendMode.Normal,
+        path: KitePath, ctm: KiteMatrix, color: RgbColor, evenOdd: Boolean,
+        alpha: Double = 1.0, blendMode: KiteBlendMode = KiteBlendMode.Normal,
     )
 
     /** Stroke [path] under [ctm] with [color] at [lineWidth] user-units, [alpha], [blendMode].
      *  [lineCap] 0/1/2 = butt/round/square; [lineJoin] 0/1/2 = miter/round/bevel. */
     public fun strokePath(
-        path: KitePath, ctm: Matrix, color: RgbColor, lineWidth: Double,
-        alpha: Double = 1.0, blendMode: BlendMode = BlendMode.Normal,
+        path: KitePath, ctm: KiteMatrix, color: RgbColor, lineWidth: Double,
+        alpha: Double = 1.0, blendMode: KiteBlendMode = KiteBlendMode.Normal,
         dashArray: List<Double>? = null, dashPhase: Double = 0.0,
         lineCap: Int = 0, lineJoin: Int = 0, miterLimit: Double = 10.0,
     )
@@ -60,10 +61,10 @@ public interface KiteCanvas {
      * trims it, so `sh` still paints something rather than nothing.
      */
     public fun fillShading(
-        shading: KiteShading, ctm: Matrix, clipPath: KitePath?,
-        alpha: Double = 1.0, blendMode: BlendMode = BlendMode.Normal,
+        shading: KiteShading, ctm: KiteMatrix, clipPath: KitePath?,
+        alpha: Double = 1.0, blendMode: KiteBlendMode = KiteBlendMode.Normal,
     ) {
-        // T-40 types (function-based, meshes, patches) render through shared
+        // Complex shading types (function-based, meshes, patches) render through shared
         // fillPath emission; axial/radial fall through to the midpoint fill.
         if (paintComplexShading(shading, ctm, clipPath, alpha, blendMode)) return
         val stops = shading.sampleStops(2) ?: return
@@ -76,7 +77,7 @@ public interface KiteCanvas {
                 lineTo(-1e6, 1e6)
                 close()
             }.build()
-            fillPath(huge, Matrix.IDENTITY, mid, evenOdd = false, alpha = alpha, blendMode = blendMode)
+            fillPath(huge, KiteMatrix.IDENTITY, mid, evenOdd = false, alpha = alpha, blendMode = blendMode)
             return
         }
         fillPath(clipPath, ctm, mid, evenOdd = false, alpha = alpha, blendMode = blendMode)
@@ -107,14 +108,14 @@ public interface KiteCanvas {
         unitsPerEm: Int,
         hasOutlines: Boolean,
         fontSpec: FontSpec,
-        textToDevice: Matrix,
+        textToDevice: KiteMatrix,
         color: RgbColor,
         alpha: Double = 1.0,
-        blendMode: BlendMode = BlendMode.Normal,
+        blendMode: KiteBlendMode = KiteBlendMode.Normal,
     )
 
     /** Push a clip to [path] under [ctm]. Matched 1:1 by [popClip]. */
-    public fun pushClip(path: KitePath, ctm: Matrix, evenOdd: Boolean)
+    public fun pushClip(path: KitePath, ctm: KiteMatrix, evenOdd: Boolean)
     public fun popClip()
 
     /**
@@ -123,7 +124,7 @@ public interface KiteCanvas {
      * position. Backends that can decode [image] paint the pixels; others
      * draw a placeholder rather than throw.
      */
-    public fun drawImage(image: ImageXObject, ctm: Matrix, alpha: Double = 1.0) { /* opt-in default */ }
+    public fun drawImage(image: KiteImageData, ctm: KiteMatrix, alpha: Double = 1.0) { /* opt-in default */ }
 
     /**
      * Open a transparency group (ISO 32000-1 §11.4). Subsequent paints
@@ -140,9 +141,9 @@ public interface KiteCanvas {
      * incorrect for fancy compositing but produces something visible.
      */
     public fun beginTransparencyGroup(
-        bbox: Rectangle, ctm: Matrix,
+        bbox: KiteRectangle, ctm: KiteMatrix,
         isolated: Boolean = false, knockout: Boolean = false,
-        alpha: Double = 1.0, blendMode: BlendMode = BlendMode.Normal,
+        alpha: Double = 1.0, blendMode: KiteBlendMode = KiteBlendMode.Normal,
     ) { /* opt-in default */ }
     public fun endTransparencyGroup() { /* opt-in default */ }
 
@@ -158,12 +159,11 @@ public interface KiteCanvas {
      * The shipped backends implement both SMask kinds: `Alpha` uses the mask
      * group's own alpha, and `Luminosity` composites the group over an opaque
      * black backdrop and converts luminance to alpha (Skia's LUMA filter, a
-     * Compose colour-matrix filter, a per-pixel pass on AWT) per §11.6.5.2
-     * (T-43).
+     * Compose colour-matrix filter, a per-pixel pass on AWT) per §11.6.5.2.
      */
     public fun applySoftMask(
         kind: SoftMask.Kind,
-        maskBBox: Rectangle, maskCtm: Matrix,
+        maskBBox: KiteRectangle, maskCtm: KiteMatrix,
         render: () -> Unit,
         renderMask: (KiteCanvas) -> Unit,
     ) {
@@ -171,38 +171,35 @@ public interface KiteCanvas {
     }
 }
 
-/** A rectangle in PDF user-space, re-exposed here for the [KiteCanvas] surface. */
-public typealias Rectangle = io.github.yuroyami.kitepdf.core.Rectangle
-
 /** Backend that ignores everything, useful for benchmarks and content-stream sanity tests. */
 public object NoopCanvas : KiteCanvas {
-    override fun beginPage(widthPt: Double, heightPt: Double, deviceCtm: Matrix) {}
+    override fun beginPage(widthPt: Double, heightPt: Double, deviceCtm: KiteMatrix) {}
     override fun endPage() {}
-    override fun fillPath(path: KitePath, ctm: Matrix, color: RgbColor, evenOdd: Boolean, alpha: Double, blendMode: BlendMode) {}
-    override fun strokePath(path: KitePath, ctm: Matrix, color: RgbColor, lineWidth: Double, alpha: Double, blendMode: BlendMode, dashArray: List<Double>?, dashPhase: Double, lineCap: Int, lineJoin: Int, miterLimit: Double) {}
-    override fun drawGlyphs(glyphs: List<TextGlyph>, fontSize: Double, unitsPerEm: Int, hasOutlines: Boolean, fontSpec: FontSpec, textToDevice: Matrix, color: RgbColor, alpha: Double, blendMode: BlendMode) {}
-    override fun pushClip(path: KitePath, ctm: Matrix, evenOdd: Boolean) {}
+    override fun fillPath(path: KitePath, ctm: KiteMatrix, color: RgbColor, evenOdd: Boolean, alpha: Double, blendMode: KiteBlendMode) {}
+    override fun strokePath(path: KitePath, ctm: KiteMatrix, color: RgbColor, lineWidth: Double, alpha: Double, blendMode: KiteBlendMode, dashArray: List<Double>?, dashPhase: Double, lineCap: Int, lineJoin: Int, miterLimit: Double) {}
+    override fun drawGlyphs(glyphs: List<TextGlyph>, fontSize: Double, unitsPerEm: Int, hasOutlines: Boolean, fontSpec: FontSpec, textToDevice: KiteMatrix, color: RgbColor, alpha: Double, blendMode: KiteBlendMode) {}
+    override fun pushClip(path: KitePath, ctm: KiteMatrix, evenOdd: Boolean) {}
     override fun popClip() {}
 }
 
 /** Records every device call, useful for tests + verifying operator dispatch. */
 public class RecordingCanvas : KiteCanvas {
     public sealed class Call {
-        public data class BeginPage(val w: Double, val h: Double, val ctm: Matrix) : Call()
+        public data class BeginPage(val w: Double, val h: Double, val ctm: KiteMatrix) : Call()
         public data object EndPage : Call()
         public data class Fill(
-            val path: KitePath, val ctm: Matrix, val color: RgbColor, val evenOdd: Boolean,
-            val alpha: Double = 1.0, val blendMode: BlendMode = BlendMode.Normal,
+            val path: KitePath, val ctm: KiteMatrix, val color: RgbColor, val evenOdd: Boolean,
+            val alpha: Double = 1.0, val blendMode: KiteBlendMode = KiteBlendMode.Normal,
         ) : Call()
         public data class Stroke(
-            val path: KitePath, val ctm: Matrix, val color: RgbColor, val lineWidth: Double,
-            val alpha: Double = 1.0, val blendMode: BlendMode = BlendMode.Normal,
+            val path: KitePath, val ctm: KiteMatrix, val color: RgbColor, val lineWidth: Double,
+            val alpha: Double = 1.0, val blendMode: KiteBlendMode = KiteBlendMode.Normal,
             val lineCap: Int = 0, val lineJoin: Int = 0, val miterLimit: Double = 10.0,
         ) : Call()
         public data class Glyphs(
             val glyphs: List<TextGlyph>, val fontSize: Double, val unitsPerEm: Int,
-            val hasOutlines: Boolean, val fontSpec: FontSpec, val textToDevice: Matrix,
-            val color: RgbColor, val alpha: Double = 1.0, val blendMode: BlendMode = BlendMode.Normal,
+            val hasOutlines: Boolean, val fontSpec: FontSpec, val textToDevice: KiteMatrix,
+            val color: RgbColor, val alpha: Double = 1.0, val blendMode: KiteBlendMode = KiteBlendMode.Normal,
         ) : Call() {
             /** Decoded text of the run: the concatenated per-glyph unicode. */
             val text: String get() = glyphs.joinToString("") { it.text }
@@ -220,35 +217,35 @@ public class RecordingCanvas : KiteCanvas {
                 return h
             }
         }
-        public data class PushClip(val path: KitePath, val ctm: Matrix, val evenOdd: Boolean) : Call()
+        public data class PushClip(val path: KitePath, val ctm: KiteMatrix, val evenOdd: Boolean) : Call()
         public data object PopClip : Call()
-        public data class Image(val image: ImageXObject, val ctm: Matrix, val alpha: Double = 1.0) : Call()
-        public data class PushGroup(val bbox: Rectangle, val ctm: Matrix, val isolated: Boolean, val knockout: Boolean, val alpha: Double, val blendMode: BlendMode) : Call()
+        public data class Image(val image: KiteImageData, val ctm: KiteMatrix, val alpha: Double = 1.0) : Call()
+        public data class PushGroup(val bbox: KiteRectangle, val ctm: KiteMatrix, val isolated: Boolean, val knockout: Boolean, val alpha: Double, val blendMode: KiteBlendMode) : Call()
         public data object PopGroup : Call()
     }
 
     public val calls: MutableList<Call> = mutableListOf()
 
-    override fun beginPage(widthPt: Double, heightPt: Double, deviceCtm: Matrix): Unit =
+    override fun beginPage(widthPt: Double, heightPt: Double, deviceCtm: KiteMatrix): Unit =
         calls.add(Call.BeginPage(widthPt, heightPt, deviceCtm)).let { }
     override fun endPage() { calls.add(Call.EndPage) }
-    override fun fillPath(path: KitePath, ctm: Matrix, color: RgbColor, evenOdd: Boolean, alpha: Double, blendMode: BlendMode) {
+    override fun fillPath(path: KitePath, ctm: KiteMatrix, color: RgbColor, evenOdd: Boolean, alpha: Double, blendMode: KiteBlendMode) {
         calls.add(Call.Fill(path, ctm, color, evenOdd, alpha, blendMode))
     }
-    override fun strokePath(path: KitePath, ctm: Matrix, color: RgbColor, lineWidth: Double, alpha: Double, blendMode: BlendMode, dashArray: List<Double>?, dashPhase: Double, lineCap: Int, lineJoin: Int, miterLimit: Double) {
+    override fun strokePath(path: KitePath, ctm: KiteMatrix, color: RgbColor, lineWidth: Double, alpha: Double, blendMode: KiteBlendMode, dashArray: List<Double>?, dashPhase: Double, lineCap: Int, lineJoin: Int, miterLimit: Double) {
         calls.add(Call.Stroke(path, ctm, color, lineWidth, alpha, blendMode, lineCap, lineJoin, miterLimit))
     }
-    override fun drawGlyphs(glyphs: List<TextGlyph>, fontSize: Double, unitsPerEm: Int, hasOutlines: Boolean, fontSpec: FontSpec, textToDevice: Matrix, color: RgbColor, alpha: Double, blendMode: BlendMode) {
+    override fun drawGlyphs(glyphs: List<TextGlyph>, fontSize: Double, unitsPerEm: Int, hasOutlines: Boolean, fontSpec: FontSpec, textToDevice: KiteMatrix, color: RgbColor, alpha: Double, blendMode: KiteBlendMode) {
         calls.add(Call.Glyphs(glyphs, fontSize, unitsPerEm, hasOutlines, fontSpec, textToDevice, color, alpha, blendMode))
     }
-    override fun pushClip(path: KitePath, ctm: Matrix, evenOdd: Boolean) {
+    override fun pushClip(path: KitePath, ctm: KiteMatrix, evenOdd: Boolean) {
         calls.add(Call.PushClip(path, ctm, evenOdd))
     }
     override fun popClip() { calls.add(Call.PopClip) }
-    override fun drawImage(image: ImageXObject, ctm: Matrix, alpha: Double) {
+    override fun drawImage(image: KiteImageData, ctm: KiteMatrix, alpha: Double) {
         calls.add(Call.Image(image, ctm, alpha))
     }
-    override fun beginTransparencyGroup(bbox: Rectangle, ctm: Matrix, isolated: Boolean, knockout: Boolean, alpha: Double, blendMode: BlendMode) {
+    override fun beginTransparencyGroup(bbox: KiteRectangle, ctm: KiteMatrix, isolated: Boolean, knockout: Boolean, alpha: Double, blendMode: KiteBlendMode) {
         calls.add(Call.PushGroup(bbox, ctm, isolated, knockout, alpha, blendMode))
     }
     override fun endTransparencyGroup() { calls.add(Call.PopGroup) }

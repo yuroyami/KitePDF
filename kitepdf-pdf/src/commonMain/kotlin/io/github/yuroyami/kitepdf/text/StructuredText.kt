@@ -2,12 +2,12 @@ package io.github.yuroyami.kitepdf.text
 
 import io.github.yuroyami.kitepdf.PdfDocument
 import io.github.yuroyami.kitepdf.PdfPage
-import io.github.yuroyami.kitepdf.core.Rectangle
+import io.github.yuroyami.kitepdf.core.KiteRectangle
 import io.github.yuroyami.kitepdf.core.font.FontSpec
 import io.github.yuroyami.kitepdf.core.font.TextGlyph
-import io.github.yuroyami.kitepdf.core.render.BlendMode
-import io.github.yuroyami.kitepdf.core.render.ImageXObject
-import io.github.yuroyami.kitepdf.core.render.Matrix
+import io.github.yuroyami.kitepdf.core.render.KiteBlendMode
+import io.github.yuroyami.kitepdf.core.render.KiteImageData
+import io.github.yuroyami.kitepdf.core.render.KiteMatrix
 import io.github.yuroyami.kitepdf.render.PageRenderer
 import io.github.yuroyami.kitepdf.core.render.KiteCanvas
 import io.github.yuroyami.kitepdf.core.render.KitePath
@@ -55,7 +55,7 @@ public data class PdfStructuredText(
  * tagging.
  */
 public data class PdfTextBlock(
-    val bounds: Rectangle,
+    val bounds: KiteRectangle,
     val lines: List<PdfTextLine>,
 )
 
@@ -64,7 +64,7 @@ public data class PdfTextBlock(
  * × font size. Spans are stored left-to-right.
  */
 public data class PdfTextLine(
-    val bounds: Rectangle,
+    val bounds: KiteRectangle,
     val spans: List<PdfTextSpan>,
 ) {
     val text: String by lazy {
@@ -98,7 +98,7 @@ public data class PdfTextSpan(
     /** Baseline-space origin in PDF user units. */
     val origin: Pair<Double, Double>,
     /** Approximate bounding box (baseline + ascender heuristic). */
-    val bounds: Rectangle,
+    val bounds: KiteRectangle,
     /**
      * `text.length + 1` user-space baseline points: entry `i` is where char
      * `i` starts, the last entry where the run ends. A multi-char glyph
@@ -135,7 +135,7 @@ internal object StructuredTextExtractor {
 
     fun extract(page: PdfPage): PdfStructuredText {
         val collector = TextCollectorCanvas()
-        PageRenderer(collector, accessDocument(page)).render(page, Matrix.IDENTITY)
+        PageRenderer(collector, accessDocument(page)).render(page, KiteMatrix.IDENTITY)
 
         val spans = collector.runs.mapNotNull { it.toSpan() }
         if (spans.isEmpty()) {
@@ -190,7 +190,7 @@ internal object StructuredTextExtractor {
         val right = spans.maxOf { it.bounds.right }
         val bottom = spans.minOf { it.bounds.bottom }
         val top = spans.maxOf { it.bounds.top }
-        return PdfTextLine(Rectangle(left, bottom, right, top), spans.toList())
+        return PdfTextLine(KiteRectangle(left, bottom, right, top), spans.toList())
     }
 
     private fun clusterBlocks(lines: List<PdfTextLine>): List<PdfTextBlock> {
@@ -227,7 +227,7 @@ internal object StructuredTextExtractor {
         val right = lines.maxOf { it.bounds.right }
         val bottom = lines.minOf { it.bounds.bottom }
         val top = lines.maxOf { it.bounds.top }
-        return PdfTextBlock(Rectangle(left, bottom, right, top), lines.toList())
+        return PdfTextBlock(KiteRectangle(left, bottom, right, top), lines.toList())
     }
 }
 
@@ -240,7 +240,7 @@ private class TextCollectorCanvas : KiteCanvas {
         val glyphs: List<TextGlyph>,
         val fontSpec: FontSpec,
         val fontSize: Double,
-        val textMatrix: Matrix,
+        val textMatrix: KiteMatrix,
         /** Character spacing Tc, in unscaled text-space units (default 0). */
         val charSpacing: Double = 0.0,
         /** Word spacing Tw, in unscaled text-space units (default 0). */
@@ -311,7 +311,7 @@ private class TextCollectorCanvas : KiteCanvas {
                 fontSpec = fontSpec,
                 fontSize = fontSize,
                 origin = originX to originY,
-                bounds = Rectangle(
+                bounds = KiteRectangle(
                     left = left,
                     bottom = bottom,
                     right = right,
@@ -324,20 +324,20 @@ private class TextCollectorCanvas : KiteCanvas {
 
     val runs = mutableListOf<TextRun>()
 
-    override fun beginPage(widthPt: Double, heightPt: Double, deviceCtm: Matrix) {}
+    override fun beginPage(widthPt: Double, heightPt: Double, deviceCtm: KiteMatrix) {}
     override fun endPage() {}
-    override fun fillPath(path: KitePath, ctm: Matrix, color: RgbColor, evenOdd: Boolean, alpha: Double, blendMode: BlendMode) {}
-    override fun strokePath(path: KitePath, ctm: Matrix, color: RgbColor, lineWidth: Double, alpha: Double, blendMode: BlendMode, dashArray: List<Double>?, dashPhase: Double, lineCap: Int, lineJoin: Int, miterLimit: Double) {}
+    override fun fillPath(path: KitePath, ctm: KiteMatrix, color: RgbColor, evenOdd: Boolean, alpha: Double, blendMode: KiteBlendMode) {}
+    override fun strokePath(path: KitePath, ctm: KiteMatrix, color: RgbColor, lineWidth: Double, alpha: Double, blendMode: KiteBlendMode, dashArray: List<Double>?, dashPhase: Double, lineCap: Int, lineJoin: Int, miterLimit: Double) {}
     override val resolvesGlyphOutlines: Boolean get() = false
     override fun drawGlyphs(
         glyphs: List<TextGlyph>, fontSize: Double, unitsPerEm: Int, hasOutlines: Boolean,
-        fontSpec: FontSpec, textToDevice: Matrix, color: RgbColor, alpha: Double, blendMode: BlendMode,
+        fontSpec: FontSpec, textToDevice: KiteMatrix, color: RgbColor, alpha: Double, blendMode: KiteBlendMode,
     ) {
         runs.add(TextRun(glyphs, fontSpec, fontSize, textToDevice))
     }
-    override fun pushClip(path: KitePath, ctm: Matrix, evenOdd: Boolean) {}
+    override fun pushClip(path: KitePath, ctm: KiteMatrix, evenOdd: Boolean) {}
     override fun popClip() {}
-    override fun drawImage(image: ImageXObject, ctm: Matrix, alpha: Double) {}
+    override fun drawImage(image: KiteImageData, ctm: KiteMatrix, alpha: Double) {}
 }
 
 /**

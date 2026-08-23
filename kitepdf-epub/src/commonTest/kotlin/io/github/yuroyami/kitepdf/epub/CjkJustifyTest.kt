@@ -8,7 +8,7 @@ import kotlin.test.Test
 import kotlin.test.assertTrue
 
 /**
- * T-71: spaceless CJK lines justify by inter-character expansion, and the
+ * Spaceless CJK lines justify by inter-character expansion, and the
  * kinsoku opener rule keeps 「『（ etc. off line ends (they bind forward).
  * The closer set additionally covers small kana and the prolonged sound mark
  * (no line may start with them).

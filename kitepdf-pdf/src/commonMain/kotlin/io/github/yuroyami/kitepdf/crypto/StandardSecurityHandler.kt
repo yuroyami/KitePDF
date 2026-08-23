@@ -97,7 +97,7 @@ public class StandardSecurityHandler(
         }
     }
 
-    /* ─── Write-side encrypt API (T-83) ──────────────────────────────────── */
+    /* ─── Write-side encrypt API ──────────────────────────────────── */
 
     /**
      * Whether [Encryptor] can produce new objects matching this handler's

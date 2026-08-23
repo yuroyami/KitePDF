@@ -1,0 +1,291 @@
+package io.github.yuroyami.kitepdf.compose
+
+import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.runtime.Immutable
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.DrawScope
+import io.github.yuroyami.kitepdf.core.render.ReaderTheme
+
+/**
+ * How [KiteDocView] lays its pages out and how the user moves between them.
+ */
+@Immutable
+public sealed interface KiteDocLayout {
+
+    /**
+     * All pages in one continuous scrollable strip (lazy: offscreen pages are
+     * neither composed nor rasterized). Pages fill the cross axis at their
+     * natural aspect ratio.
+     *
+     * Zoom in this mode is magnifier-style: the strip is scaled around the
+     * viewport centre, horizontal pan is a clamped transform, and the scroll
+     * axis keeps scrolling the (scaled) strip natively.
+     */
+    @Immutable
+    public data class Continuous(
+        val orientation: Orientation = Orientation.Vertical,
+    ) : KiteDocLayout
+
+    /**
+     * One page at a time with snap paging (swipe, or drive programmatically
+     * via [KiteDocViewState]). Each page is letterboxed to fit the viewport.
+     *
+     * @param offscreenPages pages kept composed (and rastered) on each side of
+     *   the visible one. This trades memory for instant page turns. Defaults to 1 so
+     *   the immediate neighbours are pre-rasterized while idle and a swipe never
+     *   waits on a render; raise it to cover faster flinging, set 0 to minimise
+     *   memory at the cost of a first-swipe render.
+     */
+    @Immutable
+    public data class Paged(
+        val orientation: Orientation = Orientation.Horizontal,
+        val offscreenPages: Int = 1,
+        /**
+         * Reverses the paging direction so page N+1 sits visually LEFT of
+         * page N (up in a vertical pager). Use this for right-to-left books (manga,
+         * Arabic/Hebrew). Navigation stays logical: `nextPage()` is always
+         * index +1. See [pagedFor] for automatic selection.
+         */
+        val reverseLayout: Boolean = false,
+    ) : KiteDocLayout
+
+    /**
+     * Two-page spreads: one snap-pager item shows pages (2k, 2k+1) side by
+     * side, like an open book; an odd trailing page centres alone.
+     * [reverseLayout] swaps both the swipe direction and the in-spread
+     * visual order (page 2k on the right), for right-to-left books.
+     * Navigation stays logical (`nextPage()` = index +1; the visible spread
+     * advances every second step). Meant for fixed-layout content (PDF,
+     * pre-paginated EPUB); reflowable EPUB gains nothing from it.
+     */
+    @Immutable
+    public data class Spread(
+        val orientation: Orientation = Orientation.Horizontal,
+        val offscreenPages: Int = 1,
+        val reverseLayout: Boolean = false,
+    ) : KiteDocLayout
+
+    /** Exactly one fixed page, letterboxed to fit the viewport. */
+    @Immutable
+    public data class SinglePage(val pageIndex: Int) : KiteDocLayout
+
+    public companion object {
+        public val Default: KiteDocLayout = Continuous()
+
+        /**
+         * A horizontal pager following the document's page-progression
+         * direction: right-to-left books ([io.github.yuroyami.kitepdf.core.KiteMetadata.rightToLeft])
+         * get a reversed pager, everything else the plain one.
+         */
+        public fun pagedFor(document: io.github.yuroyami.kitepdf.core.KiteDocument): Paged =
+            Paged(reverseLayout = document.metadata.rightToLeft)
+    }
+}
+
+/**
+ * Zoom & pan behaviour for [KiteDocView].
+ *
+ * [minZoom]/[maxZoom] bound *all* zoom changes, including programmatic ones
+ * through [KiteDocViewState.setZoom], so an app driving zoom from its own slider
+ * (gestures disabled) still declares its range here.
+ *
+ * @param pinchEnabled two-finger pinch zoom.
+ * @param doubleTapEnabled double-tap toggles between [minZoom] and [doubleTapZoom].
+ * @param panEnabled one-finger pan while zoomed in.
+ * @param resetZoomOnPageChange in [KiteDocLayout.Paged] mode, snap zoom back to
+ *   [minZoom] when the user lands on another page. Disable when zoom is driven
+ *   externally and should persist across pages.
+ */
+@Immutable
+public data class KiteZoomSpec(
+    val pinchEnabled: Boolean = true,
+    val doubleTapEnabled: Boolean = true,
+    val panEnabled: Boolean = true,
+    val minZoom: Float = 1f,
+    val maxZoom: Float = 8f,
+    val doubleTapZoom: Float = 2.5f,
+    val resetZoomOnPageChange: Boolean = true,
+) {
+    init {
+        require(minZoom > 0f) { "minZoom must be > 0 (was $minZoom)" }
+        require(maxZoom >= minZoom) { "maxZoom ($maxZoom) must be >= minZoom ($minZoom)" }
+    }
+
+    public companion object {
+        /** No zoom at all: gestures off, range pinned to 1. */
+        public val Disabled: KiteZoomSpec = KiteZoomSpec(
+            pinchEnabled = false,
+            doubleTapEnabled = false,
+            panEnabled = false,
+            minZoom = 1f,
+            maxZoom = 1f,
+        )
+    }
+}
+
+/**
+ * How [KiteDocView] turns pages into pixels. Pick a variant; each carries only the
+ * knobs that actually apply to it, so there are no settings that silently do
+ * nothing. Defaults to [Rasterized] via [KiteRenderSpec.Default].
+ */
+@Immutable
+public sealed interface KiteRenderSpec {
+
+    /**
+     * Vector-render each page once into a bitmap per size/zoom bucket, then draw
+     * that bitmap and GPU-transform it during gestures, so scrolling and zoom
+     * never redraw the page itself. Heavy gesturing is cheap and
+     * content-independent; the costs are one rasterization hitch per bucket and
+     * softness when zoomed past the raster resolution until the zoom settles and
+     * it re-rasterizes. Best for slow devices and dense pages.
+     *
+     * @param quality supersampling multiplier over the on-screen pixel size.
+     *   1 = rasterize exactly at display resolution (sharpest *and* cheapest,
+     *   the default). >1 = oversample, e.g. for screenshots or print-ish export.
+     *   <1 = undersample for cheap previews/thumbnails.
+     * @param maxBitmapLongSide hard cap on the longest bitmap side, protecting
+     *   memory on huge pages and deep zooms.
+     * @param rerasterizeOnZoom after a zoom settles, re-render the visible page
+     *   at the zoomed resolution so deep zoom stays crisp instead of upscaling
+     *   the base raster. Costs one extra rasterization per zoom settle.
+     * @param preserveHairlines compensate the engine's 1-px hairline floor for
+     *   any raster-vs-screen scale difference, so sub-pixel strokes (0.1-width
+     *   ECG traces, fine table rules) never vanish when the bitmap is downscaled.
+     */
+    @Immutable
+    public data class Rasterized(
+        val quality: Float = 1f,
+        val maxBitmapLongSide: Int = 4096,
+        val rerasterizeOnZoom: Boolean = true,
+        val preserveHairlines: Boolean = true,
+        /**
+         * Byte budget of the per-[KiteDocViewState] page-bitmap LRU, so
+         * scrolling back is a cache hit instead of a re-raster. 0 disables
+         * caching (every slot re-rasterizes on recomposition, the pre-cache
+         * behaviour).
+         */
+        val cacheBudgetBytes: Long = 96L * 1024 * 1024,
+    ) : KiteRenderSpec {
+        init {
+            require(quality > 0f) { "quality must be > 0 (was $quality)" }
+            require(maxBitmapLongSide > 0) { "maxBitmapLongSide must be > 0" }
+        }
+    }
+
+    /**
+     * Redraw each page into a live `Canvas` every
+     * composition, transformed by zoom/pan via the same GPU layer: no bitmap
+     * (lower memory), resolution-independent quality at rest on every platform.
+     * On Android the vector display list replays under the live transform, so it
+     * stays crisp even mid-pinch; on Skia targets (iOS/desktop/web) the layer is
+     * texture-cached, so deep in-gesture zoom softens until the draw re-runs.
+     * Per-page draw cost scales with content complexity. Best for simple pages,
+     * deep-zoom crispness, and low memory.
+     *
+     * @param hairlineWidthPx minimum stroke width in device pixels. The engine
+     *   floors thin strokes here so sub-pixel rules (ECG traces, fine borders)
+     *   stay visible; 1 = the ISO hairline. There is no supersampling knob:
+     *   vector output is already resolution-independent.
+     */
+    @Immutable
+    public data class Vectorized(
+        val hairlineWidthPx: Float = 1f,
+    ) : KiteRenderSpec {
+        init {
+            require(hairlineWidthPx > 0f) { "hairlineWidthPx must be > 0 (was $hairlineWidthPx)" }
+        }
+    }
+
+    public companion object {
+        /** Default: rasterized at display resolution. */
+        public val Default: KiteRenderSpec = Rasterized()
+    }
+}
+
+/**
+ * Colours used by [KiteDocView].
+ *
+ * @param pageBackground painted behind page content. Most documents assume
+ *   white paper and paint none themselves. Ignored when [theme] is set: the
+ *   theme owns the paper colour then.
+ * @param viewportBackground the letterbox/gutter colour around pages.
+ * @param theme optional reading theme ([ReaderTheme.Dark]/[ReaderTheme.Sepia]/
+ *   [ReaderTheme.Light]). When set, page content colours are remapped (text,
+ *   borders, backgrounds, not images) and the paper uses the theme background.
+ *   Reflowable EPUB especially benefits: night mode without re-laying-out.
+ */
+@Immutable
+public data class KiteDocViewColors(
+    val pageBackground: Color = Color.White,
+    val viewportBackground: Color = Color.Transparent,
+    val theme: ReaderTheme? = null,
+    /** Fill for [KiteDocViewState.searchHighlights] quads, drawn over the page. */
+    val searchHighlight: Color = Color(0x66FFEB3B),
+    /** Fill for the active [KiteDocViewState.selection] quads. */
+    val selectionHighlight: Color = Color(0x664285F4),
+    /**
+     * The caret-and-dot markers at the selection's two boundaries. Opaque on
+     * purpose where [selectionHighlight] is translucent: the wash says "this
+     * much is selected", the handles say exactly where that starts and ends,
+     * and a see-through boundary marker would say neither.
+     */
+    val selectionHandle: Color = Color(0xFF4285F4),
+    /**
+     * How each selection boundary marker is drawn. Null uses the built-in
+     * caret-and-dot ([KiteSelectionHandleDefaults.CaretAndDot]). The handles
+     * are canvas vector drawing, not composables: they live inside the page's
+     * draw pass so they scale, pan and zoom in lockstep with the words they
+     * bound, which an overlay composable could only approximate.
+     */
+    val selectionHandlePainter: KiteSelectionHandlePainter? = null,
+)
+
+/** Which end of the selection a handle marks, in reading order. */
+public enum class KiteSelectionHandleEdge { Start, End }
+
+/**
+ * Draws one selection boundary marker ("thumb") for [KiteDocView].
+ *
+ * Called once per edge inside the page's draw pass. [x] is the boundary's
+ * horizontal position; [top]/[bottom] are the boundary line's vertical extent,
+ * all in page-slot pixels. Size the marker against `bottom - top` (the line
+ * height) so it scales with the text through thumbnails and deep zoom, like
+ * [KiteSelectionHandleDefaults.CaretAndDot] does.
+ *
+ * Drawing does not move the grab target. A thumb is dragged by pressing near
+ * the boundary line, not near the shape you paint, so a marker drawn far from
+ * its boundary still answers to the boundary. Keep it close to the line and
+ * the two agree.
+ */
+public fun interface KiteSelectionHandlePainter {
+    public fun DrawScope.drawHandle(
+        edge: KiteSelectionHandleEdge,
+        x: Float,
+        top: Float,
+        bottom: Float,
+        color: Color,
+    )
+}
+
+public object KiteSelectionHandleDefaults {
+    /**
+     * The built-in marker: a caret spanning the boundary line's full height
+     * with a grab dot beneath it, sized from the line height.
+     */
+    public val CaretAndDot: KiteSelectionHandlePainter = KiteSelectionHandlePainter { _, x, top, bottom, color ->
+        val lineHeight = (bottom - top).coerceAtLeast(1f)
+        val radius = (lineHeight * 0.28f).coerceIn(3f, 14f)
+        val stroke = (radius * 0.5f).coerceAtLeast(1.5f)
+        drawLine(
+            color = color,
+            start = androidx.compose.ui.geometry.Offset(x, top),
+            end = androidx.compose.ui.geometry.Offset(x, bottom),
+            strokeWidth = stroke,
+        )
+        drawCircle(
+            color = color,
+            radius = radius,
+            center = androidx.compose.ui.geometry.Offset(x, bottom + radius),
+        )
+    }
+}

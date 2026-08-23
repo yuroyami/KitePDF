@@ -1,7 +1,7 @@
 package io.github.yuroyami.kitepdf.skia
 
 import io.github.yuroyami.kitepdf.epub.EpubPage
-import io.github.yuroyami.kitepdf.core.render.Matrix as PdfMatrix
+import io.github.yuroyami.kitepdf.core.render.KiteMatrix
 import io.github.yuroyami.kitepdf.core.render.ReaderTheme
 import io.github.yuroyami.kitepdf.core.render.RgbColor
 import org.jetbrains.skia.Color
@@ -37,8 +37,8 @@ public object EpubPageRasterizer {
         background: Int = Color.WHITE,
         theme: ReaderTheme? = null,
     ): Image {
-        val widthPx = kotlin.math.ceil(page.width * scale).toInt().coerceAtLeast(1)
-        val heightPx = kotlin.math.ceil(page.height * scale).toInt().coerceAtLeast(1)
+        val widthPx = kotlin.math.ceil(page.displayWidth * scale).toInt().coerceAtLeast(1)
+        val heightPx = kotlin.math.ceil(page.displayHeight * scale).toInt().coerceAtLeast(1)
         val surface = Surface.makeRasterN32Premul(widthPx, heightPx)
         try {
             val skCanvas = surface.canvas
@@ -49,7 +49,7 @@ public object EpubPageRasterizer {
             // EpubPage paints in y-up user space; flip to a top-left-origin,
             // y-down device box and scale in one CTM (same mapping the AWT
             // raster gate uses): (x, yUp) -> (scale*x, scale*(height - yUp)).
-            val deviceCtm = PdfMatrix(scale, 0.0, 0.0, -scale, 0.0, page.height * scale)
+            val deviceCtm = KiteMatrix(scale, 0.0, 0.0, -scale, 0.0, page.displayHeight * scale)
             val base = SkiaCanvas(skCanvas)
             page.renderTo(theme?.wrap(base) ?: base, deviceCtm)
             return surface.makeImageSnapshot()

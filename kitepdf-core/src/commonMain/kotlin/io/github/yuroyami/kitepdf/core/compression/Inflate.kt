@@ -35,7 +35,7 @@ public object Inflate {
     }
 
     /**
-     * [decode] behind the platform fast path (T-10): native inflate where the
+     * [decode] behind the platform fast path: native inflate where the
      * target has one, this pure-Kotlin decoder otherwise (and for any stream
      * the fast path rejects, preserving lenient errors). Same contract as
      * [decode]; use it on hot paths (zip entries), keep [decode] where the

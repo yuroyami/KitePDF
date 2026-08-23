@@ -9,7 +9,7 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 /**
- * T-43 acceptance: the luminosity soft-mask fixture (white box on the
+ * Acceptance: the luminosity soft-mask fixture (white box on the
  * spec's black backdrop gating a red fill) against mutool, plus direct
  * pixel checks that the mask actually gates.
  */
@@ -45,7 +45,7 @@ class SoftMaskOracleTest {
         val reference = MuPdfOracle.render(pdf, page = 1, dpi = 72)
         assertNotNull(reference)
         val mae = ImageDiff.compare(kite, reference).score
-        println("[T-43] luminosity smask vs mutool: MAE=${(mae * 10000).toInt() / 10000.0}")
+        println("luminosity smask vs mutool: MAE=${(mae * 10000).toInt() / 10000.0}")
         assertTrue(mae <= 0.03, "luminosity mask MAE $mae must be <= 0.03")
     }
 }

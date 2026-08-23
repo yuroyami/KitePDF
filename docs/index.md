@@ -8,7 +8,7 @@ val doc = PdfDocument.open(bytes)
 
 val text = doc.pages[0].extractText()       // read
 doc.edit().apply {                          // edit
-    redactRegion(doc.pages[0], Rectangle(72.0, 700.0, 320.0, 720.0))
+    redactRegion(doc.pages[0], KiteRectangle(72.0, 700.0, 320.0, 720.0))
 }.saveRewritten()
 
 val fresh = PdfBuilder()                     // create
@@ -53,7 +53,8 @@ Drawing a page to the screen is the one job that needs a platform, so the render
 | Artifact | Add it when you want |
 |---|---|
 | `io.github.yuroyami:kitepdf` | The engine: read, write and edit PDFs, **and** read EPUBs. Pure Kotlin (stdlib plus KiteImage codecs). |
-| `io.github.yuroyami:kitepdf-compose-viewer` | A Compose `PdfView` / `EpubView`, drawn straight into a `DrawScope`. |
+| `io.github.yuroyami:kitepdf-compose-viewer` | A Compose `KiteDocView` for PDF and EPUB, drawn straight into a `DrawScope`. |
+| `io.github.yuroyami:kitepdf-net` | Optional. Opens a document straight from a URL; the only artifact that pulls in Ktor. |
 | `io.github.yuroyami:kitepdf-native-renderer` | Headless page → image through the platform canvas (AWT, CoreGraphics, `android.graphics`, Canvas2D). |
 | `io.github.yuroyami:kitepdf-skia-renderer` | Headless page → image through Skia / Skiko: one API on JVM, Android, Apple, Linux and web. |
 
@@ -91,7 +92,7 @@ doc.edit().apply {
 
 // Truly redact a region (the underlying content is removed, not covered)
 doc.edit().apply {
-    redactRegion(doc.pages[0], Rectangle(72.0, 700.0, 320.0, 720.0))
+    redactRegion(doc.pages[0], KiteRectangle(72.0, 700.0, 320.0, 720.0))
 }.saveRewritten()
 
 // Build a new PDF from scratch
@@ -118,17 +119,17 @@ implementation("io.github.yuroyami:kitepdf-compose-viewer:0.6.3")
 ```
 
 ```kotlin
-val state = rememberPdfViewState(doc)
+val state = rememberKiteDocViewState(doc)
 
-PdfView(
+KiteDocView(
     state = state,
-    layout = PdfLayout.Paged(Orientation.Horizontal),   // or Continuous / SinglePage
-    zoomSpec = PdfZoomSpec(maxZoom = 6f),                // pinch, double-tap, pan
-    renderSpec = PdfRenderSpec.Rasterized(),            // or Vectorized()
-    overlay = { PdfNavigationControls(it, Modifier.align(Alignment.BottomCenter)) },
+    layout = KiteDocLayout.Paged(Orientation.Horizontal),   // or Continuous / SinglePage
+    zoomSpec = KiteZoomSpec(maxZoom = 6f),                // pinch, double-tap, pan
+    renderSpec = KiteRenderSpec.Rasterized(),            // or Vectorized()
+    overlay = { KiteNavigationControls(it, Modifier.align(Alignment.BottomCenter)) },
 )
-PdfPageIndicator(state)
-PdfThumbnailStrip(state)
+KitePageIndicator(state)
+KiteThumbnailStrip(state)
 ```
 
 See **[the Compose viewer guide](compose-viewer.md)**.
@@ -152,7 +153,7 @@ See **[Headless rendering](rendering.md)**.
 | | |
 |---|---|
 | **[Getting started](getting-started.md)** | Open your first PDF and display it, step by step. |
-| **[Compose viewer](compose-viewer.md)** | `PdfView`: layouts, zoom, render modes, navigation, export. |
+| **[Compose viewer](compose-viewer.md)** | `KiteDocView`: layouts, zoom, render modes, navigation, export. |
 | **[Reading PDFs](reading.md)** | Text, metadata, outlines, annotations, forms, encryption. |
 | **[Reading EPUBs](epub.md)** | Reflowable EPUB 2/3: pagination, reader settings, search, typography. |
 | **[Creating PDFs](writing.md)** | Build from scratch with the content DSL. |

@@ -11,7 +11,7 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 /**
- * T-45 (MMR half): a JBIG2 embedded stream whose generic region is
+ * MMR half: a JBIG2 embedded stream whose generic region is
  * MMR-coded (T.6 Group 4 bytes produced by ImageMagick, embedded as a
  * constant). Decoding routes through the shared CCITT G4 core; mutool is
  * the independent oracle.
@@ -104,7 +104,7 @@ class Jbig2MmrOracleTest {
         val reference = MuPdfOracle.render(pdf, page = 1, dpi = 72)
         assertNotNull(reference)
         val mae = ImageDiff.compare(kite, reference).score
-        println("[T-45] JBIG2 MMR vs mutool: MAE=${(mae * 10000).toInt() / 10000.0}")
+        println("JBIG2 MMR vs mutool: MAE=${(mae * 10000).toInt() / 10000.0}")
         assertTrue(mae <= 0.01, "MMR region MAE $mae must be <= 0.01")
     }
 }

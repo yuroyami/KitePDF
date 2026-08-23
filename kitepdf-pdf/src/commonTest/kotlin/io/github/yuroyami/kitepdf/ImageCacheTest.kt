@@ -1,6 +1,6 @@
 package io.github.yuroyami.kitepdf
 
-import io.github.yuroyami.kitepdf.core.render.Matrix
+import io.github.yuroyami.kitepdf.core.render.KiteMatrix
 import io.github.yuroyami.kitepdf.core.render.RecordingCanvas
 import io.github.yuroyami.kitepdf.writer.PdfBuilder
 import io.github.yuroyami.kitepdf.writer.PdfImage
@@ -8,7 +8,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 
 /**
- * T-12: one image XObject drawn three times on one page and once on another
+ * One image XObject drawn three times on one page and once on another
  * decodes exactly ONCE per document; dropping the cache re-decodes lazily.
  */
 class ImageCacheTest {
@@ -35,7 +35,7 @@ class ImageCacheTest {
         val doc = doc()
         for (page in doc.pages) {
             val canvas = RecordingCanvas()
-            page.renderTo(canvas, Matrix.IDENTITY)
+            page.renderTo(canvas, KiteMatrix.IDENTITY)
             // Every draw still happens; only the decode is shared.
             assertEquals(
                 if (page.index == 0) 3 else 1,
@@ -48,10 +48,10 @@ class ImageCacheTest {
     @Test
     fun dropping_the_cache_re_decodes_on_next_render() {
         val doc = doc()
-        doc.pages[0].renderTo(RecordingCanvas(), Matrix.IDENTITY)
+        doc.pages[0].renderTo(RecordingCanvas(), KiteMatrix.IDENTITY)
         assertEquals(1, doc.imageDecodeCount)
         doc.dropDecodedImageCache()
-        doc.pages[1].renderTo(RecordingCanvas(), Matrix.IDENTITY)
+        doc.pages[1].renderTo(RecordingCanvas(), KiteMatrix.IDENTITY)
         assertEquals(2, doc.imageDecodeCount, "cleared cache decodes again, exactly once")
     }
 }

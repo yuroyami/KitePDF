@@ -7,7 +7,7 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
- * T-70: the document's language (spine `xml:lang`/`lang`, else `dc:language`)
+ * The document's language (spine `xml:lang`/`lang`, else `dc:language`)
  * selects the hyphenation pattern set. "Krankenhaus" is the discriminator:
  * the German patterns break it (Kran-ken-haus) while the built-in en-US set
  * finds no break point in it at all.

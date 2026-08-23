@@ -7,9 +7,9 @@ package io.github.yuroyami.kitepdf.core
  *
  * All geometry is in the page's DISPLAY space: the top-left-origin, y-down
  * `[0, displayWidth] x [0, displayHeight]` box that [KitePage.displayToDeviceBase]
- * maps onto. Because [Rectangle] names its fields PDF-style (y-up), display
+ * maps onto. Because [KiteRectangle] names its fields PDF-style (y-up), display
  * rectangles here store the y-MIN (the edge nearest the page top) in
- * [Rectangle.bottom] and the y-MAX in [Rectangle.top], keeping
+ * [KiteRectangle.bottom] and the y-MAX in [KiteRectangle.top], keeping
  * `width`/`height` positive.
  */
 public class KiteStructuredText(public val blocks: List<KiteTextBlock>) {
@@ -62,7 +62,7 @@ public class KiteStructuredText(public val blocks: List<KiteTextBlock>) {
         return hits
     }
 
-    /* ─── Selection support (T-80) ───────────────────────────────────────── */
+    /* ─── Selection support ───────────────────────────────────────── */
 
     /**
      * One entry per positioned char, in reading order (blocks then lines then
@@ -134,11 +134,11 @@ public class KiteStructuredText(public val blocks: List<KiteTextBlock>) {
      * Display-space quads (one per line touched) for the inclusive flattened
      * range. Search hits use the same walker.
      */
-    public fun quadsFor(start: Int, endInclusive: Int): List<Rectangle> {
+    public fun quadsFor(start: Int, endInclusive: Int): List<KiteRectangle> {
         if (flatChars.isEmpty()) return emptyList()
         val a = start.coerceIn(0, flatChars.size - 1)
         val b = endInclusive.coerceIn(a, flatChars.size - 1)
-        val out = ArrayList<Rectangle>()
+        val out = ArrayList<KiteRectangle>()
         var i = a
         while (i <= b) {
             val block = flatChars[i].block
@@ -154,8 +154,8 @@ public class KiteStructuredText(public val blocks: List<KiteTextBlock>) {
      * Merges consecutive same-line `(lineIndex, charIndex)` entries of one
      * block into per-line quads spanning their char edges.
      */
-    private fun lineQuads(block: KiteTextBlock, entries: List<Pair<Int, Int>>): List<Rectangle> {
-        val quads = ArrayList<Rectangle>()
+    private fun lineQuads(block: KiteTextBlock, entries: List<Pair<Int, Int>>): List<KiteRectangle> {
+        val quads = ArrayList<KiteRectangle>()
         var i = 0
         while (i < entries.size) {
             val li = entries[i].first
@@ -163,7 +163,7 @@ public class KiteStructuredText(public val blocks: List<KiteTextBlock>) {
             while (j + 1 < entries.size && entries[j + 1].first == li) j++
             val line = block.lines[li]
             quads.add(
-                Rectangle(
+                KiteRectangle(
                     left = line.charEdges[entries[i].second],
                     bottom = line.bounds.bottom,
                     right = line.charEdges[entries[j].second + 1],
@@ -186,7 +186,7 @@ public class KiteTextBlock(public val lines: List<KiteTextLine>)
  */
 public class KiteTextLine(
     public val text: String,
-    public val bounds: Rectangle,
+    public val bounds: KiteRectangle,
     public val charEdges: DoubleArray,
 ) {
     init {
@@ -199,6 +199,6 @@ public class KiteTextLine(
 /** One search match: display-space [quads] (one per line touched) on page [pageIndex]. */
 public class KiteSearchHit(
     public val pageIndex: Int,
-    public val quads: List<Rectangle>,
+    public val quads: List<KiteRectangle>,
     public val text: String,
 )

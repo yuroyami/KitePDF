@@ -8,7 +8,7 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 /**
- * T-47 acceptance: WOFF2 fonts ([Woff2.toSfnt] + the `FontRegistry.face`
+ * Acceptance: WOFF2 fonts ([Woff2.toSfnt] + the `FontRegistry.face`
  * unwrap). No `.woff2` ships in the repo or corpus, so the test compresses
  * the in-repo DroidSansFallback TTF with the reference `woff2_compress`
  * tool (Google's encoder: brotli stream + transformed glyf/loca + optional

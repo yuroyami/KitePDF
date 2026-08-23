@@ -14,11 +14,16 @@ val doc = PdfDocument.open(bytes)
 println("${doc.pageCount} pages: PDF ${doc.version}")
 ```
 
-`open` throws (`PdfFormatException`, `WrongPasswordException`) on files it
+`open` throws (`PdfFormatException`, `KiteWrongPasswordException`) on files it
 cannot read. When null-on-failure fits your call site better, use
 `PdfDocument.openOrNull(bytes)`; the EPUB handler has the matching pair
 (`EpubDocument.open` throws `EpubFormatException` with a message naming the
 first structural failure, `EpubDocument.openOrNull` returns null instead).
+
+Don't know which format you have? `KiteDoc.open(bytes)` sniffs it and returns
+whichever handler fits. See **[Loading a document](loading.md)** for that and
+for every other source: a file path, a stream, an Android content Uri, Base64,
+a URL.
 
 ### Encrypted PDFs
 
@@ -209,7 +214,7 @@ Falls back to the `/Info` dict when XMP is absent.
 Navigate the document's bookmark tree:
 
 ```kotlin
-for (outline in doc.outlines) {
+for (outline in doc.bookmarks) {
     println("${outline.title} (count: ${outline.count})")
     for (child in outline.children) {
         println("  - ${child.title}")
@@ -231,7 +236,7 @@ Each `PdfOutline` entry carries:
 To resolve a bookmark destination to a page index:
 
 ```kotlin
-for (outline in doc.outlines) {
+for (outline in doc.bookmarks) {
     val dest = doc.resolveDestination(outline.rawDestination)
     val view = dest?.view
     if (view is PdfDestination.ViewFit.XYZ) {

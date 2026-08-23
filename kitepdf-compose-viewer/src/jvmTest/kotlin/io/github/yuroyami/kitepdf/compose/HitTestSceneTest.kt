@@ -18,7 +18,7 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
- * T-31: [PdfViewState.hitTest] maps viewport points to page user-space
+ * [KiteDocViewState.hitTest] maps viewport points to page user-space
  * points through the real composed layout (the geometry map is populated by
  * the actual page slots) and the inverted zoom/pan layer transform.
  */
@@ -32,7 +32,7 @@ class HitTestSceneTest {
         }
     }.build()
 
-    private fun assertHit(hit: PageHit?, page: Int, x: Double, y: Double, tolerance: Double = 1.0) {
+    private fun assertHit(hit: KitePageHit?, page: Int, x: Double, y: Double, tolerance: Double = 1.0) {
         assertNotNull(hit, "expected a page hit")
         assertEquals(page, hit.pageIndex)
         assertTrue(abs(hit.x - x) <= tolerance, "x: expected $x, got ${hit.x}")
@@ -42,10 +42,10 @@ class HitTestSceneTest {
     @Test
     fun single_page_hit_test_at_zoom_1_and_zoom_2() {
         val doc = KitePDF.open(redPagePdf())
-        lateinit var state: PdfViewState
+        lateinit var state: KiteDocViewState
         ImageComposeScene(width = 400, height = 400, density = Density(1f)) {
-            state = rememberPdfViewState(doc)
-            PdfView(state = state, modifier = Modifier.fillMaxSize(), layout = PdfLayout.SinglePage(0))
+            state = rememberKiteDocViewState(doc)
+            KiteDocView(state = state, modifier = Modifier.fillMaxSize(), layout = KiteDocLayout.SinglePage(0))
         }.use { scene ->
             val driver = SceneTestDriver(scene)
             driver.pumpUntil { px -> px[200, 200].red > 0.8f }
@@ -75,12 +75,12 @@ class HitTestSceneTest {
     @Test
     fun continuous_strip_maps_each_page_and_misses_the_gap() {
         val doc = KitePDF.open(redPagePdf(2))
-        lateinit var state: PdfViewState
+        lateinit var state: KiteDocViewState
         // 200x320 viewport, 8dp spacing at density 1: page 0 at y 0..200,
-        // page 1 from y 208 (the PdfViewSceneTest geometry).
+        // page 1 from y 208 (the KiteDocViewSceneTest geometry).
         ImageComposeScene(width = 200, height = 320, density = Density(1f)) {
-            state = rememberPdfViewState(doc)
-            PdfView(state = state, modifier = Modifier.fillMaxSize())
+            state = rememberKiteDocViewState(doc)
+            KiteDocView(state = state, modifier = Modifier.fillMaxSize())
         }.use { scene ->
             SceneTestDriver(scene).pumpUntil { px ->
                 px[100, 100].red > 0.8f && px[100, 300].red > 0.8f

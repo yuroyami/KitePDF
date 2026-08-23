@@ -6,7 +6,7 @@ import kotlin.test.Test
 import kotlin.test.assertTrue
 
 /**
- * T-30 corpus smoke: searching a common word in a real-world PDF's first
+ * Corpus smoke: searching a common word in a real-world PDF's first
  * page returns hits without throwing. Skipped when the git-ignored corpus
  * is not present (CI).
  */

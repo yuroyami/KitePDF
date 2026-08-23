@@ -1,6 +1,6 @@
 package io.github.yuroyami.kitepdf.core.render
 
-import io.github.yuroyami.kitepdf.core.Rectangle
+import io.github.yuroyami.kitepdf.core.KiteRectangle
 import io.github.yuroyami.kitepdf.core.filters.FilterChain
 import io.github.yuroyami.kitepdf.core.parser.IndirectResolver
 import io.github.yuroyami.kitepdf.core.parser.PdfDictionary
@@ -9,7 +9,7 @@ import io.github.yuroyami.kitepdf.core.parser.PdfReal
 import io.github.yuroyami.kitepdf.core.parser.PdfStream
 
 /**
- * T-40: parsing of the stream-based mesh shadings (ISO 32000-1 §8.7.4.5):
+ * Parsing of the stream-based mesh shadings (ISO 32000-1 §8.7.4.5):
  * types 4/5 (Gouraud triangles) into [KiteShading.TriangleMesh] and types 6/7
  * (Coons / tensor patches) into a pre-tessellated [KiteShading.PatchMesh].
  *
@@ -41,7 +41,7 @@ internal object MeshShadingParser {
         }
     }
 
-    private class Layout(dict: PdfDictionary, refs: IndirectResolver, cs: ColorSpace) {
+    private class Layout(dict: PdfDictionary, refs: IndirectResolver, cs: KiteColorSpace) {
         val bpc = dict.getInt("BitsPerCoordinate")?.toInt() ?: 16
         val bpcomp = dict.getInt("BitsPerComponent")?.toInt() ?: 8
         val bpf = dict.getInt("BitsPerFlag")?.toInt() ?: 8
@@ -64,7 +64,7 @@ internal object MeshShadingParser {
             return lo + raw.toDouble() * (hi - lo) / max
         }
 
-        fun readColor(bs: BitStream, cs: ColorSpace): RgbColor {
+        fun readColor(bs: BitStream, cs: KiteColorSpace): RgbColor {
             val comps = DoubleArray(ncomp) { i -> mapValue(bs.read(bpcomp), bpcomp, 2 + i) }
             return if (function != null) cs.toRgb(function.evaluate(comps))
             else cs.toRgb(comps)
@@ -81,7 +81,7 @@ internal object MeshShadingParser {
 
     fun parseTriangles(
         type: Int, dict: PdfDictionary, stream: PdfStream,
-        cs: ColorSpace, bg: RgbColor?, bbox: Rectangle?, refs: IndirectResolver,
+        cs: KiteColorSpace, bg: RgbColor?, bbox: KiteRectangle?, refs: IndirectResolver,
     ): KiteShading? {
         val layout = Layout(dict, refs, cs)
         val bs = BitStream(FilterChain.decode(stream))
@@ -154,7 +154,7 @@ internal object MeshShadingParser {
 
     fun parsePatches(
         type: Int, dict: PdfDictionary, stream: PdfStream,
-        cs: ColorSpace, bg: RgbColor?, bbox: Rectangle?, refs: IndirectResolver,
+        cs: KiteColorSpace, bg: RgbColor?, bbox: KiteRectangle?, refs: IndirectResolver,
     ): KiteShading? {
         val layout = Layout(dict, refs, cs)
         val bs = BitStream(FilterChain.decode(stream))
@@ -295,7 +295,7 @@ private fun io.github.yuroyami.kitepdf.core.parser.PdfArray.numAt(i: Int): Doubl
 }
 
 /**
- * Renders the T-40 shading types through plain [KiteCanvas.fillPath] calls, so
+ * Renders the complex shading types through plain [KiteCanvas.fillPath] calls, so
  * every backend supports them identically with zero bespoke code:
  *
  *  - [KiteShading.FunctionBased]: a 64x64 cell grid over the domain, each cell
@@ -312,10 +312,10 @@ private fun io.github.yuroyami.kitepdf.core.parser.PdfArray.numAt(i: Int): Doubl
  */
 public fun KiteCanvas.paintComplexShading(
     shading: KiteShading,
-    ctm: Matrix,
+    ctm: KiteMatrix,
     clipPath: KitePath?,
     alpha: Double = 1.0,
-    blendMode: BlendMode = BlendMode.Normal,
+    blendMode: KiteBlendMode = KiteBlendMode.Normal,
 ): Boolean {
     when (shading) {
         is KiteShading.FunctionBased, is KiteShading.TriangleMesh, is KiteShading.PatchMesh -> Unit
@@ -357,7 +357,7 @@ public fun KiteCanvas.paintComplexShading(
                 val det = kotlin.math.abs(cellCtm.a * cellCtm.d - cellCtm.b * cellCtm.c)
                 val scaleX = cellCtm.scaleX()
                 val scaleY = cellCtm.scaleY()
-                val canOverlap = alpha >= 1.0 && blendMode == BlendMode.Normal &&
+                val canOverlap = alpha >= 1.0 && blendMode == KiteBlendMode.Normal &&
                     det.isFinite() && scaleX.isFinite() && scaleY.isFinite() && det > 1e-12
                 val overlapX = if (canOverlap) {
                     kotlin.math.min(kotlin.math.abs(xStep) * 0.5, 0.5 * scaleY / det)
@@ -420,7 +420,7 @@ private fun KiteCanvas.subdivideAndFill(
     x0: Double, y0: Double, c0: RgbColor,
     x1: Double, y1: Double, c1: RgbColor,
     x2: Double, y2: Double, c2: RgbColor,
-    depth: Int, ctm: Matrix, alpha: Double, blendMode: BlendMode,
+    depth: Int, ctm: KiteMatrix, alpha: Double, blendMode: KiteBlendMode,
 ) {
     if (depth == 0) {
         val color = RgbColor((c0.r + c1.r + c2.r) / 3, (c0.g + c1.g + c2.g) / 3, (c0.b + c1.b + c2.b) / 3)

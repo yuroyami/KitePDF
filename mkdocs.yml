@@ -88,6 +88,7 @@ nav:
   - Home: index.md
   - Getting Started: getting-started.md
   - Guides:
+      - Loading a document: loading.md
       - Compose viewer: compose-viewer.md
       - Reading PDFs: reading.md
       - Reading EPUBs: epub.md

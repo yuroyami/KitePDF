@@ -7,7 +7,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 
-/** T-34: the JVM `openFile` sugar reads a PDF straight from a path. */
+/** The JVM `openFile` sugar reads a PDF straight from a path. */
 class OpenFileTest {
 
     @Test

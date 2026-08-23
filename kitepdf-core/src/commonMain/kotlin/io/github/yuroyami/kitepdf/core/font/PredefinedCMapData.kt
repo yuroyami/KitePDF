@@ -1,7 +1,7 @@
 package io.github.yuroyami.kitepdf.core.font
 
 /**
- * Predefined CJK CMap tables (T-46), generated from the CMap resources MuPDF
+ * Predefined CJK CMap tables, generated from the CMap resources MuPDF
  * vendors (Adobe cmap-resources, BSD-3-Clause, Copyright Adobe). Each record
  * keeps its `usecmap` chain unresolved so shared bases (GBK-X, ...) are
  * stored once; blobs are Base64 of a compact binary layout:

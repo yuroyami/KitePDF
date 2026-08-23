@@ -1,6 +1,6 @@
 package io.github.yuroyami.kitepdf
 
-import io.github.yuroyami.kitepdf.core.render.Matrix
+import io.github.yuroyami.kitepdf.core.render.KiteMatrix
 import io.github.yuroyami.kitepdf.core.render.RecordingCanvas
 import io.github.yuroyami.kitepdf.writer.PdfBuilder
 import io.github.yuroyami.kitepdf.writer.PdfImage
@@ -13,7 +13,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 /**
- * T-16: rendering every page of one document from 8 threads simultaneously
+ * Rendering every page of one document from 8 threads simultaneously
  * (including all threads on the SAME page) produces exactly the serial
  * baseline's draw calls, across 20 iterations. Before the per-call readers
  * and locked caches, the shared seek-based reader interleaved positions and
@@ -40,7 +40,7 @@ class ConcurrencyStressTest {
 
     private fun callCounts(doc: PdfDocument): List<Int> = doc.pages.map { page ->
         val c = RecordingCanvas()
-        page.renderTo(c, Matrix.IDENTITY)
+        page.renderTo(c, KiteMatrix.IDENTITY)
         c.calls.size
     }
 
@@ -60,7 +60,7 @@ class ConcurrencyStressTest {
                     try {
                         for ((i, page) in fresh.pages.withIndex()) {
                             val canvas = RecordingCanvas()
-                            page.renderTo(canvas, Matrix.IDENTITY)
+                            page.renderTo(canvas, KiteMatrix.IDENTITY)
                             if (canvas.calls.size != baseline[i]) {
                                 errors.add("iter $iteration thread $t page $i: ${canvas.calls.size} != ${baseline[i]}")
                             }
@@ -85,7 +85,7 @@ class ConcurrencyStressTest {
             thread(start = true) {
                 start.await()
                 try {
-                    repeat(5) { doc.pages[0].renderTo(RecordingCanvas(), Matrix.IDENTITY) }
+                    repeat(5) { doc.pages[0].renderTo(RecordingCanvas(), KiteMatrix.IDENTITY) }
                 } catch (e: Throwable) {
                     errors.add("thread $t threw: $e")
                 }

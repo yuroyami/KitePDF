@@ -35,17 +35,17 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.graphics.Color
 import io.github.yuroyami.kitepdf.KitePDF
 import io.github.yuroyami.kitepdf.PdfDocument
-import io.github.yuroyami.kitepdf.compose.PdfLayout
-import io.github.yuroyami.kitepdf.compose.PdfNavigationControls
-import io.github.yuroyami.kitepdf.compose.PdfThumbnailStrip
-import io.github.yuroyami.kitepdf.compose.PdfView
-import io.github.yuroyami.kitepdf.compose.PdfViewColors
-import io.github.yuroyami.kitepdf.compose.PdfZoomSpec
+import io.github.yuroyami.kitepdf.compose.KiteDocLayout
+import io.github.yuroyami.kitepdf.compose.KiteNavigationControls
+import io.github.yuroyami.kitepdf.compose.KiteThumbnailStrip
+import io.github.yuroyami.kitepdf.compose.KiteDocView
+import io.github.yuroyami.kitepdf.compose.KiteDocViewColors
+import io.github.yuroyami.kitepdf.compose.KiteZoomSpec
 import io.github.yuroyami.kitepdf.compose.encodeToPng
-import io.github.yuroyami.kitepdf.compose.rememberPdfViewState
+import io.github.yuroyami.kitepdf.compose.rememberKiteDocViewState
 
 /**
- * KitePDF sample: the whole document through the one [PdfView] composable,
+ * KitePDF sample: the whole document through the one [KiteDocView] composable,
  * plus the export callback wired to [encodeToPng].
  */
 @Composable
@@ -105,18 +105,18 @@ private fun DemoSelector(current: Demo, onSelect: (Demo) -> Unit) {
 }
 
 /** The layout modes the sample lets you flip between. */
-private enum class LayoutChoice(val label: String, val layout: PdfLayout) {
-    VERTICAL("Scroll ↓", PdfLayout.Continuous(Orientation.Vertical)),
-    HORIZONTAL("Scroll →", PdfLayout.Continuous(Orientation.Horizontal)),
-    PAGER("Pager", PdfLayout.Paged(Orientation.Horizontal)),
+private enum class LayoutChoice(val label: String, val layout: KiteDocLayout) {
+    VERTICAL("Scroll ↓", KiteDocLayout.Continuous(Orientation.Vertical)),
+    HORIZONTAL("Scroll →", KiteDocLayout.Continuous(Orientation.Horizontal)),
+    PAGER("Pager", KiteDocLayout.Paged(Orientation.Horizontal)),
 }
 
 @Composable
 private fun DocumentDisplay(doc: PdfDocument, modifier: Modifier = Modifier) {
-    // PdfView's onPageRendered callback below feeds this. It proves the export path.
+    // KiteDocView's onPageRendered callback below feeds this. It proves the export path.
     var exportNote by remember(doc) { mutableStateOf("rendering…") }
     var layoutChoice by remember { mutableStateOf(LayoutChoice.VERTICAL) }
-    val state = rememberPdfViewState(doc)
+    val state = rememberKiteDocViewState(doc)
 
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(12.dp)) {
         // Metadata strip
@@ -150,12 +150,12 @@ private fun DocumentDisplay(doc: PdfDocument, modifier: Modifier = Modifier) {
                     // ONE composable: any layout, pinch/double-tap zoom, HUD
                     // overlay. The callback hands back each rendered page as a
                     // saveable image.
-                    PdfView(
+                    KiteDocView(
                         state = state,
                         modifier = Modifier.weight(1f).fillMaxWidth().padding(8.dp),
                         layout = layoutChoice.layout,
-                        zoomSpec = PdfZoomSpec(maxZoom = 6f),
-                        colors = PdfViewColors(viewportBackground = Color(0xFF1E1E1E)),
+                        zoomSpec = KiteZoomSpec(maxZoom = 6f),
+                        colors = KiteDocViewColors(viewportBackground = Color(0xFF1E1E1E)),
                         onPageRendered = { index, image ->
                             val png = image.encodeToPng()
                             exportNote = "page ${index + 1} → ${png?.size ?: 0} B PNG"
@@ -163,13 +163,13 @@ private fun DocumentDisplay(doc: PdfDocument, modifier: Modifier = Modifier) {
                         overlay = { s ->
                             // HUD-style controls floating over the pages; the
                             // same state also drives the thumbnail strip below.
-                            PdfNavigationControls(
+                            KiteNavigationControls(
                                 s,
                                 Modifier.align(Alignment.BottomCenter).padding(12.dp),
                             )
                         },
                     )
-                    PdfThumbnailStrip(
+                    KiteThumbnailStrip(
                         state = state,
                         modifier = Modifier.fillMaxWidth(),
                         thumbnailHeight = 56.dp,
@@ -227,12 +227,12 @@ private enum class Demo(val label: String, val bytes: ByteArray) {
 }
 
 /**
- * The app-side half of text selection: the viewer exposes [PdfViewState.selection]
+ * The app-side half of text selection: the viewer exposes [KiteDocViewState.selection]
  * (made by long-press + drag on any page) but never touches the clipboard itself.
  * Copying is the app's decision. Long-press text in the viewer, then press Copy.
  */
 @Composable
-private fun PdfSelectionActions(state: io.github.yuroyami.kitepdf.compose.PdfViewState) {
+private fun PdfSelectionActions(state: io.github.yuroyami.kitepdf.compose.KiteDocViewState) {
     val selection = state.selection ?: return
     val clipboard = androidx.compose.ui.platform.LocalClipboardManager.current
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

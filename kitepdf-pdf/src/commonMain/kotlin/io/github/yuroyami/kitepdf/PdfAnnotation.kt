@@ -31,7 +31,7 @@ import io.github.yuroyami.kitepdf.core.render.RgbColor
  */
 public data class PdfAnnotation(
     val subtype: Subtype,
-    val rect: io.github.yuroyami.kitepdf.core.Rectangle,
+    val rect: io.github.yuroyami.kitepdf.core.KiteRectangle,
     val contents: String,
     /** Border / highlight / underline colour, or null when /C is omitted. */
     val color: RgbColor?,
@@ -201,7 +201,7 @@ public data class PdfAnnotation(
             return when (arr.size) {
                 1 -> RgbColor.gray(n(0))
                 3 -> RgbColor(n(0), n(1), n(2))
-                4 -> io.github.yuroyami.kitepdf.core.render.ColorSpace.DeviceCMYK
+                4 -> io.github.yuroyami.kitepdf.core.render.KiteColorSpace.DeviceCMYK
                     .toRgb(doubleArrayOf(n(0), n(1), n(2), n(3)))
                 else -> null
             }
@@ -213,13 +213,13 @@ public data class PdfAnnotation(
          * containment test could match and no border could paint, which made every link on the
          * page silently dead.
          */
-        private fun rectFromArray(arr: PdfArray): io.github.yuroyami.kitepdf.core.Rectangle {
+        private fun rectFromArray(arr: PdfArray): io.github.yuroyami.kitepdf.core.KiteRectangle {
             fun n(idx: Int) = when (val v = arr.getOrNull(idx)) {
                 is PdfReal -> v.value
                 is PdfInt -> v.value.toDouble()
                 else -> 0.0
             }
-            return io.github.yuroyami.kitepdf.core.Rectangle(n(0), n(1), n(2), n(3)).normalized()
+            return io.github.yuroyami.kitepdf.core.KiteRectangle(n(0), n(1), n(2), n(3)).normalized()
         }
     }
 }

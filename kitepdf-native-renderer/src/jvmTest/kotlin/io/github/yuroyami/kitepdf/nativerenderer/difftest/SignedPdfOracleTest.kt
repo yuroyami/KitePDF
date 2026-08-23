@@ -17,7 +17,7 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 /**
- * T-84 oracle half: a document signed over the scaffold's ByteRange with a
+ * Oracle half: a document signed over the scaffold's ByteRange with a
  * throwaway JVM keypair (java.security lives in THIS test, not the library)
  * must open and render in mutool and reopen in KitePDF with the field
  * present. External signature validators are a manual step.

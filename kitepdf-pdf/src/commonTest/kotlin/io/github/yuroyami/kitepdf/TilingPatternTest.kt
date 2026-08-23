@@ -1,7 +1,7 @@
 package io.github.yuroyami.kitepdf
 
 import io.github.yuroyami.kitepdf.core.ByteArrayBuilder
-import io.github.yuroyami.kitepdf.core.render.Matrix
+import io.github.yuroyami.kitepdf.core.render.KiteMatrix
 import io.github.yuroyami.kitepdf.core.render.RecordingCanvas
 import kotlin.test.Test
 import kotlin.test.assertTrue
@@ -45,7 +45,7 @@ class TilingPatternTest {
     @Test fun tiling_pattern_replays_cell_across_region() {
         val doc = KitePDF.open(tilingPdf())
         val canvas = RecordingCanvas()
-        doc.pages[0].renderTo(canvas, Matrix.IDENTITY)
+        doc.pages[0].renderTo(canvas, KiteMatrix.IDENTITY)
         val fills = canvas.calls.filterIsInstance<RecordingCanvas.Call.Fill>()
         // 200x200 region, 10x10 cells → on the order of 400 tiles, each a red fill.
         assertTrue(fills.size > 100, "expected many tile fills, got ${fills.size}")

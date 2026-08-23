@@ -2,9 +2,9 @@ package io.github.yuroyami.kitepdf.skia
 
 import io.github.yuroyami.kitepdf.core.font.FontSpec
 import io.github.yuroyami.kitepdf.core.font.TextGlyph
-import io.github.yuroyami.kitepdf.core.render.BlendMode
+import io.github.yuroyami.kitepdf.core.render.KiteBlendMode
 import io.github.yuroyami.kitepdf.core.render.KitePath
-import io.github.yuroyami.kitepdf.core.render.Matrix
+import io.github.yuroyami.kitepdf.core.render.KiteMatrix
 import io.github.yuroyami.kitepdf.core.render.RgbColor
 import java.io.ByteArrayInputStream
 import javax.imageio.ImageIO
@@ -42,10 +42,10 @@ class EmbeddedGlyphTransformTest {
                 unitsPerEm = 1_000,
                 hasOutlines = true,
                 fontSpec = FontSpec.SansSerif,
-                textToDevice = Matrix(2.0, 0.0, 0.0, 2.0, 30.0, 40.0),
+                textToDevice = KiteMatrix(2.0, 0.0, 0.0, 2.0, 30.0, 40.0),
                 color = RgbColor(0.0, 0.0, 0.0),
                 alpha = 1.0,
-                blendMode = BlendMode.Normal,
+                blendMode = KiteBlendMode.Normal,
             )
             surface.makeImageSnapshot()
         } finally {

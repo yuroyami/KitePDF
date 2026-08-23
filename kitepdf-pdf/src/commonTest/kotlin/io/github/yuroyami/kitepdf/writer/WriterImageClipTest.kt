@@ -1,7 +1,7 @@
 package io.github.yuroyami.kitepdf.writer
 
 import io.github.yuroyami.kitepdf.KitePDF
-import io.github.yuroyami.kitepdf.core.render.Matrix
+import io.github.yuroyami.kitepdf.core.render.KiteMatrix
 import io.github.yuroyami.kitepdf.core.render.RecordingCanvas
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -35,7 +35,7 @@ class WriterImageClipTest {
 
         val doc = KitePDF.open(bytes)
         val canvas = RecordingCanvas()
-        doc.pages[0].renderTo(canvas, Matrix.IDENTITY)
+        doc.pages[0].renderTo(canvas, KiteMatrix.IDENTITY)
 
         val images = canvas.calls.filterIsInstance<RecordingCanvas.Call.Image>()
         assertEquals(1, images.size, "expected exactly one image draw")
@@ -72,7 +72,7 @@ class WriterImageClipTest {
         }.build()
         val doc = KitePDF.open(bytes)
         val canvas = RecordingCanvas()
-        doc.pages[0].renderTo(canvas, Matrix.IDENTITY)
+        doc.pages[0].renderTo(canvas, KiteMatrix.IDENTITY)
         val img = canvas.calls.filterIsInstance<RecordingCanvas.Call.Image>().single().image
         assertTrue(img.softMaskAlpha == null, "fully-opaque image must not carry a SMask")
     }
@@ -94,7 +94,7 @@ class WriterImageClipTest {
 
         val doc = KitePDF.open(bytes)
         val canvas = RecordingCanvas()
-        doc.pages[0].renderTo(canvas, Matrix.IDENTITY)
+        doc.pages[0].renderTo(canvas, KiteMatrix.IDENTITY)
 
         val clips = canvas.calls.filterIsInstance<RecordingCanvas.Call.PushClip>()
         assertEquals(1, clips.size, "clip() should produce one pushClip")
@@ -116,7 +116,7 @@ class WriterImageClipTest {
         }.build()
         val doc = KitePDF.open(bytes)
         val canvas = RecordingCanvas()
-        doc.pages[0].renderTo(canvas, Matrix.IDENTITY)
+        doc.pages[0].renderTo(canvas, KiteMatrix.IDENTITY)
         val img = canvas.calls.filterIsInstance<RecordingCanvas.Call.Image>().single().image
         assertEquals(8, img.width)
         assertEquals("DeviceRGB", img.colorSpace)
@@ -134,7 +134,7 @@ class WriterImageClipTest {
         val doc = KitePDF.open(bytes)
         for (p in 0 until 2) {
             val canvas = RecordingCanvas()
-            doc.pages[p].renderTo(canvas, Matrix.IDENTITY)
+            doc.pages[p].renderTo(canvas, KiteMatrix.IDENTITY)
             assertEquals(1, canvas.calls.filterIsInstance<RecordingCanvas.Call.Image>().size, "page $p missing image")
         }
     }

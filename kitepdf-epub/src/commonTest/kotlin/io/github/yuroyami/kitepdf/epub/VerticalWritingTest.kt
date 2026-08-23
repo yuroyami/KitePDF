@@ -10,7 +10,7 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 /**
- * T-72: vertical writing (tategaki). A spine root resolving
+ * Vertical writing (tategaki). A spine root resolving
  * `writing-mode: vertical-rl` lays out with the inline axis running down the
  * page and columns advancing right-to-left: full-width glyphs stand upright,
  * Latin runs rotate 90 degrees clockwise, ruby sits to the RIGHT of its base

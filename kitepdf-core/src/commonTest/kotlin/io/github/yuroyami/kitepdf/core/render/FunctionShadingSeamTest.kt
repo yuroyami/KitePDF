@@ -50,11 +50,11 @@ class FunctionShadingSeamTest {
             n = 1.0,
         )
         val shading = KiteShading.FunctionBased(
-            colorSpace = ColorSpace.DeviceRGB,
+            colorSpace = KiteColorSpace.DeviceRGB,
             background = null,
             bbox = null,
             domain = domain,
-            matrix = Matrix.IDENTITY,
+            matrix = KiteMatrix.IDENTITY,
             function = function,
         )
         val canvas = RecordingCanvas()
@@ -62,7 +62,7 @@ class FunctionShadingSeamTest {
         assertTrue(
             canvas.paintComplexShading(
                 shading = shading,
-                ctm = Matrix(128.0, 32.0, 24.0, 96.0, 0.0, 0.0),
+                ctm = KiteMatrix(128.0, 32.0, 24.0, 96.0, 0.0, 0.0),
                 clipPath = null,
                 alpha = alpha,
             ),

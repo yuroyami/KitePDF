@@ -1,9 +1,9 @@
 package io.github.yuroyami.kitepdf.writer
 
-import io.github.yuroyami.kitepdf.core.Rectangle
+import io.github.yuroyami.kitepdf.core.KiteRectangle
 import io.github.yuroyami.kitepdf.content.Operation
 import io.github.yuroyami.kitepdf.core.font.PdfFont
-import io.github.yuroyami.kitepdf.core.render.Matrix
+import io.github.yuroyami.kitepdf.core.render.KiteMatrix
 import io.github.yuroyami.kitepdf.core.parser.PdfArray
 import io.github.yuroyami.kitepdf.core.parser.PdfInt
 import io.github.yuroyami.kitepdf.core.parser.PdfName
@@ -46,7 +46,7 @@ internal class RedactionEngine(
     private val fonts: Map<String, PdfFont>,
     private val imageXObjectNames: Set<String>,
     private val formXObjectNames: Set<String>,
-    private val rectangles: List<Rectangle>,
+    private val rectangles: List<KiteRectangle>,
 ) {
 
     /** An image XObject 'Do' invocation was dropped (intersected a region). */
@@ -61,7 +61,7 @@ internal class RedactionEngine(
      * form's coordinate space (accounting for the CTM at the invocation site and
      * the form's own `/Matrix`, which the caller supplies via [formMatrices]).
      */
-    data class FormHit(val name: String, val formRects: List<Rectangle>)
+    data class FormHit(val name: String, val formRects: List<KiteRectangle>)
 
     /** Form XObjects whose invocation overlaps a region and must be recursed into. */
     val formXObjectHits = ArrayList<FormHit>()
@@ -70,11 +70,11 @@ internal class RedactionEngine(
      * Optional per-form `/Matrix` (default identity). Populated by the caller
      * before [run] so the reported [FormHit.formRects] are in the form's space.
      */
-    var formMatrices: Map<String, Matrix> = emptyMap()
+    var formMatrices: Map<String, KiteMatrix> = emptyMap()
 
     private data class TextState(
-        val textMatrix: Matrix = Matrix.IDENTITY,
-        val lineMatrix: Matrix = Matrix.IDENTITY,
+        val textMatrix: KiteMatrix = KiteMatrix.IDENTITY,
+        val lineMatrix: KiteMatrix = KiteMatrix.IDENTITY,
         val font: PdfFont? = null,
         val fontSize: Double = 0.0,
         val charSpacing: Double = 0.0,
@@ -84,7 +84,7 @@ internal class RedactionEngine(
         val rise: Double = 0.0,
     )
 
-    private data class GraphicsState(val ctm: Matrix = Matrix.IDENTITY, val text: TextState = TextState())
+    private data class GraphicsState(val ctm: KiteMatrix = KiteMatrix.IDENTITY, val text: TextState = TextState())
 
     private var gs = GraphicsState()
     private val stack = ArrayDeque<GraphicsState>()
@@ -216,16 +216,16 @@ internal class RedactionEngine(
     }
 
     private fun advanceTextMatrix(advance: Double) {
-        gs = gs.copy(text = gs.text.copy(textMatrix = Matrix.translation(advance, 0.0).concat(gs.text.textMatrix)))
+        gs = gs.copy(text = gs.text.copy(textMatrix = KiteMatrix.translation(advance, 0.0).concat(gs.text.textMatrix)))
     }
 
     private fun adjustTextX(thousandths: Double) {
         val tx = thousandths / 1000.0 * gs.text.fontSize * (gs.text.horizontalScaling / 100.0)
-        gs = gs.copy(text = gs.text.copy(textMatrix = Matrix.translation(tx, 0.0).concat(gs.text.textMatrix)))
+        gs = gs.copy(text = gs.text.copy(textMatrix = KiteMatrix.translation(tx, 0.0).concat(gs.text.textMatrix)))
     }
 
     private fun moveText(tx: Double, ty: Double, setLeading: Boolean) {
-        val moved = Matrix.translation(tx, ty).concat(gs.text.lineMatrix)
+        val moved = KiteMatrix.translation(tx, ty).concat(gs.text.lineMatrix)
         gs = gs.copy(text = gs.text.copy(lineMatrix = moved, textMatrix = moved, leading = if (setLeading) -ty else gs.text.leading))
     }
 
@@ -245,7 +245,7 @@ internal class RedactionEngine(
         val fs = gs.text.fontSize
         val ascent = fs * 1.0
         val descent = fs * 0.35
-        val m = gs.ctm.concat(gs.text.textMatrix).let { Matrix.translation(0.0, gs.text.rise).concat(it) }
+        val m = gs.ctm.concat(gs.text.textMatrix).let { KiteMatrix.translation(0.0, gs.text.rise).concat(it) }
         return boxIntersects(m, x0 = 0.0, y0 = -descent, x1 = advance, y1 = ascent)
     }
 
@@ -283,11 +283,11 @@ internal class RedactionEngine(
      * skipping. A redaction must never no-op on content it can't reason about.
      */
     private fun recordFormHitIfIntersects(xobjectName: String) {
-        val formMatrix = formMatrices[xobjectName] ?: Matrix.IDENTITY
+        val formMatrix = formMatrices[xobjectName] ?: KiteMatrix.IDENTITY
         // model→page transform seen by content drawn inside the form.
         val toPage = gs.ctm.concat(formMatrix)
         val inv = toPage.invert()
-        val mapped = ArrayList<Rectangle>(rectangles.size)
+        val mapped = ArrayList<KiteRectangle>(rectangles.size)
         for (r in rectangles) {
             if (inv == null) {
                 // Can't map into form space. Pass the page-space rect through so
@@ -303,7 +303,7 @@ internal class RedactionEngine(
             val maxX = corners.maxOf { it.first }
             val minY = corners.minOf { it.second }
             val maxY = corners.maxOf { it.second }
-            mapped.add(Rectangle(left = minX, bottom = minY, right = maxX, top = maxY))
+            mapped.add(KiteRectangle(left = minX, bottom = minY, right = maxX, top = maxY))
         }
         formXObjectHits.add(FormHit(xobjectName, mapped))
     }
@@ -315,7 +315,7 @@ internal class RedactionEngine(
     }
 
     /** Map the box [x0,y0,x1,y1] through [m] and test its AABB against every rect. */
-    private fun boxIntersects(m: Matrix, x0: Double, y0: Double, x1: Double, y1: Double): Boolean {
+    private fun boxIntersects(m: KiteMatrix, x0: Double, y0: Double, x1: Double, y1: Double): Boolean {
         val corners = listOf(
             m.transformPoint(x0, y0), m.transformPoint(x1, y0),
             m.transformPoint(x0, y1), m.transformPoint(x1, y1),
@@ -333,7 +333,7 @@ internal class RedactionEngine(
     /* ─── Operand helpers ────────────────────────────────────────────────── */
 
     private fun matrix(op: Operation) =
-        Matrix(num(op, 0), num(op, 1), num(op, 2), num(op, 3), num(op, 4), num(op, 5))
+        KiteMatrix(num(op, 0), num(op, 1), num(op, 2), num(op, 3), num(op, 4), num(op, 5))
 
     private fun num(op: Operation, i: Int): Double = when (val v = op.operands.getOrNull(i)) {
         is PdfInt -> v.value.toDouble()

@@ -18,7 +18,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 
 /**
- * T-85: right-to-left page progression and two-page spreads. Colour-coded
+ * Right-to-left page progression and two-page spreads. Colour-coded
  * pages make the visual order pixel-assertable: page 0 red, 1 blue, 2 green.
  */
 class SpreadRtlSceneTest {
@@ -42,10 +42,10 @@ class SpreadRtlSceneTest {
         val doc = KitePDF.open(rgbDoc(2))
         // LTR spread: page 0 (red) left, page 1 (blue) right.
         ImageComposeScene(width = 200, height = 200, density = Density(1f)) {
-            PdfView(
-                state = rememberPdfViewState(doc),
+            KiteDocView(
+                state = rememberKiteDocViewState(doc),
                 modifier = Modifier.fillMaxSize(),
-                layout = PdfLayout.Spread(),
+                layout = KiteDocLayout.Spread(),
             )
         }.use { scene ->
             SceneTestDriver(scene).pumpUntil { px ->
@@ -57,10 +57,10 @@ class SpreadRtlSceneTest {
         }
         // RTL spread: page 0 (red) RIGHT, page 1 (blue) LEFT.
         ImageComposeScene(width = 200, height = 200, density = Density(1f)) {
-            PdfView(
-                state = rememberPdfViewState(doc),
+            KiteDocView(
+                state = rememberKiteDocViewState(doc),
                 modifier = Modifier.fillMaxSize(),
-                layout = PdfLayout.Spread(reverseLayout = true),
+                layout = KiteDocLayout.Spread(reverseLayout = true),
             )
         }.use { scene ->
             SceneTestDriver(scene).pumpUntil { px ->
@@ -75,12 +75,12 @@ class SpreadRtlSceneTest {
     @Test
     fun spread_navigation_stays_logical_and_advances_by_spread() {
         val doc = KitePDF.open(rgbDoc(3))
-        lateinit var state: PdfViewState
+        lateinit var state: KiteDocViewState
         lateinit var scope: CoroutineScope
         ImageComposeScene(width = 200, height = 200, density = Density(1f)) {
-            state = rememberPdfViewState(doc)
+            state = rememberKiteDocViewState(doc)
             scope = rememberCoroutineScope()
-            PdfView(state = state, modifier = Modifier.fillMaxSize(), layout = PdfLayout.Spread())
+            KiteDocView(state = state, modifier = Modifier.fillMaxSize(), layout = KiteDocLayout.Spread())
         }.use { scene ->
             val driver = SceneTestDriver(scene)
             driver.pumpUntil { px -> px[50, 100].red > 0.8f }
@@ -127,10 +127,10 @@ class SpreadRtlSceneTest {
 
         val rtl = KitePDF.open(sb.toString().encodeToByteArray())
         assertTrue(rtl.metadata.rightToLeft, "R2L viewer preference surfaces on KiteMetadata")
-        assertTrue(PdfLayout.pagedFor(rtl).reverseLayout)
+        assertTrue(KiteDocLayout.pagedFor(rtl).reverseLayout)
 
         val ltr = KitePDF.open(rgbDoc(1))
         assertFalse(ltr.metadata.rightToLeft)
-        assertFalse(PdfLayout.pagedFor(ltr).reverseLayout)
+        assertFalse(KiteDocLayout.pagedFor(ltr).reverseLayout)
     }
 }

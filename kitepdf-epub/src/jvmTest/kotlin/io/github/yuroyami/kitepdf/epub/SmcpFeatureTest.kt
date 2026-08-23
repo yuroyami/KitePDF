@@ -6,7 +6,7 @@ import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
 
 /**
- * T-67: the real-`smcp` path. Scans the in-repo reference fonts for one whose
+ * The real-`smcp` path. Scans the in-repo reference fonts for one whose
  * GSUB carries the small-caps feature and proves the substituted glyph is
  * used at FULL size (no synthesis). Skips when no such font is present in
  * the checkout (the synthesized path is covered in commonTest).

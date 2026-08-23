@@ -1,20 +1,24 @@
 package io.github.yuroyami.kitepdf
 
 /**
- * One-call entry point. Equivalent to [PdfDocument.open]. It exists so
- * `KitePDF.open(bytes)` reads nicely at call sites. For passwords, encryption
- * checks, editing, etc. use [PdfDocument] directly.
+ * Library-level constants.
  *
- * ```
- * val doc = KitePDF.open(bytes)
- * for (page in doc.pages) println(page.extractText())
- * ```
+ * This used to carry a one-call `open`, which read as the entry point for the
+ * whole library while only ever returning a [PdfDocument]. Use
+ * [PdfDocument.open] for a PDF, `EpubDocument.open` for a book, or
+ * `KiteDoc.open` from the `kitepdf` umbrella artifact when you do not know
+ * which of the two you have.
  */
 public object KitePDF {
 
     /** Library version. Generated from the Gradle project version at build time. */
     public const val VERSION: String = KITEPDF_VERSION
 
-    /** Parse [bytes] as a PDF document. See [PdfDocument.open] for the password overload. */
+    @Deprecated(
+        "KitePDF.open only ever opened PDFs. Use PdfDocument.open for a PDF, or " +
+            "KiteDoc.open (io.github.yuroyami.kitepdf.document, in the kitepdf umbrella) " +
+            "to open a PDF or an EPUB without knowing which it is.",
+        ReplaceWith("PdfDocument.open(bytes)", "io.github.yuroyami.kitepdf.PdfDocument"),
+    )
     public fun open(bytes: ByteArray): PdfDocument = PdfDocument.open(bytes)
 }

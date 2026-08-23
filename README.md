@@ -49,13 +49,14 @@ renderer only when you draw pages.
 
 | Artifact | Add it when |
 | --- | --- |
-| `io.github.yuroyami:kitepdf` | You want both formats. This is the usual choice. It has no code of its own: it is `api(kitepdf-pdf) + api(kitepdf-epub)` and a 12-line marker file. |
+| `io.github.yuroyami:kitepdf` | You want both formats. This is the usual choice. It re-exports both handlers and adds `KiteDoc`, which opens a file without being told which format it is. |
 | `io.github.yuroyami:kitepdf-pdf` | You want PDF only, with no EPUB reflow engine on the classpath. |
 | `io.github.yuroyami:kitepdf-epub` | You want EPUB only. |
 | `io.github.yuroyami:kitepdf-core` | Never add it yourself. It holds geometry, `KiteCanvas`, the font engine, the stream filters and the hyphenation data, and it arrives with any of the three artifacts above. |
-| `io.github.yuroyami:kitepdf-compose-viewer` | You draw with Compose Multiplatform. It gives you `PdfView`, `EpubView` and the viewer state. |
+| `io.github.yuroyami:kitepdf-compose-viewer` | You draw with Compose Multiplatform. It gives you `KiteDocView` (one composable for PDF and EPUB alike) and the viewer state. |
 | `io.github.yuroyami:kitepdf-native-renderer` | You want page-to-image through the platform's own canvas: AWT, `android.graphics`, CoreGraphics, Canvas2D. |
 | `io.github.yuroyami:kitepdf-skia-renderer` | You want page-to-image through Skia/Skiko, with one API across JVM, Android, Apple, Linux and web. |
+| `io.github.yuroyami:kitepdf-net` | You load documents from a URL. Optional, and the only artifact that pulls in Ktor; add a Ktor engine next to it. |
 
 ```kotlin
 kotlin {
@@ -77,7 +78,7 @@ JVM project: add it to your ordinary `dependencies { }` block.
 
 All three renderer modules depend on `:kitepdf-pdf` with `implementation` instead
 of `api`, and their public signatures still name types from it:
-`rememberPdfViewState(document: PdfDocument)`,
+`KiteDocView(document: KiteDocument)`,
 `AwtPdfRasterizer.encodeToPng(page: PdfPage, …)`. A renderer on its own puts
 those classes on the runtime classpath but not the compile classpath, and the
 build fails with unresolved references to `PdfDocument` and `PdfPage`. Declare
@@ -90,6 +91,26 @@ implementation("io.github.yuroyami:kitepdf-skia-renderer:0.6.3")     // exactly 
 
 The three renderers are alternative backends for the same `KiteCanvas` interface.
 Choose the one that matches how your app already draws.
+
+## Open a document
+
+Call the handler when you know the format, `KiteDoc` when you don't:
+
+```kotlin
+val pdf  = PdfDocument.open(bytes)
+val book = EpubDocument.open(bytes)
+
+import io.github.yuroyami.kitepdf.document.KiteDoc
+val doc = KiteDoc.open(bytes)          // sniffs the bytes, returns either
+KiteDoc.formatOf(bytes)                // Pdf | Epub | null, from the header alone
+```
+
+Bytes are not the only way in. There is a file path (JVM, Android, Apple, Linux,
+Windows, Android NDK), a `File` and an `InputStream` (JVM, Android), an Android
+content `Uri`, `NSData` and `NSURL` (Apple), Base64 and `data:` URIs everywhere,
+and a URL through the optional `kitepdf-net` artifact. Each has an `...OrNull`
+twin. All of them end in the same byte array: the engine has no incremental
+reader.
 
 ## Read and extract text
 
@@ -105,7 +126,7 @@ val maybe = PdfDocument.openOrNull(bytes)     // null instead of a throw
 
 doc.version                   // "1.7"
 doc.info.title                // Info dictionary
-doc.outlines                  // bookmark tree
+doc.bookmarks                  // bookmark tree
 doc.pages[3].label            // "iv", from /PageLabels
 
 val page = doc.pages[0]
@@ -131,7 +152,7 @@ ways. `saveIncremental()` appends an update section to the original bytes.
 still contains the redacted content.
 
 ```kotlin
-import io.github.yuroyami.kitepdf.core.Rectangle
+import io.github.yuroyami.kitepdf.core.KiteRectangle
 
 val filled = doc.edit().apply {
     setTextFieldValue(doc.formField("ApplicantName")!!, "Jane Doe")
@@ -140,7 +161,7 @@ val filled = doc.edit().apply {
 }.saveIncremental()
 
 val redacted = doc.edit().apply {
-    redactRegions(doc.pages[0], listOf(Rectangle(72.0, 700.0, 320.0, 720.0)))
+    redactRegions(doc.pages[0], listOf(KiteRectangle(72.0, 700.0, 320.0, 720.0)))
 }.saveRewritten()
 ```
 
@@ -191,12 +212,12 @@ import io.github.yuroyami.kitepdf.compose.*
 
 @Composable
 fun Viewer(doc: PdfDocument) {
-    val state = rememberPdfViewState(doc)
-    PdfView(
+    val state = rememberKiteDocViewState(doc)
+    KiteDocView(
         state = state,
-        layout = PdfLayout.Paged(Orientation.Horizontal),
-        zoomSpec = PdfZoomSpec(maxZoom = 6f),
-        renderSpec = PdfRenderSpec.Rasterized(),
+        layout = KiteDocLayout.Paged(Orientation.Horizontal),
+        zoomSpec = KiteZoomSpec(maxZoom = 6f),
+        renderSpec = KiteRenderSpec.Rasterized(),
         onLinkTap = { _ -> false },   // return true once you have handled the action
     )
 }
@@ -213,8 +234,9 @@ val skiaPng = PdfPageRasterizer.encodeToPng(doc.pages[0], scale = 2.0)  // any S
 ```
 
 `AwtPdfRasterizer` is the JVM entry point of `kitepdf-native-renderer`; the Apple,
-Android and JS backends have their own. `EpubView`, `rememberEpubViewState` and
-`EpubPageRasterizer` are the EPUB equivalents.
+Android and JS backends have their own. They take a `PdfPage`, so they are PDF
+only; `EpubPageRasterizer` is the EPUB half of the Skia renderer, and the Compose
+viewer takes either format through `KiteDocView`.
 
 ## Targets
 
@@ -252,7 +274,7 @@ may reach.
 | `PdfSigner` runs no cryptography | It stages the signature field, reserves `/Contents` and patches `/ByteRange`. It cannot validate a signature. Your application supplies the CMS blob. |
 | Writing encrypts more narrowly than reading | `PdfBuilder` creates AES-256/R6 only, and editing an encrypted document requires AES-128 or AES-256. RC4 documents open and decrypt, but you cannot edit them. |
 | CoreGraphics drops Standard-14 text | It paints embedded glyph outlines only, so text in a standard font does not appear. It also ignores per-image alpha. |
-| Android and CoreGraphics drop `RAW` images | Neither has a path for `ImageXObject.Kind.RAW`, so both draw a gray placeholder. `RAW` is what a successful JPEG, JPX or JBIG2 decode produces, which covers most images in most files. |
+| Android and CoreGraphics drop `RAW` images | Neither has a path for `KiteImageData.Kind.RAW`, so both draw a gray placeholder. `RAW` is what a successful JPEG, JPX or JBIG2 decode produces, which covers most images in most files. |
 | Canvas2D drops every image | It draws a placeholder in place of each one. |
 | The Compose canvas drops rotation | It reads translation and scale magnitudes from the CTM, so rotation and shear are lost. |
 | Three rasterizers use the wrong page box | `AwtPdfRasterizer`, `AndroidPdfBitmapRenderer` and `ApplePdfRasterizer` size their output from the raw MediaBox and apply a plain Y-flip, so they ignore `/Rotate`, `/CropBox` and non-zero box origins. `PdfPageRasterizer` (Skia) and the Compose viewer use the rotated, cropped box and are correct. `/UserUnit` is parsed and then applied nowhere. |

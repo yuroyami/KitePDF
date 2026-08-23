@@ -1,6 +1,6 @@
 package io.github.yuroyami.kitepdf
 
-import io.github.yuroyami.kitepdf.core.Rectangle
+import io.github.yuroyami.kitepdf.core.KiteRectangle
 
 import io.github.yuroyami.kitepdf.core.parser.IndirectResolver
 import io.github.yuroyami.kitepdf.core.parser.PdfDictionary
@@ -36,7 +36,7 @@ public class PdfFormField internal constructor(
     /** Quadding for variable text (`/Q`): 0 left, 1 centre, 2 right. */
     public val quadding: Int,
     /** The widget's `/Rect`, or null when this terminal field has no widget. */
-    public val rect: Rectangle?,
+    public val rect: KiteRectangle?,
     /** Indirect reference to the field dictionary, for editing. */
     public val fieldReference: PdfReference?,
     /** Indirect reference to the widget annotation (== [fieldReference] when merged). */
@@ -111,7 +111,7 @@ public class PdfFormField internal constructor(
                 node.getName("Subtype") == "Widget" || node["Rect"] != null -> node to ref
                 else -> kidPairs.firstOrNull() ?: (node to ref)
             }
-            val rect = widgetDict.getArray("Rect")?.takeIf { it.size >= 4 }?.let { Rectangle.fromPdfArray(it) }
+            val rect = widgetDict.getArray("Rect")?.takeIf { it.size >= 4 }?.let { KiteRectangle.fromPdfArray(it) }
 
             out.add(
                 PdfFormField(

@@ -1,7 +1,7 @@
 package io.github.yuroyami.kitepdf.core.compression
 
 /**
- * Optional platform-native flate fast path (T-10). Callers try it first and
+ * Optional platform-native flate fast path. Callers try it first and
  * fall back to the pure-Kotlin [Inflate]/[Deflate] on a null return, so a
  * platform either accelerates the hot path or costs nothing.
  *

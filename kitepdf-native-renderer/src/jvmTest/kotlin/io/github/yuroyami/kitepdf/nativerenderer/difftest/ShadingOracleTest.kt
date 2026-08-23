@@ -46,7 +46,7 @@ class ShadingOracleTest {
         for (f in fixtures) {
             val mae = diffFor(f.name, f.bytes)
             val budget = budgets.getValue(f.name)
-            println("[T-40] ${f.name}: MAE=${(mae * 10000).toInt() / 10000.0} (budget $budget)")
+            println("${f.name}: MAE=${(mae * 10000).toInt() / 10000.0} (budget $budget)")
             if (mae > budget) failures.add("${f.name}: $mae > $budget")
         }
         assertTrue(failures.isEmpty(), failures.joinToString("\n"))

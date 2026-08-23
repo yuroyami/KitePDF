@@ -21,7 +21,7 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
- * T-80: long-press-drag selection through the real composed layout. The
+ * Long-press-drag selection through the real composed layout. The
  * gesture callbacks are driven directly (begin/extend), the same way the
  * link-tap acceptance drives its handler; geometry, hit-testing, the char
  * index math and the selection model all run for real.
@@ -44,12 +44,12 @@ class SelectionSceneTest {
         val lines = kite.blocks.flatMap { it.lines }
         assertEquals(listOf("hello world", "second line"), lines.map { it.text })
 
-        lateinit var state: PdfViewState
-        val changes = mutableListOf<TextSelection?>()
+        lateinit var state: KiteDocViewState
+        val changes = mutableListOf<KiteTextSelection?>()
         ImageComposeScene(width = 200, height = 200, density = Density(1f)) {
-            state = rememberPdfViewState(doc)
+            state = rememberKiteDocViewState(doc)
             state.onSelectionChange = { changes.add(it) }
-            PdfView(state = state, modifier = Modifier.fillMaxSize(), layout = PdfLayout.SinglePage(0))
+            KiteDocView(state = state, modifier = Modifier.fillMaxSize(), layout = KiteDocLayout.SinglePage(0))
         }.use { scene ->
             val driver = SceneTestDriver(scene)
             driver.pumpUntil { state.pageGeometry.isNotEmpty() }
@@ -93,10 +93,10 @@ class SelectionSceneTest {
     @Test
     fun selection_drag_is_a_noop_off_text_and_across_pages() {
         val doc = twoLineDoc()
-        lateinit var state: PdfViewState
+        lateinit var state: KiteDocViewState
         ImageComposeScene(width = 200, height = 200, density = Density(1f)) {
-            state = rememberPdfViewState(doc)
-            PdfView(state = state, modifier = Modifier.fillMaxSize(), layout = PdfLayout.SinglePage(0))
+            state = rememberKiteDocViewState(doc)
+            KiteDocView(state = state, modifier = Modifier.fillMaxSize(), layout = KiteDocLayout.SinglePage(0))
         }.use { scene ->
             SceneTestDriver(scene).pumpUntil { state.pageGeometry.isNotEmpty() }
             // Long-press on an empty page region: no crash, no selection.
@@ -117,10 +117,10 @@ class SelectionSceneTest {
     @Test
     fun selection_lock_spans_the_gesture_and_releases_on_clear() {
         val doc = twoLineDoc()
-        lateinit var state: PdfViewState
+        lateinit var state: KiteDocViewState
         ImageComposeScene(width = 200, height = 200, density = Density(1f)) {
-            state = rememberPdfViewState(doc)
-            PdfView(state = state, modifier = Modifier.fillMaxSize(), layout = PdfLayout.SinglePage(0))
+            state = rememberKiteDocViewState(doc)
+            KiteDocView(state = state, modifier = Modifier.fillMaxSize(), layout = KiteDocLayout.SinglePage(0))
         }.use { scene ->
             SceneTestDriver(scene).pumpUntil { state.pageGeometry.isNotEmpty() }
             assertFalse(state.isSelectionActive, "no selection at rest")
@@ -159,10 +159,10 @@ class SelectionSceneTest {
     @Test
     fun selection_in_progress_tracks_the_finger_not_the_selection() {
         val doc = twoLineDoc()
-        lateinit var state: PdfViewState
+        lateinit var state: KiteDocViewState
         ImageComposeScene(width = 200, height = 200, density = Density(1f)) {
-            state = rememberPdfViewState(doc)
-            PdfView(state = state, modifier = Modifier.fillMaxSize(), layout = PdfLayout.SinglePage(0))
+            state = rememberKiteDocViewState(doc)
+            KiteDocView(state = state, modifier = Modifier.fillMaxSize(), layout = KiteDocLayout.SinglePage(0))
         }.use { scene ->
             SceneTestDriver(scene).pumpUntil { state.pageGeometry.isNotEmpty() }
             assertFalse(state.selectionInProgress, "nothing in progress at rest")
@@ -199,10 +199,10 @@ class SelectionSceneTest {
     @Test
     fun an_active_selection_stops_a_one_finger_drag_from_panning() {
         val doc = twoLineDoc()
-        lateinit var state: PdfViewState
+        lateinit var state: KiteDocViewState
         ImageComposeScene(width = 200, height = 200, density = Density(1f)) {
-            state = rememberPdfViewState(doc)
-            PdfView(state = state, modifier = Modifier.fillMaxSize(), layout = PdfLayout.SinglePage(0))
+            state = rememberKiteDocViewState(doc)
+            KiteDocView(state = state, modifier = Modifier.fillMaxSize(), layout = KiteDocLayout.SinglePage(0))
         }.use { scene ->
             val driver = SceneTestDriver(scene)
             driver.pumpUntil { state.pageGeometry.isNotEmpty() }
@@ -262,10 +262,10 @@ class SelectionSceneTest {
                 }
                 .build(),
         )
-        lateinit var state: PdfViewState
+        lateinit var state: KiteDocViewState
         ImageComposeScene(width = 200, height = 200, density = Density(1f)) {
-            state = rememberPdfViewState(doc)
-            PdfView(state = state, modifier = Modifier.fillMaxSize())
+            state = rememberKiteDocViewState(doc)
+            KiteDocView(state = state, modifier = Modifier.fillMaxSize())
         }.use { scene ->
             val driver = SceneTestDriver(scene)
             driver.pumpUntil { px -> px[100, 190].red > 0.8f }

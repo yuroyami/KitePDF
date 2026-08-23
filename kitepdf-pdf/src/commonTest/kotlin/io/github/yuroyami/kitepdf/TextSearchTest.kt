@@ -9,7 +9,7 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 /**
- * T-81/T-30: PDF `textContent()` (the display-space adapter over
+ * PDF `textContent()` (the display-space adapter over
  * PdfStructuredText) and the search API built on the shared core walker.
  */
 class TextSearchTest {

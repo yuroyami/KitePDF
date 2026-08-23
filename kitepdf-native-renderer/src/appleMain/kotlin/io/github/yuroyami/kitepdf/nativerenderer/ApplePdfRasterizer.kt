@@ -1,7 +1,7 @@
 package io.github.yuroyami.kitepdf.nativerenderer
 
 import io.github.yuroyami.kitepdf.PdfPage
-import io.github.yuroyami.kitepdf.core.render.Matrix as PdfMatrix
+import io.github.yuroyami.kitepdf.core.render.KiteMatrix
 import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.cinterop.alloc
 import kotlinx.cinterop.memScoped
@@ -86,7 +86,7 @@ public object ApplePdfRasterizer {
                     CGContextFillRect(cgContext, rect)
                 }
                 // Y-flip so PDF user-space matches the rendered image orientation.
-                val deviceCtm = PdfMatrix(scale, 0.0, 0.0, -scale, 0.0, page.height * scale)
+                val deviceCtm = KiteMatrix(scale, 0.0, 0.0, -scale, 0.0, page.height * scale)
                 val canvas = CoreGraphicsCanvas(cgContext)
                 page.renderTo(canvas, deviceCtm)
 
@@ -122,7 +122,3 @@ public object ApplePdfRasterizer {
         return data
     }
 }
-
-/** Old name from 0.0.2, when this only shipped for iOS. */
-@Deprecated("Renamed to ApplePdfRasterizer (now also macOS/tvOS)", ReplaceWith("ApplePdfRasterizer"))
-public typealias IosPdfRasterizer = ApplePdfRasterizer

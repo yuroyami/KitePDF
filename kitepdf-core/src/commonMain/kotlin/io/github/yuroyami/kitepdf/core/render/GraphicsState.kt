@@ -15,21 +15,21 @@ import io.github.yuroyami.kitepdf.core.font.PdfFont
  * [TextState] and lives only inside `BT…ET` blocks.
  */
 public data class GraphicsState(
-    val ctm: Matrix = Matrix.IDENTITY,
+    val ctm: KiteMatrix = KiteMatrix.IDENTITY,
     val strokeColor: RgbColor = RgbColor.BLACK,
     val fillColor: RgbColor = RgbColor.BLACK,
     val lineWidth: Double = 1.0,
     val text: TextState = TextState(),
     /** Current non-stroke colour space (`cs` operator). */
-    val fillColorSpace: ColorSpace = ColorSpace.DeviceGray,
+    val fillColorSpace: KiteColorSpace = KiteColorSpace.DeviceGray,
     /** Current stroke colour space (`CS` operator). */
-    val strokeColorSpace: ColorSpace = ColorSpace.DeviceGray,
+    val strokeColorSpace: KiteColorSpace = KiteColorSpace.DeviceGray,
     /** Per-pixel alpha multiplier for fills (ExtGState `/ca`), 0..1. */
     val fillAlpha: Double = 1.0,
     /** Per-pixel alpha multiplier for strokes (ExtGState `/CA`), 0..1. */
     val strokeAlpha: Double = 1.0,
     /** Blend mode applied to paints (ExtGState `/BM`). */
-    val blendMode: BlendMode = BlendMode.Normal,
+    val blendMode: KiteBlendMode = KiteBlendMode.Normal,
     /** Active soft mask (ExtGState `/SMask`); null when none. */
     val softMask: SoftMask? = null,
     /**
@@ -58,9 +58,9 @@ public data class TextState(
     val font: PdfFont? = null,
     val fontSize: Double = 12.0,
     /** Tm: maps text-space (glyph origin units) to user-space. */
-    val textMatrix: Matrix = Matrix.IDENTITY,
+    val textMatrix: KiteMatrix = KiteMatrix.IDENTITY,
     /** Tlm: starting matrix for the *next* line, separate from textMatrix. */
-    val lineMatrix: Matrix = Matrix.IDENTITY,
+    val lineMatrix: KiteMatrix = KiteMatrix.IDENTITY,
     /** Tc: extra spacing added after each glyph, in unscaled text-space. */
     val charSpacing: Double = 0.0,
     /** Tw: extra spacing added after each space (0x20) glyph. */

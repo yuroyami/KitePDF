@@ -1,7 +1,7 @@
 package io.github.yuroyami.kitepdf
 
 import io.github.yuroyami.kitepdf.core.ByteArrayBuilder
-import io.github.yuroyami.kitepdf.core.render.Matrix
+import io.github.yuroyami.kitepdf.core.render.KiteMatrix
 import io.github.yuroyami.kitepdf.render.PageRenderer
 import io.github.yuroyami.kitepdf.core.render.RecordingCanvas
 import kotlin.test.Test
@@ -15,7 +15,7 @@ class RenderTest {
         val pdf = singlePagePdf("BT /F1 18 Tf 100 700 Td (Hello) Tj ET")
         val doc = KitePDF.open(pdf)
         val canvas = RecordingCanvas()
-        doc.pages[0].renderTo(canvas, Matrix.IDENTITY)
+        doc.pages[0].renderTo(canvas, KiteMatrix.IDENTITY)
         val texts = canvas.calls.filterIsInstance<RecordingCanvas.Call.Glyphs>()
         assertEquals(1, texts.size)
         assertEquals("Hello", texts[0].text)
@@ -30,7 +30,7 @@ class RenderTest {
         val pdf = singlePagePdf("0.5 0.5 1 rg 10 20 100 200 re f")
         val doc = KitePDF.open(pdf)
         val canvas = RecordingCanvas()
-        doc.pages[0].renderTo(canvas, Matrix.IDENTITY)
+        doc.pages[0].renderTo(canvas, KiteMatrix.IDENTITY)
         val fills = canvas.calls.filterIsInstance<RecordingCanvas.Call.Fill>()
         assertEquals(1, fills.size)
         assertEquals(0.5, fills[0].color.r)
@@ -45,7 +45,7 @@ class RenderTest {
         val pdf = singlePagePdf("2 w 0 0 RG 0 0 m 100 100 l S")
         val doc = KitePDF.open(pdf)
         val canvas = RecordingCanvas()
-        doc.pages[0].renderTo(canvas, Matrix.IDENTITY)
+        doc.pages[0].renderTo(canvas, KiteMatrix.IDENTITY)
         val strokes = canvas.calls.filterIsInstance<RecordingCanvas.Call.Stroke>()
         assertEquals(1, strokes.size)
         assertEquals(2.0, strokes[0].lineWidth)
@@ -61,7 +61,7 @@ class RenderTest {
         )
         val doc = KitePDF.open(pdf)
         val canvas = RecordingCanvas()
-        doc.pages[0].renderTo(canvas, Matrix.IDENTITY)
+        doc.pages[0].renderTo(canvas, KiteMatrix.IDENTITY)
         val fills = canvas.calls.filterIsInstance<RecordingCanvas.Call.Fill>()
         assertEquals(2, fills.size)
         assertEquals(1.0, fills[0].color.r); assertEquals(0.0, fills[0].color.g)
@@ -75,7 +75,7 @@ class RenderTest {
         val pdf = singlePagePdf("BT /F1 12 Tf 50 700 Td (AB) Tj (CD) Tj ET")
         val doc = KitePDF.open(pdf)
         val canvas = RecordingCanvas()
-        doc.pages[0].renderTo(canvas, Matrix.IDENTITY)
+        doc.pages[0].renderTo(canvas, KiteMatrix.IDENTITY)
         val texts = canvas.calls.filterIsInstance<RecordingCanvas.Call.Glyphs>()
         assertEquals(2, texts.size)
         assertTrue(
@@ -92,7 +92,7 @@ class RenderTest {
         val pdf = singlePagePdf("BT /F1 1 Tf 20 0 0 20 100 700 Tm (A) Tj 0 -1 Td (B) Tj ET")
         val doc = KitePDF.open(pdf)
         val canvas = RecordingCanvas()
-        doc.pages[0].renderTo(canvas, Matrix.IDENTITY)
+        doc.pages[0].renderTo(canvas, KiteMatrix.IDENTITY)
         val texts = canvas.calls.filterIsInstance<RecordingCanvas.Call.Glyphs>()
         assertEquals(2, texts.size)
         assertEquals(700.0, texts[0].textToDevice.f, 1e-6)
@@ -107,7 +107,7 @@ class RenderTest {
         val pdf = singlePagePdf("BT /F1 1 Tf 10 0 0 10 50 500 Tm (AB) Tj (CD) Tj ET")
         val doc = KitePDF.open(pdf)
         val canvas = RecordingCanvas()
-        doc.pages[0].renderTo(canvas, Matrix.IDENTITY)
+        doc.pages[0].renderTo(canvas, KiteMatrix.IDENTITY)
         val texts = canvas.calls.filterIsInstance<RecordingCanvas.Call.Glyphs>()
         assertEquals(2, texts.size)
         assertTrue(
@@ -124,7 +124,7 @@ class RenderTest {
         val pdf = singlePagePdf("/DeviceRGB CS 1 0 0 SCN 0 0 m 100 100 l S")
         val doc = KitePDF.open(pdf)
         val canvas = RecordingCanvas()
-        doc.pages[0].renderTo(canvas, Matrix.IDENTITY)
+        doc.pages[0].renderTo(canvas, KiteMatrix.IDENTITY)
         val strokes = canvas.calls.filterIsInstance<RecordingCanvas.Call.Stroke>()
         assertEquals(1, strokes.size)
         assertEquals(1.0, strokes[0].color.r, 1e-6)

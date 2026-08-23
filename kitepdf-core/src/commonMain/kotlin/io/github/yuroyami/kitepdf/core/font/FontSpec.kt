@@ -1,7 +1,7 @@
 package io.github.yuroyami.kitepdf.core.font
 
 /** Broad typeface family a non-embedded font substitutes into. */
-public enum class FontFamily { Serif, SansSerif, Monospace }
+public enum class KiteFontFamily { Serif, SansSerif, Monospace }
 
 /**
  * Platform-neutral descriptor for picking a substitute system font when a
@@ -11,7 +11,7 @@ public enum class FontFamily { Serif, SansSerif, Monospace }
  * seam, so every document handler (PDF, EPUB, ...) feeds the same [FontSpec].
  */
 public data class FontSpec(
-    val family: FontFamily,
+    val family: KiteFontFamily,
     val bold: Boolean,
     val italic: Boolean,
     /** Original font name (e.g. "Helvetica-Bold"), for diagnostics only. */
@@ -19,6 +19,6 @@ public data class FontSpec(
 ) {
     public companion object {
         /** Neutral default: upright sans-serif. */
-        public val SansSerif: FontSpec = FontSpec(FontFamily.SansSerif, bold = false, italic = false)
+        public val SansSerif: FontSpec = FontSpec(KiteFontFamily.SansSerif, bold = false, italic = false)
     }
 }

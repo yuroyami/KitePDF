@@ -10,7 +10,7 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.use
 import io.github.yuroyami.kitepdf.core.KiteSearchHit
 import io.github.yuroyami.kitepdf.KitePDF
-import io.github.yuroyami.kitepdf.core.Rectangle
+import io.github.yuroyami.kitepdf.core.KiteRectangle
 import io.github.yuroyami.kitepdf.writer.PdfBuilder
 import kotlin.math.abs
 import kotlin.test.Test
@@ -18,8 +18,8 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 /**
- * T-33: [PdfViewState.searchHighlights] paints translucent quads over the
- * page, and [PdfOutlinePanel] composes and lists outline entries.
+ * [KiteDocViewState.searchHighlights] paints translucent quads over the
+ * page, and [KiteOutlinePanel] composes and lists outline entries.
  */
 class SearchHighlightSceneTest {
 
@@ -32,10 +32,10 @@ class SearchHighlightSceneTest {
     @Test
     fun highlight_quads_change_the_pixels_under_them() {
         val doc = KitePDF.open(redPagePdf())
-        lateinit var state: PdfViewState
+        lateinit var state: KiteDocViewState
         ImageComposeScene(width = 200, height = 200, density = Density(1f)) {
-            state = rememberPdfViewState(doc)
-            PdfView(state = state, modifier = Modifier.fillMaxSize(), layout = PdfLayout.SinglePage(0))
+            state = rememberKiteDocViewState(doc)
+            KiteDocView(state = state, modifier = Modifier.fillMaxSize(), layout = KiteDocLayout.SinglePage(0))
         }.use { scene ->
             val driver = SceneTestDriver(scene)
             // Wait for the raster crossfade to fully settle at both samples.
@@ -50,7 +50,7 @@ class SearchHighlightSceneTest {
             // One hit: display-space quad x 50..150, y 20..80 (y-min in
             // `bottom` per the display-rect convention).
             state.searchHighlights = listOf(
-                KiteSearchHit(0, listOf(Rectangle(left = 50.0, bottom = 20.0, right = 150.0, top = 80.0)), "x"),
+                KiteSearchHit(0, listOf(KiteRectangle(left = 50.0, bottom = 20.0, right = 150.0, top = 80.0)), "x"),
             )
             val after = driver.pumpUntil { px ->
                 abs(px[100, 50].green - insideBefore.green) > 0.1f
@@ -76,19 +76,19 @@ class SearchHighlightSceneTest {
     }
 
     /**
-     * A [PdfHighlight] paints in its own colour, and one without a colour is
-     * pixel-for-pixel what the plain [PdfViewState.searchHighlights] channel
+     * A [KiteHighlight] paints in its own colour, and one without a colour is
+     * pixel-for-pixel what the plain [KiteDocViewState.searchHighlights] channel
      * already produced.
      */
     @Test
     fun per_highlight_colour_overrides_the_default_and_null_matches_it() {
         val doc = KitePDF.open(redPagePdf())
-        val quad = Rectangle(left = 50.0, bottom = 20.0, right = 150.0, top = 80.0)
+        val quad = KiteRectangle(left = 50.0, bottom = 20.0, right = 150.0, top = 80.0)
         val hit = KiteSearchHit(0, listOf(quad), "x")
-        lateinit var state: PdfViewState
+        lateinit var state: KiteDocViewState
         ImageComposeScene(width = 200, height = 200, density = Density(1f)) {
-            state = rememberPdfViewState(doc)
-            PdfView(state = state, modifier = Modifier.fillMaxSize(), layout = PdfLayout.SinglePage(0))
+            state = rememberKiteDocViewState(doc)
+            KiteDocView(state = state, modifier = Modifier.fillMaxSize(), layout = KiteDocLayout.SinglePage(0))
         }.use { scene ->
             val driver = SceneTestDriver(scene)
             val plain = driver.pumpUntil { px ->
@@ -108,7 +108,7 @@ class SearchHighlightSceneTest {
             //    frame the old channel left behind.
             state.searchHighlights = emptyList()
             driver.pumpUntil { px -> abs(px[100, 50].green - plain.green) < 0.05f }
-            state.highlights = listOf(PdfHighlight(hit))
+            state.highlights = listOf(KiteHighlight(hit))
             val inherited = driver.pumpUntil { px -> abs(px[100, 50].green - plain.green) > 0.1f }
                 .toComposeImageBitmap().toPixelMap()[100, 50]
             assertEquals(default.red, inherited.red, 0.01f, "colourless highlight != searchHighlight (red)")
@@ -116,16 +116,16 @@ class SearchHighlightSceneTest {
             assertEquals(default.blue, inherited.blue, 0.01f, "colourless highlight != searchHighlight (blue)")
 
             // 3. Its own colour: opaque blue over red paper.
-            state.highlights = listOf(PdfHighlight(hit, color = Color(0xFF0000FF)))
+            state.highlights = listOf(KiteHighlight(hit, color = Color(0xFF0000FF)))
             val tinted = driver.pumpUntil { px -> px[100, 50].blue > 0.9f }
                 .toComposeImageBitmap().toPixelMap()[100, 50]
             assertTrue(tinted.blue > 0.9f && tinted.red < 0.1f, "per-highlight colour ignored (got $tinted)")
 
             // Two highlights, two colours, in one pass.
             state.highlights = listOf(
-                PdfHighlight(hit, color = Color(0xFF0000FF)),
-                PdfHighlight(
-                    KiteSearchHit(0, listOf(Rectangle(left = 50.0, bottom = 120.0, right = 150.0, top = 180.0)), "y"),
+                KiteHighlight(hit, color = Color(0xFF0000FF)),
+                KiteHighlight(
+                    KiteSearchHit(0, listOf(KiteRectangle(left = 50.0, bottom = 120.0, right = 150.0, top = 180.0)), "y"),
                     color = Color(0xFF00FF00),
                 ),
             )
@@ -150,11 +150,11 @@ class SearchHighlightSceneTest {
         val doc = KitePDF.open(redPagePdf())
         // Text quad x 50..150, y 20..80. Marker: 2% of the page width, half a
         // width off the edge, so 194..198 in a 200px slot, y 20..80.
-        val hit = KiteSearchHit(0, listOf(Rectangle(left = 50.0, bottom = 20.0, right = 150.0, top = 80.0)), "x")
-        lateinit var state: PdfViewState
+        val hit = KiteSearchHit(0, listOf(KiteRectangle(left = 50.0, bottom = 20.0, right = 150.0, top = 80.0)), "x")
+        lateinit var state: KiteDocViewState
         ImageComposeScene(width = 200, height = 200, density = Density(1f)) {
-            state = rememberPdfViewState(doc)
-            PdfView(state = state, modifier = Modifier.fillMaxSize(), layout = PdfLayout.SinglePage(0))
+            state = rememberKiteDocViewState(doc)
+            KiteDocView(state = state, modifier = Modifier.fillMaxSize(), layout = KiteDocLayout.SinglePage(0))
         }.use { scene ->
             val driver = SceneTestDriver(scene)
             // Wait for the real red raster, not the white placeholder under it:
@@ -163,13 +163,13 @@ class SearchHighlightSceneTest {
 
             // Off by default: the same highlight without the flag paints nothing
             // in the margin.
-            state.highlights = listOf(PdfHighlight(hit, color = Color(0x660000FF)))
+            state.highlights = listOf(KiteHighlight(hit, color = Color(0x660000FF)))
             val noMarker = driver.pumpUntil { px -> px[100, 50].blue > 0.2f }
                 .toComposeImageBitmap().toPixelMap()
             assertTrue(noMarker[196, 50].red > 0.95f, "no marker without the flag (${noMarker[196, 50]})")
 
             state.highlights = listOf(
-                PdfHighlight(hit, color = Color(0x660000FF), edgeMarker = true, edgeMarkerColor = Color(0xFF00FF00)),
+                KiteHighlight(hit, color = Color(0x660000FF), edgeMarker = true, edgeMarkerColor = Color(0xFF00FF00)),
             )
             val px = driver.pumpUntil { p -> p[196, 50].green > 0.9f }.toComposeImageBitmap().toPixelMap()
 
@@ -188,19 +188,19 @@ class SearchHighlightSceneTest {
     @Test
     fun edge_marker_scales_with_the_rendered_page() {
         val doc = KitePDF.open(redPagePdf())
-        val hit = KiteSearchHit(0, listOf(Rectangle(left = 50.0, bottom = 20.0, right = 150.0, top = 80.0)), "x")
-        lateinit var state: PdfViewState
+        val hit = KiteSearchHit(0, listOf(KiteRectangle(left = 50.0, bottom = 20.0, right = 150.0, top = 80.0)), "x")
+        lateinit var state: KiteDocViewState
         // 400x400 viewport: the 200pt page renders at 2x, so the marker band
         // moves from 194..198 to 388..396 and the highlight band to y 40..160.
         ImageComposeScene(width = 400, height = 400, density = Density(1f)) {
-            state = rememberPdfViewState(doc)
-            PdfView(state = state, modifier = Modifier.fillMaxSize(), layout = PdfLayout.SinglePage(0))
+            state = rememberKiteDocViewState(doc)
+            KiteDocView(state = state, modifier = Modifier.fillMaxSize(), layout = KiteDocLayout.SinglePage(0))
         }.use { scene ->
             val driver = SceneTestDriver(scene)
             driver.pumpUntil { px -> px[392, 100].red > 0.95f && px[196, 100].green < 0.05f }
             // A red fill over red paper, so the only green anywhere is the marker.
             state.highlights = listOf(
-                PdfHighlight(hit, color = Color(0x66FF0000), edgeMarker = true, edgeMarkerColor = Color(0xFF00FF00)),
+                KiteHighlight(hit, color = Color(0x66FF0000), edgeMarker = true, edgeMarkerColor = Color(0xFF00FF00)),
             )
             val px = driver.pumpUntil { p -> p[392, 100].green > 0.9f }.toComposeImageBitmap().toPixelMap()
             assertTrue(px[392, 100].green > 0.9f, "marker did not scale with the page (${px[392, 100]})")
@@ -233,10 +233,10 @@ class SearchHighlightSceneTest {
         val doc = KitePDF.open(sb.toString().encodeToByteArray())
         assertTrue(doc.outline.single().pageIndex == 1)
 
-        lateinit var state: PdfViewState
+        lateinit var state: KiteDocViewState
         ImageComposeScene(width = 200, height = 300, density = Density(1f)) {
-            state = rememberPdfViewState(doc)
-            PdfOutlinePanel(state = state, modifier = Modifier.fillMaxSize())
+            state = rememberKiteDocViewState(doc)
+            KiteOutlinePanel(state = state, modifier = Modifier.fillMaxSize())
         }.use { scene ->
             // Composes and renders without crashing; the entry paints pixels.
             SceneTestDriver(scene).pumpUntil { true }

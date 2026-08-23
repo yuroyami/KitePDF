@@ -6,7 +6,7 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
- * T-63: anchors, internal links and href-to-page mapping. `<a href>` runs
+ * Anchors, internal links and href-to-page mapping. `<a href>` runs
  * surface as display-space [EpubLink] rects on their pages; element ids (and
  * legacy `<a name>`) resolve to exact pages via `pageIndexOfHref`.
  */

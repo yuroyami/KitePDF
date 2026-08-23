@@ -10,7 +10,7 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 /**
- * T-42 acceptance: the hand-written Type3 fixture (square + triangle glyph
+ * Acceptance: the hand-written Type3 fixture (square + triangle glyph
  * procs, d1-uncolored) renders within budget of mutool, and text extraction
  * still returns the /Encoding-mapped characters.
  */
@@ -33,7 +33,7 @@ class Type3OracleTest {
         val reference = MuPdfOracle.render(pdf, page = 1, dpi = 72)
         assertNotNull(reference)
         val mae = ImageDiff.compare(kite, reference).score
-        println("[T-42] type3 vs mutool: MAE=${(mae * 10000).toInt() / 10000.0}")
+        println("type3 vs mutool: MAE=${(mae * 10000).toInt() / 10000.0}")
         assertTrue(mae <= 0.03, "Type3 MAE $mae must be <= 0.03")
     }
 

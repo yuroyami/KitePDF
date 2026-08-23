@@ -4,7 +4,7 @@ import android.graphics.Bitmap
 import android.graphics.Canvas as AndroidCanvas
 import android.graphics.Color
 import io.github.yuroyami.kitepdf.PdfPage
-import io.github.yuroyami.kitepdf.core.render.Matrix as PdfMatrix
+import io.github.yuroyami.kitepdf.core.render.KiteMatrix
 
 /**
  * Headless rendering on Android. Produces an ARGB_8888 [Bitmap] sized to
@@ -31,7 +31,7 @@ public object AndroidPdfBitmapRenderer {
         val canvas = AndroidCanvas(bm)
         canvas.drawColor(background)
         val pdfCanvas = AndroidNativeCanvas(canvas)
-        val deviceCtm = PdfMatrix(scale, 0.0, 0.0, -scale, 0.0, page.height * scale)
+        val deviceCtm = KiteMatrix(scale, 0.0, 0.0, -scale, 0.0, page.height * scale)
         page.renderTo(pdfCanvas, deviceCtm)
         return bm
     }

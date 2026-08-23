@@ -15,7 +15,7 @@ class GlyphOutlineTest {
     @Test
     fun empty_glyph_yields_empty_path() {
         val outline = GlyphOutline(emptyList(), GlyphBbox(0, 0, 0, 0))
-        val path = outline.toPdfPath()
+        val path = outline.toKitePath()
         assertTrue(path.isEmpty())
     }
 
@@ -31,7 +31,7 @@ class GlyphOutlineTest {
             ))),
             GlyphBbox(0, 0, 100, 100),
         )
-        val path = outline.toPdfPath()
+        val path = outline.toKitePath()
         // Expect MoveTo + 3 LineTo (or 4 if the loop emits one extra) + Close.
         val moves = path.segments.filterIsInstance<KitePath.Segment.MoveTo>()
         val lines = path.segments.filterIsInstance<KitePath.Segment.LineTo>()
@@ -54,7 +54,7 @@ class GlyphOutlineTest {
             ))),
             GlyphBbox(0, 0, 100, 100),
         )
-        val path = outline.toPdfPath()
+        val path = outline.toKitePath()
         val quads = path.segments.filterIsInstance<KitePath.Segment.QuadTo>()
         assertTrue(quads.isNotEmpty(), "Expected ≥1 QuadTo for off-curve point")
         val quad = quads.first()
@@ -76,7 +76,7 @@ class GlyphOutlineTest {
             ))),
             GlyphBbox(0, 0, 100, 100),
         )
-        val path = outline.toPdfPath()
+        val path = outline.toKitePath()
         val quads = path.segments.filterIsInstance<KitePath.Segment.QuadTo>()
         assertTrue(quads.size >= 2, "Expected ≥2 QuadTos with implied midpoint, got ${quads.size}")
         // Second quad's start (= first quad's end) should land at the midpoint

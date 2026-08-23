@@ -16,7 +16,7 @@ class KiteSelectionTest {
     private fun fixture(): KiteStructuredText {
         fun line(text: String, x: Double, yTop: Double) = KiteTextLine(
             text = text,
-            bounds = Rectangle(left = x, bottom = yTop, right = x + text.length * 10.0, top = yTop + 10.0),
+            bounds = KiteRectangle(left = x, bottom = yTop, right = x + text.length * 10.0, top = yTop + 10.0),
             charEdges = DoubleArray(text.length + 1) { x + it * 10.0 },
         )
         return KiteStructuredText(

@@ -9,7 +9,7 @@ import io.github.yuroyami.kitepdf.core.ByteArrayBuilder
  * tokenizes the input; every 64 Ki tokens form a block, and each block is
  * emitted as the cheapest of the three RFC encodings: stored (BTYPE=00),
  * fixed Huffman (BTYPE=01) or dynamic Huffman (BTYPE=10) with code-length
- * tables built from the block's actual token frequencies (T-11). Dynamic
+ * tables built from the block's actual token frequencies. Dynamic
  * blocks bring the pure encoder's output close to zlib's; on JVM/Android the
  * [PlatformFlate] fast path bypasses this entirely, so this is the ratio
  * story for Apple/JS/Wasm/native writers.

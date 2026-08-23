@@ -14,7 +14,7 @@ import platform.posix.memcpy
  * sugar over [PdfDocument.open]; there is no incremental file reader).
  *
  * @throws PdfFormatException when the file can't be read.
- * @throws WrongPasswordException when the document is encrypted and
+ * @throws KiteWrongPasswordException when the document is encrypted and
  *   [password] doesn't authenticate.
  */
 @OptIn(ExperimentalForeignApi::class)

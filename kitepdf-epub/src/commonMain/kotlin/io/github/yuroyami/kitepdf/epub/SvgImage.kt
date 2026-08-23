@@ -1,8 +1,8 @@
 package io.github.yuroyami.kitepdf.epub
 
 import io.github.yuroyami.kitepdf.epub.css.CssValues
-import io.github.yuroyami.kitepdf.core.render.BlendMode
-import io.github.yuroyami.kitepdf.core.render.Matrix
+import io.github.yuroyami.kitepdf.core.render.KiteBlendMode
+import io.github.yuroyami.kitepdf.core.render.KiteMatrix
 import io.github.yuroyami.kitepdf.core.render.KiteCanvas
 import io.github.yuroyami.kitepdf.core.render.KitePath
 import io.github.yuroyami.kitepdf.core.render.RgbColor
@@ -36,11 +36,11 @@ internal class SvgImage private constructor(
 ) {
 
     /** Paint the SVG into [canvas]; [ctm] maps the (0,0)-(width,height) viewport to device. */
-    fun render(canvas: KiteCanvas, ctm: Matrix) {
+    fun render(canvas: KiteCanvas, ctm: KiteMatrix) {
         val vb = viewBox
         val base = if (vb != null && vb[2] > 0 && vb[3] > 0) {
             // viewBox coords -> viewport: translate(-min) then scale(size/vb).
-            compose(ctm, compose(Matrix.scaling(width / vb[2], height / vb[3]), Matrix.translation(-vb[0], -vb[1])))
+            compose(ctm, compose(KiteMatrix.scaling(width / vb[2], height / vb[3]), KiteMatrix.translation(-vb[0], -vb[1])))
         } else ctm
         walk(root, base, Paint(), canvas)
     }
@@ -57,7 +57,7 @@ internal class SvgImage private constructor(
     // The canvas travels as a parameter, exactly like ctm and Paint: a field
     // here made render() non-reentrant, so two concurrent renders of the same
     // SvgImage hijacked each other's destination and silently dropped shapes.
-    private fun walk(el: HtmlNode.Element, parentCtm: Matrix, parent: Paint, canvas: KiteCanvas) {
+    private fun walk(el: HtmlNode.Element, parentCtm: KiteMatrix, parent: Paint, canvas: KiteCanvas) {
         val ctm = el.attrs["transform"]?.let { compose(parentCtm, parseTransform(it)) } ?: parentCtm
         val paint = resolvePaint(el.attrs, parent)
         when (el.tag.lowercase()) {
@@ -75,11 +75,11 @@ internal class SvgImage private constructor(
         }
     }
 
-    private fun paintShape(path: KitePath, ctm: Matrix, paint: Paint, canvas: KiteCanvas, forceStroke: Boolean = false) {
+    private fun paintShape(path: KitePath, ctm: KiteMatrix, paint: Paint, canvas: KiteCanvas, forceStroke: Boolean = false) {
         if (path.segments.isEmpty()) return
-        paint.fill?.let { if (!forceStroke) canvas.fillPath(path, ctm, it, paint.evenOdd, paint.opacity, BlendMode.Normal) }
+        paint.fill?.let { if (!forceStroke) canvas.fillPath(path, ctm, it, paint.evenOdd, paint.opacity, KiteBlendMode.Normal) }
         val sc = paint.stroke ?: if (forceStroke) RgbColor.BLACK else null
-        sc?.let { canvas.strokePath(path, ctm, it, paint.strokeW, paint.opacity, BlendMode.Normal) }
+        sc?.let { canvas.strokePath(path, ctm, it, paint.strokeW, paint.opacity, KiteBlendMode.Normal) }
     }
 
     private fun resolvePaint(a: Map<String, String>, p: Paint): Paint {
@@ -216,7 +216,7 @@ internal class SvgImage private constructor(
         }
 
         // Compose A ∘ B (apply B first, then A) in PDF affine convention.
-        private fun compose(a: Matrix, b: Matrix): Matrix = Matrix(
+        private fun compose(a: KiteMatrix, b: KiteMatrix): KiteMatrix = KiteMatrix(
             a.a * b.a + a.c * b.b,
             a.b * b.a + a.d * b.b,
             a.a * b.c + a.c * b.d,
@@ -225,8 +225,8 @@ internal class SvgImage private constructor(
             a.b * b.e + a.d * b.f + a.f,
         )
 
-        private fun parseTransform(s: String): Matrix {
-            var m = Matrix.IDENTITY
+        private fun parseTransform(s: String): KiteMatrix {
+            var m = KiteMatrix.IDENTITY
             var i = 0
             while (i < s.length) {
                 val open = s.indexOf('(', i)
@@ -236,17 +236,17 @@ internal class SvgImage private constructor(
                 if (close < 0) break
                 val args = numbers(s.substring(open + 1, close))
                 val t = when (name) {
-                    "translate" -> Matrix.translation(args.getOrElse(0) { 0.0 }, args.getOrElse(1) { 0.0 })
-                    "scale" -> Matrix.scaling(args.getOrElse(0) { 1.0 }, args.getOrElse(1) { args.getOrElse(0) { 1.0 } })
+                    "translate" -> KiteMatrix.translation(args.getOrElse(0) { 0.0 }, args.getOrElse(1) { 0.0 })
+                    "scale" -> KiteMatrix.scaling(args.getOrElse(0) { 1.0 }, args.getOrElse(1) { args.getOrElse(0) { 1.0 } })
                     "rotate" -> {
                         val th = (args.getOrElse(0) { 0.0 }) * PI / 180.0
-                        val rot = Matrix(cos(th), sin(th), -sin(th), cos(th), 0.0, 0.0)
-                        if (args.size >= 3) compose(Matrix.translation(args[1], args[2]), compose(rot, Matrix.translation(-args[1], -args[2]))) else rot
+                        val rot = KiteMatrix(cos(th), sin(th), -sin(th), cos(th), 0.0, 0.0)
+                        if (args.size >= 3) compose(KiteMatrix.translation(args[1], args[2]), compose(rot, KiteMatrix.translation(-args[1], -args[2]))) else rot
                     }
-                    "matrix" -> if (args.size >= 6) Matrix(args[0], args[1], args[2], args[3], args[4], args[5]) else Matrix.IDENTITY
-                    "skewx", "skewX" -> { val t = kotlin.math.tan(args.getOrElse(0) { 0.0 } * PI / 180.0); Matrix(1.0, 0.0, t, 1.0, 0.0, 0.0) }
-                    "skewy", "skewY" -> { val t = kotlin.math.tan(args.getOrElse(0) { 0.0 } * PI / 180.0); Matrix(1.0, t, 0.0, 1.0, 0.0, 0.0) }
-                    else -> Matrix.IDENTITY
+                    "matrix" -> if (args.size >= 6) KiteMatrix(args[0], args[1], args[2], args[3], args[4], args[5]) else KiteMatrix.IDENTITY
+                    "skewx", "skewX" -> { val t = kotlin.math.tan(args.getOrElse(0) { 0.0 } * PI / 180.0); KiteMatrix(1.0, 0.0, t, 1.0, 0.0, 0.0) }
+                    "skewy", "skewY" -> { val t = kotlin.math.tan(args.getOrElse(0) { 0.0 } * PI / 180.0); KiteMatrix(1.0, t, 0.0, 1.0, 0.0, 0.0) }
+                    else -> KiteMatrix.IDENTITY
                 }
                 m = compose(m, t)
                 i = close + 1

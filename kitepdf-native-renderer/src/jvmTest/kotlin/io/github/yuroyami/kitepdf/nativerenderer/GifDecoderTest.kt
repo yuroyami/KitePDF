@@ -1,6 +1,6 @@
 package io.github.yuroyami.kitepdf.nativerenderer
 
-import io.github.yuroyami.kitepdf.core.render.ImageXObject
+import io.github.yuroyami.kitepdf.core.render.KiteImageData
 import io.github.yuroyami.kitepdf.core.render.toRgbaBytes
 import java.awt.image.BufferedImage
 import java.io.ByteArrayInputStream
@@ -13,7 +13,7 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 /**
- * Verifies the pure-Kotlin core GIF path ([ImageXObject.fromEncodedImage] →
+ * Verifies the pure-Kotlin core GIF path ([KiteImageData.fromEncodedImage] →
  * `GifDecoder`) against the JVM's `ImageIO` GIF decoder as the oracle. GIF is
  * palette-exact, so the decoded RGB must match ImageIO's output exactly.
  */
@@ -37,9 +37,9 @@ class GifDecoderTest {
     fun gif_matches_imageio() {
         val w = 40; val h = 24
         val gif = encodeGif(buildIndexed(w, h))
-        val iox = ImageXObject.fromEncodedImage(gif)
+        val iox = KiteImageData.fromEncodedImage(gif)
         assertNotNull(iox, "GIF decodes")
-        assertEquals(ImageXObject.Kind.RAW, iox.kind, "GIF decodes to a RAW image in core")
+        assertEquals(KiteImageData.Kind.RAW, iox.kind, "GIF decodes to a RAW image in core")
         assertEquals(w, iox.width); assertEquals(h, iox.height)
         val rgba = iox.toRgbaBytes()
         assertNotNull(rgba)
@@ -66,7 +66,7 @@ class GifDecoderTest {
     @Test
     fun gif_is_not_blank() {
         val gif = encodeGif(buildIndexed(20, 20))
-        val rgba = ImageXObject.fromEncodedImage(gif)!!.toRgbaBytes()!!
+        val rgba = KiteImageData.fromEncodedImage(gif)!!.toRgbaBytes()!!
         val distinct = HashSet<Int>()
         var o = 0
         repeat(20 * 20) { distinct.add((rgba[o].toInt() and 0xFF) or ((rgba[o + 1].toInt() and 0xFF) shl 8) or ((rgba[o + 2].toInt() and 0xFF) shl 16)); o += 4 }

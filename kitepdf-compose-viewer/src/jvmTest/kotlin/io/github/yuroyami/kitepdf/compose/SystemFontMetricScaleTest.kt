@@ -10,11 +10,11 @@ import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.font.createFontFamilyResolver
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
-import io.github.yuroyami.kitepdf.core.font.FontFamily
+import io.github.yuroyami.kitepdf.core.font.KiteFontFamily
 import io.github.yuroyami.kitepdf.core.font.FontSpec
 import io.github.yuroyami.kitepdf.core.font.TextGlyph
-import io.github.yuroyami.kitepdf.core.render.BlendMode
-import io.github.yuroyami.kitepdf.core.render.Matrix
+import io.github.yuroyami.kitepdf.core.render.KiteBlendMode
+import io.github.yuroyami.kitepdf.core.render.KiteMatrix
 import io.github.yuroyami.kitepdf.core.render.RgbColor
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -69,22 +69,22 @@ class SystemFontMetricScaleTest {
                     fontSize = fontSize,
                     unitsPerEm = 1_000,
                     hasOutlines = false,
-                    fontSpec = FontSpec(FontFamily.Serif, bold = false, italic = false),
-                    textToDevice = Matrix(1.0, 0.0, 0.0, 1.0, 10.0, 60.0),
+                    fontSpec = FontSpec(KiteFontFamily.Serif, bold = false, italic = false),
+                    textToDevice = KiteMatrix(1.0, 0.0, 0.0, 1.0, 10.0, 60.0),
                     color = RgbColor(0.0, 0.0, 0.0),
                     alpha = 1.0,
-                    blendMode = BlendMode.Normal,
+                    blendMode = KiteBlendMode.Normal,
                 )
                 ComposeCanvas(this, textMeasurer).drawGlyphs(
                     glyphs = glyphs("IIII", advanceWidth = 250.0),
                     fontSize = fontSize,
                     unitsPerEm = 1_000,
                     hasOutlines = false,
-                    fontSpec = FontSpec(FontFamily.Serif, bold = false, italic = false),
-                    textToDevice = Matrix(1.0, 0.0, 0.0, 1.0, secondOrigin, 60.0),
+                    fontSpec = FontSpec(KiteFontFamily.Serif, bold = false, italic = false),
+                    textToDevice = KiteMatrix(1.0, 0.0, 0.0, 1.0, secondOrigin, 60.0),
                     color = RgbColor(0.85, 0.0, 0.0),
                     alpha = 1.0,
-                    blendMode = BlendMode.Normal,
+                    blendMode = KiteBlendMode.Normal,
                 )
             }
 

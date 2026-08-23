@@ -9,7 +9,7 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
- * T-25: the format-neutral [KiteDocument] surface on [PdfDocument]. Every
+ * The format-neutral [KiteDocument] surface on [PdfDocument]. Every
  * assertion goes through a `KiteDocument`-typed variable: no downcast to
  * read a title or walk the outline with resolved page indices.
  */

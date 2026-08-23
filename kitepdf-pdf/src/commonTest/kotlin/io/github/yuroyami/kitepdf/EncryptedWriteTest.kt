@@ -1,7 +1,7 @@
 package io.github.yuroyami.kitepdf
 
 import io.github.yuroyami.kitepdf.core.ByteArrayBuilder
-import io.github.yuroyami.kitepdf.core.WrongPasswordException
+import io.github.yuroyami.kitepdf.core.KiteWrongPasswordException
 import io.github.yuroyami.kitepdf.crypto.Md5
 import io.github.yuroyami.kitepdf.crypto.Rc4
 import io.github.yuroyami.kitepdf.writer.PdfBuilder
@@ -16,7 +16,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 /**
- * T-83: creating and editing encrypted PDFs. [PdfBuilder.encrypt] mints
+ * Creating and editing encrypted PDFs. [PdfBuilder.encrypt] mints
  * V5/AES-256 R6 documents; [PdfDocument.edit] re-encrypts staged objects for
  * AES documents and refuses RC4. Randomness is seeded throughout so the
  * output bytes are reproducible.
@@ -50,10 +50,10 @@ class EncryptedWriteTest {
 
     @Test
     fun wrong_or_missing_password_is_rejected() {
-        assertFailsWith<WrongPasswordException> {
+        assertFailsWith<KiteWrongPasswordException> {
             PdfDocument.open(buildEncrypted(), password = "wrong".encodeToByteArray())
         }
-        assertFailsWith<WrongPasswordException> {
+        assertFailsWith<KiteWrongPasswordException> {
             PdfDocument.open(buildEncrypted())
         }
     }
@@ -102,7 +102,7 @@ class EncryptedWriteTest {
         }
         val edited = editor.saveIncremental()
 
-        assertFailsWith<WrongPasswordException>("the edited file must still require the password") {
+        assertFailsWith<KiteWrongPasswordException>("the edited file must still require the password") {
             PdfDocument.open(edited)
         }
         val re = PdfDocument.open(edited, password = userPw.encodeToByteArray())

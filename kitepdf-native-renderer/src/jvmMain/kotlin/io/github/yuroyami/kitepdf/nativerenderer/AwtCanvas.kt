@@ -1,13 +1,13 @@
 package io.github.yuroyami.kitepdf.nativerenderer
 
 import io.github.yuroyami.kitepdf.core.render.paintComplexShading
-import io.github.yuroyami.kitepdf.core.Rectangle
-import io.github.yuroyami.kitepdf.core.font.FontFamily
+import io.github.yuroyami.kitepdf.core.KiteRectangle
+import io.github.yuroyami.kitepdf.core.font.KiteFontFamily
 import io.github.yuroyami.kitepdf.core.font.FontSpec
 import io.github.yuroyami.kitepdf.core.font.TextGlyph
-import io.github.yuroyami.kitepdf.core.render.BlendMode as PdfBlendMode
-import io.github.yuroyami.kitepdf.core.render.ImageXObject
-import io.github.yuroyami.kitepdf.core.render.Matrix as PdfMatrix
+import io.github.yuroyami.kitepdf.core.render.KiteBlendMode
+import io.github.yuroyami.kitepdf.core.render.KiteImageData
+import io.github.yuroyami.kitepdf.core.render.KiteMatrix
 import io.github.yuroyami.kitepdf.core.render.KiteCanvas
 import io.github.yuroyami.kitepdf.core.render.KitePath
 import io.github.yuroyami.kitepdf.core.render.KiteShading
@@ -62,7 +62,7 @@ public class AwtCanvas(private val g: Graphics2D) : KiteCanvas {
         g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON)
     }
 
-    override fun beginPage(widthPt: Double, heightPt: Double, deviceCtm: PdfMatrix) {
+    override fun beginPage(widthPt: Double, heightPt: Double, deviceCtm: KiteMatrix) {
         // The host owns the Graphics; we don't clear.
         saveStack.clear()
         openLayers = 0
@@ -74,8 +74,8 @@ public class AwtCanvas(private val g: Graphics2D) : KiteCanvas {
     }
 
     override fun fillPath(
-        path: KitePath, ctm: PdfMatrix, color: RgbColor, evenOdd: Boolean,
-        alpha: Double, blendMode: PdfBlendMode,
+        path: KitePath, ctm: KiteMatrix, color: RgbColor, evenOdd: Boolean,
+        alpha: Double, blendMode: KiteBlendMode,
     ) {
         val awt = toAwtPath(path, ctm).apply {
             windingRule = if (evenOdd) Path2D.WIND_EVEN_ODD else Path2D.WIND_NON_ZERO
@@ -87,8 +87,8 @@ public class AwtCanvas(private val g: Graphics2D) : KiteCanvas {
     }
 
     override fun strokePath(
-        path: KitePath, ctm: PdfMatrix, color: RgbColor, lineWidth: Double,
-        alpha: Double, blendMode: PdfBlendMode,
+        path: KitePath, ctm: KiteMatrix, color: RgbColor, lineWidth: Double,
+        alpha: Double, blendMode: KiteBlendMode,
         dashArray: List<Double>?, dashPhase: Double,
         lineCap: Int, lineJoin: Int, miterLimit: Double,
     ) {
@@ -120,10 +120,10 @@ public class AwtCanvas(private val g: Graphics2D) : KiteCanvas {
         unitsPerEm: Int,
         hasOutlines: Boolean,
         fontSpec: FontSpec,
-        textToDevice: PdfMatrix,
+        textToDevice: KiteMatrix,
         color: RgbColor,
         alpha: Double,
-        blendMode: PdfBlendMode,
+        blendMode: KiteBlendMode,
     ) {
         if (glyphs.isEmpty()) return
         if (!hasOutlines) {
@@ -143,8 +143,8 @@ public class AwtCanvas(private val g: Graphics2D) : KiteCanvas {
                     // outline(font units) → ×unitScale → +penX (text space) → finalMatrix (→ device).
                     // concat(other) applies `other` first, so the scale must be the LAST concat.
                     val glyphMatrix = textToDevice
-                        .concat(PdfMatrix.translation(penX + glyph.xOffset * unitScale, glyph.yOffset * unitScale))
-                        .concat(PdfMatrix(unitScale, 0.0, 0.0, unitScale, 0.0, 0.0))
+                        .concat(KiteMatrix.translation(penX + glyph.xOffset * unitScale, glyph.yOffset * unitScale))
+                        .concat(KiteMatrix(unitScale, 0.0, 0.0, unitScale, 0.0, 0.0))
                     val awt = toAwtPath(outline, glyphMatrix).apply { windingRule = Path2D.WIND_NON_ZERO }
                     g.fill(awt)
                     drewAny = true
@@ -170,10 +170,10 @@ public class AwtCanvas(private val g: Graphics2D) : KiteCanvas {
         glyphs: List<TextGlyph>,
         fontSize: Double,
         fontSpec: FontSpec,
-        textMatrix: PdfMatrix,
+        textMatrix: KiteMatrix,
         color: RgbColor,
         alpha: Double,
-        blendMode: PdfBlendMode,
+        blendMode: KiteBlendMode,
     ) {
         val text = glyphs.joinToString("") { it.text }
         if (text.isBlank()) return
@@ -217,9 +217,9 @@ public class AwtCanvas(private val g: Graphics2D) : KiteCanvas {
     /** Map a non-embedded PDF font to a JVM logical font (mirrors ComposeCanvas's family/style choice). */
     private fun systemFontFor(spec: FontSpec, sizePx: Float): Font {
         val family = when (spec.family) {
-            FontFamily.Serif -> Font.SERIF
-            FontFamily.Monospace -> Font.MONOSPACED
-            FontFamily.SansSerif -> Font.SANS_SERIF
+            KiteFontFamily.Serif -> Font.SERIF
+            KiteFontFamily.Monospace -> Font.MONOSPACED
+            KiteFontFamily.SansSerif -> Font.SANS_SERIF
         }
         var style = Font.PLAIN
         if (spec.bold) style = style or Font.BOLD
@@ -228,8 +228,8 @@ public class AwtCanvas(private val g: Graphics2D) : KiteCanvas {
     }
 
     override fun fillShading(
-        shading: KiteShading, ctm: PdfMatrix, clipPath: KitePath?,
-        alpha: Double, blendMode: PdfBlendMode,
+        shading: KiteShading, ctm: KiteMatrix, clipPath: KitePath?,
+        alpha: Double, blendMode: KiteBlendMode,
     ) {
         if (paintComplexShading(shading, ctm, clipPath, alpha, blendMode)) return
         val stops = shading.sampleStops(32) ?: return
@@ -299,7 +299,7 @@ public class AwtCanvas(private val g: Graphics2D) : KiteCanvas {
                 )
             }
             is KiteShading.Unsupported -> return
-            else -> return // T-40 types already handled by paintComplexShading
+            else -> return // complex shading types already handled by paintComplexShading
         }
 
         val extent = extentClip
@@ -382,7 +382,7 @@ public class AwtCanvas(private val g: Graphics2D) : KiteCanvas {
         return area
     }
 
-    override fun drawImage(image: ImageXObject, ctm: PdfMatrix, alpha: Double) {
+    override fun drawImage(image: KiteImageData, ctm: KiteMatrix, alpha: Double) {
         val bitmap = decodeImage(image) ?: return drawPlaceholder(ctm)
         val saved = g.transform
         try {
@@ -398,7 +398,7 @@ public class AwtCanvas(private val g: Graphics2D) : KiteCanvas {
                 translate(0.0, 1.0)
                 scale(1.0 / bitmap.width, -1.0 / bitmap.height)
             }
-            withComposite(PdfBlendMode.Normal, alpha) {
+            withComposite(KiteBlendMode.Normal, alpha) {
                 g.drawImage(bitmap, drawOp, null)
             }
         } finally {
@@ -406,9 +406,9 @@ public class AwtCanvas(private val g: Graphics2D) : KiteCanvas {
         }
     }
 
-    private fun decodeImage(image: ImageXObject): BufferedImage? = try {
+    private fun decodeImage(image: KiteImageData): BufferedImage? = try {
         when (image.kind) {
-            ImageXObject.Kind.JPEG, ImageXObject.Kind.JPEG2000 -> decodeJpeg(image.encodedBytes)
+            KiteImageData.Kind.JPEG, KiteImageData.Kind.JPEG2000 -> decodeJpeg(image.encodedBytes)
             // Every other kind, RAW (Flate/LZW/CCITT/PNG-predictor decoded) and
             // ImageMask stencils, is assembled into a flat RGBA8888 buffer by the
             // shared rasterizer (the same path the Compose/Skia backends use). Wrap
@@ -421,7 +421,7 @@ public class AwtCanvas(private val g: Graphics2D) : KiteCanvas {
 
     /**
      * Wrap a flat RGBA8888 buffer (R,G,B,A per pixel, row-major, no padding, as
-     * produced by [ImageXObject.toRgbaBytes]) in a [BufferedImage]. Uses
+     * produced by [KiteImageData.toRgbaBytes]) in a [BufferedImage]. Uses
      * TYPE_INT_ARGB (not OPAQUE) so per-pixel alpha from `/ImageMask` stencils and
      * `/SMask` soft masks, already baked into the A channel by the rasterizer,
      * is preserved when the bitmap is composited.
@@ -523,7 +523,7 @@ public class AwtCanvas(private val g: Graphics2D) : KiteCanvas {
         return -1
     }
 
-    private fun drawPlaceholder(ctm: PdfMatrix) {
+    private fun drawPlaceholder(ctm: KiteMatrix) {
         val saved = g.transform
         try {
             g.transform = AffineTransform(g.transform).apply {
@@ -538,7 +538,7 @@ public class AwtCanvas(private val g: Graphics2D) : KiteCanvas {
         }
     }
 
-    override fun pushClip(path: KitePath, ctm: PdfMatrix, evenOdd: Boolean) {
+    override fun pushClip(path: KitePath, ctm: KiteMatrix, evenOdd: Boolean) {
         saveStack.addLast(SavedState.snapshot(g))
         val awt = toAwtPath(path, ctm).apply {
             windingRule = if (evenOdd) Path2D.WIND_EVEN_ODD else Path2D.WIND_NON_ZERO
@@ -556,9 +556,9 @@ public class AwtCanvas(private val g: Graphics2D) : KiteCanvas {
      * BufferedImage and blit it back when the group ends.
      */
     override fun beginTransparencyGroup(
-        bbox: Rectangle, ctm: PdfMatrix,
+        bbox: KiteRectangle, ctm: KiteMatrix,
         isolated: Boolean, knockout: Boolean,
-        alpha: Double, blendMode: PdfBlendMode,
+        alpha: Double, blendMode: KiteBlendMode,
     ) {
         // For Java2D, we approximate by setting the active composite + alpha
         // and pushing them on the save stack. True saveLayer semantics (so
@@ -583,7 +583,7 @@ public class AwtCanvas(private val g: Graphics2D) : KiteCanvas {
      */
     override fun applySoftMask(
         kind: SoftMask.Kind,
-        maskBBox: Rectangle, maskCtm: PdfMatrix,
+        maskBBox: KiteRectangle, maskCtm: KiteMatrix,
         render: () -> Unit,
         renderMask: (KiteCanvas) -> Unit,
     ) {
@@ -663,15 +663,15 @@ public class AwtCanvas(private val g: Graphics2D) : KiteCanvas {
 
     /* ─── Helpers ─────────────────────────────────────────────────────────── */
 
-    private inline fun withComposite(blendMode: PdfBlendMode, alpha: Double, block: () -> Unit) {
+    private inline fun withComposite(blendMode: KiteBlendMode, alpha: Double, block: () -> Unit) {
         val saved = g.composite
         val a = alpha.toFloat().coerceIn(0f, 1f)
-        g.composite = if (blendMode == PdfBlendMode.Normal) AlphaComposite.SrcOver.derive(a)
+        g.composite = if (blendMode == KiteBlendMode.Normal) AlphaComposite.SrcOver.derive(a)
             else PdfBlendComposite(blendMode, a)
         try { block() } finally { g.composite = saved }
     }
 
-    private fun toAwtPath(src: KitePath, ctm: PdfMatrix): Path2D.Double {
+    private fun toAwtPath(src: KitePath, ctm: KiteMatrix): Path2D.Double {
         val out = Path2D.Double()
         for (seg in src.segments) {
             when (seg) {

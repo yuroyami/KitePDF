@@ -11,7 +11,7 @@ class ThemedCanvasTest {
 
     private fun fillColorThrough(theme: ReaderTheme, input: RgbColor): RgbColor {
         val rec = RecordingCanvas()
-        theme.wrap(rec).fillPath(rect(), Matrix.IDENTITY, input, evenOdd = false)
+        theme.wrap(rec).fillPath(rect(), KiteMatrix.IDENTITY, input, evenOdd = false)
         return (rec.calls.single() as RecordingCanvas.Call.Fill).color
     }
 
@@ -37,7 +37,7 @@ class ThemedCanvasTest {
     @Test
     fun stroke_colour_is_also_themed() {
         val rec = RecordingCanvas()
-        ReaderTheme.Dark.wrap(rec).strokePath(rect(), Matrix.IDENTITY, RgbColor.WHITE, lineWidth = 1.0)
+        ReaderTheme.Dark.wrap(rec).strokePath(rect(), KiteMatrix.IDENTITY, RgbColor.WHITE, lineWidth = 1.0)
         val stroke = rec.calls.single() as RecordingCanvas.Call.Stroke
         assertTrue(stroke.color.r < 0.2, "white stroke themed dark, got ${stroke.color}")
     }

@@ -271,7 +271,7 @@ object DemoPdf {
         return b.finish(rootRef = "1 0 R")
     }
 
-    /** A page with an XObject Image reference: exercises the Do operator + ImageXObject path. */
+    /** A page with an XObject Image reference: exercises the Do operator + KiteImageData path. */
     private fun buildImagePlaceholder(): ByteArray {
         val b = Builder("1.4")
         b.addObject("<< /Type /Catalog /Pages 2 0 R >>")

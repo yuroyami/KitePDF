@@ -7,7 +7,7 @@ import kotlin.test.Test
 import kotlin.test.assertTrue
 
 /**
- * T-10 acceptance benchmark: `Zlib.decode` (through the platform fast path)
+ * Acceptance benchmark: `Zlib.decode` (through the platform fast path)
  * within 2x of raw `java.util.zip` on a 6 MB fixture. Numbers print to the
  * test log for the progress ledger; the 2x bound is deliberately loose
  * because both sides run the same native zlib, so it only fails if the
@@ -98,7 +98,7 @@ class ZlibPlatformBenchTest {
         fun ms(runs: List<Long>) = runs.sorted()[runs.size / 2] / 1_000_000.0
         fun r2(v: Double) = (v * 100).toInt() / 100.0
         println(
-            "[T-10 bench] 6MB inflate over $ROUNDS rounds: Zlib.decode=${ms(oursRuns)}ms " +
+            "[bench] 6MB inflate over $ROUNDS rounds: Zlib.decode=${ms(oursRuns)}ms " +
                 "raw java.util.zip=${ms(jdkRuns)}ms (medians) ratio=${r2(ratio)} " +
                 "[lowest quartile of per-round ratios; spread ${r2(ratios.first())}..${r2(ratios.last())}]"
         )
@@ -120,7 +120,7 @@ class ZlibPlatformBenchTest {
             buf.copyOf(n)
         }
         val ratio = ours.size.toDouble() / jdk.size.toDouble()
-        println("[T-10 bench] 6MB deflate size: ours=${ours.size} zlib6=${jdk.size} ratio=${(ratio * 1000).toInt() / 1000.0}")
+        println("[bench] 6MB deflate size: ours=${ours.size} zlib6=${jdk.size} ratio=${(ratio * 1000).toInt() / 1000.0}")
         assertTrue(ratio <= 1.25, "encoded size is ${ratio}x of zlib level 6 (budget: 1.25x)")
     }
 }

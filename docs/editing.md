@@ -185,7 +185,7 @@ True redaction: permanently removing sensitive content from a PDF; requires rewr
 ### redactRegion and redactRegions
 
 ```kotlin
-val redactionRect = Rectangle(left = 100.0, bottom = 600.0, right = 300.0, top = 650.0)
+val redactionRect = KiteRectangle(left = 100.0, bottom = 600.0, right = 300.0, top = 650.0)
 editor.redactRegion(doc.pages[0], redactionRect)
 
 val bytes = editor.saveRewritten()  // Required!
@@ -195,8 +195,8 @@ Or redact multiple regions at once:
 
 ```kotlin
 val rects = listOf(
-    Rectangle(100.0, 600.0, 300.0, 650.0),
-    Rectangle(50.0, 400.0, 500.0, 450.0),
+    KiteRectangle(100.0, 600.0, 300.0, 650.0),
+    KiteRectangle(50.0, 400.0, 500.0, 450.0),
 )
 editor.redactRegions(doc.pages[0], rects)
 val bytes = editor.saveRewritten()
@@ -219,7 +219,7 @@ The decision is **deliberately conservative**: a run touching a region is remove
     **Always use `saveRewritten()` after redaction.** An incremental save would append the new (redacted) content while leaving the original, unredacted bytes in the file; where they remain **fully recoverable** by extracting earlier objects in the incremental chain, defeating redaction entirely.
 
 ```kotlin
-editor.redactRegion(doc.pages[0], Rectangle(100.0, 600.0, 200.0, 650.0))
+editor.redactRegion(doc.pages[0], KiteRectangle(100.0, 600.0, 200.0, 650.0))
 // ❌ WRONG: val bytes = editor.saveIncremental()  // Original text still in file!
 // ✅ RIGHT:
 val bytes = editor.saveRewritten()  // Creates a fresh PDF, drops unreachable content
@@ -232,7 +232,7 @@ val doc = PdfDocument.open(idCardBytes)
 val editor = doc.edit()
 
 // Redact a rectangular area containing the SSN (coordinates in points)
-editor.redactRegion(doc.pages[0], Rectangle(
+editor.redactRegion(doc.pages[0], KiteRectangle(
     left = 50.0,
     bottom = 100.0,
     right = 200.0,
@@ -296,7 +296,7 @@ Writes a brand-new PDF file from scratch, containing only objects reachable from
 
 ```kotlin
 val editor = doc.edit()
-editor.redactRegion(doc.pages[0], Rectangle(100.0, 600.0, 200.0, 650.0))
+editor.redactRegion(doc.pages[0], KiteRectangle(100.0, 600.0, 200.0, 650.0))
 val bytes = editor.saveRewritten()  // Removes redacted text permanently
 ```
 
