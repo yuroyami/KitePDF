@@ -26,7 +26,9 @@ first. Resuming at the last chapter, desktop JVM, local corpus:
 | 18.epub | 35 | 320 ms | 7 ms |
 
 The rest of the book lays out in the background, nearest chapter first, and a
-chapter landing above the reader does not move the page they are on.
+chapter landing above the reader does not move the page they are on. A reader
+who scrolls ahead onto a chapter that is not ready yet waits on its
+placeholder, and lands at the start of that chapter when it arrives.
 
 Chapters are also read and parsed one at a time now. Opening a book reads the
 container, the OPF and the table of contents, and nothing else. Two things paid

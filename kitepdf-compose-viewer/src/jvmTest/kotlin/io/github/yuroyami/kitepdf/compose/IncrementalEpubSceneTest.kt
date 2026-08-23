@@ -131,6 +131,63 @@ class IncrementalEpubSceneTest {
         }
     }
 
+    /**
+     * A reader can scroll ahead onto a chapter that is not laid out yet and sit
+     * on its placeholder. When that chapter lands, the placeholder becomes its
+     * pages and the reader must end up at the start of the chapter they were
+     * waiting for, not back where they came from.
+     */
+    @Test
+    fun landing_on_a_placeholder_puts_the_reader_at_that_chapter() {
+        val doc = book(8)
+        val gate = GatedDocument(doc, held = 5)
+        lateinit var state: KiteDocViewState
+        var goTo by mutableStateOf(-1)
+        ImageComposeScene(width = 200, height = 260, density = Density(1f)) {
+            state = rememberKiteDocViewState(gate, KiteBookmark.Flow(chapter = 4))
+            KiteDocView(
+                state = state,
+                modifier = Modifier.fillMaxSize(),
+                layout = KiteDocLayout.Paged(Orientation.Horizontal),
+            )
+            if (goTo >= 0) LaunchedEffect(goTo) { state.scrollToPage(goTo) }
+        }.use { scene ->
+            val driver = SceneTestDriver(scene)
+            // Every chapter but 5 lays out; 5 stays a placeholder.
+            driver.pumpUntilState { (0 until 8).filter { gate.isChapterReady(it) }.size == 7 }
+            assertFalse(gate.isChapterReady(5), "chapter 6 should still be held back")
+
+            val gap = state.items.indexOfFirst { it is DocItem.ChapterGap && it.chapter == 5 }
+            assertTrue(gap >= 0, "chapter 6 should be holding a placeholder slot")
+            goTo = gap
+            driver.pumpUntilState { state.currentPage == gap }
+            assertEquals(KiteLocation(5, 0), state.currentLocation, "the reader is on chapter 6's placeholder")
+
+            gate.release()
+            state.onChapterReady()
+            driver.pumpUntilState { gate.isChapterReady(5) && state.currentLocation.chapter == 5 }
+            assertEquals(
+                KiteLocation(5, 0),
+                state.currentLocation,
+                "the chapter landed and the reader was pulled off it",
+            )
+        }
+    }
+
+    /** Delegates everything, but refuses to lay out one chapter until released. */
+    private class GatedDocument(private val inner: KiteDocument, private val held: Int) : KiteDocument by inner {
+        private var open = false
+        fun release() {
+            open = true
+            inner.prepareChapter(held)
+        }
+
+        override fun prepareChapter(chapter: Int) {
+            if (chapter == held && !open) return
+            inner.prepareChapter(chapter)
+        }
+    }
+
     /** A bookmark taken now must reopen at the same place later. */
     @Test
     fun a_bookmark_round_trips_through_the_state() {

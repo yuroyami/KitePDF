@@ -378,8 +378,9 @@ val savedBookmark = state.currentBookmark()   // save on pause
 The rest of the book loads in the background, nearest chapter first. A chapter
 that lands above the reader does not move their page.
 
-Chapters that have not been laid out yet hold one page-shaped slot each.
-Replace what that slot shows with `chapterPlaceholder`:
+Chapters that have not been laid out yet hold one page-shaped slot each. A
+reader can scroll onto one and wait there; when the chapter arrives they land
+on its first page. Replace what that slot shows with `chapterPlaceholder`:
 
 ```kotlin
 KiteDocView(
