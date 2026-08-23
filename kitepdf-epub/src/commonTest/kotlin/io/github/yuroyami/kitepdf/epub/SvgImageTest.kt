@@ -1,6 +1,6 @@
 package io.github.yuroyami.kitepdf.epub
 
-import io.github.yuroyami.kitepdf.core.render.Matrix
+import io.github.yuroyami.kitepdf.core.render.KiteMatrix
 import io.github.yuroyami.kitepdf.core.render.RecordingCanvas
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -14,7 +14,7 @@ class SvgImageTest {
         val img = SvgImage.parse(svg.encodeToByteArray())
         assertNotNull(img, "SVG parses")
         val rc = RecordingCanvas()
-        img.render(rc, Matrix.IDENTITY)
+        img.render(rc, KiteMatrix.IDENTITY)
         return rc.calls
     }
 
@@ -59,7 +59,7 @@ class SvgImageTest {
         val img = SvgImage.parse("""<svg width="100" height="100" viewBox="0 0 10 10"><rect width="10" height="10"/></svg>""".encodeToByteArray())
         assertNotNull(img)
         assertEquals(100.0, img.width, 1e-6)
-        val rc = RecordingCanvas(); img.render(rc, Matrix.IDENTITY)
+        val rc = RecordingCanvas(); img.render(rc, KiteMatrix.IDENTITY)
         val f = rc.calls.filterIsInstance<RecordingCanvas.Call.Fill>().single()
         assertEquals(10.0, f.ctm.a, 1e-6, "viewBox 10 -> viewport 100 scales x10")
         assertEquals(10.0, f.ctm.d, 1e-6)
@@ -71,7 +71,7 @@ class SvgImageTest {
             """<svg width="50" height="50"><g transform="translate(5,7)"><rect width="10" height="10"/></g></svg>""".encodeToByteArray(),
         )
         assertNotNull(img)
-        val rc = RecordingCanvas(); img.render(rc, Matrix.IDENTITY)
+        val rc = RecordingCanvas(); img.render(rc, KiteMatrix.IDENTITY)
         val f = rc.calls.filterIsInstance<RecordingCanvas.Call.Fill>().single()
         assertEquals(5.0, f.ctm.e, 1e-6); assertEquals(7.0, f.ctm.f, 1e-6)
     }

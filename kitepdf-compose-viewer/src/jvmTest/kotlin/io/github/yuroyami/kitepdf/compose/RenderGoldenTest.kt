@@ -12,7 +12,7 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
 import io.github.yuroyami.kitepdf.KitePDF
 import io.github.yuroyami.kitepdf.core.ByteArrayBuilder
-import io.github.yuroyami.kitepdf.core.render.Matrix as PdfMatrix
+import io.github.yuroyami.kitepdf.core.render.KiteMatrix
 import kotlin.test.Test
 import kotlin.test.assertTrue
 
@@ -46,7 +46,7 @@ class RenderGoldenTest {
         val tm = TextMeasurer(createFontFamilyResolver(), density, ld)
         CanvasDrawScope().draw(density, ld, Canvas(bmp), Size(w.toFloat(), h.toFloat())) {
             drawRect(Color.White, size = size)
-            page.renderTo(ComposeCanvas(this, tm), PdfMatrix(scale, 0.0, 0.0, -scale, 0.0, h.toDouble()))
+            page.renderTo(ComposeCanvas(this, tm), KiteMatrix(scale, 0.0, 0.0, -scale, 0.0, h.toDouble()))
         }
         val sk = bmp.asSkiaBitmap()
 
@@ -88,7 +88,7 @@ class RenderGoldenTest {
             val tm = TextMeasurer(createFontFamilyResolver(), d, LayoutDirection.Ltr)
             CanvasDrawScope().draw(d, LayoutDirection.Ltr, Canvas(bmp), Size(w.toFloat(), h.toFloat())) {
                 drawRect(Color.White, size = size)
-                page.renderTo(ComposeCanvas(this, tm), PdfMatrix(scale, 0.0, 0.0, -scale, 0.0, h.toDouble()))
+                page.renderTo(ComposeCanvas(this, tm), KiteMatrix(scale, 0.0, 0.0, -scale, 0.0, h.toDouble()))
             }
             val sk = bmp.asSkiaBitmap()
             var dark = 0

@@ -6,7 +6,7 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
- * T-25: [KiteDocument.metadata] and [KiteDocument.outline] have empty
+ * [KiteDocument.metadata] and [KiteDocument.outline] have empty
  * defaults, so a minimal third-party implementation keeps compiling
  * (and viewers can read them without downcasting).
  */

@@ -1,6 +1,6 @@
 package io.github.yuroyami.kitepdf.core
 
-import io.github.yuroyami.kitepdf.core.render.ImageXObject
+import io.github.yuroyami.kitepdf.core.render.KiteImageData
 import io.github.yuroyami.kitepdf.core.render.toRgbaBytes
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -9,8 +9,8 @@ import kotlin.test.assertTrue
 
 /**
  * Decode correctness for the pure-Kotlin PNG path. EPUB's render test records the
- * [ImageXObject] without rasterizing it, so pixel accuracy is proven here: build
- * a PNG, decode via [ImageXObject.fromEncodedImage], assemble RGBA via
+ * [KiteImageData] without rasterizing it, so pixel accuracy is proven here: build
+ * a PNG, decode via [KiteImageData.fromEncodedImage], assemble RGBA via
  * [toRgbaBytes], and check pixels. IDAT uses a STORED deflate block and dummy
  * CRCs. The decoder verifies neither.
  */
@@ -18,8 +18,8 @@ class PngDecoderTest {
 
     // ---- assertions ----------------------------------------------------------
 
-    private fun rgbaOf(png: ByteArray): Pair<ImageXObject, ByteArray> {
-        val img = ImageXObject.fromEncodedImage(png) ?: error("PNG failed to decode")
+    private fun rgbaOf(png: ByteArray): Pair<KiteImageData, ByteArray> {
+        val img = KiteImageData.fromEncodedImage(png) ?: error("PNG failed to decode")
         val rgba = img.toRgbaBytes() ?: error("toRgbaBytes returned null")
         return img to rgba
     }
@@ -103,13 +103,13 @@ class PngDecoderTest {
     @Test
     fun interlaced_is_not_supported() {
         val png = png(w = 2, h = 1, bitDepth = 8, colorType = 2, interlace = 1, scanlines = byteArrayOf(0, 1, 2, 3, 4, 5, 6))
-        assertNull(ImageXObject.fromEncodedImage(png))
+        assertNull(KiteImageData.fromEncodedImage(png))
     }
 
     @Test
     fun truncated_png_returns_null() {
         val sigOnly = SIGNATURE + byteArrayOf(0, 0, 0, 1)
-        assertNull(ImageXObject.fromEncodedImage(sigOnly))
+        assertNull(KiteImageData.fromEncodedImage(sigOnly))
     }
 
     // ---- PNG assembly --------------------------------------------------------

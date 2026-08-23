@@ -32,7 +32,7 @@ object SyntheticPdfs {
         Fixture("syn-smask-luminosity", smaskLuminosity()),
     )
 
-    /** T-43: a luminosity soft mask (white box on black) gating a red fill. */
+    /** A luminosity soft mask (white box on black) gating a red fill. */
     private fun smaskLuminosity(): ByteArray {
         val p = Pdf()
         p.obj("<< /Type /Catalog /Pages 2 0 R >>")                              // 1
@@ -51,7 +51,7 @@ object SyntheticPdfs {
         return p.build(1)
     }
 
-    /** T-42: a hand-written Type3 font (square + triangle glyphs, d1-style). */
+    /** A hand-written Type3 font (square + triangle glyphs, d1-style). */
     private fun type3Font(): ByteArray {
         val p = Pdf()
         p.obj("<< /Type /Catalog /Pages 2 0 R >>")                              // 1
@@ -79,7 +79,7 @@ object SyntheticPdfs {
         return p.build(1)
     }
 
-    /* ─── T-40 shading fixtures ─────────────────────────────────────────── */
+    /* ─── Shading fixtures ─────────────────────────────────────────── */
 
     private fun u16(out: java.io.ByteArrayOutputStream, v: Int) {
         out.write((v ushr 8) and 0xFF)

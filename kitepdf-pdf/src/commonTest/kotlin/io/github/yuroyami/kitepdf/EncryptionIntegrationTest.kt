@@ -31,7 +31,7 @@ class EncryptionIntegrationTest {
         assertContains(doc.pages[0].extractText(), "Encrypted hello")
     }
 
-    /* ─── T-27: String password overload ─────────────────────────────────── */
+    /* ─── String password overload ─────────────────────────────────── */
 
     @Test
     fun string_overload_opens_rc4_with_ascii_password() {
@@ -57,7 +57,7 @@ class EncryptionIntegrationTest {
         var wrong = false
         try {
             PdfDocument.open(bytes, "h\u00e8llo")
-        } catch (_: io.github.yuroyami.kitepdf.core.WrongPasswordException) {
+        } catch (_: io.github.yuroyami.kitepdf.core.KiteWrongPasswordException) {
             wrong = true
         }
         assertTrue(wrong, "a different non-ASCII password must not authenticate")

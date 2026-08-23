@@ -1,6 +1,6 @@
 package io.github.yuroyami.kitepdf.core
 
-import io.github.yuroyami.kitepdf.core.render.Matrix
+import io.github.yuroyami.kitepdf.core.render.KiteMatrix
 import io.github.yuroyami.kitepdf.core.render.KiteCanvas
 
 /**
@@ -27,14 +27,14 @@ public interface KitePage {
      * `[0, displayWidth] x [0, displayHeight]`. Compose output scaling on top:
      *
      * ```kotlin
-     * val ctm = Matrix.scaling(scale, scale).concat(page.displayToDeviceBase())
+     * val ctm = KiteMatrix.scaling(scale, scale).concat(page.displayToDeviceBase())
      * page.renderTo(canvas, ctm)
      * ```
      */
-    public fun displayToDeviceBase(): Matrix
+    public fun displayToDeviceBase(): KiteMatrix
 
     /** Paints the page into [canvas] under [deviceCtm]. */
-    public fun renderTo(canvas: KiteCanvas, deviceCtm: Matrix = Matrix.IDENTITY)
+    public fun renderTo(canvas: KiteCanvas, deviceCtm: KiteMatrix = KiteMatrix.IDENTITY)
 
     /**
      * Structured text for extraction / search / selection, in display space

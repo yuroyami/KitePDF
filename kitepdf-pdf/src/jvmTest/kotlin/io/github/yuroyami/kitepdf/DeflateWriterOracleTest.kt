@@ -8,9 +8,9 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 /**
- * T-11 acceptance on real data: the pure-Kotlin dynamic-Huffman encoder's
+ * Acceptance on real data: the pure-Kotlin dynamic-Huffman encoder's
  * ratio on an actual corpus content stream, and `mutool` accepting a PDF
- * whose content stream was compressed by it (bypassing the T-10 platform
+ * whose content stream was compressed by it (bypassing the platform
  * fast path, which would otherwise hide the pure encoder on the JVM).
  * Corpus/mutool-dependent parts skip silently when absent.
  */
@@ -57,7 +57,7 @@ class DeflateWriterOracleTest {
             buf.copyOf(n)
         }
         val ratio = ours.size.toDouble() / jdk.size
-        println("[T-11 bench] GoldenHour p0 content (${content.size} B): ours=${ours.size} zlib6=${jdk.size} ratio=${(ratio * 1000).toInt() / 1000.0}")
+        println("[bench] GoldenHour p0 content (${content.size} B): ours=${ours.size} zlib6=${jdk.size} ratio=${(ratio * 1000).toInt() / 1000.0}")
         assertTrue(ratio <= 1.25, "pure encoder is ${ratio}x of zlib level 6 on a real stream (budget 1.25x)")
     }
 

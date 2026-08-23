@@ -4,7 +4,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 
 /**
- * T-17: `pageCount` answers from the root `/Count` without materializing the
+ * `pageCount` answers from the root `/Count` without materializing the
  * page list; a lying `/Count` self-corrects once `pages` is walked.
  */
 class LazyPageCountTest {

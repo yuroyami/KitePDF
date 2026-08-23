@@ -1,6 +1,6 @@
-# Compose viewer (PdfView)
+# Compose viewer (KiteDocView)
 
-Build a full-featured PDF viewer in Compose with a single composable. The `PdfView` family lets you display PDFs on screen with pinch zoom, paging, panning, and customizable rendering; all in pure Kotlin Multiplatform.
+Build a full-featured PDF viewer in Compose with a single composable. The `KiteDocView` family lets you display PDFs on screen with pinch zoom, paging, panning, and customizable rendering; all in pure Kotlin Multiplatform.
 
 ## Installation
 
@@ -29,42 +29,49 @@ The simplest viewer: a whole document in a continuous vertical scroll.
 
 ```kotlin
 val document = remember { PdfDocument.open(bytes) }
-PdfView(document, modifier = Modifier.fillMaxSize())
+KiteDocView(document, modifier = Modifier.fillMaxSize())
+```
+
+`KiteDocView` takes any `KiteDocument`, so an EPUB goes in the same call:
+
+```kotlin
+val book = remember { EpubDocument.open(bytes) }
+KiteDocView(book, modifier = Modifier.fillMaxSize())
 ```
 
 Or just one page, sized to fill the width:
 
 ```kotlin
-PdfView(document, page = 2, modifier = Modifier.fillMaxWidth())
+KiteDocView(document, page = 2, modifier = Modifier.fillMaxWidth())
 ```
 
-## The full PdfView composable
+## The full KiteDocView composable
 
 For complete control, pass a hoisted state and specify layout, zoom, render mode, and overlays:
 
 ```kotlin
-val state = rememberPdfViewState(document)
+val state = rememberKiteDocViewState(document)
 
-PdfView(
+KiteDocView(
     state = state,
     modifier = Modifier.fillMaxSize(),
-    layout = PdfLayout.Paged(Orientation.Horizontal),
-    zoomSpec = PdfZoomSpec(maxZoom = 6f),
-    renderSpec = PdfRenderSpec.Rasterized(quality = 1.5f),
-    colors = PdfViewColors(pageBackground = Color.White),
+    layout = KiteDocLayout.Paged(Orientation.Horizontal),
+    zoomSpec = KiteZoomSpec(maxZoom = 6f),
+    renderSpec = KiteRenderSpec.Rasterized(quality = 1.5f),
+    colors = KiteDocViewColors(pageBackground = Color.White),
     pageSpacing = 8.dp,
     overlay = { state ->
-        PdfNavigationControls(state, Modifier.align(Alignment.BottomCenter).padding(16.dp))
+        KiteNavigationControls(state, Modifier.align(Alignment.BottomCenter).padding(16.dp))
     },
 )
 ```
 
-## PdfViewState: control and observation
+## KiteDocViewState: control and observation
 
-`PdfViewState` is the single point of control for all viewer behavior. Hoist it outside the `PdfView` so navigation widgets, sliders, and external controls all drive the same state.
+`KiteDocViewState` is the single point of control for all viewer behavior. Hoist it outside the `KiteDocView` so navigation widgets, sliders, and external controls all drive the same state.
 
 ```kotlin
-val state = rememberPdfViewState(document)
+val state = rememberKiteDocViewState(document)
 ```
 
 ### Navigation
@@ -120,28 +127,28 @@ println("Is zoomed in? ${state.isZoomed}")
 
 Control how pages are arranged and navigated:
 
-### `PdfLayout.Continuous` (default)
+### `KiteDocLayout.Continuous` (default)
 
 All pages in one lazy-loaded strip, scrollable in a single axis. Zoom is magnifier-style: the whole strip scales around the viewport center while scrolling stays native along the scroll axis.
 
 ```kotlin
-PdfView(
+KiteDocView(
     state,
-    layout = PdfLayout.Continuous(orientation = Orientation.Vertical),
+    layout = KiteDocLayout.Continuous(orientation = Orientation.Vertical),
     // vertical = scroll down through all pages; horizontal = scroll right
 )
 ```
 
 **Best for:** reading documents end-to-end (papers, reports), where the page count matters less than the scroll position.
 
-### `PdfLayout.Paged` (snap paging)
+### `KiteDocLayout.Paged` (snap paging)
 
 One page per screen, snapped. Swipe or drive programmatically to flip pages. Each page fits letterbox-style within the viewport.
 
 ```kotlin
-PdfView(
+KiteDocView(
     state,
-    layout = PdfLayout.Paged(
+    layout = KiteDocLayout.Paged(
         orientation = Orientation.Horizontal,
         offscreenPages = 1, // pages pre-rasterized on each side
     ),
@@ -152,12 +159,12 @@ PdfView(
 
 - **`offscreenPages`**: pages kept composed and rasterized on each side of the visible page (default 1). Raise to cover faster flinging; set 0 to minimise memory. While idle, the immediate neighbours are pre-rendered so a swipe never stalls.
 
-### `PdfLayout.SinglePage`
+### `KiteDocLayout.SinglePage`
 
 Exactly one fixed page, letterboxed to fill the viewport:
 
 ```kotlin
-PdfView(state, layout = PdfLayout.SinglePage(pageIndex = 3))
+KiteDocView(state, layout = KiteDocLayout.SinglePage(pageIndex = 3))
 ```
 
 ## Zoom & gesture configuration
@@ -165,7 +172,7 @@ PdfView(state, layout = PdfLayout.SinglePage(pageIndex = 3))
 Customise pinch, double-tap, pan, and zoom bounds:
 
 ```kotlin
-val spec = PdfZoomSpec(
+val spec = KiteZoomSpec(
     pinchEnabled = true,
     doubleTapEnabled = true,
     panEnabled = true,
@@ -174,7 +181,7 @@ val spec = PdfZoomSpec(
     doubleTapZoom = 2.5f, // what double-tap toggles to
     resetZoomOnPageChange = true, // snap to minZoom when paging
 )
-PdfView(state, zoomSpec = spec)
+KiteDocView(state, zoomSpec = spec)
 ```
 
 These bounds are honoured by both gestures and programmatic calls (`setZoom`, `animateZoomTo`), so an app driving zoom from a slider is governed by the same range.
@@ -182,25 +189,25 @@ These bounds are honoured by both gestures and programmatic calls (`setZoom`, `a
 To disable zoom entirely:
 
 ```kotlin
-PdfView(state, zoomSpec = PdfZoomSpec.Disabled)
+KiteDocView(state, zoomSpec = KiteZoomSpec.Disabled)
 ```
 
 ## Rendering: rasterized vs. vectorized
 
 The `renderSpec` parameter controls how pages become pixels. Choose the right trade-off for your use case.
 
-### `PdfRenderSpec.Rasterized` (default)
+### `KiteRenderSpec.Rasterized` (default)
 
 Vector-render each page once into a bitmap per (size, zoom, quality) bucket, then draw that bitmap and GPU-transform it during gestures. Scrolling and panning are cheap; the PDF engine never re-executes.
 
 ```kotlin
-val spec = PdfRenderSpec.Rasterized(
+val spec = KiteRenderSpec.Rasterized(
     quality = 1f, // supersampling multiplier over on-screen resolution
     maxBitmapLongSide = 4096, // memory cap
     rerasterizeOnZoom = true, // re-render at settled zoom for crispness
     preserveHairlines = true, // compensate sub-pixel strokes
 )
-PdfView(state, renderSpec = spec)
+KiteDocView(state, renderSpec = spec)
 ```
 
 **When to use:**
@@ -215,15 +222,15 @@ PdfView(state, renderSpec = spec)
 - **`rerasterizeOnZoom`** (default true): after a zoom settles, re-render the visible page at the zoomed resolution so deep zoom stays crisp. Costs one extra rasterization per zoom settle.
 - **`preserveHairlines`** (default true): compensate the engine's 1-px hairline floor for any raster-vs-screen scale difference, so sub-pixel strokes (ECG traces, fine table rules) never vanish when the bitmap is downscaled.
 
-### `PdfRenderSpec.Vectorized`
+### `KiteRenderSpec.Vectorized`
 
 Re-execute each page's content stream into a live Canvas every composition, transformed by zoom/pan via a GPU layer. No bitmap; lower memory footprint, resolution-independent quality.
 
 ```kotlin
-val spec = PdfRenderSpec.Vectorized(
+val spec = KiteRenderSpec.Vectorized(
     hairlineWidthPx = 1f, // minimum stroke width in device pixels
 )
-PdfView(state, renderSpec = spec)
+KiteDocView(state, renderSpec = spec)
 ```
 
 **When to use:**
@@ -249,34 +256,34 @@ PdfView(state, renderSpec = spec)
 Control the paper and viewport background:
 
 ```kotlin
-val colors = PdfViewColors(
+val colors = KiteDocViewColors(
     pageBackground = Color.White,      // behind page content
     viewportBackground = Color.Black,  // letterbox / gutter
 )
-PdfView(state, colors = colors)
+KiteDocView(state, colors = colors)
 ```
 
 Most PDFs assume white paper and paint nothing behind their content, so `pageBackground` typically stays white.
 
-`PdfViewColors` also carries `searchHighlight` (the fill for `state.searchHighlights`) and `selectionHighlight` (the fill for the active text selection).
+`KiteDocViewColors` also carries `searchHighlight` (the fill for `state.searchHighlights`) and `selectionHighlight` (the fill for the active text selection).
 
 ## Highlights
 
-`PdfViewState` has two highlight channels, and both paint over the page in the same pass.
+`KiteDocViewState` has two highlight channels, and both paint over the page in the same pass.
 
-`searchHighlights` is the plain one. Every hit paints in `PdfViewColors.searchHighlight`, which is what search results want:
+`searchHighlights` is the plain one. Every hit paints in `KiteDocViewColors.searchHighlight`, which is what search results want:
 
 ```kotlin
 state.searchHighlights = document.search("invoice").toList()
 ```
 
-`highlights` is the app-owned one. Each entry is a `PdfHighlight`, which wraps a hit with its own colour and its own optional margin marker:
+`highlights` is the app-owned one. Each entry is a `KiteHighlight`, which wraps a hit with its own colour and its own optional margin marker:
 
 ```kotlin
 state.highlights = notes.map { note ->
-    PdfHighlight(
+    KiteHighlight(
         hit = KiteSearchHit(note.pageIndex, note.quads, note.text),
-        color = note.category.tint,       // null keeps PdfViewColors.searchHighlight
+        color = note.category.tint,       // null keeps KiteDocViewColors.searchHighlight
         edgeMarker = true,                // a pill in the page margin
         edgeMarkerColor = Color(0xFFEF6C00),
     )
@@ -294,7 +301,7 @@ A long press anchors a selection, dragging extends it, and the result lands in `
 While a selection is live, `state.isSelectionActive` is `true`, and the viewer suppresses one-finger panning and the list or pager's own scrolling so the page cannot move out from under the selection. Two-finger pinch zoom keeps working. The flag turns on the moment the long press fires and stays on until `state.clearSelection()`, which any tap on the page also calls.
 
 ```kotlin
-val state = rememberPdfViewState(document)
+val state = rememberKiteDocViewState(document)
 state.onSelectionChange = { sel -> selectedText = sel?.text }
 
 // Elsewhere, e.g. in a selection action bar:
@@ -310,22 +317,22 @@ if (state.isSelectionActive) {
 Some documents are pictures, not prose: a chart, a scan, an ECG trace, a generated report you only ever look at. There, a long press that paints a blue wash over a label is noise, and the gesture competes with panning. Pass `selectionEnabled = false` and the whole thing goes away:
 
 ```kotlin
-PdfView(state, selectionEnabled = false)
+KiteDocView(state, selectionEnabled = false)
 ```
 
 No long press selects, no wash is painted, no thumbs appear, and a selection already on screen is dropped (which also hands back the pan and scroll locks it was holding). The gesture is not attached at all, so it cannot compete with panning. Everything else, zoom, pan, tap, links, page navigation, is untouched. The default stays `true`.
 
 ### Selection menu
 
-`PdfSelectionMenu` is a ready-made context menu for the `overlay` slot. It appears when a selection exists and the drag has ended, lists your actions, and can offer a wrapping row of highlight-colour swatches:
+`KiteSelectionMenu` is a ready-made context menu for the `overlay` slot. It appears when a selection exists and the drag has ended, lists your actions, and can offer a wrapping row of highlight-colour swatches:
 
 ```kotlin
-PdfView(state, overlay = {
-    PdfSelectionMenu(
+KiteDocView(state, overlay = {
+    KiteSelectionMenu(
         state = state,
         items = listOf(
-            PdfSelectionMenuItem("Copy") { clipboard.setText(AnnotatedString(it.text)) },
-            PdfSelectionMenuItem("Add note", clearsSelection = false) { openNoteEditor(it) },
+            KiteSelectionMenuItem("Copy") { clipboard.setText(AnnotatedString(it.text)) },
+            KiteSelectionMenuItem("Add note", clearsSelection = false) { openNoteEditor(it) },
         ),
         highlightColors = listOf(Color(0xFFFFF176), Color(0xFFA5D6A7), Color(0xFF90CAF9)),
         onHighlightColorPicked = { sel, color -> addHighlight(sel, color) },
@@ -341,30 +348,69 @@ The two boundary markers ("thumbs") are canvas vector drawing inside the page's 
 
 **They drag.** Press on a thumb and that end of the selection follows your finger while the other end stays put; haul one past the other and the two ends swap, the same as a platform text field. The rest of the gesture layer is untouched: a press that misses both thumbs is still an ordinary press, so long-press selection, tap and pan behave exactly as before. Nothing to enable, and the selection stays on one page as it always did.
 
-Recolour the markers with `PdfViewColors.selectionHandle`, or replace the drawing entirely with `PdfViewColors.selectionHandlePainter`:
+Recolour the markers with `KiteDocViewColors.selectionHandle`, or replace the drawing entirely with `KiteDocViewColors.selectionHandlePainter`:
 
 ```kotlin
-PdfView(state, colors = PdfViewColors(
-    selectionHandlePainter = PdfSelectionHandlePainter { edge, x, top, bottom, color ->
+KiteDocView(state, colors = KiteDocViewColors(
+    selectionHandlePainter = KiteSelectionHandlePainter { edge, x, top, bottom, color ->
         drawCircle(color, radius = (bottom - top) * 0.35f, center = Offset(x, bottom))
     },
 ))
 ```
 
-The default is `PdfSelectionHandleDefaults.CaretAndDot`: a caret spanning the boundary line with a grab dot beneath it.
+The default is `KiteSelectionHandleDefaults.CaretAndDot`: a caret spanning the boundary line with a grab dot beneath it.
 
 One catch with a custom painter: the grab area is the boundary line, not the shape you paint. It is a fixed 24.dp radius in screen pixels, so the touch target stays the same size at every zoom level while the marker scales with the text. Draw your marker near its boundary and the two agree; draw it far away and readers will be grabbing empty space.
 
+## Link taps
+
+A tap on a link inside the document is handled for you: internal jumps (PDF
+destinations, EPUB hrefs into another chapter) scroll to the target page and
+never reach your code.
+
+Everything else goes to `onLinkTap` as a `KiteLinkAction`. Return `true` once
+you have handled it; `false` lets the tap fall through to `onTap`.
+
+```kotlin
+KiteDocView(
+    state = state,
+    onLinkTap = { link ->
+        link.uri?.let { openInBrowser(it); true } ?: false
+    },
+)
+```
+
+`link.uri` answers for both formats, so opening web links needs no `when`. When
+you do need the format-native payload:
+
+| Case | Comes from | Carries |
+|---|---|---|
+| `KiteLinkAction.Uri` | an EPUB href with a scheme | the URL |
+| `KiteLinkAction.Pdf` | any PDF `/A` action the viewer does not perform itself | the parsed `PdfAction` (a URI, a remote GoTo, a Launch, JavaScript, a form submit) |
+
+```kotlin
+onLinkTap = { link ->
+    when (link) {
+        is KiteLinkAction.Uri -> { openInBrowser(link.uri); true }
+        is KiteLinkAction.Pdf -> when (val action = link.action) {
+            is PdfAction.Uri -> { openInBrowser(action.uri); true }
+            is PdfAction.Launch -> { warnAboutLaunch(action.filename); true }
+            else -> false
+        }
+    }
+}
+```
+
 ## Navigation widgets
 
-Ready-made UI components for common patterns. They all take a `PdfViewState`, so they work from anywhere in your tree; inside the viewport (via `overlay`), in your top bar, in a side panel.
+Ready-made UI components for common patterns. They all take a `KiteDocViewState`, so they work from anywhere in your tree; inside the viewport (via `overlay`), in your top bar, in a side panel.
 
 ### Page indicator
 
 Display "current / total" page count:
 
 ```kotlin
-PdfPageIndicator(
+KitePageIndicator(
     state,
     modifier = Modifier.padding(8.dp),
     format = { current, total -> "Page ${current + 1} / $total" },
@@ -377,7 +423,7 @@ Previous / page number / next pill. Perfect for floating over the viewport:
 
 ```kotlin
 overlay = { state ->
-    PdfNavigationControls(
+    KiteNavigationControls(
         state,
         modifier = Modifier
             .align(Alignment.BottomCenter)
@@ -395,7 +441,7 @@ Buttons auto-disable at the ends (no previous on page 0, no next on the last pag
 Horizontal carousel of tappable page thumbnails. Current page is outlined; tap any thumbnail to animate there:
 
 ```kotlin
-PdfThumbnailStrip(
+KiteThumbnailStrip(
     state,
     modifier = Modifier.fillMaxWidth(),
     thumbnailHeight = 72.dp,
@@ -412,11 +458,11 @@ Thumbnails rasterize independently at strip resolution (cheap), so they don't bl
 Float HUD components over the viewport. The `overlay` lambda receives the `state` and a `BoxScope` for alignment:
 
 ```kotlin
-PdfView(
+KiteDocView(
     state,
     overlay = { state ->
         // Everything here floats over the pages
-        PdfNavigationControls(state, Modifier.align(Alignment.BottomCenter))
+        KiteNavigationControls(state, Modifier.align(Alignment.BottomCenter))
         
         // Add your own widgets
         Text(
@@ -434,7 +480,7 @@ PdfView(
 Capture a page bitmap and save it as PNG:
 
 ```kotlin
-PdfView(
+KiteDocView(
     state,
     onPageRendered = { pageIndex, bitmap ->
         // bitmap is an ImageBitmap ready for export
@@ -449,14 +495,14 @@ PdfView(
 
 This callback fires every time a page finishes rasterizing (i.e. the bitmap is ready). In rasterized mode it fires once per bucket; in vectorized mode it never fires (no bitmap to hand back).
 
-## Custom viewer: PdfRasterizer
+## Custom viewer: KitePageRasterizer
 
-If you need a viewer that doesn't fit the built-in layouts (e.g. a thumbnail grid, an image-gallery-style pager, or a PNG batch export), use `PdfRasterizer` directly:
+If you need a viewer that doesn't fit the built-in layouts (e.g. a thumbnail grid, an image-gallery-style pager, or a PNG batch export), use `KitePageRasterizer` directly:
 
 ```kotlin
 @Composable
 fun MyCustomPdfViewer(document: PdfDocument) {
-    val rasterizer = rememberPdfRasterizer()
+    val rasterizer = rememberKitePageRasterizer()
     
     for (pageIndex in 0 until document.pageCount) {
         val page = document.pages[pageIndex]
@@ -472,14 +518,14 @@ fun MyCustomPdfViewer(document: PdfDocument) {
 }
 ```
 
-`rememberPdfRasterizer()` wires the rasterizer to the composition's density, layout direction, and text measurement engine. For off-composition rasterization (e.g. a background job), construct `PdfRasterizer` directly if you already have a `TextMeasurer`.
+`rememberKitePageRasterizer()` wires the rasterizer to the composition's density, layout direction, and text measurement engine. For off-composition rasterization (e.g. a background job), construct `KitePageRasterizer` directly if you already have a `TextMeasurer`.
 
 ## Placeholder while rasterizing
 
 Show a custom placeholder while a page bitmap is being rendered:
 
 ```kotlin
-PdfView(
+KiteDocView(
     state,
     pagePlaceholder = { pageIndex ->
         Box(
@@ -503,8 +549,8 @@ Freshly rasterized pages fade in smoothly rather than popping (160 ms by default
 ## Performance notes
 
 - **Lazy composition**: Continuous mode composes only visible pages and their immediate offscreen neighbours (paged mode pre-renders `offscreenPages` on each side). Millions of pages are supported; only visible ones cost anything.
-- **Rasterization is off the main thread**: `PdfView` renders page bitmaps through `PdfRasterizer.rasterizeOffMain()` on a background pool after composition settles, so scrolling and input stay responsive; results land through a page-bitmap LRU cache. The jitter on a page turn is avoided by pre-fetching neighbours while idle.
-- **Synchronous escape hatch**: `PdfRasterizer.rasterize()` still runs on the calling thread for callers that need a bitmap right now; text measurement inside it is serialized internally, so either entry point is safe to use.
+- **Rasterization is off the main thread**: `KiteDocView` renders page bitmaps through `KitePageRasterizer.rasterizeOffMain()` on a background pool after composition settles, so scrolling and input stay responsive; results land through a page-bitmap LRU cache. The jitter on a page turn is avoided by pre-fetching neighbours while idle.
+- **Synchronous escape hatch**: `KitePageRasterizer.rasterize()` still runs on the calling thread for callers that need a bitmap right now; text measurement inside it is serialized internally, so either entry point is safe to use.
 - **Zoom settle debounce**: By default, `rerasterizeOnZoom=true` waits approximately 220 ms after zoom stops before re-rendering, so quick pinch-and-release doesn't thrash the rasterizer.
 
 ## See also

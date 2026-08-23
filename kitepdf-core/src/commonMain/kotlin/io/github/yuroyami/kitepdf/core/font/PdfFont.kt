@@ -80,9 +80,9 @@ public class PdfFont private constructor(
     public val fontSpec: FontSpec
         get() = FontSpec(
             family = when {
-                baseFont.startsWith("Times") -> FontFamily.Serif
-                baseFont.startsWith("Courier") -> FontFamily.Monospace
-                else -> FontFamily.SansSerif
+                baseFont.startsWith("Times") -> KiteFontFamily.Serif
+                baseFont.startsWith("Courier") -> KiteFontFamily.Monospace
+                else -> KiteFontFamily.SansSerif
             },
             bold = "Bold" in baseFont,
             italic = "Italic" in baseFont || "Oblique" in baseFont,

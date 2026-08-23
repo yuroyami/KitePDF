@@ -15,7 +15,7 @@ internal class PageRender(
     val pageHeight: Double,
     val margin: Double,
     /**
-     * Vertical writing (T-72): the layout's logical block axis maps to
+     * Vertical writing: the layout's logical block axis maps to
      * physical columns advancing right-to-left, and its inline axis runs down
      * the page. [startY] is then the logical block offset of the page's FIRST
      * (rightmost) column.

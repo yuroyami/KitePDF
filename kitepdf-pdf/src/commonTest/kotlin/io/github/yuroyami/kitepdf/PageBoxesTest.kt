@@ -1,6 +1,6 @@
 package io.github.yuroyami.kitepdf
 
-import io.github.yuroyami.kitepdf.core.Rectangle
+import io.github.yuroyami.kitepdf.core.KiteRectangle
 
 import io.github.yuroyami.kitepdf.core.ByteArrayBuilder
 import kotlin.test.Test
@@ -29,8 +29,8 @@ class PageBoxesTest {
             ),
         )
         val p = doc.pages[0]
-        assertEquals(Rectangle(0.0, 0.0, 612.0, 792.0), p.mediaBox)
-        assertEquals(Rectangle(10.0, 10.0, 600.0, 780.0), p.cropBox)
+        assertEquals(KiteRectangle(0.0, 0.0, 612.0, 792.0), p.mediaBox)
+        assertEquals(KiteRectangle(10.0, 10.0, 600.0, 780.0), p.cropBox)
         // Bleed/Trim/Art should default to the cropBox.
         assertEquals(p.cropBox, p.bleedBox)
         assertEquals(p.cropBox, p.trimBox)
@@ -65,9 +65,9 @@ class PageBoxesTest {
             ),
         )
         val p = doc.pages[0]
-        assertEquals(Rectangle(5.0, 5.0, 605.0, 785.0), p.bleedBox)
-        assertEquals(Rectangle(20.0, 20.0, 590.0, 770.0), p.trimBox)
-        assertEquals(Rectangle(40.0, 40.0, 570.0, 750.0), p.artBox)
+        assertEquals(KiteRectangle(5.0, 5.0, 605.0, 785.0), p.bleedBox)
+        assertEquals(KiteRectangle(20.0, 20.0, 590.0, 770.0), p.trimBox)
+        assertEquals(KiteRectangle(40.0, 40.0, 570.0, 750.0), p.artBox)
     }
 
     @Test

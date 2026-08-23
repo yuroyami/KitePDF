@@ -1,6 +1,6 @@
 package io.github.yuroyami.kitepdf.nativerenderer.difftest
 
-import io.github.yuroyami.kitepdf.core.render.ImageXObject
+import io.github.yuroyami.kitepdf.core.render.KiteImageData
 import io.github.yuroyami.kitepdf.core.render.RecordingCanvas
 import io.github.yuroyami.kitepdf.core.render.toRgbaBytes
 import io.github.yuroyami.kitepdf.epub.EpubDocument
@@ -86,10 +86,10 @@ class EpubRasterTest {
 
     @Test
     fun image_pixels_reach_the_raster() {
-        // Explicit size: since T-66 a bare <img> is inline at its intrinsic size
+        // Explicit size: a bare <img> is inline at its intrinsic size
         // (CSS behaviour); the tiny fixture PNG must be sized up to blit visibly.
         val encoded = EpubCorpus.redPng()
-        val decoded = ImageXObject.fromEncodedImage(encoded)
+        val decoded = KiteImageData.fromEncodedImage(encoded)
         assertNotNull(decoded, "red PNG fixture should decode")
         val rgba = decoded.toRgbaBytes()
         assertNotNull(rgba, "red PNG fixture should produce RGBA pixels")

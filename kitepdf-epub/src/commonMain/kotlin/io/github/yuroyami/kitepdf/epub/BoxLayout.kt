@@ -11,10 +11,10 @@ import io.github.yuroyami.kitepdf.epub.css.GenericFont
 import io.github.yuroyami.kitepdf.epub.css.TextAlign
 import io.github.yuroyami.kitepdf.epub.css.WhiteSpaceMode
 import io.github.yuroyami.kitepdf.core.text.Bidi
-import io.github.yuroyami.kitepdf.core.font.FontFamily
+import io.github.yuroyami.kitepdf.core.font.KiteFontFamily
 import io.github.yuroyami.kitepdf.core.font.FontSpec
 import io.github.yuroyami.kitepdf.core.font.TextGlyph
-import io.github.yuroyami.kitepdf.core.render.ImageXObject
+import io.github.yuroyami.kitepdf.core.render.KiteImageData
 import io.github.yuroyami.kitepdf.core.render.RgbColor
 import io.github.yuroyami.kitepdf.core.text.Hyphenator
 import kotlin.math.roundToInt
@@ -33,7 +33,7 @@ private val LIG_FEATURES = listOf("rlig", "liga")
  * owns the margin/border/padding/background).
  */
 internal class BoxLayout(
-    private val loadImage: (String) -> ImageXObject? = { null },
+    private val loadImage: (String) -> KiteImageData? = { null },
     private val loadSvg: (String) -> SvgImage? = { null },
     private val maxImageHeight: Double = Double.MAX_VALUE,
     private val fonts: FontRegistry = FontRegistry.EMPTY,
@@ -53,7 +53,7 @@ internal class BoxLayout(
      */
     private val lineHeightScale: Double = 1.0,
     /**
-     * Vertical writing (T-72, `writing-mode: vertical-rl`). Layout keeps its
+     * Vertical writing (`writing-mode: vertical-rl`). Layout keeps its
      * logical axes (the "width" passed to [layout] is the page content
      * HEIGHT); only glyph advances change: upright full-width glyphs use the
      * face's `vmtx` advance (else 1em). The paint side rotates the result.
@@ -282,7 +282,7 @@ internal class BoxLayout(
 
     private fun layoutImage(box: ImageBox, contentLeft: Double, contentW: Double, topY: Double) {
         // SVG (inline <svg> preset, or a .svg file reference) sizes from its intrinsic
-        // viewport and paints as vectors; raster images decode to an ImageXObject.
+        // viewport and paints as vectors; raster images decode to a KiteImageData.
         val svg = box.svg ?: if (box.zipPath.endsWith(".svg", true)) loadSvg(box.zipPath)?.also { box.svg = it } else null
         val intrinsicW: Double; val intrinsicH: Double
         if (svg != null) {
@@ -622,7 +622,7 @@ internal class BoxLayout(
     }
 
     private fun markerRun(marker: String, fontSize: Double, contentLeft: Double, color: RgbColor): PlacedRun? {
-        val spec = FontSpec(FontFamily.Serif, bold = false, italic = false)
+        val spec = FontSpec(KiteFontFamily.Serif, bold = false, italic = false)
         var w = 0.0
         val glyphs = ArrayList<TextGlyph>(marker.length)
         for (ch in marker) { glyphs.add(glyph(ch, spec)); w += FontMetrics.advancePt(ch, fontSize) }
@@ -648,7 +648,7 @@ internal class BoxLayout(
         // `imageWidth` is what the image actually draws at.
         val imageWidth: Double = 0.0,
         val imageHeight: Double = 0.0,
-        val image: ImageXObject? = null,
+        val image: KiteImageData? = null,
         val svgImage: SvgImage? = null,
         // Envelope padding when the reading is wider than its base (pt). Only the
         // group's first/last cells carry it; it widens wrap/measure and the pen
@@ -1005,8 +1005,8 @@ internal class BoxLayout(
     }
 
     private fun genericOf(spec: FontSpec): GenericFont = when (spec.family) {
-        FontFamily.Monospace -> GenericFont.MONO
-        FontFamily.SansSerif -> GenericFont.SANS
+        KiteFontFamily.Monospace -> GenericFont.MONO
+        KiteFontFamily.SansSerif -> GenericFont.SANS
         else -> GenericFont.SERIF
     }
 
@@ -1128,18 +1128,18 @@ internal class BoxLayout(
 
     private fun fontSpec(family: GenericFont, bold: Boolean, italic: Boolean) = FontSpec(
         when (family) {
-            GenericFont.MONO -> FontFamily.Monospace
-            GenericFont.SANS -> FontFamily.SansSerif
-            GenericFont.SERIF -> FontFamily.Serif
+            GenericFont.MONO -> KiteFontFamily.Monospace
+            GenericFont.SANS -> KiteFontFamily.SansSerif
+            GenericFont.SERIF -> KiteFontFamily.Serif
         },
         bold, italic,
     )
 
     private fun glyph(ch: Char, spec: FontSpec): TextGlyph {
         val fam = when (spec.family) {
-            FontFamily.Monospace -> GenericFont.MONO
-            FontFamily.SansSerif -> GenericFont.SANS
-            FontFamily.Serif -> GenericFont.SERIF
+            KiteFontFamily.Monospace -> GenericFont.MONO
+            KiteFontFamily.SansSerif -> GenericFont.SANS
+            KiteFontFamily.Serif -> GenericFont.SERIF
         }
         return TextGlyph(
             byteOffset = 0, byteCount = 1, gid = -1, text = ch.toString(),
@@ -1156,7 +1156,7 @@ internal class BoxLayout(
 
     private companion object {
         val BLACK = RgbColor(0.0, 0.0, 0.0)
-        val EMPTY_SPEC = FontSpec(FontFamily.Serif, bold = false, italic = false)
+        val EMPTY_SPEC = FontSpec(KiteFontFamily.Serif, bold = false, italic = false)
         /** Ruby reading size as a fraction of its base's font size. */
         const val RUBY_SIZE = 0.5
         /** Synthesized small-caps size (uppercase form scaled down). */

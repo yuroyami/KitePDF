@@ -9,7 +9,7 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 /**
- * T-84: the signing scaffold. ByteRange arithmetic must cover the whole file
+ * The signing scaffold. ByteRange arithmetic must cover the whole file
  * except the `/Contents` hex string exactly, embedding must not move a byte,
  * and the signed file must reopen with the signature field present.
  */

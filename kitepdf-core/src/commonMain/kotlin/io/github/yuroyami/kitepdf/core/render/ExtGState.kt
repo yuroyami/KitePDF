@@ -28,7 +28,7 @@ import io.github.yuroyami.kitepdf.core.parser.PdfStream
 public data class ExtGState(
     val fillAlpha: Double? = null,
     val strokeAlpha: Double? = null,
-    val blendMode: BlendMode? = null,
+    val blendMode: KiteBlendMode? = null,
     val softMask: SoftMask? = null,
     val lineWidth: Double? = null,
     val lineCap: Int? = null,
@@ -42,8 +42,8 @@ public data class ExtGState(
             val fillAlpha = dict.getReal("ca")
             val strokeAlpha = dict.getReal("CA")
             val blendMode = when (val bm = dict["BM"]) {
-                is PdfName -> BlendMode.parse(bm.value)
-                is PdfArray -> BlendMode.parse((bm.firstOrNull() as? PdfName)?.value)
+                is PdfName -> KiteBlendMode.parse(bm.value)
+                is PdfArray -> KiteBlendMode.parse((bm.firstOrNull() as? PdfName)?.value)
                 else -> null
             }
             val smask = parseSoftMask(dict["SMask"], refs)

@@ -7,7 +7,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
-/** T-15: the page-bitmap LRU's hit, eviction and budget behaviour. */
+/** The page-bitmap LRU's hit, eviction and budget behaviour. */
 class PageBitmapCacheTest {
 
     private fun key(id: Any, w: Int = 100, h: Int = 100) =

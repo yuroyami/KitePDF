@@ -7,7 +7,7 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 
 /**
- * T-22: `EpubDocument.open` throws [EpubFormatException] with a message naming
+ * `EpubDocument.open` throws [EpubFormatException] with a message naming
  * the first structural failure; `openOrNull` maps exactly those to null.
  */
 class OpenSemanticsTest {

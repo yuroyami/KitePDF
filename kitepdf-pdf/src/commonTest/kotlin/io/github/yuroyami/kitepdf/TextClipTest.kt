@@ -1,13 +1,13 @@
 package io.github.yuroyami.kitepdf
 
-import io.github.yuroyami.kitepdf.core.render.Matrix
+import io.github.yuroyami.kitepdf.core.render.KiteMatrix
 import io.github.yuroyami.kitepdf.core.render.RecordingCanvas
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 /**
- * T-41: text render modes 4..7 accumulate glyph shapes into a clip pushed at
+ * Text render modes 4..7 accumulate glyph shapes into a clip pushed at
  * ET; mode 7 paints nothing itself; mode 0 text pushes no clip (regression
  * guard). Structural assertions over the recorded canvas; the pixel-level
  * proof against mutool lives in the differential TextClipOracleTest.
@@ -40,7 +40,7 @@ class TextClipTest {
 
     private fun render(textOps: String): RecordingCanvas {
         val canvas = RecordingCanvas()
-        KitePDF.open(pdf(textOps)).pages[0].renderTo(canvas, Matrix.IDENTITY)
+        KitePDF.open(pdf(textOps)).pages[0].renderTo(canvas, KiteMatrix.IDENTITY)
         return canvas
     }
 

@@ -60,7 +60,7 @@ class CompositeFontTest {
         assertSame(IdentityCodeUnitReader, PredefinedCMaps.reader("Identity-V"))
         assertSame(SingleByteCodeUnitReader, PredefinedCMaps.reader(null))
         assertSame(SingleByteCodeUnitReader, PredefinedCMaps.reader("WeirdUnknown"))
-        // Locale CJK CMaps carry the bundled Adobe tables since T-46: real
+        // Locale CJK CMaps carry the bundled Adobe tables: real
         // registry CIDs, not the degraded CID==code fallback.
         val gbk = PredefinedCMaps.reader("GBK-EUC-H")
         assertTrue(!gbk.degraded, "bundled tables are authoritative")

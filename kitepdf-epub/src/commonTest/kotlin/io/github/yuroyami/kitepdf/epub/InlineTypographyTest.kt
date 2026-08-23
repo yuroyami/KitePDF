@@ -6,7 +6,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 /**
- * T-67: text-transform, letter-spacing, word-spacing, font-variant:
+ * Text-transform, letter-spacing, word-spacing, font-variant:
  * small-caps. Geometry asserts use the extraction charEdges (which mirror the
  * wrap advances); the synthesized small-caps path asserts drawn run sizes.
  */

@@ -2,13 +2,13 @@ package io.github.yuroyami.kitepdf
 
 import io.github.yuroyami.kitepdf.content.ContentStreamParser
 import io.github.yuroyami.kitepdf.core.ByteArrayBuilder
-import io.github.yuroyami.kitepdf.core.render.Matrix
+import io.github.yuroyami.kitepdf.core.render.KiteMatrix
 import io.github.yuroyami.kitepdf.core.render.NoopCanvas
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
 /**
- * Content-stream operation budget (T-02): a stream with millions of operators
+ * Content-stream operation budget: a stream with millions of operators
  * (adversarial, or produced by the repair path from garbage) must not allocate
  * an unbounded operation list or render forever. The parser stops at 5M ops
  * per stream; the renderer additionally budgets 20M dispatched ops per page
@@ -38,7 +38,7 @@ class OpBudgetTest {
         val doc = KitePDF.open(pdfWithRawContent(bombOps))
         assertEquals(1, doc.pageCount)
         // Must terminate (parse cap) and not throw; nothing paints, which is fine.
-        doc.pages[0].renderTo(NoopCanvas, Matrix.IDENTITY)
+        doc.pages[0].renderTo(NoopCanvas, KiteMatrix.IDENTITY)
     }
 
     private fun pdfWithRawContent(content: ByteArray): ByteArray {

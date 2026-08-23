@@ -1,6 +1,6 @@
 package io.github.yuroyami.kitepdf.core.render
 
-import io.github.yuroyami.kitepdf.core.Rectangle
+import io.github.yuroyami.kitepdf.core.KiteRectangle
 import io.github.yuroyami.kitepdf.core.parser.IndirectResolver
 import io.github.yuroyami.kitepdf.core.parser.PdfArray
 import io.github.yuroyami.kitepdf.core.parser.PdfBoolean
@@ -19,15 +19,15 @@ import io.github.yuroyami.kitepdf.core.parser.PdfStream
  *
  * KitePDF renders:
  *   - **Type 1** function-based: a colour function over a 2D domain,
- *     rasterized as a grid of cells (T-40)
+ *     rasterized as a grid of cells
  *   - **Type 2** axial: a linear gradient between two points
  *   - **Type 3** radial: a radial gradient between two circles
  *   - **Types 4/5** Gouraud triangle meshes: smoothed by recursive
- *     subdivision with vertex-colour interpolation (T-40)
+ *     subdivision with vertex-colour interpolation
  *   - **Types 6/7** Coons / tensor patches: tessellated into flat-coloured
  *     quads via Coons boundary evaluation + bilinear corner colours; the
  *     tensor type's four interior points are read but ignored, the documented
- *     MuPDF-level approximation (T-40)
+ *     MuPDF-level approximation
  *
  * Types 1/4/5/6/7 render through [paintComplexShading], shared by every
  * backend (pure `fillPath` emission); 2/3 keep the backends' native gradient
@@ -36,7 +36,7 @@ import io.github.yuroyami.kitepdf.core.parser.PdfStream
 public sealed class KiteShading {
 
     /** The shading's colour space (DeviceGray / DeviceRGB / DeviceCMYK / Indexed). */
-    public abstract val colorSpace: ColorSpace
+    public abstract val colorSpace: KiteColorSpace
 
     /**
      * Optional `/Background` colour, used for regions outside the shading
@@ -46,7 +46,7 @@ public sealed class KiteShading {
     public abstract val background: RgbColor?
 
     /** Optional clipping rectangle (`/BBox`) in shading-space. */
-    public abstract val bbox: Rectangle?
+    public abstract val bbox: KiteRectangle?
 
     /**
      * Type 2 axial shading. Linear gradient between `(x0, y0)` and
@@ -55,9 +55,9 @@ public sealed class KiteShading {
      * hand those to the backend.
      */
     public data class Axial(
-        override val colorSpace: ColorSpace,
+        override val colorSpace: KiteColorSpace,
         override val background: RgbColor?,
-        override val bbox: Rectangle?,
+        override val bbox: KiteRectangle?,
         /** [x0, y0, x1, y1] in shading-space. */
         val coords: DoubleArray,
         /** [t0, t1]: domain of [function]. */
@@ -89,9 +89,9 @@ public sealed class KiteShading {
      * `(x0, y0, r0)` and `(x1, y1, r1)` with `t` running across [domain].
      */
     public data class Radial(
-        override val colorSpace: ColorSpace,
+        override val colorSpace: KiteColorSpace,
         override val background: RgbColor?,
-        override val bbox: Rectangle?,
+        override val bbox: KiteRectangle?,
         /** [x0, y0, r0, x1, y1, r1] in shading-space. */
         val coords: DoubleArray,
         val domain: DoubleArray,
@@ -113,12 +113,12 @@ public sealed class KiteShading {
      * cells by [paintComplexShading].
      */
     public class FunctionBased(
-        override val colorSpace: ColorSpace,
+        override val colorSpace: KiteColorSpace,
         override val background: RgbColor?,
-        override val bbox: Rectangle?,
+        override val bbox: KiteRectangle?,
         /** [x0, x1, y0, y1]. */
         public val domain: DoubleArray,
-        public val matrix: Matrix,
+        public val matrix: KiteMatrix,
         private val function: KiteFunction,
     ) : KiteShading() {
         public fun colorAt(x: Double, y: Double): RgbColor =
@@ -134,9 +134,9 @@ public sealed class KiteShading {
 
     /** Types 4/5: a triangle mesh with per-vertex colours. */
     public class TriangleMesh(
-        override val colorSpace: ColorSpace,
+        override val colorSpace: KiteColorSpace,
         override val background: RgbColor?,
-        override val bbox: Rectangle?,
+        override val bbox: KiteRectangle?,
         public val triangles: List<MeshTriangle>,
     ) : KiteShading()
 
@@ -149,18 +149,18 @@ public sealed class KiteShading {
 
     /** Types 6/7, pre-tessellated at parse time. */
     public class PatchMesh(
-        override val colorSpace: ColorSpace,
+        override val colorSpace: KiteColorSpace,
         override val background: RgbColor?,
-        override val bbox: Rectangle?,
+        override val bbox: KiteRectangle?,
         public val quads: List<FlatQuad>,
     ) : KiteShading()
 
     /** Shading type we don't render; [sampleStops] returns null, so nothing paints. */
     public data class Unsupported(
         val type: Int,
-        override val colorSpace: ColorSpace,
+        override val colorSpace: KiteColorSpace,
         override val background: RgbColor?,
-        override val bbox: Rectangle?,
+        override val bbox: KiteRectangle?,
     ) : KiteShading()
 
     public companion object {
@@ -180,9 +180,9 @@ public sealed class KiteShading {
 
         private fun parseDict(dict: PdfDictionary, stream: PdfStream?, refs: IndirectResolver): KiteShading? {
             val type = dict.getInt("ShadingType")?.toInt() ?: return null
-            val cs = ColorSpace.resolve(dict["ColorSpace"], refs)
+            val cs = KiteColorSpace.resolve(dict["ColorSpace"], refs)
             val bbox = (dict.getArray("BBox"))?.let { arr ->
-                if (arr.size >= 4) Rectangle(arr.num(0), arr.num(1), arr.num(2), arr.num(3))
+                if (arr.size >= 4) KiteRectangle(arr.num(0), arr.num(1), arr.num(2), arr.num(3))
                 else null
             }
             val bg = (dict.getArray("Background"))?.let { arr ->
@@ -202,23 +202,23 @@ public sealed class KiteShading {
         }
 
         private fun parseFunctionBased(
-            dict: PdfDictionary, cs: ColorSpace, bg: RgbColor?,
-            bbox: Rectangle?, refs: IndirectResolver,
+            dict: PdfDictionary, cs: KiteColorSpace, bg: RgbColor?,
+            bbox: KiteRectangle?, refs: IndirectResolver,
         ): KiteShading? {
             val function = KiteFunction.parse(dict["Function"], refs) ?: return null
             val domain = (dict.getArray("Domain"))?.let { arr ->
                 if (arr.size >= 4) DoubleArray(4) { arr.num(it) } else null
             } ?: doubleArrayOf(0.0, 1.0, 0.0, 1.0)
             val matrix = (dict.getArray("Matrix"))?.let { arr ->
-                if (arr.size >= 6) Matrix(arr.num(0), arr.num(1), arr.num(2), arr.num(3), arr.num(4), arr.num(5))
+                if (arr.size >= 6) KiteMatrix(arr.num(0), arr.num(1), arr.num(2), arr.num(3), arr.num(4), arr.num(5))
                 else null
-            } ?: Matrix.IDENTITY
+            } ?: KiteMatrix.IDENTITY
             return FunctionBased(cs, bg, bbox, domain, matrix, function)
         }
 
         private fun parseAxial(
-            dict: PdfDictionary, cs: ColorSpace, bg: RgbColor?,
-            bbox: Rectangle?, refs: IndirectResolver,
+            dict: PdfDictionary, cs: KiteColorSpace, bg: RgbColor?,
+            bbox: KiteRectangle?, refs: IndirectResolver,
         ): KiteShading? {
             val coords = (dict.getArray("Coords"))?.let { arr ->
                 if (arr.size >= 4) DoubleArray(4) { arr.num(it) } else null
@@ -236,8 +236,8 @@ public sealed class KiteShading {
         }
 
         private fun parseRadial(
-            dict: PdfDictionary, cs: ColorSpace, bg: RgbColor?,
-            bbox: Rectangle?, refs: IndirectResolver,
+            dict: PdfDictionary, cs: KiteColorSpace, bg: RgbColor?,
+            bbox: KiteRectangle?, refs: IndirectResolver,
         ): KiteShading? {
             val coords = (dict.getArray("Coords"))?.let { arr ->
                 if (arr.size >= 6) DoubleArray(6) { arr.num(it) } else null
@@ -270,7 +270,7 @@ private fun PdfArray.num(i: Int): Double = when (val v = this[i]) {
 public fun KiteShading.sampleStops(count: Int = 32): GradientStops? {
     val function: KiteFunction
     val domain: DoubleArray
-    val cs: ColorSpace
+    val cs: KiteColorSpace
     when (this) {
         is KiteShading.Axial -> { function = this.function; domain = this.domain; cs = this.colorSpace }
         is KiteShading.Radial -> { function = this.function; domain = this.domain; cs = this.colorSpace }

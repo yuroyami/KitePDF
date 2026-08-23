@@ -1,6 +1,9 @@
 # Headless rendering (page → image)
 
-Convert PDF pages to raster images (PNG, JPEG) without a UI. Useful for thumbnails, server previews, CI screenshots, or embedding rendered previews in desktop apps.
+Convert pages to raster images (PNG, JPEG) without a UI. Useful for thumbnails, server previews, CI screenshots, or embedding rendered previews in desktop apps.
+
+!!! note "PDF and EPUB"
+    The names below say what they take. `PdfPageRasterizer` takes a `PdfPage`; `EpubPageRasterizer`, its twin in `kitepdf-skia-renderer`, takes an `EpubPage` and adds a `theme` argument for night mode. The platform-native rasterizers (`AwtPdfRasterizer`, `AndroidPdfBitmapRenderer`, `ApplePdfRasterizer`) are PDF only; for headless EPUB use the Skia renderer, or `KitePageRasterizer` from the Compose viewer, which takes any `KitePage`.
 
 ## Which tool to use?
 
@@ -258,7 +261,7 @@ dependencies {
 ```kotlin
 import io.github.yuroyami.kitepdf.nativerenderer.Canvas2dCanvas
 import io.github.yuroyami.kitepdf.PdfDocument
-import io.github.yuroyami.kitepdf.core.render.Matrix as PdfMatrix
+import io.github.yuroyami.kitepdf.core.render.KiteMatrix
 import org.w3c.dom.CanvasRenderingContext2D
 
 // In a <canvas> context
@@ -267,7 +270,7 @@ val pdfCanvas = Canvas2dCanvas(canvas)
 
 val pdf = PdfDocument.open(/* ... */)
 val page = pdf.pages[0]
-val deviceCtm = PdfMatrix(scale, 0.0, 0.0, -scale, 0.0, page.height * scale)
+val deviceCtm = KiteMatrix(scale, 0.0, 0.0, -scale, 0.0, page.height * scale)
 page.renderTo(pdfCanvas, deviceCtm)
 
 // To save as PNG: use the browser's canvas.toBlob() or toDataURL()
@@ -305,7 +308,7 @@ val blob = Blob(arrayOf(pngBytes), object : BlobPropertyBag {
 !!! tip "Bundle size trade-off"
     Skia over WASM (Skiko) adds about 5 MB to 10 MB to your JS bundle. For lightweight viewers, use Canvas2D instead.
 
-## Compose Multiplatform: Export from PdfView
+## Compose Multiplatform: Export from KiteDocView
 
 If you're using the Compose viewer (`kitepdf-compose-viewer`), export the current rendered page as a PNG via `ImageBitmap.encodeToPng()`.
 
@@ -324,7 +327,7 @@ import androidx.compose.ui.graphics.ImageBitmap
 import io.github.yuroyami.kitepdf.compose.encodeToPng
 import java.io.File
 
-// Assuming you've rendered a page into an ImageBitmap (e.g., via PdfView's onPageRendered)
+// Assuming you've rendered a page into an ImageBitmap (e.g., via KiteDocView's onPageRendered)
 val imageBitmap: ImageBitmap = /* ... */
 val pngBytes = imageBitmap.encodeToPng() ?: return
 
@@ -332,7 +335,7 @@ val pngBytes = imageBitmap.encodeToPng() ?: return
 File("export.png").writeBytes(pngBytes)
 ```
 
-- **Returns:** `ByteArray?` : PNG bytes, or `null` if encoding fails (shouldn't happen for bitmaps produced by `PdfView`).
+- **Returns:** `ByteArray?` : PNG bytes, or `null` if encoding fails (shouldn't happen for bitmaps produced by `KiteDocView`).
 
 ## Real-world example: Render all pages to PNG thumbnails
 

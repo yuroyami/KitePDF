@@ -3,12 +3,12 @@ package io.github.yuroyami.kitepdf.text
 import io.github.yuroyami.kitepdf.core.KiteStructuredText
 import io.github.yuroyami.kitepdf.core.KiteTextBlock
 import io.github.yuroyami.kitepdf.core.KiteTextLine
-import io.github.yuroyami.kitepdf.core.Rectangle
-import io.github.yuroyami.kitepdf.core.render.Matrix
+import io.github.yuroyami.kitepdf.core.KiteRectangle
+import io.github.yuroyami.kitepdf.core.render.KiteMatrix
 import kotlin.math.abs
 
 /**
- * T-81: maps [PdfStructuredText] (page user-space, y-up) onto the
+ * Maps [PdfStructuredText] (page user-space, y-up) onto the
  * format-neutral [KiteStructuredText] (display space, y-down, rotation
  * folded in), so search / selection / copy built on the core model work
  * for PDF pages exactly as they do for EPUB.
@@ -27,12 +27,12 @@ import kotlin.math.abs
  */
 internal object KiteTextAdapter {
 
-    fun toKite(st: PdfStructuredText, display: Matrix): KiteStructuredText =
+    fun toKite(st: PdfStructuredText, display: KiteMatrix): KiteStructuredText =
         KiteStructuredText(st.blocks.map { b -> KiteTextBlock(b.lines.map { toLine(it, display) }) })
 
     private class Ch(val c: Char, val end: Pair<Double, Double>)
 
-    private fun toLine(line: PdfTextLine, display: Matrix): KiteTextLine {
+    private fun toLine(line: PdfTextLine, display: KiteMatrix): KiteTextLine {
         // Rebuild the text char-by-char, keeping each char's user-space end
         // boundary (its start is the previous entry's end).
         val chars = ArrayList<Ch>()
@@ -60,7 +60,7 @@ internal object KiteTextAdapter {
             display.transformPoint(line.bounds.right, line.bounds.top),
             display.transformPoint(line.bounds.left, line.bounds.top),
         )
-        val bounds = Rectangle(
+        val bounds = KiteRectangle(
             left = corners.minOf { it.first },
             bottom = corners.minOf { it.second },
             right = corners.maxOf { it.first },

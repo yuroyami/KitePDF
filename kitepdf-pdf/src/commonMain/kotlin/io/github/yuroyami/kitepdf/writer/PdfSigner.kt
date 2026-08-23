@@ -1,7 +1,7 @@
 package io.github.yuroyami.kitepdf.writer
 
 import io.github.yuroyami.kitepdf.PdfDocument
-import io.github.yuroyami.kitepdf.core.Rectangle
+import io.github.yuroyami.kitepdf.core.KiteRectangle
 import io.github.yuroyami.kitepdf.core.parser.PdfArray
 import io.github.yuroyami.kitepdf.core.parser.PdfDictionary
 import io.github.yuroyami.kitepdf.core.parser.PdfInt
@@ -12,7 +12,7 @@ import io.github.yuroyami.kitepdf.core.parser.PdfReference
 import io.github.yuroyami.kitepdf.core.parser.PdfString
 
 /**
- * Digital signature SCAFFOLD (T-84): the prepare-then-sign flow that stages a
+ * Digital signature SCAFFOLD: the prepare-then-sign flow that stages a
  * signature field, computes the exact `/ByteRange`, and embeds a
  * caller-supplied CMS blob. The library does NO cryptography: the DER
  * `SignedData` comes from the application (JVM apps can build one with
@@ -45,7 +45,7 @@ public class PdfSigner(
      * field+widget on page [pageIndex] (invisible when [rect] is null), and
      * the AcroForm wiring (`/SigFlags 3`).
      */
-    public fun prepareSignature(fieldName: String, rect: Rectangle? = null, pageIndex: Int = 0) {
+    public fun prepareSignature(fieldName: String, rect: KiteRectangle? = null, pageIndex: Int = 0) {
         check(!prepared) { "prepareSignature was already called" }
         require(!doc.isEncrypted) { "Signing encrypted documents is not supported." }
         val page = doc.pages.getOrNull(pageIndex)
@@ -67,7 +67,7 @@ public class PdfSigner(
             ),
         )
 
-        val r = rect ?: Rectangle(0.0, 0.0, 0.0, 0.0)
+        val r = rect ?: KiteRectangle(0.0, 0.0, 0.0, 0.0)
         val fieldRef = editor.addObject(
             PdfDictionary(
                 linkedMapOf(

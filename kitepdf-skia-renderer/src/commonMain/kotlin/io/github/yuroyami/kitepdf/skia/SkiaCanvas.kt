@@ -1,13 +1,13 @@
 package io.github.yuroyami.kitepdf.skia
 
 import io.github.yuroyami.kitepdf.core.render.paintComplexShading
-import io.github.yuroyami.kitepdf.core.Rectangle
-import io.github.yuroyami.kitepdf.core.font.FontFamily
+import io.github.yuroyami.kitepdf.core.KiteRectangle
+import io.github.yuroyami.kitepdf.core.font.KiteFontFamily
 import io.github.yuroyami.kitepdf.core.font.FontSpec
 import io.github.yuroyami.kitepdf.core.font.TextGlyph
-import io.github.yuroyami.kitepdf.core.render.BlendMode as PdfBlendMode
-import io.github.yuroyami.kitepdf.core.render.ImageXObject
-import io.github.yuroyami.kitepdf.core.render.Matrix as PdfMatrix
+import io.github.yuroyami.kitepdf.core.render.KiteBlendMode
+import io.github.yuroyami.kitepdf.core.render.KiteImageData
+import io.github.yuroyami.kitepdf.core.render.KiteMatrix
 import io.github.yuroyami.kitepdf.core.render.KiteCanvas
 import io.github.yuroyami.kitepdf.core.render.KitePath
 import io.github.yuroyami.kitepdf.core.render.KiteShading
@@ -60,7 +60,7 @@ public class SkiaCanvas(private val canvas: SkCanvas) : KiteCanvas {
     /** Count of open transparency groups + soft-mask layers, for endPage cleanup. */
     private var openLayers = 0
 
-    override fun beginPage(widthPt: Double, heightPt: Double, deviceCtm: PdfMatrix) {
+    override fun beginPage(widthPt: Double, heightPt: Double, deviceCtm: KiteMatrix) {
         // The caller is responsible for sizing the surface; we don't clear.
         openLayers = 0
     }
@@ -73,8 +73,8 @@ public class SkiaCanvas(private val canvas: SkCanvas) : KiteCanvas {
     }
 
     override fun fillPath(
-        path: KitePath, ctm: PdfMatrix, color: RgbColor, evenOdd: Boolean,
-        alpha: Double, blendMode: PdfBlendMode,
+        path: KitePath, ctm: KiteMatrix, color: RgbColor, evenOdd: Boolean,
+        alpha: Double, blendMode: KiteBlendMode,
     ) {
         val sk = toSkPath(path, ctm).apply {
             fillMode = if (evenOdd) PathFillMode.EVEN_ODD else PathFillMode.WINDING
@@ -89,8 +89,8 @@ public class SkiaCanvas(private val canvas: SkCanvas) : KiteCanvas {
     }
 
     override fun strokePath(
-        path: KitePath, ctm: PdfMatrix, color: RgbColor, lineWidth: Double,
-        alpha: Double, blendMode: PdfBlendMode,
+        path: KitePath, ctm: KiteMatrix, color: RgbColor, lineWidth: Double,
+        alpha: Double, blendMode: KiteBlendMode,
         dashArray: List<Double>?, dashPhase: Double,
         lineCap: Int, lineJoin: Int, miterLimit: Double,
     ) {
@@ -135,10 +135,10 @@ public class SkiaCanvas(private val canvas: SkCanvas) : KiteCanvas {
         unitsPerEm: Int,
         hasOutlines: Boolean,
         fontSpec: FontSpec,
-        textToDevice: PdfMatrix,
+        textToDevice: KiteMatrix,
         color: RgbColor,
         alpha: Double,
-        blendMode: PdfBlendMode,
+        blendMode: KiteBlendMode,
     ) {
         if (glyphs.isEmpty()) return
         if (!hasOutlines) {
@@ -160,8 +160,8 @@ public class SkiaCanvas(private val canvas: SkCanvas) : KiteCanvas {
             val outline = glyph.outline
             if (outline != null && !outline.isEmpty()) {
                 val glyphMatrix = textToDevice
-                    .concat(PdfMatrix.translation(penX + glyph.xOffset * unitScale, glyph.yOffset * unitScale))
-                    .concat(PdfMatrix(unitScale, 0.0, 0.0, unitScale, 0.0, 0.0))
+                    .concat(KiteMatrix.translation(penX + glyph.xOffset * unitScale, glyph.yOffset * unitScale))
+                    .concat(KiteMatrix(unitScale, 0.0, 0.0, unitScale, 0.0, 0.0))
                 val sk = toSkPath(outline, glyphMatrix).apply { fillMode = PathFillMode.WINDING }
                 canvas.drawPath(sk, paint)
             }
@@ -177,7 +177,7 @@ public class SkiaCanvas(private val canvas: SkCanvas) : KiteCanvas {
      */
     private fun drawTextViaSystemFont(
         glyphs: List<TextGlyph>, fontSize: Double, fontSpec: FontSpec,
-        textMatrix: PdfMatrix, color: RgbColor, alpha: Double, blendMode: PdfBlendMode,
+        textMatrix: KiteMatrix, color: RgbColor, alpha: Double, blendMode: KiteBlendMode,
     ) {
         val text = glyphs.joinToString("") { it.text }
         if (text.isEmpty()) return
@@ -214,9 +214,9 @@ public class SkiaCanvas(private val canvas: SkCanvas) : KiteCanvas {
             else -> FontStyle.NORMAL
         }
         val family = when (spec.family) {
-            FontFamily.Serif -> "Times New Roman"
-            FontFamily.Monospace -> "Courier New"
-            FontFamily.SansSerif -> "Helvetica"
+            KiteFontFamily.Serif -> "Times New Roman"
+            KiteFontFamily.Monospace -> "Courier New"
+            KiteFontFamily.SansSerif -> "Helvetica"
         }
         return try {
             FontMgr.default.matchFamilyStyle(family, style) ?: FontMgr.default.matchFamilyStyle(null, style)
@@ -227,10 +227,10 @@ public class SkiaCanvas(private val canvas: SkCanvas) : KiteCanvas {
 
     override fun fillShading(
         shading: KiteShading,
-        ctm: PdfMatrix,
+        ctm: KiteMatrix,
         clipPath: KitePath?,
         alpha: Double,
-        blendMode: PdfBlendMode,
+        blendMode: KiteBlendMode,
     ) {
         if (paintComplexShading(shading, ctm, clipPath, alpha, blendMode)) return
         val stops = shading.sampleStops(32) ?: return
@@ -250,7 +250,7 @@ public class SkiaCanvas(private val canvas: SkCanvas) : KiteCanvas {
             is KiteShading.Axial -> shading.extendStart to shading.extendEnd
             is KiteShading.Radial -> shading.extendStart to shading.extendEnd
             is KiteShading.Unsupported -> return
-            else -> return // T-40 types already handled by paintComplexShading
+            else -> return // complex shading types already handled by paintComplexShading
         }
 
         val offsets = ArrayList<Float>(stops.offsets.size + 2)
@@ -327,7 +327,7 @@ public class SkiaCanvas(private val canvas: SkCanvas) : KiteCanvas {
         }
     }
 
-    override fun pushClip(path: KitePath, ctm: PdfMatrix, evenOdd: Boolean) {
+    override fun pushClip(path: KitePath, ctm: KiteMatrix, evenOdd: Boolean) {
         canvas.save()
         openLayers++
         val sk = toSkPath(path, ctm).apply {
@@ -343,16 +343,16 @@ public class SkiaCanvas(private val canvas: SkCanvas) : KiteCanvas {
         }
     }
 
-    override fun drawImage(image: ImageXObject, ctm: PdfMatrix, alpha: Double) {
+    override fun drawImage(image: KiteImageData, ctm: KiteMatrix, alpha: Double) {
         // Skia decodes JPEG natively + JP2/JPEG-2000 where the platform shim
         // supports it. Other kinds fall back to a placeholder rectangle.
         val sk = when (image.kind) {
-            ImageXObject.Kind.JPEG, ImageXObject.Kind.JPEG2000, ImageXObject.Kind.JBIG2 -> try {
+            KiteImageData.Kind.JPEG, KiteImageData.Kind.JPEG2000, KiteImageData.Kind.JBIG2 -> try {
                 Image.makeFromEncoded(image.encodedBytes)
             } catch (t: Throwable) {
                 null
             }
-            ImageXObject.Kind.RAW -> try {
+            KiteImageData.Kind.RAW -> try {
                 image.toRgbaBytes()?.let {
                     // toRgbaBytes() emits straight (non-premultiplied) R,G,B,A
                     // per pixel, matching RGBA_8888. UNPREMUL honours the alpha
@@ -391,7 +391,7 @@ public class SkiaCanvas(private val canvas: SkCanvas) : KiteCanvas {
         openLayers--
     }
 
-    private fun drawPlaceholder(ctm: PdfMatrix) {
+    private fun drawPlaceholder(ctm: KiteMatrix) {
         val sk = PathBuilder().apply {
             moveTo(0f, 0f); lineTo(1f, 0f); lineTo(1f, 1f); lineTo(0f, 1f); closePath()
         }.snapshot()
@@ -405,9 +405,9 @@ public class SkiaCanvas(private val canvas: SkCanvas) : KiteCanvas {
     }
 
     override fun beginTransparencyGroup(
-        bbox: Rectangle, ctm: PdfMatrix,
+        bbox: KiteRectangle, ctm: KiteMatrix,
         isolated: Boolean, knockout: Boolean,
-        alpha: Double, blendMode: PdfBlendMode,
+        alpha: Double, blendMode: KiteBlendMode,
     ) {
         val paint = Paint().apply {
             this.alpha = (alpha.coerceIn(0.0, 1.0) * 255).toInt()
@@ -426,7 +426,7 @@ public class SkiaCanvas(private val canvas: SkCanvas) : KiteCanvas {
 
     override fun applySoftMask(
         kind: SoftMask.Kind,
-        maskBBox: Rectangle, maskCtm: PdfMatrix,
+        maskBBox: KiteRectangle, maskCtm: KiteMatrix,
         render: () -> Unit,
         renderMask: (KiteCanvas) -> Unit,
     ) {
@@ -473,7 +473,7 @@ public class SkiaCanvas(private val canvas: SkCanvas) : KiteCanvas {
 
     /* ─── Helpers ─────────────────────────────────────────────────────────── */
 
-    private fun toSkPath(src: KitePath, ctm: PdfMatrix): SkPath {
+    private fun toSkPath(src: KitePath, ctm: KiteMatrix): SkPath {
         // skiko 0.148: Path is immutable; build via PathBuilder then snapshot().
         val b = PathBuilder()
         for (seg in src.segments) {
@@ -507,7 +507,7 @@ public class SkiaCanvas(private val canvas: SkCanvas) : KiteCanvas {
         return b.snapshot()
     }
 
-    private fun pdfMatrixToSkia(m: PdfMatrix): Matrix33 = Matrix33(
+    private fun pdfMatrixToSkia(m: KiteMatrix): Matrix33 = Matrix33(
         m.a.toFloat(), m.c.toFloat(), m.e.toFloat(),
         m.b.toFloat(), m.d.toFloat(), m.f.toFloat(),
         0f, 0f, 1f,
@@ -526,22 +526,22 @@ public class SkiaCanvas(private val canvas: SkCanvas) : KiteCanvas {
      * modes have a 1:1 Skia counterpart, named the same way (with Skia's
      * SCREAMING_SNAKE_CASE convention).
      */
-    private fun PdfBlendMode.toSkia(): SkiaBlendMode = when (this) {
-        PdfBlendMode.Normal -> SkiaBlendMode.SRC_OVER
-        PdfBlendMode.Multiply -> SkiaBlendMode.MULTIPLY
-        PdfBlendMode.Screen -> SkiaBlendMode.SCREEN
-        PdfBlendMode.Overlay -> SkiaBlendMode.OVERLAY
-        PdfBlendMode.Darken -> SkiaBlendMode.DARKEN
-        PdfBlendMode.Lighten -> SkiaBlendMode.LIGHTEN
-        PdfBlendMode.ColorDodge -> SkiaBlendMode.COLOR_DODGE
-        PdfBlendMode.ColorBurn -> SkiaBlendMode.COLOR_BURN
-        PdfBlendMode.HardLight -> SkiaBlendMode.HARD_LIGHT
-        PdfBlendMode.SoftLight -> SkiaBlendMode.SOFT_LIGHT
-        PdfBlendMode.Difference -> SkiaBlendMode.DIFFERENCE
-        PdfBlendMode.Exclusion -> SkiaBlendMode.EXCLUSION
-        PdfBlendMode.Hue -> SkiaBlendMode.HUE
-        PdfBlendMode.Saturation -> SkiaBlendMode.SATURATION
-        PdfBlendMode.Color -> SkiaBlendMode.COLOR
-        PdfBlendMode.Luminosity -> SkiaBlendMode.LUMINOSITY
+    private fun KiteBlendMode.toSkia(): SkiaBlendMode = when (this) {
+        KiteBlendMode.Normal -> SkiaBlendMode.SRC_OVER
+        KiteBlendMode.Multiply -> SkiaBlendMode.MULTIPLY
+        KiteBlendMode.Screen -> SkiaBlendMode.SCREEN
+        KiteBlendMode.Overlay -> SkiaBlendMode.OVERLAY
+        KiteBlendMode.Darken -> SkiaBlendMode.DARKEN
+        KiteBlendMode.Lighten -> SkiaBlendMode.LIGHTEN
+        KiteBlendMode.ColorDodge -> SkiaBlendMode.COLOR_DODGE
+        KiteBlendMode.ColorBurn -> SkiaBlendMode.COLOR_BURN
+        KiteBlendMode.HardLight -> SkiaBlendMode.HARD_LIGHT
+        KiteBlendMode.SoftLight -> SkiaBlendMode.SOFT_LIGHT
+        KiteBlendMode.Difference -> SkiaBlendMode.DIFFERENCE
+        KiteBlendMode.Exclusion -> SkiaBlendMode.EXCLUSION
+        KiteBlendMode.Hue -> SkiaBlendMode.HUE
+        KiteBlendMode.Saturation -> SkiaBlendMode.SATURATION
+        KiteBlendMode.Color -> SkiaBlendMode.COLOR
+        KiteBlendMode.Luminosity -> SkiaBlendMode.LUMINOSITY
     }
 }

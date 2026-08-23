@@ -18,7 +18,7 @@ public object Zlib {
      * data is appended big-endian. Round-trips through [decode].
      */
     public fun encode(data: ByteArray): ByteArray {
-        // Platform fast path (T-10): native zlib at level 6 emits the whole
+        // Platform fast path: native zlib at level 6 emits the whole
         // RFC 1950 stream (header + Adler) and compresses far better than the
         // pure-Kotlin encoder. Null means no fast path on this target.
         PlatformFlate.deflateOrNull(data, level = 6)?.let { return it }
@@ -54,7 +54,7 @@ public object Zlib {
         if (((cmf shl 8) or flg) % 31 != 0) throw InflateException("Zlib: header checksum failed")
         if ((flg and 0x20) != 0) throw InflateException("Zlib: preset dictionary not supported")
 
-        // Platform fast path (T-10): hand the native inflater the whole stream
+        // Platform fast path: hand the native inflater the whole stream
         // (it parses the header and verifies the Adler trailer itself, so no
         // re-verification below). Null (malformed, truncated, over the cap)
         // falls through to the pure-Kotlin path for its lenient behaviour and

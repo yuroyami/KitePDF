@@ -1,7 +1,7 @@
 package io.github.yuroyami.kitepdf
 
 import io.github.yuroyami.kitepdf.core.ByteArrayBuilder
-import io.github.yuroyami.kitepdf.core.render.Matrix
+import io.github.yuroyami.kitepdf.core.render.KiteMatrix
 import io.github.yuroyami.kitepdf.core.render.RecordingCanvas
 import io.github.yuroyami.kitepdf.writer.PdfBuilder
 import io.github.yuroyami.kitepdf.writer.StandardFont
@@ -45,7 +45,7 @@ class BatchFeaturesTest {
 
     private fun render(pdf: ByteArray): RecordingCanvas {
         val c = RecordingCanvas()
-        KitePDF.open(pdf).pages[0].renderTo(c, Matrix.IDENTITY)
+        KitePDF.open(pdf).pages[0].renderTo(c, KiteMatrix.IDENTITY)
         return c
     }
 

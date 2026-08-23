@@ -1,13 +1,13 @@
 package io.github.yuroyami.kitepdf.epub
 
-import io.github.yuroyami.kitepdf.core.render.Matrix
+import io.github.yuroyami.kitepdf.core.render.KiteMatrix
 import io.github.yuroyami.kitepdf.core.render.RecordingCanvas
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 /**
- * T-66: an inline `<img>` flows on the line (bottom on the baseline, line
+ * An inline `<img>` flows on the line (bottom on the baseline, line
  * grows to fit) instead of being dropped; `float:left/right` registers an
  * exclusion band so text lines beside the float are narrower and lines below
  * are full width again; `clear` drops content below floats.
@@ -53,7 +53,7 @@ class InlineImageFloatTest {
             """<body><p>before <img src="pic.png" style="width:30pt;height:30pt"/> after</p></body>""",
         )
         val canvas = RecordingCanvas()
-        doc.pages[0].renderTo(canvas, Matrix.IDENTITY)
+        doc.pages[0].renderTo(canvas, KiteMatrix.IDENTITY)
         val images = canvas.calls.filterIsInstance<RecordingCanvas.Call.Image>()
         assertEquals(1, images.size, "the inline image must draw")
         val glyphs = canvas.calls.filterIsInstance<RecordingCanvas.Call.Glyphs>()
@@ -71,7 +71,7 @@ class InlineImageFloatTest {
         val body = """<body><p>x <img src="pic.png" style="width:40pt;height:40pt"/> y</p><p>next</p></body>"""
         val doc = open(body)
         val canvas = RecordingCanvas()
-        doc.pages[0].renderTo(canvas, Matrix.IDENTITY)
+        doc.pages[0].renderTo(canvas, KiteMatrix.IDENTITY)
         val img = canvas.calls.filterIsInstance<RecordingCanvas.Call.Image>().single()
         val run = canvas.calls.filterIsInstance<RecordingCanvas.Call.Glyphs>().first { "x" in it.text }
 

@@ -6,7 +6,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 
 /**
- * T-51 regression: a glyf entry with NON-MONOTONIC endPtsOfContours (an
+ * Regression: a glyf entry with NON-MONOTONIC endPtsOfContours (an
  * interior entry larger than the last one, which sizes the point arrays)
  * crashed parseSimpleGlyph with ArrayIndexOutOfBoundsException. Found by the
  * mutation fuzzer (master seed 42, mutant seed 7214284492122955126 of a

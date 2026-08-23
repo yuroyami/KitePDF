@@ -1,6 +1,7 @@
 # Module kitepdf-skia-renderer
 
-A Skiko rasterizer: one rendering path with the same output on every target.
+A Skiko rasterizer: one rendering path with the same output on every target,
+for PDF pages and EPUB pages alike.
 
 This is the geometrically correct one. It honours `/Rotate`, `/CropBox`,
-non-zero origins and `/UserUnit`. Pair it with `kitepdf` or `kitepdf-pdf`.
+non-zero origins and `/UserUnit`. Pair it with `kitepdf` or a handler module.

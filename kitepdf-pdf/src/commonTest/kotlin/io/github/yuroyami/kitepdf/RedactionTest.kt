@@ -1,6 +1,6 @@
 package io.github.yuroyami.kitepdf
 
-import io.github.yuroyami.kitepdf.core.Rectangle
+import io.github.yuroyami.kitepdf.core.KiteRectangle
 
 import io.github.yuroyami.kitepdf.writer.PdfBuilder
 import io.github.yuroyami.kitepdf.writer.StandardFont
@@ -28,8 +28,8 @@ class RedactionTest {
             text(StandardFont.Helvetica, 12.0, 72.0, 100.0, keep)
         }.build(compress)
 
-    /** Rectangle (page user space) covering the secret line only. */
-    private val secretRegion = Rectangle(left = 60.0, bottom = 690.0, right = 470.0, top = 726.0)
+    /** KiteRectangle (page user space) covering the secret line only. */
+    private val secretRegion = KiteRectangle(left = 60.0, bottom = 690.0, right = 470.0, top = 726.0)
 
     @Test fun redaction_removes_target_text_and_keeps_the_rest() {
         val base = twoLinePdf(compress = false)
@@ -66,7 +66,7 @@ class RedactionTest {
     @Test fun full_page_redaction_removes_all_text() {
         val doc = KitePDF.open(twoLinePdf(compress = true))
         val out = doc.edit().apply {
-            redactRegion(doc.pages[0], Rectangle(0.0, 0.0, 612.0, 792.0))
+            redactRegion(doc.pages[0], KiteRectangle(0.0, 0.0, 612.0, 792.0))
         }.saveRewritten()
         assertTrue(KitePDF.open(out).pages[0].extractText().isBlank())
     }

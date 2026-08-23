@@ -1,6 +1,6 @@
 package io.github.yuroyami.kitepdf.nativerenderer
 
-import io.github.yuroyami.kitepdf.core.render.BlendMode
+import io.github.yuroyami.kitepdf.core.render.KiteBlendMode
 import java.awt.Composite
 import java.awt.CompositeContext
 import java.awt.RenderingHints
@@ -20,7 +20,7 @@ import java.awt.image.WritableRaster
  * colour space; we follow the spec formulas literally (§11.3.5.3).
  */
 internal class PdfBlendComposite(
-    private val mode: BlendMode,
+    private val mode: KiteBlendMode,
     private val alpha: Float,
 ) : Composite {
 
@@ -31,7 +31,7 @@ internal class PdfBlendComposite(
     ): CompositeContext = Context(mode, alpha)
 
     private class Context(
-        private val mode: BlendMode,
+        private val mode: KiteBlendMode,
         private val alpha: Float,
     ) : CompositeContext {
 
@@ -85,42 +85,42 @@ internal class PdfBlendComposite(
         private fun blendInto(
             sr: Float, sg: Float, sb: Float,
             dr: Float, dg: Float, db: Float,
-            mode: BlendMode,
+            mode: KiteBlendMode,
             o: FloatArray,
         ) {
             when (mode) {
-                BlendMode.Normal -> { o[0] = sr; o[1] = sg; o[2] = sb }
-                BlendMode.Multiply -> { o[0] = sr * dr; o[1] = sg * dg; o[2] = sb * db }
-                BlendMode.Screen -> {
+                KiteBlendMode.Normal -> { o[0] = sr; o[1] = sg; o[2] = sb }
+                KiteBlendMode.Multiply -> { o[0] = sr * dr; o[1] = sg * dg; o[2] = sb * db }
+                KiteBlendMode.Screen -> {
                     o[0] = 1 - (1 - sr) * (1 - dr)
                     o[1] = 1 - (1 - sg) * (1 - dg)
                     o[2] = 1 - (1 - sb) * (1 - db)
                 }
-                BlendMode.Overlay -> { o[0] = overlay(dr, sr); o[1] = overlay(dg, sg); o[2] = overlay(db, sb) }
-                BlendMode.Darken -> { o[0] = minOf(sr, dr); o[1] = minOf(sg, dg); o[2] = minOf(sb, db) }
-                BlendMode.Lighten -> { o[0] = maxOf(sr, dr); o[1] = maxOf(sg, dg); o[2] = maxOf(sb, db) }
-                BlendMode.ColorDodge -> { o[0] = colorDodge(dr, sr); o[1] = colorDodge(dg, sg); o[2] = colorDodge(db, sb) }
-                BlendMode.ColorBurn -> { o[0] = colorBurn(dr, sr); o[1] = colorBurn(dg, sg); o[2] = colorBurn(db, sb) }
-                BlendMode.HardLight -> { o[0] = overlay(sr, dr); o[1] = overlay(sg, dg); o[2] = overlay(sb, db) }
-                BlendMode.SoftLight -> { o[0] = softLight(dr, sr); o[1] = softLight(dg, sg); o[2] = softLight(db, sb) }
-                BlendMode.Difference -> {
+                KiteBlendMode.Overlay -> { o[0] = overlay(dr, sr); o[1] = overlay(dg, sg); o[2] = overlay(db, sb) }
+                KiteBlendMode.Darken -> { o[0] = minOf(sr, dr); o[1] = minOf(sg, dg); o[2] = minOf(sb, db) }
+                KiteBlendMode.Lighten -> { o[0] = maxOf(sr, dr); o[1] = maxOf(sg, dg); o[2] = maxOf(sb, db) }
+                KiteBlendMode.ColorDodge -> { o[0] = colorDodge(dr, sr); o[1] = colorDodge(dg, sg); o[2] = colorDodge(db, sb) }
+                KiteBlendMode.ColorBurn -> { o[0] = colorBurn(dr, sr); o[1] = colorBurn(dg, sg); o[2] = colorBurn(db, sb) }
+                KiteBlendMode.HardLight -> { o[0] = overlay(sr, dr); o[1] = overlay(sg, dg); o[2] = overlay(sb, db) }
+                KiteBlendMode.SoftLight -> { o[0] = softLight(dr, sr); o[1] = softLight(dg, sg); o[2] = softLight(db, sb) }
+                KiteBlendMode.Difference -> {
                     o[0] = kotlin.math.abs(dr - sr); o[1] = kotlin.math.abs(dg - sg); o[2] = kotlin.math.abs(db - sb)
                 }
-                BlendMode.Exclusion -> {
+                KiteBlendMode.Exclusion -> {
                     o[0] = dr + sr - 2 * dr * sr; o[1] = dg + sg - 2 * dg * sg; o[2] = db + sb - 2 * db * sb
                 }
                 // Non-separable modes (Hue/Saturation/Color/Luminosity) operate
                 // on HSL triples in place. Implemented per ISO 32000-1 §11.3.5.3.
-                BlendMode.Hue -> {
+                KiteBlendMode.Hue -> {
                     o[0] = sr; o[1] = sg; o[2] = sb
                     setSatInPlace(o, sat(dr, dg, db)); setLumInPlace(o, lum(dr, dg, db))
                 }
-                BlendMode.Saturation -> {
+                KiteBlendMode.Saturation -> {
                     o[0] = dr; o[1] = dg; o[2] = db
                     setSatInPlace(o, sat(sr, sg, sb)); setLumInPlace(o, lum(dr, dg, db))
                 }
-                BlendMode.Color -> { o[0] = sr; o[1] = sg; o[2] = sb; setLumInPlace(o, lum(dr, dg, db)) }
-                BlendMode.Luminosity -> { o[0] = dr; o[1] = dg; o[2] = db; setLumInPlace(o, lum(sr, sg, sb)) }
+                KiteBlendMode.Color -> { o[0] = sr; o[1] = sg; o[2] = sb; setLumInPlace(o, lum(dr, dg, db)) }
+                KiteBlendMode.Luminosity -> { o[0] = dr; o[1] = dg; o[2] = db; setLumInPlace(o, lum(sr, sg, sb)) }
             }
         }
 

@@ -1,7 +1,7 @@
 package io.github.yuroyami.kitepdf.epub
 
-import io.github.yuroyami.kitepdf.core.font.FontFamily
-import io.github.yuroyami.kitepdf.core.render.Matrix
+import io.github.yuroyami.kitepdf.core.font.KiteFontFamily
+import io.github.yuroyami.kitepdf.core.render.KiteMatrix
 import io.github.yuroyami.kitepdf.core.render.RecordingCanvas
 import io.github.yuroyami.kitepdf.core.render.RgbColor
 import kotlin.math.abs
@@ -10,7 +10,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 /**
- * T-73: reader settings are a cascade layer above author-important CSS.
+ * Reader settings are a cascade layer above author-important CSS.
  * One test per setting; all-default settings must change nothing.
  */
 class ReaderSettingsTest {
@@ -23,17 +23,17 @@ class ReaderSettingsTest {
 
     private fun glyphCalls(doc: EpubDocument): List<RecordingCanvas.Call.Glyphs> {
         val canvas = RecordingCanvas()
-        doc.pages[0].renderTo(canvas, Matrix.IDENTITY)
+        doc.pages[0].renderTo(canvas, KiteMatrix.IDENTITY)
         return canvas.calls.filterIsInstance<RecordingCanvas.Call.Glyphs>()
     }
 
     @Test
     fun font_family_override_beats_author_css() {
         val default = glyphCalls(open(EpubSettings()))
-        assertTrue(default.all { it.fontSpec.family == FontFamily.Monospace }, "author monospace honoured by default")
+        assertTrue(default.all { it.fontSpec.family == KiteFontFamily.Monospace }, "author monospace honoured by default")
 
         val forced = glyphCalls(open(EpubSettings(fontFamily = ReaderFontFamily.SERIF)))
-        assertTrue(forced.isNotEmpty() && forced.all { it.fontSpec.family == FontFamily.Serif },
+        assertTrue(forced.isNotEmpty() && forced.all { it.fontSpec.family == KiteFontFamily.Serif },
             "reader SERIF must override the author's monospace")
     }
 
@@ -51,14 +51,14 @@ class ReaderSettingsTest {
     fun background_color_paints_under_everything() {
         val bg = RgbColor(0.1, 0.1, 0.2)
         val canvas = RecordingCanvas()
-        open(EpubSettings(backgroundColor = bg)).pages[0].renderTo(canvas, Matrix.IDENTITY)
+        open(EpubSettings(backgroundColor = bg)).pages[0].renderTo(canvas, KiteMatrix.IDENTITY)
         val paintCalls = canvas.calls.filter { it is RecordingCanvas.Call.Fill || it is RecordingCanvas.Call.Glyphs }
         val first = paintCalls.first() as RecordingCanvas.Call.Fill
         assertEquals(bg, first.color, "first paint is the reader background")
 
         // Default: no page-background fill precedes the text.
         val plain = RecordingCanvas()
-        open(EpubSettings()).pages[0].renderTo(plain, Matrix.IDENTITY)
+        open(EpubSettings()).pages[0].renderTo(plain, KiteMatrix.IDENTITY)
         val fills = plain.calls.filterIsInstance<RecordingCanvas.Call.Fill>()
         assertTrue(fills.none { it.color == bg }, "no reader background by default")
     }
@@ -103,7 +103,7 @@ class ReaderSettingsTest {
         val stripped = glyphCalls(open(EpubSettings(usePublisherCss = false), styled))
         assertTrue(stripped.isNotEmpty() && stripped.all { it.color.r < 0.1 && it.color.g < 0.1 && it.color.b < 0.1 },
             "usePublisherCss=false leaves UA black text")
-        assertTrue(stripped.all { it.fontSpec.family != FontFamily.Monospace },
+        assertTrue(stripped.all { it.fontSpec.family != KiteFontFamily.Monospace },
             "inline monospace dropped with publisher CSS")
     }
 
@@ -112,14 +112,14 @@ class ReaderSettingsTest {
         // The reader layer must be inert by default: identical draw stream for
         // an explicitly-constructed default settings object.
         val a = RecordingCanvas()
-        open(EpubSettings()).pages[0].renderTo(a, Matrix.IDENTITY)
+        open(EpubSettings()).pages[0].renderTo(a, KiteMatrix.IDENTITY)
         val b = RecordingCanvas()
         open(
             EpubSettings(
                 fontFamily = null, lineHeightScale = 1.0, textColor = null,
                 backgroundColor = null, justify = null, usePublisherCss = true,
             ),
-        ).pages[0].renderTo(b, Matrix.IDENTITY)
+        ).pages[0].renderTo(b, KiteMatrix.IDENTITY)
         assertEquals(a.calls.size, b.calls.size)
         assertEquals(
             a.calls.filterIsInstance<RecordingCanvas.Call.Glyphs>(),

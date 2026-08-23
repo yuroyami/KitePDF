@@ -2,17 +2,17 @@ package io.github.yuroyami.kitepdf.render
 
 import io.github.yuroyami.kitepdf.core.render.applyExtGState
 
-import io.github.yuroyami.kitepdf.core.render.BlendMode
-import io.github.yuroyami.kitepdf.core.render.ColorSpace
+import io.github.yuroyami.kitepdf.core.render.KiteBlendMode
+import io.github.yuroyami.kitepdf.core.render.KiteColorSpace
 import io.github.yuroyami.kitepdf.core.render.ExtGState
 import io.github.yuroyami.kitepdf.core.render.GraphicsStack
 import io.github.yuroyami.kitepdf.core.render.GraphicsState
-import io.github.yuroyami.kitepdf.core.render.ImageXObject
+import io.github.yuroyami.kitepdf.core.render.KiteImageData
 import io.github.yuroyami.kitepdf.core.render.KiteCanvas
 import io.github.yuroyami.kitepdf.core.render.KitePath
 import io.github.yuroyami.kitepdf.core.render.KitePattern
 import io.github.yuroyami.kitepdf.core.render.KiteShading
-import io.github.yuroyami.kitepdf.core.render.Matrix
+import io.github.yuroyami.kitepdf.core.render.KiteMatrix
 import io.github.yuroyami.kitepdf.core.render.RgbColor
 import io.github.yuroyami.kitepdf.core.render.SoftMask
 import io.github.yuroyami.kitepdf.core.render.TextState
@@ -68,14 +68,14 @@ public class PageRenderer(
     // painting op via [applyPendingClip].
     private var pendingClip = 0
 
-    // Type3 fonts (T-42): parsed char-proc data per font instance, plus the
+    // Type3 fonts: parsed char-proc data per font instance, plus the
     // d1-uncolored flag. While true (inside a d1 glyph proc) every colour
     // operator is a spec no-op so the glyph paints with the caller's fill
     // colour (§9.6.5).
     private val type3Data = HashMap<PdfFont, Type3Data?>()
     private var type3IgnoreColor = false
 
-    // Text render modes 4..7 (T-41): glyph outlines accumulate here in USER
+    // Text render modes 4..7: glyph outlines accumulate here in USER
     // space across the whole BT..ET block; ET intersects the union with the
     // clip (§9.3.3: the text clip applies after the text object ends and
     // persists to the enclosing Q, which activeClipCount already models).
@@ -91,7 +91,7 @@ public class PageRenderer(
     private class FormResources(
         val fonts: Map<String, PdfFont>,
         val xobjects: Map<String, XObjectSlot>,
-        val colorSpaces: Map<String, ColorSpace>,
+        val colorSpaces: Map<String, KiteColorSpace>,
         val extGStates: Map<String, ExtGState>,
         val shadings: Map<String, KiteShading>,
         val patterns: Map<String, KitePattern>,
@@ -110,7 +110,7 @@ public class PageRenderer(
     private var optionalContent: io.github.yuroyami.kitepdf.PdfOptionalContent? = null
 
     /** The page's default (initial) CTM. Pattern matrices are relative to it. */
-    private var pageBaseCtm: Matrix = Matrix.IDENTITY
+    private var pageBaseCtm: KiteMatrix = KiteMatrix.IDENTITY
 
     /** Form-XObject nesting depth. It guards self/transitively-recursive `Do`. */
     private var formDepth = 0
@@ -127,7 +127,7 @@ public class PageRenderer(
     /** True while content must not be painted (inside a hidden OC section). */
     private fun ocHidden(): Boolean = ocHiddenDepth > 0
 
-    public fun render(page: PdfPage, deviceCtm: Matrix = defaultDeviceCtm(page)) {
+    public fun render(page: PdfPage, deviceCtm: KiteMatrix = defaultDeviceCtm(page)) {
         val fonts = loadFonts(page.resources)
         val xobjects = loadXObjects(page.resources)
         val colorSpaces = loadColorSpaces(page.resources)
@@ -321,23 +321,23 @@ public class PageRenderer(
      */
     private fun renderAppearanceForRect(
         appearance: PdfStream,
-        rect: io.github.yuroyami.kitepdf.core.Rectangle,
+        rect: io.github.yuroyami.kitepdf.core.KiteRectangle,
         state: GraphicsStack,
     ) {
         val bbox = appearance.dict.getArray("BBox")?.let { arr ->
-            io.github.yuroyami.kitepdf.core.Rectangle(
+            io.github.yuroyami.kitepdf.core.KiteRectangle(
                 arr.getOrNull(0).toDouble(), arr.getOrNull(1).toDouble(),
                 arr.getOrNull(2).toDouble(), arr.getOrNull(3).toDouble(),
             )
-        } ?: io.github.yuroyami.kitepdf.core.Rectangle(0.0, 0.0, rect.width, rect.height)
+        } ?: io.github.yuroyami.kitepdf.core.KiteRectangle(0.0, 0.0, rect.width, rect.height)
 
         val matrix = appearance.dict.getArray("Matrix")?.let { arr ->
-            Matrix(
+            KiteMatrix(
                 arr.getOrNull(0).toDouble(), arr.getOrNull(1).toDouble(),
                 arr.getOrNull(2).toDouble(), arr.getOrNull(3).toDouble(),
                 arr.getOrNull(4).toDouble(), arr.getOrNull(5).toDouble(),
             )
-        } ?: Matrix.IDENTITY
+        } ?: KiteMatrix.IDENTITY
 
         // Step 1+2: transform the four BBox corners by /Matrix, enclose upright.
         val corners = listOf(
@@ -353,7 +353,7 @@ public class PageRenderer(
         // Step 3: A maps the transformed appearance box onto /Rect.
         val sx = if (tbW != 0.0) rect.width / tbW else 1.0
         val sy = if (tbH != 0.0) rect.height / tbH else 1.0
-        val mapping = Matrix(sx, 0.0, 0.0, sy, rect.left - tbLeft * sx, rect.bottom - tbBottom * sy)
+        val mapping = KiteMatrix(sx, 0.0, 0.0, sy, rect.left - tbLeft * sx, rect.bottom - tbBottom * sy)
 
         state.save()
         state.replace(state.current.copy(ctm = state.current.ctm.concat(mapping)))
@@ -441,7 +441,7 @@ public class PageRenderer(
     /** Invoke [block] once per /QuadPoints quad (as a min/max box), or once over
      *  the whole [rect] when no quads are present. */
     private inline fun forEachQuad(
-        quads: List<Double>?, rect: io.github.yuroyami.kitepdf.core.Rectangle,
+        quads: List<Double>?, rect: io.github.yuroyami.kitepdf.core.KiteRectangle,
         block: (x0: Double, y0: Double, x1: Double, y1: Double) -> Unit,
     ) {
         if (quads != null && quads.size >= 8) {
@@ -458,7 +458,7 @@ public class PageRenderer(
     }
 
     /** Four-Bézier ellipse inscribed in [rect]. */
-    private fun ellipsePath(rect: io.github.yuroyami.kitepdf.core.Rectangle): KitePath {
+    private fun ellipsePath(rect: io.github.yuroyami.kitepdf.core.KiteRectangle): KitePath {
         val cx = rect.left + rect.width / 2; val cy = rect.bottom + rect.height / 2
         val rx = rect.width / 2; val ry = rect.height / 2
         val k = 0.5522847498
@@ -484,19 +484,19 @@ public class PageRenderer(
     }
 
     /** Named colour spaces declared in /Resources /ColorSpace. */
-    private fun loadColorSpaces(resources: PdfDictionary?): Map<String, ColorSpace> {
+    private fun loadColorSpaces(resources: PdfDictionary?): Map<String, KiteColorSpace> {
         val csDict = resources?.getDict("ColorSpace", resolver) ?: return emptyMap()
-        return csDict.map.mapValues { (_, value) -> ColorSpace.resolve(value, resolver) }
+        return csDict.map.mapValues { (_, value) -> KiteColorSpace.resolve(value, resolver) }
     }
 
     /**
      * Decode an inline image captured verbatim as `BI … ID <data> EI` (§8.9.7).
      * Parses the abbreviated dictionary, slices the raw data, and builds an
-     * [ImageXObject] driven through the normal raster path. [fillColor] tints an
+     * [KiteImageData] driven through the normal raster path. [fillColor] tints an
      * inline `/ImageMask` stencil.
      */
     /**
-     * Decode an image XObject through the per-document cache (T-12): keyed by
+     * Decode an image XObject through the per-document cache: keyed by
      * the indirect object number, so a logo stamped 40 times (or a background
      * shared by every page) decodes once per document. /ImageMask stencils are
      * tinted by the CURRENT fill colour, so their decoded form is
@@ -507,21 +507,21 @@ public class PageRenderer(
      * would pin tens of megabytes per page of a scanned book for a reuse that
      * never comes. This matches how `/ImageMask` stencils are already treated.
      */
-    private fun decodeImageCached(slot: XObjectSlot, fillColor: RgbColor): ImageXObject {
+    private fun decodeImageCached(slot: XObjectSlot, fillColor: RgbColor): KiteImageData {
         val doc = resolver as? io.github.yuroyami.kitepdf.PdfDocument
         val key = slot.objectNumber
         val masked = (slot.stream.dict["ImageMask"] as? io.github.yuroyami.kitepdf.core.parser.PdfBoolean)?.value == true ||
             slot.stream.dict["Mask"] != null
         if (doc == null || key == null || masked) {
             doc?.countImageDecode()
-            return ImageXObject.from(slot.stream, resolver, fillColor)
+            return KiteImageData.from(slot.stream, resolver, fillColor)
         }
         doc.cachedImage(key)?.let { return it }
         doc.countImageDecode()
-        return doc.cacheImage(key, ImageXObject.from(slot.stream, resolver, fillColor))
+        return doc.cacheImage(key, KiteImageData.from(slot.stream, resolver, fillColor))
     }
 
-    private fun decodeInlineImage(blob: ByteArray, fillColor: RgbColor): ImageXObject? {
+    private fun decodeInlineImage(blob: ByteArray, fillColor: RgbColor): KiteImageData? {
         if (blob.size < 4) return null
         val reader = io.github.yuroyami.kitepdf.core.ByteReader(blob)
         reader.seek(2) // skip "BI"
@@ -547,7 +547,7 @@ public class PageRenderer(
         val data = blob.copyOfRange(dataStart, dataEnd)
         entries["Length"] = PdfInt(data.size.toLong())
         val stream = PdfStream(PdfDictionary(entries), data)
-        return runCatching { ImageXObject.from(stream, resolver, fillColor) }.getOrNull()
+        return runCatching { KiteImageData.from(stream, resolver, fillColor) }.getOrNull()
     }
 
     /** Expand the abbreviated inline-image dictionary keys (§8.9.7 Table 92). */
@@ -588,18 +588,18 @@ public class PageRenderer(
         objectNumber: Long?,
     ) {
         val formMatrix = formStream.dict.getArray("Matrix")?.let { arr ->
-            Matrix(
+            KiteMatrix(
                 arr.getOrNull(0).toDouble(), arr.getOrNull(1).toDouble(),
                 arr.getOrNull(2).toDouble(), arr.getOrNull(3).toDouble(),
                 arr.getOrNull(4).toDouble(), arr.getOrNull(5).toDouble(),
             )
-        } ?: Matrix.IDENTITY
+        } ?: KiteMatrix.IDENTITY
         val bbox = formStream.dict.getArray("BBox")?.let { arr ->
-            io.github.yuroyami.kitepdf.core.Rectangle(
+            io.github.yuroyami.kitepdf.core.KiteRectangle(
                 arr.getOrNull(0).toDouble(), arr.getOrNull(1).toDouble(),
                 arr.getOrNull(2).toDouble(), arr.getOrNull(3).toDouble(),
             )
-        } ?: io.github.yuroyami.kitepdf.core.Rectangle(0.0, 0.0, 1000.0, 1000.0)
+        } ?: io.github.yuroyami.kitepdf.core.KiteRectangle(0.0, 0.0, 1000.0, 1000.0)
         fun buildResources(): FormResources {
             val resources = formStream.dict.getDict("Resources", resolver)
             val sh = loadShadings(resources)
@@ -648,7 +648,7 @@ public class PageRenderer(
                 blendMode = parentState.current.blendMode,
             )
             parentState.replace(parentState.current.copy(
-                fillAlpha = 1.0, strokeAlpha = 1.0, blendMode = BlendMode.Normal,
+                fillAlpha = 1.0, strokeAlpha = 1.0, blendMode = KiteBlendMode.Normal,
             ))
         }
         // Clip the form's content to its /BBox (§8.10.1) so it cannot overdraw
@@ -702,7 +702,7 @@ public class PageRenderer(
         return xobjs.map.mapNotNull { (name, raw) ->
             val resolved = raw.resolve(resolver) as? PdfStream ?: return@mapNotNull null
             // Keep the indirect object number: it keys the per-document decoded
-            // caches (T-12). Inline (ref-less) entries decode uncached.
+            // caches. Inline (ref-less) entries decode uncached.
             name to XObjectSlot((raw as? PdfReference)?.objectNumber, resolved)
         }.toMap()
     }
@@ -712,9 +712,9 @@ public class PageRenderer(
      * the TOP-LEFT (y-down), honouring the display box origin and normalized
      * /Rotate. Delegates to [PdfPage.pageToDeviceBase] so /Rotate, a non-zero
      * MediaBox origin, and CropBox are all folded in (they were previously
-     * ignored by the old `Matrix(1,0,0,-1,0,height)`).
+     * ignored by the old `KiteMatrix(1,0,0,-1,0,height)`).
      */
-    private fun defaultDeviceCtm(page: PdfPage): Matrix =
+    private fun defaultDeviceCtm(page: PdfPage): KiteMatrix =
         page.pageToDeviceBase()
 
     /* ─── Operator dispatch ──────────────────────────────────────────────── */
@@ -725,7 +725,7 @@ public class PageRenderer(
         path: KitePath.Builder,
         fonts: Map<String, PdfFont>,
         xobjects: Map<String, XObjectSlot>,
-        colorSpaces: Map<String, ColorSpace>,
+        colorSpaces: Map<String, KiteColorSpace>,
         extGStates: Map<String, ExtGState>,
         shadings: Map<String, KiteShading>,
         patterns: Map<String, KitePattern>,
@@ -749,7 +749,7 @@ public class PageRenderer(
                 while (activeClipCount > target) { canvas.popClip(); activeClipCount-- }
             }
             "cm" -> {
-                val m = Matrix(num(a, 0), num(a, 1), num(a, 2), num(a, 3), num(a, 4), num(a, 5))
+                val m = KiteMatrix(num(a, 0), num(a, 1), num(a, 2), num(a, 3), num(a, 4), num(a, 5))
                 state.replace(state.current.copy(ctm = state.current.ctm.concat(m)))
             }
             // A bare `w` (no operand) must keep the current width, not reset to 0
@@ -776,31 +776,31 @@ public class PageRenderer(
             // component count.
             "g" -> state.replace(state.current.copy(
                 fillColor = RgbColor.gray(num(a, 0)),
-                fillColorSpace = ColorSpace.DeviceGray, fillPattern = null,
+                fillColorSpace = KiteColorSpace.DeviceGray, fillPattern = null,
             ))
             "G" -> state.replace(state.current.copy(
                 strokeColor = RgbColor.gray(num(a, 0)),
-                strokeColorSpace = ColorSpace.DeviceGray, strokePattern = null,
+                strokeColorSpace = KiteColorSpace.DeviceGray, strokePattern = null,
             ))
             "rg" -> state.replace(state.current.copy(
                 fillColor = RgbColor(num(a, 0), num(a, 1), num(a, 2)),
-                fillColorSpace = ColorSpace.DeviceRGB, fillPattern = null,
+                fillColorSpace = KiteColorSpace.DeviceRGB, fillPattern = null,
             ))
             "RG" -> state.replace(state.current.copy(
                 strokeColor = RgbColor(num(a, 0), num(a, 1), num(a, 2)),
-                strokeColorSpace = ColorSpace.DeviceRGB, strokePattern = null,
+                strokeColorSpace = KiteColorSpace.DeviceRGB, strokePattern = null,
             ))
             "k" -> state.replace(state.current.copy(
-                fillColor = ColorSpace.DeviceCMYK.toRgb(
+                fillColor = KiteColorSpace.DeviceCMYK.toRgb(
                     doubleArrayOf(num(a, 0), num(a, 1), num(a, 2), num(a, 3)),
                 ),
-                fillColorSpace = ColorSpace.DeviceCMYK, fillPattern = null,
+                fillColorSpace = KiteColorSpace.DeviceCMYK, fillPattern = null,
             ))
             "K" -> state.replace(state.current.copy(
-                strokeColor = ColorSpace.DeviceCMYK.toRgb(
+                strokeColor = KiteColorSpace.DeviceCMYK.toRgb(
                     doubleArrayOf(num(a, 0), num(a, 1), num(a, 2), num(a, 3)),
                 ),
-                strokeColorSpace = ColorSpace.DeviceCMYK, strokePattern = null,
+                strokeColorSpace = KiteColorSpace.DeviceCMYK, strokePattern = null,
             ))
             // cs/CS select the colour space for subsequent sc/scn/SC/SCN. Without them a
             // non-device space (e.g. CoreGraphics' ICCBased-RGB on iOS-generated PDFs) stayed
@@ -809,12 +809,12 @@ public class PageRenderer(
             // initial value (black) until the next sc/scn sets components.
             "cs" -> {
                 val csp = (a.firstOrNull() as? io.github.yuroyami.kitepdf.core.parser.PdfName)
-                    ?.let { namedColorSpace(it.value, colorSpaces) } ?: ColorSpace.DeviceGray
+                    ?.let { namedColorSpace(it.value, colorSpaces) } ?: KiteColorSpace.DeviceGray
                 state.replace(state.current.copy(fillColorSpace = csp, fillColor = csp.defaultColor(), fillPattern = null))
             }
             "CS" -> {
                 val csp = (a.firstOrNull() as? io.github.yuroyami.kitepdf.core.parser.PdfName)
-                    ?.let { namedColorSpace(it.value, colorSpaces) } ?: ColorSpace.DeviceGray
+                    ?.let { namedColorSpace(it.value, colorSpaces) } ?: KiteColorSpace.DeviceGray
                 state.replace(state.current.copy(strokeColorSpace = csp, strokeColor = csp.defaultColor(), strokePattern = null))
             }
 
@@ -853,11 +853,11 @@ public class PageRenderer(
             "BT" -> {
                 pendingTextClip = null
                 state.mutateText {
-                    it.copy(textMatrix = Matrix.IDENTITY, lineMatrix = Matrix.IDENTITY)
+                    it.copy(textMatrix = KiteMatrix.IDENTITY, lineMatrix = KiteMatrix.IDENTITY)
                 }
             }
             "ET" -> {
-                // Apply the accumulated modes-4..7 text clip (T-41).
+                // Apply the accumulated modes-4..7 text clip.
                 val clip = pendingTextClip
                 pendingTextClip = null
                 if (clip != null) {
@@ -885,7 +885,7 @@ public class PageRenderer(
             "Td" -> moveText(state, num(a, 0), num(a, 1), setLeading = false)
             "TD" -> moveText(state, num(a, 0), num(a, 1), setLeading = true)
             "Tm" -> state.mutateText {
-                val m = Matrix(num(a, 0), num(a, 1), num(a, 2), num(a, 3), num(a, 4), num(a, 5))
+                val m = KiteMatrix(num(a, 0), num(a, 1), num(a, 2), num(a, 3), num(a, 4), num(a, 5))
                 it.copy(textMatrix = m, lineMatrix = m)
             }
             "T*" -> moveText(state, 0.0, -state.current.text.leading, setLeading = false)
@@ -1108,7 +1108,7 @@ public class PageRenderer(
         pendingClip = 0
         try {
             for (j in j0..j1) for (i in i0..i1) {
-                val tileCtm = patternCtm.concat(Matrix.translation(i * xs, j * ys))
+                val tileCtm = patternCtm.concat(KiteMatrix.translation(i * xs, j * ys))
                 val tileState = GraphicsStack(
                     if (uncolored) GraphicsState(ctm = tileCtm, fillColor = s.fillColor, strokeColor = s.fillColor)
                     else GraphicsState(ctm = tileCtm),
@@ -1126,7 +1126,7 @@ public class PageRenderer(
     }
 
     /** Axis-aligned device-space bounds of [path] under [ctm], or null if empty. */
-    private fun deviceBounds(path: KitePath, ctm: Matrix): DoubleArray? {
+    private fun deviceBounds(path: KitePath, ctm: KiteMatrix): DoubleArray? {
         var minX = Double.POSITIVE_INFINITY; var minY = Double.POSITIVE_INFINITY
         var maxX = Double.NEGATIVE_INFINITY; var maxY = Double.NEGATIVE_INFINITY
         var any = false
@@ -1162,18 +1162,18 @@ public class PageRenderer(
         // honour. We pass them along so the backend's saveLayer can size
         // the offscreen correctly.
         val maskBBox = mask.group.dict.getArray("BBox")?.let { arr ->
-            io.github.yuroyami.kitepdf.core.Rectangle(
+            io.github.yuroyami.kitepdf.core.KiteRectangle(
                 arr.getOrNull(0).toDouble(), arr.getOrNull(1).toDouble(),
                 arr.getOrNull(2).toDouble(), arr.getOrNull(3).toDouble(),
             )
-        } ?: io.github.yuroyami.kitepdf.core.Rectangle(0.0, 0.0, 0.0, 0.0)
+        } ?: io.github.yuroyami.kitepdf.core.KiteRectangle(0.0, 0.0, 0.0, 0.0)
         val maskMatrix = mask.group.dict.getArray("Matrix")?.let { arr ->
-            Matrix(
+            KiteMatrix(
                 arr.getOrNull(0).toDouble(), arr.getOrNull(1).toDouble(),
                 arr.getOrNull(2).toDouble(), arr.getOrNull(3).toDouble(),
                 arr.getOrNull(4).toDouble(), arr.getOrNull(5).toDouble(),
             )
-        } ?: Matrix.IDENTITY
+        } ?: KiteMatrix.IDENTITY
         canvas.applySoftMask(
             kind = mask.kind,
             maskBBox = maskBBox,
@@ -1190,7 +1190,7 @@ public class PageRenderer(
         )
     }
 
-    private fun renderMaskGroup(formStream: PdfStream, target: KiteCanvas, baseCtm: Matrix) {
+    private fun renderMaskGroup(formStream: PdfStream, target: KiteCanvas, baseCtm: KiteMatrix) {
         // We need a sub-renderer so the mask paints into [target] rather
         // than the page canvas. The cleanest thing is to construct a
         // throwaway PageRenderer instance and let it run the form-xobject
@@ -1287,7 +1287,7 @@ public class PageRenderer(
             // applies its argument first, so this is lineMatrix.concat(translation).)
             // The reverse order silently works only when Tm has unit scale; with the
             // font size baked into Tm (Tf size 1, scale in Tm) it collapsed line spacing.
-            val moved = t.lineMatrix.concat(Matrix.translation(tx, ty))
+            val moved = t.lineMatrix.concat(KiteMatrix.translation(tx, ty))
             t.copy(
                 lineMatrix = moved,
                 textMatrix = moved,
@@ -1310,7 +1310,7 @@ public class PageRenderer(
             // per byte so subsequent text does not overlap. Nothing is painted.
             val estimated = bytes.size * 0.5 * t.fontSize * hScale
             state.mutateText {
-                it.copy(textMatrix = it.textMatrix.concat(Matrix.translation(estimated, 0.0)))
+                it.copy(textMatrix = it.textMatrix.concat(KiteMatrix.translation(estimated, 0.0)))
             }
             return
         }
@@ -1329,10 +1329,10 @@ public class PageRenderer(
         // text-space → user-space (Tm + Tz + Ts, without the CTM). Stroking uses
         // this + s.ctm separately so the stroke width scales by the CTM only, as
         // the spec prescribes; drawText takes the fully-combined finalMatrix.
-        val textToUser = textMatrix.concat(Matrix(hScale, 0.0, 0.0, 1.0, 0.0, t.rise))
+        val textToUser = textMatrix.concat(KiteMatrix(hScale, 0.0, 0.0, 1.0, 0.0, t.rise))
         val finalMatrix = pageMatrix.concat(textToUser)
 
-        // Type3 fonts draw by replaying char-proc content streams (T-42).
+        // Type3 fonts draw by replaying char-proc content streams.
         type3Data[font]?.let { data ->
             showTextType3(state, bytes, t, data, textToUser)
             return
@@ -1346,9 +1346,9 @@ public class PageRenderer(
         val doFill = mode == 0 || mode == 2 || mode == 4 || mode == 6
         val doStroke = mode == 1 || mode == 2 || mode == 5 || mode == 6
         // Modes 4..7 accumulate the glyph outlines into a clip applied at ET
-        // (§9.3.3, T-41). Mode 7 clips without painting.
+        // (§9.3.3). Mode 7 clips without painting.
         val doClip = mode >= 4
-        // ONE glyph layout per run (T-13): fill, stroke, clip and the Tm
+        // ONE glyph layout per run: fill, stroke, clip and the Tm
         // advance all read the same list. Outlines are resolved only when
         // something below actually consumes them.
         val hidden = ocHidden()
@@ -1379,7 +1379,7 @@ public class PageRenderer(
         // size-in-Tm run advances in output space and the next run on the line overlaps.
         val totalAdvance = totalAdvance(glyphs, t)
         state.mutateText {
-            it.copy(textMatrix = it.textMatrix.concat(Matrix.translation(totalAdvance, 0.0)))
+            it.copy(textMatrix = it.textMatrix.concat(KiteMatrix.translation(totalAdvance, 0.0)))
         }
     }
 
@@ -1396,7 +1396,7 @@ public class PageRenderer(
         t: TextState,
         /** The run's glyphs, laid out ONCE by [showText] (outlines resolved). */
         glyphs: List<TextGlyph>,
-        textToUser: Matrix,
+        textToUser: KiteMatrix,
     ) {
         if (!font.hasEmbeddedOutlines) return
         val upm = font.unitsPerEm ?: 1000
@@ -1411,8 +1411,8 @@ public class PageRenderer(
             val outline = glyph.outline
             if (outline != null && !outline.isEmpty()) {
                 val glyphMatrix = textToUser
-                    .concat(Matrix.translation(penX, 0.0))
-                    .concat(Matrix(unitScale, 0.0, 0.0, unitScale, 0.0, 0.0))
+                    .concat(KiteMatrix.translation(penX, 0.0))
+                    .concat(KiteMatrix(unitScale, 0.0, 0.0, unitScale, 0.0, 0.0))
                 val userPath = transformPath(outline, glyphMatrix)
                 withSoftMask(s) {
                     canvas.strokePath(
@@ -1438,7 +1438,7 @@ public class PageRenderer(
         glyphs: List<TextGlyph>,
         font: PdfFont,
         t: TextState,
-        textToUser: Matrix,
+        textToUser: KiteMatrix,
     ) {
         val builder = pendingTextClip ?: KitePath.Builder().also { pendingTextClip = it }
         val upm = font.unitsPerEm ?: 1000
@@ -1446,12 +1446,12 @@ public class PageRenderer(
         val advanceScale = t.fontSize / 1000.0
         var penX = 0.0
         for (glyph in glyphs) {
-            val penMatrix = textToUser.concat(Matrix.translation(penX, 0.0))
+            val penMatrix = textToUser.concat(KiteMatrix.translation(penX, 0.0))
             val outline = glyph.outline
             if (outline != null && !outline.isEmpty()) {
                 appendPath(
                     builder,
-                    transformPath(outline, penMatrix.concat(Matrix(unitScale, 0.0, 0.0, unitScale, 0.0, 0.0))),
+                    transformPath(outline, penMatrix.concat(KiteMatrix(unitScale, 0.0, 0.0, unitScale, 0.0, 0.0))),
                 )
             } else if (glyph.advanceWidth > 0.0) {
                 val w = glyph.advanceWidth * advanceScale
@@ -1476,7 +1476,7 @@ public class PageRenderer(
     }
 
     /** Apply [m] to every coordinate of [path], returning a new path. */
-    private fun transformPath(path: KitePath, m: Matrix): KitePath {
+    private fun transformPath(path: KitePath, m: KiteMatrix): KitePath {
         val b = KitePath.Builder()
         fun p(x: Double, y: Double): Pair<Double, Double> = m.transformPoint(x, y)
         for (seg in path.segments) when (seg) {
@@ -1501,7 +1501,7 @@ public class PageRenderer(
         val tx = thousandthsOfEm / 1000.0 * t.fontSize * (t.horizontalScaling / 100.0)
         state.mutateText {
             // Text-space offset: translate first, then the text matrix (see moveText).
-            it.copy(textMatrix = it.textMatrix.concat(Matrix.translation(tx, 0.0)))
+            it.copy(textMatrix = it.textMatrix.concat(KiteMatrix.translation(tx, 0.0)))
         }
     }
 
@@ -1525,7 +1525,7 @@ public class PageRenderer(
     }
 
     /**
-     * T-42: show a text run in a Type3 font. Each byte's glyph is a content
+     * Show a text run in a Type3 font. Each byte's glyph is a content
      * stream replayed like a small form XObject under
      * `CTM x textToUser x pen x fontSize x FontMatrix`, with the font's own
      * /Resources (absent /Resources fall back to EMPTY maps: the spec's
@@ -1538,7 +1538,7 @@ public class PageRenderer(
         bytes: ByteArray,
         t: TextState,
         data: Type3Data,
-        textToUser: Matrix,
+        textToUser: KiteMatrix,
     ) {
         val hidden = ocHidden()
         var penX = 0.0
@@ -1549,8 +1549,8 @@ public class PageRenderer(
                 formDepth++
                 try {
                     val glyphToUser = textToUser
-                        .concat(Matrix.translation(penX, 0.0))
-                        .concat(Matrix.scaling(t.fontSize, t.fontSize))
+                        .concat(KiteMatrix.translation(penX, 0.0))
+                        .concat(KiteMatrix.scaling(t.fontSize, t.fontSize))
                         .concat(data.fontMatrix)
                     replayType3Proc(proc, data, state, glyphToUser)
                 } finally {
@@ -1563,7 +1563,7 @@ public class PageRenderer(
         }
         val hScale = t.horizontalScaling / 100.0
         state.mutateText {
-            it.copy(textMatrix = it.textMatrix.concat(Matrix.translation(penX * hScale, 0.0)))
+            it.copy(textMatrix = it.textMatrix.concat(KiteMatrix.translation(penX * hScale, 0.0)))
         }
     }
 
@@ -1571,7 +1571,7 @@ public class PageRenderer(
         proc: PdfStream,
         data: Type3Data,
         parentState: GraphicsStack,
-        glyphToUser: Matrix,
+        glyphToUser: KiteMatrix,
     ) {
         val res = data.resources
         val sh = loadShadings(res)
@@ -1614,12 +1614,12 @@ public class PageRenderer(
     }
 
     /** Look up a /ColorSpace name from a Resources entry; fall back to device families. */
-    private fun namedColorSpace(name: String, dict: Map<String, ColorSpace>): ColorSpace =
+    private fun namedColorSpace(name: String, dict: Map<String, KiteColorSpace>): KiteColorSpace =
         when (name) {
-            "DeviceGray", "G" -> ColorSpace.DeviceGray
-            "DeviceRGB", "RGB" -> ColorSpace.DeviceRGB
-            "DeviceCMYK", "CMYK" -> ColorSpace.DeviceCMYK
-            else -> dict[name] ?: ColorSpace.DeviceGray
+            "DeviceGray", "G" -> KiteColorSpace.DeviceGray
+            "DeviceRGB", "RGB" -> KiteColorSpace.DeviceRGB
+            "DeviceCMYK", "CMYK" -> KiteColorSpace.DeviceCMYK
+            else -> dict[name] ?: KiteColorSpace.DeviceGray
         }
 
     private companion object {
@@ -1628,7 +1628,7 @@ public class PageRenderer(
         /** Max Form-XObject nesting depth before bailing (recursion guard). */
         const val MAX_FORM_DEPTH = 15
 
-        /** Colour operators ignored inside a d1 (uncolored) Type3 glyph (T-42). */
+        /** Colour operators ignored inside a d1 (uncolored) Type3 glyph. */
         val TYPE3_COLOR_OPS = setOf("g", "G", "rg", "RG", "k", "K", "cs", "CS", "sc", "SC", "scn", "SCN")
         /**
          * Per-page dispatched-operation budget, counting tiling-pattern and

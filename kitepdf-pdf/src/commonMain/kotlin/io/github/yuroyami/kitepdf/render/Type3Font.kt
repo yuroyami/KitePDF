@@ -1,6 +1,6 @@
 package io.github.yuroyami.kitepdf.render
 
-import io.github.yuroyami.kitepdf.core.render.Matrix
+import io.github.yuroyami.kitepdf.core.render.KiteMatrix
 
 import io.github.yuroyami.kitepdf.core.parser.IndirectResolver
 import io.github.yuroyami.kitepdf.core.parser.PdfArray
@@ -11,8 +11,7 @@ import io.github.yuroyami.kitepdf.core.parser.PdfReal
 import io.github.yuroyami.kitepdf.core.parser.PdfStream
 
 /**
- * The renderer-side view of a /Subtype /Type3 font (ISO 32000-1 §9.6.5,
- * T-42): glyphs are content streams ([charProcs]) drawn in glyph space and
+ * The renderer-side view of a /Subtype /Type3 font (ISO 32000-1 §9.6.5): glyphs are content streams ([charProcs]) drawn in glyph space and
  * mapped by [fontMatrix]; widths live in GLYPH space (unlike every other
  * font's 1/1000 em). Text extraction still runs through the ordinary
  * [io.github.yuroyami.kitepdf.core.font.PdfFont] pipeline (its /Encoding
@@ -20,7 +19,7 @@ import io.github.yuroyami.kitepdf.core.parser.PdfStream
  */
 internal class Type3Data(
     val charProcs: Map<String, PdfStream>,
-    val fontMatrix: Matrix,
+    val fontMatrix: KiteMatrix,
     val resources: PdfDictionary?,
     /** Glyph name per byte code, from /Encoding /Differences. */
     val nameForCode: Array<String?>,
@@ -41,9 +40,9 @@ internal class Type3Data(
             if (procs.isEmpty()) return null
 
             val fm = dict.getArray("FontMatrix")?.let { arr ->
-                if (arr.size >= 6) Matrix(arr.num(0), arr.num(1), arr.num(2), arr.num(3), arr.num(4), arr.num(5))
+                if (arr.size >= 6) KiteMatrix(arr.num(0), arr.num(1), arr.num(2), arr.num(3), arr.num(4), arr.num(5))
                 else null
-            } ?: Matrix(0.001, 0.0, 0.0, 0.001, 0.0, 0.0)
+            } ?: KiteMatrix(0.001, 0.0, 0.0, 0.001, 0.0, 0.0)
 
             // /Encoding /Differences: integers set the next code, names assign.
             val names = arrayOfNulls<String>(256)

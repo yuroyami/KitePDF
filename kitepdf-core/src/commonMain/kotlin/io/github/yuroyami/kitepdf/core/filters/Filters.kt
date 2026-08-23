@@ -22,7 +22,7 @@ import io.github.yuroyami.kitepdf.core.parser.PdfStream
  *   - FlateDecode (with TIFF + PNG predictors), ASCIIHexDecode, ASCII85Decode,
  *     RunLengthDecode, LZWDecode, CCITTFaxDecode: implemented here.
  *   - DCTDecode (JPEG) and JBIG2Decode: handled at the image-XObject layer
- *     ([io.github.yuroyami.kitepdf.core.render.ImageXObject]), not through this chain.
+ *     ([io.github.yuroyami.kitepdf.core.render.KiteImageData]), not through this chain.
  *   - JPXDecode (JPEG 2000) and Crypt: throw [UnsupportedFilterException].
  */
 public class UnsupportedFilterException(public val filterName: String) :

@@ -7,7 +7,7 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 /**
- * T-25: the format-neutral [KiteDocument] surface on [EpubDocument]:
+ * The format-neutral [KiteDocument] surface on [EpubDocument]:
  * OPF metadata and the TOC (with hrefs resolved to page indices through
  * the pagination anchor map), read without downcasting.
  */

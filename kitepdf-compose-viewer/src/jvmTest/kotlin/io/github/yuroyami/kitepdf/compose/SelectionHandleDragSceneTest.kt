@@ -49,12 +49,12 @@ class SelectionHandleDragSceneTest {
 
     private inline fun scene(
         doc: io.github.yuroyami.kitepdf.PdfDocument,
-        body: (ImageComposeScene, PdfViewState, SceneTestDriver) -> Unit,
+        body: (ImageComposeScene, KiteDocViewState, SceneTestDriver) -> Unit,
     ) {
-        lateinit var state: PdfViewState
+        lateinit var state: KiteDocViewState
         ImageComposeScene(width = 200, height = 200, density = Density(1f)) {
-            state = rememberPdfViewState(doc)
-            PdfView(state = state, modifier = Modifier.fillMaxSize(), layout = PdfLayout.SinglePage(0))
+            state = rememberKiteDocViewState(doc)
+            KiteDocView(state = state, modifier = Modifier.fillMaxSize(), layout = KiteDocLayout.SinglePage(0))
         }.use { scene ->
             val driver = SceneTestDriver(scene)
             driver.pumpUntil { state.pageGeometry.isNotEmpty() }
@@ -63,7 +63,7 @@ class SelectionHandleDragSceneTest {
     }
 
     /** Long-press-drags a selection over the whole of the first line. */
-    private fun selectFirstLine(state: PdfViewState, line: KiteTextLine) {
+    private fun selectFirstLine(state: KiteDocViewState, line: KiteTextLine) {
         state.beginSelection(charPoint(line, 0))
         state.extendSelection(charPoint(line, line.text.length - 1))
         state.endSelectionGesture()
@@ -75,19 +75,19 @@ class SelectionHandleDragSceneTest {
         val doc = twoLineDoc()
         val line = lines(doc)[0]
         scene(doc) { _, state, _ ->
-            assertNull(state.handlePoint(PdfSelectionHandleEdge.Start), "no selection, no thumb")
+            assertNull(state.handlePoint(KiteSelectionHandleEdge.Start), "no selection, no thumb")
             assertNull(state.handleAt(Offset(100f, 100f), 24f), "nothing to grab at rest")
 
             selectFirstLine(state, line)
 
-            val start = assertNotNull(state.handlePoint(PdfSelectionHandleEdge.Start))
-            val end = assertNotNull(state.handlePoint(PdfSelectionHandleEdge.End))
+            val start = assertNotNull(state.handlePoint(KiteSelectionHandleEdge.Start))
+            val end = assertNotNull(state.handlePoint(KiteSelectionHandleEdge.End))
             assertTrue(end.x > start.x, "the end thumb sits after the start one ($start -> $end)")
 
-            assertEquals(PdfSelectionHandleEdge.Start, state.handleAt(start, 24f))
-            assertEquals(PdfSelectionHandleEdge.End, state.handleAt(end, 24f))
+            assertEquals(KiteSelectionHandleEdge.Start, state.handleAt(start, 24f))
+            assertEquals(KiteSelectionHandleEdge.End, state.handleAt(end, 24f))
             // Just inside the radius still grabs; well outside it does not.
-            assertEquals(PdfSelectionHandleEdge.Start, state.handleAt(start + Offset(0f, 20f), 24f))
+            assertEquals(KiteSelectionHandleEdge.Start, state.handleAt(start + Offset(0f, 20f), 24f))
             assertNull(state.handleAt(start + Offset(0f, 60f), 24f), "a press far from both thumbs grabs nothing")
         }
     }
@@ -99,7 +99,7 @@ class SelectionHandleDragSceneTest {
         scene(doc) { _, state, _ ->
             selectFirstLine(state, line)
 
-            state.beginHandleDrag(PdfSelectionHandleEdge.Start)
+            state.beginHandleDrag(KiteSelectionHandleEdge.Start)
             assertTrue(state.selectionInProgress, "grabbing a thumb starts a drag")
             state.extendSelection(charPoint(line, 6))
             state.endSelectionGesture()
@@ -117,7 +117,7 @@ class SelectionHandleDragSceneTest {
         scene(doc) { _, state, _ ->
             selectFirstLine(state, line)
 
-            state.beginHandleDrag(PdfSelectionHandleEdge.End)
+            state.beginHandleDrag(KiteSelectionHandleEdge.End)
             state.extendSelection(charPoint(line, 4))
             state.endSelectionGesture()
 
@@ -134,7 +134,7 @@ class SelectionHandleDragSceneTest {
 
             // Grab the START thumb and haul it past the end of the selection,
             // down onto the second line: the old end becomes the new start.
-            state.beginHandleDrag(PdfSelectionHandleEdge.Start)
+            state.beginHandleDrag(KiteSelectionHandleEdge.Start)
             state.extendSelection(charPoint(second, 5))
             state.endSelectionGesture()
 
@@ -151,7 +151,7 @@ class SelectionHandleDragSceneTest {
         scene(doc) { _, state, _ ->
             selectFirstLine(state, line)
 
-            state.beginHandleDrag(PdfSelectionHandleEdge.End)
+            state.beginHandleDrag(KiteSelectionHandleEdge.End)
             state.extendSelection(charPoint(line, 4))
             state.extendSelection(Offset(190f, 195f)) // bare paper, below both lines
             state.endSelectionGesture()
@@ -172,7 +172,7 @@ class SelectionHandleDragSceneTest {
         val line = lines(doc)[0]
         scene(doc) { scene, state, driver ->
             selectFirstLine(state, line)
-            val end = assertNotNull(state.handlePoint(PdfSelectionHandleEdge.End))
+            val end = assertNotNull(state.handlePoint(KiteSelectionHandleEdge.End))
             val target = charPoint(line, 4)
 
             scene.sendPointerEvent(PointerEventType.Press, end, type = PointerType.Touch)
@@ -200,7 +200,7 @@ class SelectionHandleDragSceneTest {
             selectFirstLine(state, line)
             // Well clear of both thumbs: measured off the real one rather than
             // guessed, since the thumb's x depends on the font's metrics.
-            val away = assertNotNull(state.handlePoint(PdfSelectionHandleEdge.End)) + Offset(0f, 100f)
+            val away = assertNotNull(state.handlePoint(KiteSelectionHandleEdge.End)) + Offset(0f, 100f)
             assertNull(state.handleAt(away, 24f), "the fixture point really is out of grab range")
 
             scene.sendPointerEvent(PointerEventType.Press, away, type = PointerType.Touch)

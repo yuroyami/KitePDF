@@ -13,7 +13,14 @@ import io.github.yuroyami.kitepdf.epub.EpubDocument
 
 val book = EpubDocument.open(epubBytes)
 println("${book.pageCount} pages at ${book.pageWidth} x ${book.pageHeight} pt")
+
+// or straight off disk, on JVM, Android and Apple:
+val fromDisk = EpubDocument.openFile("/books/moby-dick.epub")
 ```
+
+For every other source (a stream, an Android content Uri, Base64, a URL) and
+for opening a file without knowing whether it is a book or a PDF, see
+**[Loading a document](loading.md)**.
 
 `open` throws `EpubFormatException` with a message naming the first
 structural failure ("META-INF/container.xml missing or unreadable", "OPF not
@@ -46,15 +53,19 @@ val canvas = AwtCanvas(graphics2d)
 book.pages[0].renderTo(canvas)
 ```
 
-In Compose, `EpubView` is the ready-made viewer:
+In Compose, `KiteDocView` is the ready-made viewer. It takes any
+`KiteDocument`, so a book goes in exactly where a PDF would:
 
 ```kotlin
-EpubView(document = book, modifier = Modifier.fillMaxSize())
+KiteDocView(document = book, modifier = Modifier.fillMaxSize())
+
+// Night mode, applied at render, so switching never re-lays-out:
+KiteDocView(document = book, theme = ReaderTheme.Dark)
 ```
 
-It shares the `PdfView` machinery, so paged/continuous layouts, zoom,
-selection, search highlights, TOC panels, and link taps work the same way;
-see the [Compose viewer guide](compose-viewer.md).
+Paged/continuous layouts, zoom, selection, search highlights, TOC panels and
+link taps all work the same as for PDF; see the
+[Compose viewer guide](compose-viewer.md).
 
 ## Reader settings
 
@@ -92,7 +103,7 @@ for (entry in book.tableOfContents.entries) {
 ```
 
 `EpubDocument` also implements the format-neutral `KiteDocument` interface
-(shared with `PdfDocument`): `metadata`, `outlines`, `pageCount`, and
+(shared with `PdfDocument`): `metadata`, `outline`, `pageCount`, and
 per-page `textContent()` behave the same for both formats, so reader UI can
 be written once.
 

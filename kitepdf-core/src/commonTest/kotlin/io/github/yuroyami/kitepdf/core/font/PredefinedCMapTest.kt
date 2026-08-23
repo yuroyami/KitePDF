@@ -6,7 +6,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 /**
- * T-46: the bundled Adobe locale CMap tables. Expected CIDs come from the
+ * The bundled Adobe locale CMap tables. Expected CIDs come from the
  * Adobe cmap-resources files themselves (GBK-EUC-H chains to GBK-X).
  */
 class PredefinedCMapTest {

@@ -3,11 +3,11 @@ package io.github.yuroyami.kitepdf.core.render
 import kotlin.math.roundToInt
 
 /**
- * Assemble a [Kind.RAW][ImageXObject.Kind.RAW] image's already-decoded samples
+ * Assemble a [Kind.RAW][KiteImageData.Kind.RAW] image's already-decoded samples
  * into a flat RGBA8888 buffer (R,G,B,A per pixel, row-major, no padding) that a
  * platform backend can wrap in a bitmap.
  *
- * Drives every sample through the image's resolved [ColorSpace], so it covers:
+ * Drives every sample through the image's resolved [KiteColorSpace], so it covers:
  *   - DeviceGray / DeviceRGB / DeviceCMYK (process-CMYK polynomial)
  *   - Indexed (palette lookup) at any bit depth
  *   - ICCBased / CalGray / CalRGB (device-equivalent fallback)
@@ -19,7 +19,7 @@ import kotlin.math.roundToInt
  * colour space that couldn't be resolved, a truncated buffer) → the caller
  * paints a placeholder.
  */
-public fun ImageXObject.toRgbaBytes(): ByteArray? {
+public fun KiteImageData.toRgbaBytes(): ByteArray? {
     val w = width
     val h = height
     if (w <= 0 || h <= 0) return null
@@ -35,7 +35,7 @@ public fun ImageXObject.toRgbaBytes(): ByteArray? {
 
     when {
         // Fast paths for the overwhelmingly common 8-bit device cases (no /Decode).
-        decode == null && bpc == 8 && cs === ColorSpace.DeviceGray -> {
+        decode == null && bpc == 8 && cs === KiteColorSpace.DeviceGray -> {
             val rowBytes = w
             if (src.size < rowBytes * h) return null
             var i = 0; var o = 0
@@ -43,7 +43,7 @@ public fun ImageXObject.toRgbaBytes(): ByteArray? {
                 val g = src[i++]; out[o++] = g; out[o++] = g; out[o++] = g; out[o++] = opaque
             }
         }
-        decode == null && bpc == 8 && cs === ColorSpace.DeviceRGB -> {
+        decode == null && bpc == 8 && cs === KiteColorSpace.DeviceRGB -> {
             val rowBytes = w * 3
             if (src.size < rowBytes * h) return null
             var i = 0; var o = 0
@@ -51,7 +51,7 @@ public fun ImageXObject.toRgbaBytes(): ByteArray? {
                 out[o++] = src[i++]; out[o++] = src[i++]; out[o++] = src[i++]; out[o++] = opaque
             }
         }
-        cs is ColorSpace.Indexed -> {
+        cs is KiteColorSpace.Indexed -> {
             if (!unpackIndexed(src, w, h, bpc, cs, out)) return null
         }
         else -> {
@@ -66,8 +66,8 @@ public fun ImageXObject.toRgbaBytes(): ByteArray? {
 }
 
 /** Indexed: each sample is a palette index (no normalisation). Any bit depth. */
-private fun ImageXObject.unpackIndexed(
-    src: ByteArray, w: Int, h: Int, bpc: Int, cs: ColorSpace.Indexed, out: ByteArray,
+private fun KiteImageData.unpackIndexed(
+    src: ByteArray, w: Int, h: Int, bpc: Int, cs: KiteColorSpace.Indexed, out: ByteArray,
 ): Boolean {
     val rowBytes = (w * bpc + 7) / 8
     if (src.size < rowBytes * h) return false
@@ -96,8 +96,8 @@ private fun ImageXObject.unpackIndexed(
 }
 
 /** General path: normalise each component to [0,1], apply /Decode, then toRgb. */
-private fun ImageXObject.unpackGeneral(
-    src: ByteArray, w: Int, h: Int, bpc: Int, cs: ColorSpace, out: ByteArray,
+private fun KiteImageData.unpackGeneral(
+    src: ByteArray, w: Int, h: Int, bpc: Int, cs: KiteColorSpace, out: ByteArray,
 ): Boolean {
     val comps = cs.componentCount
     val rowBytes = (w * comps * bpc + 7) / 8
@@ -134,7 +134,7 @@ private fun ImageXObject.unpackGeneral(
  * `/Decode [0 1]`) a 0 sample paints the current fill colour and a 1 sample is
  * transparent. `/Decode [1 0]` inverts the sense.
  */
-private fun ImageXObject.rasterizeImageMask(w: Int, h: Int): ByteArray? {
+private fun KiteImageData.rasterizeImageMask(w: Int, h: Int): ByteArray? {
     val src = pixelBytes ?: return null
     val rowBytes = (w + 7) / 8
     if (src.size < rowBytes * h) return null
@@ -175,12 +175,12 @@ private fun readBits(data: ByteArray, bitPos: Long, count: Int): Int {
 }
 
 /** Infer a device colour space from the bytes-per-pixel when none was resolved. */
-private fun ImageXObject.inferDeviceSpace(src: ByteArray, pixelCount: Int): ColorSpace? {
+private fun KiteImageData.inferDeviceSpace(src: ByteArray, pixelCount: Int): KiteColorSpace? {
     if (bitsPerComponent != 8 || pixelCount == 0) return null
     return when (src.size / pixelCount) {
-        1 -> ColorSpace.DeviceGray
-        3 -> ColorSpace.DeviceRGB
-        4 -> ColorSpace.DeviceCMYK
+        1 -> KiteColorSpace.DeviceGray
+        3 -> KiteColorSpace.DeviceRGB
+        4 -> KiteColorSpace.DeviceCMYK
         else -> null
     }
 }
@@ -189,14 +189,14 @@ private fun ImageXObject.inferDeviceSpace(src: ByteArray, pixelCount: Int): Colo
  * Colour-key masking (ISO 32000-1 §8.9.6): clear the alpha of every pixel
  * whose components all fall inside their `/Mask` range. The comparison is made
  * on the SOURCE samples, before `/Decode` and colour conversion, as the spec
- * requires, so this re-reads [ImageXObject.pixelBytes] rather than judging the
+ * requires, so this re-reads [KiteImageData.pixelBytes] rather than judging the
  * assembled RGB.
  *
  * A range list that does not match the image's component count (a JPEG the
  * decoder handed back in another colour space, a malformed array) is ignored,
  * leaving the image opaque.
  */
-private fun ImageXObject.applyColorKeyMask(rgba: ByteArray, cs: ColorSpace) {
+private fun KiteImageData.applyColorKeyMask(rgba: ByteArray, cs: KiteColorSpace) {
     val ranges = colorKeyMask ?: return
     val src = pixelBytes ?: return
     val comps = cs.componentCount
@@ -226,7 +226,7 @@ private fun ImageXObject.applyColorKeyMask(rgba: ByteArray, cs: ColorSpace) {
  * Carries a stencil `/Mask` too, which arrives as the same plane. No-op when
  * the image has neither, leaving every pixel opaque.
  */
-private fun ImageXObject.applySoftMaskAlpha(rgba: ByteArray) {
+private fun KiteImageData.applySoftMaskAlpha(rgba: ByteArray) {
     val mask = softMaskAlpha ?: return
     val mw = softMaskWidth
     val mh = softMaskHeight

@@ -10,7 +10,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 /**
- * T-68: box model completeness. min-width / min-height / max-height clamps,
+ * Box model completeness. min-width / min-height / max-height clamps,
  * percentage height against the page content height, position:relative
  * paint offsets, object-fit:cover crop, the font: shorthand, and @import.
  */

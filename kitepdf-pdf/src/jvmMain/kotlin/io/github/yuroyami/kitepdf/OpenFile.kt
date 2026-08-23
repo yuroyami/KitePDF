@@ -7,7 +7,7 @@ import java.io.File
  * sugar over [PdfDocument.open]; there is no incremental file reader).
  *
  * @throws java.io.IOException when the file can't be read.
- * @throws WrongPasswordException when the document is encrypted and
+ * @throws KiteWrongPasswordException when the document is encrypted and
  *   [password] doesn't authenticate.
  */
 public fun PdfDocument.Companion.openFile(

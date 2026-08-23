@@ -7,7 +7,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 /**
- * T-64: `<ruby>` support. Step 1: the reading (`<rt>`) is never spliced inline
+ * `<ruby>` support. Step 1: the reading (`<rt>`) is never spliced inline
  * into the base text and `<rp>` fallback punctuation never renders. Step 2:
  * the reading paints as its own overlay run at half size, centered above the
  * base, the line grows by the reading's ascent, and a reading wider than its

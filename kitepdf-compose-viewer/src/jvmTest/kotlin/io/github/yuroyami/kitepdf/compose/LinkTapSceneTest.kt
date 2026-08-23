@@ -24,7 +24,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 
 /**
- * T-32/T-82: taps on links navigate. PDF pages hit-test their Link
+ * Taps on links navigate. PDF pages hit-test their Link
  * annotations and follow resolved destinations; EPUB pages hit-test
  * [io.github.yuroyami.kitepdf.epub.EpubPage.links] and follow internal
  * hrefs through [EpubDocument.pageOf]; URI links go to `onLinkTap`.
@@ -64,19 +64,21 @@ class LinkTapSceneTest {
     @Test
     fun pdf_link_tap_navigates_and_uri_link_reaches_the_callback() {
         val doc = KitePDF.open(pdfWithLinks())
-        lateinit var state: PdfViewState
+        lateinit var state: KiteDocViewState
         lateinit var scope: CoroutineScope
         val openedUris = mutableListOf<String>()
         // 200x320 viewport: the 200pt page maps 1:1 to px, page 0 at y 0..200.
         ImageComposeScene(width = 200, height = 320, density = Density(1f)) {
-            state = rememberPdfViewState(doc)
+            state = rememberKiteDocViewState(doc)
             scope = rememberCoroutineScope()
-            PdfView(state = state, modifier = Modifier.fillMaxSize())
+            KiteDocView(state = state, modifier = Modifier.fillMaxSize())
         }.use { scene ->
             val driver = SceneTestDriver(scene)
             driver.pumpUntil { state.pageGeometry.isNotEmpty() }
 
-            val onLinkTap: (PdfAction) -> Boolean = { action ->
+            // PDF links arrive as KiteLinkAction.Pdf with the parsed action intact.
+            val onLinkTap: (KiteLinkAction) -> Boolean = { link ->
+                val action = (link as? KiteLinkAction.Pdf)?.action
                 (action as? PdfAction.Uri)?.let { openedUris.add(it.uri) } != null
             }
 
@@ -155,12 +157,12 @@ class LinkTapSceneTest {
         val link = epubPage.links.single()
         assertEquals("OEBPS/ch2.xhtml", link.href)
 
-        lateinit var state: PdfViewState
+        lateinit var state: KiteDocViewState
         lateinit var scope: CoroutineScope
         ImageComposeScene(width = 200, height = 320, density = Density(1f)) {
-            state = rememberEpubViewState(doc)
+            state = rememberKiteDocViewState(doc)
             scope = rememberCoroutineScope()
-            PdfView(state = state, modifier = Modifier.fillMaxSize())
+            KiteDocView(state = state, modifier = Modifier.fillMaxSize())
         }.use { scene ->
             val driver = SceneTestDriver(scene)
             driver.pumpUntil { state.pageGeometry.isNotEmpty() }
@@ -177,6 +179,61 @@ class LinkTapSceneTest {
 
             // A miss (page margin) is not consumed.
             assertFalse(handleLinkTap(state, scope, null, Offset(5f, 5f)))
+        }
+    }
+
+    private fun epubWithExternalLink(): EpubDocument {
+        val container = """<?xml version="1.0"?><container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container"><rootfiles><rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/></rootfiles></container>"""
+        val opf = """<?xml version="1.0"?>
+            <package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="id">
+              <metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:identifier id="id">x</dc:identifier></metadata>
+              <manifest><item id="c1" href="ch1.xhtml" media-type="application/xhtml+xml"/></manifest>
+              <spine><itemref idref="c1"/></spine>
+            </package>"""
+        val ch1 = """<?xml version="1.0"?><html xmlns="http://www.w3.org/1999/xhtml"><body><p><a href="https://example.org/out">outside</a></p></body></html>"""
+        val zip = storedZip(
+            listOf(
+                "mimetype" to "application/epub+zip".encodeToByteArray(),
+                "META-INF/container.xml" to container.encodeToByteArray(),
+                "OEBPS/content.opf" to opf.encodeToByteArray(),
+                "OEBPS/ch1.xhtml" to ch1.encodeToByteArray(),
+            ),
+        )
+        return EpubDocument.open(zip, EpubSettings(pageWidth = 200.0, pageHeight = 200.0))
+            ?: error("EPUB fixture failed to open")
+    }
+
+    /**
+     * An EPUB href with a scheme reaches the callback as a plain
+     * [KiteLinkAction.Uri]. It used to be wrapped in a fabricated PDF action
+     * with an empty dictionary, which made EPUB apps import PDF types to read
+     * a URL back out.
+     */
+    @Test
+    fun epub_external_link_tap_reports_a_plain_uri() {
+        val doc = epubWithExternalLink()
+        val epubPage = doc.pages[0] as io.github.yuroyami.kitepdf.epub.EpubPage
+        val link = epubPage.links.single()
+        assertEquals("https://example.org/out", link.href)
+
+        lateinit var state: KiteDocViewState
+        lateinit var scope: CoroutineScope
+        ImageComposeScene(width = 200, height = 320, density = Density(1f)) {
+            state = rememberKiteDocViewState(doc)
+            scope = rememberCoroutineScope()
+            KiteDocView(state = state, modifier = Modifier.fillMaxSize())
+        }.use { scene ->
+            val driver = SceneTestDriver(scene)
+            driver.pumpUntil { state.pageGeometry.isNotEmpty() }
+
+            val seen = mutableListOf<KiteLinkAction>()
+            val tap = Offset(
+                ((link.rect.left + link.rect.right) / 2).toFloat(),
+                ((link.rect.bottom + link.rect.top) / 2).toFloat(),
+            )
+            assertTrue(handleLinkTap(state, scope, { seen.add(it); true }, tap))
+            assertEquals(listOf<KiteLinkAction>(KiteLinkAction.Uri("https://example.org/out")), seen)
+            assertEquals("https://example.org/out", seen.single().uri, "uri reads back without a when")
         }
     }
 }

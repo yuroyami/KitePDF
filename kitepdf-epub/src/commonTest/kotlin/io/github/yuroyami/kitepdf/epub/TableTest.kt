@@ -98,7 +98,7 @@ class TableTest {
         assertTrue(listOf("A", "B", "C", "D").all { it in text }, "all cells rendered: <<$text>>")
     }
 
-    /* ── T-69: completeness ──────────────────────────────────────────────── */
+    /* ── completeness ──────────────────────────────────────────────── */
 
     @Test
     fun col_widths_pin_their_columns() {

@@ -12,7 +12,7 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 /**
- * T-46 acceptance: a PDF whose Type0 font uses the PREDEFINED `GBK-EUC-H`
+ * Acceptance: a PDF whose Type0 font uses the PREDEFINED `GBK-EUC-H`
  * CMap (not an embedded one) with an embedded CID font. Rendering exercises
  * the bundled Adobe-GB1 tables end to end: GBK bytes -> registry CIDs ->
  * /CIDToGIDMap -> glyphs; mutool is the independent oracle. Extraction goes
@@ -131,7 +131,7 @@ class CjkCMapOracleTest {
         val reference = MuPdfOracle.render(pdf, page = 1, dpi = 72)
         assertNotNull(reference)
         val mae = ImageDiff.compare(kite, reference).score
-        println("[T-46] GBK-EUC-H vs mutool: MAE=${(mae * 10000).toInt() / 10000.0}")
+        println("GBK-EUC-H vs mutool: MAE=${(mae * 10000).toInt() / 10000.0}")
         assertTrue(mae <= 0.05, "GBK-EUC-H MAE $mae must be <= 0.05")
     }
 }

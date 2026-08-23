@@ -4,7 +4,7 @@ import io.github.yuroyami.kitepdf.PdfDocument
 import io.github.yuroyami.kitepdf.core.KiteRawApi
 import io.github.yuroyami.kitepdf.PdfFormField
 import io.github.yuroyami.kitepdf.PdfPage
-import io.github.yuroyami.kitepdf.core.Rectangle
+import io.github.yuroyami.kitepdf.core.KiteRectangle
 import io.github.yuroyami.kitepdf.content.ContentStreamParser
 import io.github.yuroyami.kitepdf.content.Operation
 import io.github.yuroyami.kitepdf.core.ByteArrayBuilder
@@ -594,7 +594,7 @@ public class PdfEditor internal constructor(
         return PdfDictionary(m)
     }
 
-    private fun rectToArray(r: Rectangle): io.github.yuroyami.kitepdf.core.parser.PdfArray =
+    private fun rectToArray(r: KiteRectangle): io.github.yuroyami.kitepdf.core.parser.PdfArray =
         io.github.yuroyami.kitepdf.core.parser.PdfArray(listOf(
             io.github.yuroyami.kitepdf.core.parser.PdfReal(r.left),
             io.github.yuroyami.kitepdf.core.parser.PdfReal(r.bottom),
@@ -610,7 +610,7 @@ public class PdfEditor internal constructor(
     /* ─── Redaction ──────────────────────────────────────────────────────── */
 
     /** Redact a single rectangular region of [page] (see [redactRegions]). */
-    public fun redactRegion(page: PdfPage, rectangle: Rectangle): Unit = redactRegions(page, listOf(rectangle))
+    public fun redactRegion(page: PdfPage, rectangle: KiteRectangle): Unit = redactRegions(page, listOf(rectangle))
 
     /**
      * Redact rectangular regions of [page] (rectangles in page user space).
@@ -630,7 +630,7 @@ public class PdfEditor internal constructor(
      *
      * Current limit ([RedactionEngine]): vector paths in the region are left as-is.
      */
-    public fun redactRegions(page: PdfPage, rectangles: List<Rectangle>) {
+    public fun redactRegions(page: PdfPage, rectangles: List<KiteRectangle>) {
         if (rectangles.isEmpty()) return
         val ref = pageReference(page)
 
@@ -697,7 +697,7 @@ public class PdfEditor internal constructor(
      * XObject at [formRef], recursing into any nested forms it invokes. The
      * rewritten form stream is staged as a replacement for [formRef].
      */
-    private fun redactFormXObject(formRef: PdfReference, rectangles: List<Rectangle>) {
+    private fun redactFormXObject(formRef: PdfReference, rectangles: List<KiteRectangle>) {
         if (rectangles.isEmpty()) return
         if (!redactedForms.add(formRef.objectNumber)) return
         val stream = effectiveObject(formRef.objectNumber) as? PdfStream ?: return
@@ -769,7 +769,7 @@ public class PdfEditor internal constructor(
      * streams inside a redacted region are otherwise left intact and extractable.
      * Annotations with no resolvable `/Rect` are kept (they draw nothing spatial).
      */
-    private fun pruneIntersectingAnnots(dict: PdfDictionary, rectangles: List<Rectangle>): PdfDictionary {
+    private fun pruneIntersectingAnnots(dict: PdfDictionary, rectangles: List<KiteRectangle>): PdfDictionary {
         val annots = dict.getArray("Annots", base) ?: return dict
         val kept = ArrayList<PdfObject>(annots.items.size)
         var changed = false
@@ -790,7 +790,7 @@ public class PdfEditor internal constructor(
     }
 
     /** Normalised `/Rect` of an annotation, or null when absent/malformed. */
-    private fun annotRect(annot: PdfDictionary): Rectangle? {
+    private fun annotRect(annot: PdfDictionary): KiteRectangle? {
         val arr = annot.getArray("Rect", base) ?: return null
         if (arr.size < 4) return null
         fun n(i: Int): Double? = when (val v = arr[i].resolve(base)) {
@@ -802,10 +802,10 @@ public class PdfEditor internal constructor(
         val y0 = n(1) ?: return null
         val x1 = n(2) ?: return null
         val y1 = n(3) ?: return null
-        return Rectangle(minOf(x0, x1), minOf(y0, y1), maxOf(x0, x1), maxOf(y0, y1))
+        return KiteRectangle(minOf(x0, x1), minOf(y0, y1), maxOf(x0, x1), maxOf(y0, y1))
     }
 
-    private fun rectsIntersect(a: Rectangle, b: Rectangle): Boolean =
+    private fun rectsIntersect(a: KiteRectangle, b: KiteRectangle): Boolean =
         a.left < b.right && a.right > b.left && a.bottom < b.top && a.top > b.bottom
 
     private fun loadPageFonts(resources: PdfDictionary?): Map<String, PdfFont> {
@@ -836,9 +836,9 @@ public class PdfEditor internal constructor(
     }
 
     /** Per-name form `/Matrix` (default identity when absent). */
-    private fun loadFormMatrices(resources: PdfDictionary?): Map<String, io.github.yuroyami.kitepdf.core.render.Matrix> {
+    private fun loadFormMatrices(resources: PdfDictionary?): Map<String, io.github.yuroyami.kitepdf.core.render.KiteMatrix> {
         val xobjects = resources?.getDict("XObject", base) ?: return emptyMap()
-        val out = LinkedHashMap<String, io.github.yuroyami.kitepdf.core.render.Matrix>()
+        val out = LinkedHashMap<String, io.github.yuroyami.kitepdf.core.render.KiteMatrix>()
         for ((name, value) in xobjects.map) {
             val stream = value.resolve(base) as? PdfStream ?: continue
             if (stream.dict.getName("Subtype") != "Form") continue
@@ -849,7 +849,7 @@ public class PdfEditor internal constructor(
                 is io.github.yuroyami.kitepdf.core.parser.PdfReal -> v.value
                 else -> 0.0
             }
-            out[name] = io.github.yuroyami.kitepdf.core.render.Matrix(n(0), n(1), n(2), n(3), n(4), n(5))
+            out[name] = io.github.yuroyami.kitepdf.core.render.KiteMatrix(n(0), n(1), n(2), n(3), n(4), n(5))
         }
         return out
     }

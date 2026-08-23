@@ -21,18 +21,18 @@ import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.TextUnitType
-import io.github.yuroyami.kitepdf.core.font.FontFamily as KiteFontFamily
+import io.github.yuroyami.kitepdf.core.font.KiteFontFamily
 import io.github.yuroyami.kitepdf.core.font.FontSpec
 import io.github.yuroyami.kitepdf.core.font.TextGlyph
 import androidx.compose.ui.graphics.Brush
-import io.github.yuroyami.kitepdf.core.render.BlendMode as PdfBlendMode
-import io.github.yuroyami.kitepdf.core.render.ImageXObject
+import io.github.yuroyami.kitepdf.core.render.KiteBlendMode
+import io.github.yuroyami.kitepdf.core.render.KiteImageData
 import io.github.yuroyami.kitepdf.core.render.toRgbaBytes
-import io.github.yuroyami.kitepdf.core.render.Matrix as PdfMatrix
+import io.github.yuroyami.kitepdf.core.render.KiteMatrix
 import io.github.yuroyami.kitepdf.core.render.KiteCanvas
 import io.github.yuroyami.kitepdf.core.render.KitePath
 import io.github.yuroyami.kitepdf.core.render.KiteShading
-import io.github.yuroyami.kitepdf.core.render.Rectangle as PdfRectangle
+import io.github.yuroyami.kitepdf.core.KiteRectangle
 import io.github.yuroyami.kitepdf.core.render.RgbColor
 import io.github.yuroyami.kitepdf.core.render.SoftMask
 import io.github.yuroyami.kitepdf.core.render.sampleStops
@@ -86,7 +86,7 @@ public class ComposeCanvas(
     /** Count of open transparency groups, for matching beginGroup/endGroup pairs. */
     private var openGroups = 0
 
-    override fun beginPage(widthPt: Double, heightPt: Double, deviceCtm: PdfMatrix) {
+    override fun beginPage(widthPt: Double, heightPt: Double, deviceCtm: KiteMatrix) {
         clipStack.clear()
         openGroups = 0
     }
@@ -102,8 +102,8 @@ public class ComposeCanvas(
     }
 
     override fun fillPath(
-        path: KitePath, ctm: PdfMatrix, color: RgbColor, evenOdd: Boolean,
-        alpha: Double, blendMode: PdfBlendMode,
+        path: KitePath, ctm: KiteMatrix, color: RgbColor, evenOdd: Boolean,
+        alpha: Double, blendMode: KiteBlendMode,
     ) {
         withActiveClips {
             val composePath = toComposePath(path, ctm).apply {
@@ -119,8 +119,8 @@ public class ComposeCanvas(
     }
 
     override fun strokePath(
-        path: KitePath, ctm: PdfMatrix, color: RgbColor, lineWidth: Double,
-        alpha: Double, blendMode: PdfBlendMode,
+        path: KitePath, ctm: KiteMatrix, color: RgbColor, lineWidth: Double,
+        alpha: Double, blendMode: KiteBlendMode,
         dashArray: List<Double>?, dashPhase: Double,
         lineCap: Int, lineJoin: Int, miterLimit: Double,
     ) {
@@ -171,10 +171,10 @@ public class ComposeCanvas(
         unitsPerEm: Int,
         hasOutlines: Boolean,
         fontSpec: FontSpec,
-        textToDevice: PdfMatrix,
+        textToDevice: KiteMatrix,
         color: RgbColor,
         alpha: Double,
-        blendMode: PdfBlendMode,
+        blendMode: KiteBlendMode,
     ) {
         if (glyphs.isEmpty()) return
         withActiveClips {
@@ -190,10 +190,10 @@ public class ComposeCanvas(
         glyphs: List<TextGlyph>,
         fontSize: Double,
         unitsPerEm: Int,
-        textMatrix: PdfMatrix,
+        textMatrix: KiteMatrix,
         color: RgbColor,
         alpha: Double,
-        blendMode: PdfBlendMode,
+        blendMode: KiteBlendMode,
     ) {
         val unitScale = fontSize / unitsPerEm
         val advanceScale = fontSize / 1000.0 // PDF glyph widths are 1/1000 em, NOT font units
@@ -208,8 +208,8 @@ public class ComposeCanvas(
                 // concat(other) applies `other` first, so unitScale must be the LAST concat,
                 // else every glyph collapses to a speck at the origin.
                 val glyphMatrix = textMatrix
-                    .concat(PdfMatrix.translation(penX + glyph.xOffset * unitScale, glyph.yOffset * unitScale))
-                    .concat(PdfMatrix(unitScale, 0.0, 0.0, unitScale, 0.0, 0.0))
+                    .concat(KiteMatrix.translation(penX + glyph.xOffset * unitScale, glyph.yOffset * unitScale))
+                    .concat(KiteMatrix(unitScale, 0.0, 0.0, unitScale, 0.0, 0.0))
                 val cp = toComposePath(outline, glyphMatrix).apply { fillType = PathFillType.NonZero }
                 drawScope.drawPath(cp, color = color, alpha = a, blendMode = composeBlend)
             }
@@ -221,10 +221,10 @@ public class ComposeCanvas(
         glyphs: List<TextGlyph>,
         fontSize: Double,
         fontSpec: FontSpec,
-        textMatrix: PdfMatrix,
+        textMatrix: KiteMatrix,
         color: RgbColor,
         alpha: Double,
-        blendMode: PdfBlendMode,
+        blendMode: KiteBlendMode,
     ) {
         val text = glyphs.joinToString("") { it.text }
         if (text.isEmpty()) return
@@ -300,18 +300,18 @@ public class ComposeCanvas(
         }
     }
 
-    override fun drawImage(image: ImageXObject, ctm: PdfMatrix, alpha: Double) {
+    override fun drawImage(image: KiteImageData, ctm: KiteMatrix, alpha: Double) {
         withActiveClips {
             val bitmap = when (image.kind) {
                 // Skia decodes JPEG natively; on JVM/iOS it also handles JP2 / JPEG 2000.
                 // BitmapFactory on Android decodes JPEG (JP2 returns null → placeholder).
                 // JBIG2 is best-effort: most platforms don't support it natively and
                 // ImageDecoder will fall back to null + a placeholder.
-                ImageXObject.Kind.JPEG, ImageXObject.Kind.JPEG2000, ImageXObject.Kind.JBIG2 ->
+                KiteImageData.Kind.JPEG, KiteImageData.Kind.JPEG2000, KiteImageData.Kind.JBIG2 ->
                     ImageDecoder.decode(image.encodedBytes)
                 // RAW (FlateDecode etc.): samples are already inflated. Assemble RGBA
                 // and build a bitmap directly. Covers the common embedded-PNG case.
-                ImageXObject.Kind.RAW ->
+                KiteImageData.Kind.RAW ->
                     image.toRgbaBytes()?.let { ImageDecoder.decodeRaw(it, image.width, image.height) }
                 else -> null
             }
@@ -325,10 +325,10 @@ public class ComposeCanvas(
 
     override fun fillShading(
         shading: KiteShading,
-        ctm: PdfMatrix,
+        ctm: KiteMatrix,
         clipPath: KitePath?,
         alpha: Double,
-        blendMode: PdfBlendMode,
+        blendMode: KiteBlendMode,
     ) {
         if (paintComplexShading(shading, ctm, clipPath, alpha, blendMode)) return
         val stops = shading.sampleStops(32) ?: return
@@ -368,7 +368,7 @@ public class ComposeCanvas(
                 }
                 return
             }
-            else -> return // T-40 types already handled by paintComplexShading
+            else -> return // complex shading types already handled by paintComplexShading
         }
 
         withActiveClips {
@@ -397,8 +397,8 @@ public class ComposeCanvas(
      */
     override fun applySoftMask(
         kind: SoftMask.Kind,
-        maskBBox: PdfRectangle,
-        maskCtm: PdfMatrix,
+        maskBBox: KiteRectangle,
+        maskCtm: KiteMatrix,
         render: () -> Unit,
         renderMask: (KiteCanvas) -> Unit,
     ) {
@@ -413,7 +413,7 @@ public class ComposeCanvas(
             // For a Luminosity mask (§11.6.5.2) the mask group composites over
             // an opaque BLACK backdrop and its LUMINANCE becomes the alpha:
             // a colour-matrix filter moves 0.299R+0.587G+0.114B into A at the
-            // layer restore (T-43), mirroring the Skia backend's LUMA filter.
+            // layer restore, mirroring the Skia backend's LUMA filter.
             val maskPaint = Paint().apply {
                 blendMode = ComposeBlendMode.DstIn
                 if (kind == SoftMask.Kind.Luminosity) {
@@ -451,7 +451,7 @@ public class ComposeCanvas(
         return Rect(0f, 0f, w, h)
     }
 
-    private fun drawBitmap(bitmap: androidx.compose.ui.graphics.ImageBitmap, ctm: PdfMatrix, alpha: Float) {
+    private fun drawBitmap(bitmap: androidx.compose.ui.graphics.ImageBitmap, ctm: KiteMatrix, alpha: Float) {
         val originX = ctm.e.toFloat()
         val originY = ctm.f.toFloat()
         val widthScale = sqrt(ctm.a * ctm.a + ctm.b * ctm.b).toFloat()
@@ -465,7 +465,7 @@ public class ComposeCanvas(
         }
     }
 
-    private fun drawPlaceholder(ctm: PdfMatrix) {
+    private fun drawPlaceholder(ctm: KiteMatrix) {
         val rectPath = KitePath.Builder().apply { rectangle(0.0, 0.0, 1.0, 1.0) }.build()
         val composeRect = toComposePath(rectPath, ctm).apply { fillType = PathFillType.NonZero }
         drawScope.drawPath(composeRect, color = Color(0xFFE0E0E0.toInt()))
@@ -481,7 +481,7 @@ public class ComposeCanvas(
         )
     }
 
-    override fun pushClip(path: KitePath, ctm: PdfMatrix, evenOdd: Boolean) {
+    override fun pushClip(path: KitePath, ctm: KiteMatrix, evenOdd: Boolean) {
         val composePath = toComposePath(path, ctm).apply {
             fillType = if (evenOdd) PathFillType.EvenOdd else PathFillType.NonZero
         }
@@ -499,9 +499,9 @@ public class ComposeCanvas(
      * calls `restore`, which composites the layer onto the parent.
      */
     override fun beginTransparencyGroup(
-        bbox: PdfRectangle, ctm: PdfMatrix,
+        bbox: KiteRectangle, ctm: KiteMatrix,
         isolated: Boolean, knockout: Boolean,
-        alpha: Double, blendMode: PdfBlendMode,
+        alpha: Double, blendMode: KiteBlendMode,
     ) {
         // Compute the layer's pixel bounds in device space.
         val corners = listOf(
@@ -547,7 +547,7 @@ public class ComposeCanvas(
         }
     }
 
-    private fun toComposePath(src: KitePath, ctm: PdfMatrix): Path {
+    private fun toComposePath(src: KitePath, ctm: KiteMatrix): Path {
         val out = Path()
         for (seg in src.segments) {
             when (seg) {
@@ -582,23 +582,23 @@ public class ComposeCanvas(
      * Map a PDF blend mode to its Compose equivalent. All 16 PDF blend modes
      * have a 1:1 Compose counterpart, so this is a clean enum dispatch.
      */
-    private fun PdfBlendMode.toCompose(): ComposeBlendMode = when (this) {
-        PdfBlendMode.Normal -> ComposeBlendMode.SrcOver
-        PdfBlendMode.Multiply -> ComposeBlendMode.Multiply
-        PdfBlendMode.Screen -> ComposeBlendMode.Screen
-        PdfBlendMode.Overlay -> ComposeBlendMode.Overlay
-        PdfBlendMode.Darken -> ComposeBlendMode.Darken
-        PdfBlendMode.Lighten -> ComposeBlendMode.Lighten
-        PdfBlendMode.ColorDodge -> ComposeBlendMode.ColorDodge
-        PdfBlendMode.ColorBurn -> ComposeBlendMode.ColorBurn
-        PdfBlendMode.HardLight -> ComposeBlendMode.Hardlight
-        PdfBlendMode.SoftLight -> ComposeBlendMode.Softlight
-        PdfBlendMode.Difference -> ComposeBlendMode.Difference
-        PdfBlendMode.Exclusion -> ComposeBlendMode.Exclusion
-        PdfBlendMode.Hue -> ComposeBlendMode.Hue
-        PdfBlendMode.Saturation -> ComposeBlendMode.Saturation
-        PdfBlendMode.Color -> ComposeBlendMode.Color
-        PdfBlendMode.Luminosity -> ComposeBlendMode.Luminosity
+    private fun KiteBlendMode.toCompose(): ComposeBlendMode = when (this) {
+        KiteBlendMode.Normal -> ComposeBlendMode.SrcOver
+        KiteBlendMode.Multiply -> ComposeBlendMode.Multiply
+        KiteBlendMode.Screen -> ComposeBlendMode.Screen
+        KiteBlendMode.Overlay -> ComposeBlendMode.Overlay
+        KiteBlendMode.Darken -> ComposeBlendMode.Darken
+        KiteBlendMode.Lighten -> ComposeBlendMode.Lighten
+        KiteBlendMode.ColorDodge -> ComposeBlendMode.ColorDodge
+        KiteBlendMode.ColorBurn -> ComposeBlendMode.ColorBurn
+        KiteBlendMode.HardLight -> ComposeBlendMode.Hardlight
+        KiteBlendMode.SoftLight -> ComposeBlendMode.Softlight
+        KiteBlendMode.Difference -> ComposeBlendMode.Difference
+        KiteBlendMode.Exclusion -> ComposeBlendMode.Exclusion
+        KiteBlendMode.Hue -> ComposeBlendMode.Hue
+        KiteBlendMode.Saturation -> ComposeBlendMode.Saturation
+        KiteBlendMode.Color -> ComposeBlendMode.Color
+        KiteBlendMode.Luminosity -> ComposeBlendMode.Luminosity
     }
 
     private fun FontSpec.toComposeFamily(): FontFamily = when (family) {

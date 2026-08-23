@@ -1,7 +1,7 @@
 package io.github.yuroyami.kitepdf.skia
 
 import io.github.yuroyami.kitepdf.PdfPage
-import io.github.yuroyami.kitepdf.core.render.Matrix as PdfMatrix
+import io.github.yuroyami.kitepdf.core.render.KiteMatrix
 import org.jetbrains.skia.Color
 import org.jetbrains.skia.EncodedImageFormat
 import org.jetbrains.skia.Image
@@ -49,7 +49,7 @@ public object PdfPageRasterizer {
             // honouring the display-box origin and normalized /Rotate. Scale it
             // up by `scale` in device space: scaling FIRST-applies the base
             // (a.concat(b) applies b then a).
-            val deviceCtm = PdfMatrix.scaling(scale, scale).concat(page.pageToDeviceBase())
+            val deviceCtm = KiteMatrix.scaling(scale, scale).concat(page.pageToDeviceBase())
             val pdfCanvas = SkiaCanvas(skCanvas)
             page.renderTo(pdfCanvas, deviceCtm)
             return surface.makeImageSnapshot()

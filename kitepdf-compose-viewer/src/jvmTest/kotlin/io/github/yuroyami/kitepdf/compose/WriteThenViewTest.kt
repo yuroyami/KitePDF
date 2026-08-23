@@ -11,7 +11,7 @@ import androidx.compose.ui.text.font.createFontFamilyResolver
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
 import io.github.yuroyami.kitepdf.KitePDF
-import io.github.yuroyami.kitepdf.core.render.Matrix as PdfMatrix
+import io.github.yuroyami.kitepdf.core.render.KiteMatrix
 import io.github.yuroyami.kitepdf.writer.PdfBuilder
 import io.github.yuroyami.kitepdf.writer.PdfImage
 import kotlin.test.Test
@@ -65,7 +65,7 @@ class WriteThenViewTest {
         val tm = TextMeasurer(createFontFamilyResolver(), density, ld)
         CanvasDrawScope().draw(density, ld, Canvas(bmp), Size(w.toFloat(), h.toFloat())) {
             drawRect(Color.White, size = size)
-            page.renderTo(ComposeCanvas(this, tm), PdfMatrix(1.0, 0.0, 0.0, -1.0, 0.0, h.toDouble()))
+            page.renderTo(ComposeCanvas(this, tm), KiteMatrix(1.0, 0.0, 0.0, -1.0, 0.0, h.toDouble()))
         }
         val sk = bmp.asSkiaBitmap()
         fun r(c: Int) = (c shr 16) and 0xFF

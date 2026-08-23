@@ -10,7 +10,7 @@ import io.github.yuroyami.kitepdf.core.KiteRawApi
 import io.github.yuroyami.kitepdf.core.currentThreadId
 import io.github.yuroyami.kitepdf.core.withLock
 import io.github.yuroyami.kitepdf.core.PdfFormatException
-import io.github.yuroyami.kitepdf.core.WrongPasswordException
+import io.github.yuroyami.kitepdf.core.KiteWrongPasswordException
 import io.github.yuroyami.kitepdf.core.kiteWarn
 import io.github.yuroyami.kitepdf.crypto.Decryptor
 import io.github.yuroyami.kitepdf.crypto.StandardSecurityHandler
@@ -50,7 +50,7 @@ import io.github.yuroyami.kitepdf.writer.PdfEditor
  * Holds the raw byte buffer plus the xref table; pages and indirect objects
  * are resolved lazily and cached.
  *
- * Thread-safe for concurrent reads and rendering after construction (T-16):
+ * Thread-safe for concurrent reads and rendering after construction:
  * object resolution parses from per-call readers and synchronizes only its
  * caches, so multiple threads may render pages of the same document,
  * including the same page, simultaneously.
@@ -153,7 +153,7 @@ public class PdfDocument private constructor(
 
     /**
      * Number of pages. Before [pages] materializes this reads the root
-     * `/Pages /Count` (T-17), so a 10,000-page document answers a UI badge
+     * `/Pages /Count`, so a 10,000-page document answers a UI badge
      * without constructing 10,000 page objects; a missing/negative/lying
      * `/Count` falls through to the real tree walk, and once [pages] exists
      * its size is authoritative.
@@ -174,22 +174,22 @@ public class PdfDocument private constructor(
     private val pageRefToIndex = HashMap<Long, Int>()
 
     /**
-     * Decoded image XObjects keyed by object number (T-12): a logo stamped 40
+     * Decoded image XObjects keyed by object number: a logo stamped 40
      * times or a background shared by every page decodes once per document.
      * Fill-colour-dependent /ImageMask stencils never enter it. Call
      * [dropDecodedImageCache] under memory pressure.
      */
-    private val decodedImageCache = HashMap<Long, io.github.yuroyami.kitepdf.core.render.ImageXObject>()
+    private val decodedImageCache = HashMap<Long, io.github.yuroyami.kitepdf.core.render.KiteImageData>()
 
     /** Test hook: actual image decodes performed by the renderer. */
     internal var imageDecodeCount = 0
         private set
 
-    internal fun cachedImage(objectNumber: Long): io.github.yuroyami.kitepdf.core.render.ImageXObject? =
+    internal fun cachedImage(objectNumber: Long): io.github.yuroyami.kitepdf.core.render.KiteImageData? =
         lock.withLock { decodedImageCache[objectNumber] }
 
     /** First writer wins; racing decoders converge on one instance. */
-    internal fun cacheImage(objectNumber: Long, image: io.github.yuroyami.kitepdf.core.render.ImageXObject): io.github.yuroyami.kitepdf.core.render.ImageXObject =
+    internal fun cacheImage(objectNumber: Long, image: io.github.yuroyami.kitepdf.core.render.KiteImageData): io.github.yuroyami.kitepdf.core.render.KiteImageData =
         lock.withLock { decodedImageCache.getOrPut(objectNumber) { image } }
 
     internal fun countImageDecode() {
@@ -219,12 +219,19 @@ public class PdfDocument private constructor(
     }
 
     /**
-     * Document outline (bookmarks). Top-level entries from the catalog
-     * `/Outlines /First` chain; empty list if the document has no outline.
+     * The PDF bookmark tree, with every `/Outlines` field intact (destination,
+     * colour, style, open/closed). Top-level entries come from the catalog
+     * `/Outlines /First` chain; empty when the document has no bookmarks.
+     *
+     * For the format-neutral tree a viewer navigates by, with destinations
+     * already resolved to page indices, use [outline] instead.
      */
-    public val outlines: List<PdfOutline> by lazy {
+    public val bookmarks: List<PdfOutline> by lazy {
         PdfOutline.buildTree(catalog, this)
     }
+
+    @Deprecated("Renamed to bookmarks, to stop it reading as a plural of the neutral `outline`", ReplaceWith("bookmarks"))
+    public val outlines: List<PdfOutline> get() = bookmarks
 
     /**
      * Format-neutral metadata for [KiteDocument] viewers: `/Info` values,
@@ -240,7 +247,7 @@ public class PdfDocument private constructor(
     }
 
     /**
-     * Format-neutral outline for [KiteDocument] viewers: [outlines] with each
+     * Format-neutral outline for [KiteDocument] viewers: [bookmarks] with each
      * destination resolved to a zero-based page index (null when unresolvable).
      */
     override val outline: List<KiteOutlineItem> by lazy {
@@ -253,7 +260,7 @@ public class PdfDocument private constructor(
                     children = map(node.children, depth + 1),
                 )
             }
-        map(outlines, 0)
+        map(bookmarks, 0)
     }
 
     /** Initial UI panel hint (`/PageMode`). [PageMode.UseNone] when absent. */
@@ -385,7 +392,7 @@ public class PdfDocument private constructor(
         // Lenient salvage: a single corrupt object must not abort the whole
         // document (MuPDF resolves objects best-effort). On any parse failure we
         // cache null and keep going; the page walk and renderers tolerate nulls.
-        // The parse runs OUTSIDE the lock (fresh readers, T-16); racing threads
+        // The parse runs OUTSIDE the lock (fresh readers); racing threads
         // may parse the same object once each and the first non-null cache
         // write wins (a cached null stays retryable, as before).
         val resolved: PdfObject? = runCatching {
@@ -466,7 +473,7 @@ public class PdfDocument private constructor(
         // (a hard crash on Kotlin/Native). withCycleClaim throws on same-thread
         // re-entry; the runCatching inside resolve() then caches null.
         withCycleClaim(entry.objectNumber) {
-            // Per-call reader (T-16): the old shared seek-based reader interleaved
+            // Per-call reader: the old shared seek-based reader interleaved
             // positions across threads and produced garbage parses.
             val localReader = ByteReader(bytes)
             localReader.seek(entry.byteOffset)
@@ -517,7 +524,7 @@ public class PdfDocument private constructor(
         // Look up directly via xref (avoid recursion through resolve cache).
         val entry = xref[objStreamRef] as? XrefEntry.InUse
             ?: throw PdfFormatException("ObjStm $objStreamRef not in xref as in-use")
-        val localReader = ByteReader(bytes) // per-call reader (T-16)
+        val localReader = ByteReader(bytes) // per-call reader
         localReader.seek(entry.byteOffset)
         val parser = Parser(Lexer(localReader), resolver = this)
         val indirect = parser.readIndirectObject()
@@ -633,7 +640,7 @@ public class PdfDocument private constructor(
             // garbage. Signal it unless the caller opted into read-only access.
             fun finish(doc: PdfDocument): PdfDocument {
                 if (doc.isEncrypted && !doc.isAuthenticated && !allowInvalidPassword) {
-                    throw WrongPasswordException(
+                    throw KiteWrongPasswordException(
                         "PDF is encrypted and the supplied password did not authenticate " +
                             "(pass allowInvalidPassword=true to open read-only)."
                     )
@@ -687,10 +694,10 @@ public class PdfDocument private constructor(
             }
             val first = try {
                 open(bytes, utf8, allowInvalidPassword)
-            } catch (e: WrongPasswordException) {
+            } catch (e: KiteWrongPasswordException) {
                 return try {
                     open(bytes, latin1, allowInvalidPassword)
-                } catch (_: WrongPasswordException) {
+                } catch (_: KiteWrongPasswordException) {
                     throw e
                 }
             }

@@ -12,13 +12,13 @@ import android.graphics.Path
 import android.graphics.RadialGradient
 import android.graphics.Shader
 import android.graphics.Typeface
-import io.github.yuroyami.kitepdf.core.Rectangle
-import io.github.yuroyami.kitepdf.core.font.FontFamily
+import io.github.yuroyami.kitepdf.core.KiteRectangle
+import io.github.yuroyami.kitepdf.core.font.KiteFontFamily
 import io.github.yuroyami.kitepdf.core.font.FontSpec
 import io.github.yuroyami.kitepdf.core.font.TextGlyph
-import io.github.yuroyami.kitepdf.core.render.BlendMode as PdfBlendMode
-import io.github.yuroyami.kitepdf.core.render.ImageXObject
-import io.github.yuroyami.kitepdf.core.render.Matrix as PdfMatrix
+import io.github.yuroyami.kitepdf.core.render.KiteBlendMode
+import io.github.yuroyami.kitepdf.core.render.KiteImageData
+import io.github.yuroyami.kitepdf.core.render.KiteMatrix
 import io.github.yuroyami.kitepdf.core.render.KiteCanvas
 import io.github.yuroyami.kitepdf.core.render.KitePath
 import io.github.yuroyami.kitepdf.core.render.KiteShading
@@ -45,7 +45,7 @@ public class AndroidNativeCanvas(private val canvas: AndroidCanvas) : KiteCanvas
     /** Open layers from clip pushes + transparency groups. */
     private var openLayers = 0
 
-    override fun beginPage(widthPt: Double, heightPt: Double, deviceCtm: PdfMatrix) {
+    override fun beginPage(widthPt: Double, heightPt: Double, deviceCtm: KiteMatrix) {
         openLayers = 0
     }
 
@@ -58,8 +58,8 @@ public class AndroidNativeCanvas(private val canvas: AndroidCanvas) : KiteCanvas
     }
 
     override fun fillPath(
-        path: KitePath, ctm: PdfMatrix, color: RgbColor, evenOdd: Boolean,
-        alpha: Double, blendMode: PdfBlendMode,
+        path: KitePath, ctm: KiteMatrix, color: RgbColor, evenOdd: Boolean,
+        alpha: Double, blendMode: KiteBlendMode,
     ) {
         val p = toAndroidPath(path, ctm).apply {
             fillType = if (evenOdd) Path.FillType.EVEN_ODD else Path.FillType.WINDING
@@ -74,8 +74,8 @@ public class AndroidNativeCanvas(private val canvas: AndroidCanvas) : KiteCanvas
     }
 
     override fun strokePath(
-        path: KitePath, ctm: PdfMatrix, color: RgbColor, lineWidth: Double,
-        alpha: Double, blendMode: PdfBlendMode,
+        path: KitePath, ctm: KiteMatrix, color: RgbColor, lineWidth: Double,
+        alpha: Double, blendMode: KiteBlendMode,
         dashArray: List<Double>?, dashPhase: Double,
         lineCap: Int, lineJoin: Int, miterLimit: Double,
     ) {
@@ -105,10 +105,10 @@ public class AndroidNativeCanvas(private val canvas: AndroidCanvas) : KiteCanvas
         unitsPerEm: Int,
         hasOutlines: Boolean,
         fontSpec: FontSpec,
-        textToDevice: PdfMatrix,
+        textToDevice: KiteMatrix,
         color: RgbColor,
         alpha: Double,
-        blendMode: PdfBlendMode,
+        blendMode: KiteBlendMode,
     ) {
         if (glyphs.isEmpty()) return
         if (!hasOutlines) {
@@ -130,8 +130,8 @@ public class AndroidNativeCanvas(private val canvas: AndroidCanvas) : KiteCanvas
             val outline = glyph.outline
             if (outline != null && !outline.isEmpty()) {
                 val glyphMatrix = textToDevice
-                    .concat(PdfMatrix.translation(penX + glyph.xOffset * unitScale, glyph.yOffset * unitScale))
-                    .concat(PdfMatrix(unitScale, 0.0, 0.0, unitScale, 0.0, 0.0))
+                    .concat(KiteMatrix.translation(penX + glyph.xOffset * unitScale, glyph.yOffset * unitScale))
+                    .concat(KiteMatrix(unitScale, 0.0, 0.0, unitScale, 0.0, 0.0))
                 val p = toAndroidPath(outline, glyphMatrix).apply { fillType = Path.FillType.WINDING }
                 canvas.drawPath(p, paint)
                 drewAny = true
@@ -155,10 +155,10 @@ public class AndroidNativeCanvas(private val canvas: AndroidCanvas) : KiteCanvas
         glyphs: List<TextGlyph>,
         fontSize: Double,
         fontSpec: FontSpec,
-        textMatrix: PdfMatrix,
+        textMatrix: KiteMatrix,
         color: RgbColor,
         alpha: Double,
-        blendMode: PdfBlendMode,
+        blendMode: KiteBlendMode,
     ) {
         val text = glyphs.joinToString("") { it.text }
         if (text.isBlank()) return
@@ -205,9 +205,9 @@ public class AndroidNativeCanvas(private val canvas: AndroidCanvas) : KiteCanvas
     /** Map a non-embedded PDF font to an Android logical font (mirrors AwtCanvas's family/style choice). */
     private fun systemFontFor(spec: FontSpec): Typeface {
         val base = when (spec.family) {
-            FontFamily.Serif -> Typeface.SERIF
-            FontFamily.Monospace -> Typeface.MONOSPACE
-            FontFamily.SansSerif -> Typeface.SANS_SERIF
+            KiteFontFamily.Serif -> Typeface.SERIF
+            KiteFontFamily.Monospace -> Typeface.MONOSPACE
+            KiteFontFamily.SansSerif -> Typeface.SANS_SERIF
         }
         val style = when {
             spec.bold && spec.italic -> Typeface.BOLD_ITALIC
@@ -219,8 +219,8 @@ public class AndroidNativeCanvas(private val canvas: AndroidCanvas) : KiteCanvas
     }
 
     override fun fillShading(
-        shading: KiteShading, ctm: PdfMatrix, clipPath: KitePath?,
-        alpha: Double, blendMode: PdfBlendMode,
+        shading: KiteShading, ctm: KiteMatrix, clipPath: KitePath?,
+        alpha: Double, blendMode: KiteBlendMode,
     ) {
         if (paintComplexShading(shading, ctm, clipPath, alpha, blendMode)) return
         val stops = shading.sampleStops(32) ?: return
@@ -243,7 +243,7 @@ public class AndroidNativeCanvas(private val canvas: AndroidCanvas) : KiteCanvas
                 RadialGradient(cx.toFloat(), cy.toFloat(), r, colors, positions, Shader.TileMode.CLAMP)
             }
             is KiteShading.Unsupported -> return
-            else -> return // T-40 types already handled by paintComplexShading
+            else -> return // complex shading types already handled by paintComplexShading
         }
         val paint = Paint().apply {
             isAntiAlias = true
@@ -259,7 +259,7 @@ public class AndroidNativeCanvas(private val canvas: AndroidCanvas) : KiteCanvas
         }
     }
 
-    override fun pushClip(path: KitePath, ctm: PdfMatrix, evenOdd: Boolean) {
+    override fun pushClip(path: KitePath, ctm: KiteMatrix, evenOdd: Boolean) {
         canvas.save()
         openLayers++
         val p = toAndroidPath(path, ctm).apply {
@@ -275,7 +275,7 @@ public class AndroidNativeCanvas(private val canvas: AndroidCanvas) : KiteCanvas
         }
     }
 
-    override fun drawImage(image: ImageXObject, ctm: PdfMatrix, alpha: Double) {
+    override fun drawImage(image: KiteImageData, ctm: KiteMatrix, alpha: Double) {
         val bm = decodeImage(image)
         if (bm == null) {
             drawPlaceholder(ctm)
@@ -296,9 +296,9 @@ public class AndroidNativeCanvas(private val canvas: AndroidCanvas) : KiteCanvas
         openLayers--
     }
 
-    private fun decodeImage(image: ImageXObject): android.graphics.Bitmap? = try {
+    private fun decodeImage(image: KiteImageData): android.graphics.Bitmap? = try {
         when (image.kind) {
-            ImageXObject.Kind.JPEG, ImageXObject.Kind.JPEG2000, ImageXObject.Kind.JBIG2 ->
+            KiteImageData.Kind.JPEG, KiteImageData.Kind.JPEG2000, KiteImageData.Kind.JBIG2 ->
                 BitmapFactory.decodeByteArray(image.encodedBytes, 0, image.encodedBytes.size)
             else -> null
         }
@@ -306,7 +306,7 @@ public class AndroidNativeCanvas(private val canvas: AndroidCanvas) : KiteCanvas
         null
     }
 
-    private fun drawPlaceholder(ctm: PdfMatrix) {
+    private fun drawPlaceholder(ctm: KiteMatrix) {
         canvas.save()
         canvas.concat(pdfMatrixToAndroid(ctm))
         val fill = Paint().apply { color = 0xFFE0E0E0.toInt(); style = Paint.Style.FILL }
@@ -322,9 +322,9 @@ public class AndroidNativeCanvas(private val canvas: AndroidCanvas) : KiteCanvas
     }
 
     override fun beginTransparencyGroup(
-        bbox: Rectangle, ctm: PdfMatrix,
+        bbox: KiteRectangle, ctm: KiteMatrix,
         isolated: Boolean, knockout: Boolean,
-        alpha: Double, blendMode: PdfBlendMode,
+        alpha: Double, blendMode: KiteBlendMode,
     ) {
         val paint = Paint().apply {
             this.alpha = (alpha.coerceIn(0.0, 1.0) * 255).toInt()
@@ -343,7 +343,7 @@ public class AndroidNativeCanvas(private val canvas: AndroidCanvas) : KiteCanvas
 
     override fun applySoftMask(
         kind: SoftMask.Kind,
-        maskBBox: Rectangle, maskCtm: PdfMatrix,
+        maskBBox: KiteRectangle, maskCtm: KiteMatrix,
         render: () -> Unit,
         renderMask: (KiteCanvas) -> Unit,
     ) {
@@ -368,7 +368,7 @@ public class AndroidNativeCanvas(private val canvas: AndroidCanvas) : KiteCanvas
 
     /* ─── Helpers ─────────────────────────────────────────────────────────── */
 
-    private fun toAndroidPath(src: KitePath, ctm: PdfMatrix): Path {
+    private fun toAndroidPath(src: KitePath, ctm: KiteMatrix): Path {
         val out = Path()
         for (seg in src.segments) {
             when (seg) {
@@ -397,7 +397,7 @@ public class AndroidNativeCanvas(private val canvas: AndroidCanvas) : KiteCanvas
         return out
     }
 
-    private fun pdfMatrixToAndroid(m: PdfMatrix): Matrix = Matrix().apply {
+    private fun pdfMatrixToAndroid(m: KiteMatrix): Matrix = Matrix().apply {
         setValues(
             floatArrayOf(
                 m.a.toFloat(), m.c.toFloat(), m.e.toFloat(),
@@ -414,25 +414,25 @@ public class AndroidNativeCanvas(private val canvas: AndroidCanvas) : KiteCanvas
         (b.coerceIn(0.0, 1.0) * 255).toInt(),
     )
 
-    private fun Paint.applyBlendMode(mode: PdfBlendMode) {
+    private fun Paint.applyBlendMode(mode: KiteBlendMode) {
         // API 29+: minSdk for :kitepdf-native is 29, so this is unconditional.
         blendMode = when (mode) {
-            PdfBlendMode.Normal -> AndroidBlendMode.SRC_OVER
-            PdfBlendMode.Multiply -> AndroidBlendMode.MULTIPLY
-            PdfBlendMode.Screen -> AndroidBlendMode.SCREEN
-            PdfBlendMode.Overlay -> AndroidBlendMode.OVERLAY
-            PdfBlendMode.Darken -> AndroidBlendMode.DARKEN
-            PdfBlendMode.Lighten -> AndroidBlendMode.LIGHTEN
-            PdfBlendMode.ColorDodge -> AndroidBlendMode.COLOR_DODGE
-            PdfBlendMode.ColorBurn -> AndroidBlendMode.COLOR_BURN
-            PdfBlendMode.HardLight -> AndroidBlendMode.HARD_LIGHT
-            PdfBlendMode.SoftLight -> AndroidBlendMode.SOFT_LIGHT
-            PdfBlendMode.Difference -> AndroidBlendMode.DIFFERENCE
-            PdfBlendMode.Exclusion -> AndroidBlendMode.EXCLUSION
-            PdfBlendMode.Hue -> AndroidBlendMode.HUE
-            PdfBlendMode.Saturation -> AndroidBlendMode.SATURATION
-            PdfBlendMode.Color -> AndroidBlendMode.COLOR
-            PdfBlendMode.Luminosity -> AndroidBlendMode.LUMINOSITY
+            KiteBlendMode.Normal -> AndroidBlendMode.SRC_OVER
+            KiteBlendMode.Multiply -> AndroidBlendMode.MULTIPLY
+            KiteBlendMode.Screen -> AndroidBlendMode.SCREEN
+            KiteBlendMode.Overlay -> AndroidBlendMode.OVERLAY
+            KiteBlendMode.Darken -> AndroidBlendMode.DARKEN
+            KiteBlendMode.Lighten -> AndroidBlendMode.LIGHTEN
+            KiteBlendMode.ColorDodge -> AndroidBlendMode.COLOR_DODGE
+            KiteBlendMode.ColorBurn -> AndroidBlendMode.COLOR_BURN
+            KiteBlendMode.HardLight -> AndroidBlendMode.HARD_LIGHT
+            KiteBlendMode.SoftLight -> AndroidBlendMode.SOFT_LIGHT
+            KiteBlendMode.Difference -> AndroidBlendMode.DIFFERENCE
+            KiteBlendMode.Exclusion -> AndroidBlendMode.EXCLUSION
+            KiteBlendMode.Hue -> AndroidBlendMode.HUE
+            KiteBlendMode.Saturation -> AndroidBlendMode.SATURATION
+            KiteBlendMode.Color -> AndroidBlendMode.COLOR
+            KiteBlendMode.Luminosity -> AndroidBlendMode.LUMINOSITY
         }
     }
 }

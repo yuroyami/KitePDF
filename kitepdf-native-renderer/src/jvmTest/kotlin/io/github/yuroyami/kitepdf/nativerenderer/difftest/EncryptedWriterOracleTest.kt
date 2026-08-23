@@ -15,7 +15,7 @@ import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
 
 /**
- * T-83 oracle half: mutool must accept KitePDF's encrypted output. It decrypts
+ * Oracle half: mutool must accept KitePDF's encrypted output. It decrypts
  * with the password, renders the page, extracts the text, and refuses the file
  * without the password; the incrementally edited file behaves the same and
  * shows the stamp. Skips cleanly without mutool.

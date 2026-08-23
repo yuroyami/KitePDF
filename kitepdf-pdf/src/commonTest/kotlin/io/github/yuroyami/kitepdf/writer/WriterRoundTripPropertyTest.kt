@@ -7,7 +7,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 /**
- * T-52: seeded pseudo-random build -> open -> verify -> edit -> reopen
+ * Seeded pseudo-random build -> open -> verify -> edit -> reopen
  * property loop. Pure common code; the mutool oracle half already lives in
  * WriterOracleTest. Every assertion message carries the seed so a failure is
  * reproducible with `runSeed(<seed>)`.
@@ -84,7 +84,7 @@ class WriterRoundTripPropertyTest {
             setFillRgb(1.0, 0.0, 0.0)
             text(StandardFont.Helvetica, 14.0, 30.0, 30.0, stamp)
         }
-        editor.setInfo(title = "T-52 seed $seed", author = "prop-tester")
+        editor.setInfo(title = "seed $seed", author = "prop-tester")
         val edited = editor.saveIncremental()
 
         val re = PdfDocument.open(edited)
@@ -96,7 +96,7 @@ class WriterRoundTripPropertyTest {
             }
         }
         assertTrue(stamp in re.pages[0].extractText(), "seed $seed: stamp missing after reopen")
-        assertEquals("T-52 seed $seed", re.info.title, "seed $seed: info title round-trip")
+        assertEquals("seed $seed", re.info.title, "seed $seed: info title round-trip")
         assertEquals("prop-tester", re.info.author, "seed $seed: info author round-trip")
     }
 }

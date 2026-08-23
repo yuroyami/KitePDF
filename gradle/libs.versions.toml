@@ -21,10 +21,20 @@ skiko = "0.148.2"
 # runtime dependency beyond kotlin-stdlib.
 kiteimage = "0.1.0"
 
+# Ktor client. Used ONLY by :kitepdf-net, the optional remote-loading artifact.
+# No other module may depend on it: the engine stays kotlin-stdlib + KiteImage.
+ktor = "3.5.2"
+
 [libraries] ######################################################################################
 # KiteImage supplies every image codec :kitepdf-core decodes through: JPEG
 # (baseline and progressive), PNG, GIF, BMP, JPEG 2000, JBIG2 and CCITT.
 kiteimage = { module = "io.github.yuroyami:kiteimage", version.ref = "kiteimage" }
+
+# Ktor, :kitepdf-net only. ktor-client-core carries no engine; the consumer
+# picks one (CIO, OkHttp, Darwin, Js...) exactly as with any Ktor library.
+ktor-client-core = { module = "io.ktor:ktor-client-core", version.ref = "ktor" }
+ktor-client-cio = { module = "io.ktor:ktor-client-cio", version.ref = "ktor" }
+ktor-client-mock = { module = "io.ktor:ktor-client-mock", version.ref = "ktor" }
 
 # Skia (no Compose), used by :kitepdf-skia. `skiko` is the multiplatform
 # root (common org.jetbrains.skia API; resolves skiko-awt on JVM, native

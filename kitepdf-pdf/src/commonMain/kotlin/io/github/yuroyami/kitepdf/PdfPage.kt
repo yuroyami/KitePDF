@@ -1,6 +1,6 @@
 package io.github.yuroyami.kitepdf
 
-import io.github.yuroyami.kitepdf.core.Rectangle
+import io.github.yuroyami.kitepdf.core.KiteRectangle
 
 import io.github.yuroyami.kitepdf.core.KitePage
 import io.github.yuroyami.kitepdf.core.KiteStructuredText
@@ -14,7 +14,7 @@ import io.github.yuroyami.kitepdf.core.parser.PdfInt
 import io.github.yuroyami.kitepdf.core.parser.PdfReal
 import io.github.yuroyami.kitepdf.core.parser.PdfReference
 import io.github.yuroyami.kitepdf.core.parser.PdfStream
-import io.github.yuroyami.kitepdf.core.render.Matrix
+import io.github.yuroyami.kitepdf.core.render.KiteMatrix
 import io.github.yuroyami.kitepdf.render.PageRenderer
 import io.github.yuroyami.kitepdf.core.render.KiteCanvas
 import io.github.yuroyami.kitepdf.text.TextExtractor
@@ -29,7 +29,7 @@ import io.github.yuroyami.kitepdf.text.TextExtractor
  * for (link in page.annotations) { /* … */ }
  *
  * // Paint into any backend implementing KiteCanvas (see :kitepdf-compose-viewer etc.):
- * page.renderTo(canvas, deviceCtm = Matrix.IDENTITY)
+ * page.renderTo(canvas, deviceCtm = KiteMatrix.IDENTITY)
  * ```
  */
 public class PdfPage internal constructor(
@@ -64,7 +64,7 @@ public class PdfPage internal constructor(
      * missing or non-numeric coordinate defaults to 0.0 rather than throwing.
      * A single garbage entry must not break a whole page (lenient-salvage).
      */
-    private fun readBox(key: String): Rectangle? {
+    private fun readBox(key: String): KiteRectangle? {
         val arr = node.getArray(key, document) ?: return null
         if (arr.size < 4) return null
         fun coord(i: Int): Double {
@@ -78,17 +78,17 @@ public class PdfPage internal constructor(
         }
         // Page boxes are rectangle arrays too, so the same §7.9.5 any-order rule applies. A
         // reversed /MediaBox would otherwise give the page a negative width and height.
-        return Rectangle(coord(0), coord(1), coord(2), coord(3)).normalized()
+        return KiteRectangle(coord(0), coord(1), coord(2), coord(3)).normalized()
     }
 
     /** Page box in PDF user-space units (1/72 inch). [left, bottom, right, top]. */
-    public val mediaBox: Rectangle by lazy {
-        readBox("MediaBox") ?: inherited.mediaBox?.let(Rectangle::fromPdfArray)
+    public val mediaBox: KiteRectangle by lazy {
+        readBox("MediaBox") ?: inherited.mediaBox?.let(KiteRectangle::fromPdfArray)
             ?: throw PdfFormatException("Page has no /MediaBox")
     }
 
-    public val cropBox: Rectangle by lazy {
-        readBox("CropBox") ?: inherited.cropBox?.let(Rectangle::fromPdfArray) ?: mediaBox
+    public val cropBox: KiteRectangle by lazy {
+        readBox("CropBox") ?: inherited.cropBox?.let(KiteRectangle::fromPdfArray) ?: mediaBox
     }
 
     /**
@@ -96,17 +96,17 @@ public class PdfPage internal constructor(
      * (printing with bleed). Defaults to [cropBox] when `/BleedBox` is
      * absent. ISO 32000-1 §14.11.2.
      */
-    public val bleedBox: Rectangle by lazy {
+    public val bleedBox: KiteRectangle by lazy {
         readBox("BleedBox") ?: cropBox
     }
 
     /** Intended dimensions of the finished page after trimming. Defaults to [cropBox]. */
-    public val trimBox: Rectangle by lazy {
+    public val trimBox: KiteRectangle by lazy {
         readBox("TrimBox") ?: cropBox
     }
 
     /** Extent of meaningful content (excluding margins, crop marks). Defaults to [cropBox]. */
-    public val artBox: Rectangle by lazy {
+    public val artBox: KiteRectangle by lazy {
         readBox("ArtBox") ?: cropBox
     }
 
@@ -133,7 +133,14 @@ public class PdfPage internal constructor(
      */
     public val userUnit: Double get() = node.getReal("UserUnit") ?: 1.0
 
+    /**
+     * [mediaBox] width, in points. This is the sheet, NOT what a viewer shows:
+     * it ignores `/CropBox` and `/Rotate`. For the on-screen size use
+     * [displayWidth] (or [rotatedWidth], the same value).
+     */
     public val width: Double get() = mediaBox.right - mediaBox.left
+
+    /** [mediaBox] height, in points. See [width] for why this is not [displayHeight]. */
     public val height: Double get() = mediaBox.top - mediaBox.bottom
 
     /**
@@ -141,14 +148,14 @@ public class PdfPage internal constructor(
      * intersection). Falls back to [mediaBox] when the intersection is empty or
      * degenerate (zero/negative width or height).
      */
-    public val displayBox: Rectangle by lazy {
+    public val displayBox: KiteRectangle by lazy {
         val m = mediaBox
         val c = cropBox
         val left = maxOf(m.left, c.left)
         val bottom = maxOf(m.bottom, c.bottom)
         val right = minOf(m.right, c.right)
         val top = minOf(m.top, c.top)
-        if (right > left && top > bottom) Rectangle(left, bottom, right, top) else m
+        if (right > left && top > bottom) KiteRectangle(left, bottom, right, top) else m
     }
 
     /** Width of [displayBox] after applying [rotationNormalized] (dimensions swap at 90/270). */
@@ -163,7 +170,7 @@ public class PdfPage internal constructor(
     // the already-verified pageToDeviceBase().
     override val displayWidth: Double get() = rotatedWidth
     override val displayHeight: Double get() = rotatedHeight
-    override fun displayToDeviceBase(): Matrix = pageToDeviceBase()
+    override fun displayToDeviceBase(): KiteMatrix = pageToDeviceBase()
 
     /**
      * The unscaled user-space -> device base transform, with the device origin
@@ -171,19 +178,19 @@ public class PdfPage internal constructor(
      * `[0, rotatedWidth] x [0, rotatedHeight]`. Compose additional scaling on
      * top of this to fit a target surface.
      *
-     * Verified against pdf.js viewport math for [Matrix]`(a, b, c, d, e, f)`.
+     * Verified against pdf.js viewport math for [KiteMatrix]`(a, b, c, d, e, f)`.
      */
-    public fun pageToDeviceBase(): Matrix {
+    public fun pageToDeviceBase(): KiteMatrix {
         val b = displayBox
         val x0 = b.left
         val y0 = b.bottom
         val x1 = b.right
         val y1 = b.top
         return when (rotationNormalized) {
-            90 -> Matrix(0.0, 1.0, 1.0, 0.0, -y0, -x0)
-            180 -> Matrix(-1.0, 0.0, 0.0, 1.0, x1, -y0)
-            270 -> Matrix(0.0, -1.0, -1.0, 0.0, y1, x1)
-            else -> Matrix(1.0, 0.0, 0.0, -1.0, -x0, y1)
+            90 -> KiteMatrix(0.0, 1.0, 1.0, 0.0, -y0, -x0)
+            180 -> KiteMatrix(-1.0, 0.0, 0.0, 1.0, x1, -y0)
+            270 -> KiteMatrix(0.0, -1.0, -1.0, 0.0, y1, x1)
+            else -> KiteMatrix(1.0, 0.0, 0.0, -1.0, -x0, y1)
         }
     }
 
@@ -246,7 +253,7 @@ public class PdfPage internal constructor(
     /**
      * Format-neutral structured text in DISPLAY space (y-down, rotation
      * folded in): [structuredText] pushed through [pageToDeviceBase] by the
-     * T-81 adapter. Built once and memoized; powers the shared search /
+     * Display-space adapter. Built once and memoized; powers the shared search /
      * selection / copy path a viewer uses for every format.
      */
     private val kiteTextContent: KiteStructuredText by lazy {
@@ -280,7 +287,7 @@ public class PdfPage internal constructor(
      * identity matrix for a 1pt = 1pt rendering, or a scaled / Y-flipped
      * matrix to fit a UI surface.
      */
-    override fun renderTo(canvas: KiteCanvas, deviceCtm: Matrix) {
+    override fun renderTo(canvas: KiteCanvas, deviceCtm: KiteMatrix) {
         PageRenderer(canvas, document).render(this, deviceCtm)
     }
 }

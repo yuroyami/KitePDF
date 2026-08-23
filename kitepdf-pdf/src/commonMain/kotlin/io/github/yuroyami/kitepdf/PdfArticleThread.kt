@@ -1,6 +1,6 @@
 package io.github.yuroyami.kitepdf
 
-import io.github.yuroyami.kitepdf.core.Rectangle
+import io.github.yuroyami.kitepdf.core.KiteRectangle
 
 import io.github.yuroyami.kitepdf.core.parser.IndirectResolver
 import io.github.yuroyami.kitepdf.core.parser.PdfArray
@@ -35,7 +35,7 @@ public data class PdfArticleThread(
      */
     public data class ArticleBead(
         val pageIndex: Int?,
-        val rect: Rectangle,
+        val rect: KiteRectangle,
     )
 
     public companion object {
@@ -88,7 +88,7 @@ public data class PdfArticleThread(
                 val beadDict = refs.resolve(cur) as? PdfDictionary ?: break
                 val pageRef = beadDict["P"] as? PdfReference
                 val pageIndex = pageRef?.let { pageRefToIndex[it.objectNumber] }
-                val rect = (beadDict.getArray("R"))?.let(Rectangle::fromPdfArray)
+                val rect = (beadDict.getArray("R"))?.let(KiteRectangle::fromPdfArray)
                 if (rect != null) out += ArticleBead(pageIndex, rect)
                 cur = beadDict["N"] as? PdfReference
                 hops++

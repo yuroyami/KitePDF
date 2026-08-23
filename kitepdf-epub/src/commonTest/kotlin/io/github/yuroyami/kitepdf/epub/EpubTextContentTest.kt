@@ -6,7 +6,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 /**
- * T-62: EPUB structured text + search. Extraction rebuilds line text (with the
+ * EPUB structured text + search. Extraction rebuilds line text (with the
  * collapsed inter-word spaces restored from pen gaps), blocks group lines by
  * their owning paragraph, and search matches across line breaks with
  * hyphen-rejoin, yielding display-space quads.

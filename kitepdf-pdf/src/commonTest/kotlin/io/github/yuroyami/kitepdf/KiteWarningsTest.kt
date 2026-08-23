@@ -11,7 +11,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 /**
- * T-28: the warning sink. Salvage paths report through [KiteWarnings.sink],
+ * The warning sink. Salvage paths report through [KiteWarnings.sink],
  * the default null sink stays free, and installing a sink (even a hostile
  * one) never changes parse or render results.
  */

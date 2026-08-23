@@ -27,7 +27,7 @@ class DocumentTest {
 
     @Test
     fun openOrNull_mirrors_open_without_throwing() {
-        // T-22: a good file opens; hopeless bytes give null instead of a throw.
+        // A good file opens; hopeless bytes give null instead of a throw.
         val good = PdfDocument.openOrNull(buildMinimalPdf("(ok)"))
         assertEquals(1, good?.pageCount)
         assertEquals(null, PdfDocument.openOrNull(byteArrayOf(1, 2, 3)))

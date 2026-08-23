@@ -1,7 +1,7 @@
 package io.github.yuroyami.kitepdf.nativerenderer.difftest
 
 import io.github.yuroyami.kitepdf.KitePDF
-import io.github.yuroyami.kitepdf.core.Rectangle
+import io.github.yuroyami.kitepdf.core.KiteRectangle
 import io.github.yuroyami.kitepdf.core.parser.PdfReference
 import io.github.yuroyami.kitepdf.writer.PdfBuilder
 import io.github.yuroyami.kitepdf.writer.PdfStreams
@@ -291,7 +291,7 @@ class WriterOracleTest {
 
         val doc = KitePDF.open(base)
         val redacted = doc.edit().apply {
-            redactRegion(doc.pages[0], Rectangle(60.0, 690.0, 470.0, 726.0))
+            redactRegion(doc.pages[0], KiteRectangle(60.0, 690.0, 470.0, 726.0))
         }.saveRewritten()
 
         // Our reader: secret gone, footer kept.

@@ -6,7 +6,7 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
 /**
- * T-10: `Zlib.encode`/`Zlib.decode` round-trip byte-identically on every
+ * `Zlib.encode`/`Zlib.decode` round-trip byte-identically on every
  * target, whichever side (platform-native or pure-Kotlin) each call takes,
  * and the two implementations stay mutually decodable.
  */

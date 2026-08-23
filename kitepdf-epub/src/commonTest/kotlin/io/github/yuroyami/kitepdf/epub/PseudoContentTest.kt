@@ -7,14 +7,14 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 /**
- * T-65: `::before` / `::after` generated content. String literals (with CSS
+ * `::before` / `::after` generated content. String literals (with CSS
  * escapes) and `attr(x)` render; `counter()`/`url()` values leave the rule
  * inert; other pseudo-elements are still dropped without breaking the sheet.
  */
 class PseudoContentTest {
 
     /**
-     * Extracted plain text (spaces restored by T-62's extraction; the raw
+     * Extracted plain text (spaces restored by the extraction; the raw
      * glyph stream never contains space glyphs). A render pass still runs so
      * pseudo content is also proven paintable.
      */

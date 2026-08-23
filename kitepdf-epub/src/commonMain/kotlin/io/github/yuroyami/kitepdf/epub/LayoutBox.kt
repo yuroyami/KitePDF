@@ -3,7 +3,7 @@ package io.github.yuroyami.kitepdf.epub
 import io.github.yuroyami.kitepdf.epub.css.ComputedStyle
 import io.github.yuroyami.kitepdf.core.font.FontSpec
 import io.github.yuroyami.kitepdf.core.font.TextGlyph
-import io.github.yuroyami.kitepdf.core.render.ImageXObject
+import io.github.yuroyami.kitepdf.core.render.KiteImageData
 import io.github.yuroyami.kitepdf.core.render.RgbColor
 
 /**
@@ -69,7 +69,7 @@ internal class ImageBox(
     val attrWidth: Double? = null,
     val attrHeight: Double? = null,
 ) : LayoutBox() {
-    var image: ImageXObject? = null
+    var image: KiteImageData? = null
     var drawWidth: Double = 0.0
     var drawHeight: Double = 0.0
 }
@@ -120,7 +120,7 @@ internal class PlacedImage(
     var x: Double,
     val width: Double,
     val height: Double,
-    val image: ImageXObject?,
+    val image: KiteImageData?,
     val svg: SvgImage?,
 )
 

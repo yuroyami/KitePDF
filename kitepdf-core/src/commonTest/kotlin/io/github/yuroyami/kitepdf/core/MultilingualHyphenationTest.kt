@@ -7,7 +7,7 @@ import kotlin.test.assertNull
 import kotlin.test.assertSame
 
 /**
- * Language-aware hyphenation (T-70): the bundled TeX pattern sets must produce
+ * Language-aware hyphenation: the bundled TeX pattern sets must produce
  * the exact break-point sets of the reference Knuth-Liang algorithm. Expected
  * values were computed by an independent (non-trie) implementation of the
  * algorithm over the same hyph-utf8 pattern files, so a trie bug cannot

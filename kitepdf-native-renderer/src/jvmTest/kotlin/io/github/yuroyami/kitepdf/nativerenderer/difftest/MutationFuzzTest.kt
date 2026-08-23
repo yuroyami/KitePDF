@@ -2,7 +2,7 @@ package io.github.yuroyami.kitepdf.nativerenderer.difftest
 
 import io.github.yuroyami.kitepdf.PdfDocument
 import io.github.yuroyami.kitepdf.core.KiteFormatException
-import io.github.yuroyami.kitepdf.core.WrongPasswordException
+import io.github.yuroyami.kitepdf.core.KiteWrongPasswordException
 import io.github.yuroyami.kitepdf.core.render.NoopCanvas
 import java.io.File
 import java.util.concurrent.ExecutorService
@@ -14,7 +14,7 @@ import kotlin.test.Test
 import kotlin.test.fail
 
 /**
- * T-51: deterministic mutation fuzzer. Every corpus PDF and every generated
+ * Deterministic mutation fuzzer. Every corpus PDF and every generated
  * fixture gets [MUTANTS_PER_DOC] seeded mutations (byte flips, truncations,
  * 64-byte window shuffles; master seed 42). Each mutant must open + render
  * page 0 without anything worse than a format/password exception, within a
@@ -91,7 +91,7 @@ class MutationFuzzTest {
             doc.pages.firstOrNull()?.renderTo(NoopCanvas)
         } catch (_: KiteFormatException) {
             // PdfFormatException included: malformed input politely refused.
-        } catch (_: WrongPasswordException) {
+        } catch (_: KiteWrongPasswordException) {
             // A mutation that flipped bytes into /Encrypt territory.
         } catch (e: OutOfMemoryError) {
             throw AssertionError("OutOfMemoryError: a mutant blew the heap", e)

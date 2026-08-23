@@ -169,7 +169,7 @@ internal object PredefinedCMaps {
         if (name == null) return SingleByteCodeUnitReader
         if (name == "Identity-H" || name == "Identity-V" || name == "Identity") return IdentityCodeUnitReader
 
-        // Bundled Adobe locale CMaps (T-46): full codespace segmentation AND
+        // Bundled Adobe locale CMaps: full codespace segmentation AND
         // real registry CID mapping through the usecmap chain. The Uni* CMaps
         // are not bundled (see PredefinedCMapData) and keep the synthesized
         // paths below.

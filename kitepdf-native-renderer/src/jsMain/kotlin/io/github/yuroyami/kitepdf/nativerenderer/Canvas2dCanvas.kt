@@ -1,13 +1,13 @@
 package io.github.yuroyami.kitepdf.nativerenderer
 
 import io.github.yuroyami.kitepdf.core.render.paintComplexShading
-import io.github.yuroyami.kitepdf.core.Rectangle
-import io.github.yuroyami.kitepdf.core.font.FontFamily
+import io.github.yuroyami.kitepdf.core.KiteRectangle
+import io.github.yuroyami.kitepdf.core.font.KiteFontFamily
 import io.github.yuroyami.kitepdf.core.font.FontSpec
 import io.github.yuroyami.kitepdf.core.font.TextGlyph
-import io.github.yuroyami.kitepdf.core.render.BlendMode as PdfBlendMode
-import io.github.yuroyami.kitepdf.core.render.ImageXObject
-import io.github.yuroyami.kitepdf.core.render.Matrix as PdfMatrix
+import io.github.yuroyami.kitepdf.core.render.KiteBlendMode
+import io.github.yuroyami.kitepdf.core.render.KiteImageData
+import io.github.yuroyami.kitepdf.core.render.KiteMatrix
 import io.github.yuroyami.kitepdf.core.render.KiteCanvas
 import io.github.yuroyami.kitepdf.core.render.KitePath
 import io.github.yuroyami.kitepdf.core.render.KiteShading
@@ -44,7 +44,7 @@ public class Canvas2dCanvas(private val ctx: CanvasRenderingContext2D) : KiteCan
 
     private var openLayers = 0
 
-    override fun beginPage(widthPt: Double, heightPt: Double, deviceCtm: PdfMatrix) {
+    override fun beginPage(widthPt: Double, heightPt: Double, deviceCtm: KiteMatrix) {
         openLayers = 0
     }
 
@@ -55,8 +55,8 @@ public class Canvas2dCanvas(private val ctx: CanvasRenderingContext2D) : KiteCan
     }
 
     override fun fillPath(
-        path: KitePath, ctm: PdfMatrix, color: RgbColor, evenOdd: Boolean,
-        alpha: Double, blendMode: PdfBlendMode,
+        path: KitePath, ctm: KiteMatrix, color: RgbColor, evenOdd: Boolean,
+        alpha: Double, blendMode: KiteBlendMode,
     ) {
         val p = toPath2D(path, ctm)
         ctx.save()
@@ -71,8 +71,8 @@ public class Canvas2dCanvas(private val ctx: CanvasRenderingContext2D) : KiteCan
     }
 
     override fun strokePath(
-        path: KitePath, ctm: PdfMatrix, color: RgbColor, lineWidth: Double,
-        alpha: Double, blendMode: PdfBlendMode,
+        path: KitePath, ctm: KiteMatrix, color: RgbColor, lineWidth: Double,
+        alpha: Double, blendMode: KiteBlendMode,
         dashArray: List<Double>?, dashPhase: Double,
         lineCap: Int, lineJoin: Int, miterLimit: Double,
     ) {
@@ -104,10 +104,10 @@ public class Canvas2dCanvas(private val ctx: CanvasRenderingContext2D) : KiteCan
         unitsPerEm: Int,
         hasOutlines: Boolean,
         fontSpec: FontSpec,
-        textToDevice: PdfMatrix,
+        textToDevice: KiteMatrix,
         color: RgbColor,
         alpha: Double,
-        blendMode: PdfBlendMode,
+        blendMode: KiteBlendMode,
     ) {
         if (glyphs.isEmpty()) return
         if (!hasOutlines) {
@@ -127,8 +127,8 @@ public class Canvas2dCanvas(private val ctx: CanvasRenderingContext2D) : KiteCan
                 val outline = glyph.outline
                 if (outline != null && !outline.isEmpty()) {
                     val glyphMatrix = textToDevice
-                        .concat(PdfMatrix.translation(penX + glyph.xOffset * unitScale, glyph.yOffset * unitScale))
-                        .concat(PdfMatrix(unitScale, 0.0, 0.0, unitScale, 0.0, 0.0))
+                        .concat(KiteMatrix.translation(penX + glyph.xOffset * unitScale, glyph.yOffset * unitScale))
+                        .concat(KiteMatrix(unitScale, 0.0, 0.0, unitScale, 0.0, 0.0))
                     val p = toPath2D(outline, glyphMatrix)
                     ctx.asDynamic().fill(p, "nonzero")
                     drewAny = true
@@ -156,10 +156,10 @@ public class Canvas2dCanvas(private val ctx: CanvasRenderingContext2D) : KiteCan
         glyphs: List<TextGlyph>,
         fontSize: Double,
         fontSpec: FontSpec,
-        textMatrix: PdfMatrix,
+        textMatrix: KiteMatrix,
         color: RgbColor,
         alpha: Double,
-        blendMode: PdfBlendMode,
+        blendMode: KiteBlendMode,
     ) {
         val text = glyphs.joinToString("") { it.text }
         if (text.isBlank()) return
@@ -199,9 +199,9 @@ public class Canvas2dCanvas(private val ctx: CanvasRenderingContext2D) : KiteCan
     /** Map a non-embedded PDF font to a CSS `font` string (mirrors AwtCanvas's family/style choice). */
     private fun systemFontFor(spec: FontSpec, sizePx: Double): String {
         val family = when (spec.family) {
-            FontFamily.Serif -> "serif"
-            FontFamily.Monospace -> "monospace"
-            FontFamily.SansSerif -> "sans-serif"
+            KiteFontFamily.Serif -> "serif"
+            KiteFontFamily.Monospace -> "monospace"
+            KiteFontFamily.SansSerif -> "sans-serif"
         }
         val bold = if (spec.bold) "bold " else ""
         val italic = if (spec.italic) "italic " else ""
@@ -209,8 +209,8 @@ public class Canvas2dCanvas(private val ctx: CanvasRenderingContext2D) : KiteCan
     }
 
     override fun fillShading(
-        shading: KiteShading, ctm: PdfMatrix, clipPath: KitePath?,
-        alpha: Double, blendMode: PdfBlendMode,
+        shading: KiteShading, ctm: KiteMatrix, clipPath: KitePath?,
+        alpha: Double, blendMode: KiteBlendMode,
     ) {
         if (paintComplexShading(shading, ctm, clipPath, alpha, blendMode)) return
         val stops = shading.sampleStops(32) ?: return
@@ -231,7 +231,7 @@ public class Canvas2dCanvas(private val ctx: CanvasRenderingContext2D) : KiteCan
                 ctx.createRadialGradient(x0, y0, r0, x1, y1, r1)
             }
             is KiteShading.Unsupported -> return
-            else -> return // T-40 types already handled by paintComplexShading
+            else -> return // complex shading types already handled by paintComplexShading
         }
         for (i in stops.colors.indices) {
             gradient.addColorStop(stops.offsets[i], stops.colors[i].toCssRgba(alpha))
@@ -252,7 +252,7 @@ public class Canvas2dCanvas(private val ctx: CanvasRenderingContext2D) : KiteCan
         }
     }
 
-    override fun pushClip(path: KitePath, ctm: PdfMatrix, evenOdd: Boolean) {
+    override fun pushClip(path: KitePath, ctm: KiteMatrix, evenOdd: Boolean) {
         ctx.save()
         openLayers++
         val p = toPath2D(path, ctm)
@@ -265,14 +265,14 @@ public class Canvas2dCanvas(private val ctx: CanvasRenderingContext2D) : KiteCan
         }
     }
 
-    override fun drawImage(image: ImageXObject, ctm: PdfMatrix, alpha: Double) {
+    override fun drawImage(image: KiteImageData, ctm: KiteMatrix, alpha: Double) {
         // Browser image decoding is async. This paints a placeholder instead.
         // Roadmap: an `awaitImages(): Promise<Unit>` API consumers can call
         // before render, kicking off Image() loads up front.
         drawPlaceholder(ctm, alpha)
     }
 
-    private fun drawPlaceholder(ctm: PdfMatrix, alpha: Double) {
+    private fun drawPlaceholder(ctm: KiteMatrix, alpha: Double) {
         ctx.save()
         try {
             ctx.setTransform(ctm.a, ctm.b, ctm.c, ctm.d, ctm.e, ctm.f)
@@ -288,9 +288,9 @@ public class Canvas2dCanvas(private val ctx: CanvasRenderingContext2D) : KiteCan
     }
 
     override fun beginTransparencyGroup(
-        bbox: Rectangle, ctm: PdfMatrix,
+        bbox: KiteRectangle, ctm: KiteMatrix,
         isolated: Boolean, knockout: Boolean,
-        alpha: Double, blendMode: PdfBlendMode,
+        alpha: Double, blendMode: KiteBlendMode,
     ) {
         // Canvas2D has no `saveLayer`. We approximate by stacking
         // globalAlpha + globalCompositeOperation. True isolated/knockout
@@ -310,7 +310,7 @@ public class Canvas2dCanvas(private val ctx: CanvasRenderingContext2D) : KiteCan
 
     override fun applySoftMask(
         kind: SoftMask.Kind,
-        maskBBox: Rectangle, maskCtm: PdfMatrix,
+        maskBBox: KiteRectangle, maskCtm: KiteMatrix,
         render: () -> Unit,
         renderMask: (KiteCanvas) -> Unit,
     ) {
@@ -330,7 +330,7 @@ public class Canvas2dCanvas(private val ctx: CanvasRenderingContext2D) : KiteCan
 
     /* ─── Helpers ─────────────────────────────────────────────────────────── */
 
-    private fun toPath2D(src: KitePath, ctm: PdfMatrix): Path2D {
+    private fun toPath2D(src: KitePath, ctm: KiteMatrix): Path2D {
         val p = Path2D()
         for (seg in src.segments) {
             when (seg) {
@@ -367,22 +367,22 @@ public class Canvas2dCanvas(private val ctx: CanvasRenderingContext2D) : KiteCan
         return "rgba($r8, $g8, $b8, $a)"
     }
 
-    private fun PdfBlendMode.toCanvas(): String = when (this) {
-        PdfBlendMode.Normal -> "source-over"
-        PdfBlendMode.Multiply -> "multiply"
-        PdfBlendMode.Screen -> "screen"
-        PdfBlendMode.Overlay -> "overlay"
-        PdfBlendMode.Darken -> "darken"
-        PdfBlendMode.Lighten -> "lighten"
-        PdfBlendMode.ColorDodge -> "color-dodge"
-        PdfBlendMode.ColorBurn -> "color-burn"
-        PdfBlendMode.HardLight -> "hard-light"
-        PdfBlendMode.SoftLight -> "soft-light"
-        PdfBlendMode.Difference -> "difference"
-        PdfBlendMode.Exclusion -> "exclusion"
-        PdfBlendMode.Hue -> "hue"
-        PdfBlendMode.Saturation -> "saturation"
-        PdfBlendMode.Color -> "color"
-        PdfBlendMode.Luminosity -> "luminosity"
+    private fun KiteBlendMode.toCanvas(): String = when (this) {
+        KiteBlendMode.Normal -> "source-over"
+        KiteBlendMode.Multiply -> "multiply"
+        KiteBlendMode.Screen -> "screen"
+        KiteBlendMode.Overlay -> "overlay"
+        KiteBlendMode.Darken -> "darken"
+        KiteBlendMode.Lighten -> "lighten"
+        KiteBlendMode.ColorDodge -> "color-dodge"
+        KiteBlendMode.ColorBurn -> "color-burn"
+        KiteBlendMode.HardLight -> "hard-light"
+        KiteBlendMode.SoftLight -> "soft-light"
+        KiteBlendMode.Difference -> "difference"
+        KiteBlendMode.Exclusion -> "exclusion"
+        KiteBlendMode.Hue -> "hue"
+        KiteBlendMode.Saturation -> "saturation"
+        KiteBlendMode.Color -> "color"
+        KiteBlendMode.Luminosity -> "luminosity"
     }
 }

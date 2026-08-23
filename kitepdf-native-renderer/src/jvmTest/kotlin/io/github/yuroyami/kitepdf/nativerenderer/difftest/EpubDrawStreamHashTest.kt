@@ -1,14 +1,14 @@
 package io.github.yuroyami.kitepdf.nativerenderer.difftest
 
 import io.github.yuroyami.kitepdf.epub.EpubDocument
-import io.github.yuroyami.kitepdf.core.render.Matrix
+import io.github.yuroyami.kitepdf.core.render.KiteMatrix
 import io.github.yuroyami.kitepdf.core.render.RecordingCanvas
 import java.io.File
 import java.security.MessageDigest
 import kotlin.test.Test
 
 /**
- * T-72 invariance harness: records a per-book hash of the full draw stream
+ * Invariance harness: records a per-book hash of the full draw stream
  * (every RecordingCanvas call of every page) for the synthetic fixtures and
  * the real corpus. Run once before a layout change and once after; identical
  * files prove horizontal books are untouched.
@@ -36,7 +36,7 @@ class EpubDrawStreamHashTest {
             var calls = 0
             for (page in doc.pages) {
                 val rec = RecordingCanvas()
-                runCatching { page.renderTo(rec, Matrix(1.0, 0.0, 0.0, 1.0, 0.0, 0.0)) }
+                runCatching { page.renderTo(rec, KiteMatrix(1.0, 0.0, 0.0, 1.0, 0.0, 0.0)) }
                 for (call in rec.calls) {
                     md.update(stable(call).encodeToByteArray())
                     calls++
@@ -46,12 +46,12 @@ class EpubDrawStreamHashTest {
             lines.add("$name pages=${doc.pages.size} calls=$calls md5=$hex")
         }
         out.writeText(lines.joinToString("\n") + "\n")
-        println("[T-72] wrote ${lines.size} hashes to ${out.absolutePath}")
+        println("wrote ${lines.size} hashes to ${out.absolutePath}")
     }
 
     /**
      * A run-stable serialization of a call: structural fields only, no
-     * identity hash codes (ImageXObject and friends are reference types).
+     * identity hash codes (KiteImageData and friends are reference types).
      */
     private fun stable(c: RecordingCanvas.Call): String = when (c) {
         is RecordingCanvas.Call.BeginPage -> "BP ${c.w} ${c.h} ${c.ctm}"

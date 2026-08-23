@@ -15,9 +15,9 @@ import io.github.yuroyami.kitepdf.core.KiteSearchHit
 import io.github.yuroyami.kitepdf.core.KiteStructuredText
 import io.github.yuroyami.kitepdf.core.KiteTextBlock
 import io.github.yuroyami.kitepdf.core.KiteTextLine
-import io.github.yuroyami.kitepdf.core.render.BlendMode
-import io.github.yuroyami.kitepdf.core.render.ImageXObject
-import io.github.yuroyami.kitepdf.core.render.Matrix
+import io.github.yuroyami.kitepdf.core.render.KiteBlendMode
+import io.github.yuroyami.kitepdf.core.render.KiteImageData
+import io.github.yuroyami.kitepdf.core.render.KiteMatrix
 import io.github.yuroyami.kitepdf.core.render.KiteCanvas
 import io.github.yuroyami.kitepdf.core.render.KitePath
 import io.github.yuroyami.kitepdf.core.render.RgbColor
@@ -130,7 +130,7 @@ public class EpubDocument internal constructor(
     }
 
     /**
-     * Vertical writing (T-72): true when the first spine root resolves
+     * Vertical writing: true when the first spine root resolves
      * `writing-mode: vertical-rl` (Japanese tategaki). One mode per document;
      * mixed horizontal/vertical spines follow the first (a noted limit).
      * Fixed-layout books stay on the pre-paginated path regardless.
@@ -298,8 +298,8 @@ public class EpubDocument internal constructor(
      */
     public fun pageOf(href: String): Int? = pageIndexOfHref(href)
 
-    private fun loadImage(zipPath: String): ImageXObject? =
-        parsed.zip.read(zipPath)?.let { ImageXObject.fromEncodedImage(it) }
+    private fun loadImage(zipPath: String): KiteImageData? =
+        parsed.zip.read(zipPath)?.let { KiteImageData.fromEncodedImage(it) }
 
     private fun loadSvg(zipPath: String): SvgImage? =
         parsed.zip.read(zipPath)?.let { SvgImage.parse(it) }
@@ -542,11 +542,11 @@ internal class FixedSpine(val root: BlockBox, val width: Double, val height: Dou
 
 /**
  * A tappable link region on an [EpubPage]. [rect] is in display space (y-down;
- * y-min stored in [Rectangle.bottom]). [href] is either `zipPath#fragment`
+ * y-min stored in [KiteRectangle.bottom]). [href] is either `zipPath#fragment`
  * (internal, resolve with the document's href navigation) or an external URL.
  */
 public class EpubLink internal constructor(
-    public val rect: io.github.yuroyami.kitepdf.core.Rectangle,
+    public val rect: io.github.yuroyami.kitepdf.core.KiteRectangle,
     public val href: String,
 )
 
@@ -615,14 +615,17 @@ public class EpubPage internal constructor(
     private val page: PageRender,
     private val doc: EpubDocument,
 ) : KitePage {
-    public val width: Double get() = page.pageWidth
-    public val height: Double get() = page.pageHeight
+    override val displayWidth: Double get() = page.pageWidth
+    override val displayHeight: Double get() = page.pageHeight
 
-    override val displayWidth: Double get() = width
-    override val displayHeight: Double get() = height
+    @Deprecated("Renamed to displayWidth, which every KitePage answers", ReplaceWith("displayWidth"))
+    public val width: Double get() = displayWidth
+
+    @Deprecated("Renamed to displayHeight, which every KitePage answers", ReplaceWith("displayHeight"))
+    public val height: Double get() = displayHeight
 
     /** EPUB is y-down from top-left, so the base is a straight vertical flip. */
-    override fun displayToDeviceBase(): Matrix = Matrix(1.0, 0.0, 0.0, -1.0, 0.0, height)
+    override fun displayToDeviceBase(): KiteMatrix = KiteMatrix(1.0, 0.0, 0.0, -1.0, 0.0, displayHeight)
 
     /**
      * Display-space (top-left, y-down) y of a document-space y. The single
@@ -631,21 +634,21 @@ public class EpubPage internal constructor(
      */
     private fun displayY(docY: Double): Double = page.margin + (docY - page.startY)
 
-    override fun renderTo(canvas: KiteCanvas, deviceCtm: Matrix) {
+    override fun renderTo(canvas: KiteCanvas, deviceCtm: KiteMatrix) {
         if (page.vertical) {
             renderVerticalTo(canvas, deviceCtm)
             return
         }
-        canvas.beginPage(width, height, deviceCtm)
+        canvas.beginPage(displayWidth, displayHeight, deviceCtm)
         val margin = page.margin
         val startY = page.startY
-        val bandBottom = startY + (height - 2 * margin)
-        fun yUp(docY: Double) = height - displayY(docY)
+        val bandBottom = startY + (displayHeight - 2 * margin)
+        fun yUp(docY: Double) = displayHeight - displayY(docY)
 
         // Reader background (night mode): under everything, full page.
         doc.settings.backgroundColor?.let { bg ->
             val rect = KitePath.Builder().apply {
-                moveTo(0.0, 0.0); lineTo(width, 0.0); lineTo(width, height); lineTo(0.0, height); close()
+                moveTo(0.0, 0.0); lineTo(displayWidth, 0.0); lineTo(displayWidth, displayHeight); lineTo(0.0, displayHeight); close()
             }.build()
             canvas.fillPath(rect, deviceCtm, bg, evenOdd = false)
         }
@@ -655,24 +658,24 @@ public class EpubPage internal constructor(
         for (line in page.lines) {
             val base = yUp(line.yTop + line.ascent)
             for (run in line.runs) {
-                val tm = Matrix.translation(margin + run.x, base + run.baselineShift)
+                val tm = KiteMatrix.translation(margin + run.x, base + run.baselineShift)
                 canvas.drawGlyphs(
                     run.glyphs, run.fontSize, unitsPerEm = run.unitsPerEm, hasOutlines = run.hasOutlines,
                     fontSpec = run.fontSpec, textToDevice = deviceCtm.concat(tm),
-                    color = run.color, alpha = 1.0, blendMode = BlendMode.Normal,
+                    color = run.color, alpha = 1.0, blendMode = KiteBlendMode.Normal,
                 )
             }
             // Inline images: bottom on the baseline, next to the text runs.
             for (im in line.images) {
                 val svg = im.svg
                 if (svg != null && svg.width > 0 && svg.height > 0) {
-                    val m = Matrix(
+                    val m = KiteMatrix(
                         im.width / svg.width, 0.0, 0.0, -im.height / svg.height,
                         margin + im.x, base + im.height,
                     )
                     svg.render(canvas, deviceCtm.concat(m))
                 } else if (im.image != null) {
-                    val m = Matrix(im.width, 0.0, 0.0, im.height, margin + im.x, base)
+                    val m = KiteMatrix(im.width, 0.0, 0.0, im.height, margin + im.x, base)
                     canvas.drawImage(im.image, deviceCtm.concat(m))
                 }
             }
@@ -683,7 +686,7 @@ public class EpubPage internal constructor(
             if (svg != null) {
                 // Map the SVG viewport (origin top-left, y-down) onto the box's device
                 // rect (y-up): negative y-scale, translate to the box's top edge.
-                val m = Matrix(
+                val m = KiteMatrix(
                     box.drawWidth / svg.width, 0.0, 0.0, -box.drawHeight / svg.height,
                     margin + box.x, yUp(box.bottom) + box.drawHeight,
                 )
@@ -705,34 +708,34 @@ public class EpubPage internal constructor(
                     .apply { rectangle(margin + box.x, yUp(box.bottom), box.drawWidth, box.drawHeight) }
                     .build()
                 canvas.pushClip(clip, deviceCtm, evenOdd = false)
-                val m = Matrix(dw, 0.0, 0.0, dh, margin + box.x + dx, yUp(box.bottom) + dy)
+                val m = KiteMatrix(dw, 0.0, 0.0, dh, margin + box.x + dx, yUp(box.bottom) + dy)
                 canvas.drawImage(img, deviceCtm.concat(m))
                 canvas.popClip()
                 continue
             }
-            val m = Matrix(box.drawWidth, 0.0, 0.0, box.drawHeight, margin + box.x, yUp(box.bottom))
+            val m = KiteMatrix(box.drawWidth, 0.0, 0.0, box.drawHeight, margin + box.x, yUp(box.bottom))
             canvas.drawImage(img, deviceCtm.concat(m))
         }
         canvas.endPage()
     }
 
     /**
-     * Vertical-rl painting (T-72): the logical layout maps onto physical
+     * Vertical-rl painting: the logical layout maps onto physical
      * columns advancing right-to-left, the inline axis running down the page.
      * Full-width glyphs stand upright, centred on the column's em axis;
      * everything else rotates 90 degrees clockwise around the shared baseline.
      */
-    private fun renderVerticalTo(canvas: KiteCanvas, deviceCtm: Matrix) {
-        canvas.beginPage(width, height, deviceCtm)
+    private fun renderVerticalTo(canvas: KiteCanvas, deviceCtm: KiteMatrix) {
+        canvas.beginPage(displayWidth, displayHeight, deviceCtm)
         val margin = page.margin
         val startY = page.startY
-        val bandBottom = startY + (width - 2 * margin)
+        val bandBottom = startY + (displayWidth - 2 * margin)
         // Logical block position -> the column's physical x (canvas space).
-        fun colX(v: Double) = width - margin - (v - startY)
+        fun colX(v: Double) = displayWidth - margin - (v - startY)
 
         doc.settings.backgroundColor?.let { bg ->
             val rect = KitePath.Builder().apply {
-                moveTo(0.0, 0.0); lineTo(width, 0.0); lineTo(width, height); lineTo(0.0, height); close()
+                moveTo(0.0, 0.0); lineTo(displayWidth, 0.0); lineTo(displayWidth, displayHeight); lineTo(0.0, displayHeight); close()
             }.build()
             canvas.fillPath(rect, deviceCtm, bg, evenOdd = false)
         }
@@ -758,8 +761,8 @@ public class EpubPage internal constructor(
                         canvas.drawGlyphs(
                             run.glyphs.subList(k, k + 1), run.fontSize, unitsPerEm = run.unitsPerEm,
                             hasOutlines = run.hasOutlines, fontSpec = run.fontSpec,
-                            textToDevice = deviceCtm.concat(Matrix.translation(x0, height - baseline)),
-                            color = run.color, alpha = 1.0, blendMode = BlendMode.Normal,
+                            textToDevice = deviceCtm.concat(KiteMatrix.translation(x0, displayHeight - baseline)),
+                            color = run.color, alpha = 1.0, blendMode = KiteBlendMode.Normal,
                         )
                         pen += advPt
                         k++
@@ -771,12 +774,12 @@ public class EpubPage internal constructor(
                             segAdv += run.glyphs[j].advanceWidth * run.fontSize / 1000.0
                             j++
                         }
-                        val tm = Matrix(0.0, -1.0, 1.0, 0.0, xAxis, height - pen)
+                        val tm = KiteMatrix(0.0, -1.0, 1.0, 0.0, xAxis, displayHeight - pen)
                         canvas.drawGlyphs(
                             run.glyphs.subList(k, j), run.fontSize, unitsPerEm = run.unitsPerEm,
                             hasOutlines = run.hasOutlines, fontSpec = run.fontSpec,
                             textToDevice = deviceCtm.concat(tm),
-                            color = run.color, alpha = 1.0, blendMode = BlendMode.Normal,
+                            color = run.color, alpha = 1.0, blendMode = KiteBlendMode.Normal,
                         )
                         pen += segAdv
                         k = j
@@ -790,10 +793,10 @@ public class EpubPage internal constructor(
                 val top = margin + im.x
                 val svg = im.svg
                 if (svg != null && svg.width > 0 && svg.height > 0) {
-                    val m = Matrix(0.0, -im.width / svg.width, -im.height / svg.height, 0.0, xAxis + im.height, height - top)
+                    val m = KiteMatrix(0.0, -im.width / svg.width, -im.height / svg.height, 0.0, xAxis + im.height, displayHeight - top)
                     svg.render(canvas, deviceCtm.concat(m))
                 } else if (im.image != null) {
-                    val m = Matrix(0.0, -im.width, im.height, 0.0, xAxis, height - top)
+                    val m = KiteMatrix(0.0, -im.width, im.height, 0.0, xAxis, displayHeight - top)
                     canvas.drawImage(im.image, deviceCtm.concat(m))
                 }
             }
@@ -804,12 +807,12 @@ public class EpubPage internal constructor(
             val top = margin + box.x
             val svg = box.svg
             if (svg != null) {
-                val m = Matrix(0.0, -box.drawWidth / svg.width, -box.drawHeight / svg.height, 0.0, left + box.drawHeight, height - top)
+                val m = KiteMatrix(0.0, -box.drawWidth / svg.width, -box.drawHeight / svg.height, 0.0, left + box.drawHeight, displayHeight - top)
                 svg.render(canvas, deviceCtm.concat(m))
                 continue
             }
             val img = box.image ?: continue
-            val m = Matrix(0.0, -box.drawWidth, box.drawHeight, 0.0, left, height - top)
+            val m = KiteMatrix(0.0, -box.drawWidth, box.drawHeight, 0.0, left, displayHeight - top)
             canvas.drawImage(img, deviceCtm.concat(m))
         }
         canvas.endPage()
@@ -821,7 +824,7 @@ public class EpubPage internal constructor(
 
     /** [paintBox] under the vertical mapping: block spans columns, inline runs down. */
     private fun paintBoxVertical(
-        box: LayoutBox, canvas: KiteCanvas, ctm: Matrix, margin: Double,
+        box: LayoutBox, canvas: KiteCanvas, ctm: KiteMatrix, margin: Double,
         startY: Double, bandBottom: Double, colX: (Double) -> Double,
     ) {
         val s = box.style
@@ -833,7 +836,7 @@ public class EpubPage internal constructor(
 
         fun fill(vFrom: Double, vTo: Double, uFrom: Double, uLen: Double, color: RgbColor) {
             if (vTo <= vFrom || uLen <= 0.0) return
-            rectFill(canvas, ctm, colX(vTo), height - (uFrom + uLen), vTo - vFrom, uLen, color)
+            rectFill(canvas, ctm, colX(vTo), displayHeight - (uFrom + uLen), vTo - vFrom, uLen, color)
         }
 
         s.backgroundColor?.let { fill(topDoc, botDoc, yTopDisp, w, it) }
@@ -849,7 +852,7 @@ public class EpubPage internal constructor(
     }
 
     private fun paintBox(
-        box: LayoutBox, canvas: KiteCanvas, ctm: Matrix, margin: Double,
+        box: LayoutBox, canvas: KiteCanvas, ctm: KiteMatrix, margin: Double,
         startY: Double, bandBottom: Double, yUp: (Double) -> Double,
     ) {
         val s = box.style
@@ -870,7 +873,7 @@ public class EpubPage internal constructor(
     }
 
     private fun horizontalEdge(
-        canvas: KiteCanvas, ctm: Matrix, xDev: Double, w: Double, y0Doc: Double, y1Doc: Double,
+        canvas: KiteCanvas, ctm: KiteMatrix, xDev: Double, w: Double, y0Doc: Double, y1Doc: Double,
         startY: Double, bandBottom: Double, yUp: (Double) -> Double, color: RgbColor,
     ) {
         val t = maxOf(y0Doc, startY); val b = minOf(y1Doc, bandBottom)
@@ -878,10 +881,10 @@ public class EpubPage internal constructor(
         rectFill(canvas, ctm, xDev, yUp(b), w, yUp(t) - yUp(b), color)
     }
 
-    private fun rectFill(canvas: KiteCanvas, ctm: Matrix, x: Double, yBottom: Double, w: Double, h: Double, color: RgbColor) {
+    private fun rectFill(canvas: KiteCanvas, ctm: KiteMatrix, x: Double, yBottom: Double, w: Double, h: Double, color: RgbColor) {
         if (w <= 0.0 || h <= 0.0) return
         val path = KitePath.Builder().apply { rectangle(x, yBottom, w, h) }.build()
-        canvas.fillPath(path, ctm, color, evenOdd = false, alpha = 1.0, blendMode = BlendMode.Normal)
+        canvas.fillPath(path, ctm, color, evenOdd = false, alpha = 1.0, blendMode = KiteBlendMode.Normal)
     }
 
     /* ── links ───────────────────────────────────────────────────────────── */
@@ -908,7 +911,7 @@ public class EpubPage internal constructor(
                 while (j + 1 < runs.size && runs[j + 1].href == href) j++
                 out.add(
                     EpubLink(
-                        rect = io.github.yuroyami.kitepdf.core.Rectangle(
+                        rect = io.github.yuroyami.kitepdf.core.KiteRectangle(
                             left = page.margin + runs[i].x,
                             bottom = top,
                             right = runEnd(runs[j]),
@@ -982,8 +985,8 @@ public class EpubPage internal constructor(
         val top = displayY(line.yTop)
         return KiteTextLine(
             text = sb.toString(),
-            // Display-space rect: y-min lives in [Rectangle.bottom] (see KiteStructuredText).
-            bounds = io.github.yuroyami.kitepdf.core.Rectangle(edges.first(), top, edges.last(), top + line.height),
+            // Display-space rect: y-min lives in [KiteRectangle.bottom] (see KiteStructuredText).
+            bounds = io.github.yuroyami.kitepdf.core.KiteRectangle(edges.first(), top, edges.last(), top + line.height),
             charEdges = edges.toDoubleArray(),
         )
     }

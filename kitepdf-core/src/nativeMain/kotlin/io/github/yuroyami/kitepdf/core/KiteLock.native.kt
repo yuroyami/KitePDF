@@ -10,7 +10,7 @@ import platform.posix.sched_yield
  * differ per native family (structs on Apple/Linux, integer typedefs on
  * MinGW), so a portable pure-atomics lock beats four platform actuals here.
  * Spinning is acceptable because every critical section under this lock is a
- * few map operations; the parse work itself runs outside it (T-16). After a
+ * few map operations; the parse work itself runs outside it. After a
  * short spin budget the waiter yields: an empty spin on Darwin's QoS
  * scheduler can starve a lower-priority holder scheduled on the same core
  * (the failure mode that got OSSpinLock deprecated).

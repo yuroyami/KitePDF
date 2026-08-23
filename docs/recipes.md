@@ -28,13 +28,13 @@ println(text)
 ## View a full PDF in Compose
 
 ```kotlin
-import io.github.yuroyami.kitepdf.compose.PdfView
-import io.github.yuroyami.kitepdf.compose.rememberPdfViewState
+import io.github.yuroyami.kitepdf.compose.KiteDocView
+import io.github.yuroyami.kitepdf.compose.rememberKiteDocViewState
 
 @Composable
 fun PdfViewer(doc: PdfDocument) {
-    PdfView(
-        state = rememberPdfViewState(doc),
+    KiteDocView(
+        state = rememberKiteDocViewState(doc),
         modifier = Modifier.fillMaxSize(),
     )
 }
@@ -45,7 +45,7 @@ Users scroll vertically by default. Swiping and pinch-zoom need no extra setup.
 ## View a single page in Compose
 
 ```kotlin
-PdfView(
+KiteDocView(
     document = doc,
     page = 0,
     modifier = Modifier.fillMaxWidth(),
@@ -57,14 +57,14 @@ PdfView(
 ```kotlin
 @Composable
 fun PdfPager(doc: PdfDocument) {
-    val state = rememberPdfViewState(doc)
+    val state = rememberKiteDocViewState(doc)
     val scope = rememberCoroutineScope()
     
     Column(Modifier.fillMaxSize()) {
-        PdfView(
+        KiteDocView(
             state = state,
             modifier = Modifier.weight(1f),
-            layout = PdfLayout.Paged(Orientation.Horizontal),
+            layout = KiteDocLayout.Paged(Orientation.Horizontal),
             pageSpacing = 12.dp,
         )
         
@@ -82,7 +82,7 @@ fun PdfPager(doc: PdfDocument) {
 ## Add an overlay (HUD) to the viewer
 
 ```kotlin
-PdfView(
+KiteDocView(
     state = state,
     modifier = Modifier.fillMaxSize(),
     overlay = { state ->
@@ -103,10 +103,10 @@ The overlay `BoxScope` receives the viewer state; position widgets with `align()
 **Rasterized (default):** bitmaps, sharp at normal zoom, lighter on CPU, heavier memory:
 
 ```kotlin
-PdfView(
+KiteDocView(
     state = state,
     modifier = Modifier.fillMaxSize(),
-    renderSpec = PdfRenderSpec.Rasterized(
+    renderSpec = KiteRenderSpec.Rasterized(
         quality = 1f,              // 1 = display resolution
         maxBitmapLongSide = 4096,  // cap memory
         rerasterizeOnZoom = true,  // crisp at deep zoom
@@ -118,10 +118,10 @@ PdfView(
 **Vectorized:** resolution-independent, lower memory, re-draws every frame:
 
 ```kotlin
-PdfView(
+KiteDocView(
     state = state,
     modifier = Modifier.fillMaxSize(),
-    renderSpec = PdfRenderSpec.Vectorized(hairlineWidthPx = 1f),
+    renderSpec = KiteRenderSpec.Vectorized(hairlineWidthPx = 1f),
 )
 ```
 
@@ -169,11 +169,11 @@ writeFile("watermarked.pdf", bytes)
 ## Redact a rectangular region and save
 
 ```kotlin
-import io.github.yuroyami.kitepdf.core.Rectangle
+import io.github.yuroyami.kitepdf.core.KiteRectangle
 
 val editor = doc.edit()
 
-val redactBox = Rectangle(
+val redactBox = KiteRectangle(
     left = 100.0,
     bottom = 500.0,
     right = 300.0,
@@ -238,7 +238,7 @@ val png = AwtPdfRasterizer.encodeToPng(doc.pages[0], scale = 0.25)
 
 ```kotlin
 @Composable
-fun CustomZoomControls(state: PdfViewState) {
+fun CustomZoomControls(state: KiteDocViewState) {
     var zoomValue by remember { mutableFloatStateOf(state.zoom) }
     val scope = rememberCoroutineScope()
     
@@ -292,10 +292,10 @@ This is a primitive text-removal filter (it removes all text show operators), no
 ## Disable zoom and panning
 
 ```kotlin
-PdfView(
+KiteDocView(
     state = state,
     modifier = Modifier.fillMaxSize(),
-    zoomSpec = PdfZoomSpec.Disabled,
+    zoomSpec = KiteZoomSpec.Disabled,
 )
 ```
 
@@ -309,7 +309,7 @@ println("Title: ${doc.info.title}")
 println("Author: ${doc.info.author}")
 
 // Bookmarks
-for (outline in doc.outlines) {
+for (outline in doc.bookmarks) {
     println("- ${outline.title}")
     for (child in outline.children) {
         println("  - ${child.title}")

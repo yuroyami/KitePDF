@@ -55,32 +55,32 @@ println(doc.pages[0].extractText())
 
 ### `kitepdf-compose-viewer`: Compose Multiplatform viewer
 
-A full interactive `PdfView` composable: paginated or continuous scrolling, pinch/zoom, double-tap, panning, and hoisted state for external navigation. It is an ordinary composable, so it lays out and recomposes alongside the rest of your UI. Add it to your Compose projects on Android, iOS, macOS, Desktop (JVM), or the web:
+A full interactive `KiteDocView` composable: paginated or continuous scrolling, pinch/zoom, double-tap, panning, and hoisted state for external navigation. It is an ordinary composable, so it lays out and recomposes alongside the rest of your UI. Add it to your Compose projects on Android, iOS, macOS, Desktop (JVM), or the web:
 
 ```kotlin
 val doc = remember(bytes) { PdfDocument.open(bytes) }
-PdfView(document = doc, modifier = Modifier.fillMaxSize())
+KiteDocView(document = doc, modifier = Modifier.fillMaxSize())
 ```
 
 The composable supports rich configuration via parameters:
 
 ```kotlin
-val state = rememberPdfViewState(doc)
+val state = rememberKiteDocViewState(doc)
 
-PdfView(
+KiteDocView(
     state = state,
-    layout = PdfLayout.Paged(Orientation.Horizontal),
-    zoomSpec = PdfZoomSpec(maxZoom = 6f),
-    renderSpec = PdfRenderSpec.Rasterized(quality = 1f),
-    colors = PdfViewColors(viewportBackground = Color.DarkGray),
+    layout = KiteDocLayout.Paged(Orientation.Horizontal),
+    zoomSpec = KiteZoomSpec(maxZoom = 6f),
+    renderSpec = KiteRenderSpec.Rasterized(quality = 1f),
+    colors = KiteDocViewColors(viewportBackground = Color.DarkGray),
     overlay = { s ->
-        PdfNavigationControls(s, Modifier.align(Alignment.BottomCenter).padding(16.dp))
+        KiteNavigationControls(s, Modifier.align(Alignment.BottomCenter).padding(16.dp))
     },
 )
 
 // The same state drives widgets outside the viewport:
-PdfPageIndicator(state)
-PdfThumbnailStrip(state)
+KitePageIndicator(state)
+KiteThumbnailStrip(state)
 ```
 
 !!! note
@@ -123,11 +123,11 @@ val png: ByteArray = PdfPageRasterizer.encodeToPng(doc.pages[0])
 
 The Compose viewer's `renderSpec` parameter accepts a sealed interface with two variants:
 
-**`PdfRenderSpec.Rasterized`** (default)
+**`KiteRenderSpec.Rasterized`** (default)
 : Pages are vector-rendered once into a bitmap per size/zoom bucket. Scrolling, panning, and zoomed image display use the cached bitmap with GPU transforms; content streams never re-execute during gestures. Best for performance on slow devices.
 
 ```kotlin
-renderSpec = PdfRenderSpec.Rasterized(
+renderSpec = KiteRenderSpec.Rasterized(
     quality = 1f,                    // 1 = native display resolution (default)
     maxBitmapLongSide = 4096,        // memory cap on largest page dimensions
     rerasterizeOnZoom = true,        // re-render at settled zoom level for crisp deep zoom
@@ -135,11 +135,11 @@ renderSpec = PdfRenderSpec.Rasterized(
 )
 ```
 
-**`PdfRenderSpec.Vectorized`**
+**`KiteRenderSpec.Vectorized`**
 : Pages are re-drawn live at the slot's layout resolution on every composition. No bitmap overhead; quality is resolution-independent. Best for simple pages, deep zoom crispness, and minimal memory.
 
 ```kotlin
-renderSpec = PdfRenderSpec.Vectorized(
+renderSpec = KiteRenderSpec.Vectorized(
     hairlineWidthPx = 1f,  // minimum stroke width in device pixels (ISO hairline default)
 )
 ```

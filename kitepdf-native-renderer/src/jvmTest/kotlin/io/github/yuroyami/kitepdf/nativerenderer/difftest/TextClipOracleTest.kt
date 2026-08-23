@@ -11,7 +11,7 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 /**
- * T-41 acceptance: mode-7 text clipping against the mutool oracle. A large
+ * Acceptance: mode-7 text clipping against the mutool oracle. A large
  * mode-7 run followed by a full-page red fill must show red ONLY inside the
  * letterforms; the embedded font gives both engines identical outlines, so
  * the diff isolates the clipping itself. Skips without the font or mutool.
@@ -65,7 +65,7 @@ class TextClipOracleTest {
         val reference = MuPdfOracle.render(pdf, page = 1, dpi = 72)
         assertNotNull(reference, "mutool rendered the fixture")
         val diff = ImageDiff.compare(kite, reference)
-        println("[T-41] mode-7 clip vs mutool: MAE=${(diff.score * 10000).toInt() / 10000.0}")
+        println("mode-7 clip vs mutool: MAE=${(diff.score * 10000).toInt() / 10000.0}")
         assertTrue(diff.score <= 0.03, "mode-7 text clip MAE ${diff.score} must be <= 0.03")
     }
 }

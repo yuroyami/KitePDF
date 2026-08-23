@@ -1,11 +1,11 @@
 package io.github.yuroyami.kitepdf.nativerenderer
 
-import io.github.yuroyami.kitepdf.core.Rectangle
+import io.github.yuroyami.kitepdf.core.KiteRectangle
 import io.github.yuroyami.kitepdf.core.font.FontSpec
 import io.github.yuroyami.kitepdf.core.font.TextGlyph
-import io.github.yuroyami.kitepdf.core.render.BlendMode as PdfBlendMode
-import io.github.yuroyami.kitepdf.core.render.ImageXObject
-import io.github.yuroyami.kitepdf.core.render.Matrix as PdfMatrix
+import io.github.yuroyami.kitepdf.core.render.KiteBlendMode
+import io.github.yuroyami.kitepdf.core.render.KiteImageData
+import io.github.yuroyami.kitepdf.core.render.KiteMatrix
 import io.github.yuroyami.kitepdf.core.render.KiteCanvas
 import io.github.yuroyami.kitepdf.core.render.KitePath
 import io.github.yuroyami.kitepdf.core.render.paintComplexShading
@@ -91,7 +91,7 @@ public class CoreGraphicsCanvas(private val ctx: CGContextRef) : KiteCanvas {
 
     private var openLayers = 0
 
-    override fun beginPage(widthPt: Double, heightPt: Double, deviceCtm: PdfMatrix) {
+    override fun beginPage(widthPt: Double, heightPt: Double, deviceCtm: KiteMatrix) {
         openLayers = 0
     }
 
@@ -103,8 +103,8 @@ public class CoreGraphicsCanvas(private val ctx: CGContextRef) : KiteCanvas {
     }
 
     override fun fillPath(
-        path: KitePath, ctm: PdfMatrix, color: RgbColor, evenOdd: Boolean,
-        alpha: Double, blendMode: PdfBlendMode,
+        path: KitePath, ctm: KiteMatrix, color: RgbColor, evenOdd: Boolean,
+        alpha: Double, blendMode: KiteBlendMode,
     ) {
         CGContextSaveGState(ctx)
         try {
@@ -118,8 +118,8 @@ public class CoreGraphicsCanvas(private val ctx: CGContextRef) : KiteCanvas {
     }
 
     override fun strokePath(
-        path: KitePath, ctm: PdfMatrix, color: RgbColor, lineWidth: Double,
-        alpha: Double, blendMode: PdfBlendMode,
+        path: KitePath, ctm: KiteMatrix, color: RgbColor, lineWidth: Double,
+        alpha: Double, blendMode: KiteBlendMode,
         dashArray: List<Double>?, dashPhase: Double,
         lineCap: Int, lineJoin: Int, miterLimit: Double,
     ) {
@@ -163,10 +163,10 @@ public class CoreGraphicsCanvas(private val ctx: CGContextRef) : KiteCanvas {
         unitsPerEm: Int,
         hasOutlines: Boolean,
         fontSpec: FontSpec,
-        textToDevice: PdfMatrix,
+        textToDevice: KiteMatrix,
         color: RgbColor,
         alpha: Double,
-        blendMode: PdfBlendMode,
+        blendMode: KiteBlendMode,
     ) {
         if (glyphs.isEmpty()) return
         if (!hasOutlines) return  // system-font fallback deferred
@@ -182,8 +182,8 @@ public class CoreGraphicsCanvas(private val ctx: CGContextRef) : KiteCanvas {
                 val outline = glyph.outline
                 if (outline != null && !outline.isEmpty()) {
                     val glyphMatrix = textToDevice
-                        .concat(PdfMatrix.translation(penX + glyph.xOffset * unitScale, glyph.yOffset * unitScale))
-                        .concat(PdfMatrix(unitScale, 0.0, 0.0, unitScale, 0.0, 0.0))
+                        .concat(KiteMatrix.translation(penX + glyph.xOffset * unitScale, glyph.yOffset * unitScale))
+                        .concat(KiteMatrix(unitScale, 0.0, 0.0, unitScale, 0.0, 0.0))
                     buildPath(outline, glyphMatrix)
                     CGContextFillPath(ctx)
                 }
@@ -195,8 +195,8 @@ public class CoreGraphicsCanvas(private val ctx: CGContextRef) : KiteCanvas {
     }
 
     override fun fillShading(
-        shading: KiteShading, ctm: PdfMatrix, clipPath: KitePath?,
-        alpha: Double, blendMode: PdfBlendMode,
+        shading: KiteShading, ctm: KiteMatrix, clipPath: KitePath?,
+        alpha: Double, blendMode: KiteBlendMode,
     ) {
         if (paintComplexShading(shading, ctm, clipPath, alpha, blendMode)) return
         val stops = shading.sampleStops(32) ?: return
@@ -252,7 +252,7 @@ public class CoreGraphicsCanvas(private val ctx: CGContextRef) : KiteCanvas {
                                 )
                             }
                             is KiteShading.Unsupported -> Unit
-                            else -> Unit // T-40 types already handled by paintComplexShading
+                            else -> Unit // complex shading types already handled by paintComplexShading
                         }
                     } finally {
                         CGGradientRelease(gradient)
@@ -266,7 +266,7 @@ public class CoreGraphicsCanvas(private val ctx: CGContextRef) : KiteCanvas {
         }
     }
 
-    override fun pushClip(path: KitePath, ctm: PdfMatrix, evenOdd: Boolean) {
+    override fun pushClip(path: KitePath, ctm: KiteMatrix, evenOdd: Boolean) {
         CGContextSaveGState(ctx)
         openLayers++
         buildPath(path, ctm)
@@ -280,7 +280,7 @@ public class CoreGraphicsCanvas(private val ctx: CGContextRef) : KiteCanvas {
         }
     }
 
-    override fun drawImage(image: ImageXObject, ctm: PdfMatrix, alpha: Double) {
+    override fun drawImage(image: KiteImageData, ctm: KiteMatrix, alpha: Double) {
         val cgImage = decodeImage(image)
         if (cgImage == null) {
             drawPlaceholder(ctm)
@@ -306,7 +306,7 @@ public class CoreGraphicsCanvas(private val ctx: CGContextRef) : KiteCanvas {
         }
     }
 
-    private fun decodeImage(image: ImageXObject): platform.CoreGraphics.CGImageRef? {
+    private fun decodeImage(image: KiteImageData): platform.CoreGraphics.CGImageRef? {
         val bytes = image.encodedBytes
         if (bytes.isEmpty()) return null
         if (image.kind !in IMAGE_KINDS_DECODABLE_BY_CG) return null
@@ -324,7 +324,7 @@ public class CoreGraphicsCanvas(private val ctx: CGContextRef) : KiteCanvas {
         }
     }
 
-    private fun drawPlaceholder(ctm: PdfMatrix) {
+    private fun drawPlaceholder(ctm: KiteMatrix) {
         CGContextSaveGState(ctx)
         try {
             CGContextConcatCTM(ctx, ctm.toCGAffine())
@@ -340,9 +340,9 @@ public class CoreGraphicsCanvas(private val ctx: CGContextRef) : KiteCanvas {
     }
 
     override fun beginTransparencyGroup(
-        bbox: Rectangle, ctm: PdfMatrix,
+        bbox: KiteRectangle, ctm: KiteMatrix,
         isolated: Boolean, knockout: Boolean,
-        alpha: Double, blendMode: PdfBlendMode,
+        alpha: Double, blendMode: KiteBlendMode,
     ) {
         CGContextSaveGState(ctx)
         platform.CoreGraphics.CGContextSetAlpha(ctx, alpha)
@@ -361,7 +361,7 @@ public class CoreGraphicsCanvas(private val ctx: CGContextRef) : KiteCanvas {
 
     override fun applySoftMask(
         kind: SoftMask.Kind,
-        maskBBox: Rectangle, maskCtm: PdfMatrix,
+        maskBBox: KiteRectangle, maskCtm: KiteMatrix,
         render: () -> Unit,
         renderMask: (KiteCanvas) -> Unit,
     ) {
@@ -379,7 +379,7 @@ public class CoreGraphicsCanvas(private val ctx: CGContextRef) : KiteCanvas {
 
     /* ─── Helpers ─────────────────────────────────────────────────────────── */
 
-    private fun buildPath(src: KitePath, ctm: PdfMatrix) {
+    private fun buildPath(src: KitePath, ctm: KiteMatrix) {
         CGContextBeginPath(ctx)
         for (seg in src.segments) {
             when (seg) {
@@ -407,32 +407,32 @@ public class CoreGraphicsCanvas(private val ctx: CGContextRef) : KiteCanvas {
         }
     }
 
-    private fun PdfMatrix.toCGAffine(): CValue<platform.CoreGraphics.CGAffineTransform> =
+    private fun KiteMatrix.toCGAffine(): CValue<platform.CoreGraphics.CGAffineTransform> =
         CGAffineTransformMake(a, b, c, d, e, f)
 
-    private fun PdfBlendMode.toCG(): CGBlendMode = when (this) {
-        PdfBlendMode.Normal -> CGBlendMode.kCGBlendModeNormal
-        PdfBlendMode.Multiply -> CGBlendMode.kCGBlendModeMultiply
-        PdfBlendMode.Screen -> CGBlendMode.kCGBlendModeScreen
-        PdfBlendMode.Overlay -> CGBlendMode.kCGBlendModeOverlay
-        PdfBlendMode.Darken -> CGBlendMode.kCGBlendModeDarken
-        PdfBlendMode.Lighten -> CGBlendMode.kCGBlendModeLighten
-        PdfBlendMode.ColorDodge -> CGBlendMode.kCGBlendModeColorDodge
-        PdfBlendMode.ColorBurn -> CGBlendMode.kCGBlendModeColorBurn
-        PdfBlendMode.HardLight -> CGBlendMode.kCGBlendModeHardLight
-        PdfBlendMode.SoftLight -> CGBlendMode.kCGBlendModeSoftLight
-        PdfBlendMode.Difference -> CGBlendMode.kCGBlendModeDifference
-        PdfBlendMode.Exclusion -> CGBlendMode.kCGBlendModeExclusion
-        PdfBlendMode.Hue -> CGBlendMode.kCGBlendModeHue
-        PdfBlendMode.Saturation -> CGBlendMode.kCGBlendModeSaturation
-        PdfBlendMode.Color -> CGBlendMode.kCGBlendModeColor
-        PdfBlendMode.Luminosity -> CGBlendMode.kCGBlendModeLuminosity
+    private fun KiteBlendMode.toCG(): CGBlendMode = when (this) {
+        KiteBlendMode.Normal -> CGBlendMode.kCGBlendModeNormal
+        KiteBlendMode.Multiply -> CGBlendMode.kCGBlendModeMultiply
+        KiteBlendMode.Screen -> CGBlendMode.kCGBlendModeScreen
+        KiteBlendMode.Overlay -> CGBlendMode.kCGBlendModeOverlay
+        KiteBlendMode.Darken -> CGBlendMode.kCGBlendModeDarken
+        KiteBlendMode.Lighten -> CGBlendMode.kCGBlendModeLighten
+        KiteBlendMode.ColorDodge -> CGBlendMode.kCGBlendModeColorDodge
+        KiteBlendMode.ColorBurn -> CGBlendMode.kCGBlendModeColorBurn
+        KiteBlendMode.HardLight -> CGBlendMode.kCGBlendModeHardLight
+        KiteBlendMode.SoftLight -> CGBlendMode.kCGBlendModeSoftLight
+        KiteBlendMode.Difference -> CGBlendMode.kCGBlendModeDifference
+        KiteBlendMode.Exclusion -> CGBlendMode.kCGBlendModeExclusion
+        KiteBlendMode.Hue -> CGBlendMode.kCGBlendModeHue
+        KiteBlendMode.Saturation -> CGBlendMode.kCGBlendModeSaturation
+        KiteBlendMode.Color -> CGBlendMode.kCGBlendModeColor
+        KiteBlendMode.Luminosity -> CGBlendMode.kCGBlendModeLuminosity
     }
 
     private companion object {
         val IMAGE_KINDS_DECODABLE_BY_CG = setOf(
-            ImageXObject.Kind.JPEG,
-            ImageXObject.Kind.JPEG2000,
+            KiteImageData.Kind.JPEG,
+            KiteImageData.Kind.JPEG2000,
         )
     }
 }

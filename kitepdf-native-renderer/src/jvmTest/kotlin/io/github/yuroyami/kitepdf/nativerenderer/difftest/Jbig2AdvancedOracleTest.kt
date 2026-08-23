@@ -11,7 +11,7 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 /**
- * T-45 (Huffman/halftone/refinement): hand-assembled JBIG2 embedded streams
+ * Huffman/halftone/refinement: hand-assembled JBIG2 embedded streams
  * exercising the Huffman symbol dictionary + text region path, the MMR
  * halftone path, and generic refinement. The encoders below mirror Annex B
  * code assignment and the Annex E MQ coder; mutool is the independent oracle
@@ -267,7 +267,7 @@ class Jbig2AdvancedOracleTest {
         val reference = MuPdfOracle.render(file, page = 1, dpi = 72)
         assertNotNull(reference)
         val mae = ImageDiff.compare(kite, reference).score
-        println("[T-45] $tag vs mutool: MAE=${(mae * 10000).toInt() / 10000.0}")
+        println("$tag vs mutool: MAE=${(mae * 10000).toInt() / 10000.0}")
         return mae
     }
 
