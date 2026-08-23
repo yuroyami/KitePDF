@@ -7,10 +7,83 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-An API naming pass. Two things were wrong. The viewer called itself PDF while
-serving both formats: the Compose viewer, its state, its layouts and its
-widgets were all named `Pdf*` even though every one of them drives an EPUB
-exactly as it drives a PDF. And six core types carried bare names that collide
+Big EPUBs open at the page the reader left off, instead of paginating the whole
+book first.
+
+A reflowable book has no pages until it is laid out, and KitePDF laid out every
+chapter before it would show one. On the local corpus that was 86% to 96% of
+the time between opening a file and seeing a page: a 9.9 MB book spent 986 ms
+there. A reader resuming at chapter 20 paid for chapters 0 to 19 as well.
+
+Now each chapter is laid out on its own, on demand, and the one being read goes
+first. Resuming at the last chapter, desktop JVM, local corpus:
+
+| book | chapters | before | after |
+|---|---|---|---|
+| 6.epub (9.9 MB) | 26 | 986 ms | 3 ms |
+| 11.epub (5.0 MB) | 11 | 2085 ms | 71 ms |
+| 1.epub | 19 | 729 ms | 12 ms |
+| 18.epub | 35 | 320 ms | 7 ms |
+
+The rest of the book lays out in the background, nearest chapter first, and a
+chapter landing above the reader does not move the page they are on.
+
+Closes the request in
+[issue #3](https://github.com/yuroyami/KitePDF/issues/3).
+
+### Breaking changes and migration
+
+- **Every spine item now starts on a fresh page.** A short chapter used to
+  share its page with the next one, which no mainstream reader does and which
+  is what made whole-book layout unavoidable. Page counts rise by roughly one
+  per chapter boundary (6.epub 480 to 491, 18.epub 502 to 515).
+- **`EpubDocument.outline` no longer paginates the book.** Entries carry a
+  `target` bookmark instead, and `pageIndex` is filled in only once the book is
+  fully laid out. `KiteOutlinePanel` navigates by `target`, so a table of
+  contents opens instantly and a tap lays out that one chapter.
+- **`KiteDocViewState.currentPage` counts slots, not pages.** For a PDF, and
+  for a book that has finished laying out, it is still the page index. While a
+  reflowable book is paginating, each chapter that is not ready holds one slot,
+  so it reads low until they land. `currentLocation` is the exact answer.
+- `KiteDocViewState.nextPage`/`previousPage` cross chapter boundaries and lay
+  out the next chapter when they need to.
+
+### Added
+
+- **`KiteLocation(chapter, page)`** for a position in the current layout, and
+  **`KiteBookmark`** for one that survives a re-flow. Save a bookmark when the
+  reader leaves, hand it back when they return, and they land in the same
+  paragraph even if the font size changed.
+- **`rememberKiteDocViewState(document, bookmark)`**, plus
+  `state.currentLocation`, `state.currentBookmark()`, `state.scrollTo(location)`,
+  `state.scrollTo(bookmark)`, `state.knownPageCount` and `state.isComplete`.
+- **The chapter API on `KiteDocument`**: `chapterCount`, `prepareChapter`,
+  `isChapterReady`, `pageCountIn`, `page(location)`, `pageIndexOf`,
+  `locationOf`, `bookmarkOf`, `locate`, `isComplete`, `knownPageCount`. Every
+  one has a one-chapter default, so `PdfDocument` and any third-party handler
+  answer them without writing code.
+- **`KiteDocView(chapterPlaceholder = ...)`** for what a chapter shows while it
+  is still being laid out.
+- **`EpubDocument.bookmarkOf(href)`**, which turns an internal link into a
+  position without laying anything out.
+- `KitePageIndicator` marks the total with `~` until the book is complete.
+
+### Notes
+
+- `pageCount` and `pages` still lay out every chapter and still return exactly
+  what they did. Use `knownPageCount` with `isComplete` for a running total.
+- `KiteDocLayout.Spread` pairs pages by index, so it lays the document out
+  fully before composing. It is meant for fixed-layout content anyway.
+- Lazy per-chapter PARSING (as opposed to layout) is not part of this. Parse is
+  1% to 15% of open time on desktop, and the font registry is built from every
+  chapter's `@font-face` rules, so it needs its own change.
+
+---
+
+An API naming pass, earlier in the same cycle. Two things were wrong. The
+viewer called itself PDF while serving both formats: the Compose viewer, its
+state, its layouts and its widgets were all named `Pdf*` even though every one
+of them drives an EPUB exactly as it drives a PDF. And six core types carried bare names that collide
 with Compose, Android, Skia and AWT types, which forced aliased imports at
 almost every call site.
 

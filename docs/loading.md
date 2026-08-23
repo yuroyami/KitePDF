@@ -1,6 +1,8 @@
 # Loading a document
 
-Every source ends the same way: a `ByteArray` handed to a handler. The engine has no incremental reader, so a file, a stream and a download all become one array in memory before parsing starts. Everything on this page is a thin adapter around that.
+Every source ends the same way: a `ByteArray` handed to a handler. Bytes are read whole, so a file, a stream and a download all become one array in memory before parsing starts. Everything on this page is a thin adapter around that.
+
+Reading the bytes is not what makes a big book slow to open; laying it out is, and that part IS incremental. See [Opening at a saved position](compose-viewer.md#opening-at-a-saved-position).
 
 ## When you know the format
 
@@ -115,6 +117,19 @@ KiteDoc.openUrl(url, client) { header("Authorization", "Bearer $token") }
 `downloadBytes(url, client)` gets you the raw body when you want to cache or hash it before deciding what to do.
 
 Ktor does not ship for `androidNative*` or `wasmWasi`, so neither does `kitepdf-net`. The engine artifacts still do.
+
+## Remembering where the reader was
+
+`KiteDoc.open` gives you the document. Where the reader left off is a
+`KiteBookmark`, which survives a font size or page size change:
+
+```kotlin
+val state = rememberKiteDocViewState(doc, savedBookmark)
+val savedBookmark = state.currentBookmark()      // save this
+```
+
+Only the bookmark's chapter is laid out before the page appears. See
+**[Reading EPUBs](epub.md)** for the detail.
 
 ## Re-flowing an EPUB after opening
 

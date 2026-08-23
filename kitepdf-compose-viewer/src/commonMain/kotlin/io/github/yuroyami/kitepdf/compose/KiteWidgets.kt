@@ -67,11 +67,12 @@ public fun KitePageIndicator(
     textStyle: TextStyle = TextStyle.Default,
     format: (currentPage: Int, pageCount: Int) -> String = { c, t -> "${c + 1} / $t" },
 ) {
-    BasicText(
-        text = format(state.currentPage, state.pageCount),
-        modifier = modifier,
-        style = textStyle,
-    )
+    // A reflowable book does not know its length until it is fully laid out, so
+    // the total wears a "~" until then. The default format is untouched.
+    val total = state.knownPageCount
+    val text = if (state.isComplete) format(state.currentPage, total)
+    else "~" + format(state.currentPage, total)
+    BasicText(text = text, modifier = modifier, style = textStyle)
 }
 
 /**
@@ -112,7 +113,7 @@ public fun KiteNavigationControls(
         )
         ChevronButton(
             pointsLeft = false,
-            enabled = state.currentPage < state.pageCount - 1,
+            enabled = state.currentPage < state.itemCount - 1,
             tint = contentColor,
             onClick = { scope.launch { state.nextPage() } },
         )
@@ -180,17 +181,20 @@ public fun KiteThumbnailStrip(
         horizontalArrangement = Arrangement.spacedBy(spacing),
         contentPadding = contentPadding,
     ) {
-        items(count = state.pageCount, key = { it }) { index ->
-            val page = state.document.pages[index]
-            val aspect = kitePageAspect(page)
+        items(count = state.itemCount, key = { state.items[it].key }) { index ->
+            val page = state.pageAt(index)
+            val aspect = if (page != null) kitePageAspect(page) else state.placeholderAspect()
             val widthPx = (heightPx * aspect).roundToInt().coerceAtLeast(1)
             val bitmap by produceState<ImageBitmap?>(null, page, heightPx, pageBackground) {
                 // Same mandatory guard as KitePageRaster: an exception escaping
                 // produceState aborts the host app, so a failed thumbnail must
-                // degrade to its placeholder instead.
-                value = rasterizer.rasterizeCachedOrNull(
-                    null, page, widthPx, heightPx, pageBackground, 1f, null, index,
-                )?.first
+                // degrade to its placeholder instead. A chapter still laying out
+                // has no page yet and simply shows its empty slot.
+                value = page?.let {
+                    rasterizer.rasterizeCachedOrNull(
+                        null, it, widthPx, heightPx, pageBackground, 1f, null, index,
+                    )?.first
+                }
             }
             val selected = index == state.currentPage
             val shape = RoundedCornerShape(4.dp)
@@ -223,7 +227,8 @@ public fun KiteThumbnailStrip(
 /**
  * A navigation panel over the document's outline (PDF bookmarks / EPUB table
  * of contents): an indented, clickable column of [KiteOutlineItem]s. Clicking
- * an entry with a resolved page scrolls there (and calls [onNavigate]);
+ * an entry scrolls to its target (and calls [onNavigate]); on a book still
+ * paginating this lays out that one chapter rather than the whole book;
  * entries without one (unresolvable destinations, grouping labels) render
  * dimmed and unclickable. Plain foundation styling, like every widget here.
  *
@@ -260,13 +265,16 @@ public fun KiteOutlinePanel(
     LazyColumn(modifier = modifier, contentPadding = contentPadding) {
         items(flat.size) { i ->
             val (item, depth) = flat[i]
+            // A target resolves with one chapter's layout, so an entry is live
+            // even while the rest of the book is still paginating.
+            val target = item.target
             val page = item.pageIndex
             val isCurrent = page != null && page == state.currentPage
             BasicText(
                 text = item.title,
                 style = textStyle.copy(
                     color = when {
-                        page == null -> disabledTextColor
+                        page == null && target == null -> disabledTextColor
                         isCurrent -> currentPageColor
                         else -> textColor
                     },
@@ -276,12 +284,17 @@ public fun KiteOutlinePanel(
                 modifier = Modifier
                     .fillMaxWidth()
                     .then(
-                        if (page != null) {
-                            Modifier.clickable {
+                        when {
+                            target != null -> Modifier.clickable {
+                                scope.launch { state.scrollTo(target, animate = true) }
+                                onNavigate?.invoke(item)
+                            }
+                            page != null -> Modifier.clickable {
                                 scope.launch { state.animateScrollToPage(page) }
                                 onNavigate?.invoke(item)
                             }
-                        } else Modifier,
+                            else -> Modifier
+                        },
                     )
                     .padding(
                         start = indent * depth + 4.dp,

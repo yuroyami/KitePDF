@@ -362,6 +362,48 @@ The default is `KiteSelectionHandleDefaults.CaretAndDot`: a caret spanning the b
 
 One catch with a custom painter: the grab area is the boundary line, not the shape you paint. It is a fixed 24.dp radius in screen pixels, so the touch target stays the same size at every zoom level while the marker scales with the text. Draw your marker near its boundary and the two agree; draw it far away and readers will be grabbing empty space.
 
+## Opening at a saved position
+
+A PDF is ready the moment it opens. A reflowable EPUB is not: it has to be laid
+out before it has pages, and a whole book takes seconds. So `KiteDocView` lays
+out one chapter at a time, starting with the one the reader is on.
+
+```kotlin
+val state = rememberKiteDocViewState(book, savedBookmark)
+KiteDocView(state, Modifier.fillMaxSize())
+
+val savedBookmark = state.currentBookmark()   // save on pause
+```
+
+The rest of the book loads in the background, nearest chapter first. A chapter
+that lands above the reader does not move their page.
+
+Chapters that have not been laid out yet hold one page-shaped slot each.
+Replace what that slot shows with `chapterPlaceholder`:
+
+```kotlin
+KiteDocView(
+    state = state,
+    chapterPlaceholder = { chapter -> CircularProgressIndicator() },
+)
+```
+
+### Reading the position
+
+| Member | Use it for |
+|---|---|
+| `state.currentLocation` | where the reader is, always exact |
+| `state.currentBookmark()` | what to save and reopen with |
+| `state.currentPage` | the slot on screen, for an indicator |
+| `state.knownPageCount` | pages laid out so far |
+| `state.isComplete` | true once the total is final |
+| `state.scrollTo(location)` / `scrollTo(bookmark)` | move, laying out one chapter |
+
+`KitePageIndicator` prefixes the total with `~` until `isComplete`.
+
+`state.pageCount` is still there and still exact, but reading it lays out every
+chapter. Prefer `knownPageCount` with `isComplete`.
+
 ## Link taps
 
 A tap on a link inside the document is handled for you: internal jumps (PDF

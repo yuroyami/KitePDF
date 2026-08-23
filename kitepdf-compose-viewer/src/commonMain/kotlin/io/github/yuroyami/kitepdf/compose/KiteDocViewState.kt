@@ -10,6 +10,7 @@ import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -20,10 +21,14 @@ import androidx.compose.ui.geometry.isSpecified
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.unit.IntSize
+import io.github.yuroyami.kitepdf.core.KiteBookmark
 import io.github.yuroyami.kitepdf.core.KiteDocument
+import io.github.yuroyami.kitepdf.core.KiteLocation
+import io.github.yuroyami.kitepdf.core.KitePage
 import io.github.yuroyami.kitepdf.core.KiteSearchHit
 import io.github.yuroyami.kitepdf.core.KiteStructuredText
 import kotlin.math.abs
+import kotlinx.coroutines.withContext
 
 /**
  * Remembers a [KiteDocViewState] for [document]. Hoist it to drive a
@@ -37,6 +42,23 @@ import kotlin.math.abs
 @Composable
 public fun rememberKiteDocViewState(document: KiteDocument, initialPage: Int = 0): KiteDocViewState =
     remember(document) { KiteDocViewState(document, initialPage) }
+
+/**
+ * Remembers a [KiteDocViewState] opened at [bookmark], a position saved from an
+ * earlier reading session.
+ *
+ * This is the fast way into a big reflowable book: only the bookmark's chapter
+ * is laid out before the page appears, and the rest follows in the background.
+ * Take the bookmark back with [KiteDocViewState.currentBookmark].
+ *
+ * ```kotlin
+ * val state = rememberKiteDocViewState(book, savedBookmark)
+ * KiteDocView(state, Modifier.fillMaxSize())
+ * ```
+ */
+@Composable
+public fun rememberKiteDocViewState(document: KiteDocument, bookmark: KiteBookmark): KiteDocViewState =
+    remember(document) { KiteDocViewState(document, bookmark) }
 
 /**
  * Observable state + control surface of a [KiteDocView].
@@ -55,6 +77,104 @@ public class KiteDocViewState(
     public val document: KiteDocument,
     initialPage: Int = 0,
 ) {
+    /** Opens at a saved reading position instead of a page number. */
+    public constructor(document: KiteDocument, bookmark: KiteBookmark) : this(document, 0) {
+        openAt = bookmark
+    }
+
+    /** Where the viewer should start. Resolved on first composition. */
+    internal var openAt: KiteBookmark? = null
+
+    /* ── chapters and the item strip ──────────────────────────────────────── */
+
+    /** Bumped whenever a chapter finishes laying out, to rebuild [items]. */
+    private var chaptersReady by mutableIntStateOf(0)
+
+    /** Call after a chapter lands, on the main thread. */
+    internal fun onChapterReady() {
+        chaptersReady++
+    }
+
+    /**
+     * What the viewer scrolls through: one entry per laid-out page, plus one
+     * page-shaped placeholder for each chapter still being laid out.
+     */
+    internal val items: List<DocItem>
+        get() {
+            chaptersReady // read so a landing chapter recomposes the strip
+            return buildItems(document)
+        }
+
+    /** How many slots the strip has. This is what the lists and pagers count. */
+    internal val itemCount: Int get() = items.size
+
+    /** The page in slot [index], or null when that slot is a placeholder. */
+    internal fun pageAt(index: Int): KitePage? =
+        (items.getOrNull(index) as? DocItem.Page)?.let { document.page(it.location) }
+
+    /** The location in slot [index], or null for a placeholder. */
+    internal fun locationAt(index: Int): KiteLocation? =
+        (items.getOrNull(index) as? DocItem.Page)?.location
+
+    /** The chapter whose placeholder is in slot [index], or null for a page. */
+    internal fun chapterAt(index: Int): Int? =
+        (items.getOrNull(index) as? DocItem.ChapterGap)?.chapter
+
+    /**
+     * Width-over-height for a placeholder slot: the first laid-out page's shape,
+     * so a gap is the same size as the pages around it. A4-ish when nothing is
+     * laid out yet.
+     */
+    internal fun placeholderAspect(): Float {
+        for (i in items.indices) {
+            val page = pageAt(i) ?: continue
+            return kitePageAspect(page)
+        }
+        return 1f / 1.4142f
+    }
+
+    /** The slot showing [location], or -1 when its chapter is not laid out. */
+    internal fun indexOf(location: KiteLocation): Int =
+        items.indexOfFirst { it is DocItem.Page && it.location == location }
+
+    /**
+     * Where the reader is. Always exact, even mid-layout, unlike a global page
+     * number which cannot exist until the pages before it are counted.
+     */
+    public val currentLocation: KiteLocation
+        get() = locationAt(currentPage)
+            ?: (items.getOrNull(currentPage) as? DocItem.ChapterGap)?.let { KiteLocation(it.chapter, 0) }
+            ?: KiteLocation.START
+
+    /**
+     * A position to save now and reopen with later. Survives a font size, page
+     * size or margin change: hand it to [rememberKiteDocViewState].
+     */
+    public fun currentBookmark(): KiteBookmark = document.bookmarkOf(currentLocation)
+
+    /** True once every chapter is laid out and [pageCount] is final. */
+    public val isComplete: Boolean
+        get() {
+            chaptersReady
+            return document.isComplete
+        }
+
+    /**
+     * Pages laid out so far. While a book is still paginating this grows; show
+     * it as an approximate total until [isComplete].
+     */
+    public val knownPageCount: Int
+        get() {
+            chaptersReady
+            return document.knownPageCount
+        }
+
+    /**
+     * Pages in the whole document.
+     *
+     * Lays out every chapter of a reflowable book, which is the wait the
+     * chapter API exists to avoid. Prefer [knownPageCount] with [isComplete].
+     */
     public val pageCount: Int get() = document.pageCount
 
     /** Current zoom factor. 1 = fit. Bounded by [KiteZoomSpec.minZoom]/[maxZoom]. */
@@ -101,8 +221,14 @@ public class KiteDocViewState(
     public var highlights: List<KiteHighlight> by mutableStateOf(emptyList())
 
     /**
-     * The page the viewport currently rests on: the snapped page in paged
-     * mode, the page nearest the viewport centre in continuous mode.
+     * The slot the viewport rests on: the snapped page in paged mode, the page
+     * nearest the viewport centre in continuous mode.
+     *
+     * This counts what is on screen. For a PDF, and for a book that has finished
+     * laying out, it is the page index. While a reflowable book is still
+     * paginating, chapters that are not laid out yet occupy one slot each, so it
+     * reads a little low until they land, and then it is exact. Use
+     * [currentLocation] when you need the position itself rather than a number.
      */
     public val currentPage: Int
         get() = adapter?.currentPage ?: pendingPage
@@ -298,7 +424,7 @@ public class KiteDocViewState(
         isSelectionActive = true
         selectionInProgress = true
         val (pageIndex, x, y) = hitTestDisplay(viewportOffset) ?: return
-        val text = document.pages.getOrNull(pageIndex)?.textContent() ?: return
+        val text = pageAt(pageIndex)?.textContent() ?: return
         val idx = text.charIndexAt(x, y) ?: return
         selectionAnchor = pageIndex to idx
         applySelection(text, pageIndex, idx, idx)
@@ -313,7 +439,7 @@ public class KiteDocViewState(
         val (page, anchor) = selectionAnchor ?: return
         val (pageIndex, x, y) = hitTestDisplay(viewportOffset) ?: return
         if (pageIndex != page) return
-        val text = document.pages.getOrNull(page)?.textContent() ?: return
+        val text = pageAt(page)?.textContent() ?: return
         val idx = text.charIndexAt(x, y) ?: return
         applySelection(text, page, minOf(anchor, idx), maxOf(anchor, idx))
     }
@@ -407,7 +533,7 @@ public class KiteDocViewState(
     internal fun displayToViewport(pageIndex: Int, x: Double, y: Double): Offset? {
         if (viewportSize == IntSize.Zero || zoom <= 0f) return null
         val rect = pageGeometry[pageIndex] ?: return null
-        val page = document.pages.getOrNull(pageIndex) ?: return null
+        val page = pageAt(pageIndex) ?: return null
         if (rect.width <= 0f || rect.height <= 0f || page.displayWidth <= 0.0 || page.displayHeight <= 0.0) return null
         val content = Offset(
             rect.left + (x / page.displayWidth).toFloat() * rect.width,
@@ -427,7 +553,7 @@ public class KiteDocViewState(
         val content = centre + (viewportOffset - centre - panOffset) / zoom
         for ((index, rect) in pageGeometry) {
             if (rect.width <= 0f || rect.height <= 0f || !rect.contains(content)) continue
-            val page = document.pages.getOrNull(index) ?: continue
+            val page = pageAt(index) ?: continue
             return Triple(
                 index,
                 (content.x - rect.left) / rect.width * page.displayWidth,
@@ -450,7 +576,7 @@ public class KiteDocViewState(
      */
     public fun hitTest(viewportOffset: Offset): KitePageHit? {
         val (index, devX, devY) = hitTestDisplay(viewportOffset) ?: return null
-        val page = document.pages.getOrNull(index) ?: return null
+        val page = pageAt(index) ?: return null
         val inv = page.displayToDeviceBase().invert() ?: return null
         val (x, y) = inv.transformPoint(devX, devY)
         return KitePageHit(index, x, y)
@@ -458,23 +584,73 @@ public class KiteDocViewState(
 
     /* ── navigation ───────────────────────────────────────────────────────── */
 
-    /** Jumps to [page] (coerced into range) without animation. */
+    /** Jumps to slot [page] (coerced into range) without animation. */
     public suspend fun scrollToPage(page: Int) {
-        val target = page.coerceIn(0, (pageCount - 1).coerceAtLeast(0))
+        val target = page.coerceIn(0, (itemCount - 1).coerceAtLeast(0))
         pendingPage = target
         adapter?.scrollToPage(target)
     }
 
-    /** Animates to [page] (coerced into range). */
+    /** Animates to slot [page] (coerced into range). */
     public suspend fun animateScrollToPage(page: Int) {
-        val target = page.coerceIn(0, (pageCount - 1).coerceAtLeast(0))
+        val target = page.coerceIn(0, (itemCount - 1).coerceAtLeast(0))
         pendingPage = target
         adapter?.animateScrollToPage(target)
     }
 
-    public suspend fun nextPage(): Unit = animateScrollToPage(currentPage + 1)
+    /**
+     * Jumps to [location], laying out its chapter first if needed.
+     *
+     * Prefer this over [scrollToPage] on a reflowable book: a location is exact
+     * whatever has been laid out so far, while a page number is not.
+     */
+    public suspend fun scrollTo(location: KiteLocation, animate: Boolean = false) {
+        prepareFor(location)
+        val index = indexOf(location)
+        if (index < 0) return
+        if (animate) animateScrollToPage(index) else scrollToPage(index)
+    }
 
-    public suspend fun previousPage(): Unit = animateScrollToPage(currentPage - 1)
+    /** Jumps to a saved reading position, laying out only its chapter. */
+    public suspend fun scrollTo(bookmark: KiteBookmark, animate: Boolean = false) {
+        val location = withContext(kitepdfRasterDispatcher()) { document.locate(bookmark) }
+        onComposeThread { onChapterReady() }
+        scrollTo(location, animate)
+    }
+
+    /** Lays out [location]'s chapter off the main thread, if it is not ready. */
+    private suspend fun prepareFor(location: KiteLocation) {
+        if (document.isChapterReady(location.chapter)) return
+        withContext(kitepdfRasterDispatcher()) { document.prepareChapter(location.chapter) }
+        onComposeThread { onChapterReady() }
+    }
+
+    /**
+     * The next page in reading order, crossing into the following chapter and
+     * laying it out when the current one runs out.
+     */
+    public suspend fun nextPage() {
+        val here = currentLocation
+        val inChapter = document.pageCountIn(here.chapter)
+        if (here.page + 1 < inChapter) {
+            scrollTo(KiteLocation(here.chapter, here.page + 1), animate = true)
+        } else if (here.chapter + 1 < document.chapterCount) {
+            scrollTo(KiteLocation(here.chapter + 1, 0), animate = true)
+        }
+    }
+
+    /** The previous page in reading order, crossing back a chapter if needed. */
+    public suspend fun previousPage() {
+        val here = currentLocation
+        if (here.page > 0) {
+            scrollTo(KiteLocation(here.chapter, here.page - 1), animate = true)
+        } else if (here.chapter > 0) {
+            val previous = here.chapter - 1
+            prepareFor(KiteLocation(previous, 0))
+            val last = (document.pageCountIn(previous) - 1).coerceAtLeast(0)
+            scrollTo(KiteLocation(previous, last), animate = true)
+        }
+    }
 
     internal data class PanAxes(val x: Boolean, val y: Boolean) {
         companion object {
