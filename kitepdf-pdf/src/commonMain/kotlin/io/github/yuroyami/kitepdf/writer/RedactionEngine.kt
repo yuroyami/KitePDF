@@ -34,10 +34,11 @@ import io.github.yuroyami.kitepdf.core.parser.PdfString
  *  - [droppedImageNames] / [survivingImageNames]: image XObject names whose
  *    draw op was removed vs. still drawn. The caller prunes the dropped ones
  *    from `/Resources /XObject` so the reachability GC drops the image stream.
- *  - [formXObjectHits]: form XObjects invoked via `Do` whose CTM-mapped area
- *    overlaps a region, together with the redaction rectangles mapped into the
- *    form's own coordinate space, so the caller can recurse into the form and
- *    redact there (content inside a form XObject is otherwise never reached).
+ *  - [formXObjectHits]: one entry per `Do` invocation of a form XObject, carrying
+ *    the redaction rectangles mapped into that form's own coordinate space and
+ *    whether the invocation paints into a region at all, so the caller can recurse
+ *    in and redact there (content inside a form XObject is otherwise never
+ *    reached) without disturbing the invocations that no region touches.
  *
  * Not handled yet (documented limitation): vector paths inside the region are
  * left as-is.
@@ -56,14 +57,24 @@ internal class RedactionEngine(
     val survivingImageNames = LinkedHashSet<String>()
 
     /**
-     * One `Do` invocation of a form XObject that overlaps a region, carrying the
-     * regions mapped into that form's own space and the index of the `Do` in the
-     * FILTERED output stream. The index is what lets the caller repoint this one
-     * invocation at a redacted clone without touching its siblings.
+     * One `Do` invocation of a form XObject, carrying the regions mapped into that
+     * form's own space and the index of the `Do` in the FILTERED output stream.
+     * The index is what lets the caller repoint this one invocation at a redacted
+     * clone without touching its siblings.
+     *
+     * [intersects] says whether this invocation actually paints into a region.
+     * A false one needs no redaction and no clone, but the caller still needs to
+     * know it exists: it is the reason the form's original object has to stay
+     * pristine, since that is what this invocation goes on drawing.
      */
-    data class FormHit(val name: String, val formRects: List<KiteRectangle>, val opIndex: Int)
+    data class FormHit(
+        val name: String,
+        val formRects: List<KiteRectangle>,
+        val opIndex: Int,
+        val intersects: Boolean,
+    )
 
-    /** Form XObjects whose invocation overlaps a region and must be recursed into. */
+    /** Every form XObject `Do` invocation seen, one entry per invocation. */
     val formXObjectHits = ArrayList<FormHit>()
 
     /**
@@ -71,6 +82,15 @@ internal class RedactionEngine(
      * before [run] so the reported [FormHit.formRects] are in the form's space.
      */
     var formMatrices: Map<String, KiteMatrix> = emptyMap()
+
+    /**
+     * Optional per-form `/BBox`, in the form's own space. Populated by the caller
+     * before [run] so [FormHit.intersects] can be decided. A form the caller could
+     * not read a `/BBox` for counts as intersecting: `/BBox` is required
+     * (ISO 32000-1, 8.10.2, Table 95), so its absence means a malformed form, and
+     * over-redacting is the safe side of that error.
+     */
+    var formBBoxes: Map<String, KiteRectangle> = emptyMap()
 
     private data class TextState(
         val textMatrix: KiteMatrix = KiteMatrix.IDENTITY,
@@ -268,21 +288,29 @@ internal class RedactionEngine(
             return
         }
         if (xobjectName != null && xobjectName in formXObjectNames) {
-            recordFormHitIfIntersects(xobjectName, out.size)
+            recordFormHit(xobjectName, out.size)
         }
         out.add(op)
     }
 
     /**
-     * Record a [FormHit] for this form invocation carrying the redaction
+     * Record a [FormHit] for this form invocation, carrying the redaction
      * rectangles mapped into the form's own coordinate space. The mapping is
-     * `formSpace = (ctm ∘ formMatrix)⁻¹` applied to each page-space rect; when the
-     * rect maps to empty area in form space the recursion simply finds nothing to
-     * redact. If the matrix is singular we can't map cleanly, so we pass the
-     * page-space rects through unchanged (over-covering) rather than silently
-     * skipping. A redaction must never no-op on content it can't reason about.
+     * `formSpace = (ctm ∘ formMatrix)⁻¹` applied to each page-space rect.
+     *
+     * Every invocation is recorded, whether or not it paints into a region;
+     * [FormHit.intersects] carries which. The caller needs both kinds: an
+     * invocation that misses every region needs no redaction, but it does need the
+     * form's original object left alone, and only the caller knows whether some
+     * other invocation of the same form was about to rewrite it.
+     *
+     * The test is the mapped rects against the form's `/BBox`, the box outside
+     * which a form paints nothing (ISO 32000-1, 8.10.2). Two conservative fallbacks,
+     * because a redaction must never no-op on content it cannot reason about: a
+     * singular matrix passes the page-space rects through unchanged and counts as
+     * intersecting, and so does a form whose `/BBox` the caller could not read.
      */
-    private fun recordFormHitIfIntersects(xobjectName: String, opIndex: Int) {
+    private fun recordFormHit(xobjectName: String, opIndex: Int) {
         val formMatrix = formMatrices[xobjectName] ?: KiteMatrix.IDENTITY
         // model→page transform seen by content drawn inside the form.
         val toPage = gs.ctm.concat(formMatrix)
@@ -305,8 +333,14 @@ internal class RedactionEngine(
             val maxY = corners.maxOf { it.second }
             mapped.add(KiteRectangle(left = minX, bottom = minY, right = maxX, top = maxY))
         }
-        formXObjectHits.add(FormHit(xobjectName, mapped, opIndex))
+        val bbox = formBBoxes[xobjectName]
+        val intersects = inv == null || bbox == null || mapped.any { overlaps(it, bbox) }
+        formXObjectHits.add(FormHit(xobjectName, mapped, opIndex, intersects))
     }
+
+    /** Do two rectangles share area? Touching edges do not count, as in [boxIntersects]. */
+    private fun overlaps(a: KiteRectangle, b: KiteRectangle): Boolean =
+        a.left < b.right && a.right > b.left && a.bottom < b.top && a.top > b.bottom
 
     /** Image XObjects (and inline images) are painted into the unit square under the CTM. */
     private fun imageBoxIntersects(): Boolean {
