@@ -9,7 +9,7 @@ import io.github.yuroyami.kitepdf.core.ByteArrayBuilder
  * Object numbers 1 to 5 are taken: 1 catalog, 2 pages, 3 page, 4 Helvetica,
  * 5 content stream. Extra objects start at 6.
  */
-object RawPdf {
+internal object RawPdf {
 
     /** One `n 0 obj ... endobj` block, optionally carrying a stream. */
     fun obj(number: Int, dict: String, stream: ByteArray? = null): Pair<Int, ByteArray> {
