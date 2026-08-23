@@ -15,7 +15,6 @@ import kotlin.test.assertTrue
  */
 class BatchFeaturesTest {
 
-
     private fun render(pdf: ByteArray): RecordingCanvas {
         val c = RecordingCanvas()
         KitePDF.open(pdf).pages[0].renderTo(c, KiteMatrix.IDENTITY)
