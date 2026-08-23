@@ -125,9 +125,12 @@ public class EpubDocument internal constructor(
         }
     }
 
-    private val root: BlockBox by lazy {
-        BlockBox(ComputedStyle.initial(settings.fontSize, direction = parsed.baseDir), docRoots)
-    }
+    /**
+     * One chapter's box tree under a fresh root. Layout starts each chapter at
+     * y = 0, so a chapter's geometry never depends on the chapters before it.
+     */
+    private fun chapterRoot(chapter: Int): BlockBox =
+        BlockBox(ComputedStyle.initial(settings.fontSize, direction = parsed.baseDir), listOf(docRoots[chapter]))
 
     /**
      * Vertical writing: true when the first spine root resolves
@@ -180,23 +183,55 @@ public class EpubDocument internal constructor(
         parsed.metadata.language?.takeIf { it.isNotBlank() }
     }
 
-    private val pageRenders: List<PageRender> by lazy {
+    /**
+     * Lays out and paginates one chapter, on its own. Every spine item starts
+     * on a fresh page, which is what readers expect and what lets a chapter be
+     * laid out without the ones before it.
+     *
+     * Pure: it reads the parse and the settings, and returns new objects. Two
+     * calls for the same chapter produce equal pages, so it is safe to run
+     * chapters in any order or on any thread.
+     */
+    private fun paginateChapter(chapter: Int): List<PageRender> {
         val fx = fixedSpines
-        if (fx != null) return@lazy fx.map { spine ->
+        if (fx != null) {
+            val spine = fx[chapter]
             BoxLayout(::loadImage, ::loadSvg, spine.height, parsed.fonts, documentLanguage, settings.lineHeightScale)
                 .layout(spine.root, spine.width)
-            Paginator.paginateFixed(spine.root, spine.width, spine.height)
+            return listOf(Paginator.paginateFixed(spine.root, spine.width, spine.height))
         }
         // Vertical writing swaps the budgets: the inline (line-length) budget is
         // the page content HEIGHT and each page holds contentWidth of columns.
         val inlineBudget = if (isVertical) pageContentHeight else contentWidth
         val blockBudget = if (isVertical) contentWidth else pageContentHeight
+        val root = chapterRoot(chapter)
         BoxLayout(
             ::loadImage, ::loadSvg, blockBudget, parsed.fonts, documentLanguage,
             settings.lineHeightScale, vertical = isVertical,
         ).layout(root, inlineBudget)
-        Paginator.paginate(root, settings.pageWidth, settings.pageHeight, settings.margin, vertical = isVertical)
+        val pages = Paginator.paginate(
+            root, settings.pageWidth, settings.pageHeight, settings.margin, vertical = isVertical,
+        )
+        // A spine document with nothing to paint contributed no page when the
+        // whole book shared one box tree. Keep that: do not invent a blank page.
+        val blank = pages.size == 1 &&
+            pages[0].lines.isEmpty() && pages[0].images.isEmpty() && pages[0].decoBoxes.isEmpty()
+        return if (blank) emptyList() else pages
     }
+
+    /** Every chapter's pages, chapter by chapter, in spine order. */
+    private val chapterRenders: List<List<PageRender>> by lazy {
+        docRoots.indices.map { paginateChapter(it) }
+    }
+
+    /** `chapterPageOffset[c]` is the global index of chapter `c`'s first page. */
+    private val chapterPageOffset: IntArray by lazy {
+        val offsets = IntArray(chapterRenders.size + 1)
+        for (c in chapterRenders.indices) offsets[c + 1] = offsets[c] + chapterRenders[c].size
+        offsets
+    }
+
+    private val pageRenders: List<PageRender> by lazy { chapterRenders.flatten() }
 
     /** The reflowed pages, ready to render. */
     override val pages: List<EpubPage> by lazy { pageRenders.map { EpubPage(it, this) } }
@@ -241,7 +276,6 @@ public class EpubDocument internal constructor(
      * their box's top (inline ids anchor to their enclosing block).
      */
     private val anchorPages: Map<String, Int> by lazy {
-        val renders = pageRenders // force layout + pagination first
         val map = HashMap<String, Int>()
         if (parsed.fixedLayout) {
             // One page per spine document.
@@ -250,18 +284,26 @@ public class EpubDocument internal constructor(
                 collectAnchors(docRoots[i]) { id, _ -> map.getOrPut("${sp.path}#$id") { i } }
             }
         } else {
-            val starts = renders.map { it.startY }
-            fun pageOf(y: Double): Int {
-                var p = 0
-                for (k in starts.indices) if (starts[k] <= y + 1e-9) p = k else break
-                return p
-            }
+            // Chapter-local y, chapter-local pages, then shifted by the chapter's
+            // page offset: layout no longer shares one document space.
             parsed.spines.forEachIndexed { i, sp ->
-                map.getOrPut(sp.path) { pageOf(docRoots[i].y) }
-                collectAnchors(docRoots[i]) { id, y -> map.getOrPut("${sp.path}#$id") { pageOf(y) } }
+                val local = chapterPageIndexer(i)
+                map.getOrPut(sp.path) { local(docRoots[i].y) }
+                collectAnchors(docRoots[i]) { id, y -> map.getOrPut("${sp.path}#$id") { local(y) } }
             }
         }
         map
+    }
+
+    /** Maps a chapter-local document y onto a GLOBAL page index. */
+    private fun chapterPageIndexer(chapter: Int): (Double) -> Int {
+        val starts = chapterRenders[chapter].map { it.startY }
+        val base = chapterPageOffset[chapter]
+        return { y ->
+            var p = 0
+            for (k in starts.indices) if (starts[k] <= y + 1e-9) p = k else break
+            base + p
+        }
     }
 
     private fun collectAnchors(box: LayoutBox, sink: (String, Double) -> Unit) {
