@@ -24,5 +24,6 @@ corpus/epub/*
 !corpus/epub/.gitkeep
 readium-kt-toolkit/
 
-# Project ledger (audit, roadmap and execution history), local only, never committed.
-KITEPDF_LEDGER.md
+# Project ledger (audit, roadmap and execution history). Lives in its own
+# private repo, checked out here; never part of this one.
+.ledger/
