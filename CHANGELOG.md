@@ -5,6 +5,25 @@ All notable changes to KitePDF are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- CBZ comic archives. A new `kitepdf-cbz` module reads a ZIP of images as a
+  document, one page per image, in natural filename order (`page2` before
+  `page10`). `KiteDoc.open` recognizes a CBZ on its own; `CbzDocument.open`
+  is the direct route. Pages size themselves 1 px = 1 pt, sizes come from
+  image headers so opening does not decode the archive, and packaging noise
+  (`ComicInfo.xml`, `Thumbs.db`, hidden files) is ignored. WebP pages are
+  detected but render blank until the image engine learns WebP.
+
+### Changed
+
+- `ZipReader` moved from `kitepdf-epub` to `kitepdf-core`
+  (`io.github.yuroyami.kitepdf.core.zip`). The old name still compiles as a
+  deprecated typealias for one release.
+- `KiteDoc.open`'s unreadable-bytes error now names all three formats.
+
 ## [0.7.0] - 2026-08-24
 
 Big EPUBs open at the page the reader left off, instead of paginating the whole
