@@ -188,8 +188,11 @@ val redacted = doc.edit().apply {
 Text and choice fields get a new `/AP /N` appearance stream, built from the
 field's `/DA`. Checkboxes and radio groups switch `/AS` to an existing appearance
 state and clear their siblings. All four field types clear `/NeedAppearances`.
-Redaction deletes the covered text and images from the content stream instead of
-painting over them. Three gaps remain, listed under [Limits](#limits).
+Redaction deletes covered text, images, vector paths and form XObject content
+from the content stream instead of painting over them, and an annotation or form
+field in the region is detached and emptied rather than merely unlinked, so a
+reference elsewhere in the file cannot bring its contents back. The limits that
+remain are listed under [Limits](#limits).
 
 ## Create a PDF
 
@@ -286,9 +289,9 @@ may reach.
 
 | Limit | What it means for you |
 | --- | --- |
-| Page edits are not cumulative | `editPageContent`, `stampPage` and `redactRegions` each rebuild the page from the original document's snapshot, so a second call on the same page discards the first. Use one of the three per page per `PdfEditor`. |
-| Redaction skips a shared form | A Form XObject is guarded by object number alone, so the same form reached under a second CTM keeps its content. |
-| Redaction leaves the field entry | `/AcroForm /Fields` is not pruned when a widget annotation is removed. |
+| Redaction judges a path by its bounding box | A page-spanning path is removed by a region that touches only part of it, so a full-page background rectangle or a page border can disappear. Segment-level testing is the fix and is in progress. |
+| Redaction does not test shadings | An `sh` operator painting into a region survives in the stream, covered only by the black box. |
+| Redaction cannot reach every reference | An object taken off the page is emptied as well as unlinked, so an unknown reference ships an empty annotation rather than its contents. Two structures are left inconsistent rather than rewritten: a tagged document's `/StructTreeRoot` can still name a removed annotation, and an embedded file also listed in the catalog's `/Names /EmbeddedFiles` tree stays in the document. |
 | Redaction keeps a clipping path | A vector path in the region is removed, unless it also sets a clip (`W`): then only its paint goes and its coordinates stay, because dropping the clip would let everything it clips paint over the rest of the page. A line width set through an ExtGState `/LW` is not seen either, so a stroke's ink is padded by the last `w` operator instead. |
 | Annotations are read-only | They parse and appear on `PdfPage.annotations`, but there is no authoring API. The only annotation KitePDF writes is the widget for `PdfSigner`'s own signature field. |
 | `PdfSigner` runs no cryptography | It stages the signature field, reserves `/Contents` and patches `/ByteRange`. It cannot validate a signature. Your application supplies the CMS blob. |
