@@ -1,5 +1,7 @@
 package io.github.yuroyami.kitepdf.epub
 
+import io.github.yuroyami.kitepdf.core.zip.ZipReader
+
 import io.github.yuroyami.kitepdf.epub.css.ComputedStyle
 import io.github.yuroyami.kitepdf.epub.css.CssParser
 import io.github.yuroyami.kitepdf.epub.css.Origin

@@ -1,5 +1,7 @@
 package io.github.yuroyami.kitepdf.epub
 
+import io.github.yuroyami.kitepdf.core.zip.ZipReader
+
 /** One `<manifest>` entry. */
 internal class OpfItem(val id: String, val href: String, val mediaType: String?, val properties: String?) {
     fun hasProperty(p: String): Boolean = properties?.split(' ', '\t', '\n')?.any { it == p } == true

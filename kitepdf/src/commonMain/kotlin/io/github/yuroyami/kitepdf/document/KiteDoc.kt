@@ -5,7 +5,7 @@ import io.github.yuroyami.kitepdf.core.KiteDocument
 import io.github.yuroyami.kitepdf.core.KiteFormatException
 import io.github.yuroyami.kitepdf.epub.EpubDocument
 import io.github.yuroyami.kitepdf.epub.EpubSettings
-import io.github.yuroyami.kitepdf.epub.ZipReader
+import io.github.yuroyami.kitepdf.core.zip.ZipReader
 
 /** A document format KitePDF can read. */
 public enum class KiteDocFormat {

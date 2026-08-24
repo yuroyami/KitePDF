@@ -1,5 +1,7 @@
 package io.github.yuroyami.kitepdf.epub
 
+import io.github.yuroyami.kitepdf.core.zip.ZipReader
+
 import io.github.yuroyami.kitepdf.core.render.KiteMatrix
 import io.github.yuroyami.kitepdf.core.render.RecordingCanvas
 import io.github.yuroyami.kitepdf.core.render.RgbColor
