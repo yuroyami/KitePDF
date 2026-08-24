@@ -86,6 +86,63 @@ class RedactionPathTest {
         assertEquals(0, fills(redact(pdf, highRegion)).size, "the path's lowest point was never measured")
     }
 
+    @Test fun a_second_segment_is_measured_from_the_first_segments_true_end_not_a_stale_point() {
+        // Segment 2 has to start where segment 1 actually ended, (300,900), not
+        // wherever the path's current point was before segment 1 ran. Paired
+        // with that stale (300,600) instead, segment 2's y-range would sit
+        // entirely below the region (600 to 600) and miss it; segment 1 on its
+        // own stays at x=300, right of the region, so it never hits either way.
+        val pdf = RawPdf.page("1 0 0 rg 300 600 m 300 900 l 50 600 l f\n".encodeToByteArray())
+        assertEquals(1, fills(pdf).size, "fixture is wrong, it must paint one path")
+        assertEquals(
+            0,
+            fills(redact(pdf, highRegion)).size,
+            "the second segment was measured from a stale current point",
+        )
+    }
+
+    @Test fun a_line_after_a_curve_is_measured_from_the_curves_true_end_not_a_stale_point() {
+        // Same idea as the previous test, but the first segment is a curve: its
+        // own control points (300,700)/(300,800) stay at x=300, right of the
+        // region, so the curve never hits on its own. The line after it has to
+        // start at the curve's actual end point (300,900), not the (300,600) the
+        // path's pen was at before the curve ran.
+        val pdf = RawPdf.page("1 0 0 rg 300 600 m 300 700 300 800 300 900 c 50 600 l f\n".encodeToByteArray())
+        assertEquals(1, fills(pdf).size, "fixture is wrong, it must paint one path")
+        assertEquals(
+            0,
+            fills(redact(pdf, highRegion)).size,
+            "the line after the curve was measured from a stale current point",
+        )
+    }
+
+    @Test fun a_line_after_a_closepath_continues_from_the_subpaths_start_not_a_stale_point() {
+        // `h` closes back to the subpath's own start, (300,600), and a line drawn
+        // right after it (with no intervening `m`) continues from there (ISO
+        // 32000-1, 8.5.2.1), not from wherever the pen was just before the `h`
+        // ran. Using that stale point instead would wrongly pull an untouched
+        // path into the region and delete it: this is over-removal, the same
+        // class of bug as the whole-path bounding box, just from a different
+        // cause.
+        val pdf = RawPdf.page("1 0 0 rg 300 600 m 300 900 l h 50 600 l f\n".encodeToByteArray())
+        assertEquals(1, fills(pdf).size, "fixture is wrong, it must paint one path")
+        assertEquals(
+            1,
+            fills(redact(pdf, highRegion)).size,
+            "a line after `h` was measured from a stale current point and the untouched path was wrongly removed",
+        )
+    }
+
+    @Test fun a_lines_downward_reach_is_measured_even_when_it_starts_above_the_region() {
+        // The line starts at y=900, above the region, and reaches down to y=700,
+        // inside it. A single segment's own bound has to fall as well as rise:
+        // seeding it from the first point and only ever growing upward would
+        // report a bound stuck at 900 and miss the region entirely.
+        val pdf = RawPdf.page("1 0 0 rg 150 900 m 150 700 l f\n".encodeToByteArray())
+        assertEquals(1, fills(pdf).size, "fixture is wrong, it must paint one path")
+        assertEquals(0, fills(redact(pdf, highRegion)).size, "the segment's downward reach was never measured")
+    }
+
     @Test fun a_curve_that_bulges_into_a_region_is_dropped() {
         // Both ends sit at y=600, below the region. The control points at y=800 are
         // what pull the curve up through it, so a bound taken from the ends alone
@@ -98,8 +155,12 @@ class RedactionPathTest {
     }
 
     @Test fun a_short_form_curve_that_bulges_into_a_region_is_dropped() {
-        // `y` (and `v`, its twin) carry two points, not three. Miscount them and the
-        // bulge disappears from the bounds the same way it does for `c`.
+        // `y` (and `v`, its twin) carry two points, not three. Miscount them and
+        // the control points vanish from the bounds the same way they would for
+        // `c`. The true curve peaks at `600 + 3*(4/27)*200 = 688.9`, just under
+        // the region's `bottom = 690`, so its real ink never enters the region:
+        // this pins the conservative control-point bound over-covering by 1.1pt,
+        // not real ink being caught.
         val pdf = RawPdf.page("1 0 0 rg 100 600 m 100 800 300 600 y f\n".encodeToByteArray())
         assertEquals(1, fills(pdf).size, "fixture is wrong, it must paint one curve")
         val region = KiteRectangle(left = 90.0, bottom = 690.0, right = 320.0, top = 750.0)
@@ -221,6 +282,13 @@ class RedactionPathTest {
         assertTrue(content(pdf).contains("100 700 80 40 re"), "fixture is wrong, the scan proves nothing")
 
         val out = redact(pdf, highRegion)
+        // Positive control on the OUTPUT itself: the black box redaction always
+        // paints proves the scan below is reading real content, not an empty or
+        // broken rewrite that would make the negative check pass for free.
+        assertTrue(
+            content(out).contains("90 690 110 60 re"),
+            "the redacted output lost its black box, so the scan below cannot be trusted: ${content(out)}",
+        )
         assertTrue(
             !content(out).contains("100 700 80 40 re"),
             "an unpainted path in the region kept its coordinates: ${content(out)}",
@@ -233,6 +301,166 @@ class RedactionPathTest {
         assertTrue(
             content(out).contains("100 200 80 40 re"),
             "an untouched path was lost because the buffer was never flushed: ${content(out)}",
+        )
+    }
+
+    // ─── Fix round 1: segment testing, not one box for the whole path ──────
+
+    @Test fun a_full_page_background_rectangle_survives_a_region_on_top_of_it() {
+        // The background's four edges never enter the region: bottom stays at
+        // y=0, top at y=792, left at x=0, right at x=612, and the region sits
+        // well inside all four. Testing the whole path's bounding box instead of
+        // its own edges would call every point inside a page-spanning rectangle a
+        // hit, which erases the background for a redaction anywhere on the page.
+        val pdf = RawPdf.page("0.9 0.9 0.9 rg 0 0 612 792 re f\n".encodeToByteArray())
+        assertEquals(1, fills(pdf).size, "fixture is wrong, it must paint one background")
+        val out = redact(pdf, highRegion)
+        assertEquals(1, fills(out).size, "a page-spanning background was erased by a region touching only part of it")
+    }
+
+    @Test fun a_page_border_rectangle_survives_a_region_touching_only_its_interior() {
+        // Every edge of this border stays outside the region: it runs from
+        // (36,36) to (576,756), and the region sits well inside that. The whole
+        // rectangle's bounding box does cover the region, but none of its four
+        // edges do.
+        val pdf = RawPdf.page("1 w 0 0 0 RG 36 36 540 720 re S\n".encodeToByteArray())
+        assertEquals(1, strokes(pdf).size, "fixture is wrong, it must paint one border")
+        val out = redact(pdf, highRegion)
+        assertEquals(1, strokes(out).size, "a page border was erased by a region touching only its interior")
+    }
+
+    @Test fun a_grid_of_lines_with_a_gap_in_the_middle_survives_a_region_over_the_gap() {
+        // Two horizontal lines, far apart, built as one path with two subpaths
+        // and one shared `S`, the way a table grid batches its strokes. The
+        // region sits in the empty space between them: inside the path's
+        // aggregate bounding box, but on neither actual line.
+        val pdf = RawPdf.page(
+            "1 w 0 0 0 RG 50 900 m 550 900 l 50 100 m 550 100 l S\n".encodeToByteArray(),
+        )
+        assertEquals(1, strokes(pdf).size, "fixture is wrong, it must paint one (two-subpath) stroke")
+        val region = KiteRectangle(left = 200.0, bottom = 400.0, right = 400.0, top = 600.0)
+        assertEquals(
+            1,
+            strokes(redact(pdf, region)).size,
+            "a region touching neither line removed the whole multi-subpath grid",
+        )
+    }
+
+    @Test fun a_line_continuing_after_a_rectangle_is_measured_from_the_rectangles_own_end_point() {
+        // `re` ends with the pen back at the rectangle's own start corner (ISO
+        // 32000-1, 8.5.2.1 defines it as ending with an implicit `h`), not
+        // wherever the path's current point was before the `re`. This `re` sits
+        // far from the region on its own; only a line correctly continuing from
+        // its corner reaches in.
+        val pdf = RawPdf.page("1 0 0 rg 400 50 10 10 re 100 700 l h f\n".encodeToByteArray())
+        assertEquals(1, fills(pdf).size, "fixture is wrong, it must paint one path")
+        val region = KiteRectangle(left = 150.0, bottom = 600.0, right = 250.0, top = 750.0)
+        assertEquals(
+            0,
+            fills(redact(pdf, region)).size,
+            "the line after `re` was measured from the wrong current point",
+        )
+    }
+
+    // ─── Fix round 1: a second overlapping call keeps the first black box ──
+
+    @Test fun a_second_overlapping_redaction_repaints_the_first_black_box() {
+        // Two overlapping calls on the SAME editor. Call 2's content rewrite
+        // re-parses call 1's black box as an ordinary filled path like any
+        // other, and it reaches into region B, so if it is not remembered and
+        // repainted the part of region A outside region B goes from covered to
+        // blank.
+        val doc = KitePDF.open(twoBoxPdf())
+        val editor = doc.edit()
+        val regionA = KiteRectangle(left = 50.0, bottom = 650.0, right = 250.0, top = 750.0)
+        val regionB = KiteRectangle(left = 150.0, bottom = 650.0, right = 350.0, top = 750.0)
+        editor.redactRegion(doc.pages[0], regionA)
+        editor.redactRegion(doc.pages[0], regionB)
+        val out = editor.saveRewritten()
+
+        val blackFills = render(out).calls
+            .filterIsInstance<RecordingCanvas.Call.Fill>()
+            .filter { it.color == RgbColor.BLACK }
+        assertEquals(2, blackFills.size, "the first call's black box was erased by the second call's overlapping redaction")
+    }
+
+    // ─── Fix round 1: malformed operands must not silently under-cover ─────
+
+    @Test fun a_malformed_line_width_does_not_zero_the_pen() {
+        // The second `w` has no operand: it reads as 0 through the same `num`
+        // helper used everywhere else. `PageRenderer` guards this exact operator
+        // and keeps the previous width; without the same guard the engine would
+        // believe the pen is zero while the renderer strokes thick ink.
+        val pdf = RawPdf.page("40 w w 0 0 0 RG 100 680 m 300 680 l S\n".encodeToByteArray())
+        assertEquals(1, strokes(pdf).size, "fixture is wrong, it must paint one stroke")
+        val region = KiteRectangle(left = 90.0, bottom = 690.0, right = 320.0, top = 750.0)
+        assertEquals(
+            0,
+            strokes(redact(pdf, region)).size,
+            "a malformed w zeroed the pen instead of keeping the previous width",
+        )
+    }
+
+    @Test fun a_sharp_join_is_padded_by_the_miter_amount_not_just_the_line_width() {
+        // The vertex where these two segments meet sits at y=680, ten points
+        // below the region. Padding only by half the 10pt line width (5) reaches
+        // y=685, still short. A miter join can extend `miterLimit * lineWidth / 2`
+        // from a vertex (ISO 32000-1, 8.4.3.5); at the default limit of 10 that is
+        // 50, which reaches well past the region.
+        val pdf = RawPdf.page("10 w 0 0 0 RG 100 500 m 100 680 l 300 680 l S\n".encodeToByteArray())
+        assertEquals(1, strokes(pdf).size, "fixture is wrong, it must paint one stroke")
+        val region = KiteRectangle(left = 90.0, bottom = 690.0, right = 320.0, top = 750.0)
+        assertEquals(
+            0,
+            strokes(redact(pdf, region)).size,
+            "the join was padded by the line width alone, not the miter limit",
+        )
+    }
+
+    @Test fun a_malformed_miter_limit_does_not_zero_the_pens_padding() {
+        // `M` with no operand reads as 0 through the same `num` helper, mirroring
+        // `PageRenderer`, which has the same gap and no guard on `M` either.
+        // Multiplying the pad by a 0 miter limit would erase it completely
+        // instead of falling back to the plain lineWidth/2 body pad.
+        val pdf = RawPdf.page("10 w M 0 0 0 RG 100 686 m 300 686 l S\n".encodeToByteArray())
+        assertEquals(1, strokes(pdf).size, "fixture is wrong, it must paint one stroke")
+        val region = KiteRectangle(left = 90.0, bottom = 690.0, right = 320.0, top = 750.0)
+        assertEquals(
+            0,
+            strokes(redact(pdf, region)).size,
+            "a malformed M zeroed the pad instead of falling back to lineWidth/2",
+        )
+    }
+
+    // ─── Fix round 1: a close-and-paint clip keeps its implicit close ──────
+
+    @Test fun a_close_and_paint_operator_gets_an_explicit_close_before_the_neutered_paint() {
+        // `s` (close-and-stroke) implicitly closes the subpath before painting,
+        // and `PageRenderer` closes before computing a pending clip too. A
+        // neutered bare `n` would lose that implicit close, so the clip is
+        // computed from an open triangle instead of the closed one the original
+        // stream asked for.
+        val pdf = RawPdf.page(
+            "q 100 700 m 180 700 l 140 750 l W s\n0 1 0 rg 100 200 80 40 re f\nQ\n".encodeToByteArray(),
+        )
+        val out = redact(pdf, highRegion)
+        assertTrue(
+            content(out).contains("W\nh\nn\n"),
+            "a close-and-paint operator lost its implicit close: ${content(out)}",
+        )
+    }
+
+    @Test fun a_close_fill_and_stroke_operator_also_gets_an_explicit_close_before_the_neutered_paint() {
+        // `b` (close, fill and stroke) closes the current subpath the same way
+        // `s` does (and so does `b*`). This pins that the closing set covers all
+        // three, not just `s`.
+        val pdf = RawPdf.page(
+            "q 100 700 m 180 700 l 140 750 l W b\n0 1 0 rg 100 200 80 40 re f\nQ\n".encodeToByteArray(),
+        )
+        val out = redact(pdf, highRegion)
+        assertTrue(
+            content(out).contains("W\nh\nn\n"),
+            "a close-fill-and-stroke operator lost its implicit close: ${content(out)}",
         )
     }
 }

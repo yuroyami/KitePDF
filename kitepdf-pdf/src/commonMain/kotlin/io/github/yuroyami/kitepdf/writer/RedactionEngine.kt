@@ -43,10 +43,15 @@ import io.github.yuroyami.kitepdf.core.parser.PdfString
  * Vector paths get the same treatment as text. A signature or a chart drawn as
  * line art IS its coordinates, so a path whose ink reaches a region has its
  * construction operators removed along with its painting operator, rather than
- * being covered by the black box. Two documented limits remain: a path that also
+ * being covered by the black box. The hit test is per SEGMENT (each `l`, curve
+ * or `re` edge on its own), not one bounding box for the whole path: a box for
+ * the whole path would call a page-spanning rectangle a hit for any region on
+ * the page, since its own bounding box covers the entire page (see
+ * [pathIntersectsRedaction]). Two documented limits remain: a path that also
  * sets a clip keeps its coordinates (see [paintPath] for why), and a line width
  * set through an ExtGState `/LW` rather than the `w` operator is not seen, so a
- * stroke's ink is padded by the last `w` (or the 1.0 default) instead.
+ * stroke's ink is padded by the last `w` (or the 1.0 default) and the last `M`
+ * (or the 10.0 default) instead.
  */
 internal class RedactionEngine(
     private val fonts: Map<String, PdfFont>,
@@ -109,11 +114,15 @@ internal class RedactionEngine(
         val rise: Double = 0.0,
     )
 
-    /** [lineWidth] is graphics state (ISO 32000-1, 8.4.3.2), so `Q` must put it back. */
+    /**
+     * [lineWidth] and [miterLimit] are graphics state (ISO 32000-1, 8.4.3.2 and
+     * 8.4.3.5), so `Q` must put both back.
+     */
     private data class GraphicsState(
         val ctm: KiteMatrix = KiteMatrix.IDENTITY,
         val text: TextState = TextState(),
         val lineWidth: Double = 1.0,
+        val miterLimit: Double = 10.0,
     )
 
     private var gs = GraphicsState()
@@ -128,15 +137,28 @@ internal class RedactionEngine(
      */
     private val pathOps = ArrayList<Operation>()
 
-    /** User-space bounds of the current path, grown point by point as it is built. */
-    private var pathMinX = 0.0
-    private var pathMinY = 0.0
-    private var pathMaxX = 0.0
-    private var pathMaxY = 0.0
-    private var pathHasPoints = false
+    /**
+     * User-space bounds of each SEGMENT built since the current path began: one
+     * entry per `l`, per curve, per `h`, and four per `re` (its edges). Kept apart
+     * rather than folded into one running box for the whole path, so a small
+     * region cannot be swallowed by a large path's aggregate box (see
+     * [pathIntersectsRedaction]).
+     */
+    private val pathSegments = ArrayList<SegmentBounds>()
+
+    /** Where the pen is right now, in user space, as the path is built. */
+    private var currentX = 0.0
+    private var currentY = 0.0
+
+    /** Where the CURRENT subpath began, for `h` and for `re`'s implicit close. */
+    private var subpathStartX = 0.0
+    private var subpathStartY = 0.0
 
     /** True once `W` or `W*` marked the current path as a clip. */
     private var pathClips = false
+
+    /** One segment's user-space bounding box (ISO 32000-1, 8.5.2). */
+    private data class SegmentBounds(val minX: Double, val minY: Double, val maxX: Double, val maxY: Double)
 
     fun run(ops: List<Operation>): List<Operation> {
         val out = ArrayList<Operation>(ops.size)
@@ -145,7 +167,17 @@ internal class RedactionEngine(
                 "q" -> { stack.addLast(gs); out.add(op) }
                 "Q" -> { gs = stack.removeLastOrNull() ?: gs; out.add(op) }
                 "cm" -> { gs = gs.copy(ctm = gs.ctm.concat(matrix(op))); out.add(op) }
-                "w" -> { gs = gs.copy(lineWidth = num(op, 0)); out.add(op) }
+                // A `w` with no operand is malformed, and `num` reads a missing
+                // operand as 0. Unguarded, that would silently zero the pen instead
+                // of leaving it alone, and a redaction that under-covers ships ink
+                // it promised to remove. `PageRenderer` guards this exact operator
+                // and keeps the previous width; this mirrors it.
+                "w" -> { if (op.operands.isNotEmpty()) gs = gs.copy(lineWidth = num(op, 0)); out.add(op) }
+                // `M` has no such guard, matching `PageRenderer`, which reads it the
+                // same unguarded way. A malformed or degenerate `M` still cannot
+                // under-cover: [pathIntersectsRedaction] floors the miter factor at
+                // 1, so the pad never drops below the plain lineWidth/2 body pad.
+                "M" -> { gs = gs.copy(miterLimit = num(op, 0)); out.add(op) }
 
                 "BT" -> { gs = gs.copy(text = TextState(font = gs.text.font, fontSize = gs.text.fontSize)); out.add(op) }
                 "Tf" -> {
@@ -187,17 +219,15 @@ internal class RedactionEngine(
 
                 // Path construction (ISO 32000-1, 8.5.2). Buffered, not emitted:
                 // whether these ops may be written out is only known at the paint.
-                "m", "l" -> bufferPath(op, points = 1)
-                "v", "y" -> bufferPath(op, points = 2)
-                "c" -> bufferPath(op, points = 3)
-                "h" -> pathOps.add(op) // closepath, no operands
-                "re" -> {
+                "m" -> { pathOps.add(op); moveTo(num(op, 0), num(op, 1)) }
+                "l" -> { pathOps.add(op); lineTo(num(op, 0), num(op, 1)) }
+                "c" -> {
                     pathOps.add(op)
-                    // Two opposite corners are the whole box in user space, and the
-                    // running min/max sorts out a negative width or height.
-                    addPathPoint(num(op, 0), num(op, 1))
-                    addPathPoint(num(op, 0) + num(op, 2), num(op, 1) + num(op, 3))
+                    curveTo(num(op, 0) to num(op, 1), num(op, 2) to num(op, 3), num(op, 4) to num(op, 5))
                 }
+                "v", "y" -> { pathOps.add(op); curveTo(num(op, 0) to num(op, 1), num(op, 2) to num(op, 3)) }
+                "h" -> { pathOps.add(op); closeSubpath() }
+                "re" -> { pathOps.add(op); rectSubpath(num(op, 0), num(op, 1), num(op, 2), num(op, 3)) }
 
                 "W", "W*" -> { pathClips = true; pathOps.add(op) }
 
@@ -216,31 +246,72 @@ internal class RedactionEngine(
 
     /* ─── Paths ──────────────────────────────────────────────────────────── */
 
-    /**
-     * Hold a construction op and fold its leading operand points into the bounds.
-     *
-     * [points] is how many `(x, y)` pairs the operator starts with: 1 for `m`/`l`,
-     * 2 for `v`/`y`, 3 for `c` (ISO 32000-1, 8.5.2.1). A curve is bounded by its
-     * control points (8.5.2.2), so taking them verbatim over-covers the true hull
-     * and never under-covers, which is the right way to be wrong here.
-     */
-    private fun bufferPath(op: Operation, points: Int) {
-        pathOps.add(op)
-        for (i in 0 until points) addPathPoint(num(op, i * 2), num(op, i * 2 + 1))
+    /** `m`: start a new subpath. No ink is laid down, so no segment, just a move. */
+    private fun moveTo(x: Double, y: Double) {
+        currentX = x; currentY = y
+        subpathStartX = x; subpathStartY = y
     }
 
-    /** Grow the current path's user-space bounds to hold one more point. */
-    private fun addPathPoint(x: Double, y: Double) {
-        if (!pathHasPoints) {
-            pathMinX = x; pathMaxX = x
-            pathMinY = y; pathMaxY = y
-            pathHasPoints = true
-            return
+    /** `l`: a straight segment from the current point to `(x, y)` (8.5.2.1). */
+    private fun lineTo(x: Double, y: Double) {
+        addSegment(listOf(currentX to currentY, x to y))
+        currentX = x; currentY = y
+    }
+
+    /**
+     * `c`/`v`/`y`: a cubic Bezier from the current point through [rest]'s control
+     * points. `c` supplies all three explicit points; `v` and `y` each supply the
+     * two the spelling doesn't leave implicit (8.5.2.1), so both call this the
+     * same way.
+     *
+     * The curve lies within the convex hull of ALL its control points, including
+     * the current point (8.5.2.2), so the segment's box is taken from that whole
+     * set, not stitched from point-to-point pieces: a curve can bulge toward the
+     * middle of its control polygon, away from every individual edge of it, and
+     * only the full set's box is guaranteed to contain that bulge.
+     */
+    private fun curveTo(vararg rest: Pair<Double, Double>) {
+        val points = ArrayList<Pair<Double, Double>>(rest.size + 1)
+        points.add(currentX to currentY)
+        points.addAll(rest)
+        addSegment(points)
+        val last = rest.last()
+        currentX = last.first; currentY = last.second
+    }
+
+    /** `h`: a straight segment back to where the current subpath began (8.5.2.1). */
+    private fun closeSubpath() {
+        addSegment(listOf(currentX to currentY, subpathStartX to subpathStartY))
+        currentX = subpathStartX; currentY = subpathStartY
+    }
+
+    /**
+     * `re`: a closed rectangular subpath, as its four edges (8.5.2.1 defines it as
+     * equivalent to `x y m (x+w) y l (x+w)(y+h) l x (y+h) l h`). Each edge is its
+     * own segment: a page-spanning rectangle's edges sit at the page border, so a
+     * region over the middle of the page touches none of them, even though the
+     * rectangle's own bounding box covers that region entirely.
+     */
+    private fun rectSubpath(x: Double, y: Double, w: Double, h: Double) {
+        val x2 = x + w
+        val y2 = y + h
+        addSegment(listOf(x to y, x2 to y))
+        addSegment(listOf(x2 to y, x2 to y2))
+        addSegment(listOf(x2 to y2, x to y2))
+        addSegment(listOf(x to y2, x to y))
+        currentX = x; currentY = y
+        subpathStartX = x; subpathStartY = y
+    }
+
+    /** Record one segment's user-space bounding box, tested on its own by [pathIntersectsRedaction]. */
+    private fun addSegment(points: List<Pair<Double, Double>>) {
+        var minX = points[0].first; var maxX = minX
+        var minY = points[0].second; var maxY = minY
+        for ((x, y) in points) {
+            if (x < minX) minX = x; if (x > maxX) maxX = x
+            if (y < minY) minY = y; if (y > maxY) maxY = y
         }
-        if (x < pathMinX) pathMinX = x
-        if (x > pathMaxX) pathMaxX = x
-        if (y < pathMinY) pathMinY = y
-        if (y > pathMaxY) pathMaxY = y
+        pathSegments.add(SegmentBounds(minX, minY, maxX, maxY))
     }
 
     /**
@@ -252,16 +323,25 @@ internal class RedactionEngine(
      * and over-removing is the safe side of that call.
      *
      * When the path also sets a clip (`W`/`W*`), the construction is kept and the
-     * paint becomes `n`: everything up to the matching `Q` is clipped by this path
-     * (ISO 32000-1, 8.5.4) and dropping it would let all of that escape and paint
-     * over the rest of the page. The clip's own coordinates survive, which is the
-     * documented price of keeping the clip.
+     * paint becomes `n` (or `h n`, see below), because everything up to the
+     * matching `Q` is clipped by this path (ISO 32000-1, 8.5.4) and dropping it
+     * would let all of that escape and paint over the rest of the page. The clip's
+     * own coordinates survive, which is the documented price of keeping the clip.
+     *
+     * `s`, `b` and `b*` close the current subpath before painting (8.5.3), so a
+     * bare `n` would lose that close; [CLOSING_PAINT_OPERATORS] gets an explicit
+     * `h` first instead. `PageRenderer` closes before computing a pending clip for
+     * exactly those three operators and no others, so this mirrors it.
      */
     private fun paintPath(op: Operation, out: MutableList<Operation>) {
-        val hit = pathHasPoints && pathIntersectsRedaction(strokes = op.operator in STROKING_PAINT_OPERATORS)
+        val hit = pathSegments.isNotEmpty() && pathIntersectsRedaction(strokes = op.operator in STROKING_PAINT_OPERATORS)
         when {
             !hit -> { out.addAll(pathOps); out.add(op) }
-            pathClips -> { out.addAll(pathOps); out.add(Operation("n", emptyList())) }
+            pathClips -> {
+                out.addAll(pathOps)
+                if (op.operator in CLOSING_PAINT_OPERATORS) out.add(Operation("h", emptyList()))
+                out.add(Operation("n", emptyList()))
+            }
             else -> Unit // construction and paint go together
         }
         resetPath()
@@ -279,30 +359,49 @@ internal class RedactionEngine(
      * painting operator and nothing after it left to clip.
      */
     private fun flushUnpaintedPath(out: MutableList<Operation>) {
-        val hit = pathHasPoints && pathIntersectsRedaction(strokes = false)
+        val hit = pathSegments.isNotEmpty() && pathIntersectsRedaction(strokes = false)
         if (!hit) out.addAll(pathOps)
         resetPath()
     }
 
     private fun resetPath() {
         pathOps.clear()
-        pathHasPoints = false
+        pathSegments.clear()
         pathClips = false
+        currentX = 0.0; currentY = 0.0
+        subpathStartX = 0.0; subpathStartY = 0.0
     }
 
     /**
-     * Does the current path's ink touch a region?
+     * Does the current path's ink touch a region? Tested per SEGMENT (see
+     * [pathSegments]), not by one box for the whole path: a full-page background
+     * rectangle's four edges each stay far from a region even though the
+     * rectangle's OWN bounding box covers it, so testing that one aggregate box
+     * would erase page-spanning art for a redaction anywhere on the page. A
+     * signature or any shape whose actual ink enters a region still has a segment
+     * that does, so it is still removed there; a donut whose hole boundary lies in
+     * a region is removed through that subpath's own segments.
      *
-     * The pen is padded in USER space, before the CTM maps the box out, because
+     * The pen is padded in USER space, before the CTM maps a segment out, because
      * that is where a line width is measured (ISO 32000-1, 8.4.3.2). Padding
      * afterwards by a single scale factor would under-cover a stroke under an
      * anisotropic CTM: `1 0 0 10 0 0 cm` lays ten times as much ink up the page as
      * across it, and a redaction that under-covers ships ink it promised to remove.
+     *
+     * Padding by half the line width alone still under-covers: a miter join can
+     * extend `miterLimit * lineWidth / 2` from a vertex (8.4.3.5; the default limit
+     * is 10, so up to 5x the plain pad). Rather than padding only vertices, every
+     * segment is padded by the larger amount: simpler, and the only place it
+     * over-covers is a subpath's two open ends, the safe direction. `maxOf(1.0, …)`
+     * floors the factor at the plain body pad, so a malformed or explicitly small
+     * `M` cannot shrink the pad below what an unstroked segment already gets.
      */
     private fun pathIntersectsRedaction(strokes: Boolean): Boolean {
-        if (rectangles.isEmpty()) return false
-        val pad = if (strokes) gs.lineWidth / 2.0 else 0.0
-        return boxIntersects(gs.ctm, pathMinX - pad, pathMinY - pad, pathMaxX + pad, pathMaxY + pad)
+        if (rectangles.isEmpty() || pathSegments.isEmpty()) return false
+        val pad = if (strokes) gs.lineWidth * maxOf(1.0, gs.miterLimit) / 2.0 else 0.0
+        return pathSegments.any { seg ->
+            boxIntersects(gs.ctm, seg.minX - pad, seg.minY - pad, seg.maxX + pad, seg.maxY + pad)
+        }
     }
 
     /* ─── Text showing ───────────────────────────────────────────────────── */
@@ -523,3 +622,6 @@ internal class RedactionEngine(
 
 /** Painting operators that lay ink down with the pen, so their bounds need padding. */
 private val STROKING_PAINT_OPERATORS = setOf("S", "s", "B", "B*", "b", "b*")
+
+/** Painting operators that close the current subpath before painting (ISO 32000-1, 8.5.3). */
+private val CLOSING_PAINT_OPERATORS = setOf("s", "b", "b*")
