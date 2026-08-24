@@ -700,10 +700,11 @@ public class PdfEditor internal constructor(
      * **An annotation removed from the page keeps nothing.** Reachability is not the
      * only thing keeping redacted content out of the rewrite, so the object itself is
      * emptied: text (`/Contents`, `/RC`), appearance (`/AP`), attached file (`/FS`),
-     * sound and movie go, and a detached field loses its value, its appearance state
-     * and its names on top of that. A structure this editor does not rewrite (an
-     * `/XFA` payload, a tagged document's `/StructTreeRoot`) then cannot ship the
-     * content by keeping the object alive. One thing this does not reach: an embedded
+     * sound, movie, and the actions and appearance characteristics that reach the
+     * rest (`/A`, `/AA`, `/MK`) all go, and a detached field loses its value, its
+     * appearance state and its names on top of that. A structure this editor does
+     * not rewrite (an `/XFA` payload, a tagged document's `/StructTreeRoot`) then
+     * cannot ship the content by keeping the object alive. One thing this does not reach: an embedded
      * file the catalog's `/Names /EmbeddedFiles` tree names as well stays in the
      * document, since that copy of it is not on the page.
      *
@@ -1276,21 +1277,22 @@ public class PdfEditor internal constructor(
     }
 
     /**
-     * True when [dict] is shaped like a form field, so the `/Kids` walk may treat it
-     * as one.
+     * True unless [dict] is something a form field never is.
      *
-     * A field carries `/FT` or `/T` (ISO 32000-1, 12.7.3.1). Two things a stray
-     * `/Parent` can point at instead have to be refused. A page or `/Pages` node
-     * (7.7.3.2) holds the PAGE tree in its `/Kids`, so rewriting it would delete
-     * pages from the document, which is worse than anything a redaction leak can do.
-     * A markup annotation carries `/T` too, but there it is the author's name
-     * (12.5.6.4) and the annotation is usually still on the page, so scrubbing it
-     * would take the title and appearance off something nobody redacted.
+     * It deliberately says nothing about what a field looks like: `/FT` is
+     * inheritable and `/T` is optional (ISO 32000-1, 12.7.3.1, Table 220), so a
+     * terminal field can carry neither, and a test for them refuses a real field and
+     * leaves its value in the file. What it does rule out is a page or `/Pages` node
+     * (7.7.3.2), whose `/Kids` is the PAGE tree, and an annotation other than a
+     * widget, whose `/T` is an author's name (12.5.6.4) and which is usually still on
+     * the page. Whether a candidate really is this widget's field is settled
+     * structurally in [detachFromParentField], not here; both `getName` reads are
+     * non-resolving, and that structural test is what backstops them.
      */
     private fun isFieldNode(dict: PdfDictionary): Boolean = when {
         dict.getName("Type") == "Page" || dict.getName("Type") == "Pages" -> false
         dict.getName("Type") == "Annot" || dict["Rect"] != null -> dict.getName("Subtype") == "Widget"
-        else -> dict.getName("FT") != null || dict["T"] != null
+        else -> true
     }
 
     /**
@@ -1315,22 +1317,32 @@ public class PdfEditor internal constructor(
         while (seen.add(parent.objectNumber)) {
             val field = effectiveObject(parent.objectNumber) as? PdfDictionary ?: return
             // A stray /Parent (a producer writing it where it means /P, say) points at
-            // something that is not a field at all, and rewriting THAT dictionary's
-            // /Kids would edit the page tree rather than a form. The annotation itself
-            // is already scrubbed, so stopping here costs nothing.
+            // something that is not a field at all. The structural test below is what
+            // keeps this walk out of the page tree; this one keeps a markup annotation
+            // that is still on the page from being scrubbed on the way past.
             if (!isFieldNode(field)) return
-            // Unreadable /Kids means a malformed parent-kid link: treat the field as
-            // emptied and over-remove rather than trust it.
+            // The parent-kid link is mutual (12.7.3.3), so the node this walk may
+            // rewrite is the one that actually names the child it arrived from. That
+            // is the whole test: a page keeps its annotations in /Annots and has no
+            // /Kids at all, and nor has a markup annotation, so a stray /Parent cannot
+            // walk this into the page tree however field-like the target looks.
             val kids = field.getArray("Kids", effective)?.items.orEmpty()
             val survivors = kids.filter { (it as? PdfReference)?.objectNumber != child.objectNumber }
+            if (survivors.size == kids.size) {
+                // Not this child's field, so its /Kids is not ours to rewrite. If it
+                // holds field content anyway (a producer that writes /Parent and
+                // forgets /Kids leaves the value right here), it is still a dead field:
+                // detaching it takes the value out without touching anything that
+                // belongs to somebody else. Pages and other annotations never reach
+                // this line, the guard at the top of the loop having refused them.
+                if (SCRUBBED_FIELD_KEYS.any { it in field }) detached[parent.objectNumber] = parent
+                return
+            }
             if (survivors.isNotEmpty()) {
-                // A parent that never named this widget has nothing to rewrite.
-                if (survivors.size != kids.size) {
-                    updateObject(
-                        parent,
-                        withEntry(field, "Kids", io.github.yuroyami.kitepdf.core.parser.PdfArray(survivors)),
-                    )
-                }
+                updateObject(
+                    parent,
+                    withEntry(field, "Kids", io.github.yuroyami.kitepdf.core.parser.PdfArray(survivors)),
+                )
                 return
             }
             detached[parent.objectNumber] = parent
@@ -1682,9 +1694,13 @@ public class PdfEditor internal constructor(
         /**
          * What an annotation carries: its text (§12.5.2, Table 168), the same text as
          * rich content (§12.5.6.2), the stream that draws it, the file it attaches
-         * (§12.5.6.15), its sound (§12.5.6.16) and its movie (§12.5.6.17).
+         * (§12.5.6.15), its sound (§12.5.6.16), its movie (§12.5.6.17), and the
+         * action, additional actions and appearance characteristics that reach the
+         * rest (a rendition action's media clip, §12.5.6.18, and a caption in
+         * `/MK /CA`). One removed from the page has no use for any of them, so this
+         * closes the class instead of chasing one subtype at a time.
          */
-        val SCRUBBED_ANNOT_KEYS = listOf("Contents", "RC", "AP", "FS", "Sound", "Movie")
+        val SCRUBBED_ANNOT_KEYS = listOf("Contents", "RC", "AP", "FS", "Sound", "Movie", "A", "AA", "MK")
 
         /**
          * What a form field carries on top of that: the value and its default
