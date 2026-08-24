@@ -239,6 +239,35 @@ class RedactionFieldPruneTest {
         assertFalse(holds(out, secret), "a /AcroForm written into the catalog was left pointing at the widget")
     }
 
+    @Test fun a_widget_with_an_indirect_subtype_is_still_detached() {
+        // /Subtype written as an indirect reference is legal, and the /Rect test
+        // resolves it, so the annotation is dropped from the page either way. A gate
+        // that reads the name without resolving cannot tell this is a widget, and
+        // skipping it would leave the field in /Fields with its value.
+        val pdf = RawPdf.page(
+            content = body,
+            annots = "/Annots [6 0 R]",
+            catalogExtra = "/AcroForm 8 0 R",
+            extra = listOf(
+                RawPdf.obj(
+                    6,
+                    "<< /Type /Annot /Subtype 9 0 R /FT /Tx /T (patient) /V ($secret) " +
+                        "/Rect [100 700 300 720] /P 3 0 R /AP << /N 7 0 R >> >>",
+                ),
+                apStream(7, secret),
+                RawPdf.obj(8, "<< /Fields [6 0 R] >>"),
+                RawPdf.obj(9, "/Widget"),
+            ),
+        )
+        assertEquals(secret, KitePDF.open(pdf).formField("patient")?.value, "fixture is wrong, the form is not read")
+
+        val doc = KitePDF.open(pdf)
+        val out = doc.edit().apply { redactRegion(doc.pages[0], upperRegion) }.saveRewritten()
+
+        assertEquals(0, KitePDF.open(out).formFields.size, "the form still lists the redacted field")
+        assertFalse(holds(out, secret), "a widget whose /Subtype is indirect kept its field")
+    }
+
     /* ─── A field with several widgets ───────────────────────────────────── */
 
     @Test fun the_two_widget_fixture_really_draws_both() {
@@ -371,6 +400,77 @@ class RedactionFieldPruneTest {
         assertEquals(null, survivor["T"], "the detached field kept its name")
         assertEquals(null, survivor["AP"], "the detached field kept its appearance stream")
         assertFalse(holds(out, secret), "the value survived somewhere in the file")
+    }
+
+    @Test fun a_detached_check_box_kept_alive_by_something_else_forgets_which_box_was_ticked() {
+        // For a check box or radio button the appearance state IS the value
+        // (12.7.4.2.1), and the state name can be the sensitive part on its own. /TU
+        // and /TM identify the field the same way /T does.
+        val state = "HIVPositive"
+        val pdf = RawPdf.page(
+            content = body,
+            annots = "/Annots [6 0 R]",
+            catalogExtra = "/AcroForm 9 0 R /StructTreeRoot 10 0 R",
+            extra = listOf(
+                RawPdf.obj(
+                    6,
+                    "<< /Type /Annot /Subtype /Widget /FT /Btn /T (status) /TU (TOOLTIP-TEXT) " +
+                        "/TM (MAPPING-NAME) /V /$state /AS /$state /Rect [100 700 300 720] /P 3 0 R " +
+                        "/AP << /N << /$state 7 0 R /Off 8 0 R >> >> >>",
+                ),
+                apStream(7, "TICKED"),
+                apStream(8, "EMPTY"),
+                RawPdf.obj(9, "<< /Fields [6 0 R] >>"),
+                RawPdf.obj(10, "<< /Type /StructTreeRoot /K 11 0 R >>"),
+                RawPdf.obj(11, "<< /Type /StructElem /S /Form /P 10 0 R /K << /Type /OBJR /Obj 6 0 R >> >>"),
+            ),
+        )
+        val doc = KitePDF.open(pdf)
+        val out = doc.edit().apply { redactRegion(doc.pages[0], upperRegion) }.saveRewritten()
+
+        val survivor = structTreeTarget(out)
+        assertNotNull(survivor, "fixture is wrong, the structure tree no longer keeps the widget alive")
+        assertEquals(null, survivor["AS"], "the survivor still says which box was ticked")
+        assertEquals(null, survivor["V"], "the detached check box kept its value")
+        assertEquals(null, survivor["TU"], "the detached field kept its user-facing name")
+        assertEquals(null, survivor["TM"], "the detached field kept its export name")
+        assertFalse(holds(out, state), "the state name survived somewhere in the file")
+        assertFalse(holds(out, "TOOLTIP-TEXT"), "the tooltip survived somewhere in the file")
+    }
+
+    @Test fun a_dropped_annotation_kept_alive_by_something_else_loses_its_text() {
+        // A FreeText is not a form field, so nothing detaches it: it is dropped from
+        // /Annots and that is all. Its text lives in /Contents, the same text as rich
+        // content in /RC (12.5.6.2), and its /AP draws it, so a second reference would
+        // ship all three.
+        val note = "FREETEXT-SECRET"
+        val pdf = RawPdf.page(
+            content = body,
+            annots = "/Annots [6 0 R]",
+            catalogExtra = "/StructTreeRoot 8 0 R",
+            extra = listOf(
+                RawPdf.obj(
+                    6,
+                    "<< /Type /Annot /Subtype /FreeText /Rect [100 700 300 720] /P 3 0 R " +
+                        "/Contents ($note) /RC (<body>$note</body>) /AP << /N 7 0 R >> >>",
+                ),
+                apStream(7, note),
+                RawPdf.obj(8, "<< /Type /StructTreeRoot /K 9 0 R >>"),
+                RawPdf.obj(9, "<< /Type /StructElem /S /Annot /P 8 0 R /K << /Type /OBJR /Obj 6 0 R >> >>"),
+            ),
+        )
+        assertTrue(holds(pdf, note), "fixture is wrong, the scan proves nothing")
+
+        val doc = KitePDF.open(pdf)
+        val out = doc.edit().apply { redactRegion(doc.pages[0], upperRegion) }.saveRewritten()
+
+        val survivor = structTreeTarget(out)
+        assertNotNull(survivor, "fixture is wrong, the structure tree no longer keeps the annotation alive")
+        assertEquals("FreeText", survivor.getName("Subtype"), "the surviving object is not the annotation")
+        assertEquals(null, survivor["Contents"], "the dropped annotation kept its text")
+        assertEquals(null, survivor["RC"], "the dropped annotation kept its rich text")
+        assertEquals(null, survivor["AP"], "the dropped annotation kept its appearance stream")
+        assertFalse(holds(out, note), "the annotation text survived somewhere in the file")
     }
 
     @Test fun an_unreadable_field_list_still_detaches_the_widget_from_its_parent() {
