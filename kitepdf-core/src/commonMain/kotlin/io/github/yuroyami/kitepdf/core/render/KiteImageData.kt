@@ -6,6 +6,7 @@ import io.github.yuroyami.kiteimage.codec.Jbig2Decoder
 import io.github.yuroyami.kiteimage.codec.JpxDecoder
 import io.github.yuroyami.kitepdf.core.kiteWarn
 import io.github.yuroyami.kitepdf.core.filters.FilterChain
+import io.github.yuroyami.kitepdf.core.filters.TerminalDecodeResult
 import io.github.yuroyami.kitepdf.core.parser.IndirectResolver
 import io.github.yuroyami.kitepdf.core.parser.PdfArray
 import io.github.yuroyami.kitepdf.core.parser.PdfBoolean
@@ -156,7 +157,10 @@ public class KiteImageData internal constructor(
                 // it). Falls back to the encoded [Kind.JPEG] path when the native
                 // decoder can't handle the stream (arithmetic / 12-bit / etc.).
                 Kind.JPEG -> {
-                    val bm = runCatching { KiteImage.decode(stream.rawBytes) }.getOrNull()
+                    // Prefix filters, e.g. /Filter [/ASCII85Decode /DCTDecode], must
+                    // be undone before the bytes are a JFIF file at all (D-5).
+                    val terminal = terminalBytesOf(stream)
+                    val bm = runCatching { KiteImage.decode(terminal.bytes) }.getOrNull()
                     if (bm != null) KiteImageData(
                         bm.width, bm.height, 8, "DeviceRGB", Kind.RAW,
                         encodedBytes = ByteArray(0), pixelBytes = bm.toRgbBytes(),
@@ -164,7 +168,7 @@ public class KiteImageData internal constructor(
                         resolvedColorSpace = KiteColorSpace.DeviceRGB,
                         isImageMask = isMask, maskFill = fillColor, colorKeyMask = colorKey,
                     ) else KiteImageData(
-                        width, height, bpc, cs, kind, stream.rawBytes,
+                        width, height, bpc, cs, kind, terminal.bytes,
                         softMaskAlpha = alpha, softMaskWidth = smW, softMaskHeight = smH,
                         resolvedColorSpace = resolvedCs, decode = decodeArr,
                         isImageMask = isMask, maskFill = fillColor, colorKeyMask = colorKey,
@@ -174,8 +178,12 @@ public class KiteImageData internal constructor(
                 // into a 1-bpc DeviceGray RAW image. Needs the shared `/JBIG2Globals`
                 // stream from `/DecodeParms`. Falls back to the encoded kind on failure.
                 Kind.JBIG2 -> {
-                    val globals = loadJbig2Globals(dict, refs)
-                    val decoded = runCatching { Jbig2Decoder.decode(stream.rawBytes, globals, width, height) }.getOrNull()
+                    // Same prefix-filter requirement as JPEG above, plus the
+                    // globals lookup keyed off the JBIG2 filter's own
+                    // /DecodeParms entry (see loadJbig2Globals) (D-5).
+                    val terminal = terminalBytesOf(stream)
+                    val globals = loadJbig2Globals(terminal.terminalParams, refs)
+                    val decoded = runCatching { Jbig2Decoder.decode(terminal.bytes, globals, width, height) }.getOrNull()
                     if (decoded != null) KiteImageData(
                         width, height, 1, "DeviceGray", Kind.RAW,
                         encodedBytes = ByteArray(0), pixelBytes = decoded,
@@ -183,7 +191,7 @@ public class KiteImageData internal constructor(
                         resolvedColorSpace = if (isMask) null else KiteColorSpace.DeviceGray,
                         decode = decodeArr, isImageMask = isMask, maskFill = fillColor, colorKeyMask = colorKey,
                     ) else KiteImageData(
-                        width, height, bpc, cs, kind, stream.rawBytes,
+                        width, height, bpc, cs, kind, terminal.bytes,
                         softMaskAlpha = alpha, softMaskWidth = smW, softMaskHeight = smH,
                         resolvedColorSpace = resolvedCs, decode = decodeArr,
                         isImageMask = isMask, maskFill = fillColor, colorKeyMask = colorKey,
@@ -194,7 +202,9 @@ public class KiteImageData internal constructor(
                 // alpha when /SMaskInData asks for it. Unsupported flavours fall
                 // back to the encoded kind (platform code may still handle them).
                 Kind.JPEG2000 -> {
-                    val raw = JpxDecoder.decode(stream.rawBytes)
+                    // Same prefix-filter requirement as JPEG above (D-5).
+                    val terminal = terminalBytesOf(stream)
+                    val raw = runCatching { JpxDecoder.decode(terminal.bytes) }.getOrNull()
                     if (raw != null) {
                         val smaskRaw = dict["SMaskInData"]
                         val smaskInData = ((if (smaskRaw is io.github.yuroyami.kitepdf.core.parser.PdfReference) refs?.resolve(smaskRaw) else smaskRaw) as? PdfInt)
@@ -212,7 +222,7 @@ public class KiteImageData internal constructor(
                             isImageMask = isMask, maskFill = fillColor, colorKeyMask = colorKey,
                         )
                     } else KiteImageData(
-                        width, height, bpc, cs, kind, stream.rawBytes,
+                        width, height, bpc, cs, kind, terminal.bytes,
                         softMaskAlpha = alpha, softMaskWidth = smW, softMaskHeight = smH,
                         resolvedColorSpace = resolvedCs, decode = decodeArr,
                         isImageMask = isMask, maskFill = fillColor, colorKeyMask = colorKey,
@@ -432,9 +442,23 @@ public class KiteImageData internal constructor(
             Kind.RAW -> runCatching { FilterChain.decode(mask) }.getOrNull()
             // JBIG2 stencils are the common case in MRC scans. The decoder
             // already emits PDF's convention (0 = the marked, painted sample).
-            Kind.JBIG2 -> Jbig2Decoder.decode(mask.rawBytes, loadJbig2Globals(mdict, refs), mw, mh)
+            // Same prefix-filter requirement as an image's own JBIG2Decode (D-5).
+            Kind.JBIG2 -> {
+                val terminal = terminalBytesOf(mask)
+                runCatching { Jbig2Decoder.decode(terminal.bytes, loadJbig2Globals(terminal.terminalParams, refs), mw, mh) }.getOrNull()
+            }
             else -> null
         }
+
+        /**
+         * [FilterChain.decodeToTerminal], defensively: a malformed `/Filter` or
+         * `/DecodeParms` shape falls back to the stream's own raw bytes and no
+         * terminal params, the same as an unfiltered stream, rather than
+         * aborting the image.
+         */
+        private fun terminalBytesOf(stream: PdfStream): TerminalDecodeResult =
+            runCatching { FilterChain.decodeToTerminal(stream) }
+                .getOrElse { TerminalDecodeResult(stream.rawBytes, null) }
 
         /**
          * Read a colour-key `/Mask` (ISO 32000-1 §8.9.6): an array of 2 × n
@@ -523,15 +547,18 @@ public class KiteImageData internal constructor(
             return out
         }
 
-        /** The shared JBIG2 globals stream (`/DecodeParms /JBIG2Globals`), decoded. */
-        private fun loadJbig2Globals(dict: PdfDictionary, refs: IndirectResolver?): ByteArray? {
-            val dp = dict["DecodeParms"] ?: dict["DP"] ?: return null
-            fun res(o: PdfObject?) = if (refs != null && o != null) o.resolve(refs) else o
-            val parms = when (val d = res(dp)) {
-                is PdfDictionary -> d
-                is PdfArray -> d.mapNotNull { res(it) as? PdfDictionary }.firstOrNull { it["JBIG2Globals"] != null }
-                else -> null
-            } ?: return null
+        /**
+         * The shared JBIG2 globals stream, decoded. [parms] is the JBIG2
+         * filter's own `/DecodeParms` entry, already picked out by
+         * [terminalBytesOf] / [FilterChain.decodeToTerminal] at the position
+         * aligned with `/JBIG2Decode` in `/Filter` (ISO 32000-1 §7.4, Table
+         * 5), so a chain such as `[/FlateDecode /JBIG2Decode]` with
+         * `/DecodeParms [null << /JBIG2Globals 7 0 R >>]` reads the second
+         * entry rather than guessing at the whole array's shape here too.
+         */
+        private fun loadJbig2Globals(parms: PdfDictionary?, refs: IndirectResolver?): ByteArray? {
+            if (parms == null) return null
+            fun res(o: PdfObject?) = if (refs != null && o != null) runCatching { o.resolve(refs) }.getOrNull() else o
             val gs = res(parms["JBIG2Globals"]) as? PdfStream ?: return null
             return runCatching { FilterChain.decode(gs) }.getOrNull() ?: gs.rawBytes
         }
