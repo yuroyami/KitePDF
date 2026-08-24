@@ -715,7 +715,13 @@ public class PdfEditor internal constructor(
      * (the original name plus `R1`, `R2`, ...), and that one `Do` is repointed.
      * Places that no region touches are left alone and keep drawing the original.
      *
-     * Current limit ([RedactionEngine]): vector paths in the region are left as-is.
+     * **A vector path in a region is removed, not covered.** A signature or a chart
+     * drawn as line art IS its coordinates, so the path's construction operators go
+     * with its painting operator, and the pen's width counts towards the ink a
+     * stroke lays down (ISO 32000-1, 8.4.3.2). One exception ([RedactionEngine]):
+     * a path that also sets a clip (`W`) keeps its coordinates and loses only its
+     * paint, because everything up to the matching `Q` is clipped by it (8.5.4) and
+     * dropping it would let all of that paint over the rest of the page.
      */
     public fun redactRegions(page: PdfPage, rectangles: List<KiteRectangle>) {
         if (rectangles.isEmpty()) return
