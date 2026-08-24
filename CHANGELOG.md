@@ -51,6 +51,14 @@ whole book costs the same as before.
 Closes the request in
 [issue #3](https://github.com/yuroyami/KitePDF/issues/3).
 
+EPUB footnote links land on the note. An inline element wrapping block
+children (the shape FB2 conversions emit for footnotes) used to flatten into
+one paragraph and anchor to the top of its document, so tapping a footnote
+opened the start of the notes section. The inline now splits around its
+blocks as CSS requires, the note keeps its own block structure, and the link
+lands on the note itself. Reported in
+[issue #4](https://github.com/yuroyami/KitePDF/issues/4).
+
 Redaction stops leaving content behind.
 
 `redactRegions` promised that redacted content is removed rather than covered.
