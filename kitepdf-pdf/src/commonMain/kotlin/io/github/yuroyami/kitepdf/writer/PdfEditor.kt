@@ -697,13 +697,15 @@ public class PdfEditor internal constructor(
      * rewrite. A field that still has a widget outside every region keeps that
      * widget and its place in the form.
      *
-     * **Anything removed from the page loses its content**, whatever else in the
-     * file still names it. Reachability is not the only thing keeping redacted
-     * content out of the rewrite, so every dropped annotation is emptied of
-     * `/Contents`, `/RC` and `/AP`, and a detached field of its value, its appearance
-     * state and its names on top of that. A structure this editor does not rewrite
-     * (an `/XFA` payload, a tagged document's `/StructTreeRoot`) then cannot ship the
-     * content by keeping the object alive.
+     * **An annotation removed from the page keeps nothing.** Reachability is not the
+     * only thing keeping redacted content out of the rewrite, so the object itself is
+     * emptied: text (`/Contents`, `/RC`), appearance (`/AP`), attached file (`/FS`),
+     * sound and movie go, and a detached field loses its value, its appearance state
+     * and its names on top of that. A structure this editor does not rewrite (an
+     * `/XFA` payload, a tagged document's `/StructTreeRoot`) then cannot ship the
+     * content by keeping the object alive. One thing this does not reach: an embedded
+     * file the catalog's `/Names /EmbeddedFiles` tree names as well stays in the
+     * document, since that copy of it is not on the page.
      *
      * **The page may come out with more XObjects than it went in with.** One form
      * XObject can be drawn in several places (ISO 32000-1, 8.10), and each place
@@ -1187,11 +1189,12 @@ public class PdfEditor internal constructor(
         for (annot in droppedAnnots) {
             val annotDict = effectiveObject(annot.objectNumber) as? PdfDictionary ?: continue
             // A Popup's /Parent is the markup annotation it belongs to (12.5.6.14), not
-            // a field parent, so walking it as one would scrub that annotation and a
-            // malformed one would abort the redaction. Everything else takes the field
-            // path, including a /Subtype this cannot read (getName does not resolve an
-            // indirect one): over-detaching costs a form entry, under-detaching ships
-            // the value.
+            // a field parent, so walking it as one would take the title and appearance
+            // off an annotation nobody redacted, and a malformed one would abort the
+            // redaction. Everything else takes the field path, including a /Subtype
+            // this cannot read (getName does not resolve an indirect one), because
+            // under-detaching ships the value. A Popup that hides its subtype that way
+            // gets no further than [isFieldNode], which refuses its markup parent.
             if (annotDict.getName("Subtype") == "Popup") continue
             // A widget with no /Parent IS the field, named in /Fields directly. One
             // that has a parent is going either way, so naming it here costs nothing
@@ -1267,6 +1270,24 @@ public class PdfEditor internal constructor(
     }
 
     /**
+     * True when [dict] is shaped like a form field, so the `/Kids` walk may treat it
+     * as one.
+     *
+     * A field carries `/FT` or `/T` (ISO 32000-1, 12.7.3.1). Two things a stray
+     * `/Parent` can point at instead have to be refused. A page or `/Pages` node
+     * (7.7.3.2) holds the PAGE tree in its `/Kids`, so rewriting it would delete
+     * pages from the document, which is worse than anything a redaction leak can do.
+     * A markup annotation carries `/T` too, but there it is the author's name
+     * (12.5.6.4) and the annotation is usually still on the page, so scrubbing it
+     * would take the title and appearance off something nobody redacted.
+     */
+    private fun isFieldNode(dict: PdfDictionary): Boolean = when {
+        dict.getName("Type") == "Page" || dict.getName("Type") == "Pages" -> false
+        dict.getName("Type") == "Annot" || dict["Rect"] != null -> dict.getName("Subtype") == "Widget"
+        else -> dict.getName("FT") != null || dict["T"] != null
+    }
+
+    /**
      * Take [widget] out of its parent field's `/Kids`, and add to [detached] a
      * parent that is left with no kids at all: it only existed to hold the widgets
      * that went, so the walk climbs to ITS parent in turn until one still has a kid
@@ -1287,6 +1308,11 @@ public class PdfEditor internal constructor(
         val seen = HashSet<Long>()
         while (seen.add(parent.objectNumber)) {
             val field = effectiveObject(parent.objectNumber) as? PdfDictionary ?: return
+            // A stray /Parent (a producer writing it where it means /P, say) points at
+            // something that is not a field at all, and rewriting THAT dictionary's
+            // /Kids would edit the page tree rather than a form. The annotation itself
+            // is already scrubbed, so stopping here costs nothing.
+            if (!isFieldNode(field)) return
             // Unreadable /Kids means a malformed parent-kid link: treat the field as
             // emptied and over-remove rather than trust it.
             val kids = field.getArray("Kids", effective)?.items.orEmpty()
@@ -1301,9 +1327,6 @@ public class PdfEditor internal constructor(
                 }
                 return
             }
-            // A malformed /Parent can point into the page tree, so a page or /Pages
-            // node can land here. Harmless: it carries none of the scrubbed keys, so
-            // nothing is restaged, and /Fields never names it.
             detached[parent.objectNumber] = parent
             child = parent
             parent = field.getRef("Parent") ?: return
@@ -1652,9 +1675,10 @@ public class PdfEditor internal constructor(
 
         /**
          * What an annotation carries: its text (§12.5.2, Table 168), the same text as
-         * rich content (§12.5.6.2), and the stream that draws it.
+         * rich content (§12.5.6.2), the stream that draws it, the file it attaches
+         * (§12.5.6.15), its sound (§12.5.6.16) and its movie (§12.5.6.17).
          */
-        val SCRUBBED_ANNOT_KEYS = listOf("Contents", "RC", "AP")
+        val SCRUBBED_ANNOT_KEYS = listOf("Contents", "RC", "AP", "FS", "Sound", "Movie")
 
         /**
          * What a form field carries on top of that: the value and its default
