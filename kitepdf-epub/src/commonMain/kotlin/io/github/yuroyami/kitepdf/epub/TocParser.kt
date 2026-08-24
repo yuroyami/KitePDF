@@ -1,5 +1,7 @@
 package io.github.yuroyami.kitepdf.epub
 
+import io.github.yuroyami.kitepdf.core.zip.ZipReader
+
 /** One table-of-contents node. [spineIndex] is -1 when the target isn't in the spine. */
 public class TocEntry internal constructor(
     public val label: String,

@@ -1,5 +1,7 @@
 package io.github.yuroyami.kitepdf.epub
 
+import io.github.yuroyami.kitepdf.core.zip.ZipReader
+
 /** Shared test helpers: build a minimal single-document EPUB from a `<body>` string. */
 internal object EpubFixtures {
 
