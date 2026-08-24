@@ -274,4 +274,51 @@ public object Encodings {
         "oslash", "ugrave", "uacute", "ucircumflex",
         "udieresis", "yacute", "thorn", "ydieresis",
     )
+
+    /**
+     * MacExpertEncoding: byte to glyph name, null where undefined.
+     *
+     * The expert-set vector for old-style figures, small capitals, fractions
+     * and superior/inferior forms, per ISO 32000-1, Annex D.4. 165 codes are
+     * defined; the rest stay null so an expert font's own cmap or notdef
+     * takes over. Cross-checked against two independent Apache-licensed
+     * implementations (pdf.js and Apache PDFBox), which agree on every code.
+     */
+    public val macExpertEncoding: Array<String?> = arrayOf(
+        null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+        null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+        null, null, "space", "exclamsmall", "Hungarumlautsmall", "centoldstyle", "dollaroldstyle",
+        "dollarsuperior", "ampersandsmall", "Acutesmall", "parenleftsuperior",
+        "parenrightsuperior", "twodotenleader", "onedotenleader", "comma", "hyphen", "period",
+        "fraction", "zerooldstyle", "oneoldstyle", "twooldstyle", "threeoldstyle", "fouroldstyle",
+        "fiveoldstyle", "sixoldstyle", "sevenoldstyle", "eightoldstyle", "nineoldstyle", "colon",
+        "semicolon", null, "threequartersemdash", null, "questionsmall", null, null, null, null,
+        "Ethsmall", null, null, "onequarter", "onehalf", "threequarters", "oneeighth",
+        "threeeighths", "fiveeighths", "seveneighths", "onethird", "twothirds", null, null, null,
+        null, null, null, "ff", "fi", "fl", "ffi", "ffl", "parenleftinferior", null,
+        "parenrightinferior", "Circumflexsmall", "hypheninferior", "Gravesmall", "Asmall",
+        "Bsmall", "Csmall", "Dsmall", "Esmall", "Fsmall", "Gsmall", "Hsmall", "Ismall", "Jsmall",
+        "Ksmall", "Lsmall", "Msmall", "Nsmall", "Osmall", "Psmall", "Qsmall", "Rsmall", "Ssmall",
+        "Tsmall", "Usmall", "Vsmall", "Wsmall", "Xsmall", "Ysmall", "Zsmall", "colonmonetary",
+        "onefitted", "rupiah", "Tildesmall", null, null, "asuperior", "centsuperior", null, null,
+        null, null, "Aacutesmall", "Agravesmall", "Acircumflexsmall", "Adieresissmall",
+        "Atildesmall", "Aringsmall", "Ccedillasmall", "Eacutesmall", "Egravesmall",
+        "Ecircumflexsmall", "Edieresissmall", "Iacutesmall", "Igravesmall", "Icircumflexsmall",
+        "Idieresissmall", "Ntildesmall", "Oacutesmall", "Ogravesmall", "Ocircumflexsmall",
+        "Odieresissmall", "Otildesmall", "Uacutesmall", "Ugravesmall", "Ucircumflexsmall",
+        "Udieresissmall", null, "eightsuperior", "fourinferior", "threeinferior", "sixinferior",
+        "eightinferior", "seveninferior", "Scaronsmall", null, "centinferior", "twoinferior", null,
+        "Dieresissmall", null, "Caronsmall", "osuperior", "fiveinferior", null, "commainferior",
+        "periodinferior", "Yacutesmall", null, "dollarinferior", null, null, "Thornsmall", null,
+        "nineinferior", "zeroinferior", "Zcaronsmall", "AEsmall", "Oslashsmall",
+        "questiondownsmall", "oneinferior", "Lslashsmall", null, null, null, null, null, null,
+        "Cedillasmall", null, null, null, null, null, "OEsmall", "figuredash", "hyphensuperior",
+        null, null, null, null, "exclamdownsmall", null, "Ydieresissmall", null, "onesuperior",
+        "twosuperior", "threesuperior", "foursuperior", "fivesuperior", "sixsuperior",
+        "sevensuperior", "ninesuperior", "zerosuperior", null, "esuperior", "rsuperior",
+        "tsuperior", null, null, "isuperior", "ssuperior", "dsuperior", null, null, null, null,
+        null, "lsuperior", "Ogoneksmall", "Brevesmall", "Macronsmall", "bsuperior", "nsuperior",
+        "msuperior", "commasuperior", "periodsuperior", "Dotaccentsmall", "Ringsmall", null, null,
+        null, null,
+    )
 }
