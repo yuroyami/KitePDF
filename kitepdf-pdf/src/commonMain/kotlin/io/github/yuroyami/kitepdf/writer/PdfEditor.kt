@@ -697,11 +697,13 @@ public class PdfEditor internal constructor(
      * rewrite. A field that still has a widget outside every region keeps that
      * widget and its place in the form.
      *
-     * A detached field is emptied as well as detached: `/V`, `/DV`, `/RV`, `/T` and
-     * `/AP` come off it. Reachability is not the only thing keeping the value out of
-     * the file, so a structure this editor does not rewrite (an `/XFA` payload, a
-     * tagged document's `/StructTreeRoot`) cannot ship it by keeping the object
-     * alive.
+     * **Anything removed from the page loses its content**, whatever else in the
+     * file still names it. Reachability is not the only thing keeping redacted
+     * content out of the rewrite, so every dropped annotation is emptied of
+     * `/Contents`, `/RC` and `/AP`, and a detached field of its value, its appearance
+     * state and its names on top of that. A structure this editor does not rewrite
+     * (an `/XFA` payload, a tagged document's `/StructTreeRoot`) then cannot ship the
+     * content by keeping the object alive.
      *
      * **The page may come out with more XObjects than it went in with.** One form
      * XObject can be drawn in several places (ISO 32000-1, 8.10), and each place
@@ -762,8 +764,8 @@ public class PdfEditor internal constructor(
         if (resourcesWithClones != null) newPage = withEntry(newPage, "Resources", resourcesWithClones)
         newPage = prunePageResourceXObjects(newPage, engine.droppedImageNames, engine.survivingImageNames)
         newPage = prunePageResourceXObjects(newPage, formRedaction.droppedNames, namesStillDrawn(finalOps))
-        val droppedWidgets = ArrayList<PdfReference>()
-        newPage = pruneIntersectingAnnots(newPage, regions, droppedWidgets)
+        val droppedAnnots = ArrayList<PdfReference>()
+        newPage = pruneIntersectingAnnots(newPage, regions, droppedAnnots)
         // Stage the page first: what follows reads effective objects, and a widget's
         // field is only reachable through the /Annots this call just rewrote.
         updateObject(ref, newPage)
@@ -771,7 +773,11 @@ public class PdfEditor internal constructor(
         // page is already rewritten, so a caller that catches must still be refused an
         // incremental save (it would leave the original bytes in the file).
         redactionStaged = true
-        detachRedactedFields(droppedWidgets)
+        // Content first, fields second: anything taken off the page loses its content
+        // whatever else still names it, and that must not depend on the field walk
+        // below, which can raise.
+        scrub(droppedAnnots, SCRUBBED_ANNOT_KEYS)
+        detachRedactedFields(droppedAnnots)
     }
 
     /**
@@ -1161,7 +1167,7 @@ public class PdfEditor internal constructor(
     }
 
     /**
-     * Detach the form fields of [droppedWidgets] from the interactive form.
+     * Detach the form fields of [droppedAnnots] from the interactive form.
      *
      * A widget annotation is usually the field dictionary as well (ISO 32000-1,
      * 12.7.3.3), so dropping it from the page `/Annots` leaves `/AcroForm /Fields`
@@ -1171,29 +1177,30 @@ public class PdfEditor internal constructor(
      * `/Kids` is taken out of the parent instead, and a parent left with nothing is
      * detached in turn.
      *
-     * Two things happen to a detached field: it is scrubbed (see
-     * [scrubDetachedFields]) and it is taken out of the form's `/Fields` and `/CO`
-     * arrays.
+     * Two things happen to a detached field: it is [scrub]bed of its value and its
+     * names, and it is taken out of the form's `/Fields` and `/CO` arrays.
      */
-    private fun detachRedactedFields(droppedWidgets: List<PdfReference>) {
-        if (droppedWidgets.isEmpty()) return
+    private fun detachRedactedFields(droppedAnnots: List<PdfReference>) {
+        if (droppedAnnots.isEmpty()) return
 
         val detached = LinkedHashMap<Long, PdfReference>()
-        for (widget in droppedWidgets) {
-            val widgetDict = effectiveObject(widget.objectNumber) as? PdfDictionary ?: continue
-            // Only a widget annotation is ever a field (12.7.3.3). On any other
-            // annotation /Parent means something else entirely: a Popup's is the markup
-            // annotation it belongs to (12.5.6.14), so walking it as a field tree would
-            // scrub that annotation, and a malformed one would abort the redaction.
-            if (widgetDict.getName("Subtype") != "Widget") continue
+        for (annot in droppedAnnots) {
+            val annotDict = effectiveObject(annot.objectNumber) as? PdfDictionary ?: continue
+            // A Popup's /Parent is the markup annotation it belongs to (12.5.6.14), not
+            // a field parent, so walking it as one would scrub that annotation and a
+            // malformed one would abort the redaction. Everything else takes the field
+            // path, including a /Subtype this cannot read (getName does not resolve an
+            // indirect one): over-detaching costs a form entry, under-detaching ships
+            // the value.
+            if (annotDict.getName("Subtype") == "Popup") continue
             // A widget with no /Parent IS the field, named in /Fields directly. One
             // that has a parent is going either way, so naming it here costs nothing
             // and covers a file that also lists a kid widget in /Fields.
-            detached[widget.objectNumber] = widget
-            detachFromParentField(widget, widgetDict.getRef("Parent") ?: continue, detached)
+            detached[annot.objectNumber] = annot
+            detachFromParentField(annot, annotDict.getRef("Parent") ?: continue, detached)
         }
         if (detached.isEmpty()) return
-        scrubDetachedFields(detached.values)
+        scrub(detached.values, SCRUBBED_FIELD_KEYS)
 
         // The form dictionary is read last: /Fields may be absent or malformed, and
         // the /Kids detachment above has to run either way.
@@ -1236,27 +1243,25 @@ public class PdfEditor internal constructor(
     }
 
     /**
-     * Strip the value off every field object redaction detached.
+     * Restage each of [objects] without [keys].
      *
-     * Detaching leaves the object unreachable so [saveRewritten]'s GC deletes it,
-     * which only holds for the reference paths this editor knows about. A form with
-     * an `/XFA` payload keeps its own copy of the field tree, and a tagged document
-     * can name the annotation from its `/StructTreeRoot` through an `OBJR`
-     * (ISO 32000-1, 14.7.4.3); either keeps the object alive. Scrubbing means such a
-     * survivor ships as an empty field instead of as the value the caller asked to
-     * remove: `/V` and `/DV` are the value and its default (12.7.3.3), `/RV` the same
-     * value as rich text (12.7.3.4), `/T` the field name, and `/AP` the appearance
-     * stream that draws the value.
+     * Redaction takes an annotation out of `/Annots` and a field out of `/Fields`,
+     * and then leaves [saveRewritten]'s reachability GC to delete the object. That
+     * only holds for the reference paths this editor rewrites: a form's `/XFA`
+     * payload carries its own copy of the field tree, and a tagged document names
+     * annotations from its `/StructTreeRoot` through an `OBJR` (ISO 32000-1,
+     * 14.7.4.3). Scrubbing means an object that something else still names ships
+     * empty instead of carrying the content the caller asked to remove.
      *
-     * Only fully detached objects are scrubbed. A parent that kept a widget outside
-     * every region is still a live field and keeps everything it has.
+     * Only objects redaction actually removed are scrubbed. A parent field that kept
+     * a widget outside every region is still live and keeps everything it has.
      */
-    private fun scrubDetachedFields(fields: Collection<PdfReference>) {
-        for (ref in fields) {
+    private fun scrub(objects: Collection<PdfReference>, keys: List<String>) {
+        for (ref in objects) {
             val dict = effectiveObject(ref.objectNumber) as? PdfDictionary ?: continue
             val scrubbed = LinkedHashMap(dict.map)
             var changed = false
-            for (key in SCRUBBED_FIELD_KEYS) if (scrubbed.remove(key) != null) changed = true
+            for (key in keys) if (scrubbed.remove(key) != null) changed = true
             if (changed) updateObject(ref, PdfDictionary(scrubbed))
         }
     }
@@ -1296,6 +1301,9 @@ public class PdfEditor internal constructor(
                 }
                 return
             }
+            // A malformed /Parent can point into the page tree, so a page or /Pages
+            // node can land here. Harmless: it carries none of the scrubbed keys, so
+            // nothing is restaged, and /Fields never names it.
             detached[parent.objectNumber] = parent
             child = parent
             parent = field.getRef("Parent") ?: return
@@ -1642,7 +1650,20 @@ public class PdfEditor internal constructor(
         /** Text-showing operators (§9.4.3). */
         val TEXT_SHOW_OPERATORS = setOf("Tj", "TJ", "'", "\"")
 
-        /** Field entries that carry the value redaction removes (§12.7.3.3, §12.7.3.4). */
-        val SCRUBBED_FIELD_KEYS = listOf("V", "DV", "RV", "T", "AP")
+        /**
+         * What an annotation carries: its text (§12.5.2, Table 168), the same text as
+         * rich content (§12.5.6.2), and the stream that draws it.
+         */
+        val SCRUBBED_ANNOT_KEYS = listOf("Contents", "RC", "AP")
+
+        /**
+         * What a form field carries on top of that: the value and its default
+         * (§12.7.3.3), the value as rich text (§12.7.3.4), the appearance state that IS
+         * the value for a check box or radio button (§12.7.4.2.1), the selected indices
+         * of a list box (§12.7.4.4), and the three names that identify the field
+         * (§12.7.3.1). `/AP` repeats so a non-annotation parent field carrying one
+         * loses it too.
+         */
+        val SCRUBBED_FIELD_KEYS = listOf("V", "DV", "RV", "AS", "I", "T", "TU", "TM", "AP")
     }
 }
