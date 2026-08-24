@@ -1,0 +1,56 @@
+KitePDF
+Copyright the KitePDF authors
+
+This product includes software developed by the KitePDF authors, licensed under
+the Apache License, Version 2.0. See LICENSE.
+
+--------------------------------------------------------------------------------
+Third-party data
+--------------------------------------------------------------------------------
+
+KitePDF is a from-scratch implementation. It contains no third-party source
+code. It does contain reference data that a PDF or EPUB implementation has to
+carry in order to be correct, listed here with where that data comes from.
+
+1. Adobe Glyph List (AGL)
+   Used in: kitepdf-core .../core/font/GlyphList.kt
+   Maps PostScript glyph names to Unicode codepoints. Published by Adobe
+   Systems Incorporated and redistributable under its own terms.
+   Copyright 1997-2002, 2007, 2010 Adobe Systems Incorporated.
+
+2. Adobe CMap resources
+   Used in: kitepdf-core .../core/font/PredefinedCMapData.kt
+   The predefined CJK CMaps (Adobe-Japan1, Adobe-GB1, Adobe-CNS1, Adobe-Korea1,
+   Adobe-KR and their encodings), used to map CID-keyed font codes.
+   Copyright Adobe Systems Incorporated, licensed BSD-3-Clause.
+
+3. Metrics for the 14 standard fonts
+   Used in: kitepdf-core .../core/font/Standard14Widths.kt
+   Glyph widths for Helvetica, Times, Courier, Symbol and ZapfDingbats, as
+   published by Adobe in its Core AFM set. A conforming viewer must use these
+   values: a PDF naming a standard font carries no widths of its own.
+   Metric-compatible substitutes carry the same values by definition.
+
+4. Character encodings defined by ISO 32000-1
+   Used in: kitepdf-core .../core/font/Encodings.kt
+   StandardEncoding, WinAnsiEncoding, MacRomanEncoding and PDFDocEncoding, as
+   defined in ISO 32000-1, Annex D. The tables are reproducible from public
+   data: Windows code page 1252 and Mac OS Roman as published by the Unicode
+   Consortium, glyph names from the Adobe Glyph List above, and the deviations
+   Annex D specifies. `EncodingsTest` checks those reproduction rules rather
+   than trusting the values.
+
+5. Default rendering rules for HTML
+   Used in: kitepdf-epub .../epub/css/UaStylesheet.kt
+   The user-agent stylesheet follows the default rendering the specifications
+   call for: CSS 2.1, Appendix D and the HTML Standard's Rendering section.
+
+--------------------------------------------------------------------------------
+Tools used in development, not distributed
+--------------------------------------------------------------------------------
+
+MuPDF (mutool) is used as a rendering oracle by the differential test suites.
+It is invoked as an external program during testing and no part of it is
+included in, linked to, or distributed with KitePDF. Several source comments
+name MuPDF where its observable behaviour is the interoperability target that
+a KitePDF behaviour was matched against.
