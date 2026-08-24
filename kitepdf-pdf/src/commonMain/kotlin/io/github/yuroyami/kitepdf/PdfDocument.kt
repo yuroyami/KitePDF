@@ -57,11 +57,24 @@ import io.github.yuroyami.kitepdf.writer.PdfEditor
  */
 public class PdfDocument private constructor(
     public val version: String,
-    public val bytes: ByteArray,
+    private val input: ByteArray,
     @property:KiteRawApi public val xref: Map<Long, XrefEntry>,
     @property:KiteRawApi public val trailer: PdfDictionary,
     private val security: StandardSecurityHandler?,
 ) : IndirectResolver, KiteDocument {
+
+    /**
+     * A copy of the document's bytes. Mutating it cannot affect this
+     * document; for zero-copy access use [rawBytes].
+     */
+    public val bytes: ByteArray get() = input.copyOf()
+
+    /**
+     * The live backing array, zero-copy. Mutating it corrupts lazy object
+     * resolution, which is why touching it takes the [KiteRawApi] opt-in.
+     */
+    @property:KiteRawApi
+    public val rawBytes: ByteArray get() = input
 
     /** True if the document is encrypted. */
     public val isEncrypted: Boolean get() = security != null
@@ -72,7 +85,7 @@ public class PdfDocument private constructor(
     /** The security handler, for the write path ([PdfEditor] re-encrypts staged objects). */
     internal val securityHandler: StandardSecurityHandler? get() = security
 
-    private val reader = ByteReader(bytes)
+    private val reader = ByteReader(input)
 
     /**
      * Guards the resolution caches ([objectCache], [objStreamCache],
@@ -475,7 +488,7 @@ public class PdfDocument private constructor(
         withCycleClaim(entry.objectNumber) {
             // Per-call reader: the old shared seek-based reader interleaved
             // positions across threads and produced garbage parses.
-            val localReader = ByteReader(bytes)
+            val localReader = ByteReader(input)
             localReader.seek(entry.byteOffset)
             val parser = Parser(Lexer(localReader), resolver = this)
             val indirect = parser.readIndirectObject()
@@ -524,7 +537,7 @@ public class PdfDocument private constructor(
         // Look up directly via xref (avoid recursion through resolve cache).
         val entry = xref[objStreamRef] as? XrefEntry.InUse
             ?: throw PdfFormatException("ObjStm $objStreamRef not in xref as in-use")
-        val localReader = ByteReader(bytes) // per-call reader
+        val localReader = ByteReader(input) // per-call reader
         localReader.seek(entry.byteOffset)
         val parser = Parser(Lexer(localReader), resolver = this)
         val indirect = parser.readIndirectObject()

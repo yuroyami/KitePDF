@@ -1541,13 +1541,13 @@ public class PdfEditor internal constructor(
             "Redaction was staged; call saveRewritten() instead. An incremental save " +
                 "would leave the original, unredacted content recoverable in the file."
         }
-        if (staged.isEmpty() && trailerOverrides.isEmpty()) return base.bytes.copyOf()
+        if (staged.isEmpty() && trailerOverrides.isEmpty()) return base.rawBytes.copyOf()
 
-        val out = ByteArrayBuilder(base.bytes.size + 1024)
-        out.append(base.bytes)
+        val out = ByteArrayBuilder(base.rawBytes.size + 1024)
+        out.append(base.rawBytes)
         // The appended section must start on its own line so byte offsets and
         // the "N G obj" header parse cleanly regardless of how the original ended.
-        val last = base.bytes.lastOrNull()
+        val last = base.rawBytes.lastOrNull()
         if (last != null && last != '\n'.code.toByte() && last != '\r'.code.toByte()) {
             out.append('\n'.code.toByte())
         }
@@ -1584,7 +1584,7 @@ public class PdfEditor internal constructor(
     }
 
     private fun writeTrailer(out: ByteArrayBuilder, xrefOffset: Int) {
-        val prevXref = XrefParser.findStartXref(ByteReader(base.bytes))
+        val prevXref = XrefParser.findStartXref(ByteReader(base.rawBytes))
         val maxNum = maxOf(
             base.xref.keys.maxOrNull() ?: 0L,
             staged.keys.maxOrNull() ?: 0L,
@@ -1596,7 +1596,7 @@ public class PdfEditor internal constructor(
         base.trailer["Info"]?.let { dict["Info"] = it }
         base.trailer["Encrypt"]?.let { dict["Encrypt"] = it }
         // Preserve the original /ID (signing/encryption invariant) or synthesize one.
-        dict["ID"] = base.trailer["ID"] ?: DocumentId.generate(base.bytes)
+        dict["ID"] = base.trailer["ID"] ?: DocumentId.generate(base.rawBytes)
         dict["Prev"] = PdfInt(prevXref.toLong())
         for ((k, v) in trailerOverrides) dict[k] = v
 
@@ -1661,7 +1661,7 @@ public class PdfEditor internal constructor(
 
     /** Full rewrite with a classic xref table (PDF 1.4-shaped output). */
     private fun writeWithClassicXref(ordered: List<Long>, remap: Map<Long, Long>): ByteArray {
-        val out = ByteArrayBuilder(base.bytes.size)
+        val out = ByteArrayBuilder(base.rawBytes.size)
         fileHeader(out, "1.7")
 
         val xrefEntries = ArrayList<ClassicXrefWriter.Entry>(ordered.size)
@@ -1681,7 +1681,7 @@ public class PdfEditor internal constructor(
         trailer["Size"] = PdfInt(ordered.size + 1L)
         newRootRef(remap, "Root")?.let { trailer["Root"] = it }
         newRootRef(remap, "Info")?.let { trailer["Info"] = it }
-        trailer["ID"] = base.trailer["ID"] ?: DocumentId.generate(base.bytes)
+        trailer["ID"] = base.trailer["ID"] ?: DocumentId.generate(base.rawBytes)
         out.append("trailer\n".encodeToByteArray())
         PdfObjectWriter.writeObject(PdfDictionary(trailer), out)
         out.append("\nstartxref\n$xrefOffset\n%%EOF\n".encodeToByteArray())
@@ -1705,7 +1705,7 @@ public class PdfEditor internal constructor(
         val objStmNum = maxNew + 1
         val xrefStmNum = maxNew + 2
 
-        val out = ByteArrayBuilder(base.bytes.size)
+        val out = ByteArrayBuilder(base.rawBytes.size)
         fileHeader(out, "1.5")
         val entries = ArrayList<XRefStreamWriter.XEntry>(ordered.size + 3)
         entries.add(XRefStreamWriter.XEntry(0, 0, 0, 0))   // free-list head
@@ -1742,7 +1742,7 @@ public class PdfEditor internal constructor(
             ?: throw IllegalStateException("Cannot write document with no /Root")
         val xrefStream = XRefStreamWriter.build(
             entries, size = xrefStmNum + 1, root = root, info = newRootRef(remap, "Info"), prev = null,
-            id = base.trailer["ID"] ?: DocumentId.generate(base.bytes),
+            id = base.trailer["ID"] ?: DocumentId.generate(base.rawBytes),
         )
         out.append("$xrefStmNum 0 obj\n".encodeToByteArray())
         PdfObjectWriter.writeObject(xrefStream, out)
