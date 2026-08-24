@@ -1321,7 +1321,10 @@ public class PdfEditor internal constructor(
      * Take [widget] out of its parent field's `/Kids`, and add to [detached] a
      * parent that is left with no kids at all: it only existed to hold the widgets
      * that went, so the walk climbs to ITS parent in turn until one still has a kid
-     * or the root field `/Fields` names is reached.
+     * or the root field `/Fields` names is reached. A candidate whose `/Kids` is
+     * non-empty but does not name the child is not that widget's field and is left
+     * untouched; only a candidate with no `/Kids` at all is detached, for holding
+     * the value directly (12.7.3.3).
      *
      * Fields form a tree (ISO 32000-1, 12.7.3.3), so a `/Parent` chain that returns
      * to a node it already visited is malformed and the root field cannot be found.
@@ -1350,14 +1353,22 @@ public class PdfEditor internal constructor(
             // walk this into the page tree however field-like the target looks.
             val kids = field.getArray("Kids", effective)?.items.orEmpty()
             val survivors = kids.filter { (it as? PdfReference)?.objectNumber != child.objectNumber }
-            if (survivors.size == kids.size) {
-                // Not this child's field, so its /Kids is not ours to rewrite. If it
-                // holds field content anyway (a producer that writes /Parent and
-                // forgets /Kids leaves the value right here), it is still a dead field:
-                // detaching it takes the value out without touching anything that
-                // belongs to somebody else. Pages and other annotations never reach
-                // this line, the guard at the top of the loop having refused them.
+            if (kids.isEmpty()) {
+                // No /Kids at all: a producer that writes /Parent and forgets
+                // /Kids leaves the field's value right here, and the field owns
+                // nothing else, so detaching it takes the value out without
+                // touching anything that belongs to somebody else. Pages and
+                // other annotations never reach this line, the guard at the top
+                // of the loop having refused them.
                 if (SCRUBBED_FIELD_KEYS.any { it in field }) detached[parent.objectNumber] = parent
+                return
+            }
+            if (survivors.size == kids.size) {
+                // /Kids is not empty but does not name the child the walk
+                // arrived from: the mutual link (12.7.3.3) is missing on this
+                // side too, so this candidate is not that widget's field. It
+                // can carry a real /V and /T of its own, for a field nobody
+                // redacted, so it is left untouched, /Kids included.
                 return
             }
             if (survivors.isNotEmpty()) {
