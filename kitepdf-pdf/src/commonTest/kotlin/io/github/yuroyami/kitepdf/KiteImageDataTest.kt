@@ -484,6 +484,45 @@ class KiteImageDataTest {
     }
 
     @Test
+    fun ascii85_prefix_before_jbig2_finds_globals_from_a_bare_decodeparms_dict() {
+        // /DecodeParms as a bare (non-array) dictionary is positionally valid
+        // only at index 0 (extractDecodeParms), so on a [/ASCII85Decode
+        // /JBIG2Decode] chain it does not sit at JBIG2Decode's own index 1.
+        // Spec-noncompliant (ISO 32000-1 7.4 Table 5), but a shape real
+        // writers produce; loadJbig2Globals falls back to a content search
+        // for it rather than losing the globals (D-5 fix round 1). Same
+        // globals stream and same terminal bytes as the array-form case,
+        // varying only /DecodeParms's shape, so this isolates that one
+        // property.
+        val globalsStream = PdfStream(
+            dict = PdfDictionary(emptyMap()),
+            rawBytes = jbig2PageInfoSegment(64, 128) + jbig2RegionSegment(1, 0),
+        )
+        val ownBytes = jbig2RegionSegment(2, 64)
+
+        val arrayForm = KiteImageData.from(
+            stream(
+                width = 64, height = 128, bpc = 1, colorSpace = "DeviceGray",
+                filter = PdfArray(listOf(PdfName("ASCII85Decode"), PdfName("JBIG2Decode"))),
+                bytes = ascii85Encode(ownBytes),
+                decodeParms = PdfArray(listOf(PdfNull, PdfDictionary(mapOf("JBIG2Globals" to globalsStream)))),
+            ),
+        )
+        val bareDictForm = KiteImageData.from(
+            stream(
+                width = 64, height = 128, bpc = 1, colorSpace = "DeviceGray",
+                filter = PdfArray(listOf(PdfName("ASCII85Decode"), PdfName("JBIG2Decode"))),
+                bytes = ascii85Encode(ownBytes),
+                decodeParms = PdfDictionary(mapOf("JBIG2Globals" to globalsStream)),
+            ),
+        )
+
+        assertEquals(KiteImageData.Kind.RAW, arrayForm.kind, "sanity: the array-form reference must actually decode")
+        assertEquals(KiteImageData.Kind.RAW, bareDictForm.kind)
+        assertContentEquals(arrayForm.pixelBytes, bareDictForm.pixelBytes)
+    }
+
+    @Test
     fun unsupported_prefix_filter_before_dct_degrades_without_throwing() {
         // /Crypt has no implementation anywhere in the chain. The bytes are
         // not valid JPEG on their own (no filter can undo a Crypt step), so
