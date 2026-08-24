@@ -21,9 +21,13 @@ import io.github.yuroyami.kitepdf.core.parser.PdfStream
  * Filter coverage:
  *   - FlateDecode (with TIFF + PNG predictors), ASCIIHexDecode, ASCII85Decode,
  *     RunLengthDecode, LZWDecode, CCITTFaxDecode: implemented here.
- *   - DCTDecode (JPEG) and JBIG2Decode: handled at the image-XObject layer
- *     ([io.github.yuroyami.kitepdf.core.render.KiteImageData]), not through this chain.
- *   - JPXDecode (JPEG 2000) and Crypt: throw [UnsupportedFilterException].
+ *   - DCTDecode (JPEG), JPXDecode (JPEG 2000) and JBIG2Decode: image codecs,
+ *     not byte filters, so they are handled at the image-XObject layer
+ *     ([io.github.yuroyami.kitepdf.core.render.KiteImageData]). [FilterChain.decode]
+ *     throws on them; [FilterChain.decodeToTerminal] stops at them instead, for a
+ *     stream that wraps one in transport filters (ISO 32000-1 §7.4), e.g.
+ *     `[/ASCII85Decode /DCTDecode]`.
+ *   - Crypt: throws [UnsupportedFilterException] (unimplemented).
  */
 public class UnsupportedFilterException(public val filterName: String) :
     RuntimeException("Filter not yet implemented: /$filterName")
@@ -32,6 +36,21 @@ public interface PdfFilter {
     public val name: String
     public fun decode(input: ByteArray, params: PdfDictionary?): ByteArray
 }
+
+/**
+ * Result of [FilterChain.decodeToTerminal]: [bytes] decoded up through (not
+ * including) the first filter name [FilterChain.decode]'s registry does not
+ * handle, plus [terminalParams], that filter's own `/DecodeParms` entry
+ * (ISO 32000-1 §7.4, Table 5: the entry aligned with its position in
+ * `/Filter`, not necessarily the first dictionary in the array).
+ *
+ * [terminalParams] is null when every filter was handled, in which case
+ * [bytes] is the complete decode and there is no terminal filter left.
+ */
+public class TerminalDecodeResult(
+    public val bytes: ByteArray,
+    public val terminalParams: PdfDictionary?,
+)
 
 public object FilterChain {
 
@@ -67,6 +86,35 @@ public object FilterChain {
             }
         }
         return current
+    }
+
+    /**
+     * Like [decode], but stops at the first filter name absent from the
+     * registry instead of throwing. `DCTDecode`, `JPXDecode` and `JBIG2Decode`
+     * are image codecs, not byte filters (ISO 32000-1 §7.4), so a stream that
+     * wraps one in transport filters, e.g. `[/ASCII85Decode /DCTDecode]`, can
+     * never finish through [decode]. The image-XObject layer calls this
+     * instead, decodes the terminal filter itself, and uses
+     * [TerminalDecodeResult.terminalParams] for that filter's own parameters.
+     */
+    public fun decodeToTerminal(stream: PdfStream): TerminalDecodeResult {
+        val dict = stream.dict
+        val filterNames = extractFilterNames(dict["Filter"])
+        if (filterNames.isEmpty()) return TerminalDecodeResult(stream.rawBytes, null)
+
+        val paramsList = extractDecodeParms(dict["DecodeParms"], filterNames.size)
+
+        var current = stream.rawBytes
+        for ((i, name) in filterNames.withIndex()) {
+            val filter = registry[name] ?: return TerminalDecodeResult(current, paramsList[i])
+            current = try {
+                filter.decode(current, paramsList[i])
+            } catch (e: Exception) {
+                kiteWarn { "filter: $name failed: ${e.message}" }
+                throw e
+            }
+        }
+        return TerminalDecodeResult(current, null)
     }
 
     private fun extractFilterNames(value: PdfObject?): List<String> = when (value) {

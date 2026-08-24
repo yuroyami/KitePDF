@@ -1,15 +1,18 @@
 package io.github.yuroyami.kitepdf
 
+import io.github.yuroyami.kitepdf.core.compression.Zlib
 import io.github.yuroyami.kitepdf.core.parser.PdfArray
 import io.github.yuroyami.kitepdf.core.parser.PdfBoolean
 import io.github.yuroyami.kitepdf.core.parser.PdfDictionary
 import io.github.yuroyami.kitepdf.core.parser.PdfInt
 import io.github.yuroyami.kitepdf.core.parser.PdfName
+import io.github.yuroyami.kitepdf.core.parser.PdfNull
 import io.github.yuroyami.kitepdf.core.parser.PdfObject
 import io.github.yuroyami.kitepdf.core.parser.PdfStream
 import io.github.yuroyami.kitepdf.core.render.KiteImageData
 import io.github.yuroyami.kitepdf.core.render.toRgbaBytes
 import kotlin.test.Test
+import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
 
 class KiteImageDataTest {
@@ -360,6 +363,184 @@ class KiteImageDataTest {
         assertEquals(0xFF, rgba[7].toInt() and 0xFF)
     }
 
+    /* ─── Prefix filters ahead of an image codec, ISO 32000-1 7.4 ──────────
+       /Filter [/ASCII85Decode /DCTDecode] and similar: the prefix must be
+       decoded before the terminal codec runs. Each positive case asserts the
+       wrapped image decodes to the same pixels as the bare codec, so the test
+       states the property instead of a hardcoded blob (ledger D-5). ────────── */
+
+    // 32x24 baseline JPEG, 4:4:4 (no chroma subsampling); a synthetic test
+    // vector, not a photograph. Only the bytes matter here, not the picture.
+    private val dctBytes = hex(
+        "ffd8fffe00104c61766336322e31312e31303000ffdb0043000806060706070808080808080909090a0a0a090909090a0a0a0a0a0a0c0c0c0a0a0a0a0a0a0a0c0c0c0c0d0e0d0d0d0c0d0e0e0f0f0f1212111115151519191fffc4006200010101010100" +
+            "0000000000000000000006050207040100030101010000000000000000000000050604030708100002030101000000000000000000000000040531212241110002020301010100000000000000000000042131011341610314ffc0001108001800200301" +
+            "1200021200031200ffda000c03010002110311003f00e40bc5d60d978aac25cfdfd05fe8334dea916537ea43ebc5d72365e2ab025bc17960e8c9bd522c26fd487d78bac1b2f155813de0bcb07464dea916137ea43cbc5d72365e2ab0259fb82f2c1d1937" +
+            "aa4594dfa93c8bc5d72585fc20de4d93cf49bf520e4f86578bae4b0bf86fbfd271c137ea41c9f0caf175c9617f0df7930e29bf520e5386578bae4b0b9be7efe930e09bf520e4f87fffd9",
+    )
+
+    @Test
+    fun ascii85_prefix_before_dct_decodes_to_same_pixels_as_bare_dct() {
+        val bare = KiteImageData.from(
+            stream(width = 32, height = 24, bpc = 8, colorSpace = "DeviceRGB", filter = PdfName("DCTDecode"), bytes = dctBytes),
+        )
+        val wrapped = KiteImageData.from(
+            stream(
+                width = 32, height = 24, bpc = 8, colorSpace = "DeviceRGB",
+                filter = PdfArray(listOf(PdfName("ASCII85Decode"), PdfName("DCTDecode"))),
+                bytes = ascii85Encode(dctBytes),
+            ),
+        )
+        assertEquals(KiteImageData.Kind.RAW, bare.kind, "sanity: the bare fixture must actually decode")
+        assertEquals(KiteImageData.Kind.RAW, wrapped.kind)
+        assertEquals(bare.width, wrapped.width)
+        assertEquals(bare.height, wrapped.height)
+        assertContentEquals(bare.pixelBytes, wrapped.pixelBytes)
+    }
+
+    // 32x24 JPEG 2000 codestream (part 1, baseline); a synthetic test vector.
+    private val jpxBytes = hex(
+        "ff4fff51002f000000000020000000180000000000000000000001000000010000000000000000000003070101070101070101ff52000c00000001000602020000ff5c0029227f207ee07ee07ea076f076f076c06f006f006ee067506750676850055005504757d357d35762ff64001100014c" +
+            "61766336322e31312e313030ff90000a0000000000b60001ff93c7f80208dfc7f40307257fcfe80405cd000000c7f2060000707fa7f80200047ec3f60283f302000478003bc7ec0c000d032ddeae49a07d6060087f5fc1f702403e70400d01e7dc08fbc1" +
+            "f503801bec034dc0d500a1f584800cbf2288dac56bab3fc0f942c0f942801bf45d852d0cbf4a893ac1f20600369cf674ee35a1f28800408e009b23c0298fc0f84381e0c0369d274acfcfc0e8805fa7c53fa062008ca4293fc023005fa7bfffd9",
+    )
+
+    @Test
+    fun asciihex_prefix_before_jpx_decodes_to_same_pixels_as_bare_jpx() {
+        val bare = KiteImageData.from(
+            stream(width = 32, height = 24, bpc = 8, colorSpace = "DeviceRGB", filter = PdfName("JPXDecode"), bytes = jpxBytes),
+        )
+        val wrapped = KiteImageData.from(
+            stream(
+                width = 32, height = 24, bpc = 8, colorSpace = "DeviceRGB",
+                filter = PdfArray(listOf(PdfName("ASCIIHexDecode"), PdfName("JPXDecode"))),
+                bytes = asciiHexEncode(jpxBytes),
+            ),
+        )
+        assertEquals(KiteImageData.Kind.RAW, bare.kind, "sanity: the bare fixture must actually decode")
+        assertEquals(KiteImageData.Kind.RAW, wrapped.kind)
+        assertEquals(bare.width, wrapped.width)
+        assertEquals(bare.height, wrapped.height)
+        assertContentEquals(bare.pixelBytes, wrapped.pixelBytes)
+    }
+
+    // 64x64 black rectangle + circle, Group4-compressed (single MMR strip);
+    // the same fixture proven in the native-renderer JBIG2 MMR oracle test.
+    private val jbig2G4 = byteArrayOf(
+        0x26, 0xA0.toByte(), 0x78, 0x6F, 0xFF.toByte(), 0xFC.toByte(), 0x8A.toByte(), 0x13,
+        0xFC.toByte(), 0x82.toByte(), 0x47, 0x82.toByte(), 0x07, 0xE1.toByte(), 0x07, 0xE9.toByte(),
+        0xFA.toByte(), 0x7F, 0xFA.toByte(), 0x7F, 0xFF.toByte(), 0xE9.toByte(), 0xFF.toByte(), 0xFF.toByte(),
+        0xB5.toByte(), 0xFF.toByte(), 0xFE.toByte(), 0xD7.toByte(), 0xFE.toByte(), 0xD7.toByte(), 0xB5.toByte(), 0xE1.toByte(),
+        0x85.toByte(), 0xE0.toByte(), 0xC1.toByte(), 0x78, 0xFF.toByte(), 0xFF.toByte(), 0xFF.toByte(), 0xFF.toByte(),
+        0xFF.toByte(), 0xFF.toByte(), 0xFF.toByte(), 0xFF.toByte(), 0xFF.toByte(), 0xFE.toByte(), 0x3F, 0xFF.toByte(),
+        0xFF.toByte(), 0xF0.toByte(), 0x01, 0x00, 0x10,
+    )
+
+    private fun u32be(v: Int) = byteArrayOf((v ushr 24).toByte(), (v ushr 16).toByte(), (v ushr 8).toByte(), v.toByte())
+    private fun u16be(v: Int) = byteArrayOf((v ushr 8).toByte(), v.toByte())
+
+    /** One JBIG2 segment: header (ISO/IEC 14492 7.2) + data. Page association is always 1. */
+    private fun jbig2Segment(number: Int, type: Int, data: ByteArray): ByteArray =
+        u32be(number) + byteArrayOf(type.toByte(), 0, 1) + u32be(data.size) + data
+
+    private fun jbig2PageInfo(w: Int, h: Int): ByteArray =
+        u32be(w) + u32be(h) + u32be(0) + u32be(0) + byteArrayOf(0) + u16be(0)
+
+    /** Immediate generic region (7.4.6), MMR-coded, placed at (0, [y]), combOp OR. */
+    private fun jbig2GenericRegion(y: Int): ByteArray =
+        u32be(64) + u32be(64) + u32be(0) + u32be(y) + byteArrayOf(0, 1) + jbig2G4
+
+    private fun jbig2PageInfoSegment(w: Int, h: Int) = jbig2Segment(0, 48, jbig2PageInfo(w, h))
+    private fun jbig2RegionSegment(number: Int, y: Int) = jbig2Segment(number, 38, jbig2GenericRegion(y))
+
+    @Test
+    fun flate_prefix_before_jbig2_finds_globals_aligned_to_its_own_decodeparms_slot() {
+        // Reference: page info + both 64x64 regions in one unfiltered stream,
+        // stacked into a 64x128 page.
+        val reference = KiteImageData.from(
+            stream(
+                width = 64, height = 128, bpc = 1, colorSpace = "DeviceGray",
+                filter = PdfName("JBIG2Decode"),
+                bytes = jbig2PageInfoSegment(64, 128) + jbig2RegionSegment(1, 0) + jbig2RegionSegment(2, 64),
+            ),
+        )
+        assertEquals(KiteImageData.Kind.RAW, reference.kind, "sanity: the two-region reference must actually decode")
+
+        // Split: page info + the top region go through /JBIG2Globals; the
+        // bottom region is the stream's own bytes, Flate-compressed so the
+        // prefix-decode fix is exercised too. /DecodeParms is an ARRAY, and
+        // the globals dict sits at index 1, aligned with /JBIG2Decode, not
+        // index 0 (which is null, FlateDecode's own slot).
+        val globalsStream = PdfStream(dict = PdfDictionary(emptyMap()), rawBytes = jbig2PageInfoSegment(64, 128) + jbig2RegionSegment(1, 0))
+        val wrapped = KiteImageData.from(
+            stream(
+                width = 64, height = 128, bpc = 1, colorSpace = "DeviceGray",
+                filter = PdfArray(listOf(PdfName("FlateDecode"), PdfName("JBIG2Decode"))),
+                bytes = Zlib.encode(jbig2RegionSegment(2, 64)),
+                decodeParms = PdfArray(listOf(PdfNull, PdfDictionary(mapOf("JBIG2Globals" to globalsStream)))),
+            ),
+        )
+        assertEquals(KiteImageData.Kind.RAW, wrapped.kind)
+        assertContentEquals(reference.pixelBytes, wrapped.pixelBytes)
+    }
+
+    @Test
+    fun unsupported_prefix_filter_before_dct_degrades_without_throwing() {
+        // /Crypt has no implementation anywhere in the chain. The bytes are
+        // not valid JPEG on their own (no filter can undo a Crypt step), so
+        // the image must come back as a placeholder, never as an exception
+        // out of the page (R6 lenient salvage).
+        val garbage = byteArrayOf(1, 2, 3, 4, 5, 6, 7, 8)
+        val image = KiteImageData.from(
+            stream(
+                width = 32, height = 24, bpc = 8, colorSpace = "DeviceRGB",
+                filter = PdfArray(listOf(PdfName("Crypt"), PdfName("DCTDecode"))),
+                bytes = garbage,
+            ),
+        )
+        assertEquals(KiteImageData.Kind.JPEG, image.kind)
+        assertContentEquals(garbage, image.encodedBytes)
+    }
+
+    private fun hex(s: String): ByteArray {
+        fun digit(c: Char) = when (c) {
+            in '0'..'9' -> c - '0'
+            in 'a'..'f' -> c - 'a' + 10
+            in 'A'..'F' -> c - 'A' + 10
+            else -> error("bad hex digit $c")
+        }
+        return ByteArray(s.length / 2) { i -> ((digit(s[i * 2]) shl 4) or digit(s[i * 2 + 1])).toByte() }
+    }
+
+    /** PDF ASCII85Decode's inverse (ISO 32000-1 7.4.3): groups of 4 bytes to 5 chars, zero-padded then truncated. */
+    private fun ascii85Encode(data: ByteArray): ByteArray {
+        val out = StringBuilder()
+        var i = 0
+        while (i < data.size) {
+            val n = minOf(4, data.size - i)
+            var value = 0L
+            for (j in 0 until 4) value = (value shl 8) or (if (j < n) (data[i + j].toLong() and 0xFF) else 0L)
+            val chars = CharArray(5)
+            var v = value
+            for (k in 4 downTo 0) { chars[k] = ('!'.code + (v % 85).toInt()).toChar(); v /= 85 }
+            out.append(chars, 0, n + 1)
+            i += n
+        }
+        out.append("~>")
+        return out.toString().encodeToByteArray()
+    }
+
+    /** PDF ASCIIHexDecode's inverse (ISO 32000-1 7.4.2): two hex digits per byte. */
+    private fun asciiHexEncode(data: ByteArray): ByteArray {
+        val hexChars = "0123456789ABCDEF"
+        val sb = StringBuilder(data.size * 2 + 1)
+        for (b in data) {
+            val v = b.toInt() and 0xFF
+            sb.append(hexChars[v ushr 4]); sb.append(hexChars[v and 0xF])
+        }
+        sb.append('>')
+        return sb.toString().encodeToByteArray()
+    }
+
     /** A 2×1 8-bpc DeviceGray image (black, mid grey) carrying [mask] as `/Mask`. */
     private fun grayPair(mask: PdfObject, extra: Map<String, PdfObject> = emptyMap()): PdfStream = PdfStream(
         dict = PdfDictionary(
@@ -392,18 +573,20 @@ class KiteImageDataTest {
 
     private fun stream(
         width: Int, height: Int, bpc: Int, colorSpace: String,
-        filter: PdfName, bytes: ByteArray,
+        filter: PdfObject, bytes: ByteArray, decodeParms: PdfObject? = null,
     ): PdfStream = PdfStream(
-        dict = PdfDictionary(linkedMapOf(
-            "Type" to PdfName("XObject"),
-            "Subtype" to PdfName("Image"),
-            "Width" to PdfInt(width.toLong()),
-            "Height" to PdfInt(height.toLong()),
-            "BitsPerComponent" to PdfInt(bpc.toLong()),
-            "ColorSpace" to PdfName(colorSpace),
-            "Filter" to filter,
-            "Length" to PdfInt(bytes.size.toLong()),
-        )),
+        dict = PdfDictionary(
+            linkedMapOf<String, PdfObject>(
+                "Type" to PdfName("XObject"),
+                "Subtype" to PdfName("Image"),
+                "Width" to PdfInt(width.toLong()),
+                "Height" to PdfInt(height.toLong()),
+                "BitsPerComponent" to PdfInt(bpc.toLong()),
+                "ColorSpace" to PdfName(colorSpace),
+                "Filter" to filter,
+                "Length" to PdfInt(bytes.size.toLong()),
+            ).apply { if (decodeParms != null) put("DecodeParms", decodeParms) },
+        ),
         rawBytes = bytes,
     )
 }
