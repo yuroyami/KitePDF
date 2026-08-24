@@ -50,14 +50,27 @@ import io.github.yuroyami.kitepdf.core.parser.PdfString
  * [pathIntersectsRedaction]). Two documented limits remain: a path that also
  * sets a clip keeps its coordinates (see [paintPath] for why), and a line width
  * set through an ExtGState `/LW` rather than the `w` operator is not seen, so a
- * stroke's ink is padded by the last `w` (or the 1.0 default) and the last `M`
- * (or the 10.0 default) instead.
+ * stroke's ink is padded by the last `w` (or the inherited default, see below)
+ * and the last `M` (or the inherited default) instead.
+ *
+ * A form XObject invocation is a save/restore around the form's content (ISO
+ * 32000-1, 8.10.2): every graphics state parameter in effect at the `Do`,
+ * including line width and miter limit, is in scope inside the form unless the
+ * form's own content sets a new value, and nothing the form sets leaks back out.
+ * The caller that descends into a form (see [FormHit]) is expected to construct
+ * the nested [RedactionEngine] with [initialLineWidth] and [initialMiterLimit]
+ * taken from its own current pen, exactly as `PageRenderer` carries the whole
+ * graphics state into `renderFormXObjectInner` and changes only the CTM. Left at
+ * the constructor defaults, a stroke that inherits its width would be judged
+ * with the wrong pen and could survive inside a redacted region.
  */
 internal class RedactionEngine(
     private val fonts: Map<String, PdfFont>,
     private val imageXObjectNames: Set<String>,
     private val formXObjectNames: Set<String>,
     private val rectangles: List<KiteRectangle>,
+    initialLineWidth: Double = 1.0,
+    initialMiterLimit: Double = 10.0,
 ) {
 
     /** An image XObject 'Do' invocation was dropped (intersected a region). */
@@ -76,12 +89,18 @@ internal class RedactionEngine(
      * A false one needs no redaction and no clone, but the caller still needs to
      * know it exists: it is the reason the form's original object has to stay
      * pristine, since that is what this invocation goes on drawing.
+     *
+     * [lineWidth] and [miterLimit] are the pen in effect at this `Do`, for the
+     * caller to seed the nested engine with (8.10.2): the form's own content may
+     * never set either, in which case its strokes are the invoking stream's.
      */
     data class FormHit(
         val name: String,
         val formRects: List<KiteRectangle>,
         val opIndex: Int,
         val intersects: Boolean,
+        val lineWidth: Double,
+        val miterLimit: Double,
     )
 
     /** Every form XObject `Do` invocation seen, one entry per invocation. */
@@ -125,7 +144,7 @@ internal class RedactionEngine(
         val miterLimit: Double = 10.0,
     )
 
-    private var gs = GraphicsState()
+    private var gs = GraphicsState(lineWidth = initialLineWidth, miterLimit = initialMiterLimit)
     private val stack = ArrayDeque<GraphicsState>()
 
     /**
@@ -575,7 +594,7 @@ internal class RedactionEngine(
         }
         val bbox = formBBoxes[xobjectName]
         val intersects = inv == null || bbox == null || mapped.any { overlaps(it, bbox) }
-        formXObjectHits.add(FormHit(xobjectName, mapped, opIndex, intersects))
+        formXObjectHits.add(FormHit(xobjectName, mapped, opIndex, intersects, gs.lineWidth, gs.miterLimit))
     }
 
     /** Do two rectangles share area? Touching edges do not count, as in [boxIntersects]. */
