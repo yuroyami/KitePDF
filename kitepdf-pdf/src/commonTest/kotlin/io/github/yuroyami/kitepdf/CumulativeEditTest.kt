@@ -153,6 +153,13 @@ class CumulativeEditTest {
         val text = KitePDF.open(out).pages[0].extractText()
         assertContains(text, "WATERMARK")
         assertFalse(text.contains("ALPHA"), "the stamp resurrected redacted content: $text")
-        assertFalse(RawPdf.containsBytes(out, "ALPHA".encodeToByteArray()), "ALPHA bytes came back through the stamp")
+        // A raw scan of the file bytes cannot see into stampPage's flate-compressed
+        // stream (every stream this editor writes is compressed), so it would pass
+        // whether ALPHA came back or not. Decode first, same as every other
+        // byte-level absence check in this file.
+        assertFalse(
+            decodedStreamsContain(KitePDF.open(out), "ALPHA".encodeToByteArray()),
+            "ALPHA bytes came back through the stamp",
+        )
     }
 }
