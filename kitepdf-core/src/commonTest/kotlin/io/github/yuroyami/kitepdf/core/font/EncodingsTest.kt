@@ -24,6 +24,31 @@ class EncodingsTest {
         assertEquals(256, Encodings.standardEncoding.size)
         assertEquals(256, Encodings.macRomanEncoding.size)
         assertEquals(256, Encodings.winAnsiEncoding.size)
+        assertEquals(256, Encodings.macExpertEncoding.size)
+    }
+
+    @Test
+    fun mac_expert_carries_the_full_expert_vector() {
+        val t = Encodings.macExpertEncoding
+        // 165 defined codes, per the vector in ISO 32000-1 Annex D.4.
+        assertEquals(165, t.count { it != null })
+        // Spot checks across every region of the table.
+        assertEquals("space", t[32])
+        assertEquals("Acutesmall", t[39])
+        assertEquals("zerooldstyle", t[48])
+        assertEquals("threequartersemdash", t[61])
+        assertEquals("Ethsmall", t[68])
+        assertEquals("ff", t[86])
+        assertEquals("parenleftinferior", t[91])
+        assertEquals("Asmall", t[97])
+        assertEquals("rupiah", t[125])
+        assertEquals("eightsuperior", t[161])
+        assertEquals("AEsmall", t[190])
+        assertEquals("questiondownsmall", t[192])
+        assertEquals("onefitted", t[124])
+        assertNull(t[0])
+        assertNull(t[127])
+        assertNull(t[255])
     }
 
     @Test
@@ -32,6 +57,7 @@ class EncodingsTest {
             "standardEncoding" to Encodings.standardEncoding,
             "macRomanEncoding" to Encodings.macRomanEncoding,
             "winAnsiEncoding" to Encodings.winAnsiEncoding,
+            "macExpertEncoding" to Encodings.macExpertEncoding,
         )
         for ((name, table) in tables) {
             for (code in 0..255) {

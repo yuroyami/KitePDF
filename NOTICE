@@ -33,12 +33,15 @@ carry in order to be correct, listed here with where that data comes from.
 
 4. Character encodings defined by ISO 32000-1
    Used in: kitepdf-core .../core/font/Encodings.kt
-   StandardEncoding, WinAnsiEncoding, MacRomanEncoding and PDFDocEncoding, as
-   defined in ISO 32000-1, Annex D. The tables are reproducible from public
-   data: Windows code page 1252 and Mac OS Roman as published by the Unicode
-   Consortium, glyph names from the Adobe Glyph List above, and the deviations
-   Annex D specifies. `EncodingsTest` checks those reproduction rules rather
-   than trusting the values.
+   StandardEncoding, WinAnsiEncoding, MacRomanEncoding, MacExpertEncoding and
+   PDFDocEncoding, as defined in ISO 32000-1, Annex D. The first four tables
+   are reproducible from public data: Windows code page 1252 and Mac OS Roman
+   as published by the Unicode Consortium, glyph names from the Adobe Glyph
+   List above, and the deviations Annex D specifies. MacExpertEncoding is the
+   Annex D.4 expert vector, cross-checked against two independent
+   Apache-licensed implementations (pdf.js and Apache PDFBox), which agree on
+   every code. `EncodingsTest` checks those reproduction rules and the expert
+   vector rather than trusting the values.
 
 5. Default rendering rules for HTML
    Used in: kitepdf-epub .../epub/css/UaStylesheet.kt

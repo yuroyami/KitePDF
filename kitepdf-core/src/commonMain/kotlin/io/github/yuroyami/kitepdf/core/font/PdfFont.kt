@@ -413,7 +413,7 @@ public class PdfFont private constructor(
             "WinAnsiEncoding" -> Encodings.winAnsiEncoding
             "MacRomanEncoding" -> Encodings.macRomanEncoding
             "StandardEncoding" -> Encodings.standardEncoding
-            "MacExpertEncoding" -> macExpertEncoding
+            "MacExpertEncoding" -> Encodings.macExpertEncoding
             else -> null
         }
 
@@ -515,17 +515,6 @@ public class PdfFont private constructor(
             // High half begins at code 161 (0xA1) in the ZapfDingbats vector.
             for ((i, n) in high.withIndex()) sb.append("${161 + i}=a$n ")
             encodingFromSpec(sb.toString())
-        }
-
-        /**
-         * MacExpertEncoding. We do NOT ship the full expert vector (rarely used
-         * old-style-figure / small-cap fonts); this is a deliberately minimal
-         * table so the name is not silently ALIASED to StandardEncoding (which
-         * produced wrong glyphs). Unlisted codes stay null → font cmap/notdef.
-         * TODO: full MacExpertEncoding vector if an expert-set font shows up.
-         */
-        private val macExpertEncoding: Array<String?> by lazy {
-            encodingFromSpec("32=space 33=exclamsmall 44=comma 46=period 47=fraction 48=zerooldstyle")
         }
 
         private fun applyDifferences(table: Array<String?>, diffs: PdfArray?): Array<String?> {
