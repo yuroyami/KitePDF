@@ -680,7 +680,9 @@ public class PdfEditor internal constructor(
      *
      * Calls compose: redacting a second region does not undo the first, and a
      * stamp or content edit staged earlier is redacted along with the original
-     * page content.
+     * page content. The black box from an earlier call is repainted along with
+     * the new one even when the two regions overlap, so a later call cannot
+     * uncover part of an earlier redaction (see [redactedRegionsByPage]).
      *
      * Conservative by design. A run touching a region is removed wholesale, so
      * partial overlaps over-remove. Content inside referenced form XObjects IS
@@ -757,7 +759,12 @@ public class PdfEditor internal constructor(
         out.append("q\n".encodeToByteArray())
         out.append(body)
         out.append("\nQ\n".encodeToByteArray())
-        for (r in regions) {
+        // Repaint EVERY region ever redacted on this page, not just this call's,
+        // so an earlier call's box survives even though the content rewrite above
+        // just treated it as an ordinary filled path (see [redactedRegionsByPage]).
+        val allRegionsOnPage = redactedRegionsByPage.getOrPut(ref.objectNumber) { ArrayList() }
+        allRegionsOnPage.addAll(regions)
+        for (r in allRegionsOnPage) {
             val box = "q 0 g ${fmt(r.left)} ${fmt(r.bottom)} ${fmt(r.width)} ${fmt(r.height)} re f Q\n"
             out.append(box.encodeToByteArray())
         }
@@ -826,6 +833,19 @@ public class PdfEditor internal constructor(
     private val effective = IndirectResolver { effectiveObject(it.objectNumber) }
 
     /**
+     * Regions already redacted on a page, across every [redactRegions] call this
+     * editor has made so far. Keyed by page object number.
+     *
+     * Repainted in full at the end of every call, so an earlier call's black box
+     * survives even when the content rewrite (which re-parses that box as an
+     * ordinary filled path, like any other) drops all or part of it because a
+     * later region overlaps it. Deliberately NOT cleared by [beginRedactionCall]:
+     * unlike the per-call form bookkeeping below, this has to survive between
+     * calls to do its job.
+     */
+    private val redactedRegionsByPage = LinkedHashMap<Long, MutableList<KiteRectangle>>()
+
+    /**
      * Reset the per-call form bookkeeping.
      *
      * All four maps describe ONE redaction call: inside a call they accumulate
@@ -835,6 +855,8 @@ public class PdfEditor internal constructor(
      * holds the second region's content) named in `/XObject` and so kept alive by
      * the reachability GC. Cleared, the second call re-claims the form and composes
      * on the snapshot of the already-redacted version (D-1).
+     *
+     * [redactedRegionsByPage] is deliberately not one of the four: see its own doc.
      */
     private fun beginRedactionCall() {
         formSources.clear()
