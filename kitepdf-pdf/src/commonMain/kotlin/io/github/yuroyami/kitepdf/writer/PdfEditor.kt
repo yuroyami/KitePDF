@@ -689,6 +689,14 @@ public class PdfEditor internal constructor(
      * [saveRewritten]'s reachability GC drops the image stream; and annotations
      * whose `/Rect` intersects a region are removed from the page `/Annots`.
      *
+     * **A removed widget takes its form field with it.** A widget annotation is
+     * usually the field dictionary too (ISO 32000-1, 12.7.3.3), so it is also
+     * detached from `/AcroForm /Fields` (12.7.2), or from its parent field's
+     * `/Kids` when it is one of several. Otherwise the field's `/V`, `/DV`, `/T`
+     * and appearance stream stay reachable from the catalog and survive the
+     * rewrite. A field that still has a widget outside every region keeps that
+     * widget and its place in the form.
+     *
      * **The page may come out with more XObjects than it went in with.** One form
      * XObject can be drawn in several places (ISO 32000-1, 8.10), and each place
      * sees the region in a different part of the form. One rewritten stream cannot
@@ -748,8 +756,12 @@ public class PdfEditor internal constructor(
         if (resourcesWithClones != null) newPage = withEntry(newPage, "Resources", resourcesWithClones)
         newPage = prunePageResourceXObjects(newPage, engine.droppedImageNames, engine.survivingImageNames)
         newPage = prunePageResourceXObjects(newPage, formRedaction.droppedNames, namesStillDrawn(finalOps))
-        newPage = pruneIntersectingAnnots(newPage, regions)
+        val droppedWidgets = ArrayList<PdfReference>()
+        newPage = pruneIntersectingAnnots(newPage, regions, droppedWidgets)
+        // Stage the page first: what follows reads effective objects, and a widget's
+        // field is only reachable through the /Annots this call just rewrote.
         updateObject(ref, newPage)
+        detachRedactedFields(droppedWidgets)
         redactionStaged = true
     }
 
@@ -1089,22 +1101,29 @@ public class PdfEditor internal constructor(
 
     /**
      * Drop annotations from the page `/Annots` whose `/Rect` intersects any
-     * redaction rectangle. FreeText contents, widget values, and stamp appearance
-     * streams inside a redacted region are otherwise left intact and extractable.
-     * Annotations with no resolvable `/Rect` are kept (they draw nothing spatial).
+     * redaction rectangle, reporting the ones dropped in [dropped] so the caller
+     * can detach their form fields too. FreeText contents, widget values, and stamp
+     * appearance streams inside a redacted region are otherwise left intact and
+     * extractable. Annotations with no resolvable `/Rect` are kept (they draw
+     * nothing spatial).
      */
-    private fun pruneIntersectingAnnots(dict: PdfDictionary, rectangles: List<KiteRectangle>): PdfDictionary {
-        val annots = dict.getArray("Annots", base) ?: return dict
+    private fun pruneIntersectingAnnots(
+        dict: PdfDictionary,
+        rectangles: List<KiteRectangle>,
+        dropped: MutableList<PdfReference>,
+    ): PdfDictionary {
+        val annots = dict.getArray("Annots", effective) ?: return dict
         val kept = ArrayList<PdfObject>(annots.items.size)
         var changed = false
         for (item in annots.items) {
-            val annotDict = when (val resolved = item.resolve(base)) {
+            val annotDict = when (val resolved = item.resolve(effective)) {
                 is PdfDictionary -> resolved
                 else -> null
             }
             val rect = annotDict?.let { annotRect(it) }
             if (rect != null && rectangles.any { rectsIntersect(it, rect) }) {
                 changed = true // drop it
+                (item as? PdfReference)?.let { dropped.add(it) }
             } else {
                 kept.add(item)
             }
@@ -1115,9 +1134,9 @@ public class PdfEditor internal constructor(
 
     /** Normalised `/Rect` of an annotation, or null when absent/malformed. */
     private fun annotRect(annot: PdfDictionary): KiteRectangle? {
-        val arr = annot.getArray("Rect", base) ?: return null
+        val arr = annot.getArray("Rect", effective) ?: return null
         if (arr.size < 4) return null
-        fun n(i: Int): Double? = when (val v = arr[i].resolve(base)) {
+        fun n(i: Int): Double? = when (val v = arr[i].resolve(effective)) {
             is PdfInt -> v.value.toDouble()
             is io.github.yuroyami.kitepdf.core.parser.PdfReal -> v.value
             else -> null
@@ -1127,6 +1146,94 @@ public class PdfEditor internal constructor(
         val x1 = n(2) ?: return null
         val y1 = n(3) ?: return null
         return KiteRectangle(minOf(x0, x1), minOf(y0, y1), maxOf(x0, x1), maxOf(y0, y1))
+    }
+
+    /**
+     * Detach the form fields of [droppedWidgets] from the interactive form.
+     *
+     * A widget annotation is usually the field dictionary as well (ISO 32000-1,
+     * 12.7.3.3), so dropping it from the page `/Annots` leaves `/AcroForm /Fields`
+     * (12.7.2) pointing at that same object: its `/V`, `/DV`, `/T` and appearance
+     * stream stay reachable from the catalog and survive [saveRewritten], and the
+     * caller ships a file they believe is clean. A widget that is one of a field's
+     * `/Kids` is taken out of the parent instead, and a parent left with nothing is
+     * detached in turn.
+     */
+    private fun detachRedactedFields(droppedWidgets: List<PdfReference>) {
+        if (droppedWidgets.isEmpty()) return
+        // The catalog [saveRewritten] will write, which an override replaces.
+        val rootRef = (trailerOverrides["Root"] ?: base.trailer["Root"]) as? PdfReference ?: return
+        val catalog = effectiveObject(rootRef.objectNumber) as? PdfDictionary ?: return
+        // /AcroForm is usually its own object, but a dictionary written straight into
+        // the catalog is legal, and then the catalog is what carries the change.
+        val acroRef = catalog["AcroForm"] as? PdfReference
+        val acro = (if (acroRef != null) effectiveObject(acroRef.objectNumber) else catalog["AcroForm"])
+            as? PdfDictionary ?: return
+        val fields = acro.getArray("Fields", effective) ?: return
+
+        val detached = HashSet<Long>()
+        for (widget in droppedWidgets) {
+            // A widget with no /Parent IS the field, named in /Fields directly. One
+            // that has a parent is going either way, so naming it here costs nothing
+            // and covers a file that also lists a kid widget in /Fields.
+            detached.add(widget.objectNumber)
+            val widgetDict = effectiveObject(widget.objectNumber) as? PdfDictionary ?: continue
+            detachFromParentField(widget, widgetDict.getRef("Parent") ?: continue, detached)
+        }
+
+        val kept = fields.items.filter { item ->
+            val num = (item as? PdfReference)?.objectNumber
+            num == null || num !in detached
+        }
+        if (kept.size == fields.items.size) return
+        val newAcro = withEntry(acro, "Fields", io.github.yuroyami.kitepdf.core.parser.PdfArray(kept))
+        if (acroRef != null) {
+            updateObject(acroRef, newAcro)
+        } else {
+            updateObject(rootRef, withEntry(catalog, "AcroForm", newAcro))
+        }
+    }
+
+    /**
+     * Take [widget] out of its parent field's `/Kids`, and add to [detached] a
+     * parent that is left with no kids at all: it only existed to hold the widgets
+     * that went, so the walk climbs to ITS parent in turn until one still has a kid
+     * or the root field `/Fields` names is reached.
+     *
+     * Fields form a tree (ISO 32000-1, 12.7.3.3), so a `/Parent` chain that returns
+     * to a node it already visited is malformed and the root field cannot be found.
+     * Redaction is a destructive write, so it says so rather than hand back a file
+     * whose `/Fields` still reaches the value the caller asked to remove.
+     */
+    private fun detachFromParentField(
+        widget: PdfReference,
+        parentRef: PdfReference,
+        detached: MutableSet<Long>,
+    ) {
+        var child = widget
+        var parent = parentRef
+        val seen = HashSet<Long>()
+        while (seen.add(parent.objectNumber)) {
+            val field = effectiveObject(parent.objectNumber) as? PdfDictionary ?: return
+            // Unreadable /Kids means a malformed parent-kid link: treat the field as
+            // emptied and over-remove rather than trust it.
+            val survivors = field.getArray("Kids", effective)?.items.orEmpty()
+                .filter { (it as? PdfReference)?.objectNumber != child.objectNumber }
+            if (survivors.isNotEmpty()) {
+                updateObject(
+                    parent,
+                    withEntry(field, "Kids", io.github.yuroyami.kitepdf.core.parser.PdfArray(survivors)),
+                )
+                return
+            }
+            detached.add(parent.objectNumber)
+            child = parent
+            parent = field.getRef("Parent") ?: return
+        }
+        throw IllegalStateException(
+            "Form field /Parent chain loops at object ${parent.objectNumber}; the redacted widget's field " +
+                "cannot be detached from /AcroForm /Fields, which would leave its value in the file.",
+        )
     }
 
     private fun rectsIntersect(a: KiteRectangle, b: KiteRectangle): Boolean =
