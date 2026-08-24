@@ -182,7 +182,7 @@ public class KiteImageData internal constructor(
                     // globals lookup keyed off the JBIG2 filter's own
                     // /DecodeParms entry (see loadJbig2Globals) (D-5).
                     val terminal = terminalBytesOf(stream)
-                    val globals = loadJbig2Globals(terminal.terminalParams, refs)
+                    val globals = loadJbig2Globals(terminal.terminalParams, dict["DecodeParms"], refs)
                     val decoded = runCatching { Jbig2Decoder.decode(terminal.bytes, globals, width, height) }.getOrNull()
                     if (decoded != null) KiteImageData(
                         width, height, 1, "DeviceGray", Kind.RAW,
@@ -445,7 +445,8 @@ public class KiteImageData internal constructor(
             // Same prefix-filter requirement as an image's own JBIG2Decode (D-5).
             Kind.JBIG2 -> {
                 val terminal = terminalBytesOf(mask)
-                runCatching { Jbig2Decoder.decode(terminal.bytes, loadJbig2Globals(terminal.terminalParams, refs), mw, mh) }.getOrNull()
+                val globals = loadJbig2Globals(terminal.terminalParams, mdict["DecodeParms"], refs)
+                runCatching { Jbig2Decoder.decode(terminal.bytes, globals, mw, mh) }.getOrNull()
             }
             else -> null
         }
@@ -555,11 +556,29 @@ public class KiteImageData internal constructor(
          * 5), so a chain such as `[/FlateDecode /JBIG2Decode]` with
          * `/DecodeParms [null << /JBIG2Globals 7 0 R >>]` reads the second
          * entry rather than guessing at the whole array's shape here too.
+         *
+         * A bare (non-array) `/DecodeParms` is positionally valid only at
+         * index 0 (`extractDecodeParms`), so [parms] is null whenever a
+         * writer puts a bare dictionary on a chain where JBIG2Decode is not
+         * the first filter, out of spec but not rare. When that happens,
+         * [rawDecodeParms], the stream's whole unresolved `/DecodeParms`
+         * value, is searched by content for a `/JBIG2Globals` key instead:
+         * the same recovery the pre-D-5 code did unconditionally, now used
+         * only once the positional read comes up empty, so a correctly
+         * positioned array is never second-guessed.
          */
-        private fun loadJbig2Globals(parms: PdfDictionary?, refs: IndirectResolver?): ByteArray? {
-            if (parms == null) return null
+        private fun loadJbig2Globals(
+            parms: PdfDictionary?,
+            rawDecodeParms: PdfObject?,
+            refs: IndirectResolver?,
+        ): ByteArray? {
             fun res(o: PdfObject?) = if (refs != null && o != null) runCatching { o.resolve(refs) }.getOrNull() else o
-            val gs = res(parms["JBIG2Globals"]) as? PdfStream ?: return null
+            val found = parms ?: when (val d = res(rawDecodeParms)) {
+                is PdfDictionary -> d
+                is PdfArray -> d.mapNotNull { res(it) as? PdfDictionary }.firstOrNull { it["JBIG2Globals"] != null }
+                else -> null
+            } ?: return null
+            val gs = res(found["JBIG2Globals"]) as? PdfStream ?: return null
             return runCatching { FilterChain.decode(gs) }.getOrNull() ?: gs.rawBytes
         }
 
