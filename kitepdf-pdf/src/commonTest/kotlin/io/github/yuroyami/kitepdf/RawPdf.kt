@@ -49,6 +49,41 @@ internal object RawPdf {
         offsets[4] = buf.size(); a("4 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>\nendobj\n")
         offsets[5] = buf.size(); a("5 0 obj\n<< /Length ${content.size} >>\nstream\n"); buf.append(content); a("\nendstream\nendobj\n")
         for ((n, bytes) in extra) { offsets[n] = buf.size(); buf.append(bytes) }
+        return finish(buf, offsets)
+    }
+
+    /**
+     * A two-page 612x792 document: page one draws [content] and carries [annots],
+     * page two is empty. For tests that need a page tree with more than one kid.
+     *
+     * Object numbers 1 to 6 are taken: 1 catalog, 2 pages, 3 page one, 4 Helvetica,
+     * 5 page one's content, 6 page two. Extra objects start at 7.
+     */
+    fun twoPages(
+        content: ByteArray,
+        resources: String = "<< /Font << /F1 4 0 R >> >>",
+        extra: List<Pair<Int, ByteArray>> = emptyList(),
+        catalogExtra: String = "",
+        annots: String = "",
+    ): ByteArray {
+        val buf = ByteArrayBuilder()
+        val offsets = LinkedHashMap<Int, Int>()
+        fun a(s: String) = buf.append(s.encodeToByteArray())
+        val annotsEntry = if (annots.isEmpty()) "" else " $annots"
+        a("%PDF-1.5\n%Äå\n")
+        offsets[1] = buf.size(); a("1 0 obj\n<< /Type /Catalog /Pages 2 0 R $catalogExtra >>\nendobj\n")
+        offsets[2] = buf.size(); a("2 0 obj\n<< /Type /Pages /Kids [3 0 R 6 0 R] /Count 2 >>\nendobj\n")
+        offsets[3] = buf.size(); a("3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources $resources$annotsEntry /Contents 5 0 R >>\nendobj\n")
+        offsets[4] = buf.size(); a("4 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>\nendobj\n")
+        offsets[5] = buf.size(); a("5 0 obj\n<< /Length ${content.size} >>\nstream\n"); buf.append(content); a("\nendstream\nendobj\n")
+        offsets[6] = buf.size(); a("6 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources $resources >>\nendobj\n")
+        for ((n, bytes) in extra) { offsets[n] = buf.size(); buf.append(bytes) }
+        return finish(buf, offsets)
+    }
+
+    /** Cross-reference table and trailer for the objects written at [offsets]. */
+    private fun finish(buf: ByteArrayBuilder, offsets: Map<Int, Int>): ByteArray {
+        fun a(s: String) = buf.append(s.encodeToByteArray())
         val xref = buf.size()
         val maxN = offsets.keys.max()
         a("xref\n0 ${maxN + 1}\n0000000000 65535 f \n")

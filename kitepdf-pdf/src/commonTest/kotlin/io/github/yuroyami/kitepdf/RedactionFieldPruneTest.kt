@@ -113,15 +113,23 @@ class RedactionFieldPruneTest {
         return doc.acroForm?.raw?.getArray("CO", doc)?.size ?: -1
     }
 
-    /** The widget an /OBJR in the structure tree points at, resolved in the output. */
-    private fun structTreeTarget(pdf: ByteArray): PdfDictionary? {
+    /** Every object an /OBJR in the structure tree points at, resolved in the output. */
+    private fun structTreeTargets(pdf: ByteArray): List<PdfDictionary> {
         val doc = KitePDF.open(pdf)
-        val root = doc.catalog.getDict("StructTreeRoot", doc) ?: return null
-        val elem = root.getDict("K", doc) ?: return null
-        val objr = elem.getDict("K", doc) ?: return null
-        val ref = objr.getRef("Obj") ?: return null
-        return doc.resolve(ref) as? PdfDictionary
+        val root = doc.catalog.getDict("StructTreeRoot", doc) ?: return emptyList()
+        val elems = when (val k = root["K"]?.resolve(doc)) {
+            is PdfArray -> k.items.mapNotNull { it.resolve(doc) as? PdfDictionary }
+            is PdfDictionary -> listOf(k)
+            else -> emptyList()
+        }
+        return elems.mapNotNull { elem ->
+            val ref = elem.getDict("K", doc)?.getRef("Obj") ?: return@mapNotNull null
+            doc.resolve(ref) as? PdfDictionary
+        }
     }
+
+    /** The one object the structure tree keeps alive, for the fixtures with a single /OBJR. */
+    private fun structTreeTarget(pdf: ByteArray): PdfDictionary? = structTreeTargets(pdf).singleOrNull()
 
     /** /Kids count of the field owning the first annotation still on the page. */
     private fun survivingWidgetKidCount(pdf: ByteArray): Int {
@@ -505,7 +513,104 @@ class RedactionFieldPruneTest {
         assertTrue(holds(out, "LOWER-COPY"), "the surviving widget lost its appearance stream")
     }
 
+    @Test fun a_dropped_attachment_sound_or_movie_keeps_none_of_its_payload() {
+        // /FS is the attached file (12.5.6.15), /Sound the sound stream (12.5.6.16) and
+        // /Movie the movie dictionary (12.5.6.17). Each is content in the same way
+        // /Contents is, and none of the three annotations is a form field.
+        val pdf = RawPdf.page(
+            content = body,
+            annots = "/Annots [6 0 R 7 0 R 8 0 R]",
+            catalogExtra = "/StructTreeRoot 12 0 R",
+            extra = listOf(
+                RawPdf.obj(6, "<< /Type /Annot /Subtype /FileAttachment /Rect [100 700 150 720] /FS 9 0 R >>"),
+                RawPdf.obj(7, "<< /Type /Annot /Subtype /Sound /Rect [160 700 200 720] /Sound 10 0 R >>"),
+                RawPdf.obj(8, "<< /Type /Annot /Subtype /Movie /Rect [210 700 260 720] /Movie << /F (SECRET-MOVIE) >> >>"),
+                RawPdf.obj(9, "<< /Type /Filespec /F (SECRET-FILENAME) /EF << /F 11 0 R >> >>"),
+                RawPdf.obj(10, "<< /Type /Sound /R 44100 >>", "SECRET-SOUND-SAMPLES".encodeToByteArray()),
+                RawPdf.obj(11, "<< /Type /EmbeddedFile >>", "SECRET-ATTACHED-BYTES".encodeToByteArray()),
+                RawPdf.obj(12, "<< /Type /StructTreeRoot /K [13 0 R 14 0 R 15 0 R] >>"),
+                RawPdf.obj(13, "<< /Type /StructElem /S /Annot /P 12 0 R /K << /Type /OBJR /Obj 6 0 R >> >>"),
+                RawPdf.obj(14, "<< /Type /StructElem /S /Annot /P 12 0 R /K << /Type /OBJR /Obj 7 0 R >> >>"),
+                RawPdf.obj(15, "<< /Type /StructElem /S /Annot /P 12 0 R /K << /Type /OBJR /Obj 8 0 R >> >>"),
+            ),
+        )
+        assertEquals(3, structTreeTargets(pdf).size, "fixture is wrong, it must keep three annotations alive")
+
+        val doc = KitePDF.open(pdf)
+        val out = doc.edit().apply { redactRegion(doc.pages[0], upperRegion) }.saveRewritten()
+
+        val survivors = structTreeTargets(out).associateBy { it.getName("Subtype") }
+        assertEquals(
+            setOf<String?>("FileAttachment", "Sound", "Movie"),
+            survivors.keys,
+            "fixture is wrong, the structure tree no longer keeps all three alive",
+        )
+        assertEquals(null, survivors.getValue("FileAttachment")["FS"], "the attachment kept its file")
+        assertEquals(null, survivors.getValue("Sound")["Sound"], "the sound annotation kept its sound")
+        assertEquals(null, survivors.getValue("Movie")["Movie"], "the movie annotation kept its movie")
+        assertFalse(holds(out, "SECRET-FILENAME"), "the attached file specification survived")
+        assertFalse(holds(out, "SECRET-ATTACHED-BYTES"), "the embedded file survived")
+        assertFalse(holds(out, "SECRET-SOUND-SAMPLES"), "the sound samples survived")
+        assertFalse(holds(out, "SECRET-MOVIE"), "the movie survived")
+    }
+
     /* ─── Malformed input ────────────────────────────────────────────────── */
+
+    @Test fun redacting_a_page_does_not_delete_a_sibling_page() {
+        // A producer that writes /Parent where it means /P points the annotation at the
+        // page itself. Treating that as a field walks into the page tree: the page has
+        // no /Kids so it reads as an emptied field, and its own parent is the /Pages
+        // node, whose /Kids is every page in the document.
+        val pdf = RawPdf.twoPages(
+            content = body,
+            annots = "/Annots [7 0 R]",
+            extra = listOf(
+                RawPdf.obj(
+                    7,
+                    "<< /Type /Annot /Subtype /FreeText /Rect [100 700 300 720] /Contents (NOTE-TEXT) /Parent 3 0 R >>",
+                ),
+            ),
+        )
+        assertEquals(2, KitePDF.open(pdf).pages.size, "fixture is wrong, it must have two pages")
+
+        val doc = KitePDF.open(pdf)
+        val out = doc.edit().apply { redactRegion(doc.pages[0], upperRegion) }.saveRewritten()
+
+        val reopened = KitePDF.open(out)
+        assertEquals(2, reopened.pages.size, "redacting page one deleted a page from the document")
+        assertEquals(2, reopened.pageCount, "the page tree /Count no longer matches its /Kids")
+        assertFalse(holds(out, "NOTE-TEXT"), "the dropped annotation kept its text")
+    }
+
+    @Test fun a_dropped_annotation_pointing_at_a_note_leaves_the_note_whole() {
+        // The same producer error as the page case, aimed sideways: a FreeText whose
+        // /Parent names the note it was drawn beside. A markup annotation carries /T
+        // too, but there it is the author (12.5.6.4), so a walk that took any /T for a
+        // field name would strip the title and appearance off a note nobody redacted.
+        val pdf = RawPdf.page(
+            content = body,
+            annots = "/Annots [6 0 R 7 0 R]",
+            extra = listOf(
+                RawPdf.obj(
+                    6,
+                    "<< /Type /Annot /Subtype /Text /Rect [400 400 420 420] /T (AUTHOR-NAME) " +
+                        "/Contents (a note) /AP << /N 8 0 R >> >>",
+                ),
+                RawPdf.obj(
+                    7,
+                    "<< /Type /Annot /Subtype /FreeText /Rect [100 700 300 720] /Contents (DROPPED-TEXT) /Parent 6 0 R >>",
+                ),
+                apStream(8, "NOTE-BODY"),
+            ),
+        )
+        val doc = KitePDF.open(pdf)
+        val out = doc.edit().apply { redactRegion(doc.pages[0], upperRegion) }.saveRewritten()
+
+        assertEquals(1, KitePDF.open(out).pages[0].annotations.size, "the note outside the region was pruned")
+        assertTrue(holds(out, "AUTHOR-NAME"), "the note was scrubbed as if it were a form field")
+        assertTrue(holds(out, "NOTE-BODY"), "the note lost its appearance stream")
+        assertFalse(holds(out, "DROPPED-TEXT"), "the dropped annotation kept its text")
+    }
 
     @Test fun a_popup_annotation_is_not_walked_as_a_form_field() {
         // A Popup's /Parent is the markup annotation it belongs to (12.5.6.14), not a
