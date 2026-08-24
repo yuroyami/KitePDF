@@ -1,7 +1,7 @@
 package io.github.yuroyami.kitepdf.skia
 
 import io.github.yuroyami.kitepdf.PdfPage
-import io.github.yuroyami.kitepdf.core.render.KiteMatrix
+import io.github.yuroyami.kitepdf.rasterGeometry
 import org.jetbrains.skia.Color
 import org.jetbrains.skia.EncodedImageFormat
 import org.jetbrains.skia.Image
@@ -19,9 +19,9 @@ import org.jetbrains.skia.Surface
  *    JavaFX) by drawing the returned [Image] / [ByteArray] through their
  *    own image APIs.
  *
- * The result is a sRGB raster sized to the page in PDF user-space units
- * (`1pt = 1/72in`) multiplied by [scale]. Pass `scale = 2.0` for retina /
- * "2× density" thumbnails.
+ * The result is a sRGB raster sized by [PdfPage.rasterGeometry] (rotation,
+ * crop box and `/UserUnit` all included), at [scale] device pixels per PDF
+ * user-space point. Pass `scale = 2.0` for retina / "2× density" thumbnails.
  */
 public object PdfPageRasterizer {
 
@@ -35,23 +35,14 @@ public object PdfPageRasterizer {
         scale: Double = 1.0,
         background: Int = Color.WHITE,
     ): Image {
-        // Size to the ROTATED display box (width/height swapped for /Rotate 90
-        // or 270), so rotated pages get a correctly-shaped bitmap.
-        val widthPx = kotlin.math.ceil(page.rotatedWidth * scale).toInt().coerceAtLeast(1)
-        val heightPx = kotlin.math.ceil(page.rotatedHeight * scale).toInt().coerceAtLeast(1)
-        val surface = Surface.makeRasterN32Premul(widthPx, heightPx)
+        val geometry = page.rasterGeometry(scale)
+        val surface = Surface.makeRasterN32Premul(geometry.widthPx, geometry.heightPx)
         try {
             val skCanvas = surface.canvas
             if (background != 0) skCanvas.clear(background)
 
-            // pageToDeviceBase() already maps unscaled user-space to a
-            // top-left-origin, Y-down device box [0,rotatedWidth]×[0,rotatedHeight],
-            // honouring the display-box origin and normalized /Rotate. Scale it
-            // up by `scale` in device space: scaling FIRST-applies the base
-            // (a.concat(b) applies b then a).
-            val deviceCtm = KiteMatrix.scaling(scale, scale).concat(page.pageToDeviceBase())
             val pdfCanvas = SkiaCanvas(skCanvas)
-            page.renderTo(pdfCanvas, deviceCtm)
+            page.renderTo(pdfCanvas, geometry.deviceCtm)
             return surface.makeImageSnapshot()
         } finally {
             surface.close()

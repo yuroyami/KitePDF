@@ -30,6 +30,9 @@ object SyntheticPdfs {
         Fixture("syn-shading7-tensor", shadingTensor()),
         Fixture("syn-type3-font", type3Font()),
         Fixture("syn-smask-luminosity", smaskLuminosity()),
+        Fixture("syn-rotate90", rotate90()),
+        Fixture("syn-cropbox", cropBox()),
+        Fixture("syn-mediabox-origin", mediaBoxOrigin()),
     )
 
     /** A luminosity soft mask (white box on black) gating a red fill. */
@@ -76,6 +79,80 @@ object SyntheticPdfs {
         )                                                                       // 5
         p.stream("", "1100 0 0 0 1000 1000 d1 0 0 1000 1000 re f".encodeToByteArray())          // 6
         p.stream("", "1100 0 0 0 1000 1000 d1 0 0 m 1000 0 l 500 1000 l f".encodeToByteArray()) // 7
+        return p.build(1)
+    }
+
+    /* ─── Page-geometry fixtures: /Rotate, /CropBox, non-zero /MediaBox origin ─ */
+
+    /**
+     * `/Rotate 90` on a non-square page. Two off-centre marks (unrotated
+     * bottom-left, unrotated top-right) so a wrong rotation direction, not
+     * just a wrong device-box shape, shows up in the diff (D-4).
+     */
+    private fun rotate90(): ByteArray {
+        val p = Pdf()
+        p.obj("<< /Type /Catalog /Pages 2 0 R >>")                              // 1
+        p.obj("<< /Type /Pages /Kids [3 0 R] /Count 1 >>")                      // 2
+        p.obj(
+            "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 300] /Rotate 90 " +
+                "/Resources << >> /Contents 4 0 R >>",
+        )                                                                       // 3
+        p.stream(
+            "",
+            (
+                "1 0 0 rg 0 0 60 60 re f\n" +
+                    "0 0 1 rg 140 240 60 60 re f\n"
+                ).encodeToByteArray(),
+        )                                                                       // 4
+        return p.build(1)
+    }
+
+    /**
+     * `/CropBox` smaller than `/MediaBox` and off-centre. The background fill
+     * covers the whole media box; the blue mark straddles the crop edge so a
+     * geometry bug that renders the full media box (rather than sizing to,
+     * and clipping at, the crop box) is visible, not just mis-sized (D-4).
+     */
+    private fun cropBox(): ByteArray {
+        val p = Pdf()
+        p.obj("<< /Type /Catalog /Pages 2 0 R >>")                              // 1
+        p.obj("<< /Type /Pages /Kids [3 0 R] /Count 1 >>")                      // 2
+        p.obj(
+            "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 300] /CropBox [50 80 250 220] " +
+                "/Resources << >> /Contents 4 0 R >>",
+        )                                                                       // 3
+        p.stream(
+            "",
+            (
+                "0.85 1 0.85 rg 0 0 300 300 re f\n" +
+                    "1 0 0 rg 100 120 60 60 re f\n" +
+                    "0 0 1 rg 220 190 60 60 re f\n"
+                ).encodeToByteArray(),
+        )                                                                       // 4
+        return p.build(1)
+    }
+
+    /**
+     * `/MediaBox` not starting at `[0 0]`. Same 300x300 sheet as [cropBox],
+     * just moved to start at `(20, 30)`, so a geometry bug that ignores the
+     * box origin offsets the whole page instead of just mis-sizing it (D-4).
+     */
+    private fun mediaBoxOrigin(): ByteArray {
+        val p = Pdf()
+        p.obj("<< /Type /Catalog /Pages 2 0 R >>")                              // 1
+        p.obj("<< /Type /Pages /Kids [3 0 R] /Count 1 >>")                      // 2
+        p.obj(
+            "<< /Type /Page /Parent 2 0 R /MediaBox [20 30 320 330] " +
+                "/Resources << >> /Contents 4 0 R >>",
+        )                                                                       // 3
+        p.stream(
+            "",
+            (
+                "1 1 0.8 rg 20 30 300 300 re f\n" +
+                    "1 0 0 rg 40 60 80 80 re f\n" +
+                    "0 0 1 rg 220 250 60 60 re f\n"
+                ).encodeToByteArray(),
+        )                                                                       // 4
         return p.build(1)
     }
 

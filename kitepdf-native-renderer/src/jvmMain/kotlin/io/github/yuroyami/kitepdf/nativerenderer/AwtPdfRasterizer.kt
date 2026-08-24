@@ -1,7 +1,7 @@
 package io.github.yuroyami.kitepdf.nativerenderer
 
 import io.github.yuroyami.kitepdf.PdfPage
-import io.github.yuroyami.kitepdf.core.render.KiteMatrix
+import io.github.yuroyami.kitepdf.rasterGeometry
 import java.awt.Color
 import java.awt.image.BufferedImage
 import java.io.ByteArrayOutputStream
@@ -22,8 +22,9 @@ public object AwtPdfRasterizer {
         scale: Double = 1.0,
         background: Color = Color.WHITE,
     ): BufferedImage {
-        val w = (page.width * scale).toInt().coerceAtLeast(1)
-        val h = (page.height * scale).toInt().coerceAtLeast(1)
+        val geometry = page.rasterGeometry(scale)
+        val w = geometry.widthPx
+        val h = geometry.heightPx
         val img = BufferedImage(w, h, BufferedImage.TYPE_INT_ARGB)
         val g = img.createGraphics()
         try {
@@ -33,8 +34,7 @@ public object AwtPdfRasterizer {
             // their buffers from g.clip, and image graphics report no device bounds.
             g.clip = java.awt.Rectangle(0, 0, w, h)
             val canvas = AwtCanvas(g)
-            val deviceCtm = KiteMatrix(scale, 0.0, 0.0, -scale, 0.0, page.height * scale)
-            page.renderTo(canvas, deviceCtm)
+            page.renderTo(canvas, geometry.deviceCtm)
         } finally {
             g.dispose()
         }
