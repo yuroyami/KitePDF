@@ -49,10 +49,11 @@ renderer only when you draw pages.
 
 | Artifact | Add it when |
 | --- | --- |
-| `io.github.yuroyami:kitepdf` | You want both formats. This is the usual choice. It re-exports both handlers and adds `KiteDoc`, which opens a file without being told which format it is. |
+| `io.github.yuroyami:kitepdf` | You want every format. This is the usual choice. It re-exports the handlers and adds `KiteDoc`, which opens a file without being told which format it is. |
 | `io.github.yuroyami:kitepdf-pdf` | You want PDF only, with no EPUB reflow engine on the classpath. |
 | `io.github.yuroyami:kitepdf-epub` | You want EPUB only. |
-| `io.github.yuroyami:kitepdf-core` | Never add it yourself. It holds geometry, `KiteCanvas`, the font engine, the stream filters and the hyphenation data, and it arrives with any of the three artifacts above. |
+| `io.github.yuroyami:kitepdf-cbz` | You want CBZ comic archives only. |
+| `io.github.yuroyami:kitepdf-core` | Never add it yourself. It holds geometry, `KiteCanvas`, the font engine, the stream filters and the hyphenation data, and it arrives with any of the handler artifacts above. |
 | `io.github.yuroyami:kitepdf-compose-viewer` | You draw with Compose Multiplatform. It gives you `KiteDocView` (one composable for PDF and EPUB alike) and the viewer state. |
 | `io.github.yuroyami:kitepdf-native-renderer` | You want page-to-image through the platform's own canvas: AWT, `android.graphics`, CoreGraphics, Canvas2D. |
 | `io.github.yuroyami:kitepdf-skia-renderer` | You want page-to-image through Skia/Skiko, with one API across JVM, Android, Apple, Linux and web. |
