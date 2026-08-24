@@ -20,8 +20,8 @@ import kotlin.math.pow
  *   - Indexed (palette lookup; base is one of the device families)
  *   - ICCBased: *falls back* to DeviceRGB / DeviceCMYK / DeviceGray based
  *     on `/N` component count (the ICC profile is not applied).
- *   - CalGray, CalRGB, Lab: treated as their device equivalent (no
- *     gamma / whitepoint correction); good enough for visual approximation.
+ *   - CalGray, CalRGB, Lab: gamma, whitepoint and (for CalRGB) the CIE
+ *     matrix are applied through the same XYZ-to-sRGB path.
  *
  * Separation / DeviceN resolve through their tint-transform function (see
  * [DeviceN] below). The Pattern colour space is handled by the renderer,
@@ -152,6 +152,46 @@ public sealed class KiteColorSpace {
      * CIE 1976 L*a*b* colour space (§8.6.5.4). Components are actual L (0..100)
      * and a/b (per /Range), converted via XYZ to sRGB using the /WhitePoint.
      */
+    /**
+     * CalGray (ISO 32000-1, 8.6.5.2): XYZ = WhitePoint * A^Gamma, then the
+     * shared XYZ-to-sRGB conversion. A whitepoint input renders exactly white.
+     */
+    public class CalGray(
+        private val whitePoint: DoubleArray,
+        private val gamma: Double,
+    ) : KiteColorSpace() {
+        override val componentCount: Int = 1
+        override fun toRgb(components: DoubleArray): RgbColor {
+            val a = components.getOrElse(0) { 0.0 }.coerceIn(0.0, 1.0).pow(gamma)
+            return xyzToSrgb(whitePoint[0] * a, whitePoint[1] * a, whitePoint[2] * a)
+        }
+    }
+
+    /**
+     * CalRGB (ISO 32000-1, 8.6.5.3): per-channel Gamma, then the 3x3 CIE
+     * Matrix (column-major, per the spec) into XYZ and on to sRGB. With no
+     * Matrix the gamma'd channels are treated as sRGB directly, the device
+     * behaviour every viewer degrades to for the common matrix-less dict.
+     */
+    public class CalRGB(
+        private val whitePoint: DoubleArray,
+        private val gamma: DoubleArray,
+        private val matrix: DoubleArray?,
+    ) : KiteColorSpace() {
+        override val componentCount: Int = 3
+        override fun toRgb(components: DoubleArray): RgbColor {
+            val a = components.getOrElse(0) { 0.0 }.coerceIn(0.0, 1.0).pow(gamma[0])
+            val b = components.getOrElse(1) { 0.0 }.coerceIn(0.0, 1.0).pow(gamma[1])
+            val c = components.getOrElse(2) { 0.0 }.coerceIn(0.0, 1.0).pow(gamma[2])
+            val m = matrix ?: return RgbColor(a, b, c)
+            return xyzToSrgb(
+                m[0] * a + m[3] * b + m[6] * c,
+                m[1] * a + m[4] * b + m[7] * c,
+                m[2] * a + m[5] * b + m[8] * c,
+            )
+        }
+    }
+
     public class Lab(
         private val whitePoint: DoubleArray,
         private val rangeAB: DoubleArray,
@@ -215,8 +255,23 @@ public sealed class KiteColorSpace {
                 "DeviceGray", "G" -> DeviceGray
                 "DeviceRGB", "RGB" -> DeviceRGB
                 "DeviceCMYK", "CMYK" -> DeviceCMYK
-                "CalGray" -> DeviceGray
-                "CalRGB" -> DeviceRGB
+                "CalGray" -> {
+                    val params = arr.getOrNull(1)?.resolve(refs) as? PdfDictionary
+                    CalGray(
+                        whitePoint = whitePointOf(params),
+                        gamma = (params?.get("Gamma")?.resolve(refs)).let {
+                            (it as? PdfReal)?.value ?: (it as? PdfInt)?.value?.toDouble() ?: 1.0
+                        },
+                    )
+                }
+                "CalRGB" -> {
+                    val params = arr.getOrNull(1)?.resolve(refs) as? PdfDictionary
+                    CalRGB(
+                        whitePoint = whitePointOf(params),
+                        gamma = numbersOf(params?.getArray("Gamma"), 3, 1.0),
+                        matrix = params?.getArray("Matrix")?.let { numbersOf(it, 9, 0.0) },
+                    )
+                }
                 "Lab" -> resolveLab(arr, refs)
                 "ICCBased" -> {
                     // /ICCBased [/ICCBased <stream>]: stream dict carries /N.
@@ -254,6 +309,21 @@ public sealed class KiteColorSpace {
             return DeviceN(names.size, alternate, tint, names)
         }
 
+        /** `/WhitePoint` from a Cal/Lab parameter dict, defaulting to D65. */
+        private fun whitePointOf(params: PdfDictionary?): DoubleArray =
+            params?.getArray("WhitePoint")?.let { numbersOf(it, 3, 1.0) }
+                ?: doubleArrayOf(0.9505, 1.0, 1.089)
+
+        /** [count] numbers out of [arr], each defaulting to [fallback]. */
+        private fun numbersOf(arr: PdfArray?, count: Int, fallback: Double): DoubleArray =
+            DoubleArray(count) { i ->
+                when (val v = arr?.getOrNull(i)) {
+                    is PdfReal -> v.value
+                    is PdfInt -> v.value.toDouble()
+                    else -> fallback
+                }
+            }
+
         private fun resolveLab(arr: PdfArray, refs: IndirectResolver): KiteColorSpace {
             val params = arr.getOrNull(1)?.resolve(refs) as? PdfDictionary
             val wp = params?.getArray("WhitePoint")?.let { wpArr ->
@@ -286,4 +356,17 @@ public sealed class KiteColorSpace {
             return Indexed(base, hival, lookup)
         }
     }
+}
+
+/** XYZ (D65 reference) to gamma-encoded sRGB, clamped. The same matrix [KiteColorSpace.Lab] uses. */
+private fun xyzToSrgb(x: Double, y: Double, z: Double): RgbColor {
+    var r = x * 3.2406 - y * 1.5372 - z * 0.4986
+    var g = -x * 0.9689 + y * 1.8758 + z * 0.0415
+    var b = x * 0.0557 - y * 0.2040 + z * 1.0570
+    fun gamma(c: Double): Double {
+        val cc = c.coerceIn(0.0, 1.0)
+        return if (cc <= 0.0031308) 12.92 * cc else 1.055 * cc.pow(1.0 / 2.4) - 0.055
+    }
+    r = gamma(r); g = gamma(g); b = gamma(b)
+    return RgbColor(r.coerceIn(0.0, 1.0), g.coerceIn(0.0, 1.0), b.coerceIn(0.0, 1.0))
 }
