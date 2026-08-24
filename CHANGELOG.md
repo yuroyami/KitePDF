@@ -51,6 +51,47 @@ whole book costs the same as before.
 Closes the request in
 [issue #3](https://github.com/yuroyami/KitePDF/issues/3).
 
+Redaction stops leaving content behind.
+
+`redactRegions` promised that redacted content is removed rather than covered.
+In several shapes it was not, and each shape was a different route to the same
+outcome: a file the caller ships believing it is clean.
+
+**A second edit to a page discarded the first.** `editPageContent`, `stampPage`
+and `redactRegions` each rebuilt from the page as it was opened, never from what
+an earlier call had staged. Two stamps left only the second. Worst of all, two
+`redactRegion` calls left the first region's content in the file. All three now
+read what is already staged, so calls compose in the order they are made.
+
+**A form drawn in several places was rewritten once.** One form XObject can be
+invoked many times, and each place sees the redaction rectangle in a different
+part of the form. Rewriting the shared stream once was wrong in both directions
+at the same time: the other places were never tested against the region, and
+because they draw the same object they lost content that was never in a region.
+Each place that needs a different redaction now gets its own copy, and a place
+no region touches keeps drawing the original untouched.
+
+**A redacted widget's form field stayed reachable.** Dropping the widget from
+the page's `/Annots` left `/AcroForm /Fields` and `/AcroForm /CO` pointing at
+the same object, so its value, default value, name and appearance stream
+survived the rewrite. The field is now detached from both.
+
+**Vector paths in a region were left in the stream.** A signature or a chart
+drawn as vector art *is* its coordinates, so painting a black box over it left
+the shape recoverable. Paths whose ink reaches a region are now removed, with
+the pen width accounted for, and a path that also sets a clip keeps its
+construction and stops painting rather than disappearing and letting everything
+after it escape the clip.
+
+Underneath all of that, one change of approach: **redaction no longer relies on
+the garbage collector to delete a secret.** An object taken off the page is
+emptied as well as unlinked, so a reference somewhere the editor does not
+rewrite cannot bring its contents back. That covers the paths nobody enumerated,
+which is the only way this kind of guarantee holds.
+
+`docs/editing.md` now lists what redaction removes and the limits that remain,
+replacing three stated limitations of which two had already been fixed.
+
 ### Breaking changes and migration
 
 - **Every spine item now starts on a fresh page.** A short chapter used to
