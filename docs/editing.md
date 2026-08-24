@@ -92,6 +92,8 @@ val bytes = editor.saveIncremental()
 
 Overlay text, graphics, or images onto an existing page without altering its original content.
 
+Stamps compose. A second stamp on the same page overlays the first rather than replacing it, and gets its own font resource names.
+
 ### stampPage
 
 Call `editor.stampPage(page) { ... }` with a lambda in the `ContentStreamBuilder` DSL to draw onto a page:
@@ -154,6 +156,8 @@ val stamped = editor.saveIncremental()
 
 For more sophisticated edits, parse and transform a page's content stream directly.
 
+Edits compose. The transform receives the page's content as it stands after any earlier edit on the same editor, so successive calls build on each other in call order, and a stamp or an edit staged earlier is redacted along with the original page content.
+
 ### editPageContent
 
 ```kotlin
@@ -191,6 +195,8 @@ editor.redactRegion(doc.pages[0], redactionRect)
 val bytes = editor.saveRewritten()  // Required!
 ```
 
+Corner order does not matter: a rectangle is two opposite corners in either order (ISO 32000-1, 7.9.5) and KitePDF normalises it, so an inside-out rectangle redacts the same area rather than silently nothing.
+
 Or redact multiple regions at once:
 
 ```kotlin
@@ -206,10 +212,12 @@ val bytes = editor.saveRewritten()
 
 The redaction engine:
 
-1. **Parses the page's content stream** to find all text, images, and paths.
-2. **Tracks text and image positions** through the graphics and text state machines (CTM, text matrix, font metrics).
-3. **Tests intersection** with each redaction rectangle: if a text run, character sequence, or image overlaps the rectangle, it is **removed entirely** (bytes deleted from the stream) and replaced with a spacing adjustment so surviving text keeps its position.
-4. **Paints opaque black boxes** over each redaction region to cover visual traces.
+1. **Parses the page's content stream** to find all text, images, paths and form invocations.
+2. **Tracks positions** through the graphics and text state machines (CTM, text matrix, font metrics, pen width).
+3. **Tests intersection** with each redaction rectangle: if a text run, character sequence, image or path overlaps the rectangle, it is **removed entirely** (bytes deleted from the stream), and a text run is replaced with a spacing adjustment so surviving text keeps its position.
+4. **Recurses into every form XObject** the page invokes over a region, mapping the rectangle into that invocation's own coordinate space and copying the form when two invocations need different redactions.
+5. **Detaches and empties** annotations and form fields that fall in a region.
+6. **Paints opaque black boxes** over each redaction region to cover visual traces.
 
 The decision is **deliberately conservative**: a run touching a region is removed wholesale, so partial overlaps over-remove rather than risk leaving redacted content.
 
@@ -243,13 +251,28 @@ editor.redactRegion(doc.pages[0], KiteRectangle(
 val redacted = editor.saveRewritten()
 ```
 
+### What redaction removes
+
+- **Text runs** whose box meets a region, with a spacing adjustment left behind so surviving text keeps its position.
+- **Images** whose placed area meets a region, including the data stream: the `/XObject` entry is pruned, so `saveRewritten()` does not carry it.
+- **Vector paths** (fills, strokes, curves) whose ink reaches a region, with the pen width accounted for. A path that also sets a clip keeps its construction and stops painting, because dropping a clip would change everything drawn after it.
+- **Form XObject content**, redacted in each invocation's own coordinate space. One form can be drawn in several places, and each place sees the region in a different part of the form, so each place that needs a different redaction gets its own copy. Redacting one place does not blank the others, and a place no region touches keeps drawing the original.
+- **Annotations** whose `/Rect` meets a region, together with their contents: an annotation taken off the page is also restaged without its text, appearance, action and caption entries.
+- **Form fields** belonging to a removed widget, detached from both `/AcroForm /Fields` and `/AcroForm /CO` (the calculation order), and emptied of value, default value, rich value, appearance state, selection index, name, tooltip and mapping name.
+
+The principle behind that last pair is worth stating, because it explains the shape of the rest: **redaction does not rely on the garbage collector to delete a secret.** An object taken off the page is emptied as well as unlinked, so a reference somewhere the editor does not rewrite cannot bring its contents back.
+
 ### Redaction limitations
 
-- **Vector paths** (strokes, fills, curves) within a region are left as-is; only text and images are removed.
-- **Form XObjects** (content streams referenced from `/XObject`) are not recursed into; content inside them is preserved.
-- **Image data objects** that are dropped are no longer drawn or referenced, but their data stream is not yet purged from the file.
-
-Future versions will handle these cases more aggressively.
+- **Deliberately conservative.** A text run or a path that only partly overlaps a region is removed whole, rather than risk leaving part of it behind.
+- **A path is judged by its bounding box**, so a page-spanning path can be removed by a region that only touches part of it. A full-page background rectangle or a page border falls into this.
+- **Soft masks are not inspected.** Content reached only through an `/ExtGState /SMask` luminosity group is not redacted.
+- **Shadings are not tested.** An `sh` operator painting into a region survives in the stream, covered only by the black box.
+- **Line width set through an ExtGState is not seen.** Only the `w` operator is tracked, so a stroke whose width comes from `/LW` is padded as if it were hairline. This is a library-wide gap: the renderer does not read `/LW` either.
+- **A form shared between two pages, redacted in separate calls**, can leave the second page showing the first page's redaction. Over-removal, not a leak.
+- **A form invoked from two different parent forms** decides per parent whether the original must stay intact, so one parent's descent can claim it before the other parent's untouched invocation is reached. Over-removal, not a leak.
+- **An annotation whose `/Rect` cannot be read stays on the page**, so a widget with a malformed rectangle inside a region keeps its value.
+- **An embedded file also listed in the catalog's `/Names /EmbeddedFiles` tree** stays in the document. Emptying the annotation orphans its own reference, but the name tree is a catalog structure the editor does not rewrite.
 
 ## Save modes
 
