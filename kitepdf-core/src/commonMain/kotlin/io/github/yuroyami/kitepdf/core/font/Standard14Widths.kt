@@ -1,8 +1,13 @@
 package io.github.yuroyami.kitepdf.core.font
 
 /**
- * Standard 14 base font widths, ported from the URW++ AFM files MuPDF ships.
- * Metric-compatible with Adobe Helvetica / Times / Courier / Symbol / ZapfDingbats.
+ * Glyph widths for the 14 standard fonts, in 1/1000 em.
+ *
+ * These are the metrics Adobe publishes for the base 14 (Helvetica, Times,
+ * Courier, Symbol and ZapfDingbats) in its Core AFM set. A viewer has to use
+ * them: a PDF that names a standard font carries no widths of its own, so any
+ * other numbers reflow the text. Metric-compatible substitutes exist and, by
+ * definition of metric-compatible, carry the same values.
  *
  * Stored as a packed string (one record per glyph: "glyphname=width;") to avoid
  * a multi-thousand-line static initialiser that bogs down the Kotlin compiler.

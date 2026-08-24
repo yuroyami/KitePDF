@@ -1,8 +1,13 @@
 package io.github.yuroyami.kitepdf.core.font
 
 /**
- * Adobe Glyph List → Unicode mapping, ported from MuPDF (scripts/glyphlist.txt).
- * Maps PostScript glyph names (e.g. "Adieresis", "fi") to unicode codepoints.
+ * The Adobe Glyph List: PostScript glyph name (e.g. "Adieresis", "fi") to
+ * Unicode codepoint.
+ *
+ * AGL is published by Adobe and may be redistributed; see the NOTICE file for
+ * the attribution this project carries for it. A simple font names its glyphs,
+ * so this is what turns those names into text ([Encodings] supplies the names
+ * for the four encodings PDF defines).
  *
  * Stored as a packed string ("name=HEX;") and parsed lazily on first lookup so
  * the Kotlin compiler does not have to constant-fold 4000+ map entries.
@@ -390,7 +395,7 @@ public object GlyphList {
         "=0A07;ihiragana=3044;ihookabove=1EC9;iibengali=0988;iicyrillic=0438;iideva=0908;iigujarati=0A88;iigu" +
         "rmukhi=0A08;iimatragurmukhi=0A40;iinvertedbreve=020B;iishortcyrillic=0439;iivowelsignbengali=09C0;ii" +
         "vowelsigndeva=0940;iivowelsigngujarati=0AC0;ij=0133;ikatakana=30A4;ikatakanahalfwidth=FF72;ikorean=3" +
-        "163;ilde=02DC;iluyhebrew=05AC;imacron=012B;imacroncyrillic=04E3;imageorapproximatelyequal=2253;imatr" +
+        "163;iluyhebrew=05AC;imacron=012B;imacroncyrillic=04E3;imageorapproximatelyequal=2253;imatr" +
         "agurmukhi=0A3F;imonospace=FF49;increment=2206;infinity=221E;iniarmenian=056B;integral=222B;integralb" +
         "ottom=2321;integralbt=2321;integralex=F8F5;integraltop=2320;integraltp=2320;intersection=2229;intisq" +
         "uare=3305;invbullet=25D8;invcircle=25D9;invsmileface=263B;iocyrillic=0451;iogonek=012F;iota=03B9;iot" +

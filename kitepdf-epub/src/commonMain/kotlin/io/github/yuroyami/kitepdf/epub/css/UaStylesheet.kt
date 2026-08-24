@@ -1,15 +1,21 @@
 package io.github.yuroyami.kitepdf.epub.css
 
 /**
- * The EPUB user-agent default stylesheet -- the lowest cascade layer, under all
- * author CSS. Adapted from MuPDF's `html_default_css` (the difftest oracle) and
- * trimmed to the properties this engine honours. This is what makes headings big
- * and bold, lists indented and bulleted, `<b>`/`<em>` styled, `<pre>` monospace,
- * etc., with no hard-coded tag logic in the layout walker.
+ * The EPUB user-agent default stylesheet, the lowest cascade layer, under all
+ * author CSS. This is what makes headings big and bold, lists indented and
+ * bulleted, `<b>`/`<em>` styled, `<pre>` monospace, and so on, with no
+ * hard-coded tag logic in the layout walker.
  *
- * Dropped vs MuPDF: `@page`, `content` (`q:before`), `direction`/`unicode-bidi`
- * (bidi is Phase 4), and detailed border painting (Phase 3) -- those rules or
- * properties are ignored, not honoured, yet.
+ * The rules are the default rendering the specs call for: CSS 2.1, Appendix D
+ * gives a default style sheet for HTML 4, and the HTML Standard's Rendering
+ * section carries the modern form. Every engine's defaults look alike because
+ * those documents dictate them. This one is trimmed to the properties this
+ * engine actually honours, and checked against MuPDF, which is the EPUB
+ * difftest oracle, so the two agree on what a book should look like.
+ *
+ * Not covered yet, so the rules or properties are ignored rather than honoured:
+ * `@page`, `content` (`q:before`), `direction` and `unicode-bidi` (bidi is
+ * Phase 4), and detailed border painting (Phase 3).
  */
 internal object UaStylesheet {
 
