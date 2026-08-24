@@ -4,11 +4,12 @@ import android.graphics.Bitmap
 import android.graphics.Canvas as AndroidCanvas
 import android.graphics.Color
 import io.github.yuroyami.kitepdf.PdfPage
-import io.github.yuroyami.kitepdf.core.render.KiteMatrix
+import io.github.yuroyami.kitepdf.rasterGeometry
 
 /**
- * Headless rendering on Android. Produces an ARGB_8888 [Bitmap] sized to
- * the page in pt units multiplied by [scale]. No Compose dependency.
+ * Headless rendering on Android. Produces an ARGB_8888 [Bitmap] sized by
+ * [PdfPage.rasterGeometry] (rotation, crop box and `/UserUnit` all included),
+ * at [scale] device pixels per point. No Compose dependency.
  *
  * Typical uses:
  *
@@ -25,14 +26,12 @@ public object AndroidPdfBitmapRenderer {
         scale: Double = 1.0,
         background: Int = Color.WHITE,
     ): Bitmap {
-        val w = (page.width * scale).toInt().coerceAtLeast(1)
-        val h = (page.height * scale).toInt().coerceAtLeast(1)
-        val bm = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+        val geometry = page.rasterGeometry(scale)
+        val bm = Bitmap.createBitmap(geometry.widthPx, geometry.heightPx, Bitmap.Config.ARGB_8888)
         val canvas = AndroidCanvas(bm)
         canvas.drawColor(background)
         val pdfCanvas = AndroidNativeCanvas(canvas)
-        val deviceCtm = KiteMatrix(scale, 0.0, 0.0, -scale, 0.0, page.height * scale)
-        page.renderTo(pdfCanvas, deviceCtm)
+        page.renderTo(pdfCanvas, geometry.deviceCtm)
         return bm
     }
 }

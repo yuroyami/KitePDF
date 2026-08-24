@@ -1,7 +1,7 @@
 package io.github.yuroyami.kitepdf.nativerenderer
 
 import io.github.yuroyami.kitepdf.PdfPage
-import io.github.yuroyami.kitepdf.core.render.KiteMatrix
+import io.github.yuroyami.kitepdf.rasterGeometry
 import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.cinterop.alloc
 import kotlinx.cinterop.memScoped
@@ -33,7 +33,8 @@ import platform.UniformTypeIdentifiers.UTTypePNG
 
 /**
  * Headless rendering on Apple platforms (iOS, macOS, tvOS). Produces a
- * PNG-encoded [NSData] sized to the page in pt × [scale].
+ * PNG-encoded [NSData] sized by [PdfPage.rasterGeometry] (rotation, crop box
+ * and `/UserUnit` all included), at [scale] device pixels per point.
  * Pure CoreGraphics + ImageIO, no UIKit/AppKit, no Compose dependency.
  *
  * Typical uses:
@@ -62,8 +63,9 @@ public object ApplePdfRasterizer {
         backgroundB: Double = 1.0,
         backgroundA: Double = 1.0,
     ): NSData? {
-        val widthPx = (page.width * scale).toULong().coerceAtLeast(1uL)
-        val heightPx = (page.height * scale).toULong().coerceAtLeast(1uL)
+        val geometry = page.rasterGeometry(scale)
+        val widthPx = geometry.widthPx.toULong()
+        val heightPx = geometry.heightPx.toULong()
         val space = CGColorSpaceCreateDeviceRGB() ?: return null
         try {
             // ARGB32 premultiplied, matching the format UIKit and AppKit use.
@@ -85,10 +87,8 @@ public object ApplePdfRasterizer {
                     CGContextSetRGBFillColor(cgContext, backgroundR, backgroundG, backgroundB, backgroundA)
                     CGContextFillRect(cgContext, rect)
                 }
-                // Y-flip so PDF user-space matches the rendered image orientation.
-                val deviceCtm = KiteMatrix(scale, 0.0, 0.0, -scale, 0.0, page.height * scale)
                 val canvas = CoreGraphicsCanvas(cgContext)
-                page.renderTo(canvas, deviceCtm)
+                page.renderTo(canvas, geometry.deviceCtm)
 
                 val image = CGBitmapContextCreateImage(cgContext) ?: return null
                 try {
