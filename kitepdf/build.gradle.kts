@@ -79,6 +79,7 @@ kotlin {
             // Re-export every handler. `api` so consumers see their whole API.
             api(projects.kitepdfPdf)
             api(projects.kitepdfEpub)
+            api(projects.kitepdfCbz)
         }
 
         commonTest.dependencies {

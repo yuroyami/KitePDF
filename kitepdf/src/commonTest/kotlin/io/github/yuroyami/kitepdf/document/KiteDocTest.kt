@@ -82,7 +82,7 @@ class KiteDocTest {
     @Test
     fun unreadable_bytes_throw_a_format_exception() {
         val e = assertFailsWith<KiteFormatException> { KiteDoc.open(ByteArray(64) { 0x7F }) }
-        assertTrue(e.message!!.contains("PDF or EPUB"), "the message names both formats: ${e.message}")
+        assertTrue(e.message!!.contains("PDF, EPUB or CBZ"), "the message names every format: ${e.message}")
     }
 
     @Test
