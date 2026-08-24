@@ -286,6 +286,11 @@ public class CoreGraphicsCanvas(private val ctx: CGContextRef) : KiteCanvas {
             drawPlaceholder(ctm)
             return
         }
+        val a = alpha.coerceIn(0.0, 1.0)
+        if (a <= 0.0) {
+            CGImageRelease(cgImage)
+            return
+        }
         try {
             CGContextSaveGState(ctx)
             try {
@@ -293,11 +298,8 @@ public class CoreGraphicsCanvas(private val ctx: CGContextRef) : KiteCanvas {
                 // The device CTM has already flipped Y, so we flip back here.
                 CGContextConcatCTM(ctx, ctm.toCGAffine())
                 CGContextTranslateCTM(ctx, 0.0, -1.0)
-                val rect = CGRectMake(0.0, 0.0, 1.0, 1.0)
-                // CGContextSetAlpha doesn't compose with subsequent blends well;
-                // we paint the image then use the global alpha through the
-                // context's compositing alpha.
-                CGContextDrawImage(ctx, rect, cgImage)
+                if (a < 1.0) platform.CoreGraphics.CGContextSetAlpha(ctx, a)
+                CGContextDrawImage(ctx, CGRectMake(0.0, 0.0, 1.0, 1.0), cgImage)
             } finally {
                 CGContextRestoreGState(ctx)
             }
