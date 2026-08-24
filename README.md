@@ -289,7 +289,7 @@ may reach.
 
 | Limit | What it means for you |
 | --- | --- |
-| Redaction judges a path by its bounding box | A page-spanning path is removed by a region that touches only part of it, so a full-page background rectangle or a page border can disappear. Segment-level testing is the fix and is in progress. |
+| Redaction keeps a large uniform fill | A path is judged by its segments, so a background rectangle or page border whose edges lie outside every region survives. It hides nothing the black box does not already cover, and removing it would delete the page's artwork. |
 | Redaction does not test shadings | An `sh` operator painting into a region survives in the stream, covered only by the black box. |
 | Redaction cannot reach every reference | An object taken off the page is emptied as well as unlinked, so an unknown reference ships an empty annotation rather than its contents. Two structures are left inconsistent rather than rewritten: a tagged document's `/StructTreeRoot` can still name a removed annotation, and an embedded file also listed in the catalog's `/Names /EmbeddedFiles` tree stays in the document. |
 | Redaction keeps a clipping path | A vector path in the region is removed, unless it also sets a clip (`W`): then only its paint goes and its coordinates stay, because dropping the clip would let everything it clips paint over the rest of the page. |

@@ -265,7 +265,7 @@ The principle behind that last pair is worth stating, because it explains the sh
 ### Redaction limitations
 
 - **Deliberately conservative.** A text run or a path that only partly overlaps a region is removed whole, rather than risk leaving part of it behind.
-- **A path is judged by its bounding box**, so a page-spanning path can be removed by a region that only touches part of it. A full-page background rectangle or a page border falls into this.
+- **A large uniform fill survives.** A path is judged by its segments, so a background rectangle or page border whose edges lie outside every region is kept. It conceals nothing the black box does not already cover, and the alternative deletes the page's artwork.
 - **Soft masks are not inspected.** Content reached only through an `/ExtGState /SMask` luminosity group is not redacted.
 - **Shadings are not tested.** An `sh` operator painting into a region survives in the stream, covered only by the black box.
 - **Line width set through an ExtGState is not seen.** Only the `w` operator is tracked, so a stroke whose width comes from `/LW` is padded as if it were hairline. This is a library-wide gap: the renderer does not read `/LW` either.
