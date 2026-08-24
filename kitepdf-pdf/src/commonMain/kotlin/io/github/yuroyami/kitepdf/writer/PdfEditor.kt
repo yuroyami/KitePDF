@@ -691,11 +691,17 @@ public class PdfEditor internal constructor(
      *
      * **A removed widget takes its form field with it.** A widget annotation is
      * usually the field dictionary too (ISO 32000-1, 12.7.3.3), so it is also
-     * detached from `/AcroForm /Fields` (12.7.2), or from its parent field's
-     * `/Kids` when it is one of several. Otherwise the field's `/V`, `/DV`, `/T`
-     * and appearance stream stay reachable from the catalog and survive the
+     * detached from `/AcroForm /Fields` and `/CO` (12.7.2), or from its parent
+     * field's `/Kids` when it is one of several. Otherwise the field's `/V`, `/DV`,
+     * `/T` and appearance stream stay reachable from the catalog and survive the
      * rewrite. A field that still has a widget outside every region keeps that
      * widget and its place in the form.
+     *
+     * A detached field is emptied as well as detached: `/V`, `/DV`, `/RV`, `/T` and
+     * `/AP` come off it. Reachability is not the only thing keeping the value out of
+     * the file, so a structure this editor does not rewrite (an `/XFA` payload, a
+     * tagged document's `/StructTreeRoot`) cannot ship it by keeping the object
+     * alive.
      *
      * **The page may come out with more XObjects than it went in with.** One form
      * XObject can be drawn in several places (ISO 32000-1, 8.10), and each place
@@ -761,8 +767,11 @@ public class PdfEditor internal constructor(
         // Stage the page first: what follows reads effective objects, and a widget's
         // field is only reachable through the /Annots this call just rewrote.
         updateObject(ref, newPage)
-        detachRedactedFields(droppedWidgets)
+        // Set before the field detach, which raises on a malformed /Parent chain: the
+        // page is already rewritten, so a caller that catches must still be refused an
+        // incremental save (it would leave the original bytes in the file).
         redactionStaged = true
+        detachRedactedFields(droppedWidgets)
     }
 
     /**
@@ -1123,6 +1132,9 @@ public class PdfEditor internal constructor(
             val rect = annotDict?.let { annotRect(it) }
             if (rect != null && rectangles.any { rectsIntersect(it, rect) }) {
                 changed = true // drop it
+                // Only an indirect one can be named from anywhere else: a dictionary
+                // written straight into /Annots lives nowhere but here, so removing it
+                // from the array is the whole of removing it.
                 (item as? PdfReference)?.let { dropped.add(it) }
             } else {
                 kept.add(item)
@@ -1158,10 +1170,33 @@ public class PdfEditor internal constructor(
      * caller ships a file they believe is clean. A widget that is one of a field's
      * `/Kids` is taken out of the parent instead, and a parent left with nothing is
      * detached in turn.
+     *
+     * Two things happen to a detached field: it is scrubbed (see
+     * [scrubDetachedFields]) and it is taken out of the form's `/Fields` and `/CO`
+     * arrays.
      */
     private fun detachRedactedFields(droppedWidgets: List<PdfReference>) {
         if (droppedWidgets.isEmpty()) return
-        // The catalog [saveRewritten] will write, which an override replaces.
+
+        val detached = LinkedHashMap<Long, PdfReference>()
+        for (widget in droppedWidgets) {
+            val widgetDict = effectiveObject(widget.objectNumber) as? PdfDictionary ?: continue
+            // Only a widget annotation is ever a field (12.7.3.3). On any other
+            // annotation /Parent means something else entirely: a Popup's is the markup
+            // annotation it belongs to (12.5.6.14), so walking it as a field tree would
+            // scrub that annotation, and a malformed one would abort the redaction.
+            if (widgetDict.getName("Subtype") != "Widget") continue
+            // A widget with no /Parent IS the field, named in /Fields directly. One
+            // that has a parent is going either way, so naming it here costs nothing
+            // and covers a file that also lists a kid widget in /Fields.
+            detached[widget.objectNumber] = widget
+            detachFromParentField(widget, widgetDict.getRef("Parent") ?: continue, detached)
+        }
+        if (detached.isEmpty()) return
+        scrubDetachedFields(detached.values)
+
+        // The form dictionary is read last: /Fields may be absent or malformed, and
+        // the /Kids detachment above has to run either way.
         val rootRef = (trailerOverrides["Root"] ?: base.trailer["Root"]) as? PdfReference ?: return
         val catalog = effectiveObject(rootRef.objectNumber) as? PdfDictionary ?: return
         // /AcroForm is usually its own object, but a dictionary written straight into
@@ -1169,28 +1204,60 @@ public class PdfEditor internal constructor(
         val acroRef = catalog["AcroForm"] as? PdfReference
         val acro = (if (acroRef != null) effectiveObject(acroRef.objectNumber) else catalog["AcroForm"])
             as? PdfDictionary ?: return
-        val fields = acro.getArray("Fields", effective) ?: return
 
-        val detached = HashSet<Long>()
-        for (widget in droppedWidgets) {
-            // A widget with no /Parent IS the field, named in /Fields directly. One
-            // that has a parent is going either way, so naming it here costs nothing
-            // and covers a file that also lists a kid widget in /Fields.
-            detached.add(widget.objectNumber)
-            val widgetDict = effectiveObject(widget.objectNumber) as? PdfDictionary ?: continue
-            detachFromParentField(widget, widgetDict.getRef("Parent") ?: continue, detached)
+        // /Fields is the root field list; /CO is the calculation order (12.7.2,
+        // Table 218), which names terminal fields directly and so keeps a detached
+        // one alive on its own even after /Fields lets go of its root.
+        var newAcro: PdfDictionary? = null
+        for (key in listOf("Fields", "CO")) {
+            val pruned = withoutDetached(acro.getArray(key, effective), detached.keys) ?: continue
+            newAcro = withEntry(newAcro ?: acro, key, pruned)
         }
-
-        val kept = fields.items.filter { item ->
-            val num = (item as? PdfReference)?.objectNumber
-            num == null || num !in detached
-        }
-        if (kept.size == fields.items.size) return
-        val newAcro = withEntry(acro, "Fields", io.github.yuroyami.kitepdf.core.parser.PdfArray(kept))
+        if (newAcro == null) return
         if (acroRef != null) {
             updateObject(acroRef, newAcro)
         } else {
             updateObject(rootRef, withEntry(catalog, "AcroForm", newAcro))
+        }
+    }
+
+    /** [array] with every detached object taken out, or null when it names none of them. */
+    private fun withoutDetached(
+        array: io.github.yuroyami.kitepdf.core.parser.PdfArray?,
+        detached: Set<Long>,
+    ): io.github.yuroyami.kitepdf.core.parser.PdfArray? {
+        if (array == null) return null
+        val kept = array.items.filter { item ->
+            val num = (item as? PdfReference)?.objectNumber
+            num == null || num !in detached
+        }
+        if (kept.size == array.items.size) return null
+        return io.github.yuroyami.kitepdf.core.parser.PdfArray(kept)
+    }
+
+    /**
+     * Strip the value off every field object redaction detached.
+     *
+     * Detaching leaves the object unreachable so [saveRewritten]'s GC deletes it,
+     * which only holds for the reference paths this editor knows about. A form with
+     * an `/XFA` payload keeps its own copy of the field tree, and a tagged document
+     * can name the annotation from its `/StructTreeRoot` through an `OBJR`
+     * (ISO 32000-1, 14.7.4.3); either keeps the object alive. Scrubbing means such a
+     * survivor ships as an empty field instead of as the value the caller asked to
+     * remove: `/V` and `/DV` are the value and its default (12.7.3.3), `/RV` the same
+     * value as rich text (12.7.3.4), `/T` the field name, and `/AP` the appearance
+     * stream that draws the value.
+     *
+     * Only fully detached objects are scrubbed. A parent that kept a widget outside
+     * every region is still a live field and keeps everything it has.
+     */
+    private fun scrubDetachedFields(fields: Collection<PdfReference>) {
+        for (ref in fields) {
+            val dict = effectiveObject(ref.objectNumber) as? PdfDictionary ?: continue
+            val scrubbed = LinkedHashMap(dict.map)
+            var changed = false
+            for (key in SCRUBBED_FIELD_KEYS) if (scrubbed.remove(key) != null) changed = true
+            if (changed) updateObject(ref, PdfDictionary(scrubbed))
         }
     }
 
@@ -1208,7 +1275,7 @@ public class PdfEditor internal constructor(
     private fun detachFromParentField(
         widget: PdfReference,
         parentRef: PdfReference,
-        detached: MutableSet<Long>,
+        detached: MutableMap<Long, PdfReference>,
     ) {
         var child = widget
         var parent = parentRef
@@ -1217,16 +1284,19 @@ public class PdfEditor internal constructor(
             val field = effectiveObject(parent.objectNumber) as? PdfDictionary ?: return
             // Unreadable /Kids means a malformed parent-kid link: treat the field as
             // emptied and over-remove rather than trust it.
-            val survivors = field.getArray("Kids", effective)?.items.orEmpty()
-                .filter { (it as? PdfReference)?.objectNumber != child.objectNumber }
+            val kids = field.getArray("Kids", effective)?.items.orEmpty()
+            val survivors = kids.filter { (it as? PdfReference)?.objectNumber != child.objectNumber }
             if (survivors.isNotEmpty()) {
-                updateObject(
-                    parent,
-                    withEntry(field, "Kids", io.github.yuroyami.kitepdf.core.parser.PdfArray(survivors)),
-                )
+                // A parent that never named this widget has nothing to rewrite.
+                if (survivors.size != kids.size) {
+                    updateObject(
+                        parent,
+                        withEntry(field, "Kids", io.github.yuroyami.kitepdf.core.parser.PdfArray(survivors)),
+                    )
+                }
                 return
             }
-            detached.add(parent.objectNumber)
+            detached[parent.objectNumber] = parent
             child = parent
             parent = field.getRef("Parent") ?: return
         }
@@ -1571,5 +1641,8 @@ public class PdfEditor internal constructor(
     private companion object {
         /** Text-showing operators (§9.4.3). */
         val TEXT_SHOW_OPERATORS = setOf("Tj", "TJ", "'", "\"")
+
+        /** Field entries that carry the value redaction removes (§12.7.3.3, §12.7.3.4). */
+        val SCRUBBED_FIELD_KEYS = listOf("V", "DV", "RV", "T", "AP")
     }
 }

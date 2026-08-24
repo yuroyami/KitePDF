@@ -44,7 +44,8 @@ internal object RawPdf {
         a("%PDF-1.5\n%Äå\n")
         offsets[1] = buf.size(); a("1 0 obj\n<< /Type /Catalog /Pages 2 0 R $catalogExtra >>\nendobj\n")
         offsets[2] = buf.size(); a("2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n")
-        offsets[3] = buf.size(); a("3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources $resources $annots /Contents 5 0 R >>\nendobj\n")
+        val annotsEntry = if (annots.isEmpty()) "" else " $annots"
+        offsets[3] = buf.size(); a("3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources $resources$annotsEntry /Contents 5 0 R >>\nendobj\n")
         offsets[4] = buf.size(); a("4 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>\nendobj\n")
         offsets[5] = buf.size(); a("5 0 obj\n<< /Length ${content.size} >>\nstream\n"); buf.append(content); a("\nendstream\nendobj\n")
         for ((n, bytes) in extra) { offsets[n] = buf.size(); buf.append(bytes) }
