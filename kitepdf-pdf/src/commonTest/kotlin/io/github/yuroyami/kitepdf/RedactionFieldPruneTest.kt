@@ -96,8 +96,10 @@ class RedactionFieldPruneTest {
                 null -> {}
                 is PdfStream -> {
                     if (obj.dict.toString().contains(needle)) return true
-                    val decoded = runCatching { FilterChain.decode(obj) }.getOrNull() ?: continue
-                    if (RawPdf.containsBytes(decoded, bytes)) return true
+                    // A stream that will not decode still has its bytes in the file, so
+                    // scan those: skipping it would read as "the content is gone".
+                    val payload = runCatching { FilterChain.decode(obj) }.getOrNull() ?: obj.rawBytes
+                    if (RawPdf.containsBytes(payload, bytes)) return true
                 }
                 else -> if (obj.toString().contains(needle)) return true
             }
@@ -105,10 +107,81 @@ class RedactionFieldPruneTest {
         return false
     }
 
+    /** Size of the form's /CO array, or -1 when there is none. */
+    private fun calcOrderSize(pdf: ByteArray): Int {
+        val doc = KitePDF.open(pdf)
+        return doc.acroForm?.raw?.getArray("CO", doc)?.size ?: -1
+    }
+
+    /** The widget an /OBJR in the structure tree points at, resolved in the output. */
+    private fun structTreeTarget(pdf: ByteArray): PdfDictionary? {
+        val doc = KitePDF.open(pdf)
+        val root = doc.catalog.getDict("StructTreeRoot", doc) ?: return null
+        val elem = root.getDict("K", doc) ?: return null
+        val objr = elem.getDict("K", doc) ?: return null
+        val ref = objr.getRef("Obj") ?: return null
+        return doc.resolve(ref) as? PdfDictionary
+    }
+
+    /** /Kids count of the field owning the first annotation still on the page. */
+    private fun survivingWidgetKidCount(pdf: ByteArray): Int {
+        val doc = KitePDF.open(pdf)
+        val annots = doc.pages[0].dictionary.getArray("Annots", doc) ?: return -1
+        val widget = annots.items.firstOrNull()?.resolve(doc) as? PdfDictionary ?: return -1
+        val parent = widget.getRef("Parent")?.let { doc.resolve(it) } as? PdfDictionary ?: return -1
+        return parent.getArray("Kids", doc)?.size ?: -1
+    }
+
     private fun kidCount(pdf: ByteArray, fieldName: String): Int {
         val doc = KitePDF.open(pdf)
         val field = doc.formField(fieldName) ?: return -1
         return field.fieldDict.getArray("Kids", doc)?.size ?: -1
+    }
+
+    @Test fun the_scan_sees_bytes_in_a_stream_that_will_not_decode() {
+        // /FlateDecode over bytes that are not Flate. If the scan skipped a stream it
+        // cannot decode, every absence assertion in this file could pass for the wrong
+        // reason.
+        val pdf = RawPdf.page(
+            content = body,
+            extra = listOf(
+                RawPdf.obj(
+                    6,
+                    "<< /Type /XObject /Subtype /Form /BBox [0 0 200 20] /Filter /FlateDecode >>",
+                    "NOT-REALLY-FLATE-$secret".encodeToByteArray(),
+                ),
+            ),
+        )
+        assertTrue(holds(pdf, secret), "the scan cannot see into a stream that fails to decode")
+    }
+
+
+    /** A field that names ITSELF as its parent and claims no kids. */
+    private fun loopingParentPdf(): ByteArray = RawPdf.page(
+        content = body,
+        annots = "/Annots [7 0 R]",
+        catalogExtra = "/AcroForm 8 0 R",
+        extra = listOf(
+            RawPdf.obj(6, "<< /FT /Tx /T (loop) /V (LOOP-SECRET) /Parent 6 0 R >>"),
+            RawPdf.obj(7, "<< /Type /Annot /Subtype /Widget /Rect [100 700 300 720] /Parent 6 0 R /P 3 0 R >>"),
+            RawPdf.obj(8, "<< /Fields [6 0 R] >>"),
+        ),
+    )
+
+    @Test fun a_looping_parent_chain_is_refused_rather_than_half_redacted() {
+        // A climb to the root field never ends on its own here. /Parent chains are a
+        // tree (12.7.3.3), so this file is malformed and the root field cannot be
+        // found: the value would stay in /Fields, which is the very thing this
+        // redaction removes, so the call says so instead of handing back a file the
+        // caller would believe is clean.
+        val pdf = loopingParentPdf()
+        val doc = KitePDF.open(pdf)
+        val editor = doc.edit()
+        val failure = assertFailsWith<IllegalStateException> { editor.redactRegion(doc.pages[0], upperRegion) }
+        assertTrue(
+            failure.message.orEmpty().contains("Parent"),
+            "the failure does not say what is wrong: ${failure.message}",
+        )
     }
 
     /* ─── A merged widget-and-field ──────────────────────────────────────── */
@@ -212,23 +285,30 @@ class RedactionFieldPruneTest {
         assertFalse(holds(out, secret), "the emptied field's value survived the second call")
     }
 
+    /**
+     * One root field (address) owning two terminal fields (line1 upper, line2
+     * lower), each with one widget. [calcOrder] goes into the form dictionary
+     * verbatim, for the `/CO` case.
+     */
+    private fun branchedFieldPdf(calcOrder: String = ""): ByteArray = RawPdf.page(
+        content = body,
+        annots = "/Annots [9 0 R 10 0 R]",
+        catalogExtra = "/AcroForm 11 0 R",
+        extra = listOf(
+            RawPdf.obj(6, "<< /T (address) /Kids [7 0 R 8 0 R] >>"),
+            RawPdf.obj(7, "<< /FT /Tx /T (line1) /V (SECRET-LINE-ONE) /Parent 6 0 R /Kids [9 0 R] >>"),
+            RawPdf.obj(8, "<< /FT /Tx /T (line2) /V (KEEP-LINE-TWO) /Parent 6 0 R /Kids [10 0 R] >>"),
+            RawPdf.obj(9, "<< /Type /Annot /Subtype /Widget /Rect [100 700 300 720] /Parent 7 0 R /P 3 0 R >>"),
+            RawPdf.obj(10, "<< /Type /Annot /Subtype /Widget /Rect [100 100 300 120] /Parent 8 0 R /P 3 0 R >>"),
+            RawPdf.obj(11, "<< /Fields [6 0 R] $calcOrder >>"),
+        ),
+    )
+
     @Test fun redacting_one_branch_leaves_the_other_branch_in_the_form() {
         // address (root) owns line1 and line2, each with one widget. Only line1's
         // widget is in a region, so line1 goes and line2 stays: /Fields lists roots
         // (12.7.2), and dropping the root would take an untouched field with it.
-        val pdf = RawPdf.page(
-            content = body,
-            annots = "/Annots [9 0 R 10 0 R]",
-            catalogExtra = "/AcroForm 11 0 R",
-            extra = listOf(
-                RawPdf.obj(6, "<< /T (address) /Kids [7 0 R 8 0 R] >>"),
-                RawPdf.obj(7, "<< /FT /Tx /T (line1) /V (SECRET-LINE-ONE) /Parent 6 0 R /Kids [9 0 R] >>"),
-                RawPdf.obj(8, "<< /FT /Tx /T (line2) /V (KEEP-LINE-TWO) /Parent 6 0 R /Kids [10 0 R] >>"),
-                RawPdf.obj(9, "<< /Type /Annot /Subtype /Widget /Rect [100 700 300 720] /Parent 7 0 R /P 3 0 R >>"),
-                RawPdf.obj(10, "<< /Type /Annot /Subtype /Widget /Rect [100 100 300 120] /Parent 8 0 R /P 3 0 R >>"),
-                RawPdf.obj(11, "<< /Fields [6 0 R] >>"),
-            ),
-        )
+        val pdf = branchedFieldPdf()
         assertEquals(2, KitePDF.open(pdf).formFields.size, "fixture is wrong, it must hold two fields")
 
         val doc = KitePDF.open(pdf)
@@ -241,31 +321,132 @@ class RedactionFieldPruneTest {
         assertEquals(1, reopened.formFields.size, "the redacted branch is still a field")
     }
 
-    /* ─── Malformed input ────────────────────────────────────────────────── */
+    @Test fun a_calculation_order_stops_naming_a_detached_field() {
+        // /CO is the calculation order (12.7.2, Table 218): it names TERMINAL fields,
+        // which are usually not the roots /Fields lists. Here /Fields keeps the
+        // untouched root, so the /CO entry is the only thing still naming the redacted
+        // field, and it alone keeps that field (and its value) in the file.
+        val pdf = branchedFieldPdf(calcOrder = "/CO [7 0 R]")
+        assertEquals(1, calcOrderSize(pdf), "fixture is wrong, /CO must name the field")
 
-    @Test fun a_looping_parent_chain_is_refused_rather_than_half_redacted() {
-        // The widget's parent names ITSELF as its parent and claims no kids, so a
-        // climb to the root field never ends on its own. /Parent chains are a tree
-        // (12.7.3.3), so this file is malformed and the root field cannot be found:
-        // the value would stay in /Fields, which is the very thing this redaction
-        // removes, so the call says so instead of handing back a file the caller
-        // would believe is clean.
+        val doc = KitePDF.open(pdf)
+        val out = doc.edit().apply { redactRegion(doc.pages[0], upperRegion) }.saveRewritten()
+
+        assertEquals(0, calcOrderSize(out), "/CO still names the detached field")
+        assertFalse(holds(out, "SECRET-LINE-ONE"), "the redacted branch's value survived")
+        assertTrue(holds(out, "KEEP-LINE-TWO"), "the untouched branch went with the redacted one")
+    }
+
+    @Test fun a_detached_field_kept_alive_by_something_else_ships_empty() {
+        // A tagged document names the annotation from its structure tree through an
+        // OBJR (14.7.4.3), which this editor does not rewrite, so the rewrite's GC
+        // keeps the object. Detaching alone would ship the value; the scrub is what
+        // makes the surviving object an empty field.
         val pdf = RawPdf.page(
             content = body,
-            annots = "/Annots [7 0 R]",
-            catalogExtra = "/AcroForm 8 0 R",
+            annots = "/Annots [6 0 R]",
+            catalogExtra = "/AcroForm 8 0 R /StructTreeRoot 9 0 R",
             extra = listOf(
-                RawPdf.obj(6, "<< /FT /Tx /T (loop) /V (LOOP-SECRET) /Parent 6 0 R >>"),
-                RawPdf.obj(7, "<< /Type /Annot /Subtype /Widget /Rect [100 700 300 720] /Parent 6 0 R /P 3 0 R >>"),
+                RawPdf.obj(
+                    6,
+                    "<< /Type /Annot /Subtype /Widget /FT /Tx /T (patient) /V ($secret) /DV ($secret) " +
+                        "/Rect [100 700 300 720] /P 3 0 R /AP << /N 7 0 R >> >>",
+                ),
+                apStream(7, secret),
                 RawPdf.obj(8, "<< /Fields [6 0 R] >>"),
+                RawPdf.obj(9, "<< /Type /StructTreeRoot /K 10 0 R >>"),
+                RawPdf.obj(10, "<< /Type /StructElem /S /Form /P 9 0 R /K << /Type /OBJR /Obj 6 0 R >> >>"),
             ),
         )
         val doc = KitePDF.open(pdf)
+        val out = doc.edit().apply { redactRegion(doc.pages[0], upperRegion) }.saveRewritten()
+
+        // The object is still in the file: this test says nothing about the GC, it
+        // says the survivor carries no value.
+        val survivor = structTreeTarget(out)
+        assertNotNull(survivor, "fixture is wrong, the structure tree no longer keeps the widget alive")
+        assertEquals("Widget", survivor.getName("Subtype"), "the surviving object is not the widget")
+        assertEquals(null, survivor["V"], "the detached field kept its value")
+        assertEquals(null, survivor["DV"], "the detached field kept its default value")
+        assertEquals(null, survivor["T"], "the detached field kept its name")
+        assertEquals(null, survivor["AP"], "the detached field kept its appearance stream")
+        assertFalse(holds(out, secret), "the value survived somewhere in the file")
+    }
+
+    @Test fun an_unreadable_field_list_still_detaches_the_widget_from_its_parent() {
+        // The form has no /Fields at all. The parent field is still reachable through
+        // the surviving widget's /Parent, so a /Kids entry left naming the redacted
+        // widget keeps it alive: the /Kids detachment cannot be skipped just because
+        // the form's root list is unusable.
+        val pdf = RawPdf.page(
+            content = body,
+            annots = "/Annots [7 0 R 8 0 R]",
+            catalogExtra = "/AcroForm 11 0 R",
+            extra = listOf(
+                RawPdf.obj(6, "<< /FT /Tx /T (patient) /V ($secret) /Kids [7 0 R 8 0 R] >>"),
+                RawPdf.obj(
+                    7,
+                    "<< /Type /Annot /Subtype /Widget /Rect [100 700 300 720] /Parent 6 0 R /P 3 0 R /AP << /N 9 0 R >> >>",
+                ),
+                RawPdf.obj(
+                    8,
+                    "<< /Type /Annot /Subtype /Widget /Rect [100 100 300 120] /Parent 6 0 R /P 3 0 R /AP << /N 10 0 R >> >>",
+                ),
+                apStream(9, "UPPER-COPY"),
+                apStream(10, "LOWER-COPY"),
+                RawPdf.obj(11, "<< /DA (/Helv 0 Tf 0 g) >>"),
+            ),
+        )
+        val doc = KitePDF.open(pdf)
+        val out = doc.edit().apply { redactRegion(doc.pages[0], upperRegion) }.saveRewritten()
+
+        assertEquals(1, survivingWidgetKidCount(out), "the parent's /Kids still names the redacted widget")
+        assertFalse(holds(out, "UPPER-COPY"), "the redacted widget's appearance stream is still in the file")
+        assertTrue(holds(out, "LOWER-COPY"), "the surviving widget lost its appearance stream")
+    }
+
+    /* ─── Malformed input ────────────────────────────────────────────────── */
+
+    @Test fun a_popup_annotation_is_not_walked_as_a_form_field() {
+        // A Popup's /Parent is the markup annotation it belongs to (12.5.6.14), not a
+        // field parent. Walking it as one detaches and scrubs that annotation, taking
+        // its /T and /AP with it, and a self-referential one aborts the redaction.
+        // Both popups are in the region; the note itself is not.
+        val pdf = RawPdf.page(
+            content = body,
+            annots = "/Annots [6 0 R 7 0 R 8 0 R]",
+            extra = listOf(
+                RawPdf.obj(
+                    6,
+                    "<< /Type /Annot /Subtype /Text /Rect [400 400 420 420] /T (AUTHOR-NAME) " +
+                        "/Contents (a note) /Popup 7 0 R /AP << /N 9 0 R >> >>",
+                ),
+                RawPdf.obj(7, "<< /Type /Annot /Subtype /Popup /Rect [100 700 300 720] /Parent 6 0 R >>"),
+                RawPdf.obj(8, "<< /Type /Annot /Subtype /Popup /Rect [100 700 300 720] /Parent 8 0 R >>"),
+                apStream(9, "NOTE-BODY"),
+            ),
+        )
+        val doc = KitePDF.open(pdf)
+        val out = doc.edit().apply { redactRegion(doc.pages[0], upperRegion) }.saveRewritten()
+
+        val reopened = KitePDF.open(out)
+        assertEquals(1, reopened.pages[0].annotations.size, "the note outside the region was pruned")
+        assertTrue(holds(out, "AUTHOR-NAME"), "the popup's parent annotation was scrubbed as if it were a field")
+        assertTrue(holds(out, "NOTE-BODY"), "the popup's parent annotation lost its appearance stream")
+    }
+
+    @Test fun a_refused_detach_still_blocks_an_incremental_save() {
+        // The page is rewritten before the detach can raise, so an incremental save
+        // would append the redacted page and leave every original byte in the file
+        // where it is still recoverable. The refusal has to be armed before the raise.
+        val doc = KitePDF.open(loopingParentPdf())
         val editor = doc.edit()
-        val failure = assertFailsWith<IllegalStateException> { editor.redactRegion(doc.pages[0], upperRegion) }
+        assertFailsWith<IllegalStateException> { editor.redactRegion(doc.pages[0], upperRegion) }
+
+        val refusal = assertFailsWith<IllegalStateException> { editor.saveIncremental() }
         assertTrue(
-            failure.message.orEmpty().contains("Parent"),
-            "the failure does not say what is wrong: ${failure.message}",
+            refusal.message.orEmpty().contains("saveRewritten"),
+            "an incremental save was allowed after a refused redaction: ${refusal.message}",
         )
     }
 
