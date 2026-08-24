@@ -62,6 +62,23 @@ jobs:
           path: '**/build/reports/tests/**'
           if-no-files-found: ignore
 
+      # On failure, also keep what diagnoses a CI-only regression: rendered
+      # pages, mutool references and heatmaps, sweep and benchmark reports,
+      # and fuzz reproducers (ledger 14.2, failure artifacts).
+      - name: Upload diff images and reproducers
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: failure-artifacts-jvm
+          path: |
+            **/build/difftest/**
+            **/build/epub-difftest/**
+            **/build/skia-difftest/**
+            **/build/benchmark/**
+            **/build/fuzz/**
+            **/build/epub-hashes.txt
+          if-no-files-found: ignore
+
   apple:
     # Pushes to main only; see the minutes note at the top.
     if: github.event_name == 'push'
