@@ -58,8 +58,10 @@ class DifferentialTest {
         if (report.oracleAvailable) assertOracleComplete(report)
 
         // With the oracle present, no page may exceed the regression budget.
-        // Default budget is deliberately lenient: Phase 0's job is the scoreboard,
-        // not a tight gate. Tighten with -Dkitepdf.diff.budget as correctness improves.
+        // The default sits near 2x the observed worst page (0.026 as of
+        // 2026-08-25), so a real regression fails instead of hiding under a
+        // lenient ceiling. Loosen per run with -Dkitepdf.diff.budget if a
+        // deliberate change moves the baseline.
         if (report.oracleAvailable) {
             val budget = parseBudget(System.getProperty("kitepdf.diff.budget"))
             val over = report.results.filter { result ->
@@ -89,7 +91,7 @@ class DifferentialTest {
         }
 
         internal fun parseBudget(raw: String?): Double {
-            if (raw == null) return 0.50
+            if (raw == null) return 0.05
             val value = raw.toDoubleOrNull()
             require(value != null && value.isFinite() && value in 0.0..1.0) {
                 "kitepdf.diff.budget must be a finite value from 0.0 to 1.0 (was '$raw')"

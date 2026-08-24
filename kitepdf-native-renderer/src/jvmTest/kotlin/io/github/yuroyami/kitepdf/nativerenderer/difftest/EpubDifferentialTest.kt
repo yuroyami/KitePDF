@@ -44,6 +44,8 @@ class EpubDifferentialTest {
         }
 
         val lines = ArrayList<String>()
+        // Per-book page counts, so a sweep-total delta is attributable to one book.
+        val pagesPerBook = LinkedHashMap<String, Int>()
         var failures = 0
         var blanks = 0
         var syntheticBlanks = 0
@@ -61,6 +63,7 @@ class EpubDifferentialTest {
                 failures++; lines.add("- $name: open() THREW ${e.message}"); continue
             }
 
+            pagesPerBook[name] = doc.pages.size
             for ((i, page) in doc.pages.withIndex()) {
                 pages++
                 val img = try {
@@ -88,10 +91,14 @@ class EpubDifferentialTest {
             append("oracle (mutool): ${MuPdfOracle.available} (${MuPdfOracle.describe()})\n")
             append("render failures: $failures, blank pages: $blanks\n")
             append("worst page-0 MAE vs mutool (informational only): %.4f\n\n".format(worstMae))
+            append("## Pages per book\n\n")
+            pagesPerBook.forEach { (name, count) -> append("- $name: $count\n") }
+            append("\n")
             append(lines.joinToString("\n"))
         }
         File(outDir, "report.md").writeText(report)
         println("[epub-sweep] ${corpus.size} books, $pages pages, $failures failures, $blanks blanks, oracle=${MuPdfOracle.available}, worstMAE=%.3f".format(worstMae))
+        println("[epub-sweep] pages per book: " + pagesPerBook.entries.joinToString(", ") { "${it.key}=${it.value}" })
 
         // Every page of every book renders without throwing.
         assertEquals(0, failures, "EPUB render failures:\n" + lines.filter { "THREW" in it }.joinToString("\n"))

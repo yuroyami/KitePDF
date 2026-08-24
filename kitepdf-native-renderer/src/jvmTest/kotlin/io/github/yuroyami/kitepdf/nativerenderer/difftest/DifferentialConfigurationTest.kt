@@ -34,7 +34,7 @@ class DifferentialConfigurationTest {
 
     @Test
     fun diff_budget_must_be_finite_and_normalized() {
-        assertEquals(0.50, DifferentialTest.parseBudget(null))
+        assertEquals(0.05, DifferentialTest.parseBudget(null))
         assertEquals(0.20, DifferentialTest.parseBudget("0.20"))
 
         listOf("NaN", "Infinity", "-0.1", "1.1", "not-a-number").forEach { value ->
