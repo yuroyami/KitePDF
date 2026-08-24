@@ -42,8 +42,12 @@ internal class BoxBuilder(
         var pendingMarker = marker
         val childAncestors = if (isRoot) ancestors else listOf(el) + ancestors
         var ordinal = el.attrs["start"]?.toIntOrNull() ?: 1
-        // Ids of INLINE descendants (they get no box) anchor to this block.
-        val inlineAnchors = ArrayList<String>()
+        // Ids seen on inline descendants (they get no box of their own). The
+        // first block-level box hoisted after an id claims it, so a footnote
+        // target like <span id><div>note</div></span> anchors to the note
+        // itself; ids still waiting at the end attach to this block, as they
+        // always did.
+        val pendingAnchors = ArrayList<String>()
 
         fun flush() {
             if (inl.hasContent()) {
@@ -52,6 +56,23 @@ internal class BoxBuilder(
             } else {
                 inl.reset()
             }
+        }
+
+        // CSS 2.1, 9.2.1.1: a block inside an inline splits the inline. The
+        // pending inline runs flush first (keeping document order), the block
+        // lands as a sibling, and the inline flow resumes after it. Ids that
+        // were waiting on an inline are claimed by this block so a fragment
+        // link lands on the block, not on the top of this container. (A
+        // hoisted table cannot carry anchors; its ids keep waiting.)
+        fun hoist(boxes: List<LayoutBox>) {
+            flush()
+            if (pendingAnchors.isNotEmpty()) {
+                (boxes.firstOrNull() as? BlockBox)?.let {
+                    it.anchors += pendingAnchors
+                    pendingAnchors.clear()
+                }
+            }
+            children.addAll(boxes)
         }
 
         // ::before generated content precedes the element's own children. A
@@ -97,11 +118,11 @@ internal class BoxBuilder(
                 val cs = resolver.compute(child, childAncestors, style)
                 when (cs.display) {
                     Display.NONE -> {}
-                    Display.INLINE, Display.INLINE_BLOCK -> processInline(child, cs, childAncestors, inl, inlineAnchors)
-                    Display.TABLE -> { flush(); children.addAll(buildTable(child, cs, childAncestors)) }
-                    Display.LIST_ITEM -> { flush(); children.add(buildBlock(child, cs, childAncestors, marker(cs, ordinal++), cs.color)) }
+                    Display.INLINE, Display.INLINE_BLOCK -> processInline(child, cs, childAncestors, inl, pendingAnchors, ::hoist)
+                    Display.TABLE -> hoist(buildTable(child, cs, childAncestors))
+                    Display.LIST_ITEM -> hoist(listOf(buildBlock(child, cs, childAncestors, marker(cs, ordinal++), cs.color)))
                     // BLOCK, plus stray table parts outside a table: treat as blocks (no text lost).
-                    else -> { flush(); children.add(buildBlock(child, cs, childAncestors, null, BLACK)) }
+                    else -> hoist(listOf(buildBlock(child, cs, childAncestors, null, BLACK)))
                 }
             }
         }
@@ -110,7 +131,7 @@ internal class BoxBuilder(
         return BlockBox(style, children).also { box ->
             el.attrs["id"]?.let(box.anchors::add)
             if (el.tag == "a") el.attrs["name"]?.let(box.anchors::add) // legacy anchor
-            box.anchors += inlineAnchors
+            box.anchors += pendingAnchors
         }
     }
 
@@ -275,11 +296,13 @@ internal class BoxBuilder(
         ancestors: List<HtmlNode.Element>,
         inl: Inline,
         anchorSink: MutableList<String>,
+        hoist: (List<LayoutBox>) -> Unit,
     ) {
-        // Inline elements never get a box; their anchors attach to the block.
+        // Inline elements never get a box; their ids wait for the next hoisted
+        // block, and attach to the enclosing block when none follows.
         el.attrs["id"]?.let(anchorSink::add)
         if (el.tag == "a") el.attrs["name"]?.let(anchorSink::add)
-        if (el.tag == "ruby") { processRuby(el, style, ancestors, inl, anchorSink); return }
+        if (el.tag == "ruby") { processRuby(el, style, ancestors, inl, anchorSink, hoist); return }
 
         val link = if (el.tag == "a") el.attrs["href"]?.takeIf { it.isNotBlank() }?.let(::resolveLink) else null
         if (link != null) inl.beginLink(link)
@@ -304,7 +327,18 @@ internal class BoxBuilder(
                         continue
                     }
                     val cs = resolver.compute(child, childAncestors, style)
-                    if (cs.display != Display.NONE) processInline(child, cs, childAncestors, inl, anchorSink)
+                    when (cs.display) {
+                        Display.NONE -> {}
+                        Display.INLINE, Display.INLINE_BLOCK ->
+                            processInline(child, cs, childAncestors, inl, anchorSink, hoist)
+                        Display.TABLE -> hoist(buildTable(child, cs, childAncestors))
+                        // CSS 2.1, 9.2.1.1: a block inside an inline is hoisted
+                        // to a sibling box; the inline runs resume after it. A
+                        // list item hoisted from inline flow gets no marker, a
+                        // deliberate simplification (a bare <li> inside a
+                        // <span> is not a list).
+                        else -> hoist(listOf(buildBlock(child, cs, childAncestors, null, BLACK)))
+                    }
                 }
             }
             resolver.computePseudo(el, ancestors, style, PseudoSide.AFTER)?.let { inl.appendText(it.text, it.style) }
@@ -340,6 +374,7 @@ internal class BoxBuilder(
         ancestors: List<HtmlNode.Element>,
         inl: Inline,
         anchorSink: MutableList<String>,
+        hoist: (List<LayoutBox>) -> Unit,
     ) {
         val childAncestors = listOf(el) + ancestors
         val reading = StringBuilder()
@@ -361,7 +396,7 @@ internal class BoxBuilder(
                     c.tag == "br" -> inl.addBreak()
                     else -> {
                         val cs = resolver.compute(c, childAncestors, style)
-                        if (cs.display != Display.NONE) processInline(c, cs, childAncestors, inl, anchorSink)
+                        if (cs.display != Display.NONE) processInline(c, cs, childAncestors, inl, anchorSink, hoist)
                     }
                 }
             }
