@@ -384,6 +384,28 @@ class RedactionPathTest {
         assertEquals(2, blackFills.size, "the first call's black box was erased by the second call's overlapping redaction")
     }
 
+    @Test fun non_overlapping_redactions_do_not_accumulate_duplicate_black_boxes() {
+        // Three calls on the SAME editor, three regions that never touch each
+        // other or the fixture's own boxes. None of the three calls' rewrites
+        // can ever consume an earlier call's box (nothing overlaps), so each
+        // region's box is painted exactly once, total three, not one-plus-two-
+        // plus-three.
+        val doc = KitePDF.open(twoBoxPdf())
+        val editor = doc.edit()
+        val regionA = KiteRectangle(left = 50.0, bottom = 650.0, right = 90.0, top = 660.0)
+        val regionB = KiteRectangle(left = 150.0, bottom = 650.0, right = 190.0, top = 660.0)
+        val regionC = KiteRectangle(left = 250.0, bottom = 650.0, right = 290.0, top = 660.0)
+        editor.redactRegion(doc.pages[0], regionA)
+        editor.redactRegion(doc.pages[0], regionB)
+        editor.redactRegion(doc.pages[0], regionC)
+        val out = editor.saveRewritten()
+
+        val blackFills = render(out).calls
+            .filterIsInstance<RecordingCanvas.Call.Fill>()
+            .filter { it.color == RgbColor.BLACK }
+        assertEquals(3, blackFills.size, "non-overlapping redactions left duplicate black boxes behind")
+    }
+
     // ─── Fix round 1: malformed operands must not silently under-cover ─────
 
     @Test fun a_malformed_line_width_does_not_zero_the_pen() {
@@ -461,6 +483,77 @@ class RedactionPathTest {
         assertTrue(
             content(out).contains("W\nh\nn\n"),
             "a close-fill-and-stroke operator lost its implicit close: ${content(out)}",
+        )
+    }
+
+    // ─── Final review: a form's stroke inherits the invoking stream's pen ──
+
+    /** A form invoking `/Fm0 Do` after setting the pen, whose own content never sets one. */
+    private fun formStrokePdf(setup: String, formOps: String): ByteArray = RawPdf.page(
+        content = "$setup /Fm0 Do\n".encodeToByteArray(),
+        resources = "<< /Font << /F1 4 0 R >> /XObject << /Fm0 6 0 R >> >>",
+        extra = listOf(
+            RawPdf.obj(
+                6,
+                "<< /Type /XObject /Subtype /Form /BBox [0 0 400 700] /Resources << /Font << /F1 4 0 R >> >> >>",
+                formOps.encodeToByteArray(),
+            ),
+        ),
+    )
+
+    @Test fun a_stroke_inside_a_form_inherits_the_invoking_streams_line_width() {
+        // A `Do` is a save/restore around the form (ISO 32000-1, 8.10.2): the
+        // pen in effect at the Do is what the form's own unset `w` falls back
+        // to. A 1.0-default pen pads this stroke by 5 (1 * miterLimit-default
+        // 10 / 2), well short of the region; the true 40pt pen pads it by 200.
+        val pdf = formStrokePdf("40 w 0 0 0 RG", "100 680 m 300 680 l S\n")
+        assertEquals(1, strokes(pdf).size, "fixture is wrong, it must paint one stroke")
+        val region = KiteRectangle(left = 90.0, bottom = 690.0, right = 320.0, top = 750.0)
+        assertEquals(
+            0,
+            strokes(redact(pdf, region)).size,
+            "the form's stroke was judged at the 1.0 default instead of the invoking stream's 40pt pen",
+        )
+    }
+
+    @Test fun a_stroke_inside_a_form_inherits_the_invoking_streams_miter_limit() {
+        // Isolates the miter limit from the line width: a 2pt pen alone pads
+        // by 1 either way, nowhere near the region. Only a miter limit of 20
+        // correctly inherited (instead of defaulting to 10 inside the form)
+        // pads the join far enough (2 * 20 / 2 = 20) to reach y=690.
+        val pdf = formStrokePdf("2 w 20 M 0 0 0 RG", "100 500 m 100 680 l 300 680 l S\n")
+        assertEquals(1, strokes(pdf).size, "fixture is wrong, it must paint one stroke")
+        val region = KiteRectangle(left = 90.0, bottom = 690.0, right = 320.0, top = 750.0)
+        assertEquals(
+            0,
+            strokes(redact(pdf, region)).size,
+            "the form's join was padded by the default miter limit instead of the invoking stream's",
+        )
+    }
+
+    @Test fun two_invocations_at_the_same_position_with_different_pens_get_separate_redactions() {
+        // Both Do's draw Fm0 at the same position, so they map the region to
+        // the SAME rectangle in form space: only the pen differs, 1pt before
+        // the first Do and 40pt before the second. One cached rewrite cannot
+        // be right for both, so the identity behind the cache has to carry the
+        // pen too, not just the form and its mapped rectangles.
+        val pdf = RawPdf.page(
+            content = "1 w 0 0 0 RG /Fm0 Do\n40 w 0 0 0 RG /Fm0 Do\n".encodeToByteArray(),
+            resources = "<< /Font << /F1 4 0 R >> /XObject << /Fm0 6 0 R >> >>",
+            extra = listOf(
+                RawPdf.obj(
+                    6,
+                    "<< /Type /XObject /Subtype /Form /BBox [0 0 400 700] /Resources << /Font << /F1 4 0 R >> >> >>",
+                    "100 680 m 300 680 l S\n".encodeToByteArray(),
+                ),
+            ),
+        )
+        assertEquals(2, strokes(pdf).size, "fixture is wrong, it must paint two overlapping strokes")
+        val region = KiteRectangle(left = 90.0, bottom = 690.0, right = 320.0, top = 750.0)
+        assertEquals(
+            1,
+            strokes(redact(pdf, region)).size,
+            "the second invocation's 40pt pen was judged by the first invocation's cached 1pt redaction",
         )
     }
 }

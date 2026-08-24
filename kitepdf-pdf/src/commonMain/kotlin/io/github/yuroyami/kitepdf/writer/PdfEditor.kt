@@ -721,10 +721,13 @@ public class PdfEditor internal constructor(
      * **A vector path in a region is removed, not covered.** A signature or a chart
      * drawn as line art IS its coordinates, so the path's construction operators go
      * with its painting operator, and the pen's width counts towards the ink a
-     * stroke lays down (ISO 32000-1, 8.4.3.2). One exception ([RedactionEngine]):
-     * a path that also sets a clip (`W`) keeps its coordinates and loses only its
-     * paint, because everything up to the matching `Q` is clipped by it (8.5.4) and
-     * dropping it would let all of that paint over the rest of the page.
+     * stroke lays down (ISO 32000-1, 8.4.3.2). A stroke inside a form XObject that
+     * sets no `w` or `M` of its own is judged by the invoking stream's, the same
+     * way `PageRenderer` draws it (8.10.2): the form does not restart the pen at
+     * the 1.0/10.0 defaults. One exception ([RedactionEngine]): a path that also
+     * sets a clip (`W`) keeps its coordinates and loses only its paint, because
+     * everything up to the matching `Q` is clipped by it (8.5.4) and dropping it
+     * would let all of that paint over the rest of the page.
      */
     public fun redactRegions(page: PdfPage, rectangles: List<KiteRectangle>) {
         if (rectangles.isEmpty()) return
@@ -759,12 +762,18 @@ public class PdfEditor internal constructor(
         out.append("q\n".encodeToByteArray())
         out.append(body)
         out.append("\nQ\n".encodeToByteArray())
-        // Repaint EVERY region ever redacted on this page, not just this call's,
-        // so an earlier call's box survives even though the content rewrite above
-        // just treated it as an ordinary filled path (see [redactedRegionsByPage]).
+        // This call's own regions always repaint (their content is new). An
+        // EARLIER region only needs repainting if it overlaps one of them: only
+        // an overlap could have sent that box's construction back through the
+        // engine above and had it judged (and possibly dropped) as an ordinary
+        // filled path, same as any other content (see [redactedRegionsByPage]).
+        // A non-overlapping earlier box was never at risk, so its own box from
+        // its own call is still sitting in [body] untouched, and painting it
+        // again here would only be a second, identical rectangle.
         val allRegionsOnPage = redactedRegionsByPage.getOrPut(ref.objectNumber) { ArrayList() }
-        allRegionsOnPage.addAll(regions)
-        for (r in allRegionsOnPage) {
+        val earlierAtRisk = allRegionsOnPage.filter { old -> regions.any { rectsIntersect(old, it) } }
+        for (new in regions) if (new !in allRegionsOnPage) allRegionsOnPage.add(new)
+        for (r in (earlierAtRisk + regions).distinct()) {
             val box = "q 0 g ${fmt(r.left)} ${fmt(r.bottom)} ${fmt(r.width)} ${fmt(r.height)} re f Q\n"
             out.append(box.encodeToByteArray())
         }
@@ -809,11 +818,8 @@ public class PdfEditor internal constructor(
     /** Form object numbers whose ORIGINAL object is already spoken for. */
     private val claimedForms = HashSet<Long>()
 
-    /** Form identity (object number plus mapped rectangles) to the object holding that redaction. */
+    /** Form identity, [formKey] of object number plus rectangles plus pen, to the object holding that redaction. */
     private val redactedFormCache = LinkedHashMap<String, PdfReference>()
-
-    /** Clone object number to the resource name minted for it, so one clone gets one name. */
-    private val formCloneNames = LinkedHashMap<Long, String>()
 
     /**
      * Form streams as they stood when the CURRENT redaction call began. The first
@@ -836,10 +842,14 @@ public class PdfEditor internal constructor(
      * Regions already redacted on a page, across every [redactRegions] call this
      * editor has made so far. Keyed by page object number.
      *
-     * Repainted in full at the end of every call, so an earlier call's black box
-     * survives even when the content rewrite (which re-parses that box as an
-     * ordinary filled path, like any other) drops all or part of it because a
-     * later region overlaps it. Deliberately NOT cleared by [beginRedactionCall]:
+     * Every OVERLAPPING earlier region is repainted alongside this call's own, so
+     * an earlier call's black box survives even when the content rewrite (which
+     * re-parses that box as an ordinary filled path, like any other) drops all or
+     * part of it because a later region overlaps it. A non-overlapping earlier
+     * region is not repainted: nothing in this call's rewrite could have touched
+     * its box, so it is still sitting in the stream from whichever call painted
+     * it, and painting it again would only add a second, identical rectangle.
+     * Deliberately NOT cleared by [beginRedactionCall]:
      * unlike the per-call form bookkeeping below, this has to survive between
      * calls to do its job.
      */
@@ -848,7 +858,7 @@ public class PdfEditor internal constructor(
     /**
      * Reset the per-call form bookkeeping.
      *
-     * All four maps describe ONE redaction call: inside a call they accumulate
+     * All three maps describe ONE redaction call: inside a call they accumulate
      * across the hit loop, and between calls they have to be forgotten. Carrying
      * [claimedForms] over would make a second call find the form already claimed
      * and clone it rather than rewriting it, leaving the original (which still
@@ -856,23 +866,33 @@ public class PdfEditor internal constructor(
      * the reachability GC. Cleared, the second call re-claims the form and composes
      * on the snapshot of the already-redacted version (D-1).
      *
-     * [redactedRegionsByPage] is deliberately not one of the four: see its own doc.
+     * The clone-name cache is NOT here: it lives inside [recurseIntoForms] itself,
+     * scoped to one PARENT rather than one call. See that function's doc for why.
+     *
+     * [redactedRegionsByPage] is deliberately not one of these three: see its own doc.
      */
     private fun beginRedactionCall() {
         formSources.clear()
         claimedForms.clear()
         redactedFormCache.clear()
-        formCloneNames.clear()
     }
 
     /**
      * Identity of one redaction OF one form. Two invocations of the same form
-     * that map a region to the same place can share a rewrite; two that map it
-     * elsewhere cannot, because one rewritten stream cannot be right for both.
-     * Coordinates are quantised to 1/1000 pt so float noise in the inverted CTM
-     * does not manufacture clones that are the same rewrite twice.
+     * that map a region to the same place AND inherit the same pen can share a
+     * rewrite; two that differ in either cannot, because one rewritten stream
+     * cannot be right for both: a stroke's padding depends on [lineWidth] and
+     * [miterLimit] (8.4.3.2, 8.4.3.5) the same way its position depends on
+     * [rectangles], and both travel into a form from the invoking `Do` (8.10.2).
+     * Coordinates and pen are quantised to 1/1000 pt so float noise in the
+     * inverted CTM does not manufacture clones that are the same rewrite twice.
      */
-    private fun formKey(objectNumber: Long, rectangles: List<KiteRectangle>): String = buildString {
+    private fun formKey(
+        objectNumber: Long,
+        rectangles: List<KiteRectangle>,
+        lineWidth: Double,
+        miterLimit: Double,
+    ): String = buildString {
         append(objectNumber)
         val sorted = rectangles.sortedWith(
             compareBy({ it.left }, { it.bottom }, { it.right }, { it.top }),
@@ -884,6 +904,8 @@ public class PdfEditor internal constructor(
             append(quantise(r.right)); append(',')
             append(quantise(r.top))
         }
+        append('|'); append(quantise(lineWidth))
+        append(','); append(quantise(miterLimit))
     }
 
     /**
@@ -930,8 +952,20 @@ public class PdfEditor internal constructor(
      * cannot serve both: rewriting against the union deletes content from an
      * invocation that never overlapped a region, and rewriting against only the
      * first leaves the second invocation's content intact. Each distinct
-     * (form, rectangles) pair therefore gets its own object, and the caller
-     * repoints that invocation's `Do` at it.
+     * (form, rectangles, pen) triple therefore gets its own object, and the
+     * caller repoints that invocation's `Do` at it.
+     *
+     * The clone-name cache is a LOCAL, so it lives for one call to this function,
+     * that is one PARENT resource dictionary. A name is a string meaningful only
+     * inside the `/XObject` dict it is added to (two different parents can use
+     * the same string, or different strings, for the same shared clone, and
+     * neither is wrong), so nothing is lost by minting it fresh per parent. The
+     * opposite used to be true: the cache was a field shared across the WHOLE
+     * call, so a clone target minted here for THIS parent's `usedNames` could be
+     * reused verbatim for a different parent reaching the same clone (the shared
+     * [redactedFormCache] deliberately allows that sharing), silently colliding
+     * with an unrelated entry already using that exact name in the SECOND
+     * parent's own `/XObject` dict.
      *
      * @return what the caller must change about its own stream and resources.
      */
@@ -942,6 +976,7 @@ public class PdfEditor internal constructor(
         val result = FormRedaction()
         val xobjects = resources?.getDict("XObject", effective) ?: return result
         val usedNames = HashSet(xobjects.keys)
+        val formCloneNames = LinkedHashMap<Long, String>()
 
         // A form with even one invocation that paints into no region must keep its
         // original object as it is, because that invocation goes on drawing it.
@@ -960,9 +995,10 @@ public class PdfEditor internal constructor(
             // Already on the descent: the outer invocation that put it there owns the
             // rewrite, so this one keeps pointing at whatever that produces.
             if (formRef.objectNumber in formDescent) continue
-            val key = formKey(formRef.objectNumber, hit.formRects)
+            val key = formKey(formRef.objectNumber, hit.formRects, hit.lineWidth, hit.miterLimit)
             val claimable = formRef.objectNumber !in pristine
-            val target = redactedFormCache[key] ?: redactFormXObject(formRef, hit.formRects, key, claimable)
+            val target = redactedFormCache[key]
+                ?: redactFormXObject(formRef, hit.formRects, key, claimable, hit.lineWidth, hit.miterLimit)
             if (target == null) {
                 // The form paints into a region and we could not read it. Redaction is
                 // destructive, so a skip here would ship content we never inspected
@@ -1000,6 +1036,12 @@ public class PdfEditor internal constructor(
      * the form could not be read, and the caller must drop the invocation rather
      * than leave content it could not inspect in a file it calls redacted.
      *
+     * [lineWidth] and [miterLimit] seed the nested engine's pen (ISO 32000-1,
+     * 8.10.2: a `Do` is a save/restore around the form, so the invoking stream's
+     * graphics state, including the pen, is what a form's own unset `w`/`M`
+     * fall back to). [formKey] already folds both into [key], so a second
+     * invocation that inherits a different pen never reuses this rewrite.
+     *
      * @return the object holding this redaction, or null when the form's stream is
      *   missing or will not decode.
      */
@@ -1008,6 +1050,8 @@ public class PdfEditor internal constructor(
         rectangles: List<KiteRectangle>,
         key: String,
         claimable: Boolean,
+        lineWidth: Double,
+        miterLimit: Double,
     ): PdfReference? {
         val stream = formSources[formRef.objectNumber]
             ?: (effectiveObject(formRef.objectNumber) as? PdfStream)
@@ -1030,6 +1074,8 @@ public class PdfEditor internal constructor(
                 loadImageXObjectNames(formResources),
                 loadFormXObjectNames(formResources),
                 rectangles,
+                lineWidth,
+                miterLimit,
             )
             engine.formMatrices = loadFormMatrices(formResources)
             engine.formBBoxes = loadFormBBoxes(formResources)

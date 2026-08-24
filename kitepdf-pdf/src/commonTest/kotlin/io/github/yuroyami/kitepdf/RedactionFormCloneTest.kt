@@ -338,4 +338,52 @@ class RedactionFormCloneTest {
                 "invocation still draws a line that was redacted",
         )
     }
+
+    @Test fun a_clone_name_does_not_collide_with_an_unrelated_entry_in_a_different_parent() {
+        // D is shared: the page draws it directly, once inside the region (needs
+        // a clone) and once far off-page (stays pristine, so the in-region copy
+        // cannot claim the original and must be a clone, not an in-place edit).
+        // The page also draws C, a form that invokes the SAME D at the SAME
+        // effective position, so C's invocation resolves to the identical cached
+        // clone the page's own invocation minted. C's OWN /XObject namespace
+        // happens to already use the name that clone was minted under, for an
+        // unrelated object (DECOY). Reusing the page's minted name for C without
+        // checking it against C's own names repoints C's DECOY entry at the
+        // clone, and DECOY's content is dropped by the reachability GC even
+        // though no region ever touched it.
+        val pdf = RawPdf.page(
+            content = (
+                "/D Do\n" +
+                    "q 1 0 0 1 5000 5000 cm /D Do Q\n" +
+                    "/C Do\n"
+                ).encodeToByteArray(),
+            resources = "<< /Font << /F1 4 0 R >> /XObject << /D 6 0 R /C 7 0 R >> >>",
+            extra = listOf(
+                RawPdf.obj(
+                    6,
+                    "<< /Type /XObject /Subtype /Form /BBox [0 0 200 20] /Resources << /Font << /F1 4 0 R >> >> >>",
+                    "BT /F1 12 Tf 0 0 Td (SHAREDTXT) Tj ET".encodeToByteArray(),
+                ),
+                RawPdf.obj(
+                    7,
+                    "<< /Type /XObject /Subtype /Form /BBox [0 0 200 20] " +
+                        "/Resources << /Font << /F1 4 0 R >> /XObject << /D 6 0 R /DR1 9 0 R >> >> >>",
+                    "/D Do".encodeToByteArray(),
+                ),
+                RawPdf.obj(9, "<< >>", "DECOYTEXT".encodeToByteArray()),
+            ),
+        )
+        val region = KiteRectangle(left = -10.0, bottom = -10.0, right = 210.0, top = 30.0)
+        val doc = KitePDF.open(pdf)
+        assertEquals(1, objectsHolding(pdf, "DECOYTEXT"), "fixture is wrong, the scan proves nothing")
+
+        val out = doc.edit().apply { redactRegion(doc.pages[0], region) }.saveRewritten()
+
+        assertEquals(
+            1,
+            objectsHolding(out, "DECOYTEXT"),
+            "an unrelated /DR1 entry in the second parent's own /XObject dict was repointed " +
+                "at a clone name minted for the first parent",
+        )
+    }
 }
