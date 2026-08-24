@@ -289,7 +289,7 @@ may reach.
 | Page edits are not cumulative | `editPageContent`, `stampPage` and `redactRegions` each rebuild the page from the original document's snapshot, so a second call on the same page discards the first. Use one of the three per page per `PdfEditor`. |
 | Redaction skips a shared form | A Form XObject is guarded by object number alone, so the same form reached under a second CTM keeps its content. |
 | Redaction leaves the field entry | `/AcroForm /Fields` is not pruned when a widget annotation is removed. |
-| Redaction keeps vector paths | Only text and images are removed. Paths inside the region pass through the operator filter untouched. |
+| Redaction keeps a clipping path | A vector path in the region is removed, unless it also sets a clip (`W`): then only its paint goes and its coordinates stay, because dropping the clip would let everything it clips paint over the rest of the page. A line width set through an ExtGState `/LW` is not seen either, so a stroke's ink is padded by the last `w` operator instead. |
 | Annotations are read-only | They parse and appear on `PdfPage.annotations`, but there is no authoring API. The only annotation KitePDF writes is the widget for `PdfSigner`'s own signature field. |
 | `PdfSigner` runs no cryptography | It stages the signature field, reserves `/Contents` and patches `/ByteRange`. It cannot validate a signature. Your application supplies the CMS blob. |
 | Writing encrypts more narrowly than reading | `PdfBuilder` creates AES-256/R6 only, and editing an encrypted document requires AES-128 or AES-256. RC4 documents open and decrypt, but you cannot edit them. |

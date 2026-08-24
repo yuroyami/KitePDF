@@ -40,8 +40,13 @@ import io.github.yuroyami.kitepdf.core.parser.PdfString
  *    in and redact there (content inside a form XObject is otherwise never
  *    reached) without disturbing the invocations that no region touches.
  *
- * Not handled yet (documented limitation): vector paths inside the region are
- * left as-is.
+ * Vector paths get the same treatment as text. A signature or a chart drawn as
+ * line art IS its coordinates, so a path whose ink reaches a region has its
+ * construction operators removed along with its painting operator, rather than
+ * being covered by the black box. Two documented limits remain: a path that also
+ * sets a clip keeps its coordinates (see [paintPath] for why), and a line width
+ * set through an ExtGState `/LW` rather than the `w` operator is not seen, so a
+ * stroke's ink is padded by the last `w` (or the 1.0 default) instead.
  */
 internal class RedactionEngine(
     private val fonts: Map<String, PdfFont>,
@@ -104,10 +109,34 @@ internal class RedactionEngine(
         val rise: Double = 0.0,
     )
 
-    private data class GraphicsState(val ctm: KiteMatrix = KiteMatrix.IDENTITY, val text: TextState = TextState())
+    /** [lineWidth] is graphics state (ISO 32000-1, 8.4.3.2), so `Q` must put it back. */
+    private data class GraphicsState(
+        val ctm: KiteMatrix = KiteMatrix.IDENTITY,
+        val text: TextState = TextState(),
+        val lineWidth: Double = 1.0,
+    )
 
     private var gs = GraphicsState()
     private val stack = ArrayDeque<GraphicsState>()
+
+    /**
+     * Construction ops seen since the current path began, held until the painting
+     * operator that consumes them says whether they may be written out.
+     *
+     * Path construction is NOT graphics state (ISO 32000-1, 8.5.1): it lives
+     * between a first `m`/`re` and the paint operator, so `q`/`Q` do not touch it.
+     */
+    private val pathOps = ArrayList<Operation>()
+
+    /** User-space bounds of the current path, grown point by point as it is built. */
+    private var pathMinX = 0.0
+    private var pathMinY = 0.0
+    private var pathMaxX = 0.0
+    private var pathMaxY = 0.0
+    private var pathHasPoints = false
+
+    /** True once `W` or `W*` marked the current path as a clip. */
+    private var pathClips = false
 
     fun run(ops: List<Operation>): List<Operation> {
         val out = ArrayList<Operation>(ops.size)
@@ -116,6 +145,7 @@ internal class RedactionEngine(
                 "q" -> { stack.addLast(gs); out.add(op) }
                 "Q" -> { gs = stack.removeLastOrNull() ?: gs; out.add(op) }
                 "cm" -> { gs = gs.copy(ctm = gs.ctm.concat(matrix(op))); out.add(op) }
+                "w" -> { gs = gs.copy(lineWidth = num(op, 0)); out.add(op) }
 
                 "BT" -> { gs = gs.copy(text = TextState(font = gs.text.font, fontSize = gs.text.fontSize)); out.add(op) }
                 "Tf" -> {
@@ -155,13 +185,124 @@ internal class RedactionEngine(
                 }
                 "TJ" -> emitTJ(op.operands.firstOrNull() as? PdfArray, out)
 
+                // Path construction (ISO 32000-1, 8.5.2). Buffered, not emitted:
+                // whether these ops may be written out is only known at the paint.
+                "m", "l" -> bufferPath(op, points = 1)
+                "v", "y" -> bufferPath(op, points = 2)
+                "c" -> bufferPath(op, points = 3)
+                "h" -> pathOps.add(op) // closepath, no operands
+                "re" -> {
+                    pathOps.add(op)
+                    // Two opposite corners are the whole box in user space, and the
+                    // running min/max sorts out a negative width or height.
+                    addPathPoint(num(op, 0), num(op, 1))
+                    addPathPoint(num(op, 0) + num(op, 2), num(op, 1) + num(op, 3))
+                }
+
+                "W", "W*" -> { pathClips = true; pathOps.add(op) }
+
+                // Path painting (ISO 32000-1, 8.5.3): every one ends the path object.
+                "f", "F", "f*", "B", "B*", "b", "b*", "S", "s", "n" -> paintPath(op, out)
+
                 "Do" -> handleDo(op, out)
                 "BI" -> if (op.inlineImage == null || !imageBoxIntersects()) out.add(op)
 
                 else -> out.add(op)
             }
         }
+        flushUnpaintedPath(out)
         return out
+    }
+
+    /* ─── Paths ──────────────────────────────────────────────────────────── */
+
+    /**
+     * Hold a construction op and fold its leading operand points into the bounds.
+     *
+     * [points] is how many `(x, y)` pairs the operator starts with: 1 for `m`/`l`,
+     * 2 for `v`/`y`, 3 for `c` (ISO 32000-1, 8.5.2.1). A curve is bounded by its
+     * control points (8.5.2.2), so taking them verbatim over-covers the true hull
+     * and never under-covers, which is the right way to be wrong here.
+     */
+    private fun bufferPath(op: Operation, points: Int) {
+        pathOps.add(op)
+        for (i in 0 until points) addPathPoint(num(op, i * 2), num(op, i * 2 + 1))
+    }
+
+    /** Grow the current path's user-space bounds to hold one more point. */
+    private fun addPathPoint(x: Double, y: Double) {
+        if (!pathHasPoints) {
+            pathMinX = x; pathMaxX = x
+            pathMinY = y; pathMaxY = y
+            pathHasPoints = true
+            return
+        }
+        if (x < pathMinX) pathMinX = x
+        if (x > pathMaxX) pathMaxX = x
+        if (y < pathMinY) pathMinY = y
+        if (y > pathMaxY) pathMaxY = y
+    }
+
+    /**
+     * Decide the fate of the path this painting operator consumes.
+     *
+     * A path whose ink reaches a region is removed outright: its coordinates ARE
+     * the content, so painting over it would leave the shape recoverable. The whole
+     * path goes, every subpath of it, because one painting operator paints them all
+     * and over-removing is the safe side of that call.
+     *
+     * When the path also sets a clip (`W`/`W*`), the construction is kept and the
+     * paint becomes `n`: everything up to the matching `Q` is clipped by this path
+     * (ISO 32000-1, 8.5.4) and dropping it would let all of that escape and paint
+     * over the rest of the page. The clip's own coordinates survive, which is the
+     * documented price of keeping the clip.
+     */
+    private fun paintPath(op: Operation, out: MutableList<Operation>) {
+        val hit = pathHasPoints && pathIntersectsRedaction(strokes = op.operator in STROKING_PAINT_OPERATORS)
+        when {
+            !hit -> { out.addAll(pathOps); out.add(op) }
+            pathClips -> { out.addAll(pathOps); out.add(Operation("n", emptyList())) }
+            else -> Unit // construction and paint go together
+        }
+        resetPath()
+    }
+
+    /**
+     * A stream that ends mid-path (malformed, but real) leaves construction ops
+     * buffered. They painted nothing, so emitting them changes no pixels, but their
+     * coordinates are content all the same: one in a region is dropped for exactly
+     * the reason a painted one is, and one outside every region is written out so
+     * the rewrite stays faithful to everything not deliberately removed.
+     *
+     * A pending `W` is not honoured: a clip only takes effect once a painting
+     * operator ends the path object (ISO 32000-1, 8.5.4), and here there is no
+     * painting operator and nothing after it left to clip.
+     */
+    private fun flushUnpaintedPath(out: MutableList<Operation>) {
+        val hit = pathHasPoints && pathIntersectsRedaction(strokes = false)
+        if (!hit) out.addAll(pathOps)
+        resetPath()
+    }
+
+    private fun resetPath() {
+        pathOps.clear()
+        pathHasPoints = false
+        pathClips = false
+    }
+
+    /**
+     * Does the current path's ink touch a region?
+     *
+     * The pen is padded in USER space, before the CTM maps the box out, because
+     * that is where a line width is measured (ISO 32000-1, 8.4.3.2). Padding
+     * afterwards by a single scale factor would under-cover a stroke under an
+     * anisotropic CTM: `1 0 0 10 0 0 cm` lays ten times as much ink up the page as
+     * across it, and a redaction that under-covers ships ink it promised to remove.
+     */
+    private fun pathIntersectsRedaction(strokes: Boolean): Boolean {
+        if (rectangles.isEmpty()) return false
+        val pad = if (strokes) gs.lineWidth / 2.0 else 0.0
+        return boxIntersects(gs.ctm, pathMinX - pad, pathMinY - pad, pathMaxX + pad, pathMaxY + pad)
     }
 
     /* ─── Text showing ───────────────────────────────────────────────────── */
@@ -379,3 +520,6 @@ internal class RedactionEngine(
 
     private fun bytesOf(o: PdfObject?): ByteArray? = (o as? PdfString)?.bytes
 }
+
+/** Painting operators that lay ink down with the pen, so their bounds need padding. */
+private val STROKING_PAINT_OPERATORS = setOf("S", "s", "B", "B*", "b", "b*")
