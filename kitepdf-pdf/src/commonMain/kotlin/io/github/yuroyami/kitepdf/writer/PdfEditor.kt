@@ -450,12 +450,23 @@ public class PdfEditor internal constructor(
         return -1
     }
 
-    /** If the AcroForm has `/NeedAppearances true`, flip it false so our `/AP` is used. */
+    /**
+     * If the AcroForm has `/NeedAppearances true`, flip it false so our `/AP`
+     * is used. Reads the staged-or-base view (an earlier edit may have staged
+     * the form), and accepts an `/AcroForm` written straight into the catalog.
+     */
     private fun clearNeedAppearances() {
-        val acroRef = base.catalog["AcroForm"] as? PdfReference ?: return
-        val acro = base.resolve(acroRef) as? PdfDictionary ?: return
-        if ((acro["NeedAppearances"] as? PdfBoolean)?.value == true) {
-            updateObject(acroRef, withEntry(acro, "NeedAppearances", PdfBoolean(false)))
+        val rootRef = (trailerOverrides["Root"] ?: base.trailer["Root"]) as? PdfReference ?: return
+        val catalog = effectiveObject(rootRef.objectNumber) as? PdfDictionary ?: return
+        val acroRef = catalog["AcroForm"] as? PdfReference
+        val acro = (if (acroRef != null) effectiveObject(acroRef.objectNumber) else catalog["AcroForm"])
+            as? PdfDictionary ?: return
+        if ((acro["NeedAppearances"] as? PdfBoolean)?.value != true) return
+        val cleared = withEntry(acro, "NeedAppearances", PdfBoolean(false))
+        if (acroRef != null) {
+            updateObject(acroRef, cleared)
+        } else {
+            updateObject(rootRef, withEntry(catalog, "AcroForm", cleared))
         }
     }
 
