@@ -123,3 +123,42 @@ class VerticalWritingTest {
         assertContains(text, "日本語のテスト")
     }
 }
+
+/**
+ * A book whose OPF declares `primary-writing-mode: vertical-rl` implies
+ * right-to-left page progression (ledger Part 13), derived only when the
+ * spine declares no `page-progression-direction` of its own. The signal is
+ * the OPF meta, not the chapter CSS: reading a chapter at open would break
+ * the lazy-open guarantee (LazyParseTest).
+ */
+class VerticalRtlDerivationTest {
+
+    private val settings = EpubSettings(pageWidth = 200.0, pageHeight = 300.0, fontSize = 10.0, margin = 20.0)
+
+    @Test
+    fun a_vertical_book_with_no_declared_direction_reads_rtl() {
+        val doc = EpubDocument.open(
+            EpubFixtures.epub("<p>縦</p>", primaryWritingMode = "vertical-rl"),
+            settings,
+        )
+        assertNotNull(doc)
+        assertTrue(doc.metadata.rightToLeft, "primary-writing-mode vertical-rl implies rtl progression")
+    }
+
+    @Test
+    fun a_declared_ltr_direction_beats_the_derivation() {
+        val doc = EpubDocument.open(
+            EpubFixtures.epub("<p>縦</p>", spineDirection = "ltr", primaryWritingMode = "vertical-rl"),
+            settings,
+        )
+        assertNotNull(doc)
+        assertFalse(doc.metadata.rightToLeft, "an explicit ltr declaration wins")
+    }
+
+    @Test
+    fun a_horizontal_book_stays_ltr() {
+        val doc = EpubDocument.open(EpubFixtures.epub("<p>横</p>"), settings)
+        assertNotNull(doc)
+        assertFalse(doc.metadata.rightToLeft)
+    }
+}

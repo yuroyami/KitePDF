@@ -193,7 +193,10 @@ internal class ParsedEpub(
                 language = opf.language,
                 identifier = opf.uniqueId,
                 coverImagePath = coverHref?.let { EpubDocument.resolvePath(opf.baseDir, it) },
-                rightToLeft = opf.direction?.lowercase() == "rtl",
+                // A vertical-rl book implies rtl progression when the spine
+                // declares no direction of its own (ledger Part 13).
+                rightToLeft = opf.direction?.lowercase() == "rtl" ||
+                    (opf.direction == null && opf.primaryWritingMode?.lowercase() == "vertical-rl"),
             )
         }
 

@@ -24,6 +24,8 @@ internal class OpfPackage(
     val renditionLayout: String? = null,
     /** `properties` of each spine `<itemref>`, parallel to [spineIdrefs]. */
     val spineProperties: List<String?> = emptyList(),
+    /** `<meta property="primary-writing-mode">` ("vertical-rl" and friends), or null. */
+    val primaryWritingMode: String? = null,
 ) {
     val itemsById: Map<String, OpfItem> = items.associateBy { it.id }
 
@@ -74,6 +76,7 @@ internal object Opf {
         val identifiers = ArrayList<String>()
         var metaCover: String? = null
         var renditionLayout: String? = null
+        var primaryWritingMode: String? = null
         val spineProps = ArrayList<String?>()
 
         var capture: String? = null
@@ -96,6 +99,8 @@ internal object Opf {
                         if (t.attrs["property"] == "rendition:layout") capture = "renditionLayout"
                         if (t.attrs["name"] == "rendition:layout") renditionLayout = t.attrs["content"]?.trim()
                         if (t.attrs["name"] == "fixed-layout" && t.attrs["content"]?.equals("true", true) == true) renditionLayout = "pre-paginated"
+                        if (t.attrs["property"] == "primary-writing-mode") capture = "primaryWritingMode"
+                        if (t.attrs["name"] == "primary-writing-mode") primaryWritingMode = t.attrs["content"]?.trim()
                     }
                     "title" -> capture = "title"
                     "creator" -> capture = "creator"
@@ -111,6 +116,7 @@ internal object Opf {
                     identifiers.add(it); if (captureIdIsUnique && uniqueId == null) uniqueId = it
                 }
                 "renditionLayout" -> if (renditionLayout == null) renditionLayout = t.text.trim()
+                "primaryWritingMode" -> if (primaryWritingMode == null) primaryWritingMode = t.text.trim()
                 else -> {}
             }
             is XmlToken.Close -> capture = null
@@ -120,7 +126,7 @@ internal object Opf {
             baseDir, items, spine, direction, tocNcx,
             uniqueId ?: identifiers.firstOrNull(),
             title, creators, language, identifiers, metaCover,
-            renditionLayout, spineProps,
+            renditionLayout, spineProps, primaryWritingMode,
         )
     }
 }
