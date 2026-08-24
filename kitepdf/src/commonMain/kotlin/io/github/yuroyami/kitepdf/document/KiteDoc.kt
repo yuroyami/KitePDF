@@ -1,6 +1,7 @@
 package io.github.yuroyami.kitepdf.document
 
 import io.github.yuroyami.kitepdf.PdfDocument
+import io.github.yuroyami.kitepdf.cbz.CbzDocument
 import io.github.yuroyami.kitepdf.core.KiteDocument
 import io.github.yuroyami.kitepdf.core.KiteFormatException
 import io.github.yuroyami.kitepdf.epub.EpubDocument
@@ -11,6 +12,7 @@ import io.github.yuroyami.kitepdf.core.zip.ZipReader
 public enum class KiteDocFormat {
     Pdf,
     Epub,
+    Cbz,
 }
 
 /**
@@ -34,17 +36,25 @@ public enum class KiteDocFormat {
 public object KiteDoc {
 
     /**
-     * The format [bytes] are in, or null when they are neither.
+     * The format [bytes] are in, or null when they are none of them.
      *
      * PDF is a `%PDF-` marker in the first kilobyte (leading junk is allowed,
      * as it is in real files). EPUB is a ZIP whose first entry is the OCF
      * `mimetype`, falling back to looking for `META-INF/container.xml` in the
-     * central directory for books that got the first entry wrong.
+     * central directory for books that got the first entry wrong. CBZ is any
+     * other ZIP whose real entries are all images (packaging noise like
+     * `ComicInfo.xml` and `Thumbs.db` is ignored), so a photo backup with a
+     * readme inside stays unrecognized.
      *
-     * Only the header is read, so this is cheap enough to run over a folder.
+     * PDF and EPUB read only the header; the CBZ check reads the ZIP central
+     * directory. Still cheap enough to run over a folder.
      */
     public fun formatOf(bytes: ByteArray): KiteDocFormat? = when {
-        looksLikeZip(bytes) -> if (looksLikeEpub(bytes)) KiteDocFormat.Epub else null
+        looksLikeZip(bytes) -> when {
+            looksLikeEpub(bytes) -> KiteDocFormat.Epub
+            looksLikeCbz(bytes) -> KiteDocFormat.Cbz
+            else -> null
+        }
         findPdfHeader(bytes) -> KiteDocFormat.Pdf
         else -> null
     }
@@ -52,13 +62,13 @@ public object KiteDoc {
     /**
      * Reads [bytes] as whichever format they are.
      *
-     * @param password for an encrypted PDF; ignored for EPUB.
+     * @param password for an encrypted PDF; ignored for EPUB and CBZ.
      * @param epubSettings page size, font size and margins for an EPUB;
-     *   ignored for PDF. Re-flow later with [EpubDocument.withSettings]
-     *   instead of re-opening.
-     * @throws KiteFormatException when the bytes are neither format, or are
-     *   that format but unreadable. Unrecognised bytes get one last try as a
-     *   damaged PDF first, because the PDF reader can rebuild a file whose
+     *   ignored for PDF and CBZ. Re-flow later with
+     *   [EpubDocument.withSettings] instead of re-opening.
+     * @throws KiteFormatException when the bytes are no known format, or are
+     *   a known format but unreadable. Unrecognised bytes get one last try as
+     *   a damaged PDF first, because the PDF reader can rebuild a file whose
      *   header was lost.
      * @throws io.github.yuroyami.kitepdf.core.KiteWrongPasswordException when
      *   a PDF is encrypted and [password] does not authenticate.
@@ -70,9 +80,10 @@ public object KiteDoc {
     ): KiteDocument = when (formatOf(bytes)) {
         KiteDocFormat.Pdf -> PdfDocument.open(bytes, password)
         KiteDocFormat.Epub -> EpubDocument.open(bytes, epubSettings)
+        KiteDocFormat.Cbz -> CbzDocument.open(bytes)
         null -> PdfDocument.openOrNull(bytes, password.encodeToByteArray())
             ?: throw KiteFormatException(
-                "not a readable PDF or EPUB (${bytes.size} bytes, starting ${headerPreview(bytes)})"
+                "not a readable PDF, EPUB or CBZ (${bytes.size} bytes, starting ${headerPreview(bytes)})"
             )
     }
 
@@ -158,6 +169,20 @@ public object KiteDoc {
                 (zip.readText("mimetype")?.trim() == EPUB_MIMETYPE || zip.names.any { it.endsWith(".opf") })
         }.getOrDefault(false)
     }
+
+    private val cbzImageExtensions = setOf("jpg", "jpeg", "png", "gif", "bmp", "webp")
+
+    /** Every real entry is an image: the strict CBZ definition, so a photo backup stays unrecognized. */
+    private fun looksLikeCbz(bytes: ByteArray): Boolean = runCatching {
+        val names = ZipReader(bytes).names.filterNot { name ->
+            val base = name.substringAfterLast('/')
+            name.endsWith("/") || base.startsWith(".") ||
+                base.equals("Thumbs.db", ignoreCase = true) ||
+                base.equals("desktop.ini", ignoreCase = true) ||
+                base.equals("ComicInfo.xml", ignoreCase = true)
+        }
+        names.isNotEmpty() && names.all { it.substringAfterLast('.').lowercase() in cbzImageExtensions }
+    }.getOrDefault(false)
 
     private fun readU16(bytes: ByteArray, at: Int): Int =
         if (at + 1 >= bytes.size) 0
