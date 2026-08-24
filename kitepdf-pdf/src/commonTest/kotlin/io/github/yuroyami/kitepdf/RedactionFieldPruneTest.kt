@@ -610,10 +610,46 @@ class RedactionFieldPruneTest {
         assertEquals(0, KitePDF.open(out).formFields.size, "the form still lists the redacted field")
     }
 
+    @Test fun a_widget_whose_parent_does_not_list_it_leaves_that_field_alone() {
+        // W's /Parent claims field 6, but field 6's own /Kids names widget 8, not
+        // W: the mutual link (12.7.3.3) is missing on field 6's side too, so field
+        // 6 is not W's field, it is a real field of its own, with its own /V, /T
+        // and its own untouched widget.
+        val pdf = RawPdf.page(
+            content = body,
+            annots = "/Annots [7 0 R 8 0 R]",
+            catalogExtra = "/AcroForm 9 0 R",
+            extra = listOf(
+                RawPdf.obj(6, "<< /FT /Tx /T (unrelated) /V (UNRELATED-SECRET) /Kids [8 0 R] >>"),
+                RawPdf.obj(7, "<< /Type /Annot /Subtype /Widget /Rect [100 700 300 720] /Parent 6 0 R /P 3 0 R >>"),
+                RawPdf.obj(8, "<< /Type /Annot /Subtype /Widget /Rect [100 100 300 120] /Parent 6 0 R /P 3 0 R >>"),
+                RawPdf.obj(9, "<< /Fields [6 0 R] >>"),
+            ),
+        )
+        assertEquals(
+            "UNRELATED-SECRET",
+            KitePDF.open(pdf).formField("unrelated")?.value,
+            "fixture is wrong, the form is not read",
+        )
+
+        val doc = KitePDF.open(pdf)
+        val out = doc.edit().apply { redactRegion(doc.pages[0], upperRegion) }.saveRewritten()
+
+        val reopened = KitePDF.open(out)
+        assertEquals(
+            "UNRELATED-SECRET",
+            reopened.formField("unrelated")?.value,
+            "a field that never listed the redacted widget lost its value anyway",
+        )
+        assertEquals(1, reopened.formFields.size, "the unrelated field was dropped from /AcroForm /Fields")
+        assertEquals(1, reopened.pages[0].annotations.size, "the untouched widget was pruned from its page")
+    }
+
     @Test fun a_dropped_annotation_keeps_neither_its_action_nor_its_caption() {
         // A Screen annotation reaches its media through a rendition action (12.5.6.18),
-        // /AA holds more of the same, and /MK /CA is the caption drawn on it. None of
-        // that is /Contents, and all of it is content.
+        // and /AA holds more of the same. /MK /CA is a push-button caption
+        // (12.5.6.19), not a Screen key, but the scrub does not look at /Subtype,
+        // so it rides on this same fixture instead of a fourth annotation.
         val pdf = RawPdf.page(
             content = body,
             annots = "/Annots [6 0 R]",
