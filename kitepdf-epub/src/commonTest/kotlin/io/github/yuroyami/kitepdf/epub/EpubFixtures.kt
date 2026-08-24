@@ -11,6 +11,8 @@ internal object EpubFixtures {
         extraEntries: List<Pair<String, ByteArray>> = emptyList(),
         uniqueId: String? = null,
         language: String? = null,
+        spineDirection: String? = null,
+        primaryWritingMode: String? = null,
     ): ByteArray {
         val body = if (bodyHtml.trimStart().startsWith("<body")) bodyHtml else "<body>$bodyHtml</body>"
         val container = """
@@ -22,6 +24,7 @@ internal object EpubFixtures {
         val metaItems = buildString {
             if (uniqueId != null) append("""<dc:identifier id="uid">$uniqueId</dc:identifier>""")
             if (language != null) append("""<dc:language>$language</dc:language>""")
+            if (primaryWritingMode != null) append("""<meta property="primary-writing-mode">$primaryWritingMode</meta>""")
         }
         val metadata = if (metaItems.isNotEmpty()) {
             """<metadata xmlns:dc="http://purl.org/dc/elements/1.1/">$metaItems</metadata>"""
@@ -33,7 +36,7 @@ internal object EpubFixtures {
             <package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="uid">
               $metadata
               <manifest><item id="c1" href="chapter1.xhtml" media-type="application/xhtml+xml"/></manifest>
-              <spine><itemref idref="c1"/></spine>
+              <spine${spineDirection?.let { """ page-progression-direction="$it"""" } ?: ""}><itemref idref="c1"/></spine>
             </package>
         """.trimIndent()
         val chapter = """<?xml version="1.0"?><html xmlns="http://www.w3.org/1999/xhtml">$body</html>"""
