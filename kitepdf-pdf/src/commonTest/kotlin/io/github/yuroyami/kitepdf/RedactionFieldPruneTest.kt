@@ -164,24 +164,28 @@ class RedactionFieldPruneTest {
     }
 
 
-    /** A field that names ITSELF as its parent and claims no kids. */
+    /**
+     * Two fields that are each other's parent. The /Kids links are mutual, as they
+     * must be for the walk to climb at all (12.7.3.3), so only /Parent is malformed.
+     */
     private fun loopingParentPdf(): ByteArray = RawPdf.page(
         content = body,
         annots = "/Annots [7 0 R]",
         catalogExtra = "/AcroForm 8 0 R",
         extra = listOf(
-            RawPdf.obj(6, "<< /FT /Tx /T (loop) /V (LOOP-SECRET) /Parent 6 0 R >>"),
+            RawPdf.obj(6, "<< /FT /Tx /T (loop) /V (LOOP-SECRET) /Parent 9 0 R /Kids [7 0 R] >>"),
             RawPdf.obj(7, "<< /Type /Annot /Subtype /Widget /Rect [100 700 300 720] /Parent 6 0 R /P 3 0 R >>"),
-            RawPdf.obj(8, "<< /Fields [6 0 R] >>"),
+            RawPdf.obj(8, "<< /Fields [9 0 R] >>"),
+            RawPdf.obj(9, "<< /T (outer) /Parent 6 0 R /Kids [6 0 R] >>"),
         ),
     )
 
     @Test fun a_looping_parent_chain_is_refused_rather_than_half_redacted() {
-        // A climb to the root field never ends on its own here. /Parent chains are a
-        // tree (12.7.3.3), so this file is malformed and the root field cannot be
-        // found: the value would stay in /Fields, which is the very thing this
-        // redaction removes, so the call says so instead of handing back a file the
-        // caller would believe is clean.
+        // The climb goes 6, 9, 6 and never reaches a root. /Parent chains are a tree
+        // (12.7.3.3), so this file is malformed and the root field cannot be found:
+        // the value would stay in /Fields, which is the very thing this redaction
+        // removes, so the call says so instead of handing back a file the caller
+        // would believe is clean.
         val pdf = loopingParentPdf()
         val doc = KitePDF.open(pdf)
         val editor = doc.edit()
@@ -554,6 +558,98 @@ class RedactionFieldPruneTest {
         assertFalse(holds(out, "SECRET-MOVIE"), "the movie survived")
     }
 
+    @Test fun a_field_that_inherits_its_type_and_has_no_name_still_loses_its_value() {
+        // /FT is inheritable and /T is optional (12.7.3.1, Table 220), so line1 here
+        // carries neither: it takes its type from the root and is never referred to by
+        // name. It is still the field, and the value is on it, so a walk that looked
+        // for field-ish keys instead of the /Kids link would leave SECRET in the file.
+        val pdf = RawPdf.page(
+            content = body,
+            annots = "/Annots [9 0 R]",
+            catalogExtra = "/AcroForm 11 0 R",
+            extra = listOf(
+                RawPdf.obj(6, "<< /FT /Tx /T (address) /Kids [7 0 R] >>"),
+                RawPdf.obj(7, "<< /V (INHERITED-SECRET) /Parent 6 0 R /Kids [9 0 R] >>"),
+                RawPdf.obj(9, "<< /Type /Annot /Subtype /Widget /Rect [100 700 300 720] /Parent 7 0 R /P 3 0 R >>"),
+                RawPdf.obj(11, "<< /Fields [6 0 R] >>"),
+            ),
+        )
+        // The field-tree reader treats a kid with no /T as a widget of the root rather
+        // than a field of its own, so ask the file, not the reader, where the value is.
+        assertTrue(holds(pdf, "INHERITED-SECRET"), "fixture is wrong, the scan proves nothing")
+        assertEquals(1, KitePDF.open(pdf).formFields.size, "fixture is wrong, the form is not read")
+
+        val doc = KitePDF.open(pdf)
+        val out = doc.edit().apply { redactRegion(doc.pages[0], upperRegion) }.saveRewritten()
+
+        assertFalse(holds(out, "INHERITED-SECRET"), "a field with no /FT and no /T of its own kept its value")
+        assertEquals(0, KitePDF.open(out).formFields.size, "the form still lists the redacted field")
+    }
+
+    @Test fun a_field_that_forgot_to_name_its_widget_still_loses_its_value() {
+        // The /Parent link is mutual (12.7.3.3), and this file only wrote one half of
+        // it: the widget names the field, the field has no /Kids at all. The walk
+        // cannot rewrite a /Kids that does not name the child, but the value is on
+        // that field, so it goes with the widget all the same.
+        val pdf = RawPdf.page(
+            content = body,
+            annots = "/Annots [7 0 R]",
+            catalogExtra = "/AcroForm 8 0 R",
+            extra = listOf(
+                RawPdf.obj(6, "<< /FT /Tx /T (patient) /V (HALF-LINKED-SECRET) >>"),
+                RawPdf.obj(7, "<< /Type /Annot /Subtype /Widget /Rect [100 700 300 720] /Parent 6 0 R /P 3 0 R >>"),
+                RawPdf.obj(8, "<< /Fields [6 0 R] >>"),
+            ),
+        )
+        assertEquals("HALF-LINKED-SECRET", KitePDF.open(pdf).formField("patient")?.value, "fixture is wrong, the form is not read")
+
+        val doc = KitePDF.open(pdf)
+        val out = doc.edit().apply { redactRegion(doc.pages[0], upperRegion) }.saveRewritten()
+
+        assertFalse(holds(out, "HALF-LINKED-SECRET"), "a field whose /Kids never named the widget kept its value")
+        assertEquals(0, KitePDF.open(out).formFields.size, "the form still lists the redacted field")
+    }
+
+    @Test fun a_dropped_annotation_keeps_neither_its_action_nor_its_caption() {
+        // A Screen annotation reaches its media through a rendition action (12.5.6.18),
+        // /AA holds more of the same, and /MK /CA is the caption drawn on it. None of
+        // that is /Contents, and all of it is content.
+        val pdf = RawPdf.page(
+            content = body,
+            annots = "/Annots [6 0 R]",
+            catalogExtra = "/StructTreeRoot 12 0 R",
+            extra = listOf(
+                RawPdf.obj(
+                    6,
+                    "<< /Type /Annot /Subtype /Screen /Rect [100 700 300 720] /P 3 0 R " +
+                        "/MK << /CA (CAPTION-TEXT) >> /A 9 0 R /AA << /PO 10 0 R >> >>",
+                ),
+                RawPdf.obj(
+                    9,
+                    "<< /Type /Action /S /Rendition /R << /Type /Rendition /S /MR /C << /Type /MediaClip " +
+                        "/S /MCD /D << /Type /Filespec /F (SECRET-MEDIA) /EF << /F 11 0 R >> >> >> >> >>",
+                ),
+                RawPdf.obj(10, "<< /Type /Action /S /JavaScript /JS (SECRET-SCRIPT) >>"),
+                RawPdf.obj(11, "<< /Type /EmbeddedFile >>", "SECRET-MEDIA-BYTES".encodeToByteArray()),
+                RawPdf.obj(12, "<< /Type /StructTreeRoot /K 13 0 R >>"),
+                RawPdf.obj(13, "<< /Type /StructElem /S /Annot /P 12 0 R /K << /Type /OBJR /Obj 6 0 R >> >>"),
+            ),
+        )
+        assertTrue(holds(pdf, "SECRET-MEDIA-BYTES"), "fixture is wrong, the scan proves nothing")
+
+        val doc = KitePDF.open(pdf)
+        val out = doc.edit().apply { redactRegion(doc.pages[0], upperRegion) }.saveRewritten()
+
+        val survivor = structTreeTarget(out)
+        assertNotNull(survivor, "fixture is wrong, the structure tree no longer keeps the annotation alive")
+        assertEquals(null, survivor["A"], "the dropped annotation kept its action")
+        assertEquals(null, survivor["AA"], "the dropped annotation kept its additional actions")
+        assertEquals(null, survivor["MK"], "the dropped annotation kept its caption")
+        assertFalse(holds(out, "SECRET-MEDIA-BYTES"), "the media the action reached survived")
+        assertFalse(holds(out, "SECRET-SCRIPT"), "the additional action survived")
+        assertFalse(holds(out, "CAPTION-TEXT"), "the caption survived")
+    }
+
     /* ─── Malformed input ────────────────────────────────────────────────── */
 
     @Test fun redacting_a_page_does_not_delete_a_sibling_page() {
@@ -578,7 +674,14 @@ class RedactionFieldPruneTest {
 
         val reopened = KitePDF.open(out)
         assertEquals(2, reopened.pages.size, "redacting page one deleted a page from the document")
-        assertEquals(2, reopened.pageCount, "the page tree /Count no longer matches its /Kids")
+        // /Count is not recomputed on rewrite, so a page dropped from /Kids leaves it
+        // stale at two: only comparing the two catches the deletion.
+        val pagesNode = reopened.catalog.getDict("Pages", reopened)
+        assertEquals(
+            pagesNode?.getArray("Kids", reopened)?.size,
+            pagesNode?.getInt("Count")?.toInt(),
+            "the page tree /Count no longer matches its /Kids",
+        )
         assertFalse(holds(out, "NOTE-TEXT"), "the dropped annotation kept its text")
     }
 
