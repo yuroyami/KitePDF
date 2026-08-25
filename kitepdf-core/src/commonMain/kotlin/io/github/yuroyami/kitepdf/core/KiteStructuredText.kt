@@ -93,12 +93,18 @@ public class KiteStructuredText(public val blocks: List<KiteTextBlock>) {
         var bestDx = Double.MAX_VALUE
         for ((i, ref) in flatChars.withIndex()) {
             val line = blocks[ref.block].lines[ref.line]
-            // Display rects keep y-min in `bottom` (y grows downward).
-            if (y < line.bounds.bottom || y > line.bounds.top) continue
-            val left = line.charEdges[ref.char]
-            val right = line.charEdges[ref.char + 1]
-            if (x >= left && x <= right) return i
-            val dx = if (x < left) left - x else x - right
+            // Display rects keep y-min in `bottom` (y grows downward). A
+            // vertical line runs down the page, so the roles swap: the band
+            // test is on x and the char walk is on y.
+            val along = if (line.vertical) y else x
+            val across = if (line.vertical) x else y
+            val bandLow = if (line.vertical) line.bounds.left else line.bounds.bottom
+            val bandHigh = if (line.vertical) line.bounds.right else line.bounds.top
+            if (across < bandLow || across > bandHigh) continue
+            val start = line.charEdges[ref.char]
+            val end = line.charEdges[ref.char + 1]
+            if (along >= start && along <= end) return i
+            val dx = if (along < start) start - along else along - end
             if (dx < bestDx) {
                 bestDx = dx
                 best = i
@@ -162,13 +168,14 @@ public class KiteStructuredText(public val blocks: List<KiteTextBlock>) {
             var j = i
             while (j + 1 < entries.size && entries[j + 1].first == li) j++
             val line = block.lines[li]
+            val from = line.charEdges[entries[i].second]
+            val to = line.charEdges[entries[j].second + 1]
             quads.add(
-                KiteRectangle(
-                    left = line.charEdges[entries[i].second],
-                    bottom = line.bounds.bottom,
-                    right = line.charEdges[entries[j].second + 1],
-                    top = line.bounds.top,
-                ),
+                if (line.vertical) {
+                    KiteRectangle(line.bounds.left, from, line.bounds.right, to)
+                } else {
+                    KiteRectangle(from, line.bounds.bottom, to, line.bounds.top)
+                },
             )
             i = j + 1
         }
@@ -180,14 +187,20 @@ public class KiteStructuredText(public val blocks: List<KiteTextBlock>) {
 public class KiteTextBlock(public val lines: List<KiteTextLine>)
 
 /**
- * One laid-out line. [charEdges] has `text.length + 1` display-space x
- * boundaries: `charEdges[i]` is the left edge of char `i`, the final entry
- * the line's right edge. That is enough to build sub-line highlight quads.
+ * One laid-out line. [charEdges] has `text.length + 1` display-space
+ * boundaries: `charEdges[i]` is where char `i` starts, the final entry where
+ * the line ends. That is enough to build sub-line highlight quads.
+ *
+ * They are x boundaries on a normal line. On a [vertical] one (Japanese
+ * tategaki, where a "line" is a column running down the page) they are y
+ * boundaries instead, and [bounds] gives the column's width.
  */
 public class KiteTextLine(
     public val text: String,
     public val bounds: KiteRectangle,
     public val charEdges: DoubleArray,
+    /** True when this line is a column of vertical text: see [charEdges]. */
+    public val vertical: Boolean = false,
 ) {
     init {
         require(charEdges.size == text.length + 1) {

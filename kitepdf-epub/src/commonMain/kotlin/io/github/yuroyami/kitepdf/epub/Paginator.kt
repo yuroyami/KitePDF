@@ -21,6 +21,8 @@ internal class PageRender(
      * (rightmost) column.
      */
     val vertical: Boolean = false,
+    /** Vertical writing whose columns advance LEFT to right (`vertical-lr`). */
+    val verticalLr: Boolean = false,
 )
 
 /**
@@ -53,6 +55,7 @@ internal object Paginator {
     fun paginate(
         root: BlockBox, pageWidth: Double, pageHeight: Double, margin: Double,
         vertical: Boolean = false,
+        verticalLr: Boolean = false,
     ): List<PageRender> {
         // In vertical mode pages are sliced along the logical block axis too,
         // but the per-page budget is the physical page WIDTH (columns).
@@ -113,6 +116,7 @@ internal object Paginator {
                 decoBoxes = deco.filter { it.y < end && it.bottom > start },
                 pageWidth = pageWidth, pageHeight = pageHeight, margin = margin,
                 vertical = vertical,
+                verticalLr = verticalLr,
             )
         }
     }

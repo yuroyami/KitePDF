@@ -172,13 +172,15 @@ public class EpubDocument internal constructor(
         BlockBox(ComputedStyle.initial(settings.fontSize, direction = parsed.baseDir), listOf(docRoot(chapter)))
 
     /**
-     * Vertical writing: true when the first spine root resolves
-     * `writing-mode: vertical-rl` (Japanese tategaki). One mode per document;
-     * mixed horizontal/vertical spines follow the first (a noted limit).
-     * Fixed-layout books stay on the pre-paginated path regardless.
+     * Vertical writing: the writing mode the first spine root resolves, if it
+     * is a vertical one. `vertical-rl` is Japanese tategaki, columns running
+     * right to left; `vertical-lr` lays out the same way with the columns
+     * running the other direction. One mode per document; mixed
+     * horizontal/vertical spines follow the first (a noted limit). Fixed-layout
+     * books stay on the pre-paginated path regardless.
      */
-    internal val isVertical: Boolean by lazy {
-        if (parsed.fixedLayout) return@lazy false
+    internal val verticalMode: io.github.yuroyami.kitepdf.epub.css.WritingMode? by lazy {
+        if (parsed.fixedLayout) return@lazy null
         // The spine root box wraps the document node (initial style); the html
         // element's computed style sits one level down and body's below that,
         // so walk the first-child chain a few levels.
@@ -190,12 +192,21 @@ public class EpubDocument internal constructor(
                 is TextBlockBox -> box.style
                 else -> null
             }
-            if (s?.writingMode == io.github.yuroyami.kitepdf.epub.css.WritingMode.VERTICAL_RL) return@lazy true
+            val mode = s?.writingMode
+            if (mode == io.github.yuroyami.kitepdf.epub.css.WritingMode.VERTICAL_RL ||
+                mode == io.github.yuroyami.kitepdf.epub.css.WritingMode.VERTICAL_LR
+            ) return@lazy mode
             box = (box as? BlockBox)?.children?.firstOrNull()
             depth++
         }
-        false
+        null
     }
+
+    internal val isVertical: Boolean get() = verticalMode != null
+
+    /** True for `vertical-lr`: vertical text whose columns advance left to right. */
+    internal val isVerticalLr: Boolean
+        get() = verticalMode == io.github.yuroyami.kitepdf.epub.css.WritingMode.VERTICAL_LR
 
     private fun fixedSpine(chapter: Int): FixedSpine? {
         if (!parsed.fixedLayout) return null
@@ -270,7 +281,8 @@ public class EpubDocument internal constructor(
             settings.lineHeightScale, vertical = isVertical,
         ).layout(root, inlineBudget, blockBudget)
         val pages = Paginator.paginate(
-            root, settings.pageWidth, settings.pageHeight, settings.margin, vertical = isVertical,
+            root, settings.pageWidth, settings.pageHeight, settings.margin,
+            vertical = isVertical, verticalLr = isVerticalLr,
         )
         // A spine document with nothing to paint contributed no page when the
         // whole book shared one box tree. Keep that: do not invent a blank page.
@@ -806,8 +818,7 @@ public class EpubPage internal constructor(
         val margin = page.margin
         val startY = page.startY
         val bandBottom = startY + (displayWidth - 2 * margin)
-        // Logical block position -> the column's physical x (canvas space).
-        fun colX(v: Double) = displayWidth - margin - (v - startY)
+        fun colX(v: Double) = columnX(v)
 
         doc.settings.backgroundColor?.let { bg ->
             val rect = KitePath.Builder().apply {
@@ -894,6 +905,16 @@ public class EpubPage internal constructor(
         canvas.endPage()
     }
 
+    /**
+     * Logical block position to the column's physical x. `vertical-rl` (the
+     * usual tategaki) starts at the right edge and works left; `vertical-lr`
+     * starts at the left and works right.
+     */
+    private fun columnX(v: Double): Double {
+        val span = v - page.startY
+        return if (page.verticalLr) page.margin + span else displayWidth - page.margin - span
+    }
+
     /** Upright in vertical flow: the full-width (CJK) codepoints; the rest rotate. */
     private fun isUpright(g: io.github.yuroyami.kitepdf.core.font.TextGlyph): Boolean =
         g.text.isNotEmpty() && FontMetrics.isWide(g.text[0].code)
@@ -976,8 +997,17 @@ public class EpubPage internal constructor(
     public val links: List<EpubLink> by lazy {
         val out = ArrayList<EpubLink>()
         for (line in page.lines) {
-            val top = displayY(line.yTop)
-            val bottom = top + line.height
+            // A vertical line is a column: the run extent goes down the page
+            // and the line's own thickness goes across it.
+            val acrossLow: Double
+            val acrossHigh: Double
+            if (page.vertical) {
+                val a = columnX(line.yTop)
+                val b = columnX(line.yTop + line.height)
+                acrossLow = minOf(a, b); acrossHigh = maxOf(a, b)
+            } else {
+                acrossLow = displayY(line.yTop); acrossHigh = acrossLow + line.height
+            }
             val runs = line.runs.filter { !it.isAnnotation && it.glyphs.isNotEmpty() }.sortedBy { it.x }
             var i = 0
             while (i < runs.size) {
@@ -985,14 +1015,15 @@ public class EpubPage internal constructor(
                 if (href == null) { i++; continue }
                 var j = i
                 while (j + 1 < runs.size && runs[j + 1].href == href) j++
+                val start = page.margin + runs[i].x
+                val end = runEnd(runs[j])
                 out.add(
                     EpubLink(
-                        rect = io.github.yuroyami.kitepdf.core.KiteRectangle(
-                            left = page.margin + runs[i].x,
-                            bottom = top,
-                            right = runEnd(runs[j]),
-                            top = bottom,
-                        ),
+                        rect = if (page.vertical) {
+                            io.github.yuroyami.kitepdf.core.KiteRectangle(acrossLow, start, acrossHigh, end)
+                        } else {
+                            io.github.yuroyami.kitepdf.core.KiteRectangle(start, acrossLow, end, acrossHigh)
+                        },
                         href = href,
                     ),
                 )
@@ -1114,6 +1145,20 @@ public class EpubPage internal constructor(
         }
         if (sb.isEmpty()) return null
         edges.add(penEnd)
+        if (page.vertical) {
+            // A column: the char edges run DOWN the page, and the line's own
+            // extent is the column's width across it.
+            val a = columnX(line.yTop)
+            val b = columnX(line.yTop + line.height)
+            return KiteTextLine(
+                text = sb.toString(),
+                bounds = io.github.yuroyami.kitepdf.core.KiteRectangle(
+                    minOf(a, b), edges.first(), maxOf(a, b), edges.last(),
+                ),
+                charEdges = edges.toDoubleArray(),
+                vertical = true,
+            )
+        }
         val top = displayY(line.yTop)
         return KiteTextLine(
             text = sb.toString(),
