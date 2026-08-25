@@ -28,7 +28,10 @@ internal sealed interface DocItem {
     }
 
     data class ChapterGap(val chapter: Int) : DocItem {
-        override val key: String get() = "c$chapter"
+        // Deliberately the SAME key as the chapter's future first page: the
+        // gap and page zero never coexist, and sharing the key lets keyed
+        // containers carry a waiting reader onto the landed chapter.
+        override val key: String get() = "p$chapter.0"
     }
 }
 

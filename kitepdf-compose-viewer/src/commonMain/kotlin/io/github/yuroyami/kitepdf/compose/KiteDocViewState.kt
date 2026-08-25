@@ -95,14 +95,25 @@ public class KiteDocViewState(
         chaptersReady++
     }
 
+    private var cachedItems: List<DocItem> = emptyList()
+    private var cachedEpoch = -1
+
     /**
      * What the viewer scrolls through: one entry per laid-out page, plus one
      * page-shaped placeholder for each chapter still being laid out.
+     *
+     * Memoized per publication (main thread only): a chapter laid out but not
+     * yet published stays invisible until [onChapterReady], so the pager's
+     * count, key and content callbacks always agree on one strip version.
      */
     internal val items: List<DocItem>
         get() {
-            chaptersReady // read so a landing chapter recomposes the strip
-            return buildItems(document)
+            val epoch = chaptersReady // snapshot read so a landing recomposes readers
+            if (epoch != cachedEpoch) {
+                cachedItems = buildItems(document)
+                cachedEpoch = epoch
+            }
+            return cachedItems
         }
 
     /** How many slots the strip has. This is what the lists and pagers count. */
@@ -634,10 +645,18 @@ public class KiteDocViewState(
         scrollTo(location, animate)
     }
 
-    /** Lays out [location]'s chapter off the main thread, if it is not ready. */
+    /**
+     * Lays out [location]'s chapter off the main thread if needed, and makes
+     * sure the published strip shows it. The background loader can lay a
+     * chapter out moments before its publication lands; skipping on raw
+     * readiness alone would leave navigation reading a stale strip where the
+     * target does not exist yet.
+     */
     private suspend fun prepareFor(location: KiteLocation) {
-        if (document.isChapterReady(location.chapter)) return
-        withContext(kitepdfRasterDispatcher()) { document.prepareChapter(location.chapter) }
+        if (location.chapter !in 0 until document.chapterCount) return
+        val ready = document.isChapterReady(location.chapter)
+        if (ready && indexOf(KiteLocation(location.chapter, 0)) >= 0) return
+        if (!ready) withContext(kitepdfRasterDispatcher()) { document.prepareChapter(location.chapter) }
         onComposeThread { onChapterReady() }
     }
 
