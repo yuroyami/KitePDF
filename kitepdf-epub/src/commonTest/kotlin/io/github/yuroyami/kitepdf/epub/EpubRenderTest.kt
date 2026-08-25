@@ -420,41 +420,7 @@ class EpubRenderTest {
         return sig + chunk("IHDR", ihdr) + chunk("IDAT", zlib) + chunk("IEND", ByteArray(0))
     }
 
-    /** Build a STORED (uncompressed) zip. CRCs are left zero; [ZipReader] does not verify them. */
-    private fun storedZip(entries: List<Pair<String, ByteArray>>): ByteArray {
-        val out = ArrayList<Byte>()
-        fun u16(v: Int) { out.add((v and 0xFF).toByte()); out.add(((v ushr 8) and 0xFF).toByte()) }
-        fun u32(v: Long) { var s = 0; while (s < 32) { out.add(((v ushr s) and 0xFF).toByte()); s += 8 } }
-        fun raw(b: ByteArray) { for (x in b) out.add(x) }
-
-        data class Cd(val name: ByteArray, val offset: Int, val size: Int)
-        val cds = ArrayList<Cd>()
-
-        for ((name, data) in entries) {
-            val nb = name.encodeToByteArray()
-            val offset = out.size
-            u32(0x04034b50L); u16(20); u16(0); u16(0); u16(0); u16(0)  // sig ver flags method time date
-            u32(0L); u32(data.size.toLong()); u32(data.size.toLong())  // crc csize usize
-            u16(nb.size); u16(0)                                       // nameLen extraLen
-            raw(nb); raw(data)
-            cds.add(Cd(nb, offset, data.size))
-        }
-
-        val cdStart = out.size
-        for (cd in cds) {
-            u32(0x02014b50L); u16(20); u16(20); u16(0); u16(0)         // sig verMade verNeed flags method
-            u16(0); u16(0); u32(0L)                                    // time date crc
-            u32(cd.size.toLong()); u32(cd.size.toLong())              // csize usize
-            u16(cd.name.size); u16(0); u16(0)                          // nameLen extraLen commentLen
-            u16(0); u16(0); u32(0L)                                    // diskStart intAttr extAttr
-            u32(cd.offset.toLong())                                    // local header offset
-            raw(cd.name)
-        }
-        val cdSize = out.size - cdStart
-
-        u32(0x06054b50L); u16(0); u16(0)                              // sig disk cdDisk
-        u16(cds.size); u16(cds.size)                                  // entriesThisDisk entriesTotal
-        u32(cdSize.toLong()); u32(cdStart.toLong()); u16(0)          // cdSize cdOffset commentLen
-        return out.toByteArray()
-    }
+    /** The shared builder; every fixture here is a STORED zip. */
+    private fun storedZip(entries: List<Pair<String, ByteArray>>): ByteArray =
+        EpubFixtures.storedZip(entries)
 }
