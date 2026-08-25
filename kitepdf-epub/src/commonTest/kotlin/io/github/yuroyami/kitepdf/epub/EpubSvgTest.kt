@@ -42,4 +42,22 @@ class EpubSvgTest {
         assertEquals(0.5, kotlin.math.abs(red.ctm.a), 1e-6, "explicit width 50 of a 100-wide SVG => x-scale 0.5")
         assertEquals(0.5, kotlin.math.abs(red.ctm.d), 1e-6, "explicit height 30 of a 60-tall SVG => y-scale 0.5")
     }
+
+    @Test
+    fun an_svg_wrapping_a_page_image_draws_the_image() {
+        // The fixed-layout comic idiom: one SVG per page, holding one <image>.
+        val svg = """<svg xmlns="http://www.w3.org/2000/svg" width="60" height="40">
+            <image xlink:href="page01.bmp" x="0" y="0" width="60" height="40"/></svg>"""
+        val book = EpubFixtures.epub(
+            """<body><img src="page.svg"/></body>""",
+            listOf(
+                "OEBPS/page.svg" to svg.encodeToByteArray(),
+                "OEBPS/page01.bmp" to EpubFixtures.bmp2x1(),
+            ),
+        )
+        val images = EpubDocument.open(book).pages.flatMap { page ->
+            RecordingCanvas().also { page.renderTo(it) }.calls.filterIsInstance<RecordingCanvas.Call.Image>()
+        }
+        assertTrue(images.isNotEmpty(), "the SVG's <image> reached the canvas")
+    }
 }

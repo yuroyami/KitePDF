@@ -8,6 +8,10 @@ import io.github.yuroyami.kitepdf.core.render.KiteMatrix
 import io.github.yuroyami.kitepdf.core.render.KiteCanvas
 import io.github.yuroyami.kitepdf.core.render.KitePath
 import io.github.yuroyami.kitepdf.core.css.CssValues
+import io.github.yuroyami.kitepdf.core.font.FontSpec
+import io.github.yuroyami.kitepdf.core.font.KiteFontFamily
+import io.github.yuroyami.kitepdf.core.render.KiteImageData
+import io.github.yuroyami.kitepdf.core.render.KiteShading
 import io.github.yuroyami.kitepdf.core.render.RgbColor
 import io.github.yuroyami.kitepdf.core.text.TextEncoding
 import kotlin.math.abs
@@ -30,12 +34,16 @@ import kotlin.math.PI
  *
  * Drawn: `<svg>` (width/height/viewBox), `<g>`, `<use>`, `<path>` (every `d`
  * command including elliptical arcs), `<rect>` (+ rx/ry), `<circle>`,
- * `<ellipse>`, `<line>`, `<polyline>`, `<polygon>`; `fill`, `stroke`,
- * `stroke-width`, `opacity`, `fill-opacity`, `stroke-opacity` and `fill-rule`
- * with inheritance; `transform` (translate/scale/rotate/skewX/skewY/matrix).
+ * `<ellipse>`, `<line>`, `<polyline>`, `<polygon>`, `<text>` and `<image>`;
+ * `fill`, `stroke`, `stroke-width`, `opacity`, `fill-opacity`,
+ * `stroke-opacity`, `fill-rule`, `display` and `visibility` with inheritance;
+ * `transform` (translate/scale/rotate/skewX/skewY/matrix); linear and radial
+ * gradients as paint; and `clip-path`.
  *
- * Not drawn: `<text>`, patterns, filters, and `clipPath` (the clip is ignored,
- * so the shape paints unclipped rather than disappearing).
+ * Text is measured against standard-font metrics and drawn through a host
+ * typeface, because SVG ships no font file of its own.
+ *
+ * Not drawn: patterns, masks, filters, and animation.
  */
 public class SvgImage private constructor(
     private val root: KiteXmlNode.Element,
@@ -45,14 +53,36 @@ public class SvgImage private constructor(
     private val viewBox: DoubleArray?, // minX, minY, w, h
 ) {
 
-    /** Paint the SVG into [canvas]; [ctm] maps the (0,0)-(width,height) viewport to device. */
-    public fun render(canvas: KiteCanvas, ctm: KiteMatrix) {
+    /** Every element carrying an `id`, for `<use>`, gradients and `clip-path`. */
+    private val byId: Map<String, KiteXmlNode.Element> by lazy {
+        val out = LinkedHashMap<String, KiteXmlNode.Element>()
+        fun scan(el: KiteXmlNode.Element) {
+            el.attrs["id"]?.let { if (it.isNotEmpty()) out.putIfAbsent(it, el) }
+            for (c in el.children) if (c is KiteXmlNode.Element) scan(c)
+        }
+        scan(root)
+        out
+    }
+
+    /**
+     * Paint the SVG into [canvas]; [ctm] maps the (0,0)-(width,height) viewport
+     * to device space.
+     *
+     * [loadResource] resolves an `<image href>` that points at another file,
+     * relative to wherever this SVG came from. Without it only `data:` images
+     * draw, which is what a self-contained file uses.
+     */
+    public fun render(
+        canvas: KiteCanvas,
+        ctm: KiteMatrix,
+        loadResource: ((String) -> ByteArray?)? = null,
+    ) {
         val vb = viewBox
         val base = if (vb != null && vb[2] > 0 && vb[3] > 0) {
             // viewBox coords -> viewport: translate(-min) then scale(size/vb).
             compose(ctm, compose(KiteMatrix.scaling(width / vb[2], height / vb[3]), KiteMatrix.translation(-vb[0], -vb[1])))
         } else ctm
-        walk(root, base, Paint(), canvas)
+        walk(root, base, Paint(), canvas, loadResource, depth = 0)
     }
 
     private class Paint(
@@ -62,16 +92,54 @@ public class SvgImage private constructor(
         val opacity: Double = 1.0,
         val evenOdd: Boolean = false,
         val current: RgbColor = RgbColor.BLACK,
+        /** `url(#id)` paint servers, resolved when the shape is painted. */
+        val fillRef: String? = null,
+        val strokeRef: String? = null,
+        val fillOpacity: Double = 1.0,
+        val strokeOpacity: Double = 1.0,
+        val fontSize: Double = 16.0,
+        val fontSpec: FontSpec = FontSpec.SansSerif,
+        val textAnchor: String? = null,
     )
 
     // The canvas travels as a parameter, exactly like ctm and Paint: a field
     // here made render() non-reentrant, so two concurrent renders of the same
     // SvgImage hijacked each other's destination and silently dropped shapes.
-    private fun walk(el: KiteXmlNode.Element, parentCtm: KiteMatrix, parent: Paint, canvas: KiteCanvas) {
+    private fun walk(
+        el: KiteXmlNode.Element,
+        parentCtm: KiteMatrix,
+        parent: Paint,
+        canvas: KiteCanvas,
+        load: ((String) -> ByteArray?)?,
+        depth: Int,
+    ) {
+        if (depth > MAX_DEPTH) return                       // <use> cycles
+        if (isHidden(el)) return
         val ctm = el.attrs["transform"]?.let { compose(parentCtm, parseTransform(it)) } ?: parentCtm
         val paint = resolvePaint(el.attrs, parent)
+        val clip = clipPathOf(el, ctm)
+        if (clip != null) canvas.pushClip(clip, KiteMatrix.IDENTITY, evenOdd = false)
+        try {
+            paintElement(el, ctm, paint, canvas, load, depth)
+        } finally {
+            if (clip != null) canvas.popClip()
+        }
+    }
+
+    private fun paintElement(
+        el: KiteXmlNode.Element,
+        ctm: KiteMatrix,
+        paint: Paint,
+        canvas: KiteCanvas,
+        load: ((String) -> ByteArray?)?,
+        depth: Int,
+    ) {
         when (el.tag.lowercase()) {
-            "svg", "g", "a", "switch" -> for (c in el.children) if (c is KiteXmlNode.Element) walk(c, ctm, paint, canvas)
+            "svg", "g", "a", "switch" ->
+                for (c in el.children) if (c is KiteXmlNode.Element) walk(c, ctm, paint, canvas, load, depth + 1)
+            "use" -> drawUse(el, ctm, paint, canvas, load, depth)
+            "image" -> drawImage(el, ctm, paint, canvas, load)
+            "text" -> drawText(el, ctm, paint, canvas, depth)
             "path" -> el.attrs["d"]?.let { paintShape(parsePath(it), ctm, paint, canvas) }
             "rect" -> paintShape(rect(el.attrs), ctm, paint, canvas)
             "circle" -> paintShape(ellipse(num(el, "cx"), num(el, "cy"), num(el, "r"), num(el, "r")), ctm, paint, canvas)
@@ -85,23 +153,287 @@ public class SvgImage private constructor(
         }
     }
 
+    /** `display:none` and `visibility:hidden` keep an element off the canvas. */
+    private fun isHidden(el: KiteXmlNode.Element): Boolean =
+        styleOrAttr(el, "display")?.trim() == "none" ||
+            styleOrAttr(el, "visibility")?.trim().let { it == "hidden" || it == "collapse" }
+
+    /**
+     * `<use href="#id">`: draw the referenced element again, offset by x/y.
+     * The reference's own attributes still win over the ones inherited here.
+     */
+    private fun drawUse(
+        el: KiteXmlNode.Element,
+        ctm: KiteMatrix,
+        paint: Paint,
+        canvas: KiteCanvas,
+        load: ((String) -> ByteArray?)?,
+        depth: Int,
+    ) {
+        val id = el.attrs["href"]?.trim()?.removePrefix("#")?.takeIf { it.isNotEmpty() } ?: return
+        val target = byId[id] ?: return
+        val moved = compose(ctm, KiteMatrix.translation(num(el, "x"), num(el, "y")))
+        // <symbol> is invisible on its own but paints through <use>, as a group.
+        if (target.tag.lowercase() == "symbol") {
+            for (c in target.children) if (c is KiteXmlNode.Element) walk(c, moved, paint, canvas, load, depth + 1)
+        } else {
+            walk(target, moved, paint, canvas, load, depth + 1)
+        }
+    }
+
+    /** `<image>`: a `data:` URI, or another file when the caller can load one. */
+    private fun drawImage(
+        el: KiteXmlNode.Element,
+        ctm: KiteMatrix,
+        paint: Paint,
+        canvas: KiteCanvas,
+        load: ((String) -> ByteArray?)?,
+    ) {
+        val href = el.attrs["href"]?.trim()?.takeIf { it.isNotEmpty() } ?: return
+        val bytes = if (href.startsWith("data:")) dataUri(href) else load?.invoke(href)
+        val image = bytes?.let { KiteImageData.fromEncodedImage(it) } ?: return
+        val w = num(el, "width").takeIf { it > 0 } ?: image.width.toDouble()
+        val h = num(el, "height").takeIf { it > 0 } ?: image.height.toDouble()
+        // The image's unit square has row 0 at v=1, and SVG's y grows down, so
+        // the placement matrix flips y the way a y-down page does.
+        val placed = compose(ctm, KiteMatrix(w, 0.0, 0.0, -h, num(el, "x"), num(el, "y") + h))
+        canvas.drawImage(image, placed, paint.opacity)
+    }
+
+    /**
+     * `<text>` and its `<tspan>` children, laid out on one line from the
+     * element's own (x, y) anchor. Per-tspan x/y move the pen.
+     */
+    private fun drawText(
+        el: KiteXmlNode.Element,
+        ctm: KiteMatrix,
+        paint: Paint,
+        canvas: KiteCanvas,
+        depth: Int,
+    ) {
+        if (depth > MAX_DEPTH) return
+        var penX = num(el, "x")
+        val penY = num(el, "y")
+
+        fun show(text: String, p: Paint, x: Double, y: Double): Double {
+            val trimmed = text.replace('\n', ' ').replace('\t', ' ')
+            if (trimmed.isBlank()) return 0.0
+            val glyphs = SvgText.glyphs(trimmed.trim(), p.fontSpec)
+            val runWidth = SvgText.width(glyphs, p.fontSize)
+            val startX = x + SvgText.anchorShift(p.textAnchor, runWidth)
+            // Text space is y-up; SVG is y-down, so the run is flipped in place.
+            val textToDevice = compose(ctm, KiteMatrix(1.0, 0.0, 0.0, -1.0, startX, y))
+            canvas.drawGlyphs(
+                glyphs, p.fontSize, unitsPerEm = 1000, hasOutlines = false,
+                fontSpec = p.fontSpec, textToDevice = textToDevice,
+                color = p.fill ?: RgbColor.BLACK, alpha = p.opacity * p.fillOpacity,
+            )
+            return runWidth
+        }
+
+        for (child in el.children) when (child) {
+            is KiteXmlNode.Text -> penX += show(child.text, paint, penX, penY)
+            is KiteXmlNode.Element -> {
+                if (child.tag.lowercase() != "tspan" || isHidden(child)) continue
+                val sub = resolvePaint(child.attrs, paint)
+                val sx = child.attrs["x"]?.let { parseLen(it) } ?: penX
+                val sy = child.attrs["y"]?.let { parseLen(it) } ?: penY
+                val text = child.children.filterIsInstance<KiteXmlNode.Text>().joinToString("") { it.text }
+                penX = sx + show(text, sub, sx, sy)
+            }
+        }
+    }
+
+    /** The clip path an element's `clip-path="url(#id)"` names, already in device space. */
+    private fun clipPathOf(el: KiteXmlNode.Element, ctm: KiteMatrix): KitePath? {
+        val id = urlRef(styleOrAttr(el, "clip-path")) ?: return null
+        val def = byId[id] ?: return null
+        if (def.tag.lowercase() != "clippath") return null
+        val b = KitePath.Builder()
+        var any = false
+        for (c in def.children) {
+            if (c !is KiteXmlNode.Element) continue
+            val sub = shapeOf(c) ?: continue
+            // The clip is built in device space so one pushClip covers the lot.
+            for (seg in transformPath(sub, compose(ctm, c.attrs["transform"]?.let { parseTransform(it) } ?: KiteMatrix.IDENTITY)).segments) {
+                when (seg) {
+                    is KitePath.Segment.MoveTo -> b.moveTo(seg.x, seg.y)
+                    is KitePath.Segment.LineTo -> b.lineTo(seg.x, seg.y)
+                    is KitePath.Segment.CurveTo -> b.curveTo(seg.x1, seg.y1, seg.x2, seg.y2, seg.x3, seg.y3)
+                    is KitePath.Segment.QuadTo -> b.quadTo(seg.x1, seg.y1, seg.x2, seg.y2)
+                    KitePath.Segment.Close -> b.close()
+                }
+            }
+            any = true
+        }
+        return if (any) b.build() else null
+    }
+
+    /** The geometry of one shape element, in its own user coordinates. */
+    private fun shapeOf(el: KiteXmlNode.Element): KitePath? = when (el.tag.lowercase()) {
+        "path" -> el.attrs["d"]?.let { parsePath(it) }
+        "rect" -> rect(el.attrs)
+        "circle" -> ellipse(num(el, "cx"), num(el, "cy"), num(el, "r"), num(el, "r"))
+        "ellipse" -> ellipse(num(el, "cx"), num(el, "cy"), num(el, "rx"), num(el, "ry"))
+        "polygon" -> el.attrs["points"]?.let { polyline(it, close = true) }
+        "polyline" -> el.attrs["points"]?.let { polyline(it, close = false) }
+        else -> null
+    }
+
     private fun paintShape(path: KitePath, ctm: KiteMatrix, paint: Paint, canvas: KiteCanvas, forceStroke: Boolean = false) {
         if (path.segments.isEmpty()) return
-        paint.fill?.let { if (!forceStroke) canvas.fillPath(path, ctm, it, paint.evenOdd, paint.opacity, KiteBlendMode.Normal) }
+        if (!forceStroke) {
+            val gradient = paint.fillRef?.let { gradientFor(it, path, ctm) }
+            if (gradient != null) {
+                canvas.fillShading(
+                    gradient.first, gradient.second, transformPath(path, ctm),
+                    paint.opacity * paint.fillOpacity, KiteBlendMode.Normal,
+                )
+            } else {
+                paint.fill?.let {
+                    canvas.fillPath(path, ctm, it, paint.evenOdd, paint.opacity * paint.fillOpacity, KiteBlendMode.Normal)
+                }
+            }
+        }
         val sc = paint.stroke ?: if (forceStroke) RgbColor.BLACK else null
-        sc?.let { canvas.strokePath(path, ctm, it, paint.strokeW, paint.opacity, KiteBlendMode.Normal) }
+        sc?.let {
+            canvas.strokePath(path, ctm, it, paint.strokeW, paint.opacity * paint.strokeOpacity, KiteBlendMode.Normal)
+        }
+    }
+
+    /**
+     * The shading a `url(#id)` fill resolves to, plus the matrix that puts it
+     * where the shape is. `objectBoundingBox` units (the default) map the
+     * gradient's 0..1 box onto the shape's own bounds.
+     */
+    private fun gradientFor(id: String, path: KitePath, ctm: KiteMatrix): Pair<KiteShading, KiteMatrix>? {
+        val def = byId[id] ?: return null
+        val g = SvgGradient.parse(def, byId) ?: return null
+        var m = ctm
+        if (g.objectBoundingBox) {
+            val b = boundsOf(path) ?: return null
+            m = compose(m, KiteMatrix(b[2] - b[0], 0.0, 0.0, b[3] - b[1], b[0], b[1]))
+        }
+        g.transform?.let { m = compose(m, parseTransform(it)) }
+        return g.shading to m
+    }
+
+    /** [minX, minY, maxX, maxY] over the path's points, or null when it has no area. */
+    private fun boundsOf(path: KitePath): DoubleArray? {
+        var minX = Double.MAX_VALUE
+        var minY = Double.MAX_VALUE
+        var maxX = -Double.MAX_VALUE
+        var maxY = -Double.MAX_VALUE
+        fun add(x: Double, y: Double) {
+            if (x < minX) minX = x
+            if (x > maxX) maxX = x
+            if (y < minY) minY = y
+            if (y > maxY) maxY = y
+        }
+        for (seg in path.segments) when (seg) {
+            is KitePath.Segment.MoveTo -> add(seg.x, seg.y)
+            is KitePath.Segment.LineTo -> add(seg.x, seg.y)
+            is KitePath.Segment.CurveTo -> { add(seg.x1, seg.y1); add(seg.x2, seg.y2); add(seg.x3, seg.y3) }
+            is KitePath.Segment.QuadTo -> { add(seg.x1, seg.y1); add(seg.x2, seg.y2) }
+            else -> {}
+        }
+        if (maxX <= minX || maxY <= minY) return null
+        return doubleArrayOf(minX, minY, maxX, maxY)
+    }
+
+    /** [path] with every point pushed through [m]. */
+    private fun transformPath(path: KitePath, m: KiteMatrix): KitePath {
+        fun tx(x: Double, y: Double) = m.a * x + m.c * y + m.e
+        fun ty(x: Double, y: Double) = m.b * x + m.d * y + m.f
+        val b = KitePath.Builder()
+        for (seg in path.segments) when (seg) {
+            is KitePath.Segment.MoveTo -> b.moveTo(tx(seg.x, seg.y), ty(seg.x, seg.y))
+            is KitePath.Segment.LineTo -> b.lineTo(tx(seg.x, seg.y), ty(seg.x, seg.y))
+            is KitePath.Segment.CurveTo -> b.curveTo(
+                tx(seg.x1, seg.y1), ty(seg.x1, seg.y1),
+                tx(seg.x2, seg.y2), ty(seg.x2, seg.y2),
+                tx(seg.x3, seg.y3), ty(seg.x3, seg.y3),
+            )
+            is KitePath.Segment.QuadTo -> b.quadTo(
+                tx(seg.x1, seg.y1), ty(seg.x1, seg.y1),
+                tx(seg.x2, seg.y2), ty(seg.x2, seg.y2),
+            )
+            else -> b.close()
+        }
+        return b.build()
+    }
+
+    /** An SVG presentation value: a `style` declaration wins over the attribute. */
+    private fun styleOrAttr(el: KiteXmlNode.Element, name: String): String? = declaration(el.attrs, name)
+
+    private fun declaration(a: Map<String, String>, name: String): String? {
+        a["style"]?.let { style ->
+            for (part in style.split(';')) {
+                val at = part.indexOf(':')
+                if (at > 0 && part.substring(0, at).trim() == name) return part.substring(at + 1).trim()
+            }
+        }
+        return a[name]
+    }
+
+    /** The id inside `url(#id)`, or null when the value is not one. */
+    private fun urlRef(raw: String?): String? {
+        val s = raw?.trim() ?: return null
+        if (!s.startsWith("url(")) return null
+        return s.removePrefix("url(").substringBefore(')').trim().trim('"', '\'').removePrefix("#")
+            .takeIf { it.isNotEmpty() }
+    }
+
+    /** The payload of a `data:` URI, Base64 or percent-encoded. */
+    private fun dataUri(uri: String): ByteArray? {
+        val comma = uri.indexOf(',')
+        if (comma < 0) return null
+        val meta = uri.substring(5, comma)
+        val payload = uri.substring(comma + 1)
+        return if (";base64" in meta) decodeBase64(payload) else percentDecode(payload)
     }
 
     private fun resolvePaint(a: Map<String, String>, p: Paint): Paint {
-        val current = a["color"]?.let { CssValues.color(it) } ?: p.current
+        val current = declaration(a, "color")?.let { CssValues.color(it) } ?: p.current
+        val fillRaw = declaration(a, "fill")
+        val strokeRaw = declaration(a, "stroke")
         return Paint(
-            fill = paintValue(a["fill"], p.fill, current),
-            stroke = paintValue(a["stroke"], p.stroke, current),
-            strokeW = a["stroke-width"]?.let { parseLen(it) } ?: p.strokeW,
-            opacity = (a["opacity"]?.toDoubleOrNull() ?: 1.0) * p.opacity,
-            evenOdd = when (a["fill-rule"]) { "evenodd" -> true; "nonzero" -> false; else -> p.evenOdd },
+            fill = paintValue(fillRaw, p.fill, current),
+            stroke = paintValue(strokeRaw, p.stroke, current),
+            strokeW = declaration(a, "stroke-width")?.let { parseLen(it) } ?: p.strokeW,
+            opacity = (declaration(a, "opacity")?.toDoubleOrNull() ?: 1.0) * p.opacity,
+            evenOdd = when (declaration(a, "fill-rule")) {
+                "evenodd" -> true
+                "nonzero" -> false
+                else -> p.evenOdd
+            },
             current = current,
+            fillRef = if (fillRaw != null) urlRef(fillRaw) else p.fillRef,
+            strokeRef = if (strokeRaw != null) urlRef(strokeRaw) else p.strokeRef,
+            fillOpacity = declaration(a, "fill-opacity")?.toDoubleOrNull() ?: p.fillOpacity,
+            strokeOpacity = declaration(a, "stroke-opacity")?.toDoubleOrNull() ?: p.strokeOpacity,
+            fontSize = declaration(a, "font-size")?.let { parseLen(it) } ?: p.fontSize,
+            fontSpec = fontSpecOf(
+                declaration(a, "font-family"), declaration(a, "font-weight"),
+                declaration(a, "font-style"), p.fontSpec,
+            ),
+            textAnchor = declaration(a, "text-anchor") ?: p.textAnchor,
         )
+    }
+
+    private fun fontSpecOf(family: String?, weight: String?, style: String?, inherited: FontSpec): FontSpec {
+        if (family == null && weight == null && style == null) return inherited
+        val fam = family?.lowercase()?.let { f ->
+            when {
+                "mono" in f || "courier" in f -> KiteFontFamily.Monospace
+                "sans" in f || "arial" in f || "helvetica" in f -> KiteFontFamily.SansSerif
+                "serif" in f || "times" in f || "georgia" in f -> KiteFontFamily.Serif
+                else -> null
+            }
+        } ?: inherited.family
+        val bold = weight?.let { it == "bold" || (it.toIntOrNull() ?: 400) >= 600 } ?: inherited.bold
+        val italic = style?.let { it == "italic" || it == "oblique" } ?: inherited.italic
+        return FontSpec(fam, bold, italic, family ?: inherited.name)
     }
 
     private fun paintValue(raw: String?, inherited: RgbColor?, current: RgbColor): RgbColor? = when {
@@ -172,6 +504,47 @@ public class SvgImage private constructor(
     }
 
     public companion object {
+        /** A `<use>` chain deeper than this is a cycle; stop rather than hang. */
+        private const val MAX_DEPTH = 32
+
+        /** Standard Base64, tolerant of whitespace and missing padding. */
+        private fun decodeBase64(text: String): ByteArray? {
+            val out = ArrayList<Byte>(text.length * 3 / 4 + 3)
+            var acc = 0
+            var bits = 0
+            for (c in text) {
+                if (c == '=') break
+                if (c.isWhitespace()) continue
+                val v = when (c) {
+                    in 'A'..'Z' -> c - 'A'
+                    in 'a'..'z' -> c - 'a' + 26
+                    in '0'..'9' -> c - '0' + 52
+                    '+', '-' -> 62
+                    '/', '_' -> 63
+                    else -> return null
+                }
+                acc = (acc shl 6) or v
+                bits += 6
+                if (bits >= 8) { bits -= 8; out.add(((acc shr bits) and 0xFF).toByte()) }
+            }
+            return if (out.isEmpty()) null else out.toByteArray()
+        }
+
+        private fun percentDecode(text: String): ByteArray {
+            val out = ArrayList<Byte>(text.length)
+            var i = 0
+            while (i < text.length) {
+                val c = text[i]
+                if (c == '%' && i + 2 < text.length) {
+                    val v = text.substring(i + 1, i + 3).toIntOrNull(16)
+                    if (v != null) { out.add(v.toByte()); i += 3; continue }
+                }
+                for (b in c.toString().encodeToByteArray()) out.add(b)
+                i++
+            }
+            return out.toByteArray()
+        }
+
         /** True when [bytes] open like an SVG file. */
         public fun isSvg(bytes: ByteArray): Boolean {
             val head = TextEncoding.decode(bytes.copyOfRange(0, minOf(bytes.size, 512)))
