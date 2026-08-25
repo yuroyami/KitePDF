@@ -40,11 +40,11 @@ internal class BoxLayout(
     private val maxImageHeight: Double = Double.MAX_VALUE,
     private val fonts: FontRegistry = FontRegistry.EMPTY,
     /**
-     * BCP-47 language tag of the document (spine `xml:lang`/`lang`, else OPF
-     * `dc:language`); selects the hyphenation pattern set. Null/unknown
-     * languages hyphenate with the en-US set, preserving the old behaviour.
-     * One hyphenator per document: the language does not switch between spine
-     * documents.
+     * BCP-47 language tag of the spine document being laid out (its own
+     * `xml:lang`/`lang`, else the OPF `dc:language`); selects the hyphenation
+     * pattern set, so each spine item can hyphenate in its own language.
+     * Null/unknown languages hyphenate with the en-US set, preserving the old
+     * behaviour.
      */
     private val language: String? = null,
     /**

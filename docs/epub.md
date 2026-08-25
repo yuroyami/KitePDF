@@ -128,8 +128,10 @@ reader. Use `knownPageCount` with `isComplete` for a running total, and
 `pageCountIn(chapter)` for one chapter.
 
 Laying out any chapter also reads the first one. The writing mode (horizontal
-or vertical) and the hyphenation language are one decision per book, and both
-are read from chapter 1. That is one extra chapter, never the whole book.
+or vertical) is one decision per book, read from chapter 1; the hyphenation
+language is chosen per spine item from its own `xml:lang`/`lang`, falling
+back to the book's OPF language. That is one extra chapter, never the whole
+book.
 
 ### Where embedded fonts come from
 
@@ -205,9 +207,10 @@ The layout engine covers what real books use:
   text on the fallback path is measured with the exact Standard-14 metrics,
   Cyrillic included.
 - **Hyphenation**: Knuth-Liang patterns for English, German, French,
-  Spanish, Italian, Portuguese, and Dutch, selected by the book's language.
-  Six of those languages ship a full pattern set. English ships a small
-  common-word set rather than the full `hyph-en-us` data.
+  Spanish, Italian, Portuguese, Dutch, and Russian, selected per spine
+  item from its own language tag. Seven of those languages ship a full
+  pattern set. English ships a small common-word set rather than the full
+  `hyph-en-us` data.
 - **CJK**: inter-character justification with kinsoku line-break rules, ruby
   annotations, and vertical writing (`vertical-rl` and `vertical-lr`) with
   upright CJK and rotated Latin. Selection, search and link rectangles follow

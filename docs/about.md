@@ -19,7 +19,7 @@ KitePDF is **pre-1.0**. These features work today:
 | Viewing | Compose viewer with continuous and paged layouts, two-page spreads, RTL progression, pinch-zoom, pan, double-tap, text selection, search highlights, outline panels, link taps |
 | Text | Extraction, structured text with geometry, and engine-level search for both formats |
 | Formats | PDF, reflowable EPUB 2/3, CBZ comic archives and standalone SVG, all opened by the same `KiteDoc.open` |
-| EPUB | Reflowable EPUB 2/3 on the same core: CSS cascade, embedded fonts (TTF, OTF, WOFF, WOFF2), hyphenation in seven languages, CJK justification, ruby, vertical writing (both directions), floats, tables, absolute positioning, an accessibility reading order, reader settings |
+| EPUB | Reflowable EPUB 2/3 on the same core: CSS cascade, embedded fonts (TTF, OTF, WOFF, WOFF2), hyphenation in eight languages, CJK justification, ruby, vertical writing (both directions), floats, tables, absolute positioning, an accessibility reading order, reader settings |
 | Forms | Read and fill text, checkbox, radio and choice fields |
 | Annotations | View and interact with highlights, links and comments |
 | Encryption | Open, authenticate, edit and create password-protected PDFs (AES-256/R6 on write) |

@@ -48,6 +48,18 @@ carry in order to be correct, listed here with where that data comes from.
    The user-agent stylesheet follows the default rendering the specifications
    call for: CSS 2.1, Appendix D and the HTML Standard's Rendering section.
 
+6. Hyphenation patterns from the hyph-utf8 project
+   Used in: kitepdf-core .../core/text/hyphen/ (one file per language)
+   Knuth-Liang hyphenation pattern data from
+   https://github.com/hyphenation/tex-hyphen. Each Kotlin file is a
+   mechanical re-wrapping of one upstream pattern file into string chunks;
+   the pattern data itself is carried unmodified, and each file's header
+   names its own authors, licence and upstream source. The complete
+   original files are available at the repository above. German, Spanish,
+   French, Italian and Dutch are MIT-licensed; Portuguese is
+   BSD-3-Clause; Russian is Copyright 1999-2003 Alexander I. Lebedev,
+   LPPL 1.2 or later (https://www.latex-project.org/lppl/lppl-1-2/).
+
 --------------------------------------------------------------------------------
 Tools used in development, not distributed
 --------------------------------------------------------------------------------
