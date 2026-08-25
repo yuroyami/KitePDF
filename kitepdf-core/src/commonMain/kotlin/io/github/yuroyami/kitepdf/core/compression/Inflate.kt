@@ -59,9 +59,17 @@ internal class Inflater(
     private val maxOutputBytes: Int = Int.MAX_VALUE,
 ) {
 
+    private val origin = start
     private var bytePos = start
     private var bitBuf = 0
     private var bitCount = 0
+
+    /**
+     * Input bytes eaten so far. After [inflateTo] returns this is where the
+     * stream ended, which is how a ZIP entry with no declared size finds its
+     * trailing data descriptor.
+     */
+    val consumedBytes: Int get() = bytePos - (bitCount / 8) - origin
 
     // Sliding window for LZ77 back-references. 32 KiB per RFC 1951.
     private val window = ByteArray(WINDOW_SIZE)
