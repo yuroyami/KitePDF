@@ -85,11 +85,14 @@ class CoreGraphicsPixelTest {
 
     @Test
     fun raw_image_alpha_halves_the_ink() {
+        // Over a white ground, half-alpha red keeps red at 255; the fade shows
+        // in the OTHER channels, which climb from 0 toward white's 255.
         val opaque = render { c -> c.drawImage(rawRedBlue2x1(), fullContextCtm()) }
         val half = render { c -> c.drawImage(rawRedBlue2x1(), fullContextCtm(), alpha = 0.5) }
-        val full = opaque.px(side / 4, side / 2).first
-        val faded = half.px(side / 4, side / 2).first
-        assertTrue(faded < full - 60, "alpha 0.5 must fade red: $faded vs $full")
+        val opaqueGreen = opaque.px(side / 4, side / 2).second
+        val halfGreen = half.px(side / 4, side / 2).second
+        assertTrue(opaqueGreen < 40, "opaque red has no green: $opaqueGreen")
+        assertTrue(halfGreen > opaqueGreen + 60, "half alpha lets the ground through: $halfGreen vs $opaqueGreen")
     }
 
     @Test

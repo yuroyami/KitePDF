@@ -70,6 +70,21 @@ import platform.CoreGraphics.CGPoint
 import platform.CoreGraphics.CGRectMake
 import platform.CoreGraphics.kCGGradientDrawsAfterEndLocation
 import platform.CoreGraphics.kCGGradientDrawsBeforeStartLocation
+import io.github.yuroyami.kitepdf.core.render.toRgbaBytes
+import platform.CoreFoundation.CFStringCreateWithCString
+import platform.CoreFoundation.kCFStringEncodingUTF8
+import platform.CoreGraphics.CGContextAddPath
+import platform.CoreGraphics.CGDataProviderCreateWithCFData
+import platform.CoreGraphics.CGDataProviderRelease
+import platform.CoreGraphics.CGGlyphVar
+import platform.CoreGraphics.CGImageAlphaInfo
+import platform.CoreGraphics.CGImageCreate
+import platform.CoreGraphics.CGPathRelease
+import kotlinx.cinterop.UShortVar
+import platform.CoreGraphics.CGColorRenderingIntent
+import platform.CoreText.CTFontCreatePathForGlyph
+import platform.CoreText.CTFontCreateWithName
+import platform.CoreText.CTFontGetGlyphsForCharacters
 import platform.ImageIO.CGImageSourceCreateImageAtIndex
 import platform.ImageIO.CGImageSourceCreateWithData
 
@@ -169,10 +184,14 @@ public class CoreGraphicsCanvas(private val ctx: CGContextRef) : KiteCanvas {
         blendMode: KiteBlendMode,
     ) {
         if (glyphs.isEmpty()) return
-        if (!hasOutlines) return  // system-font fallback deferred
+        if (!hasOutlines) {
+            drawTextViaSystemFont(glyphs, fontSize, fontSpec, textToDevice, color, alpha, blendMode)
+            return
+        }
 
         val unitScale = fontSize / unitsPerEm  // glyph outlines: font units → text space
         val advanceScale = fontSize / 1000.0   // advances are 1/1000 em, not font units
+        var drewAny = false
         CGContextSaveGState(ctx)
         try {
             CGContextSetBlendMode(ctx, blendMode.toCG())
@@ -186,11 +205,96 @@ public class CoreGraphicsCanvas(private val ctx: CGContextRef) : KiteCanvas {
                         .concat(KiteMatrix(unitScale, 0.0, 0.0, unitScale, 0.0, 0.0))
                     buildPath(outline, glyphMatrix)
                     CGContextFillPath(ctx)
+                    drewAny = true
                 }
                 penX += glyph.advanceWidth * advanceScale
             }
         } finally {
             CGContextRestoreGState(ctx)
+        }
+        // Embedded font present but produced no glyphs (e.g. a subset we can't
+        // decode). Fall back to a system font rather than rendering blank.
+        if (!drewAny && glyphs.any { it.text.isNotBlank() }) {
+            drawTextViaSystemFont(glyphs, fontSize, fontSpec, textToDevice, color, alpha, blendMode)
+        }
+    }
+
+    /**
+     * Standard-14 and other non-embedded fonts: fill CoreText glyph paths.
+     * Pen positions use PDF's 1/1000 em advances, so layout matches what the
+     * document assigned rather than the substitute font's own metrics.
+     */
+    private fun drawTextViaSystemFont(
+        glyphs: List<TextGlyph>,
+        fontSize: Double,
+        fontSpec: FontSpec,
+        textToDevice: KiteMatrix,
+        color: RgbColor,
+        alpha: Double,
+        blendMode: KiteBlendMode,
+    ) {
+        val fontName = systemFontName(fontSpec)
+        val cfName = CFStringCreateWithCString(null, fontName, kCFStringEncodingUTF8) ?: return
+        val font = CTFontCreateWithName(cfName, fontSize, null)
+        CFRelease(cfName)
+        if (font == null) return
+        try {
+            val advanceScale = fontSize / 1000.0
+            var penX = 0.0
+            for (glyph in glyphs) {
+                val ch = glyph.text.firstOrNull()
+                if (ch == null) {
+                    penX += glyph.advanceWidth * advanceScale
+                    continue
+                }
+                val path = memScoped {
+                    val chars = alloc<UShortVar>()
+                    chars.value = ch.code.toUShort()
+                    val ids = alloc<CGGlyphVar>()
+                    if (!CTFontGetGlyphsForCharacters(font, chars.ptr, ids.ptr, 1)) null
+                    else CTFontCreatePathForGlyph(font, ids.value, null)
+                }
+                if (path != null) {
+                    CGContextSaveGState(ctx)
+                    try {
+                        CGContextSetBlendMode(ctx, blendMode.toCG())
+                        CGContextSetRGBFillColor(ctx, color.r, color.g, color.b, alpha)
+                        // path (text-size units, y-up) -> +pen (text space) -> textToDevice.
+                        CGContextConcatCTM(ctx, textToDevice.toCGAffine())
+                        CGContextTranslateCTM(ctx, penX + glyph.xOffset * advanceScale, glyph.yOffset * advanceScale)
+                        CGContextBeginPath(ctx)
+                        CGContextAddPath(ctx, path)
+                        CGContextFillPath(ctx)
+                    } finally {
+                        CGContextRestoreGState(ctx)
+                        CGPathRelease(path)
+                    }
+                }
+                penX += glyph.advanceWidth * advanceScale
+            }
+        } finally {
+            CFRelease(font)
+        }
+    }
+
+    private fun systemFontName(spec: FontSpec): String = when (spec.family) {
+        io.github.yuroyami.kitepdf.core.font.KiteFontFamily.Serif -> when {
+            spec.bold && spec.italic -> "Times-BoldItalic"
+            spec.bold -> "Times-Bold"
+            spec.italic -> "Times-Italic"
+            else -> "Times-Roman"
+        }
+        io.github.yuroyami.kitepdf.core.font.KiteFontFamily.Monospace -> when {
+            spec.bold && spec.italic -> "Courier-BoldOblique"
+            spec.bold -> "Courier-Bold"
+            spec.italic -> "Courier-Oblique"
+            else -> "Courier"
+        }
+        io.github.yuroyami.kitepdf.core.font.KiteFontFamily.SansSerif -> when {
+            spec.bold && spec.italic -> "Helvetica-BoldOblique"
+            spec.bold -> "Helvetica-Bold"
+            spec.italic -> "Helvetica-Oblique"
+            else -> "Helvetica"
         }
     }
 
@@ -294,10 +398,16 @@ public class CoreGraphicsCanvas(private val ctx: CGContextRef) : KiteCanvas {
         try {
             CGContextSaveGState(ctx)
             try {
-                // Apply CTM, then place the image in the unit square (0,-1)..(1,0).
-                // The device CTM has already flipped Y, so we flip back here.
+                // PDF image space is the unit square (0,0)-(1,1) under the CTM,
+                // row 0 at v=1 (the Skia convention). The composite CTM already
+                // carries the device Y-flip, so flip once more here to hand
+                // CGContextDrawImage the y-up frame it expects; the old
+                // (0,-1)..(1,0) square drew outside the CTM's image of the
+                // unit square, which is why this backend showed placeholders
+                // offscreen and images not at all.
                 CGContextConcatCTM(ctx, ctm.toCGAffine())
-                CGContextTranslateCTM(ctx, 0.0, -1.0)
+                CGContextTranslateCTM(ctx, 0.0, 1.0)
+                CGContextScaleCTM(ctx, 1.0, -1.0)
                 if (a < 1.0) platform.CoreGraphics.CGContextSetAlpha(ctx, a)
                 CGContextDrawImage(ctx, CGRectMake(0.0, 0.0, 1.0, 1.0), cgImage)
             } finally {
@@ -309,6 +419,7 @@ public class CoreGraphicsCanvas(private val ctx: CGContextRef) : KiteCanvas {
     }
 
     private fun decodeImage(image: KiteImageData): platform.CoreGraphics.CGImageRef? {
+        if (image.kind == KiteImageData.Kind.RAW) return rawCgImage(image)
         val bytes = image.encodedBytes
         if (bytes.isEmpty()) return null
         if (image.kind !in IMAGE_KINDS_DECODABLE_BY_CG) return null
@@ -326,6 +437,29 @@ public class CoreGraphicsCanvas(private val ctx: CGContextRef) : KiteCanvas {
         }
     }
 
+    /**
+     * Decoded samples: what every successful JPEG / JPX / JBIG2 decode
+     * produces, plus plain Flate images. The CFData owns a copy of the
+     * pixels, so the CGImage stays valid after the Kotlin array is gone.
+     */
+    private fun rawCgImage(image: KiteImageData): platform.CoreGraphics.CGImageRef? {
+        val rgba = image.toRgbaBytes() ?: return null
+        val cfData = rgba.toCFData() ?: return null
+        val provider = CGDataProviderCreateWithCFData(cfData)
+        CFRelease(cfData)   // the provider holds its own reference
+        if (provider == null) return null
+        val cs = CGColorSpaceCreateDeviceRGB()
+        val img = CGImageCreate(
+            image.width.toULong(), image.height.toULong(),
+            8u, 32u, (image.width * 4).toULong(), cs,
+            CGImageAlphaInfo.kCGImageAlphaLast.value,
+            provider, null, true, CGColorRenderingIntent.kCGRenderingIntentDefault,
+        )
+        CGColorSpaceRelease(cs)
+        CGDataProviderRelease(provider)
+        return img
+    }
+
     private fun drawPlaceholder(ctm: KiteMatrix) {
         CGContextSaveGState(ctx)
         try {
@@ -333,7 +467,8 @@ public class CoreGraphicsCanvas(private val ctx: CGContextRef) : KiteCanvas {
             CGContextSetRGBFillColor(ctx, 0.88, 0.88, 0.88, 1.0)
             CGContextSetRGBStrokeColor(ctx, 0.53, 0.53, 0.53, 1.0)
             CGContextSetLineWidth(ctx, 0.01)
-            val rect = CGRectMake(0.0, -1.0, 1.0, 1.0)
+            // The CTM maps the unit square (0,0)-(1,1); same frame as drawImage.
+            val rect = CGRectMake(0.0, 0.0, 1.0, 1.0)
             platform.CoreGraphics.CGContextFillRect(ctx, rect)
             platform.CoreGraphics.CGContextStrokeRect(ctx, rect)
         } finally {
