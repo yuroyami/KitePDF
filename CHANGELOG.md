@@ -79,6 +79,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- EPUB: first lines of indented paragraphs no longer overflow the content box
+  and clip at the page edge. The line breaker fitted every line against the
+  full width and the `text-indent` was added afterwards at placement, so a
+  packed first line stuck out by up to the indent width (#6).
+- EPUB: Cyrillic fallback text is measured with the exact Standard-14 widths
+  instead of a flat half-em, so Russian text no longer draws squeezed and
+  line-fit decisions use real advances (#6).
 - A form XObject or a Type3 char proc with no `/Resources` of its own now
   reads the page's, as the spec asks. Both were looking at an empty map, so
   every name they used resolved to nothing and the stream painted nothing.
