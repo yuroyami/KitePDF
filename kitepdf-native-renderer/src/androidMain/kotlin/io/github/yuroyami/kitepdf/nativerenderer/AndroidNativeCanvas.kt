@@ -18,6 +18,7 @@ import io.github.yuroyami.kitepdf.core.font.FontSpec
 import io.github.yuroyami.kitepdf.core.font.TextGlyph
 import io.github.yuroyami.kitepdf.core.render.KiteBlendMode
 import io.github.yuroyami.kitepdf.core.render.KiteImageData
+import io.github.yuroyami.kitepdf.core.render.toRgbaBytes
 import io.github.yuroyami.kitepdf.core.render.KiteMatrix
 import io.github.yuroyami.kitepdf.core.render.KiteCanvas
 import io.github.yuroyami.kitepdf.core.render.KitePath
@@ -300,6 +301,16 @@ public class AndroidNativeCanvas(private val canvas: AndroidCanvas) : KiteCanvas
         when (image.kind) {
             KiteImageData.Kind.JPEG, KiteImageData.Kind.JPEG2000, KiteImageData.Kind.JBIG2 ->
                 BitmapFactory.decodeByteArray(image.encodedBytes, 0, image.encodedBytes.size)
+            // Decoded samples: what every successful JPEG / JPX / JBIG2 decode
+            // produces, plus plain Flate images. Straight-alpha RGBA from core;
+            // createBitmap premultiplies on the way in, which is what Canvas wants.
+            KiteImageData.Kind.RAW -> image.toRgbaBytes()?.let { rgba ->
+                android.graphics.Bitmap.createBitmap(
+                    RgbaPixels.toArgbInts(rgba),
+                    image.width, image.height,
+                    android.graphics.Bitmap.Config.ARGB_8888,
+                )
+            }
             else -> null
         }
     } catch (t: Throwable) {
