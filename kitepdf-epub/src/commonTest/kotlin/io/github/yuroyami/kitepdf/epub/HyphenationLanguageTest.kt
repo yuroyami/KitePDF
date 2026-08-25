@@ -53,4 +53,18 @@ class HyphenationLanguageTest {
         val text = doc.pages[0].textContent().plainText
         assertFalse("-" in text, "en-US patterns have no break inside Krankenhaus:\n$text")
     }
+
+    @Test
+    fun each_spine_hyphenates_in_its_own_language() {
+        val german = """<body xml:lang="de"><p style="hyphens:auto">Krankenhaus Krankenhaus Krankenhaus</p></body>"""
+        val english = """<body><p style="hyphens:auto">Krankenhaus Krankenhaus Krankenhaus</p></body>"""
+        val doc = EpubDocument.open(
+            EpubFixtures.epubMultiSpine(listOf(english, german)),
+            EpubSettings(pageWidth = 220.0, pageHeight = 640.0),
+        )
+        val englishText = doc.page(io.github.yuroyami.kitepdf.core.KiteLocation(0, 0)).textContent().plainText
+        val germanText = doc.page(io.github.yuroyami.kitepdf.core.KiteLocation(1, 0)).textContent().plainText
+        assertFalse("-" in englishText, "the English chapter must not use German breaks:\n$englishText")
+        assertTrue("-" in germanText, "the German chapter must break Krankenhaus:\n$germanText")
+    }
 }
