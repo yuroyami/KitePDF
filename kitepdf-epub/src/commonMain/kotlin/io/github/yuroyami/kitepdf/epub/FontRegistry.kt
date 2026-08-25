@@ -39,6 +39,13 @@ internal class EmbeddedFace(
     /** GPOS mark-to-base attachment offset (font units) placing [mark] on [base], or null. */
     fun markOffset(base: Int, mark: Int): Pair<Double, Double>? = marks?.offset(base, mark)
 
+    /** GPOS mark-to-mark offset stacking [mark] on the mark [below] it, or null. */
+    fun markStackOffset(below: Int, mark: Int): Pair<Double, Double>? = marks?.stackOffset(below, mark)
+
+    /** GPOS mark-to-ligature offset placing [mark] on [component] of [lig], or null. */
+    fun markLigatureOffset(lig: Int, mark: Int, component: Int): Pair<Double, Double>? =
+        marks?.ligatureOffset(lig, mark, component)
+
     /** True when the font has Arabic contextual-joining GSUB features. */
     val hasArabicJoining: Boolean get() = gsub?.hasArabicJoining == true
 
