@@ -4,6 +4,10 @@ import androidx.compose.ui.ImageComposeScene
 import androidx.compose.ui.graphics.PixelMap
 import androidx.compose.ui.graphics.toComposeImageBitmap
 import androidx.compose.ui.graphics.toPixelMap
+import java.io.ByteArrayOutputStream
+import java.util.zip.CRC32
+import java.util.zip.ZipEntry
+import java.util.zip.ZipOutputStream
 import org.jetbrains.skia.Image
 
 /**
@@ -69,4 +73,46 @@ internal class SceneTestDriver(private val scene: ImageComposeScene) {
     private companion object {
         const val FRAME_NANOS = 16_000_000L
     }
+}
+
+/* ── shared fixture ──────────────────────────────────────────────────────────── */
+
+internal fun multiSpineEpub(bodies: List<String>): ByteArray {
+    val container = """<?xml version="1.0"?><container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container"><rootfiles><rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/></rootfiles></container>"""
+    val items = bodies.indices.joinToString("") {
+        """<item id="c${it + 1}" href="chapter${it + 1}.xhtml" media-type="application/xhtml+xml"/>"""
+    }
+    val refs = bodies.indices.joinToString("") { """<itemref idref="c${it + 1}"/>""" }
+    val opf = """<?xml version="1.0"?>
+        <package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="id">
+          <metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:identifier id="id">scene</dc:identifier></metadata>
+          <manifest>$items</manifest>
+          <spine>$refs</spine>
+        </package>"""
+    val files = bodies.mapIndexed { i, body ->
+        "OEBPS/chapter${i + 1}.xhtml" to
+            """<?xml version="1.0"?><html xmlns="http://www.w3.org/1999/xhtml"><body>$body</body></html>""".encodeToByteArray()
+    }
+    val out = ByteArrayOutputStream()
+    ZipOutputStream(out).use { zip ->
+        zip.setMethod(ZipOutputStream.STORED)
+        val entries = listOf(
+            "mimetype" to "application/epub+zip".encodeToByteArray(),
+            "META-INF/container.xml" to container.encodeToByteArray(),
+            "OEBPS/content.opf" to opf.encodeToByteArray(),
+        ) + files
+        for ((name, data) in entries) {
+            zip.putNextEntry(
+                ZipEntry(name).apply {
+                    method = ZipEntry.STORED
+                    size = data.size.toLong()
+                    compressedSize = data.size.toLong()
+                    crc = CRC32().apply { update(data) }.value
+                },
+            )
+            zip.write(data)
+            zip.closeEntry()
+        }
+    }
+    return out.toByteArray()
 }
