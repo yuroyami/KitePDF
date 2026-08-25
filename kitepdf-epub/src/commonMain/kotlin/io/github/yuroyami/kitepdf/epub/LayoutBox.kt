@@ -23,6 +23,9 @@ internal sealed class LayoutBox {
     var borderBoxWidth: Double = 0.0
     var borderBoxHeight: Double = 0.0
 
+    /** What the source element says this content IS; null when it says nothing. */
+    var semantics: BoxSemantics? = null
+
     val bottom: Double get() = y + borderBoxHeight
 }
 
@@ -122,6 +125,8 @@ internal class PlacedImage(
     val height: Double,
     val image: KiteImageData?,
     val svg: SvgImage?,
+    /** The `alt` text, for the reading order. Empty means decorative. */
+    val alt: String? = null,
 )
 
 /** A laid-out line inside a [TextBlockBox]; [yTop] is absolute document-down. */

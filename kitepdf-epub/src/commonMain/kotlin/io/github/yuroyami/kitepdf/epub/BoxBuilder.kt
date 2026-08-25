@@ -36,6 +36,8 @@ internal class BoxBuilder(
         marker: String?,
         markerColor: RgbColor,
         isRoot: Boolean = false,
+        /** The ancestor's semantics: `aria-hidden` and `epub:type` reach down. */
+        parentSem: BoxSemantics? = null,
     ): BlockBox {
         val children = ArrayList<LayoutBox>()
         val inl = Inline()
@@ -49,9 +51,12 @@ internal class BoxBuilder(
         // always did.
         val pendingAnchors = ArrayList<String>()
 
+        // The element's own accessibility facts, shared by every box it makes.
+        val sem = BoxSemantics.of(el.tag, el.attrs, parentSem)
+
         fun flush() {
             if (inl.hasContent()) {
-                children.add(TextBlockBox(style, inl.take(), pendingMarker, markerColor))
+                children.add(TextBlockBox(style, inl.take(), pendingMarker, markerColor).also { it.semantics = sem })
                 pendingMarker = null
             } else {
                 inl.reset()
@@ -101,10 +106,14 @@ internal class BoxBuilder(
                         if ((cs.display == Display.INLINE || cs.display == Display.INLINE_BLOCK) &&
                             cs.cssFloat == CssFloat.NONE
                         ) {
-                            inl.addImage(resolveHref(src), style, cs.widthPt ?: aw?.times(0.75), cs.heightPt ?: ah?.times(0.75))
+                            inl.addImage(resolveHref(src), style, cs.widthPt ?: aw?.times(0.75), cs.heightPt ?: ah?.times(0.75), child.attrs["alt"])
                         } else {
                             flush()
-                            children.add(ImageBox(cs, resolveHref(src), attrWidth = aw, attrHeight = ah))
+                            children.add(
+                                ImageBox(cs, resolveHref(src), attrWidth = aw, attrHeight = ah).also {
+                                    it.semantics = imageSemantics(child, sem)
+                                },
+                            )
                         }
                     }
                     continue
@@ -118,11 +127,11 @@ internal class BoxBuilder(
                 val cs = resolver.compute(child, childAncestors, style)
                 when (cs.display) {
                     Display.NONE -> {}
-                    Display.INLINE, Display.INLINE_BLOCK -> processInline(child, cs, childAncestors, inl, pendingAnchors, ::hoist)
-                    Display.TABLE -> hoist(buildTable(child, cs, childAncestors))
-                    Display.LIST_ITEM -> hoist(listOf(buildBlock(child, cs, childAncestors, marker(cs, ordinal++), cs.color)))
+                    Display.INLINE, Display.INLINE_BLOCK -> processInline(child, cs, childAncestors, inl, pendingAnchors, ::hoist, sem)
+                    Display.TABLE -> hoist(buildTable(child, cs, childAncestors, sem))
+                    Display.LIST_ITEM -> hoist(listOf(buildBlock(child, cs, childAncestors, marker(cs, ordinal++), cs.color, parentSem = sem)))
                     // BLOCK, plus stray table parts outside a table: treat as blocks (no text lost).
-                    else -> hoist(listOf(buildBlock(child, cs, childAncestors, null, BLACK)))
+                    else -> hoist(listOf(buildBlock(child, cs, childAncestors, null, BLACK, parentSem = sem)))
                 }
             }
         }
@@ -132,7 +141,20 @@ internal class BoxBuilder(
             el.attrs["id"]?.let(box.anchors::add)
             if (el.tag == "a") el.attrs["name"]?.let(box.anchors::add) // legacy anchor
             box.anchors += pendingAnchors
+            box.semantics = sem
         }
+    }
+
+    /** An image announces its `alt` (or `aria-label`); `alt=""` means decorative. */
+    private fun imageSemantics(el: HtmlNode.Element, parentSem: BoxSemantics?): BoxSemantics {
+        val base = BoxSemantics.of(el.tag, el.attrs, parentSem)
+        val alt = el.attrs["alt"]
+        return BoxSemantics(
+            role = EpubRole.IMAGE,
+            label = base?.label ?: alt?.takeIf { it.isNotBlank() },
+            epubType = base?.epubType,
+            hidden = base?.hidden == true || alt?.isEmpty() == true,
+        )
     }
 
     /** A synthetic block child holding a `display:block` pseudo's content. */
@@ -152,7 +174,12 @@ internal class BoxBuilder(
      * [TableBox]; `<col>`/`<colgroup>` widths pin their columns; under
      * `border-collapse: collapse` each shared cell edge is painted once.
      */
-    private fun buildTable(el: HtmlNode.Element, style: ComputedStyle, ancestors: List<HtmlNode.Element>): List<LayoutBox> {
+    private fun buildTable(
+        el: HtmlNode.Element,
+        style: ComputedStyle,
+        ancestors: List<HtmlNode.Element>,
+        parentSem: BoxSemantics? = null,
+    ): List<LayoutBox> {
         val rows = ArrayList<TableRowBox>()
         var caption: BlockBox? = null
         val childAncestors = listOf(el) + ancestors
@@ -161,12 +188,12 @@ internal class BoxBuilder(
             for (c in container.children) {
                 if (c !is HtmlNode.Element) continue
                 if (c.tag == "caption" && caption == null) {
-                    caption = buildBlock(c, resolver.compute(c, anc, style), anc, null, BLACK)
+                    caption = buildBlock(c, resolver.compute(c, anc, style), anc, null, BLACK, parentSem = parentSem)
                     continue
                 }
                 val cs = resolver.compute(c, anc, style)
                 when (cs.display) {
-                    Display.TABLE_ROW -> rows.add(buildRow(c, cs, anc))
+                    Display.TABLE_ROW -> rows.add(buildRow(c, cs, anc, parentSem))
                     Display.TABLE_ROW_GROUP -> addRowsFrom(c, anc)
                     else -> {}
                 }
@@ -274,14 +301,19 @@ internal class BoxBuilder(
         }
     }
 
-    private fun buildRow(el: HtmlNode.Element, style: ComputedStyle, ancestors: List<HtmlNode.Element>): TableRowBox {
+    private fun buildRow(
+        el: HtmlNode.Element,
+        style: ComputedStyle,
+        ancestors: List<HtmlNode.Element>,
+        parentSem: BoxSemantics? = null,
+    ): TableRowBox {
         val cells = ArrayList<BlockBox>()
         val childAncestors = listOf(el) + ancestors
         for (c in el.children) {
             if (c !is HtmlNode.Element) continue
             val cs = resolver.compute(c, childAncestors, style)
             if (cs.display == Display.TABLE_CELL || cs.display == Display.BLOCK) {
-                val cell = buildBlock(c, cs, childAncestors, null, BLACK)
+                val cell = buildBlock(c, cs, childAncestors, null, BLACK, parentSem = parentSem)
                 cell.colspan = c.attrs["colspan"]?.toIntOrNull()?.coerceAtLeast(1) ?: 1
                 cell.rowspan = c.attrs["rowspan"]?.toIntOrNull()?.coerceAtLeast(1) ?: 1
                 cells.add(cell)
@@ -297,12 +329,13 @@ internal class BoxBuilder(
         inl: Inline,
         anchorSink: MutableList<String>,
         hoist: (List<LayoutBox>) -> Unit,
+        parentSem: BoxSemantics? = null,
     ) {
         // Inline elements never get a box; their ids wait for the next hoisted
         // block, and attach to the enclosing block when none follows.
         el.attrs["id"]?.let(anchorSink::add)
         if (el.tag == "a") el.attrs["name"]?.let(anchorSink::add)
-        if (el.tag == "ruby") { processRuby(el, style, ancestors, inl, anchorSink, hoist); return }
+        if (el.tag == "ruby") { processRuby(el, style, ancestors, inl, anchorSink, hoist, parentSem); return }
 
         val link = if (el.tag == "a") el.attrs["href"]?.takeIf { it.isNotBlank() }?.let(::resolveLink) else null
         if (link != null) inl.beginLink(link)
@@ -330,14 +363,14 @@ internal class BoxBuilder(
                     when (cs.display) {
                         Display.NONE -> {}
                         Display.INLINE, Display.INLINE_BLOCK ->
-                            processInline(child, cs, childAncestors, inl, anchorSink, hoist)
-                        Display.TABLE -> hoist(buildTable(child, cs, childAncestors))
+                            processInline(child, cs, childAncestors, inl, anchorSink, hoist, parentSem)
+                        Display.TABLE -> hoist(buildTable(child, cs, childAncestors, parentSem))
                         // CSS 2.1, 9.2.1.1: a block inside an inline is hoisted
                         // to a sibling box; the inline runs resume after it. A
                         // list item hoisted from inline flow gets no marker, a
                         // deliberate simplification (a bare <li> inside a
                         // <span> is not a list).
-                        else -> hoist(listOf(buildBlock(child, cs, childAncestors, null, BLACK)))
+                        else -> hoist(listOf(buildBlock(child, cs, childAncestors, null, BLACK, parentSem = parentSem)))
                     }
                 }
             }
@@ -375,6 +408,7 @@ internal class BoxBuilder(
         inl: Inline,
         anchorSink: MutableList<String>,
         hoist: (List<LayoutBox>) -> Unit,
+        parentSem: BoxSemantics? = null,
     ) {
         val childAncestors = listOf(el) + ancestors
         val reading = StringBuilder()
@@ -396,7 +430,7 @@ internal class BoxBuilder(
                     c.tag == "br" -> inl.addBreak()
                     else -> {
                         val cs = resolver.compute(c, childAncestors, style)
-                        if (cs.display != Display.NONE) processInline(c, cs, childAncestors, inl, anchorSink, hoist)
+                        if (cs.display != Display.NONE) processInline(c, cs, childAncestors, inl, anchorSink, hoist, parentSem)
                     }
                 }
             }
@@ -445,13 +479,13 @@ internal class BoxBuilder(
         }
 
         /** An inline `<img>`: one U+FFFC run carrying the source + size hints. */
-        fun addImage(src: String, style: ComputedStyle, cssW: Double?, cssH: Double?) {
+        fun addImage(src: String, style: ComputedStyle, cssW: Double?, cssH: Double?, alt: String? = null) {
             if (pendingSpace && blockHasContent && !lastWasBreak) {
                 runs.add(makeRun(" ", style))
             }
             pendingSpace = false; lastWasBreak = false; blockHasContent = true
             runs.add(
-                makeRun("￼", style).copy(imageSrc = src, imageCssW = cssW, imageCssH = cssH),
+                makeRun("￼", style).copy(imageSrc = src, imageCssW = cssW, imageCssH = cssH, imageAlt = alt),
             )
         }
 

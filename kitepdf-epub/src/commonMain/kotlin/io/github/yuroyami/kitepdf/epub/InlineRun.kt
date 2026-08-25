@@ -51,6 +51,8 @@ internal data class InlineRun(
     val imageSrc: String? = null,
     val imageCssW: Double? = null,
     val imageCssH: Double? = null,
+    /** The image's `alt`, for the reading order. Empty string means decorative. */
+    val imageAlt: String? = null,
 ) {
     companion object {
         val BLACK = RgbColor(0.0, 0.0, 0.0)
