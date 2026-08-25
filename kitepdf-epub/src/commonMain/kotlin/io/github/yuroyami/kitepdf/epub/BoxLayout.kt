@@ -664,7 +664,12 @@ internal class BoxLayout(
             val (l, r) = insetsFor(i)
             (contentW - l - r).coerceAtLeast(1.0)
         }
-        val cellLines = wrap(tokenize(runs, style.hyphensAuto, contentW), contentW, preserve, availAt)
+        val cellLines = wrap(
+            tokenize(runs, style.hyphensAuto, contentW), contentW, preserve, availAt,
+            // Negative (hanging) indents keep today's behaviour: only a
+            // positive indent eats into the first line's budget.
+            firstLineIndent = style.textIndentPt.coerceAtLeast(0.0),
+        )
         val out = ArrayList<PositionedLine>(cellLines.size)
         var y = topY
         cellLines.forEachIndexed { i, logical ->
@@ -1101,13 +1106,22 @@ internal class BoxLayout(
         avail: Double,
         preserve: Boolean,
         availAt: ((Int) -> Double)? = null,
+        /** `text-indent` of the block's first line; that line's budget shrinks to match. */
+        firstLineIndent: Double = 0.0,
     ): List<List<Cell>> {
         val lines = ArrayList<List<Cell>>()
         var line = ArrayList<Cell>()
         var lineW = 0.0
         var pendingSpace = 0.0
         fun commit() { lines.add(line); line = ArrayList(); lineW = 0.0; pendingSpace = 0.0 }
-        fun lineAvail() = availAt?.invoke(lines.size) ?: avail
+        // Placement shifts the first line by the indent, so the budget must
+        // shrink by the same amount or the packed line overflows the content
+        // edge by up to the indent width (issue #6). Composes with float
+        // insets because it subtracts AFTER availAt.
+        fun lineAvail(): Double {
+            val base = availAt?.invoke(lines.size) ?: avail
+            return if (lines.isEmpty()) (base - firstLineIndent).coerceAtLeast(1.0) else base
+        }
         for (tok in tokens) when (tok) {
             is Token.Break -> commit()
             is Token.Space -> when {
