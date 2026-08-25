@@ -153,8 +153,13 @@ class IncrementalEpubSceneTest {
             if (goTo >= 0) LaunchedEffect(goTo) { state.scrollToPage(goTo) }
         }.use { scene ->
             val driver = SceneTestDriver(scene)
-            // Every chapter but 5 lays out; 5 stays a placeholder.
-            driver.pumpUntilState { (0 until 8).filter { gate.isChapterReady(it) }.size == 7 }
+            // Every chapter but 5 lays out AND publishes; 5 stays a placeholder.
+            // Waiting on the PUBLISHED strip, not raw document readiness: the
+            // strip is memoized per publication, so slot math on state.items
+            // is only stable once the strip itself shows the layout.
+            driver.pumpUntilState {
+                state.items.filterIsInstance<DocItem.ChapterGap>().map { it.chapter } == listOf(5)
+            }
             assertFalse(gate.isChapterReady(5), "chapter 6 should still be held back")
 
             val gap = state.items.indexOfFirst { it is DocItem.ChapterGap && it.chapter == 5 }
