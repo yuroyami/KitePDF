@@ -142,7 +142,12 @@ internal class RedactionEngine(
         val text: TextState = TextState(),
         val lineWidth: Double = 1.0,
         val miterLimit: Double = 10.0,
+        /** Clips installed so far, page space; `Q` restores by restoring the state. */
+        val clips: List<ClipRecord> = emptyList(),
     )
+
+    /** One installed clip: its boundary segment boxes and their union, in page space. */
+    private class ClipRecord(val edges: List<SegmentBounds>, val bbox: SegmentBounds)
 
     private var gs = GraphicsState(lineWidth = initialLineWidth, miterLimit = initialMiterLimit)
     private val stack = ArrayDeque<GraphicsState>()
@@ -255,6 +260,7 @@ internal class RedactionEngine(
 
                 "Do" -> handleDo(op, out)
                 "BI" -> if (op.inlineImage == null || !imageBoxIntersects()) out.add(op)
+                "sh" -> if (!shadingIntersectsRedaction()) out.add(op)
 
                 else -> out.add(op)
             }
@@ -363,7 +369,56 @@ internal class RedactionEngine(
             }
             else -> Unit // construction and paint go together
         }
+        // The paint operator is what makes a pending `W` take effect (8.5.4).
+        // Record the clip's page-space boundary so a later `sh` can be judged
+        // by the region it actually paints.
+        if (pathClips && pathSegments.isNotEmpty()) {
+            val edges = pathSegments.map { pageBoxOf(it) }
+            val bbox = SegmentBounds(
+                edges.minOf { it.minX }, edges.minOf { it.minY },
+                edges.maxOf { it.maxX }, edges.maxOf { it.maxY },
+            )
+            gs = gs.copy(clips = gs.clips + ClipRecord(edges, bbox))
+        }
         resetPath()
+    }
+
+    /** One user-space segment box mapped through the current CTM into page space. */
+    private fun pageBoxOf(seg: SegmentBounds): SegmentBounds {
+        val corners = listOf(
+            gs.ctm.transformPoint(seg.minX, seg.minY), gs.ctm.transformPoint(seg.maxX, seg.minY),
+            gs.ctm.transformPoint(seg.minX, seg.maxY), gs.ctm.transformPoint(seg.maxX, seg.maxY),
+        )
+        return SegmentBounds(
+            corners.minOf { it.first }, corners.minOf { it.second },
+            corners.maxOf { it.first }, corners.maxOf { it.second },
+        )
+    }
+
+    /**
+     * Does the current clip put a `sh` in reach of a region? `sh` paints the
+     * whole clipping region (8.7.4.3), so it is judged by the clip's boundary,
+     * the rule paths get: remove when the visible edge crosses a region or the
+     * effective clip sits wholly inside one; keep when the clip merely
+     * surrounds the region (the black box covers it, like a full-page
+     * background) or stays clear of it. Unclipped means page-sized: keep.
+     */
+    private fun shadingIntersectsRedaction(): Boolean {
+        if (rectangles.isEmpty() || gs.clips.isEmpty()) return false
+        for (clip in gs.clips) {
+            for (e in clip.edges) {
+                if (rectangles.any { r -> e.minX < r.right && e.maxX > r.left && e.minY < r.top && e.maxY > r.bottom }) {
+                    return true
+                }
+            }
+        }
+        // Effective clip: the intersection of every installed clip's box.
+        val l = gs.clips.maxOf { it.bbox.minX }
+        val b = gs.clips.maxOf { it.bbox.minY }
+        val r = gs.clips.minOf { it.bbox.maxX }
+        val t = gs.clips.minOf { it.bbox.maxY }
+        if (l >= r || b >= t) return true // empty clip paints nothing; dropping is harmless
+        return rectangles.any { reg -> l >= reg.left && r <= reg.right && b >= reg.bottom && t <= reg.top }
     }
 
     /**
