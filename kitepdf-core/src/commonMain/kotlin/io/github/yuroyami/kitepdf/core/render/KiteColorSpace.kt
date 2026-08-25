@@ -149,6 +149,16 @@ public sealed class KiteColorSpace {
     }
 
     /**
+     * An `/ICCBased` space whose profile could be read: the colour goes
+     * through the profile's tone curves and colorant matrix rather than being
+     * treated as device RGB or grey. See [IccProfile] for what is read.
+     */
+    public class IccBased(private val profile: IccProfile) : KiteColorSpace() {
+        override val componentCount: Int = profile.componentCount
+        override fun toRgb(components: DoubleArray): RgbColor = profile.toRgb(components)
+    }
+
+    /**
      * CIE 1976 L*a*b* colour space (§8.6.5.4). Components are actual L (0..100)
      * and a/b (per /Range), converted via XYZ to sRGB using the /WhitePoint.
      */
@@ -274,10 +284,19 @@ public sealed class KiteColorSpace {
                 }
                 "Lab" -> resolveLab(arr, refs)
                 "ICCBased" -> {
-                    // /ICCBased [/ICCBased <stream>]: stream dict carries /N.
+                    // /ICCBased [/ICCBased <stream>]: the stream IS the profile,
+                    // and its dict carries /N as the component count.
                     val streamObj = arr.getOrNull(1)?.resolve(refs) as? PdfStream
                     val n = streamObj?.dict?.getInt("N")?.toInt() ?: 3
-                    when (n) {
+                    val profile = streamObj?.let { st ->
+                        runCatching { IccProfile.parse(FilterChain.decode(st)) }.getOrNull()
+                    }
+                    // A matrix/TRC profile is applied; anything else keeps the
+                    // device fallback every reader has always used. A profile
+                    // that IS sRGB stays on the device path, where the colour
+                    // passes through byte-exact instead of round-tripping.
+                    if (profile != null && profile.componentCount == n && !profile.isIdentity) IccBased(profile)
+                    else when (n) {
                         1 -> DeviceGray
                         4 -> DeviceCMYK
                         else -> DeviceRGB
