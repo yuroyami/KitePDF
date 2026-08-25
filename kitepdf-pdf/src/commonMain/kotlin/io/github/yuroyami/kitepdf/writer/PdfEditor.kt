@@ -632,33 +632,14 @@ public class PdfEditor internal constructor(
      * Decoded page content as it stands AFTER any staged edit, so a second edit
      * composes with the first instead of replacing it.
      *
-     * Mirrors [PdfPage.contentBytes]: `/Contents` may be one stream reference, a
-     * direct stream, or an array of streams that concatenate into a single
-     * stream with whitespace between the parts (ISO 32000-1, 7.8.2). A member
-     * that will not decode is skipped rather than failing the page (R6).
+     * Shares [io.github.yuroyami.kitepdf.PageContents] with
+     * [PdfPage.contentBytes]; only the resolve step differs (staged-or-base
+     * here, the base document there).
      */
-    private fun effectiveContentBytes(ref: PdfReference): ByteArray {
-        fun decode(stream: PdfStream): ByteArray? =
-            runCatching { io.github.yuroyami.kitepdf.core.filters.FilterChain.decode(stream) }.getOrNull()
-
-        return when (val contents = effectivePageDict(ref)["Contents"]) {
-            is PdfReference -> (effectiveObject(contents.objectNumber) as? PdfStream)?.let(::decode) ?: ByteArray(0)
-            is PdfStream -> decode(contents) ?: ByteArray(0)
-            is io.github.yuroyami.kitepdf.core.parser.PdfArray -> {
-                val buf = ByteArrayBuilder(4096)
-                var first = true
-                for (part in contents) {
-                    val partRef = part as? PdfReference ?: continue
-                    val bytes = (effectiveObject(partRef.objectNumber) as? PdfStream)?.let(::decode) ?: continue
-                    if (!first) buf.append('\n'.code.toByte())
-                    buf.append(bytes)
-                    first = false
-                }
-                buf.toByteArray()
-            }
-            else -> ByteArray(0)
-        }
-    }
+    private fun effectiveContentBytes(ref: PdfReference): ByteArray =
+        io.github.yuroyami.kitepdf.PageContents.concatenated(effectivePageDict(ref)["Contents"]) {
+            effectiveObject(it.objectNumber) as? PdfStream
+        } ?: ByteArray(0)
 
     /**
      * Resource dictionary as it stands after any staged edit. A staged page dict

@@ -201,40 +201,8 @@ public class PdfPage internal constructor(
      * in the array were concatenated").
      */
     public val contentBytes: ByteArray by lazy {
-        when (val c = node["Contents"]) {
-            null -> ByteArray(0)
-            is PdfReference -> streamBytesOf(c) ?: ByteArray(0)
-            // Lenient salvage: an undecodable stream (bad flate data, or one
-            // tripping the decompression-bomb cap) yields a blank page, not a
-            // crash, matching MuPDF's broken-content behaviour.
-            is PdfStream -> runCatching { FilterChain.decode(c) }.getOrNull() ?: ByteArray(0)
-            is PdfArray -> {
-                val buf = ByteArrayBuilder(4096)
-                var first = true
-                for (part in c) {
-                    // Lenient salvage: skip members that aren't references or
-                    // don't resolve to a stream; one bad chunk must not kill
-                    // the whole page.
-                    val ref = part as? PdfReference ?: continue
-                    val bytes = streamBytesOf(ref) ?: continue
-                    if (!first) buf.append('\n'.code.toByte())
-                    buf.append(bytes)
-                    first = false
-                }
-                buf.toByteArray()
-            }
-            else -> throw PdfFormatException("/Contents must be stream, ref, or array")
-        }
-    }
-
-    /**
-     * Decoded stream bytes for a content reference, or null if it doesn't
-     * resolve to a stream or its data cannot be decoded (including streams
-     * rejected by the decompression-bomb cap).
-     */
-    private fun streamBytesOf(ref: PdfReference): ByteArray? {
-        val stream = document.resolve(ref) as? PdfStream ?: return null
-        return runCatching { FilterChain.decode(stream) }.getOrNull()
+        PageContents.concatenated(node["Contents"]) { document.resolve(it) as? PdfStream }
+            ?: throw PdfFormatException("/Contents must be stream, ref, or array")
     }
 
     /** Extract page text using the naive Tj/TJ/' / " operator scan. */
