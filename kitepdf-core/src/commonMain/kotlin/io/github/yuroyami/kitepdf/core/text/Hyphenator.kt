@@ -6,14 +6,15 @@ import io.github.yuroyami.kitepdf.core.text.hyphen.HyphFr
 import io.github.yuroyami.kitepdf.core.text.hyphen.HyphIt
 import io.github.yuroyami.kitepdf.core.text.hyphen.HyphNl
 import io.github.yuroyami.kitepdf.core.text.hyphen.HyphPt
+import io.github.yuroyami.kitepdf.core.text.hyphen.HyphRu
 
 /**
  * Knuth-Liang hyphenation (the TeX algorithm). Given a set of language patterns,
  * finds the valid hyphenation points inside a word so a justified line-breaker
  * can split long words. The pattern *data* is the language-specific part; the
  * bundled sets (see [forLanguage]) are the full TeX `hyph-*` pattern files for
- * German, French, Spanish, Italian, Portuguese and Dutch, plus a small built-in
- * English set for common words.
+ * German, French, Spanish, Italian, Portuguese, Dutch and Russian, plus a
+ * small built-in English set for common words.
  *
  * Patterns are compiled into a trie so lookup is O(word length x max pattern
  * length) regardless of pattern-set size. The German set alone has ~37k
@@ -95,6 +96,7 @@ public class Hyphenator(
             "it" -> IT
             "pt" -> PT
             "nl" -> NL
+            "ru" -> RU
             else -> null
         }
 
@@ -118,6 +120,7 @@ public class Hyphenator(
         private val IT by lazy { Hyphenator(parse(HyphIt.patterns), HyphIt.MIN_PREFIX, HyphIt.MIN_SUFFIX) }
         private val PT by lazy { Hyphenator(parse(HyphPt.patterns), HyphPt.MIN_PREFIX, HyphPt.MIN_SUFFIX) }
         private val NL by lazy { Hyphenator(parse(HyphNl.patterns), HyphNl.MIN_PREFIX, HyphNl.MIN_SUFFIX) }
+        private val RU by lazy { Hyphenator(parse(HyphRu.patterns), HyphRu.MIN_PREFIX, HyphRu.MIN_SUFFIX) }
 
         private val EN_US = listOf(
             ".ach4", ".ad4der", ".af1t", ".al3t", ".am5at", ".an5c", ".ang4", ".ani5m",
