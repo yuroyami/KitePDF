@@ -452,14 +452,21 @@ public class ComposeCanvas(
     }
 
     private fun drawBitmap(bitmap: androidx.compose.ui.graphics.ImageBitmap, ctm: KiteMatrix, alpha: Float) {
-        val originX = ctm.e.toFloat()
-        val originY = ctm.f.toFloat()
-        val widthScale = sqrt(ctm.a * ctm.a + ctm.b * ctm.b).toFloat()
-        val heightScale = sqrt(ctm.c * ctm.c + ctm.d * ctm.d).toFloat()
-        val topLeftY = originY - heightScale
+        // The full CTM, not its scale magnitudes: rotation, reflection and
+        // shear survive. The unit-square mapping matches Skia: translate up
+        // one unit and flip Y, so bitmap row 0 lands on the square's top
+        // edge (v = 1).
+        val m = androidx.compose.ui.graphics.Matrix()
+        m.values[androidx.compose.ui.graphics.Matrix.ScaleX] = ctm.a.toFloat()
+        m.values[androidx.compose.ui.graphics.Matrix.SkewY] = ctm.b.toFloat()
+        m.values[androidx.compose.ui.graphics.Matrix.SkewX] = ctm.c.toFloat()
+        m.values[androidx.compose.ui.graphics.Matrix.ScaleY] = ctm.d.toFloat()
+        m.values[androidx.compose.ui.graphics.Matrix.TranslateX] = ctm.e.toFloat()
+        m.values[androidx.compose.ui.graphics.Matrix.TranslateY] = ctm.f.toFloat()
         drawScope.withTransform({
-            translate(originX, topLeftY)
-            scale(widthScale / bitmap.width, heightScale / bitmap.height, pivot = Offset.Zero)
+            transform(m)
+            translate(0f, 1f)
+            scale(1f / bitmap.width, -1f / bitmap.height, pivot = Offset.Zero)
         }) {
             drawImage(image = bitmap, topLeft = Offset.Zero, alpha = alpha)
         }
