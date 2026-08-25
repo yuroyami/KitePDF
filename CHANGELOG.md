@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Russian hyphenation patterns (hyph-utf8, contributed by ksokolovskiy in
+  #7); a ru-tagged book with `hyphens: auto` now breaks long words instead
+  of falling back to the inert en-US set.
 - SVG, as a format of its own. A new `kitepdf-svg` module holds the renderer
   that was buried in the EPUB handler, and `SvgDocument` opens a standalone
   `.svg` as a one-page document at its own viewport, drawn as vectors.

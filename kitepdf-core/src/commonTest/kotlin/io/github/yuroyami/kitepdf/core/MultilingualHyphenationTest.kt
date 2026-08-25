@@ -92,8 +92,16 @@ class MultilingualHyphenationTest {
         val ru = Hyphenator.forLanguage("ru")
         assertSame(ru, Hyphenator.forLanguage("ru-RU"), "shared Russian instance per language")
         assertTrue(ru != null, "Russian patterns must be bundled")
-        assertTrue(ru!!.hyphenate("перелистывание").isNotEmpty(), "Russian words should have break points")
-        assertTrue(ru.hyphenate("государственный").isNotEmpty(), "Russian patterns should handle long words")
+        // Exact golden breaks, computed with an independent (non-trie)
+        // Knuth-Liang implementation over the same upstream file, matching
+        // how every other language in this class derived its values.
+        check(
+            ru!!,
+            listOf(
+                "государственный" to listOf(2, 4, 7, 12),   // го-су-дар-ствен-ный
+                "перелистывание" to listOf(2, 4, 6, 9, 11), // пе-ре-ли-сты-ва-ние
+            ),
+        )
     }
 
     /** The trie rewrite must not change en-US output (same patterns, same mins). */

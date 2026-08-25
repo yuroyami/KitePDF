@@ -6,6 +6,9 @@ package io.github.yuroyami.kitepdf.core.text.hyphen
  *
  * Copyright (C) 1999-2003 Alexander I. Lebedev.
  * The source patterns are distributed under LPPL 1.2 or later.
+ * The pattern data is carried unmodified from the upstream file above; only
+ * the packaging into Kotlin string chunks differs.
+ * Upstream commit: 89b22656cceac41721d86f26e32551cbb1cd0e06.
  *
  * One Knuth-Liang pattern per line; split into chunks to stay below the JVM
  * class-file string-constant limit.
