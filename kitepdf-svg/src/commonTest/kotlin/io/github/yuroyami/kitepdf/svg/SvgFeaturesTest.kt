@@ -129,7 +129,7 @@ class SvgFeaturesTest {
     private fun byId(svg: String): Map<String, KiteXmlNode.Element> {
         val out = LinkedHashMap<String, KiteXmlNode.Element>()
         fun scan(el: KiteXmlNode.Element) {
-            el.attrs["id"]?.let { out.putIfAbsent(it, el) }
+            el.attrs["id"]?.let { if (it !in out) out[it] = el }
             for (c in el.children) if (c is KiteXmlNode.Element) scan(c)
         }
         scan(KiteXml.parse(svg))

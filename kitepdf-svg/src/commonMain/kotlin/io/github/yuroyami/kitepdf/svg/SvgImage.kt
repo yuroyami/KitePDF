@@ -57,7 +57,7 @@ public class SvgImage private constructor(
     private val byId: Map<String, KiteXmlNode.Element> by lazy {
         val out = LinkedHashMap<String, KiteXmlNode.Element>()
         fun scan(el: KiteXmlNode.Element) {
-            el.attrs["id"]?.let { if (it.isNotEmpty()) out.putIfAbsent(it, el) }
+            el.attrs["id"]?.let { if (it.isNotEmpty() && it !in out) out[it] = el }
             for (c in el.children) if (c is KiteXmlNode.Element) scan(c)
         }
         scan(root)
