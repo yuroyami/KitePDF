@@ -253,7 +253,7 @@ public class EpubDocument internal constructor(
         val spine = fixedSpine(chapter)
         if (spine != null) {
             BoxLayout(::loadImage, ::loadSvg, spine.height, fonts, languageFor(chapter), settings.lineHeightScale)
-                .layout(spine.root, spine.width)
+                .layout(spine.root, spine.width, spine.height)
             return listOf(Paginator.paginateFixed(spine.root, spine.width, spine.height))
         }
         // Vertical writing swaps the budgets: the inline (line-length) budget is
@@ -264,7 +264,7 @@ public class EpubDocument internal constructor(
         BoxLayout(
             ::loadImage, ::loadSvg, blockBudget, fonts, languageFor(chapter),
             settings.lineHeightScale, vertical = isVertical,
-        ).layout(root, inlineBudget)
+        ).layout(root, inlineBudget, blockBudget)
         val pages = Paginator.paginate(
             root, settings.pageWidth, settings.pageHeight, settings.margin, vertical = isVertical,
         )

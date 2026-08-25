@@ -79,10 +79,36 @@ internal class BoxLayout(
 
     private val activeFloats = ArrayList<FloatBand>()
 
-    /** Lay out [root] to fill [contentWidth]; returns total document height. */
-    fun layout(root: BlockBox, contentWidth: Double): Double {
+    /**
+     * The rectangle an out-of-flow box measures its insets against: the padding
+     * box of the nearest positioned ancestor, or the page for `position: fixed`
+     * and for absolute boxes with no positioned ancestor at all. Filled once the
+     * owning box knows its own size, which is why placement is deferred.
+     */
+    private class AbsContainingBlock {
+        var left = 0.0; var top = 0.0; var width = 0.0; var height = 0.0
+    }
+
+    private class PendingAbs(val box: LayoutBox, val cb: AbsContainingBlock)
+
+    private val pendingAbs = ArrayList<PendingAbs>()
+    private val pageCb = AbsContainingBlock()
+    private var currentCb = pageCb
+
+    /**
+     * Lay out [root] to fill [contentWidth]; returns total document height.
+     * [contentHeight] is the page box that `position: fixed` and bottom insets
+     * measure against; without it the laid-out document height stands in.
+     */
+    fun layout(root: BlockBox, contentWidth: Double, contentHeight: Double? = null): Double {
         activeFloats.clear()
+        pendingAbs.clear()
+        pageCb.left = 0.0; pageCb.top = 0.0
+        pageCb.width = contentWidth; pageCb.height = contentHeight ?: 0.0
+        currentCb = pageCb
         layoutBlock(root, xLeft = 0.0, availWidth = contentWidth, topY = 0.0)
+        if (contentHeight == null) pageCb.height = root.borderBoxHeight
+        flushAbs(pageCb)
         applyRelativeOffsets(root)
         return root.borderBoxHeight
     }
@@ -93,7 +119,9 @@ internal class BoxLayout(
      * box and its whole subtree. `left` wins over `right`, `top` over `bottom`.
      */
     private fun applyRelativeOffsets(box: LayoutBox) {
-        if (box is BlockBox && box.style.position == CssPosition.RELATIVE) {
+        // A TextBlockBox is the anonymous inline container and borrows its
+        // parent's style, so shifting it too would apply the offset twice.
+        if (box !is TextBlockBox && box.style.position == CssPosition.RELATIVE) {
             val s = box.style
             val dx = s.leftPt ?: s.rightPt?.let { -it } ?: 0.0
             val dy = s.topPt ?: s.bottomPt?.let { -it } ?: 0.0
@@ -123,6 +151,11 @@ internal class BoxLayout(
 
     private fun layoutBlock(box: BlockBox, xLeft: Double, availWidth: Double, topY: Double) {
         val s = box.style
+        // A positioned box is the containing block for its out-of-flow
+        // descendants, so it opens one and fills it in once its size is known.
+        val savedCb = currentCb
+        val ownCb = if (s.position != CssPosition.STATIC) AbsContainingBlock() else null
+        if (ownCb != null) currentCb = ownCb
         val bL = s.borderLeft.effective; val bR = s.borderRight.effective
         val extra = s.marginLeftPt + s.marginRightPt + bL + bR + s.paddingLeftPt + s.paddingRightPt
         var contentW = s.widthPt ?: (availWidth - extra)
@@ -142,12 +175,13 @@ internal class BoxLayout(
         var first = true
         val floatsBefore = activeFloats.size
         for (child in box.children) {
-            // Out-of-flow (position:absolute/fixed): place at its insets relative to
-            // this containing block; it does NOT advance the normal-flow cursor. Used
-            // mainly by fixed-layout pages to overlay panels/captions.
-            val pos = (child as? BlockBox)?.style?.position
+            // Out-of-flow (position:absolute/fixed): queued now, placed once its
+            // containing block knows its own size. It never advances the
+            // normal-flow cursor. Fixed-layout pages use this to overlay panels.
+            val pos = if (child is TextBlockBox) CssPosition.STATIC else child.style.position
             if (pos == CssPosition.ABSOLUTE || pos == CssPosition.FIXED) {
-                layoutAbsolute(child, contentLeft, contentTop, contentW); continue
+                pendingAbs.add(PendingAbs(child, if (pos == CssPosition.FIXED) pageCb else currentCb))
+                continue
             }
             // clear: the flow cursor drops below matching floats before this
             // child lays out (margin collapse across clearance not modelled).
@@ -190,22 +224,60 @@ internal class BoxLayout(
         // (html,body{height:100%} is everywhere in real EPUB CSS).
         if (contentH < natural) contentH = natural
         box.borderBoxHeight = s.borderTop.effective + s.paddingTopPt + contentH + s.paddingBottomPt + s.borderBottom.effective
+
+        if (ownCb != null) {
+            // The padding box, which is what CSS measures absolute insets against.
+            ownCb.left = box.x + bL
+            ownCb.top = box.y + s.borderTop.effective
+            ownCb.width = s.paddingLeftPt + contentW + s.paddingRightPt
+            ownCb.height = box.borderBoxHeight - s.borderTop.effective - s.borderBottom.effective
+            currentCb = savedCb
+            flushAbs(ownCb)
+        }
+    }
+
+    /** Place every queued out-of-flow box whose containing block is [cb]. */
+    private fun flushAbs(cb: AbsContainingBlock) {
+        val saved = currentCb
+        currentCb = cb
+        while (true) {
+            val i = pendingAbs.indexOfFirst { it.cb === cb }
+            if (i < 0) break
+            layoutAbsolute(pendingAbs.removeAt(i).box, cb)
+        }
+        currentCb = saved
     }
 
     /**
-     * Place a position:absolute/fixed block at its `left`/`top` insets within the
-     * containing block's content box, sizing from `width` (or `left`+`right`), then
-     * lay out its subtree there. Out of flow, so it never shifts sibling content.
+     * Place a position:absolute/fixed box against [cb]. Width comes from `width`,
+     * else from `left`+`right`, else from what is left of the containing block.
+     * `right`/`bottom` alone need the laid-out size, so they shift afterwards.
+     * Out of flow, so it never moves sibling content.
      */
-    private fun layoutAbsolute(box: BlockBox, cbLeft: Double, cbTop: Double, cbWidth: Double) {
+    private fun layoutAbsolute(box: LayoutBox, cb: AbsContainingBlock) {
         val s = box.style
-        val extra = s.borderLeft.effective + s.borderRight.effective + s.paddingLeftPt + s.paddingRightPt
+        val extra = s.marginLeftPt + s.marginRightPt +
+            s.borderLeft.effective + s.borderRight.effective + s.paddingLeftPt + s.paddingRightPt
+        val left = s.leftPt
+        val right = s.rightPt
         val contentW = s.widthPt
-            ?: if (s.leftPt != null && s.rightPt != null) (cbWidth - s.leftPt - s.rightPt - extra).coerceAtLeast(0.0)
-            else (cbWidth - extra).coerceAtLeast(0.0)
-        val x = cbLeft + (s.leftPt ?: 0.0)
-        val y = cbTop + (s.topPt ?: 0.0)
-        layoutBlock(box, x, contentW + extra, y)
+            ?: (cb.width - (left ?: 0.0) - (right ?: 0.0) - extra).coerceAtLeast(0.0)
+        val x = cb.left + (left ?: 0.0)
+        val y = cb.top + (s.topPt ?: 0.0)
+        layoutChild(box, x, if (box is BlockBox) contentW + extra else contentW, y)
+
+        // top AND bottom with no height: the insets set the height.
+        if (s.topPt != null && s.bottomPt != null && s.heightPt == null) {
+            val h = (cb.height - s.topPt!! - s.bottomPt!!).coerceAtLeast(0.0)
+            if (h > box.borderBoxHeight) box.borderBoxHeight = h
+        }
+        var dx = 0.0
+        var dy = 0.0
+        if (left == null && right != null) dx = (cb.left + cb.width - right - box.borderBoxWidth) - box.x
+        if (s.topPt == null && s.bottomPt != null) {
+            dy = (cb.top + cb.height - s.bottomPt!! - box.borderBoxHeight) - box.y
+        }
+        if (dx != 0.0 || dy != 0.0) shiftSubtree(box, dx, dy)
     }
 
     /** y below every float matching [clear] (the current cursor if none do). */
@@ -344,6 +416,60 @@ internal class BoxLayout(
         val gutters = spacing * (cols + 1)
         val availCells = (avail - gutters).coerceAtLeast(0.0)
 
+        val widths = DoubleArray(cols)
+        val target = s.widthPt?.let { (it - gutters).coerceAtLeast(0.0) }
+        if (s.tableLayoutFixed) {
+            fixedColumnWidths(box, cols, widths, target ?: availCells)
+        } else {
+            autoColumnWidths(box, allCells, cols, widths, availCells, target)
+        }
+
+        val tableW = widths.sum() + gutters
+        layoutTableGrid(box, cols, widths, spacing, tableW, contentLeft, availWidth, topY)
+    }
+
+    /**
+     * `table-layout: fixed`: `<col>` widths win, then the first row's declared
+     * cell widths, then the rest is split equally. Cell content is never
+     * measured, which is the point of the mode.
+     */
+    private fun fixedColumnWidths(box: TableBox, cols: Int, widths: DoubleArray, total: Double) {
+        val pinned = BooleanArray(cols)
+        for ((c, w) in box.colWidths) if (c in 0 until cols) { widths[c] = w; pinned[c] = true }
+        for (cell in box.rows.firstOrNull()?.cells.orEmpty()) {
+            val cs = cell.style
+            val w = cs.widthPt ?: continue
+            // CSS sizes a column from the declared width PLUS the cell's own
+            // padding and border, so the content still fits inside the column.
+            val outer = w + cs.paddingLeftPt + cs.paddingRightPt +
+                cs.borderLeft.effective + cs.borderRight.effective
+            val share = outer / cell.colspan
+            for (c in cell.gridCol until (cell.gridCol + cell.colspan).coerceAtMost(cols)) {
+                if (!pinned[c]) { widths[c] = share; pinned[c] = true }
+            }
+        }
+        val free = (0 until cols).filter { !pinned[it] }
+        val used = widths.sum()
+        if (free.isNotEmpty()) {
+            val each = ((total - used) / free.size).coerceAtLeast(0.0)
+            for (c in free) widths[c] = each
+        } else if (used in 0.0..total && used > 0.0) {
+            // Every column is declared but they do not fill the table: widen
+            // them proportionally rather than leaving a gap on the right.
+            val k = total / used
+            for (c in 0 until cols) widths[c] *= k
+        }
+    }
+
+    /** The default: measure every cell, then distribute the available width. */
+    private fun autoColumnWidths(
+        box: TableBox,
+        allCells: List<BlockBox>,
+        cols: Int,
+        widths: DoubleArray,
+        availCells: Double,
+        target: Double?,
+    ) {
         // Column widths: single-column cells set the base; spanning cells top up their columns.
         val colPref = DoubleArray(cols); val colMin = DoubleArray(cols)
         for (cell in allCells) if (cell.colspan == 1) {
@@ -360,8 +486,6 @@ internal class BoxLayout(
         for ((c, w) in box.colWidths) if (c in 0 until cols) { colPref[c] = w; colMin[c] = w }
 
         val totalPref = colPref.sum(); val totalMin = colMin.sum()
-        val widths = DoubleArray(cols)
-        val target = s.widthPt?.let { (it - gutters).coerceAtLeast(0.0) }
         when {
             target != null && target > totalMin -> distribute(widths, colPref, colMin, target)
             totalPref <= availCells -> for (c in 0 until cols) widths[c] = colPref[c]
@@ -383,7 +507,23 @@ internal class BoxLayout(
                 for (c in free) widths[c] = (widths[c] + add).coerceAtLeast(0.0)
             }
         }
-        val tableW = widths.sum() + gutters
+    }
+
+    /** Place rows and cells once the column widths are settled. */
+    private fun layoutTableGrid(
+        box: TableBox,
+        cols: Int,
+        widths: DoubleArray,
+        spacing: Double,
+        tableW: Double,
+        contentLeft: Double,
+        availWidth: Double,
+        topY: Double,
+    ) {
+        val s = box.style
+        val bL = s.borderLeft.effective; val bR = s.borderRight.effective
+        val allCells = box.rows.flatMap { it.cells }
+        val rowCount = box.rows.size
         // Column left offsets INCLUDING the leading + interior gutters.
         val colX = DoubleArray(cols + 1)
         colX[0] = spacing

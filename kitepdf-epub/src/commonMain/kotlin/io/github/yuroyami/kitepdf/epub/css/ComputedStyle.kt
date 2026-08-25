@@ -108,6 +108,11 @@ internal data class ComputedStyle(
     val cssFloat: CssFloat = CssFloat.NONE,
     /** `clear`: flow resumes below matching floats. Not inherited. */
     val clear: CssClear = CssClear.NONE,
+    /**
+     * `table-layout: fixed`: columns are sized by `<col>` and the first row's
+     * declared widths alone, never by cell content. Not inherited.
+     */
+    val tableLayoutFixed: Boolean = false,
 ) {
     val mono: Boolean get() = fontFamily == GenericFont.MONO
 
