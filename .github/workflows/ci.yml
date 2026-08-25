@@ -48,6 +48,7 @@ jobs:
         run: >
           ./gradlew
           :kitepdf-core:jvmTest :kitepdf-pdf:jvmTest :kitepdf-epub:jvmTest
+          :kitepdf-cbz:jvmTest :kitepdf-svg:jvmTest
           :kitepdf-skia-renderer:jvmTest :kitepdf-compose-viewer:jvmTest
           :kitepdf:jvmTest :kitepdf-net:jvmTest --stacktrace
 
@@ -102,12 +103,13 @@ jobs:
           key: konan-${{ runner.os }}-${{ hashFiles('gradle/libs.versions.toml') }}
           restore-keys: konan-${{ runner.os }}-
 
-      - name: Test iOS simulator (core, pdf, epub)
+      - name: Test iOS simulator (core, pdf, epub, svg)
         run: >
           ./gradlew
           :kitepdf-core:iosSimulatorArm64Test
           :kitepdf-pdf:iosSimulatorArm64Test
-          :kitepdf-epub:iosSimulatorArm64Test --stacktrace
+          :kitepdf-epub:iosSimulatorArm64Test
+          :kitepdf-svg:iosSimulatorArm64Test --stacktrace
 
       - name: Test macOS arm64 (core, pdf, epub)
         run: >
@@ -141,8 +143,8 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
-      - name: Test JS on Node (core, pdf)
-        run: ./gradlew :kitepdf-core:jsNodeTest :kitepdf-pdf:jsNodeTest --stacktrace
+      - name: Test JS on Node (core, pdf, svg)
+        run: ./gradlew :kitepdf-core:jsNodeTest :kitepdf-pdf:jsNodeTest :kitepdf-svg:jsNodeTest --stacktrace
 
       - name: Upload test reports
         if: always()
