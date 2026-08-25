@@ -76,6 +76,7 @@ kotlin {
         // production code to a second handler.
         jvmTest.dependencies {
             implementation(projects.kitepdfEpub)
+            implementation(projects.kitepdfDifftest)
         }
     }
 }

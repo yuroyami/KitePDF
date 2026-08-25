@@ -1,5 +1,9 @@
 package io.github.yuroyami.kitepdf.nativerenderer.difftest
 
+import io.github.yuroyami.kitepdf.difftest.ImageDiff
+import io.github.yuroyami.kitepdf.difftest.MuPdfOracle
+import io.github.yuroyami.kitepdf.difftest.PdfRenderOracle
+
 import io.github.yuroyami.kitepdf.PdfDocument
 import io.github.yuroyami.kitepdf.writer.PdfBuilder
 import io.github.yuroyami.kitepdf.writer.StandardFont

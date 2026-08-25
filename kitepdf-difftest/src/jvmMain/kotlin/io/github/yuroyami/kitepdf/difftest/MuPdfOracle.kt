@@ -1,4 +1,4 @@
-package io.github.yuroyami.kitepdf.nativerenderer.difftest
+package io.github.yuroyami.kitepdf.difftest
 
 import java.awt.image.BufferedImage
 import java.io.File
@@ -9,7 +9,7 @@ import javax.imageio.ImageIO
  * Small seam around the reference renderer so the harness can test oracle
  * failures without replacing the process-wide `mutool` discovery state.
  */
-internal interface PdfRenderOracle {
+public interface PdfRenderOracle {
     val available: Boolean
     fun describe(): String
     fun pageCountDetailed(pdf: File): MuPdfOracle.PageCountResult
@@ -30,7 +30,7 @@ internal interface PdfRenderOracle {
  * If none is found the oracle is simply [available] == false, and the harness
  * degrades to a KitePDF-only smoke pass instead of failing.
  */
-object MuPdfOracle : PdfRenderOracle {
+public object MuPdfOracle : PdfRenderOracle {
 
     sealed interface RenderResult {
         data class Success(val image: BufferedImage) : RenderResult
@@ -97,7 +97,7 @@ object MuPdfOracle : PdfRenderOracle {
      * Invoke a specific binary. Kept internal both as a test seam and so all
      * process/error handling lives in one place.
      */
-    internal fun renderWith(
+    public fun renderWith(
         tool: File,
         pdf: File,
         page: Int,
@@ -177,7 +177,7 @@ object MuPdfOracle : PdfRenderOracle {
         }
     }
 
-    internal fun pageCountWith(
+    public fun pageCountWith(
         tool: File,
         pdf: File,
         timeoutMillis: Long = 60_000L,
@@ -296,7 +296,7 @@ object MuPdfOracle : PdfRenderOracle {
         return null
     }
 
-    internal fun requireExecutable(path: String, source: String): File {
+    public fun requireExecutable(path: String, source: String): File {
         val file = File(path)
         require(file.isFile && file.canExecute()) {
             "$source points to a missing or non-executable mutool binary: ${file.absolutePath}"
