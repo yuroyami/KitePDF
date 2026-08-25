@@ -172,6 +172,18 @@ internal object EpubFixtures {
         )
     }
 
+
+    /** A fully valid 2x1 24-bit BMP: red pixel, blue pixel. Decodes for real. */
+    fun bmp2x1(): ByteArray {
+        val h = ByteArray(54)
+        h[0] = 'B'.code.toByte(); h[1] = 'M'.code.toByte()
+        fun le32(o: Int, v: Int) { var s = 0; var i = o; while (s < 32) { h[i++] = ((v ushr s) and 0xFF).toByte(); s += 8 } }
+        fun le16(o: Int, v: Int) { h[o] = (v and 0xFF).toByte(); h[o + 1] = ((v ushr 8) and 0xFF).toByte() }
+        le32(2, 62); le32(10, 54); le32(14, 40); le32(18, 2); le32(22, 1)
+        le16(26, 1); le16(28, 24); le32(34, 8)
+        return h + byteArrayOf(0, 0, 0xFF.toByte(), 0xFF.toByte(), 0, 0, 0, 0)
+    }
+
     /** Build a STORED (uncompressed) zip, CRCs included so [ZipReader] verifies clean. */
     fun storedZip(entries: List<Pair<String, ByteArray>>): ByteArray {
         val out = ArrayList<Byte>()

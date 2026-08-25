@@ -986,6 +986,62 @@ public class EpubPage internal constructor(
     private fun runEnd(r: PlacedRun): Double =
         page.margin + r.x + r.glyphs.sumOf { it.advanceWidth } * r.fontSize / 1000.0
 
+    /* ── accessibility ───────────────────────────────────────────────────── */
+
+    /**
+     * What this page says, in the order a reader that speaks would say it:
+     * one item per block of text or per image, each carrying the role its
+     * source element declared (`<h2>` is a heading, `<li>` a list item).
+     *
+     * Left out: anything marked `aria-hidden="true"` or `role="presentation"`,
+     * and an image with `alt=""`, which is how authors mark decoration.
+     *
+     * Order is the page's own top-to-bottom, which is document order for
+     * everything except boxes deliberately overlapped by absolute positioning.
+     *
+     * ```kotlin
+     * for (item in page.readingOrder()) speak(item.role, item.text)
+     * ```
+     */
+    public fun readingOrder(): List<EpubReadingItem> {
+        val out = ArrayList<Pair<Double, EpubReadingItem>>()
+        var owner: TextBlockBox? = null
+        var top = 0.0
+        var words = ArrayList<String>()
+
+        fun flushText() {
+            val o = owner
+            if (o != null && words.isNotEmpty()) {
+                readingItem(o.semantics, words.joinToString(" "))?.let { out.add(top to it) }
+            }
+            words = ArrayList()
+        }
+
+        for (line in page.lines) {
+            if (line.owner !== owner) { flushText(); owner = line.owner; top = line.yTop }
+            extractLine(line)?.let { words.add(it.text) }
+            for (img in line.images) {
+                if (img.alt?.isEmpty() == true) continue   // decorative
+                out.add(line.yTop to EpubReadingItem(EpubRole.IMAGE, img.alt.orEmpty()))
+            }
+        }
+        flushText()
+
+        for (img in page.images) {
+            val sem = img.semantics ?: continue
+            if (sem.hidden) continue
+            out.add(img.y to EpubReadingItem(EpubRole.IMAGE, sem.label.orEmpty(), epubType = sem.epubType))
+        }
+        return out.sortedBy { it.first }.map { it.second }
+    }
+
+    private fun readingItem(sem: BoxSemantics?, text: String): EpubReadingItem? {
+        if (sem?.hidden == true) return null
+        val spoken = (sem?.label ?: text).trim()
+        if (spoken.isEmpty()) return null
+        return EpubReadingItem(sem?.role ?: EpubRole.TEXT, spoken, sem?.headingLevel ?: 0, sem?.epubType)
+    }
+
     /* ── structured text (extraction / search) ───────────────────────────── */
 
     private val structured: KiteStructuredText by lazy { buildStructuredText() }

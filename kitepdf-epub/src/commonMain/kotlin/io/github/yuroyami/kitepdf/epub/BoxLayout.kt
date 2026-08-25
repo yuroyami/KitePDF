@@ -790,6 +790,7 @@ internal class BoxLayout(
         val imageHeight: Double = 0.0,
         val image: KiteImageData? = null,
         val svgImage: SvgImage? = null,
+        val imageAlt: String? = null,
         // Envelope padding when the reading is wider than its base (pt). Only the
         // group's first/last cells carry it; it widens wrap/measure and the pen
         // walk in placeRuns without entering the glyph advance stream.
@@ -876,6 +877,7 @@ internal class BoxLayout(
                     '￼', w, run.fontSizePt, fontSpec(run.family, run.bold, run.italic),
                     run.color, 0.0, false,
                     href = run.href, imageWidth = w, imageHeight = h, image = img, svgImage = svg,
+                    imageAlt = run.imageAlt,
                 )
                 tokens.add(Token.Word(listOf(cell), w))
                 continue
@@ -1178,7 +1180,7 @@ internal class BoxLayout(
             // Inline image cell: emit a PlacedImage and advance the pen.
             if (c.imageHeight > 0.0 && (c.image != null || c.svgImage != null)) {
                 closeGroup(x)
-                imageSink?.add(PlacedImage(x + c.padBefore, c.imageWidth, c.imageHeight, c.image, c.svgImage))
+                imageSink?.add(PlacedImage(x + c.padBefore, c.imageWidth, c.imageHeight, c.image, c.svgImage, c.imageAlt))
                 x += c.padBefore + c.width + c.padAfter
                 i++
                 continue
