@@ -16,10 +16,6 @@ import io.github.yuroyami.kitepdf.core.KiteLocation
 import io.github.yuroyami.kitepdf.core.KitePage
 import io.github.yuroyami.kitepdf.epub.EpubDocument
 import io.github.yuroyami.kitepdf.epub.EpubSettings
-import java.io.ByteArrayOutputStream
-import java.util.zip.CRC32
-import java.util.zip.ZipEntry
-import java.util.zip.ZipOutputStream
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -36,7 +32,7 @@ class IncrementalEpubSceneTest {
     private val settings = EpubSettings(pageWidth = 200.0, pageHeight = 200.0)
 
     private fun book(chapters: Int = 12): EpubDocument = EpubDocument.open(
-        multiSpine(
+        multiSpineEpub(
             List(chapters) { c ->
                 "<h1 id=\"head$c\">Chapter ${c + 1}</h1>" +
                     (0 until 18).joinToString("") {
@@ -306,45 +302,4 @@ class IncrementalEpubSceneTest {
         assertFalse(doc.isChapterReady(8))
     }
 
-    /* ── fixture ──────────────────────────────────────────────────────────── */
-
-    private fun multiSpine(bodies: List<String>): ByteArray {
-        val container = """<?xml version="1.0"?><container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container"><rootfiles><rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/></rootfiles></container>"""
-        val items = bodies.indices.joinToString("") {
-            """<item id="c${it + 1}" href="chapter${it + 1}.xhtml" media-type="application/xhtml+xml"/>"""
-        }
-        val refs = bodies.indices.joinToString("") { """<itemref idref="c${it + 1}"/>""" }
-        val opf = """<?xml version="1.0"?>
-            <package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="id">
-              <metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:identifier id="id">scene</dc:identifier></metadata>
-              <manifest>$items</manifest>
-              <spine>$refs</spine>
-            </package>"""
-        val files = bodies.mapIndexed { i, body ->
-            "OEBPS/chapter${i + 1}.xhtml" to
-                """<?xml version="1.0"?><html xmlns="http://www.w3.org/1999/xhtml"><body>$body</body></html>""".encodeToByteArray()
-        }
-        val out = ByteArrayOutputStream()
-        ZipOutputStream(out).use { zip ->
-            zip.setMethod(ZipOutputStream.STORED)
-            val entries = listOf(
-                "mimetype" to "application/epub+zip".encodeToByteArray(),
-                "META-INF/container.xml" to container.encodeToByteArray(),
-                "OEBPS/content.opf" to opf.encodeToByteArray(),
-            ) + files
-            for ((name, data) in entries) {
-                zip.putNextEntry(
-                    ZipEntry(name).apply {
-                        method = ZipEntry.STORED
-                        size = data.size.toLong()
-                        compressedSize = data.size.toLong()
-                        crc = CRC32().apply { update(data) }.value
-                    },
-                )
-                zip.write(data)
-                zip.closeEntry()
-            }
-        }
-        return out.toByteArray()
-    }
 }
