@@ -207,8 +207,48 @@ The layout engine covers what real books use:
   Six of those languages ship a full pattern set. English ships a small
   common-word set rather than the full `hyph-en-us` data.
 - **CJK**: inter-character justification with kinsoku line-break rules, ruby
-  annotations, and vertical writing (`writing-mode: vertical-rl`) with
-  upright CJK and rotated Latin.
-- **Layout**: floats with exclusion bands, tables, inline images on the
-  baseline, `::before`/`::after` generated content, `text-transform`,
-  letter/word spacing, and small-caps.
+  annotations, and vertical writing (`vertical-rl` and `vertical-lr`) with
+  upright CJK and rotated Latin. Selection, search and link rectangles follow
+  the columns, so a tap lands on the glyph under it.
+- **Marks**: GPOS attachment onto a base letter, onto a ligature component,
+  and onto the mark below, so two stacked diacritics sit one above the other
+  instead of overprinting.
+- **Layout**: floats with exclusion bands, tables (including
+  `table-layout: fixed`), `position: absolute`/`relative`/`fixed`, inline
+  images on the baseline, `::before`/`::after` generated content,
+  `text-transform`, letter/word spacing, and small-caps.
+
+## Books that are not quite right
+
+Two habits of real EPUBs that the engine absorbs rather than rejecting.
+
+**Encodings.** The spec says UTF-8 or UTF-16. Books ship Windows-1252 anyway,
+sometimes while their own XML declaration claims UTF-8. Every entry is read by
+weighing the evidence: a byte order mark first, then UTF-16 without one, then
+the document's declaration (`<?xml encoding>`, `<meta charset>`, or the legacy
+`http-equiv`), and finally the bytes themselves. Text that is not valid UTF-8
+is read as Windows-1252, which never fails.
+
+**Archives.** The reader handles ZIP64 records and entries whose sizes only
+the trailing data descriptor knows, and it verifies every entry's CRC. A
+mismatch is reported, not fatal: half a broken book beats no book.
+
+## Accessibility
+
+`readingOrder()` gives one page's content in the order a reader that speaks
+would say it, each item carrying the role its source element declared.
+
+```kotlin
+for (item in page.readingOrder()) {
+    when (item.role) {
+        EpubRole.HEADING -> speakHeading(item.text, item.headingLevel)
+        EpubRole.IMAGE -> describe(item.text)          // the alt text
+        else -> speak(item.text)
+    }
+}
+```
+
+Left out: anything marked `aria-hidden="true"` or `role="presentation"`, and
+an image with `alt=""`, which is how authors mark decoration. `aria-label`
+replaces an element's text, and both `aria-hidden` and `epub:type` reach down
+the subtree, so a footnote's paragraphs stay footnote.

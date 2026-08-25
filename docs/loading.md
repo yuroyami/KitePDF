@@ -23,7 +23,7 @@ val maybeBook = EpubDocument.openOrNull(bytes)
 ```kotlin
 import io.github.yuroyami.kitepdf.document.KiteDoc
 
-val doc = KiteDoc.open(bytes)          // PdfDocument or EpubDocument
+val doc = KiteDoc.open(bytes)          // whichever of the four it is
 KiteDocView(doc, Modifier.fillMaxSize())
 ```
 
@@ -33,16 +33,25 @@ Check first without opening anything:
 when (KiteDoc.formatOf(bytes)) {
     KiteDocFormat.Pdf  -> /* ... */
     KiteDocFormat.Epub -> /* ... */
-    null               -> /* neither */
+    KiteDocFormat.Cbz  -> /* a comic archive */
+    KiteDocFormat.Svg  -> /* one vector page */
+    null               -> /* none of them */
 }
 ```
 
-`formatOf` only reads the header, so it is cheap enough to run over a folder listing.
+`formatOf` reads the header for PDF, EPUB and SVG, and the ZIP central directory for CBZ, so it is cheap enough to run over a folder listing.
+
+| Format | What it recognises |
+| --- | --- |
+| PDF | a `%PDF-` marker in the first kilobyte, leading junk allowed |
+| EPUB | a ZIP whose first entry is the OCF `mimetype`, or that carries `META-INF/container.xml` |
+| CBZ | any other ZIP whose real entries are all images |
+| SVG | an `<svg>` element in the first half kilobyte, checked last |
 
 !!! note "Which artifact"
-    `KiteDoc` lives in `io.github.yuroyami:kitepdf`, the umbrella, because it is the only artifact that sees both handlers. Depending on `kitepdf-pdf` or `kitepdf-epub` alone still gets you that handler's own entry points.
+    `KiteDoc` lives in `io.github.yuroyami:kitepdf`, the umbrella, because it is the only artifact that sees every handler. Depending on `kitepdf-pdf`, `kitepdf-epub`, `kitepdf-cbz` or `kitepdf-svg` alone still gets you that handler's own entry points.
 
-Both formats take their own extras, and each ignores the other's:
+Formats take their own extras, and each ignores the others':
 
 ```kotlin
 KiteDoc.open(bytes, password = "secret")                       // PDF encryption
@@ -96,7 +105,7 @@ Networking lives in a separate artifact. The engine depends on `kotlin-stdlib` a
 
 ```kotlin
 dependencies {
-    implementation("io.github.yuroyami:kitepdf-net:0.6.3")
+    implementation("io.github.yuroyami:kitepdf-net:0.7.0")
     implementation("io.ktor:ktor-client-cio:3.5.2")   // or OkHttp, Darwin, Js
 }
 ```
