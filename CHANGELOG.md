@@ -38,6 +38,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Redaction removes a shading (`sh`) whose visible region touches a redacted
+  area. A shading paints its whole clipping region, so it is judged by the
+  clip's boundary the same way vector paths are judged by their segments; a
+  page-wide background shading survives under the black box like any other
+  background.
+- The Skia differential harness can no longer pass falsely: it runs on the
+  same hardened MuPDF oracle as the AWT harness (new internal
+  `kitepdf-difftest` module), a failed oracle render or a page-size mismatch
+  now fails the test instead of scoring perfect, the drop-in corpus is the
+  repo `corpus/pdf`, and the stale allowance for blank Standard-14 text is
+  gone.
 - The native (non-Skia) renderers reach content parity. Android and
   iOS/macOS draw decoded (RAW) images, which is what every successful JPEG,
   JPEG 2000 and JBIG2 decode produces; the browser Canvas2D backend paints
