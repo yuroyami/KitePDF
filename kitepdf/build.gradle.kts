@@ -80,6 +80,7 @@ kotlin {
             api(projects.kitepdfPdf)
             api(projects.kitepdfEpub)
             api(projects.kitepdfCbz)
+            api(projects.kitepdfSvg)
         }
 
         commonTest.dependencies {

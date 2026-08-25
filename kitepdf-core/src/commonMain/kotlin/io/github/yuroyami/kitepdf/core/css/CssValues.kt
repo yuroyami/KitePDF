@@ -1,22 +1,23 @@
-package io.github.yuroyami.kitepdf.epub.css
+package io.github.yuroyami.kitepdf.core.css
 
 import io.github.yuroyami.kitepdf.core.render.RgbColor
 
 /**
- * Value parsers shared by the cascade: CSS lengths → points, and CSS colours →
- * [RgbColor]. Kept declaration-value-agnostic (they take the raw token text) so
- * the cascade can interpret each property against the right reference (font size,
- * root size, containing-block width).
+ * CSS value parsers: lengths to points, and colours to [RgbColor]. Shared by
+ * the EPUB cascade and the SVG renderer, which read the same syntax.
+ *
+ * They take the raw token text and no context, so each caller interprets a
+ * value against the right reference (font size, root size, containing width).
  *
  * Length model: 1 CSS px = 1/96 in, 1 pt = 1/72 in, so px → pt is ×0.75. `em` is
  * relative to the caller's [fontSizePt] (the parent's size when resolving
  * `font-size` itself, else the element's own), `rem` to [rootPt], `%` to
  * [refPt] (parent size for font-size, containing width for margins, etc.).
  */
-internal object CssValues {
+public object CssValues {
 
     /** Parse a CSS `<length>`/`<percentage>` to points, or null if not a length. */
-    fun length(raw: String, fontSizePt: Double, rootPt: Double, refPt: Double): Double? {
+    public fun length(raw: String, fontSizePt: Double, rootPt: Double, refPt: Double): Double? {
         val s = raw.trim().lowercase()
         if (s.isEmpty()) return null
         fun numOf(suffix: String) = s.removeSuffix(suffix).trim().toDoubleOrNull()
@@ -40,7 +41,7 @@ internal object CssValues {
     }
 
     /** Absolute/relative `font-size` keywords → points. [mediumPt] is the base size. */
-    fun fontSizeKeyword(raw: String, parentPt: Double, mediumPt: Double): Double? = when (raw.trim().lowercase()) {
+    public fun fontSizeKeyword(raw: String, parentPt: Double, mediumPt: Double): Double? = when (raw.trim().lowercase()) {
         "xx-small" -> mediumPt * 0.6
         "x-small" -> mediumPt * 0.75
         "small" -> mediumPt * 0.89
@@ -54,7 +55,7 @@ internal object CssValues {
     }
 
     /** Parse a CSS `<color>`; null for `transparent`, `inherit`, or unrecognised. */
-    fun color(raw: String): RgbColor? {
+    public fun color(raw: String): RgbColor? {
         val s = raw.trim().lowercase()
         if (s.isEmpty() || s == "transparent" || s == "inherit" || s == "currentcolor" || s == "none") return null
         if (s.startsWith("#")) return hexColor(s.substring(1))

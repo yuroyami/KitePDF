@@ -1,5 +1,7 @@
 package io.github.yuroyami.kitepdf.epub
 
+import io.github.yuroyami.kitepdf.svg.SvgImage
+
 import io.github.yuroyami.kitepdf.core.xml.KiteXmlNode
 
 import io.github.yuroyami.kitepdf.epub.css.ComputedStyle

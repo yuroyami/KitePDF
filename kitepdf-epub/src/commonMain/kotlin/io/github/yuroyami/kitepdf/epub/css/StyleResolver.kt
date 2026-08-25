@@ -2,6 +2,7 @@ package io.github.yuroyami.kitepdf.epub.css
 
 import io.github.yuroyami.kitepdf.core.xml.KiteXmlNode
 
+import io.github.yuroyami.kitepdf.core.css.CssValues
 import io.github.yuroyami.kitepdf.core.render.RgbColor
 
 /**
