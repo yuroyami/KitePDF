@@ -43,4 +43,5 @@ include(":kitepdf-compose-viewer")  // Compose UI (PdfView)
 include(":kitepdf-net")             // optional: open documents from a URL
 include(":kitepdf-skia-renderer")   // Skia rasterizer
 include(":kitepdf-native-renderer") // AWT / Android / CoreGraphics / Canvas2D rasterizers
+include(":kitepdf-difftest")        // internal: shared differential-test oracle (not published)
 include(":sample")

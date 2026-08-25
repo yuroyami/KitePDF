@@ -1,4 +1,4 @@
-package io.github.yuroyami.kitepdf.nativerenderer.difftest
+package io.github.yuroyami.kitepdf.difftest
 
 import java.awt.Color
 import java.awt.RenderingHints
@@ -20,7 +20,7 @@ import kotlin.math.abs
  *   1.0  → maximally different (e.g. solid black vs solid white)
  * It is the primary ranking key: "show me the worst-rendering pages first."
  */
-object ImageDiff {
+public object ImageDiff {
 
     /** Per-channel delta above which a pixel counts toward [DiffResult.diffFraction]. */
     private const val PERCEPTUAL_THRESHOLD = 16
