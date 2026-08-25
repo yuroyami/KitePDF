@@ -89,6 +89,7 @@ kotlin {
         }
 
         jvmTest.dependencies {
+            implementation(projects.kitepdfDifftest)
             // Tests need a native Skiko runtime for the host OS.
             implementation(currentOsSkikoRuntime())
         }
