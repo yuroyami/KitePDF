@@ -38,6 +38,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The native (non-Skia) renderers reach content parity. Android and
+  iOS/macOS draw decoded (RAW) images, which is what every successful JPEG,
+  JPEG 2000 and JBIG2 decode produces; the browser Canvas2D backend paints
+  them too instead of a placeholder for everything. iOS and macOS render
+  Standard-14 (non-embedded) text through the system font instead of leaving
+  it blank. The Android and CoreGraphics image transforms also placed the
+  unit square wrong for the standard device transform, drawing outside the
+  page; both now use the same mapping Skia does, proven by pixel tests.
+- Compose no longer flattens a rotated, reflected or sheared image to its
+  scale: the full transform reaches the bitmap.
 - Filling a form field no longer resurrects a field an earlier redaction call
   in the same editor removed, and `/NeedAppearances` is cleared even when the
   form dictionary is written straight into the catalog.
