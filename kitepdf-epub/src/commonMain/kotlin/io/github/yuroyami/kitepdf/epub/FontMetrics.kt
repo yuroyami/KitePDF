@@ -18,7 +18,8 @@ import io.github.yuroyami.kitepdf.core.font.Standard14Widths
  * Mapping is char -> PostScript glyph name -> Standard-14 width. The reverse
  * name table is built once from the WinAnsi and Standard encodings via the core
  * Adobe Glyph List, covering Latin-1 plus the common punctuation books use
- * (curly quotes, dashes, ellipsis).
+ * (curly quotes, dashes, ellipsis). Cyrillic joins through the AFM data's own
+ * AFII glyph names (afii10017..afii10196), so it measures exactly per face too.
  */
 internal object FontMetrics {
 
@@ -45,6 +46,17 @@ internal object FontMetrics {
         }
         ingest(Encodings.winAnsiEncoding)
         ingest(Encodings.standardEncoding)
+        // Cyrillic: the AFM data in core names these glyphs afii10017..afii10196
+        // (Russian, Ukrainian, Belarusian, Serbian, plus the pre-reform
+        // letters). Map each code point to its AFII name so widthOf answers
+        // with the exact per-face width instead of the flat fallback.
+        for (n in 10017..10196) {
+            val name = "afii$n"
+            val cp = GlyphList.unicodeFor(name) ?: continue
+            if (cp in 0xE000..0xF8FF) continue // private-use aliases in the AGL
+            if (cp in m) continue
+            if (Standard14Widths.widthOf("Times-Roman", name) != null) m[cp] = name
+        }
         m
     }
 
