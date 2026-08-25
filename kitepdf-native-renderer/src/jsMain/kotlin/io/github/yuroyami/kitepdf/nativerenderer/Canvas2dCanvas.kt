@@ -14,9 +14,15 @@ import io.github.yuroyami.kitepdf.core.render.KiteShading
 import io.github.yuroyami.kitepdf.core.render.RgbColor
 import io.github.yuroyami.kitepdf.core.render.SoftMask
 import io.github.yuroyami.kitepdf.core.render.sampleStops
+import io.github.yuroyami.kitepdf.core.render.toRgbaBytes
+import kotlinx.browser.document
+import org.khronos.webgl.Int8Array
 import org.khronos.webgl.Uint8Array
+import org.khronos.webgl.Uint8ClampedArray
 import org.w3c.dom.CanvasRenderingContext2D
+import org.w3c.dom.HTMLCanvasElement
 import org.w3c.dom.HTMLImageElement
+import org.w3c.dom.ImageData
 import org.w3c.dom.Path2D
 import org.w3c.dom.url.URL
 import org.w3c.files.Blob
@@ -266,10 +272,36 @@ public class Canvas2dCanvas(private val ctx: CanvasRenderingContext2D) : KiteCan
     }
 
     override fun drawImage(image: KiteImageData, ctm: KiteMatrix, alpha: Double) {
-        // Browser image decoding is async. This paints a placeholder instead.
-        // Roadmap: an `awaitImages(): Promise<Unit>` API consumers can call
-        // before render, kicking off Image() loads up front.
-        drawPlaceholder(ctm, alpha)
+        // Decoded samples paint synchronously; that is what every successful
+        // JPEG / JPX / JBIG2 decode produces. Encoded kinds core could not
+        // decode keep the placeholder: browser decoding is async, and the
+        // preload API remains the roadmap item (ledger D-3).
+        val rgba = if (image.kind == KiteImageData.Kind.RAW) image.toRgbaBytes() else null
+        if (rgba == null) {
+            drawPlaceholder(ctm, alpha)
+            return
+        }
+        // putImageData ignores the transform, so stage on an offscreen canvas
+        // and drawImage that under the CTM.
+        val off = document.createElement("canvas") as HTMLCanvasElement
+        off.width = image.width
+        off.height = image.height
+        val offCtx = off.getContext("2d") as CanvasRenderingContext2D
+        val i8 = rgba.unsafeCast<Int8Array>()
+        val clamped = Uint8ClampedArray(i8.buffer, i8.byteOffset, i8.length)
+        offCtx.putImageData(ImageData(clamped, image.width, image.height), 0.0, 0.0)
+        ctx.save()
+        try {
+            ctx.setTransform(ctm.a, ctm.b, ctm.c, ctm.d, ctm.e, ctm.f)
+            ctx.globalAlpha = alpha.coerceIn(0.0, 1.0)
+            // Unit square, bitmap row 0 on the top edge (v = 1): the Skia
+            // mapping, translate up one unit and flip Y.
+            ctx.translate(0.0, 1.0)
+            ctx.scale(1.0 / image.width, -1.0 / image.height)
+            ctx.drawImage(off, 0.0, 0.0)
+        } finally {
+            ctx.restore()
+        }
     }
 
     private fun drawPlaceholder(ctm: KiteMatrix, alpha: Double) {
@@ -278,10 +310,11 @@ public class Canvas2dCanvas(private val ctx: CanvasRenderingContext2D) : KiteCan
             ctx.setTransform(ctm.a, ctm.b, ctm.c, ctm.d, ctm.e, ctm.f)
             ctx.globalAlpha = alpha.coerceIn(0.0, 1.0)
             ctx.fillStyle = "#E0E0E0"
-            ctx.fillRect(0.0, -1.0, 1.0, 1.0)
+            // The CTM maps the unit square (0,0)-(1,1); same frame as drawImage.
+            ctx.fillRect(0.0, 0.0, 1.0, 1.0)
             ctx.strokeStyle = "#888888"
             ctx.lineWidth = 0.01
-            ctx.strokeRect(0.0, -1.0, 1.0, 1.0)
+            ctx.strokeRect(0.0, 0.0, 1.0, 1.0)
         } finally {
             ctx.restore()
         }
