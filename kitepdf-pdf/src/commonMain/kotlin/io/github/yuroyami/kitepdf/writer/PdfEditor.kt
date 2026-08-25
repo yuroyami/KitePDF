@@ -818,6 +818,7 @@ public class PdfEditor internal constructor(
         val ref = pageReference(page)
         val pageDict = effectivePageDict(ref)
         val pageResources = effectiveResources(ref, page)
+        redactionPageResources = pageResources
         val ops = ContentStreamParser.parse(effectiveContentBytes(ref))
 
         val engine = RedactionEngine(
@@ -906,6 +907,14 @@ public class PdfEditor internal constructor(
      * redacted stream and lose content only the first invocation's region covered.
      */
     internal val formSources = LinkedHashMap<Long, PdfStream>()
+
+    /**
+     * The page being redacted, for the fallback a form with no `/Resources` of
+     * its own takes (7.8.3). Mirrors `PageRenderer.pageResources`: both use the
+     * PAGE rather than the immediate invoker, because both cache a rewritten
+     * form by object number and share it across invocations.
+     */
+    internal var redactionPageResources: PdfDictionary? = null
 
     /**
      * Resolver that sees STAGED objects, not only the ones in the base document.
