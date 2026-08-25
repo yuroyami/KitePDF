@@ -79,6 +79,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Compose viewer: the Paged layout no longer jumps while background chapters
+  land, opens directly at a saved Flow bookmark's chapter, keeps zoom and
+  selection through landings, and no longer loses the bookmark if opening is
+  interrupted. Navigating to a location that no longer exists now clamps to
+  the nearest page instead of doing nothing (#5).
 - EPUB: first lines of indented paragraphs no longer overflow the content box
   and clip at the page edge. The line breaker fitted every line against the
   full width and the `text-indent` was added afterwards at placement, so a
