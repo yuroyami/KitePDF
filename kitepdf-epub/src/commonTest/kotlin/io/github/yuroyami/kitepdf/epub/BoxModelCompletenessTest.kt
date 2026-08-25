@@ -1,5 +1,7 @@
 package io.github.yuroyami.kitepdf.epub
 
+import io.github.yuroyami.kitepdf.core.xml.KiteXmlNode
+
 import io.github.yuroyami.kitepdf.epub.css.CssParser
 import io.github.yuroyami.kitepdf.epub.css.Origin
 import io.github.yuroyami.kitepdf.epub.css.StyleResolver
@@ -80,7 +82,7 @@ class BoxModelCompletenessTest {
         val tree = HtmlParser.parse("<p>x</p>")
         val rules = CssParser.parse("p{font:italic bold small-caps 15pt/30pt Georgia, serif}", Origin.AUTHOR)
         val resolver = StyleResolver(rules, 12.0, 300.0)
-        val p = tree.children.first { it is HtmlNode.Element } as HtmlNode.Element
+        val p = tree.children.first { it is KiteXmlNode.Element } as KiteXmlNode.Element
         val cs = resolver.compute(p, emptyList(), resolver.initial())
         assertTrue(cs.italic && cs.bold && cs.smallCaps)
         assertEquals(15.0, cs.fontSizePt, 1e-6)

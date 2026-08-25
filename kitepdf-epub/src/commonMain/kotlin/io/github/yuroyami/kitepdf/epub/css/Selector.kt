@@ -1,6 +1,7 @@
 package io.github.yuroyami.kitepdf.epub.css
 
-import io.github.yuroyami.kitepdf.epub.HtmlNode
+import io.github.yuroyami.kitepdf.core.xml.KiteXmlNode
+
 import io.github.yuroyami.kitepdf.epub.elementParent
 import io.github.yuroyami.kitepdf.epub.previousElementSibling
 
@@ -12,7 +13,7 @@ internal enum class PseudoSide { BEFORE, AFTER }
 
 /** An attribute condition: `[a]`, `[a=v]`, `[a~=v]`, `[a|=v]`, `[a^=v]`, `[a$=v]`, `[a*=v]`. */
 internal class AttrCond(val name: String, val op: String?, val value: String?) {
-    fun matches(el: HtmlNode.Element): Boolean {
+    fun matches(el: KiteXmlNode.Element): Boolean {
         val actual = el.attrs[name] ?: return false
         val v = value ?: return true // presence
         return when (op) {
@@ -29,7 +30,7 @@ internal class AttrCond(val name: String, val op: String?, val value: String?) {
 
 /**
  * A structural or link pseudo-class, matched for real against the DOM
- * (sibling/index queries walk [HtmlNode.Element.parent]). [Unknown] covers
+ * (sibling/index queries walk [KiteXmlNode.Element.parent]). [Unknown] covers
  * every pseudo-class we do not implement plus the interaction states that can
  * never hold in a paginated renderer (`:visited`, `:hover`, `:focus`,
  * `:active`): per CSS invalid-selector behaviour they make the whole selector
@@ -51,7 +52,7 @@ internal sealed class PseudoClass {
     class Not(val inner: SimpleSelector) : PseudoClass()
     object Unknown : PseudoClass()
 
-    fun matches(el: HtmlNode.Element): Boolean = when (this) {
+    fun matches(el: KiteXmlNode.Element): Boolean = when (this) {
         FirstChild -> el.previousElementSibling() == null
         LastChild -> nextElementSibling(el) == null
         OnlyChild -> el.previousElementSibling() == null && nextElementSibling(el) == null
@@ -63,7 +64,7 @@ internal sealed class PseudoClass {
         LastOfType -> siblingElements(el).lastOrNull { it.tag == el.tag } === el
         // Whitespace-only text does not count as content (books indent markup).
         Empty -> el.children.none { c ->
-            c is HtmlNode.Element || (c is HtmlNode.Text && c.text.isNotBlank())
+            c is KiteXmlNode.Element || (c is KiteXmlNode.Text && c.text.isNotBlank())
         }
         Root -> el.elementParent() == null
         Link -> el.tag == "a" && "href" in el.attrs
@@ -72,24 +73,24 @@ internal sealed class PseudoClass {
     }
 
     private companion object {
-        fun siblingElements(el: HtmlNode.Element): List<HtmlNode.Element> =
-            el.parent?.children?.filterIsInstance<HtmlNode.Element>() ?: listOf(el)
+        fun siblingElements(el: KiteXmlNode.Element): List<KiteXmlNode.Element> =
+            el.parent?.children?.filterIsInstance<KiteXmlNode.Element>() ?: listOf(el)
 
-        fun elementIndex(el: HtmlNode.Element): Int {
+        fun elementIndex(el: KiteXmlNode.Element): Int {
             var i = 1
             for (c in el.parent?.children ?: return 1) {
                 if (c === el) return i
-                if (c is HtmlNode.Element) i++
+                if (c is KiteXmlNode.Element) i++
             }
             return i
         }
 
-        fun nextElementSibling(el: HtmlNode.Element): HtmlNode.Element? {
+        fun nextElementSibling(el: KiteXmlNode.Element): KiteXmlNode.Element? {
             val siblings = el.parent?.children ?: return null
             var seen = false
             for (c in siblings) {
                 if (c === el) { seen = true; continue }
-                if (seen && c is HtmlNode.Element) return c
+                if (seen && c is KiteXmlNode.Element) return c
             }
             return null
         }
@@ -111,7 +112,7 @@ internal class SimpleSelector(
     /** Specificity contribution of the pseudo-classes (the `b` bucket). */
     val pseudoClassCount: Int get() = pseudos.size
 
-    fun matches(el: HtmlNode.Element): Boolean {
+    fun matches(el: KiteXmlNode.Element): Boolean {
         if (tag != null && tag != el.tag) return false
         if (id != null && el.attrs["id"] != id) return false
         if (classes.isNotEmpty()) {
@@ -126,7 +127,7 @@ internal class SimpleSelector(
 /**
  * A complex selector: compound [parts] joined left-to-right by [combinators]
  * (size = parts-1). The rightmost part is the subject. Matching is right-to-left
- * through the DOM's parent/sibling pointers ([HtmlNode.Element.parent]), so
+ * through the DOM's parent/sibling pointers ([KiteXmlNode.Element.parent]), so
  * `>`, `+` and `~` all resolve against the real tree. A `::before`/`::after`
  * on the subject survives as [pseudoElement] (the cascade routes such rules to
  * generated content); any other pseudo-element makes [parse] return null.
@@ -155,10 +156,10 @@ internal class Selector(
      * parent/sibling pointers; [ancestors] is retained for source compatibility
      * with older call sites but is no longer consulted.
      */
-    fun matches(el: HtmlNode.Element, ancestors: List<HtmlNode.Element> = emptyList()): Boolean =
+    fun matches(el: KiteXmlNode.Element, ancestors: List<KiteXmlNode.Element> = emptyList()): Boolean =
         matchesFrom(parts.size - 1, el)
 
-    private fun matchesFrom(partIdx: Int, el: HtmlNode.Element): Boolean {
+    private fun matchesFrom(partIdx: Int, el: KiteXmlNode.Element): Boolean {
         if (!parts[partIdx].matches(el)) return false
         if (partIdx == 0) return true
         return when (combinators[partIdx - 1]) {

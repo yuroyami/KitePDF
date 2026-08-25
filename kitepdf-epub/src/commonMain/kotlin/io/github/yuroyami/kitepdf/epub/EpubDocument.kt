@@ -1,5 +1,7 @@
 package io.github.yuroyami.kitepdf.epub
 
+import io.github.yuroyami.kitepdf.core.xml.KiteXmlNode
+
 import io.github.yuroyami.kitepdf.core.zip.ZipReader
 
 import io.github.yuroyami.kitepdf.epub.css.ComputedStyle
@@ -219,9 +221,9 @@ public class EpubDocument internal constructor(
      */
     internal fun languageFor(chapter: Int): String? {
         val tree = if (chapter !in 0 until parsed.spineCount) null else parsed.spine(chapter).tree
-        val html = tree?.children?.filterIsInstance<HtmlNode.Element>()
+        val html = tree?.children?.filterIsInstance<KiteXmlNode.Element>()
             ?.firstOrNull { it.tag == "html" }
-        val body = html?.children?.filterIsInstance<HtmlNode.Element>()
+        val body = html?.children?.filterIsInstance<KiteXmlNode.Element>()
             ?.firstOrNull { it.tag == "body" }
         return html?.attrs?.get("lang")?.takeIf { it.isNotBlank() }
             ?: body?.attrs?.get("lang")?.takeIf { it.isNotBlank() }

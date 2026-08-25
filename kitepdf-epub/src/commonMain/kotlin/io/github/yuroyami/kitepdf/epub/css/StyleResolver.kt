@@ -1,6 +1,7 @@
 package io.github.yuroyami.kitepdf.epub.css
 
-import io.github.yuroyami.kitepdf.epub.HtmlNode
+import io.github.yuroyami.kitepdf.core.xml.KiteXmlNode
+
 import io.github.yuroyami.kitepdf.core.render.RgbColor
 
 /**
@@ -36,7 +37,7 @@ internal class StyleResolver(
     fun initial(): ComputedStyle = ComputedStyle.initial(rootFontSizePt, direction = baseDirection)
 
     /** [ancestors]: immediate parent first, outward to the root. [parent] = its computed style. */
-    fun compute(el: HtmlNode.Element, ancestors: List<HtmlNode.Element>, parent: ComputedStyle): ComputedStyle {
+    fun compute(el: KiteXmlNode.Element, ancestors: List<KiteXmlNode.Element>, parent: ComputedStyle): ComputedStyle {
         val bestWeight = HashMap<String, Long>()
         val value = HashMap<String, String>()
         fun offer(prop: String, v: String, weight: Long) {
@@ -74,8 +75,8 @@ internal class StyleResolver(
      * real CSS declaration overrides them. Common in pre-CSS-era books.
      */
     private fun presentationalHints(
-        el: HtmlNode.Element,
-        ancestors: List<HtmlNode.Element>,
+        el: KiteXmlNode.Element,
+        ancestors: List<KiteXmlNode.Element>,
         offer: (String, String, Long) -> Unit,
     ) {
         // Author origin at specificity 0, before every real author rule: hints
@@ -113,8 +114,8 @@ internal class StyleResolver(
      * synthesize those), as do `none`/`normal`.
      */
     fun computePseudo(
-        el: HtmlNode.Element,
-        ancestors: List<HtmlNode.Element>,
+        el: KiteXmlNode.Element,
+        ancestors: List<KiteXmlNode.Element>,
         elementStyle: ComputedStyle,
         side: PseudoSide,
     ): PseudoContent? {
@@ -142,7 +143,7 @@ internal class StyleResolver(
      * `attr(name)` concatenate; `none`/`normal` and anything with
      * `counter()`/`counters()`/`url()` return null (rule inert).
      */
-    private fun parseContentValue(v: String, el: HtmlNode.Element): String? {
+    private fun parseContentValue(v: String, el: KiteXmlNode.Element): String? {
         val s = v.trim()
         val lower = s.lowercase()
         if (lower == "none" || lower == "normal") return null

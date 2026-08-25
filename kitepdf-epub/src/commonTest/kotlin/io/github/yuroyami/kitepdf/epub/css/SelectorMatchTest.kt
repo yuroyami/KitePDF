@@ -1,6 +1,7 @@
 package io.github.yuroyami.kitepdf.epub.css
 
-import io.github.yuroyami.kitepdf.epub.HtmlNode
+import io.github.yuroyami.kitepdf.core.xml.KiteXmlNode
+
 import io.github.yuroyami.kitepdf.epub.HtmlParser
 import io.github.yuroyami.kitepdf.core.render.RgbColor
 import kotlin.test.Test
@@ -21,11 +22,11 @@ class SelectorMatchTest {
         val tree = HtmlParser.parse(html)
         val resolver = StyleResolver(CssParser.parse(css, Origin.AUTHOR), 12.0, 328.0)
         val map = LinkedHashMap<String, ComputedStyle>()
-        fun walk(el: HtmlNode.Element, ancestors: List<HtmlNode.Element>, parent: ComputedStyle) {
+        fun walk(el: KiteXmlNode.Element, ancestors: List<KiteXmlNode.Element>, parent: ComputedStyle) {
             val cs = if (el.tag == "#root") resolver.initial() else resolver.compute(el, ancestors, parent)
             el.attrs["id"]?.let { map[it] = cs }
             val childAnc = if (el.tag == "#root") ancestors else listOf(el) + ancestors
-            for (c in el.children) if (c is HtmlNode.Element) walk(c, childAnc, cs)
+            for (c in el.children) if (c is KiteXmlNode.Element) walk(c, childAnc, cs)
         }
         walk(tree, emptyList(), resolver.initial())
         return map

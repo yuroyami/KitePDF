@@ -1,5 +1,7 @@
 package io.github.yuroyami.kitepdf.epub
 
+import io.github.yuroyami.kitepdf.core.xml.KiteXmlNode
+
 import io.github.yuroyami.kitepdf.epub.css.ComputedStyle
 import io.github.yuroyami.kitepdf.epub.css.CssFloat
 import io.github.yuroyami.kitepdf.epub.css.Display
@@ -26,13 +28,13 @@ internal class BoxBuilder(
     private val docPath: String = "",
     private val resolveHref: (String) -> String,
 ) {
-    fun build(root: HtmlNode.Element): BlockBox =
+    fun build(root: KiteXmlNode.Element): BlockBox =
         buildBlock(root, resolver.initial(), emptyList(), marker = null, markerColor = BLACK, isRoot = true)
 
     private fun buildBlock(
-        el: HtmlNode.Element,
+        el: KiteXmlNode.Element,
         style: ComputedStyle,
-        ancestors: List<HtmlNode.Element>,
+        ancestors: List<KiteXmlNode.Element>,
         marker: String?,
         markerColor: RgbColor,
         isRoot: Boolean = false,
@@ -92,8 +94,8 @@ internal class BoxBuilder(
         injectPseudo(PseudoSide.BEFORE)
 
         for (child in el.children) when (child) {
-            is HtmlNode.Text -> inl.appendText(child.text, style)
-            is HtmlNode.Element -> {
+            is KiteXmlNode.Text -> inl.appendText(child.text, style)
+            is KiteXmlNode.Element -> {
                 if (child.tag == "br") { inl.addBreak(); continue }
                 if (child.tag == "img" || child.tag == "image") {
                     val src = child.attrs["src"] ?: child.attrs["href"] ?: child.attrs["xlink:href"]
@@ -146,7 +148,7 @@ internal class BoxBuilder(
     }
 
     /** An image announces its `alt` (or `aria-label`); `alt=""` means decorative. */
-    private fun imageSemantics(el: HtmlNode.Element, parentSem: BoxSemantics?): BoxSemantics {
+    private fun imageSemantics(el: KiteXmlNode.Element, parentSem: BoxSemantics?): BoxSemantics {
         val base = BoxSemantics.of(el.tag, el.attrs, parentSem)
         val alt = el.attrs["alt"]
         return BoxSemantics(
@@ -175,18 +177,18 @@ internal class BoxBuilder(
      * `border-collapse: collapse` each shared cell edge is painted once.
      */
     private fun buildTable(
-        el: HtmlNode.Element,
+        el: KiteXmlNode.Element,
         style: ComputedStyle,
-        ancestors: List<HtmlNode.Element>,
+        ancestors: List<KiteXmlNode.Element>,
         parentSem: BoxSemantics? = null,
     ): List<LayoutBox> {
         val rows = ArrayList<TableRowBox>()
         var caption: BlockBox? = null
         val childAncestors = listOf(el) + ancestors
-        fun addRowsFrom(container: HtmlNode.Element, containerAncestors: List<HtmlNode.Element>) {
+        fun addRowsFrom(container: KiteXmlNode.Element, containerAncestors: List<KiteXmlNode.Element>) {
             val anc = listOf(container) + containerAncestors
             for (c in container.children) {
-                if (c !is HtmlNode.Element) continue
+                if (c !is KiteXmlNode.Element) continue
                 if (c.tag == "caption" && caption == null) {
                     caption = buildBlock(c, resolver.compute(c, anc, style), anc, null, BLACK, parentSem = parentSem)
                     continue
@@ -207,15 +209,15 @@ internal class BoxBuilder(
     }
 
     /** `<col span width>` / `<colgroup width>` -> column index -> width (pt). */
-    private fun scanColWidths(el: HtmlNode.Element, style: ComputedStyle, ancestors: List<HtmlNode.Element>): Map<Int, Double> {
+    private fun scanColWidths(el: KiteXmlNode.Element, style: ComputedStyle, ancestors: List<KiteXmlNode.Element>): Map<Int, Double> {
         val out = HashMap<Int, Double>()
         var idx = 0
-        fun widthOf(c: HtmlNode.Element): Double? =
+        fun widthOf(c: KiteXmlNode.Element): Double? =
             resolver.compute(c, ancestors, style).widthPt
                 ?: c.attrs["width"]?.trim()?.removeSuffix("px")?.toDoubleOrNull()?.let { it * 0.75 }
-        fun scan(container: HtmlNode.Element) {
+        fun scan(container: KiteXmlNode.Element) {
             for (c in container.children) {
-                if (c !is HtmlNode.Element) continue
+                if (c !is KiteXmlNode.Element) continue
                 when (c.tag) {
                     "col" -> {
                         val span = c.attrs["span"]?.toIntOrNull()?.coerceAtLeast(1) ?: 1
@@ -223,7 +225,7 @@ internal class BoxBuilder(
                         repeat(span) { if (w != null) out[idx] = w; idx++ }
                     }
                     "colgroup" -> {
-                        if (c.children.any { it is HtmlNode.Element && it.tag == "col" }) scan(c)
+                        if (c.children.any { it is KiteXmlNode.Element && it.tag == "col" }) scan(c)
                         else {
                             val span = c.attrs["span"]?.toIntOrNull()?.coerceAtLeast(1) ?: 1
                             val w = widthOf(c)
@@ -302,15 +304,15 @@ internal class BoxBuilder(
     }
 
     private fun buildRow(
-        el: HtmlNode.Element,
+        el: KiteXmlNode.Element,
         style: ComputedStyle,
-        ancestors: List<HtmlNode.Element>,
+        ancestors: List<KiteXmlNode.Element>,
         parentSem: BoxSemantics? = null,
     ): TableRowBox {
         val cells = ArrayList<BlockBox>()
         val childAncestors = listOf(el) + ancestors
         for (c in el.children) {
-            if (c !is HtmlNode.Element) continue
+            if (c !is KiteXmlNode.Element) continue
             val cs = resolver.compute(c, childAncestors, style)
             if (cs.display == Display.TABLE_CELL || cs.display == Display.BLOCK) {
                 val cell = buildBlock(c, cs, childAncestors, null, BLACK, parentSem = parentSem)
@@ -323,9 +325,9 @@ internal class BoxBuilder(
     }
 
     private fun processInline(
-        el: HtmlNode.Element,
+        el: KiteXmlNode.Element,
         style: ComputedStyle,
-        ancestors: List<HtmlNode.Element>,
+        ancestors: List<KiteXmlNode.Element>,
         inl: Inline,
         anchorSink: MutableList<String>,
         hoist: (List<LayoutBox>) -> Unit,
@@ -345,8 +347,8 @@ internal class BoxBuilder(
             resolver.computePseudo(el, ancestors, style, PseudoSide.BEFORE)?.let { inl.appendText(it.text, it.style) }
             val childAncestors = listOf(el) + ancestors
             for (child in el.children) when (child) {
-                is HtmlNode.Text -> inl.appendText(child.text, style)
-                is HtmlNode.Element -> {
+                is KiteXmlNode.Text -> inl.appendText(child.text, style)
+                is KiteXmlNode.Element -> {
                     if (child.tag == "br") { inl.addBreak(); continue }
                     if (child.tag == "img" || child.tag == "image") {
                         // Inline image: flows on the line, bottom on the baseline.
@@ -402,9 +404,9 @@ internal class BoxBuilder(
      * documented simplification.
      */
     private fun processRuby(
-        el: HtmlNode.Element,
+        el: KiteXmlNode.Element,
         style: ComputedStyle,
-        ancestors: List<HtmlNode.Element>,
+        ancestors: List<KiteXmlNode.Element>,
         inl: Inline,
         anchorSink: MutableList<String>,
         hoist: (List<LayoutBox>) -> Unit,
@@ -412,20 +414,20 @@ internal class BoxBuilder(
     ) {
         val childAncestors = listOf(el) + ancestors
         val reading = StringBuilder()
-        fun collectText(e: HtmlNode.Element) {
+        fun collectText(e: KiteXmlNode.Element) {
             for (c in e.children) when (c) {
-                is HtmlNode.Text -> reading.append(c.text)
-                is HtmlNode.Element -> if (c.tag != "rp") collectText(c)
+                is KiteXmlNode.Text -> reading.append(c.text)
+                is KiteXmlNode.Element -> if (c.tag != "rp") collectText(c)
             }
         }
-        for (c in el.children) if (c is HtmlNode.Element && c.tag == "rt") collectText(c)
+        for (c in el.children) if (c is KiteXmlNode.Element && c.tag == "rt") collectText(c)
         val readingText = reading.toString().replace(WHITESPACE, " ").trim()
 
         inl.beginRuby(readingText.takeIf { it.isNotEmpty() })
         try {
             for (c in el.children) when (c) {
-                is HtmlNode.Text -> inl.appendText(c.text, style)
-                is HtmlNode.Element -> when {
+                is KiteXmlNode.Text -> inl.appendText(c.text, style)
+                is KiteXmlNode.Element -> when {
                     c.tag == "rt" || c.tag == "rp" -> {}
                     c.tag == "br" -> inl.addBreak()
                     else -> {

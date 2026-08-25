@@ -1,7 +1,11 @@
 package io.github.yuroyami.kitepdf.epub
 
+import io.github.yuroyami.kitepdf.core.xml.KiteXml
+import io.github.yuroyami.kitepdf.core.xml.KiteXmlNode
+import io.github.yuroyami.kitepdf.core.xml.KiteXmlToken
+
 /**
- * Folds the flat [MiniXml] token stream into an [HtmlNode] tree, recovering from
+ * Folds the flat [KiteXml] token stream into an [KiteXmlNode] tree, recovering from
  * the tag soup real books ship: void elements that are never closed, and
  * optional end tags (`<p>`, `<li>`, `<dd>/<dt>`, table rows/cells) that the
  * markup relies on the parser to imply. Well-formed XHTML (the EPUB 3 norm) is a
@@ -37,32 +41,32 @@ internal object HtmlParser {
     private val ROW_SCOPE = setOf("table", "thead", "tbody", "tfoot")
 
     /** Parse [xhtml] into a synthetic `#root` element holding the document. */
-    fun parse(xhtml: String): HtmlNode.Element {
-        val root = HtmlNode.Element("#root", emptyMap())
-        val stack = ArrayList<HtmlNode.Element>().apply { add(root) }
+    fun parse(xhtml: String): KiteXmlNode.Element {
+        val root = KiteXmlNode.Element("#root", emptyMap())
+        val stack = ArrayList<KiteXmlNode.Element>().apply { add(root) }
 
-        for (t in MiniXml.tokenize(xhtml)) when (t) {
-            is XmlToken.Open -> {
+        for (t in KiteXml.tokenize(xhtml)) when (t) {
+            is KiteXmlToken.Open -> {
                 implicitClose(stack, t.name)
-                val el = HtmlNode.Element(t.name, t.attrs)
+                val el = KiteXmlNode.Element(t.name, t.attrs)
                 el.parent = stack.last()
                 stack.last().children.add(el)
                 if (!t.selfClose && t.name !in VOID) stack.add(el)
             }
-            is XmlToken.Close -> {
+            is KiteXmlToken.Close -> {
                 if (t.name in VOID) continue
                 // Pop to the nearest matching open tag; tolerate mismatched nesting
                 // by leaving the stack alone if no match is open.
                 val idx = stack.indexOfLast { it.tag == t.name }
                 if (idx >= 1) while (stack.size > idx) stack.removeAt(stack.lastIndex)
             }
-            is XmlToken.Text -> stack.last().children.add(HtmlNode.Text(t.text))
+            is KiteXmlToken.Text -> stack.last().children.add(KiteXmlNode.Text(t.text))
         }
         return root
     }
 
     /** Apply optional-end-tag rules before opening [opening]. */
-    private fun implicitClose(stack: ArrayList<HtmlNode.Element>, opening: String) {
+    private fun implicitClose(stack: ArrayList<KiteXmlNode.Element>, opening: String) {
         // Close the nearest still-open item of [itemTags], but stop (close nothing)
         // if a [barriers] container is reached first -- that means the new item
         // belongs to a nested list/table opened inside the outer item.
@@ -85,4 +89,25 @@ internal object HtmlParser {
             if (pIdx >= 1) while (stack.size > pIdx) stack.removeAt(stack.lastIndex)
         }
     }
+}
+
+/**
+ * Parent for selector ANCESTOR walks: the synthetic `#root` wrapper is not a
+ * real element, so combinators must not match against it (a top-level element
+ * has no ancestor). Sibling/index queries, by contrast, DO use the raw
+ * [KiteXmlNode.Element.parent] so the document element is its parent's
+ * `:first-child`, matching browser behaviour.
+ */
+internal fun KiteXmlNode.Element.elementParent(): KiteXmlNode.Element? =
+    parent?.takeIf { it.tag != "#root" }
+
+/** Nearest preceding sibling that is an element, or null. */
+internal fun KiteXmlNode.Element.previousElementSibling(): KiteXmlNode.Element? {
+    val siblings = parent?.children ?: return null
+    var prev: KiteXmlNode.Element? = null
+    for (c in siblings) {
+        if (c === this) return prev
+        if (c is KiteXmlNode.Element) prev = c
+    }
+    return null
 }

@@ -1,5 +1,7 @@
 package io.github.yuroyami.kitepdf.epub
 
+import io.github.yuroyami.kitepdf.core.xml.KiteXmlNode
+
 import io.github.yuroyami.kitepdf.epub.css.CssValues
 import io.github.yuroyami.kitepdf.core.render.KiteBlendMode
 import io.github.yuroyami.kitepdf.core.render.KiteMatrix
@@ -18,7 +20,7 @@ import kotlin.math.PI
  * A minimal SVG document renderer: enough to draw the illustrations, cover art
  * and diagrams that ship in EPUBs (and to seed a future `:kitepdf-svg` handler;
  * the reusable path/transform parsing wants promoting to core then). Parses the
- * SVG XML into the shared [HtmlNode] tree and paints shapes straight into the
+ * SVG XML into the shared [KiteXmlNode] tree and paints shapes straight into the
  * core [KiteCanvas] as vectors (crisp at any scale), not a rasterised bitmap.
  *
  * Supported: `<svg>` (width/height/viewBox), `<g>`, `<path>` (all `d` commands
@@ -29,7 +31,7 @@ import kotlin.math.PI
  * skipped), `clipPath`, filters, `<use>`, nested `<image>`.
  */
 internal class SvgImage private constructor(
-    private val root: HtmlNode.Element,
+    private val root: KiteXmlNode.Element,
     /** Intrinsic size in px (from width/height, else the viewBox extent, else 300x150). */
     val width: Double,
     val height: Double,
@@ -58,11 +60,11 @@ internal class SvgImage private constructor(
     // The canvas travels as a parameter, exactly like ctm and Paint: a field
     // here made render() non-reentrant, so two concurrent renders of the same
     // SvgImage hijacked each other's destination and silently dropped shapes.
-    private fun walk(el: HtmlNode.Element, parentCtm: KiteMatrix, parent: Paint, canvas: KiteCanvas) {
+    private fun walk(el: KiteXmlNode.Element, parentCtm: KiteMatrix, parent: Paint, canvas: KiteCanvas) {
         val ctm = el.attrs["transform"]?.let { compose(parentCtm, parseTransform(it)) } ?: parentCtm
         val paint = resolvePaint(el.attrs, parent)
         when (el.tag.lowercase()) {
-            "svg", "g", "a", "switch" -> for (c in el.children) if (c is HtmlNode.Element) walk(c, ctm, paint, canvas)
+            "svg", "g", "a", "switch" -> for (c in el.children) if (c is KiteXmlNode.Element) walk(c, ctm, paint, canvas)
             "path" -> el.attrs["d"]?.let { paintShape(parsePath(it), ctm, paint, canvas) }
             "rect" -> paintShape(rect(el.attrs), ctm, paint, canvas)
             "circle" -> paintShape(ellipse(num(el, "cx"), num(el, "cy"), num(el, "r"), num(el, "r")), ctm, paint, canvas)
@@ -155,7 +157,7 @@ internal class SvgImage private constructor(
 
     // ---- helpers ------------------------------------------------------------
 
-    private fun num(el: HtmlNode.Element, k: String) = el.attrs[k]?.let { parseLen(it) } ?: 0.0
+    private fun num(el: KiteXmlNode.Element, k: String) = el.attrs[k]?.let { parseLen(it) } ?: 0.0
     private fun pLen(a: Map<String, String>, k: String) = a[k]?.let { parseLen(it) } ?: 0.0
     private fun parseLen(raw: String): Double {
         val s = raw.trim().removeSuffix("px")
@@ -175,7 +177,7 @@ internal class SvgImage private constructor(
         }
 
         /** Build from an already-parsed `<svg>` element (inline SVG in XHTML content). */
-        fun fromElement(svg: HtmlNode.Element): SvgImage? {
+        fun fromElement(svg: KiteXmlNode.Element): SvgImage? {
             if (!svg.tag.equals("svg", true)) return null
             // The XHTML parser lower-cases attribute names, so camelCase SVG
             // attributes (viewBox) arrive as "viewbox".
@@ -188,9 +190,9 @@ internal class SvgImage private constructor(
             return SvgImage(svg, w, h, vb)
         }
 
-        private fun findSvg(el: HtmlNode.Element): HtmlNode.Element? {
+        private fun findSvg(el: KiteXmlNode.Element): KiteXmlNode.Element? {
             if (el.tag.equals("svg", true)) return el
-            for (c in el.children) if (c is HtmlNode.Element) findSvg(c)?.let { return it }
+            for (c in el.children) if (c is KiteXmlNode.Element) findSvg(c)?.let { return it }
             return null
         }
 
