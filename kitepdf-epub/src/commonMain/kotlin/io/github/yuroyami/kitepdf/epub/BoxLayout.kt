@@ -793,6 +793,8 @@ internal class BoxLayout(
         val image: KiteImageData? = null,
         val svgImage: SvgImage? = null,
         val imageAlt: String? = null,
+        // How many glyphs a ligature cell replaced; 1 for everything else.
+        var ligComponents: Int = 1,
         // Envelope padding when the reading is wider than its base (pt). Only the
         // group's first/last cells carry it; it widens wrap/measure and the pen
         // walk in placeRuns without entering the glyph advance stream.
@@ -1019,7 +1021,7 @@ internal class BoxLayout(
                 val lig = Cell(
                     first.ch, face.advance1000(ligGid) * first.fontSize / 1000.0, first.fontSize,
                     first.spec, first.color, first.shift, first.underline, face, ligGid,
-                )
+                ).also { it.ligComponents = rule.rest.size + 1 }
                 repeat(rule.rest.size + 1) { cells.removeAt(i) }
                 cells.add(i, lig)
                 changed = true
@@ -1030,26 +1032,45 @@ internal class BoxLayout(
     }
 
     /**
-     * GPOS mark-to-base positioning: attach each combining mark to the current base
-     * glyph via its anchor offset (font units), correcting for how far the pen has
-     * advanced since the base. Marks are zero-advance, so several stack on one base.
+     * GPOS mark positioning: attach each combining mark by its anchor offset
+     * (font units), correcting for how far the pen has advanced since the base.
+     * Marks are zero-advance, so several land on one base.
+     *
+     * Three attachments, tried in the order a shaper would: onto the mark
+     * already sitting there (type 6, which is what stacks two diacritics rather
+     * than overprinting them), onto a ligature component (type 5), then onto
+     * the base letter (type 4).
+     *
+     * A ligature's marks all attach to its LAST component. The ligature matcher
+     * needs its components adjacent, so any mark it kept was written after the
+     * whole ligature, and that is where a reader expects it.
      */
     private fun positionMarks(cells: List<Cell>) {
         var base: Cell? = null
         var advSinceBase = 0.0 // font units from the base origin to the current pen
+        // The last attached mark, and its drawn origin relative to the base.
+        var stacked: Cell? = null
+        var stackedX = 0.0
+        var stackedY = 0.0
         for (c in cells) {
             val face = c.face
             val b = base
             if (face != null && b != null && b.face === face && c.gid >= 0) {
-                val off = face.markOffset(b.gid, c.gid)
+                val prev = stacked
+                val off = (if (prev != null) face.markStackOffset(prev.gid, c.gid) else null)
+                    ?.let { (stackedX + it.first) to (stackedY + it.second) }
+                    ?: (if (b.ligComponents > 1) face.markLigatureOffset(b.gid, c.gid, b.ligComponents - 1) else null)
+                    ?: face.markOffset(b.gid, c.gid)
                 if (off != null) {
                     c.glyphXOffset = off.first - advSinceBase
                     c.glyphYOffset = off.second
                     advSinceBase += face.advanceRaw(c.gid) // usually 0 for a mark
+                    stacked = c; stackedX = off.first; stackedY = off.second
                     continue // still attached to the same base
                 }
             }
             base = c
+            stacked = null
             advSinceBase = if (face != null && c.gid >= 0) face.advanceRaw(c.gid).toDouble() else 0.0
         }
     }
