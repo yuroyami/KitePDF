@@ -5,6 +5,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
 import kotlin.test.assertSame
+import kotlin.test.assertTrue
 
 /**
  * Language-aware hyphenation: the bundled TeX pattern sets must produce
@@ -86,6 +87,14 @@ class MultilingualHyphenationTest {
             "ziekenhuis" to listOf(3, 6),        // zie-ken-huis
         ),
     )
+
+    @Test fun russian_patterns_are_available_for_bcp47_tags() {
+        val ru = Hyphenator.forLanguage("ru")
+        assertSame(ru, Hyphenator.forLanguage("ru-RU"), "shared Russian instance per language")
+        assertTrue(ru != null, "Russian patterns must be bundled")
+        assertTrue(ru!!.hyphenate("перелистывание").isNotEmpty(), "Russian words should have break points")
+        assertTrue(ru.hyphenate("государственный").isNotEmpty(), "Russian patterns should handle long words")
+    }
 
     /** The trie rewrite must not change en-US output (same patterns, same mins). */
     @Test fun en_us_output_unchanged() = check(
