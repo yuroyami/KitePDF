@@ -17,12 +17,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (`ComicInfo.xml`, `Thumbs.db`, hidden files) is ignored. WebP pages are
   detected but render blank until the image engine learns WebP.
 
+- The full MacExpertEncoding vector. Expert-set fonts (old-style figures,
+  small capitals) selected the right glyphs for only six codes before.
+- CalGray and CalRGB colour spaces apply their gamma, whitepoint and matrix
+  instead of collapsing to the device space.
+- EPUB: each spine document hyphenates in its own language, so a bilingual
+  anthology stops applying chapter one's patterns to everything.
+- EPUB: a book whose OPF declares `primary-writing-mode: vertical-rl` and no
+  `page-progression-direction` now reads right to left, as vertical books do.
+
 ### Changed
 
 - `ZipReader` moved from `kitepdf-epub` to `kitepdf-core`
   (`io.github.yuroyami.kitepdf.core.zip`). The old name still compiles as a
   deprecated typealias for one release.
 - `KiteDoc.open`'s unreadable-bytes error now names all three formats.
+- `PdfDocument.bytes` returns a defensive copy, making the documented
+  immutability true. Zero-copy access moved to `rawBytes` behind the
+  `KiteRawApi` opt-in.
+
+### Fixed
+
+- Filling a form field no longer resurrects a field an earlier redaction call
+  in the same editor removed, and `/NeedAppearances` is cleared even when the
+  form dictionary is written straight into the catalog.
+- On iOS and macOS, an image drawn with an alpha value now actually renders
+  translucent.
 
 ## [0.7.0] - 2026-08-24
 
