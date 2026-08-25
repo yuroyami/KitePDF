@@ -190,20 +190,23 @@ public fun KiteDocView(
         }
     }
 
-    // Lay the rest of the book out behind the reader. Restarting on the chapter
-    // being read re-prioritizes without losing what is already done.
+    // Lay the rest of the book out behind the reader. Keyed on the chapter
+    // being read; with keyed retention the raw index no longer flaps under
+    // landings, so this restarts only when the reader truly changes chapter.
     val readingChapter = state.currentLocation.chapter
     LaunchedEffect(state, state.document, readingChapter) {
-        // The saved position first, so the loader never starts from chapter 0 and
-        // shifts the strip out from under the page we are about to show.
-        state.openAt?.let { mark ->
-            state.openAt = null
-            state.scrollTo(mark)
-        }
+        // The saved position first, so the loader never starts from chapter 0
+        // and shifts the strip out from under the page we are about to show.
+        // openAt is consumed inside only after the jump lands, so a restart
+        // mid-flight retries instead of silently losing the bookmark.
+        state.openSavedPosition()
         val document = state.document
         if (document.isComplete) return@LaunchedEffect
-        loadChapters(document, loadOrder(document.chapterCount, state.currentLocation.chapter)) {
-            onComposeThread { state.onChapterReady() }
+        // A previous run may have laid a chapter out and been cancelled
+        // before publishing it; one publication up front reconciles that.
+        state.publishChapter()
+        loadChapters(document, loadOrder(document.chapterCount, readingChapter)) {
+            state.publishChapter()
         }
     }
 
@@ -533,9 +536,6 @@ private fun PagedLayout(
     val pagerState = rememberPagerState(
         initialPage = state.currentPage.coerceIn(0, (state.itemCount - 1).coerceAtLeast(0)),
     ) { state.itemCount }
-    // A pager keeps its index, not its key, so a chapter landing ahead of the
-    // reader would slide the book under them. Follow the location instead.
-    KeepPagerOnLocation(state, pagerState)
     DisposableEffect(state, pagerState) {
         val adapter = PagerScrollAdapter(pagerState)
         state.adapter = adapter
@@ -545,8 +545,15 @@ private fun PagedLayout(
         }
     }
     // Landing on another page recentres the pan (and, per spec, the zoom).
+    // Compared by location, not raw index: a keyed remeasure or a correction
+    // moves the index while the reader stays on the same content, and that
+    // must not cost them their zoom.
     LaunchedEffect(state, pagerState, zoomSpec.resetZoomOnPageChange) {
-        snapshotFlow { pagerState.settledPage }.collect {
+        var last: io.github.yuroyami.kitepdf.core.KiteLocation? = null
+        snapshotFlow { pagerState.settledPage }.collect { settled ->
+            val location = state.anchorAt(settled)
+            if (location == last) return@collect
+            last = location
             state.panOffset = androidx.compose.ui.geometry.Offset.Zero
             if (zoomSpec.resetZoomOnPageChange) state.resetZoom()
         }
@@ -589,6 +596,9 @@ private fun PagedLayout(
             beyondViewportPageCount = layout.offscreenPages,
             userScrollEnabled = pagerScrollEnabled,
             reverseLayout = layout.reverseLayout,
+            // Semantic keys: a chapter landing before the reader re-anchors
+            // the pager on the same content at measure time (issue #5).
+            key = { state.items[it].key },
         ) { pageContent(it) }
         Orientation.Vertical -> VerticalPager(
             state = pagerState,
@@ -597,6 +607,7 @@ private fun PagedLayout(
             beyondViewportPageCount = layout.offscreenPages,
             userScrollEnabled = pagerScrollEnabled,
             reverseLayout = layout.reverseLayout,
+            key = { state.items[it].key },
         ) { pageContent(it) }
     }
 }
@@ -1004,42 +1015,6 @@ private const val ZOOM_SETTLE_DEBOUNCE_MS = 220L
 
 /** Fade-in duration for a freshly rasterized page bitmap. */
 private const val PAGE_FADE_MS = 160
-
-/**
- * Holds a pager on the page the reader is looking at while the strip grows
- * underneath it. A [androidx.compose.foundation.pager.PagerState] tracks an
- * index, so when a chapter lands ahead of the reader every later index shifts
- * by that chapter's page count; this puts the pager back on the same location.
- *
- * A reader waiting on a chapter's placeholder is anchored to that chapter's
- * first page, so the chapter landing puts them at its start rather than
- * dragging them back to wherever they were before.
- */
-@Composable
-private fun KeepPagerOnLocation(
-    state: KiteDocViewState,
-    pagerState: androidx.compose.foundation.pager.PagerState,
-) {
-    val anchor = remember { mutableStateOf<io.github.yuroyami.kitepdf.core.KiteLocation?>(null) }
-    val lastCount = remember { mutableStateOf(-1) }
-    LaunchedEffect(state, pagerState) {
-        snapshotFlow { state.itemCount to pagerState.currentPage }.collect { (count, current) ->
-            val gained = lastCount.value >= 0 && count != lastCount.value
-            lastCount.value = count
-            // Only a change in the strip can move the reader against their will.
-            // Anything else is the reader themselves, so follow them.
-            if (gained) {
-                val was = anchor.value
-                val moved = if (was != null) state.slotFor(was) else -1
-                if (moved >= 0 && moved != current) {
-                    pagerState.scrollToPage(moved)
-                    return@collect
-                }
-            }
-            state.anchorAt(current)?.let { anchor.value = it }
-        }
-    }
-}
 
 /**
  * The slot a chapter occupies while it is still being laid out: one page-shaped
