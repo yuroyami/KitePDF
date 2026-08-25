@@ -16,6 +16,7 @@ import io.github.yuroyami.kitepdf.core.parser.IndirectResolver
 import io.github.yuroyami.kitepdf.core.parser.PdfInt
 import io.github.yuroyami.kitepdf.core.parser.PdfName
 import io.github.yuroyami.kitepdf.core.parser.PdfObject
+import io.github.yuroyami.kitepdf.core.parser.PdfReal
 import io.github.yuroyami.kitepdf.core.parser.PdfReference
 import io.github.yuroyami.kitepdf.core.parser.PdfStream
 import io.github.yuroyami.kitepdf.core.parser.PdfString
@@ -327,6 +328,9 @@ public class PdfEditor internal constructor(
      * name; every widget's `/AS` is set to that name when the widget defines it
      * as an appearance state, or to `/Off` otherwise (so sibling radios in the
      * group are cleared). Pass `"Off"` to clear the field.
+     *
+     * A widget that ships no appearance for the state gets one drawn for it,
+     * from its own `/MK` colours, so a ticked box actually looks ticked.
      */
     public fun setButtonValue(field: PdfFormField, exportValue: String) {
         require(field.type == PdfFormField.FieldType.Button) {
@@ -344,8 +348,26 @@ public class PdfEditor internal constructor(
         }
 
         put(fieldRef, field.fieldDict, "V", PdfName(exportValue))
-        for ((wref, wdict) in buttonWidgets(field)) {
-            val states = appearanceStateNames(wdict)
+        // /Ff bit 16: the button is a radio, so its widgets draw round.
+        val radio = (field.flags and (1 shl 15)) != 0
+        val widgets = buttonWidgets(field)
+        // Each widget's own "on" name: /Opt gives one per kid (12.7.4.2.1),
+        // and a lone widget owns whatever name the caller asked for. Without
+        // either there is no way to tell which radio owns which value, so
+        // those keep whatever appearances the file shipped.
+        val optNames = field.fieldDict.getArray("Opt", base)?.map {
+            (it.resolve(base) as? PdfString)?.asText()
+        }
+        for ((i, entry) in widgets.withIndex()) {
+            val (wref, wdict) = entry
+            var states = appearanceStateNames(wdict)
+            val ownName = optNames?.getOrNull(i) ?: if (widgets.size == 1) exportValue else null
+            if (states.isEmpty() && ownName != null && ownName != "Off") {
+                toggleAppearance(wdict, ownName, radio)?.let { ap ->
+                    put(wref, wdict, "AP", ap)
+                    states = setOf(ownName, "Off")
+                }
+            }
             val asName = if (exportValue in states) exportValue else "Off"
             put(wref, wdict, "AS", PdfName(asName))
         }
@@ -404,6 +426,70 @@ public class PdfEditor internal constructor(
             if (apDict != null) updateObject(widgetRef, withEntry(field.widgetDict, "AP", apDict))
         }
         clearNeedAppearances()
+    }
+
+    /**
+     * An `/AP` dictionary with both states drawn for a toggle widget, or null
+     * when the widget has no rectangle to draw in.
+     */
+    private fun toggleAppearance(widget: PdfDictionary, onState: String, radio: Boolean): PdfDictionary? {
+        val rect = rectOf(widget) ?: return null
+        val w = abs(rect[2] - rect[0])
+        val h = abs(rect[3] - rect[1])
+        if (w <= 0.0 || h <= 0.0) return null
+        val mk = widget.getDict("MK", base)
+        val background = FieldAppearance.colorOps(mk?.getArray("BG", base), stroking = false)
+        val border = FieldAppearance.colorOps(mk?.getArray("BC", base), stroking = true)
+        val borderWidth = (widget.getDict("BS", base)?.get("W")?.resolve(base)).let {
+            (it as? PdfReal)?.value ?: (it as? PdfInt)?.value?.toDouble() ?: 1.0
+        }
+        // /MK /CA names the mark; a radio's default is the filled circle.
+        val mark = (mk?.get("CA")?.resolve(base) as? PdfString)?.asText()?.firstOrNull()
+            ?: if (radio) 'l' else '4'
+        val da = FieldAppearance.parseDA(acroFormDefaultAppearance())
+        val zapf = addObject(
+            PdfDictionary(
+                linkedMapOf(
+                    "Type" to PdfName("Font"),
+                    "Subtype" to PdfName("Type1"),
+                    "BaseFont" to PdfName("ZapfDingbats"),
+                ),
+            ),
+        )
+        fun state(on: Boolean) = addObject(
+            FieldAppearance.buildToggle(
+                w, h, on, radio, mark, background, border, borderWidth, da.colorOps, zapf,
+            ),
+        ) as PdfObject
+        return PdfDictionary(
+            linkedMapOf(
+                "N" to PdfDictionary(linkedMapOf(onState to state(true), "Off" to state(false))),
+            ),
+        )
+    }
+
+    /** A widget's `/Rect` as [x0, y0, x1, y1], or null. */
+    private fun rectOf(widget: PdfDictionary): DoubleArray? {
+        val arr = widget.getArray("Rect", base) ?: return null
+        if (arr.size < 4) return null
+        val v = DoubleArray(4) { i ->
+            when (val o = arr.getOrNull(i)?.resolve(base)) {
+                is PdfReal -> o.value
+                is PdfInt -> o.value.toDouble()
+                else -> return null
+            }
+        }
+        return v
+    }
+
+    /** The form-wide `/DA`, which is where a mark's colour usually comes from. */
+    private fun acroFormDefaultAppearance(): String? {
+        val rootRef = (trailerOverrides["Root"] ?: base.trailer["Root"]) as? PdfReference ?: return null
+        val catalog = effectiveObject(rootRef.objectNumber) as? PdfDictionary ?: return null
+        val acroRef = catalog["AcroForm"] as? PdfReference
+        val acro = (if (acroRef != null) effectiveObject(acroRef.objectNumber) else catalog["AcroForm"])
+            as? PdfDictionary ?: return null
+        return (acro["DA"]?.resolve(base) as? PdfString)?.asText()
     }
 
     /** Widget annotations of a button field: its /Kids, or the merged field itself. */
