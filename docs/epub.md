@@ -201,7 +201,9 @@ The layout engine covers what real books use:
 
 - **Embedded fonts**: TrueType, OpenType/CFF, WOFF, and WOFF2 (via a
   pure-Kotlin Brotli decoder), with per-glyph fallback so mixed-script text
-  never shows tofu.
+  never shows tofu. An embedded font is always measured from its own tables;
+  text on the fallback path is measured with the exact Standard-14 metrics,
+  Cyrillic included.
 - **Hyphenation**: Knuth-Liang patterns for English, German, French,
   Spanish, Italian, Portuguese, and Dutch, selected by the book's language.
   Six of those languages ship a full pattern set. English ships a small
@@ -216,7 +218,10 @@ The layout engine covers what real books use:
 - **Layout**: floats with exclusion bands, tables (including
   `table-layout: fixed`), `position: absolute`/`relative`/`fixed`, inline
   images on the baseline, `::before`/`::after` generated content,
-  `text-transform`, letter/word spacing, and small-caps.
+  `text-transform`, letter/word spacing, and small-caps. Known limitation:
+  in `direction: rtl` text, `text-indent` shifts from the left edge rather
+  than the inline-start (right) edge; lines still stay inside the content
+  box.
 
 ## Books that are not quite right
 
