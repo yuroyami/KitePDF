@@ -267,7 +267,7 @@ The principle behind that last pair is worth stating, because it explains the sh
 - **Deliberately conservative.** A text run or a path that only partly overlaps a region is removed whole, rather than risk leaving part of it behind.
 - **A large uniform fill survives.** A path is judged by its segments, so a background rectangle or page border whose edges lie outside every region is kept. It conceals nothing the black box does not already cover, and the alternative deletes the page's artwork.
 - **Soft masks are not inspected.** Content reached only through an `/ExtGState /SMask` luminosity group is not redacted.
-- **Shadings are not tested.** An `sh` operator painting into a region survives in the stream, covered only by the black box.
+- **Shadings are judged by their clip.** An `sh` operator paints its whole clipping region, so it is removed when that region's boundary touches a redacted area or sits wholly inside one. A page-wide (unclipped or region-surrounding) shading survives under the black box, like any full-page background.
 - **Line width set through an ExtGState is not seen.** Only the `w` operator is tracked, so a stroke whose width comes from `/LW` is padded as if it were hairline. This is a library-wide gap: the renderer does not read `/LW` either.
 - **A form shared between two pages, redacted in separate calls**, can leave the second page showing the first page's redaction. Over-removal, not a leak.
 - **A form invoked from two different parent forms** decides per parent whether the original must stay intact, so one parent's descent can claim it before the other parent's untouched invocation is reached. Over-removal, not a leak.
