@@ -58,6 +58,16 @@ The method:
 - Clears the form's `/NeedAppearances` flag so conforming viewers use the appearance we generated.
 - Buttons and choice fields have their own methods: `setCheckbox(field, checked)`, `setButtonValue(field, exportValue)` for radio groups, and `setChoiceValue(field, value)` for dropdowns and list boxes.
 
+A checkbox or radio widget that ships no `/AP` of its own gets one drawn, from
+the widget's `/MK` background and border plus the ZapfDingbats mark `/MK /CA`
+names (the check by default, the filled circle for a radio). Without it a
+ticked box stays blank in any reader that does not regenerate appearances.
+
+Which widget owns which value cannot be guessed, so an appearance is drawn only
+where the file says: a lone widget owns the value being set, and a radio group's
+kids take their names from `/Opt`. A group with neither is left exactly as it
+was, rather than having every radio light up at once.
+
 !!! warning
     Text fields without a widget `/Rect` or indirect reference cannot be filled; the editor needs these to construct and store the appearance stream.
 

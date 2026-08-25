@@ -44,7 +44,7 @@ docs use `PdfDocument`: it also carries the password overload, `openOrNull` and
 
 ## Install
 
-Seven artifacts are published, all at `0.6.0`. Add one document artifact. Add one
+Ten artifacts are published, all at `0.7.0`. Add one document artifact. Add one
 renderer only when you draw pages.
 
 | Artifact | Add it when |
@@ -53,6 +53,7 @@ renderer only when you draw pages.
 | `io.github.yuroyami:kitepdf-pdf` | You want PDF only, with no EPUB reflow engine on the classpath. |
 | `io.github.yuroyami:kitepdf-epub` | You want EPUB only. |
 | `io.github.yuroyami:kitepdf-cbz` | You want CBZ comic archives only. |
+| `io.github.yuroyami:kitepdf-svg` | You want SVG only: a standalone `.svg` as a one-page document, or the renderer that draws vector art inside another format. |
 | `io.github.yuroyami:kitepdf-core` | Never add it yourself. It holds geometry, `KiteCanvas`, the font engine, the stream filters and the hyphenation data, and it arrives with any of the handler artifacts above. |
 | `io.github.yuroyami:kitepdf-compose-viewer` | You draw with Compose Multiplatform. It gives you `KiteDocView` (one composable for PDF and EPUB alike) and the viewer state. |
 | `io.github.yuroyami:kitepdf-native-renderer` | You want page-to-image through the platform's own canvas: AWT, `android.graphics`, CoreGraphics, Canvas2D. |
@@ -63,7 +64,7 @@ renderer only when you draw pages.
 kotlin {
     sourceSets {
         commonMain.dependencies {
-            implementation("io.github.yuroyami:kitepdf:0.6.3")
+            implementation("io.github.yuroyami:kitepdf:0.7.0")
         }
     }
 }
@@ -86,8 +87,8 @@ build fails with unresolved references to `PdfDocument` and `PdfPage`. Declare
 both lines:
 
 ```kotlin
-implementation("io.github.yuroyami:kitepdf:0.6.3")                   // or kitepdf-pdf
-implementation("io.github.yuroyami:kitepdf-skia-renderer:0.6.3")     // exactly one renderer
+implementation("io.github.yuroyami:kitepdf:0.7.0")                   // or kitepdf-pdf
+implementation("io.github.yuroyami:kitepdf-skia-renderer:0.7.0")     // exactly one renderer
 ```
 
 The three renderers are alternative backends for the same `KiteCanvas` interface.
@@ -297,15 +298,11 @@ may reach.
 | Redaction does not see a line width set through `/LW` | Only the `w` operator is tracked, so a stroke whose width comes from an ExtGState's `/LW` is padded using the last `w` value (or the 1.0 default) instead. This is a library-wide gap: the renderer does not read `/LW` either. |
 | Annotations are read-only | They parse and appear on `PdfPage.annotations`, but there is no authoring API. The only annotation KitePDF writes is the widget for `PdfSigner`'s own signature field. |
 | `PdfSigner` runs no cryptography | It stages the signature field, reserves `/Contents` and patches `/ByteRange`. It cannot validate a signature. Your application supplies the CMS blob. |
+| Contextual substitution is not shaped | GSUB single and ligature lookups apply, and GPOS attaches marks to bases, ligatures and other marks. Contextual and chaining substitution (GSUB 5/6) and Indic reordering need a full shaping pipeline and are not implemented. |
 | Writing encrypts more narrowly than reading | `PdfBuilder` creates AES-256/R6 only, and editing an encrypted document requires AES-128 or AES-256. RC4 documents open and decrypt, but you cannot edit them. |
-| CoreGraphics drops Standard-14 text | It paints embedded glyph outlines only, so text in a standard font does not appear. It also ignores per-image alpha. |
-| Android and CoreGraphics drop `RAW` images | Neither has a path for `KiteImageData.Kind.RAW`, so both draw a gray placeholder. `RAW` is what a successful JPEG, JPX or JBIG2 decode produces, which covers most images in most files. |
-| Canvas2D drops every image | It draws a placeholder in place of each one. |
-| The Compose canvas drops rotation | It reads translation and scale magnitudes from the CTM, so rotation and shear are lost. |
-| Three rasterizers use the wrong page box | `AwtPdfRasterizer`, `AndroidPdfBitmapRenderer` and `ApplePdfRasterizer` size their output from the raw MediaBox and apply a plain Y-flip, so they ignore `/Rotate`, `/CropBox` and non-zero box origins. `PdfPageRasterizer` (Skia) and the Compose viewer use the rotated, cropped box and are correct. `/UserUnit` is parsed and then applied nowhere. |
-| Chained image filters are not unwound | `/Filter [/ASCII85Decode /DCTDecode]` hands still-ASCII85-encoded bytes to the JPEG decoder. |
 | Shading meshes are approximated | Coons (type 6) and tensor (type 7) patch meshes tessellate to a fixed 8×8 grid of flat-colored quads, and the tensor patch's four interior control points are read for stream alignment and then discarded. Triangle meshes (types 4 and 5) use fixed depth-3 subdivision. |
-| ICC profiles are not applied | An `/ICCBased` stream is mapped to Gray, RGB or CMYK by its `/N` count alone. Rendering intents and overprint are ignored. |
+| ICC profiles are read, but not all of them | Matrix/TRC profiles (RGB and grey) are applied. A lookup-table profile (`A2B0`, `mft1`, `mft2`, `mAB`), which is mostly CMYK press work, keeps the device fallback. Rendering intents and overprint are ignored. |
+| Canvas2D draws images one frame late | A browser decodes asynchronously, so the first pass over a JPEG paints a placeholder and the image appears on the next. Raw samples draw immediately. |
 | Structured text has no word segmentation | You get blocks, lines and spans, where a span is one text-drawing run. |
 | There is no structure tree | `markInfo` reports whether a document declares itself tagged. `/StructTreeRoot` is not parsed. |
 | EPUB fixed layout needs a fully fixed book | A hybrid book that mixes fixed and reflowable spine items uses the reflow path for the whole book. |
@@ -314,10 +311,10 @@ may reach.
 
 ## Testing
 
-769 tests across 172 test files. A differential harness compares the JVM/AWT
+1142 tests across 213 test files. A differential harness compares the JVM/AWT
 backend page by page against MuPDF, and only that backend. See
-[DIFFTEST.md](kitepdf-native-renderer/DIFFTEST.md). A local run over 36 pages
-reports a mean absolute error of 0.0062 and a worst page of 0.0281. The PDF
+[DIFFTEST.md](kitepdf-native-renderer/DIFFTEST.md). A local run over 39 pages
+reports a mean absolute error of 0.0053 and a worst page of 0.0263. The PDF
 corpus is not committed, so a clean checkout and CI do not reproduce that run.
 
 If a PDF renders incorrectly, please open an issue with the file attached. Every

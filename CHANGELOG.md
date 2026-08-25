@@ -9,6 +9,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- SVG, as a format of its own. A new `kitepdf-svg` module holds the renderer
+  that was buried in the EPUB handler, and `SvgDocument` opens a standalone
+  `.svg` as a one-page document at its own viewport, drawn as vectors.
+  `KiteDoc` recognizes it as `KiteDocFormat.Svg`.
+- SVG drawing catches up: `<use>` and `<symbol>` (with a cycle guard),
+  `<image>` from a `data:` URI or a file the caller loads, `<text>` and
+  `<tspan>` measured against standard-font metrics, linear and radial
+  gradients as fill, `clip-path`, `display`, `visibility`, `fill-opacity`,
+  `stroke-opacity`, and a `style=""` declaration outranking the matching
+  attribute. A fixed-layout comic whose pages are an SVG wrapping one JPEG
+  now draws.
+- ICC colour. An `/ICCBased` space was resolved by component count alone, so a
+  wide-gamut photo rendered as if it were sRGB. Matrix/TRC profiles (RGB and
+  grey) are now read and applied. A profile that IS sRGB stays on the device
+  path, where the colour passes through byte-exact.
+- EPUB: `EpubPage.readingOrder()`, one page's content in the order a reader
+  that speaks would say it, with the role each element declared. `aria-hidden`,
+  `role="presentation"` and `alt=""` are left out; `aria-label` replaces the
+  text; `aria-hidden` and `epub:type` inherit down the subtree.
+- EPUB: `table-layout: fixed`, and real `position: absolute` / `fixed`
+  placement (the nearest positioned ancestor is the containing block, and
+  `right`, `bottom` and a height from `top`+`bottom` all resolve).
+- EPUB: `writing-mode: vertical-lr` lays out, and selection, search and link
+  rectangles follow the columns on any vertical page.
+- Text: GPOS mark-to-mark and mark-to-ligature attachment, so two stacked
+  diacritics sit one above the other instead of overprinting.
+- Forms: a checkbox or radio widget with no `/AP` of its own gets one drawn
+  from its `/MK` colours, so a ticked box actually looks ticked.
+- `ZipReader` reads ZIP64 records and entries sized only by a trailing data
+  descriptor, and verifies every entry's CRC-32 (lenient by default, strict on
+  request, or ask with `verify`).
+- `TextEncoding` in core: text is decoded by weighing a byte order mark, a
+  UTF-16 NUL pattern, the document's own declaration, the caller's hint, and
+  finally UTF-8 validity, falling back to Windows-1252. Books that ship
+  1252 while claiming UTF-8 now read correctly.
 - CBZ comic archives. A new `kitepdf-cbz` module reads a ZIP of images as a
   document, one page per image, in natural filename order (`page2` before
   `page10`). `KiteDoc.open` recognizes a CBZ on its own; `CbzDocument.open`
@@ -28,6 +63,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- The XML reader and the CSS value parsers moved from `kitepdf-epub` to
+  `kitepdf-core` as `KiteXml`, `KiteXmlNode` and `CssValues`, all public. The
+  EPUB cascade and the SVG renderer read the same syntax, and the SVG module
+  needed an XML parser that was not inside a book handler.
+- `KiteTextLine` knows whether it is a vertical column, so its char edges run
+  down the page and hit-testing swaps axes to match.
 - `ZipReader` moved from `kitepdf-epub` to `kitepdf-core`
   (`io.github.yuroyami.kitepdf.core.zip`). The old name still compiles as a
   deprecated typealias for one release.
@@ -38,6 +79,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- A form XObject or a Type3 char proc with no `/Resources` of its own now
+  reads the page's, as the spec asks. Both were looking at an empty map, so
+  every name they used resolved to nothing and the stream painted nothing.
+- An out-of-flow inline box is blockified (CSS 9.7), which is what gives
+  `<img style="position:absolute">` a box of its own instead of a line slot.
+  The anonymous inline container also stopped inheriting its parent's
+  `position`, which was shifting relative boxes twice.
 - Redaction removes a shading (`sh`) whose visible region touches a redacted
   area. A shading paints its whole clipping region, so it is judged by the
   clip's boundary the same way vector paths are judged by their segments; a

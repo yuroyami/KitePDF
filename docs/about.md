@@ -18,21 +18,23 @@ KitePDF is **pre-1.0**. These features work today:
 | --- | --- |
 | Viewing | Compose viewer with continuous and paged layouts, two-page spreads, RTL progression, pinch-zoom, pan, double-tap, text selection, search highlights, outline panels, link taps |
 | Text | Extraction, structured text with geometry, and engine-level search for both formats |
-| EPUB | Reflowable EPUB 2/3 on the same core: CSS cascade, embedded fonts (TTF, OTF, WOFF, WOFF2), hyphenation in seven languages, CJK justification, ruby, vertical writing, floats, tables, reader settings |
+| Formats | PDF, reflowable EPUB 2/3, CBZ comic archives and standalone SVG, all opened by the same `KiteDoc.open` |
+| EPUB | Reflowable EPUB 2/3 on the same core: CSS cascade, embedded fonts (TTF, OTF, WOFF, WOFF2), hyphenation in seven languages, CJK justification, ruby, vertical writing (both directions), floats, tables, absolute positioning, an accessibility reading order, reader settings |
 | Forms | Read and fill text, checkbox, radio and choice fields |
 | Annotations | View and interact with highlights, links and comments |
 | Encryption | Open, authenticate, edit and create password-protected PDFs (AES-256/R6 on write) |
 | Editing and saving | Fill forms, stamp watermarks, redact (the content is removed, not covered), incremental save or full rebuild |
 | Building | Text with standard or custom embedded fonts, including subsetting, plus shapes, images and colors |
 | Image codecs | Supplied by KiteImage, the shared pure-Kotlin codec engine: PNG, JPEG (baseline and progressive), GIF, BMP, JPEG 2000, JBIG2 and CCITT |
+| Colour | Device spaces, CalGray/CalRGB, Lab, Indexed, Separation/DeviceN, and ICC profiles of the matrix/TRC kind |
 | Signing scaffold | `/ByteRange` preparation and CMS embedding. The cryptography stays in your application. |
 
 Planned:
 
 - Signature validation
-- Advanced color management (ICC application, rendering intents)
+- The rest of colour management: lookup-table ICC profiles and rendering intents
 - Less common form widgets (media players, rich text)
-- More handlers on the shared core (XPS, CBZ, SVG)
+- An XPS handler
 
 Known limits are listed in the [README](https://github.com/yuroyami/KitePDF#limits).
 
