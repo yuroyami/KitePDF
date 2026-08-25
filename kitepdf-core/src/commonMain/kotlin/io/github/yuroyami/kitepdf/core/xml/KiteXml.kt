@@ -1,22 +1,39 @@
-package io.github.yuroyami.kitepdf.epub
+package io.github.yuroyami.kitepdf.core.xml
 
 /**
- * Tiny, forgiving XML tokenizer, enough for EPUB's container.xml, the OPF
- * package document, and (X)HTML content. Emits a flat token stream rather than
- * a validated tree: start tags with attributes, end tags, and text. Comments,
- * the XML/DOCTYPE prologue, CDATA, and processing instructions are skipped;
- * malformed markup is salvaged rather than rejected (real EPUBs are messy).
+ * A tiny, forgiving XML reader: enough for EPUB's container.xml and OPF, for
+ * (X)HTML content, and for SVG.
+ *
+ * Comments, the XML/DOCTYPE prologue, CDATA delimiters and processing
+ * instructions are skipped, and malformed markup is salvaged rather than
+ * rejected, because real files are messy. Names lose their namespace prefix
+ * and are lowercased, so `<epub:switch epub:type="x">` reads as tag `switch`
+ * with attribute `type`.
+ *
+ * ```kotlin
+ * val root = KiteXml.parse(svgBytes.decodeToString())
+ * val width = root.attrs["width"]
+ * ```
  */
-internal sealed class XmlToken {
-    data class Open(val name: String, val attrs: Map<String, String>, val selfClose: Boolean) : XmlToken()
-    data class Close(val name: String) : XmlToken()
-    data class Text(val text: String) : XmlToken()
+public sealed class KiteXmlToken {
+    public data class Open(
+        public val name: String,
+        public val attrs: Map<String, String>,
+        public val selfClose: Boolean,
+    ) : KiteXmlToken()
+    public data class Close(public val name: String) : KiteXmlToken()
+    public data class Text(public val text: String) : KiteXmlToken()
 }
 
-internal object MiniXml {
+public object KiteXml {
 
-    fun tokenize(xml: String): List<XmlToken> {
-        val out = ArrayList<XmlToken>()
+    /**
+     * The flat token stream: start tags with attributes, end tags, and text.
+     * Tag soup is salvaged, never rejected. Use [parse] for a tree; callers
+     * that need HTML's implied end tags fold the tokens themselves.
+     */
+    public fun tokenize(xml: String): List<KiteXmlToken> {
+        val out = ArrayList<KiteXmlToken>()
         var i = 0
         val n = xml.length
         while (i < n) {
@@ -27,7 +44,7 @@ internal object MiniXml {
                     xml.startsWith("<![CDATA[", i) -> {
                         val end = xml.indexOf("]]>", i)
                         val stop = if (end < 0) n else end
-                        out.add(XmlToken.Text(xml.substring(i + 9, stop)))
+                        out.add(KiteXmlToken.Text(xml.substring(i + 9, stop)))
                         i = if (end < 0) n else end + 3
                     }
                     xml.startsWith("<?", i) -> { i = xml.indexOf("?>", i).let { if (it < 0) n else it + 2 } }
@@ -43,23 +60,23 @@ internal object MiniXml {
             } else {
                 val end = xml.indexOf('<', i).let { if (it < 0) n else it }
                 val raw = xml.substring(i, end)
-                if (raw.isNotEmpty()) out.add(XmlToken.Text(decodeEntities(raw)))
+                if (raw.isNotEmpty()) out.add(KiteXmlToken.Text(decodeEntities(raw)))
                 i = end
             }
         }
         return out
     }
 
-    private fun parseTag(body: String): XmlToken? {
+    private fun parseTag(body: String): KiteXmlToken? {
         val t = body.trim()
         if (t.isEmpty()) return null
-        if (t.startsWith("/")) return XmlToken.Close(localName(t.substring(1).trim()))
+        if (t.startsWith("/")) return KiteXmlToken.Close(localName(t.substring(1).trim()))
         val selfClose = t.endsWith("/")
         val core = if (selfClose) t.dropLast(1).trim() else t
         val sp = core.indexOfFirst { it == ' ' || it == '\t' || it == '\n' || it == '\r' }
         val name = localName(if (sp < 0) core else core.substring(0, sp))
         val attrs = if (sp < 0) emptyMap() else parseAttrs(core.substring(sp + 1))
-        return XmlToken.Open(name, attrs, selfClose)
+        return KiteXmlToken.Open(name, attrs, selfClose)
     }
 
     private fun parseAttrs(s: String): Map<String, String> {
@@ -139,5 +156,32 @@ internal object MiniXml {
             append((0xD800 + (v ushr 10)).toChar())
             append((0xDC00 + (v and 0x3FF)).toChar())
         }
+    }
+
+    /**
+     * Fold the tokens into a tree. Strict about nesting only where it can be:
+     * an end tag closes the nearest matching open element and is ignored when
+     * nothing matches, so a stray `</b>` cannot truncate the document.
+     *
+     * This is the XML reading; HTML's implied end tags (`<p>`, `<li>`, table
+     * rows) are not applied, so use it for XML and SVG, not for tag soup.
+     */
+    public fun parse(xml: String): KiteXmlNode.Element {
+        val root = KiteXmlNode.Element("#root", emptyMap())
+        val stack = ArrayList<KiteXmlNode.Element>().apply { add(root) }
+        for (t in tokenize(xml)) when (t) {
+            is KiteXmlToken.Open -> {
+                val el = KiteXmlNode.Element(t.name, t.attrs)
+                el.parent = stack.last()
+                stack.last().children.add(el)
+                if (!t.selfClose) stack.add(el)
+            }
+            is KiteXmlToken.Close -> {
+                val at = stack.indexOfLast { it.tag == t.name }
+                if (at > 0) while (stack.size > at) stack.removeAt(stack.size - 1)
+            }
+            is KiteXmlToken.Text -> stack.last().children.add(KiteXmlNode.Text(t.text))
+        }
+        return root
     }
 }

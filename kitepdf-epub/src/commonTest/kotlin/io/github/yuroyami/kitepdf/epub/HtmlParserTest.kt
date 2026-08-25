@@ -1,5 +1,7 @@
 package io.github.yuroyami.kitepdf.epub
 
+import io.github.yuroyami.kitepdf.core.xml.KiteXmlNode
+
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -7,13 +9,13 @@ import kotlin.test.assertTrue
 /** Tree-building + tag-soup recovery in [HtmlParser]. */
 class HtmlParserTest {
 
-    private fun HtmlNode.Element.elements(tag: String): List<HtmlNode.Element> =
-        children.filterIsInstance<HtmlNode.Element>().filter { it.tag == tag }
+    private fun KiteXmlNode.Element.elements(tag: String): List<KiteXmlNode.Element> =
+        children.filterIsInstance<KiteXmlNode.Element>().filter { it.tag == tag }
 
-    private fun HtmlNode.Element.descendants(tag: String): List<HtmlNode.Element> {
-        val out = ArrayList<HtmlNode.Element>()
-        fun rec(e: HtmlNode.Element) {
-            for (c in e.children) if (c is HtmlNode.Element) { if (c.tag == tag) out.add(c); rec(c) }
+    private fun KiteXmlNode.Element.descendants(tag: String): List<KiteXmlNode.Element> {
+        val out = ArrayList<KiteXmlNode.Element>()
+        fun rec(e: KiteXmlNode.Element) {
+            for (c in e.children) if (c is KiteXmlNode.Element) { if (c.tag == tag) out.add(c); rec(c) }
         }
         rec(this); return out
     }
@@ -40,7 +42,7 @@ class HtmlParserTest {
         val br = p.elements("br").single()
         assertTrue(br.children.isEmpty(), "<br> is void")
         // Text 'b' after <br> is a sibling of <br>, still inside <p>.
-        assertEquals("ab", p.children.filterIsInstance<HtmlNode.Text>().joinToString("") { it.text })
+        assertEquals("ab", p.children.filterIsInstance<KiteXmlNode.Text>().joinToString("") { it.text })
     }
 
     @Test

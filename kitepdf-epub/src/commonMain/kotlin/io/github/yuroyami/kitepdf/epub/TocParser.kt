@@ -1,5 +1,7 @@
 package io.github.yuroyami.kitepdf.epub
 
+import io.github.yuroyami.kitepdf.core.xml.KiteXmlNode
+
 import io.github.yuroyami.kitepdf.core.zip.ZipReader
 
 /** One table-of-contents node. [spineIndex] is -1 when the target isn't in the spine. */
@@ -60,23 +62,23 @@ internal object TocParser {
         return TableOfContents(parseOl(ol, dir, index, resolve))
     }
 
-    private fun parseOl(ol: HtmlNode.Element, dir: String, index: Map<String, Int>, resolve: (String, String) -> String): List<TocEntry> =
-        ol.children.filterIsInstance<HtmlNode.Element>().filter { it.tag == "li" }.map { li ->
+    private fun parseOl(ol: KiteXmlNode.Element, dir: String, index: Map<String, Int>, resolve: (String, String) -> String): List<TocEntry> =
+        ol.children.filterIsInstance<KiteXmlNode.Element>().filter { it.tag == "li" }.map { li ->
             val anchor = firstDescendantTag(li, "a") ?: firstDescendantTag(li, "span")
             val label = textOf(anchor ?: li).trim()
             val (spine, frag, path) = target(anchor?.attrs?.get("href"), dir, index, resolve)
-            val childOl = li.children.filterIsInstance<HtmlNode.Element>().firstOrNull { it.tag == "ol" }
+            val childOl = li.children.filterIsInstance<KiteXmlNode.Element>().firstOrNull { it.tag == "ol" }
             TocEntry(label, path, spine, frag, childOl?.let { parseOl(it, dir, index, resolve) } ?: emptyList())
         }
 
-    private fun findNavToc(root: HtmlNode.Element): HtmlNode.Element? {
-        var firstNav: HtmlNode.Element? = null
-        fun rec(e: HtmlNode.Element): HtmlNode.Element? {
+    private fun findNavToc(root: KiteXmlNode.Element): KiteXmlNode.Element? {
+        var firstNav: KiteXmlNode.Element? = null
+        fun rec(e: KiteXmlNode.Element): KiteXmlNode.Element? {
             if (e.tag == "nav") {
                 if (firstNav == null) firstNav = e
                 if (e.attrs["type"] == "toc") return e
             }
-            for (c in e.children) if (c is HtmlNode.Element) rec(c)?.let { return it }
+            for (c in e.children) if (c is KiteXmlNode.Element) rec(c)?.let { return it }
             return null
         }
         return rec(root) ?: firstNav
@@ -87,14 +89,14 @@ internal object TocParser {
     private fun parseNcx(xml: String, dir: String, index: Map<String, Int>, resolve: (String, String) -> String): TableOfContents {
         val root = HtmlParser.parse(xml)
         val navMap = firstDescendantTag(root, "navmap") ?: return TableOfContents(emptyList())
-        return TableOfContents(navMap.children.filterIsInstance<HtmlNode.Element>().filter { it.tag == "navpoint" }.map { parseNavPoint(it, dir, index, resolve) })
+        return TableOfContents(navMap.children.filterIsInstance<KiteXmlNode.Element>().filter { it.tag == "navpoint" }.map { parseNavPoint(it, dir, index, resolve) })
     }
 
-    private fun parseNavPoint(np: HtmlNode.Element, dir: String, index: Map<String, Int>, resolve: (String, String) -> String): TocEntry {
+    private fun parseNavPoint(np: KiteXmlNode.Element, dir: String, index: Map<String, Int>, resolve: (String, String) -> String): TocEntry {
         val label = firstDescendantTag(np, "navlabel")?.let { textOf(it).trim() } ?: ""
-        val src = np.children.filterIsInstance<HtmlNode.Element>().firstOrNull { it.tag == "content" }?.attrs?.get("src")
+        val src = np.children.filterIsInstance<KiteXmlNode.Element>().firstOrNull { it.tag == "content" }?.attrs?.get("src")
         val (spine, frag, path) = target(src, dir, index, resolve)
-        val children = np.children.filterIsInstance<HtmlNode.Element>().filter { it.tag == "navpoint" }.map { parseNavPoint(it, dir, index, resolve) }
+        val children = np.children.filterIsInstance<KiteXmlNode.Element>().filter { it.tag == "navpoint" }.map { parseNavPoint(it, dir, index, resolve) }
         return TocEntry(label, path, spine, frag, children)
     }
 
@@ -109,17 +111,17 @@ internal object TocParser {
         return Target(index[path] ?: -1, fragment, path)
     }
 
-    private fun firstDescendantTag(root: HtmlNode.Element, tag: String): HtmlNode.Element? {
-        for (c in root.children) if (c is HtmlNode.Element) {
+    private fun firstDescendantTag(root: KiteXmlNode.Element, tag: String): KiteXmlNode.Element? {
+        for (c in root.children) if (c is KiteXmlNode.Element) {
             if (c.tag == tag) return c
             firstDescendantTag(c, tag)?.let { return it }
         }
         return null
     }
 
-    private fun textOf(el: HtmlNode.Element): String {
+    private fun textOf(el: KiteXmlNode.Element): String {
         val sb = StringBuilder()
-        fun rec(n: HtmlNode) { when (n) { is HtmlNode.Text -> sb.append(n.text); is HtmlNode.Element -> n.children.forEach(::rec) } }
+        fun rec(n: KiteXmlNode) { when (n) { is KiteXmlNode.Text -> sb.append(n.text); is KiteXmlNode.Element -> n.children.forEach(::rec) } }
         rec(el)
         return sb.toString()
     }

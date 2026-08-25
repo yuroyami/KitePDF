@@ -1,5 +1,9 @@
 package io.github.yuroyami.kitepdf.epub
 
+import io.github.yuroyami.kitepdf.core.xml.KiteXml
+import io.github.yuroyami.kitepdf.core.xml.KiteXmlNode
+import io.github.yuroyami.kitepdf.core.xml.KiteXmlToken
+
 import io.github.yuroyami.kitepdf.core.zip.ZipReader
 
 import io.github.yuroyami.kitepdf.core.KiteLock
@@ -15,7 +19,7 @@ import io.github.yuroyami.kitepdf.epub.css.StyleRule
  * base dir and declared viewport. Built on demand by [ParsedEpub.spine].
  */
 internal class ParsedSpine(
-    val tree: HtmlNode.Element,
+    val tree: KiteXmlNode.Element,
     val rules: List<StyleRule>,
     val docDir: String,
     /** The `<meta name=viewport>` size, or null when the document declares none. */
@@ -205,7 +209,7 @@ internal class ParsedEpub(
             val xml = zip.readText("META-INF/encryption.xml") ?: return emptyMap()
             val map = HashMap<String, String>()
             var algo: String? = null
-            for (t in MiniXml.tokenize(xml)) if (t is XmlToken.Open) when (t.name) {
+            for (t in KiteXml.tokenize(xml)) if (t is KiteXmlToken.Open) when (t.name) {
                 "encrypteddata" -> algo = null
                 "encryptionmethod" -> algo = t.attrs["algorithm"]
                 "cipherreference" -> {
@@ -219,28 +223,28 @@ internal class ParsedEpub(
         /** META-INF/container.xml -> the OPF package path. */
         private fun containerOpfPath(zip: ZipReader): String? {
             val xml = zip.readText("META-INF/container.xml") ?: return null
-            for (t in MiniXml.tokenize(xml)) {
-                if (t is XmlToken.Open && t.name == "rootfile") t.attrs["full-path"]?.let { return it }
+            for (t in KiteXml.tokenize(xml)) {
+                if (t is KiteXmlToken.Open && t.name == "rootfile") t.attrs["full-path"]?.let { return it }
             }
             return null
         }
 
         /** Visit a document's author CSS in document order: linked sheets, then `<style>` blocks. */
         private fun walkStyleSources(
-            tree: HtmlNode.Element,
+            tree: KiteXmlNode.Element,
             docDir: String,
             onLink: (String) -> Unit,
             onInline: (String) -> Unit,
         ) {
-            fun walk(el: HtmlNode.Element) {
+            fun walk(el: KiteXmlNode.Element) {
                 when (el.tag) {
                     "link" -> {
                         val rel = el.attrs["rel"]?.lowercase() ?: ""
                         val href = el.attrs["href"]
                         if ("stylesheet" in rel && href != null) onLink(EpubDocument.resolvePath(docDir, href))
                     }
-                    "style" -> onInline(buildString { for (c in el.children) if (c is HtmlNode.Text) append(c.text) })
-                    else -> for (c in el.children) if (c is HtmlNode.Element) walk(c)
+                    "style" -> onInline(buildString { for (c in el.children) if (c is KiteXmlNode.Text) append(c.text) })
+                    else -> for (c in el.children) if (c is KiteXmlNode.Element) walk(c)
                 }
             }
             walk(tree)
@@ -275,11 +279,11 @@ internal class ParsedEpub(
         )
 
         /** Fixed-layout page size: the `<meta name=viewport>` width/height, else a root `<svg>`'s. */
-        private fun parseViewport(tree: HtmlNode.Element): Pair<Double, Double>? {
+        private fun parseViewport(tree: KiteXmlNode.Element): Pair<Double, Double>? {
             var result: Pair<Double, Double>? = null
             var svgSize: Pair<Double, Double>? = null
             fun px(s: String?) = s?.trim()?.removeSuffix("px")?.toDoubleOrNull()
-            fun walk(el: HtmlNode.Element) {
+            fun walk(el: KiteXmlNode.Element) {
                 if (el.tag == "meta" && el.attrs["name"]?.lowercase() == "viewport") {
                     var w: Double? = null; var h: Double? = null
                     for (part in (el.attrs["content"] ?: "").split(',', ';')) {
@@ -294,7 +298,7 @@ internal class ParsedEpub(
                     val w = px(el.attrs["width"]); val h = px(el.attrs["height"])
                     if (w != null && h != null && w > 0 && h > 0) svgSize = w to h
                 }
-                for (c in el.children) if (c is HtmlNode.Element) walk(c)
+                for (c in el.children) if (c is KiteXmlNode.Element) walk(c)
             }
             walk(tree)
             return result ?: svgSize

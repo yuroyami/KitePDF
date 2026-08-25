@@ -1,6 +1,7 @@
 package io.github.yuroyami.kitepdf.epub.css
 
-import io.github.yuroyami.kitepdf.epub.HtmlNode
+import io.github.yuroyami.kitepdf.core.xml.KiteXmlNode
+
 import io.github.yuroyami.kitepdf.epub.HtmlParser
 import io.github.yuroyami.kitepdf.core.render.RgbColor
 import kotlin.test.Test
@@ -15,25 +16,25 @@ class CssCascadeTest {
     private val refWidth = 328.0
 
     /** Compute styles for every element; returns a lookup by the element itself. */
-    private fun resolve(html: String, css: String = ""): Map<HtmlNode.Element, ComputedStyle> {
+    private fun resolve(html: String, css: String = ""): Map<KiteXmlNode.Element, ComputedStyle> {
         val tree = HtmlParser.parse(html)
         val author = CssParser.parse(css, Origin.AUTHOR)
         val resolver = StyleResolver(author, root, refWidth)
-        val map = LinkedHashMap<HtmlNode.Element, ComputedStyle>()
-        fun walk(el: HtmlNode.Element, ancestors: List<HtmlNode.Element>, parent: ComputedStyle) {
+        val map = LinkedHashMap<KiteXmlNode.Element, ComputedStyle>()
+        fun walk(el: KiteXmlNode.Element, ancestors: List<KiteXmlNode.Element>, parent: ComputedStyle) {
             val cs = if (el.tag == "#root") resolver.initial() else resolver.compute(el, ancestors, parent)
             map[el] = cs
             val childAnc = if (el.tag == "#root") ancestors else listOf(el) + ancestors
-            for (c in el.children) if (c is HtmlNode.Element) walk(c, childAnc, cs)
+            for (c in el.children) if (c is KiteXmlNode.Element) walk(c, childAnc, cs)
         }
         walk(tree, emptyList(), resolver.initial())
         return map
     }
 
-    private fun Map<HtmlNode.Element, ComputedStyle>.byTag(tag: String): ComputedStyle =
+    private fun Map<KiteXmlNode.Element, ComputedStyle>.byTag(tag: String): ComputedStyle =
         entries.first { it.key.tag == tag }.value
 
-    private fun Map<HtmlNode.Element, ComputedStyle>.byId(id: String): ComputedStyle =
+    private fun Map<KiteXmlNode.Element, ComputedStyle>.byId(id: String): ComputedStyle =
         entries.first { it.key.attrs["id"] == id }.value
 
     @Test

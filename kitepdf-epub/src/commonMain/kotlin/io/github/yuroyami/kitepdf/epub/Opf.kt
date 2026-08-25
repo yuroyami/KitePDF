@@ -1,5 +1,8 @@
 package io.github.yuroyami.kitepdf.epub
 
+import io.github.yuroyami.kitepdf.core.xml.KiteXml
+import io.github.yuroyami.kitepdf.core.xml.KiteXmlToken
+
 import io.github.yuroyami.kitepdf.core.zip.ZipReader
 
 /** One `<manifest>` entry. */
@@ -82,8 +85,8 @@ internal object Opf {
         var capture: String? = null
         var captureIdIsUnique = false
 
-        for (t in MiniXml.tokenize(xml)) when (t) {
-            is XmlToken.Open -> {
+        for (t in KiteXml.tokenize(xml)) when (t) {
+            is KiteXmlToken.Open -> {
                 capture = null
                 when (t.name) {
                     "package" -> uidRef = t.attrs["unique-identifier"]
@@ -108,7 +111,7 @@ internal object Opf {
                     "identifier" -> { capture = "identifier"; captureIdIsUnique = t.attrs["id"] == uidRef }
                 }
             }
-            is XmlToken.Text -> when (capture) {
+            is KiteXmlToken.Text -> when (capture) {
                 "title" -> if (title == null) title = t.text.trim()
                 "creator" -> t.text.trim().takeIf { it.isNotEmpty() }?.let { creators.add(it) }
                 "language" -> if (language == null) language = t.text.trim()
@@ -119,7 +122,7 @@ internal object Opf {
                 "primaryWritingMode" -> if (primaryWritingMode == null) primaryWritingMode = t.text.trim()
                 else -> {}
             }
-            is XmlToken.Close -> capture = null
+            is KiteXmlToken.Close -> capture = null
         }
 
         return OpfPackage(
