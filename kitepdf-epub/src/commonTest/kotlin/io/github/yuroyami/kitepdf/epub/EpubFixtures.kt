@@ -14,6 +14,8 @@ internal object EpubFixtures {
         language: String? = null,
         spineDirection: String? = null,
         primaryWritingMode: String? = null,
+        /** Replace the chapter's bytes wholesale, e.g. to store it in another encoding. */
+        chapterBytes: ByteArray? = null,
     ): ByteArray {
         val body = if (bodyHtml.trimStart().startsWith("<body")) bodyHtml else "<body>$bodyHtml</body>"
         val container = """
@@ -46,7 +48,7 @@ internal object EpubFixtures {
                 "mimetype" to "application/epub+zip".encodeToByteArray(),
                 "META-INF/container.xml" to container.encodeToByteArray(),
                 "OEBPS/content.opf" to opf.encodeToByteArray(),
-                "OEBPS/chapter1.xhtml" to chapter.encodeToByteArray(),
+                "OEBPS/chapter1.xhtml" to (chapterBytes ?: chapter.encodeToByteArray()),
             ) + extraEntries,
         )
     }

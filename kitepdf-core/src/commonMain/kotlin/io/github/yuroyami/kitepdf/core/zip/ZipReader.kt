@@ -5,6 +5,7 @@ import io.github.yuroyami.kitepdf.core.compression.Inflate
 import io.github.yuroyami.kitepdf.core.compression.Inflater
 import io.github.yuroyami.kitepdf.core.filters.FilterChain
 import io.github.yuroyami.kitepdf.core.kiteWarn
+import io.github.yuroyami.kitepdf.core.text.TextEncoding
 
 /** What the central directory says about one entry. */
 public class ZipEntryInfo internal constructor(
@@ -77,8 +78,13 @@ public class ZipReader(
      */
     public fun verify(name: String): Boolean? = readBody(name)?.crcOk
 
-    /** UTF-8 text of [name], or null. */
-    public fun readText(name: String): String? = read(name)?.decodeToString()
+    /**
+     * Text of [name], or null. The encoding is sniffed rather than assumed:
+     * see [TextEncoding]. Pass [encodingHint] when something outside the file
+     * knows better, e.g. an HTTP `Content-Type`.
+     */
+    public fun readText(name: String, encodingHint: String? = null): String? =
+        read(name)?.let { TextEncoding.decode(it, encodingHint) }
 
     private class Body(val data: ByteArray, val crcOk: Boolean?)
 

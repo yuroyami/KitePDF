@@ -6,6 +6,7 @@ import io.github.yuroyami.kitepdf.core.render.KiteMatrix
 import io.github.yuroyami.kitepdf.core.render.KiteCanvas
 import io.github.yuroyami.kitepdf.core.render.KitePath
 import io.github.yuroyami.kitepdf.core.render.RgbColor
+import io.github.yuroyami.kitepdf.core.text.TextEncoding
 import kotlin.math.abs
 import kotlin.math.ceil
 import kotlin.math.cos
@@ -163,13 +164,13 @@ internal class SvgImage private constructor(
 
     companion object {
         fun isSvg(bytes: ByteArray): Boolean {
-            val head = bytes.decodeToString(0, minOf(bytes.size, 512))
+            val head = TextEncoding.decode(bytes.copyOfRange(0, minOf(bytes.size, 512)))
             return head.contains("<svg")
         }
 
         /** Parse a whole `.svg` file (or a spine SVG document). */
         fun parse(bytes: ByteArray): SvgImage? {
-            val root = runCatching { HtmlParser.parse(bytes.decodeToString()) }.getOrNull() ?: return null
+            val root = runCatching { HtmlParser.parse(TextEncoding.decode(bytes)) }.getOrNull() ?: return null
             return findSvg(root)?.let { fromElement(it) }
         }
 
