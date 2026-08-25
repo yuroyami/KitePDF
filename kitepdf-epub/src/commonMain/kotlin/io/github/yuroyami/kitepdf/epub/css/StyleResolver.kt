@@ -325,6 +325,7 @@ internal class StyleResolver(
                 "separate" -> b.borderCollapse = false
             }
             "border-spacing" -> len(b.fontSizePt)?.let { b.borderSpacingPt = it.coerceAtLeast(0.0) }
+            "table-layout" -> b.tableLayoutFixed = v.trim().lowercase() == "fixed"
         }
     }
 
@@ -504,9 +505,16 @@ internal class StyleResolver(
         var borderSpacingPt = parent.borderSpacingPt // inherited
         var cssFloat = CssFloat.NONE // not inherited
         var clear = CssClear.NONE // not inherited
+        var tableLayoutFixed = false // not inherited
 
         fun build() = ComputedStyle(
-            display, fontSizePt, bold, italic, fontFamily, color, backgroundColor,
+            // CSS 9.7: an out-of-flow box is blockified, which is how
+            // `<img style="position:absolute">` gets a box of its own instead
+            // of flowing on a line.
+            if (display == Display.INLINE &&
+                (position == CssPosition.ABSOLUTE || position == CssPosition.FIXED)
+            ) Display.BLOCK else display,
+            fontSizePt, bold, italic, fontFamily, color, backgroundColor,
             textAlign, textIndentPt, lineHeightPt,
             marginTop, marginRight, marginBottom, marginLeft,
             paddingTop, paddingRight, paddingBottom, paddingLeft,
@@ -525,7 +533,7 @@ internal class StyleResolver(
             textTransform, letterSpacingPt, wordSpacingPt, smallCaps,
             minWidthPt, minHeightPt, maxHeightPt,
             borderCollapse, borderSpacingPt,
-            cssFloat, clear,
+            cssFloat, clear, tableLayoutFixed,
         )
     }
 
