@@ -286,8 +286,11 @@ public class AndroidNativeCanvas(private val canvas: AndroidCanvas) : KiteCanvas
         openLayers++
         canvas.concat(pdfMatrixToAndroid(ctm))
         canvas.save()
-        canvas.translate(0f, -1f)
-        canvas.scale(1f / bm.width, 1f / bm.height)
+        // Unit square (0,0)-(1,1), bitmap row 0 on the top edge (v = 1): the
+        // Skia mapping. The old (0,-1) square with a positive Y scale drew
+        // outside the CTM's image of the unit square, upside down.
+        canvas.translate(0f, 1f)
+        canvas.scale(1f / bm.width, -1f / bm.height)
         val paint = Paint().apply {
             this.alpha = (alpha.coerceIn(0.0, 1.0) * 255).toInt()
         }
