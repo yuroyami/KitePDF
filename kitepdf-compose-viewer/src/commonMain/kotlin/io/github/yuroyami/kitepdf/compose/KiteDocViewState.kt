@@ -80,6 +80,17 @@ public class KiteDocViewState(
     /** Opens at a saved reading position instead of a page number. */
     public constructor(document: KiteDocument, bookmark: KiteBookmark) : this(document, 0) {
         openAt = bookmark
+        // A Flow bookmark names its chapter outright, and the chapter's slot
+        // is knowable from the current strip (a gap or its first page), so
+        // the first composed frame already shows the target chapter instead
+        // of the start of the book (issue #5).
+        pendingPage = when (bookmark) {
+            is KiteBookmark.Flow -> {
+                val chapter = bookmark.chapter.coerceIn(0, (document.chapterCount - 1).coerceAtLeast(0))
+                slotFor(KiteLocation(chapter, 0)).coerceAtLeast(0)
+            }
+            is KiteBookmark.Page -> bookmark.pageIndex.coerceAtLeast(0)
+        }
     }
 
     /** Where the viewer should start. Resolved on first composition. */
@@ -370,7 +381,7 @@ public class KiteDocViewState(
      * the app (see the sample's selection actions).
      */
     public var selection: KiteTextSelection? by mutableStateOf(null)
-        private set
+        internal set
 
     /**
      * True while text selection owns the pointer, and while the selection it
@@ -626,24 +637,109 @@ public class KiteDocViewState(
     }
 
     /**
+     * The location a programmatic navigation is flying toward, or null. A
+     * publication that lands mid-flight corrects toward this instead of the
+     * pager's transient raw slot, so navigation wins the race by design.
+     */
+    internal var navigationTarget: KiteLocation? = null
+
+    /**
      * Jumps to [location], laying out its chapter first if needed.
      *
      * Prefer this over [scrollToPage] on a reflowable book: a location is exact
-     * whatever has been laid out so far, while a page number is not.
+     * whatever has been laid out so far, while a page number is not. A location
+     * that does not exist (stale bookmark, empty or out-of-range chapter)
+     * clamps to the nearest real slot and still counts as done.
      */
     public suspend fun scrollTo(location: KiteLocation, animate: Boolean = false) {
-        prepareFor(location)
-        val index = indexOf(location)
-        if (index < 0) return
-        if (animate) animateScrollToPage(index) else scrollToPage(index)
+        navigationTarget = location
+        try {
+            prepareFor(location)
+            val exact = indexOf(location)
+            val index = if (exact >= 0) exact else run {
+                // The location does not exist: chapter out of range, page past
+                // the chapter's end, or an empty spine item. Clamp to the
+                // nearest real slot and count the navigation as done, so a
+                // stale bookmark cannot wedge the open loop.
+                val last = (document.pageCountIn(location.chapter) - 1).coerceAtLeast(0)
+                val inChapter = indexOf(KiteLocation(location.chapter, last))
+                if (inChapter >= 0) inChapter else (itemCount - 1).coerceAtLeast(0)
+            }
+            if (animate) animateScrollToPage(index) else scrollToPage(index)
+        } finally {
+            navigationTarget = null
+        }
     }
 
     /** Jumps to a saved reading position, laying out only its chapter. */
     public suspend fun scrollTo(bookmark: KiteBookmark, animate: Boolean = false) {
-        val location = withContext(kitepdfRasterDispatcher()) { document.locate(bookmark) }
-        onComposeThread { onChapterReady() }
-        scrollTo(location, animate)
+        // Cover the locate window too: a publication during locate() must
+        // already correct toward the bookmark's chapter, not the old slot.
+        if (bookmark is KiteBookmark.Flow) {
+            val chapter = bookmark.chapter.coerceIn(0, (document.chapterCount - 1).coerceAtLeast(0))
+            navigationTarget = KiteLocation(chapter, 0)
+        }
+        try {
+            val location = withContext(kitepdfRasterDispatcher()) { document.locate(bookmark) }
+            publishChapter()
+            scrollTo(location, animate)
+        } finally {
+            navigationTarget = null
+        }
     }
+
+    /**
+     * Publishes freshly laid-out chapters to the strip and, in paged mode,
+     * keeps the reader's slot pointing at the same content.
+     *
+     * Capture, bump and verify all run on the main thread inside one frame
+     * window, so no other writer can slip between the read and the
+     * correction, and the corrected index is in place before that frame
+     * measures. The pager's own key matching covers shifts this path never
+     * sees (a publication racing a user swipe); this path covers what the
+     * key window cannot (shifts past roughly 130 slots) and does it with no
+     * wrong frame. Corrections target the slot the keys would pick anyway,
+     * so the two mechanisms never fight.
+     */
+    internal suspend fun publishChapter() {
+        val paged = adapter as? PagedLikeAdapter
+        // Captured BEFORE the strip changes: where the reader semantically is.
+        val slotBefore = paged?.currentPage ?: pendingPage
+        val anchor = navigationTarget ?: anchorAt(slotBefore)
+        val selectionBefore = selection?.let { it to anchorAt(it.pageIndex) }
+        onComposeThread { onChapterReady() }
+        // Selection indices are raw slots; keep them on the same content.
+        selectionBefore?.let { (sel, loc) ->
+            val moved = loc?.let { indexOf(it) } ?: -1
+            if (moved < 0) clearSelection()
+            else if (moved != sel.pageIndex) selection = sel.copy(pageIndex = moved)
+        }
+        if (paged == null || anchor == null) return
+        val target = slotFor(anchor)
+        // Correct only when the raw index provably did not move by itself: a
+        // swipe (or an already-applied keyed remeasure) changes it, and then
+        // the pager speaks for the reader.
+        if (target >= 0 && target != slotBefore && paged.currentPage == slotBefore) {
+            pendingPage = target
+            paged.scrollToPage(target)
+        }
+    }
+
+    /**
+     * Resolves [openAt], consuming it only on success: a cancellation
+     * mid-jump leaves the bookmark set and the restarted effect retries.
+     */
+    internal suspend fun openSavedPosition() {
+        val mark = openAt ?: return
+        scrollTo(mark)
+        openAt = null
+    }
+
+    /** Test-only: attach [adapter] as the paged adapter. */
+    internal fun attachPagedForTest(adapter: KiteScrollAdapter) { this.adapter = adapter }
+
+    /** Test-only: [slotFor] without widening its visibility story. */
+    internal fun slotForTest(location: KiteLocation): Int = slotFor(location)
 
     /**
      * Lays out [location]'s chapter off the main thread if needed, and makes
@@ -657,7 +753,7 @@ public class KiteDocViewState(
         val ready = document.isChapterReady(location.chapter)
         if (ready && indexOf(KiteLocation(location.chapter, 0)) >= 0) return
         if (!ready) withContext(kitepdfRasterDispatcher()) { document.prepareChapter(location.chapter) }
-        onComposeThread { onChapterReady() }
+        publishChapter()
     }
 
     /**
@@ -779,6 +875,9 @@ internal interface KiteScrollAdapter {
     suspend fun animateScrollToPage(page: Int)
 }
 
+/** Adapters whose container is index-tracked and needs publication corrections. */
+internal interface PagedLikeAdapter : KiteScrollAdapter
+
 /** Continuous mode: "current" = the visible item whose centre is nearest the viewport centre. */
 internal class LazyListScrollAdapter(private val listState: LazyListState) : KiteScrollAdapter {
     override val currentPage: Int
@@ -795,7 +894,7 @@ internal class LazyListScrollAdapter(private val listState: LazyListState) : Kit
     override suspend fun animateScrollToPage(page: Int) = listState.animateScrollToItem(page)
 }
 
-internal class PagerScrollAdapter(private val pagerState: PagerState) : KiteScrollAdapter {
+internal class PagerScrollAdapter(private val pagerState: PagerState) : PagedLikeAdapter {
     override val currentPage: Int get() = pagerState.currentPage
     override suspend fun scrollToPage(page: Int) = pagerState.scrollToPage(page)
     override suspend fun animateScrollToPage(page: Int) = pagerState.animateScrollToPage(page)
