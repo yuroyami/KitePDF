@@ -204,22 +204,26 @@ public class EpubDocument internal constructor(
         parsed.spine(chapter).viewport ?: (settings.pageWidth to settings.pageHeight)
 
     /**
-     * The document's language, for hyphenation pattern selection: the `lang` /
-     * `xml:lang` on the first chapter's `<html>` or `<body>` (the parser folds
-     * both onto the `lang` key), else the OPF `dc:language`. Null falls back to
-     * the en-US patterns in [BoxLayout].
-     *
-     * One language per document. Reading it from the first chapter only keeps it
-     * from parsing the whole book, and `dc:language` is required of every EPUB,
-     * so the fallback is normally there. Per-spine switching is a noted follow-up.
+     * The document's language: the first chapter's own `lang`, else the OPF
+     * `dc:language`. Null falls back to the en-US patterns in [BoxLayout].
      */
-    internal val documentLanguage: String? by lazy {
-        val tree = if (parsed.spineCount == 0) null else parsed.spine(0).tree
+    internal val documentLanguage: String? by lazy { languageFor(0) }
+
+    /**
+     * The hyphenation language for one chapter: the `lang` / `xml:lang` on
+     * that chapter's `<html>` or `<body>` (the parser folds both onto the
+     * `lang` key), else the OPF `dc:language`. Each spine document carries its
+     * own, so a bilingual anthology hyphenates each chapter with its own
+     * patterns. The chapter is already parsed by every caller (pagination has
+     * its tree in hand), so this reads nothing new.
+     */
+    internal fun languageFor(chapter: Int): String? {
+        val tree = if (chapter !in 0 until parsed.spineCount) null else parsed.spine(chapter).tree
         val html = tree?.children?.filterIsInstance<HtmlNode.Element>()
             ?.firstOrNull { it.tag == "html" }
         val body = html?.children?.filterIsInstance<HtmlNode.Element>()
             ?.firstOrNull { it.tag == "body" }
-        html?.attrs?.get("lang")?.takeIf { it.isNotBlank() }
+        return html?.attrs?.get("lang")?.takeIf { it.isNotBlank() }
             ?: body?.attrs?.get("lang")?.takeIf { it.isNotBlank() }
             ?: parsed.metadata.language?.takeIf { it.isNotBlank() }
     }
@@ -248,7 +252,7 @@ public class EpubDocument internal constructor(
         val fonts = fontsFor(chapter)
         val spine = fixedSpine(chapter)
         if (spine != null) {
-            BoxLayout(::loadImage, ::loadSvg, spine.height, fonts, documentLanguage, settings.lineHeightScale)
+            BoxLayout(::loadImage, ::loadSvg, spine.height, fonts, languageFor(chapter), settings.lineHeightScale)
                 .layout(spine.root, spine.width)
             return listOf(Paginator.paginateFixed(spine.root, spine.width, spine.height))
         }
@@ -258,7 +262,7 @@ public class EpubDocument internal constructor(
         val blockBudget = if (isVertical) contentWidth else pageContentHeight
         val root = chapterRoot(chapter)
         BoxLayout(
-            ::loadImage, ::loadSvg, blockBudget, fonts, documentLanguage,
+            ::loadImage, ::loadSvg, blockBudget, fonts, languageFor(chapter),
             settings.lineHeightScale, vertical = isVertical,
         ).layout(root, inlineBudget)
         val pages = Paginator.paginate(
