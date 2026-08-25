@@ -122,6 +122,71 @@ class VerticalWritingTest {
         val text = doc.pages[0].textContent().plainText
         assertContains(text, "日本語のテスト")
     }
+
+    /* ─── vertical-lr, and the geometry a reader touches ─────────────────── */
+
+    private fun openLr(body: String): EpubDocument {
+        val doc = EpubDocument.open(
+            EpubFixtures.epub("<style>html{writing-mode:vertical-lr}</style>$body"),
+            settings,
+        )
+        assertNotNull(doc)
+        return doc
+    }
+
+    @Test
+    fun vertical_lr_also_lays_out_vertically() {
+        val doc = openLr("<p>\u7E26\u66F8\u304D</p>")
+        assertTrue(doc.isVertical, "vertical-lr is a vertical mode")
+        assertTrue(doc.isVerticalLr, "and it is the left-to-right one")
+        val calls = glyphCalls(doc).filter { it.text.isNotBlank() }
+        assertEquals(3, calls.size, "one upright call per full-width glyph")
+    }
+
+    @Test
+    fun the_two_vertical_modes_start_from_opposite_edges() {
+        val rl = glyphCalls(open("<p>\u7E26\u66F8\u304D</p>")).first { it.text.isNotBlank() }
+        val lr = glyphCalls(openLr("<p>\u7E26\u66F8\u304D</p>")).first { it.text.isNotBlank() }
+        assertTrue(
+            lr.textToDevice.e < rl.textToDevice.e,
+            "vertical-lr starts at the left edge, vertical-rl at the right (lr=${lr.textToDevice.e}, rl=${rl.textToDevice.e})",
+        )
+    }
+
+    @Test
+    fun a_selection_quad_on_a_vertical_page_is_a_column_slice() {
+        val doc = open("<p>\u65E5\u672C\u8A9E\u306E\u30C6\u30B9\u30C8</p>")
+        val text = doc.pages[0].textContent()
+        val line = text.blocks.first().lines.first()
+        assertTrue(line.vertical, "the line knows it is a column")
+        // Char edges run DOWN the page, so they grow with the glyph index.
+        assertTrue(line.charEdges.last() > line.charEdges.first(), "edges advance down the page")
+        assertTrue(line.bounds.right > line.bounds.left, "the column has a width")
+        assertTrue(
+            line.bounds.left > doc.pageWidth / 2.0,
+            "a vertical-rl column starts on the right half (got ${line.bounds.left})",
+        )
+    }
+
+    @Test
+    fun a_point_inside_a_column_hits_the_char_under_it() {
+        val doc = open("<p>\u65E5\u672C\u8A9E\u306E\u30C6\u30B9\u30C8</p>")
+        val text = doc.pages[0].textContent()
+        val line = text.blocks.first().lines.first()
+        val midX = (line.bounds.left + line.bounds.right) / 2.0
+        val third = (line.charEdges[2] + line.charEdges[3]) / 2.0
+        assertEquals(2, text.charIndexAt(midX, third), "the third glyph down is index 2")
+    }
+
+    @Test
+    fun a_search_hit_on_a_vertical_page_is_quaded_down_the_column() {
+        val doc = open("<p>\u65E5\u672C\u8A9E\u306E\u30C6\u30B9\u30C8</p>")
+        val hits = doc.pages[0].textContent().search("\u672C\u8A9E")
+        assertEquals(1, hits.size)
+        val quad = hits.single().quads.single()
+        assertTrue(quad.top > quad.bottom, "the match runs down the page")
+        assertTrue(quad.right > quad.left, "and spans the column's width")
+    }
 }
 
 /**
