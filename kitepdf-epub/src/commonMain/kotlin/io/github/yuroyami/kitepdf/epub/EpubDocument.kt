@@ -560,6 +560,17 @@ public class EpubDocument internal constructor(
     private fun loadSvg(zipPath: String): SvgImage? =
         parsed.zip.read(zipPath)?.let { SvgImage.parse(it) }
 
+    /**
+     * Reads a file an `<image>` inside an SVG points at, resolved against the
+     * directory that SVG lives in. Fixed-layout comics wrap each page's JPEG
+     * in an SVG, so this is how those pages get their picture.
+     */
+    internal fun svgResource(baseDir: String, href: String): ByteArray? =
+        parsed.zip.read(resolvePath(baseDir, href.substringBefore('#')))
+
+    /** The directory of [chapter]'s own document, for inline SVG references. */
+    internal fun chapterDir(chapter: Int): String = parsed.spine(chapter).docDir
+
     public companion object {
         public fun open(
             bytes: ByteArray,
@@ -674,6 +685,10 @@ public class EpubPage internal constructor(
     public val chapter: Int = 0,
 ) : KitePage {
 
+    /** Reads files an SVG references, relative to [baseDir] inside the archive. */
+    private fun svgLoader(baseDir: String): (String) -> ByteArray? =
+        { href -> doc.svgResource(baseDir, href) }
+
     /** Where this page sits: its chapter, and its index inside that chapter. */
     public val location: KiteLocation get() = KiteLocation(chapter, doc.indexInChapter(chapter, page))
     override val displayWidth: Double get() = page.pageWidth
@@ -734,7 +749,7 @@ public class EpubPage internal constructor(
                         im.width / svg.width, 0.0, 0.0, -im.height / svg.height,
                         margin + im.x, base + im.height,
                     )
-                    svg.render(canvas, deviceCtm.concat(m))
+                    svg.render(canvas, deviceCtm.concat(m), svgLoader(doc.chapterDir(chapter)))
                 } else if (im.image != null) {
                     val m = KiteMatrix(im.width, 0.0, 0.0, im.height, margin + im.x, base)
                     canvas.drawImage(im.image, deviceCtm.concat(m))
@@ -751,7 +766,7 @@ public class EpubPage internal constructor(
                     box.drawWidth / svg.width, 0.0, 0.0, -box.drawHeight / svg.height,
                     margin + box.x, yUp(box.bottom) + box.drawHeight,
                 )
-                svg.render(canvas, deviceCtm.concat(m))
+                svg.render(canvas, deviceCtm.concat(m), svgLoader(box.zipPath.substringBeforeLast('/', "")))
                 continue
             }
             val img = box.image ?: continue
@@ -855,7 +870,7 @@ public class EpubPage internal constructor(
                 val svg = im.svg
                 if (svg != null && svg.width > 0 && svg.height > 0) {
                     val m = KiteMatrix(0.0, -im.width / svg.width, -im.height / svg.height, 0.0, xAxis + im.height, displayHeight - top)
-                    svg.render(canvas, deviceCtm.concat(m))
+                    svg.render(canvas, deviceCtm.concat(m), svgLoader(doc.chapterDir(chapter)))
                 } else if (im.image != null) {
                     val m = KiteMatrix(0.0, -im.width, im.height, 0.0, xAxis, displayHeight - top)
                     canvas.drawImage(im.image, deviceCtm.concat(m))
@@ -869,7 +884,7 @@ public class EpubPage internal constructor(
             val svg = box.svg
             if (svg != null) {
                 val m = KiteMatrix(0.0, -box.drawWidth / svg.width, -box.drawHeight / svg.height, 0.0, left + box.drawHeight, displayHeight - top)
-                svg.render(canvas, deviceCtm.concat(m))
+                svg.render(canvas, deviceCtm.concat(m), svgLoader(box.zipPath.substringBeforeLast('/', "")))
                 continue
             }
             val img = box.image ?: continue
