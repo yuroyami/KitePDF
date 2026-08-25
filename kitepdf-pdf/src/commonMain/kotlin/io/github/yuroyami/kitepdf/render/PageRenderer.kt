@@ -127,7 +127,15 @@ public class PageRenderer(
     /** True while content must not be painted (inside a hidden OC section). */
     private fun ocHidden(): Boolean = ocHiddenDepth > 0
 
+    /**
+     * The page's own resources, kept for the fallback the spec asks for: a
+     * form XObject or a Type3 char proc with no `/Resources` of its own reads
+     * the page's (ISO 32000-1, 7.8.3 and 9.6.5), rather than seeing nothing.
+     */
+    private var pageResources: PdfDictionary? = null
+
     public fun render(page: PdfPage, deviceCtm: KiteMatrix = defaultDeviceCtm(page)) {
+        pageResources = page.resources
         val fonts = loadFonts(page.resources)
         val xobjects = loadXObjects(page.resources)
         val colorSpaces = loadColorSpaces(page.resources)
@@ -601,7 +609,7 @@ public class PageRenderer(
             )
         } ?: io.github.yuroyami.kitepdf.core.KiteRectangle(0.0, 0.0, 1000.0, 1000.0)
         fun buildResources(): FormResources {
-            val resources = formStream.dict.getDict("Resources", resolver)
+            val resources = formStream.dict.getDict("Resources", resolver) ?: pageResources
             val sh = loadShadings(resources)
             return FormResources(
                 fonts = loadFonts(resources),
@@ -1573,7 +1581,7 @@ public class PageRenderer(
         parentState: GraphicsStack,
         glyphToUser: KiteMatrix,
     ) {
-        val res = data.resources
+        val res = data.resources ?: pageResources
         val sh = loadShadings(res)
         val fonts = loadFonts(res)
         val xobjects = loadXObjects(res)
