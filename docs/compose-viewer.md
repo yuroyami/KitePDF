@@ -378,7 +378,11 @@ val savedBookmark = state.currentBookmark()   // save on pause
 The sample app in `sample/` runs this loop against a generated 24-chapter book.
 
 The rest of the book loads in the background, nearest chapter first. A chapter
-that lands above the reader does not move their page.
+that lands above the reader does not move their page: the strip is keyed by
+reading position and each publication corrects the pager before the frame
+draws, so the viewer holds the page, the zoom, and any active selection while
+the book fills in. A saved Flow bookmark shows its chapter's placeholder from
+the very first frame.
 
 Chapters that have not been laid out yet hold one page-shaped slot each. A
 reader can scroll onto one and wait there; when the chapter arrives they land
