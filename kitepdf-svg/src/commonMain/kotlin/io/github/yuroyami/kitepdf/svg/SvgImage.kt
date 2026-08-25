@@ -1,12 +1,13 @@
-package io.github.yuroyami.kitepdf.epub
+package io.github.yuroyami.kitepdf.svg
 
+import io.github.yuroyami.kitepdf.core.xml.KiteXml
 import io.github.yuroyami.kitepdf.core.xml.KiteXmlNode
 
-import io.github.yuroyami.kitepdf.epub.css.CssValues
 import io.github.yuroyami.kitepdf.core.render.KiteBlendMode
 import io.github.yuroyami.kitepdf.core.render.KiteMatrix
 import io.github.yuroyami.kitepdf.core.render.KiteCanvas
 import io.github.yuroyami.kitepdf.core.render.KitePath
+import io.github.yuroyami.kitepdf.core.css.CssValues
 import io.github.yuroyami.kitepdf.core.render.RgbColor
 import io.github.yuroyami.kitepdf.core.text.TextEncoding
 import kotlin.math.abs
@@ -17,29 +18,35 @@ import kotlin.math.sqrt
 import kotlin.math.PI
 
 /**
- * A minimal SVG document renderer: enough to draw the illustrations, cover art
- * and diagrams that ship in EPUBs (and to seed a future `:kitepdf-svg` handler;
- * the reusable path/transform parsing wants promoting to core then). Parses the
- * SVG XML into the shared [KiteXmlNode] tree and paints shapes straight into the
- * core [KiteCanvas] as vectors (crisp at any scale), not a rasterised bitmap.
+ * An SVG image, painted as vectors into the shared [KiteCanvas] rather than
+ * rasterised, so it stays crisp at any scale. This is what draws the
+ * illustrations, cover art and diagrams that ship inside EPUBs and comics;
+ * [SvgDocument] wraps it when the `.svg` file IS the document.
  *
- * Supported: `<svg>` (width/height/viewBox), `<g>`, `<path>` (all `d` commands
- * incl. elliptical arcs), `<rect>` (+ rx/ry), `<circle>`, `<ellipse>`, `<line>`,
- * `<polyline>`, `<polygon>`; `fill`/`stroke`/`stroke-width`/`opacity`/`fill-rule`
+ * ```kotlin
+ * val svg = SvgImage.parse(bytes) ?: return
+ * svg.render(canvas, KiteMatrix.scaling(2.0, 2.0))
+ * ```
+ *
+ * Drawn: `<svg>` (width/height/viewBox), `<g>`, `<use>`, `<path>` (every `d`
+ * command including elliptical arcs), `<rect>` (+ rx/ry), `<circle>`,
+ * `<ellipse>`, `<line>`, `<polyline>`, `<polygon>`; `fill`, `stroke`,
+ * `stroke-width`, `opacity`, `fill-opacity`, `stroke-opacity` and `fill-rule`
  * with inheritance; `transform` (translate/scale/rotate/skewX/skewY/matrix).
- * Not yet: `<text>`, gradients/patterns (filled with their fallback solid or
- * skipped), `clipPath`, filters, `<use>`, nested `<image>`.
+ *
+ * Not drawn: `<text>`, patterns, filters, and `clipPath` (the clip is ignored,
+ * so the shape paints unclipped rather than disappearing).
  */
-internal class SvgImage private constructor(
+public class SvgImage private constructor(
     private val root: KiteXmlNode.Element,
     /** Intrinsic size in px (from width/height, else the viewBox extent, else 300x150). */
-    val width: Double,
-    val height: Double,
+    public val width: Double,
+    public val height: Double,
     private val viewBox: DoubleArray?, // minX, minY, w, h
 ) {
 
     /** Paint the SVG into [canvas]; [ctm] maps the (0,0)-(width,height) viewport to device. */
-    fun render(canvas: KiteCanvas, ctm: KiteMatrix) {
+    public fun render(canvas: KiteCanvas, ctm: KiteMatrix) {
         val vb = viewBox
         val base = if (vb != null && vb[2] > 0 && vb[3] > 0) {
             // viewBox coords -> viewport: translate(-min) then scale(size/vb).
@@ -164,20 +171,21 @@ internal class SvgImage private constructor(
         return s.toDoubleOrNull() ?: CssValues.length(raw, 12.0, 16.0, 0.0) ?: 0.0
     }
 
-    companion object {
-        fun isSvg(bytes: ByteArray): Boolean {
+    public companion object {
+        /** True when [bytes] open like an SVG file. */
+        public fun isSvg(bytes: ByteArray): Boolean {
             val head = TextEncoding.decode(bytes.copyOfRange(0, minOf(bytes.size, 512)))
             return head.contains("<svg")
         }
 
-        /** Parse a whole `.svg` file (or a spine SVG document). */
-        fun parse(bytes: ByteArray): SvgImage? {
-            val root = runCatching { HtmlParser.parse(TextEncoding.decode(bytes)) }.getOrNull() ?: return null
+        /** Parse a whole `.svg` file, or null when there is no `<svg>` in it. */
+        public fun parse(bytes: ByteArray): SvgImage? {
+            val root = runCatching { KiteXml.parse(TextEncoding.decode(bytes)) }.getOrNull() ?: return null
             return findSvg(root)?.let { fromElement(it) }
         }
 
-        /** Build from an already-parsed `<svg>` element (inline SVG in XHTML content). */
-        fun fromElement(svg: KiteXmlNode.Element): SvgImage? {
+        /** Build from an already-parsed `<svg>` element (inline SVG in XHTML). */
+        public fun fromElement(svg: KiteXmlNode.Element): SvgImage? {
             if (!svg.tag.equals("svg", true)) return null
             // The XHTML parser lower-cases attribute names, so camelCase SVG
             // attributes (viewBox) arrive as "viewbox".

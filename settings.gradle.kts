@@ -39,6 +39,7 @@ include(":kitepdf-core")            // format-agnostic substrate
 include(":kitepdf-pdf")             // PDF handler
 include(":kitepdf-epub")            // EPUB handler
 include(":kitepdf-cbz")             // CBZ (comic archive) handler
+include(":kitepdf-svg")             // SVG renderer + standalone .svg handler
 include(":kitepdf-compose-viewer")  // Compose UI (PdfView)
 include(":kitepdf-net")             // optional: open documents from a URL
 include(":kitepdf-skia-renderer")   // Skia rasterizer

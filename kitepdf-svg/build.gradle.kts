@@ -8,17 +8,17 @@ plugins {
 }
 
 /*
- * :kitepdf-epub is a document handler for the EPUB format. It stands on
- * :kitepdf-core (zip via Inflate, the font engine, and the render Canvas) and
- * knows nothing about PDF. Reflowable HTML/CSS layout is the format-specific
- * work; everything below it (fonts, codecs, drawing, every platform) is shared.
+ * :kitepdf-svg renders SVG. Two jobs: the image renderer that EPUB and CBZ
+ * draw inside their own pages, and a document handler for a standalone .svg
+ * file. It stands on :kitepdf-core (the XML reader, CSS values, the render
+ * canvas) and knows nothing about PDF or EPUB.
  */
 kotlin {
     explicitApi()
     jvmToolchain(21)
 
     android {
-        namespace = "io.github.yuroyami.kitepdf.epub"
+        namespace = "io.github.yuroyami.kitepdf.svg"
         compileSdk = 37
         minSdk = 21
     }
@@ -31,7 +31,7 @@ kotlin {
         iosX64(),
     ).forEach { target ->
         target.binaries.framework {
-            baseName = "KitePDFEpub"
+            baseName = "KitePDFSvg"
             isStatic = false
         }
     }
@@ -77,8 +77,6 @@ kotlin {
 
         commonMain.dependencies {
             api(project(":kitepdf-core"))
-            // EPUBs carry SVG: cover pages, spine documents, inline <svg>.
-            api(project(":kitepdf-svg"))
         }
 
         commonTest.dependencies {

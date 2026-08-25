@@ -6,6 +6,8 @@ import io.github.yuroyami.kitepdf.core.KiteDocument
 import io.github.yuroyami.kitepdf.core.KiteFormatException
 import io.github.yuroyami.kitepdf.epub.EpubDocument
 import io.github.yuroyami.kitepdf.epub.EpubSettings
+import io.github.yuroyami.kitepdf.svg.SvgDocument
+import io.github.yuroyami.kitepdf.svg.SvgImage
 import io.github.yuroyami.kitepdf.core.zip.ZipReader
 
 /** A document format KitePDF can read. */
@@ -13,6 +15,7 @@ public enum class KiteDocFormat {
     Pdf,
     Epub,
     Cbz,
+    Svg,
 }
 
 /**
@@ -46,8 +49,11 @@ public object KiteDoc {
      * `ComicInfo.xml` and `Thumbs.db` is ignored), so a photo backup with a
      * readme inside stays unrecognized.
      *
-     * PDF and EPUB read only the header; the CBZ check reads the ZIP central
-     * directory. Still cheap enough to run over a folder.
+     * SVG is an `<svg>` element in the first half kilobyte, checked last so a
+     * PDF that happens to embed the text is not mistaken for one.
+     *
+     * PDF, EPUB and SVG read only the header; the CBZ check reads the ZIP
+     * central directory. Still cheap enough to run over a folder.
      */
     public fun formatOf(bytes: ByteArray): KiteDocFormat? = when {
         looksLikeZip(bytes) -> when {
@@ -56,15 +62,16 @@ public object KiteDoc {
             else -> null
         }
         findPdfHeader(bytes) -> KiteDocFormat.Pdf
+        SvgImage.isSvg(bytes) -> KiteDocFormat.Svg
         else -> null
     }
 
     /**
      * Reads [bytes] as whichever format they are.
      *
-     * @param password for an encrypted PDF; ignored for EPUB and CBZ.
+     * @param password for an encrypted PDF; ignored for every other format.
      * @param epubSettings page size, font size and margins for an EPUB;
-     *   ignored for PDF and CBZ. Re-flow later with
+     *   ignored for every other format. Re-flow later with
      *   [EpubDocument.withSettings] instead of re-opening.
      * @throws KiteFormatException when the bytes are no known format, or are
      *   a known format but unreadable. Unrecognised bytes get one last try as
@@ -81,9 +88,10 @@ public object KiteDoc {
         KiteDocFormat.Pdf -> PdfDocument.open(bytes, password)
         KiteDocFormat.Epub -> EpubDocument.open(bytes, epubSettings)
         KiteDocFormat.Cbz -> CbzDocument.open(bytes)
+        KiteDocFormat.Svg -> SvgDocument.open(bytes)
         null -> PdfDocument.openOrNull(bytes, password.encodeToByteArray())
             ?: throw KiteFormatException(
-                "not a readable PDF, EPUB or CBZ (${bytes.size} bytes, starting ${headerPreview(bytes)})"
+                "not a readable PDF, EPUB, CBZ or SVG (${bytes.size} bytes, starting ${headerPreview(bytes)})"
             )
     }
 
