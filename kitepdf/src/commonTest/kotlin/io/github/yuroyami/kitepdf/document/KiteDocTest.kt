@@ -119,6 +119,22 @@ class KiteDocTest {
         assertNull(KiteDoc.openBase64OrNull("!!!"))
     }
 
+    @Test
+    fun malformed_base64_tail_is_not_silently_accepted() {
+        for (bad in listOf("A", "AB", "TQ=", "TQ==junk", "AAAA=")) {
+            val e = assertFailsWith<KiteFormatException> { KiteDoc.openBase64(bad) }
+            assertTrue(e.message!!.contains("Base64"), "'$bad' failed as Base64: ${e.message}")
+        }
+    }
+
+    @Test
+    fun a_data_uri_must_actually_declare_base64() {
+        val e = assertFailsWith<KiteFormatException> {
+            KiteDoc.openBase64("data:application/pdf,JVBERi0xLjQ=")
+        }
+        assertTrue(e.message!!.contains("Base64"), "message: ${e.message}")
+    }
+
     private val ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
 
     private fun base64(bytes: ByteArray): String {
