@@ -66,6 +66,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Remote document loading now streams into a bounded buffer instead of calling
+  an unbounded `bodyAsBytes`; the default ceiling is 128 MiB and every URL API
+  has a `maxBytes` overload. ZIP entries likewise have configurable 128 MiB
+  decompressed-size and 100,000-record ceilings.
+- Page rasterizers reject non-finite scales and default to a 40-megapixel
+  allocation ceiling, published once as
+  `io.github.yuroyami.kitepdf.core.render.KITE_DEFAULT_MAX_RASTER_PIXELS`. The
+  Compose viewer raises its rasterizer's ceiling to cover
+  `maxBitmapLongSide` squared, so a larger configured cap keeps rendering.
+  `EpubSettings` now rejects non-finite, negative, and geometrically
+  impossible page settings at construction time.
+- AES-256 creation now requires an explicitly supplied platform CSPRNG, and
+  encrypted editing fails at startup without one. The write path no longer
+  silently uses Kotlin's non-cryptographic `Random.Default` for keys or IVs.
+- Pull requests now run the JVM, Apple and JS gates, CI jobs have least-privilege
+  permissions and timeouts, and Android host tests are attached for modules
+  with common tests.
 - The XML reader and the CSS value parsers moved from `kitepdf-epub` to
   `kitepdf-core` as `KiteXml`, `KiteXmlNode` and `CssValues`, all public. The
   EPUB cascade and the SVG renderer read the same syntax, and the SVG module
@@ -82,6 +99,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Malformed ZIP offsets, truncated central records and ZIP64 extras now fail
+  closed instead of indexing outside the archive. Stored entries are bounded,
+  encrypted/header-mismatched entries are refused, false EOCD signatures in a
+  comment are ignored, and hostile names cannot inject control characters into
+  CRC warnings. A directory holding more records than it declares is refused,
+  while a literal 65,535-entry archive and ZIP64 writers that sentinel the
+  EOCD disk fields stay readable.
+- PDF object parsing caps container nesting at 256 levels, so a hostile
+  content stream of thousands of `[` tokens is skipped as garbage instead of
+  overflowing the call stack.
+- Remote `openUrlOrNull` no longer swallows coroutine cancellation. URL
+  credentials, query tokens and fragments are redacted from HTTP status,
+  size-limit and transport failures, including nested transport exceptions.
+- Oversized Compose page bitmaps are no longer retained above the cache budget;
+  byte accounting and raw-image row/pixel arithmetic cannot overflow, and
+  truncated huge images are rejected before allocating an RGBA buffer.
+- Cyclic SVG gradient references and deeply nested SVG trees no longer consume
+  the call stack. Non-finite SVG viewports, gradient stops and coordinates are
+  rejected or safely normalized.
+- CBZ natural sorting compares arbitrarily long digit runs exactly, without
+  overflowing `Long`. Base64 loading now rejects malformed padding, impossible
+  tails and non-zero discarded bits without boxing every decoded byte.
+- The umbrella artifact's custom POSIX source-set graph is attached after the
+  default hierarchy, so Linux, Windows and Android Native receive the documented
+  native file APIs instead of silently omitting those source sets. Its `stdio`
+  actuals are separated into LP64, ILP32 and LLP64 families, preventing Kotlin
+  metadata and Dokka from commonizing incompatible `CLong`/`size_t` signatures.
 - Compose viewer: the Paged layout no longer jumps while background chapters
   land, opens directly at a saved Flow bookmark's chapter, keeps zoom and
   selection through landings, and no longer loses the bookmark if opening is

@@ -30,10 +30,12 @@ those targets.
 !!! note "What CI actually tests"
     Every push and pull request runs the full JVM test suite (all modules,
     including the mutool differential oracle and the mutation fuzzer) on
-    Linux. Pushes to `main` additionally run the common test suites on the
-    iOS simulator (arm64) and macOS (arm64) for the core/pdf/epub modules,
-    plus the JS test suites on Node for core/pdf. The remaining targets are
-    compile-verified.
+    Linux, common tests for core/pdf/epub/cbz/svg on the arm64 iOS simulator
+    and macOS, and the core/pdf/epub/cbz/svg/umbrella/net suites on JS/Node.
+    Common code is also run through Android host-test variants, while the
+    Android, iOS and browser rendering backends are compiled and the macOS
+    CoreGraphics backend is tested. Android device rendering, Canvas2D, wasm
+    and Linux/Windows native are not executed in CI.
 
 ## What each binding does
 

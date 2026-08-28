@@ -2,6 +2,10 @@
 
 Convert pages to raster images (PNG, JPEG) without a UI. Useful for thumbnails, server previews, CI screenshots, or embedding rendered previews in desktop apps.
 
+Convenience rasterizers default to a 40-megapixel allocation ceiling and reject
+non-finite or non-positive scales before allocating. Pass `maxPixels` when a
+trusted print/export workflow deliberately needs a different ceiling.
+
 !!! note "PDF and EPUB"
     The names below say what they take. `PdfPageRasterizer` takes a `PdfPage`; `EpubPageRasterizer`, its twin in `kitepdf-skia-renderer`, takes an `EpubPage` and adds a `theme` argument for night mode. The platform-native rasterizers (`AwtPdfRasterizer`, `AndroidPdfBitmapRenderer`, `ApplePdfRasterizer`) are PDF only; for headless EPUB use the Skia renderer, or `KitePageRasterizer` from the Compose viewer, which takes any `KitePage`.
 
@@ -235,11 +239,12 @@ image.close()
 - **`page: PdfPage`** : The page to render.
 - **`scale: Double`** (default: `1.0`) : Multiplier on page dimensions.
 - **`background: Int`** (default: `Color.WHITE`) : Skia color int (0xAARRGGBB).
+- **`maxPixels: Long`** (default: `40_000_000`) : Allocation ceiling. Non-finite/non-positive scales and larger rasters fail before Skia allocates off-heap memory.
 
 **API:**
 
-- **`renderToImage(page, scale, background): Image`** : Returns a Skia `Image` (holds off-heap memory; call `close()` when done).
-- **`encodeToPng(page, scale, background): ByteArray`** : Convenience: render and encode in one call. Handles cleanup internally.
+- **`renderToImage(page, scale, background, maxPixels): Image`** : Returns a Skia `Image` (holds off-heap memory; call `close()` when done).
+- **`encodeToPng(page, scale, background, maxPixels): ByteArray`** : Convenience: render and encode in one call. Handles cleanup internally.
 
 !!! note "Off-heap memory"
     Skia images are backed by native memory. Always call `image.close()` when you're done, or use `encodeToPng()` which handles cleanup automatically.
