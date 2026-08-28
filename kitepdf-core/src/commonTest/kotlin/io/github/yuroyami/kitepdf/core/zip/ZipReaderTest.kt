@@ -5,6 +5,7 @@ import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertFailsWith
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -120,6 +121,95 @@ class ZipReaderTest {
         assertEquals(Crc32.of(long), e.crc32)
         assertEquals(8, e.method)
         assertTrue(e.compressedSize > 0)
+    }
+
+    /* ─── Resource and bounds hardening ─────────────────────────────────── */
+
+    @Test
+    fun an_entry_over_the_configured_output_limit_is_not_allocated() {
+        val zip = ZipFixture.build(listOf(ZipFixture.Spec("large.bin", long, deflate = true)))
+        val reader = ZipReader(zip, maxEntryBytes = long.size - 1)
+        assertEquals(setOf("large.bin"), reader.names)
+        assertNull(reader.read("large.bin"))
+    }
+
+    @Test
+    fun a_central_directory_over_the_configured_entry_limit_is_rejected() {
+        val zip = ZipFixture.build(
+            listOf(ZipFixture.Spec("a", hello), ZipFixture.Spec("b", hello)),
+        )
+        assertTrue(ZipReader(zip, maxEntries = 1).names.isEmpty())
+    }
+
+    @Test
+    fun duplicate_entry_names_are_rejected_as_ambiguous() {
+        val zip = ZipFixture.build(
+            listOf(ZipFixture.Spec("same", hello), ZipFixture.Spec("same", long)),
+        )
+        assertTrue(ZipReader(zip).names.isEmpty())
+    }
+
+    @Test
+    fun malformed_central_directory_lengths_do_not_escape_the_archive_bounds() {
+        val zip = ZipFixture.build(listOf(ZipFixture.Spec("a.txt", hello))).copyOf()
+        val central = signatureOffset(zip, 0x02014b50)
+        zip[central + 28] = 0xFF.toByte()
+        zip[central + 29] = 0x7F
+        assertTrue(ZipReader(zip).names.isEmpty())
+    }
+
+    @Test
+    fun an_eocd_signature_inside_the_comment_is_not_mistaken_for_the_record() {
+        val original = ZipFixture.build(listOf(ZipFixture.Spec("a.txt", hello)))
+        val eocd = original.size - 22
+        val commentSize = 22
+        val zip = original.copyOf(original.size + commentSize)
+        zip[eocd + 20] = commentSize.toByte()
+        zip[eocd + 21] = 0
+        putU32(zip, zip.size - 22, 0x06054b50)
+        assertContentEquals(hello, ZipReader(zip).read("a.txt"))
+    }
+
+    @Test
+    fun a_classic_archive_with_exactly_65535_entries_is_readable() {
+        val one = byteArrayOf(7)
+        val zip = ZipFixture.build(List(65_535) { ZipFixture.Spec("f$it", one) })
+        val reader = ZipReader(zip)
+        assertEquals(65_535, reader.names.size)
+        assertContentEquals(one, reader.read("f65534"))
+    }
+
+    @Test
+    fun a_central_directory_with_more_records_than_declared_is_rejected() {
+        val zip = ZipFixture.build(
+            listOf(ZipFixture.Spec("a", hello), ZipFixture.Spec("b", hello)),
+        ).copyOf()
+        val eocd = zip.size - 22
+        zip[eocd + 8] = 1; zip[eocd + 9] = 0   // entries on this disk
+        zip[eocd + 10] = 1; zip[eocd + 11] = 0 // entries total
+        assertTrue(ZipReader(zip).names.isEmpty(), "a truncated directory view is unsafe")
+    }
+
+    @Test
+    fun nonsensical_reader_limits_are_rejected_immediately() {
+        assertFailsWith<IllegalArgumentException> { ZipReader(ByteArray(0), maxEntryBytes = 0) }
+        assertFailsWith<IllegalArgumentException> { ZipReader(ByteArray(0), maxEntries = 0) }
+    }
+
+    private fun signatureOffset(bytes: ByteArray, signature: Int): Int {
+        for (at in 0..bytes.size - 4) {
+            if (
+                (bytes[at].toInt() and 0xFF) == (signature and 0xFF) &&
+                (bytes[at + 1].toInt() and 0xFF) == ((signature ushr 8) and 0xFF) &&
+                (bytes[at + 2].toInt() and 0xFF) == ((signature ushr 16) and 0xFF) &&
+                (bytes[at + 3].toInt() and 0xFF) == ((signature ushr 24) and 0xFF)
+            ) return at
+        }
+        error("signature not found")
+    }
+
+    private fun putU32(bytes: ByteArray, at: Int, value: Int) {
+        for (i in 0 until 4) bytes[at + i] = (value ushr (i * 8)).toByte()
     }
 }
 

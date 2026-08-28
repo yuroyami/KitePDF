@@ -18,8 +18,15 @@ public object Crc32 {
 
     /** Checksum of [bytes] between [from] (inclusive) and [to] (exclusive). */
     public fun of(bytes: ByteArray, from: Int = 0, to: Int = bytes.size): Long {
-        var c = -1
-        for (i in from until to) c = TABLE[(c xor bytes[i].toInt()) and 0xFF] xor (c ushr 8)
-        return (c.inv()).toLong() and 0xFFFFFFFFL
+        var state = INITIAL_STATE
+        for (i in from until to) state = update(state, bytes[i])
+        return finish(state)
     }
+
+    internal const val INITIAL_STATE: Int = -1
+
+    internal fun update(state: Int, byte: Byte): Int =
+        TABLE[(state xor byte.toInt()) and 0xFF] xor (state ushr 8)
+
+    internal fun finish(state: Int): Long = state.inv().toLong() and 0xFFFFFFFFL
 }
