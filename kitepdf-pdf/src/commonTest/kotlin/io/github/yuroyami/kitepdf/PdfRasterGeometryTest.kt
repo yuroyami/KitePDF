@@ -3,6 +3,7 @@ package io.github.yuroyami.kitepdf
 import io.github.yuroyami.kitepdf.core.ByteArrayBuilder
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
 /**
@@ -180,6 +181,23 @@ class PdfRasterGeometryTest {
         val g = page.rasterGeometry()
         assertEquals(101, g.widthPx)
         assertEquals(201, g.heightPx)
+    }
+
+    @Test
+    fun invalid_scales_are_rejected_instead_of_building_broken_matrices() {
+        val page = openPdf(mediaBox = "0 0 100 100").pages[0]
+        for (scale in listOf(0.0, -1.0, Double.NaN, Double.POSITIVE_INFINITY)) {
+            assertFailsWith<IllegalArgumentException>("scale $scale") { page.rasterGeometry(scale) }
+        }
+    }
+
+    @Test
+    fun raster_allocation_has_a_configurable_pixel_ceiling() {
+        val page = openPdf(mediaBox = "0 0 100 100").pages[0]
+        assertFailsWith<IllegalArgumentException> { page.rasterGeometry(scale = 10.0, maxPixels = 999_999) }
+        val allowed = page.rasterGeometry(scale = 10.0, maxPixels = 1_000_000)
+        assertEquals(1_000, allowed.widthPx)
+        assertEquals(1_000, allowed.heightPx)
     }
 
     /* ─── helpers ─────────────────────────────────────────────────────────── */

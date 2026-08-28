@@ -63,6 +63,7 @@ import io.github.yuroyami.kitepdf.PdfDocument
 import io.github.yuroyami.kitepdf.PdfPage
 import io.github.yuroyami.kitepdf.epub.EpubDocument
 import io.github.yuroyami.kitepdf.epub.EpubPage
+import io.github.yuroyami.kitepdf.core.render.KITE_DEFAULT_MAX_RASTER_PIXELS
 import io.github.yuroyami.kitepdf.core.render.ReaderTheme
 import io.github.yuroyami.kitepdf.core.render.KiteMatrix
 import kotlin.math.max
@@ -744,7 +745,14 @@ private fun KitePageRaster(
     /** The state-owned bitmap LRU; null renders uncached. */
     cache: PageBitmapCache? = null,
 ) {
-    val rasterizer = rememberKitePageRasterizer()
+    // The spec's long-side cap is the sizing authority in this path, so the
+    // rasterizer's pixel ceiling must never undercut maxBitmapLongSide².
+    val rasterizer = rememberKitePageRasterizer(
+        maxOf(
+            KITE_DEFAULT_MAX_RASTER_PIXELS,
+            spec.maxBitmapLongSide.toLong() * spec.maxBitmapLongSide,
+        ),
+    )
     val onRendered by rememberUpdatedState(onPageRendered)
 
     val scale = spec.quality * settledZoom.coerceAtLeast(0.01f)

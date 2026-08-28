@@ -144,7 +144,9 @@ public sealed interface KiteRenderSpec {
      *   the default). >1 = oversample, e.g. for screenshots or print-ish export.
      *   <1 = undersample for cheap previews/thumbnails.
      * @param maxBitmapLongSide hard cap on the longest bitmap side, protecting
-     *   memory on huge pages and deep zooms.
+     *   memory on huge pages and deep zooms. The viewer's rasterizer raises its
+     *   pixel ceiling to this value squared, so any side length allowed here
+     *   also renders.
      * @param rerasterizeOnZoom after a zoom settles, re-render the visible page
      *   at the zoomed resolution so deep zoom stays crisp instead of upscaling
      *   the base raster. Costs one extra rasterization per zoom settle.

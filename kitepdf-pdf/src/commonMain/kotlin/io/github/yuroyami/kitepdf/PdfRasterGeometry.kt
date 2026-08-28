@@ -1,5 +1,6 @@
 package io.github.yuroyami.kitepdf
 
+import io.github.yuroyami.kitepdf.core.render.KITE_DEFAULT_MAX_RASTER_PIXELS
 import io.github.yuroyami.kitepdf.core.render.KiteMatrix
 import kotlin.math.ceil
 
@@ -25,9 +26,15 @@ public data class PdfRasterGeometry(
     public val deviceCtm: KiteMatrix,
 )
 
+/** [rasterGeometry] with the library's default allocation ceiling. */
+public fun PdfPage.rasterGeometry(scale: Double = 1.0): PdfRasterGeometry =
+    rasterGeometry(scale, KITE_DEFAULT_MAX_RASTER_PIXELS)
+
 /**
  * The [PdfRasterGeometry] for rendering this page at [scale] device pixels
- * per PDF user-space unit (so `scale = dpi / 72.0`).
+ * per PDF user-space unit (so `scale = dpi / 72.0`). [maxPixels] prevents an
+ * untrusted page size, `/UserUnit`, or accidental scale from requesting an
+ * allocation large enough to terminate the host process.
  *
  * Composes three things a correct rasterizer needs and a naive one skips:
  *
@@ -50,11 +57,27 @@ public data class PdfRasterGeometry(
  * `scale` and `/UserUnit` both multiply the same way, so they compose into
  * one factor applied once: `effective = scale * userUnit`.
  */
-public fun PdfPage.rasterGeometry(scale: Double = 1.0): PdfRasterGeometry {
+public fun PdfPage.rasterGeometry(
+    scale: Double = 1.0,
+    maxPixels: Long,
+): PdfRasterGeometry {
+    require(scale.isFinite() && scale > 0.0) { "scale must be finite and > 0" }
+    require(maxPixels > 0L) { "maxPixels must be > 0" }
     val unit = userUnit.takeIf { it.isFinite() && it > 0.0 } ?: 1.0
     val effective = scale * unit
-    val widthPx = ceil(rotatedWidth * effective).toInt().coerceAtLeast(1)
-    val heightPx = ceil(rotatedHeight * effective).toInt().coerceAtLeast(1)
+    require(effective.isFinite() && effective > 0.0) { "scale multiplied by UserUnit is too large" }
+    val widthValue = ceil(rotatedWidth * effective)
+    val heightValue = ceil(rotatedHeight * effective)
+    require(
+        widthValue.isFinite() && heightValue.isFinite() &&
+            widthValue in 1.0..Int.MAX_VALUE.toDouble() &&
+            heightValue in 1.0..Int.MAX_VALUE.toDouble()
+    ) { "page raster dimensions are invalid or exceed the platform array limit" }
+    val widthPx = widthValue.toInt()
+    val heightPx = heightValue.toInt()
+    require(widthPx.toLong() * heightPx.toLong() <= maxPixels) {
+        "page raster is ${widthPx}x$heightPx pixels; limit is $maxPixels pixels"
+    }
     // scaling().concat(base) applies the base mapping first, then scales the
     // result: scaling must be the receiver, since `a.concat(b)` applies b then a.
     val deviceCtm = KiteMatrix.scaling(effective, effective).concat(pageToDeviceBase())

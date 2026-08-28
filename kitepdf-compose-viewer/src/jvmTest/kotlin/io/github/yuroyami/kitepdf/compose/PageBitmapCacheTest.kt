@@ -61,5 +61,17 @@ class PageBitmapCacheTest {
         val bmp = cache.getOrPut(k) { produced++; ImageBitmap(200, 200) }
         assertEquals(1, produced)
         assertEquals(200, bmp.width, "the oversized bitmap is returned regardless")
+        assertFalse(cache.contains(k), "an oversized bitmap must not defeat the cache budget")
+        assertEquals(0L, cache.trackedBytes)
+        assertEquals(0, cache.size)
+    }
+
+    @Test
+    fun hostile_dimensions_cannot_overflow_the_budget_accounting() {
+        val cache = PageBitmapCache(maxBytes = Long.MAX_VALUE)
+        val k = key("overflow", w = Int.MAX_VALUE, h = Int.MAX_VALUE)
+        cache.put(k, ImageBitmap(1, 1))
+        assertFalse(cache.contains(k), "a saturated cost is larger than every usable budget")
+        assertEquals(0L, cache.trackedBytes)
     }
 }

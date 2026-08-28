@@ -5,6 +5,7 @@ import io.github.yuroyami.kitepdf.core.ByteArrayBuilder
 import java.awt.Color
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
 /**
@@ -54,6 +55,14 @@ class AwtRasterizationTest {
         assertEquals(0, r)
         assertEquals(200, g)
         assertEquals(0, b)
+    }
+
+    @Test
+    fun allocation_ceiling_is_forwarded_before_awt_allocates() {
+        val page = KitePDF.open(buildPdf()).pages[0]
+        assertFailsWith<IllegalArgumentException> {
+            AwtPdfRasterizer.renderToImage(page, maxPixels = 1_000)
+        }
     }
 
     /* ─── Helper ──────────────────────────────────────────────────────────── */

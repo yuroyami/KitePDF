@@ -1,6 +1,7 @@
 package io.github.yuroyami.kitepdf.skia
 
 import io.github.yuroyami.kitepdf.epub.EpubPage
+import io.github.yuroyami.kitepdf.core.render.KITE_DEFAULT_MAX_RASTER_PIXELS
 import io.github.yuroyami.kitepdf.core.render.KiteMatrix
 import io.github.yuroyami.kitepdf.core.render.ReaderTheme
 import io.github.yuroyami.kitepdf.core.render.RgbColor
@@ -36,9 +37,17 @@ public object EpubPageRasterizer {
         scale: Double = 1.0,
         background: Int = Color.WHITE,
         theme: ReaderTheme? = null,
+    ): Image = renderToImage(page, scale, background, theme, KITE_DEFAULT_MAX_RASTER_PIXELS)
+
+    /** [renderToImage] with an explicit allocation ceiling. */
+    public fun renderToImage(
+        page: EpubPage,
+        scale: Double = 1.0,
+        background: Int = Color.WHITE,
+        theme: ReaderTheme? = null,
+        maxPixels: Long,
     ): Image {
-        val widthPx = kotlin.math.ceil(page.displayWidth * scale).toInt().coerceAtLeast(1)
-        val heightPx = kotlin.math.ceil(page.displayHeight * scale).toInt().coerceAtLeast(1)
+        val (widthPx, heightPx) = rasterSize(page, scale, maxPixels)
         val surface = Surface.makeRasterN32Premul(widthPx, heightPx)
         try {
             val skCanvas = surface.canvas
@@ -59,8 +68,22 @@ public object EpubPageRasterizer {
     }
 
     /** Convenience: render and return PNG bytes. */
-    public fun encodeToPng(page: EpubPage, scale: Double = 1.0, background: Int = Color.WHITE, theme: ReaderTheme? = null): ByteArray {
-        val image = renderToImage(page, scale, background, theme)
+    public fun encodeToPng(
+        page: EpubPage,
+        scale: Double = 1.0,
+        background: Int = Color.WHITE,
+        theme: ReaderTheme? = null,
+    ): ByteArray = encodeToPng(page, scale, background, theme, KITE_DEFAULT_MAX_RASTER_PIXELS)
+
+    /** [encodeToPng] with an explicit allocation ceiling. */
+    public fun encodeToPng(
+        page: EpubPage,
+        scale: Double = 1.0,
+        background: Int = Color.WHITE,
+        theme: ReaderTheme? = null,
+        maxPixels: Long,
+    ): ByteArray {
+        val image = renderToImage(page, scale, background, theme, maxPixels)
         try {
             val data = image.encodeToData(EncodedImageFormat.PNG)
                 ?: error("Skia: failed to encode EPUB page to PNG")
@@ -78,5 +101,23 @@ public object EpubPageRasterizer {
     private fun skiaColor(c: RgbColor): Int {
         fun ch(v: Double) = (v.coerceIn(0.0, 1.0) * 255.0 + 0.5).toInt()
         return (0xFF shl 24) or (ch(c.r) shl 16) or (ch(c.g) shl 8) or ch(c.b)
+    }
+
+    private fun rasterSize(page: EpubPage, scale: Double, maxPixels: Long): Pair<Int, Int> {
+        require(scale.isFinite() && scale > 0.0) { "scale must be finite and > 0" }
+        require(maxPixels > 0L) { "maxPixels must be > 0" }
+        val width = kotlin.math.ceil(page.displayWidth * scale)
+        val height = kotlin.math.ceil(page.displayHeight * scale)
+        require(
+            width.isFinite() && height.isFinite() &&
+                width in 1.0..Int.MAX_VALUE.toDouble() &&
+                height in 1.0..Int.MAX_VALUE.toDouble()
+        ) { "EPUB raster dimensions are invalid or exceed the platform array limit" }
+        val widthPx = width.toInt()
+        val heightPx = height.toInt()
+        require(widthPx.toLong() * heightPx.toLong() <= maxPixels) {
+            "EPUB raster is ${widthPx}x$heightPx pixels; limit is $maxPixels pixels"
+        }
+        return widthPx to heightPx
     }
 }
