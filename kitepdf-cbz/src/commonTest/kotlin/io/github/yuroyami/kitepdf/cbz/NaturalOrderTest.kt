@@ -34,4 +34,12 @@ class NaturalOrderTest {
             sorted("ch10/p1.png", "ch1/p1.png", "ch2/p1.png"),
         )
     }
+
+    @Test
+    fun digit_runs_are_exact_beyond_long_range() {
+        assertEquals(
+            listOf("p99999999999999999999999999.png", "p100000000000000000000000000.png"),
+            sorted("p100000000000000000000000000.png", "p99999999999999999999999999.png"),
+        )
+    }
 }

@@ -13,12 +13,13 @@ internal object NaturalOrder : Comparator<String> {
         while (i < a.length && j < b.length) {
             val ca = a[i]
             val cb = b[j]
-            if (ca.isDigit() && cb.isDigit()) {
-                val (na, ni) = digitRun(a, i)
-                val (nb, nj) = digitRun(b, j)
-                if (na != nb) return na.compareTo(nb)
-                i = ni
-                j = nj
+            if (ca in '0'..'9' && cb in '0'..'9') {
+                val aEnd = digitRunEnd(a, i)
+                val bEnd = digitRunEnd(b, j)
+                val numeric = compareDigitRuns(a, i, aEnd, b, j, bEnd)
+                if (numeric != 0) return numeric
+                i = aEnd
+                j = bEnd
             } else {
                 val d = ca.lowercaseChar().compareTo(cb.lowercaseChar())
                 if (d != 0) return d
@@ -31,14 +32,38 @@ internal object NaturalOrder : Comparator<String> {
         return a.compareTo(b)
     }
 
-    /** The numeric value of the digit run starting at [from], and its end. */
-    private fun digitRun(s: String, from: Int): Pair<Long, Int> {
-        var v = 0L
-        var k = from
-        while (k < s.length && s[k].isDigit()) {
-            if (v < Long.MAX_VALUE / 16) v = v * 10 + (s[k] - '0')
-            k++
+    private fun digitRunEnd(s: String, from: Int): Int {
+        var end = from
+        while (end < s.length && s[end] in '0'..'9') end++
+        return end
+    }
+
+    /**
+     * Compare decimal runs without parsing them into a fixed-width integer.
+     * Comic scanners routinely emit long timestamps and sequence ids; exact
+     * length/lexicographic comparison cannot overflow and allocates nothing.
+     */
+    private fun compareDigitRuns(
+        a: String,
+        aStart: Int,
+        aEnd: Int,
+        b: String,
+        bStart: Int,
+        bEnd: Int,
+    ): Int {
+        var ai = aStart
+        var bi = bStart
+        while (ai < aEnd && a[ai] == '0') ai++
+        while (bi < bEnd && b[bi] == '0') bi++
+        val significantA = aEnd - ai
+        val significantB = bEnd - bi
+        if (significantA != significantB) return significantA.compareTo(significantB)
+        while (ai < aEnd) {
+            val order = a[ai].compareTo(b[bi])
+            if (order != 0) return order
+            ai++
+            bi++
         }
-        return v to k
+        return 0
     }
 }
