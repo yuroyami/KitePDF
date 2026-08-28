@@ -21,6 +21,7 @@ kotlin {
         namespace = "io.github.yuroyami.kitepdf.bundle"
         compileSdk = 37
         minSdk = 21
+        withHostTest {}
     }
 
     jvm()
@@ -54,7 +55,14 @@ kotlin {
 
     js {
         browser()
-        nodejs()
+        nodejs {
+            testTask {
+                useMocha {
+                    // Layout- and inflate-heavy common tests exceed Mocha's 2s default.
+                    timeout = "120s"
+                }
+            }
+        }
         binaries.library()
     }
     @OptIn(ExperimentalWasmDsl::class)
@@ -66,6 +74,11 @@ kotlin {
     wasmWasi {
         nodejs()
     }
+
+    // Establish the standard native group graph after all targets exist and
+    // before adding the custom POSIX file-I/O layer below. Without this
+    // explicit application, those source sets are not attached to a target.
+    applyDefaultHierarchyTemplate()
 
     sourceSets {
         all {
@@ -90,8 +103,22 @@ kotlin {
         // KiteDoc.openFile through stdio, for the native targets that have
         // neither java.io nor Foundation. Apple has its own NSData version.
         val posixFileMain by creating { dependsOn(nativeMain.get()) }
-        linuxMain.get().dependsOn(posixFileMain)
-        mingwMain.get().dependsOn(posixFileMain)
-        androidNativeMain.get().dependsOn(posixFileMain)
+        val posixLp64Main by creating { dependsOn(posixFileMain) }
+        val posixIlp32Main by creating { dependsOn(posixFileMain) }
+        val posixLlp64Main by creating { dependsOn(posixFileMain) }
+
+        // The stdio calls cannot live in one shared set: the metadata compiler
+        // refuses cinterop signatures whose C widths differ between member
+        // targets ("numbers with different bit widths"). Group by ABI family.
+        linuxMain.get().dependsOn(posixLp64Main)
+        mingwMain.get().dependsOn(posixLlp64Main)
+        listOf(
+            androidNativeArm64Main.get(),
+            androidNativeX64Main.get(),
+        ).forEach { it.dependsOn(posixLp64Main) }
+        listOf(
+            androidNativeArm32Main.get(),
+            androidNativeX86Main.get(),
+        ).forEach { it.dependsOn(posixIlp32Main) }
     }
 }
