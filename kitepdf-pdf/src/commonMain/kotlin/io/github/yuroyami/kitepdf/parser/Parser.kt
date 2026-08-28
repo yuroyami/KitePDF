@@ -40,9 +40,22 @@ internal class Parser(
 
     private val reader: ByteReader get() = lexer.reader
 
+    /** Container recursion depth; hostile "[[[[…" must not consume the call stack. */
+    private var depth = 0
+
     /** Read exactly one PDF object from the current position. */
     public fun readObject(): PdfObject {
         return readObject(lexer.nextToken())
+    }
+
+    private inline fun <T> nested(read: () -> T): T {
+        if (depth >= MAX_NESTING) throw PdfFormatException("Object nesting deeper than $MAX_NESTING")
+        depth++
+        try {
+            return read()
+        } finally {
+            depth--
+        }
     }
 
     /** Read one object with a token that's already been consumed. */
@@ -85,26 +98,27 @@ internal class Parser(
         return PdfInt(first.value)
     }
 
-    private fun readArray(): PdfArray {
+    private fun readArray(): PdfArray = nested {
         val items = mutableListOf<PdfObject>()
-        while (true) {
-            val tok = lexer.nextToken()
-            if (tok == Token.ArrayClose) return PdfArray(items)
+        var tok = lexer.nextToken()
+        while (tok != Token.ArrayClose) {
             items.add(readObject(tok))
+            tok = lexer.nextToken()
         }
+        PdfArray(items)
     }
 
-    private fun readDictionary(): PdfDictionary {
+    private fun readDictionary(): PdfDictionary = nested {
         val entries = LinkedHashMap<String, PdfObject>()
-        while (true) {
-            val tok = lexer.nextToken()
-            if (tok == Token.DictClose) return PdfDictionary(entries)
+        var tok = lexer.nextToken()
+        while (tok != Token.DictClose) {
             if (tok !is Token.Name) {
                 throw PdfFormatException("Dictionary key must be a Name, got $tok")
             }
-            val value = readObject()
-            entries[tok.value] = value
+            entries[tok.value] = readObject()
+            tok = lexer.nextToken()
         }
+        PdfDictionary(entries)
     }
 
     /**
@@ -223,6 +237,9 @@ internal class Parser(
 
     private companion object {
         val ENDSTREAM = "endstream".encodeToByteArray()
+
+        /** Real documents nest containers single digits deep; MuPDF-style cap. */
+        const val MAX_NESTING = 256
     }
 }
 

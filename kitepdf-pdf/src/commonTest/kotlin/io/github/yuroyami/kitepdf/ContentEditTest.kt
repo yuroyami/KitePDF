@@ -47,6 +47,22 @@ class ContentEditTest {
         assertEquals(ops, reparsed)
     }
 
+    @Test fun hostile_inline_image_geometry_cannot_overflow_length_math() {
+        val content = (
+            "BI /W 9223372036854775807 /H 9223372036854775807 " +
+                "/CS /RGB /BPC 16 ID x EI Q"
+            ).encodeToByteArray()
+        val ops = ContentStreamParser.parse(content)
+        assertTrue(ops.any { it.operator == "BI" })
+        assertTrue(ops.any { it.operator == "Q" }, "parsing resumes after the malformed image")
+    }
+
+    @Test fun hostile_deep_array_nesting_cannot_overflow_the_call_stack() {
+        val content = ("[".repeat(20_000) + " 0 0 m S").encodeToByteArray()
+        val ops = ContentStreamParser.parse(content)
+        assertTrue(ops.any { it.operator == "S" }, "parsing survives past the hostile operand")
+    }
+
     /* ─── Page editing ───────────────────────────────────────────────────── */
 
     private fun onePagePdf(text: String): ByteArray =
