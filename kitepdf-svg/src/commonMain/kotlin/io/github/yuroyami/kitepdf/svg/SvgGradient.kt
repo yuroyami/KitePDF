@@ -41,8 +41,12 @@ internal object SvgGradient {
             val raw = attr(el, byId, name) ?: return fallback
             val s = raw.trim()
             // In objectBoundingBox units a percentage IS the fraction.
-            if (s.endsWith("%")) return (s.dropLast(1).toDoubleOrNull() ?: 0.0) / 100.0
-            return s.removeSuffix("px").toDoubleOrNull() ?: fallback
+            val parsed = if (s.endsWith("%")) {
+                s.dropLast(1).toDoubleOrNull()?.div(100.0)
+            } else {
+                s.removeSuffix("px").toDoubleOrNull()
+            }
+            return parsed?.takeIf(Double::isFinite) ?: fallback
         }
 
         val shading = when (el.tag.lowercase()) {
@@ -59,7 +63,7 @@ internal object SvgGradient {
             "radialgradient" -> {
                 val cx = n("cx", 0.5)
                 val cy = n("cy", 0.5)
-                val r = n("r", 0.5)
+                val r = n("r", 0.5).takeIf { it >= 0.0 } ?: 0.5
                 KiteShading.Radial(
                     colorSpace = KiteColorSpace.DeviceRGB,
                     background = null,
@@ -79,26 +83,29 @@ internal object SvgGradient {
 
     private class Stop(val offset: Double, val color: RgbColor)
 
-    /** This gradient's stops, or the referenced gradient's when it has none. */
+    /** This gradient's stops, or the first referenced gradient that owns some. */
     private fun stopsOf(el: KiteXmlNode.Element, byId: Map<String, KiteXmlNode.Element>): List<Stop>? {
-        val own = el.children.filterIsInstance<KiteXmlNode.Element>()
-            .filter { it.tag.lowercase() == "stop" }
-            .mapNotNull { stop ->
-                val raw = stop.attrs["offset"]?.trim() ?: "0"
-                val offset = if (raw.endsWith("%")) {
-                    (raw.dropLast(1).toDoubleOrNull() ?: 0.0) / 100.0
-                } else {
-                    raw.toDoubleOrNull() ?: 0.0
+        val seen = HashSet<KiteXmlNode.Element>()
+        var current: KiteXmlNode.Element? = el
+        while (current != null && seen.add(current)) {
+            val own = current.children.filterIsInstance<KiteXmlNode.Element>()
+                .filter { it.tag.lowercase() == "stop" }
+                .mapNotNull { stop ->
+                    val raw = stop.attrs["offset"]?.trim() ?: "0"
+                    val parsed = if (raw.endsWith("%")) {
+                        (raw.dropLast(1).toDoubleOrNull() ?: 0.0) / 100.0
+                    } else {
+                        raw.toDoubleOrNull() ?: 0.0
+                    }
+                    val offset = parsed.takeIf(Double::isFinite) ?: 0.0
+                    val color = styleOrAttr(stop, "stop-color")?.let { CssValues.color(it) } ?: RgbColor.BLACK
+                    Stop(offset.coerceIn(0.0, 1.0), color)
                 }
-                val color = styleOrAttr(stop, "stop-color")?.let { CssValues.color(it) } ?: RgbColor.BLACK
-                Stop(offset.coerceIn(0.0, 1.0), color)
-            }
-            .sortedBy { it.offset }
-        if (own.isNotEmpty()) return own
-        val href = hrefOf(el) ?: return null
-        val target = byId[href] ?: return null
-        if (target === el) return null
-        return stopsOf(target, byId)
+                .sortedBy { it.offset }
+            if (own.isNotEmpty()) return own
+            current = hrefOf(current)?.let(byId::get)
+        }
+        return null
     }
 
     /** Stops to a stitched exponential function, PDF's own multi-stop shape. */
@@ -134,10 +141,13 @@ internal object SvgGradient {
 
     /** An attribute of this gradient, or of the one it references. */
     private fun attr(el: KiteXmlNode.Element, byId: Map<String, KiteXmlNode.Element>, name: String): String? {
-        el.attrs[name]?.let { return it }
-        val target = hrefOf(el)?.let { byId[it] } ?: return null
-        if (target === el) return null
-        return attr(target, byId, name)
+        val seen = HashSet<KiteXmlNode.Element>()
+        var current: KiteXmlNode.Element? = el
+        while (current != null && seen.add(current)) {
+            current.attrs[name]?.let { return it }
+            current = hrefOf(current)?.let(byId::get)
+        }
+        return null
     }
 
     /** `href` / `xlink:href` as a bare id; the XML reader has dropped the prefix. */

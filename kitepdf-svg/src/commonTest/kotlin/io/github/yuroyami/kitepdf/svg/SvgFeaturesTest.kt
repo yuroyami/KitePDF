@@ -61,6 +61,36 @@ class SvgFeaturesTest {
         assertTrue(f.isNotEmpty(), "the rect still paints")
     }
 
+    @Test
+    fun a_multi_node_gradient_cycle_stops_instead_of_overflowing() {
+        val drawn = calls(
+            """<svg width="10" height="10">
+                 <defs>
+                   <linearGradient id="a" href="#b"/>
+                   <linearGradient id="b" href="#a"/>
+                 </defs>
+                 <rect width="10" height="10" fill="url(#a)"/>
+               </svg>""",
+        )
+        assertEquals(
+            1,
+            drawn.filterIsInstance<RecordingCanvas.Call.Fill>().size,
+            "the cyclic paint server terminates and uses the renderer's flat-colour fallback",
+        )
+    }
+
+    @Test
+    fun deeply_nested_id_indexing_does_not_use_the_call_stack() {
+        val svg = buildString {
+            append("<svg width=\"10\" height=\"10\"><use href=\"#r\"/>")
+            repeat(5_000) { append("<g>") }
+            append("<rect id=\"r\" width=\"2\" height=\"2\"/>")
+            repeat(5_000) { append("</g>") }
+            append("</svg>")
+        }
+        assertTrue(fills(svg).isNotEmpty())
+    }
+
     /* ─── image ──────────────────────────────────────────────────────────── */
 
     @Test
@@ -163,6 +193,17 @@ class SvgFeaturesTest {
         """.trimIndent()
         val parsed = SvgGradient.parse(gradient(svg, "g"), byId(svg))!!
         val radial = parsed.shading as KiteShading.Radial
+        assertEquals(listOf(0.5, 0.5, 0.0, 0.5, 0.5, 0.5), radial.coords.toList())
+    }
+
+    @Test
+    fun hostile_gradient_coordinates_cannot_inject_non_finite_geometry() {
+        val svg = """
+            <svg><radialGradient id="g" cx="NaN" cy="Infinity" r="-1">
+              <stop offset="0" stop-color="white"/><stop offset="1" stop-color="black"/>
+            </radialGradient></svg>
+        """.trimIndent()
+        val radial = SvgGradient.parse(gradient(svg, "g"), byId(svg))!!.shading as KiteShading.Radial
         assertEquals(listOf(0.5, 0.5, 0.0, 0.5, 0.5, 0.5), radial.coords.toList())
     }
 
