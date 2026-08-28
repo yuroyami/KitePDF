@@ -687,7 +687,20 @@ public data class EpubSettings(
     val justify: Boolean? = null,
     /** False drops the publisher's CSS (author rules + inline styles): UA + reader layers only. */
     val usePublisherCss: Boolean = true,
-)
+) {
+    init {
+        require(pageWidth.isFinite() && pageWidth > 0.0) { "pageWidth must be finite and > 0" }
+        require(pageHeight.isFinite() && pageHeight > 0.0) { "pageHeight must be finite and > 0" }
+        require(fontSize.isFinite() && fontSize > 0.0) { "fontSize must be finite and > 0" }
+        require(margin.isFinite() && margin >= 0.0) { "margin must be finite and >= 0" }
+        require(margin < pageWidth / 2.0 && margin < pageHeight / 2.0) {
+            "margin must leave a positive page content area"
+        }
+        require(lineHeightScale.isFinite() && lineHeightScale > 0.0) {
+            "lineHeightScale must be finite and > 0"
+        }
+    }
+}
 
 /** One reflowed EPUB page: paints backgrounds/borders, then text lines and images. */
 public class EpubPage internal constructor(
