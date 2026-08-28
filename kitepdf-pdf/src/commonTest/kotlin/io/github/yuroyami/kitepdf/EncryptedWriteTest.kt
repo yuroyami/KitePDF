@@ -114,6 +114,13 @@ class EncryptedWriteTest {
     }
 
     @Test
+    fun encrypted_editing_never_falls_back_to_general_purpose_randomness() {
+        val doc = PdfDocument.open(buildEncrypted(), password = userPw.encodeToByteArray())
+        val e = assertFailsWith<IllegalArgumentException> { doc.edit() }
+        assertContains(e.message ?: "", "cryptographically secure Random")
+    }
+
+    @Test
     fun editing_without_authentication_is_refused() {
         val doc = PdfDocument.open(
             buildEncrypted(),

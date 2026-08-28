@@ -52,16 +52,18 @@ public class PdfBuilder {
      * Encrypt the document with the V5/AES-256 (R6, PDF 2.0) Standard Security
      * Handler. Every string and stream is encrypted; the file opens with either
      * password. [permissions] maps to the advisory `/P` flags. [random] feeds
-     * the file key, salts and per-object IVs; seed it for reproducible bytes in
-     * tests. Only AES-256 is offered on the create path: there is no reason to
-     * mint new documents with weaker legacy schemes.
+     * the file key, salts and per-object IVs and must be backed by the caller's
+     * platform CSPRNG. It is deliberately required: Kotlin's `Random.Default`
+     * makes no cryptographic guarantee. A seeded random is appropriate only for
+     * reproducible test fixtures. Only AES-256 is offered on the create path:
+     * there is no reason to mint new documents with weaker legacy schemes.
      */
     public fun encrypt(
         userPassword: String,
         ownerPassword: String = userPassword,
         permissions: io.github.yuroyami.kitepdf.PdfPermissions = io.github.yuroyami.kitepdf.PdfPermissions.allowAll,
         encryptMetadata: Boolean = true,
-        random: kotlin.random.Random = kotlin.random.Random.Default,
+        random: kotlin.random.Random,
     ): PdfBuilder {
         encryptSpec = EncryptSpec(
             userPassword.encodeToByteArray(),

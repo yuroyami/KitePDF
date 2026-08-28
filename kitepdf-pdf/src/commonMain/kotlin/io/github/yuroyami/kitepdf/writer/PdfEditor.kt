@@ -57,7 +57,7 @@ import kotlin.math.abs
  */
 public class PdfEditor internal constructor(
     internal val base: PdfDocument,
-    random: kotlin.random.Random = kotlin.random.Random.Default,
+    random: kotlin.random.Random?,
 ) {
 
     private class Staged(val generation: Int, val value: PdfObject)
@@ -91,6 +91,9 @@ public class PdfEditor internal constructor(
             require(handler.supportsWrite) {
                 "Editing RC4-encrypted PDFs is not supported (legacy write support is intentionally absent); " +
                     "AES-128 (V4) and AES-256 (V5) documents can be edited."
+            }
+            requireNotNull(random) {
+                "Editing an encrypted PDF requires a cryptographically secure Random."
             }
             io.github.yuroyami.kitepdf.crypto.Encryptor(handler, random)
         }
