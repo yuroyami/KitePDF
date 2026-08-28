@@ -388,13 +388,15 @@ public class PdfDocument private constructor(
     /* ─── Editing / writing ──────────────────────────────────────────────── */
 
     /**
-     * Open an incremental-update editor over this document. Edits are saved by
-     * appending to the original bytes (see [PdfEditor]); this document instance
-     * itself is never mutated. For AES-encrypted documents the editor encrypts
-     * staged objects to match; [random] feeds the per-object IVs (seed it for
-     * reproducible output in tests).
+     * Start an immutable incremental-update transaction. Edits are appended to
+     * the original bytes (see [PdfEditor]); this document is never mutated.
+     * Editing an encrypted document writes fresh AES IVs, so [random] is
+     * required there and must be backed by the caller's platform CSPRNG. Plain
+     * documents do not consume randomness.
      */
-    public fun edit(random: kotlin.random.Random = kotlin.random.Random.Default): PdfEditor = PdfEditor(this, random)
+    public fun edit(random: kotlin.random.Random? = null): PdfEditor {
+        return PdfEditor(this, random)
+    }
 
     /* ─── IndirectResolver ───────────────────────────────────────────────── */
 
