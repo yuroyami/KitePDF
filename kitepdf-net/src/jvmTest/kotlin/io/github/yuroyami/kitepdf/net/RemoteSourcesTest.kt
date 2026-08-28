@@ -12,6 +12,7 @@ import io.ktor.client.engine.mock.respond
 import io.ktor.client.engine.mock.respondError
 import io.ktor.client.request.header
 import io.ktor.http.HttpStatusCode
+import io.ktor.http.HttpHeaders
 import io.ktor.http.headersOf
 import io.ktor.utils.io.ByteReadChannel
 import java.io.ByteArrayOutputStream
@@ -25,6 +26,7 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.CancellationException
 
 /**
  * Remote loading, driven through Ktor's MockEngine so the suite stays offline.
@@ -60,6 +62,25 @@ class RemoteSourcesTest {
     }
 
     @Test
+    fun failure_messages_do_not_expose_url_secrets() = runBlocking {
+        val client = HttpClient(MockEngine { respondError(HttpStatusCode.NotFound) })
+        val e = assertFailsWith<KiteFormatException> {
+            KiteDoc.openUrl("https://alice:secret@example.org/a.pdf?token=top-secret#fragment", client)
+        }
+        assertTrue(e.message!!.contains("example.org/a.pdf"), "message keeps a useful location: ${e.message}")
+        assertTrue("alice" !in e.message!! && "secret" !in e.message!! && "token" !in e.message!!)
+    }
+
+    @Test
+    fun transport_exceptions_do_not_reintroduce_url_secrets_through_their_cause() = runBlocking {
+        val secretUrl = "https://alice:secret@example.org/a.pdf?token=top-secret"
+        val client = HttpClient(MockEngine { throw IllegalStateException("failed request to $secretUrl") })
+        val e = assertFailsWith<KiteFormatException> { KiteDoc.downloadBytes(secretUrl, client) }
+        assertNull(e.cause, "credential-bearing transport errors are not retained")
+        assertTrue("alice" !in e.message!! && "secret" !in e.message!! && "token" !in e.message!!)
+    }
+
+    @Test
     fun an_empty_body_is_not_a_document() = runBlocking {
         val e = assertFailsWith<KiteFormatException> {
             KiteDoc.openUrl("https://example.org/empty.pdf", clientServing(ByteArray(0)))
@@ -77,6 +98,41 @@ class RemoteSourcesTest {
     fun download_bytes_hands_back_the_body_untouched() = runBlocking {
         val pdf = samplePdf()
         assertContentEquals(pdf, KiteDoc.downloadBytes("https://example.org/a.pdf", clientServing(pdf)))
+    }
+
+    @Test
+    fun streaming_body_is_stopped_at_the_configured_limit() = runBlocking {
+        val e = assertFailsWith<KiteFormatException> {
+            KiteDoc.downloadBytes("https://example.org/large.pdf", clientServing(ByteArray(9)), maxBytes = 8)
+        }
+        assertTrue(e.message!!.contains("exceeds 8 bytes"), "message: ${e.message}")
+    }
+
+    @Test
+    fun declared_oversize_body_is_rejected_before_buffering() = runBlocking {
+        val client = HttpClient(
+            MockEngine {
+                respond(
+                    ByteReadChannel(byteArrayOf(1)),
+                    HttpStatusCode.OK,
+                    headersOf(HttpHeaders.ContentLength, "1000"),
+                )
+            },
+        )
+        assertFailsWith<KiteFormatException> {
+            KiteDoc.downloadBytes("https://example.org/large.pdf", client, maxBytes = 8)
+        }
+        Unit
+    }
+
+    @Test
+    fun or_null_never_swallows_coroutine_cancellation() = runBlocking {
+        assertFailsWith<CancellationException> {
+            KiteDoc.openUrlOrNull("https://example.org/a.pdf", clientServing(samplePdf())) {
+                throw CancellationException("cancelled by caller")
+            }
+        }
+        Unit
     }
 
     /** The configure block is where auth headers go, so it has to reach the request. */
