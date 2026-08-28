@@ -3,6 +3,15 @@ package io.github.yuroyami.kitepdf.core.render
 import kotlin.math.roundToInt
 
 /**
+ * Default allocation ceiling shared by every rasterizing surface in KitePDF:
+ * 40 MP already expands to 160 MiB of RGBA, so refuse more before allocating.
+ */
+public const val KITE_DEFAULT_MAX_RASTER_PIXELS: Long = 40_000_000L
+
+/** Keep the soft-mask remap acceleration from becoming a second huge bitmap. */
+private const val MAX_MASK_COLUMN_MAP: Int = 1_000_000
+
+/**
  * Assemble a [Kind.RAW][KiteImageData.Kind.RAW] image's already-decoded samples
  * into a flat RGBA8888 buffer (R,G,B,A per pixel, row-major, no padding) that a
  * platform backend can wrap in a bitmap.
@@ -23,13 +32,22 @@ public fun KiteImageData.toRgbaBytes(): ByteArray? {
     val w = width
     val h = height
     if (w <= 0 || h <= 0) return null
+    val pixelCountLong = w.toLong() * h.toLong()
+    if (pixelCountLong > KITE_DEFAULT_MAX_RASTER_PIXELS) return null
+    val pixelCount = pixelCountLong.toInt()
 
     if (isImageMask) return rasterizeImageMask(w, h)
 
     val src = pixelBytes ?: return null
-    val pixelCount = w * h
     val cs = resolvedColorSpace ?: inferDeviceSpace(src, pixelCount) ?: return null
     val bpc = bitsPerComponent
+    when (bpc) {
+        1, 2, 4, 8, 16 -> Unit
+        else -> return null
+    }
+    val sourceComponents = if (cs is KiteColorSpace.Indexed) 1 else cs.componentCount
+    val sourceRowBytes = packedRowBytes(w, sourceComponents, bpc) ?: return null
+    if (src.size.toLong() < sourceRowBytes.toLong() * h) return null
     val out = ByteArray(pixelCount * 4)
     val opaque = 0xFF.toByte()
 
@@ -37,15 +55,15 @@ public fun KiteImageData.toRgbaBytes(): ByteArray? {
         // Fast paths for the overwhelmingly common 8-bit device cases (no /Decode).
         decode == null && bpc == 8 && cs === KiteColorSpace.DeviceGray -> {
             val rowBytes = w
-            if (src.size < rowBytes * h) return null
+            if (src.size.toLong() < rowBytes.toLong() * h) return null
             var i = 0; var o = 0
             repeat(pixelCount) {
                 val g = src[i++]; out[o++] = g; out[o++] = g; out[o++] = g; out[o++] = opaque
             }
         }
         decode == null && bpc == 8 && cs === KiteColorSpace.DeviceRGB -> {
-            val rowBytes = w * 3
-            if (src.size < rowBytes * h) return null
+            val rowBytes = packedRowBytes(w, 3, 8) ?: return null
+            if (src.size.toLong() < rowBytes.toLong() * h) return null
             var i = 0; var o = 0
             repeat(pixelCount) {
                 out[o++] = src[i++]; out[o++] = src[i++]; out[o++] = src[i++]; out[o++] = opaque
@@ -69,8 +87,8 @@ public fun KiteImageData.toRgbaBytes(): ByteArray? {
 private fun KiteImageData.unpackIndexed(
     src: ByteArray, w: Int, h: Int, bpc: Int, cs: KiteColorSpace.Indexed, out: ByteArray,
 ): Boolean {
-    val rowBytes = (w * bpc + 7) / 8
-    if (src.size < rowBytes * h) return false
+    val rowBytes = packedRowBytes(w, 1, bpc) ?: return false
+    if (src.size.toLong() < rowBytes.toLong() * h) return false
     val opaque = 0xFF.toByte()
     // /Decode for Indexed remaps the sample range to an index range; default is
     // [0, 2^bpc - 1] which is the identity (sample IS the index).
@@ -100,8 +118,9 @@ private fun KiteImageData.unpackGeneral(
     src: ByteArray, w: Int, h: Int, bpc: Int, cs: KiteColorSpace, out: ByteArray,
 ): Boolean {
     val comps = cs.componentCount
-    val rowBytes = (w * comps * bpc + 7) / 8
-    if (src.size < rowBytes * h) return false
+    if (comps <= 0) return false
+    val rowBytes = packedRowBytes(w, comps, bpc) ?: return false
+    if (src.size.toLong() < rowBytes.toLong() * h) return false
     val maxval = ((1 shl bpc) - 1).toDouble()
     val dec = decode
     val compBuf = DoubleArray(comps)
@@ -136,14 +155,14 @@ private fun KiteImageData.unpackGeneral(
  */
 private fun KiteImageData.rasterizeImageMask(w: Int, h: Int): ByteArray? {
     val src = pixelBytes ?: return null
-    val rowBytes = (w + 7) / 8
-    if (src.size < rowBytes * h) return null
+    val rowBytes = packedRowBytes(w, 1, 1) ?: return null
+    if (src.size.toLong() < rowBytes.toLong() * h) return null
     val fill = maskFill ?: RgbColor.BLACK
     val fr = (fill.r * 255.0).roundToInt().toByte()
     val fg = (fill.g * 255.0).roundToInt().toByte()
     val fb = (fill.b * 255.0).roundToInt().toByte()
     val invert = decode != null && decode.size >= 2 && decode[0] == 1.0
-    val out = ByteArray(w * h * 4)
+    val out = ByteArray((w.toLong() * h * 4L).toInt())
     var o = 0
     for (y in 0 until h) {
         val rowStart = y * rowBytes
@@ -202,7 +221,7 @@ private fun KiteImageData.applyColorKeyMask(rgba: ByteArray, cs: KiteColorSpace)
     val comps = cs.componentCount
     if (ranges.size != 2 * comps) return
     val bpc = bitsPerComponent
-    val rowBytes = (width * comps * bpc + 7) / 8
+    val rowBytes = packedRowBytes(width, comps, bpc) ?: return
     if (src.size < rowBytes.toLong() * height) return
     var a = 3
     for (y in 0 until height) {
@@ -231,11 +250,13 @@ private fun KiteImageData.applySoftMaskAlpha(rgba: ByteArray) {
     val mw = softMaskWidth
     val mh = softMaskHeight
     if (mw <= 0 || mh <= 0) return
+    val maskPixels = mw.toLong() * mh.toLong()
+    if (maskPixels > Int.MAX_VALUE.toLong()) return
     var a = 3
     // Common case: mask matches image resolution. Walk it linearly, with no
     // per-pixel integer divides for the (mx, my) remap.
     if (mw == width && mh == height) {
-        val n = width * height
+        val n = (width.toLong() * height).toInt()
         var m = 0
         while (m < n) {
             rgba[a] = if (m < mask.size) mask[m] else 0xFF.toByte()
@@ -246,14 +267,28 @@ private fun KiteImageData.applySoftMaskAlpha(rgba: ByteArray) {
     // Mismatched resolution: precompute the per-column source index once (exact
     // same values as x*mw/width) so the inner loop does an array read instead of
     // an integer divide on every pixel.
-    val colMap = IntArray(width) { x -> x * mw / width }
+    val colMap = if (width <= MAX_MASK_COLUMN_MAP) {
+        IntArray(width) { x -> (x.toLong() * mw / width).toInt() }
+    } else {
+        null
+    }
     for (y in 0 until height) {
-        val my = y * mh / height
-        val rowBase = my * mw
+        val my = (y.toLong() * mh / height).toInt()
+        val rowBase = my.toLong() * mw
         for (x in 0 until width) {
-            val idx = rowBase + colMap[x]
-            rgba[a] = if (idx < mask.size) mask[idx] else 0xFF.toByte()
+            val mx = colMap?.get(x) ?: (x.toLong() * mw / width).toInt()
+            val idx = rowBase + mx
+            rgba[a] = if (idx < mask.size.toLong()) mask[idx.toInt()] else 0xFF.toByte()
             a += 4
         }
     }
+}
+
+private fun packedRowBytes(width: Int, components: Int, bitsPerComponent: Int): Int? {
+    if (width <= 0 || components <= 0 || bitsPerComponent <= 0) return null
+    val samples = width.toLong() * components.toLong()
+    if (samples > (Long.MAX_VALUE - 7L) / bitsPerComponent) return null
+    val bits = samples * bitsPerComponent
+    val bytes = (bits + 7L) / 8L
+    return if (bytes <= Int.MAX_VALUE.toLong()) bytes.toInt() else null
 }
