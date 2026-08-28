@@ -209,35 +209,79 @@ public object KiteDoc {
     /* ── Base64 ───────────────────────────────────────────────────────────── */
 
     /**
-     * Tolerant Base64: strips a `data:` prefix and any whitespace, accepts both
-     * the standard (`+/`) and URL-safe (`-_`) alphabets, and does not require
-     * padding. Hand-rolled rather than using `kotlin.io.encoding.Base64` so the
-     * behaviour is identical on every target and needs no opt-in.
+     * Base64 with a deliberately tolerant surface and a strict core: whitespace,
+     * URL-safe characters and omitted padding are accepted, while malformed
+     * padding, impossible lengths and non-zero discarded bits are rejected.
      */
     private fun decodeBase64(text: String): ByteArray {
-        val payload = text.substringAfter("base64,", text)
-        val out = ArrayList<Byte>(payload.length * 3 / 4 + 3)
+        val payload = if (text.startsWith("data:", ignoreCase = true)) {
+            val comma = text.indexOf(',')
+            if (comma < 0 || text.substring(5, comma).split(';').none { it.equals("base64", true) }) {
+                throw KiteFormatException("not Base64: data URI has no base64 marker")
+            }
+            text.substring(comma + 1)
+        } else {
+            text
+        }
+
+        var symbols = 0
+        var padding = 0
+        var sawPadding = false
+        for (c in payload) {
+            if (c == '\n' || c == '\r' || c == ' ' || c == '\t') continue
+            if (c == '=') {
+                sawPadding = true
+                padding++
+                if (padding > 2) throw KiteFormatException("not Base64: too much padding")
+                continue
+            }
+            if (sawPadding) throw KiteFormatException("not Base64: data follows padding")
+            if (base64Value(c) < 0) {
+                val code = c.code.toString(16).uppercase().padStart(4, '0')
+                throw KiteFormatException("not Base64: unexpected character U+$code")
+            }
+            symbols++
+        }
+        if (symbols == 0) throw KiteFormatException("not Base64: decoded to nothing")
+        val remainder = symbols and 3
+        if (remainder == 1) throw KiteFormatException("not Base64: impossible payload length")
+        if (padding > 0) {
+            val expected = when (remainder) {
+                2 -> 2
+                3 -> 1
+                else -> 0
+            }
+            if (padding != expected) throw KiteFormatException("not Base64: malformed padding")
+        }
+
+        val out = ByteArray((symbols.toLong() * 6L / 8L).toInt())
+        var outAt = 0
         var acc = 0
         var bits = 0
         for (c in payload) {
             if (c == '=') break
             if (c == '\n' || c == '\r' || c == ' ' || c == '\t') continue
-            val v = when (c) {
-                in 'A'..'Z' -> c - 'A'
-                in 'a'..'z' -> c - 'a' + 26
-                in '0'..'9' -> c - '0' + 52
-                '+', '-' -> 62
-                '/', '_' -> 63
-                else -> throw KiteFormatException("not Base64: unexpected character '$c'")
-            }
+            val v = base64Value(c)
             acc = (acc shl 6) or v
             bits += 6
             if (bits >= 8) {
                 bits -= 8
-                out.add(((acc shr bits) and 0xFF).toByte())
+                out[outAt++] = ((acc shr bits) and 0xFF).toByte()
             }
+            if (bits == 0) acc = 0
         }
-        if (out.isEmpty()) throw KiteFormatException("not Base64: decoded to nothing")
-        return out.toByteArray()
+        if (bits > 0 && (acc and ((1 shl bits) - 1)) != 0) {
+            throw KiteFormatException("not Base64: non-zero discarded bits")
+        }
+        return out
+    }
+
+    private fun base64Value(c: Char): Int = when (c) {
+        in 'A'..'Z' -> c - 'A'
+        in 'a'..'z' -> c - 'a' + 26
+        in '0'..'9' -> c - '0' + 52
+        '+', '-' -> 62
+        '/', '_' -> 63
+        else -> -1
     }
 }
