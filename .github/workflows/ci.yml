@@ -7,9 +7,8 @@ name: CI
 #   need mutool from mupdf-tools; without it they report as SKIPPED).
 #   It runs on every push and pull request.
 # - `apple` and `js` prove the non-JVM targets compile AND pass the common
-#   tests. Minutes choice: they run only on pushes to main (not on PRs) to
-#   keep PR feedback fast and macOS minutes bounded; a regression lands at
-#   most one merge late and still blocks main immediately.
+#   tests before merge. Platform regressions are therefore merge-blocking,
+#   instead of being discovered only after they land on main.
 
 on:
   push:
@@ -21,11 +20,17 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - name: Set up JDK 21
         uses: actions/setup-java@v4
@@ -50,7 +55,23 @@ jobs:
           :kitepdf-core:jvmTest :kitepdf-pdf:jvmTest :kitepdf-epub:jvmTest
           :kitepdf-cbz:jvmTest :kitepdf-svg:jvmTest
           :kitepdf-skia-renderer:jvmTest :kitepdf-compose-viewer:jvmTest
-          :kitepdf:jvmTest :kitepdf-net:jvmTest --stacktrace
+          :kitepdf:jvmTest :kitepdf-net:jvmTest --continue --stacktrace
+
+      - name: Test common code through Android host variants
+        run: >
+          ./gradlew
+          :kitepdf-core:testAndroidHostTest :kitepdf-pdf:testAndroidHostTest
+          :kitepdf-epub:testAndroidHostTest :kitepdf-cbz:testAndroidHostTest
+          :kitepdf-svg:testAndroidHostTest :kitepdf:testAndroidHostTest
+          --continue --stacktrace
+
+      - name: Compile Android rendering backends
+        run: >
+          ./gradlew
+          :kitepdf-native-renderer:compileAndroidMain
+          :kitepdf-skia-renderer:compileAndroidMain
+          :kitepdf-compose-viewer:compileAndroidMain
+          --continue --stacktrace
 
       - name: Test :kitepdf-native-renderer (JVM oracle + fuzz tests)
         run: ./gradlew :kitepdf-native-renderer:jvmTest --stacktrace
@@ -81,11 +102,12 @@ jobs:
           if-no-files-found: ignore
 
   apple:
-    # Pushes to main only; see the minutes note at the top.
-    if: github.event_name == 'push'
     runs-on: macos-latest
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - name: Set up JDK 21
         uses: actions/setup-java@v4
@@ -103,21 +125,33 @@ jobs:
           key: konan-${{ runner.os }}-${{ hashFiles('gradle/libs.versions.toml') }}
           restore-keys: konan-${{ runner.os }}-
 
-      - name: Test iOS simulator (core, pdf, epub, svg)
+      - name: Test iOS simulator common suites
         run: >
           ./gradlew
           :kitepdf-core:iosSimulatorArm64Test
           :kitepdf-pdf:iosSimulatorArm64Test
           :kitepdf-epub:iosSimulatorArm64Test
-          :kitepdf-svg:iosSimulatorArm64Test --stacktrace
+          :kitepdf-cbz:iosSimulatorArm64Test
+          :kitepdf-svg:iosSimulatorArm64Test --continue --stacktrace
 
-      - name: Test macOS arm64 (core, pdf, epub)
+      - name: Compile iOS rendering backends
+        run: >
+          ./gradlew
+          :kitepdf-native-renderer:compileKotlinIosSimulatorArm64
+          :kitepdf-skia-renderer:compileKotlinIosSimulatorArm64
+          :kitepdf-compose-viewer:compileKotlinIosSimulatorArm64
+          --continue --stacktrace
+
+      - name: Test macOS arm64 suites and CoreGraphics renderer
         run: >
           ./gradlew
           :kitepdf-core:macosArm64Test
           :kitepdf-pdf:macosArm64Test
           :kitepdf-epub:macosArm64Test
-          :kitepdf:macosArm64Test --stacktrace
+          :kitepdf-cbz:macosArm64Test
+          :kitepdf-svg:macosArm64Test
+          :kitepdf:macosArm64Test
+          :kitepdf-native-renderer:macosArm64Test --continue --stacktrace
 
       - name: Upload test reports
         if: always()
@@ -128,11 +162,12 @@ jobs:
           if-no-files-found: ignore
 
   js:
-    # Pushes to main only; see the minutes note at the top.
-    if: github.event_name == 'push'
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - name: Set up JDK 21
         uses: actions/setup-java@v4
@@ -143,8 +178,21 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
-      - name: Test JS on Node (core, pdf, svg)
-        run: ./gradlew :kitepdf-core:jsNodeTest :kitepdf-pdf:jsNodeTest :kitepdf-svg:jsNodeTest --stacktrace
+      - name: Test JS on Node
+        run: >
+          ./gradlew
+          :kitepdf-core:jsNodeTest :kitepdf-pdf:jsNodeTest
+          :kitepdf-epub:jsNodeTest :kitepdf-cbz:jsNodeTest
+          :kitepdf-svg:jsNodeTest :kitepdf:jsNodeTest
+          :kitepdf-net:jsNodeTest --continue --stacktrace
+
+      - name: Compile browser rendering backends
+        run: >
+          ./gradlew
+          :kitepdf-native-renderer:compileKotlinJs
+          :kitepdf-skia-renderer:compileKotlinJs
+          :kitepdf-compose-viewer:compileKotlinJs
+          --continue --stacktrace
 
       - name: Upload test reports
         if: always()

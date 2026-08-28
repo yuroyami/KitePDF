@@ -21,6 +21,7 @@ kotlin {
         namespace = "io.github.yuroyami.kitepdf.epub"
         compileSdk = 37
         minSdk = 21
+        withHostTest {}
     }
 
     jvm()
@@ -54,7 +55,14 @@ kotlin {
 
     js {
         browser()
-        nodejs()
+        nodejs {
+            testTask {
+                useMocha {
+                    // Layout- and inflate-heavy common tests exceed Mocha's 2s default.
+                    timeout = "120s"
+                }
+            }
+        }
         binaries.library()
     }
     @OptIn(ExperimentalWasmDsl::class)
