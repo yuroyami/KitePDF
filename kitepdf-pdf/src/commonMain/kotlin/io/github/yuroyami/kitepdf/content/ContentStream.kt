@@ -87,7 +87,7 @@ public object ContentStreamParser {
             val loopStart = reader.pos()
             val tok = try {
                 peekNonOperatorToken(lexer)
-            } catch (_: Throwable) {
+            } catch (_: Exception) {
                 // Lexer choked on garbage (bad hex digit, stray '>', unterminated
                 // string, …). Skip forward and retry. peekNonOperatorToken may have
                 // already advanced; if it did not, force one byte of progress.
@@ -105,7 +105,7 @@ public object ContentStreamParser {
                             // Capture the whole "BI…EI" run verbatim so it survives a
                             // parse → edit → re-serialize round-trip.
                             ops.add(Operation("BI", emptyList(), bytes.copyOfRange(tok.offset, reader.pos())))
-                        } catch (_: Throwable) {
+                        } catch (_: Exception) {
                             // Malformed inline image: skip past it best-effort but keep
                             // the rest of the page.
                             skipToProgress(reader, loopStart)
@@ -123,7 +123,7 @@ public object ContentStreamParser {
                     rewindToken(reader, tok)
                     try {
                         operandStack.add(parser.readObject())
-                    } catch (_: Throwable) {
+                    } catch (_: Exception) {
                         // A malformed operand (e.g. "[ ...unterminated", bad number).
                         // Drop the operands accumulated for this operator and skip
                         // the bad token, then continue with the next operator.
@@ -215,7 +215,7 @@ public object ContentStreamParser {
         val filtered = isFiltered(dict)
         if (!filtered) {
             val len = unfilteredDataLength(dict)
-            if (len != null && dataStart + len <= reader.size) {
+            if (len != null && len <= reader.size - dataStart) {
                 reader.advance(len)
                 expectEi(reader)
                 return
@@ -283,11 +283,16 @@ public object ContentStreamParser {
         val imageMask = boolOf(dict, "IM", "ImageMask") == true
         val bpc = if (imageMask) 1L else (intOf(dict, "BPC", "BitsPerComponent") ?: return null)
         val components = if (imageMask) 1 else colorComponents(dict) ?: return null
+        if (bpc !in 1L..16L) return null
 
-        val bitsPerRow = w * bpc * components
+        if (w > Long.MAX_VALUE / bpc) return null
+        val samplesPerRow = w * bpc
+        if (samplesPerRow > Long.MAX_VALUE / components) return null
+        val bitsPerRow = samplesPerRow * components
+        if (bitsPerRow > Long.MAX_VALUE - 7L) return null
         val bytesPerRow = (bitsPerRow + 7) / 8
+        if (bytesPerRow > Int.MAX_VALUE.toLong() || h > Int.MAX_VALUE / bytesPerRow) return null
         val total = bytesPerRow * h
-        if (total < 0 || total > Int.MAX_VALUE) return null
         return total.toInt()
     }
 
