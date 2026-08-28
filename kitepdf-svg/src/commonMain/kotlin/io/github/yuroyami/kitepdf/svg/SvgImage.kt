@@ -56,11 +56,17 @@ public class SvgImage private constructor(
     /** Every element carrying an `id`, for `<use>`, gradients and `clip-path`. */
     private val byId: Map<String, KiteXmlNode.Element> by lazy {
         val out = LinkedHashMap<String, KiteXmlNode.Element>()
-        fun scan(el: KiteXmlNode.Element) {
+        val pending = ArrayList<KiteXmlNode.Element>()
+        pending.add(root)
+        while (pending.isNotEmpty()) {
+            val el = pending.removeAt(pending.lastIndex)
             el.attrs["id"]?.let { if (it.isNotEmpty() && it !in out) out[it] = el }
-            for (c in el.children) if (c is KiteXmlNode.Element) scan(c)
+            // Reverse push preserves document order while keeping traversal
+            // iterative: hostile SVG nesting must not consume the call stack.
+            for (i in el.children.indices.reversed()) {
+                (el.children[i] as? KiteXmlNode.Element)?.let(pending::add)
+            }
         }
-        scan(root)
         out
     }
 
@@ -563,17 +569,29 @@ public class SvgImage private constructor(
             // The XHTML parser lower-cases attribute names, so camelCase SVG
             // attributes (viewBox) arrive as "viewbox".
             val vb = (svg.attrs["viewBox"] ?: svg.attrs["viewbox"])?.let { s ->
-                val n = numbers(s); if (n.size >= 4) doubleArrayOf(n[0], n[1], n[2], n[3]) else null
+                val n = numbers(s)
+                if (n.size >= 4 && n.take(4).all(Double::isFinite)) {
+                    doubleArrayOf(n[0], n[1], n[2], n[3])
+                } else {
+                    null
+                }
             }
             val w = svg.attrs["width"]?.let { lenOrNull(it) } ?: vb?.get(2) ?: 300.0
             val h = svg.attrs["height"]?.let { lenOrNull(it) } ?: vb?.get(3) ?: 150.0
-            if (w <= 0 || h <= 0) return null
+            if (!w.isFinite() || !h.isFinite() || w <= 0 || h <= 0) return null
             return SvgImage(svg, w, h, vb)
         }
 
         private fun findSvg(el: KiteXmlNode.Element): KiteXmlNode.Element? {
-            if (el.tag.equals("svg", true)) return el
-            for (c in el.children) if (c is KiteXmlNode.Element) findSvg(c)?.let { return it }
+            val pending = ArrayList<KiteXmlNode.Element>()
+            pending.add(el)
+            while (pending.isNotEmpty()) {
+                val current = pending.removeAt(pending.lastIndex)
+                if (current.tag.equals("svg", true)) return current
+                for (i in current.children.indices.reversed()) {
+                    (current.children[i] as? KiteXmlNode.Element)?.let(pending::add)
+                }
+            }
             return null
         }
 

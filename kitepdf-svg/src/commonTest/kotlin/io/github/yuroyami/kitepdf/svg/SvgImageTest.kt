@@ -82,4 +82,20 @@ class SvgImageTest {
         assertEquals(1, c.filterIsInstance<RecordingCanvas.Call.Fill>().size)
         assertEquals(1, c.filterIsInstance<RecordingCanvas.Call.Stroke>().size)
     }
+
+    @Test
+    fun non_finite_viewport_dimensions_are_rejected() {
+        assertEquals(null, SvgImage.parse("<svg width=\"NaN\" height=\"10\"/>".encodeToByteArray()))
+        assertEquals(null, SvgImage.parse("<svg width=\"10\" height=\"Infinity\"/>".encodeToByteArray()))
+    }
+
+    @Test
+    fun finding_an_svg_below_deep_wrappers_is_iterative() {
+        val wrapped = buildString {
+            repeat(5_000) { append("<g>") }
+            append("<svg width=\"10\" height=\"10\"/>")
+            repeat(5_000) { append("</g>") }
+        }
+        assertNotNull(SvgImage.parse(wrapped.encodeToByteArray()))
+    }
 }
