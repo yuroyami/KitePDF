@@ -366,8 +366,23 @@ The editor's incremental-save mode is the foundation for digital signature workf
 AES-encrypted documents (V4/AESV2 and V5/AES-256) can be edited directly: open with the password, edit, save. The editor re-encrypts every staged object to match the document's security handler, so the output opens with the same password:
 
 ```kotlin
+import kotlin.random.asKotlinRandom
+
+val secureRandom = java.security.SecureRandom().asKotlinRandom() // JVM/Android example
 val doc = PdfDocument.open(encryptedBytes, "password".encodeToByteArray())
-val out = doc.edit().apply { setInfo(title = "Reviewed") }.saveIncremental()
+val out = doc.edit(secureRandom).apply { setInfo(title = "Reviewed") }.saveIncremental()
 ```
 
-Documents encrypted with legacy RC4 (V1/V2) are refused for editing; decrypt-and-rebuild those first. Creating new encrypted documents works too: `PdfBuilder.encrypt(userPassword, ownerPassword)` produces an AES-256 (R6) file.
+Documents encrypted with legacy RC4 (V1/V2) are refused for editing; decrypt-and-rebuild those first. Creating new encrypted documents works too:
+
+```kotlin
+val bytes = PdfBuilder()
+    .encrypt(userPassword, ownerPassword, random = secureRandom)
+    .page { /* ... */ }
+    .build()
+```
+
+This produces AES-256 (R6). New encryption and encrypted incremental editing
+require a `kotlin.random.Random` adapter backed by the platform CSPRNG; Kotlin's
+general-purpose `Random.Default` is not a cryptographic source. A seeded
+`Random(seed)` is useful only for deterministic test fixtures.

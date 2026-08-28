@@ -19,10 +19,12 @@ reflowable EPUB 2/3 books. There is no platform PDF engine underneath, no JNI an
 no native binary, so one code path runs on Android, iOS, JVM, Kotlin/Native, JS
 and Wasm.
 
-The engine modules hold three `expect` declarations in total: a mutex, a thread
-id, and the deflate/inflate hook. All three live in `kitepdf-core`. Everything
-else is shared by every target. Drawing a page to a screen is a separate, opt-in
-artifact. KitePDF is pre-1.0, and the API changes between minor versions.
+The parsing and layout engine keeps its platform seams small. `kitepdf-core`
+holds three `expect` declarations: a mutex, a thread id, and the deflate/inflate
+hook. The umbrella artifact adds one native `stdio` adapter for file paths,
+partitioned by ABI because C numeric widths differ. The document logic remains
+shared by every target. Drawing a page to a screen is a separate, opt-in artifact.
+KitePDF is pre-1.0, and the API changes between minor versions.
 
 ```kotlin
 import io.github.yuroyami.kitepdf.PdfDocument
@@ -205,7 +207,7 @@ writer:
 - `drawImage(logo, x = 400.0, y = 700.0, width = 96.0, height = 48.0)` draws an image inside `page { }`. Create the image with `PdfImage.rgba(pixels, width = 128, height = 64)`, from `io.github.yuroyami.kitepdf.writer`.
 - All 14 standard fonts are available, with widths from the URW++ AFM metrics.
 - `EmbeddedFont.load(bytes)` loads a custom font. It subsets the TrueType outlines by default and emits a CIDFontType2/Identity-H font with a matching `/ToUnicode`. CFF outlines also work.
-- `PdfBuilder.encrypt(userPassword, ownerPassword)` writes an AES-256/R6 encrypted file. On the read side the engine handles RC4, AES-128 and AES-256, across revisions R2 to R6.
+- `PdfBuilder.encrypt(userPassword, ownerPassword, random = platformCsprng)` writes an AES-256/R6 encrypted file. A platform CSPRNG is required; Kotlin's general-purpose `Random.Default` is never silently used for keys or IVs. On the read side the engine handles RC4, AES-128 and AES-256, across revisions R2 to R6.
 
 ## Read an EPUB
 
@@ -292,7 +294,7 @@ may reach.
 | Limit | What it means for you |
 | --- | --- |
 | Redaction keeps a large uniform fill | A path is judged by its segments, so a background rectangle or page border whose edges lie outside every region survives. It hides nothing the black box does not already cover, and removing it would delete the page's artwork. |
-| Redaction does not test shadings | An `sh` operator painting into a region survives in the stream, covered only by the black box. |
+| Redaction judges shadings by their clip | A shading is removed when its clipping boundary touches or sits inside a redacted region. An unclipped/page-wide shading survives under the black box like any other full-page background. |
 | Redaction cannot reach every reference | An object taken off the page is emptied as well as unlinked, so an unknown reference ships an empty annotation rather than its contents. Two structures are left inconsistent rather than rewritten: a tagged document's `/StructTreeRoot` can still name a removed annotation, and an embedded file also listed in the catalog's `/Names /EmbeddedFiles` tree stays in the document. |
 | Redaction keeps a clipping path | A vector path in the region is removed, unless it also sets a clip (`W`): then only its paint goes and its coordinates stay, because dropping the clip would let everything it clips paint over the rest of the page. |
 | Redaction does not see a line width set through `/LW` | Only the `w` operator is tracked, so a stroke whose width comes from an ExtGState's `/LW` is padded using the last `w` value (or the 1.0 default) instead. This is a library-wide gap: the renderer does not read `/LW` either. |
@@ -307,11 +309,11 @@ may reach.
 | There is no structure tree | `markInfo` reports whether a document declares itself tagged. `/StructTreeRoot` is not parsed. |
 | EPUB fixed layout needs a fully fixed book | A hybrid book that mixes fixed and reflowable spine items uses the reflow path for the whole book. |
 | English hyphenation is reduced | It ships a small common-word pattern set rather than the full `hyph-en-us` data. |
-| CI does not cover every target | Pull requests run JVM tests only. Pushes to `main` also run the core, PDF and EPUB suites on the iOS simulator, macOS and JS/Node. Nothing in CI exercises Android rendering, Canvas2D, wasm or Linux/Windows native. |
+| CI does not execute every target | Pull requests and pushes run JVM and Android-host tests plus common tests on the iOS simulator, macOS and JS/Node. Nothing in CI executes Android device rendering, Canvas2D, wasm or Linux/Windows native. |
 
 ## Testing
 
-1142 tests across 213 test files. A differential harness compares the JVM/AWT
+1228 tests across 224 test files. A differential harness compares the JVM/AWT
 backend page by page against MuPDF, and only that backend. See
 [DIFFTEST.md](kitepdf-native-renderer/DIFFTEST.md). A local run over 39 pages
 reports a mean absolute error of 0.0053 and a worst page of 0.0263. The PDF

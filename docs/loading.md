@@ -78,7 +78,7 @@ Not available: file paths on JS and Wasm, because browsers have no filesystem. R
 
 ### Base64
 
-Takes a bare payload or a whole data URI, standard or URL-safe alphabet, padded or not, and ignores line breaks. That covers a JSON API response, an `<embed>` attribute and a clipboard paste.
+Takes a bare payload or a whole `;base64` data URI, standard or URL-safe alphabet, padded or not, and ignores whitespace. Malformed padding and truncated/non-canonical tails are rejected instead of being silently decoded. That covers a JSON API response, an `<embed>` attribute and a clipboard paste.
 
 ```kotlin
 KiteDoc.openBase64("JVBERi0xLjcKJc...")
@@ -117,7 +117,20 @@ val client = HttpClient()                    // your engine, your config
 val doc = KiteDoc.openUrl("https://example.com/book.epub", client)
 ```
 
-The client is yours: KitePDF neither creates nor closes it, so timeouts, retries, auth and logging stay under your control. Per-request headers go in the trailing block:
+Downloads are streamed and capped at 128 MiB by default, because KitePDF holds
+the downloaded bytes and document model in memory. Set a smaller application
+limit, or deliberately raise it, through the overload that takes `maxBytes`:
+
+```kotlin
+val doc = KiteDoc.openUrl(url, client, maxBytes = 32 * 1024 * 1024)
+val bytes = KiteDoc.downloadBytes(url, client, maxBytes = 32 * 1024 * 1024)
+```
+
+The limit is enforced against both `Content-Length` and the bytes actually
+streamed. `openUrlOrNull` still propagates coroutine cancellation, so cancelling
+a screen or request does not leave the download running.
+
+The client is yours: KitePDF neither creates nor closes it, so timeouts, retries, auth and logging stay under your control. Per-request headers go in the trailing block. Failure messages redact URL user-info, query strings and fragments:
 
 ```kotlin
 KiteDoc.openUrl(url, client) { header("Authorization", "Bearer $token") }
