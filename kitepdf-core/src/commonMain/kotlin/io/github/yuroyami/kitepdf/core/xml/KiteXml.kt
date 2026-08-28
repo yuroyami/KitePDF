@@ -169,16 +169,28 @@ public object KiteXml {
     public fun parse(xml: String): KiteXmlNode.Element {
         val root = KiteXmlNode.Element("#root", emptyMap())
         val stack = ArrayList<KiteXmlNode.Element>().apply { add(root) }
+        // Per-tag open positions make hostile unmatched/outer close tags O(n)
+        // overall. Repeated indexOfLast scans made a deeply nested malformed
+        // document quadratic.
+        val openPositions = HashMap<String, ArrayList<Int>>()
         for (t in tokenize(xml)) when (t) {
             is KiteXmlToken.Open -> {
                 val el = KiteXmlNode.Element(t.name, t.attrs)
                 el.parent = stack.last()
                 stack.last().children.add(el)
-                if (!t.selfClose) stack.add(el)
+                if (!t.selfClose) {
+                    stack.add(el)
+                    openPositions.getOrPut(t.name, ::ArrayList).add(stack.lastIndex)
+                }
             }
             is KiteXmlToken.Close -> {
-                val at = stack.indexOfLast { it.tag == t.name }
-                if (at > 0) while (stack.size > at) stack.removeAt(stack.size - 1)
+                val at = openPositions[t.name]?.lastOrNull() ?: continue
+                while (stack.lastIndex >= at) {
+                    val removed = stack.removeAt(stack.lastIndex)
+                    val positions = openPositions.getValue(removed.tag)
+                    positions.removeAt(positions.lastIndex)
+                    if (positions.isEmpty()) openPositions.remove(removed.tag)
+                }
             }
             is KiteXmlToken.Text -> stack.last().children.add(KiteXmlNode.Text(t.text))
         }

@@ -9,17 +9,24 @@ package io.github.yuroyami.kitepdf.core
  * PDF generators in tests/samples) need the same primitive.
  */
 public class ByteArrayBuilder(initialCapacity: Int = 64) {
+    init {
+        require(initialCapacity >= 0) { "initialCapacity must be >= 0" }
+    }
+
     private var buf: ByteArray = ByteArray(initialCapacity.coerceAtLeast(16))
     private var written: Int = 0
 
     public fun append(b: Byte) {
-        if (written == buf.size) grow(written + 1)
+        reserve(1)
         buf[written++] = b
     }
 
     public fun append(bytes: ByteArray, offset: Int = 0, length: Int = bytes.size - offset) {
+        require(offset >= 0 && length >= 0 && offset <= bytes.size - length) {
+            "offset/length are outside the source array"
+        }
         if (length == 0) return
-        if (written + length > buf.size) grow(written + length)
+        reserve(length)
         bytes.copyInto(buf, written, offset, offset + length)
         written += length
     }
@@ -32,7 +39,7 @@ public class ByteArrayBuilder(initialCapacity: Int = 64) {
     public fun appendAscii(s: String) {
         val n = s.length
         if (n == 0) return
-        if (written + n > buf.size) grow(written + n)
+        reserve(n)
         var w = written
         for (i in 0 until n) buf[w++] = s[i].code.toByte()
         written = w
@@ -52,7 +59,7 @@ public class ByteArrayBuilder(initialCapacity: Int = 64) {
         while (t != 0L) { t /= 10; digits++ }
         val sign = if (value < 0) 1 else 0
         val total = digits + sign
-        if (written + total > buf.size) grow(written + total)
+        reserve(total)
         if (sign == 1) buf[written] = '-'.code.toByte()
         var idx = written + total          // one past the last digit slot
         while (v != 0L) {
@@ -79,8 +86,9 @@ public class ByteArrayBuilder(initialCapacity: Int = 64) {
 
     /** Append [count] copies of [b] in one reserved span (no per-byte grow check). */
     public fun appendFill(b: Byte, count: Int) {
-        if (count <= 0) return
-        if (written + count > buf.size) grow(written + count)
+        require(count >= 0) { "count must be >= 0" }
+        if (count == 0) return
+        reserve(count)
         buf.fill(b, written, written + count)
         written += count
     }
@@ -89,9 +97,20 @@ public class ByteArrayBuilder(initialCapacity: Int = 64) {
 
     public fun toByteArray(): ByteArray = buf.copyOf(written)
 
+    private fun reserve(additional: Int) {
+        if (additional > Int.MAX_VALUE - written) {
+            throw IllegalStateException("byte buffer exceeds the platform array limit")
+        }
+        val required = written + additional
+        if (required > buf.size) grow(required)
+    }
+
     private fun grow(minCapacity: Int) {
-        var newCap = (buf.size * 2).coerceAtLeast(16)
-        while (newCap < minCapacity) newCap *= 2
+        var newCap = buf.size.coerceAtLeast(16)
+        while (newCap < minCapacity) {
+            val doubled = newCap.toLong() * 2L
+            newCap = if (doubled >= Int.MAX_VALUE) Int.MAX_VALUE else doubled.toInt()
+        }
         buf = buf.copyOf(newCap)
     }
 }

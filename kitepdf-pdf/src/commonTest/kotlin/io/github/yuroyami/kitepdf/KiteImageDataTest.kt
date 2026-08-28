@@ -561,7 +561,7 @@ class KiteImageDataTest {
             val chars = CharArray(5)
             var v = value
             for (k in 4 downTo 0) { chars[k] = ('!'.code + (v % 85).toInt()).toChar(); v /= 85 }
-            out.append(chars, 0, n + 1)
+            out.appendRange(chars, 0, n + 1)
             i += n
         }
         out.append("~>")

@@ -119,11 +119,19 @@ public class KiteImageData internal constructor(
             fillColor: RgbColor? = null,
         ): KiteImageData {
             val dict = stream.dict
-            val width = dict.getInt("Width")?.toInt() ?: 0
-            val height = dict.getInt("Height")?.toInt() ?: 0
+            val width = positiveDimension(dict, "Width") ?: 0
+            val height = positiveDimension(dict, "Height") ?: 0
             val isMask = (dict["ImageMask"] as? PdfBoolean)?.value == true ||
                 (dict["IM"] as? PdfBoolean)?.value == true
-            val bpc = if (isMask) 1 else dict.getInt("BitsPerComponent")?.toInt() ?: 8
+            val bpc = if (isMask) {
+                1
+            } else {
+                when (val declared = dict.getInt("BitsPerComponent")) {
+                    null -> 8
+                    1L, 2L, 4L, 8L, 16L -> declared.toInt()
+                    else -> 0 // preserve the distinction between absent and invalid
+                }
+            }
             val csObj = dict["ColorSpace"] ?: dict["CS"]
             val cs = colorSpaceName(csObj)
             val resolvedCs = if (isMask) null else resolveColorSpace(csObj, refs)
@@ -331,6 +339,12 @@ public class KiteImageData internal constructor(
             }
         }
 
+        /** Convert an untrusted PDF integer without wrapping a Long into Int. */
+        private fun positiveDimension(dict: PdfDictionary, key: String): Int? =
+            dict.getInt(key)
+                ?.takeIf { it in 1L..Int.MAX_VALUE.toLong() }
+                ?.toInt()
+
         /**
          * Decode an image's `/SMask` (ISO 32000-1 §11.6.5.2), a DeviceGray image
          * whose samples ARE the base image's per-pixel alpha, into a normalised
@@ -348,18 +362,19 @@ public class KiteImageData internal constructor(
             val raw = dict["SMask"] ?: return none
             val mask = when {
                 raw is PdfStream -> raw
-                refs != null -> raw.resolve(refs) as? PdfStream ?: return none
+                refs != null -> runCatching { raw.resolve(refs) }.getOrNull() as? PdfStream ?: return none
                 else -> return none
             }
             val mdict = mask.dict
-            val mw = mdict.getInt("Width")?.toInt() ?: return none
-            val mh = mdict.getInt("Height")?.toInt() ?: return none
-            if (mw <= 0 || mh <= 0) return none
+            val mw = positiveDimension(mdict, "Width") ?: return none
+            val mh = positiveDimension(mdict, "Height") ?: return none
+            val sampleCount = mw.toLong() * mh
+            if (sampleCount > MAX_MASK_SAMPLES) return none
             if (pickKind(extractFilterNames(mdict["Filter"])) != Kind.RAW) return none
             val bytes = runCatching { FilterChain.decode(mask) }.getOrNull() ?: return none
-            val alpha = when (mdict.getInt("BitsPerComponent")?.toInt() ?: 8) {
-                8 -> if (bytes.size >= mw * mh) bytes.copyOf(mw * mh) else return none
-                1 -> expand1BitToGray(bytes, mw, mh) ?: return none
+            val alpha = when (mdict.getInt("BitsPerComponent") ?: 8L) {
+                8L -> if (bytes.size.toLong() >= sampleCount) bytes.copyOf(sampleCount.toInt()) else return none
+                1L -> expand1BitToGray(bytes, mw, mh) ?: return none
                 else -> return none
             }
             return Triple(alpha, mw, mh)
@@ -407,18 +422,18 @@ public class KiteImageData internal constructor(
                 (mdict["IM"] as? PdfBoolean)?.value == true
             // §8.9.6 requires /ImageMask true; tolerate a missing flag only
             // when the stream is 1-bit anyway, and never guess at deeper data.
-            if (!isStencil && (mdict.getInt("BitsPerComponent")?.toInt() ?: 8) != 1) return none
-            val mw = mdict.getInt("Width")?.toInt() ?: return none
-            val mh = mdict.getInt("Height")?.toInt() ?: return none
-            if (mw <= 0 || mh <= 0) return none
+            if (!isStencil && (mdict.getInt("BitsPerComponent") ?: 8L) != 1L) return none
+            val mw = positiveDimension(mdict, "Width") ?: return none
+            val mh = positiveDimension(mdict, "Height") ?: return none
             // Untrusted dimensions: refuse to allocate a plane no real scan needs.
-            if (mw.toLong() * mh > MAX_MASK_SAMPLES) return none
+            val sampleCount = mw.toLong() * mh
+            if (sampleCount > MAX_MASK_SAMPLES) return none
             val bits = decodeStencilBits(mask, mdict, mw, mh, refs) ?: return none
             val rowBytes = (mw + 7) / 8
             if (bits.size < rowBytes.toLong() * mh) return none
             val invert = readDecode(mdict["Decode"] ?: mdict["D"])
                 ?.let { it.size >= 2 && it[0] == 1.0 } == true
-            val alpha = ByteArray(mw * mh)
+            val alpha = ByteArray(sampleCount.toInt())
             var o = 0
             for (y in 0 until mh) {
                 val rowStart = y * rowBytes
@@ -534,9 +549,11 @@ public class KiteImageData internal constructor(
         private const val MAX_ALIGNED_SAMPLES = 16_000_000L
 
         private fun expand1BitToGray(raw: ByteArray, w: Int, h: Int): ByteArray? {
-            val rowBytes = (w + 7) / 8 // 1-bit rows are byte-aligned
-            if (raw.size < rowBytes * h) return null
-            val out = ByteArray(w * h)
+            val rowBytes = ((w.toLong() + 7L) / 8L).toInt() // 1-bit rows are byte-aligned
+            if (raw.size.toLong() < rowBytes.toLong() * h) return null
+            val sampleCount = w.toLong() * h
+            if (sampleCount > MAX_MASK_SAMPLES) return null
+            val out = ByteArray(sampleCount.toInt())
             var o = 0
             for (y in 0 until h) {
                 val rowStart = y * rowBytes
