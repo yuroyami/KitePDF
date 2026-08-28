@@ -21,6 +21,7 @@ kotlin {
         namespace = "io.github.yuroyami.kitepdf.svg"
         compileSdk = 37
         minSdk = 21
+        withHostTest {}
     }
 
     jvm()

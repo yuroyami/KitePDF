@@ -22,6 +22,7 @@ kotlin {
         namespace = "io.github.yuroyami.kitepdf.core"
         compileSdk = 37
         minSdk = 21
+        withHostTest {}
     }
 
     jvm()
@@ -55,7 +56,15 @@ kotlin {
 
     js {
         browser()
-        nodejs()
+        nodejs {
+            testTask {
+                useMocha {
+                    // The multi-megabyte pure-Kotlin compression round trip is
+                    // intentionally substantial and exceeds Mocha's 2s default.
+                    timeout = "120s"
+                }
+            }
+        }
         binaries.library()
     }
     @OptIn(ExperimentalWasmDsl::class)

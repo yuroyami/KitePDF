@@ -45,7 +45,14 @@ kotlin {
 
     js {
         browser()
-        nodejs()
+        nodejs {
+            testTask {
+                useMocha {
+                    // Layout- and inflate-heavy common tests exceed Mocha's 2s default.
+                    timeout = "120s"
+                }
+            }
+        }
         binaries.library()
     }
     @OptIn(ExperimentalWasmDsl::class)
