@@ -17,6 +17,8 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.LayoutDirection
 import io.github.yuroyami.kitepdf.core.KitePage
+import io.github.yuroyami.kitepdf.core.kiteWarn
+import io.github.yuroyami.kitepdf.core.render.KITE_DEFAULT_MAX_RASTER_PIXELS
 import io.github.yuroyami.kitepdf.core.render.KiteMatrix
 import io.github.yuroyami.kitepdf.core.render.ReaderTheme
 import kotlinx.coroutines.sync.withLock
@@ -40,7 +42,19 @@ public class KitePageRasterizer(
     private val density: Density,
     private val layoutDirection: LayoutDirection,
     private val textMeasurer: TextMeasurer,
+    private val maxBitmapPixels: Long,
 ) {
+
+    /** Binary-compatible constructor using the default bitmap ceiling. */
+    public constructor(
+        density: Density,
+        layoutDirection: LayoutDirection,
+        textMeasurer: TextMeasurer,
+    ) : this(density, layoutDirection, textMeasurer, KITE_DEFAULT_MAX_RASTER_PIXELS)
+
+    init {
+        require(maxBitmapPixels > 0L) { "maxBitmapPixels must be > 0" }
+    }
 
     private companion object {
         /**
@@ -191,8 +205,11 @@ public class KitePageRasterizer(
                 return rasterizeCachedOffMain(cache, page, widthPx, heightPx, background, hairlineWidthPx, theme)
             } catch (cancelled: kotlinx.coroutines.CancellationException) {
                 throw cancelled
-            } catch (failure: Throwable) {
-                println("KitePDF: page $pageIndex failed to rasterize (attempt ${attempt + 1}): $failure")
+            } catch (failure: Exception) {
+                kiteWarn {
+                    "render: page $pageIndex failed to rasterize " +
+                        "(attempt ${attempt + 1}): ${failure.message ?: failure::class.simpleName}"
+                }
             }
         }
         return null
@@ -230,8 +247,21 @@ public class KitePageRasterizer(
         theme: ReaderTheme?,
         skipSystemFontText: Boolean,
     ): Pair<ImageBitmap, Boolean> {
-        val w = widthPx.coerceAtLeast(1)
-        val h = heightPx.coerceAtLeast(1)
+        require(widthPx > 0 && heightPx > 0) { "bitmap dimensions must be > 0" }
+        require(widthPx.toLong() * heightPx.toLong() <= maxBitmapPixels) {
+            "page bitmap is ${widthPx}x$heightPx pixels; limit is $maxBitmapPixels pixels"
+        }
+        require(page.displayWidth.isFinite() && page.displayWidth > 0.0) {
+            "page display width must be finite and > 0"
+        }
+        require(page.displayHeight.isFinite() && page.displayHeight > 0.0) {
+            "page display height must be finite and > 0"
+        }
+        require(hairlineWidthPx.isFinite() && hairlineWidthPx >= 0f) {
+            "hairlineWidthPx must be finite and >= 0"
+        }
+        val w = widthPx
+        val h = heightPx
         // Fit scale from the display box: displayToDeviceBase() already maps
         // unscaled page space into a top-left, Y-down device box of
         // [0,displayWidth] x [0,displayHeight] (PDF folds in the display-box origin
@@ -256,12 +286,17 @@ public class KitePageRasterizer(
 
 /** [KitePageRasterizer] wired to the composition's density, layout direction and font resolver. */
 @Composable
-public fun rememberKitePageRasterizer(): KitePageRasterizer {
+public fun rememberKitePageRasterizer(): KitePageRasterizer =
+    rememberKitePageRasterizer(KITE_DEFAULT_MAX_RASTER_PIXELS)
+
+/** [rememberKitePageRasterizer] with an explicit per-bitmap allocation ceiling. */
+@Composable
+public fun rememberKitePageRasterizer(maxBitmapPixels: Long): KitePageRasterizer {
     val density = LocalDensity.current
     val layoutDirection = LocalLayoutDirection.current
     val textMeasurer = rememberTextMeasurer()
-    return remember(density, layoutDirection, textMeasurer) {
-        KitePageRasterizer(density, layoutDirection, textMeasurer)
+    return remember(density, layoutDirection, textMeasurer, maxBitmapPixels) {
+        KitePageRasterizer(density, layoutDirection, textMeasurer, maxBitmapPixels)
     }
 }
 

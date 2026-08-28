@@ -3,6 +3,7 @@ package io.github.yuroyami.kitepdf.nativerenderer
 import android.graphics.Bitmap
 import android.graphics.Canvas as AndroidCanvas
 import android.graphics.Color
+import io.github.yuroyami.kitepdf.core.render.KITE_DEFAULT_MAX_RASTER_PIXELS
 import io.github.yuroyami.kitepdf.PdfPage
 import io.github.yuroyami.kitepdf.rasterGeometry
 
@@ -21,12 +22,21 @@ import io.github.yuroyami.kitepdf.rasterGeometry
  */
 public object AndroidPdfBitmapRenderer {
 
+    /** Render with the default allocation ceiling. */
     public fun renderToBitmap(
         page: PdfPage,
         scale: Double = 1.0,
         background: Int = Color.WHITE,
+    ): Bitmap = renderToBitmap(page, scale, background, KITE_DEFAULT_MAX_RASTER_PIXELS)
+
+    /** Render with an explicit allocation ceiling. */
+    public fun renderToBitmap(
+        page: PdfPage,
+        scale: Double = 1.0,
+        background: Int = Color.WHITE,
+        maxPixels: Long,
     ): Bitmap {
-        val geometry = page.rasterGeometry(scale)
+        val geometry = page.rasterGeometry(scale, maxPixels)
         val bm = Bitmap.createBitmap(geometry.widthPx, geometry.heightPx, Bitmap.Config.ARGB_8888)
         val canvas = AndroidCanvas(bm)
         canvas.drawColor(background)

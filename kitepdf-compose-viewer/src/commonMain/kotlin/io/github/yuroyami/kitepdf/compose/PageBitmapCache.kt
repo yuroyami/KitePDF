@@ -30,7 +30,16 @@ internal class PageBitmapCache(private val maxBytes: Long) {
     var trackedBytes = 0L
         private set
 
-    private fun bytesOf(key: Key): Long = key.w.toLong() * key.h * 4L
+    /**
+     * Saturating byte estimate. Raster dimensions normally stay small, but a
+     * cache budget must never be defeated by overflowing `w * h * 4` back to a
+     * negative value.
+     */
+    private fun bytesOf(key: Key): Long {
+        if (key.w <= 0 || key.h <= 0) return 0L
+        val pixels = key.w.toLong() * key.h.toLong() // Int² still fits Long.
+        return if (pixels > Long.MAX_VALUE / 4L) Long.MAX_VALUE else pixels * 4L
+    }
 
     /**
      * The cached bitmap for [key], or [produce]'s result, inserted and
@@ -54,12 +63,15 @@ internal class PageBitmapCache(private val maxBytes: Long) {
     fun put(key: Key, bitmap: ImageBitmap) {
         if (maxBytes <= 0L) return
         if (entries.remove(key) != null) trackedBytes -= bytesOf(key)
+        val cost = bytesOf(key)
+        // The caller still receives an oversized freshly-rendered bitmap, but
+        // retaining it would make the advertised cache budget meaningless.
+        if (cost == Long.MAX_VALUE || cost > maxBytes) return
         entries[key] = bitmap
-        trackedBytes += bytesOf(key)
+        trackedBytes += cost
         val it = entries.keys.iterator()
         while (trackedBytes > maxBytes && it.hasNext()) {
             val eldest = it.next()
-            if (eldest == key) continue // never evict what we just produced
             it.remove()
             trackedBytes -= bytesOf(eldest)
         }

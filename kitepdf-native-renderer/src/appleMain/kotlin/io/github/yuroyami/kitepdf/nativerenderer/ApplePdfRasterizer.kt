@@ -1,6 +1,7 @@
 package io.github.yuroyami.kitepdf.nativerenderer
 
 import io.github.yuroyami.kitepdf.PdfPage
+import io.github.yuroyami.kitepdf.core.render.KITE_DEFAULT_MAX_RASTER_PIXELS
 import io.github.yuroyami.kitepdf.rasterGeometry
 import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.cinterop.alloc
@@ -62,8 +63,22 @@ public object ApplePdfRasterizer {
         backgroundG: Double = 1.0,
         backgroundB: Double = 1.0,
         backgroundA: Double = 1.0,
+    ): NSData? = renderToPngData(
+        page, scale, backgroundR, backgroundG, backgroundB, backgroundA,
+        KITE_DEFAULT_MAX_RASTER_PIXELS,
+    )
+
+    /** [renderToPngData] with an explicit allocation ceiling. */
+    public fun renderToPngData(
+        page: PdfPage,
+        scale: Double = 1.0,
+        backgroundR: Double = 1.0,
+        backgroundG: Double = 1.0,
+        backgroundB: Double = 1.0,
+        backgroundA: Double = 1.0,
+        maxPixels: Long,
     ): NSData? {
-        val geometry = page.rasterGeometry(scale)
+        val geometry = page.rasterGeometry(scale, maxPixels)
         val widthPx = geometry.widthPx.toULong()
         val heightPx = geometry.heightPx.toULong()
         val space = CGColorSpaceCreateDeviceRGB() ?: return null

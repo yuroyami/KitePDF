@@ -1,6 +1,7 @@
 package io.github.yuroyami.kitepdf.skia
 
 import io.github.yuroyami.kitepdf.PdfPage
+import io.github.yuroyami.kitepdf.core.render.KITE_DEFAULT_MAX_RASTER_PIXELS
 import io.github.yuroyami.kitepdf.rasterGeometry
 import org.jetbrains.skia.Color
 import org.jetbrains.skia.EncodedImageFormat
@@ -34,8 +35,16 @@ public object PdfPageRasterizer {
         page: PdfPage,
         scale: Double = 1.0,
         background: Int = Color.WHITE,
+    ): Image = renderToImage(page, scale, background, KITE_DEFAULT_MAX_RASTER_PIXELS)
+
+    /** [renderToImage] with an explicit allocation ceiling. */
+    public fun renderToImage(
+        page: PdfPage,
+        scale: Double = 1.0,
+        background: Int = Color.WHITE,
+        maxPixels: Long,
     ): Image {
-        val geometry = page.rasterGeometry(scale)
+        val geometry = page.rasterGeometry(scale, maxPixels)
         val surface = Surface.makeRasterN32Premul(geometry.widthPx, geometry.heightPx)
         try {
             val skCanvas = surface.canvas
@@ -50,8 +59,20 @@ public object PdfPageRasterizer {
     }
 
     /** Convenience: render and return PNG bytes. */
-    public fun encodeToPng(page: PdfPage, scale: Double = 1.0, background: Int = Color.WHITE): ByteArray {
-        val image = renderToImage(page, scale, background)
+    public fun encodeToPng(
+        page: PdfPage,
+        scale: Double = 1.0,
+        background: Int = Color.WHITE,
+    ): ByteArray = encodeToPng(page, scale, background, KITE_DEFAULT_MAX_RASTER_PIXELS)
+
+    /** [encodeToPng] with an explicit allocation ceiling. */
+    public fun encodeToPng(
+        page: PdfPage,
+        scale: Double = 1.0,
+        background: Int = Color.WHITE,
+        maxPixels: Long,
+    ): ByteArray {
+        val image = renderToImage(page, scale, background, maxPixels)
         try {
             val data = image.encodeToData(EncodedImageFormat.PNG)
                 ?: error("Skia: failed to encode page to PNG")

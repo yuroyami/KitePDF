@@ -1,6 +1,7 @@
 package io.github.yuroyami.kitepdf.nativerenderer
 
 import io.github.yuroyami.kitepdf.PdfPage
+import io.github.yuroyami.kitepdf.core.render.KITE_DEFAULT_MAX_RASTER_PIXELS
 import io.github.yuroyami.kitepdf.rasterGeometry
 import java.awt.Color
 import java.awt.image.BufferedImage
@@ -17,12 +18,21 @@ import javax.imageio.ImageIO
  */
 public object AwtPdfRasterizer {
 
+    /** Render with the default allocation ceiling. */
     public fun renderToImage(
         page: PdfPage,
         scale: Double = 1.0,
         background: Color = Color.WHITE,
+    ): BufferedImage = renderToImage(page, scale, background, KITE_DEFAULT_MAX_RASTER_PIXELS)
+
+    /** Render with an explicit allocation ceiling. */
+    public fun renderToImage(
+        page: PdfPage,
+        scale: Double = 1.0,
+        background: Color = Color.WHITE,
+        maxPixels: Long,
     ): BufferedImage {
-        val geometry = page.rasterGeometry(scale)
+        val geometry = page.rasterGeometry(scale, maxPixels)
         val w = geometry.widthPx
         val h = geometry.heightPx
         val img = BufferedImage(w, h, BufferedImage.TYPE_INT_ARGB)
@@ -42,17 +52,41 @@ public object AwtPdfRasterizer {
     }
 
     /** Returns PNG bytes ready to write to disk / a network response. */
-    public fun encodeToPng(page: PdfPage, scale: Double = 1.0, background: Color = Color.WHITE): ByteArray {
-        val img = renderToImage(page, scale, background)
+    public fun encodeToPng(
+        page: PdfPage,
+        scale: Double = 1.0,
+        background: Color = Color.WHITE,
+    ): ByteArray = encodeToPng(page, scale, background, KITE_DEFAULT_MAX_RASTER_PIXELS)
+
+    /** Returns PNG bytes with an explicit allocation ceiling. */
+    public fun encodeToPng(
+        page: PdfPage,
+        scale: Double = 1.0,
+        background: Color = Color.WHITE,
+        maxPixels: Long,
+    ): ByteArray {
+        val img = renderToImage(page, scale, background, maxPixels)
         val baos = ByteArrayOutputStream()
         ImageIO.write(img, "png", baos)
         return baos.toByteArray()
     }
 
     /** Returns JPEG bytes. Quality is JDK default; tweak with custom ImageWriter when needed. */
-    public fun encodeToJpeg(page: PdfPage, scale: Double = 1.0, background: Color = Color.WHITE): ByteArray {
+    public fun encodeToJpeg(
+        page: PdfPage,
+        scale: Double = 1.0,
+        background: Color = Color.WHITE,
+    ): ByteArray = encodeToJpeg(page, scale, background, KITE_DEFAULT_MAX_RASTER_PIXELS)
+
+    /** Returns JPEG bytes with an explicit allocation ceiling. */
+    public fun encodeToJpeg(
+        page: PdfPage,
+        scale: Double = 1.0,
+        background: Color = Color.WHITE,
+        maxPixels: Long,
+    ): ByteArray {
         // JPEG doesn't support alpha; force opaque RGB.
-        val src = renderToImage(page, scale, background)
+        val src = renderToImage(page, scale, background, maxPixels)
         val rgb = BufferedImage(src.width, src.height, BufferedImage.TYPE_INT_RGB)
         val g = rgb.createGraphics()
         try {
