@@ -121,10 +121,73 @@ class StructuredTextTest {
         assertEquals(listOf("top", "middle", "bottom"), lines)
     }
 
+    /* ─── Effective font size (issue #22) ─────────────────────────────────── */
+
+    @Test
+    fun tf_size_with_unit_tm_reports_tf_size() {
+        val doc = KitePDF.open(buildContentPdf("BT /F1 18 Tf 1 0 0 1 72 720 Tm (Hello) Tj ET\n"))
+        assertEquals(18.0, doc.pages[0].structuredText.spans.single().fontSize, 1e-9)
+    }
+
+    @Test
+    fun size_baked_into_tm_reports_effective_size() {
+        // Issue #22: producers write `/F1 1 Tf` and scale via Tm.
+        val doc = KitePDF.open(buildContentPdf("BT /F1 1 Tf 15 0 0 15 72 720 Tm (Hello) Tj ET\n"))
+        assertEquals(15.0, doc.pages[0].structuredText.spans.single().fontSize, 1e-9)
+    }
+
+    @Test
+    fun rotated_tm_keeps_effective_size() {
+        // 90-degree rotation at scale 12: the Y basis is (-12, 0), length 12.
+        val doc = KitePDF.open(buildContentPdf("BT /F1 1 Tf 0 12 -12 0 200 400 Tm (Rot) Tj ET\n"))
+        assertEquals(12.0, doc.pages[0].structuredText.spans.single().fontSize, 1e-9)
+    }
+
+    @Test
+    fun content_cm_scale_folds_into_size() {
+        val doc = KitePDF.open(
+            buildContentPdf("0.5 0 0 0.5 0 0 cm\nBT /F1 18 Tf 1 0 0 1 100 700 Tm (Half) Tj ET\n"),
+        )
+        assertEquals(9.0, doc.pages[0].structuredText.spans.single().fontSize, 1e-9)
+    }
+
+    @Test
+    fun horizontal_scaling_tz_does_not_change_size() {
+        val doc = KitePDF.open(buildContentPdf("BT /F1 12 Tf 200 Tz 1 0 0 1 72 720 Tm (Wide) Tj ET\n"))
+        assertEquals(12.0, doc.pages[0].structuredText.spans.single().fontSize, 1e-9)
+    }
+
+    @Test
+    fun y_flipped_tm_reports_positive_size() {
+        val doc = KitePDF.open(buildContentPdf("BT /F1 1 Tf 12 0 0 -12 72 720 Tm (Flip) Tj ET\n"))
+        assertEquals(12.0, doc.pages[0].structuredText.spans.single().fontSize, 1e-9)
+    }
+
+    @Test
+    fun degenerate_tm_falls_back_to_tf_size() {
+        val doc = KitePDF.open(buildContentPdf("BT /F1 8 Tf 0 0 0 0 100 700 Tm (Zero) Tj ET\n"))
+        assertEquals(8.0, doc.pages[0].structuredText.spans.single().fontSize, 1e-9)
+    }
+
+    @Test
+    fun tm_scaled_adjacent_runs_get_no_spurious_space() {
+        // Two runs 1pt apart at effective 15pt. "Hel" in Helvetica is 1500
+        // font units = 22.5pt here, so the second run starts at 72 + 22.5 + 1.
+        // The joiner threshold is 0.25 x fontSize: against the old raw size
+        // (1.0 -> 0.25pt) the 1pt gap faked a word break, "Hel lo".
+        val doc = KitePDF.open(
+            buildContentPdf(
+                "BT /F1 1 Tf 15 0 0 15 72 720 Tm (Hel) Tj ET\n" +
+                    "BT /F1 1 Tf 15 0 0 15 95.5 720 Tm (lo) Tj ET\n",
+            ),
+        )
+        assertEquals("Hello", doc.pages[0].structuredText.blocks.single().lines.single().text)
+    }
+
     /* ─── Builder ─────────────────────────────────────────────────────────── */
 
-    /** Build a single-page PDF whose content stream draws each (x, y, text) triple. */
-    private fun buildTextPdf(runs: List<Pair<Pair<Double, Double>, String>>): ByteArray {
+    /** Build a single-page PDF around one raw content stream (Helvetica as /F1). */
+    private fun buildContentPdf(content: String): ByteArray {
         val buf = ByteArrayBuilder()
         val offsets = mutableListOf<Int>()
         fun w(s: String) = buf.append(s.encodeToByteArray())
@@ -137,18 +200,10 @@ class StructuredTextTest {
         offsets.add(buf.size())
         w("3 0 obj\n<< /Type /Page /Parent 2 0 R /Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R >>\nendobj\n")
 
-        // Build content stream: one BT/ET per run for clarity.
-        val sb = StringBuilder()
-        for (entry in runs) {
-            val x = entry.first.first
-            val y = entry.first.second
-            val text = entry.second
-            sb.append("BT /F1 18 Tf 1 0 0 1 $x $y Tm ($text) Tj ET\n")
-        }
-        val content = sb.toString().encodeToByteArray()
+        val bytes = content.encodeToByteArray()
         offsets.add(buf.size())
-        w("4 0 obj\n<< /Length ${content.size} >>\nstream\n")
-        buf.append(content)
+        w("4 0 obj\n<< /Length ${bytes.size} >>\nstream\n")
+        buf.append(bytes)
         w("\nendstream\nendobj\n")
 
         offsets.add(buf.size())
@@ -160,4 +215,12 @@ class StructuredTextTest {
         w("trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n$xref\n%%EOF\n")
         return buf.toByteArray()
     }
+
+    /** Build a single-page PDF whose content stream draws each (x, y, text) triple. */
+    private fun buildTextPdf(runs: List<Pair<Pair<Double, Double>, String>>): ByteArray =
+        buildContentPdf(
+            runs.joinToString("") { entry ->
+                "BT /F1 18 Tf 1 0 0 1 ${entry.first.first} ${entry.first.second} Tm (${entry.second}) Tj ET\n"
+            },
+        )
 }

@@ -94,6 +94,11 @@ public data class PdfTextLine(
 public data class PdfTextSpan(
     val text: String,
     val fontSpec: FontSpec,
+    /**
+     * Effective font size in points: the `Tf` size times the text-matrix
+     * scale. Producers that set `Tf` to 1 and scale via `Tm` report the
+     * rendered size here, not 1.0.
+     */
     val fontSize: Double,
     /** Baseline-space origin in PDF user units. */
     val origin: Pair<Double, Double>,
@@ -306,10 +311,14 @@ private class TextCollectorCanvas : KiteCanvas {
 
             val text = glyphs.joinToString("") { it.text }
             val edgePoints = localEdges.map { textMatrix.transformPoint(it * horizScale, 0.0) }
+            // Effective size: Tf size times the matrix Y-basis length. Producers often
+            // write `/F1 1 Tf` and carry the real size in Tm (#22). The advance and
+            // ascender math above stays in raw Tf units; the matrix applies the rest.
+            val effectiveSize = fontSize * textMatrix.scaleY()
             return PdfTextSpan(
                 text = text,
                 fontSpec = fontSpec,
-                fontSize = fontSize,
+                fontSize = if (effectiveSize.isFinite() && effectiveSize > 0.0) effectiveSize else fontSize,
                 origin = originX to originY,
                 bounds = KiteRectangle(
                     left = left,
