@@ -213,7 +213,7 @@ public class ComposeCanvas(
                 val cp = toComposePath(outline, glyphMatrix).apply { fillType = PathFillType.NonZero }
                 drawScope.drawPath(cp, color = color, alpha = a, blendMode = composeBlend)
             }
-            penX += glyph.advanceWidth * advanceScale
+            penX += glyph.advanceWidth * advanceScale + glyph.advanceAdjust
         }
     }
 

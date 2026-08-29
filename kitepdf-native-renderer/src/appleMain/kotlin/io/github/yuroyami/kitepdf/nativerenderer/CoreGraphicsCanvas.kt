@@ -207,7 +207,7 @@ public class CoreGraphicsCanvas(private val ctx: CGContextRef) : KiteCanvas {
                     CGContextFillPath(ctx)
                     drewAny = true
                 }
-                penX += glyph.advanceWidth * advanceScale
+                penX += glyph.advanceWidth * advanceScale + glyph.advanceAdjust
             }
         } finally {
             CGContextRestoreGState(ctx)
@@ -244,7 +244,7 @@ public class CoreGraphicsCanvas(private val ctx: CGContextRef) : KiteCanvas {
             for (glyph in glyphs) {
                 val ch = glyph.text.firstOrNull()
                 if (ch == null) {
-                    penX += glyph.advanceWidth * advanceScale
+                    penX += glyph.advanceWidth * advanceScale + glyph.advanceAdjust
                     continue
                 }
                 val path = memScoped {
@@ -270,7 +270,7 @@ public class CoreGraphicsCanvas(private val ctx: CGContextRef) : KiteCanvas {
                         CGPathRelease(path)
                     }
                 }
-                penX += glyph.advanceWidth * advanceScale
+                penX += glyph.advanceWidth * advanceScale + glyph.advanceAdjust
             }
         } finally {
             CFRelease(font)

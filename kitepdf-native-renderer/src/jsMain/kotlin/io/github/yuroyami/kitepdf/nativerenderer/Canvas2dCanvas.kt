@@ -139,7 +139,7 @@ public class Canvas2dCanvas(private val ctx: CanvasRenderingContext2D) : KiteCan
                     ctx.asDynamic().fill(p, "nonzero")
                     drewAny = true
                 }
-                penX += glyph.advanceWidth * advanceScale
+                penX += glyph.advanceWidth * advanceScale + glyph.advanceAdjust
             }
         } finally {
             ctx.restore()
@@ -195,7 +195,9 @@ public class Canvas2dCanvas(private val ctx: CanvasRenderingContext2D) : KiteCan
             for (glyph in glyphs) {
                 val t = glyph.text
                 if (t.isNotEmpty() && t != " ") ctx.fillText(t, penX, 0.0)
-                penX += glyph.advanceWidth * advScale
+                // advScale already carries sy (renderedSize), so the text-space
+                // spacing adjust needs the same factor to stay in step.
+                penX += glyph.advanceWidth * advScale + glyph.advanceAdjust * sy
             }
         } finally {
             ctx.restore()

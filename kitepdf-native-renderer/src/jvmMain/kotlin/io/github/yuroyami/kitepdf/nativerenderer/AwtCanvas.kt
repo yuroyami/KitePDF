@@ -149,7 +149,7 @@ public class AwtCanvas(private val g: Graphics2D) : KiteCanvas {
                     g.fill(awt)
                     drewAny = true
                 }
-                penX += glyph.advanceWidth * advanceScale
+                penX += glyph.advanceWidth * advanceScale + glyph.advanceAdjust
             }
         }
         // Embedded font present but produced no glyphs (e.g. a subset we can't
@@ -206,7 +206,9 @@ public class AwtCanvas(private val g: Graphics2D) : KiteCanvas {
                 for (glyph in glyphs) {
                     val t = glyph.text
                     if (t.isNotEmpty() && t != " ") g.drawString(t, penX.toFloat(), 0f)
-                    penX += glyph.advanceWidth * advScale
+                    // advScale already carries sy (renderedSize), so the text-space
+                    // spacing adjust needs the same factor to stay in step.
+                    penX += glyph.advanceWidth * advScale + glyph.advanceAdjust * sy
                 }
             }
         } finally {

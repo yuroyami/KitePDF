@@ -35,4 +35,10 @@ public data class TextGlyph(
      */
     val xOffset: Double = 0.0,
     val yOffset: Double = 0.0,
+    /**
+     * Extra pen advance in text-space units (Tc char spacing plus Tw word
+     * spacing), applied AFTER the `advanceWidth * fontSize / 1000` scaling.
+     * Unlike [xOffset] this is not in font design units. Zero by default.
+     */
+    val advanceAdjust: Double = 0.0,
 )

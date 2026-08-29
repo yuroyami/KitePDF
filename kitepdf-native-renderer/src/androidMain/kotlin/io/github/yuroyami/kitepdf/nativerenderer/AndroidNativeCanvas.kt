@@ -137,7 +137,7 @@ public class AndroidNativeCanvas(private val canvas: AndroidCanvas) : KiteCanvas
                 canvas.drawPath(p, paint)
                 drewAny = true
             }
-            penX += glyph.advanceWidth * advanceScale
+            penX += glyph.advanceWidth * advanceScale + glyph.advanceAdjust
         }
         // Embedded font present but produced no glyphs (e.g. a subset we can't
         // decode). Fall back to a system font rather than rendering blank.
@@ -195,7 +195,9 @@ public class AndroidNativeCanvas(private val canvas: AndroidCanvas) : KiteCanvas
             for (glyph in glyphs) {
                 val t = glyph.text
                 if (t.isNotEmpty() && t != " ") canvas.drawText(t, penX.toFloat(), 0f, paint)
-                penX += glyph.advanceWidth * advScale
+                // advScale already carries sy (renderedSize), so the text-space
+                // spacing adjust needs the same factor to stay in step.
+                penX += glyph.advanceWidth * advScale + glyph.advanceAdjust * sy
             }
         } finally {
             canvas.restore()
