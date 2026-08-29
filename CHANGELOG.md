@@ -5,7 +5,21 @@ All notable changes to KitePDF are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.8.0] - 2026-08-29
+
+Two new formats. Comic archives and SVG each get their own artifact, and
+`KiteDoc.open` recognises them the way it already recognised PDF and EPUB, so a
+comic reader can pull `kitepdf-cbz` without the EPUB engine coming with it.
+
+Text geometry got a pass as well. A span now reports the size a reader actually
+sees rather than the number in the font operator, and character and word
+spacing move the pen between glyphs on every backend instead of only at the
+start of the next run.
+
+The rest is hardening. Archive reading, remote downloads and page rasterizing
+all gained ceilings and fail closed on malformed input, and creating an
+encrypted document now demands a real platform random source instead of
+quietly accepting a non-cryptographic one.
 
 ### Added
 
@@ -54,7 +68,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   image headers so opening does not decode the archive, and packaging noise
   (`ComicInfo.xml`, `Thumbs.db`, hidden files) is ignored. WebP pages are
   detected but render blank until the image engine learns WebP.
-
 - The full MacExpertEncoding vector. Expert-set fonts (old-style figures,
   small capitals) selected the right glyphs for only six codes before.
 - CalGray and CalRGB colour spaces apply their gamma, whitepoint and matrix
