@@ -99,6 +99,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Structured text: `PdfTextSpan.fontSize` now reports the effective rendered
+  size (the `Tf` size times the text-matrix scale). Producers that write
+  `/F1 1 Tf` and carry the size in `Tm` reported 1.0 for every span (#22),
+  which also collapsed the line-clustering tolerance and the synthesised-space
+  threshold that scale off it.
+- Text rendering: `Tc` character spacing and `Tw` word spacing now move the pen
+  between glyphs inside a run, on every backend. Before, only the start of the
+  next run honoured them, so spaced text painted condensed and then jumped,
+  and structured-text bounds and char edges came out narrow.
+- `extractText`: the line-break and word-gap heuristics now scale with the
+  effective (Tm-scaled) font size, so size-in-Tm documents stop growing
+  spurious newlines and word breaks.
 - Malformed ZIP offsets, truncated central records and ZIP64 extras now fail
   closed instead of indexing outside the archive. Stored entries are bounded,
   encrypted/header-mismatched entries are refused, false EOCD signatures in a
