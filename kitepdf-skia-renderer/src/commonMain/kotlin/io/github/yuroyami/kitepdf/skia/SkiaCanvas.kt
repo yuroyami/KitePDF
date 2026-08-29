@@ -165,7 +165,7 @@ public class SkiaCanvas(private val canvas: SkCanvas) : KiteCanvas {
                 val sk = toSkPath(outline, glyphMatrix).apply { fillMode = PathFillMode.WINDING }
                 canvas.drawPath(sk, paint)
             }
-            penX += glyph.advanceWidth * advanceScale
+            penX += glyph.advanceWidth * advanceScale + glyph.advanceAdjust
         }
     }
 

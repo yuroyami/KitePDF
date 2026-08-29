@@ -98,7 +98,8 @@ public interface KiteCanvas {
      *
      * Embedded fonts ([hasOutlines] = true) carry a resolved [TextGlyph.outline]
      * per glyph; scale each by [fontSize]/[unitsPerEm], advance the pen by
-     * [TextGlyph.advanceWidth] (1/1000 em), and paint under [textToDevice].
+     * `advanceWidth * fontSize / 1000 + advanceAdjust` (the adjust term carries
+     * character/word spacing), and paint under [textToDevice].
      * Non-embedded fonts ([hasOutlines] = false) carry no outlines; render
      * [TextGlyph.text] through a host typeface chosen from [fontSpec].
      */

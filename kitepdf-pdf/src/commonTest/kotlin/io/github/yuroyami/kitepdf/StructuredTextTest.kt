@@ -184,6 +184,53 @@ class StructuredTextTest {
         assertEquals("Hello", doc.pages[0].structuredText.blocks.single().lines.single().text)
     }
 
+    /* ─── Character and word spacing (Tc / Tw) ────────────────────────────── */
+
+    @Test
+    fun char_spacing_widens_span_bounds() {
+        // 2 Tc at 10pt: each glyph advances 6.67 + 2. Width = 17.34, not 13.34.
+        val doc = KitePDF.open(buildContentPdf("BT /F1 10 Tf 2 Tc 1 0 0 1 72 720 Tm (AB) Tj ET\n"))
+        val b = doc.pages[0].structuredText.spans.single().bounds
+        assertEquals(17.34, b.right - b.left, 1e-6)
+    }
+
+    @Test
+    fun word_spacing_widens_the_space_glyph() {
+        // 5 Tw at 10pt: A(6.67) + space(2.78 + 5) + B(6.67) = 21.12.
+        val doc = KitePDF.open(buildContentPdf("BT /F1 10 Tf 5 Tw 1 0 0 1 72 720 Tm (A B) Tj ET\n"))
+        val b = doc.pages[0].structuredText.spans.single().bounds
+        assertEquals(21.12, b.right - b.left, 1e-6)
+    }
+
+    @Test
+    fun quote_operator_spacing_applies() {
+        // " sets aw=5 (Tw) and ac=2 (Tc) then shows:
+        // A(6.67+2) + space(2.78+2+5) + B(6.67+2) = 27.12.
+        val doc = KitePDF.open(buildContentPdf("BT /F1 10 Tf 1 0 0 1 72 720 Tm 5 2 (A B) \" ET\n"))
+        val b = doc.pages[0].structuredText.spans.single().bounds
+        assertEquals(27.12, b.right - b.left, 1e-6)
+    }
+
+    @Test
+    fun char_spacing_lands_in_char_edges() {
+        val doc = KitePDF.open(buildContentPdf("BT /F1 10 Tf 2 Tc 1 0 0 1 72 720 Tm (AB) Tj ET\n"))
+        val edges = doc.pages[0].structuredText.spans.single().charEdgePoints!!
+        assertEquals(72.0, edges[0].first, 1e-6)
+        assertEquals(80.67, edges[1].first, 1e-6)
+        assertEquals(89.34, edges[2].first, 1e-6)
+    }
+
+    @Test
+    fun spacing_keeps_bounds_and_tm_advance_consistent() {
+        // Two Tj in one BT under 2 Tc: the second span must start exactly where
+        // the first one's Tc-inclusive advance ends (72 + 17.34).
+        val doc = KitePDF.open(buildContentPdf("BT /F1 10 Tf 2 Tc 1 0 0 1 72 720 Tm (AB) Tj (AB) Tj ET\n"))
+        val spans = doc.pages[0].structuredText.blocks.single().lines.single().spans
+        assertEquals(2, spans.size)
+        assertEquals(89.34, spans[1].origin.first, 1e-6)
+        assertEquals(89.34, spans[0].bounds.right, 1e-6)
+    }
+
     /* ─── Builder ─────────────────────────────────────────────────────────── */
 
     /** Build a single-page PDF around one raw content stream (Helvetica as /F1). */

@@ -246,25 +246,14 @@ private class TextCollectorCanvas : KiteCanvas {
         val fontSpec: FontSpec,
         val fontSize: Double,
         val textMatrix: KiteMatrix,
-        /** Character spacing Tc, in unscaled text-space units (default 0). */
-        val charSpacing: Double = 0.0,
-        /** Word spacing Tw, in unscaled text-space units (default 0). */
-        val wordSpacing: Double = 0.0,
-        /** Horizontal scaling Tz as a fraction (100% ⇒ 1.0, default 1.0). */
-        val horizScale: Double = 1.0,
     ) {
         fun toSpan(): PdfTextSpan? {
             if (glyphs.isEmpty()) return null
 
-            // Advance per ISO 32000-1 §9.4.4: for each glyph the displacement is
+            // Advance per ISO 32000-1 §9.4.4: the displacement of each glyph is
             //   ((w0 - Tj/1000) * Tfs + Tc + Tw) * Th
-            // where Th is the horizontal scale (Tz/100). Here there is no per-glyph
-            // Tj (that lives in TJ arrays the renderer already applied), so we sum
-            //   (w0 * Tfs/1000 + Tc + Tw?) * Th.
-            // Tw applies only to single-byte code 32 in simple fonts. A simple
-            // font decodes one byte per glyph, so bytes.size == glyphs.size marks
-            // the single-byte case; composite fonts never receive Tw.
-            val singleByte = glyphs.all { it.byteCount == 1 }
+            // The renderer bakes Tc/Tw into TextGlyph.advanceAdjust and carries
+            // Th (Tz) on the matrix X basis, so summing here needs neither.
             var advance = 0.0
             // Local (text-space) x boundary per char, for selection/search
             // quads. A multi-char glyph splits its advance evenly; a glyph
@@ -272,10 +261,7 @@ private class TextCollectorCanvas : KiteCanvas {
             val localEdges = ArrayList<Double>(glyphs.size + 1)
             localEdges.add(0.0)
             for (g in glyphs) {
-                var glyphAdvance = g.advanceWidth * fontSize / 1000.0 + charSpacing
-                if (singleByte && wordSpacing != 0.0 && g.isWordSpace) {
-                    glyphAdvance += wordSpacing
-                }
+                val glyphAdvance = g.advanceWidth * fontSize / 1000.0 + g.advanceAdjust
                 val n = g.text.length
                 if (n == 0) {
                     advance += glyphAdvance
@@ -285,7 +271,6 @@ private class TextCollectorCanvas : KiteCanvas {
                     advance += glyphAdvance
                 }
             }
-            advance *= horizScale
 
             // Origin and bounds come from the *full* text-rendering matrix, so
             // rotation/skew (b, c) and non-uniform scale are honoured, not just
@@ -310,7 +295,7 @@ private class TextCollectorCanvas : KiteCanvas {
             val top = corners.maxOf { it.second }
 
             val text = glyphs.joinToString("") { it.text }
-            val edgePoints = localEdges.map { textMatrix.transformPoint(it * horizScale, 0.0) }
+            val edgePoints = localEdges.map { textMatrix.transformPoint(it, 0.0) }
             // Effective size: Tf size times the matrix Y-basis length. Producers often
             // write `/F1 1 Tf` and carry the real size in Tm (#22). The advance and
             // ascender math above stays in raw Tf units; the matrix applies the rest.

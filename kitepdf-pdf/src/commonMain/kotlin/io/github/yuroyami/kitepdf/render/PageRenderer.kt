@@ -1363,7 +1363,14 @@ public class PageRenderer(
         val resolveOutlines = !hidden &&
             ((doFill && canvas.resolvesGlyphOutlines) ||
                 ((doStroke || doClip) && font.hasEmbeddedOutlines))
-        val glyphs = font.layoutBytes(bytes, resolveOutlines)
+        val laidOut = font.layoutBytes(bytes, resolveOutlines)
+        // §9.4.4: per-glyph displacement includes Tc, and Tw on single-byte 0x20
+        // (layoutBytes already encodes that rule in isWordSpace). Bake both into
+        // the glyphs so every pen loop downstream applies them uniformly.
+        val glyphs = if (t.charSpacing == 0.0 && t.wordSpacing == 0.0) laidOut
+        else laidOut.map {
+            it.copy(advanceAdjust = t.charSpacing + (if (it.isWordSpace) t.wordSpacing else 0.0))
+        }
 
         if (!hidden) {
             if (doClip) accumulateTextClip(glyphs, font, t, textToUser)
@@ -1431,7 +1438,7 @@ public class PageRenderer(
                     )
                 }
             }
-            penX += glyph.advanceWidth * advanceScale
+            penX += glyph.advanceWidth * advanceScale + glyph.advanceAdjust
         }
     }
 
@@ -1468,7 +1475,7 @@ public class PageRenderer(
                 }.build()
                 appendPath(builder, transformPath(box, penMatrix))
             }
-            penX += glyph.advanceWidth * advanceScale
+            penX += glyph.advanceWidth * advanceScale + glyph.advanceAdjust
         }
     }
 
@@ -1515,19 +1522,16 @@ public class PageRenderer(
 
     /**
      * Sum of per-glyph advances, including Tc/Tw/Th adjustments, from the run's
-     * already-laid-out [glyphs] (composite Type 0 fonts contributed one glyph
-     * per CID code unit there, and [TextGlyph.isWordSpace] carries the
-     * single-byte-32 rule, so this matches `forEachGlyphAdvance` exactly).
+     * already-laid-out [glyphs]. Tc/Tw arrive baked into
+     * [TextGlyph.advanceAdjust] by [showText], so this and every canvas pen
+     * loop advance by the same per-glyph amount.
      */
     private fun totalAdvance(glyphs: List<TextGlyph>, t: TextState): Double {
         var advance = 0.0
         val sizeFactor = t.fontSize / 1000.0
         val hScale = t.horizontalScaling / 100.0
         for (g in glyphs) {
-            val perGlyph = g.advanceWidth * sizeFactor +
-                t.charSpacing +
-                (if (g.isWordSpace) t.wordSpacing else 0.0)
-            advance += perGlyph * hScale
+            advance += (g.advanceWidth * sizeFactor + g.advanceAdjust) * hScale
         }
         return advance
     }
