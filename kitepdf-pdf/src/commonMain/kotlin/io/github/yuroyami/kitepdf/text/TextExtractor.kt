@@ -26,7 +26,12 @@ import io.github.yuroyami.kitepdf.core.parser.PdfString
  * `PdfString.asText()` (PDFDocEncoding / UTF-16BE BOM detection).
  *
  * Line breaks are inserted on `BT/ET`, `Td`, `TD`, `T*`, `Tm` heuristics
- * because PDF text positioning is geometric, not line-based.
+ * because PDF text positioning is geometric, not line-based. Those
+ * size-scaled heuristics read the `Tf` size times the `Tm` scale, since a
+ * producer may set `Tf` to 1 and carry the real size in the matrix.
+ *
+ * This is the cheap linear path: it tracks `Tm` but not `cm` or the wider
+ * graphics stack. [PdfPage.structuredText] is the precise one.
  */
 public object TextExtractor {
 
@@ -49,6 +54,9 @@ public object TextExtractor {
         // newline is emitted; only a genuine vertical move opens a new line.
         var lineY = Double.NaN
         var haveLine = false
+        // Tm Y-basis length. Producers that write `/F1 1 Tf` carry the real font
+        // size here, so the size-scaled heuristics below need it (#22).
+        var tmScaleY = 1.0
 
         for (op in ops) {
             when (op.operator) {
@@ -56,6 +64,7 @@ public object TextExtractor {
                     inText = true
                     lineY = 0.0
                     haveLine = false
+                    tmScaleY = 1.0 // Tm resets to identity at BT.
                 }
                 "ET" -> {
                     if (inText) sb.append('\n')
@@ -69,18 +78,24 @@ public object TextExtractor {
                         ?: fontSize
                 }
                 "Td", "TD" -> {
-                    // tx ty relative to the current line origin. Only a vertical
-                    // shift beyond the threshold counts as a new line.
+                    // tx ty relative to the current line origin, in PRE-Tm units,
+                    // so scale it to keep lineY in the same space as Tm's f. Only
+                    // a vertical shift beyond the threshold counts as a new line.
                     val ty = number(op.operands.getOrNull(1))
-                    val newY = (if (haveLine) lineY else 0.0) + ty
-                    maybeBreakLine(sb, inText, newY, lineY, haveLine, fontSize)
+                    val newY = (if (haveLine) lineY else 0.0) + ty * tmScaleY
+                    maybeBreakLine(sb, inText, newY, lineY, haveLine, fontSize * tmScaleY)
                     lineY = newY
                     haveLine = true
                 }
                 "Tm" -> {
-                    // a b c d e f: f is the new line-origin Y in text space.
+                    // a b c d e f: f is the new line-origin Y in text space, and
+                    // c/d give the Y-basis length (the scale the size rides on).
+                    val c = number(op.operands.getOrNull(2))
+                    val d = number(op.operands.getOrNull(3))
+                    val scale = kotlin.math.sqrt(c * c + d * d)
+                    tmScaleY = if (scale.isFinite() && scale > 0.0) scale else 1.0
                     val newY = number(op.operands.getOrNull(5))
-                    maybeBreakLine(sb, inText, newY, lineY, haveLine, fontSize)
+                    maybeBreakLine(sb, inText, newY, lineY, haveLine, fontSize * tmScaleY)
                     lineY = newY
                     haveLine = true
                 }
@@ -111,7 +126,7 @@ public object TextExtractor {
                     // moves the pen forward (a gap). Scale the word-break threshold
                     // with the effective font size so a large font needs a
                     // proportionally larger gap to read as a space.
-                    val emThreshold = wordGapThreshold(fontSize)
+                    val emThreshold = wordGapThreshold(fontSize * tmScaleY)
                     for (item in arr) {
                         when (item) {
                             is PdfString -> sb.append(decode(item, font))
@@ -150,13 +165,13 @@ public object TextExtractor {
         newY: Double,
         oldY: Double,
         haveLine: Boolean,
-        fontSize: Double,
+        effectiveFontSize: Double,
     ) {
         if (!inText || !haveLine) return
         // Threshold scales with font size (fall back to a small absolute value
         // when the size is unknown). A move smaller than this is intra-line
         // kerning/subscript jitter, not a new line.
-        val tol = if (fontSize > 0.0) fontSize * 0.3 else 1.0
+        val tol = if (effectiveFontSize > 0.0) effectiveFontSize * 0.3 else 1.0
         if (kotlin.math.abs(newY - oldY) > tol) sb.append('\n')
     }
 
@@ -167,15 +182,15 @@ public object TextExtractor {
      * to the em; the effective device gap then scales with font size when the
      * renderer multiplies by the font size, so word detection holds across sizes.
      */
-    private fun wordGapThreshold(fontSize: Double): Double {
+    private fun wordGapThreshold(effectiveFontSize: Double): Double {
         // Larger fonts tolerate slightly larger kerning before a gap reads as a
         // space; smaller fonts should trip sooner. Anchor at -200 (0.20 em) and
         // nudge with size so the visual gap needed stays roughly constant.
         val base = -200.0
         return when {
-            fontSize <= 0.0 -> base
-            fontSize >= 18.0 -> base * 1.2   // large font ⇒ need a wider gap
-            fontSize <= 6.0 -> base * 0.75   // tiny font ⇒ trip sooner
+            effectiveFontSize <= 0.0 -> base
+            effectiveFontSize >= 18.0 -> base * 1.2   // large font ⇒ need a wider gap
+            effectiveFontSize <= 6.0 -> base * 0.75   // tiny font ⇒ trip sooner
             else -> base
         }
     }
