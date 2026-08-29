@@ -152,7 +152,7 @@ Structured text clusters character runs into:
 Each `PdfTextSpan` carries:
 - `text`: the decoded string
 - `fontSpec`: family/weight/style of the font used
-- `fontSize`: point size
+- `fontSize`: effective point size as rendered (the `Tf` size times the text-matrix scale)
 - `origin`: baseline position in PDF user units (x, y) as a `Pair<Double, Double>`
 - `bounds`: bounding rectangle (heuristic: ascender + descender estimates)
 
