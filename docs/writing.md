@@ -27,7 +27,7 @@ Add the `kitepdf` artifact to your build:
 
     ```kotlin
     dependencies {
-        commonMainImplementation("io.github.yuroyami:kitepdf:0.8.0")
+        commonMainImplementation("io.github.yuroyami:kitepdf:0.8.1")
     }
     ```
 
@@ -35,7 +35,7 @@ Add the `kitepdf` artifact to your build:
 
     ```gradle
     dependencies {
-        implementation("io.github.yuroyami:kitepdf:0.8.0")
+        implementation("io.github.yuroyami:kitepdf:0.8.1")
     }
     ```
 
