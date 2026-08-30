@@ -5,6 +5,21 @@ All notable changes to KitePDF are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.1] - 2026-08-30
+
+One fix, shipped fast because 0.8.0 broke real parsers.
+
+### Fixed
+
+- Structured text: 0.8.0's effective font size silently rescaled the
+  line-clustering tolerance from an accidental 0.5pt to half the em box.
+  On dense layouts (aeronautical charts, tables) whose fonts pad the em,
+  distinct rows packed 1-1.4pt apart merged into one line and their spans
+  interleaved in reading order (#23). A line is a shared baseline, so the
+  tolerance is now a small slack around it: 5% of the font size, floored at
+  0.5pt. This restores 0.7.0's grouping on the reported file exactly, while
+  keeping 0.8.0's correct `fontSize` values.
+
 ## [0.8.0] - 2026-08-29
 
 Two new formats. Comic archives and SVG each get their own artifact, and
