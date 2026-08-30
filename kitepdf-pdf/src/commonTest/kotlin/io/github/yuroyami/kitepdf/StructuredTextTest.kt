@@ -184,6 +184,35 @@ class StructuredTextTest {
         assertEquals("Hello", doc.pages[0].structuredText.blocks.single().lines.single().text)
     }
 
+    @Test
+    fun densely_packed_rows_stay_separate_lines() {
+        // Issue #23: an aeronautical chart packs distinct rows 0.9-1.4pt apart
+        // in baseline Y, in mixed sizes, with the size carried in Tm. The line
+        // tolerance must be a small slack around baseline identity, not a
+        // fraction of the (often padded) em box, or these rows merge and their
+        // spans interleave. Geometry mirrors the reporter's file: same-row
+        // jitter (0.75pt at 21.91pt) and an equal baseline must still merge;
+        // the 1.16pt and 1.40pt row gaps must not; the 0.47pt pair merges,
+        // matching 0.7.0.
+        val doc = KitePDF.open(
+            buildContentPdf(
+                "BT /F1 1 Tf 21.91 0 0 21.91 72 812.05 Tm (BIG) Tj ET\n" +
+                    "BT /F1 1 Tf 21.91 0 0 21.91 200 811.30 Tm (JITTER) Tj ET\n" +
+                    "BT /F1 1 Tf 7.69 0 0 7.69 72 801.32 Tm (APT) Tj ET\n" +
+                    "BT /F1 1 Tf 15.62 0 0 15.62 200 801.32 Tm (ELEV) Tj ET\n" +
+                    "BT /F1 1 Tf 7.69 0 0 7.69 72 800.16 Tm (FEB) Tj ET\n" +
+                    "BT /F1 1 Tf 10.95 0 0 10.95 72 798.76 Tm (TEN) Tj ET\n" +
+                    "BT /F1 1 Tf 13.75 0 0 13.75 200 798.29 Tm (EFF) Tj ET\n" +
+                    "BT /F1 1 Tf 10.95 0 0 10.95 72 797.36 Tm (PAU) Tj ET\n",
+            ),
+        )
+        val lines = doc.pages[0].structuredText.blocks.flatMap { it.lines }
+        assertEquals(
+            listOf("BIG JITTER", "APT ELEV", "FEB", "TEN EFF", "PAU"),
+            lines.map { it.text },
+        )
+    }
+
     /* ─── Character and word spacing (Tc / Tw) ────────────────────────────── */
 
     @Test

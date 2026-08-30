@@ -60,8 +60,10 @@ public data class PdfTextBlock(
 )
 
 /**
- * One line of text: spans whose Y origins cluster within [Y_CLUSTER_TOL]
- * × font size. Spans are stored left-to-right.
+ * One line of text: spans sharing a baseline, within a small Y slack
+ * ([StructuredTextTuning.Y_CLUSTER_TOL] × font size, floored at
+ * [StructuredTextTuning.Y_CLUSTER_TOL_MIN_PT]). Spans are stored
+ * left-to-right.
  */
 public data class PdfTextLine(
     val bounds: KiteRectangle,
@@ -121,8 +123,18 @@ public data class PdfTextSpan(
  * gracefully for headings, tabular data, and rotated runs.
  */
 internal object StructuredTextTuning {
-    /** Y-position tolerance (× font size) under which spans are considered the same line. */
-    const val Y_CLUSTER_TOL = 0.5
+    /**
+     * Y-position tolerance (× font size) under which spans are considered the
+     * same line, floored at [Y_CLUSTER_TOL_MIN_PT]. A line is a shared
+     * BASELINE, so this is a small slack for numeric jitter, not a fraction of
+     * the line height: dense layouts (charts, tables) put distinct rows less
+     * than 1.5pt apart, and fonts with padded em boxes make any generous
+     * size-scaled tolerance swallow them (#23).
+     */
+    const val Y_CLUSTER_TOL = 0.05
+
+    /** Floor for the Y tolerance, in points, so tiny sizes keep some slack. */
+    const val Y_CLUSTER_TOL_MIN_PT = 0.5
 
     /**
      * Vertical gap (× median line height) above which we open a new block.
@@ -170,7 +182,10 @@ internal object StructuredTextExtractor {
         var currentFontSize = 0.0
 
         for (s in sorted) {
-            val tol = currentFontSize * StructuredTextTuning.Y_CLUSTER_TOL
+            val tol = kotlin.math.max(
+                StructuredTextTuning.Y_CLUSTER_TOL_MIN_PT,
+                currentFontSize * StructuredTextTuning.Y_CLUSTER_TOL,
+            )
             if (current.isEmpty() || kotlin.math.abs(s.origin.second - currentY) <= tol) {
                 if (current.isEmpty()) {
                     currentY = s.origin.second
