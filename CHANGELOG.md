@@ -5,6 +5,21 @@ All notable changes to KitePDF are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.2] - 2026-08-30
+
+The second half of the 0.8.1 story, found by auditing rather than by a report.
+
+### Fixed
+
+- Structured text: the synthesised-space threshold (a quarter of the font
+  size) had rescaled with 0.8.0's effective font size the same way the line
+  tolerance had. On fonts that pad their em box it grew past real word gaps,
+  so dense chart text glued words together (`HIRL(60m)`, `RVR150m`). The
+  threshold is now a tenth of the font size, floored at 0.25pt, calibrated
+  so that a normal document keeps its exact mutool-matching spacing and the
+  0.8.0-regressed chart returns to its 0.7.0 spacing, byte for byte. Both
+  the line text and the search/selection path share the rule.
+
 ## [0.8.1] - 2026-08-30
 
 One fix, shipped fast because 0.8.0 broke real parsers.

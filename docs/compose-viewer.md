@@ -11,7 +11,7 @@ Add the `kitepdf-compose-viewer` artifact to your Gradle dependencies:
     ```kotlin
     // commonMain
     dependencies {
-        implementation("io.github.yuroyami:kitepdf-compose-viewer:0.8.1")
+        implementation("io.github.yuroyami:kitepdf-compose-viewer:0.8.2")
     }
     ```
 
@@ -19,7 +19,7 @@ Add the `kitepdf-compose-viewer` artifact to your Gradle dependencies:
 
     ```gradle
     dependencies {
-        implementation("io.github.yuroyami:kitepdf-compose-viewer:0.8.1")
+        implementation("io.github.yuroyami:kitepdf-compose-viewer:0.8.2")
     }
     ```
 

@@ -46,7 +46,7 @@ docs use `PdfDocument`: it also carries the password overload, `openOrNull` and
 
 ## Install
 
-Ten artifacts are published, all at `0.8.1`. Add one document artifact. Add one
+Ten artifacts are published, all at `0.8.2`. Add one document artifact. Add one
 renderer only when you draw pages.
 
 | Artifact | Add it when |
@@ -66,7 +66,7 @@ renderer only when you draw pages.
 kotlin {
     sourceSets {
         commonMain.dependencies {
-            implementation("io.github.yuroyami:kitepdf:0.8.1")
+            implementation("io.github.yuroyami:kitepdf:0.8.2")
         }
     }
 }
@@ -89,8 +89,8 @@ build fails with unresolved references to `PdfDocument` and `PdfPage`. Declare
 both lines:
 
 ```kotlin
-implementation("io.github.yuroyami:kitepdf:0.8.1")                   // or kitepdf-pdf
-implementation("io.github.yuroyami:kitepdf-skia-renderer:0.8.1")     // exactly one renderer
+implementation("io.github.yuroyami:kitepdf:0.8.2")                   // or kitepdf-pdf
+implementation("io.github.yuroyami:kitepdf-skia-renderer:0.8.2")     // exactly one renderer
 ```
 
 The three renderers are alternative backends for the same `KiteCanvas` interface.
