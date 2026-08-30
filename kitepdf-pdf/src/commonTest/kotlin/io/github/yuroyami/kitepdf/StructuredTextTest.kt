@@ -213,6 +213,37 @@ class StructuredTextTest {
         )
     }
 
+    @Test
+    fun word_gaps_at_padded_em_sizes_get_spaces() {
+        // #23 family: dense chart text at a padded-em size. "HIRL" in Helvetica
+        // is 2333/1000 em = 17.94pt at 7.69pt, so the second run at x=91.04
+        // leaves a real 1.10pt word gap. A quarter-em threshold (1.92pt) ate
+        // it; the calibrated 0.10 x size (0.77pt) keeps the space. Both the
+        // line text and the shared-model adapter must agree.
+        val doc = KitePDF.open(
+            buildContentPdf(
+                "BT /F1 1 Tf 7.69 0 0 7.69 72 720 Tm (HIRL) Tj ET\n" +
+                    "BT /F1 1 Tf 7.69 0 0 7.69 91.04 720 Tm (\\(60m\\)) Tj ET\n",
+            ),
+        )
+        val page = doc.pages[0]
+        assertEquals("HIRL (60m)", page.structuredText.blocks.single().lines.single().text)
+        assertEquals("HIRL (60m)", page.textContent().blocks.single().lines.single().text)
+    }
+
+    @Test
+    fun sub_floor_gaps_stay_glued() {
+        // A 0.2pt sliver between runs is kerning noise, below the 0.25pt
+        // floor: no synthesised space at any size.
+        val doc = KitePDF.open(
+            buildContentPdf(
+                "BT /F1 1 Tf 7.69 0 0 7.69 72 720 Tm (AB) Tj ET\n" +
+                    "BT /F1 1 Tf 7.69 0 0 7.69 82.458 720 Tm (CD) Tj ET\n",
+            ),
+        )
+        assertEquals("ABCD", doc.pages[0].structuredText.blocks.single().lines.single().text)
+    }
+
     /* ─── Character and word spacing (Tc / Tw) ────────────────────────────── */
 
     @Test

@@ -78,8 +78,11 @@ public data class PdfTextLine(
             val prev = prevSpan
             if (prev != null) {
                 val gap = s.bounds.left - prev.bounds.right
-                val emWidth = prev.fontSize * 0.25
-                if (gap > emWidth && sb.isNotEmpty() && sb.last() != ' ') sb.append(' ')
+                val threshold = kotlin.math.max(
+                    StructuredTextTuning.SPACE_GAP_MIN_PT,
+                    prev.fontSize * StructuredTextTuning.SPACE_GAP,
+                )
+                if (gap > threshold && sb.isNotEmpty() && sb.last() != ' ') sb.append(' ')
             }
             sb.append(s.text)
             prevSpan = s
@@ -135,6 +138,18 @@ internal object StructuredTextTuning {
 
     /** Floor for the Y tolerance, in points, so tiny sizes keep some slack. */
     const val Y_CLUSTER_TOL_MIN_PT = 0.5
+
+    /**
+     * Gap (× font size) between spans above which a word space is synthesised,
+     * floored at [SPACE_GAP_MIN_PT]. Word gaps in dense small text run well
+     * under a quarter em when the font pads its em box (the #23 family);
+     * calibrated against mutool on normal documents and against 0.7.0 output
+     * on charts, where the zero-error zone is 0.05-0.12.
+     */
+    const val SPACE_GAP = 0.10
+
+    /** Floor for the space gap, in points, so kerning slivers never space. */
+    const val SPACE_GAP_MIN_PT = 0.25
 
     /**
      * Vertical gap (× median line height) above which we open a new block.
