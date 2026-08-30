@@ -42,7 +42,11 @@ internal object KiteTextAdapter {
             val edges = s.charEdgePoints ?: evenEdges(s)
             if (prev != null) {
                 val gap = s.bounds.left - prev.bounds.right
-                if (gap > prev.fontSize * 0.25 && chars.isNotEmpty() && chars.last().c != ' ') {
+                val threshold = kotlin.math.max(
+                    StructuredTextTuning.SPACE_GAP_MIN_PT,
+                    prev.fontSize * StructuredTextTuning.SPACE_GAP,
+                )
+                if (gap > threshold && chars.isNotEmpty() && chars.last().c != ' ') {
                     chars.add(Ch(' ', edges.first())) // the joiner space ends where the next span starts
                 }
             }
