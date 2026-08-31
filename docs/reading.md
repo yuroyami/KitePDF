@@ -27,7 +27,7 @@ a URL.
 
 ### Encrypted PDFs
 
-PDF encryption is transparent; pass the password to unlock it:
+You never handle decryption yourself. Pass the password and read as normal:
 
 ```kotlin
 val doc = PdfDocument.open(bytes, "mypassword".encodeToByteArray())

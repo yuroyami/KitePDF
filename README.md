@@ -267,12 +267,12 @@ viewer takes either format through `KiteDocView`.
 
 ## Targets
 
-The four document artifacts share one target set. The renderers do not, and that
+The six document artifacts share one target set. The renderers do not, and that
 difference is the usual cause of a first build that will not resolve.
 
 | Artifact | Where it runs |
 | --- | --- |
-| `kitepdf`, `-pdf`, `-epub`, `-core` | Android (minSdk 21), JVM, iOS arm64, simulator arm64 and x64, macOS arm64, tvOS, watchOS, Linux x64 and arm64, Windows (mingwX64), Android Native, JS (browser and Node), wasmJs (browser and Node), wasmWasi (Node) |
+| `kitepdf`, `-pdf`, `-epub`, `-cbz`, `-svg`, `-core` | Android (minSdk 21), JVM, iOS arm64, simulator arm64 and x64, macOS arm64, tvOS, watchOS, Linux x64 and arm64, Windows (mingwX64), Android Native, JS (browser and Node), wasmJs (browser and Node), wasmWasi (Node) |
 | `-compose-viewer` | Android (minSdk 24), JVM, iOS arm64 and simulator arm64, macOS arm64, JS and wasmJs (browser) |
 | `-native-renderer` | Android (minSdk 29), JVM, iOS arm64, simulator arm64 and x64, macOS arm64, tvOS, JS (browser) |
 | `-skia-renderer` | Android (minSdk 21, see note), JVM, iOS arm64, simulator arm64 and x64, macOS arm64, tvOS, Linux x64 and arm64, JS and wasmJs (browser) |

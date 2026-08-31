@@ -89,7 +89,7 @@ PdfBuilder()
         subject = "Financial Results",
         keywords = "quarterly, revenue, forecast",
         creator = "MyApp/1.0",
-        producer = "KitePDF/0.5.0"
+        producer = "KitePDF"
     )
     .page { /* … */ }
     .build()

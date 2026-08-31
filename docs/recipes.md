@@ -1,6 +1,6 @@
 # Recipes
 
-Short, working solutions to common KitePDF tasks. Each snippet is copy-pasteable and uses only real APIs from KitePDF 0.5.0.
+Short, working solutions to common KitePDF tasks. Each snippet is copy-pasteable and uses only real KitePDF APIs.
 
 ## Open a password-protected PDF
 
@@ -218,7 +218,7 @@ for ((index, page) in doc.pages.withIndex()) {
 }
 ```
 
-No Compose, no Skia; pure JDK. Perfect for headless backends and CI pipelines.
+No Compose, no Skia; pure JDK. Good for headless backends and CI.
 
 ## Generate a thumbnail
 

@@ -11,7 +11,7 @@ trusted print/export workflow deliberately needs a different ceiling.
 
 ## Which tool to use?
 
-KitePDF offers three rendering paths, each optimized for different scenarios:
+KitePDF offers three rendering paths, each fitting a different job:
 
 | Use case | Artifact | Best for | Platform |
 |----------|----------|----------|----------|
@@ -281,8 +281,8 @@ page.renderTo(pdfCanvas, deviceCtm)
 // To save as PNG: use the browser's canvas.toBlob() or toDataURL()
 ```
 
-!!! warning "Image XObjects in Canvas2D"
-    Embedded JPEG and JP2 images in the PDF are painted as gray placeholders (async browser decoding doesn't fit the synchronous renderer). Use Skia on JS for full image support.
+!!! warning "Embedded images arrive one frame late"
+    The browser decodes JPEG and JP2 asynchronously, so the first pass over such an image paints a placeholder and the image appears on the next render. Raw-sample images draw immediately. Use Skia on JS when the very first paint must be complete.
 
 ## Web: Skia over WASM (kitepdf-skia-renderer, JS/wasmJs)
 
@@ -393,7 +393,7 @@ suspend fun renderThumbnailsAsync(pdfPath: String, outputDir: String) {
 
 - **Scale parameter:** A page rendered at `scale = 0.5` is 4x faster and uses 4x less memory than `scale = 1.0` (area scales quadratically).
 - **Batch rendering:** Render many pages in parallel on a thread pool or coroutine dispatcher to saturate CPU cores.
-- **Platform choice:** AWT on JVM and CoreGraphics on Apple are extremely fast. Skia is also fast but has larger memory overhead.
+- **Platform choice:** AWT on JVM and CoreGraphics on Apple are fast. Skia is also fast but has larger memory overhead.
 - **Background color:** Transparent backgrounds (alpha = 0) may be slightly slower than opaque on some platforms.
 
 ## Next steps
