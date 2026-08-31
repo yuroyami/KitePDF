@@ -4,11 +4,12 @@ Render, extract, edit, or build PDFs across Android, iOS, JVM, web, and native d
 
 ## Target matrix
 
-The four document artifacts (`kitepdf`, `kitepdf-pdf`, `kitepdf-epub` and
-`kitepdf-core`) share one target set. The three renderers do not. That difference
-is the usual cause of a first build that will not resolve.
+The six document artifacts (`kitepdf`, `kitepdf-pdf`, `kitepdf-epub`,
+`kitepdf-cbz`, `kitepdf-svg` and `kitepdf-core`) share one target set. The
+three renderers do not. That difference is the usual cause of a first build
+that will not resolve.
 
-| Target | `kitepdf`, `-pdf`, `-epub`, `-core` | `-compose-viewer` | `-native-renderer` | `-skia-renderer` |
+| Target | document artifacts | `-compose-viewer` | `-native-renderer` | `-skia-renderer` |
 | --- | :---: | :---: | :---: | :---: |
 | Android | yes (minSdk 21) | yes (minSdk 24) | yes (minSdk 29) | yes (minSdk 21) |
 | JVM | yes | yes | yes | yes |
@@ -64,7 +65,7 @@ val doc = remember(bytes) { PdfDocument.open(bytes) }
 KiteDocView(document = doc, modifier = Modifier.fillMaxSize())
 ```
 
-The composable supports rich configuration via parameters:
+Configure it through parameters:
 
 ```kotlin
 val state = rememberKiteDocViewState(doc)
@@ -90,14 +91,14 @@ KiteThumbnailStrip(state)
 
 ### `kitepdf-native-renderer`: platform canvas bindings
 
-Map PDF pages to each platform's native 2D drawing API with zero middleware:
+Draws PDF pages through each platform's own 2D drawing API, with nothing in between:
 
 - **JVM** → `java.awt.Graphics2D`
 - **Android** → `android.graphics.Canvas`
 - **Apple** (iOS, macOS, tvOS) → CoreGraphics (`CGContext`)
 - **JavaScript** → `CanvasRenderingContext2D`
 
-Perfect for server-side batch rendering, thumbnails, headless screenshots, or existing non-Compose apps (AWT, Swing, UIKit, web). Each call to `encodeToPng()` draws a page via the platform's own graphics stack:
+Good for server-side batch rendering, thumbnails, headless screenshots, and existing non-Compose apps (AWT, Swing, UIKit, web). Each call to `encodeToPng()` draws a page via the platform's own graphics stack:
 
 ```kotlin
 // JVM / Desktop

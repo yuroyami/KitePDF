@@ -211,9 +211,9 @@ KiteDocView(state, renderSpec = spec)
 ```
 
 **When to use:**
-- Dense pages with complex content (graphs, photographs, intricate illustrations).
+- Dense pages with heavy content (graphs, photographs, detailed illustrations).
 - Lots of pinch-zooming and panning (fast gestures, content-independent cost).
-- Devices with limited memory (one bitmap per page at a time).
+- Slow devices, where re-drawing the page every frame would stutter.
 
 **Parameters:**
 
@@ -468,7 +468,7 @@ KitePageIndicator(
 
 ### Navigation controls
 
-Previous / page number / next pill. Perfect for floating over the viewport:
+Previous / page number / next pill. Made for floating over the viewport:
 
 ```kotlin
 overlay = { state ->

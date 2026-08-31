@@ -58,7 +58,7 @@ Drawing a page to the screen is the one job that needs a platform, so the render
 | `io.github.yuroyami:kitepdf-native-renderer` | Headless page → image through the platform canvas (AWT, CoreGraphics, `android.graphics`, Canvas2D). |
 | `io.github.yuroyami:kitepdf-skia-renderer` | Headless page → image through Skia / Skiko: one API on JVM, Android, Apple, Linux and web. |
 
-Every artifact is at `0.5.0`. For a single format, add `kitepdf-pdf` (the PDF handler alone) or `kitepdf-epub` (the EPUB reader alone). The `kitepdf` umbrella contains both. See [Show it on screen](#show-it-on-screen) for each binding in use.
+Every artifact is at `0.8.2`. For a single format, add `kitepdf-pdf`, `kitepdf-epub`, `kitepdf-cbz` or `kitepdf-svg` on its own. The `kitepdf` umbrella contains all four. See [Show it on screen](#show-it-on-screen) for each binding in use.
 
 !!! note "Not using Kotlin Multiplatform?"
     The same artifact works in a plain Android or JVM project. Add `io.github.yuroyami:kitepdf:0.8.2` to your normal `dependencies { }` block.

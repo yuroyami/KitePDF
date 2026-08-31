@@ -6,7 +6,7 @@ Edit PDF documents in place: modify form fields, add watermarks and stamps to pa
 
 Open a document with [`PdfDocument.open()`](reading.md#opening-a-pdf) and call `doc.edit()` to get a `PdfEditor` instance. The editor stages changes (new objects, replacements, deletions) and saves them in one of two modes:
 
-- **Incremental**: appends changes to the original bytes, preserving the original content. Ideal for form-filling, watermarking, and metadata updates. This mode is the foundation for digital signatures.
+- **Incremental**: appends changes to the original bytes, preserving the original content. Right for form filling, watermarks and metadata updates. This mode is the basis for digital signatures.
 - **Rewritten**: writes a fresh PDF containing only reachable objects, with edits applied and unreachable objects dropped. Required for **true redaction**, since the removed content is completely gone, not hidden in the file.
 
 ```kotlin
@@ -164,7 +164,7 @@ val stamped = editor.saveIncremental()
 
 ## Edit page content
 
-For more sophisticated edits, parse and transform a page's content stream directly.
+To change what a page already draws, parse and transform its content stream directly.
 
 Edits compose. The transform receives the page's content as it stands after any earlier edit on the same editor, so successive calls build on each other in call order, and a stamp or an edit staged earlier is redacted along with the original page content.
 
@@ -344,7 +344,7 @@ editor.setInfo(
     subject = "FY2025",
     keywords = "financial, annual",
     creator = "MyApp v1.0",
-    producer = "KitePDF 0.5.0",
+    producer = "KitePDF",
 )
 ```
 

@@ -4,7 +4,7 @@ Learn how to open a PDF, display it in the UI, and extract its content with Kite
 
 ## Step 1: Add the dependency
 
-KitePDF is published to Maven Central as seven artifacts: the `kitepdf` umbrella, the `kitepdf-pdf` and `kitepdf-epub` handlers, the shared `kitepdf-core` substrate (transitive only, never add it directly), and three alternative renderers. Start with the headless engine, and add one renderer only when you need to draw pages.
+KitePDF is published to Maven Central as ten artifacts: the `kitepdf` umbrella, the `kitepdf-pdf`, `kitepdf-epub`, `kitepdf-cbz` and `kitepdf-svg` handlers, the shared `kitepdf-core` base (it arrives with the handlers, never add it directly), the optional `kitepdf-net` URL loader, and three renderers. Start with the headless engine, and add one renderer only when you need to draw pages.
 
 === "Kotlin (KMP)"
 
@@ -143,7 +143,7 @@ fun AdvancedViewer(doc: PdfDocument) {
 
 !!! tip
 
-    Use `KiteRenderSpec.Rasterized()` (the default) for scrolling performance and memory efficiency. Switch to `KiteRenderSpec.Vectorized()` for resolution-independent, bitmap-free rendering: best for simple pages or when memory is tight.
+    Use `KiteRenderSpec.Rasterized()` (the default) for smooth scrolling and cheap gestures. Switch to `KiteRenderSpec.Vectorized()` for resolution-independent, bitmap-free rendering: best for simple pages or when memory is tight.
 
 ## Step 4: Read text out of it
 
@@ -209,7 +209,7 @@ val img = AwtPdfRasterizer.renderToImage(page, scale = 1.5)
 
 !!! note
 
-    The native-renderer artifact works on JVM, Android, and macOS. For other platforms (JS, wasm, iOS), use the Skia renderer (`kitepdf-skia-renderer`) or render through Compose (`kitepdf-compose-viewer`).
+    The native-renderer artifact runs on JVM, Android, Apple (iOS, macOS, tvOS) and browser JS. For the targets it skips (wasmJs, Linux), use the Skia renderer (`kitepdf-skia-renderer`) or render through Compose (`kitepdf-compose-viewer`).
 
 ## Where to next?
 
