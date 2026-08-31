@@ -20,9 +20,9 @@ import io.github.yuroyami.kitepdf.core.font.TrueTypeFont
  *     .build()
  * ```
  *
- * Scope: only TrueType (`glyf` outline) fonts are supported. OpenType/CFF
- * (`.otf`, sfnt tag "OTTO") and glyph subsetting are later milestones; [load]
- * rejects CFF fonts with a clear error rather than embedding something broken.
+ * Scope: TrueType (`glyf` outline) and OpenType/CFF (`.otf`, sfnt tag
+ * "OTTO") fonts are supported, subset by default. TrueType Collections
+ * (`.ttc`) are rejected with a clear error; extract a single face first.
  */
 public class EmbeddedFont private constructor(
     internal val fontBytes: ByteArray,

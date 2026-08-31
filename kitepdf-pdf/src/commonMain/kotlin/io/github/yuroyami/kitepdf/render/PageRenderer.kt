@@ -1540,9 +1540,9 @@ public class PageRenderer(
      * Show a text run in a Type3 font. Each byte's glyph is a content
      * stream replayed like a small form XObject under
      * `CTM x textToUser x pen x fontSize x FontMatrix`, with the font's own
-     * /Resources (absent /Resources fall back to EMPTY maps: the spec's
-     * page-resource fallback is a rarely-exercised corner, noted in the
-     * ledger). The pen advances by `width x FontMatrix.a x fontSize` plus
+     * /Resources (a char proc with no /Resources of its own reads the
+     * page's, as the spec asks). The pen advances by
+     * `width x FontMatrix.a x fontSize` plus
      * Tc/Tw, matching §9.6.5's glyph-space widths.
      */
     private fun showTextType3(
