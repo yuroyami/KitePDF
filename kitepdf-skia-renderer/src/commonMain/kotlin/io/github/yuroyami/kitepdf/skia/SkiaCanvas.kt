@@ -2,7 +2,6 @@ package io.github.yuroyami.kitepdf.skia
 
 import io.github.yuroyami.kitepdf.core.render.paintComplexShading
 import io.github.yuroyami.kitepdf.core.KiteRectangle
-import io.github.yuroyami.kitepdf.core.font.KiteFontFamily
 import io.github.yuroyami.kitepdf.core.font.FontSpec
 import io.github.yuroyami.kitepdf.core.font.TextGlyph
 import io.github.yuroyami.kitepdf.core.render.KiteBlendMode
@@ -21,7 +20,6 @@ import org.jetbrains.skia.Color
 import org.jetbrains.skia.ColorAlphaType
 import org.jetbrains.skia.ColorType
 import org.jetbrains.skia.Font
-import org.jetbrains.skia.FontMgr
 import org.jetbrains.skia.FontStyle
 import org.jetbrains.skia.Image
 import org.jetbrains.skia.ImageInfo
@@ -194,7 +192,10 @@ public class SkiaCanvas(private val canvas: SkCanvas) : KiteCanvas {
             isAntiAlias = true
             this.blendMode = blendMode.toSkia()
         }
-        val skFont = Font(systemTypeface(fontSpec), renderedSize)
+        // A null typeface would draw nothing at all, silently, so skip the run
+        // instead and leave the warning trail a blank page never gives.
+        val typeface = systemTypeface(fontSpec) ?: return
+        val skFont = Font(typeface, renderedSize)
         canvas.save()
         try {
             canvas.translate(textMatrix.e.toFloat(), textMatrix.f.toFloat())
@@ -213,16 +214,7 @@ public class SkiaCanvas(private val canvas: SkCanvas) : KiteCanvas {
             spec.italic -> FontStyle.ITALIC
             else -> FontStyle.NORMAL
         }
-        val family = when (spec.family) {
-            KiteFontFamily.Serif -> "Times New Roman"
-            KiteFontFamily.Monospace -> "Courier New"
-            KiteFontFamily.SansSerif -> "Helvetica"
-        }
-        return try {
-            FontMgr.default.matchFamilyStyle(family, style) ?: FontMgr.default.matchFamilyStyle(null, style)
-        } catch (t: Throwable) {
-            null
-        }
+        return SkiaSystemFonts.resolve(spec.family, style)
     }
 
     override fun fillShading(
