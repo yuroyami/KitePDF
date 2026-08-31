@@ -35,7 +35,7 @@ plugins {
 
 rootProject.name = "kitepdf-KMP"
 include(":kitepdf")                 // umbrella: re-exports every handler
-include(":kitepdf-core")            // format-agnostic substrate
+include(":kitepdf-core")            // shared core under every handler
 include(":kitepdf-pdf")             // PDF handler
 include(":kitepdf-epub")            // EPUB handler
 include(":kitepdf-cbz")             // CBZ (comic archive) handler

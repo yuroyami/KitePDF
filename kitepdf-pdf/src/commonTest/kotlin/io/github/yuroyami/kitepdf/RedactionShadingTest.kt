@@ -10,8 +10,7 @@ import kotlin.test.assertTrue
  * redaction judges it by the clip's boundary, mirroring the path-segment
  * rule: a shading whose visible edge crosses a region is removed, one whose
  * clip lies wholly inside a region is removed, and one that merely surrounds
- * the region survives under the black box, like a full-page background
- * (ledger 14.8, the `sh` gap).
+ * the region survives under the black box, like a full-page background.
  */
 class RedactionShadingTest {
 

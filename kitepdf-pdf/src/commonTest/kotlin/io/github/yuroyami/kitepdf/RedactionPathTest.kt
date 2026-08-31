@@ -11,7 +11,7 @@ import kotlin.test.assertTrue
 /**
  * A signature or a chart drawn as vector art IS its coordinates. Painting a
  * black box over it leaves the shape recoverable from the content stream, so
- * redaction has to remove the path (ledger D-2).
+ * redaction has to remove the path.
  */
 class RedactionPathTest {
 

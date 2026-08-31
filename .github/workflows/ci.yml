@@ -1,6 +1,6 @@
 name: CI
 
-# Build + test gates (T-50).
+# Build + test gates.
 #
 # - `build` (Linux JVM) is the REQUIRED gate: the JVM target is the canonical
 #   build of commonMain, and the differential/oracle suites run here (they
@@ -86,7 +86,7 @@ jobs:
 
       # On failure, also keep what diagnoses a CI-only regression: rendered
       # pages, mutool references and heatmaps, sweep and benchmark reports,
-      # and fuzz reproducers (ledger 14.2, failure artifacts).
+      # and fuzz reproducers.
       - name: Upload diff images and reproducers
         if: failure()
         uses: actions/upload-artifact@v4

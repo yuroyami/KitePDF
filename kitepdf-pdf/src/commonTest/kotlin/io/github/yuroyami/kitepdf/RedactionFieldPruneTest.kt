@@ -22,8 +22,8 @@ import kotlin.test.assertTrue
  * Dropping a widget from a page's `/Annots` is not enough. A widget annotation
  * is usually also the form field (ISO 32000-1, 12.7.3.3), and `/AcroForm
  * /Fields` (12.7.2) still names it, so its value, default value, name and
- * appearance stream stay reachable from the catalog and survive the rewrite
- * (ledger D-2). The field has to go with the widget, and a field that keeps a
+ * appearance stream stay reachable from the catalog and survive the rewrite.
+ * The field has to go with the widget, and a field that keeps a
  * widget somewhere else has to stay.
  */
 class RedactionFieldPruneTest {

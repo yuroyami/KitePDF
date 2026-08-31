@@ -276,8 +276,8 @@ public class Canvas2dCanvas(private val ctx: CanvasRenderingContext2D) : KiteCan
     override fun drawImage(image: KiteImageData, ctm: KiteMatrix, alpha: Double) {
         // Decoded samples paint synchronously; that is what every successful
         // JPEG / JPX / JBIG2 decode produces. Encoded kinds core could not
-        // decode keep the placeholder: browser decoding is async, and the
-        // preload API remains the roadmap item (ledger D-3).
+        // decode keep the placeholder: browser decoding is async, and a
+        // preload API is still to come.
         val rgba = if (image.kind == KiteImageData.Kind.RAW) image.toRgbaBytes() else null
         if (rgba == null) {
             drawPlaceholder(ctm, alpha)

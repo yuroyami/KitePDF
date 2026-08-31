@@ -5,7 +5,8 @@ package io.github.yuroyami.kitepdf.epub.css
  * brace matching, splits grouped selectors and declarations, and expands the
  * shorthands that matter for book layout (`margin`, `padding`, `list-style`).
  * `@media`/`@supports` blocks are flattened (a reflow reader honours all media);
- * `@font-face`/`@page`/`@import`/`@charset` are skipped (font-face is Phase 4).
+ * `@font-face`/`@page`/`@import`/`@charset` are skipped here; `@font-face` is
+ * read separately by the font registry.
  * Malformed input is salvaged, never thrown on -- real EPUB CSS is messy.
  */
 internal object CssParser {

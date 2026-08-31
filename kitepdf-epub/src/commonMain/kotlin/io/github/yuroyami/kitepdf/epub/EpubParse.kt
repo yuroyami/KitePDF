@@ -198,7 +198,7 @@ internal class ParsedEpub(
                 identifier = opf.uniqueId,
                 coverImagePath = coverHref?.let { EpubDocument.resolvePath(opf.baseDir, it) },
                 // A vertical-rl book implies rtl progression when the spine
-                // declares no direction of its own (ledger Part 13).
+                // declares no direction of its own.
                 rightToLeft = opf.direction?.lowercase() == "rtl" ||
                     (opf.direction == null && opf.primaryWritingMode?.lowercase() == "vertical-rl"),
             )

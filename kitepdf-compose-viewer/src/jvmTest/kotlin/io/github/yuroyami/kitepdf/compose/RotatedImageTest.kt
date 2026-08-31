@@ -17,7 +17,7 @@ import kotlin.test.assertTrue
 
 /**
  * A bitmap's full CTM must reach the pixels: rotation, reflection and shear,
- * not just the scale magnitudes (ledger D-3, the Compose sub-item).
+ * not just the scale magnitudes.
  */
 class RotatedImageTest {
 

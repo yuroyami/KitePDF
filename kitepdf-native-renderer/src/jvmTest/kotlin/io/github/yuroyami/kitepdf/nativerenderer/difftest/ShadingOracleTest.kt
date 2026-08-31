@@ -15,8 +15,8 @@ import kotlin.test.assertTrue
 /**
  * Each shading fixture is scored against mutool with its own budget:
  * type 1 within 0.01 MAE, types 4/5 within 0.05, and patch types 6/7 within
- * 0.12 (tessellation approximation tolerated by the audit). All five numbers
- * print for the ledger. Skips without mutool.
+ * 0.12 (tessellation is approximated, so its budget is looser). All five
+ * numbers print so runs can be compared over time. Skips without mutool.
  */
 class ShadingOracleTest {
 

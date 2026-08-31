@@ -11,7 +11,7 @@ import kotlin.test.assertTrue
 /**
  * [PdfDocument] promises immutability, so [PdfDocument.bytes] hands out a
  * defensive copy. Zero-copy access survives behind [PdfDocument.rawBytes],
- * an explicit [KiteRawApi] opt-in (ledger 14.4).
+ * an explicit [KiteRawApi] opt-in.
  */
 class DocumentBytesTest {
 

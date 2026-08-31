@@ -14,7 +14,7 @@ import kotlin.test.assertTrue
 /**
  * A form XObject drawn more than once is one object serving several places on
  * the page. Redacting one of those places must not blank the others, and must
- * not leave the others' content in the file either (ledger D-2). A place no
+ * not leave the others' content in the file either. A place no
  * region touches must cost nothing at all: no rewrite and no copy.
  */
 class RedactionFormCloneTest {

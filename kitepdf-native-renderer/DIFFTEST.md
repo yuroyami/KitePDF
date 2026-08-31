@@ -1,9 +1,9 @@
-# Differential rendering harness (Phase 0)
+# Differential rendering harness
 
 The correctness scoreboard. It renders each corpus PDF page with **KitePDF** and
 with **MuPDF** (`mutool draw`, the in-repo oracle), pixel-diffs the two, and
-ranks the worst-rendering pages first. This is the measurement system every
-later correctness/completeness push is graded against.
+ranks the worst-rendering pages first. Every rendering fix is graded against
+it.
 
 ## Run
 
@@ -54,8 +54,9 @@ Example: tighten the gate and crank density once correctness improves:
    readable reference PNG. A mismatch, timeout, non-zero exit, or
    missing/unreadable PNG fails the gate and is recorded in `report.md`.
 4. **Regression budget** (only when the oracle is present): no page may
-   exceed `kitepdf.diff.budget`. The default is deliberately lenient; Phase 0's
-   job is the scoreboard, not a tight gate. Lower it as the score drops.
+   exceed `kitepdf.diff.budget`. The default is deliberately lenient: the
+   harness is first a scoreboard, not a tight gate. Lower it as the score
+   drops.
 
 ## The corpus
 

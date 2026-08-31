@@ -15,7 +15,7 @@ import kotlin.test.assertTrue
 /**
  * Differential harness for the **Skia** backend, on the shared hardened
  * infrastructure ([MuPdfOracle], [ImageDiff] in `:kitepdf-difftest`), closing
- * ledger D-6's false-green list:
+ * the known false-green cases:
  *
  *  - a failed oracle render is a test FAILURE, never a perfect score;
  *  - dimensions must match within one pixel ([ImageDiff.compare] throws);

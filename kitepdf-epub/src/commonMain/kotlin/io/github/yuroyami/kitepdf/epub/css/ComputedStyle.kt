@@ -29,9 +29,8 @@ internal class Edge(val width: Double, val color: RgbColor, val visible: Boolean
 /**
  * The fully-resolved style of one element: the cascade's output. Lengths are in
  * absolute points; inherited properties already carry the parent's value.
- * Box-model fields (margins/padding/background) are computed here but only
- * *applied* by the layout engine to the extent Phase 2 supports (left inset +
- * vertical spacing); full borders/backgrounds are Phase 3.
+ * Box-model fields (margins/padding/background) are computed here; the layout
+ * engine applies the subset it supports.
  */
 internal data class ComputedStyle(
     val display: Display,

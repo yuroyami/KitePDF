@@ -9,7 +9,7 @@ import kotlin.test.assertTrue
 /**
  * Acceptance benchmark: `Zlib.decode` (through the platform fast path)
  * within 2x of raw `java.util.zip` on a 6 MB fixture. Numbers print to the
- * test log for the progress ledger; the 2x bound is deliberately loose
+ * test log for comparison over time; the 2x bound is deliberately loose
  * because both sides run the same native zlib, so it only fails if the
  * wrapper regresses badly.
  *
