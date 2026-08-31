@@ -1,7 +1,7 @@
 # Module kitepdf-core
 
-The format-agnostic substrate shared by the PDF and EPUB modules.
+The shared base every format handler builds on.
 
 Geometry, the `KiteCanvas` drawing interface, the font engine (TrueType, CFF,
 Type3, WOFF2), stream filters and the hyphenation tables. You do not add this
-directly. It arrives transitively with `kitepdf-pdf` or `kitepdf-epub`.
+directly. It arrives with any handler artifact.
