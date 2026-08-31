@@ -31,7 +31,7 @@ Open `report.md` and start at the top. That is the worst-rendering page.
 | `kitepdf.corpus` | repo-root `corpus/pdf` | extra real-world PDF directory |
 | `kitepdf.diff.dpi` | `96` | positive render density for both engines |
 | `kitepdf.diff.maxpages` | `6` | positive maximum pages scored per document |
-| `kitepdf.diff.budget` | `0.50` | finite max per-page MAE from `0.0` to `1.0` |
+| `kitepdf.diff.budget` | `0.05` | finite max per-page MAE from `0.0` to `1.0` |
 | `kitepdf.difftest.out` | `build/difftest` | output directory |
 
 Explicit corpus and `mutool` paths are strict: a missing directory, missing
@@ -54,9 +54,16 @@ Example: tighten the gate and crank density once correctness improves:
    readable reference PNG. A mismatch, timeout, non-zero exit, or
    missing/unreadable PNG fails the gate and is recorded in `report.md`.
 4. **Regression budget** (only when the oracle is present): no page may
-   exceed `kitepdf.diff.budget`. The default is deliberately lenient: the
-   harness is first a scoreboard, not a tight gate. Lower it as the score
-   drops.
+   exceed `kitepdf.diff.budget`. The default sits near twice the worst page
+   seen at the time it was set, so a real regression fails instead of hiding
+   under a lenient ceiling. Lower it as the score drops, and raise it for one
+   run when a deliberate change moves the baseline.
+
+   The number is only as steady as the oracle. A `mutool` built without colour
+   management converts CMYK the plain arithmetic way (`0 1 1 0 k` comes out
+   pure 255/0/0), while a colour-managed build lands near 237/28/36, so the
+   same page can score two or three times higher against one build than the
+   other. Compare scores only across runs that used the same oracle.
 
 ## The corpus
 
