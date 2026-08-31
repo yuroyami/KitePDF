@@ -2,7 +2,7 @@
 # Toolchain
 kotlin = "2.4.10"
 agp = "9.2.1"
-vanniktechPublish = "0.36.0"
+vanniktechPublish = "0.37.0"
 dokka = "2.2.0"
 
 # Compose Multiplatform, used only by :sample. :kitepdf stays pure-Kotlin-stdlib.
