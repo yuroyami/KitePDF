@@ -19,7 +19,7 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 /**
- * Validates custom TrueType font embedding (Milestone A) end to end.
+ * Validates custom TrueType font embedding end to end.
  *
  * Uses the in-repo `DroidSansFallback.ttf` (a TrueType/`glyf` CJK font shipped
  * with MuPDF) to build a PDF whose text is drawn with an embedded Type0 font,

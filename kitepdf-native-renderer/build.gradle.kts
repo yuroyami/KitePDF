@@ -87,10 +87,10 @@ kotlin {
 // control jvmTest. Declaring them as inputs also keeps test up-to-date checks
 // honest when a knob changes.
 tasks.withType<Test>().configureEach {
-    // M3BenchmarkTest is a wall-clock budget that fails under machine load
-    // (ledger 14.8). Run it on demand with -PslowTests.
+    // RenderBenchmarkTest is a wall-clock budget that fails under machine
+    // load. Run it on demand with -PslowTests.
     if (!project.hasProperty("slowTests")) {
-        filter.excludeTestsMatching("*M3BenchmarkTest")
+        filter.excludeTestsMatching("*RenderBenchmarkTest")
     }
 
     val kitePdfProperties = System.getProperties()

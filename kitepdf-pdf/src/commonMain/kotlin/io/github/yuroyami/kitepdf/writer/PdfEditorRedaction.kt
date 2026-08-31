@@ -14,7 +14,7 @@ import io.github.yuroyami.kitepdf.core.parser.PdfStream
 
 /*
  * The redaction machinery behind [PdfEditor.redactRegions], split out of
- * PdfEditor.kt for size (ledger 14.8). Extensions rather than members; the
+ * PdfEditor.kt for size. Extensions rather than members; the
  * editor state they touch is internal to this module.
  */
 

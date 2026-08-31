@@ -590,13 +590,13 @@ drop-in upgrade from 0.6.0.
 ## [0.6.0] - 2026-08-06
 
 Thread-safety hardening across the engine, closing every confirmed finding of
-the 2026-08-06 concurrency audit. No public API changes; two behavioural
-changes are called out below.
+a full concurrency audit. No public API changes; two behavioural changes are
+called out below.
 
 ### Fixed
 
-- The 2026-08-05 iOS text-cache crash is now fixed at the root instead of
-  narrowed: skiko's text stack shares process-global state with the host UI
+- The iOS text-cache crash is now fixed at the root instead of narrowed:
+  skiko's text stack shares process-global state with the host UI
   thread, which no library lock can exclude. The off-main raster now probes a
   page on the pool with system-font text skipped and, only when that fallback
   engages (EPUB body text, PDFs without embedded outlines), re-renders the
@@ -643,8 +643,7 @@ changes are called out below.
 ## [0.5.1] - 2026-08-01
 
 Selection you can feel and see, and margin markers that pick a side. Published
-to Maven Local for the EducHaiti reader work; Central publication can follow
-unchanged.
+to Maven Local only; the next Maven Central release carries these changes.
 
 ### Added
 
@@ -897,9 +896,9 @@ way it could report a false green.
   only, the engine does not compile for every Kotlin target, and the EPUB
   hyphenation language list.
 - Shared Kite Dokka theme, `Module.md` for all seven modules, and an
-  `mkdocs.yml` aligned with the family template.
-- Em dashes removed repo-wide per KITE.md, including 687 from Kotlin comments
-  across 191 files, verified comment-only.
+  `mkdocs.yml` matching the other Kite libraries.
+- Em dashes removed repo-wide, including 687 from Kotlin comments across 191
+  files, verified comment-only.
 - A long-standing packaging constraint is now written down: on Android,
   `kitepdf-skia-renderer` resolves `org.jetbrains.skiko:skiko-android`, which
   JetBrains publishes to the Compose dev repository rather than to Maven
@@ -925,10 +924,10 @@ pages, 0 oracle or comparison failures, mean MAE 0.0062 versus MuPDF. JVM suites
 
 ## [0.2.0] - 2026-07-11
 
-The multi-format, API-perfection release: the engine becomes a MuPDF-style
-core + handlers architecture, gains a complete EPUB reader, closes the PDF
-completeness gaps (shadings, Type3, JPX, JBIG2, CJK CMaps, soft masks), and
-lands the breaking API cleanup that 0.2.0 exists for.
+The multi-format release: the engine becomes a MuPDF-style core + handlers
+architecture, gains a complete EPUB reader, closes the PDF completeness gaps
+(shadings, Type3, JPX, JBIG2, CJK CMaps, soft masks), and lands the breaking
+API cleanup this release exists for.
 
 ### Breaking changes and migration
 
@@ -995,7 +994,7 @@ Other breaking changes:
     background colors, forced justification, and a publisher-CSS toggle,
     applied as a dedicated cascade origin that overrides author `!important`.
 - Module taxonomy: the single `:kitepdf` module is split MuPDF-style into
-  `:kitepdf-core` (format-agnostic substrate: geometry, canvas, fonts, images,
+  `:kitepdf-core` (the shared core: geometry, canvas, fonts, images,
   compression, text) and `:kitepdf-pdf` (the PDF handler), joined by
   `:kitepdf-epub`; the renderers are renamed to `:kitepdf-skia-renderer` and
   `:kitepdf-compose-viewer`, and `:kitepdf` remains as an umbrella artifact
@@ -1045,7 +1044,7 @@ Other breaking changes:
   passing) when `mutool` or a test font was absent now use JUnit assumptions, so
   they report as skipped instead of silently green. No real assertion was weakened.
 
-### Added since the EPUB milestone (M2-M5)
+### Added later in the same cycle
 
 - Viewer feature set: engine-level text search with per-page highlight quads,
   viewport hit testing, link taps (PDF link annotations and EPUB hrefs) with
@@ -1055,13 +1054,13 @@ Other breaking changes:
 - Format-neutral document seam: `KiteDocument` exposes metadata, outlines,
   structured text, and search for both handlers; `PdfPage.textContent()`
   adapts PDF structured text to it.
-- Performance and concurrency (M3): platform zlib fast paths on JVM/Android
+- Performance and concurrency: platform zlib fast paths on JVM/Android
   with a dynamic-Huffman pure-Kotlin deflate elsewhere, one glyph-layout pass
   per text run, a per-document decoded-image cache, thread-safe
   `PdfDocument` (concurrent page rendering), lazy `pageCount` from `/Count`,
   off-main-thread rasterization, and a page-bitmap LRU in the viewer. Corpus
   mean render time: 9.7ms/page on the reference machine.
-- PDF completeness (M4): text clipping modes 4-7; shading types 1, 4, 5 and
+- PDF completeness: text clipping modes 4-7; shading types 1, 4, 5 and
   6/7 (approximated); Type 3 fonts; luminosity soft masks; 47 predefined CJK
   CMaps; complete JBIG2 (MMR, Huffman symbol dictionaries and text regions,
   refinement, pattern/halftone regions); a from-scratch JPEG 2000 (JPX)
@@ -1070,7 +1069,7 @@ Other breaking changes:
   and `PdfEditor`); vertical writing (tategaki) for EPUB; and a digital
   signature scaffold (`PdfSigner`: prepare, ByteRange, embed; the CMS blob
   comes from the application).
-- API perfection (M5): explicit API mode across all published modules;
+- API cleanup: explicit API mode across all published modules;
   `KitePDF.VERSION` generated from the Gradle version; a `String` password
   overload with the documented UTF-8-then-Latin-1 rule; `KiteWarnings`, a
   process-global warning sink for the lenient salvage paths; CMYK color
@@ -1079,7 +1078,7 @@ Other breaking changes:
   run, wired into every build) and seeded writer round-trip property tests;
   CI now also tests iOS simulator, macOS, and JS(Node) targets on main.
 
-### Fixed since the EPUB milestone
+### Fixed later in the same cycle
 
 - A latent AWT soft-mask perf bug (an unclipped surface allocated a
   100-megapixel offscreen buffer per luminosity mask, ~1.1s per page).

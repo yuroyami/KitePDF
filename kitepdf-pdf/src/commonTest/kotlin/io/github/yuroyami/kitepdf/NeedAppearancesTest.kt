@@ -12,7 +12,7 @@ import kotlin.test.assertNotNull
 /**
  * `clearNeedAppearances` has to read the staged-or-base view and accept an
  * `/AcroForm` written straight into the catalog, the two shapes its
- * neighbours (ledger 14.8) already handle.
+ * neighbours already handle.
  */
 class NeedAppearancesTest {
 

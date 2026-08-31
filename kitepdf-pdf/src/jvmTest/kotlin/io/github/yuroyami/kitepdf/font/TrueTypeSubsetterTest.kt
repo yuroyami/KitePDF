@@ -10,7 +10,7 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 /**
- * Structural validation of [TrueTypeSubsetter] (Milestone B). Uses MuPDF's
+ * Structural validation of [TrueTypeSubsetter]. Uses MuPDF's
  * bundled `DroidSansFallback.ttf` (TrueType/`glyf` CJK); skips if absent. The
  * decisive checks are the spec checksum (catches `head.checkSumAdjustment` /
  * table-checksum bugs) and a KitePDF re-parse; FreeType-inside-`mutool` is the

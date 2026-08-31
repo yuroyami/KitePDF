@@ -191,7 +191,7 @@ class VerticalWritingTest {
 
 /**
  * A book whose OPF declares `primary-writing-mode: vertical-rl` implies
- * right-to-left page progression (ledger Part 13), derived only when the
+ * right-to-left page progression, derived only when the
  * spine declares no `page-progression-direction` of its own. The signal is
  * the OPF meta, not the chapter CSS: reading a chapter at open would break
  * the lazy-open guarantee (LazyParseTest).

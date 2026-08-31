@@ -8,12 +8,12 @@ import kotlin.test.Test
 import kotlin.test.assertTrue
 
 /**
- * M3 exit gate: measured open and render budgets on this machine
+ * Benchmark gate: measured open and render budgets on this machine
  * (open < 50 ms, corpus mean render < 35 ms/page at 1x through the AWT
- * rasterizer). The numbers print for the progress ledger. Corpus files are
- * optional; the synthetic fixtures always run.
+ * rasterizer). The numbers print so runs can be compared over time. Corpus
+ * files are optional; the synthetic fixtures always run.
  */
-class M3BenchmarkTest {
+class RenderBenchmarkTest {
 
     private fun corpusPdfs(): List<File> {
         var d: File? = File(System.getProperty("user.dir")).absoluteFile
@@ -54,7 +54,7 @@ class M3BenchmarkTest {
         }
         val meanRenderMs = renderTotalNs / 1_000_000.0 / pageCount
         println(
-            "[M3 bench] docs=${docs.size} pages=$pageCount " +
+            "[render bench] docs=${docs.size} pages=$pageCount " +
                 "worstOpen=${(worstOpenMs * 100).toInt() / 100.0}ms ($worstOpenName) " +
                 "meanRender=${(meanRenderMs * 100).toInt() / 100.0}ms/page",
         )

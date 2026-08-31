@@ -5,7 +5,7 @@ import kotlin.test.Test
 import kotlin.test.assertTrue
 
 /**
- * Phase 0 scoreboard. Sweeps the corpus, renders KitePDF vs the MuPDF oracle,
+ * The correctness scoreboard. Sweeps the corpus, renders KitePDF vs the MuPDF oracle,
  * writes `build/difftest/report.md` (+ per-page PNGs), and gates CI.
  *
  * Run:

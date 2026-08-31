@@ -8,7 +8,7 @@ plugins {
 }
 
 /*
- * :kitepdf-core is the format-agnostic substrate: geometry, the render Canvas,
+ * :kitepdf-core is the shared core: geometry, the render Canvas,
  * the font engine, compression, hyphenation data, and the shared value model.
  * Every document handler (:kitepdf-pdf, :kitepdf-epub, ...) and every render
  * backend depends on it. Its one runtime dependency beyond kotlin-stdlib is

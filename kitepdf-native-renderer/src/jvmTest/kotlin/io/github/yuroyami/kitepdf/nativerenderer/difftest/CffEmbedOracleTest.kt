@@ -16,8 +16,8 @@ import kotlin.test.assertContains
 import kotlin.test.assertTrue
 
 /**
- * End-to-end validation of OpenType/CFF (`.otf`) embedding + CFF subsetting
- * (Milestone B'). Uses MuPDF's bundled `NotoSans-Regular.otf` (a CFF font).
+ * End-to-end validation of OpenType/CFF (`.otf`) embedding + CFF subsetting.
+ * Uses MuPDF's bundled `NotoSans-Regular.otf` (a CFF font).
  *
  * Correctness oracle for the from-scratch CFF subsetter:
  *  - **Cross-engine agreement.** KitePDF's renderer and `mutool` are two

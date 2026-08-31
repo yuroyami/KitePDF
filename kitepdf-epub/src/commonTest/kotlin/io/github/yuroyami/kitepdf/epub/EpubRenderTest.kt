@@ -14,7 +14,7 @@ import kotlin.test.assertTrue
  * End-to-end proof that :kitepdf-epub is a real handler on :kitepdf-core: build
  * a minimal EPUB, open it, and render a page through the SAME [RecordingCanvas]
  * the PDF engine's render tests use. If text reaches drawGlyphs, the shared
- * substrate genuinely serves a second, non-PDF format.
+ * core genuinely serves a second, non-PDF format.
  */
 class EpubRenderTest {
 
@@ -107,7 +107,7 @@ class EpubRenderTest {
         assertEquals(io.github.yuroyami.kitepdf.core.render.KiteImageData.Kind.RAW, img.kind, "PNG decodes to RAW pixels in core")
     }
 
-    // ---- Phase 2: CSS reaching the canvas -----------------------------------
+    // ---- CSS reaching the canvas --------------------------------------------
 
     private fun renderRuns(body: String): List<RecordingCanvas.Call.Glyphs> {
         val doc = EpubDocument.open(buildEpubWithBody(body))
@@ -148,7 +148,7 @@ class EpubRenderTest {
         assertTrue(runs.any { "abc" in it.text && it.fontSpec.family == io.github.yuroyami.kitepdf.core.font.KiteFontFamily.SansSerif })
     }
 
-    // ---- Phase 3: box model painting ----------------------------------------
+    // ---- Box model painting -------------------------------------------------
 
     private fun renderCalls(body: String): List<RecordingCanvas.Call> {
         val doc = EpubDocument.open(buildEpubWithBody(body))
@@ -183,7 +183,7 @@ class EpubRenderTest {
         assertTrue(padded > plain + 25.0, "padding-left pushes content right ($padded vs $plain)")
     }
 
-    // ---- Phase 4: bidi ------------------------------------------------------
+    // ---- Bidi ---------------------------------------------------------------
 
     @Test
     fun bidi_reverses_a_hebrew_run() {

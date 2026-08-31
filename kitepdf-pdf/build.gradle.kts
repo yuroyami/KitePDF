@@ -16,7 +16,7 @@ plugins {
  * The handler itself is entirely common Kotlin with no cinterop, so it
  * compiles for every target Kotlin supports, hence every target is on.
  */
-// T-26: KitePDF.VERSION is generated from the Gradle project version so the
+// KitePDF.VERSION is generated from the Gradle project version so the
 // two can never drift. Wired into commonMain via srcDir(taskProvider), which
 // carries the task dependency to every compile and sources-jar task.
 val generateVersionKt = tasks.register("generateVersionKt") {

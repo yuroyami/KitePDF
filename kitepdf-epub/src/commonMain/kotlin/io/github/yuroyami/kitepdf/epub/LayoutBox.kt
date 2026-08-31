@@ -9,9 +9,9 @@ import io.github.yuroyami.kitepdf.core.render.KiteImageData
 import io.github.yuroyami.kitepdf.core.render.RgbColor
 
 /**
- * The CSS box tree the Phase-3 layout engine positions and paints. Unlike the
- * flat Phase-2 block list, this preserves nesting so a container's background,
- * border and padding wrap all its descendants.
+ * The CSS box tree the layout engine positions and paints. Unlike a flat
+ * block list, it preserves nesting so a container's background, border and
+ * padding wrap all its descendants.
  *
  * Coordinates are filled by [BoxLayout] in *document space*: x grows right from
  * the page content-left edge (0..contentWidth), y grows DOWN from the top of the

@@ -14,7 +14,7 @@ import kotlin.test.assertNull
 
 /**
  * [FilterChain.decodeToTerminal]: like [FilterChain.decode], but for a stream
- * whose terminal filter is an image codec (ledger D-5). The registry only knows
+ * whose terminal filter is an image codec. The registry only knows
  * byte filters, so [FilterChain.decode] cannot be called on such a stream at
  * all; these tests exercise the second entry point directly, ahead of the
  * end-to-end coverage in `KiteImageDataTest`.

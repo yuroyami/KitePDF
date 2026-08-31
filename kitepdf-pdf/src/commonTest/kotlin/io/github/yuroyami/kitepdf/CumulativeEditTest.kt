@@ -17,8 +17,8 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 /**
- * A second edit to one page must build on the first, not replace it
- * (ledger D-1). The redaction cases matter most: two `redactRegion` calls that
+ * A second edit to one page must build on the first, not replace it.
+ * The redaction cases matter most: two `redactRegion` calls that
  * do not compose leave the first region's content in the delivered file.
  */
 class CumulativeEditTest {

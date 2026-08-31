@@ -12,7 +12,7 @@ package io.github.yuroyami.kitepdf.core.font
  *
  * The Unicode-keyed CMaps (Uni*) are NOT bundled: their tables are the bulk
  * of the resource set (~55k entries) and the existing synthesized
- * segmentation already handles them; ledger records the tradeoff.
+ * segmentation already handles them.
  *
  * This file is generated data. Do not hand-edit.
  */

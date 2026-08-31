@@ -367,7 +367,7 @@ class KiteImageDataTest {
        /Filter [/ASCII85Decode /DCTDecode] and similar: the prefix must be
        decoded before the terminal codec runs. Each positive case asserts the
        wrapped image decodes to the same pixels as the bare codec, so the test
-       states the property instead of a hardcoded blob (ledger D-5). ────────── */
+       states the property instead of a hardcoded blob. ────────── */
 
     // 32x24 baseline JPEG, 4:4:4 (no chroma subsampling); a synthetic test
     // vector, not a photograph. Only the bytes matter here, not the picture.
