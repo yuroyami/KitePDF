@@ -15,9 +15,10 @@ docs_dir: docs
 theme:
   name: material
   language: en
+  logo: assets/kitepdf-logo.svg
+  favicon: assets/favicon.png
   icon:
     repo: fontawesome/brands/github
-    logo: material/file-pdf-box
   palette:
     - media: "(prefers-color-scheme: light)"
       scheme: default
