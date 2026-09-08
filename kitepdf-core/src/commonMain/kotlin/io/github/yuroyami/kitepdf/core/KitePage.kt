@@ -148,7 +148,14 @@ public interface KiteDocument {
     /** Pages in [chapter]. Prepares it first. Zero for an empty chapter. */
     public fun pageCountIn(chapter: Int): Int = pageCount
 
-    /** The page at [location]. Prepares its chapter first. */
+    /**
+     * The page at [location]. Prepares its chapter first.
+     *
+     * The same location answers the same object for the life of the document,
+     * and [pages] holds those same objects. Viewers key their caches on the
+     * page object, so a handler that built a new one per call would defeat
+     * every cache above it.
+     */
     public fun page(location: KiteLocation): KitePage = pages[location.page]
 
     /** True once every chapter is laid out, so global page indices are final. */

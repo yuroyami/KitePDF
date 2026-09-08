@@ -133,15 +133,68 @@ public class EpubDocument internal constructor(
     /** One per chapter, held for that chapter's layout so it happens once. */
     private val chapterLocks: Array<KiteLock> = Array(parsed.spineCount) { KiteLock() }
 
-    /** Box trees, built on demand. Cheap next to layout, but not free. */
-    private val builtRoots = arrayOfNulls<BlockBox>(parsed.spineCount)
+    /**
+     * What a laid-out chapter keeps for good: enough to count its pages, find
+     * an anchor, and turn a location into a bookmark and back, without the
+     * pages themselves. A few numbers per page, however long the chapter.
+     */
+    private class ChapterSummary(
+        val pageCount: Int,
+        /** Document-space top of each page, for anchor and offset lookups. */
+        val startYs: DoubleArray,
+        /** Characters of text on each page, the unit a flow bookmark counts in. */
+        val textLengths: IntArray,
+        /** Element ids in the chapter with their document-space y, in tree order. */
+        val anchors: List<Pair<String, Double>>,
+        /** Document-space y of the chapter root, where a link to the spine item lands. */
+        val rootY: Double,
+        /** The size every page of the chapter has, so a page answers it without its pages. */
+        val pageWidth: Double,
+        val pageHeight: Double,
+        /** What the chapter's pages cost in memory, by [estimateBytes]. */
+        val bytes: Long,
+    )
 
-    /** Laid-out pages per chapter. Null until that chapter is prepared. */
-    private val chapterPages = arrayOfNulls<List<PageRender>>(parsed.spineCount)
+    /** A chapter whose pages are in memory, with what was derived from them. */
+    private class LiveChapter(
+        val pages: List<PageRender>,
+        /** Structured text per page, built on first use, dropped with the pages. */
+        val structured: Array<KiteStructuredText?>,
+        /** Link rects per page, built on first use, dropped with the pages. */
+        val links: Array<List<EpubLink>?>,
+        /** The tick of the last use; the smallest is the first to drop. 0 for never used. */
+        var lastUse: Long,
+    )
 
-    // Box tree per spine: depends on font size + column width, so it is rebuilt
-    // whenever settings change. The DOM and CSS it is built from are parsed once
-    // per chapter and live in ParsedEpub, shared by every re-layout.
+    /** One per chapter, null until that chapter has been laid out once. */
+    private val summaries = arrayOfNulls<ChapterSummary>(parsed.spineCount)
+
+    /**
+     * The chapters whose pages are in memory. A slot goes back to null when
+     * [EpubSettings.layoutCacheBytes] needs the room; the chapter is laid out
+     * again on its next use (#218).
+     */
+    private val live = arrayOfNulls<LiveChapter>(parsed.spineCount)
+
+    /** The estimated bytes the live chapters hold, kept under the budget. */
+    private var liveBytes = 0L
+
+    /** Ticks on every use of a chapter's pages, to stamp [LiveChapter.lastUse]. */
+    private var useClock = 0L
+
+    /**
+     * One [EpubPage] per location, created with the chapter's summary and kept
+     * for the life of the document. A viewer keys its bitmap cache and its
+     * state producers on the page object, so a fresh object per lookup was a
+     * cache miss and a re-raster on every recomposition (#221).
+     */
+    private val pageObjects = arrayOfNulls<List<EpubPage>>(parsed.spineCount)
+
+    // Box tree per spine: depends on font size + column width, so it is built
+    // per layout, including the layout that brings a dropped chapter back. The
+    // DOM and CSS it is built from are parsed once per chapter and live in
+    // ParsedEpub, shared by every re-layout. The tree is most of what a
+    // laid-out chapter weighs, so it is never kept past pagination.
     private fun buildDocRoot(chapter: Int): BlockBox {
         val sp = parsed.spine(chapter)
         val (layoutWidth, layoutHeight) =
@@ -154,22 +207,11 @@ public class EpubDocument internal constructor(
     }
 
     /**
-     * One chapter's box tree, memoized. Building runs outside the lock; if two
-     * threads race, the first to publish wins and both get that instance, which
-     * matters because layout mutates the tree in place.
-     */
-    private fun docRoot(chapter: Int): BlockBox {
-        tableLock.withLock { builtRoots[chapter] }?.let { return it }
-        val built = buildDocRoot(chapter)
-        return tableLock.withLock { builtRoots[chapter] ?: built.also { builtRoots[chapter] = it } }
-    }
-
-    /**
      * One chapter's box tree under a fresh root. Layout starts each chapter at
      * y = 0, so a chapter's geometry never depends on the chapters before it.
      */
-    private fun chapterRoot(chapter: Int): BlockBox =
-        BlockBox(ComputedStyle.initial(settings.fontSize, direction = parsed.baseDir), listOf(docRoot(chapter)))
+    private fun chapterRoot(docRoot: BlockBox): BlockBox =
+        BlockBox(ComputedStyle.initial(settings.fontSize, direction = parsed.baseDir), listOf(docRoot))
 
     /**
      * Vertical writing: the writing mode the first spine root resolves, if it
@@ -184,7 +226,7 @@ public class EpubDocument internal constructor(
         // The spine root box wraps the document node (initial style); the html
         // element's computed style sits one level down and body's below that,
         // so walk the first-child chain a few levels.
-        var box: LayoutBox? = if (parsed.spineCount == 0) null else docRoot(0)
+        var box: LayoutBox? = if (parsed.spineCount == 0) null else buildDocRoot(0)
         var depth = 0
         while (box != null && depth < 4) {
             val s = when (box) {
@@ -211,7 +253,7 @@ public class EpubDocument internal constructor(
     private fun fixedSpine(chapter: Int): FixedSpine? {
         if (!parsed.fixedLayout) return null
         val (w, h) = viewportOf(chapter)
-        return FixedSpine(docRoot(chapter), w, h)
+        return FixedSpine(buildDocRoot(chapter), w, h)
     }
 
     /** A fixed-layout chapter's page size: what it declares, else the reader's. */
@@ -263,19 +305,20 @@ public class EpubDocument internal constructor(
      * calls for the same chapter produce equal pages, so it is safe to run
      * chapters in any order or on any thread.
      */
-    private fun paginateChapter(chapter: Int): List<PageRender> {
+    private fun paginateChapter(chapter: Int): Laid {
         val fonts = fontsFor(chapter)
         val spine = fixedSpine(chapter)
         if (spine != null) {
             BoxLayout(::loadImage, ::loadSvg, spine.height, fonts, languageFor(chapter), settings.lineHeightScale)
                 .layout(spine.root, spine.width, spine.height)
-            return listOf(Paginator.paginateFixed(spine.root, spine.width, spine.height))
+            return Laid(listOf(Paginator.paginateFixed(spine.root, spine.width, spine.height)), spine.root)
         }
         // Vertical writing swaps the budgets: the inline (line-length) budget is
         // the page content HEIGHT and each page holds contentWidth of columns.
         val inlineBudget = if (isVertical) pageContentHeight else contentWidth
         val blockBudget = if (isVertical) contentWidth else pageContentHeight
-        val root = chapterRoot(chapter)
+        val docRoot = buildDocRoot(chapter)
+        val root = chapterRoot(docRoot)
         BoxLayout(
             ::loadImage, ::loadSvg, blockBudget, fonts, languageFor(chapter),
             settings.lineHeightScale, vertical = isVertical,
@@ -288,20 +331,27 @@ public class EpubDocument internal constructor(
         // whole book shared one box tree. Keep that: do not invent a blank page.
         val blank = pages.size == 1 &&
             pages[0].lines.isEmpty() && pages[0].images.isEmpty() && pages[0].decoBoxes.isEmpty()
-        return if (blank) emptyList() else pages
+        return Laid(if (blank) emptyList() else pages, docRoot)
     }
+
+    /** One chapter's pages with the box tree they came from, for its anchors. */
+    private class Laid(val pages: List<PageRender>, val root: BlockBox)
 
     /* ── the chapter API ──────────────────────────────────────────────────── */
 
     override val chapterCount: Int get() = parsed.spineCount
 
     override fun isChapterReady(chapter: Int): Boolean =
-        chapter in parsed.spineIndices && tableLock.withLock { chapterPages[chapter] } != null
+        chapter in parsed.spineIndices && tableLock.withLock { summaries[chapter] } != null
 
     /**
      * Lays out one chapter. This is where a book's time goes, so it is also the
      * only thing a reader has to wait for: opening at chapter 20 prepares
      * chapter 20, not chapters 0 to 20.
+     *
+     * Pages laid out this way count as never used: a loader that walks the
+     * whole book behind the reader must not push the chapter being read out
+     * of the budget, so these are the first to drop.
      */
     override fun prepareChapter(chapter: Int) {
         if (chapter !in parsed.spineIndices) return
@@ -311,8 +361,126 @@ public class EpubDocument internal constructor(
         chapterLocks[chapter].withLock {
             if (isChapterReady(chapter)) return
             val laid = paginateChapter(chapter)
-            tableLock.withLock { chapterPages[chapter] = laid }
+            val summary = summarize(laid)
+            val objects = pageObjectsFor(chapter, summary)
+            tableLock.withLock {
+                summaries[chapter] = summary
+                pageObjects[chapter] = objects
+                publishLive(chapter, laid.pages, summary, lastUse = 0L)
+            }
         }
+    }
+
+    /**
+     * [chapter]'s pages, in memory. Lays the chapter out when they are not,
+     * whether never or dropped by the budget, and stamps them used so the
+     * budget drops other chapters first.
+     */
+    private fun livePages(chapter: Int): List<PageRender> {
+        tableLock.withLock { live[chapter]?.let { it.lastUse = ++useClock; return it.pages } }
+        chapterLocks[chapter].withLock {
+            tableLock.withLock { live[chapter]?.let { it.lastUse = ++useClock; return it.pages } }
+            val laid = paginateChapter(chapter)
+            // The summary and the page objects exist from the first layout;
+            // only a chapter that was never prepared builds them here.
+            val known = tableLock.withLock { summaries[chapter] }
+            val fresh = if (known == null) summarize(laid) else null
+            val objects = if (fresh != null) pageObjectsFor(chapter, fresh) else null
+            return tableLock.withLock {
+                val summary = summaries[chapter] ?: checkNotNull(fresh).also {
+                    summaries[chapter] = it
+                    pageObjects[chapter] = objects
+                }
+                publishLive(chapter, laid.pages, summary, lastUse = ++useClock)
+                laid.pages
+            }
+        }
+    }
+
+    /** One permanent page object per page of [chapter], sized from its summary. */
+    private fun pageObjectsFor(chapter: Int, summary: ChapterSummary): List<EpubPage> =
+        List(summary.pageCount) { EpubPage(this, chapter, it, summary.pageWidth, summary.pageHeight) }
+
+    /** Under [tableLock]: installs [pages] as [chapter]'s live pages, then trims to the budget. */
+    private fun publishLive(chapter: Int, pages: List<PageRender>, summary: ChapterSummary, lastUse: Long) {
+        if (live[chapter] != null) liveBytes -= summary.bytes
+        live[chapter] = LiveChapter(pages, arrayOfNulls(pages.size), arrayOfNulls(pages.size), lastUse)
+        liveBytes += summary.bytes
+        trimToBudget()
+    }
+
+    /**
+     * Under [tableLock]: drops the least recently used chapters until the live
+     * set fits [EpubSettings.layoutCacheBytes]. One chapter always stays,
+     * however large: a book that is one spine document has nothing smaller
+     * to drop.
+     */
+    private fun trimToBudget() {
+        val budget = settings.layoutCacheBytes
+        while (liveBytes > budget) {
+            var victim = -1
+            var oldest = Long.MAX_VALUE
+            var count = 0
+            for (c in parsed.spineIndices) {
+                val entry = live[c] ?: continue
+                count++
+                if (entry.lastUse < oldest) {
+                    oldest = entry.lastUse
+                    victim = c
+                }
+            }
+            if (count <= 1) return
+            live[victim] = null
+            liveBytes -= summaries[victim]?.bytes ?: 0L
+        }
+    }
+
+    /** The summary of [chapter], laying it out first. Null off the spine. */
+    private fun summaryOf(chapter: Int): ChapterSummary? {
+        if (chapter !in parsed.spineIndices) return null
+        prepareChapter(chapter)
+        return tableLock.withLock { summaries[chapter] }
+    }
+
+    /** What a chapter keeps for good, read off its pages and box tree once. */
+    private fun summarize(laid: Laid): ChapterSummary {
+        val pages = laid.pages
+        val anchors = ArrayList<Pair<String, Double>>()
+        collectAnchors(laid.root) { id, y -> anchors.add(id to y) }
+        return ChapterSummary(
+            pageCount = pages.size,
+            startYs = DoubleArray(pages.size) { pages[it].startY },
+            textLengths = IntArray(pages.size) { textLengthOf(pages[it]) },
+            anchors = anchors,
+            rootY = laid.root.y,
+            pageWidth = pages.firstOrNull()?.pageWidth ?: settings.pageWidth,
+            pageHeight = pages.firstOrNull()?.pageHeight ?: settings.pageHeight,
+            bytes = estimateBytes(pages),
+        )
+    }
+
+    /**
+     * What [pages] hold in memory: [BYTES_PER_GLYPH] per glyph (measured on
+     * the JVM over the corpus, an estimate everywhere) plus the samples of
+     * every image on them, counted once each.
+     */
+    private fun estimateBytes(pages: List<PageRender>): Long {
+        var glyphs = 0L
+        var imageBytes = 0L
+        val seen = HashSet<KiteImageData>()
+        fun count(image: KiteImageData?) {
+            if (image != null && seen.add(image)) {
+                imageBytes += image.encodedBytes.size.toLong() + (image.pixelBytes?.size ?: 0)
+            }
+        }
+        for (page in pages) {
+            for (line in page.lines) {
+                for (run in line.runs) glyphs += run.glyphs.size
+                for (im in line.images) count(im.image)
+            }
+            for (box in page.images) count(box.image)
+        }
+        return glyphs * BYTES_PER_GLYPH + imageBytes
     }
 
     /** Whether [chapter]'s document has been read and parsed yet. */
@@ -321,29 +489,71 @@ public class EpubDocument internal constructor(
     /** How many stylesheet files this book has parsed, however many chapters link them. */
     internal val stylesheetsParsed: Int get() = parsed.sheetsParsed
 
-    /** [chapter]'s pages, laying it out first. */
-    private fun renders(chapter: Int): List<PageRender> {
-        prepareChapter(chapter)
-        return tableLock.withLock { chapterPages[chapter] } ?: emptyList()
+    /** Whether [chapter]'s pages are in memory right now. For tests and diagnostics. */
+    internal fun isChapterLive(chapter: Int): Boolean =
+        chapter in parsed.spineIndices && tableLock.withLock { live[chapter] } != null
+
+    /** How many chapters hold their pages in memory. For tests and diagnostics. */
+    internal val liveChapterCount: Int
+        get() = tableLock.withLock { live.count { it != null } }
+
+    /** [chapter]'s page objects, laying it out first. Empty for a chapter off the spine. */
+    private fun pagesIn(chapter: Int): List<EpubPage> {
+        if (summaryOf(chapter) == null) return emptyList()
+        return tableLock.withLock { pageObjects[chapter] } ?: emptyList()
     }
 
-    override fun pageCountIn(chapter: Int): Int =
-        if (chapter in parsed.spineIndices) renders(chapter).size else 0
+    override fun pageCountIn(chapter: Int): Int = summaryOf(chapter)?.pageCount ?: 0
 
     override fun page(location: KiteLocation): EpubPage {
-        val pages = renders(location.chapter)
-        val page = pages.getOrNull(location.page)
+        val pages = pagesIn(location.chapter)
+        return pages.getOrNull(location.page)
             ?: throw IndexOutOfBoundsException(
                 "no page $location: chapter ${location.chapter} has ${pages.size} page(s)",
             )
-        return EpubPage(page, this, location.chapter)
     }
 
+    /* ── what a page reads from its chapter ───────────────────────────────── */
+
+    /** Page [index] of [chapter] to paint, in memory, laid out again if it was dropped. */
+    internal fun render(chapter: Int, index: Int): PageRender {
+        val pages = livePages(chapter)
+        return pages.getOrNull(index)
+            ?: throw IllegalStateException("chapter $chapter laid out to ${pages.size} page(s), page $index expected")
+    }
+
+    /**
+     * A per-page value derived from its render, kept with the live chapter so
+     * it is built once and dropped with the pages. A chapter dropped between
+     * the build and the store hands the value back unshared, which is correct
+     * and merely unlucky.
+     */
+    private fun <T : Any> derived(
+        chapter: Int,
+        index: Int,
+        slot: (LiveChapter) -> Array<T?>,
+        build: (PageRender) -> T,
+    ): T {
+        tableLock.withLock { live[chapter]?.let { slot(it)[index] } }?.let { return it }
+        val built = build(render(chapter, index))
+        return tableLock.withLock {
+            val entry = live[chapter] ?: return@withLock built
+            val cells = slot(entry)
+            cells[index] ?: built.also { cells[index] = it }
+        }
+    }
+
+    internal fun structuredTextOf(chapter: Int, index: Int, build: (PageRender) -> KiteStructuredText): KiteStructuredText =
+        derived(chapter, index, { it.structured }, build)
+
+    internal fun linksOf(chapter: Int, index: Int, build: (PageRender) -> List<EpubLink>): List<EpubLink> =
+        derived(chapter, index, { it.links }, build)
+
     override val isComplete: Boolean
-        get() = tableLock.withLock { chapterPages.all { it != null } }
+        get() = tableLock.withLock { summaries.all { it != null } }
 
     override val knownPageCount: Int
-        get() = tableLock.withLock { chapterPages.sumOf { it?.size ?: 0 } }
+        get() = tableLock.withLock { summaries.sumOf { it?.pageCount ?: 0 } }
 
     /**
      * The global index of [location]. Null while any earlier chapter is still
@@ -352,9 +562,9 @@ public class EpubDocument internal constructor(
     override fun pageIndexOf(location: KiteLocation): Int? = tableLock.withLock {
         if (location.chapter !in parsed.spineIndices) return@withLock null
         var offset = 0
-        for (c in 0 until location.chapter) offset += (chapterPages[c] ?: return@withLock null).size
-        val own = chapterPages[location.chapter] ?: return@withLock null
-        if (location.page !in own.indices) return@withLock null
+        for (c in 0 until location.chapter) offset += (summaries[c] ?: return@withLock null).pageCount
+        val own = summaries[location.chapter] ?: return@withLock null
+        if (location.page !in 0 until own.pageCount) return@withLock null
         offset + location.page
     }
 
@@ -363,9 +573,9 @@ public class EpubDocument internal constructor(
         if (pageIndex < 0) return@withLock null
         var remaining = pageIndex
         for (c in parsed.spineIndices) {
-            val own = chapterPages[c] ?: return@withLock null
-            if (remaining < own.size) return@withLock KiteLocation(c, remaining)
-            remaining -= own.size
+            val own = summaries[c] ?: return@withLock null
+            if (remaining < own.pageCount) return@withLock KiteLocation(c, remaining)
+            remaining -= own.pageCount
         }
         null
     }
@@ -379,22 +589,19 @@ public class EpubDocument internal constructor(
     /** `chapterPageOffset[c]` is the global index of chapter `c`'s first page. */
     private fun chapterPageOffsets(): IntArray = tableLock.withLock {
         val offsets = IntArray(parsed.spineCount + 1)
-        for (c in parsed.spineIndices) offsets[c + 1] = offsets[c] + (chapterPages[c]?.size ?: 0)
+        for (c in parsed.spineIndices) offsets[c + 1] = offsets[c] + (summaries[c]?.pageCount ?: 0)
         offsets
     }
 
     /**
      * Every page, in reading order. Lays out the whole book; for a big EPUB
-     * that is the slow path the chapter API exists to avoid.
+     * that is the slow path the chapter API exists to avoid. The objects are
+     * the ones [page] answers, and only what the budget keeps stays in memory.
      */
     override val pages: List<EpubPage>
         get() {
             prepareAll()
-            return buildList {
-                for (c in parsed.spineIndices) {
-                    for (r in renders(c)) add(EpubPage(r, this@EpubDocument, c))
-                }
-            }
+            return buildList { for (c in parsed.spineIndices) addAll(pagesIn(c)) }
         }
 
     /** Pages in the whole book. Lays it out; see [pages]. */
@@ -446,17 +653,18 @@ public class EpubDocument internal constructor(
         val offsets = chapterPageOffsets()
         val map = HashMap<String, Int>()
         parsed.spinePaths.forEachIndexed { i, path ->
+            val summary = tableLock.withLock { summaries[i] } ?: return@forEachIndexed
             val base = offsets[i]
-            map.getOrPut(path) { base + localPageOf(i, docRoot(i).y) }
-            collectAnchors(docRoot(i)) { id, y -> map.getOrPut("$path#$id") { base + localPageOf(i, y) } }
+            map.getOrPut(path) { base + localPageOf(summary, summary.rootY) }
+            for ((id, y) in summary.anchors) map.getOrPut("$path#$id") { base + localPageOf(summary, y) }
         }
         map
     }
 
     /** Chapter-local document y to a page index inside that chapter. */
-    private fun localPageOf(chapter: Int, y: Double): Int {
+    private fun localPageOf(summary: ChapterSummary, y: Double): Int {
         if (parsed.fixedLayout) return 0
-        val starts = renders(chapter).map { it.startY }
+        val starts = summary.startYs
         var p = 0
         for (k in starts.indices) if (starts[k] <= y + 1e-9) p = k else break
         return p
@@ -484,9 +692,9 @@ public class EpubDocument internal constructor(
      * same offset, even though they move to another page.
      */
     override fun bookmarkOf(location: KiteLocation): KiteBookmark.Flow {
-        val pages = renders(location.chapter)
+        val summary = summaryOf(location.chapter) ?: return KiteBookmark.Flow(location.chapter, 0)
         var offset = 0
-        for (i in 0 until location.page.coerceAtMost(pages.size)) offset += textLengthOf(pages[i])
+        for (i in 0 until location.page.coerceAtMost(summary.pageCount)) offset += summary.textLengths[i]
         return KiteBookmark.Flow(location.chapter, offset)
     }
 
@@ -500,33 +708,27 @@ public class EpubDocument internal constructor(
             return locationOf(bookmark.pageIndex) ?: KiteLocation(chapter, 0)
         }
         val flow = bookmark as KiteBookmark.Flow
-        val pages = renders(chapter)
-        if (pages.isEmpty()) return KiteLocation(chapter, 0)
+        val summary = summaryOf(chapter) ?: return KiteLocation(chapter, 0)
+        val last = summary.pageCount - 1
+        if (last < 0) return KiteLocation(chapter, 0)
 
         flow.fragment?.let { id ->
-            val y = anchorYIn(chapter, id)
-            if (y != null) return KiteLocation(chapter, localPageOf(chapter, y))
+            val y = anchorYIn(summary, id)
+            if (y != null) return KiteLocation(chapter, localPageOf(summary, y))
         }
         if (flow.charOffset <= 0) return KiteLocation(chapter, 0)
         var seen = 0
-        for (i in pages.indices) {
-            val length = textLengthOf(pages[i])
-            if (flow.charOffset < seen + length || i == pages.lastIndex) return KiteLocation(chapter, i)
+        for (i in 0..last) {
+            val length = summary.textLengths[i]
+            if (flow.charOffset < seen + length || i == last) return KiteLocation(chapter, i)
             seen += length
         }
-        return KiteLocation(chapter, pages.lastIndex)
+        return KiteLocation(chapter, last)
     }
 
     /** Chapter-local y of an element id, or null when the chapter has no such id. */
-    private fun anchorYIn(chapter: Int, id: String): Double? {
-        var found: Double? = null
-        collectAnchors(docRoot(chapter)) { anchorId, y -> if (anchorId == id && found == null) found = y }
-        return found
-    }
-
-    /** This page's index inside its own chapter, for [EpubPage.location]. */
-    internal fun indexInChapter(chapter: Int, render: PageRender): Int =
-        renders(chapter).indexOfFirst { it === render }.coerceAtLeast(0)
+    private fun anchorYIn(summary: ChapterSummary, id: String): Double? =
+        summary.anchors.firstOrNull { it.first == id }?.second
 
     /** Characters of text on one page, the unit [KiteBookmark.Flow.charOffset] counts in. */
     private fun textLengthOf(page: PageRender): Int =
@@ -584,6 +786,13 @@ public class EpubDocument internal constructor(
     internal fun chapterDir(chapter: Int): String = parsed.spine(chapter).docDir
 
     public companion object {
+        /**
+         * What one laid-out glyph costs, with its share of lines, runs and DOM:
+         * measured at 165 to 200 bytes per character on the JVM over the
+         * corpus, rounded down because Android objects are smaller.
+         */
+        private const val BYTES_PER_GLYPH = 160L
+
         public fun open(
             bytes: ByteArray,
             pageWidth: Double = 400.0,
@@ -687,8 +896,22 @@ public data class EpubSettings(
     val justify: Boolean? = null,
     /** False drops the publisher's CSS (author rules + inline styles): UA + reader layers only. */
     val usePublisherCss: Boolean = true,
+    /**
+     * How much laid-out text the book keeps in memory, as an estimate in bytes.
+     *
+     * Layout keeps one glyph object per character, so a whole novel costs more
+     * than an Android app's heap allows (about 165 bytes per character on the
+     * JVM). The chapters the reader has not used for the longest drop their
+     * pages first and lay out again on their next use, about a tenth of a
+     * second per chapter. Page counts, anchors and bookmarks survive the drop,
+     * so navigation never waits. One chapter always stays, so a book that is a
+     * single spine document keeps that document whole. 0 keeps only the chapter
+     * in use.
+     */
+    val layoutCacheBytes: Long = 48L * 1024 * 1024,
 ) {
     init {
+        require(layoutCacheBytes >= 0L) { "layoutCacheBytes must be >= 0" }
         require(pageWidth.isFinite() && pageWidth > 0.0) { "pageWidth must be finite and > 0" }
         require(pageHeight.isFinite() && pageHeight > 0.0) { "pageHeight must be finite and > 0" }
         require(fontSize.isFinite() && fontSize > 0.0) { "fontSize must be finite and > 0" }
@@ -702,22 +925,36 @@ public data class EpubSettings(
     }
 }
 
-/** One reflowed EPUB page: paints backgrounds/borders, then text lines and images. */
+/**
+ * One reflowed EPUB page: paints backgrounds/borders, then text lines and images.
+ *
+ * A page object is permanent (#221) and holds no layout of its own: what it
+ * paints comes from [EpubDocument.render], which lays the chapter out again
+ * when the memory budget had dropped it (#218). What a viewer asks without
+ * painting (size, location) is answered from the constructor, so composing a
+ * page never lays anything out.
+ */
 public class EpubPage internal constructor(
-    private val page: PageRender,
     private val doc: EpubDocument,
     /** The spine item this page belongs to. */
-    public val chapter: Int = 0,
+    public val chapter: Int,
+    /** This page's index inside its chapter. */
+    private val index: Int,
+    private val pageWidth: Double,
+    private val pageHeight: Double,
 ) : KitePage {
+
+    /** The laid-out page, fetched per operation: holding it would defeat the budget. */
+    private fun laidOut(): PageRender = doc.render(chapter, index)
 
     /** Reads files an SVG references, relative to [baseDir] inside the archive. */
     private fun svgLoader(baseDir: String): (String) -> ByteArray? =
         { href -> doc.svgResource(baseDir, href) }
 
     /** Where this page sits: its chapter, and its index inside that chapter. */
-    public val location: KiteLocation get() = KiteLocation(chapter, doc.indexInChapter(chapter, page))
-    override val displayWidth: Double get() = page.pageWidth
-    override val displayHeight: Double get() = page.pageHeight
+    public val location: KiteLocation get() = KiteLocation(chapter, index)
+    override val displayWidth: Double get() = pageWidth
+    override val displayHeight: Double get() = pageHeight
 
     @Deprecated("Renamed to displayWidth, which every KitePage answers", ReplaceWith("displayWidth"))
     public val width: Double get() = displayWidth
@@ -733,18 +970,19 @@ public class EpubPage internal constructor(
      * source of the page's vertical mapping: painting ([renderTo]) flips it
      * to y-up, extraction ([textContent]) uses it directly.
      */
-    private fun displayY(docY: Double): Double = page.margin + (docY - page.startY)
+    private fun displayY(page: PageRender, docY: Double): Double = page.margin + (docY - page.startY)
 
     override fun renderTo(canvas: KiteCanvas, deviceCtm: KiteMatrix) {
-        if (page.vertical) {
-            renderVerticalTo(canvas, deviceCtm)
-            return
-        }
+        val page = laidOut()
+        if (page.vertical) renderVerticalTo(page, canvas, deviceCtm) else renderHorizontalTo(page, canvas, deviceCtm)
+    }
+
+    private fun renderHorizontalTo(page: PageRender, canvas: KiteCanvas, deviceCtm: KiteMatrix) {
         canvas.beginPage(displayWidth, displayHeight, deviceCtm)
         val margin = page.margin
         val startY = page.startY
         val bandBottom = startY + (displayHeight - 2 * margin)
-        fun yUp(docY: Double) = displayHeight - displayY(docY)
+        fun yUp(docY: Double) = displayHeight - displayY(page, docY)
 
         // Reader background (night mode): under everything, full page.
         doc.settings.backgroundColor?.let { bg ->
@@ -826,12 +1064,12 @@ public class EpubPage internal constructor(
      * Full-width glyphs stand upright, centred on the column's em axis;
      * everything else rotates 90 degrees clockwise around the shared baseline.
      */
-    private fun renderVerticalTo(canvas: KiteCanvas, deviceCtm: KiteMatrix) {
+    private fun renderVerticalTo(page: PageRender, canvas: KiteCanvas, deviceCtm: KiteMatrix) {
         canvas.beginPage(displayWidth, displayHeight, deviceCtm)
         val margin = page.margin
         val startY = page.startY
         val bandBottom = startY + (displayWidth - 2 * margin)
-        fun colX(v: Double) = columnX(v)
+        fun colX(v: Double) = columnX(page, v)
 
         doc.settings.backgroundColor?.let { bg ->
             val rect = KitePath.Builder().apply {
@@ -923,7 +1161,7 @@ public class EpubPage internal constructor(
      * usual tategaki) starts at the right edge and works left; `vertical-lr`
      * starts at the left and works right.
      */
-    private fun columnX(v: Double): Double {
+    private fun columnX(page: PageRender, v: Double): Double {
         val span = v - page.startY
         return if (page.verticalLr) page.margin + span else displayWidth - page.margin - span
     }
@@ -1007,7 +1245,9 @@ public class EpubPage internal constructor(
      * `zipPath#fragment` strings resolvable via `EpubDocument.pageIndexOfHref`;
      * external URLs are verbatim.
      */
-    public val links: List<EpubLink> by lazy {
+    public val links: List<EpubLink> get() = doc.linksOf(chapter, index) { page -> buildLinks(page) }
+
+    private fun buildLinks(page: PageRender): List<EpubLink> {
         val out = ArrayList<EpubLink>()
         for (line in page.lines) {
             // A vertical line is a column: the run extent goes down the page
@@ -1015,11 +1255,11 @@ public class EpubPage internal constructor(
             val acrossLow: Double
             val acrossHigh: Double
             if (page.vertical) {
-                val a = columnX(line.yTop)
-                val b = columnX(line.yTop + line.height)
+                val a = columnX(page, line.yTop)
+                val b = columnX(page, line.yTop + line.height)
                 acrossLow = minOf(a, b); acrossHigh = maxOf(a, b)
             } else {
-                acrossLow = displayY(line.yTop); acrossHigh = acrossLow + line.height
+                acrossLow = displayY(page, line.yTop); acrossHigh = acrossLow + line.height
             }
             val runs = line.runs.filter { !it.isAnnotation && it.glyphs.isNotEmpty() }.sortedBy { it.x }
             var i = 0
@@ -1029,7 +1269,7 @@ public class EpubPage internal constructor(
                 var j = i
                 while (j + 1 < runs.size && runs[j + 1].href == href) j++
                 val start = page.margin + runs[i].x
-                val end = runEnd(runs[j])
+                val end = runEnd(page, runs[j])
                 out.add(
                     EpubLink(
                         rect = if (page.vertical) {
@@ -1043,10 +1283,10 @@ public class EpubPage internal constructor(
                 i = j + 1
             }
         }
-        out
+        return out
     }
 
-    private fun runEnd(r: PlacedRun): Double =
+    private fun runEnd(page: PageRender, r: PlacedRun): Double =
         page.margin + r.x + r.glyphs.sumOf { it.advanceWidth } * r.fontSize / 1000.0
 
     /* ── accessibility ───────────────────────────────────────────────────── */
@@ -1067,6 +1307,7 @@ public class EpubPage internal constructor(
      * ```
      */
     public fun readingOrder(): List<EpubReadingItem> {
+        val page = laidOut()
         val out = ArrayList<Pair<Double, EpubReadingItem>>()
         var owner: TextBlockBox? = null
         var top = 0.0
@@ -1082,7 +1323,7 @@ public class EpubPage internal constructor(
 
         for (line in page.lines) {
             if (line.owner !== owner) { flushText(); owner = line.owner; top = line.yTop }
-            extractLine(line)?.let { words.add(it.text) }
+            extractLine(page, line)?.let { words.add(it.text) }
             for (img in line.images) {
                 if (img.alt?.isEmpty() == true) continue   // decorative
                 out.add(line.yTop to EpubReadingItem(EpubRole.IMAGE, img.alt.orEmpty()))
@@ -1107,9 +1348,9 @@ public class EpubPage internal constructor(
 
     /* ── structured text (extraction / search) ───────────────────────────── */
 
-    private val structured: KiteStructuredText by lazy { buildStructuredText() }
-
-    override fun textContent(): KiteStructuredText = structured
+    /** Built once per live chapter and dropped with its pages, so search over a book stays bounded. */
+    override fun textContent(): KiteStructuredText =
+        doc.structuredTextOf(chapter, index) { page -> buildStructuredText(page) }
 
     /**
      * Blocks = consecutive page lines sharing one owning [TextBlockBox];
@@ -1117,7 +1358,7 @@ public class EpubPage internal constructor(
      * overlays excluded), restoring the collapsed inter-word spaces from the
      * pen gaps, since spaces are never drawn as glyphs.
      */
-    private fun buildStructuredText(): KiteStructuredText {
+    private fun buildStructuredText(page: PageRender): KiteStructuredText {
         val blocks = ArrayList<KiteTextBlock>()
         var curOwner: TextBlockBox? = null
         var curLines = ArrayList<KiteTextLine>()
@@ -1126,13 +1367,13 @@ public class EpubPage internal constructor(
         }
         for (line in page.lines) {
             if (line.owner !== curOwner) { flush(); curOwner = line.owner }
-            extractLine(line)?.let(curLines::add)
+            extractLine(page, line)?.let(curLines::add)
         }
         flush()
         return KiteStructuredText(blocks)
     }
 
-    private fun extractLine(line: PositionedLine): KiteTextLine? {
+    private fun extractLine(page: PageRender, line: PositionedLine): KiteTextLine? {
         val runs = line.runs
             .filter { !it.isAnnotation && it.glyphs.isNotEmpty() }
             .sortedBy { it.x }
@@ -1161,8 +1402,8 @@ public class EpubPage internal constructor(
         if (page.vertical) {
             // A column: the char edges run DOWN the page, and the line's own
             // extent is the column's width across it.
-            val a = columnX(line.yTop)
-            val b = columnX(line.yTop + line.height)
+            val a = columnX(page, line.yTop)
+            val b = columnX(page, line.yTop + line.height)
             return KiteTextLine(
                 text = sb.toString(),
                 bounds = io.github.yuroyami.kitepdf.core.KiteRectangle(
@@ -1172,7 +1413,7 @@ public class EpubPage internal constructor(
                 vertical = true,
             )
         }
-        val top = displayY(line.yTop)
+        val top = displayY(page, line.yTop)
         return KiteTextLine(
             text = sb.toString(),
             // Display-space rect: y-min lives in [KiteRectangle.bottom] (see KiteStructuredText).

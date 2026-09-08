@@ -164,6 +164,20 @@ val night = book.withSettings(
 shorthands) re-flow the book without re-parsing it: the zip, DOM, CSS, and
 fonts are all reused, so a font-size slider stays responsive on large books.
 
+### Memory
+
+A laid-out chapter costs about 165 bytes per character of text, so a whole
+novel does not fit an Android app's heap. `layoutCacheBytes` (default 48 MB)
+caps what stays in memory: the chapters the reader has not used for the
+longest drop their pages and lay out again on the next visit, about a tenth
+of a second each. Page counts, anchors and bookmarks survive the drop, so
+navigation never waits. One chapter always stays, so a book that is a single
+spine document keeps that document whole.
+
+```kotlin
+val book = EpubDocument.open(bytes, EpubSettings(layoutCacheBytes = 24L * 1024 * 1024))
+```
+
 ## Metadata and table of contents
 
 ```kotlin
