@@ -13,6 +13,7 @@ class EpubSettingsValidationTest {
         assertFailsWith<IllegalArgumentException> { EpubSettings(fontSize = Double.POSITIVE_INFINITY) }
         assertFailsWith<IllegalArgumentException> { EpubSettings(margin = -1.0) }
         assertFailsWith<IllegalArgumentException> { EpubSettings(lineHeightScale = 0.0) }
+        assertFailsWith<IllegalArgumentException> { EpubSettings(layoutCacheBytes = -1) }
     }
 
     @Test

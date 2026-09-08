@@ -7,8 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `EpubSettings.layoutCacheBytes`: a memory budget for laid-out chapters,
+  48 MB by default. The chapters the reader has not used for the longest
+  drop their pages and lay out again on the next visit; page counts, anchors
+  and bookmarks survive the drop.
+
 ### Fixed
 
+- Opening a reflowable book laid out every chapter in the background and
+  kept all of them, about 165 bytes per character of text, so a
+  normal-length novel filled a 192 MB Android heap within seconds and the
+  host app died with `OutOfMemoryError`. Laid-out pages now stay within the
+  budget above.
+- Every visible EPUB page was rasterized again each time a chapter finished
+  laying out, and faded in again, because the document handed the viewer a
+  new page object per lookup and the viewer keys its bitmap cache on the
+  object. On a 40-chapter book the two visible pages were rendered 30 times
+  each. A location now answers the same page object for the life of the
+  document.
+- An `OutOfMemoryError` inside the rasterizer escaped the failure guard,
+  which caught only `Exception`, and killed the host app instead of leaving
+  the page placeholder in place.
+- Each glyph in a laid-out chapter owned its own one-character `String`;
+  glyphs for the same character now share one.
 - The Skia renderer drew no text at all for a Standard-14 font on a host
   without Helvetica, Times New Roman or Courier New. It asked for those three
   by name, which macOS and Windows carry and a plain Linux box does not, and

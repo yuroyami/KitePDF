@@ -21,3 +21,5 @@ Things a previous change taught the hard way. One line each. Delete a line when 
 - Sampling a crossfade mid-fade reads white, and asserting before pumping a pager animation reads the old page. Both are timing assumptions in the test, not product bugs.
 - A wall-clock benchmark failure is often ambient machine load. Bisect before believing it: an older commit scoring worse under the same load proves it is the machine.
 - Reading a filter chain without the lenient wrapper reintroduces a salvage hole, however local the call site looks.
+- A page object built fresh on every lookup defeats every identity-keyed cache above it, and no test counted rasters, so each chapter landing re-rendered the visible pages for two releases (#221).
+- The JVM suites run on a 3 GB heap and never measure retained memory, so a book that fills a 192 MB Android heap passes every gate (#218).
