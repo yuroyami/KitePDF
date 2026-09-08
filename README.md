@@ -1,5 +1,9 @@
 # KitePDF
 
+<p align="center">
+  <img src="art/kitepdf-logo.svg" width="360" alt="KitePDF logo">
+</p>
+
 A pure-Kotlin document engine for Kotlin Multiplatform: read, create, edit and
 render PDFs, and read reflowable EPUB 2/3, from `commonMain`.
 
