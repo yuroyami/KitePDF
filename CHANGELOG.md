@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-09-08
+
+A reader app that opened a normal-length EPUB on Android ran out of memory a
+few seconds later and died. This release fixes that, along with the blank
+base-14 text on Linux that had been waiting behind it.
+
 ### Added
 
 - `EpubSettings.layoutCacheBytes`: a memory budget for laid-out chapters,
