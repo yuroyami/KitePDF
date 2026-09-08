@@ -1275,7 +1275,7 @@ internal class BoxLayout(
             if (face != null) {
                 val gid = face.gidFor(ch.code)
                 val adv = penAdvance1000(face, gid, ch).toDouble()
-                glyphs.add(TextGlyph(0, 1, gid, ch.toString(), adv, face.outline(gid), ch == ' '))
+                glyphs.add(TextGlyph(0, 1, gid, CharText.of(ch), adv, face.outline(gid), ch == ' '))
                 w += adv * fs / 1000.0
             } else {
                 val g = glyph(ch, base.spec)
@@ -1296,7 +1296,7 @@ internal class BoxLayout(
             if (c.kernAfter1000 != 0) g.copy(advanceWidth = g.advanceWidth + c.kernAfter1000) else g
         }
         return TextGlyph(
-            byteOffset = 0, byteCount = 1, gid = c.gid, text = c.ch.toString(),
+            byteOffset = 0, byteCount = 1, gid = c.gid, text = CharText.of(c.ch),
             // Pair kerning to the next glyph is folded into this glyph's advance so
             // the drawn pen movement matches the wrap width.
             advanceWidth = (penAdvance1000(face, c.gid, c.ch) + c.kernAfter1000).toDouble(),
@@ -1321,7 +1321,7 @@ internal class BoxLayout(
             KiteFontFamily.Serif -> GenericFont.SERIF
         }
         return TextGlyph(
-            byteOffset = 0, byteCount = 1, gid = -1, text = ch.toString(),
+            byteOffset = 0, byteCount = 1, gid = -1, text = CharText.of(ch),
             advanceWidth = FontMetrics.advance1000(ch.code, spec.bold, spec.italic, fam).toDouble(),
             outline = null, isWordSpace = ch == ' ',
         )
