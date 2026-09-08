@@ -189,6 +189,12 @@ public class KitePageRasterizer(
      * placeholder. CancellationException is rethrown so cancellation stays
      * prompt. Composables must route through this instead of calling the
      * unguarded methods, so a new call site cannot regress the guard.
+     *
+     * The catch is [Throwable], not [Exception]: an OutOfMemoryError is an
+     * Error, and the guard once let it through to kill the app it was
+     * written to protect (#219). The failed bitmap is garbage by the time
+     * the retry runs, so the second attempt often has the room the first
+     * lacked.
      */
     internal suspend fun rasterizeCachedOrNull(
         cache: PageBitmapCache?,
@@ -205,7 +211,7 @@ public class KitePageRasterizer(
                 return rasterizeCachedOffMain(cache, page, widthPx, heightPx, background, hairlineWidthPx, theme)
             } catch (cancelled: kotlinx.coroutines.CancellationException) {
                 throw cancelled
-            } catch (failure: Exception) {
+            } catch (failure: Throwable) {
                 kiteWarn {
                     "render: page $pageIndex failed to rasterize " +
                         "(attempt ${attempt + 1}): ${failure.message ?: failure::class.simpleName}"
