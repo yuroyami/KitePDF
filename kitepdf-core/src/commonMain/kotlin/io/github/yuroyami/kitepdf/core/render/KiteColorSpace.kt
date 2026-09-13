@@ -41,6 +41,21 @@ public sealed class KiteColorSpace {
     /** Default fill colour at "the colour space is set to me": black-equivalent. */
     public open fun defaultColor(): RgbColor = RgbColor.BLACK
 
+    /**
+     * True when painting in this space has no effect on the page: a
+     * Separation whose colorant is `None` (ISO 32000-1, 8.6.6.4). The renderer
+     * skips fills, strokes, text and images in such a space.
+     */
+    public open val paintsNothing: Boolean get() = false
+
+    /**
+     * The value component [index] takes at the lowest and the highest sample:
+     * the default `/Decode` of ISO 32000-1, Table 90. That is 0 to 1 except
+     * where the space declares its own range, as Lab does.
+     */
+    internal open fun componentMin(index: Int): Double = 0.0
+    internal open fun componentMax(index: Int): Double = 1.0
+
     public object DeviceGray : KiteColorSpace() {
         override val componentCount: Int = 1
         override fun toRgb(components: DoubleArray): RgbColor {
@@ -106,23 +121,28 @@ public sealed class KiteColorSpace {
 
         // Resolve the whole palette to RGB once, then every lookup is an array
         // index, with no per-pixel/per-sample DoubleArray alloc or base conversion.
+        // ISO 32000-1, 8.6.6.3: a palette byte spans the base space's own range,
+        // so a Lab lightness byte of 255 is 100, not 1 (#147).
         private val lut: Array<RgbColor> by lazy {
             val comp = base.componentCount
-            Array(hival + 1) { idx ->
+            val lo = DoubleArray(comp) { base.componentMin(it) }
+            val hi = DoubleArray(comp) { base.componentMax(it) }
+            Array(hival.coerceAtLeast(0) + 1) { idx ->
                 val off = idx * comp
                 if (off + comp > palette.size) RgbColor.BLACK
-                else base.toRgb(DoubleArray(comp) { i -> (palette[off + i].toInt() and 0xFF) / 255.0 })
+                else base.toRgb(DoubleArray(comp) { i -> lo[i] + (palette[off + i].toInt() and 0xFF) / 255.0 * (hi[i] - lo[i]) })
             }
         }
 
-        override fun toRgb(components: DoubleArray): RgbColor {
-            val idx = (components.getOrElse(0) { 0.0 } * hival).toInt().coerceIn(0, hival)
-            return lut[idx]
-        }
+        // ISO 32000-1, 8.6.6.3: the operand is an integer index, used unscaled
+        // and clamped, not a 0 to 1 fraction (#81).
+        override fun toRgb(components: DoubleArray): RgbColor = colorAt(components.getOrElse(0) { 0.0 }.toInt())
 
-        /** Direct palette lookup by integer index (for image samples, which are
-         *  raw indices rather than normalised fractions). Clamped to the palette. */
-        public fun colorAt(index: Int): RgbColor = lut[index.coerceIn(0, hival)]
+        // 8.6.8: selecting the space sets index 0, so the colour is palette entry 0.
+        override fun defaultColor(): RgbColor = lut[0]
+
+        /** Direct palette lookup by integer index, clamped to the palette. */
+        public fun colorAt(index: Int): RgbColor = lut[index.coerceIn(0, lut.size - 1)]
     }
 
     /**
@@ -138,6 +158,7 @@ public sealed class KiteColorSpace {
         public val names: List<String>,
     ) : KiteColorSpace() {
         private val isNone = names.size == 1 && names[0] == "None"
+        override val paintsNothing: Boolean get() = isNone
         override fun toRgb(components: DoubleArray): RgbColor {
             if (isNone) return RgbColor.WHITE
             val tint = tintTransform.evaluate(components)
@@ -171,9 +192,10 @@ public sealed class KiteColorSpace {
         private val gamma: Double,
     ) : KiteColorSpace() {
         override val componentCount: Int = 1
+        private val srgb = XyzToSrgb(whitePoint)
         override fun toRgb(components: DoubleArray): RgbColor {
             val a = components.getOrElse(0) { 0.0 }.coerceIn(0.0, 1.0).pow(gamma)
-            return xyzToSrgb(whitePoint[0] * a, whitePoint[1] * a, whitePoint[2] * a)
+            return srgb.convert(whitePoint[0] * a, whitePoint[1] * a, whitePoint[2] * a)
         }
     }
 
@@ -189,12 +211,13 @@ public sealed class KiteColorSpace {
         private val matrix: DoubleArray?,
     ) : KiteColorSpace() {
         override val componentCount: Int = 3
+        private val srgb = XyzToSrgb(whitePoint)
         override fun toRgb(components: DoubleArray): RgbColor {
             val a = components.getOrElse(0) { 0.0 }.coerceIn(0.0, 1.0).pow(gamma[0])
             val b = components.getOrElse(1) { 0.0 }.coerceIn(0.0, 1.0).pow(gamma[1])
             val c = components.getOrElse(2) { 0.0 }.coerceIn(0.0, 1.0).pow(gamma[2])
             val m = matrix ?: return RgbColor(a, b, c)
-            return xyzToSrgb(
+            return srgb.convert(
                 m[0] * a + m[3] * b + m[6] * c,
                 m[1] * a + m[4] * b + m[7] * c,
                 m[2] * a + m[5] * b + m[8] * c,
@@ -207,6 +230,7 @@ public sealed class KiteColorSpace {
         private val rangeAB: DoubleArray,
     ) : KiteColorSpace() {
         override val componentCount: Int = 3
+        private val srgb = XyzToSrgb(whitePoint)
         override fun toRgb(components: DoubleArray): RgbColor {
             val L = components.getOrElse(0) { 0.0 }.coerceIn(0.0, 100.0)
             val a = components.getOrElse(1) { 0.0 }.coerceIn(rangeAB[0], rangeAB[1])
@@ -215,38 +239,38 @@ public sealed class KiteColorSpace {
             val fx = fy + a / 500.0
             val fz = fy - bb / 200.0
             fun g(t: Double): Double { val t3 = t * t * t; return if (t3 > 0.008856) t3 else (t - 16.0 / 116.0) / 7.787 }
-            val x = whitePoint[0] * g(fx)
-            val y = whitePoint[1] * g(fy)
-            val z = whitePoint[2] * g(fz)
-            // XYZ (D65-ish) → linear sRGB → gamma.
-            var r = x * 3.2406 - y * 1.5372 - z * 0.4986
-            var gr = -x * 0.9689 + y * 1.8758 + z * 0.0415
-            var b = x * 0.0557 - y * 0.2040 + z * 1.0570
-            fun gamma(c: Double): Double {
-                val cc = c.coerceIn(0.0, 1.0)
-                return if (cc <= 0.0031308) 12.92 * cc else 1.055 * cc.pow(1.0 / 2.4) - 0.055
-            }
-            r = gamma(r); gr = gamma(gr); b = gamma(b)
-            return RgbColor(r.coerceIn(0.0, 1.0), gr.coerceIn(0.0, 1.0), b.coerceIn(0.0, 1.0))
+            return srgb.convert(whitePoint[0] * g(fx), whitePoint[1] * g(fy), whitePoint[2] * g(fz))
         }
+
+        // ISO 32000-1, Table 90: L spans 0 to 100, a and b their declared /Range.
+        override fun componentMin(index: Int): Double = when (index) { 0 -> 0.0; 1 -> rangeAB[0]; else -> rangeAB[2] }
+        override fun componentMax(index: Int): Double = when (index) { 0 -> 100.0; 1 -> rangeAB[1]; else -> rangeAB[3] }
     }
 
     /** Fallback for spaces we don't fully model. Routes to grey. */
     public class Unsupported(public val name: String, override val componentCount: Int) : KiteColorSpace() {
         override fun toRgb(components: DoubleArray): RgbColor {
-            // Average the components as a rough grey approximation.
-            val avg = components.take(componentCount).average().coerceIn(0.0, 1.0)
+            // Average the components as a rough grey approximation. No usable
+            // component means black, never NaN, which no clamp catches (#151).
+            val usable = components.take(componentCount).filter { it.isFinite() }
+            val avg = if (usable.isEmpty()) 0.0 else usable.average().coerceIn(0.0, 1.0)
             return RgbColor(avg, avg, avg)
         }
     }
 
     public companion object {
 
-        public fun resolve(obj: PdfObject?, refs: IndirectResolver): KiteColorSpace {
+        public fun resolve(obj: PdfObject?, refs: IndirectResolver): KiteColorSpace = resolve(obj, refs, 0)
+
+        /** A space that names itself as its own base or alternate stops at this depth. */
+        private const val MAX_NESTING = 8
+
+        private fun resolve(obj: PdfObject?, refs: IndirectResolver, depth: Int): KiteColorSpace {
+            if (depth > MAX_NESTING) return DeviceGray
             val resolved = obj?.resolve(refs) ?: return DeviceGray
             return when (resolved) {
                 is PdfName -> resolveByName(resolved.value)
-                is PdfArray -> resolveArray(resolved, refs)
+                is PdfArray -> resolveArray(resolved, refs, depth)
                 else -> DeviceGray
             }
         }
@@ -259,7 +283,7 @@ public sealed class KiteColorSpace {
             else -> DeviceGray
         }
 
-        private fun resolveArray(arr: PdfArray, refs: IndirectResolver): KiteColorSpace {
+        private fun resolveArray(arr: PdfArray, refs: IndirectResolver, depth: Int): KiteColorSpace {
             val tag = (arr.firstOrNull() as? PdfName)?.value ?: return DeviceGray
             return when (tag) {
                 "DeviceGray", "G" -> DeviceGray
@@ -291,39 +315,46 @@ public sealed class KiteColorSpace {
                     val profile = streamObj?.let { st ->
                         runCatching { IccProfile.parse(FilterChain.decode(st)) }.getOrNull()
                     }
-                    // A matrix/TRC profile is applied; anything else keeps the
-                    // device fallback every reader has always used. A profile
-                    // that IS sRGB stays on the device path, where the colour
-                    // passes through byte-exact instead of round-tripping.
-                    if (profile != null && profile.componentCount == n && !profile.isIdentity) IccBased(profile)
-                    else when (n) {
-                        1 -> DeviceGray
-                        4 -> DeviceCMYK
+                    // A matrix/TRC profile is applied. A profile that IS sRGB
+                    // stays on the device path, where the colour passes through
+                    // byte-exact instead of round-tripping. ISO 32000-1, 8.6.5.5:
+                    // a profile that cannot be applied gives way to /Alternate,
+                    // and the device guess by /N is only for a stream that
+                    // names none (#84).
+                    val applies = profile != null && profile.componentCount == n
+                    val alternate = if (applies) null else streamObj?.dict?.get("Alternate")
+                        ?.let { resolve(it, refs, depth + 1) }
+                        ?.takeIf { it.componentCount == n && it !is Unsupported }
+                    when {
+                        profile != null && applies && !profile.isIdentity -> IccBased(profile)
+                        alternate != null -> alternate
+                        n == 1 -> DeviceGray
+                        n == 4 -> DeviceCMYK
                         else -> DeviceRGB
                     }
                 }
-                "Indexed" -> resolveIndexed(arr, refs)
-                "Separation" -> resolveSeparation(arr, refs)
-                "DeviceN" -> resolveDeviceN(arr, refs)
+                "Indexed" -> resolveIndexed(arr, refs, depth)
+                "Separation" -> resolveSeparation(arr, refs, depth)
+                "DeviceN" -> resolveDeviceN(arr, refs, depth)
                 "Pattern" -> Unsupported(tag, 1)
                 else -> DeviceGray
             }
         }
 
-        private fun resolveSeparation(arr: PdfArray, refs: IndirectResolver): KiteColorSpace {
+        private fun resolveSeparation(arr: PdfArray, refs: IndirectResolver, depth: Int): KiteColorSpace {
             // [/Separation name alternateSpace tintTransform]
             val name = (arr.getOrNull(1)?.resolve(refs) as? PdfName)?.value ?: ""
-            val alternate = resolve(arr.getOrNull(2), refs)
+            val alternate = resolve(arr.getOrNull(2), refs, depth + 1)
             val tint = KiteFunction.parse(arr.getOrNull(3), refs) ?: return Unsupported("Separation", 1)
             return DeviceN(1, alternate, tint, listOf(name))
         }
 
-        private fun resolveDeviceN(arr: PdfArray, refs: IndirectResolver): KiteColorSpace {
+        private fun resolveDeviceN(arr: PdfArray, refs: IndirectResolver, depth: Int): KiteColorSpace {
             // [/DeviceN names alternateSpace tintTransform (attributes)]
             val namesArr = arr.getOrNull(1)?.resolve(refs) as? PdfArray ?: return Unsupported("DeviceN", 1)
             val names = namesArr.mapNotNull { (it as? PdfName)?.value }
             if (names.isEmpty()) return Unsupported("DeviceN", 1)
-            val alternate = resolve(arr.getOrNull(2), refs)
+            val alternate = resolve(arr.getOrNull(2), refs, depth + 1)
             val tint = KiteFunction.parse(arr.getOrNull(3), refs) ?: return Unsupported("DeviceN", names.size)
             return DeviceN(names.size, alternate, tint, names)
         }
@@ -356,10 +387,10 @@ public sealed class KiteColorSpace {
             return Lab(wp, range)
         }
 
-        private fun resolveIndexed(arr: PdfArray, refs: IndirectResolver): KiteColorSpace {
+        private fun resolveIndexed(arr: PdfArray, refs: IndirectResolver, depth: Int): KiteColorSpace {
             // [/Indexed <base> <hival> <lookup>]
             val baseObj = arr.getOrNull(1)
-            val base = resolve(baseObj, refs)
+            val base = resolve(baseObj, refs, depth + 1)
             val hival = (arr.getOrNull(2)?.let {
                 when (it) {
                     is PdfInt -> it.value.toInt()
@@ -377,15 +408,42 @@ public sealed class KiteColorSpace {
     }
 }
 
-/** XYZ (D65 reference) to gamma-encoded sRGB, clamped. The same matrix [KiteColorSpace.Lab] uses. */
-private fun xyzToSrgb(x: Double, y: Double, z: Double): RgbColor {
-    var r = x * 3.2406 - y * 1.5372 - z * 0.4986
-    var g = -x * 0.9689 + y * 1.8758 + z * 0.0415
-    var b = x * 0.0557 - y * 0.2040 + z * 1.0570
-    fun gamma(c: Double): Double {
+/**
+ * XYZ relative to a space's own white point to gamma-encoded sRGB, clamped.
+ * ISO 32000-1, 8.6.5.4 makes the white point the diffuse white of the space,
+ * so the XYZ is Bradford-adapted to D65 first and that white reproduces as
+ * sRGB white whatever it is. A D65 white point adapts by the identity (#83).
+ */
+private class XyzToSrgb(white: DoubleArray) {
+    private val m = DoubleArray(9)
+
+    init {
+        val cone = doubleArrayOf(0.8951, 0.2664, -0.1614, -0.7502, 1.7135, 0.0367, 0.0389, -0.0685, 1.0296)
+        val coneInv = doubleArrayOf(0.9869929, -0.1470543, 0.1599627, 0.4323053, 0.5183603, 0.0492912, -0.0085287, 0.0400428, 0.9684867)
+        fun response(v: DoubleArray, row: Int) = cone[3 * row] * v[0] + cone[3 * row + 1] * v[1] + cone[3 * row + 2] * v[2]
+        val gain = DoubleArray(3) { row ->
+            val src = response(white, row)
+            if (src != 0.0 && src.isFinite()) response(D65, row) / src else 1.0
+        }
+        val toD65 = DoubleArray(9) { i ->
+            (0 until 3).sumOf { k -> coneInv[3 * (i / 3) + k] * gain[k] * cone[3 * k + i % 3] }
+        }
+        for (i in 0 until 9) m[i] = (0 until 3).sumOf { k -> SRGB[3 * (i / 3) + k] * toD65[3 * k + i % 3] }
+    }
+
+    fun convert(x: Double, y: Double, z: Double): RgbColor = RgbColor(
+        encode(m[0] * x + m[1] * y + m[2] * z),
+        encode(m[3] * x + m[4] * y + m[5] * z),
+        encode(m[6] * x + m[7] * y + m[8] * z),
+    )
+
+    private fun encode(c: Double): Double {
         val cc = c.coerceIn(0.0, 1.0)
         return if (cc <= 0.0031308) 12.92 * cc else 1.055 * cc.pow(1.0 / 2.4) - 0.055
     }
-    r = gamma(r); g = gamma(g); b = gamma(b)
-    return RgbColor(r.coerceIn(0.0, 1.0), g.coerceIn(0.0, 1.0), b.coerceIn(0.0, 1.0))
+
+    private companion object {
+        val D65 = doubleArrayOf(0.9505, 1.0, 1.089)
+        val SRGB = doubleArrayOf(3.2406, -1.5372, -0.4986, -0.9689, 1.8758, 0.0415, 0.0557, -0.2040, 1.0570)
+    }
 }

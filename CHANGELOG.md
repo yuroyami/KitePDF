@@ -27,6 +27,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - An embedded TrueType font kept two copies of every glyph it had drawn, the
   boxed points and the path built from them, about 4 KB per glyph for a glyf
   record of 200 bytes. Only the path is kept now.
+- An indexed colour set by a colour operator picked the wrong palette entry:
+  every index above zero became the last one, and selecting the space painted
+  black instead of entry 0.
+- An indexed palette over a Lab base, and a Lab image with no `/Decode`, were
+  scaled 0 to 1 instead of Lab's own ranges and rendered near black.
+- Painting in a Separation named `/None` covered the artwork with opaque
+  white. It now paints nothing, as the specification requires.
+- Lab, CalGray and CalRGB colours with a D50 white point had a yellow cast.
+- An ICC profile that cannot be applied now falls back to the declared
+  `/Alternate` space instead of a device space guessed from `/N`.
+- A malformed PDF function aborted the whole page. It now degrades, and no
+  function can produce a NaN colour.
+- The PostScript calculator's `not` was logical only, and a stitching
+  function took its output count from its first piece instead of its own
+  `/Range`.
 
 ## [0.9.0] - 2026-09-08
 

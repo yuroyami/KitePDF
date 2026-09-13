@@ -99,6 +99,73 @@ class FunctionEvalTest {
         assertEquals(0.42, out[3], 0.001) // last pushed stays the k value
     }
 
+    @Test fun type4_not_complements_an_integer() {
+        // ISO 32000-1, Table 42: not is a bitwise complement on integers.
+        val f = ps("{ not }", reals(-10.0, 10.0))
+        assertEquals(-5.0, f.evaluate(doubleArrayOf(4.0))[0], 0.001)
+    }
+
+    @Test fun type4_not_negates_a_boolean() {
+        val f = ps("{ 0.5 gt not { 1 } { 0 } ifelse }", reals(0.0, 1.0), reals(0.0, 1.0))
+        assertEquals(0.0, f.evaluate(doubleArrayOf(0.7))[0], 0.001)
+        assertEquals(1.0, f.evaluate(doubleArrayOf(0.3))[0], 0.001)
+    }
+
+    @Test fun type4_and_stays_logical_on_booleans() {
+        val f = ps("{ dup 0.2 gt exch 0.8 lt and { 1 } { 0 } ifelse }", reals(0.0, 1.0), reals(0.0, 1.0))
+        assertEquals(1.0, f.evaluate(doubleArrayOf(0.5))[0], 0.001)
+        assertEquals(0.0, f.evaluate(doubleArrayOf(0.9))[0], 0.001)
+    }
+
+    @Test fun type4_underflow_degrades_instead_of_throwing() {
+        // ISO 32000-1, 7.10.5 leaves an underflow undefined; it must not abort the caller.
+        val f = ps("{ add }", reals(0.0, 1.0), reals(0.0, 1.0))
+        assertEquals(0.5, f.evaluate(doubleArrayOf(0.5))[0], 0.001)
+        assertEquals(1, ps("{ pop pop exch dup }", reals(0.0, 1.0), reals(0.0, 1.0)).evaluate(doubleArrayOf(0.5)).size)
+    }
+
+    @Test fun type2_with_a_short_c1_uses_the_default() {
+        val f = KiteFunction.Type2(doubleArrayOf(0.0, 1.0), null, doubleArrayOf(0.0, 0.0, 0.0, 0.0), doubleArrayOf(1.0), 1.0)
+        assertEquals(listOf(0.5, 0.5, 0.5, 0.5), f.evaluate(doubleArrayOf(0.5)).toList())
+    }
+
+    @Test fun a_non_finite_output_becomes_zero() {
+        // A negative base to a fractional power is NaN; no clamp catches NaN.
+        val f = ps("{ -8 exch exp }", reals(0.0, 1.0), reals(0.0, 1.0))
+        assertEquals(0.0, f.evaluate(doubleArrayOf(0.5))[0])
+    }
+
+    @Test fun an_unsupported_space_with_no_operands_is_black() {
+        val c = io.github.yuroyami.kitepdf.core.render.KiteColorSpace.Unsupported("Foo", 3).toRgb(DoubleArray(0))
+        assertEquals(io.github.yuroyami.kitepdf.core.render.RgbColor.BLACK, c)
+    }
+
+    @Test fun a_corrupt_tint_transform_does_not_abort_the_page() {
+        val pdf = TestPdf.onePage(
+            content = "0 0 1 rg 0 0 200 200 re f /Sp1 cs 0.5 sc 40 40 120 120 re f",
+            resources = "/ColorSpace << /Sp1 [/Separation /Spot /DeviceGray 5 0 R] >>",
+            extra = listOf(TestPdf.stream("{ add }", "/FunctionType 4 /Domain [0 1] /Range [0 1]")),
+        )
+        val calls = TestPdf.calls(pdf)
+        assertEquals(2, calls.count { it is io.github.yuroyami.kitepdf.core.render.RecordingCanvas.Call.Fill }, "both fills paint")
+    }
+
+    @Test fun type3_output_count_comes_from_its_own_range() {
+        // The first piece is empty; the declared range still says three outputs.
+        val empty = KiteFunction.Type2(doubleArrayOf(0.0, 1.0), null, DoubleArray(0), DoubleArray(0), 1.0)
+        val ramp = KiteFunction.Type2(doubleArrayOf(0.0, 1.0), null, doubleArrayOf(0.0, 0.0, 0.0), doubleArrayOf(1.0, 1.0, 1.0), 1.0)
+        val f = KiteFunction.Type3(
+            domain = doubleArrayOf(0.0, 1.0),
+            range = doubleArrayOf(0.0, 1.0, 0.0, 1.0, 0.0, 1.0),
+            functions = listOf(empty, ramp),
+            bounds = doubleArrayOf(0.5),
+            encode = doubleArrayOf(0.0, 1.0, 0.0, 1.0),
+        )
+        assertEquals(3, f.outputCount)
+        assertEquals(3, f.evaluate(doubleArrayOf(0.2)).size)
+        assertEquals(0.5, f.evaluate(doubleArrayOf(0.75))[1], 0.001)
+    }
+
     @Test fun array_of_functions_combines_outputs() {
         // [ {Type2 →0} {Type2 →1} ] → 2-output function.
         fun t2(c0: Double, c1: Double): PdfObject = PdfDictionary(linkedMapOf(

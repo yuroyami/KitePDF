@@ -124,6 +124,10 @@ private fun KiteImageData.unpackGeneral(
     val maxval = ((1 shl bpc) - 1).toDouble()
     val dec = decode
     val compBuf = DoubleArray(comps)
+    // ISO 32000-1, Table 90: with no /Decode a sample spans the space's own
+    // component range, 0 to 100 for Lab lightness (#76).
+    val lo = DoubleArray(comps) { cs.componentMin(it) }
+    val hi = DoubleArray(comps) { cs.componentMax(it) }
     val opaque = 0xFF.toByte()
     var o = 0
     for (y in 0 until h) {
@@ -135,7 +139,7 @@ private fun KiteImageData.unpackGeneral(
                     val dmin = dec[2 * c]; val dmax = dec[2 * c + 1]
                     dmin + sample * (dmax - dmin) / maxval
                 } else {
-                    sample / maxval
+                    lo[c] + sample * (hi[c] - lo[c]) / maxval
                 }
             }
             val rgb = cs.toRgb(compBuf)

@@ -934,11 +934,12 @@ public class PageRenderer(
                 // Skip when inside a hidden OC section or the XObject's own /OC is off.
                 if (ocHidden() || isXObjectOcHidden(slot.stream)) return
                 when (slot.stream.dict.getName("Subtype")) {
-                    "Image" -> withSoftMask(state.current) {
-                        canvas.drawImage(
-                            decodeImageCached(slot, state.current.fillColor),
-                            state.current.ctm, state.current.fillAlpha,
-                        )
+                    "Image" -> {
+                        val image = decodeImageCached(slot, state.current.fillColor)
+                        if (paintsNothing(image, state.current)) return
+                        withSoftMask(state.current) {
+                            canvas.drawImage(image, state.current.ctm, state.current.fillAlpha)
+                        }
                     }
                     "Form" -> renderFormXObject(slot.stream, state, slot.objectNumber)
                 }
@@ -961,6 +962,7 @@ public class PageRenderer(
                 if (ocHidden()) return
                 val blob = op.inlineImage ?: return
                 val img = decodeInlineImage(blob, state.current.fillColor) ?: return
+                if (paintsNothing(img, state.current)) return
                 withSoftMask(state.current) {
                     canvas.drawImage(img, state.current.ctm, state.current.fillAlpha)
                 }
@@ -1009,9 +1011,19 @@ public class PageRenderer(
         activeClipCount++
     }
 
+    /**
+     * An image in a None separation, or a stencil mask painting a None
+     * separation's colour, has no effect on the page (ISO 32000-1, 8.6.6.4).
+     */
+    private fun paintsNothing(image: KiteImageData, s: GraphicsState): Boolean =
+        image.resolvedColorSpace?.paintsNothing == true ||
+            (image.maskFill != null && s.fillColorSpace.paintsNothing)
+
     private fun paintFill(path: KitePath.Builder, state: GraphicsStack, evenOdd: Boolean) {
         if (path.isEmpty()) return
         val s = state.current
+        // ISO 32000-1, 8.6.6.4: painting in a None separation has no effect (#82).
+        if (s.fillColorSpace.paintsNothing) return
         val built = path.build()
         withSoftMask(s) {
             val pat = s.fillPattern
@@ -1039,6 +1051,7 @@ public class PageRenderer(
     private fun paintStroke(path: KitePath.Builder, state: GraphicsStack) {
         if (path.isEmpty()) return
         val s = state.current
+        if (s.strokeColorSpace.paintsNothing) return
         val built = path.build()
         withSoftMask(s) {
             val pat = s.strokePattern
@@ -1374,7 +1387,7 @@ public class PageRenderer(
 
         if (!hidden) {
             if (doClip) accumulateTextClip(glyphs, font, t, textToUser)
-            if (doFill) {
+            if (doFill && !state.current.fillColorSpace.paintsNothing) {
                 withSoftMask(state.current) {
                     canvas.drawGlyphs(
                         glyphs, t.fontSize, font.unitsPerEm ?: 1000,
@@ -1384,7 +1397,7 @@ public class PageRenderer(
                     )
                 }
             }
-            if (doStroke) {
+            if (doStroke && !state.current.strokeColorSpace.paintsNothing) {
                 strokeTextGlyphs(state, font, t, glyphs, textToUser)
             }
         }
