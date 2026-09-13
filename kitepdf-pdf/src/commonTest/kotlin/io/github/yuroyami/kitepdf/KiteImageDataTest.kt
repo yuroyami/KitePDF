@@ -15,6 +15,7 @@ import io.github.yuroyami.kitepdf.core.render.toRgbaBytes
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
 class KiteImageDataTest {
 
@@ -649,4 +650,84 @@ class KiteImageDataTest {
         ),
         rawBytes = bytes,
     )
+
+    /* ─── /SMask decoding, ISO 32000-1 §11.6.5.2 ────────────────────────── */
+
+    private fun grayMask(w: Int, h: Int, bpc: Int, bytes: ByteArray, extra: Map<String, PdfObject> = emptyMap()) = PdfStream(
+        dict = PdfDictionary(
+            LinkedHashMap<String, PdfObject>().apply {
+                put("Type", PdfName("XObject"))
+                put("Subtype", PdfName("Image"))
+                put("Width", PdfInt(w.toLong()))
+                put("Height", PdfInt(h.toLong()))
+                put("BitsPerComponent", PdfInt(bpc.toLong()))
+                put("ColorSpace", PdfName("DeviceGray"))
+                put("Length", PdfInt(bytes.size.toLong()))
+                putAll(extra)
+            },
+        ),
+        rawBytes = bytes,
+    )
+
+    private fun redBase(w: Int, h: Int, smask: PdfStream) = PdfStream(
+        dict = PdfDictionary(
+            linkedMapOf(
+                "Type" to PdfName("XObject"),
+                "Subtype" to PdfName("Image"),
+                "Width" to PdfInt(w.toLong()),
+                "Height" to PdfInt(h.toLong()),
+                "BitsPerComponent" to PdfInt(8),
+                "ColorSpace" to PdfName("DeviceRGB"),
+                "Length" to PdfInt(w * h * 3L),
+                "SMask" to smask,
+            ),
+        ),
+        rawBytes = ByteArray(w * h * 3) { if (it % 3 == 0) 0xFF.toByte() else 0 },
+    )
+
+    private fun alphas(image: KiteImageData): List<Int> {
+        val rgba = image.toRgbaBytes()!!
+        return (3 until rgba.size step 4).map { rgba[it].toInt() and 0xFF }
+    }
+
+    private fun hexBytes(s: String) = ByteArray(s.length / 2) { s.substring(it * 2, it * 2 + 2).toInt(16).toByte() }
+
+    @Test
+    fun a_jpeg_soft_mask_is_decoded_as_alpha() {
+        // A 16x16 grey ramp through `cjpeg -grayscale`: black on the left, white on the right.
+        val smask = grayMask(16, 16, 8, hexBytes(RAMP_JPEG), mapOf("Filter" to PdfName("DCTDecode")))
+        val a = alphas(KiteImageData.from(redBase(16, 16, smask)))
+        assertTrue(a[0] < 30, "the black end of the ramp is transparent (alpha ${a[0]})")
+        assertTrue(a[15] > 225, "the white end is opaque (alpha ${a[15]})")
+    }
+
+    @Test
+    fun a_four_bit_soft_mask_is_scaled_to_full_alpha() {
+        assertEquals(listOf(0, 255), alphas(KiteImageData.from(redBase(2, 1, grayMask(2, 1, 4, byteArrayOf(0x0F))))))
+    }
+
+    @Test
+    fun a_soft_mask_decode_array_inverts_the_alpha() {
+        val smask = grayMask(2, 1, 8, byteArrayOf(0x00, 0xFF.toByte()), mapOf("Decode" to PdfArray(listOf(PdfInt(1), PdfInt(0)))))
+        assertEquals(listOf(255, 0), alphas(KiteImageData.from(redBase(2, 1, smask))))
+    }
+
+    @Test
+    fun a_finer_soft_mask_sets_the_image_grid() {
+        val smask = grayMask(4, 2, 8, ByteArray(8) { if (it % 4 < 2) 0 else 0xFF.toByte() })
+        val image = KiteImageData.from(redBase(2, 1, smask))
+        assertEquals(4, image.width, "the colour is resampled up onto the mask's grid")
+        assertEquals(2, image.height)
+        assertEquals(listOf(0, 0, 255, 255, 0, 0, 255, 255), alphas(image))
+    }
 }
+
+private const val RAMP_JPEG =
+    "ffd8ffe000104a46494600010100000100010000ffdb00430002010101010102010101020202020204030202020205040403" +
+        "04060506060605060606070908060709070606080b08090a0a0a0a0a06080b0c0b0a0c090a0a0affc0000b08001000100101" +
+        "1100ffc4001f0000010501010101010100000000000000000102030405060708090a0bffc400b51000020103030204030505" +
+        "04040000017d01020300041105122131410613516107227114328191a1082342b1c11552d1f02433627282090a161718191a" +
+        "25262728292a3435363738393a434445464748494a535455565758595a636465666768696a737475767778797a8384858687" +
+        "88898a92939495969798999aa2a3a4a5a6a7a8a9aab2b3b4b5b6b7b8b9bac2c3c4c5c6c7c8c9cad2d3d4d5d6d7d8d9dae1e2" +
+        "e3e4e5e6e7e8e9eaf1f2f3f4f5f6f7f8f9faffda0008010100003f00fcedff008264ff00cc3ffe035fd107fc1327fe61ff00" +
+        "f01afe77ff00e0993ff30fff0080d7f441ff0004c9ff00987ffc06bfffd9"

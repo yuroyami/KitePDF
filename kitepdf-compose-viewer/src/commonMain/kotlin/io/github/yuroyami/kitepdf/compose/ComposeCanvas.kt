@@ -127,12 +127,7 @@ public class ComposeCanvas(
         withActiveClips {
             val composePath = toComposePath(path, ctm)
             val avgScale = (ctm.scaleX() + ctm.scaleY()) * 0.5
-            val dash = dashArray
-                ?.map { (it * avgScale).toFloat() }
-                ?.filter { it > 0f }
-                ?.let { if (it.size % 2 == 1) it + it else it } // dashPathEffect needs even length
-                ?.toFloatArray()
-                ?.takeIf { it.size >= 2 }
+            val dash = composeDashIntervals(dashArray, avgScale)
                 ?.let { PathEffect.dashPathEffect(it, (dashPhase * avgScale).toFloat()) }
             val cap = when (lineCap) {
                 1 -> androidx.compose.ui.graphics.StrokeCap.Round
@@ -642,4 +637,15 @@ internal fun systemFontMetricScale(
     val scale = targetWidthPx / measuredWidthPx
     val floatScale = scale.toFloat()
     return if (floatScale.isFinite() && floatScale > 0f) floatScale else 1f
+}
+
+/**
+ * Dash intervals for Compose: every element kept, zeros included, and an odd
+ * array doubled since a dash path effect needs pairs (ISO 32000-1, 8.4.3.6,
+ * #106). Null for an empty or all-zero array, which means a solid line.
+ */
+internal fun composeDashIntervals(dashArray: List<Double>?, scale: Double): FloatArray? {
+    val d = dashArray?.map { v -> (v * scale).toFloat().let { if (it.isFinite()) it.coerceAtLeast(0f) else 0f } } ?: return null
+    if (d.isEmpty() || d.none { it > 0f }) return null
+    return (if (d.size % 2 == 1) d + d else d).toFloatArray()
 }
