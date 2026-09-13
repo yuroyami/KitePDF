@@ -7,16 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-09-13
+
+A Chinese novel still ran a 192 MB Android heap out of memory after 0.9.0,
+because each of its 41 chapters parsed its own copy of the book's font. This
+release fixes that and more than 80 rendering and layout bugs found by
+auditing PDF, SVG and EPUB output. It also adds `kitepdf-javascript`, which
+runs the JavaScript inside PDFs.
+
 ### Added
 
 - `PdfAnnotation.isInvisible` and `PdfAnnotation.isNoZoom` expose two more
   annotation flags, both of which the renderer now honours.
+- `PdfAnnotation.borderStyle` and `borderDash` carry the border style and
+  dash from `/BS`, or the dash from the older `/Border` array.
 - `ExtGState.dashArray` and `dashPhase` carry a graphics state dictionary's
   `/D`, and `RecordingCanvas.Call.Stroke` records the dash it was given.
 - `EpubSettings.hyphenate` turns hyphenation on or off for the whole book,
   whatever its CSS says. Each chapter uses the patterns of its own language,
   and the book itself is not changed.
 - `GraphicsState.softMaskCtm` keeps the matrix a soft mask was set under.
+- `KiteColorSpace.paintsNothing` is true for a colour space that paints
+  nothing, such as a Separation named `/None`.
 - `kitepdf-javascript`, a new artifact, runs the JavaScript that PDFs carry
   on KiteJS. `PdfScriptRunner` runs the document-level scripts and
   JavaScript actions under an instruction budget, so a script cannot hang
@@ -34,6 +46,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   1.12.0, the stable release, instead of 1.12.0-beta02, and the Skia renderer
   on Skiko 0.150.1, the version that Compose release is built on. An app that
   uses both gets one Skiko, not two.
+- `EpubSettings`, `PdfAnnotation`, `ExtGState`, `GraphicsState` and
+  `RecordingCanvas.Call.Stroke` gained constructor parameters, and
+  `PageRenderer.render` gained one. Source stays compatible, but anything
+  compiled against 0.9.0 needs recompiling.
 
 ### Fixed
 
