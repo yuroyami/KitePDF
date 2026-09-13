@@ -68,6 +68,20 @@ public data class PdfAnnotation(
     /** True when the annotation should not be displayed (Hidden or NoView set). */
     val isHidden: Boolean get() = (flags and FLAG_HIDDEN) != 0 || (flags and FLAG_NOVIEW) != 0
 
+    /**
+     * The Invisible flag (§12.5.3, Table 165, bit 1): a viewer with no handler
+     * for a non-standard subtype hides the annotation instead of drawing its
+     * appearance.
+     */
+    val isInvisible: Boolean get() = (flags and FLAG_INVISIBLE) != 0
+
+    /**
+     * The NoZoom flag (§12.5.3, Table 165, bit 4): the appearance keeps its own
+     * size, with the upper-left corner of the rectangle fixed, instead of
+     * stretching to the rectangle.
+     */
+    val isNoZoom: Boolean get() = (flags and FLAG_NOZOOM) != 0
+
     public enum class Subtype {
         Link, Highlight, Underline, StrikeOut, Squiggly, Text, FreeText, Line, Square, Circle,
         Polygon, PolyLine, Ink, Stamp, Caret, Popup, FileAttachment, Sound, Movie, Widget,
@@ -89,7 +103,12 @@ public data class PdfAnnotation(
             val uri = (action as? PdfAction.Uri)?.uri ?: legacyUriFallback(dict, refs)
             val rawDest = dict["Dest"]
             val appearanceStream = selectAppearance(dict, refs)
-            val flags = dict.getInt("F")?.toInt() ?: 0
+            // /F may be an indirect reference; read unresolved it gave no flags (#165).
+            val flags = when (val f = dict["F"]?.resolve(refs)) {
+                is PdfInt -> f.value.toInt()
+                is PdfReal -> f.value.toInt()
+                else -> 0
+            }
             val quadPoints = numArray(dict.getArray("QuadPoints", refs))
             val inkLists = (dict.getArray("InkList", refs))?.mapNotNull { numArray(it as? PdfArray) }
             val vertices = numArray(dict.getArray("Vertices", refs))
@@ -138,8 +157,11 @@ public data class PdfAnnotation(
             return when (n) {
                 is PdfStream -> n
                 is PdfDictionary -> {
-                    val state = dict.getName("AS")
-                    val pick = (state?.let { n[it] } ?: n["Off"] ?: n.values.firstOrNull())
+                    // A named state with no entry has no appearance, so nothing
+                    // paints (#59). Only a missing /AS falls back to /Off, then
+                    // the first state. /AS may be an indirect reference.
+                    val state = (dict["AS"]?.resolve(refs) as? PdfName)?.value
+                    val pick = if (state != null) n[state] else n["Off"] ?: n.values.firstOrNull()
                     pick?.resolve(refs) as? PdfStream
                 }
                 else -> null
@@ -150,7 +172,9 @@ public data class PdfAnnotation(
             when (v) { is PdfReal -> v.value; is PdfInt -> v.value.toDouble(); else -> 0.0 }
         }
 
+        private const val FLAG_INVISIBLE = 1      // bit 1
         private const val FLAG_HIDDEN = 1 shl 1   // bit 2
+        private const val FLAG_NOZOOM = 1 shl 3   // bit 4
         private const val FLAG_NOVIEW = 1 shl 5   // bit 6
 
         /**

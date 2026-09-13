@@ -42,6 +42,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The PostScript calculator's `not` was logical only, and a stitching
   function took its output count from its first piece instead of its own
   `/Range`.
+- A form, tiling cell, Type 3 glyph or annotation appearance that left a `q`,
+  a clip or a marked-content section open leaked it into the rest of the
+  page: the clip, the matrix or a hidden layer outlived the stream, and one
+  malformed stamp displaced every annotation drawn after it.
+- Past 64 nested `q`, every restore consumed a real saved state. The limit
+  is now 4096, and saves and restores keep pairing past it.
+- Reusing one `PageRenderer` for several pages painted a page black after a
+  page with a stray `d1`.
+- An unclosed hidden layer in the page content erased every annotation on
+  the page, and an annotation on a switched-off layer was drawn anyway.
+- A cyclic visibility expression overflowed the stack, a form with partial
+  resources showed hidden layer content, and
+  `PdfOptionalContent.isVisibleByDefault` disagreed with the renderer for the
+  `/Unchanged` base state.
+- A checkbox whose `/AS` names a missing state rendered checked, an indirect
+  `/F` or `/AS` was ignored, an Invisible vendor annotation was drawn, a
+  NoZoom stamp was stretched to its rectangle, and `/CA` was not applied to
+  appearance streams.
+- A synthesized highlight washed out the text under it and covered the
+  bounding box of a rotated quadrilateral instead of the quadrilateral.
 
 ## [0.9.0] - 2026-09-08
 

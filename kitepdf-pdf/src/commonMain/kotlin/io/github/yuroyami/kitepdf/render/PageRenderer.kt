@@ -107,6 +107,22 @@ public class PageRenderer(
     // currently hiding content. Painting is skipped while it is > 0.
     private val markedContentStack = ArrayDeque<Boolean>()
     private var ocHiddenDepth = 0
+
+    // Nesting past MAX_MARKED_CONTENT_DEPTH is counted here, not stored (#166).
+    private var markedContentOverflow = 0
+
+    /** The deepest marked-content nesting the last render stored. For tests. */
+    internal var deepestMarkedContent: Int = 0
+        private set
+
+    // Where the content stream being interpreted starts: a Q never pops
+    // clipSaveStack, which grows by one per q, below clipSaveFloor, and an EMC
+    // never pops markedContentStack below markedContentFloor. See StreamScope.
+    private var clipSaveFloor = 0
+    private var markedContentFloor = 0
+
+    // The page's /Properties, for a nested stream whose own resources lack the name (#56).
+    private var pageProperties: Map<String, PdfObject> = emptyMap()
     private var optionalContent: io.github.yuroyami.kitepdf.PdfOptionalContent? = null
 
     /** The page's default (initial) CTM. Pattern matrices are relative to it. */
@@ -153,6 +169,13 @@ public class PageRenderer(
         optionalContent = page.internalDocument.optionalContent
         markedContentStack.clear()
         ocHiddenDepth = 0
+        markedContentOverflow = 0
+        deepestMarkedContent = 0
+        clipSaveFloor = 0
+        markedContentFloor = 0
+        pageProperties = properties
+        // A stray d1 on an earlier page must not freeze this page's colours (#52).
+        type3IgnoreColor = false
         val pathBuilder = KitePath.Builder()
         val ops = ContentStreamParser.parse(page.contentBytes)
 
@@ -167,6 +190,15 @@ public class PageRenderer(
             // not that leftover state, else an unbalanced cm skews every annotation.
             // Also drop any clips the page content left active.
             while (activeClipCount > 0) { canvas.popClip(); activeClipCount-- }
+            // Nor may an unclosed q or hidden layer in the page content reach the
+            // annotations: their visibility is their own (ISO 32000-1, 12.5.2, #53).
+            clipSaveStack.clear()
+            clipSaveFloor = 0
+            pendingClip = 0
+            markedContentStack.clear()
+            markedContentFloor = 0
+            markedContentOverflow = 0
+            ocHiddenDepth = 0
             renderAnnotations(page, GraphicsStack(GraphicsState(ctm = deviceCtm)))
         } finally {
             canvas.endPage()
@@ -183,7 +215,8 @@ public class PageRenderer(
     private fun isOcOperandHidden(operand: PdfObject?, properties: Map<String, PdfObject>): Boolean {
         val oc = optionalContent ?: return false
         val target = when (operand) {
-            is PdfName -> properties[operand.value]
+            // A nested stream whose own resources lack the name reads the page's (#56).
+            is PdfName -> properties[operand.value] ?: pageProperties[operand.value]
             else -> operand
         } ?: return false
         return !isOcObjectVisible(target, oc)
@@ -213,7 +246,9 @@ public class PageRenderer(
      */
     private fun evalOcmd(dict: PdfDictionary, oc: io.github.yuroyami.kitepdf.PdfOptionalContent): Boolean {
         (dict["VE"]?.resolve(resolver) as? PdfArray)?.let { ve ->
-            return evalVisibilityExpr(ve, oc)
+            // ISO 32000-1, 8.11.2.2 bounds no expression, so a cyclic or absurdly
+            // deep one counts as visible instead of overflowing the stack (#55).
+            return try { evalVisibilityExpr(ve, oc, 0) } catch (_: VisibilityTooDeep) { true }
         }
         val ocgsRaw = dict["OCGs"]
         val refs: List<io.github.yuroyami.kitepdf.core.parser.PdfReference> = when (val r = ocgsRaw?.resolve(resolver)) {
@@ -236,11 +271,12 @@ public class PageRenderer(
      * either OCG references or nested /VE arrays. Returns whether the expression
      * is currently satisfied (i.e. the content is visible).
      */
-    private fun evalVisibilityExpr(expr: PdfArray, oc: io.github.yuroyami.kitepdf.PdfOptionalContent): Boolean {
+    private fun evalVisibilityExpr(expr: PdfArray, oc: io.github.yuroyami.kitepdf.PdfOptionalContent, depth: Int): Boolean {
+        if (depth > MAX_VISIBILITY_DEPTH) throw VisibilityTooDeep()
         val opName = (expr.getOrNull(0) as? PdfName)?.value ?: return true
         val operands = (1 until expr.size).mapNotNull { expr.getOrNull(it) }
         fun evalOperand(o: PdfObject): Boolean = when (val r = o.resolve(resolver)) {
-            is PdfArray -> evalVisibilityExpr(r, oc)
+            is PdfArray -> evalVisibilityExpr(r, oc, depth + 1)
             else -> {
                 // A bare OCG reference: visible unless OFF in the default config.
                 val id = (o as? io.github.yuroyami.kitepdf.core.parser.PdfReference)?.objectNumber?.toString()
@@ -300,20 +336,42 @@ public class PageRenderer(
      *     colour so the annotation isn't invisible. (Highlight gets a
      *     yellow translucent fill; Link gets a thin border.)
      */
+    private class VisibilityTooDeep : RuntimeException()
+
     private fun renderAnnotations(page: io.github.yuroyami.kitepdf.PdfPage, state: GraphicsStack) {
         for (annot in page.annotations) {
             if (annot.isHidden) continue   // /F Hidden or NoView (§12.5.3)
+            // Invisible hides only a non-standard subtype with no handler (§12.5.3, #64).
+            if (annot.isInvisible && annot.subtype == Subtype.Other) continue
             // Popup annotations are only shown when their parent is opened, never
             // painted inline by a viewer.
-            if (annot.subtype == io.github.yuroyami.kitepdf.PdfAnnotation.Subtype.Popup) continue
+            if (annot.subtype == Subtype.Popup) continue
+            // An annotation on a switched-off layer is skipped (§12.5.2, #54).
+            val oc = optionalContent
+            val ocEntry = annot.raw["OC"]
+            if (oc != null && ocEntry != null && !isOcObjectVisible(ocEntry, oc)) continue
             val stream = annot.appearanceStream
-            if (stream != null) {
-                renderAppearanceForRect(stream, annot.rect, state)
-            } else {
-                synthesizeAppearance(annot, state)
+            when {
+                stream != null -> renderAppearanceForRect(
+                    stream, annot.rect, state, noZoom = annot.isNoZoom, opacity = opacityOf(annot),
+                )
+                // A state-keyed appearance whose /AS names no entry paints nothing (#59).
+                hasStateAppearances(annot) -> Unit
+                else -> synthesizeAppearance(annot, state)
             }
         }
     }
+
+    /** `/CA`, the annotation's constant opacity (ISO 32000-1, Table 164), 1 when absent. */
+    private fun opacityOf(annot: io.github.yuroyami.kitepdf.PdfAnnotation): Double =
+        when (val ca = annot.raw["CA"]?.resolve(resolver)) {
+            is PdfInt -> ca.value.toDouble()
+            is PdfReal -> ca.value
+            else -> 1.0
+        }.coerceIn(0.0, 1.0)
+
+    private fun hasStateAppearances(annot: io.github.yuroyami.kitepdf.PdfAnnotation): Boolean =
+        annot.raw.getDict("AP", resolver)?.get("N")?.resolve(resolver) is PdfDictionary
 
     /**
      * Map a Form XObject appearance to fill the annotation's /Rect, per
@@ -331,6 +389,8 @@ public class PageRenderer(
         appearance: PdfStream,
         rect: io.github.yuroyami.kitepdf.core.KiteRectangle,
         state: GraphicsStack,
+        noZoom: Boolean = false,
+        opacity: Double = 1.0,
     ) {
         val bbox = appearance.dict.getArray("BBox")?.let { arr ->
             io.github.yuroyami.kitepdf.core.KiteRectangle(
@@ -358,17 +418,32 @@ public class PageRenderer(
         val tbBottom = corners.minOf { it.second }; val tbTop = corners.maxOf { it.second }
         val tbW = tbRight - tbLeft; val tbH = tbTop - tbBottom
 
-        // Step 3: A maps the transformed appearance box onto /Rect.
-        val sx = if (tbW != 0.0) rect.width / tbW else 1.0
-        val sy = if (tbH != 0.0) rect.height / tbH else 1.0
-        val mapping = KiteMatrix(sx, 0.0, 0.0, sy, rect.left - tbLeft * sx, rect.bottom - tbBottom * sy)
+        // Step 3: A maps the transformed appearance box onto /Rect. A NoZoom
+        // annotation keeps its own size, the rectangle's upper-left corner fixed
+        // (§12.5.3, Table 165), which is exact at 72 dpi, as MuPDF does it (#63).
+        val mapping = if (noZoom) {
+            KiteMatrix(1.0, 0.0, 0.0, 1.0, rect.left - tbLeft, rect.top - tbTop)
+        } else {
+            val sx = if (tbW != 0.0) rect.width / tbW else 1.0
+            val sy = if (tbH != 0.0) rect.height / tbH else 1.0
+            KiteMatrix(sx, 0.0, 0.0, sy, rect.left - tbLeft * sx, rect.bottom - tbBottom * sy)
+        }
 
+        // /CA applies once, to the finished appearance, not to each paint in it (#163).
+        val grouped = opacity < 1.0
+        if (grouped) {
+            canvas.beginTransparencyGroup(
+                bbox = rect, ctm = state.current.ctm, isolated = true, knockout = false,
+                alpha = opacity, blendMode = KiteBlendMode.Normal,
+            )
+        }
         state.save()
         state.replace(state.current.copy(ctm = state.current.ctm.concat(mapping)))
         try {
             renderFormXObject(appearance, state)
         } finally {
             state.restore()
+            if (grouped) canvas.endTransparencyGroup()
         }
     }
 
@@ -388,19 +463,27 @@ public class PageRenderer(
         when (annot.subtype) {
             Subtype.Highlight -> {
                 val color = annot.color ?: RgbColor(1.0, 1.0, 0.0)
-                forEachQuad(quads, rect) { x0, y0, x1, y1 ->
-                    val p = KitePath.Builder().apply { rectangle(x0, y0, x1 - x0, y1 - y0) }.build()
-                    // Highlights multiply onto the page; approximate with alpha.
-                    canvas.fillPath(p, ctm, color, false, alpha = 0.4)
+                forEachQuad(quads, rect) { c ->
+                    val p = KitePath.Builder().apply {
+                        moveTo(c[0], c[1]); lineTo(c[2], c[3]); lineTo(c[4], c[5]); lineTo(c[6], c[7]); close()
+                    }.build()
+                    // A highlight multiplies onto the page, so text under it stays
+                    // black and paper takes the colour, as MuPDF draws it (#60).
+                    canvas.fillPath(p, ctm, color, false, blendMode = KiteBlendMode.Multiply)
                 }
             }
             Subtype.Underline, Subtype.StrikeOut, Subtype.Squiggly -> {
                 val color = annot.color ?: RgbColor.BLACK
-                forEachQuad(quads, rect) { x0, y0, x1, y1 ->
-                    val frac = if (annot.subtype == Subtype.StrikeOut) 0.5 else 0.08
-                    val y = y0 + (y1 - y0) * frac
-                    val line = KitePath.Builder().apply { moveTo(x0, y); lineTo(x1, y) }.build()
-                    canvas.strokePath(line, ctm, color, ((y1 - y0) * 0.06).coerceAtLeast(0.6))
+                val frac = if (annot.subtype == Subtype.StrikeOut) 0.5 else 0.08
+                forEachQuad(quads, rect) { c ->
+                    // The line follows the quadrilateral's own bottom edge, raised by
+                    // frac of its height, so it stays on rotated text (#61).
+                    val line = KitePath.Builder().apply {
+                        moveTo(c[6] + (c[0] - c[6]) * frac, c[7] + (c[1] - c[7]) * frac)
+                        lineTo(c[4] + (c[2] - c[4]) * frac, c[5] + (c[3] - c[5]) * frac)
+                    }.build()
+                    val height = kotlin.math.hypot(c[0] - c[6], c[1] - c[7])
+                    canvas.strokePath(line, ctm, color, (height * 0.06).coerceAtLeast(0.6))
                 }
             }
             Subtype.Square -> {
@@ -446,22 +529,31 @@ public class PageRenderer(
         }
     }
 
-    /** Invoke [block] once per /QuadPoints quad (as a min/max box), or once over
-     *  the whole [rect] when no quads are present. */
+    /**
+     * Invoke [block] once per /QuadPoints quadrilateral, with its corners in path
+     * order: upper-left, upper-right, lower-right, lower-left. The array lists
+     * them upper-left, upper-right, lower-left, lower-right, which is what
+     * producers write whatever ISO 32000-1, Table 179 says. The region is the
+     * quadrilateral itself, not its bounding box (#61). With no quads, [rect]
+     * is the one quadrilateral.
+     */
     private inline fun forEachQuad(
         quads: List<Double>?, rect: io.github.yuroyami.kitepdf.core.KiteRectangle,
-        block: (x0: Double, y0: Double, x1: Double, y1: Double) -> Unit,
+        block: (corners: DoubleArray) -> Unit,
     ) {
         if (quads != null && quads.size >= 8) {
             var i = 0
             while (i + 7 < quads.size) {
-                val xs = listOf(quads[i], quads[i + 2], quads[i + 4], quads[i + 6])
-                val ys = listOf(quads[i + 1], quads[i + 3], quads[i + 5], quads[i + 7])
-                block(xs.min(), ys.min(), xs.max(), ys.max())
+                block(doubleArrayOf(
+                    quads[i], quads[i + 1], quads[i + 2], quads[i + 3],
+                    quads[i + 6], quads[i + 7], quads[i + 4], quads[i + 5],
+                ))
                 i += 8
             }
         } else {
-            block(rect.left, rect.bottom, rect.left + rect.width, rect.bottom + rect.height)
+            val top = rect.bottom + rect.height
+            val right = rect.left + rect.width
+            block(doubleArrayOf(rect.left, top, right, top, right, rect.bottom, rect.left, rect.bottom))
         }
     }
 
@@ -670,12 +762,14 @@ public class PageRenderer(
         // one leak in from (or out to) the caller across the form boundary.
         val savedPendingClip = pendingClip
         pendingClip = 0
+        val scope = openScope()
         try {
             val bytes = io.github.yuroyami.kitepdf.core.filters.FilterChain.decode(formStream)
             val ops = ContentStreamParser.parse(bytes)
             val pathBuilder = KitePath.Builder()
             for (op in ops) dispatch(op, parentState, pathBuilder, childFonts, childXObjects, childColorSpaces, childExtGStates, childShadings, childPatterns, childProperties)
         } finally {
+            closeScope(scope, parentState)
             pendingClip = savedPendingClip
             // Drop any clips the form's content left unbalanced, then the BBox clip.
             while (activeClipCount > clipBase) { canvas.popClip(); activeClipCount-- }
@@ -752,8 +846,11 @@ public class PageRenderer(
             // ─── State stack ──────────────────────────────────────────────
             "q" -> { state.save(); clipSaveStack.addLast(activeClipCount) }
             "Q" -> {
+                // A Q never pops past the start of the stream that issued it (ISO
+                // 32000-1, 8.4.4), so a form's extra Q cannot reach its caller (#48).
+                if (clipSaveStack.size <= clipSaveFloor) return
                 state.restore()
-                val target = clipSaveStack.removeLastOrNull() ?: 0
+                val target = clipSaveStack.removeLast()
                 while (activeClipCount > target) { canvas.popClip(); activeClipCount-- }
             }
             "cm" -> {
@@ -970,14 +1067,22 @@ public class PageRenderer(
 
             // ─── Marked content (optional-content visibility) ────────────
             "BDC" -> {
+                if (markedContentStack.size >= MAX_MARKED_CONTENT_DEPTH) { markedContentOverflow++; return }
                 val tag = a.getOrNull(0) as? PdfName
                 val hidden = tag?.value == "OC" && isOcOperandHidden(a.getOrNull(1), properties)
                 markedContentStack.addLast(hidden)
                 if (hidden) ocHiddenDepth++
+                if (markedContentStack.size > deepestMarkedContent) deepestMarkedContent = markedContentStack.size
             }
-            "BMC" -> markedContentStack.addLast(false)
+            "BMC" -> {
+                if (markedContentStack.size >= MAX_MARKED_CONTENT_DEPTH) { markedContentOverflow++; return }
+                markedContentStack.addLast(false)
+                if (markedContentStack.size > deepestMarkedContent) deepestMarkedContent = markedContentStack.size
+            }
             "EMC" -> {
-                val wasHidden = markedContentStack.removeLastOrNull() ?: false
+                if (markedContentOverflow > 0) { markedContentOverflow--; return }
+                if (markedContentStack.size <= markedContentFloor) return
+                val wasHidden = markedContentStack.removeLast()
                 if (wasHidden && ocHiddenDepth > 0) ocHiddenDepth--
             }
 
@@ -1135,7 +1240,12 @@ public class PageRenderer(
                     else GraphicsState(ctm = tileCtm),
                 )
                 val tilePath = KitePath.Builder()
-                for (op in ops) dispatch(op, tileState, tilePath, fonts, xobjects, colorSpaces, extGStates, shadings, patterns, properties)
+                val scope = openScope()
+                try {
+                    for (op in ops) dispatch(op, tileState, tilePath, fonts, xobjects, colorSpaces, extGStates, shadings, patterns, properties)
+                } finally {
+                    closeScope(scope, null)
+                }
                 // Drop any clips the tile's content left unbalanced.
                 while (activeClipCount > clipBase) { canvas.popClip(); activeClipCount-- }
                 pendingClip = 0
@@ -1616,6 +1726,7 @@ public class PageRenderer(
         val savedIgnore = type3IgnoreColor
         type3IgnoreColor = false // each proc decides via its own d1
         val clipBase = activeClipCount
+        val scope = openScope()
         try {
             val ops = ContentStreamParser.parse(
                 io.github.yuroyami.kitepdf.core.filters.FilterChain.decode(proc),
@@ -1623,11 +1734,48 @@ public class PageRenderer(
             val pathBuilder = KitePath.Builder()
             for (op in ops) dispatch(op, parentState, pathBuilder, fonts, xobjects, colorSpaces, extGStates, sh, patterns, properties)
         } finally {
+            closeScope(scope, parentState)
             type3IgnoreColor = savedIgnore
             pendingClip = savedPendingClip
             while (activeClipCount > clipBase) { canvas.popClip(); activeClipCount-- }
             parentState.restore()
         }
+    }
+
+    /**
+     * What a content stream may leave unbalanced and ISO 32000-1 scopes to it:
+     * `q` (8.4.4) and marked content (8.11.3.2). A nested stream, whether a
+     * form, a tiling cell or a Type 3 glyph, opens a scope, and closing it undoes
+     * whatever the stream left open, so none of it reaches the stream that
+     * invoked it (#47, #48, #50, #51).
+     */
+    private class StreamScope(
+        val clipSaves: Int, val clipSaveFloor: Int,
+        val marked: Int, val markedFloor: Int, val markedOverflow: Int, val hidden: Int,
+    )
+
+    private fun openScope(): StreamScope {
+        val scope = StreamScope(
+            clipSaveStack.size, clipSaveFloor,
+            markedContentStack.size, markedContentFloor, markedContentOverflow, ocHiddenDepth,
+        )
+        clipSaveFloor = clipSaveStack.size
+        markedContentFloor = markedContentStack.size
+        markedContentOverflow = 0
+        return scope
+    }
+
+    /** Closes [scope], popping the frames of [state] that its unmatched `q`s pushed. */
+    private fun closeScope(scope: StreamScope, state: GraphicsStack?) {
+        while (clipSaveStack.size > scope.clipSaves) {
+            clipSaveStack.removeLast()
+            state?.restore()
+        }
+        clipSaveFloor = scope.clipSaveFloor
+        while (markedContentStack.size > scope.marked) markedContentStack.removeLast()
+        markedContentFloor = scope.markedFloor
+        markedContentOverflow = scope.markedOverflow
+        ocHiddenDepth = scope.hidden
     }
 
     /* ─── Helpers ────────────────────────────────────────────────────────── */
@@ -1652,6 +1800,12 @@ public class PageRenderer(
         const val MAX_TILES = 20_000L
         /** Max Form-XObject nesting depth before bailing (recursion guard). */
         const val MAX_FORM_DEPTH = 15
+
+        /** Marked-content nesting stored per page, the same bound as the graphics state (#166). */
+        const val MAX_MARKED_CONTENT_DEPTH = 4096
+
+        /** Nesting of an OCMD visibility expression before it counts as visible (#55). */
+        const val MAX_VISIBILITY_DEPTH = 32
 
         /** Colour operators ignored inside a d1 (uncolored) Type3 glyph. */
         val TYPE3_COLOR_OPS = setOf("g", "G", "rg", "RG", "k", "K", "cs", "CS", "sc", "SC", "scn", "SCN")
