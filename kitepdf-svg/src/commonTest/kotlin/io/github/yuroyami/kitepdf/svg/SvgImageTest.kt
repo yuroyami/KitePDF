@@ -1,6 +1,7 @@
 package io.github.yuroyami.kitepdf.svg
 
 import io.github.yuroyami.kitepdf.core.render.KiteMatrix
+import io.github.yuroyami.kitepdf.core.render.KitePath
 import io.github.yuroyami.kitepdf.core.render.RecordingCanvas
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -97,5 +98,91 @@ class SvgImageTest {
             repeat(5_000) { append("</g>") }
         }
         assertNotNull(SvgImage.parse(wrapped.encodeToByteArray()))
+    }
+
+    @Test
+    fun a_transform_in_a_style_declaration_applies() {
+        val f = fills("""<svg width="50" height="50"><g style="transform: translate(5px, 7px)"><rect width="10" height="10"/></g></svg>""")
+        assertEquals(5.0, f.single().ctm.e, 1e-6)
+        assertEquals(7.0, f.single().ctm.f, 1e-6)
+    }
+
+    @Test
+    fun a_wider_viewport_centres_the_viewbox_instead_of_stretching_it() {
+        // xMidYMid meet: one uniform scale, then half the leftover width on each side.
+        val ctm = fills("""<svg width="200" height="100" viewBox="0 0 100 100"><circle cx="50" cy="50" r="40"/></svg>""").single().ctm
+        assertEquals(1.0, ctm.a, 1e-9)
+        assertEquals(1.0, ctm.d, 1e-9)
+        assertEquals(50.0, ctm.e, 1e-9)
+        assertEquals(0.0, ctm.f, 1e-9)
+    }
+
+    @Test
+    fun preserve_aspect_ratio_none_stretches_and_slice_fills_and_clips() {
+        val none = fills("""<svg width="200" height="100" viewBox="0 0 100 100" preserveAspectRatio="none"><rect width="10" height="10"/></svg>""").single()
+        assertEquals(2.0, none.ctm.a, 1e-9)
+        assertEquals(1.0, none.ctm.d, 1e-9)
+
+        val slice = calls("""<svg width="200" height="100" viewBox="0 0 100 100" preserveAspectRatio="xMinYMid slice"><rect width="10" height="10"/></svg>""")
+        val fill = slice.filterIsInstance<RecordingCanvas.Call.Fill>().single()
+        assertEquals(2.0, fill.ctm.a, 1e-9)
+        assertEquals(2.0, fill.ctm.d, 1e-9)
+        assertEquals(0.0, fill.ctm.e, 1e-9)
+        assertEquals(-50.0, fill.ctm.f, 1e-9, "the 200-high content is centred on the 100-high viewport")
+        assertTrue(slice.first() is RecordingCanvas.Call.PushClip, "slice clips to the viewport (got $slice)")
+        assertTrue(slice.last() is RecordingCanvas.Call.PopClip)
+    }
+
+    @Test
+    fun physical_units_resolve_as_css_pixels() {
+        // 96 user units to the inch, so 72pt and 1in are both 96, and em follows the element's font size.
+        val f = fills("""<svg width="300" height="300"><rect width="72pt" height="1in"/><rect width="2em" height="1cm" font-size="10"/></svg>""")
+        val a = bounds(f[0].path)
+        assertEquals(96.0, a[2], 1e-9)
+        assertEquals(96.0, a[3], 1e-9)
+        val b = bounds(f[1].path)
+        assertEquals(20.0, b[2], 1e-9)
+        assertEquals(96.0 / 2.54, b[3], 1e-9)
+
+        val sized = SvgImage.parse("""<svg width="1in" height="72pt"/>""".encodeToByteArray())
+        assertNotNull(sized)
+        assertEquals(96.0, sized.width, 1e-9)
+        assertEquals(96.0, sized.height, 1e-9)
+    }
+
+    @Test
+    fun stroke_dash_cap_join_and_miter_reach_the_canvas() {
+        val s = strokes(
+            """<svg width="20" height="20"><path d="M0 0 L10 0" stroke="black" stroke-dasharray="4 2" stroke-linecap="round" stroke-linejoin="round"/></svg>""",
+        ).single()
+        assertEquals(listOf(4.0, 2.0), s.dashArray)
+        assertEquals(1, s.lineCap)
+        assertEquals(1, s.lineJoin)
+        assertEquals(4.0, s.miterLimit, 1e-9, "the initial SVG miter limit is 4, not the PDF 10")
+    }
+
+    @Test
+    fun stroke_properties_inherit_and_an_odd_dash_list_repeats() {
+        val s = strokes(
+            """<svg width="20" height="20"><g stroke-dasharray="3" stroke-dashoffset="1" stroke-linejoin="bevel" stroke-miterlimit="8"><line x2="10" stroke="black"/></g></svg>""",
+        ).single()
+        assertEquals(listOf(3.0, 3.0), s.dashArray)
+        assertEquals(1.0, s.dashPhase, 1e-9)
+        assertEquals(2, s.lineJoin)
+        assertEquals(8.0, s.miterLimit, 1e-9)
+        assertEquals(null, strokes("""<svg width="9" height="9"><line x2="5" stroke="black" stroke-dasharray="0 0"/></svg>""").single().dashArray)
+    }
+
+    private fun bounds(path: KitePath): DoubleArray {
+        val xs = ArrayList<Double>()
+        val ys = ArrayList<Double>()
+        for (seg in path.segments) when (seg) {
+            is KitePath.Segment.MoveTo -> { xs += seg.x; ys += seg.y }
+            is KitePath.Segment.LineTo -> { xs += seg.x; ys += seg.y }
+            is KitePath.Segment.CurveTo -> { xs += seg.x3; ys += seg.y3 }
+            is KitePath.Segment.QuadTo -> { xs += seg.x2; ys += seg.y2 }
+            KitePath.Segment.Close -> {}
+        }
+        return doubleArrayOf(xs.min(), ys.min(), xs.max(), ys.max())
     }
 }

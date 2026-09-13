@@ -1,6 +1,7 @@
 package io.github.yuroyami.kitepdf.svg
 
 import io.github.yuroyami.kitepdf.core.render.KiteMatrix
+import io.github.yuroyami.kitepdf.core.render.KitePath
 import io.github.yuroyami.kitepdf.core.render.KiteShading
 import io.github.yuroyami.kitepdf.core.render.RecordingCanvas
 import io.github.yuroyami.kitepdf.core.xml.KiteXml
@@ -284,7 +285,151 @@ class SvgFeaturesTest {
         assertEquals(1.0, f.single().color.b, 1e-9)
     }
 
+    @Test
+    fun the_space_before_a_tspan_survives_and_advances_the_pen() {
+        val runs = calls("""<svg width="100" height="40"><text x="0" y="20">Hello <tspan fill="red">world</tspan></text></svg>""")
+            .filterIsInstance<RecordingCanvas.Call.Glyphs>()
+        assertEquals(2, runs.size)
+        assertEquals(0.0, runs[0].textToDevice.e, 1e-9)
+        // "Hello " in Helvetica at 16: (722 + 556 + 222 + 222 + 556 + 278) * 16 / 1000.
+        assertEquals(40.896, runs[1].textToDevice.e, 1e-9)
+        assertEquals("world", runs[1].text)
+        assertEquals(1.0, runs[1].color.r, 1e-9, "the tspan keeps its own fill")
+    }
+
+    @Test
+    fun a_nested_tspan_keeps_its_text() {
+        val runs = calls("""<svg width="100" height="40"><text x="0" y="20"><tspan>out<tspan>in</tspan></tspan></text></svg>""")
+            .filterIsInstance<RecordingCanvas.Call.Glyphs>()
+        assertEquals(listOf("out", "in"), runs.map { it.text })
+        assertTrue(runs[1].textToDevice.e > runs[0].textToDevice.e, "the inner run starts where the outer one ends")
+    }
+
+    @Test
+    fun a_translucent_group_composites_once() {
+        val drawn = calls(
+            """<svg width="40" height="40"><g opacity="0.5">
+                 <rect width="20" height="20" fill="red"/><rect x="5" y="5" width="20" height="20" fill="red"/>
+               </g></svg>""",
+        )
+        val group = drawn.filterIsInstance<RecordingCanvas.Call.PushGroup>().single()
+        assertEquals(0.5, group.alpha, 1e-9)
+        val f = drawn.filterIsInstance<RecordingCanvas.Call.Fill>()
+        assertEquals(listOf(1.0, 1.0), f.map { it.alpha }, "the shapes paint at full alpha inside the group")
+        val push = drawn.indexOf(group)
+        val pop = drawn.indexOfFirst { it is RecordingCanvas.Call.PopGroup }
+        assertTrue(f.all { drawn.indexOf(it) in push..pop }, "the group brackets both shapes (got $drawn)")
+    }
+
+    @Test
+    fun a_gradient_stroke_paints_with_the_gradient_middle() {
+        val drawn = calls(
+            """<svg width="40" height="40">
+                 <linearGradient id="g"><stop offset="0" stop-color="red"/><stop offset="1" stop-color="blue"/></linearGradient>
+                 <rect x="5" y="5" width="30" height="30" fill="none" stroke="url(#g)" stroke-width="4"/>
+               </svg>""",
+        )
+        val s = drawn.filterIsInstance<RecordingCanvas.Call.Stroke>().single()
+        assertEquals(0.5, s.color.r, 1e-3)
+        assertEquals(0.5, s.color.b, 1e-3)
+        assertEquals(4.0, s.lineWidth, 1e-9)
+    }
+
+    /* ─── switch ─────────────────────────────────────────────────────────── */
+
+    @Test
+    fun a_switch_paints_only_its_first_passing_child() {
+        val f = fills(
+            """<svg width="10" height="10"><switch>
+                 <rect width="5" height="5" fill="red" requiredExtensions="http://example.org/ext"/>
+                 <rect width="5" height="5" fill="lime" systemLanguage="fr"/>
+                 <rect width="5" height="5" fill="blue" systemLanguage="en-GB, de"/>
+                 <rect width="5" height="5" fill="black"/>
+               </switch></svg>""",
+        )
+        assertEquals(1, f.size, "only one child paints")
+        assertEquals(1.0, f[0].color.b, 1e-9, "the first child whose conditions all pass")
+    }
+
+    @Test
+    fun a_switch_falls_back_past_a_foreign_object() {
+        val runs = calls(
+            """<svg width="10" height="10"><switch>
+                 <foreignObject width="10" height="10"><p xmlns="http://www.w3.org/1999/xhtml">html</p></foreignObject>
+                 <text x="0" y="8">fallback</text>
+               </switch></svg>""",
+        ).filterIsInstance<RecordingCanvas.Call.Glyphs>()
+        assertEquals(listOf("fallback"), runs.map { it.text })
+    }
+
+    @Test
+    fun a_switch_treats_required_features_as_passing() {
+        // The shape a draw.io export uses to hide its "cannot display" warning.
+        val runs = calls(
+            """<svg width="10" height="10"><switch>
+                 <g requiredFeatures="http://www.w3.org/TR/SVG11/feature#Extensibility"/>
+                 <text x="0" y="8">Text is not SVG</text>
+               </switch></svg>""",
+        ).filterIsInstance<RecordingCanvas.Call.Glyphs>()
+        assertTrue(runs.isEmpty(), "SVG 2 dropped requiredFeatures, so the empty group wins (got $runs)")
+    }
+
+    /* ─── clip geometry ──────────────────────────────────────────────────── */
+
+    @Test
+    fun a_clip_path_of_use_elements_clips_to_the_referenced_shape() {
+        val clip = calls(
+            """<svg width="100" height="100">
+                 <defs><rect id="r" width="10" height="10"/></defs>
+                 <clipPath id="c"><use href="#r" x="20" y="30"/></clipPath>
+                 <rect width="100" height="100" fill="red" clip-path="url(#c)"/>
+               </svg>""",
+        ).filterIsInstance<RecordingCanvas.Call.PushClip>().single()
+        assertEquals(listOf(20.0, 30.0, 30.0, 40.0), bounds(clip.path).toList())
+    }
+
+    @Test
+    fun a_clip_path_of_text_clips_to_the_text() {
+        val clip = calls(
+            """<svg width="100" height="100"><clipPath id="c"><text x="0" y="20">Hi</text></clipPath><rect width="100" height="100" clip-path="url(#c)"/></svg>""",
+        ).filterIsInstance<RecordingCanvas.Call.PushClip>().single()
+        val b = bounds(clip.path)
+        assertTrue(b[2] < 50.0 && b[3] < 50.0, "the clip is the text's box, not the viewport (got ${b.toList()})")
+    }
+
+    @Test
+    fun a_clip_path_with_no_geometry_clips_everything() {
+        val clip = calls("""<svg width="100" height="100"><clipPath id="c"/><rect width="100" height="100" clip-path="url(#c)"/></svg>""")
+            .filterIsInstance<RecordingCanvas.Call.PushClip>().single()
+        assertTrue(clip.path.segments.isEmpty(), "an empty clip, never an unclipped shape")
+    }
+
+    @Test
+    fun an_object_bounding_box_clip_scales_to_the_element() {
+        val clip = calls(
+            """<svg width="200" height="200">
+                 <clipPath id="c" clipPathUnits="objectBoundingBox"><rect width="0.5" height="0.5"/></clipPath>
+                 <rect x="20" y="40" width="100" height="100" clip-path="url(#c)"/>
+               </svg>""",
+        ).filterIsInstance<RecordingCanvas.Call.PushClip>().single()
+        assertEquals(listOf(20.0, 40.0, 70.0, 90.0), bounds(clip.path).toList())
+    }
+
     /* ─── fixtures ───────────────────────────────────────────────────────── */
+
+    private fun bounds(path: KitePath): DoubleArray {
+        val xs = ArrayList<Double>()
+        val ys = ArrayList<Double>()
+        for (seg in path.segments) when (seg) {
+            is KitePath.Segment.MoveTo -> { xs += seg.x; ys += seg.y }
+            is KitePath.Segment.LineTo -> { xs += seg.x; ys += seg.y }
+            is KitePath.Segment.CurveTo -> { xs += seg.x3; ys += seg.y3 }
+            is KitePath.Segment.QuadTo -> { xs += seg.x2; ys += seg.y2 }
+            KitePath.Segment.Close -> {}
+        }
+        return doubleArrayOf(xs.min(), ys.min(), xs.max(), ys.max())
+    }
+
 
     private fun bmp2x1(): ByteArray {
         val h = ByteArray(54)
