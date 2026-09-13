@@ -57,9 +57,12 @@ public class SvgPage internal constructor(
     override val displayWidth: Double get() = image.width
     override val displayHeight: Double get() = image.height
 
-    /** SVG is y-down from the top-left, so the base is a straight vertical flip. */
-    override fun displayToDeviceBase(): KiteMatrix =
-        KiteMatrix(1.0, 0.0, 0.0, -1.0, 0.0, displayHeight)
+    /**
+     * SVG display space is already top-left and y-down, which is what the page
+     * contract asks for, so the base is the identity, as it is for a comic page.
+     * A flip here turned every standalone SVG upside down (#96).
+     */
+    override fun displayToDeviceBase(): KiteMatrix = KiteMatrix.IDENTITY
 
     override fun renderTo(canvas: KiteCanvas, deviceCtm: KiteMatrix) {
         canvas.beginPage(displayWidth, displayHeight, deviceCtm)

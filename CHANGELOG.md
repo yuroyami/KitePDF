@@ -89,6 +89,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Gradients are sampled at 256 stops instead of 32, so a gradient with many
   bands keeps them, and type 4 mesh shadings read their padded vertex
   records correctly.
+- A standalone SVG file drew upside down in the viewer.
+- An SVG whose viewBox has a different shape from its width and height was
+  stretched. It now follows `preserveAspectRatio`, whose default scales
+  evenly and centres, so a circle stays a circle. `slice` clips to the
+  viewport.
+- SVG lengths in `pt`, `pc`, `in`, `cm` and `mm` were read as points, so
+  they came out at three quarters of their size, and `em` ignored the font
+  size. They now use CSS pixels, 96 to the inch, as SVG requires. The
+  file's own width and height follow the same rule, so a drawing that is
+  `210mm` wide opens at its real size instead of its viewBox size.
+- Dashed SVG strokes drew solid, and round caps and joins drew square. The
+  miter limit now starts at 4, the SVG default.
+- An SVG shape whose only paint is a gradient stroke drew nothing. It now
+  strokes in the middle colour of the gradient.
+- SVG text lost the space before a `<tspan>`, so a label read "Helloworld",
+  and a `<tspan>` inside another `<tspan>` lost its text.
+- An SVG group with `opacity` showed darker seams where its shapes overlap.
+  The group is now composited once, as one layer.
+- An SVG `<switch>` drew all of its children instead of the first one whose
+  conditions pass.
+- An SVG clip path made only of `<use>` or `<text>` elements, or with no
+  shapes at all, let the content through unclipped, and a clip path in
+  `objectBoundingBox` units clipped to almost nothing.
+- An SVG `transform` written in a `style` attribute was ignored.
 
 ## [0.9.0] - 2026-09-08
 
