@@ -60,6 +60,7 @@ renderer only when you draw pages.
 | `io.github.yuroyami:kitepdf-epub` | You want EPUB only. |
 | `io.github.yuroyami:kitepdf-cbz` | You want CBZ comic archives only. |
 | `io.github.yuroyami:kitepdf-svg` | You want SVG only: a standalone `.svg` as a one-page document, or the renderer that draws vector art inside another format. |
+| `io.github.yuroyami:kitepdf-javascript` | You want the JavaScript inside PDFs to run: document-level scripts and JavaScript actions, on the KiteJS engine. New, and ships from the release after `0.9.0`. |
 | `io.github.yuroyami:kitepdf-core` | Never add it yourself. It holds geometry, `KiteCanvas`, the font engine, the stream filters and the hyphenation data, and it arrives with any of the handler artifacts above. |
 | `io.github.yuroyami:kitepdf-compose-viewer` | You draw with Compose Multiplatform. It gives you `KiteDocView` (one composable for PDF and EPUB alike) and the viewer state. |
 | `io.github.yuroyami:kitepdf-native-renderer` | You want page-to-image through the platform's own canvas: AWT, `android.graphics`, CoreGraphics, Canvas2D. |
@@ -280,6 +281,7 @@ difference is the usual cause of a first build that will not resolve.
 | `-compose-viewer` | Android (minSdk 24), JVM, iOS arm64 and simulator arm64, macOS arm64, JS and wasmJs (browser) |
 | `-native-renderer` | Android (minSdk 29), JVM, iOS arm64, simulator arm64 and x64, macOS arm64, tvOS, JS (browser) |
 | `-skia-renderer` | Android (minSdk 21, see note), JVM, iOS arm64, simulator arm64 and x64, macOS arm64, tvOS, Linux x64 and arm64, JS and wasmJs (browser) |
+| `-javascript` | The targets KiteJS builds for: Android (minSdk 21), JVM, iOS arm64, simulator arm64 and x64, macOS arm64, Linux x64 and arm64, Windows (mingwX64), JS and wasmJs |
 
 On Android, `-skia-renderer` pulls `org.jetbrains.skiko:skiko-android`, which
 JetBrains publishes to `https://maven.pkg.jetbrains.space/public/p/compose/dev`

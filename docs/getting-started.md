@@ -4,7 +4,7 @@ Learn how to open a PDF, display it in the UI, and extract its content with Kite
 
 ## Step 1: Add the dependency
 
-KitePDF is published to Maven Central as ten artifacts: the `kitepdf` umbrella, the `kitepdf-pdf`, `kitepdf-epub`, `kitepdf-cbz` and `kitepdf-svg` handlers, the shared `kitepdf-core` base (it arrives with the handlers, never add it directly), the optional `kitepdf-net` URL loader, and three renderers. Start with the headless engine, and add one renderer only when you need to draw pages.
+KitePDF is published to Maven Central as ten artifacts: the `kitepdf` umbrella, the `kitepdf-pdf`, `kitepdf-epub`, `kitepdf-cbz` and `kitepdf-svg` handlers, the shared `kitepdf-core` base (it arrives with the handlers, never add it directly), the optional `kitepdf-net` URL loader, and three renderers. Start with the headless engine, and add one renderer only when you need to draw pages. From the release after `0.9.0`, an eleventh artifact, `kitepdf-javascript`, runs the JavaScript that PDFs carry; see [JavaScript](javascript.md).
 
 === "Kotlin (KMP)"
 
