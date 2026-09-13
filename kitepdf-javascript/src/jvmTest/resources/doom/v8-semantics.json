@@ -1,0 +1,547 @@
+[
+ {
+  "name": "int add wrap",
+  "expr": "(0x7fffffff + 1) | 0",
+  "expected": "-2147483648"
+ },
+ {
+  "name": "int sub wrap",
+  "expr": "(-0x80000000 - 1) | 0",
+  "expected": "2147483647"
+ },
+ {
+  "name": "unsigned shift",
+  "expr": "-1 >>> 0",
+  "expected": "4294967295"
+ },
+ {
+  "name": "unsigned shift div",
+  "expr": "((-1 >>> 0) / 4294967296)",
+  "expected": "0.9999999997671694"
+ },
+ {
+  "name": "big double to int",
+  "expr": "(4294967301) | 0",
+  "expected": "5"
+ },
+ {
+  "name": "neg double to int",
+  "expr": "(-4294967301) | 0",
+  "expected": "-5"
+ },
+ {
+  "name": "nan to int",
+  "expr": "NaN | 0",
+  "expected": "0"
+ },
+ {
+  "name": "inf to int",
+  "expr": "Infinity | 0",
+  "expected": "0"
+ },
+ {
+  "name": "trunc big",
+  "expr": "~~1e10",
+  "expected": "1410065408"
+ },
+ {
+  "name": "trunc neg",
+  "expr": "~~-2.7",
+  "expected": "-2"
+ },
+ {
+  "name": "shift by 32",
+  "expr": "1 << 32",
+  "expected": "1"
+ },
+ {
+  "name": "shift by 33",
+  "expr": "1 << 33",
+  "expected": "2"
+ },
+ {
+  "name": "sar neg",
+  "expr": "-8 >> 1",
+  "expected": "-4"
+ },
+ {
+  "name": "shr neg",
+  "expr": "-8 >>> 1",
+  "expected": "2147483644"
+ },
+ {
+  "name": "shift count neg",
+  "expr": "1 << -1",
+  "expected": "-2147483648"
+ },
+ {
+  "name": "imul overflow",
+  "expr": "Math.imul(0x7fffffff, 0x7fffffff)",
+  "expected": "1"
+ },
+ {
+  "name": "imul neg",
+  "expr": "Math.imul(-5, 3)",
+  "expected": "-15"
+ },
+ {
+  "name": "imul double args",
+  "expr": "Math.imul(2.7, 3.9)",
+  "expected": "6"
+ },
+ {
+  "name": "mul then or",
+  "expr": "(65536 * 65537) | 0",
+  "expected": "65536"
+ },
+ {
+  "name": "mod neg",
+  "expr": "(-7) % 3",
+  "expected": "-1"
+ },
+ {
+  "name": "mod neg int",
+  "expr": "((-7) % 3) | 0",
+  "expected": "-1"
+ },
+ {
+  "name": "div neg int",
+  "expr": "((-7) / 2) | 0",
+  "expected": "-3"
+ },
+ {
+  "name": "div by zero int",
+  "expr": "(5 / 0) | 0",
+  "expected": "0"
+ },
+ {
+  "name": "mod by zero int",
+  "expr": "(5 % 0) | 0",
+  "expected": "0"
+ },
+ {
+  "name": "and neg",
+  "expr": "-1 & 0xff",
+  "expected": "255"
+ },
+ {
+  "name": "xor",
+  "expr": "(0x12345678 ^ 0x0f0f0f0f) | 0",
+  "expected": "490428791"
+ },
+ {
+  "name": "or big",
+  "expr": "0xffffffff | 0",
+  "expected": "-1"
+ },
+ {
+  "name": "sign extend byte",
+  "expr": "(0xff << 24) >> 24",
+  "expected": "-1"
+ },
+ {
+  "name": "sign extend short",
+  "expr": "(0xffff << 16) >> 16",
+  "expected": "-1"
+ },
+ {
+  "name": "clz32 zero",
+  "expr": "Math.clz32(0)",
+  "expected": "32"
+ },
+ {
+  "name": "clz32 neg",
+  "expr": "Math.clz32(-1)",
+  "expected": "0"
+ },
+ {
+  "name": "fround",
+  "expr": "Math.fround(0.1)",
+  "expected": "0.10000000149011612"
+ },
+ {
+  "name": "fround big",
+  "expr": "Math.fround(1e40)",
+  "expected": "Infinity"
+ },
+ {
+  "name": "double add",
+  "expr": "0.1 + 0.2",
+  "expected": "0.30000000000000004"
+ },
+ {
+  "name": "double to string",
+  "expr": "String(1e21) + ' ' + String(123456789012345680000) + ' ' + String(0.000001) + ' ' + String(1e-7)",
+  "expected": "1e+21 123456789012345680000 0.000001 1e-7"
+ },
+ {
+  "name": "neg zero",
+  "expr": "1 / (-0)",
+  "expected": "-Infinity"
+ },
+ {
+  "name": "int to double",
+  "expr": "+((0x7fffffff + 1) | 0)",
+  "expected": "-2147483648"
+ },
+ {
+  "name": "unsigned compare",
+  "expr": "((-1 >>> 0) > 0)",
+  "expected": "true"
+ },
+ {
+  "name": "signed compare",
+  "expr": "((-1 | 0) < (0 | 0))",
+  "expected": "true"
+ },
+ {
+  "name": "heap32 negative index",
+  "expr": "var b = new ArrayBuffer(16); var h = new Int32Array(b); String(h[-1]) + ' ' + String(h[4])",
+  "expected": "undefined undefined"
+ },
+ {
+  "name": "heap views share",
+  "expr": "var b2 = new ArrayBuffer(8); var i8 = new Int8Array(b2); var i32 = new Int32Array(b2); i32[0] = -1; i8[0] = 1; i32[0]",
+  "expected": "-255"
+ },
+ {
+  "name": "endianness",
+  "expr": "var b3 = new ArrayBuffer(4); new Int32Array(b3)[0] = 0x01020304; new Uint8Array(b3)[0]",
+  "expected": "4"
+ },
+ {
+  "name": "u8 wrap store",
+  "expr": "var u = new Uint8Array(2); u[0] = 257; u[1] = -1; u[0] * 1000 + u[1]",
+  "expected": "1255"
+ },
+ {
+  "name": "i8 wrap store",
+  "expr": "var s8 = new Int8Array(1); s8[0] = 200; s8[0]",
+  "expected": "-56"
+ },
+ {
+  "name": "u16 store double",
+  "expr": "var u16 = new Uint16Array(1); u16[0] = 70000.9; u16[0]",
+  "expected": "4464"
+ },
+ {
+  "name": "i32 store double",
+  "expr": "var i32b = new Int32Array(1); i32b[0] = 3000000000.5; i32b[0]",
+  "expected": "-1294967296"
+ },
+ {
+  "name": "i32 store nan",
+  "expr": "var i32c = new Int32Array(1); i32c[0] = NaN; i32c[0]",
+  "expected": "0"
+ },
+ {
+  "name": "f32 store",
+  "expr": "var f32 = new Float32Array(1); f32[0] = 0.1; f32[0]",
+  "expected": "0.10000000149011612"
+ },
+ {
+  "name": "f64 store",
+  "expr": "var f64 = new Float64Array(1); f64[0] = 0.1; f64[0]",
+  "expected": "0.1"
+ },
+ {
+  "name": "u32 store neg",
+  "expr": "var u32 = new Uint32Array(1); u32[0] = -1; u32[0]",
+  "expected": "4294967295"
+ },
+ {
+  "name": "typed set overlap",
+  "expr": "var o = new Uint8Array([1,2,3,4,5]); o.set(o.subarray(0, 3), 2); Array.from(o).join()",
+  "expected": "1,2,1,2,3"
+ },
+ {
+  "name": "typed copyWithin",
+  "expr": "var c = new Uint8Array([1,2,3,4,5]); c.copyWithin(0, 2); Array.from(c).join()",
+  "expected": "3,4,5,4,5"
+ },
+ {
+  "name": "typed fill",
+  "expr": "var f = new Uint8Array(4); f.fill(7, 1, 3); Array.from(f).join()",
+  "expected": "0,7,7,0"
+ },
+ {
+  "name": "typed from array",
+  "expr": "Array.from(new Uint8Array([300, -1, 1.9, '7'])).join()",
+  "expected": "44,255,1,7"
+ },
+ {
+  "name": "typed slice",
+  "expr": "Array.from(new Uint8Array([1,2,3]).slice(1)).join()",
+  "expected": "2,3"
+ },
+ {
+  "name": "subarray view",
+  "expr": "var sv = new Uint8Array([1,2,3,4]); var v2 = sv.subarray(1, 3); v2[0] = 9; sv[1] * 10 + v2.length",
+  "expected": "92"
+ },
+ {
+  "name": "typed length after buffer",
+  "expr": "new Int32Array(new ArrayBuffer(16777216), 4).length",
+  "expected": "4194303"
+ },
+ {
+  "name": "dataview",
+  "expr": "var dv = new DataView(new ArrayBuffer(8)); dv.setInt32(0, -2, true); dv.getUint32(0, true)",
+  "expected": "4294967294"
+ },
+ {
+  "name": "switch negative",
+  "expr": "var r = 0; switch (-1 | 0) { case -1: r = 1; break; case 1: r = 2; } r",
+  "expected": "1"
+ },
+ {
+  "name": "switch fallthrough",
+  "expr": "var q = 0; switch (2) { case 1: q += 1; case 2: q += 2; case 3: q += 4; break; case 4: q += 8; } q",
+  "expected": "6"
+ },
+ {
+  "name": "labeled break",
+  "expr": "var n = 0; L: do { n = 1; if (n) break L; n = 2; } while (0); n",
+  "expected": "1"
+ },
+ {
+  "name": "comma",
+  "expr": "var k = (1, 2, 3); k",
+  "expected": "3"
+ },
+ {
+  "name": "ternary int double",
+  "expr": "+((1 ? 2 : 3.5) | 0)",
+  "expected": "2"
+ },
+ {
+  "name": "string char code",
+  "expr": "'abc'.charCodeAt(1) + 'abc'.charCodeAt(5)",
+  "expected": "NaN"
+ },
+ {
+  "name": "fromCharCode big",
+  "expr": "String.fromCharCode(65601)",
+  "expected": "A"
+ },
+ {
+  "name": "fromCharCode apply",
+  "expr": "String.fromCharCode.apply(null, new Uint8Array([72, 105]))",
+  "expected": "Hi"
+ },
+ {
+  "name": "parseInt",
+  "expr": "parseInt('0x1f') + parseInt('08') + parseInt('12abc')",
+  "expected": "51"
+ },
+ {
+  "name": "number binary",
+  "expr": "Number('0b1010') + Number('0o17') + Number('')",
+  "expected": "25"
+ },
+ {
+  "name": "tostring radix",
+  "expr": "(255).toString(2) + ' ' + (255).toString(16) + ' ' + (-255).toString(36)",
+  "expected": "11111111 ff -73"
+ },
+ {
+  "name": "math floor neg",
+  "expr": "Math.floor(-0.5) + Math.ceil(-0.5) + Math.round(-0.5) + Math.round(2.5)",
+  "expected": "2"
+ },
+ {
+  "name": "math abs int",
+  "expr": "Math.abs(-0x80000000) | 0",
+  "expected": "-2147483648"
+ },
+ {
+  "name": "math min max",
+  "expr": "Math.min(1, NaN) + ' ' + Math.max() + ' ' + Math.min()",
+  "expected": "NaN -Infinity Infinity"
+ },
+ {
+  "name": "math sqrt pow",
+  "expr": "Math.sqrt(2) + Math.pow(2, 0.5)",
+  "expected": "2.8284271247461903"
+ },
+ {
+  "name": "math sin",
+  "expr": "Math.sin(1)",
+  "expected": "0.8414709848078965"
+ },
+ {
+  "name": "math atan2",
+  "expr": "Math.atan2(1, 2)",
+  "expected": "0.4636476090008061"
+ },
+ {
+  "name": "math exp log",
+  "expr": "Math.exp(1) + ' ' + Math.log(10)",
+  "expected": "2.718281828459045 2.302585092994046"
+ },
+ {
+  "name": "function table",
+  "expr": "var t = [function(a){return a+1;}, function(a){return a+2;}]; t[1 & 1](1) + t[2 & 1](1)",
+  "expected": "5"
+ },
+ {
+  "name": "array of functions call",
+  "expr": "var ft = [null, function(x) { return x * 2; }]; ft[(1 + 0) | 0](21)",
+  "expected": "42"
+ },
+ {
+  "name": "arguments length",
+  "expr": "(function(){ return arguments.length; })(1,2)",
+  "expected": "2"
+ },
+ {
+  "name": "call apply",
+  "expr": "(function(a,b){ return this.v + a + b; }).apply({v:1}, [2,3])",
+  "expected": "6"
+ },
+ {
+  "name": "closure counter",
+  "expr": "var mk = function(){ var c = 0; return function(){ return ++c; }; }; var f1 = mk(); f1(); f1()",
+  "expected": "2"
+ },
+ {
+  "name": "in operator",
+  "expr": "('a' in {a:1}) + ' ' + (0 in [5])",
+  "expected": "true true"
+ },
+ {
+  "name": "typeof",
+  "expr": "typeof null + typeof undefined + typeof 1 + typeof '' + typeof {} + typeof function(){}",
+  "expected": "objectundefinednumberstringobjectfunction"
+ },
+ {
+  "name": "string index",
+  "expr": "'hello'[1] + 'hello'.length",
+  "expected": "e5"
+ },
+ {
+  "name": "string slice neg",
+  "expr": "'hello'.slice(-3, -1)",
+  "expected": "ll"
+ },
+ {
+  "name": "string split empty",
+  "expr": "'abc'.split('').length",
+  "expected": "3"
+ },
+ {
+  "name": "regex g exec",
+  "expr": "var re = /a/g; re.exec('aa'); re.lastIndex",
+  "expected": "1"
+ },
+ {
+  "name": "regex match all",
+  "expr": "'a1b2'.match(/\\d/g).join()",
+  "expected": "1,2"
+ },
+ {
+  "name": "date now int",
+  "expr": "typeof (Date.now() | 0)",
+  "expected": "number"
+ },
+ {
+  "name": "json",
+  "expr": "JSON.stringify({a:[1,2,{b:3}]}) + JSON.parse('[1,2]').length",
+  "expected": "{\"a\":[1,2,{\"b\":3}]}2"
+ },
+ {
+  "name": "object keys order",
+  "expr": "Object.keys({b:1, a:2, 1:3, 0:4}).join()",
+  "expected": "0,1,b,a"
+ },
+ {
+  "name": "delete",
+  "expr": "var dobj = {x: 1}; delete dobj.x; 'x' in dobj",
+  "expected": "false"
+ },
+ {
+  "name": "array holes",
+  "expr": "var ah = [1,,3]; ah.length + ' ' + (1 in ah)",
+  "expected": "3 false"
+ },
+ {
+  "name": "array length set",
+  "expr": "var al = [1,2,3]; al.length = 1; al.join() + al.length",
+  "expected": "11"
+ },
+ {
+  "name": "array push large",
+  "expr": "var ap = []; for (var i = 0; i < 100000; i++) ap.push(i); ap[99999]",
+  "expected": "99999"
+ },
+ {
+  "name": "array sort numbers",
+  "expr": "[10, 9, 1].sort().join()",
+  "expected": "1,10,9"
+ },
+ {
+  "name": "array sort fn",
+  "expr": "[10, 9, 1].sort(function(a, b){ return a - b; }).join()",
+  "expected": "1,9,10"
+ },
+ {
+  "name": "string concat number",
+  "expr": "'' + 1e21 + (0.1 * 3)",
+  "expected": "1e+210.30000000000000004"
+ },
+ {
+  "name": "double parse",
+  "expr": "+'1e3' + +'0x10' + +' 12 '",
+  "expected": "1028"
+ },
+ {
+  "name": "int32 from double heap",
+  "expr": "var hd = new Float64Array(1); hd[0] = 2147483648; hd[0] | 0",
+  "expected": "-2147483648"
+ },
+ {
+  "name": "u8 index from double",
+  "expr": "var ud = new Uint8Array(4); ud[1.5] = 3; ud[1] + ':' + ud[1.5]",
+  "expected": "0:undefined"
+ },
+ {
+  "name": "exception in callee",
+  "expr": "try { (function(){ null.f(); })(); } catch (e) { e instanceof TypeError }",
+  "expected": "true"
+ },
+ {
+  "name": "throw string",
+  "expr": "try { throw 'x'; } catch (e) { e }",
+  "expected": "x"
+ },
+ {
+  "name": "finally order",
+  "expr": "var fo = ''; (function(){ try { fo += 'a'; return; } finally { fo += 'b'; } })(); fo",
+  "expected": "ab"
+ },
+ {
+  "name": "getter this",
+  "expr": "var g = { _v: 3, get v() { return this._v; } }; g.v",
+  "expected": "3"
+ },
+ {
+  "name": "defineProperty setter",
+  "expr": "var ds = {}; Object.defineProperty(ds, 'v', { set: function(x) { this.w = x * 2; } }); ds.v = 4; ds.w",
+  "expected": "8"
+ },
+ {
+  "name": "globalThis var",
+  "expr": "var gv = 5; globalThis.gv",
+  "expected": "5"
+ },
+ {
+  "name": "function hoisting",
+  "expr": "typeof hoisted; function hoisted() {}",
+  "expected": "function"
+ },
+ {
+  "name": "nested asm module",
+  "expr": "(function(g, e, b){ 'use asm'; var H = new g.Int32Array(b); var imul = g.Math.imul; function f(p) { p = p | 0; var s = 0; s = imul(p, 3) | 0; H[p >> 2] = s; return H[p >> 2] | 0; } return { f: f }; })({ Int32Array: Int32Array, Math: Math }, {}, new ArrayBuffer(4096)).f(8)",
+  "expected": "24"
+ }
+]

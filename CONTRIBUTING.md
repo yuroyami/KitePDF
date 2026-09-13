@@ -82,6 +82,8 @@ When you touch a feature with no real-world coverage, grow the corpus: add a gen
 
 Several oracle tests read fonts from `mupdf-master/resources/fonts/`, which is also ignored. On a clean checkout those tests report as skipped.
 
+One corpus file is a benchmark of its own: DoomPDF, the Doom port that lives in a PDF's page-open script, kept as `corpus/pdf/doom.pdf` (https://doompdf.pages.dev/doom.pdf). `KITEPDF_DOOM=true ./gradlew :kitepdf-javascript:jvmTest --tests '*DoomPdfBenchmark*'` runs its script on KiteJS and reports start-up and frame times; the same flag turns on the KiteJS probes next to it. Without the flag and the file, all of them report as skipped.
+
 ## Issues and commits
 
 Every change starts with an issue. A defect found while working becomes an issue before the fix. An idea becomes an issue before the code.
