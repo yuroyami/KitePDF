@@ -134,6 +134,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - An explicit `text-align: left` inside right-to-left text was flipped to
   the right.
 - A link wrapped around a block had no clickable area over the block.
+- A comic page did not call the canvas page begin and end hooks, unlike every
+  other page type.
+- A WebP comic page drew nothing and opened at 800 by 1200 whatever its real
+  size. Page sizes now come from the WebP and TIFF headers, lossless WebP and
+  TIFF images decode wherever an image is read (comics, EPUB and SVG), and a
+  comic page that cannot decode shows a grey sheet instead of nothing. Lossy
+  WebP still has no decoder.
+- A `ReaderTheme` built inline in a composable was a new cache key on every
+  recomposition, so the viewer rendered its pages again each time. Themes now
+  compare by value.
+- `KitePageRasterizer.rasterize` now says in its docs that the page fills the
+  bitmap width, and logs a warning when the height does not match the page's
+  aspect ratio. The docs of the vectorized render mode now say that it draws
+  on the UI thread.
 
 ## [0.9.0] - 2026-09-08
 

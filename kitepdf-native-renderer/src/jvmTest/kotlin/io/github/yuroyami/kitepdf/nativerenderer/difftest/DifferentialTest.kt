@@ -46,11 +46,15 @@ class DifferentialTest {
             "KitePDF failed to render:\n" + failures.joinToString("\n") { "  ${it.doc} p${it.page}: ${it.error}" },
         )
 
-        // Synthetic content fixtures must produce non-blank output.
-        val blank = report.results.filter { it.synthetic && it.rendered && !it.nonBlank }
+        // No page may render blank where the reference paints it: fixtures always,
+        // real documents whenever the oracle shows ink. A page blank in both is
+        // a genuinely blank page (#43).
+        val blank = report.results.filter { r ->
+            r.rendered && !r.nonBlank && (r.synthetic || (r.referenceInk ?: 0L) > 20L)
+        }
         assertTrue(
             blank.isEmpty(),
-            "Blank render for fixtures: " + blank.joinToString { "${it.doc} p${it.page}" },
+            "Blank render: " + blank.joinToString { "${it.doc} p${it.page}" },
         )
 
         // A discovered oracle must successfully score every page that

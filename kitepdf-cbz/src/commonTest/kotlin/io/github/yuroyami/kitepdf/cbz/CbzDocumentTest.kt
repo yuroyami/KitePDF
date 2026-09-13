@@ -78,7 +78,7 @@ class CbzDocumentTest {
     }
 
     @Test
-    fun a_corrupt_image_gives_a_blank_page_and_the_document_survives() {
+    fun a_corrupt_image_gives_a_placeholder_page_and_the_document_survives() {
         val doc = CbzDocument.open(
             CbzFixtures.comic(
                 "p1.bmp" to CbzFixtures.bmp2x1(),
@@ -89,5 +89,32 @@ class CbzDocumentTest {
         val canvas = RecordingCanvas()
         doc.pages[1].renderTo(canvas)
         assertTrue(images(canvas).isEmpty())
+        assertEquals(1, canvas.calls.filterIsInstance<RecordingCanvas.Call.Fill>().size, "a grey sheet stands in")
+    }
+
+    @Test
+    fun render_is_bracketed_by_the_page_begin_and_end_calls() {
+        val doc = CbzDocument.open(CbzFixtures.comic("p1.bmp" to CbzFixtures.bmp2x1()))
+        val calls = RecordingCanvas().also { doc.pages[0].renderTo(it) }.calls
+        assertTrue(calls.first() is RecordingCanvas.Call.BeginPage, "got $calls")
+        assertEquals(RecordingCanvas.Call.EndPage, calls.last())
+    }
+
+    @Test
+    fun webp_pages_take_their_size_from_the_header_and_lossless_ones_draw() {
+        val doc = CbzDocument.open(
+            CbzFixtures.comic("p1.webp" to CbzFixtures.webpLossless6x4(), "p2.webp" to CbzFixtures.webpLossy6x4())
+        )
+        for (page in doc.pages) {
+            assertEquals(6.0, page.displayWidth)
+            assertEquals(4.0, page.displayHeight)
+        }
+        val lossless = RecordingCanvas().also { doc.pages[0].renderTo(it) }
+        assertEquals(1, images(lossless).size, "a lossless WebP page decodes and draws")
+        val lossy = RecordingCanvas().also { doc.pages[1].renderTo(it) }.calls
+        assertEquals(
+            1, lossy.count { it is RecordingCanvas.Call.Image || it is RecordingCanvas.Call.Fill },
+            "the page draws its image or a placeholder, never nothing",
+        )
     }
 }

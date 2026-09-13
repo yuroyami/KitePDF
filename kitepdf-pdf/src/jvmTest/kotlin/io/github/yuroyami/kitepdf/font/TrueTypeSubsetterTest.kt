@@ -31,10 +31,7 @@ class TrueTypeSubsetterTest {
 
     @Test
     fun subset_is_small_checksum_correct_and_reparses() {
-        val file = fontFile() ?: run {
-            println("[TrueTypeSubsetterTest] DroidSansFallback.ttf not found, skipping.")
-            return
-        }
+        val file = fontFile().orSkip("DroidSansFallback.ttf")
         val full = file.readBytes()
         val ttf = TrueTypeFont.parse(full)
 
@@ -63,7 +60,7 @@ class TrueTypeSubsetterTest {
 
     @Test
     fun empty_used_set_still_includes_notdef() {
-        val file = fontFile() ?: return
+        val file = fontFile().orSkip("DroidSansFallback.ttf")
         val ttf = TrueTypeFont.parse(file.readBytes())
         val sub = TrueTypeSubsetter.subset(ttf, emptySet())
         assertEquals(0xB1B0AFBAL, wholeFontChecksum(sub.fontBytes))

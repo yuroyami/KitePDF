@@ -33,7 +33,7 @@ class SmcpFeatureTest {
 
     @Test
     fun smcp_feature_substitutes_the_glyph_at_full_size() {
-        val face = smcpFace() ?: return // no smcp-bearing font in this checkout: skip
+        val face = smcpFace().orSkip("A font with a small-caps feature")
         val gid = face.gidFor('a'.code)
         val smcp = face.substSingle("smcp", gid)
         assertNotEquals(gid, smcp, "precondition")

@@ -3,24 +3,26 @@ package io.github.yuroyami.kitepdf.nativerenderer.difftest
 import io.github.yuroyami.kitepdf.writer.PdfBuilder
 import io.github.yuroyami.kitepdf.writer.PdfImage
 import java.io.File
-import kotlin.test.Test
 
 /**
- * One-shot generator: embed a `.jp2` (JPEG 2000) codestream into a PDF via
- * `/JPXDecode` and write it to `corpus/pdf/testPDF_JPX.pdf`, so the differential
- * harness has a JPX fixture (mutool is the oracle). Provide the `.jp2` path via
- * `-Dkitepdf.jp2=/path` (e.g. one made with `opj_compress`); no-ops otherwise.
+ * Writes `corpus/pdf/testPDF_JPX.pdf`: a `.jp2` (JPEG 2000) codestream embedded
+ * through `/JPXDecode`, so the differential harness has a JPX fixture with
+ * mutool as the oracle. A tool, not a test, so the gate never runs it (#192):
+ *
+ * ```
+ * ./gradlew :kitepdf-native-renderer:makeJpxFixture -Pjp2=/path/file.jp2 -Pjp2w=330 -Pjp2h=255
+ * ```
  */
-class MakeJpxFixture {
-    @Test
-    fun make() {
-        val jp2Path = System.getProperty("kitepdf.jp2") ?: "/tmp/test.jp2"
-        val jp2 = File(jp2Path)
-        if (!jp2.exists()) { println("[jpx] $jp2Path not found"); return }
-        val w = System.getProperty("kitepdf.jp2.w")?.toIntOrNull() ?: 330
-        val h = System.getProperty("kitepdf.jp2.h")?.toIntOrNull() ?: 255
-        val out = Corpus.repoCorpus("pdf")?.let { File(it, "testPDF_JPX.pdf") } ?: return
-
+object MakeJpxFixture {
+    @JvmStatic
+    fun main(args: Array<String>) {
+        val jp2 = File(requireNotNull(args.getOrNull(0)) { "usage: makeJpxFixture -Pjp2=/path/file.jp2" })
+        require(jp2.isFile) { "${jp2.path} not found" }
+        val w = args.getOrNull(1)?.toIntOrNull() ?: 330
+        val h = args.getOrNull(2)?.toIntOrNull() ?: 255
+        val dir = requireNotNull(Corpus.repoCorpus("pdf")) { "no repo root above ${File("").absolutePath}" }
+        dir.mkdirs()
+        val out = File(dir, "testPDF_JPX.pdf")
         val img = PdfImage.jpx(jp2.readBytes(), w, h)
         val pdf = PdfBuilder().page(w.toDouble(), h.toDouble()) {
             drawImage(img, 0.0, 0.0, w.toDouble(), h.toDouble())

@@ -4,6 +4,8 @@ import io.github.yuroyami.kitepdf.core.KitePage
 import io.github.yuroyami.kitepdf.core.render.KiteCanvas
 import io.github.yuroyami.kitepdf.core.render.KiteImageData
 import io.github.yuroyami.kitepdf.core.render.KiteMatrix
+import io.github.yuroyami.kitepdf.core.render.KitePath
+import io.github.yuroyami.kitepdf.core.render.RgbColor
 
 /**
  * One comic page: one image entry. Sized 1 px = 1 pt (a comic has no physical
@@ -31,12 +33,24 @@ public class CbzPage internal constructor(
     override fun displayToDeviceBase(): KiteMatrix = KiteMatrix.IDENTITY
 
     override fun renderTo(canvas: KiteCanvas, deviceCtm: KiteMatrix) {
-        val image = readEntry()?.let { KiteImageData.fromEncodedImage(it) } ?: return
-        // Backends map the image's unit square (row 0 at v=1) through the CTM,
-        // so an upright page in this y-down display space needs the y-flip form.
-        val ctm = deviceCtm.concat(
-            KiteMatrix(displayWidth, 0.0, 0.0, -displayHeight, 0.0, displayHeight)
-        )
-        canvas.drawImage(image, ctm)
+        canvas.beginPage(displayWidth, displayHeight, deviceCtm)
+        val image = readEntry()?.let { KiteImageData.fromEncodedImage(it) }
+        if (image == null) {
+            // A page that cannot decode shows a grey sheet rather than nothing (#129).
+            val sheet = KitePath.Builder().apply { rectangle(0.0, 0.0, displayWidth, displayHeight) }.build()
+            canvas.fillPath(sheet, deviceCtm, PLACEHOLDER, evenOdd = false)
+        } else {
+            // Backends map the image's unit square (row 0 at v=1) through the CTM,
+            // so an upright page in this y-down display space needs the y-flip form.
+            val ctm = deviceCtm.concat(
+                KiteMatrix(displayWidth, 0.0, 0.0, -displayHeight, 0.0, displayHeight)
+            )
+            canvas.drawImage(image, ctm)
+        }
+        canvas.endPage()
+    }
+
+    private companion object {
+        val PLACEHOLDER = RgbColor(0.9, 0.9, 0.9)
     }
 }

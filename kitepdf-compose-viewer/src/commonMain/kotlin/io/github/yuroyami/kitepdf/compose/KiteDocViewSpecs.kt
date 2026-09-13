@@ -184,6 +184,10 @@ public sealed interface KiteRenderSpec {
      * Per-page draw cost scales with content complexity. Best for simple pages,
      * deep-zoom crispness, and low memory.
      *
+     * The page is drawn inside the Compose draw pass, on the UI thread, and it is
+     * parsed and painted again on every redraw, so a dense page can drop frames.
+     * [Rasterized] renders off the main thread instead.
+     *
      * @param hairlineWidthPx minimum stroke width in device pixels. The engine
      *   floors thin strokes here so sub-pixel rules (ECG traces, fine borders)
      *   stay visible; 1 = the ISO hairline. There is no supersampling knob:

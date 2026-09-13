@@ -7,9 +7,11 @@ import io.github.yuroyami.kitepdf.writer.PdfBuilder
 import io.github.yuroyami.kitepdf.writer.StandardFont
 import java.io.ByteArrayOutputStream
 import java.io.File
+import java.util.Locale
 import java.util.zip.Deflater
 import java.util.zip.Inflater
 import kotlin.test.Test
+import org.junit.Assume.assumeTrue
 
 /**
  * Lightweight performance benchmark: the evidence behind the "efficient"
@@ -31,10 +33,8 @@ class BenchmarkTest {
     @Test
     fun benchmarks() {
         val enabled = System.getenv("KITEPDF_BENCH") == "true" || System.getProperty("kitepdf.bench") == "true"
-        if (!enabled) {
-            println("[bench] skipped. Run with KITEPDF_BENCH=true to enable the performance benchmark.")
-            return
-        }
+        // Skipped, not passed, when nobody asked for it (#191).
+        assumeTrue("Run with KITEPDF_BENCH=true to enable the performance benchmark.", enabled)
         val md = StringBuilder()
         md.appendLine("# KitePDF performance benchmark").appendLine()
         md.appendLine("Median of timed iterations after warmup. Lower ms = faster.").appendLine()
@@ -101,35 +101,62 @@ class BenchmarkTest {
 
     private fun benchCodec(md: StringBuilder) {
         md.appendLine("## Flate codec: KitePDF (pure-Kotlin) vs JDK java.util.zip").appendLine()
+        // Payloads with the entropy of real PDF streams, not one repeated string (#189).
+        for ((label, payload) in listOf("Content stream" to contentStreamPayload(), "Image samples" to imageSamplePayload())) {
+            var kiteEnc = ByteArray(0)
+            var jdkEnc = ByteArray(0)
+            val kiteEncMs = bench(1, 3) { kiteEnc = Zlib.encode(payload) }
+            val jdkEncMs = bench(1, 3) { jdkEnc = jdkDeflate(payload) }
+            // Decode the JDK-compressed bytes, so both decoders read identical input.
+            val kiteDecMs = bench(2, 5) { Zlib.decode(jdkEnc) }
+            val jdkDecMs = bench(2, 5) { jdkInflate(jdkEnc) }
 
-        // Realistic-ish payload: repeated extracted text + pseudo-random tail.
-        val text = corpusFiles().firstOrNull()?.let {
-            runCatching { KitePDF.open(it.readBytes()).pages.firstOrNull()?.extractText() }.getOrNull()
-        } ?: "The quick brown fox jumps over the lazy dog. "
-        val sb = StringBuilder()
-        while (sb.length < 512 * 1024) sb.append(text).append(' ')
-        val payload = sb.toString().encodeToByteArray()
-
-        // Encode
-        var kiteEnc = ByteArray(0); var jdkEnc = ByteArray(0)
-        val kiteEncMs = bench(1, 3) { kiteEnc = Zlib.encode(payload) }
-        val jdkEncMs = bench(1, 3) { jdkEnc = jdkDeflate(payload) }
-
-        // Decode (use JDK-compressed bytes so both decode identical input).
-        val kiteDecMs = bench(2, 5) { Zlib.decode(jdkEnc) }
-        val jdkDecMs = bench(2, 5) { jdkInflate(jdkEnc) }
-
-        fun pct(n: Int) = "%.1f%%".format(n * 100.0 / payload.size)
-        md.appendLine("Payload: ${payload.size / 1024} KB (repeated real text).").appendLine()
-        md.appendLine("| Metric | KitePDF | JDK | Ratio (Kite/JDK) |")
-        md.appendLine("|---|---:|---:|---:|")
-        md.appendLine("| Compressed size | ${kiteEnc.size / 1024} KB (${pct(kiteEnc.size)}) | ${jdkEnc.size / 1024} KB (${pct(jdkEnc.size)}) | ${"%.2f×".format(kiteEnc.size.toDouble() / jdkEnc.size)} |")
-        md.appendLine("| Encode time | ${fmt(kiteEncMs)} ms | ${fmt(jdkEncMs)} ms | ${"%.1f×".format(kiteEncMs / jdkEncMs)} |")
-        md.appendLine("| Decode time | ${fmt(kiteDecMs)} ms | ${fmt(jdkDecMs)} ms | ${"%.1f×".format(kiteDecMs / jdkDecMs)} |")
-        md.appendLine()
+            fun pct(n: Int) = "%.1f%%".format(n * 100.0 / payload.size)
+            md.appendLine("### $label, ${payload.size / 1024} KB").appendLine()
+            md.appendLine("| Metric | KitePDF | JDK | Ratio (Kite/JDK) |")
+            md.appendLine("|---|---:|---:|---:|")
+            md.appendLine("| Compressed size | ${kiteEnc.size / 1024} KB (${pct(kiteEnc.size)}) | ${jdkEnc.size / 1024} KB (${pct(jdkEnc.size)}) | ${"%.2f×".format(kiteEnc.size.toDouble() / jdkEnc.size)} |")
+            md.appendLine("| Encode time | ${fmt(kiteEncMs)} ms | ${fmt(jdkEncMs)} ms | ${"%.1f×".format(kiteEncMs / jdkEncMs)} |")
+            md.appendLine("| Decode time | ${fmt(kiteDecMs)} ms | ${fmt(jdkDecMs)} ms | ${"%.1f×".format(kiteDecMs / jdkDecMs)} |")
+            md.appendLine()
+        }
         md.appendLine("_Encode ratio > 1× = larger output (KitePDF uses fixed-Huffman, no dynamic Huffman yet). " +
             "Time ratio > 1× = slower than native zlib (expected for pure-Kotlin)._")
         md.appendLine()
+    }
+
+    /** A content stream with varied coordinates, colours, text and image placements, as pages draw them. */
+    private fun contentStreamPayload(): ByteArray {
+        val rnd = java.util.Random(42)
+        val words = listOf("the", "page", "render", "stream", "font", "glyph", "colour", "table", "figure", "chapter")
+        fun n(max: Double) = String.format(Locale.ROOT, "%.2f", rnd.nextDouble() * max)
+        val sb = StringBuilder()
+        while (sb.length < 256 * 1024) {
+            when (rnd.nextInt(4)) {
+                0 -> sb.append("${n(612.0)} ${n(792.0)} m ${n(612.0)} ${n(792.0)} l S\n")
+                1 -> {
+                    val text = List(1 + rnd.nextInt(6)) { words[rnd.nextInt(words.size)] }.joinToString(" ")
+                    sb.append("BT /F${rnd.nextInt(4)} ${8 + rnd.nextInt(10)} Tf ${n(612.0)} ${n(792.0)} Td ($text) Tj ET\n")
+                }
+                2 -> sb.append("${n(1.0)} ${n(1.0)} ${n(1.0)} rg ${n(612.0)} ${n(792.0)} ${n(200.0)} ${n(200.0)} re f\n")
+                else -> sb.append("q ${n(300.0)} 0 0 ${n(300.0)} ${n(612.0)} ${n(792.0)} cm /Im${rnd.nextInt(8)} Do Q\n")
+            }
+        }
+        return sb.toString().encodeToByteArray()
+    }
+
+    /** 8-bit RGB samples shaped like a photo: smooth ramps plus sensor noise. */
+    private fun imageSamplePayload(): ByteArray {
+        val rnd = java.util.Random(7)
+        val out = ByteArray(256 * 1024)
+        for (i in out.indices) {
+            val px = i / 3
+            val x = px % 256
+            val y = px / 256
+            val base = (x + y * (i % 3 + 1)) % 256
+            out[i] = (base + rnd.nextInt(9) - 4).coerceIn(0, 255).toByte()
+        }
+        return out
     }
 
     private fun jdkDeflate(data: ByteArray): ByteArray {

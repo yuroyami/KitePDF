@@ -54,13 +54,19 @@ The other harnesses:
 ./gradlew :kitepdf-native-renderer:jvmTest --tests "*EpubDifferentialTest*"
 ```
 
-The EPUB sweep prints a page count. **That count is the gate.** An unexplained movement stops the line. Several kinds of change move it on purpose; when yours does, say so in the same commit.
+The EPUB sweep checks every book's page count against `kitepdf-native-renderer/src/jvmTest/resources/epub-sweep-pages.txt`, so an unexplained movement stops the line. Several kinds of change move a count on purpose. When yours does, rerun the sweep with `-Dkitepdf.epub.updatePages=true` and say why in the same commit:
+
+```bash
+./gradlew :kitepdf-native-renderer:jvmTest --tests "*EpubDifferentialTest*" -Dkitepdf.epub.updatePages=true
+```
 
 Two suites are timing-sensitive and run only behind a flag:
 
 ```bash
 ./gradlew :kitepdf-native-renderer:jvmTest :kitepdf-compose-viewer:jvmTest -PslowTests
 ```
+
+They are local checks. No CI job passes the flag, so run them yourself before a change that could slow rendering.
 
 Benchmarks run only when asked:
 
@@ -74,7 +80,7 @@ The repo root holds a `corpus/` folder with `pdf/` and `epub/` subfolders. It is
 
 When you touch a feature with no real-world coverage, grow the corpus: add a generated fixture straight away, and ask for a real file when a synthetic one cannot prove the case.
 
-Several oracle tests read fonts from `mupdf-master/resources/fonts/`, which is also ignored. On a clean checkout those tests do not exercise their bodies.
+Several oracle tests read fonts from `mupdf-master/resources/fonts/`, which is also ignored. On a clean checkout those tests report as skipped.
 
 ## Issues and commits
 

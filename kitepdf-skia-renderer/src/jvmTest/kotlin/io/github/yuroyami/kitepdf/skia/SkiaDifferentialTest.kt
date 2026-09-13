@@ -41,6 +41,7 @@ class SkiaDifferentialTest {
         val nonBlank: Boolean,
         val score: Double?,
         val oracleFailure: String?,
+        val referenceInk: Long? = null,
     )
 
     @Test
@@ -73,8 +74,11 @@ class SkiaDifferentialTest {
             results.all { it.rendered },
             "Skia failed to render: " + results.filter { !it.rendered }.map { "${it.name} p${it.page}" },
         )
-        // Every generated fixture must paint something; no text exemption.
-        val blank = results.filter { it.name.startsWith("gen-") && !it.nonBlank }
+        // Every generated fixture must paint something, and so must every corpus
+        // page the reference paints (#43).
+        val blank = results.filter {
+            it.rendered && !it.nonBlank && (it.name.startsWith("gen-") || (it.referenceInk ?: 0L) > 20L)
+        }
         assertTrue(blank.isEmpty(), "blank Skia render: " + blank.map { "${it.name} p${it.page}" })
 
         if (MuPdfOracle.available) {
@@ -101,17 +105,22 @@ class SkiaDifferentialTest {
             ImageIO.read(ByteArrayInputStream(PdfPageRasterizer.encodeToPng(page, scale)))
         }.getOrNull() ?: return Result(name, i, rendered = false, nonBlank = false, score = null, oracleFailure = null)
 
-        val nonBlank = ImageDiff.nonBackgroundPixels(skiaImg) > 20
+        val ink = ImageDiff.nonBackgroundPixels(skiaImg)
+        val nonBlank = ink > 20
         if (!MuPdfOracle.available) {
             return Result(name, i, rendered = true, nonBlank = nonBlank, score = null, oracleFailure = null)
         }
         return when (val ref = MuPdfOracle.renderDetailed(pdfFile, i + 1, dpi)) {
             is MuPdfOracle.RenderResult.Success -> {
                 val outcome = runCatching { ImageDiff.compare(skiaImg, ref.image).score }
+                val refInk = ImageDiff.nonBackgroundPixels(ref.image)
                 Result(
-                    name, i, rendered = true, nonBlank = nonBlank,
+                    name, i, rendered = true,
+                    // Blank: next to no ink, or under a tenth of what the reference paints (#43).
+                    nonBlank = nonBlank && ink * 10 >= refInk,
                     score = outcome.getOrNull(),
                     oracleFailure = outcome.exceptionOrNull()?.message,
+                    referenceInk = refInk,
                 )
             }
             is MuPdfOracle.RenderResult.Failure ->

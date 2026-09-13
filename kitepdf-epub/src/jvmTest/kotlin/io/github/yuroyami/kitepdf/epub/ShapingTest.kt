@@ -4,6 +4,7 @@ import io.github.yuroyami.kitepdf.core.render.RecordingCanvas
 import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 /**
@@ -39,8 +40,8 @@ class ShapingTest {
 
     @Test
     fun arabic_word_is_shaped_through_epub() {
-        val otf = naskh() ?: return
-        val face = FontRegistry.face("ar", bold = false, italic = false, otf) ?: return
+        val otf = naskh().orSkip("NotoNaskhArabic-Regular.otf")
+        val face = assertNotNull(FontRegistry.face("ar", bold = false, italic = false, otf), "NotoNaskhArabic parses")
         assertTrue(face.hasArabicJoining, "NotoNaskhArabic exposes GSUB joining features")
 
         val isolHah = face.gidFor(0x062D)
@@ -63,8 +64,8 @@ class ShapingTest {
 
     @Test
     fun gpos_mark_to_base_offset_is_parsed() {
-        val otf = naskh() ?: return
-        val face = FontRegistry.face("ar", bold = false, italic = false, otf) ?: return
+        val otf = naskh().orSkip("NotoNaskhArabic-Regular.otf")
+        val face = assertNotNull(FontRegistry.face("ar", bold = false, italic = false, otf), "NotoNaskhArabic parses")
         // Some Arabic letter + harakat pair must have a GPOS mark-to-base anchor.
         var found = false
         val marks = 0x064B..0x0652 // fathatan..sukun
@@ -81,7 +82,7 @@ class ShapingTest {
 
     @Test
     fun arabic_marks_are_positioned_through_epub() {
-        val otf = naskh() ?: return
+        val otf = naskh().orSkip("NotoNaskhArabic-Regular.otf")
         // Letters carrying fatha (U+064E) marks; at least one mark must be GPOS-offset.
         val text = "بَحَرَ"
         val css = "@font-face{font-family:'AR';src:url(f.otf)}p{font-family:'AR'}"

@@ -9,6 +9,7 @@ import java.awt.image.BufferedImage
 import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
 /**
  * EPUB render sweep: the robustness gate for the reflow engine. Renders a set of
@@ -104,12 +105,70 @@ class EpubDifferentialTest {
         println("[epub-sweep] ${corpus.size} books, $pages pages, $failures failures, $blanks blanks, oracle=${MuPdfOracle.available}, worstMAE=%.3f".format(worstMae))
         println("[epub-sweep] pages per book: " + pagesPerBook.entries.joinToString(", ") { "${it.key}=${it.value}" })
 
+        // Page counts are the gate (#45): a book whose count moved fails until the
+        // baseline moves with it, in the commit that explains why.
+        val baselineFile = pageBaselineFile()
+        val baseline = readBaseline(baselineFile)
+        val current = LinkedHashMap<String, Pair<String, Int>>() // hash -> (name, pages)
+        for ((name, bytes) in corpus) pagesPerBook[name]?.let { current[sha1(bytes)] = name to it }
+        if (System.getProperty("kitepdf.epub.updatePages") == "true") {
+            writeBaseline(baselineFile, baseline, current)
+            println("[epub-sweep] wrote ${current.size} page counts to ${baselineFile.path}")
+        } else {
+            val unknown = current.filterKeys { it !in baseline }.values.map { it.first }
+            if (unknown.isNotEmpty()) println("[epub-sweep] not in the page-count baseline yet: ${unknown.joinToString()}")
+            val moved = current.filter { (hash, now) -> baseline[hash]?.let { it.first != now.second } == true }
+            assertTrue(
+                moved.isEmpty(),
+                "EPUB page counts moved:\n" +
+                    moved.entries.joinToString("\n") { (hash, now) -> "  ${now.first}: ${baseline[hash]?.first} -> ${now.second}" } +
+                    "\nIf the change is intended, rerun with -Dkitepdf.epub.updatePages=true and explain it in the commit.",
+            )
+        }
+
         // Every page of every book renders without throwing.
         assertEquals(0, failures, "EPUB render failures:\n" + lines.filter { "THREW" in it }.joinToString("\n"))
         // Synthetic content pages are never blank (real corpus books may
         // legitimately have blank pages, reported informationally above).
         assertEquals(0, syntheticBlanks, "blank SYNTHETIC EPUB pages:\n" + lines.filter { "SYNTHETIC" in it }.joinToString("\n"))
     }
+
+    /** The tracked page-count baseline, found from the repo root so any working directory works. */
+    private fun pageBaselineFile(): File {
+        var d: File? = File(System.getProperty("user.dir")).absoluteFile
+        while (d != null && !File(d, "settings.gradle.kts").exists()) d = d.parentFile
+        return File(d ?: File("."), "kitepdf-native-renderer/src/jvmTest/resources/epub-sweep-pages.txt")
+    }
+
+    /** `hash pages name` per line, keyed by hash; `#` starts a comment. */
+    private fun readBaseline(f: File): Map<String, Pair<Int, String>> {
+        if (!f.exists()) return emptyMap()
+        val out = LinkedHashMap<String, Pair<Int, String>>()
+        for (line in f.readLines()) {
+            if (line.isBlank() || line.startsWith("#")) continue
+            val parts = line.trim().split(Regex("\\s+"), limit = 3)
+            val pages = parts.getOrNull(1)?.toIntOrNull() ?: continue
+            out[parts[0]] = pages to parts.getOrElse(2) { "" }
+        }
+        return out
+    }
+
+    /** Rewrites the books this machine has and keeps the ones it does not. */
+    private fun writeBaseline(f: File, old: Map<String, Pair<Int, String>>, current: Map<String, Pair<String, Int>>) {
+        val merged = LinkedHashMap(old)
+        for ((hash, now) in current) merged[hash] = now.second to now.first
+        f.parentFile.mkdirs()
+        f.writeText(
+            buildString {
+                append("# EPUB sweep page counts, checked by EpubDifferentialTest.\n")
+                append("# Book hash (SHA-1 prefix), page count, book name. Rewrite with -Dkitepdf.epub.updatePages=true.\n")
+                for ((hash, v) in merged.entries.sortedBy { it.value.second }) append("$hash ${v.first} ${v.second}\n")
+            },
+        )
+    }
+
+    private fun sha1(bytes: ByteArray): String =
+        java.security.MessageDigest.getInstance("SHA-1").digest(bytes).joinToString("") { "%02x".format(it) }.take(12)
 
     private fun oracleRef(epubBytes: ByteArray, dpi: Int): BufferedImage? {
         val tmp = File.createTempFile("kite-epub-", ".epub")
