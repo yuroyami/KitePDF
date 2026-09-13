@@ -78,7 +78,7 @@ jobs:
 
       - name: Upload test reports
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: test-reports-jvm
           path: '**/build/reports/tests/**'
@@ -89,7 +89,7 @@ jobs:
       # and fuzz reproducers.
       - name: Upload diff images and reproducers
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: failure-artifacts-jvm
           path: |
@@ -155,7 +155,7 @@ jobs:
 
       - name: Upload test reports
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: test-reports-apple
           path: '**/build/reports/tests/**'
@@ -196,7 +196,7 @@ jobs:
 
       - name: Upload test reports
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: test-reports-js
           path: '**/build/reports/tests/**'
