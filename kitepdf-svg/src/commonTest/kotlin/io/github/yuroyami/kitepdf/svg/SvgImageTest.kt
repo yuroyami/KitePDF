@@ -173,6 +173,18 @@ class SvgImageTest {
         assertEquals(null, strokes("""<svg width="9" height="9"><line x2="5" stroke="black" stroke-dasharray="0 0"/></svg>""").single().dashArray)
     }
 
+    @Test
+    fun a_nested_svg_opens_its_own_viewport() {
+        val c = calls(
+            """<svg width="200" height="200"><svg x="50" y="60" width="100" height="100" viewBox="0 0 10 10"><rect width="10" height="10"/></svg></svg>""",
+        )
+        val f = c.filterIsInstance<RecordingCanvas.Call.Fill>().single()
+        assertEquals(10.0, f.ctm.a, 1e-9, "the inner viewBox maps 10 units onto 100")
+        assertEquals(50.0, f.ctm.e, 1e-9)
+        assertEquals(60.0, f.ctm.f, 1e-9)
+        assertTrue(c.any { it is RecordingCanvas.Call.PushClip }, "the inner viewport clips what it holds")
+    }
+
     private fun bounds(path: KitePath): DoubleArray {
         val xs = ArrayList<Double>()
         val ys = ArrayList<Double>()

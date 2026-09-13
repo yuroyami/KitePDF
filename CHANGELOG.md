@@ -17,6 +17,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   whatever its CSS says. Each chapter uses the patterns of its own language,
   and the book itself is not changed.
 - `GraphicsState.softMaskCtm` keeps the matrix a soft mask was set under.
+- `PdfPage.renderTo(canvas, deviceCtm, annotations)` draws only the
+  annotations a filter accepts. `{ false }` renders the page without its
+  markup, for printing, a clean thumbnail, or an editor that redraws its
+  annotation layer on its own.
 
 ### Changed
 
@@ -171,6 +175,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   soft edges came out blocky. A soft mask stored as JPEG or JPEG 2000, or at
   2, 4 or 16 bits, was dropped and the image painted opaque, and a soft
   mask's `/Decode` was ignored.
+- A square, circle, line, polygon or ink annotation without an appearance
+  stream drew a 1-point solid line whatever its border said. It now strokes
+  at its declared width and dash, and a square or circle stays inside its
+  rectangle.
+- A nested SVG `<svg>` element ignored its position, size and viewBox.
 
 ## [0.9.0] - 2026-09-08
 

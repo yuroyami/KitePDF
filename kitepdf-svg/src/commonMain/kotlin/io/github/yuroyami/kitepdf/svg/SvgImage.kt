@@ -194,7 +194,12 @@ public class SvgImage private constructor(
         depth: Int,
     ) {
         when (el.tag.lowercase()) {
-            "svg", "g", "a" ->
+            "svg" -> if (depth == 0) {
+                for (c in el.children) if (c is KiteXmlNode.Element) walk(c, ctm, paint, canvas, load, depth + 1)
+            } else {
+                drawNestedSvg(el, ctm, paint, canvas, load, depth)
+            }
+            "g", "a" ->
                 for (c in el.children) if (c is KiteXmlNode.Element) walk(c, ctm, paint, canvas, load, depth + 1)
             "switch" -> firstPassingChild(el)?.let { walk(it, ctm, paint, canvas, load, depth + 1) }
             "use" -> drawUse(el, ctm, paint, canvas, load, depth)
@@ -226,6 +231,39 @@ public class SvgImage private constructor(
     private fun isHidden(el: KiteXmlNode.Element): Boolean =
         styleOrAttr(el, "display")?.trim() == "none" ||
             styleOrAttr(el, "visibility")?.trim().let { it == "hidden" || it == "collapse" }
+
+    /**
+     * A nested `<svg>` opens a new viewport (SVG 1.1, 7.9, #176): the box at its
+     * x and y, width by height, clips what it holds, and its own viewBox maps
+     * into that box. A zero width or height draws nothing. A percentage
+     * resolves against the outer image.
+     */
+    private fun drawNestedSvg(
+        el: KiteXmlNode.Element,
+        ctm: KiteMatrix,
+        paint: Paint,
+        canvas: KiteCanvas,
+        load: ((String) -> ByteArray?)?,
+        depth: Int,
+    ) {
+        fun size(name: String, whole: Double): Double {
+            val raw = el.attrs[name]?.trim() ?: return whole
+            return if (raw.endsWith('%')) (raw.dropLast(1).toDoubleOrNull() ?: 100.0) / 100.0 * whole else parseLen(raw, paint.fontSize)
+        }
+        val w = size("width", width)
+        val h = size("height", height)
+        if (w <= 0.0 || h <= 0.0) return
+        val origin = compose(ctm, KiteMatrix.translation(num(el, "x", paint.fontSize), num(el, "y", paint.fontSize)))
+        val vb = (el.attrs["viewBox"] ?: el.attrs["viewbox"])?.let { numbers(it) }?.takeIf { it.size >= 4 && it[2] > 0 && it[3] > 0 }
+        val inner = if (vb == null) origin
+        else compose(origin, viewBoxFit(vb, w, h, el.attrs["preserveAspectRatio"] ?: el.attrs["preserveaspectratio"]).matrix)
+        canvas.pushClip(KitePath.Builder().apply { rectangle(0.0, 0.0, w, h) }.build(), origin, evenOdd = false)
+        try {
+            for (c in el.children) if (c is KiteXmlNode.Element) walk(c, inner, paint, canvas, load, depth + 1)
+        } finally {
+            canvas.popClip()
+        }
+    }
 
     /**
      * `<use href="#id">`: draw the referenced element again, offset by x/y.

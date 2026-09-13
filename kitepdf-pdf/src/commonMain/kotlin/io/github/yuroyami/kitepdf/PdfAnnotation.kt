@@ -61,6 +61,10 @@ public data class PdfAnnotation(
      * for links styled as coloured text. Ignoring it drew a box around them anyway.
      */
     val borderWidth: Double? = null,
+    /** Border style from `/BS /S`: `S` solid, `D` dashed, `B` beveled, `I` inset, `U` underline. Null when undeclared. */
+    val borderStyle: String? = null,
+    /** Dash array from `/BS /D`, or the one `/Border` may carry as its fourth element. */
+    val borderDash: List<Double>? = null,
     /** The raw dict, for callers that need fields we didn't extract. */
     val raw: PdfDictionary,
 ) {
@@ -117,7 +121,8 @@ public data class PdfAnnotation(
             return PdfAnnotation(
                 subtype, rect, contents, color, uri, action, rawDest, appearanceStream,
                 flags, quadPoints, inkLists, vertices, interiorColor,
-                borderWidth = parseBorderWidth(dict, refs), raw = dict,
+                borderWidth = parseBorderWidth(dict, refs), borderStyle = parseBorderStyle(dict, refs),
+                borderDash = parseBorderDash(dict, refs), raw = dict,
             )
         }
 
@@ -142,6 +147,17 @@ public data class PdfAnnotation(
                 is PdfInt -> w.value.toDouble()
                 else -> null
             }
+        }
+
+        /** `/BS /S` (ISO 32000-1, 12.5.4, Table 166). */
+        private fun parseBorderStyle(dict: PdfDictionary, refs: IndirectResolver): String? =
+            (dict.getDict("BS", refs)?.get("S")?.resolve(refs) as? PdfName)?.value
+
+        /** `/BS /D` first, then the dash array `/Border` may carry as its fourth element (ISO 32000-1, 12.5.4). */
+        private fun parseBorderDash(dict: PdfDictionary, refs: IndirectResolver): List<Double>? {
+            val bsDash = dict.getDict("BS", refs)?.get("D")?.resolve(refs) as? PdfArray
+            val legacy = dict.getArray("Border", refs)?.getOrNull(3)?.resolve(refs) as? PdfArray
+            return numArray(bsDash ?: legacy)?.takeIf { d -> d.isNotEmpty() && d.all { it >= 0.0 } && d.any { it > 0.0 } }
         }
 
         /**

@@ -401,3 +401,14 @@ suspend fun renderThumbnailsAsync(pdfPath: String, outputDir: String) {
 - [Reading & extracting text](reading.md) from PDFs
 - [Building PDFs](writing.md) from scratch
 - [Viewing with Compose](compose-viewer.md)
+
+## Rendering without annotations
+
+`PdfPage.renderTo` has an overload that takes a filter, so a page can render with some of its annotations or none of them:
+
+```kotlin
+page.renderTo(canvas, deviceCtm) { false }                                          // page content only
+page.renderTo(canvas, deviceCtm) { it.subtype != PdfAnnotation.Subtype.Highlight }  // hide highlights
+```
+
+Use it for printing or exporting without markup, for a clean thumbnail, or in an editor that renders the page once and redraws only its annotation layer while a shape moves.
