@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Built with Kotlin 2.4.20. The viewer now depends on Compose Multiplatform
+  1.12.0, the stable release, instead of 1.12.0-beta02, and the Skia renderer
+  on Skiko 0.150.1, the version that Compose release is built on. An app that
+  uses both gets one Skiko, not two.
+
 ### Fixed
 
 - A book whose chapters each declare the same `@font-face` in their own

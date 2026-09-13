@@ -1,21 +1,21 @@
 [versions] #######################################################################################
 # Toolchain
-kotlin = "2.4.10"
-agp = "9.2.1"
-vanniktechPublish = "0.36.0"
+kotlin = "2.4.20"
+agp = "9.4.0"
+vanniktechPublish = "0.37.0"
 dokka = "2.2.0"
 
 # Compose Multiplatform, used only by :sample. :kitepdf stays pure-Kotlin-stdlib.
-composeMultiplatform = "1.12.0-beta02"
+composeMultiplatform = "1.12.0"
 composeMaterial3 = "1.12.0-alpha03"
 
 # Android platform bridge (sample only)
-activityCompose = "1.13.0"
+activityCompose = "1.14.0-alpha02"
 
 # Skiko: JetBrains' Skia bindings. Used by :kitepdf-skia. Compose Multiplatform
 # rides on Skiko under the hood on JVM Desktop + iOS, so this gives us the same
 # renderer Compose uses, without the Compose runtime sitting on top.
-skiko = "0.148.2"
+skiko = "0.150.1"
 
 # KiteImage. The Kite lineage's shared image engine, and :kitepdf-core's one
 # runtime dependency beyond kotlin-stdlib.
