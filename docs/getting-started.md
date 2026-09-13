@@ -4,14 +4,14 @@ Learn how to open a PDF, display it in the UI, and extract its content with Kite
 
 ## Step 1: Add the dependency
 
-KitePDF is published to Maven Central as ten artifacts: the `kitepdf` umbrella, the `kitepdf-pdf`, `kitepdf-epub`, `kitepdf-cbz` and `kitepdf-svg` handlers, the shared `kitepdf-core` base (it arrives with the handlers, never add it directly), the optional `kitepdf-net` URL loader, and three renderers. Start with the headless engine, and add one renderer only when you need to draw pages. From the release after `0.9.0`, an eleventh artifact, `kitepdf-javascript`, runs the JavaScript that PDFs carry; see [JavaScript](javascript.md).
+KitePDF is published to Maven Central as eleven artifacts: the `kitepdf` umbrella, the `kitepdf-pdf`, `kitepdf-epub`, `kitepdf-cbz` and `kitepdf-svg` handlers, the shared `kitepdf-core` base (it arrives with the handlers, never add it directly), the optional `kitepdf-net` URL loader, the optional `kitepdf-javascript` script runner (see [JavaScript](javascript.md)), and three renderers. Start with the headless engine, and add one renderer only when you need to draw pages.
 
 === "Kotlin (KMP)"
 
     ```gradle
     dependencies {
         commonMain.dependencies {
-            implementation("io.github.yuroyami:kitepdf:0.9.0")
+            implementation("io.github.yuroyami:kitepdf:0.10.0")
         }
     }
     ```
@@ -20,7 +20,7 @@ KitePDF is published to Maven Central as ten artifacts: the `kitepdf` umbrella, 
 
     ```gradle
     dependencies {
-        implementation("io.github.yuroyami:kitepdf:0.9.0")
+        implementation("io.github.yuroyami:kitepdf:0.10.0")
     }
     ```
 
@@ -64,7 +64,7 @@ val doc = PdfDocument.open(bytes, "secret".encodeToByteArray())
 ```
 
 !!! tip "EPUB books"
-    The same dependency graph reads EPUBs: add `io.github.yuroyami:kitepdf-epub:0.9.0` and call `EpubDocument.open(bytes)`. See the [EPUB guide](epub.md).
+    The same dependency graph reads EPUBs: add `io.github.yuroyami:kitepdf-epub:0.10.0` and call `EpubDocument.open(bytes)`. See the [EPUB guide](epub.md).
 
 ## Step 3: Show it on screen in Compose
 
@@ -75,7 +75,7 @@ Add the dependency:
 ```gradle
 dependencies {
     commonMain.dependencies {
-        implementation("io.github.yuroyami:kitepdf-compose-viewer:0.9.0")
+        implementation("io.github.yuroyami:kitepdf-compose-viewer:0.10.0")
     }
 }
 ```
@@ -179,7 +179,7 @@ Add the dependency:
 
 ```gradle
 dependencies {
-    implementation("io.github.yuroyami:kitepdf-native-renderer:0.9.0")
+    implementation("io.github.yuroyami:kitepdf-native-renderer:0.10.0")
 }
 ```
 

@@ -9,7 +9,7 @@ render PDFs, and read reflowable EPUB 2/3, from `commonMain`.
 
 [![Maven Central](https://img.shields.io/maven-central/v/io.github.yuroyami/kitepdf?label=Maven%20Central)](https://central.sonatype.com/artifact/io.github.yuroyami/kitepdf)
 [![Docs](https://img.shields.io/badge/docs-yuroyami.github.io-1f6feb)](https://yuroyami.github.io/KitePDF/)
-[![Kotlin](https://img.shields.io/badge/Kotlin-2.4.10-7F52FF?logo=kotlin&logoColor=white)](https://kotlinlang.org)
+[![Kotlin](https://img.shields.io/badge/Kotlin-2.4.20-7F52FF?logo=kotlin&logoColor=white)](https://kotlinlang.org)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
 
 **[Documentation](https://yuroyami.github.io/KitePDF/)** · a guide for each task,
@@ -50,7 +50,7 @@ docs use `PdfDocument`: it also carries the password overload, `openOrNull` and
 
 ## Install
 
-Ten artifacts are published, all at `0.9.0`. Add one document artifact. Add one
+Eleven artifacts are published, all at `0.10.0`. Add one document artifact. Add one
 renderer only when you draw pages.
 
 | Artifact | Add it when |
@@ -60,7 +60,7 @@ renderer only when you draw pages.
 | `io.github.yuroyami:kitepdf-epub` | You want EPUB only. |
 | `io.github.yuroyami:kitepdf-cbz` | You want CBZ comic archives only. |
 | `io.github.yuroyami:kitepdf-svg` | You want SVG only: a standalone `.svg` as a one-page document, or the renderer that draws vector art inside another format. |
-| `io.github.yuroyami:kitepdf-javascript` | You want the JavaScript inside PDFs to run: document-level scripts and JavaScript actions, on the KiteJS engine. New, and ships from the release after `0.9.0`. |
+| `io.github.yuroyami:kitepdf-javascript` | You want the JavaScript inside PDFs to run: document-level scripts and JavaScript actions, on the KiteJS engine. New in `0.10.0`. |
 | `io.github.yuroyami:kitepdf-core` | Never add it yourself. It holds geometry, `KiteCanvas`, the font engine, the stream filters and the hyphenation data, and it arrives with any of the handler artifacts above. |
 | `io.github.yuroyami:kitepdf-compose-viewer` | You draw with Compose Multiplatform. It gives you `KiteDocView` (one composable for PDF and EPUB alike) and the viewer state. |
 | `io.github.yuroyami:kitepdf-native-renderer` | You want page-to-image through the platform's own canvas: AWT, `android.graphics`, CoreGraphics, Canvas2D. |
@@ -71,7 +71,7 @@ renderer only when you draw pages.
 kotlin {
     sourceSets {
         commonMain.dependencies {
-            implementation("io.github.yuroyami:kitepdf:0.9.0")
+            implementation("io.github.yuroyami:kitepdf:0.10.0")
         }
     }
 }
@@ -94,8 +94,8 @@ build fails with unresolved references to `PdfDocument` and `PdfPage`. Declare
 both lines:
 
 ```kotlin
-implementation("io.github.yuroyami:kitepdf:0.9.0")                   // or kitepdf-pdf
-implementation("io.github.yuroyami:kitepdf-skia-renderer:0.9.0")     // exactly one renderer
+implementation("io.github.yuroyami:kitepdf:0.10.0")                   // or kitepdf-pdf
+implementation("io.github.yuroyami:kitepdf-skia-renderer:0.10.0")     // exactly one renderer
 ```
 
 The three renderers are alternative backends for the same `KiteCanvas` interface.

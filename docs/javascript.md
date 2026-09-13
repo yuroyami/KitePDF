@@ -4,8 +4,7 @@ PDF files can carry JavaScript: document-level scripts that run when the file op
 
 ```kotlin
 commonMain.dependencies {
-    // Ships from the release after 0.9.0, at the same version as the other artifacts.
-    implementation("io.github.yuroyami:kitepdf-javascript:<version>")
+    implementation("io.github.yuroyami:kitepdf-javascript:0.10.0")
 }
 ```
 
