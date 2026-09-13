@@ -58,7 +58,14 @@ public sealed class KiteFunction {
             val hi = domain.getOrElse(2 * i + 1) { 1.0 }
             clamped[i] = input[i].coerceIn(minOf(lo, hi), maxOf(lo, hi))
         }
-        val raw = evaluateInternal(clamped)
+        // A corrupt function degrades to zeros instead of aborting the page
+        // (#128), and a non-finite output never reaches a colour space (#151).
+        val raw = try {
+            evaluateInternal(clamped)
+        } catch (_: RuntimeException) {
+            DoubleArray(outputCount)
+        }
+        for (i in raw.indices) if (!raw[i].isFinite()) raw[i] = 0.0
         val r = range ?: return raw
         for (i in raw.indices) {
             val lo = r.getOrElse(2 * i) { Double.NEGATIVE_INFINITY }
@@ -166,7 +173,8 @@ public sealed class KiteFunction {
         override fun evaluateInternal(input: DoubleArray): DoubleArray {
             val x = input.getOrElse(0) { 0.0 }
             val xn = x.pow(n)
-            return DoubleArray(c0.size) { i -> c0[i] + xn * (c1[i] - c0[i]) }
+            // A /C1 shorter than /C0 takes the spec default of 1 for the rest.
+            return DoubleArray(c0.size) { i -> c0[i] + xn * (c1.getOrElse(i) { 1.0 } - c0[i]) }
         }
     }
 
@@ -181,7 +189,9 @@ public sealed class KiteFunction {
         public val bounds: DoubleArray,
         public val encode: DoubleArray,
     ) : KiteFunction() {
-        override val outputCount: Int get() = functions.firstOrNull()?.outputCount ?: 0
+        // ISO 32000-1, 7.10.4: /Range is optional for a stitching function, so
+        // when present it decides the output count, not the first sub-function.
+        override val outputCount: Int get() = range?.let { it.size / 2 } ?: functions.firstOrNull()?.outputCount ?: 0
         override fun evaluateInternal(input: DoubleArray): DoubleArray {
             val x = input.getOrElse(0) { 0.0 }
             val lo = domain.getOrElse(0) { 0.0 }
@@ -194,7 +204,9 @@ public sealed class KiteFunction {
             val eLo = encode.getOrElse(2 * idx) { 0.0 }
             val eHi = encode.getOrElse(2 * idx + 1) { 1.0 }
             val remapped = if (subHi == subLo) eLo else eLo + (x - subLo) * (eHi - eLo) / (subHi - subLo)
-            return sub.evaluate(doubleArrayOf(remapped))
+            val out = sub.evaluate(doubleArrayOf(remapped))
+            val n = outputCount
+            return if (out.size == n) out else DoubleArray(n) { out.getOrElse(it) { 0.0 } }
         }
     }
 
@@ -216,7 +228,7 @@ public sealed class KiteFunction {
             val n = outputCount
             val out = DoubleArray(n)
             // The last n numbers on the stack are the outputs (out[0] deepest).
-            val nums = stack.filterIsInstance<Double>()
+            val nums = stack.mapNotNull { PostScriptCalc.number(it) }
             val start = (nums.size - n).coerceAtLeast(0)
             for (j in 0 until n) out[j] = nums.getOrElse(start + j) { 0.0 }
             return out
@@ -393,11 +405,23 @@ internal object PostScriptCalc {
         }
     }
 
-    private fun ArrayList<Any>.popNum(): Double = (removeAt(size - 1) as? Double) ?: 0.0
+    // Every pop tolerates an empty stack: ISO 32000-1, 7.10.5 leaves an underflow
+    // undefined, and one corrupt program must not abort the page (#128).
+    private fun ArrayList<Any>.popAny(): Any = if (isEmpty()) 0.0 else removeAt(size - 1)
+    private fun ArrayList<Any>.popNum(): Double = number(popAny()) ?: 0.0
+    private fun ArrayList<Any>.popBool(): Boolean = when (val v = popAny()) {
+        is Boolean -> v
+        is Double -> v != 0.0
+        else -> false
+    }
     @Suppress("UNCHECKED_CAST")
-    private fun ArrayList<Any>.popBlock(): List<Any> = (removeAt(size - 1) as? List<Any>) ?: emptyList()
-    private fun b(v: Boolean) = if (v) 1.0 else 0.0
-    private fun bool(d: Double) = d != 0.0
+    private fun ArrayList<Any>.popBlock(): List<Any> = (popAny() as? List<Any>) ?: emptyList()
+    /** A stack value as a number: a boolean counts as 1 or 0, a procedure as nothing. */
+    fun number(v: Any): Double? = when (v) {
+        is Double -> v
+        is Boolean -> if (v) 1.0 else 0.0
+        else -> null
+    }
 
     private fun applyOperator(op: String, s: ArrayList<Any>) {
         when (op) {
@@ -421,27 +445,39 @@ internal object PostScriptCalc {
             "floor" -> s.add(floor(s.popNum()))
             "ceiling" -> s.add(ceil(s.popNum()))
             "round" -> s.add(s.popNum().roundToInt().toDouble())
-            "dup" -> { val v = s.last(); s.add(v) }
+            "dup" -> if (s.isNotEmpty()) s.add(s.last())
             "pop" -> if (s.isNotEmpty()) s.removeAt(s.size - 1)
-            "exch" -> { val a = s.removeAt(s.size - 1); val b = s.removeAt(s.size - 1); s.add(a); s.add(b) }
+            "exch" -> { val a = s.popAny(); val b = s.popAny(); s.add(a); s.add(b) }
             "copy" -> { val n = s.popNum().toInt(); if (n > 0 && n <= s.size) { val base = s.size - n; for (k in 0 until n) s.add(s[base + k]) } }
             "index" -> { val n = s.popNum().toInt(); if (n >= 0 && n < s.size) s.add(s[s.size - 1 - n]) else s.add(0.0) }
             "roll" -> roll(s)
-            "eq" -> { val bb = s.popNum(); val aa = s.popNum(); s.add(b(aa == bb)) }
-            "ne" -> { val bb = s.popNum(); val aa = s.popNum(); s.add(b(aa != bb)) }
-            "gt" -> { val bb = s.popNum(); val aa = s.popNum(); s.add(b(aa > bb)) }
-            "ge" -> { val bb = s.popNum(); val aa = s.popNum(); s.add(b(aa >= bb)) }
-            "lt" -> { val bb = s.popNum(); val aa = s.popNum(); s.add(b(aa < bb)) }
-            "le" -> { val bb = s.popNum(); val aa = s.popNum(); s.add(b(aa <= bb)) }
-            "and" -> { val bb = s.popNum().toLong(); val aa = s.popNum().toLong(); s.add((aa and bb).toDouble()) }
-            "or" -> { val bb = s.popNum().toLong(); val aa = s.popNum().toLong(); s.add((aa or bb).toDouble()) }
-            "xor" -> { val bb = s.popNum().toLong(); val aa = s.popNum().toLong(); s.add((aa xor bb).toDouble()) }
-            "not" -> { val a = s.popNum(); s.add(if (a == 0.0) 1.0 else 0.0) }
+            "eq" -> { val bb = s.popNum(); val aa = s.popNum(); s.add(aa == bb) }
+            "ne" -> { val bb = s.popNum(); val aa = s.popNum(); s.add(aa != bb) }
+            "gt" -> { val bb = s.popNum(); val aa = s.popNum(); s.add(aa > bb) }
+            "ge" -> { val bb = s.popNum(); val aa = s.popNum(); s.add(aa >= bb) }
+            "lt" -> { val bb = s.popNum(); val aa = s.popNum(); s.add(aa < bb) }
+            "le" -> { val bb = s.popNum(); val aa = s.popNum(); s.add(aa <= bb) }
+            // ISO 32000-1, Table 42: logical on booleans, bitwise on integers.
+            "and", "or", "xor" -> {
+                val bb = s.popAny()
+                val aa = s.popAny()
+                if (aa is Boolean && bb is Boolean) {
+                    s.add(when (op) { "and" -> aa && bb; "or" -> aa || bb; else -> aa != bb })
+                } else {
+                    val x = (number(aa) ?: 0.0).toLong()
+                    val y = (number(bb) ?: 0.0).toLong()
+                    s.add(when (op) { "and" -> x and y; "or" -> x or y; else -> x xor y }.toDouble())
+                }
+            }
+            "not" -> when (val a = s.popAny()) {
+                is Boolean -> s.add(!a)
+                else -> s.add((number(a) ?: 0.0).toLong().inv().toDouble())
+            }
             "bitshift" -> { val sh = s.popNum().toInt(); val v = s.popNum().toLong(); s.add((if (sh >= 0) v shl sh else v shr -sh).toDouble()) }
-            "true" -> s.add(1.0)
-            "false" -> s.add(0.0)
-            "if" -> { val proc = s.popBlock(); val cond = s.popNum(); if (bool(cond)) exec(proc, s) }
-            "ifelse" -> { val p2 = s.popBlock(); val p1 = s.popBlock(); val cond = s.popNum(); exec(if (bool(cond)) p1 else p2, s) }
+            "true" -> s.add(true)
+            "false" -> s.add(false)
+            "if" -> { val proc = s.popBlock(); if (s.popBool()) exec(proc, s) }
+            "ifelse" -> { val p2 = s.popBlock(); val p1 = s.popBlock(); exec(if (s.popBool()) p1 else p2, s) }
             else -> { /* unknown operator: ignore */ }
         }
     }

@@ -8,6 +8,7 @@ import io.github.yuroyami.kitepdf.core.parser.PdfInt
 import io.github.yuroyami.kitepdf.core.parser.PdfName
 import io.github.yuroyami.kitepdf.core.parser.PdfNull
 import io.github.yuroyami.kitepdf.core.parser.PdfObject
+import io.github.yuroyami.kitepdf.core.parser.PdfReal
 import io.github.yuroyami.kitepdf.core.parser.PdfStream
 import io.github.yuroyami.kitepdf.core.render.KiteImageData
 import io.github.yuroyami.kitepdf.core.render.toRgbaBytes
@@ -592,6 +593,26 @@ class KiteImageDataTest {
         ),
         rawBytes = byteArrayOf(0x00, 0x40),
     )
+
+    @Test
+    fun a_lab_image_with_no_decode_uses_the_lab_ranges() {
+        // ISO 32000-1, Table 90: the default /Decode for Lab is [0 100 amin amax bmin bmax].
+        val lab = PdfArray(listOf(PdfName("Lab"), PdfDictionary(linkedMapOf<String, PdfObject>(
+            "WhitePoint" to PdfArray(listOf(PdfReal(0.9505), PdfInt(1), PdfReal(1.089))),
+            "Range" to PdfArray(listOf(PdfInt(-100), PdfInt(100), PdfInt(-100), PdfInt(100))),
+        ))))
+        val stream = PdfStream(
+            dict = PdfDictionary(linkedMapOf<String, PdfObject>(
+                "Type" to PdfName("XObject"), "Subtype" to PdfName("Image"),
+                "Width" to PdfInt(2), "Height" to PdfInt(2),
+                "BitsPerComponent" to PdfInt(8), "ColorSpace" to lab, "Length" to PdfInt(12),
+            )),
+            rawBytes = ByteArray(12) { 127 },
+        )
+        val rgba = KiteImageData.from(stream).toRgbaBytes()!!
+        val r = rgba[0].toInt() and 0xFF
+        kotlin.test.assertTrue(r in 100..135, "mid lightness is mid grey, not near black: $r")
+    }
 
     /** A stencil-mask image XObject: 1 bpc, `/ImageMask true`, rows byte-aligned. */
     private fun stencil(
