@@ -113,8 +113,9 @@ internal class BoxBuilder(
                             inl.addImage(resolveHref(src), style, cs.widthPt ?: aw?.times(0.75), cs.heightPt ?: ah?.times(0.75), child.attrs["alt"])
                         } else {
                             flush()
+                            // The attributes are CSS pixels, 0.75pt each, in block mode too (#112).
                             children.add(
-                                ImageBox(cs, resolveHref(src), attrWidth = aw, attrHeight = ah).also {
+                                ImageBox(cs, resolveHref(src), attrWidth = aw?.times(0.75), attrHeight = ah?.times(0.75)).also {
                                     it.semantics = imageSemantics(child, sem)
                                 },
                             )
@@ -368,13 +369,13 @@ internal class BoxBuilder(
                         Display.NONE -> {}
                         Display.INLINE, Display.INLINE_BLOCK ->
                             processInline(child, cs, childAncestors, inl, anchorSink, hoist, parentSem)
-                        Display.TABLE -> hoist(buildTable(child, cs, childAncestors, parentSem))
+                        Display.TABLE -> hoist(linked(buildTable(child, cs, childAncestors, parentSem), inl))
                         // CSS 2.1, 9.2.1.1: a block inside an inline is hoisted
                         // to a sibling box; the inline runs resume after it. A
                         // list item hoisted from inline flow gets no marker, a
                         // deliberate simplification (a bare <li> inside a
                         // <span> is not a list).
-                        else -> hoist(listOf(buildBlock(child, cs, childAncestors, null, BLACK, parentSem = parentSem)))
+                        else -> hoist(linked(listOf(buildBlock(child, cs, childAncestors, null, BLACK, parentSem = parentSem)), inl))
                     }
                 }
             }
@@ -382,6 +383,12 @@ internal class BoxBuilder(
         } finally {
             if (link != null) inl.endLink()
         }
+    }
+
+    /** Blocks lifted out of an inline `<a href>` stay part of that link (#214). */
+    private fun linked(boxes: List<LayoutBox>, inl: Inline): List<LayoutBox> {
+        inl.activeLink?.let { href -> for (b in boxes) if (b.linkHref == null) b.linkHref = href }
+        return boxes
     }
 
     /**
@@ -468,6 +475,9 @@ internal class BoxBuilder(
         fun beginLink(href: String) { linkStack.addLast(linkHref); linkHref = href }
 
         fun endLink() { linkHref = linkStack.removeLastOrNull() }
+
+        /** The `<a href>` target in force, which a block lifted out of the link inherits. */
+        val activeLink: String? get() = linkHref
 
         fun hasContent() = runs.any { it.text.isNotEmpty() || it.hardBreak }
 

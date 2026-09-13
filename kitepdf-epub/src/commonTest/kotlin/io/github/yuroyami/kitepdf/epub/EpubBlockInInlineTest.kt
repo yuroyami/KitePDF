@@ -100,7 +100,7 @@ class EpubBlockInInlineTest {
             ),
         )
         val links = doc.pages[0].links
-        assertEquals(2, links.size, "pre and post each carry a link rect around the hoisted block")
+        assertEquals(3, links.size, "pre, the hoisted block and post each carry a link rect (#214)")
         assertTrue(links.all { it.href == "OEBPS/chapter2.xhtml#z" })
     }
 

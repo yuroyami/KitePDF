@@ -114,7 +114,8 @@ public class EpubDocument internal constructor(
                 append("*{font-family:$fam}")
             }
             settings.textColor?.let { append("*{color:${cssColor(it)}}") }
-            settings.justify?.let { append("*{text-align:${if (it) "justify" else "left"}}") }
+            settings.justify?.let { append("*{text-align:${if (it) "justify" else "start"}}") }
+            settings.hyphenate?.let { append("*{hyphens:${if (it) "auto" else "manual"}}") }
         }
         if (css.isEmpty()) emptyList() else CssParser.parse(css, Origin.READER)
     }
@@ -875,7 +876,7 @@ public enum class ReaderFontFamily { SERIF, SANS_SERIF, MONOSPACE }
  * [EpubDocument.withSettings] (or the `withFontSize`/`withPageSize`/`withMargin`
  * shorthands) to re-flow without re-parsing the book.
  *
- * The typography overrides (font family, colors, justification) are applied
+ * The typography overrides (font family, colors, justification, hyphenation) are applied
  * as a reader-origin cascade layer that outranks author-important CSS: the
  * user's explicit preference beats the publisher's stylesheet. All-default
  * settings change nothing.
@@ -895,7 +896,7 @@ public data class EpubSettings(
     val textColor: RgbColor? = null,
     /** Painted under everything on every page; null = no page background. */
     val backgroundColor: RgbColor? = null,
-    /** true forces justify, false forces left-align; null = as authored. */
+    /** true forces justify, false forces start alignment; null = as authored. */
     val justify: Boolean? = null,
     /** False drops the publisher's CSS (author rules + inline styles): UA + reader layers only. */
     val usePublisherCss: Boolean = true,
@@ -912,6 +913,12 @@ public data class EpubSettings(
      * in use.
      */
     val layoutCacheBytes: Long = 48L * 1024 * 1024,
+    /**
+     * Hyphenation for the whole book, whatever its CSS says: true breaks long
+     * words at line ends, false never does, null follows the book's `hyphens`.
+     * Each chapter uses the patterns of its own language. The book is not changed.
+     */
+    val hyphenate: Boolean? = null,
 ) {
     init {
         require(layoutCacheBytes >= 0L) { "layoutCacheBytes must be >= 0" }
@@ -1284,6 +1291,26 @@ public class EpubPage internal constructor(
                     ),
                 )
                 i = j + 1
+            }
+        }
+        // A block lifted out of an inline <a> is part of that link, so its
+        // whole box is clickable, cut to this page (#214).
+        if (!page.vertical) {
+            val pageBottom = page.startY + page.pageHeight - 2 * page.margin
+            for (box in page.linkBoxes) {
+                val href = box.linkHref ?: continue
+                val top = maxOf(box.y, page.startY)
+                val bottom = minOf(box.bottom, pageBottom)
+                if (bottom <= top || box.borderBoxWidth <= 0.0) continue
+                val left = page.margin + box.x
+                out.add(
+                    EpubLink(
+                        rect = io.github.yuroyami.kitepdf.core.KiteRectangle(
+                            left, displayY(page, top), left + box.borderBoxWidth, displayY(page, bottom),
+                        ),
+                        href = href,
+                    ),
+                )
             }
         }
         return out

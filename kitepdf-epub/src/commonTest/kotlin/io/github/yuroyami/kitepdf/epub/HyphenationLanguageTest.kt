@@ -67,4 +67,17 @@ class HyphenationLanguageTest {
         assertFalse("-" in englishText, "the English chapter must not use German breaks:\n$englishText")
         assertTrue("-" in germanText, "the German chapter must break Krankenhaus:\n$germanText")
     }
+
+    @Test
+    fun the_hyphenate_setting_overrides_the_book_css() {
+        fun text(body: String, hyphenate: Boolean?): String = EpubDocument.open(
+            EpubFixtures.epub(body),
+            EpubSettings(pageWidth = 220.0, pageHeight = 640.0, hyphenate = hyphenate),
+        ).pages[0].textContent().plainText
+        val plain = """<body xml:lang="de"><p>Krankenhaus Krankenhaus Krankenhaus</p></body>"""
+        assertFalse("-" in text(plain, null), "as authored: this book never asks for hyphens")
+        assertTrue("-" in text(plain, true), "the reader turns hyphenation on, with the German patterns")
+        val asks = """<body xml:lang="de"><p style="hyphens:auto">Krankenhaus Krankenhaus Krankenhaus</p></body>"""
+        assertFalse("-" in text(asks, false), "the reader turns it off, even where the book asks for it")
+    }
 }

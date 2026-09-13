@@ -23,6 +23,8 @@ internal class PageRender(
     val vertical: Boolean = false,
     /** Vertical writing whose columns advance LEFT to right (`vertical-lr`). */
     val verticalLr: Boolean = false,
+    /** Blocks inside a link, clickable as a whole, that reach onto this page. */
+    val linkBoxes: List<LayoutBox> = emptyList(),
 )
 
 /**
@@ -48,8 +50,9 @@ internal object Paginator {
         val lines = ArrayList<PositionedLine>()
         val images = ArrayList<ImageBox>()
         val deco = ArrayList<LayoutBox>()
-        collect(root, lines, images, deco)
-        return PageRender(0.0, lines, images, deco, pageWidth, pageHeight, margin = 0.0)
+        val links = ArrayList<LayoutBox>()
+        collect(root, lines, images, deco, links)
+        return PageRender(0.0, lines, images, deco, pageWidth, pageHeight, margin = 0.0, linkBoxes = links)
     }
 
     fun paginate(
@@ -63,7 +66,8 @@ internal object Paginator {
         val lines = ArrayList<PositionedLine>()
         val images = ArrayList<ImageBox>()
         val deco = ArrayList<LayoutBox>()
-        collect(root, lines, images, deco)
+        val links = ArrayList<LayoutBox>()
+        collect(root, lines, images, deco, links)
 
         val units = ArrayList<Unit_>()
         for (l in lines) l.owner?.let { o -> units.add(Unit_(l.yTop, l.yTop + l.height, l, null, o, l.ownerIndex, o.lines.size)) }
@@ -117,6 +121,7 @@ internal object Paginator {
                 pageWidth = pageWidth, pageHeight = pageHeight, margin = margin,
                 vertical = vertical,
                 verticalLr = verticalLr,
+                linkBoxes = links.filter { it.y < end && it.bottom > start },
             )
         }
     }
@@ -145,12 +150,16 @@ internal object Paginator {
         val owner: LayoutBox, val ownerIndex: Int, val ownerCount: Int,
     )
 
-    private fun collect(box: LayoutBox, lines: ArrayList<PositionedLine>, images: ArrayList<ImageBox>, deco: ArrayList<LayoutBox>) {
+    private fun collect(
+        box: LayoutBox, lines: ArrayList<PositionedLine>, images: ArrayList<ImageBox>,
+        deco: ArrayList<LayoutBox>, links: ArrayList<LayoutBox>,
+    ) {
+        if (box.linkHref != null) links.add(box)
         when (box) {
-            is BlockBox -> { if (decorated(box.style)) deco.add(box); for (c in box.children) collect(c, lines, images, deco) }
+            is BlockBox -> { if (decorated(box.style)) deco.add(box); for (c in box.children) collect(c, lines, images, deco, links) }
             is TableBox -> {
                 if (decorated(box.style)) deco.add(box)
-                for (r in box.rows) { if (decorated(r.style)) deco.add(r); for (cell in r.cells) collect(cell, lines, images, deco) }
+                for (r in box.rows) { if (decorated(r.style)) deco.add(r); for (cell in r.cells) collect(cell, lines, images, deco, links) }
             }
             is TableRowBox -> {}
             is TextBlockBox -> lines.addAll(box.lines)

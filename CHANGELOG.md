@@ -13,6 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   annotation flags, both of which the renderer now honours.
 - `ExtGState.dashArray` and `dashPhase` carry a graphics state dictionary's
   `/D`, and `RecordingCanvas.Call.Stroke` records the dash it was given.
+- `EpubSettings.hyphenate` turns hyphenation on or off for the whole book,
+  whatever its CSS says. Each chapter uses the patterns of its own language,
+  and the book itself is not changed.
 
 ### Changed
 
@@ -113,6 +116,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   shapes at all, let the content through unclipped, and a clip path in
   `objectBoundingBox` units clipped to almost nothing.
 - An SVG `transform` written in a `style` attribute was ignored.
+- An EPUB horizontal rule painted nothing, so scene breaks disappeared. It
+  now draws a thin line across the column.
+- A block image sized with the HTML `width` and `height` attributes drew a
+  third too large.
+- A fixed-layout page treated CSS pixels as points, so its content drew at
+  75 percent of its authored size and drifted off the page art. The page size
+  is now in points too: a viewport of 800 by 1200 pixels makes a page of 600
+  by 900 points.
+- An inline image right after a word, with no space between them, was never
+  drawn.
+- A block image was always centred. It now starts at the left edge, or the
+  right edge in right-to-left text, unless both margins are `auto`, and its
+  margins narrow the room it can fill.
+- In a right-to-left list the marker stayed at the left edge, far from its
+  item.
+- An explicit `text-align: left` inside right-to-left text was flipped to
+  the right.
+- A link wrapped around a block had no clickable area over the block.
 
 ## [0.9.0] - 2026-09-08
 

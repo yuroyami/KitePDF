@@ -28,6 +28,9 @@ internal sealed class LayoutBox {
     /** What the source element says this content IS; null when it says nothing. */
     var semantics: BoxSemantics? = null
 
+    /** The target of an inline `<a href>` this block was lifted out of (#214). */
+    var linkHref: String? = null
+
     val bottom: Double get() = y + borderBoxHeight
 }
 

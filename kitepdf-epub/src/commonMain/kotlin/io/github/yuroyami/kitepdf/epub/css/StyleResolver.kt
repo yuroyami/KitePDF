@@ -435,8 +435,10 @@ internal class StyleResolver(
     }
 
     private fun parseAlign(v: String): TextAlign? = when (v.trim().lowercase()) {
-        "left", "start" -> TextAlign.LEFT
-        "right", "end" -> TextAlign.RIGHT
+        "left" -> TextAlign.LEFT
+        "right" -> TextAlign.RIGHT
+        "start" -> TextAlign.START
+        "end" -> TextAlign.END
         "center" -> TextAlign.CENTER
         "justify" -> TextAlign.JUSTIFY
         else -> null

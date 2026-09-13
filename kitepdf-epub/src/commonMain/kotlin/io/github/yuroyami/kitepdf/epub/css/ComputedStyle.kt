@@ -3,7 +3,8 @@ package io.github.yuroyami.kitepdf.epub.css
 import io.github.yuroyami.kitepdf.core.render.RgbColor
 
 internal enum class Display { BLOCK, INLINE, INLINE_BLOCK, LIST_ITEM, NONE, TABLE, TABLE_ROW, TABLE_CELL, TABLE_ROW_GROUP }
-internal enum class TextAlign { LEFT, RIGHT, CENTER, JUSTIFY }
+/** START and END follow the text direction. LEFT and RIGHT never flip (#169). */
+internal enum class TextAlign { START, END, LEFT, RIGHT, CENTER, JUSTIFY }
 internal enum class WhiteSpaceMode { NORMAL, PRE, NOWRAP, PRE_WRAP, PRE_LINE }
 internal enum class GenericFont { SERIF, SANS, MONO }
 internal enum class CssVAlign { BASELINE, SUPER, SUB, TOP, MIDDLE, BOTTOM }
@@ -122,7 +123,7 @@ internal data class ComputedStyle(
             fontSizePt = rootFontSizePt,
             bold = false, italic = false, fontFamily = GenericFont.SERIF,
             color = color, backgroundColor = null,
-            textAlign = TextAlign.LEFT, textIndentPt = 0.0, lineHeightPt = null,
+            textAlign = TextAlign.START, textIndentPt = 0.0, lineHeightPt = null,
             marginTopPt = 0.0, marginRightPt = 0.0, marginBottomPt = 0.0, marginLeftPt = 0.0,
             paddingTopPt = 0.0, paddingRightPt = 0.0, paddingBottomPt = 0.0, paddingLeftPt = 0.0,
             whiteSpace = WhiteSpaceMode.NORMAL, listType = ListType.DISC,
