@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- A book whose chapters each declare the same `@font-face` in their own
+  `<style>` block, which is how some converters write embedded fonts, parsed
+  that font once per chapter and kept every copy, with its own glyph caches,
+  for the life of the book. The layout budget never saw it: on a 41-chapter
+  Chinese novel the budget reported 23 MB while the process held 340 MB, and
+  a 192 MB Android heap died with `OutOfMemoryError` however small the budget
+  was set. A font file is now parsed once per book and shared by every rule
+  that names it. The same book now holds 32 MB.
+- An embedded TrueType font kept two copies of every glyph it had drawn, the
+  boxed points and the path built from them, about 4 KB per glyph for a glyf
+  record of 200 bytes. Only the path is kept now.
+
 ## [0.9.0] - 2026-09-08
 
 A reader app that opened a normal-length EPUB on Android ran out of memory a

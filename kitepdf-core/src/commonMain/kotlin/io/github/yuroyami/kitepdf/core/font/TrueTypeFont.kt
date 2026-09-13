@@ -48,6 +48,9 @@ public class TrueTypeFont private constructor(
      */
     private val glyphLock = KiteLock()
 
+    /** How many glyphs hold their point form in memory. For tests and diagnostics. */
+    internal val cachedOutlines: Int get() = glyphLock.withLock { cache.size }
+
     /** Convert a unicode codepoint to a glyph index, or 0 (.notdef) if unmapped. */
     public fun glyphIdForCodePoint(codePoint: Int): Int = cmap.glyphIdFor(codePoint)
 
@@ -146,11 +149,15 @@ public class TrueTypeFont private constructor(
 
     /**
      * Outline as a [KitePath], cached. The `GlyphOutline → KitePath` conversion
-     * is built once per glyph, not on every draw.
+     * is built once per glyph, not on every draw. The point form it is built
+     * from is not kept: as a second copy of every drawn glyph it doubled what
+     * a font retained, and nothing that draws asks for it once the path
+     * exists (#228).
      */
     public fun outlinePath(glyphId: Int): KitePath? {
         glyphLock.withLock { if (pathCache.containsKey(glyphId)) return pathCache[glyphId] }
-        val p = outline(glyphId)?.toKitePath()
+        val outline = glyphLock.withLock { cache[glyphId] } ?: parseGlyph(glyphId, depth = 0, active = HashSet())
+        val p = outline?.toKitePath()
         return glyphLock.withLock {
             if (pathCache.containsKey(glyphId)) {
                 pathCache[glyphId]

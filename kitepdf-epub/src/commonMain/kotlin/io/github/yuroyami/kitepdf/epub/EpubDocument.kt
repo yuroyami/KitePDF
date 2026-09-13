@@ -489,6 +489,9 @@ public class EpubDocument internal constructor(
     /** How many stylesheet files this book has parsed, however many chapters link them. */
     internal val stylesheetsParsed: Int get() = parsed.sheetsParsed
 
+    /** How many font files this book has parsed, however many chapters declare them. */
+    internal val fontFilesParsed: Int get() = parsed.fontFilesParsed
+
     /** Whether [chapter]'s pages are in memory right now. For tests and diagnostics. */
     internal fun isChapterLive(chapter: Int): Boolean =
         chapter in parsed.spineIndices && tableLock.withLock { live[chapter] } != null

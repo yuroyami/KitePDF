@@ -79,6 +79,21 @@ internal class ParsedEpub(
     /** How many stylesheet files have been parsed. One per file, never one per chapter. */
     val sheetsParsed: Int get() = sheetLock.withLock { sheetCount }
 
+    private val programLock = KiteLock()
+
+    /**
+     * Parsed font programs by zip path, null for a file that would not parse.
+     * One per file, however many `@font-face` rules name it: a converter that
+     * repeats the book's font in every chapter's own `<style>` otherwise gave
+     * the book one parsed font per chapter, each with its own bytes and glyph
+     * caches, and no budget counted them (#224).
+     */
+    private val programCache = HashMap<String, FontProgram?>()
+    private var programCount = 0
+
+    /** How many font files have been read and parsed. One per file, never one per chapter. */
+    val fontFilesParsed: Int get() = programLock.withLock { programCount }
+
     /**
      * Every `@font-face` declared by a stylesheet in the OPF manifest, loaded from
      * the zip. Built once, on the first chapter layout, not at open time.
@@ -141,10 +156,21 @@ internal class ParsedEpub(
             ?: rule.srcUrls.firstOrNull { it.endsWith(".woff2", true) }
             ?: rule.srcUrls.firstOrNull()
             ?: return null
-        val path = fontPath(dir, url)
+        val program = programAt(fontPath(dir, url)) ?: return null
+        return EmbeddedFace(rule.family, rule.bold, rule.italic, program)
+    }
+
+    /** The program of the font file at [path], parsed on first use and shared by every face after. */
+    private fun programAt(path: String): FontProgram? {
+        programLock.withLock { if (programCache.containsKey(path)) return programCache[path] }
         val raw = zip.read(path) ?: return null
         val bytes = obfuscation[path]?.let { Deobfuscate.deobfuscate(raw, it, opf.uniqueId ?: "") } ?: raw
-        return FontRegistry.face(rule.family, rule.bold, rule.italic, bytes)
+        val parsed = FontProgram.parse(bytes)
+        // Parsing ran outside the lock; the first to publish wins, as for chapters.
+        return programLock.withLock {
+            if (programCache.containsKey(path)) programCache[path]
+            else { programCount++; programCache[path] = parsed; parsed }
+        }
     }
 
     /** The sheet's own folder, falling back to the OPF's for books with wrong urls. */
