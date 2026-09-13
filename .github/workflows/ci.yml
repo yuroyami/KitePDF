@@ -55,7 +55,7 @@ jobs:
           :kitepdf-core:jvmTest :kitepdf-pdf:jvmTest :kitepdf-epub:jvmTest
           :kitepdf-cbz:jvmTest :kitepdf-svg:jvmTest
           :kitepdf-skia-renderer:jvmTest :kitepdf-compose-viewer:jvmTest
-          :kitepdf:jvmTest :kitepdf-net:jvmTest --continue --stacktrace
+          :kitepdf:jvmTest :kitepdf-net:jvmTest :kitepdf-javascript:jvmTest --continue --stacktrace
 
       - name: Test common code through Android host variants
         run: >
@@ -63,6 +63,7 @@ jobs:
           :kitepdf-core:testAndroidHostTest :kitepdf-pdf:testAndroidHostTest
           :kitepdf-epub:testAndroidHostTest :kitepdf-cbz:testAndroidHostTest
           :kitepdf-svg:testAndroidHostTest :kitepdf:testAndroidHostTest
+          :kitepdf-javascript:testAndroidHostTest
           --continue --stacktrace
 
       - name: Compile Android rendering backends
@@ -132,7 +133,8 @@ jobs:
           :kitepdf-pdf:iosSimulatorArm64Test
           :kitepdf-epub:iosSimulatorArm64Test
           :kitepdf-cbz:iosSimulatorArm64Test
-          :kitepdf-svg:iosSimulatorArm64Test --continue --stacktrace
+          :kitepdf-svg:iosSimulatorArm64Test
+          :kitepdf-javascript:iosSimulatorArm64Test --continue --stacktrace
 
       - name: Compile iOS rendering backends
         run: >
@@ -151,7 +153,8 @@ jobs:
           :kitepdf-cbz:macosArm64Test
           :kitepdf-svg:macosArm64Test
           :kitepdf:macosArm64Test
-          :kitepdf-native-renderer:macosArm64Test --continue --stacktrace
+          :kitepdf-native-renderer:macosArm64Test
+          :kitepdf-javascript:macosArm64Test --continue --stacktrace
 
       - name: Upload test reports
         if: always()
@@ -184,7 +187,7 @@ jobs:
           :kitepdf-core:jsNodeTest :kitepdf-pdf:jsNodeTest
           :kitepdf-epub:jsNodeTest :kitepdf-cbz:jsNodeTest
           :kitepdf-svg:jsNodeTest :kitepdf:jsNodeTest
-          :kitepdf-net:jsNodeTest --continue --stacktrace
+          :kitepdf-net:jsNodeTest :kitepdf-javascript:jsNodeTest --continue --stacktrace
 
       - name: Compile browser rendering backends
         run: >
