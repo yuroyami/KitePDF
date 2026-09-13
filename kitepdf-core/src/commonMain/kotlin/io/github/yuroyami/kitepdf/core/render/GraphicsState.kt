@@ -108,21 +108,26 @@ public fun GraphicsState.applyExtGState(ext: ExtGState): GraphicsState = copy(
  * Mutable stack façade. Holds the current state plus a save stack for `q`/`Q`.
  *
  * Callers update via the typed mutators (`replaceCtm`, `setFillColor`, etc.)
- * or read the current state directly. The stack is bounded by [maxDepth] to
- * defend against pathological PDFs that q-spam without Q.
+ * or read the current state directly. The stack is bounded by [maxDepth], the
+ * limit MuPDF uses, to defend against PDFs that q-spam without Q. Past it a
+ * save pushes nothing and its matching restore pops nothing, so restores keep
+ * pairing with their saves (ISO 32000-1, 8.4.4) instead of each one consuming
+ * a real frame (#49).
  */
-public class GraphicsStack(initial: GraphicsState = GraphicsState(), private val maxDepth: Int = 64) {
+public class GraphicsStack(initial: GraphicsState = GraphicsState(), private val maxDepth: Int = 4096) {
     private val stack = ArrayDeque<GraphicsState>().apply { addLast(initial) }
+    private var overflow = 0
 
     public val current: GraphicsState
         get() = stack.last()
 
     public fun save() {
-        if (stack.size >= maxDepth) return  // silent clamp; production PDFs never need this
+        if (stack.size >= maxDepth) { overflow++; return }
         stack.addLast(current)
     }
 
     public fun restore() {
+        if (overflow > 0) { overflow--; return }
         if (stack.size > 1) stack.removeLast()
     }
 

@@ -43,8 +43,13 @@ public data class PdfOptionalContent(
         val usage: PdfDictionary?,
     )
 
-    /** True if the named OCG is visible per the default configuration. */
-    public fun isVisibleByDefault(id: String): Boolean = id in onByDefault && id !in offByDefault
+    /**
+     * True if the named OCG is visible per the default configuration. A group
+     * is on unless the configuration turns it off: the `/Unchanged` base state
+     * leaves every group on at load (ISO 32000-1, 8.11.4.3), and the renderer
+     * decides visibility by this same rule (#58).
+     */
+    public fun isVisibleByDefault(id: String): Boolean = id !in offByDefault
 
     public companion object {
         public val EMPTY: PdfOptionalContent = PdfOptionalContent(emptyList(), emptySet(), emptySet(), null)
