@@ -1,6 +1,7 @@
 package io.github.yuroyami.kitepdf
 
 import io.github.yuroyami.kitepdf.core.render.KiteBlendMode
+import io.github.yuroyami.kitepdf.core.render.KiteMatrix
 import io.github.yuroyami.kitepdf.core.render.KitePath
 import io.github.yuroyami.kitepdf.core.render.RecordingCanvas
 import io.github.yuroyami.kitepdf.core.render.RgbColor
@@ -173,5 +174,42 @@ class AnnotationRulesTest {
             extra = listOf(ap("1 0 0 rg 0 0 60 60 re f"), "2"),
         ))
         assertEquals(0, calls.size)
+    }
+
+    @Test
+    fun a_synthesized_square_strokes_at_its_border_width_and_dash_inside_its_rect() {
+        val stroke = TestPdf.calls(
+            pdf(annots = listOf("<< /Type /Annot /Subtype /Square /Rect [50 50 150 150] /F 4 /C [1 0 0] /BS << /W 8 /S /D /D [4 2] >> >>")),
+        ).filterIsInstance<RecordingCanvas.Call.Stroke>().single()
+        assertEquals(8.0, stroke.lineWidth, 1e-9)
+        assertEquals(listOf(4.0, 2.0), stroke.dashArray)
+        val xs = stroke.path.segments.mapNotNull {
+            when (it) {
+                is KitePath.Segment.MoveTo -> it.x
+                is KitePath.Segment.LineTo -> it.x
+                else -> null
+            }
+        }
+        assertEquals(54.0, xs.min(), 1e-9, "the 8pt stroke stays inside the rectangle")
+        assertEquals(146.0, xs.max(), 1e-9)
+    }
+
+    @Test
+    fun a_page_renders_without_its_annotations_when_asked() {
+        val doc = PdfDocument.open(
+            pdf(
+                annots = listOf("<< /Type /Annot /Subtype /Square /Rect [100 100 160 160] /AP << /N 6 0 R >> >>"),
+                extra = listOf(ap("0 1 0 rg 0 0 60 60 re f")),
+                content = "0 0 1 rg 10 10 50 50 re f",
+            ),
+        )
+        fun colours(render: (RecordingCanvas) -> Unit) =
+            RecordingCanvas().also(render).calls.filterIsInstance<RecordingCanvas.Call.Fill>().map { it.color }
+        assertEquals(listOf(blue, green), colours { doc.pages[0].renderTo(it, KiteMatrix.IDENTITY) })
+        assertEquals(listOf(blue), colours { doc.pages[0].renderTo(it, KiteMatrix.IDENTITY) { false } }, "the page content alone")
+        assertEquals(
+            listOf(blue, green),
+            colours { c -> doc.pages[0].renderTo(c, KiteMatrix.IDENTITY) { it.subtype == PdfAnnotation.Subtype.Square } },
+        )
     }
 }

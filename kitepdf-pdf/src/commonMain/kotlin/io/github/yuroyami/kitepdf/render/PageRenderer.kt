@@ -167,7 +167,15 @@ public class PageRenderer(
      */
     private var pageResources: PdfDictionary? = null
 
-    public fun render(page: PdfPage, deviceCtm: KiteMatrix = defaultDeviceCtm(page)) {
+    /**
+     * Paints [page] under [deviceCtm], then the annotations that [annotations]
+     * accepts. `{ false }` leaves the page content on its own (#133).
+     */
+    public fun render(
+        page: PdfPage,
+        deviceCtm: KiteMatrix = defaultDeviceCtm(page),
+        annotations: (io.github.yuroyami.kitepdf.PdfAnnotation) -> Boolean = { true },
+    ) {
         pageResources = page.resources
         val fonts = loadFonts(page.resources)
         val xobjects = loadXObjects(page.resources)
@@ -216,7 +224,7 @@ public class PageRenderer(
             markedContentFloor = 0
             markedContentOverflow = 0
             ocHiddenDepth = 0
-            renderAnnotations(page, GraphicsStack(GraphicsState(ctm = deviceCtm)))
+            renderAnnotations(page, GraphicsStack(GraphicsState(ctm = deviceCtm)), annotations)
         } finally {
             canvas.endPage()
         }
@@ -355,8 +363,13 @@ public class PageRenderer(
      */
     private class VisibilityTooDeep : RuntimeException()
 
-    private fun renderAnnotations(page: io.github.yuroyami.kitepdf.PdfPage, state: GraphicsStack) {
+    private fun renderAnnotations(
+        page: io.github.yuroyami.kitepdf.PdfPage,
+        state: GraphicsStack,
+        accept: (io.github.yuroyami.kitepdf.PdfAnnotation) -> Boolean,
+    ) {
         for (annot in page.annotations) {
+            if (!accept(annot)) continue
             if (annot.isHidden) continue   // /F Hidden or NoView (§12.5.3)
             // Invisible hides only a non-standard subtype with no handler (§12.5.3, #64).
             if (annot.isInvisible && annot.subtype == Subtype.Other) continue
@@ -503,31 +516,41 @@ public class PageRenderer(
                     canvas.strokePath(line, ctm, color, (height * 0.06).coerceAtLeast(0.6))
                 }
             }
+            // Borders stroke at their declared width and dash (ISO 32000-1, 12.5.4,
+            // Table 166), and a square or circle keeps its stroke inside its rectangle (#62).
             Subtype.Square -> {
-                val p = KitePath.Builder().apply { rectangle(rect.left, rect.bottom, rect.width, rect.height) }.build()
+                val w = borderWidthOf(annot)
+                val p = KitePath.Builder().apply {
+                    rectangle(rect.left + w / 2, rect.bottom + w / 2, (rect.width - w).coerceAtLeast(0.0), (rect.height - w).coerceAtLeast(0.0))
+                }.build()
                 annot.interiorColor?.let { canvas.fillPath(p, ctm, it, false) }
-                canvas.strokePath(p, ctm, annot.color ?: RgbColor.BLACK, 1.0)
+                strokeBorder(annot, p, ctm, w)
             }
             Subtype.Circle -> {
-                val p = ellipsePath(rect)
+                val w = borderWidthOf(annot)
+                val inset = io.github.yuroyami.kitepdf.core.KiteRectangle(
+                    rect.left + w / 2, rect.bottom + w / 2,
+                    maxOf(rect.left + w / 2, rect.right - w / 2), maxOf(rect.bottom + w / 2, rect.top - w / 2),
+                )
+                val p = ellipsePath(inset)
                 annot.interiorColor?.let { canvas.fillPath(p, ctm, it, false) }
-                canvas.strokePath(p, ctm, annot.color ?: RgbColor.BLACK, 1.0)
+                strokeBorder(annot, p, ctm, w)
             }
             Subtype.Line -> annot.vertices?.let { v ->
                 if (v.size >= 4) {
                     val line = KitePath.Builder().apply { moveTo(v[0], v[1]); lineTo(v[2], v[3]) }.build()
-                    canvas.strokePath(line, ctm, annot.color ?: RgbColor.BLACK, 1.0)
+                    strokeBorder(annot, line, ctm, borderWidthOf(annot))
                 }
             }
             Subtype.Polygon, Subtype.PolyLine -> annot.vertices?.let { v ->
                 val p = polyPath(v, close = annot.subtype == Subtype.Polygon)
                 if (p != null) {
                     if (annot.subtype == Subtype.Polygon) annot.interiorColor?.let { canvas.fillPath(p, ctm, it, false) }
-                    canvas.strokePath(p, ctm, annot.color ?: RgbColor.BLACK, 1.0)
+                    strokeBorder(annot, p, ctm, borderWidthOf(annot))
                 }
             }
             Subtype.Ink -> annot.inkLists?.forEach { stroke ->
-                polyPath(stroke, close = false)?.let { canvas.strokePath(it, ctm, annot.color ?: RgbColor.BLACK, 1.0) }
+                polyPath(stroke, close = false)?.let { strokeBorder(annot, it, ctm, borderWidthOf(annot)) }
             }
             Subtype.Link -> {
                 // §12.5.4: a declared width of 0 means "no visible border", which is what a link
@@ -544,6 +567,20 @@ public class PageRenderer(
             }
             else -> { /* other annotations: nothing without /AP */ }
         }
+    }
+
+    /** The declared border width, or the default of 1 (ISO 32000-1, 12.5.4). */
+    private fun borderWidthOf(annot: io.github.yuroyami.kitepdf.PdfAnnotation): Double =
+        annot.borderWidth?.takeIf { it >= 0.0 } ?: 1.0
+
+    /** Strokes [path] at [width], dashed when the border style says so. A width of 0 draws no border. */
+    private fun strokeBorder(annot: io.github.yuroyami.kitepdf.PdfAnnotation, path: KitePath, ctm: KiteMatrix, width: Double) {
+        if (width <= 0.0) return
+        val dashed = annot.borderStyle == "D" || (annot.borderStyle == null && annot.borderDash != null)
+        canvas.strokePath(
+            path, ctm, annot.color ?: RgbColor.BLACK, width,
+            dashArray = if (dashed) annot.borderDash ?: listOf(3.0) else null,
+        )
     }
 
     /**

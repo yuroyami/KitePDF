@@ -258,4 +258,18 @@ public class PdfPage internal constructor(
     override fun renderTo(canvas: KiteCanvas, deviceCtm: KiteMatrix) {
         PageRenderer(canvas, document).render(this, deviceCtm)
     }
+
+    /**
+     * [renderTo], drawing only the annotations [annotations] accepts. `{ false }`
+     * renders the page content alone: for printing or exporting without markup,
+     * a clean thumbnail, or an editor that redraws its annotation layer on its own.
+     *
+     * ```kotlin
+     * page.renderTo(canvas, ctm) { false }                                          // no annotations
+     * page.renderTo(canvas, ctm) { it.subtype != PdfAnnotation.Subtype.Highlight }  // hide highlights
+     * ```
+     */
+    public fun renderTo(canvas: KiteCanvas, deviceCtm: KiteMatrix, annotations: (PdfAnnotation) -> Boolean) {
+        PageRenderer(canvas, document).render(this, deviceCtm, annotations)
+    }
 }
