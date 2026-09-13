@@ -24,3 +24,4 @@ Things a previous change taught the hard way. One line each. Delete a line when 
 - A page object built fresh on every lookup defeats every identity-keyed cache above it, and no test counted rasters, so each chapter landing re-rendered the visible pages for two releases (#221).
 - The JVM suites run on a 3 GB heap and never measure retained memory, so a book that fills a 192 MB Android heap passes every gate (#218).
 - The layout budget only counts what it lays out: a font declared in every chapter's own style block was parsed 41 times with 41 glyph caches, the budget said 23 MB while the heap held 340 MB, and only a heap class histogram showed it (#224).
+- A build run with `-Pkotlin.incremental=false`, as a stash check does, leaves the next normal build failing with "FqNames can't be derived". Delete the module's `build/kotlin` first.
