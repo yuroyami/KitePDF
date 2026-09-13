@@ -99,4 +99,27 @@ class EpubLinkTest {
         assertEquals(start, doc.pageIndexOfHref("OEBPS/chapter2.xhtml#no-such-id"))
         assertNull(doc.pageIndexOfHref("OEBPS/nope.xhtml"))
     }
+
+    @Test
+    fun a_link_around_a_block_covers_the_block() {
+        val doc = EpubDocument.open(
+            EpubFixtures.epubMultiSpine(
+                listOf(
+                    """<a href="chapter2.xhtml"><div><p>the whole block body links</p></div></a>""",
+                    "<p>target</p>",
+                ),
+            ),
+        )
+        val links = doc.pages[0].links
+        assertTrue(links.isNotEmpty(), "the block inside the link is clickable")
+        assertTrue(links.all { it.href == "OEBPS/chapter2.xhtml" }, "got ${links.map { it.href }}")
+        val line = doc.pages[0].textContent().blocks.single().lines[0].bounds
+        assertTrue(
+            links.any {
+                it.rect.left <= line.left && it.rect.right >= line.right &&
+                    it.rect.bottom <= line.bottom && it.rect.top >= line.top
+            },
+            "one rect covers the block's text (links ${links.map { it.rect }}, line $line)",
+        )
+    }
 }

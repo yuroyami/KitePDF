@@ -43,7 +43,7 @@ internal object UaStylesheet {
         h5{display:block;font-size:0.83em;font-weight:bold;margin:1.67em 0}
         h6{display:block;font-size:0.67em;font-weight:bold;margin:2.33em 0}
         head{display:none}
-        hr{display:block;margin:0.5em 0;text-align:center}
+        hr{border-style:solid;border-width:1px;display:block;margin:0.5em 0;text-align:center}
         html{display:block}
         li{display:list-item}
         mark{background-color:yellow}

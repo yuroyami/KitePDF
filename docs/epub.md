@@ -39,8 +39,9 @@ val book = EpubDocument.open(
 )
 ```
 
-Fixed-layout (pre-paginated) books keep their authored viewport;
-`book.isFixedLayout` tells you which kind you have.
+Fixed-layout (pre-paginated) books keep their authored viewport. The
+viewport is in CSS pixels, so a page declared 800 by 1200 is 600 by 900
+points. `book.isFixedLayout` tells you which kind you have.
 
 ## Rendering pages
 
@@ -155,10 +156,15 @@ val night = book.withSettings(
         textColor = RgbColor(0.9, 0.9, 0.9),
         backgroundColor = RgbColor(0.1, 0.1, 0.12),
         justify = true,                        // null = as authored
+        hyphenate = true,                      // null = as authored
         usePublisherCss = true,                // false = UA + reader styles only
     ),
 )
 ```
+
+`hyphenate = true` breaks long words at line ends in every chapter, with the
+patterns for that chapter's language, even when the book's CSS never asks for
+it. `false` turns hyphenation off everywhere.
 
 `withSettings` (and the `withFontSize` / `withPageSize` / `withMargin`
 shorthands) re-flow the book without re-parsing it: the zip, DOM, CSS, and

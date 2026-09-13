@@ -22,7 +22,7 @@ internal class ParsedSpine(
     val tree: KiteXmlNode.Element,
     val rules: List<StyleRule>,
     val docDir: String,
-    /** The `<meta name=viewport>` size, or null when the document declares none. */
+    /** The `<meta name=viewport>` size in points, or null when the document declares none. */
     val viewport: Pair<Double, Double>?,
     /** Zip path of this spine document, the key for href -> page navigation. */
     val path: String,
@@ -308,7 +308,8 @@ internal class ParsedEpub(
         private fun parseViewport(tree: KiteXmlNode.Element): Pair<Double, Double>? {
             var result: Pair<Double, Double>? = null
             var svgSize: Pair<Double, Double>? = null
-            fun px(s: String?) = s?.trim()?.removeSuffix("px")?.toDoubleOrNull()
+            // EPUB 3.3 gives the viewport in CSS pixels, 0.75pt each, the unit the layout uses (#111).
+            fun px(s: String?) = s?.trim()?.removeSuffix("px")?.toDoubleOrNull()?.times(0.75)
             fun walk(el: KiteXmlNode.Element) {
                 if (el.tag == "meta" && el.attrs["name"]?.lowercase() == "viewport") {
                     var w: Double? = null; var h: Double? = null

@@ -7,6 +7,7 @@ import io.github.yuroyami.kitepdf.epub.css.CssClear
 import io.github.yuroyami.kitepdf.epub.css.CssFloat
 import io.github.yuroyami.kitepdf.epub.css.CssPosition
 import io.github.yuroyami.kitepdf.epub.css.CssVAlign
+import io.github.yuroyami.kitepdf.epub.css.Display
 import io.github.yuroyami.kitepdf.epub.css.Direction
 import io.github.yuroyami.kitepdf.epub.css.ObjectFit
 import io.github.yuroyami.kitepdf.epub.css.GenericFont
@@ -374,9 +375,14 @@ internal class BoxLayout(
         // deriving the missing dimension from the intrinsic aspect ratio; fall back
         // to full content width. Scale down proportionally past max-width / content /
         // max-height so the image never overflows its column.
+        val st = box.style
+        // Fixed margins narrow the room; auto ones only place the image (CSS 2.1, 10.3.3).
+        val mL = if (st.marginLeftAuto) 0.0 else st.marginLeftPt
+        val mR = if (st.marginRightAuto) 0.0 else st.marginRightPt
+        val room = (contentW - mL - mR).coerceAtLeast(1.0)
         val ew = box.style.widthPt ?: box.attrWidth
         val eh = box.style.heightPt ?: box.attrHeight
-        var w = ew ?: (eh?.let { it / aspect } ?: contentW)
+        var w = ew ?: (eh?.let { it / aspect } ?: room)
         var h = eh ?: (w * aspect)
         // object-fit: contain. When both dimensions are fixed, letterbox the image to
         // preserve its aspect ratio inside the box (default `fill` stretches to w×h).
@@ -384,7 +390,7 @@ internal class BoxLayout(
             val scale = minOf(ew / intrinsicW, eh / intrinsicH)
             w = intrinsicW * scale; h = intrinsicH * scale
         }
-        val cap = minOf(box.style.maxWidthPt ?: Double.MAX_VALUE, contentW)
+        val cap = minOf(box.style.maxWidthPt ?: Double.MAX_VALUE, room)
         if (w > cap) { val s = cap / w; w = cap; h *= s }
         // Style clamps (proportional), then the hard page-height cap last.
         box.style.maxHeightPt?.let { if (h > it) { val k = it / h; h = it; w *= k } }
@@ -392,9 +398,33 @@ internal class BoxLayout(
         box.style.minHeightPt?.let { if (h < it) { val k = it / h; h = it; w *= k } }
         if (h > maxImageHeight) { val s = maxImageHeight / h; h = maxImageHeight; w *= s }
         box.drawWidth = w; box.drawHeight = h
-        box.x = contentLeft + (contentW - w) / 2.0
+        box.x = contentLeft + imageOffset(st, (contentW - w).coerceAtLeast(0.0), mL, mR)
         box.y = topY
         box.borderBoxWidth = w; box.borderBoxHeight = h
+    }
+
+    /**
+     * Where a block image sits across its line (CSS 2.1, 10.3.3, #171): at the
+     * start edge plus its margin, centred only when both margins are auto. An
+     * inline `<svg>` lifted into its own box still follows `text-align`.
+     */
+    private fun imageOffset(s: ComputedStyle, leftover: Double, mL: Double, mR: Double): Double = when {
+        s.display == Display.INLINE || s.display == Display.INLINE_BLOCK -> when (resolvedAlign(s)) {
+            TextAlign.RIGHT -> leftover
+            TextAlign.CENTER -> leftover / 2
+            TextAlign.JUSTIFY -> if (s.direction == Direction.RTL) leftover else 0.0
+            else -> 0.0
+        }
+        s.marginLeftAuto && s.marginRightAuto -> leftover / 2
+        s.marginLeftAuto || s.direction == Direction.RTL -> leftover - mR
+        else -> mL
+    }.coerceIn(0.0, leftover)
+
+    /** `start` and `end` resolve against the text direction; `left` and `right` never flip (#169). */
+    private fun resolvedAlign(style: ComputedStyle): TextAlign = when (style.textAlign) {
+        TextAlign.START -> if (style.direction == Direction.RTL) TextAlign.RIGHT else TextAlign.LEFT
+        TextAlign.END -> if (style.direction == Direction.RTL) TextAlign.LEFT else TextAlign.RIGHT
+        else -> style.textAlign
     }
 
     // ---- tables --------------------------------------------------------------
@@ -648,8 +678,7 @@ internal class BoxLayout(
     ): List<PositionedLine> {
         val preserve = style.whiteSpace != WhiteSpaceMode.NORMAL && style.whiteSpace != WhiteSpaceMode.NOWRAP
         val baseLevel = if (style.direction == Direction.RTL) 1 else 0
-        // `start` alignment resolves to the base direction's edge.
-        val align = if (style.direction == Direction.RTL && style.textAlign == TextAlign.LEFT) TextAlign.RIGHT else style.textAlign
+        val align = resolvedAlign(style)
         // Float exclusions: per-line widths use an estimated constant line
         // height (the authored one, without ruby/image growth), so the widths
         // the wrapper saw and the x-offsets painted below stay consistent.
@@ -713,7 +742,10 @@ internal class BoxLayout(
 
             val placed = ArrayList<PlacedRun>()
             val images = ArrayList<PlacedImage>()
-            if (i == 0 && marker != null) markerRun(marker, style.fontSizePt, contentLeft, markerColor)?.let(placed::add)
+            if (i == 0 && marker != null) {
+                val rtl = style.direction == Direction.RTL
+                markerRun(marker, style.fontSizePt, contentLeft, contentLeft + contentW, rtl, markerColor)?.let(placed::add)
+            }
             placed.addAll(placeRuns(cells, xStart, extraPerSpace, images))
             out.add(PositionedLine(placed, y, lineHeight, ascent, images))
             y += lineHeight
@@ -768,15 +800,22 @@ internal class BoxLayout(
         return w to spaces
     }
 
-    private fun markerRun(marker: String, fontSize: Double, contentLeft: Double, color: RgbColor): PlacedRun? {
+    /** A list marker hangs outside the start edge: left of the text, or right of it in right-to-left text (#167). */
+    private fun markerRun(
+        marker: String, fontSize: Double, contentLeft: Double, contentRight: Double, rtl: Boolean, color: RgbColor,
+    ): PlacedRun? {
         val spec = FontSpec(KiteFontFamily.Serif, bold = false, italic = false)
         var w = 0.0
         val glyphs = ArrayList<TextGlyph>(marker.length)
         for (ch in marker) { glyphs.add(glyph(ch, spec)); w += FontMetrics.advancePt(ch, fontSize) }
         if (glyphs.isEmpty()) return null
-        val x = (contentLeft - w - 0.4 * fontSize).coerceAtLeast(0.0)
+        val gap = 0.4 * fontSize
+        val x = if (rtl) contentRight + gap else (contentLeft - w - gap).coerceAtLeast(0.0)
         return PlacedRun(glyphs, x, fontSize, spec, color)
     }
+
+    /** A cell that paints an image rather than a glyph. */
+    private val Cell.isImage: Boolean get() = imageHeight > 0.0 && (image != null || svgImage != null)
 
     private class Cell(
         val ch: Char, var width: Double, val fontSize: Double,
@@ -1215,7 +1254,7 @@ internal class BoxLayout(
             val c = cells[i]
             if (c.ch == ' ') { closeGroup(x); x += c.width + extraPerSpace; i++; continue }
             // Inline image cell: emit a PlacedImage and advance the pen.
-            if (c.imageHeight > 0.0 && (c.image != null || c.svgImage != null)) {
+            if (c.isImage) {
                 closeGroup(x)
                 imageSink?.add(PlacedImage(x + c.padBefore, c.imageWidth, c.imageHeight, c.image, c.svgImage, c.imageAlt))
                 x += c.padBefore + c.width + c.padAfter
@@ -1228,7 +1267,8 @@ internal class BoxLayout(
             val startX = x
             val spec = c.spec; val fs = c.fontSize; val col = c.color; val sh = c.shift; val ul = c.underline; val face = c.face
             val glyphs = ArrayList<TextGlyph>()
-            while (i < cells.size && cells[i].ch != ' ' && cells[i].rubyGroup == c.rubyGroup &&
+            // An image cell always ends a text run, even when glued to a word (#99).
+            while (i < cells.size && cells[i].ch != ' ' && !cells[i].isImage && cells[i].rubyGroup == c.rubyGroup &&
                 cells[i].href == c.href && samePaint(cells[i], spec, fs, col, sh, ul, face)
             ) {
                 glyphs.add(glyphFor(cells[i])); x += cells[i].width + cells[i].padAfter; i++
