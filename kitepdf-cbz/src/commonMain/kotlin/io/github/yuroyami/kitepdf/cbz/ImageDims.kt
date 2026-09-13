@@ -4,8 +4,8 @@ import kotlin.math.abs
 
 /**
  * Width and height straight from an image file header, so a 300-page archive
- * opens without decoding 300 images. Knows PNG, GIF, BMP and JPEG; anything
- * else answers null and the caller decodes that one image for its size.
+ * opens without decoding 300 images. Knows PNG, GIF, BMP, JPEG, WebP and TIFF;
+ * anything else answers null and the caller decodes that one image for its size.
  */
 internal object ImageDims {
 
@@ -14,6 +14,8 @@ internal object ImageDims {
         isGif(bytes) -> gif(bytes)
         isBmp(bytes) -> bmp(bytes)
         isJpeg(bytes) -> jpeg(bytes)
+        isWebp(bytes) -> webp(bytes)
+        isTiff(bytes) -> tiff(bytes)
         else -> null
     }
 
@@ -28,6 +30,48 @@ internal object ImageDims {
 
     private fun isJpeg(b: ByteArray) = b.size >= 4 &&
         b[0] == 0xFF.toByte() && b[1] == 0xD8.toByte()
+
+    private fun isWebp(b: ByteArray) = b.size >= 30 &&
+        b.decodeToString(0, 4) == "RIFF" && b.decodeToString(8, 12) == "WEBP"
+
+    private fun isTiff(b: ByteArray) = b.size >= 8 && (
+        (b[0] == 'I'.code.toByte() && b[1] == 'I'.code.toByte() && b[2] == 42.toByte() && b[3] == 0.toByte()) ||
+            (b[0] == 'M'.code.toByte() && b[1] == 'M'.code.toByte() && b[2] == 0.toByte() && b[3] == 42.toByte())
+        )
+
+    /** The first chunk after the RIFF header names which of the three WebP bitstreams follows. */
+    private fun webp(b: ByteArray): Pair<Int, Int>? = when (b.decodeToString(12, 16)) {
+        // Lossy: a 3-byte frame tag and the 9D 01 2A start code, then 14-bit width and height.
+        "VP8 " -> dims(le16(b, 26) and 0x3FFF, le16(b, 28) and 0x3FFF)
+        // Lossless: the 0x2F signature, then 14-bit width-1 and height-1.
+        "VP8L" -> if (b[20] != 0x2F.toByte()) null else {
+            val bits = le32(b, 21)
+            dims((bits and 0x3FFF) + 1, ((bits ushr 14) and 0x3FFF) + 1)
+        }
+        // Extended: four flag bytes, then 24-bit canvas width-1 and height-1.
+        "VP8X" -> dims(le24(b, 24) + 1, le24(b, 27) + 1)
+        else -> null
+    }
+
+    /** Width and height tags (256 and 257) of the first image file directory. */
+    private fun tiff(b: ByteArray): Pair<Int, Int>? {
+        val le = b[0] == 'I'.code.toByte()
+        fun u16(o: Int) = if (le) le16(b, o) else ((b[o].toInt() and 0xFF) shl 8) or (b[o + 1].toInt() and 0xFF)
+        fun u32(o: Int) = if (le) le32(b, o) else be32(b, o)
+        val ifd = u32(4)
+        if (ifd < 8 || ifd + 2 > b.size) return null
+        var w = 0
+        var h = 0
+        for (i in 0 until u16(ifd)) {
+            val e = ifd + 2 + i * 12
+            if (e + 12 > b.size) break
+            val tag = u16(e)
+            if (tag != 256 && tag != 257) continue
+            val v = if (u16(e + 2) == 3) u16(e + 8) else u32(e + 8)
+            if (tag == 256) w = v else h = v
+        }
+        return dims(w, h)
+    }
 
     private fun png(b: ByteArray): Pair<Int, Int>? =
         dims(be32(b, 16), be32(b, 20))
@@ -69,6 +113,9 @@ internal object ImageDims {
 
     private fun le16(b: ByteArray, o: Int): Int =
         (b[o].toInt() and 0xFF) or ((b[o + 1].toInt() and 0xFF) shl 8)
+
+    private fun le24(b: ByteArray, o: Int): Int =
+        (b[o].toInt() and 0xFF) or ((b[o + 1].toInt() and 0xFF) shl 8) or ((b[o + 2].toInt() and 0xFF) shl 16)
 
     private fun le32(b: ByteArray, o: Int): Int =
         (b[o].toInt() and 0xFF) or ((b[o + 1].toInt() and 0xFF) shl 8) or

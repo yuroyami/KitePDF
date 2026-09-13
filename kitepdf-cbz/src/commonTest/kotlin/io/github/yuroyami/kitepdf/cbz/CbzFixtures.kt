@@ -31,6 +31,19 @@ object CbzFixtures {
         return b
     }
 
+    /** A 6x4 image through `cwebp -lossless`. */
+    fun webpLossless6x4(): ByteArray = hex(
+        "5249464634000000574542505650384c280000002f05c0000017201048da1f7a8df9171014f93fdafc075f0a14b46dc3a6fa46267c16d1ff4008fd01",
+    )
+
+    /** The same image through `cwebp -q 80`, a lossy VP8 bitstream. */
+    fun webpLossy6x4(): ByteArray = hex(
+        "524946466a00000057454250565038205e000000f002009d012a0600040001402625b00274b700a301f681720136aa0d80a0cba000" +
+            "fef35a873dfa347dc4afb4e3843b9ddf596bafdf9facfcdf4affdafd0a35fec6f7c85de1d2cfba469d6b1834f60f0314ef46b56d83f1c5ade9fc3d8000",
+    )
+
+    private fun hex(s: String): ByteArray = ByteArray(s.length / 2) { s.substring(it * 2, it * 2 + 2).toInt(16).toByte() }
+
     fun comic(vararg entries: Pair<String, ByteArray>): ByteArray =
         storedZip(entries.toList())
 

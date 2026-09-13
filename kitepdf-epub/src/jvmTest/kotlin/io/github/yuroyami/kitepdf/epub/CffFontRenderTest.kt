@@ -2,6 +2,7 @@ package io.github.yuroyami.kitepdf.epub
 
 import io.github.yuroyami.kitepdf.core.render.RecordingCanvas
 import java.io.File
+import org.junit.Assume.assumeTrue
 import kotlin.test.Test
 import kotlin.test.assertTrue
 
@@ -30,7 +31,7 @@ class CffFontRenderTest {
     @Test
     fun otf_cff_faces_yield_outlines() {
         val otfs = otfFonts()
-        if (otfs.isEmpty()) return // no CFF fonts in this checkout: skip
+        assumeTrue("no .otf fonts in this checkout, skipping.", otfs.isNotEmpty())
         var withOutlines = 0
         for (f in otfs.take(8)) {
             val face = FontRegistry.face("cff", bold = false, italic = false, f.readBytes()) ?: continue
@@ -45,7 +46,7 @@ class CffFontRenderTest {
     @Test
     fun otf_renders_through_epub_font_face_path() {
         val otfs = otfFonts()
-        if (otfs.isEmpty()) return
+        assumeTrue("no .otf fonts in this checkout, skipping.", otfs.isNotEmpty())
         for (f in otfs.take(20)) {
             val bytes = f.readBytes()
             val face = FontRegistry.face("cff", bold = false, italic = false, bytes) ?: continue

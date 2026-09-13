@@ -2,6 +2,7 @@ package io.github.yuroyami.kitepdf.epub
 
 import io.github.yuroyami.kitepdf.core.render.RecordingCanvas
 import java.io.File
+import org.junit.Assume.assumeTrue
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -53,7 +54,7 @@ class KerningTest {
     @Test
     fun a_font_yields_pair_kerning() {
         val fonts = candidateFonts()
-        if (fonts.isEmpty()) return // no fonts in this checkout: skip
+        assumeTrue("no reference fonts in this checkout, skipping.", fonts.isNotEmpty())
         var verifiedName: String? = null
         for (f in fonts) {
             val face = FontRegistry.face("k", bold = false, italic = false, f.readBytes()) ?: continue
@@ -69,6 +70,7 @@ class KerningTest {
     @Test
     fun epub_layout_folds_kern_into_advance() {
         val fonts = candidateFonts()
+        assumeTrue("no reference fonts in this checkout, skipping.", fonts.isNotEmpty())
         for (f in fonts) {
             val bytes = f.readBytes()
             val face = FontRegistry.face("k", bold = false, italic = false, bytes) ?: continue
@@ -93,6 +95,6 @@ class KerningTest {
             )
             return // verified end-to-end
         }
-        // If no font produced an adjacent kern pair in layout, skip rather than fail.
+        assumeTrue("no font produced an adjacent kern pair in layout, skipping.", false)
     }
 }

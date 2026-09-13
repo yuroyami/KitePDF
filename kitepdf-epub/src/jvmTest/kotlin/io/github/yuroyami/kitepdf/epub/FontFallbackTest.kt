@@ -42,8 +42,8 @@ class FontFallbackTest {
 
     @Test
     fun fallback_for_prefers_a_face_that_has_the_glyph() {
-        val latin = latinFace() ?: return
-        val cjk = cjkFace() ?: return
+        val latin = latinFace().orSkip("NotoSans-Regular.otf")
+        val cjk = cjkFace().orSkip("DroidSansFallback.ttf")
         val registry = FontRegistry(listOf(latin, cjk))
         assertSame(cjk, registry.fallbackFor(han, bold = false, italic = false))
         // A codepoint neither face carries falls through to null (generic path).
@@ -56,9 +56,10 @@ class FontFallbackTest {
 
     @Test
     fun missing_glyph_falls_back_to_another_registered_face() {
-        val latin = repoFont("mupdf-master/resources/fonts/noto/NotoSans-Regular.otf") ?: return
-        val cjk = repoFont("mupdf-master/resources/fonts/droid/DroidSansFallback.ttf") ?: return
-        if (latinFace() == null || cjkFace() == null) return
+        val latin = repoFont("mupdf-master/resources/fonts/noto/NotoSans-Regular.otf").orSkip("NotoSans-Regular.otf")
+        val cjk = repoFont("mupdf-master/resources/fonts/droid/DroidSansFallback.ttf").orSkip("DroidSansFallback.ttf")
+        latinFace().orSkip("A Latin-only NotoSans face")
+        cjkFace().orSkip("A CJK DroidSans face")
         val css = "@font-face{font-family:'main';src:url(main.otf)}" +
             "@font-face{font-family:'cjk';src:url(cjk.ttf)}" +
             "p{font-family:'main'}"
@@ -79,8 +80,8 @@ class FontFallbackTest {
 
     @Test
     fun missing_glyph_without_any_fallback_face_uses_the_generic_path() {
-        val latin = repoFont("mupdf-master/resources/fonts/noto/NotoSans-Regular.otf") ?: return
-        if (latinFace() == null) return
+        val latin = repoFont("mupdf-master/resources/fonts/noto/NotoSans-Regular.otf").orSkip("NotoSans-Regular.otf")
+        latinFace().orSkip("A Latin-only NotoSans face")
         val css = "@font-face{font-family:'main';src:url(main.otf)}p{font-family:'main'}"
         val doc = EpubDocument.open(
             EpubFixtures.epub(
@@ -101,7 +102,7 @@ class FontFallbackTest {
         var d: File? = File(System.getProperty("user.dir")).absoluteFile
         while (d != null && !File(d, "settings.gradle.kts").exists()) d = d.parentFile
         val book = d?.let { File(it, "corpus/epub") }?.listFiles { f -> f.extension == "epub" }
-            ?.minByOrNull { it.length() } ?: return // corpus not present: skip
+            ?.minByOrNull { it.length() }.orSkip("An EPUB corpus")
         val doc = EpubDocument.open(book.readBytes())
         for (page in doc.pages) {
             val calls = RecordingCanvas().also { page.renderTo(it) }.calls

@@ -78,7 +78,7 @@ class WoffTest {
 
     @Test
     fun woff_round_trips_to_byte_identical_sfnt_tables() {
-        val ttf = droidSans() ?: return
+        val ttf = droidSans().orSkip("DroidSansFallback.ttf")
         val woff = toWoff(ttf)
         assertTrue(Woff.isWoff(woff), "encoded bytes are recognised as WOFF")
         val sfnt = Woff.toSfnt(woff)
@@ -94,7 +94,7 @@ class WoffTest {
 
     @Test
     fun woff_font_face_renders_outlines() {
-        val ttf = droidSans() ?: return
+        val ttf = droidSans().orSkip("DroidSansFallback.ttf")
         val woff = toWoff(ttf)
         // The face built from WOFF must render the same outlines as the raw TTF.
         val fromTtf = FontRegistry.face("f", bold = false, italic = false, ttf)

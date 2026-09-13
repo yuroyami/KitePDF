@@ -130,3 +130,15 @@ tasks.withType<Test>().configureEach {
         .withPropertyName("mutoolCandidates")
         .withPathSensitivity(PathSensitivity.NONE)
 }
+
+// Writes corpus/pdf/testPDF_JPX.pdf from a .jp2 file. A tool, not a test, so
+// the gate never runs it (#192):
+//   ./gradlew :kitepdf-native-renderer:makeJpxFixture -Pjp2=/path/file.jp2
+tasks.register<JavaExec>("makeJpxFixture") {
+    group = "kitepdf"
+    description = "Embeds a JPEG 2000 file into corpus/pdf/testPDF_JPX.pdf (-Pjp2=path, optional -Pjp2w and -Pjp2h)."
+    val testCompilation = kotlin.jvm().compilations.getByName("test")
+    classpath(testCompilation.output.allOutputs, testCompilation.runtimeDependencyFiles ?: files())
+    mainClass.set("io.github.yuroyami.kitepdf.nativerenderer.difftest.MakeJpxFixture")
+    args(listOfNotNull(project.findProperty("jp2"), project.findProperty("jp2w"), project.findProperty("jp2h")).map { it.toString() })
+}

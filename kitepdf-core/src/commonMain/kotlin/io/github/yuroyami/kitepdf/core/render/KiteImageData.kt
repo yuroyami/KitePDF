@@ -256,16 +256,17 @@ public class KiteImageData internal constructor(
          * CBZ / SVG `<image>` (rather than pulled from a PDF `/XObject` stream).
          * The format and pixel dimensions are sniffed from the bytes.
          *
-         * PNG, GIF, BMP, JPEG and JPEG 2000 are decoded in pure Kotlin by the
-         * shared KiteImage engine into a [Kind.RAW] image that renders on
-         * every backend. A JPEG the native decoder can't handle (arithmetic coding,
+         * PNG, GIF, BMP, JPEG, JPEG 2000, TIFF and lossless WebP are decoded in
+         * pure Kotlin by the shared KiteImage engine into a [Kind.RAW] image that
+         * renders on every backend. Lossy WebP has no decoder yet and returns null. A JPEG the native decoder can't handle (arithmetic coding,
          * 12-bit) falls back to the host platform's loader ([Kind.JPEG] with the
          * file in [encodedBytes]). Unrecognised formats return null, so callers
          * degrade gracefully by skipping the image.
          */
         public fun fromEncodedImage(bytes: ByteArray): KiteImageData? {
             return when (ImageFormat.sniff(bytes)) {
-                ImageFormat.PNG, ImageFormat.GIF, ImageFormat.BMP, ImageFormat.JP2 ->
+                ImageFormat.PNG, ImageFormat.GIF, ImageFormat.BMP, ImageFormat.JP2,
+                ImageFormat.WEBP, ImageFormat.TIFF ->
                     runCatching { KiteImage.decode(bytes) }.getOrNull()?.toKiteImageData()
                 ImageFormat.JPEG -> {
                     runCatching { KiteImage.decode(bytes) }.getOrNull()?.let { return it.toKiteImageData() }

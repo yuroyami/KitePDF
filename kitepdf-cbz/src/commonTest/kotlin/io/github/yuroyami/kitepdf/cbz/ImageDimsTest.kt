@@ -51,4 +51,32 @@ class ImageDimsTest {
         assertNull(ImageDims.of("not an image".encodeToByteArray()))
         assertNull(ImageDims.of(ByteArray(0)))
     }
+
+    @Test
+    fun webp_lossless_lossy_and_extended_headers() {
+        assertEquals(6 to 4, ImageDims.of(CbzFixtures.webpLossless6x4()))
+        assertEquals(6 to 4, ImageDims.of(CbzFixtures.webpLossy6x4()))
+        // VP8X: four flag bytes, then 24-bit canvas width-1 (319) and height-1 (199).
+        val vp8x = "RIFF".encodeToByteArray() + byteArrayOf(30, 0, 0, 0) + "WEBPVP8X".encodeToByteArray() +
+            byteArrayOf(10, 0, 0, 0, 0, 0, 0, 0, 0x3F, 0x01, 0, 0xC7.toByte(), 0, 0)
+        assertEquals(320 to 200, ImageDims.of(vp8x))
+    }
+
+    @Test
+    fun tiff_first_directory_in_either_byte_order() {
+        fun tiff(le: Boolean): ByteArray {
+            val b = ByteArray(38)
+            fun p16(o: Int, v: Int) {
+                if (le) { b[o] = v.toByte(); b[o + 1] = (v shr 8).toByte() } else { b[o] = (v shr 8).toByte(); b[o + 1] = v.toByte() }
+            }
+            fun p32(o: Int, v: Int) = if (le) { p16(o, v and 0xFFFF); p16(o + 2, v ushr 16) } else { p16(o, v ushr 16); p16(o + 2, v and 0xFFFF) }
+            b[0] = (if (le) 'I' else 'M').code.toByte(); b[1] = b[0]
+            p16(2, 42); p32(4, 8); p16(8, 2)
+            p16(10, 256); p16(12, 3); p32(14, 1); p16(18, 320) // width as a SHORT
+            p16(22, 257); p16(24, 4); p32(26, 1); p32(30, 200) // height as a LONG
+            return b
+        }
+        assertEquals(320 to 200, ImageDims.of(tiff(le = true)))
+        assertEquals(320 to 200, ImageDims.of(tiff(le = false)))
+    }
 }

@@ -33,7 +33,7 @@ class EmbeddedFontRenderTest {
 
     @Test
     fun embedded_font_draws_real_outlines() {
-        val ttf = droidSans() ?: return // font not present in this checkout: skip
+        val ttf = droidSans().orSkip("DroidSansFallback.ttf")
         val css = "@font-face{font-family:'Embedded';src:url(font.ttf)}p{font-family:'Embedded'}"
         val runs = glyphRuns("<body><style>$css</style><p>中文字</p></body>", ttf)
 
@@ -45,7 +45,7 @@ class EmbeddedFontRenderTest {
 
     @Test
     fun unmatched_family_falls_back_to_standard14() {
-        val ttf = droidSans() ?: return
+        val ttf = droidSans().orSkip("DroidSansFallback.ttf")
         // The face is declared but no element uses it -> everything stays on the fallback path.
         val css = "@font-face{font-family:'Embedded';src:url(font.ttf)}"
         val runs = glyphRuns("<body><style>$css</style><p>hello world</p></body>", ttf)
@@ -54,7 +54,7 @@ class EmbeddedFontRenderTest {
 
     @Test
     fun font_matching_relaxes_weight_and_style() {
-        val ttf = droidSans() ?: return
+        val ttf = droidSans().orSkip("DroidSansFallback.ttf")
         val face = FontRegistry.face("book", bold = false, italic = false, ttf)
         assertNotNull(face)
         val registry = FontRegistry(listOf(face))
@@ -66,7 +66,7 @@ class EmbeddedFontRenderTest {
 
     @Test
     fun idpf_obfuscated_font_is_deobfuscated_before_parsing() {
-        val ttf = droidSans() ?: return
+        val ttf = droidSans().orSkip("DroidSansFallback.ttf")
         val uid = "urn:uuid:12345678-1234-5678-9abc-def012345678"
         val obfuscated = Deobfuscate.idpf(ttf, uid) // publisher-side mangling
         val css = "@font-face{font-family:'Obf';src:url(font.ttf)}p{font-family:'Obf'}"

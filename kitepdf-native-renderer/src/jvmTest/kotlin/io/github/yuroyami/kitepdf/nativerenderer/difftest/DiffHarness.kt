@@ -50,6 +50,8 @@ object DiffHarness {
         val kitePng: String?,     // paths relative to outDir
         val refPng: String?,
         val diffPng: String?,
+        /** Non-background pixels in the reference render, when the oracle ran. */
+        val referenceInk: Long? = null,
     )
 
     data class Report(
@@ -182,7 +184,8 @@ object DiffHarness {
                     val kiteImg = AwtPdfRasterizer.renderToImage(doc.pages[i], scale = scale)
                     val kitePng = File(docOut, "p$i.kite.png")
                     ImageIO.write(kiteImg, "png", kitePng)
-                    val nonBlank = ImageDiff.nonBackgroundPixels(kiteImg) > 20
+                    val ink = ImageDiff.nonBackgroundPixels(kiteImg)
+                    var referenceInk: Long? = null
 
                     var score: Double? = null
                     var diffFrac: Double? = null
@@ -197,6 +200,7 @@ object DiffHarness {
                                 val refPng = File(docOut, "p$i.ref.png")
                                 ImageIO.write(oracleResult.image, "png", refPng)
                                 refRel = rel(outDir, refPng)
+                                referenceInk = ImageDiff.nonBackgroundPixels(oracleResult.image)
                                 if (
                                     abs(kiteImg.width - oracleResult.image.width) > 1 ||
                                     abs(kiteImg.height - oracleResult.image.height) > 1
@@ -227,12 +231,15 @@ object DiffHarness {
                         }
                     }
 
+                    // Blank: next to no ink, or under a tenth of what the reference paints (#43).
+                    val nonBlank = ink > 20 && referenceInk.let { it == null || ink * 10 >= it }
                     results += PageResult(
                         doc = entry.name, page = i, synthetic = entry.synthetic,
                         rendered = true, error = null, nonBlank = nonBlank,
                         oracleError = oracleError,
                         score = score, diffFraction = diffFrac, maxDelta = maxDelta,
                         kitePng = rel(outDir, kitePng), refPng = refRel, diffPng = diffRel,
+                        referenceInk = referenceInk,
                     )
                 } catch (e: Exception) {
                     results += fail(entry, i, "render: ${e.message}")

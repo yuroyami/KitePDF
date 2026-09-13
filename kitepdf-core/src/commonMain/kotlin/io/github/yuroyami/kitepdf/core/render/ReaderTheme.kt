@@ -15,6 +15,10 @@ import io.github.yuroyami.kitepdf.core.font.TextGlyph
  * ```kotlin
  * page.renderTo(ReaderTheme.Dark.wrap(canvas), ctm)   // paint background yourself
  * ```
+ *
+ * Two themes are equal when they share the paper colour and the same colour
+ * function, so a theme built inline with a lambda that captures nothing stays
+ * one cache key across recompositions.
  */
 public class ReaderTheme(
     /** Paper colour behind the page content. */
@@ -25,6 +29,13 @@ public class ReaderTheme(
     /** Decorate [canvas] so its content colours are themed. Returns it unchanged for [Light]. */
     public fun wrap(canvas: KiteCanvas): KiteCanvas =
         if (this === Light) canvas else ThemedCanvas(canvas, mapColor)
+
+    override fun equals(other: Any?): Boolean =
+        this === other || (other is ReaderTheme && background == other.background && mapColor == other.mapColor)
+
+    override fun hashCode(): Int = 31 * background.hashCode() + mapColor.hashCode()
+
+    override fun toString(): String = "ReaderTheme(background=$background)"
 
     public companion object {
         /** No colour change; white paper. */

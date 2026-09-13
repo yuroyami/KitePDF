@@ -61,4 +61,27 @@ class KiteImageDataEncodedTest {
         assertNull(KiteImageData.fromEncodedImage(byteArrayOf(1, 2, 3, 4)))
         assertNull(KiteImageData.fromEncodedImage(ByteArray(0)))
     }
+
+    @Test
+    fun lossless_webp_and_tiff_decode() {
+        // One 6x4 image: through `cwebp -lossless`, and as an uncompressed RGB TIFF.
+        val webp = KiteImageData.fromEncodedImage(hex(WEBP_LOSSLESS_6X4))
+        assertEquals(6, webp?.width)
+        assertEquals(4, webp?.height)
+        val tiff = KiteImageData.fromEncodedImage(hex(TIFF_6X4))
+        assertEquals(6, tiff?.width)
+        assertEquals(4, tiff?.height)
+    }
+
+    private fun hex(s: String): ByteArray = ByteArray(s.length / 2) { s.substring(it * 2, it * 2 + 2).toInt(16).toByte() }
+
+    private companion object {
+        const val WEBP_LOSSLESS_6X4 =
+            "5249464634000000574542505650384c280000002f05c0000017201048da1f7a8df9171014f93fdafc075f0a14b46dc3a6fa46267c16d1ff4008fd01"
+        const val TIFF_6X4 =
+            "49492a00080000000a0000010300010000000600000001010300010000000400000002010300030000008600000003010300010000000100" +
+                "000006010300010000000200000011010400010000008c0000001501030001000000030000001601030001000000040000001701040001" +
+                "000000480000001c010300010000000100000000000000080008000800ff0000ff0000ff00000000ff0000ff0000ffff0000ff0000ff00" +
+                "000000ff0000ff0000ffff0000ff0000ff00000000ff0000ff0000ff00ff0000ff0000ff0000ff0000ff0000ff00"
+    }
 }

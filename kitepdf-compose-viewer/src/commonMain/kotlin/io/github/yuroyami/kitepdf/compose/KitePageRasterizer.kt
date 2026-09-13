@@ -224,6 +224,10 @@ public class KitePageRasterizer(
     /**
      * Renders [page] into a fresh [widthPx]×[heightPx] bitmap.
      *
+     * The page is scaled to fill [widthPx]. Give [heightPx] the page's own aspect
+     * ratio, `widthPx * displayHeight / displayWidth`: a shorter bitmap cuts off
+     * the bottom of the page, and a taller one leaves background below it.
+     *
      * @param background colour painted before page content (documents assume paper).
      * @param hairlineWidthPx minimum stroke width in raster pixels. See
      *   [ComposeCanvas]. Pass the raster:on-screen ratio (>1) when rendering
@@ -274,6 +278,13 @@ public class KitePageRasterizer(
         // and normalized /Rotate; EPUB folds in its top-left flip). Scaling it by
         // `s` in device space gives the final CTM; no manual Y-flip here.
         val s = w / page.displayWidth
+        val fittedHeight = page.displayHeight * s
+        if (kotlin.math.abs(h - fittedHeight) > 1.0) {
+            kiteWarn {
+                "rasterize: a ${w}x$h bitmap does not match the page's aspect ratio " +
+                    "(${w}x${fittedHeight.toInt()}), so the page fills the width and the height does not fit"
+            }
+        }
         // The theme owns the paper colour when set; else use `background`.
         val bg = theme?.background?.let { Color(it.r.toFloat(), it.g.toFloat(), it.b.toFloat()) } ?: background
         val bitmap = ImageBitmap(w, h)

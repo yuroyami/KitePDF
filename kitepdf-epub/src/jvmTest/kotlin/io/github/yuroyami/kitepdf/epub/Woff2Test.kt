@@ -15,8 +15,7 @@ import kotlin.test.assertTrue
  * hmtx transform) and asserts our decoder reverses all of it: same cmap,
  * same advances, real outlines, end-to-end through an EPUB `@font-face`.
  *
- * Skipped silently when the TTF or the encoder binary is unavailable
- * (matches WoffTest; CI has neither).
+ * Skipped when the TTF or the encoder binary is unavailable, as on CI.
  */
 class Woff2Test {
 
@@ -46,8 +45,8 @@ class Woff2Test {
 
     @Test
     fun woff2_round_trips_cmap_advances_and_outlines() {
-        val ttf = droidSans()?.readBytes() ?: return
-        val woff2 = woff2Compress(droidSans()!!) ?: return
+        val ttf = droidSans().orSkip("DroidSansFallback.ttf").readBytes()
+        val woff2 = woff2Compress(droidSans()!!).orSkip("The woff2_compress tool")
         assertTrue(Woff2.isWoff2(woff2), "encoder output is recognised as WOFF2")
 
         val fromTtf = FontRegistry.face("f", bold = false, italic = false, ttf)
@@ -71,8 +70,8 @@ class Woff2Test {
 
     @Test
     fun woff2_font_face_renders_outlines_end_to_end() {
-        val ttfFile = droidSans() ?: return
-        val woff2 = woff2Compress(ttfFile) ?: return
+        val ttfFile = droidSans().orSkip("DroidSansFallback.ttf")
+        val woff2 = woff2Compress(ttfFile).orSkip("The woff2_compress tool")
 
         val css = "@font-face{font-family:'W2';src:url(font.woff2)}p{font-family:'W2'}"
         val doc = EpubDocument.open(

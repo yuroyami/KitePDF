@@ -38,7 +38,7 @@ class LazyFontScopeTest {
      */
     @Test
     fun a_font_url_resolves_against_its_own_stylesheet() {
-        val ttf = droidSans() ?: return
+        val ttf = droidSans().orSkip("DroidSansFallback.ttf")
         val container = """<?xml version="1.0"?><container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container"><rootfiles><rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/></rootfiles></container>"""
         val opf = """<?xml version="1.0"?>
             <package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="uid">
@@ -74,7 +74,7 @@ class LazyFontScopeTest {
      */
     @Test
     fun an_inline_font_face_stays_in_its_own_chapter() {
-        val ttf = droidSans() ?: return
+        val ttf = droidSans().orSkip("DroidSansFallback.ttf")
         val face = "@font-face{font-family:'Embedded';src:url(../Fonts/font.ttf)}"
         val bytes = EpubFixtures.epubFoldered(
             bodies = listOf(
@@ -92,7 +92,7 @@ class LazyFontScopeTest {
     /** Order does not change it: preparing the plain chapter first gives the same answer. */
     @Test
     fun the_scope_does_not_depend_on_layout_order() {
-        val ttf = droidSans() ?: return
+        val ttf = droidSans().orSkip("DroidSansFallback.ttf")
         val face = "@font-face{font-family:'Embedded';src:url(../Fonts/font.ttf)}"
         val bytes = EpubFixtures.epubFoldered(
             bodies = listOf("<style>$face</style><p>中文字</p>", "<p>中文字</p>"),
@@ -112,7 +112,7 @@ class LazyFontScopeTest {
     /** A stylesheet face is the whole book's, whichever chapter is laid out first. */
     @Test
     fun a_stylesheet_face_reaches_every_chapter() {
-        val ttf = droidSans() ?: return
+        val ttf = droidSans().orSkip("DroidSansFallback.ttf")
         val css = "@font-face{font-family:'Embedded';src:url(../Fonts/font.ttf)}p{font-family:'Embedded'}"
         val bytes = EpubFixtures.epubFoldered(
             bodies = listOf("<p>中文字</p>", "<p>中文字</p>", "<p>中文字</p>"),

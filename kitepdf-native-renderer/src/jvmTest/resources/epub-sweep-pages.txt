@@ -1,0 +1,25 @@
+# EPUB sweep page counts, checked by EpubDifferentialTest.
+# Book hash (SHA-1 prefix), page count, book name. Rewrite with -Dkitepdf.epub.updatePages=true.
+d9d53e38746d 826 1
+76134f0f2d2a 106 10
+a501964728ba 579 11
+eec7c04e3d65 11 12
+7a64e6ca9f9e 367 13
+25870ca18d0b 166 15
+145f60726c63 203 16
+524d7bb4a86f 3 17
+87fa6da33535 515 18
+63c16aceff72 1242 19
+fc5dcefa9164 56 2
+59aa2ba3086f 7 3
+8e4b222cb3f6 57 4
+147fec37ee33 136 5
+0c30a6318d79 491 6
+ce8baa7ae3be 157 7
+f0091ada0476 259 8
+97f0a4130b3a 92 9
+db304e6d86fa 1 boxed
+b90f2bb6bbde 1 image
+27a932a2af5c 2 novel
+8f509a530f2c 1 styled
+d3e1064f6cad 1 table
