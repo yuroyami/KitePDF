@@ -221,7 +221,7 @@ public class Canvas2dCanvas(private val ctx: CanvasRenderingContext2D) : KiteCan
         alpha: Double, blendMode: KiteBlendMode,
     ) {
         if (paintComplexShading(shading, ctm, clipPath, alpha, blendMode)) return
-        val stops = shading.sampleStops(32) ?: return
+        val stops = shading.sampleStops() ?: return
 
         val gradient = when (shading) {
             is KiteShading.Axial -> {

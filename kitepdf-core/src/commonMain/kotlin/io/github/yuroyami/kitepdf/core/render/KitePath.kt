@@ -34,10 +34,13 @@ public data class KitePath(val segments: List<Segment>) {
         private val segments = mutableListOf<Segment>()
         private var lastX = 0.0
         private var lastY = 0.0
+        private var startX = 0.0
+        private var startY = 0.0
 
         public fun moveTo(x: Double, y: Double) {
             segments.add(Segment.MoveTo(x, y))
             lastX = x; lastY = y
+            startX = x; startY = y
         }
 
         public fun lineTo(x: Double, y: Double) {
@@ -70,6 +73,9 @@ public data class KitePath(val segments: List<Segment>) {
 
         public fun close() {
             segments.add(Segment.Close)
+            // Closing returns the current point to the subpath's start (ISO 32000-1,
+            // 8.5.2.1), where a following v begins (#136).
+            lastX = startX; lastY = startY
         }
 
         public fun rectangle(x: Double, y: Double, w: Double, h: Double) {
@@ -81,7 +87,7 @@ public data class KitePath(val segments: List<Segment>) {
         }
 
         public fun build(): KitePath = KitePath(segments.toList())
-        public fun reset() { segments.clear(); lastX = 0.0; lastY = 0.0 }
+        public fun reset() { segments.clear(); lastX = 0.0; lastY = 0.0; startX = 0.0; startY = 0.0 }
         public fun isEmpty(): Boolean = segments.isEmpty()
     }
 

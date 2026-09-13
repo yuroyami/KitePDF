@@ -333,7 +333,8 @@ public sealed class KiteColorSpace {
                         else -> DeviceRGB
                     }
                 }
-                "Indexed" -> resolveIndexed(arr, refs, depth)
+                // ISO 32000-1, 8.9.7, Table 94: /I abbreviates /Indexed in inline images (#115).
+                "Indexed", "I" -> resolveIndexed(arr, refs, depth)
                 "Separation" -> resolveSeparation(arr, refs, depth)
                 "DeviceN" -> resolveDeviceN(arr, refs, depth)
                 "Pattern" -> Unsupported(tag, 1)

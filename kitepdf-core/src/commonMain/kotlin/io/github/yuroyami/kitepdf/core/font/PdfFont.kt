@@ -547,16 +547,19 @@ public class PdfFont private constructor(
         ): WidthTable {
             val widths = IntArray(256)
             val present = BooleanArray(256)
+            val firstChar = dict.getInt("FirstChar")?.toInt() ?: -1
+            val arr = dict.getArray("Widths", refs) // /Widths is often an indirect reference
             // Standard-14 metrics seed the table (a real, defined width) for the
-            // built-in fonts; these count as "present" so we don't fall back.
+            // built-in fonts; these count as "present" so we don't fall back. With
+            // no /Widths, a Windows core-font name borrows the metrics of the
+            // Standard 14 face it stands for, as other readers do (#120).
+            val metricsName = if (arr == null) Standard14Widths.canonicalName(baseFont) else baseFont
             for (i in 0..255) {
                 val gn = nameTable[i] ?: continue
-                val w = Standard14Widths.widthOf(baseFont, gn) ?: continue
+                val w = Standard14Widths.widthOf(metricsName, gn) ?: continue
                 widths[i] = w
                 present[i] = true
             }
-            val firstChar = dict.getInt("FirstChar")?.toInt() ?: -1
-            val arr = dict.getArray("Widths", refs) // /Widths is often an indirect reference
             if (firstChar in 0..255 && arr != null) {
                 for ((idx, w) in arr.withIndex()) {
                     val code = firstChar + idx

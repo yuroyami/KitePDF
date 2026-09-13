@@ -2,6 +2,7 @@ package io.github.yuroyami.kitepdf.core
 
 import io.github.yuroyami.kitepdf.core.font.CidWidthTable
 import io.github.yuroyami.kitepdf.core.font.PdfFont
+import io.github.yuroyami.kitepdf.core.font.Standard14Widths
 import io.github.yuroyami.kitepdf.core.parser.IndirectResolver
 import io.github.yuroyami.kitepdf.core.parser.PdfArray
 import io.github.yuroyami.kitepdf.core.parser.PdfDictionary
@@ -71,5 +72,25 @@ class FontWidthResolutionTest {
         // Without resolving the indirect /Widths, this would be the 500 default.
         assertEquals(700, font.widthOf(65))
         assertEquals(700, font.widthOf(74))
+    }
+
+    @Test fun a_windows_core_font_with_no_widths_borrows_standard14_metrics() {
+        // /ArialMT with no /Widths measures as Helvetica, as other readers do (#120).
+        val font = PdfFont.from(
+            PdfDictionary(linkedMapOf<String, PdfObject>(
+                "Type" to PdfName("Font"), "Subtype" to PdfName("TrueType"),
+                "BaseFont" to PdfName("ArialMT"), "Encoding" to PdfName("WinAnsiEncoding"),
+            )),
+            IndirectResolver { null },
+        )
+        assertEquals(222, font.widthOf('i'.code))
+        assertEquals(944, font.widthOf('W'.code))
+    }
+
+    @Test fun the_core_font_aliases_keep_weight_and_slant() {
+        assertEquals("Helvetica-Bold", Standard14Widths.canonicalName("Arial,Bold"))
+        assertEquals("Times-BoldItalic", Standard14Widths.canonicalName("TimesNewRomanPS-BoldItalicMT"))
+        assertEquals("Courier", Standard14Widths.canonicalName("CourierNewPSMT"))
+        assertEquals("ArialNarrow", Standard14Widths.canonicalName("ArialNarrow"))
     }
 }

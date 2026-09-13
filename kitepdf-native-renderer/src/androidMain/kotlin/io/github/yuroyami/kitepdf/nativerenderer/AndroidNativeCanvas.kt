@@ -226,7 +226,7 @@ public class AndroidNativeCanvas(private val canvas: AndroidCanvas) : KiteCanvas
         alpha: Double, blendMode: KiteBlendMode,
     ) {
         if (paintComplexShading(shading, ctm, clipPath, alpha, blendMode)) return
-        val stops = shading.sampleStops(32) ?: return
+        val stops = shading.sampleStops() ?: return
         val colors = IntArray(stops.colors.size) { stops.colors[it].toArgb(alpha) }
         val positions = FloatArray(stops.offsets.size) { stops.offsets[it].toFloat() }
 

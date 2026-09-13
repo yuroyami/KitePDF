@@ -196,6 +196,7 @@ public class RecordingCanvas : KiteCanvas {
             val path: KitePath, val ctm: KiteMatrix, val color: RgbColor, val lineWidth: Double,
             val alpha: Double = 1.0, val blendMode: KiteBlendMode = KiteBlendMode.Normal,
             val lineCap: Int = 0, val lineJoin: Int = 0, val miterLimit: Double = 10.0,
+            val dashArray: List<Double>? = null, val dashPhase: Double = 0.0,
         ) : Call()
         public data class Glyphs(
             val glyphs: List<TextGlyph>, val fontSize: Double, val unitsPerEm: Int,
@@ -234,7 +235,7 @@ public class RecordingCanvas : KiteCanvas {
         calls.add(Call.Fill(path, ctm, color, evenOdd, alpha, blendMode))
     }
     override fun strokePath(path: KitePath, ctm: KiteMatrix, color: RgbColor, lineWidth: Double, alpha: Double, blendMode: KiteBlendMode, dashArray: List<Double>?, dashPhase: Double, lineCap: Int, lineJoin: Int, miterLimit: Double) {
-        calls.add(Call.Stroke(path, ctm, color, lineWidth, alpha, blendMode, lineCap, lineJoin, miterLimit))
+        calls.add(Call.Stroke(path, ctm, color, lineWidth, alpha, blendMode, lineCap, lineJoin, miterLimit, dashArray, dashPhase))
     }
     override fun drawGlyphs(glyphs: List<TextGlyph>, fontSize: Double, unitsPerEm: Int, hasOutlines: Boolean, fontSpec: FontSpec, textToDevice: KiteMatrix, color: RgbColor, alpha: Double, blendMode: KiteBlendMode) {
         calls.add(Call.Glyphs(glyphs, fontSize, unitsPerEm, hasOutlines, fontSpec, textToDevice, color, alpha, blendMode))

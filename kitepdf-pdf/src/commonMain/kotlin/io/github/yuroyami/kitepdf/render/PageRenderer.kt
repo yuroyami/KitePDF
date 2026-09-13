@@ -123,6 +123,20 @@ public class PageRenderer(
 
     // The page's /Properties, for a nested stream whose own resources lack the name (#56).
     private var pageProperties: Map<String, PdfObject> = emptyMap()
+
+    /**
+     * The face for text whose font is missing from the resources: Helvetica,
+     * the substitute ISO 32000-1, 9.6.2.2 asks for and the one MuPDF uses, so
+     * the text paints and advances by real widths (#139, #142).
+     */
+    private val missingFont: PdfFont by lazy {
+        PdfFont.from(
+            PdfDictionary(linkedMapOf<String, PdfObject>(
+                "Type" to PdfName("Font"), "Subtype" to PdfName("Type1"), "BaseFont" to PdfName("Helvetica"),
+            )),
+            resolver,
+        )
+    }
     private var optionalContent: io.github.yuroyami.kitepdf.PdfOptionalContent? = null
 
     /** The page's default (initial) CTM. Pattern matrices are relative to it. */
@@ -861,9 +875,10 @@ public class PageRenderer(
             // (which would render every subsequent stroke as a hairline). Only
             // update when an operand is actually present.
             "w" -> if (a.isNotEmpty()) state.replace(state.current.copy(lineWidth = num(a, 0)))
-            "J" -> state.replace(state.current.copy(lineCap = num(a, 0).toInt()))
-            "j" -> state.replace(state.current.copy(lineJoin = num(a, 0).toInt()))
-            "M" -> state.replace(state.current.copy(miterLimit = num(a, 0)))
+            // A missing operand leaves the parameter alone, as it does for w (#137).
+            "J" -> if (a.isNotEmpty()) state.replace(state.current.copy(lineCap = num(a, 0).toInt()))
+            "j" -> if (a.isNotEmpty()) state.replace(state.current.copy(lineJoin = num(a, 0).toInt()))
+            "M" -> if (a.isNotEmpty()) state.replace(state.current.copy(miterLimit = num(a, 0)))
             "d" -> {
                 // dash: [ array ] phase d. The array holds on/off lengths (user units).
                 val arr = a.getOrNull(0) as? io.github.yuroyami.kitepdf.core.parser.PdfArray
@@ -913,14 +928,14 @@ public class PageRenderer(
             // ECG grid white. Per ISO 32000-1 §8.6.8 selecting a space resets the colour to its
             // initial value (black) until the next sc/scn sets components.
             "cs" -> {
-                val csp = (a.firstOrNull() as? io.github.yuroyami.kitepdf.core.parser.PdfName)
-                    ?.let { namedColorSpace(it.value, colorSpaces) } ?: KiteColorSpace.DeviceGray
-                state.replace(state.current.copy(fillColorSpace = csp, fillColor = csp.defaultColor(), fillPattern = null))
+                val name = (a.firstOrNull() as? io.github.yuroyami.kitepdf.core.parser.PdfName)?.value
+                val csp = name?.let { namedColorSpace(it, colorSpaces) } ?: KiteColorSpace.DeviceGray
+                state.replace(state.current.copy(fillColorSpace = csp, fillColor = csp.defaultColor(), fillPattern = initialPattern(name, csp)))
             }
             "CS" -> {
-                val csp = (a.firstOrNull() as? io.github.yuroyami.kitepdf.core.parser.PdfName)
-                    ?.let { namedColorSpace(it.value, colorSpaces) } ?: KiteColorSpace.DeviceGray
-                state.replace(state.current.copy(strokeColorSpace = csp, strokeColor = csp.defaultColor(), strokePattern = null))
+                val name = (a.firstOrNull() as? io.github.yuroyami.kitepdf.core.parser.PdfName)?.value
+                val csp = name?.let { namedColorSpace(it, colorSpaces) } ?: KiteColorSpace.DeviceGray
+                state.replace(state.current.copy(strokeColorSpace = csp, strokeColor = csp.defaultColor(), strokePattern = initialPattern(name, csp)))
             }
 
             // ─── Path construction ───────────────────────────────────────
@@ -976,7 +991,9 @@ public class PageRenderer(
             "Tf" -> {
                 val fontName = (a.getOrNull(0) as? PdfName)?.value
                 val fontSize = num(a, 1)
-                val resolved = fonts[fontName]
+                val resolved = fonts[fontName] ?: missingFont.also {
+                    kiteWarn { "render: font $fontName missing from /Resources" }
+                }
                 state.mutateText { it.copy(font = resolved, fontSize = fontSize) }
             }
             "Tc" -> state.mutateText { it.copy(charSpacing = num(a, 0)) }
@@ -1048,10 +1065,14 @@ public class PageRenderer(
                 val name = (a.firstOrNull() as? PdfName)?.value ?: return
                 val shading = shadings[name] ?: return
                 val s = state.current
-                canvas.fillShading(
-                    shading, s.ctm, clipPath = null,
-                    alpha = s.fillAlpha, blendMode = s.blendMode,
-                )
+                // sh paints under the active soft mask like every other painting
+                // operator (ISO 32000-1, 11.6.5.1, #65).
+                withSoftMask(s) {
+                    canvas.fillShading(
+                        shading, s.ctm, clipPath = null,
+                        alpha = s.fillAlpha, blendMode = s.blendMode,
+                    )
+                }
             }
 
             // ─── Inline image (BI … ID … EI) ─────────────────────────────
@@ -1117,6 +1138,70 @@ public class PageRenderer(
     }
 
     /**
+     * The pattern a newly selected colour space starts with. A Pattern space's
+     * initial colour is no pattern at all, which paints nothing until `scn`
+     * names one (ISO 32000-1, 8.6.8, #148). Any other space starts with none.
+     */
+    private fun initialPattern(name: String?, csp: KiteColorSpace): KitePattern? =
+        if (name == "Pattern" || (csp as? KiteColorSpace.Unsupported)?.name == "Pattern") KitePattern.Unsupported else null
+
+    /**
+     * [path] with its degenerate subpaths, those whose every point is the same,
+     * settled per ISO 32000-1, 8.5.3.2: round caps paint one as a dot, drawn as
+     * a zero-length line so every backend agrees (#135), and butt or square caps
+     * paint nothing (#134). Null when nothing is left to stroke.
+     */
+    private fun strokeable(path: KitePath, lineCap: Int): KitePath? {
+        val segs = path.segments
+        var start = 0
+        var degenerate = false
+        while (start < segs.size) {
+            val end = subpathEnd(segs, start)
+            if (isDegenerate(segs, start, end)) { degenerate = true; break }
+            start = end
+        }
+        if (!degenerate) return path
+        val out = ArrayList<KitePath.Segment>(segs.size)
+        start = 0
+        while (start < segs.size) {
+            val end = subpathEnd(segs, start)
+            if (!isDegenerate(segs, start, end)) {
+                for (k in start until end) out.add(segs[k])
+            } else if (lineCap == 1) {
+                val p = segs[start] as KitePath.Segment.MoveTo
+                out.add(KitePath.Segment.MoveTo(p.x, p.y))
+                out.add(KitePath.Segment.LineTo(p.x, p.y))
+            }
+            start = end
+        }
+        return if (out.isEmpty()) null else KitePath(out)
+    }
+
+    /** Index just past the subpath that starts at [from]: the next move, or the end. */
+    private fun subpathEnd(segs: List<KitePath.Segment>, from: Int): Int {
+        var k = from + 1
+        while (k < segs.size && segs[k] !is KitePath.Segment.MoveTo) k++
+        return k
+    }
+
+    /** A move followed only by segments that never leave its point. A lone move is not a subpath. */
+    private fun isDegenerate(segs: List<KitePath.Segment>, from: Int, end: Int): Boolean {
+        val m = segs[from] as? KitePath.Segment.MoveTo ?: return false
+        if (end - from < 2) return false
+        for (k in from + 1 until end) {
+            val stays = when (val s = segs[k]) {
+                is KitePath.Segment.LineTo -> s.x == m.x && s.y == m.y
+                is KitePath.Segment.CurveTo ->
+                    s.x1 == m.x && s.y1 == m.y && s.x2 == m.x && s.y2 == m.y && s.x3 == m.x && s.y3 == m.y
+                is KitePath.Segment.QuadTo -> s.x1 == m.x && s.y1 == m.y && s.x2 == m.x && s.y2 == m.y
+                is KitePath.Segment.MoveTo, KitePath.Segment.Close -> true
+            }
+            if (!stays) return false
+        }
+        return true
+    }
+
+    /**
      * An image in a None separation, or a stencil mask painting a None
      * separation's colour, has no effect on the page (ISO 32000-1, 8.6.6.4).
      */
@@ -1157,7 +1242,7 @@ public class PageRenderer(
         if (path.isEmpty()) return
         val s = state.current
         if (s.strokeColorSpace.paintsNothing) return
-        val built = path.build()
+        val built = strokeable(path.build(), s.lineCap) ?: return
         withSoftMask(s) {
             val pat = s.strokePattern
             when {
@@ -1226,6 +1311,11 @@ public class PageRenderer(
         val properties = loadProperties(res)
         val ops = ContentStreamParser.parse(pat.contentBytes)
         val uncolored = pat.paintType == 2
+        // ISO 32000-1, 8.7.3.1, Table 75: the pattern's box clips each cell, so a
+        // cell that draws past it cannot flood the fill (#95).
+        val cellBox = KitePath.Builder().apply {
+            rectangle(pat.bbox.left, pat.bbox.bottom, pat.bbox.right - pat.bbox.left, pat.bbox.top - pat.bbox.bottom)
+        }.build()
 
         canvas.pushClip(clipPath, s.ctm, evenOdd)
         val clipBase = activeClipCount
@@ -1239,6 +1329,8 @@ public class PageRenderer(
                     if (uncolored) GraphicsState(ctm = tileCtm, fillColor = s.fillColor, strokeColor = s.fillColor)
                     else GraphicsState(ctm = tileCtm),
                 )
+                canvas.pushClip(cellBox, tileCtm, false)
+                activeClipCount++
                 val tilePath = KitePath.Builder()
                 val scope = openScope()
                 try {
@@ -1433,18 +1525,8 @@ public class PageRenderer(
         if (bytes.isEmpty()) return
         val hScale = t.horizontalScaling / 100.0
 
-        val font = t.font
-        if (font == null) {
-            // Tf named an absent font, so we have no metrics or glyphs. Rather
-            // than return WITHOUT advancing Tm (which collapses every following
-            // run onto this position), advance by an estimated width of ~0.5em
-            // per byte so subsequent text does not overlap. Nothing is painted.
-            val estimated = bytes.size * 0.5 * t.fontSize * hScale
-            state.mutateText {
-                it.copy(textMatrix = it.textMatrix.concat(KiteMatrix.translation(estimated, 0.0)))
-            }
-            return
-        }
+        // Text shown before any Tf uses the missing-font substitute as well.
+        val font = t.font ?: missingFont
 
         // Combined text-space-to-user-space matrix:
         //   text matrix × CTM, with font size + horizontal scale already
@@ -1497,7 +1579,7 @@ public class PageRenderer(
 
         if (!hidden) {
             if (doClip) accumulateTextClip(glyphs, font, t, textToUser)
-            if (doFill && !state.current.fillColorSpace.paintsNothing) {
+            if (doFill && !state.current.fillColorSpace.paintsNothing && state.current.fillPattern !is KitePattern.Unsupported) {
                 withSoftMask(state.current) {
                     canvas.drawGlyphs(
                         glyphs, t.fontSize, font.unitsPerEm ?: 1000,
@@ -1676,11 +1758,14 @@ public class PageRenderer(
         textToUser: KiteMatrix,
     ) {
         val hidden = ocHidden()
+        // ISO 32000-2, 9.3.6: render modes 3 and 7 draw no Type 3 glyph, though the
+        // pen still advances (#86).
+        val invisible = t.renderingMode == 3 || t.renderingMode == 7
         var penX = 0.0
         for (b in bytes) {
             val code = b.toInt() and 0xFF
             val proc = data.nameForCode[code]?.let { data.charProcs[it] }
-            if (!hidden && proc != null && formDepth < MAX_FORM_DEPTH) {
+            if (!hidden && !invisible && proc != null && formDepth < MAX_FORM_DEPTH) {
                 formDepth++
                 try {
                     val glyphToUser = textToUser

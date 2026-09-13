@@ -19,7 +19,7 @@ import io.github.yuroyami.kitepdf.core.parser.PdfStream
  *   - `/ca`: fill alpha (0..1)
  *   - `/BM`: blend mode (name or array of names)
  *   - `/SMask`: soft-mask dict ("None" / Mask dict)
- *   - `/LW` `/LC` `/LJ` `/ML` `/D`: line state we honor where Compose has equivalents
+ *   - `/LW` `/LC` `/LJ` `/ML` `/D`: line width, cap, join, miter limit and dash
  *   - `/AIS`, `/SA`, `/OP`, `/op`, `/OPM`, `/Font`, `/RI`: accepted but ignored (rare)
  *
  * Missing fields stay at their previous values; that's the spec's
@@ -34,6 +34,10 @@ public data class ExtGState(
     val lineCap: Int? = null,
     val lineJoin: Int? = null,
     val miterLimit: Double? = null,
+    /** `/D`'s dash array, or null when the dictionary sets no dash. Empty means solid. */
+    val dashArray: List<Double>? = null,
+    /** `/D`'s dash phase, read together with [dashArray]. */
+    val dashPhase: Double = 0.0,
 ) {
 
     public companion object {
@@ -48,6 +52,14 @@ public data class ExtGState(
             }
             val smask = parseSoftMask(dict["SMask"], refs)
             val lw = dict.getReal("LW")
+            // /D is [dashArray dashPhase] (ISO 32000-1, 8.4.5, Table 58, #107).
+            val dash = dict.getArray("D", refs)
+            fun number(o: Any?): Double = when (o) {
+                is io.github.yuroyami.kitepdf.core.parser.PdfInt -> o.value.toDouble()
+                is io.github.yuroyami.kitepdf.core.parser.PdfReal -> o.value
+                else -> 0.0
+            }
+            val dashArray = (dash?.getOrNull(0)?.resolve(refs) as? PdfArray)?.map { number(it) }
             return ExtGState(
                 fillAlpha = fillAlpha?.coerceIn(0.0, 1.0),
                 strokeAlpha = strokeAlpha?.coerceIn(0.0, 1.0),
@@ -57,6 +69,8 @@ public data class ExtGState(
                 lineCap = dict.getInt("LC")?.toInt(),
                 lineJoin = dict.getInt("LJ")?.toInt(),
                 miterLimit = dict.getReal("ML"),
+                dashArray = dashArray,
+                dashPhase = number(dash?.getOrNull(1)),
             )
         }
 

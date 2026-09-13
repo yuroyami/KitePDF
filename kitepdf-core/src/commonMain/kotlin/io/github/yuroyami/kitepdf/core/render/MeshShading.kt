@@ -115,9 +115,13 @@ internal object MeshShadingParser {
             var va: Vertex? = null
             var vb: Vertex? = null
             var vc: Vertex? = null
+            // Each type 4 vertex record, flag included, is padded to a byte
+            // boundary (ISO 32000-1, 8.7.4.5.5, #157).
             fun readVertex(): Vertex {
                 val (x, y) = layout.readPoint(bs)
-                return Vertex(x, y, layout.readColor(bs, cs))
+                val v = Vertex(x, y, layout.readColor(bs, cs))
+                bs.alignToByte()
+                return v
             }
             while (bs.remaining >= layout.bpf + minVertexBits && triangles.size < MAX_TRIANGLES) {
                 val flag = bs.read(layout.bpf).toInt()

@@ -1,5 +1,6 @@
 package io.github.yuroyami.kitepdf.render
 
+import io.github.yuroyami.kitepdf.core.font.Encodings
 import io.github.yuroyami.kitepdf.core.render.KiteMatrix
 
 import io.github.yuroyami.kitepdf.core.parser.IndirectResolver
@@ -44,9 +45,18 @@ internal class Type3Data(
                 else null
             } ?: KiteMatrix(0.001, 0.0, 0.0, 0.001, 0.0, 0.0)
 
-            // /Encoding /Differences: integers set the next code, names assign.
+            // A name selects a base encoding and a dictionary's /BaseEncoding seeds
+            // the table before /Differences, as for simple fonts (ISO 32000-1,
+            // 9.6.6.1, #145). /Differences: integers set the next code, names assign.
             val names = arrayOfNulls<String>(256)
-            val encoding = dict["Encoding"]?.resolve(refs) as? PdfDictionary
+            val encodingObj = dict["Encoding"]?.resolve(refs)
+            val encoding = encodingObj as? PdfDictionary
+            val baseName = when (encodingObj) {
+                is PdfName -> encodingObj.value
+                is PdfDictionary -> encodingObj.getName("BaseEncoding")
+                else -> null
+            }
+            baseEncoding(baseName)?.forEachIndexed { code, name -> if (code < 256) names[code] = name }
             val differences = encoding?.getArray("Differences", refs)
             if (differences != null) {
                 var code = 0
@@ -72,6 +82,14 @@ internal class Type3Data(
                 }
             }
             return Type3Data(procs, fm, dict.getDict("Resources", refs), names, widths, hasWidth)
+        }
+
+        private fun baseEncoding(name: String?): Array<String?>? = when (name) {
+            "StandardEncoding" -> Encodings.standardEncoding
+            "WinAnsiEncoding" -> Encodings.winAnsiEncoding
+            "MacRomanEncoding" -> Encodings.macRomanEncoding
+            "MacExpertEncoding" -> Encodings.macExpertEncoding
+            else -> null
         }
 
         private fun PdfArray.num(i: Int): Double = when (val v = this[i]) {

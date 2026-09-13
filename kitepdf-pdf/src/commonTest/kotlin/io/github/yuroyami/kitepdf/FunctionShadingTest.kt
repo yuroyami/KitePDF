@@ -7,6 +7,7 @@ import io.github.yuroyami.kitepdf.core.parser.PdfInt
 import io.github.yuroyami.kitepdf.core.parser.PdfName
 import io.github.yuroyami.kitepdf.core.parser.PdfObject
 import io.github.yuroyami.kitepdf.core.parser.PdfReal
+import io.github.yuroyami.kitepdf.core.parser.PdfStream
 import io.github.yuroyami.kitepdf.core.parser.PdfReference
 import io.github.yuroyami.kitepdf.core.render.KiteFunction
 import io.github.yuroyami.kitepdf.core.render.KiteShading
@@ -158,7 +159,7 @@ class FunctionShadingTest {
         // White at centre (t=0), black at edge (t=1).
         assertEquals(1.0, stops.colors.first().r, 1e-9)
         assertEquals(0.0, stops.colors.last().r, 1e-9)
-        assertEquals(32, stops.colors.size)
+        assertEquals(256, stops.colors.size)
     }
 
     @Test
@@ -186,6 +187,52 @@ class FunctionShadingTest {
         )
         assertTrue(sh is KiteShading.Axial)
         assertEquals(3, sh.colorSpace.componentCount)
+    }
+
+    @Test
+    fun a_many_band_stitching_function_keeps_every_band() {
+        // 48 flat bands alternating red and blue; 32 stops skip some, 256 keep all (#153).
+        val bands = (0 until 48).map { i ->
+            val c = if (i % 2 == 0) listOf(1.0, 0.0, 0.0) else listOf(0.0, 0.0, 1.0)
+            PdfDictionary(mapOf(
+                "FunctionType" to PdfInt(2), "Domain" to PdfArray(listOf(PdfReal(0.0), PdfReal(1.0))),
+                "C0" to PdfArray(c.map { PdfReal(it) }), "C1" to PdfArray(c.map { PdfReal(it) }), "N" to PdfReal(1.0),
+            ))
+        }
+        val stitch = PdfDictionary(mapOf(
+            "FunctionType" to PdfInt(3), "Domain" to PdfArray(listOf(PdfReal(0.0), PdfReal(1.0))),
+            "Functions" to PdfArray(bands),
+            "Bounds" to PdfArray((1 until 48).map { PdfReal(it / 48.0) }),
+            "Encode" to PdfArray((0 until 48).flatMap { listOf(PdfReal(0.0), PdfReal(1.0)) }),
+        ))
+        val axial = KiteShading.parse(
+            PdfDictionary(mapOf(
+                "ShadingType" to PdfInt(2), "ColorSpace" to PdfName("DeviceRGB"),
+                "Coords" to PdfArray(listOf(PdfReal(0.0), PdfReal(0.0), PdfReal(480.0), PdfReal(0.0))),
+                "Function" to stitch,
+            )),
+            noResolver,
+        )
+        val stops = assertNotNull(assertNotNull(axial).sampleStops())
+        assertEquals(47, stops.colors.toList().zipWithNext().count { (a, b) -> a != b }, "every band boundary survives")
+    }
+
+    @Test
+    fun type4_vertex_records_are_padded_to_whole_bytes() {
+        // 2-bit flag, 8-bit x and y, one 4-bit grey: 22 bits, padded to 24 (#157).
+        val stream = PdfStream(
+            dict = PdfDictionary(mapOf(
+                "ShadingType" to PdfInt(4), "ColorSpace" to PdfName("DeviceGray"),
+                "BitsPerCoordinate" to PdfInt(8), "BitsPerComponent" to PdfInt(4), "BitsPerFlag" to PdfInt(2),
+                "Decode" to PdfArray(listOf(0, 255, 0, 255, 0, 1).map { PdfInt(it.toLong()) }),
+                "Length" to PdfInt(9),
+            )),
+            rawBytes = byteArrayOf(0x02, 0x85.toByte(), 0x3C, 0x32, 0x07, 0xA0.toByte(), 0x19, 0x3E, 0x80.toByte()),
+        )
+        val mesh = KiteShading.parse(stream, noResolver) as KiteShading.TriangleMesh
+        val t = mesh.triangles.single()
+        assertEquals(listOf(10.0, 200.0, 100.0), t.x.toList())
+        assertEquals(listOf(20.0, 30.0, 250.0), t.y.toList())
     }
 
     /* ─── Helper ──────────────────────────────────────────────────────────── */

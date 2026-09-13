@@ -331,7 +331,7 @@ public class ComposeCanvas(
         blendMode: KiteBlendMode,
     ) {
         if (paintComplexShading(shading, ctm, clipPath, alpha, blendMode)) return
-        val stops = shading.sampleStops(32) ?: return
+        val stops = shading.sampleStops() ?: return
         val composeStops = stops.offsets.mapIndexed { i, off ->
             off.toFloat() to stops.colors[i].toCompose()
         }.toTypedArray()

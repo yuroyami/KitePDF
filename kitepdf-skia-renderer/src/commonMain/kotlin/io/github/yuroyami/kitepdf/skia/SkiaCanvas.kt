@@ -225,7 +225,7 @@ public class SkiaCanvas(private val canvas: SkCanvas) : KiteCanvas {
         blendMode: KiteBlendMode,
     ) {
         if (paintComplexShading(shading, ctm, clipPath, alpha, blendMode)) return
-        val stops = shading.sampleStops(32) ?: return
+        val stops = shading.sampleStops() ?: return
 
         // PDF /Extend [start end] controls whether the shading keeps painting
         // past t<0 (start) and t>1 (end) with the terminal colours. Skia's
