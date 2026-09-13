@@ -1,80 +1,105 @@
 package io.github.yuroyami.kitepdf
 
+import io.github.yuroyami.kitepdf.core.font.TextGlyph
 import io.github.yuroyami.kitepdf.core.render.KiteMatrix
+import io.github.yuroyami.kitepdf.core.render.KitePath
 import io.github.yuroyami.kitepdf.core.render.RecordingCanvas
+import io.github.yuroyami.kitepdf.render.glyphToUser
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
-/**
- * Text render modes 4..7 accumulate glyph shapes into a clip pushed at
- * ET; mode 7 paints nothing itself; mode 0 text pushes no clip (regression
- * guard). Structural assertions over the recorded canvas; the pixel-level
- * proof against mutool lives in the differential TextClipOracleTest.
- */
+/** Text clipping (render modes 4 to 7) and the clip a Type 3 `d1` box puts on its glyph. */
 class TextClipTest {
 
-    private fun pdf(textOps: String): ByteArray {
-        val content = "$textOps\n1 0 0 rg 0 0 612 792 re f"
-        val sb = StringBuilder()
-        val offsets = ArrayList<Int>()
-        fun add(s: String) {
-            offsets.add(sb.length)
-            sb.append(s)
+    private val widths = (listOf(250) + List(32) { 0 } + listOf(600)).joinToString(" ")
+
+    /** A page with an embedded TrueType font whose `A` is a square and whose space is empty. */
+    private fun ttfPage(content: String) = TestPdf.onePage(
+        content = content,
+        resources = "/Font << /F1 5 0 R >>",
+        mediaBox = "0 0 300 300",
+        extra = listOf(
+            "<< /Type /Font /Subtype /TrueType /BaseFont /SquareTest /FirstChar 32 /LastChar 65 /Widths [$widths] " +
+                "/FontDescriptor 6 0 R /Encoding /WinAnsiEncoding >>",
+            "<< /Type /FontDescriptor /FontName /SquareTest /Flags 32 /FontBBox [0 0 500 500] /ItalicAngle 0 " +
+                "/Ascent 500 /Descent 0 /CapHeight 500 /StemV 80 /FontFile2 7 0 R >>",
+            TestPdf.Stream("", TestFonts.squareAndSpaceTtf()),
+        ),
+    )
+
+    /** The last clip pushed before the first fill: the text clip in these fixtures. */
+    private fun clipBeforeFill(calls: List<RecordingCanvas.Call>): RecordingCanvas.Call.PushClip =
+        calls.takeWhile { it !is RecordingCanvas.Call.Fill }.filterIsInstance<RecordingCanvas.Call.PushClip>().last()
+
+    /** [minX, minY, maxX, maxY] of [path] after [m]. */
+    private fun deviceBounds(path: KitePath, m: KiteMatrix): DoubleArray {
+        val xs = ArrayList<Double>()
+        val ys = ArrayList<Double>()
+        fun add(x: Double, y: Double) { xs += m.a * x + m.c * y + m.e; ys += m.b * x + m.d * y + m.f }
+        for (seg in path.segments) when (seg) {
+            is KitePath.Segment.MoveTo -> add(seg.x, seg.y)
+            is KitePath.Segment.LineTo -> add(seg.x, seg.y)
+            is KitePath.Segment.CurveTo -> add(seg.x3, seg.y3)
+            is KitePath.Segment.QuadTo -> add(seg.x2, seg.y2)
+            KitePath.Segment.Close -> {}
         }
-        sb.append("%PDF-1.4\n")
-        add("1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n")
-        add("2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n")
-        add(
-            "3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] " +
-                "/Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>\nendobj\n",
+        return doubleArrayOf(xs.min(), ys.min(), xs.max(), ys.max())
+    }
+
+    @Test
+    fun a_space_in_clipped_text_adds_nothing_to_the_clip() {
+        val clip = clipBeforeFill(TestPdf.calls(ttfPage("BT /F1 100 Tf 7 Tr 20 120 Td (A A) Tj ET 1 0 0 rg 0 0 300 300 re f")))
+        assertEquals(2, clip.path.segments.count { it is KitePath.Segment.MoveTo }, "two squares, and no box for the space")
+    }
+
+    @Test
+    fun a_matrix_change_before_et_does_not_move_the_text_clip() {
+        fun bounds(content: String) = clipBeforeFill(TestPdf.calls(ttfPage(content))).let { deviceBounds(it.path, it.ctm) }
+        val plain = bounds("BT /F1 100 Tf 7 Tr 20 120 Td (A) Tj ET 1 0 0 rg 0 0 300 300 re f")
+        val moved = bounds("BT /F1 100 Tf 7 Tr 20 120 Td (A) Tj 2 0 0 2 0 0 cm ET 1 0 0 rg 0 0 300 300 re f")
+        for (i in 0..3) assertEquals(plain[i], moved[i], 1e-6, "edge $i of the clip")
+        assertEquals(50.0, plain[2] - plain[0], 1e-6, "the 500-unit square at 100pt")
+    }
+
+    @Test
+    fun a_type3_glyph_is_clipped_to_its_d1_box() {
+        val calls = TestPdf.calls(
+            TestPdf.onePage(
+                content = "BT /T3 100 Tf 10 10 Td (a) Tj ET",
+                resources = "/Font << /T3 5 0 R >>",
+                mediaBox = "0 0 300 300",
+                extra = listOf(
+                    "<< /Type /Font /Subtype /Type3 /FontMatrix [0.001 0 0 0.001 0 0] /FontBBox [0 0 1000 1000] " +
+                        "/Encoding << /Differences [97 /Sq] >> /FirstChar 97 /LastChar 97 /Widths [1000] /CharProcs << /Sq 6 0 R >> >>",
+                    TestPdf.stream("1000 0 100 100 400 400 d1 0 0 1000 1000 re f"),
+                ),
+            ),
         )
-        add("4 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>\nendobj\n")
-        add("5 0 obj\n<< /Length ${content.length} >>\nstream\n$content\nendstream\nendobj\n")
-        val xref = sb.length
-        sb.append("xref\n0 6\n0000000000 65535 f \n")
-        for (o in offsets) sb.append("${o.toString().padStart(10, '0')} 00000 n \n")
-        sb.append("trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n$xref\n%%EOF\n")
-        return sb.toString().encodeToByteArray()
-    }
-
-    private fun render(textOps: String): RecordingCanvas {
-        val canvas = RecordingCanvas()
-        KitePDF.open(pdf(textOps)).pages[0].renderTo(canvas, KiteMatrix.IDENTITY)
-        return canvas
+        val clip = clipBeforeFill(calls)
+        val b = deviceBounds(clip.path, clip.ctm)
+        assertEquals(30.0, b[2] - b[0], 1e-6, "the 300-unit glyph box at 100pt")
+        val fillAt = calls.indexOfFirst { it is RecordingCanvas.Call.Fill }
+        assertTrue(calls.drop(fillAt).any { it is RecordingCanvas.Call.PopClip }, "and the clip ends with the glyph")
     }
 
     @Test
-    fun mode7_pushes_a_clip_at_ET_and_paints_no_text() {
-        val canvas = render("BT /F1 100 Tf 7 Tr 100 300 Td (AB) Tj ET")
-        val calls = canvas.calls
-        assertEquals(0, calls.count { it is RecordingCanvas.Call.Glyphs }, "mode 7 never paints glyphs")
-
-        val clipIdx = calls.indexOfFirst { it is RecordingCanvas.Call.PushClip }
-        val fillIdx = calls.indexOfLast { it is RecordingCanvas.Call.Fill }
-        assertTrue(clipIdx >= 0, "ET pushed the accumulated text clip")
-        assertTrue(fillIdx > clipIdx, "the red rect fills INSIDE the text clip")
-        val clip = calls[clipIdx] as RecordingCanvas.Call.PushClip
-        assertTrue(clip.path.segments.isNotEmpty(), "the clip path carries the glyph shapes")
+    fun a_stray_d1_in_page_content_clips_nothing() {
+        val calls = TestPdf.calls(TestPdf.onePage("0 0 0 0 10 10 d1 1 0 0 rg 0 0 200 200 re f"))
+        val fillAt = calls.indexOfFirst { it is RecordingCanvas.Call.Fill }
+        val clips = calls.subList(0, fillAt).filterIsInstance<RecordingCanvas.Call.PushClip>()
+        assertTrue(clips.none { c -> deviceBounds(c.path, c.ctm).let { it[2] - it[0] < 20.0 } }, "no 10pt clip from the stray d1")
     }
 
     @Test
-    fun mode6_paints_and_clips() {
-        val canvas = render("BT /F1 100 Tf 6 Tr 100 300 Td (AB) Tj ET")
-        assertTrue(canvas.calls.any { it is RecordingCanvas.Call.Glyphs }, "mode 6 fills the text")
-        assertTrue(canvas.calls.any { it is RecordingCanvas.Call.PushClip }, "and clips")
-    }
-
-    @Test
-    fun mode0_pushes_no_clip() {
-        val canvas = render("BT /F1 100 Tf 100 300 Td (AB) Tj ET")
-        assertTrue(canvas.calls.any { it is RecordingCanvas.Call.Glyphs })
-        assertEquals(0, canvas.calls.count { it is RecordingCanvas.Call.PushClip }, "plain text never clips")
-    }
-
-    @Test
-    fun empty_mode7_run_pushes_nothing() {
-        val canvas = render("BT /F1 100 Tf 7 Tr 100 300 Td () Tj ET")
-        assertEquals(0, canvas.calls.count { it is RecordingCanvas.Call.PushClip })
+    fun a_glyph_offset_moves_its_stroke_and_clip_outline() {
+        val glyph = TextGlyph(
+            byteOffset = 0, byteCount = 1, gid = 1, text = "A", advanceWidth = 600.0,
+            outline = null, isWordSpace = false, xOffset = 100.0, yOffset = 50.0,
+        )
+        val m = glyphToUser(KiteMatrix.IDENTITY, penX = 10.0, glyph = glyph, unitScale = 0.01)
+        assertEquals(11.0, m.e, 1e-9, "the pen plus 100 font units at a hundredth")
+        assertEquals(0.5, m.f, 1e-9)
+        assertEquals(0.01, m.a, 1e-9)
     }
 }

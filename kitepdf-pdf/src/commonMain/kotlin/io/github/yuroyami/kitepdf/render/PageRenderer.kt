@@ -81,6 +81,9 @@ public class PageRenderer(
     // persists to the enclosing Q, which activeClipCount already models).
     private var pendingTextClip: KitePath.Builder? = null
 
+    /** How many Type 3 char procs are running, so a stray `d1` in page content clips nothing. */
+    private var type3Depth = 0
+
     /** An XObject with the indirect object number it resolved from (null for
      *  the rare ref-less inline entry). The number keys the decoded caches. */
     public class XObjectSlot(public val objectNumber: Long?, public val stream: PdfStream)
@@ -696,6 +699,9 @@ public class PageRenderer(
         }
     }
 
+    private fun isTransparencyGroup(form: PdfStream): Boolean =
+        form.dict.getDict("Group", resolver)?.getName("S") == "Transparency"
+
     private fun renderFormXObjectInner(
         formStream: PdfStream,
         parentState: GraphicsStack,
@@ -761,8 +767,10 @@ public class PageRenderer(
                 alpha = parentState.current.fillAlpha,
                 blendMode = parentState.current.blendMode,
             )
+            // ISO 32000-1, 11.6.6: the soft mask resets to None inside the group too.
             parentState.replace(parentState.current.copy(
                 fillAlpha = 1.0, strokeAlpha = 1.0, blendMode = KiteBlendMode.Normal,
+                softMask = null, softMaskCtm = null,
             ))
         }
         // Clip the form's content to its /BBox (§8.10.1) so it cannot overdraw
@@ -856,7 +864,18 @@ public class PageRenderer(
             // glyph (nothing to do: wx/wy come from /Widths); d1 declares an
             // uncoloured one, so colour operators are ignored from here on.
             "d0" -> Unit
-            "d1" -> type3IgnoreColor = true
+            "d1" -> {
+                type3IgnoreColor = true
+                // The d1 box clips the glyph (ISO 32000-1, 9.6.5, #144). A box with no area clips nothing.
+                if (type3Depth > 0 && a.size >= 6) {
+                    val llx = num(a, 2); val lly = num(a, 3); val urx = num(a, 4); val ury = num(a, 5)
+                    if (urx > llx && ury > lly) {
+                        val box = KitePath.Builder().apply { rectangle(llx, lly, urx - llx, ury - lly) }.build()
+                        canvas.pushClip(box, state.current.ctm, evenOdd = false)
+                        activeClipCount++
+                    }
+                }
+            }
             // ─── State stack ──────────────────────────────────────────────
             "q" -> { state.save(); clipSaveStack.addLast(activeClipCount) }
             "Q" -> {
@@ -983,7 +1002,8 @@ public class PageRenderer(
                 if (clip != null) {
                     val built = clip.build()
                     if (!built.isEmpty()) {
-                        canvas.pushClip(built, state.current.ctm, evenOdd = false)
+                        // Built in device space, so the CTM at ET cannot move it (#146).
+                        canvas.pushClip(built, KiteMatrix.IDENTITY, evenOdd = false)
                         activeClipCount++
                     }
                 }
@@ -1055,7 +1075,13 @@ public class PageRenderer(
                             canvas.drawImage(image, state.current.ctm, state.current.fillAlpha)
                         }
                     }
-                    "Form" -> renderFormXObject(slot.stream, state, slot.objectNumber)
+                    // A transparency group takes the soft mask once, on its composited
+                    // result, not once per object inside it (ISO 32000-1, 11.6.6, #66).
+                    "Form" -> if (isTransparencyGroup(slot.stream)) {
+                        withSoftMask(state.current) { renderFormXObject(slot.stream, state, slot.objectNumber) }
+                    } else {
+                        renderFormXObject(slot.stream, state, slot.objectNumber)
+                    }
                 }
             }
 
@@ -1068,10 +1094,7 @@ public class PageRenderer(
                 // sh paints under the active soft mask like every other painting
                 // operator (ISO 32000-1, 11.6.5.1, #65).
                 withSoftMask(s) {
-                    canvas.fillShading(
-                        shading, s.ctm, clipPath = null,
-                        alpha = s.fillAlpha, blendMode = s.blendMode,
-                    )
+                    fillShadingInBBox(shading, s.ctm, clipPath = null, alpha = s.fillAlpha, blendMode = s.blendMode)
                 }
             }
 
@@ -1221,11 +1244,8 @@ public class PageRenderer(
                 // The pattern /Matrix maps pattern space to the page's DEFAULT
                 // coordinate system, not the current user space (§8.7.3.1). Use
                 // pageBaseCtm, matching the tiling path below, instead of s.ctm.
-                pat is KitePattern.Shading -> canvas.fillShading(
-                    pat.shading, pageBaseCtm.concat(pat.matrix), clipPath = built,
-                    alpha = s.fillAlpha, blendMode = s.blendMode,
-                )
-                pat is KitePattern.Tiling -> renderTilingPattern(pat, built, s, evenOdd)
+                pat is KitePattern.Shading -> paintShadingPattern(pat, built, s, evenOdd, stroke = false)
+                pat is KitePattern.Tiling -> renderTilingPattern(pat, built, s, evenOdd, s.fillAlpha)
                 pat != null -> {
                     // Unsupported pattern. Skip rather than paint the default
                     // colour, which would flood e.g. a full-page background black.
@@ -1250,11 +1270,8 @@ public class PageRenderer(
                 // region. We approximate the stroke region by its outline path
                 // and fill the pattern into it (mirror of the fill-pattern path).
                 // The pattern /Matrix is relative to the page default CTM.
-                pat is KitePattern.Shading -> canvas.fillShading(
-                    pat.shading, pageBaseCtm.concat(pat.matrix), clipPath = built,
-                    alpha = s.strokeAlpha, blendMode = s.blendMode,
-                )
-                pat is KitePattern.Tiling -> renderTilingPattern(pat, built, s, evenOdd = false)
+                pat is KitePattern.Shading -> paintShadingPattern(pat, built, s, evenOdd = false, stroke = true)
+                pat is KitePattern.Tiling -> renderTilingPattern(pat, built, s, evenOdd = false, alpha = s.strokeAlpha)
                 pat != null -> {
                     // Unsupported pattern. Skip rather than paint a stale colour.
                 }
@@ -1268,6 +1285,38 @@ public class PageRenderer(
         }
     }
 
+    /** Paints [shading] clipped to its own /BBox, which lives in shading space (ISO 32000-1, 8.7.4.3, #154). */
+    private fun fillShadingInBBox(
+        shading: KiteShading, ctm: KiteMatrix, clipPath: KitePath?, alpha: Double, blendMode: KiteBlendMode,
+    ) {
+        val box = shading.bbox?.takeIf { it.right > it.left && it.top > it.bottom }
+        if (box != null) {
+            val rect = KitePath.Builder().apply { rectangle(box.left, box.bottom, box.right - box.left, box.top - box.bottom) }.build()
+            canvas.pushClip(rect, ctm, evenOdd = false)
+        }
+        try {
+            canvas.fillShading(shading, ctm, clipPath, alpha = alpha, blendMode = blendMode)
+        } finally {
+            if (box != null) canvas.popClip()
+        }
+    }
+
+    /**
+     * A shading pattern fill. The pattern's own graphics state is in effect
+     * (ISO 32000-1, Table 76, #158), its /Background covers the region first
+     * (Table 78 limits that to pattern fills, never `sh`, #155), and the
+     * shading then paints clipped to its box. The pattern matrix maps to the
+     * page's default space, like the tiling path.
+     */
+    private fun paintShadingPattern(pat: KitePattern.Shading, region: KitePath, s: GraphicsState, evenOdd: Boolean, stroke: Boolean) {
+        val ps = pat.extGState?.let { s.applyExtGState(it) } ?: s
+        val alpha = if (stroke) ps.strokeAlpha else ps.fillAlpha
+        pat.shading.background?.let { bg ->
+            canvas.fillPath(region, s.ctm, bg, evenOdd, alpha = alpha, blendMode = ps.blendMode)
+        }
+        fillShadingInBBox(pat.shading, pageBaseCtm.concat(pat.matrix), region, alpha, ps.blendMode)
+    }
+
     /**
      * Fill [clipPath] with a tiling pattern (ISO 32000-1 §8.7.3): clip to the
      * region, then replay the pattern cell's content stream at every
@@ -1276,7 +1325,7 @@ public class PageRenderer(
      * (PaintType 2) are painted in the current fill colour.
      */
     private fun renderTilingPattern(
-        pat: KitePattern.Tiling, clipPath: KitePath, s: GraphicsState, evenOdd: Boolean,
+        pat: KitePattern.Tiling, clipPath: KitePath, s: GraphicsState, evenOdd: Boolean, alpha: Double,
     ) {
         val xs = pat.xStep
         val ys = pat.yStep
@@ -1318,6 +1367,15 @@ public class PageRenderer(
         }.build()
 
         canvas.pushClip(clipPath, s.ctm, evenOdd)
+        // The fill's alpha and blend mode apply once, to the whole pattern fill,
+        // not again to each cell's own paints (#156).
+        val groupBox = if (alpha < 1.0 || s.blendMode != KiteBlendMode.Normal) deviceBounds(clipPath, KiteMatrix.IDENTITY) else null
+        if (groupBox != null) {
+            canvas.beginTransparencyGroup(
+                io.github.yuroyami.kitepdf.core.KiteRectangle(groupBox[0], groupBox[1], groupBox[2], groupBox[3]), s.ctm,
+                isolated = true, knockout = false, alpha = alpha, blendMode = s.blendMode,
+            )
+        }
         val clipBase = activeClipCount
         // A pending W/W* belongs to the enclosing stream, not the tile cell.
         val savedPendingClip = pendingClip
@@ -1344,6 +1402,7 @@ public class PageRenderer(
             }
         } finally {
             pendingClip = savedPendingClip
+            if (groupBox != null) canvas.endTransparencyGroup()
             canvas.popClip()
         }
     }
@@ -1397,10 +1456,13 @@ public class PageRenderer(
                 arr.getOrNull(4).toDouble(), arr.getOrNull(5).toDouble(),
             )
         } ?: KiteMatrix.IDENTITY
+        // The mask lives in the coordinate system in force when gs set it, so a
+        // later cm moves the content, never the mask (ISO 32000-1, 11.6.5.2, #67).
+        val baseCtm = state.softMaskCtm ?: state.ctm
         canvas.applySoftMask(
             kind = mask.kind,
             maskBBox = maskBBox,
-            maskCtm = state.ctm.concat(maskMatrix),
+            maskCtm = baseCtm.concat(maskMatrix),
             render = paint,
             renderMask = { childCanvas ->
                 // Recurse into the same renderer pipeline but onto whatever
@@ -1408,7 +1470,7 @@ public class PageRenderer(
                 // stream is rendered with a fresh graphics state. The spec
                 // says soft masks render onto a transparent backdrop with
                 // their own state stack (§11.6.5).
-                renderMaskGroup(mask.group, childCanvas, state.ctm)
+                renderMaskGroup(mask.group, childCanvas, baseCtm)
             },
         )
     }
@@ -1578,7 +1640,7 @@ public class PageRenderer(
         }
 
         if (!hidden) {
-            if (doClip) accumulateTextClip(glyphs, font, t, textToUser)
+            if (doClip) accumulateTextClip(glyphs, font, t, textToUser, state.current.ctm)
             if (doFill && !state.current.fillColorSpace.paintsNothing && state.current.fillPattern !is KitePattern.Unsupported) {
                 withSoftMask(state.current) {
                     canvas.drawGlyphs(
@@ -1630,10 +1692,7 @@ public class PageRenderer(
         for (glyph in glyphs) {
             val outline = glyph.outline
             if (outline != null && !outline.isEmpty()) {
-                val glyphMatrix = textToUser
-                    .concat(KiteMatrix.translation(penX, 0.0))
-                    .concat(KiteMatrix(unitScale, 0.0, 0.0, unitScale, 0.0, 0.0))
-                val userPath = transformPath(outline, glyphMatrix)
+                val userPath = transformPath(outline, glyphToUser(textToUser, penX, glyph, unitScale))
                 withSoftMask(s) {
                     canvas.strokePath(
                         userPath, s.ctm, s.strokeColor, s.lineWidth,
@@ -1648,37 +1707,36 @@ public class PageRenderer(
     }
 
     /**
-     * Modes 4..7: add this run's glyph shapes to [pendingTextClip] in USER
-     * space (same math as [strokeTextGlyphs]). Glyphs without outlines (the
-     * system-font fallback) contribute their advance x em box instead. This is an
-     * approximation, but a non-empty clip beats silently clipping everything
-     * away. The CTM applies when ET pushes the accumulated path.
+     * Modes 4..7: add this run's glyph shapes to [pendingTextClip] in device
+     * space, so a matrix change before ET cannot move the clip (#146). A font
+     * with no embedded outlines adds an em box per glyph instead, since a
+     * clip that is too big beats clipping everything away. A font that has
+     * outlines adds nothing for an empty glyph such as a space (ISO 32000-1,
+     * 9.3.6, #87).
      */
     private fun accumulateTextClip(
         glyphs: List<TextGlyph>,
         font: PdfFont,
         t: TextState,
         textToUser: KiteMatrix,
+        ctm: KiteMatrix,
     ) {
         val builder = pendingTextClip ?: KitePath.Builder().also { pendingTextClip = it }
         val upm = font.unitsPerEm ?: 1000
         val unitScale = t.fontSize / upm
         val advanceScale = t.fontSize / 1000.0
+        val textToDevice = ctm.concat(textToUser)
         var penX = 0.0
         for (glyph in glyphs) {
-            val penMatrix = textToUser.concat(KiteMatrix.translation(penX, 0.0))
             val outline = glyph.outline
             if (outline != null && !outline.isEmpty()) {
-                appendPath(
-                    builder,
-                    transformPath(outline, penMatrix.concat(KiteMatrix(unitScale, 0.0, 0.0, unitScale, 0.0, 0.0))),
-                )
-            } else if (glyph.advanceWidth > 0.0) {
+                appendPath(builder, transformPath(outline, glyphToUser(textToDevice, penX, glyph, unitScale)))
+            } else if (!font.hasEmbeddedOutlines && glyph.advanceWidth > 0.0) {
                 val w = glyph.advanceWidth * advanceScale
                 val box = KitePath.Builder().apply {
                     rectangle(0.0, -0.2 * t.fontSize, w, t.fontSize)
                 }.build()
-                appendPath(builder, transformPath(box, penMatrix))
+                appendPath(builder, transformPath(box, textToDevice.concat(KiteMatrix.translation(penX, 0.0))))
             }
             penX += glyph.advanceWidth * advanceScale + glyph.advanceAdjust
         }
@@ -1810,6 +1868,7 @@ public class PageRenderer(
         pendingClip = 0
         val savedIgnore = type3IgnoreColor
         type3IgnoreColor = false // each proc decides via its own d1
+        type3Depth++
         val clipBase = activeClipCount
         val scope = openScope()
         try {
@@ -1821,6 +1880,7 @@ public class PageRenderer(
         } finally {
             closeScope(scope, parentState)
             type3IgnoreColor = savedIgnore
+            type3Depth--
             pendingClip = savedPendingClip
             while (activeClipCount > clipBase) { canvas.popClip(); activeClipCount-- }
             parentState.restore()
@@ -1903,3 +1963,13 @@ public class PageRenderer(
         const val MAX_DISPATCHED_OPS = 20_000_000L
     }
 }
+
+/**
+ * Where one glyph's outline lands in user space: the pen position plus the
+ * glyph's own offset in font units, the way every canvas places a filled
+ * glyph (#141).
+ */
+internal fun glyphToUser(textToUser: KiteMatrix, penX: Double, glyph: TextGlyph, unitScale: Double): KiteMatrix =
+    textToUser
+        .concat(KiteMatrix.translation(penX + glyph.xOffset * unitScale, glyph.yOffset * unitScale))
+        .concat(KiteMatrix(unitScale, 0.0, 0.0, unitScale, 0.0, 0.0))

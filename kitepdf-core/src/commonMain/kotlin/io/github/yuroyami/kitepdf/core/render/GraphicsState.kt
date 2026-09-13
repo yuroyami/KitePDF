@@ -32,6 +32,8 @@ public data class GraphicsState(
     val blendMode: KiteBlendMode = KiteBlendMode.Normal,
     /** Active soft mask (ExtGState `/SMask`); null when none. */
     val softMask: SoftMask? = null,
+    /** The CTM when [softMask] was set: the mask is drawn under it, never under a later `cm` (#67). */
+    val softMaskCtm: KiteMatrix? = null,
     /**
      * Active fill pattern, set by `scn` when the fill colour-space is
      * `/Pattern`. When non-null, [fillColor] is ignored and paint operators
@@ -97,6 +99,11 @@ public fun GraphicsState.applyExtGState(ext: ExtGState): GraphicsState = copy(
         SoftMask.None -> null
         is SoftMask.MaskGroup -> ext.softMask
         null -> softMask
+    },
+    softMaskCtm = when (ext.softMask) {
+        SoftMask.None -> null
+        is SoftMask.MaskGroup -> ctm
+        null -> softMaskCtm
     },
     lineWidth = ext.lineWidth ?: lineWidth,
     lineCap = ext.lineCap ?: lineCap,

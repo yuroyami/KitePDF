@@ -245,10 +245,9 @@ public class KiteImageData internal constructor(
                     isImageMask = isMask, maskFill = fillColor, colorKeyMask = colorKey,
                 )
             }
-            // A stencil is usually finer than the layer it masks, so the composite
-            // is built on the stencil's grid. `/SMask` images keep the behaviour
-            // they have always had.
-            return if (hasSMask) image else image.alignedToStencilGrid()
+            // A mask, stencil or soft, is usually finer than the layer it masks, so
+            // the composite is built on the mask's grid (#75).
+            return image.alignedToMaskGrid()
         }
 
         /**
@@ -351,9 +350,10 @@ public class KiteImageData internal constructor(
          * whose samples ARE the base image's per-pixel alpha, into a normalised
          * 8-bit grayscale buffer (0 = transparent, 255 = opaque).
          *
-         * Scope: RAW (Flate/LZW/CCITT/…) DeviceGray masks at 1 or 8 bpc. A
-         * DCT/JPX-encoded mask (needs a platform decoder) is skipped, leaving the
-         * image opaque.
+         * The mask is an ordinary image, so it takes the decoders a base image
+         * takes (every filter chain, JPEG and JPEG 2000), any bit depth, and its
+         * own `/Decode` (#73, #74). A mask that still cannot decode is logged and
+         * leaves the image opaque.
          */
         private fun loadSoftMask(
             dict: PdfDictionary,
@@ -371,14 +371,66 @@ public class KiteImageData internal constructor(
             val mh = positiveDimension(mdict, "Height") ?: return none
             val sampleCount = mw.toLong() * mh
             if (sampleCount > MAX_MASK_SAMPLES) return none
-            if (pickKind(extractFilterNames(mdict["Filter"])) != Kind.RAW) return none
-            val bytes = runCatching { FilterChain.decode(mask) }.getOrNull() ?: return none
-            val alpha = when (mdict.getInt("BitsPerComponent") ?: 8L) {
-                8L -> if (bytes.size.toLong() >= sampleCount) bytes.copyOf(sampleCount.toInt()) else return none
-                1L -> expand1BitToGray(bytes, mw, mh) ?: return none
-                else -> return none
+            val decoded: Triple<ByteArray, Int, Int> = when (pickKind(extractFilterNames(mdict["Filter"]))) {
+                Kind.RAW -> {
+                    val bytes = runCatching { FilterChain.decode(mask) }.getOrNull()
+                    val bpc = (mdict.getInt("BitsPerComponent") ?: 8L).toInt()
+                    bytes?.let { grayPlane(it, bpc, mw, mh) }?.let { Triple(it, mw, mh) }
+                }
+                Kind.JPEG -> runCatching { KiteImage.decode(terminalBytesOf(mask).bytes) }.getOrNull()
+                    ?.takeIf { it.width.toLong() * it.height <= MAX_MASK_SAMPLES }
+                    ?.let { bm ->
+                        val rgb = bm.toRgbBytes()
+                        Triple(ByteArray(bm.width * bm.height) { rgb[it * 3] }, bm.width, bm.height)
+                    }
+                Kind.JPEG2000 -> runCatching { JpxDecoder.decode(terminalBytesOf(mask).bytes) }.getOrNull()
+                    ?.takeIf { it.width.toLong() * it.height in 1..MAX_MASK_SAMPLES }
+                    ?.let { jpx ->
+                        val n = (jpx.pixelBytes.size / (jpx.width * jpx.height)).coerceAtLeast(1)
+                        Triple(ByteArray(jpx.width * jpx.height) { jpx.pixelBytes[it * n] }, jpx.width, jpx.height)
+                    }
+                else -> null
+            } ?: run {
+                kiteWarn { "image: the soft mask could not be decoded, so the image paints opaque" }
+                return none
             }
-            return Triple(alpha, mw, mh)
+            val (alpha, aw, ah) = decoded
+            // /Decode maps each sample before it becomes alpha, so [1 0] inverts it (#74).
+            val dec = readDecode(mdict["Decode"] ?: mdict["D"])
+            if (dec != null && dec.size >= 2 && (dec[0] != 0.0 || dec[1] != 1.0)) {
+                for (i in alpha.indices) {
+                    val v = dec[0] + (alpha[i].toInt() and 0xFF) / 255.0 * (dec[1] - dec[0])
+                    alpha[i] = (v.coerceIn(0.0, 1.0) * 255.0 + 0.5).toInt().toByte()
+                }
+            }
+            return Triple(alpha, aw, ah)
+        }
+
+        /** One byte per sample from [bpc]-bit rows (each row starts on a byte), scaled to 0..255. */
+        private fun grayPlane(bytes: ByteArray, bpc: Int, w: Int, h: Int): ByteArray? {
+            when (bpc) {
+                8 -> return if (bytes.size.toLong() >= w.toLong() * h) bytes.copyOf(w * h) else null
+                1 -> return expand1BitToGray(bytes, w, h)
+                2, 4, 16 -> {}
+                else -> return null
+            }
+            val rowBytes = (w.toLong() * bpc + 7) / 8
+            if (bytes.size < rowBytes * h) return null
+            val max = (1 shl minOf(bpc, 8)) - 1
+            val out = ByteArray(w * h)
+            for (y in 0 until h) {
+                val row = (y * rowBytes).toInt()
+                for (x in 0 until w) {
+                    out[y * w + x] = if (bpc == 16) {
+                        bytes[row + x * 2] // the high byte of a 16-bit sample
+                    } else {
+                        val bit = x * bpc
+                        val v = (bytes[row + bit / 8].toInt() shr (8 - bpc - bit % 8)) and max
+                        (v * 255 / max).toByte()
+                    }
+                }
+            }
+            return out
         }
 
         /**
@@ -496,8 +548,9 @@ public class KiteImageData internal constructor(
         }
 
         /**
-         * Resample a stencil-masked image up onto the stencil's own pixel grid
-         * when the stencil is the finer of the two.
+         * Resample a masked image up onto its mask's own pixel grid when the
+         * mask, stencil or soft, is the finer of the two. A soft edge cut at
+         * high resolution over a small photo is the same case as a scan (#75).
          *
          * Both are mapped to the same unit square, so either grid composites
          * faithfully, but they are not equally good: MRC scans (the layered
@@ -512,7 +565,7 @@ public class KiteImageData internal constructor(
          * pixels, just more coarsely. [MAX_ALIGNED_SAMPLES] caps the work,
          * since both sizes come from an untrusted file.
          */
-        private fun KiteImageData.alignedToStencilGrid(): KiteImageData {
+        private fun KiteImageData.alignedToMaskGrid(): KiteImageData {
             val src = pixelBytes ?: return this
             if (softMaskAlpha == null || kind != Kind.RAW || isImageMask) return this
             if (bitsPerComponent != 8 || width <= 0 || height <= 0) return this

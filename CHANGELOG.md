@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `EpubSettings.hyphenate` turns hyphenation on or off for the whole book,
   whatever its CSS says. Each chapter uses the patterns of its own language,
   and the book itself is not changed.
+- `GraphicsState.softMaskCtm` keeps the matrix a soft mask was set under.
 
 ### Changed
 
@@ -148,6 +149,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   bitmap width, and logs a warning when the height does not match the page's
   aspect ratio. The docs of the vectorized render mode now say that it draws
   on the UI thread.
+- Clipped text over a gradient or an image got a solid bar in every word gap.
+  A space in a font with outlines now adds nothing to a text clip.
+- A matrix change inside a clipping text object moved the clip, and stroked
+  and clipping text ignored each glyph's own offset.
+- A Type 3 glyph was not clipped to the box its `d1` declares.
+- A dotted line (`[0 12] 0 d` with round caps) drew as dashes, and a line
+  with a zero gap drew dashed, on AWT and Compose.
+- On AWT, a clip and a transparency group that did not nest restored each
+  other's state, and blending onto a transparent surface blended against
+  black.
+- A soft mask was applied to each object inside a transparency group instead
+  of once to the group, so every overlap came out darker, and a soft mask
+  moved with any `cm` after the `gs` that set it.
+- Axial and radial shadings painted outside their `/BBox`, a shading
+  pattern's `/Background` was never painted, and its own graphics state was
+  ignored.
+- A tiling pattern fill under a constant alpha or a blend mode painted
+  opaque and unblended.
+- A soft mask finer than its image was sampled down to the image's grid, so
+  soft edges came out blocky. A soft mask stored as JPEG or JPEG 2000, or at
+  2, 4 or 16 bits, was dropped and the image painted opaque, and a soft
+  mask's `/Decode` was ignored.
 
 ## [0.9.0] - 2026-09-08
 

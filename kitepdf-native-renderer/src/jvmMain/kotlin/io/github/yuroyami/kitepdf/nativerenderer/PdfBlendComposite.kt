@@ -64,11 +64,14 @@ internal class PdfBlendComposite(
                     blendInto(sr, sg, sb, dr, dg, db, mode, blendRgb)
                     val br = blendRgb[0]; val bg = blendRgb[1]; val bb = blendRgb[2]
 
-                    // PDF spec §11.3.6: result = (1 - srcA) * dst + srcA * blend(src, dst)
-                    val outR = (1 - srcA) * dr + srcA * br
-                    val outG = (1 - srcA) * dg + srcA * bg
-                    val outB = (1 - srcA) * db + srcA * bb
+                    // ISO 32000-1, 11.3.6, general form: the blend only reaches the part of
+                    // the source that lands on backdrop ink, so on a transparent backdrop
+                    // the source keeps its own colour instead of blending with black (#162).
                     val outA = srcA + dstA * (1 - srcA)
+                    val k = if (outA > 0f) srcA / outA else 0f
+                    val outR = (1 - k) * dr + k * ((1 - dstA) * sr + dstA * br)
+                    val outG = (1 - k) * dg + k * ((1 - dstA) * sg + dstA * bg)
+                    val outB = (1 - k) * db + k * ((1 - dstA) * sb + dstA * bb)
 
                     out[0] = (outR * 255).toInt().coerceIn(0, 255)
                     out[1] = (outG * 255).toInt().coerceIn(0, 255)

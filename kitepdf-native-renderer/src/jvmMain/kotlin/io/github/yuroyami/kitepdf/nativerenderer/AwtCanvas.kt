@@ -52,8 +52,9 @@ import javax.imageio.ImageIO
  */
 public class AwtCanvas(private val g: Graphics2D) : KiteCanvas {
 
-    /** Save-state stack: mirrors clip + transform + composite per push. */
-    private val saveStack = ArrayDeque<SavedState>()
+    /** Clips and transparency groups keep separate stacks, so interleaving them cannot restore the wrong state (#138). */
+    private val clipStack = ArrayDeque<java.awt.Shape?>()
+    private val groupStack = ArrayDeque<java.awt.Composite>()
     private var openLayers = 0
 
     init {
@@ -64,13 +65,17 @@ public class AwtCanvas(private val g: Graphics2D) : KiteCanvas {
 
     override fun beginPage(widthPt: Double, heightPt: Double, deviceCtm: KiteMatrix) {
         // The host owns the Graphics; we don't clear.
-        saveStack.clear()
+        clipStack.clear()
+        groupStack.clear()
         openLayers = 0
     }
 
     override fun endPage() {
-        // Roll back any leftover save layers (defensive).
-        while (saveStack.isNotEmpty()) saveStack.removeLast().restore(g)
+        // Roll back any leftover clips and groups (defensive).
+        if (clipStack.isNotEmpty()) g.clip = clipStack.first()
+        if (groupStack.isNotEmpty()) g.composite = groupStack.first()
+        clipStack.clear()
+        groupStack.clear()
     }
 
     override fun fillPath(
@@ -98,11 +103,7 @@ public class AwtCanvas(private val g: Graphics2D) : KiteCanvas {
         val cap = when (lineCap) { 1 -> BasicStroke.CAP_ROUND; 2 -> BasicStroke.CAP_SQUARE; else -> BasicStroke.CAP_BUTT }
         val join = when (lineJoin) { 1 -> BasicStroke.JOIN_ROUND; 2 -> BasicStroke.JOIN_BEVEL; else -> BasicStroke.JOIN_MITER }
         val miter = miterLimit.toFloat().coerceAtLeast(1f)
-        val dash = dashArray
-            ?.map { (it * avgScale).toFloat() }
-            ?.filter { it > 0f }
-            ?.toFloatArray()
-            ?.takeIf { it.isNotEmpty() }
+        val dash = awtDash(dashArray, avgScale)
         withComposite(blendMode, alpha) {
             g.color = color.toAwt()
             g.stroke = if (dash != null) {
@@ -541,7 +542,7 @@ public class AwtCanvas(private val g: Graphics2D) : KiteCanvas {
     }
 
     override fun pushClip(path: KitePath, ctm: KiteMatrix, evenOdd: Boolean) {
-        saveStack.addLast(SavedState.snapshot(g))
+        clipStack.addLast(g.clip)
         val awt = toAwtPath(path, ctm).apply {
             windingRule = if (evenOdd) Path2D.WIND_EVEN_ODD else Path2D.WIND_NON_ZERO
         }
@@ -549,7 +550,7 @@ public class AwtCanvas(private val g: Graphics2D) : KiteCanvas {
     }
 
     override fun popClip() {
-        if (saveStack.isNotEmpty()) saveStack.removeLast().restore(g)
+        if (clipStack.isNotEmpty()) g.clip = clipStack.removeLast()
     }
 
     /**
@@ -567,12 +568,12 @@ public class AwtCanvas(private val g: Graphics2D) : KiteCanvas {
         // intermediate operations composite *then* blend) would need a
         // separate BufferedImage. That's a follow-up for fidelity-sensitive
         // PDFs; the alpha-only case (the common one) works here.
-        saveStack.addLast(SavedState.snapshot(g))
+        groupStack.addLast(g.composite)
         g.composite = PdfBlendComposite(blendMode, alpha.toFloat().coerceIn(0f, 1f))
     }
 
     override fun endTransparencyGroup() {
-        if (saveStack.isNotEmpty()) saveStack.removeLast().restore(g)
+        if (groupStack.isNotEmpty()) g.composite = groupStack.removeLast()
     }
 
     /**
@@ -715,20 +716,15 @@ public class AwtCanvas(private val g: Graphics2D) : KiteCanvas {
     )
 
     /** Snapshot of Graphics2D state that needs restoring after a clip / group push. */
-    private data class SavedState(
-        val clip: java.awt.Shape?,
-        val transform: AffineTransform,
-        val composite: java.awt.Composite,
-        val paint: java.awt.Paint,
-    ) {
-        fun restore(g: Graphics2D) {
-            g.clip = clip
-            g.transform = transform
-            g.composite = composite
-            g.paint = paint
-        }
-        companion object {
-            fun snapshot(g: Graphics2D) = SavedState(g.clip, AffineTransform(g.transform), g.composite, g.paint)
-        }
-    }
+}
+
+/**
+ * The dash for a Java2D stroke: every element kept, zeros included, since a
+ * zero dash under round caps is a dot and a zero gap is solid (ISO 32000-1,
+ * 8.4.3.6, #106). Null for an empty or all-zero array, which means solid and
+ * is the one array BasicStroke refuses.
+ */
+internal fun awtDash(dashArray: List<Double>?, scale: Double): FloatArray? {
+    val d = dashArray?.map { v -> (v * scale).toFloat().let { if (it.isFinite()) it.coerceAtLeast(0f) else 0f } } ?: return null
+    return d.takeIf { it.isNotEmpty() && it.any { v -> v > 0f } }?.toFloatArray()
 }
