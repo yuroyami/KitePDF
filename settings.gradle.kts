@@ -29,6 +29,16 @@ providers.gradleProperty("kiteImagePath").orNull?.let { path ->
     }
 }
 
+// Build against a local KiteJS checkout instead of Maven Central: -PkiteJsPath=../KiteJS
+providers.gradleProperty("kiteJsPath").orNull?.let { path ->
+    includeBuild(path) {
+        dependencySubstitution {
+            substitute(module("io.github.yuroyami:kitejs"))
+                .using(project(":kitejs"))
+        }
+    }
+}
+
 plugins {
     id("org.gradle.toolchains.foojay-resolver-convention") version "1.0.0"
 }
@@ -40,6 +50,7 @@ include(":kitepdf-pdf")             // PDF handler
 include(":kitepdf-epub")            // EPUB handler
 include(":kitepdf-cbz")             // CBZ (comic archive) handler
 include(":kitepdf-svg")             // SVG renderer + standalone .svg handler
+include(":kitepdf-javascript")      // runs document JavaScript on KiteJS
 include(":kitepdf-compose-viewer")  // Compose UI (PdfView)
 include(":kitepdf-net")             // optional: open documents from a URL
 include(":kitepdf-skia-renderer")   // Skia rasterizer

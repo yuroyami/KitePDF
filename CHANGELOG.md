@@ -17,6 +17,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   whatever its CSS says. Each chapter uses the patterns of its own language,
   and the book itself is not changed.
 - `GraphicsState.softMaskCtm` keeps the matrix a soft mask was set under.
+- `kitepdf-javascript`, a new artifact, runs the JavaScript that PDFs carry
+  on KiteJS. `PdfScriptRunner` runs the document-level scripts and
+  JavaScript actions under an instruction budget, so a script cannot hang
+  the app. It covers the targets KiteJS builds for.
+- `KiteScriptEngine` in `kitepdf-core` is the interface the rest of KitePDF
+  talks to, so no other module depends on a script engine.
 - `PdfPage.renderTo(canvas, deviceCtm, annotations)` draws only the
   annotations a filter accepts. `{ false }` renders the page without its
   markup, for printing, a clean thumbnail, or an editor that redraws its

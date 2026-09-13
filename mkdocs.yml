@@ -96,6 +96,7 @@ nav:
       - Creating PDFs: writing.md
       - Editing & redaction: editing.md
       - Headless rendering: rendering.md
+      - JavaScript: javascript.md
   - Reference:
       - Recipes: recipes.md
       - Platform support: platforms.md

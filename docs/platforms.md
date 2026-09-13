@@ -25,6 +25,11 @@ that will not resolve.
 | wasmJs | yes (browser, Node) | yes (browser) | no | yes (browser) |
 | wasmWasi | yes (Node) | no | no | no |
 
+`kitepdf-javascript`, which runs the JavaScript inside PDFs, covers the targets
+its engine, KiteJS, builds for: Android, JVM, iOS, macOS arm64, Linux x64 and
+arm64, Windows, JS and wasmJs. It has no tvOS, watchOS, Android Native or
+wasmWasi build.
+
 Intel macOS, tvOS x64 and watchOS x64 are off everywhere. Kotlin 2.3 deprecated
 those targets.
 

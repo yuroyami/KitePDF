@@ -21,6 +21,10 @@ skiko = "0.150.1"
 # runtime dependency beyond kotlin-stdlib.
 kiteimage = "0.1.0"
 
+# KiteJS. The Kite lineage's JavaScript engine. Used ONLY by :kitepdf-javascript,
+# so no other module carries a script engine.
+kitejs = "0.1.0"
+
 # Ktor client. Used ONLY by :kitepdf-net, the optional remote-loading artifact.
 # No other module may depend on it: the engine stays kotlin-stdlib + KiteImage.
 ktor = "3.5.2"
@@ -29,6 +33,9 @@ ktor = "3.5.2"
 # KiteImage supplies every image codec :kitepdf-core decodes through: JPEG
 # (baseline and progressive), PNG, GIF, BMP, JPEG 2000, JBIG2 and CCITT.
 kiteimage = { module = "io.github.yuroyami:kiteimage", version.ref = "kiteimage" }
+
+# KiteJS runs document JavaScript, :kitepdf-javascript only.
+kitejs = { module = "io.github.yuroyami:kitejs", version.ref = "kitejs" }
 
 # Ktor, :kitepdf-net only. ktor-client-core carries no engine; the consumer
 # picks one (CIO, OkHttp, Darwin, Js...) exactly as with any Ktor library.
