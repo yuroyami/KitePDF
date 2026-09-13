@@ -174,6 +174,10 @@ of a second each. Page counts, anchors and bookmarks survive the drop, so
 navigation never waits. One chapter always stays, so a book that is a single
 spine document keeps that document whole.
 
+Embedded fonts sit outside that budget and stay small on their own: a font
+file is parsed once per book, however many stylesheets or chapters declare it,
+and it keeps one outline per glyph it has drawn.
+
 ```kotlin
 val book = EpubDocument.open(bytes, EpubSettings(layoutCacheBytes = 24L * 1024 * 1024))
 ```

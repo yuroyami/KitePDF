@@ -8,10 +8,11 @@ import io.github.yuroyami.kitepdf.core.font.TrueTypeFont
 import io.github.yuroyami.kitepdf.core.render.KitePath
 
 /**
- * One embedded `@font-face`, wrapping a parsed core [TrueTypeFont]. Provides the
- * per-glyph data the layout needs to draw real outlines: glyph id (cmap), outline
- * (in font units), and advance normalised to 1/1000 em (matching the width
- * convention every backend now uses after the advance-scale fix).
+ * The parsed program behind one or more [EmbeddedFace]s: the SFNT tables, the
+ * CFF outlines of an `.otf`, and its kerning, substitution and mark tables.
+ * This is what a font costs in memory (its bytes, plus one cached path per
+ * glyph drawn), so a book parses each font file once and every `@font-face`
+ * that names the file shares the result (#224).
  *
  * Scope: TrueType (`glyf`) AND OpenType-CFF (`.otf`) programs. Both are SFNT
  * containers, so `cmap`/`hmtx`/`head` (glyph id + advances + unitsPerEm) always
@@ -21,16 +22,61 @@ import io.github.yuroyami.kitepdf.core.render.KitePath
  * SFNT-wrapped `.otf`.) WOFF 1.0 and WOFF2 wrappers are unwrapped to bare SFNT
  * before parsing ([Woff] / [Woff2]).
  */
+internal class FontProgram(
+    val ttf: TrueTypeFont,
+    val cff: CffFont? = null,
+    val kern: OpenTypeKern? = null,
+    val gsub: OpenTypeGsub? = null,
+    val marks: OpenTypeMarks? = null,
+) {
+    companion object {
+        /**
+         * Parse [bytes] as a TrueType (`glyf`) or OpenType-CFF (`.otf`) program; null
+         * if the SFNT itself won't parse. For an `.otf` (no `glyf` table) the `CFF `
+         * table is parsed for outlines; metrics still come from the SFNT `hmtx`.
+         */
+        fun parse(bytes: ByteArray): FontProgram? {
+            // WOFF is a wrapped SFNT: unwrap first (1.0 = zlib tables, 2.0 = brotli
+            // stream + glyf/loca transform).
+            val sfnt = when {
+                Woff.isWoff(bytes) -> Woff.toSfnt(bytes) ?: return null
+                Woff2.isWoff2(bytes) -> Woff2.toSfnt(bytes) ?: return null
+                else -> bytes
+            }
+            val ttf = runCatching { TrueTypeFont.parse(sfnt) }.getOrNull() ?: return null
+            val cff = if (ttf.rawTable("glyf") == null) {
+                ttf.rawTable("CFF ")?.let { runCatching { CffFont.parse(it) }.getOrNull() }
+            } else null
+            val gpos = ttf.rawTable("GPOS")
+            return FontProgram(
+                ttf, cff,
+                kern = OpenTypeKern.from(ttf.rawTable("kern"), gpos),
+                gsub = OpenTypeGsub.from(ttf.rawTable("GSUB")),
+                marks = OpenTypeMarks.from(gpos),
+            )
+        }
+    }
+}
+
+/**
+ * One embedded `@font-face`: a family name and style over a [FontProgram] it
+ * may share with other faces. Provides the per-glyph data the layout needs to
+ * draw real outlines: glyph id (cmap), outline (in font units), and advance
+ * normalised to 1/1000 em (matching the width convention every backend now
+ * uses after the advance-scale fix).
+ */
 internal class EmbeddedFace(
     val family: String,
     val bold: Boolean,
     val italic: Boolean,
-    private val ttf: TrueTypeFont,
-    private val cff: CffFont? = null,
-    private val kern: OpenTypeKern? = null,
-    private val gsub: OpenTypeGsub? = null,
-    private val marks: OpenTypeMarks? = null,
+    private val program: FontProgram,
 ) {
+    private val ttf: TrueTypeFont get() = program.ttf
+    private val cff: CffFont? get() = program.cff
+    private val kern: OpenTypeKern? get() = program.kern
+    private val gsub: OpenTypeGsub? get() = program.gsub
+    private val marks: OpenTypeMarks? get() = program.marks
+
     val unitsPerEm: Int get() = ttf.unitsPerEm
 
     /** Raw advance of [gid] in font design units (unitsPerEm), for mark math. */
@@ -116,28 +162,8 @@ internal class FontRegistry(private val faces: List<EmbeddedFace>) {
     companion object {
         val EMPTY = FontRegistry(emptyList())
 
-        /**
-         * Parse [bytes] as a TrueType (`glyf`) or OpenType-CFF (`.otf`) face; null
-         * if the SFNT itself won't parse. For an `.otf` (no `glyf` table) the `CFF `
-         * table is parsed for outlines; metrics still come from the SFNT `hmtx`.
-         */
-        fun face(family: String, bold: Boolean, italic: Boolean, bytes: ByteArray): EmbeddedFace? {
-            // WOFF is a wrapped SFNT: unwrap first (1.0 = zlib tables, 2.0 = brotli
-            // stream + glyf/loca transform).
-            val sfnt = when {
-                Woff.isWoff(bytes) -> Woff.toSfnt(bytes) ?: return null
-                Woff2.isWoff2(bytes) -> Woff2.toSfnt(bytes) ?: return null
-                else -> bytes
-            }
-            val ttf = runCatching { TrueTypeFont.parse(sfnt) }.getOrNull() ?: return null
-            val cff = if (ttf.rawTable("glyf") == null) {
-                ttf.rawTable("CFF ")?.let { runCatching { CffFont.parse(it) }.getOrNull() }
-            } else null
-            val gpos = ttf.rawTable("GPOS")
-            val kern = OpenTypeKern.from(ttf.rawTable("kern"), gpos)
-            val gsub = OpenTypeGsub.from(ttf.rawTable("GSUB"))
-            val marks = OpenTypeMarks.from(gpos)
-            return EmbeddedFace(family, bold, italic, ttf, cff, kern, gsub, marks)
-        }
+        /** One face over a freshly parsed [FontProgram]; null when [bytes] will not parse. */
+        fun face(family: String, bold: Boolean, italic: Boolean, bytes: ByteArray): EmbeddedFace? =
+            FontProgram.parse(bytes)?.let { EmbeddedFace(family, bold, italic, it) }
     }
 }
