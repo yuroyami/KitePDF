@@ -265,9 +265,10 @@ private fun PdfArray.num(i: Int): Double = when (val v = this[i]) {
 /**
  * Sample a [KiteShading.Axial] or [KiteShading.Radial] at evenly-spaced
  * stops between `domain[0]` and `domain[1]`. Returns parallel `t` and
- * RGB arrays the backend uses to build a gradient brush.
+ * RGB arrays the backend uses to build a gradient brush. The default of 256
+ * matches MuPDF, so a function with many narrow bands keeps them all (#153).
  */
-public fun KiteShading.sampleStops(count: Int = 32): GradientStops? {
+public fun KiteShading.sampleStops(count: Int = 256): GradientStops? {
     val function: KiteFunction
     val domain: DoubleArray
     val cs: KiteColorSpace

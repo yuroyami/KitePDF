@@ -102,6 +102,9 @@ public fun GraphicsState.applyExtGState(ext: ExtGState): GraphicsState = copy(
     lineCap = ext.lineCap ?: lineCap,
     lineJoin = ext.lineJoin ?: lineJoin,
     miterLimit = ext.miterLimit ?: miterLimit,
+    // /D replaces the dash; an empty or all-zero array means solid, as for d (#107).
+    dashArray = if (ext.dashArray == null) dashArray else ext.dashArray.takeIf { ds -> ds.isNotEmpty() && ds.any { it > 0.0 } },
+    dashPhase = if (ext.dashArray == null) dashPhase else ext.dashPhase,
 )
 
 /**

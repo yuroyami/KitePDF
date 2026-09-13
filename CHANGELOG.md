@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `PdfAnnotation.isInvisible` and `PdfAnnotation.isNoZoom` expose two more
+  annotation flags, both of which the renderer now honours.
+- `ExtGState.dashArray` and `dashPhase` carry a graphics state dictionary's
+  `/D`, and `RecordingCanvas.Call.Stroke` records the dash it was given.
+
 ### Changed
 
 - Built with Kotlin 2.4.20. The viewer now depends on Compose Multiplatform
@@ -62,6 +69,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   appearance streams.
 - A synthesized highlight washed out the text under it and covered the
   bounding box of a rotated quadrilateral instead of the quadrilateral.
+- Text in a font missing from the page resources painted nothing. It now
+  paints in Helvetica, as other readers do.
+- Invisible Type 3 text (render modes 3 and 7) was painted over the page,
+  and a Type 3 font with a name for its `/Encoding` drew no glyphs.
+- Arial, Times New Roman and Courier New without `/Widths` were measured at a
+  flat half em. They now use the matching Standard 14 metrics.
+- A pattern colour space with no pattern named painted black, `sh` ignored
+  the active soft mask, and a tiling cell that drew past its box flooded the
+  whole fill.
+- A dash set through a graphics state dictionary drew solid.
+- A line cap, join or miter operator with no operand reset the parameter to
+  zero, and a curve after a close or a rectangle started from the wrong
+  point.
+- A zero-length stroke with square caps painted a square, and a move-then-close
+  with round caps drew nothing on AWT but a dot on Skia.
+- An inline image using the `/I` abbreviation for Indexed painted its raw
+  indices as grey.
+- Gradients are sampled at 256 stops instead of 32, so a gradient with many
+  bands keeps them, and type 4 mesh shadings read their padded vertex
+  records correctly.
 
 ## [0.9.0] - 2026-09-08
 

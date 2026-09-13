@@ -303,7 +303,7 @@ public class CoreGraphicsCanvas(private val ctx: CGContextRef) : KiteCanvas {
         alpha: Double, blendMode: KiteBlendMode,
     ) {
         if (paintComplexShading(shading, ctm, clipPath, alpha, blendMode)) return
-        val stops = shading.sampleStops(32) ?: return
+        val stops = shading.sampleStops() ?: return
 
         CGContextSaveGState(ctx)
         try {

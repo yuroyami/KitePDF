@@ -61,4 +61,34 @@ public object Standard14Widths {
 
     /** True iff [baseFontName] is one of the 14 names a PDF reader must support. */
     public fun isStandard14(baseFontName: String): Boolean = baseFontName in packed
+
+    /**
+     * The Standard 14 name a Windows core-font name stands for: Arial for
+     * Helvetica, Times New Roman for Times and Courier New for Courier, keeping
+     * the weight and slant, the way PDF readers normalise them. Any other name
+     * comes back unchanged (#120).
+     */
+    internal fun canonicalName(name: String): String {
+        if (name in packed) return name
+        val bare = (if (name.length > 7 && name[6] == '+') name.substring(7) else name).replace(" ", "")
+        val (prefix, faces) = when {
+            bare.startsWith("TimesNewRoman") -> "TimesNewRoman" to TIMES
+            bare.startsWith("CourierNew") -> "CourierNew" to COURIER
+            bare.startsWith("Arial") -> "Arial" to HELVETICA
+            else -> return name
+        }
+        val style = bare.removePrefix(prefix).lowercase()
+            .replace("ps", "").replace("mt", "").replace(",", "").replace("-", "")
+        return when (style) {
+            "" -> faces[0]
+            "bold" -> faces[1]
+            "italic", "oblique" -> faces[2]
+            "bolditalic", "boldoblique" -> faces[3]
+            else -> name
+        }
+    }
+
+    private val HELVETICA = arrayOf("Helvetica", "Helvetica-Bold", "Helvetica-Oblique", "Helvetica-BoldOblique")
+    private val TIMES = arrayOf("Times-Roman", "Times-Bold", "Times-Italic", "Times-BoldItalic")
+    private val COURIER = arrayOf("Courier", "Courier-Bold", "Courier-Oblique", "Courier-BoldOblique")
 }

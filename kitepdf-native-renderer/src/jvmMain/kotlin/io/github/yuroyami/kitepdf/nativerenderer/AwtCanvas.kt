@@ -234,7 +234,7 @@ public class AwtCanvas(private val g: Graphics2D) : KiteCanvas {
         alpha: Double, blendMode: KiteBlendMode,
     ) {
         if (paintComplexShading(shading, ctm, clipPath, alpha, blendMode)) return
-        val stops = shading.sampleStops(32) ?: return
+        val stops = shading.sampleStops() ?: return
         val fractions = FloatArray(stops.offsets.size) { stops.offsets[it].toFloat() }
         val colors = Array(stops.colors.size) { stops.colors[it].toAwt() }
 
