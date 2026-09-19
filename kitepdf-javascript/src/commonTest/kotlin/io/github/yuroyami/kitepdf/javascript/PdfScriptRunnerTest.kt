@@ -42,7 +42,8 @@ class PdfScriptRunnerTest {
                 ),
             ),
         )
-        val failures = PdfScriptRunner(doc, onAlert = { alerts += it }, onConsole = { printed += it }).use { it.runDocumentScripts() }
+        val failures = PdfScriptRunner(doc, onAlert = { alert -> alerts += alert.message; 1 }, onConsole = { printed += it })
+            .use { it.runDocumentScripts() }
         assertEquals(listOf("first"), printed)
         assertEquals(listOf("total 42"), alerts, "the third script still ran, and saw the first one's variable")
         assertEquals(1, failures.size, "the broken script is reported")

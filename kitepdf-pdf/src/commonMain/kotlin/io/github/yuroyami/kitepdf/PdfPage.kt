@@ -234,6 +234,34 @@ public class PdfPage internal constructor(
     internal val internalDocument: PdfDocument get() = document
 
     /**
+     * The action the page's `/AA /O` entry names, run when the page opens
+     * (ISO 32000-1 §12.6.3, Table 195). Null when the page defines none.
+     *
+     * A viewer runs it when the page becomes the current one. Documents that put
+     * a whole program in a page use this trigger to start it.
+     */
+    public val openAction: PdfAction? by lazy {
+        PdfAction.parse(node.getDict("AA", document)?.getDict("O", document), document)
+    }
+
+    /**
+     * The action the page's `/AA /C` entry names, run when the page closes
+     * (ISO 32000-1 §12.6.3, Table 195). Null when the page defines none.
+     */
+    public val closeAction: PdfAction? by lazy {
+        PdfAction.parse(node.getDict("AA", document)?.getDict("C", document), document)
+    }
+
+    /**
+     * The indirect references of this page's annotations, in the order `/Annots` lists them.
+     * A caller that has an annotation's reference, such as a form field's widget, uses this to
+     * find which page holds it, without building every annotation.
+     */
+    public val annotationReferences: List<PdfReference> by lazy {
+        node.getArray("Annots", document)?.filterIsInstance<PdfReference>() ?: emptyList()
+    }
+
+    /**
      * Annotations attached to this page (links, highlights, etc.). Parsed from
      * the page's `/Annots` array; empty when the page has none.
      */
@@ -271,5 +299,25 @@ public class PdfPage internal constructor(
      */
     public fun renderTo(canvas: KiteCanvas, deviceCtm: KiteMatrix, annotations: (PdfAnnotation) -> Boolean) {
         PageRenderer(canvas, document).render(this, deviceCtm, annotations)
+    }
+
+    /**
+     * [renderTo] with the form being filled: a widget whose field has a value in [formState] is
+     * drawn from that value, and a field the state hides is not drawn. Pass null to render the
+     * file as it arrived.
+     *
+     * ```kotlin
+     * val state = PdfFormState(doc)
+     * state.setValue("name", "Ada")
+     * page.renderTo(canvas, ctm, state)   // the box shows Ada, whatever the file stores
+     * ```
+     */
+    public fun renderTo(
+        canvas: KiteCanvas,
+        deviceCtm: KiteMatrix,
+        formState: PdfFormState?,
+        annotations: (PdfAnnotation) -> Boolean = { true },
+    ) {
+        PageRenderer(canvas, document, formState).render(this, deviceCtm, annotations)
     }
 }

@@ -53,6 +53,12 @@ import io.github.yuroyami.kitepdf.core.parser.PdfString
 public class PageRenderer(
     private val canvas: KiteCanvas,
     private val resolver: IndirectResolver,
+    /**
+     * The document's live form values, when a reader is filling the form. A widget whose field
+     * has a value here is drawn from that value, not from the appearance the file stores, and a
+     * field this state hides is not drawn at all. Null renders the file as it arrived.
+     */
+    private val formState: io.github.yuroyami.kitepdf.PdfFormState? = null,
 ) {
 
     // W/W* push a clip on the canvas, but the canvas keeps its own clip stack
@@ -380,8 +386,13 @@ public class PageRenderer(
             val oc = optionalContent
             val ocEntry = annot.raw["OC"]
             if (oc != null && ocEntry != null && !isOcObjectVisible(ocEntry, oc)) continue
+            // A form being filled draws from the live value, not from the appearance the file
+            // stores, because that one still shows what the field held when it was written.
+            val liveAppearance = liveWidgetAppearance(annot)
             val stream = annot.appearanceStream
             when {
+                liveAppearance === HIDDEN_WIDGET -> Unit
+                liveAppearance != null -> renderAppearanceForRect(liveAppearance, annot.rect, state)
                 stream != null -> renderAppearanceForRect(
                     stream, annot.rect, state, noZoom = annot.isNoZoom, opacity = opacityOf(annot),
                 )
@@ -390,6 +401,21 @@ public class PageRenderer(
                 else -> synthesizeAppearance(annot, state)
             }
         }
+    }
+
+    /**
+     * The appearance a widget gets from [formState], or null when the state says nothing about it
+     * and the file's own appearance applies. [HIDDEN_WIDGET] means the state hides the field.
+     */
+    private fun liveWidgetAppearance(annot: io.github.yuroyami.kitepdf.PdfAnnotation): PdfStream? {
+        val state = formState ?: return null
+        if (annot.subtype != Subtype.Widget) return null
+        val name = io.github.yuroyami.kitepdf.PdfFormField.qualifiedNameOf(annot.raw, resolver) ?: return null
+        if (state.isHidden(name)) return HIDDEN_WIDGET
+        if (!state.isChanged(name)) return null
+        return io.github.yuroyami.kitepdf.writer.FieldAppearance.synthesize(
+            annot.raw, annot.rect.width, annot.rect.height, resolver, valueOverride = state.value(name) ?: "",
+        )
     }
 
     /** `/CA`, the annotation's constant opacity (ISO 32000-1, Table 164), 1 when absent. */
@@ -551,6 +577,15 @@ public class PageRenderer(
             }
             Subtype.Ink -> annot.inkLists?.forEach { stroke ->
                 polyPath(stroke, close = false)?.let { strokeBorder(annot, it, ctm, borderWidthOf(annot)) }
+            }
+            // A form widget with no /AP: draw its box, its border and its value from the field's
+            // own entries, the way §12.7.3.3 describes and MuPDF does on page load. Without this
+            // a form written without appearance streams renders as an empty sheet (#127).
+            Subtype.Widget -> {
+                val appearance = io.github.yuroyami.kitepdf.writer.FieldAppearance.synthesize(
+                    annot.raw, rect.width, rect.height, resolver,
+                )
+                if (appearance != null) renderAppearanceForRect(appearance, rect, state)
             }
             Subtype.Link -> {
                 // §12.5.4: a declared width of 0 means "no visible border", which is what a link
@@ -1978,6 +2013,9 @@ public class PageRenderer(
         }
 
     private companion object {
+        /** Stands for "the live form state hides this widget", which is not "it has no appearance". */
+        val HIDDEN_WIDGET = PdfStream(PdfDictionary(emptyMap()), ByteArray(0))
+
         /** Safety cap on tiling-pattern tile count to bound adversarial inputs. */
         const val MAX_TILES = 20_000L
         /** Max Form-XObject nesting depth before bailing (recursion guard). */

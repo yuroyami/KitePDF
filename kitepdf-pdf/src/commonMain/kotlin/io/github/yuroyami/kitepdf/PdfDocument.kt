@@ -305,6 +305,30 @@ public class PdfDocument private constructor(
     public val language: String? get() = (catalog["Lang"] as? PdfString)?.asText()
 
     /**
+     * The catalog's `/OpenAction`, run when the document opens (ISO 32000-1
+     * §12.6.2). Null when the document defines none.
+     *
+     * The entry may be an action or a destination. A destination is reported as
+     * a [PdfAction.GoTo] carrying it, so a caller handles one type either way.
+     */
+    public val openAction: PdfAction? by lazy {
+        when (val entry = catalog["OpenAction"]?.resolve(this)) {
+            null -> null
+            is PdfDictionary -> PdfAction.parse(entry, this)
+            // An array or a name here is a destination, not an action (§12.3.2.2).
+            else -> PdfAction.GoTo(destination = entry, raw = PdfDictionary(emptyMap()))
+        }
+    }
+
+    /**
+     * The scripts of the catalog's `/AA` dictionary: the five document triggers
+     * of ISO 32000-1 §12.6.3, Table 197. Null when the catalog has no `/AA`.
+     */
+    public val additionalActions: PdfDocumentActions? by lazy {
+        PdfDocumentActions.parse(catalog, this)
+    }
+
+    /**
      * Document-level JavaScript scripts from `/Names /JavaScript`. Map keys
      * are the script names; values are the JS source. Empty when none.
      */
@@ -371,6 +395,20 @@ public class PdfDocument private constructor(
     /** Look up a form field by its fully-qualified name; null if not present. */
     public fun formField(fullyQualifiedName: String): PdfFormField? =
         formFields.firstOrNull { it.fullyQualifiedName == fullyQualifiedName }
+
+    /**
+     * Which page a field is drawn on, counting from zero, or null when no page holds its widget.
+     * A field with widgets on several pages reports the first one, which is what a script's
+     * `field.page` reports too.
+     */
+    public fun pageIndexOfField(field: PdfFormField): Int? {
+        val wanted = field.widgets.mapNotNull { it.reference }.toSet()
+        if (wanted.isEmpty()) return null
+        for ((index, page) in pages.withIndex()) {
+            if (page.annotationReferences.any { it in wanted }) return index
+        }
+        return null
+    }
 
     /**
      * Resolve a `/Dest` (on a Link annotation or outline) or `/A /D` (a GoTo

@@ -20,12 +20,25 @@ import io.github.yuroyami.kitepdf.core.script.KiteScriptException
 public class KiteJsScriptEngine(
     /** Interpreter steps one call may take before it stops. 0 means no limit. */
     public val instructionBudget: Int = DEFAULT_INSTRUCTION_BUDGET,
+    /**
+     * Asked now and then while a script runs. Answer true and the script stops at once. A viewer
+     * uses it for a wall clock deadline, or for a stop button, which an instruction count cannot
+     * express: a document that legitimately runs for minutes needs time, not steps.
+     */
+    deadline: (() -> Boolean)? = null,
+    /**
+     * Where `Date.now()` reads the time, in milliseconds since the epoch. Leave it unset and the
+     * engine reads the real clock. A test sets it so a script that measures time is repeatable.
+     */
+    clock: (() -> Long)? = null,
 ) : KiteScriptEngine {
 
     private val js = KiteJs {
         this.instructionBudget = this@KiteJsScriptEngine.instructionBudget
         safeBuiltins = true
         sealBuiltins = true
+        deadline?.let { interruptWhen = it }
+        clock?.let { source -> this.clock = { source().toDouble() } }
     }
 
     override fun evaluate(source: String, name: String): String? = guarded(name) {
