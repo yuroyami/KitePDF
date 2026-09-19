@@ -97,6 +97,56 @@ class FormStateRenderTest {
         assertFalse("Fire" in text, "the hidden button is still drawn in <$text>")
     }
 
+    /** A check box with no appearance stream draws its box, and its mark when it is ticked. */
+    @Test
+    fun a_check_box_without_an_appearance_stream_draws_its_box() {
+        val buf = ByteArrayBuilder()
+        val offsets = LinkedHashMap<Int, Int>()
+        fun obj(n: Int, body: String) {
+            offsets[n] = buf.size()
+            buf.append("$n 0 obj\n$body\nendobj\n".encodeToByteArray())
+        }
+        buf.append("%PDF-1.7\n%\u00c4\u00e5\n".encodeToByteArray())
+        obj(1, "<< /Type /Catalog /Pages 2 0 R /AcroForm << /Fields [4 0 R] >> >>")
+        obj(2, "<< /Type /Pages /Kids [3 0 R] /Count 1 >>")
+        obj(3, "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] /Annots [4 0 R] >>")
+        obj(
+            4,
+            "<< /Type /Annot /Subtype /Widget /FT /Btn /T (agree) /V /Off /Rect [30 60 60 90] " +
+                "/MK << /BG [1 1 1] /BC [1 0 0] >> /BS << /W 2 >> >>",
+        )
+        val xref = buf.size()
+        val maxN = offsets.keys.max()
+        buf.append("xref\n0 ${maxN + 1}\n0000000000 65535 f \n".encodeToByteArray())
+        for (n in 1..maxN) {
+            val off = offsets[n]
+            buf.append(
+                (
+                    if (off == null) "0000000000 65535 f \n"
+                    else "${off.toString().padStart(10, '0')} 00000 n \n"
+                    ).encodeToByteArray(),
+            )
+        }
+        buf.append("trailer\n<< /Size ${maxN + 1} /Root 1 0 R >>\nstartxref\n$xref\n%%EOF\n".encodeToByteArray())
+
+        val doc = PdfDocument.open(buf.toByteArray())
+        val off = RecordingCanvas().also { doc.pages[0].renderTo(it, KiteMatrix.IDENTITY) }
+        assertTrue(
+            off.calls.filterIsInstance<RecordingCanvas.Call.Fill>().isNotEmpty(),
+            "the unticked box still draws its background",
+        )
+        assertTrue(
+            off.calls.filterIsInstance<RecordingCanvas.Call.Stroke>().isNotEmpty(),
+            "the unticked box still draws its red border",
+        )
+        assertTrue(drawnText(off).isEmpty(), "an unticked box has no mark")
+
+        val state = PdfFormState(doc)
+        state.setValue("agree", "Yes")
+        val on = RecordingCanvas().also { doc.pages[0].renderTo(it, KiteMatrix.IDENTITY, state) }
+        assertTrue(drawnText(on).isNotEmpty(), "a ticked box draws its mark")
+    }
+
     @Test
     fun the_state_reports_changes_and_can_be_reset() {
         val doc = PdfDocument.open(formPdf())

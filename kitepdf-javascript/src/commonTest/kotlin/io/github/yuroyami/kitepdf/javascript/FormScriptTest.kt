@@ -18,7 +18,9 @@ class FormScriptTest {
      * Three fields: `a` and `b` are typed into, `total` calculates their sum with the helper
      * library and formats it as currency. The form declares the calculation order.
      */
-    private fun invoicePdf(): ByteArray {
+    private fun invoicePdf(
+        calculate: String = "AFSimple_Calculate\\('SUM', new Array\\('a', 'b'\\)\\)",
+    ): ByteArray {
         val buf = ByteArrayBuilder()
         val offsets = LinkedHashMap<Int, Int>()
         fun obj(n: Int, body: String) {
@@ -34,7 +36,7 @@ class FormScriptTest {
         obj(
             6,
             "<< /Type /Annot /Subtype /Widget /FT /Tx /T (total) /V () /Rect [20 120 120 140] " +
-                "/AA << /C << /S /JavaScript /JS (AFSimple_Calculate\\('SUM', new Array\\('a', 'b'\\)\\)) >> " +
+                "/AA << /C << /S /JavaScript /JS ($calculate) >> " +
                 "/F << /S /JavaScript /JS (AFNumber_Format\\(2, 0, 0, 0, '\\$', true\\)) >> >> >>",
         )
         obj(
@@ -61,6 +63,21 @@ class FormScriptTest {
     @Test
     fun a_total_recalculates_when_a_field_changes() {
         val doc = PdfDocument.open(invoicePdf())
+        PdfScriptRunner(doc).use { runner ->
+            runner.setFieldValue("a", "2")
+            runner.setFieldValue("b", "3")
+            assertEquals("5", runner.formState.value("total"))
+        }
+    }
+
+    /** The plain shape of a calculation, with no helper library: the example in the issue. */
+    @Test
+    fun a_calculate_script_that_adds_two_fields_by_hand() {
+        val doc = PdfDocument.open(
+            invoicePdf(
+                calculate = "event.value = this.getField\\('a'\\).value + this.getField\\('b'\\).value",
+            ),
+        )
         PdfScriptRunner(doc).use { runner ->
             runner.setFieldValue("a", "2")
             runner.setFieldValue("b", "3")
