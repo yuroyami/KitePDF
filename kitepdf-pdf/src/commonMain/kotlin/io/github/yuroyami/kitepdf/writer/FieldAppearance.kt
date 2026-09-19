@@ -114,7 +114,7 @@ internal object FieldAppearance {
         border: String?,
         borderWidth: Double,
         markColor: String,
-        zapfRef: PdfReference,
+        zapfFont: PdfObject,
     ): PdfStream {
         val content = ByteArrayBuilder(64)
         content.ascii("q\n")
@@ -154,7 +154,7 @@ internal object FieldAppearance {
         content.ascii("Q\n")
 
         val resources = PdfDictionary(
-            linkedMapOf("Font" to PdfDictionary(linkedMapOf("ZaDb" to zapfRef as PdfObject))),
+            linkedMapOf("Font" to PdfDictionary(linkedMapOf("ZaDb" to zapfFont))),
         )
         return PdfStreams.flate(
             content.toByteArray(),
@@ -234,9 +234,30 @@ internal object FieldAppearance {
             fieldType == "Tx" || fieldType == "Ch" -> valueOverride ?: valueText(inherited(widget, "V", refs), refs)
             else -> ""
         }
-        // A check box or a radio button keyed by state needs its own generator, and a file that
-        // leaves those out is handled where the widget is toggled, not here.
-        if (fieldType == "Btn" && !isPushButton) return null
+        // A check box or a radio button draws its box and, when it is on, its mark.
+        if (fieldType == "Btn" && !isPushButton) {
+            val state = valueOverride ?: valueText(inherited(widget, "V", refs), refs)
+            val onState = onStateNameOf(widget, refs)
+            val on = state.isNotEmpty() && state != "Off" && (onState == null || state == onState)
+            return buildToggle(
+                width = width,
+                height = height,
+                on = on,
+                radio = (flags and RADIO) != 0,
+                mark = markOf(mk, refs),
+                background = background,
+                border = border,
+                borderWidth = borderWidth,
+                markColor = da.colorOps,
+                zapfFont = PdfDictionary(
+                    linkedMapOf(
+                        "Type" to PdfName("Font"),
+                        "Subtype" to PdfName("Type1"),
+                        "BaseFont" to PdfName("ZapfDingbats"),
+                    ),
+                ),
+            )
+        }
 
         val content = ByteArrayBuilder(96)
         content.ascii("q\n")
@@ -294,6 +315,19 @@ internal object FieldAppearance {
         )
     }
 
+    /**
+     * The glyph `/MK /CA` asks for on a check box or a radio button, as a ZapfDingbats character
+     * (ISO 32000-1 §12.5.6.19, Table 189): `4` is the check, `l` the filled circle of a radio.
+     */
+    private fun markOf(mk: PdfDictionary?, refs: IndirectResolver): Char =
+        (mk?.get("CA")?.resolve(refs) as? PdfString)?.asText()?.firstOrNull() ?: '4'
+
+    /** The `/AP /N` state that turns the widget on, or null when it names none. */
+    private fun onStateNameOf(widget: PdfDictionary, refs: IndirectResolver): String? {
+        val normal = widget.getDict("AP", refs)?.get("N")?.resolve(refs) as? PdfDictionary ?: return null
+        return normal.map.keys.firstOrNull { it != "Off" }
+    }
+
     /** An entry of the widget, or of the nearest ancestor field that has it (§12.7.3.2). */
     private fun inherited(widget: PdfDictionary, key: String, refs: IndirectResolver): PdfObject? {
         var node: PdfDictionary? = widget
@@ -329,6 +363,9 @@ internal object FieldAppearance {
 
     /** `/Ff` bit 17: the button is a push button, so it has a caption instead of a state. */
     private const val PUSH_BUTTON = 1 shl 16
+
+    /** `/Ff` bit 16: the button is one of a radio group, so its box is round. */
+    private const val RADIO = 1 shl 15
 
     /** A malformed `/Parent` chain must not loop forever. */
     private const val MAX_PARENT_DEPTH = 32
