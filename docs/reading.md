@@ -314,8 +314,16 @@ Each `PdfFormField` carries:
 - `isReadOnly`: true if the field cannot be edited
 - `isMultiline`: true for multi-line text fields
 - `quadding`: text alignment: 0 = left, 1 = center, 2 = right
-- `rect`: widget placement rectangle (nullable)
+- `rect`: the first widget's placement rectangle (nullable)
+- `widgets`: every place the field is drawn. A radio group has one per button, and a field
+  repeated on several pages has one per page. Each carries its rectangle, its `onStateName`
+  (the `/AP` state that selects it) and its own scripts
+- `additionalActions`: the scripts the field runs, such as `keystroke`, `calculate` and
+  `mouseDown` (see the [JavaScript guide](javascript.md))
 - `fieldReference`, `widgetReference`: indirect references (for editing via `PdfEditor`)
+
+Some files write their widgets straight onto the page and never build the `/AcroForm` field
+tree. KitePDF reads those too, as Chrome does, so `formFields` is not empty for them.
 
 To fill form fields, use the editor (see the [editing guide](editing.md)):
 

@@ -27,6 +27,29 @@ val updated = editor.saveIncremental()
 
 PDF interactive forms (AcroForms) are fully readable via [`doc.formFields`](reading.md#form-fields), and text fields can be filled programmatically.
 
+### While the reader has the file open
+
+`PdfEditor` writes a new file. To hold what a form shows right now, while someone is filling it,
+use `PdfFormState`. It keeps the current value per field, the file is not touched, and the
+renderer draws from it.
+
+```kotlin
+val state = PdfFormState(doc)
+state.setValue("employee.name", "Jane Doe")
+state.setHidden("manager_only", true)
+
+page.renderTo(canvas, ctm, state)   // the box shows Jane Doe
+doc.formField("employee.name")?.value   // still what the file says
+```
+
+`state.onChange { }` reports each change, so a viewer redraws only the widgets that moved.
+`state.reset(name)` puts one field back to the file's own value, and `resetAll()` puts back
+every field. Writing the result to a file is a separate step, through `PdfEditor`.
+
+A form whose widgets carry no appearance stream is drawn from its own entries: the background
+and border from `/MK`, the value in the `/DA` font. Before this, such a form rendered as an
+empty sheet.
+
 ### Text field filling
 
 Call `editor.setTextFieldValue(field, value)` to set a text field and regenerate its appearance (the visual representation viewers display):

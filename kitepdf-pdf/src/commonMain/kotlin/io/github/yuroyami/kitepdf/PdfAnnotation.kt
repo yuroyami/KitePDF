@@ -65,6 +65,12 @@ public data class PdfAnnotation(
     val borderStyle: String? = null,
     /** Dash array from `/BS /D`, or the one `/Border` may carry as its fourth element. */
     val borderDash: List<Double>? = null,
+    /**
+     * The scripts in the annotation's `/AA` dictionary: the mouse and focus triggers of any
+     * annotation, and on a form widget the keystroke, format, validate and calculate triggers
+     * (§12.6.3, Table 194 and Table 196). Null when the annotation has no `/AA`.
+     */
+    val additionalActions: PdfWidgetActions? = null,
     /** The raw dict, for callers that need fields we didn't extract. */
     val raw: PdfDictionary,
 ) {
@@ -122,7 +128,8 @@ public data class PdfAnnotation(
                 subtype, rect, contents, color, uri, action, rawDest, appearanceStream,
                 flags, quadPoints, inkLists, vertices, interiorColor,
                 borderWidth = parseBorderWidth(dict, refs), borderStyle = parseBorderStyle(dict, refs),
-                borderDash = parseBorderDash(dict, refs), raw = dict,
+                borderDash = parseBorderDash(dict, refs),
+                additionalActions = PdfWidgetActions.parse(dict, refs), raw = dict,
             )
         }
 

@@ -2,6 +2,7 @@ package io.github.yuroyami.kitepdf.writer
 
 import io.github.yuroyami.kitepdf.content.ContentStreamParser
 import io.github.yuroyami.kitepdf.core.ByteArrayBuilder
+import io.github.yuroyami.kitepdf.core.parser.IndirectResolver
 import io.github.yuroyami.kitepdf.core.parser.PdfArray
 import io.github.yuroyami.kitepdf.core.parser.PdfDictionary
 import io.github.yuroyami.kitepdf.core.parser.PdfInt
@@ -193,6 +194,144 @@ internal object FieldAppearance {
         }
         return v.joinToString(" ") { fmt(it) } + " " + op
     }
+
+    /* ─── Appearance for a widget that carries none ────────────────────────── */
+
+    /**
+     * The appearance a reader draws for a form widget with no `/AP` stream.
+     *
+     * ISO 32000-1 §12.7.3.3 says a reader constructs field appearances when
+     * `/NeedAppearances` is true, and §12.5.5 says it should generate an
+     * appearance for any annotation that arrives without one. MuPDF does it for
+     * every widget on page load, whatever the flag says, so a form written
+     * without appearances still shows its boxes, its captions and its values.
+     *
+     * The result is a Form XObject whose resources hold a direct font
+     * dictionary, so the renderer needs nothing from the file to draw it.
+     * Returns null when the widget is not a form field.
+     */
+    internal fun synthesize(
+        widget: PdfDictionary,
+        width: Double,
+        height: Double,
+        refs: IndirectResolver,
+        /** What the field shows now, when a reader or a script has changed it. */
+        valueOverride: String? = null,
+    ): PdfStream? {
+        if (width <= 0.0 || height <= 0.0) return null
+        val fieldType = inherited(widget, "FT", refs)?.let { (it as? PdfName)?.value } ?: return null
+        val flags = (inherited(widget, "Ff", refs) as? PdfInt)?.value?.toInt() ?: 0
+        val mk = widget.getDict("MK", refs)
+        val background = colorOps(mk?.getArray("BG", refs), stroking = false)
+        val border = colorOps(mk?.getArray("BC", refs), stroking = true)
+        val borderWidth = borderWidthOf(widget, refs, hasBorderColor = border != null)
+        val da = parseDA((inherited(widget, "DA", refs) as? PdfString)?.asText())
+        val quadding = (inherited(widget, "Q", refs) as? PdfInt)?.value?.toInt() ?: 0
+
+        val isPushButton = fieldType == "Btn" && (flags and PUSH_BUTTON) != 0
+        val text = when {
+            isPushButton -> (mk?.get("CA")?.resolve(refs) as? PdfString)?.asText() ?: ""
+            fieldType == "Tx" || fieldType == "Ch" -> valueOverride ?: valueText(inherited(widget, "V", refs), refs)
+            else -> ""
+        }
+        // A check box or a radio button keyed by state needs its own generator, and a file that
+        // leaves those out is handled where the widget is toggled, not here.
+        if (fieldType == "Btn" && !isPushButton) return null
+
+        val content = ByteArrayBuilder(96)
+        content.ascii("q\n")
+        if (background != null) {
+            content.ascii("$background\n0 0 ${fmt(width)} ${fmt(height)} re f\n")
+        }
+        if (border != null && borderWidth > 0.0) {
+            val inset = borderWidth / 2.0
+            content.ascii("$border ${fmt(borderWidth)} w\n")
+            content.ascii(
+                "${fmt(inset)} ${fmt(inset)} ${fmt(width - borderWidth)} ${fmt(height - borderWidth)} re S\n",
+            )
+        }
+        if (text.isNotEmpty()) {
+            val pad = (borderWidth + 1.0).coerceAtLeast(1.0)
+            val size = if (da.fontSize > 0.0) da.fontSize else autoSize(height, isPushButton)
+            val advance = StandardFont.Helvetica.stringWidth(text, size)
+            // A push button centres its caption; a variable text field follows /Q
+            // (ISO 32000-1 §12.7.3.1, Table 222): 0 left, 1 centre, 2 right.
+            val x = when {
+                isPushButton || quadding == 1 -> ((width - advance) / 2.0).coerceAtLeast(pad)
+                quadding == 2 -> (width - pad - advance).coerceAtLeast(pad)
+                else -> pad
+            }
+            val baseline = ((height - size) / 2.0 + size * 0.2).coerceAtLeast(pad)
+            content.ascii("/Tx BMC\nq\n")
+            content.ascii("${fmt(pad)} ${fmt(pad)} ${fmt((width - 2 * pad).coerceAtLeast(0.0))} ${fmt((height - 2 * pad).coerceAtLeast(0.0))} re W n\n")
+            content.ascii("BT\n${da.colorOps}\n/${da.fontName} ${fmt(size)} Tf\n${fmt(x)} ${fmt(baseline)} Td\n")
+            PdfObjectWriter.writeObject(PdfString(PdfText.encodeContentString(text)), content)
+            content.ascii(" Tj\nET\nQ\nEMC\n")
+        }
+        content.ascii("Q\n")
+
+        val font = PdfDictionary(
+            linkedMapOf(
+                "Type" to PdfName("Font"),
+                "Subtype" to PdfName("Type1"),
+                "BaseFont" to PdfName("Helvetica"),
+                "Encoding" to PdfName("WinAnsiEncoding"),
+            ),
+        )
+        return PdfStream(
+            dict = PdfDictionary(
+                linkedMapOf(
+                    "Type" to PdfName("XObject"),
+                    "Subtype" to PdfName("Form"),
+                    "FormType" to PdfInt(1),
+                    "BBox" to PdfArray(listOf(PdfReal(0.0), PdfReal(0.0), PdfReal(width), PdfReal(height))),
+                    "Resources" to PdfDictionary(
+                        linkedMapOf("Font" to PdfDictionary(linkedMapOf(da.fontName to font as PdfObject))),
+                    ),
+                ),
+            ),
+            rawBytes = content.toByteArray(),
+        )
+    }
+
+    /** An entry of the widget, or of the nearest ancestor field that has it (§12.7.3.2). */
+    private fun inherited(widget: PdfDictionary, key: String, refs: IndirectResolver): PdfObject? {
+        var node: PdfDictionary? = widget
+        var guard = 0
+        while (node != null && guard++ < MAX_PARENT_DEPTH) {
+            node[key]?.resolve(refs)?.let { return it }
+            node = node["Parent"]?.resolve(refs) as? PdfDictionary
+        }
+        return null
+    }
+
+    /** `/BS /W` first, then `/Border`, then the default of 1 when a border colour is set (§12.5.4). */
+    private fun borderWidthOf(widget: PdfDictionary, refs: IndirectResolver, hasBorderColor: Boolean): Double {
+        widget.getDict("BS", refs)?.let { bs -> numberOf(bs["W"]?.resolve(refs))?.let { return it } }
+        widget.getArray("Border", refs)?.let { border -> numberOf(border.getOrNull(2)?.resolve(refs))?.let { return it } }
+        return if (hasBorderColor) 1.0 else 0.0
+    }
+
+    /** A field value as the text to draw: a string for text, a name for a choice. */
+    private fun valueText(value: PdfObject?, refs: IndirectResolver): String = when (val v = value?.resolve(refs)) {
+        is PdfString -> v.asText()
+        is PdfName -> v.value
+        is PdfArray -> (v.getOrNull(0)?.resolve(refs) as? PdfString)?.asText() ?: ""
+        else -> ""
+    }
+
+    /**
+     * The size for `/DA` font size 0, which means "fit the box" (§12.7.3.3). A button's caption
+     * keeps a little more room around it than a field's value.
+     */
+    private fun autoSize(height: Double, isButton: Boolean): Double =
+        (height - if (isButton) 4.0 else 2.0).coerceIn(4.0, 12.0)
+
+    /** `/Ff` bit 17: the button is a push button, so it has a caption instead of a state. */
+    private const val PUSH_BUTTON = 1 shl 16
+
+    /** A malformed `/Parent` chain must not loop forever. */
+    private const val MAX_PARENT_DEPTH = 32
 
     /** ZapfDingbats check glyph advance and cap height, both in em. */
     private const val ZAPF_ADVANCE = 0.79
