@@ -116,6 +116,8 @@ class FormLayerSceneTest {
             assertTrue(handleWidgetTap(state, scripts, Offset(55f, 160f)), "the button consumed the tap")
             assertEquals(listOf("down press", "up press"), scripts.events.drop(2))
             assertEquals("pressed", scripts.formState.value("out"))
+            // handleWidgetTap with no scope runs the press where it stands, which is what keeps
+            // this assertion in order; the viewer passes its own scope and posts instead.
 
             // The timer the press started is pumped by the viewer, a frame at a time.
             driver.pumpUntil { scripts.ticks >= 3 }
@@ -142,7 +144,8 @@ class FormLayerSceneTest {
             // The text field is [20..180] x [120..160] user space, so display y 40..80: centre (100, 60).
             assertTrue(handleWidgetTap(state, scripts, Offset(100f, 60f)), "the field consumed the tap")
             assertEquals("out", state.focusedField)
-            assertTrue(scripts.events.contains("focus out"), "the field's own focus script ran")
+            // The focus script runs on the script thread, so the viewer does not wait for it.
+            driver.pumpUntil { scripts.events.contains("focus out") }
 
             // A digit is taken and a letter is refused, as the field's keystroke script says.
             assertEquals("4", scripts.keystroke("out", "4", 0, 0))
@@ -152,8 +155,68 @@ class FormLayerSceneTest {
             // Leaving the field commits it, which is what runs validate, calculate and format.
             state.blurFocusedField()
             assertEquals(null, state.focusedField)
-            assertTrue(scripts.events.contains("commit out=4"), "leaving the field committed it: ${scripts.events}")
-            assertTrue(scripts.events.contains("blur out"))
+            driver.pumpUntil { scripts.events.contains("commit out=4") }
+            driver.pumpUntil { scripts.events.contains("blur out") }
+        }
+    }
+
+    /** An edit is reduced to the text put in and the range it replaces, which is what a script sees. */
+    @Test
+    fun an_edit_reduces_to_one_insertion_or_deletion() {
+        editOf("", "w").let { assertEquals("w", it.change); assertEquals(0, it.start); assertEquals(0, it.end) }
+        editOf("12", "123").let { assertEquals("3", it.change); assertEquals(2, it.start); assertEquals(2, it.end) }
+        editOf("123", "13").let { assertEquals("", it.change); assertEquals(1, it.start); assertEquals(2, it.end) }
+        editOf("abc", "aXc").let { assertEquals("X", it.change); assertEquals(1, it.start); assertEquals(2, it.end) }
+        editOf("abc", "abc").let { assertEquals("", it.change); assertEquals(3, it.start); assertEquals(3, it.end) }
+    }
+
+    /** The scripts run on a thread of their own, so a slow document does not stop the drawing. */
+    @Test
+    fun a_slow_script_does_not_block_the_viewer() {
+        val doc = PdfDocument.open(formPdf())
+        val scripts = object : PdfScriptHandler {
+            override val formState: PdfFormState = PdfFormState(doc)
+
+            /** Held until the test lets go, which is what a long running script looks like. */
+            val release = java.util.concurrent.CountDownLatch(1)
+            val started = java.util.concurrent.CountDownLatch(1)
+            val finished = java.util.concurrent.CountDownLatch(1)
+
+            @Volatile var thread: String? = null
+
+            override fun documentOpened() {
+                thread = Thread.currentThread().name
+                started.countDown()
+                release.await()
+                formState.setValue("out", "late")
+                finished.countDown()
+            }
+        }
+        lateinit var state: KiteDocViewState
+        ImageComposeScene(width = 200, height = 200, density = Density(1f)) {
+            state = rememberKiteDocViewState(doc)
+            KiteDocView(state = state, modifier = Modifier.fillMaxSize(), scripts = scripts)
+        }.use { scene ->
+            val driver = SceneTestDriver(scene)
+            driver.pumpUntilState { scripts.started.count == 0L }
+
+            // The script is stuck now. If it held the thread that draws, none of these frames
+            // would render and the loop below would never finish.
+            var framesWhileBusy = 0
+            driver.pumpUntilState(maxFrames = 12, timeoutMs = 4_000) {
+                framesWhileBusy++
+                framesWhileBusy >= 10
+            }
+            assertTrue(framesWhileBusy >= 10, "only $framesWhileBusy frames rendered while the script was stuck")
+            assertEquals("", scripts.formState.value("out"), "the script has not written yet")
+
+            scripts.release.countDown()
+            driver.pumpUntilState { scripts.finished.count == 0L }
+            assertEquals("late", scripts.formState.value("out"))
+            assertTrue(
+                scripts.thread != Thread.currentThread().name,
+                "the script ran on its own thread, not the test's: ${scripts.thread}",
+            )
         }
     }
 }

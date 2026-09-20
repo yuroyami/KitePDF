@@ -110,6 +110,16 @@ are read-only, and a script reaches nothing outside the engine except what the r
 Denying scripts does not stop a reader filling the form: values still go into the form state, and
 only the scripts are silent.
 
+## Threads
+
+An engine belongs to one thread, so a runner does too: make it and use it from the same thread.
+The engine itself is opened by the first script that runs, not when the runner is made, so a host
+may construct a runner on one thread and hand it to the thread that will use it. The Compose
+viewer does exactly that: it keeps a thread for scripts and posts every call to it.
+
+`PdfFormState` is the exception, and deliberately so: it is written by the scripts and read by
+whatever draws, so it is safe from two threads.
+
 ## Other engines
 
 The runner talks to the `KiteScriptEngine` interface in `kitepdf-core`. `KiteJsScriptEngine` is the KiteJS implementation. Pass your own engine to `PdfScriptRunner` to use another one.

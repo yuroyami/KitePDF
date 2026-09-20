@@ -1,5 +1,7 @@
 package io.github.yuroyami.kitepdf.compose
 
+import kotlinx.coroutines.launch
+
 import androidx.compose.animation.core.AnimationSpec
 import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.spring
@@ -283,12 +285,16 @@ public class KiteDocViewState(
     public var focusedField: String? by mutableStateOf(null)
         internal set
 
+    /** Where script work is posted, so a long script never runs on the thread that draws. */
+    internal var scriptScope: kotlinx.coroutines.CoroutineScope? = null
+
     /** Puts the caret in a field, telling the document's scripts that it took the focus. */
     internal fun focusField(fieldName: String) {
         if (focusedField == fieldName) return
         blurFocusedField()
         focusedField = fieldName
-        scripts?.focus(fieldName)
+        val handler = scripts ?: return
+        post { handler.focus(fieldName) }
     }
 
     /**
@@ -299,9 +305,24 @@ public class KiteDocViewState(
         val name = focusedField ?: return
         focusedField = null
         val handler = scripts ?: return
-        handler.commit(name, handler.formState.value(name) ?: "")
-        handler.blur(name)
-        formRevision = handler.formState.revision
+        post {
+            handler.commit(name, handler.formState.value(name) ?: "")
+            handler.blur(name)
+        }
+    }
+
+    /** Runs [work] on the script thread, or here when no scope is set, as a test has none. */
+    internal fun post(work: () -> Unit) {
+        val scope = scriptScope
+        if (scope == null) {
+            work()
+            formRevision = scripts?.formState?.revision ?: formRevision
+            return
+        }
+        scope.launch(kitepdfScriptDispatcher()) {
+            work()
+            formRevision = scripts?.formState?.revision ?: formRevision
+        }
     }
 
     /**

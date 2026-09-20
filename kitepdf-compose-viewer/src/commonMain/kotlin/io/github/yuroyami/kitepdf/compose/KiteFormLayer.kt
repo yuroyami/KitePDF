@@ -17,6 +17,8 @@ import io.github.yuroyami.kitepdf.PdfPage
 import io.github.yuroyami.kitepdf.PdfScriptHandler
 import io.github.yuroyami.kitepdf.core.KitePage
 import io.github.yuroyami.kitepdf.core.render.KiteMatrix
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.launch
 
 /**
  * The form layer: the widgets of a page, drawn over the page itself and redrawn on their own.
@@ -63,16 +65,29 @@ internal fun Modifier.kiteFormLayer(
 internal fun KiteScriptTimers(scripts: PdfScriptHandler?, onChanged: () -> Unit) {
     if (scripts == null) return
     LaunchedEffect(scripts) {
+        var running = false
         while (true) {
-            withFrameMillis { frameTimeMillis ->
-                if (scripts.hasTimers) {
-                    val before = scripts.formState.revision
-                    scripts.pumpTimers(frameTimeMillis)
-                    if (scripts.formState.revision != before) onChanged()
-                }
+            val frameTime = withFrameMillis { it }
+            // One round at a time: a frame that takes longer than a frame must not queue another.
+            if (!running && scripts.hasTimers) {
+                running = true
+                val before = scripts.formState.revision
+                kotlinx.coroutines.withContext(kitepdfScriptDispatcher()) { scripts.pumpTimers(frameTime) }
+                running = false
+                if (scripts.formState.revision != before) onChanged()
             }
         }
     }
+}
+
+/**
+ * Runs [work] on the thread the document's scripts live on, so a long one never blocks drawing.
+ *
+ * A script engine belongs to one thread, so everything the viewer asks of a document goes through
+ * here, in the order it was asked.
+ */
+internal fun CoroutineScope.postToScripts(work: () -> Unit) {
+    launch(kitepdfScriptDispatcher()) { work() }
 }
 
 /** Keeps a number that changes whenever the form does, so a layer can repaint on it. */
@@ -103,6 +118,7 @@ internal fun handleWidgetTap(
     state: KiteDocViewState,
     scripts: PdfScriptHandler?,
     offset: Offset,
+    scope: CoroutineScope? = null,
 ): Boolean {
     if (scripts == null) return false
     val hit = state.hitTest(offset) ?: return false
@@ -110,9 +126,14 @@ internal fun handleWidgetTap(
     val field = page.formFieldAt(hit.x, hit.y) ?: return false
     val name = field.fullyQualifiedName
     if (scripts.formState.isReadOnly(name)) return true
-    scripts.mouseDown(name)
-    toggleIfButton(scripts, field)
-    scripts.mouseUp(name)
+    // The scripts of a widget may take a while, so they go to the script thread. A test with no
+    // scope runs them where it stands, which keeps its assertions in order.
+    val press = {
+        scripts.mouseDown(name)
+        toggleIfButton(scripts, field)
+        scripts.mouseUp(name)
+    }
+    if (scope != null) scope.postToScripts(press) else press()
     // A text or choice field takes the caret, which is what opens the keyboard.
     if (field.type == PdfFormField.FieldType.Text || field.type == PdfFormField.FieldType.Choice) {
         state.focusField(name)

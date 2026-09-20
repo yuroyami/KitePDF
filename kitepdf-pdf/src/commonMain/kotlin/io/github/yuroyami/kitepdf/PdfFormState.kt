@@ -1,5 +1,7 @@
 package io.github.yuroyami.kitepdf
 
+import io.github.yuroyami.kitepdf.core.withLock
+
 /**
  * The live values of a document's form fields, while the reader has it open.
  *
@@ -18,11 +20,14 @@ package io.github.yuroyami.kitepdf
  * doc.formField("total")?.value // still what the file says
  * ```
  *
- * One instance belongs to one document and to one thread. A viewer keeps it for
- * as long as the document is open, and reads [revision] to know when to redraw.
+ * A viewer keeps one for as long as the document is open, and reads [revision] to know when to
+ * redraw. Reads and writes are safe from two threads, because a document's scripts run on a
+ * thread of their own while the viewer draws on its own: the engine that runs the scripts is
+ * confined to one thread, but the values it writes are read by another.
  */
 public class PdfFormState(private val document: PdfDocument) {
 
+    private val lock = io.github.yuroyami.kitepdf.core.KiteLock()
     private val values = HashMap<String, String>()
     private val hidden = HashMap<String, Boolean>()
     private val readOnly = HashMap<String, Boolean>()
@@ -47,13 +52,13 @@ public class PdfFormState(private val document: PdfDocument) {
 
     /** The value the reader sees: what this state holds, or the file's own value. */
     public fun value(fieldName: String): String? =
-        values[fieldName] ?: document.formField(fieldName)?.value
+        lock.withLock { values[fieldName] } ?: document.formField(fieldName)?.value
 
     /** True when this state has its own value for the field, so the file's is out of date. */
-    public fun isChanged(fieldName: String): Boolean = fieldName in values
+    public fun isChanged(fieldName: String): Boolean = lock.withLock { fieldName in values }
 
     /** Every field this state has a value for, in the order they were first set. */
-    public val changedFields: Set<String> get() = values.keys.toSet()
+    public val changedFields: Set<String> get() = lock.withLock { values.keys.toSet() }
 
     /**
      * Sets the value shown for [fieldName]. Does nothing when the document has no
@@ -61,27 +66,31 @@ public class PdfFormState(private val document: PdfDocument) {
      */
     public fun setValue(fieldName: String, value: String) {
         if (document.formField(fieldName) == null) return
-        if (values[fieldName] == value) return
-        values[fieldName] = value
-        revision++
-        publish(Change(fieldName, value))
+        val changed = lock.withLock {
+            if (values[fieldName] == value) false else { values[fieldName] = value; revision++; true }
+        }
+        if (changed) publish(Change(fieldName, value))
     }
 
     /** Drops this state's value for [fieldName], so the file's own value shows again. */
     public fun reset(fieldName: String) {
-        if (values.remove(fieldName) == null) return
-        revision++
-        publish(Change(fieldName, value(fieldName) ?: ""))
+        val removed = lock.withLock {
+            if (values.remove(fieldName) == null) false else { revision++; true }
+        }
+        if (removed) publish(Change(fieldName, value(fieldName) ?: ""))
     }
 
     /** Drops every value, visibility and read-only change this state holds. */
     public fun resetAll() {
-        if (values.isEmpty() && hidden.isEmpty() && readOnly.isEmpty()) return
-        val touched = values.keys + hidden.keys + readOnly.keys
-        values.clear()
-        hidden.clear()
-        readOnly.clear()
-        revision++
+        val touched = lock.withLock {
+            if (values.isEmpty() && hidden.isEmpty() && readOnly.isEmpty()) return
+            val names = values.keys + hidden.keys + readOnly.keys
+            values.clear()
+            hidden.clear()
+            readOnly.clear()
+            revision++
+            names
+        }
         for (name in touched) publish(Change(name, value(name) ?: ""))
     }
 
@@ -91,7 +100,7 @@ public class PdfFormState(private val document: PdfDocument) {
      * it through `field.display` or `field.hidden`.
      */
     public fun isHidden(fieldName: String): Boolean {
-        hidden[fieldName]?.let { return it }
+        lock.withLock { hidden[fieldName] }?.let { return it }
         val widget = document.formField(fieldName)?.widgets?.firstOrNull() ?: return false
         val flags = (widget.dict["F"]?.resolve(document) as? io.github.yuroyami.kitepdf.core.parser.PdfInt)
             ?.value?.toInt() ?: 0
@@ -101,23 +110,23 @@ public class PdfFormState(private val document: PdfDocument) {
     /** Hides or shows the field, whatever the file's own flag says. */
     public fun setHidden(fieldName: String, value: Boolean) {
         if (document.formField(fieldName) == null) return
-        if (isHidden(fieldName) == value && hidden.containsKey(fieldName)) return
-        hidden[fieldName] = value
-        revision++
-        publish(Change(fieldName, this.value(fieldName) ?: "", flagsOnly = true))
+        val changed = lock.withLock {
+            if (hidden[fieldName] == value) false else { hidden[fieldName] = value; revision++; true }
+        }
+        if (changed) publish(Change(fieldName, this.value(fieldName) ?: "", flagsOnly = true))
     }
 
     /** Whether the reader may change the field: the file's own flag, unless this state says otherwise. */
     public fun isReadOnly(fieldName: String): Boolean =
-        readOnly[fieldName] ?: (document.formField(fieldName)?.isReadOnly == true)
+        lock.withLock { readOnly[fieldName] } ?: (document.formField(fieldName)?.isReadOnly == true)
 
     /** Makes the field read-only, or gives it back to the reader. */
     public fun setReadOnly(fieldName: String, value: Boolean) {
         if (document.formField(fieldName) == null) return
-        if (readOnly[fieldName] == value) return
-        readOnly[fieldName] = value
-        revision++
-        publish(Change(fieldName, this.value(fieldName) ?: "", flagsOnly = true))
+        val changed = lock.withLock {
+            if (readOnly[fieldName] == value) false else { readOnly[fieldName] = value; revision++; true }
+        }
+        if (changed) publish(Change(fieldName, this.value(fieldName) ?: "", flagsOnly = true))
     }
 
     /**
@@ -125,8 +134,8 @@ public class PdfFormState(private val document: PdfDocument) {
      * function that stops the listening.
      */
     public fun onChange(listener: (Change) -> Unit): () -> Unit {
-        listeners.add(listener)
-        return { listeners.remove(listener) }
+        lock.withLock { listeners.add(listener) }
+        return { lock.withLock { listeners.remove(listener) } }
     }
 
     private companion object {
@@ -136,7 +145,7 @@ public class PdfFormState(private val document: PdfDocument) {
 
     private fun publish(change: Change) {
         // A listener that throws must not stop the others, and must not stop a script.
-        for (listener in listeners.toList()) {
+        for (listener in lock.withLock { listeners.toList() }) {
             try {
                 listener(change)
             } catch (e: RuntimeException) {
