@@ -20,6 +20,16 @@ script that writes a field twenty times a second costs twenty small redraws.
 
 Without a handler nothing in the document runs, which is the default.
 
+### Filling a form
+
+With a handler, a tap on a widget does what a viewer does: a push button runs its press and
+release scripts, a check box or a radio button changes the form's value, and a text field takes
+the caret and opens the keyboard. Each character the reader types goes through the field's own
+keystroke script first, so a form that only takes digits refuses a letter, and leaving the field
+commits it: validate, then calculate, then format.
+
+`state.focusedField` says which field has the caret, and it is null when none has.
+
 ## Installation
 
 Add the `kitepdf-compose-viewer` artifact to your Gradle dependencies:

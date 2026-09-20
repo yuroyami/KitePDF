@@ -231,6 +231,7 @@ public fun KiteDocView(
         handler.pageOpened(currentPage)
     }
     KiteScriptTimers(scripts) { state.formRevision = scripts?.formState?.revision ?: 0 }
+    KiteFormInput(state, scripts)
 
     // Route taps through link hit-testing first: a tap on a link
     // navigates (or defers to onLinkTap); anything else reaches user onTap. A widget comes
@@ -238,10 +239,10 @@ public fun KiteDocView(
     val tapScope = rememberCoroutineScope()
     val linkAwareTap: (Offset) -> Unit = { offset ->
         state.clearSelection() // tap anywhere dismisses an active selection
-        if (!handleWidgetTap(state, scripts, offset) &&
-            !handleLinkTap(state, tapScope, onLinkTap, offset)
-        ) {
-            onTap?.invoke(offset)
+        if (!handleWidgetTap(state, scripts, offset)) {
+            // A tap outside every widget leaves the field that had the caret, which commits it.
+            state.blurFocusedField()
+            if (!handleLinkTap(state, tapScope, onLinkTap, offset)) onTap?.invoke(offset)
         }
     }
 

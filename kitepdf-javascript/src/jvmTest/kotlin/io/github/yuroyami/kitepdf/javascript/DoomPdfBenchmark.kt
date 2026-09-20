@@ -70,6 +70,20 @@ class DoomPdfBenchmark {
             File(out, "console.txt").writeText(consoleRows().joinToString("\n"))
             assertTrue(runner.hasTimers, "the game never set its loop timer; alerts: $alerts")
 
+            // Input: a button on the page and a key typed into the box, which is how the game
+            // reads a keyboard. Both go through the widget's own scripts.
+            runner.mouseDown("fire_button")
+            runner.mouseUp("fire_button")
+            runner.keystroke("key_input", "w")
+            clock += FRAME_STEP
+            runner.pumpTimers(clock)
+            val afterInput = consoleRows()
+            for (line in afterInput.takeLast(4)) note("after input: $line")
+            assertTrue(
+                afterInput.any { it.startsWith("key down:") } && afterInput.any { it.startsWith("pressed: w") },
+                "the game did not see the button press and the typed key: ${afterInput.takeLast(6)}",
+            )
+
             val frames = 120
             val times = ArrayList<Long>()
             val writes = ArrayList<Int>()

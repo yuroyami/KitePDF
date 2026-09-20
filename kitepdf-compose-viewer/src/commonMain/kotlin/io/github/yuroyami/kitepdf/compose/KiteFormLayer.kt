@@ -113,6 +113,12 @@ internal fun handleWidgetTap(
     scripts.mouseDown(name)
     toggleIfButton(scripts, field)
     scripts.mouseUp(name)
+    // A text or choice field takes the caret, which is what opens the keyboard.
+    if (field.type == PdfFormField.FieldType.Text || field.type == PdfFormField.FieldType.Choice) {
+        state.focusField(name)
+    } else {
+        state.blurFocusedField()
+    }
     return true
 }
 

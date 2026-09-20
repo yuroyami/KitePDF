@@ -62,9 +62,30 @@ class FormLayerSceneTest {
         override fun mouseDown(fieldName: String) { events.add("down $fieldName") }
         override fun mouseUp(fieldName: String) {
             events.add("up $fieldName")
-            formState.setValue("out", "pressed")
-            timerDue = 0
+            // Only the button writes and starts the timer, as its own script would.
+            if (fieldName == "press") {
+                formState.setValue("out", "pressed")
+                timerDue = 0
+            }
         }
+
+        /** Stands in for a keystroke script that only takes digits. */
+        override fun keystroke(fieldName: String, change: String, selectionStart: Int, selectionEnd: Int): String? {
+            if (change.any { !it.isDigit() }) return null
+            val current = formState.value(fieldName) ?: ""
+            val start = selectionStart.coerceIn(0, current.length)
+            val end = selectionEnd.coerceIn(start, current.length)
+            return current.substring(0, start) + change + current.substring(end)
+        }
+
+        override fun commit(fieldName: String, value: String): Boolean {
+            events.add("commit $fieldName=$value")
+            formState.setValue(fieldName, value)
+            return true
+        }
+
+        override fun focus(fieldName: String) { events.add("focus $fieldName") }
+        override fun blur(fieldName: String) { events.add("blur $fieldName") }
 
         override val hasTimers: Boolean get() = timerDue != null
         override fun pumpTimers(nowMillis: Long): Long? {
@@ -103,6 +124,36 @@ class FormLayerSceneTest {
 
             // A tap on empty page space is not a widget.
             assertFalse(handleWidgetTap(state, scripts, Offset(150f, 190f)))
+        }
+    }
+
+    @Test
+    fun a_tap_on_a_text_field_takes_the_caret_and_typing_goes_through_the_scripts() {
+        val doc = PdfDocument.open(formPdf())
+        val scripts = FakeScripts(doc)
+        lateinit var state: KiteDocViewState
+        ImageComposeScene(width = 200, height = 200, density = Density(1f)) {
+            state = rememberKiteDocViewState(doc)
+            KiteDocView(state = state, modifier = Modifier.fillMaxSize(), scripts = scripts)
+        }.use { scene ->
+            val driver = SceneTestDriver(scene)
+            driver.pumpUntil { state.pageGeometry.isNotEmpty() }
+
+            // The text field is [20..180] x [120..160] user space, so display y 40..80: centre (100, 60).
+            assertTrue(handleWidgetTap(state, scripts, Offset(100f, 60f)), "the field consumed the tap")
+            assertEquals("out", state.focusedField)
+            assertTrue(scripts.events.contains("focus out"), "the field's own focus script ran")
+
+            // A digit is taken and a letter is refused, as the field's keystroke script says.
+            assertEquals("4", scripts.keystroke("out", "4", 0, 0))
+            scripts.formState.setValue("out", "4")
+            assertEquals(null, scripts.keystroke("out", "x", 1, 1), "a letter is refused")
+
+            // Leaving the field commits it, which is what runs validate, calculate and format.
+            state.blurFocusedField()
+            assertEquals(null, state.focusedField)
+            assertTrue(scripts.events.contains("commit out=4"), "leaving the field committed it: ${scripts.events}")
+            assertTrue(scripts.events.contains("blur out"))
         }
     }
 }
