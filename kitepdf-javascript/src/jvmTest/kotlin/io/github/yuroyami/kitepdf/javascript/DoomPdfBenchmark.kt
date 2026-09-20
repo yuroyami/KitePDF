@@ -52,8 +52,17 @@ class DoomPdfBenchmark {
         var clock = 1_000_000L
         val alerts = ArrayList<String>()
         val console = ArrayList<String>()
+        // The game's asm.js module is compiled ahead of time unless this says otherwise, which
+        // is how the two paths are compared under one harness:
+        // -Dkitepdf.doom.asm=false
+        val asmJs = System.getProperty("kitepdf.doom.asm") != "false"
         PdfScriptRunner(
             doc,
+            engine = KiteJsScriptEngine(
+                instructionBudget = PdfScriptPolicy.LONG_RUNNING.instructionBudget,
+                clock = { clock++ },
+                asmJs = asmJs,
+            ),
             policy = PdfScriptPolicy.LONG_RUNNING,
             onAlert = { alert -> alerts.add(alert.message); note("alert: ${alert.message}"); 1 },
             onConsole = { text -> console.add(text) },
@@ -65,6 +74,11 @@ class DoomPdfBenchmark {
             // Doom is tens of millions of integer operations a frame, and whether its asm.js
             // module was compiled ahead of time is most of the frame time.
             for (report in runner.asmReports) note("asm.js: $report")
+            assertTrue(
+                !asmJs || runner.asmReports.any { it.endsWith(": compiled") },
+                "the game's module was not compiled ahead of time, so these times are not the " +
+                    "ones a reader would see: ${runner.asmReports}",
+            )
             val rows = { (199 downTo 0).joinToString("\n") { runner.formState.value("field_$it") ?: "" } }
             val consoleRows = { (24 downTo 0).mapNotNull { runner.formState.value("console_$it") }.filter { it.isNotBlank() } }
             note("start-up: ${startupMs / 1000.0} s, ${runner.formState.changedFields.size} fields written, timers=${runner.hasTimers}")
@@ -87,9 +101,44 @@ class DoomPdfBenchmark {
                 "the game did not see the button press and the typed key: ${afterInput.takeLast(6)}",
             )
 
+            // Doom shows a still title screen for its first eleven seconds and writes almost
+            // nothing while it is up, so a frame measured there is the cost of doing nothing.
+            // Run the game past it before measuring anything.
+            var warmup = 0
+            while (warmup * FRAME_STEP < TITLE_SCREEN_MS) {
+                clock += FRAME_STEP
+                runner.pumpTimers(clock)
+                warmup++
+            }
+            note("ran $warmup frames to get past the title screen")
+
             val frames = 120
             val times = ArrayList<Long>()
             val writes = ArrayList<Int>()
+            // A second thread reads this one's stack while the frames run and counts what it
+            // finds. It says which part of a frame the time goes to, which is not obvious: the
+            // game's own code is only one of the three, next to the script that turns its
+            // framebuffer into text and the bridge that carries the text into the form.
+            val playing = Thread.currentThread()
+            val leaves = HashMap<String, Int>()
+            var samples = 0
+            val sampling = java.util.concurrent.atomic.AtomicBoolean(true)
+            val sampler = Thread {
+                while (sampling.get()) {
+                    val stack = playing.stackTrace
+                    if (stack.isNotEmpty()) {
+                        samples++
+                        leaves.merge(
+                            "${stack[0].className.substringAfterLast('.')}.${stack[0].methodName}",
+                            1,
+                            Int::plus,
+                        )
+                    }
+                    Thread.sleep(2)
+                }
+            }
+            sampler.isDaemon = true
+            sampler.start()
             for (frame in 1..frames) {
                 val before = runner.formState.revision
                 val t = System.nanoTime()
@@ -99,12 +148,22 @@ class DoomPdfBenchmark {
                 writes += runner.formState.revision - before
                 if (frame <= 3 || frame % 20 == 0) note("frame $frame: ${times.last()} ms, ${writes.last()} field writes")
             }
+            sampling.set(false)
+            sampler.join(2_000)
+            note("where a frame goes, from $samples samples:")
+            leaves.entries.sortedByDescending { it.value }.take(8).forEach { (name, n) ->
+                note("  ${(n * 1000.0 / maxOf(samples, 1)).toInt() / 10.0}%  $name")
+            }
             File(out, "frame.txt").writeText(rows())
             val sorted = times.sorted()
             note(
                 "frames: ${times.size}, median ${sorted[sorted.size / 2]} ms, " +
                     "min ${sorted.first()} ms, max ${sorted.last()} ms, " +
                     "median writes ${writes.sorted()[writes.size / 2]}",
+            )
+            assertTrue(
+                writes.sorted()[writes.size / 2] > 0,
+                "half the measured frames drew nothing, so the times are the cost of an idle loop",
             )
             val drawn = (0 until 200).count { !runner.formState.value("field_$it").isNullOrBlank() }
             note("screen rows with content: $drawn of 200")
@@ -124,7 +183,14 @@ class DoomPdfBenchmark {
     }
 
     private companion object {
-        /** Doom runs at 35 tics a second, so a frame is worth about this many milliseconds. */
-        const val FRAME_STEP = 20L
+        /**
+         * How far the clock moves for each frame the harness pumps. Doom runs at 35 tics a
+         * second, so one tic is due every pump and a frame's measured time is the real time the
+         * engine needs to advance the game by one tic. Divide 1000 by it for frames a second.
+         */
+        const val FRAME_STEP = 30L
+
+        /** How long Doom's title screen stays up before the demo starts playing. */
+        const val TITLE_SCREEN_MS = 15_000L
     }
 }

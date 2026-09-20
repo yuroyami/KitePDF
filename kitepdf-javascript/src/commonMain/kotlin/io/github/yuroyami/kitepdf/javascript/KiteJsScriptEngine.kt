@@ -31,6 +31,11 @@ public class KiteJsScriptEngine(
      * engine reads the real clock. A test sets it so a script that measures time is repeatable.
      */
     clock: (() -> Long)? = null,
+    /**
+     * Whether a document's `"use asm"` module is compiled ahead of time. On by default, and worth
+     * turning off only to compare the two: a module runs and answers the same either way.
+     */
+    asmJs: Boolean = true,
 ) : KiteScriptEngine {
 
     private val js = KiteJs {
@@ -39,6 +44,7 @@ public class KiteJsScriptEngine(
         sealBuiltins = true
         deadline?.let { interruptWhen = it }
         clock?.let { source -> this.clock = { source().toDouble() } }
+        this.asmJs = asmJs
     }
 
     /**

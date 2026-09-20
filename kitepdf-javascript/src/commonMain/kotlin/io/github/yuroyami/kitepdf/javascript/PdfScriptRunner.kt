@@ -393,8 +393,17 @@ public class PdfScriptRunner(
         }
     }
 
-    /** True when this event, or the whole document, has used the time the policy allows. */
+    /**
+     * True when this event, or the whole document, has used the time the policy allows.
+     *
+     * The clock is only read when there is a budget to compare it against. A policy with no
+     * budget is asked this many times a second and would otherwise read the clock each time for
+     * an answer that is always the same. It also keeps the clock out of the engine's own speed: a
+     * test that fixes the clock so its run is repeatable would otherwise see it move faster the
+     * more instructions the engine ran.
+     */
     private fun deadlinePassed(): Boolean {
+        if (policy.budgetMillis <= 0 && policy.documentBudgetMillis <= 0) return false
         val now = now()
         if (policy.budgetMillis > 0 && now - eventStartedAt > policy.budgetMillis) {
             val keepGoing = policy.onStillRunning?.invoke(now - eventStartedAt) == true
