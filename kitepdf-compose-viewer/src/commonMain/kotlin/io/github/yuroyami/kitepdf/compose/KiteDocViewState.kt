@@ -277,6 +277,34 @@ public class KiteDocViewState(
     internal var scripts: io.github.yuroyami.kitepdf.PdfScriptHandler? by mutableStateOf(null)
 
     /**
+     * The form field that has the caret, or null when none has. A viewer shows the platform
+     * keyboard while it is set, and what the reader types goes through the document's scripts.
+     */
+    public var focusedField: String? by mutableStateOf(null)
+        internal set
+
+    /** Puts the caret in a field, telling the document's scripts that it took the focus. */
+    internal fun focusField(fieldName: String) {
+        if (focusedField == fieldName) return
+        blurFocusedField()
+        focusedField = fieldName
+        scripts?.focus(fieldName)
+    }
+
+    /**
+     * Takes the caret out of the focused field and commits what it holds: the document's
+     * validate, calculate and format scripts run, as they do when a reader leaves a field.
+     */
+    internal fun blurFocusedField() {
+        val name = focusedField ?: return
+        focusedField = null
+        val handler = scripts ?: return
+        handler.commit(name, handler.formState.value(name) ?: "")
+        handler.blur(name)
+        formRevision = handler.formState.revision
+    }
+
+    /**
      * Changes whenever the form does, so the field layer repaints and the page bitmap does not.
      * A script that writes a field twenty times a second costs twenty overlay draws.
      */
