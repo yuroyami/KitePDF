@@ -84,6 +84,8 @@ Several oracle tests read fonts from `mupdf-master/resources/fonts/`, which is a
 
 One corpus file is a benchmark of its own: DoomPDF, the Doom port that lives in a PDF's page-open script, kept as `corpus/pdf/doom.pdf` (https://doompdf.pages.dev/doom.pdf). `KITEPDF_DOOM=true ./gradlew :kitepdf-javascript:jvmTest --tests '*DoomPdfBenchmark*'` runs its script on KiteJS and reports start-up and frame times; the same flag turns on the KiteJS probes next to it. Without the flag and the file, all of them report as skipped.
 
+The clock the benchmark gives the game is its own, and it moves one Doom tic for each frame the harness pumps. A frame's time is therefore the real time the engine needs to advance the game by one tic, so 1000 divided by it is frames a second. The run first plays 15 seconds of game time to get past the still title screen, because a frame measured there is the cost of drawing nothing. Add `-Dkitepdf.doom.asm=false` to run the same game with the asm.js module interpreted instead of compiled, which is how the two are compared under one harness.
+
 ## Issues and commits
 
 Every change starts with an issue. A defect found while working becomes an issue before the fix. An idea becomes an issue before the code.
