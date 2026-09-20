@@ -22,6 +22,8 @@ internal class PageBitmapCache(private val maxBytes: Long) {
         val bgArgb: Int,
         val themeId: Int,
         val hairlineBits: Int,
+        /** True when the page was drawn without its form widgets, because a form layer draws them. */
+        val withoutWidgets: Boolean = false,
     )
 
     // Access-ordered behaviour done manually: Kotlin common LinkedHashMap has

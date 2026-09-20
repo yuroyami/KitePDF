@@ -174,6 +174,36 @@ public class PageRenderer(
     private var pageResources: PdfDictionary? = null
 
     /**
+     * Paints only the annotations [annotations] accepts, and none of the page's own content.
+     *
+     * A viewer that keeps a drawn page and redraws its form on top uses this: the page is
+     * rasterized once without its widgets, and each changed field is painted over it, so a value
+     * a script writes twenty times a second costs twenty small redraws and not twenty pages.
+     */
+    public fun renderAnnotations(
+        page: PdfPage,
+        deviceCtm: KiteMatrix = defaultDeviceCtm(page),
+        annotations: (io.github.yuroyami.kitepdf.PdfAnnotation) -> Boolean = { true },
+    ) {
+        pageResources = page.resources
+        optionalContent = page.internalDocument.optionalContent
+        activeClipCount = 0
+        clipSaveStack.clear()
+        pendingClip = 0
+        pageBaseCtm = deviceCtm
+        formDepth = 0
+        dispatchedOps = 0L
+        markedContentStack.clear()
+        ocHiddenDepth = 0
+        canvas.beginPage(page.rotatedWidth, page.rotatedHeight, deviceCtm)
+        try {
+            renderAnnotations(page, GraphicsStack(GraphicsState(ctm = deviceCtm)), annotations)
+        } finally {
+            canvas.endPage()
+        }
+    }
+
+    /**
      * Paints [page] under [deviceCtm], then the annotations that [annotations]
      * accepts. `{ false }` leaves the page content on its own (#133).
      */

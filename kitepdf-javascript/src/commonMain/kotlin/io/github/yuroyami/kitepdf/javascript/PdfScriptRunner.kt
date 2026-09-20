@@ -34,7 +34,7 @@ import io.github.yuroyami.kitepdf.core.script.KiteScriptException
 public class PdfScriptRunner(
     private val document: PdfDocument,
     /** Where field values live while the reader has the file open. */
-    public val formState: PdfFormState = PdfFormState(document),
+    override val formState: PdfFormState = PdfFormState(document),
     /** What the document's scripts are allowed to do. */
     public val policy: PdfScriptPolicy = PdfScriptPolicy(),
     /** Shows `app.alert`, and answers which button the reader pressed (1 is OK). */
@@ -52,7 +52,7 @@ public class PdfScriptRunner(
      */
     private val clock: (() -> Long)? = null,
     engine: KiteScriptEngine? = null,
-) : AutoCloseable {
+) : io.github.yuroyami.kitepdf.PdfScriptHandler, AutoCloseable {
 
     private val engine: KiteScriptEngine = engine ?: KiteJsScriptEngine(
         instructionBudget = policy.instructionBudget,
@@ -108,6 +108,30 @@ public class PdfScriptRunner(
      * Runs the document's own scripts and then its open action, which is what a viewer does when
      * the file opens (ISO 32000-1 §7.7.4 and §12.6.4.16). Returns the scripts that failed.
      */
+    override fun documentOpened() {
+        runDocumentOpen()
+    }
+
+    override fun pageOpened(pageIndex: Int) {
+        runPageOpen(pageIndex)
+    }
+
+    override fun pageClosed(pageIndex: Int) {
+        runPageClose(pageIndex)
+    }
+
+    override fun runAction(action: PdfAction.JavaScript) {
+        run(action)
+    }
+
+    /** The viewer's keystroke: the value the field should show, or null when a script refused it. */
+    override fun keystroke(fieldName: String, change: String, selectionStart: Int, selectionEnd: Int): String? {
+        val result = keystroke(fieldName, change, selectionStart, selectionEnd, commit = false)
+        return if (result.accepted) result.value else null
+    }
+
+    override fun commit(fieldName: String, value: String): Boolean = setFieldValue(fieldName, value)
+
     public fun runDocumentOpen(): List<KiteScriptException> {
         val before = failureList.size
         runDocumentScripts()
@@ -180,6 +204,7 @@ public class PdfScriptRunner(
         change: String,
         selectionStart: Int = (formState.value(fieldName) ?: "").length,
         selectionEnd: Int = selectionStart,
+        commit: Boolean = false,
     ): KeystrokeResult {
         prepare()
         val script = keystrokeScript(fieldName) ?: return KeystrokeResult(true, mergedValue(fieldName, change, selectionStart, selectionEnd))
@@ -273,16 +298,16 @@ public class PdfScriptRunner(
     }
 
     /** Runs a widget's mouse down script, which is how an on-screen button reports a press. */
-    public fun mouseDown(fieldName: String): Unit = widgetEvent(fieldName, "MouseDown") { it.mouseDown }
+    override fun mouseDown(fieldName: String): Unit = widgetEvent(fieldName, "MouseDown") { it.mouseDown }
 
     /** Runs a widget's mouse up script, which is how an on-screen button reports a release. */
-    public fun mouseUp(fieldName: String): Unit = widgetEvent(fieldName, "MouseUp") { it.mouseUp }
+    override fun mouseUp(fieldName: String): Unit = widgetEvent(fieldName, "MouseUp") { it.mouseUp }
 
     /** Runs a widget's focus script. */
-    public fun focus(fieldName: String): Unit = widgetEvent(fieldName, "Focus") { it.focus }
+    override fun focus(fieldName: String): Unit = widgetEvent(fieldName, "Focus") { it.focus }
 
     /** Runs a widget's blur script, which a viewer fires when the field loses the caret. */
-    public fun blur(fieldName: String): Unit = widgetEvent(fieldName, "Blur") { it.blur }
+    override fun blur(fieldName: String): Unit = widgetEvent(fieldName, "Blur") { it.blur }
 
     private inline fun widgetEvent(
         fieldName: String,
@@ -311,7 +336,7 @@ public class PdfScriptRunner(
      * A viewer calls this once per frame. Nothing runs on its own: a document cannot take the
      * thread from the host.
      */
-    public fun pumpTimers(nowMillis: Long): Long? {
+    override fun pumpTimers(nowMillis: Long): Long? {
         if (!started || !policy.enabled) return null
         for (code in host.dueTimers(nowMillis)) {
             evaluate(code, "timer")
@@ -321,7 +346,7 @@ public class PdfScriptRunner(
     }
 
     /** True when a script is waiting on a timer, so a viewer knows to keep pumping. */
-    public val hasTimers: Boolean get() = host.hasTimers
+    override val hasTimers: Boolean get() = host.hasTimers
 
     /* ─── the engine ────────────────────────────────────────────────────── */
 

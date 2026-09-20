@@ -273,6 +273,15 @@ public class KiteDocViewState(
 
     /* ── internal wiring (set by KiteDocView during composition) ─────────────── */
 
+    /** The document's script handler, when the host gave the viewer one. */
+    internal var scripts: io.github.yuroyami.kitepdf.PdfScriptHandler? by mutableStateOf(null)
+
+    /**
+     * Changes whenever the form does, so the field layer repaints and the page bitmap does not.
+     * A script that writes a field twenty times a second costs twenty overlay draws.
+     */
+    internal var formRevision: Int by mutableIntStateOf(0)
+
     internal var adapter: KiteScrollAdapter? by mutableStateOf(null)
     internal var pendingPage: Int = initialPage.coerceAtLeast(0)
     internal var zoomRange: ClosedFloatingPointRange<Float> by mutableStateOf(1f..8f)

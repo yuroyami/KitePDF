@@ -253,6 +253,23 @@ public class PdfPage internal constructor(
     }
 
     /**
+     * The form field whose widget covers the point, in page space, or null when none does.
+     *
+     * A viewer uses it to decide what a tap hit: a push button to press, a check box to toggle,
+     * a text field to put the caret in. The topmost widget wins, as it does for links.
+     */
+    public fun formFieldAt(x: Double, y: Double): PdfFormField? {
+        for (annotation in annotations.asReversed()) {
+            if (annotation.subtype != PdfAnnotation.Subtype.Widget || annotation.isHidden) continue
+            val rect = annotation.rect
+            if (x < rect.left || x > rect.right || y < rect.bottom || y > rect.top) continue
+            document.formFields.firstOrNull { field -> field.widgets.any { it.rect == rect } }
+                ?.let { return it }
+        }
+        return null
+    }
+
+    /**
      * The indirect references of this page's annotations, in the order `/Annots` lists them.
      * A caller that has an annotation's reference, such as a form field's widget, uses this to
      * find which page holds it, without building every annotation.
@@ -319,5 +336,25 @@ public class PdfPage internal constructor(
         annotations: (PdfAnnotation) -> Boolean = { true },
     ) {
         PageRenderer(canvas, document, formState).render(this, deviceCtm, annotations)
+    }
+
+    /**
+     * Draws only the annotations [annotations] accepts, with none of the page's own content.
+     *
+     * A viewer that keeps the drawn page and paints the form on top of it uses this: the page is
+     * rasterized once without its widgets, and a field a script changes is redrawn on its own.
+     *
+     * ```kotlin
+     * page.renderTo(canvas, ctm) { it.subtype != PdfAnnotation.Subtype.Widget }  // the page
+     * page.renderAnnotationsTo(overlay, ctm, state) { it.subtype == PdfAnnotation.Subtype.Widget }
+     * ```
+     */
+    public fun renderAnnotationsTo(
+        canvas: KiteCanvas,
+        deviceCtm: KiteMatrix,
+        formState: PdfFormState? = null,
+        annotations: (PdfAnnotation) -> Boolean = { true },
+    ) {
+        PageRenderer(canvas, document, formState).renderAnnotations(this, deviceCtm, annotations)
     }
 }
