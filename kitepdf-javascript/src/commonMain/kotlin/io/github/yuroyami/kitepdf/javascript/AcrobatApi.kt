@@ -361,7 +361,37 @@ internal object AcrobatApi {
   defineFieldProp('password', function (n) { return !!fieldProp(n, 'password'); });
   defineFieldProp('userName', function (n) { return fieldProp(n, 'userName'); });
 
+  // The rest of the Field surface. A script reads these far more often than it writes them, and
+  // one missing name stops the script at its first line, so each answers what PDFium answers for
+  // a field that carries nothing of its own.
+  var fieldDefaults = {
+    buttonAlignX: 50, buttonAlignY: 50, buttonFitBounds: false, buttonPosition: 0,
+    buttonScaleHow: 0, buttonScaleWhen: 0, calcOrderIndex: -1, commitOnSelChange: false,
+    defaultStyle: null, doNotScroll: false, doNotSpellCheck: false, exportValues: [],
+    fileSelect: false, highlight: 'invert', multipleSelection: false, radiosInUnison: false,
+    richText: false, richValue: [], rotation: 0, style: 'check', submitName: '',
+    textFont: 'Helv', source: null,
+  };
+  for (var defaultName in fieldDefaults) {
+    (function (prop, value) {
+      Object.defineProperty(Field.prototype, prop, {
+        get: function () { return value; },
+        set: function () {},
+        enumerable: true,
+        configurable: true,
+      });
+    })(defaultName, fieldDefaults[defaultName]);
+  }
+
   Field.prototype.setFocus = function () { host.action('setFocus', { field: this.__name }); };
+  Field.prototype.browseForFileToSubmit = function () {};
+  Field.prototype.buttonGetIcon = function () { return null; };
+  Field.prototype.buttonImportIcon = function () { return 1; };
+  Field.prototype.buttonSetIcon = function () {};
+  Field.prototype.signatureGetModifications = function () { return ''; };
+  Field.prototype.signatureGetSeedValue = function () { return null; };
+  Field.prototype.signatureSetSeedValue = function () {};
+  Field.prototype.signatureSign = function () { return false; };
   Field.prototype.checkThisBox = function (widget, on) {
     host.setFieldProp(this.__name, 'checked', on === undefined ? true : !!on);
   };
@@ -513,6 +543,7 @@ internal object AcrobatApi {
     addField: function () { return null; },
     removeField: function () {},
     addAnnot: function () { return null; },
+    addLink: function () { return null; },
     addIcon: function () {},
     getIcon: function () { return null; },
     removeIcon: function () {},
@@ -583,12 +614,23 @@ internal object AcrobatApi {
   g.security = {};
   g.Doc = doc;
   g.Field = Field;
-  g.event = { target: null, value: '', change: '', rc: true, willCommit: true, name: 'Open', type: 'Doc' };
+  // The event a script sees outside any trigger. A file that reads event.value at the top level
+  // of its document script must find the same shape it finds inside one.
+  function emptyEvent() {
+    return {
+      name: 'Open', type: 'Doc', rc: true, willCommit: true, value: '', change: '',
+      changeEx: undefined, commitKey: 0, fieldFull: false, keyDown: false, modifier: false,
+      richChange: [], richChangeEx: [], richValue: [], selEnd: 0, selStart: 0, shift: false,
+      source: null, target: null, targetName: '',
+    };
+  }
+  g.event = emptyEvent();
 
   /** Builds the event object for one trigger, runs [body], and reports what the script left. */
   g.__kiteEvent = function (info, body) {
     var previous = g.event;
-    var ev = {
+    var ev = emptyEvent();
+    var built = {
       name: info.name, type: info.type, rc: true, willCommit: !!info.willCommit,
       value: info.value === undefined ? '' : info.value,
       change: info.change === undefined ? '' : info.change,
@@ -602,6 +644,7 @@ internal object AcrobatApi {
       target: info.field ? getField(info.field) : null,
       targetName: info.field === undefined ? '' : info.field,
     };
+    for (var key in built) ev[key] = built[key];
     g.event = ev;
     try {
       body();
