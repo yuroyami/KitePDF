@@ -48,11 +48,20 @@ internal fun KiteFormInput(state: KiteDocViewState, scripts: PdfScriptHandler?) 
     BasicTextField(
         value = value,
         onValueChange = { next ->
-            val accepted = keystrokeOf(scripts, fieldName, value, next)
-            if (accepted != null) {
-                value = accepted
-                scripts.formState.setValue(fieldName, accepted.text)
-                state.formRevision = scripts.formState.revision
+            // The character is shown at once and the script has the last word. Asking the script
+            // first would mean waiting on the thread it runs on, which may be busy with a
+            // document that works for minutes.
+            val previous = value
+            value = next
+            val edit = editOf(previous.text, next.text)
+            state.post {
+                val accepted = scripts.keystroke(fieldName, edit.change, edit.start, edit.end)
+                if (accepted == null) {
+                    value = previous
+                } else {
+                    scripts.formState.setValue(fieldName, accepted)
+                    if (accepted != next.text) value = TextFieldValue(accepted, TextRange(accepted.length))
+                }
             }
         },
         singleLine = true,
@@ -66,24 +75,12 @@ internal fun KiteFormInput(state: KiteDocViewState, scripts: PdfScriptHandler?) 
     )
 }
 
-/**
- * What the field holds after this edit, or null when a script refused it.
- *
- * The edit is reduced to one insertion or deletion, because that is what the keystroke trigger
- * describes: the text being put in, and the range it replaces.
- */
-private fun keystrokeOf(
-    scripts: PdfScriptHandler,
-    fieldName: String,
-    before: TextFieldValue,
-    after: TextFieldValue,
-): TextFieldValue? {
-    if (before.text == after.text) return after
-    val common = before.text.commonPrefixWith(after.text).length
-    val tailLength = before.text.drop(common).commonSuffixWith(after.text.drop(common)).length
-    val start = common
-    val end = before.text.length - tailLength
-    val change = after.text.substring(start, after.text.length - tailLength)
-    val accepted = scripts.keystroke(fieldName, change, start, end) ?: return null
-    return if (accepted == after.text) after else TextFieldValue(accepted, TextRange(accepted.length))
+/** One edit as the keystroke trigger describes it: the text put in, and the range it replaces. */
+internal class Edit(val change: String, val start: Int, val end: Int)
+
+/** Reduces a before and after text to that one edit. */
+internal fun editOf(before: String, after: String): Edit {
+    val common = before.commonPrefixWith(after).length
+    val tailLength = before.drop(common).commonSuffixWith(after.drop(common)).length
+    return Edit(after.substring(common, after.length - tailLength), common, before.length - tailLength)
 }

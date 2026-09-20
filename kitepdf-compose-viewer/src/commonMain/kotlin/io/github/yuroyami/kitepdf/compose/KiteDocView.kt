@@ -70,6 +70,7 @@ import kotlin.math.max
 import kotlin.math.roundToInt
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.launch
 
 /**
@@ -171,8 +172,10 @@ public fun KiteDocView(
      */
     scripts: io.github.yuroyami.kitepdf.PdfScriptHandler? = null,
 ) {
+    val scriptScope = rememberCoroutineScope()
     SideEffect {
         state.scripts = scripts
+        state.scriptScope = scriptScope
         state.selectionEnabled = selectionEnabled
         state.zoomRange = zoomSpec.minZoom..zoomSpec.maxZoom
         state.panAxes = when (layout) {
@@ -223,12 +226,17 @@ public fun KiteDocView(
     // The document's own scripts: its open action once, then each page's as the reader
     // reaches it, and the timers a script set, pumped a frame at a time.
     LaunchedEffect(scripts, state.document) {
-        scripts?.documentOpened()
+        val handler = scripts ?: return@LaunchedEffect
+        // A document's own scripts may run for a long time before they show anything, so they
+        // run on their own thread and the reader keeps scrolling meanwhile.
+        withContext(kitepdfScriptDispatcher()) { handler.documentOpened() }
+        state.formRevision = handler.formState.revision
     }
     val currentPage = state.currentLocation.chapter
     LaunchedEffect(scripts, currentPage) {
         val handler = scripts ?: return@LaunchedEffect
-        handler.pageOpened(currentPage)
+        withContext(kitepdfScriptDispatcher()) { handler.pageOpened(currentPage) }
+        state.formRevision = handler.formState.revision
     }
     KiteScriptTimers(scripts) { state.formRevision = scripts?.formState?.revision ?: 0 }
     KiteFormInput(state, scripts)
@@ -239,7 +247,7 @@ public fun KiteDocView(
     val tapScope = rememberCoroutineScope()
     val linkAwareTap: (Offset) -> Unit = { offset ->
         state.clearSelection() // tap anywhere dismisses an active selection
-        if (!handleWidgetTap(state, scripts, offset)) {
+        if (!handleWidgetTap(state, scripts, offset, tapScope)) {
             // A tap outside every widget leaves the field that had the caret, which commits it.
             state.blurFocusedField()
             if (!handleLinkTap(state, tapScope, onLinkTap, offset)) onTap?.invoke(offset)

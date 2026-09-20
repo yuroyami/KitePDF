@@ -30,6 +30,16 @@ commits it: validate, then calculate, then format.
 
 `state.focusedField` says which field has the caret, and it is null when none has.
 
+### Where the scripts run
+
+On a thread of their own. A form script finishes in milliseconds, but a document that carries a
+program in a page's open action can work for tens of seconds before it shows anything, and the
+reader must still be able to scroll and close it meanwhile. The viewer posts every script call to
+that one thread, in order, and repaints when the form changes.
+
+A character the reader types is shown at once and the field's keystroke script has the last word:
+if it refuses, the field goes back to what it held.
+
 ## Installation
 
 Add the `kitepdf-compose-viewer` artifact to your Gradle dependencies:

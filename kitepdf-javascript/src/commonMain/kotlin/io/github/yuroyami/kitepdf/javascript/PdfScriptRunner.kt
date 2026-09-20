@@ -54,11 +54,21 @@ public class PdfScriptRunner(
     engine: KiteScriptEngine? = null,
 ) : io.github.yuroyami.kitepdf.PdfScriptHandler, AutoCloseable {
 
-    private val engine: KiteScriptEngine = engine ?: KiteJsScriptEngine(
-        instructionBudget = policy.instructionBudget,
-        deadline = { deadlinePassed() },
-        clock = clock,
-    )
+    /**
+     * The engine, opened when the first script runs rather than when the runner is made.
+     *
+     * An engine belongs to the thread that opened it, and a viewer keeps its scripts off the
+     * thread it draws on, so the runner may be made on one thread and used on another. Opening
+     * it on first use puts it on the thread that will run it.
+     */
+    private val engineSource = engine
+    private val ownEngine: KiteScriptEngine by lazy {
+        engineSource ?: KiteJsScriptEngine(
+            instructionBudget = policy.instructionBudget,
+            deadline = { deadlinePassed() },
+            clock = clock,
+        )
+    }
 
     private val host = PdfScriptHost(
         document,
@@ -97,9 +107,9 @@ public class PdfScriptRunner(
         if (started) return
         started = true
         host.calculateNow = { runCalculations() }
-        host.bind(engine)
-        engine.evaluate(AcrobatApi.SOURCE, "acrobat-api")
-        engine.evaluate(AformApi.SOURCE, "af-helpers")
+        host.bind(ownEngine)
+        ownEngine.evaluate(AcrobatApi.SOURCE, "acrobat-api")
+        ownEngine.evaluate(AformApi.SOURCE, "af-helpers")
     }
 
     /* ─── documents and pages ───────────────────────────────────────────── */
@@ -351,7 +361,7 @@ public class PdfScriptRunner(
     /* ─── the engine ────────────────────────────────────────────────────── */
 
     private fun dispatch(script: String, name: String, info: Map<String, Any?>): PdfScriptHost.EventResult {
-        engine.defineValue("__kiteEventInfo", info)
+        ownEngine.defineValue("__kiteEventInfo", info)
         // The script runs as a function body, which is where a field's script lives in Acrobat,
         // so its own `var` declarations stay out of the global scope.
         evaluate("__kiteEvent(__kiteEventInfo, function () {\n$script\n})", name)
@@ -363,7 +373,7 @@ public class PdfScriptRunner(
         if (!policy.enabled) return null
         eventStartedAt = now()
         return try {
-            engine.evaluate(source, name)
+            ownEngine.evaluate(source, name)
         } catch (e: KiteScriptException) {
             failureList.add(e)
             null
@@ -419,6 +429,9 @@ public class PdfScriptRunner(
         return current.substring(0, from) + change + current.substring(to)
     }
 
-    override fun close(): Unit = engine.close()
+    override fun close() {
+        // Nothing to close when no script ever ran, because no engine was ever opened.
+        if (started) ownEngine.close()
+    }
 }
 
