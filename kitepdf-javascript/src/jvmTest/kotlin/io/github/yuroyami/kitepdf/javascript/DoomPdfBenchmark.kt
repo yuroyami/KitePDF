@@ -62,6 +62,9 @@ class DoomPdfBenchmark {
             val t1 = System.nanoTime()
             runner.runPageOpen(0)
             val startupMs = ms(t1)
+            // Doom is tens of millions of integer operations a frame, and whether its asm.js
+            // module was compiled ahead of time is most of the frame time.
+            for (report in runner.asmReports) note("asm.js: $report")
             val rows = { (199 downTo 0).joinToString("\n") { runner.formState.value("field_$it") ?: "" } }
             val consoleRows = { (24 downTo 0).mapNotNull { runner.formState.value("console_$it") }.filter { it.isNotBlank() } }
             note("start-up: ${startupMs / 1000.0} s, ${runner.formState.changedFields.size} fields written, timers=${runner.hasTimers}")

@@ -79,6 +79,17 @@ public class PdfScriptRunner(
     /** Every script that failed since the runner opened, newest last. */
     public val failures: List<KiteScriptException> get() = failureList
 
+    /**
+     * What the engine did with each `"use asm"` function in the document, one line each. Empty
+     * until the first script runs, and for an engine that does not compile such a function.
+     *
+     * A PDF that carries a program compiled from C, such as DoomPDF, holds one of these. It runs
+     * many times faster when the engine compiles it ahead of time, and the line says whether that
+     * happened and, if not, the first thing in the module that stopped it.
+     */
+    public val asmReports: List<String>
+        get() = if (!started) emptyList() else (ownEngine as? KiteJsScriptEngine)?.asmReports.orEmpty()
+
     private val failureList = ArrayList<KiteScriptException>()
     private var started = false
     private var eventStartedAt: Long = 0

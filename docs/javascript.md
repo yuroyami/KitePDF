@@ -110,6 +110,28 @@ are read-only, and a script reaches nothing outside the engine except what the r
 Denying scripts does not stop a reader filling the form: values still go into the form state, and
 only the scripts are silent.
 
+## A document that carries a whole program
+
+Some PDFs hold a program compiled from C, put through Emscripten and dropped into a page's
+open action. DoomPDF is the well known one: the game runs in the script and draws itself into
+two hundred text fields, one per screen row.
+
+Such a program is written in asm.js, a subset of JavaScript whose types are all known before it
+runs, and KiteJS compiles it ahead of time to typed code. That is the difference between a frame
+every few seconds and a frame that a reader would call playable. It happens on its own; nothing
+has to be switched on.
+
+`runner.asmReports` says what the engine did with each module, one line each:
+
+```kotlin
+runner.runPageOpen(0)
+for (report in runner.asmReports) println(report)   // "asm: compiled"
+```
+
+A module that does not compile still runs and still gives the same answers, and the line names the
+first thing in it that asm.js does not allow. The list is empty until the first script runs, and
+for any engine other than KiteJS.
+
 ## Threads
 
 An engine belongs to one thread, so a runner does too: make it and use it from the same thread.
