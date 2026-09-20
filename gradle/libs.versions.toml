@@ -23,7 +23,7 @@ kiteimage = "0.1.0"
 
 # KiteJS. The Kite lineage's JavaScript engine. Used ONLY by :kitepdf-javascript,
 # so no other module carries a script engine.
-kitejs = "0.1.0"
+kitejs = "0.2.0"
 
 # Ktor client. Used ONLY by :kitepdf-net, the optional remote-loading artifact.
 # No other module may depend on it: the engine stays kotlin-stdlib + KiteImage.

@@ -41,6 +41,15 @@ public class KiteJsScriptEngine(
         clock?.let { source -> this.clock = { source().toDouble() } }
     }
 
+    /**
+     * What the engine did with each `"use asm"` function it has parsed, one line each.
+     *
+     * A PDF that holds a program compiled from C, such as DoomPDF, carries one of these. It runs
+     * many times faster when the engine can compile it ahead of time, and the line says whether
+     * that happened and, if not, the first thing in the module that stopped it.
+     */
+    public val asmReports: List<String> get() = js.asmReports.map { it.toString() }
+
     override fun evaluate(source: String, name: String): String? = guarded(name) {
         val value = js.evaluate(source, name)
         if (value.isNullish) null else value.asString()
