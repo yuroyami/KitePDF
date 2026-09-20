@@ -162,8 +162,17 @@ public fun KiteDocView(
     overlay: (@Composable BoxScope.(KiteDocViewState) -> Unit)? = null,
     onTap: ((Offset) -> Unit)? = null,
     onLinkTap: ((KiteLinkAction) -> Boolean)? = null,
+    /**
+     * Runs the document's own scripts, when the host wants them run. `kitepdf-javascript`
+     * provides one; without it nothing in a document runs, which is the default.
+     *
+     * With a handler the viewer fires the document and page triggers, draws the form from its
+     * live values, sends a tap on a widget to it, and pumps the timers a script set.
+     */
+    scripts: io.github.yuroyami.kitepdf.PdfScriptHandler? = null,
 ) {
     SideEffect {
+        state.scripts = scripts
         state.selectionEnabled = selectionEnabled
         state.zoomRange = zoomSpec.minZoom..zoomSpec.maxZoom
         state.panAxes = when (layout) {
@@ -211,12 +220,29 @@ public fun KiteDocView(
         }
     }
 
+    // The document's own scripts: its open action once, then each page's as the reader
+    // reaches it, and the timers a script set, pumped a frame at a time.
+    LaunchedEffect(scripts, state.document) {
+        scripts?.documentOpened()
+    }
+    val currentPage = state.currentLocation.chapter
+    LaunchedEffect(scripts, currentPage) {
+        val handler = scripts ?: return@LaunchedEffect
+        handler.pageOpened(currentPage)
+    }
+    KiteScriptTimers(scripts) { state.formRevision = scripts?.formState?.revision ?: 0 }
+
     // Route taps through link hit-testing first: a tap on a link
-    // navigates (or defers to onLinkTap); anything else reaches user onTap.
+    // navigates (or defers to onLinkTap); anything else reaches user onTap. A widget comes
+    // before both, because a button on a form is a target of its own.
     val tapScope = rememberCoroutineScope()
     val linkAwareTap: (Offset) -> Unit = { offset ->
         state.clearSelection() // tap anywhere dismisses an active selection
-        if (!handleLinkTap(state, tapScope, onLinkTap, offset)) onTap?.invoke(offset)
+        if (!handleWidgetTap(state, scripts, offset) &&
+            !handleLinkTap(state, tapScope, onLinkTap, offset)
+        ) {
+            onTap?.invoke(offset)
+        }
     }
 
     Box(
@@ -708,13 +734,16 @@ private fun PageBox(
         }
         if (fit != IntSize.Zero) {
             val dpSize = with(density) { DpSize(fit.width.toDp(), fit.height.toDp()) }
+            val formTextMeasurer = androidx.compose.ui.text.rememberTextMeasurer()
             val slot = Modifier.size(dpSize)
+                .kiteFormLayer(page, state.scripts, formTextMeasurer, 1f, state.formRevision)
                 .highlightOverlay(state, page, pageIndex, colors)
             when (renderSpec) {
                 is KiteRenderSpec.Rasterized -> KitePageRaster(
                     page, pageIndex, fit, settledZoom, renderSpec, colors,
                     onPageRendered, pagePlaceholder, slot,
                     cache = state.bitmapCacheFor(renderSpec.cacheBudgetBytes),
+                    drawsFormLayer = state.scripts != null && page is io.github.yuroyami.kitepdf.PdfPage,
                 )
                 is KiteRenderSpec.Vectorized -> KitePageVector(
                     page, renderSpec, colors, slot,
@@ -744,6 +773,8 @@ private fun KitePageRaster(
     modifier: Modifier,
     /** The state-owned bitmap LRU; null renders uncached. */
     cache: PageBitmapCache? = null,
+    /** True when a form layer draws this page's widgets, so the bitmap must leave them out. */
+    drawsFormLayer: Boolean = false,
 ) {
     // The spec's long-side cap is the sizing authority in this path, so the
     // rasterizer's pixel ceiling must never undercut maxBitmapLongSide².
@@ -771,7 +802,7 @@ private fun KitePageRaster(
         max(1f, raster.width / visualWidth)
     } else 1f
 
-    val rastered by produceState<Pair<ImageBitmap, Boolean>?>(null, page, raster, colors.pageBackground, colors.theme, hairline, cache) {
+    val rastered by produceState<Pair<ImageBitmap, Boolean>?>(null, page, raster, colors.pageBackground, colors.theme, hairline, cache, drawsFormLayer) {
         // Off the main thread: a 10-30ms page raster on the UI thread
         // janks scroll and pinch. The rasterizer serializes pages on its mutex
         // (TextMeasurer's cache is not thread-safe) but the main thread stays
@@ -785,6 +816,7 @@ private fun KitePageRaster(
             rasterizer.rasterizeCachedOrNull(
                 cache, page, raster.width, raster.height,
                 colors.pageBackground, hairline, colors.theme, pageIndex,
+                skipWidgets = drawsFormLayer,
             )
         }
     }

@@ -120,13 +120,14 @@ public class KitePageRasterizer(
         background: Color,
         hairlineWidthPx: Float,
         theme: ReaderTheme?,
+        skipWidgets: Boolean = false,
     ): ImageBitmap {
         val (probe, usedSystemFont) = kotlinx.coroutines.withContext(kitepdfRasterDispatcher()) {
-            rasterizeInternal(page, widthPx, heightPx, background, hairlineWidthPx, theme, skipSystemFontText = true)
+            rasterizeInternal(page, widthPx, heightPx, background, hairlineWidthPx, theme, skipSystemFontText = true, skipWidgets = skipWidgets)
         }
         if (!usedSystemFont) return probe
         return onMainOrCaller {
-            rasterizeInternal(page, widthPx, heightPx, background, hairlineWidthPx, theme, skipSystemFontText = false).first
+            rasterizeInternal(page, widthPx, heightPx, background, hairlineWidthPx, theme, skipSystemFontText = false, skipWidgets = skipWidgets).first
         }
     }
 
@@ -157,9 +158,10 @@ public class KitePageRasterizer(
         background: Color,
         hairlineWidthPx: Float,
         theme: ReaderTheme?,
+        skipWidgets: Boolean = false,
     ): Pair<ImageBitmap, Boolean> = renderMutex.withLock {
         if (cache == null) {
-            rasterizeOffMainLocked(page, widthPx, heightPx, background, hairlineWidthPx, theme) to true
+            rasterizeOffMainLocked(page, widthPx, heightPx, background, hairlineWidthPx, theme, skipWidgets) to true
         } else {
             val key = PageBitmapCache.Key(
                 pageIdentity = page,
@@ -168,12 +170,13 @@ public class KitePageRasterizer(
                 bgArgb = background.toArgb(),
                 themeId = theme?.hashCode() ?: 0,
                 hairlineBits = hairlineWidthPx.toRawBits(),
+                withoutWidgets = skipWidgets,
             )
             val hit = cache.get(key)
             if (hit != null) {
                 hit to false
             } else {
-                val bmp = rasterizeOffMainLocked(page, widthPx, heightPx, background, hairlineWidthPx, theme)
+                val bmp = rasterizeOffMainLocked(page, widthPx, heightPx, background, hairlineWidthPx, theme, skipWidgets)
                 cache.put(key, bmp)
                 bmp to true
             }
@@ -205,10 +208,11 @@ public class KitePageRasterizer(
         hairlineWidthPx: Float,
         theme: ReaderTheme?,
         pageIndex: Int,
+        skipWidgets: Boolean = false,
     ): Pair<ImageBitmap, Boolean>? {
         for (attempt in 0 until 2) {
             try {
-                return rasterizeCachedOffMain(cache, page, widthPx, heightPx, background, hairlineWidthPx, theme)
+                return rasterizeCachedOffMain(cache, page, widthPx, heightPx, background, hairlineWidthPx, theme, skipWidgets)
             } catch (cancelled: kotlinx.coroutines.CancellationException) {
                 throw cancelled
             } catch (failure: Throwable) {
@@ -256,6 +260,7 @@ public class KitePageRasterizer(
         hairlineWidthPx: Float,
         theme: ReaderTheme?,
         skipSystemFontText: Boolean,
+        skipWidgets: Boolean = false,
     ): Pair<ImageBitmap, Boolean> {
         require(widthPx > 0 && heightPx > 0) { "bitmap dimensions must be > 0" }
         require(widthPx.toLong() * heightPx.toLong() <= maxBitmapPixels) {
@@ -294,7 +299,16 @@ public class KitePageRasterizer(
             // concat(b) applies b FIRST, so displayToDeviceBase() runs before the scale.
             val deviceCtm = KiteMatrix.scaling(s, s).concat(page.displayToDeviceBase())
             val base = ComposeCanvas(this, textMeasurer, hairlineWidthPx, skipSystemFontText)
-            page.renderTo(theme?.wrap(base) ?: base, deviceCtm)
+            val canvas = theme?.wrap(base) ?: base
+            // A viewer with a live form draws the widgets in its own layer, so the bitmap must
+            // leave them out or each field would be drawn twice, the stale one underneath.
+            if (skipWidgets && page is io.github.yuroyami.kitepdf.PdfPage) {
+                page.renderTo(canvas, deviceCtm) {
+                    it.subtype != io.github.yuroyami.kitepdf.PdfAnnotation.Subtype.Widget
+                }
+            } else {
+                page.renderTo(canvas, deviceCtm)
+            }
             usedSystemFont = base.usedSystemFontText
         }
         return bitmap to usedSystemFont

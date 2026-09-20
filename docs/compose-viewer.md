@@ -2,6 +2,24 @@
 
 Build a full-featured PDF viewer in Compose with a single composable. The `KiteDocView` family lets you display PDFs on screen with pinch zoom, paging, panning, and customizable rendering; all in pure Kotlin Multiplatform.
 
+## Run a document's scripts
+
+A PDF can carry scripts: a form that totals a column, a button that hides a field, a page that
+starts something when it opens. The viewer runs none of them unless you hand it a handler, and
+`kitepdf-javascript` provides one:
+
+```kotlin
+val runner = remember(doc) { PdfScriptRunner(doc, onAlert = { alert -> showDialog(alert.message); 1 }) }
+KiteDocView(state = state, scripts = runner)
+```
+
+With a handler the viewer fires the document and page triggers, sends a tap on a widget to the
+scripts, draws the form from its live values, and pumps the timers a script set, one frame at a
+time. The page itself is drawn once and kept: only the fields that changed are repainted, so a
+script that writes a field twenty times a second costs twenty small redraws.
+
+Without a handler nothing in the document runs, which is the default.
+
 ## Installation
 
 Add the `kitepdf-compose-viewer` artifact to your Gradle dependencies:
