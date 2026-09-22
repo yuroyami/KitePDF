@@ -189,11 +189,19 @@ public class KiteImageData internal constructor(
                     // be undone before the bytes are a JFIF file at all (D-5).
                     val terminal = terminalBytesOf(stream)
                     val bm = runCatching { KiteImage.decode(terminal.bytes) }.getOrNull()
+                    // ISO 32000-1, 8.9.5.2: /ColorSpace and /Decode belong to the image, not to
+                    // its filter. The decoder returns RGB, which holds the samples of a grey or a
+                    // three-component JPEG exactly, so those keep the declared space. A
+                    // four-component JPEG is already converted, so it stays device RGB (#72).
+                    val declared = if (isMask) null else resolvedCs
+                    val declaredComps = if (declared is KiteColorSpace.Indexed) 1 else declared?.componentCount ?: 0
+                    val keep = bm != null && declared != null && (declaredComps == 1 || declaredComps == 3) &&
+                        jpegFrame(terminal.bytes)?.get(2) == declaredComps
                     if (bm != null) KiteImageData(
-                        bm.width, bm.height, 8, "DeviceRGB", Kind.RAW,
-                        encodedBytes = ByteArray(0), pixelBytes = bm.toRgbBytes(),
+                        bm.width, bm.height, 8, if (keep) cs else "DeviceRGB", Kind.RAW,
+                        encodedBytes = ByteArray(0), pixelBytes = if (keep && declaredComps == 1) bm.toGrayBytes() else bm.toRgbBytes(),
                         softMaskAlpha = alpha, softMaskWidth = smW, softMaskHeight = smH, softMaskMatte = matte,
-                        resolvedColorSpace = KiteColorSpace.DeviceRGB,
+                        resolvedColorSpace = if (keep) declared else KiteColorSpace.DeviceRGB, decode = if (keep) decodeArr else null,
                         isImageMask = isMask, maskFill = fillColor, colorKeyMask = colorKey,
                     ) else KiteImageData(
                         width, height, bpc, cs, kind, terminal.bytes,
@@ -292,7 +300,7 @@ public class KiteImageData internal constructor(
                     runCatching { KiteImage.decode(bytes) }.getOrNull()?.let { return it.toKiteImageData() }
                     // Streams KiteImage can't handle (arithmetic coding, 12-bit)
                     // defer to the host platform's loader.
-                    val (w, h) = jpegSize(bytes) ?: return null
+                    val (w, h) = jpegFrame(bytes) ?: return null
                     if (w <= 0 || h <= 0) return null
                     KiteImageData(
                         width = w, height = h, bitsPerComponent = 8,
@@ -304,11 +312,11 @@ public class KiteImageData internal constructor(
         }
 
         /**
-         * Pixel size of a JPEG from its first SOF marker, or null if [b] is not a
-         * JPEG. Walks the segment markers rather than assuming SOF sits right after
-         * SOI (real files carry APPn/DQT segments first).
+         * Width, height and component count of a JPEG from its first SOF marker, or
+         * null if [b] is not a JPEG. Walks the segment markers rather than assuming SOF
+         * sits right after SOI (real files carry APPn/DQT segments first).
          */
-        private fun jpegSize(b: ByteArray): Pair<Int, Int>? {
+        private fun jpegFrame(b: ByteArray): IntArray? {
             if (b.size < 4 || (b[0].toInt() and 0xFF) != 0xFF || (b[1].toInt() and 0xFF) != 0xD8) return null
             var i = 2
             while (i + 1 < b.size) {
@@ -321,10 +329,10 @@ public class KiteImageData internal constructor(
                 val len = ((b[i].toInt() and 0xFF) shl 8) or (b[i + 1].toInt() and 0xFF)
                 // SOF0..SOF15 carry the frame size, except DHT(C4)/JPG(C8)/DAC(CC).
                 if (marker in 0xC0..0xCF && marker != 0xC4 && marker != 0xC8 && marker != 0xCC) {
-                    if (i + 6 >= b.size) return null
+                    if (i + 7 >= b.size) return null
                     val height = ((b[i + 3].toInt() and 0xFF) shl 8) or (b[i + 4].toInt() and 0xFF)
                     val width = ((b[i + 5].toInt() and 0xFF) shl 8) or (b[i + 6].toInt() and 0xFF)
-                    return width to height
+                    return intArrayOf(width, height, b[i + 7].toInt() and 0xFF)
                 }
                 if (len < 2) break
                 i += len

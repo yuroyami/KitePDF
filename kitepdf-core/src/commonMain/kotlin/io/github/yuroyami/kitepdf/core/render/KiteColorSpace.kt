@@ -56,6 +56,13 @@ public sealed class KiteColorSpace {
     internal open fun componentMin(index: Int): Double = 0.0
     internal open fun componentMax(index: Int): Double = 1.0
 
+    /**
+     * For a space that converts by one tone curve per component, then one matrix to
+     * linear sRGB, then the sRGB encoding: those parts, which the raster path runs
+     * from tables. Null for every other space.
+     */
+    internal open val curveMatrix: CurveMatrix? get() = null
+
     public object DeviceGray : KiteColorSpace() {
         override val componentCount: Int = 1
         override fun toRgb(components: DoubleArray): RgbColor {
@@ -177,6 +184,7 @@ public sealed class KiteColorSpace {
     public class IccBased(private val profile: IccProfile) : KiteColorSpace() {
         override val componentCount: Int = profile.componentCount
         override fun toRgb(components: DoubleArray): RgbColor = profile.toRgb(components)
+        override val curveMatrix: CurveMatrix? get() = profile.curveMatrix
     }
 
     /**
@@ -212,6 +220,13 @@ public sealed class KiteColorSpace {
     ) : KiteColorSpace() {
         override val componentCount: Int = 3
         private val srgb = XyzToSrgb(whitePoint)
+
+        override val curveMatrix: CurveMatrix? by lazy {
+            val m = matrix ?: return@lazy null
+            // /Matrix is column-major: X = m[0] A + m[3] B + m[6] C.
+            CurveMatrix(List(3) { c -> { v: Double -> v.coerceIn(0.0, 1.0).pow(gamma[c]) } }, srgb.after(DoubleArray(9) { i -> m[3 * (i % 3) + i / 3] }))
+        }
+
         override fun toRgb(components: DoubleArray): RgbColor {
             val a = components.getOrElse(0) { 0.0 }.coerceIn(0.0, 1.0).pow(gamma[0])
             val b = components.getOrElse(1) { 0.0 }.coerceIn(0.0, 1.0).pow(gamma[1])
@@ -422,6 +437,23 @@ public sealed class KiteColorSpace {
 }
 
 /**
+ * A colour conversion in three parts: [curves] take each component to linear light,
+ * [toLinearSrgb] is a row-major 3x3 matrix from those values to linear sRGB, and the
+ * sRGB encoding follows.
+ */
+internal class CurveMatrix(val curves: List<(Double) -> Double>, val toLinearSrgb: DoubleArray)
+
+/** The sRGB encoding of a linear value, clamped to 0..1 first (IEC 61966-2-1). */
+internal fun srgbEncode(linear: Double): Double {
+    val c = linear.coerceIn(0.0, 1.0)
+    return if (c <= 0.0031308) 12.92 * c else 1.055 * c.pow(1.0 / 2.4) - 0.055
+}
+
+/** The product of two row-major 3x3 matrices: [a] applied after [b]. */
+internal fun times3(a: DoubleArray, b: DoubleArray): DoubleArray =
+    DoubleArray(9) { i -> (0 until 3).sumOf { k -> a[3 * (i / 3) + k] * b[3 * k + i % 3] } }
+
+/**
  * XYZ relative to a space's own white point to gamma-encoded sRGB, clamped.
  * ISO 32000-1, 8.6.5.4 makes the white point the diffuse white of the space,
  * so the XYZ is Bradford-adapted to D65 first and that white reproduces as
@@ -445,15 +477,13 @@ private class XyzToSrgb(white: DoubleArray) {
     }
 
     fun convert(x: Double, y: Double, z: Double): RgbColor = RgbColor(
-        encode(m[0] * x + m[1] * y + m[2] * z),
-        encode(m[3] * x + m[4] * y + m[5] * z),
-        encode(m[6] * x + m[7] * y + m[8] * z),
+        srgbEncode(m[0] * x + m[1] * y + m[2] * z),
+        srgbEncode(m[3] * x + m[4] * y + m[5] * z),
+        srgbEncode(m[6] * x + m[7] * y + m[8] * z),
     )
 
-    private fun encode(c: Double): Double {
-        val cc = c.coerceIn(0.0, 1.0)
-        return if (cc <= 0.0031308) 12.92 * cc else 1.055 * cc.pow(1.0 / 2.4) - 0.055
-    }
+    /** This conversion's matrix after the row-major matrix [a]: XYZ to linear sRGB, as one step. */
+    fun after(a: DoubleArray): DoubleArray = times3(m, a)
 
     private companion object {
         val D65 = doubleArrayOf(0.9505, 1.0, 1.089)

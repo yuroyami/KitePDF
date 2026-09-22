@@ -126,6 +126,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - An `<svg>` written in a chapter loads its `<image>` from the chapter's folder,
   so cover pages in a folder, as Project Gutenberg books have them, draw their
   cover (#276).
+- A JPEG keeps the colour space and `/Decode` array of its image, so an inverted,
+  spot colour or ICC-tagged JPEG shows its own colours. Eight-bit images in a grey
+  space, an ICC matrix profile or CalRGB convert through tables, about twenty times
+  faster than before (#72).
 
 ## [0.10.0] - 2026-09-13
 

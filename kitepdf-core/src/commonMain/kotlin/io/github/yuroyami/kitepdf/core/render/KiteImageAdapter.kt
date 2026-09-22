@@ -23,6 +23,9 @@ internal fun KiteBitmap.toRgbBytes(): ByteArray {
     return out
 }
 
+/** One byte per pixel from the red channel, for a grey image whose three channels are equal. */
+internal fun KiteBitmap.toGrayBytes(): ByteArray = ByteArray(width * height) { ((argb[it] ushr 16) and 0xFF).toByte() }
+
 /** Full conversion: RGB pixel bytes + alpha plane when any pixel is not opaque. */
 internal fun KiteBitmap.toKiteImageData(): KiteImageData {
     val n = width * height
