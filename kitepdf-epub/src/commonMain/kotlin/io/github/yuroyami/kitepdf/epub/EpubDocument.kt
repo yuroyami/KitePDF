@@ -961,6 +961,13 @@ public class EpubPage internal constructor(
     private fun laidOut(): PageRender = doc.render(chapter, index)
 
     /** Reads files an SVG references, relative to [baseDir] inside the archive. */
+    /**
+     * The folder an image box's SVG resolves its own links against: the folder of its file,
+     * or the chapter's folder for an `<svg>` written in the chapter (RFC 3986, 5.2, #276).
+     */
+    private fun resourceDir(box: ImageBox): String =
+        if (box.zipPath.isEmpty()) doc.chapterDir(chapter) else box.zipPath.substringBeforeLast('/', "")
+
     private fun svgLoader(baseDir: String): (String) -> ByteArray? =
         { href -> doc.svgResource(baseDir, href) }
 
@@ -1034,7 +1041,7 @@ public class EpubPage internal constructor(
             val inset = imageInset(box.style)
             paintImage(canvas, deviceCtm, box.image, box.svg, box.drawWidth, box.drawHeight,
                 margin + box.x + inset.inlineStart, yUp(box.bottom - inset.blockEnd), box.style.objectFit,
-                box.zipPath.substringBeforeLast('/', ""))
+                resourceDir(box))
         }
         canvas.endPage()
     }
@@ -1133,7 +1140,7 @@ public class EpubPage internal constructor(
             val left = minOf(colX(box.y + inset.blockStart), colX(box.bottom - inset.blockEnd))
             val top = margin + box.x + inset.inlineStart
             paintImage(canvas, deviceCtm, box.image, box.svg, box.drawWidth, box.drawHeight,
-                left, displayHeight - top - box.drawHeight, box.style.objectFit, box.zipPath.substringBeforeLast('/', ""))
+                left, displayHeight - top - box.drawHeight, box.style.objectFit, resourceDir(box))
         }
         canvas.endPage()
     }
