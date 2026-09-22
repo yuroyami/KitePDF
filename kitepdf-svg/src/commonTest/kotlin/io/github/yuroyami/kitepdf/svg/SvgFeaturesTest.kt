@@ -134,11 +134,22 @@ class SvgFeaturesTest {
             val drawn = calls("<svg width='200' height='100'><image href='pic.bmp' $dimensions/></svg>") { bmp2x1() }
             assertTrue(drawn.none { it is RecordingCanvas.Call.Image }, dimensions)
         }
-        for (dimensions in listOf("", "width='auto' height='auto'")) {
+        for (dimensions in listOf("", "width='auto' height='auto'", "width='' height=''", "width='wide' height='tall'")) {
             val image = calls("<svg width='200' height='100'><image href='pic.bmp' $dimensions/></svg>") { bmp2x1() }
                 .filterIsInstance<RecordingCanvas.Call.Image>().single()
-            assertEquals(2.0, image.ctm.a, 1e-9)
-            assertEquals(-1.0, image.ctm.d, 1e-9)
+            assertEquals(2.0, image.ctm.a, 1e-9, dimensions)
+            assertEquals(-1.0, image.ctm.d, 1e-9, dimensions)
+        }
+    }
+
+    @Test
+    fun one_auto_image_side_follows_the_intrinsic_aspect_ratio() {
+        // #263: the 2 by 1 image keeps its shape when only one side is given.
+        for ((dimensions, size) in listOf("width='40'" to (40.0 to 20.0), "height='40'" to (80.0 to 40.0), "width='40' height=''" to (40.0 to 20.0))) {
+            val image = calls("<svg width='200' height='100'><image href='pic.bmp' $dimensions/></svg>") { bmp2x1() }
+                .filterIsInstance<RecordingCanvas.Call.Image>().single()
+            assertEquals(size.first, image.ctm.a, 1e-9, dimensions)
+            assertEquals(-size.second, image.ctm.d, 1e-9, dimensions)
         }
     }
 
@@ -441,6 +452,25 @@ class SvgFeaturesTest {
                </svg>""",
         ).filterIsInstance<RecordingCanvas.Call.PushClip>().single()
         assertEquals(listOf(20.0, 40.0, 70.0, 90.0), bounds(clip.path).toList())
+    }
+
+    @Test
+    fun clip_content_inherits_from_the_clip_paths_own_ancestors() {
+        // SVG 1.1, 14.3.5 (#269): 2em is 32 at the root's 16, not 120 at the group's 60.
+        val clip = calls(
+            """<svg width="200" height="200">
+                 <defs><clipPath id="c"><rect width="2em" height="2em"/></clipPath></defs>
+                 <g font-size="60" clip-path="url(#c)"><rect width="200" height="200"/></g>
+               </svg>""",
+        ).filterIsInstance<RecordingCanvas.Call.PushClip>().single()
+        assertEquals(listOf(0.0, 0.0, 32.0, 32.0), bounds(clip.path).toList())
+        val sized = calls(
+            """<svg width="200" height="200" font-size="10">
+                 <clipPath id="c" font-size="20"><rect width="2em" height="2em"/></clipPath>
+                 <g font-size="60" clip-path="url(#c)"><rect width="200" height="200"/></g>
+               </svg>""",
+        ).filterIsInstance<RecordingCanvas.Call.PushClip>().single()
+        assertEquals(listOf(0.0, 0.0, 40.0, 40.0), bounds(sized.path).toList())
     }
 
     /* ─── fixtures ───────────────────────────────────────────────────────── */
