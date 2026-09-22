@@ -3,6 +3,7 @@ package io.github.yuroyami.kitepdf.epub
 import io.github.yuroyami.kitepdf.svg.SvgImage
 
 import io.github.yuroyami.kitepdf.epub.css.ComputedStyle
+import io.github.yuroyami.kitepdf.epub.css.ObjectFit
 import io.github.yuroyami.kitepdf.core.font.FontSpec
 import io.github.yuroyami.kitepdf.core.font.TextGlyph
 import io.github.yuroyami.kitepdf.core.render.KiteImageData
@@ -78,6 +79,7 @@ internal class ImageBox(
     val attrHeight: Double? = null,
 ) : LayoutBox() {
     var image: KiteImageData? = null
+    /** Physical image dimensions; the border box uses the layout's logical axes. */
     var drawWidth: Double = 0.0
     var drawHeight: Double = 0.0
 }
@@ -124,8 +126,8 @@ internal class PlacedRun(
 
 /**
  * An inline image placed on a line, parallel to [PlacedRun]: document-space
- * left [x], its draw size, and the decoded payload (raster [image] or [svg]).
- * Its bottom sits on the line's baseline (`vertical-align` baseline only).
+ * inline position [x], its physical draw size, and the decoded payload.
+ * Its block-end edge sits on the line's baseline (`vertical-align` baseline only).
  */
 internal class PlacedImage(
     /** Mutable only for the post-layout `position:relative` shift pass. */
@@ -136,6 +138,7 @@ internal class PlacedImage(
     val svg: SvgImage?,
     /** The `alt` text, for the reading order. Empty means decorative. */
     val alt: String? = null,
+    val objectFit: ObjectFit = ObjectFit.FILL,
 )
 
 /** A laid-out line inside a [TextBlockBox]; [yTop] is absolute document-down. */

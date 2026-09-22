@@ -289,6 +289,42 @@ KiteDocView(state, renderSpec = spec)
     
     For most apps, **Rasterized with `rerasterizeOnZoom=true`** is the sweet spot: responsive gestures and crisp zoom, with a small memory footprint per page.
 
+### Custom canvas decorators
+
+Pass `canvasDecorator` to either render spec to filter ink, inspect glyphs or
+insert drawing calls inside the page's own paint pass. This hook is also
+available on `KitePageRasterizer.rasterize` and `rasterizeOffMain`.
+
+```kotlin
+val decorator: KiteCanvasDecorator = remember {
+    { inner ->
+        object : KiteCanvas by inner {
+            override fun fillPath(
+                path: KitePath, ctm: KiteMatrix, color: RgbColor,
+                evenOdd: Boolean, alpha: Double, blendMode: KiteBlendMode,
+            ) {
+                inner.fillPath(path, ctm, color, evenOdd, alpha * 0.8, blendMode)
+            }
+        }
+    }
+}
+KiteDocView(
+    state = state,
+    renderSpec = KiteRenderSpec.Rasterized(canvasDecorator = decorator),
+)
+```
+
+The supplied canvas includes the reader theme, so custom colours pass through
+its colour mapping. Paper, viewer overlays and interactive form controls are
+outside this hook. The wrapper receives the same coordinates and matrices as
+`KiteCanvas` and should delegate operations it does not customize.
+
+Rasterization can run on a background thread and repeat on Main when a page
+needs system-font text. Create a fresh wrapper in the function, keep it
+repeatable, and never retain the supplied canvas. Cache hits do not invoke it.
+Remember the function for cache reuse; replace it when captured rendering
+settings change so the viewer redraws with a new cache key.
+
 ## Colors
 
 Control the paper and viewport background:

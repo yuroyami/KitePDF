@@ -37,8 +37,26 @@ public data class KiteMatrix(
         f = other.e * b + other.f * d + f,
     )
 
+    /**
+     * Transformed X coordinate (ISO 32000-1, 8.3.4). Use with [transformY]
+     * in path and glyph loops to avoid allocating and boxing a [Pair] per point.
+     * The arithmetic order matches [transformPoint], including rounding.
+     */
+    public fun transformX(x: Double, y: Double): Double = a * x + c * y + e
+
+    /**
+     * Transformed Y coordinate (ISO 32000-1, 8.3.4). Like [transformX], this
+     * returns a scalar so platform path builders can consume it without a tuple.
+     */
+    public fun transformY(x: Double, y: Double): Double = b * x + d * y + f
+
+    /**
+     * Both transformed coordinates, retained for callers that need a [Pair].
+     * Rendering loops should use [transformX] and [transformY] to avoid the
+     * intermediate tuple and boxed coordinates (ISO 32000-1, 8.3.4).
+     */
     public fun transformPoint(x: Double, y: Double): Pair<Double, Double> =
-        (a * x + c * y + e) to (b * x + d * y + f)
+        transformX(x, y) to transformY(x, y)
 
     /** X-component of the unit vector after this transform, useful for scaled font sizes. */
     public fun scaleX(): Double = kotlin.math.sqrt(a * a + b * b)

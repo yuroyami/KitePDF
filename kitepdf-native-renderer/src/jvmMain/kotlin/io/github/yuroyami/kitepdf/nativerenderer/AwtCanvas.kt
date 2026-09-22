@@ -255,8 +255,10 @@ public class AwtCanvas(private var g: Graphics2D) : KiteCanvas {
 
         val paint: java.awt.Paint = when (shading) {
             is KiteShading.Axial -> {
-                val (x0, y0) = ctm.transformPoint(shading.coords[0], shading.coords[1])
-                val (x1, y1) = ctm.transformPoint(shading.coords[2], shading.coords[3])
+                val x0 = ctm.transformX(shading.coords[0], shading.coords[1])
+                val y0 = ctm.transformY(shading.coords[0], shading.coords[1])
+                val x1 = ctm.transformX(shading.coords[2], shading.coords[3])
+                val y1 = ctm.transformY(shading.coords[2], shading.coords[3])
                 if (!shading.extendStart || !shading.extendEnd) {
                     extentClip = axialExtent(x0, y0, x1, y1, shading.extendStart, shading.extendEnd)
                 }
@@ -273,9 +275,11 @@ public class AwtCanvas(private var g: Graphics2D) : KiteCanvas {
                 // circle as the bounding one and the smaller circle's centre as the
                 // focus, reversing the colours when circle0 is the larger.
                 val sc = kotlin.math.sqrt(ctm.a * ctm.a + ctm.b * ctm.b)
-                val (ax, ay) = ctm.transformPoint(shading.coords[0], shading.coords[1])
+                val ax = ctm.transformX(shading.coords[0], shading.coords[1])
+                val ay = ctm.transformY(shading.coords[0], shading.coords[1])
                 val ar = shading.coords[2] * sc
-                val (bx, by) = ctm.transformPoint(shading.coords[3], shading.coords[4])
+                val bx = ctm.transformX(shading.coords[3], shading.coords[4])
+                val by = ctm.transformY(shading.coords[3], shading.coords[4])
                 val br = shading.coords[5] * sc
                 val outerIsB = br >= ar
                 val cx = if (outerIsB) bx else ax
@@ -774,22 +778,29 @@ public class AwtCanvas(private var g: Graphics2D) : KiteCanvas {
         for (seg in src.segments) {
             when (seg) {
                 is KitePath.Segment.MoveTo -> {
-                    val (x, y) = ctm.transformPoint(seg.x, seg.y)
+                    val x = ctm.transformX(seg.x, seg.y)
+                    val y = ctm.transformY(seg.x, seg.y)
                     out.moveTo(x, y)
                 }
                 is KitePath.Segment.LineTo -> {
-                    val (x, y) = ctm.transformPoint(seg.x, seg.y)
+                    val x = ctm.transformX(seg.x, seg.y)
+                    val y = ctm.transformY(seg.x, seg.y)
                     out.lineTo(x, y)
                 }
                 is KitePath.Segment.CurveTo -> {
-                    val (x1, y1) = ctm.transformPoint(seg.x1, seg.y1)
-                    val (x2, y2) = ctm.transformPoint(seg.x2, seg.y2)
-                    val (x3, y3) = ctm.transformPoint(seg.x3, seg.y3)
+                    val x1 = ctm.transformX(seg.x1, seg.y1)
+                    val y1 = ctm.transformY(seg.x1, seg.y1)
+                    val x2 = ctm.transformX(seg.x2, seg.y2)
+                    val y2 = ctm.transformY(seg.x2, seg.y2)
+                    val x3 = ctm.transformX(seg.x3, seg.y3)
+                    val y3 = ctm.transformY(seg.x3, seg.y3)
                     out.curveTo(x1, y1, x2, y2, x3, y3)
                 }
                 is KitePath.Segment.QuadTo -> {
-                    val (x1, y1) = ctm.transformPoint(seg.x1, seg.y1)
-                    val (x2, y2) = ctm.transformPoint(seg.x2, seg.y2)
+                    val x1 = ctm.transformX(seg.x1, seg.y1)
+                    val y1 = ctm.transformY(seg.x1, seg.y1)
+                    val x2 = ctm.transformX(seg.x2, seg.y2)
+                    val y2 = ctm.transformY(seg.x2, seg.y2)
                     out.quadTo(x1, y1, x2, y2)
                 }
                 KitePath.Segment.Close -> out.closePath()

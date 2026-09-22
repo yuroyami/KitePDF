@@ -30,8 +30,12 @@ internal object SvgGradient {
      * Read the gradient at [el], following one `href` to a gradient that holds
      * the stops (the common "same stops, different geometry" idiom).
      */
-    fun parse(el: KiteXmlNode.Element, byId: Map<String, KiteXmlNode.Element>): Parsed? {
-        val stops = stopsOf(el, byId) ?: return null
+    fun parse(
+        el: KiteXmlNode.Element,
+        byId: Map<String, KiteXmlNode.Element>,
+        declaration: (KiteXmlNode.Element, String) -> String? = SvgStyles::inlineValue,
+    ): Parsed? {
+        val stops = stopsOf(el, byId, declaration) ?: return null
         val fn = functionOf(stops) ?: return null
         val units = attr(el, byId, "gradientunits") ?: attr(el, byId, "gradientUnits")
         val objectBox = units?.trim() != "userSpaceOnUse"
@@ -84,7 +88,11 @@ internal object SvgGradient {
     private class Stop(val offset: Double, val color: RgbColor)
 
     /** This gradient's stops, or the first referenced gradient that owns some. */
-    private fun stopsOf(el: KiteXmlNode.Element, byId: Map<String, KiteXmlNode.Element>): List<Stop>? {
+    private fun stopsOf(
+        el: KiteXmlNode.Element,
+        byId: Map<String, KiteXmlNode.Element>,
+        declaration: (KiteXmlNode.Element, String) -> String?,
+    ): List<Stop>? {
         val seen = HashSet<KiteXmlNode.Element>()
         var current: KiteXmlNode.Element? = el
         while (current != null && seen.add(current)) {
@@ -98,7 +106,7 @@ internal object SvgGradient {
                         raw.toDoubleOrNull() ?: 0.0
                     }
                     val offset = parsed.takeIf(Double::isFinite) ?: 0.0
-                    val color = styleOrAttr(stop, "stop-color")?.let { CssValues.color(it) } ?: RgbColor.BLACK
+                    val color = declaration(stop, "stop-color")?.let { CssValues.color(it) } ?: RgbColor.BLACK
                     Stop(offset.coerceIn(0.0, 1.0), color)
                 }
                 .sortedBy { it.offset }
@@ -154,16 +162,4 @@ internal object SvgGradient {
     private fun hrefOf(el: KiteXmlNode.Element): String? =
         el.attrs["href"]?.trim()?.removePrefix("#")?.takeIf { it.isNotEmpty() }
 
-    /** An SVG presentation value: the `style` declaration wins over the attribute. */
-    private fun styleOrAttr(el: KiteXmlNode.Element, name: String): String? {
-        el.attrs["style"]?.let { style ->
-            for (part in style.split(';')) {
-                val at = part.indexOf(':')
-                if (at > 0 && part.substring(0, at).trim().equals(name, ignoreCase = true)) {
-                    return part.substring(at + 1).trim()
-                }
-            }
-        }
-        return el.attrs[name]
-    }
 }

@@ -25,3 +25,5 @@ b4341fe88482 1 inline-background
 27a932a2af5c 2 novel
 8f509a530f2c 1 styled
 d3e1064f6cad 1 table
+4bf0c8a4b3b1 1 vertical-cover
+31ef6f274d5f 1 vertical-images

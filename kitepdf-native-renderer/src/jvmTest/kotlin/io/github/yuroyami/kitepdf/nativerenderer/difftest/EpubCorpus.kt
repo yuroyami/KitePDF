@@ -3,6 +3,7 @@ package io.github.yuroyami.kitepdf.nativerenderer.difftest
 import io.github.yuroyami.kitepdf.epub.EpubPage
 import io.github.yuroyami.kitepdf.nativerenderer.AwtCanvas
 import io.github.yuroyami.kitepdf.core.render.KiteMatrix
+import io.github.yuroyami.kitepdf.core.zip.Crc32
 import java.awt.Color
 import java.awt.image.BufferedImage
 
@@ -44,7 +45,56 @@ object EpubCorpus {
             <p><span style="background-color:#99ddff">A blue span</span><mark>next to a yellow span</mark>.</p>
             <p style="width:150pt"><mark>A highlight that wraps across several lines, including the spaces between its words.</mark></p>
         """.trimIndent()),
+        "vertical-images" to epub("""
+            <style>html{writing-mode:vertical-rl}body,p{margin:0;padding:0;text-indent:0}</style>
+            <p><img src="quadrants.png" style="width:80pt;height:40pt"/><img src="quadrants.png" style="width:40pt;height:80pt"/></p>
+            <img src="quadrants.png" style="display:block;width:100pt;height:50pt"/>
+        """.trimIndent(), listOf("OEBPS/quadrants.png" to quadrantPng())),
+        "vertical-cover" to epub("""
+            <style>html{writing-mode:vertical-lr}body,p{margin:0;padding:0;text-indent:0}</style>
+            <p><img src="bands.png" style="width:60pt;height:60pt;object-fit:cover"/></p>
+            <img src="bands.png" style="display:block;width:50pt;height:80pt;object-fit:cover"/>
+        """.trimIndent(), listOf("OEBPS/bands.png" to bandPng())),
     )
+
+    /** Non-square orientation fixture: red/green above blue/white. */
+    fun quadrantPng(): ByteArray = rgbPng(40, 20) { x, y ->
+        when {
+            y < 10 && x < 20 -> 0xff0000
+            y < 10 -> 0x00ff00
+            x < 20 -> 0x0000ff
+            else -> 0xffffff
+        }
+    }
+
+    /** Three equal bands; a centred square cover crop keeps only the green band. */
+    fun bandPng(tall: Boolean = false): ByteArray = rgbPng(if (tall) 30 else 90, if (tall) 90 else 30) { x, y ->
+        when ((if (tall) y else x) / 30) { 0 -> 0xff0000; 1 -> 0x00ff00; else -> 0x0000ff }
+    }
+
+    /** Deterministic RGB PNG with one stored-deflate block, valid CRCs and Adler-32. */
+    private fun rgbPng(width: Int, height: Int, pixel: (Int, Int) -> Int): ByteArray {
+        fun be32(n: Int) = byteArrayOf((n ushr 24).toByte(), (n ushr 16).toByte(), (n ushr 8).toByte(), n.toByte())
+        fun chunk(type: String, data: ByteArray): ByteArray {
+            val body = type.encodeToByteArray() + data
+            return be32(data.size) + body + be32(Crc32.of(body).toInt())
+        }
+        val scan = ByteArray(height * (width * 3 + 1))
+        for (y in 0 until height) for (x in 0 until width) {
+            val color = pixel(x, y)
+            val i = y * (width * 3 + 1) + 1 + x * 3
+            scan[i] = (color ushr 16).toByte(); scan[i + 1] = (color ushr 8).toByte(); scan[i + 2] = color.toByte()
+        }
+        require(scan.size < 65536)
+        var a = 1; var b = 0
+        for (v in scan) { a = (a + (v.toInt() and 255)) % 65521; b = (b + a) % 65521 }
+        val nlen = scan.size.inv()
+        val zlib = byteArrayOf(0x78, 1, 1, scan.size.toByte(), (scan.size ushr 8).toByte(), nlen.toByte(), (nlen ushr 8).toByte()) +
+            scan + be32((b shl 16) or a)
+        return byteArrayOf(0x89.toByte(), 0x50, 0x4e, 0x47, 13, 10, 26, 10) +
+            chunk("IHDR", be32(width) + be32(height) + byteArrayOf(8, 2, 0, 0, 0)) +
+            chunk("IDAT", zlib) + chunk("IEND", byteArrayOf())
+    }
 
     fun epub(bodyHtml: String, extra: List<Pair<String, ByteArray>> = emptyList()): ByteArray {
         val body = if (bodyHtml.trimStart().startsWith("<body")) bodyHtml else "<body>$bodyHtml</body>"

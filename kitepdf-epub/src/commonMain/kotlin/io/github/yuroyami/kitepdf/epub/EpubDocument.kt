@@ -9,6 +9,7 @@ import io.github.yuroyami.kitepdf.core.zip.ZipReader
 import io.github.yuroyami.kitepdf.epub.css.ComputedStyle
 import io.github.yuroyami.kitepdf.epub.css.CssParser
 import io.github.yuroyami.kitepdf.epub.css.Origin
+import io.github.yuroyami.kitepdf.epub.css.ObjectFit
 import io.github.yuroyami.kitepdf.epub.css.StyleResolver
 import io.github.yuroyami.kitepdf.epub.css.StyleRule
 import io.github.yuroyami.kitepdf.core.KiteBookmark
@@ -1021,54 +1022,14 @@ public class EpubPage internal constructor(
             }
             // Inline images: bottom on the baseline, next to the text runs.
             for (im in line.images) {
-                val svg = im.svg
-                if (svg != null && svg.width > 0 && svg.height > 0) {
-                    val m = KiteMatrix(
-                        im.width / svg.width, 0.0, 0.0, -im.height / svg.height,
-                        margin + im.x, base + im.height,
-                    )
-                    svg.render(canvas, deviceCtm.concat(m), svgLoader(doc.chapterDir(chapter)))
-                } else if (im.image != null) {
-                    val m = KiteMatrix(im.width, 0.0, 0.0, im.height, margin + im.x, base)
-                    canvas.drawImage(im.image, deviceCtm.concat(m))
-                }
+                paintImage(canvas, deviceCtm, im.image, im.svg, im.width, im.height,
+                    margin + im.x, base, im.objectFit, doc.chapterDir(chapter))
             }
         }
 
         for (box in page.images) {
-            val svg = box.svg
-            if (svg != null) {
-                // Map the SVG viewport (origin top-left, y-down) onto the box's device
-                // rect (y-up): negative y-scale, translate to the box's top edge.
-                val m = KiteMatrix(
-                    box.drawWidth / svg.width, 0.0, 0.0, -box.drawHeight / svg.height,
-                    margin + box.x, yUp(box.bottom) + box.drawHeight,
-                )
-                svg.render(canvas, deviceCtm.concat(m), svgLoader(box.zipPath.substringBeforeLast('/', "")))
-                continue
-            }
-            val img = box.image ?: continue
-            // object-fit: cover. Scale to FILL the box preserving aspect,
-            // center, and clip the overflow to the box rect.
-            if (box.style.objectFit == io.github.yuroyami.kitepdf.epub.css.ObjectFit.COVER &&
-                img.width > 0 && img.height > 0
-            ) {
-                val scale = maxOf(box.drawWidth / img.width, box.drawHeight / img.height)
-                val dw = img.width * scale
-                val dh = img.height * scale
-                val dx = (box.drawWidth - dw) / 2.0
-                val dy = (box.drawHeight - dh) / 2.0
-                val clip = KitePath.Builder()
-                    .apply { rectangle(margin + box.x, yUp(box.bottom), box.drawWidth, box.drawHeight) }
-                    .build()
-                canvas.pushClip(clip, deviceCtm, evenOdd = false)
-                val m = KiteMatrix(dw, 0.0, 0.0, dh, margin + box.x + dx, yUp(box.bottom) + dy)
-                canvas.drawImage(img, deviceCtm.concat(m))
-                canvas.popClip()
-                continue
-            }
-            val m = KiteMatrix(box.drawWidth, 0.0, 0.0, box.drawHeight, margin + box.x, yUp(box.bottom))
-            canvas.drawImage(img, deviceCtm.concat(m))
+            paintImage(canvas, deviceCtm, box.image, box.svg, box.drawWidth, box.drawHeight,
+                margin + box.x, yUp(box.bottom), box.style.objectFit, box.zipPath.substringBeforeLast('/', ""))
         }
         canvas.endPage()
     }
@@ -1145,36 +1106,59 @@ public class EpubPage internal constructor(
                 }
                 paintRunLines(run, canvas, runTransform(run))
             }
-            // Inline images rotate with the flow: the inline extent runs down
-            // the page, the height extends left of the baseline axis.
+            // Replaced content stays upright. Its physical width occupies the
+            // column's ascent side, while its height advances the inline pen.
             for (im in line.images) {
                 val xAxis = colX(line.yTop + line.ascent)
                 val top = margin + im.x
-                val svg = im.svg
-                if (svg != null && svg.width > 0 && svg.height > 0) {
-                    val m = KiteMatrix(0.0, -im.width / svg.width, -im.height / svg.height, 0.0, xAxis + im.height, displayHeight - top)
-                    svg.render(canvas, deviceCtm.concat(m), svgLoader(doc.chapterDir(chapter)))
-                } else if (im.image != null) {
-                    val m = KiteMatrix(0.0, -im.width, im.height, 0.0, xAxis, displayHeight - top)
-                    canvas.drawImage(im.image, deviceCtm.concat(m))
-                }
+                val left = if (page.verticalLr) xAxis - im.width else xAxis
+                paintImage(canvas, deviceCtm, im.image, im.svg, im.width, im.height,
+                    left, displayHeight - top - im.height, im.objectFit, doc.chapterDir(chapter))
             }
         }
 
         for (box in page.images) {
-            val left = colX(box.bottom)
+            val left = minOf(colX(box.y), colX(box.bottom))
             val top = margin + box.x
-            val svg = box.svg
-            if (svg != null) {
-                val m = KiteMatrix(0.0, -box.drawWidth / svg.width, -box.drawHeight / svg.height, 0.0, left + box.drawHeight, displayHeight - top)
-                svg.render(canvas, deviceCtm.concat(m), svgLoader(box.zipPath.substringBeforeLast('/', "")))
-                continue
-            }
-            val img = box.image ?: continue
-            val m = KiteMatrix(0.0, -box.drawWidth, box.drawHeight, 0.0, left, displayHeight - top)
-            canvas.drawImage(img, deviceCtm.concat(m))
+            paintImage(canvas, deviceCtm, box.image, box.svg, box.drawWidth, box.drawHeight,
+                left, displayHeight - top - box.drawHeight, box.style.objectFit, box.zipPath.substringBeforeLast('/', ""))
         }
         canvas.endPage()
+    }
+
+    /**
+     * CSS Writing Modes 4, 3 and 7.2: image orientation/dimensions are physical.
+     * CSS Images 3, 4.3.2 and 4.5: cover preserves intrinsic aspect, centres the content,
+     * and clips it to the replaced element's box in every writing mode (#100, #170).
+     */
+    private fun paintImage(
+        canvas: KiteCanvas, deviceCtm: KiteMatrix, image: KiteImageData?, svg: SvgImage?,
+        width: Double, height: Double, left: Double, bottom: Double, objectFit: ObjectFit, baseDir: String,
+    ) {
+        val intrinsicW = svg?.width ?: image?.width?.toDouble() ?: return
+        val intrinsicH = svg?.height ?: image?.height?.toDouble() ?: return
+        if (width <= 0 || height <= 0 || intrinsicW <= 0 || intrinsicH <= 0) return
+        val cover = objectFit == ObjectFit.COVER
+        val scale = if (cover) maxOf(width / intrinsicW, height / intrinsicH) else null
+        val dw = scale?.let { intrinsicW * it } ?: width
+        val dh = scale?.let { intrinsicH * it } ?: height
+        val x = left + (width - dw) / 2.0
+        val y = bottom + (height - dh) / 2.0
+        if (cover) {
+            val clip = KitePath.Builder().apply { rectangle(left, bottom, width, height) }.build()
+            canvas.pushClip(clip, deviceCtm, evenOdd = false)
+        }
+        try {
+            if (svg != null) {
+                val m = KiteMatrix(dw / intrinsicW, 0.0, 0.0, -dh / intrinsicH, x, y + dh)
+                svg.render(canvas, deviceCtm.concat(m), svgLoader(baseDir))
+            } else if (image != null) {
+                val m = KiteMatrix(dw, 0.0, 0.0, dh, x, y)
+                canvas.drawImage(image, deviceCtm.concat(m))
+            }
+        } finally {
+            if (cover) canvas.popClip()
+        }
     }
 
     /** CSS 2.1, section 14.2: every inline fragment paints its own background. */

@@ -280,8 +280,10 @@ public class SkiaCanvas(private val canvas: SkCanvas) : KiteCanvas {
 
         val shader: Shader = when (shading) {
             is KiteShading.Axial -> {
-                val (x0, y0) = ctm.transformPoint(shading.coords[0], shading.coords[1])
-                val (x1, y1) = ctm.transformPoint(shading.coords[2], shading.coords[3])
+                val x0 = ctm.transformX(shading.coords[0], shading.coords[1])
+                val y0 = ctm.transformY(shading.coords[0], shading.coords[1])
+                val x1 = ctm.transformX(shading.coords[2], shading.coords[3])
+                val y1 = ctm.transformY(shading.coords[2], shading.coords[3])
                 Shader.makeLinearGradient(
                     x0.toFloat(), y0.toFloat(),
                     x1.toFloat(), y1.toFloat(),
@@ -291,9 +293,11 @@ public class SkiaCanvas(private val canvas: SkCanvas) : KiteCanvas {
             is KiteShading.Radial -> {
                 // True PDF two-circle radial via a two-point conical gradient.
                 val sc = kotlin.math.sqrt(ctm.a * ctm.a + ctm.b * ctm.b)
-                val (x0, y0) = ctm.transformPoint(shading.coords[0], shading.coords[1])
+                val x0 = ctm.transformX(shading.coords[0], shading.coords[1])
+                val y0 = ctm.transformY(shading.coords[0], shading.coords[1])
                 val r0 = (shading.coords[2] * sc).toFloat().coerceAtLeast(0f)
-                val (x1, y1) = ctm.transformPoint(shading.coords[3], shading.coords[4])
+                val x1 = ctm.transformX(shading.coords[3], shading.coords[4])
+                val y1 = ctm.transformY(shading.coords[3], shading.coords[4])
                 val r1 = (shading.coords[5] * sc).toFloat().coerceAtLeast(0.1f)
                 Shader.makeTwoPointConicalGradient(
                     x0.toFloat(), y0.toFloat(), r0,
@@ -471,17 +475,22 @@ public class SkiaCanvas(private val canvas: SkCanvas) : KiteCanvas {
         for (seg in src.segments) {
             when (seg) {
                 is KitePath.Segment.MoveTo -> {
-                    val (x, y) = ctm.transformPoint(seg.x, seg.y)
+                    val x = ctm.transformX(seg.x, seg.y)
+                    val y = ctm.transformY(seg.x, seg.y)
                     b.moveTo(x.toFloat(), y.toFloat())
                 }
                 is KitePath.Segment.LineTo -> {
-                    val (x, y) = ctm.transformPoint(seg.x, seg.y)
+                    val x = ctm.transformX(seg.x, seg.y)
+                    val y = ctm.transformY(seg.x, seg.y)
                     b.lineTo(x.toFloat(), y.toFloat())
                 }
                 is KitePath.Segment.CurveTo -> {
-                    val (x1, y1) = ctm.transformPoint(seg.x1, seg.y1)
-                    val (x2, y2) = ctm.transformPoint(seg.x2, seg.y2)
-                    val (x3, y3) = ctm.transformPoint(seg.x3, seg.y3)
+                    val x1 = ctm.transformX(seg.x1, seg.y1)
+                    val y1 = ctm.transformY(seg.x1, seg.y1)
+                    val x2 = ctm.transformX(seg.x2, seg.y2)
+                    val y2 = ctm.transformY(seg.x2, seg.y2)
+                    val x3 = ctm.transformX(seg.x3, seg.y3)
+                    val y3 = ctm.transformY(seg.x3, seg.y3)
                     b.cubicTo(
                         x1.toFloat(), y1.toFloat(),
                         x2.toFloat(), y2.toFloat(),
@@ -489,8 +498,10 @@ public class SkiaCanvas(private val canvas: SkCanvas) : KiteCanvas {
                     )
                 }
                 is KitePath.Segment.QuadTo -> {
-                    val (x1, y1) = ctm.transformPoint(seg.x1, seg.y1)
-                    val (x2, y2) = ctm.transformPoint(seg.x2, seg.y2)
+                    val x1 = ctm.transformX(seg.x1, seg.y1)
+                    val y1 = ctm.transformY(seg.x1, seg.y1)
+                    val x2 = ctm.transformX(seg.x2, seg.y2)
+                    val y2 = ctm.transformY(seg.x2, seg.y2)
                     b.quadTo(x1.toFloat(), y1.toFloat(), x2.toFloat(), y2.toFloat())
                 }
                 KitePath.Segment.Close -> b.closePath()

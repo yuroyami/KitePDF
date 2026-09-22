@@ -232,15 +232,18 @@ public class AndroidNativeCanvas(private val canvas: AndroidCanvas) : KiteCanvas
 
         val shader: Shader = when (shading) {
             is KiteShading.Axial -> {
-                val (x0, y0) = ctm.transformPoint(shading.coords[0], shading.coords[1])
-                val (x1, y1) = ctm.transformPoint(shading.coords[2], shading.coords[3])
+                val x0 = ctm.transformX(shading.coords[0], shading.coords[1])
+                val y0 = ctm.transformY(shading.coords[0], shading.coords[1])
+                val x1 = ctm.transformX(shading.coords[2], shading.coords[3])
+                val y1 = ctm.transformY(shading.coords[2], shading.coords[3])
                 LinearGradient(
                     x0.toFloat(), y0.toFloat(), x1.toFloat(), y1.toFloat(),
                     colors, positions, Shader.TileMode.CLAMP,
                 )
             }
             is KiteShading.Radial -> {
-                val (cx, cy) = ctm.transformPoint(shading.coords[3], shading.coords[4])
+                val cx = ctm.transformX(shading.coords[3], shading.coords[4])
+                val cy = ctm.transformY(shading.coords[3], shading.coords[4])
                 val r = (shading.coords[5] * kotlin.math.sqrt(ctm.a * ctm.a + ctm.b * ctm.b))
                     .toFloat().coerceAtLeast(0.1f)
                 RadialGradient(cx.toFloat(), cy.toFloat(), r, colors, positions, Shader.TileMode.CLAMP)
@@ -389,22 +392,29 @@ public class AndroidNativeCanvas(private val canvas: AndroidCanvas) : KiteCanvas
         for (seg in src.segments) {
             when (seg) {
                 is KitePath.Segment.MoveTo -> {
-                    val (x, y) = ctm.transformPoint(seg.x, seg.y)
+                    val x = ctm.transformX(seg.x, seg.y)
+                    val y = ctm.transformY(seg.x, seg.y)
                     out.moveTo(x.toFloat(), y.toFloat())
                 }
                 is KitePath.Segment.LineTo -> {
-                    val (x, y) = ctm.transformPoint(seg.x, seg.y)
+                    val x = ctm.transformX(seg.x, seg.y)
+                    val y = ctm.transformY(seg.x, seg.y)
                     out.lineTo(x.toFloat(), y.toFloat())
                 }
                 is KitePath.Segment.CurveTo -> {
-                    val (x1, y1) = ctm.transformPoint(seg.x1, seg.y1)
-                    val (x2, y2) = ctm.transformPoint(seg.x2, seg.y2)
-                    val (x3, y3) = ctm.transformPoint(seg.x3, seg.y3)
+                    val x1 = ctm.transformX(seg.x1, seg.y1)
+                    val y1 = ctm.transformY(seg.x1, seg.y1)
+                    val x2 = ctm.transformX(seg.x2, seg.y2)
+                    val y2 = ctm.transformY(seg.x2, seg.y2)
+                    val x3 = ctm.transformX(seg.x3, seg.y3)
+                    val y3 = ctm.transformY(seg.x3, seg.y3)
                     out.cubicTo(x1.toFloat(), y1.toFloat(), x2.toFloat(), y2.toFloat(), x3.toFloat(), y3.toFloat())
                 }
                 is KitePath.Segment.QuadTo -> {
-                    val (x1, y1) = ctm.transformPoint(seg.x1, seg.y1)
-                    val (x2, y2) = ctm.transformPoint(seg.x2, seg.y2)
+                    val x1 = ctm.transformX(seg.x1, seg.y1)
+                    val y1 = ctm.transformY(seg.x1, seg.y1)
+                    val x2 = ctm.transformX(seg.x2, seg.y2)
+                    val y2 = ctm.transformY(seg.x2, seg.y2)
                     out.quadTo(x1.toFloat(), y1.toFloat(), x2.toFloat(), y2.toFloat())
                 }
                 KitePath.Segment.Close -> out.close()

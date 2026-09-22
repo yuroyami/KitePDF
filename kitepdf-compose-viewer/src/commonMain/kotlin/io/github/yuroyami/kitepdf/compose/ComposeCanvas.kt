@@ -333,8 +333,10 @@ public class ComposeCanvas(
 
         val brush: Brush = when (shading) {
             is KiteShading.Axial -> {
-                val (x0, y0) = ctm.transformPoint(shading.coords[0], shading.coords[1])
-                val (x1, y1) = ctm.transformPoint(shading.coords[2], shading.coords[3])
+                val x0 = ctm.transformX(shading.coords[0], shading.coords[1])
+                val y0 = ctm.transformY(shading.coords[0], shading.coords[1])
+                val x1 = ctm.transformX(shading.coords[2], shading.coords[3])
+                val y1 = ctm.transformY(shading.coords[2], shading.coords[3])
                 Brush.linearGradient(
                     colorStops = composeStops,
                     start = Offset(x0.toFloat(), y0.toFloat()),
@@ -346,7 +348,8 @@ public class ComposeCanvas(
                 // The inner circle (concentric or offset) is approximated; PDF's
                 // two-circle radial gradient is richer than Compose's, but for
                 // most real-world shadings the difference is sub-pixel.
-                val (cx, cy) = ctm.transformPoint(shading.coords[3], shading.coords[4])
+                val cx = ctm.transformX(shading.coords[3], shading.coords[4])
+                val cy = ctm.transformY(shading.coords[3], shading.coords[4])
                 val rScale = sqrt(ctm.a * ctm.a + ctm.b * ctm.b)
                 val radius = (shading.coords[5] * rScale).toFloat()
                 Brush.radialGradient(
@@ -506,17 +509,19 @@ public class ComposeCanvas(
         alpha: Double, blendMode: KiteBlendMode,
     ) {
         // Compute the layer's pixel bounds in device space.
-        val corners = listOf(
-            ctm.transformPoint(bbox.left, bbox.bottom),
-            ctm.transformPoint(bbox.right, bbox.bottom),
-            ctm.transformPoint(bbox.right, bbox.top),
-            ctm.transformPoint(bbox.left, bbox.top),
-        )
-        val xs = corners.map { it.first }
-        val ys = corners.map { it.second }
+        val x0 = ctm.transformX(bbox.left, bbox.bottom)
+        val y0 = ctm.transformY(bbox.left, bbox.bottom)
+        val x1 = ctm.transformX(bbox.right, bbox.bottom)
+        val y1 = ctm.transformY(bbox.right, bbox.bottom)
+        val x2 = ctm.transformX(bbox.right, bbox.top)
+        val y2 = ctm.transformY(bbox.right, bbox.top)
+        val x3 = ctm.transformX(bbox.left, bbox.top)
+        val y3 = ctm.transformY(bbox.left, bbox.top)
         val rect = Rect(
-            xs.min().toFloat(), ys.min().toFloat(),
-            xs.max().toFloat(), ys.max().toFloat(),
+            minOf(minOf(x0, x1), minOf(x2, x3)).toFloat(),
+            minOf(minOf(y0, y1), minOf(y2, y3)).toFloat(),
+            maxOf(maxOf(x0, x1), maxOf(x2, x3)).toFloat(),
+            maxOf(maxOf(y0, y1), maxOf(y2, y3)).toFloat(),
         )
 
         val paint = Paint().apply {
@@ -554,22 +559,29 @@ public class ComposeCanvas(
         for (seg in src.segments) {
             when (seg) {
                 is KitePath.Segment.MoveTo -> {
-                    val (x, y) = ctm.transformPoint(seg.x, seg.y)
+                    val x = ctm.transformX(seg.x, seg.y)
+                    val y = ctm.transformY(seg.x, seg.y)
                     out.moveTo(x.toFloat(), y.toFloat())
                 }
                 is KitePath.Segment.LineTo -> {
-                    val (x, y) = ctm.transformPoint(seg.x, seg.y)
+                    val x = ctm.transformX(seg.x, seg.y)
+                    val y = ctm.transformY(seg.x, seg.y)
                     out.lineTo(x.toFloat(), y.toFloat())
                 }
                 is KitePath.Segment.CurveTo -> {
-                    val (x1, y1) = ctm.transformPoint(seg.x1, seg.y1)
-                    val (x2, y2) = ctm.transformPoint(seg.x2, seg.y2)
-                    val (x3, y3) = ctm.transformPoint(seg.x3, seg.y3)
+                    val x1 = ctm.transformX(seg.x1, seg.y1)
+                    val y1 = ctm.transformY(seg.x1, seg.y1)
+                    val x2 = ctm.transformX(seg.x2, seg.y2)
+                    val y2 = ctm.transformY(seg.x2, seg.y2)
+                    val x3 = ctm.transformX(seg.x3, seg.y3)
+                    val y3 = ctm.transformY(seg.x3, seg.y3)
                     out.cubicTo(x1.toFloat(), y1.toFloat(), x2.toFloat(), y2.toFloat(), x3.toFloat(), y3.toFloat())
                 }
                 is KitePath.Segment.QuadTo -> {
-                    val (x1, y1) = ctm.transformPoint(seg.x1, seg.y1)
-                    val (x2, y2) = ctm.transformPoint(seg.x2, seg.y2)
+                    val x1 = ctm.transformX(seg.x1, seg.y1)
+                    val y1 = ctm.transformY(seg.x1, seg.y1)
+                    val x2 = ctm.transformX(seg.x2, seg.y2)
+                    val y2 = ctm.transformY(seg.x2, seg.y2)
                     out.quadraticTo(x1.toFloat(), y1.toFloat(), x2.toFloat(), y2.toFloat())
                 }
                 KitePath.Segment.Close -> out.close()

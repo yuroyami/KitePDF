@@ -2,6 +2,7 @@ package io.github.yuroyami.kitepdf.epub
 
 import io.github.yuroyami.kitepdf.epub.css.CssVAlign
 import io.github.yuroyami.kitepdf.epub.css.GenericFont
+import io.github.yuroyami.kitepdf.epub.css.ObjectFit
 import io.github.yuroyami.kitepdf.core.render.RgbColor
 
 /**
@@ -53,6 +54,7 @@ internal data class InlineRun(
     val imageCssH: Double? = null,
     /** The image's `alt`, for the reading order. Empty string means decorative. */
     val imageAlt: String? = null,
+    val imageObjectFit: ObjectFit = ObjectFit.FILL,
     val lineThrough: Boolean = false,
     /** Inline box background, including the nearest painted inline ancestor. */
     val backgroundColor: RgbColor? = null,

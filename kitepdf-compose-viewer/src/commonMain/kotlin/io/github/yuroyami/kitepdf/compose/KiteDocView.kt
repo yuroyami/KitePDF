@@ -819,7 +819,7 @@ private fun KitePageRaster(
         max(1f, raster.width / visualWidth)
     } else 1f
 
-    val rastered by produceState<Pair<ImageBitmap, Boolean>?>(null, page, raster, colors.pageBackground, colors.theme, hairline, cache, drawsFormLayer) {
+    val rastered by produceState<Pair<ImageBitmap, Boolean>?>(null, page, raster, colors.pageBackground, colors.theme, hairline, cache, drawsFormLayer, spec.canvasDecorator) {
         // Off the main thread: a 10-30ms page raster on the UI thread
         // janks scroll and pinch. The rasterizer serializes pages on its mutex
         // (TextMeasurer's cache is not thread-safe) but the main thread stays
@@ -834,6 +834,7 @@ private fun KitePageRaster(
                 cache, page, raster.width, raster.height,
                 colors.pageBackground, hairline, colors.theme, pageIndex,
                 skipWidgets = drawsFormLayer,
+                canvasDecorator = spec.canvasDecorator,
             )
         }
     }
@@ -899,7 +900,8 @@ private fun KitePageVector(
         // (PDF folds in the display-box origin + /Rotate; EPUB its top-left flip).
         val deviceCtm = KiteMatrix.scaling(scale, scale).concat(page.displayToDeviceBase())
         val base = ComposeCanvas(this, textMeasurer, spec.hairlineWidthPx)
-        page.renderTo(theme?.wrap(base) ?: base, deviceCtm)
+        val themed = theme?.wrap(base) ?: base
+        page.renderTo(spec.canvasDecorator?.invoke(themed) ?: themed, deviceCtm)
     }
 }
 
