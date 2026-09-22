@@ -28,7 +28,12 @@ internal class ParsedSpine(
     val path: String,
     /** Faces from this document's own inline `<style>` blocks. Almost always empty. */
     val localFaces: List<EmbeddedFace>,
-)
+) {
+    /** What each note, glossary and bibliography link in this document is for, by href (#227). */
+    val linkKinds: Map<String, EpubLinkKind> by lazy {
+        linkKindsIn(tree) { href -> resolveLinkHref(href, path) { EpubDocument.resolvePath(docDir, it) } }
+    }
+}
 
 /**
  * The reusable, font-size-independent parse of a book. One [ParsedEpub] backs any

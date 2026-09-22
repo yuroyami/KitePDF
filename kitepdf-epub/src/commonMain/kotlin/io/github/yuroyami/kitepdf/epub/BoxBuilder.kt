@@ -445,14 +445,7 @@ internal class BoxBuilder(
      * `#fragment` targets this document; a relative path resolves against the
      * document's directory, keeping its fragment.
      */
-    private fun resolveLink(href: String): String {
-        val h = href.trim()
-        if (SCHEME.containsMatchIn(h)) return h
-        val path = h.substringBefore('#')
-        val frag = h.substringAfter('#', "")
-        val resolved = if (path.isEmpty()) docPath else resolveHref(path)
-        return if (frag.isEmpty()) resolved else "$resolved#$frag"
-    }
+    private fun resolveLink(href: String): String = resolveLinkHref(href, docPath, resolveHref)
 
     /**
      * `<ruby>`: the base (text / `<rb>` / other inline children) flows normally
@@ -665,7 +658,22 @@ internal class BoxBuilder(
     private companion object {
         val BLACK = RgbColor(0.0, 0.0, 0.0)
         val WHITESPACE = Regex("\\s+")
-        /** A URI scheme prefix (`https:`, `mailto:`, ...): the href is external. */
-        val SCHEME = Regex("^[a-zA-Z][a-zA-Z0-9+.-]*:")
     }
 }
+
+/**
+ * An `<a href>` as the layout stores it: `zipPath#fragment` for a place in the book,
+ * and the href itself for an external URL. [docPath] is the document the link sits in,
+ * and [resolveHref] resolves a relative path against that document's folder.
+ */
+internal fun resolveLinkHref(href: String, docPath: String, resolveHref: (String) -> String): String {
+    val h = href.trim()
+    if (URI_SCHEME.containsMatchIn(h)) return h
+    val path = h.substringBefore('#')
+    val frag = h.substringAfter('#', "")
+    val resolved = if (path.isEmpty()) docPath else resolveHref(path)
+    return if (frag.isEmpty()) resolved else "$resolved#$frag"
+}
+
+/** A URI scheme prefix (`https:`, `mailto:`, ...): the href is external. */
+private val URI_SCHEME = Regex("^[a-zA-Z][a-zA-Z0-9+.-]*:")

@@ -221,6 +221,32 @@ val text = book.pages[0].textContent()
 val target: Int? = book.pageOf("chapter2.xhtml#section-3")
 ```
 
+### Notes and other link targets
+
+Each link on a page says what it is for, in `EpubLink.kind`. A link marked
+`epub:type="noteref"` or `role="doc-noteref"`, or with the `rel="footnote"` that
+EPUB 2 converters write, is a note reference. Glossary and bibliography
+references have their own kinds.
+
+`linkTarget` reads the element a link points at, without laying its chapter out.
+A reader can show a footnote in a popup instead of turning the page:
+
+```kotlin
+// Link rects are in display space, y down, with the smaller y in `bottom`.
+val tapped = page.links.first { x in it.rect.left..it.rect.right && y in it.rect.bottom..it.rect.top }
+if (tapped.kind == EpubLinkKind.NOTE_REFERENCE) {
+    book.linkTarget(tapped.href)?.let { note ->
+        showNote(note.text)                     // one line per paragraph
+        // note.kind is FOOTNOTE, ENDNOTE, GLOSSARY_ENTRY and so on
+        // note.bookmark goes to the note itself: book.locate(note.bookmark)
+    }
+}
+```
+
+The text leaves out ruby readings and the back link to the call site. When the
+id sits on a short inline anchor, as in `<p><a id="fn1">1.</a> The note.</p>`, the
+text is the whole paragraph. A glossary term comes with its definitions.
+
 ## Typography
 
 The layout engine covers what real books use:
