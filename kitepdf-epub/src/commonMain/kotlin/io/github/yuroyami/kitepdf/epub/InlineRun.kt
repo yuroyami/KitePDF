@@ -6,6 +6,7 @@ import io.github.yuroyami.kitepdf.epub.css.DecorationLine
 import io.github.yuroyami.kitepdf.epub.css.GenericFont
 import io.github.yuroyami.kitepdf.epub.css.ObjectFit
 import io.github.yuroyami.kitepdf.core.render.RgbColor
+import io.github.yuroyami.kitepdf.svg.SvgImage
 
 /**
  * A maximal span of text sharing one computed inline style. Everything the layout
@@ -52,6 +53,8 @@ internal data class InlineRun(
      * attributes, in points) or the intrinsic size, capped to the line width.
      */
     val imageSrc: String? = null,
+    /** Inline `<svg>` element: its parsed picture, drawn in place of [imageSrc], which is then empty. */
+    val imageSvg: SvgImage? = null,
     val imageCssW: Double? = null,
     val imageCssH: Double? = null,
     /** The image's `alt`, for the reading order. Empty string means decorative. */

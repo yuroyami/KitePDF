@@ -120,6 +120,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   sits inside them (#101).
 - An SVG chapter reads as one image named by its `<title>`, else its `<desc>`, and
   a fixed-layout SVG chapter takes its page size from its `viewBox` (#26).
+- An `<svg>` inside an inline element, such as a MathJax equation in a `<span>`,
+  flows on the line like an `<img>`, sized by its `width` and `height` in the
+  element's own font. An `<svg>` with `display: none` takes no space (#275).
 
 ## [0.10.0] - 2026-09-13
 
