@@ -123,6 +123,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - An `<svg>` inside an inline element, such as a MathJax equation in a `<span>`,
   flows on the line like an `<img>`, sized by its `width` and `height` in the
   element's own font. An `<svg>` with `display: none` takes no space (#275).
+- An `<svg>` written in a chapter loads its `<image>` from the chapter's folder,
+  so cover pages in a folder, as Project Gutenberg books have them, draw their
+  cover (#276).
 
 ## [0.10.0] - 2026-09-13
 

@@ -60,4 +60,18 @@ class EpubSvgTest {
         }
         assertTrue(images.isNotEmpty(), "the SVG's <image> reached the canvas")
     }
+
+    @Test
+    fun an_svg_written_in_a_chapter_loads_its_image_from_the_chapter_folder() {
+        // The usual cover page: the chapter and its picture both sit in OEBPS/, not at the root (#276).
+        val book = EpubFixtures.epub(
+            """<div><svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 200 100">
+                <image width="200" height="100" xlink:href="pic.bmp"/></svg></div>""",
+            listOf("OEBPS/pic.bmp" to EpubFixtures.bmp2x1()),
+        )
+        val images = EpubDocument.open(book).pages.flatMap { page ->
+            RecordingCanvas().also { page.renderTo(it) }.calls.filterIsInstance<RecordingCanvas.Call.Image>()
+        }
+        assertEquals(1, images.size, "the cover picture reached the canvas")
+    }
 }
