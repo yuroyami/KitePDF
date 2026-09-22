@@ -426,8 +426,7 @@ private fun ContinuousLayout(
         val adapter = LazyListScrollAdapter(listState)
         state.adapter = adapter
         onDispose {
-            state.pendingPage = adapter.leadingPage
-            state.pendingScrollOffset = adapter.scrollOffsetPx
+            state.park(adapter.currentPage, adapter.leadingPage, adapter.scrollOffsetPx)
             if (state.adapter === adapter) state.adapter = null
         }
     }
@@ -579,8 +578,7 @@ private fun PagedLayout(
         val adapter = PagerScrollAdapter(pagerState)
         state.adapter = adapter
         onDispose {
-            state.pendingPage = adapter.currentPage
-            state.pendingScrollOffset = 0
+            state.park(adapter.currentPage)
             if (state.adapter === adapter) state.adapter = null
         }
     }
@@ -674,8 +672,7 @@ private fun SinglePageLayout(
         val adapter = FixedPageAdapter(layout.pageIndex)
         state.adapter = adapter
         onDispose {
-            state.pendingPage = adapter.currentPage
-            state.pendingScrollOffset = 0
+            state.park(adapter.currentPage)
             if (state.adapter === adapter) state.adapter = null
         }
     }
@@ -1133,8 +1130,7 @@ private fun SpreadLayout(
         val adapter = SpreadScrollAdapter(pagerState)
         state.adapter = adapter
         onDispose {
-            state.pendingPage = adapter.currentPage
-            state.pendingScrollOffset = 0
+            state.park(adapter.currentPage)
             if (state.adapter === adapter) state.adapter = null
         }
     }
