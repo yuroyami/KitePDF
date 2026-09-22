@@ -163,7 +163,8 @@ internal object Paginator {
             }
             is TableRowBox -> {}
             is TextBlockBox -> lines.addAll(box.lines)
-            is ImageBox -> images.add(box)
+            // An image paints its own background and border (CSS 2.1, 14.2, #101).
+            is ImageBox -> { if (decorated(box.style)) deco.add(box); images.add(box) }
         }
     }
 

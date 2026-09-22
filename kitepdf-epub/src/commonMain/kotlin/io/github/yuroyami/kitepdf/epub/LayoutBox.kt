@@ -86,6 +86,20 @@ internal class ImageBox(
     var drawHeight: Double = 0.0
 }
 
+/**
+ * The border plus padding around an image's content box, on each logical side. Top and
+ * bottom are the block sides and left and right the inline sides, as the box painter
+ * reads them in both writing modes.
+ */
+internal class ImageInset(val blockStart: Double, val blockEnd: Double, val inlineStart: Double, val inlineEnd: Double)
+
+internal fun imageInset(s: ComputedStyle): ImageInset = ImageInset(
+    blockStart = s.borderTop.effective + s.paddingTopPt,
+    blockEnd = s.borderBottom.effective + s.paddingBottomPt,
+    inlineStart = s.borderLeft.effective + s.paddingLeftPt,
+    inlineEnd = s.borderRight.effective + s.paddingRightPt,
+)
+
 /** A table box: a grid of [rows] with auto column widths plus `<col>` pins. */
 internal class TableBox(
     override val style: ComputedStyle,
