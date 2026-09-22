@@ -53,6 +53,10 @@ internal object SvgText {
         }
     }
 
+    /** The advance of [ch] at [fontSize], in user units, the same width [glyphs] gives it. */
+    fun advance(ch: Char, spec: FontSpec, fontSize: Double): Double =
+        (glyphName(ch)?.let { Standard14Widths.widthOf(metricFont(spec), it) } ?: 500) * fontSize / 1000.0
+
     /** Total advance of [glyphs] at [fontSize], in user units. */
     fun width(glyphs: List<TextGlyph>, fontSize: Double): Double =
         glyphs.sumOf { it.advanceWidth } * fontSize / 1000.0

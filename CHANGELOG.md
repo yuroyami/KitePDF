@@ -93,6 +93,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   leaves the screen, and a start page past the end opens at the last page (#258,
   #262).
 
+### More reader fixes
+
+- SVG text reads its `x`, `y`, `dx`, `dy` and `rotate` lists per character, and
+  `text-anchor` aligns each text chunk as one piece across its `<tspan>`s
+  (#181).
+
 ## [0.10.0] - 2026-09-13
 
 A Chinese novel still ran a 192 MB Android heap out of memory after 0.9.0,
