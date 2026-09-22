@@ -336,8 +336,10 @@ public class CoreGraphicsCanvas(private val ctx: CGContextRef) : KiteCanvas {
                             kCGGradientDrawsBeforeStartLocation or kCGGradientDrawsAfterEndLocation
                         when (shading) {
                             is KiteShading.Axial -> {
-                                val (x0, y0) = ctm.transformPoint(shading.coords[0], shading.coords[1])
-                                val (x1, y1) = ctm.transformPoint(shading.coords[2], shading.coords[3])
+                                val x0 = ctm.transformX(shading.coords[0], shading.coords[1])
+                                val y0 = ctm.transformY(shading.coords[0], shading.coords[1])
+                                val x1 = ctm.transformX(shading.coords[2], shading.coords[3])
+                                val y1 = ctm.transformY(shading.coords[2], shading.coords[3])
                                 val start = cValue<CGPoint> { x = x0; y = y0 }
                                 val end = cValue<CGPoint> { x = x1; y = y1 }
                                 CGContextDrawLinearGradient(ctx, gradient, start, end, drawOpts)
@@ -345,9 +347,11 @@ public class CoreGraphicsCanvas(private val ctx: CGContextRef) : KiteCanvas {
                             is KiteShading.Radial -> {
                                 // True PDF two-circle radial. Core Graphics takes both circles.
                                 val sc = kotlin.math.sqrt(ctm.a * ctm.a + ctm.b * ctm.b)
-                                val (x0, y0) = ctm.transformPoint(shading.coords[0], shading.coords[1])
+                                val x0 = ctm.transformX(shading.coords[0], shading.coords[1])
+                                val y0 = ctm.transformY(shading.coords[0], shading.coords[1])
                                 val r0 = (shading.coords[2] * sc).coerceAtLeast(0.0)
-                                val (x1, y1) = ctm.transformPoint(shading.coords[3], shading.coords[4])
+                                val x1 = ctm.transformX(shading.coords[3], shading.coords[4])
+                                val y1 = ctm.transformY(shading.coords[3], shading.coords[4])
                                 val r1 = (shading.coords[5] * sc).coerceAtLeast(0.1)
                                 val startC = cValue<CGPoint> { x = x0; y = y0 }
                                 val endC = cValue<CGPoint> { x = x1; y = y1 }
@@ -521,22 +525,29 @@ public class CoreGraphicsCanvas(private val ctx: CGContextRef) : KiteCanvas {
         for (seg in src.segments) {
             when (seg) {
                 is KitePath.Segment.MoveTo -> {
-                    val (x, y) = ctm.transformPoint(seg.x, seg.y)
+                    val x = ctm.transformX(seg.x, seg.y)
+                    val y = ctm.transformY(seg.x, seg.y)
                     CGContextMoveToPoint(ctx, x, y)
                 }
                 is KitePath.Segment.LineTo -> {
-                    val (x, y) = ctm.transformPoint(seg.x, seg.y)
+                    val x = ctm.transformX(seg.x, seg.y)
+                    val y = ctm.transformY(seg.x, seg.y)
                     CGContextAddLineToPoint(ctx, x, y)
                 }
                 is KitePath.Segment.CurveTo -> {
-                    val (x1, y1) = ctm.transformPoint(seg.x1, seg.y1)
-                    val (x2, y2) = ctm.transformPoint(seg.x2, seg.y2)
-                    val (x3, y3) = ctm.transformPoint(seg.x3, seg.y3)
+                    val x1 = ctm.transformX(seg.x1, seg.y1)
+                    val y1 = ctm.transformY(seg.x1, seg.y1)
+                    val x2 = ctm.transformX(seg.x2, seg.y2)
+                    val y2 = ctm.transformY(seg.x2, seg.y2)
+                    val x3 = ctm.transformX(seg.x3, seg.y3)
+                    val y3 = ctm.transformY(seg.x3, seg.y3)
                     CGContextAddCurveToPoint(ctx, x1, y1, x2, y2, x3, y3)
                 }
                 is KitePath.Segment.QuadTo -> {
-                    val (x1, y1) = ctm.transformPoint(seg.x1, seg.y1)
-                    val (x2, y2) = ctm.transformPoint(seg.x2, seg.y2)
+                    val x1 = ctm.transformX(seg.x1, seg.y1)
+                    val y1 = ctm.transformY(seg.x1, seg.y1)
+                    val x2 = ctm.transformX(seg.x2, seg.y2)
+                    val y2 = ctm.transformY(seg.x2, seg.y2)
                     CGContextAddQuadCurveToPoint(ctx, x1, y1, x2, y2)
                 }
                 KitePath.Segment.Close -> CGContextClosePath(ctx)

@@ -225,16 +225,20 @@ public class Canvas2dCanvas(private val ctx: CanvasRenderingContext2D) : KiteCan
 
         val gradient = when (shading) {
             is KiteShading.Axial -> {
-                val (x0, y0) = ctm.transformPoint(shading.coords[0], shading.coords[1])
-                val (x1, y1) = ctm.transformPoint(shading.coords[2], shading.coords[3])
+                val x0 = ctm.transformX(shading.coords[0], shading.coords[1])
+                val y0 = ctm.transformY(shading.coords[0], shading.coords[1])
+                val x1 = ctm.transformX(shading.coords[2], shading.coords[3])
+                val y1 = ctm.transformY(shading.coords[2], shading.coords[3])
                 ctx.createLinearGradient(x0, y0, x1, y1)
             }
             is KiteShading.Radial -> {
                 // True PDF two-circle radial. Canvas2D supports both circles.
                 val sc = kotlin.math.sqrt(ctm.a * ctm.a + ctm.b * ctm.b)
-                val (x0, y0) = ctm.transformPoint(shading.coords[0], shading.coords[1])
+                val x0 = ctm.transformX(shading.coords[0], shading.coords[1])
+                val y0 = ctm.transformY(shading.coords[0], shading.coords[1])
                 val r0 = (shading.coords[2] * sc).coerceAtLeast(0.0)
-                val (x1, y1) = ctm.transformPoint(shading.coords[3], shading.coords[4])
+                val x1 = ctm.transformX(shading.coords[3], shading.coords[4])
+                val y1 = ctm.transformY(shading.coords[3], shading.coords[4])
                 val r1 = (shading.coords[5] * sc).coerceAtLeast(0.1)
                 ctx.createRadialGradient(x0, y0, r0, x1, y1, r1)
             }
@@ -370,22 +374,29 @@ public class Canvas2dCanvas(private val ctx: CanvasRenderingContext2D) : KiteCan
         for (seg in src.segments) {
             when (seg) {
                 is KitePath.Segment.MoveTo -> {
-                    val (x, y) = ctm.transformPoint(seg.x, seg.y)
+                    val x = ctm.transformX(seg.x, seg.y)
+                    val y = ctm.transformY(seg.x, seg.y)
                     p.moveTo(x, y)
                 }
                 is KitePath.Segment.LineTo -> {
-                    val (x, y) = ctm.transformPoint(seg.x, seg.y)
+                    val x = ctm.transformX(seg.x, seg.y)
+                    val y = ctm.transformY(seg.x, seg.y)
                     p.lineTo(x, y)
                 }
                 is KitePath.Segment.CurveTo -> {
-                    val (x1, y1) = ctm.transformPoint(seg.x1, seg.y1)
-                    val (x2, y2) = ctm.transformPoint(seg.x2, seg.y2)
-                    val (x3, y3) = ctm.transformPoint(seg.x3, seg.y3)
+                    val x1 = ctm.transformX(seg.x1, seg.y1)
+                    val y1 = ctm.transformY(seg.x1, seg.y1)
+                    val x2 = ctm.transformX(seg.x2, seg.y2)
+                    val y2 = ctm.transformY(seg.x2, seg.y2)
+                    val x3 = ctm.transformX(seg.x3, seg.y3)
+                    val y3 = ctm.transformY(seg.x3, seg.y3)
                     p.bezierCurveTo(x1, y1, x2, y2, x3, y3)
                 }
                 is KitePath.Segment.QuadTo -> {
-                    val (x1, y1) = ctm.transformPoint(seg.x1, seg.y1)
-                    val (x2, y2) = ctm.transformPoint(seg.x2, seg.y2)
+                    val x1 = ctm.transformX(seg.x1, seg.y1)
+                    val y1 = ctm.transformY(seg.x1, seg.y1)
+                    val x2 = ctm.transformX(seg.x2, seg.y2)
+                    val y2 = ctm.transformY(seg.x2, seg.y2)
                     p.quadraticCurveTo(x1, y1, x2, y2)
                 }
                 KitePath.Segment.Close -> p.closePath()

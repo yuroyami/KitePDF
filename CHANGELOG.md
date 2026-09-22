@@ -35,6 +35,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Two generated EPUB sweep fixtures cover inline decorations and backgrounds,
   adding one page each without changing the existing fixture bytes.
 
+### Additional reader fixes
+
+- SVG embedded stylesheets support type, class, ID, universal and compound
+  selectors with specificity, source order, inline styles and `!important`.
+  Unsupported selectors and at-rules are skipped without leaking styles (#89).
+- EPUB images stay upright in vertical writing and keep CSS width/height in
+  physical axes. Block and inline `object-fit: cover` images crop to their
+  frames in horizontal and vertical writing (#100, #170).
+- Matrix scalar coordinate methods remove per-point `Pair` and boxed-number
+  allocations from all six canvas backends, retaining `transformPoint` for
+  existing callers (#185).
+- `KiteCanvasDecorator` exposes the page paint pass through both viewer render
+  specs and the public rasterizer. Replacing a decorator invalidates cached
+  pixels; system-font retries use fresh wrappers (#132).
+- Two additional EPUB sweep fixtures add one page each. All 26 existing books
+  retain their page counts.
+
 ## [0.10.0] - 2026-09-13
 
 A Chinese novel still ran a 192 MB Android heap out of memory after 0.9.0,

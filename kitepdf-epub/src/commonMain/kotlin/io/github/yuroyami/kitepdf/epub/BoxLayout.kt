@@ -58,8 +58,8 @@ internal class BoxLayout(
     /**
      * Vertical writing (`writing-mode: vertical-rl`). Layout keeps its
      * logical axes (the "width" passed to [layout] is the page content
-     * HEIGHT); only glyph advances change: upright full-width glyphs use the
-     * face's `vmtx` advance (else 1em). The paint side rotates the result.
+     * HEIGHT). Upright glyphs use the face's `vmtx` advance (else 1em), while
+     * replaced images keep physical width/height and map them to logical axes.
      */
     private val vertical: Boolean = false,
 ) {
@@ -380,9 +380,13 @@ internal class BoxLayout(
         val mL = if (st.marginLeftAuto) 0.0 else st.marginLeftPt
         val mR = if (st.marginRightAuto) 0.0 else st.marginRightPt
         val room = (contentW - mL - mR).coerceAtLeast(1.0)
+        // CSS Writing Modes 4, 7.2: replaced width/height remain physical in
+        // vertical flow. Only their inline/block allocation swaps (#100).
+        val physicalRoomW = if (vertical) maxImageHeight else room
+        val physicalRoomH = if (vertical) room else maxImageHeight
         val ew = box.style.widthPt ?: box.attrWidth
         val eh = box.style.heightPt ?: box.attrHeight
-        var w = ew ?: (eh?.let { it / aspect } ?: room)
+        var w = ew ?: (eh?.let { it / aspect } ?: physicalRoomW)
         var h = eh ?: (w * aspect)
         // object-fit: contain. When both dimensions are fixed, letterbox the image to
         // preserve its aspect ratio inside the box (default `fill` stretches to w×h).
@@ -390,17 +394,19 @@ internal class BoxLayout(
             val scale = minOf(ew / intrinsicW, eh / intrinsicH)
             w = intrinsicW * scale; h = intrinsicH * scale
         }
-        val cap = minOf(box.style.maxWidthPt ?: Double.MAX_VALUE, room)
+        val cap = minOf(box.style.maxWidthPt ?: Double.MAX_VALUE, physicalRoomW)
         if (w > cap) { val s = cap / w; w = cap; h *= s }
         // Style clamps (proportional), then the hard page-height cap last.
         box.style.maxHeightPt?.let { if (h > it) { val k = it / h; h = it; w *= k } }
         box.style.minWidthPt?.let { if (w < it) { val k = it / w; w = it; h *= k } }
         box.style.minHeightPt?.let { if (h < it) { val k = it / h; h = it; w *= k } }
-        if (h > maxImageHeight) { val s = maxImageHeight / h; h = maxImageHeight; w *= s }
+        if (h > physicalRoomH) { val s = physicalRoomH / h; h = physicalRoomH; w *= s }
         box.drawWidth = w; box.drawHeight = h
-        box.x = contentLeft + imageOffset(st, (contentW - w).coerceAtLeast(0.0), mL, mR)
+        val inlineSize = if (vertical) h else w
+        val blockSize = if (vertical) w else h
+        box.x = contentLeft + imageOffset(st, (contentW - inlineSize).coerceAtLeast(0.0), mL, mR)
         box.y = topY
-        box.borderBoxWidth = w; box.borderBoxHeight = h
+        box.borderBoxWidth = inlineSize; box.borderBoxHeight = blockSize
     }
 
     /**
@@ -712,7 +718,7 @@ internal class BoxLayout(
             var ascent = maxFs * 0.8 + rubyExtra
             // An inline image grows the line: its bottom sits on the baseline,
             // so the ascent must cover the image height (descent unchanged).
-            val imgH = cells.maxOfOrNull { it.imageHeight } ?: 0.0
+            val imgH = cells.maxOfOrNull { if (vertical) it.imageWidth else it.imageHeight } ?: 0.0
             if (imgH > ascent) {
                 lineHeight += imgH - ascent
                 ascent = imgH
@@ -837,6 +843,7 @@ internal class BoxLayout(
         val image: KiteImageData? = null,
         val svgImage: SvgImage? = null,
         val imageAlt: String? = null,
+        val imageObjectFit: ObjectFit = ObjectFit.FILL,
         // How many glyphs a ligature cell replaced; 1 for everything else.
         var ligComponents: Int = 1,
         // Envelope padding when the reading is wider than its base (pt). Only the
@@ -924,14 +931,18 @@ internal class BoxLayout(
                 }
                 var w = run.imageCssW ?: run.imageCssH?.let { it * iw / ih } ?: (iw * 0.75)
                 var h = run.imageCssH ?: (w * ih / iw)
-                if (w > contentW) { h *= contentW / w; w = contentW }
+                if (vertical) {
+                    if (h > contentW) { w *= contentW / h; h = contentW }
+                    if (w > maxImageHeight) { h *= maxImageHeight / w; w = maxImageHeight }
+                } else if (w > contentW) { h *= contentW / w; w = contentW }
+                val inlineSize = if (vertical) h else w
                 val cell = Cell(
-                    '￼', w, run.fontSizePt, fontSpec(run.family, run.bold, run.italic),
+                    '￼', inlineSize, run.fontSizePt, fontSpec(run.family, run.bold, run.italic),
                     run.color, 0.0, false,
                     href = run.href, imageWidth = w, imageHeight = h, image = img, svgImage = svg,
-                    imageAlt = run.imageAlt,
+                    imageAlt = run.imageAlt, imageObjectFit = run.imageObjectFit,
                 )
-                tokens.add(Token.Word(listOf(cell), w))
+                tokens.add(Token.Word(listOf(cell), inlineSize))
                 continue
             }
             // Never mix ruby groups (or ruby and plain text) inside one word: the
@@ -1282,7 +1293,7 @@ internal class BoxLayout(
             // Inline image cell: emit a PlacedImage and advance the pen.
             if (c.isImage) {
                 closeGroup(x)
-                imageSink?.add(PlacedImage(x + c.padBefore, c.imageWidth, c.imageHeight, c.image, c.svgImage, c.imageAlt))
+                imageSink?.add(PlacedImage(x + c.padBefore, c.imageWidth, c.imageHeight, c.image, c.svgImage, c.imageAlt, c.imageObjectFit))
                 x += c.padBefore + c.width + c.padAfter
                 i++
                 continue

@@ -9,6 +9,7 @@ import io.github.yuroyami.kitepdf.epub.css.CssFloat
 import io.github.yuroyami.kitepdf.epub.css.Display
 import io.github.yuroyami.kitepdf.epub.css.Edge
 import io.github.yuroyami.kitepdf.epub.css.ListType
+import io.github.yuroyami.kitepdf.epub.css.ObjectFit
 import io.github.yuroyami.kitepdf.epub.css.PseudoContent
 import io.github.yuroyami.kitepdf.epub.css.PseudoSide
 import io.github.yuroyami.kitepdf.epub.css.StyleResolver
@@ -110,7 +111,7 @@ internal class BoxBuilder(
                         if ((cs.display == Display.INLINE || cs.display == Display.INLINE_BLOCK) &&
                             cs.cssFloat == CssFloat.NONE
                         ) {
-                            inl.addImage(resolveHref(src), style, cs.widthPt ?: aw?.times(0.75), cs.heightPt ?: ah?.times(0.75), child.attrs["alt"])
+                            inl.addImage(resolveHref(src), style, cs.widthPt ?: aw?.times(0.75), cs.heightPt ?: ah?.times(0.75), child.attrs["alt"], cs.objectFit)
                         } else {
                             flush()
                             // The attributes are CSS pixels, 0.75pt each, in block mode too (#112).
@@ -362,7 +363,7 @@ internal class BoxBuilder(
                             val cs = resolver.compute(child, childAncestors, style)
                             val aw = child.attrs["width"]?.trim()?.removeSuffix("px")?.toDoubleOrNull()?.times(0.75)
                             val ah = child.attrs["height"]?.trim()?.removeSuffix("px")?.toDoubleOrNull()?.times(0.75)
-                            inl.addImage(resolveHref(src), style, cs.widthPt ?: aw, cs.heightPt ?: ah)
+                            inl.addImage(resolveHref(src), style, cs.widthPt ?: aw, cs.heightPt ?: ah, child.attrs["alt"], cs.objectFit)
                         }
                         continue
                     }
@@ -506,13 +507,13 @@ internal class BoxBuilder(
         }
 
         /** An inline `<img>`: one U+FFFC run carrying the source + size hints. */
-        fun addImage(src: String, style: ComputedStyle, cssW: Double?, cssH: Double?, alt: String? = null) {
+        fun addImage(src: String, style: ComputedStyle, cssW: Double?, cssH: Double?, alt: String? = null, objectFit: ObjectFit = ObjectFit.FILL) {
             if (pendingSpace && blockHasContent && !lastWasBreak) {
                 runs.add(pendingSpaceRun ?: makeRun(" ", style))
             }
             pendingSpace = false; lastWasBreak = false; blockHasContent = true
             runs.add(
-                makeRun("￼", style).copy(imageSrc = src, imageCssW = cssW, imageCssH = cssH, imageAlt = alt),
+                makeRun("￼", style).copy(imageSrc = src, imageCssW = cssW, imageCssH = cssH, imageAlt = alt, imageObjectFit = objectFit),
             )
         }
 

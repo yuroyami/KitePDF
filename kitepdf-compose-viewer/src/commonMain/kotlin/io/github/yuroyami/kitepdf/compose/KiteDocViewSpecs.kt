@@ -167,6 +167,8 @@ public sealed interface KiteRenderSpec {
          * behaviour).
          */
         val cacheBudgetBytes: Long = 96L * 1024 * 1024,
+        /** Wraps each page paint pass; see [KiteCanvasDecorator] for cache and thread rules. */
+        val canvasDecorator: KiteCanvasDecorator? = null,
     ) : KiteRenderSpec {
         init {
             require(quality > 0f) { "quality must be > 0 (was $quality)" }
@@ -196,6 +198,8 @@ public sealed interface KiteRenderSpec {
     @Immutable
     public data class Vectorized(
         val hairlineWidthPx: Float = 1f,
+        /** Wraps each live page paint pass on the UI thread. */
+        val canvasDecorator: KiteCanvasDecorator? = null,
     ) : KiteRenderSpec {
         init {
             require(hairlineWidthPx > 0f) { "hairlineWidthPx must be > 0 (was $hairlineWidthPx)" }

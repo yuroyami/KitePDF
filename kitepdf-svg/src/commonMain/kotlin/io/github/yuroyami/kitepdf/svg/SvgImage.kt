@@ -41,7 +41,11 @@ import kotlin.math.PI
  * `fill`, `stroke`, `stroke-width`, `opacity`, `fill-opacity`,
  * `stroke-opacity`, `fill-rule`, `display` and `visibility` with inheritance;
  * `transform` (translate/scale/rotate/skewX/skewY/matrix); linear and radial
- * gradients as paint; and `clip-path`.
+ * gradients as paint; and `clip-path`. Embedded `<style>` rules support type,
+ * universal, class and ID selectors, their compounds and comma lists, with
+ * specificity, source order and `!important` (SVG 1.1, section 6).
+ * Combinators, attribute/pseudo selectors, CSS escapes, at-rules and external
+ * stylesheets are not interpreted.
  *
  * Text is measured against standard-font metrics and drawn through a host
  * typeface, because SVG ships no font file of its own.
@@ -55,6 +59,8 @@ public class SvgImage private constructor(
     public val height: Double,
     private val viewBox: DoubleArray?, // minX, minY, w, h
 ) {
+
+    private val styles: SvgStyles by lazy { SvgStyles(root) }
 
     /** Every element carrying an `id`, for `<use>`, gradients and `clip-path`. */
     private val byId: Map<String, KiteXmlNode.Element> by lazy {
@@ -138,6 +144,7 @@ public class SvgImage private constructor(
         val fontSize: Double = 16.0,
         val fontSpec: FontSpec = FontSpec.SansSerif,
         val textAnchor: String? = null,
+        val visible: Boolean = true,
         val dash: List<Double>? = null,
         val dashOffset: Double = 0.0,
         val lineCap: Int = 0,
@@ -163,15 +170,15 @@ public class SvgImage private constructor(
         depth: Int,
     ) {
         if (depth > MAX_DEPTH) return                       // <use> cycles
-        if (isHidden(el)) return
+        if (isDisplayNone(el)) return
         // A transform may come from a style declaration too, like any presentation property (#182).
         val ctm = styleOrAttr(el, "transform")?.let { compose(parentCtm, parseTransform(it)) } ?: parentCtm
         val container = el.tag.lowercase() in CONTAINERS
-        val paint = resolvePaint(el.attrs, parent, container)
+        val paint = resolvePaint(el, parent, container)
         // SVG 1.1, 14.5: a container's opacity composites its children once, as
         // one offscreen group, so where two of its shapes overlap no darker seam
         // shows (#91). A single shape's own opacity stays a per-paint alpha.
-        val groupAlpha = if (container) (declaration(el.attrs, "opacity")?.toDoubleOrNull() ?: 1.0).coerceIn(0.0, 1.0) else 1.0
+        val groupAlpha = if (container) (styleOrAttr(el, "opacity")?.toDoubleOrNull() ?: 1.0).coerceIn(0.0, 1.0) else 1.0
         val clip = clipPathOf(el, ctm, paint)
         if (clip != null) canvas.pushClip(clip, KiteMatrix.IDENTITY, evenOdd = false)
         if (groupAlpha < 1.0) {
@@ -230,10 +237,9 @@ public class SvgImage private constructor(
         }
     }
 
-    /** `display:none` and `visibility:hidden` keep an element off the canvas. */
-    private fun isHidden(el: KiteXmlNode.Element): Boolean =
-        styleOrAttr(el, "display")?.trim() == "none" ||
-            styleOrAttr(el, "visibility")?.trim().let { it == "hidden" || it == "collapse" }
+    /** Display removes the subtree; inherited visibility can be overridden below it. */
+    private fun isDisplayNone(el: KiteXmlNode.Element): Boolean =
+        styleOrAttr(el, "display")?.trim() == "none"
 
     /**
      * A nested `<svg>` opens a new viewport (SVG 1.1, 7.9, #176): the box at its
@@ -300,6 +306,7 @@ public class SvgImage private constructor(
         canvas: KiteCanvas,
         load: ((String) -> ByteArray?)?,
     ) {
+        if (!paint.visible) return
         val href = el.attrs["href"]?.trim()?.takeIf { it.isNotEmpty() } ?: return
         val bytes = if (href.startsWith("data:")) dataUri(href) else load?.invoke(href)
         val image = bytes?.let { KiteImageData.fromEncodedImage(it) } ?: return
@@ -339,8 +346,8 @@ public class SvgImage private constructor(
                     nextX = null; nextY = null
                 }
                 is KiteXmlNode.Element -> {
-                    if (child.tag.lowercase() != "tspan" || isHidden(child)) continue
-                    val sub = resolvePaint(child.attrs, p)
+                    if (child.tag.lowercase() != "tspan" || isDisplayNone(child)) continue
+                    val sub = resolvePaint(child, p)
                     collect(
                         child, sub, d + 1,
                         child.attrs["x"]?.let { parseLen(it, sub.fontSize, sub.viewportWidth) } ?: nextX,
@@ -391,6 +398,7 @@ public class SvgImage private constructor(
     ) {
         if (depth > MAX_DEPTH) return
         for (run in layoutText(el, paint, depth)) {
+            if (!run.paint.visible) continue
             // Text space is y-up; SVG is y-down, so the run is flipped in place.
             canvas.drawGlyphs(
                 run.glyphs, run.paint.fontSize, unitsPerEm = 1000, hasOutlines = false,
@@ -419,7 +427,7 @@ public class SvgImage private constructor(
         for (c in def.children) {
             if (c !is KiteXmlNode.Element) continue
             val m = compose(clipCtm, styleOrAttr(c, "transform")?.let { parseTransform(it) } ?: KiteMatrix.IDENTITY)
-            for (part in clipShapesOf(c, m, resolvePaint(c.attrs, paint))) {
+            for (part in clipShapesOf(c, m, resolvePaint(c, paint))) {
                 for (seg in part.segments) when (seg) {
                     is KitePath.Segment.MoveTo -> b.moveTo(seg.x, seg.y)
                     is KitePath.Segment.LineTo -> b.lineTo(seg.x, seg.y)
@@ -439,7 +447,7 @@ public class SvgImage private constructor(
         // A use contributes the shape it references, moved by its x and y (#175).
         "use" -> {
             val target = c.attrs["href"]?.trim()?.removePrefix("#")?.let { byId[it] }
-            val shape = target?.let { shapeOf(it, resolvePaint(it.attrs, paint)) }
+            val shape = target?.let { shapeOf(it, resolvePaint(it, paint)) }
             if (target == null || shape == null) {
                 emptyList()
             } else {
@@ -468,14 +476,14 @@ public class SvgImage private constructor(
             "switch" -> listOfNotNull(firstPassingChild(el))
             "use" -> {
                 val target = el.attrs["href"]?.trim()?.removePrefix("#")?.let { byId[it] } ?: return null
-                val tb = boundsOfElement(target, resolvePaint(target.attrs, paint), depth + 1) ?: return null
+                val tb = boundsOfElement(target, resolvePaint(target, paint), depth + 1) ?: return null
                 return mapBounds(tb, compose(KiteMatrix.translation(num(el, "x", paint), num(el, "y", paint)), transformOf(target)))
             }
             else -> return null
         }
         var acc: DoubleArray? = null
         for (c in children) {
-            val cb = boundsOfElement(c, resolvePaint(c.attrs, paint), depth + 1)?.let { mapBounds(it, transformOf(c)) } ?: continue
+            val cb = boundsOfElement(c, resolvePaint(c, paint), depth + 1)?.let { mapBounds(it, transformOf(c)) } ?: continue
             val a = acc
             acc = if (a == null) cb else doubleArrayOf(minOf(a[0], cb[0]), minOf(a[1], cb[1]), maxOf(a[2], cb[2]), maxOf(a[3], cb[3]))
         }
@@ -530,7 +538,7 @@ public class SvgImage private constructor(
     }
 
     private fun paintShape(path: KitePath, ctm: KiteMatrix, paint: Paint, canvas: KiteCanvas, forceStroke: Boolean = false) {
-        if (path.segments.isEmpty()) return
+        if (!paint.visible || path.segments.isEmpty()) return
         if (!forceStroke) {
             val gradient = paint.fillRef?.let { gradientFor(it, path, ctm) }
             if (gradient != null) {
@@ -561,7 +569,7 @@ public class SvgImage private constructor(
      */
     private fun strokeColorOf(id: String): RgbColor? {
         val def = byId[id] ?: return null
-        return SvgGradient.parse(def, byId)?.shading?.sampleStops(3)?.colors?.get(1)
+        return SvgGradient.parse(def, byId, styles::value)?.shading?.sampleStops(3)?.colors?.get(1)
     }
 
     /**
@@ -571,7 +579,7 @@ public class SvgImage private constructor(
      */
     private fun gradientFor(id: String, path: KitePath, ctm: KiteMatrix): Pair<KiteShading, KiteMatrix>? {
         val def = byId[id] ?: return null
-        val g = SvgGradient.parse(def, byId) ?: return null
+        val g = SvgGradient.parse(def, byId, styles::value) ?: return null
         var m = ctm
         if (g.objectBoundingBox) {
             val b = boundsOf(path) ?: return null
@@ -626,18 +634,8 @@ public class SvgImage private constructor(
         return b.build()
     }
 
-    /** An SVG presentation value: a `style` declaration wins over the attribute. */
-    private fun styleOrAttr(el: KiteXmlNode.Element, name: String): String? = declaration(el.attrs, name)
-
-    private fun declaration(a: Map<String, String>, name: String): String? {
-        a["style"]?.let { style ->
-            for (part in style.split(';')) {
-                val at = part.indexOf(':')
-                if (at > 0 && part.substring(0, at).trim() == name) return part.substring(at + 1).trim()
-            }
-        }
-        return a[name]
-    }
+    /** The author's cascaded value, including embedded sheets (SVG 1.1, 6.4). */
+    private fun styleOrAttr(el: KiteXmlNode.Element, name: String): String? = styles.value(el, name)
 
     /** The id inside `url(#id)`, or null when the value is not one. */
     private fun urlRef(raw: String?): String? {
@@ -656,23 +654,26 @@ public class SvgImage private constructor(
         return if (";base64" in meta) decodeBase64(payload) else percentDecode(payload)
     }
 
-    private fun resolvePaint(a: Map<String, String>, p: Paint, container: Boolean = false): Paint {
-        val current = declaration(a, "color")?.let { CssValues.color(it) } ?: p.current
-        val fillRaw = declaration(a, "fill")
-        val strokeRaw = declaration(a, "stroke")
+    private fun resolvePaint(el: KiteXmlNode.Element, p: Paint, container: Boolean = false): Paint {
+        // Inherited paint properties use the parent's computed value, including
+        // relative lengths and paint-server references (CSS 2.2, 6.2, #89).
+        fun declaration(name: String): String? = styleOrAttr(el, name)?.takeUnless { it.equals("inherit", ignoreCase = true) }
+        val current = declaration("color")?.let { CssValues.color(it) } ?: p.current
+        val fillRaw = declaration("fill")
+        val strokeRaw = declaration("stroke")
         // em lengths resolve against this element's font size, and font-size itself
         // against the parent's (#178).
-        val fontSize = declaration(a, "font-size")?.trim()?.let { raw ->
+        val fontSize = declaration("font-size")?.trim()?.let { raw ->
             if (raw.endsWith('%')) raw.dropLast(1).toDoubleOrNull()?.let { p.fontSize * it / 100.0 } else lengthOrNull(raw, p.fontSize)
         }?.takeIf { it > 0.0 && it.isFinite() } ?: p.fontSize
         return Paint(
             fill = paintValue(fillRaw, p.fill, current),
             stroke = paintValue(strokeRaw, p.stroke, current),
-            strokeW = declaration(a, "stroke-width")?.let { parseLen(it, fontSize, percentageBase("stroke-width", p)) } ?: p.strokeW,
+            strokeW = declaration("stroke-width")?.let { parseLen(it, fontSize, percentageBase("stroke-width", p)) } ?: p.strokeW,
             // A container's opacity composites it as a group in walk, so only a
             // single shape multiplies its own opacity into the paint (#91).
-            opacity = if (container) p.opacity else (declaration(a, "opacity")?.toDoubleOrNull() ?: 1.0) * p.opacity,
-            evenOdd = when (declaration(a, "fill-rule")) {
+            opacity = if (container) p.opacity else (declaration("opacity")?.toDoubleOrNull() ?: 1.0) * p.opacity,
+            evenOdd = when (declaration("fill-rule")) {
                 "evenodd" -> true
                 "nonzero" -> false
                 else -> p.evenOdd
@@ -680,34 +681,39 @@ public class SvgImage private constructor(
             current = current,
             fillRef = if (fillRaw != null) urlRef(fillRaw) else p.fillRef,
             strokeRef = if (strokeRaw != null) urlRef(strokeRaw) else p.strokeRef,
-            fillOpacity = declaration(a, "fill-opacity")?.toDoubleOrNull() ?: p.fillOpacity,
-            strokeOpacity = declaration(a, "stroke-opacity")?.toDoubleOrNull() ?: p.strokeOpacity,
+            fillOpacity = declaration("fill-opacity")?.toDoubleOrNull() ?: p.fillOpacity,
+            strokeOpacity = declaration("stroke-opacity")?.toDoubleOrNull() ?: p.strokeOpacity,
             fontSize = fontSize,
             fontSpec = fontSpecOf(
-                declaration(a, "font-family"), declaration(a, "font-weight"),
-                declaration(a, "font-style"), p.fontSpec,
+                declaration("font-family"), declaration("font-weight"),
+                declaration("font-style"), p.fontSpec,
             ),
-            textAnchor = declaration(a, "text-anchor") ?: p.textAnchor,
+            textAnchor = declaration("text-anchor") ?: p.textAnchor,
+            visible = when (declaration("visibility")) {
+                "hidden", "collapse" -> false
+                "visible" -> true
+                else -> p.visible
+            },
             // SVG 1.1, 11.4: the stroke properties are inherited like the rest (#92).
-            dash = when (val raw = declaration(a, "stroke-dasharray")?.trim()) {
+            dash = when (val raw = declaration("stroke-dasharray")?.trim()) {
                 null, "inherit" -> p.dash
                 else -> dashArrayOf(raw, fontSize, percentageBase("stroke-dasharray", p))
             },
-            dashOffset = declaration(a, "stroke-dashoffset")?.trim()?.takeIf { it != "inherit" }
+            dashOffset = declaration("stroke-dashoffset")?.trim()?.takeIf { it != "inherit" }
                 ?.let { parseLen(it, fontSize, percentageBase("stroke-dashoffset", p)) } ?: p.dashOffset,
-            lineCap = when (declaration(a, "stroke-linecap")?.trim()) {
+            lineCap = when (declaration("stroke-linecap")?.trim()) {
                 "butt" -> 0
                 "round" -> 1
                 "square" -> 2
                 else -> p.lineCap
             },
-            lineJoin = when (declaration(a, "stroke-linejoin")?.trim()) {
+            lineJoin = when (declaration("stroke-linejoin")?.trim()) {
                 "miter", "miter-clip", "arcs" -> 0
                 "round" -> 1
                 "bevel" -> 2
                 else -> p.lineJoin
             },
-            miterLimit = declaration(a, "stroke-miterlimit")?.toDoubleOrNull()?.takeIf { it >= 1.0 } ?: p.miterLimit,
+            miterLimit = declaration("stroke-miterlimit")?.toDoubleOrNull()?.takeIf { it >= 1.0 } ?: p.miterLimit,
             viewport = p.viewport,
             viewportWidth = p.viewportWidth, viewportHeight = p.viewportHeight,
         )

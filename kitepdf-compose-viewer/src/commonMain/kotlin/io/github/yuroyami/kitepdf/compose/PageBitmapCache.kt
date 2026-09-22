@@ -24,6 +24,8 @@ internal class PageBitmapCache(private val maxBytes: Long) {
         val hairlineBits: Int,
         /** True when the page was drawn without its form widgets, because a form layer draws them. */
         val withoutWidgets: Boolean = false,
+        /** Keep the function itself: a hash alone could alias distinct ink filters. */
+        val canvasDecorator: KiteCanvasDecorator? = null,
     )
 
     // Access-ordered behaviour done manually: Kotlin common LinkedHashMap has
