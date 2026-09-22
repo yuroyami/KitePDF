@@ -85,6 +85,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - An SVG `<image>` with an auto, empty or unreadable width or height takes its
   intrinsic size or ratio (#263). Clip path content inherits style from the clip
   path's own ancestors, not from the element that uses the clip (#269).
+- XPS text with a gradient or image fill and a missing font paints in one colour
+  of the brush instead of disappearing (#267). XPS clips leave out figures that
+  are marked as unfilled (#268).
 
 ## [0.10.0] - 2026-09-13
 

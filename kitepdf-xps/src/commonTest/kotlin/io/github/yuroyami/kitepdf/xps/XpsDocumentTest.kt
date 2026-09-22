@@ -205,6 +205,30 @@ class XpsDocumentTest {
         assertFalse(calls[0].hasOutlines)
     }
 
+    @Test fun gradientTextWithAMissingFontStaysReadable() {
+        // #267: no outline to fill, so the substitute text takes the first stop's colour.
+        val canvas = render("""<Glyphs FontUri="missing.odttf" FontRenderingEmSize="20" OriginX="10" OriginY="30"
+            UnicodeString="Title"><Glyphs.Fill><LinearGradientBrush StartPoint="0,0" EndPoint="100,0">
+            <LinearGradientBrush.GradientStops><GradientStop Offset="1" Color="#0000ff"/>
+            <GradientStop Offset="0" Color="#ff0000"/></LinearGradientBrush.GradientStops>
+            </LinearGradientBrush></Glyphs.Fill></Glyphs>""")
+        val glyphs = canvas.calls.filterIsInstance<RecordingCanvas.Call.Glyphs>()
+        assertEquals("Title", glyphs.joinToString("") { it.text })
+        assertTrue(glyphs.all { it.color == RgbColor(1.0, 0.0, 0.0) })
+    }
+
+    @Test fun clipUsesOnlyTheFilledFigures() {
+        // ECMA-388, 11.2.1 (#268): the unfilled figure takes no part in the clip.
+        val canvas = render("""<Canvas><Canvas.Clip><PathGeometry>
+          <PathFigure StartPoint="0,0" IsClosed="true" IsFilled="false"><PolyLineSegment Points="500,0 500,500 0,500"/></PathFigure>
+          <PathFigure StartPoint="10,10" IsClosed="true"><PolyLineSegment Points="20,10 20,20 10,20"/></PathFigure>
+          </PathGeometry></Canvas.Clip><Path Data="M0,0L100,0 100,100 0,100Z" Fill="#f00"/></Canvas>""")
+        // The first clip is the page box; the canvas clip comes after it.
+        val clip = canvas.calls.filterIsInstance<RecordingCanvas.Call.PushClip>().last()
+        assertEquals(KitePath.Segment.MoveTo(10.0, 10.0), clip.path.segments.first())
+        assertTrue(clip.path.segments.none { it is KitePath.Segment.LineTo && it.x == 500.0 })
+    }
+
     @Test fun geometryPropertiesHandleCurvesAndUnfilledFigures() {
         val canvas = render("""<Path Stroke="#000" Fill="#f00"><Path.Data><PathGeometry FillRule="NonZero">
           <PathFigure StartPoint="0,0" IsClosed="true" IsFilled="false"><PolyBezierSegment Points="0,10 10,10 10,0"/></PathFigure>

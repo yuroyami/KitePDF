@@ -33,6 +33,17 @@ internal class XpsBrushes(
         return color.copy(alpha = color.alpha * resource.node.number("opacity", 1.0).coerceIn(0.0, 1.0))
     }
 
+    /** One colour for [resource] where only a solid colour can paint: its first gradient stop, or black for an image. */
+    fun representative(resource: XpsResource): XpsColor {
+        solid(resource)?.let { return it }
+        val node = resource.node
+        val alpha = node.number("opacity", 1.0).coerceIn(0.0, 1.0)
+        val holder = node.elements().firstOrNull { it.tag == "${node.tag}.gradientstops" }
+        val first = (holder?.elements() ?: node.elements()).filter { it.tag == "gradientstop" }
+            .minByOrNull { it.number("offset", 0.0) }?.let { xpsColor(it.attrs["color"].orEmpty()) }
+        return first?.let { it.copy(alpha = it.alpha * alpha) } ?: XpsColor(RgbColor.BLACK, alpha)
+    }
+
     fun fill(
         resource: XpsResource, path: KitePath, evenOdd: Boolean, canvas: KiteCanvas,
         ctm: KiteMatrix, scope: XpsResources, depth: Int,

@@ -64,7 +64,8 @@ internal class XpsRenderer(private val packageData: XpsPackage, private val page
             val ctm = parent.concat(transform(el, scope, "rendertransform"))
             val clip = geometry(el, "clip", scope)
             val opacity = el.number("opacity", 1.0).coerceIn(0.0, 1.0)
-            if (clip != null) canvas.pushClip(clip.path, ctm.concat(clip.transform), clip.evenOdd)
+            // A clip is the geometry's fill area, without its unfilled figures (ECMA-388, 11.2.1, #268).
+            if (clip != null) canvas.pushClip(clip.fill, ctm.concat(clip.transform), clip.evenOdd)
             try {
                 if (opacity < 1.0) canvas.beginTransparencyGroup(pageBox, pageCtm, isolated = true, alpha = opacity)
                 try {
@@ -130,6 +131,9 @@ internal class XpsRenderer(private val packageData: XpsPackage, private val page
         textLines?.let { lines -> extract(run, ctm)?.let(lines::add); return }
         val brush = property(el, "fill", base, scope) ?: return
         val solid = brushes.solid(brush)
+        // Substitute text has no outline to fill with the brush. It stays readable in
+        // one colour that stands for the brush (lenient salvage, #267).
+        val substitute by lazy { brushes.representative(brush) }
         for (position in run.glyphs) {
             val transform = ctm.concat(position.transform)
             val glyph = position.glyph
@@ -147,6 +151,9 @@ internal class XpsRenderer(private val packageData: XpsPackage, private val page
                 val path = transformPath(outline, position.transform.concat(
                     KiteMatrix.scaling(run.fontSize / run.unitsPerEm, run.fontSize / run.unitsPerEm)))
                 brushes.fill(brush, path, false, canvas, ctm, scope, depth + 1)
+            } else {
+                canvas.drawGlyphs(listOf(glyph), run.fontSize, run.unitsPerEm, run.embedded, run.spec,
+                    transform, substitute.color, substitute.alpha)
             }
         }
     }
