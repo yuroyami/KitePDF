@@ -61,4 +61,39 @@ class OptionalContentUsageTest {
             assertEquals(1, fills(pdf(application, extraUsage = "/Export << /ExportState /ON >>")))
         }
     }
+
+    @Test
+    fun a_reference_to_a_missing_object_reads_as_null_and_hides_nothing() {
+        // ISO 32000-1, 7.3.10: object 9 does not exist, so every page must still render (#252).
+        for (application in listOf(
+            "9 0 R",
+            "<< /Event /View /Category [9 0 R] /OCGs [5 0 R] >>",
+            "<< /Event /View /Category 9 0 R /OCGs [5 0 R] >>",
+            "<< /Event /View /Category [/View] /OCGs 9 0 R >>",
+        )) assertEquals(2, fills(pdf(application)), application)
+        assertEquals(2, fills(pdf(extraUsage = "/Print 9 0 R", application = "<< /Event /View /Category [/Print] /OCGs [5 0 R] >>")))
+        assertEquals(2, fills(pdf(membership = "<< /Type /OCMD /VE 9 0 R >>")))
+        assertEquals(2, fills(pdf(membership = "<< /Type /OCMD /OCGs 9 0 R >>")))
+        for ((catalog, expected) in listOf(
+            "/OCProperties << /OCGs [5 0 R] /D 9 0 R >>" to 2,
+            // The /OFF list still applies when only the /OCGs list is broken.
+            "/OCProperties << /OCGs 9 0 R /D << /OFF [5 0 R] >> >>" to 1,
+            "/OCProperties 9 0 R" to 2,
+        )) {
+            val doc = TestPdf.onePage(
+                "0 0 1 rg 0 0 10 10 re f /OC /Layer BDC 1 0 0 rg 20 20 10 10 re f EMC",
+                resources = "/Properties << /Layer 5 0 R >>",
+                catalogEntries = catalog,
+                extra = listOf("<< /Type /OCG /Name (L) >>"),
+            )
+            assertEquals(expected, fills(doc), catalog)
+        }
+        val danglingProperty = TestPdf.onePage(
+            "/OC /Layer BDC 0 0 10 10 re f EMC",
+            resources = "/Properties << /Layer 9 0 R >>",
+            catalogEntries = "/OCProperties << /OCGs [5 0 R] >>",
+            extra = listOf("<< /Type /OCG /Name (L) >>"),
+        )
+        assertEquals(1, fills(danglingProperty))
+    }
 }

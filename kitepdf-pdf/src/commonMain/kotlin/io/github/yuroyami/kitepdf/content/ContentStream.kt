@@ -1,6 +1,7 @@
 package io.github.yuroyami.kitepdf.content
 
 import io.github.yuroyami.kitepdf.core.ByteReader
+import io.github.yuroyami.kitepdf.core.parser.IndirectResolver
 import io.github.yuroyami.kitepdf.core.parser.Lexer
 import io.github.yuroyami.kitepdf.parser.Parser
 import io.github.yuroyami.kitepdf.core.parser.PdfArray
@@ -77,6 +78,18 @@ public object ContentStreamParser {
      * so a stubbornly-bad byte can never spin the loop.
      */
     public fun parse(bytes: ByteArray): List<Operation> = parse(bytes, emptyMap())
+
+    /**
+     * The `/ColorSpace` resources an inline image may name, for [parse]. The
+     * renderer, text extraction and the editor all read inline images through
+     * this map, so they split a content stream at the same bytes (#266).
+     */
+    internal fun colorSpaces(resources: PdfDictionary?, refs: IndirectResolver): Map<String, KiteColorSpace> {
+        val csDict = runCatching { resources?.getDict("ColorSpace", refs) }.getOrNull() ?: return emptyMap()
+        return csDict.map.mapNotNull { (name, value) ->
+            runCatching { KiteColorSpace.resolve(value, refs) }.getOrNull()?.let { name to it }
+        }.toMap()
+    }
 
     /** Resource names determine inline sample counts (ISO 32000-1, 8.9.7). */
     internal fun parse(bytes: ByteArray, colorSpaces: Map<String, KiteColorSpace>): List<Operation> {
@@ -221,8 +234,11 @@ public object ContentStreamParser {
             val len = unfilteredDataLength(dict, colorSpaces)
             if (len != null && len <= reader.size - dataStart) {
                 reader.advance(len)
-                expectEi(reader)
-                return
+                if (expectEi(reader)) return
+                // EI is not where the length puts it, so the length is wrong for
+                // this file (a colour space count can be a guess). Scan from the
+                // data start, not from the wrong end point (#254).
+                reader.seek(dataStart)
             }
         }
         // Filtered, or geometry unknown/out of range: fall back to a boundary-aware
@@ -328,8 +344,11 @@ public object ContentStreamParser {
         return null
     }
 
-    /** After the exact data length, expect (and consume) the `EI` marker. */
-    private fun expectEi(reader: ByteReader) {
+    /**
+     * After the exact data length, consume the `EI` marker and return true.
+     * Returns false, with the reader moved, when `EI` is not there.
+     */
+    private fun expectEi(reader: ByteReader): Boolean {
         // Skip a single optional whitespace byte between data and EI.
         val nb = reader.peek()
         if (nb == ' '.code || nb == '\r'.code || nb == '\n'.code || nb == '\t'.code ||
@@ -337,12 +356,9 @@ public object ContentStreamParser {
         ) {
             reader.readByte()
         }
-        if (reader.matches(eiMarker, reader.pos())) {
-            reader.advance(2)
-        } else {
-            // Length was right but EI is not where expected. Recover by scanning.
-            scanForEi(reader, reader.pos())
-        }
+        if (!reader.matches(eiMarker, reader.pos())) return false
+        reader.advance(2)
+        return true
     }
 
     /**

@@ -20,6 +20,7 @@ import io.github.yuroyami.kitepdf.core.render.TextState
 import io.github.yuroyami.kitepdf.core.kiteWarn
 import io.github.yuroyami.kitepdf.PdfAnnotation.Subtype
 import io.github.yuroyami.kitepdf.PdfPage
+import io.github.yuroyami.kitepdf.missingAsNull
 import io.github.yuroyami.kitepdf.content.ContentStreamParser
 import io.github.yuroyami.kitepdf.content.Operation
 import io.github.yuroyami.kitepdf.core.font.PdfFont
@@ -292,7 +293,9 @@ public class PageRenderer(
 
     /** Resolve an OCG or OCMD object and decide if it is visible by default. */
     private fun isOcObjectVisible(obj: PdfObject, oc: io.github.yuroyami.kitepdf.PdfOptionalContent): Boolean {
-        val dict = obj.resolve(resolver) as? PdfDictionary ?: return true
+        // A missing object is null (ISO 32000-1, 7.3.10), so it hides nothing (#252).
+        val dict = missingAsNull { obj.resolve(resolver) } as? PdfDictionary
+            ?: return true
         if (dict.getName("Type") == "OCMD") return evalOcmd(dict, oc)
         // Plain OCG: hidden only if explicitly OFF in the default configuration.
         val id = (obj as? io.github.yuroyami.kitepdf.core.parser.PdfReference)?.objectNumber?.toString()
@@ -306,13 +309,15 @@ public class PageRenderer(
      * is no /VE do we fall back to /OCGs and the /P policy.
      */
     private fun evalOcmd(dict: PdfDictionary, oc: io.github.yuroyami.kitepdf.PdfOptionalContent): Boolean {
-        (dict["VE"]?.resolve(resolver) as? PdfArray)?.let { ve ->
+        (missingAsNull { dict["VE"]?.resolve(resolver) } as? PdfArray)?.let { ve ->
             // ISO 32000-1, 8.11.2.2 bounds no expression, so a cyclic or absurdly
             // deep one counts as visible instead of overflowing the stack (#55).
             return try { evalVisibilityExpr(ve, oc, 0) } catch (_: VisibilityTooDeep) { true }
         }
         val ocgsRaw = dict["OCGs"]
-        val refs: List<io.github.yuroyami.kitepdf.core.parser.PdfReference> = when (val r = ocgsRaw?.resolve(resolver)) {
+        val refs: List<io.github.yuroyami.kitepdf.core.parser.PdfReference> = when (
+            val r = missingAsNull { ocgsRaw?.resolve(resolver) }
+        ) {
             is PdfArray -> r.mapNotNull { it as? io.github.yuroyami.kitepdf.core.parser.PdfReference }
             else -> listOfNotNull(ocgsRaw as? io.github.yuroyami.kitepdf.core.parser.PdfReference)
         }
@@ -336,7 +341,7 @@ public class PageRenderer(
         if (depth > MAX_VISIBILITY_DEPTH) throw VisibilityTooDeep()
         val opName = (expr.getOrNull(0) as? PdfName)?.value ?: return true
         val operands = (1 until expr.size).mapNotNull { expr.getOrNull(it) }
-        fun evalOperand(o: PdfObject): Boolean = when (val r = o.resolve(resolver)) {
+        fun evalOperand(o: PdfObject): Boolean = when (val r = missingAsNull { o.resolve(resolver) }) {
             is PdfArray -> evalVisibilityExpr(r, oc, depth + 1)
             else -> {
                 // A bare OCG reference: visible unless OFF in the default config.
@@ -703,10 +708,8 @@ public class PageRenderer(
     }
 
     /** Named colour spaces declared in /Resources /ColorSpace. */
-    private fun loadColorSpaces(resources: PdfDictionary?): Map<String, KiteColorSpace> {
-        val csDict = resources?.getDict("ColorSpace", resolver) ?: return emptyMap()
-        return csDict.map.mapValues { (_, value) -> KiteColorSpace.resolve(value, resolver) }
-    }
+    private fun loadColorSpaces(resources: PdfDictionary?): Map<String, KiteColorSpace> =
+        ContentStreamParser.colorSpaces(resources, resolver)
 
     /**
      * Decode an inline image captured verbatim as `BI … ID <data> EI` (§8.9.7).

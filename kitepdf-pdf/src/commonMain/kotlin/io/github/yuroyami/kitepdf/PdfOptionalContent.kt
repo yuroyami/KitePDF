@@ -4,6 +4,7 @@ import io.github.yuroyami.kitepdf.core.parser.IndirectResolver
 import io.github.yuroyami.kitepdf.core.parser.PdfArray
 import io.github.yuroyami.kitepdf.core.parser.PdfDictionary
 import io.github.yuroyami.kitepdf.core.parser.PdfName
+import io.github.yuroyami.kitepdf.core.parser.PdfObject
 import io.github.yuroyami.kitepdf.core.parser.PdfReference
 import io.github.yuroyami.kitepdf.core.parser.PdfString
 
@@ -55,21 +56,22 @@ public data class PdfOptionalContent(
         public val EMPTY: PdfOptionalContent = PdfOptionalContent(emptyList(), emptySet(), emptySet(), null)
 
         internal fun parse(catalog: PdfDictionary, refs: IndirectResolver): PdfOptionalContent? {
-            val props = catalog.getDict("OCProperties", refs) ?: return null
+            val props = missingAsNull { catalog.getDict("OCProperties", refs) } ?: return null
 
-            val ocgs = (props.getArray("OCGs", refs))?.let { arr ->
+            val ocgs = missingAsNull { props.getArray("OCGs", refs) }?.let { arr ->
                 buildList {
                     for (item in arr) {
                         val (dict, id) = unwrap(item, refs) ?: continue
                         val name = (dict["Name"] as? PdfString)?.asText() ?: id
                         val intent = parseIntent(dict["Intent"])
-                        val usage = dict.getDict("Usage", refs)
+                        val usage = missingAsNull { dict.getDict("Usage", refs) }
                         add(OptionalContentGroup(id, name, intent, usage))
                     }
                 }
             } ?: emptyList()
 
-            val defaultConfig = props.getDict("D", refs)
+            // A broken /D leaves every group on, the /BaseState default.
+            val defaultConfig = missingAsNull { props.getDict("D", refs) }
             val defaultName = (defaultConfig?.get("Name") as? PdfString)?.asText()
 
             // /BaseState: ON (all on by default), OFF (all off), Unchanged. Default ON.
@@ -84,14 +86,14 @@ public data class PdfOptionalContent(
                 else -> onIds += allIds
             }
             // /ON list overrides BaseState off → on.
-            defaultConfig?.getArray("ON", refs)?.forEach { obj ->
+            missingAsNull { defaultConfig?.getArray("ON", refs) }?.forEach { obj ->
                 (obj as? PdfReference)?.objectNumber?.toString()?.let {
                     onIds += it
                     offIds -= it
                 }
             }
             // /OFF list overrides BaseState on → off.
-            defaultConfig?.getArray("OFF", refs)?.forEach { obj ->
+            missingAsNull { defaultConfig?.getArray("OFF", refs) }?.forEach { obj ->
                 (obj as? PdfReference)?.objectNumber?.toString()?.let {
                     offIds += it
                     onIds -= it
@@ -103,33 +105,8 @@ public data class PdfOptionalContent(
             // /OCGs list selects nothing (ISO 32000-1, 8.11.4.4, Table 103).
             val groupsById = ocgs.associateBy { it.id }
             val viewStates = mutableMapOf<String, Boolean>()
-            defaultConfig?.getArray("AS", refs)?.forEach { obj ->
-                val application = obj.resolve(refs) as? PdfDictionary ?: return@forEach
-                if (application.getName("Event") != "View") return@forEach
-                val categories = application.getArray("Category", refs)?.mapNotNull {
-                    (it.resolve(refs) as? PdfName)?.value
-                } ?: return@forEach
-                val targets = application.getArray("OCGs", refs) ?: return@forEach
-                for (target in targets) {
-                    val id = (target as? PdfReference)?.objectNumber?.toString() ?: continue
-                    val usage = groupsById[id]?.usage ?: continue
-                    val states = categories.mapNotNull { category ->
-                        val stateKey = when (category) {
-                            "View" -> "ViewState"
-                            "Print" -> "PrintState"
-                            "Export" -> "ExportState"
-                            else -> return@mapNotNull null
-                        }
-                        when (usage.getDict(category, refs)?.getName(stateKey)) {
-                            "ON" -> true
-                            "OFF" -> false
-                            else -> null
-                        }
-                    }
-                    if (states.isNotEmpty()) {
-                        viewStates[id] = viewStates.getOrElse(id) { true } && states.all { it }
-                    }
-                }
+            missingAsNull { defaultConfig?.getArray("AS", refs) }?.forEach { obj ->
+                applyViewUsage(obj, refs, groupsById, viewStates)
             }
             for ((id, visible) in viewStates) {
                 if (visible) { onIds += id; offIds -= id }
@@ -139,7 +116,42 @@ public data class PdfOptionalContent(
             return PdfOptionalContent(ocgs, onIds, offIds, defaultName)
         }
 
-        private fun unwrap(obj: io.github.yuroyami.kitepdf.core.parser.PdfObject, refs: IndirectResolver): Pair<PdfDictionary, String>? {
+        /** Folds one `/AS` usage application into [viewStates]; other events are ignored. */
+        private fun applyViewUsage(
+            obj: PdfObject,
+            refs: IndirectResolver,
+            groupsById: Map<String, OptionalContentGroup>,
+            viewStates: MutableMap<String, Boolean>,
+        ) {
+            val application = missingAsNull { obj.resolve(refs) } as? PdfDictionary ?: return
+            if (application.getName("Event") != "View") return
+            val categories = missingAsNull { application.getArray("Category", refs) }?.mapNotNull {
+                (missingAsNull { it.resolve(refs) } as? PdfName)?.value
+            } ?: return
+            val targets = missingAsNull { application.getArray("OCGs", refs) } ?: return
+            for (target in targets) {
+                val id = (target as? PdfReference)?.objectNumber?.toString() ?: continue
+                val usage = groupsById[id]?.usage ?: continue
+                val states = categories.mapNotNull { category ->
+                    val stateKey = when (category) {
+                        "View" -> "ViewState"
+                        "Print" -> "PrintState"
+                        "Export" -> "ExportState"
+                        else -> return@mapNotNull null
+                    }
+                    when (missingAsNull { usage.getDict(category, refs) }?.getName(stateKey)) {
+                        "ON" -> true
+                        "OFF" -> false
+                        else -> null
+                    }
+                }
+                if (states.isNotEmpty()) {
+                    viewStates[id] = viewStates.getOrElse(id) { true } && states.all { it }
+                }
+            }
+        }
+
+        private fun unwrap(obj: PdfObject, refs: IndirectResolver): Pair<PdfDictionary, String>? {
             return when (obj) {
                 is PdfReference -> {
                     val d = refs.resolve(obj) as? PdfDictionary ?: return null
@@ -150,7 +162,7 @@ public data class PdfOptionalContent(
             }
         }
 
-        private fun parseIntent(obj: io.github.yuroyami.kitepdf.core.parser.PdfObject?): List<String> = when (obj) {
+        private fun parseIntent(obj: PdfObject?): List<String> = when (obj) {
             null -> emptyList()
             is PdfName -> listOf(obj.value)
             is PdfArray -> obj.mapNotNull { (it as? PdfName)?.value }
