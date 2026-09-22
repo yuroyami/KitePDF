@@ -61,6 +61,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   images where the renderer does (#254, #266).
 - The Deflate oracle test reads the CI oracle through `MUTOOL`, and reports
   skipped instead of passed when the oracle is absent (#260).
+- AWT soft masks composite the masked content as one layer. Masked pages
+  render faster than before #78, one blend mode survives the mask, and mixed
+  blend modes keep the exact backdrop path (#256).
+- An AWT soft mask whose `/BBox` cannot be read covers the page instead of
+  erasing the content, and a mask past the raster budget applies at a lower
+  resolution instead of being skipped (#255, #264).
+- AWT blend modes work on RGB surfaces (#272).
 
 ## [0.10.0] - 2026-09-13
 

@@ -46,10 +46,16 @@ internal class PdfBlendComposite(
             // (plus boxed Floats) on every pixel of the compositing loop.
             val blendRgb = FloatArray(3)
 
+            // A raster with no alpha band is opaque (#272). Without this, dstPx[3] stays 0
+            // and every blend on an RGB surface falls back to the source colour.
+            val srcOpaque = src.numBands < 4
+            val dstOpaque = dstIn.numBands < 4
             for (y in 0 until height) {
                 for (x in 0 until width) {
                     src.getPixel(x, y, srcPx)
                     dstIn.getPixel(x, y, dstPx)
+                    if (srcOpaque) srcPx[3] = 255
+                    if (dstOpaque) dstPx[3] = 255
 
                     // Premultiply by alpha and normalise to [0..1].
                     val srcA = (srcPx[3] / 255f) * alpha
