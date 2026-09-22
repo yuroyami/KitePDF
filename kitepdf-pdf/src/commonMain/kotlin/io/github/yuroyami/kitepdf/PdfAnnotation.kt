@@ -103,7 +103,7 @@ public data class PdfAnnotation(
         public fun parse(dict: PdfDictionary, refs: IndirectResolver): PdfAnnotation {
             val subtypeName = dict.getName("Subtype") ?: ""
             val subtype = parseSubtype(subtypeName)
-            val rect = (dict.getArray("Rect") ?: PdfArray(emptyList())).let { rectFromArray(it) }
+            val rect = (missingAsNull { dict.getArray("Rect", refs) } ?: PdfArray(emptyList())).let { rectFromArray(it) }
             val contents = when (val c = dict["Contents"]) {
                 is PdfString -> c.asText()
                 else -> ""

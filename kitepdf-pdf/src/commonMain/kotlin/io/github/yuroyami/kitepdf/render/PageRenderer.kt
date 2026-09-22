@@ -488,14 +488,14 @@ public class PageRenderer(
         noZoom: Boolean = false,
         opacity: Double = 1.0,
     ) {
-        val bbox = appearance.dict.getArray("BBox")?.let { arr ->
+        val bbox = missingAsNull { appearance.dict.getArray("BBox", resolver) }?.let { arr ->
             io.github.yuroyami.kitepdf.core.KiteRectangle(
                 arr.getOrNull(0).toDouble(), arr.getOrNull(1).toDouble(),
                 arr.getOrNull(2).toDouble(), arr.getOrNull(3).toDouble(),
             )
         } ?: io.github.yuroyami.kitepdf.core.KiteRectangle(0.0, 0.0, rect.width, rect.height)
 
-        val matrix = appearance.dict.getArray("Matrix")?.let { arr ->
+        val matrix = missingAsNull { appearance.dict.getArray("Matrix", resolver) }?.let { arr ->
             KiteMatrix(
                 arr.getOrNull(0).toDouble(), arr.getOrNull(1).toDouble(),
                 arr.getOrNull(2).toDouble(), arr.getOrNull(3).toDouble(),
@@ -829,14 +829,15 @@ public class PageRenderer(
         parentState: GraphicsStack,
         objectNumber: Long?,
     ) {
-        val formMatrix = formStream.dict.getArray("Matrix")?.let { arr ->
+        // Both may be indirect arrays (ISO 32000-1, 7.3.10, #273).
+        val formMatrix = missingAsNull { formStream.dict.getArray("Matrix", resolver) }?.let { arr ->
             KiteMatrix(
                 arr.getOrNull(0).toDouble(), arr.getOrNull(1).toDouble(),
                 arr.getOrNull(2).toDouble(), arr.getOrNull(3).toDouble(),
                 arr.getOrNull(4).toDouble(), arr.getOrNull(5).toDouble(),
             )
         } ?: KiteMatrix.IDENTITY
-        val bbox = formStream.dict.getArray("BBox")?.let { arr ->
+        val bbox = missingAsNull { formStream.dict.getArray("BBox", resolver) }?.let { arr ->
             io.github.yuroyami.kitepdf.core.KiteRectangle(
                 arr.getOrNull(0).toDouble(), arr.getOrNull(1).toDouble(),
                 arr.getOrNull(2).toDouble(), arr.getOrNull(3).toDouble(),
@@ -1565,7 +1566,7 @@ public class PageRenderer(
         // The mask group has its own /BBox + /Matrix the renderer should
         // honour. We pass them along so the backend's saveLayer can size
         // the offscreen correctly.
-        val maskMatrix = mask.group.dict.getArray("Matrix")?.let { arr ->
+        val maskMatrix = missingAsNull { mask.group.dict.getArray("Matrix", resolver) }?.let { arr ->
             KiteMatrix(
                 arr.getOrNull(0).toDouble(), arr.getOrNull(1).toDouble(),
                 arr.getOrNull(2).toDouble(), arr.getOrNull(3).toDouble(),

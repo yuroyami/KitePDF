@@ -642,7 +642,7 @@ public class PdfDocument private constructor(
         sourceRef: PdfReference? = null,
     ) {
         if (depth > MAX_PAGE_TREE_DEPTH) return
-        val merged = inherited.merge(node)
+        val merged = inherited.merge(node, this)
         val type = node.getName("Type")
         when {
             type == "Page" -> {
@@ -923,10 +923,11 @@ internal data class PageInheritable(
     val resources: PdfDictionary? = null,
     val rotate: Long? = null,
 ) {
-    fun merge(node: PdfDictionary): PageInheritable = PageInheritable(
-        mediaBox = node.getArray("MediaBox") ?: mediaBox,
-        cropBox = node.getArray("CropBox") ?: cropBox,
-        resources = node.getDict("Resources") ?: resources,
-        rotate = node.getInt("Rotate") ?: rotate,
+    /** Each value may be indirect (ISO 32000-1, 7.3.10), and a missing one is null (#273). */
+    fun merge(node: PdfDictionary, refs: IndirectResolver): PageInheritable = PageInheritable(
+        mediaBox = missingAsNull { node.getArray("MediaBox", refs) } ?: mediaBox,
+        cropBox = missingAsNull { node.getArray("CropBox", refs) } ?: cropBox,
+        resources = missingAsNull { node.getDict("Resources", refs) } ?: resources,
+        rotate = (missingAsNull { node["Rotate"]?.resolve(refs) } as? PdfInt)?.value ?: rotate,
     )
 }

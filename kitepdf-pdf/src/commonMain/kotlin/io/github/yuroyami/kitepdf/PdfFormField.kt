@@ -259,7 +259,7 @@ public class PdfFormField internal constructor(
             }
             val widgets = widgetPairs.map { (dict, widgetRef) ->
                 Widget(
-                    rect = dict.getArray("Rect")?.takeIf { it.size >= 4 }?.let { KiteRectangle.fromPdfArray(it) },
+                    rect = missingAsNull { dict.getArray("Rect", refs) }?.takeIf { it.size >= 4 }?.let { KiteRectangle.fromPdfArray(it) },
                     reference = widgetRef,
                     onStateName = onStateNameOf(dict, refs),
                     additionalActions = PdfWidgetActions.parse(dict, refs),

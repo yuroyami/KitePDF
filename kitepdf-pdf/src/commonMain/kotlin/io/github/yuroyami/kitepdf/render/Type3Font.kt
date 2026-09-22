@@ -10,6 +10,7 @@ import io.github.yuroyami.kitepdf.core.parser.PdfInt
 import io.github.yuroyami.kitepdf.core.parser.PdfName
 import io.github.yuroyami.kitepdf.core.parser.PdfReal
 import io.github.yuroyami.kitepdf.core.parser.PdfStream
+import io.github.yuroyami.kitepdf.missingAsNull
 
 /**
  * The renderer-side view of a /Subtype /Type3 font (ISO 32000-1 §9.6.5): glyphs are content streams ([charProcs]) drawn in glyph space and
@@ -40,7 +41,7 @@ internal class Type3Data(
             }.toMap()
             if (procs.isEmpty()) return null
 
-            val fm = dict.getArray("FontMatrix")?.let { arr ->
+            val fm = missingAsNull { dict.getArray("FontMatrix", refs) }?.let { arr ->
                 if (arr.size >= 6) KiteMatrix(arr.num(0), arr.num(1), arr.num(2), arr.num(3), arr.num(4), arr.num(5))
                 else null
             } ?: KiteMatrix(0.001, 0.0, 0.0, 0.001, 0.0, 0.0)

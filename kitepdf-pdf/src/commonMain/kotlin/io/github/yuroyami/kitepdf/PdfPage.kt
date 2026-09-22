@@ -65,7 +65,7 @@ public class PdfPage internal constructor(
      * A single garbage entry must not break a whole page (lenient-salvage).
      */
     private fun readBox(key: String): KiteRectangle? {
-        val arr = node.getArray(key, document) ?: return null
+        val arr = missingAsNull { node.getArray(key, document) } ?: return null
         if (arr.size < 4) return null
         fun coord(i: Int): Double {
             val raw = arr[i]
@@ -110,7 +110,8 @@ public class PdfPage internal constructor(
         readBox("ArtBox") ?: cropBox
     }
 
-    public val rotation: Int get() = (node.getInt("Rotate") ?: inherited.rotate ?: 0).toInt()
+    public val rotation: Int
+        get() = ((missingAsNull { node["Rotate"]?.resolve(document) } as? PdfInt)?.value ?: inherited.rotate ?: 0).toInt()
 
     /**
      * [rotation] normalised into `{0, 90, 180, 270}`: reduced modulo 360 into
@@ -123,7 +124,8 @@ public class PdfPage internal constructor(
             return (((r + 45) / 90) * 90) % 360
         }
 
-    public val resources: PdfDictionary? get() = node.getDict("Resources", document) ?: inherited.resources
+    public val resources: PdfDictionary?
+        get() = missingAsNull { node.getDict("Resources", document) } ?: inherited.resources
 
     /**
      * Multiplier for user-space units on this page (PDF 1.6+, §14.8.1). Default
