@@ -225,6 +225,18 @@ public class AwtCanvas(private var g: Graphics2D) : KiteCanvas {
         }
     }
 
+    /**
+     * The outline of [text] in the logical font [drawGlyphs] draws a font without
+     * embedded outlines in, at 1000 units per em with y up (#85).
+     */
+    override fun hostGlyphOutline(text: String, fontSpec: FontSpec): KitePath {
+        val key = fontSpec.copy(name = "") to text
+        hostOutlines[key]?.let { return it }
+        if (hostOutlines.size >= HOST_OUTLINE_CACHE_SIZE) hostOutlines.clear()
+        val shape = systemFontFor(fontSpec, 1000f).createGlyphVector(OUTLINE_CONTEXT, text).outline
+        return outlineOf(shape).also { hostOutlines[key] = it }
+    }
+
     /** Map a non-embedded PDF font to a JVM logical font (mirrors ComposeCanvas's family/style choice). */
     private fun systemFontFor(spec: FontSpec, sizePx: Float): Font {
         val family = when (spec.family) {
@@ -922,6 +934,31 @@ public class AwtCanvas(private var g: Graphics2D) : KiteCanvas {
     private companion object {
         /** A mask area this many budgets wide cannot be a page render; it keeps the paint unmasked. */
         const val UNBOUNDED_MASK_FACTOR = 16L
+
+        /** Host glyph outlines per font and text, shared by every canvas. Cleared when full. */
+        val hostOutlines = java.util.concurrent.ConcurrentHashMap<Pair<FontSpec, String>, KitePath>()
+        const val HOST_OUTLINE_CACHE_SIZE = 4096
+
+        /** Unhinted outlines with fractional advances, so a glyph keeps its design shape. */
+        val OUTLINE_CONTEXT = java.awt.font.FontRenderContext(null, true, true)
+
+        /** A Java 2D shape, whose y runs down, as a [KitePath] whose y runs up. */
+        fun outlineOf(shape: java.awt.Shape): KitePath {
+            val b = KitePath.Builder()
+            val c = DoubleArray(6)
+            val it = shape.getPathIterator(null)
+            while (!it.isDone) {
+                when (it.currentSegment(c)) {
+                    java.awt.geom.PathIterator.SEG_MOVETO -> b.moveTo(c[0], -c[1])
+                    java.awt.geom.PathIterator.SEG_LINETO -> b.lineTo(c[0], -c[1])
+                    java.awt.geom.PathIterator.SEG_QUADTO -> b.quadTo(c[0], -c[1], c[2], -c[3])
+                    java.awt.geom.PathIterator.SEG_CUBICTO -> b.curveTo(c[0], -c[1], c[2], -c[3], c[4], -c[5])
+                    java.awt.geom.PathIterator.SEG_CLOSE -> b.close()
+                }
+                it.next()
+            }
+            return b.build()
+        }
     }
 
     /** The layer a soft mask is rendering into, or null outside [applySoftMask]. */

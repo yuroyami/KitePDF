@@ -1818,7 +1818,12 @@ public class PageRenderer(
         }
 
         if (!hidden) {
-            if (doClip) accumulateTextClip(glyphs, font, t, textToUser, state.current.ctm)
+            // A font without a program strokes and clips with the outlines of the host face
+            // that stands in for it (ISO 32000-1, 9.3.6 and 9.6.2.2, #85).
+            val hostShapes = if ((doStroke || doClip) && !font.hasEmbeddedOutlines) hostOutlined(glyphs, font) else null
+            val shapes = hostShapes ?: glyphs
+            val shapeUnits = if (hostShapes != null) HOST_UNITS_PER_EM else font.unitsPerEm ?: 1000
+            if (doClip) accumulateTextClip(shapes, font, t, textToUser, state.current.ctm, shapeUnits)
             if (doFill && !state.current.fillColorSpace.paintsNothing && state.current.fillPattern !is KitePattern.Unsupported) {
                 withSoftMask(state.current) {
                     canvas.drawGlyphs(
@@ -1830,7 +1835,18 @@ public class PageRenderer(
                 }
             }
             if (doStroke && !state.current.strokeColorSpace.paintsNothing) {
-                strokeTextGlyphs(state, font, t, glyphs, textToUser)
+                if (font.hasEmbeddedOutlines || hostShapes != null) {
+                    strokeTextGlyphs(state, t, shapes, shapeUnits, textToUser)
+                } else if (!doFill && canvas.resolvesGlyphOutlines) {
+                    // This canvas has no host outlines, and a filled run beats a blank one.
+                    withSoftMask(state.current) {
+                        canvas.drawGlyphs(
+                            glyphs, t.fontSize, HOST_UNITS_PER_EM, false, font.fontSpec, finalMatrix,
+                            state.current.strokeColor,
+                            alpha = state.current.strokeAlpha, blendMode = state.current.blendMode,
+                        )
+                    }
+                }
             }
         }
 
@@ -1848,19 +1864,18 @@ public class PageRenderer(
      * Builds each glyph's outline into user space (glyph units → unitScale →
      * pen advance → [textToUser]) and strokes it under s.ctm with the current
      * stroke colour/width, so modes 1/2 actually stroke rather than falling back
-     * to a plain fill. Fonts without embedded outlines contribute nothing here.
+     * to a plain fill. A font without embedded outlines arrives with the host
+     * outlines [hostOutlined] gave it, at [unitsPerEm] 1000.
      */
     private fun strokeTextGlyphs(
         state: GraphicsStack,
-        font: PdfFont,
         t: TextState,
         /** The run's glyphs, laid out ONCE by [showText] (outlines resolved). */
         glyphs: List<TextGlyph>,
+        unitsPerEm: Int,
         textToUser: KiteMatrix,
     ) {
-        if (!font.hasEmbeddedOutlines) return
-        val upm = font.unitsPerEm ?: 1000
-        val unitScale = t.fontSize / upm
+        val unitScale = t.fontSize / unitsPerEm
         val advanceScale = t.fontSize / 1000.0
         val s = state.current
         var penX = 0.0
@@ -1887,10 +1902,10 @@ public class PageRenderer(
     /**
      * Modes 4..7: add this run's glyph shapes to [pendingTextClip] in device
      * space, so a matrix change before ET cannot move the clip (#146). A font
-     * with no embedded outlines adds an em box per glyph instead, since a
-     * clip that is too big beats clipping everything away. A font that has
-     * outlines adds nothing for an empty glyph such as a space (ISO 32000-1,
-     * 9.3.6, #87).
+     * with no embedded outlines adds the host outlines [hostOutlined] gave its
+     * glyphs, or an em box per glyph on a canvas without them, since a clip
+     * that is too big beats clipping everything away. An empty outline, such
+     * as a space's, adds nothing (ISO 32000-1, 9.3.6, #87).
      */
     private fun accumulateTextClip(
         glyphs: List<TextGlyph>,
@@ -1898,17 +1913,17 @@ public class PageRenderer(
         t: TextState,
         textToUser: KiteMatrix,
         ctm: KiteMatrix,
+        unitsPerEm: Int,
     ) {
         val builder = pendingTextClip ?: KitePath.Builder().also { pendingTextClip = it }
-        val upm = font.unitsPerEm ?: 1000
-        val unitScale = t.fontSize / upm
+        val unitScale = t.fontSize / unitsPerEm
         val advanceScale = t.fontSize / 1000.0
         val textToDevice = ctm.concat(textToUser)
         var penX = 0.0
         for (glyph in glyphs) {
             val outline = glyph.outline
-            if (outline != null && !outline.isEmpty()) {
-                appendPath(builder, transformPath(outline, glyphToUser(textToDevice, penX, glyph, unitScale)))
+            if (outline != null) {
+                if (!outline.isEmpty()) appendPath(builder, transformPath(outline, glyphToUser(textToDevice, penX, glyph, unitScale)))
             } else if (!font.hasEmbeddedOutlines && glyph.advanceWidth > 0.0) {
                 val w = glyph.advanceWidth * advanceScale
                 val box = KitePath.Builder().apply {
@@ -1917,6 +1932,20 @@ public class PageRenderer(
                 appendPath(builder, transformPath(box, textToDevice.concat(KiteMatrix.translation(penX, 0.0))))
             }
             penX += glyph.advanceWidth * advanceScale + glyph.advanceAdjust
+        }
+    }
+
+    /**
+     * [glyphs] with the outlines of the host face [canvas] draws [font] in, at
+     * [HOST_UNITS_PER_EM]. A blank glyph gets an empty outline. Null on a canvas
+     * that has no host outlines or does not paint.
+     */
+    private fun hostOutlined(glyphs: List<TextGlyph>, font: PdfFont): List<TextGlyph>? {
+        if (!canvas.resolvesGlyphOutlines) return null
+        return glyphs.map { glyph ->
+            val outline = if (glyph.text.isBlank()) EMPTY_OUTLINE
+            else canvas.hostGlyphOutline(glyph.text, font.fontSpec) ?: return null
+            glyph.copy(outline = outline)
         }
     }
 
@@ -2125,6 +2154,12 @@ public class PageRenderer(
     private companion object {
         /** Stands for "the live form state hides this widget", which is not "it has no appearance". */
         val HIDDEN_WIDGET = PdfStream(PdfDictionary(emptyMap()), ByteArray(0))
+
+        /** The glyph space of [KiteCanvas.hostGlyphOutline] outlines. */
+        const val HOST_UNITS_PER_EM = 1000
+
+        /** The outline of a blank glyph: it strokes and clips nothing. */
+        val EMPTY_OUTLINE: KitePath = KitePath.Builder().build()
 
         /** Safety cap on tiling-pattern tile count to bound adversarial inputs. */
         const val MAX_TILES = 20_000L

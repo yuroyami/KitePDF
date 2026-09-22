@@ -115,6 +115,18 @@ public interface KiteCanvas {
         blendMode: KiteBlendMode = KiteBlendMode.Normal,
     )
 
+    /**
+     * The outline of [text] in the host face this canvas draws a font without
+     * embedded outlines in, chosen from [fontSpec] as [drawGlyphs] chooses it. The
+     * outline is in glyph space: 1000 units per em, y up, and the pen at the origin
+     * on the baseline. A document handler strokes and clips such text with it, since
+     * a missing font program does not excuse the stroke (ISO 32000-1, 9.3.6).
+     *
+     * The default is null: this canvas has no outlines for its host faces, and a
+     * stroked run then paints filled in the stroke colour.
+     */
+    public fun hostGlyphOutline(text: String, fontSpec: FontSpec): KitePath? = null
+
     /** Push a clip to [path] under [ctm]. Matched 1:1 by [popClip]. */
     public fun pushClip(path: KitePath, ctm: KiteMatrix, evenOdd: Boolean)
     public fun popClip()

@@ -119,6 +119,8 @@ internal class ThemedCanvas(
         textToDevice: KiteMatrix, color: RgbColor, alpha: Double, blendMode: KiteBlendMode,
     ) = inner.drawGlyphs(glyphs, fontSize, unitsPerEm, hasOutlines, fontSpec, textToDevice, mapColor(color), alpha, blendMode)
 
+    override fun hostGlyphOutline(text: String, fontSpec: FontSpec): KitePath? = inner.hostGlyphOutline(text, fontSpec)
+
     override fun pushClip(path: KitePath, ctm: KiteMatrix, evenOdd: Boolean) = inner.pushClip(path, ctm, evenOdd)
     override fun popClip() = inner.popClip()
 
