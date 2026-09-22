@@ -7,8 +7,10 @@ import io.github.yuroyami.kitepdf.difftest.PdfRenderOracle
 import io.github.yuroyami.kitepdf.KitePDF
 import io.github.yuroyami.kitepdf.nativerenderer.AwtPdfRasterizer
 import java.io.File
+import java.awt.Color
 import org.junit.Assume.assumeTrue
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
@@ -28,13 +30,14 @@ class SoftMaskOracleTest {
         val centre = img.getRGB(80, 80) // inside the mask box: user (80,120) -> device (80,80)
         assertTrue(
             (centre ushr 24) and 0xFF > 200 && (centre ushr 16) and 0xFF > 200 && (centre ushr 8) and 0xFF < 60,
-            "centre is opaque red through the mask (${'$'}{Integer.toHexString(centre)})",
+            "centre is opaque red through the mask (${Integer.toHexString(centre)})",
         )
-        // Outside the box the mask's black backdrop gives luminance 0: the
-        // content is fully masked OUT, i.e. transparent (the page compositor
-        // supplies the paper; ImageDiff flattens the same way mutool's PNG is).
-        val edge = img.getRGB(180, 180)
-        assertTrue((edge ushr 24) and 0xFF < 30, "edges are masked to transparency (${'$'}{Integer.toHexString(edge)})")
+        // Zero mask coverage removes only the new paint. The rasterizer's
+        // prepainted white paper must survive (ISO 32000-1, 11.6.5.1, #78).
+        assertEquals(Color.WHITE.rgb, img.getRGB(180, 180), "mask must preserve the white backdrop")
+        val transparent = AwtPdfRasterizer.renderToImage(doc.pages[0], background = Color(0, 0, 0, 0))
+        assertEquals(0, transparent.getRGB(180, 180) ushr 24, "masked content stays transparent without paper")
+        assertEquals(Color.RED.rgb, transparent.getRGB(80, 80), "content inside the mask stays opaque red")
     }
 
     @Test

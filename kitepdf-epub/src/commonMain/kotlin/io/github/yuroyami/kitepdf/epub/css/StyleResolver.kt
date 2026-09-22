@@ -230,7 +230,7 @@ internal class StyleResolver(
                 "normal" -> false
                 else -> b.italic
             }
-            "font-family" -> { b.fontFamily = parseFamily(v); b.fontFamilyName = firstSpecificFamily(v) }
+            "font-family" -> { b.fontFamily = parseFamily(v); b.fontFamilyNames = specificFamilies(v) }
             "color" -> CssValues.color(v)?.let { b.color = it }
             "background-color" -> b.backgroundColor = CssValues.color(v)
             "background" -> v.split(Regex("\\s+")).firstNotNullOfOrNull { CssValues.color(it) }?.let { b.backgroundColor = it }
@@ -257,7 +257,10 @@ internal class StyleResolver(
             }
             "text-decoration", "text-decoration-line" -> {
                 val s = v.lowercase()
-                if ("underline" in s) b.underline = true else if ("none" in s) b.underline = false
+                // CSS Text Decoration 3, section 2: a descendant cannot cancel
+                // decoration propagated by an ancestor with `none`.
+                b.underline = b.underline || "underline" in s
+                b.lineThrough = b.lineThrough || "line-through" in s
             }
             "border-top-width" -> borderW(b, v)?.let { b.borderTopW = it }
             "border-right-width" -> borderW(b, v)?.let { b.borderRightW = it }
@@ -411,16 +414,23 @@ internal class StyleResolver(
         "system-ui", "ui-serif", "ui-sans-serif", "ui-monospace", "emoji", "math", "inherit", "initial",
     )
 
-    private fun firstSpecificFamily(v: String): String? {
-        for (raw in v.split(',')) {
-            val f = raw.trim().trim('"', '\'').lowercase()
-            if (f.isNotEmpty() && f !in GENERIC_FAMILIES) return f
+    private fun specificFamilies(v: String): List<String> {
+        val names = ArrayList<String>()
+        // CSS Fonts 4, section 5: unavailable families fall through in order;
+        // a generic family resolves immediately, so names after it cannot win.
+        for (raw in CssParser.splitTopLevel(v, ',')) {
+            val token = raw.trim().lowercase()
+            if (token in GENERIC_FAMILIES) break
+            val family = token.trim('"', '\'')
+            if (family.isNotEmpty()) names.add(family)
         }
-        return null
+        return names
     }
 
     private fun parseFamily(v: String): GenericFont {
-        for (raw in v.split(',')) {
+        val families = CssParser.splitTopLevel(v, ',')
+        val generic = families.firstOrNull { it.trim().lowercase() in GENERIC_FAMILIES }
+        for (raw in if (generic != null) listOf(generic) else families) {
             val f = raw.trim().trim('"', '\'').lowercase()
             when {
                 f.isEmpty() -> {}
@@ -479,6 +489,7 @@ internal class StyleResolver(
         var whiteSpace = parent.whiteSpace
         var listType = parent.listType
         var underline = parent.underline
+        var lineThrough = parent.lineThrough
         // Non-inherited → initial values.
         var display = Display.INLINE
         var backgroundColor: RgbColor? = null
@@ -493,7 +504,7 @@ internal class StyleResolver(
         var widthPt: Double? = null; var heightPt: Double? = null; var maxWidthPt: Double? = null
         var breakBefore = false; var breakAfter = false; var breakInsideAvoid = false
         var marginLeftAuto = false; var marginRightAuto = false
-        var fontFamilyName = parent.fontFamilyName
+        var fontFamilyNames = parent.fontFamilyNames
         var direction = parent.direction
         var hyphensAuto = parent.hyphensAuto
         var position = CssPosition.STATIC // not inherited
@@ -530,14 +541,14 @@ internal class StyleResolver(
             widthPt, heightPt, maxWidthPt,
             breakBefore, breakAfter, breakInsideAvoid,
             marginLeftAuto, marginRightAuto,
-            fontFamilyName,
+            fontFamilyNames,
             direction,
             hyphensAuto,
             position, leftPt, topPt, rightPt, bottomPt, objectFit, writingMode,
             textTransform, letterSpacingPt, wordSpacingPt, smallCaps,
             minWidthPt, minHeightPt, maxHeightPt,
             borderCollapse, borderSpacingPt,
-            cssFloat, clear, tableLayoutFixed,
+            cssFloat, clear, tableLayoutFixed, lineThrough,
         )
     }
 

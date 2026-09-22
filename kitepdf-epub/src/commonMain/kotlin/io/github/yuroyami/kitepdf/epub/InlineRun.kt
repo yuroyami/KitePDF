@@ -21,8 +21,8 @@ internal data class InlineRun(
     val valign: CssVAlign = CssVAlign.BASELINE,
     val underline: Boolean = false,
     val hardBreak: Boolean = false,
-    /** CSS `font-family` name to match against an embedded `@font-face`, or null. */
-    val fontFamilyName: String? = null,
+    /** Ordered CSS families before the first generic, matched against embedded faces. */
+    val fontFamilyNames: List<String> = emptyList(),
     /**
      * Ruby membership: runs of one `<ruby>` base share a group id (>= 0) and
      * carry the collected `<rt>` reading. The layout keeps a group unbreakable,
@@ -53,6 +53,9 @@ internal data class InlineRun(
     val imageCssH: Double? = null,
     /** The image's `alt`, for the reading order. Empty string means decorative. */
     val imageAlt: String? = null,
+    val lineThrough: Boolean = false,
+    /** Inline box background, including the nearest painted inline ancestor. */
+    val backgroundColor: RgbColor? = null,
 ) {
     companion object {
         val BLACK = RgbColor(0.0, 0.0, 0.0)

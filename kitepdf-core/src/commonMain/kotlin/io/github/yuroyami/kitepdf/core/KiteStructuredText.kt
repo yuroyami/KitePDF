@@ -101,8 +101,10 @@ public class KiteStructuredText(public val blocks: List<KiteTextBlock>) {
             val bandLow = if (line.vertical) line.bounds.left else line.bounds.bottom
             val bandHigh = if (line.vertical) line.bounds.right else line.bounds.top
             if (across < bandLow || across > bandHigh) continue
-            val start = line.charEdges[ref.char]
-            val end = line.charEdges[ref.char + 1]
+            val edgeA = line.charEdges[ref.char]
+            val edgeB = line.charEdges[ref.char + 1]
+            val start = minOf(edgeA, edgeB)
+            val end = maxOf(edgeA, edgeB)
             if (along >= start && along <= end) return i
             val dx = if (along < start) start - along else along - end
             if (dx < bestDx) {
@@ -168,8 +170,13 @@ public class KiteStructuredText(public val blocks: List<KiteTextBlock>) {
             var j = i
             while (j + 1 < entries.size && entries[j + 1].first == li) j++
             val line = block.lines[li]
-            val from = line.charEdges[entries[i].second]
-            val to = line.charEdges[entries[j].second + 1]
+            var from = Double.POSITIVE_INFINITY
+            var to = Double.NEGATIVE_INFINITY
+            for (k in i..j) {
+                val char = entries[k].second
+                from = minOf(from, line.charEdges[char], line.charEdges[char + 1])
+                to = maxOf(to, line.charEdges[char], line.charEdges[char + 1])
+            }
             quads.add(
                 if (line.vertical) {
                     KiteRectangle(line.bounds.left, from, line.bounds.right, to)
@@ -190,6 +197,9 @@ public class KiteTextBlock(public val lines: List<KiteTextLine>)
  * One laid-out line. [charEdges] has `text.length + 1` display-space
  * boundaries: `charEdges[i]` is where char `i` starts, the final entry where
  * the line ends. That is enough to build sub-line highlight quads.
+ * Entries follow the text's logical order, so right-to-left runs may have
+ * descending edges and positioned runs may change direction. Hit tests use
+ * each adjacent pair's extent; highlights enclose every selected pair.
  *
  * They are x boundaries on a normal line. On a [vertical] one (Japanese
  * tategaki, where a "line" is a column running down the page) they are y

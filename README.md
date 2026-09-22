@@ -53,6 +53,11 @@ docs use `PdfDocument`: it also carries the password overload, `openOrNull` and
 Eleven artifacts are published, all at `0.10.0`. Add one document artifact. Add one
 renderer only when you draw pages.
 
+The source tree also includes the new `kitepdf-xps` handler for XPS and
+OpenXPS, re-exported by the umbrella artifact. It is unreleased and is not
+part of Maven Central version `0.10.0`; use a local project dependency until
+the next release. See [XPS support](docs/xps.md) for usage and supported markup.
+
 | Artifact | Add it when |
 | --- | --- |
 | `io.github.yuroyami:kitepdf` | You want every format. This is the usual choice. It re-exports the handlers and adds `KiteDoc`, which opens a file without being told which format it is. |

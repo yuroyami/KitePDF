@@ -5,6 +5,7 @@ import io.github.yuroyami.kitepdf.core.KiteRectangle
 import io.github.yuroyami.kitepdf.core.font.KiteFontFamily
 import io.github.yuroyami.kitepdf.core.font.FontSpec
 import io.github.yuroyami.kitepdf.core.font.TextGlyph
+import io.github.yuroyami.kitepdf.core.render.KITE_DEFAULT_MAX_RASTER_PIXELS
 import io.github.yuroyami.kitepdf.core.render.KiteBlendMode
 import io.github.yuroyami.kitepdf.core.render.KiteImageData
 import io.github.yuroyami.kitepdf.core.render.KiteMatrix
@@ -18,6 +19,8 @@ import io.github.yuroyami.kitepdf.core.render.toRgbaBytes
 import java.awt.AlphaComposite
 import java.awt.BasicStroke
 import java.awt.Color
+import java.awt.Composite
+import java.awt.CompositeContext
 import java.awt.Font
 import java.awt.Graphics2D
 import java.awt.LinearGradientPaint
@@ -27,7 +30,12 @@ import java.awt.RenderingHints
 import java.awt.geom.AffineTransform
 import java.awt.geom.Path2D
 import java.awt.geom.Point2D
+import java.awt.geom.Rectangle2D
 import java.awt.image.BufferedImage
+import java.awt.image.ColorModel
+import java.awt.image.Raster
+import java.awt.image.WritableRaster
+import java.awt.image.DataBufferInt
 import javax.imageio.ImageIO
 
 /**
@@ -50,7 +58,7 @@ import javax.imageio.ImageIO
  * (Multiply, Screen, …) require a custom `java.awt.Composite`. We ship a
  * pixel-level [PdfBlendComposite] that implements all 16 modes for fidelity.
  */
-public class AwtCanvas(private val g: Graphics2D) : KiteCanvas {
+public class AwtCanvas(private var g: Graphics2D) : KiteCanvas {
 
     /** Clips and transparency groups keep separate stacks, so interleaving them cannot restore the wrong state (#138). */
     private val clipStack = ArrayDeque<java.awt.Shape?>()
@@ -577,12 +585,12 @@ public class AwtCanvas(private val g: Graphics2D) : KiteCanvas {
     }
 
     /**
-     * Soft mask (ISO 32000-1 §11.6.5). Content is painted on the live surface,
-     * then gated by the mask group:
-     *   - [SoftMask.Kind.Alpha]: the mask group's alpha, applied via `DST_IN`.
-     *   - [SoftMask.Kind.Luminosity]: the mask group is rendered offscreen over
-     *     a black backdrop, its per-pixel luminance is converted to alpha, and
-     *     that alpha map is `DST_IN`-composited onto the content.
+     * Soft mask (ISO 32000-1, 11.6.5): gate only the new content, then composite
+     * it over the existing page. Both intermediate surfaces have alpha even
+     * when the caller's Graphics2D targets an RGB image (#78, #79, #80).
+     * The content buffer starts with the existing backdrop so non-Normal paint
+     * modes still see its colours. Mask coverage interpolates the original and
+     * rendered premultiplied colours once, after all painting has finished.
      */
     override fun applySoftMask(
         kind: SoftMask.Kind,
@@ -590,78 +598,165 @@ public class AwtCanvas(private val g: Graphics2D) : KiteCanvas {
         render: () -> Unit,
         renderMask: (KiteCanvas) -> Unit,
     ) {
-        // Render the masked content normally onto the live surface first.
-        render()
+        val parent = g
+        val box = maskBBox.normalized()
+        val maskTransform = AffineTransform(parent.transform).apply {
+            concatenate(AffineTransform(maskCtm.a, maskCtm.b, maskCtm.c, maskCtm.d, maskCtm.e, maskCtm.f))
+        }
+        val area = maskTransform.createTransformedShape(
+            Rectangle2D.Double(box.left, box.bottom, box.width, box.height),
+        ).bounds2D
+        if (!listOf(area.minX, area.minY, area.maxX, area.maxY).all { it.isFinite() }) {
+            render() // Malformed geometry: keep the paint without its unusable mask.
+            return
+        }
+        parent.clip?.let { clip ->
+            Rectangle2D.intersect(area, parent.transform.createTransformedShape(clip).bounds2D, area)
+        }
+        if (area.isEmpty) return
+        val bounds = area.bounds
+        if (bounds.width <= 0 || bounds.height <= 0 ||
+            bounds.width.toLong() * bounds.height > KITE_DEFAULT_MAX_RASTER_PIXELS
+        ) {
+            render() // Retain lenient salvage without unbounded temporary allocations.
+            return
+        }
 
-        when (kind) {
-            SoftMask.Kind.Alpha -> {
-                // The mask group's own *alpha* is the mask. DST_IN keeps only the
-                // content pixels the mask covers. (ISO 32000-1 §11.6.5.2)
-                val savedComposite = g.composite
-                try {
-                    g.composite = AlphaComposite.DstIn
-                    renderMask(this)
-                } finally {
-                    g.composite = savedComposite
-                }
+        val content = BufferedImage(bounds.width, bounds.height, BufferedImage.TYPE_INT_ARGB)
+        val mask = BufferedImage(bounds.width, bounds.height, BufferedImage.TYPE_INT_ARGB)
+        transferMaskBackdrop(parent, bounds, content, null)
+        fun prepare(graphics: Graphics2D) {
+            graphics.setRenderingHints(parent.renderingHints)
+            graphics.translate(-bounds.x.toDouble(), -bounds.y.toDouble())
+            graphics.transform(parent.transform)
+            graphics.clip = parent.clip
+        }
+
+        // The content callback closes over this canvas. Redirect it only for
+        // this invocation, and restore state even when a malformed paint fails.
+        val contentGraphics = content.createGraphics()
+        val savedClips = clipStack.toList()
+        val savedGroups = groupStack.toList()
+        try {
+            prepare(contentGraphics)
+            g = contentGraphics
+            clipStack.clear()
+            groupStack.clear()
+            render()
+        } finally {
+            g = parent
+            clipStack.clear()
+            clipStack.addAll(savedClips)
+            groupStack.clear()
+            groupStack.addAll(savedGroups)
+            contentGraphics.dispose()
+        }
+
+        val maskGraphics = mask.createGraphics()
+        try {
+            if (kind == SoftMask.Kind.Luminosity) {
+                maskGraphics.color = Color.BLACK
+                maskGraphics.fillRect(0, 0, bounds.width, bounds.height)
             }
-            SoftMask.Kind.Luminosity -> {
-                // The mask group's *luminance* (not its alpha) is the mask, over a
-                // black backdrop (§11.6.5.2). Render the mask group offscreen onto
-                // an opaque black background, convert each pixel's luminance → alpha,
-                // then DST_IN that alpha map onto the live surface.
-                // Device-space bounds: transform the (user-space) clip through g's
-                // transform so the offscreen surface covers the right pixels even
-                // when the host installed a non-identity transform on g.
-                val userClip = g.clip ?: java.awt.Rectangle(0, 0, 10_000, 10_000)
-                val bounds = g.transform.createTransformedShape(userClip).bounds
-                if (bounds.width <= 0 || bounds.height <= 0) return
-                val maskImg = BufferedImage(bounds.width, bounds.height, BufferedImage.TYPE_INT_ARGB)
-                val mg = maskImg.createGraphics()
-                try {
-                    // Black backdrop: pixels the mask group never paints stay black
-                    // → luminance 0 → alpha 0 → content fully masked out there.
-                    mg.color = Color.BLACK
-                    mg.fillRect(0, 0, bounds.width, bounds.height)
-                    // Match the live surface's rendering hints + coordinate space so
-                    // the mask lands exactly over the content it gates. The main g's
-                    // transform already includes the device CTM; shift its origin to
-                    // the offscreen image's (0,0) by subtracting the clip origin.
-                    mg.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
-                    mg.setRenderingHint(RenderingHints.KEY_STROKE_CONTROL, RenderingHints.VALUE_STROKE_PURE)
-                    mg.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON)
-                    mg.translate(-bounds.x, -bounds.y)
-                    mg.transform(g.transform)
-                    renderMask(AwtCanvas(mg))
-                } finally {
-                    mg.dispose()
-                }
-                // Convert luminance → alpha in place: A = 0.3R + 0.59G + 0.11B.
-                val w = maskImg.width; val h = maskImg.height
-                val px = maskImg.getRGB(0, 0, w, h, null, 0, w)
-                for (i in px.indices) {
-                    val p = px[i]
-                    val r = (p ushr 16) and 0xFF
-                    val gg = (p ushr 8) and 0xFF
-                    val b = p and 0xFF
-                    val lum = (r * 77 + gg * 150 + b * 29) ushr 8 // /256, integer luma
-                    px[i] = (lum shl 24) // pure alpha, colour irrelevant for DST_IN
-                }
-                maskImg.setRGB(0, 0, w, h, px, 0, w)
-                // Blit the alpha map with DST_IN using device coordinates (bypass the
-                // active CTM) so it aligns pixel-for-pixel with the offscreen render.
-                val savedComposite = g.composite
-                val savedTransform = g.transform
-                try {
-                    g.transform = AffineTransform()
-                    g.composite = AlphaComposite.DstIn
-                    g.drawImage(maskImg, bounds.x, bounds.y, null)
-                } finally {
-                    g.composite = savedComposite
-                    g.transform = savedTransform
-                }
+            prepare(maskGraphics)
+            renderMask(AwtCanvas(maskGraphics))
+        } finally {
+            maskGraphics.dispose()
+        }
+        if (kind == SoftMask.Kind.Luminosity) {
+            // Opaque black backdrop means unpainted pixels have zero luminance.
+            val pixels = (mask.raster.dataBuffer as DataBufferInt).data
+            for (i in pixels.indices) {
+                val p = pixels[i]
+                val luminance = (((p ushr 16) and 255) * 77 +
+                    ((p ushr 8) and 255) * 150 + (p and 255) * 29) ushr 8
+                pixels[i] = luminance shl 24
             }
         }
+        transferMaskBackdrop(parent, bounds, content, mask)
+    }
+
+    /**
+     * Graphics2D does not expose its backing image. A Composite receives the
+     * destination raster, allowing a readback without changing the host surface.
+     * Opaque coordinate tiles carry explicit indices through any raster tiling
+     * or origin translation performed by Java2D. No destination layout or alpha
+     * channel is assumed. A null mask copies the backdrop into [content]; the
+     * second pass mixes the rendered content with that unchanged backdrop.
+     */
+    private fun transferMaskBackdrop(
+        parent: Graphics2D, bounds: java.awt.Rectangle,
+        content: BufferedImage, mask: BufferedImage?,
+    ) {
+        val contentPixels = (content.raster.dataBuffer as DataBufferInt).data
+        val maskPixels = mask?.let { (it.raster.dataBuffer as DataBufferInt).data }
+        val tileWidth = minOf(bounds.width, 1024)
+        val tileHeight = minOf(bounds.height, 1024)
+        val coordinates = BufferedImage(tileWidth, tileHeight, BufferedImage.TYPE_INT_RGB)
+        val indices = (coordinates.raster.dataBuffer as DataBufferInt).data
+        for (i in indices.indices) indices[i] = i
+        val target = parent.create() as Graphics2D
+        try {
+            target.transform = AffineTransform()
+            for (top in 0 until bounds.height step tileHeight) {
+                for (left in 0 until bounds.width step tileWidth) {
+                    target.composite = object : Composite {
+                        override fun createContext(srcColorModel: ColorModel, dstColorModel: ColorModel, hints: RenderingHints?): CompositeContext =
+                            object : CompositeContext {
+                                override fun dispose() {}
+                                override fun compose(src: Raster, dstIn: Raster, dstOut: WritableRaster) {
+                                    var sourceData: Any? = null
+                                    var destinationData: Any? = null
+                                    var outputData: Any? = null
+                                    for (y in 0 until minOf(src.height, dstIn.height, dstOut.height)) {
+                                        for (x in 0 until minOf(src.width, dstIn.width, dstOut.width)) {
+                                            sourceData = src.getDataElements(x + src.minX, y + src.minY, sourceData)
+                                            val index = srcColorModel.getRGB(sourceData) and 0xFFFFFF
+                                            val position = (top + index / tileWidth) * bounds.width + left + index % tileWidth
+                                            destinationData = dstIn.getDataElements(x + dstIn.minX, y + dstIn.minY, destinationData)
+                                            if (maskPixels == null) {
+                                                contentPixels[position] = dstColorModel.getRGB(destinationData)
+                                                dstOut.setDataElements(x + dstOut.minX, y + dstOut.minY, destinationData)
+                                            } else {
+                                                val coverage = maskPixels[position] ushr 24
+                                                val backdrop = dstColorModel.getRGB(destinationData)
+                                                if (coverage == 0 || backdrop == contentPixels[position]) {
+                                                    // Preserve untouched destination precision, including >8-bit colour models.
+                                                    dstOut.setDataElements(x + dstOut.minX, y + dstOut.minY, destinationData)
+                                                } else {
+                                                    val result = mixMaskedPixel(backdrop, contentPixels[position], coverage)
+                                                    outputData = dstColorModel.getDataElements(result, outputData)
+                                                    dstOut.setDataElements(x + dstOut.minX, y + dstOut.minY, outputData)
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                    }
+                    val width = minOf(tileWidth, bounds.width - left)
+                    val height = minOf(tileHeight, bounds.height - top)
+                    val x = bounds.x + left
+                    val y = bounds.y + top
+                    target.drawImage(coordinates, x, y, x + width, y + height, 0, 0, width, height, null)
+                }
+            }
+        } finally {
+            target.dispose()
+        }
+    }
+
+    private fun mixMaskedPixel(backdrop: Int, rendered: Int, coverage: Int): Int {
+        if (coverage == 0 || backdrop == rendered) return backdrop
+        if (coverage == 255) return rendered
+        val oldWeight = (backdrop ushr 24) * (255 - coverage)
+        val newWeight = (rendered ushr 24) * coverage
+        val weight = oldWeight + newWeight
+        if (weight == 0) return 0
+        fun channel(shift: Int): Int =
+            ((((backdrop ushr shift) and 255) * oldWeight +
+                ((rendered ushr shift) and 255) * newWeight + weight / 2) / weight)
+        return (((weight + 127) / 255) shl 24) or (channel(16) shl 16) or (channel(8) shl 8) or channel(0)
     }
 
     /* ─── Helpers ─────────────────────────────────────────────────────────── */

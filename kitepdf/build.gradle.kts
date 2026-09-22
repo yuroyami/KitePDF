@@ -94,6 +94,7 @@ kotlin {
             api(projects.kitepdfEpub)
             api(projects.kitepdfCbz)
             api(projects.kitepdfSvg)
+            api(projects.kitepdfXps)
         }
 
         commonTest.dependencies {

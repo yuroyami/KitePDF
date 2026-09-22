@@ -418,13 +418,16 @@ private fun ContinuousLayout(
     // always one layout switch stale. currentPage reads the still-attached
     // outgoing adapter live and falls back to pendingPage on first composition.
     val listState = rememberLazyListState(
-        initialFirstVisibleItemIndex = state.currentPage.coerceIn(0, (state.itemCount - 1).coerceAtLeast(0)),
+        initialFirstVisibleItemIndex = state.slotFor(state.currentScrollPosition.location)
+            .coerceIn(0, (state.itemCount - 1).coerceAtLeast(0)),
+        initialFirstVisibleItemScrollOffset = state.currentScrollPosition.offsetPx,
     )
     DisposableEffect(state, listState) {
         val adapter = LazyListScrollAdapter(listState)
         state.adapter = adapter
         onDispose {
-            state.pendingPage = adapter.currentPage
+            state.pendingPage = adapter.leadingPage
+            state.pendingScrollOffset = adapter.scrollOffsetPx
             if (state.adapter === adapter) state.adapter = null
         }
     }
@@ -577,6 +580,7 @@ private fun PagedLayout(
         state.adapter = adapter
         onDispose {
             state.pendingPage = adapter.currentPage
+            state.pendingScrollOffset = 0
             if (state.adapter === adapter) state.adapter = null
         }
     }
@@ -669,7 +673,11 @@ private fun SinglePageLayout(
     DisposableEffect(state, layout.pageIndex) {
         val adapter = FixedPageAdapter(layout.pageIndex)
         state.adapter = adapter
-        onDispose { if (state.adapter === adapter) state.adapter = null }
+        onDispose {
+            state.pendingPage = adapter.currentPage
+            state.pendingScrollOffset = 0
+            if (state.adapter === adapter) state.adapter = null
+        }
     }
     val scope = rememberCoroutineScope()
     val haptics = LocalHapticFeedback.current
@@ -1124,6 +1132,7 @@ private fun SpreadLayout(
         state.adapter = adapter
         onDispose {
             state.pendingPage = adapter.currentPage
+            state.pendingScrollOffset = 0
             if (state.adapter === adapter) state.adapter = null
         }
     }

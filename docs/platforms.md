@@ -1,11 +1,11 @@
 # Platform support
 
-Render, extract, edit, or build PDFs across Android, iOS, JVM, web, and native desktop; all from shared Kotlin code. The engine runs everywhere; rendering binds to the right canvas per platform.
+Render, extract, edit, or build PDFs across Android, iOS, JVM, web, and native desktop using shared Kotlin code. The engine declares the targets below; rendering binds to each platform's canvas.
 
 ## Target matrix
 
-The six document artifacts (`kitepdf`, `kitepdf-pdf`, `kitepdf-epub`,
-`kitepdf-cbz`, `kitepdf-svg` and `kitepdf-core`) share one target set. The
+The seven document artifacts (`kitepdf`, `kitepdf-pdf`, `kitepdf-epub`,
+`kitepdf-cbz`, `kitepdf-svg`, `kitepdf-xps` and `kitepdf-core`) share one target set. The
 three renderers do not. That difference is the usual cause of a first build
 that will not resolve.
 
@@ -34,14 +34,43 @@ Intel macOS, tvOS x64 and watchOS x64 are off everywhere. Kotlin 2.3 deprecated
 those targets.
 
 !!! note "What CI actually tests"
-    Every push and pull request runs the full JVM test suite (all modules,
-    including the mutool differential oracle and the mutation fuzzer) on
-    Linux, common tests for core/pdf/epub/cbz/svg on the arm64 iOS simulator
-    and macOS, and the core/pdf/epub/cbz/svg/umbrella/net suites on JS/Node.
+    Every push and pull request runs the default JVM test suites across the library modules,
+    including the mutool differential oracle and the mutation fuzzer, on
+    Linux, common tests for core/pdf/epub/cbz/svg/xps on the arm64 iOS simulator
+    and macOS, and the core/pdf/epub/cbz/svg/xps/umbrella/net suites on JS/Node.
     Common code is also run through Android host-test variants, while the
     Android, iOS and browser rendering backends are compiled and the macOS
     CoreGraphics backend is tested. Android device rendering, Canvas2D, wasm
     and Linux/Windows native are not executed in CI.
+
+## Verification coverage
+
+The target matrix above describes the Gradle variants the project declares.
+It does not mean every variant has been compiled or run. The checked-in CI
+workflow currently provides the following coverage on pushes and pull requests:
+
+| Target | Document and script modules | Rendering and viewer |
+| --- | --- | --- |
+| JVM on Linux | Unit tests, including umbrella and network modules | AWT, Skia and Compose tests; MuPDF differential tests |
+| Android | Host tests for core, PDF, EPUB, CBZ, SVG, XPS, umbrella and JavaScript | Android, Skia and Compose compile checks; no emulator or device pixel tests |
+| iOS simulator arm64 | Core, PDF, EPUB, CBZ, SVG, XPS and JavaScript common tests | Native, Skia and Compose compile checks; no rendering tests |
+| macOS arm64 | Core, PDF, EPUB, CBZ, SVG, XPS, umbrella and JavaScript common tests | CoreGraphics tests; Skia and Compose native targets are not explicitly checked |
+| JS on Node | Core, PDF, EPUB, CBZ, SVG, XPS, umbrella, network and JavaScript tests | Browser renderer and viewer compile checks; no browser pixel tests |
+| wasmJs and wasmWasi | No CI compile or test job | No CI compile or test job |
+| Linux native and Windows native | No CI compile or test job | No CI compile or test job |
+| Android Native | No CI compile or test job | No renderer variants |
+| Apple device targets, iOS x64, tvOS and watchOS | No explicit CI compile or test job | No explicit CI compile or test job |
+| Sample applications | No CI compile or runtime job | No CI compile or runtime job |
+
+The default JVM suites exclude `RenderBenchmarkTest` and
+`IncrementalEpubSceneTest`, which require `-PslowTests`. CI does not pass that
+flag, so those timing-sensitive suites are not part of its test coverage.
+
+An Android host test executes shared code on the JVM; it does not execute
+`android.graphics.Canvas`. A browser compilation does not exercise Canvas2D.
+An iOS simulator build does not establish a device build or physical-device
+behavior. Shared source compilation can cover code used by additional targets,
+but it is not a substitute for compiling and running those target variants.
 
 ## What each binding does
 
@@ -54,7 +83,8 @@ No platform or native dependencies: only `kotlin-stdlib` and the pure-Kotlin Kit
 - Form filling or redaction without rendering
 - Programmatic PDF generation
 
-Runs on every target in the table above.
+Declares every document-artifact target in the table above; verification
+coverage varies by target as listed above.
 
 ```kotlin
 val doc = PdfDocument.open(pdfBytes)
@@ -92,7 +122,7 @@ KiteThumbnailStrip(state)
 ```
 
 !!! note
-    **No Intel-Apple variants:** Compose Multiplatform publishes only arm64 variants for iOS (`iosArm64`, `iosSimulatorArm64`) and macOS (`macosArm64`). Deploy to Apple Silicon or use a different simulator. The core engine compiles for x64 targets too; only the Compose binding is limited.
+    **No Intel-Apple variants:** Compose Multiplatform publishes only arm64 variants for iOS (`iosArm64`, `iosSimulatorArm64`) and macOS (`macosArm64`). Deploy to Apple Silicon or use a different simulator. The document modules also declare `iosX64`; that variant is not checked by CI.
 
 ### `kitepdf-native-renderer`: platform canvas bindings
 
@@ -154,9 +184,9 @@ renderSpec = KiteRenderSpec.Vectorized(
 
 ## Platform support notes
 
-### The engine runs everywhere
+### Shared engine across declared targets
 
-Parsing, editing, writing, and text extraction run the same Kotlin code on every target. The only per-platform branches in the engine are the three `expect` declarations in `kitepdf-core`: `KiteLock`, `currentThreadId()` and `PlatformFlate`, the deflate/inflate hook. PDF operations work on watchOS, WASI, Android NDK, and minimal environments where no UI framework is available.
+Parsing, editing, writing, and text extraction share Kotlin code across the declared targets. The engine's three `expect` declarations in `kitepdf-core` are `KiteLock`, `currentThreadId()` and `PlatformFlate`, the deflate/inflate hook. Document variants are declared for watchOS, WASI and Android Native without a UI framework dependency; CI does not compile or execute those variants.
 
 ### Compose ships Apple Silicon only
 
@@ -167,7 +197,7 @@ Compose Multiplatform publishes only `iosArm64()`, `iosSimulatorArm64()`, and `m
 
 ### watchOS is engine-only
 
-watchOS 32-bit `arm64_32` ABI makes `CGFloat` and `size_t` 32-bit, incompatible with CoreGraphics. Neither the native renderer nor Skiko ship watchOS builds. The core KitePDF engine compiles fine; you can read, extract, and edit PDFs but cannot render them to screen or image.
+watchOS 32-bit `arm64_32` ABI makes `CGFloat` and `size_t` 32-bit, incompatible with this CoreGraphics backend. Neither the native renderer nor Skiko ship watchOS builds. The document modules declare watchOS variants for reading, extraction and editing; CI does not compile or execute them.
 
 ### Skiko coverage
 
@@ -176,11 +206,12 @@ Skiko does not publish builds for:
 - **Windows (mingwX64):** no Windows-native Skiko runtime
 - **watchOS:** no Skiko variant for the `arm64_32` ABI
 
-The core engine and native renderer (on iOS/macOS/tvOS) work fine in these environments; use them instead.
+The document modules declare Windows-native and watchOS variants. Neither
+the native renderer nor the Skia renderer provides a variant for those targets.
 
 ### Android NDK and WASI
 
-The core engine compiles for Android NDK (`androidNativeArm32`, `androidNativeArm64`, `androidNativeX86`, `androidNativeX64`) and WASI for headless and embedded use. No rendering bindings are published for these targets; use the engine directly for PDF operations.
+The document modules declare Android Native (`androidNativeArm32`, `androidNativeArm64`, `androidNativeX86`, `androidNativeX64`) and WASI variants for headless and embedded use. CI does not compile or execute them, and no rendering bindings are declared for these targets.
 
 ### The three Android minimum API levels
 

@@ -68,4 +68,48 @@ class KiteSelectionTest {
         assertEquals(0.0, cross[1].left)
         assertEquals(10.0, cross[1].right)
     }
+
+    @Test
+    fun right_to_left_edges_preserve_logical_selection_and_positive_quads() {
+        val st = KiteStructuredText(listOf(KiteTextBlock(listOf(KiteTextLine(
+            text = "אב",
+            bounds = KiteRectangle(80.0, 0.0, 100.0, 10.0),
+            charEdges = doubleArrayOf(100.0, 90.0, 80.0),
+        )))))
+        assertEquals(0, st.charIndexAt(95.0, 5.0))
+        assertEquals(1, st.charIndexAt(85.0, 5.0))
+        assertEquals(0, st.charIndexAt(110.0, 5.0))
+        assertEquals(1, st.charIndexAt(70.0, 5.0))
+        assertEquals("אב", st.textRange(0, 1))
+        assertEquals(KiteRectangle(80.0, 0.0, 100.0, 10.0), st.quadsFor(0, 1).single())
+        assertEquals(KiteRectangle(80.0, 0.0, 90.0, 10.0), st.search("ב").single().quads.single())
+    }
+
+    @Test
+    fun highlights_bound_all_selected_edges_when_positions_change_direction() {
+        val st = KiteStructuredText(listOf(KiteTextBlock(listOf(KiteTextLine(
+            text = "abc",
+            bounds = KiteRectangle(0.0, 0.0, 40.0, 10.0),
+            charEdges = doubleArrayOf(10.0, 40.0, 0.0, 20.0),
+        )))))
+        val bounds = KiteRectangle(0.0, 0.0, 40.0, 10.0)
+        assertEquals(bounds, st.quadsFor(0, 2).single())
+        assertEquals(bounds, st.search("abc").single().quads.single())
+        assertEquals(bounds, st.search("ab").single().quads.single())
+    }
+
+    @Test
+    fun descending_vertical_edges_hit_and_highlight_in_display_space() {
+        val st = KiteStructuredText(listOf(KiteTextBlock(listOf(KiteTextLine(
+            text = "ab",
+            bounds = KiteRectangle(0.0, 80.0, 10.0, 100.0),
+            charEdges = doubleArrayOf(100.0, 90.0, 80.0),
+            vertical = true,
+        )))))
+        assertEquals(0, st.charIndexAt(5.0, 95.0))
+        assertEquals(1, st.charIndexAt(5.0, 85.0))
+        assertEquals(1, st.charIndexAt(5.0, 70.0))
+        assertEquals(KiteRectangle(0.0, 80.0, 10.0, 100.0), st.quadsFor(0, 1).single())
+        assertEquals(KiteRectangle(0.0, 80.0, 10.0, 90.0), st.search("b").single().quads.single())
+    }
 }

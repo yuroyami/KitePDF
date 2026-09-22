@@ -72,8 +72,8 @@ internal data class ComputedStyle(
     /** `margin-left`/`margin-right: auto` centers a width-constrained box. */
     val marginLeftAuto: Boolean,
     val marginRightAuto: Boolean,
-    /** First non-generic `font-family` name, for matching an `@font-face`; null if all generic. */
-    val fontFamilyName: String?,
+    /** Ordered `font-family` names before the first generic, for matching embedded faces. */
+    val fontFamilyNames: List<String>,
     /** Inline base direction (from `direction`/`dir`), for the bidi algorithm. */
     val direction: Direction,
     /** `hyphens: auto` allows the line-breaker to hyphenate long words. */
@@ -113,6 +113,8 @@ internal data class ComputedStyle(
      * declared widths alone, never by cell content. Not inherited.
      */
     val tableLayoutFixed: Boolean = false,
+    /** Propagated line-through decoration (CSS Text Decoration 3, section 2). */
+    val lineThrough: Boolean = false,
 ) {
     val mono: Boolean get() = fontFamily == GenericFont.MONO
 
@@ -132,7 +134,7 @@ internal data class ComputedStyle(
             widthPt = null, heightPt = null, maxWidthPt = null,
             breakBefore = false, breakAfter = false, breakInsideAvoid = false,
             marginLeftAuto = false, marginRightAuto = false,
-            fontFamilyName = null,
+            fontFamilyNames = emptyList(),
             direction = direction,
             hyphensAuto = false,
             position = CssPosition.STATIC,

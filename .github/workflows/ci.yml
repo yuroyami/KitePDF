@@ -4,7 +4,7 @@ name: CI
 #
 # - `build` (Linux JVM) is the REQUIRED gate: the JVM target is the canonical
 #   build of commonMain, and the differential/oracle suites run here (they
-#   need mutool from mupdf-tools; without it they report as SKIPPED).
+#   use a pinned, colour-managed mutool build).
 #   It runs on every push and pull request.
 # - `apple` and `js` prove the non-JVM targets compile AND pass the common
 #   tests before merge. Platform regressions are therefore merge-blocking,
@@ -41,10 +41,39 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
-      - name: Install mupdf-tools (oracle for differential tests)
+      # Distribution packages can disable ICC, changing CMYK scores for the
+      # same renderer. Keep the oracle version and colour management fixed.
+      - name: Cache colour-managed MuPDF 1.27.2
+        id: mutool-cache
+        uses: actions/cache@v4
+        with:
+          path: .oracle-bin
+          key: mutool-${{ runner.os }}-${{ runner.arch }}-73d3100d-icc-v1
+
+      - name: Check out the pinned oracle source
+        if: steps.mutool-cache.outputs.cache-hit != 'true'
+        uses: actions/checkout@v4
+        with:
+          repository: ArtifexSoftware/mupdf
+          ref: 73d3100d46d8a9ad634f6ef035bbe78f0f947886
+          path: .oracle-source
+          submodules: recursive
+          persist-credentials: false
+
+      - name: Build the colour-managed oracle
+        if: steps.mutool-cache.outputs.cache-hit != 'true'
         run: |
-          sudo apt-get update
-          sudo apt-get install -y mupdf-tools
+          make -C .oracle-source -j2 build=release HAVE_X11=no HAVE_GLUT=no \
+            USE_TESSERACT=no USE_LEPTONICA=no USE_ZXINGCPP=no USE_ZINT=no \
+            XCFLAGS=-DFZ_ENABLE_ICC=1 build/release/mutool
+          mkdir -p .oracle-bin
+          cp .oracle-source/build/release/mutool .oracle-bin/mutool
+
+      - name: Select the pinned oracle
+        run: |
+          test -x "$GITHUB_WORKSPACE/.oracle-bin/mutool"
+          "$GITHUB_WORKSPACE/.oracle-bin/mutool" -v
+          echo "MUTOOL=$GITHUB_WORKSPACE/.oracle-bin/mutool" >> "$GITHUB_ENV"
 
       - name: Compile commonMain (JVM)
         run: ./gradlew :kitepdf:compileKotlinJvm --stacktrace
@@ -53,7 +82,7 @@ jobs:
         run: >
           ./gradlew
           :kitepdf-core:jvmTest :kitepdf-pdf:jvmTest :kitepdf-epub:jvmTest
-          :kitepdf-cbz:jvmTest :kitepdf-svg:jvmTest
+          :kitepdf-cbz:jvmTest :kitepdf-svg:jvmTest :kitepdf-xps:jvmTest
           :kitepdf-skia-renderer:jvmTest :kitepdf-compose-viewer:jvmTest
           :kitepdf:jvmTest :kitepdf-net:jvmTest :kitepdf-javascript:jvmTest --continue --stacktrace
 
@@ -62,7 +91,7 @@ jobs:
           ./gradlew
           :kitepdf-core:testAndroidHostTest :kitepdf-pdf:testAndroidHostTest
           :kitepdf-epub:testAndroidHostTest :kitepdf-cbz:testAndroidHostTest
-          :kitepdf-svg:testAndroidHostTest :kitepdf:testAndroidHostTest
+          :kitepdf-svg:testAndroidHostTest :kitepdf-xps:testAndroidHostTest :kitepdf:testAndroidHostTest
           :kitepdf-javascript:testAndroidHostTest
           --continue --stacktrace
 
@@ -134,6 +163,7 @@ jobs:
           :kitepdf-epub:iosSimulatorArm64Test
           :kitepdf-cbz:iosSimulatorArm64Test
           :kitepdf-svg:iosSimulatorArm64Test
+          :kitepdf-xps:iosSimulatorArm64Test
           :kitepdf-javascript:iosSimulatorArm64Test --continue --stacktrace
 
       - name: Compile iOS rendering backends
@@ -152,6 +182,7 @@ jobs:
           :kitepdf-epub:macosArm64Test
           :kitepdf-cbz:macosArm64Test
           :kitepdf-svg:macosArm64Test
+          :kitepdf-xps:macosArm64Test
           :kitepdf:macosArm64Test
           :kitepdf-native-renderer:macosArm64Test
           :kitepdf-javascript:macosArm64Test --continue --stacktrace
@@ -186,7 +217,7 @@ jobs:
           ./gradlew
           :kitepdf-core:jsNodeTest :kitepdf-pdf:jsNodeTest
           :kitepdf-epub:jsNodeTest :kitepdf-cbz:jsNodeTest
-          :kitepdf-svg:jsNodeTest :kitepdf:jsNodeTest
+          :kitepdf-svg:jsNodeTest :kitepdf-xps:jsNodeTest :kitepdf:jsNodeTest
           :kitepdf-net:jsNodeTest :kitepdf-javascript:jsNodeTest --continue --stacktrace
 
       - name: Compile browser rendering backends

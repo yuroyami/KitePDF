@@ -238,7 +238,7 @@ public class PageRenderer(
         // A stray d1 on an earlier page must not freeze this page's colours (#52).
         type3IgnoreColor = false
         val pathBuilder = KitePath.Builder()
-        val ops = ContentStreamParser.parse(page.contentBytes)
+        val ops = ContentStreamParser.parse(page.contentBytes, colorSpaces)
 
         // Size the device surface for the ROTATED page: pageToDeviceBase() maps
         // into [0,rotatedWidth] x [0,rotatedHeight], so width/height must be
@@ -740,7 +740,11 @@ public class PageRenderer(
         return doc.cacheImage(key, KiteImageData.from(slot.stream, resolver, fillColor))
     }
 
-    private fun decodeInlineImage(blob: ByteArray, fillColor: RgbColor): KiteImageData? {
+    private fun decodeInlineImage(
+        blob: ByteArray,
+        fillColor: RgbColor,
+        colorSpaces: Map<String, KiteColorSpace>,
+    ): KiteImageData? {
         if (blob.size < 4) return null
         val reader = io.github.yuroyami.kitepdf.core.ByteReader(blob)
         reader.seek(2) // skip "BI"
@@ -763,10 +767,18 @@ public class PageRenderer(
             if (c == ' '.code || c == '\n'.code || c == '\r'.code || c == '\t'.code) dataEnd-- else break
         }
         if (dataEnd < dataStart) return null
+        // Exact sample length preserves whitespace-valued final samples as well
+        // as embedded EI bytes in resource-named spaces (ISO 32000-1, 8.9.7).
+        val exactLength = ContentStreamParser.unfilteredDataLength(PdfDictionary(entries), colorSpaces)
+        if (exactLength != null && exactLength <= blob.size - 2 - dataStart) {
+            dataEnd = dataStart + exactLength
+        }
         val data = blob.copyOfRange(dataStart, dataEnd)
         entries["Length"] = PdfInt(data.size.toLong())
         val stream = PdfStream(PdfDictionary(entries), data)
-        return runCatching { KiteImageData.from(stream, resolver, fillColor) }.getOrNull()
+        val colorName = (entries["ColorSpace"] as? PdfName)?.value
+        val colorSpace = colorName?.let { namedColorSpace(it, colorSpaces) }
+        return runCatching { KiteImageData.from(stream, resolver, fillColor, colorSpace) }.getOrNull()
     }
 
     /** Expand the abbreviated inline-image dictionary keys (§8.9.7 Table 92). */
@@ -889,7 +901,7 @@ public class PageRenderer(
         val scope = openScope()
         try {
             val bytes = io.github.yuroyami.kitepdf.core.filters.FilterChain.decode(formStream)
-            val ops = ContentStreamParser.parse(bytes)
+            val ops = ContentStreamParser.parse(bytes, childColorSpaces)
             val pathBuilder = KitePath.Builder()
             for (op in ops) dispatch(op, parentState, pathBuilder, childFonts, childXObjects, childColorSpaces, childExtGStates, childShadings, childPatterns, childProperties)
         } finally {
@@ -1204,7 +1216,7 @@ public class PageRenderer(
             "BI" -> {
                 if (ocHidden()) return
                 val blob = op.inlineImage ?: return
-                val img = decodeInlineImage(blob, state.current.fillColor) ?: return
+                val img = decodeInlineImage(blob, state.current.fillColor, colorSpaces) ?: return
                 if (paintsNothing(img, state.current)) return
                 withSoftMask(state.current) {
                     canvas.drawImage(img, state.current.ctm, state.current.fillAlpha)
@@ -1460,7 +1472,7 @@ public class PageRenderer(
         val shadings = loadShadings(res)
         val patterns = loadPatterns(res, shadings)
         val properties = loadProperties(res)
-        val ops = ContentStreamParser.parse(pat.contentBytes)
+        val ops = ContentStreamParser.parse(pat.contentBytes, colorSpaces)
         val uncolored = pat.paintType == 2
         // ISO 32000-1, 8.7.3.1, Table 75: the pattern's box clips each cell, so a
         // cell that draws past it cannot flood the fill (#95).
@@ -1976,6 +1988,7 @@ public class PageRenderer(
         try {
             val ops = ContentStreamParser.parse(
                 io.github.yuroyami.kitepdf.core.filters.FilterChain.decode(proc),
+                colorSpaces,
             )
             val pathBuilder = KitePath.Builder()
             for (op in ops) dispatch(op, parentState, pathBuilder, fonts, xobjects, colorSpaces, extGStates, sh, patterns, properties)

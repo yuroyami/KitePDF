@@ -35,6 +35,15 @@ object EpubCorpus {
         "boxed" to epub("""<div style="background-color:#eeeeff;border:2px solid #444466;padding:8px"><p>a callout with background and border</p></div><ul><li>first item</li><li>second item</li></ul>"""),
         "table" to epub("<table><tr><td>Alpha</td><td>Beta</td></tr><tr><td>Gamma</td><td>Delta</td></tr></table>"),
         "image" to epub("<p>a figure follows:</p><img src=\"pic.png\"/>", listOf("OEBPS/pic.png" to redPng())),
+        "inline-decoration" to epub("""
+            <p><a href="chapter1.xhtml">A linked phrase</a>, <ins>an insertion</ins>, and <del>a deletion</del>.</p>
+            <p><span style="text-decoration:underline line-through">Both lines <span style="text-decoration:none">continue here</span></span>.</p>
+        """.trimIndent()),
+        "inline-background" to epub("""
+            <p>Plain text, <mark>a highlighted <em>nested phrase</em></mark>, and plain text again.</p>
+            <p><span style="background-color:#99ddff">A blue span</span><mark>next to a yellow span</mark>.</p>
+            <p style="width:150pt"><mark>A highlight that wraps across several lines, including the spaces between its words.</mark></p>
+        """.trimIndent()),
     )
 
     fun epub(bodyHtml: String, extra: List<Pair<String, ByteArray>> = emptyList()): ByteArray {

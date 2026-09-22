@@ -117,6 +117,19 @@ public class KiteImageData internal constructor(
             stream: PdfStream,
             refs: IndirectResolver? = null,
             fillColor: RgbColor? = null,
+        ): KiteImageData = from(stream, refs, fillColor, null)
+
+        /**
+         * Decode an inline image with its resource [colorSpace] already resolved.
+         * Unlike image XObjects, inline images may name a colour space in the
+         * current resource dictionary (ISO 32000-1, 8.9.7). Null keeps the normal
+         * stream-dictionary lookup; stencil masks still use [fillColor].
+         */
+        public fun from(
+            stream: PdfStream,
+            refs: IndirectResolver?,
+            fillColor: RgbColor?,
+            colorSpace: KiteColorSpace?,
         ): KiteImageData {
             val dict = stream.dict
             val width = positiveDimension(dict, "Width") ?: 0
@@ -134,7 +147,7 @@ public class KiteImageData internal constructor(
             }
             val csObj = dict["ColorSpace"] ?: dict["CS"]
             val cs = colorSpaceName(csObj)
-            val resolvedCs = if (isMask) null else resolveColorSpace(csObj, refs)
+            val resolvedCs = if (isMask) null else colorSpace ?: resolveColorSpace(csObj, refs)
             val decodeArr = readDecode(dict["Decode"] ?: dict["D"])
 
             // `/SMask` wins over `/Mask` when an image carries both, so exactly

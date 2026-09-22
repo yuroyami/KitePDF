@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### XPS and issue fixes
+
+- Added the `kitepdf-xps` XPS/OpenXPS handler with OPC package discovery,
+  fixed pages, paths, glyphs, obfuscated fonts, brushes and resource dictionaries.
+  The umbrella opener recognizes XPS before the CBZ fallback. The module is
+  unreleased; its documentation lists rendering and conformance limits (#205).
+- Added lazy ComicInfo.xml metadata and page bookmarks for CBZ archives (#206).
+- Added `KiteScrollPosition` and continuous viewport-offset save/restore in both
+  scroll axes, including reopening and right-to-left layout direction (#251).
+- EPUB font stacks try later embedded families before their generic fallback
+  (#104). Underlines, strikethroughs and inline backgrounds paint across styled
+  spaces and line wrapping (#103, #168).
+- SVG percentage geometry resolves against the nearest viewport, including
+  nested SVGs and viewBox user coordinates (#177).
+- Android repeats odd-length PDF dash arrays before passing them to the native
+  path effect (#105). Inline images resolve scoped colour-space resources and
+  retain exact sample boundaries (#114). View usage rules hide print-only PDF
+  layers in the default display configuration (#57).
+- AWT soft masks preserve the existing backdrop and work on RGB destinations
+  while retaining per-paint blend modes (#78, #80). Mask colours no longer
+  paint over the page on AWT; the other backend work in #79 remains open.
+- CI pins a colour-managed MuPDF oracle instead of using distribution packages
+  whose colour configuration changes the differential result (#223).
+- Platform documentation separates declared targets from tests, compile checks
+  and targets with no CI verification (#193).
+- Two generated EPUB sweep fixtures cover inline decorations and backgrounds,
+  adding one page each without changing the existing fixture bytes.
+
 ## [0.10.0] - 2026-09-13
 
 A Chinese novel still ran a 192 MB Android heap out of memory after 0.9.0,

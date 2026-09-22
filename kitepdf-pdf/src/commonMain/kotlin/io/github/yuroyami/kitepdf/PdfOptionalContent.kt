@@ -21,9 +21,9 @@ import io.github.yuroyami.kitepdf.core.parser.PdfString
 public data class PdfOptionalContent(
     /** All OCGs declared in /OCProperties /OCGs. */
     val groups: List<OptionalContentGroup>,
-    /** Identifiers of OCGs that are ON in the default configuration. */
+    /** OCGs ON after the default configuration's View usage rules (ISO 32000-1, 8.11.4.4). */
     val onByDefault: Set<String>,
-    /** Identifiers of OCGs that are explicitly OFF in the default configuration. */
+    /** OCGs OFF after the default configuration's View usage rules (ISO 32000-1, 8.11.4.4). */
     val offByDefault: Set<String>,
     /** Display name of the default config (/D /Name), if present. */
     val defaultConfigName: String?,
@@ -39,7 +39,7 @@ public data class PdfOptionalContent(
         val name: String,
         /** Spec /Intent: typically "View" or "Design". Empty when not declared. */
         val intent: List<String>,
-        /** /Usage dict for purpose-specific defaults (Print, Export, View). Raw: opaque to us. */
+        /** Raw /Usage dict; View usage applications also affect the default visibility sets. */
         val usage: PdfDictionary?,
     )
 
@@ -96,6 +96,44 @@ public data class PdfOptionalContent(
                     offIds += it
                     onIds -= it
                 }
+            }
+
+            // ViewState is applied only through /AS, not merely by declaring
+            // /Usage. Repeated applicable entries combine with AND; an absent
+            // /OCGs list selects nothing (ISO 32000-1, 8.11.4.4, Table 103).
+            val groupsById = ocgs.associateBy { it.id }
+            val viewStates = mutableMapOf<String, Boolean>()
+            defaultConfig?.getArray("AS", refs)?.forEach { obj ->
+                val application = obj.resolve(refs) as? PdfDictionary ?: return@forEach
+                if (application.getName("Event") != "View") return@forEach
+                val categories = application.getArray("Category", refs)?.mapNotNull {
+                    (it.resolve(refs) as? PdfName)?.value
+                } ?: return@forEach
+                val targets = application.getArray("OCGs", refs) ?: return@forEach
+                for (target in targets) {
+                    val id = (target as? PdfReference)?.objectNumber?.toString() ?: continue
+                    val usage = groupsById[id]?.usage ?: continue
+                    val states = categories.mapNotNull { category ->
+                        val stateKey = when (category) {
+                            "View" -> "ViewState"
+                            "Print" -> "PrintState"
+                            "Export" -> "ExportState"
+                            else -> return@mapNotNull null
+                        }
+                        when (usage.getDict(category, refs)?.getName(stateKey)) {
+                            "ON" -> true
+                            "OFF" -> false
+                            else -> null
+                        }
+                    }
+                    if (states.isNotEmpty()) {
+                        viewStates[id] = viewStates.getOrElse(id) { true } && states.all { it }
+                    }
+                }
+            }
+            for ((id, visible) in viewStates) {
+                if (visible) { onIds += id; offIds -= id }
+                else { offIds += id; onIds -= id }
             }
 
             return PdfOptionalContent(ocgs, onIds, offIds, defaultName)

@@ -8,6 +8,7 @@ import io.github.yuroyami.kitepdf.epub.EpubDocument
 import io.github.yuroyami.kitepdf.epub.EpubSettings
 import io.github.yuroyami.kitepdf.svg.SvgDocument
 import io.github.yuroyami.kitepdf.svg.SvgImage
+import io.github.yuroyami.kitepdf.xps.XpsDocument
 import io.github.yuroyami.kitepdf.core.zip.ZipReader
 
 /** A document format KitePDF can read. */
@@ -16,6 +17,8 @@ public enum class KiteDocFormat {
     Epub,
     Cbz,
     Svg,
+    /** XPS and OpenXPS, whose package structure is defined by ECMA-388 §9. */
+    Xps,
 }
 
 /**
@@ -28,12 +31,12 @@ public enum class KiteDocFormat {
  * and the shared search / selection / outline APIs ever need.
  *
  * ```kotlin
- * val doc = KiteDoc.open(bytes)          // PdfDocument or EpubDocument
+ * val doc = KiteDoc.open(bytes)          // A supported document handler
  * KiteDocView(doc, Modifier.fillMaxSize())
  * ```
  *
- * Lives in the `kitepdf` umbrella artifact, the only one that sees both
- * handlers. Depending on a single handler still gets you that handler's own
+ * Lives in the `kitepdf` umbrella artifact, the only one that sees every
+ * handler. Depending on a single handler still gets you that handler's own
  * entry points.
  */
 public object KiteDoc {
@@ -52,12 +55,14 @@ public object KiteDoc {
      * SVG is an `<svg>` element in the first half kilobyte, checked last so a
      * PDF that happens to embed the text is not mistaken for one.
      *
-     * PDF, EPUB and SVG read only the header; the CBZ check reads the ZIP
-     * central directory. Still cheap enough to run over a folder.
+     * XPS and OpenXPS are OPC packages with a fixed document sequence
+     * (ECMA-388 §9.1.2), checked before the comic heuristic. ZIP checks read
+     * the central directory and small package metadata parts.
      */
     public fun formatOf(bytes: ByteArray): KiteDocFormat? = when {
         looksLikeZip(bytes) -> when {
             looksLikeEpub(bytes) -> KiteDocFormat.Epub
+            XpsDocument.isXps(bytes) -> KiteDocFormat.Xps
             looksLikeCbz(bytes) -> KiteDocFormat.Cbz
             else -> null
         }
@@ -89,9 +94,10 @@ public object KiteDoc {
         KiteDocFormat.Epub -> EpubDocument.open(bytes, epubSettings)
         KiteDocFormat.Cbz -> CbzDocument.open(bytes)
         KiteDocFormat.Svg -> SvgDocument.open(bytes)
+        KiteDocFormat.Xps -> XpsDocument.open(bytes)
         null -> PdfDocument.openOrNull(bytes, password.encodeToByteArray())
             ?: throw KiteFormatException(
-                "not a readable PDF, EPUB, CBZ or SVG (${bytes.size} bytes, starting ${headerPreview(bytes)})"
+                "not a readable PDF, EPUB, CBZ, SVG or XPS (${bytes.size} bytes, starting ${headerPreview(bytes)})"
             )
     }
 

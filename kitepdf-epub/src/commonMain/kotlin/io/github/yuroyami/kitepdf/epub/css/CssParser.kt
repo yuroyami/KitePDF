@@ -140,6 +140,9 @@ internal object CssParser {
                 if (kw != null) emit("list-style-type", kw.lowercase())
                 emit(prop, value)
             }
+            // Keep the supported decoration-line subset in one cascade slot,
+            // so an author longhand can override the UA link shorthand.
+            "text-decoration" -> emit("text-decoration-line", value)
             "font" -> expandFont(value, ::emit)
             else -> emit(prop, value)
         }
@@ -222,7 +225,7 @@ internal object CssParser {
     }
 
     /** Split on [sep] at top level (ignoring separators inside `()` or quotes). */
-    private fun splitTopLevel(s: String, sep: Char): List<String> {
+    internal fun splitTopLevel(s: String, sep: Char): List<String> {
         val out = ArrayList<String>()
         val sb = StringBuilder()
         var depth = 0

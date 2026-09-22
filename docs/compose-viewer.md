@@ -438,11 +438,30 @@ KiteDocView(
 | Member | Use it for |
 |---|---|
 | `state.currentLocation` | where the reader is, always exact |
-| `state.currentBookmark()` | what to save and reopen with |
+| `state.currentBookmark()` | a content anchor that survives EPUB reflow |
+| `state.currentScrollPosition` | the leading visible page and continuous offset in pixels |
 | `state.currentPage` | the slot on screen, for an indicator |
 | `state.knownPageCount` | pages laid out so far |
 | `state.isComplete` | true once the total is final |
 | `state.scrollTo(location)` / `scrollTo(bookmark)` | move, laying out one chapter |
+
+For an exact continuous PDF scroll position, save `currentScrollPosition`:
+
+```kotlin
+val saved: KiteScrollPosition = state.currentScrollPosition
+// Persist saved.location.chapter, saved.location.page and saved.offsetPx.
+val reopened = rememberKiteDocViewState(document, saved)
+// Or restore an existing viewer from a coroutine:
+state.scrollTo(saved)
+```
+
+This records the leading visible page, which can differ from the page nearest
+its viewport's centre (`currentLocation`), plus the unzoomed pixel offset into
+that page. Both continuous axes and right-to-left layout direction are
+supported. An exact visual match requires the same page layout, viewport and
+density; zoom and cross-axis pan are separate. For reflowable EPUBs whose font
+or page size changes, use `currentBookmark()` to retain the content anchor.
+Paged and single-page layouts report an offset of zero and restore the page.
 
 `KitePageIndicator` prefixes the total with `~` until `isComplete`.
 

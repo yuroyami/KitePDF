@@ -23,7 +23,7 @@ val maybeBook = EpubDocument.openOrNull(bytes)
 ```kotlin
 import io.github.yuroyami.kitepdf.document.KiteDoc
 
-val doc = KiteDoc.open(bytes)          // whichever of the four it is
+val doc = KiteDoc.open(bytes)          // whichever supported format it is
 KiteDocView(doc, Modifier.fillMaxSize())
 ```
 
@@ -35,21 +35,23 @@ when (KiteDoc.formatOf(bytes)) {
     KiteDocFormat.Epub -> /* ... */
     KiteDocFormat.Cbz  -> /* a comic archive */
     KiteDocFormat.Svg  -> /* one vector page */
+    KiteDocFormat.Xps  -> /* XPS or OpenXPS, unreleased */
     null               -> /* none of them */
 }
 ```
 
-`formatOf` reads the header for PDF, EPUB and SVG, and the ZIP central directory for CBZ, so it is cheap enough to run over a folder listing.
+`formatOf` checks PDF, EPUB and SVG headers and ZIP entries. XPS detection also reads the package relationships and fixed document sequence, before the CBZ image-entry fallback. XPS support is unreleased; see [XPS and OpenXPS](xps.md).
 
 | Format | What it recognises |
 | --- | --- |
 | PDF | a `%PDF-` marker in the first kilobyte, leading junk allowed |
 | EPUB | a ZIP whose first entry is the OCF `mimetype`, or that carries `META-INF/container.xml` |
 | CBZ | any other ZIP whose real entries are all images |
+| XPS / OpenXPS | an OPC fixed document sequence, found through package relationships or recovery paths |
 | SVG | an `<svg>` element in the first half kilobyte, checked last |
 
 !!! note "Which artifact"
-    `KiteDoc` lives in `io.github.yuroyami:kitepdf`, the umbrella, because it is the only artifact that sees every handler. Depending on `kitepdf-pdf`, `kitepdf-epub`, `kitepdf-cbz` or `kitepdf-svg` alone still gets you that handler's own entry points.
+    `KiteDoc` lives in `io.github.yuroyami:kitepdf`, the umbrella, because it is the only artifact that sees every handler. Depending on `kitepdf-pdf`, `kitepdf-epub`, `kitepdf-cbz`, `kitepdf-svg` or `kitepdf-xps` alone still gets you that handler's own entry points.
 
 Formats take their own extras, and each ignores the others':
 

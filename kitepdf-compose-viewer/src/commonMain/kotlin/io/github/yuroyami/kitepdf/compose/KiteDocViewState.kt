@@ -62,6 +62,11 @@ public fun rememberKiteDocViewState(document: KiteDocument, initialPage: Int = 0
 public fun rememberKiteDocViewState(document: KiteDocument, bookmark: KiteBookmark): KiteDocViewState =
     remember(document) { KiteDocViewState(document, bookmark) }
 
+/** Remembers a state reopened at a page and continuous scroll offset. */
+@Composable
+public fun rememberKiteDocViewState(document: KiteDocument, position: KiteScrollPosition): KiteDocViewState =
+    remember(document) { KiteDocViewState(document, position) }
+
 /**
  * Observable state + control surface of a [KiteDocView].
  *
@@ -94,6 +99,16 @@ public class KiteDocViewState(
             is KiteBookmark.Page -> bookmark.pageIndex.coerceAtLeast(0)
         }
     }
+
+    /** Opens at [position], including the continuous layout's pixel offset. */
+    public constructor(document: KiteDocument, position: KiteScrollPosition) : this(document, 0) {
+        openScrollAt = position
+        pendingPage = slotFor(position.location).coerceAtLeast(0)
+        pendingScrollOffset = position.offsetPx
+    }
+
+    private var openScrollAt: KiteScrollPosition? = null
+    internal var pendingScrollOffset: Int = 0
 
     /** Where the viewer should start. Resolved on first composition. */
     internal var openAt: KiteBookmark? = null
@@ -185,6 +200,23 @@ public class KiteDocViewState(
      */
     public val currentLocation: KiteLocation
         get() = anchorAt(currentPage) ?: KiteLocation.START
+
+    /**
+     * The leading visible page and how many pixels have scrolled past its
+     * leading edge. Unlike [currentLocation], this anchors the viewport edge,
+     * not its centre, so a continuous viewport can be restored without a jump.
+     * Reads observe scroll state. Paged and single-page layouts report zero.
+     * See [KiteScrollPosition] for the layout and zoom boundaries.
+     */
+    public val currentScrollPosition: KiteScrollPosition
+        get() {
+            val scroll = adapter ?: return openScrollAt ?: KiteScrollPosition(
+                anchorAt(pendingPage) ?: KiteLocation.START, pendingScrollOffset,
+            )
+            return KiteScrollPosition(
+                anchorAt(scroll.leadingPage) ?: KiteLocation.START, scroll.scrollOffsetPx,
+            )
+        }
 
     /**
      * A position to save now and reopen with later. Survives a font size, page
@@ -684,6 +716,7 @@ public class KiteDocViewState(
     public suspend fun scrollToPage(page: Int) {
         val target = page.coerceIn(0, (itemCount - 1).coerceAtLeast(0))
         pendingPage = target
+        pendingScrollOffset = 0
         adapter?.scrollToPage(target)
     }
 
@@ -691,6 +724,7 @@ public class KiteDocViewState(
     public suspend fun animateScrollToPage(page: Int) {
         val target = page.coerceIn(0, (itemCount - 1).coerceAtLeast(0))
         pendingPage = target
+        pendingScrollOffset = 0
         adapter?.animateScrollToPage(target)
     }
 
@@ -710,6 +744,10 @@ public class KiteDocViewState(
      * clamps to the nearest real slot and still counts as done.
      */
     public suspend fun scrollTo(location: KiteLocation, animate: Boolean = false) {
+        scrollToLocation(location, animate, 0)
+    }
+
+    private suspend fun scrollToLocation(location: KiteLocation, animate: Boolean, offsetPx: Int) {
         navigationTarget = location
         try {
             prepareFor(location)
@@ -723,10 +761,27 @@ public class KiteDocViewState(
                 val inChapter = indexOf(KiteLocation(location.chapter, last))
                 if (inChapter >= 0) inChapter else (itemCount - 1).coerceAtLeast(0)
             }
-            if (animate) animateScrollToPage(index) else scrollToPage(index)
+            val continuous = adapter as? LazyListScrollAdapter
+            if (!animate && continuous != null) {
+                pendingPage = index
+                pendingScrollOffset = offsetPx
+                continuous.scrollToPageOffset(index, offsetPx)
+            } else {
+                if (animate) animateScrollToPage(index) else scrollToPage(index)
+                if (adapter == null) pendingScrollOffset = offsetPx
+            }
         } finally {
             navigationTarget = null
         }
+    }
+
+    /**
+     * Restores a page and scroll offset. Continuous layouts apply [position]'s
+     * offset on their scroll axis; the other layouts navigate to its page.
+     * Calls before composition are retained for the initial list measurement.
+     */
+    public suspend fun scrollTo(position: KiteScrollPosition) {
+        scrollToLocation(position.location, animate = false, offsetPx = position.offsetPx)
     }
 
     /** Jumps to a saved reading position, laying out only its chapter. */
@@ -788,6 +843,11 @@ public class KiteDocViewState(
      * mid-jump leaves the bookmark set and the restarted effect retries.
      */
     internal suspend fun openSavedPosition() {
+        openScrollAt?.let { position ->
+            scrollTo(position)
+            openScrollAt = null
+            return
+        }
         val mark = openAt ?: return
         scrollTo(mark)
         openAt = null
@@ -929,6 +989,8 @@ public enum class KiteMarkerSide { Start, End }
 
 internal interface KiteScrollAdapter {
     val currentPage: Int
+    val leadingPage: Int get() = currentPage
+    val scrollOffsetPx: Int get() = 0
     suspend fun scrollToPage(page: Int)
     suspend fun animateScrollToPage(page: Int)
 }
@@ -938,6 +1000,10 @@ internal interface PagedLikeAdapter : KiteScrollAdapter
 
 /** Continuous mode: "current" = the visible item whose centre is nearest the viewport centre. */
 internal class LazyListScrollAdapter(private val listState: LazyListState) : KiteScrollAdapter {
+    override val leadingPage: Int get() = listState.firstVisibleItemIndex
+    override val scrollOffsetPx: Int get() = listState.firstVisibleItemScrollOffset
+    suspend fun scrollToPageOffset(page: Int, offsetPx: Int) = listState.scrollToItem(page, offsetPx)
+
     override val currentPage: Int
         get() {
             val info = listState.layoutInfo

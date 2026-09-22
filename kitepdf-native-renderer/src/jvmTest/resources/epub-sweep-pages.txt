@@ -20,6 +20,8 @@ f0091ada0476 259 8
 97f0a4130b3a 92 9
 db304e6d86fa 1 boxed
 b90f2bb6bbde 1 image
+b4341fe88482 1 inline-background
+72631037ff41 1 inline-decoration
 27a932a2af5c 2 novel
 8f509a530f2c 1 styled
 d3e1064f6cad 1 table

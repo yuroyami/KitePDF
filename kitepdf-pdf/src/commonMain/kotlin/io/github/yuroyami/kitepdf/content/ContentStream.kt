@@ -10,6 +10,7 @@ import io.github.yuroyami.kitepdf.core.parser.PdfInt
 import io.github.yuroyami.kitepdf.core.parser.PdfName
 import io.github.yuroyami.kitepdf.core.parser.PdfObject
 import io.github.yuroyami.kitepdf.core.parser.Token
+import io.github.yuroyami.kitepdf.core.render.KiteColorSpace
 
 /**
  * Content stream parsing (ISO 32000-1 §7.8 + §8 + §9).
@@ -75,7 +76,10 @@ public object ContentStreamParser {
      * path advances the reader past the position where the failure was observed,
      * so a stubbornly-bad byte can never spin the loop.
      */
-    public fun parse(bytes: ByteArray): List<Operation> {
+    public fun parse(bytes: ByteArray): List<Operation> = parse(bytes, emptyMap())
+
+    /** Resource names determine inline sample counts (ISO 32000-1, 8.9.7). */
+    internal fun parse(bytes: ByteArray, colorSpaces: Map<String, KiteColorSpace>): List<Operation> {
         val reader = ByteReader(bytes)
         val lexer = Lexer(reader)
         val parser = Parser(lexer)
@@ -101,7 +105,7 @@ public object ContentStreamParser {
                     // Inline images need special handling. "BI ... ID ... EI" is a mini stream.
                     if (tok.value == "BI") {
                         try {
-                            consumeInlineImage(reader)
+                            consumeInlineImage(reader, colorSpaces)
                             // Capture the whole "BI…EI" run verbatim so it survives a
                             // parse → edit → re-serialize round-trip.
                             ops.add(Operation("BI", emptyList(), bytes.copyOfRange(tok.offset, reader.pos())))
@@ -200,7 +204,7 @@ public object ContentStreamParser {
      *         whitespace / EOF / a delimiter). Whitespace before `EI` is NOT
      *         strictly required, so data ending flush against `EI` is handled.
      */
-    private fun consumeInlineImage(reader: ByteReader) {
+    private fun consumeInlineImage(reader: ByteReader, colorSpaces: Map<String, KiteColorSpace>) {
         val dict = lexInlineImageDictUpToId(reader)
 
         // One whitespace byte separates ID from the binary payload (§8.9.7).
@@ -214,7 +218,7 @@ public object ContentStreamParser {
         val dataStart = reader.pos()
         val filtered = isFiltered(dict)
         if (!filtered) {
-            val len = unfilteredDataLength(dict)
+            val len = unfilteredDataLength(dict, colorSpaces)
             if (len != null && len <= reader.size - dataStart) {
                 reader.advance(len)
                 expectEi(reader)
@@ -275,14 +279,15 @@ public object ContentStreamParser {
      * Exact byte length of an UNFILTERED inline-image sample stream:
      * ceil(W * bpc * components / 8) * H. Returns null if geometry is missing.
      */
-    private fun unfilteredDataLength(dict: PdfDictionary): Int? {
+    internal fun unfilteredDataLength(dict: PdfDictionary, colorSpaces: Map<String, KiteColorSpace>): Int? {
+        if (isFiltered(dict)) return null
         val w = intOf(dict, "W", "Width") ?: return null
         val h = intOf(dict, "H", "Height") ?: return null
         if (w <= 0 || h <= 0) return null
 
         val imageMask = boolOf(dict, "IM", "ImageMask") == true
         val bpc = if (imageMask) 1L else (intOf(dict, "BPC", "BitsPerComponent") ?: return null)
-        val components = if (imageMask) 1 else colorComponents(dict) ?: return null
+        val components = if (imageMask) 1 else colorComponents(dict, colorSpaces) ?: return null
         if (bpc !in 1L..16L) return null
 
         if (w > Long.MAX_VALUE / bpc) return null
@@ -297,14 +302,14 @@ public object ContentStreamParser {
     }
 
     /** Number of color components implied by the inline-image color space. */
-    private fun colorComponents(dict: PdfDictionary): Int? {
+    private fun colorComponents(dict: PdfDictionary, colorSpaces: Map<String, KiteColorSpace>): Int? {
         val cs = (dict.map["CS"] ?: dict.map["ColorSpace"])
         val name = (cs as? PdfName)?.value ?: return null
         return when (name) {
-            "G", "DeviceGray", "CalGray", "I", "Indexed" -> 1
-            "RGB", "DeviceRGB", "CalRGB", "Lab" -> 3
+            "G", "DeviceGray", "I", "Indexed" -> 1
+            "RGB", "DeviceRGB" -> 3
             "CMYK", "DeviceCMYK" -> 4
-            else -> null // named/resource color space: component count unknown here
+            else -> colorSpaces[name]?.componentCount?.takeIf { it > 0 }
         }
     }
 

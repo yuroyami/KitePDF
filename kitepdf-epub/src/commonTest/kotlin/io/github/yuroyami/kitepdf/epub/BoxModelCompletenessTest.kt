@@ -87,7 +87,7 @@ class BoxModelCompletenessTest {
         assertTrue(cs.italic && cs.bold && cs.smallCaps)
         assertEquals(15.0, cs.fontSizePt, 1e-6)
         assertEquals(30.0, cs.lineHeightPt!!, 1e-6)
-        assertEquals("georgia", cs.fontFamilyName)
+        assertEquals(listOf("georgia"), cs.fontFamilyNames)
     }
 
     @Test

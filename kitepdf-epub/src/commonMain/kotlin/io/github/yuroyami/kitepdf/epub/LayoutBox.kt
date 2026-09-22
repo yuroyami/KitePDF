@@ -116,6 +116,10 @@ internal class PlacedRun(
     val isAnnotation: Boolean = false,
     /** Link target when the run is inside `<a href>` (see [InlineRun.href]). */
     val href: String? = null,
+    val lineThrough: Boolean = false,
+    val backgroundColor: RgbColor? = null,
+    /** Includes justified spaces, even when no glyph is painted for them. */
+    val paintWidth: Double = glyphs.sumOf { it.advanceWidth } * fontSize / 1000.0,
 )
 
 /**
