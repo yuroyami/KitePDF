@@ -127,7 +127,8 @@ internal class BoxBuilder(
                 }
                 if (child.tag == "svg") { // inline SVG: paint as a vector image box
                     SvgImage.fromElement(child)?.let {
-                        flush(); children.add(ImageBox(resolver.compute(child, childAncestors, style), "", it))
+                        flush()
+                        children.add(ImageBox(resolver.compute(child, childAncestors, style), "", it).also { box -> box.semantics = svgSemantics(child, sem) })
                     }
                     continue
                 }
@@ -161,6 +162,23 @@ internal class BoxBuilder(
             label = base?.label ?: alt?.takeIf { it.isNotBlank() },
             epubType = base?.epubType,
             hidden = base?.hidden == true || alt?.isEmpty() == true,
+        )
+    }
+
+    /**
+     * An `<svg>` reads as an image named by its `aria-label`, else by its own `<title>`,
+     * else by its `<desc>`, which is how an SVG chapter announces itself (#26).
+     */
+    private fun svgSemantics(el: KiteXmlNode.Element, parentSem: BoxSemantics?): BoxSemantics {
+        val base = BoxSemantics.of(el.tag, el.attrs, parentSem)
+        fun childText(tag: String): String? = el.children.firstNotNullOfOrNull { c ->
+            (c as? KiteXmlNode.Element)?.takeIf { it.tag == tag }?.let { it.textContent().replace(WHITESPACE, " ").trim() }
+        }?.takeIf { it.isNotEmpty() }
+        return BoxSemantics(
+            role = EpubRole.IMAGE,
+            label = base?.label ?: childText("title") ?: childText("desc"),
+            epubType = base?.epubType,
+            hidden = base?.hidden == true,
         )
     }
 

@@ -299,13 +299,25 @@ internal class ParsedEpub(
 
         private fun dirOf(path: String): String = path.substringBeforeLast('/', "")
 
+        private val VIEWBOX_SEPARATOR = Regex("[\\s,]+")
+
         private val IMPORT_RE = Regex(
             """@import\s+(?:url\(\s*)?["']?([^"')\s;]+)["']?\s*\)?[^;{]*;""",
             RegexOption.IGNORE_CASE,
         )
 
-        /** Fixed-layout page size: the `<meta name=viewport>` width/height, else a root `<svg>`'s. */
+        /**
+         * Fixed-layout page size. An SVG document gives it in its root `viewBox` (EPUB 3.3,
+         * 8.2.2.6, #26). An XHTML document gives it in `<meta name=viewport>`, else in the
+         * width and height of its first `<svg>`.
+         */
         private fun parseViewport(tree: KiteXmlNode.Element): Pair<Double, Double>? {
+            val root = tree.children.firstOrNull { it is KiteXmlNode.Element } as KiteXmlNode.Element?
+            if (root != null && root.tag.equals("svg", true)) {
+                // The parser lower-cases attribute names, as SvgImage.fromElement notes.
+                val box = (root.attrs["viewBox"] ?: root.attrs["viewbox"])?.trim()?.split(VIEWBOX_SEPARATOR)?.mapNotNull { it.toDoubleOrNull() }
+                if (box != null && box.size == 4 && box[2] > 0 && box[3] > 0) return box[2] * 0.75 to box[3] * 0.75
+            }
             var result: Pair<Double, Double>? = null
             var svgSize: Pair<Double, Double>? = null
             // EPUB 3.3 gives the viewport in CSS pixels, 0.75pt each, the unit the layout uses (#111).
