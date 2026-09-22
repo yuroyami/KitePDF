@@ -230,10 +230,14 @@ internal class StyleResolver(
                 "normal" -> false
                 else -> b.italic
             }
-            "font-family" -> { b.fontFamily = parseFamily(v); b.fontFamilyNames = specificFamilies(v) }
+            // `inherit` keeps the parent's family, which the builder already holds.
+            "font-family" -> if (v.trim().lowercase() != "inherit") {
+                b.fontFamily = parseFamily(v); b.fontFamilyNames = specificFamilies(v)
+            }
             "color" -> CssValues.color(v)?.let { b.color = it }
-            "background-color" -> b.backgroundColor = CssValues.color(v)
-            "background" -> v.split(Regex("\\s+")).firstNotNullOfOrNull { CssValues.color(it) }?.let { b.backgroundColor = it }
+            "background-color" -> b.backgroundColor = background(v)
+            "background" -> CssParser.splitTopLevel(v.trim().replace(WHITESPACE, " "), ' ')
+                .firstOrNull { CssValues.alpha(it) != null }?.let { b.backgroundColor = background(it) }
             "text-align" -> parseAlign(v)?.let { b.textAlign = it }
             "text-indent" -> len(refWidthPt)?.let { b.textIndentPt = it }
             "line-height" -> resolveLineHeight(b, v)
@@ -255,13 +259,14 @@ internal class StyleResolver(
                 "bottom" -> b.verticalAlign = CssVAlign.BOTTOM
                 "baseline" -> b.verticalAlign = CssVAlign.BASELINE
             }
+            // The element's own lines. A descendant cannot cancel lines an ancestor
+            // propagates with `none` (CSS Text Decoration 3, 2.1); build() adds those.
             "text-decoration", "text-decoration-line" -> {
                 val s = v.lowercase()
-                // CSS Text Decoration 3, section 2: a descendant cannot cancel
-                // decoration propagated by an ancestor with `none`.
-                b.underline = b.underline || "underline" in s
-                b.lineThrough = b.lineThrough || "line-through" in s
+                b.ownUnderline = "underline" in s
+                b.ownLineThrough = "line-through" in s
             }
+            "text-decoration-color" -> b.decorationColor = CssValues.color(v)
             "border-top-width" -> borderW(b, v)?.let { b.borderTopW = it }
             "border-right-width" -> borderW(b, v)?.let { b.borderRightW = it }
             "border-bottom-width" -> borderW(b, v)?.let { b.borderBottomW = it }
@@ -427,18 +432,32 @@ internal class StyleResolver(
         return names
     }
 
+    /** A background colour with its alpha, or null for a transparent or unreadable one (#253). */
+    private fun background(v: String): CssBackground? {
+        val color = CssValues.color(v) ?: return null
+        val alpha = CssValues.alpha(v) ?: 1.0
+        return if (alpha > 0.0) CssBackground(color, alpha) else null
+    }
+
     private fun parseFamily(v: String): GenericFont {
-        val families = CssParser.splitTopLevel(v, ',')
-        val generic = families.firstOrNull { it.trim().lowercase() in GENERIC_FAMILIES }
-        for (raw in if (generic != null) listOf(generic) else families) {
-            val f = raw.trim().trim('"', '\'').lowercase()
+        // A quoted name is a family name even when it reads like a generic one.
+        val families = CssParser.splitTopLevel(v, ',').map { it.trim() }.filter { it.isNotEmpty() }
+        val generic = families.indexOfFirst { it.lowercase() in GENERIC_FAMILIES }
+        // CSS Fonts 4, 4.2: the first generic family always resolves. system-ui is the
+        // platform's interface face, a sans-serif on every major platform (#257).
+        when (families.getOrNull(generic)?.lowercase()) {
+            "serif", "ui-serif" -> return GenericFont.SERIF
+            "sans-serif", "system-ui", "ui-sans-serif" -> return GenericFont.SANS
+            "monospace", "ui-monospace" -> return GenericFont.MONO
+        }
+        // No face here for cursive, fantasy, emoji or math: the names before them are the best hint.
+        for (raw in if (generic >= 0) families.subList(0, generic) else families) {
+            val f = raw.trim('"', '\'').lowercase()
             when {
-                f.isEmpty() -> {}
                 "mono" in f || "courier" in f || "consol" in f -> return GenericFont.MONO
-                f == "sans-serif" || "sans" in f || "arial" in f || "helvetica" in f ||
+                "sans" in f || "arial" in f || "helvetica" in f ||
                     "verdana" in f || "tahoma" in f || "segoe" in f || "calibri" in f || "gothic" in f -> return GenericFont.SANS
-                f == "serif" || "serif" in f || "times" in f || "georgia" in f || "garamond" in f ||
-                    "cursive" in f || "fantasy" in f -> return GenericFont.SERIF
+                "serif" in f || "times" in f || "georgia" in f || "garamond" in f -> return GenericFont.SERIF
             }
         }
         return GenericFont.SERIF
@@ -477,7 +496,7 @@ internal class StyleResolver(
     }
 
     /** Mutable working style: inherited fields seeded from the parent, the rest initial. */
-    private inner class Builder(parent: ComputedStyle) {
+    private inner class Builder(private val parent: ComputedStyle) {
         var fontSizePt = parent.fontSizePt
         var bold = parent.bold
         var italic = parent.italic
@@ -488,11 +507,12 @@ internal class StyleResolver(
         var lineHeightPt = parent.lineHeightPt
         var whiteSpace = parent.whiteSpace
         var listType = parent.listType
-        var underline = parent.underline
-        var lineThrough = parent.lineThrough
         // Non-inherited → initial values.
+        var ownUnderline = false
+        var ownLineThrough = false
+        var decorationColor: RgbColor? = null
         var display = Display.INLINE
-        var backgroundColor: RgbColor? = null
+        var backgroundColor: CssBackground? = null
         var marginTop = 0.0; var marginRight = 0.0; var marginBottom = 0.0; var marginLeft = 0.0
         var paddingTop = 0.0; var paddingRight = 0.0; var paddingBottom = 0.0; var paddingLeft = 0.0
         var verticalAlign = CssVAlign.BASELINE
@@ -522,38 +542,48 @@ internal class StyleResolver(
         var clear = CssClear.NONE // not inherited
         var tableLayoutFixed = false // not inherited
 
-        fun build() = ComputedStyle(
-            // CSS 9.7: an out-of-flow box is blockified, which is how
-            // `<img style="position:absolute">` gets a box of its own instead
-            // of flowing on a line.
-            if (display == Display.INLINE &&
-                (position == CssPosition.ABSOLUTE || position == CssPosition.FIXED)
-            ) Display.BLOCK else display,
-            fontSizePt, bold, italic, fontFamily, color, backgroundColor,
-            textAlign, textIndentPt, lineHeightPt,
-            marginTop, marginRight, marginBottom, marginLeft,
-            paddingTop, paddingRight, paddingBottom, paddingLeft,
-            whiteSpace, listType, verticalAlign, underline,
-            Edge(borderTopW, borderTopColor ?: color, borderTopVis),
-            Edge(borderRightW, borderRightColor ?: color, borderRightVis),
-            Edge(borderBottomW, borderBottomColor ?: color, borderBottomVis),
-            Edge(borderLeftW, borderLeftColor ?: color, borderLeftVis),
-            widthPt, heightPt, maxWidthPt,
-            breakBefore, breakAfter, breakInsideAvoid,
-            marginLeftAuto, marginRightAuto,
-            fontFamilyNames,
-            direction,
-            hyphensAuto,
-            position, leftPt, topPt, rightPt, bottomPt, objectFit, writingMode,
-            textTransform, letterSpacingPt, wordSpacingPt, smallCaps,
-            minWidthPt, minHeightPt, maxHeightPt,
-            borderCollapse, borderSpacingPt,
-            cssFloat, clear, tableLayoutFixed, lineThrough,
-        )
+        fun build(): ComputedStyle {
+            val outOfFlow = position == CssPosition.ABSOLUTE || position == CssPosition.FIXED || cssFloat != CssFloat.NONE
+            // CSS Text Decoration 3, 2.1: lines reach in-flow descendants only, never the
+            // contents of an inline block or of a floated or positioned box (#265).
+            val inherits = display != Display.INLINE_BLOCK && !outOfFlow
+            val own = DecorationLine(decorationColor ?: color, fontSizePt, raised = verticalAlign != CssVAlign.BASELINE)
+            val underline = if (ownUnderline) own else parent.underline.takeIf { inherits }
+            val lineThrough = if (ownLineThrough) own else parent.lineThrough.takeIf { inherits }
+            return ComputedStyle(
+                // CSS 9.7: an out-of-flow box is blockified, which is how
+                // `<img style="position:absolute">` gets a box of its own instead
+                // of flowing on a line.
+                if (display == Display.INLINE &&
+                    (position == CssPosition.ABSOLUTE || position == CssPosition.FIXED)
+                ) Display.BLOCK else display,
+                fontSizePt, bold, italic, fontFamily, color, backgroundColor,
+                textAlign, textIndentPt, lineHeightPt,
+                marginTop, marginRight, marginBottom, marginLeft,
+                paddingTop, paddingRight, paddingBottom, paddingLeft,
+                whiteSpace, listType, verticalAlign, underline,
+                Edge(borderTopW, borderTopColor ?: color, borderTopVis),
+                Edge(borderRightW, borderRightColor ?: color, borderRightVis),
+                Edge(borderBottomW, borderBottomColor ?: color, borderBottomVis),
+                Edge(borderLeftW, borderLeftColor ?: color, borderLeftVis),
+                widthPt, heightPt, maxWidthPt,
+                breakBefore, breakAfter, breakInsideAvoid,
+                marginLeftAuto, marginRightAuto,
+                fontFamilyNames,
+                direction,
+                hyphensAuto,
+                position, leftPt, topPt, rightPt, bottomPt, objectFit, writingMode,
+                textTransform, letterSpacingPt, wordSpacingPt, smallCaps,
+                minWidthPt, minHeightPt, maxHeightPt,
+                borderCollapse, borderSpacingPt,
+                cssFloat, clear, tableLayoutFixed, lineThrough,
+            )
+        }
     }
 
     private companion object {
         const val INLINE_SPEC = 0xFFFFFF
+        val WHITESPACE = Regex("\\s+")
     }
 }
 

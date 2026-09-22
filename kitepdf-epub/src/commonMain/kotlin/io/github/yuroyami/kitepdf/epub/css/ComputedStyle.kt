@@ -27,6 +27,17 @@ internal class Edge(val width: Double, val color: RgbColor, val visible: Boolean
     }
 }
 
+/** A background colour and its alpha (CSS Color 4, 4.2). The cascade keeps no fully transparent one (#253). */
+internal data class CssBackground(val color: RgbColor, val alpha: Double = 1.0)
+
+/**
+ * One decoration line and the element that draws it. CSS Text Decoration 3 keeps that
+ * element's colour across its descendants (2.3), and one thickness and position on each
+ * line (2.5), so the line takes its size from that element too (#271). [raised] is true
+ * when that element has its own `vertical-align`: its lines then follow its shifted text.
+ */
+internal data class DecorationLine(val color: RgbColor, val sizePt: Double, val raised: Boolean = false)
+
 /**
  * The fully-resolved style of one element: the cascade's output. Lengths are in
  * absolute points; inherited properties already carry the parent's value.
@@ -40,7 +51,7 @@ internal data class ComputedStyle(
     val italic: Boolean,
     val fontFamily: GenericFont,
     val color: RgbColor,
-    val backgroundColor: RgbColor?,
+    val backgroundColor: CssBackground?,
     val textAlign: TextAlign,
     val textIndentPt: Double,
     /** Resolved line height in points, or null for `normal`. */
@@ -56,7 +67,8 @@ internal data class ComputedStyle(
     val whiteSpace: WhiteSpaceMode,
     val listType: ListType,
     val verticalAlign: CssVAlign,
-    val underline: Boolean,
+    /** Propagated underline (CSS Text Decoration 3, 2.1). */
+    val underline: DecorationLine?,
     val borderTop: Edge,
     val borderRight: Edge,
     val borderBottom: Edge,
@@ -113,8 +125,8 @@ internal data class ComputedStyle(
      * declared widths alone, never by cell content. Not inherited.
      */
     val tableLayoutFixed: Boolean = false,
-    /** Propagated line-through decoration (CSS Text Decoration 3, section 2). */
-    val lineThrough: Boolean = false,
+    /** Propagated line-through (CSS Text Decoration 3, 2.1). */
+    val lineThrough: DecorationLine? = null,
 ) {
     val mono: Boolean get() = fontFamily == GenericFont.MONO
 
@@ -129,7 +141,7 @@ internal data class ComputedStyle(
             marginTopPt = 0.0, marginRightPt = 0.0, marginBottomPt = 0.0, marginLeftPt = 0.0,
             paddingTopPt = 0.0, paddingRightPt = 0.0, paddingBottomPt = 0.0, paddingLeftPt = 0.0,
             whiteSpace = WhiteSpaceMode.NORMAL, listType = ListType.DISC,
-            verticalAlign = CssVAlign.BASELINE, underline = false,
+            verticalAlign = CssVAlign.BASELINE, underline = null,
             borderTop = Edge.NONE, borderRight = Edge.NONE, borderBottom = Edge.NONE, borderLeft = Edge.NONE,
             widthPt = null, heightPt = null, maxWidthPt = null,
             breakBefore = false, breakAfter = false, breakInsideAvoid = false,

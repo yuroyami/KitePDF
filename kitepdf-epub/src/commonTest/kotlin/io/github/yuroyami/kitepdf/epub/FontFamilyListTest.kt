@@ -63,4 +63,27 @@ class FontFamilyListTest {
         doc.pages[0].renderTo(canvas)
         assertTrue(canvas.calls.filterIsInstance<RecordingCanvas.Call.Glyphs>().single().hasOutlines)
     }
+
+    @Test
+    fun system_ui_and_the_names_before_a_faceless_generic_pick_the_face() {
+        // CSS Fonts 4, 4.2 (#257).
+        for ((stack, family) in listOf(
+            "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" to KiteFontFamily.SansSerif,
+            "'Comic Sans MS', cursive" to KiteFontFamily.SansSerif,
+            "ui-monospace, monospace" to KiteFontFamily.Monospace,
+            "ui-serif, sans-serif" to KiteFontFamily.Serif,
+            "Helvetica, Arial, sans-serif" to KiteFontFamily.SansSerif,
+            "fantasy" to KiteFontFamily.Serif,
+        )) {
+            assertEquals(family, render(stack).fontSpec.family, stack)
+        }
+    }
+
+    @Test
+    fun inherit_keeps_the_parents_family() {
+        val doc = EpubDocument.open(EpubFixtures.epub("""<div style="font-family:monospace"><p style="font-family:inherit">AAA</p></div>"""))
+        val canvas = RecordingCanvas()
+        doc.pages[0].renderTo(canvas)
+        assertEquals(KiteFontFamily.Monospace, canvas.calls.filterIsInstance<RecordingCanvas.Call.Glyphs>().single().fontSpec.family)
+    }
 }

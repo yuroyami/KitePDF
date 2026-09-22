@@ -71,6 +71,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Inherited page boxes, resources and rotation, form and appearance geometry,
   annotation and widget rectangles, article beads and Type 3 font matrices may
   be indirect objects. A reference to a missing object reads as absent (#273).
+- `CssValues.alpha` reads the alpha of a CSS colour. EPUB backgrounds keep
+  their alpha, and a transparent one paints nothing. A forced reader text colour
+  removes author backgrounds, and the Sepia theme keeps light fills light (#253).
+- EPUB `system-ui` and the `ui-*` font families resolve to their generic face,
+  and `font-family: inherit` keeps the parent's family (#257).
+- A space between two inline elements no longer grows the line, and copied text
+  keeps it (#259). An inline image in `vertical-lr` text sits in its own column
+  (#261).
+- Underlines and line-throughs skip inline blocks, floats and positioned boxes,
+  and keep the colour and thickness of the element that draws them. EPUB reads
+  `text-decoration-color` (#265, #271).
 
 ## [0.10.0] - 2026-09-13
 

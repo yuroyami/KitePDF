@@ -3,10 +3,12 @@ package io.github.yuroyami.kitepdf.epub
 import io.github.yuroyami.kitepdf.svg.SvgImage
 
 import io.github.yuroyami.kitepdf.epub.css.ComputedStyle
+import io.github.yuroyami.kitepdf.epub.css.CssBackground
 import io.github.yuroyami.kitepdf.epub.css.CssClear
 import io.github.yuroyami.kitepdf.epub.css.CssFloat
 import io.github.yuroyami.kitepdf.epub.css.CssPosition
 import io.github.yuroyami.kitepdf.epub.css.CssVAlign
+import io.github.yuroyami.kitepdf.epub.css.DecorationLine
 import io.github.yuroyami.kitepdf.epub.css.Display
 import io.github.yuroyami.kitepdf.epub.css.Direction
 import io.github.yuroyami.kitepdf.epub.css.ObjectFit
@@ -825,7 +827,7 @@ internal class BoxLayout(
 
     private class Cell(
         val ch: Char, var width: Double, val fontSize: Double,
-        val spec: FontSpec, val color: RgbColor, val shift: Double, val underline: Boolean,
+        val spec: FontSpec, val color: RgbColor, val shift: Double, val underline: DecorationLine?,
         val face: EmbeddedFace? = null, var gid: Int = -1,
         // Kerning to the next glyph (1/1000 em), folded into this glyph's advance.
         var kernAfter1000: Int = 0,
@@ -850,8 +852,8 @@ internal class BoxLayout(
         // group's first/last cells carry it; it widens wrap/measure and the pen
         // walk in placeRuns without entering the glyph advance stream.
         var padBefore: Double = 0.0, var padAfter: Double = 0.0,
-        val lineThrough: Boolean = false,
-        val backgroundColor: RgbColor? = null,
+        val lineThrough: DecorationLine? = null,
+        val backgroundColor: CssBackground? = null,
     )
 
     private sealed class Token {
@@ -938,7 +940,7 @@ internal class BoxLayout(
                 val inlineSize = if (vertical) h else w
                 val cell = Cell(
                     '￼', inlineSize, run.fontSizePt, fontSpec(run.family, run.bold, run.italic),
-                    run.color, 0.0, false,
+                    run.color, 0.0, null,
                     href = run.href, imageWidth = w, imageHeight = h, image = img, svgImage = svg,
                     imageAlt = run.imageAlt, imageObjectFit = run.imageObjectFit,
                 )
@@ -1282,7 +1284,7 @@ internal class BoxLayout(
             if (c.ch == ' ') {
                 closeGroup(x)
                 val width = c.width + extraPerSpace
-                if (c.underline || c.lineThrough || c.backgroundColor != null) {
+                if (c.underline != null || c.lineThrough != null || c.backgroundColor != null) {
                     out.add(PlacedRun(
                         emptyList(), x, c.fontSize, c.spec, c.color, c.shift, c.underline,
                         lineThrough = c.lineThrough, backgroundColor = c.backgroundColor, paintWidth = width,
@@ -1330,7 +1332,7 @@ internal class BoxLayout(
             // Reading baseline sits on the base text's ascent line: the overlay's
             // own ascent then exactly fills the rubyExtra the line grew by.
             baselineShift = base.fontSize * 0.8,
-            underline = false,
+            underline = null,
             hasOutlines = r.face != null, unitsPerEm = r.face?.unitsPerEm ?: 1000,
             isAnnotation = true,
         )

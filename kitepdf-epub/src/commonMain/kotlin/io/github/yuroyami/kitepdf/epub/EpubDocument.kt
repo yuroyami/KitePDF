@@ -114,7 +114,9 @@ public class EpubDocument internal constructor(
                 }
                 append("*{font-family:$fam}")
             }
-            settings.textColor?.let { append("*{color:${cssColor(it)}}") }
+            // A forced text colour could sit on an author background of the same
+            // lightness, so the reader drops backgrounds with it (#253).
+            settings.textColor?.let { append("*{color:${cssColor(it)};background-color:transparent;background:transparent}") }
             settings.justify?.let { append("*{text-align:${if (it) "justify" else "start"}}") }
             settings.hyphenate?.let { append("*{hyphens:${if (it) "auto" else "manual"}}") }
         }
@@ -1018,7 +1020,7 @@ public class EpubPage internal constructor(
                     fontSpec = run.fontSpec, textToDevice = deviceCtm.concat(tm),
                     color = run.color, alpha = 1.0, blendMode = KiteBlendMode.Normal,
                 )
-                paintRunLines(run, canvas, deviceCtm.concat(tm))
+                paintRunLines(run, canvas) { shift -> deviceCtm.concat(KiteMatrix.translation(margin + run.x, base + shift)) }
             }
             // Inline images: bottom on the baseline, next to the text runs.
             for (im in line.images) {
@@ -1057,16 +1059,24 @@ public class EpubPage internal constructor(
         for (box in page.decoBoxes) paintBoxVertical(box, canvas, deviceCtm, margin, startY, bandBottom, ::colX)
 
         for (line in page.lines) {
-            fun runTransform(run: PlacedRun): KiteMatrix = deviceCtm.concat(KiteMatrix(
-                0.0, -1.0, 1.0, 0.0,
-                colX(line.yTop + line.ascent - run.baselineShift), displayHeight - margin - run.x,
+            // CSS Writing Modes 4, 6.3 and 6.4: line-over is the right side in both
+            // vertical modes, which in vertical-lr is the line's block-end side. So a
+            // vertical-lr baseline sits the line's ascent before its end (#261), and a
+            // line taller than the page keeps that over side, which holds the ink, on
+            // the page. A positive shift moves toward line-over.
+            fun axisX(shift: Double): Double = colX(
+                if (page.verticalLr) minOf(line.yTop + line.height, bandBottom) - line.ascent + shift
+                else line.yTop + line.ascent - shift,
+            )
+            fun runTransform(run: PlacedRun, shift: Double = run.baselineShift): KiteMatrix = deviceCtm.concat(KiteMatrix(
+                0.0, -1.0, 1.0, 0.0, axisX(shift), displayHeight - margin - run.x,
             ))
             for (run in line.runs) paintRunBackground(run, canvas, runTransform(run))
             for (run in line.runs) {
                 // The horizontal baseline maps to a vertical em axis at this x
                 // (a positive baselineShift moves toward the line-over side, so
                 // ruby lands to the RIGHT of its base column).
-                val xAxis = colX(line.yTop + line.ascent - run.baselineShift)
+                val xAxis = axisX(run.baselineShift)
                 var pen = margin + run.x // display-y pen, running down the page
                 var k = 0
                 while (k < run.glyphs.size) {
@@ -1104,16 +1114,14 @@ public class EpubPage internal constructor(
                         k = j
                     }
                 }
-                paintRunLines(run, canvas, runTransform(run))
+                paintRunLines(run, canvas) { shift -> runTransform(run, shift) }
             }
             // Replaced content stays upright. Its physical width occupies the
-            // column's ascent side, while its height advances the inline pen.
+            // line-over side of the baseline, while its height advances the inline pen.
             for (im in line.images) {
-                val xAxis = colX(line.yTop + line.ascent)
                 val top = margin + im.x
-                val left = if (page.verticalLr) xAxis - im.width else xAxis
                 paintImage(canvas, deviceCtm, im.image, im.svg, im.width, im.height,
-                    left, displayHeight - top - im.height, im.objectFit, doc.chapterDir(chapter))
+                    axisX(0.0), displayHeight - top - im.height, im.objectFit, doc.chapterDir(chapter))
             }
         }
 
@@ -1161,18 +1169,27 @@ public class EpubPage internal constructor(
         }
     }
 
-    /** CSS 2.1, section 14.2: every inline fragment paints its own background. */
+    /** CSS 2.1, section 14.2: every inline fragment paints its own background, with its alpha (#253). */
     private fun paintRunBackground(run: PlacedRun, canvas: KiteCanvas, ctm: KiteMatrix) {
         run.backgroundColor?.let {
-            rectFill(canvas, ctm, 0.0, -0.2 * run.fontSize, run.paintWidth, run.fontSize, it)
+            rectFill(canvas, ctm, 0.0, -0.2 * run.fontSize, run.paintWidth, run.fontSize, it.color, it.alpha)
         }
     }
 
-    /** CSS Text Decoration 3, section 2.1: lines follow the baseline and inline advance. */
-    private fun paintRunLines(run: PlacedRun, canvas: KiteCanvas, ctm: KiteMatrix) {
-        val thickness = run.fontSize * 0.05
-        if (run.underline) rectFill(canvas, ctm, 0.0, -0.15 * run.fontSize, run.paintWidth, thickness, run.color)
-        if (run.lineThrough) rectFill(canvas, ctm, 0.0, 0.3 * run.fontSize, run.paintWidth, thickness, run.color)
+    /**
+     * CSS Text Decoration 3: a line keeps the colour and size of the element that draws
+     * it (2.3, 2.5). An underline stays on the line's baseline unless that element is
+     * raised itself; a line-through crosses the text it decorates (#271). [at] places
+     * the run's start at a baseline shifted toward line-over.
+     */
+    private fun paintRunLines(run: PlacedRun, canvas: KiteCanvas, at: (shift: Double) -> KiteMatrix) {
+        run.underline?.let {
+            val ctm = at(if (it.raised) run.baselineShift else 0.0)
+            rectFill(canvas, ctm, 0.0, -0.15 * it.sizePt, run.paintWidth, it.sizePt * 0.05, it.color)
+        }
+        run.lineThrough?.let {
+            rectFill(canvas, at(run.baselineShift), 0.0, 0.3 * run.fontSize, run.paintWidth, it.sizePt * 0.05, it.color)
+        }
     }
 
     /**
@@ -1201,12 +1218,12 @@ public class EpubPage internal constructor(
         if (botDoc <= topDoc || w <= 0.0) return
         val yTopDisp = margin + box.x
 
-        fun fill(vFrom: Double, vTo: Double, uFrom: Double, uLen: Double, color: RgbColor) {
+        fun fill(vFrom: Double, vTo: Double, uFrom: Double, uLen: Double, color: RgbColor, alpha: Double = 1.0) {
             if (vTo <= vFrom || uLen <= 0.0) return
-            rectFill(canvas, ctm, colX(vTo), displayHeight - (uFrom + uLen), vTo - vFrom, uLen, color)
+            rectFill(canvas, ctm, colX(vTo), displayHeight - (uFrom + uLen), vTo - vFrom, uLen, color, alpha)
         }
 
-        s.backgroundColor?.let { fill(topDoc, botDoc, yTopDisp, w, it) }
+        s.backgroundColor?.let { fill(topDoc, botDoc, yTopDisp, w, it.color, it.alpha) }
 
         val eT = s.borderTop.effective; val eB = s.borderBottom.effective
         val eL = s.borderLeft.effective; val eR = s.borderRight.effective
@@ -1229,7 +1246,7 @@ public class EpubPage internal constructor(
         val botDoc = minOf(box.bottom, bandBottom)
         if (botDoc <= topDoc || w <= 0.0) return
 
-        s.backgroundColor?.let { rectFill(canvas, ctm, xDev, yUp(botDoc), w, yUp(topDoc) - yUp(botDoc), it) }
+        s.backgroundColor?.let { rectFill(canvas, ctm, xDev, yUp(botDoc), w, yUp(topDoc) - yUp(botDoc), it.color, it.alpha) }
 
         val eT = s.borderTop.effective; val eB = s.borderBottom.effective
         val eL = s.borderLeft.effective; val eR = s.borderRight.effective
@@ -1248,10 +1265,13 @@ public class EpubPage internal constructor(
         rectFill(canvas, ctm, xDev, yUp(b), w, yUp(t) - yUp(b), color)
     }
 
-    private fun rectFill(canvas: KiteCanvas, ctm: KiteMatrix, x: Double, yBottom: Double, w: Double, h: Double, color: RgbColor) {
+    private fun rectFill(
+        canvas: KiteCanvas, ctm: KiteMatrix, x: Double, yBottom: Double, w: Double, h: Double,
+        color: RgbColor, alpha: Double = 1.0,
+    ) {
         if (w <= 0.0 || h <= 0.0) return
         val path = KitePath.Builder().apply { rectangle(x, yBottom, w, h) }.build()
-        canvas.fillPath(path, ctm, color, evenOdd = false, alpha = 1.0, blendMode = KiteBlendMode.Normal)
+        canvas.fillPath(path, ctm, color, evenOdd = false, alpha = alpha, blendMode = KiteBlendMode.Normal)
     }
 
     /* ── links ───────────────────────────────────────────────────────────── */
@@ -1420,11 +1440,13 @@ public class EpubPage internal constructor(
         val sb = StringBuilder()
         val edges = ArrayList<Double>()
         var penEnd = Double.NaN
+        var penSize = 0.0
         for (run in runs) {
             var x = page.margin + run.x
             // Words are separate runs with a pen gap where the collapsed space
-            // was; restore it as one space char spanning the gap.
-            if (!penEnd.isNaN() && x - penEnd > run.fontSize * SPACE_GAP_EM && sb.isNotEmpty() && sb.last() != ' ') {
+            // was; restore it as one space char spanning the gap. The smaller of
+            // the two sizes judges the gap, since either side may hold the space (#259).
+            if (!penEnd.isNaN() && x - penEnd > minOf(run.fontSize, penSize) * SPACE_GAP_EM && sb.isNotEmpty() && sb.last() != ' ') {
                 edges.add(penEnd); sb.append(' ')
             }
             for (g in run.glyphs) {
@@ -1435,6 +1457,7 @@ public class EpubPage internal constructor(
                 x += gw
             }
             penEnd = x
+            penSize = run.fontSize
         }
         if (sb.isEmpty()) return null
         edges.add(penEnd)
