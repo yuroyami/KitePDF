@@ -1008,11 +1008,16 @@ public class EpubPage internal constructor(
             val base = yUp(line.yTop + line.ascent)
             for (run in line.runs) {
                 val tm = KiteMatrix.translation(margin + run.x, base + run.baselineShift)
-                canvas.drawGlyphs(
+                paintRunBackground(run, canvas, deviceCtm.concat(tm))
+            }
+            for (run in line.runs) {
+                val tm = KiteMatrix.translation(margin + run.x, base + run.baselineShift)
+                if (run.glyphs.isNotEmpty()) canvas.drawGlyphs(
                     run.glyphs, run.fontSize, unitsPerEm = run.unitsPerEm, hasOutlines = run.hasOutlines,
                     fontSpec = run.fontSpec, textToDevice = deviceCtm.concat(tm),
                     color = run.color, alpha = 1.0, blendMode = KiteBlendMode.Normal,
                 )
+                paintRunLines(run, canvas, deviceCtm.concat(tm))
             }
             // Inline images: bottom on the baseline, next to the text runs.
             for (im in line.images) {
@@ -1091,6 +1096,11 @@ public class EpubPage internal constructor(
         for (box in page.decoBoxes) paintBoxVertical(box, canvas, deviceCtm, margin, startY, bandBottom, ::colX)
 
         for (line in page.lines) {
+            fun runTransform(run: PlacedRun): KiteMatrix = deviceCtm.concat(KiteMatrix(
+                0.0, -1.0, 1.0, 0.0,
+                colX(line.yTop + line.ascent - run.baselineShift), displayHeight - margin - run.x,
+            ))
+            for (run in line.runs) paintRunBackground(run, canvas, runTransform(run))
             for (run in line.runs) {
                 // The horizontal baseline maps to a vertical em axis at this x
                 // (a positive baselineShift moves toward the line-over side, so
@@ -1133,6 +1143,7 @@ public class EpubPage internal constructor(
                         k = j
                     }
                 }
+                paintRunLines(run, canvas, runTransform(run))
             }
             // Inline images rotate with the flow: the inline extent runs down
             // the page, the height extends left of the baseline axis.
@@ -1164,6 +1175,20 @@ public class EpubPage internal constructor(
             canvas.drawImage(img, deviceCtm.concat(m))
         }
         canvas.endPage()
+    }
+
+    /** CSS 2.1, section 14.2: every inline fragment paints its own background. */
+    private fun paintRunBackground(run: PlacedRun, canvas: KiteCanvas, ctm: KiteMatrix) {
+        run.backgroundColor?.let {
+            rectFill(canvas, ctm, 0.0, -0.2 * run.fontSize, run.paintWidth, run.fontSize, it)
+        }
+    }
+
+    /** CSS Text Decoration 3, section 2.1: lines follow the baseline and inline advance. */
+    private fun paintRunLines(run: PlacedRun, canvas: KiteCanvas, ctm: KiteMatrix) {
+        val thickness = run.fontSize * 0.05
+        if (run.underline) rectFill(canvas, ctm, 0.0, -0.15 * run.fontSize, run.paintWidth, thickness, run.color)
+        if (run.lineThrough) rectFill(canvas, ctm, 0.0, 0.3 * run.fontSize, run.paintWidth, thickness, run.color)
     }
 
     /**

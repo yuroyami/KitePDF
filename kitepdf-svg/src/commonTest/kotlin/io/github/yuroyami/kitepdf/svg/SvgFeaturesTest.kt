@@ -114,6 +114,34 @@ class SvgFeaturesTest {
         assertTrue(drawn.any { it is RecordingCanvas.Call.Image }, "got $drawn")
     }
 
+    @Test
+    fun image_percentage_coordinates_and_dimensions_use_their_axis() {
+        val image = calls(
+            """<svg width="200" height="100"><image href="pic.bmp" x="10%" y="20%" width="50%" height="40%"/></svg>""",
+        ) { bmp2x1() }.filterIsInstance<RecordingCanvas.Call.Image>().single()
+        assertEquals(100.0, image.ctm.a, 1e-9)
+        assertEquals(-40.0, image.ctm.d, 1e-9)
+        assertEquals(20.0, image.ctm.e, 1e-9)
+        assertEquals(60.0, image.ctm.f, 1e-9)
+    }
+
+    @Test
+    fun explicit_zero_image_dimensions_disable_rendering() {
+        for (dimensions in listOf(
+            "width='0%' height='50%'", "width='50%' height='0%'",
+            "width='0' height='10'", "width='10' height='0'",
+        )) {
+            val drawn = calls("<svg width='200' height='100'><image href='pic.bmp' $dimensions/></svg>") { bmp2x1() }
+            assertTrue(drawn.none { it is RecordingCanvas.Call.Image }, dimensions)
+        }
+        for (dimensions in listOf("", "width='auto' height='auto'")) {
+            val image = calls("<svg width='200' height='100'><image href='pic.bmp' $dimensions/></svg>") { bmp2x1() }
+                .filterIsInstance<RecordingCanvas.Call.Image>().single()
+            assertEquals(2.0, image.ctm.a, 1e-9)
+            assertEquals(-1.0, image.ctm.d, 1e-9)
+        }
+    }
+
     /* ─── text ───────────────────────────────────────────────────────────── */
 
     @Test

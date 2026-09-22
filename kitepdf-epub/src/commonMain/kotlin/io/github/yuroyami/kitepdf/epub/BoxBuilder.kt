@@ -168,7 +168,8 @@ internal class BoxBuilder(
             text = pc.text, fontSizePt = pc.style.fontSizePt,
             bold = pc.style.bold, italic = pc.style.italic, family = pc.style.fontFamily,
             color = pc.style.color, valign = pc.style.verticalAlign, underline = pc.style.underline,
-            fontFamilyName = pc.style.fontFamilyName,
+            fontFamilyNames = pc.style.fontFamilyNames,
+            lineThrough = pc.style.lineThrough,
         )
         return BlockBox(pc.style, listOf(TextBlockBox(pc.style, listOf(run))))
     }
@@ -340,11 +341,12 @@ internal class BoxBuilder(
         // block, and attach to the enclosing block when none follows.
         el.attrs["id"]?.let(anchorSink::add)
         if (el.tag == "a") el.attrs["name"]?.let(anchorSink::add)
-        if (el.tag == "ruby") { processRuby(el, style, ancestors, inl, anchorSink, hoist, parentSem); return }
 
         val link = if (el.tag == "a") el.attrs["href"]?.takeIf { it.isNotBlank() }?.let(::resolveLink) else null
         if (link != null) inl.beginLink(link)
+        val background = inl.beginBackground(style.backgroundColor)
         try {
+            if (el.tag == "ruby") { processRuby(el, style, ancestors, inl, anchorSink, hoist, parentSem); return }
             // Inline generated content flows with the element's own runs (a
             // block-display pseudo inside an inline element is treated inline).
             resolver.computePseudo(el, ancestors, style, PseudoSide.BEFORE)?.let { inl.appendText(it.text, it.style) }
@@ -381,6 +383,7 @@ internal class BoxBuilder(
             }
             resolver.computePseudo(el, ancestors, style, PseudoSide.AFTER)?.let { inl.appendText(it.text, it.style) }
         } finally {
+            inl.endBackground(background)
             if (link != null) inl.endLink()
         }
     }
@@ -454,6 +457,16 @@ internal class BoxBuilder(
     private class Inline {
         private var runs = ArrayList<InlineRun>()
         private var pendingSpace = false
+        private var pendingSpaceRun: InlineRun? = null
+        private var backgroundColor: RgbColor? = null
+
+        fun beginBackground(color: RgbColor?): RgbColor? {
+            val previous = backgroundColor
+            if (color != null) backgroundColor = color
+            return previous
+        }
+
+        fun endBackground(previous: RgbColor?) { backgroundColor = previous }
         private var blockHasContent = false
         private var lastWasBreak = false
         // Active <ruby> group: runs made between beginRuby/endRuby carry the id +
@@ -485,7 +498,7 @@ internal class BoxBuilder(
             val r = runs; runs = ArrayList(); reset(); return r
         }
 
-        fun reset() { runs = ArrayList(); pendingSpace = false; blockHasContent = false; lastWasBreak = false }
+        fun reset() { runs = ArrayList(); pendingSpace = false; pendingSpaceRun = null; blockHasContent = false; lastWasBreak = false }
 
         fun addBreak() {
             runs.add(InlineRun("", fontSizePt = 0.0, hardBreak = true))
@@ -495,7 +508,7 @@ internal class BoxBuilder(
         /** An inline `<img>`: one U+FFFC run carrying the source + size hints. */
         fun addImage(src: String, style: ComputedStyle, cssW: Double?, cssH: Double?, alt: String? = null) {
             if (pendingSpace && blockHasContent && !lastWasBreak) {
-                runs.add(makeRun(" ", style))
+                runs.add(pendingSpaceRun ?: makeRun(" ", style))
             }
             pendingSpace = false; lastWasBreak = false; blockHasContent = true
             runs.add(
@@ -513,12 +526,15 @@ internal class BoxBuilder(
             val b = StringBuilder(raw.length)
             for (ch in raw) {
                 if (ch.isWhitespace()) {
+                    if (!pendingSpace) pendingSpaceRun = makeRun(" ", style)
                     pendingSpace = true
                 } else {
                     // Word boundary BEFORE consuming pendingSpace: capitalize needs it,
                     // and it must survive across appendText calls (runs split mid-word).
                     val boundary = pendingSpace || !blockHasContent || lastWasBreak
-                    if (pendingSpace && blockHasContent && !lastWasBreak) b.append(' ')
+                    if (pendingSpace && blockHasContent && !lastWasBreak) {
+                        if (b.isNotEmpty()) b.append(' ') else runs.add(pendingSpaceRun ?: makeRun(" ", style))
+                    }
                     pendingSpace = false; lastWasBreak = false
                     b.append(transformChar(ch, style.textTransform, boundary)); blockHasContent = true
                 }
@@ -549,11 +565,14 @@ internal class BoxBuilder(
             text = text, fontSizePt = style.fontSizePt,
             bold = style.bold, italic = style.italic, family = style.fontFamily,
             color = style.color, valign = style.verticalAlign, underline = style.underline,
-            fontFamilyName = style.fontFamilyName,
+            fontFamilyNames = style.fontFamilyNames,
             rubyGroup = rubyGroup, rubyText = rubyText,
             href = linkHref,
             letterSpacingPt = style.letterSpacingPt, wordSpacingPt = style.wordSpacingPt,
             smallCaps = style.smallCaps,
+            lineThrough = style.lineThrough,
+            backgroundColor = style.backgroundColor.takeIf { style.display == Display.INLINE || style.display == Display.INLINE_BLOCK }
+                ?: backgroundColor,
         )
     }
 

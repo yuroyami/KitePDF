@@ -36,6 +36,7 @@ dependencies {
     dokka(project(":kitepdf-pdf"))
     dokka(project(":kitepdf-epub"))
     dokka(project(":kitepdf-cbz"))
+    dokka(project(":kitepdf-xps"))
     dokka(project(":kitepdf-svg"))
     dokka(project(":kitepdf-javascript"))
     dokka(project(":kitepdf-net"))

@@ -32,6 +32,7 @@ internal object UaStylesheet {
         cite,dfn,em,i,var{font-style:italic}
         code,kbd,samp,tt{font-family:monospace}
         dd{display:block;margin:0 0 0 40px}
+        del,s,strike{text-decoration:line-through}
         div{display:block}
         dl{display:block;margin:1em 0}
         dt{display:block;font-weight:bold}
@@ -45,6 +46,7 @@ internal object UaStylesheet {
         head{display:none}
         hr{border-style:solid;border-width:1px;display:block;margin:0.5em 0;text-align:center}
         html{display:block}
+        ins,u{text-decoration:underline}
         li{display:list-item}
         mark{background-color:yellow}
         ol{display:block;list-style-type:decimal;margin:1em 0;padding:0 0 0 30pt}

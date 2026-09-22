@@ -49,6 +49,7 @@ include(":kitepdf-core")            // shared core under every handler
 include(":kitepdf-pdf")             // PDF handler
 include(":kitepdf-epub")            // EPUB handler
 include(":kitepdf-cbz")             // CBZ (comic archive) handler
+include(":kitepdf-xps")             // XPS / OpenXPS fixed-page handler
 include(":kitepdf-svg")             // SVG renderer + standalone .svg handler
 include(":kitepdf-javascript")      // runs document JavaScript on KiteJS
 include(":kitepdf-compose-viewer")  // Compose UI (PdfView)

@@ -1,6 +1,6 @@
 # KitePDF
 
-A Kotlin Multiplatform library for reading and writing PDF, EPUB, CBZ and SVG, with one Compose viewer for all of them.
+A Kotlin Multiplatform library for reading and writing PDF, EPUB, CBZ, SVG and XPS/OpenXPS (XPS is unreleased), with one Compose viewer for all of them.
 
 Read `CONTRIBUTING.md` first: it holds the ground rules, the references, and the gate you must run before every commit.
 

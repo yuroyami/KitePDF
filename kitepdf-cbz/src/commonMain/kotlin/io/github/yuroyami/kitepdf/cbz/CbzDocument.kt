@@ -1,5 +1,8 @@
 package io.github.yuroyami.kitepdf.cbz
 
+import io.github.yuroyami.kitepdf.core.KiteBookmark
+import io.github.yuroyami.kitepdf.core.KiteMetadata
+import io.github.yuroyami.kitepdf.core.KiteOutlineItem
 import io.github.yuroyami.kitepdf.core.KiteDocument
 import io.github.yuroyami.kitepdf.core.KiteFormatException
 import io.github.yuroyami.kitepdf.core.KitePage
@@ -34,6 +37,25 @@ public class CbzDocument private constructor(
     }
 
     override val pageCount: Int get() = pages.size
+
+    /** Optional ComicInfo.xml declarations, parsed without decoding page images. */
+    public val comicMetadata: CbzMetadata? by lazy {
+        // ComicInfo belongs at the ZIP root. A nested file may describe an
+        // unrelated bundled archive and must not replace the book metadata.
+        val name = zip.names.firstOrNull { it.equals("ComicInfo.xml", ignoreCase = true) }
+        name?.let { runCatching { zip.read(it)?.let { bytes -> parseComicInfo(bytes, pageCount) } }.getOrNull() }
+    }
+
+    override val metadata: KiteMetadata
+        get() = comicMetadata?.let {
+            KiteMetadata(it.title, it.writers, it.language, it.rightToLeft)
+        } ?: KiteMetadata()
+
+    /** ComicInfo page bookmarks form the navigation list, in page order. */
+    override val outline: List<KiteOutlineItem>
+        get() = comicMetadata?.pages?.sortedBy { it.image }?.mapNotNull { page ->
+            page.bookmark?.let { KiteOutlineItem(it, page.image, target = KiteBookmark.Page(page.image)) }
+        } ?: emptyList()
 
     public companion object {
 

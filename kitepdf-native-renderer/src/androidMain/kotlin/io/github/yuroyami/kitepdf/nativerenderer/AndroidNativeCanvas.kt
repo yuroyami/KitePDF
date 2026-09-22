@@ -92,7 +92,7 @@ public class AndroidNativeCanvas(private val canvas: AndroidCanvas) : KiteCanvas
             strokeMiter = miterLimit.toFloat().coerceAtLeast(1f)
             if (!dashArray.isNullOrEmpty()) {
                 // Dash lengths are user-space units; device px = unit × scale.
-                val intervals = FloatArray(dashArray.size) { (dashArray[it] * avgScale).toFloat() }
+                val intervals = scaledDashIntervals(dashArray, avgScale)
                 pathEffect = DashPathEffect(intervals, (dashPhase * avgScale).toFloat())
             }
             applyBlendMode(blendMode)
