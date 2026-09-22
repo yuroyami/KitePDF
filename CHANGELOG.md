@@ -101,6 +101,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - An image whose soft mask has a `/Matte` colour has that preblend undone, so its
   edges lose the matte-coloured fringe. `KiteImageData.softMaskMatte` carries
   the colour (#159).
+- Text notes, file attachments, carets, stamps and free text annotations with no
+  appearance stream get one: the note or attachment icon, the caret, the stamp
+  name in a frame, and the free text in its `/DA` font and colour (#164).
 
 ## [0.10.0] - 2026-09-13
 

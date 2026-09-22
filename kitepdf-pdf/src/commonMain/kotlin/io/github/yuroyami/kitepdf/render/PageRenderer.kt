@@ -640,6 +640,12 @@ public class PageRenderer(
                     canvas.strokePath(p, ctm, annot.color ?: RgbColor(0.0, 0.3, 0.8), declared ?: 0.5)
                 }
             }
+            // Notes, attachments, carets, stamps and free text have no geometry to draw from,
+            // so each gets a small appearance of its own, as MuPDF draws them on load (#164).
+            Subtype.Text, Subtype.FileAttachment, Subtype.Caret, Subtype.Stamp, Subtype.FreeText ->
+                io.github.yuroyami.kitepdf.writer.AnnotationAppearance.synthesize(annot, resolver)?.let {
+                    renderAppearanceForRect(it, rect, state, noZoom = annot.isNoZoom, opacity = opacityOf(annot))
+                }
             else -> { /* other annotations: nothing without /AP */ }
         }
     }
