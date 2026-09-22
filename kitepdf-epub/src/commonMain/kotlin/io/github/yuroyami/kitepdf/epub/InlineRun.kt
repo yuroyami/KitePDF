@@ -1,6 +1,8 @@
 package io.github.yuroyami.kitepdf.epub
 
+import io.github.yuroyami.kitepdf.epub.css.CssBackground
 import io.github.yuroyami.kitepdf.epub.css.CssVAlign
+import io.github.yuroyami.kitepdf.epub.css.DecorationLine
 import io.github.yuroyami.kitepdf.epub.css.GenericFont
 import io.github.yuroyami.kitepdf.epub.css.ObjectFit
 import io.github.yuroyami.kitepdf.core.render.RgbColor
@@ -20,7 +22,7 @@ internal data class InlineRun(
     val family: GenericFont = GenericFont.SERIF,
     val color: RgbColor = BLACK,
     val valign: CssVAlign = CssVAlign.BASELINE,
-    val underline: Boolean = false,
+    val underline: DecorationLine? = null,
     val hardBreak: Boolean = false,
     /** Ordered CSS families before the first generic, matched against embedded faces. */
     val fontFamilyNames: List<String> = emptyList(),
@@ -55,9 +57,9 @@ internal data class InlineRun(
     /** The image's `alt`, for the reading order. Empty string means decorative. */
     val imageAlt: String? = null,
     val imageObjectFit: ObjectFit = ObjectFit.FILL,
-    val lineThrough: Boolean = false,
+    val lineThrough: DecorationLine? = null,
     /** Inline box background, including the nearest painted inline ancestor. */
-    val backgroundColor: RgbColor? = null,
+    val backgroundColor: CssBackground? = null,
 ) {
     companion object {
         val BLACK = RgbColor(0.0, 0.0, 0.0)

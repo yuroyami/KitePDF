@@ -44,9 +44,25 @@ public class ReaderTheme(
         /** Night mode: dark paper, content colours inverted in lightness (hue preserved). */
         public val Dark: ReaderTheme = ReaderTheme(RgbColor(0.11, 0.11, 0.12), ::invertLightness)
 
+        // Declared before Sepia, which reads them while the companion initializes.
+        private val SEPIA_PAPER = RgbColor(0.93, 0.87, 0.75)
+        private val SEPIA_INK = RgbColor(0.30, 0.24, 0.18)
+
         /** Warm reading: cream paper, ink softened toward warm brown. */
-        public val Sepia: ReaderTheme = ReaderTheme(RgbColor(0.93, 0.87, 0.75)) { c ->
-            RgbColor(minOf(c.r, 0.30), minOf(c.g, 0.24), minOf(c.b, 0.18))
+        public val Sepia: ReaderTheme = ReaderTheme(SEPIA_PAPER, ::toSepia)
+
+        /**
+         * Maps each channel onto the range from the brown ink to the cream paper. White
+         * stays paper and black becomes the ink, so a light fill stays light under dark
+         * text instead of turning into a dark box (#253).
+         */
+        private fun toSepia(c: RgbColor): RgbColor {
+            fun mix(ink: Double, paper: Double, v: Double) = ink * (1.0 - v) + paper * v
+            return RgbColor(
+                mix(SEPIA_INK.r, SEPIA_PAPER.r, c.r),
+                mix(SEPIA_INK.g, SEPIA_PAPER.g, c.g),
+                mix(SEPIA_INK.b, SEPIA_PAPER.b, c.b),
+            )
         }
 
         /**

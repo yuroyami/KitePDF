@@ -1,5 +1,7 @@
 package io.github.yuroyami.kitepdf.epub.css
 
+import io.github.yuroyami.kitepdf.core.css.CssValues
+
 /**
  * A forgiving CSS parser for the EPUB subset. Strips comments, scans rules by
  * brace matching, splits grouped selectors and declarations, and expands the
@@ -141,8 +143,12 @@ internal object CssParser {
                 emit(prop, value)
             }
             // Keep the supported decoration-line subset in one cascade slot,
-            // so an author longhand can override the UA link shorthand.
-            "text-decoration" -> emit("text-decoration-line", value)
+            // so an author longhand can override the UA link shorthand. The
+            // shorthand also sets the colour: an omitted one is currentcolor.
+            "text-decoration" -> {
+                emit("text-decoration-line", value)
+                emit("text-decoration-color", splitWords(value).firstOrNull { CssValues.color(it) != null } ?: "currentcolor")
+            }
             "font" -> expandFont(value, ::emit)
             else -> emit(prop, value)
         }

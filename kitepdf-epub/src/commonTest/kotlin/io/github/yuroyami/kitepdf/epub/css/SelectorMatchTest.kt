@@ -105,7 +105,7 @@ class SelectorMatchTest {
         // background-color does not inherit, so only the true match paints red.
         val html = """<html id="r"><body id="b"><p id="p">x</p></body></html>"""
         val s = resolve(html, ":root{background-color:red}")
-        assertEquals(setOf("r"), s.filterValues { it.backgroundColor == red }.keys)
+        assertEquals(setOf("r"), s.filterValues { it.backgroundColor?.color == red }.keys)
     }
 
     @Test

@@ -22,7 +22,13 @@ class EpubVerticalImageRasterTest {
         return EpubCorpus.rasterize(doc.pages.single())
     }
 
-    private fun left(mode: String, width: Int): Int = if (mode == "vertical-rl") 280 - width else 20
+    // In vertical-lr the line's over side is its block-end side (CSS Writing Modes 4, 6.3),
+    // so an inline image sits past the line's under side: 0.6 em of this 10pt text (#261).
+    private fun left(mode: String, display: String, width: Int): Int = when {
+        mode == "vertical-rl" -> 280 - width
+        mode == "vertical-lr" && display == "inline" -> 26
+        else -> 20
+    }
 
     private fun assertPixel(image: BufferedImage, x: Int, y: Int, expected: Int, label: String) {
         assertEquals(expected, image.getRGB(x, y) and 0xffffff, "$label pixel at ($x,$y)")
@@ -32,7 +38,7 @@ class EpubVerticalImageRasterTest {
     fun non_square_quadrants_keep_their_physical_position_in_every_writing_mode() {
         for (mode in modes) for (display in listOf("block", "inline")) {
             val image = raster(mode, display, EpubCorpus.quadrantPng(), 80, 40)
-            val x = left(mode, 80)
+            val x = left(mode, display, 80)
             val label = "$mode $display"
             assertPixel(image, x + 20, 30, 0xff0000, "$label top-left")
             assertPixel(image, x + 60, 30, 0x00ff00, "$label top-right")
@@ -56,7 +62,7 @@ class EpubVerticalImageRasterTest {
         """.trimIndent().encodeToByteArray()
         for (mode in modes) for (display in listOf("block", "inline")) for (vector in listOf(false, true)) {
             val image = raster(mode, display, if (vector) svg else EpubCorpus.bandPng(), 60, 60, cover = true, svg = vector)
-            val x = left(mode, 60)
+            val x = left(mode, display, 60)
             val label = "$mode $display ${if (vector) "SVG" else "PNG"} landscape cover"
             for (dx in listOf(5, 30, 54)) for (dy in listOf(5, 30, 54)) {
                 assertPixel(image, x + dx, 20 + dy, 0x00ff00, label)
@@ -72,7 +78,7 @@ class EpubVerticalImageRasterTest {
     fun portrait_cover_crops_top_and_bottom_in_physical_coordinates() {
         for (mode in modes) for (display in listOf("block", "inline")) {
             val image = raster(mode, display, EpubCorpus.bandPng(tall = true), 60, 40, cover = true)
-            val x = left(mode, 60)
+            val x = left(mode, display, 60)
             val label = "$mode $display portrait cover"
             for (dx in listOf(5, 30, 54)) for (dy in listOf(5, 20, 34)) {
                 assertPixel(image, x + dx, 20 + dy, 0x00ff00, label)

@@ -3,6 +3,8 @@ package io.github.yuroyami.kitepdf.epub
 import io.github.yuroyami.kitepdf.svg.SvgImage
 
 import io.github.yuroyami.kitepdf.epub.css.ComputedStyle
+import io.github.yuroyami.kitepdf.epub.css.CssBackground
+import io.github.yuroyami.kitepdf.epub.css.DecorationLine
 import io.github.yuroyami.kitepdf.epub.css.ObjectFit
 import io.github.yuroyami.kitepdf.core.font.FontSpec
 import io.github.yuroyami.kitepdf.core.font.TextGlyph
@@ -107,7 +109,7 @@ internal class PlacedRun(
     val fontSpec: FontSpec,
     val color: RgbColor,
     val baselineShift: Double = 0.0,
-    val underline: Boolean = false,
+    val underline: DecorationLine? = null,
     /** True when [glyphs] carry embedded outlines; then [unitsPerEm] is the face's. */
     val hasOutlines: Boolean = false,
     val unitsPerEm: Int = 1000,
@@ -118,8 +120,8 @@ internal class PlacedRun(
     val isAnnotation: Boolean = false,
     /** Link target when the run is inside `<a href>` (see [InlineRun.href]). */
     val href: String? = null,
-    val lineThrough: Boolean = false,
-    val backgroundColor: RgbColor? = null,
+    val lineThrough: DecorationLine? = null,
+    val backgroundColor: CssBackground? = null,
     /** Includes justified spaces, even when no glyph is painted for them. */
     val paintWidth: Double = glyphs.sumOf { it.advanceWidth } * fontSize / 1000.0,
 )

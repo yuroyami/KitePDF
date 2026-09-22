@@ -1,6 +1,7 @@
 package io.github.yuroyami.kitepdf.core.render
 
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
@@ -46,6 +47,16 @@ class ThemedCanvasTest {
     fun sepia_paper_is_warm() {
         val bg = ReaderTheme.Sepia.background
         assertTrue(bg.r > bg.b, "sepia paper warm (r>b): $bg")
+    }
+
+    @Test
+    fun sepia_keeps_light_fills_light_and_ink_brown() {
+        // A white or light grey box behind dark text must not turn dark (#253).
+        assertEquals(ReaderTheme.Sepia.background, fillColorThrough(ReaderTheme.Sepia, RgbColor.WHITE))
+        val light = fillColorThrough(ReaderTheme.Sepia, RgbColor.gray(0.93))
+        assertTrue(light.r > 0.8 && light.g > 0.75 && light.b > 0.65, "a light fill stays light, got $light")
+        val ink = fillColorThrough(ReaderTheme.Sepia, RgbColor.BLACK)
+        assertEquals(RgbColor(0.30, 0.24, 0.18), ink)
     }
 
     @Test

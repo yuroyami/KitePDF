@@ -54,13 +54,42 @@ public object CssValues {
         else -> null
     }
 
-    /** Parse a CSS `<color>`; null for `transparent`, `inherit`, or unrecognised. */
+    /** Parse the RGB part of a CSS `<color>` ([alpha] reads the rest); null for `transparent`, `inherit`, or unrecognised. */
     public fun color(raw: String): RgbColor? {
         val s = raw.trim().lowercase()
         if (s.isEmpty() || s == "transparent" || s == "inherit" || s == "currentcolor" || s == "none") return null
         if (s.startsWith("#")) return hexColor(s.substring(1))
         if (s.startsWith("rgb")) return rgbFunc(s)
         return NAMED[s]
+    }
+
+    /**
+     * The alpha of a CSS `<color>`, from 0 (transparent) to 1 (opaque). [color] reads
+     * only the RGB part, so a painter that honours transparency asks for both.
+     *
+     * CSS Color 4 makes alpha part of the colour: `transparent` is fully transparent
+     * (6.3), `rgb()` and `rgba()` take it as a fourth number or percentage (4.2, 5.1),
+     * and the four- and eight-digit hex forms carry it in their last digits (5.2).
+     * Every other colour is opaque. Null when [raw] is not a colour [color] reads.
+     */
+    public fun alpha(raw: String): Double? {
+        val s = raw.trim().lowercase()
+        if (s == "transparent") return 0.0
+        if (color(s) == null) return null
+        if (s.startsWith("#")) {
+            val h = s.substring(1)
+            return when (h.length) {
+                4 -> hex(h[3]).takeIf { it >= 0 }?.let { it * 17 / 255.0 }
+                8 -> hex2(h, 6).takeIf { it >= 0 }?.let { it / 255.0 }
+                else -> 1.0
+            }
+        }
+        if (s.startsWith("rgb")) {
+            val a = rgbParts(s)?.getOrNull(3) ?: return 1.0
+            val value = if (a.endsWith("%")) a.dropLast(1).toDoubleOrNull()?.let { it / 100.0 } else a.toDoubleOrNull()
+            return value?.coerceIn(0.0, 1.0)
+        }
+        return 1.0
     }
 
     private fun hexColor(h: String): RgbColor? {
@@ -79,10 +108,14 @@ public object CssValues {
         }
     }
 
-    private fun rgbFunc(s: String): RgbColor? {
+    private fun rgbParts(s: String): List<String>? {
         val open = s.indexOf('('); val close = s.indexOf(')')
         if (open < 0 || close < open) return null
-        val parts = s.substring(open + 1, close).split(',', ' ', '/').map { it.trim() }.filter { it.isNotEmpty() }
+        return s.substring(open + 1, close).split(',', ' ', '/').map { it.trim() }.filter { it.isNotEmpty() }
+    }
+
+    private fun rgbFunc(s: String): RgbColor? {
+        val parts = rgbParts(s) ?: return null
         if (parts.size < 3) return null
         fun comp(p: String): Double? =
             if (p.endsWith("%")) p.dropLast(1).toDoubleOrNull()?.let { it / 100.0 }

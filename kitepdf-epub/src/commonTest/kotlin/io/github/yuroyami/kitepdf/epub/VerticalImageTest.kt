@@ -62,6 +62,31 @@ class VerticalImageTest {
     }
 
     @Test
+    fun an_inline_image_shares_its_glyph_column_in_both_vertical_modes() {
+        // CSS Writing Modes 4, 6.4: line-over is the right side in both vertical modes (#261).
+        val offsets = verticalModes.map { mode ->
+            val recorded = calls(mode, "<p>\u65E5<img src='pic.png' style='width:10pt;height:10pt'/>\u672C</p>")
+            val image = recorded.filterIsInstance<RecordingCanvas.Call.Image>().single()
+            val glyph = recorded.filterIsInstance<RecordingCanvas.Call.Glyphs>().first { it.text == "\u65E5" }
+            image.ctm.e - glyph.textToDevice.e
+        }
+        assertEquals(offsets[0], offsets[1], 1e-9)
+    }
+
+    @Test
+    fun a_vertical_column_stays_inside_its_line_in_both_modes() {
+        for (mode in verticalModes) {
+            val doc = open(mode, "<p>\u65E5\u672C</p>")
+            val line = doc.pages[0].textContent().blocks.first().lines.first()
+            val glyph = RecordingCanvas().also { doc.pages[0].renderTo(it) }.calls
+                .filterIsInstance<RecordingCanvas.Call.Glyphs>().first { it.text == "\u65E5" }
+            val em = glyph.glyphs.single().advanceWidth * glyph.fontSize / 1000.0
+            assertTrue(glyph.textToDevice.e >= line.bounds.left - 1.0, "$mode: ${glyph.textToDevice.e} vs ${line.bounds}")
+            assertTrue(glyph.textToDevice.e + em <= line.bounds.right + 1.0, "$mode: ${glyph.textToDevice.e + em} vs ${line.bounds}")
+        }
+    }
+
+    @Test
     fun inline_image_intrinsic_dimensions_are_not_transposed() {
         for (mode in verticalModes) {
             assertSize(images(mode, "<img src=\"pic.png\"/>").single().ctm, 3.0, 1.5, mode)

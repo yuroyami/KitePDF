@@ -5,6 +5,7 @@ import io.github.yuroyami.kitepdf.svg.SvgImage
 import io.github.yuroyami.kitepdf.core.xml.KiteXmlNode
 
 import io.github.yuroyami.kitepdf.epub.css.ComputedStyle
+import io.github.yuroyami.kitepdf.epub.css.CssBackground
 import io.github.yuroyami.kitepdf.epub.css.CssFloat
 import io.github.yuroyami.kitepdf.epub.css.Display
 import io.github.yuroyami.kitepdf.epub.css.Edge
@@ -459,15 +460,15 @@ internal class BoxBuilder(
         private var runs = ArrayList<InlineRun>()
         private var pendingSpace = false
         private var pendingSpaceRun: InlineRun? = null
-        private var backgroundColor: RgbColor? = null
+        private var backgroundColor: CssBackground? = null
 
-        fun beginBackground(color: RgbColor?): RgbColor? {
+        fun beginBackground(color: CssBackground?): CssBackground? {
             val previous = backgroundColor
             if (color != null) backgroundColor = color
             return previous
         }
 
-        fun endBackground(previous: RgbColor?) { backgroundColor = previous }
+        fun endBackground(previous: CssBackground?) { backgroundColor = previous }
         private var blockHasContent = false
         private var lastWasBreak = false
         // Active <ruby> group: runs made between beginRuby/endRuby carry the id +
@@ -534,7 +535,13 @@ internal class BoxBuilder(
                     // and it must survive across appendText calls (runs split mid-word).
                     val boundary = pendingSpace || !blockHasContent || lastWasBreak
                     if (pendingSpace && blockHasContent && !lastWasBreak) {
-                        if (b.isNotEmpty()) b.append(' ') else runs.add(pendingSpaceRun ?: makeRun(" ", style))
+                        // A space between two elements paints with the element that holds
+                        // it, so it needs a run of its own only when its lines or background
+                        // differ from the text after it. Otherwise it joins that text, which
+                        // keeps the line height and the copied space unchanged (#259).
+                        val space = pendingSpaceRun
+                        if (b.isEmpty() && space != null && !samePaint(space, makeRun("", style))) runs.add(space)
+                        else b.append(' ')
                     }
                     pendingSpace = false; lastWasBreak = false
                     b.append(transformChar(ch, style.textTransform, boundary)); blockHasContent = true
@@ -561,6 +568,9 @@ internal class BoxBuilder(
             }
             return sb.toString()
         }
+
+        private fun samePaint(a: InlineRun, b: InlineRun): Boolean =
+            a.underline == b.underline && a.lineThrough == b.lineThrough && a.backgroundColor == b.backgroundColor
 
         private fun makeRun(text: String, style: ComputedStyle) = InlineRun(
             text = text, fontSizePt = style.fontSizePt,
