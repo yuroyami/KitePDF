@@ -2,7 +2,9 @@ package io.github.yuroyami.kitepdf
 
 import io.github.yuroyami.kitepdf.core.ByteArrayBuilder
 import io.github.yuroyami.kitepdf.core.render.KiteMatrix
+import io.github.yuroyami.kitepdf.core.render.KitePath
 import io.github.yuroyami.kitepdf.core.render.RecordingCanvas
+import io.github.yuroyami.kitepdf.core.render.RgbColor
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -97,6 +99,73 @@ class AppearanceSynthesisTest {
         assertEquals(1.0, fills[0].color.r)
         assertEquals(1.0, fills[0].color.g)
         assertEquals(0.0, fills[0].color.b)
+    }
+
+    /* ─── notes, attachments, carets, stamps and free text with no /AP (#164) ─ */
+
+    private fun glyphs(c: RecordingCanvas) = c.calls.filterIsInstance<RecordingCanvas.Call.Glyphs>()
+
+    /** The device box of every fill, as [left, bottom, right, top]. */
+    private fun fillBounds(c: RecordingCanvas): DoubleArray {
+        val b = doubleArrayOf(Double.MAX_VALUE, Double.MAX_VALUE, -Double.MAX_VALUE, -Double.MAX_VALUE)
+        for (fill in fills(c)) for (seg in fill.path.segments) {
+            val pts = when (seg) {
+                is KitePath.Segment.MoveTo -> listOf(seg.x to seg.y)
+                is KitePath.Segment.LineTo -> listOf(seg.x to seg.y)
+                is KitePath.Segment.CurveTo -> listOf(seg.x3 to seg.y3)
+                else -> emptyList()
+            }
+            for ((x, y) in pts) {
+                val dx = fill.ctm.a * x + fill.ctm.c * y + fill.ctm.e
+                val dy = fill.ctm.b * x + fill.ctm.d * y + fill.ctm.f
+                b[0] = minOf(b[0], dx); b[1] = minOf(b[1], dy); b[2] = maxOf(b[2], dx); b[3] = maxOf(b[3], dy)
+            }
+        }
+        return b
+    }
+
+    @Test fun a_sticky_note_with_no_appearance_draws_its_icon_in_its_rect() {
+        val c = render(widgetPdf("<< /Type /Annot /Subtype /Text /Rect [100 100 120 120] /C [1 1 0] >>"))
+        assertTrue(fills(c).any { it.color == RgbColor(1.0, 1.0, 0.0) }, "the note fills in its own colour")
+        assertTrue(strokes(c).isNotEmpty(), "the icon has an outline")
+        val b = fillBounds(c)
+        assertTrue(b[0] >= 100.0 - 1e-6 && b[1] >= 100.0 - 1e-6 && b[2] <= 120.0 + 1e-6 && b[3] <= 120.0 + 1e-6, "icon at ${b.toList()}")
+    }
+
+    @Test fun a_file_attachment_and_a_caret_with_no_appearance_are_drawn() {
+        val attachment = render(widgetPdf("<< /Type /Annot /Subtype /FileAttachment /Rect [100 100 120 120] /Name /Paperclip >>"))
+        assertTrue(strokes(attachment).isNotEmpty(), "the paperclip is drawn")
+        val caret = render(widgetPdf("<< /Type /Annot /Subtype /Caret /Rect [100 100 110 110] /C [1 0 0] >>"))
+        assertEquals(RgbColor(1.0, 0.0, 0.0), fills(caret).single().color)
+    }
+
+    @Test fun a_stamp_with_no_appearance_shows_its_name() {
+        val c = render(widgetPdf("<< /Type /Annot /Subtype /Stamp /Rect [50 50 250 110] /Name /NotApproved >>"))
+        assertEquals("NOT APPROVED", glyphs(c).joinToString("") { it.text })
+        assertTrue(strokes(c).isNotEmpty(), "the stamp has a frame")
+    }
+
+    @Test fun free_text_with_no_appearance_draws_its_contents_in_the_da_font_and_colour() {
+        val c = render(widgetPdf(
+            "<< /Type /Annot /Subtype /FreeText /Rect [50 50 250 110] /DA (0 0 1 rg /Helv 10 Tf) " +
+                "/Contents (Hello world) /C [1 1 0.8] >>",
+        ))
+        val runs = glyphs(c)
+        assertEquals("Hello world", runs.joinToString("") { it.text })
+        assertEquals(RgbColor(0.0, 0.0, 1.0), runs.first().color)
+        assertEquals(10.0, runs.first().fontSize, 1e-9)
+        assertTrue(fills(c).any { it.color == RgbColor(1.0, 1.0, 0.8) }, "Acrobat keeps the fill in /C")
+    }
+
+    @Test fun free_text_wraps_inside_its_box() {
+        val c = render(widgetPdf(
+            "<< /Type /Annot /Subtype /FreeText /Rect [50 50 110 150] /DA (/Helv 10 Tf) /BS << /W 0 >> " +
+                "/Contents (one two three four five six) >>",
+        ))
+        val runs = glyphs(c)
+        assertTrue(runs.size >= 2, "the text wraps to more than one line: ${runs.map { it.text }}")
+        assertEquals("one two three four five six", runs.joinToString(" ") { it.text })
+        assertTrue(runs.zipWithNext().all { (a, b) -> b.textToDevice.f < a.textToDevice.f }, "each line sits below the last")
     }
 
     @Test fun hidden_annotation_is_not_rendered() {
