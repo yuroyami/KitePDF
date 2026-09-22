@@ -4,12 +4,15 @@ import io.github.yuroyami.kitepdf.core.KiteRectangle
 import io.github.yuroyami.kitepdf.content.Operation
 import io.github.yuroyami.kitepdf.core.font.PdfFont
 import io.github.yuroyami.kitepdf.core.render.KiteMatrix
+import io.github.yuroyami.kitepdf.core.parser.IndirectResolver
 import io.github.yuroyami.kitepdf.core.parser.PdfArray
+import io.github.yuroyami.kitepdf.core.parser.PdfDictionary
 import io.github.yuroyami.kitepdf.core.parser.PdfInt
 import io.github.yuroyami.kitepdf.core.parser.PdfName
 import io.github.yuroyami.kitepdf.core.parser.PdfObject
 import io.github.yuroyami.kitepdf.core.parser.PdfReal
 import io.github.yuroyami.kitepdf.core.parser.PdfString
+import io.github.yuroyami.kitepdf.render.Type3Data
 
 /**
  * The content-stream transform behind true region redaction.
@@ -71,6 +74,9 @@ internal class RedactionEngine(
     private val rectangles: List<KiteRectangle>,
     initialLineWidth: Double = 1.0,
     initialMiterLimit: Double = 10.0,
+    initialText: TextState = TextState(),
+    /** The Type 3 fonts of the stream's resources by name, which advance by their own widths. */
+    private val type3Fonts: Map<String, Type3Data> = emptyMap(),
 ) {
 
     /** An image XObject 'Do' invocation was dropped (intersected a region). */
@@ -93,6 +99,8 @@ internal class RedactionEngine(
      * [lineWidth] and [miterLimit] are the pen in effect at this `Do`, for the
      * caller to seed the nested engine with (8.10.2): the form's own content may
      * never set either, in which case its strokes are the invoking stream's.
+     * [text] is the text state at the `Do`, for the same reason: a form that
+     * shows text without its own `Tf` draws in the invoking stream's font.
      */
     data class FormHit(
         val name: String,
@@ -101,6 +109,7 @@ internal class RedactionEngine(
         val intersects: Boolean,
         val lineWidth: Double,
         val miterLimit: Double,
+        val text: TextState,
     )
 
     /** Every form XObject `Do` invocation seen, one entry per invocation. */
@@ -121,11 +130,17 @@ internal class RedactionEngine(
      */
     var formBBoxes: Map<String, KiteRectangle> = emptyMap()
 
-    private data class TextState(
+    /**
+     * The text state of ISO 32000-1, 9.3, with the renderer's defaults: a run shown
+     * before any `Tf` draws at 12 points in the missing-font substitute.
+     */
+    data class TextState(
         val textMatrix: KiteMatrix = KiteMatrix.IDENTITY,
         val lineMatrix: KiteMatrix = KiteMatrix.IDENTITY,
         val font: PdfFont? = null,
-        val fontSize: Double = 0.0,
+        /** The glyph-space widths and matrix of [font] when it is a Type 3 font the renderer draws as one. */
+        val type3: Type3Data? = null,
+        val fontSize: Double = 12.0,
         val charSpacing: Double = 0.0,
         val wordSpacing: Double = 0.0,
         val horizontalScaling: Double = 100.0,
@@ -149,7 +164,25 @@ internal class RedactionEngine(
     /** One installed clip: its boundary segment boxes and their union, in page space. */
     private class ClipRecord(val edges: List<SegmentBounds>, val bbox: SegmentBounds)
 
-    private var gs = GraphicsState(lineWidth = initialLineWidth, miterLimit = initialMiterLimit)
+    // A `Do` cannot sit inside a text object (8.10.2), so a form starts with no text matrix.
+    private var gs = GraphicsState(
+        text = initialText.copy(textMatrix = KiteMatrix.IDENTITY, lineMatrix = KiteMatrix.IDENTITY),
+        lineWidth = initialLineWidth,
+        miterLimit = initialMiterLimit,
+    )
+
+    /**
+     * The face the renderer draws text in when its font is missing from the
+     * resources or no `Tf` came first: Helvetica (ISO 32000-1, 9.6.2.2).
+     */
+    private val missingFont: PdfFont by lazy {
+        PdfFont.from(
+            PdfDictionary(linkedMapOf<String, PdfObject>(
+                "Type" to PdfName("Font"), "Subtype" to PdfName("Type1"), "BaseFont" to PdfName("Helvetica"),
+            )),
+            IndirectResolver { null },
+        )
+    }
     private val stack = ArrayDeque<GraphicsState>()
 
     /**
@@ -203,9 +236,17 @@ internal class RedactionEngine(
                 // 1, so the pad never drops below the plain lineWidth/2 body pad.
                 "M" -> { gs = gs.copy(miterLimit = num(op, 0)); out.add(op) }
 
-                "BT" -> { gs = gs.copy(text = TextState(font = gs.text.font, fontSize = gs.text.fontSize)); out.add(op) }
+                "BT" -> {
+                    // BT resets only the two matrices. Tc, Tw, Tz, TL, Ts and the font
+                    // are graphics state and carry over (ISO 32000-1, 9.3.1).
+                    gs = gs.copy(text = gs.text.copy(textMatrix = KiteMatrix.IDENTITY, lineMatrix = KiteMatrix.IDENTITY))
+                    out.add(op)
+                }
                 "Tf" -> {
-                    gs = gs.copy(text = gs.text.copy(font = fonts[name(op, 0)], fontSize = num(op, 1)))
+                    val fontName = name(op, 0)
+                    gs = gs.copy(text = gs.text.copy(
+                        font = fonts[fontName] ?: missingFont, type3 = type3Fonts[fontName], fontSize = num(op, 1),
+                    ))
                     out.add(op)
                 }
                 "Tc" -> { gs = gs.copy(text = gs.text.copy(charSpacing = num(op, 0))); out.add(op) }
@@ -483,12 +524,8 @@ internal class RedactionEngine(
     /** Emit a `Tj`: keep it, or (if redacted) replace with an equivalent advance. */
     private fun emitShow(bytes: ByteArray?, out: MutableList<Operation>) {
         if (bytes == null) return
-        val font = gs.text.font
-        if (font == null) {
-            // No font → the renderer wouldn't show or advance; pass through.
-            out.add(Operation("Tj", listOf(PdfString(bytes))))
-            return
-        }
+        // Text before any Tf still draws, in the substitute (PageRenderer.showText).
+        val font = gs.text.font ?: missingFont
         val advance = advanceOf(bytes, font)
         if (runIntersectsRedaction(advance)) {
             compensation(advance)?.let { out.add(Operation("TJ", listOf(PdfArray(listOf(PdfReal(it)))))) }
@@ -501,22 +538,18 @@ internal class RedactionEngine(
     /** Rebuild a `TJ` array, replacing redacted strings with equivalent spacing. */
     private fun emitTJ(array: PdfArray?, out: MutableList<Operation>) {
         if (array == null) return
-        val font = gs.text.font
+        val font = gs.text.font ?: missingFont
         val items = ArrayList<PdfObject>(array.items.size)
         for (item in array.items) {
             when (item) {
                 is PdfString -> {
-                    if (font == null) {
-                        items.add(item)
+                    val advance = advanceOf(item.bytes, font)
+                    if (runIntersectsRedaction(advance)) {
+                        compensation(advance)?.let { items.add(PdfReal(it)) }
                     } else {
-                        val advance = advanceOf(item.bytes, font)
-                        if (runIntersectsRedaction(advance)) {
-                            compensation(advance)?.let { items.add(PdfReal(it)) }
-                        } else {
-                            items.add(item)
-                        }
-                        advanceTextMatrix(advance)
+                        items.add(item)
                     }
+                    advanceTextMatrix(advance)
                 }
                 is PdfReal -> { items.add(item); adjustTextX(-item.value) }
                 is PdfInt -> { items.add(item); adjustTextX(-item.value.toDouble()) }
@@ -526,12 +559,21 @@ internal class RedactionEngine(
         out.add(Operation("TJ", listOf(PdfArray(items))))
     }
 
-    /** Total text-space advance of [bytes], matching PageRenderer.totalAdvance. */
+    /** Total text-space advance of [bytes], matching PageRenderer.totalAdvance and showTextType3. */
     private fun advanceOf(bytes: ByteArray, font: PdfFont): Double {
         val t = gs.text
         val sizeFactor = t.fontSize / 1000.0
         val hScale = t.horizontalScaling / 100.0
         var advance = 0.0
+        t.type3?.let { type3 ->
+            // A Type 3 width is in glyph space, which /FontMatrix maps to text space (ISO 32000-1, 9.6.5).
+            for (b in bytes) {
+                val code = b.toInt() and 0xFF
+                advance += type3.widthFor(code) * type3.fontMatrix.a * t.fontSize + t.charSpacing +
+                    (if (code == 0x20) t.wordSpacing else 0.0)
+            }
+            return advance * hScale
+        }
         font.forEachGlyphAdvance(bytes) { width, isWordSpace ->
             advance += (width * sizeFactor + t.charSpacing + (if (isWordSpace) t.wordSpacing else 0.0)) * hScale
         }
@@ -549,17 +591,19 @@ internal class RedactionEngine(
         return -advance * 1000.0 / denom
     }
 
+    // Every move below is in text space: translate first, then the text matrix,
+    // as PageRenderer does. `concat` applies its argument first (ISO 32000-1, 9.4.2).
     private fun advanceTextMatrix(advance: Double) {
-        gs = gs.copy(text = gs.text.copy(textMatrix = KiteMatrix.translation(advance, 0.0).concat(gs.text.textMatrix)))
+        gs = gs.copy(text = gs.text.copy(textMatrix = gs.text.textMatrix.concat(KiteMatrix.translation(advance, 0.0))))
     }
 
     private fun adjustTextX(thousandths: Double) {
         val tx = thousandths / 1000.0 * gs.text.fontSize * (gs.text.horizontalScaling / 100.0)
-        gs = gs.copy(text = gs.text.copy(textMatrix = KiteMatrix.translation(tx, 0.0).concat(gs.text.textMatrix)))
+        gs = gs.copy(text = gs.text.copy(textMatrix = gs.text.textMatrix.concat(KiteMatrix.translation(tx, 0.0))))
     }
 
     private fun moveText(tx: Double, ty: Double, setLeading: Boolean) {
-        val moved = KiteMatrix.translation(tx, ty).concat(gs.text.lineMatrix)
+        val moved = gs.text.lineMatrix.concat(KiteMatrix.translation(tx, ty))
         gs = gs.copy(text = gs.text.copy(lineMatrix = moved, textMatrix = moved, leading = if (setLeading) -ty else gs.text.leading))
     }
 
@@ -579,7 +623,8 @@ internal class RedactionEngine(
         val fs = gs.text.fontSize
         val ascent = fs * 1.0
         val descent = fs * 0.35
-        val m = gs.ctm.concat(gs.text.textMatrix).let { KiteMatrix.translation(0.0, gs.text.rise).concat(it) }
+        // The rise is in text space too, under the text matrix (9.3.7).
+        val m = gs.ctm.concat(gs.text.textMatrix).concat(KiteMatrix.translation(0.0, gs.text.rise))
         return boxIntersects(m, x0 = 0.0, y0 = -descent, x1 = advance, y1 = ascent)
     }
 
@@ -649,7 +694,7 @@ internal class RedactionEngine(
         }
         val bbox = formBBoxes[xobjectName]
         val intersects = inv == null || bbox == null || mapped.any { overlaps(it, bbox) }
-        formXObjectHits.add(FormHit(xobjectName, mapped, opIndex, intersects, gs.lineWidth, gs.miterLimit))
+        formXObjectHits.add(FormHit(xobjectName, mapped, opIndex, intersects, gs.lineWidth, gs.miterLimit, gs.text))
     }
 
     /** Do two rectangles share area? Touching edges do not count, as in [boxIntersects]. */

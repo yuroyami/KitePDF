@@ -31,3 +31,5 @@ Things a previous change taught the hard way. One line each. Delete a line when 
 - DoomPDF shows a still title screen for its first eleven seconds and writes almost nothing while it is up. A benchmark that measures the first frames measures an idle loop and reports a fine number for doing nothing. Run 15 seconds of game time first, and assert that half the measured frames drew something.
 - Java2D gives every buffered image of one type the same device configuration, so `deviceConfiguration.bounds` says nothing about the surface a Graphics2D draws on. A soft mask sized from it became a 10-million-point layer at a tiny scale and erased the page (#255).
 - A 3-band RGB raster has no alpha band, so a custom Composite that reads band 3 sees every pixel as transparent. That made every AWT blend mode paint as Normal on RGB surfaces (#272).
+- `RedactionEngine` keeps its own copy of the renderer's text state machine. A text fix in `PageRenderer` that skips it lets a redaction keep text the page draws (#278).
+- The EPUB sweep's blank-page check passes a cover page that paints only a background fill, so a cover image that fails to load goes unnoticed (#276).
