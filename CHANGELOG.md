@@ -68,6 +68,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   erasing the content, and a mask past the raster budget applies at a lower
   resolution instead of being skipped (#255, #264).
 - AWT blend modes work on RGB surfaces (#272).
+- Inherited page boxes, resources and rotation, form and appearance geometry,
+  annotation and widget rectangles, article beads and Type 3 font matrices may
+  be indirect objects. A reference to a missing object reads as absent (#273).
 
 ## [0.10.0] - 2026-09-13
 

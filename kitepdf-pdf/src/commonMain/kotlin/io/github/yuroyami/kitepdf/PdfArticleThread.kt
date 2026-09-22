@@ -88,7 +88,7 @@ public data class PdfArticleThread(
                 val beadDict = refs.resolve(cur) as? PdfDictionary ?: break
                 val pageRef = beadDict["P"] as? PdfReference
                 val pageIndex = pageRef?.let { pageRefToIndex[it.objectNumber] }
-                val rect = (beadDict.getArray("R"))?.let(KiteRectangle::fromPdfArray)
+                val rect = missingAsNull { beadDict.getArray("R", refs) }?.let(KiteRectangle::fromPdfArray)
                 if (rect != null) out += ArticleBead(pageIndex, rect)
                 cur = beadDict["N"] as? PdfReference
                 hops++
