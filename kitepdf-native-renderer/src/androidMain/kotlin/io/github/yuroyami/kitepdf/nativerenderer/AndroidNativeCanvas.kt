@@ -205,6 +205,38 @@ public class AndroidNativeCanvas(private val canvas: AndroidCanvas) : KiteCanvas
         }
     }
 
+    /**
+     * The outline of [text] in the logical font [drawGlyphs] draws a font without
+     * embedded outlines in, at 1000 units per em with y up (#85). Null before API 34,
+     * which has no way to walk a path.
+     */
+    override fun hostGlyphOutline(text: String, fontSpec: FontSpec): KitePath? {
+        if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.UPSIDE_DOWN_CAKE) return null
+        val path = Path()
+        Paint().apply {
+            typeface = systemFontFor(fontSpec)
+            textSize = 1000f
+        }.getTextPath(text, 0, text.length, 0f, 0f, path)
+        val b = KitePath.Builder()
+        val it = path.pathIterator
+        val p = FloatArray(8)
+        while (true) {
+            when (it.next(p, 0)) {
+                android.graphics.PathIterator.VERB_MOVE -> b.moveTo(p[0].toDouble(), -p[1].toDouble())
+                android.graphics.PathIterator.VERB_LINE -> b.lineTo(p[2].toDouble(), -p[3].toDouble())
+                // Glyph paths hold no conics; one would draw as its quadratic hull.
+                android.graphics.PathIterator.VERB_QUAD, android.graphics.PathIterator.VERB_CONIC ->
+                    b.quadTo(p[2].toDouble(), -p[3].toDouble(), p[4].toDouble(), -p[5].toDouble())
+                android.graphics.PathIterator.VERB_CUBIC -> b.curveTo(
+                    p[2].toDouble(), -p[3].toDouble(), p[4].toDouble(), -p[5].toDouble(), p[6].toDouble(), -p[7].toDouble(),
+                )
+                android.graphics.PathIterator.VERB_CLOSE -> b.close()
+                else -> break
+            }
+        }
+        return b.build()
+    }
+
     /** Map a non-embedded PDF font to an Android logical font (mirrors AwtCanvas's family/style choice). */
     private fun systemFontFor(spec: FontSpec): Typeface {
         val base = when (spec.family) {

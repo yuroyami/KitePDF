@@ -31,6 +31,7 @@ import org.jetbrains.skia.PathEffect
 import org.jetbrains.skia.Path as SkPath
 import org.jetbrains.skia.PathBuilder
 import org.jetbrains.skia.PathFillMode
+import org.jetbrains.skia.PathVerb
 import org.jetbrains.skia.Shader
 import org.jetbrains.skia.Gradient
 import org.jetbrains.skia.Color4f
@@ -204,6 +205,42 @@ public class SkiaCanvas(private val canvas: SkCanvas) : KiteCanvas {
             canvas.drawString(text, 0f, 0f, skFont, paint)
         } finally {
             canvas.restore()
+        }
+    }
+
+    /**
+     * The outline of [text] in the host typeface [drawGlyphs] draws a font without
+     * embedded outlines in, at 1000 units per em with y up (#85).
+     */
+    override fun hostGlyphOutline(text: String, fontSpec: FontSpec): KitePath? {
+        val typeface = systemTypeface(fontSpec) ?: return null
+        val font = Font(typeface, 1000f)
+        val ids = font.getStringGlyphs(text)
+        val advances = font.getWidths(ids)
+        val b = KitePath.Builder()
+        var penX = 0.0
+        for (k in ids.indices) {
+            font.getPath(ids[k])?.let { appendFlipped(b, it, penX) }
+            penX += advances[k]
+        }
+        return b.build()
+    }
+
+    /** Appends a Skia glyph path, whose y runs down, moved right by [dx] and with y up. */
+    private fun appendFlipped(b: KitePath.Builder, path: SkPath, dx: Double) {
+        fun x(p: org.jetbrains.skia.Point?) = dx + (p?.x ?: 0f)
+        fun y(p: org.jetbrains.skia.Point?) = -(p?.y ?: 0f).toDouble()
+        for (seg in path) {
+            if (seg == null) continue
+            when (seg.verb) {
+                PathVerb.MOVE -> b.moveTo(x(seg.p0), y(seg.p0))
+                PathVerb.LINE -> b.lineTo(x(seg.p1), y(seg.p1))
+                // Glyph paths hold no conics; one would draw as its quadratic hull.
+                PathVerb.QUAD, PathVerb.CONIC -> b.quadTo(x(seg.p1), y(seg.p1), x(seg.p2), y(seg.p2))
+                PathVerb.CUBIC -> b.curveTo(x(seg.p1), y(seg.p1), x(seg.p2), y(seg.p2), x(seg.p3), y(seg.p3))
+                PathVerb.CLOSE -> b.close()
+                PathVerb.DONE -> {}
+            }
         }
     }
 

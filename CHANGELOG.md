@@ -108,6 +108,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   inside a form moves with the form, and the painted path clips it under the
   current matrix (#93). An uncoloured tiling pattern paints in the colour given
   with its name, and its cell cannot set a colour of its own (#94).
+- Stroked and clipping text in a font without an embedded program uses the
+  outlines of the host face on AWT, Skia, Compose and Android 14 or later. The
+  new `KiteCanvas.hostGlyphOutline` supplies them. A canvas without host
+  outlines fills stroked text in the stroke colour instead of drawing nothing
+  (#85).
 
 ## [0.10.0] - 2026-09-13
 

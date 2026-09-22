@@ -9,6 +9,7 @@ import androidx.compose.ui.graphics.Paint
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathFillType
+import androidx.compose.ui.graphics.PathSegment
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipPath
@@ -261,17 +262,7 @@ public class ComposeCanvas(
         // retry a few times (the window is a microsecond-scale map purge) and,
         // if the cache is truly hot, skip this run: one missing fallback-font
         // run on one page beats a dead app.
-        var measured: androidx.compose.ui.text.TextLayoutResult? = null
-        var attempt = 0
-        while (measured == null) {
-            measured = try {
-                textMeasurer.measure(text = text, style = style)
-            } catch (race: ConcurrentModificationException) {
-                if (++attempt >= 5) return
-                null
-            }
-        }
-        val layout = measured
+        val layout = measureOrNull(text, style) ?: return
         val metricScale = systemFontMetricScale(
             glyphs = glyphs,
             renderedSize = renderedSize,
@@ -293,6 +284,56 @@ public class ComposeCanvas(
         }) {
             drawText(textLayoutResult = layout, blendMode = blendMode.toCompose())
         }
+    }
+
+    /** Measures [text], retrying the race on skiko's style cache a few times; null when the cache stays hot. */
+    private fun measureOrNull(text: String, style: TextStyle): androidx.compose.ui.text.TextLayoutResult? {
+        repeat(5) {
+            try {
+                return textMeasurer.measure(text = text, style = style)
+            } catch (race: ConcurrentModificationException) {
+                // Try again: the window is a microsecond-scale map purge.
+            }
+        }
+        return null
+    }
+
+    /**
+     * The outline of [text] in the host face [drawGlyphs] draws a font without
+     * embedded outlines in, at 1000 units per em with y up (#85). Off the main
+     * thread it only records the run, as the system-font path does, so the page
+     * renders again on Main.
+     */
+    override fun hostGlyphOutline(text: String, fontSpec: FontSpec): KitePath? {
+        if (skipSystemFontText) {
+            usedSystemFontText = true
+            return null
+        }
+        val style = TextStyle(
+            // 1000 px whatever the density and font scale, as in drawTextViaSystemFont.
+            fontSize = TextUnit((1000.0 / (drawScope.density * drawScope.fontScale)).toFloat(), TextUnitType.Sp),
+            fontFamily = fontSpec.toComposeFamily(),
+            fontWeight = fontSpec.toComposeWeight(),
+            fontStyle = fontSpec.toComposeStyle(),
+        )
+        val layout = measureOrNull(text, style) ?: return null
+        val baseline = layout.firstBaseline.toDouble()
+        val b = KitePath.Builder()
+        for (seg in layout.getPathForRange(0, text.length)) {
+            val p = seg.points
+            fun x(i: Int) = p[i].toDouble()
+            fun y(i: Int) = baseline - p[i]
+            when (seg.type) {
+                PathSegment.Type.Move -> b.moveTo(x(0), y(1))
+                PathSegment.Type.Line -> b.lineTo(x(2), y(3))
+                // The iterator turns conics into quadratics.
+                PathSegment.Type.Quadratic, PathSegment.Type.Conic -> b.quadTo(x(2), y(3), x(4), y(5))
+                PathSegment.Type.Cubic -> b.curveTo(x(2), y(3), x(4), y(5), x(6), y(7))
+                PathSegment.Type.Close -> b.close()
+                PathSegment.Type.Done -> {}
+            }
+        }
+        return b.build()
     }
 
     override fun drawImage(image: KiteImageData, ctm: KiteMatrix, alpha: Double) {
