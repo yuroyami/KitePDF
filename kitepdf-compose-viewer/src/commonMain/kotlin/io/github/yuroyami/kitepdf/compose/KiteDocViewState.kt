@@ -211,7 +211,7 @@ public class KiteDocViewState(
     public val currentScrollPosition: KiteScrollPosition
         get() {
             val scroll = adapter ?: return openScrollAt ?: KiteScrollPosition(
-                anchorAt(pendingPage) ?: KiteLocation.START, pendingScrollOffset,
+                anchorAt(inStrip(pendingLeadingPage ?: pendingPage)) ?: KiteLocation.START, pendingScrollOffset,
             )
             return KiteScrollPosition(
                 anchorAt(scroll.leadingPage) ?: KiteLocation.START, scroll.scrollOffsetPx,
@@ -303,7 +303,10 @@ public class KiteDocViewState(
      * [currentLocation] when you need the position itself rather than a number.
      */
     public val currentPage: Int
-        get() = adapter?.currentPage ?: pendingPage
+        get() = adapter?.currentPage ?: inStrip(pendingPage)
+
+    /** [slot] clamped into the strip, so a start page past the end opens at the last page (#262). */
+    private fun inStrip(slot: Int): Int = slot.coerceIn(0, (itemCount - 1).coerceAtLeast(0))
 
     /* ── internal wiring (set by KiteDocView during composition) ─────────────── */
 
@@ -365,6 +368,20 @@ public class KiteDocViewState(
 
     internal var adapter: KiteScrollAdapter? by mutableStateOf(null)
     internal var pendingPage: Int = initialPage.coerceAtLeast(0)
+
+    /**
+     * The first visible slot when a continuous layout detached, which [pendingScrollOffset]
+     * is measured from. Null when that slot is [pendingPage]. [pendingPage] stays the slot
+     * nearest the viewport centre, so the reading position does not move on detach (#258).
+     */
+    internal var pendingLeadingPage: Int? = null
+
+    /** Remembers the position of a viewer that is not attached. */
+    internal fun park(page: Int, leadingPage: Int? = null, offsetPx: Int = 0) {
+        pendingPage = page
+        pendingLeadingPage = leadingPage
+        pendingScrollOffset = offsetPx
+    }
     internal var zoomRange: ClosedFloatingPointRange<Float> by mutableStateOf(1f..8f)
     internal var viewportSize: IntSize by mutableStateOf(IntSize.Zero)
 
@@ -715,16 +732,14 @@ public class KiteDocViewState(
     /** Jumps to slot [page] (coerced into range) without animation. */
     public suspend fun scrollToPage(page: Int) {
         val target = page.coerceIn(0, (itemCount - 1).coerceAtLeast(0))
-        pendingPage = target
-        pendingScrollOffset = 0
+        park(target)
         adapter?.scrollToPage(target)
     }
 
     /** Animates to slot [page] (coerced into range). */
     public suspend fun animateScrollToPage(page: Int) {
         val target = page.coerceIn(0, (itemCount - 1).coerceAtLeast(0))
-        pendingPage = target
-        pendingScrollOffset = 0
+        park(target)
         adapter?.animateScrollToPage(target)
     }
 
@@ -763,8 +778,7 @@ public class KiteDocViewState(
             }
             val continuous = adapter as? LazyListScrollAdapter
             if (!animate && continuous != null) {
-                pendingPage = index
-                pendingScrollOffset = offsetPx
+                park(index, offsetPx = offsetPx)
                 continuous.scrollToPageOffset(index, offsetPx)
             } else {
                 if (animate) animateScrollToPage(index) else scrollToPage(index)

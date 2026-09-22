@@ -82,6 +82,38 @@ class ScrollPositionSceneTest {
     }
 
     @Test
+    fun detaching_keeps_the_centre_page_as_the_reading_position() {
+        // Page 0 still leads the viewport while page 1 holds its centre (#258).
+        val saved = KiteScrollPosition(KiteLocation(0, 0), 150)
+        val state = KiteDocViewState(document(), saved)
+        ImageComposeScene(200, 320, Density(1f)) {
+            KiteDocView(state, Modifier.fillMaxSize(), layout = KiteDocLayout.Continuous())
+        }.use { scene ->
+            SceneTestDriver(scene).pumpUntilState {
+                state.currentScrollPosition == saved && state.hitTest(Offset(100f, 160f)) != null
+            }
+            assertEquals(1, state.currentPage)
+        }
+        assertEquals(1, state.currentPage, "the reading position does not move on detach")
+        assertEquals(KiteLocation(0, 1), state.currentLocation)
+        assertEquals(saved, state.currentScrollPosition, "the scroll anchor stays the leading page")
+    }
+
+    @Test
+    fun a_start_page_past_the_end_opens_at_the_last_page() {
+        // The strip has five slots, so page 999 clamps to slot 4 (#262).
+        val state = KiteDocViewState(document(), initialPage = 999)
+        assertEquals(4, state.currentPage)
+        assertEquals(KiteLocation(0, 4), state.currentScrollPosition.location)
+        ImageComposeScene(200, 320, Density(1f)) {
+            KiteDocView(state, Modifier.fillMaxSize(), layout = KiteDocLayout.Continuous())
+        }.use { scene ->
+            SceneTestDriver(scene).pumpUntilState { state.hitTest(Offset(100f, 160f)) != null }
+            assertEquals(4, state.currentPage)
+        }
+    }
+
+    @Test
     fun non_continuous_layouts_drop_offsets_on_open_and_detach() {
         for (layout in listOf(KiteDocLayout.Paged(), KiteDocLayout.Spread(), KiteDocLayout.SinglePage(1))) {
             val state = KiteDocViewState(document(), KiteScrollPosition(KiteLocation(0, 1), 137))

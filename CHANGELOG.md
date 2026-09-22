@@ -89,6 +89,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   of the brush instead of disappearing (#267). XPS clips leave out figures that
   are marked as unfilled (#268).
 - CI uploads the XPS raster test output when that test fails (#270).
+- The continuous viewer keeps the centre page as the reading position when it
+  leaves the screen, and a start page past the end opens at the last page (#258,
+  #262).
 
 ## [0.10.0] - 2026-09-13
 
