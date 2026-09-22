@@ -381,11 +381,14 @@ internal class BoxLayout(
         // Fixed margins narrow the room; auto ones only place the image (CSS 2.1, 10.3.3).
         val mL = if (st.marginLeftAuto) 0.0 else st.marginLeftPt
         val mR = if (st.marginRightAuto) 0.0 else st.marginRightPt
-        val room = (contentW - mL - mR).coerceAtLeast(1.0)
+        // CSS 2.1, 8.1: border and padding surround a replaced element's content too (#101).
+        val inset = imageInset(st)
+        val room = (contentW - mL - mR - inset.inlineStart - inset.inlineEnd).coerceAtLeast(1.0)
+        val blockRoom = (maxImageHeight - inset.blockStart - inset.blockEnd).coerceAtLeast(1.0)
         // CSS Writing Modes 4, 7.2: replaced width/height remain physical in
         // vertical flow. Only their inline/block allocation swaps (#100).
-        val physicalRoomW = if (vertical) maxImageHeight else room
-        val physicalRoomH = if (vertical) room else maxImageHeight
+        val physicalRoomW = if (vertical) blockRoom else room
+        val physicalRoomH = if (vertical) room else blockRoom
         val ew = box.style.widthPt ?: box.attrWidth
         val eh = box.style.heightPt ?: box.attrHeight
         var w = ew ?: (eh?.let { it / aspect } ?: physicalRoomW)
@@ -404,8 +407,8 @@ internal class BoxLayout(
         box.style.minHeightPt?.let { if (h < it) { val k = it / h; h = it; w *= k } }
         if (h > physicalRoomH) { val s = physicalRoomH / h; h = physicalRoomH; w *= s }
         box.drawWidth = w; box.drawHeight = h
-        val inlineSize = if (vertical) h else w
-        val blockSize = if (vertical) w else h
+        val inlineSize = (if (vertical) h else w) + inset.inlineStart + inset.inlineEnd
+        val blockSize = (if (vertical) w else h) + inset.blockStart + inset.blockEnd
         box.x = contentLeft + imageOffset(st, (contentW - inlineSize).coerceAtLeast(0.0), mL, mR)
         box.y = topY
         box.borderBoxWidth = inlineSize; box.borderBoxHeight = blockSize

@@ -1030,8 +1030,11 @@ public class EpubPage internal constructor(
         }
 
         for (box in page.images) {
+            // The picture fills the content box, inside the border and padding (#101).
+            val inset = imageInset(box.style)
             paintImage(canvas, deviceCtm, box.image, box.svg, box.drawWidth, box.drawHeight,
-                margin + box.x, yUp(box.bottom), box.style.objectFit, box.zipPath.substringBeforeLast('/', ""))
+                margin + box.x + inset.inlineStart, yUp(box.bottom - inset.blockEnd), box.style.objectFit,
+                box.zipPath.substringBeforeLast('/', ""))
         }
         canvas.endPage()
     }
@@ -1126,8 +1129,9 @@ public class EpubPage internal constructor(
         }
 
         for (box in page.images) {
-            val left = minOf(colX(box.y), colX(box.bottom))
-            val top = margin + box.x
+            val inset = imageInset(box.style)
+            val left = minOf(colX(box.y + inset.blockStart), colX(box.bottom - inset.blockEnd))
+            val top = margin + box.x + inset.inlineStart
             paintImage(canvas, deviceCtm, box.image, box.svg, box.drawWidth, box.drawHeight,
                 left, displayHeight - top - box.drawHeight, box.style.objectFit, box.zipPath.substringBeforeLast('/', ""))
         }
