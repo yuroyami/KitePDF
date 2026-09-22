@@ -224,6 +224,54 @@ class KiteImageDataTest {
         assertEquals(0xFF, rgba[5].toInt() and 0xFF) // pixel1 green
     }
 
+    @Test
+    fun a_matte_soft_mask_undoes_the_preblend() {
+        // ISO 32000-1, 11.6.5.3 (#159): red at alpha 128/255, preblended with white,
+        // is stored as m + a * (c - m) = (255, 128, 128). Reading it gives red again.
+        val smask = PdfStream(
+            dict = PdfDictionary(linkedMapOf(
+                "Type" to PdfName("XObject"), "Subtype" to PdfName("Image"),
+                "Width" to PdfInt(1), "Height" to PdfInt(1), "BitsPerComponent" to PdfInt(8),
+                "ColorSpace" to PdfName("DeviceGray"), "Length" to PdfInt(1),
+                "Matte" to PdfArray(listOf(PdfInt(1), PdfInt(1), PdfInt(1))),
+            )),
+            rawBytes = byteArrayOf(0x80.toByte()),
+        )
+        val base = PdfStream(
+            dict = PdfDictionary(linkedMapOf(
+                "Type" to PdfName("XObject"), "Subtype" to PdfName("Image"),
+                "Width" to PdfInt(1), "Height" to PdfInt(1), "BitsPerComponent" to PdfInt(8),
+                "ColorSpace" to PdfName("DeviceRGB"), "Length" to PdfInt(3), "SMask" to smask,
+            )),
+            rawBytes = byteArrayOf(0xFF.toByte(), 0x80.toByte(), 0x80.toByte()),
+        )
+        val rgba = KiteImageData.from(base).toRgbaBytes()!!
+        assertEquals(0x80, rgba[3].toInt() and 0xFF)
+        assertEquals(0xFF, rgba[0].toInt() and 0xFF)
+        assertTrue((rgba[1].toInt() and 0xFF) <= 2 && (rgba[2].toInt() and 0xFF) <= 2, "green and blue return to 0")
+    }
+
+    @Test
+    fun a_matte_that_does_not_fit_the_colour_space_is_ignored() {
+        // Two components for an RGB image: the entry is broken, so the samples stay as stored.
+        val smask = PdfStream(
+            dict = PdfDictionary(linkedMapOf(
+                "Width" to PdfInt(1), "Height" to PdfInt(1), "BitsPerComponent" to PdfInt(8),
+                "ColorSpace" to PdfName("DeviceGray"), "Matte" to PdfArray(listOf(PdfInt(1), PdfInt(1))),
+            )),
+            rawBytes = byteArrayOf(0x80.toByte()),
+        )
+        val base = PdfStream(
+            dict = PdfDictionary(linkedMapOf(
+                "Width" to PdfInt(1), "Height" to PdfInt(1), "BitsPerComponent" to PdfInt(8),
+                "ColorSpace" to PdfName("DeviceRGB"), "SMask" to smask,
+            )),
+            rawBytes = byteArrayOf(0xFF.toByte(), 0x80.toByte(), 0x80.toByte()),
+        )
+        val rgba = KiteImageData.from(base).toRgbaBytes()!!
+        assertEquals(0x80, rgba[1].toInt() and 0xFF)
+    }
+
     /* ─── /Mask, ISO 32000-1 §8.9.6 ─────────────────────────────────────── */
 
     @Test

@@ -80,7 +80,30 @@ public fun KiteImageData.toRgbaBytes(): ByteArray? {
     // a colour-key /Mask or an alpha plane (/SMask, or a stencil /Mask), never both.
     applyColorKeyMask(out, cs)
     applySoftMaskAlpha(out)
+    unblendMatte(out)
     return out
+}
+
+/**
+ * ISO 32000-1, 11.6.5.3: a sample preblended with the matte colour m holds
+ * c' = m + a * (c - m), so c = m + (c' - m) / a. The blend is undone on the RGB
+ * result, as pdf.js does. A fully transparent pixel keeps its samples.
+ */
+private fun KiteImageData.unblendMatte(rgba: ByteArray) {
+    val matte = softMaskMatte ?: return
+    if (softMaskAlpha == null) return
+    val m = doubleArrayOf(matte.r * 255.0, matte.g * 255.0, matte.b * 255.0)
+    var i = 0
+    while (i + 3 < rgba.size) {
+        val a = rgba[i + 3].toInt() and 0xFF
+        if (a in 1..254) {
+            for (c in 0..2) {
+                val v = rgba[i + c].toInt() and 0xFF
+                rgba[i + c] = (m[c] + (v - m[c]) * 255.0 / a).roundToInt().coerceIn(0, 255).toByte()
+            }
+        }
+        i += 4
+    }
 }
 
 /** Indexed: each sample is a palette index (no normalisation). Any bit depth. */
