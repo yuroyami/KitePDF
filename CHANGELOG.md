@@ -93,7 +93,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   leaves the screen, and a start page past the end opens at the last page (#258,
   #262).
 
-### More reader fixes
+### More fixes
 
 - SVG text reads its `x`, `y`, `dx`, `dy` and `rotate` lists per character, and
   `text-anchor` aligns each text chunk as one piece across its `<tspan>`s
@@ -134,6 +134,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   reference. `EpubDocument.linkTarget` reads the text, kind and a reflow-safe
   bookmark of the element a link points at, so a reader can show a footnote in
   place (#227).
+- Redaction finds text where the renderer draws it. Text could survive a region
+  drawn over it when the page carried the font size in the text matrix, set
+  leading or spacing before a text object, raised text with `Ts`, used a Type 3
+  font or a font missing from the resources, or drew a form that inherits its
+  font (#278).
 
 ## [0.10.0] - 2026-09-13
 

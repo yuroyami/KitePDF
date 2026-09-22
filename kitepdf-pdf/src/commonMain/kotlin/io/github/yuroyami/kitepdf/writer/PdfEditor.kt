@@ -831,6 +831,7 @@ public class PdfEditor internal constructor(
             loadImageXObjectNames(pageResources),
             loadFormXObjectNames(pageResources),
             regions,
+            type3Fonts = loadType3Fonts(pageResources),
         )
         engine.formMatrices = loadFormMatrices(pageResources)
         engine.formBBoxes = loadFormBBoxes(pageResources)
@@ -904,6 +905,9 @@ public class PdfEditor internal constructor(
 
     /** Form identity, [formKey] of object number plus rectangles plus pen, to the object holding that redaction. */
     internal val redactedFormCache = LinkedHashMap<String, PdfReference>()
+
+    /** A number per font a form inherits, for [formKey]. A [PdfFont] compares by identity. */
+    internal val redactionFontIds = HashMap<PdfFont, Int>()
 
     /**
      * Form streams as they stood when the CURRENT redaction call began. The first

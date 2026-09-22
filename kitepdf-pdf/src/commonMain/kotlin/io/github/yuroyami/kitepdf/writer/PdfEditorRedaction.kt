@@ -11,6 +11,7 @@ import io.github.yuroyami.kitepdf.core.parser.PdfName
 import io.github.yuroyami.kitepdf.core.parser.PdfObject
 import io.github.yuroyami.kitepdf.core.parser.PdfReference
 import io.github.yuroyami.kitepdf.core.parser.PdfStream
+import io.github.yuroyami.kitepdf.render.Type3Data
 
 /*
  * The redaction machinery behind [PdfEditor.redactRegions], split out of
@@ -21,7 +22,7 @@ import io.github.yuroyami.kitepdf.core.parser.PdfStream
 /**
  * Reset the per-call form bookkeeping.
  *
- * All three maps describe ONE redaction call: inside a call they accumulate
+ * All four maps describe ONE redaction call: inside a call they accumulate
  * across the hit loop, and between calls they have to be forgotten. Carrying
  * [claimedForms] over would make a second call find the form already claimed
  * and clone it rather than rewriting it, leaving the original (which still
@@ -32,21 +33,23 @@ import io.github.yuroyami.kitepdf.core.parser.PdfStream
  * The clone-name cache is NOT here: it lives inside [recurseIntoForms] itself,
  * scoped to one PARENT rather than one call. See that function's doc for why.
  *
- * [redactedRegionsByPage] is deliberately not one of these three: see its own doc.
+ * [redactedRegionsByPage] is deliberately not one of these four: see its own doc.
  */
 internal fun PdfEditor.beginRedactionCall() {
     formSources.clear()
     claimedForms.clear()
     redactedFormCache.clear()
+    redactionFontIds.clear()
 }
 
 /**
  * Identity of one redaction OF one form. Two invocations of the same form
- * that map a region to the same place AND inherit the same pen can share a
- * rewrite; two that differ in either cannot, because one rewritten stream
- * cannot be right for both: a stroke's padding depends on [lineWidth] and
- * [miterLimit] (8.4.3.2, 8.4.3.5) the same way its position depends on
- * [rectangles], and both travel into a form from the invoking `Do` (8.10.2).
+ * that map a region to the same place AND inherit the same pen and text state
+ * can share a rewrite; two that differ in any of these cannot, because one
+ * rewritten stream cannot be right for both: a stroke's padding depends on
+ * [lineWidth] and [miterLimit] (8.4.3.2, 8.4.3.5), and a run's place on the
+ * font and spacing in [text], the same way both depend on [rectangles]. All of
+ * them travel into a form from the invoking `Do` (8.10.2).
  * Coordinates and pen are quantised to 1/1000 pt so float noise in the
  * inverted CTM does not manufacture clones that are the same rewrite twice.
  */
@@ -55,6 +58,7 @@ internal fun PdfEditor.formKey(
     rectangles: List<KiteRectangle>,
     lineWidth: Double,
     miterLimit: Double,
+    text: RedactionEngine.TextState,
 ): String = buildString {
     append(objectNumber)
     val sorted = rectangles.sortedWith(
@@ -69,6 +73,10 @@ internal fun PdfEditor.formKey(
     }
     append('|'); append(quantise(lineWidth))
     append(','); append(quantise(miterLimit))
+    append("|f"); append(text.font?.let { redactionFontIds.getOrPut(it) { redactionFontIds.size } } ?: -1)
+    for (v in listOf(text.fontSize, text.charSpacing, text.wordSpacing, text.horizontalScaling, text.leading, text.rise)) {
+        append(','); append(quantise(v))
+    }
 }
 
 /**
@@ -158,10 +166,10 @@ internal fun PdfEditor.recurseIntoForms(
         // Already on the descent: the outer invocation that put it there owns the
         // rewrite, so this one keeps pointing at whatever that produces.
         if (formRef.objectNumber in formDescent) continue
-        val key = formKey(formRef.objectNumber, hit.formRects, hit.lineWidth, hit.miterLimit)
+        val key = formKey(formRef.objectNumber, hit.formRects, hit.lineWidth, hit.miterLimit, hit.text)
         val claimable = formRef.objectNumber !in pristine
         val target = redactedFormCache[key]
-            ?: redactFormXObject(formRef, hit.formRects, key, claimable, hit.lineWidth, hit.miterLimit)
+            ?: redactFormXObject(formRef, hit.formRects, key, claimable, hit.lineWidth, hit.miterLimit, hit.text)
         if (target == null) {
             // The form paints into a region and we could not read it. Redaction is
             // destructive, so a skip here would ship content we never inspected
@@ -202,8 +210,10 @@ internal fun PdfEditor.recurseIntoForms(
  * [lineWidth] and [miterLimit] seed the nested engine's pen (ISO 32000-1,
  * 8.10.2: a `Do` is a save/restore around the form, so the invoking stream's
  * graphics state, including the pen, is what a form's own unset `w`/`M`
- * fall back to). [formKey] already folds both into [key], so a second
- * invocation that inherits a different pen never reuses this rewrite.
+ * fall back to). [text] seeds its text state the same way, since a form that
+ * shows text without its own `Tf` draws in the invoking stream's font.
+ * [formKey] already folds all three into [key], so a second invocation that
+ * inherits a different pen or text state never reuses this rewrite.
  *
  * @return the object holding this redaction, or null when the form's stream is
  *   missing or will not decode.
@@ -215,6 +225,7 @@ internal fun PdfEditor.redactFormXObject(
     claimable: Boolean,
     lineWidth: Double,
     miterLimit: Double,
+    text: RedactionEngine.TextState,
 ): PdfReference? {
     val stream = formSources[formRef.objectNumber]
         ?: (effectiveObject(formRef.objectNumber) as? PdfStream)
@@ -241,6 +252,8 @@ internal fun PdfEditor.redactFormXObject(
             rectangles,
             lineWidth,
             miterLimit,
+            text,
+            loadType3Fonts(formResources),
         )
         engine.formMatrices = loadFormMatrices(formResources)
         engine.formBBoxes = loadFormBBoxes(formResources)
@@ -606,6 +619,21 @@ internal fun PdfEditor.loadPageFonts(resources: PdfDictionary?): Map<String, Pdf
     val fontDict = resources?.getDict("Font", effective) ?: return emptyMap()
     val out = LinkedHashMap<String, PdfFont>()
     for ((name, value) in fontDict.map) out[name] = PdfFont.from(value, effective)
+    return out
+}
+
+/**
+ * The Type 3 fonts of [resources] by name, read as the renderer reads them: a Type 3
+ * width is in glyph space, so the pen moves by it times the font matrix (9.6.5).
+ */
+internal fun PdfEditor.loadType3Fonts(resources: PdfDictionary?): Map<String, Type3Data> {
+    val fontDict = resources?.getDict("Font", effective) ?: return emptyMap()
+    val out = LinkedHashMap<String, Type3Data>()
+    for ((name, value) in fontDict.map) {
+        val dict = value.resolve(effective) as? PdfDictionary ?: continue
+        if (dict.getName("Subtype") != "Type3") continue
+        Type3Data.parse(dict, effective)?.let { out[name] = it }
+    }
     return out
 }
 
