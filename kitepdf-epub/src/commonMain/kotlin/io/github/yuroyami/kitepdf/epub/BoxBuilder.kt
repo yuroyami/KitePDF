@@ -2,6 +2,7 @@ package io.github.yuroyami.kitepdf.epub
 
 import io.github.yuroyami.kitepdf.svg.SvgImage
 
+import io.github.yuroyami.kitepdf.core.css.CssValues
 import io.github.yuroyami.kitepdf.core.xml.KiteXmlNode
 
 import io.github.yuroyami.kitepdf.epub.css.ComputedStyle
@@ -126,9 +127,11 @@ internal class BoxBuilder(
                     continue
                 }
                 if (child.tag == "svg") { // inline SVG: paint as a vector image box
-                    SvgImage.fromElement(child)?.let {
+                    val cs = resolver.compute(child, childAncestors, style)
+                    // A hidden sprite sheet or glyph cache generates no box (CSS 2.1, 9.2.4, #275).
+                    if (cs.display != Display.NONE) SvgImage.fromElement(child)?.let {
                         flush()
-                        children.add(ImageBox(resolver.compute(child, childAncestors, style), "", it).also { box -> box.semantics = svgSemantics(child, sem) })
+                        children.add(ImageBox(cs, "", it).also { box -> box.semantics = svgSemantics(child, sem) })
                     }
                     continue
                 }
@@ -180,6 +183,16 @@ internal class BoxBuilder(
             epubType = base?.epubType,
             hidden = base?.hidden == true,
         )
+    }
+
+    /**
+     * The `width` or `height` attribute of an inline `<svg>` in points: a bare number is
+     * CSS pixels, and `em` and `ex` follow the element's own font. Null for a percentage.
+     */
+    private fun svgSizePt(raw: String?, style: ComputedStyle): Double? {
+        val s = raw?.trim()?.takeIf { it.isNotEmpty() && !it.endsWith('%') } ?: return null
+        val pt = s.toDoubleOrNull()?.times(0.75) ?: CssValues.length(s, style.fontSizePt, resolver.initial().fontSizePt, 0.0)
+        return pt?.takeIf { it.isFinite() && it > 0.0 }
     }
 
     /** A synthetic block child holding a `display:block` pseudo's content. */
@@ -386,6 +399,19 @@ internal class BoxBuilder(
                         }
                         continue
                     }
+                    if (child.tag == "svg") {
+                        // An <svg> in inline content is an inline replaced element, like an
+                        // <img>: it flows on the line (CSS 2.1, 10.3.2, #275).
+                        val cs = resolver.compute(child, childAncestors, style)
+                        if (cs.display != Display.NONE) SvgImage.fromElement(child)?.let { svg ->
+                            val sem = svgSemantics(child, parentSem)
+                            inl.addImage(
+                                "", style, cs.widthPt ?: svgSizePt(child.attrs["width"], cs), cs.heightPt ?: svgSizePt(child.attrs["height"], cs),
+                                alt = if (sem.hidden) "" else sem.label, objectFit = cs.objectFit, svg = svg,
+                            )
+                        }
+                        continue
+                    }
                     val cs = resolver.compute(child, childAncestors, style)
                     when (cs.display) {
                         Display.NONE -> {}
@@ -526,13 +552,16 @@ internal class BoxBuilder(
         }
 
         /** An inline `<img>`: one U+FFFC run carrying the source + size hints. */
-        fun addImage(src: String, style: ComputedStyle, cssW: Double?, cssH: Double?, alt: String? = null, objectFit: ObjectFit = ObjectFit.FILL) {
+        fun addImage(
+            src: String, style: ComputedStyle, cssW: Double?, cssH: Double?, alt: String? = null,
+            objectFit: ObjectFit = ObjectFit.FILL, svg: SvgImage? = null,
+        ) {
             if (pendingSpace && blockHasContent && !lastWasBreak) {
                 runs.add(pendingSpaceRun ?: makeRun(" ", style))
             }
             pendingSpace = false; lastWasBreak = false; blockHasContent = true
             runs.add(
-                makeRun("￼", style).copy(imageSrc = src, imageCssW = cssW, imageCssH = cssH, imageAlt = alt, imageObjectFit = objectFit),
+                makeRun("￼", style).copy(imageSrc = src, imageSvg = svg, imageCssW = cssW, imageCssH = cssH, imageAlt = alt, imageObjectFit = objectFit),
             )
         }
 

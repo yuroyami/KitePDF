@@ -926,7 +926,7 @@ internal class BoxLayout(
             // content width. Undecodable images are skipped like block ones.
             if (run.imageSrc != null) {
                 endWord()
-                val svg = if (run.imageSrc.endsWith(".svg", true)) loadSvg(run.imageSrc) else null
+                val svg = run.imageSvg ?: if (run.imageSrc.endsWith(".svg", true)) loadSvg(run.imageSrc) else null
                 val img = if (svg == null) loadImage(run.imageSrc) else null
                 val iw: Double; val ih: Double
                 when {
