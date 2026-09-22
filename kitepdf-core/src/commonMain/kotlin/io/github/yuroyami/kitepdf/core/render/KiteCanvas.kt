@@ -87,7 +87,8 @@ public interface KiteCanvas {
      * True when this canvas needs resolved glyph outlines ([TextGlyph.outline]),
      * i.e. it actually paints (a render backend). Extraction canvases that only
      * read text + advances override this to `false`, letting the driver skip the
-     * cost of resolving glyph outlines.
+     * cost of resolving glyph outlines. Such a canvas gets every text run through
+     * [drawGlyphs], also a run that paints nothing, such as invisible OCR text.
      */
     public val resolvesGlyphOutlines: Boolean get() = true
 

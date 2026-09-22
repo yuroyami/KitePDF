@@ -1787,7 +1787,7 @@ public class PageRenderer(
 
         // Type3 fonts draw by replaying char-proc content streams.
         type3Data[font]?.let { data ->
-            showTextType3(state, bytes, t, data, textToUser)
+            showTextType3(state, font, bytes, t, data, textToUser)
             return
         }
 
@@ -1833,6 +1833,15 @@ public class PageRenderer(
                         alpha = state.current.fillAlpha, blendMode = state.current.blendMode,
                     )
                 }
+            } else if (!canvas.resolvesGlyphOutlines) {
+                // A canvas that reads text gets the runs that fill nothing too: an OCR layer
+                // (mode 3), outlined and clipping text are text all the same (9.3.6, #274).
+                canvas.drawGlyphs(
+                    glyphs, t.fontSize, font.unitsPerEm ?: 1000,
+                    font.hasEmbeddedOutlines, font.fontSpec, finalMatrix,
+                    state.current.fillColor,
+                    alpha = state.current.fillAlpha, blendMode = state.current.blendMode,
+                )
             }
             if (doStroke && !state.current.strokeColorSpace.paintsNothing) {
                 if (font.hasEmbeddedOutlines || hostShapes != null) {
@@ -2017,6 +2026,7 @@ public class PageRenderer(
      */
     private fun showTextType3(
         state: GraphicsStack,
+        font: PdfFont,
         bytes: ByteArray,
         t: TextState,
         data: Type3Data,
@@ -2026,11 +2036,14 @@ public class PageRenderer(
         // ISO 32000-2, 9.3.6: render modes 3 and 7 draw no Type 3 glyph, though the
         // pen still advances (#86).
         val invisible = t.renderingMode == 3 || t.renderingMode == 7
+        // A canvas that reads text cannot read the glyph drawings, so it gets the run as text.
+        val readsText = !canvas.resolvesGlyphOutlines
+        if (readsText && !hidden) reportType3Text(state, font, bytes, t, data, textToUser)
         var penX = 0.0
         for (b in bytes) {
             val code = b.toInt() and 0xFF
             val proc = data.nameForCode[code]?.let { data.charProcs[it] }
-            if (!hidden && !invisible && proc != null && formDepth < MAX_FORM_DEPTH) {
+            if (!hidden && !invisible && !readsText && proc != null && formDepth < MAX_FORM_DEPTH) {
                 formDepth++
                 try {
                     val glyphToUser = textToUser
@@ -2050,6 +2063,32 @@ public class PageRenderer(
         state.mutateText {
             it.copy(textMatrix = it.textMatrix.concat(KiteMatrix.translation(penX * hScale, 0.0)))
         }
+    }
+
+    /**
+     * Hands a Type 3 run to a canvas that reads text, with each glyph's text from the
+     * font's encoding or `/ToUnicode` and its advance from `/Widths` and `/FontMatrix`,
+     * in thousandths of an em (ISO 32000-1, 9.6.5, #274).
+     */
+    private fun reportType3Text(
+        state: GraphicsStack,
+        font: PdfFont,
+        bytes: ByteArray,
+        t: TextState,
+        data: Type3Data,
+        textToUser: KiteMatrix,
+    ) {
+        val glyphs = font.layoutBytes(bytes, false).map { glyph ->
+            val code = bytes.getOrNull(glyph.byteOffset)?.toInt()?.and(0xFF) ?: 0
+            glyph.copy(
+                advanceWidth = data.widthFor(code) * data.fontMatrix.a * 1000.0,
+                advanceAdjust = t.charSpacing + (if (glyph.isWordSpace) t.wordSpacing else 0.0),
+            )
+        }
+        canvas.drawGlyphs(
+            glyphs, t.fontSize, 1000, false, font.fontSpec, state.current.ctm.concat(textToUser),
+            state.current.fillColor, alpha = state.current.fillAlpha, blendMode = state.current.blendMode,
+        )
     }
 
     private fun replayType3Proc(
