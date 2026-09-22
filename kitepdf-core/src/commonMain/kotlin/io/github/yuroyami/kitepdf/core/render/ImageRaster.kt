@@ -72,6 +72,12 @@ public fun KiteImageData.toRgbaBytes(): ByteArray? {
         cs is KiteColorSpace.Indexed -> {
             if (!unpackIndexed(src, w, h, bpc, cs, out)) return null
         }
+        // An 8-bit grey space, a curve and matrix space and DeviceRGB with /Decode run
+        // from tables, so a photo in an ICC or spot space costs a few lookups per pixel
+        // instead of a full conversion (#72). DeviceRGB without /Decode took a fast path above.
+        bpc == 8 && cs.componentCount == 1 -> unpackGrayTable(src, pixelCount, cs, out)
+        bpc == 8 && cs.componentCount == 3 && cs.curveMatrix != null -> unpackCurveMatrix(src, pixelCount, cs, out)
+        bpc == 8 && cs === KiteColorSpace.DeviceRGB -> unpackRgbDecode(src, pixelCount, out)
         else -> {
             if (!unpackGeneral(src, w, h, bpc, cs, out)) return null
         }
@@ -145,12 +151,8 @@ private fun KiteImageData.unpackGeneral(
     val rowBytes = packedRowBytes(w, comps, bpc) ?: return false
     if (src.size.toLong() < rowBytes.toLong() * h) return false
     val maxval = ((1 shl bpc) - 1).toDouble()
-    val dec = decode
     val compBuf = DoubleArray(comps)
-    // ISO 32000-1, Table 90: with no /Decode a sample spans the space's own
-    // component range, 0 to 100 for Lab lightness (#76).
-    val lo = DoubleArray(comps) { cs.componentMin(it) }
-    val hi = DoubleArray(comps) { cs.componentMax(it) }
+    val range = sampleRanges(cs, comps)
     val opaque = 0xFF.toByte()
     var o = 0
     for (y in 0 until h) {
@@ -158,12 +160,7 @@ private fun KiteImageData.unpackGeneral(
         for (x in 0 until w) {
             for (c in 0 until comps) {
                 val sample = readBits(src, bit, bpc); bit += bpc
-                compBuf[c] = if (dec != null && dec.size >= 2 * (c + 1)) {
-                    val dmin = dec[2 * c]; val dmax = dec[2 * c + 1]
-                    dmin + sample * (dmax - dmin) / maxval
-                } else {
-                    lo[c] + sample * (hi[c] - lo[c]) / maxval
-                }
+                compBuf[c] = range[2 * c] + sample * (range[2 * c + 1] - range[2 * c]) / maxval
             }
             val rgb = cs.toRgb(compBuf)
             out[o++] = (rgb.r * 255.0).roundToInt().toByte()
@@ -173,6 +170,95 @@ private fun KiteImageData.unpackGeneral(
         }
     }
     return true
+}
+
+/**
+ * Each component's value at the lowest and the highest sample, as pairs: the
+ * `/Decode` entry, else the space's own range. ISO 32000-1, Table 90: that is 0
+ * to 100 for Lab lightness (#76).
+ */
+private fun KiteImageData.sampleRanges(cs: KiteColorSpace, comps: Int): DoubleArray {
+    val dec = decode
+    return DoubleArray(2 * comps) { i ->
+        val c = i / 2
+        when {
+            dec != null && dec.size >= 2 * (c + 1) -> dec[i]
+            i % 2 == 0 -> cs.componentMin(c)
+            else -> cs.componentMax(c)
+        }
+    }
+}
+
+/** An 8-bit one-component image through a 256-entry table of the space's own colours. */
+private fun KiteImageData.unpackGrayTable(src: ByteArray, pixelCount: Int, cs: KiteColorSpace, out: ByteArray) {
+    val range = sampleRanges(cs, 1)
+    val table = ByteArray(256 * 3)
+    val comp = DoubleArray(1)
+    for (s in 0..255) {
+        comp[0] = range[0] + s * (range[1] - range[0]) / 255.0
+        val rgb = cs.toRgb(comp)
+        table[3 * s] = (rgb.r * 255.0).roundToInt().toByte()
+        table[3 * s + 1] = (rgb.g * 255.0).roundToInt().toByte()
+        table[3 * s + 2] = (rgb.b * 255.0).roundToInt().toByte()
+    }
+    var o = 0
+    for (i in 0 until pixelCount) {
+        val t = 3 * (src[i].toInt() and 0xFF)
+        out[o++] = table[t]; out[o++] = table[t + 1]; out[o++] = table[t + 2]; out[o++] = 0xFF.toByte()
+    }
+}
+
+/**
+ * An 8-bit image in a curve and matrix space, such as an ICC matrix profile: a
+ * table per tone curve, the matrix, then a table of the sRGB encoding. The result
+ * matches the full conversion to within one level.
+ */
+private fun KiteImageData.unpackCurveMatrix(src: ByteArray, pixelCount: Int, cs: KiteColorSpace, out: ByteArray) {
+    val model = cs.curveMatrix ?: return
+    val range = sampleRanges(cs, 3)
+    val lin = Array(3) { c ->
+        FloatArray(256) { v -> model.curves[c](range[2 * c] + v * (range[2 * c + 1] - range[2 * c]) / 255.0).toFloat() }
+    }
+    val m = FloatArray(9) { model.toLinearSrgb[it].toFloat() }
+    val encode = SRGB_ENCODE
+    val top = (SRGB_ENCODE_STEPS - 1).toFloat()
+    var p = 0
+    var o = 0
+    repeat(pixelCount) {
+        val r = lin[0][src[p].toInt() and 0xFF]
+        val g = lin[1][src[p + 1].toInt() and 0xFF]
+        val b = lin[2][src[p + 2].toInt() and 0xFF]
+        p += 3
+        for (k in 0 until 3) {
+            val v = (m[3 * k] * r + m[3 * k + 1] * g + m[3 * k + 2] * b).coerceIn(0f, 1f)
+            out[o++] = encode[(v * top + 0.5f).toInt()]
+        }
+        out[o++] = 0xFF.toByte()
+    }
+}
+
+/** An 8-bit DeviceRGB image with a `/Decode` array: one table per component. */
+private fun KiteImageData.unpackRgbDecode(src: ByteArray, pixelCount: Int, out: ByteArray) {
+    val range = sampleRanges(KiteColorSpace.DeviceRGB, 3)
+    val table = Array(3) { c ->
+        ByteArray(256) { v -> ((range[2 * c] + v * (range[2 * c + 1] - range[2 * c]) / 255.0).coerceIn(0.0, 1.0) * 255.0).roundToInt().toByte() }
+    }
+    var p = 0
+    var o = 0
+    repeat(pixelCount) {
+        out[o++] = table[0][src[p++].toInt() and 0xFF]
+        out[o++] = table[1][src[p++].toInt() and 0xFF]
+        out[o++] = table[2][src[p++].toInt() and 0xFF]
+        out[o++] = 0xFF.toByte()
+    }
+}
+
+/** Linear steps of the sRGB encoding table: fine enough that the steep start stays within a level. */
+private const val SRGB_ENCODE_STEPS = 65536
+
+/** The sRGB encoding of linear value i / (steps - 1), as a byte. */
+private val SRGB_ENCODE: ByteArray by lazy {
+    ByteArray(SRGB_ENCODE_STEPS) { (srgbEncode(it / (SRGB_ENCODE_STEPS - 1).toDouble()) * 255.0).roundToInt().toByte() }
 }
 
 /**

@@ -49,6 +49,15 @@ public class IccProfile internal constructor(
         }
     }
 
+    /** The curves and matrix of an RGB profile, which the raster path runs from tables. Null for grey. */
+    internal val curveMatrix: CurveMatrix? by lazy {
+        val c = colorants ?: return@lazy null
+        if (curves.size < 3) return@lazy null
+        // The colorants are column-major: X = c[0] r + c[3] g + c[6] b.
+        val toXyz = DoubleArray(9) { i -> c[3 * (i % 3) + i / 3] }
+        CurveMatrix(List(3) { k -> curves[k]::eval }, times3(XYZ_TO_SRGB, times3(D50_TO_D65, toXyz)))
+    }
+
     /** Convert [components] (0..1 per channel) to sRGB. */
     public fun toRgb(components: DoubleArray): RgbColor {
         if (colorants == null) {
@@ -183,19 +192,31 @@ public class IccProfile internal constructor(
          * XYZ-to-sRGB conversion.
          */
         private fun xyzD50ToSrgb(x: Double, y: Double, z: Double): RgbColor {
-            val x65 = 0.9555766 * x - 0.0230393 * y + 0.0631636 * z
-            val y65 = -0.0282895 * x + 1.0099416 * y + 0.0210077 * z
-            val z65 = 0.0122982 * x - 0.0204830 * y + 1.3299098 * z
-            var r = x65 * 3.2404542 - y65 * 1.5371385 - z65 * 0.4985314
-            var g = -x65 * 0.9692660 + y65 * 1.8760108 + z65 * 0.0415560
-            var b = x65 * 0.0556434 - y65 * 0.2040259 + z65 * 1.0572252
-            fun encode(c: Double): Double {
-                val cc = c.coerceIn(0.0, 1.0)
-                return if (cc <= 0.0031308) 12.92 * cc else 1.055 * cc.pow(1.0 / 2.4) - 0.055
-            }
-            r = encode(r); g = encode(g); b = encode(b)
-            return RgbColor(r.coerceIn(0.0, 1.0), g.coerceIn(0.0, 1.0), b.coerceIn(0.0, 1.0))
+            val a = D50_TO_D65
+            val s = XYZ_TO_SRGB
+            val x65 = a[0] * x + a[1] * y + a[2] * z
+            val y65 = a[3] * x + a[4] * y + a[5] * z
+            val z65 = a[6] * x + a[7] * y + a[8] * z
+            return RgbColor(
+                srgbEncode(s[0] * x65 + s[1] * y65 + s[2] * z65),
+                srgbEncode(s[3] * x65 + s[4] * y65 + s[5] * z65),
+                srgbEncode(s[6] * x65 + s[7] * y65 + s[8] * z65),
+            )
         }
+
+        /** Bradford adaptation from the D50 connection space to D65, row-major. */
+        private val D50_TO_D65 = doubleArrayOf(
+            0.9555766, -0.0230393, 0.0631636,
+            -0.0282895, 1.0099416, 0.0210077,
+            0.0122982, -0.0204830, 1.3299098,
+        )
+
+        /** D65 XYZ to linear sRGB, row-major. */
+        private val XYZ_TO_SRGB = doubleArrayOf(
+            3.2404542, -1.5371385, -0.4985314,
+            -0.9692660, 1.8760108, 0.0415560,
+            0.0556434, -0.2040259, 1.0572252,
+        )
     }
 }
 
