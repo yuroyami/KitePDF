@@ -130,6 +130,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   spot colour or ICC-tagged JPEG shows its own colours. Eight-bit images in a grey
   space, an ICC matrix profile or CalRGB convert through tables, about twenty times
   faster than before (#72).
+- `EpubLink.kind` says whether a link is a note, glossary or bibliography
+  reference. `EpubDocument.linkTarget` reads the text, kind and a reflow-safe
+  bookmark of the element a link points at, so a reader can show a footnote in
+  place (#227).
 
 ## [0.10.0] - 2026-09-13
 

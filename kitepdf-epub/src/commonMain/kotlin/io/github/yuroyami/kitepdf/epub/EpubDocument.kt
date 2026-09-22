@@ -682,6 +682,29 @@ public class EpubDocument internal constructor(
         parsed.spinePaths.indexOfFirst { it == path }.takeIf { it >= 0 }
 
     /**
+     * The element an internal link points at, to show a note, a glossary entry or a
+     * citation in place instead of turning the page (#227). Reads the markup of the
+     * target's chapter only, and does not lay it out.
+     *
+     * [href] is a link as [EpubPage.links] gives it, `zipPath#fragment`. Returns null for
+     * an external URL, a link without a fragment, or a fragment the chapter lacks.
+     *
+     * ```kotlin
+     * val link = page.links.first { it.kind == EpubLinkKind.NOTE_REFERENCE }
+     * book.linkTarget(link.href)?.let { note -> showNote(note.text) }
+     * ```
+     */
+    public fun linkTarget(href: String): EpubLinkTarget? {
+        val fragment = href.substringAfter('#', "").takeIf { it.isNotEmpty() } ?: return null
+        val chapter = chapterOfPath(href.substringBefore('#')) ?: return null
+        return linkTargetIn(parsed.spine(chapter).tree, chapter, href, fragment)
+    }
+
+    /** What the link [href] on a page of [chapter] is for. */
+    internal fun linkKind(chapter: Int, href: String): EpubLinkKind =
+        parsed.spine(chapter).linkKinds[href] ?: EpubLinkKind.LINK
+
+    /**
      * A reading position for an internal href (`chapter3.xhtml#part-two`), built
      * without laying anything out. Resolve it with [locate], which prepares that
      * one chapter. This is the cheap half of following a link.
@@ -865,10 +888,13 @@ internal class FixedSpine(val root: BlockBox, val width: Double, val height: Dou
  * A tappable link region on an [EpubPage]. [rect] is in display space (y-down;
  * y-min stored in [KiteRectangle.bottom]). [href] is either `zipPath#fragment`
  * (internal, resolve with the document's href navigation) or an external URL.
+ * [kind] says what the link is for, such as a note reference, which a reader can
+ * open in place with [EpubDocument.linkTarget].
  */
 public class EpubLink internal constructor(
     public val rect: io.github.yuroyami.kitepdf.core.KiteRectangle,
     public val href: String,
+    public val kind: EpubLinkKind = EpubLinkKind.LINK,
 )
 
 /** Generic font family a reader app can force via [EpubSettings.fontFamily]. */
@@ -1328,6 +1354,7 @@ public class EpubPage internal constructor(
                             io.github.yuroyami.kitepdf.core.KiteRectangle(start, acrossLow, end, acrossHigh)
                         },
                         href = href,
+                        kind = doc.linkKind(chapter, href),
                     ),
                 )
                 i = j + 1
@@ -1349,6 +1376,7 @@ public class EpubPage internal constructor(
                             left, displayY(page, top), left + box.borderBoxWidth, displayY(page, bottom),
                         ),
                         href = href,
+                        kind = doc.linkKind(chapter, href),
                     ),
                 )
             }
