@@ -104,6 +104,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Text notes, file attachments, carets, stamps and free text annotations with no
   appearance stream get one: the note or attachment icon, the caret, the stamp
   name in a frame, and the free text in its `/DA` font and colour (#164).
+- A shading pattern follows the space of the stream that paints it, so a pattern
+  inside a form moves with the form, and the painted path clips it under the
+  current matrix (#93). An uncoloured tiling pattern paints in the colour given
+  with its name, and its cell cannot set a colour of its own (#94).
 
 ## [0.10.0] - 2026-09-13
 
