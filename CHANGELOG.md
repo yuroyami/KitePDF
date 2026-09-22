@@ -98,6 +98,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - SVG text reads its `x`, `y`, `dx`, `dy` and `rotate` lists per character, and
   `text-anchor` aligns each text chunk as one piece across its `<tspan>`s
   (#181).
+- An image whose soft mask has a `/Matte` colour has that preblend undone, so its
+  edges lose the matte-coloured fringe. `KiteImageData.softMaskMatte` carries
+  the colour (#159).
 
 ## [0.10.0] - 2026-09-13
 

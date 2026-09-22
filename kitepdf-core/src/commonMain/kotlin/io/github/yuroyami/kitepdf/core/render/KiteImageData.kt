@@ -88,6 +88,12 @@ public class KiteImageData internal constructor(
      * an array-valued `/Mask` and no `/SMask`.
      */
     public val colorKeyMask: IntArray? = null,
+    /**
+     * The `/Matte` colour of the `/SMask`, converted to RGB. When it is set, the
+     * colour samples were preblended with it (ISO 32000-1, 11.6.5.3), and
+     * [toRgbaBytes] undoes that blend. Null when the soft mask has no `/Matte`.
+     */
+    public val softMaskMatte: RgbColor? = null,
 ) {
 
     public enum class Kind {
@@ -156,6 +162,7 @@ public class KiteImageData internal constructor(
             val (alpha, smW, smH) =
                 if (hasSMask) loadSoftMask(dict, refs) else loadStencilMask(dict, refs)
             val colorKey = if (hasSMask) null else loadColorKeyMask(dict, refs)
+            val matte = if (hasSMask && !isMask) loadMatte(dict, refs, resolvedCs) else null
 
             val filters = extractFilterNames(dict["Filter"] ?: dict["F"])
             val kind = pickKind(filters)
@@ -168,7 +175,7 @@ public class KiteImageData internal constructor(
                     pixelBytes = runCatching { FilterChain.decode(stream) }.onFailure { e ->
                         kiteWarn { "image: decode fell back to placeholder: ${e.message}" }
                     }.getOrNull(),
-                    softMaskAlpha = alpha, softMaskWidth = smW, softMaskHeight = smH,
+                    softMaskAlpha = alpha, softMaskWidth = smW, softMaskHeight = smH, softMaskMatte = matte,
                     resolvedColorSpace = resolvedCs, decode = decodeArr,
                     isImageMask = isMask, maskFill = fillColor, colorKeyMask = colorKey,
                 )
@@ -185,12 +192,12 @@ public class KiteImageData internal constructor(
                     if (bm != null) KiteImageData(
                         bm.width, bm.height, 8, "DeviceRGB", Kind.RAW,
                         encodedBytes = ByteArray(0), pixelBytes = bm.toRgbBytes(),
-                        softMaskAlpha = alpha, softMaskWidth = smW, softMaskHeight = smH,
+                        softMaskAlpha = alpha, softMaskWidth = smW, softMaskHeight = smH, softMaskMatte = matte,
                         resolvedColorSpace = KiteColorSpace.DeviceRGB,
                         isImageMask = isMask, maskFill = fillColor, colorKeyMask = colorKey,
                     ) else KiteImageData(
                         width, height, bpc, cs, kind, terminal.bytes,
-                        softMaskAlpha = alpha, softMaskWidth = smW, softMaskHeight = smH,
+                        softMaskAlpha = alpha, softMaskWidth = smW, softMaskHeight = smH, softMaskMatte = matte,
                         resolvedColorSpace = resolvedCs, decode = decodeArr,
                         isImageMask = isMask, maskFill = fillColor, colorKeyMask = colorKey,
                     )
@@ -208,12 +215,12 @@ public class KiteImageData internal constructor(
                     if (decoded != null) KiteImageData(
                         width, height, 1, "DeviceGray", Kind.RAW,
                         encodedBytes = ByteArray(0), pixelBytes = decoded,
-                        softMaskAlpha = alpha, softMaskWidth = smW, softMaskHeight = smH,
+                        softMaskAlpha = alpha, softMaskWidth = smW, softMaskHeight = smH, softMaskMatte = matte,
                         resolvedColorSpace = if (isMask) null else KiteColorSpace.DeviceGray,
                         decode = decodeArr, isImageMask = isMask, maskFill = fillColor, colorKeyMask = colorKey,
                     ) else KiteImageData(
                         width, height, bpc, cs, kind, terminal.bytes,
-                        softMaskAlpha = alpha, softMaskWidth = smW, softMaskHeight = smH,
+                        softMaskAlpha = alpha, softMaskWidth = smW, softMaskHeight = smH, softMaskMatte = matte,
                         resolvedColorSpace = resolvedCs, decode = decodeArr,
                         isImageMask = isMask, maskFill = fillColor, colorKeyMask = colorKey,
                     )
@@ -237,6 +244,7 @@ public class KiteImageData internal constructor(
                             softMaskAlpha = if (useAlpha) raw.alpha else alpha,
                             softMaskWidth = if (useAlpha) raw.width else smW,
                             softMaskHeight = if (useAlpha) raw.height else smH,
+                            softMaskMatte = if (useAlpha) null else matte,
                             resolvedColorSpace = if (isMask) null else {
                                 if (raw.colorSpace == "DeviceRGB") KiteColorSpace.DeviceRGB else KiteColorSpace.DeviceGray
                             },
@@ -244,7 +252,7 @@ public class KiteImageData internal constructor(
                         )
                     } else KiteImageData(
                         width, height, bpc, cs, kind, terminal.bytes,
-                        softMaskAlpha = alpha, softMaskWidth = smW, softMaskHeight = smH,
+                        softMaskAlpha = alpha, softMaskWidth = smW, softMaskHeight = smH, softMaskMatte = matte,
                         resolvedColorSpace = resolvedCs, decode = decodeArr,
                         isImageMask = isMask, maskFill = fillColor, colorKeyMask = colorKey,
                     )
@@ -253,7 +261,7 @@ public class KiteImageData internal constructor(
                 // platform code (or a future native decoder) interprets them.
                 else -> KiteImageData(
                     width, height, bpc, cs, kind, stream.rawBytes,
-                    softMaskAlpha = alpha, softMaskWidth = smW, softMaskHeight = smH,
+                    softMaskAlpha = alpha, softMaskWidth = smW, softMaskHeight = smH, softMaskMatte = matte,
                     resolvedColorSpace = resolvedCs, decode = decodeArr,
                     isImageMask = isMask, maskFill = fillColor, colorKeyMask = colorKey,
                 )
@@ -447,6 +455,22 @@ public class KiteImageData internal constructor(
         }
 
         /**
+         * The `/Matte` of an image's `/SMask` as RGB (ISO 32000-1, 11.6.5.3). It has one
+         * component per component of the image's own colour space, so it is null when
+         * that space is unknown or indexed, or when the count does not match.
+         */
+        private fun loadMatte(dict: PdfDictionary, refs: IndirectResolver?, cs: KiteColorSpace?): RgbColor? {
+            if (cs == null || cs is KiteColorSpace.Indexed) return null
+            val raw = dict["SMask"] ?: return null
+            val mask = (if (raw is PdfStream || refs == null) raw else runCatching { raw.resolve(refs) }.getOrNull())
+                as? PdfStream ?: return null
+            val entry = mask.dict["Matte"]?.let { m -> if (refs == null) m else runCatching { m.resolve(refs) }.getOrNull() }
+            val matte = readDecode(entry) ?: return null
+            if (matte.size != cs.componentCount) return null
+            return runCatching { cs.toRgb(matte) }.getOrNull()
+        }
+
+        /**
          * True when the image dictionary carries a `/SMask` worth reading. A
          * present-but-empty entry (`null`, `/None`) counts as absent, so a
          * `/Mask` next to it is still honoured.
@@ -603,7 +627,7 @@ public class KiteImageData internal constructor(
             return KiteImageData(
                 width = mw, height = mh, bitsPerComponent = 8, colorSpace = colorSpace,
                 kind = Kind.RAW, encodedBytes = ByteArray(0), pixelBytes = out,
-                softMaskAlpha = softMaskAlpha, softMaskWidth = mw, softMaskHeight = mh,
+                softMaskAlpha = softMaskAlpha, softMaskWidth = mw, softMaskHeight = mh, softMaskMatte = softMaskMatte,
                 resolvedColorSpace = resolvedColorSpace, decode = decode,
                 isImageMask = false, maskFill = maskFill, colorKeyMask = colorKeyMask,
             )
