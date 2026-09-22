@@ -88,6 +88,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - XPS text with a gradient or image fill and a missing font paints in one colour
   of the brush instead of disappearing (#267). XPS clips leave out figures that
   are marked as unfilled (#268).
+- CI uploads the XPS raster test output when that test fails (#270).
 
 ## [0.10.0] - 2026-09-13
 

@@ -126,6 +126,7 @@ jobs:
             **/build/difftest/**
             **/build/epub-difftest/**
             **/build/skia-difftest/**
+            **/build/xps-difftest/**
             **/build/benchmark/**
             **/build/fuzz/**
             **/build/epub-hashes.txt
