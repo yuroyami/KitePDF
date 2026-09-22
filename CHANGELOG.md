@@ -113,6 +113,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   new `KiteCanvas.hostGlyphOutline` supplies them. A canvas without host
   outlines fills stroked text in the stroke colour instead of drawing nothing
   (#85).
+- Search and selection find text that fills nothing: invisible text such as an
+  OCR layer, outlined and clipping text, and text in a colour that paints
+  nothing. Type 3 text reaches the text layer too (#274).
 
 ## [0.10.0] - 2026-09-13
 
