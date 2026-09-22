@@ -52,6 +52,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Two additional EPUB sweep fixtures add one page each. All 26 existing books
   retain their page counts.
 
+### Follow-up fixes
+
+- A reference to a missing object no longer fails every page of a PDF with
+  layers. Optional content reads it as null and hides nothing (#252).
+- An inline image whose computed length does not end at `EI` no longer drops
+  the rest of the page. Text extraction, the editor and redaction split inline
+  images where the renderer does (#254, #266).
+- The Deflate oracle test reads the CI oracle through `MUTOOL`, and reports
+  skipped instead of passed when the oracle is absent (#260).
+
 ## [0.10.0] - 2026-09-13
 
 A Chinese novel still ran a 192 MB Android heap out of memory after 0.9.0,

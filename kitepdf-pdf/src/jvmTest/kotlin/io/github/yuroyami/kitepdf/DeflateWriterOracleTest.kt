@@ -2,6 +2,7 @@ package io.github.yuroyami.kitepdf
 
 import io.github.yuroyami.kitepdf.core.compression.Deflate
 import io.github.yuroyami.kitepdf.core.compression.Zlib
+import io.github.yuroyami.kitepdf.font.orSkip
 import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -12,7 +13,7 @@ import kotlin.test.assertTrue
  * ratio on an actual corpus content stream, and `mutool` accepting a PDF
  * whose content stream was compressed by it (bypassing the platform
  * fast path, which would otherwise hide the pure encoder on the JVM).
- * Corpus/mutool-dependent parts skip silently when absent.
+ * Corpus/mutool-dependent parts report SKIPPED when absent.
  */
 class DeflateWriterOracleTest {
 
@@ -22,8 +23,9 @@ class DeflateWriterOracleTest {
         return d?.let { File(it, "corpus/pdf/$name") }?.takeIf { it.exists() }
     }
 
+    // CI provides its pinned oracle only through MUTOOL (#260).
     private fun mutool(): String? =
-        listOf("/opt/homebrew/bin/mutool", "/usr/local/bin/mutool", "mutool")
+        listOfNotNull(System.getenv("MUTOOL"), "/opt/homebrew/bin/mutool", "/usr/local/bin/mutool", "mutool")
             .firstOrNull { runCatching { ProcessBuilder(it, "-v").start().waitFor() }.getOrNull() == 0 }
 
     /** Manual zlib wrapper over the PURE encoder (Zlib.encode fast-paths on JVM). */
@@ -40,7 +42,7 @@ class DeflateWriterOracleTest {
 
     @Test
     fun real_content_stream_ratio_within_budget() {
-        val file = corpusPdf("GoldenHour-byIOS.pdf") ?: return
+        val file = corpusPdf("GoldenHour-byIOS.pdf").orSkip("The GoldenHour corpus PDF")
         val doc = KitePDF.open(file.readBytes())
         val content = doc.pages[0].contentBytes
         assertTrue(content.size > 1000, "page 0 has a real content stream (${content.size} B)")
@@ -63,7 +65,7 @@ class DeflateWriterOracleTest {
 
     @Test
     fun mutool_accepts_a_pdf_with_a_pure_encoded_stream() {
-        val mutool = mutool() ?: return
+        val mutool = mutool().orSkip("mutool")
         val content = "1 0 0 RG 0.9 0.2 0.1 rg 72 72 468 648 re f BT /F1 24 Tf 100 400 Td (pure dynamic huffman) Tj ET\n"
             .repeat(50).encodeToByteArray()
         val stream = pureZlib(content)

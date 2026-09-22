@@ -199,7 +199,8 @@ public class PdfEditor internal constructor(
      */
     public fun editPageContent(page: PdfPage, transform: (List<Operation>) -> List<Operation>) {
         val ref = pageReference(page)
-        val ops = ContentStreamParser.parse(effectiveContentBytes(ref))
+        val colorSpaces = ContentStreamParser.colorSpaces(effectiveResources(ref, page), effective)
+        val ops = ContentStreamParser.parse(effectiveContentBytes(ref), colorSpaces)
         val newContent = ContentStreamWriter.serialize(transform(ops))
         val streamRef = addObject(PdfStreams.flate(newContent))
         updateObject(ref, withEntry(effectivePageDict(ref), "Contents", streamRef))
@@ -822,7 +823,8 @@ public class PdfEditor internal constructor(
         val pageDict = effectivePageDict(ref)
         val pageResources = effectiveResources(ref, page)
         redactionPageResources = pageResources
-        val ops = ContentStreamParser.parse(effectiveContentBytes(ref))
+        // Split inline images at the renderer's bytes, or a redaction can miss drawn text (#266).
+        val ops = ContentStreamParser.parse(effectiveContentBytes(ref), ContentStreamParser.colorSpaces(pageResources, effective))
 
         val engine = RedactionEngine(
             loadPageFonts(pageResources),

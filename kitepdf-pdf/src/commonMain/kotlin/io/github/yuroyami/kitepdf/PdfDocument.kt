@@ -371,7 +371,8 @@ public class PdfDocument private constructor(
      * catalog has no `/OCProperties`.
      */
     public val optionalContent: PdfOptionalContent? by lazy {
-        PdfOptionalContent.parse(catalog, this)
+        // Lenient salvage: an unreadable configuration leaves every layer visible (#252).
+        runCatching { PdfOptionalContent.parse(catalog, this) }.getOrNull()
     }
 
     /**

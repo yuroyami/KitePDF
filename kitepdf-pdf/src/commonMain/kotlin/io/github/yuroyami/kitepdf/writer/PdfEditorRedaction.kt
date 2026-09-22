@@ -233,7 +233,7 @@ internal fun PdfEditor.redactFormXObject(
         // A form may omit /Resources and take the page's (7.8.3). The renderer
         // does the same, which is what keeps the mirror invariant true.
         val formResources = stream.dict.getDict("Resources", effective) ?: redactionPageResources
-        val ops = ContentStreamParser.parse(content)
+        val ops = ContentStreamParser.parse(content, ContentStreamParser.colorSpaces(formResources, effective))
         val engine = RedactionEngine(
             loadPageFonts(formResources),
             loadImageXObjectNames(formResources),

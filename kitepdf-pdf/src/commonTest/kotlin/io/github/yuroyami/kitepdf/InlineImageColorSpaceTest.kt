@@ -5,6 +5,7 @@ import io.github.yuroyami.kitepdf.core.render.toRgbaBytes
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
 /** Inline resource colour spaces and sample boundaries (ISO 32000-1, 8.9.7, #114). */
 class InlineImageColorSpaceTest {
@@ -72,5 +73,43 @@ class InlineImageColorSpaceTest {
             "BI /W 1 /H 1 /BPC 8 /CS /Missing /F /AHx ID 00> EI 0 0 10 10 re f",
         )
         assertEquals(1, TestPdf.calls(pdf).filterIsInstance<RecordingCanvas.Call.Fill>().size)
+    }
+
+    @Test
+    fun a_wrong_component_count_rescans_from_the_data_start() {
+        // An ICCBased stream without /N reads as three components, so the exact
+        // length overshoots the real EI. The rest of the page must survive (#254).
+        val samples = ByteArray(400) { 'A'.code.toByte() }
+        val tail = buildString { append(" EI Q"); repeat(100) { append(" 0 0 1 1 re f") } }
+        val content = "q 20 0 0 20 0 0 cm BI /W 20 /H 20 /BPC 8 /CS /CS0 ID ".encodeToByteArray() +
+            samples + tail.encodeToByteArray()
+        val pdf = TestPdf.build(listOf(
+            "<< /Type /Catalog /Pages 2 0 R >>",
+            "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+            "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] /Resources << /ColorSpace << /CS0 [/ICCBased 5 0 R] >> >> /Contents 4 0 R >>",
+            TestPdf.Stream("", content),
+            TestPdf.Stream("", ByteArray(16)),
+        ))
+        val calls = TestPdf.calls(pdf)
+        assertEquals(1, calls.filterIsInstance<RecordingCanvas.Call.Image>().size)
+        assertEquals(100, calls.filterIsInstance<RecordingCanvas.Call.Fill>().size)
+    }
+
+    @Test
+    fun text_extraction_ends_an_inline_image_where_the_renderer_does() {
+        // The samples hold " EI (": a scan would stop there and read the string
+        // opener into the following text operators (#266).
+        val samples = byteArrayOf(32, 69, 73, 32, 40)
+        val content = "BI /W 5 /H 1 /BPC 8 /CS /CS0 ID ".encodeToByteArray() + samples +
+            " EI BT /F1 12 Tf 10 10 Td (secret) Tj ET".encodeToByteArray()
+        val pdf = TestPdf.build(listOf(
+            "<< /Type /Catalog /Pages 2 0 R >>",
+            "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+            "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] /Resources << /ColorSpace << /CS0 /DeviceGray >> " +
+                "/Font << /F1 << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> >> >> /Contents 4 0 R >>",
+            TestPdf.Stream("", content),
+        ))
+        val page = PdfDocument.open(pdf).pages[0]
+        assertTrue("secret" in io.github.yuroyami.kitepdf.text.TextExtractor.extract(page))
     }
 }
