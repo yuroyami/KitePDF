@@ -80,6 +80,7 @@ public class PageRenderer(
     // operator is a spec no-op so the glyph paints with the caller's fill
     // colour (§9.6.5).
     private val type3Data = HashMap<PdfFont, Type3Data?>()
+    /** Colour operators are ignored: in a d1 Type 3 glyph (9.6.5) and in an uncoloured tiling cell (8.7.3.3). */
     private var type3IgnoreColor = false
 
     // Text render modes 4..7: glyph outlines accumulate here in USER
@@ -152,6 +153,13 @@ public class PageRenderer(
     /** The page's default (initial) CTM. Pattern matrices are relative to it. */
     private var pageBaseCtm: KiteMatrix = KiteMatrix.IDENTITY
 
+    /**
+     * The default space of the content stream being run: the page's, a form's once its
+     * /Matrix applies, a tiling cell's or a Type 3 glyph's. A pattern matrix maps to it
+     * (ISO 32000-1, 8.7.3.1), so a pattern inside a form moves with the form (#93).
+     */
+    private var patternBaseCtm: KiteMatrix = KiteMatrix.IDENTITY
+
     /** The page crop box, so a soft mask whose /BBox cannot be read still covers only the page (#255). */
     private var pageCropBox: io.github.yuroyami.kitepdf.core.KiteRectangle? = null
 
@@ -195,6 +203,7 @@ public class PageRenderer(
         clipSaveStack.clear()
         pendingClip = 0
         pageBaseCtm = deviceCtm
+        patternBaseCtm = deviceCtm
         pageCropBox = page.cropBox
         formDepth = 0
         dispatchedOps = 0L
@@ -230,6 +239,7 @@ public class PageRenderer(
         clipSaveStack.clear()
         pendingClip = 0
         pageBaseCtm = deviceCtm
+        patternBaseCtm = deviceCtm
         pageCropBox = page.cropBox
         formDepth = 0
         dispatchedOps = 0L
@@ -882,6 +892,8 @@ public class PageRenderer(
         parentState.replace(parentState.current.copy(
             ctm = parentState.current.ctm.concat(formMatrix),
         ))
+        val savedPatternBase = patternBaseCtm
+        patternBaseCtm = parentState.current.ctm
         val groupOpened = isTransparencyGroup
         if (groupOpened) {
             // The group's constant alpha + blend mode apply ONCE, to the composite
@@ -926,6 +938,7 @@ public class PageRenderer(
             while (activeClipCount > clipBase) { canvas.popClip(); activeClipCount-- }
             canvas.popClip()
             if (groupOpened) canvas.endTransparencyGroup()
+            patternBaseCtm = savedPatternBase
             parentState.restore()
         }
     }
@@ -985,7 +998,7 @@ public class PageRenderer(
         properties: Map<String, PdfObject>,
     ) {
         if (++dispatchedOps > MAX_DISPATCHED_OPS) return
-        // d1 (uncolored) Type3 glyph procs must not change colour state.
+        // d1 (uncolored) Type3 glyph procs and uncoloured pattern cells must not change colour state.
         if (type3IgnoreColor && op.operator in TYPE3_COLOR_OPS) return
         val a = op.operands
         when (op.operator) {
@@ -1374,7 +1387,7 @@ public class PageRenderer(
                 // coordinate system, not the current user space (§8.7.3.1). Use
                 // pageBaseCtm, matching the tiling path below, instead of s.ctm.
                 pat is KitePattern.Shading -> paintShadingPattern(pat, built, s, evenOdd, stroke = false)
-                pat is KitePattern.Tiling -> renderTilingPattern(pat, built, s, evenOdd, s.fillAlpha)
+                pat is KitePattern.Tiling -> renderTilingPattern(pat, built, s, evenOdd, s.fillAlpha, s.fillColor)
                 pat != null -> {
                     // Unsupported pattern. Skip rather than paint the default
                     // colour, which would flood e.g. a full-page background black.
@@ -1400,7 +1413,7 @@ public class PageRenderer(
                 // and fill the pattern into it (mirror of the fill-pattern path).
                 // The pattern /Matrix is relative to the page default CTM.
                 pat is KitePattern.Shading -> paintShadingPattern(pat, built, s, evenOdd = false, stroke = true)
-                pat is KitePattern.Tiling -> renderTilingPattern(pat, built, s, evenOdd = false, alpha = s.strokeAlpha)
+                pat is KitePattern.Tiling -> renderTilingPattern(pat, built, s, evenOdd = false, alpha = s.strokeAlpha, color = s.strokeColor)
                 pat != null -> {
                     // Unsupported pattern. Skip rather than paint a stale colour.
                 }
@@ -1435,7 +1448,7 @@ public class PageRenderer(
      * (ISO 32000-1, Table 76, #158), its /Background covers the region first
      * (Table 78 limits that to pattern fills, never `sh`, #155), and the
      * shading then paints clipped to its box. The pattern matrix maps to the
-     * page's default space, like the tiling path.
+     * default space of the stream that paints, like the tiling path.
      */
     private fun paintShadingPattern(pat: KitePattern.Shading, region: KitePath, s: GraphicsState, evenOdd: Boolean, stroke: Boolean) {
         val ps = pat.extGState?.let { s.applyExtGState(it) } ?: s
@@ -1443,23 +1456,32 @@ public class PageRenderer(
         pat.shading.background?.let { bg ->
             canvas.fillPath(region, s.ctm, bg, evenOdd, alpha = alpha, blendMode = ps.blendMode)
         }
-        fillShadingInBBox(pat.shading, pageBaseCtm.concat(pat.matrix), region, alpha, ps.blendMode)
+        // The region is the path under the CTM at the paint operator (8.5.3.1). Only the
+        // shading follows the pattern matrix, so the two cannot share one matrix (#93).
+        canvas.pushClip(region, s.ctm, evenOdd)
+        try {
+            fillShadingInBBox(pat.shading, patternBaseCtm.concat(pat.matrix), null, alpha, ps.blendMode)
+        } finally {
+            canvas.popClip()
+        }
     }
 
     /**
      * Fill [clipPath] with a tiling pattern (ISO 32000-1 §8.7.3): clip to the
      * region, then replay the pattern cell's content stream at every
      * `/XStep`,`/YStep` offset that intersects the region. The pattern matrix is
-     * relative to the page's default coordinate system. Uncolored patterns
-     * (PaintType 2) are painted in the current fill colour.
+     * relative to the default space of the stream that paints. An uncoloured
+     * pattern (PaintType 2) paints in [color], the colour the `scn` operands gave,
+     * and its cell cannot set a colour of its own (ISO 32000-1, 8.7.3.3, #94).
      */
     private fun renderTilingPattern(
         pat: KitePattern.Tiling, clipPath: KitePath, s: GraphicsState, evenOdd: Boolean, alpha: Double,
+        color: RgbColor,
     ) {
         val xs = pat.xStep
         val ys = pat.yStep
         if (xs == 0.0 || ys == 0.0) return
-        val patternCtm = pageBaseCtm.concat(pat.matrix)
+        val patternCtm = patternBaseCtm.concat(pat.matrix)
         val toPattern = patternCtm.invert() ?: return
         val dev = deviceBounds(clipPath, s.ctm) ?: return
 
@@ -1509,11 +1531,15 @@ public class PageRenderer(
         // A pending W/W* belongs to the enclosing stream, not the tile cell.
         val savedPendingClip = pendingClip
         pendingClip = 0
+        val savedPatternBase = patternBaseCtm
+        val savedIgnore = type3IgnoreColor
+        type3IgnoreColor = uncolored
         try {
             for (j in j0..j1) for (i in i0..i1) {
                 val tileCtm = patternCtm.concat(KiteMatrix.translation(i * xs, j * ys))
+                patternBaseCtm = tileCtm
                 val tileState = GraphicsStack(
-                    if (uncolored) GraphicsState(ctm = tileCtm, fillColor = s.fillColor, strokeColor = s.fillColor)
+                    if (uncolored) GraphicsState(ctm = tileCtm, fillColor = color, strokeColor = color)
                     else GraphicsState(ctm = tileCtm),
                 )
                 canvas.pushClip(cellBox, tileCtm, false)
@@ -1531,6 +1557,8 @@ public class PageRenderer(
             }
         } finally {
             pendingClip = savedPendingClip
+            patternBaseCtm = savedPatternBase
+            type3IgnoreColor = savedIgnore
             if (groupBox != null) canvas.endTransparencyGroup()
             canvas.popClip()
         }
@@ -1664,9 +1692,14 @@ public class PageRenderer(
             // Unsupported so the fill is skipped rather than collapsing to the
             // default (black) colour and flooding the region.
             val pat = patterns[nameOp.value] ?: KitePattern.Unsupported
+            // With [/Pattern base], the operands before the name are the colour of an
+            // uncoloured pattern, in the base space (ISO 32000-1, 8.7.3.3, #94).
+            val space = if (stroke) state.current.strokeColorSpace else state.current.fillColorSpace
+            val base = (space as? KiteColorSpace.Unsupported)?.patternBase
+            val color = if (base != null && a.size > 1) base.toRgb(DoubleArray(a.size - 1) { num(a, it) }) else null
             state.replace(
-                if (stroke) state.current.copy(strokePattern = pat)
-                else state.current.copy(fillPattern = pat),
+                if (stroke) state.current.copy(strokePattern = pat, strokeColor = color ?: state.current.strokeColor)
+                else state.current.copy(fillPattern = pat, fillColor = color ?: state.current.fillColor),
             )
             return
         }
@@ -2009,6 +2042,8 @@ public class PageRenderer(
         parentState.replace(parentState.current.copy(
             ctm = parentState.current.ctm.concat(glyphToUser),
         ))
+        val savedPatternBase = patternBaseCtm
+        patternBaseCtm = parentState.current.ctm
         val savedPendingClip = pendingClip
         pendingClip = 0
         val savedIgnore = type3IgnoreColor
@@ -2027,6 +2062,7 @@ public class PageRenderer(
             closeScope(scope, parentState)
             type3IgnoreColor = savedIgnore
             type3Depth--
+            patternBaseCtm = savedPatternBase
             pendingClip = savedPendingClip
             while (activeClipCount > clipBase) { canvas.popClip(); activeClipCount-- }
             parentState.restore()

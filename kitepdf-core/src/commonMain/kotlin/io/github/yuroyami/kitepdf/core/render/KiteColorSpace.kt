@@ -247,8 +247,20 @@ public sealed class KiteColorSpace {
         override fun componentMax(index: Int): Double = when (index) { 0 -> 100.0; 1 -> rangeAB[1]; else -> rangeAB[3] }
     }
 
-    /** Fallback for spaces we don't fully model. Routes to grey. */
-    public class Unsupported(public val name: String, override val componentCount: Int) : KiteColorSpace() {
+    /**
+     * Fallback for spaces we don't fully model. Routes to grey.
+     *
+     * [patternBase] is the underlying space of `[/Pattern base]`: an uncoloured tiling
+     * pattern takes its colour in that space from the operands before its name
+     * (ISO 32000-1, 8.7.3.3). Null for every other space.
+     */
+    public class Unsupported(
+        public val name: String,
+        override val componentCount: Int,
+        public val patternBase: KiteColorSpace?,
+    ) : KiteColorSpace() {
+        public constructor(name: String, componentCount: Int) : this(name, componentCount, null)
+
         override fun toRgb(components: DoubleArray): RgbColor {
             // Average the components as a rough grey approximation. No usable
             // component means black, never NaN, which no clamp catches (#151).
@@ -337,7 +349,7 @@ public sealed class KiteColorSpace {
                 "Indexed", "I" -> resolveIndexed(arr, refs, depth)
                 "Separation" -> resolveSeparation(arr, refs, depth)
                 "DeviceN" -> resolveDeviceN(arr, refs, depth)
-                "Pattern" -> Unsupported(tag, 1)
+                "Pattern" -> Unsupported(tag, 1, arr.getOrNull(1)?.let { resolve(it, refs, depth + 1) })
                 else -> DeviceGray
             }
         }

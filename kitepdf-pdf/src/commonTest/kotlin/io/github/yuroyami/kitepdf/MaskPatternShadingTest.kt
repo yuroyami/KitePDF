@@ -2,6 +2,8 @@ package io.github.yuroyami.kitepdf
 
 import io.github.yuroyami.kitepdf.core.KiteRectangle
 import io.github.yuroyami.kitepdf.core.render.KiteCanvas
+import io.github.yuroyami.kitepdf.core.render.KiteBlendMode
+import io.github.yuroyami.kitepdf.core.render.KiteShading
 import io.github.yuroyami.kitepdf.core.render.KiteMatrix
 import io.github.yuroyami.kitepdf.core.render.KitePath
 import io.github.yuroyami.kitepdf.core.render.RecordingCanvas
@@ -105,6 +107,76 @@ class MaskPatternShadingTest {
         assertEquals(2, fills.size, "the background, then the shading")
         assertEquals(RgbColor(0.0, 1.0, 0.0), fills[0].color, "the background comes first")
         assertTrue(fills.all { it.alpha == 0.5 }, "the pattern's own /ca applies (got ${fills.map { it.alpha }})")
+    }
+
+    /** Records every shading fill with the matrix it was given. */
+    private class ShadingRecordingCanvas(val inner: RecordingCanvas = RecordingCanvas()) : KiteCanvas by inner {
+        val shadingCtms = ArrayList<KiteMatrix>()
+        override fun fillShading(shading: KiteShading, ctm: KiteMatrix, clipPath: KitePath?, alpha: Double, blendMode: KiteBlendMode) {
+            shadingCtms += ctm
+            inner.fillShading(shading, ctm, clipPath, alpha, blendMode)
+        }
+    }
+
+    private val gradient = "<< /ShadingType 2 /ColorSpace /DeviceRGB /Coords [0 0 200 0] " +
+        "/Function << /FunctionType 2 /Domain [0 1] /C0 [1 0 0] /C1 [0 0 1] /N 1 >> /Extend [true true] >>"
+
+    @Test
+    fun a_shading_pattern_clips_under_the_ctm_and_shades_under_the_pattern_matrix() {
+        // ISO 32000-1, 8.7.3.1 and 8.5.3.1 (#93): the cm moves the square, not the gradient.
+        val canvas = ShadingRecordingCanvas()
+        val pdf = TestPdf.onePage(
+            content = "q 1 0 0 1 50 0 cm /Pattern cs /P1 scn 0 50 100 100 re f Q",
+            resources = "/Pattern << /P1 5 0 R >>",
+            extra = listOf("<< /PatternType 2 /Matrix [1 0 0 1 0 0] /Shading $gradient >>"),
+        )
+        PdfDocument.open(pdf).pages[0].renderTo(canvas, KiteMatrix.IDENTITY)
+        val clip = canvas.inner.calls.filterIsInstance<RecordingCanvas.Call.PushClip>().first()
+        assertEquals(50.0, clip.ctm.e, 1e-9, "the region is the square under the cm")
+        assertEquals(0.0, canvas.shadingCtms.single().e, 1e-9, "the gradient stays on the page's space")
+    }
+
+    @Test
+    fun a_shading_pattern_inside_a_form_follows_the_form_space() {
+        // 8.7.3.1: inside a form the parent stream is the form, so its /Matrix moves the gradient.
+        val canvas = ShadingRecordingCanvas()
+        val pdf = TestPdf.onePage(
+            content = "/Fm Do",
+            resources = "/XObject << /Fm 5 0 R >>",
+            extra = listOf(
+                TestPdf.stream(
+                    "/Pattern cs /P1 scn 0 0 100 100 re f",
+                    "/Type /XObject /Subtype /Form /BBox [0 0 200 200] /Matrix [1 0 0 1 100 0] /Resources << /Pattern << /P1 6 0 R >> >>",
+                ),
+                "<< /PatternType 2 /Shading $gradient >>",
+            ),
+        )
+        PdfDocument.open(pdf).pages[0].renderTo(canvas, KiteMatrix.IDENTITY)
+        assertEquals(100.0, canvas.shadingCtms.single().e, 1e-9)
+    }
+
+    private fun uncolouredCells(operands: String, cell: String): List<RgbColor> {
+        val calls = TestPdf.calls(
+            TestPdf.onePage(
+                content = "q /Cs1 cs $operands /P1 scn 20 20 160 160 re f Q",
+                resources = "/ColorSpace << /Cs1 [/Pattern /DeviceRGB] >> /Pattern << /P1 5 0 R >>",
+                extra = listOf(
+                    TestPdf.stream(cell, "/PatternType 1 /PaintType 2 /TilingType 1 /BBox [0 0 20 20] /XStep 20 /YStep 20 /Resources << >>"),
+                ),
+            ),
+        )
+        return calls.filterIsInstance<RecordingCanvas.Call.Fill>().map { it.color }.distinct()
+    }
+
+    @Test
+    fun an_uncoloured_tiling_pattern_paints_in_the_operand_colour() {
+        // ISO 32000-1, 8.7.3.3 (#94): the colour comes with the name, in the base space.
+        assertEquals(listOf(RgbColor(1.0, 0.0, 0.0)), uncolouredCells("1 0 0", "0 0 10 10 re f"))
+    }
+
+    @Test
+    fun an_uncoloured_cell_cannot_set_its_own_colour() {
+        assertEquals(listOf(RgbColor(0.0, 0.0, 1.0)), uncolouredCells("0 0 1", "1 0 0 rg 0 0 10 10 re f"))
     }
 
     @Test
