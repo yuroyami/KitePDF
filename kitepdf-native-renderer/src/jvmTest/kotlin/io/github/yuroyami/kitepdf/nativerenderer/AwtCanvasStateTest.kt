@@ -52,4 +52,14 @@ class AwtCanvasStateTest {
         assertTrue(px[0] > 250, "red survives: there is no ink under it to multiply with (got ${px.toList()})")
         assertEquals(127, px[3], "half alpha")
     }
+
+    @Test
+    fun multiply_onto_an_rgb_surface_blends_with_the_opaque_backdrop() {
+        // A raster with no alpha band is opaque, so Multiply must darken it (#272).
+        val src = BufferedImage(1, 1, BufferedImage.TYPE_INT_ARGB).apply { setRGB(0, 0, 0xFFFF0000.toInt()) }
+        val dst = BufferedImage(1, 1, BufferedImage.TYPE_INT_RGB).apply { setRGB(0, 0, 0xFF8080FF.toInt()) }
+        PdfBlendComposite(KiteBlendMode.Multiply, 1f).createContext(src.colorModel, dst.colorModel, null)
+            .compose(src.raster, dst.raster, dst.raster)
+        assertEquals(0xFF800000.toInt(), dst.getRGB(0, 0))
+    }
 }

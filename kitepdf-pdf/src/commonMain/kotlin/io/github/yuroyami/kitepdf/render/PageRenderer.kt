@@ -152,6 +152,9 @@ public class PageRenderer(
     /** The page's default (initial) CTM. Pattern matrices are relative to it. */
     private var pageBaseCtm: KiteMatrix = KiteMatrix.IDENTITY
 
+    /** The page crop box, so a soft mask whose /BBox cannot be read still covers only the page (#255). */
+    private var pageCropBox: io.github.yuroyami.kitepdf.core.KiteRectangle? = null
+
     /** Form-XObject nesting depth. It guards self/transitively-recursive `Do`. */
     private var formDepth = 0
 
@@ -192,6 +195,7 @@ public class PageRenderer(
         clipSaveStack.clear()
         pendingClip = 0
         pageBaseCtm = deviceCtm
+        pageCropBox = page.cropBox
         formDepth = 0
         dispatchedOps = 0L
         markedContentStack.clear()
@@ -226,6 +230,7 @@ public class PageRenderer(
         clipSaveStack.clear()
         pendingClip = 0
         pageBaseCtm = deviceCtm
+        pageCropBox = page.cropBox
         formDepth = 0
         dispatchedOps = 0L
         optionalContent = page.internalDocument.optionalContent
@@ -1560,12 +1565,6 @@ public class PageRenderer(
         // The mask group has its own /BBox + /Matrix the renderer should
         // honour. We pass them along so the backend's saveLayer can size
         // the offscreen correctly.
-        val maskBBox = mask.group.dict.getArray("BBox")?.let { arr ->
-            io.github.yuroyami.kitepdf.core.KiteRectangle(
-                arr.getOrNull(0).toDouble(), arr.getOrNull(1).toDouble(),
-                arr.getOrNull(2).toDouble(), arr.getOrNull(3).toDouble(),
-            )
-        } ?: io.github.yuroyami.kitepdf.core.KiteRectangle(0.0, 0.0, 0.0, 0.0)
         val maskMatrix = mask.group.dict.getArray("Matrix")?.let { arr ->
             KiteMatrix(
                 arr.getOrNull(0).toDouble(), arr.getOrNull(1).toDouble(),
@@ -1576,10 +1575,20 @@ public class PageRenderer(
         // The mask lives in the coordinate system in force when gs set it, so a
         // later cm moves the content, never the mask (ISO 32000-1, 11.6.5.2, #67).
         val baseCtm = state.softMaskCtm ?: state.ctm
+        val maskCtm = baseCtm.concat(maskMatrix)
+        // The box may be an indirect array (ISO 32000-1, 7.3.10). A box that
+        // cannot be read must not cut the content away: it covers the page (#255).
+        val maskBBox = missingAsNull { mask.group.dict.getArray("BBox", resolver) }
+            ?.takeIf { it.size >= 4 }?.let { arr ->
+                io.github.yuroyami.kitepdf.core.KiteRectangle(
+                    arr.getOrNull(0).toDouble(), arr.getOrNull(1).toDouble(),
+                    arr.getOrNull(2).toDouble(), arr.getOrNull(3).toDouble(),
+                )
+            } ?: pageBoxIn(maskCtm)
         canvas.applySoftMask(
             kind = mask.kind,
             maskBBox = maskBBox,
-            maskCtm = baseCtm.concat(maskMatrix),
+            maskCtm = maskCtm,
             render = paint,
             renderMask = { childCanvas ->
                 // Recurse into the same renderer pipeline but onto whatever
@@ -1590,6 +1599,18 @@ public class PageRenderer(
                 renderMaskGroup(mask.group, childCanvas, baseCtm)
             },
         )
+    }
+
+    /** The page crop box in the space [maskCtm] maps to the device, for a mask box that cannot be read. */
+    private fun pageBoxIn(maskCtm: KiteMatrix): io.github.yuroyami.kitepdf.core.KiteRectangle {
+        val crop = pageCropBox ?: return UNBOUNDED_MASK_BOX
+        val toMask = maskCtm.invert()?.concat(pageBaseCtm) ?: return crop
+        val xs = DoubleArray(4); val ys = DoubleArray(4)
+        for ((i, corner) in listOf(crop.left to crop.bottom, crop.right to crop.bottom, crop.right to crop.top, crop.left to crop.top).withIndex()) {
+            xs[i] = toMask.transformX(corner.first, corner.second)
+            ys[i] = toMask.transformY(corner.first, corner.second)
+        }
+        return io.github.yuroyami.kitepdf.core.KiteRectangle(xs.min(), ys.min(), xs.max(), ys.max())
     }
 
     private fun renderMaskGroup(formStream: PdfStream, target: KiteCanvas, baseCtm: KiteMatrix) {
@@ -2069,6 +2090,9 @@ public class PageRenderer(
 
         /** Marked-content nesting stored per page, the same bound as the graphics state (#166). */
         const val MAX_MARKED_CONTENT_DEPTH = 4096
+
+        /** A soft mask box that bounds nothing, for a group whose /BBox cannot be read (#255). */
+        private val UNBOUNDED_MASK_BOX = io.github.yuroyami.kitepdf.core.KiteRectangle(-1.0e7, -1.0e7, 1.0e7, 1.0e7)
 
         /** Nesting of an OCMD visibility expression before it counts as visible (#55). */
         const val MAX_VISIBILITY_DEPTH = 32

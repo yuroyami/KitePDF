@@ -589,12 +589,17 @@ public class AwtCanvas(private var g: Graphics2D) : KiteCanvas {
     }
 
     /**
-     * Soft mask (ISO 32000-1, 11.6.5): gate only the new content, then composite
-     * it over the existing page. Both intermediate surfaces have alpha even
-     * when the caller's Graphics2D targets an RGB image (#78, #79, #80).
-     * The content buffer starts with the existing backdrop so non-Normal paint
-     * modes still see its colours. Mask coverage interpolates the original and
-     * rendered premultiplied colours once, after all painting has finished.
+     * Soft mask (ISO 32000-1, 11.6.5): the content paints into its own transparent
+     * layer, the mask scales that layer's alpha, and the layer then composites onto
+     * the page once. The backdrop is never read or masked (#78), the layer has alpha
+     * whatever the destination type (#80), and the mask group's colours never reach
+     * the page (#79). Skia and Compose use the same layer model.
+     *
+     * One native blit replaces a per-pixel readback of the page, which made masked
+     * pages 3 to 44 times slower (#256). When every paint in the content used one
+     * blend mode, the layer composites with that mode, so a masked Multiply shadow
+     * still multiplies. Content that mixes blend modes renders again on the exact,
+     * slower backdrop path.
      */
     override fun applySoftMask(
         kind: SoftMask.Kind,
@@ -619,33 +624,39 @@ public class AwtCanvas(private var g: Graphics2D) : KiteCanvas {
         }
         if (area.isEmpty) return
         val bounds = area.bounds
-        if (bounds.width <= 0 || bounds.height <= 0 ||
-            bounds.width.toLong() * bounds.height > KITE_DEFAULT_MAX_RASTER_PIXELS
-        ) {
-            render() // Retain lenient salvage without unbounded temporary allocations.
+        if (bounds.width <= 0 || bounds.height <= 0) return
+        val pixels = bounds.width.toLong() * bounds.height
+        if (pixels > maskPixelBudget * UNBOUNDED_MASK_FACTOR) {
+            render() // An unclipped box far past any page: keep the paint without its mask.
             return
         }
-
-        val content = BufferedImage(bounds.width, bounds.height, BufferedImage.TYPE_INT_ARGB)
-        val mask = BufferedImage(bounds.width, bounds.height, BufferedImage.TYPE_INT_ARGB)
-        transferMaskBackdrop(parent, bounds, content, null)
+        // Past the raster budget the mask applies at a lower resolution instead of
+        // being dropped, so the page never shows unmasked content (#264).
+        val scale = if (pixels > maskPixelBudget) kotlin.math.sqrt(maskPixelBudget.toDouble() / pixels) else 1.0
+        val width = maxOf(1, kotlin.math.ceil(bounds.width * scale).toInt())
+        val height = maxOf(1, kotlin.math.ceil(bounds.height * scale).toInt())
         fun prepare(graphics: Graphics2D) {
             graphics.setRenderingHints(parent.renderingHints)
+            if (scale != 1.0) graphics.scale(scale, scale)
             graphics.translate(-bounds.x.toDouble(), -bounds.y.toDouble())
             graphics.transform(parent.transform)
-            graphics.clip = parent.clip
+            parent.clip?.let(graphics::clip)
         }
 
+        val layer = takeMaskBuffer(width, height)
         // The content callback closes over this canvas. Redirect it only for
         // this invocation, and restore state even when a malformed paint fails.
-        val contentGraphics = content.createGraphics()
+        val layerGraphics = layer.createGraphics()
         val savedClips = clipStack.toList()
         val savedGroups = groupStack.toList()
+        val savedBlends = layerBlends
+        val blends = LayerBlends()
         try {
-            prepare(contentGraphics)
-            g = contentGraphics
+            prepare(layerGraphics)
+            g = layerGraphics
             clipStack.clear()
             groupStack.clear()
+            layerBlends = blends
             render()
         } finally {
             g = parent
@@ -653,6 +664,131 @@ public class AwtCanvas(private var g: Graphics2D) : KiteCanvas {
             clipStack.addAll(savedClips)
             groupStack.clear()
             groupStack.addAll(savedGroups)
+            layerBlends = savedBlends
+            layerGraphics.dispose()
+        }
+        // A mask nested in another masked layer is one more paint of that layer.
+        savedBlends?.merge(blends)
+        val layerPixels = (layer.raster.dataBuffer as DataBufferInt).data
+        // Only the pixels the content touched need the mask, the blit and the cleanup.
+        val painted = paintedBounds(layerPixels, width, height)
+        if (painted == null) {
+            giveBackMaskBuffer(layer, IntRange.EMPTY)
+            return
+        }
+        val mask = takeMaskBuffer(width, height)
+        if (blends.mixed && scale == 1.0) {
+            // Paints with different blend modes each need the real backdrop, which
+            // one layer composite cannot give them (#80). This rare case renders again.
+            java.util.Arrays.fill(layerPixels, 0)
+            maskOverBackdrop(parent, bounds, kind, layer, mask, ::prepare, render, renderMask)
+            return
+        }
+
+        val maskGraphics = mask.createGraphics()
+        try {
+            maskGraphics.clipRect(painted.x, painted.y, painted.width, painted.height)
+            if (kind == SoftMask.Kind.Luminosity) {
+                // Opaque black backdrop means unpainted pixels have zero luminance.
+                maskGraphics.color = Color.BLACK
+                maskGraphics.fillRect(painted.x, painted.y, painted.width, painted.height)
+            }
+            prepare(maskGraphics)
+            renderMask(AwtCanvas(maskGraphics))
+        } finally {
+            maskGraphics.dispose()
+        }
+
+        // ISO 32000-1, 11.6.5.2: the mask value scales the content's alpha only.
+        val maskPixels = (mask.raster.dataBuffer as DataBufferInt).data
+        val luminosity = kind == SoftMask.Kind.Luminosity
+        for (y in painted.y until painted.y + painted.height) {
+            for (i in y * width + painted.x until y * width + painted.x + painted.width) {
+                val p = layerPixels[i]
+                val alpha = p ushr 24
+                if (alpha == 0) continue
+                val m = maskPixels[i]
+                val coverage = if (luminosity) {
+                    (((m ushr 16) and 255) * 77 + ((m ushr 8) and 255) * 150 + (m and 255) * 29) ushr 8
+                } else m ushr 24
+                if (coverage == 255) continue
+                layerPixels[i] = (((alpha * coverage + 127) / 255) shl 24) or (p and 0xFFFFFF)
+            }
+        }
+
+        val target = parent.create() as Graphics2D
+        try {
+            target.transform = AffineTransform()
+            val mode = blends.single
+            target.composite = if (mode == null || mode == KiteBlendMode.Normal) AlphaComposite.SrcOver
+                else PdfBlendComposite(mode, 1f)
+            if (scale == 1.0) {
+                val x = bounds.x + painted.x
+                val y = bounds.y + painted.y
+                target.drawImage(layer, x, y, x + painted.width, y + painted.height,
+                    painted.x, painted.y, painted.x + painted.width, painted.y + painted.height, null)
+            } else {
+                target.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR)
+                target.drawImage(layer, bounds.x, bounds.y, bounds.width, bounds.height, null)
+            }
+        } finally {
+            target.dispose()
+        }
+        val dirtyRows = painted.y until painted.y + painted.height
+        giveBackMaskBuffer(layer, dirtyRows)
+        giveBackMaskBuffer(mask, dirtyRows)
+    }
+
+    /** The bounds of the pixels with any alpha, or null when the content painted nothing. */
+    private fun paintedBounds(pixels: IntArray, width: Int, height: Int): java.awt.Rectangle? {
+        var minY = -1; var maxY = -1; var minX = width; var maxX = -1
+        for (y in 0 until height) {
+            val row = y * width
+            // The alpha of an OR is the OR of the alphas, and the JIT vectorises this loop.
+            var any = 0
+            for (i in row until row + width) any = any or pixels[i]
+            if (any ushr 24 == 0) continue
+            var first = 0
+            while (pixels[row + first] ushr 24 == 0) first++
+            var last = width - 1
+            while (pixels[row + last] ushr 24 == 0) last--
+            if (minY < 0) minY = y
+            maxY = y
+            if (first < minX) minX = first
+            if (last > maxX) maxX = last
+        }
+        return if (minY < 0) null else java.awt.Rectangle(minX, minY, maxX - minX + 1, maxY - minY + 1)
+    }
+
+    /**
+     * The exact path for content that mixes blend modes: [content] starts with the
+     * page backdrop, the content paints over it with its own modes, and the mask
+     * then interpolates the original and rendered colours once per pixel.
+     */
+    private fun maskOverBackdrop(
+        parent: Graphics2D, bounds: java.awt.Rectangle, kind: SoftMask.Kind,
+        content: BufferedImage, mask: BufferedImage, prepare: (Graphics2D) -> Unit,
+        render: () -> Unit, renderMask: (KiteCanvas) -> Unit,
+    ) {
+        transferMaskBackdrop(parent, bounds, content, null)
+        val contentGraphics = content.createGraphics()
+        val savedClips = clipStack.toList()
+        val savedGroups = groupStack.toList()
+        val savedBlends = layerBlends
+        try {
+            prepare(contentGraphics)
+            g = contentGraphics
+            clipStack.clear()
+            groupStack.clear()
+            layerBlends = null
+            render()
+        } finally {
+            g = parent
+            clipStack.clear()
+            clipStack.addAll(savedClips)
+            groupStack.clear()
+            groupStack.addAll(savedGroups)
+            layerBlends = savedBlends
             contentGraphics.dispose()
         }
 
@@ -763,9 +899,57 @@ public class AwtCanvas(private var g: Graphics2D) : KiteCanvas {
         return (((weight + 127) / 255) shl 24) or (channel(16) shl 16) or (channel(8) shl 8) or channel(0)
     }
 
+    /** The blend modes the paints of one soft-masked layer used; [single] is set only when all agree. */
+    private class LayerBlends {
+        var single: KiteBlendMode? = null
+            private set
+        var mixed = false
+            private set
+
+        fun record(mode: KiteBlendMode) {
+            if (mixed || mode == single) return
+            if (single == null) single = mode else { single = null; mixed = true }
+        }
+
+        fun merge(inner: LayerBlends) {
+            if (inner.mixed) { single = null; mixed = true } else inner.single?.let(::record)
+        }
+    }
+
+    /** Pixels one soft mask layer may use before it drops to a lower resolution. */
+    internal var maskPixelBudget: Long = KITE_DEFAULT_MAX_RASTER_PIXELS
+
+    private companion object {
+        /** A mask area this many budgets wide cannot be a page render; it keeps the paint unmasked. */
+        const val UNBOUNDED_MASK_FACTOR = 16L
+    }
+
+    /** The layer a soft mask is rendering into, or null outside [applySoftMask]. */
+    private var layerBlends: LayerBlends? = null
+
+    /** Two same-sized buffers survive between masked paints, so a masked page does not reallocate per paint. */
+    private val spareMaskBuffers = ArrayList<BufferedImage>(2)
+
+    /** A fully transparent buffer: pooled buffers are cleared when they come back. */
+    private fun takeMaskBuffer(width: Int, height: Int): BufferedImage {
+        val index = spareMaskBuffers.indexOfFirst { it.width == width && it.height == height }
+        return if (index < 0) BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB) else spareMaskBuffers.removeAt(index)
+    }
+
+    /** Clears [dirtyRows], the only rows a masked paint wrote, and keeps the buffer for the next paint. */
+    private fun giveBackMaskBuffer(buffer: BufferedImage, dirtyRows: IntRange) {
+        if (spareMaskBuffers.size >= 2) return
+        if (!dirtyRows.isEmpty()) {
+            java.util.Arrays.fill((buffer.raster.dataBuffer as DataBufferInt).data,
+                dirtyRows.first * buffer.width, (dirtyRows.last + 1) * buffer.width, 0)
+        }
+        spareMaskBuffers.add(buffer)
+    }
+
     /* ─── Helpers ─────────────────────────────────────────────────────────── */
 
     private inline fun withComposite(blendMode: KiteBlendMode, alpha: Double, block: () -> Unit) {
+        layerBlends?.record(blendMode)
         val saved = g.composite
         val a = alpha.toFloat().coerceIn(0f, 1f)
         g.composite = if (blendMode == KiteBlendMode.Normal) AlphaComposite.SrcOver.derive(a)

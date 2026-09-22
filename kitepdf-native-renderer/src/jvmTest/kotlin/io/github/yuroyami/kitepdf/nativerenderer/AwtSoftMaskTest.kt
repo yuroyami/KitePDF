@@ -127,6 +127,8 @@ class AwtSoftMaskTest {
                     canvas.applySoftMask(SoftMask.Kind.Alpha, KiteRectangle(0.0, 0.0, 40.0, 40.0), KiteMatrix.IDENTITY,
                         render = {
                             canvas.pushClip(rect(0.0, 0.0, 5.0, 5.0), KiteMatrix.IDENTITY, false)
+                            // Content that paints nothing skips the mask, so paint before failing.
+                            fill(canvas, 0.0, 0.0, 5.0, 5.0, RgbColor(0.0, 1.0, 0.0))
                             if (!failInMask) error("content failed")
                             canvas.popClip()
                         },
@@ -142,6 +144,63 @@ class AwtSoftMaskTest {
             } finally {
                 graphics.dispose()
             }
+        }
+    }
+
+    @Test
+    fun an_indirect_or_missing_mask_box_keeps_the_masked_content() {
+        // ISO 32000-1, 7.3.10: the box may be a reference; an unread box must not erase the content (#255).
+        for ((groupBox, extra) in listOf(
+            "/BBox 7 0 R" to listOf("[0 0 200 200]"),
+            "" to emptyList(),
+            "/BBox 9 0 R" to emptyList(),
+        )) {
+            val pdf = pdf("/GS gs 1 0 0 rg 20 20 160 160 re f", "Alpha", "0 0 1 rg 0 0 100 200 re f", groupBox, extra)
+            for (image in renderSurfaces(pdf)) {
+                assertEquals(Color.RED.rgb, image.getRGB(50, 100), "masked-in pixel, box '$groupBox', image type ${image.type}")
+                assertEquals(Color.WHITE.rgb, image.getRGB(150, 100), "masked-out pixel, box '$groupBox', image type ${image.type}")
+            }
+        }
+    }
+
+    @Test
+    fun a_mask_past_the_pixel_budget_applies_at_a_lower_resolution() {
+        // A huge render keeps its mask instead of painting the content unmasked (#264).
+        val image = BufferedImage(40, 40, BufferedImage.TYPE_INT_RGB)
+        val graphics = image.createGraphics()
+        try {
+            graphics.color = Color.WHITE
+            graphics.fillRect(0, 0, 40, 40)
+            val canvas = AwtCanvas(graphics).apply { maskPixelBudget = 100 }
+            canvas.applySoftMask(SoftMask.Kind.Alpha, KiteRectangle(0.0, 0.0, 40.0, 40.0), KiteMatrix.IDENTITY,
+                render = { fill(canvas, 0.0, 0.0, 40.0, 40.0, RgbColor(1.0, 0.0, 0.0)) },
+                renderMask = { fill(it, 0.0, 0.0, 20.0, 40.0, RgbColor(0.0, 0.0, 0.0)) },
+            )
+            assertPixel(image, 5, 20, Color.RED)
+            assertPixel(image, 35, 20, Color.WHITE)
+        } finally {
+            graphics.dispose()
+        }
+    }
+
+    @Test
+    fun a_single_blend_mode_survives_the_mask_layer() {
+        // One masked Multiply paint multiplies with the page, as the backdrop path did.
+        val image = BufferedImage(40, 40, BufferedImage.TYPE_INT_RGB)
+        val graphics = image.createGraphics()
+        try {
+            graphics.color = Color(128, 128, 255)
+            graphics.fillRect(0, 0, 40, 40)
+            val canvas = AwtCanvas(graphics)
+            canvas.applySoftMask(SoftMask.Kind.Alpha, KiteRectangle(0.0, 0.0, 40.0, 40.0), KiteMatrix.IDENTITY,
+                render = {
+                    canvas.fillPath(rect(0.0, 0.0, 40.0, 40.0), KiteMatrix.IDENTITY, RgbColor(1.0, 0.0, 0.0), false, 1.0, KiteBlendMode.Multiply)
+                },
+                renderMask = { it.fillPath(rect(0.0, 0.0, 40.0, 40.0), KiteMatrix.IDENTITY, RgbColor(0.0, 0.0, 0.0), false, 1.0) },
+            )
+            assertPixel(image, 20, 20, Color(128, 0, 0))
+        } finally {
+            graphics.dispose()
         }
     }
 
@@ -264,7 +323,10 @@ class AwtSoftMaskTest {
         }
     }
 
-    private fun pdf(content: String, kind: String, mask: String): ByteArray {
+    private fun pdf(
+        content: String, kind: String, mask: String,
+        groupBox: String = "/BBox [0 0 200 200]", extra: List<String> = emptyList(),
+    ): ByteArray {
         val output = ByteArrayOutputStream()
         val offsets = mutableListOf<Int>()
         fun write(text: String) = output.write(text.encodeToByteArray())
@@ -280,7 +342,8 @@ class AwtSoftMaskTest {
         obj("<< /Type /Page /Parent 2 0 R /Resources << /ExtGState << /GS 5 0 R >> >> /Contents 4 0 R >>")
         stream("", content)
         obj("<< /Type /ExtGState /SMask << /S /$kind /G 6 0 R /BC [0 0 0] >> >>")
-        stream("/Type /XObject /Subtype /Form /BBox [0 0 200 200] /Resources << >> /Group << /S /Transparency /CS /DeviceRGB >>", mask)
+        stream("/Type /XObject /Subtype /Form $groupBox /Resources << >> /Group << /S /Transparency /CS /DeviceRGB >>", mask)
+        for (body in extra) obj(body)
         val xref = output.size()
         write("xref\n0 ${offsets.size + 1}\n0000000000 65535 f \n")
         for (offset in offsets) write("${offset.toString().padStart(10, '0')} 00000 n \n")
