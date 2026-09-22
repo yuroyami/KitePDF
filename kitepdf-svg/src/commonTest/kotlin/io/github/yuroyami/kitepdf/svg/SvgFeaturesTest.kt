@@ -184,6 +184,65 @@ class SvgFeaturesTest {
         assertEquals(30.0, runs[1].textToDevice.f, 1e-9)
     }
 
+    @Test
+    fun a_text_offset_moves_the_first_character() {
+        // A 10 by 5 offset on the text element itself (#181).
+        val run = calls("""<svg width="100" height="40"><text y="20" dx="10" dy="5">Hi</text></svg>""")
+            .filterIsInstance<RecordingCanvas.Call.Glyphs>().single()
+        assertEquals("Hi", run.text)
+        assertEquals(10.0, run.textToDevice.e, 1e-9)
+        assertEquals(25.0, run.textToDevice.f, 1e-9)
+    }
+
+    @Test
+    fun position_lists_place_each_character() {
+        // SVG 1.1, 10.4: the n-th value of a list belongs to the n-th character (#181).
+        val runs = calls("""<svg width="200" height="60"><text x="10 50" y="20" dx="0 0 5" dy="0 0 7">ABC</text></svg>""")
+            .filterIsInstance<RecordingCanvas.Call.Glyphs>()
+        assertEquals(listOf("A", "B", "C"), runs.map { it.text })
+        assertEquals(10.0, runs[0].textToDevice.e, 1e-9)
+        assertEquals(50.0, runs[1].textToDevice.e, 1e-9)
+        // C follows the advance of B (667 in Helvetica) and adds its own offsets.
+        assertEquals(50.0 + 667 * 16 / 1000.0 + 5.0, runs[2].textToDevice.e, 1e-9)
+        assertEquals(27.0, runs[2].textToDevice.f, 1e-9)
+    }
+
+    @Test
+    fun a_tspan_list_wins_only_for_the_characters_it_has_values_for() {
+        // SVG 1.1, 10.5: the nearest element with a value for a character wins (#181).
+        val runs = calls("""<svg width="200" height="40"><text x="10 30 60" y="20">A<tspan x="100">BC</tspan></text></svg>""")
+            .filterIsInstance<RecordingCanvas.Call.Glyphs>()
+        assertEquals(listOf("A", "B", "C"), runs.map { it.text })
+        assertEquals(listOf(10.0, 100.0, 60.0), runs.map { it.textToDevice.e })
+    }
+
+    @Test
+    fun rotate_turns_each_character_and_repeats_its_last_value() {
+        val runs = calls("""<svg width="200" height="40"><text x="10" y="20" rotate="90">AB</text></svg>""")
+            .filterIsInstance<RecordingCanvas.Call.Glyphs>()
+        assertEquals(listOf("A", "B"), runs.map { it.text })
+        for (run in runs) {
+            // Text x runs down the page, and text y (up) runs along +x.
+            val m = run.textToDevice
+            assertEquals(0.0, m.a, 1e-9); assertEquals(1.0, m.b, 1e-9)
+            assertEquals(1.0, m.c, 1e-9); assertEquals(0.0, m.d, 1e-9)
+        }
+        // The pen still moves along the line: B starts one advance of A (667) later.
+        assertEquals(10.0 + 667 * 16 / 1000.0, runs[1].textToDevice.e, 1e-9)
+        assertEquals(20.0, runs[1].textToDevice.f, 1e-9)
+    }
+
+    @Test
+    fun a_middle_anchor_centres_the_whole_chunk_across_tspans() {
+        // SVG 1.1, 10.9.1: text-anchor aligns a text chunk, not each tspan.
+        val runs = calls("""<svg width="200" height="40"><text x="100" y="20" text-anchor="middle">AB<tspan fill="red">CD</tspan></text></svg>""")
+            .filterIsInstance<RecordingCanvas.Call.Glyphs>()
+        assertEquals(listOf("AB", "CD"), runs.map { it.text })
+        // A, B, C and D in Helvetica at 16: (667 + 667 + 722 + 722) * 16 / 1000.
+        assertEquals(100.0 - 44.448 / 2, runs[0].textToDevice.e, 1e-9)
+        assertEquals(runs[0].textToDevice.e + (667 + 667) * 16 / 1000.0, runs[1].textToDevice.e, 1e-9)
+    }
+
     /* ─── gradients ──────────────────────────────────────────────────────── */
 
     private fun gradient(svg: String, id: String): KiteXmlNode.Element {

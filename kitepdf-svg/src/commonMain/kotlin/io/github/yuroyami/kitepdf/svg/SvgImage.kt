@@ -326,70 +326,120 @@ public class SvgImage private constructor(
         canvas.drawImage(image, placed, paint.opacity)
     }
 
-    /** One laid-out run of `<text>`: its characters, paint and where it starts. */
-    private class TextRun(val paint: Paint, val x: Double, val y: Double, val glyphs: List<TextGlyph>, val width: Double)
+    /**
+     * One laid-out run of `<text>`: its characters, paint and where it starts. [rotate]
+     * turns the run about its start, in degrees clockwise, and only a single-character
+     * run has one.
+     */
+    private class TextRun(
+        val paint: Paint, val x: Double, val y: Double, val glyphs: List<TextGlyph>, val width: Double,
+        val rotate: Double = 0.0,
+    )
 
     /**
      * Lays out `<text>` and its nested `<tspan>`s as one stream of characters.
      * White space collapses across the whole element, so the one space before
-     * a tspan survives and advances the pen, and a nested tspan is laid out as
-     * a run of its own (SVG 1.1, 10.5 and 10.15, #98). A tspan's x and y move
-     * the pen; everything else continues where the last run ended.
+     * a tspan survives and advances the pen (SVG 1.1, 10.15, #98).
+     *
+     * The x, y, dx, dy and rotate lists of an element give its n-th character its
+     * own position, and the nearest element with a value for a character wins. A
+     * rotate list repeats its last value (SVG 1.1, 10.4 and 10.5, #181). Each
+     * absolute position starts a text chunk, which `text-anchor` aligns as one
+     * piece (10.9.1). A nested tspan is laid out as a run of its own.
      */
     private fun layoutText(el: KiteXmlNode.Element, paint: Paint, depth: Int): List<TextRun> {
-        class Piece(val text: String, val paint: Paint, val x: Double?, val y: Double?)
-        val pieces = ArrayList<Piece>()
-        fun collect(node: KiteXmlNode.Element, p: Paint, d: Int, x: Double?, y: Double?) {
+        class Ch(val char: Char, val paint: Paint) {
+            var x: Double? = null
+            var y: Double? = null
+            var dx: Double? = null
+            var dy: Double? = null
+            var rotate: Double? = null
+            var penX = 0.0
+            var penY = 0.0
+            var advance = 0.0
+        }
+        val chars = ArrayList<Ch>()
+        var afterSpace = true
+        fun collect(node: KiteXmlNode.Element, p: Paint, d: Int) {
             if (d > MAX_DEPTH) return
-            var nextX = x
-            var nextY = y
+            val first = chars.size
             for (child in node.children) when (child) {
-                is KiteXmlNode.Text -> {
-                    pieces.add(Piece(child.text, p, nextX, nextY))
-                    nextX = null; nextY = null
+                is KiteXmlNode.Text -> for (raw in child.text) {
+                    val ch = if (raw == '\n' || raw == '\r' || raw == '\t') ' ' else raw
+                    if (ch != ' ') { chars.add(Ch(ch, p)); afterSpace = false }
+                    else if (!afterSpace) { chars.add(Ch(' ', p)); afterSpace = true }
                 }
                 is KiteXmlNode.Element -> {
                     if (child.tag.lowercase() != "tspan" || isDisplayNone(child)) continue
-                    val sub = resolvePaint(child, p)
-                    collect(
-                        child, sub, d + 1,
-                        child.attrs["x"]?.let { parseLen(it, sub.fontSize, sub.viewportWidth) } ?: nextX,
-                        child.attrs["y"]?.let { parseLen(it, sub.fontSize, sub.viewportHeight) } ?: nextY,
-                    )
-                    nextX = null; nextY = null
+                    collect(child, resolvePaint(child, p), d + 1)
                 }
             }
-        }
-        collect(el, paint, depth, num(el, "x", paint), num(el, "y", paint))
-
-        var afterSpace = true
-        val texts = pieces.map { piece ->
-            val sb = StringBuilder()
-            for (raw in piece.text) {
-                val ch = if (raw == '\n' || raw == '\r' || raw == '\t') ' ' else raw
-                if (ch != ' ') { sb.append(ch); afterSpace = false } else if (!afterSpace) { sb.append(' '); afterSpace = true }
+            // The children ran first and hold the nearer values, so only gaps are filled.
+            val own = chars.subList(first, chars.size)
+            fun fill(values: List<Double>?, get: (Ch) -> Double?, set: (Ch, Double) -> Unit) {
+                values?.forEachIndexed { i, v -> own.getOrNull(i)?.let { if (get(it) == null) set(it, v) } }
             }
-            sb.toString()
-        }.toMutableList()
-        val last = texts.indexOfLast { it.isNotEmpty() }
-        if (last >= 0 && texts[last].endsWith(' ')) texts[last] = texts[last].dropLast(1)
+            fill(lengthList(node.attrs["x"], p.fontSize, p.viewportWidth), { it.x }) { c, v -> c.x = v }
+            fill(lengthList(node.attrs["y"], p.fontSize, p.viewportHeight), { it.y }) { c, v -> c.y = v }
+            fill(lengthList(node.attrs["dx"], p.fontSize, p.viewportWidth), { it.dx }) { c, v -> c.dx = v }
+            fill(lengthList(node.attrs["dy"], p.fontSize, p.viewportHeight), { it.dy }) { c, v -> c.dy = v }
+            node.attrs["rotate"]?.let { numbers(it) }?.takeIf { it.isNotEmpty() }?.let { angles ->
+                fill(List(own.size) { angles[minOf(it, angles.lastIndex)] }, { it.rotate }) { c, v -> c.rotate = v }
+            }
+        }
+        collect(el, paint, depth)
+        if (chars.lastOrNull()?.char == ' ') chars.removeAt(chars.lastIndex)
 
-        val runs = ArrayList<TextRun>()
         var penX = 0.0
         var penY = 0.0
-        for ((i, piece) in pieces.withIndex()) {
-            piece.x?.let { penX = it }
-            piece.y?.let { penY = it }
-            val text = texts[i]
-            if (text.isEmpty()) continue
-            val glyphs = SvgText.glyphs(text, piece.paint.fontSpec)
-            val runWidth = SvgText.width(glyphs, piece.paint.fontSize)
+        for (c in chars) {
+            c.x?.let { penX = it }
+            c.y?.let { penY = it }
+            penX += c.dx ?: 0.0
+            penY += c.dy ?: 0.0
+            c.penX = penX
+            c.penY = penY
+            c.advance = SvgText.advance(c.char, c.paint.fontSpec, c.paint.fontSize)
+            penX += c.advance
+        }
+        // text-anchor moves each chunk by its own advance, as the chunk's first character asks.
+        var chunk = 0
+        while (chunk < chars.size) {
+            var end = chunk + 1
+            while (end < chars.size && chars[end].x == null && chars[end].y == null) end++
+            val last = chars[end - 1]
+            val shift = SvgText.anchorShift(chars[chunk].paint.textAnchor, last.penX + last.advance - chars[chunk].penX)
+            for (k in chunk until end) chars[k].penX += shift
+            chunk = end
+        }
+
+        val runs = ArrayList<TextRun>()
+        var i = 0
+        while (i < chars.size) {
+            val c = chars[i]
+            val rotate = c.rotate ?: 0.0
+            var j = i + 1
+            // A run goes on while nothing moves its next character away from the pen.
+            while (j < chars.size && rotate == 0.0 && chars[j].paint === c.paint &&
+                chars[j].x == null && chars[j].y == null && (chars[j].dx ?: 0.0) == 0.0 &&
+                (chars[j].dy ?: 0.0) == 0.0 && (chars[j].rotate ?: 0.0) == 0.0
+            ) j++
+            val text = buildString { for (k in i until j) append(chars[k].char) }
             if (text.isNotBlank()) {
-                runs.add(TextRun(piece.paint, penX + SvgText.anchorShift(piece.paint.textAnchor, runWidth), penY, glyphs, runWidth))
+                val glyphs = SvgText.glyphs(text, c.paint.fontSpec)
+                runs.add(TextRun(c.paint, c.penX, c.penY, glyphs, SvgText.width(glyphs, c.paint.fontSize), rotate))
             }
-            penX += runWidth
+            i = j
         }
         return runs
+    }
+
+    /** Turns a run by its own rotation about its start, or the identity. */
+    private fun turnOf(run: TextRun): KiteMatrix {
+        if (run.rotate == 0.0) return KiteMatrix.IDENTITY
+        val th = run.rotate * PI / 180.0
+        val rot = KiteMatrix(cos(th), sin(th), -sin(th), cos(th), 0.0, 0.0)
+        return compose(KiteMatrix.translation(run.x, run.y), compose(rot, KiteMatrix.translation(-run.x, -run.y)))
     }
 
     private fun drawText(
@@ -406,7 +456,7 @@ public class SvgImage private constructor(
             canvas.drawGlyphs(
                 run.glyphs, run.paint.fontSize, unitsPerEm = 1000, hasOutlines = false,
                 fontSpec = run.paint.fontSpec,
-                textToDevice = compose(ctm, KiteMatrix(1.0, 0.0, 0.0, -1.0, run.x, run.y)),
+                textToDevice = compose(ctm, compose(turnOf(run), KiteMatrix(1.0, 0.0, 0.0, -1.0, run.x, run.y))),
                 color = run.paint.fill ?: RgbColor.BLACK, alpha = run.paint.opacity * run.paint.fillOpacity,
             )
         }
@@ -478,7 +528,7 @@ public class SvgImage private constructor(
         // stand-in PDF text clipping uses for a font it has no outlines for.
         "text" -> layoutText(c, paint, 0).map { run ->
             val fs = run.paint.fontSize
-            transformPath(KitePath.Builder().apply { rectangle(run.x, run.y - 0.8 * fs, run.width, fs) }.build(), m)
+            transformPath(KitePath.Builder().apply { rectangle(run.x, run.y - 0.8 * fs, run.width, fs) }.build(), compose(m, turnOf(run)))
         }
         else -> shapeOf(c, paint)?.let { listOf(transformPath(it, m)) } ?: emptyList()
     }
@@ -931,6 +981,21 @@ public class SvgImage private constructor(
 
         /** A root width or height in user units, or null for a percentage or junk. */
         private fun lenOrNull(raw: String): Double? = lengthOrNull(raw, 16.0)
+
+        /**
+         * A list of lengths such as `x="10 20 30"`, or null when the attribute is absent,
+         * empty, or holds a value it cannot read (then the attribute is ignored).
+         */
+        private fun lengthList(raw: String?, fontSize: Double, reference: Double): List<Double>? {
+            val parts = raw?.trim()?.split(LIST_SEPARATOR)?.filter { it.isNotEmpty() }?.takeIf { it.isNotEmpty() } ?: return null
+            return parts.map { part ->
+                if (part.endsWith('%')) {
+                    part.dropLast(1).toDoubleOrNull()?.takeIf { it.isFinite() }?.let { it * reference / 100.0 } ?: return null
+                } else lengthOrNull(part, fontSize) ?: return null
+            }
+        }
+
+        private val LIST_SEPARATOR = Regex("[\\s,]+")
 
         /** An `<image>` width or height in user units, or null for `auto` and for a value it cannot read. */
         private fun imageSizeOrNull(raw: String, fontSize: Double, reference: Double): Double? {
