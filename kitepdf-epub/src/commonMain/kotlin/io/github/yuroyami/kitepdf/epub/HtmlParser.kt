@@ -101,6 +101,12 @@ internal object HtmlParser {
 internal fun KiteXmlNode.Element.elementParent(): KiteXmlNode.Element? =
     parent?.takeIf { it.tag != "#root" }
 
+/** Every text node under this element, in document order, joined as written. */
+internal fun KiteXmlNode.Element.textContent(): String = buildString {
+    fun rec(n: KiteXmlNode) { when (n) { is KiteXmlNode.Text -> append(n.text); is KiteXmlNode.Element -> n.children.forEach(::rec) } }
+    rec(this@textContent)
+}
+
 /** Nearest preceding sibling that is an element, or null. */
 internal fun KiteXmlNode.Element.previousElementSibling(): KiteXmlNode.Element? {
     val siblings = parent?.children ?: return null

@@ -118,6 +118,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   nothing. Type 3 text reaches the text layer too (#274).
 - A block image with a border, padding or background paints them, and the picture
   sits inside them (#101).
+- An SVG chapter reads as one image named by its `<title>`, else its `<desc>`, and
+  a fixed-layout SVG chapter takes its page size from its `viewBox` (#26).
 
 ## [0.10.0] - 2026-09-13
 
