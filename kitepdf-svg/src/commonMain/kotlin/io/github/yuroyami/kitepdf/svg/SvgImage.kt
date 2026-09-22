@@ -310,12 +310,15 @@ public class SvgImage private constructor(
         val href = el.attrs["href"]?.trim()?.takeIf { it.isNotEmpty() } ?: return
         val bytes = if (href.startsWith("data:")) dataUri(href) else load?.invoke(href)
         val image = bytes?.let { KiteImageData.fromEncodedImage(it) } ?: return
-        val w = el.attrs["width"]?.takeUnless { it.trim() == "auto" }
-            ?.let { parseLen(it, paint.fontSize, paint.viewportWidth) } ?: image.width.toDouble()
-        val h = el.attrs["height"]?.takeUnless { it.trim() == "auto" }
-            ?.let { parseLen(it, paint.fontSize, paint.viewportHeight) } ?: image.height.toDouble()
-        // Explicit zero dimensions disable rendering; only missing/auto sizes
-        // use the intrinsic dimensions (SVG 2, 12.2, #177).
+        // A missing, auto or unreadable size is auto: it takes the intrinsic size,
+        // or the other side through the intrinsic aspect ratio (#263). An explicit
+        // zero still disables rendering (SVG 2, 12.2, #177).
+        val iw = image.width.toDouble()
+        val ih = image.height.toDouble()
+        val cssW = el.attrs["width"]?.let { imageSizeOrNull(it, paint.fontSize, paint.viewportWidth) }
+        val cssH = el.attrs["height"]?.let { imageSizeOrNull(it, paint.fontSize, paint.viewportHeight) }
+        val w = cssW ?: cssH?.let { if (ih > 0.0) it * iw / ih else iw } ?: iw
+        val h = cssH ?: cssW?.let { if (iw > 0.0) it * ih / iw else ih } ?: ih
         if (w <= 0.0 || h <= 0.0 || !w.isFinite() || !h.isFinite()) return
         // The image's unit square has row 0 at v=1, and SVG's y grows down, so
         // the placement matrix flips y the way a y-down page does.
@@ -423,11 +426,12 @@ public class SvgImage private constructor(
         }
         // This adds a user-space transform, not a viewport. Percentages inside
         // clip content still use the viewport's extent (SVG 2, 8.11, #177).
+        val clipPaint = clipPaintOf(def, paint)
         val b = KitePath.Builder()
         for (c in def.children) {
             if (c !is KiteXmlNode.Element) continue
             val m = compose(clipCtm, styleOrAttr(c, "transform")?.let { parseTransform(it) } ?: KiteMatrix.IDENTITY)
-            for (part in clipShapesOf(c, m, resolvePaint(c, paint))) {
+            for (part in clipShapesOf(c, m, resolvePaint(c, clipPaint))) {
                 for (seg in part.segments) when (seg) {
                     is KitePath.Segment.MoveTo -> b.moveTo(seg.x, seg.y)
                     is KitePath.Segment.LineTo -> b.lineTo(seg.x, seg.y)
@@ -440,6 +444,18 @@ public class SvgImage private constructor(
         // A clip path that yields no geometry clips everything away rather than
         // nothing, so content can never flood past a clip it was given (#175).
         return b.build()
+    }
+
+    /**
+     * The paint a `<clipPath>` gives its children. They inherit from the clip path's
+     * own ancestors, not from the element that uses it (SVG 1.1, 14.3.5, #269).
+     * Percentages keep [user]'s viewport.
+     */
+    private fun clipPaintOf(def: KiteXmlNode.Element, user: Paint): Paint {
+        val chain = generateSequence(def) { it.parent }.take(MAX_DEPTH).toList().asReversed()
+        var p = Paint(viewport = user.viewport, viewportWidth = user.viewportWidth, viewportHeight = user.viewportHeight)
+        for (e in chain) p = resolvePaint(e, p, container = true)
+        return p
     }
 
     /** The device-space geometry one child of a `<clipPath>` contributes under [m]. */
@@ -915,6 +931,15 @@ public class SvgImage private constructor(
 
         /** A root width or height in user units, or null for a percentage or junk. */
         private fun lenOrNull(raw: String): Double? = lengthOrNull(raw, 16.0)
+
+        /** An `<image>` width or height in user units, or null for `auto` and for a value it cannot read. */
+        private fun imageSizeOrNull(raw: String, fontSize: Double, reference: Double): Double? {
+            val s = raw.trim()
+            if (s == "auto") return null
+            return if (s.endsWith('%')) {
+                s.dropLast(1).toDoubleOrNull()?.takeIf { it.isFinite() }?.let { it * reference / 100.0 }
+            } else lengthOrNull(s, fontSize)
+        }
 
         private fun parseLen(raw: String, fontSize: Double = 16.0, reference: Double = 0.0): Double {
             val s = raw.trim()

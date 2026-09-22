@@ -82,6 +82,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Underlines and line-throughs skip inline blocks, floats and positioned boxes,
   and keep the colour and thickness of the element that draws them. EPUB reads
   `text-decoration-color` (#265, #271).
+- An SVG `<image>` with an auto, empty or unreadable width or height takes its
+  intrinsic size or ratio (#263). Clip path content inherits style from the clip
+  path's own ancestors, not from the element that uses the clip (#269).
 
 ## [0.10.0] - 2026-09-13
 
