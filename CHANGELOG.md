@@ -197,6 +197,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   photo book held 230 MB, enough to run an Android app out of memory. Set
   `PdfDocument.imageCacheBudgetBytes` to change the budget, and call the now public
   `dropDecodedImageCache` when the app runs low on memory (#116).
+- An image drawn many times on a page, such as a tiled background, a watermark or a
+  row of icons, converts to a platform bitmap once instead of once per draw. On AWT,
+  a page that stamps one image 32 times renders in 1.9 ms instead of 25 ms. Each
+  canvas keeps at most 16 MB of these bitmaps (#117).
 
 ## [0.10.0] - 2026-09-13
 

@@ -8,6 +8,8 @@ import io.github.yuroyami.kitepdf.core.render.KiteBlendMode
 import io.github.yuroyami.kitepdf.core.render.KiteImageData
 import io.github.yuroyami.kitepdf.core.render.KiteMatrix
 import io.github.yuroyami.kitepdf.core.render.KiteCanvas
+import io.github.yuroyami.kitepdf.core.render.KiteBitmapCache
+import io.github.yuroyami.kitepdf.core.render.KiteImageSampling
 import io.github.yuroyami.kitepdf.core.render.KitePath
 import io.github.yuroyami.kitepdf.core.render.KiteShading
 import io.github.yuroyami.kitepdf.core.render.RgbColor
@@ -392,29 +394,7 @@ public class SkiaCanvas(private val canvas: SkCanvas) : KiteCanvas {
         )
         // Skia decodes JPEG natively + JP2/JPEG-2000 where the platform shim
         // supports it. Other kinds fall back to a placeholder rectangle.
-        val sk = when (image.kind) {
-            KiteImageData.Kind.JPEG, KiteImageData.Kind.JPEG2000, KiteImageData.Kind.JBIG2 -> try {
-                Image.makeFromEncoded(image.encodedBytes)
-            } catch (t: Throwable) {
-                null
-            }
-            KiteImageData.Kind.RAW -> try {
-                image.toRgbaBytes()?.let { rgba ->
-                    // An image drawn smaller than its pixels is averaged down first, so fine detail fades instead of dropping out.
-                    val w = sampling.shrunkWidth(image.width)
-                    val h = sampling.shrunkHeight(image.height)
-                    val pixels = if (sampling.shrinks) shrinkRgba(rgba, image.width, image.height, sampling.shrinkX, sampling.shrinkY) else rgba
-                    // toRgbaBytes() emits straight (non-premultiplied) R,G,B,A
-                    // per pixel, matching RGBA_8888. UNPREMUL honours the alpha
-                    // channel (SMask alpha, ImageMask stencil transparency);
-                    // OPAQUE would discard it, rendering masks as solid black.
-                    Image.makeRaster(ImageInfo(w, h, ColorType.RGBA_8888, ColorAlphaType.UNPREMUL), pixels, w * 4)
-                }
-            } catch (t: Throwable) {
-                null
-            }
-            else -> null
-        }
+        val sk = images.getOrPut(image, sampling, { it.width.toLong() * it.height * 4 }) { imageFor(image, sampling) }
         if (sk == null) {
             drawPlaceholder(ctm)
             return
@@ -446,6 +426,34 @@ public class SkiaCanvas(private val canvas: SkCanvas) : KiteCanvas {
         canvas.restore()
         canvas.restore()
         openLayers--
+    }
+
+    /** Bitmaps built from images, so that an image drawn many times converts once (#117). */
+    private val images = KiteBitmapCache<Image>()
+
+    /** The image as a Skia image, averaged down when [sampling] shrinks a RAW image. */
+    private fun imageFor(image: KiteImageData, sampling: KiteImageSampling): Image? = when (image.kind) {
+        KiteImageData.Kind.JPEG, KiteImageData.Kind.JPEG2000, KiteImageData.Kind.JBIG2 -> try {
+            Image.makeFromEncoded(image.encodedBytes)
+        } catch (t: Throwable) {
+            null
+        }
+        KiteImageData.Kind.RAW -> try {
+            image.toRgbaBytes()?.let { rgba ->
+                // An image drawn smaller than its pixels is averaged down first, so fine detail fades instead of dropping out.
+                val w = sampling.shrunkWidth(image.width)
+                val h = sampling.shrunkHeight(image.height)
+                val pixels = if (sampling.shrinks) shrinkRgba(rgba, image.width, image.height, sampling.shrinkX, sampling.shrinkY) else rgba
+                // toRgbaBytes() emits straight (non-premultiplied) R,G,B,A
+                // per pixel, matching RGBA_8888. UNPREMUL honours the alpha
+                // channel (SMask alpha, ImageMask stencil transparency);
+                // OPAQUE would discard it, rendering masks as solid black.
+                Image.makeRaster(ImageInfo(w, h, ColorType.RGBA_8888, ColorAlphaType.UNPREMUL), pixels, w * 4)
+            }
+        } catch (t: Throwable) {
+            null
+        }
+        else -> null
     }
 
     private fun drawPlaceholder(ctm: KiteMatrix) {
