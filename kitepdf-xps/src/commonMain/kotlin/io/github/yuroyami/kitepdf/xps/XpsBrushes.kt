@@ -6,12 +6,14 @@ import io.github.yuroyami.kitepdf.core.kiteWarn
 import io.github.yuroyami.kitepdf.core.render.KiteCanvas
 import io.github.yuroyami.kitepdf.core.render.KiteColorSpace
 import io.github.yuroyami.kitepdf.core.render.KiteFunction
+import io.github.yuroyami.kitepdf.core.render.KiteGradientSpread
 import io.github.yuroyami.kitepdf.core.render.KiteImageData
 import io.github.yuroyami.kitepdf.core.render.KiteMatrix
 import io.github.yuroyami.kitepdf.core.render.KitePath
 import io.github.yuroyami.kitepdf.core.render.KiteShading
 import io.github.yuroyami.kitepdf.core.render.RgbColor
 import io.github.yuroyami.kitepdf.core.render.SoftMask
+import io.github.yuroyami.kitepdf.core.render.spreadOver
 import kotlin.math.ceil
 import kotlin.math.floor
 import kotlin.math.pow
@@ -148,8 +150,10 @@ internal class XpsBrushes(
             canvas.fillPath(rectangle(box), ctm, stops[0].color.color, false, alpha * stops[0].color.alpha)
             return
         }
-        if (node.attrs["spreadmethod"] !in listOf(null, "Pad")) {
-            kiteWarn { "xps: gradient repeat/reflect uses pad fallback" }
+        val spread = when (node.attrs["spreadmethod"]) {
+            "Reflect" -> KiteGradientSpread.Reflect
+            "Repeat" -> KiteGradientSpread.Repeat
+            else -> KiteGradientSpread.Pad
         }
         // ScRGB interpolation is linear light. Sample back into display sRGB;
         // native canvas gradients otherwise interpolate encoded components.
@@ -176,6 +180,8 @@ internal class XpsBrushes(
                 DoubleArray((stops.size - 1) * 2) { if (it % 2 == 0) 0.0 else 1.0 })
         }
         var gradientCtm = ctm
+        // The painted region in the space of the gradient's coordinates, for the spread method.
+        var region = box
         val coords = if (node.tag == "lineargradientbrush") {
             val start = numbers(node.attrs["startpoint"].orEmpty()).takeIf { it.size == 2 } ?: listOf(0.0, 0.0)
             val end = numbers(node.attrs["endpoint"].orEmpty()).takeIf { it.size == 2 } ?: listOf(1.0, 1.0)
@@ -187,11 +193,14 @@ internal class XpsBrushes(
             if (rx <= 0 || ry <= 0) return
             val radiusScale = ry / rx
             gradientCtm = ctm.concat(KiteMatrix.scaling(1.0, radiusScale))
+            region = KiteRectangle(box.left, box.bottom / radiusScale, box.right, box.top / radiusScale)
             doubleArrayOf(origin[0], origin[1] / radiusScale, 0.0, center[0], center[1] / radiusScale, rx)
         }
         fun shading(mask: Boolean): KiteShading = if (coords.size == 4) {
             KiteShading.Axial(KiteColorSpace.DeviceRGB, null, null, coords, doubleArrayOf(0.0, 1.0), function(mask), true, true)
-        } else KiteShading.Radial(KiteColorSpace.DeviceRGB, null, null, coords, doubleArrayOf(0.0, 1.0), function(mask), true, true)
+        } else {
+            KiteShading.Radial(KiteColorSpace.DeviceRGB, null, null, coords, doubleArrayOf(0.0, 1.0), function(mask), true, true)
+        }.spreadOver(spread, region)
         val color = shading(false)
         if (stops.any { it.color.alpha < 1 }) {
             // Luminosity converts the grayscale alpha ramp to a soft mask.

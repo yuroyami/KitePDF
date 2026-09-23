@@ -14,8 +14,10 @@ import io.github.yuroyami.kitepdf.core.css.CssValues
 import io.github.yuroyami.kitepdf.core.font.FontSpec
 import io.github.yuroyami.kitepdf.core.font.KiteFontFamily
 import io.github.yuroyami.kitepdf.core.render.KiteImageData
-import io.github.yuroyami.kitepdf.core.render.KiteShading
 import io.github.yuroyami.kitepdf.core.render.RgbColor
+import io.github.yuroyami.kitepdf.core.render.SoftMask
+import io.github.yuroyami.kitepdf.core.render.spreadOver
+import io.github.yuroyami.kitepdf.core.render.strokeOutline
 import io.github.yuroyami.kitepdf.core.text.TextEncoding
 import kotlin.math.abs
 import kotlin.math.ceil
@@ -608,20 +610,26 @@ public class SvgImage private constructor(
         if (!forceStroke) {
             val gradient = paint.fillRef?.let { gradientFor(it, path) }
             if (gradient != null) {
-                // The canvas maps the fill region by the gradient's matrix, so the shape goes in gradient space.
-                // A gradient transform without an inverse paints nothing.
-                val (shading, local) = gradient
-                local.invert()?.let { inverse ->
-                    canvas.fillShading(
-                        shading, compose(ctm, local), transformPath(path, inverse),
-                        paint.opacity * paint.fillOpacity, KiteBlendMode.Normal,
-                    )
-                }
+                paintGradient(gradient.first, gradient.second, path, ctm, paint.opacity * paint.fillOpacity, canvas)
             } else {
                 paint.fill?.let {
                     canvas.fillPath(path, ctm, it, paint.evenOdd, paint.opacity * paint.fillOpacity, KiteBlendMode.Normal)
                 }
             }
+        }
+        // A gradient stroke fills the outline of the stroke. Its bounding box units are those
+        // of the shape's own geometry (SVG 1.1, 7.11), so the gradient maps as for the fill.
+        val strokeGradient = paint.strokeRef?.let { gradientFor(it, path) }
+        if (strokeGradient != null) {
+            val scale = sqrt(ctm.a * ctm.a + ctm.b * ctm.b + ctm.c * ctm.c + ctm.d * ctm.d)
+            val outline = path.strokeOutline(
+                paint.strokeW, paint.lineCap, paint.lineJoin, paint.miterLimit, paint.dash, paint.dashOffset,
+                tolerance = if (scale > 0.0) 0.25 / scale else 0.1,
+            )
+            if (!outline.isEmpty()) {
+                paintGradient(strokeGradient.first, strokeGradient.second, outline, ctm, paint.opacity * paint.strokeOpacity, canvas)
+            }
+            return
         }
         val sc = paint.strokeRef?.let { strokeColorOf(it) } ?: paint.stroke ?: if (forceStroke) RgbColor.BLACK else null
         sc?.let {
@@ -634,9 +642,38 @@ public class SvgImage private constructor(
     }
 
     /**
-     * The colour a gradient stroke paints with: the gradient's middle. No
-     * canvas can fill a shading over a stroke's outline, and dropping the
-     * stroke made a shape whose only paint it was vanish (#90).
+     * Fills [region], a path in user space under [ctm], with the gradient [g], whose
+     * space maps to user space by [local]. The spread method continues the gradient over
+     * the whole region (SVG 1.1, 13.2.2), and the opacity of the stops fades it through a
+     * luminosity soft mask of their alphas (13.2.4). A gradient transform without an
+     * inverse paints nothing.
+     */
+    private fun paintGradient(
+        g: SvgGradient.Parsed, local: KiteMatrix, region: KitePath, ctm: KiteMatrix, alpha: Double, canvas: KiteCanvas,
+    ) {
+        val inverse = local.invert() ?: return
+        // The canvas maps the fill region by the gradient's matrix, so the region goes in gradient space.
+        val inGradient = transformPath(region, inverse)
+        val gradientCtm = compose(ctm, local)
+        val b = boundsOf(inGradient) ?: return
+        val box = KiteRectangle(b[0], b[1], b[2], b[3])
+        val shading = g.shading.spreadOver(g.spread, box)
+        val opacity = g.opacity?.spreadOver(g.spread, box)
+        if (opacity == null) {
+            canvas.fillShading(shading, gradientCtm, inGradient, alpha, KiteBlendMode.Normal)
+            return
+        }
+        canvas.applySoftMask(
+            SoftMask.Kind.Luminosity, box, gradientCtm,
+            render = { canvas.fillShading(shading, gradientCtm, inGradient, alpha, KiteBlendMode.Normal) },
+            renderMask = { it.fillShading(opacity, gradientCtm, inGradient) },
+        )
+    }
+
+    /**
+     * The colour a gradient stroke paints with when the gradient cannot map onto the
+     * shape: the gradient's middle. A shape with no area has no bounding box for the
+     * gradient, and dropping the stroke made a shape whose only paint it was vanish (#90).
      */
     private fun strokeColorOf(id: String): RgbColor? {
         val def = byId[id] ?: return null
@@ -648,7 +685,7 @@ public class SvgImage private constructor(
      * gradient's space to the shape's user space. `objectBoundingBox` units
      * (the default) map the gradient's 0..1 box onto the shape's own bounds.
      */
-    private fun gradientFor(id: String, path: KitePath): Pair<KiteShading, KiteMatrix>? {
+    private fun gradientFor(id: String, path: KitePath): Pair<SvgGradient.Parsed, KiteMatrix>? {
         val def = byId[id] ?: return null
         val g = SvgGradient.parse(def, byId, styles::value) ?: return null
         var m = KiteMatrix.IDENTITY
@@ -657,7 +694,7 @@ public class SvgImage private constructor(
             m = compose(m, KiteMatrix(b[2] - b[0], 0.0, 0.0, b[3] - b[1], b[0], b[1]))
         }
         g.transform?.let { m = compose(m, parseTransform(it)) }
-        return g.shading to m
+        return g to m
     }
 
     /** [minX, minY, maxX, maxY] over the path's points, or null when it has no area. */

@@ -74,6 +74,30 @@ class XpsRasterTest {
         assertTrue(left < 60 && right > 210, "gradient must vary across the rectangle: $left -> $right")
     }
 
+    @Test fun spreadMethodRepeatsAndReflectsTheGradient() {
+        // The gradient runs from x = 0 to x = 48 across a 192-wide path, 1.5 pixels per unit.
+        fun rendered(spread: String) = raster(XpsFixtures.packageBytes("""
+            <Path Data="M0,0 L192,0 192,40 0,40 Z"><Path.Fill>
+              <LinearGradientBrush StartPoint="0,0" EndPoint="48,0" SpreadMethod="$spread">
+                <LinearGradientBrush.GradientStops><GradientStop Offset="0" Color="#FF0000"/>
+                  <GradientStop Offset="1" Color="#0000FF"/></LinearGradientBrush.GradientStops>
+              </LinearGradientBrush>
+            </Path.Fill></Path>
+        """.trimIndent()))
+        fun assertPixel(image: BufferedImage, x: Int, r: Int, b: Int) {
+            val c = image.getRGB(x, 30)
+            val actual = listOf(c shr 16 and 255, c shr 8 and 255, c and 255)
+            assertTrue(abs(actual[0] - r) <= 6 && actual[1] <= 6 && abs(actual[2] - b) <= 6, "pixel $x: expected ($r, 0, $b), got $actual")
+        }
+        // Pixel 17 has its centre a quarter into the first period, and pixel 89 a quarter into the second.
+        val repeat = rendered("Repeat")
+        assertPixel(repeat, 17, 193, 62)
+        assertPixel(repeat, 89, 193, 62)
+        val reflect = rendered("Reflect")
+        assertPixel(reflect, 17, 193, 62)
+        assertPixel(reflect, 89, 62, 193)
+    }
+
     @Test fun generatedPageAgreesWithMuPdf() {
         val oracle = sequenceOf(System.getenv("MUTOOL"), "/opt/homebrew/bin/mutool", "/usr/local/bin/mutool", "/usr/bin/mutool")
             .filterNotNull().map(::File).firstOrNull { it.canExecute() }
