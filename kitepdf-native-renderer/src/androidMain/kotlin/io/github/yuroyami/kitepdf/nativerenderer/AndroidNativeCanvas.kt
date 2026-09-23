@@ -262,27 +262,27 @@ public class AndroidNativeCanvas(private val canvas: AndroidCanvas) : KiteCanvas
         val colors = IntArray(stops.colors.size) { stops.colors[it].toArgb(alpha) }
         val positions = FloatArray(stops.offsets.size) { stops.offsets[it].toFloat() }
 
-        val shader: Shader = when (shading) {
-            is KiteShading.Axial -> {
-                val x0 = ctm.transformX(shading.coords[0], shading.coords[1])
-                val y0 = ctm.transformY(shading.coords[0], shading.coords[1])
-                val x1 = ctm.transformX(shading.coords[2], shading.coords[3])
-                val y1 = ctm.transformY(shading.coords[2], shading.coords[3])
-                LinearGradient(
-                    x0.toFloat(), y0.toFloat(), x1.toFloat(), y1.toFloat(),
-                    colors, positions, Shader.TileMode.CLAMP,
-                )
-            }
-            is KiteShading.Radial -> {
-                val cx = ctm.transformX(shading.coords[3], shading.coords[4])
-                val cy = ctm.transformY(shading.coords[3], shading.coords[4])
-                val r = (shading.coords[5] * kotlin.math.sqrt(ctm.a * ctm.a + ctm.b * ctm.b))
-                    .toFloat().coerceAtLeast(0.1f)
-                RadialGradient(cx.toFloat(), cy.toFloat(), r, colors, positions, Shader.TileMode.CLAMP)
-            }
-            is KiteShading.Unsupported -> return
+        // The gradient is built in shading space and the CTM maps it as a whole, so a
+        // non-uniform or skewed CTM turns circles into ellipses and tilts the bands
+        // (ISO 32000-1, 8.7.4.5.3 and 8.7.4.5.4). A CTM without an inverse paints nothing.
+        val det = ctm.a * ctm.d - ctm.b * ctm.c
+        if (det == 0.0 || !det.isFinite()) return
+        val c = when (shading) {
+            is KiteShading.Axial -> shading.coords
+            is KiteShading.Radial -> shading.coords
             else -> return // complex shading types already handled by paintComplexShading
         }
+        val shader: Shader = if (shading is KiteShading.Axial) {
+            LinearGradient(
+                c[0].toFloat(), c[1].toFloat(), c[2].toFloat(), c[3].toFloat(),
+                colors, positions, Shader.TileMode.CLAMP,
+            )
+        } else {
+            // The radius is at least a tenth of a device pixel.
+            val r = c[5].coerceAtLeast(0.1 / kotlin.math.sqrt(kotlin.math.abs(det)))
+            RadialGradient(c[3].toFloat(), c[4].toFloat(), r.toFloat(), colors, positions, Shader.TileMode.CLAMP)
+        }
+        shader.setLocalMatrix(pdfMatrixToAndroid(ctm))
         val paint = Paint().apply {
             isAntiAlias = true
             style = Paint.Style.FILL

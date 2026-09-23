@@ -315,31 +315,30 @@ public class SkiaCanvas(private val canvas: SkCanvas) : KiteCanvas {
             ),
         )
 
+        // The gradient is built in shading space and the CTM maps it as a whole, so a
+        // non-uniform or skewed CTM turns circles into ellipses and tilts the bands
+        // (ISO 32000-1, 8.7.4.5.3 and 8.7.4.5.4). A CTM without an inverse paints nothing.
+        val det = ctm.a * ctm.d - ctm.b * ctm.c
+        if (det == 0.0 || !det.isFinite()) return
+        val toDevice = pdfMatrixToSkia(ctm)
         val shader: Shader = when (shading) {
             is KiteShading.Axial -> {
-                val x0 = ctm.transformX(shading.coords[0], shading.coords[1])
-                val y0 = ctm.transformY(shading.coords[0], shading.coords[1])
-                val x1 = ctm.transformX(shading.coords[2], shading.coords[3])
-                val y1 = ctm.transformY(shading.coords[2], shading.coords[3])
+                val c = shading.coords
                 Shader.makeLinearGradient(
-                    x0.toFloat(), y0.toFloat(),
-                    x1.toFloat(), y1.toFloat(),
-                    gradient,
+                    c[0].toFloat(), c[1].toFloat(),
+                    c[2].toFloat(), c[3].toFloat(),
+                    gradient, toDevice,
                 )
             }
             is KiteShading.Radial -> {
                 // True PDF two-circle radial via a two-point conical gradient.
-                val sc = kotlin.math.sqrt(ctm.a * ctm.a + ctm.b * ctm.b)
-                val x0 = ctm.transformX(shading.coords[0], shading.coords[1])
-                val y0 = ctm.transformY(shading.coords[0], shading.coords[1])
-                val r0 = (shading.coords[2] * sc).toFloat().coerceAtLeast(0f)
-                val x1 = ctm.transformX(shading.coords[3], shading.coords[4])
-                val y1 = ctm.transformY(shading.coords[3], shading.coords[4])
-                val r1 = (shading.coords[5] * sc).toFloat().coerceAtLeast(0.1f)
+                // The outer radius is at least a tenth of a device pixel.
+                val c = shading.coords
+                val minRadius = 0.1 / kotlin.math.sqrt(kotlin.math.abs(det))
                 Shader.makeTwoPointConicalGradient(
-                    x0.toFloat(), y0.toFloat(), r0,
-                    x1.toFloat(), y1.toFloat(), r1,
-                    gradient,
+                    c[0].toFloat(), c[1].toFloat(), c[2].coerceAtLeast(0.0).toFloat(),
+                    c[3].toFloat(), c[4].toFloat(), c[5].coerceAtLeast(minRadius).toFloat(),
+                    gradient, toDevice,
                 )
             }
             is KiteShading.Unsupported -> return
