@@ -372,8 +372,11 @@ public class PdfFont private constructor(
             val toUnicode = loadToUnicode(dict, refs)
             val wt = resolveWidths(dict, baseFont, nameTable, refs)
 
-            val embeddedTtf = descriptor?.let { loadEmbeddedTtf(it, refs) }
-            val embeddedCff = if (embeddedTtf == null) descriptor?.let { loadEmbeddedCff(it, refs) } else null
+            // /FontFile3 holds a bare CFF program or, since PDF 1.6, a whole OpenType font.
+            val fontFile2 = descriptor?.let { loadEmbeddedTtf(it, refs) }
+            val fontFile3 = if (fontFile2 == null) descriptor?.let { loadFontFile3(it, refs) } else null
+            val embeddedTtf = fontFile2 ?: fontFile3?.let { FontFile3.trueType(it) }
+            val embeddedCff = if (embeddedTtf == null) fontFile3?.let { FontFile3.cff(it) } else null
             val embeddedType1 = if (embeddedTtf == null && embeddedCff == null)
                 descriptor?.let { loadEmbeddedType1(it, refs) } else null
 
@@ -391,9 +394,10 @@ public class PdfFont private constructor(
             return runCatching { TrueTypeFont.parse(FilterChain.decode(stream)) }.getOrNull()
         }
 
-        private fun loadEmbeddedCff(descriptor: PdfDictionary, refs: IndirectResolver): CffFont? {
+        /** The decoded `/FontFile3` stream, or null. [FontFile3] reads what it holds. */
+        private fun loadFontFile3(descriptor: PdfDictionary, refs: IndirectResolver): ByteArray? {
             val stream = (descriptor["FontFile3"]?.resolve(refs) as? PdfStream) ?: return null
-            return runCatching { CffFont.parse(FilterChain.decode(stream)) }.getOrNull()
+            return runCatching { FilterChain.decode(stream) }.getOrNull()
         }
 
         private fun loadEmbeddedType1(descriptor: PdfDictionary, refs: IndirectResolver): Type1Font? {

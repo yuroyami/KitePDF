@@ -78,6 +78,9 @@ public class TrueTypeFont private constructor(
         return if (glyphId < v.size) v[glyphId] else v[v.size - 1]
     }
 
+    /** True when the font has the SFNT table [tag]. */
+    internal fun hasTable(tag: String): Boolean = tag in tables
+
     /**
      * Raw bytes of the SFNT table [tag] (e.g. `"name"`, `"OS/2"`, `"glyf"`), or
      * null if the font has no such table. Lets the writer's font-embedding path

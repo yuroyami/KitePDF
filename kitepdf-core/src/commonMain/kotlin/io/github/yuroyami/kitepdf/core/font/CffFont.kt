@@ -174,7 +174,14 @@ public class CffFont private constructor(
 
     public companion object {
 
-        public fun parse(bytes: ByteArray): CffFont {
+        public fun parse(bytes: ByteArray): CffFont = parse(bytes, unitsPerEm = 1000)
+
+        /**
+         * Parse a CFF program whose units per em default to [unitsPerEm] when its Top DICT
+         * has no `FontMatrix`. A bare program has 1000. The `CFF ` table of an OpenType font
+         * takes the `head` value, as FreeType does.
+         */
+        internal fun parse(bytes: ByteArray, unitsPerEm: Int): CffFont {
             val reader = TtfReader(bytes)
             // ── Header ────────────────────────────────────────────────────
             val major = reader.u8()
@@ -260,9 +267,13 @@ public class CffFont private constructor(
 
             // A FontDict matrix applies first, then the Top DICT matrix, and a FontDict
             // without one takes the Top DICT's, as FreeType and pdf.js combine them.
-            val topMatrix = fontMatrixOf(topDict[0x0C07]?.filterIsInstance<Double>())
+            // Only an explicit Top DICT matrix multiplies a FontDict matrix.
+            val explicitTop = fontMatrixOf(topDict[0x0C07]?.filterIsInstance<Double>())
+            val topMatrix = explicitTop ?: if (unitsPerEm == 1000 || unitsPerEm <= 0) null else {
+                KiteMatrix(1.0 / unitsPerEm, 0.0, 0.0, 1.0 / unitsPerEm, 0.0, 0.0)
+            }
             val fontMatrices = if (isCidKeyed && priv.fdMatrices.isNotEmpty()) {
-                priv.fdMatrices.map { fd -> if (fd == null) topMatrix else topMatrix?.concat(fd) ?: fd }
+                priv.fdMatrices.map { fd -> if (fd == null) topMatrix else explicitTop?.concat(fd) ?: fd }
             } else {
                 listOf(topMatrix)
             }
