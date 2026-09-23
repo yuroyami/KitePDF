@@ -411,6 +411,12 @@ public class KiteImageData internal constructor(
                 refs != null -> runCatching { raw.resolve(refs) }.getOrNull() as? PdfStream ?: return none
                 else -> return none
             }
+            return softMaskPlane(mask)
+        }
+
+        /** The samples of the mask image [mask] as an 8-bit alpha plane, or no mask when they cannot be read. */
+        private fun softMaskPlane(mask: PdfStream): Triple<ByteArray?, Int, Int> {
+            val none = Triple<ByteArray?, Int, Int>(null, 0, 0)
             val mdict = mask.dict
             val mw = positiveDimension(mdict, "Width") ?: return none
             val mh = positiveDimension(mdict, "Height") ?: return none
@@ -518,7 +524,8 @@ public class KiteImageData internal constructor(
          * Scope: masks the filter chain decodes (Flate, LZW, CCITT, …) and
          * JBIG2 masks, which is what scanner output carries. Anything else, a
          * mask that fails to decode, or an absurd size returns no mask, leaving
-         * the image painted unmasked rather than blanking the page.
+         * the image painted unmasked rather than blanking the page. A mask with
+         * more than 1 bit per sample and no stencil flag is read as a soft mask.
          */
         private fun loadStencilMask(
             dict: PdfDictionary,
@@ -534,9 +541,10 @@ public class KiteImageData internal constructor(
             val mdict = mask.dict
             val isStencil = (mdict["ImageMask"] as? PdfBoolean)?.value == true ||
                 (mdict["IM"] as? PdfBoolean)?.value == true
-            // §8.9.6 requires /ImageMask true; tolerate a missing flag only
-            // when the stream is 1-bit anyway, and never guess at deeper data.
-            if (!isStencil && (mdict.getInt("BitsPerComponent") ?: 8L) != 1L) return none
+            // §8.9.6 requires /ImageMask true. A 1-bit stream without the flag is
+            // still read as a stencil. A deeper one can only be a soft mask under
+            // the wrong key, so its samples become alpha, as in MuPDF (#160).
+            if (!isStencil && (mdict.getInt("BitsPerComponent") ?: 8L) != 1L) return softMaskPlane(mask)
             val mw = positiveDimension(mdict, "Width") ?: return none
             val mh = positiveDimension(mdict, "Height") ?: return none
             // Untrusted dimensions: refuse to allocate a plane no real scan needs.
