@@ -21,9 +21,10 @@ import io.github.yuroyami.kitepdf.core.PdfFormatException
 /**
  * Recursive-descent parser for PDF objects (ISO 32000-1 §7.3).
  *
- * Drives a [Lexer] one token at a time. Handles the tricky one-token lookahead
- * needed to distinguish "N G obj" headers, "N G R" references, and bare numbers
- * inside arrays. See [readArray] for the details.
+ * Drives a [Lexer] one token at a time and lexes each token once. An integer
+ * can start an "N G R" reference, so arrays and dictionaries hold it until the
+ * next token decides, as MuPDF's pdf_parse_array and pdf_parse_dict do. See
+ * [readArray] and [readDictionary] for the details.
  *
  * Pass a [resolver] (typically the owning [io.github.yuroyami.kitepdf.PdfDocument]) when
  * parsing in a context where indirect references in stream dictionaries must be
@@ -77,11 +78,20 @@ internal class Parser(
     }
 
     /**
-     * An integer might be the start of "N G R" (reference) or "N G obj" (object
-     * header). Only valid in specific contexts, but a bare integer inside an
-     * array also needs to peek ahead, because "10 0 R" is three tokens that
-     * become one PdfReference. We snapshot the reader position so we can
-     * back out if the lookahead doesn't match.
+     * Read one content stream operand whose first token the caller already lexed.
+     * An operand is a direct object and never a stream (ISO 32000-1, 7.8.2), so an
+     * integer is a number, and a dictionary is not followed by a stream body.
+     */
+    public fun readOperand(first: Token): PdfObject = when (first) {
+        is Token.Integer -> PdfInt(first.value)
+        Token.DictOpen -> readDictionary()
+        else -> readObject(first)
+    }
+
+    /**
+     * A lone object that starts with an integer can be "N G R", so this looks
+     * two tokens ahead and rewinds when they are not "G R". Arrays and
+     * dictionaries do not call it: they hold the integer until the next token decides.
      */
     private fun readNumberOrReferenceOrInt(first: Token.Integer): PdfObject {
         val checkpoint = reader.pos()
@@ -98,16 +108,48 @@ internal class Parser(
         return PdfInt(first.value)
     }
 
+    /**
+     * Up to two integers wait in `first` and `second` until the next token shows
+     * whether they start "N G R". A third integer releases the oldest one.
+     */
     private fun readArray(): PdfArray = nested {
         val items = mutableListOf<PdfObject>()
-        var tok = lexer.nextToken()
-        while (tok != Token.ArrayClose) {
+        var first = 0L
+        var second = 0L
+        var held = 0
+        while (true) {
+            val tok = lexer.nextToken()
+            if (tok is Token.Integer) {
+                when (held) {
+                    0 -> first = tok.value
+                    1 -> second = tok.value
+                    else -> {
+                        items.add(PdfInt(first))
+                        first = second
+                        second = tok.value
+                    }
+                }
+                if (held < 2) held++
+                continue
+            }
+            if (held == 2 && tok is Token.Keyword && tok.value == "R") {
+                items.add(PdfReference(first, second.toInt()))
+                held = 0
+                continue
+            }
+            if (held > 0) items.add(PdfInt(first))
+            if (held > 1) items.add(PdfInt(second))
+            held = 0
+            if (tok == Token.ArrayClose) break
             items.add(readObject(tok))
-            tok = lexer.nextToken()
         }
         PdfArray(items)
     }
 
+    /**
+     * After an integer value, the next token shows whether the value is "N G R".
+     * When it does not, that token is the next key, so it is not lexed again.
+     */
     private fun readDictionary(): PdfDictionary = nested {
         val entries = LinkedHashMap<String, PdfObject>()
         var tok = lexer.nextToken()
@@ -115,8 +157,26 @@ internal class Parser(
             if (tok !is Token.Name) {
                 throw PdfFormatException("Dictionary key must be a Name, got $tok")
             }
-            entries[tok.value] = readObject()
+            val key = tok.value
+            val first = lexer.nextToken()
+            if (first !is Token.Integer) {
+                entries[key] = readObject(first)
+                tok = lexer.nextToken()
+                continue
+            }
             tok = lexer.nextToken()
+            if (tok is Token.Integer) {
+                val afterSecond = reader.pos()
+                val third = lexer.nextToken()
+                if (third is Token.Keyword && third.value == "R") {
+                    entries[key] = PdfReference(first.value, tok.value.toInt())
+                    tok = lexer.nextToken()
+                    continue
+                }
+                // Not a reference, so the second integer is a key and fails the check above.
+                reader.seek(afterSecond)
+            }
+            entries[key] = PdfInt(first.value)
         }
         PdfDictionary(entries)
     }
