@@ -48,7 +48,7 @@ jobs:
       # same renderer. Keep the oracle version and colour management fixed.
       - name: Cache colour-managed MuPDF 1.27.2
         id: mutool-cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: .oracle-bin
           key: mutool-${{ runner.os }}-${{ runner.arch }}-73d3100d-icc-v1
@@ -153,7 +153,7 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
 
       - name: Cache Konan (native compiler + prebuilt deps)
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.konan
           key: konan-${{ runner.os }}-${{ hashFiles('gradle/libs.versions.toml') }}
@@ -217,7 +217,7 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
 
       - name: Cache Konan (native compiler + prebuilt deps)
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.konan
           key: konan-${{ runner.os }}-${{ hashFiles('gradle/libs.versions.toml') }}
