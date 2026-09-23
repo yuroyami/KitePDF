@@ -177,6 +177,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Mesh shadings (free-form, lattice, Coons and tensor) no longer show a grid of
   pale lines between their cells. Opaque cells now overlap by about half a device
   pixel, as the cells of a function shading already did (#126).
+- A stroke in a pattern colour paints the pattern inside the stroke. A closed
+  path was filled instead, an open line painted nothing, and stroked text used
+  the fallback colour. The new `KitePath.strokeOutline` builds the area that a
+  stroke paints, with its width, dashes, caps and joins (#284).
 
 ## [0.10.0] - 2026-09-13
 
