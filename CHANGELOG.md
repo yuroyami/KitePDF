@@ -238,6 +238,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   paint and hid what was under it. A new `KiteCanvas.drawImage` overload carries
   the blend mode. A canvas that does not override it paints the image alone in
   an isolated group with that blend mode (#113).
+- `ApplePdfRasterizer.renderToPngData` returns a PNG with the page the right way up.
+  It threw on every call, because it cast Objective-C objects to Core Foundation
+  pointers, which Kotlin/Native checks at run time. It also drew the page upside
+  down (#288).
 
 ## [0.10.0] - 2026-09-13
 
