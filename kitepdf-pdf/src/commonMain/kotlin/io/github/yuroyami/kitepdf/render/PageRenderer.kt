@@ -238,8 +238,8 @@ public class PageRenderer(
         val xobjects = loadXObjects(page.resources)
         val colorSpaces = loadColorSpaces(page.resources)
         val extGStates = loadExtGStates(page.resources)
-        val shadings = loadShadings(page.resources)
-        val patterns = loadPatterns(page.resources, shadings)
+        val shadings = loadShadings(page.resources, colorSpaces)
+        val patterns = loadPatterns(page.resources, shadings, colorSpaces)
         val properties = loadProperties(page.resources)
         val state = GraphicsStack(GraphicsState(ctm = deviceCtm))
         activeClipCount = 0
@@ -379,11 +379,12 @@ public class PageRenderer(
         }
     }
 
-    /** Named shadings declared in /Resources /Shading. */
-    private fun loadShadings(resources: PdfDictionary?): Map<String, KiteShading> {
+    /** Named shadings declared in /Resources /Shading, each in the default space of [colorSpaces] when it names a device family. */
+    private fun loadShadings(resources: PdfDictionary?, colorSpaces: Map<String, KiteColorSpace>): Map<String, KiteShading> {
         val dict = resources?.getDict("Shading", resolver) ?: return emptyMap()
         return dict.map.mapNotNull { (name, value) ->
-            val sh = KiteShading.parse(value, resolver) ?: return@mapNotNull null
+            val source = DefaultColorSpaces.shading(value, resources, colorSpaces, resolver)
+            val sh = KiteShading.parse(source, resolver) ?: return@mapNotNull null
             name to sh
         }.toMap()
     }
@@ -398,10 +399,12 @@ public class PageRenderer(
     private fun loadPatterns(
         resources: PdfDictionary?,
         shadings: Map<String, KiteShading>,
+        colorSpaces: Map<String, KiteColorSpace>,
     ): Map<String, KitePattern> {
         val dict = resources?.getDict("Pattern", resolver) ?: return emptyMap()
         return dict.map.mapNotNull { (name, value) ->
-            val p = KitePattern.parse(value, resolver, shadings) ?: return@mapNotNull null
+            val source = DefaultColorSpaces.pattern(value, resources, colorSpaces, resolver)
+            val p = KitePattern.parse(source, resolver, shadings) ?: return@mapNotNull null
             name to p
         }.toMap()
     }
@@ -735,16 +738,20 @@ public class PageRenderer(
         return b.build()
     }
 
-    /** Named colour spaces declared in /Resources /ColorSpace. */
-    private fun loadColorSpaces(resources: PdfDictionary?): Map<String, KiteColorSpace> =
-        ContentStreamParser.colorSpaces(resources, resolver)
-
     /**
-     * Decode an inline image captured verbatim as `BI … ID <data> EI` (§8.9.7).
-     * Parses the abbreviated dictionary, slices the raw data, and builds an
-     * [KiteImageData] driven through the normal raster path. [fillColor] tints an
-     * inline `/ImageMask` stencil.
+     * Named colour spaces declared in /Resources /ColorSpace. An entry that names a device
+     * family selects that family, so the default for it applies (ISO 32000-1, 8.6.5.6).
      */
+    private fun loadColorSpaces(resources: PdfDictionary?): Map<String, KiteColorSpace> {
+        val spaces = ContentStreamParser.colorSpaces(resources, resolver)
+        if (DefaultColorSpaces.KEYS.none { it in spaces }) return spaces
+        val entries = runCatching { resources?.getDict("ColorSpace", resolver) }.getOrNull() ?: return spaces
+        return spaces.mapValues { (name, space) ->
+            val device = if (name in DefaultColorSpaces.KEYS) null else DefaultColorSpaces.deviceFamily(entries[name], resolver)
+            if (device != null) DefaultColorSpaces.substitute(device, spaces) else space
+        }
+    }
+
     /**
      * Decode an image XObject through the per-document cache: keyed by
      * the indirect object number, so a logo stamped 40 times (or a background
@@ -756,12 +763,21 @@ public class PageRenderer(
      * one use per page, resampled onto the stencil's grid, so caching them
      * would pin tens of megabytes per page of a scanned book for a reuse that
      * never comes. This matches how `/ImageMask` stencils are already treated.
+     *
+     * An image in a device space that a default of [colorSpaces] replaces skips the cache
+     * as well, because the same image can meet other defaults on another page.
      */
-    private fun decodeImageCached(slot: XObjectSlot, fillColor: RgbColor): KiteImageData {
+    private fun decodeImageCached(slot: XObjectSlot, fillColor: RgbColor, colorSpaces: Map<String, KiteColorSpace>): KiteImageData {
         val doc = resolver as? io.github.yuroyami.kitepdf.PdfDocument
         val key = slot.objectNumber
-        val masked = (slot.stream.dict["ImageMask"] as? io.github.yuroyami.kitepdf.core.parser.PdfBoolean)?.value == true ||
-            slot.stream.dict["Mask"] != null
+        val dict = slot.stream.dict
+        val stencil = (dict["ImageMask"] as? io.github.yuroyami.kitepdf.core.parser.PdfBoolean)?.value == true
+        val masked = stencil || dict["Mask"] != null
+        val defaultSpace = if (stencil) null else DefaultColorSpaces.imageSpace(dict["ColorSpace"], colorSpaces, resolver)
+        if (defaultSpace != null) {
+            doc?.countImageDecode()
+            return KiteImageData.from(slot.stream, resolver, fillColor, defaultSpace)
+        }
         if (doc == null || key == null || masked) {
             doc?.countImageDecode()
             return KiteImageData.from(slot.stream, resolver, fillColor)
@@ -771,6 +787,12 @@ public class PageRenderer(
         return doc.cacheImage(key, KiteImageData.from(slot.stream, resolver, fillColor))
     }
 
+    /**
+     * Decode an inline image captured verbatim as `BI … ID <data> EI` (§8.9.7).
+     * Parses the abbreviated dictionary, slices the raw data, and builds an
+     * [KiteImageData] driven through the normal raster path. [fillColor] tints an
+     * inline `/ImageMask` stencil.
+     */
     private fun decodeInlineImage(
         blob: ByteArray,
         fillColor: RgbColor,
@@ -809,6 +831,7 @@ public class PageRenderer(
         val stream = PdfStream(PdfDictionary(entries), data)
         val colorName = (entries["ColorSpace"] as? PdfName)?.value
         val colorSpace = colorName?.let { namedColorSpace(it, colorSpaces) }
+            ?: DefaultColorSpaces.imageSpace(entries["ColorSpace"], colorSpaces, resolver)
         return runCatching { KiteImageData.from(stream, resolver, fillColor, colorSpace) }.getOrNull()
     }
 
@@ -868,14 +891,15 @@ public class PageRenderer(
         } ?: io.github.yuroyami.kitepdf.core.KiteRectangle(0.0, 0.0, 1000.0, 1000.0)
         fun buildResources(): FormResources {
             val resources = formStream.dict.getDict("Resources", resolver) ?: pageResources
-            val sh = loadShadings(resources)
+            val colorSpaces = loadColorSpaces(resources)
+            val sh = loadShadings(resources, colorSpaces)
             return FormResources(
                 fonts = loadFonts(resources),
                 xobjects = loadXObjects(resources),
-                colorSpaces = loadColorSpaces(resources),
+                colorSpaces = colorSpaces,
                 extGStates = loadExtGStates(resources),
                 shadings = sh,
-                patterns = loadPatterns(resources, sh),
+                patterns = loadPatterns(resources, sh, colorSpaces),
                 properties = loadProperties(resources),
             )
         }
@@ -1062,34 +1086,14 @@ public class PageRenderer(
             // to the corresponding device family (§8.6.8). Otherwise a later bare
             // `sc`/`scn` would still see a stale non-device space and misread the
             // component count.
-            "g" -> state.replace(state.current.copy(
-                fillColor = RgbColor.gray(num(a, 0)),
-                fillColorSpace = KiteColorSpace.DeviceGray, fillPattern = null,
-            ))
-            "G" -> state.replace(state.current.copy(
-                strokeColor = RgbColor.gray(num(a, 0)),
-                strokeColorSpace = KiteColorSpace.DeviceGray, strokePattern = null,
-            ))
-            "rg" -> state.replace(state.current.copy(
-                fillColor = RgbColor(num(a, 0), num(a, 1), num(a, 2)),
-                fillColorSpace = KiteColorSpace.DeviceRGB, fillPattern = null,
-            ))
-            "RG" -> state.replace(state.current.copy(
-                strokeColor = RgbColor(num(a, 0), num(a, 1), num(a, 2)),
-                strokeColorSpace = KiteColorSpace.DeviceRGB, strokePattern = null,
-            ))
-            "k" -> state.replace(state.current.copy(
-                fillColor = KiteColorSpace.DeviceCMYK.toRgb(
-                    doubleArrayOf(num(a, 0), num(a, 1), num(a, 2), num(a, 3)),
-                ),
-                fillColorSpace = KiteColorSpace.DeviceCMYK, fillPattern = null,
-            ))
-            "K" -> state.replace(state.current.copy(
-                strokeColor = KiteColorSpace.DeviceCMYK.toRgb(
-                    doubleArrayOf(num(a, 0), num(a, 1), num(a, 2), num(a, 3)),
-                ),
-                strokeColorSpace = KiteColorSpace.DeviceCMYK, strokePattern = null,
-            ))
+            "g", "rg", "k" -> {
+                val space = DefaultColorSpaces.substitute(deviceSpaceOf(op.operator), colorSpaces)
+                state.replace(state.current.copy(fillColor = deviceColor(space, a), fillColorSpace = space, fillPattern = null))
+            }
+            "G", "RG", "K" -> {
+                val space = DefaultColorSpaces.substitute(deviceSpaceOf(op.operator), colorSpaces)
+                state.replace(state.current.copy(strokeColor = deviceColor(space, a), strokeColorSpace = space, strokePattern = null))
+            }
             // cs/CS select the colour space for subsequent sc/scn/SC/SCN. Without them a
             // non-device space (e.g. CoreGraphics' ICCBased-RGB on iOS-generated PDFs) stayed
             // at the default DeviceGray, so `r g b SCN` was read as gray(r), turning the pink
@@ -1218,7 +1222,7 @@ public class PageRenderer(
                 if (ocHidden() || isXObjectOcHidden(slot.stream)) return
                 when (slot.stream.dict.getName("Subtype")) {
                     "Image" -> {
-                        val image = decodeImageCached(slot, state.current.fillColor)
+                        val image = decodeImageCached(slot, state.current.fillColor, colorSpaces)
                         if (paintsNothing(image, state.current)) return
                         withSoftMask(state.current) { paintImage(image, state.current) }
                     }
@@ -1528,8 +1532,8 @@ public class PageRenderer(
         val xobjects = loadXObjects(res)
         val colorSpaces = loadColorSpaces(res)
         val extGStates = loadExtGStates(res)
-        val shadings = loadShadings(res)
-        val patterns = loadPatterns(res, shadings)
+        val shadings = loadShadings(res, colorSpaces)
+        val patterns = loadPatterns(res, shadings, colorSpaces)
         val properties = loadProperties(res)
         val ops = ContentStreamParser.parse(pat.contentBytes, colorSpaces)
         val uncolored = pat.paintType == 2
@@ -2291,12 +2295,12 @@ public class PageRenderer(
         glyphToUser: KiteMatrix,
     ) {
         val res = data.resources ?: pageResources
-        val sh = loadShadings(res)
         val fonts = loadFonts(res)
         val xobjects = loadXObjects(res)
         val colorSpaces = loadColorSpaces(res)
+        val sh = loadShadings(res, colorSpaces)
         val extGStates = loadExtGStates(res)
-        val patterns = loadPatterns(res, sh)
+        val patterns = loadPatterns(res, sh, colorSpaces)
         val properties = loadProperties(res)
 
         parentState.save()
@@ -2374,14 +2378,31 @@ public class PageRenderer(
         else -> 0.0
     }
 
-    /** Look up a /ColorSpace name from a Resources entry; fall back to device families. */
+    /**
+     * Look up a /ColorSpace name from a Resources entry; fall back to device families. A
+     * device family takes the default for it from [dict] (ISO 32000-1, 8.6.5.6).
+     */
     private fun namedColorSpace(name: String, dict: Map<String, KiteColorSpace>): KiteColorSpace =
         when (name) {
-            "DeviceGray", "G" -> KiteColorSpace.DeviceGray
-            "DeviceRGB", "RGB" -> KiteColorSpace.DeviceRGB
-            "DeviceCMYK", "CMYK" -> KiteColorSpace.DeviceCMYK
+            "DeviceGray", "G" -> DefaultColorSpaces.substitute(KiteColorSpace.DeviceGray, dict)
+            "DeviceRGB", "RGB" -> DefaultColorSpaces.substitute(KiteColorSpace.DeviceRGB, dict)
+            "DeviceCMYK", "CMYK" -> DefaultColorSpaces.substitute(KiteColorSpace.DeviceCMYK, dict)
             else -> dict[name] ?: KiteColorSpace.DeviceGray
         }
+
+    /** The device family that the colour operator [operator] (g, rg, k or a stroking form) selects. */
+    private fun deviceSpaceOf(operator: String): KiteColorSpace = when (operator) {
+        "g", "G" -> KiteColorSpace.DeviceGray
+        "rg", "RG" -> KiteColorSpace.DeviceRGB
+        else -> KiteColorSpace.DeviceCMYK
+    }
+
+    /** The colour of the operands [a] in [space]. The device families keep their direct forms. */
+    private fun deviceColor(space: KiteColorSpace, a: List<PdfObject>): RgbColor = when (space) {
+        KiteColorSpace.DeviceGray -> RgbColor.gray(num(a, 0))
+        KiteColorSpace.DeviceRGB -> RgbColor(num(a, 0), num(a, 1), num(a, 2))
+        else -> space.toRgb(DoubleArray(space.componentCount) { num(a, it) })
+    }
 
     private companion object {
         /** Stands for "the live form state hides this widget", which is not "it has no appearance". */
