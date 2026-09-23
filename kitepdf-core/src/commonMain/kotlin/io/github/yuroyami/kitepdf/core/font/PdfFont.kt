@@ -184,6 +184,24 @@ public class PdfFont private constructor(
         }
     }
 
+    /**
+     * True when this font writes top to bottom: a Type 0 font whose CMap has writing
+     * mode 1, such as `Identity-V` (ISO 32000-1, 9.7.4.3 and 9.7.5.3). Each glyph then
+     * moves the pen down by its [verticalMetrics], not right by its width.
+     */
+    public val isVertical: Boolean get() = composite?.vertical == true
+
+    /**
+     * The vertical metrics of each glyph in [bytes], in the order [layoutBytes] lays
+     * them out, or null when this font is not [isVertical]. ISO 32000-1, 9.7.4.3 reads
+     * them from the CIDFont's `/W2` array, else from `/DW2`, whose default is
+     * `[880 -1000]`.
+     */
+    public fun verticalMetrics(bytes: ByteArray): List<PdfVerticalMetrics>? {
+        val c = composite?.takeIf { it.vertical } ?: return null
+        return c.codeUnits(bytes).map { c.verticalMetricsOf(it.cid) }.toList()
+    }
+
     /* ─── Width-only fast paths (kept for callers that already had byte codes) ─── */
 
     /** Width (1/1000 em) for a single byte code in a simple font. Composite use [layoutBytes]. */

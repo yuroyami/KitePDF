@@ -157,6 +157,13 @@ internal object PredefinedCMaps {
     )
 
     /**
+     * True when the predefined CMap [name] writes top to bottom. ISO 32000-1, Table 118
+     * names every vertical CMap with a `-V` ending, such as `Identity-V`, except the
+     * Adobe-Japan1 CMap that is called `V`.
+     */
+    fun isVertical(name: String?): Boolean = name == "V" || name?.endsWith("-V") == true
+
+    /**
      * Resolve a named `/Encoding` to a [CodeUnitReader].
      *
      * - Identity-H / Identity-V → exact 2-byte reader.

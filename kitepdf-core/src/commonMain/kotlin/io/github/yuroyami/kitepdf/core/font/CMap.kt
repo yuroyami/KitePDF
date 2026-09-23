@@ -54,6 +54,8 @@ public class CMap private constructor(
     /** CID mappings for an embedded /Encoding CMap (code → CID). */
     private val cidChars: Map<Int, Int>,
     private val cidRanges: List<CidRange>,
+    /** `/WMode` from the CMap program: 1 writes top to bottom (ISO 32000-1, 9.7.5.3). */
+    internal val writingMode: Int = 0,
 ) {
 
     /**
@@ -233,10 +235,16 @@ public class CMap private constructor(
             val cidRanges = mutableListOf<CidRange>()
             val codespaces = mutableListOf<Codespace>()
             var codeWidth = 1
+            var writingMode = 0
 
             while (true) {
                 val tok = lexer.nextToken()
                 if (tok == Token.EndOfFile) break
+                if (tok is Token.Name && tok.value == "WMode") {
+                    // `/WMode 1 def`: the one entry of the CMap dictionary that layout needs.
+                    (lexer.nextToken() as? Token.Integer)?.let { writingMode = it.value.toInt() }
+                    continue
+                }
                 if (tok !is Token.Keyword) continue
                 when (tok.value) {
                     "begincodespacerange" -> {
@@ -249,7 +257,7 @@ public class CMap private constructor(
                     "begincidrange" -> parseCidRange(lexer, cidRanges)
                 }
             }
-            return CMap(codeWidth, codespaces, bfChars, bfRanges, cidChars, cidRanges)
+            return CMap(codeWidth, codespaces, bfChars, bfRanges, cidChars, cidRanges, writingMode)
         }
 
         private fun parseCodeSpaceRange(lexer: Lexer, out: MutableList<Codespace>) {

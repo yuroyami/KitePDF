@@ -139,6 +139,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   leading or spacing before a text object, raised text with `Ts`, used a Type 3
   font or a font missing from the resources, or drew a form that inherits its
   font (#278).
+- Vertical CJK text in a PDF, drawn with a Type 0 font in writing mode 1 such
+  as `Identity-V`, stands in columns instead of one row across the page. Text
+  extraction, search and redaction follow the columns. `PdfFont.isVertical` and
+  `PdfFont.verticalMetrics` expose the writing mode and the `/W2` metrics (#124).
 
 ## [0.10.0] - 2026-09-13
 

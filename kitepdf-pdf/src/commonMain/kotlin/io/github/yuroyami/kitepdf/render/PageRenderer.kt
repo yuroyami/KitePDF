@@ -24,6 +24,7 @@ import io.github.yuroyami.kitepdf.missingAsNull
 import io.github.yuroyami.kitepdf.content.ContentStreamParser
 import io.github.yuroyami.kitepdf.content.Operation
 import io.github.yuroyami.kitepdf.core.font.PdfFont
+import io.github.yuroyami.kitepdf.core.font.PdfVerticalMetrics
 import io.github.yuroyami.kitepdf.core.font.TextGlyph
 import io.github.yuroyami.kitepdf.core.parser.IndirectResolver
 import io.github.yuroyami.kitepdf.core.parser.PdfArray
@@ -1816,6 +1817,32 @@ public class PageRenderer(
         else laidOut.map {
             it.copy(advanceAdjust = t.charSpacing + (if (it.isWordSpace) t.wordSpacing else 0.0))
         }
+        // Writing mode 1 stacks the glyphs down the page, each from its own origin (9.7.4.3).
+        val vertical = font.verticalMetrics(bytes)?.takeIf { it.size == glyphs.size && it.isNotEmpty() }
+            ?.let { verticalRun(it, glyphs, t, textMatrix, hScale) }
+
+        // One run to the canvas. A vertical run goes glyph by glyph to a canvas that
+        // paints, and as one column to a canvas that reads text, so its line runs down.
+        fun drawRun(color: RgbColor, alpha: Double, unitsPerEm: Int, hasOutlines: Boolean) {
+            when {
+                vertical == null -> canvas.drawGlyphs(
+                    glyphs, t.fontSize, unitsPerEm, hasOutlines, font.fontSpec, finalMatrix, color,
+                    alpha = alpha, blendMode = state.current.blendMode,
+                )
+                canvas.resolvesGlyphOutlines -> for ((i, glyph) in glyphs.withIndex()) {
+                    canvas.drawGlyphs(
+                        listOf(glyph), t.fontSize, unitsPerEm, hasOutlines, font.fontSpec,
+                        pageMatrix.concat(vertical.placements[i]), color,
+                        alpha = alpha, blendMode = state.current.blendMode,
+                    )
+                }
+                else -> canvas.drawGlyphs(
+                    vertical.column, t.fontSize, unitsPerEm, hasOutlines, font.fontSpec,
+                    pageMatrix.concat(vertical.columnMatrix), color,
+                    alpha = alpha, blendMode = state.current.blendMode,
+                )
+            }
+        }
 
         if (!hidden) {
             // A font without a program strokes and clips with the outlines of the host face
@@ -1823,37 +1850,24 @@ public class PageRenderer(
             val hostShapes = if ((doStroke || doClip) && !font.hasEmbeddedOutlines) hostOutlined(glyphs, font) else null
             val shapes = hostShapes ?: glyphs
             val shapeUnits = if (hostShapes != null) HOST_UNITS_PER_EM else font.unitsPerEm ?: 1000
-            if (doClip) accumulateTextClip(shapes, font, t, textToUser, state.current.ctm, shapeUnits)
+            val placements = vertical?.placements
+            if (doClip) accumulateTextClip(shapes, font, t, textToUser, state.current.ctm, shapeUnits, placements)
             if (doFill && !state.current.fillColorSpace.paintsNothing && state.current.fillPattern !is KitePattern.Unsupported) {
                 withSoftMask(state.current) {
-                    canvas.drawGlyphs(
-                        glyphs, t.fontSize, font.unitsPerEm ?: 1000,
-                        font.hasEmbeddedOutlines, font.fontSpec, finalMatrix,
-                        state.current.fillColor,
-                        alpha = state.current.fillAlpha, blendMode = state.current.blendMode,
-                    )
+                    drawRun(state.current.fillColor, state.current.fillAlpha, font.unitsPerEm ?: 1000, font.hasEmbeddedOutlines)
                 }
             } else if (!canvas.resolvesGlyphOutlines) {
                 // A canvas that reads text gets the runs that fill nothing too: an OCR layer
                 // (mode 3), outlined and clipping text are text all the same (9.3.6, #274).
-                canvas.drawGlyphs(
-                    glyphs, t.fontSize, font.unitsPerEm ?: 1000,
-                    font.hasEmbeddedOutlines, font.fontSpec, finalMatrix,
-                    state.current.fillColor,
-                    alpha = state.current.fillAlpha, blendMode = state.current.blendMode,
-                )
+                drawRun(state.current.fillColor, state.current.fillAlpha, font.unitsPerEm ?: 1000, font.hasEmbeddedOutlines)
             }
             if (doStroke && !state.current.strokeColorSpace.paintsNothing) {
                 if (font.hasEmbeddedOutlines || hostShapes != null) {
-                    strokeTextGlyphs(state, t, shapes, shapeUnits, textToUser)
+                    strokeTextGlyphs(state, t, shapes, shapeUnits, textToUser, placements)
                 } else if (!doFill && canvas.resolvesGlyphOutlines) {
                     // This canvas has no host outlines, and a filled run beats a blank one.
                     withSoftMask(state.current) {
-                        canvas.drawGlyphs(
-                            glyphs, t.fontSize, HOST_UNITS_PER_EM, false, font.fontSpec, finalMatrix,
-                            state.current.strokeColor,
-                            alpha = state.current.strokeAlpha, blendMode = state.current.blendMode,
-                        )
+                        drawRun(state.current.strokeColor, state.current.strokeAlpha, HOST_UNITS_PER_EM, false)
                     }
                 }
             }
@@ -1862,10 +1876,54 @@ public class PageRenderer(
         // Advance Tm by the total width of this run. The advance is in text space,
         // so translate first then apply the text matrix (see moveText), otherwise a
         // size-in-Tm run advances in output space and the next run on the line overlaps.
-        val totalAdvance = totalAdvance(glyphs, t)
-        state.mutateText {
-            it.copy(textMatrix = it.textMatrix.concat(KiteMatrix.translation(totalAdvance, 0.0)))
+        val move = if (vertical != null) KiteMatrix.translation(0.0, vertical.displacement)
+        else KiteMatrix.translation(totalAdvance(glyphs, t), 0.0)
+        state.mutateText { it.copy(textMatrix = it.textMatrix.concat(move)) }
+    }
+
+    /**
+     * One run in vertical writing (ISO 32000-1, 9.7.4.3), placed as MuPDF places it.
+     * [placements] maps text space to user space for each glyph, with the glyph's
+     * horizontal origin at the pen minus its position vector. [displacement] is how far
+     * the run moves the pen down the column. [column] and [columnMatrix] are the same
+     * run for a canvas that reads text: one line down the page, each glyph advancing by
+     * its vertical displacement along a matrix turned a quarter turn clockwise.
+     */
+    private class VerticalRun(
+        val placements: List<KiteMatrix>,
+        val displacement: Double,
+        val column: List<TextGlyph>,
+        val columnMatrix: KiteMatrix,
+    )
+
+    private fun verticalRun(
+        metrics: List<PdfVerticalMetrics>,
+        glyphs: List<TextGlyph>,
+        t: TextState,
+        textMatrix: KiteMatrix,
+        hScale: Double,
+    ): VerticalRun {
+        // 9.4.4: ty = w1y x Tfs + Tc (+ Tw), and Th applies to tx only, so neither the
+        // pen nor the origin shift scales with Tz. The glyph itself still does.
+        val size = t.fontSize / 1000.0
+        val glyphScale = KiteMatrix(hScale, 0.0, 0.0, 1.0, 0.0, t.rise)
+        val placements = ArrayList<KiteMatrix>(glyphs.size)
+        var penY = 0.0
+        for ((i, glyph) in glyphs.withIndex()) {
+            val m = metrics[i]
+            val origin = KiteMatrix.translation(-m.originX * kotlin.math.abs(size), penY - m.originY * size)
+            placements.add(textMatrix.concat(origin).concat(glyphScale))
+            penY += m.displacement * size + glyph.advanceAdjust
         }
+        // The reading line sits 0.3 em left of the first glyph's centre line, so a
+        // reader's usual 0.2 em descent and 0.8 em ascent cover the column evenly.
+        val first = metrics[0]
+        val lineX = (glyphs[0].advanceWidth * hScale / 2.0 - first.originX) * size - 0.3 * t.fontSize
+        val column = glyphs.mapIndexed { i, glyph ->
+            glyph.copy(advanceWidth = -metrics[i].displacement, advanceAdjust = -glyph.advanceAdjust)
+        }
+        val columnMatrix = textMatrix.concat(KiteMatrix.translation(lineX, t.rise)).concat(QUARTER_TURN_CLOCKWISE)
+        return VerticalRun(placements, penY, column, columnMatrix)
     }
 
     /**
@@ -1883,6 +1941,8 @@ public class PageRenderer(
         glyphs: List<TextGlyph>,
         unitsPerEm: Int,
         textToUser: KiteMatrix,
+        /** Per-glyph text-to-user matrices of a vertical run, which replace the pen. */
+        placements: List<KiteMatrix>? = null,
     ) {
         val unitScale = t.fontSize / unitsPerEm
         val advanceScale = t.fontSize / 1000.0
@@ -1891,10 +1951,12 @@ public class PageRenderer(
         // Build each glyph outline into USER space (glyph units → unitScale →
         // pen advance → text-to-user), then stroke it with s.ctm so the stroke
         // width scales by the CTM only, the pure user-space width the spec wants.
-        for (glyph in glyphs) {
+        for ((i, glyph) in glyphs.withIndex()) {
             val outline = glyph.outline
             if (outline != null && !outline.isEmpty()) {
-                val userPath = transformPath(outline, glyphToUser(textToUser, penX, glyph, unitScale))
+                val toUser = if (placements != null) glyphToUser(placements[i], 0.0, glyph, unitScale)
+                else glyphToUser(textToUser, penX, glyph, unitScale)
+                val userPath = transformPath(outline, toUser)
                 withSoftMask(s) {
                     canvas.strokePath(
                         userPath, s.ctm, s.strokeColor, s.lineWidth,
@@ -1923,22 +1985,30 @@ public class PageRenderer(
         textToUser: KiteMatrix,
         ctm: KiteMatrix,
         unitsPerEm: Int,
+        /** Per-glyph text-to-user matrices of a vertical run, which replace the pen. */
+        placements: List<KiteMatrix>? = null,
     ) {
         val builder = pendingTextClip ?: KitePath.Builder().also { pendingTextClip = it }
         val unitScale = t.fontSize / unitsPerEm
         val advanceScale = t.fontSize / 1000.0
         val textToDevice = ctm.concat(textToUser)
         var penX = 0.0
-        for (glyph in glyphs) {
+        for ((i, glyph) in glyphs.withIndex()) {
+            // A vertical run places each glyph's horizontal origin itself; otherwise the pen does.
+            val placement = placements?.let { ctm.concat(it[i]) }
             val outline = glyph.outline
             if (outline != null) {
-                if (!outline.isEmpty()) appendPath(builder, transformPath(outline, glyphToUser(textToDevice, penX, glyph, unitScale)))
+                if (!outline.isEmpty()) {
+                    val toDevice = if (placement != null) glyphToUser(placement, 0.0, glyph, unitScale)
+                    else glyphToUser(textToDevice, penX, glyph, unitScale)
+                    appendPath(builder, transformPath(outline, toDevice))
+                }
             } else if (!font.hasEmbeddedOutlines && glyph.advanceWidth > 0.0) {
                 val w = glyph.advanceWidth * advanceScale
                 val box = KitePath.Builder().apply {
                     rectangle(0.0, -0.2 * t.fontSize, w, t.fontSize)
                 }.build()
-                appendPath(builder, transformPath(box, textToDevice.concat(KiteMatrix.translation(penX, 0.0))))
+                appendPath(builder, transformPath(box, placement ?: textToDevice.concat(KiteMatrix.translation(penX, 0.0))))
             }
             penX += glyph.advanceWidth * advanceScale + glyph.advanceAdjust
         }
@@ -1989,13 +2059,18 @@ public class PageRenderer(
         return b.build()
     }
 
-    /** TJ numeric adjustment: shift the text-cursor by [thousandthsOfEm] of em. */
+    /**
+     * TJ numeric adjustment: shift the text-cursor by [thousandthsOfEm] of em. In
+     * vertical writing it moves down the column, with no horizontal scaling (9.4.3).
+     */
     private fun adjustTextX(state: GraphicsStack, thousandthsOfEm: Double) {
         val t = state.current.text
-        val tx = thousandthsOfEm / 1000.0 * t.fontSize * (t.horizontalScaling / 100.0)
+        val shift = thousandthsOfEm / 1000.0 * t.fontSize
+        val move = if (t.font?.isVertical == true) KiteMatrix.translation(0.0, shift)
+        else KiteMatrix.translation(shift * (t.horizontalScaling / 100.0), 0.0)
         state.mutateText {
             // Text-space offset: translate first, then the text matrix (see moveText).
-            it.copy(textMatrix = it.textMatrix.concat(KiteMatrix.translation(tx, 0.0)))
+            it.copy(textMatrix = it.textMatrix.concat(move))
         }
     }
 
@@ -2196,6 +2271,9 @@ public class PageRenderer(
 
         /** The glyph space of [KiteCanvas.hostGlyphOutline] outlines. */
         const val HOST_UNITS_PER_EM = 1000
+
+        /** Turns the x axis to point down the page: a reading line for a vertical column. */
+        val QUARTER_TURN_CLOCKWISE = KiteMatrix(0.0, -1.0, 1.0, 0.0, 0.0, 0.0)
 
         /** The outline of a blank glyph: it strokes and clips nothing. */
         val EMPTY_OUTLINE: KitePath = KitePath.Builder().build()

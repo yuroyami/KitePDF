@@ -149,6 +149,8 @@ Structured text clusters character runs into:
 - **Lines**: spans whose Y origins cluster within tolerance
 - **Blocks**: lines grouped by vertical spacing (paragraph-like chunks)
 
+Vertical text forms columns instead of lines. A Type 0 font whose CMap has writing mode 1, such as `Identity-V`, stacks its glyphs down the page (ISO 32000-1, 9.7.4.3). Each column is a `PdfTextLine` whose spans run top to bottom, and the columns of a block come right to left, the order vertical CJK text reads in. In `page.textContent()`, such a line has `vertical = true`, so search and selection highlights follow the column.
+
 Each `PdfTextSpan` carries:
 - `text`: the decoded string
 - `fontSpec`: family/weight/style of the font used
