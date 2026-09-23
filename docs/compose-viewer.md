@@ -319,6 +319,12 @@ its colour mapping. Paper, viewer overlays and interactive form controls are
 outside this hook. The wrapper receives the same coordinates and matrices as
 `KiteCanvas` and should delegate operations it does not customize.
 
+Some `KiteCanvas` operations have two overloads. `drawImage` has one with a
+blend mode, which the renderer calls for an image that does not paint with
+the Normal blend mode. To customize such an operation, override both overloads.
+With `by inner`, Kotlin sends an overload that the wrapper does not override
+straight to `inner`.
+
 Rasterization can run on a background thread and repeat on Main when a page
 needs system-font text. Create a fresh wrapper in the function, keep it
 repeatable, and never retain the supplied canvas. Cache hits do not invoke it.

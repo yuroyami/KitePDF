@@ -156,6 +156,10 @@ public interface KiteCanvas {
      * that composites with [blendMode]. A group that holds one paint composites as that
      * paint does, so the result is the same, only slower. A canvas that blends images
      * itself overrides this, and its [drawImage] then calls this with [KiteBlendMode.Normal].
+     *
+     * The renderer calls this overload only for a blend mode other than Normal. A wrapper
+     * that delegates with `by` must override both overloads: Kotlin sends an overload that
+     * the wrapper does not override straight to the wrapped canvas.
      */
     public fun drawImage(image: KiteImageData, ctm: KiteMatrix, alpha: Double, blendMode: KiteBlendMode) {
         if (blendMode == KiteBlendMode.Normal) return drawImage(image, ctm, alpha)
