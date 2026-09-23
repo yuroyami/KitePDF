@@ -88,7 +88,7 @@ internal class CompositeFont(
     fun outline(cid: Int): KitePath? {
         val gid = cidToGid.map(cid)
         ttf?.let { return it.outlinePath(gid) }
-        cff?.let { return it.outline(gid) }
+        cff?.let { return it.glyphSpaceOutline(gid) }
         return null
     }
 
