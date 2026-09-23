@@ -20,6 +20,8 @@ import io.github.yuroyami.kitepdf.core.render.sampleStops
 import io.github.yuroyami.kitepdf.core.render.shrinkRgba
 import io.github.yuroyami.kitepdf.core.render.toRgbaBytes
 import kotlinx.browser.document
+import kotlin.math.ceil
+import kotlin.math.floor
 import org.khronos.webgl.Int8Array
 import org.khronos.webgl.Uint8Array
 import org.khronos.webgl.Uint8ClampedArray
@@ -42,23 +44,38 @@ import org.w3c.files.BlobPropertyBag
  *
  * Honest scope:
  *
- *  - Path operations, gradients, blend modes (all 16), clipping,
- *    transparency groups, soft masks: ✅ rendered via the standard
- *    Canvas2D API.
+ *  - Path operations, gradients, blend modes (all 16) and clipping use
+ *    the standard Canvas2D API. A transparency group with an alpha or a
+ *    blend mode, and a soft mask, paint into an offscreen canvas that
+ *    composites onto the page once.
  *  - Embedded image XObjects: ⚠️ JPEG / JP2 are decoded asynchronously by
  *    the browser (`HTMLImageElement.src = …`), which doesn't fit the
  *    renderer's synchronous draw pass. v1 paints placeholders for image
  *    XObjects; an async render path is roadmapped.
  */
-public class Canvas2dCanvas(private val ctx: CanvasRenderingContext2D) : KiteCanvas {
+public class Canvas2dCanvas(ctx: CanvasRenderingContext2D) : KiteCanvas {
 
+    /** The context that paints go to: the host's, or the offscreen canvas of an open layer. */
+    private var ctx: CanvasRenderingContext2D = ctx
+
+    /** The device pixel where the canvas of [ctx] starts: zero for the host's canvas. */
+    private var originX = 0.0
+    private var originY = 0.0
+
+    /** Clips pushed on [ctx] and not popped yet. */
     private var openLayers = 0
 
+    /** Open transparency groups, innermost last. */
+    private val groups = ArrayDeque<Group>()
+
     override fun beginPage(widthPt: Double, heightPt: Double, deviceCtm: KiteMatrix) {
+        while (groups.isNotEmpty()) endTransparencyGroup()
         openLayers = 0
     }
 
     override fun endPage() {
+        // Close any group left open, then roll back leftover clips (defensive).
+        while (groups.isNotEmpty()) endTransparencyGroup()
         while (openLayers > 0) {
             ctx.restore(); openLayers--
         }
@@ -263,19 +280,21 @@ public class Canvas2dCanvas(private val ctx: CanvasRenderingContext2D) : KiteCan
 
         ctx.save()
         try {
-            ctx.setTransform(ctm.a, ctm.b, ctm.c, ctm.d, ctm.e, ctm.f)
+            setDeviceTransform(ctm)
             ctx.fillStyle = gradient
             ctx.globalCompositeOperation = blendMode.toCanvas()
             // Without a region the shading covers the whole canvas, taken back into shading space.
             val region = clipPath ?: KitePath.Builder().apply {
-                val w = ctx.canvas.width.toDouble()
-                val h = ctx.canvas.height.toDouble()
+                val x0 = originX
+                val y0 = originY
+                val x1 = originX + ctx.canvas.width
+                val y1 = originY + ctx.canvas.height
                 fun corner(x: Double, y: Double, first: Boolean) {
                     val sx = (ctm.d * (x - ctm.e) - ctm.c * (y - ctm.f)) / det
                     val sy = (ctm.a * (y - ctm.f) - ctm.b * (x - ctm.e)) / det
                     if (first) moveTo(sx, sy) else lineTo(sx, sy)
                 }
-                corner(0.0, 0.0, true); corner(w, 0.0, false); corner(w, h, false); corner(0.0, h, false)
+                corner(x0, y0, true); corner(x1, y0, false); corner(x1, y1, false); corner(x0, y1, false)
                 close()
             }.build()
             ctx.asDynamic().fill(toPath2D(region, KiteMatrix.IDENTITY), "nonzero")
@@ -311,7 +330,7 @@ public class Canvas2dCanvas(private val ctx: CanvasRenderingContext2D) : KiteCan
         }
         ctx.save()
         try {
-            ctx.setTransform(ctm.a, ctm.b, ctm.c, ctm.d, ctm.e, ctm.f)
+            setDeviceTransform(ctm)
             ctx.globalAlpha = alpha.coerceIn(0.0, 1.0)
             ctx.imageSmoothingEnabled = sampling.smooth
             // Unit square, bitmap row 0 on the top edge (v = 1): the Skia
@@ -351,7 +370,7 @@ public class Canvas2dCanvas(private val ctx: CanvasRenderingContext2D) : KiteCan
     private fun drawPlaceholder(ctm: KiteMatrix, alpha: Double) {
         ctx.save()
         try {
-            ctx.setTransform(ctm.a, ctm.b, ctm.c, ctm.d, ctm.e, ctm.f)
+            setDeviceTransform(ctm)
             ctx.globalAlpha = alpha.coerceIn(0.0, 1.0)
             ctx.fillStyle = "#E0E0E0"
             // The CTM maps the unit square (0,0)-(1,1); same frame as drawImage.
@@ -364,45 +383,185 @@ public class Canvas2dCanvas(private val ctx: CanvasRenderingContext2D) : KiteCan
         }
     }
 
+    /**
+     * An open transparency group. A group with a constant alpha below 1 or a blend mode
+     * other than Normal paints into its own [layer], which composites onto the page once
+     * when the group ends. Otherwise [layer] is null and the group paints straight onto
+     * the page, which gives the same pixels.
+     */
+    private class Group(val saved: Saved?, val layer: Layer?, val alpha: Double, val blendMode: KiteBlendMode)
+
+    /** An offscreen canvas whose top left corner is device pixel ([x], [y]). */
+    private class Layer(val canvas: HTMLCanvasElement, val x: Double, val y: Double)
+
+    /** The context state from before a layer opened. */
+    private class Saved(val ctx: CanvasRenderingContext2D, val originX: Double, val originY: Double, val openLayers: Int)
+
+    /**
+     * ISO 32000-1, 11.4.5: a group's constant alpha and blend mode apply once, when the
+     * group composites onto its backdrop. So a group that has them paints into a layer
+     * first (#77). The layer is isolated, and knockout is not honoured (#125).
+     */
     override fun beginTransparencyGroup(
         bbox: KiteRectangle, ctm: KiteMatrix,
         isolated: Boolean, knockout: Boolean,
         alpha: Double, blendMode: KiteBlendMode,
     ) {
-        // Canvas2D has no `saveLayer`. We approximate by stacking
-        // globalAlpha + globalCompositeOperation. True isolated/knockout
-        // semantics (paint to an off-screen and composite at end) is a
-        // roadmap item.
-        ctx.save()
-        openLayers++
-        ctx.globalAlpha = alpha.coerceIn(0.0, 1.0)
-        ctx.globalCompositeOperation = blendMode.toCanvas()
+        val a = alpha.coerceIn(0.0, 1.0)
+        // A plain group, or one with malformed geometry, paints straight onto the page.
+        val area = if (a < 1.0 || blendMode != KiteBlendMode.Normal) deviceArea(bbox, ctm) else null
+        if (area == null) {
+            groups.addLast(Group(null, null, 1.0, KiteBlendMode.Normal))
+            return
+        }
+        val saved = Saved(ctx, originX, originY, openLayers)
+        groups.addLast(Group(saved, openLayer(area), a, blendMode))
     }
 
     override fun endTransparencyGroup() {
-        if (openLayers > 0) {
-            ctx.restore(); openLayers--
-        }
+        val group = groups.removeLastOrNull() ?: return
+        val layer = group.layer ?: return
+        closeLayer(group.saved ?: return)
+        composite(layer, group.alpha, group.blendMode.toCanvas())
     }
 
+    /**
+     * ISO 32000-1, 11.6.5.2: the content and the mask group each paint into a layer of
+     * their own. The mask layer's alpha, or for a luminosity mask its luminosity over a
+     * black backdrop, gates the content layer, which then composites onto the page. The
+     * mask group's colours never reach the page (#161).
+     */
     override fun applySoftMask(
         kind: SoftMask.Kind,
         maskBBox: KiteRectangle, maskCtm: KiteMatrix,
         render: () -> Unit,
         renderMask: (KiteCanvas) -> Unit,
     ) {
-        // Render content, then over-paint the mask group with
-        // `destination-in` so the mask's alpha clips the content.
-        // Canvas2D applies this to the whole context, which suits the
-        // common case of "this whole paint is masked".
+        val area = deviceArea(maskBBox, maskCtm)
+        if (area == null) {
+            render() // Malformed geometry: keep the paint without its unusable mask.
+            return
+        }
+        // The mask is zero wherever the content could show.
+        if (area[2] == 0 || area[3] == 0) return
+        val content = paintInLayer(area, render)
+        val mask = paintInLayer(area) {
+            if (kind == SoftMask.Kind.Luminosity) {
+                // Unpainted parts of the group show the black backdrop, whose luminosity is zero.
+                ctx.save()
+                ctx.setTransform(1.0, 0.0, 0.0, 1.0, 0.0, 0.0)
+                ctx.fillStyle = "black"
+                ctx.fillRect(0.0, 0.0, ctx.canvas.width.toDouble(), ctx.canvas.height.toDouble())
+                ctx.restore()
+            }
+            renderMask(this)
+        }
+        if (kind == SoftMask.Kind.Luminosity) luminosityToAlpha(mask.canvas)
+        val contentCtx = content.canvas.getContext("2d") as CanvasRenderingContext2D
+        contentCtx.setTransform(1.0, 0.0, 0.0, 1.0, 0.0, 0.0)
+        contentCtx.globalCompositeOperation = "destination-in"
+        contentCtx.drawImage(mask.canvas, 0.0, 0.0)
+        composite(content, 1.0, "source-over")
+    }
+
+    /** A layer over [area] that [paint] draws into, through this canvas. */
+    private fun paintInLayer(area: IntArray, paint: () -> Unit): Layer {
+        val saved = Saved(ctx, originX, originY, openLayers)
+        val openGroups = groups.size
+        val layer = openLayer(area)
+        try {
+            paint()
+        } finally {
+            // Groups the paint left open close inside the layer.
+            while (groups.size > openGroups) endTransparencyGroup()
+            closeLayer(saved)
+        }
+        return layer
+    }
+
+    /**
+     * The device pixels that [box] covers under [toDevice], inside the canvas of [ctx], as
+     * left, top, width and height. Null when the geometry is not finite.
+     */
+    private fun deviceArea(box: KiteRectangle, toDevice: KiteMatrix): IntArray? {
+        val b = box.normalized()
+        val xs = doubleArrayOf(
+            toDevice.transformX(b.left, b.bottom), toDevice.transformX(b.right, b.bottom),
+            toDevice.transformX(b.left, b.top), toDevice.transformX(b.right, b.top),
+        )
+        val ys = doubleArrayOf(
+            toDevice.transformY(b.left, b.bottom), toDevice.transformY(b.right, b.bottom),
+            toDevice.transformY(b.left, b.top), toDevice.transformY(b.right, b.top),
+        )
+        if (!xs.all { it.isFinite() } || !ys.all { it.isFinite() }) return null
+        val left = floor(maxOf(xs.min(), originX)).toInt()
+        val top = floor(maxOf(ys.min(), originY)).toInt()
+        val right = ceil(minOf(xs.max(), originX + ctx.canvas.width)).toInt()
+        val bottom = ceil(minOf(ys.max(), originY + ctx.canvas.height)).toInt()
+        return intArrayOf(left, top, maxOf(0, right - left), maxOf(0, bottom - top))
+    }
+
+    /** Opens an offscreen canvas over [area] and sends the paints that follow to it. */
+    private fun openLayer(area: IntArray): Layer {
+        val canvas = document.createElement("canvas") as HTMLCanvasElement
+        canvas.width = area[2]
+        canvas.height = area[3]
+        val layer = Layer(canvas, area[0].toDouble(), area[1].toDouble())
+        ctx = canvas.getContext("2d") as CanvasRenderingContext2D
+        originX = layer.x
+        originY = layer.y
+        openLayers = 0
+        ctx.setTransform(1.0, 0.0, 0.0, 1.0, -originX, -originY)
+        return layer
+    }
+
+    /** Drops the clips left on the current layer and sends paints back to the context in [saved]. */
+    private fun closeLayer(saved: Saved) {
+        while (openLayers > 0) {
+            ctx.restore(); openLayers--
+        }
+        ctx = saved.ctx
+        originX = saved.originX
+        originY = saved.originY
+        openLayers = saved.openLayers
+    }
+
+    /** Draws [layer] onto [ctx] where it belongs, with [alpha] and the composite operation [mode]. */
+    private fun composite(layer: Layer, alpha: Double, mode: String) {
+        // A canvas without pixels cannot be drawn, and shows nothing anyway.
+        if (layer.canvas.width == 0 || layer.canvas.height == 0) return
         ctx.save()
         try {
-            render()
-            ctx.globalCompositeOperation = "destination-in"
-            renderMask(this)
+            ctx.setTransform(1.0, 0.0, 0.0, 1.0, layer.x - originX, layer.y - originY)
+            ctx.globalAlpha = alpha
+            ctx.globalCompositeOperation = mode
+            ctx.drawImage(layer.canvas, 0.0, 0.0)
         } finally {
             ctx.restore()
         }
+    }
+
+    /** Replaces the alpha of every pixel of [canvas] with its luminosity 0.30 R + 0.59 G + 0.11 B. */
+    private fun luminosityToAlpha(canvas: HTMLCanvasElement) {
+        if (canvas.width == 0 || canvas.height == 0) return
+        val maskCtx = canvas.getContext("2d") as CanvasRenderingContext2D
+        val image = maskCtx.getImageData(0.0, 0.0, canvas.width.toDouble(), canvas.height.toDouble())
+        val data = image.data.asDynamic()
+        val length = canvas.width * canvas.height * 4
+        var i = 0
+        while (i < length) {
+            val r = data[i] as Int
+            val g = data[i + 1] as Int
+            val b = data[i + 2] as Int
+            data[i + 3] = (r * 77 + g * 150 + b * 29) ushr 8
+            i += 4
+        }
+        maskCtx.putImageData(image, 0.0, 0.0)
+    }
+
+    /** Sets [m], a transform to device pixels, on [ctx], whose canvas starts at the layer origin. */
+    private fun setDeviceTransform(m: KiteMatrix) {
+        ctx.setTransform(m.a, m.b, m.c, m.d, m.e - originX, m.f - originY)
     }
 
     /* ─── Helpers ─────────────────────────────────────────────────────────── */

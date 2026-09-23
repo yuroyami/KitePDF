@@ -52,7 +52,14 @@ kotlin {
     // which breaks every Double-typed CoreGraphics call in this backend.
 
     js {
-        browser()
+        browser {
+            testTask {
+                useKarma {
+                    // CI runners do not allow the sandbox that Chrome needs. A local run keeps it.
+                    if (System.getenv("CI") != null) useChromeHeadlessNoSandbox() else useChromeHeadless()
+                }
+            }
+        }
         binaries.library()
     }
 

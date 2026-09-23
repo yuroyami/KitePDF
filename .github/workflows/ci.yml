@@ -229,6 +229,9 @@ jobs:
           :kitepdf-compose-viewer:compileKotlinJs
           --continue --stacktrace
 
+      - name: Test the browser canvas in headless Chrome
+        run: ./gradlew :kitepdf-native-renderer:jsBrowserTest --continue --stacktrace
+
       - name: Upload test reports
         if: always()
         uses: actions/upload-artifact@v4
