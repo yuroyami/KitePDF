@@ -213,6 +213,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   luminosity of its group. On CoreGraphics the group painted onto the page in its
   own colours, so a mask drawn in blue turned the masked artwork blue. Android read
   a luminosity mask as an alpha mask (#79).
+- Canvas2D composites a transparency group once, with its alpha and blend mode, and
+  gates a soft mask by the alpha or the luminosity of its group. Before, shapes that
+  overlap in a translucent group drew darker where they overlap, and a Multiply group
+  drew as a normal paint. A soft mask painted its own colours onto the page (#77, #161).
 
 ## [0.10.0] - 2026-09-13
 
