@@ -1,6 +1,7 @@
 package io.github.yuroyami.kitepdf.core
 
 import io.github.yuroyami.kitepdf.core.font.Type1Font
+import io.github.yuroyami.kitepdf.core.render.KitePath
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
@@ -94,6 +95,53 @@ class Type1Test {
         val header = "%!PS-AdobeFont-1.0: Three 001.000\n/FontName /Three def\ncurrentfile eexec\n".encodeToByteArray()
         val font = Type1Font.parse(header + eexec, header.size, eexec.size)
         assertEquals(setOf(".notdef", "A", "B"), font.glyphNames)
+    }
+
+    /**
+     * A Type 1 font whose glyph /A is a 500 by 700 box, with [fontMatrix] as its
+     * `/FontMatrix` line, or none.
+     */
+    private fun boxFont(fontMatrix: String?, inEexec: Boolean = false): Type1Font {
+        fun bytes(vararg v: Int) = ByteArray(v.size) { v[it].toByte() }
+        // hsbw 0 500, rmoveto 0 0, rlineto 500 0, rlineto 0 700, rlineto -500 0, closepath, endchar.
+        val charstring = csEncrypt(
+            bytes(0, 0, 0, 0, 139, 248, 136, 13, 139, 139, 21, 248, 136, 139, 5, 139, 249, 80, 5, 252, 136, 139, 5, 9, 14),
+        )
+        val matrixLine = fontMatrix?.let { "$it\n" } ?: ""
+        val privateText = ("dup /Private 5 dict dup begin\n" + (if (inEexec) matrixLine else "") +
+            "/lenIV 4 def\n/Subrs 0 array def\n/CharStrings 1 dict dup begin\n/A ${charstring.size} RD ")
+            .encodeToByteArray() + charstring + "\nND\nend\nend\n".encodeToByteArray()
+        val eexec = eexecEncrypt(byteArrayOf(0, 0, 0, 0) + privateText)
+        val header = ("%!PS-AdobeFont-1.0: BoxFont 001.000\n12 dict begin\n/FontName /BoxFont def\n" +
+            (if (inEexec) "" else matrixLine) + "/Encoding StandardEncoding def\ncurrentdict end\ncurrentfile eexec\n")
+            .encodeToByteArray()
+        return Type1Font.parse(header + eexec, header.size, eexec.size)
+    }
+
+    /** The left, bottom, right and top of the points of glyph /A. */
+    private fun boxBounds(font: Type1Font): List<Double> {
+        val points = font.outlineForGlyphName("A")!!.segments.mapNotNull { s ->
+            when (s) {
+                is KitePath.Segment.MoveTo -> s.x to s.y
+                is KitePath.Segment.LineTo -> s.x to s.y
+                else -> null
+            }
+        }
+        return listOf(points.minOf { it.first }, points.minOf { it.second }, points.maxOf { it.first }, points.maxOf { it.second })
+    }
+
+    /** The font's own `/FontMatrix` maps outlines into glyph space, 1000 units per em (#140). */
+    @Test
+    fun font_matrix_maps_outlines_into_glyph_space() {
+        assertEquals(listOf(0.0, 0.0, 500.0, 700.0), boxBounds(boxFont(null)))
+        assertEquals(listOf(0.0, 0.0, 500.0, 700.0), boxBounds(boxFont("/FontMatrix [0.001 0 0 0.001 0 0] readonly def")))
+        assertEquals(listOf(0.0, 0.0, 250.0, 350.0), boxBounds(boxFont("/FontMatrix [0.0005 0 0 0.0005 0 0] readonly def")))
+        // FreeType also reads the braces form and numbers without a leading zero.
+        assertEquals(listOf(0.0, 0.0, 250.0, 350.0), boxBounds(boxFont("/FontMatrix {.0005 0 0 .0005 0 0} readonly def")))
+        assertEquals(listOf(0.0, 0.0, 250.0, 350.0), boxBounds(boxFont("/FontMatrix [0.0005 0 0 0.0005 0 0] def", inEexec = true)))
+        // No area, or a word where a number goes: the default applies.
+        assertEquals(listOf(0.0, 0.0, 500.0, 700.0), boxBounds(boxFont("/FontMatrix [0 0 0 0 0 0] readonly def")))
+        assertEquals(listOf(0.0, 0.0, 500.0, 700.0), boxBounds(boxFont("/FontMatrix [0.0005 0 0 x 0 0] readonly def")))
     }
 
     /* ─── Helpers: encrypt routines (inverse of Type 1's decrypt) ───────── */

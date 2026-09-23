@@ -1,5 +1,6 @@
 package io.github.yuroyami.kitepdf.core.font
 
+import io.github.yuroyami.kitepdf.core.render.KiteMatrix
 import io.github.yuroyami.kitepdf.core.render.KitePath
 
 /**
@@ -24,7 +25,8 @@ import io.github.yuroyami.kitepdf.core.render.KitePath
  *
  * Scope: rendering only. We extract enough to give every charstring its
  * outline; PostScript expressions and hints that don't affect vector
- * painting are not interpreted.
+ * painting are not interpreted. Outlines come out in PDF glyph space, where
+ * an em is 1000 units, after the font's own `/FontMatrix`.
  */
 internal class Type1Font private constructor(
     val name: String,
@@ -33,6 +35,8 @@ internal class Type1Font private constructor(
     /** /Encoding[i] = glyph name (or .notdef) for the standard 256 slots. */
     private val encoding: Array<String?>,
     private val lenIV: Int,
+    /** The map from charstring units to glyph space, or null when `/FontMatrix` is the default. */
+    private val glyphSpace: KiteMatrix?,
 ) {
 
     private val outlineCache = HashMap<String, KitePath?>()
@@ -42,7 +46,7 @@ internal class Type1Font private constructor(
         val cs = charStrings[glyphName]
         val path = if (cs == null) null else runCatching {
             Type1CharstringInterpreter(decryptCharstring(cs, lenIV), subrs, ::seacCharstring).interpret()
-        }.getOrNull()
+        }.getOrNull()?.let { raw -> glyphSpace?.let { raw.mappedBy(it) } ?: raw }
         outlineCache[glyphName] = path
         return path
     }
@@ -97,8 +101,9 @@ internal class Type1Font private constructor(
             val lenIV = parseLenIV(plaintext)
             val subrs = parseSubrs(plaintext)
             val charStrings = parseCharStrings(plaintext)
+            val fontMatrix = parseFontMatrix(header) ?: parseFontMatrix(plaintext)
 
-            return Type1Font(fontName, subrs, charStrings, encoding, lenIV)
+            return Type1Font(fontName, subrs, charStrings, encoding, lenIV, glyphSpaceMatrix(fontMatrix))
         }
 
         /* ─── PFB container ──────────────────────────────────────────────── */
@@ -164,6 +169,19 @@ internal class Type1Font private constructor(
             val end = after.indexOfAny(charArrayOf(' ', '\n', '\r', '\t', '/', '<'), 1)
             return if (end > 1) after.substring(1, end) else "Unknown"
         }
+
+        /**
+         * The `/FontMatrix` array, or null when the font has none or it is unusable.
+         * FreeType also reads the array in either bracket form.
+         */
+        private fun parseFontMatrix(bytes: ByteArray): KiteMatrix? {
+            val match = FONT_MATRIX.find(bytes.decodeToString()) ?: return null
+            val numbers = match.groupValues[1].trim().split(WHITESPACE).map { it.toDoubleOrNull() ?: return null }
+            return fontMatrixOf(numbers)
+        }
+
+        private val FONT_MATRIX = Regex("""/FontMatrix\s*[\[{]([^\]}]*)[\]}]""")
+        private val WHITESPACE = Regex("""\s+""")
 
         /**
          * Parse the `/Encoding` array: 256 entries of `dup <code> /<name> put`

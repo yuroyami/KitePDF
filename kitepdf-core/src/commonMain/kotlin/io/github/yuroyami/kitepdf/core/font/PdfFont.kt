@@ -66,7 +66,12 @@ public class PdfFont private constructor(
         get() = embeddedTtf != null || embeddedCff != null || embeddedType1 != null ||
             composite?.let { it.ttf != null || it.cff != null } == true
 
-    /** Units-per-em: TTF reports its own; CFF + Type 1 default to 1000. */
+    /**
+     * The units per em of this font's outlines, or null without embedded outlines. A
+     * TrueType font reports its own. CFF and Type 1 outlines are already mapped through
+     * the program's `FontMatrix` into glyph space, where an em is 1000 units
+     * (ISO 32000-1, 9.2.4), so they report 1000.
+     */
     public val unitsPerEm: Int?
         get() = embeddedTtf?.unitsPerEm
             ?: composite?.ttf?.unitsPerEm
@@ -264,7 +269,7 @@ public class PdfFont private constructor(
     private fun simpleOutline(code: Int): KitePath? {
         if (composite != null) return null
         embeddedTtf?.let { ttf -> return ttf.outlinePath(simpleGid(code)) }
-        embeddedCff?.let { cff -> return cff.outline(simpleGid(code)) }
+        embeddedCff?.let { cff -> return cff.glyphSpaceOutline(simpleGid(code)) }
         embeddedType1?.let { t1 ->
             val gn = glyphNameForByte[code and 0xFF] ?: return null
             return t1.outlineForGlyphName(gn) ?: t1.outlineForByte(code)

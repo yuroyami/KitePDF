@@ -1,6 +1,8 @@
 package io.github.yuroyami.kitepdf.core.font
 
 import io.github.yuroyami.kitepdf.core.PdfFormatException
+import io.github.yuroyami.kitepdf.core.render.KiteMatrix
+import io.github.yuroyami.kitepdf.core.render.KitePath
 import io.github.yuroyami.kitepdf.core.withLock
 
 /**
@@ -17,6 +19,7 @@ import io.github.yuroyami.kitepdf.core.withLock
  *   - Charsets format 0/1/2 → glyph-name lookup.
  *   - Encodings format 0/1: for non-CIDFonts only (byte → SID → glyph name → GID).
  *   - CID-keyed fonts via FDSelect/FDArray (format 0 and 3).
+ *   - The Top DICT and FontDict `FontMatrix`, for outlines in PDF glyph space.
  *
  * Not yet handled: hint operators are skipped (we don't rasterize, so hints
  * are ignored); flex operators are approximated as cubic Béziers; the
@@ -45,6 +48,11 @@ public class CffFont private constructor(
     internal val isCidKeyed: Boolean,
     /** Per-FontDict private data (one entry for a non-CID font). The subsetter re-emits it. */
     internal val fdPrivates: List<FdPrivate>,
+    /**
+     * Per FontDict (one entry for a non-CID font): the map from this program's units to
+     * PDF glyph space, or null where it is the identity. See [glyphSpaceOutline].
+     */
+    private val glyphSpaceMatrices: List<KiteMatrix?>,
 ) {
 
     /** The bits of a Private DICT the subsetter re-emits (hints are dropped). */
@@ -53,6 +61,9 @@ public class CffFont private constructor(
     public val numGlyphs: Int get() = charStrings.size
 
     private val outlineCache = HashMap<Int, io.github.yuroyami.kitepdf.core.render.KitePath?>()
+
+    /** Outlines mapped into glyph space, filled only for a glyph whose FontDict has a matrix. */
+    private val glyphSpaceCache = HashMap<Int, KitePath>()
 
     /**
      * Guards [outlineCache]; the face can be shared across documents (EPUB
@@ -63,7 +74,8 @@ public class CffFont private constructor(
     private val glyphLock = io.github.yuroyami.kitepdf.core.KiteLock()
 
     /**
-     * Returns the outline of [glyphId], or null if it's empty / unparseable.
+     * Returns the outline of [glyphId] in the program's own units, before its
+     * `FontMatrix`, or null if it's empty / unparseable.
      * Decoded outlines are cached: a glyph drawn N times runs the Type 2
      * charstring interpreter once, not N times.
      */
@@ -86,6 +98,20 @@ public class CffFont private constructor(
                 path
             }
         }
+    }
+
+    /**
+     * The outline of [glyphId] in PDF glyph space, where an em is 1000 units (ISO 32000-1,
+     * 9.2.4): [outline] mapped through the `FontMatrix` of its FontDict. It is [outline]
+     * itself when that matrix is the default, `[0.001 0 0 0.001 0 0]`.
+     */
+    internal fun glyphSpaceOutline(glyphId: Int): KitePath? {
+        val raw = outline(glyphId) ?: return null
+        val fd = if (fdSelect.isNotEmpty()) fdSelect[glyphId] else 0
+        val m = glyphSpaceMatrices.getOrNull(fd) ?: return raw
+        glyphLock.withLock { glyphSpaceCache[glyphId]?.let { return it } }
+        val mapped = raw.mappedBy(m)
+        return glyphLock.withLock { glyphSpaceCache.getOrPut(glyphId) { mapped } }
     }
 
     /** Glyph id for a PostScript glyph name; -1 if unknown. */
@@ -192,6 +218,15 @@ public class CffFont private constructor(
             // ── Private DICT + Local Subrs (per FontDict for CID-keyed) ───
             val priv = parsePrivateAndFdData(reader, topDict, isCidKeyed, numGlyphs)
 
+            // A FontDict matrix applies first, then the Top DICT matrix, and a FontDict
+            // without one takes the Top DICT's, as FreeType and pdf.js combine them.
+            val topMatrix = fontMatrixOf(topDict[0x0C07]?.filterIsInstance<Double>())
+            val fontMatrices = if (isCidKeyed && priv.fdMatrices.isNotEmpty()) {
+                priv.fdMatrices.map { fd -> if (fd == null) topMatrix else topMatrix?.concat(fd) ?: fd }
+            } else {
+                listOf(topMatrix)
+            }
+
             return CffFont(
                 reader = reader,
                 name = name,
@@ -205,6 +240,7 @@ public class CffFont private constructor(
                 nominalWidthX = priv.nominalWidthX,
                 isCidKeyed = isCidKeyed,
                 fdPrivates = priv.fdPrivates,
+                glyphSpaceMatrices = fontMatrices.map(::glyphSpaceMatrix),
             )
         }
 
@@ -358,6 +394,8 @@ public class CffFont private constructor(
             val nominalWidthX: Double,
             val fdSelect: IntArray,
             val fdPrivates: List<FdPrivate>,
+            /** Each FontDict's own `FontMatrix`, null where it has none. Empty for a non-CID font. */
+            val fdMatrices: List<KiteMatrix?> = emptyList(),
         )
 
         private fun parsePrivateAndFdData(
@@ -372,6 +410,7 @@ public class CffFont private constructor(
                 val fdSelect = if (fdSelectOffset > 0) readFdSelect(reader, fdSelectOffset, numGlyphs) else IntArray(numGlyphs)
                 val locals = mutableListOf<List<ByteArray>>()
                 val fdPrivates = mutableListOf<FdPrivate>()
+                val fdMatrices = mutableListOf<KiteMatrix?>()
                 var defaultW = 0.0; var nominalW = 0.0
                 if (fdArrayOffset > 0) {
                     reader.seek(fdArrayOffset)
@@ -381,11 +420,12 @@ public class CffFont private constructor(
                         val (subrs, dW, nW) = readPrivate(reader, dict)
                         locals.add(subrs)
                         fdPrivates.add(FdPrivate(dW, nW))
+                        fdMatrices.add(fontMatrixOf(dict[0x0C07]?.filterIsInstance<Double>()))
                         if (defaultW == 0.0) defaultW = dW
                         if (nominalW == 0.0) nominalW = nW
                     }
                 }
-                return PrivateData(locals, defaultW, nominalW, fdSelect, fdPrivates)
+                return PrivateData(locals, defaultW, nominalW, fdSelect, fdPrivates, fdMatrices)
             } else {
                 val (subrs, dW, nW) = readPrivate(reader, topDict)
                 return PrivateData(listOf(subrs), dW, nW, IntArray(0), listOf(FdPrivate(dW, nW)))

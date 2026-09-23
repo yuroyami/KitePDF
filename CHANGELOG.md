@@ -146,6 +146,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - An embedded Type 1 font keeps every glyph. The glyph count after `/CharStrings`
   was read as the length of a glyph program, so the first glyphs of the font drew
   nothing (#279).
+- A CFF or Type 1 font draws at the size its own `FontMatrix` gives. A font of
+  2048 units per em drew about twice too large (#140).
 
 ## [0.10.0] - 2026-09-13
 
