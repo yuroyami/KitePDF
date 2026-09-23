@@ -606,12 +606,17 @@ public class SvgImage private constructor(
     private fun paintShape(path: KitePath, ctm: KiteMatrix, paint: Paint, canvas: KiteCanvas, forceStroke: Boolean = false) {
         if (!paint.visible || path.segments.isEmpty()) return
         if (!forceStroke) {
-            val gradient = paint.fillRef?.let { gradientFor(it, path, ctm) }
+            val gradient = paint.fillRef?.let { gradientFor(it, path) }
             if (gradient != null) {
-                canvas.fillShading(
-                    gradient.first, gradient.second, transformPath(path, ctm),
-                    paint.opacity * paint.fillOpacity, KiteBlendMode.Normal,
-                )
+                // The canvas maps the fill region by the gradient's matrix, so the shape goes in gradient space.
+                // A gradient transform without an inverse paints nothing.
+                val (shading, local) = gradient
+                local.invert()?.let { inverse ->
+                    canvas.fillShading(
+                        shading, compose(ctm, local), transformPath(path, inverse),
+                        paint.opacity * paint.fillOpacity, KiteBlendMode.Normal,
+                    )
+                }
             } else {
                 paint.fill?.let {
                     canvas.fillPath(path, ctm, it, paint.evenOdd, paint.opacity * paint.fillOpacity, KiteBlendMode.Normal)
@@ -639,14 +644,14 @@ public class SvgImage private constructor(
     }
 
     /**
-     * The shading a `url(#id)` fill resolves to, plus the matrix that puts it
-     * where the shape is. `objectBoundingBox` units (the default) map the
-     * gradient's 0..1 box onto the shape's own bounds.
+     * The shading a `url(#id)` fill resolves to, plus the matrix from the
+     * gradient's space to the shape's user space. `objectBoundingBox` units
+     * (the default) map the gradient's 0..1 box onto the shape's own bounds.
      */
-    private fun gradientFor(id: String, path: KitePath, ctm: KiteMatrix): Pair<KiteShading, KiteMatrix>? {
+    private fun gradientFor(id: String, path: KitePath): Pair<KiteShading, KiteMatrix>? {
         val def = byId[id] ?: return null
         val g = SvgGradient.parse(def, byId, styles::value) ?: return null
-        var m = ctm
+        var m = KiteMatrix.IDENTITY
         if (g.objectBoundingBox) {
             val b = boundsOf(path) ?: return null
             m = compose(m, KiteMatrix(b[2] - b[0], 0.0, 0.0, b[3] - b[1], b[0], b[1]))
