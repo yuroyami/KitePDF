@@ -33,3 +33,4 @@ Things a previous change taught the hard way. One line each. Delete a line when 
 - A 3-band RGB raster has no alpha band, so a custom Composite that reads band 3 sees every pixel as transparent. That made every AWT blend mode paint as Normal on RGB surfaces (#272).
 - `RedactionEngine` keeps its own copy of the renderer's text state machine. A text fix in `PageRenderer` that skips it lets a redaction keep text the page draws (#278).
 - The EPUB sweep's blank-page check passes a cover page that paints only a background fill, so a cover image that fails to load goes unnoticed (#276).
+- A canvas draws a system font when an embedded font yields no outlines, so a pixel comparison with mutool passed while KitePDF never read a CFF subset. Count `TextGlyph.outline` on a recording canvas as well (#280).

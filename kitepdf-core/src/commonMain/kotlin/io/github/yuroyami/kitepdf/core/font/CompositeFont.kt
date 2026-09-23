@@ -88,11 +88,12 @@ internal class CompositeFont(
     fun outline(cid: Int): KitePath? {
         val gid = cidToGid.map(cid)
         ttf?.let { return it.outlinePath(gid) }
-        cff?.let { return it.glyphSpaceOutline(gid) }
+        // A CID-keyed CFF program selects the glyph through its charset (ISO 32000-1, 9.7.4.2).
+        cff?.let { return it.glyphSpaceOutline(it.glyphIdForCid(gid)) }
         return null
     }
 
-    fun gidFor(cid: Int): Int = cidToGid.map(cid)
+    fun gidFor(cid: Int): Int = cidToGid.map(cid).let { gid -> cff?.glyphIdForCid(gid)?.coerceAtLeast(0) ?: gid }
     fun widthOf(cid: Int): Double = widths.widthOf(cid)
     fun verticalMetricsOf(cid: Int): PdfVerticalMetrics = verticalWidths.metrics(cid, widthOf(cid))
 
