@@ -155,6 +155,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `PdfBuilder` embeds an OpenType CFF font at its true size when the font is not
   1000 units per em. `CffSubsetter.subset` takes the units per em in a new
   `unitsPerEm` parameter and writes them into the `FontMatrix` of the subset (#281).
+- A font embedded as a whole OpenType file (`/FontFile3` with `/Subtype /OpenType`)
+  draws from its own CFF or TrueType outlines instead of a system font. An OpenType
+  CFF font without a `FontMatrix` takes its units per em from its `head` table, as in
+  FreeType (#282).
 
 ## [0.10.0] - 2026-09-13
 

@@ -138,8 +138,11 @@ internal class CompositeFont(
 
             // Resolve descendant's embedded outlines.
             val descriptor = descendant["FontDescriptor"]?.resolve(refs) as? PdfDictionary
-            val ttf = descriptor?.let { loadTtf(it, refs) }
-            val cff = if (ttf == null) descriptor?.let { loadCff(it, refs) } else null
+            // /FontFile3 holds a bare CFF program or, since PDF 1.6, a whole OpenType font.
+            val fontFile2 = descriptor?.let { loadTtf(it, refs) }
+            val fontFile3 = if (fontFile2 == null) descriptor?.let { loadFontFile3(it, refs) } else null
+            val ttf = fontFile2 ?: fontFile3?.let { FontFile3.trueType(it) }
+            val cff = if (ttf == null) fontFile3?.let { FontFile3.cff(it) } else null
 
             val cidToGid = CidToGidMap.from(descendant["CIDToGIDMap"]?.resolve(refs))
             val widths = CidWidthTable.from(descendant, refs)
@@ -158,9 +161,10 @@ internal class CompositeFont(
             return runCatching { TrueTypeFont.parse(FilterChain.decode(stream)) }.getOrNull()
         }
 
-        private fun loadCff(descriptor: PdfDictionary, refs: IndirectResolver): CffFont? {
+        /** The decoded `/FontFile3` stream, or null. [FontFile3] reads what it holds. */
+        private fun loadFontFile3(descriptor: PdfDictionary, refs: IndirectResolver): ByteArray? {
             val stream = (descriptor["FontFile3"]?.resolve(refs) as? PdfStream) ?: return null
-            return runCatching { CffFont.parse(FilterChain.decode(stream)) }.getOrNull()
+            return runCatching { FilterChain.decode(stream) }.getOrNull()
         }
 
         private fun loadToUnicodeOnParent(parent: PdfDictionary, refs: IndirectResolver): CMap? {
