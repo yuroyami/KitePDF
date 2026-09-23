@@ -24,7 +24,13 @@ public object CffSubsetter {
 
     public class Subset(public val cff: ByteArray, public val oldToNew: Map<Int, Int>)
 
-    public fun subset(cff: CffFont, usedGids: Set<Int>): Subset {
+    /**
+     * Subset [cff] to [usedGids] plus `.notdef`. [unitsPerEm] is the number of font units
+     * in an em, such as the `head` value of an OpenType font. A bare CFF program has 1000
+     * by default (Adobe Technical Note 5176, Table 9), so the subset records any other
+     * value in its `FontMatrix`.
+     */
+    public fun subset(cff: CffFont, usedGids: Set<Int>, unitsPerEm: Int = 1000): Subset {
         val numGlyphsOrig = cff.numGlyphs
 
         // Closure = used glyphs + .notdef, renumbered densely in ascending order.
@@ -83,10 +89,19 @@ public object CffSubsetter {
             ByteArrayBuilder(12).apply { append(dictInt5(privSize)); append(dictInt5(privOffset)); append(op(18)) }.toByteArray()
 
         val maxCid = oldGids[n - 1]
+        // No FontDict carries a FontMatrix, so every FontDict takes this one.
+        val fontMatrix = if (unitsPerEm == 1000 || unitsPerEm <= 0) ByteArray(0) else {
+            val scale = dictReal(1.0 / unitsPerEm)
+            ByteArrayBuilder(32).apply {
+                append(scale); append(dictInt(0)); append(dictInt(0)); append(scale); append(dictInt(0)); append(dictInt(0))
+                append(op(0x0C07))
+            }.toByteArray()
+        }
         // Measure the Top DICT (fixed size: all offsets are 5-byte) to lay everything out.
         fun topDict(charsetOff: Int, charStringsOff: Int, fdArrayOff: Int, fdSelectOff: Int): ByteArray =
             ByteArrayBuilder(48).apply {
                 append(dictInt(391)); append(dictInt(392)); append(dictInt(0)); append(op(0x0C1E)) // ROS
+                append(fontMatrix)                                                                  // FontMatrix
                 append(dictInt(maxCid + 1)); append(op(0x0C22))                                     // CIDCount
                 append(dictInt5(charsetOff)); append(op(15))                                        // charset
                 append(dictInt5(charStringsOff)); append(op(17))                                    // CharStrings
@@ -190,6 +205,31 @@ public object CffSubsetter {
         v in -1131..-108 -> { val w = -v - 108; byteArrayOf((251 + (w ushr 8)).toByte(), (w and 0xFF).toByte()) }
         v in -32768..32767 -> byteArrayOf(28, (v ushr 8).toByte(), v.toByte())
         else -> dictInt5(v)
+    }
+
+    /** DICT real operand: 30, then the number's characters as nibbles, ended by 0xF. */
+    private fun dictReal(v: Double): ByteArray {
+        val nibbles = ArrayList<Int>()
+        val text = v.toString()
+        var i = 0
+        while (i < text.length) {
+            when (val ch = text[i]) {
+                in '0'..'9' -> nibbles.add(ch - '0')
+                '.' -> nibbles.add(0xA)
+                '-' -> nibbles.add(0xE)
+                'E', 'e' -> when (text.getOrNull(i + 1)) {
+                    '-' -> { nibbles.add(0xC); i++ }
+                    '+' -> { nibbles.add(0xB); i++ }
+                    else -> nibbles.add(0xB)
+                }
+            }
+            i++
+        }
+        nibbles.add(0xF)
+        if (nibbles.size % 2 == 1) nibbles.add(0xF)
+        return ByteArray(1 + nibbles.size / 2) { k ->
+            if (k == 0) 30 else ((nibbles[2 * k - 2] shl 4) or nibbles[2 * k - 1]).toByte()
+        }
     }
 
     /** Fixed 5-byte DICT integer (29 + i32). Keeps DICT sizes stable for offset backpatching. */

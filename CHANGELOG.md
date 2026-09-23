@@ -152,6 +152,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   of the program (ISO 32000-1, 9.7.4.2). Text in such a font drew the wrong glyphs
   or fell back to a system font. This hit most CJK subset fonts and every OpenType
   CFF font that `PdfBuilder` embeds (#280).
+- `PdfBuilder` embeds an OpenType CFF font at its true size when the font is not
+  1000 units per em. `CffSubsetter.subset` takes the units per em in a new
+  `unitsPerEm` parameter and writes them into the `FontMatrix` of the subset (#281).
 
 ## [0.10.0] - 2026-09-13
 

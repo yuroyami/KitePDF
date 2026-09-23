@@ -46,6 +46,56 @@ class CffEmbedOracleTest {
         return null
     }
 
+    /** The top and bottom rows that hold ink darker than mid grey. */
+    private fun inkRows(img: java.awt.image.BufferedImage): IntRange {
+        var top = Int.MAX_VALUE
+        var bottom = -1
+        for (y in 0 until img.height) for (x in 0 until img.width) {
+            if ((img.getRGB(x, y) and 0xFF) < 128) { top = minOf(top, y); bottom = maxOf(bottom, y) }
+        }
+        return top..bottom
+    }
+
+    /**
+     * A CFF font of 2048 units per em must keep its size when the subset is embedded as a
+     * bare CFF program, which has 1000 by default (Adobe Technical Note 5176, Table 9).
+     */
+    @Test
+    fun a_cff_font_of_2048_units_per_em_embeds_at_its_true_size() {
+        var d: File? = File(System.getProperty("user.dir")).absoluteFile
+        var otf: File? = null
+        while (d != null && otf == null) {
+            otf = File(d, "mupdf-master/resources/fonts/sil/CharisSIL-5.000-developer/sources/CharisSIL-R-designsource.otf")
+                .takeIf { it.isFile }
+            d = d.parentFile
+        }
+        assumeTrue("CharisSIL-R-designsource.otf not found, skipping.", otf != null)
+        assumeTrue("mutool not found, skipping.", MuPdfOracle.binary != null)
+        val bytes = otf!!.readBytes()
+        val ttf = TrueTypeFont.parse(bytes)
+        assertEquals(2048, ttf.unitsPerEm)
+
+        // The true height of "H" at 48 pt and 72 dpi, from the font's own outline.
+        val cff = io.github.yuroyami.kitepdf.core.font.CffFont.parse(ttf.rawTable("CFF ")!!)
+        val ys = cff.outline(ttf.glyphIdForCodePoint('H'.code))!!.segments.flatMap { s ->
+            when (s) {
+                is io.github.yuroyami.kitepdf.core.render.KitePath.Segment.MoveTo -> listOf(s.y)
+                is io.github.yuroyami.kitepdf.core.render.KitePath.Segment.LineTo -> listOf(s.y)
+                is io.github.yuroyami.kitepdf.core.render.KitePath.Segment.CurveTo -> listOf(s.y1, s.y2, s.y3)
+                else -> emptyList()
+            }
+        }
+        val expected = (ys.max() - ys.min()) * 48.0 / 2048
+
+        val pdf = PdfBuilder().page(300.0, 200.0) { text(EmbeddedFont.load(bytes), 48.0, 40.0, 60.0, "H") }.build()
+        val file = File.createTempFile("kite-cff-2048-", ".pdf").apply { deleteOnExit(); writeBytes(pdf) }
+        val mutool = inkRows(MuPdfOracle.render(file, 1, 72)!!)
+        val kite = inkRows(AwtPdfRasterizer.renderToImage(KitePDF.open(pdf).pages[0]))
+        println("H ink height at 48 pt: expected=$expected mutool=${mutool.count()} kite=${kite.count()}")
+        assertEquals(expected, mutool.count().toDouble(), 2.0, "mutool height of the embedded H")
+        assertEquals(expected, kite.count().toDouble(), 2.0, "KitePDF height of the embedded H")
+    }
+
     @Test
     fun cff_otf_subsets_embeds_and_renders_correctly() {
         val otf = otfFile()
