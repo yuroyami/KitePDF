@@ -478,11 +478,25 @@ class SvgFeaturesTest {
     }
 
     @Test
-    fun a_gradient_stroke_paints_with_the_gradient_middle() {
+    fun a_gradient_stroke_fills_the_outline_of_the_stroke() {
         val drawn = calls(
             """<svg width="40" height="40">
                  <linearGradient id="g"><stop offset="0" stop-color="red"/><stop offset="1" stop-color="blue"/></linearGradient>
                  <rect x="5" y="5" width="30" height="30" fill="none" stroke="url(#g)" stroke-width="4"/>
+               </svg>""",
+        )
+        assertTrue(drawn.none { it is RecordingCanvas.Call.Stroke }, "no stroke in one flat colour")
+        // The outline of a stroke 4 wide around the square, with mitred corners, runs from 3 to 37.
+        assertNear(listOf(3.0, 3.0, 37.0, 37.0), deviceBounds(drawn.filterIsInstance<RecordingCanvas.Call.Fill>().single()), "outline")
+    }
+
+    @Test
+    fun a_gradient_stroke_on_a_shape_without_area_keeps_the_gradient_middle() {
+        // A horizontal line has no bounding box height, so the gradient cannot map onto it (#90).
+        val drawn = calls(
+            """<svg width="40" height="40">
+                 <linearGradient id="g"><stop offset="0" stop-color="red"/><stop offset="1" stop-color="blue"/></linearGradient>
+                 <line x1="5" y1="20" x2="35" y2="20" stroke="url(#g)" stroke-width="4"/>
                </svg>""",
         )
         val s = drawn.filterIsInstance<RecordingCanvas.Call.Stroke>().single()

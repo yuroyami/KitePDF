@@ -3,6 +3,7 @@ package io.github.yuroyami.kitepdf.svg
 import io.github.yuroyami.kitepdf.core.css.CssValues
 import io.github.yuroyami.kitepdf.core.render.KiteColorSpace
 import io.github.yuroyami.kitepdf.core.render.KiteFunction
+import io.github.yuroyami.kitepdf.core.render.KiteGradientSpread
 import io.github.yuroyami.kitepdf.core.render.KiteShading
 import io.github.yuroyami.kitepdf.core.render.RgbColor
 import io.github.yuroyami.kitepdf.core.xml.KiteXmlNode
@@ -24,6 +25,13 @@ internal object SvgGradient {
         val objectBoundingBox: Boolean,
         /** `gradientTransform`, or null. */
         val transform: String?,
+        /** `spreadMethod`: how the gradient continues past its ends (SVG 1.1, 13.2.2). */
+        val spread: KiteGradientSpread = KiteGradientSpread.Pad,
+        /**
+         * The same geometry with the opacity of each stop as a grey level, for a
+         * luminosity soft mask. Null when every stop is opaque.
+         */
+        val opacity: KiteShading? = null,
     )
 
     /**
@@ -36,7 +44,14 @@ internal object SvgGradient {
         declaration: (KiteXmlNode.Element, String) -> String? = SvgStyles::inlineValue,
     ): Parsed? {
         val stops = stopsOf(el, byId, declaration) ?: return null
-        val fn = functionOf(stops) ?: return null
+        val fn = functionOf(stops) { channels(it.color) } ?: return null
+        // A stop's opacity multiplies into the alpha of its colour (SVG 1.1, 13.2.4).
+        val opacityFn = if (stops.all { it.alpha >= 1.0 }) null else functionOf(stops) { doubleArrayOf(it.alpha, it.alpha, it.alpha) }
+        val spread = when ((attr(el, byId, "spreadmethod") ?: attr(el, byId, "spreadMethod"))?.trim()) {
+            "reflect" -> KiteGradientSpread.Reflect
+            "repeat" -> KiteGradientSpread.Repeat
+            else -> KiteGradientSpread.Pad
+        }
         val units = attr(el, byId, "gradientunits") ?: attr(el, byId, "gradientUnits")
         val objectBox = units?.trim() != "userSpaceOnUse"
         val transform = attr(el, byId, "gradienttransform") ?: attr(el, byId, "gradientTransform")
@@ -53,14 +68,14 @@ internal object SvgGradient {
             return parsed?.takeIf(Double::isFinite) ?: fallback
         }
 
-        val shading = when (el.tag.lowercase()) {
+        fun shading(function: KiteFunction): KiteShading? = when (el.tag.lowercase()) {
             "lineargradient" -> KiteShading.Axial(
                 colorSpace = KiteColorSpace.DeviceRGB,
                 background = null,
                 bbox = null,
                 coords = doubleArrayOf(n("x1", 0.0), n("y1", 0.0), n("x2", 1.0), n("y2", 0.0)),
                 domain = doubleArrayOf(0.0, 1.0),
-                function = fn,
+                function = function,
                 extendStart = true,
                 extendEnd = true,
             )
@@ -75,17 +90,17 @@ internal object SvgGradient {
                     // The focal point (fx, fy) is the inner circle's centre, radius 0.
                     coords = doubleArrayOf(n("fx", cx), n("fy", cy), 0.0, cx, cy, r),
                     domain = doubleArrayOf(0.0, 1.0),
-                    function = fn,
+                    function = function,
                     extendStart = true,
                     extendEnd = true,
                 )
             }
-            else -> return null
+            else -> null
         }
-        return Parsed(shading, objectBox, transform)
+        return Parsed(shading(fn) ?: return null, objectBox, transform, spread, opacityFn?.let(::shading))
     }
 
-    private class Stop(val offset: Double, val color: RgbColor)
+    private class Stop(val offset: Double, val color: RgbColor, val alpha: Double)
 
     /** This gradient's stops, or the first referenced gradient that owns some. */
     private fun stopsOf(
@@ -106,8 +121,10 @@ internal object SvgGradient {
                         raw.toDoubleOrNull() ?: 0.0
                     }
                     val offset = parsed.takeIf(Double::isFinite) ?: 0.0
-                    val color = declaration(stop, "stop-color")?.let { CssValues.color(it) } ?: RgbColor.BLACK
-                    Stop(offset.coerceIn(0.0, 1.0), color)
+                    val colorRaw = declaration(stop, "stop-color")
+                    val color = colorRaw?.let { CssValues.color(it) } ?: RgbColor.BLACK
+                    val alpha = (colorRaw?.let { CssValues.alpha(it) } ?: 1.0) * opacityOf(declaration(stop, "stop-opacity"))
+                    Stop(offset.coerceIn(0.0, 1.0), color, alpha)
                 }
                 .sortedBy { it.offset }
             if (own.isNotEmpty()) return own
@@ -116,11 +133,18 @@ internal object SvgGradient {
         return null
     }
 
-    /** Stops to a stitched exponential function, PDF's own multi-stop shape. */
-    private fun functionOf(stops: List<Stop>): KiteFunction? {
+    /** A `stop-opacity` from 0 to 1, as a number or a percentage. Anything else is opaque. */
+    private fun opacityOf(raw: String?): Double {
+        val s = raw?.trim() ?: return 1.0
+        val value = if (s.endsWith("%")) s.dropLast(1).toDoubleOrNull()?.div(100.0) else s.toDoubleOrNull()
+        return value?.takeIf(Double::isFinite)?.coerceIn(0.0, 1.0) ?: 1.0
+    }
+
+    /** Stops to a stitched exponential function, PDF's own multi-stop shape, with [values] of each stop. */
+    private fun functionOf(stops: List<Stop>, values: (Stop) -> DoubleArray): KiteFunction? {
         if (stops.isEmpty()) return null
         if (stops.size == 1) {
-            val c = channels(stops[0].color)
+            val c = values(stops[0])
             return KiteFunction.Type2(doubleArrayOf(0.0, 1.0), null, c, c, 1.0)
         }
         val subs = ArrayList<KiteFunction>(stops.size - 1)
@@ -130,7 +154,7 @@ internal object SvgGradient {
             subs.add(
                 KiteFunction.Type2(
                     doubleArrayOf(0.0, 1.0), null,
-                    channels(stops[i].color), channels(stops[i + 1].color), 1.0,
+                    values(stops[i]), values(stops[i + 1]), 1.0,
                 ),
             )
             if (i > 0) bounds.add(stops[i].offset)

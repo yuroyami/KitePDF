@@ -181,6 +181,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   path was filled instead, an open line painted nothing, and stroked text used
   the fallback colour. The new `KitePath.strokeOutline` builds the area that a
   stroke paints, with its width, dashes, caps and joins (#284).
+- SVG gradients honour `spreadMethod`, `stop-opacity` and the alpha of a stop
+  colour, and a gradient stroke shows the gradient along the stroke instead of
+  one flat colour. XPS gradient brushes honour `SpreadMethod`. The new
+  `KiteShading.spreadOver` repeats or mirrors an axial or radial shading over a
+  region (#179, #180, #286, #287).
 
 ## [0.10.0] - 2026-09-13
 
