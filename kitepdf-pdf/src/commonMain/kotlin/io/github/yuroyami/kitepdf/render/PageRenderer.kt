@@ -16,6 +16,7 @@ import io.github.yuroyami.kitepdf.core.render.KiteMatrix
 import io.github.yuroyami.kitepdf.core.render.RgbColor
 import io.github.yuroyami.kitepdf.core.render.SoftMask
 import io.github.yuroyami.kitepdf.core.render.TextState
+import io.github.yuroyami.kitepdf.core.render.strokeOutline
 
 import io.github.yuroyami.kitepdf.core.kiteWarn
 import io.github.yuroyami.kitepdf.PdfAnnotation.Subtype
@@ -1409,12 +1410,7 @@ public class PageRenderer(
         withSoftMask(s) {
             val pat = s.strokePattern
             when {
-                // A pattern stroke paints the pattern clipped to the stroked
-                // region. We approximate the stroke region by its outline path
-                // and fill the pattern into it (mirror of the fill-pattern path).
-                // The pattern /Matrix is relative to the page default CTM.
-                pat is KitePattern.Shading -> paintShadingPattern(pat, built, s, evenOdd = false, stroke = true)
-                pat is KitePattern.Tiling -> renderTilingPattern(pat, built, s, evenOdd = false, alpha = s.strokeAlpha, color = s.strokeColor)
+                pat is KitePattern.Shading || pat is KitePattern.Tiling -> strokeWithPattern(pat, built, s)
                 pat != null -> {
                     // Unsupported pattern. Skip rather than paint a stale colour.
                 }
@@ -1425,6 +1421,30 @@ public class PageRenderer(
                     lineCap = s.lineCap, lineJoin = s.lineJoin, miterLimit = s.miterLimit,
                 )
             }
+        }
+    }
+
+    /**
+     * Strokes [path] in the pattern colour [pat]: the pattern fills the area the stroke
+     * covers, with its width, dashes, caps and joins (ISO 32000-1, 8.7.3.1 and 8.5.3.2, #284).
+     * The pattern /Matrix is relative to the default space of the stream that paints.
+     */
+    private fun strokeWithPattern(pat: KitePattern, path: KitePath, s: GraphicsState) {
+        val ctm = s.ctm
+        val det = kotlin.math.abs(ctm.a * ctm.d - ctm.b * ctm.c)
+        if (!(det > 0.0) || !det.isFinite()) return
+        // A width of 0 is the thinnest line the device can show, one pixel (8.4.3.2).
+        val width = if (s.lineWidth > 0.0) s.lineWidth else 1.0 / kotlin.math.sqrt(det)
+        // Curves flatten to a quarter of a device pixel. The Frobenius norm bounds the largest scale of the CTM.
+        val scale = kotlin.math.sqrt(ctm.a * ctm.a + ctm.b * ctm.b + ctm.c * ctm.c + ctm.d * ctm.d)
+        val outline = path.strokeOutline(
+            width, s.lineCap, s.lineJoin, s.miterLimit, s.dashArray, s.dashPhase, tolerance = 0.25 / scale,
+        )
+        if (outline.isEmpty()) return
+        when (pat) {
+            is KitePattern.Shading -> paintShadingPattern(pat, outline, s, evenOdd = false, stroke = true)
+            is KitePattern.Tiling -> renderTilingPattern(pat, outline, s, evenOdd = false, alpha = s.strokeAlpha, color = s.strokeColor)
+            else -> Unit
         }
     }
 
@@ -1982,9 +2002,20 @@ public class PageRenderer(
         /** Per-glyph text-to-user matrices of a vertical run, which replace the pen. */
         placements: List<KiteMatrix>? = null,
     ) {
+        val s = state.current
+        when (val pat = s.strokePattern) {
+            null -> Unit
+            // The pattern fills the stroke of every glyph at once, as it does for a path (#284).
+            is KitePattern.Shading, is KitePattern.Tiling -> {
+                val shapes = glyphShapes(glyphs, t, textToUser, unitsPerEm, placements) ?: return
+                withSoftMask(s) { strokeWithPattern(pat, shapes.build(), s) }
+                return
+            }
+            // An unsupported pattern paints nothing, as for a path, rather than a stale colour.
+            else -> return
+        }
         val unitScale = t.fontSize / unitsPerEm
         val advanceScale = t.fontSize / 1000.0
-        val s = state.current
         var penX = 0.0
         // Build each glyph outline into USER space (glyph units → unitScale →
         // pen advance → text-to-user), then stroke it with s.ctm so the stroke

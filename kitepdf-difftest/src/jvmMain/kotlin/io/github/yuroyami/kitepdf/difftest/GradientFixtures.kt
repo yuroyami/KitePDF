@@ -38,7 +38,13 @@ object GradientFixtures {
         fixture("radial-extend-start", "", radial("100 100 20 100 100 80", "true false"), budget = 0.015),
         fixture("radial-extend-end", "", radial("100 100 20 100 100 80", "false true"), budget = 0.015),
         // Text in a shading pattern colour shows the gradient inside its glyphs (ISO 32000-1, 9.3.6).
-        patternText("text-shading-pattern", budget = 0.005),
+        patternText("text-shading-pattern", "/Pattern cs /P1 scn BT /F1 60 Tf 20 80 Td (AAA) Tj ET", budget = 0.005),
+        // A stroke in a pattern colour paints the pattern inside the stroke only (8.7.3.1).
+        patternStroke("stroke-pattern-square", "10 w 50 50 100 100 re S", budget = 0.005),
+        patternStroke("stroke-pattern-line", "10 w 20 100 m 180 100 l S", budget = 0.005),
+        patternStroke("stroke-pattern-dashed-round", "10 w 1 J 1 j [20 15] 0 d 30 40 m 100 170 l 170 40 l S", budget = 0.005),
+        // Glyph edges lie on whole points, so a 4-point stroke has whole-pixel edges at 72 dpi.
+        patternText("text-stroke-shading-pattern", "/Pattern CS /P1 SCN 4 w BT 1 Tr /F1 60 Tf 20 80 Td (AAA) Tj ET", budget = 0.005),
     )
 
     private fun axial(coords: String, extend: String = "true true") =
@@ -53,12 +59,19 @@ object GradientFixtures {
         listOf(shading.toByteArray()), budget,
     )
 
+    /** A page that strokes with [content] in an axial shading pattern across the page. */
+    private fun patternStroke(name: String, content: String, budget: Double): Fixture = page(
+        name, "/Pattern CS /P1 SCN $content", "/Pattern << /P1 5 0 R >>",
+        listOf("<< /PatternType 2 /Shading ${axial("0 0 200 0")} >>".toByteArray()), budget,
+    )
+
     /**
-     * Three glyphs in an axial shading pattern. The font is embedded, so mutool and
-     * every backend fill the same glyph shapes: squares 30 points wide, 36 points apart.
+     * Glyphs shown by [content] in the axial shading pattern `P1`. The font `F1` is
+     * embedded, so mutool and every backend paint the same glyph shapes: an `A` is a
+     * square 30 points wide at a size of 60, and the next one starts 36 points along.
      */
-    private fun patternText(name: String, budget: Double): Fixture = page(
-        name, "/Pattern cs /P1 scn BT /F1 60 Tf 20 80 Td (AAA) Tj ET",
+    private fun patternText(name: String, content: String, budget: Double): Fixture = page(
+        name, content,
         "/Font << /F1 5 0 R >> /Pattern << /P1 8 0 R >>",
         listOf(
             ("<< /Type /Font /Subtype /TrueType /BaseFont /Square /FirstChar 65 /LastChar 65 /Widths [600] " +
