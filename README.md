@@ -313,7 +313,6 @@ may reach.
 | `PdfSigner` runs no cryptography | It stages the signature field, reserves `/Contents` and patches `/ByteRange`. It cannot validate a signature. Your application supplies the CMS blob. |
 | Contextual substitution is not shaped | GSUB single and ligature lookups apply, and GPOS attaches marks to bases, ligatures and other marks. Contextual and chaining substitution (GSUB 5/6) and Indic reordering need a full shaping pipeline and are not implemented. |
 | Writing encrypts more narrowly than reading | `PdfBuilder` creates AES-256/R6 only, and editing an encrypted document requires AES-128 or AES-256. RC4 documents open and decrypt, but you cannot edit them. |
-| Shading meshes are approximated | Coons (type 6) and tensor (type 7) patch meshes tessellate to a fixed 8×8 grid of flat-colored quads, and the tensor patch's four interior control points are read for stream alignment and then discarded. Triangle meshes (types 4 and 5) use fixed depth-3 subdivision. |
 | ICC profiles are read, but not all of them | Matrix/TRC profiles (RGB and grey) are applied. A lookup-table profile (`A2B0`, `mft1`, `mft2`, `mAB`), which is mostly CMYK press work, keeps the device fallback. Rendering intents and overprint are ignored. |
 | Canvas2D draws images one frame late | A browser decodes asynchronously, so the first pass over a JPEG paints a placeholder and the image appears on the next. Raw samples draw immediately. |
 | Structured text has no word segmentation | You get blocks, lines and spans, where a span is one text-drawing run. |

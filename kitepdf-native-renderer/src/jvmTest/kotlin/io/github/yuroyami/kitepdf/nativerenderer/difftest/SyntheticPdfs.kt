@@ -293,9 +293,8 @@ object SyntheticPdfs {
 
     /**
      * Type 7 tensor: a straight-edged bilinear patch whose 16 control points
-     * are bilinear grid samples. The exact tensor surface then EQUALS the
-     * Coons surface our parser approximates with, so the oracle diff isolates
-     * the plumbing, not the (documented) interior-point approximation.
+     * are bilinear grid samples, so its tensor surface equals its Coons
+     * surface. The tensor page of GradientFixtures moves the interior points.
      */
     private fun shadingTensor(): ByteArray {
         val c00 = 30.0 to 20.0

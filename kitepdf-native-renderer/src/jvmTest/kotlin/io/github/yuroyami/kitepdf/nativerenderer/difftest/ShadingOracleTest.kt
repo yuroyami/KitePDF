@@ -14,8 +14,8 @@ import kotlin.test.assertTrue
 
 /**
  * Each shading fixture is scored against mutool with its own budget:
- * type 1 within 0.01 MAE, types 4/5 within 0.05, and patch types 6/7 within
- * 0.12 (tessellation is approximated, so its budget is looser). All five
+ * type 1 within 0.01 MAE, and the mesh types 4 to 7 within 0.005, because
+ * the renderer fills a mesh by the same pixel rule as MuPDF (#196). All five
  * numbers print so runs can be compared over time. Skips without mutool.
  */
 class ShadingOracleTest {
@@ -41,10 +41,10 @@ class ShadingOracleTest {
 
         val budgets = mapOf(
             "syn-shading1-function" to 0.01,
-            "syn-shading4-freeform" to 0.05,
-            "syn-shading5-lattice" to 0.05,
-            "syn-shading6-coons" to 0.12,
-            "syn-shading7-tensor" to 0.12,
+            "syn-shading4-freeform" to 0.005,
+            "syn-shading5-lattice" to 0.005,
+            "syn-shading6-coons" to 0.005,
+            "syn-shading7-tensor" to 0.005,
         )
         val failures = ArrayList<String>()
         for (f in fixtures) {

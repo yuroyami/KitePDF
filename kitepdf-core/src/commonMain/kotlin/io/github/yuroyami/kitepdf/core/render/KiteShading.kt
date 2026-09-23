@@ -22,16 +22,15 @@ import io.github.yuroyami.kitepdf.core.parser.PdfStream
  *     rasterized as a grid of cells
  *   - **Type 2** axial: a linear gradient between two points
  *   - **Type 3** radial: a radial gradient between two circles
- *   - **Types 4/5** Gouraud triangle meshes: smoothed by recursive
- *     subdivision with vertex-colour interpolation
- *   - **Types 6/7** Coons / tensor patches: tessellated into flat-coloured
- *     quads via Coons boundary evaluation + bilinear corner colours; the
- *     tensor type's four interior points are read but ignored, the documented
- *     MuPDF-level approximation
+ *   - **Types 4/5** Gouraud triangle meshes: the colour is interpolated
+ *     across each triangle
+ *   - **Types 6/7** Coons and tensor-product patches: the exact tensor-product
+ *     surface, split into small triangles in device space
  *
  * Types 1/4/5/6/7 render through [paintComplexShading], shared by every
- * backend (pure `fillPath` emission); 2/3 keep the backends' native gradient
- * brushes. Unparseable shadings become [Unsupported] and paint nothing.
+ * backend: type 1 as a grid of `fillPath` cells, and a mesh as one image drawn
+ * with `drawImage`. Types 2/3 keep the backends' native gradient brushes.
+ * Unparseable shadings become [Unsupported] and paint nothing.
  */
 public sealed class KiteShading {
 
@@ -125,35 +124,69 @@ public sealed class KiteShading {
             colorSpace.toRgb(function.evaluate(doubleArrayOf(x, y)))
     }
 
-    /** One Gouraud triangle: three shading-space vertices with colours. */
+    /**
+     * One Gouraud triangle: three shading-space vertices with colours. In a mesh with a
+     * /Function, [t] holds the parametric value of each vertex. A point inside the triangle
+     * then takes its colour from the interpolated t, not from the interpolated [colors]
+     * (ISO 32000-1, 8.7.4.5.5).
+     */
     public class MeshTriangle(
         public val x: DoubleArray,
         public val y: DoubleArray,
         public val colors: Array<RgbColor>,
+        public val t: DoubleArray? = null,
     )
 
-    /** Types 4/5: a triangle mesh with per-vertex colours. */
+    /** Types 4/5: a triangle mesh with per-vertex colours (ISO 32000-1, 8.7.4.5.5 and 8.7.4.5.6). */
     public class TriangleMesh(
         override val colorSpace: KiteColorSpace,
         override val background: RgbColor?,
         override val bbox: KiteRectangle?,
         public val triangles: List<MeshTriangle>,
+        /** The colours of t when the mesh has a /Function, or null when its vertices carry colours. */
+        public val colorTable: MeshColorTable? = null,
     ) : KiteShading()
 
-    /** A flat-coloured tessellation quad from a Coons/tensor patch. */
-    public class FlatQuad(
-        public val xs: DoubleArray,
-        public val ys: DoubleArray,
-        public val color: RgbColor,
+    /**
+     * One patch of a type 6 or 7 mesh as a tensor-product surface (ISO 32000-1, 8.7.4.5.8).
+     * [x] and [y] hold the 16 control points in shading space, p(i, j) at index 4 i + j, and
+     * [colors] the colours of the corners p(0,0), p(0,3), p(3,3) and p(3,0). A Coons patch of
+     * type 6 gets its 4 interior points from its boundary, by the equations of 8.7.4.5.8, and
+     * the tensor-product surface of those points is the Coons surface.
+     */
+    public class MeshPatch(
+        public val x: DoubleArray,
+        public val y: DoubleArray,
+        public val colors: Array<RgbColor>,
+        /** The parametric value of each corner when the mesh has a /Function, else null. */
+        public val t: DoubleArray? = null,
     )
 
-    /** Types 6/7, pre-tessellated at parse time. */
+    /** Types 6/7: a mesh of Coons or tensor-product patches (ISO 32000-1, 8.7.4.5.7 and 8.7.4.5.8). */
     public class PatchMesh(
         override val colorSpace: KiteColorSpace,
         override val background: RgbColor?,
         override val bbox: KiteRectangle?,
-        public val quads: List<FlatQuad>,
+        public val patches: List<MeshPatch>,
+        /** The colours of t when the mesh has a /Function, or null when its corners carry colours. */
+        public val colorTable: MeshColorTable? = null,
     ) : KiteShading()
+
+    /**
+     * The colours of the parametric value t in a mesh with a /Function: the function sampled
+     * at 256 even steps from [t0] to [t1], the /Decode range of t, as MuPDF samples it. A point
+     * of the mesh interpolates t first and then looks its colour up here.
+     */
+    public class MeshColorTable(public val t0: Double, public val t1: Double, public val colors: Array<RgbColor>) {
+        /** The colour of [t]. */
+        public fun colorAt(t: Double): RgbColor = colors[indexOf(t)]
+
+        /** The entry of [t]: the fraction of the range, truncated to a step of 1/255, as MuPDF truncates it. */
+        internal fun indexOf(t: Double): Int {
+            val f = (t - t0) / (t1 - t0) * 255.0
+            return if (f.isNaN()) 0 else f.coerceIn(0.0, (colors.size - 1).toDouble()).toInt()
+        }
+    }
 
     /** Shading type we don't render; [sampleStops] returns null, so nothing paints. */
     public data class Unsupported(

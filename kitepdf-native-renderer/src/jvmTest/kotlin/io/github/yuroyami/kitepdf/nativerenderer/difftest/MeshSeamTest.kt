@@ -13,9 +13,9 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 /**
- * The cells of a mesh shading overlap, so the page does not show through the
- * seams between them (#126). Each fixture mixes red, green and blue, and the
- * renderer splits it into 64 cells.
+ * The renderer fills a mesh shading into one image, so the page does not show
+ * through the seams between its cells (#126, #196). Each fixture mixes red,
+ * green and blue.
  */
 class MeshSeamTest {
 

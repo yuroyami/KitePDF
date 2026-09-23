@@ -2219,17 +2219,6 @@ sealed class io.github.yuroyami.kitepdf.core.render/KiteShading { // io.github.y
         final fun toString(): kotlin/String // io.github.yuroyami.kitepdf.core.render/KiteShading.Axial.toString|toString(){}[0]
     }
 
-    final class FlatQuad { // io.github.yuroyami.kitepdf.core.render/KiteShading.FlatQuad|null[0]
-        constructor <init>(kotlin/DoubleArray, kotlin/DoubleArray, io.github.yuroyami.kitepdf.core.render/RgbColor) // io.github.yuroyami.kitepdf.core.render/KiteShading.FlatQuad.<init>|<init>(kotlin.DoubleArray;kotlin.DoubleArray;io.github.yuroyami.kitepdf.core.render.RgbColor){}[0]
-
-        final val color // io.github.yuroyami.kitepdf.core.render/KiteShading.FlatQuad.color|{}color[0]
-            final fun <get-color>(): io.github.yuroyami.kitepdf.core.render/RgbColor // io.github.yuroyami.kitepdf.core.render/KiteShading.FlatQuad.color.<get-color>|<get-color>(){}[0]
-        final val xs // io.github.yuroyami.kitepdf.core.render/KiteShading.FlatQuad.xs|{}xs[0]
-            final fun <get-xs>(): kotlin/DoubleArray // io.github.yuroyami.kitepdf.core.render/KiteShading.FlatQuad.xs.<get-xs>|<get-xs>(){}[0]
-        final val ys // io.github.yuroyami.kitepdf.core.render/KiteShading.FlatQuad.ys|{}ys[0]
-            final fun <get-ys>(): kotlin/DoubleArray // io.github.yuroyami.kitepdf.core.render/KiteShading.FlatQuad.ys.<get-ys>|<get-ys>(){}[0]
-    }
-
     final class FunctionBased : io.github.yuroyami.kitepdf.core.render/KiteShading { // io.github.yuroyami.kitepdf.core.render/KiteShading.FunctionBased|null[0]
         constructor <init>(io.github.yuroyami.kitepdf.core.render/KiteColorSpace, io.github.yuroyami.kitepdf.core.render/RgbColor?, io.github.yuroyami.kitepdf.core/KiteRectangle?, kotlin/DoubleArray, io.github.yuroyami.kitepdf.core.render/KiteMatrix, io.github.yuroyami.kitepdf.core.render/KiteFunction) // io.github.yuroyami.kitepdf.core.render/KiteShading.FunctionBased.<init>|<init>(io.github.yuroyami.kitepdf.core.render.KiteColorSpace;io.github.yuroyami.kitepdf.core.render.RgbColor?;io.github.yuroyami.kitepdf.core.KiteRectangle?;kotlin.DoubleArray;io.github.yuroyami.kitepdf.core.render.KiteMatrix;io.github.yuroyami.kitepdf.core.render.KiteFunction){}[0]
 
@@ -2247,11 +2236,39 @@ sealed class io.github.yuroyami.kitepdf.core.render/KiteShading { // io.github.y
         final fun colorAt(kotlin/Double, kotlin/Double): io.github.yuroyami.kitepdf.core.render/RgbColor // io.github.yuroyami.kitepdf.core.render/KiteShading.FunctionBased.colorAt|colorAt(kotlin.Double;kotlin.Double){}[0]
     }
 
+    final class MeshColorTable { // io.github.yuroyami.kitepdf.core.render/KiteShading.MeshColorTable|null[0]
+        constructor <init>(kotlin/Double, kotlin/Double, kotlin/Array<io.github.yuroyami.kitepdf.core.render/RgbColor>) // io.github.yuroyami.kitepdf.core.render/KiteShading.MeshColorTable.<init>|<init>(kotlin.Double;kotlin.Double;kotlin.Array<io.github.yuroyami.kitepdf.core.render.RgbColor>){}[0]
+
+        final val colors // io.github.yuroyami.kitepdf.core.render/KiteShading.MeshColorTable.colors|{}colors[0]
+            final fun <get-colors>(): kotlin/Array<io.github.yuroyami.kitepdf.core.render/RgbColor> // io.github.yuroyami.kitepdf.core.render/KiteShading.MeshColorTable.colors.<get-colors>|<get-colors>(){}[0]
+        final val t0 // io.github.yuroyami.kitepdf.core.render/KiteShading.MeshColorTable.t0|{}t0[0]
+            final fun <get-t0>(): kotlin/Double // io.github.yuroyami.kitepdf.core.render/KiteShading.MeshColorTable.t0.<get-t0>|<get-t0>(){}[0]
+        final val t1 // io.github.yuroyami.kitepdf.core.render/KiteShading.MeshColorTable.t1|{}t1[0]
+            final fun <get-t1>(): kotlin/Double // io.github.yuroyami.kitepdf.core.render/KiteShading.MeshColorTable.t1.<get-t1>|<get-t1>(){}[0]
+
+        final fun colorAt(kotlin/Double): io.github.yuroyami.kitepdf.core.render/RgbColor // io.github.yuroyami.kitepdf.core.render/KiteShading.MeshColorTable.colorAt|colorAt(kotlin.Double){}[0]
+    }
+
+    final class MeshPatch { // io.github.yuroyami.kitepdf.core.render/KiteShading.MeshPatch|null[0]
+        constructor <init>(kotlin/DoubleArray, kotlin/DoubleArray, kotlin/Array<io.github.yuroyami.kitepdf.core.render/RgbColor>, kotlin/DoubleArray? = ...) // io.github.yuroyami.kitepdf.core.render/KiteShading.MeshPatch.<init>|<init>(kotlin.DoubleArray;kotlin.DoubleArray;kotlin.Array<io.github.yuroyami.kitepdf.core.render.RgbColor>;kotlin.DoubleArray?){}[0]
+
+        final val colors // io.github.yuroyami.kitepdf.core.render/KiteShading.MeshPatch.colors|{}colors[0]
+            final fun <get-colors>(): kotlin/Array<io.github.yuroyami.kitepdf.core.render/RgbColor> // io.github.yuroyami.kitepdf.core.render/KiteShading.MeshPatch.colors.<get-colors>|<get-colors>(){}[0]
+        final val t // io.github.yuroyami.kitepdf.core.render/KiteShading.MeshPatch.t|{}t[0]
+            final fun <get-t>(): kotlin/DoubleArray? // io.github.yuroyami.kitepdf.core.render/KiteShading.MeshPatch.t.<get-t>|<get-t>(){}[0]
+        final val x // io.github.yuroyami.kitepdf.core.render/KiteShading.MeshPatch.x|{}x[0]
+            final fun <get-x>(): kotlin/DoubleArray // io.github.yuroyami.kitepdf.core.render/KiteShading.MeshPatch.x.<get-x>|<get-x>(){}[0]
+        final val y // io.github.yuroyami.kitepdf.core.render/KiteShading.MeshPatch.y|{}y[0]
+            final fun <get-y>(): kotlin/DoubleArray // io.github.yuroyami.kitepdf.core.render/KiteShading.MeshPatch.y.<get-y>|<get-y>(){}[0]
+    }
+
     final class MeshTriangle { // io.github.yuroyami.kitepdf.core.render/KiteShading.MeshTriangle|null[0]
-        constructor <init>(kotlin/DoubleArray, kotlin/DoubleArray, kotlin/Array<io.github.yuroyami.kitepdf.core.render/RgbColor>) // io.github.yuroyami.kitepdf.core.render/KiteShading.MeshTriangle.<init>|<init>(kotlin.DoubleArray;kotlin.DoubleArray;kotlin.Array<io.github.yuroyami.kitepdf.core.render.RgbColor>){}[0]
+        constructor <init>(kotlin/DoubleArray, kotlin/DoubleArray, kotlin/Array<io.github.yuroyami.kitepdf.core.render/RgbColor>, kotlin/DoubleArray? = ...) // io.github.yuroyami.kitepdf.core.render/KiteShading.MeshTriangle.<init>|<init>(kotlin.DoubleArray;kotlin.DoubleArray;kotlin.Array<io.github.yuroyami.kitepdf.core.render.RgbColor>;kotlin.DoubleArray?){}[0]
 
         final val colors // io.github.yuroyami.kitepdf.core.render/KiteShading.MeshTriangle.colors|{}colors[0]
             final fun <get-colors>(): kotlin/Array<io.github.yuroyami.kitepdf.core.render/RgbColor> // io.github.yuroyami.kitepdf.core.render/KiteShading.MeshTriangle.colors.<get-colors>|<get-colors>(){}[0]
+        final val t // io.github.yuroyami.kitepdf.core.render/KiteShading.MeshTriangle.t|{}t[0]
+            final fun <get-t>(): kotlin/DoubleArray? // io.github.yuroyami.kitepdf.core.render/KiteShading.MeshTriangle.t.<get-t>|<get-t>(){}[0]
         final val x // io.github.yuroyami.kitepdf.core.render/KiteShading.MeshTriangle.x|{}x[0]
             final fun <get-x>(): kotlin/DoubleArray // io.github.yuroyami.kitepdf.core.render/KiteShading.MeshTriangle.x.<get-x>|<get-x>(){}[0]
         final val y // io.github.yuroyami.kitepdf.core.render/KiteShading.MeshTriangle.y|{}y[0]
@@ -2259,7 +2276,7 @@ sealed class io.github.yuroyami.kitepdf.core.render/KiteShading { // io.github.y
     }
 
     final class PatchMesh : io.github.yuroyami.kitepdf.core.render/KiteShading { // io.github.yuroyami.kitepdf.core.render/KiteShading.PatchMesh|null[0]
-        constructor <init>(io.github.yuroyami.kitepdf.core.render/KiteColorSpace, io.github.yuroyami.kitepdf.core.render/RgbColor?, io.github.yuroyami.kitepdf.core/KiteRectangle?, kotlin.collections/List<io.github.yuroyami.kitepdf.core.render/KiteShading.FlatQuad>) // io.github.yuroyami.kitepdf.core.render/KiteShading.PatchMesh.<init>|<init>(io.github.yuroyami.kitepdf.core.render.KiteColorSpace;io.github.yuroyami.kitepdf.core.render.RgbColor?;io.github.yuroyami.kitepdf.core.KiteRectangle?;kotlin.collections.List<io.github.yuroyami.kitepdf.core.render.KiteShading.FlatQuad>){}[0]
+        constructor <init>(io.github.yuroyami.kitepdf.core.render/KiteColorSpace, io.github.yuroyami.kitepdf.core.render/RgbColor?, io.github.yuroyami.kitepdf.core/KiteRectangle?, kotlin.collections/List<io.github.yuroyami.kitepdf.core.render/KiteShading.MeshPatch>, io.github.yuroyami.kitepdf.core.render/KiteShading.MeshColorTable? = ...) // io.github.yuroyami.kitepdf.core.render/KiteShading.PatchMesh.<init>|<init>(io.github.yuroyami.kitepdf.core.render.KiteColorSpace;io.github.yuroyami.kitepdf.core.render.RgbColor?;io.github.yuroyami.kitepdf.core.KiteRectangle?;kotlin.collections.List<io.github.yuroyami.kitepdf.core.render.KiteShading.MeshPatch>;io.github.yuroyami.kitepdf.core.render.KiteShading.MeshColorTable?){}[0]
 
         final val background // io.github.yuroyami.kitepdf.core.render/KiteShading.PatchMesh.background|{}background[0]
             final fun <get-background>(): io.github.yuroyami.kitepdf.core.render/RgbColor? // io.github.yuroyami.kitepdf.core.render/KiteShading.PatchMesh.background.<get-background>|<get-background>(){}[0]
@@ -2267,8 +2284,10 @@ sealed class io.github.yuroyami.kitepdf.core.render/KiteShading { // io.github.y
             final fun <get-bbox>(): io.github.yuroyami.kitepdf.core/KiteRectangle? // io.github.yuroyami.kitepdf.core.render/KiteShading.PatchMesh.bbox.<get-bbox>|<get-bbox>(){}[0]
         final val colorSpace // io.github.yuroyami.kitepdf.core.render/KiteShading.PatchMesh.colorSpace|{}colorSpace[0]
             final fun <get-colorSpace>(): io.github.yuroyami.kitepdf.core.render/KiteColorSpace // io.github.yuroyami.kitepdf.core.render/KiteShading.PatchMesh.colorSpace.<get-colorSpace>|<get-colorSpace>(){}[0]
-        final val quads // io.github.yuroyami.kitepdf.core.render/KiteShading.PatchMesh.quads|{}quads[0]
-            final fun <get-quads>(): kotlin.collections/List<io.github.yuroyami.kitepdf.core.render/KiteShading.FlatQuad> // io.github.yuroyami.kitepdf.core.render/KiteShading.PatchMesh.quads.<get-quads>|<get-quads>(){}[0]
+        final val colorTable // io.github.yuroyami.kitepdf.core.render/KiteShading.PatchMesh.colorTable|{}colorTable[0]
+            final fun <get-colorTable>(): io.github.yuroyami.kitepdf.core.render/KiteShading.MeshColorTable? // io.github.yuroyami.kitepdf.core.render/KiteShading.PatchMesh.colorTable.<get-colorTable>|<get-colorTable>(){}[0]
+        final val patches // io.github.yuroyami.kitepdf.core.render/KiteShading.PatchMesh.patches|{}patches[0]
+            final fun <get-patches>(): kotlin.collections/List<io.github.yuroyami.kitepdf.core.render/KiteShading.MeshPatch> // io.github.yuroyami.kitepdf.core.render/KiteShading.PatchMesh.patches.<get-patches>|<get-patches>(){}[0]
     }
 
     final class Radial : io.github.yuroyami.kitepdf.core.render/KiteShading { // io.github.yuroyami.kitepdf.core.render/KiteShading.Radial|null[0]
@@ -2306,7 +2325,7 @@ sealed class io.github.yuroyami.kitepdf.core.render/KiteShading { // io.github.y
     }
 
     final class TriangleMesh : io.github.yuroyami.kitepdf.core.render/KiteShading { // io.github.yuroyami.kitepdf.core.render/KiteShading.TriangleMesh|null[0]
-        constructor <init>(io.github.yuroyami.kitepdf.core.render/KiteColorSpace, io.github.yuroyami.kitepdf.core.render/RgbColor?, io.github.yuroyami.kitepdf.core/KiteRectangle?, kotlin.collections/List<io.github.yuroyami.kitepdf.core.render/KiteShading.MeshTriangle>) // io.github.yuroyami.kitepdf.core.render/KiteShading.TriangleMesh.<init>|<init>(io.github.yuroyami.kitepdf.core.render.KiteColorSpace;io.github.yuroyami.kitepdf.core.render.RgbColor?;io.github.yuroyami.kitepdf.core.KiteRectangle?;kotlin.collections.List<io.github.yuroyami.kitepdf.core.render.KiteShading.MeshTriangle>){}[0]
+        constructor <init>(io.github.yuroyami.kitepdf.core.render/KiteColorSpace, io.github.yuroyami.kitepdf.core.render/RgbColor?, io.github.yuroyami.kitepdf.core/KiteRectangle?, kotlin.collections/List<io.github.yuroyami.kitepdf.core.render/KiteShading.MeshTriangle>, io.github.yuroyami.kitepdf.core.render/KiteShading.MeshColorTable? = ...) // io.github.yuroyami.kitepdf.core.render/KiteShading.TriangleMesh.<init>|<init>(io.github.yuroyami.kitepdf.core.render.KiteColorSpace;io.github.yuroyami.kitepdf.core.render.RgbColor?;io.github.yuroyami.kitepdf.core.KiteRectangle?;kotlin.collections.List<io.github.yuroyami.kitepdf.core.render.KiteShading.MeshTriangle>;io.github.yuroyami.kitepdf.core.render.KiteShading.MeshColorTable?){}[0]
 
         final val background // io.github.yuroyami.kitepdf.core.render/KiteShading.TriangleMesh.background|{}background[0]
             final fun <get-background>(): io.github.yuroyami.kitepdf.core.render/RgbColor? // io.github.yuroyami.kitepdf.core.render/KiteShading.TriangleMesh.background.<get-background>|<get-background>(){}[0]
@@ -2314,6 +2333,8 @@ sealed class io.github.yuroyami.kitepdf.core.render/KiteShading { // io.github.y
             final fun <get-bbox>(): io.github.yuroyami.kitepdf.core/KiteRectangle? // io.github.yuroyami.kitepdf.core.render/KiteShading.TriangleMesh.bbox.<get-bbox>|<get-bbox>(){}[0]
         final val colorSpace // io.github.yuroyami.kitepdf.core.render/KiteShading.TriangleMesh.colorSpace|{}colorSpace[0]
             final fun <get-colorSpace>(): io.github.yuroyami.kitepdf.core.render/KiteColorSpace // io.github.yuroyami.kitepdf.core.render/KiteShading.TriangleMesh.colorSpace.<get-colorSpace>|<get-colorSpace>(){}[0]
+        final val colorTable // io.github.yuroyami.kitepdf.core.render/KiteShading.TriangleMesh.colorTable|{}colorTable[0]
+            final fun <get-colorTable>(): io.github.yuroyami.kitepdf.core.render/KiteShading.MeshColorTable? // io.github.yuroyami.kitepdf.core.render/KiteShading.TriangleMesh.colorTable.<get-colorTable>|<get-colorTable>(){}[0]
         final val triangles // io.github.yuroyami.kitepdf.core.render/KiteShading.TriangleMesh.triangles|{}triangles[0]
             final fun <get-triangles>(): kotlin.collections/List<io.github.yuroyami.kitepdf.core.render/KiteShading.MeshTriangle> // io.github.yuroyami.kitepdf.core.render/KiteShading.TriangleMesh.triangles.<get-triangles>|<get-triangles>(){}[0]
     }

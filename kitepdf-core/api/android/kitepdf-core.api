@@ -1758,13 +1758,6 @@ public final class io/github/yuroyami/kitepdf/core/render/KiteShading$Companion 
 	public final fun parse (Lio/github/yuroyami/kitepdf/core/parser/PdfObject;Lio/github/yuroyami/kitepdf/core/parser/IndirectResolver;)Lio/github/yuroyami/kitepdf/core/render/KiteShading;
 }
 
-public final class io/github/yuroyami/kitepdf/core/render/KiteShading$FlatQuad {
-	public fun <init> ([D[DLio/github/yuroyami/kitepdf/core/render/RgbColor;)V
-	public final fun getColor ()Lio/github/yuroyami/kitepdf/core/render/RgbColor;
-	public final fun getXs ()[D
-	public final fun getYs ()[D
-}
-
 public final class io/github/yuroyami/kitepdf/core/render/KiteShading$FunctionBased : io/github/yuroyami/kitepdf/core/render/KiteShading {
 	public fun <init> (Lio/github/yuroyami/kitepdf/core/render/KiteColorSpace;Lio/github/yuroyami/kitepdf/core/render/RgbColor;Lio/github/yuroyami/kitepdf/core/KiteRectangle;[DLio/github/yuroyami/kitepdf/core/render/KiteMatrix;Lio/github/yuroyami/kitepdf/core/render/KiteFunction;)V
 	public final fun colorAt (DD)Lio/github/yuroyami/kitepdf/core/render/RgbColor;
@@ -1775,19 +1768,40 @@ public final class io/github/yuroyami/kitepdf/core/render/KiteShading$FunctionBa
 	public final fun getMatrix ()Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;
 }
 
-public final class io/github/yuroyami/kitepdf/core/render/KiteShading$MeshTriangle {
-	public fun <init> ([D[D[Lio/github/yuroyami/kitepdf/core/render/RgbColor;)V
+public final class io/github/yuroyami/kitepdf/core/render/KiteShading$MeshColorTable {
+	public fun <init> (DD[Lio/github/yuroyami/kitepdf/core/render/RgbColor;)V
+	public final fun colorAt (D)Lio/github/yuroyami/kitepdf/core/render/RgbColor;
 	public final fun getColors ()[Lio/github/yuroyami/kitepdf/core/render/RgbColor;
+	public final fun getT0 ()D
+	public final fun getT1 ()D
+}
+
+public final class io/github/yuroyami/kitepdf/core/render/KiteShading$MeshPatch {
+	public fun <init> ([D[D[Lio/github/yuroyami/kitepdf/core/render/RgbColor;[D)V
+	public synthetic fun <init> ([D[D[Lio/github/yuroyami/kitepdf/core/render/RgbColor;[DILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun getColors ()[Lio/github/yuroyami/kitepdf/core/render/RgbColor;
+	public final fun getT ()[D
+	public final fun getX ()[D
+	public final fun getY ()[D
+}
+
+public final class io/github/yuroyami/kitepdf/core/render/KiteShading$MeshTriangle {
+	public fun <init> ([D[D[Lio/github/yuroyami/kitepdf/core/render/RgbColor;[D)V
+	public synthetic fun <init> ([D[D[Lio/github/yuroyami/kitepdf/core/render/RgbColor;[DILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun getColors ()[Lio/github/yuroyami/kitepdf/core/render/RgbColor;
+	public final fun getT ()[D
 	public final fun getX ()[D
 	public final fun getY ()[D
 }
 
 public final class io/github/yuroyami/kitepdf/core/render/KiteShading$PatchMesh : io/github/yuroyami/kitepdf/core/render/KiteShading {
-	public fun <init> (Lio/github/yuroyami/kitepdf/core/render/KiteColorSpace;Lio/github/yuroyami/kitepdf/core/render/RgbColor;Lio/github/yuroyami/kitepdf/core/KiteRectangle;Ljava/util/List;)V
+	public fun <init> (Lio/github/yuroyami/kitepdf/core/render/KiteColorSpace;Lio/github/yuroyami/kitepdf/core/render/RgbColor;Lio/github/yuroyami/kitepdf/core/KiteRectangle;Ljava/util/List;Lio/github/yuroyami/kitepdf/core/render/KiteShading$MeshColorTable;)V
+	public synthetic fun <init> (Lio/github/yuroyami/kitepdf/core/render/KiteColorSpace;Lio/github/yuroyami/kitepdf/core/render/RgbColor;Lio/github/yuroyami/kitepdf/core/KiteRectangle;Ljava/util/List;Lio/github/yuroyami/kitepdf/core/render/KiteShading$MeshColorTable;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public fun getBackground ()Lio/github/yuroyami/kitepdf/core/render/RgbColor;
 	public fun getBbox ()Lio/github/yuroyami/kitepdf/core/KiteRectangle;
 	public fun getColorSpace ()Lio/github/yuroyami/kitepdf/core/render/KiteColorSpace;
-	public final fun getQuads ()Ljava/util/List;
+	public final fun getColorTable ()Lio/github/yuroyami/kitepdf/core/render/KiteShading$MeshColorTable;
+	public final fun getPatches ()Ljava/util/List;
 }
 
 public final class io/github/yuroyami/kitepdf/core/render/KiteShading$Radial : io/github/yuroyami/kitepdf/core/render/KiteShading {
@@ -1816,10 +1830,12 @@ public final class io/github/yuroyami/kitepdf/core/render/KiteShading$Radial : i
 }
 
 public final class io/github/yuroyami/kitepdf/core/render/KiteShading$TriangleMesh : io/github/yuroyami/kitepdf/core/render/KiteShading {
-	public fun <init> (Lio/github/yuroyami/kitepdf/core/render/KiteColorSpace;Lio/github/yuroyami/kitepdf/core/render/RgbColor;Lio/github/yuroyami/kitepdf/core/KiteRectangle;Ljava/util/List;)V
+	public fun <init> (Lio/github/yuroyami/kitepdf/core/render/KiteColorSpace;Lio/github/yuroyami/kitepdf/core/render/RgbColor;Lio/github/yuroyami/kitepdf/core/KiteRectangle;Ljava/util/List;Lio/github/yuroyami/kitepdf/core/render/KiteShading$MeshColorTable;)V
+	public synthetic fun <init> (Lio/github/yuroyami/kitepdf/core/render/KiteColorSpace;Lio/github/yuroyami/kitepdf/core/render/RgbColor;Lio/github/yuroyami/kitepdf/core/KiteRectangle;Ljava/util/List;Lio/github/yuroyami/kitepdf/core/render/KiteShading$MeshColorTable;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public fun getBackground ()Lio/github/yuroyami/kitepdf/core/render/RgbColor;
 	public fun getBbox ()Lio/github/yuroyami/kitepdf/core/KiteRectangle;
 	public fun getColorSpace ()Lio/github/yuroyami/kitepdf/core/render/KiteColorSpace;
+	public final fun getColorTable ()Lio/github/yuroyami/kitepdf/core/render/KiteShading$MeshColorTable;
 	public final fun getTriangles ()Ljava/util/List;
 }
 

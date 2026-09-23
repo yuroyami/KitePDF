@@ -1,12 +1,12 @@
 package io.github.yuroyami.kitepdf.difftest
 
 import java.io.ByteArrayOutputStream
+import kotlin.math.roundToInt
 
 /**
- * One-page PDFs, 200 by 200 points, that each paint one axial or radial shading,
- * with `sh` or as the pattern colour of text. The tests of each backend render
- * them and score the result against mutool, so a backend that draws a gradient
- * wrong fails on its own.
+ * One-page PDFs, 200 by 200 points, that each paint one shading, with `sh` or as a
+ * pattern colour. The tests of each backend render them and score the result against
+ * mutool, so a backend that draws a gradient or a mesh wrong fails on its own.
  */
 object GradientFixtures {
 
@@ -42,7 +42,101 @@ object GradientFixtures {
         patternStroke("stroke-pattern-dashed-round", "10 w 1 J 1 j [20 15] 0 d 30 40 m 100 170 l 170 40 l S", budget = 0.005),
         // Glyph edges lie on whole points, so a 4-point stroke has whole-pixel edges at 72 dpi.
         patternText("text-stroke-shading-pattern", "/Pattern CS /P1 SCN 4 w BT 1 Tr /F1 60 Tf 20 80 Td (AAA) Tj ET", budget = 0.005),
+        // A tensor-product patch whose interior points pull its middle towards the top right
+        // corner. A renderer that reads it as a Coons patch draws the colours in other places (#196).
+        mesh("mesh-tensor-interior", "q 0 0 200 200 re W n /Sh1 sh Q", "", tensorPatch(), budget = 0.005),
+        // A mesh with a function interpolates t. Halfway from the red corner at t = 0 to the blue
+        // diagonal at t = 1, the colour is green, not the purple that mixing red and blue gives
+        // (ISO 32000-1, 8.7.4.5.5).
+        mesh("mesh-function", "q 0 0 200 200 re W n /Sh1 sh Q", "", functionTriangles(), budget = 0.005),
+        // A translucent mesh over a black band composites once, with no seams between its triangles.
+        mesh(
+            "mesh-translucent", "0 g 0 0 100 200 re f /GS1 gs /Sh1 sh", "/ExtGState << /GS1 << /ca 0.5 >> >>",
+            coonsPatch(), budget = 0.005,
+        ),
+        // A Coons patch as the pattern colour of a disc, so the edge of the disc cuts the mesh.
+        oracleFixture(
+            "mesh-coons-pattern",
+            "/Pattern cs /P1 scn 170 100 m 170 138.66 138.66 170 100 170 c 61.34 170 30 138.66 30 100 c " +
+                "30 61.34 61.34 30 100 30 c 138.66 30 170 61.34 170 100 c f",
+            "/Pattern << /P1 5 0 R >>",
+            listOf("<< /PatternType 2 /Shading 6 0 R >>".toByteArray(), coonsPatch()),
+            budget = 0.005,
+        ),
     )
+
+    /** A page that paints the mesh shading [stream] with [content] and [resources] besides it. */
+    private fun mesh(name: String, content: String, resources: String, stream: ByteArray, budget: Double): OracleFixture =
+        oracleFixture(name, content, "/Shading << /Sh1 5 0 R >> $resources", listOf(stream), budget)
+
+    /** The entries of a mesh stream with 16-bit coordinates over the page and 8-bit colour values. */
+    private fun meshEntries(type: Int, colours: Int) = "/ShadingType $type /ColorSpace /DeviceRGB /BitsPerCoordinate 16 " +
+        "/BitsPerComponent 8 /BitsPerFlag 8 /Decode [0 200 0 200${" 0 1".repeat(colours)}]"
+
+    private fun ByteArrayOutputStream.point(x: Double, y: Double) {
+        for (v in listOf(x, y)) {
+            val n = (v / 200 * 65535).roundToInt()
+            write(n shr 8)
+            write(n and 0xFF)
+        }
+    }
+
+    /** Red, green, blue and yellow at the corners p00, p03, p33 and p30. */
+    private fun ByteArrayOutputStream.cornerColours() {
+        for (c in listOf(intArrayOf(255, 0, 0), intArrayOf(0, 255, 0), intArrayOf(0, 0, 255), intArrayOf(255, 255, 0))) {
+            for (v in c) write(v)
+        }
+    }
+
+    /** A square tensor-product patch from (20, 20) to (180, 180), all four interior points at (150, 150). */
+    private fun tensorPatch(): ByteArray {
+        val data = ByteArrayOutputStream()
+        data.write(0)
+        fun at(i: Int, j: Int) = data.point(20 + 160.0 * i / 3, 20 + 160.0 * j / 3)
+        // p00 p01 p02 p03, p13 p23 p33, p32 p31 p30, p20 p10, then the interior p11 p12 p22 p21.
+        at(0, 0); at(0, 1); at(0, 2); at(0, 3)
+        at(1, 3); at(2, 3); at(3, 3)
+        at(3, 2); at(3, 1); at(3, 0)
+        at(2, 0); at(1, 0)
+        repeat(4) { data.point(150.0, 150.0) }
+        data.cornerColours()
+        return pdfStream(data.toByteArray(), meshEntries(7, 3))
+    }
+
+    /** A Coons patch over the page square with bulging edges. */
+    private fun coonsPatch(): ByteArray {
+        val data = ByteArrayOutputStream()
+        data.write(0)
+        for ((x, y) in listOf(
+            20.0 to 20.0, 70.0 to 5.0, 130.0 to 5.0, 180.0 to 20.0,
+            195.0 to 70.0, 195.0 to 130.0, 180.0 to 180.0,
+            130.0 to 195.0, 70.0 to 195.0, 20.0 to 180.0,
+            5.0 to 130.0, 5.0 to 70.0,
+        )) data.point(x, y)
+        data.cornerColours()
+        return pdfStream(data.toByteArray(), meshEntries(6, 3))
+    }
+
+    /**
+     * Two triangles over the square from (20, 20) to (180, 180) whose one colour value is the t
+     * of a function that runs red, green, blue. t is 0 at the bottom left, 1 at the top left and
+     * the bottom right, and 0.5 at the top right.
+     */
+    private fun functionTriangles(): ByteArray {
+        val data = ByteArrayOutputStream()
+        for ((flag, x, y, t) in listOf(
+            listOf(0.0, 20.0, 20.0, 0.0), listOf(0.0, 180.0, 20.0, 255.0), listOf(0.0, 20.0, 180.0, 255.0),
+            listOf(1.0, 180.0, 180.0, 128.0),
+        )) {
+            data.write(flag.toInt())
+            data.point(x, y)
+            data.write(t.toInt())
+        }
+        val function = "<< /FunctionType 3 /Domain [0 1] /Bounds [0.5] /Encode [0 1 0 1] /Functions [" +
+            "<< /FunctionType 2 /Domain [0 1] /C0 [1 0 0] /C1 [0 1 0] /N 1 >> " +
+            "<< /FunctionType 2 /Domain [0 1] /C0 [0 1 0] /C1 [0 0 1] /N 1 >>] >>"
+        return pdfStream(data.toByteArray(), meshEntries(4, 1) + " /Function $function")
+    }
 
     private fun axial(coords: String, extend: String = "true true") =
         "<< /ShadingType 2 /ColorSpace /DeviceRGB /Coords [$coords] /Function $RED_TO_BLUE /Extend [$extend] >>"
