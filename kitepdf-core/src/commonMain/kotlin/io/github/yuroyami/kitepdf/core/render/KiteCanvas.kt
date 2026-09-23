@@ -40,8 +40,13 @@ public interface KiteCanvas {
         alpha: Double = 1.0, blendMode: KiteBlendMode = KiteBlendMode.Normal,
     )
 
-    /** Stroke [path] under [ctm] with [color] at [lineWidth] user-units, [alpha], [blendMode].
-     *  [lineCap] 0/1/2 = butt/round/square; [lineJoin] 0/1/2 = miter/round/bevel. */
+    /**
+     * Stroke [path] under [ctm] with [color] at [lineWidth] user-units, [alpha], [blendMode].
+     * [lineCap] 0/1/2 = butt/round/square; [lineJoin] 0/1/2 = miter/round/bevel.
+     *
+     * The pen is round in user space, so a [ctm] that scales x and y differently makes it
+     * an ellipse on the device (ISO 32000-1, 8.4.3.2). [strokePen] says how to draw it.
+     */
     public fun strokePath(
         path: KitePath, ctm: KiteMatrix, color: RgbColor, lineWidth: Double,
         alpha: Double = 1.0, blendMode: KiteBlendMode = KiteBlendMode.Normal,

@@ -222,6 +222,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   style decides between equal widths. The table's own border joins the collapse
   instead of painting next to the outer cell borders, and a collapsed table has no
   padding (#210).
+- A stroke under a matrix that scales x and y differently has an elliptical pen on
+  every canvas, as ISO 32000-1, 8.4.3.2 requires. Before, each canvas drew a round
+  pen of the mean scale, so a chart stretched to fit drew its vertical lines too thin
+  and its horizontal lines too thick. Dash lengths now stretch with the matrix too.
+  The new `strokePen` and `KiteMatrix.keepsCircles` hold the rule (#108).
 
 ## [0.10.0] - 2026-09-13
 

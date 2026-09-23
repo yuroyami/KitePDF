@@ -46,6 +46,7 @@ import io.github.yuroyami.kitepdf.core.render.imageSampling
 import io.github.yuroyami.kitepdf.core.render.sampleStops
 import io.github.yuroyami.kitepdf.core.render.shrinkArgb
 import io.github.yuroyami.kitepdf.core.render.shrinkRgba
+import io.github.yuroyami.kitepdf.core.render.strokePen
 import kotlin.math.abs
 import kotlin.math.atan2
 import kotlin.math.sqrt
@@ -136,10 +137,15 @@ public class ComposeCanvas(
         lineCap: Int, lineJoin: Int, miterLimit: Double,
     ) {
         withActiveClips {
-            val composePath = toComposePath(path, ctm)
-            val avgScale = (ctm.scaleX() + ctm.scaleY()) * 0.5
-            val dash = composeDashIntervals(dashArray, avgScale)
-                ?.let { PathEffect.dashPathEffect(it, (dashPhase * avgScale).toFloat()) }
+            // Hairline minimum: a stroke thinner than ~1 device pixel must still
+            // render as a visible 1px line, not vanish (ISO 32000-1 §8.4.3.2; cf.
+            // MuPDF draw-device.c clamping linewidth up to the anti-alias unit).
+            // The floor is configurable so supersampled rasters can keep
+            // hairlines ≥1 px at their final on-screen scale.
+            val pen = strokePen(ctm, lineWidth, hairlineWidthPx.toDouble())
+            val composePath = toComposePath(path, pen.pathMatrix)
+            val dash = composeDashIntervals(dashArray, pen.dashScale)
+                ?.let { PathEffect.dashPathEffect(it, (dashPhase * pen.dashScale).toFloat()) }
             val cap = when (lineCap) {
                 1 -> androidx.compose.ui.graphics.StrokeCap.Round
                 2 -> androidx.compose.ui.graphics.StrokeCap.Square
@@ -150,24 +156,24 @@ public class ComposeCanvas(
                 2 -> androidx.compose.ui.graphics.StrokeJoin.Bevel
                 else -> androidx.compose.ui.graphics.StrokeJoin.Miter
             }
-            drawScope.drawPath(
-                path = composePath,
-                color = color.toCompose(),
-                alpha = alpha.toFloat().coerceIn(0f, 1f),
-                style = Stroke(
-                    // Hairline minimum: a stroke thinner than ~1 device pixel must still
-                    // render as a visible 1px line, not vanish (ISO 32000-1 §8.4.3.2; cf.
-                    // MuPDF draw-device.c clamping linewidth up to the anti-alias unit).
-                    // The floor is configurable so supersampled rasters can keep
-                    // hairlines ≥1 px at their final on-screen scale.
-                    width = (lineWidth * avgScale).toFloat().coerceAtLeast(hairlineWidthPx),
-                    cap = cap,
-                    join = join,
-                    miter = miterLimit.toFloat().coerceAtLeast(1f),
-                    pathEffect = dash,
-                ),
-                blendMode = blendMode.toCompose(),
-            )
+            val stroke: DrawScope.() -> Unit = {
+                drawPath(
+                    path = composePath,
+                    color = color.toCompose(),
+                    alpha = alpha.toFloat().coerceIn(0f, 1f),
+                    style = Stroke(
+                        width = pen.width.toFloat(),
+                        cap = cap,
+                        join = join,
+                        miter = miterLimit.toFloat().coerceAtLeast(1f),
+                        pathEffect = dash,
+                    ),
+                    blendMode = blendMode.toCompose(),
+                )
+            }
+            // An elliptical pen strokes in user space under the matrix.
+            val m = pen.strokeMatrix
+            if (m == null) drawScope.stroke() else drawScope.withTransform({ transform(m.toComposeMatrix()) }, stroke)
         }
     }
 

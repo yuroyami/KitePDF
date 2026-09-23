@@ -18,6 +18,7 @@ import io.github.yuroyami.kitepdf.core.render.SoftMask
 import io.github.yuroyami.kitepdf.core.render.imageSampling
 import io.github.yuroyami.kitepdf.core.render.sampleStops
 import io.github.yuroyami.kitepdf.core.render.shrinkRgba
+import io.github.yuroyami.kitepdf.core.render.strokePen
 import io.github.yuroyami.kitepdf.core.render.toRgbaBytes
 import kotlinx.browser.document
 import kotlin.math.ceil
@@ -103,20 +104,23 @@ public class Canvas2dCanvas(ctx: CanvasRenderingContext2D) : KiteCanvas {
         dashArray: List<Double>?, dashPhase: Double,
         lineCap: Int, lineJoin: Int, miterLimit: Double,
     ) {
-        val p = toPath2D(path, ctm)
+        val pen = strokePen(ctm, lineWidth, floorPx = 0.1)
+        val p = toPath2D(path, pen.pathMatrix)
         ctx.save()
         try {
+            // An elliptical pen strokes in user space: the canvas applies its transform to
+            // the path, the line width and the dashes when it strokes.
+            pen.strokeMatrix?.let { setDeviceTransform(it) }
             ctx.strokeStyle = color.toCssRgba(alpha)
-            val avgScale = (ctm.scaleX() + ctm.scaleY()) * 0.5
-            ctx.lineWidth = (lineWidth * avgScale).coerceAtLeast(0.1)
+            ctx.lineWidth = pen.width
             // lineCap/lineJoin are JS string-union types; assign the raw strings.
             ctx.asDynamic().lineCap = when (lineCap) { 1 -> "round"; 2 -> "square"; else -> "butt" }
             ctx.asDynamic().lineJoin = when (lineJoin) { 1 -> "round"; 2 -> "bevel"; else -> "miter" }
             ctx.miterLimit = miterLimit.coerceAtLeast(1.0)
             if (!dashArray.isNullOrEmpty()) {
                 // Dash lengths are user-space units; device px = unit × scale.
-                ctx.setLineDash(dashArray.map { it * avgScale }.toTypedArray())
-                ctx.lineDashOffset = dashPhase * avgScale
+                ctx.setLineDash(dashArray.map { it * pen.dashScale }.toTypedArray())
+                ctx.lineDashOffset = dashPhase * pen.dashScale
             }
             ctx.globalCompositeOperation = blendMode.toCanvas()
             ctx.stroke(p)

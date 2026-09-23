@@ -17,6 +17,7 @@ import io.github.yuroyami.kitepdf.core.render.SoftMask
 import io.github.yuroyami.kitepdf.core.render.imageSampling
 import io.github.yuroyami.kitepdf.core.render.sampleStops
 import io.github.yuroyami.kitepdf.core.render.shrinkRgba
+import io.github.yuroyami.kitepdf.core.render.strokePen
 import io.github.yuroyami.kitepdf.core.render.toRgbaBytes
 import org.jetbrains.skia.BlendMode as SkiaBlendMode
 import org.jetbrains.skia.Canvas as SkCanvas
@@ -103,14 +104,14 @@ public class SkiaCanvas(private val canvas: SkCanvas) : KiteCanvas {
         dashArray: List<Double>?, dashPhase: Double,
         lineCap: Int, lineJoin: Int, miterLimit: Double,
     ) {
-        val sk = toSkPath(path, ctm)
-        val avgScale = (ctm.scaleX() + ctm.scaleY()) * 0.5
+        // Hairline minimum: sub-pixel strokes must still render as a visible ~1px
+        // line (ISO 32000-1 §8.4.3.2; MuPDF clamps to the anti-alias unit, draw-device.c:800).
+        val pen = strokePen(ctm, lineWidth, floorPx = 1.0)
+        val sk = toSkPath(path, pen.pathMatrix)
         val paint = Paint().apply {
             this.color = color.toArgb(alpha)
             this.mode = PaintMode.STROKE
-            // Hairline minimum: sub-pixel strokes must still render as a visible ~1px
-            // line (ISO 32000-1 §8.4.3.2; MuPDF clamps to the anti-alias unit, draw-device.c:800).
-            this.strokeWidth = (lineWidth * avgScale).toFloat().coerceAtLeast(1.0f)
+            this.strokeWidth = pen.width.toFloat()
             this.isAntiAlias = true
             this.blendMode = blendMode.toSkia()
             this.strokeCap = when (lineCap) {
@@ -128,14 +129,26 @@ public class SkiaCanvas(private val canvas: SkCanvas) : KiteCanvas {
             // same way as the line width. Skia needs an even-length, positive
             // interval array.
             dashArray?.let { da ->
-                val scaled = da.map { (it * avgScale).toFloat().coerceAtLeast(0f) }
+                val scaled = da.map { (it * pen.dashScale).toFloat().coerceAtLeast(0f) }
                 val intervals = if (scaled.size % 2 == 0) scaled else scaled + scaled
                 if (intervals.isNotEmpty() && intervals.sum() > 0f) {
-                    this.pathEffect = PathEffect.makeDash(intervals.toFloatArray(), (dashPhase * avgScale).toFloat())
+                    this.pathEffect = PathEffect.makeDash(intervals.toFloatArray(), (dashPhase * pen.dashScale).toFloat())
                 }
             }
         }
-        canvas.drawPath(sk, paint)
+        val m = pen.strokeMatrix
+        if (m == null) {
+            canvas.drawPath(sk, paint)
+        } else {
+            // Skia strokes in local space under the matrix, which draws the elliptical pen.
+            canvas.save()
+            try {
+                canvas.concat(pdfMatrixToSkia(m))
+                canvas.drawPath(sk, paint)
+            } finally {
+                canvas.restore()
+            }
+        }
     }
 
     override fun drawGlyphs(

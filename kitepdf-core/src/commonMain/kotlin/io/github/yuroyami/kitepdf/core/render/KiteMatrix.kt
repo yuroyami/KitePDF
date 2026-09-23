@@ -62,6 +62,18 @@ public data class KiteMatrix(
     public fun scaleX(): Double = kotlin.math.sqrt(a * a + b * b)
     public fun scaleY(): Double = kotlin.math.sqrt(c * c + d * d)
 
+    /**
+     * Whether this matrix maps every circle onto a circle: it only moves, turns, mirrors
+     * and scales both axes by one factor. A stroke under such a matrix has a round pen
+     * on the device as well (ISO 32000-1, 8.4.3.2). See [strokePen].
+     */
+    public fun keepsCircles(): Boolean {
+        val xx = a * a + b * b
+        val yy = c * c + d * d
+        val tolerance = maxOf(xx, yy) * 1e-6
+        return kotlin.math.abs(xx - yy) <= tolerance && kotlin.math.abs(a * c + b * d) <= tolerance
+    }
+
     public fun translate(tx: Double, ty: Double): KiteMatrix = translation(tx, ty).concat(this)
     public fun scale(sx: Double, sy: Double): KiteMatrix = scaling(sx, sy).concat(this)
 
