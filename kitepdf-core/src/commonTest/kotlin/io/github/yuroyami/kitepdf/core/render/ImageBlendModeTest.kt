@@ -61,7 +61,8 @@ class ImageBlendModeTest {
         canvas.drawImage(image, ctm, 0.5, KiteBlendMode.Multiply)
         assertEquals(
             listOf(
-                "group ${KiteRectangle(0.0, 0.0, 1.0, 1.0)} isolated=true knockout=false alpha=1.0 Multiply",
+                // Kotlin/JS prints the double 1.0 as "1", so the number is formatted, not written out.
+                "group ${KiteRectangle(0.0, 0.0, 1.0, 1.0)} isolated=true knockout=false alpha=${1.0} Multiply",
                 "image alpha=0.5",
                 "end",
             ),
