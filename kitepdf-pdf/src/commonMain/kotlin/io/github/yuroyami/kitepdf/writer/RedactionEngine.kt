@@ -3,6 +3,7 @@ package io.github.yuroyami.kitepdf.writer
 import io.github.yuroyami.kitepdf.core.KiteRectangle
 import io.github.yuroyami.kitepdf.content.Operation
 import io.github.yuroyami.kitepdf.core.font.PdfFont
+import io.github.yuroyami.kitepdf.core.font.PdfVerticalMetrics
 import io.github.yuroyami.kitepdf.core.render.KiteMatrix
 import io.github.yuroyami.kitepdf.core.parser.IndirectResolver
 import io.github.yuroyami.kitepdf.core.parser.PdfArray
@@ -526,13 +527,13 @@ internal class RedactionEngine(
         if (bytes == null) return
         // Text before any Tf still draws, in the substitute (PageRenderer.showText).
         val font = gs.text.font ?: missingFont
-        val advance = advanceOf(bytes, font)
-        if (runIntersectsRedaction(advance)) {
-            compensation(advance)?.let { out.add(Operation("TJ", listOf(PdfArray(listOf(PdfReal(it)))))) }
+        val shown = show(bytes, font)
+        if (shown.hit) {
+            compensation(shown)?.let { out.add(Operation("TJ", listOf(PdfArray(listOf(PdfReal(it)))))) }
         } else {
             out.add(Operation("Tj", listOf(PdfString(bytes))))
         }
-        advanceTextMatrix(advance)
+        moveBy(shown)
     }
 
     /** Rebuild a `TJ` array, replacing redacted strings with equivalent spacing. */
@@ -543,13 +544,13 @@ internal class RedactionEngine(
         for (item in array.items) {
             when (item) {
                 is PdfString -> {
-                    val advance = advanceOf(item.bytes, font)
-                    if (runIntersectsRedaction(advance)) {
-                        compensation(advance)?.let { items.add(PdfReal(it)) }
+                    val shown = show(item.bytes, font)
+                    if (shown.hit) {
+                        compensation(shown)?.let { items.add(PdfReal(it)) }
                     } else {
                         items.add(item)
                     }
-                    advanceTextMatrix(advance)
+                    moveBy(shown)
                 }
                 is PdfReal -> { items.add(item); adjustTextX(-item.value) }
                 is PdfInt -> { items.add(item); adjustTextX(-item.value.toDouble()) }
@@ -557,6 +558,44 @@ internal class RedactionEngine(
             }
         }
         out.add(Operation("TJ", listOf(PdfArray(items))))
+    }
+
+    /**
+     * One shown string: how far it moves the pen in text space, along x, or along y
+     * for a [vertical] font, and whether its glyphs touch a region.
+     */
+    private class Shown(val advance: Double, val vertical: Boolean, val hit: Boolean)
+
+    private fun show(bytes: ByteArray, font: PdfFont): Shown {
+        font.verticalMetrics(bytes)?.let { return showVertical(bytes, font, it) }
+        val advance = advanceOf(bytes, font)
+        return Shown(advance, vertical = false, hit = runIntersectsRedaction(advance))
+    }
+
+    /**
+     * A string in a font that writes top to bottom (ISO 32000-1, 9.7.4.3), placed as
+     * PageRenderer places it: each glyph hangs from the pen by its position vector, and
+     * the pen moves by w1y x Tfs + Tc (+ Tw) with no horizontal scaling. Each glyph's
+     * box over-covers along the column as [runIntersectsRedaction] does across a line.
+     */
+    private fun showVertical(bytes: ByteArray, font: PdfFont, metrics: List<PdfVerticalMetrics>): Shown {
+        val t = gs.text
+        val size = t.fontSize / 1000.0
+        val hScale = t.horizontalScaling / 100.0
+        val m = gs.ctm.concat(t.textMatrix).concat(KiteMatrix.translation(0.0, t.rise))
+        var penY = 0.0
+        var hit = false
+        var i = 0
+        font.forEachGlyphAdvance(bytes) { width, isWordSpace ->
+            val v = metrics.getOrNull(i++) ?: return@forEachGlyphAdvance
+            val x = -v.originX * kotlin.math.abs(size)
+            val y = penY - v.originY * size
+            if (!hit && rectangles.isNotEmpty()) {
+                hit = boxIntersects(m, x0 = x, y0 = y - 0.35 * t.fontSize, x1 = x + width * size * hScale, y1 = y + t.fontSize)
+            }
+            penY += v.displacement * size + t.charSpacing + (if (isWordSpace) t.wordSpacing else 0.0)
+        }
+        return Shown(penY, vertical = true, hit = hit)
     }
 
     /** Total text-space advance of [bytes], matching PageRenderer.totalAdvance and showTextType3. */
@@ -581,25 +620,29 @@ internal class RedactionEngine(
     }
 
     /**
-     * The TJ number that advances the cursor by [advance] text-space units
-     * (the renderer applies `adjustTextX(-number)`), or null when font size /
-     * horizontal scale make it ill-defined (then the advance is ~0 anyway).
+     * The TJ number that moves the cursor as [shown] did (the renderer applies
+     * `adjustTextX(-number)`), or null when font size / horizontal scale make it
+     * ill-defined (then the advance is ~0 anyway). A vertical font's TJ number moves
+     * the pen along the column, with no horizontal scaling (ISO 32000-1, 9.4.3).
      */
-    private fun compensation(advance: Double): Double? {
-        val denom = gs.text.fontSize * (gs.text.horizontalScaling / 100.0)
+    private fun compensation(shown: Shown): Double? {
+        val denom = if (shown.vertical) gs.text.fontSize else gs.text.fontSize * (gs.text.horizontalScaling / 100.0)
         if (kotlin.math.abs(denom) < 1e-9) return null
-        return -advance * 1000.0 / denom
+        return -shown.advance * 1000.0 / denom
     }
 
     // Every move below is in text space: translate first, then the text matrix,
     // as PageRenderer does. `concat` applies its argument first (ISO 32000-1, 9.4.2).
-    private fun advanceTextMatrix(advance: Double) {
-        gs = gs.copy(text = gs.text.copy(textMatrix = gs.text.textMatrix.concat(KiteMatrix.translation(advance, 0.0))))
+    private fun moveBy(shown: Shown) {
+        val move = if (shown.vertical) KiteMatrix.translation(0.0, shown.advance) else KiteMatrix.translation(shown.advance, 0.0)
+        gs = gs.copy(text = gs.text.copy(textMatrix = gs.text.textMatrix.concat(move)))
     }
 
     private fun adjustTextX(thousandths: Double) {
-        val tx = thousandths / 1000.0 * gs.text.fontSize * (gs.text.horizontalScaling / 100.0)
-        gs = gs.copy(text = gs.text.copy(textMatrix = gs.text.textMatrix.concat(KiteMatrix.translation(tx, 0.0))))
+        val shift = thousandths / 1000.0 * gs.text.fontSize
+        val move = if (gs.text.font?.isVertical == true) KiteMatrix.translation(0.0, shift)
+        else KiteMatrix.translation(shift * (gs.text.horizontalScaling / 100.0), 0.0)
+        gs = gs.copy(text = gs.text.copy(textMatrix = gs.text.textMatrix.concat(move)))
     }
 
     private fun moveText(tx: Double, ty: Double, setLeading: Boolean) {

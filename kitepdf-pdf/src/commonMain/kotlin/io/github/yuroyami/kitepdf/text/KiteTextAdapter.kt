@@ -18,10 +18,12 @@ import kotlin.math.abs
  * trimmed) while tracking a user-space boundary point per char, so the
  * produced [KiteTextLine.charEdges] stay aligned with the text.
  *
- * The Kite line model is one-dimensional (x edges within a horizontal
- * line). For a line whose display-space baseline runs left-to-right
- * (all /Rotate 0 and most /Rotate 180 content) the edges are exact glyph
- * boundaries; for rotated/vertical/reversed baselines the edges are
+ * The Kite line model is one-dimensional: x edges within a horizontal
+ * line, or y edges within a vertical one. For a line whose display-space
+ * baseline runs left-to-right (all /Rotate 0 and most /Rotate 180 content)
+ * the edges are exact glyph boundaries. A baseline that runs up or down the
+ * display, such as vertical CJK text or a page turned by /Rotate 90, makes a
+ * vertical line with exact y edges. For a reversed baseline the edges are
  * distributed evenly across the line's display box, which keeps every
  * highlight quad inside the correct box at reduced sub-line precision.
  */
@@ -38,10 +40,11 @@ internal object KiteTextAdapter {
         val chars = ArrayList<Ch>()
         var lineStart: Pair<Double, Double>? = null
         var prev: PdfTextSpan? = null
+        val down = line.spans.isNotEmpty() && line.spans.all { it.runsDown }
         for (s in line.spans) {
             val edges = s.charEdgePoints ?: evenEdges(s)
             if (prev != null) {
-                val gap = s.bounds.left - prev.bounds.right
+                val gap = if (down) prev.bounds.bottom - s.bounds.top else s.bounds.left - prev.bounds.right
                 val threshold = kotlin.math.max(
                     StructuredTextTuning.SPACE_GAP_MIN_PT,
                     prev.fontSize * StructuredTextTuning.SPACE_GAP,
@@ -80,7 +83,19 @@ internal object KiteTextAdapter {
         val lastPt = chars.last().end
         val last = display.transformPoint(lastPt.first, lastPt.second)
         val dx = last.first - first.first
-        if (dx > 0 && dx >= abs(last.second - first.second)) {
+        val dy = last.second - first.second
+        if (abs(dy) > abs(dx)) {
+            // Up or down the display: y edges, coerced monotonic the way the line runs.
+            var y = first.second
+            edges[0] = y
+            for (i in chars.indices) {
+                val p = display.transformY(chars[i].end.first, chars[i].end.second)
+                if (if (dy > 0) p > y else p < y) y = p
+                edges[i + 1] = y
+            }
+            return KiteTextLine(text, bounds, edges, vertical = true)
+        }
+        if (dx > 0 && dx >= abs(dy)) {
             // Horizontal, left-to-right in display space: exact edges,
             // coerced monotonic against numeric jitter.
             var x = first.first

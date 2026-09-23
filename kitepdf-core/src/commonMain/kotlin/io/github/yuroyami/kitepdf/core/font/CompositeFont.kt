@@ -6,6 +6,7 @@ import io.github.yuroyami.kitepdf.core.parser.PdfArray
 import io.github.yuroyami.kitepdf.core.parser.PdfDictionary
 import io.github.yuroyami.kitepdf.core.parser.PdfInt
 import io.github.yuroyami.kitepdf.core.parser.PdfName
+import io.github.yuroyami.kitepdf.core.parser.PdfObject
 import io.github.yuroyami.kitepdf.core.parser.PdfReal
 import io.github.yuroyami.kitepdf.core.parser.PdfStream
 import io.github.yuroyami.kitepdf.core.render.KitePath
@@ -50,6 +51,10 @@ internal class CompositeFont(
     val widths: CidWidthTable,
     /** ToUnicode CMap on the parent Type 0 dict. */
     val toUnicode: CMap?,
+    /** True when the CMap's writing mode is 1: glyphs stack down the page (ISO 32000-1, 9.7.4.3). */
+    val vertical: Boolean = false,
+    /** CID-keyed vertical metrics from /W2 + /DW2, read only for a [vertical] font. */
+    private val verticalWidths: CidVerticalTable = CidVerticalTable.DEFAULT,
 ) {
 
     /**
@@ -89,6 +94,7 @@ internal class CompositeFont(
 
     fun gidFor(cid: Int): Int = cidToGid.map(cid)
     fun widthOf(cid: Int): Double = widths.widthOf(cid)
+    fun verticalMetricsOf(cid: Int): PdfVerticalMetrics = verticalWidths.metrics(cid, widthOf(cid))
 
     /** Decode the full byte run to unicode via ToUnicode CMap (preferred) or codepoint guess. */
     fun decode(bytes: ByteArray): String {
@@ -121,6 +127,13 @@ internal class CompositeFont(
                 runCatching { CMap.parse(FilterChain.decode(it)) }.getOrNull()
             }
             val codeReader = PredefinedCMaps.reader(encodingName)
+            // Writing mode 1 comes from an embedded CMap's stream /WMode or its program, or
+            // from a predefined name such as Identity-V (ISO 32000-1, 9.7.5.2 and 9.7.5.3).
+            val vertical = if (encodingObj is PdfStream) {
+                (encodingObj.dict.getInt("WMode")?.toInt() ?: encodingCMap?.writingMode) == 1
+            } else {
+                PredefinedCMaps.isVertical(encodingName)
+            }
 
             // Resolve descendant's embedded outlines.
             val descriptor = descendant["FontDescriptor"]?.resolve(refs) as? PdfDictionary
@@ -132,7 +145,11 @@ internal class CompositeFont(
             val toUnicode = loadToUnicodeOnParent(parentDict, refs)
             val baseFont = parentDict.getName("BaseFont") ?: descendant.getName("BaseFont") ?: "Unknown"
 
-            return CompositeFont(baseFont, descendantSubtype, ttf, cff, codeReader, encodingCMap, cidToGid, widths, toUnicode)
+            val verticalWidths = if (vertical) CidVerticalTable.from(descendant, refs) else CidVerticalTable.DEFAULT
+            return CompositeFont(
+                baseFont, descendantSubtype, ttf, cff, codeReader, encodingCMap, cidToGid, widths, toUnicode,
+                vertical, verticalWidths,
+            )
         }
 
         private fun loadTtf(descriptor: PdfDictionary, refs: IndirectResolver): TrueTypeFont? {
@@ -182,6 +199,93 @@ internal class CidToGidMap private constructor(
             return IntArray(n) { i ->
                 ((bytes[i * 2].toInt() and 0xFF) shl 8) or (bytes[i * 2 + 1].toInt() and 0xFF)
             }
+        }
+    }
+}
+
+/* ─── /W2 vertical metrics (ISO 32000-1 §9.7.4.3) ─────────────────────────── */
+
+/**
+ * CID-keyed vertical metrics for a font in vertical writing mode. `/W2` takes the two
+ * forms of `/W`, with three numbers per CID, `w1y vx vy`, instead of one width:
+ *   `[ cid [ w1y vx vy  w1y vx vy … ] ]`  and  `[ cidStart cidEnd w1y vx vy ]`.
+ * A CID that `/W2` does not list takes `/DW2`, `[vy w1y]`, whose default is
+ * `[880 -1000]`, and a `vx` of half its horizontal width.
+ */
+internal class CidVerticalTable private constructor(
+    private val starts: IntArray,
+    private val ends: IntArray,
+    /** Where each range's first `w1y vx vy` triple starts in [triples]. */
+    private val offsets: IntArray,
+    /** True when a range lists one triple per CID, false when one triple covers it. */
+    private val perCid: BooleanArray,
+    private val triples: DoubleArray,
+    private val defaultOriginY: Double,
+    private val defaultDisplacement: Double,
+) {
+
+    /** The metrics of [cid], whose horizontal width is [width]. The first range that holds it wins. */
+    fun metrics(cid: Int, width: Double): PdfVerticalMetrics {
+        for (i in starts.indices) {
+            if (cid < starts[i] || cid > ends[i]) continue
+            val at = offsets[i] + if (perCid[i]) 3 * (cid - starts[i]) else 0
+            return PdfVerticalMetrics(triples[at], triples[at + 1], triples[at + 2])
+        }
+        return PdfVerticalMetrics(defaultDisplacement, width / 2.0, defaultOriginY)
+    }
+
+    companion object {
+        /** No /W2, and the /DW2 default. */
+        val DEFAULT = CidVerticalTable(IntArray(0), IntArray(0), IntArray(0), BooleanArray(0), DoubleArray(0), 880.0, -1000.0)
+
+        fun from(descendant: PdfDictionary, refs: IndirectResolver): CidVerticalTable {
+            val dw2 = descendant.getArray("DW2", refs)
+            val originY = dw2?.getOrNull(0)?.numberOrNull() ?: 880.0
+            val displacement = dw2?.getOrNull(1)?.numberOrNull() ?: -1000.0
+            val starts = mutableListOf<Int>()
+            val ends = mutableListOf<Int>()
+            val offsets = mutableListOf<Int>()
+            val perCid = mutableListOf<Boolean>()
+            val triples = mutableListOf<Double>()
+            val w2 = descendant.getArray("W2", refs)
+            var i = 0
+            while (w2 != null && i < w2.size) {
+                val first = (w2.getOrNull(i) as? PdfInt)?.value?.toInt() ?: break
+                when (val second = w2.getOrNull(i + 1)) {
+                    is PdfArray -> {
+                        // A number that is not one reads as 0 rather than shifting the triples after it.
+                        val values = second.map { it.numberOrNull() ?: 0.0 }
+                        val count = values.size / 3
+                        if (count > 0) {
+                            starts.add(first); ends.add(first + count - 1)
+                            offsets.add(triples.size); perCid.add(true)
+                            triples.addAll(values.subList(0, 3 * count))
+                        }
+                        i += 2
+                    }
+                    is PdfInt, is PdfReal -> {
+                        val last = second.numberOrNull()?.toInt() ?: break
+                        val w1 = w2.getOrNull(i + 2)?.numberOrNull() ?: break
+                        val vx = w2.getOrNull(i + 3)?.numberOrNull() ?: break
+                        val vy = w2.getOrNull(i + 4)?.numberOrNull() ?: break
+                        starts.add(first); ends.add(last)
+                        offsets.add(triples.size); perCid.add(false)
+                        triples.add(w1); triples.add(vx); triples.add(vy)
+                        i += 5
+                    }
+                    else -> i++
+                }
+            }
+            return CidVerticalTable(
+                starts.toIntArray(), ends.toIntArray(), offsets.toIntArray(), perCid.toBooleanArray(),
+                triples.toDoubleArray(), originY, displacement,
+            )
+        }
+
+        private fun PdfObject.numberOrNull(): Double? = when (this) {
+            is PdfInt -> value.toDouble()
+            is PdfReal -> value
+            else -> null
         }
     }
 }

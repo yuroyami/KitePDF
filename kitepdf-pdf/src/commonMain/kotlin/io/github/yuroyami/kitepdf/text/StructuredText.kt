@@ -63,13 +63,15 @@ public data class PdfTextBlock(
  * One line of text: spans sharing a baseline, within a small Y slack
  * ([StructuredTextTuning.Y_CLUSTER_TOL] × font size, floored at
  * [StructuredTextTuning.Y_CLUSTER_TOL_MIN_PT]). Spans are stored
- * left-to-right.
+ * left-to-right. A column of vertical text (ISO 32000-1, 9.7.4.3) is a line
+ * too: its spans run down the page and are stored top to bottom.
  */
 public data class PdfTextLine(
     val bounds: KiteRectangle,
     val spans: List<PdfTextSpan>,
 ) {
     val text: String by lazy {
+        val down = spans.isNotEmpty() && spans.all { it.runsDown }
         val sb = StringBuilder()
         var prevSpan: PdfTextSpan? = null
         for (s in spans) {
@@ -77,7 +79,7 @@ public data class PdfTextLine(
             // that the source didn't explicitly mark.
             val prev = prevSpan
             if (prev != null) {
-                val gap = s.bounds.left - prev.bounds.right
+                val gap = if (down) prev.bounds.bottom - s.bounds.top else s.bounds.left - prev.bounds.right
                 val threshold = kotlin.math.max(
                     StructuredTextTuning.SPACE_GAP_MIN_PT,
                     prev.fontSize * StructuredTextTuning.SPACE_GAP,
@@ -120,6 +122,18 @@ public data class PdfTextSpan(
 )
 
 /**
+ * True when this span's baseline runs down the page: vertical writing, or text
+ * turned a quarter turn clockwise. Such spans stack into columns, not lines.
+ */
+internal val PdfTextSpan.runsDown: Boolean
+    get() {
+        val edges = charEdgePoints ?: return false
+        val dx = edges.last().first - edges.first().first
+        val dy = edges.last().second - edges.first().second
+        return dy < 0.0 && -dy > kotlin.math.abs(dx)
+    }
+
+/**
  * Tunables for the structured-text clustering pass. PDF text has no
  * inherent line/paragraph notion. These heuristics work well for the
  * common case (running text in horizontal writing mode) and degrade
@@ -157,6 +171,13 @@ internal object StructuredTextTuning {
      * solid paragraph-break indicator for running text.
      */
     const val GAP_TO_NEW_BLOCK = 1.0
+
+    /**
+     * X tolerance (× font size) under which spans that run down the page share a
+     * column. A column is a shared centre line, and the next column sits a full
+     * em or more away, so a quarter em absorbs glyphs that sit off the line.
+     */
+    const val COLUMN_X_TOL = 0.25
 }
 
 /**
@@ -174,10 +195,92 @@ internal object StructuredTextExtractor {
             return PdfStructuredText(page.width, page.height, emptyList())
         }
 
-        val lines = clusterLines(spans)
-        val blocks = clusterBlocks(lines)
-        return PdfStructuredText(page.width, page.height, blocks)
+        // Spans that run down the page, such as vertical CJK text, stack into columns.
+        val (down, across) = spans.partition { it.runsDown }
+        val blocks = clusterBlocks(clusterLines(across))
+        val columnBlocks = clusterColumnBlocks(clusterColumns(down))
+        return PdfStructuredText(page.width, page.height, mergeByTop(blocks, columnBlocks))
     }
+
+    /**
+     * Group spans that run down the page into columns: spans whose boxes share a
+     * centre line, within [StructuredTextTuning.COLUMN_X_TOL]. Columns come right to
+     * left, the order vertical CJK text reads in, and keep their spans top to bottom.
+     */
+    private fun clusterColumns(spans: List<PdfTextSpan>): List<PdfTextLine> {
+        fun centre(s: PdfTextSpan) = (s.bounds.left + s.bounds.right) / 2.0
+        val out = mutableListOf<PdfTextLine>()
+        val current = mutableListOf<PdfTextSpan>()
+        var currentX = Double.NaN
+        var currentFontSize = 0.0
+        fun finish() {
+            current.sortByDescending { it.bounds.top }
+            out += PdfTextLine(hull(current.map { it.bounds }), current.toList())
+            current.clear()
+        }
+        for (s in spans.sortedByDescending { centre(it) }) {
+            val tol = kotlin.math.max(
+                StructuredTextTuning.Y_CLUSTER_TOL_MIN_PT,
+                currentFontSize * StructuredTextTuning.COLUMN_X_TOL,
+            )
+            if (current.isNotEmpty() && kotlin.math.abs(centre(s) - currentX) > tol) finish()
+            if (current.isEmpty()) {
+                currentX = centre(s)
+                currentFontSize = s.fontSize
+            }
+            current.add(s)
+        }
+        if (current.isNotEmpty()) finish()
+        return out
+    }
+
+    /**
+     * Group columns, right to left, into blocks. A new block opens where the gap
+     * to the previous column is wider than [StructuredTextTuning.GAP_TO_NEW_BLOCK]
+     * × the median column width, or where the two columns share no height.
+     */
+    private fun clusterColumnBlocks(columns: List<PdfTextLine>): List<PdfTextBlock> {
+        if (columns.isEmpty()) return emptyList()
+        val medianWidth = columns.map { it.bounds.width }.sorted()[columns.size / 2]
+        val threshold = medianWidth * StructuredTextTuning.GAP_TO_NEW_BLOCK
+        val blocks = mutableListOf<PdfTextBlock>()
+        val current = mutableListOf<PdfTextLine>()
+        for (column in columns) {
+            val prev = current.lastOrNull()
+            if (prev != null && (
+                    prev.bounds.left - column.bounds.right > threshold + 0.001 ||
+                        column.bounds.top < prev.bounds.bottom || column.bounds.bottom > prev.bounds.top
+                    )
+            ) {
+                blocks += finishBlock(current)
+                current.clear()
+            }
+            current.add(column)
+        }
+        if (current.isNotEmpty()) blocks += finishBlock(current)
+        return blocks
+    }
+
+    /** Both kinds of block in one reading order: the block that starts higher comes first. */
+    private fun mergeByTop(lines: List<PdfTextBlock>, columns: List<PdfTextBlock>): List<PdfTextBlock> {
+        if (columns.isEmpty()) return lines
+        if (lines.isEmpty()) return columns
+        val out = ArrayList<PdfTextBlock>(lines.size + columns.size)
+        var i = 0
+        var j = 0
+        while (i < lines.size || j < columns.size) {
+            out += if (j >= columns.size || (i < lines.size && lines[i].bounds.top >= columns[j].bounds.top)) lines[i++]
+            else columns[j++]
+        }
+        return out
+    }
+
+    private fun hull(boxes: List<KiteRectangle>): KiteRectangle = KiteRectangle(
+        left = boxes.minOf { it.left },
+        bottom = boxes.minOf { it.bottom },
+        right = boxes.maxOf { it.right },
+        top = boxes.maxOf { it.top },
+    )
 
     private fun accessDocument(page: PdfPage): PdfDocument {
         // Visibility shim. PdfPage's `document` field is private. Use
