@@ -551,6 +551,25 @@ onLinkTap = { link ->
 }
 ```
 
+### Notes in place
+
+An EPUB link can mark itself as a reference to a note, a glossary entry or a
+bibliography entry (see `EpubLink.kind` in [EPUB](epub.md)). The viewer offers
+such a link to `onEpubReferenceTap` before it scrolls. Return `true` to keep the
+reader on the page, for example after you show the note in a popup. Return
+`false` and the viewer scrolls to the target as usual.
+
+```kotlin
+KiteDocView(
+    state = state,
+    onEpubReferenceTap = { link ->
+        book.linkTarget(link.href)?.let { note -> showNote(note.text); true } ?: false
+    },
+)
+```
+
+An ordinary internal link never reaches this callback.
+
 ## Navigation widgets
 
 Ready-made UI components for common patterns. They all take a `KiteDocViewState`, so they work from anywhere in your tree; inside the viewport (via `overlay`), in your top bar, in a side panel.
