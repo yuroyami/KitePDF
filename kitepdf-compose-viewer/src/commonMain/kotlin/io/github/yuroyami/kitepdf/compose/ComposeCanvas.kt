@@ -34,6 +34,7 @@ import io.github.yuroyami.kitepdf.core.render.KiteBlendMode
 import io.github.yuroyami.kitepdf.core.render.KiteBitmapCache
 import io.github.yuroyami.kitepdf.core.render.KiteImageData
 import io.github.yuroyami.kitepdf.core.render.KiteImageSampling
+import io.github.yuroyami.kitepdf.core.render.KiteMaskTransfer
 import io.github.yuroyami.kitepdf.core.render.toRgbaBytes
 import io.github.yuroyami.kitepdf.core.render.KiteMatrix
 import io.github.yuroyami.kitepdf.core.render.KiteCanvas
@@ -493,21 +494,30 @@ public class ComposeCanvas(
         }
     }
 
+    override fun applySoftMask(
+        kind: SoftMask.Kind,
+        maskBBox: KiteRectangle,
+        maskCtm: KiteMatrix,
+        render: () -> Unit,
+        renderMask: (KiteCanvas) -> Unit,
+    ) {
+        applySoftMask(kind, maskBBox, maskCtm, null, render, renderMask)
+    }
+
     /**
      * Soft-mask compositing (ISO 32000-1 §11.6.5). We open a saveLayer for
      * the content, render it, then over-paint the mask group with
      * [ComposeBlendMode.DstIn] so the mask's alpha clips the content.
      *
-     * Honest scope: this implements the **Alpha** SMask kind correctly. The
-     * **Luminosity** kind would require a colour-to-alpha filter (a Skia
-     * `ColorFilter` we don't currently set up); we render it as-if-Alpha,
-     * which produces visually plausible results for mask groups whose
-     * content is already monochrome-with-alpha (the common case).
+     * A colour matrix turns the mask layer into alpha. A matrix can only scale
+     * and offset, so the [transfer] function applies as the straight line
+     * closest to its table: exact for a linear function such as an inverter.
      */
     override fun applySoftMask(
         kind: SoftMask.Kind,
         maskBBox: KiteRectangle,
         maskCtm: KiteMatrix,
+        transfer: KiteMaskTransfer?,
         render: () -> Unit,
         renderMask: (KiteCanvas) -> Unit,
     ) {
@@ -523,6 +533,10 @@ public class ComposeCanvas(
             // an opaque BLACK backdrop and its LUMINANCE becomes the alpha:
             // a colour-matrix filter moves 0.299R+0.587G+0.114B into A at the
             // layer restore, mirroring the Skia backend's LUMA filter.
+            // The /TR line then maps the alpha: A' = slope * A + offset. The offset of a
+            // Compose colour matrix is in levels from 0 to 255.
+            val slope = (transfer?.slope ?: 1.0).toFloat()
+            val offset = ((transfer?.offset ?: 0.0) * 255).toFloat()
             val maskPaint = Paint().apply {
                 blendMode = ComposeBlendMode.DstIn
                 if (kind == SoftMask.Kind.Luminosity) {
@@ -532,7 +546,18 @@ public class ComposeCanvas(
                                 0f, 0f, 0f, 0f, 0f,
                                 0f, 0f, 0f, 0f, 0f,
                                 0f, 0f, 0f, 0f, 0f,
-                                0.299f, 0.587f, 0.114f, 0f, 0f,
+                                0.299f * slope, 0.587f * slope, 0.114f * slope, 0f, offset,
+                            ),
+                        ),
+                    )
+                } else if (transfer != null) {
+                    colorFilter = androidx.compose.ui.graphics.ColorFilter.colorMatrix(
+                        androidx.compose.ui.graphics.ColorMatrix(
+                            floatArrayOf(
+                                1f, 0f, 0f, 0f, 0f,
+                                0f, 1f, 0f, 0f, 0f,
+                                0f, 0f, 1f, 0f, 0f,
+                                0f, 0f, 0f, slope, offset,
                             ),
                         ),
                     )

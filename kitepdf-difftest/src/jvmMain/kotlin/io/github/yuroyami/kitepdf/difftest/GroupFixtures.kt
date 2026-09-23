@@ -23,11 +23,45 @@ object GroupFixtures {
             listOf(form("0 g /GH gs 0 0 200 200 re f", "/ExtGState << /GH << /ca 0.5 >> >>")),
             budget = 0.005,
         ),
+        // A luminosity mask on a white backdrop: its group paints black in its own box, so the red
+        // page shows everywhere except in that box (#68).
+        oracleFixture(
+            "soft-mask-backdrop",
+            "/GS1 gs 1 0 0 rg 0 0 200 200 re f",
+            "/ExtGState << /GS1 << /SMask << /S /Luminosity /BC [1] /G 5 0 R >> >> >>",
+            listOf(
+                pdfStream(
+                    "0 g 40 40 80 80 re f".toByteArray(),
+                    "/Type /XObject /Subtype /Form /BBox [40 40 120 120] /Group << /S /Transparency /CS /DeviceGray >>",
+                ),
+            ),
+            budget = 0.005,
+        ),
+        // A luminosity mask with an inverting transfer function: its group paints white in a square,
+        // so the red page shows everywhere except in that square (#68).
+        oracleFixture(
+            "soft-mask-transfer",
+            "/GS1 gs 1 0 0 rg 0 0 200 200 re f",
+            "/ExtGState << /GS1 << /SMask << /S /Luminosity /G 5 0 R $INVERTER >> >> >>",
+            listOf(form("1 g 40 40 80 80 re f", "")),
+            budget = 0.005,
+        ),
+        // An alpha mask with the same transfer function: the square of the group hides the page.
+        oracleFixture(
+            "soft-mask-alpha-transfer",
+            "/GS1 gs 1 0 0 rg 0 0 200 200 re f",
+            "/ExtGState << /GS1 << /SMask << /S /Alpha /G 5 0 R $INVERTER >> >> >>",
+            listOf(form("0 g 40 40 80 80 re f", "")),
+            budget = 0.005,
+        ),
         // An image multiplied onto the light blue backdrop: no quadrant keeps its own colour (#113).
         image("image-multiply", "/BM /Multiply", budget = 0.005),
         // The same image at half alpha.
         image("image-alpha-multiply", "/ca 0.5 /BM /Multiply", budget = 0.005),
     )
+
+    /** A /TR entry that inverts each mask value: 1 becomes 0 and 0 becomes 1. */
+    private const val INVERTER = "/TR << /FunctionType 2 /Domain [0 1] /C0 [1] /C1 [0] /N 1 >>"
 
     /** Red, green, blue and yellow in a square of two by two pixels. */
     private val FOUR_COLOURS = byteArrayOf(-1, 0, 0, 0, -1, 0, 0, 0, -1, -1, -1, 0)

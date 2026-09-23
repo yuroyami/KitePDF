@@ -5,7 +5,9 @@ import io.github.yuroyami.kitepdf.core.parser.PdfArray
 import io.github.yuroyami.kitepdf.core.parser.PdfDictionary
 import io.github.yuroyami.kitepdf.core.parser.PdfInt
 import io.github.yuroyami.kitepdf.core.parser.PdfName
+import io.github.yuroyami.kitepdf.core.parser.PdfObject
 import io.github.yuroyami.kitepdf.core.parser.PdfReal
+import io.github.yuroyami.kitepdf.core.parser.PdfReference
 import io.github.yuroyami.kitepdf.core.parser.PdfStream
 
 /**
@@ -74,26 +76,43 @@ public data class ExtGState(
             )
         }
 
-        private fun parseSoftMask(value: Any?, refs: IndirectResolver): SoftMask? {
-            return when (value) {
-                is PdfName -> if (value.value == "None") SoftMask.None else null
+        private fun parseSoftMask(value: PdfObject?, refs: IndirectResolver): SoftMask? {
+            // The mask dictionary may be an indirect object (ISO 32000-1, 7.3.10).
+            return when (val mask = deref(value, refs)) {
+                is PdfName -> if (mask.value == "None") SoftMask.None else null
                 is PdfDictionary -> {
-                    val subtype = value.getName("S") ?: "Luminosity"
-                    val groupObj = value["G"]
-                    val groupStream = when (groupObj) {
-                        is PdfStream -> groupObj
-                        is io.github.yuroyami.kitepdf.core.parser.PdfReference ->
-                            (refs.resolve(groupObj) as? PdfStream)
-                        else -> null
-                    }
+                    val subtype = mask.getName("S") ?: "Luminosity"
+                    val groupStream = deref(mask["G"], refs) as? PdfStream
                     groupStream?.let {
                         val kind = if (subtype == "Alpha") SoftMask.Kind.Alpha else SoftMask.Kind.Luminosity
-                        SoftMask.MaskGroup(kind, it)
+                        // /BC and /TR (ISO 32000-1, 11.6.5.2, Table 144, #68).
+                        val backdrop = (deref(mask["BC"], refs) as? PdfArray)?.map { c ->
+                            when (val n = deref(c, refs)) {
+                                is PdfInt -> n.value.toDouble()
+                                is PdfReal -> n.value
+                                else -> 0.0
+                            }
+                        }
+                        SoftMask.MaskGroup(kind, it, backdrop, parseTransfer(mask["TR"], refs))
                     }
                 }
                 else -> null
             }
         }
+
+        /**
+         * The /TR function of a soft mask, or null for the identity. The name /Identity and a
+         * function without exactly one output both mean the identity (ISO 32000-1, Table 144).
+         */
+        private fun parseTransfer(value: PdfObject?, refs: IndirectResolver): KiteFunction? {
+            val resolved = deref(value, refs) ?: return null
+            if (resolved is PdfName) return null
+            return KiteFunction.parse(resolved, refs)?.takeIf { it.outputCount == 1 }
+        }
+
+        /** [value], or the object it refers to. A reference to a missing object reads as null. */
+        private fun deref(value: PdfObject?, refs: IndirectResolver): PdfObject? =
+            if (value is PdfReference) refs.resolve(value) else value
     }
 }
 
@@ -104,6 +123,21 @@ public data class ExtGState(
  */
 public sealed class SoftMask {
     public object None : SoftMask()
-    public data class MaskGroup(val kind: Kind, val group: PdfStream) : SoftMask()
+
+    /**
+     * A mask made from the transparency group [group] (ISO 32000-1, 11.6.5.2, Table 144).
+     *
+     * @property backdrop The /BC components: the colour, in the colour space of the group,
+     *   that a luminosity mask composites the group over. Null means black.
+     * @property transfer The /TR function that maps each value of the group, its alpha or
+     *   its luminosity, to the mask value. Null means the identity.
+     */
+    public data class MaskGroup(
+        val kind: Kind,
+        val group: PdfStream,
+        val backdrop: List<Double>? = null,
+        val transfer: KiteFunction? = null,
+    ) : SoftMask()
+
     public enum class Kind { Luminosity, Alpha }
 }
