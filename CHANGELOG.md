@@ -227,6 +227,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   pen of the mean scale, so a chart stretched to fit drew its vertical lines too thin
   and its horizontal lines too thick. Dash lengths now stretch with the matrix too.
   The new `strokePen` and `KiteMatrix.keepsCircles` hold the rule (#108).
+- `onPageRendered` fires once for each fresh page bitmap. It could fire twice for one
+  bitmap when the raster finished just as the viewer started to watch for it, which
+  happens more often on a busy machine (#229).
 
 ## [0.10.0] - 2026-09-13
 

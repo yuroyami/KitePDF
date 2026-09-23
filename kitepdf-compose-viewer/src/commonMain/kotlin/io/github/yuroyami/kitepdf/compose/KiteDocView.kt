@@ -841,9 +841,7 @@ private fun KitePageRaster(
     // frame visible across a re-raster), so the placeholder→page hand-off and any
     // crisp-zoom refresh read as a smooth dissolve rather than a flash.
     // onPageRendered fires only on FRESH rasterization, never on cache hits.
-    LaunchedEffect(rastered) {
-        rastered?.let { (bmp, fresh) -> if (fresh) onRendered?.invoke(pageIndex, bmp) }
-    }
+    ReportFreshRaster(rastered) { bmp -> onRendered?.invoke(pageIndex, bmp) }
     Crossfade(
         targetState = bitmap,
         animationSpec = tween(durationMillis = PAGE_FADE_MS),
@@ -862,6 +860,19 @@ private fun KitePageRaster(
         } else {
             Box(Modifier.fillMaxSize().background(colors.pageBackground))
         }
+    }
+}
+
+/**
+ * Calls [report] once for each fresh bitmap in [rastered]. The effect reads the value
+ * it is keyed on, not the live state. A raster that lands while the effect for the old
+ * value starts would otherwise be reported by that effect and again by the effect for
+ * the new value (#229).
+ */
+@Composable
+internal fun ReportFreshRaster(rastered: Pair<ImageBitmap, Boolean>?, report: (ImageBitmap) -> Unit) {
+    LaunchedEffect(rastered) {
+        rastered?.let { (bmp, fresh) -> if (fresh) report(bmp) }
     }
 }
 
