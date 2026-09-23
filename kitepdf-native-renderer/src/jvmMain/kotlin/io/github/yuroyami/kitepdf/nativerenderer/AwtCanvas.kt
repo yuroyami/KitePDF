@@ -259,6 +259,22 @@ public class AwtCanvas(private var g: Graphics2D) : KiteCanvas {
         val fractions = FloatArray(stops.offsets.size) { stops.offsets[it].toFloat() }
         val colors = Array(stops.colors.size) { stops.colors[it].toAwt() }
 
+        // The gradient is built in shading space and the CTM maps it as a whole, so a
+        // non-uniform or skewed CTM turns circles into ellipses and tilts the bands
+        // (ISO 32000-1, 8.7.4.5.3 and 8.7.4.5.4). A CTM without an inverse paints nothing.
+        val toDevice = AffineTransform(ctm.a, ctm.b, ctm.c, ctm.d, ctm.e, ctm.f)
+        val det = toDevice.determinant
+        if (det == 0.0 || !det.isFinite()) return
+        val toShading = toDevice.createInverse()
+
+        // Base fill region: the caller's shading clip path, else the device clip.
+        val region: java.awt.Shape = if (clipPath != null) {
+            toAwtPath(clipPath, ctm).apply { windingRule = Path2D.WIND_NON_ZERO }
+        } else {
+            g.clipBounds ?: java.awt.Rectangle(0, 0, 10_000, 10_000)
+        }
+        val box = region.bounds2D
+
         // AWT gradients only offer NO_CYCLE, which *clamps*: it always extends
         // the endpoint colours to infinity. PDF's `Extend [s e]` may forbid that on
         // either side. When a side isn't extended we intersect the fill region with
@@ -267,17 +283,18 @@ public class AwtCanvas(private var g: Graphics2D) : KiteCanvas {
 
         val paint: java.awt.Paint = when (shading) {
             is KiteShading.Axial -> {
-                val x0 = ctm.transformX(shading.coords[0], shading.coords[1])
-                val y0 = ctm.transformY(shading.coords[0], shading.coords[1])
-                val x1 = ctm.transformX(shading.coords[2], shading.coords[3])
-                val y1 = ctm.transformY(shading.coords[2], shading.coords[3])
+                val (x0, y0, x1, y1) = shading.coords
+                if (x0 == x1 && y0 == y1) return
                 if (!shading.extendStart || !shading.extendEnd) {
-                    extentClip = axialExtent(x0, y0, x1, y1, shading.extendStart, shading.extendEnd)
+                    val reach = reachOf(box, toShading, x0, y0)
+                    extentClip = axialExtent(x0, y0, x1, y1, shading.extendStart, shading.extendEnd, reach)
+                        .createTransformedArea(toDevice)
                 }
                 LinearGradientPaint(
                     Point2D.Double(x0, y0), Point2D.Double(x1, y1),
                     fractions, colors,
                     MultipleGradientPaint.CycleMethod.NO_CYCLE,
+                    MultipleGradientPaint.ColorSpaceType.SRGB, toDevice,
                 )
             }
             is KiteShading.Radial -> {
@@ -286,17 +303,18 @@ public class AwtCanvas(private var g: Graphics2D) : KiteCanvas {
                 // exact when the inner radius is 0 (point→circle). Use the larger
                 // circle as the bounding one and the smaller circle's centre as the
                 // focus, reversing the colours when circle0 is the larger.
-                val sc = kotlin.math.sqrt(ctm.a * ctm.a + ctm.b * ctm.b)
-                val ax = ctm.transformX(shading.coords[0], shading.coords[1])
-                val ay = ctm.transformY(shading.coords[0], shading.coords[1])
-                val ar = shading.coords[2] * sc
-                val bx = ctm.transformX(shading.coords[3], shading.coords[4])
-                val by = ctm.transformY(shading.coords[3], shading.coords[4])
-                val br = shading.coords[5] * sc
+                val ax = shading.coords[0]
+                val ay = shading.coords[1]
+                val ar = shading.coords[2]
+                val bx = shading.coords[3]
+                val by = shading.coords[4]
+                val br = shading.coords[5]
                 val outerIsB = br >= ar
                 val cx = if (outerIsB) bx else ax
                 val cy = if (outerIsB) by else ay
-                val radius = (if (outerIsB) br else ar).toFloat().coerceAtLeast(0.1f)
+                // At least a tenth of a device pixel, measured in shading space.
+                val minRadius = 0.1 / kotlin.math.sqrt(kotlin.math.abs(det))
+                val radius = (if (outerIsB) br else ar).coerceAtLeast(minRadius)
                 var fx = if (outerIsB) ax else bx
                 var fy = if (outerIsB) ay else by
                 // Focus must lie inside the bounding circle for AWT.
@@ -315,14 +333,16 @@ public class AwtCanvas(private var g: Graphics2D) : KiteCanvas {
                 val innerR = (if (outerIsB) ar else br).coerceAtLeast(0.0)
                 if (!outerExtend || !innerExtend) {
                     extentClip = radialExtent(
-                        cx, cy, radius.toDouble(), outerExtend,
+                        cx, cy, radius, outerExtend,
                         innerCx, innerCy, innerR, innerExtend,
-                    )
+                        reachOf(box, toShading, cx, cy),
+                    ).createTransformedArea(toDevice)
                 }
                 RadialGradientPaint(
-                    Point2D.Double(cx, cy), radius, Point2D.Double(fx, fy),
+                    Point2D.Double(cx, cy), radius.toFloat(), Point2D.Double(fx, fy),
                     fractions, cols,
                     MultipleGradientPaint.CycleMethod.NO_CYCLE,
+                    MultipleGradientPaint.ColorSpaceType.SRGB, toDevice,
                 )
             }
             is KiteShading.Unsupported -> return
@@ -332,12 +352,6 @@ public class AwtCanvas(private var g: Graphics2D) : KiteCanvas {
         val extent = extentClip
         withComposite(blendMode, alpha) {
             g.paint = paint
-            // Base fill region: the caller's shading clip path, else the device clip.
-            val region: java.awt.Shape = if (clipPath != null) {
-                toAwtPath(clipPath, ctm).apply { windingRule = Path2D.WIND_NON_ZERO }
-            } else {
-                g.clipBounds ?: java.awt.Rectangle(0, 0, 10_000, 10_000)
-            }
             if (extent != null) {
                 // Honour Extend=false: paint only inside the gradient's extent.
                 val area = java.awt.geom.Area(region)
@@ -349,29 +363,39 @@ public class AwtCanvas(private var g: Graphics2D) : KiteCanvas {
         }
     }
 
+    /** A distance in shading space from ([x], [y]) that reaches every corner of the device [box]. */
+    private fun reachOf(box: Rectangle2D, toShading: AffineTransform, x: Double, y: Double): Double {
+        var reach = 0.0
+        val corner = Point2D.Double()
+        for (cx in doubleArrayOf(box.minX, box.maxX)) for (cy in doubleArrayOf(box.minY, box.maxY)) {
+            corner.setLocation(cx, cy)
+            toShading.transform(corner, corner)
+            reach = maxOf(reach, kotlin.math.hypot(corner.x - x, corner.y - y))
+        }
+        return reach + 1.0
+    }
+
     /**
-     * Extent region for an axial gradient with [Extend] false on one/both ends.
-     * Builds the half-plane band bounded by the perpendiculars through P0 and P1,
-     * extended sideways to cover any plausible device area. A side that IS extended
-     * is left unbounded (the band runs to +/- a large distance there).
+     * Extent region for an axial gradient with [Extend] false on one/both ends, in
+     * shading space. Builds the band bounded by the perpendiculars through P0 and P1,
+     * [reach] wide on each side. A side that IS extended runs [reach] past its end.
      */
     private fun axialExtent(
         x0: Double, y0: Double, x1: Double, y1: Double,
-        extendStart: Boolean, extendEnd: Boolean,
+        extendStart: Boolean, extendEnd: Boolean, reach: Double,
     ): java.awt.geom.Area {
         val dx = x1 - x0; val dy = y1 - y0
         val len = kotlin.math.sqrt(dx * dx + dy * dy)
-        val big = 1.0e6
         if (len < 1e-9) {
             // Degenerate axis: nothing sensible to bound, so allow everything.
-            return java.awt.geom.Area(java.awt.geom.Rectangle2D.Double(-big, -big, 2 * big, 2 * big))
+            return java.awt.geom.Area(java.awt.geom.Rectangle2D.Double(x0 - reach, y0 - reach, 2 * reach, 2 * reach))
         }
         val ux = dx / len; val uy = dy / len            // axis unit vector (P0→P1)
         val px = -uy; val py = ux                        // perpendicular unit vector
-        // Along-axis start/end offsets from P0: extended sides run out to `big`.
-        val s0 = if (extendStart) -big else 0.0
-        val s1 = if (extendEnd) len + big else len
-        val hw = big                                     // perpendicular half-width
+        // Along-axis start/end offsets from P0: extended sides run out to `reach`.
+        val s0 = if (extendStart) -reach else 0.0
+        val s1 = if (extendEnd) len + reach else len
+        val hw = reach                                   // perpendicular half-width
         fun pt(along: Double, side: Double) = Point2D.Double(
             x0 + ux * along + px * side,
             y0 + uy * along + py * side,
@@ -384,21 +408,18 @@ public class AwtCanvas(private var g: Graphics2D) : KiteCanvas {
     }
 
     /**
-     * Extent region for a radial gradient with [Extend] false on one/both ends.
-     * Starts from the outer disk (bounded when the outer end isn't extended, else a
-     * huge disk) and subtracts the inner disk when the inner end isn't extended.
+     * Extent region for a radial gradient with [Extend] false on one/both ends, in
+     * shading space. Starts from the outer disk (bounded when the outer end isn't
+     * extended, else a disk of radius [reach]) and subtracts the inner disk when the
+     * inner end isn't extended.
      */
     private fun radialExtent(
         outerCx: Double, outerCy: Double, outerR: Double, outerExtend: Boolean,
         innerCx: Double, innerCy: Double, innerR: Double, innerExtend: Boolean,
+        reach: Double,
     ): java.awt.geom.Area {
-        val big = 1.0e6
-        val outer = if (outerExtend) {
-            java.awt.geom.Ellipse2D.Double(outerCx - big, outerCy - big, 2 * big, 2 * big)
-        } else {
-            java.awt.geom.Ellipse2D.Double(outerCx - outerR, outerCy - outerR, 2 * outerR, 2 * outerR)
-        }
-        val area = java.awt.geom.Area(outer)
+        val r = if (outerExtend) maxOf(reach, outerR) else outerR
+        val area = java.awt.geom.Area(java.awt.geom.Ellipse2D.Double(outerCx - r, outerCy - r, 2 * r, 2 * r))
         if (!innerExtend && innerR > 0.0) {
             area.subtract(
                 java.awt.geom.Area(

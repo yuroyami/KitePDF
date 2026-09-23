@@ -304,6 +304,11 @@ public class CoreGraphicsCanvas(private val ctx: CGContextRef) : KiteCanvas {
     ) {
         if (paintComplexShading(shading, ctm, clipPath, alpha, blendMode)) return
         val stops = shading.sampleStops() ?: return
+        // The gradient is drawn in shading space under the whole CTM, so a non-uniform
+        // or skewed CTM turns circles into ellipses and tilts the bands (ISO 32000-1,
+        // 8.7.4.5.3 and 8.7.4.5.4). A CTM without an inverse paints nothing.
+        val det = ctm.a * ctm.d - ctm.b * ctm.c
+        if (det == 0.0 || !det.isFinite()) return
 
         CGContextSaveGState(ctx)
         try {
@@ -314,6 +319,7 @@ public class CoreGraphicsCanvas(private val ctx: CGContextRef) : KiteCanvas {
                 buildPath(clipPath, ctm)
                 CGContextClip(ctx)
             }
+            CGContextConcatCTM(ctx, ctm.toCGAffine())
 
             val space = CGColorSpaceCreateDeviceRGB()
             try {
@@ -336,25 +342,19 @@ public class CoreGraphicsCanvas(private val ctx: CGContextRef) : KiteCanvas {
                             kCGGradientDrawsBeforeStartLocation or kCGGradientDrawsAfterEndLocation
                         when (shading) {
                             is KiteShading.Axial -> {
-                                val x0 = ctm.transformX(shading.coords[0], shading.coords[1])
-                                val y0 = ctm.transformY(shading.coords[0], shading.coords[1])
-                                val x1 = ctm.transformX(shading.coords[2], shading.coords[3])
-                                val y1 = ctm.transformY(shading.coords[2], shading.coords[3])
-                                val start = cValue<CGPoint> { x = x0; y = y0 }
-                                val end = cValue<CGPoint> { x = x1; y = y1 }
+                                val c = shading.coords
+                                val start = cValue<CGPoint> { x = c[0]; y = c[1] }
+                                val end = cValue<CGPoint> { x = c[2]; y = c[3] }
                                 CGContextDrawLinearGradient(ctx, gradient, start, end, drawOpts)
                             }
                             is KiteShading.Radial -> {
                                 // True PDF two-circle radial. Core Graphics takes both circles.
-                                val sc = kotlin.math.sqrt(ctm.a * ctm.a + ctm.b * ctm.b)
-                                val x0 = ctm.transformX(shading.coords[0], shading.coords[1])
-                                val y0 = ctm.transformY(shading.coords[0], shading.coords[1])
-                                val r0 = (shading.coords[2] * sc).coerceAtLeast(0.0)
-                                val x1 = ctm.transformX(shading.coords[3], shading.coords[4])
-                                val y1 = ctm.transformY(shading.coords[3], shading.coords[4])
-                                val r1 = (shading.coords[5] * sc).coerceAtLeast(0.1)
-                                val startC = cValue<CGPoint> { x = x0; y = y0 }
-                                val endC = cValue<CGPoint> { x = x1; y = y1 }
+                                // The outer radius is at least a tenth of a device pixel.
+                                val c = shading.coords
+                                val r0 = c[2].coerceAtLeast(0.0)
+                                val r1 = c[5].coerceAtLeast(0.1 / kotlin.math.sqrt(kotlin.math.abs(det)))
+                                val startC = cValue<CGPoint> { x = c[0]; y = c[1] }
+                                val endC = cValue<CGPoint> { x = c[3]; y = c[4] }
                                 CGContextDrawRadialGradient(
                                     ctx, gradient, startC, r0, endC, r1, drawOpts,
                                 )

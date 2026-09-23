@@ -37,6 +37,7 @@ import io.github.yuroyami.kitepdf.core.KiteRectangle
 import io.github.yuroyami.kitepdf.core.render.RgbColor
 import io.github.yuroyami.kitepdf.core.render.SoftMask
 import io.github.yuroyami.kitepdf.core.render.sampleStops
+import kotlin.math.abs
 import kotlin.math.atan2
 import kotlin.math.sqrt
 
@@ -371,17 +372,19 @@ public class ComposeCanvas(
         val composeStops = stops.offsets.mapIndexed { i, off ->
             off.toFloat() to stops.colors[i].toCompose()
         }.toTypedArray()
+        // The gradient is built and drawn in shading space under the whole CTM, so a
+        // non-uniform or skewed CTM turns circles into ellipses and tilts the bands
+        // (ISO 32000-1, 8.7.4.5.3 and 8.7.4.5.4). A CTM without an inverse paints nothing.
+        val det = ctm.a * ctm.d - ctm.b * ctm.c
+        if (det == 0.0 || !det.isFinite()) return
 
         val brush: Brush = when (shading) {
             is KiteShading.Axial -> {
-                val x0 = ctm.transformX(shading.coords[0], shading.coords[1])
-                val y0 = ctm.transformY(shading.coords[0], shading.coords[1])
-                val x1 = ctm.transformX(shading.coords[2], shading.coords[3])
-                val y1 = ctm.transformY(shading.coords[2], shading.coords[3])
+                val c = shading.coords
                 Brush.linearGradient(
                     colorStops = composeStops,
-                    start = Offset(x0.toFloat(), y0.toFloat()),
-                    end = Offset(x1.toFloat(), y1.toFloat()),
+                    start = Offset(c[0].toFloat(), c[1].toFloat()),
+                    end = Offset(c[2].toFloat(), c[3].toFloat()),
                 )
             }
             is KiteShading.Radial -> {
@@ -389,14 +392,12 @@ public class ComposeCanvas(
                 // The inner circle (concentric or offset) is approximated; PDF's
                 // two-circle radial gradient is richer than Compose's, but for
                 // most real-world shadings the difference is sub-pixel.
-                val cx = ctm.transformX(shading.coords[3], shading.coords[4])
-                val cy = ctm.transformY(shading.coords[3], shading.coords[4])
-                val rScale = sqrt(ctm.a * ctm.a + ctm.b * ctm.b)
-                val radius = (shading.coords[5] * rScale).toFloat()
+                // The radius is at least a tenth of a device pixel.
+                val c = shading.coords
                 Brush.radialGradient(
                     colorStops = composeStops,
-                    center = Offset(cx.toFloat(), cy.toFloat()),
-                    radius = if (radius <= 0f) 1f else radius,
+                    center = Offset(c[3].toFloat(), c[4].toFloat()),
+                    radius = c[5].coerceAtLeast(0.1 / sqrt(abs(det))).toFloat(),
                 )
             }
             is KiteShading.Unsupported -> {
@@ -410,15 +411,24 @@ public class ComposeCanvas(
             else -> return // complex shading types already handled by paintComplexShading
         }
 
+        // Without a region the shading covers the whole canvas (the `sh` operator), taken back into shading space.
+        val region = clipPath ?: KitePath.Builder().apply {
+            val w = drawScope.size.width.toDouble()
+            val h = drawScope.size.height.toDouble()
+            fun corner(x: Double, y: Double, first: Boolean) {
+                val sx = (ctm.d * (x - ctm.e) - ctm.c * (y - ctm.f)) / det
+                val sy = (ctm.a * (y - ctm.f) - ctm.b * (x - ctm.e)) / det
+                if (first) moveTo(sx, sy) else lineTo(sx, sy)
+            }
+            corner(0.0, 0.0, true); corner(w, 0.0, false); corner(w, h, false); corner(0.0, h, false)
+            close()
+        }.build()
         withActiveClips {
             val composeBlend = blendMode.toCompose()
             val a = alpha.toFloat().coerceIn(0f, 1f)
-            if (clipPath != null) {
-                val cp = toComposePath(clipPath, ctm).apply { fillType = PathFillType.NonZero }
-                drawScope.drawPath(cp, brush = brush, alpha = a, blendMode = composeBlend)
-            } else {
-                // Page-area shading (the `sh` operator): paint the whole canvas.
-                drawScope.drawRect(brush = brush, alpha = a, blendMode = composeBlend)
+            drawScope.withTransform({ transform(ctm.toComposeMatrix()) }) {
+                val cp = toComposePath(region, KiteMatrix.IDENTITY).apply { fillType = PathFillType.NonZero }
+                drawPath(cp, brush = brush, alpha = a, blendMode = composeBlend)
             }
         }
     }
@@ -495,15 +505,8 @@ public class ComposeCanvas(
         // shear survive. The unit-square mapping matches Skia: translate up
         // one unit and flip Y, so bitmap row 0 lands on the square's top
         // edge (v = 1).
-        val m = androidx.compose.ui.graphics.Matrix()
-        m.values[androidx.compose.ui.graphics.Matrix.ScaleX] = ctm.a.toFloat()
-        m.values[androidx.compose.ui.graphics.Matrix.SkewY] = ctm.b.toFloat()
-        m.values[androidx.compose.ui.graphics.Matrix.SkewX] = ctm.c.toFloat()
-        m.values[androidx.compose.ui.graphics.Matrix.ScaleY] = ctm.d.toFloat()
-        m.values[androidx.compose.ui.graphics.Matrix.TranslateX] = ctm.e.toFloat()
-        m.values[androidx.compose.ui.graphics.Matrix.TranslateY] = ctm.f.toFloat()
         drawScope.withTransform({
-            transform(m)
+            transform(ctm.toComposeMatrix())
             translate(0f, 1f)
             scale(1f / bitmap.width, -1f / bitmap.height, pivot = Offset.Zero)
         }) {
@@ -593,6 +596,18 @@ public class ComposeCanvas(
         drawScope.clipPath(frame.path) {
             applyClipsThen(index + 1, block)
         }
+    }
+
+    /** This matrix as a Compose matrix, rotation, reflection and shear included. */
+    private fun KiteMatrix.toComposeMatrix(): androidx.compose.ui.graphics.Matrix {
+        val m = androidx.compose.ui.graphics.Matrix()
+        m.values[androidx.compose.ui.graphics.Matrix.ScaleX] = a.toFloat()
+        m.values[androidx.compose.ui.graphics.Matrix.SkewY] = b.toFloat()
+        m.values[androidx.compose.ui.graphics.Matrix.SkewX] = c.toFloat()
+        m.values[androidx.compose.ui.graphics.Matrix.ScaleY] = d.toFloat()
+        m.values[androidx.compose.ui.graphics.Matrix.TranslateX] = e.toFloat()
+        m.values[androidx.compose.ui.graphics.Matrix.TranslateY] = f.toFloat()
+        return m
     }
 
     private fun toComposePath(src: KitePath, ctm: KiteMatrix): Path {

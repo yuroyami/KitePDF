@@ -162,6 +162,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - An SVG shape filled with a gradient shows the gradient inside the shape. The
   shape was transformed twice, so the gradient painted far from the shape, or off
   the page, and the shape stayed empty (#283).
+- Axial and radial shadings keep their shape under a non-uniform or skewed
+  transformation on every backend. A stretched radial shading drew circles instead
+  of ellipses, and a skewed axial shading drew its bands at the wrong angle (#69).
 
 ## [0.10.0] - 2026-09-13
 

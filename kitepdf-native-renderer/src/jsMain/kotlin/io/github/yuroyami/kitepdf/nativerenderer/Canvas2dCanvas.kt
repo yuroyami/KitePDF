@@ -222,25 +222,23 @@ public class Canvas2dCanvas(private val ctx: CanvasRenderingContext2D) : KiteCan
     ) {
         if (paintComplexShading(shading, ctm, clipPath, alpha, blendMode)) return
         val stops = shading.sampleStops() ?: return
+        // The gradient is built and filled in shading space under the whole CTM, so a
+        // non-uniform or skewed CTM turns circles into ellipses and tilts the bands
+        // (ISO 32000-1, 8.7.4.5.3 and 8.7.4.5.4). A CTM without an inverse paints nothing.
+        val det = ctm.a * ctm.d - ctm.b * ctm.c
+        if (det == 0.0 || !det.isFinite()) return
 
         val gradient = when (shading) {
             is KiteShading.Axial -> {
-                val x0 = ctm.transformX(shading.coords[0], shading.coords[1])
-                val y0 = ctm.transformY(shading.coords[0], shading.coords[1])
-                val x1 = ctm.transformX(shading.coords[2], shading.coords[3])
-                val y1 = ctm.transformY(shading.coords[2], shading.coords[3])
-                ctx.createLinearGradient(x0, y0, x1, y1)
+                val c = shading.coords
+                ctx.createLinearGradient(c[0], c[1], c[2], c[3])
             }
             is KiteShading.Radial -> {
                 // True PDF two-circle radial. Canvas2D supports both circles.
-                val sc = kotlin.math.sqrt(ctm.a * ctm.a + ctm.b * ctm.b)
-                val x0 = ctm.transformX(shading.coords[0], shading.coords[1])
-                val y0 = ctm.transformY(shading.coords[0], shading.coords[1])
-                val r0 = (shading.coords[2] * sc).coerceAtLeast(0.0)
-                val x1 = ctm.transformX(shading.coords[3], shading.coords[4])
-                val y1 = ctm.transformY(shading.coords[3], shading.coords[4])
-                val r1 = (shading.coords[5] * sc).coerceAtLeast(0.1)
-                ctx.createRadialGradient(x0, y0, r0, x1, y1, r1)
+                // The outer radius is at least a tenth of a device pixel.
+                val c = shading.coords
+                val minRadius = 0.1 / kotlin.math.sqrt(kotlin.math.abs(det))
+                ctx.createRadialGradient(c[0], c[1], c[2].coerceAtLeast(0.0), c[3], c[4], c[5].coerceAtLeast(minRadius))
             }
             is KiteShading.Unsupported -> return
             else -> return // complex shading types already handled by paintComplexShading
@@ -251,14 +249,22 @@ public class Canvas2dCanvas(private val ctx: CanvasRenderingContext2D) : KiteCan
 
         ctx.save()
         try {
+            ctx.setTransform(ctm.a, ctm.b, ctm.c, ctm.d, ctm.e, ctm.f)
             ctx.fillStyle = gradient
             ctx.globalCompositeOperation = blendMode.toCanvas()
-            if (clipPath != null) {
-                val p = toPath2D(clipPath, ctm)
-                ctx.asDynamic().fill(p, "nonzero")
-            } else {
-                ctx.fillRect(0.0, 0.0, ctx.canvas.width.toDouble(), ctx.canvas.height.toDouble())
-            }
+            // Without a region the shading covers the whole canvas, taken back into shading space.
+            val region = clipPath ?: KitePath.Builder().apply {
+                val w = ctx.canvas.width.toDouble()
+                val h = ctx.canvas.height.toDouble()
+                fun corner(x: Double, y: Double, first: Boolean) {
+                    val sx = (ctm.d * (x - ctm.e) - ctm.c * (y - ctm.f)) / det
+                    val sy = (ctm.a * (y - ctm.f) - ctm.b * (x - ctm.e)) / det
+                    if (first) moveTo(sx, sy) else lineTo(sx, sy)
+                }
+                corner(0.0, 0.0, true); corner(w, 0.0, false); corner(w, h, false); corner(0.0, h, false)
+                close()
+            }.build()
+            ctx.asDynamic().fill(toPath2D(region, KiteMatrix.IDENTITY), "nonzero")
         } finally {
             ctx.restore()
         }

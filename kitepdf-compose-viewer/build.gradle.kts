@@ -87,6 +87,7 @@ kotlin {
 
         jvmTest.dependencies {
             implementation(currentOsSkikoRuntime())
+            implementation(projects.kitepdfDifftest)
         }
     }
 }
