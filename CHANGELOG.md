@@ -299,6 +299,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   mesh with a `/Function` blends the parametric value and then looks it up, as
   ISO 32000-1, 8.7.4.5.5 requires. `KiteShading.PatchMesh` holds `MeshPatch`
   control points in place of `FlatQuad` cells (#196).
+- AWT anti-aliases the edges of a clip path, as MuPDF, Skia and Compose do. A
+  gradient, an image, a mesh or a pattern stroke inside a curved clip had jagged
+  edges, and so did text in a clipping render mode. A rectangular clip keeps every
+  whole pixel that it touches, as in MuPDF (#285).
 
 ## [0.10.0] - 2026-09-13
 

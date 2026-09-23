@@ -42,6 +42,16 @@ object GradientFixtures {
         patternStroke("stroke-pattern-dashed-round", "10 w 1 J 1 j [20 15] 0 d 30 40 m 100 170 l 170 40 l S", budget = 0.005),
         // Glyph edges lie on whole points, so a 4-point stroke has whole-pixel edges at 72 dpi.
         patternText("text-stroke-shading-pattern", "/Pattern CS /P1 SCN 4 w BT 1 Tr /F1 60 Tf 20 80 Td (AAA) Tj ET", budget = 0.005),
+        // A 3-point stroke has its edges on half pixels, so the clip of the stroke cuts through
+        // pixels, and each edge pixel is half covered (#285).
+        patternText("text-stroke-shading-pattern-half-pixel", "/Pattern CS /P1 SCN 3 w BT 1 Tr /F1 60 Tf 20 80 Td (AAA) Tj ET", budget = 0.005),
+        // A shading painted with `sh` inside a circular clip path.
+        oracleFixture(
+            "axial-in-circle-clip",
+            "q 170 100 m 170 138.66 138.66 170 100 170 c 61.34 170 30 138.66 30 100 c " +
+                "30 61.34 61.34 30 100 30 c 138.66 30 170 61.34 170 100 c W n /Sh1 sh Q",
+            "/Shading << /Sh1 5 0 R >>", listOf(axial("0 0 200 0").toByteArray()), budget = 0.005,
+        ),
         // A tensor-product patch whose interior points pull its middle towards the top right
         // corner. A renderer that reads it as a Coons patch draws the colours in other places (#196).
         mesh("mesh-tensor-interior", "q 0 0 200 200 re W n /Sh1 sh Q", "", tensorPatch(), budget = 0.005),

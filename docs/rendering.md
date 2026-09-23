@@ -398,6 +398,15 @@ Every backend gives a thin stroke the same weight, so a page looks the same on e
 
 MuPDF also draws a width of 0 at a fifth of a pixel, so a zero-width line is darker here than in `mutool draw`. In the Compose viewer, `hairlineWidthPx` sets the width of a zero-width stroke (see [Compose viewer](compose-viewer.md)).
 
+## Clip edges on AWT
+
+Java2D does not anti-alias a clip. So the AWT backend applies a clip path the way MuPDF does:
+
+- A rectangular clip keeps every whole pixel that the rectangle touches.
+- Any other clip path sends the paints inside it to a layer. When the clip ends, the layer composites onto the page through the anti-aliased coverage of the path.
+
+A gradient, an image or a pattern stroke inside a curved clip therefore has smooth edges, as in `mutool draw`. Each curved clip costs one layer the size of the clip, so a page with hundreds of curved clips renders more slowly than a page with rectangular clips.
+
 ## Performance tips
 
 - **Scale parameter:** A page rendered at `scale = 0.5` is 4x faster and uses 4x less memory than `scale = 1.0` (area scales quadratically).
