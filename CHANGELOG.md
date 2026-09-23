@@ -201,6 +201,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   row of icons, converts to a platform bitmap once instead of once per draw. On AWT,
   a page that stamps one image 32 times renders in 1.9 ms instead of 25 ms. Each
   canvas keeps at most 16 MB of these bitmaps (#117).
+- AWT applies the constant alpha and blend mode of a transparency group once, to
+  the whole group. The first paint in a group replaced the group's settings, so a
+  half-transparent logo or shadow drew fully opaque and a Multiply group drew as
+  a normal paint (#77).
 
 ## [0.10.0] - 2026-09-13
 

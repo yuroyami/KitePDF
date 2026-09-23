@@ -66,7 +66,7 @@ public class AwtCanvas(private var g: Graphics2D) : KiteCanvas {
 
     /** Clips and transparency groups keep separate stacks, so interleaving them cannot restore the wrong state (#138). */
     private val clipStack = ArrayDeque<java.awt.Shape?>()
-    private val groupStack = ArrayDeque<java.awt.Composite>()
+    private val groupStack = ArrayDeque<GroupFrame>()
     private var openLayers = 0
 
     init {
@@ -77,17 +77,16 @@ public class AwtCanvas(private var g: Graphics2D) : KiteCanvas {
 
     override fun beginPage(widthPt: Double, heightPt: Double, deviceCtm: KiteMatrix) {
         // The host owns the Graphics; we don't clear.
+        while (groupStack.isNotEmpty()) endTransparencyGroup()
         clipStack.clear()
-        groupStack.clear()
         openLayers = 0
     }
 
     override fun endPage() {
-        // Roll back any leftover clips and groups (defensive).
+        // Close any group left open, then roll back leftover clips (defensive).
+        while (groupStack.isNotEmpty()) endTransparencyGroup()
         if (clipStack.isNotEmpty()) g.clip = clipStack.first()
-        if (groupStack.isNotEmpty()) g.composite = groupStack.first()
         clipStack.clear()
-        groupStack.clear()
     }
 
     override fun fillPath(
@@ -568,30 +567,107 @@ public class AwtCanvas(private var g: Graphics2D) : KiteCanvas {
     }
 
     override fun popClip() {
-        if (clipStack.isNotEmpty()) g.clip = clipStack.removeLast()
+        if (clipStack.isNotEmpty()) {
+            g.clip = clipStack.removeLast()
+            return
+        }
+        // A clip pushed before the open group: pop it on the graphics it was pushed on (#138).
+        val frame = groupStack.lastOrNull { it.savedClips.isNotEmpty() } ?: return
+        frame.parent.clip = frame.savedClips.removeLast()
     }
 
     /**
-     * Open an offscreen layer for transparency-group compositing. Java2D has
-     * no built-in saveLayer like Skia, so we manually pixel-render into a
-     * BufferedImage and blit it back when the group ends.
+     * An open transparency group. A group with a constant alpha below 1 or a blend
+     * mode other than Normal paints into its own [layer], which composites onto
+     * [parent] once when the group ends. Otherwise [layer] is null and the group
+     * paints straight onto [parent], which gives the same pixels.
+     */
+    private class GroupFrame(
+        val parent: Graphics2D,
+        val layer: BufferedImage?,
+        val bounds: java.awt.Rectangle,
+        val scale: Double,
+        val alpha: Float,
+        val blendMode: KiteBlendMode,
+        val savedClips: ArrayDeque<java.awt.Shape?>,
+        val savedBlends: LayerBlends?,
+    )
+
+    /**
+     * ISO 32000-1, 11.4.5: a group's constant alpha and blend mode apply once, when the
+     * group composites onto its backdrop. So a group that has them paints into a
+     * transparent layer first (#77). The layer is isolated, and knockout is not
+     * honoured (#125).
      */
     override fun beginTransparencyGroup(
         bbox: KiteRectangle, ctm: KiteMatrix,
         isolated: Boolean, knockout: Boolean,
         alpha: Double, blendMode: KiteBlendMode,
     ) {
-        // For Java2D, we approximate by setting the active composite + alpha
-        // and pushing them on the save stack. True saveLayer semantics (so
-        // intermediate operations composite *then* blend) would need a
-        // separate BufferedImage. That's a follow-up for fidelity-sensitive
-        // PDFs; the alpha-only case (the common one) works here.
-        groupStack.addLast(g.composite)
-        g.composite = PdfBlendComposite(blendMode, alpha.toFloat().coerceIn(0f, 1f))
+        val parent = g
+        val a = alpha.toFloat().coerceIn(0f, 1f)
+        fun direct() = groupStack.addLast(GroupFrame(parent, null, java.awt.Rectangle(), 1.0, a, blendMode, ArrayDeque(), layerBlends))
+        if (a >= 1f && blendMode == KiteBlendMode.Normal) return direct()
+        val box = bbox.normalized()
+        val area = AffineTransform(parent.transform).apply {
+            concatenate(AffineTransform(ctm.a, ctm.b, ctm.c, ctm.d, ctm.e, ctm.f))
+        }.createTransformedShape(Rectangle2D.Double(box.left, box.bottom, box.width, box.height)).bounds2D
+        // Malformed geometry: paint the group straight onto the page.
+        if (!listOf(area.minX, area.minY, area.maxX, area.maxY).all { it.isFinite() }) return direct()
+        parent.clip?.let { clip ->
+            Rectangle2D.intersect(area, parent.transform.createTransformedShape(clip).bounds2D, area)
+        }
+        // Nothing of the group can show: its paints go to a layer that is never composited.
+        val bounds = if (area.isEmpty) java.awt.Rectangle(0, 0, 0, 0) else area.bounds
+        val pixels = bounds.width.toLong() * bounds.height
+        if (pixels > maskPixelBudget * UNBOUNDED_MASK_FACTOR) return direct()
+        // Past the raster budget the layer is drawn at a lower resolution, as a soft mask is (#264).
+        val scale = if (pixels > maskPixelBudget) kotlin.math.sqrt(maskPixelBudget.toDouble() / pixels) else 1.0
+        val layer = BufferedImage(
+            maxOf(1, kotlin.math.ceil(bounds.width * scale).toInt()),
+            maxOf(1, kotlin.math.ceil(bounds.height * scale).toInt()),
+            BufferedImage.TYPE_INT_ARGB,
+        )
+        val layerGraphics = layer.createGraphics()
+        layerGraphics.setRenderingHints(parent.renderingHints)
+        if (bounds.isEmpty) layerGraphics.clipRect(0, 0, 0, 0)
+        if (scale != 1.0) layerGraphics.scale(scale, scale)
+        layerGraphics.translate(-bounds.x.toDouble(), -bounds.y.toDouble())
+        layerGraphics.transform(parent.transform)
+        parent.clip?.let(layerGraphics::clip)
+        groupStack.addLast(GroupFrame(parent, layer, bounds, scale, a, blendMode, ArrayDeque(clipStack), layerBlends))
+        g = layerGraphics
+        clipStack.clear()
+        // The paints inside composite onto the layer, not onto a soft-masked layer outside.
+        layerBlends = null
     }
 
     override fun endTransparencyGroup() {
-        if (groupStack.isNotEmpty()) g.composite = groupStack.removeLast()
+        val frame = groupStack.removeLastOrNull() ?: return
+        val layer = frame.layer ?: return
+        val layerGraphics = g
+        g = frame.parent
+        clipStack.clear()
+        clipStack.addAll(frame.savedClips)
+        layerBlends = frame.savedBlends
+        layerGraphics.dispose()
+        if (frame.bounds.isEmpty) return
+        // The group composites as one paint with its own blend mode.
+        layerBlends?.record(frame.blendMode)
+        val target = g.create() as Graphics2D
+        try {
+            target.transform = AffineTransform()
+            target.composite = if (frame.blendMode == KiteBlendMode.Normal) AlphaComposite.SrcOver.derive(frame.alpha)
+                else PdfBlendComposite(frame.blendMode, frame.alpha)
+            if (frame.scale == 1.0) {
+                target.drawImage(layer, frame.bounds.x, frame.bounds.y, null)
+            } else {
+                target.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR)
+                target.drawImage(layer, frame.bounds.x, frame.bounds.y, frame.bounds.width, frame.bounds.height, null)
+            }
+        } finally {
+            target.dispose()
+        }
     }
 
     /**
