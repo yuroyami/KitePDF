@@ -205,6 +205,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the whole group. The first paint in a group replaced the group's settings, so a
   half-transparent logo or shadow drew fully opaque and a Multiply group drew as
   a normal paint (#77).
+- Text in a font that the document does not embed lands where the document puts
+  it on Skia and Compose. Skia drew each run with the widths of the host face, so
+  a line laid out to a fixed width ended far short of its place. Compose ignored
+  character and word spacing (#121).
 
 ## [0.10.0] - 2026-09-13
 

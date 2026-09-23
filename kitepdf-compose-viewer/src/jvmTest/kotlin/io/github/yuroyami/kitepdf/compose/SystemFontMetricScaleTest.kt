@@ -130,6 +130,25 @@ class SystemFontMetricScaleTest {
     private fun green(color: Int): Int = (color shr 8) and 0xFF
     private fun blue(color: Int): Int = color and 0xFF
 
+    private fun List<List<TextGlyph>>.texts() = map { piece -> piece.joinToString("") { it.text } }
+
+    @Test
+    fun a_run_without_spacing_stays_one_piece() {
+        assertEquals(listOf("Hello world"), spacedPieces(glyphs("Hello world", advanceWidth = 500.0)).texts())
+    }
+
+    @Test
+    fun word_spacing_cuts_the_run_around_each_space() {
+        val glyphs = glyphs("Hi there you", advanceWidth = 500.0).map { if (it.isWordSpace) it.copy(advanceAdjust = 20.0) else it }
+        assertEquals(listOf("Hi", " ", "there", " ", "you"), spacedPieces(glyphs).texts())
+    }
+
+    @Test
+    fun character_spacing_cuts_the_run_after_each_glyph() {
+        val glyphs = glyphs("abc", advanceWidth = 500.0).map { it.copy(advanceAdjust = 6.0) }
+        assertEquals(listOf("a", "b", "c"), spacedPieces(glyphs).texts())
+    }
+
     private fun glyphs(text: String, advanceWidth: Double): List<TextGlyph> =
         text.mapIndexed { index, character ->
             TextGlyph(

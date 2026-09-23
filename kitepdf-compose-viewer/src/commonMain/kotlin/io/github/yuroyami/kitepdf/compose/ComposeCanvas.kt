@@ -272,27 +272,35 @@ public class ComposeCanvas(
         // retry a few times (the window is a microsecond-scale map purge) and,
         // if the cache is truly hot, skip this run: one missing fallback-font
         // run on one page beats a dead app.
-        val layout = measureOrNull(text, style) ?: return
-        val metricScale = systemFontMetricScale(
-            glyphs = glyphs,
-            renderedSize = renderedSize,
-            measuredWidthPx = layout.multiParagraph.intrinsics.maxIntrinsicWidth.toDouble(),
-        )
-        val horizontalScale = if (sy != 0.0) {
-            (sx / sy).toFloat() * metricScale
-        } else {
-            metricScale
-        }
-
         drawScope.withTransform({
             translate(textMatrix.e.toFloat(), textMatrix.f.toFloat())
             if (rotationDegrees != 0f) rotate(rotationDegrees, pivot = Offset.Zero)
-            translate(0f, -layout.firstBaseline)
-            if (horizontalScale != 1f) {
-                scale(scaleX = horizontalScale, scaleY = 1f, pivot = Offset.Zero)
-            }
+            if (sy != 0.0 && sx != sy) scale(scaleX = (sx / sy).toFloat(), scaleY = 1f, pivot = Offset.Zero)
         }) {
-            drawText(textLayoutResult = layout, blendMode = blendMode.toCompose())
+            // Each piece starts where the document's own advances put it (ISO 32000-1, 9.4.4),
+            // character and word spacing included (#121). A piece of one glyph keeps the host
+            // face's shape, as on AWT and in MuPDF for a base-14 font. A longer piece is fitted
+            // to its document width, since its glyphs cannot be placed one by one.
+            var penX = 0.0
+            for (piece in spacedPieces(glyphs)) {
+                val pieceText = piece.joinToString("") { it.text }
+                if (pieceText.isNotBlank()) {
+                    val layout = measureOrNull(pieceText, style) ?: return@withTransform
+                    val metricScale = if (piece.size == 1) 1f else systemFontMetricScale(
+                        glyphs = piece,
+                        renderedSize = renderedSize,
+                        measuredWidthPx = layout.multiParagraph.intrinsics.maxIntrinsicWidth.toDouble(),
+                    )
+                    withTransform({
+                        translate(penX.toFloat(), -layout.firstBaseline)
+                        if (metricScale != 1f) scale(scaleX = metricScale, scaleY = 1f, pivot = Offset.Zero)
+                    }) {
+                        drawText(textLayoutResult = layout, blendMode = blendMode.toCompose())
+                    }
+                }
+                // renderedSize already carries sy, so the text-space adjustment needs it too.
+                penX += piece.sumOf { it.advanceWidth } * renderedSize / 1_000.0 + piece.last().advanceAdjust * sy
+            }
         }
     }
 
@@ -762,6 +770,29 @@ internal fun systemFontMetricScale(
     val scale = targetWidthPx / measuredWidthPx
     val floatScale = scale.toFloat()
     return if (floatScale.isFinite() && floatScale > 0f) floatScale else 1f
+}
+
+/**
+ * [glyphs] cut into pieces that each shape as one unit. A glyph that the document
+ * spaces after, by character or word spacing, ends its piece, and a spaced blank
+ * glyph is a piece of its own. A run without spacing stays one piece, which keeps
+ * its ligatures and combining marks.
+ */
+internal fun spacedPieces(glyphs: List<TextGlyph>): List<List<TextGlyph>> {
+    val pieces = ArrayList<List<TextGlyph>>()
+    var start = 0
+    for (i in glyphs.indices) {
+        val glyph = glyphs[i]
+        if (glyph.advanceAdjust == 0.0) continue
+        if (glyph.text.isBlank() && start < i) {
+            pieces += glyphs.subList(start, i)
+            start = i
+        }
+        pieces += glyphs.subList(start, i + 1)
+        start = i + 1
+    }
+    if (start < glyphs.size) pieces += glyphs.subList(start, glyphs.size)
+    return pieces
 }
 
 /**
