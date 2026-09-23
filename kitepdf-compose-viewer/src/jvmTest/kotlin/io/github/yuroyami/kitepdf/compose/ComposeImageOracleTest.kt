@@ -1,7 +1,7 @@
 package io.github.yuroyami.kitepdf.compose
 
-import io.github.yuroyami.kitepdf.difftest.GradientFixtures
 import io.github.yuroyami.kitepdf.difftest.ImageDiff
+import io.github.yuroyami.kitepdf.difftest.ImageFixtures
 import io.github.yuroyami.kitepdf.difftest.MuPdfOracle
 import java.io.File
 import org.junit.Assume.assumeTrue
@@ -10,16 +10,16 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 /**
- * Scores the Compose canvas on every [GradientFixtures] page against mutool,
- * each within its own budget. Skips without mutool.
+ * Scores the Compose canvas on every [ImageFixtures] page against mutool, each
+ * within its own budget. Skips without mutool.
  */
-class ComposeGradientOracleTest {
+class ComposeImageOracleTest {
 
     @Test
-    fun every_gradient_fixture_is_within_budget() {
+    fun every_image_fixture_is_within_budget() {
         assumeTrue("mutool not found, skipping.", MuPdfOracle.binary != null)
         val failures = ArrayList<String>()
-        for (f in GradientFixtures.all()) {
+        for (f in ImageFixtures.all()) {
             val kite = renderWithCompose(f.bytes)
             val pdf = File.createTempFile("kite-${f.name}", ".pdf").apply { deleteOnExit(); writeBytes(f.bytes) }
             val reference = assertNotNull(MuPdfOracle.render(pdf, page = 1, dpi = 72), "mutool rendered ${f.name}")

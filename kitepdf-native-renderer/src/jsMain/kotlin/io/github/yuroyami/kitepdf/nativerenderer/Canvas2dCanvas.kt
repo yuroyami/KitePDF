@@ -13,7 +13,9 @@ import io.github.yuroyami.kitepdf.core.render.KitePath
 import io.github.yuroyami.kitepdf.core.render.KiteShading
 import io.github.yuroyami.kitepdf.core.render.RgbColor
 import io.github.yuroyami.kitepdf.core.render.SoftMask
+import io.github.yuroyami.kitepdf.core.render.imageSampling
 import io.github.yuroyami.kitepdf.core.render.sampleStops
+import io.github.yuroyami.kitepdf.core.render.shrinkRgba
 import io.github.yuroyami.kitepdf.core.render.toRgbaBytes
 import kotlinx.browser.document
 import org.khronos.webgl.Int8Array
@@ -298,28 +300,35 @@ public class Canvas2dCanvas(private val ctx: CanvasRenderingContext2D) : KiteCan
         // JPEG / JPX / JBIG2 decode produces. Encoded kinds core could not
         // decode keep the placeholder: browser decoding is async, and a
         // preload API is still to come.
-        val rgba = if (image.kind == KiteImageData.Kind.RAW) image.toRgbaBytes() else null
-        if (rgba == null) {
+        val full = if (image.kind == KiteImageData.Kind.RAW) image.toRgbaBytes() else null
+        if (full == null) {
             drawPlaceholder(ctm, alpha)
             return
         }
+        // One sampling policy on every canvas (#122, #123). setTransform below makes the ctm the device transform.
+        val sampling = imageSampling(image.width, image.height, ctm, image.interpolate)
+        // An image drawn smaller than its pixels is averaged down first, so fine detail fades instead of dropping out.
+        val rgba = if (sampling.shrinks) shrinkRgba(full, image.width, image.height, sampling.shrinkX, sampling.shrinkY) else full
+        val width = sampling.shrunkWidth(image.width)
+        val height = sampling.shrunkHeight(image.height)
         // putImageData ignores the transform, so stage on an offscreen canvas
         // and drawImage that under the CTM.
         val off = document.createElement("canvas") as HTMLCanvasElement
-        off.width = image.width
-        off.height = image.height
+        off.width = width
+        off.height = height
         val offCtx = off.getContext("2d") as CanvasRenderingContext2D
         val i8 = rgba.unsafeCast<Int8Array>()
         val clamped = Uint8ClampedArray(i8.buffer, i8.byteOffset, i8.length)
-        offCtx.putImageData(ImageData(clamped, image.width, image.height), 0.0, 0.0)
+        offCtx.putImageData(ImageData(clamped, width, height), 0.0, 0.0)
         ctx.save()
         try {
             ctx.setTransform(ctm.a, ctm.b, ctm.c, ctm.d, ctm.e, ctm.f)
             ctx.globalAlpha = alpha.coerceIn(0.0, 1.0)
+            ctx.imageSmoothingEnabled = sampling.smooth
             // Unit square, bitmap row 0 on the top edge (v = 1): the Skia
             // mapping, translate up one unit and flip Y.
             ctx.translate(0.0, 1.0)
-            ctx.scale(1.0 / image.width, -1.0 / image.height)
+            ctx.scale(1.0 / width, -1.0 / height)
             ctx.drawImage(off, 0.0, 0.0)
         } finally {
             ctx.restore()

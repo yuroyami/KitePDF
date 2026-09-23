@@ -19,6 +19,10 @@ import io.github.yuroyami.kitepdf.core.font.FontSpec
 import io.github.yuroyami.kitepdf.core.font.TextGlyph
 import io.github.yuroyami.kitepdf.core.render.KiteBlendMode
 import io.github.yuroyami.kitepdf.core.render.KiteImageData
+import io.github.yuroyami.kitepdf.core.render.KiteImageSampling
+import io.github.yuroyami.kitepdf.core.render.imageSampling
+import io.github.yuroyami.kitepdf.core.render.shrinkArgb
+import io.github.yuroyami.kitepdf.core.render.shrinkRgba
 import io.github.yuroyami.kitepdf.core.render.toRgbaBytes
 import io.github.yuroyami.kitepdf.core.render.KiteMatrix
 import io.github.yuroyami.kitepdf.core.render.KiteCanvas
@@ -355,7 +359,9 @@ public class AndroidNativeCanvas(private val canvas: AndroidCanvas) : KiteCanvas
     }
 
     override fun drawImage(image: KiteImageData, ctm: KiteMatrix, alpha: Double) {
-        val bm = decodeImage(image)
+        // One sampling policy on every canvas (#122, #123). The ctm maps to this canvas's pixels.
+        val sampling = imageSampling(image.width, image.height, ctm, image.interpolate)
+        val bm = decodeImage(image, sampling)
         if (bm == null) {
             drawPlaceholder(ctm)
             return
@@ -371,6 +377,8 @@ public class AndroidNativeCanvas(private val canvas: AndroidCanvas) : KiteCanvas
         canvas.scale(1f / bm.width, -1f / bm.height)
         val paint = Paint().apply {
             this.alpha = (alpha.coerceIn(0.0, 1.0) * 255).toInt()
+            // Set both ways: the default of this flag differs between Android versions.
+            isFilterBitmap = sampling.smooth
         }
         canvas.drawBitmap(bm, 0f, 0f, paint)
         canvas.restore()
@@ -378,18 +386,32 @@ public class AndroidNativeCanvas(private val canvas: AndroidCanvas) : KiteCanvas
         openLayers--
     }
 
-    private fun decodeImage(image: KiteImageData): android.graphics.Bitmap? = try {
+    /** The image as a bitmap, averaged down when [sampling] shrinks it, so fine detail fades instead of dropping out (#122). */
+    private fun decodeImage(image: KiteImageData, sampling: KiteImageSampling): android.graphics.Bitmap? = try {
         when (image.kind) {
-            KiteImageData.Kind.JPEG, KiteImageData.Kind.JPEG2000, KiteImageData.Kind.JBIG2 ->
-                BitmapFactory.decodeByteArray(image.encodedBytes, 0, image.encodedBytes.size)
+            KiteImageData.Kind.JPEG, KiteImageData.Kind.JPEG2000, KiteImageData.Kind.JBIG2 -> {
+                // The decoder averages a JPEG down while it decodes, by one power of two for both directions.
+                val sample = minOf(sampling.shrinkX, sampling.shrinkY)
+                val options = BitmapFactory.Options().apply { inSampleSize = sample }
+                BitmapFactory.decodeByteArray(image.encodedBytes, 0, image.encodedBytes.size, options)?.let { bm ->
+                    val fx = sampling.shrinkX / sample
+                    val fy = sampling.shrinkY / sample
+                    if (fx == 1 && fy == 1) return@let bm
+                    // getPixels gives straight ARGB.
+                    val small = shrinkArgb(bm.width, bm.height, fx, fy) { pixels, y, rows ->
+                        bm.getPixels(pixels, 0, bm.width, 0, y, bm.width, rows)
+                    }
+                    rgbaBitmap(small, (bm.width + fx - 1) / fx, (bm.height + fy - 1) / fy).also { bm.recycle() }
+                }
+            }
             // Decoded samples: what every successful JPEG / JPX / JBIG2 decode
-            // produces, plus plain Flate images. Straight-alpha RGBA from core;
-            // createBitmap premultiplies on the way in, which is what Canvas wants.
+            // produces, plus plain Flate images. Straight-alpha RGBA from core.
             KiteImageData.Kind.RAW -> image.toRgbaBytes()?.let { rgba ->
-                android.graphics.Bitmap.createBitmap(
-                    RgbaPixels.toArgbInts(rgba),
-                    image.width, image.height,
-                    android.graphics.Bitmap.Config.ARGB_8888,
+                if (!sampling.shrinks) return@let rgbaBitmap(rgba, image.width, image.height)
+                rgbaBitmap(
+                    shrinkRgba(rgba, image.width, image.height, sampling.shrinkX, sampling.shrinkY),
+                    sampling.shrunkWidth(image.width),
+                    sampling.shrunkHeight(image.height),
                 )
             }
             else -> null
@@ -397,6 +419,10 @@ public class AndroidNativeCanvas(private val canvas: AndroidCanvas) : KiteCanvas
     } catch (t: Throwable) {
         null
     }
+
+    /** Straight RGBA as a bitmap. createBitmap premultiplies on the way in, which is what Canvas wants. */
+    private fun rgbaBitmap(rgba: ByteArray, width: Int, height: Int): android.graphics.Bitmap =
+        android.graphics.Bitmap.createBitmap(RgbaPixels.toArgbInts(rgba), width, height, android.graphics.Bitmap.Config.ARGB_8888)
 
     private fun drawPlaceholder(ctm: KiteMatrix) {
         canvas.save()

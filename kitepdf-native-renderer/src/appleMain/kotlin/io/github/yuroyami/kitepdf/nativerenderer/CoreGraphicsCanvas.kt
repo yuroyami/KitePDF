@@ -5,6 +5,7 @@ import io.github.yuroyami.kitepdf.core.font.FontSpec
 import io.github.yuroyami.kitepdf.core.font.TextGlyph
 import io.github.yuroyami.kitepdf.core.render.KiteBlendMode
 import io.github.yuroyami.kitepdf.core.render.KiteImageData
+import io.github.yuroyami.kitepdf.core.render.KiteImageSampling
 import io.github.yuroyami.kitepdf.core.render.KiteMatrix
 import io.github.yuroyami.kitepdf.core.render.KiteCanvas
 import io.github.yuroyami.kitepdf.core.render.KitePath
@@ -12,7 +13,9 @@ import io.github.yuroyami.kitepdf.core.render.paintComplexShading
 import io.github.yuroyami.kitepdf.core.render.KiteShading
 import io.github.yuroyami.kitepdf.core.render.RgbColor
 import io.github.yuroyami.kitepdf.core.render.SoftMask
+import io.github.yuroyami.kitepdf.core.render.imageSampling
 import io.github.yuroyami.kitepdf.core.render.sampleStops
+import io.github.yuroyami.kitepdf.core.render.shrinkRgba
 import kotlinx.cinterop.CValue
 import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.cinterop.addressOf
@@ -50,6 +53,11 @@ import platform.CoreGraphics.CGFloatVar
 import platform.CoreGraphics.CGContextEOFillPath
 import platform.CoreGraphics.CGContextEndTransparencyLayer
 import platform.CoreGraphics.CGContextFillPath
+import platform.CoreGraphics.CGContextGetUserSpaceToDeviceSpaceTransform
+import platform.CoreGraphics.CGContextSetInterpolationQuality
+import platform.CoreGraphics.kCGInterpolationHigh
+import platform.CoreGraphics.kCGInterpolationLow
+import platform.CoreGraphics.kCGInterpolationNone
 import platform.CoreGraphics.CGContextMoveToPoint
 import platform.CoreGraphics.CGContextRef
 import platform.CoreGraphics.CGContextRestoreGState
@@ -397,7 +405,10 @@ public class CoreGraphicsCanvas(private val ctx: CGContextRef) : KiteCanvas {
     }
 
     override fun drawImage(image: KiteImageData, ctm: KiteMatrix, alpha: Double) {
-        val cgImage = decodeImage(image)
+        // One sampling policy on every canvas (#122, #123), read from the whole transform to device pixels.
+        val userToDevice = CGContextGetUserSpaceToDeviceSpaceTransform(ctx).useContents { KiteMatrix(a, b, c, d, tx, ty) }
+        val sampling = imageSampling(image.width, image.height, userToDevice.concat(ctm), image.interpolate)
+        val cgImage = decodeImage(image, sampling)
         if (cgImage == null) {
             drawPlaceholder(ctm)
             return
@@ -420,6 +431,13 @@ public class CoreGraphicsCanvas(private val ctx: CGContextRef) : KiteCanvas {
                 CGContextConcatCTM(ctx, ctm.toCGAffine())
                 CGContextTranslateCTM(ctx, 0.0, 1.0)
                 CGContextScaleCTM(ctx, 1.0, -1.0)
+                val quality = when {
+                    // A RAW image is averaged down in decodeImage. CoreGraphics averages an encoded one itself.
+                    sampling.shrinks && image.kind != KiteImageData.Kind.RAW -> kCGInterpolationHigh
+                    sampling.smooth -> kCGInterpolationLow
+                    else -> kCGInterpolationNone
+                }
+                CGContextSetInterpolationQuality(ctx, quality)
                 if (a < 1.0) platform.CoreGraphics.CGContextSetAlpha(ctx, a)
                 CGContextDrawImage(ctx, CGRectMake(0.0, 0.0, 1.0, 1.0), cgImage)
             } finally {
@@ -430,8 +448,8 @@ public class CoreGraphicsCanvas(private val ctx: CGContextRef) : KiteCanvas {
         }
     }
 
-    private fun decodeImage(image: KiteImageData): platform.CoreGraphics.CGImageRef? {
-        if (image.kind == KiteImageData.Kind.RAW) return rawCgImage(image)
+    private fun decodeImage(image: KiteImageData, sampling: KiteImageSampling): platform.CoreGraphics.CGImageRef? {
+        if (image.kind == KiteImageData.Kind.RAW) return rawCgImage(image, sampling)
         val bytes = image.encodedBytes
         if (bytes.isEmpty()) return null
         if (image.kind !in IMAGE_KINDS_DECODABLE_BY_CG) return null
@@ -453,19 +471,23 @@ public class CoreGraphicsCanvas(private val ctx: CGContextRef) : KiteCanvas {
      * Decoded samples: what every successful JPEG / JPX / JBIG2 decode
      * produces, plus plain Flate images. The CFData owns a copy of the
      * pixels, so the CGImage stays valid after the Kotlin array is gone.
+     * An image drawn smaller than its pixels is averaged down first (#122).
      */
-    private fun rawCgImage(image: KiteImageData): platform.CoreGraphics.CGImageRef? {
-        val rgba = image.toRgbaBytes() ?: return null
+    private fun rawCgImage(image: KiteImageData, sampling: KiteImageSampling): platform.CoreGraphics.CGImageRef? {
+        val full = image.toRgbaBytes() ?: return null
+        val rgba = if (sampling.shrinks) shrinkRgba(full, image.width, image.height, sampling.shrinkX, sampling.shrinkY) else full
+        val width = sampling.shrunkWidth(image.width)
+        val height = sampling.shrunkHeight(image.height)
         val cfData = rgba.toCFData() ?: return null
         val provider = CGDataProviderCreateWithCFData(cfData)
         CFRelease(cfData)   // the provider holds its own reference
         if (provider == null) return null
         val cs = CGColorSpaceCreateDeviceRGB()
         val img = CGImageCreate(
-            image.width.toULong(), image.height.toULong(),
-            8u, 32u, (image.width * 4).toULong(), cs,
+            width.toULong(), height.toULong(),
+            8u, 32u, (width * 4).toULong(), cs,
             CGImageAlphaInfo.kCGImageAlphaLast.value,
-            provider, null, true, CGColorRenderingIntent.kCGRenderingIntentDefault,
+            provider, null, sampling.smooth, CGColorRenderingIntent.kCGRenderingIntentDefault,
         )
         CGColorSpaceRelease(cs)
         CGDataProviderRelease(provider)

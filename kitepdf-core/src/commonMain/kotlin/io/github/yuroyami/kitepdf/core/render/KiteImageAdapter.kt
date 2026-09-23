@@ -44,5 +44,6 @@ internal fun KiteBitmap.toKiteImageData(): KiteImageData {
         softMaskWidth = if (alpha != null) width else 0,
         softMaskHeight = if (alpha != null) height else 0,
         resolvedColorSpace = KiteColorSpace.DeviceRGB,
+        interpolate = true,
     )
 }

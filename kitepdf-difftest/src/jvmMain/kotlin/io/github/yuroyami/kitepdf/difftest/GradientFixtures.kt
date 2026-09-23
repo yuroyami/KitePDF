@@ -10,13 +10,10 @@ import java.io.ByteArrayOutputStream
  */
 object GradientFixtures {
 
-    /** A named fixture and the most mean absolute error a backend may score on it. */
-    data class Fixture(val name: String, val bytes: ByteArray, val budget: Double)
-
     /** Red to blue, linear in the shading parameter. */
     private const val RED_TO_BLUE = "<< /FunctionType 2 /Domain [0 1] /C0 [1 0 0] /C1 [0 0 1] /N 1 >>"
 
-    fun all(): List<Fixture> = listOf(
+    fun all(): List<OracleFixture> = listOf(
         // A skewed CTM tilts the bands of an axial shading.
         fixture("axial-skewed", "1 0 1 1 20 0 cm", axial("0 0 100 0"), budget = 0.005),
         // A non-uniform CTM stretches the circles of a radial shading into ellipses.
@@ -54,13 +51,13 @@ object GradientFixtures {
         "<< /ShadingType 3 /ColorSpace /DeviceRGB /Coords [$coords] /Function $RED_TO_BLUE /Extend [$extend] >>"
 
     /** A page that paints [shading] under [cm] over the whole page. */
-    private fun fixture(name: String, cm: String, shading: String, budget: Double): Fixture = page(
+    private fun fixture(name: String, cm: String, shading: String, budget: Double): OracleFixture = oracleFixture(
         name, "q 0 0 200 200 re W n $cm /Sh1 sh Q", "/Shading << /Sh1 5 0 R >>",
         listOf(shading.toByteArray()), budget,
     )
 
     /** A page that strokes with [content] in an axial shading pattern across the page. */
-    private fun patternStroke(name: String, content: String, budget: Double): Fixture = page(
+    private fun patternStroke(name: String, content: String, budget: Double): OracleFixture = oracleFixture(
         name, "/Pattern CS /P1 SCN $content", "/Pattern << /P1 5 0 R >>",
         listOf("<< /PatternType 2 /Shading ${axial("0 0 200 0")} >>".toByteArray()), budget,
     )
@@ -70,7 +67,7 @@ object GradientFixtures {
      * embedded, so mutool and every backend paint the same glyph shapes: an `A` is a
      * square 30 points wide at a size of 60, and the next one starts 36 points along.
      */
-    private fun patternText(name: String, content: String, budget: Double): Fixture = page(
+    private fun patternText(name: String, content: String, budget: Double): OracleFixture = oracleFixture(
         name, content,
         "/Font << /F1 5 0 R >> /Pattern << /P1 8 0 R >>",
         listOf(
@@ -78,38 +75,11 @@ object GradientFixtures {
                 "/FontDescriptor 6 0 R /Encoding /WinAnsiEncoding >>").toByteArray(),
             ("<< /Type /FontDescriptor /FontName /Square /Flags 32 /FontBBox [0 0 500 500] /ItalicAngle 0 " +
                 "/Ascent 500 /Descent 0 /CapHeight 500 /StemV 80 /FontFile2 7 0 R >>").toByteArray(),
-            stream(squareFont()),
+            pdfStream(squareFont()),
             "<< /PatternType 2 /Shading ${axial("20 0 130 0")} >>".toByteArray(),
         ),
         budget,
     )
-
-    /** One page drawing [content] with [resources]. The [extra] objects are numbered from 5. */
-    private fun page(name: String, content: String, resources: String, extra: List<ByteArray>, budget: Double): Fixture {
-        val objects = listOf(
-            "<< /Type /Catalog /Pages 2 0 R >>".toByteArray(),
-            "<< /Type /Pages /Kids [3 0 R] /Count 1 >>".toByteArray(),
-            "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] /Resources << $resources >> /Contents 4 0 R >>".toByteArray(),
-            stream(content.toByteArray()),
-        ) + extra
-        val out = ByteArrayOutputStream()
-        out.write("%PDF-1.7\n".toByteArray())
-        val offsets = objects.mapIndexed { i, body ->
-            out.size().also {
-                out.write("${i + 1} 0 obj\n".toByteArray())
-                out.write(body)
-                out.write("\nendobj\n".toByteArray())
-            }
-        }
-        val xref = out.size()
-        out.write("xref\n0 ${objects.size + 1}\n0000000000 65535 f \n".toByteArray())
-        for (o in offsets) out.write("${o.toString().padStart(10, '0')} 00000 n \n".toByteArray())
-        out.write("trailer\n<< /Size ${objects.size + 1} /Root 1 0 R >>\nstartxref\n$xref\n%%EOF\n".toByteArray())
-        return Fixture(name, out.toByteArray(), budget)
-    }
-
-    private fun stream(data: ByteArray): ByteArray =
-        "<< /Length ${data.size} >>\nstream\n".toByteArray() + data + "\nendstream".toByteArray()
 
     /** A TrueType font of 1000 units per em whose `A` (glyph 1) is a 500-unit square. */
     private fun squareFont(): ByteArray {

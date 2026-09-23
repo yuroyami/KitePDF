@@ -94,7 +94,22 @@ public class KiteImageData internal constructor(
      * [toRgbaBytes] undoes that blend. Null when the soft mask has no `/Matte`.
      */
     public val softMaskMatte: RgbColor? = null,
+    /**
+     * The `/Interpolate` entry of ISO 32000-1, Table 89: the image asks to stay smooth
+     * when enlarged (see [imageSampling]). Images from EPUB, SVG, XPS and CBZ files set
+     * it, because browsers smooth an enlarged image by default.
+     */
+    public val interpolate: Boolean = false,
 ) {
+
+    /** This image with [interpolate] set to [on]. */
+    internal fun withInterpolate(on: Boolean): KiteImageData = if (on == interpolate) this else KiteImageData(
+        width = width, height = height, bitsPerComponent = bitsPerComponent, colorSpace = colorSpace, kind = kind,
+        encodedBytes = encodedBytes, pixelBytes = pixelBytes,
+        softMaskAlpha = softMaskAlpha, softMaskWidth = softMaskWidth, softMaskHeight = softMaskHeight,
+        resolvedColorSpace = resolvedColorSpace, decode = decode, isImageMask = isImageMask, maskFill = maskFill,
+        colorKeyMask = colorKeyMask, softMaskMatte = softMaskMatte, interpolate = on,
+    )
 
     public enum class Kind {
         /** Pixel data already flat in [pixelBytes] (Flate/LZW/CCITT/ASCII/RLE). */
@@ -276,7 +291,8 @@ public class KiteImageData internal constructor(
             }
             // A mask, stencil or soft, is usually finer than the layer it masks, so
             // the composite is built on the mask's grid (#75).
-            return image.alignedToMaskGrid()
+            val interpolate = ((dict["Interpolate"] ?: dict["I"]) as? PdfBoolean)?.value == true
+            return image.alignedToMaskGrid().withInterpolate(interpolate)
         }
 
         /**
@@ -304,7 +320,7 @@ public class KiteImageData internal constructor(
                     if (w <= 0 || h <= 0) return null
                     KiteImageData(
                         width = w, height = h, bitsPerComponent = 8,
-                        colorSpace = "DeviceRGB", kind = Kind.JPEG, encodedBytes = bytes,
+                        colorSpace = "DeviceRGB", kind = Kind.JPEG, encodedBytes = bytes, interpolate = true,
                     )
                 }
                 else -> null
@@ -637,7 +653,7 @@ public class KiteImageData internal constructor(
                 kind = Kind.RAW, encodedBytes = ByteArray(0), pixelBytes = out,
                 softMaskAlpha = softMaskAlpha, softMaskWidth = mw, softMaskHeight = mh, softMaskMatte = softMaskMatte,
                 resolvedColorSpace = resolvedColorSpace, decode = decode,
-                isImageMask = false, maskFill = maskFill, colorKeyMask = colorKeyMask,
+                isImageMask = false, maskFill = maskFill, colorKeyMask = colorKeyMask, interpolate = interpolate,
             )
         }
 

@@ -186,6 +186,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   one flat colour. XPS gradient brushes honour `SpreadMethod`. The new
   `KiteShading.spreadOver` repeats or mirrors an axial or radial shading over a
   region (#179, #180, #286, #287).
+- Every canvas samples an image the same way, by MuPDF's rules. An image drawn
+  smaller than its pixels is averaged down first, so thin lines in a scanned page
+  fade to grey instead of dropping out. An image enlarged more than twice keeps
+  hard pixel edges unless its `/Interpolate` entry is true, and Compose no longer
+  blurs it. Images from EPUB, SVG, XPS and CBZ files stay smooth, as in a browser.
+  The new `imageSampling` holds the rules (#122, #123).
 
 ## [0.10.0] - 2026-09-13
 
