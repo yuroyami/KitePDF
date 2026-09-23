@@ -233,6 +233,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Images on CoreGraphics stand the same way as on the other canvases. Each image
   drew upside down, because the canvas flipped it for a y-down bitmap while
   CoreGraphics already draws the first row at the top of the image (#289).
+- An image paints with the blend mode of the graphics state on every canvas, as
+  ISO 32000-1, 11.3.5 requires. Before, an image under Multiply drew as a normal
+  paint and hid what was under it. A new `KiteCanvas.drawImage` overload carries
+  the blend mode. A canvas that does not override it paints the image alone in
+  an isolated group with that blend mode (#113).
 
 ## [0.10.0] - 2026-09-13
 

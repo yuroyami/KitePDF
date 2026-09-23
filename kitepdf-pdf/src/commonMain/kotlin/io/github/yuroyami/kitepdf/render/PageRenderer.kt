@@ -1216,7 +1216,7 @@ public class PageRenderer(
                         val image = decodeImageCached(slot, state.current.fillColor)
                         if (paintsNothing(image, state.current)) return
                         withSoftMask(state.current) {
-                            canvas.drawImage(image, state.current.ctm, state.current.fillAlpha)
+                            canvas.drawImage(image, state.current.ctm, state.current.fillAlpha, state.current.blendMode)
                         }
                     }
                     // A transparency group takes the soft mask once, on its composited
@@ -1249,7 +1249,7 @@ public class PageRenderer(
                 val img = decodeInlineImage(blob, state.current.fillColor, colorSpaces) ?: return
                 if (paintsNothing(img, state.current)) return
                 withSoftMask(state.current) {
-                    canvas.drawImage(img, state.current.ctm, state.current.fillAlpha)
+                    canvas.drawImage(img, state.current.ctm, state.current.fillAlpha, state.current.blendMode)
                 }
             }
 

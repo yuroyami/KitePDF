@@ -1,9 +1,9 @@
 package io.github.yuroyami.kitepdf.difftest
 
 /**
- * One-page PDFs that each draw one transparency group or soft mask. The tests of
- * each backend render them and score the result against mutool, so a backend that
- * composites a group in its own way fails on its own.
+ * One-page PDFs that each draw one transparency group, soft mask or blended image. The
+ * tests of each backend render them and score the result against mutool, so a backend
+ * that composites in its own way fails on its own.
  */
 object GroupFixtures {
 
@@ -23,6 +23,22 @@ object GroupFixtures {
             listOf(form("0 g /GH gs 0 0 200 200 re f", "/ExtGState << /GH << /ca 0.5 >> >>")),
             budget = 0.005,
         ),
+        // An image multiplied onto the light blue backdrop: no quadrant keeps its own colour (#113).
+        image("image-multiply", "/BM /Multiply", budget = 0.005),
+        // The same image at half alpha.
+        image("image-alpha-multiply", "/ca 0.5 /BM /Multiply", budget = 0.005),
+    )
+
+    /** Red, green, blue and yellow in a square of two by two pixels. */
+    private val FOUR_COLOURS = byteArrayOf(-1, 0, 0, 0, -1, 0, 0, 0, -1, -1, -1, 0)
+
+    /** A light blue page, then [FOUR_COLOURS] enlarged to 100 points under the graphics state [state]. */
+    private fun image(name: String, state: String, budget: Double): OracleFixture = oracleFixture(
+        name,
+        "0.5 0.5 1 rg 0 0 200 200 re f q /GS1 gs 100 0 0 100 50 50 cm /Im1 Do Q",
+        "/ExtGState << /GS1 << $state >> >> /XObject << /Im1 5 0 R >>",
+        listOf(pdfStream(FOUR_COLOURS, "/Type /XObject /Subtype /Image /Width 2 /Height 2 /ColorSpace /DeviceRGB /BitsPerComponent 8")),
+        budget,
     )
 
     /** A light blue page, then a group of two overlapping red squares drawn under the graphics state [state]. */

@@ -377,6 +377,10 @@ public class AwtCanvas(private var g: Graphics2D) : KiteCanvas {
     }
 
     override fun drawImage(image: KiteImageData, ctm: KiteMatrix, alpha: Double) {
+        drawImage(image, ctm, alpha, KiteBlendMode.Normal)
+    }
+
+    override fun drawImage(image: KiteImageData, ctm: KiteMatrix, alpha: Double, blendMode: KiteBlendMode) {
         val matrix = AffineTransform(ctm.a, ctm.b, ctm.c, ctm.d, ctm.e, ctm.f)
         // The policy reads the whole transform to device pixels, including one the host set on the Graphics.
         val device = AffineTransform(g.transform).apply { concatenate(matrix) }
@@ -405,7 +409,7 @@ public class AwtCanvas(private var g: Graphics2D) : KiteCanvas {
                 translate(0.0, 1.0)
                 scale(1.0 / bitmap.width, -1.0 / bitmap.height)
             }
-            withComposite(KiteBlendMode.Normal, alpha) {
+            withComposite(blendMode, alpha) {
                 g.drawImage(bitmap, drawOp, null)
             }
         } finally {

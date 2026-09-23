@@ -374,6 +374,10 @@ public class AndroidNativeCanvas(private val canvas: AndroidCanvas) : KiteCanvas
     }
 
     override fun drawImage(image: KiteImageData, ctm: KiteMatrix, alpha: Double) {
+        drawImage(image, ctm, alpha, KiteBlendMode.Normal)
+    }
+
+    override fun drawImage(image: KiteImageData, ctm: KiteMatrix, alpha: Double, blendMode: KiteBlendMode) {
         // One sampling policy on every canvas (#122, #123). The ctm maps to this canvas's pixels.
         val sampling = imageSampling(image.width, image.height, ctm, image.interpolate)
         val bm = bitmaps.getOrPut(image, sampling, { it.width.toLong() * it.height * 4 }) { decodeImage(image, sampling) }
@@ -394,6 +398,7 @@ public class AndroidNativeCanvas(private val canvas: AndroidCanvas) : KiteCanvas
             this.alpha = (alpha.coerceIn(0.0, 1.0) * 255).toInt()
             // Set both ways: the default of this flag differs between Android versions.
             isFilterBitmap = sampling.smooth
+            applyBlendMode(blendMode)
         }
         canvas.drawBitmap(bm, 0f, 0f, paint)
         canvas.restore()
