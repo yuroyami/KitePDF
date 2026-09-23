@@ -260,8 +260,23 @@ public class AndroidNativeCanvas(private val canvas: AndroidCanvas) : KiteCanvas
     ) {
         if (paintComplexShading(shading, ctm, clipPath, alpha, blendMode)) return
         val stops = shading.sampleStops() ?: return
-        val colors = IntArray(stops.colors.size) { stops.colors[it].toArgb(alpha) }
-        val positions = FloatArray(stops.offsets.size) { stops.offsets[it].toFloat() }
+        // An end that is not extended paints nothing past it (ISO 32000-1, 8.7.4.5.3 and
+        // 8.7.4.5.4). A transparent stop on that end makes the clamp past it transparent.
+        val (extendStart, extendEnd) = when (shading) {
+            is KiteShading.Axial -> shading.extendStart to shading.extendEnd
+            is KiteShading.Radial -> shading.extendStart to shading.extendEnd
+            else -> true to true
+        }
+        val start = if (extendStart) 0 else 1
+        val count = stops.colors.size + start + (if (extendEnd) 0 else 1)
+        val colors = IntArray(count) { i ->
+            val k = i - start
+            if (k in stops.colors.indices) stops.colors[k].toArgb(alpha) else Color.TRANSPARENT
+        }
+        val positions = FloatArray(count) { i ->
+            val k = i - start
+            if (k in stops.offsets.indices) stops.offsets[k].toFloat() else if (k < 0) 0f else 1f
+        }
 
         // The gradient is built in shading space and the CTM maps it as a whole, so a
         // non-uniform or skewed CTM turns circles into ellipses and tilts the bands

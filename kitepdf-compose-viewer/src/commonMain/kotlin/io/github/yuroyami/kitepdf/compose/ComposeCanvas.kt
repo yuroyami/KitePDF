@@ -370,8 +370,17 @@ public class ComposeCanvas(
     ) {
         if (paintComplexShading(shading, ctm, clipPath, alpha, blendMode)) return
         val stops = shading.sampleStops() ?: return
-        val composeStops = stops.offsets.mapIndexed { i, off ->
-            off.toFloat() to stops.colors[i].toCompose()
+        // An end that is not extended paints nothing past it (ISO 32000-1, 8.7.4.5.3 and
+        // 8.7.4.5.4). A transparent stop on that end makes the clamp past it transparent.
+        val (extendStart, extendEnd) = when (shading) {
+            is KiteShading.Axial -> shading.extendStart to shading.extendEnd
+            is KiteShading.Radial -> shading.extendStart to shading.extendEnd
+            else -> true to true
+        }
+        val composeStops = buildList {
+            if (!extendStart) add(0f to Color.Transparent)
+            for (i in stops.offsets.indices) add(stops.offsets[i].toFloat() to stops.colors[i].toCompose())
+            if (!extendEnd) add(1f to Color.Transparent)
         }.toTypedArray()
         // The gradient is built and drawn in shading space under the whole CTM, so a
         // non-uniform or skewed CTM turns circles into ellipses and tilts the bands

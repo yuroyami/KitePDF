@@ -28,6 +28,14 @@ object GradientFixtures {
         fixture("radial-concentric", "", radial("100 100 10 100 100 90"), budget = 0.005),
         // A start circle larger than the end circle, so the colours run inwards.
         fixture("radial-shrinking", "", radial("100 100 90 100 100 10"), budget = 0.005),
+        // An end whose extend flag is false paints nothing past it: a band, and then one side only.
+        fixture("axial-extend-none", "", axial("70 0 130 0", "false false"), budget = 0.015),
+        fixture("axial-extend-start", "", axial("70 0 130 0", "true false"), budget = 0.015),
+        fixture("axial-extend-end", "", axial("70 0 130 0", "false true"), budget = 0.015),
+        // A ring, then everything outside the start circle, then the disc of the end circle.
+        fixture("radial-extend-none", "", radial("100 100 20 100 100 80", "false false"), budget = 0.015),
+        fixture("radial-extend-start", "", radial("100 100 20 100 100 80", "true false"), budget = 0.015),
+        fixture("radial-extend-end", "", radial("100 100 20 100 100 80", "false true"), budget = 0.015),
     )
 
     private fun axial(coords: String, extend: String = "true true") =

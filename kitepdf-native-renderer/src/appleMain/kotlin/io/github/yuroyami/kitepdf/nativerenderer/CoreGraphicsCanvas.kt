@@ -338,8 +338,16 @@ public class CoreGraphicsCanvas(private val ctx: CGContextRef) : KiteCanvas {
                         space, components, locations, nStops.toULong(),
                     ) ?: return@memScoped
                     try {
+                        // The two draw options are the two extend flags (ISO 32000-1,
+                        // 8.7.4.5.3 and 8.7.4.5.4): an end that is not extended paints nothing past it.
+                        val (extendStart, extendEnd) = when (shading) {
+                            is KiteShading.Axial -> shading.extendStart to shading.extendEnd
+                            is KiteShading.Radial -> shading.extendStart to shading.extendEnd
+                            else -> true to true
+                        }
                         val drawOpts: CGGradientDrawingOptions =
-                            kCGGradientDrawsBeforeStartLocation or kCGGradientDrawsAfterEndLocation
+                            (if (extendStart) kCGGradientDrawsBeforeStartLocation else 0u) or
+                                (if (extendEnd) kCGGradientDrawsAfterEndLocation else 0u)
                         when (shading) {
                             is KiteShading.Axial -> {
                                 val c = shading.coords
