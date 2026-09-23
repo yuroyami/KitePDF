@@ -52,9 +52,9 @@ internal fun renderOnCanvas(bytes: ByteArray): CanvasRenderingContext2D {
     return ctx
 }
 
-/** Asserts that the pixel at page point ([x], [y]), with y up, is [expected] within 3 levels. */
-internal fun CanvasRenderingContext2D.assertPixel(x: Int, y: Int, expected: List<Int>) {
+/** Asserts that the pixel at page point ([x], [y]), with y up, is [expected] within [tolerance] levels. */
+internal fun CanvasRenderingContext2D.assertPixel(x: Int, y: Int, expected: List<Int>, tolerance: Int = 3) {
     val data = getImageData(x.toDouble(), (SIDE - 1 - y).toDouble(), 1.0, 1.0).data.asDynamic()
     val actual = listOf(data[0] as Int, data[1] as Int, data[2] as Int)
-    assertTrue(actual.zip(expected).all { (a, e) -> abs(a - e) <= 3 }, "pixel ($x, $y): expected $expected, got $actual")
+    assertTrue(actual.zip(expected).all { (a, e) -> abs(a - e) <= tolerance }, "pixel ($x, $y): expected $expected, got $actual")
 }
