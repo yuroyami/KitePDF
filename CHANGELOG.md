@@ -172,6 +172,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Compose, Android, CoreGraphics and Canvas2D honour the `/Extend` flags of axial
   and radial shadings. A gradient that the document confines to a band or a ring
   flooded the whole clip region (#70).
+- Text filled in a pattern colour shows the pattern inside its glyphs. A title
+  filled with a gradient drew as flat black type (#88).
 
 ## [0.10.0] - 2026-09-13
 

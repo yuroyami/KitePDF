@@ -1845,16 +1845,26 @@ public class PageRenderer(
         }
 
         if (!hidden) {
-            // A font without a program strokes and clips with the outlines of the host face
-            // that stands in for it (ISO 32000-1, 9.3.6 and 9.6.2.2, #85).
-            val hostShapes = if ((doStroke || doClip) && !font.hasEmbeddedOutlines) hostOutlined(glyphs, font) else null
+            // A pattern fills the glyph shapes, as it fills a path (ISO 32000-1, 8.7.3.1 and 9.3.6).
+            val fillPattern = state.current.fillPattern
+            val patternFill = doFill && canvas.resolvesGlyphOutlines &&
+                (fillPattern is KitePattern.Shading || fillPattern is KitePattern.Tiling)
+            // A font without a program strokes, clips and fills with a pattern through the
+            // outlines of the host face that stands in for it (ISO 32000-1, 9.3.6 and 9.6.2.2, #85).
+            val hostShapes = if ((doStroke || doClip || patternFill) && !font.hasEmbeddedOutlines) hostOutlined(glyphs, font) else null
             val shapes = hostShapes ?: glyphs
             val shapeUnits = if (hostShapes != null) HOST_UNITS_PER_EM else font.unitsPerEm ?: 1000
             val placements = vertical?.placements
             if (doClip) accumulateTextClip(shapes, font, t, textToUser, state.current.ctm, shapeUnits, placements)
-            if (doFill && !state.current.fillColorSpace.paintsNothing && state.current.fillPattern !is KitePattern.Unsupported) {
-                withSoftMask(state.current) {
-                    drawRun(state.current.fillColor, state.current.fillAlpha, font.unitsPerEm ?: 1000, font.hasEmbeddedOutlines)
+            if (doFill && !state.current.fillColorSpace.paintsNothing && fillPattern !is KitePattern.Unsupported) {
+                // Without any glyph shape, the run keeps the colour the pattern falls back to.
+                val shapePath = if (patternFill) glyphShapes(shapes, t, textToUser, shapeUnits, placements) else null
+                if (shapePath != null) {
+                    paintFill(shapePath, state, evenOdd = false)
+                } else {
+                    withSoftMask(state.current) {
+                        drawRun(state.current.fillColor, state.current.fillAlpha, font.unitsPerEm ?: 1000, font.hasEmbeddedOutlines)
+                    }
                 }
             } else if (!canvas.resolvesGlyphOutlines) {
                 // A canvas that reads text gets the runs that fill nothing too: an OCR layer
@@ -1924,6 +1934,34 @@ public class PageRenderer(
         }
         val columnMatrix = textMatrix.concat(KiteMatrix.translation(lineX, t.rise)).concat(QUARTER_TURN_CLOCKWISE)
         return VerticalRun(placements, penY, column, columnMatrix)
+    }
+
+    /**
+     * The outlines of [glyphs] in user space as one path, placed the way
+     * [strokeTextGlyphs] places them, or null when no glyph has an outline.
+     */
+    private fun glyphShapes(
+        glyphs: List<TextGlyph>,
+        t: TextState,
+        textToUser: KiteMatrix,
+        unitsPerEm: Int,
+        /** Per-glyph text-to-user matrices of a vertical run, which replace the pen. */
+        placements: List<KiteMatrix>?,
+    ): KitePath.Builder? {
+        val unitScale = t.fontSize / unitsPerEm
+        val advanceScale = t.fontSize / 1000.0
+        val builder = KitePath.Builder()
+        var penX = 0.0
+        for ((i, glyph) in glyphs.withIndex()) {
+            val outline = glyph.outline
+            if (outline != null && !outline.isEmpty()) {
+                val toUser = if (placements != null) glyphToUser(placements[i], 0.0, glyph, unitScale)
+                else glyphToUser(textToUser, penX, glyph, unitScale)
+                appendPath(builder, transformPath(outline, toUser))
+            }
+            penX += glyph.advanceWidth * advanceScale + glyph.advanceAdjust
+        }
+        return builder.takeUnless { it.isEmpty() }
     }
 
     /**
