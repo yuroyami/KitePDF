@@ -291,6 +291,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (#109, #110).
 - An SVG `stroke-width` of 0 paints no stroke, as SVG 1.1, 11.4 requires. Before, it
   drew a thin outline (#292).
+- Mesh shadings match MuPDF to within a few colour levels. Free-form and lattice
+  meshes blend their vertex colours at every pixel, where each cell had one flat
+  colour. Coons and tensor patches follow their curved surface, and a tensor patch
+  uses its four interior points, which were read and then dropped. Each mesh draws
+  as one image, so a translucent mesh has no darker seams where cells overlap. A
+  mesh with a `/Function` blends the parametric value and then looks it up, as
+  ISO 32000-1, 8.7.4.5.5 requires. `KiteShading.PatchMesh` holds `MeshPatch`
+  control points in place of `FlatQuad` cells (#196).
 
 ## [0.10.0] - 2026-09-13
 
