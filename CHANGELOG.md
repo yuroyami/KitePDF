@@ -148,6 +148,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   nothing (#279).
 - A CFF or Type 1 font draws at the size its own `FontMatrix` gives. A font of
   2048 units per em drew about twice too large (#140).
+- A Type 0 font over a CID-keyed CFF program finds each glyph through the charset
+  of the program (ISO 32000-1, 9.7.4.2). Text in such a font drew the wrong glyphs
+  or fell back to a system font. This hit most CJK subset fonts and every OpenType
+  CFF font that `PdfBuilder` embeds (#280).
 
 ## [0.10.0] - 2026-09-13
 

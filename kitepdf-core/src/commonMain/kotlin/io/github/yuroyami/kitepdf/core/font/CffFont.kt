@@ -53,6 +53,10 @@ public class CffFont private constructor(
      * PDF glyph space, or null where it is the identity. See [glyphSpaceOutline].
      */
     private val glyphSpaceMatrices: List<KiteMatrix?>,
+    /** The CIDs of a CID-keyed charset in ascending order, each once. Empty for any other program. */
+    private val charsetCids: IntArray = IntArray(0),
+    /** The glyph of each CID in [charsetCids]: the lowest one when two glyphs share a CID, as in FreeType. */
+    private val charsetGids: IntArray = IntArray(0),
 ) {
 
     /** The bits of a Private DICT the subsetter re-emits (hints are dropped). */
@@ -112,6 +116,27 @@ public class CffFont private constructor(
         glyphLock.withLock { glyphSpaceCache[glyphId]?.let { return it } }
         val mapped = raw.mappedBy(m)
         return glyphLock.withLock { glyphSpaceCache.getOrPut(glyphId) { mapped } }
+    }
+
+    /**
+     * The glyph that draws [cid] in a Type 0 CIDFont. A CID-keyed program selects it
+     * through its charset, and any other program uses the CID as the glyph id
+     * (ISO 32000-1, 9.7.4.2). -1 when a CID-keyed charset does not hold [cid].
+     */
+    internal fun glyphIdForCid(cid: Int): Int {
+        if (!isCidKeyed || charsetCids.isEmpty() || cid == 0) return cid
+        var lo = 0
+        var hi = charsetCids.size - 1
+        while (lo <= hi) {
+            val mid = (lo + hi) ushr 1
+            val c = charsetCids[mid]
+            when {
+                c < cid -> lo = mid + 1
+                c > cid -> hi = mid - 1
+                else -> return charsetGids[mid]
+            }
+        }
+        return -1
     }
 
     /** Glyph id for a PostScript glyph name; -1 if unknown. */
@@ -192,6 +217,8 @@ public class CffFont private constructor(
             val charsetOffset = (topDict[15]?.firstOrNull() as? Double)?.toInt() ?: 0
             val glyphNames = Array<String?>(numGlyphs) { null }
             glyphNames[0] = ".notdef"
+            var charsetCids = IntArray(0)
+            var charsetGids = IntArray(0)
             if (charsetOffset > 2) {
                 reader.seek(charsetOffset)
                 val format = reader.u8()
@@ -199,6 +226,19 @@ public class CffFont private constructor(
                 for ((i, sid) in sids.withIndex()) {
                     val gid = i + 1
                     glyphNames[gid] = if (isCidKeyed) "cid$sid" else stringResolver(sid)
+                }
+                if (isCidKeyed) {
+                    // Sort (CID, glyph) pairs, then keep the first glyph of each CID.
+                    val pairs = LongArray(sids.size) { (sids[it].toLong() shl 32) or (it + 1).toLong() }
+                    pairs.sort()
+                    val cids = ArrayList<Int>(pairs.size)
+                    val gids = ArrayList<Int>(pairs.size)
+                    for (p in pairs) {
+                        val cid = (p ushr 32).toInt()
+                        if (cids.isEmpty() || cids.last() != cid) { cids.add(cid); gids.add(p.toInt()) }
+                    }
+                    charsetCids = cids.toIntArray()
+                    charsetGids = gids.toIntArray()
                 }
             } else {
                 // Predefined charsets: 0 = ISOAdobe, 1 = Expert, 2 = ExpertSubset.
@@ -241,6 +281,8 @@ public class CffFont private constructor(
                 isCidKeyed = isCidKeyed,
                 fdPrivates = priv.fdPrivates,
                 glyphSpaceMatrices = fontMatrices.map(::glyphSpaceMatrix),
+                charsetCids = charsetCids,
+                charsetGids = charsetGids,
             )
         }
 

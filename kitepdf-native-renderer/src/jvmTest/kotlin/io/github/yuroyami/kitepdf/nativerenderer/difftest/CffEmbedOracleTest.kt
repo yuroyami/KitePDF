@@ -6,6 +6,8 @@ import io.github.yuroyami.kitepdf.difftest.PdfRenderOracle
 
 import io.github.yuroyami.kitepdf.KitePDF
 import io.github.yuroyami.kitepdf.core.font.TrueTypeFont
+import io.github.yuroyami.kitepdf.core.render.KiteMatrix
+import io.github.yuroyami.kitepdf.core.render.RecordingCanvas
 import io.github.yuroyami.kitepdf.nativerenderer.AwtPdfRasterizer
 import io.github.yuroyami.kitepdf.writer.EmbeddedFont
 import io.github.yuroyami.kitepdf.writer.PdfBuilder
@@ -13,6 +15,7 @@ import java.io.File
 import org.junit.Assume.assumeTrue
 import kotlin.test.Test
 import kotlin.test.assertContains
+import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 /**
@@ -74,6 +77,13 @@ class CffEmbedOracleTest {
 
         // Reader recovers the text via /ToUnicode.
         assertContains(KitePDF.open(subsetPdf).pages[0].extractText(), text)
+
+        // KitePDF draws the embedded outlines. A canvas draws a system font when an embedded
+        // font yields none, and that fallback looks close enough to pass the pixel checks below.
+        val recorder = RecordingCanvas()
+        KitePDF.open(subsetPdf).pages[0].renderTo(recorder, KiteMatrix.IDENTITY)
+        val drawn = recorder.calls.filterIsInstance<RecordingCanvas.Call.Glyphs>().flatMap { it.glyphs }
+        assertEquals(text.length, drawn.count { it.outline != null }, "glyphs drawn from the embedded CFF")
 
         assumeTrue("mutool not found, skipping render oracle.", MuPdfOracle.binary != null)
         val subFile = File.createTempFile("kite-cff-sub-", ".pdf").apply { writeBytes(subsetPdf) }

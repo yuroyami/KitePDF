@@ -192,22 +192,27 @@ internal object TestCff {
     /**
      * A CID-keyed program with one FontDict for each of [fdMatrices], where an empty array
      * means no matrix. Glyph 0 is `.notdef` in FontDict 0, and glyph 1 + i is a box in FontDict i.
+     * [charset] gives the CID of each glyph after `.notdef`; without it, the predefined
+     * charset applies.
      */
-    fun cid(topMatrix: ByteArray, vararg fdMatrices: ByteArray): ByteArray {
+    fun cid(topMatrix: ByteArray, vararg fdMatrices: ByteArray, charset: IntArray? = null): ByteArray {
         val name = index(listOf("Test".encodeToByteArray()))
         val empty = index(emptyList())
         val charStrings = index(listOf(bytes(14)) + fdMatrices.map { BOX })
+        val charsetBytes = charset?.let { cids -> bytes(0) + cids.fold(ByteArray(0)) { acc, c -> acc + bytes(c ushr 8, c) } }
         val fdSelect = bytes(0, 0, *IntArray(fdMatrices.size) { it })
         fun fontDict(i: Int, priv: Int) = fdMatrices[i] + int5(PRIVATE.size) + int5(priv) + bytes(18)
         fun fdArray(priv: Int) = index(fdMatrices.indices.map { fontDict(it, priv) })
-        fun top(cs: Int, fdArrayAt: Int, fdSelectAt: Int) = bytes(139, 139, 139, 12, 30) + topMatrix +
+        fun top(cs: Int, charsetAt: Int, fdArrayAt: Int, fdSelectAt: Int) = bytes(139, 139, 139, 12, 30) + topMatrix +
+            (if (charsetBytes == null) ByteArray(0) else int5(charsetAt) + bytes(15)) +
             int5(cs) + bytes(17) + int5(fdArrayAt) + bytes(12, 36) + int5(fdSelectAt) + bytes(12, 37)
-        val csOffset = 4 + name.size + index(listOf(top(0, 0, 0))).size + 2 * empty.size
-        val fdSelectOffset = csOffset + charStrings.size
+        val csOffset = 4 + name.size + index(listOf(top(0, 0, 0, 0))).size + 2 * empty.size
+        val charsetOffset = csOffset + charStrings.size
+        val fdSelectOffset = charsetOffset + (charsetBytes?.size ?: 0)
         val fdArrayOffset = fdSelectOffset + fdSelect.size
         // Every FontDict points at the one Private DICT at the end.
         val privOffset = fdArrayOffset + fdArray(0).size
-        return bytes(1, 0, 4, 4) + name + index(listOf(top(csOffset, fdArrayOffset, fdSelectOffset))) + empty + empty +
-            charStrings + fdSelect + fdArray(privOffset) + PRIVATE
+        return bytes(1, 0, 4, 4) + name + index(listOf(top(csOffset, charsetOffset, fdArrayOffset, fdSelectOffset))) +
+            empty + empty + charStrings + (charsetBytes ?: ByteArray(0)) + fdSelect + fdArray(privOffset) + PRIVATE
     }
 }
