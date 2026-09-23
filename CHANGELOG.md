@@ -174,6 +174,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   flooded the whole clip region (#70).
 - Text filled in a pattern colour shows the pattern inside its glyphs. A title
   filled with a gradient drew as flat black type (#88).
+- Mesh shadings (free-form, lattice, Coons and tensor) no longer show a grid of
+  pale lines between their cells. Opaque cells now overlap by about half a device
+  pixel, as the cells of a function shading already did (#126).
 
 ## [0.10.0] - 2026-09-13
 
