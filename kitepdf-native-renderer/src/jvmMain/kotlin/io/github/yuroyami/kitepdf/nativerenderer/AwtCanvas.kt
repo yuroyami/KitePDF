@@ -67,7 +67,7 @@ import javax.imageio.ImageIO
 public class AwtCanvas(private var g: Graphics2D) : KiteCanvas {
 
     /** Clips and transparency groups keep separate stacks, so interleaving them cannot restore the wrong state (#138). */
-    private val clipStack = ArrayDeque<java.awt.Shape?>()
+    private val clipStack = ArrayDeque<ClipEntry>()
     private val groupStack = ArrayDeque<GroupFrame>()
     private var openLayers = 0
 
@@ -80,15 +80,14 @@ public class AwtCanvas(private var g: Graphics2D) : KiteCanvas {
     override fun beginPage(widthPt: Double, heightPt: Double, deviceCtm: KiteMatrix) {
         // The host owns the Graphics; we don't clear.
         while (groupStack.isNotEmpty()) endTransparencyGroup()
-        clipStack.clear()
+        while (clipStack.isNotEmpty()) popClip()
         openLayers = 0
     }
 
     override fun endPage() {
         // Close any group left open, then roll back leftover clips (defensive).
         while (groupStack.isNotEmpty()) endTransparencyGroup()
-        if (clipStack.isNotEmpty()) g.clip = clipStack.first()
-        clipStack.clear()
+        while (clipStack.isNotEmpty()) popClip()
     }
 
     override fun fillPath(
@@ -572,22 +571,195 @@ public class AwtCanvas(private var g: Graphics2D) : KiteCanvas {
         }
     }
 
+    /**
+     * Java2D clips by pixel centre and never anti-aliases a clip, so a clip is applied
+     * as MuPDF applies it (#285). A rectangle clips to the whole pixels it touches. Any
+     * other shape opens a [SoftClip]: the paints inside go to a layer, which composites
+     * onto the page through the anti-aliased coverage of the shape when the clip pops.
+     */
     override fun pushClip(path: KitePath, ctm: KiteMatrix, evenOdd: Boolean) {
-        clipStack.addLast(g.clip)
         val awt = toAwtPath(path, ctm).apply {
             windingRule = if (evenOdd) Path2D.WIND_EVEN_ODD else Path2D.WIND_NON_ZERO
         }
-        g.clip(awt)  // intersect with existing clip (Java2D semantics match PDF)
+        val saved = g.clip
+        val device = g.transform.createTransformedShape(awt)
+        val box = wholePixelBox(device)
+        if (box != null) {
+            clipStack.addLast(ClipEntry(saved))
+            val transform = g.transform
+            g.transform = AffineTransform()
+            g.clip(box)
+            g.transform = transform
+            return
+        }
+        val soft = beginSoftClip(device)
+        clipStack.addLast(ClipEntry(saved, soft))
+        if (soft == null) {
+            g.clip(awt) // Too large a layer, or nothing inside: a hard clip.
+            return
+        }
+        g = soft.graphics
+        layerBlends = soft.blends
     }
 
     override fun popClip() {
-        if (clipStack.isNotEmpty()) {
-            g.clip = clipStack.removeLast()
+        clipStack.removeLastOrNull()?.let { entry ->
+            val soft = entry.soft
+            if (soft == null) g.clip = entry.saved else endSoftClip(soft)
             return
         }
         // A clip pushed before the open group: pop it on the graphics it was pushed on (#138).
-        val frame = groupStack.lastOrNull { it.savedClips.isNotEmpty() } ?: return
-        frame.parent.clip = frame.savedClips.removeLast()
+        val frame = groupStack.lastOrNull { it.savedClips.size > it.deferredPops } ?: return
+        if (frame.deferredPops > 0 || frame.savedClips.last().soft != null) {
+            // The group paints onto the layer of a soft clip, so that clip ends after the group.
+            frame.deferredPops++
+            return
+        }
+        frame.parent.clip = frame.savedClips.removeLast().saved
+    }
+
+    /** One pushed clip: the clip it replaced on the graphics it was pushed on, and its layer when it is soft. */
+    private class ClipEntry(val saved: java.awt.Shape?, val soft: SoftClip? = null)
+
+    /**
+     * A clip with anti-aliased edges. The paints inside go to [layer] through [graphics].
+     * The layer covers [bounds] in device pixels, and [shape] is the clip in device space.
+     */
+    private class SoftClip(
+        val parent: Graphics2D,
+        val graphics: Graphics2D,
+        val layer: BufferedImage,
+        val bounds: java.awt.Rectangle,
+        val shape: java.awt.Shape,
+        val savedBlends: LayerBlends?,
+    ) {
+        /** The paints in the layer. A paint in another blend mode first composites what the layer holds. */
+        lateinit var blends: LayerBlends
+    }
+
+    /**
+     * The whole-pixel box that MuPDF clips to when [shape] is one axis-aligned rectangle,
+     * or null for any other shape. MuPDF snaps the edges to a grid of 17 by 15 samples a
+     * pixel and keeps every pixel the snapped rectangle touches (`fz_bound_rasterizer`).
+     */
+    private fun wholePixelBox(shape: java.awt.Shape): java.awt.Rectangle? {
+        val xs = DoubleArray(5)
+        val ys = DoubleArray(5)
+        var n = 0
+        val c = DoubleArray(6)
+        val it = shape.getPathIterator(null)
+        while (!it.isDone) {
+            when (it.currentSegment(c)) {
+                java.awt.geom.PathIterator.SEG_MOVETO -> if (n == 0) { xs[0] = c[0]; ys[0] = c[1]; n = 1 } else return null
+                java.awt.geom.PathIterator.SEG_LINETO -> if (n in 1..4) { xs[n] = c[0]; ys[n] = c[1]; n++ } else return null
+                java.awt.geom.PathIterator.SEG_CLOSE -> Unit
+                else -> return null
+            }
+            it.next()
+        }
+        // Four corners, or five with the last back on the first.
+        if (n == 5 && (!same(xs[4], xs[0]) || !same(ys[4], ys[0])) || n < 4) return null
+        // The sides alternate between horizontal and vertical.
+        val flat = same(ys[0], ys[1])
+        for (k in 0..3) {
+            val next = (k + 1) % 4
+            val horizontal = (k % 2 == 0) == flat
+            if (horizontal && !same(ys[k], ys[next]) || !horizontal && !same(xs[k], xs[next])) return null
+        }
+        val x0 = minOf(xs[0], xs[2]); val x1 = maxOf(xs[0], xs[2])
+        val y0 = minOf(ys[0], ys[2]); val y1 = maxOf(ys[0], ys[2])
+        if (!(x0.isFinite() && x1.isFinite() && y0.isFinite() && y1.isFinite())) return null
+        fun pixel(v: Double) = v.coerceIn(-PIXEL_LIMIT, PIXEL_LIMIT).toInt()
+        val left = pixel(kotlin.math.floor(x0))
+        val top = pixel(kotlin.math.floor(y0))
+        val right = pixel(kotlin.math.ceil(kotlin.math.floor(x1 * 17) / 17))
+        val bottom = pixel(kotlin.math.ceil(kotlin.math.floor(y1 * 15) / 15))
+        return java.awt.Rectangle(left, top, maxOf(0, right - left), maxOf(0, bottom - top))
+    }
+
+    private fun same(a: Double, b: Double) = kotlin.math.abs(a - b) <= 1e-6
+
+    /**
+     * Opens a layer for a soft clip of [shape], sized to the part of it that the current
+     * clip leaves. Returns null when that part is empty or past [maskPixelBudget].
+     */
+    private fun beginSoftClip(shape: java.awt.Shape): SoftClip? {
+        val parent = g
+        val area = shape.bounds2D
+        if (!listOf(area.minX, area.minY, area.maxX, area.maxY).all { it.isFinite() }) return null
+        parent.clip?.let { clip ->
+            Rectangle2D.intersect(area, parent.transform.createTransformedShape(clip).bounds2D, area)
+        }
+        if (area.isEmpty) return null
+        val bounds = area.bounds
+        if (bounds.width <= 0 || bounds.height <= 0 || bounds.width.toLong() * bounds.height > maskPixelBudget) return null
+        val layer = takeMaskBuffer(bounds.width, bounds.height)
+        val graphics = layer.createGraphics()
+        graphics.setRenderingHints(parent.renderingHints)
+        graphics.translate(-bounds.x.toDouble(), -bounds.y.toDouble())
+        graphics.transform(parent.transform)
+        parent.clip?.let(graphics::clip)
+        return SoftClip(parent, graphics, layer, bounds, shape, layerBlends).also { soft ->
+            soft.blends = LayerBlends { compositeSoftClip(soft) }
+        }
+    }
+
+    private fun endSoftClip(soft: SoftClip) {
+        soft.graphics.dispose()
+        g = soft.parent
+        layerBlends = soft.savedBlends
+        compositeSoftClip(soft)
+        giveBackMaskBuffer(soft.layer, IntRange.EMPTY)
+    }
+
+    /**
+     * Composites what the layer of [soft] holds onto its parent, through the anti-aliased
+     * coverage of its shape, and clears it. The layer composites once, in the blend mode
+     * of its paints.
+     */
+    private fun compositeSoftClip(soft: SoftClip) {
+        val bounds = soft.bounds
+        val width = bounds.width
+        val pixels = (soft.layer.raster.dataBuffer as DataBufferInt).data
+        val painted = paintedBounds(pixels, width, bounds.height) ?: return
+        val mask = takeMaskBuffer(width, bounds.height)
+        val maskGraphics = mask.createGraphics()
+        try {
+            maskGraphics.clipRect(painted.x, painted.y, painted.width, painted.height)
+            maskGraphics.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
+            maskGraphics.setRenderingHint(RenderingHints.KEY_STROKE_CONTROL, RenderingHints.VALUE_STROKE_PURE)
+            maskGraphics.translate(-bounds.x.toDouble(), -bounds.y.toDouble())
+            maskGraphics.color = Color.WHITE
+            maskGraphics.fill(soft.shape)
+        } finally {
+            maskGraphics.dispose()
+        }
+        val coverage = (mask.raster.dataBuffer as DataBufferInt).data
+        for (y in painted.y until painted.y + painted.height) {
+            for (i in y * width + painted.x until y * width + painted.x + painted.width) {
+                val p = pixels[i]
+                val cover = coverage[i] ushr 24
+                if (cover == 255 || p == 0) continue
+                pixels[i] = ((((p ushr 24) * cover + 127) / 255) shl 24) or (p and 0xFFFFFF)
+            }
+        }
+        val dirtyRows = painted.y until painted.y + painted.height
+        giveBackMaskBuffer(mask, dirtyRows)
+        val mode = soft.blends.single ?: KiteBlendMode.Normal
+        // One paint of the layer outside, recorded before it lands there.
+        soft.savedBlends?.record(mode)
+        val target = soft.parent.create() as Graphics2D
+        try {
+            target.transform = AffineTransform()
+            target.composite = if (mode == KiteBlendMode.Normal) AlphaComposite.SrcOver else PdfBlendComposite(mode, 1f)
+            val x = bounds.x + painted.x
+            val y = bounds.y + painted.y
+            target.drawImage(soft.layer, x, y, x + painted.width, y + painted.height,
+                painted.x, painted.y, painted.x + painted.width, painted.y + painted.height, null)
+        } finally {
+            target.dispose()
+        }
+        java.util.Arrays.fill(pixels, painted.y * width, (painted.y + painted.height) * width, 0)
     }
 
     /**
@@ -603,9 +775,12 @@ public class AwtCanvas(private var g: Graphics2D) : KiteCanvas {
         val scale: Double,
         val alpha: Float,
         val blendMode: KiteBlendMode,
-        val savedClips: ArrayDeque<java.awt.Shape?>,
+        val savedClips: ArrayDeque<ClipEntry>,
         val savedBlends: LayerBlends?,
-    )
+    ) {
+        /** Clips from [savedClips] popped while the group was open, which end after it. */
+        var deferredPops = 0
+    }
 
     /**
      * ISO 32000-1, 11.4.5: a group's constant alpha and blend mode apply once, when the
@@ -657,8 +832,19 @@ public class AwtCanvas(private var g: Graphics2D) : KiteCanvas {
     }
 
     override fun endTransparencyGroup() {
-        val frame = groupStack.removeLastOrNull() ?: return
+        val frame = groupStack.lastOrNull() ?: return
+        // A clip left open inside the group ends first, onto the group's layer.
+        if (frame.layer != null) while (clipStack.isNotEmpty()) popClip()
+        groupStack.removeLast()
         val layer = frame.layer ?: return
+        try {
+            compositeGroup(frame, layer)
+        } finally {
+            repeat(frame.deferredPops) { popClip() }
+        }
+    }
+
+    private fun compositeGroup(frame: GroupFrame, layer: BufferedImage) {
         val layerGraphics = g
         g = frame.parent
         clipStack.clear()
@@ -765,6 +951,8 @@ public class AwtCanvas(private var g: Graphics2D) : KiteCanvas {
             layerBlends = blends
             render()
         } finally {
+            // A clip left open by the content ends onto this layer.
+            runCatching { while (clipStack.isNotEmpty()) popClip() }
             g = parent
             clipStack.clear()
             clipStack.addAll(savedClips)
@@ -890,6 +1078,8 @@ public class AwtCanvas(private var g: Graphics2D) : KiteCanvas {
             layerBlends = null
             render()
         } finally {
+            // A clip left open by the content ends onto this layer.
+            runCatching { while (clipStack.isNotEmpty()) popClip() }
             g = parent
             clipStack.clear()
             clipStack.addAll(savedClips)
@@ -1008,8 +1198,12 @@ public class AwtCanvas(private var g: Graphics2D) : KiteCanvas {
         return (((weight + 127) / 255) shl 24) or (channel(16) shl 16) or (channel(8) shl 8) or channel(0)
     }
 
-    /** The blend modes the paints of one soft-masked layer used; [single] is set only when all agree. */
-    private class LayerBlends {
+    /**
+     * The blend modes the paints of one layer used; [single] is set only when all agree.
+     * The layer of a soft clip passes [flush], which composites what the layer holds, so
+     * a paint in another mode starts the layer again and its modes never mix (#285).
+     */
+    private class LayerBlends(private val flush: (() -> Unit)? = null) {
         var single: KiteBlendMode? = null
             private set
         var mixed = false
@@ -1017,11 +1211,16 @@ public class AwtCanvas(private var g: Graphics2D) : KiteCanvas {
 
         fun record(mode: KiteBlendMode) {
             if (mixed || mode == single) return
-            if (single == null) single = mode else { single = null; mixed = true }
+            if (single != null && flush != null) flush.invoke()
+            if (single == null || flush != null) single = mode else { single = null; mixed = true }
         }
 
         fun merge(inner: LayerBlends) {
-            if (inner.mixed) { single = null; mixed = true } else inner.single?.let(::record)
+            when {
+                // Content that mixed modes lands as one normal paint.
+                inner.mixed -> if (flush != null) record(KiteBlendMode.Normal) else { single = null; mixed = true }
+                else -> inner.single?.let(::record)
+            }
         }
     }
 
@@ -1031,6 +1230,9 @@ public class AwtCanvas(private var g: Graphics2D) : KiteCanvas {
     private companion object {
         /** A mask area this many budgets wide cannot be a page render; it keeps the paint unmasked. */
         const val UNBOUNDED_MASK_FACTOR = 16L
+
+        /** The largest device coordinate of a clip box, so its width still fits in an Int. */
+        const val PIXEL_LIMIT = 268_435_456.0
 
         /** Host glyph outlines per font and text, shared by every canvas. Cleared when full. */
         val hostOutlines = java.util.concurrent.ConcurrentHashMap<Pair<FontSpec, String>, KitePath>()
@@ -1058,7 +1260,7 @@ public class AwtCanvas(private var g: Graphics2D) : KiteCanvas {
         }
     }
 
-    /** The layer a soft mask is rendering into, or null outside [applySoftMask]. */
+    /** The blends of the layer a soft mask or a soft clip is rendering into, or null outside both. */
     private var layerBlends: LayerBlends? = null
 
     /** Two same-sized buffers survive between masked paints, so a masked page does not reallocate per paint. */
