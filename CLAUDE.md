@@ -34,3 +34,6 @@ Things a previous change taught the hard way. One line each. Delete a line when 
 - `RedactionEngine` keeps its own copy of the renderer's text state machine. A text fix in `PageRenderer` that skips it lets a redaction keep text the page draws (#278).
 - The EPUB sweep's blank-page check passes a cover page that paints only a background fill, so a cover image that fails to load goes unnoticed (#276).
 - A canvas draws a system font when an embedded font yields no outlines, so a pixel comparison with mutool passed while KitePDF never read a CFF subset. Count `TextGlyph.outline` on a recording canvas as well (#280).
+- A `KiteCanvas` overload with a default body goes past every wrapper written with `by` delegation, so a decorator that overrides only the old overload stops seeing those paints with no compile error. The renderer calls the old overload for the old case (#290).
+- `CGContextDrawImage` draws the first row of an image at the top of its rectangle, unlike the other canvases. An image test whose rows are equal cannot show a vertical flip (#289).
+- Kotlin/Native checks a cast from an Objective-C object to a C pointer at run time, so `as CFDataRef` compiles and then throws. Create the Core Foundation object instead (#288).
