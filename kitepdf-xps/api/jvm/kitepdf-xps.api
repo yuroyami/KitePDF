@@ -1,0 +1,33 @@
+public final class io/github/yuroyami/kitepdf/xps/XpsDocument : io/github/yuroyami/kitepdf/core/KiteDocument {
+	public static final field Companion Lio/github/yuroyami/kitepdf/xps/XpsDocument$Companion;
+	public fun bookmarkOf (Lio/github/yuroyami/kitepdf/core/KiteLocation;)Lio/github/yuroyami/kitepdf/core/KiteBookmark;
+	public fun getChapterCount ()I
+	public fun getKnownPageCount ()I
+	public fun getMetadata ()Lio/github/yuroyami/kitepdf/core/KiteMetadata;
+	public fun getOutline ()Ljava/util/List;
+	public fun getPageCount ()I
+	public fun getPages ()Ljava/util/List;
+	public fun isChapterReady (I)Z
+	public fun isComplete ()Z
+	public fun locate (Lio/github/yuroyami/kitepdf/core/KiteBookmark;)Lio/github/yuroyami/kitepdf/core/KiteLocation;
+	public fun locationOf (I)Lio/github/yuroyami/kitepdf/core/KiteLocation;
+	public fun page (Lio/github/yuroyami/kitepdf/core/KiteLocation;)Lio/github/yuroyami/kitepdf/core/KitePage;
+	public fun pageCountIn (I)I
+	public fun pageIndexOf (Lio/github/yuroyami/kitepdf/core/KiteLocation;)Ljava/lang/Integer;
+	public fun prepareChapter (I)V
+}
+
+public final class io/github/yuroyami/kitepdf/xps/XpsDocument$Companion {
+	public final fun isXps ([B)Z
+	public final fun open ([B)Lio/github/yuroyami/kitepdf/xps/XpsDocument;
+	public final fun openOrNull ([B)Lio/github/yuroyami/kitepdf/xps/XpsDocument;
+}
+
+public final class io/github/yuroyami/kitepdf/xps/XpsPage : io/github/yuroyami/kitepdf/core/KitePage {
+	public fun displayToDeviceBase ()Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;
+	public fun getDisplayHeight ()D
+	public fun getDisplayWidth ()D
+	public fun renderTo (Lio/github/yuroyami/kitepdf/core/render/KiteCanvas;Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;)V
+	public fun textContent ()Lio/github/yuroyami/kitepdf/core/KiteStructuredText;
+}
+

@@ -82,3 +82,21 @@ allprojects {
     }
 }
 
+// The public API of each published module is dumped into its api/ directory and
+// checked in, so a change to it shows up as a diff in review. `checkKotlinAbi` fails
+// when the code and the dump differ; `updateKotlinAbi` writes the dump again.
+val publishedModules = setOf(
+    "kitepdf", "kitepdf-core", "kitepdf-pdf", "kitepdf-epub", "kitepdf-cbz", "kitepdf-xps",
+    "kitepdf-svg", "kitepdf-javascript", "kitepdf-net", "kitepdf-compose-viewer",
+    "kitepdf-native-renderer", "kitepdf-skia-renderer",
+)
+subprojects {
+    if (name !in publishedModules) return@subprojects
+    plugins.withId("org.jetbrains.kotlin.multiplatform") {
+        extensions.configure<org.jetbrains.kotlin.gradle.dsl.KotlinMultiplatformExtension> {
+            @OptIn(org.jetbrains.kotlin.gradle.dsl.abi.ExperimentalAbiValidation::class)
+            abiValidation()
+        }
+    }
+}
+

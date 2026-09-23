@@ -279,6 +279,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `g`, `rg`, `k`, `cs`, images and shadings. Before, a calibrated document drew its
   device colours uncalibrated. The defaults of a form XObject come from its own
   resources, as the clause says. MuPDF also lets a form inherit the page's (#150).
+- Each published module keeps a dump of its public API in its `api/` directory, and
+  CI fails when the code and the dump differ. An API change now shows up as a diff
+  in review (#202).
 
 ## [0.10.0] - 2026-09-13
 

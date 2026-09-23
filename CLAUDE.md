@@ -37,3 +37,4 @@ Things a previous change taught the hard way. One line each. Delete a line when 
 - A `KiteCanvas` overload with a default body goes past every wrapper written with `by` delegation, so a decorator that overrides only the old overload stops seeing those paints with no compile error. The renderer calls the old overload for the old case (#290).
 - `CGContextDrawImage` draws the first row of an image at the top of its rectangle, unlike the other canvases. An image test whose rows are equal cannot show a vertical flip (#289).
 - Kotlin/Native checks a cast from an Objective-C object to a C pointer at run time, so `as CFDataRef` compiles and then throws. Create the Core Foundation object instead (#288).
+- Gradle applies `--tests` only to the test task named just before it, so `:a:jvmTest :b:jvmTest --tests X` runs every test of `:a`. A run that looks filtered can be the whole suite.

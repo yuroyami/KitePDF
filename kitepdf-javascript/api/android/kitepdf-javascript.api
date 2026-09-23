@@ -1,0 +1,181 @@
+public final class io/github/yuroyami/kitepdf/javascript/KiteJsScriptEngine : io/github/yuroyami/kitepdf/core/script/KiteScriptEngine {
+	public static final field Companion Lio/github/yuroyami/kitepdf/javascript/KiteJsScriptEngine$Companion;
+	public static final field DEFAULT_INSTRUCTION_BUDGET I
+	public fun <init> ()V
+	public fun <init> (ILkotlin/jvm/functions/Function0;Lkotlin/jvm/functions/Function0;Z)V
+	public synthetic fun <init> (ILkotlin/jvm/functions/Function0;Lkotlin/jvm/functions/Function0;ZILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun close ()V
+	public fun defineFunction (Ljava/lang/String;Lkotlin/jvm/functions/Function1;)V
+	public fun defineValue (Ljava/lang/String;Ljava/lang/Object;)V
+	public fun evaluate (Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;
+	public final fun getAsmReports ()Ljava/util/List;
+	public final fun getInstructionBudget ()I
+}
+
+public final class io/github/yuroyami/kitepdf/javascript/KiteJsScriptEngine$Companion {
+}
+
+public final class io/github/yuroyami/kitepdf/javascript/PdfScriptAlert {
+	public final fun getButtons ()I
+	public final fun getIcon ()I
+	public final fun getMessage ()Ljava/lang/String;
+	public final fun getTitle ()Ljava/lang/String;
+}
+
+public final class io/github/yuroyami/kitepdf/javascript/PdfScriptPolicy {
+	public static final field Companion Lio/github/yuroyami/kitepdf/javascript/PdfScriptPolicy$Companion;
+	public fun <init> ()V
+	public fun <init> (ZJJILkotlin/jvm/functions/Function1;)V
+	public synthetic fun <init> (ZJJILkotlin/jvm/functions/Function1;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun getBudgetMillis ()J
+	public final fun getDocumentBudgetMillis ()J
+	public final fun getEnabled ()Z
+	public final fun getInstructionBudget ()I
+	public final fun getOnStillRunning ()Lkotlin/jvm/functions/Function1;
+}
+
+public final class io/github/yuroyami/kitepdf/javascript/PdfScriptPolicy$Companion {
+	public final fun getDENY ()Lio/github/yuroyami/kitepdf/javascript/PdfScriptPolicy;
+	public final fun getLONG_RUNNING ()Lio/github/yuroyami/kitepdf/javascript/PdfScriptPolicy;
+}
+
+public final class io/github/yuroyami/kitepdf/javascript/PdfScriptPrompt {
+	public final fun getDefaultValue ()Ljava/lang/String;
+	public final fun getQuestion ()Ljava/lang/String;
+	public final fun getTitle ()Ljava/lang/String;
+	public final fun isPassword ()Z
+}
+
+public abstract class io/github/yuroyami/kitepdf/javascript/PdfScriptRequest {
+}
+
+public final class io/github/yuroyami/kitepdf/javascript/PdfScriptRequest$Beep : io/github/yuroyami/kitepdf/javascript/PdfScriptRequest {
+	public static final field INSTANCE Lio/github/yuroyami/kitepdf/javascript/PdfScriptRequest$Beep;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/github/yuroyami/kitepdf/javascript/PdfScriptRequest$Document : io/github/yuroyami/kitepdf/javascript/PdfScriptRequest {
+	public fun <init> (Ljava/lang/String;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;)Lio/github/yuroyami/kitepdf/javascript/PdfScriptRequest$Document;
+	public static synthetic fun copy$default (Lio/github/yuroyami/kitepdf/javascript/PdfScriptRequest$Document;Ljava/lang/String;ILjava/lang/Object;)Lio/github/yuroyami/kitepdf/javascript/PdfScriptRequest$Document;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getWhat ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/github/yuroyami/kitepdf/javascript/PdfScriptRequest$Focus : io/github/yuroyami/kitepdf/javascript/PdfScriptRequest {
+	public fun <init> (Ljava/lang/String;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;)Lio/github/yuroyami/kitepdf/javascript/PdfScriptRequest$Focus;
+	public static synthetic fun copy$default (Lio/github/yuroyami/kitepdf/javascript/PdfScriptRequest$Focus;Ljava/lang/String;ILjava/lang/Object;)Lio/github/yuroyami/kitepdf/javascript/PdfScriptRequest$Focus;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getFieldName ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/github/yuroyami/kitepdf/javascript/PdfScriptRequest$GoTo : io/github/yuroyami/kitepdf/javascript/PdfScriptRequest {
+	public fun <init> (Ljava/lang/Integer;Ljava/lang/String;)V
+	public final fun component1 ()Ljava/lang/Integer;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/Integer;Ljava/lang/String;)Lio/github/yuroyami/kitepdf/javascript/PdfScriptRequest$GoTo;
+	public static synthetic fun copy$default (Lio/github/yuroyami/kitepdf/javascript/PdfScriptRequest$GoTo;Ljava/lang/Integer;Ljava/lang/String;ILjava/lang/Object;)Lio/github/yuroyami/kitepdf/javascript/PdfScriptRequest$GoTo;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getNamedDestination ()Ljava/lang/String;
+	public final fun getPageIndex ()Ljava/lang/Integer;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/github/yuroyami/kitepdf/javascript/PdfScriptRequest$LaunchUrl : io/github/yuroyami/kitepdf/javascript/PdfScriptRequest {
+	public fun <init> (Ljava/lang/String;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;)Lio/github/yuroyami/kitepdf/javascript/PdfScriptRequest$LaunchUrl;
+	public static synthetic fun copy$default (Lio/github/yuroyami/kitepdf/javascript/PdfScriptRequest$LaunchUrl;Ljava/lang/String;ILjava/lang/Object;)Lio/github/yuroyami/kitepdf/javascript/PdfScriptRequest$LaunchUrl;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getUrl ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/github/yuroyami/kitepdf/javascript/PdfScriptRequest$Mail : io/github/yuroyami/kitepdf/javascript/PdfScriptRequest {
+	public static final field INSTANCE Lio/github/yuroyami/kitepdf/javascript/PdfScriptRequest$Mail;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/github/yuroyami/kitepdf/javascript/PdfScriptRequest$MenuItem : io/github/yuroyami/kitepdf/javascript/PdfScriptRequest {
+	public fun <init> (Ljava/lang/String;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;)Lio/github/yuroyami/kitepdf/javascript/PdfScriptRequest$MenuItem;
+	public static synthetic fun copy$default (Lio/github/yuroyami/kitepdf/javascript/PdfScriptRequest$MenuItem;Ljava/lang/String;ILjava/lang/Object;)Lio/github/yuroyami/kitepdf/javascript/PdfScriptRequest$MenuItem;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getName ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/github/yuroyami/kitepdf/javascript/PdfScriptRequest$Print : io/github/yuroyami/kitepdf/javascript/PdfScriptRequest {
+	public static final field INSTANCE Lio/github/yuroyami/kitepdf/javascript/PdfScriptRequest$Print;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/github/yuroyami/kitepdf/javascript/PdfScriptRequest$SubmitForm : io/github/yuroyami/kitepdf/javascript/PdfScriptRequest {
+	public fun <init> (Ljava/lang/String;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;)Lio/github/yuroyami/kitepdf/javascript/PdfScriptRequest$SubmitForm;
+	public static synthetic fun copy$default (Lio/github/yuroyami/kitepdf/javascript/PdfScriptRequest$SubmitForm;Ljava/lang/String;ILjava/lang/Object;)Lio/github/yuroyami/kitepdf/javascript/PdfScriptRequest$SubmitForm;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getUrl ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/github/yuroyami/kitepdf/javascript/PdfScriptRunner : io/github/yuroyami/kitepdf/PdfScriptHandler, java/lang/AutoCloseable {
+	public fun <init> (Lio/github/yuroyami/kitepdf/PdfDocument;Lio/github/yuroyami/kitepdf/PdfFormState;Lio/github/yuroyami/kitepdf/javascript/PdfScriptPolicy;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function0;Lio/github/yuroyami/kitepdf/core/script/KiteScriptEngine;)V
+	public synthetic fun <init> (Lio/github/yuroyami/kitepdf/PdfDocument;Lio/github/yuroyami/kitepdf/PdfFormState;Lio/github/yuroyami/kitepdf/javascript/PdfScriptPolicy;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function0;Lio/github/yuroyami/kitepdf/core/script/KiteScriptEngine;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun blur (Ljava/lang/String;)V
+	public fun close ()V
+	public fun commit (Ljava/lang/String;Ljava/lang/String;)Z
+	public fun documentOpened ()V
+	public fun focus (Ljava/lang/String;)V
+	public final fun formattedValue (Ljava/lang/String;)Ljava/lang/String;
+	public final fun getAsmReports ()Ljava/util/List;
+	public final fun getCurrentPage ()I
+	public final fun getFailures ()Ljava/util/List;
+	public final fun getFileName ()Ljava/lang/String;
+	public fun getFormState ()Lio/github/yuroyami/kitepdf/PdfFormState;
+	public fun getHasTimers ()Z
+	public final fun getPolicy ()Lio/github/yuroyami/kitepdf/javascript/PdfScriptPolicy;
+	public fun keystroke (Ljava/lang/String;Ljava/lang/String;II)Ljava/lang/String;
+	public final fun keystroke (Ljava/lang/String;Ljava/lang/String;IIZ)Lio/github/yuroyami/kitepdf/javascript/PdfScriptRunner$KeystrokeResult;
+	public static synthetic fun keystroke$default (Lio/github/yuroyami/kitepdf/javascript/PdfScriptRunner;Ljava/lang/String;Ljava/lang/String;IIZILjava/lang/Object;)Lio/github/yuroyami/kitepdf/javascript/PdfScriptRunner$KeystrokeResult;
+	public fun mouseDown (Ljava/lang/String;)V
+	public fun mouseUp (Ljava/lang/String;)V
+	public fun pageClosed (I)V
+	public fun pageOpened (I)V
+	public fun pumpTimers (J)Ljava/lang/Long;
+	public final fun run (Lio/github/yuroyami/kitepdf/PdfAction$JavaScript;)Ljava/lang/String;
+	public fun runAction (Lio/github/yuroyami/kitepdf/PdfAction$JavaScript;)V
+	public final fun runCalculations ()V
+	public final fun runDocumentOpen ()Ljava/util/List;
+	public final fun runDocumentScripts ()Ljava/util/List;
+	public final fun runPageClose (I)Lio/github/yuroyami/kitepdf/core/script/KiteScriptException;
+	public final fun runPageOpen (I)Lio/github/yuroyami/kitepdf/core/script/KiteScriptException;
+	public final fun setCurrentPage (I)V
+	public final fun setFieldValue (Ljava/lang/String;Ljava/lang/String;)Z
+	public final fun setFileName (Ljava/lang/String;)V
+}
+
+public final class io/github/yuroyami/kitepdf/javascript/PdfScriptRunner$KeystrokeResult {
+	public final fun getAccepted ()Z
+	public final fun getValue ()Ljava/lang/String;
+}
+

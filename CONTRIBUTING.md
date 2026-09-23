@@ -68,6 +68,14 @@ Two suites are timing-sensitive and run only behind a flag:
 
 They are local checks. No CI job passes the flag, so run them yourself before a change that could slow rendering.
 
+Each published module keeps a dump of its public API in its `api/` directory. A change to the public API changes that dump too. Run this and commit the changed `api/` files in the same commit:
+
+```bash
+./gradlew updateKotlinAbi
+```
+
+CI runs `checkKotlinAbi` on macOS, the one host that compiles every target, and fails when the code and the dump differ. A diff in `api/` that the change did not intend is an accidental API change.
+
 Benchmarks run only when asked:
 
 ```bash
