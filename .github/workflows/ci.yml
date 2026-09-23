@@ -42,7 +42,7 @@ jobs:
           java-version: '21'
 
       - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
+        uses: gradle/actions/setup-gradle@v6
 
       # Distribution packages can disable ICC, changing CMYK scores for the
       # same renderer. Keep the oracle version and colour management fixed.
@@ -150,7 +150,7 @@ jobs:
           java-version: '21'
 
       - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
+        uses: gradle/actions/setup-gradle@v6
 
       - name: Cache Konan (native compiler + prebuilt deps)
         uses: actions/cache@v4
@@ -214,7 +214,7 @@ jobs:
           java-version: '21'
 
       - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
+        uses: gradle/actions/setup-gradle@v6
 
       - name: Cache Konan (native compiler + prebuilt deps)
         uses: actions/cache@v4
@@ -243,7 +243,7 @@ jobs:
           java-version: '21'
 
       - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
+        uses: gradle/actions/setup-gradle@v6
 
       - name: Test JS on Node
         run: >
