@@ -103,6 +103,23 @@ class FontMatrixTest {
         assertEquals(listOf(box, halfBox), glyphs.map { bounds(it.outline) })
     }
 
+    @Test
+    fun a_subset_records_units_per_em_that_are_not_1000() {
+        val source = CffFont.parse(TestCff.simple())
+        val plain = CffFont.parse(CffSubsetter.subset(source, setOf(1)).cff)
+        assertSame(plain.outline(1), plain.glyphSpaceOutline(1), "1000 units per em writes no matrix")
+
+        val scaled = CffFont.parse(CffSubsetter.subset(source, setOf(1), unitsPerEm = 2000).cff)
+        assertEquals(box, bounds(scaled.outline(1)))
+        assertEquals(halfBox, bounds(scaled.glyphSpaceOutline(1)))
+
+        // 1/2048 has no short decimal form, so the real operand must keep every digit.
+        val odd = CffFont.parse(CffSubsetter.subset(source, setOf(1), unitsPerEm = 2048).cff)
+        val b = bounds(odd.glyphSpaceOutline(1))
+        assertEquals(500.0 * 1000 / 2048, b[2], 1e-9)
+        assertEquals(700.0 * 1000 / 2048, b[3], 1e-9)
+    }
+
     private val refs = IndirectResolver { null }
 
     private fun dict(vararg entries: Pair<String, PdfObject>) = PdfDictionary(linkedMapOf(*entries))

@@ -58,7 +58,7 @@ internal object FontEmbedder {
         if (cff != null) {
             val used = if (font.subset && usage.usedGids.isNotEmpty()) usage.usedGids
                 else (0 until cff.numGlyphs).toSet()
-            val sub = CffSubsetter.subset(cff, used)
+            val sub = CffSubsetter.subset(cff, used, ttf.unitsPerEm)
             program = sub.cff
             baseName = if (font.subset) subsetTag(sub.oldToNew) + "+" + font.postScriptName else font.postScriptName
             descendantSubtype = "CIDFontType0"
