@@ -236,4 +236,88 @@ class LinkTapSceneTest {
             assertEquals("https://example.org/out", seen.single().uri, "uri reads back without a when")
         }
     }
+
+    /** One chapter: a note reference at the top, and the note it points at after enough text to fill a page. */
+    private fun epubWithNote(): EpubDocument {
+        val container = """<?xml version="1.0"?><container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container"><rootfiles><rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/></rootfiles></container>"""
+        val opf = """<?xml version="1.0"?>
+            <package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="id">
+              <metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:identifier id="id">x</dc:identifier></metadata>
+              <manifest><item id="c1" href="ch1.xhtml" media-type="application/xhtml+xml"/></manifest>
+              <spine><itemref idref="c1"/></spine>
+            </package>"""
+        val filler = (1..30).joinToString("") { "<p>filler paragraph $it keeps the note on a later page</p>" }
+        val ch1 = """<?xml version="1.0"?><html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops"><body>""" +
+            """<p>A claim<a epub:type="noteref" href="#fn1">1</a></p>$filler""" +
+            """<aside epub:type="footnote" id="fn1"><p>The note.</p></aside></body></html>"""
+        val zip = storedZip(
+            listOf(
+                "mimetype" to "application/epub+zip".encodeToByteArray(),
+                "META-INF/container.xml" to container.encodeToByteArray(),
+                "OEBPS/content.opf" to opf.encodeToByteArray(),
+                "OEBPS/ch1.xhtml" to ch1.encodeToByteArray(),
+            ),
+        )
+        return EpubDocument.open(zip, EpubSettings(pageWidth = 200.0, pageHeight = 200.0))
+            ?: error("EPUB fixture failed to open")
+    }
+
+    private fun centreOf(link: io.github.yuroyami.kitepdf.epub.EpubLink) = Offset(
+        ((link.rect.left + link.rect.right) / 2).toFloat(),
+        ((link.rect.bottom + link.rect.top) / 2).toFloat(),
+    )
+
+    /** A host can show a note in place: the viewer offers the reference first and does not scroll (#277). */
+    @Test
+    fun epub_note_reference_goes_to_the_host_before_the_viewer_scrolls() {
+        val doc = epubWithNote()
+        val link = (doc.pages[0] as io.github.yuroyami.kitepdf.epub.EpubPage).links.single()
+        assertEquals(io.github.yuroyami.kitepdf.epub.EpubLinkKind.NOTE_REFERENCE, link.kind)
+
+        lateinit var state: KiteDocViewState
+        lateinit var scope: CoroutineScope
+        ImageComposeScene(width = 200, height = 320, density = Density(1f)) {
+            state = rememberKiteDocViewState(doc)
+            scope = rememberCoroutineScope()
+            KiteDocView(state = state, modifier = Modifier.fillMaxSize())
+        }.use { scene ->
+            val driver = SceneTestDriver(scene)
+            driver.pumpUntil { state.pageGeometry.isNotEmpty() }
+
+            val shown = mutableListOf<String>()
+            val consumed = handleLinkTap(state, scope, null, centreOf(link)) { ref ->
+                doc.linkTarget(ref.href)?.let { shown += it.text } != null
+            }
+            assertTrue(consumed, "the host consumed the tap")
+            assertEquals(listOf("The note."), shown)
+            driver.pumpUntil(maxFrames = 10) { false }
+            assertEquals(0, state.currentPage, "the viewer stays on the page the reader tapped")
+
+            // Declined by the host: the viewer follows the link as before.
+            val offered = mutableListOf<String>()
+            assertTrue(handleLinkTap(state, scope, null, centreOf(link)) { offered += it.href; false })
+            assertEquals(listOf(link.href), offered)
+            driver.pumpUntil { state.currentPage > 0 }
+            assertTrue(state.currentPage > 0, "the viewer scrolled to the note")
+        }
+    }
+
+    @Test
+    fun an_ordinary_internal_link_never_reaches_the_reference_callback() {
+        val doc = epubWithLink()
+        val link = (doc.pages[0] as io.github.yuroyami.kitepdf.epub.EpubPage).links.single()
+        lateinit var state: KiteDocViewState
+        lateinit var scope: CoroutineScope
+        ImageComposeScene(width = 200, height = 320, density = Density(1f)) {
+            state = rememberKiteDocViewState(doc)
+            scope = rememberCoroutineScope()
+            KiteDocView(state = state, modifier = Modifier.fillMaxSize())
+        }.use { scene ->
+            val driver = SceneTestDriver(scene)
+            driver.pumpUntil { state.pageGeometry.isNotEmpty() }
+            var offered = 0
+            assertTrue(handleLinkTap(state, scope, null, centreOf(link)) { offered++; true })
+            assertEquals(0, offered)
+        }
+    }
 }

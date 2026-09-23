@@ -62,6 +62,8 @@ import io.github.yuroyami.kitepdf.PdfAnnotation
 import io.github.yuroyami.kitepdf.PdfDocument
 import io.github.yuroyami.kitepdf.PdfPage
 import io.github.yuroyami.kitepdf.epub.EpubDocument
+import io.github.yuroyami.kitepdf.epub.EpubLink
+import io.github.yuroyami.kitepdf.epub.EpubLinkKind
 import io.github.yuroyami.kitepdf.epub.EpubPage
 import io.github.yuroyami.kitepdf.core.render.KITE_DEFAULT_MAX_RASTER_PIXELS
 import io.github.yuroyami.kitepdf.core.render.ReaderTheme
@@ -143,7 +145,8 @@ import kotlinx.coroutines.launch
  *   perform itself: a URL, a remote GoTo, a Launch. Return true after handling
  *   it (e.g. opening the URL in a browser); false lets the tap fall through to
  *   [onTap]. Internal go-to-page links (PDF destinations, EPUB internal hrefs)
- *   never reach this: the viewer scrolls to the target page directly. See
+ *   never reach this: the viewer scrolls to the target page directly. An EPUB
+ *   reference to a note goes to `onEpubReferenceTap` first. See
  *   [KiteLinkAction] for the payload; `link.uri` covers both formats.
  */
 @Composable
@@ -173,6 +176,13 @@ public fun KiteDocView(
     scripts: io.github.yuroyami.kitepdf.PdfScriptHandler? = null,
     /** Called before links for a saved highlight. Return true to consume the tap. */
     onHighlightTap: ((KiteHighlight) -> Boolean)? = null,
+    /**
+     * Called before the viewer follows an internal EPUB link whose [EpubLink.kind] marks it
+     * as a reference to a note, a glossary entry or a bibliography entry. Return true to
+     * consume the tap, for example after you show [EpubDocument.linkTarget] in a popup.
+     * Return false, or pass null, and the viewer scrolls to the target.
+     */
+    onEpubReferenceTap: ((EpubLink) -> Boolean)? = null,
 ) {
     val scriptScope = rememberCoroutineScope()
     SideEffect {
@@ -246,6 +256,7 @@ public fun KiteDocView(
     // Keep callbacks fresh without restarting pointer input during a press or a selection.
     val currentHighlightTap by rememberUpdatedState(onHighlightTap)
     val currentLinkTap by rememberUpdatedState(onLinkTap)
+    val currentReferenceTap by rememberUpdatedState(onEpubReferenceTap)
     val currentTap by rememberUpdatedState(onTap)
     val currentScripts by rememberUpdatedState(scripts)
     val tapScope = rememberCoroutineScope()
@@ -256,7 +267,7 @@ public fun KiteDocView(
                 state.blurFocusedField()
                 val highlight = state.highlightAt(offset)
                 val consumed = highlight != null && currentHighlightTap?.invoke(highlight) == true
-                if (!consumed && !handleLinkTap(state, tapScope, currentLinkTap, offset)) {
+                if (!consumed && !handleLinkTap(state, tapScope, currentLinkTap, offset, currentReferenceTap)) {
                     currentTap?.invoke(offset)
                 }
             }
@@ -301,13 +312,16 @@ public fun KiteDocView(
  * annotations (topmost drawn last, so scanned in reverse) in user space;
  * EPUB pages hit-test [EpubPage.links] in display space. In-document
  * targets animate to the target page; everything else is offered to
- * [onLinkTap]. Returns true when the tap was consumed.
+ * [onLinkTap]. An EPUB reference to a note, a glossary entry or a
+ * bibliography entry goes to [onEpubReferenceTap] before the viewer
+ * follows it. Returns true when the tap was consumed.
  */
 internal fun handleLinkTap(
     state: KiteDocViewState,
     scope: kotlinx.coroutines.CoroutineScope,
     onLinkTap: ((KiteLinkAction) -> Boolean)?,
     offset: Offset,
+    onEpubReferenceTap: ((EpubLink) -> Boolean)? = null,
 ): Boolean {
     val hit = state.hitTest(offset) ?: return false
     when (val page = state.pageAt(hit.pageIndex)) {
@@ -341,6 +355,8 @@ internal fun handleLinkTap(
                 if (SCHEME_REGEX.containsMatchIn(link.href)) {
                     return onLinkTap?.invoke(KiteLinkAction.Uri(link.href)) == true
                 }
+                // The host may show a note or an entry in place instead (#277).
+                if (link.kind != EpubLinkKind.LINK && onEpubReferenceTap?.invoke(link) == true) return true
                 // A bookmark needs no layout to build, and following it lays out
                 // the target chapter alone rather than the whole book.
                 val target = (state.document as? EpubDocument)?.bookmarkOf(link.href) ?: return false

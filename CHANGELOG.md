@@ -15,6 +15,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and excludes transient search hits. Returning false preserves normal link/page taps.
 - `KiteDocLayout.Continuous.contentPadding` provides scrollable clearance for floating
   reader controls without cutting the document viewport off at the system safe area.
+- `KiteDocView.onEpubReferenceTap` receives a tapped EPUB reference to a note, a
+  glossary entry or a bibliography entry before the viewer scrolls to it. A host can
+  show the note in place with `EpubDocument.linkTarget` and keep the reader on the
+  page (#277).
 
 ### Fixed
 
