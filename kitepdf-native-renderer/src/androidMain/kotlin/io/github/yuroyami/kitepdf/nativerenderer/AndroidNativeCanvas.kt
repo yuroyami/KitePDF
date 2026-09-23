@@ -4,6 +4,7 @@ import android.graphics.BitmapFactory
 import android.graphics.BlendMode as AndroidBlendMode
 import android.graphics.Canvas as AndroidCanvas
 import android.graphics.Color
+import android.graphics.ColorMatrixColorFilter
 import android.graphics.DashPathEffect
 import android.graphics.LinearGradient
 import android.graphics.Matrix
@@ -473,10 +474,18 @@ public class AndroidNativeCanvas(private val canvas: AndroidCanvas) : KiteCanvas
         openLayers++
         try {
             render()
-            val maskPaint = Paint().apply { blendMode = AndroidBlendMode.DST_IN }
+            val luminosity = kind == SoftMask.Kind.Luminosity
+            val maskPaint = Paint().apply {
+                blendMode = AndroidBlendMode.DST_IN
+                // ISO 32000-1, 11.5.3: a luminosity mask gates by the group's brightness,
+                // so the layer's luminosity becomes its alpha when it composites (#79).
+                if (luminosity) colorFilter = ColorMatrixColorFilter(LUMINOSITY_TO_ALPHA)
+            }
             canvas.saveLayer(null, maskPaint)
             openLayers++
             try {
+                // Unpainted parts of the group show the black backdrop, whose luminosity is zero.
+                if (luminosity) canvas.drawColor(Color.BLACK)
                 renderMask(this)
             } finally {
                 canvas.restore()
@@ -565,3 +574,11 @@ public class AndroidNativeCanvas(private val canvas: AndroidCanvas) : KiteCanvas
         }
     }
 }
+
+/** A colour matrix that keeps no colour and turns the luminosity 0.30 R + 0.59 G + 0.11 B into alpha. */
+private val LUMINOSITY_TO_ALPHA = floatArrayOf(
+    0f, 0f, 0f, 0f, 0f,
+    0f, 0f, 0f, 0f, 0f,
+    0f, 0f, 0f, 0f, 0f,
+    0.30f, 0.59f, 0.11f, 0f, 0f,
+)

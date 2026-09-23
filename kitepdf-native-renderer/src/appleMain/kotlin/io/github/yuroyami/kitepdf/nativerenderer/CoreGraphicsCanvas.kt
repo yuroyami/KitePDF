@@ -3,6 +3,7 @@ package io.github.yuroyami.kitepdf.nativerenderer
 import io.github.yuroyami.kitepdf.core.KiteRectangle
 import io.github.yuroyami.kitepdf.core.font.FontSpec
 import io.github.yuroyami.kitepdf.core.font.TextGlyph
+import io.github.yuroyami.kitepdf.core.render.KITE_DEFAULT_MAX_RASTER_PIXELS
 import io.github.yuroyami.kitepdf.core.render.KiteBitmapCache
 import io.github.yuroyami.kitepdf.core.render.KiteBlendMode
 import io.github.yuroyami.kitepdf.core.render.KiteImageData
@@ -30,10 +31,22 @@ import kotlinx.cinterop.set
 import kotlinx.cinterop.useContents
 import kotlinx.cinterop.usePinned
 import kotlinx.cinterop.value
+import kotlin.math.ceil
+import kotlin.math.floor
+import kotlin.math.sqrt
 import platform.CoreFoundation.CFDataCreate
 import platform.CoreFoundation.CFDataRef
 import platform.CoreFoundation.CFRelease
+import platform.CoreGraphics.CGAffineTransform
+import platform.CoreGraphics.CGAffineTransformInvert
 import platform.CoreGraphics.CGAffineTransformMake
+import platform.CoreGraphics.CGBitmapContextCreate
+import platform.CoreGraphics.CGColorSpaceCreateDeviceGray
+import platform.CoreGraphics.CGContextClipToMask
+import platform.CoreGraphics.CGContextFillRect
+import platform.CoreGraphics.CGContextGetClipBoundingBox
+import platform.CoreGraphics.CGContextRelease
+import platform.CoreGraphics.CGImageRef
 import platform.CoreGraphics.CGBlendMode
 import platform.CoreGraphics.CGColorSpaceCreateDeviceRGB
 import platform.CoreGraphics.CGColorSpaceRelease
@@ -543,22 +556,145 @@ public class CoreGraphicsCanvas(private val ctx: CGContextRef) : KiteCanvas {
         }
     }
 
+    /**
+     * ISO 32000-1, 11.6.5.2: the mask group draws into a bitmap of its own. Its alpha, or
+     * its luminosity over a black backdrop, becomes a grey mask that the content paints
+     * through with CGContextClipToMask. So the mask group's colours never reach the page,
+     * and each paint keeps its own blend mode against the page (#79).
+     */
     override fun applySoftMask(
         kind: SoftMask.Kind,
         maskBBox: KiteRectangle, maskCtm: KiteMatrix,
         render: () -> Unit,
         renderMask: (KiteCanvas) -> Unit,
     ) {
-        CGContextSaveGState(ctx)
-        CGContextBeginTransparencyLayer(ctx, null)
-        try {
-            render()
-            CGContextSetBlendMode(ctx, CGBlendMode.kCGBlendModeDestinationIn)
-            renderMask(this)
-        } finally {
-            CGContextEndTransparencyLayer(ctx)
-            CGContextRestoreGState(ctx)
+        val toDevice = CGContextGetUserSpaceToDeviceSpaceTransform(ctx)
+        val userToDevice = toDevice.useContents { KiteMatrix(a, b, c, d, tx, ty) }
+        val area = maskArea(maskBBox, userToDevice.concat(maskCtm), userToDevice)
+        if (area == null) {
+            render() // Malformed geometry: keep the paint without its unusable mask.
+            return
         }
+        val (x0, y0) = area[0] to area[1]
+        val width = area[2] - x0
+        val height = area[3] - y0
+        // The mask is zero wherever the content could show.
+        if (width <= 0 || height <= 0) return
+        val pixels = width.toLong() * height
+        if (pixels > MASK_PIXEL_BUDGET * UNBOUNDED_MASK_FACTOR) {
+            render() // An unclipped box far past any page: keep the paint without its mask.
+            return
+        }
+        // Past the raster budget the mask applies at a lower resolution instead of being dropped.
+        val scale = if (pixels > MASK_PIXEL_BUDGET) sqrt(MASK_PIXEL_BUDGET.toDouble() / pixels) else 1.0
+        val w = maxOf(1, ceil(width * scale).toInt())
+        val h = maxOf(1, ceil(height * scale).toInt())
+        val values = maskValues(kind, w, h, x0, y0, scale, toDevice, renderMask)
+        val mask = values?.let { greyImage(it, w, h) }
+        if (mask == null) {
+            render()
+            return
+        }
+        CGContextSaveGState(ctx)
+        try {
+            // Clip in device pixels, then return to the user space the content paints in.
+            CGContextConcatCTM(ctx, CGAffineTransformInvert(toDevice))
+            CGContextClipToMask(ctx, CGRectMake(x0.toDouble(), y0.toDouble(), width.toDouble(), height.toDouble()), mask)
+            CGContextConcatCTM(ctx, toDevice)
+            render()
+        } finally {
+            CGContextRestoreGState(ctx)
+            CGImageRelease(mask)
+        }
+    }
+
+    /**
+     * The device pixels that [box] covers under [boxToDevice], inside the clip, as
+     * left, bottom, right and top. Null when the geometry is not finite.
+     */
+    private fun maskArea(box: KiteRectangle, boxToDevice: KiteMatrix, userToDevice: KiteMatrix): IntArray? {
+        val b = box.normalized()
+        val bounds = deviceBounds(b.left, b.bottom, b.right, b.top, boxToDevice) ?: return null
+        val clip = CGContextGetClipBoundingBox(ctx).useContents {
+            deviceBounds(origin.x, origin.y, origin.x + size.width, origin.y + size.height, userToDevice)
+        }
+        // A context without a finite clip box leaves the mask box as it is.
+        if (clip != null) {
+            bounds[0] = maxOf(bounds[0], clip[0])
+            bounds[1] = maxOf(bounds[1], clip[1])
+            bounds[2] = minOf(bounds[2], clip[2])
+            bounds[3] = minOf(bounds[3], clip[3])
+        }
+        return intArrayOf(floor(bounds[0]).toInt(), floor(bounds[1]).toInt(), ceil(bounds[2]).toInt(), ceil(bounds[3]).toInt())
+    }
+
+    /** The bounds of a rectangle under [m] as left, bottom, right and top, or null when not finite. */
+    private fun deviceBounds(left: Double, bottom: Double, right: Double, top: Double, m: KiteMatrix): DoubleArray? {
+        val xs = doubleArrayOf(m.transformX(left, bottom), m.transformX(right, bottom), m.transformX(left, top), m.transformX(right, top))
+        val ys = doubleArrayOf(m.transformY(left, bottom), m.transformY(right, bottom), m.transformY(left, top), m.transformY(right, top))
+        if (!xs.all { it.isFinite() } || !ys.all { it.isFinite() }) return null
+        // Keep the bounds within what an Int can hold: the clip cuts them down anyway.
+        fun c(v: Double) = v.coerceIn(-1e9, 1e9)
+        return doubleArrayOf(c(xs.min()), c(ys.min()), c(xs.max()), c(ys.max()))
+    }
+
+    /**
+     * One mask value per pixel, from the top row down, for [w] by [h] pixels whose bottom
+     * left corner is device pixel ([x0], [y0]) at [scale]. The value is the mask group's
+     * alpha, or for a luminosity mask its luminosity over black (ISO 32000-1, 11.5.3).
+     */
+    private fun maskValues(
+        kind: SoftMask.Kind, w: Int, h: Int, x0: Int, y0: Int, scale: Double,
+        toDevice: CValue<CGAffineTransform>, renderMask: (KiteCanvas) -> Unit,
+    ): ByteArray? {
+        val rgba = ByteArray(w * h * 4)
+        rgba.usePinned { pinned ->
+            val space = CGColorSpaceCreateDeviceRGB()
+            val maskCtx = CGBitmapContextCreate(
+                pinned.addressOf(0), w.toULong(), h.toULong(), 8u, (w * 4).toULong(), space,
+                CGImageAlphaInfo.kCGImageAlphaPremultipliedLast.value,
+            )
+            CGColorSpaceRelease(space)
+            if (maskCtx == null) return null
+            try {
+                if (kind == SoftMask.Kind.Luminosity) {
+                    // Unpainted pixels show the black backdrop, whose luminosity is zero.
+                    CGContextSetRGBFillColor(maskCtx, 0.0, 0.0, 0.0, 1.0)
+                    CGContextFillRect(maskCtx, CGRectMake(0.0, 0.0, w.toDouble(), h.toDouble()))
+                }
+                CGContextScaleCTM(maskCtx, scale, scale)
+                CGContextTranslateCTM(maskCtx, -x0.toDouble(), -y0.toDouble())
+                CGContextConcatCTM(maskCtx, toDevice)
+                renderMask(CoreGraphicsCanvas(maskCtx))
+            } finally {
+                CGContextRelease(maskCtx)
+            }
+        }
+        if (kind == SoftMask.Kind.Alpha) return ByteArray(w * h) { rgba[it * 4 + 3] }
+        // Opaque over black, so the premultiplied colour is the colour itself.
+        return ByteArray(w * h) { i ->
+            val r = rgba[i * 4].toInt() and 255
+            val g = rgba[i * 4 + 1].toInt() and 255
+            val b = rgba[i * 4 + 2].toInt() and 255
+            ((r * 77 + g * 150 + b * 29) ushr 8).toByte()
+        }
+    }
+
+    /** A DeviceGray image of [values], [w] by [h] pixels, for CGContextClipToMask. */
+    private fun greyImage(values: ByteArray, w: Int, h: Int): CGImageRef? {
+        val cfData = values.toCFData() ?: return null
+        val provider = CGDataProviderCreateWithCFData(cfData)
+        CFRelease(cfData)   // the provider holds its own reference
+        if (provider == null) return null
+        val cs = CGColorSpaceCreateDeviceGray()
+        val img = CGImageCreate(
+            w.toULong(), h.toULong(), 8u, 8u, w.toULong(), cs,
+            CGImageAlphaInfo.kCGImageAlphaNone.value,
+            provider, null, true, CGColorRenderingIntent.kCGRenderingIntentDefault,
+        )
+        CGColorSpaceRelease(cs)
+        CGDataProviderRelease(provider)
+        return img
     }
 
     /* ─── Helpers ─────────────────────────────────────────────────────────── */
@@ -621,6 +757,12 @@ public class CoreGraphicsCanvas(private val ctx: CGContextRef) : KiteCanvas {
     }
 
     private companion object {
+        /** Pixels one soft mask may use before it drops to a lower resolution, as on AWT. */
+        const val MASK_PIXEL_BUDGET = KITE_DEFAULT_MAX_RASTER_PIXELS
+
+        /** A mask area this many budgets wide cannot be a page render; it keeps the paint unmasked. */
+        const val UNBOUNDED_MASK_FACTOR = 16L
+
         val IMAGE_KINDS_DECODABLE_BY_CG = setOf(
             KiteImageData.Kind.JPEG,
             KiteImageData.Kind.JPEG2000,
