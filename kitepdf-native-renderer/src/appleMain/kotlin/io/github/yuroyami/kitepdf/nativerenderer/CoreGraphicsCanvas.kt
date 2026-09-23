@@ -3,6 +3,7 @@ package io.github.yuroyami.kitepdf.nativerenderer
 import io.github.yuroyami.kitepdf.core.KiteRectangle
 import io.github.yuroyami.kitepdf.core.font.FontSpec
 import io.github.yuroyami.kitepdf.core.font.TextGlyph
+import io.github.yuroyami.kitepdf.core.render.KiteBitmapCache
 import io.github.yuroyami.kitepdf.core.render.KiteBlendMode
 import io.github.yuroyami.kitepdf.core.render.KiteImageData
 import io.github.yuroyami.kitepdf.core.render.KiteImageSampling
@@ -474,11 +475,14 @@ public class CoreGraphicsCanvas(private val ctx: CGContextRef) : KiteCanvas {
      * An image drawn smaller than its pixels is averaged down first (#122).
      */
     private fun rawCgImage(image: KiteImageData, sampling: KiteImageSampling): platform.CoreGraphics.CGImageRef? {
-        val full = image.toRgbaBytes() ?: return null
-        val rgba = if (sampling.shrinks) shrinkRgba(full, image.width, image.height, sampling.shrinkX, sampling.shrinkY) else full
-        val width = sampling.shrunkWidth(image.width)
-        val height = sampling.shrunkHeight(image.height)
-        val cfData = rgba.toCFData() ?: return null
+        val pixels = rgbaImages.getOrPut(image, sampling, { it.rgba.size.toLong() }) {
+            val full = image.toRgbaBytes() ?: return@getOrPut null
+            val rgba = if (sampling.shrinks) shrinkRgba(full, image.width, image.height, sampling.shrinkX, sampling.shrinkY) else full
+            RgbaImage(rgba, sampling.shrunkWidth(image.width), sampling.shrunkHeight(image.height))
+        } ?: return null
+        val width = pixels.width
+        val height = pixels.height
+        val cfData = pixels.rgba.toCFData() ?: return null
         val provider = CGDataProviderCreateWithCFData(cfData)
         CFRelease(cfData)   // the provider holds its own reference
         if (provider == null) return null
@@ -493,6 +497,15 @@ public class CoreGraphicsCanvas(private val ctx: CGContextRef) : KiteCanvas {
         CGDataProviderRelease(provider)
         return img
     }
+
+    /** Straight RGBA pixels of [width] by [height]. */
+    private class RgbaImage(val rgba: ByteArray, val width: Int, val height: Int)
+
+    /**
+     * RGBA built from RAW images, so that an image drawn many times converts once (#117).
+     * It holds Kotlin arrays only: each draw makes its own CGImage and releases it.
+     */
+    private val rgbaImages = KiteBitmapCache<RgbaImage>()
 
     private fun drawPlaceholder(ctm: KiteMatrix) {
         CGContextSaveGState(ctx)

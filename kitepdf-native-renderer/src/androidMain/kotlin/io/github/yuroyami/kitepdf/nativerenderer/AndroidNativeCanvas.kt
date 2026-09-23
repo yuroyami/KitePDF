@@ -18,6 +18,7 @@ import io.github.yuroyami.kitepdf.core.font.KiteFontFamily
 import io.github.yuroyami.kitepdf.core.font.FontSpec
 import io.github.yuroyami.kitepdf.core.font.TextGlyph
 import io.github.yuroyami.kitepdf.core.render.KiteBlendMode
+import io.github.yuroyami.kitepdf.core.render.KiteBitmapCache
 import io.github.yuroyami.kitepdf.core.render.KiteImageData
 import io.github.yuroyami.kitepdf.core.render.KiteImageSampling
 import io.github.yuroyami.kitepdf.core.render.imageSampling
@@ -361,7 +362,7 @@ public class AndroidNativeCanvas(private val canvas: AndroidCanvas) : KiteCanvas
     override fun drawImage(image: KiteImageData, ctm: KiteMatrix, alpha: Double) {
         // One sampling policy on every canvas (#122, #123). The ctm maps to this canvas's pixels.
         val sampling = imageSampling(image.width, image.height, ctm, image.interpolate)
-        val bm = decodeImage(image, sampling)
+        val bm = bitmaps.getOrPut(image, sampling, { it.width.toLong() * it.height * 4 }) { decodeImage(image, sampling) }
         if (bm == null) {
             drawPlaceholder(ctm)
             return
@@ -385,6 +386,9 @@ public class AndroidNativeCanvas(private val canvas: AndroidCanvas) : KiteCanvas
         canvas.restore()
         openLayers--
     }
+
+    /** Bitmaps built from images, so that an image drawn many times converts once (#117). */
+    private val bitmaps = KiteBitmapCache<android.graphics.Bitmap>()
 
     /** The image as a bitmap, averaged down when [sampling] shrinks it, so fine detail fades instead of dropping out (#122). */
     private fun decodeImage(image: KiteImageData, sampling: KiteImageSampling): android.graphics.Bitmap? = try {

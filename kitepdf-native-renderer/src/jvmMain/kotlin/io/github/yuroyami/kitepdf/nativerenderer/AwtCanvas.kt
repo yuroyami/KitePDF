@@ -6,6 +6,7 @@ import io.github.yuroyami.kitepdf.core.font.KiteFontFamily
 import io.github.yuroyami.kitepdf.core.font.FontSpec
 import io.github.yuroyami.kitepdf.core.font.TextGlyph
 import io.github.yuroyami.kitepdf.core.render.KITE_DEFAULT_MAX_RASTER_PIXELS
+import io.github.yuroyami.kitepdf.core.render.KiteBitmapCache
 import io.github.yuroyami.kitepdf.core.render.KiteBlendMode
 import io.github.yuroyami.kitepdf.core.render.KiteImageData
 import io.github.yuroyami.kitepdf.core.render.KiteImageSampling
@@ -376,7 +377,8 @@ public class AwtCanvas(private var g: Graphics2D) : KiteCanvas {
             KiteMatrix(device.scaleX, device.shearY, device.shearX, device.scaleY, device.translateX, device.translateY),
             image.interpolate,
         )
-        val bitmap = decodeImage(image, sampling) ?: return drawPlaceholder(ctm)
+        val bitmap = bitmaps.getOrPut(image, sampling, { it.width.toLong() * it.height * 4 }) { decodeImage(image, sampling) }
+            ?: return drawPlaceholder(ctm)
         val saved = g.transform
         val savedHint = g.getRenderingHint(RenderingHints.KEY_INTERPOLATION)
         try {
@@ -403,6 +405,9 @@ public class AwtCanvas(private var g: Graphics2D) : KiteCanvas {
             if (savedHint != null) g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, savedHint)
         }
     }
+
+    /** Bitmaps built from images, so that an image drawn many times converts once (#117). */
+    private val bitmaps = KiteBitmapCache<BufferedImage>()
 
     /** The image as a bitmap, averaged down when [sampling] shrinks it, so fine detail fades instead of dropping out (#122). */
     private fun decodeImage(image: KiteImageData, sampling: KiteImageSampling): BufferedImage? = try {

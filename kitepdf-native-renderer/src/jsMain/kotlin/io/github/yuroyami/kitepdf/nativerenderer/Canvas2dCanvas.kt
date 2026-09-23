@@ -6,7 +6,9 @@ import io.github.yuroyami.kitepdf.core.font.KiteFontFamily
 import io.github.yuroyami.kitepdf.core.font.FontSpec
 import io.github.yuroyami.kitepdf.core.font.TextGlyph
 import io.github.yuroyami.kitepdf.core.render.KiteBlendMode
+import io.github.yuroyami.kitepdf.core.render.KiteBitmapCache
 import io.github.yuroyami.kitepdf.core.render.KiteImageData
+import io.github.yuroyami.kitepdf.core.render.KiteImageSampling
 import io.github.yuroyami.kitepdf.core.render.KiteMatrix
 import io.github.yuroyami.kitepdf.core.render.KiteCanvas
 import io.github.yuroyami.kitepdf.core.render.KitePath
@@ -300,26 +302,13 @@ public class Canvas2dCanvas(private val ctx: CanvasRenderingContext2D) : KiteCan
         // JPEG / JPX / JBIG2 decode produces. Encoded kinds core could not
         // decode keep the placeholder: browser decoding is async, and a
         // preload API is still to come.
-        val full = if (image.kind == KiteImageData.Kind.RAW) image.toRgbaBytes() else null
-        if (full == null) {
+        // One sampling policy on every canvas (#122, #123). setTransform below makes the ctm the device transform.
+        val sampling = imageSampling(image.width, image.height, ctm, image.interpolate)
+        val off = offscreens.getOrPut(image, sampling, { it.width.toLong() * it.height * 4 }) { offscreenFor(image, sampling) }
+        if (off == null) {
             drawPlaceholder(ctm, alpha)
             return
         }
-        // One sampling policy on every canvas (#122, #123). setTransform below makes the ctm the device transform.
-        val sampling = imageSampling(image.width, image.height, ctm, image.interpolate)
-        // An image drawn smaller than its pixels is averaged down first, so fine detail fades instead of dropping out.
-        val rgba = if (sampling.shrinks) shrinkRgba(full, image.width, image.height, sampling.shrinkX, sampling.shrinkY) else full
-        val width = sampling.shrunkWidth(image.width)
-        val height = sampling.shrunkHeight(image.height)
-        // putImageData ignores the transform, so stage on an offscreen canvas
-        // and drawImage that under the CTM.
-        val off = document.createElement("canvas") as HTMLCanvasElement
-        off.width = width
-        off.height = height
-        val offCtx = off.getContext("2d") as CanvasRenderingContext2D
-        val i8 = rgba.unsafeCast<Int8Array>()
-        val clamped = Uint8ClampedArray(i8.buffer, i8.byteOffset, i8.length)
-        offCtx.putImageData(ImageData(clamped, width, height), 0.0, 0.0)
         ctx.save()
         try {
             ctx.setTransform(ctm.a, ctm.b, ctm.c, ctm.d, ctm.e, ctm.f)
@@ -328,11 +317,35 @@ public class Canvas2dCanvas(private val ctx: CanvasRenderingContext2D) : KiteCan
             // Unit square, bitmap row 0 on the top edge (v = 1): the Skia
             // mapping, translate up one unit and flip Y.
             ctx.translate(0.0, 1.0)
-            ctx.scale(1.0 / width, -1.0 / height)
+            ctx.scale(1.0 / off.width, -1.0 / off.height)
             ctx.drawImage(off, 0.0, 0.0)
         } finally {
             ctx.restore()
         }
+    }
+
+    /** Offscreen canvases that hold images, so that an image drawn many times converts once (#117). */
+    private val offscreens = KiteBitmapCache<HTMLCanvasElement>()
+
+    /**
+     * The image on an offscreen canvas, averaged down when [sampling] shrinks it, so fine
+     * detail fades instead of dropping out. putImageData ignores the transform, so the
+     * image waits here to be drawn under the CTM. Null for a kind that core did not decode.
+     */
+    private fun offscreenFor(image: KiteImageData, sampling: KiteImageSampling): HTMLCanvasElement? {
+        if (image.kind != KiteImageData.Kind.RAW) return null
+        val full = image.toRgbaBytes() ?: return null
+        val rgba = if (sampling.shrinks) shrinkRgba(full, image.width, image.height, sampling.shrinkX, sampling.shrinkY) else full
+        val width = sampling.shrunkWidth(image.width)
+        val height = sampling.shrunkHeight(image.height)
+        val off = document.createElement("canvas") as HTMLCanvasElement
+        off.width = width
+        off.height = height
+        val offCtx = off.getContext("2d") as CanvasRenderingContext2D
+        val i8 = rgba.unsafeCast<Int8Array>()
+        val clamped = Uint8ClampedArray(i8.buffer, i8.byteOffset, i8.length)
+        offCtx.putImageData(ImageData(clamped, width, height), 0.0, 0.0)
+        return off
     }
 
     private fun drawPlaceholder(ctm: KiteMatrix, alpha: Double) {

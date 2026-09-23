@@ -31,7 +31,9 @@ import io.github.yuroyami.kitepdf.core.font.TextGlyph
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.ShaderBrush
 import io.github.yuroyami.kitepdf.core.render.KiteBlendMode
+import io.github.yuroyami.kitepdf.core.render.KiteBitmapCache
 import io.github.yuroyami.kitepdf.core.render.KiteImageData
+import io.github.yuroyami.kitepdf.core.render.KiteImageSampling
 import io.github.yuroyami.kitepdf.core.render.toRgbaBytes
 import io.github.yuroyami.kitepdf.core.render.KiteMatrix
 import io.github.yuroyami.kitepdf.core.render.KiteCanvas
@@ -348,42 +350,46 @@ public class ComposeCanvas(
         // One sampling policy on every canvas (#122, #123). The ctm maps to this scope's pixels.
         val sampling = imageSampling(image.width, image.height, ctm, image.interpolate)
         withActiveClips {
-            val decoded = when (image.kind) {
-                // Skia decodes JPEG natively; on JVM/iOS it also handles JP2 / JPEG 2000.
-                // BitmapFactory on Android decodes JPEG (JP2 returns null → placeholder).
-                // JBIG2 is best-effort: most platforms don't support it natively and
-                // ImageDecoder will fall back to null + a placeholder.
-                KiteImageData.Kind.JPEG, KiteImageData.Kind.JPEG2000, KiteImageData.Kind.JBIG2 ->
-                    ImageDecoder.decode(image.encodedBytes)
-                // RAW (FlateDecode etc.): samples are already inflated. Assemble RGBA
-                // and build a bitmap directly. Covers the common embedded-PNG case.
-                KiteImageData.Kind.RAW -> image.toRgbaBytes()?.let { rgba ->
-                    if (!sampling.shrinks) return@let ImageDecoder.decodeRaw(rgba, image.width, image.height)
-                    // An image drawn smaller than its pixels is averaged down first, so fine detail fades instead of dropping out.
-                    ImageDecoder.decodeRaw(
-                        shrinkRgba(rgba, image.width, image.height, sampling.shrinkX, sampling.shrinkY),
-                        sampling.shrunkWidth(image.width),
-                        sampling.shrunkHeight(image.height),
-                    )
-                }
-                else -> null
-            }
-            val bitmap = if (decoded != null && sampling.shrinks && image.kind != KiteImageData.Kind.RAW) {
-                // readPixels gives straight ARGB on every platform.
-                val w = decoded.width
-                val small = shrinkArgb(w, decoded.height, sampling.shrinkX, sampling.shrinkY) { pixels, y, rows ->
-                    decoded.readPixels(pixels, startX = 0, startY = y, width = w, height = rows)
-                }
-                ImageDecoder.decodeRaw(small, sampling.shrunkWidth(w), sampling.shrunkHeight(decoded.height)) ?: decoded
-            } else {
-                decoded
-            }
+            val bitmap = bitmaps.getOrPut(image, sampling, { it.width.toLong() * it.height * 4 }) { bitmapFor(image, sampling) }
             if (bitmap != null) {
                 drawBitmap(bitmap, ctm, alpha.toFloat().coerceIn(0f, 1f), if (sampling.smooth) FilterQuality.Low else FilterQuality.None)
             } else {
                 drawPlaceholder(ctm)
             }
         }
+    }
+
+    /** Bitmaps built from images, so that an image drawn many times converts once (#117). */
+    private val bitmaps = KiteBitmapCache<ImageBitmap>()
+
+    /** The image as a bitmap, averaged down when [sampling] shrinks it, so fine detail fades instead of dropping out. */
+    private fun bitmapFor(image: KiteImageData, sampling: KiteImageSampling): ImageBitmap? {
+        val decoded = when (image.kind) {
+            // Skia decodes JPEG natively; on JVM/iOS it also handles JP2 / JPEG 2000.
+            // BitmapFactory on Android decodes JPEG (JP2 returns null → placeholder).
+            // JBIG2 is best-effort: most platforms don't support it natively and
+            // ImageDecoder will fall back to null + a placeholder.
+            KiteImageData.Kind.JPEG, KiteImageData.Kind.JPEG2000, KiteImageData.Kind.JBIG2 ->
+                ImageDecoder.decode(image.encodedBytes)
+            // RAW (FlateDecode etc.): samples are already inflated. Assemble RGBA
+            // and build a bitmap directly. Covers the common embedded-PNG case.
+            KiteImageData.Kind.RAW -> return image.toRgbaBytes()?.let { rgba ->
+                if (!sampling.shrinks) return@let ImageDecoder.decodeRaw(rgba, image.width, image.height)
+                ImageDecoder.decodeRaw(
+                    shrinkRgba(rgba, image.width, image.height, sampling.shrinkX, sampling.shrinkY),
+                    sampling.shrunkWidth(image.width),
+                    sampling.shrunkHeight(image.height),
+                )
+            }
+            else -> null
+        } ?: return null
+        if (!sampling.shrinks) return decoded
+        // readPixels gives straight ARGB on every platform.
+        val w = decoded.width
+        val small = shrinkArgb(w, decoded.height, sampling.shrinkX, sampling.shrinkY) { pixels, y, rows ->
+            decoded.readPixels(pixels, startX = 0, startY = y, width = w, height = rows)
+        }
+        return ImageDecoder.decodeRaw(small, sampling.shrunkWidth(w), sampling.shrunkHeight(decoded.height)) ?: decoded
     }
 
     override fun fillShading(
