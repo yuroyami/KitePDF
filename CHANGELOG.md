@@ -159,6 +159,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   draws from its own CFF or TrueType outlines instead of a system font. An OpenType
   CFF font without a `FontMatrix` takes its units per em from its `head` table, as in
   FreeType (#282).
+- An SVG shape filled with a gradient shows the gradient inside the shape. The
+  shape was transformed twice, so the gradient painted far from the shape, or off
+  the page, and the shape stayed empty (#283).
 
 ## [0.10.0] - 2026-09-13
 

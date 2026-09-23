@@ -342,6 +342,64 @@ class SvgFeaturesTest {
         assertTrue(drawn.any { it is RecordingCanvas.Call.Fill }, "got $drawn")
     }
 
+    /** [minX, minY, maxX, maxY] of the fill region of [fill] in device space. */
+    private fun deviceBounds(fill: RecordingCanvas.Call.Fill): List<Double> {
+        val m = fill.ctm
+        val points = fill.path.segments.mapNotNull {
+            when (it) {
+                is KitePath.Segment.MoveTo -> it.x to it.y
+                is KitePath.Segment.LineTo -> it.x to it.y
+                else -> null
+            }
+        }.map { (x, y) -> (m.a * x + m.c * y + m.e) to (m.b * x + m.d * y + m.f) }
+        return listOf(points.minOf { it.first }, points.minOf { it.second }, points.maxOf { it.first }, points.maxOf { it.second })
+    }
+
+    private fun assertNear(expected: List<Double>, actual: List<Double>, message: String) =
+        assertTrue(expected.zip(actual).all { (e, a) -> kotlin.math.abs(e - a) < 1e-9 }, "$message: expected $expected, got $actual")
+
+    /** Where [fill]'s matrix puts the gradient-space point ([x], [y]). */
+    private fun gradientPoint(fill: RecordingCanvas.Call.Fill, x: Double, y: Double) =
+        fill.ctm.let { listOf(it.a * x + it.c * y + it.e, it.b * x + it.d * y + it.f) }
+
+    private fun gradientSquare(gradientAttrs: String) = fills(
+        """<svg width="100" height="100" viewBox="0 0 50 50">
+             <linearGradient id="g" $gradientAttrs><stop offset="0" stop-color="red"/><stop offset="1" stop-color="blue"/></linearGradient>
+             <rect x="10" y="10" width="20" height="20" fill="url(#g)"/>
+           </svg>""",
+    ).single()
+
+    @Test
+    fun a_gradient_fill_covers_its_shape_once() {
+        // The viewBox scales by 2, so the square covers (20, 20) to (60, 60) on the device.
+        val fill = gradientSquare("")
+        assertNear(listOf(20.0, 20.0, 60.0, 60.0), deviceBounds(fill), "fill region")
+        assertNear(listOf(20.0, 20.0), gradientPoint(fill, 0.0, 0.0), "gradient box origin")
+        assertNear(listOf(60.0, 60.0), gradientPoint(fill, 1.0, 1.0), "gradient box corner")
+    }
+
+    @Test
+    fun a_gradient_transform_moves_the_gradient_but_not_the_shape() {
+        val rotated = gradientSquare("gradientTransform='rotate(90)'")
+        assertNear(listOf(20.0, 20.0, 60.0, 60.0), deviceBounds(rotated), "fill region")
+        // Rotating the unit box by 90 degrees sends (1, 0) to (0, 1), the square's bottom left corner.
+        assertNear(listOf(20.0, 60.0), gradientPoint(rotated, 1.0, 0.0), "rotated axis end")
+
+        val user = gradientSquare("gradientUnits='userSpaceOnUse' gradientTransform='translate(5 0)'")
+        assertNear(listOf(20.0, 20.0, 60.0, 60.0), deviceBounds(user), "fill region")
+        assertNear(listOf(10.0, 0.0), gradientPoint(user, 0.0, 0.0), "user space origin")
+    }
+
+    @Test
+    fun a_gradient_transform_without_an_inverse_paints_nothing() {
+        assertTrue(calls(
+            """<svg width="20" height="20">
+                 <linearGradient id="g" gradientTransform="scale(0)"><stop offset="0" stop-color="red"/></linearGradient>
+                 <rect width="20" height="20" fill="url(#g)"/>
+               </svg>""",
+        ).none { it is RecordingCanvas.Call.Fill })
+    }
+
     @Test
     fun a_fill_pointing_at_nothing_falls_back_to_the_inherited_colour() {
         val f = fills("""<svg width="10" height="10" fill="red"><rect width="5" height="5" fill="url(#gone)"/></svg>""")
