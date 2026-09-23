@@ -37,6 +37,7 @@ import org.jetbrains.skia.PathBuilder
 import org.jetbrains.skia.PathFillMode
 import org.jetbrains.skia.PathVerb
 import org.jetbrains.skia.Shader
+import org.jetbrains.skia.TextBlob
 import org.jetbrains.skia.Gradient
 import org.jetbrains.skia.Color4f
 import org.jetbrains.skia.FilterTileMode
@@ -181,14 +182,14 @@ public class SkiaCanvas(private val canvas: SkCanvas) : KiteCanvas {
      * System-font fallback for fonts without embedded outlines (Standard-14
      * Helvetica/Times/Courier etc). Decode to text, pick a host typeface by
      * family, and draw the run with the text matrix's scale/rotation applied
-     * (baseline at the matrix origin). Mirrors ComposeCanvas.drawTextViaSystemFont.
+     * (baseline at the matrix origin). Each glyph starts where the document's
+     * own advances put it, as on AWT.
      */
     private fun drawTextViaSystemFont(
         glyphs: List<TextGlyph>, fontSize: Double, fontSpec: FontSpec,
         textMatrix: KiteMatrix, color: RgbColor, alpha: Double, blendMode: KiteBlendMode,
     ) {
-        val text = glyphs.joinToString("") { it.text }
-        if (text.isEmpty()) return
+        if (glyphs.all { it.text.isEmpty() }) return
         val sx = kotlin.math.sqrt(textMatrix.a * textMatrix.a + textMatrix.b * textMatrix.b)
         val sy = kotlin.math.sqrt(textMatrix.c * textMatrix.c + textMatrix.d * textMatrix.d)
         val renderedSize = (fontSize * sy).toFloat()
@@ -206,15 +207,53 @@ public class SkiaCanvas(private val canvas: SkCanvas) : KiteCanvas {
         // instead and leave the warning trail a blank page never gives.
         val typeface = systemTypeface(fontSpec) ?: return
         val skFont = Font(typeface, renderedSize)
+        // renderedSize already carries sy, so the text-space adjustment needs it too.
+        val run = placedRun(glyphs, skFont, renderedSize / 1000.0, sy) ?: return
         canvas.save()
         try {
             canvas.translate(textMatrix.e.toFloat(), textMatrix.f.toFloat())
             if (rotationDeg != 0f) canvas.rotate(rotationDeg)
             if (sx != sy && sy != 0.0) canvas.scale((sx / sy).toFloat(), 1f)
-            canvas.drawString(text, 0f, 0f, skFont, paint)
+            canvas.drawTextBlob(run, 0f, 0f, paint)
         } finally {
             canvas.restore()
         }
+    }
+
+    /**
+     * The characters of [glyphs] in [font], each glyph placed where the document's own
+     * advances put it (ISO 32000-1, 9.4.4), character and word spacing included (#121).
+     * The characters of one glyph, such as a ligature, keep the host face's spacing.
+     */
+    private fun placedRun(glyphs: List<TextGlyph>, font: Font, advanceScale: Double, adjustScale: Double): TextBlob? {
+        val capacity = glyphs.sumOf { it.text.length }
+        if (capacity == 0) return null
+        val codePoints = IntArray(capacity)
+        // The pen position of the glyph a character starts, or NaN for a later character of the same glyph.
+        val origins = DoubleArray(capacity)
+        var n = 0
+        var penX = 0.0
+        for (glyph in glyphs) {
+            val t = glyph.text
+            var i = 0
+            while (i < t.length) {
+                val pair = t[i].isHighSurrogate() && i + 1 < t.length && t[i + 1].isLowSurrogate()
+                codePoints[n] = if (pair) 0x10000 + ((t[i].code - 0xD800) shl 10) + (t[i + 1].code - 0xDC00) else t[i].code
+                origins[n] = if (i == 0) penX else Double.NaN
+                n++
+                i += if (pair) 2 else 1
+            }
+            penX += glyph.advanceWidth * advanceScale + glyph.advanceAdjust * adjustScale
+        }
+        val ids = font.getUTF32Glyphs(codePoints.copyOf(n))
+        val widths = font.getWidths(ids)
+        val xs = FloatArray(n)
+        var x = 0.0
+        for (k in 0 until n) {
+            x = if (origins[k].isNaN()) x + widths[k - 1] else origins[k]
+            xs[k] = x.toFloat()
+        }
+        return TextBlob.makeFromPosH(ids, xs, 0f, font)
     }
 
     /**

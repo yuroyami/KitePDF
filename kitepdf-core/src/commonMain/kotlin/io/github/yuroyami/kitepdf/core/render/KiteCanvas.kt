@@ -102,7 +102,9 @@ public interface KiteCanvas {
      * `advanceWidth * fontSize / 1000 + advanceAdjust` (the adjust term carries
      * character/word spacing), and paint under [textToDevice].
      * Non-embedded fonts ([hasOutlines] = false) carry no outlines; render
-     * [TextGlyph.text] through a host typeface chosen from [fontSpec].
+     * [TextGlyph.text] through a host typeface chosen from [fontSpec]. The pen
+     * still advances by the document's numbers above, not by the host face's
+     * own metrics (ISO 32000-1, 9.4.4).
      */
     public fun drawGlyphs(
         glyphs: List<TextGlyph>,
