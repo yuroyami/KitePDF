@@ -169,6 +169,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   highlight of a sphere or a button no longer turns into a plain fade around one
   centre. Android draws both circles from API 31 on; below that, only circles that
   share a centre draw exactly (#71).
+- Compose, Android, CoreGraphics and Canvas2D honour the `/Extend` flags of axial
+  and radial shadings. A gradient that the document confines to a band or a ring
+  flooded the whole clip region (#70).
 
 ## [0.10.0] - 2026-09-13
 

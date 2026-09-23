@@ -243,9 +243,19 @@ public class Canvas2dCanvas(private val ctx: CanvasRenderingContext2D) : KiteCan
             is KiteShading.Unsupported -> return
             else -> return // complex shading types already handled by paintComplexShading
         }
+        // An end that is not extended paints nothing past it (ISO 32000-1, 8.7.4.5.3 and
+        // 8.7.4.5.4). A canvas gradient always pads with the colour of its outermost stop,
+        // so a transparent stop on that end, added first or last, makes the pad transparent.
+        val (extendStart, extendEnd) = when (shading) {
+            is KiteShading.Axial -> shading.extendStart to shading.extendEnd
+            is KiteShading.Radial -> shading.extendStart to shading.extendEnd
+            else -> true to true
+        }
+        if (!extendStart) gradient.addColorStop(0.0, "rgba(0,0,0,0)")
         for (i in stops.colors.indices) {
             gradient.addColorStop(stops.offsets[i], stops.colors[i].toCssRgba(alpha))
         }
+        if (!extendEnd) gradient.addColorStop(1.0, "rgba(0,0,0,0)")
 
         ctx.save()
         try {
