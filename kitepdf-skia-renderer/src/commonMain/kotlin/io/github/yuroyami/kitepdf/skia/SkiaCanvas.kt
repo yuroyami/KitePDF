@@ -12,7 +12,9 @@ import io.github.yuroyami.kitepdf.core.render.KitePath
 import io.github.yuroyami.kitepdf.core.render.KiteShading
 import io.github.yuroyami.kitepdf.core.render.RgbColor
 import io.github.yuroyami.kitepdf.core.render.SoftMask
+import io.github.yuroyami.kitepdf.core.render.imageSampling
 import io.github.yuroyami.kitepdf.core.render.sampleStops
+import io.github.yuroyami.kitepdf.core.render.shrinkRgba
 import io.github.yuroyami.kitepdf.core.render.toRgbaBytes
 import org.jetbrains.skia.BlendMode as SkiaBlendMode
 import org.jetbrains.skia.Canvas as SkCanvas
@@ -36,6 +38,11 @@ import org.jetbrains.skia.Shader
 import org.jetbrains.skia.Gradient
 import org.jetbrains.skia.Color4f
 import org.jetbrains.skia.FilterTileMode
+import org.jetbrains.skia.FilterMipmap
+import org.jetbrains.skia.FilterMode
+import org.jetbrains.skia.MipmapMode
+import org.jetbrains.skia.Rect
+import org.jetbrains.skia.SamplingMode
 
 /**
  * [KiteCanvas] backed by a raw [org.jetbrains.skia.Canvas] (Skiko).
@@ -376,6 +383,13 @@ public class SkiaCanvas(private val canvas: SkCanvas) : KiteCanvas {
     }
 
     override fun drawImage(image: KiteImageData, ctm: KiteMatrix, alpha: Double) {
+        // One sampling policy on every canvas (#122, #123), read from the whole transform to device pixels.
+        val m = canvas.localToDeviceAsMatrix33.makeConcat(pdfMatrixToSkia(ctm)).mat
+        val sampling = imageSampling(
+            image.width, image.height,
+            KiteMatrix(m[0].toDouble(), m[3].toDouble(), m[1].toDouble(), m[4].toDouble(), m[2].toDouble(), m[5].toDouble()),
+            image.interpolate,
+        )
         // Skia decodes JPEG natively + JP2/JPEG-2000 where the platform shim
         // supports it. Other kinds fall back to a placeholder rectangle.
         val sk = when (image.kind) {
@@ -385,12 +399,16 @@ public class SkiaCanvas(private val canvas: SkCanvas) : KiteCanvas {
                 null
             }
             KiteImageData.Kind.RAW -> try {
-                image.toRgbaBytes()?.let {
+                image.toRgbaBytes()?.let { rgba ->
+                    // An image drawn smaller than its pixels is averaged down first, so fine detail fades instead of dropping out.
+                    val w = sampling.shrunkWidth(image.width)
+                    val h = sampling.shrunkHeight(image.height)
+                    val pixels = if (sampling.shrinks) shrinkRgba(rgba, image.width, image.height, sampling.shrinkX, sampling.shrinkY) else rgba
                     // toRgbaBytes() emits straight (non-premultiplied) R,G,B,A
                     // per pixel, matching RGBA_8888. UNPREMUL honours the alpha
                     // channel (SMask alpha, ImageMask stencil transparency);
                     // OPAQUE would discard it, rendering masks as solid black.
-                    Image.makeRaster(ImageInfo(image.width, image.height, ColorType.RGBA_8888, ColorAlphaType.UNPREMUL), it, image.width * 4)
+                    Image.makeRaster(ImageInfo(w, h, ColorType.RGBA_8888, ColorAlphaType.UNPREMUL), pixels, w * 4)
                 }
             } catch (t: Throwable) {
                 null
@@ -414,10 +432,17 @@ public class SkiaCanvas(private val canvas: SkCanvas) : KiteCanvas {
         // unit square, matching AwtCanvas' documented mapping. The earlier
         // translate(0,-1)+positive-Y scale both mis-placed and flipped it.
         val paint = Paint().apply { this.alpha = alpha.toFloat().coerceIn(0f, 1f).let { (it * 255).toInt() } }
+        val mode = when {
+            // An encoded image is not averaged above, so Skia's mipmaps average it.
+            sampling.shrinks && image.kind != KiteImageData.Kind.RAW -> FilterMipmap(FilterMode.LINEAR, MipmapMode.LINEAR)
+            sampling.smooth -> SamplingMode.LINEAR
+            else -> SamplingMode.DEFAULT
+        }
         canvas.save()
         canvas.translate(0f, 1f)
         canvas.scale(1f / sk.width, -1f / sk.height)
-        canvas.drawImage(sk, 0f, 0f, paint)
+        val bounds = Rect.makeWH(sk.width.toFloat(), sk.height.toFloat())
+        canvas.drawImageRect(sk, bounds, bounds, mode, paint, false)
         canvas.restore()
         canvas.restore()
         openLayers--

@@ -8,13 +8,17 @@ import io.github.yuroyami.kitepdf.core.font.TextGlyph
 import io.github.yuroyami.kitepdf.core.render.KITE_DEFAULT_MAX_RASTER_PIXELS
 import io.github.yuroyami.kitepdf.core.render.KiteBlendMode
 import io.github.yuroyami.kitepdf.core.render.KiteImageData
+import io.github.yuroyami.kitepdf.core.render.KiteImageSampling
 import io.github.yuroyami.kitepdf.core.render.KiteMatrix
 import io.github.yuroyami.kitepdf.core.render.KiteCanvas
 import io.github.yuroyami.kitepdf.core.render.KitePath
 import io.github.yuroyami.kitepdf.core.render.KiteShading
 import io.github.yuroyami.kitepdf.core.render.RgbColor
 import io.github.yuroyami.kitepdf.core.render.SoftMask
+import io.github.yuroyami.kitepdf.core.render.imageSampling
 import io.github.yuroyami.kitepdf.core.render.sampleStops
+import io.github.yuroyami.kitepdf.core.render.shrinkArgb
+import io.github.yuroyami.kitepdf.core.render.shrinkRgba
 import io.github.yuroyami.kitepdf.core.render.toRgbaBytes
 import java.awt.AlphaComposite
 import java.awt.BasicStroke
@@ -364,11 +368,23 @@ public class AwtCanvas(private var g: Graphics2D) : KiteCanvas {
     }
 
     override fun drawImage(image: KiteImageData, ctm: KiteMatrix, alpha: Double) {
-        val bitmap = decodeImage(image) ?: return drawPlaceholder(ctm)
+        val matrix = AffineTransform(ctm.a, ctm.b, ctm.c, ctm.d, ctm.e, ctm.f)
+        // The policy reads the whole transform to device pixels, including one the host set on the Graphics.
+        val device = AffineTransform(g.transform).apply { concatenate(matrix) }
+        val sampling = imageSampling(
+            image.width, image.height,
+            KiteMatrix(device.scaleX, device.shearY, device.shearX, device.scaleY, device.translateX, device.translateY),
+            image.interpolate,
+        )
+        val bitmap = decodeImage(image, sampling) ?: return drawPlaceholder(ctm)
         val saved = g.transform
+        val savedHint = g.getRenderingHint(RenderingHints.KEY_INTERPOLATION)
         try {
-            val matrix = AffineTransform(ctm.a, ctm.b, ctm.c, ctm.d, ctm.e, ctm.f)
-            g.transform = AffineTransform(g.transform).apply { concatenate(matrix) }
+            g.transform = device
+            g.setRenderingHint(
+                RenderingHints.KEY_INTERPOLATION,
+                if (sampling.smooth) RenderingHints.VALUE_INTERPOLATION_BILINEAR else RenderingHints.VALUE_INTERPOLATION_NEAREST_NEIGHBOR,
+            )
             // PDF image is in the unit square (0..1)² with Y flipped already by deviceCtm.
             // We draw at (0, -1) sized (1, 1). The Y-flip in CTM puts it upright.
             val drawOp = AffineTransform().apply {
@@ -384,20 +400,39 @@ public class AwtCanvas(private var g: Graphics2D) : KiteCanvas {
             }
         } finally {
             g.transform = saved
+            if (savedHint != null) g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, savedHint)
         }
     }
 
-    private fun decodeImage(image: KiteImageData): BufferedImage? = try {
+    /** The image as a bitmap, averaged down when [sampling] shrinks it, so fine detail fades instead of dropping out (#122). */
+    private fun decodeImage(image: KiteImageData, sampling: KiteImageSampling): BufferedImage? = try {
         when (image.kind) {
-            KiteImageData.Kind.JPEG, KiteImageData.Kind.JPEG2000 -> decodeJpeg(image.encodedBytes)
+            KiteImageData.Kind.JPEG, KiteImageData.Kind.JPEG2000 ->
+                decodeJpeg(image.encodedBytes)?.let { if (sampling.shrinks) shrink(it, sampling) else it }
             // Every other kind, RAW (Flate/LZW/CCITT/PNG-predictor decoded) and
             // ImageMask stencils, is assembled into a flat RGBA8888 buffer by the
             // shared rasterizer (the same path the Compose/Skia backends use). Wrap
             // it in an ARGB BufferedImage so ImageMask + SMask alpha survive.
-            else -> image.toRgbaBytes()?.let { rgbaToBufferedImage(it, image.width, image.height) }
+            else -> image.toRgbaBytes()?.let { rgba ->
+                if (!sampling.shrinks) return@let rgbaToBufferedImage(rgba, image.width, image.height)
+                rgbaToBufferedImage(
+                    shrinkRgba(rgba, image.width, image.height, sampling.shrinkX, sampling.shrinkY),
+                    sampling.shrunkWidth(image.width),
+                    sampling.shrunkHeight(image.height),
+                )
+            }
         }
     } catch (t: Throwable) {
         null
+    }
+
+    /** [image] averaged down as [sampling] asks. getRGB gives straight ARGB whatever the image type. */
+    private fun shrink(image: BufferedImage, sampling: KiteImageSampling): BufferedImage {
+        val w = image.width
+        val small = shrinkArgb(w, image.height, sampling.shrinkX, sampling.shrinkY) { pixels, y, rows ->
+            image.getRGB(0, y, w, rows, pixels, 0, w)
+        }
+        return rgbaToBufferedImage(small, sampling.shrunkWidth(w), sampling.shrunkHeight(image.height)) ?: image
     }
 
     /**

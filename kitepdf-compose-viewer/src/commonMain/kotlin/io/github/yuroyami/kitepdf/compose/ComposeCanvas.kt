@@ -5,6 +5,8 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.BlendMode as ComposeBlendMode
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.FilterQuality
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.Paint
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.Path
@@ -20,6 +22,7 @@ import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.TextUnitType
 import io.github.yuroyami.kitepdf.core.font.KiteFontFamily
@@ -37,7 +40,10 @@ import io.github.yuroyami.kitepdf.core.render.KiteShading
 import io.github.yuroyami.kitepdf.core.KiteRectangle
 import io.github.yuroyami.kitepdf.core.render.RgbColor
 import io.github.yuroyami.kitepdf.core.render.SoftMask
+import io.github.yuroyami.kitepdf.core.render.imageSampling
 import io.github.yuroyami.kitepdf.core.render.sampleStops
+import io.github.yuroyami.kitepdf.core.render.shrinkArgb
+import io.github.yuroyami.kitepdf.core.render.shrinkRgba
 import kotlin.math.abs
 import kotlin.math.atan2
 import kotlin.math.sqrt
@@ -339,8 +345,10 @@ public class ComposeCanvas(
     }
 
     override fun drawImage(image: KiteImageData, ctm: KiteMatrix, alpha: Double) {
+        // One sampling policy on every canvas (#122, #123). The ctm maps to this scope's pixels.
+        val sampling = imageSampling(image.width, image.height, ctm, image.interpolate)
         withActiveClips {
-            val bitmap = when (image.kind) {
+            val decoded = when (image.kind) {
                 // Skia decodes JPEG natively; on JVM/iOS it also handles JP2 / JPEG 2000.
                 // BitmapFactory on Android decodes JPEG (JP2 returns null → placeholder).
                 // JBIG2 is best-effort: most platforms don't support it natively and
@@ -349,12 +357,29 @@ public class ComposeCanvas(
                     ImageDecoder.decode(image.encodedBytes)
                 // RAW (FlateDecode etc.): samples are already inflated. Assemble RGBA
                 // and build a bitmap directly. Covers the common embedded-PNG case.
-                KiteImageData.Kind.RAW ->
-                    image.toRgbaBytes()?.let { ImageDecoder.decodeRaw(it, image.width, image.height) }
+                KiteImageData.Kind.RAW -> image.toRgbaBytes()?.let { rgba ->
+                    if (!sampling.shrinks) return@let ImageDecoder.decodeRaw(rgba, image.width, image.height)
+                    // An image drawn smaller than its pixels is averaged down first, so fine detail fades instead of dropping out.
+                    ImageDecoder.decodeRaw(
+                        shrinkRgba(rgba, image.width, image.height, sampling.shrinkX, sampling.shrinkY),
+                        sampling.shrunkWidth(image.width),
+                        sampling.shrunkHeight(image.height),
+                    )
+                }
                 else -> null
             }
+            val bitmap = if (decoded != null && sampling.shrinks && image.kind != KiteImageData.Kind.RAW) {
+                // readPixels gives straight ARGB on every platform.
+                val w = decoded.width
+                val small = shrinkArgb(w, decoded.height, sampling.shrinkX, sampling.shrinkY) { pixels, y, rows ->
+                    decoded.readPixels(pixels, startX = 0, startY = y, width = w, height = rows)
+                }
+                ImageDecoder.decodeRaw(small, sampling.shrunkWidth(w), sampling.shrunkHeight(decoded.height)) ?: decoded
+            } else {
+                decoded
+            }
             if (bitmap != null) {
-                drawBitmap(bitmap, ctm, alpha.toFloat().coerceIn(0f, 1f))
+                drawBitmap(bitmap, ctm, alpha.toFloat().coerceIn(0f, 1f), if (sampling.smooth) FilterQuality.Low else FilterQuality.None)
             } else {
                 drawPlaceholder(ctm)
             }
@@ -508,7 +533,7 @@ public class ComposeCanvas(
         return Rect(0f, 0f, w, h)
     }
 
-    private fun drawBitmap(bitmap: androidx.compose.ui.graphics.ImageBitmap, ctm: KiteMatrix, alpha: Float) {
+    private fun drawBitmap(bitmap: ImageBitmap, ctm: KiteMatrix, alpha: Float, filterQuality: FilterQuality) {
         // The full CTM, not its scale magnitudes: rotation, reflection and
         // shear survive. The unit-square mapping matches Skia: translate up
         // one unit and flip Y, so bitmap row 0 lands on the square's top
@@ -518,7 +543,7 @@ public class ComposeCanvas(
             translate(0f, 1f)
             scale(1f / bitmap.width, -1f / bitmap.height, pivot = Offset.Zero)
         }) {
-            drawImage(image = bitmap, topLeft = Offset.Zero, alpha = alpha)
+            drawImage(image = bitmap, dstSize = IntSize(bitmap.width, bitmap.height), alpha = alpha, filterQuality = filterQuality)
         }
     }
 
