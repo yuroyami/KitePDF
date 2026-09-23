@@ -1,6 +1,8 @@
 package io.github.yuroyami.kitepdf.compose
 
 import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.Immutable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
@@ -24,6 +26,8 @@ public sealed interface KiteDocLayout {
     @Immutable
     public data class Continuous(
         val orientation: Orientation = Orientation.Vertical,
+        /** Scrollable edge clearance for host controls; pages still pass underneath them. */
+        val contentPadding: PaddingValues = PaddingValues(0.dp),
     ) : KiteDocLayout
 
     /**

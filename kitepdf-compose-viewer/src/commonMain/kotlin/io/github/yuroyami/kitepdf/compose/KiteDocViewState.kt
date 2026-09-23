@@ -727,6 +727,21 @@ public class KiteDocViewState(
         return KitePageHit(index, x, y)
     }
 
+    /**
+     * The topmost app-owned highlight under a viewport tap, or null on unmarked paper.
+     * Uses the same display-space geometry as painting, including page rotation, zoom and pan.
+     * Search results are intentionally excluded: only [highlights] belong to the host's marks.
+     */
+    public fun highlightAt(viewportOffset: Offset): KiteHighlight? {
+        val (page, x, y) = hitTestDisplay(viewportOffset) ?: return null
+        return highlights.asReversed().firstOrNull { highlight ->
+            highlight.hit.pageIndex == page && highlight.hit.quads.any { quad ->
+                val rect = quad.normalized()
+                x >= rect.left && x <= rect.right && y >= rect.bottom && y <= rect.top
+            }
+        }
+    }
+
     /* ── navigation ───────────────────────────────────────────────────────── */
 
     /** Jumps to slot [page] (coerced into range) without animation. */
@@ -987,6 +1002,8 @@ public data class KiteHighlight(
     val edgeMarker: Boolean = false,
     val edgeMarkerColor: Color? = null,
     val edgeMarkerSide: KiteMarkerSide = KiteMarkerSide.End,
+    /** Stable host identity, returned intact by [KiteDocViewState.highlightAt]. */
+    val id: String? = null,
 )
 
 /**
