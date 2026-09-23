@@ -1,0 +1,71 @@
+// Klib ABI Dump
+// Targets: [androidNativeArm32, androidNativeArm64, androidNativeX64, androidNativeX86, iosArm64, iosSimulatorArm64, iosX64, js, linuxArm64, linuxX64, macosArm64, mingwX64, tvosArm64, tvosSimulatorArm64, wasmJs, wasmWasi, watchosArm32, watchosArm64, watchosDeviceArm64, watchosSimulatorArm64]
+// Rendering settings:
+// - Signature version: 2
+// - Show manifest properties: true
+// - Show declarations: true
+
+// Library unique name: <io.github.yuroyami:kitepdf-cbz>
+final class io.github.yuroyami.kitepdf.cbz/CbzDocument : io.github.yuroyami.kitepdf.core/KiteDocument { // io.github.yuroyami.kitepdf.cbz/CbzDocument|null[0]
+    final val comicMetadata // io.github.yuroyami.kitepdf.cbz/CbzDocument.comicMetadata|{}comicMetadata[0]
+        final fun <get-comicMetadata>(): io.github.yuroyami.kitepdf.cbz/CbzMetadata? // io.github.yuroyami.kitepdf.cbz/CbzDocument.comicMetadata.<get-comicMetadata>|<get-comicMetadata>(){}[0]
+    final val metadata // io.github.yuroyami.kitepdf.cbz/CbzDocument.metadata|{}metadata[0]
+        final fun <get-metadata>(): io.github.yuroyami.kitepdf.core/KiteMetadata // io.github.yuroyami.kitepdf.cbz/CbzDocument.metadata.<get-metadata>|<get-metadata>(){}[0]
+    final val outline // io.github.yuroyami.kitepdf.cbz/CbzDocument.outline|{}outline[0]
+        final fun <get-outline>(): kotlin.collections/List<io.github.yuroyami.kitepdf.core/KiteOutlineItem> // io.github.yuroyami.kitepdf.cbz/CbzDocument.outline.<get-outline>|<get-outline>(){}[0]
+    final val pageCount // io.github.yuroyami.kitepdf.cbz/CbzDocument.pageCount|{}pageCount[0]
+        final fun <get-pageCount>(): kotlin/Int // io.github.yuroyami.kitepdf.cbz/CbzDocument.pageCount.<get-pageCount>|<get-pageCount>(){}[0]
+    final val pages // io.github.yuroyami.kitepdf.cbz/CbzDocument.pages|{}pages[0]
+        final fun <get-pages>(): kotlin.collections/List<io.github.yuroyami.kitepdf.core/KitePage> // io.github.yuroyami.kitepdf.cbz/CbzDocument.pages.<get-pages>|<get-pages>(){}[0]
+
+    final object Companion { // io.github.yuroyami.kitepdf.cbz/CbzDocument.Companion|null[0]
+        final fun open(kotlin/ByteArray): io.github.yuroyami.kitepdf.cbz/CbzDocument // io.github.yuroyami.kitepdf.cbz/CbzDocument.Companion.open|open(kotlin.ByteArray){}[0]
+        final fun openOrNull(kotlin/ByteArray): io.github.yuroyami.kitepdf.cbz/CbzDocument? // io.github.yuroyami.kitepdf.cbz/CbzDocument.Companion.openOrNull|openOrNull(kotlin.ByteArray){}[0]
+    }
+}
+
+final class io.github.yuroyami.kitepdf.cbz/CbzMetadata { // io.github.yuroyami.kitepdf.cbz/CbzMetadata|null[0]
+    final val fields // io.github.yuroyami.kitepdf.cbz/CbzMetadata.fields|{}fields[0]
+        final fun <get-fields>(): kotlin.collections/Map<kotlin/String, kotlin/String> // io.github.yuroyami.kitepdf.cbz/CbzMetadata.fields.<get-fields>|<get-fields>(){}[0]
+    final val language // io.github.yuroyami.kitepdf.cbz/CbzMetadata.language|{}language[0]
+        final fun <get-language>(): kotlin/String? // io.github.yuroyami.kitepdf.cbz/CbzMetadata.language.<get-language>|<get-language>(){}[0]
+    final val number // io.github.yuroyami.kitepdf.cbz/CbzMetadata.number|{}number[0]
+        final fun <get-number>(): kotlin/String? // io.github.yuroyami.kitepdf.cbz/CbzMetadata.number.<get-number>|<get-number>(){}[0]
+    final val pages // io.github.yuroyami.kitepdf.cbz/CbzMetadata.pages|{}pages[0]
+        final fun <get-pages>(): kotlin.collections/List<io.github.yuroyami.kitepdf.cbz/CbzPageMetadata> // io.github.yuroyami.kitepdf.cbz/CbzMetadata.pages.<get-pages>|<get-pages>(){}[0]
+    final val publisher // io.github.yuroyami.kitepdf.cbz/CbzMetadata.publisher|{}publisher[0]
+        final fun <get-publisher>(): kotlin/String? // io.github.yuroyami.kitepdf.cbz/CbzMetadata.publisher.<get-publisher>|<get-publisher>(){}[0]
+    final val rightToLeft // io.github.yuroyami.kitepdf.cbz/CbzMetadata.rightToLeft|{}rightToLeft[0]
+        final fun <get-rightToLeft>(): kotlin/Boolean // io.github.yuroyami.kitepdf.cbz/CbzMetadata.rightToLeft.<get-rightToLeft>|<get-rightToLeft>(){}[0]
+    final val series // io.github.yuroyami.kitepdf.cbz/CbzMetadata.series|{}series[0]
+        final fun <get-series>(): kotlin/String? // io.github.yuroyami.kitepdf.cbz/CbzMetadata.series.<get-series>|<get-series>(){}[0]
+    final val summary // io.github.yuroyami.kitepdf.cbz/CbzMetadata.summary|{}summary[0]
+        final fun <get-summary>(): kotlin/String? // io.github.yuroyami.kitepdf.cbz/CbzMetadata.summary.<get-summary>|<get-summary>(){}[0]
+    final val title // io.github.yuroyami.kitepdf.cbz/CbzMetadata.title|{}title[0]
+        final fun <get-title>(): kotlin/String? // io.github.yuroyami.kitepdf.cbz/CbzMetadata.title.<get-title>|<get-title>(){}[0]
+    final val writers // io.github.yuroyami.kitepdf.cbz/CbzMetadata.writers|{}writers[0]
+        final fun <get-writers>(): kotlin.collections/List<kotlin/String> // io.github.yuroyami.kitepdf.cbz/CbzMetadata.writers.<get-writers>|<get-writers>(){}[0]
+}
+
+final class io.github.yuroyami.kitepdf.cbz/CbzPage : io.github.yuroyami.kitepdf.core/KitePage { // io.github.yuroyami.kitepdf.cbz/CbzPage|null[0]
+    final val displayHeight // io.github.yuroyami.kitepdf.cbz/CbzPage.displayHeight|{}displayHeight[0]
+        final fun <get-displayHeight>(): kotlin/Double // io.github.yuroyami.kitepdf.cbz/CbzPage.displayHeight.<get-displayHeight>|<get-displayHeight>(){}[0]
+    final val displayWidth // io.github.yuroyami.kitepdf.cbz/CbzPage.displayWidth|{}displayWidth[0]
+        final fun <get-displayWidth>(): kotlin/Double // io.github.yuroyami.kitepdf.cbz/CbzPage.displayWidth.<get-displayWidth>|<get-displayWidth>(){}[0]
+
+    final fun displayToDeviceBase(): io.github.yuroyami.kitepdf.core.render/KiteMatrix // io.github.yuroyami.kitepdf.cbz/CbzPage.displayToDeviceBase|displayToDeviceBase(){}[0]
+    final fun renderTo(io.github.yuroyami.kitepdf.core.render/KiteCanvas, io.github.yuroyami.kitepdf.core.render/KiteMatrix) // io.github.yuroyami.kitepdf.cbz/CbzPage.renderTo|renderTo(io.github.yuroyami.kitepdf.core.render.KiteCanvas;io.github.yuroyami.kitepdf.core.render.KiteMatrix){}[0]
+}
+
+final class io.github.yuroyami.kitepdf.cbz/CbzPageMetadata { // io.github.yuroyami.kitepdf.cbz/CbzPageMetadata|null[0]
+    final val attributes // io.github.yuroyami.kitepdf.cbz/CbzPageMetadata.attributes|{}attributes[0]
+        final fun <get-attributes>(): kotlin.collections/Map<kotlin/String, kotlin/String> // io.github.yuroyami.kitepdf.cbz/CbzPageMetadata.attributes.<get-attributes>|<get-attributes>(){}[0]
+    final val bookmark // io.github.yuroyami.kitepdf.cbz/CbzPageMetadata.bookmark|{}bookmark[0]
+        final fun <get-bookmark>(): kotlin/String? // io.github.yuroyami.kitepdf.cbz/CbzPageMetadata.bookmark.<get-bookmark>|<get-bookmark>(){}[0]
+    final val doublePage // io.github.yuroyami.kitepdf.cbz/CbzPageMetadata.doublePage|{}doublePage[0]
+        final fun <get-doublePage>(): kotlin/Boolean // io.github.yuroyami.kitepdf.cbz/CbzPageMetadata.doublePage.<get-doublePage>|<get-doublePage>(){}[0]
+    final val image // io.github.yuroyami.kitepdf.cbz/CbzPageMetadata.image|{}image[0]
+        final fun <get-image>(): kotlin/Int // io.github.yuroyami.kitepdf.cbz/CbzPageMetadata.image.<get-image>|<get-image>(){}[0]
+    final val type // io.github.yuroyami.kitepdf.cbz/CbzPageMetadata.type|{}type[0]
+        final fun <get-type>(): kotlin/String? // io.github.yuroyami.kitepdf.cbz/CbzPageMetadata.type.<get-type>|<get-type>(){}[0]
+}

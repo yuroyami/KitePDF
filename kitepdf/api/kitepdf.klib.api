@@ -1,0 +1,45 @@
+// Klib ABI Dump
+// Targets: [androidNativeArm32, androidNativeArm64, androidNativeX64, androidNativeX86, iosArm64, iosSimulatorArm64, iosX64, js, linuxArm64, linuxX64, macosArm64, mingwX64, tvosArm64, tvosSimulatorArm64, wasmJs, wasmWasi, watchosArm32, watchosArm64, watchosDeviceArm64, watchosSimulatorArm64]
+// Alias: native => [androidNativeArm32, androidNativeArm64, androidNativeX64, androidNativeX86, iosArm64, iosSimulatorArm64, iosX64, linuxArm64, linuxX64, macosArm64, mingwX64, tvosArm64, tvosSimulatorArm64, watchosArm32, watchosArm64, watchosDeviceArm64, watchosSimulatorArm64]
+// Alias: apple => [iosArm64, iosSimulatorArm64, iosX64, macosArm64, tvosArm64, tvosSimulatorArm64, watchosArm32, watchosArm64, watchosDeviceArm64, watchosSimulatorArm64]
+// Rendering settings:
+// - Signature version: 2
+// - Show manifest properties: true
+// - Show declarations: true
+
+// Library unique name: <io.github.yuroyami:kitepdf>
+final enum class io.github.yuroyami.kitepdf.document/KiteDocFormat : kotlin/Enum<io.github.yuroyami.kitepdf.document/KiteDocFormat> { // io.github.yuroyami.kitepdf.document/KiteDocFormat|null[0]
+    enum entry Cbz // io.github.yuroyami.kitepdf.document/KiteDocFormat.Cbz|null[0]
+    enum entry Epub // io.github.yuroyami.kitepdf.document/KiteDocFormat.Epub|null[0]
+    enum entry Pdf // io.github.yuroyami.kitepdf.document/KiteDocFormat.Pdf|null[0]
+    enum entry Svg // io.github.yuroyami.kitepdf.document/KiteDocFormat.Svg|null[0]
+    enum entry Xps // io.github.yuroyami.kitepdf.document/KiteDocFormat.Xps|null[0]
+
+    final val entries // io.github.yuroyami.kitepdf.document/KiteDocFormat.entries|#static{}entries[0]
+        final fun <get-entries>(): kotlin.enums/EnumEntries<io.github.yuroyami.kitepdf.document/KiteDocFormat> // io.github.yuroyami.kitepdf.document/KiteDocFormat.entries.<get-entries>|<get-entries>#static(){}[0]
+
+    final fun valueOf(kotlin/String): io.github.yuroyami.kitepdf.document/KiteDocFormat // io.github.yuroyami.kitepdf.document/KiteDocFormat.valueOf|valueOf#static(kotlin.String){}[0]
+    final fun values(): kotlin/Array<io.github.yuroyami.kitepdf.document/KiteDocFormat> // io.github.yuroyami.kitepdf.document/KiteDocFormat.values|values#static(){}[0]
+}
+
+final object io.github.yuroyami.kitepdf.bundle/KitePDFBundle { // io.github.yuroyami.kitepdf.bundle/KitePDFBundle|null[0]
+    final const val COORDINATE // io.github.yuroyami.kitepdf.bundle/KitePDFBundle.COORDINATE|{}COORDINATE[0]
+        final fun <get-COORDINATE>(): kotlin/String // io.github.yuroyami.kitepdf.bundle/KitePDFBundle.COORDINATE.<get-COORDINATE>|<get-COORDINATE>(){}[0]
+}
+
+final object io.github.yuroyami.kitepdf.document/KiteDoc { // io.github.yuroyami.kitepdf.document/KiteDoc|null[0]
+    final fun formatOf(kotlin/ByteArray): io.github.yuroyami.kitepdf.document/KiteDocFormat? // io.github.yuroyami.kitepdf.document/KiteDoc.formatOf|formatOf(kotlin.ByteArray){}[0]
+    final fun open(kotlin/ByteArray, kotlin/String = ..., io.github.yuroyami.kitepdf.epub/EpubSettings = ...): io.github.yuroyami.kitepdf.core/KiteDocument // io.github.yuroyami.kitepdf.document/KiteDoc.open|open(kotlin.ByteArray;kotlin.String;io.github.yuroyami.kitepdf.epub.EpubSettings){}[0]
+    final fun openBase64(kotlin/String, kotlin/String = ..., io.github.yuroyami.kitepdf.epub/EpubSettings = ...): io.github.yuroyami.kitepdf.core/KiteDocument // io.github.yuroyami.kitepdf.document/KiteDoc.openBase64|openBase64(kotlin.String;kotlin.String;io.github.yuroyami.kitepdf.epub.EpubSettings){}[0]
+    final fun openBase64OrNull(kotlin/String, kotlin/String = ..., io.github.yuroyami.kitepdf.epub/EpubSettings = ...): io.github.yuroyami.kitepdf.core/KiteDocument? // io.github.yuroyami.kitepdf.document/KiteDoc.openBase64OrNull|openBase64OrNull(kotlin.String;kotlin.String;io.github.yuroyami.kitepdf.epub.EpubSettings){}[0]
+    final fun openOrNull(kotlin/ByteArray, kotlin/String = ..., io.github.yuroyami.kitepdf.epub/EpubSettings = ...): io.github.yuroyami.kitepdf.core/KiteDocument? // io.github.yuroyami.kitepdf.document/KiteDoc.openOrNull|openOrNull(kotlin.ByteArray;kotlin.String;io.github.yuroyami.kitepdf.epub.EpubSettings){}[0]
+}
+
+// Targets: [native]
+final fun (io.github.yuroyami.kitepdf.document/KiteDoc).io.github.yuroyami.kitepdf.document/openFile(kotlin/String, kotlin/String = ..., io.github.yuroyami.kitepdf.epub/EpubSettings = ...): io.github.yuroyami.kitepdf.core/KiteDocument // io.github.yuroyami.kitepdf.document/openFile|openFile@io.github.yuroyami.kitepdf.document.KiteDoc(kotlin.String;kotlin.String;io.github.yuroyami.kitepdf.epub.EpubSettings){}[0]
+
+// Targets: [apple]
+final fun (io.github.yuroyami.kitepdf.document/KiteDoc).io.github.yuroyami.kitepdf.document/open(platform.Foundation/NSData, kotlin/String = ..., io.github.yuroyami.kitepdf.epub/EpubSettings = ...): io.github.yuroyami.kitepdf.core/KiteDocument // io.github.yuroyami.kitepdf.document/open|open@io.github.yuroyami.kitepdf.document.KiteDoc(platform.Foundation.NSData;kotlin.String;io.github.yuroyami.kitepdf.epub.EpubSettings){}[0]
+
+// Targets: [apple]
+final fun (io.github.yuroyami.kitepdf.document/KiteDoc).io.github.yuroyami.kitepdf.document/open(platform.Foundation/NSURL, kotlin/String = ..., io.github.yuroyami.kitepdf.epub/EpubSettings = ...): io.github.yuroyami.kitepdf.core/KiteDocument // io.github.yuroyami.kitepdf.document/open|open@io.github.yuroyami.kitepdf.document.KiteDoc(platform.Foundation.NSURL;kotlin.String;io.github.yuroyami.kitepdf.epub.EpubSettings){}[0]

@@ -1,0 +1,36 @@
+public final class io/github/yuroyami/kitepdf/nativerenderer/AwtCanvas : io/github/yuroyami/kitepdf/core/render/KiteCanvas {
+	public fun <init> (Ljava/awt/Graphics2D;)V
+	public fun applySoftMask (Lio/github/yuroyami/kitepdf/core/render/SoftMask$Kind;Lio/github/yuroyami/kitepdf/core/KiteRectangle;Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;Lio/github/yuroyami/kitepdf/core/render/KiteMaskTransfer;Lkotlin/jvm/functions/Function0;Lkotlin/jvm/functions/Function1;)V
+	public fun applySoftMask (Lio/github/yuroyami/kitepdf/core/render/SoftMask$Kind;Lio/github/yuroyami/kitepdf/core/KiteRectangle;Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;Lkotlin/jvm/functions/Function0;Lkotlin/jvm/functions/Function1;)V
+	public fun beginPage (DDLio/github/yuroyami/kitepdf/core/render/KiteMatrix;)V
+	public fun beginTransparencyGroup (Lio/github/yuroyami/kitepdf/core/KiteRectangle;Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;ZZDLio/github/yuroyami/kitepdf/core/render/KiteBlendMode;)V
+	public fun drawGlyphs (Ljava/util/List;DIZLio/github/yuroyami/kitepdf/core/font/FontSpec;Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;Lio/github/yuroyami/kitepdf/core/render/RgbColor;DLio/github/yuroyami/kitepdf/core/render/KiteBlendMode;)V
+	public fun drawImage (Lio/github/yuroyami/kitepdf/core/render/KiteImageData;Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;D)V
+	public fun drawImage (Lio/github/yuroyami/kitepdf/core/render/KiteImageData;Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;DLio/github/yuroyami/kitepdf/core/render/KiteBlendMode;)V
+	public fun endPage ()V
+	public fun endTransparencyGroup ()V
+	public fun fillPath (Lio/github/yuroyami/kitepdf/core/render/KitePath;Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;Lio/github/yuroyami/kitepdf/core/render/RgbColor;ZDLio/github/yuroyami/kitepdf/core/render/KiteBlendMode;)V
+	public fun fillShading (Lio/github/yuroyami/kitepdf/core/render/KiteShading;Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;Lio/github/yuroyami/kitepdf/core/render/KitePath;DLio/github/yuroyami/kitepdf/core/render/KiteBlendMode;)V
+	public fun getResolvesGlyphOutlines ()Z
+	public fun hostGlyphOutline (Ljava/lang/String;Lio/github/yuroyami/kitepdf/core/font/FontSpec;)Lio/github/yuroyami/kitepdf/core/render/KitePath;
+	public fun popClip ()V
+	public fun pushClip (Lio/github/yuroyami/kitepdf/core/render/KitePath;Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;Z)V
+	public fun strokePath (Lio/github/yuroyami/kitepdf/core/render/KitePath;Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;Lio/github/yuroyami/kitepdf/core/render/RgbColor;DDLio/github/yuroyami/kitepdf/core/render/KiteBlendMode;Ljava/util/List;DIID)V
+}
+
+public final class io/github/yuroyami/kitepdf/nativerenderer/AwtPdfRasterizer {
+	public static final field INSTANCE Lio/github/yuroyami/kitepdf/nativerenderer/AwtPdfRasterizer;
+	public final fun encodeToJpeg (Lio/github/yuroyami/kitepdf/PdfPage;DLjava/awt/Color;)[B
+	public final fun encodeToJpeg (Lio/github/yuroyami/kitepdf/PdfPage;DLjava/awt/Color;J)[B
+	public static synthetic fun encodeToJpeg$default (Lio/github/yuroyami/kitepdf/nativerenderer/AwtPdfRasterizer;Lio/github/yuroyami/kitepdf/PdfPage;DLjava/awt/Color;ILjava/lang/Object;)[B
+	public static synthetic fun encodeToJpeg$default (Lio/github/yuroyami/kitepdf/nativerenderer/AwtPdfRasterizer;Lio/github/yuroyami/kitepdf/PdfPage;DLjava/awt/Color;JILjava/lang/Object;)[B
+	public final fun encodeToPng (Lio/github/yuroyami/kitepdf/PdfPage;DLjava/awt/Color;)[B
+	public final fun encodeToPng (Lio/github/yuroyami/kitepdf/PdfPage;DLjava/awt/Color;J)[B
+	public static synthetic fun encodeToPng$default (Lio/github/yuroyami/kitepdf/nativerenderer/AwtPdfRasterizer;Lio/github/yuroyami/kitepdf/PdfPage;DLjava/awt/Color;ILjava/lang/Object;)[B
+	public static synthetic fun encodeToPng$default (Lio/github/yuroyami/kitepdf/nativerenderer/AwtPdfRasterizer;Lio/github/yuroyami/kitepdf/PdfPage;DLjava/awt/Color;JILjava/lang/Object;)[B
+	public final fun renderToImage (Lio/github/yuroyami/kitepdf/PdfPage;DLjava/awt/Color;)Ljava/awt/image/BufferedImage;
+	public final fun renderToImage (Lio/github/yuroyami/kitepdf/PdfPage;DLjava/awt/Color;J)Ljava/awt/image/BufferedImage;
+	public static synthetic fun renderToImage$default (Lio/github/yuroyami/kitepdf/nativerenderer/AwtPdfRasterizer;Lio/github/yuroyami/kitepdf/PdfPage;DLjava/awt/Color;ILjava/lang/Object;)Ljava/awt/image/BufferedImage;
+	public static synthetic fun renderToImage$default (Lio/github/yuroyami/kitepdf/nativerenderer/AwtPdfRasterizer;Lio/github/yuroyami/kitepdf/PdfPage;DLjava/awt/Color;JILjava/lang/Object;)Ljava/awt/image/BufferedImage;
+}
+

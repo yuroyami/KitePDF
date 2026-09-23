@@ -1,0 +1,222 @@
+// Klib ABI Dump
+// Targets: [iosArm64, iosSimulatorArm64, iosX64, js, linuxArm64, linuxX64, macosArm64, mingwX64, wasmJs]
+// Rendering settings:
+// - Signature version: 2
+// - Show manifest properties: true
+// - Show declarations: true
+
+// Library unique name: <io.github.yuroyami:kitepdf-javascript>
+final class io.github.yuroyami.kitepdf.javascript/KiteJsScriptEngine : io.github.yuroyami.kitepdf.core.script/KiteScriptEngine { // io.github.yuroyami.kitepdf.javascript/KiteJsScriptEngine|null[0]
+    constructor <init>(kotlin/Int = ..., kotlin/Function0<kotlin/Boolean>? = ..., kotlin/Function0<kotlin/Long>? = ..., kotlin/Boolean = ...) // io.github.yuroyami.kitepdf.javascript/KiteJsScriptEngine.<init>|<init>(kotlin.Int;kotlin.Function0<kotlin.Boolean>?;kotlin.Function0<kotlin.Long>?;kotlin.Boolean){}[0]
+
+    final val asmReports // io.github.yuroyami.kitepdf.javascript/KiteJsScriptEngine.asmReports|{}asmReports[0]
+        final fun <get-asmReports>(): kotlin.collections/List<kotlin/String> // io.github.yuroyami.kitepdf.javascript/KiteJsScriptEngine.asmReports.<get-asmReports>|<get-asmReports>(){}[0]
+    final val instructionBudget // io.github.yuroyami.kitepdf.javascript/KiteJsScriptEngine.instructionBudget|{}instructionBudget[0]
+        final fun <get-instructionBudget>(): kotlin/Int // io.github.yuroyami.kitepdf.javascript/KiteJsScriptEngine.instructionBudget.<get-instructionBudget>|<get-instructionBudget>(){}[0]
+
+    final fun close() // io.github.yuroyami.kitepdf.javascript/KiteJsScriptEngine.close|close(){}[0]
+    final fun defineFunction(kotlin/String, kotlin/Function1<kotlin.collections/List<kotlin/Any?>, kotlin/Any?>) // io.github.yuroyami.kitepdf.javascript/KiteJsScriptEngine.defineFunction|defineFunction(kotlin.String;kotlin.Function1<kotlin.collections.List<kotlin.Any?>,kotlin.Any?>){}[0]
+    final fun defineValue(kotlin/String, kotlin/Any?) // io.github.yuroyami.kitepdf.javascript/KiteJsScriptEngine.defineValue|defineValue(kotlin.String;kotlin.Any?){}[0]
+    final fun evaluate(kotlin/String, kotlin/String): kotlin/String? // io.github.yuroyami.kitepdf.javascript/KiteJsScriptEngine.evaluate|evaluate(kotlin.String;kotlin.String){}[0]
+
+    final object Companion { // io.github.yuroyami.kitepdf.javascript/KiteJsScriptEngine.Companion|null[0]
+        final const val DEFAULT_INSTRUCTION_BUDGET // io.github.yuroyami.kitepdf.javascript/KiteJsScriptEngine.Companion.DEFAULT_INSTRUCTION_BUDGET|{}DEFAULT_INSTRUCTION_BUDGET[0]
+            final fun <get-DEFAULT_INSTRUCTION_BUDGET>(): kotlin/Int // io.github.yuroyami.kitepdf.javascript/KiteJsScriptEngine.Companion.DEFAULT_INSTRUCTION_BUDGET.<get-DEFAULT_INSTRUCTION_BUDGET>|<get-DEFAULT_INSTRUCTION_BUDGET>(){}[0]
+    }
+}
+
+final class io.github.yuroyami.kitepdf.javascript/PdfScriptAlert { // io.github.yuroyami.kitepdf.javascript/PdfScriptAlert|null[0]
+    final val buttons // io.github.yuroyami.kitepdf.javascript/PdfScriptAlert.buttons|{}buttons[0]
+        final fun <get-buttons>(): kotlin/Int // io.github.yuroyami.kitepdf.javascript/PdfScriptAlert.buttons.<get-buttons>|<get-buttons>(){}[0]
+    final val icon // io.github.yuroyami.kitepdf.javascript/PdfScriptAlert.icon|{}icon[0]
+        final fun <get-icon>(): kotlin/Int // io.github.yuroyami.kitepdf.javascript/PdfScriptAlert.icon.<get-icon>|<get-icon>(){}[0]
+    final val message // io.github.yuroyami.kitepdf.javascript/PdfScriptAlert.message|{}message[0]
+        final fun <get-message>(): kotlin/String // io.github.yuroyami.kitepdf.javascript/PdfScriptAlert.message.<get-message>|<get-message>(){}[0]
+    final val title // io.github.yuroyami.kitepdf.javascript/PdfScriptAlert.title|{}title[0]
+        final fun <get-title>(): kotlin/String // io.github.yuroyami.kitepdf.javascript/PdfScriptAlert.title.<get-title>|<get-title>(){}[0]
+}
+
+final class io.github.yuroyami.kitepdf.javascript/PdfScriptPolicy { // io.github.yuroyami.kitepdf.javascript/PdfScriptPolicy|null[0]
+    constructor <init>(kotlin/Boolean = ..., kotlin/Long = ..., kotlin/Long = ..., kotlin/Int = ..., kotlin/Function1<kotlin/Long, kotlin/Boolean>? = ...) // io.github.yuroyami.kitepdf.javascript/PdfScriptPolicy.<init>|<init>(kotlin.Boolean;kotlin.Long;kotlin.Long;kotlin.Int;kotlin.Function1<kotlin.Long,kotlin.Boolean>?){}[0]
+
+    final val budgetMillis // io.github.yuroyami.kitepdf.javascript/PdfScriptPolicy.budgetMillis|{}budgetMillis[0]
+        final fun <get-budgetMillis>(): kotlin/Long // io.github.yuroyami.kitepdf.javascript/PdfScriptPolicy.budgetMillis.<get-budgetMillis>|<get-budgetMillis>(){}[0]
+    final val documentBudgetMillis // io.github.yuroyami.kitepdf.javascript/PdfScriptPolicy.documentBudgetMillis|{}documentBudgetMillis[0]
+        final fun <get-documentBudgetMillis>(): kotlin/Long // io.github.yuroyami.kitepdf.javascript/PdfScriptPolicy.documentBudgetMillis.<get-documentBudgetMillis>|<get-documentBudgetMillis>(){}[0]
+    final val enabled // io.github.yuroyami.kitepdf.javascript/PdfScriptPolicy.enabled|{}enabled[0]
+        final fun <get-enabled>(): kotlin/Boolean // io.github.yuroyami.kitepdf.javascript/PdfScriptPolicy.enabled.<get-enabled>|<get-enabled>(){}[0]
+    final val instructionBudget // io.github.yuroyami.kitepdf.javascript/PdfScriptPolicy.instructionBudget|{}instructionBudget[0]
+        final fun <get-instructionBudget>(): kotlin/Int // io.github.yuroyami.kitepdf.javascript/PdfScriptPolicy.instructionBudget.<get-instructionBudget>|<get-instructionBudget>(){}[0]
+    final val onStillRunning // io.github.yuroyami.kitepdf.javascript/PdfScriptPolicy.onStillRunning|{}onStillRunning[0]
+        final fun <get-onStillRunning>(): kotlin/Function1<kotlin/Long, kotlin/Boolean>? // io.github.yuroyami.kitepdf.javascript/PdfScriptPolicy.onStillRunning.<get-onStillRunning>|<get-onStillRunning>(){}[0]
+
+    final object Companion { // io.github.yuroyami.kitepdf.javascript/PdfScriptPolicy.Companion|null[0]
+        final val DENY // io.github.yuroyami.kitepdf.javascript/PdfScriptPolicy.Companion.DENY|{}DENY[0]
+            final fun <get-DENY>(): io.github.yuroyami.kitepdf.javascript/PdfScriptPolicy // io.github.yuroyami.kitepdf.javascript/PdfScriptPolicy.Companion.DENY.<get-DENY>|<get-DENY>(){}[0]
+        final val LONG_RUNNING // io.github.yuroyami.kitepdf.javascript/PdfScriptPolicy.Companion.LONG_RUNNING|{}LONG_RUNNING[0]
+            final fun <get-LONG_RUNNING>(): io.github.yuroyami.kitepdf.javascript/PdfScriptPolicy // io.github.yuroyami.kitepdf.javascript/PdfScriptPolicy.Companion.LONG_RUNNING.<get-LONG_RUNNING>|<get-LONG_RUNNING>(){}[0]
+    }
+}
+
+final class io.github.yuroyami.kitepdf.javascript/PdfScriptPrompt { // io.github.yuroyami.kitepdf.javascript/PdfScriptPrompt|null[0]
+    final val defaultValue // io.github.yuroyami.kitepdf.javascript/PdfScriptPrompt.defaultValue|{}defaultValue[0]
+        final fun <get-defaultValue>(): kotlin/String // io.github.yuroyami.kitepdf.javascript/PdfScriptPrompt.defaultValue.<get-defaultValue>|<get-defaultValue>(){}[0]
+    final val isPassword // io.github.yuroyami.kitepdf.javascript/PdfScriptPrompt.isPassword|{}isPassword[0]
+        final fun <get-isPassword>(): kotlin/Boolean // io.github.yuroyami.kitepdf.javascript/PdfScriptPrompt.isPassword.<get-isPassword>|<get-isPassword>(){}[0]
+    final val question // io.github.yuroyami.kitepdf.javascript/PdfScriptPrompt.question|{}question[0]
+        final fun <get-question>(): kotlin/String // io.github.yuroyami.kitepdf.javascript/PdfScriptPrompt.question.<get-question>|<get-question>(){}[0]
+    final val title // io.github.yuroyami.kitepdf.javascript/PdfScriptPrompt.title|{}title[0]
+        final fun <get-title>(): kotlin/String // io.github.yuroyami.kitepdf.javascript/PdfScriptPrompt.title.<get-title>|<get-title>(){}[0]
+}
+
+final class io.github.yuroyami.kitepdf.javascript/PdfScriptRunner : io.github.yuroyami.kitepdf/PdfScriptHandler, kotlin/AutoCloseable { // io.github.yuroyami.kitepdf.javascript/PdfScriptRunner|null[0]
+    constructor <init>(io.github.yuroyami.kitepdf/PdfDocument, io.github.yuroyami.kitepdf/PdfFormState = ..., io.github.yuroyami.kitepdf.javascript/PdfScriptPolicy = ..., kotlin/Function1<io.github.yuroyami.kitepdf.javascript/PdfScriptAlert, kotlin/Int> = ..., kotlin/Function1<kotlin/String, kotlin/Unit> = ..., kotlin/Function1<io.github.yuroyami.kitepdf.javascript/PdfScriptRequest, kotlin/Unit> = ..., kotlin/Function1<io.github.yuroyami.kitepdf.javascript/PdfScriptPrompt, kotlin/String?> = ..., kotlin/Function0<kotlin/Long>? = ..., io.github.yuroyami.kitepdf.core.script/KiteScriptEngine? = ...) // io.github.yuroyami.kitepdf.javascript/PdfScriptRunner.<init>|<init>(io.github.yuroyami.kitepdf.PdfDocument;io.github.yuroyami.kitepdf.PdfFormState;io.github.yuroyami.kitepdf.javascript.PdfScriptPolicy;kotlin.Function1<io.github.yuroyami.kitepdf.javascript.PdfScriptAlert,kotlin.Int>;kotlin.Function1<kotlin.String,kotlin.Unit>;kotlin.Function1<io.github.yuroyami.kitepdf.javascript.PdfScriptRequest,kotlin.Unit>;kotlin.Function1<io.github.yuroyami.kitepdf.javascript.PdfScriptPrompt,kotlin.String?>;kotlin.Function0<kotlin.Long>?;io.github.yuroyami.kitepdf.core.script.KiteScriptEngine?){}[0]
+
+    final val asmReports // io.github.yuroyami.kitepdf.javascript/PdfScriptRunner.asmReports|{}asmReports[0]
+        final fun <get-asmReports>(): kotlin.collections/List<kotlin/String> // io.github.yuroyami.kitepdf.javascript/PdfScriptRunner.asmReports.<get-asmReports>|<get-asmReports>(){}[0]
+    final val failures // io.github.yuroyami.kitepdf.javascript/PdfScriptRunner.failures|{}failures[0]
+        final fun <get-failures>(): kotlin.collections/List<io.github.yuroyami.kitepdf.core.script/KiteScriptException> // io.github.yuroyami.kitepdf.javascript/PdfScriptRunner.failures.<get-failures>|<get-failures>(){}[0]
+    final val formState // io.github.yuroyami.kitepdf.javascript/PdfScriptRunner.formState|{}formState[0]
+        final fun <get-formState>(): io.github.yuroyami.kitepdf/PdfFormState // io.github.yuroyami.kitepdf.javascript/PdfScriptRunner.formState.<get-formState>|<get-formState>(){}[0]
+    final val hasTimers // io.github.yuroyami.kitepdf.javascript/PdfScriptRunner.hasTimers|{}hasTimers[0]
+        final fun <get-hasTimers>(): kotlin/Boolean // io.github.yuroyami.kitepdf.javascript/PdfScriptRunner.hasTimers.<get-hasTimers>|<get-hasTimers>(){}[0]
+    final val policy // io.github.yuroyami.kitepdf.javascript/PdfScriptRunner.policy|{}policy[0]
+        final fun <get-policy>(): io.github.yuroyami.kitepdf.javascript/PdfScriptPolicy // io.github.yuroyami.kitepdf.javascript/PdfScriptRunner.policy.<get-policy>|<get-policy>(){}[0]
+
+    final var currentPage // io.github.yuroyami.kitepdf.javascript/PdfScriptRunner.currentPage|{}currentPage[0]
+        final fun <get-currentPage>(): kotlin/Int // io.github.yuroyami.kitepdf.javascript/PdfScriptRunner.currentPage.<get-currentPage>|<get-currentPage>(){}[0]
+        final fun <set-currentPage>(kotlin/Int) // io.github.yuroyami.kitepdf.javascript/PdfScriptRunner.currentPage.<set-currentPage>|<set-currentPage>(kotlin.Int){}[0]
+    final var fileName // io.github.yuroyami.kitepdf.javascript/PdfScriptRunner.fileName|{}fileName[0]
+        final fun <get-fileName>(): kotlin/String // io.github.yuroyami.kitepdf.javascript/PdfScriptRunner.fileName.<get-fileName>|<get-fileName>(){}[0]
+        final fun <set-fileName>(kotlin/String) // io.github.yuroyami.kitepdf.javascript/PdfScriptRunner.fileName.<set-fileName>|<set-fileName>(kotlin.String){}[0]
+
+    final fun blur(kotlin/String) // io.github.yuroyami.kitepdf.javascript/PdfScriptRunner.blur|blur(kotlin.String){}[0]
+    final fun close() // io.github.yuroyami.kitepdf.javascript/PdfScriptRunner.close|close(){}[0]
+    final fun commit(kotlin/String, kotlin/String): kotlin/Boolean // io.github.yuroyami.kitepdf.javascript/PdfScriptRunner.commit|commit(kotlin.String;kotlin.String){}[0]
+    final fun documentOpened() // io.github.yuroyami.kitepdf.javascript/PdfScriptRunner.documentOpened|documentOpened(){}[0]
+    final fun focus(kotlin/String) // io.github.yuroyami.kitepdf.javascript/PdfScriptRunner.focus|focus(kotlin.String){}[0]
+    final fun formattedValue(kotlin/String): kotlin/String // io.github.yuroyami.kitepdf.javascript/PdfScriptRunner.formattedValue|formattedValue(kotlin.String){}[0]
+    final fun keystroke(kotlin/String, kotlin/String, kotlin/Int = ..., kotlin/Int = ..., kotlin/Boolean = ...): io.github.yuroyami.kitepdf.javascript/PdfScriptRunner.KeystrokeResult // io.github.yuroyami.kitepdf.javascript/PdfScriptRunner.keystroke|keystroke(kotlin.String;kotlin.String;kotlin.Int;kotlin.Int;kotlin.Boolean){}[0]
+    final fun keystroke(kotlin/String, kotlin/String, kotlin/Int, kotlin/Int): kotlin/String? // io.github.yuroyami.kitepdf.javascript/PdfScriptRunner.keystroke|keystroke(kotlin.String;kotlin.String;kotlin.Int;kotlin.Int){}[0]
+    final fun mouseDown(kotlin/String) // io.github.yuroyami.kitepdf.javascript/PdfScriptRunner.mouseDown|mouseDown(kotlin.String){}[0]
+    final fun mouseUp(kotlin/String) // io.github.yuroyami.kitepdf.javascript/PdfScriptRunner.mouseUp|mouseUp(kotlin.String){}[0]
+    final fun pageClosed(kotlin/Int) // io.github.yuroyami.kitepdf.javascript/PdfScriptRunner.pageClosed|pageClosed(kotlin.Int){}[0]
+    final fun pageOpened(kotlin/Int) // io.github.yuroyami.kitepdf.javascript/PdfScriptRunner.pageOpened|pageOpened(kotlin.Int){}[0]
+    final fun pumpTimers(kotlin/Long): kotlin/Long? // io.github.yuroyami.kitepdf.javascript/PdfScriptRunner.pumpTimers|pumpTimers(kotlin.Long){}[0]
+    final fun run(io.github.yuroyami.kitepdf/PdfAction.JavaScript): kotlin/String? // io.github.yuroyami.kitepdf.javascript/PdfScriptRunner.run|run(io.github.yuroyami.kitepdf.PdfAction.JavaScript){}[0]
+    final fun runAction(io.github.yuroyami.kitepdf/PdfAction.JavaScript) // io.github.yuroyami.kitepdf.javascript/PdfScriptRunner.runAction|runAction(io.github.yuroyami.kitepdf.PdfAction.JavaScript){}[0]
+    final fun runCalculations() // io.github.yuroyami.kitepdf.javascript/PdfScriptRunner.runCalculations|runCalculations(){}[0]
+    final fun runDocumentOpen(): kotlin.collections/List<io.github.yuroyami.kitepdf.core.script/KiteScriptException> // io.github.yuroyami.kitepdf.javascript/PdfScriptRunner.runDocumentOpen|runDocumentOpen(){}[0]
+    final fun runDocumentScripts(): kotlin.collections/List<io.github.yuroyami.kitepdf.core.script/KiteScriptException> // io.github.yuroyami.kitepdf.javascript/PdfScriptRunner.runDocumentScripts|runDocumentScripts(){}[0]
+    final fun runPageClose(kotlin/Int): io.github.yuroyami.kitepdf.core.script/KiteScriptException? // io.github.yuroyami.kitepdf.javascript/PdfScriptRunner.runPageClose|runPageClose(kotlin.Int){}[0]
+    final fun runPageOpen(kotlin/Int): io.github.yuroyami.kitepdf.core.script/KiteScriptException? // io.github.yuroyami.kitepdf.javascript/PdfScriptRunner.runPageOpen|runPageOpen(kotlin.Int){}[0]
+    final fun setFieldValue(kotlin/String, kotlin/String): kotlin/Boolean // io.github.yuroyami.kitepdf.javascript/PdfScriptRunner.setFieldValue|setFieldValue(kotlin.String;kotlin.String){}[0]
+
+    final class KeystrokeResult { // io.github.yuroyami.kitepdf.javascript/PdfScriptRunner.KeystrokeResult|null[0]
+        final val accepted // io.github.yuroyami.kitepdf.javascript/PdfScriptRunner.KeystrokeResult.accepted|{}accepted[0]
+            final fun <get-accepted>(): kotlin/Boolean // io.github.yuroyami.kitepdf.javascript/PdfScriptRunner.KeystrokeResult.accepted.<get-accepted>|<get-accepted>(){}[0]
+        final val value // io.github.yuroyami.kitepdf.javascript/PdfScriptRunner.KeystrokeResult.value|{}value[0]
+            final fun <get-value>(): kotlin/String // io.github.yuroyami.kitepdf.javascript/PdfScriptRunner.KeystrokeResult.value.<get-value>|<get-value>(){}[0]
+    }
+}
+
+sealed class io.github.yuroyami.kitepdf.javascript/PdfScriptRequest { // io.github.yuroyami.kitepdf.javascript/PdfScriptRequest|null[0]
+    final class Document : io.github.yuroyami.kitepdf.javascript/PdfScriptRequest { // io.github.yuroyami.kitepdf.javascript/PdfScriptRequest.Document|null[0]
+        constructor <init>(kotlin/String) // io.github.yuroyami.kitepdf.javascript/PdfScriptRequest.Document.<init>|<init>(kotlin.String){}[0]
+
+        final val what // io.github.yuroyami.kitepdf.javascript/PdfScriptRequest.Document.what|{}what[0]
+            final fun <get-what>(): kotlin/String // io.github.yuroyami.kitepdf.javascript/PdfScriptRequest.Document.what.<get-what>|<get-what>(){}[0]
+
+        final fun component1(): kotlin/String // io.github.yuroyami.kitepdf.javascript/PdfScriptRequest.Document.component1|component1(){}[0]
+        final fun copy(kotlin/String = ...): io.github.yuroyami.kitepdf.javascript/PdfScriptRequest.Document // io.github.yuroyami.kitepdf.javascript/PdfScriptRequest.Document.copy|copy(kotlin.String){}[0]
+        final fun equals(kotlin/Any?): kotlin/Boolean // io.github.yuroyami.kitepdf.javascript/PdfScriptRequest.Document.equals|equals(kotlin.Any?){}[0]
+        final fun hashCode(): kotlin/Int // io.github.yuroyami.kitepdf.javascript/PdfScriptRequest.Document.hashCode|hashCode(){}[0]
+        final fun toString(): kotlin/String // io.github.yuroyami.kitepdf.javascript/PdfScriptRequest.Document.toString|toString(){}[0]
+    }
+
+    final class Focus : io.github.yuroyami.kitepdf.javascript/PdfScriptRequest { // io.github.yuroyami.kitepdf.javascript/PdfScriptRequest.Focus|null[0]
+        constructor <init>(kotlin/String) // io.github.yuroyami.kitepdf.javascript/PdfScriptRequest.Focus.<init>|<init>(kotlin.String){}[0]
+
+        final val fieldName // io.github.yuroyami.kitepdf.javascript/PdfScriptRequest.Focus.fieldName|{}fieldName[0]
+            final fun <get-fieldName>(): kotlin/String // io.github.yuroyami.kitepdf.javascript/PdfScriptRequest.Focus.fieldName.<get-fieldName>|<get-fieldName>(){}[0]
+
+        final fun component1(): kotlin/String // io.github.yuroyami.kitepdf.javascript/PdfScriptRequest.Focus.component1|component1(){}[0]
+        final fun copy(kotlin/String = ...): io.github.yuroyami.kitepdf.javascript/PdfScriptRequest.Focus // io.github.yuroyami.kitepdf.javascript/PdfScriptRequest.Focus.copy|copy(kotlin.String){}[0]
+        final fun equals(kotlin/Any?): kotlin/Boolean // io.github.yuroyami.kitepdf.javascript/PdfScriptRequest.Focus.equals|equals(kotlin.Any?){}[0]
+        final fun hashCode(): kotlin/Int // io.github.yuroyami.kitepdf.javascript/PdfScriptRequest.Focus.hashCode|hashCode(){}[0]
+        final fun toString(): kotlin/String // io.github.yuroyami.kitepdf.javascript/PdfScriptRequest.Focus.toString|toString(){}[0]
+    }
+
+    final class GoTo : io.github.yuroyami.kitepdf.javascript/PdfScriptRequest { // io.github.yuroyami.kitepdf.javascript/PdfScriptRequest.GoTo|null[0]
+        constructor <init>(kotlin/Int?, kotlin/String?) // io.github.yuroyami.kitepdf.javascript/PdfScriptRequest.GoTo.<init>|<init>(kotlin.Int?;kotlin.String?){}[0]
+
+        final val namedDestination // io.github.yuroyami.kitepdf.javascript/PdfScriptRequest.GoTo.namedDestination|{}namedDestination[0]
+            final fun <get-namedDestination>(): kotlin/String? // io.github.yuroyami.kitepdf.javascript/PdfScriptRequest.GoTo.namedDestination.<get-namedDestination>|<get-namedDestination>(){}[0]
+        final val pageIndex // io.github.yuroyami.kitepdf.javascript/PdfScriptRequest.GoTo.pageIndex|{}pageIndex[0]
+            final fun <get-pageIndex>(): kotlin/Int? // io.github.yuroyami.kitepdf.javascript/PdfScriptRequest.GoTo.pageIndex.<get-pageIndex>|<get-pageIndex>(){}[0]
+
+        final fun component1(): kotlin/Int? // io.github.yuroyami.kitepdf.javascript/PdfScriptRequest.GoTo.component1|component1(){}[0]
+        final fun component2(): kotlin/String? // io.github.yuroyami.kitepdf.javascript/PdfScriptRequest.GoTo.component2|component2(){}[0]
+        final fun copy(kotlin/Int? = ..., kotlin/String? = ...): io.github.yuroyami.kitepdf.javascript/PdfScriptRequest.GoTo // io.github.yuroyami.kitepdf.javascript/PdfScriptRequest.GoTo.copy|copy(kotlin.Int?;kotlin.String?){}[0]
+        final fun equals(kotlin/Any?): kotlin/Boolean // io.github.yuroyami.kitepdf.javascript/PdfScriptRequest.GoTo.equals|equals(kotlin.Any?){}[0]
+        final fun hashCode(): kotlin/Int // io.github.yuroyami.kitepdf.javascript/PdfScriptRequest.GoTo.hashCode|hashCode(){}[0]
+        final fun toString(): kotlin/String // io.github.yuroyami.kitepdf.javascript/PdfScriptRequest.GoTo.toString|toString(){}[0]
+    }
+
+    final class LaunchUrl : io.github.yuroyami.kitepdf.javascript/PdfScriptRequest { // io.github.yuroyami.kitepdf.javascript/PdfScriptRequest.LaunchUrl|null[0]
+        constructor <init>(kotlin/String) // io.github.yuroyami.kitepdf.javascript/PdfScriptRequest.LaunchUrl.<init>|<init>(kotlin.String){}[0]
+
+        final val url // io.github.yuroyami.kitepdf.javascript/PdfScriptRequest.LaunchUrl.url|{}url[0]
+            final fun <get-url>(): kotlin/String // io.github.yuroyami.kitepdf.javascript/PdfScriptRequest.LaunchUrl.url.<get-url>|<get-url>(){}[0]
+
+        final fun component1(): kotlin/String // io.github.yuroyami.kitepdf.javascript/PdfScriptRequest.LaunchUrl.component1|component1(){}[0]
+        final fun copy(kotlin/String = ...): io.github.yuroyami.kitepdf.javascript/PdfScriptRequest.LaunchUrl // io.github.yuroyami.kitepdf.javascript/PdfScriptRequest.LaunchUrl.copy|copy(kotlin.String){}[0]
+        final fun equals(kotlin/Any?): kotlin/Boolean // io.github.yuroyami.kitepdf.javascript/PdfScriptRequest.LaunchUrl.equals|equals(kotlin.Any?){}[0]
+        final fun hashCode(): kotlin/Int // io.github.yuroyami.kitepdf.javascript/PdfScriptRequest.LaunchUrl.hashCode|hashCode(){}[0]
+        final fun toString(): kotlin/String // io.github.yuroyami.kitepdf.javascript/PdfScriptRequest.LaunchUrl.toString|toString(){}[0]
+    }
+
+    final class MenuItem : io.github.yuroyami.kitepdf.javascript/PdfScriptRequest { // io.github.yuroyami.kitepdf.javascript/PdfScriptRequest.MenuItem|null[0]
+        constructor <init>(kotlin/String) // io.github.yuroyami.kitepdf.javascript/PdfScriptRequest.MenuItem.<init>|<init>(kotlin.String){}[0]
+
+        final val name // io.github.yuroyami.kitepdf.javascript/PdfScriptRequest.MenuItem.name|{}name[0]
+            final fun <get-name>(): kotlin/String // io.github.yuroyami.kitepdf.javascript/PdfScriptRequest.MenuItem.name.<get-name>|<get-name>(){}[0]
+
+        final fun component1(): kotlin/String // io.github.yuroyami.kitepdf.javascript/PdfScriptRequest.MenuItem.component1|component1(){}[0]
+        final fun copy(kotlin/String = ...): io.github.yuroyami.kitepdf.javascript/PdfScriptRequest.MenuItem // io.github.yuroyami.kitepdf.javascript/PdfScriptRequest.MenuItem.copy|copy(kotlin.String){}[0]
+        final fun equals(kotlin/Any?): kotlin/Boolean // io.github.yuroyami.kitepdf.javascript/PdfScriptRequest.MenuItem.equals|equals(kotlin.Any?){}[0]
+        final fun hashCode(): kotlin/Int // io.github.yuroyami.kitepdf.javascript/PdfScriptRequest.MenuItem.hashCode|hashCode(){}[0]
+        final fun toString(): kotlin/String // io.github.yuroyami.kitepdf.javascript/PdfScriptRequest.MenuItem.toString|toString(){}[0]
+    }
+
+    final class SubmitForm : io.github.yuroyami.kitepdf.javascript/PdfScriptRequest { // io.github.yuroyami.kitepdf.javascript/PdfScriptRequest.SubmitForm|null[0]
+        constructor <init>(kotlin/String) // io.github.yuroyami.kitepdf.javascript/PdfScriptRequest.SubmitForm.<init>|<init>(kotlin.String){}[0]
+
+        final val url // io.github.yuroyami.kitepdf.javascript/PdfScriptRequest.SubmitForm.url|{}url[0]
+            final fun <get-url>(): kotlin/String // io.github.yuroyami.kitepdf.javascript/PdfScriptRequest.SubmitForm.url.<get-url>|<get-url>(){}[0]
+
+        final fun component1(): kotlin/String // io.github.yuroyami.kitepdf.javascript/PdfScriptRequest.SubmitForm.component1|component1(){}[0]
+        final fun copy(kotlin/String = ...): io.github.yuroyami.kitepdf.javascript/PdfScriptRequest.SubmitForm // io.github.yuroyami.kitepdf.javascript/PdfScriptRequest.SubmitForm.copy|copy(kotlin.String){}[0]
+        final fun equals(kotlin/Any?): kotlin/Boolean // io.github.yuroyami.kitepdf.javascript/PdfScriptRequest.SubmitForm.equals|equals(kotlin.Any?){}[0]
+        final fun hashCode(): kotlin/Int // io.github.yuroyami.kitepdf.javascript/PdfScriptRequest.SubmitForm.hashCode|hashCode(){}[0]
+        final fun toString(): kotlin/String // io.github.yuroyami.kitepdf.javascript/PdfScriptRequest.SubmitForm.toString|toString(){}[0]
+    }
+
+    final object Beep : io.github.yuroyami.kitepdf.javascript/PdfScriptRequest { // io.github.yuroyami.kitepdf.javascript/PdfScriptRequest.Beep|null[0]
+        final fun equals(kotlin/Any?): kotlin/Boolean // io.github.yuroyami.kitepdf.javascript/PdfScriptRequest.Beep.equals|equals(kotlin.Any?){}[0]
+        final fun hashCode(): kotlin/Int // io.github.yuroyami.kitepdf.javascript/PdfScriptRequest.Beep.hashCode|hashCode(){}[0]
+        final fun toString(): kotlin/String // io.github.yuroyami.kitepdf.javascript/PdfScriptRequest.Beep.toString|toString(){}[0]
+    }
+
+    final object Mail : io.github.yuroyami.kitepdf.javascript/PdfScriptRequest { // io.github.yuroyami.kitepdf.javascript/PdfScriptRequest.Mail|null[0]
+        final fun equals(kotlin/Any?): kotlin/Boolean // io.github.yuroyami.kitepdf.javascript/PdfScriptRequest.Mail.equals|equals(kotlin.Any?){}[0]
+        final fun hashCode(): kotlin/Int // io.github.yuroyami.kitepdf.javascript/PdfScriptRequest.Mail.hashCode|hashCode(){}[0]
+        final fun toString(): kotlin/String // io.github.yuroyami.kitepdf.javascript/PdfScriptRequest.Mail.toString|toString(){}[0]
+    }
+
+    final object Print : io.github.yuroyami.kitepdf.javascript/PdfScriptRequest { // io.github.yuroyami.kitepdf.javascript/PdfScriptRequest.Print|null[0]
+        final fun equals(kotlin/Any?): kotlin/Boolean // io.github.yuroyami.kitepdf.javascript/PdfScriptRequest.Print.equals|equals(kotlin.Any?){}[0]
+        final fun hashCode(): kotlin/Int // io.github.yuroyami.kitepdf.javascript/PdfScriptRequest.Print.hashCode|hashCode(){}[0]
+        final fun toString(): kotlin/String // io.github.yuroyami.kitepdf.javascript/PdfScriptRequest.Print.toString|toString(){}[0]
+    }
+}

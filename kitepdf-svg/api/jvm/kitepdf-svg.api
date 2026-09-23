@@ -1,0 +1,46 @@
+public final class io/github/yuroyami/kitepdf/svg/SvgDocument : io/github/yuroyami/kitepdf/core/KiteDocument {
+	public static final field Companion Lio/github/yuroyami/kitepdf/svg/SvgDocument$Companion;
+	public fun bookmarkOf (Lio/github/yuroyami/kitepdf/core/KiteLocation;)Lio/github/yuroyami/kitepdf/core/KiteBookmark;
+	public fun getChapterCount ()I
+	public fun getKnownPageCount ()I
+	public fun getMetadata ()Lio/github/yuroyami/kitepdf/core/KiteMetadata;
+	public fun getOutline ()Ljava/util/List;
+	public fun getPageCount ()I
+	public fun getPages ()Ljava/util/List;
+	public fun isChapterReady (I)Z
+	public fun isComplete ()Z
+	public fun locate (Lio/github/yuroyami/kitepdf/core/KiteBookmark;)Lio/github/yuroyami/kitepdf/core/KiteLocation;
+	public fun locationOf (I)Lio/github/yuroyami/kitepdf/core/KiteLocation;
+	public fun page (Lio/github/yuroyami/kitepdf/core/KiteLocation;)Lio/github/yuroyami/kitepdf/core/KitePage;
+	public fun pageCountIn (I)I
+	public fun pageIndexOf (Lio/github/yuroyami/kitepdf/core/KiteLocation;)Ljava/lang/Integer;
+	public fun prepareChapter (I)V
+}
+
+public final class io/github/yuroyami/kitepdf/svg/SvgDocument$Companion {
+	public final fun open ([B)Lio/github/yuroyami/kitepdf/svg/SvgDocument;
+	public final fun openOrNull ([B)Lio/github/yuroyami/kitepdf/svg/SvgDocument;
+}
+
+public final class io/github/yuroyami/kitepdf/svg/SvgImage {
+	public static final field Companion Lio/github/yuroyami/kitepdf/svg/SvgImage$Companion;
+	public final fun getHeight ()D
+	public final fun getWidth ()D
+	public final fun render (Lio/github/yuroyami/kitepdf/core/render/KiteCanvas;Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;Lkotlin/jvm/functions/Function1;)V
+	public static synthetic fun render$default (Lio/github/yuroyami/kitepdf/svg/SvgImage;Lio/github/yuroyami/kitepdf/core/render/KiteCanvas;Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;Lkotlin/jvm/functions/Function1;ILjava/lang/Object;)V
+}
+
+public final class io/github/yuroyami/kitepdf/svg/SvgImage$Companion {
+	public final fun fromElement (Lio/github/yuroyami/kitepdf/core/xml/KiteXmlNode$Element;)Lio/github/yuroyami/kitepdf/svg/SvgImage;
+	public final fun isSvg ([B)Z
+	public final fun parse ([B)Lio/github/yuroyami/kitepdf/svg/SvgImage;
+}
+
+public final class io/github/yuroyami/kitepdf/svg/SvgPage : io/github/yuroyami/kitepdf/core/KitePage {
+	public fun displayToDeviceBase ()Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;
+	public fun getDisplayHeight ()D
+	public fun getDisplayWidth ()D
+	public fun renderTo (Lio/github/yuroyami/kitepdf/core/render/KiteCanvas;Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;)V
+	public fun textContent ()Lio/github/yuroyami/kitepdf/core/KiteStructuredText;
+}
+

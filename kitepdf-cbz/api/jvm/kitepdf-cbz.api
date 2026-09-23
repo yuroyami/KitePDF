@@ -1,0 +1,54 @@
+public final class io/github/yuroyami/kitepdf/cbz/CbzDocument : io/github/yuroyami/kitepdf/core/KiteDocument {
+	public static final field Companion Lio/github/yuroyami/kitepdf/cbz/CbzDocument$Companion;
+	public fun bookmarkOf (Lio/github/yuroyami/kitepdf/core/KiteLocation;)Lio/github/yuroyami/kitepdf/core/KiteBookmark;
+	public fun getChapterCount ()I
+	public final fun getComicMetadata ()Lio/github/yuroyami/kitepdf/cbz/CbzMetadata;
+	public fun getKnownPageCount ()I
+	public fun getMetadata ()Lio/github/yuroyami/kitepdf/core/KiteMetadata;
+	public fun getOutline ()Ljava/util/List;
+	public fun getPageCount ()I
+	public fun getPages ()Ljava/util/List;
+	public fun isChapterReady (I)Z
+	public fun isComplete ()Z
+	public fun locate (Lio/github/yuroyami/kitepdf/core/KiteBookmark;)Lio/github/yuroyami/kitepdf/core/KiteLocation;
+	public fun locationOf (I)Lio/github/yuroyami/kitepdf/core/KiteLocation;
+	public fun page (Lio/github/yuroyami/kitepdf/core/KiteLocation;)Lio/github/yuroyami/kitepdf/core/KitePage;
+	public fun pageCountIn (I)I
+	public fun pageIndexOf (Lio/github/yuroyami/kitepdf/core/KiteLocation;)Ljava/lang/Integer;
+	public fun prepareChapter (I)V
+}
+
+public final class io/github/yuroyami/kitepdf/cbz/CbzDocument$Companion {
+	public final fun open ([B)Lio/github/yuroyami/kitepdf/cbz/CbzDocument;
+	public final fun openOrNull ([B)Lio/github/yuroyami/kitepdf/cbz/CbzDocument;
+}
+
+public final class io/github/yuroyami/kitepdf/cbz/CbzMetadata {
+	public final fun getFields ()Ljava/util/Map;
+	public final fun getLanguage ()Ljava/lang/String;
+	public final fun getNumber ()Ljava/lang/String;
+	public final fun getPages ()Ljava/util/List;
+	public final fun getPublisher ()Ljava/lang/String;
+	public final fun getRightToLeft ()Z
+	public final fun getSeries ()Ljava/lang/String;
+	public final fun getSummary ()Ljava/lang/String;
+	public final fun getTitle ()Ljava/lang/String;
+	public final fun getWriters ()Ljava/util/List;
+}
+
+public final class io/github/yuroyami/kitepdf/cbz/CbzPage : io/github/yuroyami/kitepdf/core/KitePage {
+	public fun displayToDeviceBase ()Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;
+	public fun getDisplayHeight ()D
+	public fun getDisplayWidth ()D
+	public fun renderTo (Lio/github/yuroyami/kitepdf/core/render/KiteCanvas;Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;)V
+	public fun textContent ()Lio/github/yuroyami/kitepdf/core/KiteStructuredText;
+}
+
+public final class io/github/yuroyami/kitepdf/cbz/CbzPageMetadata {
+	public final fun getAttributes ()Ljava/util/Map;
+	public final fun getBookmark ()Ljava/lang/String;
+	public final fun getDoublePage ()Z
+	public final fun getImage ()I
+	public final fun getType ()Ljava/lang/String;
+}
+

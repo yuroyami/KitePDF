@@ -9,6 +9,9 @@ name: CI
 # - `apple` and `js` prove the non-JVM targets compile AND pass the common
 #   tests before merge. Platform regressions are therefore merge-blocking,
 #   instead of being discovered only after they land on main.
+# - `api` checks the public API of each published module against the dump in
+#   its api/ directory. It runs on macOS, the one host that compiles every
+#   target, so the Apple-only declarations are checked too.
 
 on:
   push:
@@ -195,6 +198,35 @@ jobs:
           name: test-reports-apple
           path: '**/build/reports/tests/**'
           if-no-files-found: ignore
+
+  api:
+    runs-on: macos-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Cache Konan (native compiler + prebuilt deps)
+        uses: actions/cache@v4
+        with:
+          path: ~/.konan
+          key: konan-${{ runner.os }}-${{ hashFiles('gradle/libs.versions.toml') }}
+          restore-keys: konan-${{ runner.os }}-
+
+      # A failure here means the public API changed. If the change is intended,
+      # run ./gradlew updateKotlinAbi and commit the api/ files with it.
+      - name: Check the public API against the dumps
+        run: ./gradlew checkKotlinAbi --continue --stacktrace
 
   js:
     runs-on: ubuntu-latest

@@ -1,0 +1,33 @@
+// Klib ABI Dump
+// Targets: [androidNativeArm32, androidNativeArm64, androidNativeX64, androidNativeX86, iosArm64, iosSimulatorArm64, iosX64, js, linuxArm64, linuxX64, macosArm64, mingwX64, tvosArm64, tvosSimulatorArm64, wasmJs, wasmWasi, watchosArm32, watchosArm64, watchosDeviceArm64, watchosSimulatorArm64]
+// Rendering settings:
+// - Signature version: 2
+// - Show manifest properties: true
+// - Show declarations: true
+
+// Library unique name: <io.github.yuroyami:kitepdf-xps>
+final class io.github.yuroyami.kitepdf.xps/XpsDocument : io.github.yuroyami.kitepdf.core/KiteDocument { // io.github.yuroyami.kitepdf.xps/XpsDocument|null[0]
+    final val metadata // io.github.yuroyami.kitepdf.xps/XpsDocument.metadata|{}metadata[0]
+        final fun <get-metadata>(): io.github.yuroyami.kitepdf.core/KiteMetadata // io.github.yuroyami.kitepdf.xps/XpsDocument.metadata.<get-metadata>|<get-metadata>(){}[0]
+    final val pageCount // io.github.yuroyami.kitepdf.xps/XpsDocument.pageCount|{}pageCount[0]
+        final fun <get-pageCount>(): kotlin/Int // io.github.yuroyami.kitepdf.xps/XpsDocument.pageCount.<get-pageCount>|<get-pageCount>(){}[0]
+    final val pages // io.github.yuroyami.kitepdf.xps/XpsDocument.pages|{}pages[0]
+        final fun <get-pages>(): kotlin.collections/List<io.github.yuroyami.kitepdf.xps/XpsPage> // io.github.yuroyami.kitepdf.xps/XpsDocument.pages.<get-pages>|<get-pages>(){}[0]
+
+    final object Companion { // io.github.yuroyami.kitepdf.xps/XpsDocument.Companion|null[0]
+        final fun isXps(kotlin/ByteArray): kotlin/Boolean // io.github.yuroyami.kitepdf.xps/XpsDocument.Companion.isXps|isXps(kotlin.ByteArray){}[0]
+        final fun open(kotlin/ByteArray): io.github.yuroyami.kitepdf.xps/XpsDocument // io.github.yuroyami.kitepdf.xps/XpsDocument.Companion.open|open(kotlin.ByteArray){}[0]
+        final fun openOrNull(kotlin/ByteArray): io.github.yuroyami.kitepdf.xps/XpsDocument? // io.github.yuroyami.kitepdf.xps/XpsDocument.Companion.openOrNull|openOrNull(kotlin.ByteArray){}[0]
+    }
+}
+
+final class io.github.yuroyami.kitepdf.xps/XpsPage : io.github.yuroyami.kitepdf.core/KitePage { // io.github.yuroyami.kitepdf.xps/XpsPage|null[0]
+    final val displayHeight // io.github.yuroyami.kitepdf.xps/XpsPage.displayHeight|{}displayHeight[0]
+        final fun <get-displayHeight>(): kotlin/Double // io.github.yuroyami.kitepdf.xps/XpsPage.displayHeight.<get-displayHeight>|<get-displayHeight>(){}[0]
+    final val displayWidth // io.github.yuroyami.kitepdf.xps/XpsPage.displayWidth|{}displayWidth[0]
+        final fun <get-displayWidth>(): kotlin/Double // io.github.yuroyami.kitepdf.xps/XpsPage.displayWidth.<get-displayWidth>|<get-displayWidth>(){}[0]
+
+    final fun displayToDeviceBase(): io.github.yuroyami.kitepdf.core.render/KiteMatrix // io.github.yuroyami.kitepdf.xps/XpsPage.displayToDeviceBase|displayToDeviceBase(){}[0]
+    final fun renderTo(io.github.yuroyami.kitepdf.core.render/KiteCanvas, io.github.yuroyami.kitepdf.core.render/KiteMatrix) // io.github.yuroyami.kitepdf.xps/XpsPage.renderTo|renderTo(io.github.yuroyami.kitepdf.core.render.KiteCanvas;io.github.yuroyami.kitepdf.core.render.KiteMatrix){}[0]
+    final fun textContent(): io.github.yuroyami.kitepdf.core/KiteStructuredText // io.github.yuroyami.kitepdf.xps/XpsPage.textContent|textContent(){}[0]
+}
