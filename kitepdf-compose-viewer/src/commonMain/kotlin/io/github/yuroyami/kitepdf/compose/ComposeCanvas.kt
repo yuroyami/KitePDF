@@ -26,6 +26,7 @@ import io.github.yuroyami.kitepdf.core.font.KiteFontFamily
 import io.github.yuroyami.kitepdf.core.font.FontSpec
 import io.github.yuroyami.kitepdf.core.font.TextGlyph
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.ShaderBrush
 import io.github.yuroyami.kitepdf.core.render.KiteBlendMode
 import io.github.yuroyami.kitepdf.core.render.KiteImageData
 import io.github.yuroyami.kitepdf.core.render.toRgbaBytes
@@ -388,17 +389,15 @@ public class ComposeCanvas(
                 )
             }
             is KiteShading.Radial -> {
-                // We use the outer circle's centre + radius as the gradient.
-                // The inner circle (concentric or offset) is approximated; PDF's
-                // two-circle radial gradient is richer than Compose's, but for
-                // most real-world shadings the difference is sub-pixel.
-                // The radius is at least a tenth of a device pixel.
+                // A radial shading runs between two circles (ISO 32000-1, 8.7.4.5.4).
+                // The end radius is at least a tenth of a device pixel.
                 val c = shading.coords
-                Brush.radialGradient(
-                    colorStops = composeStops,
-                    center = Offset(c[3].toFloat(), c[4].toFloat()),
-                    radius = c[5].coerceAtLeast(0.1 / sqrt(abs(det))).toFloat(),
-                )
+                val r0 = c[2].coerceAtLeast(0.0)
+                val r1 = c[5].coerceAtLeast(0.1 / sqrt(abs(det)))
+                twoCircleGradient(
+                    c[0].toFloat(), c[1].toFloat(), r0.toFloat(), c[3].toFloat(), c[4].toFloat(), r1.toFloat(),
+                    composeStops.map { it.second }, composeStops.map { it.first },
+                )?.let { ShaderBrush(it) } ?: oneCircleGradient(c[0], c[1], r0, c[3], c[4], r1, composeStops)
             }
             is KiteShading.Unsupported -> {
                 // Background fall-back: solid colour if the spec gave one.
@@ -596,6 +595,24 @@ public class ComposeCanvas(
         drawScope.clipPath(frame.path) {
             applyClipsThen(index + 1, block)
         }
+    }
+
+    /**
+     * One circle standing in for a radial shading between two circles, on a platform
+     * that has no gradient between two circles. It is exact when the circles share a
+     * centre. Otherwise it keeps only the end circle.
+     */
+    private fun oneCircleGradient(
+        x0: Double, y0: Double, r0: Double, x1: Double, y1: Double, r1: Double,
+        stops: Array<Pair<Float, Color>>,
+    ): Brush {
+        val center = Offset(x1.toFloat(), y1.toFloat())
+        if (x0 != x1 || y0 != y1) return Brush.radialGradient(*stops, center = center, radius = r1.toFloat())
+        // Offset s lies on the circle of radius r0 + s (r1 - r0), as a fraction of the larger radius.
+        val outer = maxOf(r0, r1)
+        val mapped = stops.map { (s, color) -> ((r0 + s * (r1 - r0)) / outer).toFloat() to color }
+        val ordered = if (r1 < r0) mapped.reversed() else mapped
+        return Brush.radialGradient(*ordered.toTypedArray(), center = center, radius = outer.toFloat())
     }
 
     /** This matrix as a Compose matrix, rotation, reflection and shear included. */

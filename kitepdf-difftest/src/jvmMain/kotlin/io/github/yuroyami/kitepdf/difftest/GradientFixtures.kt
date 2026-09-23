@@ -17,11 +17,17 @@ object GradientFixtures {
 
     fun all(): List<Fixture> = listOf(
         // A skewed CTM tilts the bands of an axial shading.
-        fixture("axial-skewed", "1 0 1 1 20 0 cm", axial("0 0 100 0"), budget = 0.01),
+        fixture("axial-skewed", "1 0 1 1 20 0 cm", axial("0 0 100 0"), budget = 0.005),
         // A non-uniform CTM stretches the circles of a radial shading into ellipses.
-        fixture("radial-stretched", "2 0 0 1 0 0 cm", radial("50 100 0 50 100 40"), budget = 0.01),
+        fixture("radial-stretched", "2 0 0 1 0 0 cm", radial("50 100 0 50 100 40"), budget = 0.005),
         // A scale along the axis only, which a backend that maps just the two end points also draws right.
-        fixture("axial-scaled-along-axis", "2 0 0 1 0 0 cm", axial("0 0 100 0"), budget = 0.01),
+        fixture("axial-scaled-along-axis", "2 0 0 1 0 0 cm", axial("0 0 100 0"), budget = 0.005),
+        // A small start circle off the centre of the end circle: the highlight of a sphere.
+        fixture("radial-offset-highlight", "", radial("70 130 5 100 100 85"), budget = 0.005),
+        // Two circles with one centre: the colour of the start circle fills its inside.
+        fixture("radial-concentric", "", radial("100 100 10 100 100 90"), budget = 0.005),
+        // A start circle larger than the end circle, so the colours run inwards.
+        fixture("radial-shrinking", "", radial("100 100 90 100 100 10"), budget = 0.005),
     )
 
     private fun axial(coords: String, extend: String = "true true") =
