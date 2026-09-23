@@ -61,8 +61,8 @@ class RenderGoldenTest {
         // 2) Vector fill: red rect (10,150) 60x40 → centre is red.
         assertTrue(isReddish(sk.getColor(dx(40), dy(170))), "vector fill not red")
 
-        // 3) Hairline stroke (width 0.1) along y=120 → a 1px anti-aliased line reads
-        //    as grey, not pure black, so count non-white pixels on that row band.
+        // 3) A zero-width stroke along y=120 is one device pixel wide (ISO 32000-1, 8.4.3.2).
+        //    Anti-aliased, it reads as grey, not pure black, so count non-white pixels on that row band.
         var strokePx = 0
         val syy = dy(120)
         for (xx in dx(15)..dx(285)) for (yy in (syy - 2)..(syy + 2)) if (isNonWhite(sk.getColor(xx, yy))) strokePx++
@@ -117,7 +117,7 @@ class RenderGoldenTest {
             0 0 0 rg
             BT /F1 40 Tf 10 250 Td (Hg) Tj ET
             1 0 0 rg 10 150 60 40 re f
-            0 0 0 RG 0.1 w 10 120 m 290 120 l S
+            0 0 0 RG 0 w 10 120 m 290 120 l S
             q 40 0 0 40 200 230 cm /Im0 Do Q
         """.trimIndent().encodeToByteArray()
 

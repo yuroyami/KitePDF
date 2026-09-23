@@ -282,6 +282,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Each published module keeps a dump of its public API in its `api/` directory, and
   CI fails when the code and the dump differ. An API change now shows up as a diff
   in review (#202).
+- Every backend gives a thin stroke the same weight. A line width of 0 is one device
+  pixel, as ISO 32000-1, 8.4.3.2 requires. Any other line is at least a fifth of a
+  pixel, as in MuPDF. Before, Skia and Compose drew every thin line one pixel wide,
+  so an ECG grid of 0.15-unit lines turned black. AWT, Android, CoreGraphics and
+  Canvas2D drew a zero-width line at a tenth of a pixel. `hairlineWidthPx` in the
+  Compose viewer is now the width of a zero-width stroke, still 1 by default
+  (#109, #110).
 
 ## [0.10.0] - 2026-09-13
 

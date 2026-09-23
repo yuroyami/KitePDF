@@ -2153,6 +2153,7 @@ public final class io/github/yuroyami/kitepdf/core/render/StrokeOutlineKt {
 
 public final class io/github/yuroyami/kitepdf/core/render/StrokePenKt {
 	public static final fun strokePen (Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;DD)Lio/github/yuroyami/kitepdf/core/render/KiteStrokePen;
+	public static synthetic fun strokePen$default (Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;DDILjava/lang/Object;)Lio/github/yuroyami/kitepdf/core/render/KiteStrokePen;
 }
 
 public final class io/github/yuroyami/kitepdf/core/render/TextState {

@@ -73,11 +73,11 @@ public class ComposeCanvas(
     private val drawScope: DrawScope,
     private val textMeasurer: TextMeasurer,
     /**
-     * Minimum stroke width in *raster* pixels. Defaults to 1, the ISO hairline
-     * floor. When rasterizing supersampled (raster larger than its on-screen
-     * size), pass the supersample factor instead: a floor of 1 raster pixel
-     * would shrink below one *screen* pixel after downscale and hairlines
-     * (e.g. 0.1-width ECG traces) would vanish.
+     * The width in raster pixels of a stroke whose line width is 0. Defaults to 1, the one
+     * device pixel of ISO 32000-1, 8.4.3.2. Other thin strokes widen to a fifth of it, as
+     * [strokePen] describes. When rasterizing supersampled (raster larger than its on-screen
+     * size), pass the supersample factor instead, so thin strokes keep their weight after
+     * the downscale.
      */
     private val hairlineWidthPx: Float = 1f,
     /**
@@ -138,11 +138,8 @@ public class ComposeCanvas(
         lineCap: Int, lineJoin: Int, miterLimit: Double,
     ) {
         withActiveClips {
-            // Hairline minimum: a stroke thinner than ~1 device pixel must still
-            // render as a visible 1px line, not vanish (ISO 32000-1 §8.4.3.2; cf.
-            // MuPDF draw-device.c clamping linewidth up to the anti-alias unit).
-            // The floor is configurable so supersampled rasters can keep
-            // hairlines ≥1 px at their final on-screen scale.
+            // The hairline scales with a supersampled raster, so thin strokes keep their
+            // on-screen weight after the downscale.
             val pen = strokePen(ctm, lineWidth, hairlineWidthPx.toDouble())
             val composePath = toComposePath(path, pen.pathMatrix)
             val dash = composeDashIntervals(dashArray, pen.dashScale)

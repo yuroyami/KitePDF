@@ -25,8 +25,7 @@ public class KiteStrokePen internal constructor(
 )
 
 /**
- * The pen for a stroke [lineWidth] user units wide under [ctm], on a canvas whose
- * thinnest line is [floorPx] device pixels.
+ * The pen for a stroke [lineWidth] user units wide under [ctm].
  *
  * - A matrix that keeps circles round strokes in device space, with the width and the
  *   dashes scaled by the matrix.
@@ -34,10 +33,21 @@ public class KiteStrokePen internal constructor(
  *   stroker of the canvas draws the elliptical pen. MuPDF strokes the same way.
  * - A singular matrix strokes in device space, scaled by the mean length of its columns.
  *
- * A pen thinner than [floorPx] widens to it. An elliptical pen is measured as MuPDF
- * measures it, by the square root of the determinant of [ctm].
+ * Every canvas shares one floor, so a page has the same weight on every backend (#109, #110):
+ *
+ * - A line width of 0 is [hairlinePx] device pixels wide. ISO 32000-1, 8.4.3.2 makes it the
+ *   thinnest line the device can render, one device pixel.
+ * - Any other pen thinner than a fifth of [hairlinePx] widens to that fifth. The spec sets no
+ *   floor here. A fifth of a pixel is the anti-alias unit that MuPDF widens every stroke to
+ *   (`fz_draw_stroke_path_aux` in draw-device.c), so a rule of 0.15 units at 72 dpi stays a light
+ *   line and does not become a solid pixel. MuPDF also draws a width of 0 at this fifth.
+ *
+ * A canvas that draws a raster larger than its final size passes the ratio of the two as
+ * [hairlinePx], so both widths hold at the final size. An elliptical pen is measured as
+ * MuPDF measures it, by the square root of the determinant of [ctm].
  */
-public fun strokePen(ctm: KiteMatrix, lineWidth: Double, floorPx: Double): KiteStrokePen {
+public fun strokePen(ctm: KiteMatrix, lineWidth: Double, hairlinePx: Double = 1.0): KiteStrokePen {
+    val floorPx = if (lineWidth <= 0.0) hairlinePx else hairlinePx * THIN_LINE_FLOOR
     val expansion = sqrt(abs(ctm.a * ctm.d - ctm.b * ctm.c))
     if (!ctm.keepsCircles() && expansion >= MIN_EXPANSION && expansion.isFinite()) {
         return KiteStrokePen(KiteMatrix.IDENTITY, ctm, max(lineWidth, floorPx / expansion), 1.0)
@@ -45,6 +55,9 @@ public fun strokePen(ctm: KiteMatrix, lineWidth: Double, floorPx: Double): KiteS
     val scale = (ctm.scaleX() + ctm.scaleY()) * 0.5
     return KiteStrokePen(ctm, null, max(lineWidth * scale, floorPx), scale)
 }
+
+/** The thinnest pen of a width above 0, as a fraction of the hairline: MuPDF's 2 / (8 + 2) at 8 bits of anti-aliasing. */
+private const val THIN_LINE_FLOOR = 0.2
 
 /** Below this, a matrix is singular, as [KiteMatrix.invert] decides. */
 private const val MIN_EXPANSION = 1e-6

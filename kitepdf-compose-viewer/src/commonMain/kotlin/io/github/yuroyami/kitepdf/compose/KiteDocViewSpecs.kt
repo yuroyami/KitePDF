@@ -154,9 +154,10 @@ public sealed interface KiteRenderSpec {
      * @param rerasterizeOnZoom after a zoom settles, re-render the visible page
      *   at the zoomed resolution so deep zoom stays crisp instead of upscaling
      *   the base raster. Costs one extra rasterization per zoom settle.
-     * @param preserveHairlines compensate the engine's 1-px hairline floor for
-     *   any raster-vs-screen scale difference, so sub-pixel strokes (0.1-width
-     *   ECG traces, fine table rules) never vanish when the bitmap is downscaled.
+     * @param preserveHairlines scale the engine's stroke floors by the ratio of the
+     *   raster to the screen, so a zero-width stroke stays one screen pixel and other
+     *   sub-pixel strokes (ECG traces, fine table rules) keep their weight when the
+     *   bitmap is downscaled.
      */
     @Immutable
     public data class Rasterized(
@@ -194,10 +195,10 @@ public sealed interface KiteRenderSpec {
      * parsed and painted again on every redraw, so a dense page can drop frames.
      * [Rasterized] renders off the main thread instead.
      *
-     * @param hairlineWidthPx minimum stroke width in device pixels. The engine
-     *   floors thin strokes here so sub-pixel rules (ECG traces, fine borders)
-     *   stay visible; 1 = the ISO hairline. There is no supersampling knob:
-     *   vector output is already resolution-independent.
+     * @param hairlineWidthPx the width in device pixels of a stroke whose line width
+     *   is 0; 1 = the one device pixel of ISO 32000-1, 8.4.3.2. Other thin strokes
+     *   (ECG traces, fine borders) widen to a fifth of it, as MuPDF draws them. There
+     *   is no supersampling knob: vector output is already resolution-independent.
      */
     @Immutable
     public data class Vectorized(

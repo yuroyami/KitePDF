@@ -89,7 +89,7 @@ public class AndroidNativeCanvas(private val canvas: AndroidCanvas) : KiteCanvas
         dashArray: List<Double>?, dashPhase: Double,
         lineCap: Int, lineJoin: Int, miterLimit: Double,
     ) {
-        val pen = strokePen(ctm, lineWidth, floorPx = 0.1)
+        val pen = strokePen(ctm, lineWidth)
         val p = toAndroidPath(path, pen.pathMatrix)
         val paint = Paint().apply {
             isAntiAlias = true

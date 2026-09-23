@@ -834,10 +834,10 @@ private fun KitePageRaster(
         kitePageAspect(page),
         spec.maxBitmapLongSide,
     )
-    // Hairline compensation: the engine floors strokes at 1 *raster* px. When
-    // the raster is larger than its final on-screen size (supersampling), that
-    // floor must grow by the same ratio or sub-pixel strokes vanish in the
-    // downscale. (Upscaling can only thicken them, so 1 is safe.)
+    // Hairline compensation: the engine draws a zero-width stroke 1 *raster* px wide
+    // and floors other strokes at a fifth of that. When the raster is larger than its
+    // final on-screen size (supersampling), both must grow by the same ratio or
+    // sub-pixel strokes fade in the downscale. (Upscaling can only thicken them, so 1 is safe.)
     val visualWidth = baseSize.width * settledZoom
     val hairline = if (spec.preserveHairlines && visualWidth > 0f) {
         max(1f, raster.width / visualWidth)

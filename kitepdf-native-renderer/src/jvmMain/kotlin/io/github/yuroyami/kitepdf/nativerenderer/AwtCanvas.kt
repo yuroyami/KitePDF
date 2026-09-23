@@ -110,7 +110,7 @@ public class AwtCanvas(private var g: Graphics2D) : KiteCanvas {
         dashArray: List<Double>?, dashPhase: Double,
         lineCap: Int, lineJoin: Int, miterLimit: Double,
     ) {
-        val pen = strokePen(ctm, lineWidth, floorPx = 0.1)
+        val pen = strokePen(ctm, lineWidth)
         val awt = toAwtPath(path, pen.pathMatrix)
         val width = pen.width.toFloat()
         val cap = when (lineCap) { 1 -> BasicStroke.CAP_ROUND; 2 -> BasicStroke.CAP_SQUARE; else -> BasicStroke.CAP_BUTT }
