@@ -617,6 +617,9 @@ public class SvgImage private constructor(
                 }
             }
         }
+        // SVG 1.1, 11.4: a stroke width of 0 paints no stroke. The canvas would draw the PDF
+        // hairline for it, one device pixel wide (#292).
+        if (paint.strokeW <= 0.0) return
         // A gradient stroke fills the outline of the stroke. Its bounding box units are those
         // of the shape's own geometry (SVG 1.1, 7.11), so the gradient maps as for the fill.
         val strokeGradient = paint.strokeRef?.let { gradientFor(it, path) }

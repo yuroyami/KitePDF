@@ -48,6 +48,14 @@ class SvgImageTest {
     }
 
     @Test
+    fun a_stroke_width_of_zero_paints_no_stroke() {
+        // SVG 1.1, 11.4. The fill still paints (#292).
+        val c = calls("""<svg width="20" height="20"><rect x="5" y="5" width="10" height="10" fill="red" stroke="black" stroke-width="0"/></svg>""")
+        assertTrue(c.filterIsInstance<RecordingCanvas.Call.Stroke>().isEmpty(), "a zero stroke width paints no stroke")
+        assertEquals(1, c.filterIsInstance<RecordingCanvas.Call.Fill>().size)
+    }
+
+    @Test
     fun curves_and_arcs_parse_without_error() {
         // Cubic, smooth-cubic, quadratic, and an elliptical arc.
         val f = fills("""<svg width="50" height="50"><path d="M0 0 C10 0 10 10 0 10 S-10 20 0 20 Q5 25 10 20 T20 20 A5 5 0 0 1 25 25 Z"/></svg>""")

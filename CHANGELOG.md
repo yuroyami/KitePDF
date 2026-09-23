@@ -289,6 +289,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Canvas2D drew a zero-width line at a tenth of a pixel. `hairlineWidthPx` in the
   Compose viewer is now the width of a zero-width stroke, still 1 by default
   (#109, #110).
+- An SVG `stroke-width` of 0 paints no stroke, as SVG 1.1, 11.4 requires. Before, it
+  drew a thin outline (#292).
 
 ## [0.10.0] - 2026-09-13
 
