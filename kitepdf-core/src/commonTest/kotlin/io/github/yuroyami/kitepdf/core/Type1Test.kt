@@ -78,6 +78,24 @@ class Type1Test {
         assertEquals(true, outline != null)
     }
 
+    /**
+     * The number after `/CharStrings` counts glyphs. Read as a charstring length, it
+     * skipped that many bytes and lost every glyph that started inside them.
+     */
+    @Test
+    fun every_charstring_is_found_whatever_the_glyph_count() {
+        val cs = csEncrypt(byteArrayOf(0, 0, 0, 0, 14))
+        val privateText = "dup /Private 5 dict dup begin\n/lenIV 4 def\n/Subrs 0 array def\n/CharStrings 40 dict dup begin\n"
+            .encodeToByteArray() +
+            listOf(".notdef", "A", "B").fold(ByteArray(0)) { acc, name ->
+                acc + "/$name ${cs.size} RD ".encodeToByteArray() + cs + "\nND\n".encodeToByteArray()
+            } + "end\nend\n".encodeToByteArray()
+        val eexec = eexecEncrypt(byteArrayOf(0, 0, 0, 0) + privateText)
+        val header = "%!PS-AdobeFont-1.0: Three 001.000\n/FontName /Three def\ncurrentfile eexec\n".encodeToByteArray()
+        val font = Type1Font.parse(header + eexec, header.size, eexec.size)
+        assertEquals(setOf(".notdef", "A", "B"), font.glyphNames)
+    }
+
     /* ─── Helpers: encrypt routines (inverse of Type 1's decrypt) ───────── */
 
     private fun eexecEncrypt(plain: ByteArray): ByteArray = streamEncrypt(plain, seed = 55665)
