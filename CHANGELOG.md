@@ -192,6 +192,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   hard pixel edges unless its `/Interpolate` entry is true, and Compose no longer
   blurs it. Images from EPUB, SVG, XPS and CBZ files stay smooth, as in a browser.
   The new `imageSampling` holds the rules (#122, #123).
+- A PDF keeps at most 32 MB of decoded images for reuse, and drops the image used
+  least recently first. Before, it kept every image it had drawn, so a 40-page
+  photo book held 230 MB, enough to run an Android app out of memory. Set
+  `PdfDocument.imageCacheBudgetBytes` to change the budget, and call the now public
+  `dropDecodedImageCache` when the app runs low on memory (#116).
 
 ## [0.10.0] - 2026-09-13
 
