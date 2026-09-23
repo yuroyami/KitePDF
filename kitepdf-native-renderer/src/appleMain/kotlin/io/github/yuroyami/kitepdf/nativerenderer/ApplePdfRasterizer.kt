@@ -10,6 +10,9 @@ import kotlinx.cinterop.ptr
 import kotlinx.cinterop.useContents
 import kotlinx.cinterop.value
 import platform.CoreFoundation.CFArrayCreateMutable
+import platform.CoreFoundation.CFDataCreateMutable
+import platform.CoreFoundation.CFStringCreateWithCString
+import platform.CoreFoundation.kCFStringEncodingUTF8
 import platform.CoreFoundation.CFDictionaryCreateMutable
 import platform.CoreFoundation.CFRelease
 import platform.CoreGraphics.CGBitmapContextCreate
@@ -19,6 +22,8 @@ import platform.CoreGraphics.CGColorSpaceRelease
 import platform.CoreGraphics.CGContextClearRect
 import platform.CoreGraphics.CGContextRef
 import platform.CoreGraphics.CGContextRelease
+import platform.CoreGraphics.CGContextScaleCTM
+import platform.CoreGraphics.CGContextTranslateCTM
 import platform.CoreGraphics.CGContextSetRGBFillColor
 import platform.CoreGraphics.CGContextFillRect
 import platform.CoreGraphics.CGImageAlphaInfo
@@ -26,11 +31,9 @@ import platform.CoreGraphics.CGImageRelease
 import platform.CoreGraphics.CGRectMake
 import platform.Foundation.CFBridgingRelease
 import platform.Foundation.NSData
-import platform.Foundation.NSMutableData
 import platform.ImageIO.CGImageDestinationAddImage
 import platform.ImageIO.CGImageDestinationCreateWithData
 import platform.ImageIO.CGImageDestinationFinalize
-import platform.UniformTypeIdentifiers.UTTypePNG
 
 /**
  * Headless rendering on Apple platforms (iOS, macOS, tvOS). Produces a
@@ -102,6 +105,10 @@ public object ApplePdfRasterizer {
                     CGContextSetRGBFillColor(cgContext, backgroundR, backgroundG, backgroundB, backgroundA)
                     CGContextFillRect(cgContext, rect)
                 }
+                // The device matrix of the geometry is y-down and a bitmap context is y-up.
+                // Flip the context so that the first row of the PNG is the top of the page (#288).
+                CGContextTranslateCTM(cgContext, 0.0, heightPx.toDouble())
+                CGContextScaleCTM(cgContext, 1.0, -1.0)
                 val canvas = CoreGraphicsCanvas(cgContext)
                 page.renderTo(canvas, geometry.deviceCtm)
 
@@ -120,20 +127,28 @@ public object ApplePdfRasterizer {
     }
 
     private fun encodeToPng(image: platform.CoreGraphics.CGImageRef): NSData? {
-        val data = NSMutableData()
-        @Suppress("CAST_NEVER_SUCCEEDS")
-        val dest = CGImageDestinationCreateWithData(
-            data as platform.CoreFoundation.CFMutableDataRef,
-            UTTypePNG.identifier as platform.CoreFoundation.CFStringRef,
-            1uL,
-            null,
-        ) ?: return null
+        // Core Foundation objects, not casts: Kotlin/Native checks a cast from an
+        // Objective-C object to a C pointer at runtime, and it throws (#288).
+        val data = CFDataCreateMutable(null, 0) ?: return null
+        var encoded = false
         try {
-            CGImageDestinationAddImage(dest, image, null)
-            if (!CGImageDestinationFinalize(dest)) return null
+            val type = CFStringCreateWithCString(null, "public.png", kCFStringEncodingUTF8) ?: return null
+            val dest = try {
+                CGImageDestinationCreateWithData(data, type, 1uL, null)
+            } finally {
+                CFRelease(type)
+            } ?: return null
+            try {
+                CGImageDestinationAddImage(dest, image, null)
+                encoded = CGImageDestinationFinalize(dest)
+            } finally {
+                CFRelease(dest)
+            }
         } finally {
-            CFRelease(dest)
+            if (!encoded) CFRelease(data)
         }
-        return data
+        if (!encoded) return null
+        // The NSData takes over the reference to the bytes.
+        return CFBridgingRelease(data) as NSData
     }
 }
