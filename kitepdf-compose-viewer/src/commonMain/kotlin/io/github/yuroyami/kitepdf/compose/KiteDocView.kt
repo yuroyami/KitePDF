@@ -171,6 +171,8 @@ public fun KiteDocView(
      * live values, sends a tap on a widget to it, and pumps the timers a script set.
      */
     scripts: io.github.yuroyami.kitepdf.PdfScriptHandler? = null,
+    /** Called before links for a saved highlight. Return true to consume the tap. */
+    onHighlightTap: ((KiteHighlight) -> Boolean)? = null,
 ) {
     val scriptScope = rememberCoroutineScope()
     SideEffect {
@@ -241,16 +243,23 @@ public fun KiteDocView(
     KiteScriptTimers(scripts) { state.formRevision = scripts?.formState?.revision ?: 0 }
     KiteFormInput(state, scripts)
 
-    // Route taps through link hit-testing first: a tap on a link
-    // navigates (or defers to onLinkTap); anything else reaches user onTap. A widget comes
-    // before both, because a button on a form is a target of its own.
+    // Keep callbacks fresh without restarting pointer input during a press or a selection.
+    val currentHighlightTap by rememberUpdatedState(onHighlightTap)
+    val currentLinkTap by rememberUpdatedState(onLinkTap)
+    val currentTap by rememberUpdatedState(onTap)
+    val currentScripts by rememberUpdatedState(scripts)
     val tapScope = rememberCoroutineScope()
-    val linkAwareTap: (Offset) -> Unit = { offset ->
-        state.clearSelection() // tap anywhere dismisses an active selection
-        if (!handleWidgetTap(state, scripts, offset, tapScope)) {
-            // A tap outside every widget leaves the field that had the caret, which commits it.
-            state.blurFocusedField()
-            if (!handleLinkTap(state, tapScope, onLinkTap, offset)) onTap?.invoke(offset)
+    val linkAwareTap: (Offset) -> Unit = remember(state, tapScope) {
+        { offset ->
+            state.clearSelection()
+            if (!handleWidgetTap(state, currentScripts, offset, tapScope)) {
+                state.blurFocusedField()
+                val highlight = state.highlightAt(offset)
+                val consumed = highlight != null && currentHighlightTap?.invoke(highlight) == true
+                if (!consumed && !handleLinkTap(state, tapScope, currentLinkTap, offset)) {
+                    currentTap?.invoke(offset)
+                }
+            }
         }
     }
 
@@ -482,6 +491,7 @@ private fun ContinuousLayout(
                 state = listState,
                 verticalArrangement = Arrangement.spacedBy(pageSpacing),
                 userScrollEnabled = listScrollEnabled,
+                contentPadding = layout.contentPadding,
             ) {
                 items(count = state.itemCount, key = { state.items[it].key }) { pageItem(it) }
             }
@@ -490,6 +500,7 @@ private fun ContinuousLayout(
                 state = listState,
                 horizontalArrangement = Arrangement.spacedBy(pageSpacing),
                 userScrollEnabled = listScrollEnabled,
+                contentPadding = layout.contentPadding,
             ) {
                 items(count = state.itemCount, key = { state.items[it].key }) { pageItem(it) }
             }

@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `KiteDocView.onHighlightTap`, `KiteDocViewState.highlightAt`, and optional
+  `KiteHighlight.id`: hosts can open edit/delete controls when a saved mark is tapped.
+  Hit testing follows painted quads through zoom and pan, prefers the topmost mark,
+  and excludes transient search hits. Returning false preserves normal link/page taps.
+- `KiteDocLayout.Continuous.contentPadding` provides scrollable clearance for floating
+  reader controls without cutting the document viewport off at the system safe area.
+
+### Fixed
+
+- Viewer tap handlers now use current host callbacks after recomposition, so annotation
+  actions do not retain the state from before a mark was created or edited.
+
 ### XPS and issue fixes
 
 - Added the `kitepdf-xps` XPS/OpenXPS handler with OPC package discovery,
