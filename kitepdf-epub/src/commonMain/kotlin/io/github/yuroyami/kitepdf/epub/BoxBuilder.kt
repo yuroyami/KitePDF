@@ -5,6 +5,7 @@ import io.github.yuroyami.kitepdf.svg.SvgImage
 import io.github.yuroyami.kitepdf.core.css.CssValues
 import io.github.yuroyami.kitepdf.core.xml.KiteXmlNode
 
+import io.github.yuroyami.kitepdf.epub.css.BorderStyle
 import io.github.yuroyami.kitepdf.epub.css.ComputedStyle
 import io.github.yuroyami.kitepdf.epub.css.CssBackground
 import io.github.yuroyami.kitepdf.epub.css.CssFloat
@@ -240,8 +241,19 @@ internal class BoxBuilder(
         }
         addRowsFrom(el, ancestors)
         placeCells(rows)
-        val finalRows = if (style.borderCollapse) collapseBorders(rows) else rows
-        val table = TableBox(style, finalRows, scanColWidths(el, style, childAncestors))
+        val table = if (style.borderCollapse) {
+            // The table's own border joins the collapse, and a collapsed table has no padding (CSS 2.1, 17.6.2).
+            TableBox(
+                style.copy(
+                    borderTop = Edge.NONE, borderRight = Edge.NONE, borderBottom = Edge.NONE, borderLeft = Edge.NONE,
+                    paddingTopPt = 0.0, paddingRightPt = 0.0, paddingBottomPt = 0.0, paddingLeftPt = 0.0,
+                ),
+                collapseBorders(rows, style),
+                scanColWidths(el, style, childAncestors),
+            )
+        } else {
+            TableBox(style, rows, scanColWidths(el, style, childAncestors))
+        }
         return listOfNotNull(caption, table)
     }
 
@@ -277,45 +289,70 @@ internal class BoxBuilder(
     }
 
     /**
-     * `border-collapse: collapse`: each interior shared edge paints once, the
-     * wider edge winning; the loser's edge is dropped from that cell's style.
-     * Cells are rebuilt with the adjusted styles (styles are immutable).
+     * `border-collapse: collapse` (CSS 2.1, 17.6.2.1). Where two cells share an edge, one
+     * border shows, chosen by [collapsedWins]; the other side drops its border. An edge on
+     * the outside of the grid meets the table's own border in [table] instead, and takes
+     * the winner of the two, since the table paints no border of its own. A side that
+     * meets several cells keeps its border when it wins against at least one of them, so a
+     * spanning cell leaves no gap. Cells are rebuilt with the adjusted styles (styles are
+     * immutable).
      */
-    private fun collapseBorders(rows: List<TableRowBox>): List<TableRowBox> {
+    private fun collapseBorders(rows: List<TableRowBox>, table: ComputedStyle): List<TableRowBox> {
         // Grid of covering cells (spans fill every slot they touch).
         val grid = HashMap<Long, BlockBox>()
         fun key(r: Int, c: Int) = r.toLong() * 100_000L + c
+        var rowCount = 0
+        var colCount = 0
         for (row in rows) for (cell in row.cells) {
             for (dr in 0 until cell.rowspan) for (dc in 0 until cell.colspan) {
                 grid.getOrPut(key(cell.gridRow + dr, cell.gridCol + dc)) { cell }
             }
+            rowCount = maxOf(rowCount, cell.gridRow + cell.rowspan)
+            colCount = maxOf(colCount, cell.gridCol + cell.colspan)
         }
-        val dropTop = HashSet<BlockBox>()
-        val dropLeft = HashSet<BlockBox>()
-        val dropBottom = HashSet<BlockBox>()
-        val dropRight = HashSet<BlockBox>()
-        for (row in rows) for (cell in row.cells) {
-            grid[key(cell.gridRow - 1, cell.gridCol)]?.takeIf { it !== cell }?.let { above ->
-                if (above.style.borderBottom.effective >= cell.style.borderTop.effective) dropTop.add(cell)
-                else dropBottom.add(above)
+        /** The distinct cells other than [cell] in the slots [slots]. */
+        fun neighbours(cell: BlockBox, slots: List<Long>): List<BlockBox> =
+            slots.mapNotNull { grid[it] }.filter { it !== cell }.distinct()
+
+        /**
+         * The border that [cell] shows on one side: [own] when it wins against at least one
+         * of the [facing] edges, which hold ties since they lie above or to the left when
+         * [facingHoldsTies]; the table's [outer] edge decides on the outside of the grid.
+         */
+        fun resolve(own: Edge, facing: List<Edge>, facingHoldsTies: Boolean, outer: Edge?): Edge = when {
+            facing.isNotEmpty() -> {
+                val wins = facing.any { other -> if (facingHoldsTies) collapsedWins(own, other) else !collapsedWins(other, own) }
+                if (wins) own else Edge.NONE
             }
-            grid[key(cell.gridRow, cell.gridCol - 1)]?.takeIf { it !== cell }?.let { left ->
-                if (left.style.borderRight.effective >= cell.style.borderLeft.effective) dropLeft.add(cell)
-                else dropRight.add(left)
-            }
+            // A cell's border wins a tie against the table's.
+            outer != null -> if (collapsedWins(outer, own)) outer else own
+            else -> own
         }
+
         return rows.map { row ->
             TableRowBox(
                 row.style,
                 row.cells.map { cell ->
                     val s = cell.style
+                    val cols = (cell.gridCol until cell.gridCol + cell.colspan).toList()
+                    val rowsSpanned = (cell.gridRow until cell.gridRow + cell.rowspan).toList()
+                    val above = neighbours(cell, cols.map { key(cell.gridRow - 1, it) })
+                    val below = neighbours(cell, cols.map { key(cell.gridRow + cell.rowspan, it) })
+                    val left = neighbours(cell, rowsSpanned.map { key(it, cell.gridCol - 1) })
+                    val right = neighbours(cell, rowsSpanned.map { key(it, cell.gridCol + cell.colspan) })
                     val ns = s.copy(
-                        borderTop = if (cell in dropTop) Edge.NONE else s.borderTop,
-                        borderLeft = if (cell in dropLeft) Edge.NONE else s.borderLeft,
-                        borderBottom = if (cell in dropBottom) Edge.NONE else s.borderBottom,
-                        borderRight = if (cell in dropRight) Edge.NONE else s.borderRight,
+                        borderTop = resolve(s.borderTop, above.map { it.style.borderBottom }, true, table.borderTop.takeIf { cell.gridRow == 0 }),
+                        borderLeft = resolve(s.borderLeft, left.map { it.style.borderRight }, true, table.borderLeft.takeIf { cell.gridCol == 0 }),
+                        borderBottom = resolve(
+                            s.borderBottom, below.map { it.style.borderTop }, false,
+                            table.borderBottom.takeIf { cell.gridRow + cell.rowspan == rowCount },
+                        ),
+                        borderRight = resolve(
+                            s.borderRight, right.map { it.style.borderLeft }, false,
+                            table.borderRight.takeIf { cell.gridCol + cell.colspan == colCount },
+                        ),
                     )
-                    if (ns === s || ns == s) cell else BlockBox(ns, cell.children).also {
+                    if (ns == s) cell else BlockBox(ns, cell.children).also {
                         it.colspan = cell.colspan; it.rowspan = cell.rowspan
                         it.gridRow = cell.gridRow; it.gridCol = cell.gridCol
                         it.anchors += cell.anchors
@@ -677,3 +714,19 @@ internal fun resolveLinkHref(href: String, docPath: String, resolveHref: (String
 
 /** A URI scheme prefix (`https:`, `mailto:`, ...): the href is external. */
 private val URI_SCHEME = Regex("^[a-zA-Z][a-zA-Z0-9+.-]*:")
+
+/**
+ * Whether [challenger] shows instead of [holder] where two collapsed borders meet
+ * (CSS 2.1, 17.6.2.1). `hidden` wins over everything, and `none` loses to everything.
+ * Then the wider border wins, then the style listed first in [BorderStyle]. A full tie
+ * leaves [holder], which is the border above or to the left, or the cell's own border
+ * against the table's.
+ */
+internal fun collapsedWins(challenger: Edge, holder: Edge): Boolean = when {
+    holder.style == BorderStyle.HIDDEN -> false
+    challenger.style == BorderStyle.HIDDEN -> true
+    !challenger.visible -> false
+    !holder.visible -> true
+    challenger.width != holder.width -> challenger.width > holder.width
+    else -> challenger.style.ordinal < holder.style.ordinal
+}

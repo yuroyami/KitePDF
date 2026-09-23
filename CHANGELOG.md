@@ -217,6 +217,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   gates a soft mask by the alpha or the luminosity of its group. Before, shapes that
   overlap in a translucent group drew darker where they overlap, and a Multiply group
   drew as a normal paint. A soft mask painted its own colours onto the page (#77, #161).
+- EPUB tables with `border-collapse: collapse` resolve each shared border by the
+  rules of CSS 2.1. A `hidden` border hides the edge, the wider border wins, and the
+  style decides between equal widths. The table's own border joins the collapse
+  instead of painting next to the outer cell borders, and a collapsed table has no
+  padding (#210).
 
 ## [0.10.0] - 2026-09-13
 

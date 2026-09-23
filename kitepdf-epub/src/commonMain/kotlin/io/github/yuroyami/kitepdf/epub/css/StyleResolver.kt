@@ -271,10 +271,10 @@ internal class StyleResolver(
             "border-right-width" -> borderW(b, v)?.let { b.borderRightW = it }
             "border-bottom-width" -> borderW(b, v)?.let { b.borderBottomW = it }
             "border-left-width" -> borderW(b, v)?.let { b.borderLeftW = it }
-            "border-top-style" -> b.borderTopVis = borderVisible(v)
-            "border-right-style" -> b.borderRightVis = borderVisible(v)
-            "border-bottom-style" -> b.borderBottomVis = borderVisible(v)
-            "border-left-style" -> b.borderLeftVis = borderVisible(v)
+            "border-top-style" -> borderStyle(v)?.let { b.borderTopStyle = it }
+            "border-right-style" -> borderStyle(v)?.let { b.borderRightStyle = it }
+            "border-bottom-style" -> borderStyle(v)?.let { b.borderBottomStyle = it }
+            "border-left-style" -> borderStyle(v)?.let { b.borderLeftStyle = it }
             "border-top-color" -> CssValues.color(v)?.let { b.borderTopColor = it }
             "border-right-color" -> CssValues.color(v)?.let { b.borderRightColor = it }
             "border-bottom-color" -> CssValues.color(v)?.let { b.borderBottomColor = it }
@@ -349,7 +349,21 @@ internal class StyleResolver(
         else -> CssValues.length(v, b.fontSizePt, rootFontSizePt, refWidthPt)
     }
 
-    private fun borderVisible(v: String): Boolean = v.trim().lowercase().let { it != "none" && it != "hidden" }
+    /** A `border-style` value, or null for one that is not a style, which leaves the declaration out. */
+    private fun borderStyle(v: String): BorderStyle? = when (v.trim().lowercase()) {
+        // `border-style` is not inherited, so `unset` means the initial value.
+        "none", "initial", "unset" -> BorderStyle.NONE
+        "hidden" -> BorderStyle.HIDDEN
+        "solid" -> BorderStyle.SOLID
+        "double" -> BorderStyle.DOUBLE
+        "dashed" -> BorderStyle.DASHED
+        "dotted" -> BorderStyle.DOTTED
+        "ridge" -> BorderStyle.RIDGE
+        "outset" -> BorderStyle.OUTSET
+        "groove" -> BorderStyle.GROOVE
+        "inset" -> BorderStyle.INSET
+        else -> null
+    }
 
     private fun sizeValue(b: Builder, v: String, ref: Double): Double? = when (v.trim().lowercase()) {
         "auto", "none", "inherit" -> null
@@ -518,7 +532,8 @@ internal class StyleResolver(
         var verticalAlign = CssVAlign.BASELINE
         // Border width defaults to `medium`; it only occupies space when its style is visible.
         var borderTopW = 2.25; var borderRightW = 2.25; var borderBottomW = 2.25; var borderLeftW = 2.25
-        var borderTopVis = false; var borderRightVis = false; var borderBottomVis = false; var borderLeftVis = false
+        var borderTopStyle = BorderStyle.NONE; var borderRightStyle = BorderStyle.NONE
+        var borderBottomStyle = BorderStyle.NONE; var borderLeftStyle = BorderStyle.NONE
         var borderTopColor: RgbColor? = null; var borderRightColor: RgbColor? = null
         var borderBottomColor: RgbColor? = null; var borderLeftColor: RgbColor? = null
         var widthPt: Double? = null; var heightPt: Double? = null; var maxWidthPt: Double? = null
@@ -562,10 +577,10 @@ internal class StyleResolver(
                 marginTop, marginRight, marginBottom, marginLeft,
                 paddingTop, paddingRight, paddingBottom, paddingLeft,
                 whiteSpace, listType, verticalAlign, underline,
-                Edge(borderTopW, borderTopColor ?: color, borderTopVis),
-                Edge(borderRightW, borderRightColor ?: color, borderRightVis),
-                Edge(borderBottomW, borderBottomColor ?: color, borderBottomVis),
-                Edge(borderLeftW, borderLeftColor ?: color, borderLeftVis),
+                Edge(borderTopW, borderTopColor ?: color, borderTopStyle),
+                Edge(borderRightW, borderRightColor ?: color, borderRightStyle),
+                Edge(borderBottomW, borderBottomColor ?: color, borderBottomStyle),
+                Edge(borderLeftW, borderLeftColor ?: color, borderLeftStyle),
                 widthPt, heightPt, maxWidthPt,
                 breakBefore, breakAfter, breakInsideAvoid,
                 marginLeftAuto, marginRightAuto,

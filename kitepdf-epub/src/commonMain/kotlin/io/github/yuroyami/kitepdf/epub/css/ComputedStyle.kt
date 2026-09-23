@@ -17,13 +17,22 @@ internal enum class CssFloat { NONE, LEFT, RIGHT }
 internal enum class CssClear { NONE, LEFT, RIGHT, BOTH }
 internal enum class TextTransform { NONE, UPPERCASE, LOWERCASE, CAPITALIZE }
 
+/**
+ * The `border-style` of one edge. Where two collapsed table borders of the same width
+ * meet, the visible style listed first wins (CSS 2.1, 17.6.2.1).
+ */
+internal enum class BorderStyle { NONE, HIDDEN, DOUBLE, SOLID, DASHED, DOTTED, RIDGE, OUTSET, GROOVE, INSET }
+
 /** One border edge. Painted only when [visible] (`border-style` not none/hidden). */
-internal class Edge(val width: Double, val color: RgbColor, val visible: Boolean) {
+internal class Edge(val width: Double, val color: RgbColor, val style: BorderStyle) {
+    /** Whether the edge occupies space and paints. */
+    val visible: Boolean get() = style != BorderStyle.NONE && style != BorderStyle.HIDDEN
+
     /** Width that actually occupies space and paints. */
     val effective: Double get() = if (visible) width else 0.0
 
     companion object {
-        val NONE = Edge(0.0, RgbColor(0.0, 0.0, 0.0), false)
+        val NONE = Edge(0.0, RgbColor(0.0, 0.0, 0.0), BorderStyle.NONE)
     }
 }
 

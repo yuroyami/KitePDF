@@ -136,6 +136,63 @@ class TableTest {
     }
 
     @Test
+    fun a_hidden_table_border_hides_the_outer_cell_borders() {
+        // CSS 2.1, 17.6.2.1: `hidden` wins over every border it meets.
+        val t = firstTable(laidOut(grid, "table{border-collapse:collapse;border-style:hidden} td{border:1px solid black}"))
+        val a = t.rows[0].cells[0]
+        val d = t.rows[1].cells[1]
+        assertEquals(0.0, a.style.borderTop.effective, "top outer edge")
+        assertEquals(0.0, a.style.borderLeft.effective, "left outer edge")
+        assertEquals(0.0, d.style.borderBottom.effective, "bottom outer edge")
+        assertEquals(0.0, d.style.borderRight.effective, "right outer edge")
+        assertTrue(a.style.borderRight.effective > 0, "the grid inside keeps its lines")
+    }
+
+    @Test
+    fun the_table_border_and_an_outer_cell_border_paint_once() {
+        val t = firstTable(laidOut(grid, "table{border-collapse:collapse;border:3px solid red} td{border:1px solid black}"))
+        assertEquals(0.0, t.style.borderLeft.effective, "the table paints no border of its own")
+        val a = t.rows[0].cells[0]
+        assertEquals(2.25, a.style.borderLeft.effective, 1e-9, "the wider table border shows on the outer edge")
+        assertEquals(1.0, a.style.borderLeft.color.r, "in the table's colour")
+        assertEquals(0.75, a.style.borderRight.effective, 1e-9, "the shared edge keeps the cell border")
+    }
+
+    @Test
+    fun equal_widths_resolve_by_style() {
+        // Same width: double beats solid, and solid beats dashed (CSS 2.1, 17.6.2.1).
+        val html = "<table><tr><td>A</td><td class=\"b\">B</td><td class=\"c\">C</td></tr></table>"
+        val t = firstTable(
+            laidOut(html, "table{border-collapse:collapse} td{border:1px solid black} .b{border-left:1px double blue} .c{border-left:1px dashed red}"),
+        )
+        val (a, b, c) = t.rows[0].cells
+        assertEquals(0.0, a.style.borderRight.effective, "solid loses to double")
+        assertTrue(b.style.borderLeft.effective > 0, "double shows")
+        assertTrue(b.style.borderRight.effective > 0, "solid shows")
+        assertEquals(0.0, c.style.borderLeft.effective, "dashed loses to solid")
+    }
+
+    @Test
+    fun a_spanning_cell_keeps_its_border_where_it_wins() {
+        // A spans both columns. C's thick top beats A's bottom; A's bottom beats D's top, which it
+        // ties and holds as the border above. So A keeps its border over D, and nothing is left bare.
+        val html = "<table><tr><td colspan=\"2\">A</td></tr><tr><td class=\"c\">C</td><td>D</td></tr></table>"
+        val t = firstTable(laidOut(html, "table{border-collapse:collapse} td{border:1px solid black} .c{border-top:3px solid black}"))
+        val a = t.rows[0].cells[0]
+        val (c, d) = t.rows[1].cells
+        assertTrue(a.style.borderBottom.effective > 0, "A keeps its bottom border")
+        assertEquals(2.25, c.style.borderTop.effective, 1e-9, "C's wider top shows")
+        assertEquals(0.0, d.style.borderTop.effective, "D's top loses to A's bottom")
+    }
+
+    @Test
+    fun a_collapsed_table_has_no_padding() {
+        val t = firstTable(laidOut(grid, "table{border-collapse:collapse;padding:10px} td{border:1px solid black}"))
+        assertEquals(0.0, t.style.paddingLeftPt)
+        assertEquals(0.0, t.style.paddingTopPt)
+    }
+
+    @Test
     fun cell_vertical_align_offsets_content_within_the_row() {
         // First cell is 3 lines tall; single-line neighbours align middle/bottom/top.
         val html = "<table><tr>" +
