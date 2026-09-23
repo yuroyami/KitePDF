@@ -303,6 +303,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   gradient, an image, a mesh or a pattern stroke inside a curved clip had jagged
   edges, and so did text in a clipping render mode. A rectangular clip keeps every
   whole pixel that it touches, as in MuPDF (#285).
+- The lexer reads a real number and an operator without building a String. On a
+  dense page of 140,000 operators, a content stream parses in 21 ms instead of 28 ms
+  and allocates 30 MB instead of 87 MB. On Kotlin/Wasm a real is now the nearest
+  double: the String parse there can be one unit off in the last place (#119).
 
 ## [0.10.0] - 2026-09-13
 

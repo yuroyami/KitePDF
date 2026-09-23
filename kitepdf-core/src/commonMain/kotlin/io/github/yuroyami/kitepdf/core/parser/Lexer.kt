@@ -189,11 +189,19 @@ public class Lexer(public val reader: ByteReader) {
         val sb = tokenBuf.also { it.setLength(0) }
         var sawDot = false
         var sawDigit = false
+        // The digits of a real as one integer, without leading zeros, and how many follow the dot.
+        var mantissa = 0L
+        var significant = 0
+        var fraction = 0
         // First char: maybe sign or dot
         val first = reader.readByte()
         sb.append(first.toChar())
         if (first == '.'.code) sawDot = true
-        if (first in '0'.code..'9'.code) sawDigit = true
+        if (first in '0'.code..'9'.code) {
+            sawDigit = true
+            mantissa = (first - '0'.code).toLong()
+            if (mantissa != 0L) significant = 1
+        }
         while (true) {
             val b = reader.peek()
             if (b == -1) break
@@ -202,17 +210,30 @@ public class Lexer(public val reader: ByteReader) {
                 sb.append(b.toChar()); reader.readByte()
             } else if (b in '0'.code..'9'.code) {
                 sawDigit = true
+                if (sawDot) fraction++
+                if (significant > 0 || b != '0'.code) {
+                    significant++
+                    if (significant <= MAX_EXACT_DIGITS) mantissa = mantissa * 10 + (b - '0'.code)
+                }
                 sb.append(b.toChar()); reader.readByte()
             } else break
         }
         // Reject a lone "+", "-", "." that came from misclassification.
         if (!sawDigit) {
             // Treat as keyword instead.
-            return Token.Keyword(sb.toString(), start)
+            return Token.Keyword(keyword(sb), start)
         }
         return if (sawDot) {
-            val text = sb.toString()
-            val d = text.toDoubleOrNull() ?: throw PdfFormatException("Bad real '$text' at $start")
+            // A real has no exponent in PDF (7.3.3). With at most 15 significant digits the
+            // mantissa and the power of ten are both exact doubles, so one division rounds
+            // correctly and gives the same double as a String parse, without allocating (#119).
+            val d = if (significant <= MAX_EXACT_DIGITS && fraction < POWERS_OF_TEN.size) {
+                val v = mantissa.toDouble() / POWERS_OF_TEN[fraction]
+                if (first == '-'.code) -v else v
+            } else {
+                val text = sb.toString()
+                text.toDoubleOrNull() ?: throw PdfFormatException("Bad real '$text' at $start")
+            }
             Token.Real(d, start)
         } else {
             // Integer fast path: accumulate directly from the buffer with no String
@@ -253,10 +274,62 @@ public class Lexer(public val reader: ByteReader) {
             val bad = reader.readByte()
             throw PdfFormatException("Unrecognized byte ${bad.toChar()} (0x${bad.toString(16)}) at $start")
         }
-        return Token.Keyword(sb.toString(), start)
+        return Token.Keyword(keyword(sb), start)
+    }
+
+    /** The keyword in [sb]: one shared string for each operator and object keyword, so those cost no allocation (#119). */
+    private fun keyword(sb: StringBuilder): String {
+        val n = sb.length
+        if (n > MAX_KEYWORD_LENGTH) return sb.toString()
+        var h = 0
+        for (i in 0 until n) h = 31 * h + sb[i].code
+        var slot = keywordSlot(h)
+        while (true) {
+            val k = KEYWORD_TABLE[slot] ?: return sb.toString()
+            if (k.length == n) {
+                var i = 0
+                while (i < n && k[i] == sb[i]) i++
+                if (i == n) return k
+            }
+            slot = (slot + 1) and (KEYWORD_TABLE.size - 1)
+        }
     }
 
     public companion object {
+        /** The most significant digits that a Long holds and a double represents exactly. */
+        private const val MAX_EXACT_DIGITS = 15
+
+        /** 10^0 to 10^22, every power of ten that a double represents exactly. */
+        private val POWERS_OF_TEN = DoubleArray(23).also { p ->
+            p[0] = 1.0
+            for (i in 1 until p.size) p[i] = p[i - 1] * 10
+        }
+
+        /** The operators of a content stream (ISO 32000-1, Annex A) and the keywords of object syntax (7.3). */
+        private val KEYWORDS = arrayOf(
+            "b", "B", "b*", "B*", "BDC", "BI", "BMC", "BT", "BX", "c", "cm", "CS", "cs", "d", "d0", "d1",
+            "Do", "DP", "EI", "EMC", "ET", "EX", "f", "F", "f*", "G", "g", "gs", "h", "i", "ID", "j", "J",
+            "K", "k", "l", "m", "M", "MP", "n", "q", "Q", "re", "RG", "rg", "ri", "s", "S", "SC", "sc",
+            "SCN", "scn", "sh", "T*", "Tc", "Td", "TD", "Tf", "Tj", "TJ", "TL", "Tm", "Tr", "Ts", "Tw",
+            "Tz", "v", "w", "W", "W*", "y", "'", "\"",
+            "true", "false", "null", "obj", "endobj", "stream", "endstream", "R", "xref", "trailer", "startxref",
+        )
+
+        private val MAX_KEYWORD_LENGTH = KEYWORDS.maxOf { it.length }
+
+        private fun keywordSlot(hash: Int): Int = (hash * -0x61c88647) ushr 24
+
+        /** [KEYWORDS] by hash, with linear probing: 256 slots for 84 keywords. */
+        private val KEYWORD_TABLE = arrayOfNulls<String>(256).also { table ->
+            for (k in KEYWORDS) {
+                var h = 0
+                for (ch in k) h = 31 * h + ch.code
+                var slot = keywordSlot(h)
+                while (table[slot] != null) slot = (slot + 1) and (table.size - 1)
+                table[slot] = k
+            }
+        }
+
         public fun isWhitespace(c: Int): Boolean =
             c == 0 || c == 9 || c == 10 || c == 12 || c == 13 || c == 32
 
