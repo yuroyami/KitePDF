@@ -12,6 +12,7 @@ import android.graphics.Path
 import android.graphics.RadialGradient
 import android.graphics.Shader
 import android.graphics.Typeface
+import android.os.Build
 import io.github.yuroyami.kitepdf.core.KiteRectangle
 import io.github.yuroyami.kitepdf.core.font.KiteFontFamily
 import io.github.yuroyami.kitepdf.core.font.FontSpec
@@ -278,9 +279,18 @@ public class AndroidNativeCanvas(private val canvas: AndroidCanvas) : KiteCanvas
                 colors, positions, Shader.TileMode.CLAMP,
             )
         } else {
-            // The radius is at least a tenth of a device pixel.
-            val r = c[5].coerceAtLeast(0.1 / kotlin.math.sqrt(kotlin.math.abs(det)))
-            RadialGradient(c[3].toFloat(), c[4].toFloat(), r.toFloat(), colors, positions, Shader.TileMode.CLAMP)
+            // A radial shading runs between two circles (ISO 32000-1, 8.7.4.5.4), which
+            // Android draws from API 31 on. The end radius is at least a tenth of a device pixel.
+            val r0 = c[2].coerceAtLeast(0.0)
+            val r1 = c[5].coerceAtLeast(0.1 / kotlin.math.sqrt(kotlin.math.abs(det)))
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                RadialGradient(
+                    c[0].toFloat(), c[1].toFloat(), r0.toFloat(), c[3].toFloat(), c[4].toFloat(), r1.toFloat(),
+                    LongArray(colors.size) { Color.pack(colors[it]) }, positions, Shader.TileMode.CLAMP,
+                )
+            } else {
+                oneCircleGradient(c, r0, r1, colors, positions)
+            }
         }
         shader.setLocalMatrix(pdfMatrixToAndroid(ctm))
         val paint = Paint().apply {
@@ -295,6 +305,22 @@ public class AndroidNativeCanvas(private val canvas: AndroidCanvas) : KiteCanvas
         } else {
             canvas.drawPaint(paint)
         }
+    }
+
+    /**
+     * One circle standing in for a radial shading between two circles, below API 31.
+     * It is exact when the circles share a centre. Otherwise it keeps only the end circle.
+     */
+    private fun oneCircleGradient(c: DoubleArray, r0: Double, r1: Double, colors: IntArray, positions: FloatArray): Shader {
+        if (c[0] != c[3] || c[1] != c[4]) {
+            return RadialGradient(c[3].toFloat(), c[4].toFloat(), r1.toFloat(), colors, positions, Shader.TileMode.CLAMP)
+        }
+        // Offset s lies on the circle of radius r0 + s (r1 - r0), as a fraction of the larger radius.
+        val outer = maxOf(r0, r1)
+        val mapped = FloatArray(positions.size) { ((r0 + positions[it] * (r1 - r0)) / outer).toFloat() }
+        val ordered = colors.copyOf()
+        if (r1 < r0) { mapped.reverse(); ordered.reverse() }
+        return RadialGradient(c[3].toFloat(), c[4].toFloat(), outer.toFloat(), ordered, mapped, Shader.TileMode.CLAMP)
     }
 
     override fun pushClip(path: KitePath, ctm: KiteMatrix, evenOdd: Boolean) {

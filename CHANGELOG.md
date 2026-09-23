@@ -165,6 +165,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Axial and radial shadings keep their shape under a non-uniform or skewed
   transformation on every backend. A stretched radial shading drew circles instead
   of ellipses, and a skewed axial shading drew its bands at the wrong angle (#69).
+- A radial shading keeps its start circle on AWT, Compose and Android. The
+  highlight of a sphere or a button no longer turns into a plain fade around one
+  centre. Android draws both circles from API 31 on; below that, only circles that
+  share a centre draw exactly (#71).
 
 ## [0.10.0] - 2026-09-13
 

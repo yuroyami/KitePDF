@@ -25,7 +25,6 @@ import java.awt.Font
 import java.awt.Graphics2D
 import java.awt.LinearGradientPaint
 import java.awt.MultipleGradientPaint
-import java.awt.RadialGradientPaint
 import java.awt.RenderingHints
 import java.awt.geom.AffineTransform
 import java.awt.geom.Path2D
@@ -298,52 +297,9 @@ public class AwtCanvas(private var g: Graphics2D) : KiteCanvas {
                 )
             }
             is KiteShading.Radial -> {
-                // PDF two-circle radial (§8.7.4.5.4): circle0 at t0, circle1 at t1.
-                // RadialGradientPaint models one bounding circle + a focus point,
-                // exact when the inner radius is 0 (point→circle). Use the larger
-                // circle as the bounding one and the smaller circle's centre as the
-                // focus, reversing the colours when circle0 is the larger.
-                val ax = shading.coords[0]
-                val ay = shading.coords[1]
-                val ar = shading.coords[2]
-                val bx = shading.coords[3]
-                val by = shading.coords[4]
-                val br = shading.coords[5]
-                val outerIsB = br >= ar
-                val cx = if (outerIsB) bx else ax
-                val cy = if (outerIsB) by else ay
-                // At least a tenth of a device pixel, measured in shading space.
-                val minRadius = 0.1 / kotlin.math.sqrt(kotlin.math.abs(det))
-                val radius = (if (outerIsB) br else ar).coerceAtLeast(minRadius)
-                var fx = if (outerIsB) ax else bx
-                var fy = if (outerIsB) ay else by
-                // Focus must lie inside the bounding circle for AWT.
-                val ddx = fx - cx; val ddy = fy - cy
-                val dist = kotlin.math.sqrt(ddx * ddx + ddy * ddy)
-                if (dist > radius * 0.99) { val k = radius * 0.99 / dist; fx = cx + ddx * k; fy = cy + ddy * k }
-                val cols = if (outerIsB) colors else colors.reversedArray()
-                // Extend: the outer circle (larger radius) carries the t-end that
-                // extends outward; the inner circle the t-end that extends inward.
-                // extend=false on the outer end → don't paint outside the outer disk;
-                // on the inner end → don't paint inside the inner disk.
-                val outerExtend = if (outerIsB) shading.extendEnd else shading.extendStart
-                val innerExtend = if (outerIsB) shading.extendStart else shading.extendEnd
-                val innerCx = if (outerIsB) ax else bx
-                val innerCy = if (outerIsB) ay else by
-                val innerR = (if (outerIsB) ar else br).coerceAtLeast(0.0)
-                if (!outerExtend || !innerExtend) {
-                    extentClip = radialExtent(
-                        cx, cy, radius, outerExtend,
-                        innerCx, innerCy, innerR, innerExtend,
-                        reachOf(box, toShading, cx, cy),
-                    ).createTransformedArea(toDevice)
-                }
-                RadialGradientPaint(
-                    Point2D.Double(cx, cy), radius.toFloat(), Point2D.Double(fx, fy),
-                    fractions, cols,
-                    MultipleGradientPaint.CycleMethod.NO_CYCLE,
-                    MultipleGradientPaint.ColorSpaceType.SRGB, toDevice,
-                )
+                // Both circles and both extend flags, solved per pixel: AWT's own radial
+                // gradient has one circle and a focus point (ISO 32000-1, 8.7.4.5.4).
+                RadialShadingPaint(shading.coords, shading.extendStart, shading.extendEnd, stops, toDevice)
             }
             is KiteShading.Unsupported -> return
             else -> return // complex shading types already handled by paintComplexShading
@@ -405,29 +361,6 @@ public class AwtCanvas(private var g: Graphics2D) : KiteCanvas {
         path.moveTo(p00.x, p00.y); path.lineTo(p01.x, p01.y)
         path.lineTo(p11.x, p11.y); path.lineTo(p10.x, p10.y); path.closePath()
         return java.awt.geom.Area(path)
-    }
-
-    /**
-     * Extent region for a radial gradient with [Extend] false on one/both ends, in
-     * shading space. Starts from the outer disk (bounded when the outer end isn't
-     * extended, else a disk of radius [reach]) and subtracts the inner disk when the
-     * inner end isn't extended.
-     */
-    private fun radialExtent(
-        outerCx: Double, outerCy: Double, outerR: Double, outerExtend: Boolean,
-        innerCx: Double, innerCy: Double, innerR: Double, innerExtend: Boolean,
-        reach: Double,
-    ): java.awt.geom.Area {
-        val r = if (outerExtend) maxOf(reach, outerR) else outerR
-        val area = java.awt.geom.Area(java.awt.geom.Ellipse2D.Double(outerCx - r, outerCy - r, 2 * r, 2 * r))
-        if (!innerExtend && innerR > 0.0) {
-            area.subtract(
-                java.awt.geom.Area(
-                    java.awt.geom.Ellipse2D.Double(innerCx - innerR, innerCy - innerR, 2 * innerR, 2 * innerR),
-                ),
-            )
-        }
-        return area
     }
 
     override fun drawImage(image: KiteImageData, ctm: KiteMatrix, alpha: Double) {
