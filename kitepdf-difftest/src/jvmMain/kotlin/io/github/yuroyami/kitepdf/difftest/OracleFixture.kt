@@ -1,6 +1,8 @@
 package io.github.yuroyami.kitepdf.difftest
 
+import java.awt.image.BufferedImage
 import java.io.ByteArrayOutputStream
+import java.io.File
 
 /**
  * A one-page PDF that the tests of each backend render and score against mutool, and
@@ -38,3 +40,21 @@ internal fun oracleFixture(name: String, content: String, resources: String, ext
 /** A stream object that holds [data], with the [entries] of its dictionary besides /Length. */
 internal fun pdfStream(data: ByteArray, entries: String = ""): ByteArray =
     "<< $entries /Length ${data.size} >>\nstream\n".toByteArray() + data + "\nendstream".toByteArray()
+
+/**
+ * Renders each of [fixtures] with [render], scores it against mutool at 72 dpi and
+ * prints the score under the name of the [backend]. Returns one line for each fixture
+ * over its budget. Needs mutool, so check [MuPdfOracle.binary] first.
+ */
+fun scoreAgainstMutool(backend: String, fixtures: List<OracleFixture>, render: (ByteArray) -> BufferedImage): List<String> {
+    val failures = ArrayList<String>()
+    for (f in fixtures) {
+        val kite = render(f.bytes)
+        val pdf = File.createTempFile("kite-${f.name}", ".pdf").apply { deleteOnExit(); writeBytes(f.bytes) }
+        val reference = MuPdfOracle.render(pdf, page = 1, dpi = 72) ?: error("mutool did not render ${f.name}")
+        val mae = ImageDiff.compare(kite, reference).meanAbsError
+        println("$backend ${f.name}: MAE=${"%.5f".format(mae)} (budget ${f.budget})")
+        if (mae > f.budget) failures += "${f.name}: $mae > ${f.budget}"
+    }
+    return failures
+}
