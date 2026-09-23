@@ -1215,9 +1215,7 @@ public class PageRenderer(
                     "Image" -> {
                         val image = decodeImageCached(slot, state.current.fillColor)
                         if (paintsNothing(image, state.current)) return
-                        withSoftMask(state.current) {
-                            canvas.drawImage(image, state.current.ctm, state.current.fillAlpha, state.current.blendMode)
-                        }
+                        withSoftMask(state.current) { paintImage(image, state.current) }
                     }
                     // A transparency group takes the soft mask once, on its composited
                     // result, not once per object inside it (ISO 32000-1, 11.6.6, #66).
@@ -1248,9 +1246,7 @@ public class PageRenderer(
                 val blob = op.inlineImage ?: return
                 val img = decodeInlineImage(blob, state.current.fillColor, colorSpaces) ?: return
                 if (paintsNothing(img, state.current)) return
-                withSoftMask(state.current) {
-                    canvas.drawImage(img, state.current.ctm, state.current.fillAlpha, state.current.blendMode)
-                }
+                withSoftMask(state.current) { paintImage(img, state.current) }
             }
 
             // ─── Marked content (optional-content visibility) ────────────
@@ -1655,6 +1651,19 @@ public class PageRenderer(
                 renderMaskGroup(mask.group, childCanvas, baseCtm)
             },
         )
+    }
+
+    /**
+     * Draws [image] with the alpha and the blend mode of [s] (ISO 32000-1, 11.3.5). A Normal
+     * image goes through the overload that every canvas and wrapper knows: a wrapper that
+     * delegates with `by` sends the other overload past itself (#290).
+     */
+    private fun paintImage(image: KiteImageData, s: GraphicsState) {
+        if (s.blendMode == KiteBlendMode.Normal) {
+            canvas.drawImage(image, s.ctm, s.fillAlpha)
+        } else {
+            canvas.drawImage(image, s.ctm, s.fillAlpha, s.blendMode)
+        }
     }
 
     /** The page crop box in the space [maskCtm] maps to the device, for a mask box that cannot be read. */
