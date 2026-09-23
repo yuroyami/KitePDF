@@ -245,7 +245,8 @@ internal class Type1Font private constructor(
         private fun parseCharStrings(plaintext: ByteArray): Map<String, ByteArray> {
             val mark = indexOfBytes(plaintext, "/CharStrings".encodeToByteArray()) ?: return emptyMap()
             val out = HashMap<String, ByteArray>(64)
-            var cursor = mark
+            // Start after the key: read as a glyph entry, its glyph count would skip that many bytes of glyphs.
+            var cursor = mark + "/CharStrings".length
             val end = plaintext.size
             while (cursor < end) {
                 // Find next "/name " pattern.

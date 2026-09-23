@@ -143,6 +143,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   as `Identity-V`, stands in columns instead of one row across the page. Text
   extraction, search and redaction follow the columns. `PdfFont.isVertical` and
   `PdfFont.verticalMetrics` expose the writing mode and the `/W2` metrics (#124).
+- An embedded Type 1 font keeps every glyph. The glyph count after `/CharStrings`
+  was read as the length of a glyph program, so the first glyphs of the font drew
+  nothing (#279).
 
 ## [0.10.0] - 2026-09-13
 
