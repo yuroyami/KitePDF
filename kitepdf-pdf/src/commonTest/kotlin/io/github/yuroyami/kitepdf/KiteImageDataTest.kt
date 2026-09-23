@@ -323,6 +323,21 @@ class KiteImageDataTest {
     }
 
     @Test
+    fun a_deeper_mask_without_the_stencil_flag_is_read_as_a_soft_mask() {
+        // ISO 32000-1, 8.9.6.4 requires /ImageMask true. An 8-bit /Mask without it
+        // is a soft mask under the wrong key, so its grey levels become alpha (#160).
+        val mask = grayMask(2, 1, 8, byteArrayOf(0x80.toByte(), 0x00))
+        assertEquals(listOf(0x80, 0x00), alphas(KiteImageData.from(grayPair(mask = mask))))
+    }
+
+    @Test
+    fun a_one_bit_mask_without_the_stencil_flag_is_still_a_stencil() {
+        // Sample 1 masks the pixel out and sample 0 paints, as with the flag.
+        val mask = grayMask(2, 1, 1, byteArrayOf(0b10000000.toByte()))
+        assertEquals(listOf(0x00, 0xFF), alphas(KiteImageData.from(grayPair(mask = mask))))
+    }
+
+    @Test
     fun color_key_mask_clears_pixels_inside_every_range() {
         // 2×1 DeviceRGB (red, green) with /Mask [250 255 0 5 0 5]: red falls
         // inside all three ranges, green does not.

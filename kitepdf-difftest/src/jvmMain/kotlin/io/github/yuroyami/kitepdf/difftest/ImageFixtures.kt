@@ -28,6 +28,11 @@ object ImageFixtures {
         image("image-enlarged-smooth", "96 0 0 96 52 52 cm", gray(64) { x, y -> if ((x / 8 + y / 8) % 2 == 0) 40 else 220 }, budget = 0.002),
         // The same squares turned by 30 degrees at their own size.
         image("image-rotated", rotated(64.0, 30.0), gray(64) { x, y -> if ((x / 8 + y / 8) % 2 == 0) 40 else 220 }, budget = 0.005),
+        // An 8-bit /Mask without /ImageMask is a soft mask under the wrong key, so its grey levels become alpha.
+        image(
+            "image-deep-mask-no-stencil-flag", "160 0 0 160 20 20 cm", FOUR_COLOURS, budget = 0.005,
+            mask = gray(2) { x, y -> intArrayOf(0, 255, 128, 64)[y * 2 + x] },
+        ),
     )
 
     /** Samples for an image XObject, row by row from the top. A null [colorSpace] makes a one-bit stencil mask. */
@@ -57,8 +62,14 @@ object ImageFixtures {
         return String.format(Locale.ROOT, "%.4f %.4f %.4f %.4f %.4f %.4f cm", a, b, -b, a, e, f)
     }
 
-    /** A page that draws [samples] under [cm], in blue when they are a stencil mask. */
-    private fun image(name: String, cm: String, samples: Samples, budget: Double): OracleFixture {
+    /** A page that draws [samples] under [cm], in blue when they are a stencil mask, with [mask] as its `/Mask` when given. */
+    private fun image(name: String, cm: String, samples: Samples, budget: Double, mask: Samples? = null): OracleFixture {
+        val objects = listOf(imageStream(samples, if (mask != null) " /Mask 6 0 R" else "")) + listOfNotNull(mask?.let { imageStream(it, "") })
+        return oracleFixture(name, "q 0 0 1 rg $cm /Im1 Do Q", "/XObject << /Im1 5 0 R >>", objects, budget)
+    }
+
+    /** An image XObject that holds [samples], with [extra] entries at the end of its dictionary. */
+    private fun imageStream(samples: Samples, extra: String): ByteArray {
         val deflater = Deflater()
         deflater.setInput(samples.data)
         deflater.finish()
@@ -67,7 +78,7 @@ object ImageFixtures {
         deflater.end()
         val format = samples.colorSpace?.let { "/ColorSpace $it /BitsPerComponent 8" } ?: "/ImageMask true /BitsPerComponent 1"
         val entries = "/Type /XObject /Subtype /Image /Width ${samples.width} /Height ${samples.height} $format /Filter /FlateDecode" +
-            if (samples.interpolate) " /Interpolate true" else ""
-        return oracleFixture(name, "q 0 0 1 rg $cm /Im1 Do Q", "/XObject << /Im1 5 0 R >>", listOf(pdfStream(packed, entries)), budget)
+            (if (samples.interpolate) " /Interpolate true" else "") + extra
+        return pdfStream(packed, entries)
     }
 }

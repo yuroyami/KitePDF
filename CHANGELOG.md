@@ -266,6 +266,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   overload takes the transfer function as a `KiteMaskTransfer` table. Compose and
   Android apply it as the straight line closest to the table, which is exact for
   an inverter (#68).
+- An image whose `/Mask` is a grey image of more than 1 bit per sample, without the
+  stencil flag, is masked by it. Its grey levels become alpha, as in MuPDF. Before,
+  the image painted unmasked. ISO 32000-1, 8.9.6 requires the flag, so the file is
+  out of spec, and a 1-bit mask without the flag still reads as a stencil (#160).
 
 ## [0.10.0] - 2026-09-13
 
