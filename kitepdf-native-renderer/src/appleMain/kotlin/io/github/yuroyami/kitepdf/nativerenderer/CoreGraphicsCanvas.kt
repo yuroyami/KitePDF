@@ -162,7 +162,7 @@ public class CoreGraphicsCanvas(private val ctx: CGContextRef) : KiteCanvas {
         dashArray: List<Double>?, dashPhase: Double,
         lineCap: Int, lineJoin: Int, miterLimit: Double,
     ) {
-        val pen = strokePen(ctm, lineWidth, floorPx = 0.1)
+        val pen = strokePen(ctm, lineWidth)
         CGContextSaveGState(ctx)
         try {
             // An elliptical pen strokes in user space: Core Graphics applies the CTM to the

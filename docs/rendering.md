@@ -389,6 +389,15 @@ suspend fun renderThumbnailsAsync(pdfPath: String, outputDir: String) {
 }
 ```
 
+## Thin lines
+
+Every backend gives a thin stroke the same weight, so a page looks the same on each one.
+
+- A line width of 0 is one device pixel wide, as ISO 32000-1, 8.4.3.2 asks.
+- Any other line thinner than a fifth of a pixel widens to a fifth of a pixel. MuPDF does the same, so the 0.15-unit grid of an ECG report stays light grey and does not turn black.
+
+MuPDF also draws a width of 0 at a fifth of a pixel, so a zero-width line is darker here than in `mutool draw`. In the Compose viewer, `hairlineWidthPx` sets the width of a zero-width stroke (see [Compose viewer](compose-viewer.md)).
+
 ## Performance tips
 
 - **Scale parameter:** A page rendered at `scale = 0.5` is 4x faster and uses 4x less memory than `scale = 1.0` (area scales quadratically).

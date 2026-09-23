@@ -105,9 +105,7 @@ public class SkiaCanvas(private val canvas: SkCanvas) : KiteCanvas {
         dashArray: List<Double>?, dashPhase: Double,
         lineCap: Int, lineJoin: Int, miterLimit: Double,
     ) {
-        // Hairline minimum: sub-pixel strokes must still render as a visible ~1px
-        // line (ISO 32000-1 §8.4.3.2; MuPDF clamps to the anti-alias unit, draw-device.c:800).
-        val pen = strokePen(ctm, lineWidth, floorPx = 1.0)
+        val pen = strokePen(ctm, lineWidth)
         val sk = toSkPath(path, pen.pathMatrix)
         val paint = Paint().apply {
             this.color = color.toArgb(alpha)

@@ -178,7 +178,7 @@ renderSpec = KiteRenderSpec.Rasterized(
 
 ```kotlin
 renderSpec = KiteRenderSpec.Vectorized(
-    hairlineWidthPx = 1f,  // minimum stroke width in device pixels (ISO hairline default)
+    hairlineWidthPx = 1f,  // width of a zero-width stroke in device pixels (the ISO default)
 )
 ```
 

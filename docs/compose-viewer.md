@@ -258,7 +258,7 @@ KiteDocView(state, renderSpec = spec)
 - **`quality`** (default 1.0): supersampling multiplier over on-screen pixels. `1.0` = rasterize exactly at display resolution (fastest and sharpest). `>1.0` (e.g. 1.5) oversamples for screenshots or print-like export. `<1.0` undersamples for cheap thumbnails.
 - **`maxBitmapLongSide`** (default 4096): hard memory cap. Large pages and deep zoom won't exceed this on the longest side.
 - **`rerasterizeOnZoom`** (default true): after a zoom settles, re-render the visible page at the zoomed resolution so deep zoom stays crisp. Costs one extra rasterization per zoom settle.
-- **`preserveHairlines`** (default true): compensate the engine's 1-px hairline floor for any raster-vs-screen scale difference, so sub-pixel strokes (ECG traces, fine table rules) never vanish when the bitmap is downscaled.
+- **`preserveHairlines`** (default true): scale the engine's stroke floors by the ratio of the raster to the screen. A zero-width stroke then stays one screen pixel wide, and other sub-pixel strokes (ECG traces, fine table rules) keep their weight when the bitmap is downscaled.
 
 ### `KiteRenderSpec.Vectorized`
 
@@ -266,7 +266,7 @@ Re-execute each page's content stream into a live Canvas every composition, tran
 
 ```kotlin
 val spec = KiteRenderSpec.Vectorized(
-    hairlineWidthPx = 1f, // minimum stroke width in device pixels
+    hairlineWidthPx = 1f, // width of a zero-width stroke, in device pixels
 )
 KiteDocView(state, renderSpec = spec)
 ```
@@ -279,7 +279,7 @@ KiteDocView(state, renderSpec = spec)
 
 **Parameters:**
 
-- **`hairlineWidthPx`** (default 1.0): minimum stroke width in device pixels. The engine floors thin strokes here so sub-pixel rules (ECG traces, fine borders) stay visible. `1.0` is the ISO hairline.
+- **`hairlineWidthPx`** (default 1.0): the width in device pixels of a stroke whose line width is 0. `1.0` is the one device pixel of ISO 32000-1, 8.4.3.2. Other thin strokes (ECG traces, fine borders) widen to a fifth of this width, as MuPDF draws them, so they stay visible without turning into solid pixels.
 
 !!! warning "Rasterized vs. Vectorized trade-off"
 

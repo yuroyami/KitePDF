@@ -101,12 +101,15 @@ class KiteDocViewerFeaturesTest {
 
     @Test
     fun supersampled_raster_preserves_hairlines_when_compensated() {
-        // A 0.05-width stroke: far below one pixel at ANY raster scale.
+        // A 0.05-width stroke at y=100 and a zero-width one at y=50: both below one pixel at this scale.
         val bytes = PdfBuilder()
             .page(width = 200.0, height = 200.0) {
                 setStrokeRgb(0.0, 0.0, 0.0)
                 setLineWidth(0.05)
                 moveTo(10.0, 100.0); lineTo(190.0, 100.0)
+                stroke()
+                setLineWidth(0.0)
+                moveTo(10.0, 50.0); lineTo(190.0, 50.0)
                 stroke()
             }
             .build()
@@ -118,25 +121,23 @@ class KiteDocViewerFeaturesTest {
             TextMeasurer(createFontFamilyResolver(), density, LayoutDirection.Ltr),
         )
 
-        // 4× supersample of a 200px-wide on-screen box.
-        fun strokeThickness(hairlineWidthPx: Float): Int {
-            val bmp = rasterizer.rasterize(page, 800, 800, hairlineWidthPx = hairlineWidthPx)
-            val sk = bmp.asSkiaBitmap()
-            var nonWhite = 0
-            for (yy in 380..420) {
-                val c = sk.getColor(400, yy)
-                val r = (c shr 16) and 0xFF
-                if (r < 220) nonWhite++
-            }
-            return nonWhite
+        // 4× supersample of a 200px-wide on-screen box. The ink of a line is 255 minus the
+        // red channel, summed down one column across it, so a solid pixel row is 255.
+        fun ink(hairlineWidthPx: Float, centreY: Int): Int {
+            val sk = rasterizer.rasterize(page, 800, 800, hairlineWidthPx = hairlineWidthPx).asSkiaBitmap()
+            return (centreY - 20..centreY + 20).sumOf { 255 - ((sk.getColor(400, it) shr 16) and 0xFF) }
         }
 
-        val uncompensated = strokeThickness(1f)
-        val compensated = strokeThickness(4f)
-        assertTrue(uncompensated in 1..2, "expected ~1px floor without compensation, got $uncompensated")
-        assertTrue(
-            compensated >= 3,
-            "hairline compensation ineffective: $compensated px thick at 4x supersample (uncompensated=$uncompensated)",
-        )
+        // Without compensation the thin line is a fifth of a raster pixel and the zero-width
+        // line is one raster pixel, so each would lose three quarters of its ink in the downscale.
+        val thin = ink(1f, 400)
+        val zero = ink(1f, 600)
+        assertTrue(thin in 35..70, "a thin line should floor at a fifth of a pixel, ink $thin")
+        assertTrue(zero in 220..290, "a zero-width line should be one pixel, ink $zero")
+        // Compensated, both carry four times the ink, which is their weight at the on-screen size.
+        val thinCompensated = ink(4f, 400)
+        val zeroCompensated = ink(4f, 600)
+        assertTrue(thinCompensated in thin * 3..thin * 5, "thin line: $thinCompensated against $thin uncompensated")
+        assertTrue(zeroCompensated in zero * 3..zero * 5, "zero-width line: $zeroCompensated against $zero uncompensated")
     }
 }

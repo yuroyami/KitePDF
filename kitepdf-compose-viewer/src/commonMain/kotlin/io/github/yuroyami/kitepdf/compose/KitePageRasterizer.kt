@@ -251,9 +251,9 @@ public class KitePageRasterizer(
      * the bottom of the page, and a taller one leaves background below it.
      *
      * @param background colour painted before page content (documents assume paper).
-     * @param hairlineWidthPx minimum stroke width in raster pixels. See
-     *   [ComposeCanvas]. Pass the raster:on-screen ratio (>1) when rendering
-     *   supersampled so sub-pixel strokes survive the downscale.
+     * @param hairlineWidthPx the width in raster pixels of a stroke whose line width
+     *   is 0. See [ComposeCanvas]. Pass the raster:on-screen ratio (>1) when rendering
+     *   supersampled so sub-pixel strokes keep their weight after the downscale.
      */
     public fun rasterize(
         page: KitePage,
