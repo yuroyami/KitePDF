@@ -126,6 +126,8 @@ internal class ThemedCanvas(
 
     // Images are NOT themed. Photos should keep their real colours.
     override fun drawImage(image: KiteImageData, ctm: KiteMatrix, alpha: Double) = inner.drawImage(image, ctm, alpha)
+    override fun drawImage(image: KiteImageData, ctm: KiteMatrix, alpha: Double, blendMode: KiteBlendMode) =
+        inner.drawImage(image, ctm, alpha, blendMode)
 
     override fun beginTransparencyGroup(bbox: KiteRectangle, ctm: KiteMatrix, isolated: Boolean, knockout: Boolean, alpha: Double, blendMode: KiteBlendMode) =
         inner.beginTransparencyGroup(bbox, ctm, isolated, knockout, alpha, blendMode)

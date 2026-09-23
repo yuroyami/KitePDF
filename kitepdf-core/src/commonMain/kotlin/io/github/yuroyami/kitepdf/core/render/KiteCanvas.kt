@@ -148,6 +148,26 @@ public interface KiteCanvas {
     public fun drawImage(image: KiteImageData, ctm: KiteMatrix, alpha: Double = 1.0) { /* opt-in default */ }
 
     /**
+     * Paint an XObject Image as [drawImage] does, composited with [blendMode]. The blend
+     * mode of the graphics state applies to an image as to every other paint
+     * (ISO 32000-1, 11.3.5).
+     *
+     * The default paints the image with [drawImage] inside an isolated transparency group
+     * that composites with [blendMode]. A group that holds one paint composites as that
+     * paint does, so the result is the same, only slower. A canvas that blends images
+     * itself overrides this, and its [drawImage] then calls this with [KiteBlendMode.Normal].
+     */
+    public fun drawImage(image: KiteImageData, ctm: KiteMatrix, alpha: Double, blendMode: KiteBlendMode) {
+        if (blendMode == KiteBlendMode.Normal) return drawImage(image, ctm, alpha)
+        beginTransparencyGroup(IMAGE_SPACE, ctm, isolated = true, knockout = false, alpha = 1.0, blendMode = blendMode)
+        try {
+            drawImage(image, ctm, alpha)
+        } finally {
+            endTransparencyGroup()
+        }
+    }
+
+    /**
      * Open a transparency group (ISO 32000-1 §11.4). Subsequent paints
      * accumulate into an offscreen layer; [endTransparencyGroup] composites
      * the layer back onto the parent with [blendMode] + [alpha].
@@ -191,6 +211,9 @@ public interface KiteCanvas {
         render()
     }
 }
+
+/** The unit square that an image fills in its own space (ISO 32000-1, 8.9.4). */
+private val IMAGE_SPACE = KiteRectangle(0.0, 0.0, 1.0, 1.0)
 
 /** Backend that ignores everything, useful for benchmarks and content-stream sanity tests. */
 public object NoopCanvas : KiteCanvas {
@@ -241,7 +264,10 @@ public class RecordingCanvas : KiteCanvas {
         }
         public data class PushClip(val path: KitePath, val ctm: KiteMatrix, val evenOdd: Boolean) : Call()
         public data object PopClip : Call()
-        public data class Image(val image: KiteImageData, val ctm: KiteMatrix, val alpha: Double = 1.0) : Call()
+        public data class Image(
+            val image: KiteImageData, val ctm: KiteMatrix, val alpha: Double = 1.0,
+            val blendMode: KiteBlendMode = KiteBlendMode.Normal,
+        ) : Call()
         public data class PushGroup(val bbox: KiteRectangle, val ctm: KiteMatrix, val isolated: Boolean, val knockout: Boolean, val alpha: Double, val blendMode: KiteBlendMode) : Call()
         public data object PopGroup : Call()
     }
@@ -266,6 +292,9 @@ public class RecordingCanvas : KiteCanvas {
     override fun popClip() { calls.add(Call.PopClip) }
     override fun drawImage(image: KiteImageData, ctm: KiteMatrix, alpha: Double) {
         calls.add(Call.Image(image, ctm, alpha))
+    }
+    override fun drawImage(image: KiteImageData, ctm: KiteMatrix, alpha: Double, blendMode: KiteBlendMode) {
+        calls.add(Call.Image(image, ctm, alpha, blendMode))
     }
     override fun beginTransparencyGroup(bbox: KiteRectangle, ctm: KiteMatrix, isolated: Boolean, knockout: Boolean, alpha: Double, blendMode: KiteBlendMode) {
         calls.add(Call.PushGroup(bbox, ctm, isolated, knockout, alpha, blendMode))

@@ -321,6 +321,10 @@ public class Canvas2dCanvas(ctx: CanvasRenderingContext2D) : KiteCanvas {
     }
 
     override fun drawImage(image: KiteImageData, ctm: KiteMatrix, alpha: Double) {
+        drawImage(image, ctm, alpha, KiteBlendMode.Normal)
+    }
+
+    override fun drawImage(image: KiteImageData, ctm: KiteMatrix, alpha: Double, blendMode: KiteBlendMode) {
         // Decoded samples paint synchronously; that is what every successful
         // JPEG / JPX / JBIG2 decode produces. Encoded kinds core could not
         // decode keep the placeholder: browser decoding is async, and a
@@ -336,6 +340,7 @@ public class Canvas2dCanvas(ctx: CanvasRenderingContext2D) : KiteCanvas {
         try {
             setDeviceTransform(ctm)
             ctx.globalAlpha = alpha.coerceIn(0.0, 1.0)
+            ctx.globalCompositeOperation = blendMode.toCanvas()
             ctx.imageSmoothingEnabled = sampling.smooth
             // Unit square, bitmap row 0 on the top edge (v = 1): the Skia
             // mapping, translate up one unit and flip Y.

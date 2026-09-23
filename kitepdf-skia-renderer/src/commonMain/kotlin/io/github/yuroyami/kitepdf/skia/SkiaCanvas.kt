@@ -437,6 +437,10 @@ public class SkiaCanvas(private val canvas: SkCanvas) : KiteCanvas {
     }
 
     override fun drawImage(image: KiteImageData, ctm: KiteMatrix, alpha: Double) {
+        drawImage(image, ctm, alpha, KiteBlendMode.Normal)
+    }
+
+    override fun drawImage(image: KiteImageData, ctm: KiteMatrix, alpha: Double, blendMode: KiteBlendMode) {
         // One sampling policy on every canvas (#122, #123), read from the whole transform to device pixels.
         val m = canvas.localToDeviceAsMatrix33.makeConcat(pdfMatrixToSkia(ctm)).mat
         val sampling = imageSampling(
@@ -463,7 +467,10 @@ public class SkiaCanvas(private val canvas: SkCanvas) : KiteCanvas {
         // then flip Y (negative Y scale) to land the image upright inside the
         // unit square, matching AwtCanvas' documented mapping. The earlier
         // translate(0,-1)+positive-Y scale both mis-placed and flipped it.
-        val paint = Paint().apply { this.alpha = alpha.toFloat().coerceIn(0f, 1f).let { (it * 255).toInt() } }
+        val paint = Paint().apply {
+            this.alpha = alpha.toFloat().coerceIn(0f, 1f).let { (it * 255).toInt() }
+            this.blendMode = blendMode.toSkia()
+        }
         val mode = when {
             // An encoded image is not averaged above, so Skia's mipmaps average it.
             sampling.shrinks && image.kind != KiteImageData.Kind.RAW -> FilterMipmap(FilterMode.LINEAR, MipmapMode.LINEAR)

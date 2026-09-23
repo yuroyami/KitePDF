@@ -423,6 +423,10 @@ public class CoreGraphicsCanvas(private val ctx: CGContextRef) : KiteCanvas {
     }
 
     override fun drawImage(image: KiteImageData, ctm: KiteMatrix, alpha: Double) {
+        drawImage(image, ctm, alpha, KiteBlendMode.Normal)
+    }
+
+    override fun drawImage(image: KiteImageData, ctm: KiteMatrix, alpha: Double, blendMode: KiteBlendMode) {
         // One sampling policy on every canvas (#122, #123), read from the whole transform to device pixels.
         val userToDevice = CGContextGetUserSpaceToDeviceSpaceTransform(ctx).useContents { KiteMatrix(a, b, c, d, tx, ty) }
         val sampling = imageSampling(image.width, image.height, userToDevice.concat(ctm), image.interpolate)
@@ -442,6 +446,7 @@ public class CoreGraphicsCanvas(private val ctx: CGContextRef) : KiteCanvas {
                 // PDF image space is the unit square under the CTM, with the first row
                 // of the image at v = 1 (ISO 32000-1, 8.9.4). CGContextDrawImage draws
                 // the first row at the top of its rectangle, so no flip is needed (#289).
+                CGContextSetBlendMode(ctx, blendMode.toCG())
                 CGContextConcatCTM(ctx, ctm.toCGAffine())
                 val quality = when {
                     // A RAW image is averaged down in decodeImage. CoreGraphics averages an encoded one itself.

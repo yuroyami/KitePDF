@@ -361,12 +361,19 @@ public class ComposeCanvas(
     }
 
     override fun drawImage(image: KiteImageData, ctm: KiteMatrix, alpha: Double) {
+        drawImage(image, ctm, alpha, KiteBlendMode.Normal)
+    }
+
+    override fun drawImage(image: KiteImageData, ctm: KiteMatrix, alpha: Double, blendMode: KiteBlendMode) {
         // One sampling policy on every canvas (#122, #123). The ctm maps to this scope's pixels.
         val sampling = imageSampling(image.width, image.height, ctm, image.interpolate)
         withActiveClips {
             val bitmap = bitmaps.getOrPut(image, sampling, { it.width.toLong() * it.height * 4 }) { bitmapFor(image, sampling) }
             if (bitmap != null) {
-                drawBitmap(bitmap, ctm, alpha.toFloat().coerceIn(0f, 1f), if (sampling.smooth) FilterQuality.Low else FilterQuality.None)
+                drawBitmap(
+                    bitmap, ctm, alpha.toFloat().coerceIn(0f, 1f),
+                    if (sampling.smooth) FilterQuality.Low else FilterQuality.None, blendMode.toCompose(),
+                )
             } else {
                 drawPlaceholder(ctm)
             }
@@ -553,7 +560,10 @@ public class ComposeCanvas(
         return Rect(0f, 0f, w, h)
     }
 
-    private fun drawBitmap(bitmap: ImageBitmap, ctm: KiteMatrix, alpha: Float, filterQuality: FilterQuality) {
+    private fun drawBitmap(
+        bitmap: ImageBitmap, ctm: KiteMatrix, alpha: Float, filterQuality: FilterQuality,
+        blendMode: androidx.compose.ui.graphics.BlendMode = androidx.compose.ui.graphics.BlendMode.SrcOver,
+    ) {
         // The full CTM, not its scale magnitudes: rotation, reflection and
         // shear survive. The unit-square mapping matches Skia: translate up
         // one unit and flip Y, so bitmap row 0 lands on the square's top
@@ -563,7 +573,10 @@ public class ComposeCanvas(
             translate(0f, 1f)
             scale(1f / bitmap.width, -1f / bitmap.height, pivot = Offset.Zero)
         }) {
-            drawImage(image = bitmap, dstSize = IntSize(bitmap.width, bitmap.height), alpha = alpha, filterQuality = filterQuality)
+            drawImage(
+                image = bitmap, dstSize = IntSize(bitmap.width, bitmap.height), alpha = alpha,
+                blendMode = blendMode, filterQuality = filterQuality,
+            )
         }
     }
 
