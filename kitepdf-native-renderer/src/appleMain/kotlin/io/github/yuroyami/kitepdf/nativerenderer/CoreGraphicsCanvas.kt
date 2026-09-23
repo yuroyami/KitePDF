@@ -439,16 +439,10 @@ public class CoreGraphicsCanvas(private val ctx: CGContextRef) : KiteCanvas {
         try {
             CGContextSaveGState(ctx)
             try {
-                // PDF image space is the unit square (0,0)-(1,1) under the CTM,
-                // row 0 at v=1 (the Skia convention). The composite CTM already
-                // carries the device Y-flip, so flip once more here to hand
-                // CGContextDrawImage the y-up frame it expects; the old
-                // (0,-1)..(1,0) square drew outside the CTM's image of the
-                // unit square, which is why this backend showed placeholders
-                // offscreen and images not at all.
+                // PDF image space is the unit square under the CTM, with the first row
+                // of the image at v = 1 (ISO 32000-1, 8.9.4). CGContextDrawImage draws
+                // the first row at the top of its rectangle, so no flip is needed (#289).
                 CGContextConcatCTM(ctx, ctm.toCGAffine())
-                CGContextTranslateCTM(ctx, 0.0, 1.0)
-                CGContextScaleCTM(ctx, 1.0, -1.0)
                 val quality = when {
                     // A RAW image is averaged down in decodeImage. CoreGraphics averages an encoded one itself.
                     sampling.shrinks && image.kind != KiteImageData.Kind.RAW -> kCGInterpolationHigh

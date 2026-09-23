@@ -230,6 +230,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `onPageRendered` fires once for each fresh page bitmap. It could fire twice for one
   bitmap when the raster finished just as the viewer started to watch for it, which
   happens more often on a busy machine (#229).
+- Images on CoreGraphics stand the same way as on the other canvases. Each image
+  drew upside down, because the canvas flipped it for a y-down bitmap while
+  CoreGraphics already draws the first row at the top of the image (#289).
 
 ## [0.10.0] - 2026-09-13
 
