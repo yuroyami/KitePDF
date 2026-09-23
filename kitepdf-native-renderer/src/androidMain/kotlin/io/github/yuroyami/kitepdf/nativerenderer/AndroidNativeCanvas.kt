@@ -25,6 +25,7 @@ import io.github.yuroyami.kitepdf.core.render.KiteImageSampling
 import io.github.yuroyami.kitepdf.core.render.imageSampling
 import io.github.yuroyami.kitepdf.core.render.shrinkArgb
 import io.github.yuroyami.kitepdf.core.render.shrinkRgba
+import io.github.yuroyami.kitepdf.core.render.strokePen
 import io.github.yuroyami.kitepdf.core.render.toRgbaBytes
 import io.github.yuroyami.kitepdf.core.render.KiteMatrix
 import io.github.yuroyami.kitepdf.core.render.KiteCanvas
@@ -87,24 +88,36 @@ public class AndroidNativeCanvas(private val canvas: AndroidCanvas) : KiteCanvas
         dashArray: List<Double>?, dashPhase: Double,
         lineCap: Int, lineJoin: Int, miterLimit: Double,
     ) {
-        val p = toAndroidPath(path, ctm)
-        val avgScale = (ctm.scaleX() + ctm.scaleY()) * 0.5
+        val pen = strokePen(ctm, lineWidth, floorPx = 0.1)
+        val p = toAndroidPath(path, pen.pathMatrix)
         val paint = Paint().apply {
             isAntiAlias = true
             style = Paint.Style.STROKE
             this.color = color.toArgb(alpha)
-            strokeWidth = (lineWidth * avgScale).toFloat().coerceAtLeast(0.1f)
+            strokeWidth = pen.width.toFloat()
             strokeCap = when (lineCap) { 1 -> Paint.Cap.ROUND; 2 -> Paint.Cap.SQUARE; else -> Paint.Cap.BUTT }
             strokeJoin = when (lineJoin) { 1 -> Paint.Join.ROUND; 2 -> Paint.Join.BEVEL; else -> Paint.Join.MITER }
             strokeMiter = miterLimit.toFloat().coerceAtLeast(1f)
             if (!dashArray.isNullOrEmpty()) {
                 // Dash lengths are user-space units; device px = unit × scale.
-                val intervals = scaledDashIntervals(dashArray, avgScale)
-                pathEffect = DashPathEffect(intervals, (dashPhase * avgScale).toFloat())
+                val intervals = scaledDashIntervals(dashArray, pen.dashScale)
+                pathEffect = DashPathEffect(intervals, (dashPhase * pen.dashScale).toFloat())
             }
             applyBlendMode(blendMode)
         }
-        canvas.drawPath(p, paint)
+        val m = pen.strokeMatrix
+        if (m == null) {
+            canvas.drawPath(p, paint)
+        } else {
+            // The canvas strokes in local space under the matrix, which draws the elliptical pen.
+            canvas.save()
+            try {
+                canvas.concat(pdfMatrixToAndroid(m))
+                canvas.drawPath(p, paint)
+            } finally {
+                canvas.restore()
+            }
+        }
     }
 
     override fun drawGlyphs(

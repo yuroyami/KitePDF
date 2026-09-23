@@ -18,6 +18,7 @@ import io.github.yuroyami.kitepdf.core.render.SoftMask
 import io.github.yuroyami.kitepdf.core.render.imageSampling
 import io.github.yuroyami.kitepdf.core.render.sampleStops
 import io.github.yuroyami.kitepdf.core.render.shrinkRgba
+import io.github.yuroyami.kitepdf.core.render.strokePen
 import kotlinx.cinterop.CValue
 import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.cinterop.addressOf
@@ -160,12 +161,15 @@ public class CoreGraphicsCanvas(private val ctx: CGContextRef) : KiteCanvas {
         dashArray: List<Double>?, dashPhase: Double,
         lineCap: Int, lineJoin: Int, miterLimit: Double,
     ) {
+        val pen = strokePen(ctm, lineWidth, floorPx = 0.1)
         CGContextSaveGState(ctx)
         try {
+            // An elliptical pen strokes in user space: Core Graphics applies the CTM to the
+            // line width and the dashes when it strokes.
+            pen.strokeMatrix?.let { CGContextConcatCTM(ctx, it.toCGAffine()) }
             CGContextSetBlendMode(ctx, blendMode.toCG())
             CGContextSetRGBStrokeColor(ctx, color.r, color.g, color.b, alpha)
-            val avgScale = (ctm.scaleX() + ctm.scaleY()) * 0.5
-            CGContextSetLineWidth(ctx, (lineWidth * avgScale).coerceAtLeast(0.1))
+            CGContextSetLineWidth(ctx, pen.width)
             // PDF cap/join codes match Core Graphics' enum ordinals (butt/round/square,
             // miter/round/bevel).
             platform.CoreGraphics.CGContextSetLineCap(ctx, when (lineCap) {
@@ -183,11 +187,11 @@ public class CoreGraphicsCanvas(private val ctx: CGContextRef) : KiteCanvas {
                 // Dash lengths are user-space units; device px = unit × scale.
                 memScoped {
                     val lengths = allocArray<CGFloatVar>(dashArray.size)
-                    for (i in dashArray.indices) lengths[i] = (dashArray[i] * avgScale)
-                    CGContextSetLineDash(ctx, dashPhase * avgScale, lengths, dashArray.size.toULong())
+                    for (i in dashArray.indices) lengths[i] = (dashArray[i] * pen.dashScale)
+                    CGContextSetLineDash(ctx, dashPhase * pen.dashScale, lengths, dashArray.size.toULong())
                 }
             }
-            buildPath(path, ctm)
+            buildPath(path, pen.pathMatrix)
             CGContextStrokePath(ctx)
         } finally {
             CGContextRestoreGState(ctx)

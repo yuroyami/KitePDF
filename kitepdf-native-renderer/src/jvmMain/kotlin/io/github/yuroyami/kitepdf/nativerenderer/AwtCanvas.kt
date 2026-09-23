@@ -20,6 +20,7 @@ import io.github.yuroyami.kitepdf.core.render.imageSampling
 import io.github.yuroyami.kitepdf.core.render.sampleStops
 import io.github.yuroyami.kitepdf.core.render.shrinkArgb
 import io.github.yuroyami.kitepdf.core.render.shrinkRgba
+import io.github.yuroyami.kitepdf.core.render.strokePen
 import io.github.yuroyami.kitepdf.core.render.toRgbaBytes
 import java.awt.AlphaComposite
 import java.awt.BasicStroke
@@ -108,21 +109,29 @@ public class AwtCanvas(private var g: Graphics2D) : KiteCanvas {
         dashArray: List<Double>?, dashPhase: Double,
         lineCap: Int, lineJoin: Int, miterLimit: Double,
     ) {
-        val awt = toAwtPath(path, ctm)
-        val avgScale = (ctm.scaleX() + ctm.scaleY()) * 0.5
-        val width = (lineWidth * avgScale).toFloat().coerceAtLeast(0.1f)
+        val pen = strokePen(ctm, lineWidth, floorPx = 0.1)
+        val awt = toAwtPath(path, pen.pathMatrix)
+        val width = pen.width.toFloat()
         val cap = when (lineCap) { 1 -> BasicStroke.CAP_ROUND; 2 -> BasicStroke.CAP_SQUARE; else -> BasicStroke.CAP_BUTT }
         val join = when (lineJoin) { 1 -> BasicStroke.JOIN_ROUND; 2 -> BasicStroke.JOIN_BEVEL; else -> BasicStroke.JOIN_MITER }
         val miter = miterLimit.toFloat().coerceAtLeast(1f)
-        val dash = awtDash(dashArray, avgScale)
+        val dash = awtDash(dashArray, pen.dashScale)
         withComposite(blendMode, alpha) {
             g.color = color.toAwt()
             g.stroke = if (dash != null) {
-                BasicStroke(width, cap, join, miter, dash, (dashPhase * avgScale).toFloat().coerceAtLeast(0f))
+                BasicStroke(width, cap, join, miter, dash, (dashPhase * pen.dashScale).toFloat().coerceAtLeast(0f))
             } else {
                 BasicStroke(width, cap, join, miter)
             }
-            g.draw(awt)
+            val m = pen.strokeMatrix
+            if (m == null) {
+                g.draw(awt)
+            } else {
+                // Java2D strokes in user space under the transform, which draws the elliptical pen.
+                val saved = g.transform
+                g.transform(AffineTransform(m.a, m.b, m.c, m.d, m.e, m.f))
+                try { g.draw(awt) } finally { g.transform = saved }
+            }
         }
     }
 
