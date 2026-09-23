@@ -9,8 +9,10 @@ import io.github.yuroyami.kitepdf.core.parser.PdfName
 import io.github.yuroyami.kitepdf.core.parser.PdfNull
 import io.github.yuroyami.kitepdf.core.parser.PdfReal
 import io.github.yuroyami.kitepdf.core.parser.PdfReference
+import io.github.yuroyami.kitepdf.core.PdfFormatException
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertIs
 
 class ParserTest {
@@ -44,10 +46,38 @@ class ParserTest {
 
     @Test
     fun reference_in_array_followed_by_another_int() {
-        // The lookahead must NOT consume "10" as the start of another ref.
+        // The "10" after a reference must not start another reference.
         val arr = parse("[7 0 R 10]") as PdfArray
         assertEquals(2, arr.size)
         assertEquals(PdfReference(7, 0), arr[0])
         assertEquals(PdfInt(10), arr[1])
+    }
+
+    @Test
+    fun array_holds_two_integers_until_the_next_token() {
+        // Only "N G R" makes a reference. A third integer releases the oldest one.
+        val arr = parse("[1 2 3 0 R 5 6 /N 7 8]") as PdfArray
+        assertEquals(
+            listOf(PdfInt(1), PdfInt(2), PdfReference(3, 0), PdfInt(5), PdfInt(6), PdfName("N"), PdfInt(7), PdfInt(8)),
+            arr.items,
+        )
+    }
+
+    @Test
+    fun array_reference_needs_two_integers() {
+        assertFailsWith<PdfFormatException> { parse("[1 R]") }
+    }
+
+    @Test
+    fun dict_integer_value_before_a_key_or_a_reference() {
+        val dict = parse("<< /A 1 /B 2 0 R /C 3 >>") as PdfDictionary
+        assertEquals(PdfInt(1), dict["A"])
+        assertEquals(PdfReference(2, 0), dict["B"])
+        assertEquals(PdfInt(3), dict["C"])
+    }
+
+    @Test
+    fun dict_two_integers_without_r_is_malformed() {
+        assertFailsWith<PdfFormatException> { parse("<< /A 1 2 /B 3 >>") }
     }
 }

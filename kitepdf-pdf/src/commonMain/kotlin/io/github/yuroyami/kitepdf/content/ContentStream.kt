@@ -103,15 +103,15 @@ public object ContentStreamParser {
             // Record where this iteration starts so a failure can guarantee progress.
             val loopStart = reader.pos()
             val tok = try {
-                peekNonOperatorToken(lexer)
+                lexer.nextToken()
             } catch (_: Exception) {
                 // Lexer choked on garbage (bad hex digit, stray '>', unterminated
-                // string, …). Skip forward and retry. peekNonOperatorToken may have
-                // already advanced; if it did not, force one byte of progress.
+                // string, …). Skip forward and retry. The lexer may have already
+                // advanced; if it did not, force one byte of progress.
                 skipToProgress(reader, loopStart)
                 operandStack.clear()
                 if (reader.isAtEnd()) break else continue
-            } ?: break
+            }
 
             when (tok) {
                 is Token.Keyword -> {
@@ -136,10 +136,9 @@ public object ContentStreamParser {
                 }
                 Token.EndOfFile -> break
                 else -> {
-                    // Push back and let the Parser read a full object (handles arrays/dicts).
-                    rewindToken(reader, tok)
+                    // The parser finishes the operand from this token, so no token is lexed twice.
                     try {
-                        operandStack.add(parser.readObject())
+                        operandStack.add(parser.readOperand(tok))
                     } catch (_: Exception) {
                         // A malformed operand (e.g. "[ ...unterminated", bad number).
                         // Drop the operands accumulated for this operator and skip
@@ -169,31 +168,6 @@ public object ContentStreamParser {
             reader.seek(floor)
             reader.readByte()
         }
-    }
-
-    /**
-     * peek one token AND consume it; we only special-case keywords for
-     * downstream branching. For non-keyword tokens we rewind so [Parser] can
-     * re-read them as a full PdfObject (handles arrays "[ ... ]" properly).
-     */
-    private fun peekNonOperatorToken(lexer: Lexer): Token? {
-        val checkpoint = lexer.reader.pos()
-        val tok = lexer.nextToken()
-        if (tok == Token.EndOfFile) return null
-        return when (tok) {
-            is Token.Keyword -> tok
-            else -> {
-                // Rewind so the parser sees this token again.
-                lexer.reader.seek(checkpoint)
-                tok
-            }
-        }
-    }
-
-    private fun rewindToken(reader: ByteReader, tok: Token) {
-        // Not used in current path because peekNonOperatorToken rewinds itself.
-        // Kept as a no-op for the API shape.
-        if (tok == Token.EndOfFile) return
     }
 
     /* ─── Inline images (ISO 32000-1 §8.9.7) ──────────────────────────────── */

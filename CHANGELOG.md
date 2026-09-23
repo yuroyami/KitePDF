@@ -307,6 +307,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   dense page of 140,000 operators, a content stream parses in 21 ms instead of 28 ms
   and allocates 30 MB instead of 87 MB. On Kotlin/Wasm a real is now the nearest
   double: the String parse there can be one unit off in the last place (#119).
+- The content stream parser lexes each token once. It lexed each operand twice, and
+  an integer up to four times. On the same page, a content stream parses in 14 ms
+  instead of 21 ms and allocates 24 MB instead of 30 MB. Arrays and dictionaries in
+  the document body also stop lexing tokens twice. An integer operand is always a
+  number, and a dictionary operand is never a stream, as ISO 32000-1, 7.8.2
+  requires (#293).
 
 ## [0.10.0] - 2026-09-13
 
