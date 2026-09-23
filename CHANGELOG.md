@@ -270,6 +270,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   stencil flag, is masked by it. Its grey levels become alpha, as in MuPDF. Before,
   the image painted unmasked. ISO 32000-1, 8.9.6 requires the flag, so the file is
   out of spec, and a 1-bit mask without the flag still reads as a stencil (#160).
+- A page's DefaultGray, DefaultRGB and DefaultCMYK colour spaces replace the device
+  spaces that its content selects, as ISO 32000-1, 8.6.5.6 requires. This covers
+  `g`, `rg`, `k`, `cs`, images and shadings. Before, a calibrated document drew its
+  device colours uncalibrated. The defaults of a form XObject come from its own
+  resources, as the clause says. MuPDF also lets a form inherit the page's (#150).
 
 ## [0.10.0] - 2026-09-13
 
