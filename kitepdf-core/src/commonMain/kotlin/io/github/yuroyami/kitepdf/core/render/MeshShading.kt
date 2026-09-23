@@ -310,6 +310,10 @@ private fun io.github.yuroyami.kitepdf.core.parser.PdfArray.numAt(i: Int): Doubl
  *    Gouraud approximation smoother than per-triangle flat fill.
  *  - [KiteShading.PatchMesh]: the pre-tessellated flat quads.
  *
+ * For an opaque, normal paint, neighbouring cells overlap by about half a device
+ * pixel, so the page does not show through the seams between their anti-aliased
+ * edges.
+ *
  * Returns false for axial/radial/unsupported so the caller proceeds to its
  * native gradient path. [clipPath] (the pattern/`sh` fill region) and the
  * shading /BBox clip via push/popClip around the cells.
@@ -392,25 +396,20 @@ public fun KiteCanvas.paintComplexShading(
                 }
             }
             is KiteShading.TriangleMesh -> {
+                val overlap = canOverlap(ctm, alpha, blendMode)
                 for (t in shading.triangles) {
                     subdivideAndFill(
                         t.x[0], t.y[0], t.colors[0],
                         t.x[1], t.y[1], t.colors[1],
                         t.x[2], t.y[2], t.colors[2],
-                        depth = 3, ctm = ctm, alpha = alpha, blendMode = blendMode,
+                        depth = 3, ctm = ctm, alpha = alpha, blendMode = blendMode, overlap = overlap,
                     )
                 }
             }
             is KiteShading.PatchMesh -> {
+                val overlap = canOverlap(ctm, alpha, blendMode)
                 for (q in shading.quads) {
-                    val p = KitePath.Builder().apply {
-                        moveTo(q.xs[0], q.ys[0])
-                        lineTo(q.xs[1], q.ys[1])
-                        lineTo(q.xs[2], q.ys[2])
-                        lineTo(q.xs[3], q.ys[3])
-                        close()
-                    }.build()
-                    fillPath(p, ctm, q.color, evenOdd = false, alpha = alpha, blendMode = blendMode)
+                    fillCell(q.xs, q.ys, q.color, ctm, alpha, blendMode, overlap)
                 }
             }
         }
@@ -424,25 +423,79 @@ private fun KiteCanvas.subdivideAndFill(
     x0: Double, y0: Double, c0: RgbColor,
     x1: Double, y1: Double, c1: RgbColor,
     x2: Double, y2: Double, c2: RgbColor,
-    depth: Int, ctm: KiteMatrix, alpha: Double, blendMode: KiteBlendMode,
+    depth: Int, ctm: KiteMatrix, alpha: Double, blendMode: KiteBlendMode, overlap: Boolean,
 ) {
     if (depth == 0) {
         val color = RgbColor((c0.r + c1.r + c2.r) / 3, (c0.g + c1.g + c2.g) / 3, (c0.b + c1.b + c2.b) / 3)
-        val p = KitePath.Builder().apply {
-            moveTo(x0, y0)
-            lineTo(x1, y1)
-            lineTo(x2, y2)
-            close()
-        }.build()
-        fillPath(p, ctm, color, evenOdd = false, alpha = alpha, blendMode = blendMode)
+        fillCell(doubleArrayOf(x0, x1, x2), doubleArrayOf(y0, y1, y2), color, ctm, alpha, blendMode, overlap)
         return
     }
     fun mid(a: RgbColor, b: RgbColor) = RgbColor((a.r + b.r) / 2, (a.g + b.g) / 2, (a.b + b.b) / 2)
     val mx01 = (x0 + x1) / 2; val my01 = (y0 + y1) / 2; val mc01 = mid(c0, c1)
     val mx12 = (x1 + x2) / 2; val my12 = (y1 + y2) / 2; val mc12 = mid(c1, c2)
     val mx20 = (x2 + x0) / 2; val my20 = (y2 + y0) / 2; val mc20 = mid(c2, c0)
-    subdivideAndFill(x0, y0, c0, mx01, my01, mc01, mx20, my20, mc20, depth - 1, ctm, alpha, blendMode)
-    subdivideAndFill(mx01, my01, mc01, x1, y1, c1, mx12, my12, mc12, depth - 1, ctm, alpha, blendMode)
-    subdivideAndFill(mx20, my20, mc20, mx12, my12, mc12, x2, y2, c2, depth - 1, ctm, alpha, blendMode)
-    subdivideAndFill(mx01, my01, mc01, mx12, my12, mc12, mx20, my20, mc20, depth - 1, ctm, alpha, blendMode)
+    subdivideAndFill(x0, y0, c0, mx01, my01, mc01, mx20, my20, mc20, depth - 1, ctm, alpha, blendMode, overlap)
+    subdivideAndFill(mx01, my01, mc01, x1, y1, c1, mx12, my12, mc12, depth - 1, ctm, alpha, blendMode, overlap)
+    subdivideAndFill(mx20, my20, mc20, mx12, my12, mc12, x2, y2, c2, depth - 1, ctm, alpha, blendMode, overlap)
+    subdivideAndFill(mx01, my01, mc01, mx12, my12, mc12, mx20, my20, mc20, depth - 1, ctm, alpha, blendMode, overlap)
+}
+
+/**
+ * True when neighbouring cells may overlap: only an opaque, normal paint shows
+ * no double compositing where they do, and only an invertible [ctm] has device
+ * pixels to measure.
+ */
+private fun canOverlap(ctm: KiteMatrix, alpha: Double, blendMode: KiteBlendMode): Boolean {
+    val det = ctm.a * ctm.d - ctm.b * ctm.c
+    return alpha >= 1.0 && blendMode == KiteBlendMode.Normal && det.isFinite() && det != 0.0
+}
+
+/**
+ * Fills the convex cell with corners [xs], [ys]. With [overlap], the cell first
+ * grows about its centre until its nearest edge sits half a device pixel further
+ * out, as the function-based cells do: two anti-aliased fills that only abut each
+ * cover part of their shared edge pixels, and the page shows through the seam (#126).
+ * No corner moves more than one and a half device pixels and no cell grows past
+ * twice its size, so a sliver or a cell smaller than a pixel cannot cover its
+ * neighbours. A cell does not know which of its edges are shared, so the outer
+ * edge of the mesh grows too.
+ */
+private fun KiteCanvas.fillCell(
+    xs: DoubleArray, ys: DoubleArray, color: RgbColor,
+    ctm: KiteMatrix, alpha: Double, blendMode: KiteBlendMode, overlap: Boolean,
+) {
+    val n = xs.size
+    var factor = 1.0
+    val cx = xs.average()
+    val cy = ys.average()
+    if (overlap) {
+        // How far the centre is from the nearest edge and from the farthest corner, in device pixels.
+        val dx = DoubleArray(n) { ctm.transformX(xs[it], ys[it]) }
+        val dy = DoubleArray(n) { ctm.transformY(xs[it], ys[it]) }
+        val mx = ctm.transformX(cx, cy)
+        val my = ctm.transformY(cx, cy)
+        var nearest = Double.MAX_VALUE
+        var farthest = 0.0
+        for (i in 0 until n) {
+            val j = (i + 1) % n
+            val ex = dx[j] - dx[i]
+            val ey = dy[j] - dy[i]
+            val length = kotlin.math.sqrt(ex * ex + ey * ey)
+            if (length > 0.0) nearest = kotlin.math.min(nearest, kotlin.math.abs(ex * (my - dy[i]) - ey * (mx - dx[i])) / length)
+            farthest = kotlin.math.max(farthest, kotlin.math.hypot(dx[i] - mx, dy[i] - my))
+        }
+        if (nearest > 0.0 && nearest.isFinite() && farthest.isFinite()) {
+            factor = 1.0 + minOf(0.5 / nearest, 1.5 / farthest, 1.0)
+        }
+    }
+    val p = KitePath.Builder().apply {
+        for (i in 0 until n) {
+            // An affine CTM keeps ratios, so scaling about the centre here scales about its image on the device.
+            val x = cx + (xs[i] - cx) * factor
+            val y = cy + (ys[i] - cy) * factor
+            if (i == 0) moveTo(x, y) else lineTo(x, y)
+        }
+        close()
+    }.build()
+    fillPath(p, ctm, color, evenOdd = false, alpha = alpha, blendMode = blendMode)
 }
