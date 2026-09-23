@@ -12,6 +12,7 @@ import io.github.yuroyami.kitepdf.core.withLock
 import io.github.yuroyami.kitepdf.core.PdfFormatException
 import io.github.yuroyami.kitepdf.core.KiteWrongPasswordException
 import io.github.yuroyami.kitepdf.core.kiteWarn
+import io.github.yuroyami.kitepdf.core.render.KiteImageData
 import io.github.yuroyami.kitepdf.crypto.Decryptor
 import io.github.yuroyami.kitepdf.crypto.StandardSecurityHandler
 import io.github.yuroyami.kitepdf.core.filters.FilterChain
@@ -189,29 +190,74 @@ public class PdfDocument private constructor(
     /**
      * Decoded image XObjects keyed by object number: a logo stamped 40
      * times or a background shared by every page decodes once per document.
-     * Fill-colour-dependent /ImageMask stencils never enter it. Call
-     * [dropDecodedImageCache] under memory pressure.
+     * Fill-colour-dependent /ImageMask stencils never enter it. It holds at
+     * most [imageCacheBudgetBytes], and its order runs from the image used
+     * least recently to the one used most recently.
      */
-    private val decodedImageCache = HashMap<Long, io.github.yuroyami.kitepdf.core.render.KiteImageData>()
+    private val decodedImageCache = LinkedHashMap<Long, KiteImageData>()
+
+    /** The bytes that the images in [decodedImageCache] hold. */
+    internal var decodedImageBytes = 0L
+        private set
+
+    /**
+     * The most bytes of decoded images that this document keeps, so that an image
+     * drawn again, on another page or at another zoom, does not decode again. The
+     * image used least recently leaves first, and an image larger than the whole
+     * budget is not kept. The default is [DEFAULT_IMAGE_CACHE_BUDGET_BYTES]; 0 keeps
+     * no image. Lower it for a small heap, and call [dropDecodedImageCache] when the
+     * app runs low on memory.
+     */
+    public var imageCacheBudgetBytes: Long = DEFAULT_IMAGE_CACHE_BUDGET_BYTES
+        set(value) {
+            lock.withLock {
+                field = value.coerceAtLeast(0L)
+                trimImageCache()
+            }
+        }
 
     /** Test hook: actual image decodes performed by the renderer. */
     internal var imageDecodeCount = 0
         private set
 
-    internal fun cachedImage(objectNumber: Long): io.github.yuroyami.kitepdf.core.render.KiteImageData? =
-        lock.withLock { decodedImageCache[objectNumber] }
+    internal fun cachedImage(objectNumber: Long): KiteImageData? = lock.withLock {
+        // Put the image back at the end, as the one used most recently.
+        decodedImageCache.remove(objectNumber)?.also { decodedImageCache[objectNumber] = it }
+    }
 
     /** First writer wins; racing decoders converge on one instance. */
-    internal fun cacheImage(objectNumber: Long, image: io.github.yuroyami.kitepdf.core.render.KiteImageData): io.github.yuroyami.kitepdf.core.render.KiteImageData =
-        lock.withLock { decodedImageCache.getOrPut(objectNumber) { image } }
+    internal fun cacheImage(objectNumber: Long, image: KiteImageData): KiteImageData = lock.withLock {
+        decodedImageCache[objectNumber]?.let { return@withLock it }
+        val bytes = image.retainedBytes()
+        if (bytes > imageCacheBudgetBytes) return@withLock image
+        decodedImageCache[objectNumber] = image
+        decodedImageBytes += bytes
+        trimImageCache()
+        image
+    }
+
+    /** Removes the images used least recently until the cache fits its budget. Call it with [lock] held. */
+    private fun trimImageCache() {
+        val images = decodedImageCache.values.iterator()
+        while (decodedImageBytes > imageCacheBudgetBytes && images.hasNext()) {
+            decodedImageBytes -= images.next().retainedBytes()
+            images.remove()
+        }
+    }
 
     internal fun countImageDecode() {
         lock.withLock { imageDecodeCount++ }
     }
 
-    /** Frees every cached decoded image (they re-decode lazily on next use). */
-    internal fun dropDecodedImageCache() {
-        lock.withLock { decodedImageCache.clear() }
+    /**
+     * Frees every decoded image that this document keeps, for example when the app
+     * runs low on memory. An image decodes again when it is next drawn.
+     */
+    public fun dropDecodedImageCache() {
+        lock.withLock {
+            decodedImageCache.clear()
+            decodedImageBytes = 0L
+        }
     }
 
     /**
@@ -680,6 +726,9 @@ public class PdfDocument private constructor(
          */
         private const val MAX_RESOLUTION_DEPTH = 256
 
+        /** The default of [imageCacheBudgetBytes]: 32 MB, a small share of a 192 MB Android heap. */
+        public const val DEFAULT_IMAGE_CACHE_BUDGET_BYTES: Long = 32L * 1024 * 1024
+
         public fun open(
             bytes: ByteArray,
             password: ByteArray = byteArrayOf(),
@@ -931,3 +980,7 @@ internal data class PageInheritable(
         rotate = (missingAsNull { node["Rotate"]?.resolve(refs) } as? PdfInt)?.value ?: rotate,
     )
 }
+
+/** The bytes that a decoded image holds: its samples, its encoded data and its soft mask. */
+internal fun KiteImageData.retainedBytes(): Long =
+    encodedBytes.size.toLong() + (pixelBytes?.size ?: 0) + (softMaskAlpha?.size ?: 0)
