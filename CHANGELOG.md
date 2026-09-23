@@ -244,6 +244,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   It threw on every call, because it cast Objective-C objects to Core Foundation
   pointers, which Kotlin/Native checks at run time. It also drew the page upside
   down (#288).
+- A soft mask reads its /BC backdrop colour and its /TR transfer function, as
+  ISO 32000-1, 11.6.5.2 requires. A luminosity mask with a white backdrop hid the
+  content outside its group instead of showing it, and an inverting transfer
+  function swapped the parts that show and the parts that hide. A mask dictionary
+  given as an indirect object was ignored. A new `KiteCanvas.applySoftMask`
+  overload takes the transfer function as a `KiteMaskTransfer` table. Compose and
+  Android apply it as the straight line closest to the table, which is exact for
+  an inverter (#68).
 
 ## [0.10.0] - 2026-09-13
 

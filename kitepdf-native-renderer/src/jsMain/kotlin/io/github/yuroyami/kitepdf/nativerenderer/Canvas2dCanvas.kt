@@ -9,6 +9,7 @@ import io.github.yuroyami.kitepdf.core.render.KiteBlendMode
 import io.github.yuroyami.kitepdf.core.render.KiteBitmapCache
 import io.github.yuroyami.kitepdf.core.render.KiteImageData
 import io.github.yuroyami.kitepdf.core.render.KiteImageSampling
+import io.github.yuroyami.kitepdf.core.render.KiteMaskTransfer
 import io.github.yuroyami.kitepdf.core.render.KiteMatrix
 import io.github.yuroyami.kitepdf.core.render.KiteCanvas
 import io.github.yuroyami.kitepdf.core.render.KitePath
@@ -434,15 +435,26 @@ public class Canvas2dCanvas(ctx: CanvasRenderingContext2D) : KiteCanvas {
         composite(layer, group.alpha, group.blendMode.toCanvas())
     }
 
+    override fun applySoftMask(
+        kind: SoftMask.Kind,
+        maskBBox: KiteRectangle, maskCtm: KiteMatrix,
+        render: () -> Unit,
+        renderMask: (KiteCanvas) -> Unit,
+    ) {
+        applySoftMask(kind, maskBBox, maskCtm, null, render, renderMask)
+    }
+
     /**
      * ISO 32000-1, 11.6.5.2: the content and the mask group each paint into a layer of
      * their own. The mask layer's alpha, or for a luminosity mask its luminosity over a
      * black backdrop, gates the content layer, which then composites onto the page. The
-     * mask group's colours never reach the page (#161).
+     * mask group's colours never reach the page (#161). The [transfer] table maps each
+     * mask value.
      */
     override fun applySoftMask(
         kind: SoftMask.Kind,
         maskBBox: KiteRectangle, maskCtm: KiteMatrix,
+        transfer: KiteMaskTransfer?,
         render: () -> Unit,
         renderMask: (KiteCanvas) -> Unit,
     ) {
@@ -465,7 +477,8 @@ public class Canvas2dCanvas(ctx: CanvasRenderingContext2D) : KiteCanvas {
             }
             renderMask(this)
         }
-        if (kind == SoftMask.Kind.Luminosity) luminosityToAlpha(mask.canvas)
+        val luminosity = kind == SoftMask.Kind.Luminosity
+        if (luminosity || transfer != null) maskToAlpha(mask.canvas, luminosity, transfer)
         val contentCtx = content.canvas.getContext("2d") as CanvasRenderingContext2D
         contentCtx.setTransform(1.0, 0.0, 0.0, 1.0, 0.0, 0.0)
         contentCtx.globalCompositeOperation = "destination-in"
@@ -550,8 +563,12 @@ public class Canvas2dCanvas(ctx: CanvasRenderingContext2D) : KiteCanvas {
         }
     }
 
-    /** Replaces the alpha of every pixel of [canvas] with its luminosity 0.30 R + 0.59 G + 0.11 B. */
-    private fun luminosityToAlpha(canvas: HTMLCanvasElement) {
+    /**
+     * Replaces the alpha of every pixel of [canvas] with its mask value: the luminosity
+     * 0.30 R + 0.59 G + 0.11 B when [luminosity] is true, or else the alpha, then mapped
+     * through [transfer].
+     */
+    private fun maskToAlpha(canvas: HTMLCanvasElement, luminosity: Boolean, transfer: KiteMaskTransfer?) {
         if (canvas.width == 0 || canvas.height == 0) return
         val maskCtx = canvas.getContext("2d") as CanvasRenderingContext2D
         val image = maskCtx.getImageData(0.0, 0.0, canvas.width.toDouble(), canvas.height.toDouble())
@@ -559,10 +576,12 @@ public class Canvas2dCanvas(ctx: CanvasRenderingContext2D) : KiteCanvas {
         val length = canvas.width * canvas.height * 4
         var i = 0
         while (i < length) {
-            val r = data[i] as Int
-            val g = data[i + 1] as Int
-            val b = data[i + 2] as Int
-            data[i + 3] = (r * 77 + g * 150 + b * 29) ushr 8
+            val level = if (luminosity) {
+                ((data[i] as Int) * 77 + (data[i + 1] as Int) * 150 + (data[i + 2] as Int) * 29) ushr 8
+            } else {
+                data[i + 3] as Int
+            }
+            data[i + 3] = transfer?.get(level) ?: level
             i += 4
         }
         maskCtx.putImageData(image, 0.0, 0.0)

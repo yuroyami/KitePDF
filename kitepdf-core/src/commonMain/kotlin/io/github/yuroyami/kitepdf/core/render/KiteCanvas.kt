@@ -214,6 +214,27 @@ public interface KiteCanvas {
     ) {
         render()
     }
+
+    /**
+     * Applies a soft mask whose values pass through [transfer] before they gate the
+     * content (ISO 32000-1, 11.6.5.2, Table 144, /TR). A null [transfer] is the identity.
+     * The transfer applies to every mask value, also where the group paints nothing.
+     *
+     * The default implementation ignores [transfer] and calls the [applySoftMask]
+     * above, so a canvas written before the transfer function still masks. The
+     * renderer calls this overload only for a mask with a transfer function. A
+     * wrapper that delegates with `by` must override both overloads: Kotlin sends
+     * an overload that the wrapper does not override straight to the wrapped canvas.
+     */
+    public fun applySoftMask(
+        kind: SoftMask.Kind,
+        maskBBox: KiteRectangle, maskCtm: KiteMatrix,
+        transfer: KiteMaskTransfer?,
+        render: () -> Unit,
+        renderMask: (KiteCanvas) -> Unit,
+    ) {
+        applySoftMask(kind, maskBBox, maskCtm, render, renderMask)
+    }
 }
 
 /** The unit square that an image fills in its own space (ISO 32000-1, 8.9.4). */

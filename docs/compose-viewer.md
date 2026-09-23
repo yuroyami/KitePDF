@@ -321,7 +321,9 @@ outside this hook. The wrapper receives the same coordinates and matrices as
 
 Some `KiteCanvas` operations have two overloads. `drawImage` has one with a
 blend mode, which the renderer calls for an image that does not paint with
-the Normal blend mode. To customize such an operation, override both overloads.
+the Normal blend mode. `applySoftMask` has one with a transfer function, which
+the renderer calls for a soft mask that has one. To customize such an
+operation, override both overloads.
 With `by inner`, Kotlin sends an overload that the wrapper does not override
 straight to `inner`.
 

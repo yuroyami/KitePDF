@@ -10,6 +10,7 @@ import io.github.yuroyami.kitepdf.core.render.KiteMatrix
 import io.github.yuroyami.kitepdf.core.render.KiteCanvas
 import io.github.yuroyami.kitepdf.core.render.KiteBitmapCache
 import io.github.yuroyami.kitepdf.core.render.KiteImageSampling
+import io.github.yuroyami.kitepdf.core.render.KiteMaskTransfer
 import io.github.yuroyami.kitepdf.core.render.KitePath
 import io.github.yuroyami.kitepdf.core.render.KiteShading
 import io.github.yuroyami.kitepdf.core.render.RgbColor
@@ -554,6 +555,16 @@ public class SkiaCanvas(private val canvas: SkCanvas) : KiteCanvas {
         render: () -> Unit,
         renderMask: (KiteCanvas) -> Unit,
     ) {
+        applySoftMask(kind, maskBBox, maskCtm, null, render, renderMask)
+    }
+
+    override fun applySoftMask(
+        kind: SoftMask.Kind,
+        maskBBox: KiteRectangle, maskCtm: KiteMatrix,
+        transfer: KiteMaskTransfer?,
+        render: () -> Unit,
+        renderMask: (KiteCanvas) -> Unit,
+    ) {
         // Outer layer captures the content. Inner layer paints the mask
         // group on top with DstIn so the mask's alpha clips the content.
         canvas.saveLayer(null, Paint())
@@ -568,10 +579,14 @@ public class SkiaCanvas(private val canvas: SkCanvas) : KiteCanvas {
             // luminance, so unpainted areas (luminance 0) mask fully out. We
             // realise that with the LUMA colour filter, which maps each pixel's
             // luminance into its alpha, applied as the layer's restore paint.
+            // The /TR table then maps the alpha, also where the group paints nothing.
+            val table = transfer?.let { org.jetbrains.skia.ColorFilter.makeTableARGB(it.toByteArray(), null, null, null) }
             val maskPaint = Paint().apply {
                 blendMode = SkiaBlendMode.DST_IN
-                if (kind == SoftMask.Kind.Luminosity) {
-                    colorFilter = org.jetbrains.skia.ColorFilter.luma
+                colorFilter = when {
+                    kind == SoftMask.Kind.Alpha -> table
+                    table != null -> org.jetbrains.skia.ColorFilter.makeComposed(table, org.jetbrains.skia.ColorFilter.luma)
+                    else -> org.jetbrains.skia.ColorFilter.luma
                 }
             }
             canvas.saveLayer(null, maskPaint)

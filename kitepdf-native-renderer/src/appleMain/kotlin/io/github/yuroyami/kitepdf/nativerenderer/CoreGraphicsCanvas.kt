@@ -8,6 +8,7 @@ import io.github.yuroyami.kitepdf.core.render.KiteBitmapCache
 import io.github.yuroyami.kitepdf.core.render.KiteBlendMode
 import io.github.yuroyami.kitepdf.core.render.KiteImageData
 import io.github.yuroyami.kitepdf.core.render.KiteImageSampling
+import io.github.yuroyami.kitepdf.core.render.KiteMaskTransfer
 import io.github.yuroyami.kitepdf.core.render.KiteMatrix
 import io.github.yuroyami.kitepdf.core.render.KiteCanvas
 import io.github.yuroyami.kitepdf.core.render.KitePath
@@ -559,15 +560,26 @@ public class CoreGraphicsCanvas(private val ctx: CGContextRef) : KiteCanvas {
         }
     }
 
+    override fun applySoftMask(
+        kind: SoftMask.Kind,
+        maskBBox: KiteRectangle, maskCtm: KiteMatrix,
+        render: () -> Unit,
+        renderMask: (KiteCanvas) -> Unit,
+    ) {
+        applySoftMask(kind, maskBBox, maskCtm, null, render, renderMask)
+    }
+
     /**
      * ISO 32000-1, 11.6.5.2: the mask group draws into a bitmap of its own. Its alpha, or
      * its luminosity over a black backdrop, becomes a grey mask that the content paints
      * through with CGContextClipToMask. So the mask group's colours never reach the page,
-     * and each paint keeps its own blend mode against the page (#79).
+     * and each paint keeps its own blend mode against the page (#79). The [transfer]
+     * table maps each value of the grey mask.
      */
     override fun applySoftMask(
         kind: SoftMask.Kind,
         maskBBox: KiteRectangle, maskCtm: KiteMatrix,
+        transfer: KiteMaskTransfer?,
         render: () -> Unit,
         renderMask: (KiteCanvas) -> Unit,
     ) {
@@ -593,6 +605,9 @@ public class CoreGraphicsCanvas(private val ctx: CGContextRef) : KiteCanvas {
         val w = maxOf(1, ceil(width * scale).toInt())
         val h = maxOf(1, ceil(height * scale).toInt())
         val values = maskValues(kind, w, h, x0, y0, scale, toDevice, renderMask)
+        if (values != null && transfer != null) {
+            for (i in values.indices) values[i] = transfer[values[i].toInt() and 255].toByte()
+        }
         val mask = values?.let { greyImage(it, w, h) }
         if (mask == null) {
             render()

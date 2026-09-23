@@ -22,6 +22,7 @@ import io.github.yuroyami.kitepdf.core.render.KiteBlendMode
 import io.github.yuroyami.kitepdf.core.render.KiteBitmapCache
 import io.github.yuroyami.kitepdf.core.render.KiteImageData
 import io.github.yuroyami.kitepdf.core.render.KiteImageSampling
+import io.github.yuroyami.kitepdf.core.render.KiteMaskTransfer
 import io.github.yuroyami.kitepdf.core.render.imageSampling
 import io.github.yuroyami.kitepdf.core.render.shrinkArgb
 import io.github.yuroyami.kitepdf.core.render.shrinkRgba
@@ -488,6 +489,16 @@ public class AndroidNativeCanvas(private val canvas: AndroidCanvas) : KiteCanvas
         render: () -> Unit,
         renderMask: (KiteCanvas) -> Unit,
     ) {
+        applySoftMask(kind, maskBBox, maskCtm, null, render, renderMask)
+    }
+
+    override fun applySoftMask(
+        kind: SoftMask.Kind,
+        maskBBox: KiteRectangle, maskCtm: KiteMatrix,
+        transfer: KiteMaskTransfer?,
+        render: () -> Unit,
+        renderMask: (KiteCanvas) -> Unit,
+    ) {
         canvas.saveLayer(null, Paint())
         openLayers++
         try {
@@ -497,7 +508,7 @@ public class AndroidNativeCanvas(private val canvas: AndroidCanvas) : KiteCanvas
                 blendMode = AndroidBlendMode.DST_IN
                 // ISO 32000-1, 11.5.3: a luminosity mask gates by the group's brightness,
                 // so the layer's luminosity becomes its alpha when it composites (#79).
-                if (luminosity) colorFilter = ColorMatrixColorFilter(LUMINOSITY_TO_ALPHA)
+                if (luminosity || transfer != null) colorFilter = ColorMatrixColorFilter(maskToAlpha(luminosity, transfer))
             }
             canvas.saveLayer(null, maskPaint)
             openLayers++
@@ -593,10 +604,27 @@ public class AndroidNativeCanvas(private val canvas: AndroidCanvas) : KiteCanvas
     }
 }
 
-/** A colour matrix that keeps no colour and turns the luminosity 0.30 R + 0.59 G + 0.11 B into alpha. */
-private val LUMINOSITY_TO_ALPHA = floatArrayOf(
-    0f, 0f, 0f, 0f, 0f,
-    0f, 0f, 0f, 0f, 0f,
-    0f, 0f, 0f, 0f, 0f,
-    0.30f, 0.59f, 0.11f, 0f, 0f,
-)
+/**
+ * A colour matrix that turns the mask layer into alpha: the luminosity 0.30 R + 0.59 G + 0.11 B
+ * when [luminosity] is true, or else the alpha itself. A matrix can only scale and offset, so
+ * [transfer] applies as the straight line closest to its table. The offset is in levels from 0 to 255.
+ */
+private fun maskToAlpha(luminosity: Boolean, transfer: KiteMaskTransfer?): FloatArray {
+    val slope = (transfer?.slope ?: 1.0).toFloat()
+    val offset = ((transfer?.offset ?: 0.0) * 255).toFloat()
+    return if (luminosity) {
+        floatArrayOf(
+            0f, 0f, 0f, 0f, 0f,
+            0f, 0f, 0f, 0f, 0f,
+            0f, 0f, 0f, 0f, 0f,
+            0.30f * slope, 0.59f * slope, 0.11f * slope, 0f, offset,
+        )
+    } else {
+        floatArrayOf(
+            1f, 0f, 0f, 0f, 0f,
+            0f, 1f, 0f, 0f, 0f,
+            0f, 0f, 1f, 0f, 0f,
+            0f, 0f, 0f, slope, offset,
+        )
+    }
+}

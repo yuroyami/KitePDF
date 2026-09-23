@@ -136,4 +136,6 @@ internal class ThemedCanvas(
 
     override fun applySoftMask(kind: SoftMask.Kind, maskBBox: KiteRectangle, maskCtm: KiteMatrix, render: () -> Unit, renderMask: (KiteCanvas) -> Unit) =
         inner.applySoftMask(kind, maskBBox, maskCtm, render, renderMask)
+    override fun applySoftMask(kind: SoftMask.Kind, maskBBox: KiteRectangle, maskCtm: KiteMatrix, transfer: KiteMaskTransfer?, render: () -> Unit, renderMask: (KiteCanvas) -> Unit) =
+        inner.applySoftMask(kind, maskBBox, maskCtm, transfer, render, renderMask)
 }

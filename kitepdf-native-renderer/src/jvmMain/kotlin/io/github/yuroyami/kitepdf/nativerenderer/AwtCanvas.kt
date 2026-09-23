@@ -10,6 +10,7 @@ import io.github.yuroyami.kitepdf.core.render.KiteBitmapCache
 import io.github.yuroyami.kitepdf.core.render.KiteBlendMode
 import io.github.yuroyami.kitepdf.core.render.KiteImageData
 import io.github.yuroyami.kitepdf.core.render.KiteImageSampling
+import io.github.yuroyami.kitepdf.core.render.KiteMaskTransfer
 import io.github.yuroyami.kitepdf.core.render.KiteMatrix
 import io.github.yuroyami.kitepdf.core.render.KiteCanvas
 import io.github.yuroyami.kitepdf.core.render.KitePath
@@ -683,6 +684,15 @@ public class AwtCanvas(private var g: Graphics2D) : KiteCanvas {
         }
     }
 
+    override fun applySoftMask(
+        kind: SoftMask.Kind,
+        maskBBox: KiteRectangle, maskCtm: KiteMatrix,
+        render: () -> Unit,
+        renderMask: (KiteCanvas) -> Unit,
+    ) {
+        applySoftMask(kind, maskBBox, maskCtm, null, render, renderMask)
+    }
+
     /**
      * Soft mask (ISO 32000-1, 11.6.5): the content paints into its own transparent
      * layer, the mask scales that layer's alpha, and the layer then composites onto
@@ -694,11 +704,12 @@ public class AwtCanvas(private var g: Graphics2D) : KiteCanvas {
      * pages 3 to 44 times slower (#256). When every paint in the content used one
      * blend mode, the layer composites with that mode, so a masked Multiply shadow
      * still multiplies. Content that mixes blend modes renders again on the exact,
-     * slower backdrop path.
+     * slower backdrop path. The [transfer] table maps each mask value once, on both paths.
      */
     override fun applySoftMask(
         kind: SoftMask.Kind,
         maskBBox: KiteRectangle, maskCtm: KiteMatrix,
+        transfer: KiteMaskTransfer?,
         render: () -> Unit,
         renderMask: (KiteCanvas) -> Unit,
     ) {
@@ -776,7 +787,7 @@ public class AwtCanvas(private var g: Graphics2D) : KiteCanvas {
             // Paints with different blend modes each need the real backdrop, which
             // one layer composite cannot give them (#80). This rare case renders again.
             java.util.Arrays.fill(layerPixels, 0)
-            maskOverBackdrop(parent, bounds, kind, layer, mask, ::prepare, render, renderMask)
+            maskOverBackdrop(parent, bounds, kind, transfer, layer, mask, ::prepare, render, renderMask)
             return
         }
 
@@ -803,9 +814,10 @@ public class AwtCanvas(private var g: Graphics2D) : KiteCanvas {
                 val alpha = p ushr 24
                 if (alpha == 0) continue
                 val m = maskPixels[i]
-                val coverage = if (luminosity) {
+                val level = if (luminosity) {
                     (((m ushr 16) and 255) * 77 + ((m ushr 8) and 255) * 150 + (m and 255) * 29) ushr 8
                 } else m ushr 24
+                val coverage = transfer?.get(level) ?: level
                 if (coverage == 255) continue
                 layerPixels[i] = (((alpha * coverage + 127) / 255) shl 24) or (p and 0xFFFFFF)
             }
@@ -861,7 +873,7 @@ public class AwtCanvas(private var g: Graphics2D) : KiteCanvas {
      * then interpolates the original and rendered colours once per pixel.
      */
     private fun maskOverBackdrop(
-        parent: Graphics2D, bounds: java.awt.Rectangle, kind: SoftMask.Kind,
+        parent: Graphics2D, bounds: java.awt.Rectangle, kind: SoftMask.Kind, transfer: KiteMaskTransfer?,
         content: BufferedImage, mask: BufferedImage, prepare: (Graphics2D) -> Unit,
         render: () -> Unit, renderMask: (KiteCanvas) -> Unit,
     ) {
@@ -898,14 +910,16 @@ public class AwtCanvas(private var g: Graphics2D) : KiteCanvas {
         } finally {
             maskGraphics.dispose()
         }
-        if (kind == SoftMask.Kind.Luminosity) {
+        if (kind == SoftMask.Kind.Luminosity || transfer != null) {
             // Opaque black backdrop means unpainted pixels have zero luminance.
+            val luminosity = kind == SoftMask.Kind.Luminosity
             val pixels = (mask.raster.dataBuffer as DataBufferInt).data
             for (i in pixels.indices) {
                 val p = pixels[i]
-                val luminance = (((p ushr 16) and 255) * 77 +
-                    ((p ushr 8) and 255) * 150 + (p and 255) * 29) ushr 8
-                pixels[i] = luminance shl 24
+                val level = if (luminosity) {
+                    (((p ushr 16) and 255) * 77 + ((p ushr 8) and 255) * 150 + (p and 255) * 29) ushr 8
+                } else p ushr 24
+                pixels[i] = (transfer?.get(level) ?: level) shl 24
             }
         }
         transferMaskBackdrop(parent, bounds, content, mask)

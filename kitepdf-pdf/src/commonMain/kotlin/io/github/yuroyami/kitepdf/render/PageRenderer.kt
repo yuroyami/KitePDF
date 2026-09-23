@@ -13,6 +13,8 @@ import io.github.yuroyami.kitepdf.core.render.KitePath
 import io.github.yuroyami.kitepdf.core.render.KitePattern
 import io.github.yuroyami.kitepdf.core.render.KiteShading
 import io.github.yuroyami.kitepdf.core.render.KiteMatrix
+import io.github.yuroyami.kitepdf.core.render.KiteFunction
+import io.github.yuroyami.kitepdf.core.render.KiteMaskTransfer
 import io.github.yuroyami.kitepdf.core.render.RgbColor
 import io.github.yuroyami.kitepdf.core.render.SoftMask
 import io.github.yuroyami.kitepdf.core.render.TextState
@@ -111,6 +113,9 @@ public class PageRenderer(
         val properties: Map<String, PdfObject>,
     )
     private val formResourceCache = HashMap<Long, FormResources>()
+
+    /** The table of each soft mask transfer function, built once per function. */
+    private val maskTransfers = HashMap<KiteFunction, KiteMaskTransfer>()
 
     // ─── Optional content (layers) ───────────────────────────────────────────
     // Marked-content sections introduced by `BDC /OC <ocg>` are suppressed when
@@ -1628,29 +1633,64 @@ public class PageRenderer(
         // later cm moves the content, never the mask (ISO 32000-1, 11.6.5.2, #67).
         val baseCtm = state.softMaskCtm ?: state.ctm
         val maskCtm = baseCtm.concat(maskMatrix)
+        // /TR maps each value of the group to the mask value, and /BC is the backdrop
+        // that a luminosity group composites over (ISO 32000-1, 11.6.5.2, Table 144, #68).
+        val transfer = mask.transfer?.let { f ->
+            maskTransfers.getOrPut(f) { KiteMaskTransfer.of { f.evaluate(doubleArrayOf(it))[0] } }
+        }
+        val backdrop = if (mask.kind == SoftMask.Kind.Luminosity) maskBackdrop(mask) else null
+        // Where the group paints nothing, the mask value is that of the backdrop: black
+        // for a luminosity mask, transparent for an alpha mask, then through /TR.
+        val backdropLevel = kotlin.math.round((backdrop?.let { 0.30 * it.r + 0.59 * it.g + 0.11 * it.b } ?: 0.0) * 255)
+            .toInt().let { transfer?.get(it) ?: it }
         // The box may be an indirect array (ISO 32000-1, 7.3.10). A box that
         // cannot be read must not cut the content away: it covers the page (#255).
-        val maskBBox = missingAsNull { mask.group.dict.getArray("BBox", resolver) }
+        // A backdrop that lets the content through also covers the page.
+        val groupBox = missingAsNull { mask.group.dict.getArray("BBox", resolver) }
             ?.takeIf { it.size >= 4 }?.let { arr ->
                 io.github.yuroyami.kitepdf.core.KiteRectangle(
                     arr.getOrNull(0).toDouble(), arr.getOrNull(1).toDouble(),
                     arr.getOrNull(2).toDouble(), arr.getOrNull(3).toDouble(),
                 )
-            } ?: pageBoxIn(maskCtm)
-        canvas.applySoftMask(
-            kind = mask.kind,
-            maskBBox = maskBBox,
-            maskCtm = maskCtm,
-            render = paint,
-            renderMask = { childCanvas ->
-                // Recurse into the same renderer pipeline but onto whatever
-                // canvas the backend handed us. The mask group's content
-                // stream is rendered with a fresh graphics state. The spec
-                // says soft masks render onto a transparent backdrop with
-                // their own state stack (§11.6.5).
-                renderMaskGroup(mask.group, childCanvas, baseCtm)
-            },
-        )
+            }
+        val maskBBox = if (groupBox != null && (backdropLevel == 0 || pageCropBox == null)) groupBox else pageBoxIn(maskCtm)
+        val renderMask = { childCanvas: KiteCanvas ->
+            // A backend starts a luminosity mask on black, so a backdrop of another
+            // colour paints over the whole page before the group does. Some backends
+            // mask past the mask box, and there the backdrop must show too.
+            if (backdrop != null) {
+                val b = if (pageCropBox != null) pageBoxIn(maskCtm) else maskBBox
+                val box = KitePath.Builder().apply { rectangle(b.left, b.bottom, b.right - b.left, b.top - b.bottom) }.build()
+                childCanvas.fillPath(box, maskCtm, backdrop, evenOdd = false, alpha = 1.0, blendMode = KiteBlendMode.Normal)
+            }
+            // Recurse into the same renderer pipeline but onto whatever
+            // canvas the backend handed us. The mask group's content
+            // stream is rendered with a fresh graphics state. The spec
+            // says soft masks render onto a transparent backdrop with
+            // their own state stack (§11.6.5).
+            renderMaskGroup(mask.group, childCanvas, baseCtm)
+        }
+        // Without a transfer function, the overload that every canvas and wrapper knows.
+        // A wrapper that delegates with `by` sends the other overload past itself.
+        if (transfer == null) {
+            canvas.applySoftMask(mask.kind, maskBBox, maskCtm, paint, renderMask)
+        } else {
+            canvas.applySoftMask(mask.kind, maskBBox, maskCtm, transfer, paint, renderMask)
+        }
+    }
+
+    /** The /BC colour of a luminosity mask in RGB, or null when it is black or absent. */
+    private fun maskBackdrop(mask: SoftMask.MaskGroup): RgbColor? {
+        val components = mask.backdrop ?: return null
+        // The components are in the colour space of the group (ISO 32000-1, Table 144).
+        val cs = missingAsNull { mask.group.dict.getDict("Group", resolver) }?.get("CS")
+        val space = cs?.let { missingAsNull { KiteColorSpace.resolve(it, resolver) } } ?: when (components.size) {
+            3 -> KiteColorSpace.DeviceRGB
+            4 -> KiteColorSpace.DeviceCMYK
+            else -> KiteColorSpace.DeviceGray
+        }
+        val rgb = space.toRgb(DoubleArray(space.componentCount) { components.getOrElse(it) { 0.0 } })
+        return rgb.takeUnless { it.r <= 0.0 && it.g <= 0.0 && it.b <= 0.0 }
     }
 
     /**
