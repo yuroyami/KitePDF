@@ -2,6 +2,7 @@ package io.github.yuroyami.kitepdf.nativerenderer.difftest
 
 import io.github.yuroyami.kitepdf.difftest.ImageDiff
 import io.github.yuroyami.kitepdf.difftest.MuPdfOracle
+import io.github.yuroyami.kitepdf.difftest.MutoolAcceptance
 import io.github.yuroyami.kitepdf.difftest.PdfRenderOracle
 
 import io.github.yuroyami.kitepdf.KitePDF
@@ -89,7 +90,7 @@ class CffEmbedOracleTest {
 
         val pdf = PdfBuilder().page(300.0, 200.0) { text(EmbeddedFont.load(bytes), 48.0, 40.0, 60.0, "H") }.build()
         val file = File.createTempFile("kite-cff-2048-", ".pdf").apply { deleteOnExit(); writeBytes(pdf) }
-        val mutool = inkRows(MuPdfOracle.render(file, 1, 72)!!)
+        val mutool = inkRows(MutoolAcceptance.render(file, 1, 72))
         val kite = inkRows(AwtPdfRasterizer.renderToImage(KitePDF.open(pdf).pages[0]))
         println("H ink height at 48 pt: expected=$expected mutool=${mutool.count()} kite=${kite.count()}")
         assertEquals(expected, mutool.count().toDouble(), 2.0, "mutool height of the embedded H")
@@ -139,21 +140,20 @@ class CffEmbedOracleTest {
         val subFile = File.createTempFile("kite-cff-sub-", ".pdf").apply { writeBytes(subsetPdf) }
         val fullFile = File.createTempFile("kite-cff-full-", ".pdf").apply { writeBytes(fullPdf) }
         try {
-            val muSub = MuPdfOracle.render(subFile, 1, 144)
-            val muFull = MuPdfOracle.render(fullFile, 1, 144)
+            val muSub = MutoolAcceptance.render(subFile, 1, 144)
+            val muFull = MutoolAcceptance.render(fullFile, 1, 144)
             val kiteSub = AwtPdfRasterizer.renderToImage(KitePDF.open(subsetPdf).pages[0], scale = 2.0)
-            assertTrue(muSub != null && muFull != null, "mutool failed to render the CFF embed")
 
             // Ink present. The glyphs actually drew (not blank / not .notdef-empty).
             assertTrue(ImageDiff.nonBackgroundPixels(kiteSub) > 1000, "KitePDF render is blank")
-            assertTrue(ImageDiff.nonBackgroundPixels(muSub!!) > 1000, "mutool render is blank")
+            assertTrue(ImageDiff.nonBackgroundPixels(muSub) > 1000, "mutool render is blank")
 
             // Cross-engine agreement: two independent CFF engines must concur.
             val crossMae = ImageDiff.compare(kiteSub, muSub).meanAbsError
             assertTrue(crossMae < 0.06, "KitePDF vs mutool disagree on the CFF embed (MAE=$crossMae)")
 
             // Subset renders identically to the all-glyph embed.
-            val subVsFull = ImageDiff.compare(muSub, muFull!!).meanAbsError
+            val subVsFull = ImageDiff.compare(muSub, muFull).meanAbsError
             assertTrue(subVsFull < 0.02, "subset differs from full embed (MAE=$subVsFull)")
         } finally {
             subFile.delete()

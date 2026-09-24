@@ -2,6 +2,7 @@ package io.github.yuroyami.kitepdf.nativerenderer.difftest
 
 import io.github.yuroyami.kitepdf.difftest.ImageDiff
 import io.github.yuroyami.kitepdf.difftest.MuPdfOracle
+import io.github.yuroyami.kitepdf.difftest.MutoolAcceptance
 import io.github.yuroyami.kitepdf.difftest.PdfRenderOracle
 
 import io.github.yuroyami.kitepdf.PdfDocument
@@ -9,11 +10,9 @@ import io.github.yuroyami.kitepdf.PdfFormField
 import io.github.yuroyami.kitepdf.writer.PdfBuilder
 import io.github.yuroyami.kitepdf.writer.PdfSigner
 import io.github.yuroyami.kitepdf.writer.StandardFont
-import java.io.ByteArrayOutputStream
 import java.io.File
 import java.security.KeyPairGenerator
 import java.security.Signature
-import java.util.concurrent.TimeUnit
 import org.junit.Assume.assumeTrue
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -23,8 +22,9 @@ import kotlin.test.assertTrue
 /**
  * Oracle half: a document signed over the scaffold's ByteRange with a
  * throwaway JVM keypair (java.security lives in THIS test, not the library)
- * must open and render in mutool and reopen in KitePDF with the field
- * present. External signature validators are a manual step.
+ * must open and render in mutool without a warning or an error, and reopen
+ * in KitePDF with the field present. External signature validators are a
+ * manual step.
  */
 class SignedPdfOracleTest {
 
@@ -58,12 +58,8 @@ class SignedPdfOracleTest {
             writeBytes(signed)
         }
         val png = File.createTempFile("kite-signed", ".png").apply { deleteOnExit() }
-        val proc = ProcessBuilder(tool.absolutePath, "draw", "-o", png.absolutePath, "-r", "72", pdf.absolutePath, "1")
-            .redirectErrorStream(true).start()
-        val out = ByteArrayOutputStream()
-        proc.inputStream.copyTo(out)
-        assertTrue(proc.waitFor(60, TimeUnit.SECONDS), "mutool timed out")
-        assertEquals(0, proc.exitValue(), "mutool draw failed: $out")
+        val draw = MutoolAcceptance.run(tool, "draw", "-o", png.absolutePath, "-r", "72", pdf.absolutePath, "1")
+        MutoolAcceptance.assertAccepted(draw, "the signed PDF")
         assertTrue(png.length() > 0, "rendered PNG is empty")
 
         val re = PdfDocument.open(signed)

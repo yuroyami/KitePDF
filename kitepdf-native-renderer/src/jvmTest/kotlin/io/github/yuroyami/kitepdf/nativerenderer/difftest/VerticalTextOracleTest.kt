@@ -2,6 +2,7 @@ package io.github.yuroyami.kitepdf.nativerenderer.difftest
 
 import io.github.yuroyami.kitepdf.difftest.ImageDiff
 import io.github.yuroyami.kitepdf.difftest.MuPdfOracle
+import io.github.yuroyami.kitepdf.difftest.MutoolAcceptance
 
 import io.github.yuroyami.kitepdf.KitePDF
 import io.github.yuroyami.kitepdf.nativerenderer.AwtPdfRasterizer
@@ -12,7 +13,6 @@ import java.io.File
 import org.junit.Assume.assumeTrue
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 /**
@@ -70,8 +70,7 @@ class VerticalTextOracleTest {
             deleteOnExit()
             writeBytes(bytes)
         }
-        val reference = MuPdfOracle.render(pdf, page = 1, dpi = 72)
-        assertNotNull(reference, "mutool rendered the fixture")
+        val reference = MutoolAcceptance.render(pdf, page = 1, dpi = 72)
 
         val ours = inkBox(kite)
         val theirs = inkBox(reference)

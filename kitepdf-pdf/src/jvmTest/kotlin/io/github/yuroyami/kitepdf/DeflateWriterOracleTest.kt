@@ -2,6 +2,7 @@ package io.github.yuroyami.kitepdf
 
 import io.github.yuroyami.kitepdf.core.compression.Deflate
 import io.github.yuroyami.kitepdf.core.compression.Zlib
+import io.github.yuroyami.kitepdf.difftest.MutoolAcceptance
 import io.github.yuroyami.kitepdf.font.orSkip
 import java.io.File
 import kotlin.test.Test
@@ -103,10 +104,8 @@ class DeflateWriterOracleTest {
             writeBytes(pdf)
         }
         val png = File.createTempFile("kitepdf-t11", ".png").apply { deleteOnExit() }
-        val p = ProcessBuilder(mutool, "draw", "-o", png.absolutePath, tmp.absolutePath)
-            .redirectErrorStream(true)
-            .start()
-        val outText = p.inputStream.readBytes().decodeToString()
-        assertEquals(0, p.waitFor(), "mutool draw accepts the pure-encoded PDF: $outText")
+        // A bad deflate stream still exits with 0: mutool only warns and draws what it decoded.
+        val draw = MutoolAcceptance.run(File(mutool), "draw", "-o", png.absolutePath, tmp.absolutePath)
+        MutoolAcceptance.assertAccepted(draw, "the PDF with a pure-encoded stream")
     }
 }

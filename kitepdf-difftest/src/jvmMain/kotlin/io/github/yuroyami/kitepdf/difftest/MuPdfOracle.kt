@@ -33,7 +33,8 @@ public interface PdfRenderOracle {
 public object MuPdfOracle : PdfRenderOracle {
 
     sealed interface RenderResult {
-        data class Success(val image: BufferedImage) : RenderResult
+        /** [output] holds the first 4 KB that mutool printed, line by line, warnings included. */
+        data class Success(val image: BufferedImage, val output: String = "") : RenderResult
 
         data class Failure(
             val reason: String,
@@ -139,7 +140,8 @@ public object MuPdfOracle : PdfRenderOracle {
                 )
             } else {
                 val exit = process.exitValue()
-                val output = readDiagnostic(logFile)
+                val rawOutput = readOutput(logFile)
+                val output = normalizeDiagnostic(rawOutput)
                 when {
                     exit != 0 -> RenderResult.Failure(
                         reason = "mutool draw failed",
@@ -155,7 +157,7 @@ public object MuPdfOracle : PdfRenderOracle {
 
                     else -> {
                         val image = ImageIO.read(outFile)
-                        if (image != null) RenderResult.Success(image)
+                        if (image != null) RenderResult.Success(image, rawOutput)
                         else RenderResult.Failure(
                             reason = "mutool draw produced an unreadable PNG",
                             exitCode = exit,
