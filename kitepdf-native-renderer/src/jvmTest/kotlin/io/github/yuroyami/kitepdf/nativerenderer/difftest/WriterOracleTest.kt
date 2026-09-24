@@ -2,6 +2,7 @@ package io.github.yuroyami.kitepdf.nativerenderer.difftest
 
 import io.github.yuroyami.kitepdf.difftest.ImageDiff
 import io.github.yuroyami.kitepdf.difftest.MuPdfOracle
+import io.github.yuroyami.kitepdf.difftest.MutoolAcceptance
 import io.github.yuroyami.kitepdf.difftest.PdfRenderOracle
 
 import io.github.yuroyami.kitepdf.KitePDF
@@ -12,7 +13,6 @@ import io.github.yuroyami.kitepdf.writer.PdfStreams
 import io.github.yuroyami.kitepdf.writer.StandardFont
 import java.io.ByteArrayOutputStream
 import java.io.File
-import java.util.concurrent.TimeUnit
 import org.junit.Assume.assumeTrue
 import kotlin.test.Test
 import kotlin.test.assertContains
@@ -29,6 +29,9 @@ import kotlin.test.assertTrue
  * (a) renders the page, which exercises the whole resolve chain (xref → /Prev →
  * Root → Pages → Page → Contents/Font) through the appended section, and
  * (b) reports our appended trailer (with /Prev and the edited /Info).
+ *
+ * Every mutool run must also finish without a warning or an error ([MutoolAcceptance]).
+ * mutool repairs a broken xref while it reads and still exits with 0.
  *
  * Skips cleanly when no mutool is on the system (mirrors the differential harness).
  */
@@ -61,28 +64,36 @@ class WriterOracleTest {
         val pdf = File.createTempFile("kite-edited-", ".pdf").apply { writeBytes(edited) }
         val png = File.createTempFile("kite-edited-", ".png")
         try {
-            // (a) Render the page. A broken xref/Prev/offsets would fail this.
-            val draw = runMutool(
+            // (a) Render the page. A broken xref, /Prev or startxref fails this, and so does a
+            // wrong offset for an object that the page uses: mutool warns while it repairs.
+            val draw = MutoolAcceptance.run(
                 tool, "draw", "-r", "72", "-F", "png", "-o", png.absolutePath,
                 pdf.absolutePath, "1",
             )
-            assertEquals(0, draw.exitCode, "mutool draw failed:\n${draw.output}")
+            MutoolAcceptance.assertAccepted(draw, "the incrementally edited PDF")
             assertTrue(png.exists() && png.length() > 0L, "mutool produced no PNG output")
 
             // (b) Dump the active trailer. It must be OUR appended one.
-            val trailer = runMutool(tool, "show", pdf.absolutePath, "trailer")
-            assertEquals(0, trailer.exitCode, "mutool show trailer failed:\n${trailer.output}")
+            val trailer = MutoolAcceptance.run(tool, "show", pdf.absolutePath, "trailer")
+            MutoolAcceptance.assertAccepted(trailer, "the trailer of the incrementally edited PDF")
             assertTrue(
-                trailer.output.contains("/Prev"),
-                "mutool didn't see the appended incremental trailer:\n${trailer.output}",
+                trailer.stdout.contains("/Prev"),
+                "mutool didn't see the appended incremental trailer:\n${trailer.stdout}",
             )
 
             // (c) Confirm mutool resolved the edited /Info title.
-            val info = runMutool(tool, "info", pdf.absolutePath)
-            assertEquals(0, info.exitCode, "mutool info failed:\n${info.output}")
+            val info = MutoolAcceptance.run(tool, "info", pdf.absolutePath)
+            MutoolAcceptance.assertAccepted(info, "the /Info of the incrementally edited PDF")
             assertTrue(
-                info.output.contains("KiteEditedMarker"),
-                "mutool didn't resolve the edited /Info title:\n${info.output}",
+                info.stdout.contains("KiteEditedMarker"),
+                "mutool didn't resolve the edited /Info title:\n${info.stdout}",
+            )
+
+            // (d) Load every object. No step above loads the marker object, so only
+            // this step sees a wrong offset for it.
+            MutoolAcceptance.assertAccepted(
+                MutoolAcceptance.run(tool, "show", pdf.absolutePath, "grep"),
+                "every object of the incrementally edited PDF",
             )
         } finally {
             pdf.delete()
@@ -123,17 +134,17 @@ class WriterOracleTest {
         val cleaned = File.createTempFile("kite-flate-clean-", ".pdf")
         try {
             // (a) mutool renders the page. It must decode our FlateDecode stream.
-            val draw = runMutool(
+            val draw = MutoolAcceptance.run(
                 tool, "draw", "-r", "72", "-F", "png", "-o", png.absolutePath,
                 pdf.absolutePath, "1",
             )
-            assertEquals(0, draw.exitCode, "mutool draw failed:\n${draw.output}")
+            MutoolAcceptance.assertAccepted(draw, "the PDF with our flate content stream")
             assertTrue(png.exists() && png.length() > 0L, "mutool produced no PNG")
 
             // (b) mutool clean -d decompresses all streams; the marker text must
             // appear verbatim in the cleaned (now-uncompressed) output.
-            val clean = runMutool(tool, "clean", "-d", pdf.absolutePath, cleaned.absolutePath)
-            assertEquals(0, clean.exitCode, "mutool clean failed:\n${clean.output}")
+            val clean = MutoolAcceptance.run(tool, "clean", "-d", pdf.absolutePath, cleaned.absolutePath)
+            MutoolAcceptance.assertAccepted(clean, "the PDF with our flate content stream")
             val cleanedText = cleaned.readBytes().toString(Charsets.ISO_8859_1)
             assertTrue(
                 cleanedText.contains("Flate Works 123"),
@@ -174,20 +185,20 @@ class WriterOracleTest {
             // mutool must render BOTH pages (proves a fully valid from-scratch file:
             // header, xref, catalog, page tree, fonts, and flate content streams).
             for ((page, png) in listOf(1 to png1, 2 to png2)) {
-                val draw = runMutool(
+                val draw = MutoolAcceptance.run(
                     tool, "draw", "-r", "72", "-F", "png", "-o", png.absolutePath,
                     pdf.absolutePath, page.toString(),
                 )
-                assertEquals(0, draw.exitCode, "mutool draw page $page failed:\n${draw.output}")
+                MutoolAcceptance.assertAccepted(draw, "page $page of the from-scratch PDF")
                 assertTrue(png.exists() && png.length() > 0L, "mutool produced no PNG for page $page")
             }
 
             // mutool resolves our /Info metadata.
-            val info = runMutool(tool, "info", pdf.absolutePath)
-            assertEquals(0, info.exitCode, "mutool info failed:\n${info.output}")
+            val info = MutoolAcceptance.run(tool, "info", pdf.absolutePath)
+            MutoolAcceptance.assertAccepted(info, "the /Info of the from-scratch PDF")
             assertTrue(
-                info.output.contains("Built From Scratch 42"),
-                "mutool didn't resolve the from-scratch /Info title:\n${info.output}",
+                info.stdout.contains("Built From Scratch 42"),
+                "mutool didn't resolve the from-scratch /Info title:\n${info.stdout}",
             )
         } finally {
             pdf.delete()
@@ -223,15 +234,15 @@ class WriterOracleTest {
         val png = File.createTempFile("kite-stamp-", ".png")
         val cleaned = File.createTempFile("kite-stamp-clean-", ".pdf")
         try {
-            val draw = runMutool(
+            val draw = MutoolAcceptance.run(
                 tool, "draw", "-r", "72", "-F", "png", "-o", png.absolutePath, pdf.absolutePath, "1",
             )
-            assertEquals(0, draw.exitCode, "mutool draw failed:\n${draw.output}")
+            MutoolAcceptance.assertAccepted(draw, "the stamped PDF")
             assertTrue(png.exists() && png.length() > 0L, "mutool produced no PNG")
 
             // The decompressed content must contain BOTH the original and stamp text.
-            val clean = runMutool(tool, "clean", "-d", pdf.absolutePath, cleaned.absolutePath)
-            assertEquals(0, clean.exitCode, "mutool clean failed:\n${clean.output}")
+            val clean = MutoolAcceptance.run(tool, "clean", "-d", pdf.absolutePath, cleaned.absolutePath)
+            MutoolAcceptance.assertAccepted(clean, "the stamped PDF")
             val cleanedText = cleaned.readBytes().toString(Charsets.ISO_8859_1)
             assertTrue(cleanedText.contains("Base body content"), "original content missing after clean")
             assertTrue(cleanedText.contains("CONFIDENTIAL"), "stamp content missing after clean")
@@ -260,15 +271,15 @@ class WriterOracleTest {
         val png = File.createTempFile("kite-form-", ".png")
         val cleaned = File.createTempFile("kite-form-clean-", ".pdf")
         try {
-            val draw = runMutool(
+            val draw = MutoolAcceptance.run(
                 tool, "draw", "-r", "72", "-F", "png", "-o", png.absolutePath, pdf.absolutePath, "1",
             )
-            assertEquals(0, draw.exitCode, "mutool draw failed:\n${draw.output}")
+            MutoolAcceptance.assertAccepted(draw, "the filled form")
             assertTrue(png.exists() && png.length() > 0L, "mutool produced no PNG")
 
             // The generated appearance stream must decompress to the field value.
-            val clean = runMutool(tool, "clean", "-d", pdf.absolutePath, cleaned.absolutePath)
-            assertEquals(0, clean.exitCode, "mutool clean failed:\n${clean.output}")
+            val clean = MutoolAcceptance.run(tool, "clean", "-d", pdf.absolutePath, cleaned.absolutePath)
+            MutoolAcceptance.assertAccepted(clean, "the filled form")
             assertTrue(
                 cleaned.readBytes().toString(Charsets.ISO_8859_1).contains("Filled By KitePDF"),
                 "mutool didn't find the value in the generated appearance",
@@ -307,15 +318,15 @@ class WriterOracleTest {
         val png = File.createTempFile("kite-redact-", ".png")
         val cleaned = File.createTempFile("kite-redact-clean-", ".pdf")
         try {
-            val draw = runMutool(
+            val draw = MutoolAcceptance.run(
                 tool, "draw", "-r", "72", "-F", "png", "-o", png.absolutePath, pdf.absolutePath, "1",
             )
-            assertEquals(0, draw.exitCode, "mutool draw failed:\n${draw.output}")
+            MutoolAcceptance.assertAccepted(draw, "the redacted PDF")
             assertTrue(png.exists() && png.length() > 0L, "mutool produced no PNG")
 
             // Decompress all streams; the secret must not appear anywhere, the footer must.
-            val clean = runMutool(tool, "clean", "-d", pdf.absolutePath, cleaned.absolutePath)
-            assertEquals(0, clean.exitCode, "mutool clean failed:\n${clean.output}")
+            val clean = MutoolAcceptance.run(tool, "clean", "-d", pdf.absolutePath, cleaned.absolutePath)
+            MutoolAcceptance.assertAccepted(clean, "the redacted PDF")
             val cleanedText = cleaned.readBytes().toString(Charsets.ISO_8859_1)
             assertFalse(cleanedText.contains("TOPSECRET"), "mutool recovered the redacted text")
             assertTrue(cleanedText.contains("visible footer"), "surviving text lost")
@@ -377,18 +388,24 @@ class WriterOracleTest {
         try {
             // mutool must render the page, proving it walks our /XRef stream and
             // resolves objects out of our /ObjStm.
-            val draw = runMutool(
+            val draw = MutoolAcceptance.run(
                 tool, "draw", "-r", "72", "-F", "png", "-o", png.absolutePath, pdf.absolutePath, "1",
             )
-            assertEquals(0, draw.exitCode, "mutool draw failed on object-stream output:\n${draw.output}")
+            MutoolAcceptance.assertAccepted(draw, "the object-stream output")
             assertTrue(png.exists() && png.length() > 0L, "mutool produced no PNG")
 
             // mutool resolves /Info, which lives inside the object stream.
-            val info = runMutool(tool, "info", pdf.absolutePath)
-            assertEquals(0, info.exitCode, "mutool info failed:\n${info.output}")
+            val info = MutoolAcceptance.run(tool, "info", pdf.absolutePath)
+            MutoolAcceptance.assertAccepted(info, "the /Info of the object-stream output")
             assertTrue(
-                info.output.contains("ObjStm Oracle 99"),
-                "mutool didn't resolve /Info from the object stream:\n${info.output}",
+                info.stdout.contains("ObjStm Oracle 99"),
+                "mutool didn't resolve /Info from the object stream:\n${info.stdout}",
+            )
+
+            // Load every object. No step above loads the content stream of page 2.
+            MutoolAcceptance.assertAccepted(
+                MutoolAcceptance.run(tool, "show", pdf.absolutePath, "grep"),
+                "every object of the object-stream output",
             )
         } finally {
             pdf.delete()
@@ -421,31 +438,16 @@ class WriterOracleTest {
         val pngs = (1..3).map { File.createTempFile("kite-merge-$it-", ".png") }
         try {
             for ((page, png) in (1..3).zip(pngs)) {
-                val draw = runMutool(
+                val draw = MutoolAcceptance.run(
                     tool, "draw", "-r", "72", "-F", "png", "-o", png.absolutePath, pdf.absolutePath, page.toString(),
                 )
-                assertEquals(0, draw.exitCode, "mutool draw page $page failed:\n${draw.output}")
+                MutoolAcceptance.assertAccepted(draw, "page $page of the merged PDF")
                 assertTrue(png.exists() && png.length() > 0L, "mutool produced no PNG for page $page")
             }
         } finally {
             pdf.delete()
             pngs.forEach { it.delete() }
         }
-    }
-
-    private data class MutoolResult(val exitCode: Int, val output: String)
-
-    private fun runMutool(tool: File, vararg args: String): MutoolResult {
-        val proc = ProcessBuilder(listOf(tool.absolutePath) + args)
-            .redirectErrorStream(true)
-            .start()
-        val out = ByteArrayOutputStream()
-        proc.inputStream.copyTo(out)
-        if (!proc.waitFor(60, TimeUnit.SECONDS)) {
-            proc.destroyForcibly()
-            return MutoolResult(-1, "timed out")
-        }
-        return MutoolResult(proc.exitValue(), out.toString(Charsets.UTF_8))
     }
 
     /** Minimal one-page PDF with a trailer-referenced /Info dict and real text content. */

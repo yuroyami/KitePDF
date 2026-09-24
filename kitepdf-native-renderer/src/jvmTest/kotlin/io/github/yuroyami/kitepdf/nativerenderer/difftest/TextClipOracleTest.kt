@@ -2,6 +2,7 @@ package io.github.yuroyami.kitepdf.nativerenderer.difftest
 
 import io.github.yuroyami.kitepdf.difftest.ImageDiff
 import io.github.yuroyami.kitepdf.difftest.MuPdfOracle
+import io.github.yuroyami.kitepdf.difftest.MutoolAcceptance
 import io.github.yuroyami.kitepdf.difftest.PdfRenderOracle
 
 import io.github.yuroyami.kitepdf.KitePDF
@@ -11,7 +12,6 @@ import io.github.yuroyami.kitepdf.writer.PdfBuilder
 import java.io.File
 import org.junit.Assume.assumeTrue
 import kotlin.test.Test
-import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 /**
@@ -66,8 +66,7 @@ class TextClipOracleTest {
             deleteOnExit()
             writeBytes(bytes)
         }
-        val reference = MuPdfOracle.render(pdf, page = 1, dpi = 72)
-        assertNotNull(reference, "mutool rendered the fixture")
+        val reference = MutoolAcceptance.render(pdf, page = 1, dpi = 72)
         val diff = ImageDiff.compare(kite, reference)
         println("mode-7 clip vs mutool: MAE=${(diff.score * 10000).toInt() / 10000.0}")
         assertTrue(diff.score <= 0.03, "mode-7 text clip MAE ${diff.score} must be <= 0.03")

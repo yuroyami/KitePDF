@@ -2,20 +2,18 @@ package io.github.yuroyami.kitepdf.nativerenderer.difftest
 
 import io.github.yuroyami.kitepdf.difftest.ImageDiff
 import io.github.yuroyami.kitepdf.difftest.MuPdfOracle
+import io.github.yuroyami.kitepdf.difftest.MutoolAcceptance
 import io.github.yuroyami.kitepdf.difftest.PdfRenderOracle
 
 import io.github.yuroyami.kitepdf.KitePDF
 import io.github.yuroyami.kitepdf.writer.EmbeddedFont
 import io.github.yuroyami.kitepdf.writer.PdfBuilder
 import java.awt.image.BufferedImage
-import java.io.ByteArrayOutputStream
 import java.io.File
-import java.util.concurrent.TimeUnit
 import org.junit.Assume.assumeTrue
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
-import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 /**
@@ -92,20 +90,20 @@ class EmbeddedFontOracleTest {
         val pdf = File.createTempFile("kite-embed-", ".pdf").apply { writeBytes(bytes) }
         val png = File.createTempFile("kite-embed-", ".png")
         try {
-            // mutool must rasterise the page. A malformed FontFile2 or font dict
-            // would fail here, not silently substitute.
-            val draw = runMutool(
+            // mutool must rasterise the page. It warns when it cannot use an embedded
+            // font and draws a substitute, so the acceptance check fails on that.
+            val draw = MutoolAcceptance.run(
                 tool, "draw", "-r", "72", "-F", "png", "-o", png.absolutePath, pdf.absolutePath, "1",
             )
-            assertEquals(0, draw.exitCode, "mutool draw failed:\n${draw.output}")
+            MutoolAcceptance.assertAccepted(draw, "the PDF with an embedded TrueType font")
             assertTrue(png.exists() && png.length() > 0L, "mutool produced no PNG")
 
             // mutool must report our composite Type0 / Identity-H font.
-            val info = runMutool(tool, "info", pdf.absolutePath)
-            assertEquals(0, info.exitCode, "mutool info failed:\n${info.output}")
+            val info = MutoolAcceptance.run(tool, "info", pdf.absolutePath)
+            MutoolAcceptance.assertAccepted(info, "the PDF with an embedded TrueType font")
             assertTrue(
-                info.output.contains("Type0") && info.output.contains("Identity-H"),
-                "mutool didn't report a Type0 Identity-H font:\n${info.output}",
+                info.stdout.contains("Type0") && info.stdout.contains("Identity-H"),
+                "mutool didn't report a Type0 Identity-H font:\n${info.stdout}",
             )
         } finally {
             pdf.delete()
@@ -150,10 +148,8 @@ class EmbeddedFontOracleTest {
         val subFile = File.createTempFile("kite-subset-", ".pdf").apply { writeBytes(subsetPdf) }
         val fullFile = File.createTempFile("kite-full-", ".pdf").apply { writeBytes(fullPdf) }
         try {
-            val subImg = MuPdfOracle.render(subFile, 1, 144)
-            val fullImg = MuPdfOracle.render(fullFile, 1, 144)
-            assertNotNull(subImg, "mutool failed to render the subset")
-            assertNotNull(fullImg, "mutool failed to render the full embed")
+            val subImg = MutoolAcceptance.render(subFile, 1, 144)
+            val fullImg = MutoolAcceptance.render(fullFile, 1, 144)
             assertEquals(0.0, meanAbsErr(subImg, fullImg), 0.001, "subset render differs from full embed")
         } finally {
             subFile.delete()
@@ -173,20 +169,5 @@ class EmbeddedFontOracleTest {
             sum += kotlin.math.abs((pa and 0xFF) - (pb and 0xFF))
         }
         return sum.toDouble() / (a.width.toLong() * a.height * 3 * 255)
-    }
-
-    private data class MutoolResult(val exitCode: Int, val output: String)
-
-    private fun runMutool(tool: File, vararg args: String): MutoolResult {
-        val proc = ProcessBuilder(listOf(tool.absolutePath) + args)
-            .redirectErrorStream(true)
-            .start()
-        val out = ByteArrayOutputStream()
-        proc.inputStream.copyTo(out)
-        if (!proc.waitFor(60, TimeUnit.SECONDS)) {
-            proc.destroyForcibly()
-            return MutoolResult(-1, "timed out")
-        }
-        return MutoolResult(proc.exitValue(), out.toString(Charsets.UTF_8))
     }
 }

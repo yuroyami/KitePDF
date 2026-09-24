@@ -127,6 +127,11 @@ kotlin {
         commonTest.dependencies {
             implementation(kotlin("test"))
         }
+
+        // Test-only: the shared mutool acceptance check. The module is internal and never published.
+        jvmTest.dependencies {
+            implementation(project(":kitepdf-difftest"))
+        }
     }
 }
 

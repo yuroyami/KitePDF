@@ -2,19 +2,17 @@ package io.github.yuroyami.kitepdf.nativerenderer.difftest
 
 import io.github.yuroyami.kitepdf.difftest.ImageDiff
 import io.github.yuroyami.kitepdf.difftest.MuPdfOracle
+import io.github.yuroyami.kitepdf.difftest.MutoolAcceptance
 import io.github.yuroyami.kitepdf.difftest.PdfRenderOracle
 
 import io.github.yuroyami.kitepdf.PdfDocument
 import io.github.yuroyami.kitepdf.writer.PdfBuilder
 import io.github.yuroyami.kitepdf.writer.StandardFont
-import java.io.ByteArrayOutputStream
 import java.io.File
-import java.util.concurrent.TimeUnit
 import kotlin.random.Random
 import org.junit.Assume.assumeTrue
 import kotlin.test.Test
 import kotlin.test.assertContains
-import kotlin.test.assertEquals
 import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
 
@@ -22,7 +20,8 @@ import kotlin.test.assertTrue
  * Oracle half: mutool must accept KitePDF's encrypted output. It decrypts
  * with the password, renders the page, extracts the text, and refuses the file
  * without the password; the incrementally edited file behaves the same and
- * shows the stamp. Skips cleanly without mutool.
+ * shows the stamp. Every accepted run must finish without a warning or an
+ * error ([MutoolAcceptance]). Skips cleanly without mutool.
  */
 class EncryptedWriterOracleTest {
 
@@ -43,19 +42,25 @@ class EncryptedWriterOracleTest {
             writeBytes(buildEncrypted())
         }
 
-        // Without the password mutool must fail.
-        val locked = run(tool, "draw", "-o", "/dev/null", pdf.absolutePath, "1")
-        assertNotEquals(0, locked.exit, "mutool must refuse the file without the password")
+        // Without the password mutool must fail. The output needs a format that mutool knows:
+        // with "-o /dev/null" it fails on the output name for any file, encrypted or not.
+        val png = File.createTempFile("kite-enc-", ".png").apply { deleteOnExit() }
+        val locked = MutoolAcceptance.run(tool, "draw", "-F", "png", "-o", png.absolutePath, pdf.absolutePath, "1")
+        assertNotEquals(0, locked.exitCode, "mutool must refuse the file without the password")
+        assertContains(locked.stderr, "cannot authenticate password")
 
         // With the password: page renders and the text extracts.
-        val png = File.createTempFile("kite-enc-", ".png").apply { deleteOnExit() }
-        val draw = run(tool, "draw", "-p", password, "-o", png.absolutePath, "-r", "72", pdf.absolutePath, "1")
-        assertEquals(0, draw.exit, "mutool draw -p failed: ${draw.output}")
+        val draw = MutoolAcceptance.run(
+            tool, "draw", "-p", password, "-o", png.absolutePath, "-r", "72", pdf.absolutePath, "1",
+        )
+        MutoolAcceptance.assertAccepted(draw, "the encrypted PDF")
         assertTrue(png.length() > 0, "rendered PNG is empty")
 
         val txt = File.createTempFile("kite-enc-", ".txt").apply { deleteOnExit() }
-        val extract = run(tool, "draw", "-p", password, "-F", "text", "-o", txt.absolutePath, pdf.absolutePath, "1")
-        assertEquals(0, extract.exit, "mutool text extraction failed: ${extract.output}")
+        val extract = MutoolAcceptance.run(
+            tool, "draw", "-p", password, "-F", "text", "-o", txt.absolutePath, pdf.absolutePath, "1",
+        )
+        MutoolAcceptance.assertAccepted(extract, "the encrypted PDF")
         assertContains(txt.readText(), "Classified payload")
     }
 
@@ -79,30 +84,19 @@ class EncryptedWriterOracleTest {
             writeBytes(edited)
         }
         val png = File.createTempFile("kite-enc-edit-", ".png").apply { deleteOnExit() }
-        val draw = run(tool, "draw", "-p", password, "-o", png.absolutePath, "-r", "72", pdf.absolutePath, "1")
-        assertEquals(0, draw.exit, "mutool draw -p on the edited file failed: ${draw.output}")
+        val draw = MutoolAcceptance.run(
+            tool, "draw", "-p", password, "-o", png.absolutePath, "-r", "72", pdf.absolutePath, "1",
+        )
+        MutoolAcceptance.assertAccepted(draw, "the edited encrypted PDF")
         assertTrue(png.length() > 0, "rendered PNG is empty")
 
         val txt = File.createTempFile("kite-enc-edit-", ".txt").apply { deleteOnExit() }
-        val extract = run(tool, "draw", "-p", password, "-F", "text", "-o", txt.absolutePath, pdf.absolutePath, "1")
-        assertEquals(0, extract.exit, "mutool text extraction failed: ${extract.output}")
+        val extract = MutoolAcceptance.run(
+            tool, "draw", "-p", password, "-F", "text", "-o", txt.absolutePath, pdf.absolutePath, "1",
+        )
+        MutoolAcceptance.assertAccepted(extract, "the edited encrypted PDF")
         val text = txt.readText()
         assertContains(text, "Classified payload", false, "original content survives")
         assertContains(text, "STAMPED", false, "the stamp is visible to mutool")
-    }
-
-    private class Result(val exit: Int, val output: String)
-
-    private fun run(tool: File, vararg args: String): Result {
-        val proc = ProcessBuilder(listOf(tool.absolutePath) + args)
-            .redirectErrorStream(true)
-            .start()
-        val out = ByteArrayOutputStream()
-        proc.inputStream.copyTo(out)
-        if (!proc.waitFor(60, TimeUnit.SECONDS)) {
-            proc.destroyForcibly()
-            return Result(-1, "timed out")
-        }
-        return Result(proc.exitValue(), out.toString(Charsets.UTF_8))
     }
 }

@@ -38,3 +38,5 @@ Things a previous change taught the hard way. One line each. Delete a line when 
 - `CGContextDrawImage` draws the first row of an image at the top of its rectangle, unlike the other canvases. An image test whose rows are equal cannot show a vertical flip (#289).
 - Kotlin/Native checks a cast from an Objective-C object to a C pointer at run time, so `as CFDataRef` compiles and then throws. Create the Core Foundation object instead (#288).
 - Gradle applies `--tests` only to the test task named just before it, so `:a:jvmTest :b:jvmTest --tests X` runs every test of `:a`. A run that looks filtered can be the whole suite.
+- mutool repairs a broken xref, warns on stderr and still exits with 0, and `draw` loads only the objects its page uses. Check a file KitePDF wrote with `MutoolAcceptance`, and load every object with `mutool show <file> grep` (#295).
+- `mutool draw -o /dev/null` exits with 1 for every file, because it cannot pick an output format from the name. A test that expects mutool to refuse a file must pass `-F` (#296).
