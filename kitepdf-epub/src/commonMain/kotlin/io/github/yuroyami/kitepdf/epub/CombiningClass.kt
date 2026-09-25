@@ -2,7 +2,7 @@ package io.github.yuroyami.kitepdf.epub
 
 /**
  * The order a shaper puts combining marks in before GSUB runs (#211): each run of marks
- * sorts by canonical combining class (Unicode 15, 3.11), with the classes HarfBuzz modifies
+ * sorts by canonical combining class (Unicode 17, 3.11), with the classes HarfBuzz modifies
  * so that fonts see the order they were built for. Hebrew points follow the SBL Hebrew order,
  * Arabic shadda goes before the other marks, and Thai sara u and uu go before phinthu.
  *
@@ -54,9 +54,9 @@ internal object CombiningClass {
         in 0x064B..0x065F -> arabic(cp)
         0x0670 -> 35
         in 0x06D6..0x06ED -> arabicExtended(cp)
-        0x093C, 0x09BC, 0x0A3C, 0x0ABC, 0x0B3C, 0x0CBC -> 7
-        0x094D, 0x09CD, 0x0A4D, 0x0ACD, 0x0B4D, 0x0BCD, 0x0C4D, 0x0CCD, 0x0D4D, 0x0DCA -> 9
-        0x0951, 0x0953, 0x0954 -> 230
+        0x093C, 0x09BC, 0x0A3C, 0x0ABC, 0x0B3C, 0x0C3C, 0x0CBC -> 7
+        0x094D, 0x09CD, 0x0A4D, 0x0ACD, 0x0B4D, 0x0BCD, 0x0C4D, 0x0CCD, 0x0D3B, 0x0D3C, 0x0D4D, 0x0DCA -> 9
+        0x0951, 0x0953, 0x0954, 0x09FE -> 230
         0x0952 -> 220
         0x0C55 -> 84
         0x0C56 -> 91
@@ -66,9 +66,18 @@ internal object CombiningClass {
         0x0EB8, 0x0EB9 -> 118
         in 0x0EC8..0x0ECB -> 122
         0x1037 -> 7
+        in 0x1CD0..0x1CF9 -> vedic(cp)
         0x1039, 0x103A -> 9
         in 0x20D0..0x20DC -> if (cp in 0x20D2..0x20D3 || cp in 0x20D8..0x20DA) 1 else 230
+        in 0xA8E0..0xA8F1 -> 230
         in 0xFE20..0xFE2F -> if (cp in 0xFE27..0xFE2D) 220 else 230
+        else -> 0
+    }
+
+    private fun vedic(cp: Int): Int = when (cp) {
+        in 0x1CD0..0x1CD2, 0x1CDA, 0x1CDB, 0x1CE0, 0x1CF4, 0x1CF8, 0x1CF9 -> 230
+        0x1CD4, in 0x1CE2..0x1CE8 -> 1
+        in 0x1CD5..0x1CD9, in 0x1CDC..0x1CDF, 0x1CED -> 220
         else -> 0
     }
 

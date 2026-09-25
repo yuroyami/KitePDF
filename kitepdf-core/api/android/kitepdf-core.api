@@ -513,21 +513,35 @@ public final class io/github/yuroyami/kitepdf/core/font/GlyphPoint {
 }
 
 public final class io/github/yuroyami/kitepdf/core/font/GsubGlyph {
-	public fun <init> (IILjava/util/Set;Z)V
-	public synthetic fun <init> (IILjava/util/Set;ZILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun <init> (IILjava/util/Set;ZLio/github/yuroyami/kitepdf/core/font/GsubGlyph$Ignorable;)V
+	public synthetic fun <init> (IILjava/util/Set;ZLio/github/yuroyami/kitepdf/core/font/GsubGlyph$Ignorable;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public final fun getCluster ()I
 	public final fun getComponents ()I
 	public final fun getFeatures ()Ljava/util/Set;
 	public final fun getGid ()I
+	public final fun getIgnorable ()Lio/github/yuroyami/kitepdf/core/font/GsubGlyph$Ignorable;
 	public final fun getLigated ()Z
+	public final fun getMultiplied ()Z
 	public final fun getShaperData ()I
+	public final fun getSubstituted ()Z
 	public final fun getSyllable ()I
 	public final fun isMark ()Z
 	public final fun setCluster (I)V
 	public final fun setFeatures (Ljava/util/Set;)V
 	public final fun setGid (I)V
+	public final fun setLigated (Z)V
+	public final fun setMultiplied (Z)V
 	public final fun setShaperData (I)V
 	public final fun setSyllable (I)V
+}
+
+public final class io/github/yuroyami/kitepdf/core/font/GsubGlyph$Ignorable : java/lang/Enum {
+	public static final field OTHER Lio/github/yuroyami/kitepdf/core/font/GsubGlyph$Ignorable;
+	public static final field ZWJ Lio/github/yuroyami/kitepdf/core/font/GsubGlyph$Ignorable;
+	public static final field ZWNJ Lio/github/yuroyami/kitepdf/core/font/GsubGlyph$Ignorable;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lio/github/yuroyami/kitepdf/core/font/GsubGlyph$Ignorable;
+	public static fun values ()[Lio/github/yuroyami/kitepdf/core/font/GsubGlyph$Ignorable;
 }
 
 public final class io/github/yuroyami/kitepdf/core/font/Head {
@@ -601,9 +615,10 @@ public final class io/github/yuroyami/kitepdf/core/font/OpenTypeGsub {
 	public final fun hasScript (Ljava/lang/String;)Z
 	public final fun ligatures (Ljava/lang/String;I)Ljava/util/List;
 	public final fun single (Ljava/lang/String;I)Ljava/lang/Integer;
-	public final fun substitute (Ljava/util/List;Ljava/lang/String;Ljava/lang/String;Ljava/util/List;Ljava/util/Set;Ljava/util/Set;)V
-	public static synthetic fun substitute$default (Lio/github/yuroyami/kitepdf/core/font/OpenTypeGsub;Ljava/util/List;Ljava/lang/String;Ljava/lang/String;Ljava/util/List;Ljava/util/Set;Ljava/util/Set;ILjava/lang/Object;)V
-	public final fun wouldSubstitute (Ljava/lang/String;Ljava/lang/String;[I)Z
+	public final fun substitute (Ljava/util/List;Ljava/lang/String;Ljava/lang/String;Ljava/util/List;Ljava/util/Set;Ljava/util/Set;Ljava/util/Set;Ljava/util/Set;)V
+	public static synthetic fun substitute$default (Lio/github/yuroyami/kitepdf/core/font/OpenTypeGsub;Ljava/util/List;Ljava/lang/String;Ljava/lang/String;Ljava/util/List;Ljava/util/Set;Ljava/util/Set;Ljava/util/Set;Ljava/util/Set;ILjava/lang/Object;)V
+	public final fun wouldSubstitute (Ljava/lang/String;Ljava/lang/String;[IZ)Z
+	public static synthetic fun wouldSubstitute$default (Lio/github/yuroyami/kitepdf/core/font/OpenTypeGsub;Ljava/lang/String;Ljava/lang/String;[IZILjava/lang/Object;)Z
 }
 
 public final class io/github/yuroyami/kitepdf/core/font/OpenTypeGsub$Companion {
