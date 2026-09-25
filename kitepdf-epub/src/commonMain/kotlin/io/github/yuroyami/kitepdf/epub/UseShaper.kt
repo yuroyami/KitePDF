@@ -173,7 +173,8 @@ internal object UseShaper {
             }
         }
         val direction = if (TextShaper.isRightToLeft(script)) "rtla" else "ltra"
-        gsub.substitute(glyphs, script, null, listOf(listOf("rvrn"), listOf(direction, if (direction == "rtla") "rtlm" else "ltrm")))
+        // `rtlm` reaches only the glyphs that mirroring left alone (#321).
+        gsub.substitute(glyphs, script, null, listOf(listOf("rvrn"), listOf(direction, if (direction == "rtla") "rtlm" else "ltrm")), setOf("rtlm"))
         findClusters(glyphs)
         // The first glyphs of a cluster may form a repha: only the repha itself, when it is one.
         Syllables.forEach(glyphs) { start, end ->

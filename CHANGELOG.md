@@ -499,6 +499,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and 3 and Tangut break between characters, as CJK ideographs do. Against `hb-shape`,
   9,903 random words in 50 fonts of the Universal Shaping Engine and 5,427 random words in
   40 other fonts outside the plane give the same glyphs (#319).
+- In right-to-left text, a bracket or another character with a mirror image, such as `(`,
+  `«` or `≤`, draws as its mirror when the font has it, as HarfBuzz mirrors it. The other
+  characters of right-to-left text take the font's `rtlm` forms, and left-to-right text
+  takes its `ltrm` forms, so an Old Hungarian font gives its left-to-right glyphs. Against
+  `hb-shape`, 895 random right-to-left words with mirrored characters in six fonts give the
+  same glyphs (#321).
 - Text in an embedded font shapes through every GSUB lookup type. Contextual and
   chained contextual substitution, multiple and alternate substitution, and reverse
   chaining now apply along with single and ligature substitution. The lookups run for the script
