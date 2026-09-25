@@ -216,7 +216,12 @@ public class OpenTypeGsub private constructor(
             if (seq.size == 1) { replace(i, seq[0]); return i + 1 }
             val source = glyphs.removeAt(i)
             for ((k, gid) in seq.withIndex()) {
-                glyphs.add(i + k, source.copy(gid).also { it.substituted = true; it.multiplied = true })
+                // Each part counts as a component, unless the glyph is attached to a ligature.
+                glyphs.add(i + k, source.copy(gid).also {
+                    it.substituted = true
+                    it.multiplied = true
+                    if (source.ligId == 0) { it.ligComp = k; it.ligBase = false }
+                })
             }
             return i + seq.size
         }
@@ -225,18 +230,58 @@ public class OpenTypeGsub private constructor(
             val rules = st.rulesFor(glyphs[i].gid) ?: return -1
             for (rule in rules) {
                 val positions = matchInput(lookup, i, rule.rest.size + 1) { k, g -> g.gid == rule.rest[k - 1] } ?: continue
-                ligate(positions, rule.lig)
+                ligate(lookup, positions, rule.lig)
                 return i + 1
             }
             return -1
         }
 
-        /** Replaces the glyphs at [positions] with [lig], which takes their clusters and the marks between them. */
-        private fun ligate(positions: IntArray, lig: Int) {
+        /**
+         * Replaces the glyphs at [positions] with [lig], which takes their clusters and the marks
+         * between them. As HarfBuzz's ligate_input does, the marks between the components attach
+         * to the component before them, and the marks that followed a component ligature move to
+         * the matching component of the new one. A base with marks, or marks alone, form no new
+         * ligature in this sense.
+         */
+        private fun ligate(lookup: Lookup, positions: IntArray, lig: Int) {
             val first = glyphs[positions[0]]
             val last = positions.last()
+            val rest = (1 until positions.size).map { glyphs[positions[it]] }
+            val baseLigature = glyphClass(first) == BASE && rest.all { glyphClass(it) == MARK }
+            val markLigature = glyphClass(first) == MARK && rest.all { glyphClass(it) == MARK }
+            val isLigature = !baseLigature && !markLigature
+            val ligId = if (isLigature) glyphs.maxOf { it.ligId } + 1 else 0
+            var lastLigId = first.ligId
+            var lastComponents = componentCount(first)
+            var componentsSoFar = lastComponents
+            val total = positions.sumOf { componentCount(glyphs[it]) }
+            if (isLigature) { first.ligId = ligId; first.ligBase = true; first.ligComponents = total }
             // Marks the lookup skipped between the components stay, after the ligature, in its cluster.
             for (p in positions[0]..last) glyphs[p].cluster = first.cluster
+            for (k in 1 until positions.size) {
+                for (p in positions[k - 1] + 1 until positions[k]) {
+                    if (!isLigature) continue
+                    val mark = glyphs[p]
+                    val thisComponent = mark.component.takeIf { it != 0 } ?: lastComponents
+                    mark.ligId = ligId
+                    mark.ligBase = false
+                    mark.ligComp = componentsSoFar - lastComponents + minOf(thisComponent, lastComponents)
+                }
+                val component = glyphs[positions[k]]
+                lastLigId = component.ligId
+                lastComponents = componentCount(component)
+                componentsSoFar += lastComponents
+            }
+            if (!markLigature && lastLigId != 0) {
+                var p = last + 1
+                while (p < glyphs.size && glyphs[p].ligId == lastLigId) {
+                    val thisComponent = glyphs[p].component
+                    if (thisComponent == 0) break
+                    glyphs[p].ligId = ligId
+                    glyphs[p].ligComp = componentsSoFar - lastComponents + minOf(thisComponent, lastComponents)
+                    p++
+                }
+            }
             first.gid = lig
             first.components = positions.size
             first.ligated = true
@@ -244,6 +289,9 @@ public class OpenTypeGsub private constructor(
             first.substituted = true
             for (k in positions.size - 1 downTo 1) glyphs.removeAt(positions[k])
         }
+
+        /** How many components [g] stands for: those of a ligature of class ligature, or 1, as HarfBuzz's get_lig_num_comps counts them. */
+        private fun componentCount(g: GsubGlyph): Int = if (g.ligBase && glyphClass(g) == LIGATURE) g.ligComponents else 1
 
         private fun applyContext(st: ContextSubst, lookup: Lookup, i: Int): Int {
             val gid = glyphs[i].gid
@@ -321,11 +369,35 @@ public class OpenTypeGsub private constructor(
             positions[0] = start
             var p = start
             val syllable = glyphs[start].syllable
+            val firstLigId = glyphs[start].ligId
+            val firstComponent = glyphs[start].component
+            var baseMaySkip: Boolean? = null
             for (k in 1 until count) {
                 p = seek(lookup, p, 1, syllable, context = false) { g -> applies(g) && match(k, g) } ?: return null
+                val g = glyphs[p]
+                // HarfBuzz forms nothing across marks attached to different ligature components.
+                if (firstLigId != 0 && firstComponent != 0) {
+                    if (g.ligId != firstLigId || g.component != firstComponent) {
+                        // Unless the ligature they are attached to is one the lookup skips.
+                        val skips = baseMaySkip ?: ligatureBaseSkipped(lookup, start, firstLigId).also { baseMaySkip = it }
+                        if (!skips) return null
+                    }
+                } else if (g.ligId != 0 && g.component != 0 && g.ligId != firstLigId) {
+                    return null
+                }
                 positions[k] = p
             }
             return positions
+        }
+
+        /** True when the lookup skips the ligature before [start] that the marks of [ligId] are attached to. */
+        private fun ligatureBaseSkipped(lookup: Lookup, start: Int, ligId: Int): Boolean {
+            var j = start
+            while (j > 0 && glyphs[j - 1].ligId == ligId) {
+                if (glyphs[j - 1].component == 0) return skipped(glyphs[j - 1], lookup)
+                j--
+            }
+            return false
         }
 
         private inline fun matchBacktrack(lookup: Lookup, start: Int, count: Int, match: (Int, GsubGlyph) -> Boolean): Boolean {
@@ -544,6 +616,12 @@ public class OpenTypeGsub private constructor(
     }
 
     public companion object {
+        /**
+         * A table with no scripts, features or lookups, for a font without GSUB. A shaper still
+         * reorders and normalizes its text, as HarfBuzz does for such a font.
+         */
+        public val EMPTY: OpenTypeGsub = OpenTypeGsub(emptyMap(), emptyList(), emptyList(), null)
+
         /** The glyph classes of GDEF (OpenType 1.9, "GDEF: Glyph Definition Table"). */
         private const val BASE = 1
         private const val LIGATURE = 2
@@ -901,9 +979,25 @@ public class GsubGlyph(
     public var components: Int = 1
         internal set
 
-    /** True once any substitution replaced this glyph. A lookup no longer passes over it. */
+    /**
+     * True once any substitution replaced this glyph. A lookup no longer passes over it. A
+     * shaper may clear it, as HarfBuzz clears it between the stages of its Universal Shaping
+     * Engine to see what the next stage substitutes.
+     */
     public var substituted: Boolean = false
-        internal set
+
+    /**
+     * The ligature component this glyph belongs to, as HarfBuzz's lig_comp counts it: for a mark
+     * a ligature passed over, the component of the ligature it attaches to; for a part of a
+     * multiple substitution, its index among the parts; 0 for a ligature and any other glyph.
+     */
+    public val component: Int get() = if (ligBase) 0 else ligComp
+
+    /** The ligature this glyph is, or attaches to, as HarfBuzz's lig_id numbers them; 0 for none. */
+    internal var ligId: Int = 0
+    internal var ligComp: Int = 0
+    internal var ligBase: Boolean = false
+    internal var ligComponents: Int = 1
 
     /** True once a ligature substitution produced this glyph. A shaper may clear it. */
     public var ligated: Boolean = false
@@ -919,6 +1013,10 @@ public class GsubGlyph(
 
     internal fun copy(gid: Int): GsubGlyph = GsubGlyph(gid, cluster, features, isMark, ignorable).also {
         it.components = components
+        it.ligId = ligId
+        it.ligComp = ligComp
+        it.ligBase = ligBase
+        it.ligComponents = ligComponents
         it.substituted = substituted
         it.ligated = ligated
         it.multiplied = multiplied

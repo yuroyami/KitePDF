@@ -142,6 +142,21 @@ class OpenTypeGsubTest {
     }
 
     @Test
+    fun a_mark_attached_inside_a_ligature_does_not_ligate_with_a_mark_after_it() {
+        // Lookup 0 joins bases 1 and 2 over mark 50; lookup 1 would join marks 50 and 51.
+        val table = gsub(
+            listOf("DFLT" to listOf(0, 1)), listOf("ccmp" to listOf(0), "liga" to listOf(1)),
+            listOf(lookup(4, ligature(9, 1, 2), flag = 0x8), lookup(4, ligature(70, 50, 51))),
+        )
+        val t = assertNotNull(OpenTypeGsub.from(table, gdef(1 to 1, 2 to 1, 9 to 2, 50 to 3, 51 to 3, 70 to 3)))
+        // Mark 50 attaches to the first component of ligature 9 and mark 51 to nothing, so they
+        // stay apart, as HarfBuzz keeps them.
+        assertEquals(listOf(9, 50, 51), shape(t, run(1, 50, 2, 51), listOf(listOf("ccmp"), listOf("liga"))))
+        // Without the first ligature, the two marks join.
+        assertEquals(listOf(1, 70, 3), shape(t, run(1, 50, 51, 3), listOf(listOf("ccmp"), listOf("liga"))))
+    }
+
+    @Test
     fun a_reverse_chain_substitutes_in_place_from_the_end() {
         val t = assertNotNull(OpenTypeGsub.from(gsub(listOf("DFLT" to listOf(0)), listOf("rclt" to listOf(0)), listOf(lookup(8, reverse(1, ahead = 2, to = 11))))))
         assertEquals(listOf(1, 11, 2), shape(t, run(1, 1, 2), listOf(listOf("rclt"))))

@@ -5,24 +5,25 @@ package io.github.yuroyami.kitepdf.epub
  * the contextual form of each letter from its joining type and those of its neighbours. The
  * caller then applies the GSUB feature of each form, such as `init` or `fina`.
  *
- * The joining types of U+0600 to U+08FF come from ArabicShaping.txt of Unicode 17. Outside
- * those blocks, a character is transparent when it is a non-spacing or enclosing mark or a
- * format character, and non-joining otherwise, as the header of that file says.
+ * The joining types of U+0600 to U+08FF, of Mongolian and of Phags-pa come from
+ * ArabicShaping.txt of Unicode 17. Outside those blocks, a character is transparent when it
+ * is a non-spacing or enclosing mark or a format character, and non-joining otherwise, as the
+ * header of that file says.
  */
 internal object ArabicJoining {
 
     /**
      * The joining types, with the two joining groups of Syriac that have forms of their own:
-     * non-joining, right-joining, dual-joining, Alaph, Dalath and Rish, and transparent. A
-     * join-causing character, such as ZWJ or tatweel, counts as dual-joining.
+     * non-joining, left-joining, right-joining, dual-joining, Alaph, Dalath and Rish, and
+     * transparent. A join-causing character, such as ZWJ or tatweel, counts as dual-joining.
      */
-    enum class Jt { U, R, D, ALAPH, DALATH_RISH, T }
+    enum class Jt { U, L, R, D, ALAPH, DALATH_RISH, T }
 
     /** The contextual forms, each named after its GSUB feature. */
     enum class Form { ISOL, INIT, MEDI, FINA, FIN2, FIN3, MED2 }
 
-    /** True if any code point in [cps] is in the blocks of Arabic and Syriac, U+0600 to U+08FF. */
-    fun hasArabic(cps: IntArray): Boolean = cps.any { it in 0x0600..0x08FF }
+    /** True if any code point in [cps] is in a joining script: U+0600 to U+08FF, Mongolian or Phags-pa. */
+    fun hasArabic(cps: IntArray): Boolean = cps.any { it in 0x0600..0x08FF || it in 0x1800..0x18AF || it in 0xA840..0xA87F }
 
     /** The GSUB feature tag of [form]. */
     fun feature(form: Form): String = form.name.lowercase()
@@ -44,11 +45,18 @@ internal object ArabicJoining {
             prev = i
             state = entry.next
         }
+        // A Mongolian free variation selector takes the form of the letter before it.
+        for (i in 1 until cps.size) if (cps[i] in 0x180B..0x180D || cps[i] == 0x180F) out[i] = out[i - 1]
         return out
     }
 
     /** The joining type of [cp]. */
     fun type(cp: Int): Jt = when (cp) {
+        // Mongolian and Phags-pa
+        0x1806, 0x180E, in 0x1880..0x1884, 0xA873 -> Jt.U
+        0x1807, 0x180A, in 0x1820..0x1878, in 0x1887..0x18A8, 0x18AA, in 0xA840..0xA871 -> Jt.D
+        0x1885, 0x1886 -> Jt.T
+        0xA872 -> Jt.L
         in 0x0610..0x061A, 0x061C, in 0x064B..0x065F, 0x0670, in 0x06D6..0x06DC, in 0x06DF..0x06E4, 0x06E7, 0x06E8,
             in 0x06EA..0x06ED, 0x070F, 0x0711, in 0x0730..0x074A, in 0x07A6..0x07B0, in 0x07EB..0x07F3, 0x07FD,
             in 0x0816..0x0819, in 0x081B..0x0823, in 0x0825..0x0827, in 0x0829..0x082D, in 0x0859..0x085B,
@@ -81,21 +89,21 @@ internal object ArabicJoining {
     /**
      * HarfBuzz's arabic_state_table, one row for each state, with one entry for each joining
      * type in the order of [Jt]. The states: 0 after a non-joining character, 1 after a
-     * right-joining one or an isolated Alaph, 2 after a dual-joining one that is isolated so
-     * far, 3 after a final dual-joining one, 4 after a final Alaph, 5 after an Alaph in fin2
-     * or fin3, and 6 after Dalath or Rish.
+     * right-joining one or an isolated Alaph, 2 after a left-joining or dual-joining one that is
+     * isolated so far, 3 after a final dual-joining one, 4 after a final Alaph, 5 after an Alaph
+     * in fin2 or fin3, and 6 after Dalath or Rish.
      */
     private val STATES: Array<Array<Entry>> = run {
         val none: Form? = null
         fun e(prev: Form?, curr: Form?, next: Int) = Entry(prev, curr, next)
         arrayOf(
-            arrayOf(e(none, none, 0), e(none, Form.ISOL, 1), e(none, Form.ISOL, 2), e(none, Form.ISOL, 1), e(none, Form.ISOL, 6)),
-            arrayOf(e(none, none, 0), e(none, Form.ISOL, 1), e(none, Form.ISOL, 2), e(none, Form.FIN2, 5), e(none, Form.ISOL, 6)),
-            arrayOf(e(none, none, 0), e(Form.INIT, Form.FINA, 1), e(Form.INIT, Form.FINA, 3), e(Form.INIT, Form.FINA, 4), e(Form.INIT, Form.FINA, 6)),
-            arrayOf(e(none, none, 0), e(Form.MEDI, Form.FINA, 1), e(Form.MEDI, Form.FINA, 3), e(Form.MEDI, Form.FINA, 4), e(Form.MEDI, Form.FINA, 6)),
-            arrayOf(e(none, none, 0), e(Form.MED2, Form.ISOL, 1), e(Form.MED2, Form.ISOL, 2), e(Form.MED2, Form.FIN2, 5), e(Form.MED2, Form.ISOL, 6)),
-            arrayOf(e(none, none, 0), e(Form.ISOL, Form.ISOL, 1), e(Form.ISOL, Form.ISOL, 2), e(Form.ISOL, Form.FIN2, 5), e(Form.ISOL, Form.ISOL, 6)),
-            arrayOf(e(none, none, 0), e(none, Form.ISOL, 1), e(none, Form.ISOL, 2), e(none, Form.FIN3, 5), e(none, Form.ISOL, 6)),
+            arrayOf(e(none, none, 0), e(none, Form.ISOL, 2), e(none, Form.ISOL, 1), e(none, Form.ISOL, 2), e(none, Form.ISOL, 1), e(none, Form.ISOL, 6)),
+            arrayOf(e(none, none, 0), e(none, Form.ISOL, 2), e(none, Form.ISOL, 1), e(none, Form.ISOL, 2), e(none, Form.FIN2, 5), e(none, Form.ISOL, 6)),
+            arrayOf(e(none, none, 0), e(none, Form.ISOL, 2), e(Form.INIT, Form.FINA, 1), e(Form.INIT, Form.FINA, 3), e(Form.INIT, Form.FINA, 4), e(Form.INIT, Form.FINA, 6)),
+            arrayOf(e(none, none, 0), e(none, Form.ISOL, 2), e(Form.MEDI, Form.FINA, 1), e(Form.MEDI, Form.FINA, 3), e(Form.MEDI, Form.FINA, 4), e(Form.MEDI, Form.FINA, 6)),
+            arrayOf(e(none, none, 0), e(none, Form.ISOL, 2), e(Form.MED2, Form.ISOL, 1), e(Form.MED2, Form.ISOL, 2), e(Form.MED2, Form.FIN2, 5), e(Form.MED2, Form.ISOL, 6)),
+            arrayOf(e(none, none, 0), e(none, Form.ISOL, 2), e(Form.ISOL, Form.ISOL, 1), e(Form.ISOL, Form.ISOL, 2), e(Form.ISOL, Form.FIN2, 5), e(Form.ISOL, Form.ISOL, 6)),
+            arrayOf(e(none, none, 0), e(none, Form.ISOL, 2), e(none, Form.ISOL, 1), e(none, Form.ISOL, 2), e(none, Form.FIN3, 5), e(none, Form.ISOL, 6)),
         )
     }
 }

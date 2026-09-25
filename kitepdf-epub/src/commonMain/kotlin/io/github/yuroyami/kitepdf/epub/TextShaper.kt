@@ -47,8 +47,8 @@ internal object TextShaper {
     /**
      * Shapes the characters [codePoints] of one run in [script], whose glyphs before shaping are
      * [gids]: through [IndicShaper] for the scripts of India, [KhmerShaper] for Khmer,
-     * [MyanmarShaper] for Myanmar, and [Normalizer] and GSUB in the stages of [stages] for the
-     * rest. [forms] are the Arabic joining forms of the run,
+     * [MyanmarShaper] for Myanmar, [UseShaper] for Sinhala, Tibetan and the other scripts of the
+     * Universal Shaping Engine, and [Normalizer] and GSUB in the stages of [stages] for the rest. [forms] are the Arabic joining forms of the run,
      * when it has Arabic. The cluster of each glyph is the index of its first character in
      * [codePoints].
      */
@@ -79,6 +79,10 @@ internal object TextShaper {
             val prepared = MyanmarShaper.prepare(codePoints) { face.gidFor(it) != 0 }
             addPrepared(prepared)
             MyanmarShaper.shape(gsub, script, glyphs, prepared.codePoints, face::gidFor, optionalLigatures)
+        } else if (UseShaper.handles(script, gsub)) {
+            val prepared = UseShaper.prepare(script, codePoints) { face.gidFor(it) != 0 }
+            addPrepared(prepared)
+            UseShaper.shape(gsub, script, glyphs, prepared.codePoints, face::gidFor, optionalLigatures)
         } else {
             val arabic = script == "arab" || script == "syrc"
             // Thai and Lao split sara am before normalization, as HarfBuzz's Thai shaper does.
@@ -191,7 +195,7 @@ internal object TextShaper {
      */
     fun isMark(cp: Int): Boolean = cp.toChar().category == CharCategory.NON_SPACING_MARK && !isDefaultIgnorable(cp)
 
-    private val RTL = setOf("arab", "hebr", "syrc", "thaa", "nko ")
+    private val RTL = setOf("arab", "hebr", "syrc", "thaa", "nko ", "mand")
 
     /** The OpenType tags of the script of [cp], the newer tag first, or null for common characters. */
     private fun scriptTags(cp: Int): List<String>? = when {
@@ -204,6 +208,8 @@ internal object TextShaper {
         cp in 0x600..0x6FF || cp in 0x750..0x77F || cp in 0x870..0x8FF || cp in 0xFB50..0xFDFF || cp in 0xFE70..0xFEFF -> listOf("arab")
         cp in 0x700..0x74F || cp in 0x860..0x86F -> listOf("syrc")
         cp in 0x780..0x7BF -> listOf("thaa")
+        cp in 0x7C0..0x7FF -> listOf("nko ")
+        cp in 0x840..0x85F -> listOf("mand")
         cp in 0x900..0x97F || cp in 0xA8E0..0xA8FF -> listOf("dev2", "deva")
         cp in 0x980..0x9FF -> listOf("bng2", "beng")
         cp in 0xA00..0xA7F -> listOf("gur2", "guru")
@@ -217,6 +223,29 @@ internal object TextShaper {
         cp in 0xE00..0xE7F -> listOf("thai")
         cp in 0xE80..0xEFF -> listOf("lao ")
         cp in 0xF00..0xFFF -> listOf("tibt")
+        cp in 0x1700..0x171F -> listOf("tglg")
+        cp in 0x1720..0x173F -> listOf("hano")
+        cp in 0x1740..0x175F -> listOf("buhd")
+        cp in 0x1760..0x177F -> listOf("tagb")
+        cp in 0x1800..0x18AF -> listOf("mong")
+        cp in 0x1900..0x194F -> listOf("limb")
+        cp in 0x1950..0x197F -> listOf("tale")
+        cp in 0x1A00..0x1A1F -> listOf("bugi")
+        cp in 0x1A20..0x1AAF -> listOf("lana")
+        cp in 0x1B00..0x1B7F -> listOf("bali")
+        cp in 0x1B80..0x1BBF || cp in 0x1CC0..0x1CCF -> listOf("sund")
+        cp in 0x1BC0..0x1BFF -> listOf("batk")
+        cp in 0x1C00..0x1C4F -> listOf("lepc")
+        cp in 0x2D30..0x2D7F -> listOf("tfng")
+        cp in 0xA800..0xA82F -> listOf("sylo")
+        cp in 0xA840..0xA87F -> listOf("phag")
+        cp in 0xA880..0xA8DF -> listOf("saur")
+        cp in 0xA900..0xA92F -> listOf("kali")
+        cp in 0xA930..0xA95F -> listOf("rjng")
+        cp in 0xA980..0xA9DF -> listOf("java")
+        cp in 0xAA00..0xAA5F -> listOf("cham")
+        cp in 0xAA80..0xAADF -> listOf("tavt")
+        cp in 0xAAE0..0xAAFF || cp in 0xABC0..0xABFF -> listOf("mtei")
         cp in 0x1000..0x109F -> listOf("mym2", "mymr")
         cp in 0x10A0..0x10FF -> listOf("geor")
         cp in 0x1200..0x137F -> listOf("ethi")

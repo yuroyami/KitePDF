@@ -353,6 +353,8 @@ final class io.github.yuroyami.kitepdf.core.font/GlyphPoint { // io.github.yuroy
 final class io.github.yuroyami.kitepdf.core.font/GsubGlyph { // io.github.yuroyami.kitepdf.core.font/GsubGlyph|null[0]
     constructor <init>(kotlin/Int, kotlin/Int, kotlin.collections/Set<kotlin/String> = ..., kotlin/Boolean = ..., io.github.yuroyami.kitepdf.core.font/GsubGlyph.Ignorable? = ...) // io.github.yuroyami.kitepdf.core.font/GsubGlyph.<init>|<init>(kotlin.Int;kotlin.Int;kotlin.collections.Set<kotlin.String>;kotlin.Boolean;io.github.yuroyami.kitepdf.core.font.GsubGlyph.Ignorable?){}[0]
 
+    final val component // io.github.yuroyami.kitepdf.core.font/GsubGlyph.component|{}component[0]
+        final fun <get-component>(): kotlin/Int // io.github.yuroyami.kitepdf.core.font/GsubGlyph.component.<get-component>|<get-component>(){}[0]
     final val ignorable // io.github.yuroyami.kitepdf.core.font/GsubGlyph.ignorable|{}ignorable[0]
         final fun <get-ignorable>(): io.github.yuroyami.kitepdf.core.font/GsubGlyph.Ignorable? // io.github.yuroyami.kitepdf.core.font/GsubGlyph.ignorable.<get-ignorable>|<get-ignorable>(){}[0]
     final val isMark // io.github.yuroyami.kitepdf.core.font/GsubGlyph.isMark|{}isMark[0]
@@ -383,6 +385,7 @@ final class io.github.yuroyami.kitepdf.core.font/GsubGlyph { // io.github.yuroya
         final fun <set-shaperData>(kotlin/Int) // io.github.yuroyami.kitepdf.core.font/GsubGlyph.shaperData.<set-shaperData>|<set-shaperData>(kotlin.Int){}[0]
     final var substituted // io.github.yuroyami.kitepdf.core.font/GsubGlyph.substituted|{}substituted[0]
         final fun <get-substituted>(): kotlin/Boolean // io.github.yuroyami.kitepdf.core.font/GsubGlyph.substituted.<get-substituted>|<get-substituted>(){}[0]
+        final fun <set-substituted>(kotlin/Boolean) // io.github.yuroyami.kitepdf.core.font/GsubGlyph.substituted.<set-substituted>|<set-substituted>(kotlin.Boolean){}[0]
     final var syllable // io.github.yuroyami.kitepdf.core.font/GsubGlyph.syllable|{}syllable[0]
         final fun <get-syllable>(): kotlin/Int // io.github.yuroyami.kitepdf.core.font/GsubGlyph.syllable.<get-syllable>|<get-syllable>(){}[0]
         final fun <set-syllable>(kotlin/Int) // io.github.yuroyami.kitepdf.core.font/GsubGlyph.syllable.<set-syllable>|<set-syllable>(kotlin.Int){}[0]
@@ -492,6 +495,9 @@ final class io.github.yuroyami.kitepdf.core.font/OpenTypeGsub { // io.github.yur
     }
 
     final object Companion { // io.github.yuroyami.kitepdf.core.font/OpenTypeGsub.Companion|null[0]
+        final val EMPTY // io.github.yuroyami.kitepdf.core.font/OpenTypeGsub.Companion.EMPTY|{}EMPTY[0]
+            final fun <get-EMPTY>(): io.github.yuroyami.kitepdf.core.font/OpenTypeGsub // io.github.yuroyami.kitepdf.core.font/OpenTypeGsub.Companion.EMPTY.<get-EMPTY>|<get-EMPTY>(){}[0]
+
         final fun from(kotlin/ByteArray?): io.github.yuroyami.kitepdf.core.font/OpenTypeGsub? // io.github.yuroyami.kitepdf.core.font/OpenTypeGsub.Companion.from|from(kotlin.ByteArray?){}[0]
         final fun from(kotlin/ByteArray?, kotlin/ByteArray?): io.github.yuroyami.kitepdf.core.font/OpenTypeGsub? // io.github.yuroyami.kitepdf.core.font/OpenTypeGsub.Companion.from|from(kotlin.ByteArray?;kotlin.ByteArray?){}[0]
     }
