@@ -18,7 +18,7 @@ import kotlin.random.Random
 object ParityFixtures {
 
     fun all(): List<SyntheticPdfs.Fixture> =
-        annotations() + icons() + forms() + colourSpaces() + text() + geometry() + damaged() + written()
+        annotations() + icons() + forms() + colourSpaces() + groups() + text() + geometry() + damaged() + written()
 
     private const val HELV = "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>"
 
@@ -140,6 +140,52 @@ object ParityFixtures {
             ),
         )
     }
+
+    /** Transparency groups whose flags change the result: knockout, and a non-isolated blend over the page. */
+    private fun groups(): List<SyntheticPdfs.Fixture> {
+        fun group(name: String, groupDict: String, groupContent: String, pageContent: String, gs: String) = fixture(
+            "parity-group-$name",
+            onePage(
+                "$pageContent /Fm0 Do",
+                "/XObject << /Fm0 5 0 R >> /ExtGState << $gs >>",
+                extraObjects = listOf(formXObject("/BBox [0 0 300 300] /Group $groupDict /Resources << /ExtGState << $gs >> >>", groupContent)),
+            ),
+        )
+        return listOf(
+            group(
+                "knockout",
+                "<< /S /Transparency /CS /DeviceRGB /I true /K true >>",
+                "/GA gs 1 0 0 rg 40 40 140 140 re f 0 0 1 rg 120 120 140 140 re f",
+                "",
+                "/GA << /ca 0.5 >>",
+            ),
+            group(
+                "non-isolated-multiply",
+                "<< /S /Transparency /CS /DeviceRGB /I false >>",
+                "/GM gs 1 1 0 rg 60 60 180 180 re f",
+                "0 1 0 rg 20 20 260 260 re f",
+                "/GM << /BM /Multiply >>",
+            ),
+            group(
+                "non-isolated-multiply-alpha",
+                "<< /S /Transparency /CS /DeviceRGB /I false >>",
+                "/GM gs 1 1 0 rg 60 60 180 180 re f",
+                "0 1 0 rg 20 20 260 260 re f /GA gs",
+                "/GM << /BM /Multiply >> /GA << /ca 0.6 >>",
+            ),
+            group(
+                "isolated-multiply",
+                "<< /S /Transparency /CS /DeviceRGB /I true >>",
+                "/GM gs 1 1 0 rg 60 60 180 180 re f",
+                "0 1 0 rg 20 20 260 260 re f",
+                "/GM << /BM /Multiply >>",
+            ),
+        )
+    }
+
+    /** A form XObject with the entries [dict] and the content [content], as a stream object body. */
+    private fun formXObject(dict: String, content: String): String =
+        "<< /Type /XObject /Subtype /Form $dict /Length ${content.length} >>\nstream\n$content\nendstream"
 
     /** Cyan and magenta as DeviceN, through a PostScript tint transform that is object 5. */
     private fun deviceN(): ByteArray {

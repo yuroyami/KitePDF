@@ -643,6 +643,11 @@ public class ComposeCanvas(
         isolated: Boolean, knockout: Boolean,
         alpha: Double, blendMode: KiteBlendMode,
     ) {
+        // A non-isolated group at full alpha in Normal paints straight onto its backdrop, so its blend
+        // modes see what lies under it. A layer would isolate it (ISO 32000-1, 11.4.5, #125).
+        val layered = isolated || alpha < 1.0 || blendMode != KiteBlendMode.Normal
+        groupLayers.addLast(layered)
+        if (!layered) return
         // Compute the layer's pixel bounds in device space.
         val x0 = ctm.transformX(bbox.left, bbox.bottom)
         val y0 = ctm.transformY(bbox.left, bbox.bottom)
@@ -667,7 +672,11 @@ public class ComposeCanvas(
         openGroups++
     }
 
+    /** For each open group, whether it opened a layer. */
+    private val groupLayers = ArrayDeque<Boolean>()
+
     override fun endTransparencyGroup() {
+        if (groupLayers.removeLastOrNull() != true) return
         if (openGroups <= 0) return
         drawScope.drawContext.canvas.restore()
         openGroups--

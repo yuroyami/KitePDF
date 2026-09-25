@@ -901,7 +901,9 @@ public class AwtCanvas(private var g: Graphics2D) : KiteCanvas {
         val parent = g
         val a = alpha.toFloat().coerceIn(0f, 1f)
         fun direct() = groupStack.addLast(GroupFrame(parent, null, java.awt.Rectangle(), 1.0, a, blendMode, ArrayDeque(), layerBlends))
-        if (a >= 1f && blendMode == KiteBlendMode.Normal) return direct()
+        // An isolated group composites its paints onto a transparent backdrop, so it needs a layer
+        // even at full alpha in Normal (ISO 32000-1, 11.4.5, #125).
+        if (a >= 1f && blendMode == KiteBlendMode.Normal && !isolated) return direct()
         val box = bbox.normalized()
         val area = AffineTransform(parent.transform).apply {
             concatenate(AffineTransform(ctm.a, ctm.b, ctm.c, ctm.d, ctm.e, ctm.f))

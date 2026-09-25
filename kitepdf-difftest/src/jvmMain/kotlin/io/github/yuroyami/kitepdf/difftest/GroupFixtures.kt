@@ -58,6 +58,26 @@ object GroupFixtures {
         image("image-multiply", "/BM /Multiply", budget = 0.005),
         // The same image at half alpha.
         image("image-alpha-multiply", "/ca 0.5 /BM /Multiply", budget = 0.005),
+        // A yellow square multiplied inside an isolated group, over a green page: the multiply sees the
+        // group's transparent backdrop, so the square stays yellow (ISO 32000-1, 11.4.5, #125).
+        isolation("group-isolated-multiply", isolated = true, budget = 0.005),
+        // The same in a non-isolated group: the multiply sees the green page, so the square is green.
+        isolation("group-non-isolated-multiply", isolated = false, budget = 0.005),
+    )
+
+    /** A green page, then a group, [isolated] or not, whose yellow square blends in Multiply. */
+    private fun isolation(name: String, isolated: Boolean, budget: Double): OracleFixture = oracleFixture(
+        name,
+        "0 1 0 rg 0 0 200 200 re f /Fm1 Do",
+        "/XObject << /Fm1 5 0 R >>",
+        listOf(
+            pdfStream(
+                "/GM gs 1 1 0 rg 40 40 120 120 re f".toByteArray(),
+                "/Type /XObject /Subtype /Form /BBox [0 0 200 200] /Group << /S /Transparency /I $isolated >> " +
+                    "/Resources << /ExtGState << /GM << /BM /Multiply >> >> >>",
+            ),
+        ),
+        budget,
     )
 
     /** A /TR entry that inverts each mask value: 1 becomes 0 and 0 becomes 1. */
