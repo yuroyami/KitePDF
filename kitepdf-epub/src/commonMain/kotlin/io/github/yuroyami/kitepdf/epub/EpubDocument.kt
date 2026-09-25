@@ -1038,9 +1038,7 @@ public class EpubPage internal constructor(
             canvas.fillPath(rect, deviceCtm, bg, evenOdd = false)
         }
 
-        for (box in page.decoBoxes) paintBox(box, canvas, deviceCtm, margin, startY, bandBottom, ::yUp)
-
-        for (line in page.lines) {
+        fun paintLine(line: PositionedLine) {
             val base = yUp(line.yTop + line.ascent)
             for (run in line.runs) {
                 val tm = KiteMatrix.translation(margin + run.x, base + run.baselineShift)
@@ -1062,13 +1060,18 @@ public class EpubPage internal constructor(
             }
         }
 
-        for (box in page.images) {
-            // The picture fills the content box, inside the border and padding (#101).
-            val inset = imageInset(box.style)
-            paintImage(canvas, deviceCtm, box.image, box.svg, box.drawWidth, box.drawHeight,
-                margin + box.x + inset.inlineStart, yUp(box.bottom - inset.blockEnd), box.style.objectFit,
-                resourceDir(box))
-        }
+        paintInOrder(
+            page,
+            deco = { box -> paintBox(box, canvas, deviceCtm, margin, startY, bandBottom, ::yUp) },
+            line = ::paintLine,
+            image = { box ->
+                // The picture fills the content box, inside the border and padding (#101).
+                val inset = imageInset(box.style)
+                paintImage(canvas, deviceCtm, box.image, box.svg, box.drawWidth, box.drawHeight,
+                    margin + box.x + inset.inlineStart, yUp(box.bottom - inset.blockEnd), box.style.objectFit,
+                    resourceDir(box))
+            },
+        )
         canvas.endPage()
     }
 
@@ -1092,9 +1095,7 @@ public class EpubPage internal constructor(
             canvas.fillPath(rect, deviceCtm, bg, evenOdd = false)
         }
 
-        for (box in page.decoBoxes) paintBoxVertical(box, canvas, deviceCtm, margin, startY, bandBottom, ::colX)
-
-        for (line in page.lines) {
+        fun paintLine(line: PositionedLine) {
             // CSS Writing Modes 4, 6.3 and 6.4: line-over is the right side in both
             // vertical modes, which in vertical-lr is the line's block-end side. So a
             // vertical-lr baseline sits the line's ascent before its end (#261), and a
@@ -1161,14 +1162,42 @@ public class EpubPage internal constructor(
             }
         }
 
-        for (box in page.images) {
-            val inset = imageInset(box.style)
-            val left = minOf(colX(box.y + inset.blockStart), colX(box.bottom - inset.blockEnd))
-            val top = margin + box.x + inset.inlineStart
-            paintImage(canvas, deviceCtm, box.image, box.svg, box.drawWidth, box.drawHeight,
-                left, displayHeight - top - box.drawHeight, box.style.objectFit, resourceDir(box))
-        }
+        paintInOrder(
+            page,
+            deco = { box -> paintBoxVertical(box, canvas, deviceCtm, margin, startY, bandBottom, ::colX) },
+            line = ::paintLine,
+            image = { box ->
+                val inset = imageInset(box.style)
+                val left = minOf(colX(box.y + inset.blockStart), colX(box.bottom - inset.blockEnd))
+                val top = margin + box.x + inset.inlineStart
+                paintImage(canvas, deviceCtm, box.image, box.svg, box.drawWidth, box.drawHeight,
+                    left, displayHeight - top - box.drawHeight, box.style.objectFit, resourceDir(box))
+            },
+        )
         canvas.endPage()
+    }
+
+    /**
+     * Paints the backgrounds and borders, the lines and the block images of [page] in the order
+     * that [Paginator] numbered them, which follows CSS 2.1, Appendix E (#172).
+     */
+    private fun paintInOrder(page: PageRender, deco: (LayoutBox) -> Unit, line: (PositionedLine) -> Unit, image: (ImageBox) -> Unit) {
+        // Each step is its rank, then its kind, then its index in the page's list.
+        val steps = LongArray(page.decoBoxes.size + page.lines.size + page.images.size)
+        var n = 0
+        fun step(rank: Int, kind: Int, index: Int) { steps[n++] = (rank.toLong() shl 32) or (kind.toLong() shl 30) or index.toLong() }
+        page.decoBoxes.forEachIndexed { i, box -> step(box.decoRank, 0, i) }
+        page.lines.forEachIndexed { i, l -> step(l.paintRank, 1, i) }
+        page.images.forEachIndexed { i, box -> step(box.contentRank, 2, i) }
+        steps.sort()
+        for (s in steps) {
+            val index = (s and 0x3FFFFFFF).toInt()
+            when ((s ushr 30 and 3).toInt()) {
+                0 -> deco(page.decoBoxes[index])
+                1 -> line(page.lines[index])
+                else -> image(page.images[index])
+            }
+        }
     }
 
     /**

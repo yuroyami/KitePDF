@@ -299,6 +299,7 @@ internal class StyleResolver(
                 "left" -> CssClear.LEFT; "right" -> CssClear.RIGHT
                 "both" -> CssClear.BOTH; else -> CssClear.NONE
             }
+            "z-index" -> b.zIndex = v.trim().toIntOrNull()
             "position" -> b.position = when (v.trim().lowercase()) {
                 "absolute" -> CssPosition.ABSOLUTE; "fixed" -> CssPosition.FIXED
                 "relative" -> CssPosition.RELATIVE; else -> CssPosition.STATIC
@@ -556,6 +557,7 @@ internal class StyleResolver(
         var cssFloat = CssFloat.NONE // not inherited
         var clear = CssClear.NONE // not inherited
         var tableLayoutFixed = false // not inherited
+        var zIndex: Int? = null // not inherited
 
         fun build(): ComputedStyle {
             val outOfFlow = position == CssPosition.ABSOLUTE || position == CssPosition.FIXED || cssFloat != CssFloat.NONE
@@ -591,7 +593,7 @@ internal class StyleResolver(
                 textTransform, letterSpacingPt, wordSpacingPt, smallCaps,
                 minWidthPt, minHeightPt, maxHeightPt,
                 borderCollapse, borderSpacingPt,
-                cssFloat, clear, tableLayoutFixed, lineThrough,
+                cssFloat, clear, tableLayoutFixed, lineThrough, zIndex,
             )
         }
     }
