@@ -1241,7 +1241,7 @@ public class EpubPage internal constructor(
 
     /** Upright in vertical flow: the full-width (CJK) codepoints; the rest rotate. */
     private fun isUpright(g: io.github.yuroyami.kitepdf.core.font.TextGlyph): Boolean =
-        g.text.isNotEmpty() && FontMetrics.isWide(g.text[0].code)
+        g.text.isNotEmpty() && FontMetrics.isWide(codePointAt(g.text, 0))
 
     /** [paintBox] under the vertical mapping: block spans columns, inline runs down. */
     private fun paintBoxVertical(

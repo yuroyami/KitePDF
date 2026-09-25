@@ -219,7 +219,7 @@ internal object IndicShaper {
     }
 
     /** HarfBuzz's general categories from format to non-spacing mark: the letters, the marks and the format characters. */
-    private fun isWordCharacter(cp: Int): Boolean = when (cp.toChar().category) {
+    private fun isWordCharacter(cp: Int): Boolean = when (GeneralCategory.of(cp)) {
         CharCategory.FORMAT, CharCategory.UNASSIGNED, CharCategory.PRIVATE_USE, CharCategory.SURROGATE,
         CharCategory.LOWERCASE_LETTER, CharCategory.MODIFIER_LETTER, CharCategory.OTHER_LETTER,
         CharCategory.TITLECASE_LETTER, CharCategory.UPPERCASE_LETTER, CharCategory.COMBINING_SPACING_MARK,

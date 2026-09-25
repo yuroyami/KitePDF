@@ -5,10 +5,9 @@ package io.github.yuroyami.kitepdf.epub
  * the contextual form of each letter from its joining type and those of its neighbours. The
  * caller then applies the GSUB feature of each form, such as `init` or `fina`.
  *
- * The joining types of U+0600 to U+08FF, of Mongolian and of Phags-pa come from
- * ArabicShaping.txt of Unicode 17. Outside those blocks, a character is transparent when it
- * is a non-spacing or enclosing mark or a format character, and non-joining otherwise, as the
- * header of that file says.
+ * The joining types come from ArabicShaping.txt of Unicode 17, for every plane (#319). A
+ * character that the file does not list is transparent when it is a non-spacing or enclosing
+ * mark or a format character, and non-joining otherwise, as the header of that file says.
  */
 internal object ArabicJoining {
 
@@ -22,8 +21,13 @@ internal object ArabicJoining {
     /** The contextual forms, each named after its GSUB feature. */
     enum class Form { ISOL, INIT, MEDI, FINA, FIN2, FIN3, MED2 }
 
-    /** True if any code point in [cps] is in a joining script: U+0600 to U+08FF, Mongolian or Phags-pa. */
-    fun hasArabic(cps: IntArray): Boolean = cps.any { it in 0x0600..0x08FF || it in 0x1800..0x18AF || it in 0xA840..0xA87F }
+    /** True if any code point in [cps] is in a script that joins, such as Arabic, Syriac, Mongolian or Adlam. */
+    fun hasArabic(cps: IntArray): Boolean = cps.any { UnicodeScript.of(it) in JOINING_SCRIPTS }
+
+    /** The scripts that HarfBuzz gives joining forms, by their ISO 15924 codes. */
+    private val JOINING_SCRIPTS = setOf(
+        "Adlm", "Arab", "Chrs", "Mand", "Mani", "Mong", "Nkoo", "Ougr", "Phag", "Phlp", "Rohg", "Sogd", "Syrc",
+    )
 
     /** The GSUB feature tag of [form]. */
     fun feature(form: Form): String = form.name.lowercase()
@@ -51,37 +55,21 @@ internal object ArabicJoining {
     }
 
     /** The joining type of [cp]. */
-    fun type(cp: Int): Jt = when (cp) {
-        // Mongolian and Phags-pa
-        0x1806, 0x180E, in 0x1880..0x1884, 0xA873 -> Jt.U
-        0x1807, 0x180A, in 0x1820..0x1878, in 0x1887..0x18A8, 0x18AA, in 0xA840..0xA871 -> Jt.D
-        0x1885, 0x1886 -> Jt.T
-        0xA872 -> Jt.L
-        in 0x0610..0x061A, 0x061C, in 0x064B..0x065F, 0x0670, in 0x06D6..0x06DC, in 0x06DF..0x06E4, 0x06E7, 0x06E8,
-            in 0x06EA..0x06ED, 0x070F, 0x0711, in 0x0730..0x074A, in 0x07A6..0x07B0, in 0x07EB..0x07F3, 0x07FD,
-            in 0x0816..0x0819, in 0x081B..0x0823, in 0x0825..0x0827, in 0x0829..0x082D, in 0x0859..0x085B,
-            in 0x0897..0x089F, in 0x08CA..0x08E1, in 0x08E3..0x08FF -> Jt.T
-        0x0620, 0x0626, 0x0628, in 0x062A..0x062E, in 0x0633..0x0647, 0x0649, 0x064A, 0x066E, 0x066F, in 0x0678..0x0687,
-            in 0x069A..0x06BF, 0x06C1, 0x06C2, 0x06CC, 0x06CE, 0x06D0, 0x06D1, in 0x06FA..0x06FC, 0x06FF,
-            in 0x0712..0x0714, in 0x071A..0x071D, in 0x071F..0x0727, 0x0729, 0x072B, 0x072D, 0x072E, in 0x074E..0x0758,
-            in 0x075C..0x076A, in 0x076D..0x0770, 0x0772, in 0x0775..0x0777, in 0x077A..0x077F, in 0x07CA..0x07EA,
-            0x07FA, in 0x0841..0x0845, 0x0848, in 0x084A..0x0853, 0x0855, 0x0860, in 0x0862..0x0865, 0x0868,
-            in 0x0883..0x0886, in 0x0889..0x088D, 0x088F, in 0x08A0..0x08A9, 0x08AF, 0x08B0, in 0x08B3..0x08B8,
-            in 0x08BA..0x08C8 -> Jt.D
-        in 0x0622..0x0625, 0x0627, 0x0629, in 0x062F..0x0632, 0x0648, in 0x0671..0x0673, in 0x0675..0x0677,
-            in 0x0688..0x0699, 0x06C0, in 0x06C3..0x06CB, 0x06CD, 0x06CF, 0x06D2, 0x06D3, 0x06D5, 0x06EE, 0x06EF,
-            in 0x0717..0x0719, 0x071E, 0x0728, 0x072C, 0x074D, in 0x0759..0x075B, 0x076B, 0x076C, 0x0771, 0x0773, 0x0774,
-            0x0778, 0x0779, 0x0840, 0x0846, 0x0847, 0x0849, 0x0854, in 0x0856..0x0858, 0x0867, 0x0869, 0x086A,
-            in 0x0870..0x0882, 0x088E, in 0x08AA..0x08AC, 0x08AE, 0x08B1, 0x08B2, 0x08B9 -> Jt.R
-        0x0710 -> Jt.ALAPH
-        0x0715, 0x0716, 0x072A, 0x072F -> Jt.DALATH_RISH
-        in 0x0600..0x08FF, 0x200C, 0x180E -> Jt.U
-        0x200D -> Jt.D
-        else -> when (cp.toChar().category) {
+    fun type(cp: Int): Jt = when (table[cp]) {
+        1 -> Jt.L
+        2 -> Jt.R
+        3 -> Jt.D
+        4 -> Jt.ALAPH
+        5 -> Jt.DALATH_RISH
+        6 -> Jt.T
+        7 -> Jt.U
+        else -> when (GeneralCategory.of(cp)) {
             CharCategory.NON_SPACING_MARK, CharCategory.ENCLOSING_MARK, CharCategory.FORMAT -> Jt.T
             else -> Jt.U
         }
     }
+
+    private val table by lazy { PackedRuns(TYPES) }
 
     /** What one character does in a state: the form the previous character takes, its own form, and the next state. */
     private class Entry(val prev: Form?, val curr: Form?, val next: Int)
@@ -106,4 +94,34 @@ internal object ArabicJoining {
             arrayOf(e(none, none, 0), e(none, Form.ISOL, 2), e(none, Form.ISOL, 1), e(none, Form.ISOL, 2), e(none, Form.FIN3, 5), e(none, Form.ISOL, 6)),
         )
     }
+
+    /**
+     * The joining type of every character that ArabicShaping.txt lists, in runs of one type: the
+     * first and last code point in six hex digits each, and the type in two: 1 left-joining, 2
+     * right-joining, 3 dual-joining or join-causing, 4 Alaph, 5 Dalath and Rish, 6 transparent
+     * and 7 non-joining.
+     */
+    private const val TYPES =
+        "000600000605070006080006080700060B00060B07000620000620030006210006210700062200062502000626000626030006270006270200062800" +
+        "0628030006290006290200062A00062E0300062F00063202000633000647030006480006480200064900064A0300066E00066F030006710006730200" +
+        "06740006740700067500067702000678000687030006880006990200069A0006BF030006C00006C0020006C10006C2030006C30006CB020006CC0006" +
+        "CC030006CD0006CD020006CE0006CE030006CF0006CF020006D00006D1030006D20006D3020006D50006D5020006DD0006DD070006EE0006EF020006" +
+        "FA0006FC030006FF0006FF0300070F00070F060007100007100400071200071403000715000716050007170007190200071A00071D0300071E00071E" +
+        "0200071F00072703000728000728020007290007290300072A00072A0500072B00072B0300072C00072C0200072D00072E0300072F00072F0500074D" +
+        "00074D0200074E0007580300075900075B0200075C00076A0300076B00076C0200076D00077003000771000771020007720007720300077300077402" +
+        "000775000777030007780007790200077A00077F030007CA0007EA030007FA0007FA0300084000084002000841000845030008460008470200084800" +
+        "0848030008490008490200084A0008530300085400085402000855000855030008560008580200086000086003000861000861070008620008650300" +
+        "086600086607000867000867020008680008680300086900086A0200087000088202000883000886030008870008880700088900088D0300088E0008" +
+        "8E0200088F00088F03000890000891070008A00008A9030008AA0008AC020008AD0008AD070008AE0008AE020008AF0008B0030008B10008B2020008" +
+        "B30008B8030008B90008B9020008BA0008C8030008E20008E207001806001806070018070018070300180A00180A0300180E00180E07001820001878" +
+        "0300188000188407001885001886060018870018A8030018AA0018AA0300200C00200C0700200D00200D0300202F00202F070020660020690700A840" +
+        "00A8710300A87200A8720100A87300A87307010AC0010AC403010AC5010AC502010AC6010AC607010AC7010AC702010AC8010AC807010AC9010ACA02" +
+        "010ACB010ACC07010ACD010ACD01010ACE010AD202010AD3010AD603010AD7010AD701010AD8010ADC03010ADD010ADD02010ADE010AE003010AE101" +
+        "0AE102010AE2010AE307010AE4010AE402010AEB010AEE03010AEF010AEF02010B80010B8003010B81010B8102010B82010B8203010B83010B850201" +
+        "0B86010B8803010B89010B8902010B8A010B8B03010B8C010B8C02010B8D010B8D03010B8E010B8F02010B90010B9003010B91010B9102010BA9010B" +
+        "AC02010BAD010BAE03010BAF010BAF07010D00010D0001010D01010D2103010D22010D2202010D23010D2303010EC2010EC202010EC3010EC403010E" +
+        "C6010EC703010F30010F3203010F33010F3302010F34010F4403010F45010F4507010F51010F5303010F54010F5402010F70010F7303010F74010F75" +
+        "02010F76010F8103010FB0010FB003010FB1010FB107010FB2010FB303010FB4010FB602010FB7010FB707010FB8010FB803010FB9010FBA02010FBB" +
+        "010FBC03010FBD010FBD02010FBE010FBF03010FC0010FC007010FC1010FC103010FC2010FC302010FC4010FC403010FC5010FC807010FC9010FC902" +
+        "010FCA010FCA03010FCB010FCB010110BD0110BD070110CD0110CD0701E90001E9430301E94B01E94B06"
 }

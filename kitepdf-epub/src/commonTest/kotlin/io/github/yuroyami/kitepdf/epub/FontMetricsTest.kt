@@ -52,8 +52,8 @@ class FontMetricsTest {
 
     @Test
     fun advance_scales_with_font_size() {
-        val at12 = FontMetrics.advancePt('A', 12.0)
-        val at24 = FontMetrics.advancePt('A', 24.0)
+        val at12 = FontMetrics.advancePt('A'.code, 12.0)
+        val at24 = FontMetrics.advancePt('A'.code, 24.0)
         assertEquals(at12 * 2, at24, 1e-9)
         assertEquals(722 * 12.0 / 1000.0, at12, 1e-9)
     }

@@ -35,9 +35,33 @@ class GsubOracleTest {
         return words.mapIndexed { i, word ->
             val gids = lines[i].trim().removePrefix("[").removeSuffix("]").split('|').filter { it.isNotBlank() }.map { it.trim().toInt() }
             // HarfBuzz lists the glyphs of a right-to-left word from its end.
-            if (word.any { it.code in 0x0590..0x08FF }) gids.reversed() else gids
+            if (isRightToLeft(word)) gids.reversed() else gids
         }
     }
+
+    /**
+     * True when HarfBuzz shapes [word] right to left: the first character of a script, by the
+     * JDK's own Unicode data, is of a script that HarfBuzz's hb_script_get_horizontal_direction
+     * lists as right to left.
+     */
+    private fun isRightToLeft(word: String): Boolean {
+        for (cp in word.codePoints().toArray()) {
+            val script = Character.UnicodeScript.of(cp)
+            if (script == Character.UnicodeScript.COMMON || script == Character.UnicodeScript.INHERITED ||
+                script == Character.UnicodeScript.UNKNOWN
+            ) continue
+            return script.name in RTL_SCRIPTS
+        }
+        return false
+    }
+
+    private val RTL_SCRIPTS = setOf(
+        "ARABIC", "HEBREW", "SYRIAC", "THAANA", "CYPRIOT", "KHAROSHTHI", "PHOENICIAN", "NKO", "LYDIAN", "AVESTAN",
+        "IMPERIAL_ARAMAIC", "INSCRIPTIONAL_PAHLAVI", "INSCRIPTIONAL_PARTHIAN", "OLD_SOUTH_ARABIAN", "OLD_TURKIC",
+        "SAMARITAN", "MANDAIC", "MEROITIC_CURSIVE", "MEROITIC_HIEROGLYPHS", "MANICHAEAN", "MENDE_KIKAKUI", "NABATAEAN",
+        "OLD_NORTH_ARABIAN", "PALMYRENE", "PSALTER_PAHLAVI", "HATRAN", "ADLAM", "HANIFI_ROHINGYA", "OLD_SOGDIAN",
+        "SOGDIAN", "ELYMAIC", "CHORASMIAN", "YEZIDI", "OLD_UYGHUR", "GARAY", "SIDETIC",
+    )
 
     private val faces = HashMap<File, EmbeddedFace>()
 
@@ -293,7 +317,7 @@ class GsubOracleTest {
         assertTrue(failures.isEmpty(), failures.take(20).joinToString("\n"))
     }
 
-    /** The Noto font of each script of the Universal Shaping Engine in the Basic Multilingual Plane, with its block. */
+    /** The Noto font of each script of the Universal Shaping Engine, with its block. */
     private val use = listOf(
         "NotoSerifSinhala-Regular.otf" to 0x0D80..0x0DFF, "NotoSerifTibetan-Regular.otf" to 0x0F00..0x0FFF,
         "NotoSansMongolian-Regular.otf" to 0x1800..0x18AF, "NotoSansTagalog-Regular.otf" to 0x1700..0x171F,
@@ -309,13 +333,42 @@ class GsubOracleTest {
         "NotoSansCham-Regular.otf" to 0xAA00..0xAA5F, "NotoSansTaiViet-Regular.otf" to 0xAA80..0xAADF,
         "NotoSansMeeteiMayek-Regular.otf" to 0xABC0..0xABFF, "NotoSansNKo-Regular.otf" to 0x07C0..0x07FF,
         "NotoSansMandaic-Regular.otf" to 0x0840..0x085F,
+        // Outside the Basic Multilingual Plane (#319)
+        "NotoSansAdlam-Regular.otf" to 0x1E900..0x1E95F, "NotoSerifAhom-Regular.otf" to 0x11700..0x1174F,
+        "NotoSansBhaiksuki-Regular.otf" to 0x11C00..0x11C6F, "NotoSansBrahmi-Regular.otf" to 0x11000..0x1107F,
+        "NotoSansChakma-Regular.otf" to 0x11100..0x1114F, "NotoSansChorasmian-Regular.otf" to 0x10FB0..0x10FDF,
+        "NotoSansCyproMinoan-Regular.otf" to 0x12F90..0x12FFF, "NotoSerifDivesAkuru-Regular.otf" to 0x11900..0x1195F,
+        "NotoSerifDogra-Regular.otf" to 0x11800..0x1184F, "NotoSansDuployan-Regular.otf" to 0x1BC00..0x1BCAF,
+        "NotoSansEgyptianHieroglyphs-Regular.otf" to 0x13000..0x1345F,
+        "NotoSansElymaic-Regular.otf" to 0x10FE0..0x10FFF, "NotoSansGunjalaGondi-Regular.otf" to 0x11D60..0x11DAF,
+        "NotoSansMasaramGondi-Regular.otf" to 0x11D00..0x11D5F, "NotoSerifGrantha-Regular.otf" to 0x11300..0x1137F,
+        "NotoSansHanifiRohingya-Regular.otf" to 0x10D00..0x10D3F,
+        "NotoSansPahawhHmong-Regular.otf" to 0x16B00..0x16B8F,
+        "NotoSerifNyiakengPuachueHmong-Regular.otf" to 0x1E100..0x1E14F,
+        "NotoSansKawi-Regular.otf" to 0x11F00..0x11F5F, "NotoSansKharoshthi-Regular.otf" to 0x10A00..0x10A5F,
+        "NotoSerifKhojki-Regular.otf" to 0x11200..0x1124F,
+        "NotoSerifKhitanSmallScript-Regular.otf" to 0x18B00..0x18CFF, "NotoSansKaithi-Regular.otf" to 0x11080..0x110CF,
+        "NotoSansMahajani-Regular.otf" to 0x11150..0x1117F, "NotoSerifMakasar-Regular.otf" to 0x11EE0..0x11EFF,
+        "NotoSansManichaean-Regular.otf" to 0x10AC0..0x10AFF, "NotoSansMarchen-Regular.otf" to 0x11C70..0x11CBF,
+        "NotoSansMedefaidrin-Regular.otf" to 0x16E40..0x16E9F, "NotoSansModi-Regular.otf" to 0x11600..0x1165F,
+        "NotoSansMultani-Regular.otf" to 0x11280..0x112AF, "NotoSansNagMundari-Regular.otf" to 0x1E4D0..0x1E4FF,
+        "NotoSansNandinagari-Regular.otf" to 0x119A0..0x119FF, "NotoSansNewa-Regular.otf" to 0x11400..0x1147F,
+        "NotoSansOldSogdian-Regular.otf" to 0x10F00..0x10F2F, "NotoSerifOldUyghur-Regular.otf" to 0x10F70..0x10FAF,
+        "NotoSansPsalterPahlavi-Regular.otf" to 0x10B80..0x10BAF, "NotoSansMiao-Regular.otf" to 0x16F00..0x16F9F,
+        "NotoSansSharada-Regular.otf" to 0x11180..0x111DF, "NotoSansSiddham-Regular.otf" to 0x11580..0x115FF,
+        "NotoSansKhudawadi-Regular.otf" to 0x112B0..0x112FF, "NotoSansSogdian-Regular.otf" to 0x10F30..0x10F6F,
+        "NotoSansSoyombo-Regular.otf" to 0x11A50..0x11AAF, "NotoSansTakri-Regular.otf" to 0x11680..0x116CF,
+        "NotoSansTirhuta-Regular.otf" to 0x11480..0x114DF, "NotoSansTangsa-Regular.otf" to 0x16A70..0x16ACF,
+        "NotoSerifToto-Regular.otf" to 0x1E290..0x1E2BF, "NotoSerifVithkuqi-Regular.otf" to 0x10570..0x105BF,
+        "NotoSansWancho-Regular.otf" to 0x1E2C0..0x1E2FF, "NotoSerifYezidi-Regular.otf" to 0x10E80..0x10EBF,
+        "NotoSansZanabazarSquare-Regular.otf" to 0x11A00..0x11A4F,
     )
 
     /**
      * Random words of the scripts of the Universal Shaping Engine shape to the glyphs HarfBuzz
-     * gives (#317): letters followed by signs of the block, now and then a joiner, and strings of
-     * any characters of the block, which make broken clusters. Four of the fonts have no GSUB,
-     * so these words also check the reordering of a font without one.
+     * gives (#317, #319): letters followed by signs of the block, now and then a joiner, and
+     * strings of any characters of the block, which make broken clusters. Four of the fonts have
+     * no GSUB, so these words also check the reordering of a font without one.
      */
     @Test
     fun random_use_words_shape_to_the_glyphs_harfbuzz_gives() {
@@ -326,9 +379,10 @@ class GsubOracleTest {
         for ((name, block) in use) {
             val font = File(dir, name).takeIf { it.exists() } ?: continue
             val chars = block.filter { face(font).gidFor(it) != 0 }
-            val letters = chars.filter { it.toChar().category == CharCategory.OTHER_LETTER }.ifEmpty { chars }
+            val letters = chars.filter { Character.getType(it) == Character.OTHER_LETTER.toInt() }.ifEmpty { chars }
             val signs = (chars - letters.toSet()).ifEmpty { chars }
-            val extra = listOf(0x200C, 0x200D) + listOf(0x25CC).filter { face(font).gidFor(it) != 0 }
+            // The Khitan filler joins the characters of a Khitan block.
+            val extra = listOf(0x200C, 0x200D) + listOf(0x25CC, 0x16FE4).filter { face(font).gidFor(it) != 0 }
             val random = Random(block.first)
             val words = List(200) {
                 buildString {
@@ -354,6 +408,76 @@ class GsubOracleTest {
     }
 
     private fun File.orSkipIfMissing(): File = takeIf { it.exists() }.orSkip(name)
+
+    /** The Noto font of scripts outside the Basic Multilingual Plane that HarfBuzz shapes with its default shaper, with their characters. */
+    private val supplementary: List<Pair<String, List<Int>>> = listOf(
+        "NotoSansGothic-Regular.otf" to 0x10330..0x1034F, "NotoSansDeseret-Regular.otf" to 0x10400..0x1044F,
+        "NotoSansOsage-Regular.otf" to 0x104B0..0x104FF, "NotoSansOldItalic-Regular.otf" to 0x10300..0x1032F,
+        "NotoSansOldPermic-Regular.otf" to 0x10350..0x1037F,
+        "NotoSansOldTurkic-Regular.otf" to 0x10C00..0x10C4F, "NotoSansPhoenician-Regular.otf" to 0x10900..0x1091F,
+        "NotoSansImperialAramaic-Regular.otf" to 0x10840..0x1085F, "NotoSansNabataean-Regular.otf" to 0x10880..0x108AF,
+        "NotoSansPalmyrene-Regular.otf" to 0x10860..0x1087F, "NotoSansHatran-Regular.otf" to 0x108E0..0x108FF,
+        "NotoSansAvestan-Regular.otf" to 0x10B00..0x10B3F,
+        "NotoSansInscriptionalPahlavi-Regular.otf" to 0x10B60..0x10B7F,
+        "NotoSansInscriptionalParthian-Regular.otf" to 0x10B40..0x10B5F,
+        "NotoSansLydian-Regular.otf" to 0x10920..0x1093F, "NotoSansLycian-Regular.otf" to 0x10280..0x1029F,
+        "NotoSansCarian-Regular.otf" to 0x102A0..0x102DF, "NotoSansCypriot-Regular.otf" to 0x10800..0x1083F,
+        "NotoSansMeroitic-Regular.otf" to 0x109A0..0x109FF, "NotoSansOldSouthArabian-Regular.otf" to 0x10A60..0x10A7F,
+        "NotoSansOldNorthArabian-Regular.otf" to 0x10A80..0x10A9F,
+        "NotoSansMendeKikakui-Regular.otf" to 0x1E800..0x1E8DF, "NotoSansBassaVah-Regular.otf" to 0x16AD0..0x16AFF,
+        "NotoSansMro-Regular.otf" to 0x16A40..0x16A6F, "NotoSansSoraSompeng-Regular.otf" to 0x110D0..0x110FF,
+        "NotoSansElbasan-Regular.otf" to 0x10500..0x1052F, "NotoSansCaucasianAlbanian-Regular.otf" to 0x10530..0x1056F,
+        "NotoSansWarangCiti-Regular.otf" to 0x118A0..0x118FF, "NotoSansPauCinHau-Regular.otf" to 0x11AC0..0x11AFF,
+        "NotoSansLinearB-Regular.otf" to 0x10000..0x1007F, "NotoSansUgaritic-Regular.otf" to 0x10380..0x1039F,
+        "NotoSansOldPersian-Regular.otf" to 0x103A0..0x103DF, "NotoSansShavian-Regular.otf" to 0x10450..0x1047F,
+        "NotoSansOsmanya-Regular.otf" to 0x10480..0x104AF,
+        // The combining letters of the supplement, over the letters of the Basic Multilingual Plane.
+        "NotoSansGlagolitic-Regular.otf" to (0x2C00..0x2C5F) + (0x1E000..0x1E02F),
+        "NotoMusic-Regular.otf" to 0x1D100..0x1D1FF, "NotoSansMath-Regular.otf" to 0x1D400..0x1D7FF,
+        "NotoSansSignWriting-Regular.otf" to 0x1D800..0x1DAAF, "NotoSansBamum-Regular.otf" to 0x16800..0x16A3F,
+        "NotoSansAnatolianHieroglyphs-Regular.otf" to 0x14400..0x1467F,
+    ).map { (name, chars) -> name to chars.toList() }
+
+    /**
+     * Random words of the scripts outside the Basic Multilingual Plane that HarfBuzz shapes with
+     * its default shaper shape to the glyphs it gives (#319): characters of the font, some with
+     * marks after them, and now and then a joiner. The musical symbols decompose, and several of
+     * the scripts run from right to left.
+     */
+    @Test
+    fun random_words_outside_the_bmp_shape_to_the_glyphs_harfbuzz_gives() {
+        val dir = fontsDir().orSkip("The Noto fonts of mupdf-master/resources")
+        val tool = hbShape().orSkip("hb-shape")
+        val marksTypes = setOf(Character.NON_SPACING_MARK, Character.COMBINING_SPACING_MARK, Character.ENCLOSING_MARK).map { it.toInt() }
+        val failures = ArrayList<String>()
+        var total = 0
+        for ((name, range) in supplementary) {
+            val font = File(dir, name).takeIf { it.exists() } ?: continue
+            val chars = range.filter { face(font).gidFor(it) != 0 }
+            val marks = chars.filter { Character.getType(it) in marksTypes }
+            val bases = (chars - marks.toSet()).ifEmpty { chars }
+            val random = Random(range.first())
+            val words = List(150) {
+                buildString {
+                    repeat(1 + random.nextInt(3)) {
+                        appendCodePoint(bases.random(random))
+                        if (marks.isNotEmpty()) repeat(random.nextInt(3)) { appendCodePoint(marks.random(random)) }
+                        if (random.nextInt(12) == 0) appendCodePoint(listOf(0x200C, 0x200D).random(random))
+                    }
+                }
+            }.distinct()
+            val theirs = harfbuzz(tool, font, words)
+            for ((i, word) in words.withIndex()) {
+                total++
+                val ours = kitepdf(font, word)
+                if (ours != theirs[i]) {
+                    failures += "$name ${word.codePoints().toArray().joinToString(" ") { "%04X".format(it) }}: KitePDF $ours, HarfBuzz ${theirs[i]}"
+                }
+            }
+        }
+        println("random words outside the bmp: ${total - failures.size} of $total match")
+        assertTrue(failures.isEmpty(), failures.take(20).joinToString("\n"))
+    }
 
     /**
      * Random words of Latin, Vietnamese, Greek, Cyrillic, Hebrew, Thai and Lao letters with up to

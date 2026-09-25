@@ -79,14 +79,19 @@ internal object FontMetrics {
         return if (family == GenericFont.MONO) MONO_WIDTH else FALLBACK_WIDTH
     }
 
-    /** True for CJK/full-width code points (one em wide, break between them). */
+    /**
+     * True for CJK/full-width code points (one em wide, break between them). Outside the Basic
+     * Multilingual Plane: Tangut, the kana supplements, Nushu and the ideographs of planes 2 and
+     * 3 (#319). Khitan stays out, because its characters join through GSUB.
+     */
     fun isWide(cp: Int): Boolean =
         cp in 0x1100..0x115F || cp in 0x2E80..0x303E || cp in 0x3041..0x33FF ||
             cp in 0x3400..0x4DBF || cp in 0x4E00..0x9FFF || cp in 0xA000..0xA4CF ||
             cp in 0xAC00..0xD7A3 || cp in 0xF900..0xFAFF || cp in 0xFE30..0xFE4F ||
-            cp in 0xFF00..0xFF60 || cp in 0xFFE0..0xFFE6
+            cp in 0xFF00..0xFF60 || cp in 0xFFE0..0xFFE6 ||
+            cp in 0x17000..0x18AFF || cp in 0x18D00..0x18D7F || cp in 0x1AFF0..0x1B2FF || cp in 0x20000..0x3FFFD
 
-    /** Advance of [ch] in points at [fontSize]. */
-    fun advancePt(ch: Char, fontSize: Double, bold: Boolean = false, italic: Boolean = false, family: GenericFont = GenericFont.SERIF): Double =
-        advance1000(ch.code, bold, italic, family) * fontSize / 1000.0
+    /** Advance of [cp] in points at [fontSize]. */
+    fun advancePt(cp: Int, fontSize: Double, bold: Boolean = false, italic: Boolean = false, family: GenericFont = GenericFont.SERIF): Double =
+        advance1000(cp, bold, italic, family) * fontSize / 1000.0
 }
