@@ -523,6 +523,13 @@ public class KiteDocViewState(
     public var selectionInProgress: Boolean by mutableStateOf(false)
         private set
 
+    /**
+     * True while a thumb drag reshapes the selection. A finger held still on a thumb also
+     * reaches the long-press timeout, and the long press underneath must leave it alone (#313).
+     */
+    internal var handleDragInProgress: Boolean = false
+        private set
+
     /** Fires on every selection change, including clearing (null). */
     public var onSelectionChange: ((KiteTextSelection?) -> Unit)? = null
 
@@ -552,6 +559,7 @@ public class KiteDocViewState(
         selectionAnchor = null
         isSelectionActive = false
         selectionInProgress = false
+        handleDragInProgress = false
         if (selection != null) {
             selection = null
             onSelectionChange?.invoke(null)
@@ -598,6 +606,7 @@ public class KiteDocViewState(
      */
     internal fun endSelectionGesture() {
         selectionInProgress = false
+        handleDragInProgress = false
         if (selection == null) isSelectionActive = false
     }
 
@@ -616,6 +625,7 @@ public class KiteDocViewState(
         selectionAnchor = sel.pageIndex to if (edge == KiteSelectionHandleEdge.Start) sel.end else sel.start
         isSelectionActive = true
         selectionInProgress = true
+        handleDragInProgress = true
     }
 
     /**
