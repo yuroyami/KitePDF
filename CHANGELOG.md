@@ -430,6 +430,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   before them. Joiners are hidden, and a lone matra gets a dotted circle. Before, a
   Hindi word such as हिन्दी drew its i matra after the consonant and no conjuncts.
   Against `hb-shape`, all 60 test words in the two scripts give the same glyphs (#211).
+- Gurmukhi, Gujarati, Oriya, Tamil, Telugu, Kannada and Malayalam text shapes. Each
+  script places its reph and its matras as HarfBuzz's Indic shaper places them, and a
+  Ra after a virama that the font forms into a pre-base shape moves before the base, as
+  Malayalam needs. A font with only the old script tags, such as `deva`, shapes by the
+  old specification. A font with no tag for the script that falls back to `DFLT` or
+  `latn` is not reordered, as in HarfBuzz. The shaper also follows HarfBuzz 14.4 more
+  closely in all nine scripts. It reads the category and position of each character
+  from HarfBuzz's table for Unicode 17, and it splits syllables by the longest match. A
+  vowel sequence that would draw like another vowel, such as अ and the aa matra, gets a
+  dotted circle. Characters decompose and compose as HarfBuzz normalizes them: Bengali
+  Rra stays whole, and Na with a nukta composes into Nnna when the font has it. A danda
+  or a Vedic sign no longer decides the script of a word.
+  GSUB matching passes over ZWJ, ZWNJ and the other default ignorable characters where
+  HarfBuzz does, and the Hangul fillers draw instead of hiding. Against `hb-shape`, all
+  208 test words and 3,575 random Indic words give the same glyphs (#211).
 - Text in an embedded font shapes through every GSUB lookup type. Contextual and
   chained contextual substitution, multiple and alternate substitution, and reverse
   chaining now apply along with single and ligature substitution. The lookups run for the script

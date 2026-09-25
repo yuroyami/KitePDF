@@ -58,9 +58,15 @@ public class OpenTypeGsub private constructor(
      *
      * A feature in [positional] applies only to the glyphs whose [GsubGlyph.features] name
      * it, as the joining forms of Arabic do. Every other feature applies to every glyph. A
-     * lookup whose features are all in [perSyllable] matches its input only inside the
+     * lookup whose features are all in [perSyllable] matches only inside the
      * [GsubGlyph.syllable] of the glyph it starts at, as HarfBuzz constrains the features of an
      * Indic syllable.
+     *
+     * Matching passes over a [GsubGlyph.ignorable] glyph that does not match, as HarfBuzz
+     * does, with two exceptions for the joiners. Inside the input, a ZWNJ never passes, and a
+     * ZWJ does not pass for a lookup that a feature in [manualZwj] references. Before or after
+     * the input, a ZWJ always passes, and a ZWNJ passes unless a feature in [manualZwnj]
+     * references the lookup.
      */
     public fun substitute(
         glyphs: MutableList<GsubGlyph>,
@@ -69,6 +75,8 @@ public class OpenTypeGsub private constructor(
         stages: List<List<String>>,
         positional: Set<String> = emptySet(),
         perSyllable: Set<String> = emptySet(),
+        manualZwj: Set<String> = emptySet(),
+        manualZwnj: Set<String> = emptySet(),
     ) {
         val lang = languageSystem(script, language) ?: return
         val active = HashMap<String, MutableList<Int>>()
@@ -87,29 +95,30 @@ public class OpenTypeGsub private constructor(
                 val global = tags.any { it !in positional }
                 val applies: (GsubGlyph) -> Boolean =
                     if (global) { _ -> true } else { g -> g.features.any { it in tags } }
-                Applier(glyphs, applies, tags.all { it in perSyllable }).run(lookup)
+                Applier(glyphs, applies, tags.all { it in perSyllable }, tags.none { it in manualZwj }, tags.none { it in manualZwnj }).run(lookup)
             }
         }
     }
 
     /**
-     * True when a lookup of [feature] for [script] would substitute exactly [gids], with no
-     * context before or after them, as HarfBuzz's Indic shaper asks the font whether a
-     * consonant takes a below-base form.
+     * True when a lookup of [feature] for [script] would substitute exactly [gids], as
+     * HarfBuzz's Indic shaper asks the font whether a consonant takes a below-base form. With
+     * [zeroContext], a chained rule counts only when it needs no glyphs before or after its
+     * input; without it, the rule counts whatever glyphs it needs around the input.
      */
-    public fun wouldSubstitute(feature: String, script: String, gids: IntArray): Boolean {
+    public fun wouldSubstitute(feature: String, script: String, gids: IntArray, zeroContext: Boolean = true): Boolean {
         if (gids.isEmpty()) return false
         val lang = languageSystem(script, null) ?: return false
         val indices = (listOf(lang.required) + lang.features.toList()).mapNotNull { features.getOrNull(it) }
             .filter { it.tag == feature }.flatMap { it.lookups.toList() }
         for (li in indices) {
             val lookup = lookups.getOrNull(li) ?: continue
-            for (st in lookup.subtables) if (wouldApply(st, gids)) return true
+            for (st in lookup.subtables) if (wouldApply(st, gids, zeroContext)) return true
         }
         return false
     }
 
-    private fun wouldApply(st: Subtable, gids: IntArray): Boolean {
+    private fun wouldApply(st: Subtable, gids: IntArray, zeroContext: Boolean): Boolean {
         val first = gids[0]
         val rest = gids.copyOfRange(1, gids.size)
         return when (st) {
@@ -122,15 +131,16 @@ public class OpenTypeGsub private constructor(
                 st.ruleSets.getOrNull(st.classes.classOf(first))?.any { r -> r.input.size == rest.size && r.input.indices.all { r.input[it] == st.classes.classOf(rest[it]) } } == true
             is ContextSubst.Coverages -> st.coverages.size == gids.size && gids.indices.all { st.coverages[it].indexOf(gids[it]) >= 0 }
             is ChainSubst.Glyphs -> st.coverage.indexOf(first).let { i ->
-                i >= 0 && st.ruleSets.getOrNull(i)?.any { it.backtrack.isEmpty() && it.lookahead.isEmpty() && it.input.contentEquals(rest) } == true
+                i >= 0 && st.ruleSets.getOrNull(i)?.any { (!zeroContext || it.backtrack.isEmpty() && it.lookahead.isEmpty()) && it.input.contentEquals(rest) } == true
             }
             is ChainSubst.Classes -> st.coverage.indexOf(first) >= 0 &&
                 st.ruleSets.getOrNull(st.input.classOf(first))?.any { r ->
-                    r.backtrack.isEmpty() && r.lookahead.isEmpty() && r.input.size == rest.size && r.input.indices.all { r.input[it] == st.input.classOf(rest[it]) }
+                    (!zeroContext || r.backtrack.isEmpty() && r.lookahead.isEmpty()) &&
+                        r.input.size == rest.size && r.input.indices.all { r.input[it] == st.input.classOf(rest[it]) }
                 } == true
-            is ChainSubst.Coverages -> st.backtrack.isEmpty() && st.lookahead.isEmpty() && st.input.size == gids.size &&
+            is ChainSubst.Coverages -> (!zeroContext || st.backtrack.isEmpty() && st.lookahead.isEmpty()) && st.input.size == gids.size &&
                 gids.indices.all { st.input[it].indexOf(gids[it]) >= 0 }
-            is ReverseChainSubst -> gids.size == 1 && st.backtrack.isEmpty() && st.lookahead.isEmpty() && st.coverage.indexOf(first) >= 0
+            is ReverseChainSubst -> gids.size == 1 && st.coverage.indexOf(first) >= 0
         }
     }
 
@@ -141,11 +151,17 @@ public class OpenTypeGsub private constructor(
 
     /* ─── Applying lookups ─────────────────────────────────────────────────── */
 
-    /** One pass of lookups over [glyphs], where [applies] tells which glyphs the features of the pass reach. */
+    /**
+     * One pass of lookups over [glyphs], where [applies] tells which glyphs the features of the
+     * pass reach. [autoZwj] and [autoZwnj] say whether matching passes over a joiner, as
+     * HarfBuzz's auto_zwj and auto_zwnj do.
+     */
     private inner class Applier(
         val glyphs: MutableList<GsubGlyph>,
         val applies: (GsubGlyph) -> Boolean,
         val perSyllable: Boolean = false,
+        val autoZwj: Boolean = true,
+        val autoZwnj: Boolean = true,
     ) {
         /** How deep nested lookups go, as HarfBuzz limits them. */
         private var nesting = 0
@@ -176,9 +192,9 @@ public class OpenTypeGsub private constructor(
         fun applyAt(lookup: Lookup, i: Int): Int {
             for (st in lookup.subtables) {
                 val next = when (st) {
-                    is SingleSubst -> st.substitute(glyphs[i].gid)?.let { glyphs[i].gid = it; i + 1 } ?: -1
+                    is SingleSubst -> st.substitute(glyphs[i].gid)?.let { replace(i, it); i + 1 } ?: -1
                     is MultipleSubst -> applyMultiple(st, i)
-                    is AlternateSubst -> st.alternates(glyphs[i].gid)?.firstOrNull()?.let { glyphs[i].gid = it; i + 1 } ?: -1
+                    is AlternateSubst -> st.alternates(glyphs[i].gid)?.firstOrNull()?.let { replace(i, it); i + 1 } ?: -1
                     is LigatureSubst -> applyLigature(st, lookup, i)
                     is ContextSubst -> applyContext(st, lookup, i)
                     is ChainSubst -> applyChain(st, lookup, i)
@@ -189,10 +205,19 @@ public class OpenTypeGsub private constructor(
             return -1
         }
 
+        private fun replace(i: Int, gid: Int) {
+            glyphs[i].gid = gid
+            glyphs[i].substituted = true
+        }
+
+        /** One glyph in a sequence is a single substitution, as HarfBuzz treats it; more are multiplied. */
         private fun applyMultiple(st: MultipleSubst, i: Int): Int {
             val seq = st.sequence(glyphs[i].gid) ?: return -1
+            if (seq.size == 1) { replace(i, seq[0]); return i + 1 }
             val source = glyphs.removeAt(i)
-            for ((k, gid) in seq.withIndex()) glyphs.add(i + k, source.copy(gid))
+            for ((k, gid) in seq.withIndex()) {
+                glyphs.add(i + k, source.copy(gid).also { it.substituted = true; it.multiplied = true })
+            }
             return i + seq.size
         }
 
@@ -215,6 +240,8 @@ public class OpenTypeGsub private constructor(
             first.gid = lig
             first.components = positions.size
             first.ligated = true
+            first.multiplied = false
+            first.substituted = true
             for (k in positions.size - 1 downTo 1) glyphs.removeAt(positions[k])
         }
 
@@ -280,13 +307,14 @@ public class OpenTypeGsub private constructor(
             val index = st.coverage.indexOf(glyphs[i].gid).takeIf { it >= 0 } ?: return false
             if (!matchBacktrack(lookup, i, st.backtrack.size) { k, g -> st.backtrack[k].indexOf(g.gid) >= 0 }) return false
             if (!matchLookahead(lookup, i, st.lookahead.size) { k, g -> st.lookahead[k].indexOf(g.gid) >= 0 }) return false
-            glyphs[i].gid = st.substitutes.getOrNull(index) ?: return false
+            replace(i, st.substitutes.getOrNull(index) ?: return false)
             return true
         }
 
         /**
-         * The positions of [count] input glyphs from [start], each after the last one that
-         * [lookup] does not skip, when [match] accepts glyphs 1 and on; null when they do not match.
+         * The positions of [count] input glyphs from [start], when [match] accepts glyphs 1 and
+         * on; null when they do not match. Input glyphs carry the feature of the lookup, as
+         * HarfBuzz's mask check asks.
          */
         private inline fun matchInput(lookup: Lookup, start: Int, count: Int, match: (Int, GsubGlyph) -> Boolean): IntArray? {
             val positions = IntArray(count)
@@ -294,11 +322,7 @@ public class OpenTypeGsub private constructor(
             var p = start
             val syllable = glyphs[start].syllable
             for (k in 1 until count) {
-                p = nextUnskipped(lookup, p) ?: return null
-                val g = glyphs[p]
-                // Input glyphs carry the feature of the lookup, as HarfBuzz's mask check asks.
-                if (!applies(g) || !match(k, g)) return null
-                if (perSyllable && g.syllable != syllable) return null
+                p = seek(lookup, p, 1, syllable, context = false) { g -> applies(g) && match(k, g) } ?: return null
                 positions[k] = p
             }
             return positions
@@ -306,32 +330,44 @@ public class OpenTypeGsub private constructor(
 
         private inline fun matchBacktrack(lookup: Lookup, start: Int, count: Int, match: (Int, GsubGlyph) -> Boolean): Boolean {
             var p = start
-            for (k in 0 until count) {
-                p = previousUnskipped(lookup, p) ?: return false
-                if (!match(k, glyphs[p])) return false
-            }
+            val syllable = glyphs[start].syllable
+            for (k in 0 until count) p = seek(lookup, p, -1, syllable, context = true) { g -> match(k, g) } ?: return false
             return true
         }
 
         private inline fun matchLookahead(lookup: Lookup, end: Int, count: Int, match: (Int, GsubGlyph) -> Boolean): Boolean {
             var p = end
-            for (k in 0 until count) {
-                p = nextUnskipped(lookup, p) ?: return false
-                if (!match(k, glyphs[p])) return false
-            }
+            val syllable = glyphs[end].syllable
+            for (k in 0 until count) p = seek(lookup, p, 1, syllable, context = true) { g -> match(k, g) } ?: return false
             return true
         }
 
-        private fun nextUnskipped(lookup: Lookup, from: Int): Int? {
-            var p = from + 1
-            while (p < glyphs.size && skipped(glyphs[p], lookup)) p++
-            return p.takeIf { it < glyphs.size }
+        /**
+         * The next glyph from [from] in the direction of [step] that [matches], as HarfBuzz's
+         * skipping iterator finds it: the lookup flag skips a glyph, and a default ignorable
+         * that does not match is passed over. Null when a glyph that cannot be passed over does
+         * not match. A per-syllable lookup matches only glyphs of [syllable].
+         */
+        private inline fun seek(lookup: Lookup, from: Int, step: Int, syllable: Int, context: Boolean, matches: (GsubGlyph) -> Boolean): Int? {
+            var p = from + step
+            while (p in glyphs.indices) {
+                val g = glyphs[p]
+                if (!skipped(g, lookup)) {
+                    val sameSyllable = !perSyllable || syllable == 0 || g.syllable == syllable
+                    if (sameSyllable && matches(g)) return p
+                    if (!passable(g, context)) return null
+                }
+                p += step
+            }
+            return null
         }
 
-        private fun previousUnskipped(lookup: Lookup, from: Int): Int? {
-            var p = from - 1
-            while (p >= 0 && skipped(glyphs[p], lookup)) p--
-            return p.takeIf { it >= 0 }
+        /** True for a default ignorable that matching may pass over, HarfBuzz's SKIP_MAYBE. */
+        private fun passable(g: GsubGlyph, context: Boolean): Boolean = !g.substituted && when (g.ignorable) {
+            null -> false
+            GsubGlyph.Ignorable.ZWNJ -> context && autoZwnj
+            GsubGlyph.Ignorable.ZWJ -> context || autoZwj
+            GsubGlyph.Ignorable.OTHER -> true
         }
 
         /**
@@ -410,7 +446,7 @@ public class OpenTypeGsub private constructor(
             gdef?.glyphClasses?.let { return it.classOf(g.gid) }
             return when {
                 g.isMark -> MARK
-                g.ligated -> LIGATURE
+                g.ligated && !g.multiplied -> LIGATURE
                 else -> BASE
             }
         }
@@ -839,13 +875,20 @@ public class OpenTypeGsub private constructor(
  *   joining form of an Arabic letter.
  * @property isMark True for a combining mark. A lookup flag reads it when the font has no
  *   GDEF glyph classes of its own.
+ * @property ignorable The kind of default ignorable character this glyph stands for, which a
+ *   lookup may pass over, or null for any other glyph. CGJ, the Mongolian free variation
+ *   selectors and the tag characters stay null, because HarfBuzz does not pass over them in GSUB.
  */
 public class GsubGlyph(
     public var gid: Int,
     public var cluster: Int,
     public var features: Set<String> = emptySet(),
     public val isMark: Boolean = false,
+    public val ignorable: Ignorable? = null,
 ) {
+    /** The default ignorable characters a lookup may pass over, as HarfBuzz tells them apart. */
+    public enum class Ignorable { ZWJ, ZWNJ, OTHER }
+
     /** The syllable of the glyph, which a per-syllable lookup does not match across. */
     public var syllable: Int = 0
 
@@ -856,13 +899,21 @@ public class GsubGlyph(
     public var components: Int = 1
         internal set
 
-    /** True once a ligature substitution produced this glyph. */
-    public var ligated: Boolean = false
+    /** True once any substitution replaced this glyph. A lookup no longer passes over it. */
+    public var substituted: Boolean = false
         internal set
 
-    internal fun copy(gid: Int): GsubGlyph = GsubGlyph(gid, cluster, features, isMark).also {
+    /** True once a ligature substitution produced this glyph. A shaper may clear it. */
+    public var ligated: Boolean = false
+
+    /** True when a multiple substitution produced this glyph and no ligature has joined it since. A shaper may clear it. */
+    public var multiplied: Boolean = false
+
+    internal fun copy(gid: Int): GsubGlyph = GsubGlyph(gid, cluster, features, isMark, ignorable).also {
         it.components = components
+        it.substituted = substituted
         it.ligated = ligated
+        it.multiplied = multiplied
         it.syllable = syllable
         it.shaperData = shaperData
     }

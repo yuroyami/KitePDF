@@ -2,13 +2,14 @@ package io.github.yuroyami.kitepdf.epub
 
 import java.io.File
 import java.util.concurrent.TimeUnit
+import kotlin.random.Random
 import kotlin.test.Test
 import kotlin.test.assertTrue
 
 /**
  * Shapes words through GSUB the way [BoxLayout] does and compares the glyph ids with
- * HarfBuzz's `hb-shape` (#211). Skips when `hb-shape` or the Noto fonts of the MuPDF
- * resources are missing.
+ * HarfBuzz's `hb-shape` (#211): real words of each script, and random words of the Indic
+ * scripts. Skips when `hb-shape` or the Noto fonts of the MuPDF resources are missing.
  */
 class GsubOracleTest {
 
@@ -21,20 +22,27 @@ class GsubOracleTest {
     private fun hbShape(): String? =
         listOf("/opt/homebrew/bin/hb-shape", "/usr/local/bin/hb-shape", "/usr/bin/hb-shape").firstOrNull { File(it).canExecute() }
 
-    /** The glyph ids HarfBuzz gives [word] in [font], in logical order. */
-    private fun harfbuzz(tool: String, font: File, word: String): List<Int> {
-        val p = ProcessBuilder(tool, "--no-positions", "--no-glyph-names", "--no-clusters", font.path, word)
+    /** The glyph ids HarfBuzz gives each of [words] in [font], in logical order, from one run of `hb-shape`. */
+    private fun harfbuzz(tool: String, font: File, words: List<String>): List<List<Int>> {
+        val text = File.createTempFile("gsub-oracle", ".txt").apply { deleteOnExit(); writeText(words.joinToString("\n", postfix = "\n")) }
+        val p = ProcessBuilder(tool, "--no-positions", "--no-glyph-names", "--no-clusters", "--text-file=${text.path}", font.path)
             .redirectErrorStream(true).start()
-        val out = p.inputStream.bufferedReader().readText().trim()
-        p.waitFor(20, TimeUnit.SECONDS)
-        val gids = out.removePrefix("[").removeSuffix("]").split('|').filter { it.isNotBlank() }.map { it.trim().toInt() }
-        val rtl = word.any { it.code in 0x0590..0x08FF }
-        return if (rtl) gids.reversed() else gids
+        val lines = p.inputStream.bufferedReader().readLines()
+        p.waitFor(60, TimeUnit.SECONDS)
+        return words.mapIndexed { i, word ->
+            val gids = lines[i].trim().removePrefix("[").removeSuffix("]").split('|').filter { it.isNotBlank() }.map { it.trim().toInt() }
+            if (word.any { it.code in 0x0590..0x08FF }) gids.reversed() else gids
+        }
     }
+
+    private val faces = HashMap<File, EmbeddedFace>()
+
+    private fun face(font: File): EmbeddedFace =
+        faces.getOrPut(font) { FontRegistry.face("t", bold = false, italic = false, font.readBytes()) ?: error("${font.name} does not parse") }
 
     /** The glyph ids KitePDF gives [word] in [font], through the same steps as [BoxLayout]. */
     private fun kitepdf(font: File, word: String): List<Int> {
-        val face = FontRegistry.face("t", bold = false, italic = false, font.readBytes()) ?: error("${font.name} does not parse")
+        val face = face(font)
         val gsub = face.gsub ?: return word.codePoints().toArray().map { face.gidFor(it) }
         val ordered = word.codePoints().toArray().toMutableList()
         CombiningClass.reorder(ordered) { it }
@@ -68,10 +76,27 @@ class GsubOracleTest {
             "বাংলা", "ভাষা", "কি", "কর্ম", "স্ত্রী", "বিদ্যা", "কোথায়", "শ্রী", "ক্ষমা", "রবীন্দ্রনাথ",
             "র্য", "র\u200Dয", "ক্\u200Dষ", "ৎ", "সৌরভ", "গৈরিক", "ড়", "ঢ়", "য়", "১২৩",
         ),
+        "NotoSerifGurmukhi-Regular.otf" to listOf(
+            "ਪੰਜਾਬੀ", "ਗੁਰਮੁਖੀ", "ਸਿੱਖ", "ਕਿਤਾਬ", "ਪ੍ਰੇਮ", "ਧਰਮ", "ਸ਼ਬਦ", "ਖ਼ਾਲਸਾ", "ਕ੍ਰਿਪਾ", "ਸ੍ਵਰ", "ਦੁੱਖ", "ਕਿਉਂ",
+        ),
+        "NotoSerifGujarati-Regular.otf" to listOf(
+            "ગુજરાતી", "ભાષા", "કિતાબ", "ધર્મ", "પ્રેમ", "સ્ત્રી", "શ્રી", "ક્ષમા", "કૃપા", "દ્વાર", "ત્ર", "દ્ય", "ર્કિ",
+        ),
+        "NotoSerifOriya-Regular.otf" to listOf(
+            "ଓଡ଼ିଆ", "ଭାଷା", "କି", "ଧର୍ମ", "ପ୍ରେମ", "କୋଣ", "ସ୍ତ୍ରୀ", "କୈ", "କୌ", "ଶ୍ରୀ", "ଯ୍ୟ", "ର୍କି",
+        ),
+        "NotoSerifTamil-Regular.otf" to listOf("தமிழ்", "மொழி", "கை", "கொ", "கௌ", "ஸ்ரீ", "க்ஷ", "புத்தகம்", "கோ", "நீ", "ஔ", "க்ஷ்மி"),
+        "NotoSerifTelugu-Regular.otf" to listOf(
+            "తెలుగు", "భాష", "కి", "ధర్మం", "ప్రేమ", "స్త్రీ", "కొ", "శ్రీ", "కై", "ర్\u200Dక", "ఔ", "క్ష", "త్ర్య",
+        ),
+        "NotoSerifKannada-Regular.otf" to listOf(
+            "ಕನ್ನಡ", "ಭಾಷೆ", "ಕಿ", "ಧರ್ಮ", "ಪ್ರೇಮ", "ಸ್ತ್ರೀ", "ಕೊ", "ಶ್ರೀ", "ಕೀ", "ಕೋ", "ಕ್ಷ", "ರ್ಕಿ", "ಕೌ",
+        ),
+        "NotoSerifMalayalam-Regular.otf" to listOf(
+            "മലയാളം", "ഭാഷ", "കി", "ധർമ്മം", "പ്രേമം", "സ്ത്രീ", "കൊ", "ശ്രീ", "ക്ര", "ൎക്ക",
+            "അവൻ", "അവന്\u200D", "കാർ", "കാര്\u200D", "ക്ഷ", "ന്റെ",
+        ),
     )
-
-    /** Scripts whose shaper does more than GSUB alone, printed for information and not asserted. */
-    private val informational = mapOf<String, List<String>>()
 
     @Test
     fun words_shape_to_the_glyphs_harfbuzz_gives() {
@@ -81,20 +106,79 @@ class GsubOracleTest {
         var total = 0
         for ((name, words) in cases) {
             val font = File(dir, name).takeIf { it.exists() } ?: continue
-            for (word in words) {
+            val theirs = harfbuzz(tool, font, words)
+            for ((i, word) in words.withIndex()) {
                 total++
                 val ours = kitepdf(font, word)
-                val theirs = harfbuzz(tool, font, word)
-                val line = "$name $word: KitePDF $ours, HarfBuzz $theirs"
+                val line = "$name $word: KitePDF $ours, HarfBuzz ${theirs[i]}"
                 println(line)
-                if (ours != theirs) failures += line
+                if (ours != theirs[i]) failures += line
             }
         }
         println("gsub oracle: ${total - failures.size} of $total words match")
-        for ((name, words) in informational) {
-            val font = File(dir, name).takeIf { it.exists() } ?: continue
-            for (word in words) println("informational $name $word: KitePDF ${kitepdf(font, word)}, HarfBuzz ${harfbuzz(tool, font, word)}")
-        }
         assertTrue(failures.isEmpty(), failures.joinToString("\n"))
+    }
+
+    /** The Noto font of each Indic script, with the first character of its block. */
+    private val indic = listOf(
+        "NotoSerifDevanagari-Regular.otf" to 0x0900, "NotoSerifBengali-Regular.otf" to 0x0980,
+        "NotoSerifGurmukhi-Regular.otf" to 0x0A00, "NotoSerifGujarati-Regular.otf" to 0x0A80,
+        "NotoSerifOriya-Regular.otf" to 0x0B00, "NotoSerifTamil-Regular.otf" to 0x0B80,
+        "NotoSerifTelugu-Regular.otf" to 0x0C00, "NotoSerifKannada-Regular.otf" to 0x0C80,
+        "NotoSerifMalayalam-Regular.otf" to 0x0D00,
+    )
+
+    /**
+     * Random words of each Indic script shape to the glyphs HarfBuzz gives (#211). The words mix
+     * the letters and signs of the block with viramas, joiners and placeholders in a fixed random
+     * order, so they reach characters and syllable shapes that real words rarely use.
+     */
+    @Test
+    fun random_indic_words_shape_to_the_glyphs_harfbuzz_gives() {
+        val dir = fontsDir().orSkip("The Noto fonts of mupdf-master/resources")
+        val tool = hbShape().orSkip("hb-shape")
+        val failures = ArrayList<String>()
+        var total = 0
+        for ((name, block) in indic) {
+            val font = File(dir, name).takeIf { it.exists() } ?: continue
+            val chars = (block until block + 0x80).filter { face(font).gidFor(it) != 0 }
+            val letters = chars.filter { it.toChar().category == CharCategory.OTHER_LETTER }
+            val signs = chars - letters.toSet()
+            val random = Random(block)
+            // Every one of these scripts has its virama at 0x4D and its Ra at 0x30 in the block.
+            val words = List(400) { randomWord(random, letters, signs, block + 0x4D, block + 0x30) }.distinct()
+            val theirs = harfbuzz(tool, font, words)
+            for ((i, word) in words.withIndex()) {
+                total++
+                val ours = kitepdf(font, word)
+                if (ours != theirs[i]) {
+                    failures += "$name ${word.codePoints().toArray().joinToString(" ") { "%04X".format(it) }}: KitePDF $ours, HarfBuzz ${theirs[i]}"
+                }
+            }
+        }
+        println("random indic words: ${total - failures.size} of $total match")
+        assertTrue(failures.isEmpty(), failures.take(20).joinToString("\n"))
+    }
+
+    /**
+     * One to three syllables of letters joined by viramas, some with a joiner after the virama,
+     * each followed by signs. Some words start with a sign, a placeholder, or a Ra and virama
+     * with or without a ZWJ.
+     */
+    private fun randomWord(random: Random, letters: List<Int>, signs: List<Int>, virama: Int, ra: Int): String = buildString {
+        when (random.nextInt(6)) {
+            0 -> appendCodePoint(signs.random(random))
+            1 -> appendCodePoint(listOf(0x25CC, 0x00A0).random(random))
+            2 -> { appendCodePoint(ra); appendCodePoint(virama); if (random.nextBoolean()) appendCodePoint(0x200D) }
+        }
+        repeat(1 + random.nextInt(3)) {
+            appendCodePoint(letters.random(random))
+            while (random.nextInt(3) == 0) {
+                appendCodePoint(virama)
+                if (random.nextInt(4) == 0) appendCodePoint(if (random.nextBoolean()) 0x200D else 0x200C)
+                appendCodePoint(letters.random(random))
+            }
+            repeat(random.nextInt(3)) { appendCodePoint(signs.random(random)) }
+        }
     }
 }

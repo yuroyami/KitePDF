@@ -55,28 +55,31 @@ internal object TextShaper {
         forms: Array<ArabicJoining.Form>?, optionalLigatures: Boolean,
     ): MutableList<GsubGlyph> {
         val glyphs = ArrayList<GsubGlyph>(codePoints.size)
-        val ignorables = ArrayList<Pair<GsubGlyph, Int>>()
-        if (IndicShaper.handles(script)) {
-            val shaped = ArrayList<Int>(codePoints.size)
-            for ((k, cp) in codePoints.withIndex()) {
-                // A nukta form Unicode keeps decomposed, or a split matra, shapes as its parts.
-                val parts = IndicShaper.decompose(cp)?.takeIf { p -> p.all { face.gidFor(it) != 0 } }
-                if (parts != null) for (part in parts) { glyphs += GsubGlyph(face.gidFor(part), k, isMark = isMark(part.toChar())); shaped += part }
-                else { glyphs += GsubGlyph(gids[k], k, isMark = isMark(cp.toChar())); shaped += cp }
-                if (isDefaultIgnorable(cp)) ignorables += glyphs.last() to glyphs.last().gid
+        val ignorables = ArrayList<GsubGlyph>()
+        if (IndicShaper.handles(script, gsub)) {
+            val prepared = IndicShaper.prepare(script, codePoints) { face.gidFor(it) != 0 }
+            for ((j, cp) in prepared.codePoints.withIndex()) {
+                val source = prepared.sources[j]
+                val gid = if (cp == codePoints[source]) gids[source] else face.gidFor(cp)
+                glyphs += GsubGlyph(gid, source, isMark = isMark(cp), ignorable = ignorable(cp))
+                if (isDefaultIgnorable(cp)) ignorables += glyphs.last()
             }
-            IndicShaper.shape(gsub, script, glyphs, shaped.toIntArray(), face::gidFor, optionalLigatures)
+            IndicShaper.shape(gsub, script, glyphs, prepared.codePoints, face::gidFor, optionalLigatures)
         } else {
             for ((k, cp) in codePoints.withIndex()) {
                 val joining = forms?.let { joining(cp, it[k]) } ?: emptySet()
-                glyphs += GsubGlyph(gids[k], k, joining, isMark(cp.toChar()))
-                if (isDefaultIgnorable(cp)) ignorables += glyphs.last() to glyphs.last().gid
+                glyphs += GsubGlyph(gids[k], k, joining, isMark(cp), ignorable(cp))
+                if (isDefaultIgnorable(cp)) ignorables += glyphs.last()
             }
-            gsub.substitute(glyphs, script, null, stages(script, optionalLigatures), POSITIONAL)
+            val manualZwj = if (script == "arab" || script == "syrc") ARABIC_MANUAL_ZWJ else emptySet()
+            gsub.substitute(glyphs, script, null, stages(script, optionalLigatures), POSITIONAL, manualZwj = manualZwj)
         }
         hideIgnorables(face, glyphs, ignorables)
         return glyphs
     }
+
+    /** The ligating features of Arabic, for which HarfBuzz lets a ZWJ break a ligature as a ZWNJ does. */
+    private val ARABIC_MANUAL_ZWJ = setOf("rlig", "rclt", "calt")
 
     /** Marks a glyph that draws nothing and takes no advance, as a hidden default ignorable. */
     const val INVISIBLE: Int = 1 shl 30
@@ -85,21 +88,36 @@ internal object TextShaper {
      * A default ignorable that no lookup substituted, such as a ZWJ, becomes the space glyph
      * with no advance, as HarfBuzz hides it. A font may draw a placeholder for its own glyph.
      */
-    private fun hideIgnorables(face: EmbeddedFace, glyphs: List<GsubGlyph>, ignorables: List<Pair<GsubGlyph, Int>>) {
+    private fun hideIgnorables(face: EmbeddedFace, glyphs: List<GsubGlyph>, ignorables: List<GsubGlyph>) {
         if (ignorables.isEmpty()) return
         val space = face.gidFor(' '.code)
-        for ((g, gid) in ignorables) {
-            if (g.gid != gid || glyphs.none { it === g }) continue
+        for (g in ignorables) {
+            if (g.substituted || glyphs.none { it === g }) continue
             if (space != 0) g.gid = space
             g.shaperData = g.shaperData or INVISIBLE
         }
     }
 
-    /** True for a Default_Ignorable_Code_Point of Unicode, which draws nothing. */
+    /**
+     * True for a character HarfBuzz treats as default ignorable, which draws nothing. HarfBuzz
+     * leaves out the Hangul fillers, which fonts draw as spacing glyphs.
+     */
     fun isDefaultIgnorable(cp: Int): Boolean =
-        cp == 0x00AD || cp == 0x034F || cp == 0x061C || cp == 0x115F || cp == 0x1160 || cp in 0x17B4..0x17B5 ||
-            cp in 0x180B..0x180F || cp in 0x200B..0x200F || cp in 0x202A..0x202E || cp in 0x2060..0x206F ||
-            cp == 0x3164 || cp in 0xFE00..0xFE0F || cp == 0xFEFF || cp == 0xFFA0 || cp in 0xFFF0..0xFFF8
+        cp == 0x00AD || cp == 0x034F || cp == 0x061C || cp in 0x17B4..0x17B5 || cp in 0x180B..0x180E ||
+            cp in 0x200B..0x200F || cp in 0x202A..0x202E || cp in 0x2060..0x206F ||
+            cp in 0xFE00..0xFE0F || cp == 0xFEFF || cp in 0xFFF0..0xFFF8
+
+    /**
+     * How a lookup passes over [cp], or null for a character it does not pass over. CGJ and
+     * the Mongolian free variation selectors stay visible to GSUB, as HarfBuzz keeps them.
+     */
+    fun ignorable(cp: Int): GsubGlyph.Ignorable? = when {
+        cp == 0x200C -> GsubGlyph.Ignorable.ZWNJ
+        cp == 0x200D -> GsubGlyph.Ignorable.ZWJ
+        cp == 0x034F || cp in 0x180B..0x180D -> null
+        isDefaultIgnorable(cp) -> GsubGlyph.Ignorable.OTHER
+        else -> null
+    }
 
     /** The joining feature of [cp] in [form], or none for a character that does not join. */
     fun joining(cp: Int, form: ArabicJoining.Form): Set<String> = when (ArabicJoining.type(cp)) {
@@ -107,13 +125,17 @@ internal object TextShaper {
         else -> emptySet()
     }
 
-    /** True for a combining mark, the class a lookup flag skips when the font has no GDEF classes. */
-    fun isMark(ch: Char): Boolean = ch.category == CharCategory.NON_SPACING_MARK || ch.category == CharCategory.ENCLOSING_MARK
+    /**
+     * True for a non-spacing mark that is not default ignorable, the glyph class HarfBuzz gives
+     * a mark when the font has no GDEF classes.
+     */
+    fun isMark(cp: Int): Boolean = cp.toChar().category == CharCategory.NON_SPACING_MARK && !isDefaultIgnorable(cp)
 
     private val RTL = setOf("arab", "hebr", "syrc", "thaa", "nko ")
 
     /** The OpenType tags of the script of [cp], the newer tag first, or null for common characters. */
     private fun scriptTags(cp: Int): List<String>? = when {
+        isShared(cp) -> null
         cp in 0x41..0x5A || cp in 0x61..0x7A || cp in 0xC0..0x24F || cp in 0x1E00..0x1EFF -> LATN
         cp in 0x370..0x3FF || cp in 0x1F00..0x1FFF -> listOf("grek")
         cp in 0x400..0x52F -> listOf("cyrl")
@@ -122,7 +144,7 @@ internal object TextShaper {
         cp in 0x600..0x6FF || cp in 0x750..0x77F || cp in 0x8A0..0x8FF || cp in 0xFB50..0xFDFF || cp in 0xFE70..0xFEFF -> listOf("arab")
         cp in 0x700..0x74F -> listOf("syrc")
         cp in 0x780..0x7BF -> listOf("thaa")
-        cp in 0x900..0x97F -> listOf("dev2", "deva")
+        cp in 0x900..0x97F || cp in 0xA8E0..0xA8FF -> listOf("dev2", "deva")
         cp in 0x980..0x9FF -> listOf("bng2", "beng")
         cp in 0xA00..0xA7F -> listOf("gur2", "guru")
         cp in 0xA80..0xAFF -> listOf("gjr2", "gujr")
@@ -146,4 +168,14 @@ internal object TextShaper {
     }
 
     private val LATN = listOf("latn")
+
+    /**
+     * The characters inside the blocks of [scriptTags] that Scripts.txt of Unicode 17 gives to
+     * no one script (Common or Inherited), such as the danda. They do not choose the script.
+     */
+    private fun isShared(cp: Int): Boolean =
+        cp == 0x00D7 || cp == 0x00F7 || cp == 0x0374 || cp == 0x037E || cp == 0x0385 || cp == 0x0387 || cp in 0x0485..0x0486 ||
+            cp == 0x0605 || cp == 0x060C || cp == 0x061B || cp == 0x061F || cp == 0x0640 || cp in 0x064B..0x0655 || cp == 0x0670 ||
+            cp == 0x06DD || cp == 0x08E2 || cp in 0xFD3E..0xFD3F || cp == 0xFEFF || cp in 0x0951..0x0954 || cp in 0x0964..0x0965 ||
+            cp == 0x0E3F || cp in 0x0FD5..0x0FD8 || cp == 0x10FB || cp in 0x3099..0x309C || cp == 0x30A0 || cp in 0x30FB..0x30FC
 }
