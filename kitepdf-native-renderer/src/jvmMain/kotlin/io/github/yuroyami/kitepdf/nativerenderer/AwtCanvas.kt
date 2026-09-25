@@ -17,6 +17,7 @@ import io.github.yuroyami.kitepdf.core.render.KitePath
 import io.github.yuroyami.kitepdf.core.render.KiteShading
 import io.github.yuroyami.kitepdf.core.render.RgbColor
 import io.github.yuroyami.kitepdf.core.render.SoftMask
+import io.github.yuroyami.kitepdf.core.render.gridFitImage
 import io.github.yuroyami.kitepdf.core.render.imageSampling
 import io.github.yuroyami.kitepdf.core.render.sampleStops
 import io.github.yuroyami.kitepdf.core.render.shrinkArgb
@@ -383,12 +384,11 @@ public class AwtCanvas(private var g: Graphics2D) : KiteCanvas {
     override fun drawImage(image: KiteImageData, ctm: KiteMatrix, alpha: Double, blendMode: KiteBlendMode) {
         val matrix = AffineTransform(ctm.a, ctm.b, ctm.c, ctm.d, ctm.e, ctm.f)
         // The policy reads the whole transform to device pixels, including one the host set on the Graphics.
-        val device = AffineTransform(g.transform).apply { concatenate(matrix) }
-        val sampling = imageSampling(
-            image.width, image.height,
-            KiteMatrix(device.scaleX, device.shearY, device.shearX, device.scaleY, device.translateX, device.translateY),
-            image.interpolate,
-        )
+        val whole = AffineTransform(g.transform).apply { concatenate(matrix) }
+        // The edges of an unrotated image move outwards onto whole pixels, as in MuPDF (#300).
+        val fitted = gridFitImage(KiteMatrix(whole.scaleX, whole.shearY, whole.shearX, whole.scaleY, whole.translateX, whole.translateY))
+        val device = AffineTransform(fitted.a, fitted.b, fitted.c, fitted.d, fitted.e, fitted.f)
+        val sampling = imageSampling(image.width, image.height, fitted, image.interpolate)
         val bitmap = bitmaps.getOrPut(image, sampling, { it.width.toLong() * it.height * 4 }) { decodeImage(image, sampling) }
             ?: return drawPlaceholder(ctm)
         val saved = g.transform

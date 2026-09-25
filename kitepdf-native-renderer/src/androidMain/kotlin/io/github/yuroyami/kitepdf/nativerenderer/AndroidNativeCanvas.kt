@@ -23,6 +23,7 @@ import io.github.yuroyami.kitepdf.core.render.KiteBitmapCache
 import io.github.yuroyami.kitepdf.core.render.KiteImageData
 import io.github.yuroyami.kitepdf.core.render.KiteImageSampling
 import io.github.yuroyami.kitepdf.core.render.KiteMaskTransfer
+import io.github.yuroyami.kitepdf.core.render.gridFitImage
 import io.github.yuroyami.kitepdf.core.render.imageSampling
 import io.github.yuroyami.kitepdf.core.render.shrinkArgb
 import io.github.yuroyami.kitepdf.core.render.shrinkRgba
@@ -379,8 +380,10 @@ public class AndroidNativeCanvas(private val canvas: AndroidCanvas) : KiteCanvas
     }
 
     override fun drawImage(image: KiteImageData, ctm: KiteMatrix, alpha: Double, blendMode: KiteBlendMode) {
-        // One sampling policy on every canvas (#122, #123). The ctm maps to this canvas's pixels.
-        val sampling = imageSampling(image.width, image.height, ctm, image.interpolate)
+        // One sampling policy on every canvas (#122, #123). The ctm maps to this canvas's pixels,
+        // and the edges of an unrotated image move outwards onto whole pixels, as in MuPDF (#300).
+        val device = gridFitImage(ctm)
+        val sampling = imageSampling(image.width, image.height, device, image.interpolate)
         val bm = bitmaps.getOrPut(image, sampling, { it.width.toLong() * it.height * 4 }) { decodeImage(image, sampling) }
         if (bm == null) {
             drawPlaceholder(ctm)
@@ -388,7 +391,7 @@ public class AndroidNativeCanvas(private val canvas: AndroidCanvas) : KiteCanvas
         }
         canvas.save()
         openLayers++
-        canvas.concat(pdfMatrixToAndroid(ctm))
+        canvas.concat(pdfMatrixToAndroid(device))
         canvas.save()
         // Unit square (0,0)-(1,1), bitmap row 0 on the top edge (v = 1): the
         // Skia mapping. The old (0,-1) square with a positive Y scale drew

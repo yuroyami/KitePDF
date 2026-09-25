@@ -1207,6 +1207,10 @@ public final class io/github/yuroyami/kitepdf/core/render/IccProfile$Companion {
 	public final fun parse ([B)Lio/github/yuroyami/kitepdf/core/render/IccProfile;
 }
 
+public final class io/github/yuroyami/kitepdf/core/render/ImageGridFitKt {
+	public static final fun gridFitImage (Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;)Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;
+}
+
 public final class io/github/yuroyami/kitepdf/core/render/ImageRasterKt {
 	public static final field KITE_DEFAULT_MAX_RASTER_PIXELS J
 	public static final fun toRgbaBytes (Lio/github/yuroyami/kitepdf/core/render/KiteImageData;)[B

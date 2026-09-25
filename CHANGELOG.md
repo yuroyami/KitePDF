@@ -324,6 +324,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Accented letters and many symbols in an embedded Type1C font draw again. The
   table of CFF standard strings stopped at `germandbls`, so é, ü, ©, ° and every
   other glyph from SID 150 up had no name (#303).
+- An image drawn without rotation, or turned by a multiple of 90 degrees, covers
+  every pixel it touches, as in MuPDF: its edges move outwards onto whole pixels
+  before it is drawn. On AWT, an edge pixel was filled only when the image
+  covered its centre, so image edges and scaled images sampled differently from
+  MuPDF. Every canvas now applies `gridFitImage`. Three image fixtures match
+  MuPDF to the pixel, and the DifferentialTest mean falls from 0.0017 to 0.0016
+  (#300, #301).
 
 ## [0.10.0] - 2026-09-13
 
