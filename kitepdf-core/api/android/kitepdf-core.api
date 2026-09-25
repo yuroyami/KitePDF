@@ -617,6 +617,7 @@ public final class io/github/yuroyami/kitepdf/core/font/PdfFont {
 	public final fun getBaseFont ()Ljava/lang/String;
 	public final fun getFontSpec ()Lio/github/yuroyami/kitepdf/core/font/FontSpec;
 	public final fun getHasEmbeddedOutlines ()Z
+	public final fun getHasOutlines ()Z
 	public final fun getSubtype ()Ljava/lang/String;
 	public final fun getUnitsPerEm ()Ljava/lang/Integer;
 	public final fun glyphIdForByte (I)I

@@ -60,6 +60,15 @@ carry in order to be correct, listed here with where that data comes from.
    BSD-3-Clause; Russian is Copyright 1999-2003 Alexander I. Lebedev,
    LPPL 1.2 or later (https://www.latex-project.org/lppl/lppl-1-2/).
 
+7. URW base 35 fonts
+   Used in: kitepdf-core .../core/font/Standard14FontData.kt
+   The CFF programs of Nimbus Sans, Nimbus Roman, Nimbus Mono PS, Standard
+   Symbols PS and Dingbats, which draw the standard 14 fonts when a PDF does
+   not embed them. They are the files that MuPDF ships in resources/fonts/urw,
+   stored unmodified as DEFLATE and Base64 by tools/generate_standard14_fonts.py.
+   Copyright 2016 by (URW)++ Design & Development, licensed under the SIL Open
+   Font License, Version 1.1. The license text is at the top of the file above.
+
 --------------------------------------------------------------------------------
 Tools used in development, not distributed
 --------------------------------------------------------------------------------

@@ -87,12 +87,12 @@ class PatternTextTest {
 
     @Test
     fun a_font_without_outlines_keeps_the_fallback_colour() {
-        // The recording canvas has no host outlines, so Helvetica has no shapes to fill.
+        // The recording canvas has no host outlines, so a font without a program has no shapes to fill.
         val calls = TestPdf.calls(
             TestPdf.onePage(
                 content = "/Pattern cs /P1 scn BT /F1 100 Tf 20 120 Td (A) Tj ET",
                 resources = "/Font << /F1 5 0 R >> /Pattern << /P1 6 0 R >>",
-                extra = listOf("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>", redToBlue),
+                extra = listOf("<< /Type /Font /Subtype /Type1 /BaseFont /HostSans /FirstChar 65 /LastChar 65 /Widths [667] >>", redToBlue),
             ),
         )
         assertEquals(1, calls.count { it is RecordingCanvas.Call.Glyphs })
