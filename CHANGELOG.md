@@ -331,6 +331,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   MuPDF. Every canvas now applies `gridFitImage`. Three image fixtures match
   MuPDF to the pixel, and the DifferentialTest mean falls from 0.0017 to 0.0016
   (#300, #301).
+- DeviceCMYK converts to the colours that PDFium and MuPDF draw. KitePDF used
+  the polynomial of pdf.js, which was 5 to 10 times further from both engines
+  than they are from each other. It now uses PDFium's table, which approximates
+  the Adobe conversion from US Web Coated (SWOP) to sRGB. The initial colour of
+  DeviceCMYK, black ink alone, is now the converted colour instead of pure black.
+  The DifferentialTest mean falls from 0.0016 to 0.0010 (#299).
 
 ## [0.10.0] - 2026-09-13
 

@@ -52,9 +52,6 @@ class PdfiumParityTest {
          * The goal is an empty map. Drop-in corpus pages run only where the corpus exists.
          */
         val KNOWN_GAPS: Map<String, Int> = mapOf(
-            // DeviceCMYK converts to other colours than MuPDF and PDFium.
-            "syn-cmyk p0" to 299,
-            "gen-cmyk-swatches p0" to 299,
             // A JPEG 2000 image decodes a fraction of a level off from OpenJPEG.
             "testPDF_JPX p0" to 302,
         )

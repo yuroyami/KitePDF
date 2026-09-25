@@ -69,6 +69,15 @@ carry in order to be correct, listed here with where that data comes from.
    Copyright 2016 by (URW)++ Design & Development, licensed under the SIL Open
    Font License, Version 1.1. The license text is at the top of the file above.
 
+8. PDFium's table for DeviceCMYK
+   Used in: kitepdf-core .../core/render/AdobeCmykTable.kt and AdobeCmyk.kt
+   The sRGB colours of a 9 by 9 by 9 by 9 grid over C, M, Y and K, and the
+   way PDFium steps between grid points, from core/fxge/dib/cfx_cmyk_to_srgb.cpp.
+   Copyright 2019 The PDFium Authors, original code copyright 2014 Foxit
+   Software Inc., under the BSD-style license of PDFium
+   (https://pdfium.googlesource.com/pdfium/+/refs/heads/main/LICENSE).
+   tools/generate_adobe_cmyk_table.py extracts the table.
+
 --------------------------------------------------------------------------------
 Tools used in development, not distributed
 --------------------------------------------------------------------------------
