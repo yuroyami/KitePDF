@@ -210,11 +210,15 @@ class SelectionSceneTest {
             state.setZoom(2f)
             driver.pumpUntil(maxFrames = 2) { false }
 
-            /** Presses, drags 30px up, and reports the pan taken BEFORE the release. */
+            /**
+             * Presses, drags 30px up, and reports the pan taken BEFORE the release. The move
+             * follows the press with no frame between them, so a slow frame cannot pass the
+             * long-press timeout and make the drag a selection (#310).
+             */
             fun dragUp(): Offset {
                 state.panOffset = Offset.Zero
-                scene.sendPointerEvent(PointerEventType.Press, Offset(100f, 120f), type = PointerType.Touch)
                 driver.pumpUntil(maxFrames = 2) { false }
+                scene.sendPointerEvent(PointerEventType.Press, Offset(100f, 120f), type = PointerType.Touch)
                 scene.sendPointerEvent(PointerEventType.Move, Offset(100f, 90f), type = PointerType.Touch)
                 driver.pumpUntil(maxFrames = 2) { false }
                 val panned = state.panOffset
@@ -270,11 +274,17 @@ class SelectionSceneTest {
             val driver = SceneTestDriver(scene)
             driver.pumpUntil { px -> px[100, 190].red > 0.8f }
 
-            /** Drags the strip up ~140px, past the touch slop, in steps. */
+            /**
+             * Drags the strip up ~140px in steps. The frames before the press let the strip
+             * recompose with the current lock. The first step follows the press with no frame
+             * between them and goes past the touch slop: the long-press timeout runs on the wall
+             * clock, and a frame that ran after it on a loaded machine made the drag a selection,
+             * which locks the strip (#310).
+             */
             fun dragUp() {
-                scene.sendPointerEvent(PointerEventType.Press, Offset(100f, 180f), type = PointerType.Touch)
                 driver.pumpUntil(maxFrames = 2) { false }
-                for (y in intArrayOf(160, 130, 100, 70, 40)) {
+                scene.sendPointerEvent(PointerEventType.Press, Offset(100f, 180f), type = PointerType.Touch)
+                for (y in intArrayOf(140, 110, 80, 60, 40)) {
                     scene.sendPointerEvent(PointerEventType.Move, Offset(100f, y.toFloat()), type = PointerType.Touch)
                     driver.pumpUntil(maxFrames = 2) { false }
                 }

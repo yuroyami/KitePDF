@@ -230,11 +230,12 @@ class SelectionHandleDragSceneTest {
             val away = assertNotNull(state.handlePoint(KiteSelectionHandleEdge.End)) + Offset(0f, 100f)
             assertNull(state.handleAt(away, 24f), "the fixture point really is out of grab range")
 
+            // The scene handles a press as it is sent, so a claim would show at once. The move
+            // and the release follow with no frame between them: a slow frame could pass the
+            // long-press timeout, and a long press on bare paper rightly starts a new selection (#310).
             scene.sendPointerEvent(PointerEventType.Press, away, type = PointerType.Touch)
-            driver.pumpUntil(maxFrames = 2) { false }
             assertFalse(state.selectionInProgress, "a press on bare paper grabs no thumb")
             scene.sendPointerEvent(PointerEventType.Move, away + Offset(20f, 0f), type = PointerType.Touch)
-            driver.pumpUntil(maxFrames = 2) { false }
             scene.sendPointerEvent(PointerEventType.Release, away + Offset(20f, 0f), type = PointerType.Touch)
             driver.pumpUntil(maxFrames = 2) { false }
 
