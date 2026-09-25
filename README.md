@@ -1,19 +1,41 @@
-# KitePDF
+<h1 align="center">KitePDF</h1>
 
 <p align="center">
   <img src="art/kitepdf-logo.svg" width="360" alt="KitePDF logo">
 </p>
 
-A pure-Kotlin document engine for Kotlin Multiplatform: read, create, edit and
-render PDFs, and read reflowable EPUB 2/3, from `commonMain`.
+<p align="center">
+  A pure-Kotlin document engine for Kotlin Multiplatform: read, create, edit and
+  render PDFs, and read reflowable EPUB 2/3, from <code>commonMain</code>.
+</p>
 
-[![Maven Central](https://img.shields.io/maven-central/v/io.github.yuroyami/kitepdf?label=Maven%20Central)](https://central.sonatype.com/artifact/io.github.yuroyami/kitepdf)
-[![Docs](https://img.shields.io/badge/docs-yuroyami.github.io-1f6feb)](https://yuroyami.github.io/KitePDF/)
-[![Kotlin](https://img.shields.io/badge/Kotlin-2.4.20-7F52FF?logo=kotlin&logoColor=white)](https://kotlinlang.org)
-[![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
+<p align="center">
+  <a href="https://central.sonatype.com/artifact/io.github.yuroyami/kitepdf"><img src="https://img.shields.io/maven-central/v/io.github.yuroyami/kitepdf?label=Maven%20Central" alt="Maven Central"></a>
+  <a href="https://github.com/yuroyami/KitePDF/actions/workflows/ci.yml"><img src="https://github.com/yuroyami/KitePDF/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://yuroyami.github.io/KitePDF/"><img src="https://img.shields.io/badge/docs-yuroyami.github.io-1f6feb" alt="Docs"></a>
+  <a href="https://kotlinlang.org"><img src="https://img.shields.io/badge/Kotlin-2.4.20-7F52FF?logo=kotlin&logoColor=white" alt="Kotlin 2.4.20"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue" alt="License: Apache-2.0"></a>
+</p>
 
-**[Documentation](https://yuroyami.github.io/KitePDF/)** · a guide for each task,
-plus the generated API reference.
+<p align="center">
+  <img src="https://img.shields.io/badge/PDF-read%20%C2%B7%20write%20%C2%B7%20edit-D62828" alt="PDF: read, write, edit">
+  <img src="https://img.shields.io/badge/EPUB-2%20and%203-2A9D8F" alt="EPUB 2 and 3">
+  <img src="https://img.shields.io/badge/CBZ-comics-E76F51" alt="CBZ comics">
+  <img src="https://img.shields.io/badge/SVG-vector-F4A261" alt="SVG">
+  <img src="https://img.shields.io/badge/XPS-OpenXPS-6D597A" alt="XPS and OpenXPS">
+  <br>
+  <img src="https://img.shields.io/badge/Android-3DDC84?logo=android&logoColor=white" alt="Android">
+  <img src="https://img.shields.io/badge/iOS-000000?logo=apple&logoColor=white" alt="iOS">
+  <img src="https://img.shields.io/badge/macOS-000000?logo=apple&logoColor=white" alt="macOS">
+  <img src="https://img.shields.io/badge/JVM-ED8B00?logo=openjdk&logoColor=white" alt="JVM">
+  <img src="https://img.shields.io/badge/Linux-FCC624?logo=linux&logoColor=black" alt="Linux">
+  <img src="https://img.shields.io/badge/Windows-0078D4" alt="Windows">
+  <img src="https://img.shields.io/badge/Web-JS%20%C2%B7%20Wasm-654FF0?logo=webassembly&logoColor=white" alt="Web: JS and Wasm">
+</p>
+
+<p align="center">
+  <b><a href="https://yuroyami.github.io/KitePDF/">Documentation</a></b> · a guide for each task, plus the generated API reference.
+</p>
 
 ## What you get
 
@@ -21,12 +43,48 @@ KitePDF brings its own document engine, written in Kotlin from the ground up. Th
 platform PDF library underneath, no JNI and no native binary. So the same code runs on
 Android, iOS, the desktop JVM, macOS, Linux, Windows and the web.
 
-- **Open** PDF, EPUB 2 and 3, CBZ comic archives, SVG, and XPS or OpenXPS, all through one `KiteDoc.open` call.
-- **Read** the text of any page with its position, and search a whole document.
-- **Change** PDFs: fill forms, edit pages, redact, encrypt, and prepare a signature.
-- **Create** new PDFs with the standard fonts, your own fonts and your images.
-- **Show** pages in a Compose Multiplatform viewer, or render them to PNG without a screen.
-- **Run** the JavaScript inside PDF forms, so totals add up and fields format themselves. This part is experimental.
+<table>
+<tr>
+<td width="33%" valign="top">
+
+**Open**<br>
+PDF, EPUB 2 and 3, CBZ comic archives, SVG, and XPS or OpenXPS, all through one `KiteDoc.open` call.
+
+</td>
+<td width="33%" valign="top">
+
+**Show**<br>
+One Compose Multiplatform composable for every format, or pages rendered to PNG without a screen.
+
+</td>
+<td width="33%" valign="top">
+
+**Read**<br>
+The text of any page with its position, and search across a whole document.
+
+</td>
+</tr>
+<tr>
+<td width="33%" valign="top">
+
+**Change**<br>
+Fill forms, edit pages, redact for real, encrypt, and prepare a signature.
+
+</td>
+<td width="33%" valign="top">
+
+**Create**<br>
+New PDFs with the standard fonts, your own fonts and your images.
+
+</td>
+<td width="33%" valign="top">
+
+**Run**<br>
+The JavaScript inside PDF forms, so totals add up and fields format themselves. Experimental.
+
+</td>
+</tr>
+</table>
 
 Here is a PDF made, opened and read back:
 
@@ -47,7 +105,8 @@ doc.pages[0].extractText()   // "Hello from PdfBuilder"
 `KitePDF.open(bytes)` is a short alias for `PdfDocument.open(bytes)`. The docs use
 `PdfDocument`, because it also has the password overload, `openOrNull` and `edit()`.
 
-KitePDF is not at 1.0 yet, so the API can still change between minor versions.
+> [!NOTE]
+> KitePDF is not at 1.0 yet, so the API can still change between minor versions.
 
 ## Install
 
@@ -79,10 +138,15 @@ kotlin {
 }
 ```
 
-A few things are good to know:
+> [!TIP]
+> Most apps need just two lines: `kitepdf` for the documents, and `kitepdf-compose-viewer` to show them.
+
+> [!IMPORTANT]
+> A renderer needs a document artifact next to it. The viewer and the renderers take types like `PdfDocument` and `PdfPage`, but they do not pass that dependency on to you. With a renderer alone, your build cannot resolve those types.
+
+A few more things are good to know:
 
 - **`kitepdf-core` comes with every document artifact.** Never add it yourself.
-- **A renderer needs a document artifact next to it.** The viewer and the renderers take types like `PdfDocument` and `PdfPage`, but they do not pass that dependency on to you. With a renderer alone, your build cannot resolve those types.
 - **The document artifacts are light.** They depend only on `kotlin-stdlib` and KiteImage, which decodes JPEG, PNG, GIF, JPEG 2000, JBIG2 and CCITT images.
 - **`kitepdf-net` needs a Ktor engine.** Add the Ktor client engine for your platform next to it.
 - **Plain Android and JVM projects work too.** Put the same lines in your usual `dependencies { }` block.
@@ -270,6 +334,10 @@ with the reason behind each gap.
 
 ## Good to know
 
+<details>
+<summary><b>Known limits</b>: what KitePDF does not do yet, in one table</summary>
+<br>
+
 | Topic | What to expect |
 | --- | --- |
 | Annotations | You can read them, but there is no API to create them yet. |
@@ -283,6 +351,8 @@ with the reason behind each gap.
 | Browser | With Canvas2D, an image appears one frame late, because the browser decodes it in the background. |
 | Rendering | AWT on the JVM and Skia are the two complete renderers. |
 | CI | CI runs the tests on the JVM, the Android host, the iOS simulator, macOS, Node and a headless browser. Android devices, Wasm, and native Linux and Windows are not tested there. |
+
+</details>
 
 ## How it is tested
 
