@@ -18,22 +18,6 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/PDF-read%20%C2%B7%20write%20%C2%B7%20edit-D62828" alt="PDF: read, write, edit">
-  <img src="https://img.shields.io/badge/EPUB-2%20and%203-2A9D8F" alt="EPUB 2 and 3">
-  <img src="https://img.shields.io/badge/CBZ-comics-E76F51" alt="CBZ comics">
-  <img src="https://img.shields.io/badge/SVG-vector-F4A261" alt="SVG">
-  <img src="https://img.shields.io/badge/XPS-OpenXPS-6D597A" alt="XPS and OpenXPS">
-  <br>
-  <img src="https://img.shields.io/badge/Android-3DDC84?logo=android&logoColor=white" alt="Android">
-  <img src="https://img.shields.io/badge/iOS-000000?logo=apple&logoColor=white" alt="iOS">
-  <img src="https://img.shields.io/badge/macOS-000000?logo=apple&logoColor=white" alt="macOS">
-  <img src="https://img.shields.io/badge/JVM-ED8B00?logo=openjdk&logoColor=white" alt="JVM">
-  <img src="https://img.shields.io/badge/Linux-FCC624?logo=linux&logoColor=black" alt="Linux">
-  <img src="https://img.shields.io/badge/Windows-0078D4" alt="Windows">
-  <img src="https://img.shields.io/badge/Web-JS%20%C2%B7%20Wasm-654FF0?logo=webassembly&logoColor=white" alt="Web: JS and Wasm">
-</p>
-
-<p align="center">
   <b><a href="https://yuroyami.github.io/KitePDF/">Documentation</a></b> · a guide for each task, plus the generated API reference.
 </p>
 
