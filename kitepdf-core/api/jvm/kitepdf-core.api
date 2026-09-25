@@ -520,6 +520,7 @@ public final class io/github/yuroyami/kitepdf/core/font/GsubGlyph {
 	public final fun getFeatures ()Ljava/util/Set;
 	public final fun getGid ()I
 	public final fun getIgnorable ()Lio/github/yuroyami/kitepdf/core/font/GsubGlyph$Ignorable;
+	public final fun getInserted ()Z
 	public final fun getLigated ()Z
 	public final fun getMultiplied ()Z
 	public final fun getShaperData ()I
@@ -529,6 +530,7 @@ public final class io/github/yuroyami/kitepdf/core/font/GsubGlyph {
 	public final fun setCluster (I)V
 	public final fun setFeatures (Ljava/util/Set;)V
 	public final fun setGid (I)V
+	public final fun setInserted (Z)V
 	public final fun setLigated (Z)V
 	public final fun setMultiplied (Z)V
 	public final fun setShaperData (I)V

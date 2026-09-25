@@ -472,6 +472,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   base and take `pref`, a pre-base vowel moves to the start of the syllable, a split vowel
   decomposes into U+17C1 and itself, and a broken syllable gets a dotted circle. Against
   `hb-shape`, 12 Khmer words and 798 random Khmer words give the same glyphs (#317).
+- Myanmar text shapes as HarfBuzz's Myanmar shaper shapes it. A kinzi goes after the base,
+  a medial Ra and a pre-base vowel go before it, and `rphf`, `pref`, `blwf` and `pstf` apply
+  one at a time. A font made only for the `mymr` tag from before the Myanmar shaping spec
+  keeps the default features, as in HarfBuzz. A dotted circle that a shaper inserts now
+  has no glyph class until a lookup replaces it, as in HarfBuzz, so a lookup that passes
+  over base glyphs stops at it. Against `hb-shape`, 10 Myanmar words and 799 random
+  Myanmar words give the same glyphs (#317).
 - Text in an embedded font shapes through every GSUB lookup type. Contextual and
   chained contextual substitution, multiple and alternate substitution, and reverse
   chaining now apply along with single and ligature substitution. The lookups run for the script
