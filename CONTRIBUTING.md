@@ -28,6 +28,8 @@ Breaking any of these fails the change, however good the code is.
 - **The spec is ISO 32000-1 (PDF 1.7) and ISO 32000-2 (PDF 2.0)** for PDF, EPUB 3.3 for books, and the relevant CSS and SVG specs for layout and vector work. Cite the section number in the code comment when you implement spec behaviour.
 - MuPDF is not automatically right. Where the spec and the reference disagree, say so in the commit and follow the spec.
 - **PDFium is the second oracle.** It must do nothing better than KitePDF. `PdfiumParityTest` fails where MuPDF and PDFium agree and KitePDF differs from both. A difference that only PDFium shows is not a failure. Install the pinned `pypdfium2` as `kitepdf-native-renderer/DIFFTEST.md` shows.
+- **HarfBuzz is the shaping oracle for EPUB text.** `GsubOracleTest` shapes real and random words in the Noto fonts of `mupdf-master/resources/fonts/noto` and compares the glyphs with `hb-shape` of HarfBuzz 14.4, the Homebrew binary at `/opt/homebrew/bin/hb-shape`. A newer HarfBuzz can shape differently, so check its release notes when a word stops matching. Without `hb-shape`, the test reports as skipped.
+- **The conformance files of Unicode are the bidi oracle.** `BidiConformanceTest` runs a committed sample of `BidiCharacterTest.txt` and `BidiTest.txt` of Unicode 17 in every build. It runs the full files when they are in `~/.cache/kitepdf/ucd-17`, and its KDoc gives the commands that download them.
 
 ## The gate
 
