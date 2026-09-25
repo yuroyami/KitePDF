@@ -4,6 +4,7 @@ import io.github.yuroyami.kitepdf.KitePDF
 import io.github.yuroyami.kitepdf.difftest.ColorFixtures
 import io.github.yuroyami.kitepdf.difftest.GradientFixtures
 import io.github.yuroyami.kitepdf.difftest.GroupFixtures
+import io.github.yuroyami.kitepdf.difftest.IccFixtures
 import io.github.yuroyami.kitepdf.difftest.ImageDiff
 import io.github.yuroyami.kitepdf.difftest.ImageFixtures
 import io.github.yuroyami.kitepdf.difftest.MuPdfOracle
@@ -164,7 +165,7 @@ object ParityHarness {
         for (f in ParityFixtures.all()) {
             docs += Document(f.name, File(inputs, "${f.name}.pdf").apply { writeBytes(f.bytes) })
         }
-        for (f in ColorFixtures.all() + GradientFixtures.all() + GroupFixtures.all() + ImageFixtures.all()) {
+        for (f in ColorFixtures.all() + GradientFixtures.all() + GroupFixtures.all() + ImageFixtures.all() + IccFixtures.all()) {
             val pdf = File(inputs, "${f.name}.pdf").apply { writeBytes(f.bytes) }
             docs += Document("fixture-${f.name}", pdf)
         }

@@ -382,6 +382,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Canvas 2D draws into the context's own path, as CoreGraphics already did. A
   clip still keeps a path of its own. On the dense magazine page, a render at
   scale 2 on AWT allocates 16 MB instead of 22 to 25 MB (#130).
+- An ICC profile made of lookup tables, which most CMYK press profiles are, now
+  converts colours through its tables instead of the device fallback. KitePDF reads
+  the `mft1`, `mft2` and `mAB ` tables, with the relative colorimetric intent and
+  black point compensation, and interpolates as Little CMS does, as MuPDF converts
+  them. A CMYK profile is read for the first time. Through Apple's Generic CMYK
+  profile and MuPDF's own CMYK profile, twelve swatches match mutool within one
+  level. D50 white now converts to exact sRGB white, which it missed by 0.04 percent
+  in blue (#200).
 
 ## [0.10.0] - 2026-09-13
 

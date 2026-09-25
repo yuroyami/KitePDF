@@ -78,6 +78,9 @@ public fun KiteImageData.toRgbaBytes(): ByteArray? {
         bpc == 8 && cs.componentCount == 1 -> unpackGrayTable(src, pixelCount, cs, out)
         bpc == 8 && cs.componentCount == 3 && cs.curveMatrix != null -> unpackCurveMatrix(src, pixelCount, cs, out)
         bpc == 8 && cs === KiteColorSpace.DeviceRGB -> unpackRgbDecode(src, pixelCount, out)
+        decode == null && bpc == 8 && cs.componentCount == 4 && cs !is KiteColorSpace.Indexed -> {
+            if (!unpackCmyk8(src, pixelCount, cs, out)) return null
+        }
         else -> {
             if (!unpackGeneral(src, w, h, bpc, cs, out)) return null
         }
@@ -168,6 +171,39 @@ private fun KiteImageData.unpackGeneral(
             out[o++] = (rgb.b * 255.0).roundToInt().toByte()
             out[o++] = opaque
         }
+    }
+    return true
+}
+
+/**
+ * An 8-bit four-component image through the integer conversion of its space, DeviceCMYK or
+ * a CMYK ICC table, instead of one conversion through doubles for each pixel. A run of
+ * equal pixels converts once, as the flat areas of a photograph and a scan often are.
+ */
+private fun unpackCmyk8(src: ByteArray, pixelCount: Int, cs: KiteColorSpace, out: ByteArray): Boolean {
+    if (src.size.toLong() < pixelCount.toLong() * 4) return false
+    val opaque = 0xFF.toByte()
+    var have = false
+    var last = 0
+    var rgb = 0
+    var i = 0
+    var o = 0
+    repeat(pixelCount) {
+        val c = src[i].toInt() and 0xFF
+        val m = src[i + 1].toInt() and 0xFF
+        val y = src[i + 2].toInt() and 0xFF
+        val k = src[i + 3].toInt() and 0xFF
+        i += 4
+        val packed = (c shl 24) or (m shl 16) or (y shl 8) or k
+        if (!have || packed != last) {
+            rgb = cs.cmyk8(c, m, y, k)
+            last = packed
+            have = true
+        }
+        out[o++] = (rgb shr 16).toByte()
+        out[o++] = (rgb shr 8).toByte()
+        out[o++] = rgb.toByte()
+        out[o++] = opaque
     }
     return true
 }

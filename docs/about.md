@@ -26,13 +26,13 @@ KitePDF is **pre-1.0**. These features work today:
 | Editing and saving | Fill forms, stamp watermarks, redact (the content is removed, not covered), incremental save or full rebuild |
 | Building | Text with standard or custom embedded fonts, including subsetting, plus shapes, images and colors |
 | Image codecs | Supplied by KiteImage, the shared pure-Kotlin codec engine: PNG, JPEG (baseline and progressive), GIF, BMP, JPEG 2000, JBIG2 and CCITT |
-| Colour | Device spaces, CalGray/CalRGB, Lab, Indexed, Separation/DeviceN, and ICC profiles of the matrix/TRC kind |
+| Colour | Device spaces, CalGray/CalRGB, Lab, Indexed, Separation/DeviceN, and grey, RGB and CMYK ICC profiles, matrix/TRC and lookup-table alike |
 | Signing scaffold | `/ByteRange` preparation and CMS embedding. The cryptography stays in your application. |
 
 Planned:
 
 - Signature validation
-- The rest of colour management: lookup-table ICC profiles and rendering intents
+- The rest of colour management: rendering intents and overprint
 - Less common form widgets (media players, rich text)
 
 Known limits are listed in the [README](https://github.com/yuroyami/KitePDF#limits).
