@@ -23,7 +23,9 @@ class OutlinedTextTest {
         content = content,
         resources = "/Font << /F1 5 0 R >>",
         mediaBox = "0 0 300 300",
-        extra = listOf("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>"),
+        // A font that names no standard font has no program at all, so the host face stands in.
+        // It keeps the Helvetica widths of space, H and I: 278, 722 and 278.
+        extra = listOf("<< /Type /Font /Subtype /Type1 /BaseFont /HostSans /FirstChar 32 /LastChar 73 /Widths [278 ${"0 ".repeat(39)}722 278] >>"),
     )
 
     private fun render(content: String, canvas: KiteCanvas) =

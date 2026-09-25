@@ -12,6 +12,8 @@ import org.junit.Assume.assumeTrue
  * defines "better": KitePDF fails where PDFium succeeds, or KitePDF differs from MuPDF and
  * PDFium where the two agree, or PDFium extracts text that KitePDF misses. A difference
  * that only one reference shows is PDFium or MuPDF going its own way, and never fails.
+ * [KNOWN_GAPS] holds the pages that still fail, each with its issue, and
+ * [REFERENCES_WRONG] the pages where both references are wrong.
  *
  * Needs both mutool and PDFium (see [PdfiumOracle]), and skips without either. Writes
  * `build/difftest/parity.md`, with the three renders and a map of each page.
@@ -28,7 +30,7 @@ class PdfiumParityTest {
         val outDir = File(System.getProperty("kitepdf.difftest.out") ?: "build/difftest").apply { mkdirs() }
         val dpi = DifferentialTest.parseDpi(System.getProperty("kitepdf.diff.dpi"))
 
-        val report = ParityHarness.run(ParityHarness.documents(outDir), dpi, outDir, KNOWN_GAPS)
+        val report = ParityHarness.run(ParityHarness.documents(outDir), dpi, outDir, KNOWN_GAPS, REFERENCES_WRONG)
         report.writeMarkdown()
         println(report.summary())
 
@@ -39,8 +41,8 @@ class PdfiumParityTest {
         )
         assertTrue(
             report.stale.isEmpty(),
-            "These known gaps no longer show PDFium doing better. Close their issues and remove them from KNOWN_GAPS:\n" +
-                report.stale.joinToString("\n") { "  $it (#${KNOWN_GAPS[it]})" },
+            "These pages no longer show PDFium doing better. Remove them from KNOWN_GAPS or REFERENCES_WRONG, and close their issues:\n" +
+                report.stale.joinToString("\n") { key -> "  $key" + (KNOWN_GAPS[key]?.let { " (#$it)" } ?: "") },
         )
     }
 
@@ -50,17 +52,6 @@ class PdfiumParityTest {
          * The goal is an empty map. Drop-in corpus pages run only where the corpus exists.
          */
         val KNOWN_GAPS: Map<String, Int> = mapOf(
-            // Standard 14 fonts that the file does not embed render in a system font.
-            "syn-text p0" to 298,
-            "syn-multipage p1" to 298,
-            "gen-standard14-fonts p0" to 298,
-            "gen-text-sizes p0" to 298,
-            "gen-nested-gstate p0" to 298,
-            "gen-paragraph p0" to 298,
-            "gen-multipage-mixed p0" to 298,
-            "gen-multipage-mixed p1" to 298,
-            "gen-multipage-mixed p2" to 298,
-            "doom p0" to 298,
             // DeviceCMYK converts to other colours than MuPDF and PDFium.
             "syn-cmyk p0" to 299,
             "gen-cmyk-swatches p0" to 299,
@@ -73,6 +64,18 @@ class PdfiumParityTest {
             "fixture-image-thin-lines-shrunk p0" to 301,
             // A JPEG 2000 image decodes a fraction of a level off from OpenJPEG.
             "testPDF_JPX p0" to 302,
+        )
+
+        /**
+         * Pages where MuPDF and PDFium agree with each other and both are wrong, each with
+         * the reason from the spec. Only the pixel finding of the page is covered.
+         */
+        val REFERENCES_WRONG: Map<String, ParityHarness.ReferencesWrong> = mapOf(
+            "doom p0" to ParityHarness.ReferencesWrong(
+                maxKiteTiles = 6,
+                reason = "the push buttons have /MK /BG [0.9] and no appearance stream, so their background is grey " +
+                    "(ISO 32000-1, 12.5.6.19). MuPDF draws the background rectangle empty, and PDFium draws no button",
+            ),
         )
     }
 }

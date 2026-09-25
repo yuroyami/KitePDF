@@ -129,8 +129,14 @@ and green where MuPDF alone differs.
 
 `PdfiumParityTest.KNOWN_GAPS` lists each page where PDFium does better today,
 with its open issue. The label `plan:pdfium-parity` groups those issues. A new
-finding needs an issue before it goes on the list. A page that stops failing
-must come off the list, or the check fails.
+finding needs an issue before it goes on the list.
+
+Sometimes MuPDF and PDFium agree with each other and both are wrong.
+`PdfiumParityTest.REFERENCES_WRONG` lists those pages, each with the reason
+from the spec. An entry covers only the pixel finding of its page, and only up
+to the number of tiles it records, so a new fault on the same page still fails.
+
+A page on either list that stops failing must come off it, or the check fails.
 
 PDFium comes from `pypdfium2` and runs in its own Python process. Install the
 pinned version once:

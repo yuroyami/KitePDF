@@ -313,6 +313,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the document body also stop lexing tokens twice. An integer operand is always a
   number, and a dictionary operand is never a stream, as ISO 32000-1, 7.8.2
   requires (#293).
+- Text in one of the standard 14 fonts that a PDF does not embed, such as
+  Helvetica, Times or Courier, draws from real outlines. KitePDF bundles the URW
+  fonts that MuPDF uses, which have the metrics of the Adobe originals. Before,
+  a system font drew the glyphs at the standard widths, so letters crowded or
+  left gaps. Names that stand for a standard font, such as `Arial,Bold` or
+  `Times,Italic`, find it too. The bundle adds about 500 KB. `PdfFont.hasOutlines`
+  tells whether a font draws from outlines, embedded or bundled. The
+  DifferentialTest mean falls from 0.0029 to 0.0017 (#298).
+- Accented letters and many symbols in an embedded Type1C font draw again. The
+  table of CFF standard strings stopped at `germandbls`, so é, ü, ©, ° and every
+  other glyph from SID 150 up had no name (#303).
 
 ## [0.10.0] - 2026-09-13
 

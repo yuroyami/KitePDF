@@ -58,6 +58,8 @@ public class PdfFont private constructor(
     private val embeddedType1: Type1Font?,
     /** Type 0 composite descendant chain (CIDFontType0/2 under a Type0 parent). */
     private val composite: CompositeFont?,
+    /** The bundled program of a standard 14 font that the file names and does not embed. */
+    private val builtinCff: CffFont? = null,
 ) {
 
     public val isComposite: Boolean get() = composite != null
@@ -65,6 +67,14 @@ public class PdfFont private constructor(
     public val hasEmbeddedOutlines: Boolean
         get() = embeddedTtf != null || embeddedCff != null || embeddedType1 != null ||
             composite?.let { it.ttf != null || it.cff != null } == true
+
+    /**
+     * True when the glyphs of this font have outlines: from the program the file embeds,
+     * or, for a standard 14 font that the file does not embed, from the metric-compatible
+     * program that KitePDF bundles (ISO 32000-1, 9.6.2.2). False when a canvas has to stand
+     * a host typeface in for the font, as [fontSpec] describes.
+     */
+    public val hasOutlines: Boolean get() = hasEmbeddedOutlines || builtinCff != null
 
     /**
      * The units per em of this font's outlines, or null without embedded outlines. A
@@ -75,7 +85,7 @@ public class PdfFont private constructor(
     public val unitsPerEm: Int?
         get() = embeddedTtf?.unitsPerEm
             ?: composite?.ttf?.unitsPerEm
-            ?: (embeddedCff ?: embeddedType1 ?: composite?.cff)?.let { 1000 }
+            ?: (embeddedCff ?: embeddedType1 ?: composite?.cff ?: builtinCff)?.let { 1000 }
 
     /**
      * Platform-neutral substitute-font descriptor, derived from [baseFont], for
@@ -255,12 +265,11 @@ public class PdfFont private constructor(
                 if (g == 0 && (code and 0xFF) in 1 until ttf.numGlyphs) g = code and 0xFF
                 g
             }
-            embeddedCff != null -> {
+            else -> (embeddedCff ?: builtinCff)?.let { cff ->
                 val gn = glyphNameForByte[code and 0xFF]
-                val byName = gn?.let { embeddedCff.glyphIdForName(it) } ?: -1
-                if (byName >= 0) byName else embeddedCff.glyphIdForCodePoint(resolveByteToUnicode(code)).coerceAtLeast(0)
-            }
-            else -> 0
+                val byName = gn?.let { cff.glyphIdForName(it) } ?: -1
+                if (byName >= 0) byName else cff.glyphIdForCodePoint(resolveByteToUnicode(code)).coerceAtLeast(0)
+            } ?: 0
         }
         gidCache[code] = gid
         return gid
@@ -269,7 +278,7 @@ public class PdfFont private constructor(
     private fun simpleOutline(code: Int): KitePath? {
         if (composite != null) return null
         embeddedTtf?.let { ttf -> return ttf.outlinePath(simpleGid(code)) }
-        embeddedCff?.let { cff -> return cff.glyphSpaceOutline(simpleGid(code)) }
+        (embeddedCff ?: builtinCff)?.let { cff -> return cff.glyphSpaceOutline(simpleGid(code)) }
         embeddedType1?.let { t1 ->
             val gn = glyphNameForByte[code and 0xFF] ?: return null
             return t1.outlineForGlyphName(gn) ?: t1.outlineForByte(code)
@@ -379,11 +388,15 @@ public class PdfFont private constructor(
             val embeddedCff = if (embeddedTtf == null) fontFile3?.let { FontFile3.cff(it) } else null
             val embeddedType1 = if (embeddedTtf == null && embeddedCff == null)
                 descriptor?.let { loadEmbeddedType1(it, refs) } else null
+            // A standard 14 font that the file does not embed draws from the bundled program
+            // (ISO 32000-1, 9.6.2.2). A Type 3 font draws from its own glyph procedures.
+            val builtinCff = if (subtype != "Type3" && embeddedTtf == null && embeddedCff == null && embeddedType1 == null)
+                Standard14Fonts.program(baseFont) else null
 
             return PdfFont(
                 baseFont, subtype, nameTable, unicodeTable, toUnicode,
                 wt.widths, wt.present, wt.missingWidth,
-                embeddedTtf, embeddedCff, embeddedType1, composite = null,
+                embeddedTtf, embeddedCff, embeddedType1, composite = null, builtinCff = builtinCff,
             )
         }
 

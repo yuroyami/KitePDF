@@ -449,6 +449,8 @@ final class io.github.yuroyami.kitepdf.core.font/PdfFont { // io.github.yuroyami
         final fun <get-fontSpec>(): io.github.yuroyami.kitepdf.core.font/FontSpec // io.github.yuroyami.kitepdf.core.font/PdfFont.fontSpec.<get-fontSpec>|<get-fontSpec>(){}[0]
     final val hasEmbeddedOutlines // io.github.yuroyami.kitepdf.core.font/PdfFont.hasEmbeddedOutlines|{}hasEmbeddedOutlines[0]
         final fun <get-hasEmbeddedOutlines>(): kotlin/Boolean // io.github.yuroyami.kitepdf.core.font/PdfFont.hasEmbeddedOutlines.<get-hasEmbeddedOutlines>|<get-hasEmbeddedOutlines>(){}[0]
+    final val hasOutlines // io.github.yuroyami.kitepdf.core.font/PdfFont.hasOutlines|{}hasOutlines[0]
+        final fun <get-hasOutlines>(): kotlin/Boolean // io.github.yuroyami.kitepdf.core.font/PdfFont.hasOutlines.<get-hasOutlines>|<get-hasOutlines>(){}[0]
     final val isComposite // io.github.yuroyami.kitepdf.core.font/PdfFont.isComposite|{}isComposite[0]
         final fun <get-isComposite>(): kotlin/Boolean // io.github.yuroyami.kitepdf.core.font/PdfFont.isComposite.<get-isComposite>|<get-isComposite>(){}[0]
     final val isVertical // io.github.yuroyami.kitepdf.core.font/PdfFont.isVertical|{}isVertical[0]

@@ -1881,7 +1881,7 @@ public class PageRenderer(
         val hidden = ocHidden()
         val resolveOutlines = !hidden &&
             ((doFill && canvas.resolvesGlyphOutlines) ||
-                ((doStroke || doClip) && font.hasEmbeddedOutlines))
+                ((doStroke || doClip) && font.hasOutlines))
         val laidOut = font.layoutBytes(bytes, resolveOutlines)
         // §9.4.4: per-glyph displacement includes Tc, and Tw on single-byte 0x20
         // (layoutBytes already encodes that rule in isWordSpace). Bake both into
@@ -1924,7 +1924,7 @@ public class PageRenderer(
                 (fillPattern is KitePattern.Shading || fillPattern is KitePattern.Tiling)
             // A font without a program strokes, clips and fills with a pattern through the
             // outlines of the host face that stands in for it (ISO 32000-1, 9.3.6 and 9.6.2.2, #85).
-            val hostShapes = if ((doStroke || doClip || patternFill) && !font.hasEmbeddedOutlines) hostOutlined(glyphs, font) else null
+            val hostShapes = if ((doStroke || doClip || patternFill) && !font.hasOutlines) hostOutlined(glyphs, font) else null
             val shapes = hostShapes ?: glyphs
             val shapeUnits = if (hostShapes != null) HOST_UNITS_PER_EM else font.unitsPerEm ?: 1000
             val placements = vertical?.placements
@@ -1936,16 +1936,16 @@ public class PageRenderer(
                     paintFill(shapePath, state, evenOdd = false)
                 } else {
                     withSoftMask(state.current) {
-                        drawRun(state.current.fillColor, state.current.fillAlpha, font.unitsPerEm ?: 1000, font.hasEmbeddedOutlines)
+                        drawRun(state.current.fillColor, state.current.fillAlpha, font.unitsPerEm ?: 1000, font.hasOutlines)
                     }
                 }
             } else if (!canvas.resolvesGlyphOutlines) {
                 // A canvas that reads text gets the runs that fill nothing too: an OCR layer
                 // (mode 3), outlined and clipping text are text all the same (9.3.6, #274).
-                drawRun(state.current.fillColor, state.current.fillAlpha, font.unitsPerEm ?: 1000, font.hasEmbeddedOutlines)
+                drawRun(state.current.fillColor, state.current.fillAlpha, font.unitsPerEm ?: 1000, font.hasOutlines)
             }
             if (doStroke && !state.current.strokeColorSpace.paintsNothing) {
-                if (font.hasEmbeddedOutlines || hostShapes != null) {
+                if (font.hasOutlines || hostShapes != null) {
                     strokeTextGlyphs(state, t, shapes, shapeUnits, textToUser, placements)
                 } else if (!doFill && canvas.resolvesGlyphOutlines) {
                     // This canvas has no host outlines, and a filled run beats a blank one.
@@ -2125,7 +2125,7 @@ public class PageRenderer(
                     else glyphToUser(textToDevice, penX, glyph, unitScale)
                     appendPath(builder, transformPath(outline, toDevice))
                 }
-            } else if (!font.hasEmbeddedOutlines && glyph.advanceWidth > 0.0) {
+            } else if (!font.hasOutlines && glyph.advanceWidth > 0.0) {
                 val w = glyph.advanceWidth * advanceScale
                 val box = KitePath.Builder().apply {
                     rectangle(0.0, -0.2 * t.fontSize, w, t.fontSize)

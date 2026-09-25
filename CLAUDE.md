@@ -40,3 +40,4 @@ Things a previous change taught the hard way. One line each. Delete a line when 
 - Gradle applies `--tests` only to the test task named just before it, so `:a:jvmTest :b:jvmTest --tests X` runs every test of `:a`. A run that looks filtered can be the whole suite.
 - mutool repairs a broken xref, warns on stderr and still exits with 0, and `draw` loads only the objects its page uses. Check a file KitePDF wrote with `MutoolAcceptance`, and load every object with `mutool show <file> grep` (#295).
 - `mutool draw -o /dev/null` exits with 1 for every file, because it cannot pick an output format from the name. A test that expects mutool to refuse a file must pass `-F` (#296).
+- A glyph lookup that misses falls back to glyph 0 and draws nothing, with no error. So the CFF standard strings stopped at SID 149, every accented letter of an embedded Type1C font vanished, and no test noticed. Test a font path with a glyph beyond ASCII (#303).

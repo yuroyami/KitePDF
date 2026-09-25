@@ -63,18 +63,24 @@ public object Standard14Widths {
     public fun isStandard14(baseFontName: String): Boolean = baseFontName in packed
 
     /**
-     * The Standard 14 name a Windows core-font name stands for: Arial for
-     * Helvetica, Times New Roman for Times and Courier New for Courier, keeping
-     * the weight and slant, the way PDF readers normalise them. Any other name
-     * comes back unchanged (#120).
+     * The Standard 14 name that [name] stands for, the way MuPDF normalises it: Arial for
+     * Helvetica, Times New Roman for Times and Courier New for Courier, and a style after a
+     * comma, such as `Helvetica,Bold` or `Times,Italic`, keeping the weight and slant. Every
+     * variant of Symbol, such as `SymbolMT`, is Symbol. Any other name comes back unchanged
+     * (#120, #298).
      */
     internal fun canonicalName(name: String): String {
         if (name in packed) return name
         val bare = (if (name.length > 7 && name[6] == '+') name.substring(7) else name).replace(" ", "")
+        if (bare in packed) return bare
         val (prefix, faces) = when {
             bare.startsWith("TimesNewRoman") -> "TimesNewRoman" to TIMES
+            bare.startsWith("Times") -> "Times" to TIMES
             bare.startsWith("CourierNew") -> "CourierNew" to COURIER
+            bare.startsWith("Courier") -> "Courier" to COURIER
             bare.startsWith("Arial") -> "Arial" to HELVETICA
+            bare.startsWith("Helvetica") -> "Helvetica" to HELVETICA
+            bare.startsWith("Symbol") -> "Symbol" to SYMBOL
             else -> return name
         }
         val style = bare.removePrefix(prefix).lowercase()
@@ -91,4 +97,5 @@ public object Standard14Widths {
     private val HELVETICA = arrayOf("Helvetica", "Helvetica-Bold", "Helvetica-Oblique", "Helvetica-BoldOblique")
     private val TIMES = arrayOf("Times-Roman", "Times-Bold", "Times-Italic", "Times-BoldItalic")
     private val COURIER = arrayOf("Courier", "Courier-Bold", "Courier-Oblique", "Courier-BoldOblique")
+    private val SYMBOL = arrayOf("Symbol", "Symbol", "Symbol", "Symbol")
 }

@@ -46,13 +46,27 @@ object ParityHarness {
         NO_REFERENCE("no reference render"),
     }
 
+    /** What PDFium does better on a page. */
+    enum class FindingKind { OPEN, PAGES, RENDER, SIZE, PIXELS, TEXT }
+
+    data class Finding(val kind: FindingKind, val text: String) {
+        override fun toString(): String = text
+    }
+
+    /**
+     * A page where MuPDF and PDFium agree with each other and both are wrong, so KitePDF
+     * alone is right. It covers the pixel finding while KitePDF alone differs in at most
+     * [maxKiteTiles] tiles, so a new fault on the same page still fails.
+     */
+    data class ReferencesWrong(val maxKiteTiles: Int, val reason: String)
+
     data class PageResult(
         val doc: String,
         /** 0-based; -1 for a finding about the whole document. */
         val page: Int,
         val verdict: Verdict,
-        /** Why PDFium does better, one line each. Empty unless the verdict is [Verdict.PDFIUM_BETTER]. */
-        val findings: List<String>,
+        /** What PDFium does better. Empty unless the verdict is [Verdict.PDFIUM_BETTER]. */
+        val findings: List<Finding>,
         /** Anything else worth reading: a failed reference, a difference only one reference shows. */
         val notes: List<String>,
         val diff: ThreeWayDiff.Result? = null,
@@ -64,15 +78,26 @@ object ParityHarness {
     class Report(
         val results: List<PageResult>,
         val knownGaps: Map<String, Int>,
+        val referencesWrong: Map<String, ReferencesWrong>,
         val dpi: Int,
         val outDir: File,
     ) {
-        /** Pages where PDFium does better and no open issue records it. */
-        val unexplained: List<PageResult> get() = results.filter { it.verdict == Verdict.PDFIUM_BETTER && it.key !in knownGaps }
+        /** True when [ReferencesWrong] explains every finding of [result]. */
+        fun referencesAreWrong(result: PageResult): Boolean {
+            val entry = referencesWrong[result.key] ?: return false
+            val diff = result.diff ?: return false
+            return result.findings.all { it.kind == FindingKind.PIXELS } &&
+                diff.pageOutlier != ThreeWayDiff.Engine.KITE &&
+                diff.outlierTiles.getValue(ThreeWayDiff.Engine.KITE) <= entry.maxKiteTiles
+        }
 
-        /** Known gaps whose page ran and no longer shows PDFium doing better. */
+        /** Pages where PDFium does better, with no open issue and no reason why both references are wrong. */
+        val unexplained: List<PageResult>
+            get() = results.filter { it.verdict == Verdict.PDFIUM_BETTER && it.key !in knownGaps && !referencesAreWrong(it) }
+
+        /** Entries of either list whose page ran and no longer shows PDFium doing better. */
         val stale: List<String>
-            get() = knownGaps.keys.filter { key ->
+            get() = (knownGaps.keys + referencesWrong.keys).filter { key ->
                 val ran = results.filter { it.key == key }
                 ran.isNotEmpty() && ran.none { it.verdict == Verdict.PDFIUM_BETTER }
             }
@@ -106,11 +131,16 @@ object ParityHarness {
                     listOf(ThreeWayDiff.Engine.KITE, ThreeWayDiff.Engine.PDFIUM, ThreeWayDiff.Engine.MUPDF)
                         .joinToString("/") { "${t.outlierTiles.getValue(it)}" }
                 } ?: "n/a"
-                val gap = knownGaps[r.key]?.let { " (known gap, #$it)" } ?: ""
+                val label = when {
+                    r.verdict != Verdict.PDFIUM_BETTER -> r.verdict.label
+                    r.key in knownGaps -> "${r.verdict.label} (known gap, #${knownGaps.getValue(r.key)})"
+                    referencesAreWrong(r) -> "Both references wrong: ${referencesWrong.getValue(r.key).reason}"
+                    else -> r.verdict.label
+                }
                 val why = (r.findings + r.notes).joinToString("; ").replace("|", "/").take(300)
                 val renders = r.images?.let { "[K]($it.kite.png) [M]($it.mupdf.png) [P]($it.pdfium.png) [map]($it.map.png)" } ?: ""
                 md.appendLine(
-                    "| ${r.doc} | ${if (r.page < 0) "all" else r.page} | ${r.verdict.label}$gap | ${f(d?.kiteMupdf)} | ${f(d?.kitePdfium)} | " +
+                    "| ${r.doc} | ${if (r.page < 0) "all" else r.page} | $label | ${f(d?.kiteMupdf)} | ${f(d?.kitePdfium)} | " +
                         "${f(d?.mupdfPdfium)} | $tiles | $why | $renders |",
                 )
             }
@@ -134,13 +164,14 @@ object ParityHarness {
         dpi: Int,
         outDir: File,
         knownGaps: Map<String, Int>,
+        referencesWrong: Map<String, ReferencesWrong> = emptyMap(),
         maxPages: Int = DiffHarness.MAX_PAGES_PER_DOC,
         mupdf: PdfRenderOracle = MuPdfOracle,
         pdfium: PdfiumOracle = PdfiumOracle,
     ): Report {
         val results = ArrayList<PageResult>()
         for (document in documents) results += runDocument(document, dpi, outDir, maxPages, mupdf, pdfium)
-        return Report(results, knownGaps, dpi, outDir)
+        return Report(results, knownGaps, referencesWrong, dpi, outDir)
     }
 
     private fun runDocument(
@@ -155,7 +186,7 @@ object ParityHarness {
         val kiteDoc = try {
             KitePDF.open(document.pdf.readBytes())
         } catch (e: Exception) {
-            val finding = if ((pdfiumPages ?: 0) > 0) "KitePDF cannot open a document that PDFium opens: ${e.message}" else null
+            val finding = if ((pdfiumPages ?: 0) > 0) Finding(FindingKind.OPEN, "KitePDF cannot open a document that PDFium opens: ${e.message}") else null
             return listOf(
                 PageResult(
                     doc = document.name,
@@ -173,7 +204,7 @@ object ParityHarness {
                 doc = document.name,
                 page = -1,
                 verdict = Verdict.PDFIUM_BETTER,
-                findings = listOf("PDFium finds $pdfiumPages pages and KitePDF finds $kitePages"),
+                findings = listOf(Finding(FindingKind.PAGES, "PDFium finds $pdfiumPages pages and KitePDF finds $kitePages")),
                 notes = emptyList(),
             )
         }
@@ -197,7 +228,7 @@ object ParityHarness {
         pdfium: PdfiumOracle,
         pdfiumText: PdfiumOracle.TextResult?,
     ): PageResult {
-        val findings = ArrayList<String>()
+        val findings = ArrayList<Finding>()
         val notes = ArrayList<String>()
         val kite = try {
             AwtPdfRasterizer.renderToImage(kiteDoc.pages[i], scale = dpi / 72.0)
@@ -219,12 +250,12 @@ object ParityHarness {
             val kiteText = runCatching { kiteDoc.pages[i].extractText() }.getOrElse { "" }
             val missing = missingCharacters(pdfiumText.text, kiteText)
             if (missing.isNotEmpty()) {
-                findings += "PDFium extracts ${missing.length} characters that KitePDF does not: \"${missing.take(40)}\""
+                findings += Finding(FindingKind.TEXT, "PDFium extracts ${missing.length} characters that KitePDF does not: \"${missing.take(40)}\"")
             }
         }
 
         if (kite == null) {
-            if (p != null && ImageDiff.nonBackgroundPixels(p) > 0) findings += "PDFium renders the page and KitePDF fails"
+            if (p != null && ImageDiff.nonBackgroundPixels(p) > 0) findings += Finding(FindingKind.RENDER, "PDFium renders the page and KitePDF fails")
             return result(document, i, findings, notes, null, null)
         }
         val base = "parity/${document.name}/p$i"
@@ -238,7 +269,7 @@ object ParityHarness {
         if (!kiteFitsMupdf || !kiteFitsPdfium) {
             val referencesAgree = abs(m.width - p.width) <= 1 && abs(m.height - p.height) <= 1
             val sizes = "KitePDF ${kite.width}x${kite.height}, MuPDF ${m.width}x${m.height}, PDFium ${p.width}x${p.height}"
-            if (referencesAgree) findings += "the page size differs from both references: $sizes" else notes += "page sizes differ: $sizes"
+            if (referencesAgree) findings += Finding(FindingKind.SIZE, "the page size differs from both references: $sizes") else notes += "page sizes differ: $sizes"
             return result(document, i, findings, notes, null, base)
         }
         val diff = ThreeWayDiff.compare(kite, m, p)
@@ -253,11 +284,11 @@ object ParityHarness {
             val worst = diff.worstKiteTile?.let { t ->
                 " The worst tile, at x ${t.x} and y ${t.y}, has K-M ${"%.3f".format(t.kiteMupdf)}, K-P ${"%.3f".format(t.kitePdfium)}, M-P ${"%.3f".format(t.mupdfPdfium)}."
             } ?: ""
-            findings += when {
+            findings += Finding(FindingKind.PIXELS, when {
                 diff.pageOutlier == ThreeWayDiff.Engine.KITE && tiles > 0 -> "MuPDF and PDFium agree and KitePDF differs, on the page and in $tiles tiles.$worst"
                 diff.pageOutlier == ThreeWayDiff.Engine.KITE -> "MuPDF and PDFium agree and KitePDF differs across the page"
                 else -> "MuPDF and PDFium agree and KitePDF differs in $tiles tiles.$worst"
-            }
+            })
         }
         if (diff.outlierTiles.getValue(ThreeWayDiff.Engine.PDFIUM) > 0 || diff.pageOutlier == ThreeWayDiff.Engine.PDFIUM) {
             notes += "PDFium alone differs in ${diff.outlierTiles.getValue(ThreeWayDiff.Engine.PDFIUM)} tiles"
@@ -271,7 +302,7 @@ object ParityHarness {
     private fun result(
         document: Document,
         page: Int,
-        findings: List<String>,
+        findings: List<Finding>,
         notes: List<String>,
         diff: ThreeWayDiff.Result?,
         images: String?,
