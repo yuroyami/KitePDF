@@ -69,3 +69,7 @@ It is invoked as an external program during testing and no part of it is
 included in, linked to, or distributed with KitePDF. Several source comments
 name MuPDF where its observable behaviour is the interoperability target that
 a KitePDF behaviour was matched against.
+
+PDFium, through the Python binding pypdfium2, is the second rendering oracle
+of the parity check. It runs as an external program during testing, and no
+part of it is included in, linked to, or distributed with KitePDF.

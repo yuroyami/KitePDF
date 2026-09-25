@@ -4,7 +4,8 @@ name: CI
 #
 # - `build` (Linux JVM) is the REQUIRED gate: the JVM target is the canonical
 #   build of commonMain, and the differential/oracle suites run here (they
-#   use a pinned, colour-managed mutool build).
+#   use a pinned, colour-managed mutool build, and a pinned PDFium for the
+#   parity check).
 #   It runs on every push and pull request.
 # - `apple` and `js` prove the non-JVM targets compile AND pass the common
 #   tests before merge. Platform regressions are therefore merge-blocking,
@@ -77,6 +78,15 @@ jobs:
           test -x "$GITHUB_WORKSPACE/.oracle-bin/mutool"
           "$GITHUB_WORKSPACE/.oracle-bin/mutool" -v
           echo "MUTOOL=$GITHUB_WORKSPACE/.oracle-bin/mutool" >> "$GITHUB_ENV"
+
+      # PDFium is the second oracle. The parity check fails where PDFium does
+      # better than KitePDF, and a new PDFium build moves its verdicts, so pin it.
+      - name: Install the pinned PDFium oracle
+        run: |
+          python3 -m venv "$RUNNER_TEMP/pdfium-venv"
+          "$RUNNER_TEMP/pdfium-venv/bin/python" -m pip install --disable-pip-version-check \
+            --only-binary :all: --no-deps pypdfium2==5.13.0
+          echo "PDFIUM_PYTHON=$RUNNER_TEMP/pdfium-venv/bin/python" >> "$GITHUB_ENV"
 
       - name: Compile commonMain (JVM)
         run: ./gradlew :kitepdf:compileKotlinJvm --stacktrace

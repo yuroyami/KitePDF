@@ -33,6 +33,7 @@ Open `report.md` and start at the top. That is the worst-rendering page.
 | `kitepdf.diff.maxpages` | `6` | positive maximum pages scored per document |
 | `kitepdf.diff.budget` | `0.05` | finite max per-page MAE from `0.0` to `1.0` |
 | `kitepdf.difftest.out` | `build/difftest` | output directory |
+| `kitepdf.pdfium.python` | _auto_ | Python with `pypdfium2`, for the parity check |
 
 Explicit corpus and `mutool` paths are strict: a missing directory, missing
 binary, or non-executable binary fails the test instead of silently reducing
@@ -89,3 +90,57 @@ make -C mupdf-master build=release HAVE_X11=no HAVE_GLUT=no mujs=no -j4
 `mujs=no` disables MuPDF's JavaScript engine (`-DFZ_ENABLE_JS=0`); rendering
 doesn't use it. Without any oracle the harness still runs as a KitePDF-only
 smoke pass and emits the report.
+
+## The parity check (PDFium)
+
+`PdfiumParityTest` asks one question: does PDFium, the PDF engine of Chrome, do
+anything better than KitePDF? It renders each page of the corpus and of the
+shared oracle fixtures three times: KitePDF on AWT (K), MuPDF (M) and PDFium
+(P). Then it compares each pair of renders.
+
+MuPDF and PDFium disagree with each other in known ways: anti-aliasing, the
+weight of thin lines, mesh shadings, and the fonts that replace the standard 14
+fonts. So a difference between KitePDF and PDFium proves nothing by itself. The
+third render breaks the tie:
+
+| Pattern | Verdict |
+|---|---|
+| M and P agree, and K differs from both | PDFium does better. The check fails. |
+| K agrees with M or with P | The check passes. One reference goes its own way. |
+| Each engine alone differs somewhere on the page | No consensus. The check passes and lists the page for review. |
+
+`ThreeWayDiff` measures agreement on the whole page and on each tile of 24
+pixels, so a small missing element counts as well as a colour shift. An engine
+is the odd one out when its distance to each of the other two is more than
+twice their distance to each other, plus a margin.
+
+The check also fails when PDFium opens a document or finds pages that KitePDF
+does not, renders a page that KitePDF fails on, or extracts a character from a
+page that KitePDF does not extract.
+
+```
+build/difftest/
+  parity.md                 every page with its three distances and its verdict
+  parity/<doc>/p<n>.*.png   kite, mupdf and pdfium renders, and the map
+```
+
+The map is red where KitePDF alone differs, blue where PDFium alone differs,
+and green where MuPDF alone differs.
+
+`PdfiumParityTest.KNOWN_GAPS` lists each page where PDFium does better today,
+with its open issue. The label `plan:pdfium-parity` groups those issues. A new
+finding needs an issue before it goes on the list. A page that stops failing
+must come off the list, or the check fails.
+
+PDFium comes from `pypdfium2` and runs in its own Python process. Install the
+pinned version once:
+
+```bash
+python3 -m venv ~/.cache/kitepdf/pdfium-venv
+~/.cache/kitepdf/pdfium-venv/bin/python -m pip install --only-binary :all: --no-deps pypdfium2==5.13.0
+```
+
+`PdfiumOracle` finds it from `-Dkitepdf.pdfium.python`, `$PDFIUM_PYTHON`, that
+virtual environment, or a `python3` on `$PATH` that imports `pypdfium2`.
+Without PDFium or `mutool`, the check reports as skipped. CI installs the same
+version.

@@ -27,6 +27,7 @@ Breaking any of these fails the change, however good the code is.
 - **MuPDF is the architectural reference and `mutool` is the oracle.** A source snapshot lives in `mupdf-master/`. Its third-party submodules are empty placeholders, so do not try to build it. The runnable oracle is the Homebrew `mutool` binary at `/opt/homebrew/bin/mutool`.
 - **The spec is ISO 32000-1 (PDF 1.7) and ISO 32000-2 (PDF 2.0)** for PDF, EPUB 3.3 for books, and the relevant CSS and SVG specs for layout and vector work. Cite the section number in the code comment when you implement spec behaviour.
 - MuPDF is not automatically right. Where the spec and the reference disagree, say so in the commit and follow the spec.
+- **PDFium is the second oracle.** It must do nothing better than KitePDF. `PdfiumParityTest` fails where MuPDF and PDFium agree and KitePDF differs from both. A difference that only PDFium shows is not a failure. Install the pinned `pypdfium2` as `kitepdf-native-renderer/DIFFTEST.md` shows.
 
 ## The gate
 
@@ -43,6 +44,8 @@ Run this before every commit.
 ```
 
 Then read `kitepdf-native-renderer/build/difftest/report.md`. The mean error must not be worse than before your change. Record the number and explain any movement.
+
+The gate also runs the PDFium parity check. When it fails, read `kitepdf-native-renderer/build/difftest/parity.md`. A page that your change fixes must come off `PdfiumParityTest.KNOWN_GAPS`, and a new finding needs an issue before it goes on.
 
 The other harnesses:
 

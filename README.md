@@ -324,8 +324,9 @@ may reach.
 ## Testing
 
 1228 tests across 224 test files. A differential harness compares the JVM/AWT
-backend page by page against MuPDF, and only that backend. See
-[DIFFTEST.md](kitepdf-native-renderer/DIFFTEST.md). A local run over 39 pages
+backend page by page against MuPDF, and only that backend. A parity check adds
+PDFium as a second reference, and fails where MuPDF and PDFium agree and KitePDF
+differs from both. See [DIFFTEST.md](kitepdf-native-renderer/DIFFTEST.md). A local run over 39 pages
 reports a mean absolute error of 0.0053 and a worst page of 0.0263. The PDF
 corpus is not committed, so a clean checkout and CI do not reproduce that run.
 
