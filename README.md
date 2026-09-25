@@ -90,16 +90,15 @@ A few things are good to know:
 
 ## A quick tour
 
-### Open any document
+### Open a document
 
 ```kotlin
+import io.github.yuroyami.kitepdf.PdfDocument
 import io.github.yuroyami.kitepdf.document.KiteDoc
 
-val doc = KiteDoc.open(bytes)          // finds the format by itself
+val doc = PdfDocument.open(bytes)      // a PDF; PdfDocument.open(bytes, "secret") if it is locked
+val any = KiteDoc.open(bytes)          // any format: KitePDF finds out which by itself
 KiteDoc.formatOf(bytes)                // Pdf, Epub, Cbz, Svg, Xps, or null
-
-val pdf  = PdfDocument.open(bytes)     // when you know the format
-val book = EpubDocument.open(bytes)
 ```
 
 `open` throws when it cannot read a file, and `openOrNull` returns `null` instead. A
@@ -112,12 +111,37 @@ Base64 or a `data:` URI, and a URL through `kitepdf-net`. Each one also has an
 `...OrNull` form. See [Loading](https://yuroyami.github.io/KitePDF/loading/) for which
 platform takes which.
 
+### Show it in Compose
+
+With `kitepdf-compose-viewer`, one composable shows any document, whatever its format:
+
+```kotlin
+import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
+import io.github.yuroyami.kitepdf.compose.*
+import io.github.yuroyami.kitepdf.core.KiteDocument
+
+@Composable
+fun Viewer(doc: KiteDocument) {
+    KiteDocView(
+        state = rememberKiteDocViewState(doc),
+        modifier = Modifier.fillMaxSize(),
+        layout = KiteDocLayout.Paged(Orientation.Horizontal),   // or KiteDocLayout.Continuous()
+        zoomSpec = KiteZoomSpec(maxZoom = 6f),
+    )
+}
+```
+
+It zooms, selects text, follows links inside the document and highlights search hits. See
+[Compose viewer](https://yuroyami.github.io/KitePDF/compose-viewer/) for everything it can do.
+
 ### Read and search text
 
 ```kotlin
 import io.github.yuroyami.kitepdf.text.search
 
-val doc = PdfDocument.open(bytes)      // or PdfDocument.open(bytes, "secret")
 val page = doc.pages[0]
 
 page.extractText()            // the page as plain text
@@ -195,28 +219,6 @@ val state = rememberKiteDocViewState(book, savedBookmark)   // opens at the save
 KiteDocView(state, Modifier.fillMaxSize())
 
 savedBookmark = state.currentBookmark()                    // save it when the app pauses
-```
-
-### Show it on screen
-
-With `kitepdf-compose-viewer`, one composable shows every format:
-
-```kotlin
-import androidx.compose.foundation.gestures.Orientation
-import androidx.compose.runtime.Composable
-import io.github.yuroyami.kitepdf.compose.*
-
-@Composable
-fun Viewer(doc: PdfDocument) {
-    val state = rememberKiteDocViewState(doc)
-    KiteDocView(
-        state = state,
-        layout = KiteDocLayout.Paged(Orientation.Horizontal),
-        zoomSpec = KiteZoomSpec(maxZoom = 6f),
-        renderSpec = KiteRenderSpec.Rasterized(),
-        onLinkTap = { _ -> false },   // return true once you have handled the link
-    )
-}
 ```
 
 ### Render a page to an image
