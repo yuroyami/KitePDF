@@ -424,6 +424,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A grey ICC profile maps full grey to white, whatever its white point tag says.
   With a D65 tag, full grey drew as #ebffff and mid grey as #768295, where mutool
   draws #ffffff and #808080 (#311).
+- The scene tests of the viewer wait for background work, such as a chapter layout
+  or a page raster, on the wall clock instead of a count of frames. The count came to
+  under four seconds, which a loaded CI runner can need for a twelve-chapter book.
+  `IncrementalEpubSceneTest` runs in the default suite again, and its opening test
+  waits until the chapter is laid out, not only until its placeholder shows (#294, #213).
 - Three scene tests of text selection no longer fail on a loaded machine. A frame
   that ran past the long-press timeout while a test finger was down turned the
   gesture into a long press. The tests now send the first move with no frame after

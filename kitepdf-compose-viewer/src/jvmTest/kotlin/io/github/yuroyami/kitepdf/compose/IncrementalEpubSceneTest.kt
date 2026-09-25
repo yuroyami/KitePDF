@@ -54,8 +54,9 @@ class IncrementalEpubSceneTest {
             KiteDocView(state = state, modifier = Modifier.fillMaxSize())
         }.use { scene ->
             val driver = SceneTestDriver(scene)
-            // One frame: the target chapter is laid out, the reader is on it.
-            driver.pumpUntilState { state.currentLocation.chapter == 9 }
+            // The target chapter is laid out and the reader is on it. A chapter not laid out
+            // yet is a placeholder slot that also reports its chapter, so wait for both.
+            driver.pumpUntilState { doc.isChapterReady(9) && state.currentLocation.chapter == 9 }
             assertEquals(9, state.currentLocation.chapter)
             assertTrue(doc.isChapterReady(9))
             assertFalse(doc.isComplete, "the whole book should not be laid out yet")

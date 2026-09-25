@@ -91,11 +91,3 @@ kotlin {
         }
     }
 }
-
-// IncrementalEpubSceneTest is timing-racy as a class under machine load.
-// Run it on demand with -PslowTests.
-tasks.withType<Test>().configureEach {
-    if (!project.hasProperty("slowTests")) {
-        filter.excludeTestsMatching("*IncrementalEpubSceneTest")
-    }
-}

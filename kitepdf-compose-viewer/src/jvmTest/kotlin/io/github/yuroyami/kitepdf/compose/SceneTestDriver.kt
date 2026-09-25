@@ -28,11 +28,12 @@ internal class SceneTestDriver(private val scene: ImageComposeScene) {
      * Render frames until [check] passes against the latest frame, or until the
      * frame/time budget is exhausted. Returns the last rendered frame either way
      * to let the caller's assertions report the failure if the condition never
-     * held.
+     * held. The default budget is wall-clock time, as for [pumpUntilState]: a page
+     * raster comes from a background thread.
      */
     fun pumpUntil(
-        maxFrames: Int = 600,
-        timeoutMs: Long = 10_000,
+        maxFrames: Int = Int.MAX_VALUE,
+        timeoutMs: Long = 60_000,
         check: (PixelMap) -> Boolean,
     ): Image {
         var img = scene.render(timeNanos)
@@ -52,10 +53,15 @@ internal class SceneTestDriver(private val scene: ImageComposeScene) {
      * Render frames until [check] holds. For conditions that live in state
      * rather than in pixels, such as a chapter finishing its layout on a
      * background thread.
+     *
+     * The default budget is wall-clock time, not a frame count. Such a condition
+     * waits on real threads, and a loaded machine slows those, not the virtual
+     * clock: 900 frames came to under four seconds, and a CI runner under load
+     * needed more than that to lay out a twelve-chapter book (#294).
      */
     fun pumpUntilState(
-        maxFrames: Int = 900,
-        timeoutMs: Long = 20_000,
+        maxFrames: Int = Int.MAX_VALUE,
+        timeoutMs: Long = 60_000,
         check: () -> Boolean,
     ) {
         scene.render(timeNanos)
