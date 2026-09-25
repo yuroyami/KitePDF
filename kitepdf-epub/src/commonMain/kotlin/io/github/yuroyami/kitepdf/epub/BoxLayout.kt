@@ -1,5 +1,6 @@
 package io.github.yuroyami.kitepdf.epub
 
+import io.github.yuroyami.kitepdf.core.font.GsubGlyph
 import io.github.yuroyami.kitepdf.svg.SvgImage
 
 import io.github.yuroyami.kitepdf.epub.css.ComputedStyle
@@ -26,7 +27,6 @@ import kotlin.math.roundToInt
 
 // GSUB ligature features, applied required-first: Arabic lam-alef (`rlig`) then
 // discretionary Latin ligatures like fi/fl (`liga`).
-private val LIG_FEATURES = listOf("rlig", "liga")
 
 /**
  * Positions the [LayoutBox] tree in document space (x from content-left, y down).
@@ -876,8 +876,7 @@ internal class BoxLayout(
         var softHyphens = ArrayList<Int>()
         fun endWord() {
             if (word.isNotEmpty()) {
-                shapeArabic(word)               // contextual joining (1:1 gid remap)
-                val ligated = applyLigatures(word) // liga/rlig (may collapse cells)
+                val ligated = shapeWord(word)   // GSUB: joining forms, ligatures, contextual substitutions
                 positionMarks(word)             // GPOS mark-to-base attachment
                 kernWord(word)
                 // Skip hyphenation when a ligature collapsed cells (soft-hyphen indices
@@ -1047,67 +1046,85 @@ internal class BoxLayout(
     }
 
     /**
-     * Arabic contextual joining: remap each letter's glyph to its initial/medial/
-     * final/isolated form via the matching GSUB feature. 1:1, so cell count and
-     * hyphenation indices are unchanged. Single-face words only (the common case).
+     * Runs a word through the GSUB table of its face (#211): the features HarfBuzz applies by
+     * default for the script of the word, in its stages, with the joining forms of Arabic
+     * across the whole word. Cells of one paint, link and ruby group shape together. Returns
+     * true when the cells no longer stand one for each character, which turns hyphenation
+     * off for the word.
      */
-    private fun shapeArabic(cells: MutableList<Cell>) {
-        val face = cells.firstOrNull()?.face ?: return
-        if (!face.hasArabicJoining || cells.any { it.face !== face }) return
-        val cps = IntArray(cells.size) { cells[it].ch.code }
-        if (!ArabicJoining.hasArabic(cps)) return
-        val forms = ArabicJoining.forms(cps)
-        for (i in cells.indices) {
-            val c = cells[i]
-            if (c.gid < 0) continue
-            val newGid = face.substSingle(ArabicJoining.feature(forms[i]), c.gid)
-            if (newGid != c.gid) {
-                c.gid = newGid
-                c.width = face.advance1000(newGid) * c.fontSize / 1000.0
-            }
-        }
-    }
-
-    /**
-     * Apply GSUB ligatures (`rlig` then `liga`) greedily, longest match first,
-     * collapsing a run of component glyphs into one ligature cell. Returns true if
-     * anything changed. Single-face words only.
-     */
-    private fun applyLigatures(cells: MutableList<Cell>): Boolean {
+    private fun shapeWord(cells: MutableList<Cell>): Boolean {
         val face = cells.firstOrNull()?.face ?: return false
         if (cells.any { it.face !== face }) return false
+        val gsub = face.gsub ?: return false
+        // Marks go into the order the font expects, as HarfBuzz normalizes them.
+        CombiningClass.reorder(cells) { it.ch.code }
+        val cps = IntArray(cells.size) { cells[it].ch.code }
+        val script = TextShaper.script(cps, gsub)
+        val forms = if (ArabicJoining.hasArabic(cps)) ArabicJoining.forms(cps) else null
+        val stages = TextShaper.stages(script, optionalLigatures = cells.none { it.kernAfter1000 != 0 })
+        val out = ArrayList<Cell>(cells.size)
         var changed = false
-        var i = 0
-        while (i < cells.size) {
-            val first = cells[i]
-            if (first.gid < 0) { i++; continue }
-            val rule = LIG_FEATURES.firstNotNullOfOrNull { feat ->
-                face.ligatures(feat, first.gid)?.firstOrNull { r ->
-                    i + r.rest.size < cells.size &&
-                        r.rest.indices.all { j ->
-                            val next = cells[i + 1 + j]
-                            next.gid == r.rest[j] && samePaint(next, first) && next.href == first.href &&
-                                next.rubyGroup == first.rubyGroup
-                        }
+        var start = 0
+        while (start < cells.size) {
+            var end = start + 1
+            while (end < cells.size && shapesWith(cells[start], cells[end])) end++
+            val run = cells.subList(start, end)
+            if (run.any { it.gid < 0 }) {
+                out.addAll(run)
+            } else {
+                val glyphs = MutableList(run.size) { k ->
+                    val c = run[k]
+                    val joining = forms?.let { TextShaper.joining(cps[start + k], it[start + k]) } ?: emptySet()
+                    GsubGlyph(c.gid, k, joining, TextShaper.isMark(c.ch))
                 }
+                gsub.substitute(glyphs, script, null, stages, TextShaper.POSITIONAL)
+                if (rebuild(run, glyphs, face, out)) changed = true
             }
-            if (rule != null) {
-                val ligGid = rule.lig
-                // The ligature draws every component, so it carries the text of every one (#314).
-                val text = (0..rule.rest.size).joinToString("") { k -> cells[i + k].let { c -> c.text ?: c.ch.toString() } }
-                val lig = Cell(
-                    first.ch, face.advance1000(ligGid) * first.fontSize / 1000.0, first.fontSize,
-                    first.spec, first.color, first.shift, first.underline, face, ligGid,
-                    rubyGroup = first.rubyGroup, rubyText = first.rubyText, href = first.href,
-                    lineThrough = first.lineThrough, backgroundColor = first.backgroundColor,
-                ).also { it.ligComponents = rule.rest.size + 1; it.text = text }
-                repeat(rule.rest.size + 1) { cells.removeAt(i) }
-                cells.add(i, lig)
-                changed = true
-            }
-            i++
+            start = end
         }
+        if (changed) { cells.clear(); cells.addAll(out) }
         return changed
+    }
+
+    /** Cells that GSUB may join: a ligature never spans a change of paint, link or ruby group. */
+    private fun shapesWith(a: Cell, b: Cell): Boolean = samePaint(a, b) && a.href == b.href && a.rubyGroup == b.rubyGroup
+
+    /**
+     * Appends the cells of the shaped [glyphs] of [run] to [out]. A glyph that still stands for
+     * its own character keeps its cell. Otherwise the first glyph of each cluster carries the
+     * text of every character in the cluster, and the other glyphs of it carry none, so the
+     * text of the page stays the text of the book (#314). True when the cells changed shape.
+     */
+    private fun rebuild(run: List<Cell>, glyphs: List<GsubGlyph>, face: EmbeddedFace, out: MutableList<Cell>): Boolean {
+        if (glyphs.size == run.size && glyphs.indices.all { glyphs[it].cluster == it }) {
+            for ((k, g) in glyphs.withIndex()) {
+                val c = run[k]
+                if (g.gid != c.gid) {
+                    c.gid = g.gid
+                    c.width = (penAdvance1000(face, g.gid, c.ch) + c.kernAfter1000) * c.fontSize / 1000.0
+                }
+                out.add(c)
+            }
+            return false
+        }
+        for ((j, g) in glyphs.withIndex()) {
+            val first = j == 0 || glyphs[j - 1].cluster != g.cluster
+            var next = run.size
+            for (k in j + 1 until glyphs.size) if (glyphs[k].cluster > g.cluster) { next = glyphs[k].cluster; break }
+            val base = run[g.cluster]
+            val text = if (first) (g.cluster until next).joinToString("") { k -> run[k].text ?: run[k].ch.toString() } else ""
+            // Letter-spacing rides on the first glyph of the cluster, as it did on its character.
+            val spacing = if (first) base.kernAfter1000 else 0
+            out.add(
+                Cell(
+                    base.ch, (penAdvance1000(face, g.gid, base.ch) + spacing) * base.fontSize / 1000.0, base.fontSize,
+                    base.spec, base.color, base.shift, base.underline, face, g.gid, kernAfter1000 = spacing,
+                    rubyGroup = base.rubyGroup, rubyText = base.rubyText, href = base.href,
+                    lineThrough = base.lineThrough, backgroundColor = base.backgroundColor,
+                ).also { it.ligComponents = g.components; it.text = text },
+            )
+        }
+        return true
     }
 
     /**
