@@ -27,7 +27,7 @@ kitejs = "0.2.0"
 
 # Ktor client. Used ONLY by :kitepdf-net, the optional remote-loading artifact.
 # No other module may depend on it: the engine stays kotlin-stdlib + KiteImage.
-ktor = "3.5.2"
+ktor = "3.6.0"
 
 [libraries] ######################################################################################
 # KiteImage supplies every image codec :kitepdf-core decodes through: JPEG
