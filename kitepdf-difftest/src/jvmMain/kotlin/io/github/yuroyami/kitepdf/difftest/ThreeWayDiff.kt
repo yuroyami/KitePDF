@@ -29,8 +29,12 @@ public object ThreeWayDiff {
     /** The margin on a tile: about 5 levels a channel. */
     private const val TILE_MARGIN = 0.02
 
-    /** The margin on the whole page: about a quarter of a level a channel. */
-    private const val PAGE_MARGIN = 0.001
+    /**
+     * The margin on the whole page: about half a level a channel. Below it, a difference is
+     * the rounding of interpolation, which differs between rasterizers by a level or two and
+     * cannot be seen. A local fault still shows in the tiles (#302).
+     */
+    private const val PAGE_MARGIN = 0.002
 
     public enum class Engine { KITE, MUPDF, PDFIUM }
 

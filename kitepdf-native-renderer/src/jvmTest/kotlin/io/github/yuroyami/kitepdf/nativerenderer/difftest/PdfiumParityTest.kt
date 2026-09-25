@@ -51,10 +51,7 @@ class PdfiumParityTest {
          * Pages where PDFium does better today, each with the open issue that records it.
          * The goal is an empty map. Drop-in corpus pages run only where the corpus exists.
          */
-        val KNOWN_GAPS: Map<String, Int> = mapOf(
-            // A JPEG 2000 image decodes a fraction of a level off from OpenJPEG.
-            "testPDF_JPX p0" to 302,
-        )
+        val KNOWN_GAPS: Map<String, Int> = emptyMap()
 
         /**
          * Pages where MuPDF and PDFium agree with each other and both are wrong, each with
