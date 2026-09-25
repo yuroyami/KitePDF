@@ -165,7 +165,7 @@ object ParityHarness {
         for (f in ParityFixtures.all()) {
             docs += Document(f.name, File(inputs, "${f.name}.pdf").apply { writeBytes(f.bytes) })
         }
-        val icc = IccFixtures.all() + IccFixtures.intents().map { it.fixture }
+        val icc = IccFixtures.all() + (IccFixtures.intents() + IccFixtures.outputIntent()).map { it.fixture }
         for (f in ColorFixtures.all() + GradientFixtures.all() + GroupFixtures.all() + ImageFixtures.all() + icc) {
             val pdf = File(inputs, "${f.name}.pdf").apply { writeBytes(f.bytes) }
             docs += Document("fixture-${f.name}", pdf)

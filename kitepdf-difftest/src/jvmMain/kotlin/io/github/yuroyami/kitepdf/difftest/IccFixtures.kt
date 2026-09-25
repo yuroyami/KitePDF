@@ -57,6 +57,39 @@ object IccFixtures {
         greyWithD65White(),
     )
 
+    /**
+     * A page whose catalog names the press profile as its output intent, and which paints
+     * DeviceCMYK only: fills, a space that names DeviceCMYK, an image and a flat shading.
+     * mutool converts DeviceCMYK through the output intent (#312). It also proofs RGB and
+     * grey content through it, which KitePDF does not, so the page has none.
+     */
+    fun outputIntent(): SwatchPage {
+        val samples = ByteArray(16)
+        for ((i, c) in PRESS_SWATCHES.withIndex()) {
+            val inks = c.split(' ').map { (it.toDouble() * 255).roundToInt() }
+            for (k in 0 until 4) samples[i * 4 + k] = inks[k].toByte()
+        }
+        val content = StringBuilder()
+        for ((col, c) in PRESS_SWATCHES.withIndex()) content.append("$c k ").append(cell(0, col))
+        content.append("/CS0 cs 0 0 0 0.5 sc ").append(cell(1, 0))
+        content.append("0.3 0.1 0.6 0.05 k ").append(cell(1, 1))
+        content.append("q 100 105 40 40 re W n /Sh0 sh Q\n")
+        content.append("q 90 0 0 90 5 5 cm /Im0 Do Q\n")
+        val image = pdfStream(samples, "/Type /XObject /Subtype /Image /Width 2 /Height 2 /BitsPerComponent 8 /ColorSpace /DeviceCMYK")
+        val shading = "<< /ShadingType 2 /ColorSpace /DeviceCMYK /Coords [100 0 140 0] " +
+            "/Function << /FunctionType 2 /Domain [0 1] /C0 [0.6 0.2 0 0.1] /C1 [0.6 0.2 0 0.1] /N 1 >> >>"
+        val imageCentres = listOf(27.5 to 72.5, 72.5 to 72.5, 27.5 to 27.5, 72.5 to 27.5)
+        return SwatchPage(
+            oracleFixture(
+                "icc-output-intent", content.toString(),
+                "/ColorSpace << /CS0 /DeviceCMYK >> /XObject << /Im0 6 0 R >> /Shading << /Sh0 7 0 R >>",
+                listOf(pdfStream(pressProfile, "/N 4"), image, shading.toByteArray()), budget = 0.002,
+                catalog = "/OutputIntents [<< /Type /OutputIntent /S /GTS_PDFX /OutputConditionIdentifier (Press) /DestOutputProfile 5 0 R >>] ",
+            ),
+            (0 until 4).map { centre(0, it) } + listOf(centre(1, 0), centre(1, 1), centre(1, 2)) + imageCentres,
+        )
+    }
+
     private val INTENTS = listOf("Perceptual", "RelativeColorimetric", "Saturation", "AbsoluteColorimetric")
     private val PRESS_SWATCHES = listOf("0 0 0 0", "1 0 0 0", "0.2 0.7 0.1 0.3", "1 1 1 1")
 

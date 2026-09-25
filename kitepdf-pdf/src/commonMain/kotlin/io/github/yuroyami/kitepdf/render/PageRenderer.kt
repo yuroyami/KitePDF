@@ -410,7 +410,7 @@ public class PageRenderer(
     private fun loadShadings(resources: PdfDictionary?, colorSpaces: Map<String, KiteColorSpace>): Map<String, KiteShading> {
         val dict = resources?.getDict("Shading", resolver) ?: return emptyMap()
         return dict.map.mapNotNull { (name, value) ->
-            val source = DefaultColorSpaces.shading(value, resources, colorSpaces, resolver)
+            val source = DefaultColorSpaces.shading(value, resources, colorSpaces, resolver, outputIntent)
             val sh = KiteShading.parse(source, resolver) ?: return@mapNotNull null
             name to sh
         }.toMap()
@@ -430,7 +430,7 @@ public class PageRenderer(
     ): Map<String, KitePattern> {
         val dict = resources?.getDict("Pattern", resolver) ?: return emptyMap()
         return dict.map.mapNotNull { (name, value) ->
-            val source = DefaultColorSpaces.pattern(value, resources, colorSpaces, resolver)
+            val source = DefaultColorSpaces.pattern(value, resources, colorSpaces, resolver, outputIntent)
             val p = KitePattern.parse(source, resolver, shadings) ?: return@mapNotNull null
             name to p
         }.toMap()
@@ -769,8 +769,12 @@ public class PageRenderer(
      * Named colour spaces declared in /Resources /ColorSpace. An entry that names a device
      * family selects that family, so the default for it applies (ISO 32000-1, 8.6.5.6).
      */
+    /** The CMYK output intent of the document, the DefaultCMYK of resources that name none (#312). */
+    private val outputIntent: DefaultColorSpaces.OutputIntent? =
+        (resolver as? io.github.yuroyami.kitepdf.PdfDocument)?.cmykOutputIntent
+
     private fun loadColorSpaces(resources: PdfDictionary?): Map<String, KiteColorSpace> {
-        val spaces = ContentStreamParser.colorSpaces(resources, resolver)
+        val spaces = DefaultColorSpaces.withOutputIntent(ContentStreamParser.colorSpaces(resources, resolver), outputIntent)
         if (DefaultColorSpaces.KEYS.none { it in spaces }) return spaces
         val entries = runCatching { resources?.getDict("ColorSpace", resolver) }.getOrNull() ?: return spaces
         return spaces.mapValues { (name, space) ->
@@ -792,7 +796,8 @@ public class PageRenderer(
      * never comes. This matches how `/ImageMask` stencils are already treated.
      *
      * An image in a device space that a default of [colorSpaces] replaces skips the cache
-     * as well, because the same image can meet other defaults on another page.
+     * as well, because the same image can meet other defaults on another page. The output
+     * intent is the same on every page, so an image that only it replaces is cached.
      */
     private fun decodeImageCached(slot: XObjectSlot, fillColor: RgbColor, colorSpaces: Map<String, KiteColorSpace>): KiteImageData {
         val doc = resolver as? io.github.yuroyami.kitepdf.PdfDocument
@@ -801,6 +806,11 @@ public class PageRenderer(
         val stencil = (dict["ImageMask"] as? io.github.yuroyami.kitepdf.core.parser.PdfBoolean)?.value == true
         val masked = stencil || dict["Mask"] != null
         val defaultSpace = if (stencil) null else DefaultColorSpaces.imageSpace(dict["ColorSpace"], colorSpaces, resolver)
+        if (defaultSpace != null && doc != null && key != null && !masked && DefaultColorSpaces.onlyOutputIntent(colorSpaces, outputIntent)) {
+            doc.cachedImage(key)?.let { return it }
+            doc.countImageDecode()
+            return doc.cacheImage(key, KiteImageData.from(slot.stream, resolver, fillColor, defaultSpace))
+        }
         if (defaultSpace != null) {
             doc?.countImageDecode()
             return KiteImageData.from(slot.stream, resolver, fillColor, defaultSpace)

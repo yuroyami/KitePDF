@@ -24,6 +24,9 @@ import io.github.yuroyami.kitepdf.parser.Parser
 import io.github.yuroyami.kitepdf.core.parser.PdfArray
 import io.github.yuroyami.kitepdf.core.parser.PdfDictionary
 import io.github.yuroyami.kitepdf.core.parser.PdfInt
+import io.github.yuroyami.kitepdf.core.parser.PdfName
+import io.github.yuroyami.kitepdf.core.render.KiteColorSpace
+import io.github.yuroyami.kitepdf.render.DefaultColorSpaces
 import io.github.yuroyami.kitepdf.core.parser.PdfObject
 import io.github.yuroyami.kitepdf.core.parser.PdfReference
 import io.github.yuroyami.kitepdf.parser.PdfRepair
@@ -500,6 +503,21 @@ public class PdfDocument private constructor(
     public val optionalContent: PdfOptionalContent? by lazy {
         // Lenient salvage: an unreadable configuration leaves every layer visible (#252).
         runCatching { PdfOptionalContent.parse(catalog, this) }.getOrNull()
+    }
+
+    /**
+     * The first output intent of the catalog as `[/ICCBased profile]` and its space, when the
+     * profile is a CMYK profile that KitePDF can read, else null. The renderer uses it as
+     * `/DefaultCMYK` wherever the resources name none, as MuPDF does (ISO 32000-1, 14.11.5, #312).
+     */
+    internal val cmykOutputIntent: DefaultColorSpaces.OutputIntent? by lazy {
+        runCatching {
+            val intent = catalog.getArray("OutputIntents", this)?.firstOrNull()?.resolve(this) as? PdfDictionary
+            val profile = intent?.get("DestOutputProfile") ?: return@runCatching null
+            val source = PdfArray(listOf(PdfName("ICCBased"), profile))
+            val space = KiteColorSpace.resolve(source, this)
+            if (space is KiteColorSpace.IccBased && space.componentCount == 4) DefaultColorSpaces.OutputIntent(source, space) else null
+        }.getOrNull()
     }
 
     /**
