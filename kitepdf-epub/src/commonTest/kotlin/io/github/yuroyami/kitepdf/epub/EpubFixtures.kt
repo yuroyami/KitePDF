@@ -214,6 +214,68 @@ internal object EpubFixtures {
         return (dir + bodies).toByteArray()
     }
 
+    /**
+     * A minimal TrueType font with an `fi` ligature: glyphs 1, 2 and 3 are squares for
+     * `f`, `i` and the ligature, and a `liga` lookup of GSUB joins `f i` into glyph 3.
+     */
+    fun ligatureTtf(): ByteArray {
+        fun u16(v: Int) = byteArrayOf((v shr 8).toByte(), v.toByte())
+        fun s16(v: Int) = u16(v and 0xFFFF)
+        fun u32(v: Long) = byteArrayOf((v shr 24).toByte(), (v shr 16).toByte(), (v shr 8).toByte(), v.toByte())
+        fun tag(t: String) = t.encodeToByteArray()
+        // Format 4: 'f' -> 1 and 'i' -> 2, then the 0xFFFF end segment.
+        val format4 = u16(4) + u16(40) + u16(0) + u16(6) + u16(4) + u16(1) + u16(2) +
+            u16(0x66) + u16(0x69) + u16(0xFFFF) + u16(0) + u16(0x66) + u16(0x69) + u16(0xFFFF) +
+            s16(1 - 0x66) + s16(2 - 0x69) + s16(1) + u16(0) + u16(0) + u16(0)
+        val cmap = u16(0) + u16(1) + u16(3) + u16(1) + u32(12) + format4
+        val square = s16(1) + s16(0) + s16(0) + s16(100) + s16(100) + u16(3) + u16(0) +
+            byteArrayOf(1, 1, 1, 1) +
+            s16(0) + s16(100) + s16(0) + s16(-100) +
+            s16(0) + s16(0) + s16(100) + s16(0)
+        val glyf = square + square + square
+        val head = ByteArray(54).also { it[18] = 0x03; it[19] = 0xE8.toByte() }
+        val maxp = u32(0x00010000) + u16(4) + ByteArray(26)
+        val hhea = ByteArray(36).also { it[35] = 4 }
+        val hmtx = u16(500) + u16(0) + u16(300) + u16(0) + u16(250) + u16(0) + u16(520) + u16(0)
+        val loca = u16(0) + u16(0) + u16(square.size / 2) + u16(square.size) + u16(3 * square.size / 2)
+        // GSUB: script DFLT whose default language takes feature 0, `liga`, with lookup 0:
+        // a type 4 ligature substitution from glyph 1 followed by glyph 2 to glyph 3.
+        val langSys = u16(0) + u16(0xFFFF) + u16(1) + u16(0)
+        val script = u16(4) + u16(0) + langSys
+        val scriptList = u16(1) + tag("DFLT") + u16(8) + script
+        val feature = u16(0) + u16(1) + u16(0)
+        val featureList = u16(1) + tag("liga") + u16(8) + feature
+        val ligature = u16(3) + u16(2) + u16(2)
+        val ligatureSet = u16(1) + u16(4) + ligature
+        val coverage = u16(1) + u16(1) + u16(1)
+        val subtable = u16(1) + u16(8) + u16(1) + u16(8 + coverage.size) + coverage + ligatureSet
+        val lookup = u16(4) + u16(0) + u16(1) + u16(8) + subtable
+        val lookupList = u16(1) + u16(4) + lookup
+        val scriptOff = 10
+        val featureOff = scriptOff + scriptList.size
+        val lookupOff = featureOff + featureList.size
+        val gsub = u16(1) + u16(0) + u16(scriptOff) + u16(featureOff) + u16(lookupOff) + scriptList + featureList + lookupList
+        val tables = listOf(
+            "GSUB" to gsub, "cmap" to cmap, "glyf" to glyf, "head" to head, "hhea" to hhea,
+            "hmtx" to hmtx, "loca" to loca, "maxp" to maxp,
+        )
+        var offset = 12 + tables.size * 16
+        val dir = ArrayList<Byte>()
+        val bodies = ArrayList<Byte>()
+        dir.addAll((u32(0x00010000) + u16(tables.size) + u16(0) + u16(0) + u16(0)).toList())
+        for ((name, body) in tables) {
+            dir.addAll(tag(name).toList())
+            dir.addAll(u32(0).toList())
+            dir.addAll(u32(offset.toLong()).toList())
+            dir.addAll(u32(body.size.toLong()).toList())
+            val padded = (body.size + 3) and 3.inv()
+            bodies.addAll(body.toList())
+            repeat(padded - body.size) { bodies.add(0) }
+            offset += padded
+        }
+        return (dir + bodies).toByteArray()
+    }
+
     /** A fully valid 2x1 24-bit BMP: red pixel, blue pixel. Decodes for real. */
     fun bmp2x1(): ByteArray {
         val h = ByteArray(54)
