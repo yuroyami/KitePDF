@@ -243,25 +243,22 @@ internal object IndicShaper {
             g.shaperData = properties(codePoints[i]) or (if (isWordCharacter(codePoints[i])) WORD_CHARACTER else 0)
         }
         gsub.substitute(glyphs, script, null, listOf(listOf("rvrn"), listOf("ltra", "ltrm")))
-        findSyllables(glyphs)
+        Syllables.find(glyphs, ::category, SYLLABLES, NON_INDIC_CLUSTER)
         gsub.substitute(glyphs, script, null, listOf(listOf("locl", "ccmp")), perSyllable = PER_SYLLABLE)
 
         val virama = gidFor(config.virama)
         updateConsonantPositions(gsub, script, glyphs, virama, zeroContext)
-        insertDottedCircles(glyphs, gidFor(0x25CC))
-        forEachSyllable(glyphs) { start, end -> initialReordering(config, oldSpec, zeroContext, gsub, script, glyphs, start, end) }
+        Syllables.insertDottedCircles(glyphs, gidFor(0x25CC), BROKEN_CLUSTER, REPHA, p(DOTTED_CIRCLE, END), ::category)
+        Syllables.forEach(glyphs) { start, end -> initialReordering(config, oldSpec, zeroContext, gsub, script, glyphs, start, end) }
         for (feature in BASIC) gsub.substitute(glyphs, script, null, listOf(listOf(feature)), POSITIONAL, PER_SYLLABLE, OWN, OWN)
-        forEachSyllable(glyphs) { start, end -> finalReordering(config, glyphs, start, end, virama) }
+        Syllables.forEach(glyphs) { start, end -> finalReordering(config, glyphs, start, end, virama) }
         // HarfBuzz turns liga off for these scripts.
         val presentation = listOf("init", "pres", "abvs", "blws", "psts", "haln", "rlig", "rclt", "calt") +
             if (optionalLigatures) listOf("clig") else emptyList()
         gsub.substitute(glyphs, script, null, listOf(presentation), POSITIONAL, PER_SYLLABLE, OWN, OWN)
 
         // A reordered syllable is one cluster, so its first glyph carries the whole text of it.
-        forEachSyllable(glyphs) { start, end ->
-            val cluster = (start until end).minOf { glyphs[it].cluster }
-            for (i in start until end) glyphs[i].cluster = cluster
-        }
+        Syllables.mergeClusters(glyphs)
     }
 
     /* ─── Properties ───────────────────────────────────────────────────────── */
@@ -271,7 +268,7 @@ internal object IndicShaper {
     private fun setCategory(g: GsubGlyph, cat: Int) { g.shaperData = (g.shaperData and 0xFF.inv()) or cat }
     private fun setPosition(g: GsubGlyph, pos: Int) { g.shaperData = (g.shaperData and 0xFF00.inv()) or (pos shl 8) }
 
-    private fun flags(vararg categories: Int): Long = categories.fold(0L) { m, c -> m or (1L shl c) }
+    private fun flags(vararg categories: Int): Long = Syllables.flags(*categories)
     private val CONSONANTS = flags(C, CS, RA, CM, V, PLACEHOLDER, DOTTED_CIRCLE)
     private val JOINERS = flags(ZWJ, ZWNJ)
     private val MATRAS = flags(M, MPST)
@@ -438,68 +435,8 @@ internal object IndicShaper {
     private const val BROKEN_CLUSTER = 4
     private const val NON_INDIC_CLUSTER = 5
 
-    /**
-     * A regular pattern over the categories of a word. [ends] takes the positions a match may
-     * start at, as bits counted from [start], and gives the positions it may end at. A
-     * syllable is at most 63 characters long.
-     */
-    private abstract class Pattern {
-        abstract fun ends(cats: IntArray, start: Int, from: Long): Long
-    }
-
-    private class One(private val set: Long) : Pattern() {
-        override fun ends(cats: IntArray, start: Int, from: Long): Long {
-            var out = 0L
-            var bits = from
-            while (bits != 0L) {
-                val j = bits.countTrailingZeroBits()
-                bits = bits and (bits - 1)
-                val i = start + j
-                if (j < 63 && i < cats.size && (set ushr cats[i]) and 1L != 0L) out = out or (1L shl (j + 1))
-            }
-            return out
-        }
-    }
-
-    private class Seq(private val parts: Array<out Pattern>) : Pattern() {
-        override fun ends(cats: IntArray, start: Int, from: Long): Long {
-            var m = from
-            for (part in parts) {
-                if (m == 0L) return 0L
-                m = part.ends(cats, start, m)
-            }
-            return m
-        }
-    }
-
-    private class Alt(private val parts: Array<out Pattern>) : Pattern() {
-        override fun ends(cats: IntArray, start: Int, from: Long): Long = parts.fold(0L) { m, part -> m or part.ends(cats, start, from) }
-    }
-
-    private class Opt(private val part: Pattern) : Pattern() {
-        override fun ends(cats: IntArray, start: Int, from: Long): Long = from or part.ends(cats, start, from)
-    }
-
-    private class Star(private val part: Pattern) : Pattern() {
-        override fun ends(cats: IntArray, start: Int, from: Long): Long {
-            var all = from
-            var frontier = from
-            while (frontier != 0L) {
-                frontier = part.ends(cats, start, frontier) and all.inv()
-                all = all or frontier
-            }
-            return all
-        }
-    }
-
-    private fun cat(vararg categories: Int): Pattern = One(flags(*categories))
-    private fun seq(vararg parts: Pattern): Pattern = Seq(parts)
-    private fun alt(vararg parts: Pattern): Pattern = Alt(parts)
-    private fun opt(part: Pattern): Pattern = Opt(part)
-    private fun star(part: Pattern): Pattern = Star(part)
-
     /** The syllable patterns with their types, in the order that breaks a tie between two matches of one length. */
-    private val SYLLABLES: List<Pair<Pattern, Int>> = run {
+    private val SYLLABLES: List<Pair<Syllables.Pattern, Int>> = with(Syllables) {
         val c = cat(C, RA)
         val n = seq(opt(seq(opt(cat(ZWNJ)), cat(RS))), opt(seq(cat(N), opt(cat(N)))))
         val z = cat(ZWJ, ZWNJ)
@@ -521,58 +458,6 @@ internal object IndicShaper {
             cat(SMPST) to NON_INDIC_CLUSTER,
             seq(opt(reph), n, complexSyllableTail) to BROKEN_CLUSTER,
         )
-    }
-
-    /**
-     * Numbers the syllables of [glyphs] as HarfBuzz's scanner does: the longest match of any
-     * pattern wins, and a character no pattern matches is a syllable of its own. The low four
-     * bits of [GsubGlyph.syllable] hold the type of the syllable.
-     */
-    private fun findSyllables(glyphs: List<GsubGlyph>) {
-        val cats = IntArray(glyphs.size) { category(glyphs[it]) }
-        var i = 0
-        var serial = 0
-        while (i < cats.size) {
-            var length = 0
-            var type = NON_INDIC_CLUSTER
-            for ((pattern, t) in SYLLABLES) {
-                val longest = 63 - pattern.ends(cats, i, 1L).countLeadingZeroBits()
-                if (longest > length) { length = longest; type = t }
-            }
-            if (length == 0) length = 1
-            serial++
-            for (k in i until i + length) glyphs[k].syllable = (serial shl 4) or type
-            i += length
-        }
-    }
-
-    private inline fun forEachSyllable(glyphs: List<GsubGlyph>, action: (Int, Int) -> Unit) {
-        var start = 0
-        while (start < glyphs.size) {
-            var end = start + 1
-            while (end < glyphs.size && glyphs[end].syllable == glyphs[start].syllable) end++
-            action(start, end)
-            start = end
-        }
-    }
-
-    /**
-     * A broken syllable, such as a lone matra, gets a dotted circle to sit on, after a leading
-     * reph sign, as HarfBuzz gives it. Nothing is inserted when the font has no dotted circle.
-     */
-    private fun insertDottedCircles(glyphs: MutableList<GsubGlyph>, circle: Int) {
-        if (circle <= 0) return
-        var i = 0
-        var last = -1
-        while (i < glyphs.size) {
-            val g = glyphs[i]
-            if (g.syllable != last && g.syllable and 0xF == BROKEN_CLUSTER) {
-                last = g.syllable
-                while (i < glyphs.size && glyphs[i].syllable == last && category(glyphs[i]) == REPHA) i++
-                glyphs.add(i, GsubGlyph(circle, g.cluster, g.features).also { it.syllable = last; it.shaperData = p(DOTTED_CIRCLE, END) })
-            }
-            i++
-        }
     }
 
     /**
