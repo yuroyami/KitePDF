@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-09-25
+
+This release adds `kitepdf-xps` for XPS and OpenXPS, runs the JavaScript inside
+PDF forms, and shapes complex scripts in EPUB the way HarfBuzz does. It closes
+156 issues. Most of them are rendering, font and colour bugs that a comparison of
+pages with MuPDF and PDFium found. Some API changes break source compatibility
+with 0.10.0. The Changed section lists them.
+
 ### Added
 
 - `KiteDocView.onHighlightTap`, `KiteDocViewState.highlightAt`, and optional
@@ -19,6 +27,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   glossary entry or a bibliography entry before the viewer scrolls to it. A host can
   show the note in place with `EpubDocument.linkTarget` and keep the reader on the
   page (#277).
+
+### Changed
+
+- Breaking: `PdfScriptRunner.onAlert` takes a `PdfScriptAlert` and returns the
+  number of the button that the reader pressed. The new `formState` and `policy`
+  parameters come right after `document`, so pass the other arguments by name (#234).
+- Breaking: `KiteShading.FlatQuad` is removed. `KiteShading.PatchMesh.quads` is
+  replaced by `patches` and `colorTable` (#196).
+- Breaking: `PdfAnnotation` has a new `additionalActions` parameter before `raw`.
+  Pass `raw` by name (#238).
+- Breaking: `KiteDocFormat` has a new `Xps` value. A `when` over it without an
+  `else` branch must handle `Xps` (#205).
+- A `KiteCanvas` wrapper that delegates with `by` must override both overloads of
+  `drawImage` and of `applySoftMask`. The renderer calls the new overloads for an
+  image with a blend mode other than Normal and for a soft mask with a transfer
+  function (#113, #68).
+- `ExtGState`, `GraphicsState`, `SoftMask.MaskGroup`, `RecordingCanvas.Call.Image`,
+  `PageRenderer`, `KiteJsScriptEngine`, `KiteDocView`, `KiteDocLayout.Continuous`,
+  `KiteHighlight` and `KiteRenderSpec` have new parameters with default values.
+  They are source compatible with 0.10.0, but not binary compatible.
+- Compose Multiplatform 1.12.1 and Ktor 3.6.0. The build uses AGP 9.4.1,
+  Gradle 9.8.0 and Dokka 2.3.0-Beta.
 
 ### Fixed
 

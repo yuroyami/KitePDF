@@ -1,9 +1,9 @@
 # XPS and OpenXPS
 
-The unreleased source tree includes `kitepdf-xps`, a fixed-page handler for
-Microsoft XPS and OpenXPS packages. It uses the same `KiteDocument`, `KitePage`
-and canvas APIs as the other formats, so existing viewers and rasterizers can
-render it. It is not included in the published `0.10.0` artifacts yet.
+`kitepdf-xps` is a fixed-page handler for Microsoft XPS and OpenXPS packages.
+It uses the same `KiteDocument`, `KitePage` and canvas APIs as the other
+formats, so existing viewers and rasterizers can render it. It is published
+from `0.11.0`.
 
 ## Open a document
 
@@ -22,9 +22,8 @@ println("${firstPage.displayWidth} x ${firstPage.displayHeight} points")
 val text = firstPage.textContent().plainText
 ```
 
-Use a project dependency on `:kitepdf` for all handlers, or `:kitepdf-xps` for
-XPS alone when building from source. A new Maven coordinate will become
-available with the next release; adding `kitepdf-xps:0.10.0` will not resolve it.
+Add `io.github.yuroyami:kitepdf:0.11.0` for all handlers, or
+`io.github.yuroyami:kitepdf-xps:0.11.0` for XPS alone.
 
 ## Package and page model
 

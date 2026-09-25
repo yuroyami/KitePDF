@@ -416,7 +416,7 @@ Add KitePDF to your `build.gradle.kts`:
 
     ```kotlin
     dependencies {
-        commonMainImplementation("io.github.yuroyami:kitepdf:0.10.0")
+        commonMainImplementation("io.github.yuroyami:kitepdf:0.11.0")
     }
     ```
 
@@ -424,7 +424,7 @@ Add KitePDF to your `build.gradle.kts`:
 
     ```kotlin
     dependencies {
-        implementation("io.github.yuroyami:kitepdf:0.10.0")
+        implementation("io.github.yuroyami:kitepdf:0.11.0")
     }
     ```
 
