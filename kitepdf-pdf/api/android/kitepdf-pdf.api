@@ -1456,6 +1456,8 @@ public final class io/github/yuroyami/kitepdf/writer/EmbeddedFont {
 
 public final class io/github/yuroyami/kitepdf/writer/EmbeddedFont$Companion {
 	public final fun load ([BLjava/lang/String;Z)Lio/github/yuroyami/kitepdf/writer/EmbeddedFont;
+	public final fun load ([BLjava/lang/String;ZI)Lio/github/yuroyami/kitepdf/writer/EmbeddedFont;
+	public static synthetic fun load$default (Lio/github/yuroyami/kitepdf/writer/EmbeddedFont$Companion;[BLjava/lang/String;ZIILjava/lang/Object;)Lio/github/yuroyami/kitepdf/writer/EmbeddedFont;
 	public static synthetic fun load$default (Lio/github/yuroyami/kitepdf/writer/EmbeddedFont$Companion;[BLjava/lang/String;ZILjava/lang/Object;)Lio/github/yuroyami/kitepdf/writer/EmbeddedFont;
 }
 

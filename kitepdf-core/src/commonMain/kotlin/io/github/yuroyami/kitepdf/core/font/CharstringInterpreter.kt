@@ -46,6 +46,15 @@ internal class CharstringInterpreter(
      * outline only). Kept additive so existing callers stay source-compatible.
      */
     private val seacRenderer: ((baseCode: Int, accentCode: Int, adx: Double, ady: Double, into: KitePath.Builder) -> Unit)? = null,
+    /**
+     * A CFF2 charstring (OpenType 1.8): it carries no width and no `endchar`, and its
+     * `blend` and `vsindex` operators run at the default instance of the font (#199).
+     */
+    private val cff2: Boolean = false,
+    /** For CFF2: the number of regions of item variation data n, which `blend` reads. */
+    private val regionCount: (Int) -> Int = { 0 },
+    /** For CFF2: the item variation data that `blend` uses until a `vsindex` changes it. */
+    private var vsindex: Int = 0,
 ) {
 
     private val pathBuilder = KitePath.Builder()
@@ -71,7 +80,10 @@ internal class CharstringInterpreter(
     private var depth = 0
 
     fun interpret(): KitePath {
+        if (cff2) widthSet = true
         execute(charstring)
+        // A CFF2 glyph ends with its data, where a CFF glyph has endchar.
+        if (cff2 && !done && !pathBuilder.isEmpty()) pathBuilder.close()
         return pathBuilder.build()
     }
 
@@ -157,6 +169,8 @@ internal class CharstringInterpreter(
                                 execute(sub)
                             }
                             11 -> return               // return (depth decremented in finally)
+                            15 -> if (cff2) vsindex = stack.removeLastOrNull()?.toInt() ?: 0 else stack.clear()
+                            16 -> if (cff2) blend() else stack.clear()
                             else -> stack.clear()      // unknown: defensive reset
                         }
                     }
@@ -522,6 +536,15 @@ internal class CharstringInterpreter(
             emitCurve(dx4, dy4, dx5, dy5, -dx, d6)
         }
         stack.clear()
+    }
+
+    /**
+     * CFF2 `blend` at the default instance: n default values, then n deltas for each
+     * region, then n. The defaults stay on the stack and the deltas go.
+     */
+    private fun blend() {
+        val n = stack.removeLastOrNull()?.toInt() ?: return
+        repeat(n * regionCount(vsindex)) { stack.removeLastOrNull() }
     }
 
     private fun endchar() {

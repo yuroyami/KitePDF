@@ -45,7 +45,7 @@ internal class FontProgram(
             }
             val ttf = runCatching { TrueTypeFont.parse(sfnt) }.getOrNull() ?: return null
             val cff = if (ttf.rawTable("glyf") == null) {
-                ttf.rawTable("CFF ")?.let { runCatching { CffFont.parse(it) }.getOrNull() }
+                (ttf.rawTable("CFF ") ?: ttf.rawTable("CFF2"))?.let { runCatching { CffFont.parse(it) }.getOrNull() }
             } else null
             val gpos = ttf.rawTable("GPOS")
             return FontProgram(

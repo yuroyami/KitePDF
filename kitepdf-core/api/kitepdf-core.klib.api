@@ -566,7 +566,10 @@ final class io.github.yuroyami.kitepdf.core.font/TrueTypeFont { // io.github.yur
     final fun rawTable(kotlin/String): kotlin/ByteArray? // io.github.yuroyami.kitepdf.core.font/TrueTypeFont.rawTable|rawTable(kotlin.String){}[0]
 
     final object Companion { // io.github.yuroyami.kitepdf.core.font/TrueTypeFont.Companion|null[0]
+        final fun extractFace(kotlin/ByteArray, kotlin/Int): kotlin/ByteArray // io.github.yuroyami.kitepdf.core.font/TrueTypeFont.Companion.extractFace|extractFace(kotlin.ByteArray;kotlin.Int){}[0]
+        final fun faceCount(kotlin/ByteArray): kotlin/Int // io.github.yuroyami.kitepdf.core.font/TrueTypeFont.Companion.faceCount|faceCount(kotlin.ByteArray){}[0]
         final fun parse(kotlin/ByteArray): io.github.yuroyami.kitepdf.core.font/TrueTypeFont // io.github.yuroyami.kitepdf.core.font/TrueTypeFont.Companion.parse|parse(kotlin.ByteArray){}[0]
+        final fun parse(kotlin/ByteArray, kotlin/Int): io.github.yuroyami.kitepdf.core.font/TrueTypeFont // io.github.yuroyami.kitepdf.core.font/TrueTypeFont.Companion.parse|parse(kotlin.ByteArray;kotlin.Int){}[0]
     }
 }
 
