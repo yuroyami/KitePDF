@@ -122,7 +122,7 @@ public class ComposeCanvas(
         alpha: Double, blendMode: KiteBlendMode,
     ) {
         withActiveClips {
-            val composePath = toComposePath(path, ctm).apply {
+            val composePath = toComposePath(path, ctm, scratchPath).apply {
                 fillType = if (evenOdd) PathFillType.EvenOdd else PathFillType.NonZero
             }
             drawScope.drawPath(
@@ -144,7 +144,7 @@ public class ComposeCanvas(
             // The hairline scales with a supersampled raster, so thin strokes keep their
             // on-screen weight after the downscale.
             val pen = strokePen(ctm, lineWidth, hairlineWidthPx.toDouble())
-            val composePath = toComposePath(path, pen.pathMatrix)
+            val composePath = toComposePath(path, pen.pathMatrix, scratchPath)
             val dash = composeDashIntervals(dashArray, pen.dashScale)
                 ?.let { PathEffect.dashPathEffect(it, (dashPhase * pen.dashScale).toFloat()) }
             val cap = when (lineCap) {
@@ -223,7 +223,7 @@ public class ComposeCanvas(
                 val glyphMatrix = textMatrix
                     .concat(KiteMatrix.translation(penX + glyph.xOffset * unitScale, glyph.yOffset * unitScale))
                     .concat(KiteMatrix(unitScale, 0.0, 0.0, unitScale, 0.0, 0.0))
-                val cp = toComposePath(outline, glyphMatrix).apply { fillType = PathFillType.NonZero }
+                val cp = toComposePath(outline, glyphMatrix, scratchPath).apply { fillType = PathFillType.NonZero }
                 drawScope.drawPath(cp, color = color, alpha = a, blendMode = composeBlend)
             }
             penX += glyph.advanceWidth * advanceScale + glyph.advanceAdjust
@@ -490,7 +490,7 @@ public class ComposeCanvas(
             val composeBlend = paintBlend(blendMode)
             val a = alpha.toFloat().coerceIn(0f, 1f)
             drawScope.withTransform({ transform(ctm.toComposeMatrix()) }) {
-                val cp = toComposePath(region, KiteMatrix.IDENTITY).apply { fillType = PathFillType.NonZero }
+                val cp = toComposePath(region, KiteMatrix.IDENTITY, scratchPath).apply { fillType = PathFillType.NonZero }
                 drawPath(cp, brush = brush, alpha = a, blendMode = composeBlend)
             }
         }
@@ -753,8 +753,15 @@ public class ComposeCanvas(
         return m
     }
 
-    private fun toComposePath(src: KitePath, ctm: KiteMatrix): Path {
-        val out = Path()
+    /**
+     * One path that fills, strokes, glyphs and shadings reuse, since a draw copies the path it
+     * paints. A clip keeps its own, because the clip stack holds it (#130).
+     */
+    private val scratchPath = Path()
+
+    /** [src] under [ctm], rewound into [into] or in a new path. */
+    private fun toComposePath(src: KitePath, ctm: KiteMatrix, into: Path? = null): Path {
+        val out = into?.apply { rewind() } ?: Path()
         for (seg in src.segments) {
             when (seg) {
                 is KitePath.Segment.MoveTo -> {

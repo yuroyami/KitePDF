@@ -97,7 +97,7 @@ public class AwtCanvas(private var g: Graphics2D) : KiteCanvas {
         path: KitePath, ctm: KiteMatrix, color: RgbColor, evenOdd: Boolean,
         alpha: Double, blendMode: KiteBlendMode,
     ) {
-        val awt = toAwtPath(path, ctm).apply {
+        val awt = toAwtPath(path, ctm, scratchPath).apply {
             windingRule = if (evenOdd) Path2D.WIND_EVEN_ODD else Path2D.WIND_NON_ZERO
         }
         withComposite(blendMode, alpha) {
@@ -113,7 +113,7 @@ public class AwtCanvas(private var g: Graphics2D) : KiteCanvas {
         lineCap: Int, lineJoin: Int, miterLimit: Double,
     ) {
         val pen = strokePen(ctm, lineWidth)
-        val awt = toAwtPath(path, pen.pathMatrix)
+        val awt = toAwtPath(path, pen.pathMatrix, scratchPath)
         val width = pen.width.toFloat()
         val cap = when (lineCap) { 1 -> BasicStroke.CAP_ROUND; 2 -> BasicStroke.CAP_SQUARE; else -> BasicStroke.CAP_BUTT }
         val join = when (lineJoin) { 1 -> BasicStroke.JOIN_ROUND; 2 -> BasicStroke.JOIN_BEVEL; else -> BasicStroke.JOIN_MITER }
@@ -179,7 +179,7 @@ public class AwtCanvas(private var g: Graphics2D) : KiteCanvas {
                         .concat(KiteMatrix(unitScale, 0.0, 0.0, unitScale, 0.0, 0.0))
                     val glyphMatrix = if (onPixels) snapGlyph(exact, unitsPerEm) else exact
                     if (!cache || !drawCachedGlyph(outline, glyphMatrix, unitsPerEm, awtColor)) {
-                        g.fill(toAwtPath(outline, glyphMatrix).apply { windingRule = Path2D.WIND_NON_ZERO })
+                        g.fill(toAwtPath(outline, glyphMatrix, scratchPath).apply { windingRule = Path2D.WIND_NON_ZERO })
                     }
                     drewAny = true
                 }
@@ -1432,8 +1432,18 @@ public class AwtCanvas(private var g: Graphics2D) : KiteCanvas {
         try { block() } finally { g.composite = saved }
     }
 
-    private fun toAwtPath(src: KitePath, ctm: KiteMatrix): Path2D.Double {
-        val out = Path2D.Double()
+    /**
+     * One path that fills, strokes and glyph fills reuse, since Java 2D keeps no reference
+     * to a path it paints. A clip keeps its own path, because the Graphics may keep it (#130).
+     */
+    private val scratchPath = Path2D.Double(Path2D.WIND_NON_ZERO, 64)
+
+    /**
+     * [src] under [ctm] as a Java 2D path: reset into [into], or a new one sized for [src], so
+     * a path of any length grows no array while it is built (#130).
+     */
+    private fun toAwtPath(src: KitePath, ctm: KiteMatrix, into: Path2D.Double? = null): Path2D.Double {
+        val out = into?.apply { reset(); windingRule = Path2D.WIND_NON_ZERO } ?: Path2D.Double(Path2D.WIND_NON_ZERO, pointCount(src))
         for (seg in src.segments) {
             when (seg) {
                 is KitePath.Segment.MoveTo -> {
@@ -1466,6 +1476,17 @@ public class AwtCanvas(private var g: Graphics2D) : KiteCanvas {
             }
         }
         return out
+    }
+
+    /** The points [src] stores in a Java 2D path: one a move, line or close, two a quadratic and three a cubic segment. */
+    private fun pointCount(src: KitePath): Int {
+        var n = 0
+        for (seg in src.segments) n += when (seg) {
+            is KitePath.Segment.CurveTo -> 3
+            is KitePath.Segment.QuadTo -> 2
+            else -> 1
+        }
+        return maxOf(n, 1)
     }
 
     /**

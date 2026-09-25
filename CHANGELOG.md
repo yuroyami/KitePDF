@@ -376,6 +376,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   on every draw. On a dense magazine page of 113,000 operators, a render again on
   AWT takes 5 to 8 ms less, and the part before rasterization falls from 13 ms to
   2.5 ms (#118).
+- Fills, strokes and glyphs no longer build a new path object for each paint. AWT,
+  Compose and Android reuse one path per canvas, and size a new one from its
+  segments. Skia reuses one path builder and frees each path once it is drawn.
+  Canvas 2D draws into the context's own path, as CoreGraphics already did. A
+  clip still keeps a path of its own. On the dense magazine page, a render at
+  scale 2 on AWT allocates 16 MB instead of 22 to 25 MB (#130).
 
 ## [0.10.0] - 2026-09-13
 
