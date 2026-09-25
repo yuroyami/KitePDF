@@ -46,8 +46,8 @@ internal object TextShaper {
 
     /**
      * Shapes the characters [codePoints] of one run in [script], whose glyphs before shaping are
-     * [gids]: through [IndicShaper] for the scripts of India, and through [Normalizer] and GSUB
-     * in the stages of [stages] for the rest. [forms] are the Arabic joining forms of the run,
+     * [gids]: through [IndicShaper] for the scripts of India, [KhmerShaper] for Khmer, and
+     * [Normalizer] and GSUB in the stages of [stages] for the rest. [forms] are the Arabic joining forms of the run,
      * when it has Arabic. The cluster of each glyph is the index of its first character in
      * [codePoints].
      */
@@ -57,15 +57,23 @@ internal object TextShaper {
     ): MutableList<GsubGlyph> {
         val glyphs = ArrayList<GsubGlyph>(codePoints.size)
         val ignorables = ArrayList<GsubGlyph>()
-        if (IndicShaper.handles(script, gsub)) {
-            val prepared = IndicShaper.prepare(script, codePoints) { face.gidFor(it) != 0 }
+        // The glyphs of characters that a shaper of its own prepared, each with its source.
+        fun addPrepared(prepared: Normalizer.Result) {
             for ((j, cp) in prepared.codePoints.withIndex()) {
                 val source = prepared.sources[j]
                 val gid = if (cp == codePoints[source]) gids[source] else face.gidFor(cp)
                 glyphs += GsubGlyph(gid, source, isMark = isMark(cp), ignorable = ignorable(cp))
                 if (isDefaultIgnorable(cp)) ignorables += glyphs.last()
             }
+        }
+        if (IndicShaper.handles(script, gsub)) {
+            val prepared = IndicShaper.prepare(script, codePoints) { face.gidFor(it) != 0 }
+            addPrepared(prepared)
             IndicShaper.shape(gsub, script, glyphs, prepared.codePoints, face::gidFor, optionalLigatures)
+        } else if (KhmerShaper.handles(script)) {
+            val prepared = KhmerShaper.prepare(codePoints) { face.gidFor(it) != 0 }
+            addPrepared(prepared)
+            KhmerShaper.shape(gsub, script, glyphs, prepared.codePoints, face::gidFor, optionalLigatures)
         } else {
             val arabic = script == "arab" || script == "syrc"
             // Thai and Lao split sara am before normalization, as HarfBuzz's Thai shaper does.

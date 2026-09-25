@@ -9,7 +9,7 @@ import kotlin.test.assertTrue
 /**
  * Shapes words through GSUB the way [BoxLayout] does and compares the glyph ids with
  * HarfBuzz's `hb-shape` (#211): real words of each script, random words of the Indic
- * scripts, Arabic, Urdu and Syriac, and random words with combining marks. Skips when
+ * scripts, Khmer, Arabic, Urdu and Syriac, and random words with combining marks. Skips when
  * `hb-shape` or the Noto fonts of the MuPDF resources are missing.
  */
 class GsubOracleTest {
@@ -66,6 +66,9 @@ class GsubOracleTest {
         "NotoSerifHebrew-Regular.otf" to listOf("שָׁלוֹם", "עברית", "בְּרֵאשִׁית", "יִשְׂרָאֵל", "הַמֶּלֶךְ"),
         "NotoSerifThai-Regular.otf" to listOf("ภาษา", "ไทย", "สวัสดี", "ประเทศ", "กรุงเทพ", "น้ำ", "ทำ", "คำ", "กำลัง", "ต่ำ", "จำนวน"),
         "NotoSerifLao-Regular.otf" to listOf("ພາສາ", "ລາວ", "ນ້ຳ", "ຄຳ", "ທຳ"),
+        "NotoSerifKhmer-Regular.otf" to listOf(
+            "ភាសាខ្មែរ", "កម្ពុជា", "ស្រី", "ក្រុង", "ព្រះ", "ខ្ញុំ", "សួស្តី", "អរគុណ", "ឆ្នាំ", "ប្រទេស", "កើត", "ចៅ",
+        ),
         "NotoSerifDevanagari-Regular.otf" to listOf(
             "हिन्दी", "नमस्ते", "क्षत्रिय", "कि", "धर्म", "कर्म", "पुत्र", "विद्या", "श्री", "द्वार",
             "प्रेम", "ज़िंदगी", "फ़िल्म", "स्त्री", "आत्मा", "राष्ट्र", "कृष्ण", "हृदय", "र्क", "मैं",
@@ -205,6 +208,44 @@ class GsubOracleTest {
         println("random arabic and syriac words: ${total - failures.size} of $total match")
         assertTrue(failures.isEmpty(), failures.take(20).joinToString("\n"))
     }
+
+    /**
+     * Random words of Khmer shape to the glyphs HarfBuzz gives (#317): consonants with subscript
+     * consonants after a coeng, now and then a Robat sign, a vowel, a sign or a joiner, and
+     * strings of any characters of the block, which make broken syllables.
+     */
+    @Test
+    fun random_khmer_words_shape_to_the_glyphs_harfbuzz_gives() {
+        val dir = fontsDir().orSkip("The Noto fonts of mupdf-master/resources")
+        val tool = hbShape().orSkip("hb-shape")
+        val font = File(dir, "NotoSerifKhmer-Regular.otf").orSkipIfMissing()
+        val consonants = (0x1780..0x17A2).toList() + listOf(0x179A, 0x179A)
+        val vowels = (0x17B6..0x17C5).toList()
+        val signs = (0x17C6..0x17D1).toList() + listOf(0x17D3, 0x17DD)
+        val any = (0x1780..0x17DD).filter { face(font).gidFor(it) != 0 } + listOf(0x200C, 0x200D, 0x25CC)
+        val random = Random(0x1780)
+        val words = List(800) {
+            buildString {
+                if (random.nextInt(4) == 0) repeat(2 + random.nextInt(5)) { appendCodePoint(any.random(random)) }
+                else repeat(1 + random.nextInt(3)) {
+                    appendCodePoint(consonants.random(random))
+                    repeat(random.nextInt(3)) { appendCodePoint(0x17D2); appendCodePoint(consonants.random(random)) }
+                    if (random.nextInt(5) == 0) appendCodePoint(listOf(0x17C9, 0x17CA, 0x17CC).random(random))
+                    if (random.nextBoolean()) appendCodePoint(vowels.random(random))
+                    if (random.nextInt(3) == 0) appendCodePoint(signs.random(random))
+                    if (random.nextInt(8) == 0) appendCodePoint(listOf(0x200C, 0x200D).random(random))
+                }
+            }
+        }.distinct()
+        val theirs = harfbuzz(tool, font, words)
+        val failures = words.indices.filter { kitepdf(font, words[it]) != theirs[it] }.map { i ->
+            "${words[i].codePoints().toArray().joinToString(" ") { "%04X".format(it) }}: KitePDF ${kitepdf(font, words[i])}, HarfBuzz ${theirs[i]}"
+        }
+        println("random khmer words: ${words.size - failures.size} of ${words.size} match")
+        assertTrue(failures.isEmpty(), failures.take(20).joinToString("\n"))
+    }
+
+    private fun File.orSkipIfMissing(): File = takeIf { it.exists() }.orSkip(name)
 
     /**
      * Random words of Latin, Vietnamese, Greek, Cyrillic, Hebrew, Thai and Lao letters with up to

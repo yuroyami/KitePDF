@@ -468,6 +468,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   go into canonical order inside the shaper, after that step, instead of before shaping
   starts, as in HarfBuzz. So the text of the page keeps the order of the book. Against
   `hb-shape`, 985 random Thai and Lao words with marks give the same glyphs (#317).
+- Khmer text shapes as HarfBuzz's Khmer shaper shapes it. A coeng and Ro move before the
+  base and take `pref`, a pre-base vowel moves to the start of the syllable, a split vowel
+  decomposes into U+17C1 and itself, and a broken syllable gets a dotted circle. Against
+  `hb-shape`, 12 Khmer words and 798 random Khmer words give the same glyphs (#317).
 - Text in an embedded font shapes through every GSUB lookup type. Contextual and
   chained contextual substitution, multiple and alternate substitution, and reverse
   chaining now apply along with single and ligature substitution. The lookups run for the script

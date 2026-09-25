@@ -275,12 +275,12 @@ The layout engine covers what real books use:
   go into the order the font expects. The syllables of Devanagari, Bengali,
   Gurmukhi, Gujarati, Oriya, Tamil, Telugu, Kannada and Malayalam are reordered
   around their features, with reph, half forms, pre-base matras and pre-base
-  consonants, as HarfBuzz's Indic shaper does.
-  Thai and Lao sara am splits into nikhahit and sara aa. Words in Latin, Greek,
-  Cyrillic, Arabic, Urdu Nastaliq, Syriac, Hebrew, Thai, Lao and the nine Indic
-  scripts shape to the glyphs HarfBuzz gives, except that the Syriac
-  abbreviation mark does not stretch. Sinhala, Khmer, Myanmar and Tibetan are
-  not reordered yet.
+  consonants, as HarfBuzz's Indic shaper does, and so are Khmer syllables, as
+  its Khmer shaper does. Thai and Lao sara am splits into nikhahit and sara
+  aa. Words in Latin, Greek, Cyrillic, Arabic, Urdu Nastaliq, Syriac, Hebrew,
+  Thai, Lao, Khmer and the nine Indic scripts shape to the glyphs HarfBuzz
+  gives, except that the Syriac abbreviation mark does not stretch. Sinhala,
+  Myanmar and Tibetan are not reordered yet.
 - **Marks**: GPOS attachment onto a base letter, onto a ligature component,
   and onto the mark below, so two stacked diacritics sit one above the other
   instead of overprinting.
