@@ -4,12 +4,11 @@ package io.github.yuroyami.kitepdf.epub
  * The order a shaper puts combining marks in before GSUB runs (#211): each run of marks
  * sorts by canonical combining class (Unicode 17, 3.11), with the classes HarfBuzz modifies
  * so that fonts see the order they were built for. Hebrew points follow the SBL Hebrew order,
- * Arabic shadda goes before the other marks, and Thai sara u and uu go before phinthu. The
- * Arabic modifier marks of UTR #53, such as hamza above, then go first among the marks of
- * their class (#318).
+ * Arabic shadda goes before the other marks, Thai sara u and uu go before phinthu, and the
+ * Tibetan vowel sign u goes before the sign i.
  *
- * Only the blocks of the scripts [TextShaper] shapes are covered. A mark outside them has
- * class 0 and keeps its place.
+ * The classes cover the Basic Multilingual Plane. A character outside it has class 0 and
+ * keeps its place.
  */
 internal object CombiningClass {
 
@@ -23,41 +22,18 @@ internal object CombiningClass {
             if (end - i > 1) {
                 val sorted = items.subList(i, end).sortedBy { modified(codePoint(it)) }
                 for (k in sorted.indices) items[i + k] = sorted[k]
-                moveModifierMarks(items.subList(i, end), codePoint)
             }
             i = end
         }
     }
 
-    /**
-     * Moves the modifier marks at the start of the class 220 marks, and then those at the start
-     * of the class 230 marks, before the other marks of the sorted [run], as HarfBuzz's
-     * reorder_marks_arabic does.
-     */
-    private fun <T> moveModifierMarks(run: MutableList<T>, codePoint: (T) -> Int) {
-        var start = 0
-        var i = 0
-        for (cc in intArrayOf(220, 230)) {
-            while (i < run.size && modified(codePoint(run[i])) < cc) i++
-            if (i == run.size) break
-            if (modified(codePoint(run[i])) > cc) continue
-            var j = i
-            while (j < run.size && modified(codePoint(run[j])) == cc && codePoint(run[j]) in MODIFIER_MARKS) j++
-            if (i == j) continue
-            val moved = run.subList(i, j).toList() + run.subList(start, i).toList()
-            for ((k, item) in moved.withIndex()) run[start + k] = item
-            start += j - i
-            i = j
-        }
-    }
-
-    /** The modifier combining marks of UTR #53. */
-    private val MODIFIER_MARKS = setOf(
-        0x0654, 0x0655, 0x0658, 0x06DC, 0x06E3, 0x06E7, 0x06E8, 0x08CA, 0x08CB, 0x08CD, 0x08CE, 0x08CF, 0x08D3, 0x08F3,
-    )
-
     /** The combining class of [cp] as HarfBuzz modifies it, 0 for a character that is not a mark. */
     fun modified(cp: Int): Int {
+        when (cp) {
+            // Tai Tham sakot and Tibetan padma go after the other marks, Tibetan tsa-phru before the vowel signs.
+            0x1A60, 0x0FC6 -> return 254
+            0x0F39 -> return 127
+        }
         val ccc = canonical(cp)
         return when (ccc) {
             in 10..26 -> HEBREW[ccc - 10]
@@ -65,6 +41,8 @@ internal object CombiningClass {
             84 -> 4
             91 -> 5
             103 -> 3
+            130 -> 132
+            132 -> 131
             else -> ccc
         }
     }
@@ -75,103 +53,63 @@ internal object CombiningClass {
     /** Arabic classes 27 to 35, with shadda moved before the other marks as HarfBuzz does. */
     private val ARABIC = intArrayOf(28, 29, 30, 31, 32, 33, 27, 34, 35)
 
-    /** The canonical combining class of [cp] in the covered blocks (UnicodeData.txt, field 3). */
-    private fun canonical(cp: Int): Int = when (cp) {
-        in 0x0300..0x036F -> latin(cp)
-        in 0x0483..0x0487 -> 230
-        in 0x0591..0x05C7 -> hebrew(cp)
-        in 0x0610..0x061A -> if (cp <= 0x0617) 230 else cp - 0x0618 + 30
-        in 0x064B..0x065F -> arabic(cp)
-        0x0670 -> 35
-        in 0x06D6..0x06ED -> arabicExtended(cp)
-        in 0x0700..0x08FF -> u0700(cp)
-        0x093C, 0x09BC, 0x0A3C, 0x0ABC, 0x0B3C, 0x0C3C, 0x0CBC -> 7
-        0x094D, 0x09CD, 0x0A4D, 0x0ACD, 0x0B4D, 0x0BCD, 0x0C4D, 0x0CCD, 0x0D3B, 0x0D3C, 0x0D4D, 0x0DCA -> 9
-        0x0951, 0x0953, 0x0954, 0x09FE -> 230
-        0x0952 -> 220
-        0x0C55 -> 84
-        0x0C56 -> 91
-        0x0E38, 0x0E39 -> 103
-        0x0E3A -> 9
-        in 0x0E48..0x0E4B -> 107
-        0x0EB8, 0x0EB9 -> 118
-        in 0x0EC8..0x0ECB -> 122
-        0x1037 -> 7
-        in 0x1CD0..0x1CF9 -> vedic(cp)
-        0x1039, 0x103A -> 9
-        in 0x20D0..0x20DC -> if (cp in 0x20D2..0x20D3 || cp in 0x20D8..0x20DA) 1 else 230
-        in 0xA8E0..0xA8F1 -> 230
-        in 0xFE20..0xFE2F -> if (cp in 0xFE27..0xFE2D) 220 else 230
-        else -> 0
+    /** The canonical combining class of [cp], from UnicodeData.txt, field 3. */
+    fun canonical(cp: Int): Int {
+        val table = ranges
+        var lo = 0
+        var hi = table.size / 3 - 1
+        while (lo <= hi) {
+            val mid = (lo + hi) ushr 1
+            when {
+                cp < table[mid * 3] -> hi = mid - 1
+                cp > table[mid * 3 + 1] -> lo = mid + 1
+                else -> return table[mid * 3 + 2]
+            }
+        }
+        return 0
     }
 
-    private fun vedic(cp: Int): Int = when (cp) {
-        in 0x1CD0..0x1CD2, 0x1CDA, 0x1CDB, 0x1CE0, 0x1CF4, 0x1CF8, 0x1CF9 -> 230
-        0x1CD4, in 0x1CE2..0x1CE8 -> 1
-        in 0x1CD5..0x1CD9, in 0x1CDC..0x1CDF, 0x1CED -> 220
-        else -> 0
+    /** The first character, last character and class of each run of [CLASSES]. */
+    private val ranges: IntArray by lazy {
+        IntArray(CLASSES.length / 10 * 3) { k ->
+            val record = k / 3 * 10
+            when (k % 3) {
+                0 -> CLASSES.substring(record, record + 4).toInt(16)
+                1 -> CLASSES.substring(record + 4, record + 8).toInt(16)
+                else -> CLASSES.substring(record + 8, record + 10).toInt(16)
+            }
+        }
     }
 
-    private fun latin(cp: Int): Int = when (cp) {
-        in 0x0300..0x0314 -> 230
-        0x0315, 0x031A, 0x0358 -> 232
-        in 0x0316..0x0319, in 0x031C..0x0320, in 0x0323..0x0326, in 0x0329..0x0333, in 0x0339..0x033C,
-        in 0x0347..0x0349, 0x034D, 0x034E, in 0x0353..0x0356, 0x0359, 0x035A -> 220
-        0x031B -> 216
-        0x0321, 0x0322, 0x0327, 0x0328 -> 202
-        in 0x0334..0x0338 -> 1
-        0x0345 -> 240
-        0x034F -> 0
-        0x035C, 0x035F, 0x0362 -> 233
-        0x035D, 0x035E, 0x0360, 0x0361 -> 234
-        else -> 230
-    }
-
-    private fun hebrew(cp: Int): Int = when (cp) {
-        in 0x05B0..0x05B9 -> cp - 0x05B0 + 10
-        0x05BA -> 19
-        0x05BB -> 20
-        0x05BC -> 21
-        0x05BD -> 22
-        0x05BF -> 23
-        0x05C1 -> 24
-        0x05C2 -> 25
-        0x05C4 -> 230
-        0x05C5 -> 220
-        0x05C7 -> 18
-        0x0591, 0x0596, 0x059B, in 0x05A2..0x05A7, 0x05AA -> 220
-        0x059A, 0x05AD -> 222
-        0x05AE -> 228
-        in 0x0592..0x05AF -> 230
-        else -> 0
-    }
-
-    private fun arabic(cp: Int): Int = when (cp) {
-        in 0x064B..0x0652 -> cp - 0x064B + 27
-        0x0655, 0x0656, 0x065C, 0x065F -> 220
-        else -> 230
-    }
-
-    /** Syriac, N'Ko, Samaritan, Mandaic and the Arabic extended blocks, U+0700 to U+08FF. */
-    private fun u0700(cp: Int): Int = when (cp) {
-        0x0711 -> 36
-        0x0731, 0x0734, in 0x0737..0x0739, 0x073B, 0x073C, 0x073E, 0x0742, 0x0744, 0x0746, 0x0748 -> 220
-        in 0x0730..0x074A -> 230
-        0x07F2, 0x07FD -> 220
-        in 0x07EB..0x07F3 -> 230
-        in 0x0816..0x0819, in 0x081B..0x0823, in 0x0825..0x0827, in 0x0829..0x082D -> 230
-        in 0x0859..0x085B, in 0x0899..0x089B, in 0x08CF..0x08D3, 0x08E3, 0x08E6, 0x08E9, in 0x08ED..0x08EF, 0x08F6, 0x08F9, 0x08FA -> 220
-        0x08F0 -> 27
-        0x08F1 -> 28
-        0x08F2 -> 29
-        0x0897, 0x0898, in 0x089C..0x089F, in 0x08CA..0x08CE, in 0x08D4..0x08E1, 0x08E4, 0x08E5, 0x08E7, 0x08E8,
-        in 0x08EA..0x08EC, in 0x08F3..0x08F5, 0x08F7, 0x08F8, in 0x08FB..0x08FF -> 230
-        else -> 0
-    }
-
-    private fun arabicExtended(cp: Int): Int = when (cp) {
-        0x06DD, 0x06DE, 0x06E5, 0x06E6, 0x06E9 -> 0
-        0x06E3, 0x06EA, 0x06ED -> 220
-        else -> 230
-    }
+    /**
+     * Every character of the Basic Multilingual Plane with a combining class other than 0, in
+     * runs of one class: the first and last character in four hex digits each, and the class in
+     * two. Generated from UnicodeData.txt of Unicode 17.
+     */
+    private const val CLASSES =
+        "03000314E603150315E803160319DC031A031AE8031B031BD8031C0320DC03210322CA03230326DC03270328CA03290333DC03340338010339033CDC" +
+        "033D0344E603450345F003460346E603470349DC034A034CE6034D034EDC03500352E603530356DC03570357E603580358E80359035ADC035B035BE6" +
+        "035C035CE9035D035EEA035F035FE903600361EA03620362E90363036FE604830487E605910591DC05920595E605960596DC05970599E6059A059ADE" +
+        "059B059BDC059C05A1E605A205A7DC05A805A9E605AA05AADC05AB05ACE605AD05ADDE05AE05AEE405AF05AFE605B005B00A05B105B10B05B205B20C" +
+        "05B305B30D05B405B40E05B505B50F05B605B61005B705B71105B805B81205B905BA1305BB05BB1405BC05BC1505BD05BD1605BF05BF1705C105C118" +
+        "05C205C21905C405C4E605C505C5DC05C705C71206100617E6061806181E061906191F061A061A20064B064B1B064C064C1C064D064D1D064E064E1E" +
+        "064F064F1F06500650200651065121065206522206530654E606550656DC0657065BE6065C065CDC065D065EE6065F065FDC067006702306D606DCE6" +
+        "06DF06E2E606E306E3DC06E406E4E606E706E8E606EA06EADC06EB06ECE606ED06EDDC071107112407300730E607310731DC07320733E607340734DC" +
+        "07350736E607370739DC073A073AE6073B073CDC073D073DE6073E073EDC073F0741E607420742DC07430743E607440744DC07450745E607460746DC" +
+        "07470747E607480748DC0749074AE607EB07F1E607F207F2DC07F307F3E607FD07FDDC08160819E6081B0823E608250827E60829082DE60859085BDC" +
+        "08970898E60899089BDC089C089FE608CA08CEE608CF08D3DC08D408E1E608E308E3DC08E408E5E608E608E6DC08E708E8E608E908E9DC08EA08ECE6" +
+        "08ED08EFDC08F008F01B08F108F11C08F208F21D08F308F5E608F608F6DC08F708F8E608F908FADC08FB08FFE6093C093C07094D094D0909510951E6" +
+        "09520952DC09530954E609BC09BC0709CD09CD0909FE09FEE60A3C0A3C070A4D0A4D090ABC0ABC070ACD0ACD090B3C0B3C070B4D0B4D090BCD0BCD09" +
+        "0C3C0C3C070C4D0C4D090C550C55540C560C565B0CBC0CBC070CCD0CCD090D3B0D3C090D4D0D4D090DCA0DCA090E380E39670E3A0E3A090E480E4B6B" +
+        "0EB80EB9760EBA0EBA090EC80ECB7A0F180F19DC0F350F35DC0F370F37DC0F390F39D80F710F71810F720F72820F740F74840F7A0F7D820F800F8082" +
+        "0F820F83E60F840F84090F860F87E60FC60FC6DC10371037071039103A09108D108DDC135D135FE61714171509173417340917D217D20917DD17DDE6" +
+        "18A918A9E419391939DE193A193AE6193B193BDC1A171A17E61A181A18DC1A601A60091A751A7CE61A7F1A7FDC1AB01AB4E61AB51ABADC1ABB1ABCE6" +
+        "1ABD1ABDDC1ABF1AC0DC1AC11AC2E61AC31AC4DC1AC51AC9E61ACA1ACADC1ACB1ADCE61ADD1ADDDC1AE01AE5E61AE61AE6DC1AE71AEAE61AEB1AEBEA" +
+        "1B341B34071B441B44091B6B1B6BE61B6C1B6CDC1B6D1B73E61BAA1BAB091BE61BE6071BF21BF3091C371C37071CD01CD2E61CD41CD4011CD51CD9DC" +
+        "1CDA1CDBE61CDC1CDFDC1CE01CE0E61CE21CE8011CED1CEDDC1CF41CF4E61CF81CF9E61DC01DC1E61DC21DC2DC1DC31DC9E61DCA1DCADC1DCB1DCCE6" +
+        "1DCD1DCDEA1DCE1DCED61DCF1DCFDC1DD01DD0CA1DD11DF5E61DF61DF6E81DF71DF8E41DF91DF9DC1DFA1DFADA1DFB1DFBE61DFC1DFCE91DFD1DFDDC" +
+        "1DFE1DFEE61DFF1DFFDC20D020D1E620D220D30120D420D7E620D820DA0120DB20DCE620E120E1E620E520E60120E720E7E620E820E8DC20E920E9E6" +
+        "20EA20EB0120EC20EFDC20F020F0E62CEF2CF1E62D7F2D7F092DE02DFFE6302A302ADA302B302BE4302C302CE8302D302DDE302E302FE03099309A08" +
+        "A66FA66FE6A674A67DE6A69EA69FE6A6F0A6F1E6A806A80609A82CA82C09A8C4A8C409A8E0A8F1E6A92BA92DDCA953A95309A9B3A9B307A9C0A9C009" +
+        "AAB0AAB0E6AAB2AAB3E6AAB4AAB4DCAAB7AAB8E6AABEAABFE6AAC1AAC1E6AAF6AAF609ABEDABED09FB1EFB1E1AFE20FE26E6FE27FE2DDCFE2EFE2FE6"
 }

@@ -455,6 +455,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and the Arabic modifier marks of UTR #53, such as hamza below and small high seen, go
   first among the marks of their class, as HarfBuzz orders them. Against `hb-shape`,
   1,500 random Arabic, Urdu and Syriac words give the same glyphs (#318).
+- A letter with combining marks draws with the glyph the font has for the whole letter,
+  as HarfBuzz composes them. Before GSUB, a character decomposes when the font has no
+  glyph for it or when marks follow it, the marks go into canonical order, and a mark
+  composes with the letter before it when the font has a glyph for the result. So t
+  with a combining diaeresis draws as ẗ, and alef with hamza above as أ. The data
+  covers the Basic Multilingual Plane of Unicode 17, and the combining classes now cover
+  every mark in it. Against `hb-shape`, 1,951 random Latin, Greek, Cyrillic and Hebrew
+  words with marks give the same glyphs (#316).
 - Text in an embedded font shapes through every GSUB lookup type. Contextual and
   chained contextual substitution, multiple and alternate substitution, and reverse
   chaining now apply along with single and ligature substitution. The lookups run for the script

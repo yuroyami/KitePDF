@@ -137,62 +137,36 @@ internal object IndicShaper {
 
     /* ─── Preparing the characters (HarfBuzz's preprocess_text and normalizer) ─── */
 
-    /** The characters [prepare] hands to [shape], each with the index in the word of the character it came from. */
-    class Prepared(val codePoints: IntArray, val sources: IntArray)
-
     /**
      * The characters of the word [cps] in [script] as HarfBuzz hands them to its Indic shaper.
      * A dotted circle goes before the last character of a vowel sequence that would draw like
-     * another vowel, when the font has one. Each character then decomposes as far as the font
-     * has glyphs for the parts, the marks go into canonical order, and a mark composes with the
-     * character before it when the font has a glyph for the result. A nukta form that Unicode
-     * keeps decomposed stays decomposed, and a split matra does not compose again.
+     * another vowel, when the font has one. Then [Normalizer] decomposes every character as far
+     * as the font has glyphs for the parts, puts the marks in canonical order, and composes a
+     * mark with the character before it when the font has a glyph for the result. A nukta form
+     * that Unicode keeps decomposed stays decomposed, and a split matra does not compose again.
      */
-    fun prepare(script: String, cps: IntArray, hasGlyph: (Int) -> Boolean): Prepared {
+    fun prepare(script: String, cps: IntArray, hasGlyph: (Int) -> Boolean): Normalizer.Result {
         val config = config(script)
         val codes = ArrayList<Int>(cps.size + 2)
         val sources = ArrayList<Int>(cps.size + 2)
-        fun add(cp: Int, source: Int) {
-            val parts = decomposition(cp, hasGlyph)
-            if (parts == null) { codes += cp; sources += source } else for (part in parts) { codes += part; sources += source }
-        }
         val circle = config != null && hasGlyph(0x25CC)
         var i = 0
         while (i < cps.size) {
             val rest = if (circle && cps[i] in config.block) {
                 CONFUSABLE_VOWELS[cps[i]]?.firstOrNull { r -> i + r.size < cps.size && r.indices.all { cps[i + 1 + it] == r[it] } }
             } else null
-            if (rest == null) { add(cps[i], i); i++; continue }
-            for (k in 0 until rest.size) add(cps[i + k], i + k)
+            if (rest == null) { codes += cps[i]; sources += i; i++; continue }
+            for (k in 0 until rest.size) { codes += cps[i + k]; sources += i + k }
             codes += 0x25CC
             sources += i + rest.size
-            add(cps[i + rest.size], i + rest.size)
+            codes += cps[i + rest.size]
+            sources += i + rest.size
             i += rest.size + 1
         }
-        val order = codes.indices.toMutableList()
-        CombiningClass.reorder(order) { codes[it] }
-        // Compose a mark with the last starter when nothing between them blocks it.
-        val outCodes = ArrayList<Int>(order.size)
-        val outSources = ArrayList<Int>(order.size)
-        var starter = 0
-        for ((k, index) in order.withIndex()) {
-            val cp = codes[index]
-            if (k > 0 && isUnicodeMark(cp)) {
-                val last = outCodes.size - 1
-                if (starter == last || CombiningClass.modified(outCodes[last]) < CombiningClass.modified(cp)) {
-                    val composed = composition(outCodes[starter], cp)
-                    if (composed != null && hasGlyph(composed)) {
-                        outCodes[starter] = composed
-                        outSources[starter] = minOf(outSources[starter], sources[index])
-                        continue
-                    }
-                }
-            }
-            outCodes += cp
-            outSources += sources[index]
-            if (CombiningClass.modified(cp) == 0) starter = outCodes.size - 1
-        }
-        return Prepared(outCodes.toIntArray(), outSources.toIntArray())
+        return Normalizer.normalize(
+            codes.toIntArray(), sources.toIntArray(), hasGlyph, shortCircuit = false,
+            decompose = ::decomposition, compose = ::composition,
+        )
     }
 
     /**
@@ -233,51 +207,15 @@ internal object IndicShaper {
 
     private fun lasts(vararg last: Int): List<IntArray> = last.map { intArrayOf(it) }
 
-    /**
-     * The canonical decompositions of the Indic blocks, less the four HarfBuzz keeps whole:
-     * Devanagari Rra, Bengali Rra and Rha, and Tamil Au.
-     */
-    private val CANONICAL: Map<Int, IntArray> = mapOf(
-        0x0929 to intArrayOf(0x0928, 0x093C), 0x0934 to intArrayOf(0x0933, 0x093C),
-        0x0958 to intArrayOf(0x0915, 0x093C), 0x0959 to intArrayOf(0x0916, 0x093C), 0x095A to intArrayOf(0x0917, 0x093C),
-        0x095B to intArrayOf(0x091C, 0x093C), 0x095C to intArrayOf(0x0921, 0x093C), 0x095D to intArrayOf(0x0922, 0x093C),
-        0x095E to intArrayOf(0x092B, 0x093C), 0x095F to intArrayOf(0x092F, 0x093C),
-        0x09CB to intArrayOf(0x09C7, 0x09BE), 0x09CC to intArrayOf(0x09C7, 0x09D7), 0x09DF to intArrayOf(0x09AF, 0x09BC),
-        0x0A33 to intArrayOf(0x0A32, 0x0A3C), 0x0A36 to intArrayOf(0x0A38, 0x0A3C), 0x0A59 to intArrayOf(0x0A16, 0x0A3C),
-        0x0A5A to intArrayOf(0x0A17, 0x0A3C), 0x0A5B to intArrayOf(0x0A1C, 0x0A3C), 0x0A5E to intArrayOf(0x0A2B, 0x0A3C),
-        0x0B48 to intArrayOf(0x0B47, 0x0B56), 0x0B4B to intArrayOf(0x0B47, 0x0B3E), 0x0B4C to intArrayOf(0x0B47, 0x0B57),
-        0x0B5C to intArrayOf(0x0B21, 0x0B3C), 0x0B5D to intArrayOf(0x0B22, 0x0B3C),
-        0x0BCA to intArrayOf(0x0BC6, 0x0BBE), 0x0BCB to intArrayOf(0x0BC7, 0x0BBE), 0x0BCC to intArrayOf(0x0BC6, 0x0BD7),
-        0x0C48 to intArrayOf(0x0C46, 0x0C56),
-        0x0CC0 to intArrayOf(0x0CBF, 0x0CD5), 0x0CC7 to intArrayOf(0x0CC6, 0x0CD5), 0x0CC8 to intArrayOf(0x0CC6, 0x0CD6),
-        0x0CCA to intArrayOf(0x0CC6, 0x0CC2), 0x0CCB to intArrayOf(0x0CCA, 0x0CD5),
-        0x0D4A to intArrayOf(0x0D46, 0x0D3E), 0x0D4B to intArrayOf(0x0D47, 0x0D3E), 0x0D4C to intArrayOf(0x0D46, 0x0D57),
-    )
+    /** HarfBuzz's decompose_indic: Devanagari Rra, Bengali Rra and Rha, and Tamil Au stay whole. */
+    private fun decomposition(cp: Int): IntArray? =
+        if (cp == 0x0931 || cp == 0x09DC || cp == 0x09DD || cp == 0x0B94) null else Normalizer.decomposition(cp)
 
-    /** The parts of [cp] as far as the font has glyphs for them, after HarfBuzz's decompose, or null to keep it whole. */
-    private fun decomposition(cp: Int, hasGlyph: (Int) -> Boolean): IntArray? {
-        val pair = CANONICAL[cp] ?: return null
-        if (!hasGlyph(pair[1])) return null
-        decomposition(pair[0], hasGlyph)?.let { return it + pair[1] }
-        return if (hasGlyph(pair[0])) pair else null
-    }
-
-    /**
-     * The character that [a] and the mark [b] compose into, as HarfBuzz's compose_indic allows:
-     * a canonical composition that Unicode does not exclude, and Bengali Yya, or null.
-     */
+    /** HarfBuzz's compose_indic: a split matra does not compose again, and Bengali Yya does. */
     private fun composition(a: Int, b: Int): Int? = when {
-        b == 0x093C && a == 0x0928 -> 0x0929
-        b == 0x093C && a == 0x0930 -> 0x0931
-        b == 0x093C && a == 0x0933 -> 0x0934
-        b == 0x09BC && a == 0x09AF -> 0x09DF
-        b == 0x0BD7 && a == 0x0B92 -> 0x0B94
-        else -> null
-    }
-
-    private fun isUnicodeMark(cp: Int): Boolean = when (cp.toChar().category) {
-        CharCategory.NON_SPACING_MARK, CharCategory.COMBINING_SPACING_MARK, CharCategory.ENCLOSING_MARK -> true
-        else -> false
+        Normalizer.isMark(a) -> null
+        a == 0x09AF && b == 0x09BC -> 0x09DF
+        else -> Normalizer.composition(a, b)
     }
 
     /** HarfBuzz's general categories from format to non-spacing mark: the letters, the marks and the format characters. */
