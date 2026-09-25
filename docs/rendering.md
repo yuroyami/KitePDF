@@ -407,6 +407,15 @@ Java2D does not anti-alias a clip. So the AWT backend applies a clip path the wa
 
 A gradient, an image or a pattern stroke inside a curved clip therefore has smooth edges, as in `mutool draw`. Each curved clip costs one layer the size of the clip, so a page with hundreds of curved clips renders more slowly than a page with rectangular clips.
 
+## Glyphs on AWT
+
+The AWT backend places and caches glyphs the way MuPDF does:
+
+- A glyph snaps to a subpixel grid. Along the text, an em under 24 pixels lands on a quarter pixel, an em under 48 pixels on half a pixel, and a larger em on a whole pixel. Across horizontal text, an em of 8 pixels or more lands on a whole pixel, so a line of text sits on one pixel row.
+- Each glyph is filled once for each size, subpixel position and colour, and the canvas copies those pixels for every other use on the page. A page of dense text renders about three times faster than when every glyph is filled.
+
+Turned or skewed text, a glyph with an em over 256 pixels, and text in a blend mode other than Normal are filled as paths. They still snap to the same grid.
+
 ## Performance tips
 
 - **Scale parameter:** A page rendered at `scale = 0.5` is 4x faster and uses 4x less memory than `scale = 1.0` (area scales quadratically).

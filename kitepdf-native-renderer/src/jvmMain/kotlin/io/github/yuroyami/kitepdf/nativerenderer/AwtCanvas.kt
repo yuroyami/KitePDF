@@ -44,6 +44,8 @@ import java.awt.image.Raster
 import java.awt.image.WritableRaster
 import java.awt.image.DataBufferInt
 import javax.imageio.ImageIO
+import kotlin.math.abs
+import kotlin.math.floor
 
 /**
  * [KiteCanvas] backed by [java.awt.Graphics2D]. Pure JRE: no Skia, no
@@ -156,19 +158,28 @@ public class AwtCanvas(private var g: Graphics2D) : KiteCanvas {
         val unitScale = fontSize / unitsPerEm   // glyph outlines: font units → text space
         val advanceScale = fontSize / 1000.0    // PDF glyph widths are 1/1000 em, NOT font units
         var drewAny = false
+        // Glyph positions snap to MuPDF's subpixel grid, and glyph pixels come from the cache,
+        // when this Graphics draws in whole device pixels: no transform, or a shift by whole pixels.
+        val base = g.transform
+        val onPixels = (base.type and AffineTransform.TYPE_TRANSLATION.inv()) == 0 &&
+            base.translateX == floor(base.translateX) && base.translateY == floor(base.translateY)
+        val cache = onPixels && blendMode == KiteBlendMode.Normal
         withComposite(blendMode, alpha) {
-            g.color = color.toAwt()
+            val awtColor = color.toAwt()
+            g.color = awtColor
             var penX = 0.0
             for (glyph in glyphs) {
                 val outline = glyph.outline
                 if (outline != null && !outline.isEmpty()) {
                     // outline(font units) → ×unitScale → +penX (text space) → finalMatrix (→ device).
                     // concat(other) applies `other` first, so the scale must be the LAST concat.
-                    val glyphMatrix = textToDevice
+                    val exact = textToDevice
                         .concat(KiteMatrix.translation(penX + glyph.xOffset * unitScale, glyph.yOffset * unitScale))
                         .concat(KiteMatrix(unitScale, 0.0, 0.0, unitScale, 0.0, 0.0))
-                    val awt = toAwtPath(outline, glyphMatrix).apply { windingRule = Path2D.WIND_NON_ZERO }
-                    g.fill(awt)
+                    val glyphMatrix = if (onPixels) snapGlyph(exact, unitsPerEm) else exact
+                    if (!cache || !drawCachedGlyph(outline, glyphMatrix, unitsPerEm, awtColor)) {
+                        g.fill(toAwtPath(outline, glyphMatrix).apply { windingRule = Path2D.WIND_NON_ZERO })
+                    }
                     drewAny = true
                 }
                 penX += glyph.advanceWidth * advanceScale + glyph.advanceAdjust
@@ -179,6 +190,100 @@ public class AwtCanvas(private var g: Graphics2D) : KiteCanvas {
         if (!drewAny && glyphs.any { it.text.isNotBlank() }) {
             drawTextViaSystemFont(glyphs, fontSize, fontSpec, textToDevice, color, alpha, blendMode)
         }
+    }
+
+    /** The pixels of one glyph at one size, subpixel position and colour; null for an outline that covers nothing. */
+    private class GlyphRaster(val image: BufferedImage?, val left: Int, val top: Int)
+
+    /** Identifies a [GlyphRaster]. Fonts keep one outline object for each glyph, so the outline compares by identity. */
+    private class GlyphKey(val outline: KitePath, val a: Double, val d: Double, val fx: Double, val fy: Double, val rgb: Int) {
+        override fun equals(other: Any?): Boolean = other is GlyphKey && other.outline === outline &&
+            other.a == a && other.d == d && other.fx == fx && other.fy == fy && other.rgb == rgb
+
+        override fun hashCode(): Int {
+            var h = System.identityHashCode(outline)
+            h = 31 * h + a.hashCode()
+            h = 31 * h + d.hashCode()
+            h = 31 * h + fx.hashCode()
+            h = 31 * h + fy.hashCode()
+            return 31 * h + rgb
+        }
+    }
+
+    /** Rasterized glyphs, as MuPDF and PDFium keep them: a glyph is filled once and copied after that (#306). */
+    private val glyphRasters = object : LinkedHashMap<GlyphKey, GlyphRaster>(256, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<GlyphKey, GlyphRaster>?): Boolean = size > GLYPH_CACHE_ENTRIES
+    }
+
+    /**
+     * Draws [outline] under [m], which maps it to device pixels, from the glyph cache. Returns
+     * false for a glyph that the cache does not hold: a turned or skewed one, or one whose em
+     * is larger than [GLYPH_CACHE_MAX_EM] pixels.
+     */
+    private fun drawCachedGlyph(outline: KitePath, m: KiteMatrix, unitsPerEm: Int, color: Color): Boolean {
+        if (m.b != 0.0 || m.c != 0.0) return false
+        if (kotlin.math.sqrt(abs(m.a * m.d)) * unitsPerEm > GLYPH_CACHE_MAX_EM) return false
+        val ix = floor(m.e)
+        val iy = floor(m.f)
+        val key = GlyphKey(outline, m.a, m.d, m.e - ix, m.f - iy, color.rgb)
+        val raster = glyphRasters.getOrPut(key) { rasterizeGlyph(outline, KiteMatrix(m.a, 0.0, 0.0, m.d, m.e - ix, m.f - iy), color) }
+        raster.image?.let { g.drawImage(it, ix.toInt() + raster.left, iy.toInt() + raster.top, null) }
+        return true
+    }
+
+    /** [outline] under [m], filled in [color] into an image with this Graphics' hints, and where its corner goes. */
+    private fun rasterizeGlyph(outline: KitePath, m: KiteMatrix, color: Color): GlyphRaster {
+        val path = toAwtPath(outline, m).apply { windingRule = Path2D.WIND_NON_ZERO }
+        val bounds = path.bounds2D
+        if (bounds.isEmpty) return GlyphRaster(null, 0, 0)
+        val left = floor(bounds.minX).toInt() - 1
+        val top = floor(bounds.minY).toInt() - 1
+        val width = kotlin.math.ceil(bounds.maxX).toInt() - left + 1
+        val height = kotlin.math.ceil(bounds.maxY).toInt() - top + 1
+        val image = BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB_PRE)
+        val gi = image.createGraphics()
+        try {
+            gi.setRenderingHints(g.renderingHints)
+            gi.color = color
+            gi.translate(-left, -top)
+            gi.fill(path)
+        } finally {
+            gi.dispose()
+        }
+        return GlyphRaster(image, left, top)
+    }
+
+    /**
+     * [m], which maps a glyph to device pixels, with its origin on MuPDF's subpixel grid
+     * (`fz_subpixel_adjust`). Along the text, an em under 24 pixels lands on a quarter pixel,
+     * one under 48 on half a pixel, and a larger one on a whole pixel. Across horizontal or
+     * vertical text, an em of 8 pixels or more lands on a whole pixel.
+     */
+    private fun snapGlyph(m: KiteMatrix, unitsPerEm: Int): KiteMatrix {
+        val size = kotlin.math.sqrt(abs(m.a * m.d - m.b * m.c)) * unitsPerEm
+        val (q, r) = when {
+            size >= 48 -> 0 to 0.5
+            size >= 24 -> 128 to 0.25
+            else -> 192 to 0.125
+        }
+        val (qMin, rMin) = when {
+            size >= 8 -> 0 to 0.5
+            size >= 4 -> 128 to 0.25
+            else -> 192 to 0.125
+        }
+        var hq = q
+        var hr = r
+        var vq = q
+        var vr = r
+        if (m.a == 0.0 && m.d == 0.0) { hq = qMin; hr = rMin }
+        if (m.b == 0.0 && m.c == 0.0) { vq = qMin; vr = rMin }
+        val e = m.e + hr
+        val f = m.f + vr
+        val pixE = floor(e)
+        val pixF = floor(f)
+        val subE = (((e - pixE) * 256).toInt() and hq) / 256.0
+        val subF = (((f - pixF) * 256).toInt() and vq) / 256.0
+        return KiteMatrix(m.a, m.b, m.c, m.d, pixE + subE, pixF + subF)
     }
 
     /**
@@ -1233,6 +1338,12 @@ public class AwtCanvas(private var g: Graphics2D) : KiteCanvas {
 
         /** The largest device coordinate of a clip box, so its width still fits in an Int. */
         const val PIXEL_LIMIT = 268_435_456.0
+
+        /** Glyph rasters that one canvas keeps. A page of text uses a few hundred. */
+        const val GLYPH_CACHE_ENTRIES = 4096
+
+        /** The largest em, in pixels, whose glyphs go to the cache. A larger glyph is filled as a path. */
+        const val GLYPH_CACHE_MAX_EM = 256.0
 
         /** Host glyph outlines per font and text, shared by every canvas. Cleared when full. */
         val hostOutlines = java.util.concurrent.ConcurrentHashMap<Pair<FontSpec, String>, KitePath>()
