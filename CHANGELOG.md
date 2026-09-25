@@ -403,6 +403,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   viewer, cancelling the coroutine of `rasterizeOffMain` now stops a page and throws
   a `CancellationException`, so a page the reader scrolled past stops rendering
   instead of running to the end (#188).
+- ICC colours convert through the rendering intent the document names: the `ri`
+  operator, `/RI` in an extended graphics state, and the `/Intent` of an image. A
+  lookup-table profile reads the table of that intent and compensates its black
+  point, and the absolute colorimetric intent keeps the colour of the paper, as
+  Little CMS converts them for MuPDF. `/UseBlackPtComp` turns the compensation on
+  and off. A colour set before `ri` converts again, so the later intent paints it.
+  Before, every paint used the relative colorimetric intent. On seven test pages,
+  most of them in a press profile with a table per intent, all 68 swatches match
+  mutool within one level. Overprint is still ignored (#201).
+- An RGB lookup-table profile interpolates on a grid of 17 points a side, the grid
+  MuPDF asks Little CMS for, instead of 33. The page of RGB swatches scores 0.00010
+  against mutool instead of 0.00047 (#201).
+- A grey ICC profile maps full grey to white, whatever its white point tag says.
+  With a D65 tag, full grey drew as #ebffff and mid grey as #768295, where mutool
+  draws #ffffff and #808080 (#311).
 - The differential test checks each page against its own recorded score, not only
   the mean of all pages. A page fails when its mean error, its fraction of changed
   pixels or its largest channel error gets clearly worse. A new fixture fails until

@@ -414,25 +414,33 @@ internal fun encodePcs(xyz: DoubleArray, encoding: IccLut.PcsEncoding): DoubleAr
 /**
  * A lookup-table profile's colours in sRGB: [toPcs], then black point compensation from
  * [blackPoint] to the black of sRGB, then the D50 to sRGB conversion. Little CMS computes
- * the same transform once on a grid, 17 points a side for four inputs and 33 otherwise,
- * and interpolates in it, so [toRgb] does too.
+ * the same transform once on a grid and interpolates in it, so [toRgb] does too. MuPDF asks
+ * for the low-resolution grid: 33 points for one input, and 17 points a side otherwise.
  */
 internal class IccLutTransform(
     private val inputs: Int,
     private val toPcs: IccLut,
     /** D50 XYZ; zero when the profile has no black point to compensate. */
     private val blackPoint: DoubleArray,
+    /**
+     * For the absolute colorimetric intent, the factor per XYZ channel from the connection
+     * space to the white of the medium, which then takes the place of black point compensation.
+     */
+    private val absoluteScale: DoubleArray? = null,
+    /** False for the absolute colorimetric intent, whose white is meant to miss sRGB white. */
+    private val fixWhite: Boolean = true,
 ) {
     /** The transform evaluated through every stage, without the grid. */
     fun exact(components: DoubleArray): RgbColor {
         val xyz = decodePcs(toPcs.eval(components), toPcs.pcsEncoding)
-        // Little CMS's ComputeBlackPointCompensation: black moves to zero and the white stays.
-        val c = DoubleArray(3) { k -> PCS_WHITE[k] * (xyz[k] - blackPoint[k]) / (PCS_WHITE[k] - blackPoint[k]) }
+        val c = absoluteScale?.let { s -> DoubleArray(3) { k -> xyz[k] * s[k] } }
+            // Little CMS's ComputeBlackPointCompensation: black moves to zero and the white stays.
+            ?: DoubleArray(3) { k -> PCS_WHITE[k] * (xyz[k] - blackPoint[k]) / (PCS_WHITE[k] - blackPoint[k]) }
         return IccProfile.xyzD50ToSrgb(c[0], c[1], c[2])
     }
 
     private val grid: IccLut.Clut by lazy {
-        val n = if (inputs == 4) 17 else 33
+        val n = if (inputs == 1) 33 else 17
         var count = 1
         repeat(inputs) { count *= n }
         val values = DoubleArray(count * 3)
@@ -453,7 +461,7 @@ internal class IccLutTransform(
         // Little CMS's FixWhiteMisalignment: the white of the input, no ink for CMYK and full
         // light otherwise, lands on sRGB white exactly, unless a channel is far off.
         val white = 3 * (if (inputs == 4) 0 else count - 1)
-        if ((0..2).all { 1.0 - values[white + it] <= WHITE_FIXUP_LIMIT }) for (k in 0..2) values[white + k] = 1.0
+        if (fixWhite && (0..2).all { 1.0 - values[white + it] <= WHITE_FIXUP_LIMIT }) for (k in 0..2) values[white + k] = 1.0
         IccLut.Clut(IntArray(inputs) { n }, 3, values)
     }
 

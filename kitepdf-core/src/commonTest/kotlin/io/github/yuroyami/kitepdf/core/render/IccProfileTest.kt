@@ -5,6 +5,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
+import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
 /** Reading matrix/TRC and lookup-table ICC profiles and colour-managing through them. */
@@ -175,6 +176,89 @@ class IccProfileTest {
         val p = IccProfile.parse(assemble("CMYK", listOf("A2B1" to blackOnlyCmyk(93.0, 20.0)), pcs = "Lab ", deviceClass = "scnr"))!!
         val white = p.toRgb(doubleArrayOf(0.0, 0.0, 0.0, 0.0))
         assertTrue(white.r == 1.0 && white.g == 1.0 && white.b == 1.0, "no ink is white: $white")
+    }
+
+    /** An XYZ tag holding [x], [y] and [z]. */
+    private fun xyzTag(x: Double, y: Double, z: Double): ByteArray = ByteArray(20).also { b ->
+        "XYZ ".forEachIndexed { i, c -> b[i] = c.code.toByte() }
+        s15(b, 8, x); s15(b, 12, y); s15(b, 16, z)
+    }
+
+    /**
+     * A black-only CMYK profile whose darkest ink is L* 45 perceptually, 20 colorimetrically and
+     * 35 for saturation. Little CMS clamps a black point to L* 50, so each can compensate to black.
+     */
+    private fun intentCmyk(deviceClass: String = "scnr", white: ByteArray? = null): ByteArray = assemble(
+        "CMYK",
+        listOf("A2B0" to blackOnlyCmyk(100.0, 45.0), "A2B1" to blackOnlyCmyk(100.0, 20.0), "A2B2" to blackOnlyCmyk(100.0, 35.0)) +
+            listOfNotNull(white?.let { "wtpt" to it }),
+        pcs = "Lab ", deviceClass = deviceClass,
+    )
+
+    @Test
+    fun each_intent_converts_through_its_own_table() {
+        val p = IccProfile.parse(intentCmyk())!!
+        assertSame(p, p.forRendering(KiteRenderingIntent.RelativeColorimetric, true), "the profile as read is the default")
+        fun black(intent: KiteRenderingIntent) = p.forRendering(intent, blackPointCompensation = false).toRgb(doubleArrayOf(0.0, 0.0, 0.0, 1.0)).g
+        val perceptual = black(KiteRenderingIntent.Perceptual)
+        val saturation = black(KiteRenderingIntent.Saturation)
+        val relative = black(KiteRenderingIntent.RelativeColorimetric)
+        assertTrue(perceptual > saturation && saturation > relative, "L* 45, 35 and 20: $perceptual, $saturation, $relative")
+        // The absolute intent reads the colorimetric table, and this profile's medium is D50.
+        assertEquals(relative, black(KiteRenderingIntent.AbsoluteColorimetric), 1e-9)
+        assertSame(p.forRendering(KiteRenderingIntent.Perceptual, false), p.forRendering(KiteRenderingIntent.Perceptual, false), "built once")
+    }
+
+    @Test
+    fun black_point_compensation_takes_the_darkest_ink_of_each_intent_to_black() {
+        val p = IccProfile.parse(intentCmyk())!!
+        for (intent in listOf(KiteRenderingIntent.Perceptual, KiteRenderingIntent.RelativeColorimetric, KiteRenderingIntent.Saturation)) {
+            val black = p.forRendering(intent, true).toRgb(doubleArrayOf(0.0, 0.0, 0.0, 1.0))
+            assertTrue(black.g < 0.01, "$intent: $black")
+        }
+        // The absolute intent never compensates.
+        assertTrue(p.forRendering(KiteRenderingIntent.AbsoluteColorimetric, true).toRgb(doubleArrayOf(0.0, 0.0, 0.0, 1.0)).g > 0.1)
+    }
+
+    @Test
+    fun the_absolute_intent_keeps_the_colour_of_the_paper() {
+        // A paper of L* 90: the colorimetric table maps it to white, the absolute intent back to the paper.
+        val y = ((90.0 + 16.0) / 116.0).pow(3)
+        val paper = xyzTag(0.9642 * y, y, 0.8249 * y)
+        val p = IccProfile.parse(intentCmyk(white = paper))!!
+        val none = doubleArrayOf(0.0, 0.0, 0.0, 0.0)
+        assertEquals(1.0, p.toRgb(none).g, 1e-6)
+        val absolute = p.forRendering(KiteRenderingIntent.AbsoluteColorimetric, true).toRgb(none)
+        assertTrue(absolute.g in 0.85..0.9 && kotlin.math.abs(absolute.r - absolute.b) < 0.01, "L* 90 grey: $absolute")
+        // A version 2 display profile's medium reads as D50, as Little CMS reads it, so its paper is white.
+        val display = IccProfile.parse(intentCmyk(deviceClass = "mntr", white = paper))!!
+        assertEquals(1.0, display.forRendering(KiteRenderingIntent.AbsoluteColorimetric, true).toRgb(none).g, 0.002)
+    }
+
+    @Test
+    fun a_grey_profile_maps_full_grey_to_white_whatever_its_white_point_tag_says() {
+        val curve = ByteArray(14)
+        "curv".forEachIndexed { i, c -> curve[i] = c.code.toByte() }
+        u32(curve, 8, 1)
+        curve[12] = 2; curve[13] = 0x33
+        val p = IccProfile.parse(assemble("GRAY", listOf("kTRC" to curve, "wtpt" to xyzTag(0.9505, 1.0, 1.0891))))!!
+        val white = p.toRgb(doubleArrayOf(1.0))
+        assertTrue(white.r > 0.995 && white.g > 0.995 && white.b > 0.995, "white, not tinted by the D65 tag: $white")
+    }
+
+    @Test
+    fun a_space_built_on_a_profile_converts_through_its_intent() {
+        val icc = KiteColorSpace.IccBased(IccProfile.parse(intentCmyk())!!)
+        assertSame(icc, icc.withIntent(KiteRenderingIntent.RelativeColorimetric))
+        assertSame(KiteColorSpace.DeviceCMYK, KiteColorSpace.DeviceCMYK.withIntent(KiteRenderingIntent.Perceptual))
+        val perceptual = icc.withIntent(KiteRenderingIntent.Perceptual, blackPointCompensation = false)
+        assertSame(perceptual, icc.withIntent(KiteRenderingIntent.Perceptual, blackPointCompensation = false), "built once")
+        val k = doubleArrayOf(0.0, 0.0, 0.0, 1.0)
+        assertTrue(perceptual.toRgb(k).g > icc.withIntent(KiteRenderingIntent.RelativeColorimetric, false).toRgb(k).g)
+        // The state converts its current colour again when the intent changes.
+        val state = GraphicsState(fillColorSpace = icc, fillColor = icc.toRgb(k), fillComponents = k)
+            .withColorRendering(KiteRenderingIntent.Perceptual, blackPointCompensation = false)
+        assertEquals(perceptual.toRgb(k), state.fillColor)
     }
 
     @Test

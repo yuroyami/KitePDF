@@ -53,6 +53,14 @@ public data class GraphicsState(
     val lineJoin: Int = 0,
     /** Miter limit (`M`). */
     val miterLimit: Double = 10.0,
+    /** The rendering intent (`ri`, ExtGState `/RI`) that colours convert through. */
+    val renderingIntent: KiteRenderingIntent = KiteRenderingIntent.RelativeColorimetric,
+    /** Black point compensation in that conversion (ExtGState `/UseBlackPtComp`). */
+    val blackPointCompensation: Boolean = true,
+    /** The components [fillColor] came from in [fillColorSpace], or null for the initial colour of the space. */
+    val fillComponents: DoubleArray? = null,
+    /** The components [strokeColor] came from in [strokeColorSpace], or null for the initial colour of the space. */
+    val strokeComponents: DoubleArray? = null,
 )
 
 /** Per-`BT/ET` block text state, reset at BT and mutated by text operators. */
@@ -112,7 +120,26 @@ public fun GraphicsState.applyExtGState(ext: ExtGState): GraphicsState = copy(
     // /D replaces the dash; an empty or all-zero array means solid, as for d (#107).
     dashArray = if (ext.dashArray == null) dashArray else ext.dashArray.takeIf { ds -> ds.isNotEmpty() && ds.any { it > 0.0 } },
     dashPhase = if (ext.dashArray == null) dashPhase else ext.dashPhase,
-)
+).withColorRendering(ext.renderingIntent ?: renderingIntent, ext.blackPointCompensation ?: blackPointCompensation)
+
+/**
+ * This state with colours converting through [intent], with or without black point
+ * compensation. The current colours convert again from their components, so a colour set
+ * before `ri` follows it, as it does in MuPDF (#201).
+ */
+public fun GraphicsState.withColorRendering(intent: KiteRenderingIntent, blackPointCompensation: Boolean): GraphicsState {
+    if (intent == renderingIntent && blackPointCompensation == this.blackPointCompensation) return this
+    val fill = fillColorSpace.withIntent(intent, blackPointCompensation)
+    val stroke = strokeColorSpace.withIntent(intent, blackPointCompensation)
+    return copy(
+        renderingIntent = intent,
+        blackPointCompensation = blackPointCompensation,
+        fillColorSpace = fill,
+        fillColor = if (fill === fillColorSpace) fillColor else fillComponents?.let(fill::toRgb) ?: fill.defaultColor(),
+        strokeColorSpace = stroke,
+        strokeColor = if (stroke === strokeColorSpace) strokeColor else strokeComponents?.let(stroke::toRgb) ?: stroke.defaultColor(),
+    )
+}
 
 /**
  * Mutable stack façade. Holds the current state plus a save stack for `q`/`Q`.

@@ -35,6 +35,147 @@ object IccFixtures {
         "0.2 0.7 0.1", "0.75 0.1 0.9", "0.05 0.05 0.05", "0.9 0.6 0.3", "0.3 0.3 0.8", "0.99 0.99 0.2",
     )
 
+    /**
+     * A page of rendering intents, and the centres of its swatches in points from the bottom
+     * left of the 200-point page. A test compares the swatches one by one, because the page
+     * mean hides a swatch that is off.
+     */
+    data class SwatchPage(val fixture: OracleFixture, val swatches: List<Pair<Double, Double>>)
+
+    /**
+     * Pages whose colours convert through each rendering intent (#201): a CMYK press profile
+     * with its own table for each intent and a paper white, a version 4 RGB profile, and a
+     * grey profile whose white point tag is D65. mutool converts them through Little CMS.
+     */
+    fun intents(): List<SwatchPage> = listOf(
+        intentRows("icc-intent-ri") { "/$it ri\n" },
+        intentRows("icc-intent-extgstate", extGStates = true) { "/GS${INTENTS.indexOf(it)} gs\n" },
+        lateIntent(),
+        intentImages(),
+        noBlackPointCompensation(),
+        rgbVersion4Intents(),
+        greyWithD65White(),
+    )
+
+    private val INTENTS = listOf("Perceptual", "RelativeColorimetric", "Saturation", "AbsoluteColorimetric")
+    private val PRESS_SWATCHES = listOf("0 0 0 0", "1 0 0 0", "0.2 0.7 0.1 0.3", "1 1 1 1")
+
+    /** Swatch [col] of row [row]: 40 points a side, four to a row, from the top of the page down. */
+    private fun cell(row: Int, col: Int): String = "${10 + col * 45} ${150 - row * 45} 40 40 re f\n"
+    private fun centre(row: Int, col: Int): Pair<Double, Double> = (30.0 + col * 45) to (170.0 - row * 45)
+
+    /** One row of [PRESS_SWATCHES] per intent, each row selected by [select]. */
+    private fun intentRows(name: String, extGStates: Boolean = false, select: (String) -> String): SwatchPage {
+        val content = StringBuilder()
+        val centres = ArrayList<Pair<Double, Double>>()
+        for ((row, intent) in INTENTS.withIndex()) {
+            content.append(select(intent)).append("/CS0 cs\n")
+            for ((col, c) in PRESS_SWATCHES.withIndex()) {
+                content.append("$c sc ").append(cell(row, col))
+                centres += centre(row, col)
+            }
+        }
+        val gs = if (extGStates) " /ExtGState << " + INTENTS.withIndex().joinToString(" ") { (i, n) -> "/GS$i << /RI /$n >>" } + " >>" else ""
+        return SwatchPage(
+            oracleFixture(name, content.toString(), "/ColorSpace << /CS0 [/ICCBased 5 0 R] >>$gs", listOf(pdfStream(pressProfile, "/N 4")), budget = 0.002),
+            centres,
+        )
+    }
+
+    /**
+     * Colours set before the intent that paints them, through `sc` and through `k` in a
+     * DefaultCMYK space, and an intent that `Q` takes back. MuPDF converts a colour when it
+     * paints, so the later `ri` decides.
+     */
+    private fun lateIntent(): SwatchPage {
+        val content = "/CS0 cs 0.2 0.7 0.1 0.3 sc /Perceptual ri ${cell(0, 0)}" +
+            "/Saturation ri 0.2 0.7 0.1 0.3 k /AbsoluteColorimetric ri ${cell(0, 1)}" +
+            "/RelativeColorimetric ri /CS0 cs 0.2 0.7 0.1 0.3 sc q /Saturation ri Q ${cell(0, 2)}" +
+            "/Perceptual ri 1 0 0 0 k ${cell(1, 0)}"
+        return SwatchPage(
+            oracleFixture(
+                "icc-intent-late", content,
+                "/ColorSpace << /CS0 [/ICCBased 5 0 R] /DefaultCMYK [/ICCBased 5 0 R] >>",
+                listOf(pdfStream(pressProfile, "/N 4")), budget = 0.002,
+            ),
+            listOf(centre(0, 0), centre(0, 1), centre(0, 2), centre(1, 0)),
+        )
+    }
+
+    /** A 2 by 2 image of the press swatches with its own `/Intent`, and the same image without one under `ri`. */
+    private fun intentImages(): SwatchPage {
+        val samples = ByteArray(16)
+        for ((i, c) in PRESS_SWATCHES.withIndex()) {
+            val inks = c.split(' ').map { (it.toDouble() * 255).roundToInt() }
+            for (k in 0 until 4) samples[i * 4 + k] = inks[k].toByte()
+        }
+        fun image(intent: String) = pdfStream(
+            samples,
+            "/Type /XObject /Subtype /Image /Width 2 /Height 2 /BitsPerComponent 8 /ColorSpace [/ICCBased 5 0 R]$intent",
+        )
+        val content = "/AbsoluteColorimetric ri q 90 0 0 90 5 105 cm /Im1 Do Q /Saturation ri q 90 0 0 90 105 105 cm /Im2 Do Q"
+        // The image rows run from the top: samples 0 and 1 on the upper row.
+        val centres = listOf(27.5 to 172.5, 72.5 to 172.5, 27.5 to 127.5, 72.5 to 127.5)
+        return SwatchPage(
+            oracleFixture(
+                "icc-intent-image", content, "/XObject << /Im1 6 0 R /Im2 7 0 R >>",
+                listOf(pdfStream(pressProfile, "/N 4"), image(" /Intent /Perceptual"), image("")), budget = 0.002,
+            ),
+            centres + centres.map { (x, y) -> x + 100 to y },
+        )
+    }
+
+    /** The press swatches with `/UseBlackPtComp /OFF`, which moves the dark colours, then back `/ON`. */
+    private fun noBlackPointCompensation(): SwatchPage {
+        val content = StringBuilder("/GS0 gs /CS0 cs\n")
+        for ((col, c) in PRESS_SWATCHES.withIndex()) content.append("$c sc ").append(cell(0, col))
+        content.append("/GS1 gs /Perceptual ri\n")
+        for ((col, c) in PRESS_SWATCHES.withIndex()) content.append("$c sc ").append(cell(1, col))
+        return SwatchPage(
+            oracleFixture(
+                "icc-intent-no-bpc", content.toString(),
+                "/ColorSpace << /CS0 [/ICCBased 5 0 R] >> /ExtGState << /GS0 << /UseBlackPtComp /OFF >> /GS1 << /UseBlackPtComp /ON >> >>",
+                listOf(pdfStream(pressProfile, "/N 4")), budget = 0.002,
+            ),
+            (0 until 4).map { centre(0, it) } + (0 until 4).map { centre(1, it) },
+        )
+    }
+
+    /** The version 4 RGB profile, which has only `A2B0`, with the relative and the perceptual intent. */
+    private fun rgbVersion4Intents(): SwatchPage {
+        val colours = listOf("0 0 0", "0.05 0.05 0.05", "0.2 0.7 0.1", "0.9 0.6 0.3")
+        val content = StringBuilder("/CS0 cs\n")
+        for ((col, c) in colours.withIndex()) content.append("$c sc ").append(cell(0, col))
+        content.append("/Perceptual ri\n")
+        for ((col, c) in colours.withIndex()) content.append("$c sc ").append(cell(1, col))
+        return SwatchPage(
+            oracleFixture(
+                "icc-intent-rgb-v4", content.toString(), "/ColorSpace << /CS0 [/ICCBased 5 0 R] >>",
+                listOf(pdfStream(rgbProfile, "/N 3")), budget = 0.002,
+            ),
+            (0 until 4).map { centre(0, it) } + (0 until 4).map { centre(1, it) },
+        )
+    }
+
+    /**
+     * A version 2 grey display profile whose white point tag is D65. Little CMS maps grey to
+     * the D50 white of the connection space whatever the tag says, so full grey is white.
+     */
+    private fun greyWithD65White(): SwatchPage {
+        val levels = listOf("1", "0.75", "0.5", "0.25")
+        val content = StringBuilder("/CS0 cs\n")
+        for ((col, g) in levels.withIndex()) content.append("$g sc ").append(cell(0, col))
+        content.append("/AbsoluteColorimetric ri\n")
+        for ((col, g) in levels.withIndex()) content.append("$g sc ").append(cell(1, col))
+        return SwatchPage(
+            oracleFixture(
+                "icc-grey-d65-white", content.toString(), "/ColorSpace << /CS0 [/ICCBased 5 0 R] >>",
+                listOf(pdfStream(greyD65Profile, "/N 1")), budget = 0.002,
+            ),
+            (0 until 4).map { centre(0, it) } + (0 until 4).map { centre(1, it) },
+        )
+    }
+
     /** Twelve swatches of 40 points in a space of [n] components, on a 190-point page. */
     private fun swatches(name: String, profile: ByteArray, n: Int, colours: List<String>): OracleFixture {
         val content = StringBuilder("/CS0 cs\n")
@@ -79,6 +220,43 @@ object IccFixtures {
             DoubleArray(4) { ink.coerceIn(0.0, 1.0) }
         }
         profile(0x02100000, "prtr", "CMYK", listOf("A2B0" to a2b, "A2B1" to a2b, "B2A0" to b2a, "B2A1" to b2a))
+    }
+
+    /**
+     * The press of [cmykProfile] with a table per intent: the perceptual one lifts the black
+     * and softens the colours, the saturation one strengthens them, and the white point tag
+     * is the paper, a warm Lab 95, 1, 5.
+     */
+    private val pressProfile: ByteArray by lazy {
+        fun table(adjust: (DoubleArray) -> DoubleArray) =
+            lut16(inputs = 4, outputs = 3, grid = 5, inputCurve = { it.pow(0.9) }) { cmyk -> encodeLabV2(adjust(inkModelLab(cmyk))) }
+        val b2a = lut16(inputs = 3, outputs = 4, grid = 3, inputCurve = { it }) { lab ->
+            val ink = 1.0 - lab[0] * 65535.0 / 65280.0
+            DoubleArray(4) { ink.coerceIn(0.0, 1.0) }
+        }
+        profile(
+            0x02100000, "prtr", "CMYK",
+            listOf(
+                "A2B0" to table { lab -> doubleArrayOf(6.0 + lab[0] * 0.9, lab[1] * 0.8, lab[2] * 0.8) },
+                "A2B1" to table { it },
+                "A2B2" to table { lab -> doubleArrayOf(lab[0], (lab[1] * 1.2).coerceIn(-127.0, 127.0), (lab[2] * 1.2).coerceIn(-127.0, 127.0)) },
+                "B2A0" to b2a, "B2A1" to b2a,
+            ),
+            white = labToXyzD50(95.0, 1.0, 5.0),
+        )
+    }
+
+    /** A version 2 grey display profile: gamma 2.2 and a D65 white point tag. */
+    private val greyD65Profile: ByteArray by lazy {
+        val trc = Writer().apply { sig("curv"); u32(0); u32(1); u16(563); u16(0) }.bytes()
+        profile(0x02100000, "mntr", "GRAY", listOf("kTRC" to trc), white = doubleArrayOf(0.9505, 1.0, 1.0891), pcs = "XYZ ")
+    }
+
+    /** Lab to XYZ, both relative to D50. */
+    private fun labToXyzD50(l: Double, a: Double, b: Double): DoubleArray {
+        val fy = (l + 16.0) / 116.0
+        fun finv(t: Double) = if (t > 6.0 / 29.0) t * t * t else 108.0 / 841.0 * (t - 4.0 / 29.0)
+        return doubleArrayOf(0.9642 * finv(fy + a / 500.0), finv(fy), 0.8249 * finv(fy - b / 200.0))
     }
 
     /** A made-up press: each ink absorbs mostly one third of the spectrum, over a slightly warm paper. */
@@ -201,10 +379,13 @@ object IccFixtures {
         return out.bytes()
     }
 
-    /** A profile of [version], [deviceClass] and [space] with a Lab connection space and [tags]. */
-    private fun profile(version: Int, deviceClass: String, space: String, tags: List<Pair<String, ByteArray>>): ByteArray {
-        val white = Writer().apply { sig("XYZ "); u32(0); s15f16(0.9642); s15f16(1.0); s15f16(0.8249) }.bytes()
-        val all = listOf("wtpt" to white) + tags
+    /** A profile of [version], [deviceClass] and [space] with the connection space [pcs], the white point tag [white] and [tags]. */
+    private fun profile(
+        version: Int, deviceClass: String, space: String, tags: List<Pair<String, ByteArray>>,
+        white: DoubleArray = doubleArrayOf(0.9642, 1.0, 0.8249), pcs: String = "Lab ",
+    ): ByteArray {
+        val whiteTag = Writer().apply { sig("XYZ "); u32(0); s15f16(white[0]); s15f16(white[1]); s15f16(white[2]) }.bytes()
+        val all = listOf("wtpt" to whiteTag) + tags
         // A table shared by two tags is written once.
         val blocks = LinkedHashMap<ByteArray, Int>()
         var offset = 128 + 4 + 12 * all.size
@@ -213,7 +394,7 @@ object IccFixtures {
             offset += (data.size + 3) and 3.inv()
         }
         val out = Writer()
-        out.u32(offset); out.u32(0); out.u32(version); out.sig(deviceClass); out.sig(space); out.sig("Lab ")
+        out.u32(offset); out.u32(0); out.u32(version); out.sig(deviceClass); out.sig(space); out.sig(pcs)
         repeat(12) { out.u8(0) }
         out.sig("acsp"); out.u32(0); out.u32(0); out.u32(0); out.u32(0); out.u32(0); out.u32(0); out.u32(0)
         out.s15f16(0.9642); out.s15f16(1.0); out.s15f16(0.8249)

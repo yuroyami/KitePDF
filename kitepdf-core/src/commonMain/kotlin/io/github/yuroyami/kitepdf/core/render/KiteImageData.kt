@@ -103,12 +103,34 @@ public class KiteImageData internal constructor(
 ) {
 
     /** This image with [interpolate] set to [on]. */
-    internal fun withInterpolate(on: Boolean): KiteImageData = if (on == interpolate) this else KiteImageData(
+    internal fun withInterpolate(on: Boolean): KiteImageData = if (on == interpolate) this else copy(interpolate = on)
+
+    /** The images [withIntent] made from this one, two per intent. */
+    private var renderings: Array<KiteImageData?>? = null
+
+    /**
+     * This image with its colours converting through [intent], with or without black point
+     * compensation (ISO 32000-1, 8.6.5.8). An image whose colour space does not depend on
+     * them returns itself. The image made for an intent is kept, so a cache keyed by the
+     * image still finds it the next time.
+     */
+    public fun withIntent(intent: KiteRenderingIntent, blackPointCompensation: Boolean = true): KiteImageData {
+        val space = resolvedColorSpace?.withIntent(intent, blackPointCompensation)
+        if (space === resolvedColorSpace) return this
+        val all = renderings ?: arrayOfNulls<KiteImageData>(8).also { renderings = it }
+        val slot = 2 * intent.ordinal + if (blackPointCompensation) 1 else 0
+        return all[slot] ?: copy(resolvedColorSpace = space).also { all[slot] = it }
+    }
+
+    private fun copy(
+        interpolate: Boolean = this.interpolate,
+        resolvedColorSpace: KiteColorSpace? = this.resolvedColorSpace,
+    ): KiteImageData = KiteImageData(
         width = width, height = height, bitsPerComponent = bitsPerComponent, colorSpace = colorSpace, kind = kind,
         encodedBytes = encodedBytes, pixelBytes = pixelBytes,
         softMaskAlpha = softMaskAlpha, softMaskWidth = softMaskWidth, softMaskHeight = softMaskHeight,
         resolvedColorSpace = resolvedColorSpace, decode = decode, isImageMask = isImageMask, maskFill = maskFill,
-        colorKeyMask = colorKeyMask, softMaskMatte = softMaskMatte, interpolate = on,
+        colorKeyMask = colorKeyMask, softMaskMatte = softMaskMatte, interpolate = interpolate,
     )
 
     public enum class Kind {
