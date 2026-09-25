@@ -1,5 +1,6 @@
 package io.github.yuroyami.kitepdf.render
 
+import io.github.yuroyami.kitepdf.core.parser.PdfReference
 import io.github.yuroyami.kitepdf.core.font.Encodings
 import io.github.yuroyami.kitepdf.core.render.KiteMatrix
 
@@ -21,6 +22,8 @@ import io.github.yuroyami.kitepdf.missingAsNull
  */
 internal class Type3Data(
     val charProcs: Map<String, PdfStream>,
+    /** The object number of each procedure in [charProcs] that has one, for the operation cache. */
+    val charProcObjects: Map<String, Long>,
     val fontMatrix: KiteMatrix,
     val resources: PdfDictionary?,
     /** Glyph name per byte code, from /Encoding /Differences. */
@@ -40,6 +43,7 @@ internal class Type3Data(
                 (raw.resolve(refs) as? PdfStream)?.let { name to it }
             }.toMap()
             if (procs.isEmpty()) return null
+            val procObjects = cpDict.map.mapNotNull { (name, raw) -> (raw as? PdfReference)?.let { name to it.objectNumber } }.toMap()
 
             val fm = missingAsNull { dict.getArray("FontMatrix", refs) }?.let { arr ->
                 if (arr.size >= 6) KiteMatrix(arr.num(0), arr.num(1), arr.num(2), arr.num(3), arr.num(4), arr.num(5))
@@ -82,7 +86,7 @@ internal class Type3Data(
                     }
                 }
             }
-            return Type3Data(procs, fm, dict.getDict("Resources", refs), names, widths, hasWidth)
+            return Type3Data(procs, procObjects, fm, dict.getDict("Resources", refs), names, widths, hasWidth)
         }
 
         private fun baseEncoding(name: String?): Array<String?>? = when (name) {

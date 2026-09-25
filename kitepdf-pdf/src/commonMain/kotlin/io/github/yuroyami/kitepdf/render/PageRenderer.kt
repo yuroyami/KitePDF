@@ -66,6 +66,13 @@ public class PageRenderer(
     private val formState: io.github.yuroyami.kitepdf.PdfFormState? = null,
 ) {
 
+    /** The document's cache of parsed content, when [resolver] is a whole document (#118). */
+    private val document: io.github.yuroyami.kitepdf.PdfDocument? = resolver as? io.github.yuroyami.kitepdf.PdfDocument
+
+    /** The operations of the content that object [objectNumber] holds, from the document's cache when there is one. */
+    private fun cachedOperations(objectNumber: Long?, parse: () -> List<Operation>): List<Operation> =
+        objectNumber?.let { number -> document?.operations(number, parse) } ?: parse()
+
     // W/W* push a clip on the canvas, but the canvas keeps its own clip stack
     // separate from the PDF q/Q graphics-state stack. Track how many clips are
     // active so Q can pop exactly the ones pushed since its matching q,
@@ -261,7 +268,7 @@ public class PageRenderer(
         // A stray d1 on an earlier page must not freeze this page's colours (#52).
         type3IgnoreColor = false
         val pathBuilder = KitePath.Builder()
-        val ops = ContentStreamParser.parse(page.contentBytes, colorSpaces)
+        val ops = page.operations(colorSpaces)
 
         // Size the device surface for the ROTATED page: pageToDeviceBase() maps
         // into [0,rotatedWidth] x [0,rotatedHeight], so width/height must be
@@ -889,6 +896,7 @@ public class PageRenderer(
                 arr.getOrNull(2).toDouble(), arr.getOrNull(3).toDouble(),
             )
         } ?: io.github.yuroyami.kitepdf.core.KiteRectangle(0.0, 0.0, 1000.0, 1000.0)
+        val ownResources = formStream.dict.getDict("Resources", resolver) != null
         fun buildResources(): FormResources {
             val resources = formStream.dict.getDict("Resources", resolver) ?: pageResources
             val colorSpaces = loadColorSpaces(resources)
@@ -965,8 +973,10 @@ public class PageRenderer(
         pendingClip = 0
         val scope = openScope()
         try {
-            val bytes = io.github.yuroyami.kitepdf.core.filters.FilterChain.decode(formStream)
-            val ops = ContentStreamParser.parse(bytes, childColorSpaces)
+            val parse = { ContentStreamParser.parse(io.github.yuroyami.kitepdf.core.filters.FilterChain.decode(formStream), childColorSpaces) }
+            // A form with resources of its own parses the same way wherever it is drawn, so its
+            // operations come from the document's cache. Without them it reads the page's (#118).
+            val ops = if (ownResources) cachedOperations(objectNumber, parse) else parse()
             val pathBuilder = KitePath.Builder()
             for (op in ops) dispatch(op, parentState, pathBuilder, childFonts, childXObjects, childColorSpaces, childExtGStates, childShadings, childPatterns, childProperties)
         } finally {
@@ -2289,7 +2299,7 @@ public class PageRenderer(
                         .concat(KiteMatrix.translation(penX, 0.0))
                         .concat(KiteMatrix.scaling(t.fontSize, t.fontSize))
                         .concat(data.fontMatrix)
-                    replayType3Proc(proc, data, state, glyphToUser)
+                    replayType3Proc(proc, data.charProcObjects[data.nameForCode[code]], data, state, glyphToUser)
                 } finally {
                     formDepth--
                 }
@@ -2332,6 +2342,7 @@ public class PageRenderer(
 
     private fun replayType3Proc(
         proc: PdfStream,
+        procObject: Long?,
         data: Type3Data,
         parentState: GraphicsStack,
         glyphToUser: KiteMatrix,
@@ -2359,10 +2370,9 @@ public class PageRenderer(
         val clipBase = activeClipCount
         val scope = openScope()
         try {
-            val ops = ContentStreamParser.parse(
-                io.github.yuroyami.kitepdf.core.filters.FilterChain.decode(proc),
-                colorSpaces,
-            )
+            val parse = { ContentStreamParser.parse(io.github.yuroyami.kitepdf.core.filters.FilterChain.decode(proc), colorSpaces) }
+            // A glyph drawn many times parses once, when its font has resources of its own (#118).
+            val ops = if (data.resources != null) cachedOperations(procObject, parse) else parse()
             val pathBuilder = KitePath.Builder()
             for (op in ops) dispatch(op, parentState, pathBuilder, fonts, xobjects, colorSpaces, extGStates, sh, patterns, properties)
         } finally {

@@ -369,6 +369,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   through Adobe's CID-to-Unicode table of the font's collection, as ISO 32000-1,
   9.10.2 describes. Before, such text drew nothing and extracted as U+FFFD. The
   four tables add 148 KB (#309).
+- A page drawn again, at another zoom or after a scroll back, no longer parses its
+  content again. `PdfDocument` keeps parsed content up to
+  `operationCacheBudgetBytes`, 16 MB by default, and `dropOperationCache` frees it.
+  A form XObject drawn many times, and a Type 3 glyph, now parse once instead of
+  on every draw. On a dense magazine page of 113,000 operators, a render again on
+  AWT takes 5 to 8 ms less, and the part before rasterization falls from 13 ms to
+  2.5 ms (#118).
 
 ## [0.10.0] - 2026-09-13
 

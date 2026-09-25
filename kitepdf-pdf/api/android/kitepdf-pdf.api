@@ -546,8 +546,10 @@ public final class io/github/yuroyami/kitepdf/PdfDestination$ViewFit$XYZ : io/gi
 public final class io/github/yuroyami/kitepdf/PdfDocument : io/github/yuroyami/kitepdf/core/KiteDocument, io/github/yuroyami/kitepdf/core/parser/IndirectResolver {
 	public static final field Companion Lio/github/yuroyami/kitepdf/PdfDocument$Companion;
 	public static final field DEFAULT_IMAGE_CACHE_BUDGET_BYTES J
+	public static final field DEFAULT_OPERATION_CACHE_BUDGET_BYTES J
 	public fun bookmarkOf (Lio/github/yuroyami/kitepdf/core/KiteLocation;)Lio/github/yuroyami/kitepdf/core/KiteBookmark;
 	public final fun dropDecodedImageCache ()V
+	public final fun dropOperationCache ()V
 	public final fun edit (Lkotlin/random/Random;)Lio/github/yuroyami/kitepdf/writer/PdfEditor;
 	public static synthetic fun edit$default (Lio/github/yuroyami/kitepdf/PdfDocument;Lkotlin/random/Random;ILjava/lang/Object;)Lio/github/yuroyami/kitepdf/writer/PdfEditor;
 	public final fun formField (Ljava/lang/String;)Lio/github/yuroyami/kitepdf/PdfFormField;
@@ -568,6 +570,7 @@ public final class io/github/yuroyami/kitepdf/PdfDocument : io/github/yuroyami/k
 	public final fun getMarkInfo ()Lio/github/yuroyami/kitepdf/PdfMarkInfo;
 	public fun getMetadata ()Lio/github/yuroyami/kitepdf/core/KiteMetadata;
 	public final fun getOpenAction ()Lio/github/yuroyami/kitepdf/PdfAction;
+	public final fun getOperationCacheBudgetBytes ()J
 	public final fun getOptionalContent ()Lio/github/yuroyami/kitepdf/PdfOptionalContent;
 	public fun getOutline ()Ljava/util/List;
 	public final fun getOutlines ()Ljava/util/List;
@@ -597,6 +600,7 @@ public final class io/github/yuroyami/kitepdf/PdfDocument : io/github/yuroyami/k
 	public fun resolve (Lio/github/yuroyami/kitepdf/core/parser/PdfReference;)Lio/github/yuroyami/kitepdf/core/parser/PdfObject;
 	public final fun resolveDestination (Lio/github/yuroyami/kitepdf/core/parser/PdfObject;)Lio/github/yuroyami/kitepdf/PdfDestination;
 	public final fun setImageCacheBudgetBytes (J)V
+	public final fun setOperationCacheBudgetBytes (J)V
 }
 
 public final class io/github/yuroyami/kitepdf/PdfDocument$Companion {
