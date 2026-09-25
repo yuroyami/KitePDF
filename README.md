@@ -140,11 +140,10 @@ kotlin {
 ### What else you need
 
 > [!IMPORTANT]
-> Three artifacts need something extra. Without it, the build or the download fails.
+> Two artifacts need something extra. Without it, the build or the download fails.
 
 | If you add | You also need |
 | --- | --- |
-| The viewer or a renderer | **A document artifact** such as `kitepdf`. The viewer and the renderers do not bring it along, so without it your code cannot see `PdfDocument` or `PdfPage`. |
 | `kitepdf-net` | **A Ktor client engine** such as `io.ktor:ktor-client-cio:3.6.0`, or the OkHttp, Darwin or JS engine. KitePDF downloads through the engine you pick. |
 | `kitepdf-skia-renderer` on Android | **One more repository**: `maven("https://maven.pkg.jetbrains.space/public/p/compose/dev")`. Skia's Android build lives there, not on Maven Central. |
 
