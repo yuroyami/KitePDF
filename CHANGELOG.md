@@ -403,6 +403,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   viewer, cancelling the coroutine of `rasterizeOffMain` now stops a page and throws
   a `CancellationException`, so a page the reader scrolled past stops rendering
   instead of running to the end (#188).
+- The differential test checks each page against its own recorded score, not only
+  the mean of all pages. A page fails when its mean error, its fraction of changed
+  pixels or its largest channel error gets clearly worse. A new fixture fails until
+  its score is recorded, and a recorded score moves only in a run with
+  `-Dkitepdf.diff.updateBaseline=true` (#195).
 
 ## [0.10.0] - 2026-09-13
 

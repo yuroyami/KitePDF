@@ -52,6 +52,8 @@ object DiffHarness {
         val diffPng: String?,
         /** Non-background pixels in the reference render, when the oracle ran. */
         val referenceInk: Long? = null,
+        /** The document this page came from. */
+        val source: Corpus.Entry? = null,
     )
 
     data class Report(
@@ -239,7 +241,7 @@ object DiffHarness {
                         oracleError = oracleError,
                         score = score, diffFraction = diffFrac, maxDelta = maxDelta,
                         kitePng = rel(outDir, kitePng), refPng = refRel, diffPng = diffRel,
-                        referenceInk = referenceInk,
+                        referenceInk = referenceInk, source = entry,
                     )
                 } catch (e: Exception) {
                     results += fail(entry, i, "render: ${e.message}")
@@ -255,7 +257,7 @@ object DiffHarness {
         rendered = false, error = error, nonBlank = false,
         oracleError = null,
         score = null, diffFraction = null, maxDelta = null,
-        kitePng = null, refPng = null, diffPng = null,
+        kitePng = null, refPng = null, diffPng = null, source = entry,
     )
 
     private fun rel(base: File, f: File): String =

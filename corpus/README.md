@@ -22,7 +22,9 @@ corpus/
 
   Report + per-page PNGs land in `kitepdf-native-renderer/build/difftest/`.
   Only the first few pages of each file are scored (`MAX_PAGES_PER_DOC`) to keep
-  runs fast.
+  runs fast. A run with `-Dkitepdf.diff.updateBaseline=true` records the score
+  of each page under a hash of the file, and later runs fail when a page gets
+  worse. The file name stays out of the recorded scores.
 
 - **EPUB**: every `.epub` under `corpus/epub/` is rendered and (best-effort)
   diffed against `mutool`. Run `--tests "*EpubDifferentialTest*"`.
