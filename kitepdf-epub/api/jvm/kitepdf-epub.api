@@ -97,6 +97,7 @@ public final class io/github/yuroyami/kitepdf/epub/EpubPage : io/github/yuroyami
 	public final fun getWidth ()D
 	public final fun readingOrder ()Ljava/util/List;
 	public fun renderTo (Lio/github/yuroyami/kitepdf/core/render/KiteCanvas;Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;)V
+	public fun renderTo (Lio/github/yuroyami/kitepdf/core/render/KiteCanvas;Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;Lio/github/yuroyami/kitepdf/core/KiteCancellation;)V
 	public fun textContent ()Lio/github/yuroyami/kitepdf/core/KiteStructuredText;
 }
 

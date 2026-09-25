@@ -1,5 +1,7 @@
 package io.github.yuroyami.kitepdf.compose
 
+import kotlinx.coroutines.ensureActive
+import io.github.yuroyami.kitepdf.core.KiteCancellation
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.remember
@@ -71,6 +73,9 @@ public class KitePageRasterizer(
          */
         private val renderMutex = kotlinx.coroutines.sync.Mutex()
 
+        /** The cancellation of a render nobody can cancel. */
+        private val NEVER_CANCELLED = KiteCancellation { false }
+
         /**
          * True when this platform provides a usable [kotlinx.coroutines.Dispatchers.Main].
          * A headless JVM without a Swing/JavaFX main loop has none; there the
@@ -84,10 +89,9 @@ public class KitePageRasterizer(
     }
 
     /**
-     * [rasterize], off the main thread where the platform allows. One page
-     * runs to completion once started (the synchronous renderer has no
-     * cancellation points; the operation budget bounds the worst case), so
-     * cancellation takes effect between pages.
+     * [rasterize], off the main thread where the platform allows. Cancelling the
+     * calling coroutine stops a PDF page between operators and throws a
+     * CancellationException instead of returning a partial bitmap (#188).
      *
      * Pages that fall back to system-font text (EPUB body text, PDFs without
      * embedded outlines) are re-rendered on [Dispatchers.Main]: skiko's text
@@ -137,13 +141,17 @@ public class KitePageRasterizer(
         skipWidgets: Boolean = false,
         canvasDecorator: KiteCanvasDecorator? = null,
     ): ImageBitmap {
+        // A page the viewer no longer needs stops between operators when its coroutine is cancelled (#188).
+        val job = kotlinx.coroutines.currentCoroutineContext()[kotlinx.coroutines.Job]
+        val cancellation = job?.let { KiteCancellation { !it.isActive } }
         val (probe, usedSystemFont) = kotlinx.coroutines.withContext(kitepdfRasterDispatcher()) {
-            rasterizeInternal(page, widthPx, heightPx, background, hairlineWidthPx, theme, skipSystemFontText = true, skipWidgets = skipWidgets, canvasDecorator = canvasDecorator)
+            rasterizeInternal(page, widthPx, heightPx, background, hairlineWidthPx, theme, skipSystemFontText = true, skipWidgets = skipWidgets, canvasDecorator = canvasDecorator, cancellation = cancellation)
         }
+        kotlinx.coroutines.currentCoroutineContext().ensureActive()
         if (!usedSystemFont) return probe
         return onMainOrCaller {
-            rasterizeInternal(page, widthPx, heightPx, background, hairlineWidthPx, theme, skipSystemFontText = false, skipWidgets = skipWidgets, canvasDecorator = canvasDecorator).first
-        }
+            rasterizeInternal(page, widthPx, heightPx, background, hairlineWidthPx, theme, skipSystemFontText = false, skipWidgets = skipWidgets, canvasDecorator = canvasDecorator, cancellation = cancellation).first
+        }.also { kotlinx.coroutines.currentCoroutineContext().ensureActive() }
     }
 
     /**
@@ -294,6 +302,7 @@ public class KitePageRasterizer(
         skipSystemFontText: Boolean,
         skipWidgets: Boolean = false,
         canvasDecorator: KiteCanvasDecorator? = null,
+        cancellation: KiteCancellation? = null,
     ): Pair<ImageBitmap, Boolean> {
         require(widthPx > 0 && heightPx > 0) { "bitmap dimensions must be > 0" }
         require(widthPx.toLong() * heightPx.toLong() <= maxBitmapPixels) {
@@ -336,12 +345,12 @@ public class KitePageRasterizer(
             val canvas = canvasDecorator?.invoke(themed) ?: themed
             // A viewer with a live form draws the widgets in its own layer, so the bitmap must
             // leave them out or each field would be drawn twice, the stale one underneath.
-            if (skipWidgets && page is io.github.yuroyami.kitepdf.PdfPage) {
-                page.renderTo(canvas, deviceCtm) {
-                    it.subtype != io.github.yuroyami.kitepdf.PdfAnnotation.Subtype.Widget
-                }
-            } else {
-                page.renderTo(canvas, deviceCtm)
+            when {
+                skipWidgets && page is io.github.yuroyami.kitepdf.PdfPage -> page.renderTo(
+                    canvas, deviceCtm, formState = null, cancellation = cancellation ?: NEVER_CANCELLED,
+                ) { it.subtype != io.github.yuroyami.kitepdf.PdfAnnotation.Subtype.Widget }
+                cancellation != null -> page.renderTo(canvas, deviceCtm, cancellation)
+                else -> page.renderTo(canvas, deviceCtm)
             }
             usedSystemFont = base.usedSystemFontText
         }

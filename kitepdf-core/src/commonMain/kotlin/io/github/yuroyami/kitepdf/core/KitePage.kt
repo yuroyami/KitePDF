@@ -37,6 +37,14 @@ public interface KitePage {
     public fun renderTo(canvas: KiteCanvas, deviceCtm: KiteMatrix = KiteMatrix.IDENTITY)
 
     /**
+     * [renderTo] that stops early once [cancellation] reads true: the page returns with the
+     * canvas closed and what it painted so far. A viewer passes it so a page the reader
+     * scrolled past stops rendering. A format that renders its pages quickly ignores it.
+     */
+    public fun renderTo(canvas: KiteCanvas, deviceCtm: KiteMatrix, cancellation: KiteCancellation): Unit =
+        renderTo(canvas, deviceCtm)
+
+    /**
      * Structured text for extraction / search / selection, in display space
      * (see [KiteStructuredText] for the coordinate convention), or `null`
      * when the handler does not expose it. Both handlers implement this:

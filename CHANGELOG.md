@@ -397,6 +397,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   of a collection as a font of its own, chosen with `faceIndex`. Before, a
   collection or a CFF2 font fell back to a substitute face, and the writer refused
   a collection (#199).
+- A page render can be cancelled. `KitePage.renderTo` takes a `KiteCancellation`,
+  which the PDF renderer reads every 32 operators; once it reads true, the page
+  paints nothing more and returns with every clip and group closed. In the Compose
+  viewer, cancelling the coroutine of `rasterizeOffMain` now stops a page and throws
+  a `CancellationException`, so a page the reader scrolled past stops rendering
+  instead of running to the end (#188).
 
 ## [0.10.0] - 2026-09-13
 

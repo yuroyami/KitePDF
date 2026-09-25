@@ -876,8 +876,11 @@ public final class io/github/yuroyami/kitepdf/PdfPage : io/github/yuroyami/kitep
 	public final fun renderAnnotationsTo (Lio/github/yuroyami/kitepdf/core/render/KiteCanvas;Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;Lio/github/yuroyami/kitepdf/PdfFormState;Lkotlin/jvm/functions/Function1;)V
 	public static synthetic fun renderAnnotationsTo$default (Lio/github/yuroyami/kitepdf/PdfPage;Lio/github/yuroyami/kitepdf/core/render/KiteCanvas;Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;Lio/github/yuroyami/kitepdf/PdfFormState;Lkotlin/jvm/functions/Function1;ILjava/lang/Object;)V
 	public fun renderTo (Lio/github/yuroyami/kitepdf/core/render/KiteCanvas;Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;)V
+	public final fun renderTo (Lio/github/yuroyami/kitepdf/core/render/KiteCanvas;Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;Lio/github/yuroyami/kitepdf/PdfFormState;Lio/github/yuroyami/kitepdf/core/KiteCancellation;Lkotlin/jvm/functions/Function1;)V
 	public final fun renderTo (Lio/github/yuroyami/kitepdf/core/render/KiteCanvas;Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;Lio/github/yuroyami/kitepdf/PdfFormState;Lkotlin/jvm/functions/Function1;)V
+	public fun renderTo (Lio/github/yuroyami/kitepdf/core/render/KiteCanvas;Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;Lio/github/yuroyami/kitepdf/core/KiteCancellation;)V
 	public final fun renderTo (Lio/github/yuroyami/kitepdf/core/render/KiteCanvas;Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;Lkotlin/jvm/functions/Function1;)V
+	public static synthetic fun renderTo$default (Lio/github/yuroyami/kitepdf/PdfPage;Lio/github/yuroyami/kitepdf/core/render/KiteCanvas;Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;Lio/github/yuroyami/kitepdf/PdfFormState;Lio/github/yuroyami/kitepdf/core/KiteCancellation;Lkotlin/jvm/functions/Function1;ILjava/lang/Object;)V
 	public static synthetic fun renderTo$default (Lio/github/yuroyami/kitepdf/PdfPage;Lio/github/yuroyami/kitepdf/core/render/KiteCanvas;Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;Lio/github/yuroyami/kitepdf/PdfFormState;Lkotlin/jvm/functions/Function1;ILjava/lang/Object;)V
 	public fun textContent ()Lio/github/yuroyami/kitepdf/core/KiteStructuredText;
 }
@@ -1314,6 +1317,7 @@ public final class io/github/yuroyami/kitepdf/parser/XrefEntry$InUse : io/github
 public final class io/github/yuroyami/kitepdf/render/PageRenderer {
 	public fun <init> (Lio/github/yuroyami/kitepdf/core/render/KiteCanvas;Lio/github/yuroyami/kitepdf/core/parser/IndirectResolver;Lio/github/yuroyami/kitepdf/PdfFormState;)V
 	public synthetic fun <init> (Lio/github/yuroyami/kitepdf/core/render/KiteCanvas;Lio/github/yuroyami/kitepdf/core/parser/IndirectResolver;Lio/github/yuroyami/kitepdf/PdfFormState;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun <init> (Lio/github/yuroyami/kitepdf/core/render/KiteCanvas;Lio/github/yuroyami/kitepdf/core/parser/IndirectResolver;Lio/github/yuroyami/kitepdf/PdfFormState;Lio/github/yuroyami/kitepdf/core/KiteCancellation;)V
 	public final fun render (Lio/github/yuroyami/kitepdf/PdfPage;Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;Lkotlin/jvm/functions/Function1;)V
 	public static synthetic fun render$default (Lio/github/yuroyami/kitepdf/render/PageRenderer;Lio/github/yuroyami/kitepdf/PdfPage;Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;Lkotlin/jvm/functions/Function1;ILjava/lang/Object;)V
 	public final fun renderAnnotations (Lio/github/yuroyami/kitepdf/PdfPage;Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;Lkotlin/jvm/functions/Function1;)V

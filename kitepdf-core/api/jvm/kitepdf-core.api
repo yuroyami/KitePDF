@@ -68,6 +68,10 @@ public final class io/github/yuroyami/kitepdf/core/KiteBookmark$Page : io/github
 	public fun toString ()Ljava/lang/String;
 }
 
+public abstract interface class io/github/yuroyami/kitepdf/core/KiteCancellation {
+	public abstract fun isCancelled ()Z
+}
+
 public abstract interface class io/github/yuroyami/kitepdf/core/KiteDocument {
 	public fun bookmarkOf (Lio/github/yuroyami/kitepdf/core/KiteLocation;)Lio/github/yuroyami/kitepdf/core/KiteBookmark;
 	public fun getChapterCount ()I
@@ -174,11 +178,13 @@ public abstract interface class io/github/yuroyami/kitepdf/core/KitePage {
 	public abstract fun getDisplayHeight ()D
 	public abstract fun getDisplayWidth ()D
 	public abstract fun renderTo (Lio/github/yuroyami/kitepdf/core/render/KiteCanvas;Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;)V
+	public fun renderTo (Lio/github/yuroyami/kitepdf/core/render/KiteCanvas;Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;Lio/github/yuroyami/kitepdf/core/KiteCancellation;)V
 	public static synthetic fun renderTo$default (Lio/github/yuroyami/kitepdf/core/KitePage;Lio/github/yuroyami/kitepdf/core/render/KiteCanvas;Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;ILjava/lang/Object;)V
 	public fun textContent ()Lio/github/yuroyami/kitepdf/core/KiteStructuredText;
 }
 
 public final class io/github/yuroyami/kitepdf/core/KitePage$DefaultImpls {
+	public static fun renderTo (Lio/github/yuroyami/kitepdf/core/KitePage;Lio/github/yuroyami/kitepdf/core/render/KiteCanvas;Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;Lio/github/yuroyami/kitepdf/core/KiteCancellation;)V
 	public static synthetic fun renderTo$default (Lio/github/yuroyami/kitepdf/core/KitePage;Lio/github/yuroyami/kitepdf/core/render/KiteCanvas;Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;ILjava/lang/Object;)V
 	public static fun textContent (Lio/github/yuroyami/kitepdf/core/KitePage;)Lio/github/yuroyami/kitepdf/core/KiteStructuredText;
 }

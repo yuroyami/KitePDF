@@ -41,6 +41,7 @@ public final class io/github/yuroyami/kitepdf/cbz/CbzPage : io/github/yuroyami/k
 	public fun getDisplayHeight ()D
 	public fun getDisplayWidth ()D
 	public fun renderTo (Lio/github/yuroyami/kitepdf/core/render/KiteCanvas;Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;)V
+	public fun renderTo (Lio/github/yuroyami/kitepdf/core/render/KiteCanvas;Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;Lio/github/yuroyami/kitepdf/core/KiteCancellation;)V
 	public fun textContent ()Lio/github/yuroyami/kitepdf/core/KiteStructuredText;
 }
 
