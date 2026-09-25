@@ -15,6 +15,7 @@ import io.github.yuroyami.kitepdf.core.render.KitePath
 import io.github.yuroyami.kitepdf.core.render.KiteShading
 import io.github.yuroyami.kitepdf.core.render.RgbColor
 import io.github.yuroyami.kitepdf.core.render.SoftMask
+import io.github.yuroyami.kitepdf.core.render.gridFitImage
 import io.github.yuroyami.kitepdf.core.render.imageSampling
 import io.github.yuroyami.kitepdf.core.render.sampleStops
 import io.github.yuroyami.kitepdf.core.render.shrinkRgba
@@ -442,11 +443,11 @@ public class SkiaCanvas(private val canvas: SkCanvas) : KiteCanvas {
     override fun drawImage(image: KiteImageData, ctm: KiteMatrix, alpha: Double, blendMode: KiteBlendMode) {
         // One sampling policy on every canvas (#122, #123), read from the whole transform to device pixels.
         val m = canvas.localToDeviceAsMatrix33.makeConcat(pdfMatrixToSkia(ctm)).mat
-        val sampling = imageSampling(
-            image.width, image.height,
+        // The edges of an unrotated image move outwards onto whole pixels, as in MuPDF (#300).
+        val device = gridFitImage(
             KiteMatrix(m[0].toDouble(), m[3].toDouble(), m[1].toDouble(), m[4].toDouble(), m[2].toDouble(), m[5].toDouble()),
-            image.interpolate,
         )
+        val sampling = imageSampling(image.width, image.height, device, image.interpolate)
         // Skia decodes JPEG natively + JP2/JPEG-2000 where the platform shim
         // supports it. Other kinds fall back to a placeholder rectangle.
         val sk = images.getOrPut(image, sampling, { it.width.toLong() * it.height * 4 }) { imageFor(image, sampling) }
@@ -459,8 +460,7 @@ public class SkiaCanvas(private val canvas: SkCanvas) : KiteCanvas {
         // that unit square (upright) and let the concatenated CTM place it.
         canvas.save()
         openLayers++
-        val matrix = pdfMatrixToSkia(ctm)
-        canvas.concat(matrix)
+        canvas.setMatrix(pdfMatrixToSkia(device))
         // Map the bitmap onto the PDF image unit square [0,1]². The bitmap's
         // row 0 is its top edge (v=1), last row is v=0. So translate up by 1
         // then flip Y (negative Y scale) to land the image upright inside the

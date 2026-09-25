@@ -16,6 +16,7 @@ import io.github.yuroyami.kitepdf.core.render.KitePath
 import io.github.yuroyami.kitepdf.core.render.KiteShading
 import io.github.yuroyami.kitepdf.core.render.RgbColor
 import io.github.yuroyami.kitepdf.core.render.SoftMask
+import io.github.yuroyami.kitepdf.core.render.gridFitImage
 import io.github.yuroyami.kitepdf.core.render.imageSampling
 import io.github.yuroyami.kitepdf.core.render.sampleStops
 import io.github.yuroyami.kitepdf.core.render.shrinkRgba
@@ -330,8 +331,10 @@ public class Canvas2dCanvas(ctx: CanvasRenderingContext2D) : KiteCanvas {
         // JPEG / JPX / JBIG2 decode produces. Encoded kinds core could not
         // decode keep the placeholder: browser decoding is async, and a
         // preload API is still to come.
-        // One sampling policy on every canvas (#122, #123). setTransform below makes the ctm the device transform.
-        val sampling = imageSampling(image.width, image.height, ctm, image.interpolate)
+        // One sampling policy on every canvas (#122, #123). setTransform below makes the ctm the device
+        // transform, and the edges of an unrotated image move outwards onto whole pixels, as in MuPDF (#300).
+        val device = gridFitImage(ctm)
+        val sampling = imageSampling(image.width, image.height, device, image.interpolate)
         val off = offscreens.getOrPut(image, sampling, { it.width.toLong() * it.height * 4 }) { offscreenFor(image, sampling) }
         if (off == null) {
             drawPlaceholder(ctm, alpha)
@@ -339,7 +342,7 @@ public class Canvas2dCanvas(ctx: CanvasRenderingContext2D) : KiteCanvas {
         }
         ctx.save()
         try {
-            setDeviceTransform(ctm)
+            setDeviceTransform(device)
             ctx.globalAlpha = alpha.coerceIn(0.0, 1.0)
             ctx.globalCompositeOperation = blendMode.toCanvas()
             ctx.imageSmoothingEnabled = sampling.smooth

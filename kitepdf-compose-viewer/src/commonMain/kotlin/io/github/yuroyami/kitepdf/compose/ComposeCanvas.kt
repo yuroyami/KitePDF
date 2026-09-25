@@ -43,6 +43,7 @@ import io.github.yuroyami.kitepdf.core.render.KiteShading
 import io.github.yuroyami.kitepdf.core.KiteRectangle
 import io.github.yuroyami.kitepdf.core.render.RgbColor
 import io.github.yuroyami.kitepdf.core.render.SoftMask
+import io.github.yuroyami.kitepdf.core.render.gridFitImage
 import io.github.yuroyami.kitepdf.core.render.imageSampling
 import io.github.yuroyami.kitepdf.core.render.sampleStops
 import io.github.yuroyami.kitepdf.core.render.shrinkArgb
@@ -363,13 +364,15 @@ public class ComposeCanvas(
     }
 
     override fun drawImage(image: KiteImageData, ctm: KiteMatrix, alpha: Double, blendMode: KiteBlendMode) {
-        // One sampling policy on every canvas (#122, #123). The ctm maps to this scope's pixels.
-        val sampling = imageSampling(image.width, image.height, ctm, image.interpolate)
+        // One sampling policy on every canvas (#122, #123). The ctm maps to this scope's pixels,
+        // and the edges of an unrotated image move outwards onto whole pixels, as in MuPDF (#300).
+        val device = gridFitImage(ctm)
+        val sampling = imageSampling(image.width, image.height, device, image.interpolate)
         withActiveClips {
             val bitmap = bitmaps.getOrPut(image, sampling, { it.width.toLong() * it.height * 4 }) { bitmapFor(image, sampling) }
             if (bitmap != null) {
                 drawBitmap(
-                    bitmap, ctm, alpha.toFloat().coerceIn(0f, 1f),
+                    bitmap, device, alpha.toFloat().coerceIn(0f, 1f),
                     if (sampling.smooth) FilterQuality.Low else FilterQuality.None, blendMode.toCompose(),
                 )
             } else {

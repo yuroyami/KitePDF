@@ -55,13 +55,6 @@ class PdfiumParityTest {
             // DeviceCMYK converts to other colours than MuPDF and PDFium.
             "syn-cmyk p0" to 299,
             "gen-cmyk-swatches p0" to 299,
-            // The edges of an unrotated image cover other pixels than in MuPDF.
-            "fixture-image-enlarged-hard-edges p0" to 300,
-            "fixture-image-interpolate p0" to 300,
-            "fixture-image-deep-mask-no-stencil-flag p0" to 300,
-            // A scaled image resamples to other pixels where MuPDF and PDFium agree.
-            "testPDF_JBIG2 p0" to 301,
-            "fixture-image-thin-lines-shrunk p0" to 301,
             // A JPEG 2000 image decodes a fraction of a level off from OpenJPEG.
             "testPDF_JPX p0" to 302,
         )

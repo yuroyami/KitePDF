@@ -16,6 +16,7 @@ import io.github.yuroyami.kitepdf.core.render.paintComplexShading
 import io.github.yuroyami.kitepdf.core.render.KiteShading
 import io.github.yuroyami.kitepdf.core.render.RgbColor
 import io.github.yuroyami.kitepdf.core.render.SoftMask
+import io.github.yuroyami.kitepdf.core.render.gridFitImage
 import io.github.yuroyami.kitepdf.core.render.imageSampling
 import io.github.yuroyami.kitepdf.core.render.sampleStops
 import io.github.yuroyami.kitepdf.core.render.shrinkRgba
@@ -430,7 +431,10 @@ public class CoreGraphicsCanvas(private val ctx: CGContextRef) : KiteCanvas {
     override fun drawImage(image: KiteImageData, ctm: KiteMatrix, alpha: Double, blendMode: KiteBlendMode) {
         // One sampling policy on every canvas (#122, #123), read from the whole transform to device pixels.
         val userToDevice = CGContextGetUserSpaceToDeviceSpaceTransform(ctx).useContents { KiteMatrix(a, b, c, d, tx, ty) }
-        val sampling = imageSampling(image.width, image.height, userToDevice.concat(ctm), image.interpolate)
+        // The edges of an unrotated image move outwards onto whole pixels, as in MuPDF (#300).
+        val device = gridFitImage(userToDevice.concat(ctm))
+        val local = userToDevice.invert()?.concat(device) ?: ctm
+        val sampling = imageSampling(image.width, image.height, device, image.interpolate)
         val cgImage = decodeImage(image, sampling)
         if (cgImage == null) {
             drawPlaceholder(ctm)
@@ -448,7 +452,7 @@ public class CoreGraphicsCanvas(private val ctx: CGContextRef) : KiteCanvas {
                 // of the image at v = 1 (ISO 32000-1, 8.9.4). CGContextDrawImage draws
                 // the first row at the top of its rectangle, so no flip is needed (#289).
                 CGContextSetBlendMode(ctx, blendMode.toCG())
-                CGContextConcatCTM(ctx, ctm.toCGAffine())
+                CGContextConcatCTM(ctx, local.toCGAffine())
                 val quality = when {
                     // A RAW image is averaged down in decodeImage. CoreGraphics averages an encoded one itself.
                     sampling.shrinks && image.kind != KiteImageData.Kind.RAW -> kCGInterpolationHigh
