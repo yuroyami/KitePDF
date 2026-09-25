@@ -65,9 +65,9 @@ class CompositeFontTest {
         val gbk = PredefinedCMaps.reader("GBK-EUC-H")
         assertTrue(!gbk.degraded, "bundled tables are authoritative")
         assertTrue(gbk !== IdentityCodeUnitReader && gbk !== SingleByteCodeUnitReader)
-        // The Unicode-keyed CMaps stay synthesized (tables not bundled).
-        val utf16 = PredefinedCMaps.reader("UniJIS-UTF16-H")
-        assertTrue(utf16.degraded)
+        // The Unicode-keyed CMaps carry their tables too (#198); a name outside the spec's list does not.
+        assertTrue(!PredefinedCMaps.reader("UniJIS-UTF16-H").degraded)
+        assertTrue(PredefinedCMaps.reader("UniJIS2004-UTF16-H").degraded)
     }
 
     @Test

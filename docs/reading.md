@@ -125,7 +125,7 @@ val text = page.extractText()
 This walks the content stream for text-showing operators (`Tj`, `TJ`, `'`, `"`), decodes strings using PDFDocEncoding (or UTF-16BE if a BOM is present), and joins them with line breaks heuristically inserted on text-positioning commands.
 
 !!! note
-    Extraction decodes each show string through the font that draws it, resolving `/Encoding` (with `/Differences`) and the `/ToUnicode` CMap, including composite Type0/CID fonts and the predefined CJK CMaps. Text without any Unicode mapping (some symbolic subsets) falls back to a best-effort byte interpretation.
+    Extraction decodes each show string through the font that draws it, resolving `/Encoding` (with `/Differences`) and the `/ToUnicode` CMap, including composite Type0/CID fonts and the predefined CJK CMaps. A CJK font without `/ToUnicode` finds its text through its CMap or its Adobe character collection, as ISO 32000-1, 9.10.2 describes. Text without any Unicode mapping (some symbolic subsets) falls back to a best-effort byte interpretation.
 
 ### Structured Text
 

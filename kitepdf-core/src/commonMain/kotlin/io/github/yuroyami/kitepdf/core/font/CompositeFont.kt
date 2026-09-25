@@ -18,10 +18,10 @@ import io.github.yuroyami.kitepdf.core.render.KitePath
  * The flow:
  *   bytes ── /Encoding CMap ──▶ CID ── /CIDToGIDMap ──▶ GID ──▶ outline
  *
- * For text extraction the parent Type 0's `/ToUnicode` (when present)
- * handles bytes → unicode directly; otherwise we fall back to the CIDFont's
- * `/CIDSystemInfo` registry which we currently don't have full coverage of,
- * so unicode extraction may degrade to a placeholder character.
+ * For text the parent Type 0's `/ToUnicode` (when present) handles bytes →
+ * unicode directly. Otherwise [textOf] follows ISO 32000-1, 9.10.2: the code of
+ * a Unicode-keyed CMap is its own text, and a CID of an Adobe CJK collection
+ * finds its text through [CidUnicode].
  *
  * /W widths use a compact two-form encoding:
  *   `[ cid [ w1 w2 … wn ] ]`            (n consecutive CIDs)
@@ -55,6 +55,10 @@ internal class CompositeFont(
     val vertical: Boolean = false,
     /** CID-keyed vertical metrics from /W2 + /DW2, read only for a [vertical] font. */
     private val verticalWidths: CidVerticalTable = CidVerticalTable.DEFAULT,
+    /** True when /Encoding is a predefined CMap whose codes are UTF-16, such as UniJIS-UCS2-H. */
+    private val unicodeKeyed: Boolean = false,
+    /** The Adobe collection the CIDs belong to, such as Japan1, or null for another collection. */
+    private val ordering: String? = null,
 ) {
 
     /**
@@ -97,11 +101,31 @@ internal class CompositeFont(
     fun widthOf(cid: Int): Double = widths.widthOf(cid)
     fun verticalMetricsOf(cid: Int): PdfVerticalMetrics = verticalWidths.metrics(cid, widthOf(cid))
 
-    /** Decode the full byte run to unicode via ToUnicode CMap (preferred) or codepoint guess. */
+    /** Decode the full byte run to unicode via ToUnicode CMap (preferred) or [textOf]. */
     fun decode(bytes: ByteArray): String {
         toUnicode?.let { return it.decodeAll(bytes) }
-        // No ToUnicode. Emit one replacement character per code unit.
-        return buildString { codeUnits(bytes).forEach { append('�') } }
+        // A code without any text shows one replacement character.
+        return buildString {
+            for (u in codeUnits(bytes)) append(textOf(bytes, u.byteOffset, u.byteCount, u.cid).ifEmpty { "\uFFFD" })
+        }
+    }
+
+    /**
+     * The Unicode text of the code of [count] bytes at [offset], whose CID is [cid]. ISO
+     * 32000-1, 9.10.2: the ToUnicode map first. Without one, the code of a Unicode-keyed
+     * CMap is its own UTF-16 text, and a CID of an Adobe CJK collection finds its text in
+     * that collection's UCS2 CMap (#309). Empty when none of them applies.
+     */
+    fun textOf(bytes: ByteArray, offset: Int, count: Int, cid: Int): String {
+        toUnicode?.let { return it.decodeAll(bytes.copyOfRange(offset, offset + count)) }
+        if (unicodeKeyed) {
+            return CharArray(count / 2) { i ->
+                (((bytes[offset + 2 * i].toInt() and 0xFF) shl 8) or (bytes[offset + 2 * i + 1].toInt() and 0xFF)).toChar()
+            }.concatToString()
+        }
+        // CID 0 is .notdef, which draws nothing and has no text.
+        if (cid == 0) return ""
+        return ordering?.let { CidUnicode.text(it, cid) } ?: ""
     }
 
     data class CidUnit(val cid: Int, val byteOffset: Int, val byteCount: Int)
@@ -150,11 +174,26 @@ internal class CompositeFont(
             val baseFont = parentDict.getName("BaseFont") ?: descendant.getName("BaseFont") ?: "Unknown"
 
             val verticalWidths = if (vertical) CidVerticalTable.from(descendant, refs) else CidVerticalTable.DEFAULT
+            // ISO 32000-1, 9.10.2 takes the collection from the CMap, and the font's own
+            // CIDSystemInfo names it for an Identity CMap or an embedded one.
+            val ordering = PredefinedCMaps.ordering(encodingName) ?: adobeOrdering(descendant, refs)
             return CompositeFont(
                 baseFont, descendantSubtype, ttf, cff, codeReader, encodingCMap, cidToGid, widths, toUnicode,
                 vertical, verticalWidths,
+                unicodeKeyed = encodingCMap == null && PredefinedCMaps.isUnicodeKeyed(encodingName),
+                ordering = ordering,
             )
         }
+
+        /** The ordering of the font's CIDSystemInfo when it names one of the four Adobe CJK collections, else null. */
+        private fun adobeOrdering(descendant: PdfDictionary, refs: IndirectResolver): String? {
+            val info = descendant["CIDSystemInfo"]?.resolve(refs) as? PdfDictionary ?: return null
+            val registry = (info["Registry"]?.resolve(refs) as? io.github.yuroyami.kitepdf.core.parser.PdfString)?.asText()
+            val ordering = (info["Ordering"]?.resolve(refs) as? io.github.yuroyami.kitepdf.core.parser.PdfString)?.asText()
+            return ordering.takeIf { registry == "Adobe" && it in ADOBE_CJK_ORDERINGS }
+        }
+
+        private val ADOBE_CJK_ORDERINGS = setOf("Japan1", "GB1", "CNS1", "Korea1")
 
         private fun loadTtf(descriptor: PdfDictionary, refs: IndirectResolver): TrueTypeFont? {
             val stream = (descriptor["FontFile2"]?.resolve(refs) as? PdfStream) ?: return null

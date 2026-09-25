@@ -359,6 +359,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   against a transparent backdrop. Android and CoreGraphics cannot start a layer
   from the page, so there the group keeps the old result. #308 lists this and two
   rarer cases that are still approximate (#125).
+- Every predefined CJK CMap of ISO 32000-1, Table 118 now maps codes to the right
+  CIDs. The Unicode-keyed CMaps, such as UniJIS-UCS2-H and UniGB-UTF16-H, fell back
+  to CID = code, so an embedded font drew the wrong glyphs. All CMap tables now use
+  a compact encoding: with the new ones they take 212 KB, against 157 KB before
+  (#198).
+- Text in a CJK font that is not embedded and has no ToUnicode map draws and
+  extracts. The text comes from the code of a Unicode-keyed CMap, or from the CID
+  through Adobe's CID-to-Unicode table of the font's collection, as ISO 32000-1,
+  9.10.2 describes. Before, such text drew nothing and extracted as U+FFFD. The
+  four tables add 148 KB (#309).
 
 ## [0.10.0] - 2026-09-13
 
