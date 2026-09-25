@@ -63,18 +63,41 @@ object GroupFixtures {
         isolation("group-isolated-multiply", isolated = true, budget = 0.005),
         // The same in a non-isolated group: the multiply sees the green page, so the square is green.
         isolation("group-non-isolated-multiply", isolated = false, budget = 0.005),
+        // The non-isolated group painted at alpha 0.6: the square is still green, where an isolated
+        // group would show yellow at 0.6 over green.
+        isolation("group-non-isolated-multiply-alpha", isolated = false, budget = 0.005, alpha = 0.6),
+        // A red and a blue square at half alpha in a knockout group, over a light yellow page: where
+        // they overlap, the blue square replaces the red one (ISO 32000-1, 11.4.6, #125).
+        knockout("group-knockout", isolated = true, budget = 0.005),
+        // The same in a non-isolated knockout group: nothing inside blends, so the result is the same.
+        knockout("group-knockout-non-isolated", isolated = false, budget = 0.005),
     )
 
-    /** A green page, then a group, [isolated] or not, whose yellow square blends in Multiply. */
-    private fun isolation(name: String, isolated: Boolean, budget: Double): OracleFixture = oracleFixture(
+    /** A green page, then a group, [isolated] or not and painted at [alpha], whose yellow square blends in Multiply. */
+    private fun isolation(name: String, isolated: Boolean, budget: Double, alpha: Double = 1.0): OracleFixture = oracleFixture(
         name,
-        "0 1 0 rg 0 0 200 200 re f /Fm1 Do",
-        "/XObject << /Fm1 5 0 R >>",
+        if (alpha < 1.0) "0 1 0 rg 0 0 200 200 re f /GS1 gs /Fm1 Do" else "0 1 0 rg 0 0 200 200 re f /Fm1 Do",
+        if (alpha < 1.0) "/XObject << /Fm1 5 0 R >> /ExtGState << /GS1 << /ca $alpha >> >>" else "/XObject << /Fm1 5 0 R >>",
         listOf(
             pdfStream(
                 "/GM gs 1 1 0 rg 40 40 120 120 re f".toByteArray(),
                 "/Type /XObject /Subtype /Form /BBox [0 0 200 200] /Group << /S /Transparency /I $isolated >> " +
                     "/Resources << /ExtGState << /GM << /BM /Multiply >> >> >>",
+            ),
+        ),
+        budget,
+    )
+
+    /** A light yellow page, then a knockout group, [isolated] or not, of two overlapping squares at half alpha. */
+    private fun knockout(name: String, isolated: Boolean, budget: Double): OracleFixture = oracleFixture(
+        name,
+        "1 1 0.6 rg 0 0 200 200 re f /Fm1 Do",
+        "/XObject << /Fm1 5 0 R >>",
+        listOf(
+            pdfStream(
+                "/GA gs 1 0 0 rg 20 20 100 100 re f 0 0 1 rg 80 80 100 100 re f".toByteArray(),
+                "/Type /XObject /Subtype /Form /BBox [0 0 200 200] /Group << /S /Transparency /I $isolated /K true >> " +
+                    "/Resources << /ExtGState << /GA << /ca 0.5 >> >> >>",
             ),
         ),
         budget,

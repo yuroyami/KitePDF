@@ -163,7 +163,8 @@ public class AwtCanvas(private var g: Graphics2D) : KiteCanvas {
         val base = g.transform
         val onPixels = (base.type and AffineTransform.TYPE_TRANSLATION.inv()) == 0 &&
             base.translateX == floor(base.translateX) && base.translateY == floor(base.translateY)
-        val cache = onPixels && blendMode == KiteBlendMode.Normal
+        // A knockout paint replaces what lies under it, and a cached glyph image would replace its empty corners too.
+        val cache = onPixels && blendMode == KiteBlendMode.Normal && !knockingOut
         withComposite(blendMode, alpha) {
             val awtColor = color.toAwt()
             g.color = awtColor
@@ -697,7 +698,8 @@ public class AwtCanvas(private var g: Graphics2D) : KiteCanvas {
             g.transform = transform
             return
         }
-        val soft = beginSoftClip(device)
+        // A soft clip would composite each knockout paint over the ones before it, so a knockout group clips hard.
+        val soft = if (knockingOut) null else beginSoftClip(device)
         clipStack.addLast(ClipEntry(saved, soft))
         if (soft == null) {
             g.clip(awt) // Too large a layer, or nothing inside: a hard clip.
@@ -868,10 +870,10 @@ public class AwtCanvas(private var g: Graphics2D) : KiteCanvas {
     }
 
     /**
-     * An open transparency group. A group with a constant alpha below 1 or a blend
-     * mode other than Normal paints into its own [layer], which composites onto
-     * [parent] once when the group ends. Otherwise [layer] is null and the group
-     * paints straight onto [parent], which gives the same pixels.
+     * An open transparency group. A group that needs its own [layer] paints into it,
+     * and the layer composites onto [parent] once when the group ends. Otherwise
+     * [layer] is null and the group paints straight onto [parent], which gives the
+     * same pixels. In a [knockout] group each paint replaces what lies under it.
      */
     private class GroupFrame(
         val parent: Graphics2D,
@@ -882,6 +884,7 @@ public class AwtCanvas(private var g: Graphics2D) : KiteCanvas {
         val blendMode: KiteBlendMode,
         val savedClips: ArrayDeque<ClipEntry>,
         val savedBlends: LayerBlends?,
+        val knockout: Boolean = false,
     ) {
         /** Clips from [savedClips] popped while the group was open, which end after it. */
         var deferredPops = 0
@@ -889,9 +892,17 @@ public class AwtCanvas(private var g: Graphics2D) : KiteCanvas {
 
     /**
      * ISO 32000-1, 11.4.5: a group's constant alpha and blend mode apply once, when the
-     * group composites onto its backdrop. So a group that has them paints into a
-     * transparent layer first (#77). The layer is isolated, and knockout is not
-     * honoured (#125).
+     * group composites onto its backdrop. So a group that has them paints into a layer
+     * first (#77). An isolated group's layer starts transparent. A non-isolated group's
+     * layer starts as a copy of the backdrop, so a paint inside blends with the page,
+     * and at the end the layer mixes with the page by [alpha]. That is exact over an
+     * opaque backdrop. A non-isolated group with a blend mode of its own starts
+     * transparent, which is exact when no paint inside blends (#125).
+     *
+     * In a knockout group (11.4.6) each paint replaces what lies under it inside its
+     * shape, so each paint composites against the group's transparent backdrop. That is
+     * the result of the spec unless a paint inside blends. A group nested in a knockout
+     * group gets a layer, so its own paints do not knock each other out.
      */
     override fun beginTransparencyGroup(
         bbox: KiteRectangle, ctm: KiteMatrix,
@@ -900,10 +911,11 @@ public class AwtCanvas(private var g: Graphics2D) : KiteCanvas {
     ) {
         val parent = g
         val a = alpha.toFloat().coerceIn(0f, 1f)
+        val nested = knockingOut
         fun direct() = groupStack.addLast(GroupFrame(parent, null, java.awt.Rectangle(), 1.0, a, blendMode, ArrayDeque(), layerBlends))
         // An isolated group composites its paints onto a transparent backdrop, so it needs a layer
         // even at full alpha in Normal (ISO 32000-1, 11.4.5, #125).
-        if (a >= 1f && blendMode == KiteBlendMode.Normal && !isolated) return direct()
+        if (a >= 1f && blendMode == KiteBlendMode.Normal && !isolated && !knockout && !nested) return direct()
         val box = bbox.normalized()
         val area = AffineTransform(parent.transform).apply {
             concatenate(AffineTransform(ctm.a, ctm.b, ctm.c, ctm.d, ctm.e, ctm.f))
@@ -924,6 +936,10 @@ public class AwtCanvas(private var g: Graphics2D) : KiteCanvas {
             maxOf(1, kotlin.math.ceil(bounds.height * scale).toInt()),
             BufferedImage.TYPE_INT_ARGB,
         )
+        // A non-isolated group starts from the page under it, so its paints blend with the page (#125).
+        if (!isolated && !knockout && !nested && blendMode == KiteBlendMode.Normal && scale == 1.0 && !bounds.isEmpty) {
+            transferMaskBackdrop(parent, bounds, layer, null)
+        }
         val layerGraphics = layer.createGraphics()
         layerGraphics.setRenderingHints(parent.renderingHints)
         if (bounds.isEmpty) layerGraphics.clipRect(0, 0, 0, 0)
@@ -931,7 +947,7 @@ public class AwtCanvas(private var g: Graphics2D) : KiteCanvas {
         layerGraphics.translate(-bounds.x.toDouble(), -bounds.y.toDouble())
         layerGraphics.transform(parent.transform)
         parent.clip?.let(layerGraphics::clip)
-        groupStack.addLast(GroupFrame(parent, layer, bounds, scale, a, blendMode, ArrayDeque(clipStack), layerBlends))
+        groupStack.addLast(GroupFrame(parent, layer, bounds, scale, a, blendMode, ArrayDeque(clipStack), layerBlends, knockout))
         g = layerGraphics
         clipStack.clear()
         // The paints inside composite onto the layer, not onto a soft-masked layer outside.
@@ -1397,12 +1413,22 @@ public class AwtCanvas(private var g: Graphics2D) : KiteCanvas {
 
     /* ─── Helpers ─────────────────────────────────────────────────────────── */
 
+    /**
+     * True while the paints go straight to the layer of a knockout group. Against the
+     * group's transparent backdrop a paint in any blend mode is its own colour, so it
+     * replaces what lies under it, and the anti-aliased edge mixes by coverage (#125).
+     */
+    private val knockingOut: Boolean get() = groupStack.lastOrNull()?.knockout == true
+
     private inline fun withComposite(blendMode: KiteBlendMode, alpha: Double, block: () -> Unit) {
         layerBlends?.record(blendMode)
         val saved = g.composite
         val a = alpha.toFloat().coerceIn(0f, 1f)
-        g.composite = if (blendMode == KiteBlendMode.Normal) AlphaComposite.SrcOver.derive(a)
-            else PdfBlendComposite(blendMode, a)
+        g.composite = when {
+            knockingOut -> AlphaComposite.Src.derive(a)
+            blendMode == KiteBlendMode.Normal -> AlphaComposite.SrcOver.derive(a)
+            else -> PdfBlendComposite(blendMode, a)
+        }
         try { block() } finally { g.composite = saved }
     }
 

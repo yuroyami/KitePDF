@@ -916,10 +916,14 @@ public class PageRenderer(
         val childProperties = res.properties
         val groupDict = formStream.dict.getDict("Group", resolver)
         val isTransparencyGroup = groupDict?.getName("S") == "Transparency"
-        // Isolation only shows when a paint inside blends in a mode other than Normal, so a
-        // canvas need not open a layer for an isolated group of Normal paints (#125).
-        val isolated = ((groupDict?.get("I") as? io.github.yuroyami.kitepdf.core.parser.PdfBoolean)?.value ?: false) &&
-            formBlends(res.extGStates, res.xobjects)
+        // Isolation only shows when a paint inside blends in a mode other than Normal (#125).
+        // Without such a paint, a group that needs a layer anyway takes the cheaper transparent
+        // one, and a group at full alpha in Normal paints straight onto the page.
+        val isolated = if (formBlends(res.extGStates, res.xobjects)) {
+            (groupDict?.get("I") as? io.github.yuroyami.kitepdf.core.parser.PdfBoolean)?.value ?: false
+        } else {
+            parentState.current.fillAlpha < 1.0 || parentState.current.blendMode != KiteBlendMode.Normal
+        }
         val knockout = (groupDict?.get("K") as? io.github.yuroyami.kitepdf.core.parser.PdfBoolean)?.value ?: false
 
         parentState.save()

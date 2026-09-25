@@ -58,6 +58,7 @@ public class AndroidNativeCanvas(private val canvas: AndroidCanvas) : KiteCanvas
 
     override fun beginPage(widthPt: Double, heightPt: Double, deviceCtm: KiteMatrix) {
         openLayers = 0
+        groups.clear()
     }
 
     override fun endPage() {
@@ -66,6 +67,7 @@ public class AndroidNativeCanvas(private val canvas: AndroidCanvas) : KiteCanvas
             canvas.restore()
             openLayers--
         }
+        groups.clear()
     }
 
     override fun fillPath(
@@ -79,7 +81,7 @@ public class AndroidNativeCanvas(private val canvas: AndroidCanvas) : KiteCanvas
             isAntiAlias = true
             style = Paint.Style.FILL
             this.color = color.toArgb(alpha)
-            applyBlendMode(blendMode)
+            applyPaintBlend(blendMode)
         }
         canvas.drawPath(p, paint)
     }
@@ -105,7 +107,7 @@ public class AndroidNativeCanvas(private val canvas: AndroidCanvas) : KiteCanvas
                 val intervals = scaledDashIntervals(dashArray, pen.dashScale)
                 pathEffect = DashPathEffect(intervals, (dashPhase * pen.dashScale).toFloat())
             }
-            applyBlendMode(blendMode)
+            applyPaintBlend(blendMode)
         }
         val m = pen.strokeMatrix
         if (m == null) {
@@ -145,7 +147,7 @@ public class AndroidNativeCanvas(private val canvas: AndroidCanvas) : KiteCanvas
             isAntiAlias = true
             style = Paint.Style.FILL
             this.color = color.toArgb(alpha)
-            applyBlendMode(blendMode)
+            applyPaintBlend(blendMode)
         }
         var drewAny = false
         var penX = 0.0
@@ -207,7 +209,7 @@ public class AndroidNativeCanvas(private val canvas: AndroidCanvas) : KiteCanvas
                 this.color = color.toArgb(alpha)
                 typeface = systemFontFor(fontSpec)
                 textSize = renderedSize.toFloat()
-                applyBlendMode(blendMode)
+                applyPaintBlend(blendMode)
             }
             // Position each glyph by the PDF's OWN advance widths (1/1000 em),
             // not the substitute font's natural metrics, otherwise spacing
@@ -333,7 +335,7 @@ public class AndroidNativeCanvas(private val canvas: AndroidCanvas) : KiteCanvas
             isAntiAlias = true
             style = Paint.Style.FILL
             this.shader = shader
-            applyBlendMode(blendMode)
+            applyPaintBlend(blendMode)
         }
         if (clipPath != null) {
             val cp = toAndroidPath(clipPath, ctm).apply { fillType = Path.FillType.WINDING }
@@ -402,7 +404,7 @@ public class AndroidNativeCanvas(private val canvas: AndroidCanvas) : KiteCanvas
             this.alpha = (alpha.coerceIn(0.0, 1.0) * 255).toInt()
             // Set both ways: the default of this flag differs between Android versions.
             isFilterBitmap = sampling.smooth
-            applyBlendMode(blendMode)
+            applyPaintBlend(blendMode)
         }
         canvas.drawBitmap(bm, 0f, 0f, paint)
         canvas.restore()
@@ -466,15 +468,21 @@ public class AndroidNativeCanvas(private val canvas: AndroidCanvas) : KiteCanvas
         canvas.restore()
     }
 
+    /**
+     * A non-isolated group at full alpha in Normal paints straight onto its backdrop, so its
+     * blend modes see what lies under it (ISO 32000-1, 11.4.5, #125). Any other group paints
+     * into a layer. An Android layer always starts transparent, which is exact for a
+     * non-isolated group only when no paint inside blends. In a knockout group (11.4.6)
+     * each paint replaces what lies under it inside its shape.
+     */
     override fun beginTransparencyGroup(
         bbox: KiteRectangle, ctm: KiteMatrix,
         isolated: Boolean, knockout: Boolean,
         alpha: Double, blendMode: KiteBlendMode,
     ) {
-        // A non-isolated group at full alpha in Normal paints straight onto its backdrop, so its blend
-        // modes see what lies under it. A layer would isolate it (ISO 32000-1, 11.4.5, #125).
-        val layered = isolated || alpha < 1.0 || blendMode != KiteBlendMode.Normal
-        groupLayers.addLast(layered)
+        // A group nested in a knockout group gets a layer, so its own paints do not knock each other out.
+        val layered = isolated || knockout || knockingOut || alpha < 1.0 || blendMode != KiteBlendMode.Normal
+        groups.addLast(Group(layered, knockout))
         if (!layered) return
         val paint = Paint().apply {
             this.alpha = (alpha.coerceIn(0.0, 1.0) * 255).toInt()
@@ -484,11 +492,24 @@ public class AndroidNativeCanvas(private val canvas: AndroidCanvas) : KiteCanvas
         openLayers++
     }
 
-    /** For each open group, whether it opened a layer. */
-    private val groupLayers = ArrayDeque<Boolean>()
+    /** An open group: whether it opened a layer, and whether its paints knock out. */
+    private class Group(val layered: Boolean, val knockout: Boolean)
+
+    private val groups = ArrayDeque<Group>()
+
+    /**
+     * True while the paints go straight to the layer of a knockout group. Against the
+     * group's transparent backdrop a paint in any blend mode is its own colour, so it
+     * replaces what lies under it, and the anti-aliased edge mixes by coverage (#125).
+     */
+    private val knockingOut: Boolean get() = groups.lastOrNull()?.knockout == true
+
+    private fun Paint.applyPaintBlend(mode: KiteBlendMode) {
+        if (knockingOut) blendMode = AndroidBlendMode.SRC else applyBlendMode(mode)
+    }
 
     override fun endTransparencyGroup() {
-        if (groupLayers.removeLastOrNull() != true) return
+        if (groups.removeLastOrNull()?.layered != true) return
         if (openLayers > 0) {
             canvas.restore()
             openLayers--
@@ -513,6 +534,8 @@ public class AndroidNativeCanvas(private val canvas: AndroidCanvas) : KiteCanvas
     ) {
         canvas.saveLayer(null, Paint())
         openLayers++
+        // The content and the mask composite as usual, also inside a knockout group.
+        groups.addLast(Group(layered = false, knockout = false))
         try {
             render()
             val luminosity = kind == SoftMask.Kind.Luminosity
@@ -533,6 +556,7 @@ public class AndroidNativeCanvas(private val canvas: AndroidCanvas) : KiteCanvas
                 openLayers--
             }
         } finally {
+            groups.removeLastOrNull()
             canvas.restore()
             openLayers--
         }

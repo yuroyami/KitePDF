@@ -92,9 +92,8 @@ public class Canvas2dCanvas(ctx: CanvasRenderingContext2D) : KiteCanvas {
         ctx.save()
         try {
             ctx.fillStyle = color.toCssRgba(alpha)
-            ctx.globalCompositeOperation = blendMode.toCanvas()
             // Path2D + fill(path, fillRule): fillRule is "evenodd" or "nonzero"
-            ctx.asDynamic().fill(p, if (evenOdd) "evenodd" else "nonzero")
+            paint(blendMode) { ctx.asDynamic().fill(p, if (evenOdd) "evenodd" else "nonzero") }
         } finally {
             ctx.restore()
         }
@@ -124,8 +123,7 @@ public class Canvas2dCanvas(ctx: CanvasRenderingContext2D) : KiteCanvas {
                 ctx.setLineDash(dashArray.map { it * pen.dashScale }.toTypedArray())
                 ctx.lineDashOffset = dashPhase * pen.dashScale
             }
-            ctx.globalCompositeOperation = blendMode.toCanvas()
-            ctx.stroke(p)
+            paint(blendMode) { ctx.stroke(p) }
         } finally {
             ctx.restore()
         }
@@ -154,7 +152,6 @@ public class Canvas2dCanvas(ctx: CanvasRenderingContext2D) : KiteCanvas {
         ctx.save()
         try {
             ctx.fillStyle = color.toCssRgba(alpha)
-            ctx.globalCompositeOperation = blendMode.toCanvas()
             var penX = 0.0
             for (glyph in glyphs) {
                 val outline = glyph.outline
@@ -163,7 +160,7 @@ public class Canvas2dCanvas(ctx: CanvasRenderingContext2D) : KiteCanvas {
                         .concat(KiteMatrix.translation(penX + glyph.xOffset * unitScale, glyph.yOffset * unitScale))
                         .concat(KiteMatrix(unitScale, 0.0, 0.0, unitScale, 0.0, 0.0))
                     val p = toPath2D(outline, glyphMatrix)
-                    ctx.asDynamic().fill(p, "nonzero")
+                    paint(blendMode) { ctx.asDynamic().fill(p, "nonzero") }
                     drewAny = true
                 }
                 penX += glyph.advanceWidth * advanceScale + glyph.advanceAdjust
@@ -212,7 +209,6 @@ public class Canvas2dCanvas(ctx: CanvasRenderingContext2D) : KiteCanvas {
             if (rotation != 0.0) ctx.rotate(rotation)
             if (sx != sy) ctx.scale(sx / sy, 1.0)
             ctx.fillStyle = color.toCssRgba(alpha)
-            ctx.globalCompositeOperation = blendMode.toCanvas()
             ctx.font = systemFontFor(fontSpec, renderedSize)
             // Position each glyph by the PDF's OWN advance widths (1/1000 em),
             // not the substitute font's natural metrics, otherwise spacing
@@ -221,7 +217,7 @@ public class Canvas2dCanvas(ctx: CanvasRenderingContext2D) : KiteCanvas {
             val advScale = renderedSize / 1000.0
             for (glyph in glyphs) {
                 val t = glyph.text
-                if (t.isNotEmpty() && t != " ") ctx.fillText(t, penX, 0.0)
+                if (t.isNotEmpty() && t != " ") paint(blendMode) { ctx.fillText(t, penX, 0.0) }
                 // advScale already carries sy (renderedSize), so the text-space
                 // spacing adjust needs the same factor to stay in step.
                 penX += glyph.advanceWidth * advScale + glyph.advanceAdjust * sy
@@ -288,7 +284,6 @@ public class Canvas2dCanvas(ctx: CanvasRenderingContext2D) : KiteCanvas {
         try {
             setDeviceTransform(ctm)
             ctx.fillStyle = gradient
-            ctx.globalCompositeOperation = blendMode.toCanvas()
             // Without a region the shading covers the whole canvas, taken back into shading space.
             val region = clipPath ?: KitePath.Builder().apply {
                 val x0 = originX
@@ -303,7 +298,8 @@ public class Canvas2dCanvas(ctx: CanvasRenderingContext2D) : KiteCanvas {
                 corner(x0, y0, true); corner(x1, y0, false); corner(x1, y1, false); corner(x0, y1, false)
                 close()
             }.build()
-            ctx.asDynamic().fill(toPath2D(region, KiteMatrix.IDENTITY), "nonzero")
+            val area = toPath2D(region, KiteMatrix.IDENTITY)
+            paint(blendMode) { ctx.asDynamic().fill(area, "nonzero") }
         } finally {
             ctx.restore()
         }
@@ -344,13 +340,12 @@ public class Canvas2dCanvas(ctx: CanvasRenderingContext2D) : KiteCanvas {
         try {
             setDeviceTransform(device)
             ctx.globalAlpha = alpha.coerceIn(0.0, 1.0)
-            ctx.globalCompositeOperation = blendMode.toCanvas()
             ctx.imageSmoothingEnabled = sampling.smooth
             // Unit square, bitmap row 0 on the top edge (v = 1): the Skia
             // mapping, translate up one unit and flip Y.
             ctx.translate(0.0, 1.0)
             ctx.scale(1.0 / off.width, -1.0 / off.height)
-            ctx.drawImage(off, 0.0, 0.0)
+            paint(blendMode) { ctx.drawImage(off, 0.0, 0.0) }
         } finally {
             ctx.restore()
         }
@@ -402,7 +397,7 @@ public class Canvas2dCanvas(ctx: CanvasRenderingContext2D) : KiteCanvas {
      * when the group ends. Otherwise [layer] is null and the group paints straight onto
      * the page, which gives the same pixels.
      */
-    private class Group(val saved: Saved?, val layer: Layer?, val alpha: Double, val blendMode: KiteBlendMode)
+    private class Group(val saved: Saved?, val layer: Layer?, val alpha: Double, val blendMode: KiteBlendMode, val knockout: Boolean = false)
 
     /** An offscreen canvas whose top left corner is device pixel ([x], [y]). */
     private class Layer(val canvas: HTMLCanvasElement, val x: Double, val y: Double)
@@ -413,7 +408,15 @@ public class Canvas2dCanvas(ctx: CanvasRenderingContext2D) : KiteCanvas {
     /**
      * ISO 32000-1, 11.4.5: a group's constant alpha and blend mode apply once, when the
      * group composites onto its backdrop. So a group that has them paints into a layer
-     * first (#77). The layer is isolated, and knockout is not honoured (#125).
+     * first (#77). An isolated group's layer starts transparent. A non-isolated group's
+     * layer starts as a copy of the backdrop, so a paint inside blends with the page, and
+     * at the end the layer mixes with the page by [alpha]. That is exact over an opaque
+     * backdrop. A non-isolated group with a blend mode of its own starts transparent,
+     * which is exact when no paint inside blends (#125).
+     *
+     * In a knockout group (11.4.6) each paint replaces what lies under it inside its
+     * shape. A group nested in a knockout group gets a layer, so its own paints do not
+     * knock each other out.
      */
     override fun beginTransparencyGroup(
         bbox: KiteRectangle, ctm: KiteMatrix,
@@ -421,15 +424,57 @@ public class Canvas2dCanvas(ctx: CanvasRenderingContext2D) : KiteCanvas {
         alpha: Double, blendMode: KiteBlendMode,
     ) {
         val a = alpha.coerceIn(0.0, 1.0)
+        val nested = knockingOut
         // A plain group, or one with malformed geometry, paints straight onto the page. An isolated
         // group needs a layer, so its blend modes see a transparent backdrop (ISO 32000-1, 11.4.5, #125).
-        val area = if (a < 1.0 || blendMode != KiteBlendMode.Normal || isolated) deviceArea(bbox, ctm) else null
+        val layered = a < 1.0 || blendMode != KiteBlendMode.Normal || isolated || knockout || nested
+        val area = if (layered) deviceArea(bbox, ctm) else null
         if (area == null) {
             groups.addLast(Group(null, null, 1.0, KiteBlendMode.Normal))
             return
         }
         val saved = Saved(ctx, originX, originY, openLayers)
-        groups.addLast(Group(saved, openLayer(area), a, blendMode))
+        val layer = openLayer(area)
+        if (!isolated && !knockout && !nested && blendMode == KiteBlendMode.Normal && area[2] > 0 && area[3] > 0) {
+            // The layer starts as the page under it, read from the canvas of the context outside.
+            ctx.save()
+            ctx.setTransform(1.0, 0.0, 0.0, 1.0, 0.0, 0.0)
+            ctx.drawImage(saved.ctx.canvas, layer.x - saved.originX, layer.y - saved.originY, area[2].toDouble(), area[3].toDouble(),
+                0.0, 0.0, area[2].toDouble(), area[3].toDouble())
+            ctx.restore()
+        }
+        groups.addLast(Group(saved, layer, a, blendMode, knockout))
+    }
+
+    /**
+     * True while the paints go to the layer of a knockout group. Canvas 2D has no
+     * operation that replaces only inside a shape, so [paint] erases the shape first.
+     */
+    private val knockingOut: Boolean get() = groups.lastOrNull()?.knockout == true
+
+    /**
+     * Runs [draw] in the composite operation of [mode]. In a knockout group [draw] first
+     * erases its own shape at full strength, so the paint then lands on the group's
+     * transparent backdrop, where any blend mode gives the paint's own colour (#125).
+     */
+    private inline fun paint(mode: KiteBlendMode, draw: () -> Unit) {
+        if (knockingOut) {
+            val fill = ctx.fillStyle
+            val stroke = ctx.strokeStyle
+            val alpha = ctx.globalAlpha
+            ctx.fillStyle = "black"
+            ctx.strokeStyle = "black"
+            ctx.globalAlpha = 1.0
+            ctx.globalCompositeOperation = "destination-out"
+            draw()
+            ctx.fillStyle = fill
+            ctx.strokeStyle = stroke
+            ctx.globalAlpha = alpha
+            ctx.globalCompositeOperation = "source-over"
+        } else {
+            ctx.globalCompositeOperation = mode.toCanvas()
+        }
+        draw()
     }
 
     override fun endTransparencyGroup() {
@@ -469,17 +514,25 @@ public class Canvas2dCanvas(ctx: CanvasRenderingContext2D) : KiteCanvas {
         }
         // The mask is zero wherever the content could show.
         if (area[2] == 0 || area[3] == 0) return
-        val content = paintInLayer(area, render)
-        val mask = paintInLayer(area) {
-            if (kind == SoftMask.Kind.Luminosity) {
-                // Unpainted parts of the group show the black backdrop, whose luminosity is zero.
-                ctx.save()
-                ctx.setTransform(1.0, 0.0, 0.0, 1.0, 0.0, 0.0)
-                ctx.fillStyle = "black"
-                ctx.fillRect(0.0, 0.0, ctx.canvas.width.toDouble(), ctx.canvas.height.toDouble())
-                ctx.restore()
+        // The content and the mask composite as usual, also inside a knockout group.
+        groups.addLast(Group(null, null, 1.0, KiteBlendMode.Normal))
+        val content: Layer
+        val mask: Layer
+        try {
+            content = paintInLayer(area, render)
+            mask = paintInLayer(area) {
+                if (kind == SoftMask.Kind.Luminosity) {
+                    // Unpainted parts of the group show the black backdrop, whose luminosity is zero.
+                    ctx.save()
+                    ctx.setTransform(1.0, 0.0, 0.0, 1.0, 0.0, 0.0)
+                    ctx.fillStyle = "black"
+                    ctx.fillRect(0.0, 0.0, ctx.canvas.width.toDouble(), ctx.canvas.height.toDouble())
+                    ctx.restore()
+                }
+                renderMask(this)
             }
-            renderMask(this)
+        } finally {
+            groups.removeLastOrNull()
         }
         val luminosity = kind == SoftMask.Kind.Luminosity
         if (luminosity || transfer != null) maskToAlpha(mask.canvas, luminosity, transfer)
