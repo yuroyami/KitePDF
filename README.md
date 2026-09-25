@@ -100,8 +100,17 @@ doc.pages[0].extractText()   // "Hello from PdfBuilder"
 
 ## Install
 
-Every artifact is on Maven Central at `0.11.0`. Pick one document artifact, and add a
-renderer only when you draw pages yourself.
+Every artifact is on Maven Central at `0.11.0`. Most apps need just two lines: one to
+open documents, and one to show them.
+
+```kotlin
+commonMain.dependencies {
+    implementation("io.github.yuroyami:kitepdf:0.11.0")                  // opens every format
+    implementation("io.github.yuroyami:kitepdf-compose-viewer:0.11.0")   // shows them with KiteDocView
+}
+```
+
+Here is everything you can add:
 
 ```kotlin
 kotlin {
@@ -120,27 +129,30 @@ kotlin {
             // Optional, depending on what you build
             implementation("io.github.yuroyami:kitepdf-compose-viewer:0.11.0")   // KiteDocView for Compose Multiplatform
             implementation("io.github.yuroyami:kitepdf-native-renderer:0.11.0")  // page-to-image on the platform canvas
-            implementation("io.github.yuroyami:kitepdf-skia-renderer:0.11.0")    // page-to-image on Skia, alike on every target
+            implementation("io.github.yuroyami:kitepdf-skia-renderer:0.11.0")    // page-to-image on Skia (on Android, add one repository)
             implementation("io.github.yuroyami:kitepdf-javascript:0.11.0")       // runs the JavaScript inside PDFs (pulls in KiteJS)
-            implementation("io.github.yuroyami:kitepdf-net:0.11.0")              // loads documents from a URL (pulls in Ktor)
+            implementation("io.github.yuroyami:kitepdf-net:0.11.0")              // loads documents from a URL (add a Ktor engine too)
         }
     }
 }
 ```
 
-> [!TIP]
-> Most apps need just two lines: `kitepdf` for the documents, and `kitepdf-compose-viewer` to show them.
+### What else you need
 
 > [!IMPORTANT]
-> A renderer needs a document artifact next to it. The viewer and the renderers take types like `PdfDocument` and `PdfPage`, but they do not pass that dependency on to you. With a renderer alone, your build cannot resolve those types.
+> Three artifacts need something extra. Without it, the build or the download fails.
 
-A few more things are good to know:
+| If you add | You also need |
+| --- | --- |
+| The viewer or a renderer | **A document artifact** such as `kitepdf`. The viewer and the renderers do not bring it along, so without it your code cannot see `PdfDocument` or `PdfPage`. |
+| `kitepdf-net` | **A Ktor client engine** such as `io.ktor:ktor-client-cio:3.6.0`, or the OkHttp, Darwin or JS engine. KitePDF downloads through the engine you pick. |
+| `kitepdf-skia-renderer` on Android | **One more repository**: `maven("https://maven.pkg.jetbrains.space/public/p/compose/dev")`. Skia's Android build lives there, not on Maven Central. |
 
-- **`kitepdf-core` comes with every document artifact.** Never add it yourself.
-- **The document artifacts are light.** They depend only on `kotlin-stdlib` and KiteImage, which decodes JPEG, PNG, GIF, JPEG 2000, JBIG2 and CCITT images.
-- **`kitepdf-net` needs a Ktor engine.** Add the Ktor client engine for your platform next to it.
-- **Plain Android and JVM projects work too.** Put the same lines in your usual `dependencies { }` block.
-- **On Android, the Skia renderer needs one more repository.** Skiko's Android build lives at `https://maven.pkg.jetbrains.space/public/p/compose/dev`, not on Maven Central. On Android, `kitepdf-native-renderer` is the simpler choice.
+Good to know:
+
+- `kitepdf-core` comes with every document artifact, so you never add it yourself.
+- The document artifacts depend only on `kotlin-stdlib` and KiteImage, which decodes the images.
+- In a plain Android or JVM project, put the same lines in your usual `dependencies { }` block.
 
 ## A quick tour
 
