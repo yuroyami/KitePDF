@@ -489,6 +489,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   longer joins marks that attach to different components of an earlier ligature, because
   the components of a ligature are now tracked as HarfBuzz tracks them. Against `hb-shape`,
   17 Sinhala and Tibetan words and 5,347 random words in 27 fonts give the same glyphs (#317).
+- A character outside the Basic Multilingual Plane, such as a mathematical letter, a CJK
+  Extension B ideograph or a letter of Adlam or Brahmi, is one character to the layout. It
+  draws the glyph that the font gives it, where it drew two missing glyphs before, and its
+  text on the page is the whole character. The shapers reach these characters too: the
+  Universal Shaping Engine shapes Brahmi, Chakma, Grantha, Adlam and its other scripts
+  outside that plane, and the script of each word, its marks, their classes and their
+  decompositions come from tables of Unicode 17 for every plane. The ideographs of planes 2
+  and 3 and Tangut break between characters, as CJK ideographs do. Against `hb-shape`,
+  9,903 random words in 50 fonts of the Universal Shaping Engine and 5,427 random words in
+  40 other fonts outside the plane give the same glyphs (#319).
 - Text in an embedded font shapes through every GSUB lookup type. Contextual and
   chained contextual substitution, multiple and alternate substitution, and reverse
   chaining now apply along with single and ligature substitution. The lookups run for the script

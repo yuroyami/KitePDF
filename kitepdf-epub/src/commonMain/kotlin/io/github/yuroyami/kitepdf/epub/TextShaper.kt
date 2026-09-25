@@ -174,16 +174,18 @@ internal object TextShaper {
     fun isDefaultIgnorable(cp: Int): Boolean =
         cp == 0x00AD || cp == 0x034F || cp == 0x061C || cp in 0x17B4..0x17B5 || cp in 0x180B..0x180E ||
             cp in 0x200B..0x200F || cp in 0x202A..0x202E || cp in 0x2060..0x206F ||
-            cp in 0xFE00..0xFE0F || cp == 0xFEFF || cp in 0xFFF0..0xFFF8
+            cp in 0xFE00..0xFE0F || cp == 0xFEFF || cp in 0xFFF0..0xFFF8 ||
+            cp in 0x1D173..0x1D17A || cp in 0xE0000..0xE0FFF
 
     /**
-     * How a lookup passes over [cp], or null for a character it does not pass over. CGJ and
-     * the Mongolian free variation selectors stay visible to GSUB, as HarfBuzz keeps them.
+     * How a lookup passes over [cp], or null for a character it does not pass over. CGJ, the
+     * Mongolian free variation selectors and the tag characters stay visible to GSUB, as
+     * HarfBuzz keeps them.
      */
     fun ignorable(cp: Int): GsubGlyph.Ignorable? = when {
         cp == 0x200C -> GsubGlyph.Ignorable.ZWNJ
         cp == 0x200D -> GsubGlyph.Ignorable.ZWJ
-        cp == 0x034F || cp in 0x180B..0x180D -> null
+        cp == 0x034F || cp in 0x180B..0x180D || cp in 0xE0020..0xE007F -> null
         isDefaultIgnorable(cp) -> GsubGlyph.Ignorable.OTHER
         else -> null
     }
@@ -193,78 +195,33 @@ internal object TextShaper {
      * True for a non-spacing mark that is not default ignorable, the glyph class HarfBuzz gives
      * a mark when the font has no GDEF classes.
      */
-    fun isMark(cp: Int): Boolean = cp.toChar().category == CharCategory.NON_SPACING_MARK && !isDefaultIgnorable(cp)
+    fun isMark(cp: Int): Boolean = GeneralCategory.of(cp) == CharCategory.NON_SPACING_MARK && !isDefaultIgnorable(cp)
 
-    private val RTL = setOf("arab", "hebr", "syrc", "thaa", "nko ", "mand")
-
-    /** The OpenType tags of the script of [cp], the newer tag first, or null for common characters. */
-    private fun scriptTags(cp: Int): List<String>? = when {
-        isShared(cp) -> null
-        cp in 0x41..0x5A || cp in 0x61..0x7A || cp in 0xC0..0x24F || cp in 0x1E00..0x1EFF -> LATN
-        cp in 0x370..0x3FF || cp in 0x1F00..0x1FFF -> listOf("grek")
-        cp in 0x400..0x52F -> listOf("cyrl")
-        cp in 0x530..0x58F -> listOf("armn")
-        cp in 0x590..0x5FF || cp in 0xFB1D..0xFB4F -> listOf("hebr")
-        cp in 0x600..0x6FF || cp in 0x750..0x77F || cp in 0x870..0x8FF || cp in 0xFB50..0xFDFF || cp in 0xFE70..0xFEFF -> listOf("arab")
-        cp in 0x700..0x74F || cp in 0x860..0x86F -> listOf("syrc")
-        cp in 0x780..0x7BF -> listOf("thaa")
-        cp in 0x7C0..0x7FF -> listOf("nko ")
-        cp in 0x840..0x85F -> listOf("mand")
-        cp in 0x900..0x97F || cp in 0xA8E0..0xA8FF -> listOf("dev2", "deva")
-        cp in 0x980..0x9FF -> listOf("bng2", "beng")
-        cp in 0xA00..0xA7F -> listOf("gur2", "guru")
-        cp in 0xA80..0xAFF -> listOf("gjr2", "gujr")
-        cp in 0xB00..0xB7F -> listOf("ory2", "orya")
-        cp in 0xB80..0xBFF -> listOf("tml2", "taml")
-        cp in 0xC00..0xC7F -> listOf("tel2", "telu")
-        cp in 0xC80..0xCFF -> listOf("knd2", "knda")
-        cp in 0xD00..0xD7F -> listOf("mlm2", "mlym")
-        cp in 0xD80..0xDFF -> listOf("sinh")
-        cp in 0xE00..0xE7F -> listOf("thai")
-        cp in 0xE80..0xEFF -> listOf("lao ")
-        cp in 0xF00..0xFFF -> listOf("tibt")
-        cp in 0x1700..0x171F -> listOf("tglg")
-        cp in 0x1720..0x173F -> listOf("hano")
-        cp in 0x1740..0x175F -> listOf("buhd")
-        cp in 0x1760..0x177F -> listOf("tagb")
-        cp in 0x1800..0x18AF -> listOf("mong")
-        cp in 0x1900..0x194F -> listOf("limb")
-        cp in 0x1950..0x197F -> listOf("tale")
-        cp in 0x1A00..0x1A1F -> listOf("bugi")
-        cp in 0x1A20..0x1AAF -> listOf("lana")
-        cp in 0x1B00..0x1B7F -> listOf("bali")
-        cp in 0x1B80..0x1BBF || cp in 0x1CC0..0x1CCF -> listOf("sund")
-        cp in 0x1BC0..0x1BFF -> listOf("batk")
-        cp in 0x1C00..0x1C4F -> listOf("lepc")
-        cp in 0x2D30..0x2D7F -> listOf("tfng")
-        cp in 0xA800..0xA82F -> listOf("sylo")
-        cp in 0xA840..0xA87F -> listOf("phag")
-        cp in 0xA880..0xA8DF -> listOf("saur")
-        cp in 0xA900..0xA92F -> listOf("kali")
-        cp in 0xA930..0xA95F -> listOf("rjng")
-        cp in 0xA980..0xA9DF -> listOf("java")
-        cp in 0xAA00..0xAA5F -> listOf("cham")
-        cp in 0xAA80..0xAADF -> listOf("tavt")
-        cp in 0xAAE0..0xAAFF || cp in 0xABC0..0xABFF -> listOf("mtei")
-        cp in 0x1000..0x109F -> listOf("mym2", "mymr")
-        cp in 0x10A0..0x10FF -> listOf("geor")
-        cp in 0x1200..0x137F -> listOf("ethi")
-        cp in 0x1780..0x17FF -> listOf("khmr")
-        cp in 0x1100..0x11FF || cp in 0xAC00..0xD7AF || cp in 0x3130..0x318F -> listOf("hang")
-        cp in 0x3040..0x30FF -> listOf("kana")
-        cp in 0x3400..0x4DBF || cp in 0x4E00..0x9FFF || cp in 0xF900..0xFAFF -> listOf("hani")
-        else -> null
-    }
-
-    private val LATN = listOf("latn")
+    /** The scripts that HarfBuzz runs from right to left, by their OpenType tags. */
+    private val RTL = setOf(
+        "adlm", "arab", "armi", "avst", "chrs", "cprt", "elym", "gara", "hatr", "hebr", "khar", "lydi", "mand", "mani",
+        "mend", "merc", "mero", "narb", "nbat", "nko ", "orkh", "ougr", "palm", "phli", "phlp", "phnx", "prti", "rohg",
+        "samr", "sarb", "sidt", "sogd", "sogo", "syrc", "thaa", "yezi",
+    )
 
     /**
-     * The characters inside the blocks of [scriptTags] that Scripts.txt of Unicode 17 gives to
-     * no one script (Common or Inherited), such as the danda. They do not choose the script.
+     * The OpenType tags of the script of [cp], the newer tag first, or null for a Common or
+     * Inherited character (#319). HarfBuzz's rule: the ISO 15924 code in lower case, with a
+     * newer tag for the scripts of India and Myanmar, and a few older exceptions.
      */
-    private fun isShared(cp: Int): Boolean =
-        cp == 0x00D7 || cp == 0x00F7 || cp == 0x0374 || cp == 0x037E || cp == 0x0385 || cp == 0x0387 || cp in 0x0485..0x0486 ||
-            cp == 0x0605 || cp == 0x060C || cp == 0x061B || cp == 0x061F || cp == 0x0640 || cp in 0x064B..0x0655 || cp == 0x0670 ||
-            cp == 0x06DD || cp == 0x08E2 || cp in 0xFD3E..0xFD3F || cp == 0xFEFF || cp in 0x0951..0x0954 || cp in 0x0964..0x0965 ||
-            cp == 0x0E3F || cp in 0x0FD5..0x0FD8 || cp == 0x10FB || cp in 0x3099..0x309C || cp == 0x30A0 || cp in 0x30FB..0x30FC
+    private fun scriptTags(cp: Int): List<String>? {
+        val code = UnicodeScript.of(cp) ?: return null
+        return NEW_TAGS[code] ?: listOf(OLD_TAGS[code] ?: code.lowercase())
+    }
+
+    /** The scripts that HarfBuzz gives a newer tag first, as OpenType's second Indic specification names them. */
+    private val NEW_TAGS = mapOf(
+        "Beng" to listOf("bng2", "beng"), "Deva" to listOf("dev2", "deva"), "Gujr" to listOf("gjr2", "gujr"),
+        "Guru" to listOf("gur2", "guru"), "Knda" to listOf("knd2", "knda"), "Mlym" to listOf("mlm2", "mlym"),
+        "Orya" to listOf("ory2", "orya"), "Taml" to listOf("tml2", "taml"), "Telu" to listOf("tel2", "telu"),
+        "Mymr" to listOf("mym2", "mymr"),
+    )
+
+    /** The scripts whose tag is not their ISO 15924 code in lower case. */
+    private val OLD_TAGS = mapOf("Hira" to "kana", "Laoo" to "lao ", "Nkoo" to "nko ", "Vaii" to "vai ", "Yiii" to "yi  ")
 }

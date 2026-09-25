@@ -12,8 +12,10 @@ package io.github.yuroyami.kitepdf.epub
 internal object CharText {
     private val table = arrayOfNulls<String>(0x10000)
 
-    fun of(ch: Char): String {
-        val i = ch.code
-        return table[i] ?: ch.toString().also { table[i] = it }
+    /** The text of [cp]. A character outside the BMP is rare, so it gets a String of its own (#319). */
+    fun of(cp: Int): String {
+        if (cp < 0x10000) return table[cp] ?: cp.toChar().toString().also { table[cp] = it }
+        val v = cp - 0x10000
+        return charArrayOf((0xD800 + (v shr 10)).toChar(), (0xDC00 + (v and 0x3FF)).toChar()).concatToString()
     }
 }

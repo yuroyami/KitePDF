@@ -277,12 +277,15 @@ The layout engine covers what real books use:
   around their features, with reph, half forms, pre-base matras and pre-base
   consonants, as HarfBuzz's Indic shaper does, and so are Khmer and Myanmar
   syllables, as its Khmer and Myanmar shapers do. Sinhala, Tibetan, Balinese,
-  Javanese and the other scripts of HarfBuzz's Universal Shaping Engine in the
-  Basic Multilingual Plane are reordered as that engine does. Thai and Lao sara
-  am splits into nikhahit and sara aa. Words in all these scripts, and in Latin,
-  Greek, Cyrillic, Arabic, Urdu Nastaliq, Syriac and Hebrew, shape to the glyphs
-  HarfBuzz gives, except that the Syriac abbreviation mark does not stretch. A
-  font without GSUB still has its text reordered.
+  Javanese, Brahmi, Adlam and the other scripts of HarfBuzz's Universal Shaping
+  Engine are reordered as that engine does. Thai and Lao sara am splits into
+  nikhahit and sara aa. Words in all these scripts, in Latin, Greek, Cyrillic,
+  Arabic, Urdu Nastaliq, Syriac and Hebrew, and in the scripts outside the Basic
+  Multilingual Plane that HarfBuzz shapes with its default shaper, shape to the
+  glyphs HarfBuzz gives, except that the Syriac abbreviation mark does not
+  stretch. A font without GSUB still has its text reordered. A character outside
+  the Basic Multilingual Plane, such as a mathematical letter or a CJK Extension B
+  ideograph, draws from the font of the book.
 - **Marks**: GPOS attachment onto a base letter, onto a ligature component,
   and onto the mark below, so two stacked diacritics sit one above the other
   instead of overprinting.
