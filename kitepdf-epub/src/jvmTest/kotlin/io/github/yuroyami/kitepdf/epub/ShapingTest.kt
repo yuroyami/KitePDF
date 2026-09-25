@@ -58,10 +58,9 @@ class ShapingTest {
 
     @Test
     fun marks_sort_by_class_and_modifier_marks_go_first() {
-        // Small high seen, a modifier mark of class 230, goes before fathatan (#318).
-        val arabic = mutableListOf(0x0630, 0x064B, 0x06DC)
-        CombiningClass.reorder(arabic) { it }
-        assertEquals(listOf(0x0630, 0x06DC, 0x064B), arabic)
+        // Small high seen, a modifier mark of class 230, goes before fathatan in Arabic (#318).
+        val arabic = Normalizer.normalize(intArrayOf(0x0630, 0x064B, 0x06DC), intArrayOf(0, 1, 2), { true }, arabicMarks = true)
+        assertEquals(listOf(0x0630, 0x06DC, 0x064B), arabic.codePoints.toList())
         // Superscript Alaph, class 36, goes before a zqapha below of class 220.
         val syriac = mutableListOf(0x0724, 0x0734, 0x0711)
         CombiningClass.reorder(syriac) { it }

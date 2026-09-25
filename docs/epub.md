@@ -270,12 +270,12 @@ The layout engine covers what real books use:
   the columns, so a tap lands on the glyph under it.
 - **Shaping**: every GSUB lookup type of an embedded font, contextual and
   chaining substitution included, for the script of each word and in the
-  stages HarfBuzz uses, with the joining forms of Arabic and Syriac. Combining
-  marks are put in the order the font expects first, but a letter and a mark
-  in decomposed form are not composed into one glyph yet. The syllables of
-  Devanagari, Bengali, Gurmukhi, Gujarati, Oriya, Tamil, Telugu, Kannada and
-  Malayalam are reordered around their features, with reph, half forms,
-  pre-base matras and pre-base consonants, as HarfBuzz's Indic shaper does.
+  stages HarfBuzz uses, with the joining forms of Arabic and Syriac. Characters
+  decompose and compose first, as HarfBuzz normalizes them, and combining marks
+  go into the order the font expects. The syllables of Devanagari, Bengali,
+  Gurmukhi, Gujarati, Oriya, Tamil, Telugu, Kannada and Malayalam are reordered
+  around their features, with reph, half forms, pre-base matras and pre-base
+  consonants, as HarfBuzz's Indic shaper does.
   Words in Latin, Greek, Cyrillic, Arabic, Urdu Nastaliq, Syriac, Hebrew, Thai
   and the nine Indic scripts shape to the glyphs HarfBuzz gives, except that
   the Syriac abbreviation mark does not stretch. Sinhala, Khmer, Myanmar and

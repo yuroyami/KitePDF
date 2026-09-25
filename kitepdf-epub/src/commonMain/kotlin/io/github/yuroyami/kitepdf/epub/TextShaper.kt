@@ -46,9 +46,10 @@ internal object TextShaper {
 
     /**
      * Shapes the characters [codePoints] of one run in [script], whose glyphs before shaping are
-     * [gids]: through [IndicShaper] for the scripts of India, and through GSUB in the stages of
-     * [stages] for the rest. [forms] are the Arabic joining forms of the run, when it has
-     * Arabic. The cluster of each glyph is the index of its first character in [codePoints].
+     * [gids]: through [IndicShaper] for the scripts of India, and through [Normalizer] and GSUB
+     * in the stages of [stages] for the rest. [forms] are the Arabic joining forms of the run,
+     * when it has Arabic. The cluster of each glyph is the index of its first character in
+     * [codePoints].
      */
     fun shape(
         face: EmbeddedFace, gsub: OpenTypeGsub, script: String, codePoints: IntArray, gids: IntArray,
@@ -66,12 +67,21 @@ internal object TextShaper {
             }
             IndicShaper.shape(gsub, script, glyphs, prepared.codePoints, face::gidFor, optionalLigatures)
         } else {
-            for ((k, cp) in codePoints.withIndex()) {
-                val joining = forms?.get(k)?.let { setOf(ArabicJoining.feature(it)) } ?: emptySet()
-                glyphs += GsubGlyph(gids[k], k, joining, isMark(cp), ignorable(cp))
+            val arabic = script == "arab" || script == "syrc"
+            // A word of whole letters that the font has needs no normalization.
+            val normal = if (gids.none { it == 0 } && codePoints.none { Normalizer.isMark(it) }) null else {
+                Normalizer.normalize(codePoints, IntArray(codePoints.size) { it }, { face.gidFor(it) != 0 }, arabicMarks = arabic)
+            }
+            val cps = normal?.codePoints ?: codePoints
+            for ((j, cp) in cps.withIndex()) {
+                val source = normal?.sources?.get(j) ?: j
+                val gid = if (cp == codePoints[source]) gids[source] else face.gidFor(cp)
+                // A letter takes the joining form of the character it came from; a mark takes none.
+                val form = forms?.get(source)?.takeIf { ArabicJoining.type(cp) != ArabicJoining.Jt.T }
+                glyphs += GsubGlyph(gid, source, form?.let { setOf(ArabicJoining.feature(it)) } ?: emptySet(), isMark(cp), ignorable(cp))
                 if (isDefaultIgnorable(cp)) ignorables += glyphs.last()
             }
-            val manualZwj = if (script == "arab" || script == "syrc") ARABIC_MANUAL_ZWJ else emptySet()
+            val manualZwj = if (arabic) ARABIC_MANUAL_ZWJ else emptySet()
             gsub.substitute(glyphs, script, null, stages(script, optionalLigatures), POSITIONAL, manualZwj = manualZwj)
         }
         hideIgnorables(face, glyphs, ignorables)

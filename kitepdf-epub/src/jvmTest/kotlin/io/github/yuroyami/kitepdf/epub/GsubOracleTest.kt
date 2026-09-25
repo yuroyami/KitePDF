@@ -8,9 +8,9 @@ import kotlin.test.assertTrue
 
 /**
  * Shapes words through GSUB the way [BoxLayout] does and compares the glyph ids with
- * HarfBuzz's `hb-shape` (#211): real words of each script, and random words of the Indic
- * scripts, Arabic, Urdu and Syriac. Skips when `hb-shape` or the Noto fonts of the MuPDF
- * resources are missing.
+ * HarfBuzz's `hb-shape` (#211): real words of each script, random words of the Indic
+ * scripts, Arabic, Urdu and Syriac, and random words with combining marks. Skips when
+ * `hb-shape` or the Noto fonts of the MuPDF resources are missing.
  */
 class GsubOracleTest {
 
@@ -162,26 +162,23 @@ class GsubOracleTest {
     }
 
     /**
-     * Random words of Arabic, Urdu and Syriac shape to the glyphs HarfBuzz gives (#315, #318):
-     * letters with up to two marks each, and now and then a joiner, a right-to-left mark or a
-     * tatweel. The words leave out what KitePDF does not do yet: a letter that composes with a
-     * madda or hamza mark (#316), and the Syriac abbreviation mark, which needs `stch`.
+     * Random words of Arabic, Urdu and Syriac shape to the glyphs HarfBuzz gives (#315, #316,
+     * #318): letters with up to two marks each, and now and then a joiner, a right-to-left mark
+     * or a tatweel. The words leave out the Syriac abbreviation mark, which needs `stch`.
      */
     @Test
     fun random_arabic_and_syriac_words_shape_to_the_glyphs_harfbuzz_gives() {
         val dir = fontsDir().orSkip("The Noto fonts of mupdf-master/resources")
         val tool = hbShape().orSkip("hb-shape")
         val joiners = listOf(0x200C, 0x200D, 0x200F, 0x2060, 0x0640)
-        val arabicLetters = (0x0621..0x064A).filter { it !in 0x0622..0x0626 } +
-            listOf(0x0671, 0x0674, 0x0679, 0x067E, 0x0686, 0x0688, 0x0691, 0x06A9, 0x06AF, 0x06BE, 0x06C1, 0x06CC, 0x06D2)
+        val arabicLetters = (0x0621..0x064A).toList() +
+            listOf(0x0671, 0x0674, 0x0679, 0x067E, 0x0686, 0x0688, 0x0691, 0x06A9, 0x06AF, 0x06BE, 0x06C1, 0x06CC, 0x06D2, 0x06D5)
         val arabicMarks = (0x064B..0x0655).toList() + listOf(0x0658, 0x0670, 0x06DC, 0x06E3, 0x06E7, 0x06E8)
         val sets = listOf(
             Triple("NotoNaskhArabic-Regular.otf", arabicLetters, arabicMarks),
             Triple("NotoNastaliqUrdu-Regular.otf", arabicLetters, arabicMarks),
             Triple("NotoSansSyriac-Regular.otf", (0x0710..0x072F) + (0x074D..0x074F), (0x0730..0x074A).toList()),
         )
-        val composing = setOf(0x0627, 0x0648, 0x064A, 0x06C1, 0x06D2, 0x06D5)
-        val maddaAndHamza = setOf(0x0653, 0x0654, 0x0655)
         val failures = ArrayList<String>()
         var total = 0
         for ((index, set) in sets.withIndex()) {
@@ -191,10 +188,8 @@ class GsubOracleTest {
             val words = List(500) {
                 buildString {
                     repeat(2 + random.nextInt(4)) {
-                        val letter = letters.random(random)
-                        appendCodePoint(letter)
-                        val pool = if (letter in composing) marks - maddaAndHamza else marks
-                        repeat(random.nextInt(3)) { appendCodePoint(pool.random(random)) }
+                        appendCodePoint(letters.random(random))
+                        repeat(random.nextInt(3)) { appendCodePoint(marks.random(random)) }
                         if (random.nextInt(5) == 0) appendCodePoint(joiners.random(random))
                     }
                 }
@@ -209,6 +204,55 @@ class GsubOracleTest {
             }
         }
         println("random arabic and syriac words: ${total - failures.size} of $total match")
+        assertTrue(failures.isEmpty(), failures.take(20).joinToString("\n"))
+    }
+
+    /**
+     * Random words of Latin, Vietnamese, Greek, Cyrillic and Hebrew letters with up to three
+     * combining marks each shape to the glyphs HarfBuzz gives (#316). HarfBuzz decomposes a
+     * letter that marks follow and composes it again with the marks the font has a glyph for.
+     */
+    @Test
+    fun random_words_with_marks_shape_to_the_glyphs_harfbuzz_gives() {
+        val dir = fontsDir().orSkip("The Noto fonts of mupdf-master/resources")
+        val tool = hbShape().orSkip("hb-shape")
+        val latinMarks = (0x0300..0x0315).toList() + listOf(0x031B, 0x0323, 0x0324, 0x0325, 0x0327, 0x0328, 0x032D, 0x0330, 0x0331)
+        val sets = listOf(
+            Triple(
+                "NotoSerif-Regular.otf", "aeiouyAEIOUYcnszgklrtdhw".map { it.code } +
+                    listOf(0x00E9, 0x00EA, 0x00F4, 0x0103, 0x01A1, 0x01B0, 0x1EB9, 0x0131), latinMarks,
+            ),
+            Triple(
+                "NotoSerif-Regular.otf", (0x03B1..0x03C9).toList() + listOf(0x03AC, 0x03AD, 0x1F00, 0x1F10, 0x1F70, 0x1FB6, 0x0391, 0x03A9),
+                listOf(0x0300, 0x0301, 0x0304, 0x0306, 0x0308, 0x0313, 0x0314, 0x0342, 0x0345),
+            ),
+            Triple("NotoSerif-Regular.otf", (0x0430..0x044F).toList() + listOf(0x0415, 0x0418, 0x0456), listOf(0x0300, 0x0301, 0x0306, 0x0308, 0x030F, 0x0311)),
+            Triple("NotoSerifHebrew-Regular.otf", (0x05D0..0x05EA).toList(), (0x05B0..0x05BC).toList() + listOf(0x05BF, 0x05C1, 0x05C2, 0x05C7)),
+        )
+        val failures = ArrayList<String>()
+        var total = 0
+        for ((index, set) in sets.withIndex()) {
+            val (name, letters, marks) = set
+            val font = File(dir, name).takeIf { it.exists() } ?: continue
+            val random = Random(100 + index)
+            val words = List(500) {
+                buildString {
+                    repeat(1 + random.nextInt(4)) {
+                        appendCodePoint(letters.random(random))
+                        repeat(random.nextInt(4)) { appendCodePoint(marks.random(random)) }
+                    }
+                }
+            }.distinct()
+            val theirs = harfbuzz(tool, font, words)
+            for ((i, word) in words.withIndex()) {
+                total++
+                val ours = kitepdf(font, word)
+                if (ours != theirs[i]) {
+                    failures += "$name ${word.codePoints().toArray().joinToString(" ") { "%04X".format(it) }}: KitePDF $ours, HarfBuzz ${theirs[i]}"
+                }
+            }
+        }
+        println("random words with marks: ${total - failures.size} of $total match")
         assertTrue(failures.isEmpty(), failures.take(20).joinToString("\n"))
     }
 
