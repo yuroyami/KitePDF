@@ -603,8 +603,11 @@ internal class BoxBuilder(
                 return
             }
             val b = StringBuilder(raw.length)
-            for (ch in raw) {
-                if (ch.isWhitespace()) {
+            var at = 0
+            while (at < raw.length) {
+                val cp = codePointAt(raw, at)
+                at += charCount(cp)
+                if (cp < 0x10000 && cp.toChar().isWhitespace()) {
                     if (!pendingSpace) pendingSpaceRun = makeRun(" ", style)
                     pendingSpace = true
                 } else {
@@ -621,17 +624,18 @@ internal class BoxBuilder(
                         else b.append(' ')
                     }
                     pendingSpace = false; lastWasBreak = false
-                    b.append(transformChar(ch, style.textTransform, boundary)); blockHasContent = true
+                    appendCodePoint(b, transform(cp, style.textTransform, boundary)); blockHasContent = true
                 }
             }
             if (b.isNotEmpty()) runs.add(makeRun(b.toString(), style))
         }
 
-        private fun transformChar(ch: Char, tt: TextTransform, wordBoundary: Boolean): Char = when (tt) {
-            TextTransform.NONE -> ch
-            TextTransform.UPPERCASE -> ch.uppercaseChar()
-            TextTransform.LOWERCASE -> ch.lowercaseChar()
-            TextTransform.CAPITALIZE -> if (wordBoundary) ch.uppercaseChar() else ch
+        /** The case of [cp] that [tt] asks for, one code point at a time, so a letter outside the BMP changes too (#322). */
+        private fun transform(cp: Int, tt: TextTransform, wordBoundary: Boolean): Int = when (tt) {
+            TextTransform.NONE -> cp
+            TextTransform.UPPERCASE -> CaseMapping.uppercase(cp)
+            TextTransform.LOWERCASE -> CaseMapping.lowercase(cp)
+            TextTransform.CAPITALIZE -> if (wordBoundary) CaseMapping.titlecase(cp) else cp
         }
 
         /** Transform preserved-whitespace text: word boundaries follow whitespace. */
@@ -639,9 +643,12 @@ internal class BoxBuilder(
             if (tt == TextTransform.NONE) return raw
             val sb = StringBuilder(raw.length)
             var boundary = true
-            for (ch in raw) {
-                sb.append(transformChar(ch, tt, boundary))
-                boundary = ch.isWhitespace()
+            var at = 0
+            while (at < raw.length) {
+                val cp = codePointAt(raw, at)
+                at += charCount(cp)
+                appendCodePoint(sb, transform(cp, tt, boundary))
+                boundary = cp < 0x10000 && cp.toChar().isWhitespace()
             }
             return sb.toString()
         }
