@@ -1,5 +1,6 @@
 package io.github.yuroyami.kitepdf.epub
 
+import io.github.yuroyami.kitepdf.core.font.GsubGlyph
 import io.github.yuroyami.kitepdf.core.font.OpenTypeGsub
 
 /**
@@ -42,6 +43,63 @@ internal object TextShaper {
         val direction = if (isRightToLeft(script)) "rtla" else "ltra"
         return listOf(listOf("rvrn"), listOf(direction, "ccmp", "locl", "rlig", "rclt", "calt") + ligatures)
     }
+
+    /**
+     * Shapes the characters [codePoints] of one run in [script], whose glyphs before shaping are
+     * [gids]: through [IndicShaper] for the scripts of India, and through GSUB in the stages of
+     * [stages] for the rest. [forms] are the Arabic joining forms of the run, when it has
+     * Arabic. The cluster of each glyph is the index of its first character in [codePoints].
+     */
+    fun shape(
+        face: EmbeddedFace, gsub: OpenTypeGsub, script: String, codePoints: IntArray, gids: IntArray,
+        forms: Array<ArabicJoining.Form>?, optionalLigatures: Boolean,
+    ): MutableList<GsubGlyph> {
+        val glyphs = ArrayList<GsubGlyph>(codePoints.size)
+        val ignorables = ArrayList<Pair<GsubGlyph, Int>>()
+        if (IndicShaper.handles(script)) {
+            val shaped = ArrayList<Int>(codePoints.size)
+            for ((k, cp) in codePoints.withIndex()) {
+                // A nukta form Unicode keeps decomposed, or a split matra, shapes as its parts.
+                val parts = IndicShaper.decompose(cp)?.takeIf { p -> p.all { face.gidFor(it) != 0 } }
+                if (parts != null) for (part in parts) { glyphs += GsubGlyph(face.gidFor(part), k, isMark = isMark(part.toChar())); shaped += part }
+                else { glyphs += GsubGlyph(gids[k], k, isMark = isMark(cp.toChar())); shaped += cp }
+                if (isDefaultIgnorable(cp)) ignorables += glyphs.last() to glyphs.last().gid
+            }
+            IndicShaper.shape(gsub, script, glyphs, shaped.toIntArray(), face::gidFor, optionalLigatures)
+        } else {
+            for ((k, cp) in codePoints.withIndex()) {
+                val joining = forms?.let { joining(cp, it[k]) } ?: emptySet()
+                glyphs += GsubGlyph(gids[k], k, joining, isMark(cp.toChar()))
+                if (isDefaultIgnorable(cp)) ignorables += glyphs.last() to glyphs.last().gid
+            }
+            gsub.substitute(glyphs, script, null, stages(script, optionalLigatures), POSITIONAL)
+        }
+        hideIgnorables(face, glyphs, ignorables)
+        return glyphs
+    }
+
+    /** Marks a glyph that draws nothing and takes no advance, as a hidden default ignorable. */
+    const val INVISIBLE: Int = 1 shl 30
+
+    /**
+     * A default ignorable that no lookup substituted, such as a ZWJ, becomes the space glyph
+     * with no advance, as HarfBuzz hides it. A font may draw a placeholder for its own glyph.
+     */
+    private fun hideIgnorables(face: EmbeddedFace, glyphs: List<GsubGlyph>, ignorables: List<Pair<GsubGlyph, Int>>) {
+        if (ignorables.isEmpty()) return
+        val space = face.gidFor(' '.code)
+        for ((g, gid) in ignorables) {
+            if (g.gid != gid || glyphs.none { it === g }) continue
+            if (space != 0) g.gid = space
+            g.shaperData = g.shaperData or INVISIBLE
+        }
+    }
+
+    /** True for a Default_Ignorable_Code_Point of Unicode, which draws nothing. */
+    fun isDefaultIgnorable(cp: Int): Boolean =
+        cp == 0x00AD || cp == 0x034F || cp == 0x061C || cp == 0x115F || cp == 0x1160 || cp in 0x17B4..0x17B5 ||
+            cp in 0x180B..0x180F || cp in 0x200B..0x200F || cp in 0x202A..0x202E || cp in 0x2060..0x206F ||
+            cp == 0x3164 || cp in 0xFE00..0xFE0F || cp == 0xFEFF || cp == 0xFFA0 || cp in 0xFFF0..0xFFF8
 
     /** The joining feature of [cp] in [form], or none for a character that does not join. */
     fun joining(cp: Int, form: ArabicJoining.Form): Set<String> = when (ArabicJoining.type(cp)) {

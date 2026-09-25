@@ -424,6 +424,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A grey ICC profile maps full grey to white, whatever its white point tag says.
   With a D65 tag, full grey drew as #ebffff and mid grey as #768295, where mutool
   draws #ffffff and #808080 (#311).
+- Devanagari and Bengali text shapes: each syllable is reordered around its features,
+  as HarfBuzz's Indic shaper does. The base consonant is found, a leading Ra and virama
+  becomes a reph, consonants before the base take half forms, and a pre-base matra moves
+  before them. Joiners are hidden, and a lone matra gets a dotted circle. Before, a
+  Hindi word such as हिन्दी drew its i matra after the consonant and no conjuncts.
+  Against `hb-shape`, all 60 test words in the two scripts give the same glyphs (#211).
 - Text in an embedded font shapes through every GSUB lookup type. Contextual and
   chained contextual substitution, multiple and alternate substitution, and reverse
   chaining now apply along with single and ligature substitution. The lookups run for the script

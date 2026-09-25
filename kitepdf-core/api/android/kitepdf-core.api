@@ -520,9 +520,14 @@ public final class io/github/yuroyami/kitepdf/core/font/GsubGlyph {
 	public final fun getFeatures ()Ljava/util/Set;
 	public final fun getGid ()I
 	public final fun getLigated ()Z
+	public final fun getShaperData ()I
+	public final fun getSyllable ()I
 	public final fun isMark ()Z
 	public final fun setCluster (I)V
+	public final fun setFeatures (Ljava/util/Set;)V
 	public final fun setGid (I)V
+	public final fun setShaperData (I)V
+	public final fun setSyllable (I)V
 }
 
 public final class io/github/yuroyami/kitepdf/core/font/Head {
@@ -596,8 +601,9 @@ public final class io/github/yuroyami/kitepdf/core/font/OpenTypeGsub {
 	public final fun hasScript (Ljava/lang/String;)Z
 	public final fun ligatures (Ljava/lang/String;I)Ljava/util/List;
 	public final fun single (Ljava/lang/String;I)Ljava/lang/Integer;
-	public final fun substitute (Ljava/util/List;Ljava/lang/String;Ljava/lang/String;Ljava/util/List;Ljava/util/Set;)V
-	public static synthetic fun substitute$default (Lio/github/yuroyami/kitepdf/core/font/OpenTypeGsub;Ljava/util/List;Ljava/lang/String;Ljava/lang/String;Ljava/util/List;Ljava/util/Set;ILjava/lang/Object;)V
+	public final fun substitute (Ljava/util/List;Ljava/lang/String;Ljava/lang/String;Ljava/util/List;Ljava/util/Set;Ljava/util/Set;)V
+	public static synthetic fun substitute$default (Lio/github/yuroyami/kitepdf/core/font/OpenTypeGsub;Ljava/util/List;Ljava/lang/String;Ljava/lang/String;Ljava/util/List;Ljava/util/Set;Ljava/util/Set;ILjava/lang/Object;)V
+	public final fun wouldSubstitute (Ljava/lang/String;Ljava/lang/String;[I)Z
 }
 
 public final class io/github/yuroyami/kitepdf/core/font/OpenTypeGsub$Companion {
