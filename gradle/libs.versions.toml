@@ -1,16 +1,16 @@
 [versions] #######################################################################################
 # Toolchain
 kotlin = "2.4.20"
-agp = "9.4.0"
+agp = "9.4.1"
 vanniktechPublish = "0.37.0"
-dokka = "2.2.0"
+dokka = "2.3.0-Beta"
 
 # Compose Multiplatform, used only by :sample. :kitepdf stays pure-Kotlin-stdlib.
-composeMultiplatform = "1.12.0"
+composeMultiplatform = "1.12.1"
 composeMaterial3 = "1.12.0-alpha03"
 
 # Android platform bridge (sample only)
-activityCompose = "1.14.0-alpha02"
+activityCompose = "1.14.0-alpha03"
 
 # Skiko: JetBrains' Skia bindings. Used by :kitepdf-skia. Compose Multiplatform
 # rides on Skiko under the hood on JVM Desktop + iOS, so this gives us the same
@@ -27,7 +27,7 @@ kitejs = "0.2.0"
 
 # Ktor client. Used ONLY by :kitepdf-net, the optional remote-loading artifact.
 # No other module may depend on it: the engine stays kotlin-stdlib + KiteImage.
-ktor = "3.5.2"
+ktor = "3.6.0"
 
 [libraries] ######################################################################################
 # KiteImage supplies every image codec :kitepdf-core decodes through: JPEG
