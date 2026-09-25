@@ -1,5 +1,3 @@
-<h1 align="center">KitePDF</h1>
-
 <p align="center">
   <img src="art/kitepdf-logo.svg" width="360" alt="KitePDF logo">
 </p>
