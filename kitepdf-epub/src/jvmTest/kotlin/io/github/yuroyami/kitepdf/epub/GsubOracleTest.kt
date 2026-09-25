@@ -9,7 +9,8 @@ import kotlin.test.assertTrue
 /**
  * Shapes words through GSUB the way [BoxLayout] does and compares the glyph ids with
  * HarfBuzz's `hb-shape` (#211): real words of each script, and random words of the Indic
- * scripts. Skips when `hb-shape` or the Noto fonts of the MuPDF resources are missing.
+ * scripts, Arabic, Urdu and Syriac. Skips when `hb-shape` or the Noto fonts of the MuPDF
+ * resources are missing.
  */
 class GsubOracleTest {
 
@@ -157,6 +158,57 @@ class GsubOracleTest {
             }
         }
         println("random indic words: ${total - failures.size} of $total match")
+        assertTrue(failures.isEmpty(), failures.take(20).joinToString("\n"))
+    }
+
+    /**
+     * Random words of Arabic, Urdu and Syriac shape to the glyphs HarfBuzz gives (#315, #318):
+     * letters with up to two marks each, and now and then a joiner, a right-to-left mark or a
+     * tatweel. The words leave out what KitePDF does not do yet: a letter that composes with a
+     * madda or hamza mark (#316), and the Syriac abbreviation mark, which needs `stch`.
+     */
+    @Test
+    fun random_arabic_and_syriac_words_shape_to_the_glyphs_harfbuzz_gives() {
+        val dir = fontsDir().orSkip("The Noto fonts of mupdf-master/resources")
+        val tool = hbShape().orSkip("hb-shape")
+        val joiners = listOf(0x200C, 0x200D, 0x200F, 0x2060, 0x0640)
+        val arabicLetters = (0x0621..0x064A).filter { it !in 0x0622..0x0626 } +
+            listOf(0x0671, 0x0674, 0x0679, 0x067E, 0x0686, 0x0688, 0x0691, 0x06A9, 0x06AF, 0x06BE, 0x06C1, 0x06CC, 0x06D2)
+        val arabicMarks = (0x064B..0x0655).toList() + listOf(0x0658, 0x0670, 0x06DC, 0x06E3, 0x06E7, 0x06E8)
+        val sets = listOf(
+            Triple("NotoNaskhArabic-Regular.otf", arabicLetters, arabicMarks),
+            Triple("NotoNastaliqUrdu-Regular.otf", arabicLetters, arabicMarks),
+            Triple("NotoSansSyriac-Regular.otf", (0x0710..0x072F) + (0x074D..0x074F), (0x0730..0x074A).toList()),
+        )
+        val composing = setOf(0x0627, 0x0648, 0x064A, 0x06C1, 0x06D2, 0x06D5)
+        val maddaAndHamza = setOf(0x0653, 0x0654, 0x0655)
+        val failures = ArrayList<String>()
+        var total = 0
+        for ((index, set) in sets.withIndex()) {
+            val (name, letters, marks) = set
+            val font = File(dir, name).takeIf { it.exists() } ?: continue
+            val random = Random(index)
+            val words = List(500) {
+                buildString {
+                    repeat(2 + random.nextInt(4)) {
+                        val letter = letters.random(random)
+                        appendCodePoint(letter)
+                        val pool = if (letter in composing) marks - maddaAndHamza else marks
+                        repeat(random.nextInt(3)) { appendCodePoint(pool.random(random)) }
+                        if (random.nextInt(5) == 0) appendCodePoint(joiners.random(random))
+                    }
+                }
+            }.distinct()
+            val theirs = harfbuzz(tool, font, words)
+            for ((i, word) in words.withIndex()) {
+                total++
+                val ours = kitepdf(font, word)
+                if (ours != theirs[i]) {
+                    failures += "$name ${word.codePoints().toArray().joinToString(" ") { "%04X".format(it) }}: KitePDF $ours, HarfBuzz ${theirs[i]}"
+                }
+            }
+        }
+        println("random arabic and syriac words: ${total - failures.size} of $total match")
         assertTrue(failures.isEmpty(), failures.take(20).joinToString("\n"))
     }
 

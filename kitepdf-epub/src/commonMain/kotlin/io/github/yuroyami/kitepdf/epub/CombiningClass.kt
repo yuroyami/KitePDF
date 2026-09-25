@@ -4,7 +4,9 @@ package io.github.yuroyami.kitepdf.epub
  * The order a shaper puts combining marks in before GSUB runs (#211): each run of marks
  * sorts by canonical combining class (Unicode 17, 3.11), with the classes HarfBuzz modifies
  * so that fonts see the order they were built for. Hebrew points follow the SBL Hebrew order,
- * Arabic shadda goes before the other marks, and Thai sara u and uu go before phinthu.
+ * Arabic shadda goes before the other marks, and Thai sara u and uu go before phinthu. The
+ * Arabic modifier marks of UTR #53, such as hamza above, then go first among the marks of
+ * their class (#318).
  *
  * Only the blocks of the scripts [TextShaper] shapes are covered. A mark outside them has
  * class 0 and keeps its place.
@@ -21,10 +23,38 @@ internal object CombiningClass {
             if (end - i > 1) {
                 val sorted = items.subList(i, end).sortedBy { modified(codePoint(it)) }
                 for (k in sorted.indices) items[i + k] = sorted[k]
+                moveModifierMarks(items.subList(i, end), codePoint)
             }
             i = end
         }
     }
+
+    /**
+     * Moves the modifier marks at the start of the class 220 marks, and then those at the start
+     * of the class 230 marks, before the other marks of the sorted [run], as HarfBuzz's
+     * reorder_marks_arabic does.
+     */
+    private fun <T> moveModifierMarks(run: MutableList<T>, codePoint: (T) -> Int) {
+        var start = 0
+        var i = 0
+        for (cc in intArrayOf(220, 230)) {
+            while (i < run.size && modified(codePoint(run[i])) < cc) i++
+            if (i == run.size) break
+            if (modified(codePoint(run[i])) > cc) continue
+            var j = i
+            while (j < run.size && modified(codePoint(run[j])) == cc && codePoint(run[j]) in MODIFIER_MARKS) j++
+            if (i == j) continue
+            val moved = run.subList(i, j).toList() + run.subList(start, i).toList()
+            for ((k, item) in moved.withIndex()) run[start + k] = item
+            start += j - i
+            i = j
+        }
+    }
+
+    /** The modifier combining marks of UTR #53. */
+    private val MODIFIER_MARKS = setOf(
+        0x0654, 0x0655, 0x0658, 0x06DC, 0x06E3, 0x06E7, 0x06E8, 0x08CA, 0x08CB, 0x08CD, 0x08CE, 0x08CF, 0x08D3, 0x08F3,
+    )
 
     /** The combining class of [cp] as HarfBuzz modifies it, 0 for a character that is not a mark. */
     fun modified(cp: Int): Int {
@@ -54,6 +84,7 @@ internal object CombiningClass {
         in 0x064B..0x065F -> arabic(cp)
         0x0670 -> 35
         in 0x06D6..0x06ED -> arabicExtended(cp)
+        in 0x0700..0x08FF -> u0700(cp)
         0x093C, 0x09BC, 0x0A3C, 0x0ABC, 0x0B3C, 0x0C3C, 0x0CBC -> 7
         0x094D, 0x09CD, 0x0A4D, 0x0ACD, 0x0B4D, 0x0BCD, 0x0C4D, 0x0CCD, 0x0D3B, 0x0D3C, 0x0D4D, 0x0DCA -> 9
         0x0951, 0x0953, 0x0954, 0x09FE -> 230
@@ -119,6 +150,23 @@ internal object CombiningClass {
         in 0x064B..0x0652 -> cp - 0x064B + 27
         0x0655, 0x0656, 0x065C, 0x065F -> 220
         else -> 230
+    }
+
+    /** Syriac, N'Ko, Samaritan, Mandaic and the Arabic extended blocks, U+0700 to U+08FF. */
+    private fun u0700(cp: Int): Int = when (cp) {
+        0x0711 -> 36
+        0x0731, 0x0734, in 0x0737..0x0739, 0x073B, 0x073C, 0x073E, 0x0742, 0x0744, 0x0746, 0x0748 -> 220
+        in 0x0730..0x074A -> 230
+        0x07F2, 0x07FD -> 220
+        in 0x07EB..0x07F3 -> 230
+        in 0x0816..0x0819, in 0x081B..0x0823, in 0x0825..0x0827, in 0x0829..0x082D -> 230
+        in 0x0859..0x085B, in 0x0899..0x089B, in 0x08CF..0x08D3, 0x08E3, 0x08E6, 0x08E9, in 0x08ED..0x08EF, 0x08F6, 0x08F9, 0x08FA -> 220
+        0x08F0 -> 27
+        0x08F1 -> 28
+        0x08F2 -> 29
+        0x0897, 0x0898, in 0x089C..0x089F, in 0x08CA..0x08CE, in 0x08D4..0x08E1, 0x08E4, 0x08E5, 0x08E7, 0x08E8,
+        in 0x08EA..0x08EC, in 0x08F3..0x08F5, 0x08F7, 0x08F8, in 0x08FB..0x08FF -> 230
+        else -> 0
     }
 
     private fun arabicExtended(cp: Int): Int = when (cp) {

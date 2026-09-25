@@ -445,6 +445,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   GSUB matching passes over ZWJ, ZWNJ and the other default ignorable characters where
   HarfBuzz does, and the Hangul fillers draw instead of hiding. Against `hb-shape`, all
   208 test words and 3,575 random Indic words give the same glyphs (#211).
+- Arabic and Syriac letters take the joining forms Unicode gives them. The joining types
+  of U+0600 to U+08FF come from ArabicShaping.txt of Unicode 17, and a format character,
+  such as a right-to-left mark, is transparent. Before, a hamza joined the letter before
+  it, so the yeh of شيء drew in its medial form, and a direction mark broke the join
+  between two letters. Syriac letters now join, and Alaph takes its fin2, fin3 and med2
+  forms, as HarfBuzz's Arabic shaper gives them (#315).
+- The marks of Syriac and of the Arabic extended blocks sort by their combining class,
+  and the Arabic modifier marks of UTR #53, such as hamza below and small high seen, go
+  first among the marks of their class, as HarfBuzz orders them. Against `hb-shape`,
+  1,500 random Arabic, Urdu and Syriac words give the same glyphs (#318).
 - Text in an embedded font shapes through every GSUB lookup type. Contextual and
   chained contextual substitution, multiple and alternate substitution, and reverse
   chaining now apply along with single and ligature substitution. The lookups run for the script
