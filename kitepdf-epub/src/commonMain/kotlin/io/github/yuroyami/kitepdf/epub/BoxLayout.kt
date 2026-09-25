@@ -853,6 +853,8 @@ internal class BoxLayout(
         var ligComponents: Int = 1,
         // The text of a cell that stands for several characters, such as a ligature; null means [ch].
         var text: String? = null,
+        // A hidden default ignorable, such as a ZWJ: it draws nothing and takes no advance.
+        var invisible: Boolean = false,
         // Envelope padding when the reading is wider than its base (pt). Only the
         // group's first/last cells carry it; it widens wrap/measure and the pen
         // walk in placeRuns without entering the glyph advance stream.
@@ -1061,7 +1063,7 @@ internal class BoxLayout(
         val cps = IntArray(cells.size) { cells[it].ch.code }
         val script = TextShaper.script(cps, gsub)
         val forms = if (ArabicJoining.hasArabic(cps)) ArabicJoining.forms(cps) else null
-        val stages = TextShaper.stages(script, optionalLigatures = cells.none { it.kernAfter1000 != 0 })
+        val optionalLigatures = cells.none { it.kernAfter1000 != 0 }
         val out = ArrayList<Cell>(cells.size)
         var changed = false
         var start = 0
@@ -1072,12 +1074,10 @@ internal class BoxLayout(
             if (run.any { it.gid < 0 }) {
                 out.addAll(run)
             } else {
-                val glyphs = MutableList(run.size) { k ->
-                    val c = run[k]
-                    val joining = forms?.let { TextShaper.joining(cps[start + k], it[start + k]) } ?: emptySet()
-                    GsubGlyph(c.gid, k, joining, TextShaper.isMark(c.ch))
-                }
-                gsub.substitute(glyphs, script, null, stages, TextShaper.POSITIONAL)
+                val runForms = forms?.copyOfRange(start, end)
+                val glyphs = TextShaper.shape(
+                    face, gsub, script, cps.copyOfRange(start, end), IntArray(run.size) { run[it].gid }, runForms, optionalLigatures,
+                )
                 if (rebuild(run, glyphs, face, out)) changed = true
             }
             start = end
@@ -1099,7 +1099,9 @@ internal class BoxLayout(
         if (glyphs.size == run.size && glyphs.indices.all { glyphs[it].cluster == it }) {
             for ((k, g) in glyphs.withIndex()) {
                 val c = run[k]
-                if (g.gid != c.gid) {
+                if (g.shaperData and TextShaper.INVISIBLE != 0) {
+                    c.gid = g.gid; c.invisible = true; c.width = 0.0
+                } else if (g.gid != c.gid) {
                     c.gid = g.gid
                     c.width = (penAdvance1000(face, g.gid, c.ch) + c.kernAfter1000) * c.fontSize / 1000.0
                 }
@@ -1121,7 +1123,10 @@ internal class BoxLayout(
                     base.spec, base.color, base.shift, base.underline, face, g.gid, kernAfter1000 = spacing,
                     rubyGroup = base.rubyGroup, rubyText = base.rubyText, href = base.href,
                     lineThrough = base.lineThrough, backgroundColor = base.backgroundColor,
-                ).also { it.ligComponents = g.components; it.text = text },
+                ).also {
+                    it.ligComponents = g.components; it.text = text
+                    if (g.shaperData and TextShaper.INVISIBLE != 0) { it.invisible = true; it.width = 0.0 }
+                },
             )
         }
         return true
@@ -1405,7 +1410,7 @@ internal class BoxLayout(
             byteOffset = 0, byteCount = 1, gid = c.gid, text = c.text ?: CharText.of(c.ch),
             // Pair kerning to the next glyph is folded into this glyph's advance so
             // the drawn pen movement matches the wrap width.
-            advanceWidth = (penAdvance1000(face, c.gid, c.ch) + c.kernAfter1000).toDouble(),
+            advanceWidth = if (c.invisible) 0.0 else (penAdvance1000(face, c.gid, c.ch) + c.kernAfter1000).toDouble(),
             outline = face.outline(c.gid), isWordSpace = c.ch == ' ',
             xOffset = c.glyphXOffset, yOffset = c.glyphYOffset,
         )

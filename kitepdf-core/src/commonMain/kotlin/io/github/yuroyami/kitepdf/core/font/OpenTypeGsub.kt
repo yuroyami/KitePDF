@@ -57,7 +57,10 @@ public class OpenTypeGsub private constructor(
      * applies before the next, its lookups in LookupList order.
      *
      * A feature in [positional] applies only to the glyphs whose [GsubGlyph.features] name
-     * it, as the joining forms of Arabic do. Every other feature applies to every glyph.
+     * it, as the joining forms of Arabic do. Every other feature applies to every glyph. A
+     * lookup whose features are all in [perSyllable] matches its input only inside the
+     * [GsubGlyph.syllable] of the glyph it starts at, as HarfBuzz constrains the features of an
+     * Indic syllable.
      */
     public fun substitute(
         glyphs: MutableList<GsubGlyph>,
@@ -65,6 +68,7 @@ public class OpenTypeGsub private constructor(
         language: String?,
         stages: List<List<String>>,
         positional: Set<String> = emptySet(),
+        perSyllable: Set<String> = emptySet(),
     ) {
         val lang = languageSystem(script, language) ?: return
         val active = HashMap<String, MutableList<Int>>()
@@ -83,8 +87,50 @@ public class OpenTypeGsub private constructor(
                 val global = tags.any { it !in positional }
                 val applies: (GsubGlyph) -> Boolean =
                     if (global) { _ -> true } else { g -> g.features.any { it in tags } }
-                Applier(glyphs, applies).run(lookup)
+                Applier(glyphs, applies, tags.all { it in perSyllable }).run(lookup)
             }
+        }
+    }
+
+    /**
+     * True when a lookup of [feature] for [script] would substitute exactly [gids], with no
+     * context before or after them, as HarfBuzz's Indic shaper asks the font whether a
+     * consonant takes a below-base form.
+     */
+    public fun wouldSubstitute(feature: String, script: String, gids: IntArray): Boolean {
+        if (gids.isEmpty()) return false
+        val lang = languageSystem(script, null) ?: return false
+        val indices = (listOf(lang.required) + lang.features.toList()).mapNotNull { features.getOrNull(it) }
+            .filter { it.tag == feature }.flatMap { it.lookups.toList() }
+        for (li in indices) {
+            val lookup = lookups.getOrNull(li) ?: continue
+            for (st in lookup.subtables) if (wouldApply(st, gids)) return true
+        }
+        return false
+    }
+
+    private fun wouldApply(st: Subtable, gids: IntArray): Boolean {
+        val first = gids[0]
+        val rest = gids.copyOfRange(1, gids.size)
+        return when (st) {
+            is SingleSubst -> gids.size == 1 && st.substitute(first) != null
+            is MultipleSubst -> gids.size == 1 && st.sequence(first) != null
+            is AlternateSubst -> gids.size == 1 && st.alternates(first) != null
+            is LigatureSubst -> st.rulesFor(first)?.any { it.rest.contentEquals(rest) } == true
+            is ContextSubst.Glyphs -> st.coverage.indexOf(first).let { i -> i >= 0 && st.ruleSets.getOrNull(i)?.any { it.input.contentEquals(rest) } == true }
+            is ContextSubst.Classes -> st.coverage.indexOf(first) >= 0 &&
+                st.ruleSets.getOrNull(st.classes.classOf(first))?.any { r -> r.input.size == rest.size && r.input.indices.all { r.input[it] == st.classes.classOf(rest[it]) } } == true
+            is ContextSubst.Coverages -> st.coverages.size == gids.size && gids.indices.all { st.coverages[it].indexOf(gids[it]) >= 0 }
+            is ChainSubst.Glyphs -> st.coverage.indexOf(first).let { i ->
+                i >= 0 && st.ruleSets.getOrNull(i)?.any { it.backtrack.isEmpty() && it.lookahead.isEmpty() && it.input.contentEquals(rest) } == true
+            }
+            is ChainSubst.Classes -> st.coverage.indexOf(first) >= 0 &&
+                st.ruleSets.getOrNull(st.input.classOf(first))?.any { r ->
+                    r.backtrack.isEmpty() && r.lookahead.isEmpty() && r.input.size == rest.size && r.input.indices.all { r.input[it] == st.input.classOf(rest[it]) }
+                } == true
+            is ChainSubst.Coverages -> st.backtrack.isEmpty() && st.lookahead.isEmpty() && st.input.size == gids.size &&
+                gids.indices.all { st.input[it].indexOf(gids[it]) >= 0 }
+            is ReverseChainSubst -> gids.size == 1 && st.backtrack.isEmpty() && st.lookahead.isEmpty() && st.coverage.indexOf(first) >= 0
         }
     }
 
@@ -96,7 +142,11 @@ public class OpenTypeGsub private constructor(
     /* ─── Applying lookups ─────────────────────────────────────────────────── */
 
     /** One pass of lookups over [glyphs], where [applies] tells which glyphs the features of the pass reach. */
-    private inner class Applier(val glyphs: MutableList<GsubGlyph>, val applies: (GsubGlyph) -> Boolean) {
+    private inner class Applier(
+        val glyphs: MutableList<GsubGlyph>,
+        val applies: (GsubGlyph) -> Boolean,
+        val perSyllable: Boolean = false,
+    ) {
         /** How deep nested lookups go, as HarfBuzz limits them. */
         private var nesting = 0
 
@@ -242,11 +292,13 @@ public class OpenTypeGsub private constructor(
             val positions = IntArray(count)
             positions[0] = start
             var p = start
+            val syllable = glyphs[start].syllable
             for (k in 1 until count) {
                 p = nextUnskipped(lookup, p) ?: return null
                 val g = glyphs[p]
                 // Input glyphs carry the feature of the lookup, as HarfBuzz's mask check asks.
                 if (!applies(g) || !match(k, g)) return null
+                if (perSyllable && g.syllable != syllable) return null
                 positions[k] = p
             }
             return positions
@@ -791,9 +843,15 @@ public class OpenTypeGsub private constructor(
 public class GsubGlyph(
     public var gid: Int,
     public var cluster: Int,
-    public val features: Set<String> = emptySet(),
+    public var features: Set<String> = emptySet(),
     public val isMark: Boolean = false,
 ) {
+    /** The syllable of the glyph, which a per-syllable lookup does not match across. */
+    public var syllable: Int = 0
+
+    /** Free for the shaper: the category and position an Indic shaper keeps with each glyph. */
+    public var shaperData: Int = 0
+
     /** How many glyphs a ligature joined into this one, 1 for any other glyph. */
     public var components: Int = 1
         internal set
@@ -805,5 +863,7 @@ public class GsubGlyph(
     internal fun copy(gid: Int): GsubGlyph = GsubGlyph(gid, cluster, features, isMark).also {
         it.components = components
         it.ligated = ligated
+        it.syllable = syllable
+        it.shaperData = shaperData
     }
 }

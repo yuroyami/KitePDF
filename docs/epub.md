@@ -271,9 +271,11 @@ The layout engine covers what real books use:
 - **Shaping**: every GSUB lookup type of an embedded font, contextual and
   chaining substitution included, for the script of each word and in the
   stages HarfBuzz uses, with the joining forms of Arabic. Combining marks are
-  put in the order the font expects first. Words in Latin, Greek, Cyrillic,
-  Arabic, Urdu Nastaliq, Hebrew and Thai shape to the glyphs HarfBuzz gives.
-  Indic scripts are not reordered yet.
+  put in the order the font expects first. Devanagari and Bengali syllables
+  are reordered around their features, with reph, half forms and pre-base
+  matras, as HarfBuzz's Indic shaper does. Words in Latin, Greek, Cyrillic,
+  Arabic, Urdu Nastaliq, Hebrew, Thai, Devanagari and Bengali shape to the
+  glyphs HarfBuzz gives. The other Indic scripts are not reordered yet.
 - **Marks**: GPOS attachment onto a base letter, onto a ligature component,
   and onto the mark below, so two stacked diacritics sit one above the other
   instead of overprinting.

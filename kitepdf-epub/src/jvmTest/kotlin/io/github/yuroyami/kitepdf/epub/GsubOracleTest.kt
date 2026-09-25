@@ -1,6 +1,5 @@
 package io.github.yuroyami.kitepdf.epub
 
-import io.github.yuroyami.kitepdf.core.font.GsubGlyph
 import java.io.File
 import java.util.concurrent.TimeUnit
 import kotlin.test.Test
@@ -42,12 +41,7 @@ class GsubOracleTest {
         val cps = ordered.toIntArray()
         val script = TextShaper.script(cps, gsub)
         val forms = if (ArabicJoining.hasArabic(cps)) ArabicJoining.forms(cps) else null
-        val glyphs = MutableList(cps.size) { k ->
-            val joining = forms?.let { TextShaper.joining(cps[k], it[k]) } ?: emptySet()
-            GsubGlyph(face.gidFor(cps[k]), k, joining, TextShaper.isMark(cps[k].toChar()))
-        }
-        gsub.substitute(glyphs, script, null, TextShaper.stages(script, optionalLigatures = true), TextShaper.POSITIONAL)
-        return glyphs.map { it.gid }
+        return TextShaper.shape(face, gsub, script, cps, IntArray(cps.size) { face.gidFor(cps[it]) }, forms, optionalLigatures = true).map { it.gid }
     }
 
     private val cases = mapOf(
@@ -64,12 +58,20 @@ class GsubOracleTest {
         ),
         "NotoSerifHebrew-Regular.otf" to listOf("שָׁלוֹם", "עברית", "בְּרֵאשִׁית", "יִשְׂרָאֵל", "הַמֶּלֶךְ"),
         "NotoSerifThai-Regular.otf" to listOf("ภาษา", "ไทย", "สวัสดี", "ประเทศ", "กรุงเทพ"),
+        "NotoSerifDevanagari-Regular.otf" to listOf(
+            "हिन्दी", "नमस्ते", "क्षत्रिय", "कि", "धर्म", "कर्म", "पुत्र", "विद्या", "श्री", "द्वार",
+            "प्रेम", "ज़िंदगी", "फ़िल्म", "स्त्री", "आत्मा", "राष्ट्र", "कृष्ण", "हृदय", "र्क", "मैं",
+            "क्\u200Dष", "क्\u200Cष", "र्\u200Dया", "द्ध्र्य", "श्र्य", "ि", "१२३", "ॐ", "अँधेरा", "ह्म",
+            "र्कि", "र्त्", "ट्ठ", "ङ्क्ष", "प्र्", "ऋषि", "क़ि", "र्ज़", "त्र्य", "न्त्र्य",
+        ),
+        "NotoSerifBengali-Regular.otf" to listOf(
+            "বাংলা", "ভাষা", "কি", "কর্ম", "স্ত্রী", "বিদ্যা", "কোথায়", "শ্রী", "ক্ষমা", "রবীন্দ্রনাথ",
+            "র্য", "র\u200Dয", "ক্\u200Dষ", "ৎ", "সৌরভ", "গৈরিক", "ড়", "ঢ়", "য়", "১২৩",
+        ),
     )
 
     /** Scripts whose shaper does more than GSUB alone, printed for information and not asserted. */
-    private val informational = mapOf(
-        "NotoSerifDevanagari-Regular.otf" to listOf("हिन्दी", "नमस्ते", "क्षत्रिय", "कि"),
-    )
+    private val informational = mapOf<String, List<String>>()
 
     @Test
     fun words_shape_to_the_glyphs_harfbuzz_gives() {

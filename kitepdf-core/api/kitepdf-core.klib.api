@@ -353,8 +353,6 @@ final class io.github.yuroyami.kitepdf.core.font/GlyphPoint { // io.github.yuroy
 final class io.github.yuroyami.kitepdf.core.font/GsubGlyph { // io.github.yuroyami.kitepdf.core.font/GsubGlyph|null[0]
     constructor <init>(kotlin/Int, kotlin/Int, kotlin.collections/Set<kotlin/String> = ..., kotlin/Boolean = ...) // io.github.yuroyami.kitepdf.core.font/GsubGlyph.<init>|<init>(kotlin.Int;kotlin.Int;kotlin.collections.Set<kotlin.String>;kotlin.Boolean){}[0]
 
-    final val features // io.github.yuroyami.kitepdf.core.font/GsubGlyph.features|{}features[0]
-        final fun <get-features>(): kotlin.collections/Set<kotlin/String> // io.github.yuroyami.kitepdf.core.font/GsubGlyph.features.<get-features>|<get-features>(){}[0]
     final val isMark // io.github.yuroyami.kitepdf.core.font/GsubGlyph.isMark|{}isMark[0]
         final fun <get-isMark>(): kotlin/Boolean // io.github.yuroyami.kitepdf.core.font/GsubGlyph.isMark.<get-isMark>|<get-isMark>(){}[0]
 
@@ -363,11 +361,20 @@ final class io.github.yuroyami.kitepdf.core.font/GsubGlyph { // io.github.yuroya
         final fun <set-cluster>(kotlin/Int) // io.github.yuroyami.kitepdf.core.font/GsubGlyph.cluster.<set-cluster>|<set-cluster>(kotlin.Int){}[0]
     final var components // io.github.yuroyami.kitepdf.core.font/GsubGlyph.components|{}components[0]
         final fun <get-components>(): kotlin/Int // io.github.yuroyami.kitepdf.core.font/GsubGlyph.components.<get-components>|<get-components>(){}[0]
+    final var features // io.github.yuroyami.kitepdf.core.font/GsubGlyph.features|{}features[0]
+        final fun <get-features>(): kotlin.collections/Set<kotlin/String> // io.github.yuroyami.kitepdf.core.font/GsubGlyph.features.<get-features>|<get-features>(){}[0]
+        final fun <set-features>(kotlin.collections/Set<kotlin/String>) // io.github.yuroyami.kitepdf.core.font/GsubGlyph.features.<set-features>|<set-features>(kotlin.collections.Set<kotlin.String>){}[0]
     final var gid // io.github.yuroyami.kitepdf.core.font/GsubGlyph.gid|{}gid[0]
         final fun <get-gid>(): kotlin/Int // io.github.yuroyami.kitepdf.core.font/GsubGlyph.gid.<get-gid>|<get-gid>(){}[0]
         final fun <set-gid>(kotlin/Int) // io.github.yuroyami.kitepdf.core.font/GsubGlyph.gid.<set-gid>|<set-gid>(kotlin.Int){}[0]
     final var ligated // io.github.yuroyami.kitepdf.core.font/GsubGlyph.ligated|{}ligated[0]
         final fun <get-ligated>(): kotlin/Boolean // io.github.yuroyami.kitepdf.core.font/GsubGlyph.ligated.<get-ligated>|<get-ligated>(){}[0]
+    final var shaperData // io.github.yuroyami.kitepdf.core.font/GsubGlyph.shaperData|{}shaperData[0]
+        final fun <get-shaperData>(): kotlin/Int // io.github.yuroyami.kitepdf.core.font/GsubGlyph.shaperData.<get-shaperData>|<get-shaperData>(){}[0]
+        final fun <set-shaperData>(kotlin/Int) // io.github.yuroyami.kitepdf.core.font/GsubGlyph.shaperData.<set-shaperData>|<set-shaperData>(kotlin.Int){}[0]
+    final var syllable // io.github.yuroyami.kitepdf.core.font/GsubGlyph.syllable|{}syllable[0]
+        final fun <get-syllable>(): kotlin/Int // io.github.yuroyami.kitepdf.core.font/GsubGlyph.syllable.<get-syllable>|<get-syllable>(){}[0]
+        final fun <set-syllable>(kotlin/Int) // io.github.yuroyami.kitepdf.core.font/GsubGlyph.syllable.<set-syllable>|<set-syllable>(kotlin.Int){}[0]
 }
 
 final class io.github.yuroyami.kitepdf.core.font/Head { // io.github.yuroyami.kitepdf.core.font/Head|null[0]
@@ -449,7 +456,8 @@ final class io.github.yuroyami.kitepdf.core.font/OpenTypeGsub { // io.github.yur
     final fun hasScript(kotlin/String): kotlin/Boolean // io.github.yuroyami.kitepdf.core.font/OpenTypeGsub.hasScript|hasScript(kotlin.String){}[0]
     final fun ligatures(kotlin/String, kotlin/Int): kotlin.collections/List<io.github.yuroyami.kitepdf.core.font/OpenTypeGsub.LigRule>? // io.github.yuroyami.kitepdf.core.font/OpenTypeGsub.ligatures|ligatures(kotlin.String;kotlin.Int){}[0]
     final fun single(kotlin/String, kotlin/Int): kotlin/Int? // io.github.yuroyami.kitepdf.core.font/OpenTypeGsub.single|single(kotlin.String;kotlin.Int){}[0]
-    final fun substitute(kotlin.collections/MutableList<io.github.yuroyami.kitepdf.core.font/GsubGlyph>, kotlin/String, kotlin/String?, kotlin.collections/List<kotlin.collections/List<kotlin/String>>, kotlin.collections/Set<kotlin/String> = ...) // io.github.yuroyami.kitepdf.core.font/OpenTypeGsub.substitute|substitute(kotlin.collections.MutableList<io.github.yuroyami.kitepdf.core.font.GsubGlyph>;kotlin.String;kotlin.String?;kotlin.collections.List<kotlin.collections.List<kotlin.String>>;kotlin.collections.Set<kotlin.String>){}[0]
+    final fun substitute(kotlin.collections/MutableList<io.github.yuroyami.kitepdf.core.font/GsubGlyph>, kotlin/String, kotlin/String?, kotlin.collections/List<kotlin.collections/List<kotlin/String>>, kotlin.collections/Set<kotlin/String> = ..., kotlin.collections/Set<kotlin/String> = ...) // io.github.yuroyami.kitepdf.core.font/OpenTypeGsub.substitute|substitute(kotlin.collections.MutableList<io.github.yuroyami.kitepdf.core.font.GsubGlyph>;kotlin.String;kotlin.String?;kotlin.collections.List<kotlin.collections.List<kotlin.String>>;kotlin.collections.Set<kotlin.String>;kotlin.collections.Set<kotlin.String>){}[0]
+    final fun wouldSubstitute(kotlin/String, kotlin/String, kotlin/IntArray): kotlin/Boolean // io.github.yuroyami.kitepdf.core.font/OpenTypeGsub.wouldSubstitute|wouldSubstitute(kotlin.String;kotlin.String;kotlin.IntArray){}[0]
 
     final class LigRule { // io.github.yuroyami.kitepdf.core.font/OpenTypeGsub.LigRule|null[0]
         constructor <init>(kotlin/IntArray, kotlin/Int) // io.github.yuroyami.kitepdf.core.font/OpenTypeGsub.LigRule.<init>|<init>(kotlin.IntArray;kotlin.Int){}[0]
