@@ -1,5 +1,6 @@
 package io.github.yuroyami.kitepdf.epub
 
+import io.github.yuroyami.kitepdf.core.font.OpenTypeGsub
 import java.io.File
 import java.util.concurrent.TimeUnit
 import kotlin.random.Random
@@ -9,8 +10,9 @@ import kotlin.test.assertTrue
 /**
  * Shapes words through GSUB the way [BoxLayout] does and compares the glyph ids with
  * HarfBuzz's `hb-shape` (#211): real words of each script, random words of the Indic
- * scripts, Khmer, Myanmar, Arabic, Urdu and Syriac, and random words with combining marks.
- * Skips when `hb-shape` or the Noto fonts of the MuPDF resources are missing.
+ * scripts, Khmer, Myanmar, the Universal Shaping Engine, Arabic, Urdu and Syriac, and random
+ * words with combining marks. Skips when `hb-shape` or the Noto fonts of the MuPDF resources
+ * are missing.
  */
 class GsubOracleTest {
 
@@ -32,6 +34,7 @@ class GsubOracleTest {
         p.waitFor(60, TimeUnit.SECONDS)
         return words.mapIndexed { i, word ->
             val gids = lines[i].trim().removePrefix("[").removeSuffix("]").split('|').filter { it.isNotBlank() }.map { it.trim().toInt() }
+            // HarfBuzz lists the glyphs of a right-to-left word from its end.
             if (word.any { it.code in 0x0590..0x08FF }) gids.reversed() else gids
         }
     }
@@ -44,7 +47,7 @@ class GsubOracleTest {
     /** The glyph ids KitePDF gives [word] in [font], through the same steps as [BoxLayout]. */
     private fun kitepdf(font: File, word: String): List<Int> {
         val face = face(font)
-        val gsub = face.gsub ?: return word.codePoints().toArray().map { face.gidFor(it) }
+        val gsub = face.gsub ?: OpenTypeGsub.EMPTY
         val cps = word.codePoints().toArray()
         val script = TextShaper.script(cps, gsub)
         val forms = if (ArabicJoining.hasArabic(cps)) ArabicJoining.forms(cps) else null
@@ -69,6 +72,10 @@ class GsubOracleTest {
         "NotoSerifKhmer-Regular.otf" to listOf(
             "ភាសាខ្មែរ", "កម្ពុជា", "ស្រី", "ក្រុង", "ព្រះ", "ខ្ញុំ", "សួស្តី", "អរគុណ", "ឆ្នាំ", "ប្រទេស", "កើត", "ចៅ",
         ),
+        "NotoSerifSinhala-Regular.otf" to listOf(
+            "සිංහල", "ශ්‍රී", "ලංකාව", "කෙසේද", "ස්තූතියි", "ක්‍ෂ", "පොත", "කෝ", "රෞ", "ද්‍ය",
+        ),
+        "NotoSerifTibetan-Regular.otf" to listOf("བོད་ཡིག", "སྐད", "བཀྲ་ཤིས", "བསྒྲུབས", "རྒྱལ", "ཧཱུྃ", "ཨོཾ"),
         "NotoSerifMyanmar-Regular.otf" to listOf(
             "မြန်မာ", "ဘာသာ", "ကျေးဇူးတင်ပါတယ်", "မင်္ဂလာပါ", "သင်္ချိုင်း", "ကြောင်", "ပြည်", "စာအုပ်", "ရှင်", "လျှော့",
         ),
@@ -283,6 +290,66 @@ class GsubOracleTest {
             "${words[i].codePoints().toArray().joinToString(" ") { "%04X".format(it) }}: KitePDF ${kitepdf(font, words[i])}, HarfBuzz ${theirs[i]}"
         }
         println("random myanmar words: ${words.size - failures.size} of ${words.size} match")
+        assertTrue(failures.isEmpty(), failures.take(20).joinToString("\n"))
+    }
+
+    /** The Noto font of each script of the Universal Shaping Engine in the Basic Multilingual Plane, with its block. */
+    private val use = listOf(
+        "NotoSerifSinhala-Regular.otf" to 0x0D80..0x0DFF, "NotoSerifTibetan-Regular.otf" to 0x0F00..0x0FFF,
+        "NotoSansMongolian-Regular.otf" to 0x1800..0x18AF, "NotoSansTagalog-Regular.otf" to 0x1700..0x171F,
+        "NotoSansHanunoo-Regular.otf" to 0x1720..0x173F, "NotoSansBuhid-Regular.otf" to 0x1740..0x175F,
+        "NotoSansTagbanwa-Regular.otf" to 0x1760..0x177F, "NotoSansLimbu-Regular.otf" to 0x1900..0x194F,
+        "NotoSansTaiLe-Regular.otf" to 0x1950..0x197F, "NotoSansBuginese-Regular.otf" to 0x1A00..0x1A1F,
+        "NotoSansTaiTham-Regular.otf" to 0x1A20..0x1AAF, "NotoSerifBalinese-Regular.otf" to 0x1B00..0x1B7F,
+        "NotoSansSundanese-Regular.otf" to 0x1B80..0x1BBF, "NotoSansBatak-Regular.otf" to 0x1BC0..0x1BFF,
+        "NotoSansLepcha-Regular.otf" to 0x1C00..0x1C4F, "NotoSansTifinagh-Regular.otf" to 0x2D30..0x2D7F,
+        "NotoSansSylotiNagri-Regular.otf" to 0xA800..0xA82F, "NotoSansPhagsPa-Regular.otf" to 0xA840..0xA87F,
+        "NotoSansSaurashtra-Regular.otf" to 0xA880..0xA8DF, "NotoSansKayahLi-Regular.otf" to 0xA900..0xA92F,
+        "NotoSansRejang-Regular.otf" to 0xA930..0xA95F, "NotoSansJavanese-Regular.otf" to 0xA980..0xA9DF,
+        "NotoSansCham-Regular.otf" to 0xAA00..0xAA5F, "NotoSansTaiViet-Regular.otf" to 0xAA80..0xAADF,
+        "NotoSansMeeteiMayek-Regular.otf" to 0xABC0..0xABFF, "NotoSansNKo-Regular.otf" to 0x07C0..0x07FF,
+        "NotoSansMandaic-Regular.otf" to 0x0840..0x085F,
+    )
+
+    /**
+     * Random words of the scripts of the Universal Shaping Engine shape to the glyphs HarfBuzz
+     * gives (#317): letters followed by signs of the block, now and then a joiner, and strings of
+     * any characters of the block, which make broken clusters. Four of the fonts have no GSUB,
+     * so these words also check the reordering of a font without one.
+     */
+    @Test
+    fun random_use_words_shape_to_the_glyphs_harfbuzz_gives() {
+        val dir = fontsDir().orSkip("The Noto fonts of mupdf-master/resources")
+        val tool = hbShape().orSkip("hb-shape")
+        val failures = ArrayList<String>()
+        var total = 0
+        for ((name, block) in use) {
+            val font = File(dir, name).takeIf { it.exists() } ?: continue
+            val chars = block.filter { face(font).gidFor(it) != 0 }
+            val letters = chars.filter { it.toChar().category == CharCategory.OTHER_LETTER }.ifEmpty { chars }
+            val signs = (chars - letters.toSet()).ifEmpty { chars }
+            val extra = listOf(0x200C, 0x200D) + listOf(0x25CC).filter { face(font).gidFor(it) != 0 }
+            val random = Random(block.first)
+            val words = List(200) {
+                buildString {
+                    if (random.nextInt(4) == 0) repeat(2 + random.nextInt(5)) { appendCodePoint((chars + extra).random(random)) }
+                    else repeat(1 + random.nextInt(3)) {
+                        appendCodePoint(letters.random(random))
+                        repeat(random.nextInt(4)) { appendCodePoint(signs.random(random)) }
+                        if (random.nextInt(10) == 0) appendCodePoint(extra.random(random))
+                    }
+                }
+            }.distinct()
+            val theirs = harfbuzz(tool, font, words)
+            for ((i, word) in words.withIndex()) {
+                total++
+                val ours = kitepdf(font, word)
+                if (ours != theirs[i]) {
+                    failures += "$name ${word.codePoints().toArray().joinToString(" ") { "%04X".format(it) }}: KitePDF $ours, HarfBuzz ${theirs[i]}"
+                }
+            }
+        }
+        println("random use words: ${total - failures.size} of $total match")
         assertTrue(failures.isEmpty(), failures.take(20).joinToString("\n"))
     }
 

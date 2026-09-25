@@ -479,6 +479,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   has no glyph class until a lookup replaces it, as in HarfBuzz, so a lookup that passes
   over base glyphs stops at it. Against `hb-shape`, 10 Myanmar words and 799 random
   Myanmar words give the same glyphs (#317).
+- Sinhala, Tibetan and the other scripts that HarfBuzz shapes with its Universal Shaping
+  Engine shape as it does, for the Basic Multilingual Plane: Mongolian, Tagalog, Hanunoo,
+  Buhid, Tagbanwa, Limbu, Tai Le, Buginese, Tai Tham, Balinese, Sundanese, Batak, Lepcha,
+  Syloti Nagri, Phags-pa, Saurashtra, Kayah Li, Rejang, Javanese, Cham, Tai Viet, Meetei
+  Mayek, Tifinagh, N'Ko and Mandaic. A repha moves after the base, a pre-base vowel moves
+  before it, a broken cluster gets a dotted circle, and a joining script takes its joining
+  forms. A font without GSUB now has its text reordered too, as in HarfBuzz. A ligature no
+  longer joins marks that attach to different components of an earlier ligature, because
+  the components of a ligature are now tracked as HarfBuzz tracks them. Against `hb-shape`,
+  17 Sinhala and Tibetan words and 5,347 random words in 27 fonts give the same glyphs (#317).
 - Text in an embedded font shapes through every GSUB lookup type. Contextual and
   chained contextual substitution, multiple and alternate substitution, and reverse
   chaining now apply along with single and ligature substitution. The lookups run for the script

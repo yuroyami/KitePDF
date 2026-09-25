@@ -1,6 +1,7 @@
 package io.github.yuroyami.kitepdf.epub
 
 import io.github.yuroyami.kitepdf.core.font.GsubGlyph
+import io.github.yuroyami.kitepdf.core.font.OpenTypeGsub
 import io.github.yuroyami.kitepdf.svg.SvgImage
 
 import io.github.yuroyami.kitepdf.epub.css.ComputedStyle
@@ -1057,7 +1058,8 @@ internal class BoxLayout(
     private fun shapeWord(cells: MutableList<Cell>): Boolean {
         val face = cells.firstOrNull()?.face ?: return false
         if (cells.any { it.face !== face }) return false
-        val gsub = face.gsub ?: return false
+        // A font without GSUB still has its syllables reordered, as HarfBuzz reorders them.
+        val gsub = face.gsub ?: OpenTypeGsub.EMPTY
         val cps = IntArray(cells.size) { cells[it].ch.code }
         val script = TextShaper.script(cps, gsub)
         val forms = if (ArabicJoining.hasArabic(cps)) ArabicJoining.forms(cps) else null

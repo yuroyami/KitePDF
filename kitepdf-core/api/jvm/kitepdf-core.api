@@ -516,6 +516,7 @@ public final class io/github/yuroyami/kitepdf/core/font/GsubGlyph {
 	public fun <init> (IILjava/util/Set;ZLio/github/yuroyami/kitepdf/core/font/GsubGlyph$Ignorable;)V
 	public synthetic fun <init> (IILjava/util/Set;ZLio/github/yuroyami/kitepdf/core/font/GsubGlyph$Ignorable;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public final fun getCluster ()I
+	public final fun getComponent ()I
 	public final fun getComponents ()I
 	public final fun getFeatures ()Ljava/util/Set;
 	public final fun getGid ()I
@@ -534,6 +535,7 @@ public final class io/github/yuroyami/kitepdf/core/font/GsubGlyph {
 	public final fun setLigated (Z)V
 	public final fun setMultiplied (Z)V
 	public final fun setShaperData (I)V
+	public final fun setSubstituted (Z)V
 	public final fun setSyllable (I)V
 }
 
@@ -626,6 +628,7 @@ public final class io/github/yuroyami/kitepdf/core/font/OpenTypeGsub {
 public final class io/github/yuroyami/kitepdf/core/font/OpenTypeGsub$Companion {
 	public final fun from ([B)Lio/github/yuroyami/kitepdf/core/font/OpenTypeGsub;
 	public final fun from ([B[B)Lio/github/yuroyami/kitepdf/core/font/OpenTypeGsub;
+	public final fun getEMPTY ()Lio/github/yuroyami/kitepdf/core/font/OpenTypeGsub;
 }
 
 public final class io/github/yuroyami/kitepdf/core/font/OpenTypeGsub$LigRule {
