@@ -1027,15 +1027,14 @@ internal class BoxLayout(
                 // font-variant: small-caps. Prefer the face's real `smcp` glyph;
                 // otherwise synthesize: the UPPERCASE form at 0.8x size (the cell
                 // then carries the uppercase char, a documented extraction quirk).
-                // Only the BMP is synthesized, where Char has the case mappings.
                 var c = cp
                 var cellFs = fs
                 var smcpGid = -1
-                if (run.smallCaps && cp < 0x10000 && cp.toChar().isLowerCase()) {
+                if (run.smallCaps && CaseMapping.isLowercase(cp)) {
                     val g0 = face?.gidFor(cp) ?: 0
                     val s = if (g0 != 0) face!!.substSingle("smcp", g0) else 0
                     if (g0 != 0 && s != g0) smcpGid = s
-                    else { c = cp.toChar().uppercaseChar().code; cellFs = fs * SMALL_CAPS_SCALE }
+                    else { c = CaseMapping.uppercase(cp); cellFs = fs * SMALL_CAPS_SCALE }
                 }
                 // Per-glyph fallback: a codepoint missing from the matched face
                 // (cmap -> gid 0, `.notdef`) must not paint tofu. Try any other

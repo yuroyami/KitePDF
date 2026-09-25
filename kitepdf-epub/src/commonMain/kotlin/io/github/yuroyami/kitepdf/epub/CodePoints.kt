@@ -10,6 +10,13 @@ internal fun codePointAt(text: CharSequence, index: Int): Int {
     return high.code
 }
 
+/** Appends [cp] to [out] as one or two UTF-16 chars. */
+internal fun appendCodePoint(out: StringBuilder, cp: Int) {
+    if (cp < 0x10000) { out.append(cp.toChar()); return }
+    val v = cp - 0x10000
+    out.append((0xD800 + (v shr 10)).toChar()).append((0xDC00 + (v and 0x3FF)).toChar())
+}
+
 /** The number of UTF-16 chars that [cp] takes. */
 internal fun charCount(cp: Int): Int = if (cp >= 0x10000) 2 else 1
 

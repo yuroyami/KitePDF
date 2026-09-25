@@ -512,6 +512,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   as a whole before it breaks into lines. A bracket around right-to-left text in a
   left-to-right sentence keeps its glyph. All 91,707 tests of BidiCharacterTest.txt and all
   770,241 cases of BidiTest.txt pass (#323).
+- `text-transform` and synthesized small caps change the case of letters outside the Basic
+  Multilingual Plane, such as Adlam, Deseret and Osage, through the simple case mappings of
+  Unicode 17. `capitalize` gives the first letter of a word its titlecase, as CSS asks, so
+  a digraph such as ǆ becomes ǅ (#322).
 - Text in an embedded font shapes through every GSUB lookup type. Contextual and
   chained contextual substitution, multiple and alternate substitution, and reverse
   chaining now apply along with single and ligature substitution. The lookups run for the script

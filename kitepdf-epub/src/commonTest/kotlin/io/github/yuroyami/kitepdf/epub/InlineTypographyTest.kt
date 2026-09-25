@@ -36,6 +36,8 @@ class InlineTypographyTest {
         )
         // Apostrophes are not word separators.
         assertEquals("Don't", firstLine(open("<p>don't</p>", "p{text-transform:capitalize}")).text)
+        // The first letter takes its titlecase, which differs from its uppercase for a digraph such as dz.
+        assertEquals("\u01C5em", firstLine(open("<p>\u01C6em</p>", "p{text-transform:capitalize}")).text)
     }
 
     @Test
@@ -45,6 +47,16 @@ class InlineTypographyTest {
             "Hello",
             firstLine(open("<p>he<span>llo</span></p>", "p{text-transform:capitalize}")).text,
         )
+    }
+
+    @Test
+    fun text_transform_changes_letters_outside_the_bmp() {
+        // Adlam and Deseret have case (#322): small alif is U+1E922, capital alif U+1E900.
+        val upper = firstLine(open("<p>\uD83A\uDD22\uD801\uDC28</p>", "p{text-transform:uppercase}")).text
+        assertEquals("\uD83A\uDD00\uD801\uDC00", upper)
+        assertEquals("\uD83A\uDD22\uD801\uDC28", firstLine(open("<p>\uD83A\uDD00\uD801\uDC00</p>", "p{text-transform:lowercase}")).text)
+        // Deseret runs left to right, so the text keeps its order: only the first letter of each word changes.
+        assertEquals("\uD801\uDC00\uD801\uDC28 \uD801\uDC00", firstLine(open("<p>\uD801\uDC28\uD801\uDC28 \uD801\uDC28</p>", "p{text-transform:capitalize}")).text)
     }
 
     /* ── letter-spacing / word-spacing ───────────────────────────────────── */
@@ -106,6 +118,16 @@ class InlineTypographyTest {
         assertEquals(9.6, small.fontSize, 1e-9, "synthesized small caps at 0.8em")
         val smallText = runs.filter { it.fontSize < 12.0 }.joinToString("") { it.text }
         assertTrue(smallText.all { !it.isLowerCase() }, "small-cap glyphs are uppercase forms (got '$smallText')")
+    }
+
+    @Test
+    fun synthesized_small_caps_covers_letters_outside_the_bmp() {
+        // Deseret small long i draws as its capital, U+10400, at 0.8em (#322).
+        val runs = open("<p>\uD801\uDC28</p>", "p{font-variant:small-caps}").pages.flatMap { page ->
+            RecordingCanvas().also { page.renderTo(it) }.calls.filterIsInstance<RecordingCanvas.Call.Glyphs>()
+        }
+        assertEquals(listOf("\uD801\uDC00"), runs.map { it.text })
+        assertEquals(9.6, runs.single().fontSize, 1e-9)
     }
 
     @Test
