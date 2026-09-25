@@ -424,6 +424,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A grey ICC profile maps full grey to white, whatever its white point tag says.
   With a D65 tag, full grey drew as #ebffff and mid grey as #768295, where mutool
   draws #ffffff and #808080 (#311).
+- A finger held still on a selection handle before it drags keeps the selection.
+  The long press under the handle reached its timeout and started a new selection
+  at the handle, so a pause of half a second lost the words already chosen (#313).
 - The differential test checks each page against its own recorded score, not only
   the mean of all pages. A page fails when its mean error, its fraction of changed
   pixels or its largest channel error gets clearly worse. A new fixture fails until

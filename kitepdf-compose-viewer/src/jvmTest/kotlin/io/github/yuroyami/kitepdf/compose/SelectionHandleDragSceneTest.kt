@@ -189,6 +189,33 @@ class SelectionHandleDragSceneTest {
     }
 
     /**
+     * A finger that rests on a thumb before it moves still drags the thumb. The long press
+     * under the thumb reaches its timeout too, and it must not start a fresh selection (#313).
+     */
+    @Test
+    fun a_thumb_held_still_before_the_drag_keeps_its_selection() {
+        val doc = twoLineDoc()
+        val line = lines(doc)[0]
+        scene(doc) { scene, state, driver ->
+            selectFirstLine(state, line)
+            val end = assertNotNull(state.handlePoint(KiteSelectionHandleEdge.End))
+            val target = charPoint(line, 4)
+
+            scene.sendPointerEvent(PointerEventType.Press, end, type = PointerType.Touch)
+            driver.pumpUntil(maxFrames = 2) { false }
+            // The long-press timeout of the scene runs on the wall clock and fires in the next frame.
+            Thread.sleep(LONG_PRESS_WAIT_MS)
+            driver.pumpUntil(maxFrames = 2) { false }
+            scene.sendPointerEvent(PointerEventType.Move, target, type = PointerType.Touch)
+            driver.pumpUntil(maxFrames = 2) { false }
+            scene.sendPointerEvent(PointerEventType.Release, target, type = PointerType.Touch)
+            driver.pumpUntil(maxFrames = 2) { false }
+
+            assertEquals("hello", assertNotNull(state.selection).text)
+        }
+    }
+
+    /**
      * A press that misses both thumbs must leave the selection alone: it is an
      * ordinary press, and the long-press detector underneath still owns it.
      */
@@ -213,5 +240,10 @@ class SelectionHandleDragSceneTest {
 
             assertEquals(line.text, assertNotNull(state.selection).text, "the selection survives an unrelated press")
         }
+    }
+
+    private companion object {
+        /** Longer than the 500 ms long-press timeout of Compose on the desktop. */
+        const val LONG_PRESS_WAIT_MS = 700L
     }
 }

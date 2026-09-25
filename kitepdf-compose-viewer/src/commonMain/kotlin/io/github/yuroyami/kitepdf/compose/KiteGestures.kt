@@ -55,7 +55,10 @@ internal fun Modifier.kiteSelectionGestures(
         // character is exactly as often as the platform text fields tick.
         var lastSelectedText: String? = null
         detectDragGesturesAfterLongPress(
-            onDragStart = { pos ->
+            onDragStart = onDragStart@{ pos ->
+                // The detector also sees a press that a thumb claimed, and a finger held still
+                // on the thumb reaches the timeout. That gesture belongs to the thumb (#313).
+                if (state.handleDragInProgress) return@onDragStart
                 state.beginSelection(pos)
                 lastSelectedText = state.selection?.text
                 if (state.isSelectionActive) {
@@ -64,7 +67,8 @@ internal fun Modifier.kiteSelectionGestures(
             },
             onDragEnd = { state.endSelectionGesture() },
             onDragCancel = { state.endSelectionGesture() },
-            onDrag = { change, _ ->
+            onDrag = onDrag@{ change, _ ->
+                if (state.handleDragInProgress) return@onDrag
                 state.extendSelection(change.position)
                 val text = state.selection?.text
                 if (text != null && text != lastSelectedText) {
