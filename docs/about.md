@@ -49,6 +49,11 @@ Contributions are welcome. Check the [GitHub repository](https://github.com/yuro
 
 KitePDF is licensed under the **Apache License 2.0**. You can use, modify and distribute it in commercial and open-source projects.
 
-A small number of source files contain encoding tables derived from [MuPDF](https://mupdf.com/) by Artifex Software, and those files keep their original AGPL-3.0 headers in comments. They do not restrict the rest of the project. See the source comments for the exact locations.
+KitePDF contains no third-party source code. It bundles third-party data, each under its own license:
 
-Standard-14 font width metrics come from URW++ AFM files.
+- the URW base 35 fonts that draw the standard 14 fonts, under the SIL Open Font License 1.1;
+- PDFium's table for DeviceCMYK, under the BSD-style license of PDFium;
+- Adobe's glyph lists and CJK CMaps, under BSD-3-Clause;
+- hyphenation patterns from the hyph-utf8 project, each under the license in its file header.
+
+The NOTICE file in the repository lists every piece with its source.
