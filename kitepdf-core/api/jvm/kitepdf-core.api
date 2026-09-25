@@ -2320,19 +2320,31 @@ public final class io/github/yuroyami/kitepdf/core/text/Bidi {
 	public static final field AL I
 	public static final field AN I
 	public static final field B I
+	public static final field BN I
 	public static final field CS I
 	public static final field EN I
 	public static final field ES I
 	public static final field ET I
+	public static final field FSI I
 	public static final field INSTANCE Lio/github/yuroyami/kitepdf/core/text/Bidi;
 	public static final field L I
+	public static final field LRE I
+	public static final field LRI I
+	public static final field LRO I
+	public static final field NSM I
 	public static final field ON I
+	public static final field PDF I
+	public static final field PDI I
 	public static final field R I
+	public static final field RLE I
+	public static final field RLI I
+	public static final field RLO I
 	public static final field S I
 	public static final field WS I
 	public final fun baseLevel ([ILjava/lang/Integer;)I
 	public static synthetic fun baseLevel$default (Lio/github/yuroyami/kitepdf/core/text/Bidi;[ILjava/lang/Integer;ILjava/lang/Object;)I
 	public final fun classify (I)I
+	public final fun lineLevels ([I[II)[I
 	public final fun reorderVisually ([I)[I
 	public final fun resolveLevels ([II)[I
 }

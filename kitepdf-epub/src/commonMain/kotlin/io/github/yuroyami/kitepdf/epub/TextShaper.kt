@@ -36,13 +36,16 @@ internal object TextShaper {
     fun stages(script: String, optionalLigatures: Boolean): List<List<String>> {
         val ligatures = if (optionalLigatures) listOf("liga", "clig") else emptyList()
         if (script == "arab" || script == "syrc") return listOf(
-            listOf("rvrn"), listOf("rtla", "rtlm"), listOf("ccmp", "locl"),
+            listOf("rvrn"), listOf("rtla") + MIRRORED, listOf("ccmp", "locl"),
             listOf("isol"), listOf("fina"), listOf("fin2"), listOf("fin3"), listOf("medi"), listOf("med2"), listOf("init"),
             listOf("rlig"), listOf("rclt", "calt"), listOf("mset") + ligatures,
         )
-        val direction = if (isRightToLeft(script)) listOf("rtla", "rtlm") else listOf("ltra", "ltrm")
-        return listOf(listOf("rvrn"), direction + listOf("ccmp", "locl", "rlig", "rclt", "calt") + ligatures)
+        val direction = if (isRightToLeft(script)) "rtla" else "ltra"
+        return listOf(listOf("rvrn"), listOf(direction) + MIRRORED + listOf("ccmp", "locl", "rlig", "rclt", "calt") + ligatures)
     }
+
+    /** The mirrored forms, each of which reaches only the glyphs that list it. */
+    val MIRRORED: List<String> = listOf("ltrm", "rtlm")
 
     /**
      * Shapes the characters [codePoints] of one run in [script], whose glyphs before shaping are
@@ -52,31 +55,34 @@ internal object TextShaper {
      * [forms] are the Arabic joining forms of the run, when it has Arabic. The cluster of each
      * glyph is the index of its first character in [codePoints].
      *
-     * In right-to-left text, a character that has a mirror, such as `(`, first becomes that mirror
-     * when the font has a glyph for it, and `rtlm` reaches only the characters that did not, as
-     * HarfBuzz's hb_ot_mirror_chars does (#321).
+     * [rtl] tells which characters sit at an odd bidi level, as the layout resolves them. Without
+     * it, every character runs in the direction of [script], as a word does in `hb-shape`. A
+     * right-to-left character that has a mirror, such as `(`, first becomes that mirror when the
+     * font has a glyph for it, and the other right-to-left characters take `rtlm`, as HarfBuzz's
+     * hb_ot_mirror_chars does in a right-to-left run. The left-to-right characters take `ltrm`
+     * (#321).
      */
     fun shape(
         face: EmbeddedFace, gsub: OpenTypeGsub, script: String, codePoints: IntArray, gids: IntArray,
-        forms: Array<ArabicJoining.Form?>?, optionalLigatures: Boolean,
+        forms: Array<ArabicJoining.Form?>?, optionalLigatures: Boolean, rtl: BooleanArray? = null,
     ): MutableList<GsubGlyph> {
         val glyphs = ArrayList<GsubGlyph>(codePoints.size)
         val ignorables = ArrayList<GsubGlyph>()
         var cps = codePoints
         var gs = gids
-        val rtlm = if (isRightToLeft(script)) BooleanArray(codePoints.size) { true } else null
-        if (rtlm != null) for ((i, cp) in codePoints.withIndex()) {
+        // The mirrored form of each character: its mirror character, or `rtlm` or `ltrm`.
+        val mirrored = arrayOfNulls<String>(codePoints.size)
+        for ((i, cp) in codePoints.withIndex()) {
+            if (!(rtl?.get(i) ?: isRightToLeft(script))) { mirrored[i] = "ltrm"; continue }
             val mirror = BidiMirroring.of(cp)
             val gid = if (mirror != cp) face.gidFor(mirror) else 0
-            if (gid == 0) continue
+            if (gid == 0) { mirrored[i] = "rtlm"; continue }
             if (cps === codePoints) { cps = codePoints.copyOf(); gs = gids.copyOf() }
             cps[i] = mirror
             gs[i] = gid
-            rtlm[i] = false
         }
-        // A glyph of right-to-left text that mirroring left alone takes `rtlm`.
         fun add(glyph: GsubGlyph, cp: Int) {
-            if (rtlm?.get(glyph.cluster) == true) glyph.features += "rtlm"
+            mirrored[glyph.cluster]?.let { glyph.features += it }
             glyphs += glyph
             if (isDefaultIgnorable(cp)) ignorables += glyph
         }
@@ -123,7 +129,7 @@ internal object TextShaper {
                 add(GsubGlyph(gid, source, form?.let { setOf(ArabicJoining.feature(it)) } ?: emptySet(), isMark(cp), ignorable(cp)), cp)
             }
             val manualZwj = if (arabic) ARABIC_MANUAL_ZWJ else emptySet()
-            gsub.substitute(glyphs, script, null, stages(script, optionalLigatures), POSITIONAL + "rtlm", manualZwj = manualZwj)
+            gsub.substitute(glyphs, script, null, stages(script, optionalLigatures), POSITIONAL + MIRRORED, manualZwj = manualZwj)
         }
         hideIgnorables(face, glyphs, ignorables)
         return glyphs

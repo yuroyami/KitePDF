@@ -285,11 +285,15 @@ The layout engine covers what real books use:
   glyphs HarfBuzz gives, except that the Syriac abbreviation mark does not
   stretch. A font without GSUB still has its text reordered. A character outside
   the Basic Multilingual Plane, such as a mathematical letter or a CJK Extension B
-  ideograph, draws from the font of the book. In right-to-left text, a bracket
-  draws as its mirror image, as HarfBuzz mirrors it.
+  ideograph, draws from the font of the book.
 - **Marks**: GPOS attachment onto a base letter, onto a ligature component,
   and onto the mark below, so two stacked diacritics sit one above the other
   instead of overprinting.
+- **Bidirectional text**: the Unicode Bidirectional Algorithm (UAX #9) of
+  Unicode 17 in full, with the bidi class of every character, explicit
+  embeddings and isolates, and paired brackets. Each paragraph resolves as a
+  whole before it breaks into lines, and a forced line break ends a paragraph.
+  A bracket at a right-to-left level draws as its mirror image.
 - **Layout**: floats with exclusion bands, tables (including
   `table-layout: fixed`), `position: absolute`/`relative`/`fixed`, inline
   images on the baseline, `::before`/`::after` generated content,

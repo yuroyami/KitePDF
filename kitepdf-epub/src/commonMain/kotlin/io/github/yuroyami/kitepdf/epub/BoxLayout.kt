@@ -706,15 +706,15 @@ internal class BoxLayout(
             (contentW - l - r).coerceAtLeast(1.0)
         }
         val cellLines = wrap(
-            tokenize(runs, style.hyphensAuto, contentW), contentW, preserve, availAt,
+            tokenize(runs, style.hyphensAuto, contentW, bidiLevels(runs, baseLevel)), contentW, preserve, availAt,
             // Negative (hanging) indents keep today's behaviour: only a
             // positive indent eats into the first line's budget.
             firstLineIndent = style.textIndentPt.coerceAtLeast(0.0),
         )
+        val visualLines = bidiLines(cellLines, baseLevel) // logical → visual order (UAX #9)
         val out = ArrayList<PositionedLine>(cellLines.size)
         var y = topY
-        cellLines.forEachIndexed { i, logical ->
-            val cells = bidiReorder(logical, baseLevel) // logical → visual order (UAX #9 L2)
+        visualLines.forEachIndexed { i, cells ->
             val maxFs = cells.maxOfOrNull { it.fontSize }?.takeIf { it > 0.0 } ?: style.fontSizePt
             // A line carrying ruby grows by the reading's ascent: the base text
             // drops within the line so the overlay fits inside the line box.
@@ -769,13 +769,65 @@ internal class BoxLayout(
         return out
     }
 
-    /** Reorder a line's cells from logical to visual order (bidi L2); identity for pure-LTR lines. */
-    private fun bidiReorder(cells: List<Cell>, baseLevel: Int): List<Cell> {
-        if (cells.isEmpty()) return cells
-        if (baseLevel == 0 && cells.none { val c = Bidi.classify(it.cp); c == Bidi.R || c == Bidi.AL }) return cells
-        val cps = IntArray(cells.size) { cells[it].cp }
-        val order = Bidi.reorderVisually(Bidi.resolveLevels(cps, baseLevel))
-        return order.map { cells[it] }
+    /**
+     * The bidi level of each char of each run, or null when a left-to-right paragraph has nothing
+     * that reorders (#323). UAX #9 resolves each paragraph as a whole, before shaping, so that a
+     * bracket mirrors by its own level. A forced line break ends a paragraph, as in browsers. An
+     * inline image stands for U+FFFC.
+     */
+    private fun bidiLevels(runs: List<InlineRun>, baseLevel: Int): List<IntArray>? {
+        if (baseLevel == 0 && runs.none { it.imageSrc == null && reorders(it.text) }) return null
+        val out = runs.map { IntArray(if (it.imageSrc != null) 1 else it.text.length) { baseLevel } }
+        val cps = ArrayList<Int>()
+        val owners = ArrayList<Long>()
+        fun resolve() {
+            if (cps.isEmpty()) return
+            val levels = Bidi.resolveLevels(cps.toIntArray(), baseLevel)
+            for ((k, owner) in owners.withIndex()) {
+                val levelsOfRun = out[(owner ushr 32).toInt()]
+                val at = owner.toInt()
+                levelsOfRun[at] = levels[k]
+                if (cps[k] >= 0x10000) levelsOfRun[at + 1] = levels[k]
+            }
+            cps.clear()
+            owners.clear()
+        }
+        for ((r, run) in runs.withIndex()) {
+            when {
+                run.hardBreak -> resolve()
+                run.imageSrc != null -> { cps += 0xFFFC; owners += r.toLong() shl 32 }
+                else -> {
+                    var at = 0
+                    while (at < run.text.length) {
+                        val cp = codePointAt(run.text, at)
+                        if (cp == '\n'.code) resolve() else if (cp != '\r'.code) { cps += cp; owners += (r.toLong() shl 32) or at.toLong() }
+                        at += charCount(cp)
+                    }
+                }
+            }
+        }
+        resolve()
+        return out
+    }
+
+    /** True when [text] has a character that can move in a left-to-right paragraph. */
+    private fun reorders(text: String): Boolean {
+        var at = 0
+        while (at < text.length) {
+            val cp = codePointAt(text, at)
+            if (Bidi.classify(cp) in REORDERING) return true
+            at += charCount(cp)
+        }
+        return false
+    }
+
+    /** Reorders each line from logical to visual order with the levels of its cells, by rules L1 and L2 (#323). */
+    private fun bidiLines(lines: List<List<Cell>>, baseLevel: Int): List<List<Cell>> = lines.map { line ->
+        if (baseLevel == 0 && line.all { it.level == 0 }) line
+        else {
+            val levels = Bidi.lineLevels(IntArray(line.size) { line[it].cp }, IntArray(line.size) { line[it].level }, baseLevel)
+            Bidi.reorderVisually(levels).map { line[it] }
+        }
     }
 
     /**
@@ -863,6 +915,8 @@ internal class BoxLayout(
         var padBefore: Double = 0.0, var padAfter: Double = 0.0,
         val lineThrough: DecorationLine? = null,
         val backgroundColor: CssBackground? = null,
+        // The bidi level of the character, from [bidiLevels]; odd for right to left.
+        val level: Int = 0,
     )
 
     private sealed class Token {
@@ -873,7 +927,7 @@ internal class BoxLayout(
         object Break : Token()
     }
 
-    private fun tokenize(runs: List<InlineRun>, hyphensAuto: Boolean, contentW: Double = Double.MAX_VALUE): List<Token> {
+    private fun tokenize(runs: List<InlineRun>, hyphensAuto: Boolean, contentW: Double = Double.MAX_VALUE, levels: List<IntArray>? = null): List<Token> {
         val tokens = ArrayList<Token>()
         var word = ArrayList<Cell>()
         var wordW = 0.0
@@ -924,7 +978,8 @@ internal class BoxLayout(
                 word = ArrayList(); wordW = 0.0; softHyphens = ArrayList()
             }
         }
-        for (run in runs) {
+        for ((r, run) in runs.withIndex()) {
+            val levelsOfRun = levels?.get(r)
             if (run.hardBreak) { endWord(); tokens.add(Token.Break); continue }
             // Inline image: one unbreakable single-cell token, sized from CSS
             // width/height (or the HTML attributes, both already in points),
@@ -951,7 +1006,7 @@ internal class BoxLayout(
                     0xFFFC, inlineSize, run.fontSizePt, fontSpec(run.family, run.bold, run.italic),
                     run.color, 0.0, null,
                     href = run.href, imageWidth = w, imageHeight = h, image = img, svgImage = svg,
-                    imageAlt = run.imageAlt, imageObjectFit = run.imageObjectFit,
+                    imageAlt = run.imageAlt, imageObjectFit = run.imageObjectFit, level = levelsOfRun?.get(0) ?: 0,
                 )
                 tokens.add(Token.Word(listOf(cell), inlineSize))
                 continue
@@ -968,7 +1023,7 @@ internal class BoxLayout(
             }
             val spec = fontSpec(run.family, run.bold, run.italic)
             val face = run.fontFamilyNames.firstNotNullOfOrNull { fonts.match(it, run.bold, run.italic) }
-            fun cellFor(cp: Int): Cell {
+            fun cellFor(cp: Int, level: Int): Cell {
                 // font-variant: small-caps. Prefer the face's real `smcp` glyph;
                 // otherwise synthesize: the UPPERCASE form at 0.8x size (the cell
                 // then carries the uppercase char, a documented extraction quirk).
@@ -998,11 +1053,11 @@ internal class BoxLayout(
                     val gid = if (smcpGid >= 0) smcpGid else f.gidFor(c)
                     Cell(c, penAdvance1000(f, gid, c) * cellFs / 1000.0, cellFs, spec, run.color, shift, run.underline, f, gid,
                         rubyGroup = run.rubyGroup, rubyText = run.rubyText, href = run.href,
-                        lineThrough = run.lineThrough, backgroundColor = run.backgroundColor)
+                        lineThrough = run.lineThrough, backgroundColor = run.backgroundColor, level = level)
                 } else {
                     Cell(c, FontMetrics.advancePt(c, cellFs, run.bold, run.italic, run.family), cellFs, spec, run.color, shift, run.underline,
                         rubyGroup = run.rubyGroup, rubyText = run.rubyText, href = run.href,
-                        lineThrough = run.lineThrough, backgroundColor = run.backgroundColor)
+                        lineThrough = run.lineThrough, backgroundColor = run.backgroundColor, level = level)
                 }
                 // letter-spacing: added to every glyph advance, kept in sync
                 // between the wrap width and the drawn advance (like kerning).
@@ -1013,38 +1068,44 @@ internal class BoxLayout(
                 }
                 return cell
             }
-            for (cp in codePointsOf(run.text)) when {
-                cp == '\n'.code -> { endWord(); tokens.add(Token.Break) }
-                cp == '\r'.code -> {}
-                cp == 0x00AD -> softHyphens.add(word.size) // soft hyphen: a break point, drawn only if used
-                isWhitespace(cp) -> {
-                    endWord()
-                    val sw = if (face != null) face.advance1000(face.gidFor(' '.code)) * fs / 1000.0
-                    else FontMetrics.advancePt(' '.code, fs, run.bold, run.italic, run.family)
-                    // word-spacing adds to spaces; letter-spacing to every advance.
-                    tokens.add(Token.Space(Cell(
-                        ' '.code, sw + run.wordSpacingPt + run.letterSpacingPt, fs, spec, run.color, shift, run.underline,
-                        href = run.href, lineThrough = run.lineThrough, backgroundColor = run.backgroundColor,
-                    )))
-                }
-                // Ruby bases do not split per CJK char: the whole base is one token.
-                FontMetrics.isWide(cp) && run.rubyGroup < 0 -> {
-                    // CJK ideographs break per character; kinsoku merges: a closer
-                    // stays with the char before it, and anything after an opener
-                    // stays with the opener (an opener must not end a line).
-                    endWord()
-                    val cell = cellFor(cp)
-                    val last = tokens.lastOrNull()
-                    val bindsBack = last is Token.Word && last.cells.isNotEmpty() &&
-                        (isCloser(cp) || isOpener(last.cells.last().cp))
-                    if (bindsBack) {
-                        val lw = last as Token.Word
-                        tokens[tokens.lastIndex] = Token.Word(lw.cells + cell, lw.width + cell.width)
-                    } else {
-                        tokens.add(Token.Word(listOf(cell), cell.width))
+            var at = 0
+            while (at < run.text.length) {
+                val cp = codePointAt(run.text, at)
+                val level = levelsOfRun?.get(at) ?: 0
+                at += charCount(cp)
+                when {
+                    cp == '\n'.code -> { endWord(); tokens.add(Token.Break) }
+                    cp == '\r'.code -> {}
+                    cp == 0x00AD -> softHyphens.add(word.size) // soft hyphen: a break point, drawn only if used
+                    isWhitespace(cp) -> {
+                        endWord()
+                        val sw = if (face != null) face.advance1000(face.gidFor(' '.code)) * fs / 1000.0
+                        else FontMetrics.advancePt(' '.code, fs, run.bold, run.italic, run.family)
+                        // word-spacing adds to spaces; letter-spacing to every advance.
+                        tokens.add(Token.Space(Cell(
+                            ' '.code, sw + run.wordSpacingPt + run.letterSpacingPt, fs, spec, run.color, shift, run.underline,
+                            href = run.href, lineThrough = run.lineThrough, backgroundColor = run.backgroundColor, level = level,
+                        )))
                     }
+                    // Ruby bases do not split per CJK char: the whole base is one token.
+                    FontMetrics.isWide(cp) && run.rubyGroup < 0 -> {
+                        // CJK ideographs break per character; kinsoku merges: a closer
+                        // stays with the char before it, and anything after an opener
+                        // stays with the opener (an opener must not end a line).
+                        endWord()
+                        val cell = cellFor(cp, level)
+                        val last = tokens.lastOrNull()
+                        val bindsBack = last is Token.Word && last.cells.isNotEmpty() &&
+                            (isCloser(cp) || isOpener(last.cells.last().cp))
+                        if (bindsBack) {
+                            val lw = last as Token.Word
+                            tokens[tokens.lastIndex] = Token.Word(lw.cells + cell, lw.width + cell.width)
+                        } else {
+                            tokens.add(Token.Word(listOf(cell), cell.width))
+                        }
+                    }
+                    else -> { val c = cellFor(cp, level); word.add(c); wordW += c.width }
                 }
-                else -> { val c = cellFor(cp); word.add(c); wordW += c.width }
             }
         }
         endWord()
@@ -1080,6 +1141,7 @@ internal class BoxLayout(
                 val runForms = forms?.copyOfRange(start, end)
                 val glyphs = TextShaper.shape(
                     face, gsub, script, cps.copyOfRange(start, end), IntArray(run.size) { run[it].gid }, runForms, optionalLigatures,
+                    BooleanArray(run.size) { run[it].level % 2 == 1 },
                 )
                 if (rebuild(run, glyphs, face, out)) changed = true
             }
@@ -1125,7 +1187,7 @@ internal class BoxLayout(
                     base.cp, (penAdvance1000(face, g.gid, base.cp) + spacing) * base.fontSize / 1000.0, base.fontSize,
                     base.spec, base.color, base.shift, base.underline, face, g.gid, kernAfter1000 = spacing,
                     rubyGroup = base.rubyGroup, rubyText = base.rubyText, href = base.href,
-                    lineThrough = base.lineThrough, backgroundColor = base.backgroundColor,
+                    lineThrough = base.lineThrough, backgroundColor = base.backgroundColor, level = base.level,
                 ).also {
                     it.ligComponents = g.components; it.text = text
                     if (g.shaperData and TextShaper.INVISIBLE != 0) { it.invisible = true; it.width = 0.0 }
@@ -1279,7 +1341,7 @@ internal class BoxLayout(
         val face = c.face
         return Cell(
             '-'.code, hyphenWidth(c), c.fontSize, c.spec, c.color, c.shift, c.underline, face, face?.gidFor('-'.code) ?: -1,
-            href = c.href, lineThrough = c.lineThrough, backgroundColor = c.backgroundColor,
+            href = c.href, lineThrough = c.lineThrough, backgroundColor = c.backgroundColor, level = c.level,
         )
     }
 
@@ -1458,6 +1520,8 @@ internal class BoxLayout(
         const val RUBY_SIZE = 0.5
         /** Synthesized small-caps size (uppercase form scaled down). */
         const val SMALL_CAPS_SCALE = 0.8
+        /** The bidi classes that can move a character in a left-to-right paragraph. */
+        val REORDERING = setOf(Bidi.R, Bidi.AL, Bidi.AN, Bidi.RLE, Bidi.RLO, Bidi.RLI, Bidi.FSI)
         // JIS X 4051 no-break-before set (matching MuPDF's kinsoku table):
         // closing punctuation, plus the small kana and sound/iteration marks
         // that bind to the preceding character.
