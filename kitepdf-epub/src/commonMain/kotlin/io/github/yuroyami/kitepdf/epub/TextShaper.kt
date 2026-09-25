@@ -36,21 +36,25 @@ internal object TextShaper {
     fun stages(script: String, optionalLigatures: Boolean): List<List<String>> {
         val ligatures = if (optionalLigatures) listOf("liga", "clig") else emptyList()
         if (script == "arab" || script == "syrc") return listOf(
-            listOf("rvrn"), listOf("rtla"), listOf("ccmp", "locl"),
+            listOf("rvrn"), listOf("rtla", "rtlm"), listOf("ccmp", "locl"),
             listOf("isol"), listOf("fina"), listOf("fin2"), listOf("fin3"), listOf("medi"), listOf("med2"), listOf("init"),
             listOf("rlig"), listOf("rclt", "calt"), listOf("mset") + ligatures,
         )
-        val direction = if (isRightToLeft(script)) "rtla" else "ltra"
-        return listOf(listOf("rvrn"), listOf(direction, "ccmp", "locl", "rlig", "rclt", "calt") + ligatures)
+        val direction = if (isRightToLeft(script)) listOf("rtla", "rtlm") else listOf("ltra", "ltrm")
+        return listOf(listOf("rvrn"), direction + listOf("ccmp", "locl", "rlig", "rclt", "calt") + ligatures)
     }
 
     /**
      * Shapes the characters [codePoints] of one run in [script], whose glyphs before shaping are
      * [gids]: through [IndicShaper] for the scripts of India, [KhmerShaper] for Khmer,
      * [MyanmarShaper] for Myanmar, [UseShaper] for Sinhala, Tibetan and the other scripts of the
-     * Universal Shaping Engine, and [Normalizer] and GSUB in the stages of [stages] for the rest. [forms] are the Arabic joining forms of the run,
-     * when it has Arabic. The cluster of each glyph is the index of its first character in
-     * [codePoints].
+     * Universal Shaping Engine, and [Normalizer] and GSUB in the stages of [stages] for the rest.
+     * [forms] are the Arabic joining forms of the run, when it has Arabic. The cluster of each
+     * glyph is the index of its first character in [codePoints].
+     *
+     * In right-to-left text, a character that has a mirror, such as `(`, first becomes that mirror
+     * when the font has a glyph for it, and `rtlm` reaches only the characters that did not, as
+     * HarfBuzz's hb_ot_mirror_chars does (#321).
      */
     fun shape(
         face: EmbeddedFace, gsub: OpenTypeGsub, script: String, codePoints: IntArray, gids: IntArray,
@@ -58,53 +62,68 @@ internal object TextShaper {
     ): MutableList<GsubGlyph> {
         val glyphs = ArrayList<GsubGlyph>(codePoints.size)
         val ignorables = ArrayList<GsubGlyph>()
+        var cps = codePoints
+        var gs = gids
+        val rtlm = if (isRightToLeft(script)) BooleanArray(codePoints.size) { true } else null
+        if (rtlm != null) for ((i, cp) in codePoints.withIndex()) {
+            val mirror = BidiMirroring.of(cp)
+            val gid = if (mirror != cp) face.gidFor(mirror) else 0
+            if (gid == 0) continue
+            if (cps === codePoints) { cps = codePoints.copyOf(); gs = gids.copyOf() }
+            cps[i] = mirror
+            gs[i] = gid
+            rtlm[i] = false
+        }
+        // A glyph of right-to-left text that mirroring left alone takes `rtlm`.
+        fun add(glyph: GsubGlyph, cp: Int) {
+            if (rtlm?.get(glyph.cluster) == true) glyph.features += "rtlm"
+            glyphs += glyph
+            if (isDefaultIgnorable(cp)) ignorables += glyph
+        }
         // The glyphs of characters that a shaper of its own prepared, each with its source.
         fun addPrepared(prepared: Normalizer.Result) {
             for ((j, cp) in prepared.codePoints.withIndex()) {
                 val source = prepared.sources[j]
-                val gid = if (cp == codePoints[source]) gids[source] else face.gidFor(cp)
-                glyphs += GsubGlyph(gid, source, isMark = isMark(cp), ignorable = ignorable(cp))
-                if (isDefaultIgnorable(cp)) ignorables += glyphs.last()
+                val gid = if (cp == cps[source]) gs[source] else face.gidFor(cp)
+                add(GsubGlyph(gid, source, isMark = isMark(cp), ignorable = ignorable(cp)), cp)
             }
         }
         if (IndicShaper.handles(script, gsub)) {
-            val prepared = IndicShaper.prepare(script, codePoints) { face.gidFor(it) != 0 }
+            val prepared = IndicShaper.prepare(script, cps) { face.gidFor(it) != 0 }
             addPrepared(prepared)
             IndicShaper.shape(gsub, script, glyphs, prepared.codePoints, face::gidFor, optionalLigatures)
         } else if (KhmerShaper.handles(script)) {
-            val prepared = KhmerShaper.prepare(codePoints) { face.gidFor(it) != 0 }
+            val prepared = KhmerShaper.prepare(cps) { face.gidFor(it) != 0 }
             addPrepared(prepared)
             KhmerShaper.shape(gsub, script, glyphs, prepared.codePoints, face::gidFor, optionalLigatures)
         } else if (MyanmarShaper.handles(script, gsub)) {
-            val prepared = MyanmarShaper.prepare(codePoints) { face.gidFor(it) != 0 }
+            val prepared = MyanmarShaper.prepare(cps) { face.gidFor(it) != 0 }
             addPrepared(prepared)
             MyanmarShaper.shape(gsub, script, glyphs, prepared.codePoints, face::gidFor, optionalLigatures)
         } else if (UseShaper.handles(script, gsub)) {
-            val prepared = UseShaper.prepare(script, codePoints) { face.gidFor(it) != 0 }
+            val prepared = UseShaper.prepare(script, cps) { face.gidFor(it) != 0 }
             addPrepared(prepared)
             UseShaper.shape(gsub, script, glyphs, prepared.codePoints, face::gidFor, optionalLigatures)
         } else {
             val arabic = script == "arab" || script == "syrc"
             // Thai and Lao split sara am before normalization, as HarfBuzz's Thai shaper does.
-            val split = if (script == "thai" || script == "lao ") decomposeSaraAm(codePoints) else null
+            val split = if (script == "thai" || script == "lao ") decomposeSaraAm(cps) else null
             // A word of whole letters that the font has needs no normalization.
-            val normal = if (split == null && gids.none { it == 0 } && codePoints.none { Normalizer.isMark(it) }) null else {
+            val normal = if (split == null && gs.none { it == 0 } && cps.none { Normalizer.isMark(it) }) null else {
                 Normalizer.normalize(
-                    split?.codePoints ?: codePoints, split?.sources ?: IntArray(codePoints.size) { it },
+                    split?.codePoints ?: cps, split?.sources ?: IntArray(cps.size) { it },
                     { face.gidFor(it) != 0 }, arabicMarks = arabic,
                 )
             }
-            val cps = normal?.codePoints ?: codePoints
-            for ((j, cp) in cps.withIndex()) {
+            for ((j, cp) in (normal?.codePoints ?: cps).withIndex()) {
                 val source = normal?.sources?.get(j) ?: j
-                val gid = if (cp == codePoints[source]) gids[source] else face.gidFor(cp)
+                val gid = if (cp == cps[source]) gs[source] else face.gidFor(cp)
                 // A letter takes the joining form of the character it came from; a mark takes none.
                 val form = forms?.get(source)?.takeIf { ArabicJoining.type(cp) != ArabicJoining.Jt.T }
-                glyphs += GsubGlyph(gid, source, form?.let { setOf(ArabicJoining.feature(it)) } ?: emptySet(), isMark(cp), ignorable(cp))
-                if (isDefaultIgnorable(cp)) ignorables += glyphs.last()
+                add(GsubGlyph(gid, source, form?.let { setOf(ArabicJoining.feature(it)) } ?: emptySet(), isMark(cp), ignorable(cp)), cp)
             }
             val manualZwj = if (arabic) ARABIC_MANUAL_ZWJ else emptySet()
-            gsub.substitute(glyphs, script, null, stages(script, optionalLigatures), POSITIONAL, manualZwj = manualZwj)
+            gsub.substitute(glyphs, script, null, stages(script, optionalLigatures), POSITIONAL + "rtlm", manualZwj = manualZwj)
         }
         hideIgnorables(face, glyphs, ignorables)
         return glyphs

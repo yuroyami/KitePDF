@@ -285,7 +285,8 @@ The layout engine covers what real books use:
   glyphs HarfBuzz gives, except that the Syriac abbreviation mark does not
   stretch. A font without GSUB still has its text reordered. A character outside
   the Basic Multilingual Plane, such as a mathematical letter or a CJK Extension B
-  ideograph, draws from the font of the book.
+  ideograph, draws from the font of the book. In right-to-left text, a bracket
+  draws as its mirror image, as HarfBuzz mirrors it.
 - **Marks**: GPOS attachment onto a base letter, onto a ligature component,
   and onto the mark below, so two stacked diacritics sit one above the other
   instead of overprinting.

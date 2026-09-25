@@ -413,7 +413,7 @@ class GsubOracleTest {
     private val supplementary: List<Pair<String, List<Int>>> = listOf(
         "NotoSansGothic-Regular.otf" to 0x10330..0x1034F, "NotoSansDeseret-Regular.otf" to 0x10400..0x1044F,
         "NotoSansOsage-Regular.otf" to 0x104B0..0x104FF, "NotoSansOldItalic-Regular.otf" to 0x10300..0x1032F,
-        "NotoSansOldPermic-Regular.otf" to 0x10350..0x1037F,
+        "NotoSansOldPermic-Regular.otf" to 0x10350..0x1037F, "NotoSansOldHungarian-Regular.otf" to 0x10C80..0x10CFF,
         "NotoSansOldTurkic-Regular.otf" to 0x10C00..0x10C4F, "NotoSansPhoenician-Regular.otf" to 0x10900..0x1091F,
         "NotoSansImperialAramaic-Regular.otf" to 0x10840..0x1085F, "NotoSansNabataean-Regular.otf" to 0x10880..0x108AF,
         "NotoSansPalmyrene-Regular.otf" to 0x10860..0x1087F, "NotoSansHatran-Regular.otf" to 0x108E0..0x108FF,
@@ -534,6 +534,57 @@ class GsubOracleTest {
             }
         }
         println("random words with marks: ${total - failures.size} of $total match")
+        assertTrue(failures.isEmpty(), failures.take(20).joinToString("\n"))
+    }
+
+    /**
+     * Right-to-left words with brackets and other mirrored characters shape to the glyphs HarfBuzz
+     * gives (#321): a character becomes its mirror when the font has it, and `rtlm` reaches the
+     * rest. Syriac takes the Arabic shaper, Adlam and Hanifi Rohingya the Universal Shaping
+     * Engine, and Hebrew and Phoenician the default shaper. In Noto Sans Math, the Hebrew letters
+     * make the words right to left, and `rtlm` gives the mirrored forms of symbols such as the
+     * square root, which have no mirror character.
+     */
+    @Test
+    fun right_to_left_words_mirror_their_brackets_as_harfbuzz_does() {
+        val dir = fontsDir().orSkip("The Noto fonts of mupdf-master/resources")
+        val tool = hbShape().orSkip("hb-shape")
+        val mirrored = listOf(
+            0x28, 0x29, 0x3C, 0x3E, 0x5B, 0x5D, 0x7B, 0x7D, 0xAB, 0xBB, 0x2039, 0x203A, 0x2208, 0x220B,
+            0x2211, 0x221A, 0x222B, 0x2264, 0x2265, 0x2282, 0x2283,
+        )
+        val sets = listOf(
+            "NotoSansSyriac-Regular.otf" to (0x0710..0x072C).toList(),
+            "NotoSansAdlam-Regular.otf" to (0x1E900..0x1E943).toList(),
+            "NotoSansHanifiRohingya-Regular.otf" to (0x10D00..0x10D23).toList(),
+            "NotoSerifHebrew-Regular.otf" to (0x05D0..0x05EA).toList(),
+            "NotoSansPhoenician-Regular.otf" to (0x10900..0x10915).toList(),
+            "NotoSansMath-Regular.otf" to (0x05D0..0x05EA).toList(),
+        )
+        val failures = ArrayList<String>()
+        var total = 0
+        for ((index, set) in sets.withIndex()) {
+            val (name, letters) = set
+            val font = File(dir, name).takeIf { it.exists() } ?: continue
+            val random = Random(300 + index)
+            val words = List(150) {
+                buildString {
+                    if (random.nextBoolean()) appendCodePoint(mirrored.random(random))
+                    repeat(1 + random.nextInt(4)) { appendCodePoint(letters.random(random)) }
+                    if (random.nextInt(3) == 0) appendCodePoint(mirrored.random(random))
+                    if (random.nextBoolean()) appendCodePoint(mirrored.random(random))
+                }
+            }.distinct()
+            val theirs = harfbuzz(tool, font, words)
+            for ((i, word) in words.withIndex()) {
+                total++
+                val ours = kitepdf(font, word)
+                if (ours != theirs[i]) {
+                    failures += "$name ${word.codePoints().toArray().joinToString(" ") { "%04X".format(it) }}: KitePDF $ours, HarfBuzz ${theirs[i]}"
+                }
+            }
+        }
+        println("right-to-left words with mirrored characters: ${total - failures.size} of $total match")
         assertTrue(failures.isEmpty(), failures.take(20).joinToString("\n"))
     }
 
