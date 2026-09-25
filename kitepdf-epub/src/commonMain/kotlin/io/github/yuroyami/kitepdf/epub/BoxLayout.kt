@@ -851,6 +851,8 @@ internal class BoxLayout(
         val imageObjectFit: ObjectFit = ObjectFit.FILL,
         // How many glyphs a ligature cell replaced; 1 for everything else.
         var ligComponents: Int = 1,
+        // The text of a cell that stands for several characters, such as a ligature; null means [ch].
+        var text: String? = null,
         // Envelope padding when the reading is wider than its base (pt). Only the
         // group's first/last cells carry it; it widens wrap/measure and the pen
         // walk in placeRuns without entering the glyph advance stream.
@@ -1091,12 +1093,14 @@ internal class BoxLayout(
             }
             if (rule != null) {
                 val ligGid = rule.lig
+                // The ligature draws every component, so it carries the text of every one (#314).
+                val text = (0..rule.rest.size).joinToString("") { k -> cells[i + k].let { c -> c.text ?: c.ch.toString() } }
                 val lig = Cell(
                     first.ch, face.advance1000(ligGid) * first.fontSize / 1000.0, first.fontSize,
                     first.spec, first.color, first.shift, first.underline, face, ligGid,
                     rubyGroup = first.rubyGroup, rubyText = first.rubyText, href = first.href,
                     lineThrough = first.lineThrough, backgroundColor = first.backgroundColor,
-                ).also { it.ligComponents = rule.rest.size + 1 }
+                ).also { it.ligComponents = rule.rest.size + 1; it.text = text }
                 repeat(rule.rest.size + 1) { cells.removeAt(i) }
                 cells.add(i, lig)
                 changed = true
@@ -1381,7 +1385,7 @@ internal class BoxLayout(
             if (c.kernAfter1000 != 0) g.copy(advanceWidth = g.advanceWidth + c.kernAfter1000) else g
         }
         return TextGlyph(
-            byteOffset = 0, byteCount = 1, gid = c.gid, text = CharText.of(c.ch),
+            byteOffset = 0, byteCount = 1, gid = c.gid, text = c.text ?: CharText.of(c.ch),
             // Pair kerning to the next glyph is folded into this glyph's advance so
             // the drawn pen movement matches the wrap width.
             advanceWidth = (penAdvance1000(face, c.gid, c.ch) + c.kernAfter1000).toDouble(),

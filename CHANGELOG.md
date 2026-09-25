@@ -424,6 +424,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A grey ICC profile maps full grey to white, whatever its white point tag says.
   With a D65 tag, full grey drew as #ebffff and mid grey as #768295, where mutool
   draws #ffffff and #808080 (#311).
+- In a book whose embedded font has ligatures, such as fi and ffi, the text of the
+  page keeps every character a ligature draws. Before, a ligature kept only its first
+  character, so search, selection and copy saw "fnd ofce" for "find office" (#314).
 - The scene tests of the viewer wait for background work, such as a chapter layout
   or a page raster, on the wall clock instead of a count of frames. The count came to
   under four seconds, which a loaded CI runner can need for a twelve-chapter book.
