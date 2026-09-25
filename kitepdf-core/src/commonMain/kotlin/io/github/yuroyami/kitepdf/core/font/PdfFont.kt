@@ -97,6 +97,7 @@ public class PdfFont private constructor(
             family = when {
                 baseFont.startsWith("Times") -> KiteFontFamily.Serif
                 baseFont.startsWith("Courier") -> KiteFontFamily.Monospace
+                CJK_SERIF.any { it in baseFont } -> KiteFontFamily.Serif
                 else -> KiteFontFamily.SansSerif
             },
             bold = "Bold" in baseFont,
@@ -158,9 +159,8 @@ public class PdfFont private constructor(
             val outline = if (resolveOutlines) c.outline(unit.cid) else null
             val gid = c.gidFor(unit.cid)
             val width = c.widthOf(unit.cid)
-            // Text per glyph: slice the bytes for that code unit and decode.
-            val slice = bytes.copyOfRange(unit.byteOffset, unit.byteOffset + unit.byteCount)
-            val text = c.toUnicode?.decodeAll(slice) ?: ""
+            // A font without outlines draws this text with a system font (#309).
+            val text = c.textOf(bytes, unit.byteOffset, unit.byteCount, unit.cid)
             out.add(TextGlyph(
                 byteOffset = unit.byteOffset, byteCount = unit.byteCount, gid = gid,
                 text = text, advanceWidth = width, outline = outline,
@@ -338,6 +338,9 @@ public class PdfFont private constructor(
     }
 
     public companion object {
+
+        /** Name parts of CJK fonts in a serif style, such as MS-Mincho, PMingLiU, STSong, SimSun and Batang. */
+        private val CJK_SERIF = listOf("Mincho", "Ming", "Song", "SimSun", "Batang", "Myungjo")
 
         /**
          * Build a [PdfFont] from one resource entry. [refs] resolves indirect

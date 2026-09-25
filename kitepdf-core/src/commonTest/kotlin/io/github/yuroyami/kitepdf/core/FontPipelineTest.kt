@@ -1,5 +1,6 @@
 package io.github.yuroyami.kitepdf.core
 
+import io.github.yuroyami.kitepdf.core.font.KiteFontFamily
 import io.github.yuroyami.kitepdf.core.font.PdfFont
 import io.github.yuroyami.kitepdf.core.parser.IndirectResolver
 import io.github.yuroyami.kitepdf.core.parser.PdfArray
@@ -128,6 +129,47 @@ class FontPipelineTest {
     }
 
     /** Tiny IndirectResolver backed by a map, for unit-testing without a full document. */
+    @Test
+    fun a_cjk_font_without_to_unicode_finds_its_text() {
+        // ISO 32000-1, 9.10.2 (#309): あいう through Shift-JIS, a Unicode-keyed CMap and Identity-H,
+        // in a Japan1 font that is not embedded and has no ToUnicode map.
+        fun font(encoding: String): PdfFont {
+            val resolver = MapResolver()
+            resolver.put(99, PdfDictionary(linkedMapOf(
+                "Type" to PdfName("Font"),
+                "Subtype" to PdfName("CIDFontType0"),
+                "BaseFont" to PdfName("MS-Mincho"),
+                "CIDSystemInfo" to PdfDictionary(linkedMapOf(
+                    "Registry" to PdfString("Adobe".encodeToByteArray()),
+                    "Ordering" to PdfString("Japan1".encodeToByteArray()),
+                    "Supplement" to PdfInt(2),
+                )),
+            )))
+            return PdfFont.from(PdfDictionary(linkedMapOf(
+                "Type" to PdfName("Font"),
+                "Subtype" to PdfName("Type0"),
+                "BaseFont" to PdfName("MS-Mincho"),
+                "Encoding" to PdfName(encoding),
+                "DescendantFonts" to PdfArray(listOf(PdfReference(99, 0))),
+            )), resolver)
+        }
+        fun bytes(vararg b: Int) = ByteArray(b.size) { b[it].toByte() }
+        for ((encoding, codes) in listOf(
+            "90ms-RKSJ-H" to bytes(0x82, 0xA0, 0x82, 0xA2, 0x82, 0xA4),
+            "UniJIS-UCS2-H" to bytes(0x30, 0x42, 0x30, 0x44, 0x30, 0x46),
+            "Identity-H" to bytes(0x02, 0x0E, 0x02, 0x0F, 0x02, 0x10),
+        )) {
+            val font = font(encoding)
+            assertEquals("あいう", font.decode(codes), encoding)
+            assertEquals(listOf("あ", "い", "う"), font.layoutBytes(codes, resolveOutlines = false).map { it.text }, encoding)
+            assertEquals(KiteFontFamily.Serif, font.fontSpec.family, "a Mincho font draws in a serif face")
+        }
+        // 0x80 is in the 1-byte codespace of 90ms-RKSJ-H and maps to no CID, so it is .notdef.
+        val notdef = font("90ms-RKSJ-H")
+        assertEquals("", notdef.layoutBytes(bytes(0x80), resolveOutlines = false).single().text)
+        assertEquals("\uFFFD", notdef.decode(bytes(0x80)))
+    }
+
     private class MapResolver : IndirectResolver {
         private val backing = HashMap<Long, PdfObject>()
         fun put(num: Long, obj: PdfObject) { backing[num] = obj }

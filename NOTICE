@@ -23,10 +23,13 @@ carry in order to be correct, listed here with where that data comes from.
    Copyright 2002-2019 Adobe, licensed BSD-3-Clause.
 
 2. Adobe CMap resources
-   Used in: kitepdf-core .../core/font/PredefinedCMapData.kt
-   The predefined CJK CMaps (Adobe-Japan1, Adobe-GB1, Adobe-CNS1, Adobe-Korea1,
-   Adobe-KR and their encodings), used to map CID-keyed font codes.
-   Copyright Adobe Systems Incorporated, licensed BSD-3-Clause.
+   Used in: kitepdf-core .../core/font/PredefinedCMapData.kt and
+   CidUnicodeData.kt, whose headers carry the notice.
+   The predefined CJK CMaps of Adobe-Japan1, Adobe-GB1, Adobe-CNS1 and
+   Adobe-Korea1, which map the codes of a CID-keyed font to CIDs, and the
+   Adobe-*-UCS2 CMaps, which map those CIDs to Unicode. Taken from the copy in
+   MuPDF's source tree by tools/generate_cjk_cmaps.py.
+   Copyright 1990-2015 Adobe Systems Incorporated, licensed BSD-3-Clause.
 
 3. Metrics for the 14 standard fonts
    Used in: kitepdf-core .../core/font/Standard14Widths.kt

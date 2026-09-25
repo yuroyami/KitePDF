@@ -1,33 +1,24 @@
 package io.github.yuroyami.kitepdf.core.font
 
+import io.github.yuroyami.kitepdf.core.compression.Inflate
+import kotlin.io.encoding.Base64
+
 /**
  * Built-in CMaps named in `/Encoding` of Type 0 composite fonts.
  *
- * The PDF spec (ISO 32000-1 §9.7.5.2) defines Identity-H / Identity-V plus a
- * long list of predefined CJK CMaps (GBK-EUC-H, 90ms-RKSJ-H, ETen-B5-H,
- * UniJIS-UCS2-H, UniGB-UCS2-H, …). Each such CMap:
- *   1. SEGMENTS the byte stream into codes using its codespace ranges, and for
- *      the CJK encodings those ranges are MIXED-WIDTH (ASCII is 1 byte, the CJK
- *      block is 2 bytes). Segmenting "widest-first" or "always 2 bytes" is wrong.
- *   2. MAPS each code to a CID via large lookup tables that live in Adobe's CMap
- *      resource packages (Adobe-Japan1, Adobe-GB1, Adobe-CNS1, Adobe-Korea1,
- *      Adobe-KR). Those tables are NOT bundled in this repo.
+ * ISO 32000-1, 9.7.5.2 defines Identity-H and Identity-V, and a list of predefined
+ * CJK CMaps such as GBK-EUC-H, 90ms-RKSJ-H and UniJIS-UCS2-H. Each one splits the
+ * bytes into codes by its codespace ranges, which mix widths: ASCII takes 1 byte and
+ * the CJK block 2. Then it maps each code to a CID of an Adobe character collection.
  *
- * What this file does correctly WITHOUT the resource data:
- *   - Identity-H / Identity-V: exact (every 2-byte BE pair IS the CID).
- *   - The mixed-width CJK CMaps: we reproduce their CODESPACE structure so byte
- *     SEGMENTATION is correct (1-byte ASCII vs 2-byte CJK split at the right
- *     boundary). This keeps glyph counts and per-glyph byte offsets right, which
- *     is what layout/redaction/advance need.
- *   - CID mapping for those CMaps DEGRADES to CID == code (the raw segmented
- *     integer). That is NOT the Adobe registry CID; it is a documented last
- *     resort (see [degraded]). Glyph resolution via /CIDToGIDMap will therefore
- *     be wrong for these fonts unless the font is Identity-keyed or a /ToUnicode
- *     is present. Shipping the Adobe CMap resource data is TODO (see deferred).
+ * - Identity-H and Identity-V: every 2-byte pair is the CID.
+ * - Every other CMap of the spec's list: [PredefinedCMapData] bundles Adobe's own
+ *   tables, and [TableCMapReader] reads them (#198).
+ * - Any other name: a synthesized reader keeps the byte segmentation of the family the
+ *   name belongs to and falls back to CID = code, which is [CodeUnitReader.degraded].
  *
- * An EMBEDDED /Encoding CMap *stream* (as opposed to a predefined name) is fully
- * supported via [CMap.codeUnits] (see [CompositeFont]). That path does real
- * codespace segmentation AND real cidchar/cidrange CID mapping from the stream.
+ * An embedded `/Encoding` CMap stream goes through [CMap.codeUnits] instead (see
+ * [CompositeFont]).
  */
 internal interface CodeUnitReader {
     /** Read one code unit at [offset] from [bytes]; returns (cid, bytesConsumed) or null on EOF. */
@@ -164,11 +155,34 @@ internal object PredefinedCMaps {
     fun isVertical(name: String?): Boolean = name == "V" || name?.endsWith("-V") == true
 
     /**
+     * True when the codes of the predefined CMap [name] are UTF-16 code units, as in
+     * UniJIS-UCS2-H or UniGB-UTF16-V. Such a code is its own Unicode text.
+     */
+    fun isUnicodeKeyed(name: String?): Boolean =
+        name != null && name.startsWith("Uni") && ("UCS2" in name || "UTF16" in name)
+
+    /**
+     * The Adobe character collection, such as Japan1, that the bundled CMap [name] maps
+     * codes into, or null for a name that is not bundled.
+     */
+    fun ordering(name: String?): String? {
+        var cur = name
+        var hops = 0
+        while (cur != null && hops++ < 8) {
+            val entry = PredefinedCMapData.entries[cur] ?: return null
+            entry.ordering?.let { return it }
+            cur = entry.usecmap
+        }
+        return null
+    }
+
+    /**
      * Resolve a named `/Encoding` to a [CodeUnitReader].
      *
      * - Identity-H / Identity-V → exact 2-byte reader.
-     * - Known mixed-width CJK families → a codespace-correct segmenting reader
-     *   with a DEGRADED (CID == code) mapping (no bundled Adobe resource data).
+     * - A bundled CMap → [TableCMapReader], with the real CIDs.
+     * - Other names of a known family → a codespace-correct segmenting reader
+     *   with a DEGRADED (CID == code) mapping.
      * - Unknown `-H`/`-V` names → treated as 2-byte UCS2-style (degraded).
      * - null / unknown 1-byte → single-byte.
      */
@@ -176,16 +190,13 @@ internal object PredefinedCMaps {
         if (name == null) return SingleByteCodeUnitReader
         if (name == "Identity-H" || name == "Identity-V" || name == "Identity") return IdentityCodeUnitReader
 
-        // Bundled Adobe locale CMaps: full codespace segmentation AND
-        // real registry CID mapping through the usecmap chain. The Uni* CMaps
-        // are not bundled (see PredefinedCMapData) and keep the synthesized
-        // paths below.
+        // Bundled Adobe CMaps: full codespace segmentation AND real registry CID
+        // mapping through the usecmap chain.
         TableCMapReader.forName(name)?.let { return it }
 
-        // Unicode-keyed predefined CMaps: the code IS a Unicode code unit, so a
-        // 2-byte (UCS2) or 2/4-byte (UTF16) segmentation is correct AND the code
-        // doubles as a usable index; still flagged degraded (CID != code in the
-        // Adobe registry, but for Identity-keyed CIDFontType2 it round-trips).
+        // Unicode-keyed CMaps the spec does not list, such as UniJIS2004-UTF16-H: the
+        // code IS a Unicode code unit, so a 2-byte (UCS2) or 2/4-byte (UTF16)
+        // segmentation is correct, but the CID is not, so the reader is degraded.
         if (name.startsWith("Uni", ignoreCase = false)) {
             return when {
                 name.contains("UTF16") -> CodespaceReader(utf16)
@@ -224,6 +235,9 @@ internal object PredefinedCMaps {
  * code to its Adobe-registry CID through the chain. Unmapped codes resolve
  * to CID 0 (.notdef), matching the spec. Not degraded: these are the real
  * tables.
+ *
+ * A 4-byte code of a UTF-16 CMap, from D800DC00 up, does not fit a signed Int, so
+ * codes compare unsigned.
  */
 internal class TableCMapReader private constructor(
     private val chain: List<Decoded>,
@@ -262,7 +276,7 @@ internal class TableCMapReader private constructor(
                 val v = d.charCodes[mid]
                 when {
                     v == code -> return d.charCids[mid]
-                    v < code -> lo = mid + 1
+                    below(v, code) -> lo = mid + 1
                     else -> hi = mid - 1
                 }
             }
@@ -271,14 +285,17 @@ internal class TableCMapReader private constructor(
             while (lo <= hi) {
                 val mid = (lo + hi) ushr 1
                 when {
-                    code < d.rangeLo[mid] -> hi = mid - 1
-                    code > d.rangeHi[mid] -> lo = mid + 1
+                    below(code, d.rangeLo[mid]) -> hi = mid - 1
+                    below(d.rangeHi[mid], code) -> lo = mid + 1
                     else -> return d.rangeCid[mid] + (code - d.rangeLo[mid])
                 }
             }
         }
         return 0 // .notdef
     }
+
+    /** True when [a] is below [b], both read as unsigned 32-bit codes. */
+    private fun below(a: Int, b: Int): Boolean = (a xor Int.MIN_VALUE) < (b xor Int.MIN_VALUE)
 
     companion object {
         // One SYNCHRONIZED lazy per bundled CMap name, keyed by the fixed
@@ -301,73 +318,79 @@ internal class TableCMapReader private constructor(
             var hops = 0
             while (cur != null && hops++ < 8) {
                 val entry = PredefinedCMapData.entries[cur] ?: break
-                chain.add(decode(entry.blob))
+                chain.add(decode(entry.table))
                 cur = entry.usecmap
             }
             return if (chain.isEmpty()) null else TableCMapReader(chain)
         }
 
-        private fun decode(b64: String): Decoded {
-            val b = decodeBase64(b64)
-            var p = 0
-            fun u8() = b[p++].toInt() and 0xFF
-            fun u16() = (u8() shl 8) or u8()
-            fun u32() = (u16() shl 16) or u16()
-
-            val csCount = u8()
+        /**
+         * Reads one table of [PredefinedCMapData]: the codespace ranges, then the single
+         * codes, then the code ranges, each code and CID a difference from the one before.
+         * A code is added as a 32-bit pattern, so a code from 80000000 up wraps as it should.
+         */
+        private fun decode(table: String): Decoded {
+            val v = Leb128(Inflate.decode(Base64.decode(table)))
+            val csCount = v.next()
             val codespaces = ArrayList<CodespaceReader.Range>(csCount)
             repeat(csCount) {
-                val w = u8()
-                val low = IntArray(w) { u8() }
-                val high = IntArray(w) { u8() }
+                val w = v.next()
+                val low = IntArray(w) { v.next() }
+                val high = IntArray(w) { v.next() }
                 codespaces.add(CodespaceReader.Range(w, low, high))
             }
-            val nChars = u32()
+            val nChars = v.next()
             val charCodes = IntArray(nChars)
             val charCids = IntArray(nChars)
+            var code = 0
+            var cid = 0
             for (i in 0 until nChars) {
-                charCodes[i] = u32()
-                charCids[i] = u16()
+                code += v.next()
+                cid += v.signed()
+                charCodes[i] = code
+                charCids[i] = cid
             }
-            val nRanges = u32()
+            val nRanges = v.next()
             val rangeLo = IntArray(nRanges)
             val rangeHi = IntArray(nRanges)
             val rangeCid = IntArray(nRanges)
+            var lo = 0
+            var nextCid = 0
             for (i in 0 until nRanges) {
-                rangeLo[i] = u32()
-                rangeHi[i] = u32()
-                rangeCid[i] = u16()
+                lo += v.next()
+                val hi = lo + v.next()
+                val first = nextCid + v.signed()
+                rangeLo[i] = lo
+                rangeHi[i] = hi
+                rangeCid[i] = first
+                nextCid = first + (hi - lo) + 1
             }
             return Decoded(codespaces, charCodes, charCids, rangeLo, rangeHi, rangeCid)
         }
+    }
+}
 
-        private fun decodeBase64(s: String): ByteArray {
-            val out = ByteArray(s.length / 4 * 3)
-            var o = 0
-            var buf = 0
-            var bits = 0
-            var pad = 0
-            for (c in s) {
-                val v = when (c) {
-                    in 'A'..'Z' -> c - 'A'
-                    in 'a'..'z' -> c - 'a' + 26
-                    in '0'..'9' -> c - '0' + 52
-                    '+' -> 62
-                    '/' -> 63
-                    '=' -> { pad++; 0 }
-                    else -> error("bad base64")
-                }
-                buf = (buf shl 6) or v
-                bits += 6
-                if (bits == 24) {
-                    out[o++] = (buf ushr 16).toByte()
-                    out[o++] = (buf ushr 8).toByte()
-                    out[o++] = buf.toByte()
-                    buf = 0
-                    bits = 0
-                }
-            }
-            return if (pad == 0) out else out.copyOf(o - pad)
+/**
+ * Unsigned LEB128 numbers from [bytes], as the CJK tables store them. [next] keeps the low
+ * 32 bits of a larger number, which is what a sum of 32-bit code differences needs.
+ */
+internal class Leb128(private val bytes: ByteArray) {
+    private var p = 0
+
+    fun next(): Int {
+        var n = 0L
+        var shift = 0
+        while (true) {
+            val b = bytes[p++].toInt() and 0xFF
+            n = n or ((b and 0x7F).toLong() shl shift)
+            if (b and 0x80 == 0) return n.toInt()
+            shift += 7
         }
+    }
+
+    /** A zigzag-coded difference: 0, -1, 1, -2, 2 and so on. */
+    fun signed(): Int {
+        val z = next()
+        return (z ushr 1) xor -(z and 1)
     }
 }
