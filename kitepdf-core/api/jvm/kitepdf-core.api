@@ -512,6 +512,19 @@ public final class io/github/yuroyami/kitepdf/core/font/GlyphPoint {
 	public fun toString ()Ljava/lang/String;
 }
 
+public final class io/github/yuroyami/kitepdf/core/font/GsubGlyph {
+	public fun <init> (IILjava/util/Set;Z)V
+	public synthetic fun <init> (IILjava/util/Set;ZILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun getCluster ()I
+	public final fun getComponents ()I
+	public final fun getFeatures ()Ljava/util/Set;
+	public final fun getGid ()I
+	public final fun getLigated ()Z
+	public final fun isMark ()Z
+	public final fun setCluster (I)V
+	public final fun setGid (I)V
+}
+
 public final class io/github/yuroyami/kitepdf/core/font/Head {
 	public fun <init> (IIIIIII)V
 	public final fun component1 ()I
@@ -580,12 +593,16 @@ public final class io/github/yuroyami/kitepdf/core/font/Maxp {
 public final class io/github/yuroyami/kitepdf/core/font/OpenTypeGsub {
 	public static final field Companion Lio/github/yuroyami/kitepdf/core/font/OpenTypeGsub$Companion;
 	public final fun getHasArabicJoining ()Z
+	public final fun hasScript (Ljava/lang/String;)Z
 	public final fun ligatures (Ljava/lang/String;I)Ljava/util/List;
 	public final fun single (Ljava/lang/String;I)Ljava/lang/Integer;
+	public final fun substitute (Ljava/util/List;Ljava/lang/String;Ljava/lang/String;Ljava/util/List;Ljava/util/Set;)V
+	public static synthetic fun substitute$default (Lio/github/yuroyami/kitepdf/core/font/OpenTypeGsub;Ljava/util/List;Ljava/lang/String;Ljava/lang/String;Ljava/util/List;Ljava/util/Set;ILjava/lang/Object;)V
 }
 
 public final class io/github/yuroyami/kitepdf/core/font/OpenTypeGsub$Companion {
 	public final fun from ([B)Lio/github/yuroyami/kitepdf/core/font/OpenTypeGsub;
+	public final fun from ([B[B)Lio/github/yuroyami/kitepdf/core/font/OpenTypeGsub;
 }
 
 public final class io/github/yuroyami/kitepdf/core/font/OpenTypeGsub$LigRule {

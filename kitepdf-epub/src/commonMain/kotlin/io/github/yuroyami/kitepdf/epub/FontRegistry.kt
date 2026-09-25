@@ -51,7 +51,7 @@ internal class FontProgram(
             return FontProgram(
                 ttf, cff,
                 kern = OpenTypeKern.from(ttf.rawTable("kern"), gpos),
-                gsub = OpenTypeGsub.from(ttf.rawTable("GSUB")),
+                gsub = OpenTypeGsub.from(ttf.rawTable("GSUB"), ttf.rawTable("GDEF")),
                 marks = OpenTypeMarks.from(gpos),
             )
         }
@@ -74,7 +74,8 @@ internal class EmbeddedFace(
     private val ttf: TrueTypeFont get() = program.ttf
     private val cff: CffFont? get() = program.cff
     private val kern: OpenTypeKern? get() = program.kern
-    private val gsub: OpenTypeGsub? get() = program.gsub
+    /** The substitution table of the font, which [BoxLayout] shapes words through. */
+    val gsub: OpenTypeGsub? get() = program.gsub
     private val marks: OpenTypeMarks? get() = program.marks
 
     val unitsPerEm: Int get() = ttf.unitsPerEm

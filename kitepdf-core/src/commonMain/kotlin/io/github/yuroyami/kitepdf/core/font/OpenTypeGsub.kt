@@ -1,169 +1,540 @@
 package io.github.yuroyami.kitepdf.core.font
 
 /**
- * The substitution half of OpenType shaping (`GSUB`), scoped to the two lookup
- * types that carry the highest-value features for reflowable text:
+ * The substitution half of OpenType shaping: the `GSUB` table (OpenType 1.9, "GSUB: Glyph
+ * Substitution Table").
  *
- *  - **Type 1 single substitution**: drives Arabic contextual joining
- *    (`init`/`medi`/`fina`/`isol`) and simple 1:1 alternates. A glyph maps to one
- *    replacement glyph.
- *  - **Type 4 ligature substitution**: `liga`/`rlig` (fi/fl, Arabic lam-alef). A
- *    run of component glyphs collapses to one ligature glyph.
+ * [substitute] runs a sequence of glyphs through the lookups of the features a shaper asks
+ * for, the way HarfBuzz runs them: the script and language of the text pick a language
+ * system, each stage of features applies its lookups in LookupList order, and a lookup flag
+ * skips the glyphs its GDEF class excludes (#211). Every lookup type reads: single (1),
+ * multiple (2), alternate (3), ligature (4), context (5), chained context (6), extension (7)
+ * and reverse chained context (8). A context lookup applies its nested lookups at the glyphs
+ * it matched.
  *
- * Lookups are indexed by the feature tag that references them, so a shaper can ask
- * "apply feature X to this glyph". Type 7 (extension) is unwrapped. Contextual /
- * chaining lookups (types 5/6/8) and GPOS mark positioning are out of scope.
+ * [single] and [ligatures] read one feature on its own, for a caller that wants one glyph.
  */
 public class OpenTypeGsub private constructor(
-    private val single: Map<String, MutableMap<Int, Int>>,
-    private val liga: Map<String, MutableMap<Int, MutableList<LigRule>>>,
+    private val scripts: Map<String, Script>,
+    private val features: List<Feature>,
+    private val lookups: List<Lookup?>,
+    private val gdef: Gdef?,
 ) {
     /** A ligature rule: [rest] are the 2nd..nth component glyph ids, [lig] the result. */
     public class LigRule(public val rest: IntArray, public val lig: Int)
 
     /** The single-substitution glyph for [gid] under [feature], or null. */
-    public fun single(feature: String, gid: Int): Int? = single[feature]?.get(gid)
+    public fun single(feature: String, gid: Int): Int? {
+        for (lookup in lookupsOf(feature)) {
+            for (st in lookup.subtables) if (st is SingleSubst) st.substitute(gid)?.let { return it }
+        }
+        return null
+    }
 
     /** Ligature rules whose first component is [firstGid] under [feature], longest first. */
-    public fun ligatures(feature: String, firstGid: Int): List<LigRule>? = liga[feature]?.get(firstGid)
+    public fun ligatures(feature: String, firstGid: Int): List<LigRule>? {
+        val out = ArrayList<LigRule>()
+        for (lookup in lookupsOf(feature)) {
+            for (st in lookup.subtables) if (st is LigatureSubst) st.rulesFor(firstGid)?.let { out.addAll(it) }
+        }
+        return out.takeIf { it.isNotEmpty() }?.sortedByDescending { it.rest.size }
+    }
 
     public val hasArabicJoining: Boolean
-        get() = single.keys.any { it == "init" || it == "medi" || it == "fina" }
+        get() = features.any { it.tag == "init" || it.tag == "medi" || it.tag == "fina" }
+
+    /** True when the table has a script record tagged [tag], such as `arab` or `dev2`. */
+    public fun hasScript(tag: String): Boolean = tag in scripts
+
+    /** The lookups of every feature record tagged [tag], whatever its script, in LookupList order. */
+    private fun lookupsOf(tag: String): List<Lookup> =
+        features.filter { it.tag == tag }.flatMap { f -> f.lookups.toList() }.distinct().sorted().mapNotNull { lookups.getOrNull(it) }
+
+    /**
+     * Substitutes [glyphs] in place. [script] and [language] are OpenType tags, such as
+     * `arab` and `URD `; a script the font lacks falls back to `DFLT`, `dflt` and `latn`, and
+     * a language it lacks falls back to the default language system. Each list of [stages]
+     * applies before the next, its lookups in LookupList order.
+     *
+     * A feature in [positional] applies only to the glyphs whose [GsubGlyph.features] name
+     * it, as the joining forms of Arabic do. Every other feature applies to every glyph.
+     */
+    public fun substitute(
+        glyphs: MutableList<GsubGlyph>,
+        script: String,
+        language: String?,
+        stages: List<List<String>>,
+        positional: Set<String> = emptySet(),
+    ) {
+        val lang = languageSystem(script, language) ?: return
+        val active = HashMap<String, MutableList<Int>>()
+        lang.required.takeIf { it >= 0 }?.let { features.getOrNull(it) }?.let { f -> active.getOrPut(f.tag) { ArrayList() } += f.lookups.toList() }
+        for (fi in lang.features) {
+            val f = features.getOrNull(fi) ?: continue
+            active.getOrPut(f.tag) { ArrayList() } += f.lookups.toList()
+        }
+        for (stage in stages) {
+            // lookup index -> the features of this stage that reference it
+            val stageLookups = HashMap<Int, MutableSet<String>>()
+            for (tag in stage) for (li in active[tag].orEmpty()) stageLookups.getOrPut(li) { HashSet() } += tag
+            for (li in stageLookups.keys.sorted()) {
+                val tags = stageLookups.getValue(li)
+                val lookup = lookups.getOrNull(li) ?: continue
+                val global = tags.any { it !in positional }
+                val applies: (GsubGlyph) -> Boolean =
+                    if (global) { _ -> true } else { g -> g.features.any { it in tags } }
+                Applier(glyphs, applies).run(lookup)
+            }
+        }
+    }
+
+    private fun languageSystem(script: String, language: String?): LangSys? {
+        val s = scripts[script] ?: scripts["DFLT"] ?: scripts["dflt"] ?: scripts["latn"] ?: return null
+        return language?.let { s.languages[it] } ?: s.default ?: s.languages.values.firstOrNull()
+    }
+
+    /* ─── Applying lookups ─────────────────────────────────────────────────── */
+
+    /** One pass of lookups over [glyphs], where [applies] tells which glyphs the features of the pass reach. */
+    private inner class Applier(val glyphs: MutableList<GsubGlyph>, val applies: (GsubGlyph) -> Boolean) {
+        /** How deep nested lookups go, as HarfBuzz limits them. */
+        private var nesting = 0
+
+        fun run(lookup: Lookup) {
+            if (lookup.type == 8) {
+                // A reverse chained lookup runs from the end, and only substitutes in place.
+                var i = glyphs.size - 1
+                while (i >= 0) {
+                    val g = glyphs[i]
+                    if (applies(g) && !skipped(g, lookup)) {
+                        for (st in lookup.subtables) if (st is ReverseChainSubst && applyReverse(st, lookup, i)) break
+                    }
+                    i--
+                }
+                return
+            }
+            var i = 0
+            while (i < glyphs.size) {
+                val g = glyphs[i]
+                if (!applies(g) || skipped(g, lookup)) { i++; continue }
+                val next = applyAt(lookup, i)
+                i = if (next < 0) i + 1 else next
+            }
+        }
+
+        /** Applies the first subtable of [lookup] that matches at [i]; the index to go on from, or -1. */
+        fun applyAt(lookup: Lookup, i: Int): Int {
+            for (st in lookup.subtables) {
+                val next = when (st) {
+                    is SingleSubst -> st.substitute(glyphs[i].gid)?.let { glyphs[i].gid = it; i + 1 } ?: -1
+                    is MultipleSubst -> applyMultiple(st, i)
+                    is AlternateSubst -> st.alternates(glyphs[i].gid)?.firstOrNull()?.let { glyphs[i].gid = it; i + 1 } ?: -1
+                    is LigatureSubst -> applyLigature(st, lookup, i)
+                    is ContextSubst -> applyContext(st, lookup, i)
+                    is ChainSubst -> applyChain(st, lookup, i)
+                    is ReverseChainSubst -> -1
+                }
+                if (next >= 0) return next
+            }
+            return -1
+        }
+
+        private fun applyMultiple(st: MultipleSubst, i: Int): Int {
+            val seq = st.sequence(glyphs[i].gid) ?: return -1
+            val source = glyphs.removeAt(i)
+            for ((k, gid) in seq.withIndex()) glyphs.add(i + k, source.copy(gid))
+            return i + seq.size
+        }
+
+        private fun applyLigature(st: LigatureSubst, lookup: Lookup, i: Int): Int {
+            val rules = st.rulesFor(glyphs[i].gid) ?: return -1
+            for (rule in rules) {
+                val positions = matchInput(lookup, i, rule.rest.size + 1) { k, g -> g.gid == rule.rest[k - 1] } ?: continue
+                ligate(positions, rule.lig)
+                return i + 1
+            }
+            return -1
+        }
+
+        /** Replaces the glyphs at [positions] with [lig], which takes their clusters and the marks between them. */
+        private fun ligate(positions: IntArray, lig: Int) {
+            val first = glyphs[positions[0]]
+            val last = positions.last()
+            // Marks the lookup skipped between the components stay, after the ligature, in its cluster.
+            for (p in positions[0]..last) glyphs[p].cluster = first.cluster
+            first.gid = lig
+            first.components = positions.size
+            first.ligated = true
+            for (k in positions.size - 1 downTo 1) glyphs.removeAt(positions[k])
+        }
+
+        private fun applyContext(st: ContextSubst, lookup: Lookup, i: Int): Int {
+            val gid = glyphs[i].gid
+            when (st) {
+                is ContextSubst.Glyphs -> {
+                    val index = st.coverage.indexOf(gid).takeIf { it >= 0 } ?: return -1
+                    for (rule in st.ruleSets.getOrNull(index) ?: return -1) {
+                        val positions = matchInput(lookup, i, rule.input.size + 1) { k, g -> g.gid == rule.input[k - 1] } ?: continue
+                        return applyRecords(positions, rule.records)
+                    }
+                }
+                is ContextSubst.Classes -> {
+                    if (st.coverage.indexOf(gid) < 0) return -1
+                    for (rule in st.ruleSets.getOrNull(st.classes.classOf(gid)) ?: return -1) {
+                        val positions = matchInput(lookup, i, rule.input.size + 1) { k, g -> st.classes.classOf(g.gid) == rule.input[k - 1] } ?: continue
+                        return applyRecords(positions, rule.records)
+                    }
+                }
+                is ContextSubst.Coverages -> {
+                    if (st.coverages.isEmpty() || st.coverages[0].indexOf(gid) < 0) return -1
+                    val positions = matchInput(lookup, i, st.coverages.size) { k, g -> st.coverages[k].indexOf(g.gid) >= 0 } ?: return -1
+                    return applyRecords(positions, st.records)
+                }
+            }
+            return -1
+        }
+
+        private fun applyChain(st: ChainSubst, lookup: Lookup, i: Int): Int {
+            val gid = glyphs[i].gid
+            when (st) {
+                is ChainSubst.Glyphs -> {
+                    val index = st.coverage.indexOf(gid).takeIf { it >= 0 } ?: return -1
+                    for (rule in st.ruleSets.getOrNull(index) ?: return -1) {
+                        val positions = matchInput(lookup, i, rule.input.size + 1) { k, g -> g.gid == rule.input[k - 1] } ?: continue
+                        if (!matchBacktrack(lookup, i, rule.backtrack.size) { k, g -> g.gid == rule.backtrack[k] }) continue
+                        if (!matchLookahead(lookup, positions.last(), rule.lookahead.size) { k, g -> g.gid == rule.lookahead[k] }) continue
+                        return applyRecords(positions, rule.records)
+                    }
+                }
+                is ChainSubst.Classes -> {
+                    if (st.coverage.indexOf(gid) < 0) return -1
+                    for (rule in st.ruleSets.getOrNull(st.input.classOf(gid)) ?: return -1) {
+                        val positions = matchInput(lookup, i, rule.input.size + 1) { k, g -> st.input.classOf(g.gid) == rule.input[k - 1] } ?: continue
+                        if (!matchBacktrack(lookup, i, rule.backtrack.size) { k, g -> st.backtrack.classOf(g.gid) == rule.backtrack[k] }) continue
+                        if (!matchLookahead(lookup, positions.last(), rule.lookahead.size) { k, g -> st.lookahead.classOf(g.gid) == rule.lookahead[k] }) continue
+                        return applyRecords(positions, rule.records)
+                    }
+                }
+                is ChainSubst.Coverages -> {
+                    if (st.input.isEmpty() || st.input[0].indexOf(gid) < 0) return -1
+                    val positions = matchInput(lookup, i, st.input.size) { k, g -> st.input[k].indexOf(g.gid) >= 0 } ?: return -1
+                    if (!matchBacktrack(lookup, i, st.backtrack.size) { k, g -> st.backtrack[k].indexOf(g.gid) >= 0 }) return -1
+                    if (!matchLookahead(lookup, positions.last(), st.lookahead.size) { k, g -> st.lookahead[k].indexOf(g.gid) >= 0 }) return -1
+                    return applyRecords(positions, st.records)
+                }
+            }
+            return -1
+        }
+
+        private fun applyReverse(st: ReverseChainSubst, lookup: Lookup, i: Int): Boolean {
+            val index = st.coverage.indexOf(glyphs[i].gid).takeIf { it >= 0 } ?: return false
+            if (!matchBacktrack(lookup, i, st.backtrack.size) { k, g -> st.backtrack[k].indexOf(g.gid) >= 0 }) return false
+            if (!matchLookahead(lookup, i, st.lookahead.size) { k, g -> st.lookahead[k].indexOf(g.gid) >= 0 }) return false
+            glyphs[i].gid = st.substitutes.getOrNull(index) ?: return false
+            return true
+        }
+
+        /**
+         * The positions of [count] input glyphs from [start], each after the last one that
+         * [lookup] does not skip, when [match] accepts glyphs 1 and on; null when they do not match.
+         */
+        private inline fun matchInput(lookup: Lookup, start: Int, count: Int, match: (Int, GsubGlyph) -> Boolean): IntArray? {
+            val positions = IntArray(count)
+            positions[0] = start
+            var p = start
+            for (k in 1 until count) {
+                p = nextUnskipped(lookup, p) ?: return null
+                val g = glyphs[p]
+                // Input glyphs carry the feature of the lookup, as HarfBuzz's mask check asks.
+                if (!applies(g) || !match(k, g)) return null
+                positions[k] = p
+            }
+            return positions
+        }
+
+        private inline fun matchBacktrack(lookup: Lookup, start: Int, count: Int, match: (Int, GsubGlyph) -> Boolean): Boolean {
+            var p = start
+            for (k in 0 until count) {
+                p = previousUnskipped(lookup, p) ?: return false
+                if (!match(k, glyphs[p])) return false
+            }
+            return true
+        }
+
+        private inline fun matchLookahead(lookup: Lookup, end: Int, count: Int, match: (Int, GsubGlyph) -> Boolean): Boolean {
+            var p = end
+            for (k in 0 until count) {
+                p = nextUnskipped(lookup, p) ?: return false
+                if (!match(k, glyphs[p])) return false
+            }
+            return true
+        }
+
+        private fun nextUnskipped(lookup: Lookup, from: Int): Int? {
+            var p = from + 1
+            while (p < glyphs.size && skipped(glyphs[p], lookup)) p++
+            return p.takeIf { it < glyphs.size }
+        }
+
+        private fun previousUnskipped(lookup: Lookup, from: Int): Int? {
+            var p = from - 1
+            while (p >= 0 && skipped(glyphs[p], lookup)) p--
+            return p.takeIf { it >= 0 }
+        }
+
+        /**
+         * Applies the nested lookups of [records] at the matched [positions], and returns the
+         * index after the last matched glyph. A nested lookup that changes the number of glyphs
+         * shifts the positions after it, as HarfBuzz's apply_lookup does.
+         */
+        private fun applyRecords(positions: IntArray, records: List<Record>): Int {
+            val matched = positions.toMutableList()
+            var end = matched.last() + 1
+            if (nesting >= MAX_NESTING) return end
+            nesting++
+            try {
+                for (record in records) {
+                    val idx = record.sequenceIndex
+                    if (idx >= matched.size) continue
+                    val at = matched[idx]
+                    if (at >= glyphs.size) continue
+                    val nested = lookups.getOrNull(record.lookupIndex) ?: continue
+                    val before = glyphs.size
+                    if (applyNested(nested, at) < 0) continue
+                    var delta = glyphs.size - before
+                    if (delta == 0) continue
+                    end += delta
+                    if (end < at) { delta += at - end; end = at }
+                    var next = idx + 1
+                    if (delta < 0) {
+                        delta = maxOf(delta, next - matched.size)
+                        next -= delta
+                    }
+                    // Shift the positions after the nested lookup by the change in length.
+                    if (delta > 0) {
+                        repeat(delta) { k -> matched.add(idx + 1 + k, 0) }
+                        for (j in idx + 1..idx + delta) matched[j] = matched[j - 1] + 1
+                        for (j in idx + delta + 1 until matched.size) matched[j] += delta
+                    } else if (delta < 0) {
+                        repeat(-delta) { if (idx + 1 < matched.size) matched.removeAt(idx + 1) }
+                        for (j in idx + 1 until matched.size) matched[j] += delta
+                    }
+                }
+            } finally {
+                nesting--
+            }
+            return end.coerceIn(0, glyphs.size)
+        }
+
+        /** A nested lookup applies once, at [at], whatever the lookup flags say about that glyph. */
+        private fun applyNested(lookup: Lookup, at: Int): Int {
+            if (lookup.type == 8) {
+                for (st in lookup.subtables) if (st is ReverseChainSubst && applyReverse(st, lookup, at)) return at + 1
+                return -1
+            }
+            return applyAt(lookup, at)
+        }
+
+        /** True when the flag of [lookup] makes it pass over [g] (OpenType 1.9, "Lookup Table"). */
+        fun skipped(g: GsubGlyph, lookup: Lookup): Boolean {
+            val flag = lookup.flag
+            if (flag and 0xFF1E == 0) return false
+            val cls = glyphClass(g)
+            return when (cls) {
+                BASE -> flag and IGNORE_BASE != 0
+                LIGATURE -> flag and IGNORE_LIGATURES != 0
+                MARK -> when {
+                    flag and IGNORE_MARKS != 0 -> true
+                    flag and USE_MARK_FILTERING_SET != 0 -> gdef?.markSets?.getOrNull(lookup.markSet)?.indexOf(g.gid)?.let { it < 0 } ?: true
+                    flag and MARK_ATTACHMENT_TYPE != 0 -> (gdef?.markAttach?.classOf(g.gid) ?: 0) != (flag ushr 8)
+                    else -> false
+                }
+                else -> false
+            }
+        }
+
+        /** The GDEF class of [g], or one made from what the caller knows when the font has no classes. */
+        private fun glyphClass(g: GsubGlyph): Int {
+            gdef?.glyphClasses?.let { return it.classOf(g.gid) }
+            return when {
+                g.isMark -> MARK
+                g.ligated -> LIGATURE
+                else -> BASE
+            }
+        }
+    }
+
+    /* ─── The parsed table ─────────────────────────────────────────────────── */
+
+    private class LangSys(val required: Int, val features: IntArray)
+    private class Script(val default: LangSys?, val languages: Map<String, LangSys>)
+    private class Feature(val tag: String, val lookups: IntArray)
+    private class Lookup(val type: Int, val flag: Int, val markSet: Int, val subtables: List<Subtable>)
+    private class Record(val sequenceIndex: Int, val lookupIndex: Int)
+    private class SeqRule(val input: IntArray, val records: List<Record>)
+    private class ChainRule(val backtrack: IntArray, val input: IntArray, val lookahead: IntArray, val records: List<Record>)
+    private class Gdef(val glyphClasses: ClassDef?, val markAttach: ClassDef?, val markSets: List<Coverage>)
+
+    private sealed class Subtable
+
+    private class SingleSubst(val coverage: Coverage, val delta: Int, val substitutes: IntArray?) : Subtable() {
+        fun substitute(gid: Int): Int? {
+            val i = coverage.indexOf(gid).takeIf { it >= 0 } ?: return null
+            return substitutes?.getOrNull(i) ?: if (substitutes == null) (gid + delta) and 0xFFFF else null
+        }
+    }
+
+    private class MultipleSubst(val coverage: Coverage, val sequences: Array<IntArray>) : Subtable() {
+        fun sequence(gid: Int): IntArray? = coverage.indexOf(gid).takeIf { it >= 0 }?.let { sequences.getOrNull(it) }
+    }
+
+    private class AlternateSubst(val coverage: Coverage, val sets: Array<IntArray>) : Subtable() {
+        fun alternates(gid: Int): IntArray? = coverage.indexOf(gid).takeIf { it >= 0 }?.let { sets.getOrNull(it) }
+    }
+
+    private class LigatureSubst(val coverage: Coverage, val sets: Array<List<LigRule>>) : Subtable() {
+        /** The rules of [first] in the order of the font, which is the order of preference. */
+        fun rulesFor(first: Int): List<LigRule>? = coverage.indexOf(first).takeIf { it >= 0 }?.let { sets.getOrNull(it) }
+    }
+
+    private sealed class ContextSubst : Subtable() {
+        class Glyphs(val coverage: Coverage, val ruleSets: Array<List<SeqRule>>) : ContextSubst()
+        class Classes(val coverage: Coverage, val classes: ClassDef, val ruleSets: Array<List<SeqRule>>) : ContextSubst()
+        class Coverages(val coverages: List<Coverage>, val records: List<Record>) : ContextSubst()
+    }
+
+    private sealed class ChainSubst : Subtable() {
+        class Glyphs(val coverage: Coverage, val ruleSets: Array<List<ChainRule>>) : ChainSubst()
+        class Classes(
+            val coverage: Coverage, val backtrack: ClassDef, val input: ClassDef, val lookahead: ClassDef,
+            val ruleSets: Array<List<ChainRule>>,
+        ) : ChainSubst()
+        class Coverages(val backtrack: List<Coverage>, val input: List<Coverage>, val lookahead: List<Coverage>, val records: List<Record>) : ChainSubst()
+    }
+
+    private class ReverseChainSubst(
+        val coverage: Coverage, val backtrack: List<Coverage>, val lookahead: List<Coverage>, val substitutes: IntArray,
+    ) : Subtable()
+
+    /**
+     * A coverage table: the index of a glyph in it, by binary search over its glyphs (format 1)
+     * or over its ranges (format 2).
+     */
+    private class Coverage(private val starts: IntArray, private val ends: IntArray, private val firstIndex: IntArray) {
+        fun indexOf(gid: Int): Int {
+            var lo = 0
+            var hi = starts.size - 1
+            while (lo <= hi) {
+                val mid = (lo + hi) ushr 1
+                when {
+                    gid < starts[mid] -> hi = mid - 1
+                    gid > ends[mid] -> lo = mid + 1
+                    else -> return firstIndex[mid] + (gid - starts[mid])
+                }
+            }
+            return -1
+        }
+    }
+
+    /** A class definition table: the class of a glyph, 0 for any glyph it does not list. */
+    private class ClassDef(private val starts: IntArray, private val ends: IntArray, private val classes: IntArray) {
+        fun classOf(gid: Int): Int {
+            var lo = 0
+            var hi = starts.size - 1
+            while (lo <= hi) {
+                val mid = (lo + hi) ushr 1
+                when {
+                    gid < starts[mid] -> hi = mid - 1
+                    gid > ends[mid] -> lo = mid + 1
+                    else -> return classes[mid]
+                }
+            }
+            return 0
+        }
+    }
 
     public companion object {
-        private val WANT = setOf("init", "medi", "fina", "isol", "liga", "rlig", "calt")
+        /** The glyph classes of GDEF (OpenType 1.9, "GDEF: Glyph Definition Table"). */
+        private const val BASE = 1
+        private const val LIGATURE = 2
+        private const val MARK = 3
 
-        public fun from(gsub: ByteArray?): OpenTypeGsub? {
+        private const val IGNORE_BASE = 0x2
+        private const val IGNORE_LIGATURES = 0x4
+        private const val IGNORE_MARKS = 0x8
+        private const val USE_MARK_FILTERING_SET = 0x10
+        private const val MARK_ATTACHMENT_TYPE = 0xFF00
+
+        /** Nested lookups go no deeper, as HarfBuzz's HB_MAX_NESTING_LEVEL. */
+        private const val MAX_NESTING = 64
+
+        public fun from(gsub: ByteArray?): OpenTypeGsub? = from(gsub, null)
+
+        /** The GSUB table [gsub] with the glyph classes of the GDEF table [gdef], or null when [gsub] cannot be read. */
+        public fun from(gsub: ByteArray?, gdef: ByteArray?): OpenTypeGsub? {
             gsub ?: return null
-            return runCatching { parse(gsub) }.getOrNull()
+            return runCatching { Parser(gsub).table(gdef?.let { runCatching { parseGdef(it) }.getOrNull() }) }.getOrNull()
         }
 
-        private fun parse(b: ByteArray): OpenTypeGsub? {
+        private fun parseGdef(b: ByteArray): Gdef {
             val r = R(b)
-            r.u16(); r.u16() // major/minor
-            r.u16() // scriptListOffset (script filtering skipped: features apply broadly)
-            val featureListOff = r.u16()
-            val lookupListOff = r.u16()
-
-            // feature tag -> the lookup indices it references
-            val tagLookups = HashMap<String, MutableList<Int>>()
-            r.seek(featureListOff)
-            val featureCount = r.u16()
-            for (i in 0 until featureCount) {
-                r.seek(featureListOff + 2 + i * 6)
-                val tag = tagString(r.u32())
-                val featOff = r.u16()
-                if (tag !in WANT) continue
-                r.seek(featureListOff + featOff)
-                r.u16() // featureParams
-                val n = r.u16()
-                val ids = tagLookups.getOrPut(tag) { ArrayList() }
-                repeat(n) { ids.add(r.u16()) }
+            r.seek(0)
+            r.u16()
+            val minor = r.u16()
+            val classOff = r.u16()
+            r.u16() // attachList
+            r.u16() // ligCaretList
+            val markAttachOff = r.u16()
+            val markSetsOff = if (minor >= 2) r.u16() else 0
+            val markSets = ArrayList<Coverage>()
+            if (markSetsOff != 0) {
+                r.seek(markSetsOff)
+                r.u16() // format
+                val count = r.u16()
+                val offsets = LongArray(count) { r.u32() }
+                for (o in offsets) markSets += readCoverage(b, markSetsOff + o.toInt())
             }
-            if (tagLookups.isEmpty()) return null
-
-            r.seek(lookupListOff)
-            val lookupCount = r.u16()
-            val lookupOffsets = IntArray(lookupCount) { r.u16() }
-
-            val single = HashMap<String, MutableMap<Int, Int>>()
-            val liga = HashMap<String, MutableMap<Int, MutableList<LigRule>>>()
-            for ((tag, ids) in tagLookups) {
-                for (li in ids) {
-                    if (li !in 0 until lookupCount) continue
-                    parseLookup(b, lookupListOff + lookupOffsets[li], tag, single, liga)
-                }
-            }
-            if (single.isEmpty() && liga.isEmpty()) return null
-            return OpenTypeGsub(single, liga)
+            return Gdef(
+                classOff.takeIf { it != 0 }?.let { readClassDef(b, it) },
+                markAttachOff.takeIf { it != 0 }?.let { readClassDef(b, it) },
+                markSets,
+            )
         }
 
-        private fun parseLookup(
-            b: ByteArray, base: Int, tag: String,
-            single: HashMap<String, MutableMap<Int, Int>>,
-            liga: HashMap<String, MutableMap<Int, MutableList<LigRule>>>,
-        ) {
-            val r = R(b); r.seek(base)
-            var type = r.u16()
-            r.u16() // lookupFlag
-            val subCount = r.u16()
-            val subOffsets = IntArray(subCount) { r.u16() }
-            for (so in subOffsets) {
-                var subBase = base + so
-                var effType = type
-                if (type == 7) { // extension: redirect to the real type/offset
-                    val er = R(b); er.seek(subBase)
-                    er.u16() // format
-                    effType = er.u16()
-                    subBase += er.u32().toInt()
-                }
-                when (effType) {
-                    1 -> parseSingle(b, subBase, single.getOrPut(tag) { HashMap() })
-                    4 -> parseLigature(b, subBase, liga.getOrPut(tag) { HashMap() })
-                }
-            }
-        }
-
-        private fun parseSingle(b: ByteArray, base: Int, out: MutableMap<Int, Int>) {
-            val r = R(b); r.seek(base)
-            val format = r.u16()
-            val cov = base + r.u16()
-            when (format) {
-                1 -> {
-                    val delta = r.s16()
-                    for (gid in readCoverageOrdered(b, cov)) out[gid] = (gid + delta) and 0xFFFF
-                }
-                2 -> {
-                    val n = r.u16()
-                    val subs = IntArray(n) { r.u16() }
-                    val covGids = readCoverageOrdered(b, cov)
-                    for (i in covGids.indices) if (i < n) out[covGids[i]] = subs[i]
-                }
-            }
-        }
-
-        private fun parseLigature(b: ByteArray, base: Int, out: MutableMap<Int, MutableList<LigRule>>) {
-            val r = R(b); r.seek(base)
-            r.u16() // format (1)
-            val cov = base + r.u16()
-            val setCount = r.u16()
-            val setOffsets = IntArray(setCount) { r.u16() }
-            val covGids = readCoverageOrdered(b, cov)
-            for (i in covGids.indices) {
-                if (i >= setCount) break
-                val firstGid = covGids[i]
-                val setBase = base + setOffsets[i]
-                val sr = R(b); sr.seek(setBase)
-                val ligCount = sr.u16()
-                val ligOffsets = IntArray(ligCount) { sr.u16() }
-                val rules = out.getOrPut(firstGid) { ArrayList() }
-                for (lo in ligOffsets) {
-                    val lr = R(b); lr.seek(setBase + lo)
-                    val ligGlyph = lr.u16()
-                    val compCount = lr.u16()
-                    val rest = IntArray((compCount - 1).coerceAtLeast(0)) { lr.u16() }
-                    rules.add(LigRule(rest, ligGlyph))
-                }
-                // Greedy longest-match first.
-                rules.sortByDescending { it.rest.size }
-            }
-        }
-
-        /** Coverage glyph ids in coverage-index order (index i -> glyph). */
-        private fun readCoverageOrdered(b: ByteArray, off: Int): IntArray {
+        private fun readCoverage(b: ByteArray, off: Int): Coverage {
             val r = R(b); r.seek(off)
             return when (r.u16()) {
-                1 -> { val n = r.u16(); IntArray(n) { r.u16() } }
+                1 -> {
+                    val n = r.u16()
+                    val glyphs = IntArray(n) { r.u16() }
+                    Coverage(glyphs, glyphs, IntArray(n) { it })
+                }
                 2 -> {
                     val n = r.u16()
-                    val out = ArrayList<Int>()
-                    for (i in 0 until n) {
-                        val s = r.u16(); val e = r.u16(); r.u16() // startCoverageIndex
-                        for (g in s..e) out.add(g)
-                    }
-                    out.toIntArray()
+                    val starts = IntArray(n); val ends = IntArray(n); val first = IntArray(n)
+                    for (i in 0 until n) { starts[i] = r.u16(); ends[i] = r.u16(); first[i] = r.u16() }
+                    Coverage(starts, ends, first)
                 }
-                else -> IntArray(0)
+                else -> Coverage(IntArray(0), IntArray(0), IntArray(0))
+            }
+        }
+
+        private fun readClassDef(b: ByteArray, off: Int): ClassDef {
+            val r = R(b); r.seek(off)
+            return when (r.u16()) {
+                1 -> {
+                    val start = r.u16()
+                    val n = r.u16()
+                    val classes = IntArray(n) { r.u16() }
+                    ClassDef(IntArray(n) { start + it }, IntArray(n) { start + it }, classes)
+                }
+                2 -> {
+                    val n = r.u16()
+                    val starts = IntArray(n); val ends = IntArray(n); val classes = IntArray(n)
+                    for (i in 0 until n) { starts[i] = r.u16(); ends[i] = r.u16(); classes[i] = r.u16() }
+                    ClassDef(starts, ends, classes)
+                }
+                else -> ClassDef(IntArray(0), IntArray(0), IntArray(0))
             }
         }
 
@@ -172,6 +543,223 @@ public class OpenTypeGsub private constructor(
             append(((v ushr 16) and 0xFF).toInt().toChar())
             append(((v ushr 8) and 0xFF).toInt().toChar())
             append((v and 0xFF).toInt().toChar())
+        }
+
+        /** Reads the lists of one GSUB table; a subtable it cannot read is left out, not the table. */
+        private class Parser(private val b: ByteArray) {
+
+            fun table(gdef: Gdef?): OpenTypeGsub? {
+                val r = R(b)
+                r.u16(); r.u16() // major/minor
+                val scriptListOff = r.u16()
+                val featureListOff = r.u16()
+                val lookupListOff = r.u16()
+                val lookups = lookupList(lookupListOff)
+                if (lookups.all { it == null }) return null
+                return OpenTypeGsub(scriptList(scriptListOff), featureList(featureListOff), lookups, gdef)
+            }
+
+            private fun scriptList(off: Int): Map<String, Script> {
+                val out = HashMap<String, Script>()
+                val r = R(b); r.seek(off)
+                val n = r.u16()
+                repeat(n) {
+                    val tag = tagString(r.u32())
+                    val scriptOff = off + r.u16()
+                    runCatching { script(scriptOff) }.getOrNull()?.let { out[tag] = it }
+                }
+                return out
+            }
+
+            private fun script(off: Int): Script {
+                val r = R(b); r.seek(off)
+                val defaultOff = r.u16()
+                val n = r.u16()
+                val languages = HashMap<String, LangSys>()
+                repeat(n) {
+                    val tag = tagString(r.u32())
+                    val langOff = r.u16()
+                    languages[tag] = langSys(off + langOff)
+                }
+                return Script(defaultOff.takeIf { it != 0 }?.let { langSys(off + it) }, languages)
+            }
+
+            private fun langSys(off: Int): LangSys {
+                val r = R(b); r.seek(off)
+                r.u16() // lookupOrder
+                val required = r.u16().let { if (it == 0xFFFF) -1 else it }
+                val n = r.u16()
+                return LangSys(required, IntArray(n) { r.u16() })
+            }
+
+            private fun featureList(off: Int): List<Feature> {
+                val r = R(b); r.seek(off)
+                val n = r.u16()
+                return List(n) {
+                    val tag = tagString(r.u32())
+                    val featOff = off + r.u16()
+                    val fr = R(b); fr.seek(featOff)
+                    fr.u16() // featureParams
+                    val count = fr.u16()
+                    Feature(tag, IntArray(count) { fr.u16() })
+                }
+            }
+
+            private fun lookupList(off: Int): List<Lookup?> {
+                val r = R(b); r.seek(off)
+                val n = r.u16()
+                val offsets = IntArray(n) { r.u16() }
+                return offsets.map { runCatching { lookup(off + it) }.getOrNull() }
+            }
+
+            private fun lookup(off: Int): Lookup {
+                val r = R(b); r.seek(off)
+                val type = r.u16()
+                val flag = r.u16()
+                val n = r.u16()
+                val subOffsets = IntArray(n) { off + r.u16() }
+                val markSet = if (flag and USE_MARK_FILTERING_SET != 0) r.u16() else 0
+                val subtables = ArrayList<Subtable>()
+                var resolved = type
+                for (so in subOffsets) {
+                    var subOff = so
+                    var effType = type
+                    if (type == 7) {
+                        // Extension: the real type and a 32-bit offset from the extension subtable.
+                        val er = R(b); er.seek(so)
+                        er.u16()
+                        effType = er.u16()
+                        subOff = so + er.u32().toInt()
+                        resolved = effType
+                    }
+                    runCatching { subtable(effType, subOff) }.getOrNull()?.let { subtables += it }
+                }
+                return Lookup(if (resolved == 7) 0 else resolved, flag, markSet, subtables)
+            }
+
+            private fun subtable(type: Int, off: Int): Subtable? {
+                val r = R(b); r.seek(off)
+                val format = r.u16()
+                return when (type) {
+                    1 -> {
+                        val cov = readCoverage(b, off + r.u16())
+                        when (format) {
+                            1 -> SingleSubst(cov, r.s16(), null)
+                            2 -> { val n = r.u16(); SingleSubst(cov, 0, IntArray(n) { r.u16() }) }
+                            else -> null
+                        }
+                    }
+                    2, 3 -> {
+                        val cov = readCoverage(b, off + r.u16())
+                        val n = r.u16()
+                        val sets = Array(n) { idx ->
+                            val sr = R(b); sr.seek(off + R(b).also { it.seek(off + 6 + 2 * idx) }.u16())
+                            val count = sr.u16()
+                            IntArray(count) { sr.u16() }
+                        }
+                        if (type == 2) MultipleSubst(cov, sets) else AlternateSubst(cov, sets)
+                    }
+                    4 -> {
+                        val cov = readCoverage(b, off + r.u16())
+                        val n = r.u16()
+                        val setOffsets = IntArray(n) { off + r.u16() }
+                        LigatureSubst(cov, Array(n) { idx ->
+                            val setBase = setOffsets[idx]
+                            val sr = R(b); sr.seek(setBase)
+                            val count = sr.u16()
+                            val ligOffsets = IntArray(count) { setBase + sr.u16() }
+                            ligOffsets.map { lo ->
+                                val lr = R(b); lr.seek(lo)
+                                val lig = lr.u16()
+                                val comps = lr.u16()
+                                LigRule(IntArray((comps - 1).coerceAtLeast(0)) { lr.u16() }, lig)
+                            }
+                        })
+                    }
+                    5 -> context(format, off)
+                    6 -> chain(format, off)
+                    8 -> {
+                        val cov = readCoverage(b, off + r.u16())
+                        val back = List(r.u16()) { readCoverage(b, off + r.u16()) }
+                        val ahead = List(r.u16()) { readCoverage(b, off + r.u16()) }
+                        val n = r.u16()
+                        ReverseChainSubst(cov, back, ahead, IntArray(n) { r.u16() })
+                    }
+                    else -> null
+                }
+            }
+
+            private fun records(r: R, count: Int): List<Record> = List(count) { Record(r.u16(), r.u16()) }
+
+            private fun context(format: Int, off: Int): Subtable? {
+                val r = R(b); r.seek(off + 2)
+                return when (format) {
+                    1, 2 -> {
+                        val cov = readCoverage(b, off + r.u16())
+                        val classes = if (format == 2) readClassDef(b, off + r.u16()) else null
+                        val n = r.u16()
+                        val setOffsets = IntArray(n) { r.u16() }
+                        val sets = Array(n) { idx ->
+                            if (setOffsets[idx] == 0) return@Array emptyList<SeqRule>()
+                            val setBase = off + setOffsets[idx]
+                            val sr = R(b); sr.seek(setBase)
+                            val count = sr.u16()
+                            val ruleOffsets = IntArray(count) { setBase + sr.u16() }
+                            ruleOffsets.map { ro ->
+                                val rr = R(b); rr.seek(ro)
+                                val glyphCount = rr.u16()
+                                val recordCount = rr.u16()
+                                val input = IntArray((glyphCount - 1).coerceAtLeast(0)) { rr.u16() }
+                                SeqRule(input, records(rr, recordCount))
+                            }
+                        }
+                        if (classes != null) ContextSubst.Classes(cov, classes, sets) else ContextSubst.Glyphs(cov, sets)
+                    }
+                    3 -> {
+                        val glyphCount = r.u16()
+                        val recordCount = r.u16()
+                        val coverages = List(glyphCount) { readCoverage(b, off + r.u16()) }
+                        ContextSubst.Coverages(coverages, records(r, recordCount))
+                    }
+                    else -> null
+                }
+            }
+
+            private fun chain(format: Int, off: Int): Subtable? {
+                val r = R(b); r.seek(off + 2)
+                return when (format) {
+                    1, 2 -> {
+                        val cov = readCoverage(b, off + r.u16())
+                        val classDefs = if (format == 2) List(3) { readClassDef(b, off + r.u16()) } else null
+                        val n = r.u16()
+                        val setOffsets = IntArray(n) { r.u16() }
+                        val sets = Array(n) { idx ->
+                            if (setOffsets[idx] == 0) return@Array emptyList<ChainRule>()
+                            val setBase = off + setOffsets[idx]
+                            val sr = R(b); sr.seek(setBase)
+                            val count = sr.u16()
+                            val ruleOffsets = IntArray(count) { setBase + sr.u16() }
+                            ruleOffsets.map { ro ->
+                                val rr = R(b); rr.seek(ro)
+                                val backtrack = IntArray(rr.u16()) { rr.u16() }
+                                val inputCount = rr.u16()
+                                val input = IntArray((inputCount - 1).coerceAtLeast(0)) { rr.u16() }
+                                val lookahead = IntArray(rr.u16()) { rr.u16() }
+                                ChainRule(backtrack, input, lookahead, records(rr, rr.u16()))
+                            }
+                        }
+                        if (classDefs != null) ChainSubst.Classes(cov, classDefs[0], classDefs[1], classDefs[2], sets)
+                        else ChainSubst.Glyphs(cov, sets)
+                    }
+                    3 -> {
+                        val back = List(r.u16()) { readCoverage(b, off + r.u16()) }
+                        val input = List(r.u16()) { readCoverage(b, off + r.u16()) }
+                        val ahead = List(r.u16()) { readCoverage(b, off + r.u16()) }
+                        ChainSubst.Coverages(back, input, ahead, records(r, r.u16()))
+                    }
+                    else -> null
+                }
+            }
         }
     }
 
@@ -185,5 +773,37 @@ public class OpenTypeGsub private constructor(
                 ((b[p + 2].toLong() and 0xFF) shl 8) or (b[p + 3].toLong() and 0xFF)
             p += 4; return v
         }
+    }
+}
+
+/**
+ * One glyph of a run that [OpenTypeGsub.substitute] reshapes.
+ *
+ * @property gid The glyph id.
+ * @property cluster The index of the first character this glyph stands for. A ligature takes
+ *   the cluster of its first component, and so do the marks between its components; the
+ *   glyphs of a multiple substitution keep the cluster of the glyph they replace.
+ * @property features The features that reach this glyph besides the global ones, such as the
+ *   joining form of an Arabic letter.
+ * @property isMark True for a combining mark. A lookup flag reads it when the font has no
+ *   GDEF glyph classes of its own.
+ */
+public class GsubGlyph(
+    public var gid: Int,
+    public var cluster: Int,
+    public val features: Set<String> = emptySet(),
+    public val isMark: Boolean = false,
+) {
+    /** How many glyphs a ligature joined into this one, 1 for any other glyph. */
+    public var components: Int = 1
+        internal set
+
+    /** True once a ligature substitution produced this glyph. */
+    public var ligated: Boolean = false
+        internal set
+
+    internal fun copy(gid: Int): GsubGlyph = GsubGlyph(gid, cluster, features, isMark).also {
+        it.components = components
+        it.ligated = ligated
     }
 }

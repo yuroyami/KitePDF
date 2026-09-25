@@ -424,6 +424,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A grey ICC profile maps full grey to white, whatever its white point tag says.
   With a D65 tag, full grey drew as #ebffff and mid grey as #768295, where mutool
   draws #ffffff and #808080 (#311).
+- Text in an embedded font shapes through every GSUB lookup type. Contextual and
+  chained contextual substitution, multiple and alternate substitution, and reverse
+  chaining now apply along with single and ligature substitution. The lookups run for the script
+  of each word, in the stages HarfBuzz uses, and a lookup flag skips the glyphs its
+  GDEF class excludes. Combining marks go into the order HarfBuzz normalizes them to.
+  Before, a per-glyph table took single and ligature lookups of a few features, so
+  Urdu Nastaliq and most contextual forms did not shape. Against `hb-shape`, all 57
+  test words in Latin, Greek, Cyrillic, Arabic, Urdu, Hebrew and Thai now give the
+  same glyphs. Indic scripts still need their own reordering (#211).
 - In a book whose embedded font has ligatures, such as fi and ffi, the text of the
   page keeps every character a ligature draws. Before, a ligature kept only its first
   character, so search, selection and copy saw "fnd ofce" for "find office" (#314).
