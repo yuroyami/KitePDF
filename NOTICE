@@ -17,6 +17,10 @@ carry in order to be correct, listed here with where that data comes from.
    Maps PostScript glyph names to Unicode codepoints. Published by Adobe
    Systems Incorporated and redistributable under its own terms.
    Copyright 1997-2002, 2007, 2010 Adobe Systems Incorporated.
+   The ZapfDingbats glyph list of the same project maps the glyph names of
+   ZapfDingbats (a1 to a206). Used in: kitepdf-core .../core/font/
+   ZapfDingbatsGlyphList.kt, whose header carries the notice.
+   Copyright 2002-2019 Adobe, licensed BSD-3-Clause.
 
 2. Adobe CMap resources
    Used in: kitepdf-core .../core/font/PredefinedCMapData.kt

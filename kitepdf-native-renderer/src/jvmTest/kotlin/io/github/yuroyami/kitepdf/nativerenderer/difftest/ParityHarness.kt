@@ -148,10 +148,13 @@ object ParityHarness {
         }
     }
 
-    /** The drop-in and synthetic corpus, and every shared oracle fixture. */
+    /** The drop-in and synthetic corpus, the parity fixtures, and every shared oracle fixture. */
     fun documents(outDir: File): List<Document> {
         val docs = Corpus.assemble(outDir).map { Document(it.name, it.pdf) }.toMutableList()
         val inputs = File(outDir, "parity-inputs").apply { mkdirs() }
+        for (f in ParityFixtures.all()) {
+            docs += Document(f.name, File(inputs, "${f.name}.pdf").apply { writeBytes(f.bytes) })
+        }
         for (f in ColorFixtures.all() + GradientFixtures.all() + GroupFixtures.all() + ImageFixtures.all()) {
             val pdf = File(inputs, "${f.name}.pdf").apply { writeBytes(f.bytes) }
             docs += Document("fixture-${f.name}", pdf)

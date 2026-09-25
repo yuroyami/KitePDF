@@ -337,6 +337,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the Adobe conversion from US Web Coated (SWOP) to sRGB. The initial colour of
   DeviceCMYK, black ink alone, is now the converted colour instead of pure black.
   The DifferentialTest mean falls from 0.0016 to 0.0010 (#299).
+- ZapfDingbats codes from 128 up draw the right symbols. The built-in encoding put
+  the bracket ornaments of codes 128 to 141 at code 161, so 121 codes named the
+  wrong glyph (#304).
+- Text extraction returns ZapfDingbats symbols, such as ✔ and ♠, through Adobe's
+  ZapfDingbats glyph list. Before, it returned the raw byte (#305).
 
 ## [0.10.0] - 2026-09-13
 

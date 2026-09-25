@@ -374,9 +374,11 @@ public class PdfFont private constructor(
             val descriptor = dict["FontDescriptor"]?.resolve(refs) as? PdfDictionary
             val flags = descriptor?.getInt("Flags")?.toInt() ?: 0
             val nameTable = resolveEncoding(dict, baseFont, subtype, flags, refs)
+            // ZapfDingbats names its glyphs a1 to a206, which only its own list maps (#305).
+            val dingbats = Standard14Widths.canonicalName(baseFont) == "ZapfDingbats"
             val unicodeTable = IntArray(256) { i ->
                 val gn = nameTable[i] ?: return@IntArray 0
-                GlyphList.unicodeFor(gn) ?: 0
+                (if (dingbats) ZapfDingbatsGlyphList.unicodeFor(gn) else null) ?: GlyphList.unicodeFor(gn) ?: 0
             }
             val toUnicode = loadToUnicode(dict, refs)
             val wt = resolveWidths(dict, baseFont, nameTable, refs)
@@ -543,7 +545,8 @@ public class PdfFont private constructor(
                 84, 97, 98, 99, 100,
             )
             for ((i, n) in low.withIndex()) sb.append("${33 + i}=a$n ")
-            // 128..255 range (a89.. etc.)
+            // Codes 128 to 141 hold the bracket ornaments, and codes 161 to 254 the rest, with 240
+            // unused (ISO 32000-1, Annex D.6, and the Dingbats AFM, #304).
             val high = intArrayOf(
                 89, 90, 93, 94, 91, 92, 205, 85, 206, 86, 87, 88, 95, 96, 101, 102, 103, 104, 106, 107,
                 108, 112, 111, 110, 109, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132,
@@ -552,8 +555,12 @@ public class PdfFont private constructor(
                 168, 169, 170, 171, 172, 173, 162, 174, 175, 176, 177, 178, 179, 193, 180, 199, 181, 200,
                 182, 201, 183, 184, 197, 185, 194, 198, 186, 195, 187, 188, 189, 190, 191,
             )
-            // High half begins at code 161 (0xA1) in the ZapfDingbats vector.
-            for ((i, n) in high.withIndex()) sb.append("${161 + i}=a$n ")
+            for (i in 0 until 14) sb.append("${128 + i}=a${high[i]} ")
+            var code = 161
+            for (i in 14 until high.size) {
+                if (code == 240) code++
+                sb.append("${code++}=a${high[i]} ")
+            }
             encodingFromSpec(sb.toString())
         }
 
