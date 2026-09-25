@@ -1,5 +1,7 @@
 package io.github.yuroyami.kitepdf
 
+import io.github.yuroyami.kitepdf.content.ContentStreamParser
+import io.github.yuroyami.kitepdf.content.Operation
 import io.github.yuroyami.kitepdf.core.KiteDocument
 import io.github.yuroyami.kitepdf.core.KiteMetadata
 import io.github.yuroyami.kitepdf.core.KiteOutlineItem
@@ -257,6 +259,85 @@ public class PdfDocument private constructor(
         lock.withLock {
             decodedImageCache.clear()
             decodedImageBytes = 0L
+        }
+    }
+
+    /**
+     * Parsed content, keyed by the object number of the page, form or Type 3 glyph
+     * that holds it, in order from the content used least recently (#118).
+     */
+    private val operationCache = LinkedHashMap<Long, CachedOperations>()
+
+    private class CachedOperations(val operations: List<Operation>, val bytes: Long)
+
+    /** The estimated bytes of the operations in [operationCache]. */
+    internal var cachedOperationBytes = 0L
+        private set
+
+    /** Test hook: content streams parsed through [operations]. */
+    internal var operationParseCount = 0
+        private set
+
+    /**
+     * The most bytes of parsed content that this document keeps, so that a page drawn
+     * again, at another zoom or after a scroll back, does not parse its content again,
+     * and a form drawn many times parses once. A dense page of 100,000 operators takes
+     * about 12 MB. The content used least recently leaves first, and content larger
+     * than the whole budget is not kept. The default is
+     * [DEFAULT_OPERATION_CACHE_BUDGET_BYTES]; 0 keeps none. Lower it for a small heap,
+     * and call [dropOperationCache] when the app runs low on memory.
+     */
+    public var operationCacheBudgetBytes: Long = DEFAULT_OPERATION_CACHE_BUDGET_BYTES
+        set(value) {
+            lock.withLock {
+                field = value.coerceAtLeast(0L)
+                trimOperationCache()
+            }
+        }
+
+    /**
+     * The operations of the content that object [objectNumber] holds. On a miss, [parse]
+     * makes them outside the lock, and the first result stored wins.
+     */
+    internal fun operations(objectNumber: Long, parse: () -> List<Operation>): List<Operation> {
+        lock.withLock {
+            operationCache.remove(objectNumber)?.let { hit ->
+                // Put it back at the end, as the content used most recently.
+                operationCache[objectNumber] = hit
+                return hit.operations
+            }
+        }
+        val parsed = parse()
+        val bytes = ContentStreamParser.retainedBytes(parsed)
+        return lock.withLock {
+            operationParseCount++
+            operationCache[objectNumber]?.let { return@withLock it.operations }
+            if (bytes <= operationCacheBudgetBytes) {
+                operationCache[objectNumber] = CachedOperations(parsed, bytes)
+                cachedOperationBytes += bytes
+                trimOperationCache()
+            }
+            parsed
+        }
+    }
+
+    /** Removes the content used least recently until the cache fits its budget. Call it with [lock] held. */
+    private fun trimOperationCache() {
+        val entries = operationCache.values.iterator()
+        while (cachedOperationBytes > operationCacheBudgetBytes && entries.hasNext()) {
+            cachedOperationBytes -= entries.next().bytes
+            entries.remove()
+        }
+    }
+
+    /**
+     * Frees the parsed content that this document keeps, for example when the app runs
+     * low on memory. A page parses again when it is next drawn.
+     */
+    public fun dropOperationCache() {
+        lock.withLock {
+            operationCache.clear()
+            cachedOperationBytes = 0L
         }
     }
 
@@ -728,6 +809,9 @@ public class PdfDocument private constructor(
 
         /** The default of [imageCacheBudgetBytes]: 32 MB, a small share of a 192 MB Android heap. */
         public const val DEFAULT_IMAGE_CACHE_BUDGET_BYTES: Long = 32L * 1024 * 1024
+
+        /** The default of [operationCacheBudgetBytes]: 16 MB, enough for one dense page or many plain ones. */
+        public const val DEFAULT_OPERATION_CACHE_BUDGET_BYTES: Long = 16L * 1024 * 1024
 
         public fun open(
             bytes: ByteArray,

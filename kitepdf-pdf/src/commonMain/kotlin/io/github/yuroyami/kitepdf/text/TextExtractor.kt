@@ -38,7 +38,7 @@ public object TextExtractor {
     public fun extract(page: PdfPage): String {
         // The renderer's colour spaces, so inline images end at the same byte (#266).
         val colorSpaces = ContentStreamParser.colorSpaces(page.resources, page.internalDocument)
-        val ops = ContentStreamParser.parse(page.contentBytes, colorSpaces)
+        val ops = page.operations(colorSpaces)
         return extract(ops, loadFonts(page))
     }
 

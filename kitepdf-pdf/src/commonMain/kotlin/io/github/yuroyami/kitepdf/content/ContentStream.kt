@@ -91,6 +91,28 @@ public object ContentStreamParser {
         }.toMap()
     }
 
+    /**
+     * About the bytes that [ops] hold in memory, for the operation cache of a document:
+     * 104 an operation, as measured on a page of path operators, plus the bytes of their
+     * strings and inline images.
+     */
+    internal fun retainedBytes(ops: List<Operation>): Long {
+        var total = ops.size * BYTES_PER_OPERATION
+        for (op in ops) {
+            op.inlineImage?.let { total += it.size }
+            for (operand in op.operands) total += stringBytes(operand)
+        }
+        return total
+    }
+
+    private const val BYTES_PER_OPERATION = 104L
+
+    private fun stringBytes(operand: PdfObject): Long = when (operand) {
+        is io.github.yuroyami.kitepdf.core.parser.PdfString -> operand.bytes.size.toLong()
+        is PdfArray -> operand.items.sumOf { stringBytes(it) + 16 }
+        else -> 0L
+    }
+
     /** Resource names determine inline sample counts (ISO 32000-1, 8.9.7). */
     internal fun parse(bytes: ByteArray, colorSpaces: Map<String, KiteColorSpace>): List<Operation> {
         val reader = ByteReader(bytes)

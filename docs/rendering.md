@@ -423,6 +423,21 @@ Turned or skewed text, a glyph with an em over 256 pixels, and text in a blend m
 - **Platform choice:** AWT on JVM and CoreGraphics on Apple are fast. Skia is also fast but has larger memory overhead.
 - **Background color:** Transparent backgrounds (alpha = 0) may be slightly slower than opaque on some platforms.
 
+## Memory
+
+A `PdfDocument` keeps two caches, so that a page drawn again, at another zoom or after a scroll back, costs less:
+
+- **Decoded images**, up to `imageCacheBudgetBytes` (default 32 MB). An image drawn on many pages decodes once.
+- **Parsed content**, up to `operationCacheBudgetBytes` (default 16 MB). A page drawn again, and a form drawn many times, parse their content once. A dense page of 100,000 operators takes about 12 MB.
+
+Each cache drops what it used least recently first. Lower the budgets for a small heap, and call `dropDecodedImageCache()` and `dropOperationCache()` when the app runs low on memory:
+
+```kotlin
+val doc = PdfDocument.open(bytes)
+doc.imageCacheBudgetBytes = 16L * 1024 * 1024
+doc.operationCacheBudgetBytes = 8L * 1024 * 1024
+```
+
 ## Next steps
 
 - [Reading & extracting text](reading.md) from PDFs

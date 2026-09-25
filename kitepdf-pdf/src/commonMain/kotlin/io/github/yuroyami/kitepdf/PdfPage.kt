@@ -207,6 +207,17 @@ public class PdfPage internal constructor(
             ?: throw PdfFormatException("/Contents must be stream, ref, or array")
     }
 
+    /**
+     * The parsed operations of this page's content, through the document's cache (#118).
+     * [colorSpaces] names the colour spaces an inline image may use, so every reader
+     * splits the content at the same bytes (#266).
+     */
+    internal fun operations(colorSpaces: Map<String, io.github.yuroyami.kitepdf.core.render.KiteColorSpace>): List<io.github.yuroyami.kitepdf.content.Operation> {
+        val parse = { io.github.yuroyami.kitepdf.content.ContentStreamParser.parse(contentBytes, colorSpaces) }
+        val number = reference?.objectNumber ?: return parse()
+        return document.operations(number, parse)
+    }
+
     /** Extract page text using the naive Tj/TJ/' / " operator scan. */
     public fun extractText(): String = TextExtractor.extract(this)
 

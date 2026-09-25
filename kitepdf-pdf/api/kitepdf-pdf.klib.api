@@ -833,8 +833,12 @@ final class io.github.yuroyami.kitepdf/PdfDocument : io.github.yuroyami.kitepdf.
     final var imageCacheBudgetBytes // io.github.yuroyami.kitepdf/PdfDocument.imageCacheBudgetBytes|{}imageCacheBudgetBytes[0]
         final fun <get-imageCacheBudgetBytes>(): kotlin/Long // io.github.yuroyami.kitepdf/PdfDocument.imageCacheBudgetBytes.<get-imageCacheBudgetBytes>|<get-imageCacheBudgetBytes>(){}[0]
         final fun <set-imageCacheBudgetBytes>(kotlin/Long) // io.github.yuroyami.kitepdf/PdfDocument.imageCacheBudgetBytes.<set-imageCacheBudgetBytes>|<set-imageCacheBudgetBytes>(kotlin.Long){}[0]
+    final var operationCacheBudgetBytes // io.github.yuroyami.kitepdf/PdfDocument.operationCacheBudgetBytes|{}operationCacheBudgetBytes[0]
+        final fun <get-operationCacheBudgetBytes>(): kotlin/Long // io.github.yuroyami.kitepdf/PdfDocument.operationCacheBudgetBytes.<get-operationCacheBudgetBytes>|<get-operationCacheBudgetBytes>(){}[0]
+        final fun <set-operationCacheBudgetBytes>(kotlin/Long) // io.github.yuroyami.kitepdf/PdfDocument.operationCacheBudgetBytes.<set-operationCacheBudgetBytes>|<set-operationCacheBudgetBytes>(kotlin.Long){}[0]
 
     final fun dropDecodedImageCache() // io.github.yuroyami.kitepdf/PdfDocument.dropDecodedImageCache|dropDecodedImageCache(){}[0]
+    final fun dropOperationCache() // io.github.yuroyami.kitepdf/PdfDocument.dropOperationCache|dropOperationCache(){}[0]
     final fun edit(kotlin.random/Random? = ...): io.github.yuroyami.kitepdf.writer/PdfEditor // io.github.yuroyami.kitepdf/PdfDocument.edit|edit(kotlin.random.Random?){}[0]
     final fun formField(kotlin/String): io.github.yuroyami.kitepdf/PdfFormField? // io.github.yuroyami.kitepdf/PdfDocument.formField|formField(kotlin.String){}[0]
     final fun pageIndexOfField(io.github.yuroyami.kitepdf/PdfFormField): kotlin/Int? // io.github.yuroyami.kitepdf/PdfDocument.pageIndexOfField|pageIndexOfField(io.github.yuroyami.kitepdf.PdfFormField){}[0]
@@ -844,6 +848,8 @@ final class io.github.yuroyami.kitepdf/PdfDocument : io.github.yuroyami.kitepdf.
     final object Companion { // io.github.yuroyami.kitepdf/PdfDocument.Companion|null[0]
         final const val DEFAULT_IMAGE_CACHE_BUDGET_BYTES // io.github.yuroyami.kitepdf/PdfDocument.Companion.DEFAULT_IMAGE_CACHE_BUDGET_BYTES|{}DEFAULT_IMAGE_CACHE_BUDGET_BYTES[0]
             final fun <get-DEFAULT_IMAGE_CACHE_BUDGET_BYTES>(): kotlin/Long // io.github.yuroyami.kitepdf/PdfDocument.Companion.DEFAULT_IMAGE_CACHE_BUDGET_BYTES.<get-DEFAULT_IMAGE_CACHE_BUDGET_BYTES>|<get-DEFAULT_IMAGE_CACHE_BUDGET_BYTES>(){}[0]
+        final const val DEFAULT_OPERATION_CACHE_BUDGET_BYTES // io.github.yuroyami.kitepdf/PdfDocument.Companion.DEFAULT_OPERATION_CACHE_BUDGET_BYTES|{}DEFAULT_OPERATION_CACHE_BUDGET_BYTES[0]
+            final fun <get-DEFAULT_OPERATION_CACHE_BUDGET_BYTES>(): kotlin/Long // io.github.yuroyami.kitepdf/PdfDocument.Companion.DEFAULT_OPERATION_CACHE_BUDGET_BYTES.<get-DEFAULT_OPERATION_CACHE_BUDGET_BYTES>|<get-DEFAULT_OPERATION_CACHE_BUDGET_BYTES>(){}[0]
 
         final fun open(kotlin/ByteArray, kotlin/ByteArray = ..., kotlin/Boolean = ...): io.github.yuroyami.kitepdf/PdfDocument // io.github.yuroyami.kitepdf/PdfDocument.Companion.open|open(kotlin.ByteArray;kotlin.ByteArray;kotlin.Boolean){}[0]
         final fun open(kotlin/ByteArray, kotlin/String, kotlin/Boolean = ...): io.github.yuroyami.kitepdf/PdfDocument // io.github.yuroyami.kitepdf/PdfDocument.Companion.open|open(kotlin.ByteArray;kotlin.String;kotlin.Boolean){}[0]
