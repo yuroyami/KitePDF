@@ -15,10 +15,12 @@ import io.github.yuroyami.kitepdf.core.render.KiteShading
 import io.github.yuroyami.kitepdf.core.render.KiteMatrix
 import io.github.yuroyami.kitepdf.core.render.KiteFunction
 import io.github.yuroyami.kitepdf.core.render.KiteMaskTransfer
+import io.github.yuroyami.kitepdf.core.render.KiteRenderingIntent
 import io.github.yuroyami.kitepdf.core.render.RgbColor
 import io.github.yuroyami.kitepdf.core.render.SoftMask
 import io.github.yuroyami.kitepdf.core.render.TextState
 import io.github.yuroyami.kitepdf.core.render.strokeOutline
+import io.github.yuroyami.kitepdf.core.render.withColorRendering
 
 import io.github.yuroyami.kitepdf.core.kiteWarn
 import io.github.yuroyami.kitepdf.PdfAnnotation.Subtype
@@ -815,12 +817,12 @@ public class PageRenderer(
     /**
      * Decode an inline image captured verbatim as `BI … ID <data> EI` (§8.9.7).
      * Parses the abbreviated dictionary, slices the raw data, and builds an
-     * [KiteImageData] driven through the normal raster path. [fillColor] tints an
-     * inline `/ImageMask` stencil.
+     * [KiteImageData] driven through the normal raster path. The fill colour of [s]
+     * tints an inline `/ImageMask` stencil, and its intent converts the colours.
      */
     private fun decodeInlineImage(
         blob: ByteArray,
-        fillColor: RgbColor,
+        s: GraphicsState,
         colorSpaces: Map<String, KiteColorSpace>,
     ): KiteImageData? {
         if (blob.size < 4) return null
@@ -857,7 +859,8 @@ public class PageRenderer(
         val colorName = (entries["ColorSpace"] as? PdfName)?.value
         val colorSpace = colorName?.let { namedColorSpace(it, colorSpaces) }
             ?: DefaultColorSpaces.imageSpace(entries["ColorSpace"], colorSpaces, resolver)
-        return runCatching { KiteImageData.from(stream, resolver, fillColor, colorSpace) }.getOrNull()
+        return runCatching { KiteImageData.from(stream, resolver, s.fillColor, colorSpace) }.getOrNull()
+            ?.withIntent(imageIntent(stream.dict, s), s.blackPointCompensation)
     }
 
     /** Expand the abbreviated inline-image dictionary keys (§8.9.7 Table 92). */
@@ -1127,12 +1130,14 @@ public class PageRenderer(
             // `sc`/`scn` would still see a stale non-device space and misread the
             // component count.
             "g", "rg", "k" -> {
-                val space = DefaultColorSpaces.substitute(deviceSpaceOf(op.operator), colorSpaces)
-                state.replace(state.current.copy(fillColor = deviceColor(space, a), fillColorSpace = space, fillPattern = null))
+                val s = state.current
+                val space = DefaultColorSpaces.substitute(deviceSpaceOf(op.operator), colorSpaces).withIntent(s.renderingIntent, s.blackPointCompensation)
+                state.replace(s.copy(fillColor = deviceColor(space, a), fillColorSpace = space, fillPattern = null, fillComponents = components(space, a)))
             }
             "G", "RG", "K" -> {
-                val space = DefaultColorSpaces.substitute(deviceSpaceOf(op.operator), colorSpaces)
-                state.replace(state.current.copy(strokeColor = deviceColor(space, a), strokeColorSpace = space, strokePattern = null))
+                val s = state.current
+                val space = DefaultColorSpaces.substitute(deviceSpaceOf(op.operator), colorSpaces).withIntent(s.renderingIntent, s.blackPointCompensation)
+                state.replace(s.copy(strokeColor = deviceColor(space, a), strokeColorSpace = space, strokePattern = null, strokeComponents = components(space, a)))
             }
             // cs/CS select the colour space for subsequent sc/scn/SC/SCN. Without them a
             // non-device space (e.g. CoreGraphics' ICCBased-RGB on iOS-generated PDFs) stayed
@@ -1140,14 +1145,23 @@ public class PageRenderer(
             // ECG grid white. Per ISO 32000-1 §8.6.8 selecting a space resets the colour to its
             // initial value (black) until the next sc/scn sets components.
             "cs" -> {
+                val s = state.current
                 val name = (a.firstOrNull() as? io.github.yuroyami.kitepdf.core.parser.PdfName)?.value
-                val csp = name?.let { namedColorSpace(it, colorSpaces) } ?: KiteColorSpace.DeviceGray
-                state.replace(state.current.copy(fillColorSpace = csp, fillColor = csp.defaultColor(), fillPattern = initialPattern(name, csp)))
+                val csp = (name?.let { namedColorSpace(it, colorSpaces) } ?: KiteColorSpace.DeviceGray)
+                    .withIntent(s.renderingIntent, s.blackPointCompensation)
+                state.replace(s.copy(fillColorSpace = csp, fillColor = csp.defaultColor(), fillPattern = initialPattern(name, csp), fillComponents = null))
             }
             "CS" -> {
+                val s = state.current
                 val name = (a.firstOrNull() as? io.github.yuroyami.kitepdf.core.parser.PdfName)?.value
-                val csp = name?.let { namedColorSpace(it, colorSpaces) } ?: KiteColorSpace.DeviceGray
-                state.replace(state.current.copy(strokeColorSpace = csp, strokeColor = csp.defaultColor(), strokePattern = initialPattern(name, csp)))
+                val csp = (name?.let { namedColorSpace(it, colorSpaces) } ?: KiteColorSpace.DeviceGray)
+                    .withIntent(s.renderingIntent, s.blackPointCompensation)
+                state.replace(s.copy(strokeColorSpace = csp, strokeColor = csp.defaultColor(), strokePattern = initialPattern(name, csp), strokeComponents = null))
+            }
+            // A new intent converts the current colours again, as MuPDF converts them when it paints (#201).
+            "ri" -> {
+                val name = (a.firstOrNull() as? PdfName)?.value
+                state.replace(state.current.withColorRendering(KiteRenderingIntent.fromPdfName(name), state.current.blackPointCompensation))
             }
 
             // ─── Path construction ───────────────────────────────────────
@@ -1263,6 +1277,7 @@ public class PageRenderer(
                 when (slot.stream.dict.getName("Subtype")) {
                     "Image" -> {
                         val image = decodeImageCached(slot, state.current.fillColor, colorSpaces)
+                            .withIntent(imageIntent(slot.stream.dict, state.current), state.current.blackPointCompensation)
                         if (paintsNothing(image, state.current)) return
                         withSoftMask(state.current) { paintImage(image, state.current) }
                     }
@@ -1285,7 +1300,10 @@ public class PageRenderer(
                 // sh paints under the active soft mask like every other painting
                 // operator (ISO 32000-1, 11.6.5.1, #65).
                 withSoftMask(s) {
-                    fillShadingInBBox(shading, s.ctm, clipPath = null, alpha = s.fillAlpha, blendMode = s.blendMode)
+                    fillShadingInBBox(
+                        shading.withIntent(s.renderingIntent, s.blackPointCompensation), s.ctm,
+                        clipPath = null, alpha = s.fillAlpha, blendMode = s.blendMode,
+                    )
                 }
             }
 
@@ -1293,7 +1311,7 @@ public class PageRenderer(
             "BI" -> {
                 if (ocHidden()) return
                 val blob = op.inlineImage ?: return
-                val img = decodeInlineImage(blob, state.current.fillColor, colorSpaces) ?: return
+                val img = decodeInlineImage(blob, state.current, colorSpaces) ?: return
                 if (paintsNothing(img, state.current)) return
                 withSoftMask(state.current) { paintImage(img, state.current) }
             }
@@ -1526,7 +1544,8 @@ public class PageRenderer(
         // shading follows the pattern matrix, so the two cannot share one matrix (#93).
         canvas.pushClip(region, s.ctm, evenOdd)
         try {
-            fillShadingInBBox(pat.shading, patternBaseCtm.concat(pat.matrix), null, alpha, ps.blendMode)
+            val shading = pat.shading.withIntent(ps.renderingIntent, ps.blackPointCompensation)
+            fillShadingInBBox(shading, patternBaseCtm.concat(pat.matrix), null, alpha, ps.blendMode)
         } finally {
             canvas.popClip()
         }
@@ -1863,8 +1882,8 @@ public class PageRenderer(
         }
         val rgb = cs.toRgb(comps)
         state.replace(
-            if (stroke) state.current.copy(strokeColor = rgb, strokePattern = null)
-            else state.current.copy(fillColor = rgb, fillPattern = null),
+            if (stroke) state.current.copy(strokeColor = rgb, strokePattern = null, strokeComponents = comps)
+            else state.current.copy(fillColor = rgb, fillPattern = null, fillComponents = comps),
         )
     }
 
@@ -1884,8 +1903,8 @@ public class PageRenderer(
         }
         val rgb = cs.toRgb(comps)
         state.replace(
-            if (stroke) state.current.copy(strokeColor = rgb, strokePattern = null)
-            else state.current.copy(fillColor = rgb, fillPattern = null),
+            if (stroke) state.current.copy(strokeColor = rgb, strokePattern = null, strokeComponents = comps)
+            else state.current.copy(fillColor = rgb, fillPattern = null, fillComponents = comps),
         )
     }
 
@@ -2473,6 +2492,22 @@ public class PageRenderer(
     }
 
     /** The colour of the operands [a] in [space]. The device families keep their direct forms. */
+    /**
+     * The operands of a colour operator in [space], which [GraphicsState.withColorRendering]
+     * converts again. A device space converts alike for every intent, so it keeps none.
+     */
+    private fun components(space: KiteColorSpace, a: List<PdfObject>): DoubleArray? = when (space) {
+        KiteColorSpace.DeviceGray, KiteColorSpace.DeviceRGB, KiteColorSpace.DeviceCMYK -> null
+        else -> DoubleArray(a.size) { num(a, it) }
+    }
+
+    /**
+     * The intent an image converts through: its own `/Intent` when it has one, else the one
+     * of the graphics state, as MuPDF chooses (ISO 32000-1, 8.6.5.8 and Table 89).
+     */
+    private fun imageIntent(dict: PdfDictionary, s: GraphicsState): KiteRenderingIntent =
+        (dict["Intent"] as? PdfName)?.let { KiteRenderingIntent.fromPdfName(it.value) } ?: s.renderingIntent
+
     private fun deviceColor(space: KiteColorSpace, a: List<PdfObject>): RgbColor = when (space) {
         KiteColorSpace.DeviceGray -> RgbColor.gray(num(a, 0))
         KiteColorSpace.DeviceRGB -> RgbColor(num(a, 0), num(a, 1), num(a, 2))

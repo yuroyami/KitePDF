@@ -22,7 +22,8 @@ import io.github.yuroyami.kitepdf.core.parser.PdfStream
  *   - `/BM`: blend mode (name or array of names)
  *   - `/SMask`: soft-mask dict ("None" / Mask dict)
  *   - `/LW` `/LC` `/LJ` `/ML` `/D`: line width, cap, join, miter limit and dash
- *   - `/AIS`, `/SA`, `/OP`, `/op`, `/OPM`, `/Font`, `/RI`: accepted but ignored (rare)
+ *   - `/RI` `/UseBlackPtComp`: rendering intent and black point compensation
+ *   - `/AIS`, `/SA`, `/OP`, `/op`, `/OPM`, `/Font`: accepted but ignored (rare)
  *
  * Missing fields stay at their previous values; that's the spec's
  * "ExtGState modifies the current state" rule.
@@ -40,6 +41,13 @@ public data class ExtGState(
     val dashArray: List<Double>? = null,
     /** `/D`'s dash phase, read together with [dashArray]. */
     val dashPhase: Double = 0.0,
+    /** `/RI`, or null when the dictionary sets no rendering intent. */
+    val renderingIntent: KiteRenderingIntent? = null,
+    /**
+     * `/UseBlackPtComp` of ISO 32000-2, 8.4.5: true for `/ON`, false for `/OFF` and `/Default`,
+     * as MuPDF reads it, or null when the dictionary does not set it.
+     */
+    val blackPointCompensation: Boolean? = null,
 ) {
 
     public companion object {
@@ -73,6 +81,8 @@ public data class ExtGState(
                 miterLimit = dict.getReal("ML"),
                 dashArray = dashArray,
                 dashPhase = number(dash?.getOrNull(1)),
+                renderingIntent = (deref(dict["RI"], refs) as? PdfName)?.let { KiteRenderingIntent.fromPdfName(it.value) },
+                blackPointCompensation = (deref(dict["UseBlackPtComp"], refs) as? PdfName)?.let { it.value == "ON" },
             )
         }
 

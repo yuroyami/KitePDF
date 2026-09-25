@@ -48,6 +48,13 @@ public sealed class KiteShading {
     public abstract val bbox: KiteRectangle?
 
     /**
+     * This shading with its colours converting through [intent], with or without black point
+     * compensation (ISO 32000-1, 8.6.5.8). A mesh converts its colours when it is read, and
+     * [background] is converted then too, so both keep the relative colorimetric intent.
+     */
+    public open fun withIntent(intent: KiteRenderingIntent, blackPointCompensation: Boolean = true): KiteShading = this
+
+    /**
      * Type 2 axial shading. Linear gradient between `(x0, y0)` and
      * `(x1, y1)` with `t` running across [domain]. [function] supplies a
      * colour per `t` value; we sample it at a fixed number of stops and
@@ -81,6 +88,11 @@ public sealed class KiteShading {
             h = 31 * h + extendEnd.hashCode()
             return h
         }
+
+        override fun withIntent(intent: KiteRenderingIntent, blackPointCompensation: Boolean): KiteShading {
+            val cs = colorSpace.withIntent(intent, blackPointCompensation)
+            return if (cs === colorSpace) this else copy(colorSpace = cs)
+        }
     }
 
     /**
@@ -104,6 +116,11 @@ public sealed class KiteShading {
             function == other.function && extendStart == other.extendStart && extendEnd == other.extendEnd
         override fun hashCode(): Int = 31 * (31 * coords.contentHashCode() + function.hashCode()) +
             domain.contentHashCode()
+
+        override fun withIntent(intent: KiteRenderingIntent, blackPointCompensation: Boolean): KiteShading {
+            val cs = colorSpace.withIntent(intent, blackPointCompensation)
+            return if (cs === colorSpace) this else copy(colorSpace = cs)
+        }
     }
 
     /**
@@ -122,6 +139,11 @@ public sealed class KiteShading {
     ) : KiteShading() {
         public fun colorAt(x: Double, y: Double): RgbColor =
             colorSpace.toRgb(function.evaluate(doubleArrayOf(x, y)))
+
+        override fun withIntent(intent: KiteRenderingIntent, blackPointCompensation: Boolean): KiteShading {
+            val cs = colorSpace.withIntent(intent, blackPointCompensation)
+            return if (cs === colorSpace) this else FunctionBased(cs, background, bbox, domain, matrix, function)
+        }
     }
 
     /**

@@ -18,8 +18,8 @@ import kotlin.math.pow
  * Supported families:
  *   - DeviceGray / DeviceRGB / DeviceCMYK (the device families)
  *   - Indexed (palette lookup; base is one of the device families)
- *   - ICCBased: *falls back* to DeviceRGB / DeviceCMYK / DeviceGray based
- *     on `/N` component count (the ICC profile is not applied).
+ *   - ICCBased: converts through the profile (see [IccProfile]), and falls
+ *     back to `/Alternate` or a device space by `/N` when the profile cannot be read.
  *   - CalGray, CalRGB, Lab: gamma, whitepoint and (for CalRGB) the CIE
  *     matrix are applied through the same XYZ-to-sRGB path.
  *
@@ -65,6 +65,23 @@ public sealed class KiteColorSpace {
 
     internal open fun componentMin(index: Int): Double = 0.0
     internal open fun componentMax(index: Int): Double = 1.0
+
+    /**
+     * This space converting through [intent], with or without black point compensation
+     * (ISO 32000-1, 8.6.5.8). Only an ICC profile with a table per intent, and a space built
+     * on one, converts differently, so every other space returns itself.
+     */
+    public open fun withIntent(intent: KiteRenderingIntent, blackPointCompensation: Boolean = true): KiteColorSpace = this
+
+    /** The spaces [withIntent] built from this one, two per intent. */
+    private var renderings: Array<KiteColorSpace?>? = null
+
+    /** The space of [intent] and [bpc], which [build] makes the first time. */
+    internal fun rendering(intent: KiteRenderingIntent, bpc: Boolean, build: () -> KiteColorSpace): KiteColorSpace {
+        val all = renderings ?: arrayOfNulls<KiteColorSpace>(8).also { renderings = it }
+        val slot = 2 * intent.ordinal + if (bpc) 1 else 0
+        return all[slot] ?: build().also { all[slot] = it }
+    }
 
     /**
      * For a space that converts by one tone curve per component, then one matrix to
@@ -146,6 +163,11 @@ public sealed class KiteColorSpace {
 
         /** Direct palette lookup by integer index, clamped to the palette. */
         public fun colorAt(index: Int): RgbColor = lut[index.coerceIn(0, lut.size - 1)]
+
+        override fun withIntent(intent: KiteRenderingIntent, blackPointCompensation: Boolean): KiteColorSpace {
+            val b = base.withIntent(intent, blackPointCompensation)
+            return if (b === base) this else rendering(intent, blackPointCompensation) { Indexed(b, hival, palette) }
+        }
     }
 
     /**
@@ -170,6 +192,11 @@ public sealed class KiteColorSpace {
         // A separation at full tint (1.0) is its "solid" colour; default to that.
         override fun defaultColor(): RgbColor =
             if (isNone) RgbColor.WHITE else alternate.toRgb(tintTransform.evaluate(DoubleArray(componentCount) { 1.0 }))
+
+        override fun withIntent(intent: KiteRenderingIntent, blackPointCompensation: Boolean): KiteColorSpace {
+            val alt = alternate.withIntent(intent, blackPointCompensation)
+            return if (alt === alternate) this else rendering(intent, blackPointCompensation) { DeviceN(componentCount, alt, tintTransform, names) }
+        }
     }
 
     /**
@@ -182,6 +209,11 @@ public sealed class KiteColorSpace {
         override fun toRgb(components: DoubleArray): RgbColor = profile.toRgb(components)
         override val curveMatrix: CurveMatrix? get() = profile.curveMatrix
         override fun cmyk8(c: Int, m: Int, y: Int, k: Int): Int = profile.cmyk8(c, m, y, k) ?: super.cmyk8(c, m, y, k)
+
+        override fun withIntent(intent: KiteRenderingIntent, blackPointCompensation: Boolean): KiteColorSpace {
+            val p = profile.forRendering(intent, blackPointCompensation)
+            return if (p === profile) this else rendering(intent, blackPointCompensation) { IccBased(p) }
+        }
     }
 
     /**

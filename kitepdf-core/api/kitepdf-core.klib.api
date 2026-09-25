@@ -63,6 +63,23 @@ final enum class io.github.yuroyami.kitepdf.core.render/KiteGradientSpread : kot
     final fun values(): kotlin/Array<io.github.yuroyami.kitepdf.core.render/KiteGradientSpread> // io.github.yuroyami.kitepdf.core.render/KiteGradientSpread.values|values#static(){}[0]
 }
 
+final enum class io.github.yuroyami.kitepdf.core.render/KiteRenderingIntent : kotlin/Enum<io.github.yuroyami.kitepdf.core.render/KiteRenderingIntent> { // io.github.yuroyami.kitepdf.core.render/KiteRenderingIntent|null[0]
+    enum entry AbsoluteColorimetric // io.github.yuroyami.kitepdf.core.render/KiteRenderingIntent.AbsoluteColorimetric|null[0]
+    enum entry Perceptual // io.github.yuroyami.kitepdf.core.render/KiteRenderingIntent.Perceptual|null[0]
+    enum entry RelativeColorimetric // io.github.yuroyami.kitepdf.core.render/KiteRenderingIntent.RelativeColorimetric|null[0]
+    enum entry Saturation // io.github.yuroyami.kitepdf.core.render/KiteRenderingIntent.Saturation|null[0]
+
+    final val entries // io.github.yuroyami.kitepdf.core.render/KiteRenderingIntent.entries|#static{}entries[0]
+        final fun <get-entries>(): kotlin.enums/EnumEntries<io.github.yuroyami.kitepdf.core.render/KiteRenderingIntent> // io.github.yuroyami.kitepdf.core.render/KiteRenderingIntent.entries.<get-entries>|<get-entries>#static(){}[0]
+
+    final fun valueOf(kotlin/String): io.github.yuroyami.kitepdf.core.render/KiteRenderingIntent // io.github.yuroyami.kitepdf.core.render/KiteRenderingIntent.valueOf|valueOf#static(kotlin.String){}[0]
+    final fun values(): kotlin/Array<io.github.yuroyami.kitepdf.core.render/KiteRenderingIntent> // io.github.yuroyami.kitepdf.core.render/KiteRenderingIntent.values|values#static(){}[0]
+
+    final object Companion { // io.github.yuroyami.kitepdf.core.render/KiteRenderingIntent.Companion|null[0]
+        final fun fromPdfName(kotlin/String?): io.github.yuroyami.kitepdf.core.render/KiteRenderingIntent // io.github.yuroyami.kitepdf.core.render/KiteRenderingIntent.Companion.fromPdfName|fromPdfName(kotlin.String?){}[0]
+    }
+}
+
 abstract fun interface io.github.yuroyami.kitepdf.core.parser/IndirectResolver { // io.github.yuroyami.kitepdf.core.parser/IndirectResolver|null[0]
     abstract fun resolve(io.github.yuroyami.kitepdf.core.parser/PdfReference): io.github.yuroyami.kitepdf.core.parser/PdfObject? // io.github.yuroyami.kitepdf.core.parser/IndirectResolver.resolve|resolve(io.github.yuroyami.kitepdf.core.parser.PdfReference){}[0]
 }
@@ -791,8 +808,10 @@ final class io.github.yuroyami.kitepdf.core.parser/PdfString : io.github.yuroyam
 }
 
 final class io.github.yuroyami.kitepdf.core.render/ExtGState { // io.github.yuroyami.kitepdf.core.render/ExtGState|null[0]
-    constructor <init>(kotlin/Double? = ..., kotlin/Double? = ..., io.github.yuroyami.kitepdf.core.render/KiteBlendMode? = ..., io.github.yuroyami.kitepdf.core.render/SoftMask? = ..., kotlin/Double? = ..., kotlin/Int? = ..., kotlin/Int? = ..., kotlin/Double? = ..., kotlin.collections/List<kotlin/Double>? = ..., kotlin/Double = ...) // io.github.yuroyami.kitepdf.core.render/ExtGState.<init>|<init>(kotlin.Double?;kotlin.Double?;io.github.yuroyami.kitepdf.core.render.KiteBlendMode?;io.github.yuroyami.kitepdf.core.render.SoftMask?;kotlin.Double?;kotlin.Int?;kotlin.Int?;kotlin.Double?;kotlin.collections.List<kotlin.Double>?;kotlin.Double){}[0]
+    constructor <init>(kotlin/Double? = ..., kotlin/Double? = ..., io.github.yuroyami.kitepdf.core.render/KiteBlendMode? = ..., io.github.yuroyami.kitepdf.core.render/SoftMask? = ..., kotlin/Double? = ..., kotlin/Int? = ..., kotlin/Int? = ..., kotlin/Double? = ..., kotlin.collections/List<kotlin/Double>? = ..., kotlin/Double = ..., io.github.yuroyami.kitepdf.core.render/KiteRenderingIntent? = ..., kotlin/Boolean? = ...) // io.github.yuroyami.kitepdf.core.render/ExtGState.<init>|<init>(kotlin.Double?;kotlin.Double?;io.github.yuroyami.kitepdf.core.render.KiteBlendMode?;io.github.yuroyami.kitepdf.core.render.SoftMask?;kotlin.Double?;kotlin.Int?;kotlin.Int?;kotlin.Double?;kotlin.collections.List<kotlin.Double>?;kotlin.Double;io.github.yuroyami.kitepdf.core.render.KiteRenderingIntent?;kotlin.Boolean?){}[0]
 
+    final val blackPointCompensation // io.github.yuroyami.kitepdf.core.render/ExtGState.blackPointCompensation|{}blackPointCompensation[0]
+        final fun <get-blackPointCompensation>(): kotlin/Boolean? // io.github.yuroyami.kitepdf.core.render/ExtGState.blackPointCompensation.<get-blackPointCompensation>|<get-blackPointCompensation>(){}[0]
     final val blendMode // io.github.yuroyami.kitepdf.core.render/ExtGState.blendMode|{}blendMode[0]
         final fun <get-blendMode>(): io.github.yuroyami.kitepdf.core.render/KiteBlendMode? // io.github.yuroyami.kitepdf.core.render/ExtGState.blendMode.<get-blendMode>|<get-blendMode>(){}[0]
     final val dashArray // io.github.yuroyami.kitepdf.core.render/ExtGState.dashArray|{}dashArray[0]
@@ -809,6 +828,8 @@ final class io.github.yuroyami.kitepdf.core.render/ExtGState { // io.github.yuro
         final fun <get-lineWidth>(): kotlin/Double? // io.github.yuroyami.kitepdf.core.render/ExtGState.lineWidth.<get-lineWidth>|<get-lineWidth>(){}[0]
     final val miterLimit // io.github.yuroyami.kitepdf.core.render/ExtGState.miterLimit|{}miterLimit[0]
         final fun <get-miterLimit>(): kotlin/Double? // io.github.yuroyami.kitepdf.core.render/ExtGState.miterLimit.<get-miterLimit>|<get-miterLimit>(){}[0]
+    final val renderingIntent // io.github.yuroyami.kitepdf.core.render/ExtGState.renderingIntent|{}renderingIntent[0]
+        final fun <get-renderingIntent>(): io.github.yuroyami.kitepdf.core.render/KiteRenderingIntent? // io.github.yuroyami.kitepdf.core.render/ExtGState.renderingIntent.<get-renderingIntent>|<get-renderingIntent>(){}[0]
     final val softMask // io.github.yuroyami.kitepdf.core.render/ExtGState.softMask|{}softMask[0]
         final fun <get-softMask>(): io.github.yuroyami.kitepdf.core.render/SoftMask? // io.github.yuroyami.kitepdf.core.render/ExtGState.softMask.<get-softMask>|<get-softMask>(){}[0]
     final val strokeAlpha // io.github.yuroyami.kitepdf.core.render/ExtGState.strokeAlpha|{}strokeAlpha[0]
@@ -816,6 +837,8 @@ final class io.github.yuroyami.kitepdf.core.render/ExtGState { // io.github.yuro
 
     final fun component1(): kotlin/Double? // io.github.yuroyami.kitepdf.core.render/ExtGState.component1|component1(){}[0]
     final fun component10(): kotlin/Double // io.github.yuroyami.kitepdf.core.render/ExtGState.component10|component10(){}[0]
+    final fun component11(): io.github.yuroyami.kitepdf.core.render/KiteRenderingIntent? // io.github.yuroyami.kitepdf.core.render/ExtGState.component11|component11(){}[0]
+    final fun component12(): kotlin/Boolean? // io.github.yuroyami.kitepdf.core.render/ExtGState.component12|component12(){}[0]
     final fun component2(): kotlin/Double? // io.github.yuroyami.kitepdf.core.render/ExtGState.component2|component2(){}[0]
     final fun component3(): io.github.yuroyami.kitepdf.core.render/KiteBlendMode? // io.github.yuroyami.kitepdf.core.render/ExtGState.component3|component3(){}[0]
     final fun component4(): io.github.yuroyami.kitepdf.core.render/SoftMask? // io.github.yuroyami.kitepdf.core.render/ExtGState.component4|component4(){}[0]
@@ -824,7 +847,7 @@ final class io.github.yuroyami.kitepdf.core.render/ExtGState { // io.github.yuro
     final fun component7(): kotlin/Int? // io.github.yuroyami.kitepdf.core.render/ExtGState.component7|component7(){}[0]
     final fun component8(): kotlin/Double? // io.github.yuroyami.kitepdf.core.render/ExtGState.component8|component8(){}[0]
     final fun component9(): kotlin.collections/List<kotlin/Double>? // io.github.yuroyami.kitepdf.core.render/ExtGState.component9|component9(){}[0]
-    final fun copy(kotlin/Double? = ..., kotlin/Double? = ..., io.github.yuroyami.kitepdf.core.render/KiteBlendMode? = ..., io.github.yuroyami.kitepdf.core.render/SoftMask? = ..., kotlin/Double? = ..., kotlin/Int? = ..., kotlin/Int? = ..., kotlin/Double? = ..., kotlin.collections/List<kotlin/Double>? = ..., kotlin/Double = ...): io.github.yuroyami.kitepdf.core.render/ExtGState // io.github.yuroyami.kitepdf.core.render/ExtGState.copy|copy(kotlin.Double?;kotlin.Double?;io.github.yuroyami.kitepdf.core.render.KiteBlendMode?;io.github.yuroyami.kitepdf.core.render.SoftMask?;kotlin.Double?;kotlin.Int?;kotlin.Int?;kotlin.Double?;kotlin.collections.List<kotlin.Double>?;kotlin.Double){}[0]
+    final fun copy(kotlin/Double? = ..., kotlin/Double? = ..., io.github.yuroyami.kitepdf.core.render/KiteBlendMode? = ..., io.github.yuroyami.kitepdf.core.render/SoftMask? = ..., kotlin/Double? = ..., kotlin/Int? = ..., kotlin/Int? = ..., kotlin/Double? = ..., kotlin.collections/List<kotlin/Double>? = ..., kotlin/Double = ..., io.github.yuroyami.kitepdf.core.render/KiteRenderingIntent? = ..., kotlin/Boolean? = ...): io.github.yuroyami.kitepdf.core.render/ExtGState // io.github.yuroyami.kitepdf.core.render/ExtGState.copy|copy(kotlin.Double?;kotlin.Double?;io.github.yuroyami.kitepdf.core.render.KiteBlendMode?;io.github.yuroyami.kitepdf.core.render.SoftMask?;kotlin.Double?;kotlin.Int?;kotlin.Int?;kotlin.Double?;kotlin.collections.List<kotlin.Double>?;kotlin.Double;io.github.yuroyami.kitepdf.core.render.KiteRenderingIntent?;kotlin.Boolean?){}[0]
     final fun equals(kotlin/Any?): kotlin/Boolean // io.github.yuroyami.kitepdf.core.render/ExtGState.equals|equals(kotlin.Any?){}[0]
     final fun hashCode(): kotlin/Int // io.github.yuroyami.kitepdf.core.render/ExtGState.hashCode|hashCode(){}[0]
     final fun toString(): kotlin/String // io.github.yuroyami.kitepdf.core.render/ExtGState.toString|toString(){}[0]
@@ -863,8 +886,10 @@ final class io.github.yuroyami.kitepdf.core.render/GraphicsStack { // io.github.
 }
 
 final class io.github.yuroyami.kitepdf.core.render/GraphicsState { // io.github.yuroyami.kitepdf.core.render/GraphicsState|null[0]
-    constructor <init>(io.github.yuroyami.kitepdf.core.render/KiteMatrix = ..., io.github.yuroyami.kitepdf.core.render/RgbColor = ..., io.github.yuroyami.kitepdf.core.render/RgbColor = ..., kotlin/Double = ..., io.github.yuroyami.kitepdf.core.render/TextState = ..., io.github.yuroyami.kitepdf.core.render/KiteColorSpace = ..., io.github.yuroyami.kitepdf.core.render/KiteColorSpace = ..., kotlin/Double = ..., kotlin/Double = ..., io.github.yuroyami.kitepdf.core.render/KiteBlendMode = ..., io.github.yuroyami.kitepdf.core.render/SoftMask? = ..., io.github.yuroyami.kitepdf.core.render/KiteMatrix? = ..., io.github.yuroyami.kitepdf.core.render/KitePattern? = ..., io.github.yuroyami.kitepdf.core.render/KitePattern? = ..., kotlin.collections/List<kotlin/Double>? = ..., kotlin/Double = ..., kotlin/Int = ..., kotlin/Int = ..., kotlin/Double = ...) // io.github.yuroyami.kitepdf.core.render/GraphicsState.<init>|<init>(io.github.yuroyami.kitepdf.core.render.KiteMatrix;io.github.yuroyami.kitepdf.core.render.RgbColor;io.github.yuroyami.kitepdf.core.render.RgbColor;kotlin.Double;io.github.yuroyami.kitepdf.core.render.TextState;io.github.yuroyami.kitepdf.core.render.KiteColorSpace;io.github.yuroyami.kitepdf.core.render.KiteColorSpace;kotlin.Double;kotlin.Double;io.github.yuroyami.kitepdf.core.render.KiteBlendMode;io.github.yuroyami.kitepdf.core.render.SoftMask?;io.github.yuroyami.kitepdf.core.render.KiteMatrix?;io.github.yuroyami.kitepdf.core.render.KitePattern?;io.github.yuroyami.kitepdf.core.render.KitePattern?;kotlin.collections.List<kotlin.Double>?;kotlin.Double;kotlin.Int;kotlin.Int;kotlin.Double){}[0]
+    constructor <init>(io.github.yuroyami.kitepdf.core.render/KiteMatrix = ..., io.github.yuroyami.kitepdf.core.render/RgbColor = ..., io.github.yuroyami.kitepdf.core.render/RgbColor = ..., kotlin/Double = ..., io.github.yuroyami.kitepdf.core.render/TextState = ..., io.github.yuroyami.kitepdf.core.render/KiteColorSpace = ..., io.github.yuroyami.kitepdf.core.render/KiteColorSpace = ..., kotlin/Double = ..., kotlin/Double = ..., io.github.yuroyami.kitepdf.core.render/KiteBlendMode = ..., io.github.yuroyami.kitepdf.core.render/SoftMask? = ..., io.github.yuroyami.kitepdf.core.render/KiteMatrix? = ..., io.github.yuroyami.kitepdf.core.render/KitePattern? = ..., io.github.yuroyami.kitepdf.core.render/KitePattern? = ..., kotlin.collections/List<kotlin/Double>? = ..., kotlin/Double = ..., kotlin/Int = ..., kotlin/Int = ..., kotlin/Double = ..., io.github.yuroyami.kitepdf.core.render/KiteRenderingIntent = ..., kotlin/Boolean = ..., kotlin/DoubleArray? = ..., kotlin/DoubleArray? = ...) // io.github.yuroyami.kitepdf.core.render/GraphicsState.<init>|<init>(io.github.yuroyami.kitepdf.core.render.KiteMatrix;io.github.yuroyami.kitepdf.core.render.RgbColor;io.github.yuroyami.kitepdf.core.render.RgbColor;kotlin.Double;io.github.yuroyami.kitepdf.core.render.TextState;io.github.yuroyami.kitepdf.core.render.KiteColorSpace;io.github.yuroyami.kitepdf.core.render.KiteColorSpace;kotlin.Double;kotlin.Double;io.github.yuroyami.kitepdf.core.render.KiteBlendMode;io.github.yuroyami.kitepdf.core.render.SoftMask?;io.github.yuroyami.kitepdf.core.render.KiteMatrix?;io.github.yuroyami.kitepdf.core.render.KitePattern?;io.github.yuroyami.kitepdf.core.render.KitePattern?;kotlin.collections.List<kotlin.Double>?;kotlin.Double;kotlin.Int;kotlin.Int;kotlin.Double;io.github.yuroyami.kitepdf.core.render.KiteRenderingIntent;kotlin.Boolean;kotlin.DoubleArray?;kotlin.DoubleArray?){}[0]
 
+    final val blackPointCompensation // io.github.yuroyami.kitepdf.core.render/GraphicsState.blackPointCompensation|{}blackPointCompensation[0]
+        final fun <get-blackPointCompensation>(): kotlin/Boolean // io.github.yuroyami.kitepdf.core.render/GraphicsState.blackPointCompensation.<get-blackPointCompensation>|<get-blackPointCompensation>(){}[0]
     final val blendMode // io.github.yuroyami.kitepdf.core.render/GraphicsState.blendMode|{}blendMode[0]
         final fun <get-blendMode>(): io.github.yuroyami.kitepdf.core.render/KiteBlendMode // io.github.yuroyami.kitepdf.core.render/GraphicsState.blendMode.<get-blendMode>|<get-blendMode>(){}[0]
     final val ctm // io.github.yuroyami.kitepdf.core.render/GraphicsState.ctm|{}ctm[0]
@@ -879,6 +904,8 @@ final class io.github.yuroyami.kitepdf.core.render/GraphicsState { // io.github.
         final fun <get-fillColor>(): io.github.yuroyami.kitepdf.core.render/RgbColor // io.github.yuroyami.kitepdf.core.render/GraphicsState.fillColor.<get-fillColor>|<get-fillColor>(){}[0]
     final val fillColorSpace // io.github.yuroyami.kitepdf.core.render/GraphicsState.fillColorSpace|{}fillColorSpace[0]
         final fun <get-fillColorSpace>(): io.github.yuroyami.kitepdf.core.render/KiteColorSpace // io.github.yuroyami.kitepdf.core.render/GraphicsState.fillColorSpace.<get-fillColorSpace>|<get-fillColorSpace>(){}[0]
+    final val fillComponents // io.github.yuroyami.kitepdf.core.render/GraphicsState.fillComponents|{}fillComponents[0]
+        final fun <get-fillComponents>(): kotlin/DoubleArray? // io.github.yuroyami.kitepdf.core.render/GraphicsState.fillComponents.<get-fillComponents>|<get-fillComponents>(){}[0]
     final val fillPattern // io.github.yuroyami.kitepdf.core.render/GraphicsState.fillPattern|{}fillPattern[0]
         final fun <get-fillPattern>(): io.github.yuroyami.kitepdf.core.render/KitePattern? // io.github.yuroyami.kitepdf.core.render/GraphicsState.fillPattern.<get-fillPattern>|<get-fillPattern>(){}[0]
     final val lineCap // io.github.yuroyami.kitepdf.core.render/GraphicsState.lineCap|{}lineCap[0]
@@ -889,6 +916,8 @@ final class io.github.yuroyami.kitepdf.core.render/GraphicsState { // io.github.
         final fun <get-lineWidth>(): kotlin/Double // io.github.yuroyami.kitepdf.core.render/GraphicsState.lineWidth.<get-lineWidth>|<get-lineWidth>(){}[0]
     final val miterLimit // io.github.yuroyami.kitepdf.core.render/GraphicsState.miterLimit|{}miterLimit[0]
         final fun <get-miterLimit>(): kotlin/Double // io.github.yuroyami.kitepdf.core.render/GraphicsState.miterLimit.<get-miterLimit>|<get-miterLimit>(){}[0]
+    final val renderingIntent // io.github.yuroyami.kitepdf.core.render/GraphicsState.renderingIntent|{}renderingIntent[0]
+        final fun <get-renderingIntent>(): io.github.yuroyami.kitepdf.core.render/KiteRenderingIntent // io.github.yuroyami.kitepdf.core.render/GraphicsState.renderingIntent.<get-renderingIntent>|<get-renderingIntent>(){}[0]
     final val softMask // io.github.yuroyami.kitepdf.core.render/GraphicsState.softMask|{}softMask[0]
         final fun <get-softMask>(): io.github.yuroyami.kitepdf.core.render/SoftMask? // io.github.yuroyami.kitepdf.core.render/GraphicsState.softMask.<get-softMask>|<get-softMask>(){}[0]
     final val softMaskCtm // io.github.yuroyami.kitepdf.core.render/GraphicsState.softMaskCtm|{}softMaskCtm[0]
@@ -899,6 +928,8 @@ final class io.github.yuroyami.kitepdf.core.render/GraphicsState { // io.github.
         final fun <get-strokeColor>(): io.github.yuroyami.kitepdf.core.render/RgbColor // io.github.yuroyami.kitepdf.core.render/GraphicsState.strokeColor.<get-strokeColor>|<get-strokeColor>(){}[0]
     final val strokeColorSpace // io.github.yuroyami.kitepdf.core.render/GraphicsState.strokeColorSpace|{}strokeColorSpace[0]
         final fun <get-strokeColorSpace>(): io.github.yuroyami.kitepdf.core.render/KiteColorSpace // io.github.yuroyami.kitepdf.core.render/GraphicsState.strokeColorSpace.<get-strokeColorSpace>|<get-strokeColorSpace>(){}[0]
+    final val strokeComponents // io.github.yuroyami.kitepdf.core.render/GraphicsState.strokeComponents|{}strokeComponents[0]
+        final fun <get-strokeComponents>(): kotlin/DoubleArray? // io.github.yuroyami.kitepdf.core.render/GraphicsState.strokeComponents.<get-strokeComponents>|<get-strokeComponents>(){}[0]
     final val strokePattern // io.github.yuroyami.kitepdf.core.render/GraphicsState.strokePattern|{}strokePattern[0]
         final fun <get-strokePattern>(): io.github.yuroyami.kitepdf.core.render/KitePattern? // io.github.yuroyami.kitepdf.core.render/GraphicsState.strokePattern.<get-strokePattern>|<get-strokePattern>(){}[0]
     final val text // io.github.yuroyami.kitepdf.core.render/GraphicsState.text|{}text[0]
@@ -916,6 +947,10 @@ final class io.github.yuroyami.kitepdf.core.render/GraphicsState { // io.github.
     final fun component18(): kotlin/Int // io.github.yuroyami.kitepdf.core.render/GraphicsState.component18|component18(){}[0]
     final fun component19(): kotlin/Double // io.github.yuroyami.kitepdf.core.render/GraphicsState.component19|component19(){}[0]
     final fun component2(): io.github.yuroyami.kitepdf.core.render/RgbColor // io.github.yuroyami.kitepdf.core.render/GraphicsState.component2|component2(){}[0]
+    final fun component20(): io.github.yuroyami.kitepdf.core.render/KiteRenderingIntent // io.github.yuroyami.kitepdf.core.render/GraphicsState.component20|component20(){}[0]
+    final fun component21(): kotlin/Boolean // io.github.yuroyami.kitepdf.core.render/GraphicsState.component21|component21(){}[0]
+    final fun component22(): kotlin/DoubleArray? // io.github.yuroyami.kitepdf.core.render/GraphicsState.component22|component22(){}[0]
+    final fun component23(): kotlin/DoubleArray? // io.github.yuroyami.kitepdf.core.render/GraphicsState.component23|component23(){}[0]
     final fun component3(): io.github.yuroyami.kitepdf.core.render/RgbColor // io.github.yuroyami.kitepdf.core.render/GraphicsState.component3|component3(){}[0]
     final fun component4(): kotlin/Double // io.github.yuroyami.kitepdf.core.render/GraphicsState.component4|component4(){}[0]
     final fun component5(): io.github.yuroyami.kitepdf.core.render/TextState // io.github.yuroyami.kitepdf.core.render/GraphicsState.component5|component5(){}[0]
@@ -923,7 +958,7 @@ final class io.github.yuroyami.kitepdf.core.render/GraphicsState { // io.github.
     final fun component7(): io.github.yuroyami.kitepdf.core.render/KiteColorSpace // io.github.yuroyami.kitepdf.core.render/GraphicsState.component7|component7(){}[0]
     final fun component8(): kotlin/Double // io.github.yuroyami.kitepdf.core.render/GraphicsState.component8|component8(){}[0]
     final fun component9(): kotlin/Double // io.github.yuroyami.kitepdf.core.render/GraphicsState.component9|component9(){}[0]
-    final fun copy(io.github.yuroyami.kitepdf.core.render/KiteMatrix = ..., io.github.yuroyami.kitepdf.core.render/RgbColor = ..., io.github.yuroyami.kitepdf.core.render/RgbColor = ..., kotlin/Double = ..., io.github.yuroyami.kitepdf.core.render/TextState = ..., io.github.yuroyami.kitepdf.core.render/KiteColorSpace = ..., io.github.yuroyami.kitepdf.core.render/KiteColorSpace = ..., kotlin/Double = ..., kotlin/Double = ..., io.github.yuroyami.kitepdf.core.render/KiteBlendMode = ..., io.github.yuroyami.kitepdf.core.render/SoftMask? = ..., io.github.yuroyami.kitepdf.core.render/KiteMatrix? = ..., io.github.yuroyami.kitepdf.core.render/KitePattern? = ..., io.github.yuroyami.kitepdf.core.render/KitePattern? = ..., kotlin.collections/List<kotlin/Double>? = ..., kotlin/Double = ..., kotlin/Int = ..., kotlin/Int = ..., kotlin/Double = ...): io.github.yuroyami.kitepdf.core.render/GraphicsState // io.github.yuroyami.kitepdf.core.render/GraphicsState.copy|copy(io.github.yuroyami.kitepdf.core.render.KiteMatrix;io.github.yuroyami.kitepdf.core.render.RgbColor;io.github.yuroyami.kitepdf.core.render.RgbColor;kotlin.Double;io.github.yuroyami.kitepdf.core.render.TextState;io.github.yuroyami.kitepdf.core.render.KiteColorSpace;io.github.yuroyami.kitepdf.core.render.KiteColorSpace;kotlin.Double;kotlin.Double;io.github.yuroyami.kitepdf.core.render.KiteBlendMode;io.github.yuroyami.kitepdf.core.render.SoftMask?;io.github.yuroyami.kitepdf.core.render.KiteMatrix?;io.github.yuroyami.kitepdf.core.render.KitePattern?;io.github.yuroyami.kitepdf.core.render.KitePattern?;kotlin.collections.List<kotlin.Double>?;kotlin.Double;kotlin.Int;kotlin.Int;kotlin.Double){}[0]
+    final fun copy(io.github.yuroyami.kitepdf.core.render/KiteMatrix = ..., io.github.yuroyami.kitepdf.core.render/RgbColor = ..., io.github.yuroyami.kitepdf.core.render/RgbColor = ..., kotlin/Double = ..., io.github.yuroyami.kitepdf.core.render/TextState = ..., io.github.yuroyami.kitepdf.core.render/KiteColorSpace = ..., io.github.yuroyami.kitepdf.core.render/KiteColorSpace = ..., kotlin/Double = ..., kotlin/Double = ..., io.github.yuroyami.kitepdf.core.render/KiteBlendMode = ..., io.github.yuroyami.kitepdf.core.render/SoftMask? = ..., io.github.yuroyami.kitepdf.core.render/KiteMatrix? = ..., io.github.yuroyami.kitepdf.core.render/KitePattern? = ..., io.github.yuroyami.kitepdf.core.render/KitePattern? = ..., kotlin.collections/List<kotlin/Double>? = ..., kotlin/Double = ..., kotlin/Int = ..., kotlin/Int = ..., kotlin/Double = ..., io.github.yuroyami.kitepdf.core.render/KiteRenderingIntent = ..., kotlin/Boolean = ..., kotlin/DoubleArray? = ..., kotlin/DoubleArray? = ...): io.github.yuroyami.kitepdf.core.render/GraphicsState // io.github.yuroyami.kitepdf.core.render/GraphicsState.copy|copy(io.github.yuroyami.kitepdf.core.render.KiteMatrix;io.github.yuroyami.kitepdf.core.render.RgbColor;io.github.yuroyami.kitepdf.core.render.RgbColor;kotlin.Double;io.github.yuroyami.kitepdf.core.render.TextState;io.github.yuroyami.kitepdf.core.render.KiteColorSpace;io.github.yuroyami.kitepdf.core.render.KiteColorSpace;kotlin.Double;kotlin.Double;io.github.yuroyami.kitepdf.core.render.KiteBlendMode;io.github.yuroyami.kitepdf.core.render.SoftMask?;io.github.yuroyami.kitepdf.core.render.KiteMatrix?;io.github.yuroyami.kitepdf.core.render.KitePattern?;io.github.yuroyami.kitepdf.core.render.KitePattern?;kotlin.collections.List<kotlin.Double>?;kotlin.Double;kotlin.Int;kotlin.Int;kotlin.Double;io.github.yuroyami.kitepdf.core.render.KiteRenderingIntent;kotlin.Boolean;kotlin.DoubleArray?;kotlin.DoubleArray?){}[0]
     final fun equals(kotlin/Any?): kotlin/Boolean // io.github.yuroyami.kitepdf.core.render/GraphicsState.equals|equals(kotlin.Any?){}[0]
     final fun hashCode(): kotlin/Int // io.github.yuroyami.kitepdf.core.render/GraphicsState.hashCode|hashCode(){}[0]
     final fun toString(): kotlin/String // io.github.yuroyami.kitepdf.core.render/GraphicsState.toString|toString(){}[0]
@@ -977,6 +1012,8 @@ final class io.github.yuroyami.kitepdf.core.render/KiteImageData { // io.github.
         final fun <get-softMaskWidth>(): kotlin/Int // io.github.yuroyami.kitepdf.core.render/KiteImageData.softMaskWidth.<get-softMaskWidth>|<get-softMaskWidth>(){}[0]
     final val width // io.github.yuroyami.kitepdf.core.render/KiteImageData.width|{}width[0]
         final fun <get-width>(): kotlin/Int // io.github.yuroyami.kitepdf.core.render/KiteImageData.width.<get-width>|<get-width>(){}[0]
+
+    final fun withIntent(io.github.yuroyami.kitepdf.core.render/KiteRenderingIntent, kotlin/Boolean = ...): io.github.yuroyami.kitepdf.core.render/KiteImageData // io.github.yuroyami.kitepdf.core.render/KiteImageData.withIntent|withIntent(io.github.yuroyami.kitepdf.core.render.KiteRenderingIntent;kotlin.Boolean){}[0]
 
     final enum class Kind : kotlin/Enum<io.github.yuroyami.kitepdf.core.render/KiteImageData.Kind> { // io.github.yuroyami.kitepdf.core.render/KiteImageData.Kind|null[0]
         enum entry CCITT // io.github.yuroyami.kitepdf.core.render/KiteImageData.Kind.CCITT|null[0]
@@ -1901,6 +1938,7 @@ sealed class io.github.yuroyami.kitepdf.core.render/KiteColorSpace { // io.githu
 
     abstract fun toRgb(kotlin/DoubleArray): io.github.yuroyami.kitepdf.core.render/RgbColor // io.github.yuroyami.kitepdf.core.render/KiteColorSpace.toRgb|toRgb(kotlin.DoubleArray){}[0]
     open fun defaultColor(): io.github.yuroyami.kitepdf.core.render/RgbColor // io.github.yuroyami.kitepdf.core.render/KiteColorSpace.defaultColor|defaultColor(){}[0]
+    open fun withIntent(io.github.yuroyami.kitepdf.core.render/KiteRenderingIntent, kotlin/Boolean = ...): io.github.yuroyami.kitepdf.core.render/KiteColorSpace // io.github.yuroyami.kitepdf.core.render/KiteColorSpace.withIntent|withIntent(io.github.yuroyami.kitepdf.core.render.KiteRenderingIntent;kotlin.Boolean){}[0]
 
     final class CalGray : io.github.yuroyami.kitepdf.core.render/KiteColorSpace { // io.github.yuroyami.kitepdf.core.render/KiteColorSpace.CalGray|null[0]
         constructor <init>(kotlin/DoubleArray, kotlin/Double) // io.github.yuroyami.kitepdf.core.render/KiteColorSpace.CalGray.<init>|<init>(kotlin.DoubleArray;kotlin.Double){}[0]
@@ -1936,6 +1974,7 @@ sealed class io.github.yuroyami.kitepdf.core.render/KiteColorSpace { // io.githu
 
         final fun defaultColor(): io.github.yuroyami.kitepdf.core.render/RgbColor // io.github.yuroyami.kitepdf.core.render/KiteColorSpace.DeviceN.defaultColor|defaultColor(){}[0]
         final fun toRgb(kotlin/DoubleArray): io.github.yuroyami.kitepdf.core.render/RgbColor // io.github.yuroyami.kitepdf.core.render/KiteColorSpace.DeviceN.toRgb|toRgb(kotlin.DoubleArray){}[0]
+        final fun withIntent(io.github.yuroyami.kitepdf.core.render/KiteRenderingIntent, kotlin/Boolean): io.github.yuroyami.kitepdf.core.render/KiteColorSpace // io.github.yuroyami.kitepdf.core.render/KiteColorSpace.DeviceN.withIntent|withIntent(io.github.yuroyami.kitepdf.core.render.KiteRenderingIntent;kotlin.Boolean){}[0]
     }
 
     final class IccBased : io.github.yuroyami.kitepdf.core.render/KiteColorSpace { // io.github.yuroyami.kitepdf.core.render/KiteColorSpace.IccBased|null[0]
@@ -1945,6 +1984,7 @@ sealed class io.github.yuroyami.kitepdf.core.render/KiteColorSpace { // io.githu
             final fun <get-componentCount>(): kotlin/Int // io.github.yuroyami.kitepdf.core.render/KiteColorSpace.IccBased.componentCount.<get-componentCount>|<get-componentCount>(){}[0]
 
         final fun toRgb(kotlin/DoubleArray): io.github.yuroyami.kitepdf.core.render/RgbColor // io.github.yuroyami.kitepdf.core.render/KiteColorSpace.IccBased.toRgb|toRgb(kotlin.DoubleArray){}[0]
+        final fun withIntent(io.github.yuroyami.kitepdf.core.render/KiteRenderingIntent, kotlin/Boolean): io.github.yuroyami.kitepdf.core.render/KiteColorSpace // io.github.yuroyami.kitepdf.core.render/KiteColorSpace.IccBased.withIntent|withIntent(io.github.yuroyami.kitepdf.core.render.KiteRenderingIntent;kotlin.Boolean){}[0]
     }
 
     final class Indexed : io.github.yuroyami.kitepdf.core.render/KiteColorSpace { // io.github.yuroyami.kitepdf.core.render/KiteColorSpace.Indexed|null[0]
@@ -1962,6 +2002,7 @@ sealed class io.github.yuroyami.kitepdf.core.render/KiteColorSpace { // io.githu
         final fun colorAt(kotlin/Int): io.github.yuroyami.kitepdf.core.render/RgbColor // io.github.yuroyami.kitepdf.core.render/KiteColorSpace.Indexed.colorAt|colorAt(kotlin.Int){}[0]
         final fun defaultColor(): io.github.yuroyami.kitepdf.core.render/RgbColor // io.github.yuroyami.kitepdf.core.render/KiteColorSpace.Indexed.defaultColor|defaultColor(){}[0]
         final fun toRgb(kotlin/DoubleArray): io.github.yuroyami.kitepdf.core.render/RgbColor // io.github.yuroyami.kitepdf.core.render/KiteColorSpace.Indexed.toRgb|toRgb(kotlin.DoubleArray){}[0]
+        final fun withIntent(io.github.yuroyami.kitepdf.core.render/KiteRenderingIntent, kotlin/Boolean): io.github.yuroyami.kitepdf.core.render/KiteColorSpace // io.github.yuroyami.kitepdf.core.render/KiteColorSpace.Indexed.withIntent|withIntent(io.github.yuroyami.kitepdf.core.render.KiteRenderingIntent;kotlin.Boolean){}[0]
     }
 
     final class Lab : io.github.yuroyami.kitepdf.core.render/KiteColorSpace { // io.github.yuroyami.kitepdf.core.render/KiteColorSpace.Lab|null[0]
@@ -2195,6 +2236,8 @@ sealed class io.github.yuroyami.kitepdf.core.render/KiteShading { // io.github.y
     abstract val colorSpace // io.github.yuroyami.kitepdf.core.render/KiteShading.colorSpace|{}colorSpace[0]
         abstract fun <get-colorSpace>(): io.github.yuroyami.kitepdf.core.render/KiteColorSpace // io.github.yuroyami.kitepdf.core.render/KiteShading.colorSpace.<get-colorSpace>|<get-colorSpace>(){}[0]
 
+    open fun withIntent(io.github.yuroyami.kitepdf.core.render/KiteRenderingIntent, kotlin/Boolean = ...): io.github.yuroyami.kitepdf.core.render/KiteShading // io.github.yuroyami.kitepdf.core.render/KiteShading.withIntent|withIntent(io.github.yuroyami.kitepdf.core.render.KiteRenderingIntent;kotlin.Boolean){}[0]
+
     final class Axial : io.github.yuroyami.kitepdf.core.render/KiteShading { // io.github.yuroyami.kitepdf.core.render/KiteShading.Axial|null[0]
         constructor <init>(io.github.yuroyami.kitepdf.core.render/KiteColorSpace, io.github.yuroyami.kitepdf.core.render/RgbColor?, io.github.yuroyami.kitepdf.core/KiteRectangle?, kotlin/DoubleArray, kotlin/DoubleArray, io.github.yuroyami.kitepdf.core.render/KiteFunction, kotlin/Boolean, kotlin/Boolean) // io.github.yuroyami.kitepdf.core.render/KiteShading.Axial.<init>|<init>(io.github.yuroyami.kitepdf.core.render.KiteColorSpace;io.github.yuroyami.kitepdf.core.render.RgbColor?;io.github.yuroyami.kitepdf.core.KiteRectangle?;kotlin.DoubleArray;kotlin.DoubleArray;io.github.yuroyami.kitepdf.core.render.KiteFunction;kotlin.Boolean;kotlin.Boolean){}[0]
 
@@ -2227,6 +2270,7 @@ sealed class io.github.yuroyami.kitepdf.core.render/KiteShading { // io.github.y
         final fun equals(kotlin/Any?): kotlin/Boolean // io.github.yuroyami.kitepdf.core.render/KiteShading.Axial.equals|equals(kotlin.Any?){}[0]
         final fun hashCode(): kotlin/Int // io.github.yuroyami.kitepdf.core.render/KiteShading.Axial.hashCode|hashCode(){}[0]
         final fun toString(): kotlin/String // io.github.yuroyami.kitepdf.core.render/KiteShading.Axial.toString|toString(){}[0]
+        final fun withIntent(io.github.yuroyami.kitepdf.core.render/KiteRenderingIntent, kotlin/Boolean): io.github.yuroyami.kitepdf.core.render/KiteShading // io.github.yuroyami.kitepdf.core.render/KiteShading.Axial.withIntent|withIntent(io.github.yuroyami.kitepdf.core.render.KiteRenderingIntent;kotlin.Boolean){}[0]
     }
 
     final class FunctionBased : io.github.yuroyami.kitepdf.core.render/KiteShading { // io.github.yuroyami.kitepdf.core.render/KiteShading.FunctionBased|null[0]
@@ -2244,6 +2288,7 @@ sealed class io.github.yuroyami.kitepdf.core.render/KiteShading { // io.github.y
             final fun <get-matrix>(): io.github.yuroyami.kitepdf.core.render/KiteMatrix // io.github.yuroyami.kitepdf.core.render/KiteShading.FunctionBased.matrix.<get-matrix>|<get-matrix>(){}[0]
 
         final fun colorAt(kotlin/Double, kotlin/Double): io.github.yuroyami.kitepdf.core.render/RgbColor // io.github.yuroyami.kitepdf.core.render/KiteShading.FunctionBased.colorAt|colorAt(kotlin.Double;kotlin.Double){}[0]
+        final fun withIntent(io.github.yuroyami.kitepdf.core.render/KiteRenderingIntent, kotlin/Boolean): io.github.yuroyami.kitepdf.core.render/KiteShading // io.github.yuroyami.kitepdf.core.render/KiteShading.FunctionBased.withIntent|withIntent(io.github.yuroyami.kitepdf.core.render.KiteRenderingIntent;kotlin.Boolean){}[0]
     }
 
     final class MeshColorTable { // io.github.yuroyami.kitepdf.core.render/KiteShading.MeshColorTable|null[0]
@@ -2332,6 +2377,7 @@ sealed class io.github.yuroyami.kitepdf.core.render/KiteShading { // io.github.y
         final fun equals(kotlin/Any?): kotlin/Boolean // io.github.yuroyami.kitepdf.core.render/KiteShading.Radial.equals|equals(kotlin.Any?){}[0]
         final fun hashCode(): kotlin/Int // io.github.yuroyami.kitepdf.core.render/KiteShading.Radial.hashCode|hashCode(){}[0]
         final fun toString(): kotlin/String // io.github.yuroyami.kitepdf.core.render/KiteShading.Radial.toString|toString(){}[0]
+        final fun withIntent(io.github.yuroyami.kitepdf.core.render/KiteRenderingIntent, kotlin/Boolean): io.github.yuroyami.kitepdf.core.render/KiteShading // io.github.yuroyami.kitepdf.core.render/KiteShading.Radial.withIntent|withIntent(io.github.yuroyami.kitepdf.core.render.KiteRenderingIntent;kotlin.Boolean){}[0]
     }
 
     final class TriangleMesh : io.github.yuroyami.kitepdf.core.render/KiteShading { // io.github.yuroyami.kitepdf.core.render/KiteShading.TriangleMesh|null[0]
@@ -2708,6 +2754,7 @@ final const val io.github.yuroyami.kitepdf.core.render/MAX_SPREAD_PERIODS // io.
     final fun <get-MAX_SPREAD_PERIODS>(): kotlin/Int // io.github.yuroyami.kitepdf.core.render/MAX_SPREAD_PERIODS.<get-MAX_SPREAD_PERIODS>|<get-MAX_SPREAD_PERIODS>(){}[0]
 
 final fun (io.github.yuroyami.kitepdf.core.render/GraphicsState).io.github.yuroyami.kitepdf.core.render/applyExtGState(io.github.yuroyami.kitepdf.core.render/ExtGState): io.github.yuroyami.kitepdf.core.render/GraphicsState // io.github.yuroyami.kitepdf.core.render/applyExtGState|applyExtGState@io.github.yuroyami.kitepdf.core.render.GraphicsState(io.github.yuroyami.kitepdf.core.render.ExtGState){}[0]
+final fun (io.github.yuroyami.kitepdf.core.render/GraphicsState).io.github.yuroyami.kitepdf.core.render/withColorRendering(io.github.yuroyami.kitepdf.core.render/KiteRenderingIntent, kotlin/Boolean): io.github.yuroyami.kitepdf.core.render/GraphicsState // io.github.yuroyami.kitepdf.core.render/withColorRendering|withColorRendering@io.github.yuroyami.kitepdf.core.render.GraphicsState(io.github.yuroyami.kitepdf.core.render.KiteRenderingIntent;kotlin.Boolean){}[0]
 final fun (io.github.yuroyami.kitepdf.core.render/KiteCanvas).io.github.yuroyami.kitepdf.core.render/paintComplexShading(io.github.yuroyami.kitepdf.core.render/KiteShading, io.github.yuroyami.kitepdf.core.render/KiteMatrix, io.github.yuroyami.kitepdf.core.render/KitePath?, kotlin/Double = ..., io.github.yuroyami.kitepdf.core.render/KiteBlendMode = ...): kotlin/Boolean // io.github.yuroyami.kitepdf.core.render/paintComplexShading|paintComplexShading@io.github.yuroyami.kitepdf.core.render.KiteCanvas(io.github.yuroyami.kitepdf.core.render.KiteShading;io.github.yuroyami.kitepdf.core.render.KiteMatrix;io.github.yuroyami.kitepdf.core.render.KitePath?;kotlin.Double;io.github.yuroyami.kitepdf.core.render.KiteBlendMode){}[0]
 final fun (io.github.yuroyami.kitepdf.core.render/KiteImageData).io.github.yuroyami.kitepdf.core.render/toRgbaBytes(): kotlin/ByteArray? // io.github.yuroyami.kitepdf.core.render/toRgbaBytes|toRgbaBytes@io.github.yuroyami.kitepdf.core.render.KiteImageData(){}[0]
 final fun (io.github.yuroyami.kitepdf.core.render/KitePath).io.github.yuroyami.kitepdf.core.render/strokeOutline(kotlin/Double, kotlin/Int = ..., kotlin/Int = ..., kotlin/Double = ..., kotlin.collections/List<kotlin/Double>? = ..., kotlin/Double = ..., kotlin/Double = ...): io.github.yuroyami.kitepdf.core.render/KitePath // io.github.yuroyami.kitepdf.core.render/strokeOutline|strokeOutline@io.github.yuroyami.kitepdf.core.render.KitePath(kotlin.Double;kotlin.Int;kotlin.Int;kotlin.Double;kotlin.collections.List<kotlin.Double>?;kotlin.Double;kotlin.Double){}[0]

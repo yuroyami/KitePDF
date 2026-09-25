@@ -1090,10 +1090,12 @@ public final class io/github/yuroyami/kitepdf/core/parser/Token$StringLiteral : 
 public final class io/github/yuroyami/kitepdf/core/render/ExtGState {
 	public static final field Companion Lio/github/yuroyami/kitepdf/core/render/ExtGState$Companion;
 	public fun <init> ()V
-	public fun <init> (Ljava/lang/Double;Ljava/lang/Double;Lio/github/yuroyami/kitepdf/core/render/KiteBlendMode;Lio/github/yuroyami/kitepdf/core/render/SoftMask;Ljava/lang/Double;Ljava/lang/Integer;Ljava/lang/Integer;Ljava/lang/Double;Ljava/util/List;D)V
-	public synthetic fun <init> (Ljava/lang/Double;Ljava/lang/Double;Lio/github/yuroyami/kitepdf/core/render/KiteBlendMode;Lio/github/yuroyami/kitepdf/core/render/SoftMask;Ljava/lang/Double;Ljava/lang/Integer;Ljava/lang/Integer;Ljava/lang/Double;Ljava/util/List;DILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun <init> (Ljava/lang/Double;Ljava/lang/Double;Lio/github/yuroyami/kitepdf/core/render/KiteBlendMode;Lio/github/yuroyami/kitepdf/core/render/SoftMask;Ljava/lang/Double;Ljava/lang/Integer;Ljava/lang/Integer;Ljava/lang/Double;Ljava/util/List;DLio/github/yuroyami/kitepdf/core/render/KiteRenderingIntent;Ljava/lang/Boolean;)V
+	public synthetic fun <init> (Ljava/lang/Double;Ljava/lang/Double;Lio/github/yuroyami/kitepdf/core/render/KiteBlendMode;Lio/github/yuroyami/kitepdf/core/render/SoftMask;Ljava/lang/Double;Ljava/lang/Integer;Ljava/lang/Integer;Ljava/lang/Double;Ljava/util/List;DLio/github/yuroyami/kitepdf/core/render/KiteRenderingIntent;Ljava/lang/Boolean;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public final fun component1 ()Ljava/lang/Double;
 	public final fun component10 ()D
+	public final fun component11 ()Lio/github/yuroyami/kitepdf/core/render/KiteRenderingIntent;
+	public final fun component12 ()Ljava/lang/Boolean;
 	public final fun component2 ()Ljava/lang/Double;
 	public final fun component3 ()Lio/github/yuroyami/kitepdf/core/render/KiteBlendMode;
 	public final fun component4 ()Lio/github/yuroyami/kitepdf/core/render/SoftMask;
@@ -1102,9 +1104,10 @@ public final class io/github/yuroyami/kitepdf/core/render/ExtGState {
 	public final fun component7 ()Ljava/lang/Integer;
 	public final fun component8 ()Ljava/lang/Double;
 	public final fun component9 ()Ljava/util/List;
-	public final fun copy (Ljava/lang/Double;Ljava/lang/Double;Lio/github/yuroyami/kitepdf/core/render/KiteBlendMode;Lio/github/yuroyami/kitepdf/core/render/SoftMask;Ljava/lang/Double;Ljava/lang/Integer;Ljava/lang/Integer;Ljava/lang/Double;Ljava/util/List;D)Lio/github/yuroyami/kitepdf/core/render/ExtGState;
-	public static synthetic fun copy$default (Lio/github/yuroyami/kitepdf/core/render/ExtGState;Ljava/lang/Double;Ljava/lang/Double;Lio/github/yuroyami/kitepdf/core/render/KiteBlendMode;Lio/github/yuroyami/kitepdf/core/render/SoftMask;Ljava/lang/Double;Ljava/lang/Integer;Ljava/lang/Integer;Ljava/lang/Double;Ljava/util/List;DILjava/lang/Object;)Lio/github/yuroyami/kitepdf/core/render/ExtGState;
+	public final fun copy (Ljava/lang/Double;Ljava/lang/Double;Lio/github/yuroyami/kitepdf/core/render/KiteBlendMode;Lio/github/yuroyami/kitepdf/core/render/SoftMask;Ljava/lang/Double;Ljava/lang/Integer;Ljava/lang/Integer;Ljava/lang/Double;Ljava/util/List;DLio/github/yuroyami/kitepdf/core/render/KiteRenderingIntent;Ljava/lang/Boolean;)Lio/github/yuroyami/kitepdf/core/render/ExtGState;
+	public static synthetic fun copy$default (Lio/github/yuroyami/kitepdf/core/render/ExtGState;Ljava/lang/Double;Ljava/lang/Double;Lio/github/yuroyami/kitepdf/core/render/KiteBlendMode;Lio/github/yuroyami/kitepdf/core/render/SoftMask;Ljava/lang/Double;Ljava/lang/Integer;Ljava/lang/Integer;Ljava/lang/Double;Ljava/util/List;DLio/github/yuroyami/kitepdf/core/render/KiteRenderingIntent;Ljava/lang/Boolean;ILjava/lang/Object;)Lio/github/yuroyami/kitepdf/core/render/ExtGState;
 	public fun equals (Ljava/lang/Object;)Z
+	public final fun getBlackPointCompensation ()Ljava/lang/Boolean;
 	public final fun getBlendMode ()Lio/github/yuroyami/kitepdf/core/render/KiteBlendMode;
 	public final fun getDashArray ()Ljava/util/List;
 	public final fun getDashPhase ()D
@@ -1113,6 +1116,7 @@ public final class io/github/yuroyami/kitepdf/core/render/ExtGState {
 	public final fun getLineJoin ()Ljava/lang/Integer;
 	public final fun getLineWidth ()Ljava/lang/Double;
 	public final fun getMiterLimit ()Ljava/lang/Double;
+	public final fun getRenderingIntent ()Lio/github/yuroyami/kitepdf/core/render/KiteRenderingIntent;
 	public final fun getSoftMask ()Lio/github/yuroyami/kitepdf/core/render/SoftMask;
 	public final fun getStrokeAlpha ()Ljava/lang/Double;
 	public fun hashCode ()I
@@ -1154,8 +1158,8 @@ public final class io/github/yuroyami/kitepdf/core/render/GraphicsStack {
 
 public final class io/github/yuroyami/kitepdf/core/render/GraphicsState {
 	public fun <init> ()V
-	public fun <init> (Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;Lio/github/yuroyami/kitepdf/core/render/RgbColor;Lio/github/yuroyami/kitepdf/core/render/RgbColor;DLio/github/yuroyami/kitepdf/core/render/TextState;Lio/github/yuroyami/kitepdf/core/render/KiteColorSpace;Lio/github/yuroyami/kitepdf/core/render/KiteColorSpace;DDLio/github/yuroyami/kitepdf/core/render/KiteBlendMode;Lio/github/yuroyami/kitepdf/core/render/SoftMask;Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;Lio/github/yuroyami/kitepdf/core/render/KitePattern;Lio/github/yuroyami/kitepdf/core/render/KitePattern;Ljava/util/List;DIID)V
-	public synthetic fun <init> (Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;Lio/github/yuroyami/kitepdf/core/render/RgbColor;Lio/github/yuroyami/kitepdf/core/render/RgbColor;DLio/github/yuroyami/kitepdf/core/render/TextState;Lio/github/yuroyami/kitepdf/core/render/KiteColorSpace;Lio/github/yuroyami/kitepdf/core/render/KiteColorSpace;DDLio/github/yuroyami/kitepdf/core/render/KiteBlendMode;Lio/github/yuroyami/kitepdf/core/render/SoftMask;Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;Lio/github/yuroyami/kitepdf/core/render/KitePattern;Lio/github/yuroyami/kitepdf/core/render/KitePattern;Ljava/util/List;DIIDILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun <init> (Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;Lio/github/yuroyami/kitepdf/core/render/RgbColor;Lio/github/yuroyami/kitepdf/core/render/RgbColor;DLio/github/yuroyami/kitepdf/core/render/TextState;Lio/github/yuroyami/kitepdf/core/render/KiteColorSpace;Lio/github/yuroyami/kitepdf/core/render/KiteColorSpace;DDLio/github/yuroyami/kitepdf/core/render/KiteBlendMode;Lio/github/yuroyami/kitepdf/core/render/SoftMask;Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;Lio/github/yuroyami/kitepdf/core/render/KitePattern;Lio/github/yuroyami/kitepdf/core/render/KitePattern;Ljava/util/List;DIIDLio/github/yuroyami/kitepdf/core/render/KiteRenderingIntent;Z[D[D)V
+	public synthetic fun <init> (Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;Lio/github/yuroyami/kitepdf/core/render/RgbColor;Lio/github/yuroyami/kitepdf/core/render/RgbColor;DLio/github/yuroyami/kitepdf/core/render/TextState;Lio/github/yuroyami/kitepdf/core/render/KiteColorSpace;Lio/github/yuroyami/kitepdf/core/render/KiteColorSpace;DDLio/github/yuroyami/kitepdf/core/render/KiteBlendMode;Lio/github/yuroyami/kitepdf/core/render/SoftMask;Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;Lio/github/yuroyami/kitepdf/core/render/KitePattern;Lio/github/yuroyami/kitepdf/core/render/KitePattern;Ljava/util/List;DIIDLio/github/yuroyami/kitepdf/core/render/KiteRenderingIntent;Z[D[DILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public final fun component1 ()Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;
 	public final fun component10 ()Lio/github/yuroyami/kitepdf/core/render/KiteBlendMode;
 	public final fun component11 ()Lio/github/yuroyami/kitepdf/core/render/SoftMask;
@@ -1168,6 +1172,10 @@ public final class io/github/yuroyami/kitepdf/core/render/GraphicsState {
 	public final fun component18 ()I
 	public final fun component19 ()D
 	public final fun component2 ()Lio/github/yuroyami/kitepdf/core/render/RgbColor;
+	public final fun component20 ()Lio/github/yuroyami/kitepdf/core/render/KiteRenderingIntent;
+	public final fun component21 ()Z
+	public final fun component22 ()[D
+	public final fun component23 ()[D
 	public final fun component3 ()Lio/github/yuroyami/kitepdf/core/render/RgbColor;
 	public final fun component4 ()D
 	public final fun component5 ()Lio/github/yuroyami/kitepdf/core/render/TextState;
@@ -1175,9 +1183,10 @@ public final class io/github/yuroyami/kitepdf/core/render/GraphicsState {
 	public final fun component7 ()Lio/github/yuroyami/kitepdf/core/render/KiteColorSpace;
 	public final fun component8 ()D
 	public final fun component9 ()D
-	public final fun copy (Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;Lio/github/yuroyami/kitepdf/core/render/RgbColor;Lio/github/yuroyami/kitepdf/core/render/RgbColor;DLio/github/yuroyami/kitepdf/core/render/TextState;Lio/github/yuroyami/kitepdf/core/render/KiteColorSpace;Lio/github/yuroyami/kitepdf/core/render/KiteColorSpace;DDLio/github/yuroyami/kitepdf/core/render/KiteBlendMode;Lio/github/yuroyami/kitepdf/core/render/SoftMask;Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;Lio/github/yuroyami/kitepdf/core/render/KitePattern;Lio/github/yuroyami/kitepdf/core/render/KitePattern;Ljava/util/List;DIID)Lio/github/yuroyami/kitepdf/core/render/GraphicsState;
-	public static synthetic fun copy$default (Lio/github/yuroyami/kitepdf/core/render/GraphicsState;Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;Lio/github/yuroyami/kitepdf/core/render/RgbColor;Lio/github/yuroyami/kitepdf/core/render/RgbColor;DLio/github/yuroyami/kitepdf/core/render/TextState;Lio/github/yuroyami/kitepdf/core/render/KiteColorSpace;Lio/github/yuroyami/kitepdf/core/render/KiteColorSpace;DDLio/github/yuroyami/kitepdf/core/render/KiteBlendMode;Lio/github/yuroyami/kitepdf/core/render/SoftMask;Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;Lio/github/yuroyami/kitepdf/core/render/KitePattern;Lio/github/yuroyami/kitepdf/core/render/KitePattern;Ljava/util/List;DIIDILjava/lang/Object;)Lio/github/yuroyami/kitepdf/core/render/GraphicsState;
+	public final fun copy (Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;Lio/github/yuroyami/kitepdf/core/render/RgbColor;Lio/github/yuroyami/kitepdf/core/render/RgbColor;DLio/github/yuroyami/kitepdf/core/render/TextState;Lio/github/yuroyami/kitepdf/core/render/KiteColorSpace;Lio/github/yuroyami/kitepdf/core/render/KiteColorSpace;DDLio/github/yuroyami/kitepdf/core/render/KiteBlendMode;Lio/github/yuroyami/kitepdf/core/render/SoftMask;Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;Lio/github/yuroyami/kitepdf/core/render/KitePattern;Lio/github/yuroyami/kitepdf/core/render/KitePattern;Ljava/util/List;DIIDLio/github/yuroyami/kitepdf/core/render/KiteRenderingIntent;Z[D[D)Lio/github/yuroyami/kitepdf/core/render/GraphicsState;
+	public static synthetic fun copy$default (Lio/github/yuroyami/kitepdf/core/render/GraphicsState;Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;Lio/github/yuroyami/kitepdf/core/render/RgbColor;Lio/github/yuroyami/kitepdf/core/render/RgbColor;DLio/github/yuroyami/kitepdf/core/render/TextState;Lio/github/yuroyami/kitepdf/core/render/KiteColorSpace;Lio/github/yuroyami/kitepdf/core/render/KiteColorSpace;DDLio/github/yuroyami/kitepdf/core/render/KiteBlendMode;Lio/github/yuroyami/kitepdf/core/render/SoftMask;Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;Lio/github/yuroyami/kitepdf/core/render/KitePattern;Lio/github/yuroyami/kitepdf/core/render/KitePattern;Ljava/util/List;DIIDLio/github/yuroyami/kitepdf/core/render/KiteRenderingIntent;Z[D[DILjava/lang/Object;)Lio/github/yuroyami/kitepdf/core/render/GraphicsState;
 	public fun equals (Ljava/lang/Object;)Z
+	public final fun getBlackPointCompensation ()Z
 	public final fun getBlendMode ()Lio/github/yuroyami/kitepdf/core/render/KiteBlendMode;
 	public final fun getCtm ()Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;
 	public final fun getDashArray ()Ljava/util/List;
@@ -1185,16 +1194,19 @@ public final class io/github/yuroyami/kitepdf/core/render/GraphicsState {
 	public final fun getFillAlpha ()D
 	public final fun getFillColor ()Lio/github/yuroyami/kitepdf/core/render/RgbColor;
 	public final fun getFillColorSpace ()Lio/github/yuroyami/kitepdf/core/render/KiteColorSpace;
+	public final fun getFillComponents ()[D
 	public final fun getFillPattern ()Lio/github/yuroyami/kitepdf/core/render/KitePattern;
 	public final fun getLineCap ()I
 	public final fun getLineJoin ()I
 	public final fun getLineWidth ()D
 	public final fun getMiterLimit ()D
+	public final fun getRenderingIntent ()Lio/github/yuroyami/kitepdf/core/render/KiteRenderingIntent;
 	public final fun getSoftMask ()Lio/github/yuroyami/kitepdf/core/render/SoftMask;
 	public final fun getSoftMaskCtm ()Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;
 	public final fun getStrokeAlpha ()D
 	public final fun getStrokeColor ()Lio/github/yuroyami/kitepdf/core/render/RgbColor;
 	public final fun getStrokeColorSpace ()Lio/github/yuroyami/kitepdf/core/render/KiteColorSpace;
+	public final fun getStrokeComponents ()[D
 	public final fun getStrokePattern ()Lio/github/yuroyami/kitepdf/core/render/KitePattern;
 	public final fun getText ()Lio/github/yuroyami/kitepdf/core/render/TextState;
 	public fun hashCode ()I
@@ -1203,6 +1215,7 @@ public final class io/github/yuroyami/kitepdf/core/render/GraphicsState {
 
 public final class io/github/yuroyami/kitepdf/core/render/GraphicsStateKt {
 	public static final fun applyExtGState (Lio/github/yuroyami/kitepdf/core/render/GraphicsState;Lio/github/yuroyami/kitepdf/core/render/ExtGState;)Lio/github/yuroyami/kitepdf/core/render/GraphicsState;
+	public static final fun withColorRendering (Lio/github/yuroyami/kitepdf/core/render/GraphicsState;Lio/github/yuroyami/kitepdf/core/render/KiteRenderingIntent;Z)Lio/github/yuroyami/kitepdf/core/render/GraphicsState;
 }
 
 public final class io/github/yuroyami/kitepdf/core/render/IccProfile {
@@ -1320,6 +1333,8 @@ public abstract class io/github/yuroyami/kitepdf/core/render/KiteColorSpace {
 	public abstract fun getComponentCount ()I
 	public fun getPaintsNothing ()Z
 	public abstract fun toRgb ([D)Lio/github/yuroyami/kitepdf/core/render/RgbColor;
+	public fun withIntent (Lio/github/yuroyami/kitepdf/core/render/KiteRenderingIntent;Z)Lio/github/yuroyami/kitepdf/core/render/KiteColorSpace;
+	public static synthetic fun withIntent$default (Lio/github/yuroyami/kitepdf/core/render/KiteColorSpace;Lio/github/yuroyami/kitepdf/core/render/KiteRenderingIntent;ZILjava/lang/Object;)Lio/github/yuroyami/kitepdf/core/render/KiteColorSpace;
 }
 
 public final class io/github/yuroyami/kitepdf/core/render/KiteColorSpace$CalGray : io/github/yuroyami/kitepdf/core/render/KiteColorSpace {
@@ -1360,6 +1375,7 @@ public final class io/github/yuroyami/kitepdf/core/render/KiteColorSpace$DeviceN
 	public fun getPaintsNothing ()Z
 	public final fun getTintTransform ()Lio/github/yuroyami/kitepdf/core/render/KiteFunction;
 	public fun toRgb ([D)Lio/github/yuroyami/kitepdf/core/render/RgbColor;
+	public fun withIntent (Lio/github/yuroyami/kitepdf/core/render/KiteRenderingIntent;Z)Lio/github/yuroyami/kitepdf/core/render/KiteColorSpace;
 }
 
 public final class io/github/yuroyami/kitepdf/core/render/KiteColorSpace$DeviceRGB : io/github/yuroyami/kitepdf/core/render/KiteColorSpace {
@@ -1372,6 +1388,7 @@ public final class io/github/yuroyami/kitepdf/core/render/KiteColorSpace$IccBase
 	public fun <init> (Lio/github/yuroyami/kitepdf/core/render/IccProfile;)V
 	public fun getComponentCount ()I
 	public fun toRgb ([D)Lio/github/yuroyami/kitepdf/core/render/RgbColor;
+	public fun withIntent (Lio/github/yuroyami/kitepdf/core/render/KiteRenderingIntent;Z)Lio/github/yuroyami/kitepdf/core/render/KiteColorSpace;
 }
 
 public final class io/github/yuroyami/kitepdf/core/render/KiteColorSpace$Indexed : io/github/yuroyami/kitepdf/core/render/KiteColorSpace {
@@ -1383,6 +1400,7 @@ public final class io/github/yuroyami/kitepdf/core/render/KiteColorSpace$Indexed
 	public final fun getHival ()I
 	public final fun getPalette ()[B
 	public fun toRgb ([D)Lio/github/yuroyami/kitepdf/core/render/RgbColor;
+	public fun withIntent (Lio/github/yuroyami/kitepdf/core/render/KiteRenderingIntent;Z)Lio/github/yuroyami/kitepdf/core/render/KiteColorSpace;
 }
 
 public final class io/github/yuroyami/kitepdf/core/render/KiteColorSpace$Lab : io/github/yuroyami/kitepdf/core/render/KiteColorSpace {
@@ -1489,6 +1507,8 @@ public final class io/github/yuroyami/kitepdf/core/render/KiteImageData {
 	public final fun getSoftMaskWidth ()I
 	public final fun getWidth ()I
 	public final fun isImageMask ()Z
+	public final fun withIntent (Lio/github/yuroyami/kitepdf/core/render/KiteRenderingIntent;Z)Lio/github/yuroyami/kitepdf/core/render/KiteImageData;
+	public static synthetic fun withIntent$default (Lio/github/yuroyami/kitepdf/core/render/KiteImageData;Lio/github/yuroyami/kitepdf/core/render/KiteRenderingIntent;ZILjava/lang/Object;)Lio/github/yuroyami/kitepdf/core/render/KiteImageData;
 }
 
 public final class io/github/yuroyami/kitepdf/core/render/KiteImageData$Companion {
@@ -1736,11 +1756,28 @@ public final class io/github/yuroyami/kitepdf/core/render/KitePattern$Unsupporte
 	public fun getMatrix ()Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;
 }
 
+public final class io/github/yuroyami/kitepdf/core/render/KiteRenderingIntent : java/lang/Enum {
+	public static final field AbsoluteColorimetric Lio/github/yuroyami/kitepdf/core/render/KiteRenderingIntent;
+	public static final field Companion Lio/github/yuroyami/kitepdf/core/render/KiteRenderingIntent$Companion;
+	public static final field Perceptual Lio/github/yuroyami/kitepdf/core/render/KiteRenderingIntent;
+	public static final field RelativeColorimetric Lio/github/yuroyami/kitepdf/core/render/KiteRenderingIntent;
+	public static final field Saturation Lio/github/yuroyami/kitepdf/core/render/KiteRenderingIntent;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lio/github/yuroyami/kitepdf/core/render/KiteRenderingIntent;
+	public static fun values ()[Lio/github/yuroyami/kitepdf/core/render/KiteRenderingIntent;
+}
+
+public final class io/github/yuroyami/kitepdf/core/render/KiteRenderingIntent$Companion {
+	public final fun fromPdfName (Ljava/lang/String;)Lio/github/yuroyami/kitepdf/core/render/KiteRenderingIntent;
+}
+
 public abstract class io/github/yuroyami/kitepdf/core/render/KiteShading {
 	public static final field Companion Lio/github/yuroyami/kitepdf/core/render/KiteShading$Companion;
 	public abstract fun getBackground ()Lio/github/yuroyami/kitepdf/core/render/RgbColor;
 	public abstract fun getBbox ()Lio/github/yuroyami/kitepdf/core/KiteRectangle;
 	public abstract fun getColorSpace ()Lio/github/yuroyami/kitepdf/core/render/KiteColorSpace;
+	public fun withIntent (Lio/github/yuroyami/kitepdf/core/render/KiteRenderingIntent;Z)Lio/github/yuroyami/kitepdf/core/render/KiteShading;
+	public static synthetic fun withIntent$default (Lio/github/yuroyami/kitepdf/core/render/KiteShading;Lio/github/yuroyami/kitepdf/core/render/KiteRenderingIntent;ZILjava/lang/Object;)Lio/github/yuroyami/kitepdf/core/render/KiteShading;
 }
 
 public final class io/github/yuroyami/kitepdf/core/render/KiteShading$Axial : io/github/yuroyami/kitepdf/core/render/KiteShading {
@@ -1766,6 +1803,7 @@ public final class io/github/yuroyami/kitepdf/core/render/KiteShading$Axial : io
 	public final fun getFunction ()Lio/github/yuroyami/kitepdf/core/render/KiteFunction;
 	public fun hashCode ()I
 	public fun toString ()Ljava/lang/String;
+	public fun withIntent (Lio/github/yuroyami/kitepdf/core/render/KiteRenderingIntent;Z)Lio/github/yuroyami/kitepdf/core/render/KiteShading;
 }
 
 public final class io/github/yuroyami/kitepdf/core/render/KiteShading$Companion {
@@ -1780,6 +1818,7 @@ public final class io/github/yuroyami/kitepdf/core/render/KiteShading$FunctionBa
 	public fun getColorSpace ()Lio/github/yuroyami/kitepdf/core/render/KiteColorSpace;
 	public final fun getDomain ()[D
 	public final fun getMatrix ()Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;
+	public fun withIntent (Lio/github/yuroyami/kitepdf/core/render/KiteRenderingIntent;Z)Lio/github/yuroyami/kitepdf/core/render/KiteShading;
 }
 
 public final class io/github/yuroyami/kitepdf/core/render/KiteShading$MeshColorTable {
@@ -1841,6 +1880,7 @@ public final class io/github/yuroyami/kitepdf/core/render/KiteShading$Radial : i
 	public final fun getFunction ()Lio/github/yuroyami/kitepdf/core/render/KiteFunction;
 	public fun hashCode ()I
 	public fun toString ()Ljava/lang/String;
+	public fun withIntent (Lio/github/yuroyami/kitepdf/core/render/KiteRenderingIntent;Z)Lio/github/yuroyami/kitepdf/core/render/KiteShading;
 }
 
 public final class io/github/yuroyami/kitepdf/core/render/KiteShading$TriangleMesh : io/github/yuroyami/kitepdf/core/render/KiteShading {

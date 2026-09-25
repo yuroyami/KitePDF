@@ -11,8 +11,9 @@ import kotlin.math.pow
  * what makes a photo tagged AdobeRGB look flat when it is drawn as if it were
  * sRGB. A matrix/TRC profile has tone curves and a colorant matrix, and converts
  * through XYZ. A lookup-table profile, which most CMYK press profiles are, converts
- * through its `A2B1` or `A2B0` table with the relative colorimetric intent and black
- * point compensation, as MuPDF does through Little CMS (#200).
+ * through the table of the rendering intent with black point compensation, as MuPDF
+ * does through Little CMS (#200, #201). [parse] gives the relative colorimetric
+ * transform, and [forRendering] the transform of any other intent.
  */
 public class IccProfile internal constructor(
     /** 1 for grey, 3 for RGB, 4 for CMYK. */
@@ -21,13 +22,20 @@ public class IccProfile internal constructor(
     private val curves: List<IccCurve>,
     /**
      * Column-major colorant matrix (X, Y, Z per channel) taking linear channel
-     * values to D50 XYZ. Null for a grey profile, which uses its white point.
+     * values to D50 XYZ. Null for a grey profile, which maps to the connection-space white.
      */
     private val colorants: DoubleArray?,
-    /** Media white point, D50-relative. */
-    private val whitePoint: DoubleArray,
+    /**
+     * For the absolute colorimetric intent, the factor per XYZ channel from the connection
+     * space to the white of the medium. Null for any other intent.
+     */
+    private val absoluteScale: DoubleArray? = null,
     /** The transform of a lookup-table profile, which takes over from [curves] and [colorants]. */
     private val lut: IccLutTransform? = null,
+    /** What the profile was read from, kept on the profile [parse] returns so that it can build other intents. */
+    private val source: IccSource? = null,
+    /** The profile [parse] returned, when this is one it built for another intent. */
+    private val root: IccProfile? = null,
 ) {
 
     /**
@@ -55,8 +63,8 @@ public class IccProfile internal constructor(
         if (lut != null) return@lazy null
         val c = colorants ?: return@lazy null
         if (curves.size < 3) return@lazy null
-        // The colorants are column-major: X = c[0] r + c[3] g + c[6] b.
-        val toXyz = DoubleArray(9) { i -> c[3 * (i % 3) + i / 3] }
+        // The colorants are column-major: X = c[0] r + c[3] g + c[6] b. The rows are X, Y and Z.
+        val toXyz = DoubleArray(9) { i -> c[3 * (i % 3) + i / 3] * (absoluteScale?.get(i / 3) ?: 1.0) }
         CurveMatrix(List(3) { k -> curves[k]::eval }, times3(D50_TO_LINEAR_SRGB, toXyz))
     }
 
@@ -67,8 +75,9 @@ public class IccProfile internal constructor(
     public fun toRgb(components: DoubleArray): RgbColor {
         lut?.let { return it.toRgb(components) }
         if (colorants == null) {
+            // Little CMS maps grey to the connection-space white, whatever white point the tag gives.
             val g = curves.firstOrNull()?.eval(components.getOrElse(0) { 0.0 }) ?: 0.0
-            return xyzD50ToSrgb(whitePoint[0] * g, whitePoint[1] * g, whitePoint[2] * g)
+            return pcsToSrgb(PCS_WHITE[0] * g, PCS_WHITE[1] * g, PCS_WHITE[2] * g)
         }
         val r = curves.getOrNull(0)?.eval(components.getOrElse(0) { 0.0 }) ?: 0.0
         val g = curves.getOrNull(1)?.eval(components.getOrElse(1) { 0.0 }) ?: 0.0
@@ -76,7 +85,31 @@ public class IccProfile internal constructor(
         val x = colorants[0] * r + colorants[3] * g + colorants[6] * b
         val y = colorants[1] * r + colorants[4] * g + colorants[7] * b
         val z = colorants[2] * r + colorants[5] * g + colorants[8] * b
-        return xyzD50ToSrgb(x, y, z)
+        return pcsToSrgb(x, y, z)
+    }
+
+    private fun pcsToSrgb(x: Double, y: Double, z: Double): RgbColor {
+        val s = absoluteScale ?: return xyzD50ToSrgb(x, y, z)
+        return xyzD50ToSrgb(x * s[0], y * s[1], z * s[2])
+    }
+
+    /** The profiles [forRendering] built, two per intent: without and with black point compensation. */
+    private val renderings = arrayOfNulls<IccProfile>(8)
+
+    /**
+     * This profile converting through [intent], with or without black point compensation,
+     * as Little CMS converts it for MuPDF. A profile whose transform does not change returns
+     * the profile [parse] gave.
+     */
+    internal fun forRendering(intent: KiteRenderingIntent, blackPointCompensation: Boolean): IccProfile {
+        root?.let { return it.forRendering(intent, blackPointCompensation) }
+        val s = source ?: return this
+        val slot = 2 * intent.ordinal + if (blackPointCompensation) 1 else 0
+        renderings[slot]?.let { return it }
+        val plan = s.plan(intent, blackPointCompensation)
+        val built = if (plan == s.defaultPlan) this else s.build(plan, root = this) ?: this
+        renderings[slot] = built
+        return built
     }
 
     public companion object {
@@ -135,96 +168,15 @@ public class IccProfile internal constructor(
         }
 
         private fun parseUncached(bytes: ByteArray): IccProfile? {
-            if (bytes.size < 132) return null
-            // Header: size(4) cmm(4) version(4) class(4) space(4) pcs(4) ...
-            val space = tag(bytes, 16)
-            val components = when (space) {
-                "RGB " -> 3
-                "GRAY" -> 1
-                "CMYK" -> 4
-                else -> return null
-            }
-            val count = u32(bytes, 128).toInt()
-            if (count <= 0 || count > 1024) return null
-            val tags = HashMap<String, Pair<Int, Int>>(count)
-            for (i in 0 until count) {
-                val at = 132 + i * 12
-                if (at + 12 > bytes.size) return null
-                val off = u32(bytes, at + 4).toInt()
-                val len = u32(bytes, at + 8).toInt()
-                if (off < 0 || len < 0 || off + len > bytes.size) continue
-                tags[tag(bytes, at)] = off to len
-            }
-            val white = tags["wtpt"]?.let { xyzTag(bytes, it.first, it.second) }
-                ?: doubleArrayOf(0.9642, 1.0, 0.8249)   // D50, the PCS white
-
-            // Little CMS reads a table before a matrix: A2B1 for the relative colorimetric
-            // intent of ISO 32000-1, 8.6.5.8, else A2B0 (#200).
-            lutTransform(bytes, tags, components)?.let { return IccProfile(components, emptyList(), null, white, it) }
-            if (components == 4) return null
-            // A table that cannot be read leaves only the matrix; without one, say no
-            // rather than half-render the profile.
-            if (("A2B0" in tags || "A2B1" in tags) && "rXYZ" !in tags && "kTRC" !in tags) return null
-
-            if (components == 1) {
-                val curve = tags["kTRC"]?.let { curveTag(bytes, it.first, it.second) } ?: return null
-                return IccProfile(1, listOf(curve), null, white)
-            }
-            val r = tags["rXYZ"]?.let { xyzTag(bytes, it.first, it.second) } ?: return null
-            val g = tags["gXYZ"]?.let { xyzTag(bytes, it.first, it.second) } ?: return null
-            val b = tags["bXYZ"]?.let { xyzTag(bytes, it.first, it.second) } ?: return null
-            val curves = listOf("rTRC", "gTRC", "bTRC").map { name ->
-                tags[name]?.let { curveTag(bytes, it.first, it.second) } ?: IccCurve.Gamma(1.0)
-            }
-            return IccProfile(3, curves, doubleArrayOf(r[0], r[1], r[2], g[0], g[1], g[2], b[0], b[1], b[2]), white)
-        }
-
-        /**
-         * The transform through the relative colorimetric table of a lookup-table profile,
-         * with its black point for black point compensation, or null when it has none.
-         */
-        private fun lutTransform(bytes: ByteArray, tags: Map<String, Pair<Int, Int>>, components: Int): IccLutTransform? {
-            val pcsIsLab = when (tag(bytes, 20)) {
-                "Lab " -> true
-                "XYZ " -> false
-                else -> return null
-            }
-            fun table(name: String, atoB: Boolean): IccLut? =
-                tags[name]?.let { (off, len) -> IccLut.read(bytes, off, len, atoB, pcsIsLab) }
-            val a2b1 = table("A2B1", atoB = true)?.takeIf { it.inputs == components && it.outputs == 3 }
-            val relative = a2b1 ?: table("A2B0", atoB = true)?.takeIf { it.inputs == components && it.outputs == 3 } ?: return null
-            val black = blackPoint(bytes, components, relative, hasRelative = a2b1 != null, b2a0 = { table("B2A0", atoB = false) })
-            return IccLutTransform(components, relative, black)
-        }
-
-        /**
-         * The black point of a lookup-table profile, as Little CMS detects it for black
-         * point compensation with the relative colorimetric intent (cmsDetectBlackPoint).
-         * A CMYK printer profile maps Lab black through its perceptual table and back; any
-         * other profile converts its darkest colour. The point is neutral, with L* at most
-         * 50, and zero when the profile has no table for the intent.
-         */
-        private fun blackPoint(
-            bytes: ByteArray, components: Int, relative: IccLut, hasRelative: Boolean, b2a0: () -> IccLut?,
-        ): DoubleArray {
-            val none = doubleArrayOf(0.0, 0.0, 0.0)
-            val device = if (components == 4 && tag(bytes, 12) == "prtr") {
-                val back = b2a0()?.takeIf { it.inputs == 3 && it.outputs == 4 } ?: return none
-                back.eval(encodePcs(labToXyz(0.0, 0.0, 0.0), back.pcsEncoding))
-            } else {
-                if (!hasRelative) return none
-                DoubleArray(components) { if (components == 4) 1.0 else 0.0 }
-            }
-            val xyz = decodePcs(relative.eval(device), relative.pcsEncoding)
-            val l = xyzToLab(xyz[0], xyz[1], xyz[2])[0].coerceIn(0.0, 50.0)
-            return labToXyz(l, 0.0, 0.0)
+            val source = IccSource.read(bytes) ?: return null
+            return source.build(source.defaultPlan, root = null)
         }
 
         /** Internal: the curve tag at [at], for [IccLut]. */
         internal fun curveAt(b: ByteArray, at: Int, len: Int): IccCurve? = curveTag(b, at, len)
 
         /** `XYZType`: a signature, four reserved bytes, then s15Fixed16 X, Y, Z. */
-        private fun xyzTag(b: ByteArray, off: Int, len: Int): DoubleArray? {
+        internal fun xyzTag(b: ByteArray, off: Int, len: Int): DoubleArray? {
             if (len < 20 || off + 20 > b.size) return null
             if (tag(b, off) != "XYZ ") return null
             return doubleArrayOf(s15f16(b, off + 8), s15f16(b, off + 12), s15f16(b, off + 16))
@@ -258,13 +210,13 @@ public class IccProfile internal constructor(
             return IccCurve.Parametric(type, p)
         }
 
-        private fun tag(b: ByteArray, at: Int): String =
+        internal fun tag(b: ByteArray, at: Int): String =
             buildString(4) { for (i in 0 until 4) append((b[at + i].toInt() and 0xFF).toChar()) }
 
         private fun u16(b: ByteArray, at: Int): Int =
             ((b[at].toInt() and 0xFF) shl 8) or (b[at + 1].toInt() and 0xFF)
 
-        private fun u32(b: ByteArray, at: Int): Long =
+        internal fun u32(b: ByteArray, at: Int): Long =
             ((b[at].toLong() and 0xFF) shl 24) or ((b[at + 1].toLong() and 0xFF) shl 16) or
                 ((b[at + 2].toLong() and 0xFF) shl 8) or (b[at + 3].toLong() and 0xFF)
 
