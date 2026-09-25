@@ -193,12 +193,23 @@ fun Viewer(doc: KiteDocument) {
         modifier = Modifier.fillMaxSize(),
         layout = KiteDocLayout.Paged(Orientation.Horizontal),   // or KiteDocLayout.Continuous()
         zoomSpec = KiteZoomSpec(maxZoom = 6f),
+        renderSpec = KiteRenderSpec.Rasterized(),               // or KiteRenderSpec.Vectorized()
     )
 }
 ```
 
 It zooms, selects text, follows links inside the document and highlights search hits. See
 [Compose viewer](https://yuroyami.github.io/KitePDF/compose-viewer/) for everything it can do.
+
+The viewer draws pages in one of two ways, and you pick one with `renderSpec`:
+
+- `Rasterized` (the default) draws each page once into a bitmap. Scrolling and zooming
+  stay smooth, even on dense pages and slow devices.
+- `Vectorized` draws the page from its vector content each time the screen updates. It
+  uses no bitmap memory, and text and lines stay sharp at any zoom.
+
+See [Rendering: rasterized vs. vectorized](https://yuroyami.github.io/KitePDF/compose-viewer/#rendering-rasterized-vs-vectorized)
+for the trade-offs.
 
 ### Read and search text
 
