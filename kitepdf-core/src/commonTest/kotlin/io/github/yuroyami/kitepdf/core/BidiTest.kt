@@ -5,7 +5,7 @@ import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
 
-/** Unicode Bidirectional Algorithm (implicit subset). */
+/** Unicode Bidirectional Algorithm: a few cases by hand. The JVM test BidiConformanceTest runs the conformance files of Unicode. */
 class BidiTest {
 
     // Hebrew alef/bet/gimel, Arabic alef/beh, Arabic-Indic digit.
