@@ -421,8 +421,9 @@ public class Canvas2dCanvas(ctx: CanvasRenderingContext2D) : KiteCanvas {
         alpha: Double, blendMode: KiteBlendMode,
     ) {
         val a = alpha.coerceIn(0.0, 1.0)
-        // A plain group, or one with malformed geometry, paints straight onto the page.
-        val area = if (a < 1.0 || blendMode != KiteBlendMode.Normal) deviceArea(bbox, ctm) else null
+        // A plain group, or one with malformed geometry, paints straight onto the page. An isolated
+        // group needs a layer, so its blend modes see a transparent backdrop (ISO 32000-1, 11.4.5, #125).
+        val area = if (a < 1.0 || blendMode != KiteBlendMode.Normal || isolated) deviceArea(bbox, ctm) else null
         if (area == null) {
             groups.addLast(Group(null, null, 1.0, KiteBlendMode.Normal))
             return

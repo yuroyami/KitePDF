@@ -916,7 +916,10 @@ public class PageRenderer(
         val childProperties = res.properties
         val groupDict = formStream.dict.getDict("Group", resolver)
         val isTransparencyGroup = groupDict?.getName("S") == "Transparency"
-        val isolated = (groupDict?.get("I") as? io.github.yuroyami.kitepdf.core.parser.PdfBoolean)?.value ?: false
+        // Isolation only shows when a paint inside blends in a mode other than Normal, so a
+        // canvas need not open a layer for an isolated group of Normal paints (#125).
+        val isolated = ((groupDict?.get("I") as? io.github.yuroyami.kitepdf.core.parser.PdfBoolean)?.value ?: false) &&
+            formBlends(res.extGStates, res.xobjects)
         val knockout = (groupDict?.get("K") as? io.github.yuroyami.kitepdf.core.parser.PdfBoolean)?.value ?: false
 
         parentState.save()
@@ -1695,6 +1698,41 @@ public class PageRenderer(
         }
         val rgb = space.toRgb(DoubleArray(space.componentCount) { components.getOrElse(it) { 0.0 } })
         return rgb.takeUnless { it.r <= 0.0 && it.g <= 0.0 && it.b <= 0.0 }
+    }
+
+    /**
+     * True when a paint inside a form can blend in a mode other than Normal, so the isolation
+     * of its group shows (ISO 32000-1, 11.4.5). With Normal paints alone, an isolated group
+     * looks the same painted straight onto the page. Looks into nested forms, four deep.
+     */
+    private fun formBlends(extGStates: Map<String, ExtGState>, xobjects: Map<String, XObjectSlot>): Boolean {
+        if (extGStates.values.any { it.blendMode != null && it.blendMode != KiteBlendMode.Normal }) return true
+        return xobjects.values.any { slot -> formDictBlends(slot.stream.dict, depth = 1) }
+    }
+
+    /** [formBlends] from the raw dictionary of a nested form, so nothing is loaded for it. */
+    private fun formDictBlends(dict: PdfDictionary, depth: Int): Boolean {
+        if (depth > 4 || dict.getName("Subtype") != "Form") return false
+        val resources = missingAsNull { dict.getDict("Resources", resolver) } ?: return false
+        val states = missingAsNull { resources.getDict("ExtGState", resolver) }
+        if (states != null && states.map.values.any { v -> (missingAsNull { v.resolve(resolver) } as? PdfDictionary)?.let(::blendsOtherThanNormal) == true }) {
+            return true
+        }
+        val forms = missingAsNull { resources.getDict("XObject", resolver) } ?: return false
+        return forms.map.values.any { v ->
+            (missingAsNull { v.resolve(resolver) } as? io.github.yuroyami.kitepdf.core.parser.PdfStream)?.let { formDictBlends(it.dict, depth + 1) } == true
+        }
+    }
+
+    /** True when the /BM of [gs], a name or an array of names, names a mode other than Normal. */
+    private fun blendsOtherThanNormal(gs: PdfDictionary): Boolean {
+        val bm = gs["BM"] ?: return false
+        val names = when (bm) {
+            is PdfName -> listOf(bm.value)
+            is io.github.yuroyami.kitepdf.core.parser.PdfArray -> bm.items.mapNotNull { (it as? PdfName)?.value }
+            else -> emptyList()
+        }
+        return names.any { it != "Normal" && it != "Compatible" }
     }
 
     /**

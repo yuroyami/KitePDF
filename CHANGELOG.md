@@ -346,6 +346,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   each size, subpixel position and colour, and copied after that, as MuPDF and
   PDFium do. Glyphs also snap to MuPDF's subpixel grid, so a line of text sits on
   one pixel row. The DifferentialTest mean falls from 0.0010 to 0.0007 (#306).
+- Every backend honours whether a transparency group is isolated, when a paint
+  inside blends in a mode other than Normal. An isolated group blends against a
+  transparent backdrop, and a non-isolated group against the page. AWT and
+  Canvas2D painted every such group straight onto the page, and Skia, Compose,
+  Android and CoreGraphics isolated every group (ISO 32000-1, 11.4.5, #125).
 
 ## [0.10.0] - 2026-09-13
 
