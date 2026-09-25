@@ -16,6 +16,7 @@ import kotlin.test.assertTrue
  *   -Dkitepdf.corpus=/path/to/pdfs     extra real-world corpus dir (default ./corpus)
  *   -Dkitepdf.diff.dpi=150             render density (default 96)
  *   -Dkitepdf.diff.budget=0.15         max allowed per-page MAE before failing
+ *   -Dkitepdf.diff.updateBaseline=true rewrite the per-page baseline, `difftest-baseline.txt`
  *   -Dkitepdf.difftest.out=build/difftest   output directory
  *
  * Without an oracle the test degrades to a KitePDF-only smoke pass (render
@@ -82,6 +83,12 @@ class DifferentialTest {
                     "Build mupdf-master (mujs=no) or pass -Dkitepdf.mutool to enable differential scoring.",
             )
         }
+
+        // Each page against its own recorded score (#195). The scores hold at the default
+        // density only, so a run at another density skips them.
+        if (report.oracleAvailable && dpi == DiffHarness.DEFAULT_DPI) {
+            checkBaseline(corpus, report, update = System.getProperty("kitepdf.diff.updateBaseline") == "true")
+        }
     }
 
     companion object {
@@ -101,6 +108,51 @@ class DifferentialTest {
                 "kitepdf.diff.budget must be a finite value from 0.0 to 1.0 (was '$raw')"
             }
             return value
+        }
+
+        /**
+         * Fails when a page scores worse than its recorded baseline, or when a fixture has no
+         * baseline. With [update], writes this run's scores instead.
+         */
+        internal fun checkBaseline(corpus: List<Corpus.Entry>, report: DiffHarness.Report, update: Boolean) {
+            val current = LinkedHashMap<String, DiffBaseline.Score>()
+            val names = HashMap<String, String>()
+            for (r in report.results) {
+                val entry = r.source ?: continue
+                val score = DiffBaseline.Score(r.score ?: continue, r.diffFraction ?: continue, r.maxDelta ?: continue)
+                val key = DiffBaseline.key(entry, r.page)
+                current[key] = score
+                names[key] = "${r.doc} p${r.page}"
+                println("[difftest] page $key ${"%.5f".format(score.mae)} ${"%.5f".format(score.diffFraction)} ${score.maxDelta} (${r.doc})")
+            }
+            val file = DiffBaseline.file()
+            val baseline = DiffBaseline.read(file)
+            if (update) {
+                DiffBaseline.write(file, baseline, current, corpus.filter { it.synthetic }.map { it.name }.toSet())
+                println("[difftest] wrote ${current.size} page scores to ${file.path}")
+                return
+            }
+            val worse = current.mapNotNull { (key, now) ->
+                val shown = names[key].let { if (it == key) it else "$it [$key]" }
+                baseline[key]?.let { base -> DiffBaseline.regression(base, now)?.let { "  $shown: $it" } }
+            }
+            val improved = current.filter { (key, now) -> baseline[key]?.let { DiffBaseline.improved(it, now) } == true }
+            if (improved.isNotEmpty()) {
+                println("[difftest] better than the baseline, record it with -Dkitepdf.diff.updateBaseline=true: " + improved.keys.joinToString { names[it]!! })
+            }
+            val missing = current.keys.filter { it !in baseline }
+            val missingFixtures = missing.filter { !it.startsWith("sha1-") }
+            if (missing.size > missingFixtures.size) {
+                println("[difftest] corpus pages not in the baseline yet: " + missing.filter { it.startsWith("sha1-") }.joinToString { names[it]!! })
+            }
+            assertTrue(
+                worse.isEmpty() && missingFixtures.isEmpty(),
+                buildString {
+                    if (worse.isNotEmpty()) append("Pages worse than their baseline:\n" + worse.joinToString("\n") + "\n")
+                    if (missingFixtures.isNotEmpty()) append("Fixture pages with no baseline: " + missingFixtures.joinToString() + "\n")
+                    append("If the change is intended, rerun with -Dkitepdf.diff.updateBaseline=true and explain it in the commit.")
+                },
+            )
         }
 
         internal fun assertOracleComplete(report: DiffHarness.Report) {

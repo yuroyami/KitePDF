@@ -32,6 +32,7 @@ Open `report.md` and start at the top. That is the worst-rendering page.
 | `kitepdf.diff.dpi` | `96` | positive render density for both engines |
 | `kitepdf.diff.maxpages` | `6` | positive maximum pages scored per document |
 | `kitepdf.diff.budget` | `0.05` | finite max per-page MAE from `0.0` to `1.0` |
+| `kitepdf.diff.updateBaseline` | `false` | write this run's per-page scores to the baseline file instead of checking them |
 | `kitepdf.difftest.out` | `build/difftest` | output directory |
 | `kitepdf.pdfium.python` | _auto_ | Python with `pypdfium2`, for the parity check |
 
@@ -65,6 +66,20 @@ Example: tighten the gate and crank density once correctness improves:
    pure 255/0/0), while a colour-managed build lands near 237/28/36, so the
    same page can score two or three times higher against one build than the
    other. Compare scores only across runs that used the same oracle.
+5. **Per-page baseline** (only when the oracle is present, at 96 dpi): each
+   page must not score clearly worse than its entry in
+   `src/jvmTest/resources/difftest-baseline.txt`, even when the mean holds.
+   A page fails when one of these grows past its margin:
+   - the mean error, by more than a quarter plus 0.0005
+   - the fraction of changed pixels, by more than a quarter plus 0.002
+   - the largest channel error, by more than 48 levels
+
+   A fixture page with no entry fails. A corpus page with no entry is only
+   reported. A fixture keys by its name. A corpus document keys by a hash of
+   its bytes, so its file name stays out of the tracked file. When a change
+   moves a score on purpose, rerun with `-Dkitepdf.diff.updateBaseline=true`
+   and say why in the same commit. The sweep prints each page that got
+   better, so that its new score can be recorded.
 
 ## The corpus
 

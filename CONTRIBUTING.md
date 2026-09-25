@@ -45,6 +45,12 @@ Run this before every commit.
 
 Then read `kitepdf-native-renderer/build/difftest/report.md`. The mean error must not be worse than before your change. Record the number and explain any movement.
 
+The sweep also checks each page against its own score in `kitepdf-native-renderer/src/jvmTest/resources/difftest-baseline.txt`. A page fails when its mean error, its fraction of changed pixels or its largest channel error gets clearly worse, even when the mean holds. A new fixture fails until it has a score. When your change moves a score on purpose, rerun the sweep with `-Dkitepdf.diff.updateBaseline=true` and say why in the same commit. The sweep also names each page that got better. Record the new score, so that the page cannot slip back unnoticed.
+
+```bash
+./gradlew :kitepdf-native-renderer:jvmTest --tests "*.difftest.DifferentialTest" -Dkitepdf.diff.updateBaseline=true
+```
+
 The gate also runs the PDFium parity check. When it fails, read `kitepdf-native-renderer/build/difftest/parity.md`. A page that your change fixes must come off `PdfiumParityTest.KNOWN_GAPS`, and a new finding needs an issue before it goes on.
 
 The other harnesses:

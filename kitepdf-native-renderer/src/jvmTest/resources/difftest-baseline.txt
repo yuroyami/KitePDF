@@ -1,0 +1,43 @@
+# The score of each page of the differential sweep against MuPDF at 96 dpi, checked by DifferentialTest.
+# Fixture name or corpus document hash, page, mean absolute error, fraction of changed pixels,
+# largest channel error. Rewrite with -Dkitepdf.diff.updateBaseline=true and say why in the commit.
+gen-cmyk-swatches p0 0.00046 0.00055 17
+gen-gray-ramp p0 0.00030 0.00007 17
+gen-multipage-mixed p0 0.00003 0.00007 38
+gen-multipage-mixed p1 0.00005 0.00049 21
+gen-multipage-mixed p2 0.00007 0.00074 22
+gen-multipage-mixed p3 0.00037 0.00187 95
+gen-multipage-mixed p4 0.00001 0.00002 25
+gen-nested-gstate p0 0.00003 0.00003 32
+gen-paragraph p0 0.00012 0.00025 30
+gen-rgb-swatches p0 0.00007 0.00000 12
+gen-standard14-fonts p0 0.00042 0.00100 34
+gen-text-sizes p0 0.00032 0.00095 42
+gen-transforms p0 0.00002 0.00000 11
+gen-vector-paths p0 0.00009 0.00003 27
+syn-blend-multiply p0 0.00008 0.00000 16
+syn-clip p0 0.00000 0.00000 0
+syn-cmyk p0 0.00128 0.00183 29
+syn-cropbox p0 0.00015 0.00000 12
+syn-dash p0 0.00015 0.00000 11
+syn-mediabox-origin p0 0.00007 0.00000 12
+syn-multipage p0 0.00017 0.00034 28
+syn-multipage p1 0.00017 0.00036 34
+syn-rotate90 p0 0.00004 0.00000 12
+syn-shading1-function p0 0.00290 0.00599 171
+syn-shading4-freeform p0 0.00000 0.00000 1
+syn-shading5-lattice p0 0.00000 0.00000 1
+syn-shading6-coons p0 0.00000 0.00000 1
+syn-shading7-tensor p0 0.00000 0.00000 1
+syn-smask-luminosity p0 0.00012 0.00000 13
+syn-text p0 0.00015 0.00096 31
+syn-transparency p0 0.00084 0.00000 10
+syn-type3-font p0 0.00185 0.00927 133
+syn-vector p0 0.00011 0.00004 27
+sha1-761bce999db9 p0 0.00173 0.00014 30
+sha1-761bce999db9 p1 0.00204 0.00001 30
+sha1-761bce999db9 p2 0.00375 0.00003 20
+sha1-761bce999db9 p3 0.00507 0.00058 22
+sha1-88cc53889228 p0 0.00354 0.01863 255
+sha1-cdc7835f9316 p0 0.00003 0.00003 20
+sha1-d3f44cf73fce p0 0.00161 0.00000 2
