@@ -342,6 +342,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   wrong glyph (#304).
 - Text extraction returns ZapfDingbats symbols, such as ✔ and ♠, through Adobe's
   ZapfDingbats glyph list. Before, it returned the raw byte (#305).
+- On AWT, text renders about three times faster. Each glyph is filled once for
+  each size, subpixel position and colour, and copied after that, as MuPDF and
+  PDFium do. Glyphs also snap to MuPDF's subpixel grid, so a line of text sits on
+  one pixel row. The DifferentialTest mean falls from 0.0010 to 0.0007 (#306).
 
 ## [0.10.0] - 2026-09-13
 
