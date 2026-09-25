@@ -351,6 +351,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   transparent backdrop, and a non-isolated group against the page. AWT and
   Canvas2D painted every such group straight onto the page, and Skia, Compose,
   Android and CoreGraphics isolated every group (ISO 32000-1, 11.4.5, #125).
+- A knockout group draws as ISO 32000-1, 11.4.6 describes: where two of its paints
+  overlap, the later paint replaces the earlier one instead of compositing over it.
+  No backend read the knockout flag before (#125).
+- A non-isolated group with an alpha below 1 blends its paints with the page, and
+  then mixes the result with the page by that alpha. Before, its paints blended
+  against a transparent backdrop. Android and CoreGraphics cannot start a layer
+  from the page, so there the group keeps the old result. #308 lists this and two
+  rarer cases that are still approximate (#125).
 
 ## [0.10.0] - 2026-09-13
 

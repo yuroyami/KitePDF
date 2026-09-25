@@ -176,10 +176,15 @@ public interface KiteCanvas {
      * accumulate into an offscreen layer; [endTransparencyGroup] composites
      * the layer back onto the parent with [blendMode] + [alpha].
      *
-     * [isolated] = the group composites onto a transparent backdrop (true)
-     * vs. the parent's current contents (false). [knockout] is a per-group
-     * compositing flavour that's rare outside design PDFs; backends without
-     * knockout support fall back to non-knockout.
+     * - [isolated]: the paints composite onto a transparent backdrop, not onto
+     *   what lies under the group (§11.4.5). The two differ only when a paint
+     *   inside blends in a mode other than Normal. The PDF renderer passes true
+     *   for a non-isolated group without such a paint when the group needs a
+     *   layer anyway, because a transparent layer costs less.
+     * - [knockout]: each paint replaces what the earlier paints of the group
+     *   left inside its shape (§11.4.6). The canvases composite each paint
+     *   against a transparent backdrop, which is exact unless a paint inside
+     *   blends in a mode other than Normal.
      *
      * Default implementation: a no-op pair so backends that don't model
      * groups still render their content (just without isolation). That's

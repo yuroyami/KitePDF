@@ -75,6 +75,7 @@ public class SkiaCanvas(private val canvas: SkCanvas) : KiteCanvas {
     override fun beginPage(widthPt: Double, heightPt: Double, deviceCtm: KiteMatrix) {
         // The caller is responsible for sizing the surface; we don't clear.
         openLayers = 0
+        groups.clear()
     }
 
     override fun endPage() {
@@ -82,6 +83,7 @@ public class SkiaCanvas(private val canvas: SkCanvas) : KiteCanvas {
             canvas.restore()
             openLayers--
         }
+        groups.clear()
     }
 
     override fun fillPath(
@@ -95,7 +97,7 @@ public class SkiaCanvas(private val canvas: SkCanvas) : KiteCanvas {
             this.color = color.toArgb(alpha)
             this.mode = PaintMode.FILL
             this.isAntiAlias = true
-            this.blendMode = blendMode.toSkia()
+            this.blendMode = paintBlend(blendMode)
         }
         canvas.drawPath(sk, paint)
     }
@@ -113,7 +115,7 @@ public class SkiaCanvas(private val canvas: SkCanvas) : KiteCanvas {
             this.mode = PaintMode.STROKE
             this.strokeWidth = pen.width.toFloat()
             this.isAntiAlias = true
-            this.blendMode = blendMode.toSkia()
+            this.blendMode = paintBlend(blendMode)
             this.strokeCap = when (lineCap) {
                 1 -> org.jetbrains.skia.PaintStrokeCap.ROUND
                 2 -> org.jetbrains.skia.PaintStrokeCap.SQUARE
@@ -175,7 +177,7 @@ public class SkiaCanvas(private val canvas: SkCanvas) : KiteCanvas {
             this.color = argb
             mode = PaintMode.FILL
             isAntiAlias = true
-            this.blendMode = blendMode.toSkia()
+            this.blendMode = paintBlend(blendMode)
         }
         var penX = 0.0
         for (glyph in glyphs) {
@@ -214,7 +216,7 @@ public class SkiaCanvas(private val canvas: SkCanvas) : KiteCanvas {
             this.color = argb
             mode = PaintMode.FILL
             isAntiAlias = true
-            this.blendMode = blendMode.toSkia()
+            this.blendMode = paintBlend(blendMode)
         }
         // A null typeface would draw nothing at all, silently, so skip the run
         // instead and leave the warning trail a blank page never gives.
@@ -409,7 +411,7 @@ public class SkiaCanvas(private val canvas: SkCanvas) : KiteCanvas {
             this.shader = shader
             this.mode = PaintMode.FILL
             this.isAntiAlias = true
-            this.blendMode = blendMode.toSkia()
+            this.blendMode = paintBlend(blendMode)
         }
         if (clipPath != null) {
             val sk = toSkPath(clipPath, ctm).apply { fillMode = PathFillMode.WINDING }
@@ -468,7 +470,7 @@ public class SkiaCanvas(private val canvas: SkCanvas) : KiteCanvas {
         // translate(0,-1)+positive-Y scale both mis-placed and flipped it.
         val paint = Paint().apply {
             this.alpha = alpha.toFloat().coerceIn(0f, 1f).let { (it * 255).toInt() }
-            this.blendMode = blendMode.toSkia()
+            this.blendMode = paintBlend(blendMode)
         }
         val mode = when {
             // An encoded image is not averaged above, so Skia's mipmaps average it.
@@ -527,29 +529,51 @@ public class SkiaCanvas(private val canvas: SkCanvas) : KiteCanvas {
         canvas.restore()
     }
 
+    /**
+     * A non-isolated group at full alpha in Normal paints straight onto its backdrop, so its
+     * blend modes see what lies under it (ISO 32000-1, 11.4.5, #125). Any other group paints
+     * into a layer. A non-isolated group's layer starts as a copy of the backdrop, and at the
+     * end mixes with it by [alpha], which is exact over an opaque backdrop. In a knockout
+     * group (11.4.6) each paint replaces what lies under it inside its shape.
+     */
     override fun beginTransparencyGroup(
         bbox: KiteRectangle, ctm: KiteMatrix,
         isolated: Boolean, knockout: Boolean,
         alpha: Double, blendMode: KiteBlendMode,
     ) {
-        // A non-isolated group at full alpha in Normal paints straight onto its backdrop, so its blend
-        // modes see what lies under it. A layer would isolate it (ISO 32000-1, 11.4.5, #125).
-        val layered = isolated || alpha < 1.0 || blendMode != KiteBlendMode.Normal
-        groupLayers.addLast(layered)
+        // A group nested in a knockout group gets a layer, so its own paints do not knock each other out.
+        val nested = knockingOut
+        val layered = isolated || knockout || nested || alpha < 1.0 || blendMode != KiteBlendMode.Normal
+        groups.addLast(Group(layered, knockout))
         if (!layered) return
         val paint = Paint().apply {
             this.alpha = (alpha.coerceIn(0.0, 1.0) * 255).toInt()
             this.blendMode = blendMode.toSkia()
         }
-        canvas.saveLayer(null, paint)
+        if (!isolated && !knockout && !nested && blendMode == KiteBlendMode.Normal) {
+            canvas.saveLayer(SkCanvas.SaveLayerRec(null, paint, null, null, SkCanvas.SaveLayerFlags(SkCanvas.SaveLayerFlagsSet.InitWithPrevious)))
+        } else {
+            canvas.saveLayer(null, paint)
+        }
         openLayers++
     }
 
-    /** For each open group, whether it opened a layer. */
-    private val groupLayers = ArrayDeque<Boolean>()
+    /** An open group: whether it opened a layer, and whether its paints knock out. */
+    private class Group(val layered: Boolean, val knockout: Boolean)
+
+    private val groups = ArrayDeque<Group>()
+
+    /**
+     * True while the paints go straight to the layer of a knockout group. Against the
+     * group's transparent backdrop a paint in any blend mode is its own colour, so it
+     * replaces what lies under it, and the anti-aliased edge mixes by coverage (#125).
+     */
+    private val knockingOut: Boolean get() = groups.lastOrNull()?.knockout == true
+
+    private fun paintBlend(mode: KiteBlendMode): SkiaBlendMode = if (knockingOut) SkiaBlendMode.SRC else mode.toSkia()
 
     override fun endTransparencyGroup() {
-        if (groupLayers.removeLastOrNull() != true) return
+        if (groups.removeLastOrNull()?.layered != true) return
         if (openLayers > 0) {
             canvas.restore()
             openLayers--
@@ -576,6 +600,8 @@ public class SkiaCanvas(private val canvas: SkCanvas) : KiteCanvas {
         // group on top with DstIn so the mask's alpha clips the content.
         canvas.saveLayer(null, Paint())
         openLayers++
+        // The content and the mask composite as usual, also inside a knockout group.
+        groups.addLast(Group(layered = false, knockout = false))
         try {
             render()
 
@@ -612,6 +638,7 @@ public class SkiaCanvas(private val canvas: SkCanvas) : KiteCanvas {
                 openLayers--
             }
         } finally {
+            groups.removeLastOrNull()
             canvas.restore()
             openLayers--
         }

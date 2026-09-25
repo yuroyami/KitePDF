@@ -103,6 +103,7 @@ public class ComposeCanvas(
     override fun beginPage(widthPt: Double, heightPt: Double, deviceCtm: KiteMatrix) {
         clipStack.clear()
         openGroups = 0
+        groups.clear()
     }
 
     override fun endPage() {
@@ -113,6 +114,7 @@ public class ComposeCanvas(
             openGroups--
         }
         clipStack.clear()
+        groups.clear()
     }
 
     override fun fillPath(
@@ -127,7 +129,7 @@ public class ComposeCanvas(
                 path = composePath,
                 color = color.toCompose(),
                 alpha = alpha.toFloat().coerceIn(0f, 1f),
-                blendMode = blendMode.toCompose(),
+                blendMode = paintBlend(blendMode),
             )
         }
     }
@@ -167,7 +169,7 @@ public class ComposeCanvas(
                         miter = miterLimit.toFloat().coerceAtLeast(1f),
                         pathEffect = dash,
                     ),
-                    blendMode = blendMode.toCompose(),
+                    blendMode = paintBlend(blendMode),
                 )
             }
             // An elliptical pen strokes in user space under the matrix.
@@ -209,7 +211,7 @@ public class ComposeCanvas(
         val unitScale = fontSize / unitsPerEm
         val advanceScale = fontSize / 1000.0 // PDF glyph widths are 1/1000 em, NOT font units
         val color = color.toCompose()
-        val composeBlend = blendMode.toCompose()
+        val composeBlend = paintBlend(blendMode)
         val a = alpha.toFloat().coerceIn(0f, 1f)
         var penX = 0.0
         for (glyph in glyphs) {
@@ -300,7 +302,7 @@ public class ComposeCanvas(
                         translate(penX.toFloat(), -layout.firstBaseline)
                         if (metricScale != 1f) scale(scaleX = metricScale, scaleY = 1f, pivot = Offset.Zero)
                     }) {
-                        drawText(textLayoutResult = layout, blendMode = blendMode.toCompose())
+                        drawText(textLayoutResult = layout, blendMode = paintBlend(blendMode))
                     }
                 }
                 // renderedSize already carries sy, so the text-space adjustment needs it too.
@@ -373,7 +375,7 @@ public class ComposeCanvas(
             if (bitmap != null) {
                 drawBitmap(
                     bitmap, device, alpha.toFloat().coerceIn(0f, 1f),
-                    if (sampling.smooth) FilterQuality.Low else FilterQuality.None, blendMode.toCompose(),
+                    if (sampling.smooth) FilterQuality.Low else FilterQuality.None, paintBlend(blendMode),
                 )
             } else {
                 drawPlaceholder(ctm)
@@ -485,7 +487,7 @@ public class ComposeCanvas(
             close()
         }.build()
         withActiveClips {
-            val composeBlend = blendMode.toCompose()
+            val composeBlend = paintBlend(blendMode)
             val a = alpha.toFloat().coerceIn(0f, 1f)
             drawScope.withTransform({ transform(ctm.toComposeMatrix()) }) {
                 val cp = toComposePath(region, KiteMatrix.IDENTITY).apply { fillType = PathFillType.NonZero }
@@ -525,6 +527,8 @@ public class ComposeCanvas(
         // Outer layer: holds the masked content.
         val outerPaint = Paint()
         composeCanvas.saveLayer(infiniteRect(), outerPaint)
+        // The content and the mask composite as usual, also inside a knockout group.
+        groups.addLast(Group(layered = false, knockout = false))
         try {
             render()
             // Inner layer with DstIn: subsequent draws will multiply by the
@@ -575,6 +579,7 @@ public class ComposeCanvas(
                 composeCanvas.restore()
             }
         } finally {
+            groups.removeLastOrNull()
             composeCanvas.restore()
         }
     }
@@ -637,16 +642,23 @@ public class ComposeCanvas(
      * with a Paint that carries the requested alpha + blend mode. Subsequent
      * draws accumulate into the offscreen layer; matching [endTransparencyGroup]
      * calls `restore`, which composites the layer onto the parent.
+     *
+     * A non-isolated group at full alpha in Normal paints straight onto its
+     * backdrop, so its blend modes see what lies under it (ISO 32000-1, 11.4.5,
+     * #125). A non-isolated group's layer starts as a copy of the backdrop where
+     * the platform can copy it, which is exact over an opaque backdrop. On
+     * Android it starts transparent, which is exact when no paint inside blends.
+     * In a knockout group (11.4.6) each paint replaces what lies under it.
      */
     override fun beginTransparencyGroup(
         bbox: KiteRectangle, ctm: KiteMatrix,
         isolated: Boolean, knockout: Boolean,
         alpha: Double, blendMode: KiteBlendMode,
     ) {
-        // A non-isolated group at full alpha in Normal paints straight onto its backdrop, so its blend
-        // modes see what lies under it. A layer would isolate it (ISO 32000-1, 11.4.5, #125).
-        val layered = isolated || alpha < 1.0 || blendMode != KiteBlendMode.Normal
-        groupLayers.addLast(layered)
+        // A group nested in a knockout group gets a layer, so its own paints do not knock each other out.
+        val nested = knockingOut
+        val layered = isolated || knockout || nested || alpha < 1.0 || blendMode != KiteBlendMode.Normal
+        groups.addLast(Group(layered, knockout))
         if (!layered) return
         // Compute the layer's pixel bounds in device space.
         val x0 = ctm.transformX(bbox.left, bbox.bottom)
@@ -668,15 +680,28 @@ public class ComposeCanvas(
             this.alpha = alpha.toFloat().coerceIn(0f, 1f)
             this.blendMode = blendMode.toCompose()
         }
-        drawScope.drawContext.canvas.saveLayer(rect, paint)
+        val canvas = drawScope.drawContext.canvas
+        val overBackdrop = !isolated && !knockout && !nested && blendMode == KiteBlendMode.Normal
+        if (!overBackdrop || !saveLayerOverBackdrop(canvas, rect, paint)) canvas.saveLayer(rect, paint)
         openGroups++
     }
 
-    /** For each open group, whether it opened a layer. */
-    private val groupLayers = ArrayDeque<Boolean>()
+    /** An open group: whether it opened a layer, and whether its paints knock out. */
+    private class Group(val layered: Boolean, val knockout: Boolean)
+
+    private val groups = ArrayDeque<Group>()
+
+    /**
+     * True while the paints go straight to the layer of a knockout group. Against the
+     * group's transparent backdrop a paint in any blend mode is its own colour, so it
+     * replaces what lies under it, and the anti-aliased edge mixes by coverage (#125).
+     */
+    private val knockingOut: Boolean get() = groups.lastOrNull()?.knockout == true
+
+    private fun paintBlend(mode: KiteBlendMode): ComposeBlendMode = if (knockingOut) ComposeBlendMode.Src else mode.toCompose()
 
     override fun endTransparencyGroup() {
-        if (groupLayers.removeLastOrNull() != true) return
+        if (groups.removeLastOrNull()?.layered != true) return
         if (openGroups <= 0) return
         drawScope.drawContext.canvas.restore()
         openGroups--
