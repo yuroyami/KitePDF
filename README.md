@@ -50,13 +50,8 @@ docs use `PdfDocument`: it also carries the password overload, `openOrNull` and
 
 ## Install
 
-Eleven artifacts are published, all at `0.10.0`. Add one document artifact. Add one
+Twelve artifacts are published, all at `0.11.0`. Add one document artifact. Add one
 renderer only when you draw pages.
-
-The source tree also includes the new `kitepdf-xps` handler for XPS and
-OpenXPS, re-exported by the umbrella artifact. It is unreleased and is not
-part of Maven Central version `0.10.0`; use a local project dependency until
-the next release. See [XPS support](docs/xps.md) for usage and supported markup.
 
 | Artifact | Add it when |
 | --- | --- |
@@ -65,6 +60,7 @@ the next release. See [XPS support](docs/xps.md) for usage and supported markup.
 | `io.github.yuroyami:kitepdf-epub` | You want EPUB only. |
 | `io.github.yuroyami:kitepdf-cbz` | You want CBZ comic archives only. |
 | `io.github.yuroyami:kitepdf-svg` | You want SVG only: a standalone `.svg` as a one-page document, or the renderer that draws vector art inside another format. |
+| `io.github.yuroyami:kitepdf-xps` | You want XPS and OpenXPS only. New in `0.11.0`. See [XPS support](docs/xps.md). |
 | `io.github.yuroyami:kitepdf-javascript` | You want the JavaScript inside PDFs to run: document-level scripts and JavaScript actions, on the KiteJS engine. New in `0.10.0`. |
 | `io.github.yuroyami:kitepdf-core` | Never add it yourself. It holds geometry, `KiteCanvas`, the font engine, the stream filters and the hyphenation data, and it arrives with any of the handler artifacts above. |
 | `io.github.yuroyami:kitepdf-compose-viewer` | You draw with Compose Multiplatform. It gives you `KiteDocView` (one composable for PDF and EPUB alike) and the viewer state. |
@@ -76,7 +72,7 @@ the next release. See [XPS support](docs/xps.md) for usage and supported markup.
 kotlin {
     sourceSets {
         commonMain.dependencies {
-            implementation("io.github.yuroyami:kitepdf:0.10.0")
+            implementation("io.github.yuroyami:kitepdf:0.11.0")
         }
     }
 }
@@ -99,8 +95,8 @@ build fails with unresolved references to `PdfDocument` and `PdfPage`. Declare
 both lines:
 
 ```kotlin
-implementation("io.github.yuroyami:kitepdf:0.10.0")                   // or kitepdf-pdf
-implementation("io.github.yuroyami:kitepdf-skia-renderer:0.10.0")     // exactly one renderer
+implementation("io.github.yuroyami:kitepdf:0.11.0")                   // or kitepdf-pdf
+implementation("io.github.yuroyami:kitepdf-skia-renderer:0.11.0")     // exactly one renderer
 ```
 
 The three renderers are alternative backends for the same `KiteCanvas` interface.

@@ -35,12 +35,12 @@ when (KiteDoc.formatOf(bytes)) {
     KiteDocFormat.Epub -> /* ... */
     KiteDocFormat.Cbz  -> /* a comic archive */
     KiteDocFormat.Svg  -> /* one vector page */
-    KiteDocFormat.Xps  -> /* XPS or OpenXPS, unreleased */
+    KiteDocFormat.Xps  -> /* XPS or OpenXPS */
     null               -> /* none of them */
 }
 ```
 
-`formatOf` checks PDF, EPUB and SVG headers and ZIP entries. XPS detection also reads the package relationships and fixed document sequence, before the CBZ image-entry fallback. XPS support is unreleased; see [XPS and OpenXPS](xps.md).
+`formatOf` checks PDF, EPUB and SVG headers and ZIP entries. XPS detection also reads the package relationships and fixed document sequence, before the CBZ image-entry fallback. See [XPS and OpenXPS](xps.md).
 
 | Format | What it recognises |
 | --- | --- |
@@ -107,7 +107,7 @@ Networking lives in a separate artifact. The engine depends on `kotlin-stdlib` a
 
 ```kotlin
 dependencies {
-    implementation("io.github.yuroyami:kitepdf-net:0.10.0")
+    implementation("io.github.yuroyami:kitepdf-net:0.11.0")
     implementation("io.ktor:ktor-client-cio:3.5.2")   // or OkHttp, Darwin, Js
 }
 ```

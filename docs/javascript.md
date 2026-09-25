@@ -7,7 +7,7 @@ and runs none of them. The `kitepdf-javascript` artifact runs them, on
 
 ```kotlin
 commonMain.dependencies {
-    implementation("io.github.yuroyami:kitepdf-javascript:0.10.0")
+    implementation("io.github.yuroyami:kitepdf-javascript:0.11.0")
 }
 ```
 
