@@ -16,14 +16,14 @@ internal object FontFile3 {
     }
 
     /**
-     * The CFF program in [bytes]: the bytes themselves, or the `CFF ` table of an OpenType
-     * font, whose units per em default to its `head` value. Null when an OpenType font has
-     * no `CFF ` table or the program does not parse.
+     * The CFF program in [bytes]: the bytes themselves, or the `CFF ` or `CFF2` table of an
+     * OpenType font, whose units per em default to its `head` value. Null when an OpenType
+     * font has neither table or the program does not parse.
      */
     fun cff(bytes: ByteArray): CffFont? = runCatching {
         if (!isSfnt(bytes)) return@runCatching CffFont.parse(bytes)
         val sfnt = TrueTypeFont.parse(bytes)
-        sfnt.rawTable("CFF ")?.let { CffFont.parse(it, sfnt.unitsPerEm) }
+        (sfnt.rawTable("CFF ") ?: sfnt.rawTable("CFF2"))?.let { CffFont.parse(it, sfnt.unitsPerEm) }
     }.getOrNull()
 
     /** The font in [bytes] when they hold an OpenType font with TrueType (`glyf`) outlines, else null. */

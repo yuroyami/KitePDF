@@ -57,6 +57,12 @@ public class CffFont private constructor(
     private val charsetCids: IntArray = IntArray(0),
     /** The glyph of each CID in [charsetCids]: the lowest one when two glyphs share a CID, as in FreeType. */
     private val charsetGids: IntArray = IntArray(0),
+    /** True for a CFF2 program (OpenType 1.8), whose charstrings run at the default instance (#199). */
+    internal val isCff2: Boolean = false,
+    /** For CFF2: the number of regions of each item variation data, which `blend` reads. */
+    private val regionCounts: IntArray = IntArray(0),
+    /** For CFF2: the `vsindex` of each FontDict's Private DICT, the default for its charstrings. */
+    private val fdVsindex: IntArray = IntArray(0),
 ) {
 
     /** The bits of a Private DICT the subsetter re-emits (hints are dropped). */
@@ -91,7 +97,12 @@ public class CffFont private constructor(
             val fdIndex = if (fdSelect.isNotEmpty()) fdSelect[glyphId] else 0
             val locals = localSubrsPerFd.getOrNull(fdIndex) ?: emptyList()
             runCatching {
-                CharstringInterpreter(cs, locals, globalSubrs, defaultWidthX, nominalWidthX).interpret()
+                CharstringInterpreter(
+                    cs, locals, globalSubrs, defaultWidthX, nominalWidthX,
+                    cff2 = isCff2,
+                    regionCount = { regionCounts.getOrElse(it) { 0 } },
+                    vsindex = fdVsindex.getOrElse(fdIndex) { 0 },
+                ).interpret()
             }.getOrNull()
         }
         return glyphLock.withLock {
@@ -188,7 +199,7 @@ public class CffFont private constructor(
             reader.u8()  // minor
             val hdrSize = reader.u8()
             reader.u8()  // offSize
-            if (major == 2) throw PdfFormatException("CFF: CFF2 (OpenType CFF2) is not supported")
+            if (major == 2) return parseCff2(reader, unitsPerEm)
             if (major != 1) throw PdfFormatException("CFF: unsupported major version $major")
             reader.seek(hdrSize)
 
@@ -297,10 +308,108 @@ public class CffFont private constructor(
             )
         }
 
+        /**
+         * A CFF2 program, the `CFF2` table of an OpenType 1.8 font (#199). Its Top DICT sits
+         * right after the header instead of in an INDEX, an INDEX counts in 32 bits, there
+         * is no name, string or charset data, and every glyph has a FontDict. The
+         * charstrings run at the default instance, so a `blend` keeps its default values
+         * and needs only the region count of each item variation data.
+         */
+        private fun parseCff2(reader: TtfReader, unitsPerEm: Int): CffFont {
+            reader.seek(2)
+            val hdrSize = reader.u8()
+            val topDictLength = reader.u16()
+            val topDict = parseDict(reader.slice(hdrSize, topDictLength))
+            reader.seek(hdrSize + topDictLength)
+            val globalSubrs = readIndex(reader, cff2 = true)
+
+            val csOffset = (topDict[17]?.firstOrNull() as? Double)?.toInt()
+                ?: throw PdfFormatException("CFF2: missing /CharStrings offset")
+            reader.seek(csOffset)
+            val charStrings = readIndex(reader, cff2 = true)
+            val numGlyphs = charStrings.size
+
+            val fdArrayOffset = (topDict[0x0C24]?.firstOrNull() as? Double)?.toInt()
+                ?: throw PdfFormatException("CFF2: missing /FDArray offset")
+            reader.seek(fdArrayOffset)
+            val fdArray = readIndex(reader, cff2 = true)
+            val locals = ArrayList<List<ByteArray>>(fdArray.size)
+            val vsindexes = IntArray(fdArray.size)
+            val fdMatrices = ArrayList<KiteMatrix?>(fdArray.size)
+            for ((i, entry) in fdArray.withIndex()) {
+                val dict = parseDict(entry)
+                val priv = dict[18]
+                var subrs: List<ByteArray> = emptyList()
+                if (priv != null && priv.size >= 2) {
+                    val size = (priv[0] as Double).toInt()
+                    val offset = (priv[1] as Double).toInt()
+                    val privDict = parseDict(reader.slice(offset, size))
+                    vsindexes[i] = (privDict[22]?.firstOrNull() as? Double)?.toInt() ?: 0
+                    val subrsOffset = (privDict[19]?.firstOrNull() as? Double)?.toInt() ?: 0
+                    if (subrsOffset > 0) {
+                        reader.seek(offset + subrsOffset)
+                        subrs = readIndex(reader, cff2 = true)
+                    }
+                }
+                locals += subrs
+                fdMatrices += fontMatrixOf(dict[0x0C07]?.filterIsInstance<Double>())
+            }
+            val fdSelectOffset = (topDict[0x0C25]?.firstOrNull() as? Double)?.toInt() ?: 0
+            val fdSelect = if (fdSelectOffset > 0 && fdArray.size > 1) readFdSelect(reader, fdSelectOffset, numGlyphs) else IntArray(numGlyphs)
+            val vstoreOffset = (topDict[24]?.firstOrNull() as? Double)?.toInt() ?: 0
+            val regionCounts = if (vstoreOffset > 0) readRegionCounts(reader, vstoreOffset) else IntArray(0)
+
+            val explicitTop = fontMatrixOf(topDict[0x0C07]?.filterIsInstance<Double>())
+            val topMatrix = explicitTop ?: if (unitsPerEm == 1000 || unitsPerEm <= 0) null else {
+                KiteMatrix(1.0 / unitsPerEm, 0.0, 0.0, 1.0 / unitsPerEm, 0.0, 0.0)
+            }
+            val fontMatrices = fdMatrices.map { fd -> if (fd == null) topMatrix else explicitTop?.concat(fd) ?: fd }
+            val glyphNames = Array<String?>(numGlyphs) { null }
+            if (numGlyphs > 0) glyphNames[0] = ".notdef"
+            return CffFont(
+                reader = reader,
+                name = "CFF2",
+                charStrings = charStrings,
+                globalSubrs = globalSubrs,
+                localSubrsPerFd = locals,
+                fdSelect = fdSelect,
+                glyphNames = glyphNames,
+                nameToGid = mapOf(".notdef" to 0),
+                defaultWidthX = 0.0,
+                nominalWidthX = 0.0,
+                isCidKeyed = false,
+                fdPrivates = List(fdArray.size) { FdPrivate(0.0, 0.0) },
+                glyphSpaceMatrices = fontMatrices.map(::glyphSpaceMatrix),
+                isCff2 = true,
+                regionCounts = regionCounts,
+                fdVsindex = vsindexes,
+            )
+        }
+
+        /**
+         * The region count of each item variation data in the CFF2 VariationStore at [offset]:
+         * a 16-bit length, then an ItemVariationStore whose offsets count from its own start.
+         */
+        private fun readRegionCounts(reader: TtfReader, offset: Int): IntArray {
+            val store = offset + 2
+            reader.seek(store)
+            if (reader.u16() != 1) return IntArray(0)
+            reader.skip(4) // variationRegionListOffset
+            val count = reader.u16()
+            val offsets = IntArray(count) { reader.u32().toInt() }
+            return IntArray(count) { i ->
+                reader.seek(store + offsets[i])
+                reader.skip(4) // itemCount, wordDeltaCount
+                reader.u16()
+            }
+        }
+
         /* ─── INDEX parser (Section 5 of CFF spec) ──────────────────────── */
 
-        private fun readIndex(reader: TtfReader): List<ByteArray> {
-            val count = reader.u16()
+        /** An INDEX: its count is 16 bits in CFF and 32 bits in CFF2. */
+        private fun readIndex(reader: TtfReader, cff2: Boolean = false): List<ByteArray> {
+            val count = if (cff2) reader.u32().toInt() else reader.u16()
+            if (count < 0) throw PdfFormatException("CFF2: INDEX count out of range")
             if (count == 0) return emptyList()
             val offSize = reader.u8()
             val offsets = IntArray(count + 1) { readOffset(reader, offSize) }
@@ -341,7 +450,8 @@ public class CffFont private constructor(
                         operands.clear()
                         i += 2
                     }
-                    b <= 21 -> {
+                    // 22 to 27 are reserved in CFF, and CFF2 uses 22 (vsindex), 23 (blend) and 24 (vstore).
+                    b <= 27 -> {
                         result[b] = operands.toList()
                         operands.clear()
                         i++
@@ -508,6 +618,23 @@ public class CffFont private constructor(
             val format = reader.u8()
             return when (format) {
                 0 -> IntArray(numGlyphs) { reader.u8() }
+                4 -> {
+                    // CFF2: {first: u32, fd: u16} ranges and a u32 sentinel.
+                    val nRanges = reader.u32().toInt()
+                    val firsts = IntArray(nRanges)
+                    val fds = IntArray(nRanges)
+                    for (i in 0 until nRanges) {
+                        firsts[i] = reader.u32().toInt()
+                        fds[i] = reader.u16()
+                    }
+                    val sentinel = reader.u32().toInt()
+                    val out = IntArray(numGlyphs)
+                    for (i in 0 until nRanges) {
+                        val end = if (i + 1 < nRanges) firsts[i + 1] else sentinel
+                        for (g in firsts[i] until minOf(end, numGlyphs)) if (g >= 0) out[g] = fds[i]
+                    }
+                    out
+                }
                 3 -> {
                     // Format 3 ranges are interleaved {first: u16, fd: u8} pairs,
                     // then a sentinel u16 (gid past the last range). Reading all

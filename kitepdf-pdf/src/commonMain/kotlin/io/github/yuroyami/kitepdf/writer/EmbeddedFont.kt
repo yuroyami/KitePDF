@@ -51,17 +51,30 @@ public class EmbeddedFont private constructor(
          * `"KiteFont"`. When [subset] (default) only the glyphs the document uses
          * are embedded; pass false to embed the whole program.
          *
-         * @throws UnsupportedOperationException for a TrueType Collection (`.ttc`).
+         * A TrueType collection (`.ttc`) embeds its first face; the overload with a
+         * `faceIndex` chooses another.
          */
-        public fun load(fontBytes: ByteArray, name: String? = null, subset: Boolean = true): EmbeddedFont {
+        public fun load(fontBytes: ByteArray, name: String? = null, subset: Boolean = true): EmbeddedFont =
+            load(fontBytes, name, subset, faceIndex = 0)
+
+        /**
+         * [load] for face [faceIndex] of a TrueType collection (`.ttc`), whose faces
+         * [TrueTypeFont.faceCount] counts. The face is embedded as a font of its own,
+         * since a PDF font program holds one font (#199).
+         */
+        public fun load(fontBytes: ByteArray, name: String? = null, subset: Boolean = true, faceIndex: Int): EmbeddedFont {
             require(fontBytes.size >= 12) { "Not a font file: only ${fontBytes.size} bytes" }
-            if (scaler(fontBytes) == SCALER_TTCF) throw UnsupportedOperationException(
-                "TrueType Collections (.ttc) are not supported; extract a single .ttf/.otf first",
-            )
-            val ttf = TrueTypeFont.parse(fontBytes)
+            val collection = scaler(fontBytes) == SCALER_TTCF
+            require(collection || faceIndex == 0) { "A single font has only face 0, not $faceIndex" }
+            val face = if (collection) TrueTypeFont.extractFace(fontBytes, faceIndex) else fontBytes
+            val ttf = TrueTypeFont.parse(face)
+            // A CFF2 program has no subsetter yet, and a PDF font program holds CFF or TrueType outlines.
+            if (ttf.rawTable("CFF2") != null && ttf.rawTable("CFF ") == null && ttf.rawTable("glyf") == null) {
+                throw UnsupportedOperationException("CFF2 fonts cannot be embedded yet; use a font with CFF or TrueType outlines")
+            }
             val cff = ttf.rawTable("CFF ")?.let { CffFont.parse(it) }
             val resolved = (name ?: postScriptNameOf(ttf))?.let(::sanitizeName)?.takeIf { it.isNotEmpty() }
-            return EmbeddedFont(fontBytes, ttf, cff, resolved ?: "KiteFont", subset)
+            return EmbeddedFont(face, ttf, cff, resolved ?: "KiteFont", subset)
         }
 
         private fun scaler(b: ByteArray): Long =

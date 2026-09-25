@@ -390,6 +390,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   profile and MuPDF's own CMYK profile, twelve swatches match mutool within one
   level. D50 white now converts to exact sRGB white, which it missed by 0.04 percent
   in blue (#200).
+- TrueType collections (`.ttc`) and CFF2 fonts are read. A collection gives its
+  first face, or any face through `TrueTypeFont.parse(bytes, faceIndex)`, and
+  `TrueTypeFont.faceCount` counts them. A CFF2 program, the outlines of an OpenType
+  variable font, draws at its default instance. `EmbeddedFont.load` embeds a face
+  of a collection as a font of its own, chosen with `faceIndex`. Before, a
+  collection or a CFF2 font fell back to a substitute face, and the writer refused
+  a collection (#199).
 
 ## [0.10.0] - 2026-09-13
 

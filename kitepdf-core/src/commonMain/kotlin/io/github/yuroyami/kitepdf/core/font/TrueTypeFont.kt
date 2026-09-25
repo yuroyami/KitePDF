@@ -409,9 +409,16 @@ public class TrueTypeFont private constructor(
 
         private val EMPTY = ByteArray(0)
 
-        /** Parse a font from a raw `.ttf` / `.otf` byte buffer. */
-        public fun parse(bytes: ByteArray): TrueTypeFont {
+        /** Parse a font from a raw `.ttf` / `.otf` byte buffer; the first face of a `.ttc` collection. */
+        public fun parse(bytes: ByteArray): TrueTypeFont = parse(bytes, faceIndex = 0)
+
+        /**
+         * Parse face [faceIndex] of [bytes]. A TrueType collection (`ttcf`) holds several
+         * faces that share tables, and a single font has only face 0 (#199).
+         */
+        public fun parse(bytes: ByteArray, faceIndex: Int): TrueTypeFont {
             val reader = TtfReader(bytes)
+            reader.seek(faceStart(reader, faceIndex))
             // ── sfnt header ───────────────────────────────────────────────
             val scalerType = reader.u32()
             if (scalerType != 0x00010000L && scalerType != 0x4F54544FL && // "OTTO"
@@ -448,6 +455,54 @@ public class TrueTypeFont private constructor(
 
             return TrueTypeFont(reader, tables, head, maxp, hhea, hmtx, cmap, locaOffsets)
         }
+
+        /** The number of faces in [bytes]: the count of a TrueType collection, else 1. */
+        public fun faceCount(bytes: ByteArray): Int {
+            if (bytes.size < 12 || !isCollection(bytes)) return 1
+            val reader = TtfReader(bytes)
+            reader.seek(8)
+            return reader.u32().coerceIn(0L, MAX_FACES.toLong()).toInt()
+        }
+
+        /**
+         * Face [faceIndex] of [bytes] as a font of its own: the tables of that face in a new
+         * sfnt, for a writer that must embed one font program. A single font comes back as it is.
+         */
+        public fun extractFace(bytes: ByteArray, faceIndex: Int): ByteArray {
+            if (!isCollection(bytes)) {
+                require(faceIndex == 0) { "a single font has only face 0" }
+                return bytes
+            }
+            val face = parse(bytes, faceIndex)
+            return SfntWriter.assemble(LinkedHashMap<String, ByteArray>().apply {
+                for (tag in face.tables.keys.sorted()) face.rawTable(tag)?.let { put(tag, it) }
+            })
+        }
+
+        private fun isCollection(bytes: ByteArray): Boolean =
+            bytes.size >= 4 && bytes[0] == 't'.code.toByte() && bytes[1] == 't'.code.toByte() &&
+                bytes[2] == 'c'.code.toByte() && bytes[3] == 'f'.code.toByte()
+
+        /**
+         * Where the table directory of face [faceIndex] starts. A collection lists one offset
+         * for each face after its header, and the table offsets inside stay absolute.
+         */
+        private fun faceStart(reader: TtfReader, faceIndex: Int): Int {
+            if (!isCollection(reader.bytes)) {
+                if (faceIndex != 0) throw TtfFormatException("a single font has only face 0, not $faceIndex")
+                return 0
+            }
+            reader.seek(8)
+            val count = reader.u32()
+            if (faceIndex < 0 || faceIndex >= count || count > MAX_FACES) {
+                throw TtfFormatException("face $faceIndex is not in a collection of $count")
+            }
+            reader.seek(12 + 4 * faceIndex)
+            return reader.u32().toInt()
+        }
+
+        /** More faces than any real collection holds; a larger count is a corrupt header. */
+        private const val MAX_FACES = 4096
 
         private fun parseHead(reader: TtfReader, table: Table): Head {
             reader.seek(table.offset)

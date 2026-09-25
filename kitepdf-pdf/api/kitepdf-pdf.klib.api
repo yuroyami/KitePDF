@@ -313,6 +313,7 @@ final class io.github.yuroyami.kitepdf.writer/EmbeddedFont { // io.github.yuroya
 
     final object Companion { // io.github.yuroyami.kitepdf.writer/EmbeddedFont.Companion|null[0]
         final fun load(kotlin/ByteArray, kotlin/String? = ..., kotlin/Boolean = ...): io.github.yuroyami.kitepdf.writer/EmbeddedFont // io.github.yuroyami.kitepdf.writer/EmbeddedFont.Companion.load|load(kotlin.ByteArray;kotlin.String?;kotlin.Boolean){}[0]
+        final fun load(kotlin/ByteArray, kotlin/String? = ..., kotlin/Boolean = ..., kotlin/Int): io.github.yuroyami.kitepdf.writer/EmbeddedFont // io.github.yuroyami.kitepdf.writer/EmbeddedFont.Companion.load|load(kotlin.ByteArray;kotlin.String?;kotlin.Boolean;kotlin.Int){}[0]
     }
 }
 

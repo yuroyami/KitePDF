@@ -709,7 +709,10 @@ public final class io/github/yuroyami/kitepdf/core/font/TrueTypeFont {
 }
 
 public final class io/github/yuroyami/kitepdf/core/font/TrueTypeFont$Companion {
+	public final fun extractFace ([BI)[B
+	public final fun faceCount ([B)I
 	public final fun parse ([B)Lio/github/yuroyami/kitepdf/core/font/TrueTypeFont;
+	public final fun parse ([BI)Lio/github/yuroyami/kitepdf/core/font/TrueTypeFont;
 }
 
 public final class io/github/yuroyami/kitepdf/core/font/TrueTypeSubsetter {

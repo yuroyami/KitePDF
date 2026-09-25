@@ -17,7 +17,7 @@ internal class XpsFont(val ttf: TrueTypeFont, private val cff: CffFont?) {
         fun parse(bytes: ByteArray, face: Int): XpsFont? {
             val sfnt = collectionFace(bytes, face) ?: return null
             val ttf = TrueTypeFont.parse(sfnt)
-            val cff = ttf.rawTable("CFF ")?.let { CffFont.parse(it) }
+            val cff = (ttf.rawTable("CFF ") ?: ttf.rawTable("CFF2"))?.let { CffFont.parse(it) }
             return XpsFont(ttf, cff)
         }
 

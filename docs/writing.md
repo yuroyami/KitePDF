@@ -180,8 +180,16 @@ val pdf = PdfBuilder()
 
 With `subset = true` (the default) only the glyphs the document actually
 draws are embedded, with the standard six-letter subset tag on `/BaseFont`;
-pass `subset = false` to embed the whole program. TrueType Collections
-(`.ttc`) are not supported; extract a single face first.
+pass `subset = false` to embed the whole program.
+
+A TrueType collection (`.ttc`) embeds its first face. Pass `faceIndex` to
+choose another; `TrueTypeFont.faceCount` tells how many a collection holds.
+The face is embedded as a font of its own. A font with CFF2 outlines cannot
+be embedded yet.
+
+```kotlin
+val mincho = EmbeddedFont.load(ttcBytes, faceIndex = 1)
+```
 
 ## Colors and graphics
 
