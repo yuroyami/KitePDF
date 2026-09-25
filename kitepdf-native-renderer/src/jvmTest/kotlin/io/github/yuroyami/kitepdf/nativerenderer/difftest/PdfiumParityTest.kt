@@ -1,0 +1,78 @@
+package io.github.yuroyami.kitepdf.nativerenderer.difftest
+
+import io.github.yuroyami.kitepdf.difftest.MuPdfOracle
+import io.github.yuroyami.kitepdf.difftest.PdfiumOracle
+import java.io.File
+import kotlin.test.Test
+import kotlin.test.assertTrue
+import org.junit.Assume.assumeTrue
+
+/**
+ * PDFium, the PDF engine of Chrome, must do nothing better than KitePDF. [ParityHarness]
+ * defines "better": KitePDF fails where PDFium succeeds, or KitePDF differs from MuPDF and
+ * PDFium where the two agree, or PDFium extracts text that KitePDF misses. A difference
+ * that only one reference shows is PDFium or MuPDF going its own way, and never fails.
+ *
+ * Needs both mutool and PDFium (see [PdfiumOracle]), and skips without either. Writes
+ * `build/difftest/parity.md`, with the three renders and a map of each page.
+ *
+ * Run:
+ *   ./gradlew :kitepdf-native-renderer:jvmTest --tests "*PdfiumParityTest*"
+ */
+class PdfiumParityTest {
+
+    @Test
+    fun pdfium_does_nothing_better_than_kitepdf() {
+        assumeTrue("PDFium not found, skipping: ${PdfiumOracle.unavailableReason}", PdfiumOracle.available)
+        assumeTrue("mutool not found, skipping.", MuPdfOracle.available)
+        val outDir = File(System.getProperty("kitepdf.difftest.out") ?: "build/difftest").apply { mkdirs() }
+        val dpi = DifferentialTest.parseDpi(System.getProperty("kitepdf.diff.dpi"))
+
+        val report = ParityHarness.run(ParityHarness.documents(outDir), dpi, outDir, KNOWN_GAPS)
+        report.writeMarkdown()
+        println(report.summary())
+
+        assertTrue(
+            report.unexplained.isEmpty(),
+            "PDFium does better than KitePDF, and no open issue records it:\n" +
+                report.unexplained.joinToString("\n") { "  ${it.key}: ${it.findings.joinToString("; ")}" },
+        )
+        assertTrue(
+            report.stale.isEmpty(),
+            "These known gaps no longer show PDFium doing better. Close their issues and remove them from KNOWN_GAPS:\n" +
+                report.stale.joinToString("\n") { "  $it (#${KNOWN_GAPS[it]})" },
+        )
+    }
+
+    companion object {
+        /**
+         * Pages where PDFium does better today, each with the open issue that records it.
+         * The goal is an empty map. Drop-in corpus pages run only where the corpus exists.
+         */
+        val KNOWN_GAPS: Map<String, Int> = mapOf(
+            // Standard 14 fonts that the file does not embed render in a system font.
+            "syn-text p0" to 298,
+            "syn-multipage p1" to 298,
+            "gen-standard14-fonts p0" to 298,
+            "gen-text-sizes p0" to 298,
+            "gen-nested-gstate p0" to 298,
+            "gen-paragraph p0" to 298,
+            "gen-multipage-mixed p0" to 298,
+            "gen-multipage-mixed p1" to 298,
+            "gen-multipage-mixed p2" to 298,
+            "doom p0" to 298,
+            // DeviceCMYK converts to other colours than MuPDF and PDFium.
+            "syn-cmyk p0" to 299,
+            "gen-cmyk-swatches p0" to 299,
+            // The edges of an unrotated image cover other pixels than in MuPDF.
+            "fixture-image-enlarged-hard-edges p0" to 300,
+            "fixture-image-interpolate p0" to 300,
+            "fixture-image-deep-mask-no-stencil-flag p0" to 300,
+            // A scaled image resamples to other pixels where MuPDF and PDFium agree.
+            "testPDF_JBIG2 p0" to 301,
+            "fixture-image-thin-lines-shrunk p0" to 301,
+            // A JPEG 2000 image decodes a fraction of a level off from OpenJPEG.
+            "testPDF_JPX p0" to 302,
+        )
+    }
+}

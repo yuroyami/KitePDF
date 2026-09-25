@@ -136,6 +136,19 @@ tasks.withType<Test>().configureEach {
     inputs.files(mutoolCandidates)
         .withPropertyName("mutoolCandidates")
         .withPathSensitivity(PathSensitivity.NONE)
+
+    // The PDFium of the parity check: the Python that PdfiumOracle picks, and the
+    // pypdfium2 version installed next to it.
+    val pdfiumPython = kitePdfProperties["kitepdf.pdfium.python"]
+        ?: System.getenv("PDFIUM_PYTHON")?.takeIf(String::isNotBlank)
+    inputs.property("pdfiumPython", pdfiumPython ?: "")
+    val pdfiumVenvs = listOfNotNull(
+        pdfiumPython?.let { file(it).parentFile?.parentFile },
+        File(System.getProperty("user.home"), ".cache/kitepdf/pdfium-venv"),
+    )
+    inputs.files(pdfiumVenvs.map { venv -> fileTree(venv) { include("lib/**/pypdfium2-*.dist-info/METADATA") } })
+        .withPropertyName("pdfiumVersion")
+        .withPathSensitivity(PathSensitivity.RELATIVE)
 }
 
 // Writes corpus/pdf/testPDF_JPX.pdf from a .jp2 file. A tool, not a test, so
