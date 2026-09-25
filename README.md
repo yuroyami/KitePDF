@@ -341,10 +341,16 @@ are meant for your own host project.
 
 ## License
 
-Apache-2.0. One file, `Encodings.kt`, carries character encoding tables from
-[MuPDF](https://mupdf.com/) by Artifex Software and keeps its AGPL-3.0
-attribution in the file header. Standard-14 font metrics come from URW++ AFM
-files.
+Apache-2.0. KitePDF contains no third-party source code. It bundles
+third-party data, each under its own license, and [NOTICE](NOTICE) lists every
+piece with its source:
+
+- the URW base 35 fonts that draw the standard 14 fonts, under the SIL Open Font
+  License 1.1;
+- PDFium's table for DeviceCMYK, under the BSD-style license of PDFium;
+- Adobe's glyph lists and CJK CMaps, under BSD-3-Clause;
+- hyphenation patterns from the hyph-utf8 project, each under the license in its
+  file header.
 
 Part of the Kite family: [KiteCore](https://github.com/yuroyami/KiteCore),
 [KiteImage](https://github.com/yuroyami/KiteImage),
