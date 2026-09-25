@@ -1,6 +1,8 @@
 package io.github.yuroyami.kitepdf.epub
 
 import io.github.yuroyami.kitepdf.epub.css.ComputedStyle
+import io.github.yuroyami.kitepdf.epub.css.CssFloat
+import io.github.yuroyami.kitepdf.epub.css.CssPosition
 
 /** Everything to paint on one page: its document-space top plus the boxes on it. */
 internal class PageRender(
@@ -47,6 +49,7 @@ internal object Paginator {
      * onto a single [PageRender].
      */
     fun paginateFixed(root: BlockBox, pageWidth: Double, pageHeight: Double): PageRender {
+        numberPaintOrder(root)
         val lines = ArrayList<PositionedLine>()
         val images = ArrayList<ImageBox>()
         val deco = ArrayList<LayoutBox>()
@@ -63,6 +66,7 @@ internal object Paginator {
         // In vertical mode pages are sliced along the logical block axis too,
         // but the per-page budget is the physical page WIDTH (columns).
         val pageContentHeight = (if (vertical) pageWidth else pageHeight) - 2 * margin
+        numberPaintOrder(root)
         val lines = ArrayList<PositionedLine>()
         val images = ArrayList<ImageBox>()
         val deco = ArrayList<LayoutBox>()
@@ -166,6 +170,56 @@ internal object Paginator {
             // An image paints its own background and border (CSS 2.1, 14.2, #101).
             is ImageBox -> { if (decorated(box.style)) deco.add(box); images.add(box) }
         }
+    }
+
+    /**
+     * Numbers the paint of every box and line under [root] in the order of CSS 2.1, Appendix E
+     * (#172). In each stacking context: the positioned boxes with a negative `z-index`, the
+     * backgrounds and borders of the blocks in tree order, the floats, the lines and block images
+     * in tree order, the positioned boxes with `z-index` auto or 0, and those with a positive one.
+     * A float or a positioned box paints as a whole at its place in that order, and a text block
+     * always belongs to the flow of its block, whose style it shares.
+     */
+    private fun numberPaintOrder(root: LayoutBox) {
+        var rank = 0
+        fun children(b: LayoutBox): List<LayoutBox> = when (b) {
+            is BlockBox -> b.children
+            is TableBox -> b.rows
+            is TableRowBox -> b.cells
+            else -> emptyList()
+        }
+        fun group(box: LayoutBox) {
+            box.decoRank = rank++
+            val negative = ArrayList<LayoutBox>()
+            val zero = ArrayList<LayoutBox>()
+            val positive = ArrayList<LayoutBox>()
+            val blocks = ArrayList<LayoutBox>()
+            val floats = ArrayList<LayoutBox>()
+            val flow = ArrayList<Any>()
+            fun content(b: LayoutBox) {
+                if (b is TextBlockBox) flow.addAll(b.lines) else if (b is ImageBox) flow.add(b)
+            }
+            fun walk(b: LayoutBox) {
+                for (c in children(b)) {
+                    val z = c.style.zIndex ?: 0
+                    when {
+                        c is TextBlockBox -> content(c)
+                        c.style.position != CssPosition.STATIC -> (if (z < 0) negative else if (z > 0) positive else zero) += c
+                        c.style.cssFloat != CssFloat.NONE -> floats += c
+                        else -> { blocks += c; content(c); walk(c) }
+                    }
+                }
+            }
+            content(box)
+            walk(box)
+            for (c in negative.sortedBy { it.style.zIndex }) group(c)
+            for (b in blocks) b.decoRank = rank++
+            for (f in floats) group(f)
+            for (item in flow) if (item is PositionedLine) item.paintRank = rank++ else (item as ImageBox).contentRank = rank++
+            for (c in zero) group(c)
+            for (c in positive.sortedBy { it.style.zIndex }) group(c)
+        }
+        group(root)
     }
 
     private fun decorated(s: ComputedStyle): Boolean =

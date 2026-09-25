@@ -297,7 +297,9 @@ The layout engine covers what real books use:
 - **Layout**: floats with exclusion bands, tables (including
   `table-layout: fixed`), `position: absolute`/`relative`/`fixed`, inline
   images on the baseline, `::before`/`::after` generated content,
-  `text-transform`, letter/word spacing, and small-caps. Known limitation:
+  `text-transform`, letter/word spacing, and small-caps. A page paints in the
+  order of CSS 2.1, Appendix E: backgrounds and borders, then floats, then lines
+  and block images in document order, then positioned boxes by `z-index`. Known limitation:
   in `direction: rtl` text, `text-indent` shifts from the left edge rather
   than the inline-start (right) edge; lines still stay inside the content
   box.

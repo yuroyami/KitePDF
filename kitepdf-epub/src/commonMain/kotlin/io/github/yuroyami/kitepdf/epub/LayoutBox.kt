@@ -34,6 +34,9 @@ internal sealed class LayoutBox {
     /** The target of an inline `<a href>` this block was lifted out of (#214). */
     var linkHref: String? = null
 
+    /** When the background and border of this box paint, from [Paginator] (#172). */
+    var decoRank: Int = 0
+
     val bottom: Double get() = y + borderBoxHeight
 }
 
@@ -81,6 +84,8 @@ internal class ImageBox(
     val attrHeight: Double? = null,
 ) : LayoutBox() {
     var image: KiteImageData? = null
+    /** When the picture itself paints, after the background and border (#172). */
+    var contentRank: Int = 0
     /** Physical image dimensions; the border box uses the layout's logical axes. */
     var drawWidth: Double = 0.0
     var drawHeight: Double = 0.0
@@ -170,4 +175,7 @@ internal class PositionedLine(
     /** Owning box + line index, filled after layout, for the paginator's widows/orphans. */
     var owner: TextBlockBox? = null
     var ownerIndex: Int = 0
+
+    /** When this line paints, from [Paginator] (#172). */
+    var paintRank: Int = 0
 }

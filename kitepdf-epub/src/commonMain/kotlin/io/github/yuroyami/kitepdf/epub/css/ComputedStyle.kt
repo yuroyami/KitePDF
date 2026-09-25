@@ -136,6 +136,8 @@ internal data class ComputedStyle(
     val tableLayoutFixed: Boolean = false,
     /** Propagated line-through (CSS Text Decoration 3, 2.1). */
     val lineThrough: DecorationLine? = null,
+    /** `z-index` of a positioned box, null for `auto` (CSS 2.1, 9.9.1, #172). Not inherited. */
+    val zIndex: Int? = null,
 ) {
     val mono: Boolean get() = fontFamily == GenericFont.MONO
 

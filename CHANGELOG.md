@@ -516,6 +516,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Multilingual Plane, such as Adlam, Deseret and Osage, through the simple case mappings of
   Unicode 17. `capitalize` gives the first letter of a word its titlecase, as CSS asks, so
   a digraph such as ǆ becomes ǅ (#322).
+- A page paints in the order of CSS 2.1, Appendix E. Lines and block images paint in
+  document order, so text after an image paints over it where the two overlap. Positioned
+  boxes paint after the flow, in the order of their `z-index`, and a float paints after the
+  backgrounds of the flow (#172).
 - Text in an embedded font shapes through every GSUB lookup type. Contextual and
   chained contextual substitution, multiple and alternate substitution, and reverse
   chaining now apply along with single and ligature substitution. The lookups run for the script
