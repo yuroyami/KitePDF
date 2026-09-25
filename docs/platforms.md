@@ -62,9 +62,9 @@ workflow currently provides the following coverage on pushes and pull requests:
 | Apple device targets, iOS x64, tvOS and watchOS | No explicit CI compile or test job | No explicit CI compile or test job |
 | Sample applications | No CI compile or runtime job | No CI compile or runtime job |
 
-The default JVM suites exclude `RenderBenchmarkTest` and
-`IncrementalEpubSceneTest`, which require `-PslowTests`. CI does not pass that
-flag, so those timing-sensitive suites are not part of its test coverage.
+The default JVM suites exclude `RenderBenchmarkTest`, which requires
+`-PslowTests`. CI does not pass that flag, so that timing-sensitive suite is
+not part of its test coverage.
 
 An Android host test executes shared code on the JVM; it does not execute
 `android.graphics.Canvas`. A browser compilation does not exercise Canvas2D.
