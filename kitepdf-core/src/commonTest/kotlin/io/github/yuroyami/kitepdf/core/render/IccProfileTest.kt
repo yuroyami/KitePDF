@@ -7,7 +7,7 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
-/** Reading a matrix/TRC ICC profile and colour-managing through it. */
+/** Reading matrix/TRC and lookup-table ICC profiles and colour-managing through them. */
 class IccProfileTest {
 
     /** Build a profile with the tags a matrix/TRC RGB profile carries. */
@@ -37,7 +37,7 @@ class IccProfileTest {
         return assemble("RGB ", tags)
     }
 
-    private fun assemble(space: String, tags: List<Pair<String, ByteArray>>): ByteArray {
+    private fun assemble(space: String, tags: List<Pair<String, ByteArray>>, pcs: String = "XYZ ", deviceClass: String = "mntr"): ByteArray {
         val tableSize = 4 + tags.size * 12
         val header = 128
         var offset = header + tableSize
@@ -50,8 +50,9 @@ class IccProfileTest {
         }
         val out = ByteArray(header + tableSize + body.size)
         u32(out, 0, out.size)
+        deviceClass.forEachIndexed { i, c -> out[12 + i] = c.code.toByte() }
         space.forEachIndexed { i, c -> out[16 + i] = c.code.toByte() }
-        "XYZ ".forEachIndexed { i, c -> out[20 + i] = c.code.toByte() }
+        pcs.forEachIndexed { i, c -> out[20 + i] = c.code.toByte() }
         u32(out, 128, tags.size)
         entries.forEachIndexed { i, (name, off, len) ->
             val at = 132 + i * 12
@@ -123,10 +124,63 @@ class IccProfileTest {
     }
 
     @Test
-    fun a_lookup_table_profile_is_refused_so_the_caller_falls_back() {
+    fun a_lookup_table_that_is_cut_short_is_refused_so_the_caller_falls_back() {
         val a2b = ByteArray(32)
         "mft2".forEachIndexed { i, c -> a2b[i] = c.code.toByte() }
         assertNull(IccProfile.parse(assemble("RGB ", listOf("A2B0" to a2b))))
+        assertNull(IccProfile.parse(assemble("CMYK", listOf("A2B0" to a2b), pcs = "Lab ")))
+    }
+
+    /**
+     * A CMYK to Lab `lut16Type` table of two points a side in which only black ink darkens:
+     * L* runs from [paper] with no black to [ink] with full black, and a* and b* stay 0.
+     */
+    private fun blackOnlyCmyk(paper: Double, ink: Double): ByteArray {
+        val points = 16
+        val b = ByteArray(52 + 4 * 2 * 2 + points * 3 * 2 + 3 * 2 * 2)
+        "mft2".forEachIndexed { i, c -> b[i] = c.code.toByte() }
+        b[8] = 4; b[9] = 3; b[10] = 2
+        for (i in 0 until 9) s15(b, 12 + 4 * i, if (i % 4 == 0) 1.0 else 0.0)
+        fun u16(at: Int, v: Int) { b[at] = ((v ushr 8) and 0xFF).toByte(); b[at + 1] = (v and 0xFF).toByte() }
+        u16(48, 2); u16(50, 2)
+        var at = 52
+        repeat(4) { u16(at, 0); u16(at + 2, 65535); at += 4 }
+        for (node in 0 until points) {
+            // The last input, black, varies fastest.
+            val l = if (node % 2 == 1) ink else paper
+            u16(at, (l / 100.0 * 65280.0).toInt()); u16(at + 2, 0x8000); u16(at + 4, 0x8000)
+            at += 6
+        }
+        repeat(3) { u16(at, 0); u16(at + 2, 65535); at += 4 }
+        return b
+    }
+
+    @Test
+    fun a_lookup_table_cmyk_profile_converts_through_its_table() {
+        val p = IccProfile.parse(assemble("CMYK", listOf("A2B1" to blackOnlyCmyk(100.0, 20.0)), pcs = "Lab ", deviceClass = "scnr"))
+        assertNotNull(p)
+        assertEquals(4, p.componentCount)
+        val white = p.toRgb(doubleArrayOf(0.0, 0.0, 0.0, 0.0))
+        assertEquals(1.0, white.r, 1e-6)
+        val half = p.toRgb(doubleArrayOf(0.7, 0.2, 0.9, 0.5))
+        assertTrue(kotlin.math.abs(half.r - half.g) < 0.01 && kotlin.math.abs(half.g - half.b) < 0.01, "only black darkens, so grey: $half")
+        // Black point compensation takes the darkest ink, L* 20, to black.
+        val black = p.toRgb(doubleArrayOf(0.0, 0.0, 0.0, 1.0))
+        assertTrue(black.r < 0.01, "the darkest ink is black: $black")
+        assertTrue(half.r > black.r && half.r < white.r, "black ink darkens steadily: $half")
+    }
+
+    @Test
+    fun a_paper_close_to_white_lands_on_white_as_little_cms_makes_it() {
+        val p = IccProfile.parse(assemble("CMYK", listOf("A2B1" to blackOnlyCmyk(93.0, 20.0)), pcs = "Lab ", deviceClass = "scnr"))!!
+        val white = p.toRgb(doubleArrayOf(0.0, 0.0, 0.0, 0.0))
+        assertTrue(white.r == 1.0 && white.g == 1.0 && white.b == 1.0, "no ink is white: $white")
+    }
+
+    @Test
+    fun the_same_profile_is_read_once() {
+        val bytes = assemble("CMYK", listOf("A2B1" to blackOnlyCmyk(100.0, 20.0)), pcs = "Lab ", deviceClass = "scnr")
+        kotlin.test.assertSame(IccProfile.parse(bytes), IccProfile.parse(bytes.copyOf()))
     }
 
     @Test

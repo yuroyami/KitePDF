@@ -53,6 +53,16 @@ public sealed class KiteColorSpace {
      * the default `/Decode` of ISO 32000-1, Table 90. That is 0 to 1 except
      * where the space declares its own range, as Lab does.
      */
+    /**
+     * 8-bit inks of a four-component space as 0xRRGGBB, the path of an 8-bit CMYK image.
+     * DeviceCMYK and a CMYK ICC table convert with no allocation.
+     */
+    internal open fun cmyk8(c: Int, m: Int, y: Int, k: Int): Int {
+        val rgb = toRgb(doubleArrayOf(c / 255.0, m / 255.0, y / 255.0, k / 255.0))
+        fun byte(v: Double) = (v * 255.0 + 0.5).toInt().coerceIn(0, 255)
+        return (byte(rgb.r) shl 16) or (byte(rgb.g) shl 8) or byte(rgb.b)
+    }
+
     internal open fun componentMin(index: Int): Double = 0.0
     internal open fun componentMax(index: Int): Double = 1.0
 
@@ -82,6 +92,8 @@ public sealed class KiteColorSpace {
 
     public object DeviceCMYK : KiteColorSpace() {
         override val componentCount: Int = 4
+
+        override fun cmyk8(c: Int, m: Int, y: Int, k: Int): Int = AdobeCmyk.rgb(c, m, y, k)
 
         /**
          * The conversion of PDFium, which approximates Adobe's from US Web Coated (SWOP) to
@@ -169,6 +181,7 @@ public sealed class KiteColorSpace {
         override val componentCount: Int = profile.componentCount
         override fun toRgb(components: DoubleArray): RgbColor = profile.toRgb(components)
         override val curveMatrix: CurveMatrix? get() = profile.curveMatrix
+        override fun cmyk8(c: Int, m: Int, y: Int, k: Int): Int = profile.cmyk8(c, m, y, k) ?: super.cmyk8(c, m, y, k)
     }
 
     /**
