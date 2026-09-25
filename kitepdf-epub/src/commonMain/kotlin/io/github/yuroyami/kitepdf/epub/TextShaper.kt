@@ -52,7 +52,7 @@ internal object TextShaper {
      */
     fun shape(
         face: EmbeddedFace, gsub: OpenTypeGsub, script: String, codePoints: IntArray, gids: IntArray,
-        forms: Array<ArabicJoining.Form>?, optionalLigatures: Boolean,
+        forms: Array<ArabicJoining.Form?>?, optionalLigatures: Boolean,
     ): MutableList<GsubGlyph> {
         val glyphs = ArrayList<GsubGlyph>(codePoints.size)
         val ignorables = ArrayList<GsubGlyph>()
@@ -67,7 +67,7 @@ internal object TextShaper {
             IndicShaper.shape(gsub, script, glyphs, prepared.codePoints, face::gidFor, optionalLigatures)
         } else {
             for ((k, cp) in codePoints.withIndex()) {
-                val joining = forms?.let { joining(cp, it[k]) } ?: emptySet()
+                val joining = forms?.get(k)?.let { setOf(ArabicJoining.feature(it)) } ?: emptySet()
                 glyphs += GsubGlyph(gids[k], k, joining, isMark(cp), ignorable(cp))
                 if (isDefaultIgnorable(cp)) ignorables += glyphs.last()
             }
@@ -119,11 +119,6 @@ internal object TextShaper {
         else -> null
     }
 
-    /** The joining feature of [cp] in [form], or none for a character that does not join. */
-    fun joining(cp: Int, form: ArabicJoining.Form): Set<String> = when (ArabicJoining.type(cp)) {
-        ArabicJoining.Jt.D, ArabicJoining.Jt.R, ArabicJoining.Jt.C -> setOf(ArabicJoining.feature(form))
-        else -> emptySet()
-    }
 
     /**
      * True for a non-spacing mark that is not default ignorable, the glyph class HarfBuzz gives
@@ -141,8 +136,8 @@ internal object TextShaper {
         cp in 0x400..0x52F -> listOf("cyrl")
         cp in 0x530..0x58F -> listOf("armn")
         cp in 0x590..0x5FF || cp in 0xFB1D..0xFB4F -> listOf("hebr")
-        cp in 0x600..0x6FF || cp in 0x750..0x77F || cp in 0x8A0..0x8FF || cp in 0xFB50..0xFDFF || cp in 0xFE70..0xFEFF -> listOf("arab")
-        cp in 0x700..0x74F -> listOf("syrc")
+        cp in 0x600..0x6FF || cp in 0x750..0x77F || cp in 0x870..0x8FF || cp in 0xFB50..0xFDFF || cp in 0xFE70..0xFEFF -> listOf("arab")
+        cp in 0x700..0x74F || cp in 0x860..0x86F -> listOf("syrc")
         cp in 0x780..0x7BF -> listOf("thaa")
         cp in 0x900..0x97F || cp in 0xA8E0..0xA8FF -> listOf("dev2", "deva")
         cp in 0x980..0x9FF -> listOf("bng2", "beng")

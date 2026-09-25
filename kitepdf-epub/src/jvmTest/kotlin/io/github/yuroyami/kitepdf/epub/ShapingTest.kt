@@ -1,6 +1,7 @@
 package io.github.yuroyami.kitepdf.epub
 
 import io.github.yuroyami.kitepdf.core.render.RecordingCanvas
+import io.github.yuroyami.kitepdf.epub.ArabicJoining.Form
 import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -36,6 +37,35 @@ class ShapingTest {
         // second takes final (joins to the previous reh which... reh can't join left) -> both ISOL.
         val rr = ArabicJoining.forms(intArrayOf(0x0631, 0x0631))
         assertEquals(ArabicJoining.Form.ISOL, rr[0])
+    }
+
+    @Test
+    fun hamza_joins_neither_side_and_a_format_character_is_transparent() {
+        // شيء: the yeh is final, because hamza joins neither side (#315).
+        assertEquals(listOf(Form.INIT, Form.FINA, null), ArabicJoining.forms(intArrayOf(0x0634, 0x064A, 0x0621)).toList())
+        // Two behs join across a right-to-left mark.
+        assertEquals(listOf(Form.INIT, null, Form.FINA), ArabicJoining.forms(intArrayOf(0x0628, 0x200F, 0x0628)).toList())
+    }
+
+    @Test
+    fun syriac_alaph_takes_the_forms_of_its_joining_group() {
+        assertEquals(listOf(Form.INIT, Form.FINA), ArabicJoining.forms(intArrayOf(0x0712, 0x0710)).toList())
+        // An Alaph inside a word takes med2, after Dalath fin3, and after another Alaph fin2.
+        assertEquals(listOf(Form.INIT, Form.MED2, Form.ISOL), ArabicJoining.forms(intArrayOf(0x0712, 0x0710, 0x0712)).toList())
+        assertEquals(listOf(Form.ISOL, Form.FIN3), ArabicJoining.forms(intArrayOf(0x0715, 0x0710)).toList())
+        assertEquals(listOf(Form.ISOL, Form.FIN2), ArabicJoining.forms(intArrayOf(0x0710, 0x0710)).toList())
+    }
+
+    @Test
+    fun marks_sort_by_class_and_modifier_marks_go_first() {
+        // Small high seen, a modifier mark of class 230, goes before fathatan (#318).
+        val arabic = mutableListOf(0x0630, 0x064B, 0x06DC)
+        CombiningClass.reorder(arabic) { it }
+        assertEquals(listOf(0x0630, 0x06DC, 0x064B), arabic)
+        // Superscript Alaph, class 36, goes before a zqapha below of class 220.
+        val syriac = mutableListOf(0x0724, 0x0734, 0x0711)
+        CombiningClass.reorder(syriac) { it }
+        assertEquals(listOf(0x0724, 0x0711, 0x0734), syriac)
     }
 
     @Test
