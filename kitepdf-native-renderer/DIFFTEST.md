@@ -131,10 +131,12 @@ and green where MuPDF alone differs.
 with its open issue. The label `plan:pdfium-parity` groups those issues. A new
 finding needs an issue before it goes on the list.
 
-Sometimes MuPDF and PDFium agree with each other and both are wrong.
-`PdfiumParityTest.REFERENCES_WRONG` lists those pages, each with the reason
-from the spec. An entry covers only the pixel finding of its page, and only up
-to the number of tiles it records, so a new fault on the same page still fails.
+Sometimes KitePDF alone differs and is still right. MuPDF and PDFium can agree
+with each other and both be wrong, or the spec can leave the look to the
+reader, such as the icon of a note. `PdfiumParityTest.EXEMPTIONS` lists those
+pages, each with its kind and the reason from the spec. An entry covers only
+the pixel finding of its page, and only up to the number of tiles it records,
+so a new fault on the same page still fails.
 
 A page on either list that stops failing must come off it, or the check fails.
 

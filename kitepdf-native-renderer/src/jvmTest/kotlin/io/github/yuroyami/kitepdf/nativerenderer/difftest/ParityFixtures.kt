@@ -1,6 +1,12 @@
 package io.github.yuroyami.kitepdf.nativerenderer.difftest
 
+import io.github.yuroyami.kitepdf.writer.EmbeddedFont
+import io.github.yuroyami.kitepdf.writer.PdfBuilder
+import io.github.yuroyami.kitepdf.writer.StandardFont
 import java.io.ByteArrayOutputStream
+import java.io.File
+import java.util.zip.Deflater
+import kotlin.random.Random
 
 /**
  * Pages for the PDFium parity check, one feature each, in areas where a reader must do
@@ -11,7 +17,8 @@ import java.io.ByteArrayOutputStream
  */
 object ParityFixtures {
 
-    fun all(): List<SyntheticPdfs.Fixture> = annotations() + forms() + colourSpaces() + text() + geometry() + damaged()
+    fun all(): List<SyntheticPdfs.Fixture> =
+        annotations() + icons() + forms() + colourSpaces() + text() + geometry() + damaged() + written()
 
     private const val HELV = "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>"
 
@@ -46,6 +53,33 @@ object ParityFixtures {
         d.add("<< /Type /Annot /Subtype /Square /Rect [40 40 260 160] /C [1 0 0] /F 4 /AP << /N 6 0 R >> >>")
         d.stream("/Type /XObject /Subtype /Form /BBox [0 0 220 120]", "0 0.7 0 rg 10 10 200 100 re f".encodeToByteArray())
         return d.build(1)
+    }
+
+    /** Annotations that a reader draws as an icon when they have no appearance stream. */
+    private fun icons(): List<SyntheticPdfs.Fixture> {
+        val notes = listOf("Comment", "Note", "Help", "Key", "Insert", "Paragraph", "NewParagraph")
+        val annots = notes.mapIndexed { i, name ->
+            val x = 30 + (i % 4) * 65
+            val y = 220 - (i / 4) * 80
+            "<< /Type /Annot /Subtype /Text /Name /$name /Rect [$x $y ${x + 24} ${y + 24}] /C [1 0.9 0.3] /F 4 >>"
+        }
+        return listOf(
+            fixture("parity-annot-text-icons", onePage("", annots = annots)),
+            fixture(
+                "parity-annot-stamp",
+                onePage("", annots = listOf("<< /Type /Annot /Subtype /Stamp /Name /Approved /Rect [40 120 260 190] /C [0 0.5 0] /F 4 >>")),
+            ),
+            fixture(
+                "parity-annot-caret-attachment",
+                onePage(
+                    "",
+                    annots = listOf(
+                        "<< /Type /Annot /Subtype /Caret /Rect [40 120 70 150] /C [0 0 1] /F 4 >>",
+                        "<< /Type /Annot /Subtype /FileAttachment /Name /PushPin /Rect [150 120 170 150] /C [1 0 0] /F 4 >>",
+                    ),
+                ),
+            ),
+        )
     }
 
     private fun forms(): List<SyntheticPdfs.Fixture> {
@@ -186,6 +220,69 @@ object ParityFixtures {
             fixture("parity-damaged-xref-offsets", shifted.encodeToByteArray()),
             fixture("parity-damaged-no-xref", noXref.encodeToByteArray()),
         )
+    }
+
+    /** Files that KitePDF's own writer makes: an embedded TrueType font, and AES-256 encryption. */
+    private fun written(): List<SyntheticPdfs.Fixture> {
+        val out = ArrayList<SyntheticPdfs.Fixture>()
+        systemTrueType()?.let { bytes ->
+            val font = EmbeddedFont.load(bytes)
+            out += fixture(
+                "parity-embedded-truetype",
+                PdfBuilder().page(300.0, 300.0) {
+                    text(font, 20.0, 20.0, 240.0, "Embedded TrueType")
+                    text(font, 20.0, 20.0, 200.0, "Café naïve über ñandú")
+                    text(font, 20.0, 20.0, 160.0, "© ® ° ± × ÷ ½ €")
+                }.build(),
+            )
+        }
+        out += fixture(
+            "parity-encrypted-aes256",
+            PdfBuilder().encrypt(userPassword = "", ownerPassword = "owner", random = Random(7)).page(300.0, 300.0) {
+                setFillRgb(0.1, 0.4, 0.8)
+                rectangle(30.0, 30.0, 240.0, 120.0)
+                fill()
+                text(StandardFont.Helvetica, 20.0, 30.0, 200.0, "Encrypted with AES-256")
+            }.build(),
+        )
+        out += fixture("parity-xref-stream", xrefStream(onePage("0 0.5 0 rg 30 30 240 240 re f 1 1 1 rg 80 80 140 140 re f")))
+        return out
+    }
+
+    /** A TrueType font of the host: DejaVu Sans on Linux, Arial on macOS, or null. */
+    private fun systemTrueType(): ByteArray? = listOf(
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        "/System/Library/Fonts/Supplemental/Arial.ttf",
+        "/Library/Fonts/Arial.ttf",
+    ).map(::File).firstOrNull { it.isFile }?.readBytes()
+
+    /** [classic] rewritten with a cross-reference stream in place of its xref table (ISO 32000-1, 7.5.8). */
+    private fun xrefStream(classic: ByteArray): ByteArray {
+        val text = classic.decodeToString()
+        val body = text.substring(0, text.indexOf("xref\n"))
+        val offsets = Regex("(\\d{10}) 00000 n").findAll(text).map { it.groupValues[1].toInt() }.toList()
+        val count = offsets.size + 2
+        val rows = ByteArrayOutputStream()
+        fun row(type: Int, field2: Int, field3: Int) {
+            rows.write(type)
+            rows.write(field2 ushr 24); rows.write(field2 ushr 16); rows.write(field2 ushr 8); rows.write(field2)
+            rows.write(field3)
+        }
+        row(0, 0, 255)
+        for (o in offsets) row(1, o, 0)
+        val streamOffset = body.length
+        row(1, streamOffset, 0)
+        val deflater = Deflater().apply { setInput(rows.toByteArray()); finish() }
+        val packed = ByteArray(4096).let { buf -> buf.copyOf(deflater.deflate(buf)) }
+        val out = ByteArrayOutputStream()
+        out.write(body.encodeToByteArray())
+        out.write(
+            ("${count - 1} 0 obj\n<< /Type /XRef /Size ${count} /W [1 4 1] /Root 1 0 R /Filter /FlateDecode /Length ${packed.size} >>\nstream\n")
+                .encodeToByteArray(),
+        )
+        out.write(packed)
+        out.write("\nendstream\nendobj\nstartxref\n$streamOffset\n%%EOF\n".encodeToByteArray())
+        return out.toByteArray()
     }
 
     private fun fixture(name: String, bytes: ByteArray) = SyntheticPdfs.Fixture(name, bytes)

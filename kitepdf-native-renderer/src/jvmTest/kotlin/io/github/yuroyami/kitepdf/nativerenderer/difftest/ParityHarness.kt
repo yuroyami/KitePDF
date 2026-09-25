@@ -53,12 +53,21 @@ object ParityHarness {
         override fun toString(): String = text
     }
 
+    /** Why a page where KitePDF alone differs is still right. */
+    enum class ExemptionKind(val label: String) {
+        /** MuPDF and PDFium agree with each other, and the spec says both are wrong. */
+        REFERENCES_WRONG("Both references wrong"),
+
+        /** The spec leaves the look to the reader, such as the icon of a note, so no engine is the reference. */
+        READER_DEFINED("Reader-defined"),
+    }
+
     /**
-     * A page where MuPDF and PDFium agree with each other and both are wrong, so KitePDF
-     * alone is right. It covers the pixel finding while KitePDF alone differs in at most
+     * A page where KitePDF alone differs and is still right, for the [reason] from the
+     * spec. It covers the pixel finding while KitePDF alone differs in at most
      * [maxKiteTiles] tiles, so a new fault on the same page still fails.
      */
-    data class ReferencesWrong(val maxKiteTiles: Int, val reason: String)
+    data class Exemption(val kind: ExemptionKind, val maxKiteTiles: Int, val reason: String)
 
     data class PageResult(
         val doc: String,
@@ -78,26 +87,26 @@ object ParityHarness {
     class Report(
         val results: List<PageResult>,
         val knownGaps: Map<String, Int>,
-        val referencesWrong: Map<String, ReferencesWrong>,
+        val exemptions: Map<String, Exemption>,
         val dpi: Int,
         val outDir: File,
     ) {
-        /** True when [ReferencesWrong] explains every finding of [result]. */
-        fun referencesAreWrong(result: PageResult): Boolean {
-            val entry = referencesWrong[result.key] ?: return false
+        /** True when an [Exemption] explains every finding of [result]. */
+        fun isExempt(result: PageResult): Boolean {
+            val entry = exemptions[result.key] ?: return false
             val diff = result.diff ?: return false
             return result.findings.all { it.kind == FindingKind.PIXELS } &&
                 diff.pageOutlier != ThreeWayDiff.Engine.KITE &&
                 diff.outlierTiles.getValue(ThreeWayDiff.Engine.KITE) <= entry.maxKiteTiles
         }
 
-        /** Pages where PDFium does better, with no open issue and no reason why both references are wrong. */
+        /** Pages where PDFium does better, with no open issue and no exemption that explains it. */
         val unexplained: List<PageResult>
-            get() = results.filter { it.verdict == Verdict.PDFIUM_BETTER && it.key !in knownGaps && !referencesAreWrong(it) }
+            get() = results.filter { it.verdict == Verdict.PDFIUM_BETTER && it.key !in knownGaps && !isExempt(it) }
 
         /** Entries of either list whose page ran and no longer shows PDFium doing better. */
         val stale: List<String>
-            get() = (knownGaps.keys + referencesWrong.keys).filter { key ->
+            get() = (knownGaps.keys + exemptions.keys).filter { key ->
                 val ran = results.filter { it.key == key }
                 ran.isNotEmpty() && ran.none { it.verdict == Verdict.PDFIUM_BETTER }
             }
@@ -134,7 +143,7 @@ object ParityHarness {
                 val label = when {
                     r.verdict != Verdict.PDFIUM_BETTER -> r.verdict.label
                     r.key in knownGaps -> "${r.verdict.label} (known gap, #${knownGaps.getValue(r.key)})"
-                    referencesAreWrong(r) -> "Both references wrong: ${referencesWrong.getValue(r.key).reason}"
+                    isExempt(r) -> exemptions.getValue(r.key).let { "${it.kind.label}: ${it.reason}" }
                     else -> r.verdict.label
                 }
                 val why = (r.findings + r.notes).joinToString("; ").replace("|", "/").take(300)
@@ -167,14 +176,14 @@ object ParityHarness {
         dpi: Int,
         outDir: File,
         knownGaps: Map<String, Int>,
-        referencesWrong: Map<String, ReferencesWrong> = emptyMap(),
+        exemptions: Map<String, Exemption> = emptyMap(),
         maxPages: Int = DiffHarness.MAX_PAGES_PER_DOC,
         mupdf: PdfRenderOracle = MuPdfOracle,
         pdfium: PdfiumOracle = PdfiumOracle,
     ): Report {
         val results = ArrayList<PageResult>()
         for (document in documents) results += runDocument(document, dpi, outDir, maxPages, mupdf, pdfium)
-        return Report(results, knownGaps, referencesWrong, dpi, outDir)
+        return Report(results, knownGaps, exemptions, dpi, outDir)
     }
 
     private fun runDocument(
