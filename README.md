@@ -21,6 +21,12 @@
   <b><a href="https://yuroyami.github.io/KitePDF/">Documentation</a></b> · a guide for each task, plus the generated API reference.
 </p>
 
+<p align="center">
+  <img src="art/showcase.png" width="100%" alt="A PDF page with a bar chart and a table, an EPUB page with English, Arabic, Hindi and Japanese text, and an SVG illustration of a kite, all rendered by KitePDF">
+  <br>
+  <sub>A PDF, an EPUB and an SVG, each rendered by KitePDF.</sub>
+</p>
+
 ## What you get
 
 KitePDF brings its own document engine, written in Kotlin from the ground up. There is no
