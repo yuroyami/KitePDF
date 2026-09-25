@@ -1,31 +1,15 @@
 package io.github.yuroyami.kitepdf.epub
 
 /**
- * The order a shaper puts combining marks in before GSUB runs (#211): each run of marks
- * sorts by canonical combining class (Unicode 17, 3.11), with the classes HarfBuzz modifies
- * so that fonts see the order they were built for. Hebrew points follow the SBL Hebrew order,
+ * The combining classes that [Normalizer] sorts each run of marks by before GSUB runs (#211):
+ * the canonical combining class of Unicode 17 (3.11), with the classes HarfBuzz modifies so
+ * that fonts see the order they were built for. Hebrew points follow the SBL Hebrew order,
  * Arabic shadda goes before the other marks, Thai sara u and uu go before phinthu, and the
  * Tibetan vowel sign u goes before the sign i.
  *
- * The classes cover the Basic Multilingual Plane. A character outside it has class 0 and
- * keeps its place.
+ * The classes cover the Basic Multilingual Plane. A character outside it has class 0.
  */
 internal object CombiningClass {
-
-    /** Sorts each run of marks in [items] by [modified] class, keeping the order of equal classes. */
-    fun <T> reorder(items: MutableList<T>, codePoint: (T) -> Int) {
-        var i = 0
-        while (i < items.size) {
-            if (modified(codePoint(items[i])) == 0) { i++; continue }
-            var end = i + 1
-            while (end < items.size && modified(codePoint(items[end])) != 0) end++
-            if (end - i > 1) {
-                val sorted = items.subList(i, end).sortedBy { modified(codePoint(it)) }
-                for (k in sorted.indices) items[i + k] = sorted[k]
-            }
-            i = end
-        }
-    }
 
     /** The combining class of [cp] as HarfBuzz modifies it, 0 for a character that is not a mark. */
     fun modified(cp: Int): Int {

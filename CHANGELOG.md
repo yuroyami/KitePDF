@@ -463,6 +463,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   covers the Basic Multilingual Plane of Unicode 17, and the combining classes now cover
   every mark in it. Against `hb-shape`, 1,951 random Latin, Greek, Cyrillic and Hebrew
   words with marks give the same glyphs (#316).
+- Thai and Lao sara am splits into nikhahit and sara aa, and the nikhahit moves back over
+  the tone marks before it, as HarfBuzz and Uniscribe order them. The marks of a word now
+  go into canonical order inside the shaper, after that step, instead of before shaping
+  starts, as in HarfBuzz. So the text of the page keeps the order of the book. Against
+  `hb-shape`, 985 random Thai and Lao words with marks give the same glyphs (#317).
 - Text in an embedded font shapes through every GSUB lookup type. Contextual and
   chained contextual substitution, multiple and alternate substitution, and reverse
   chaining now apply along with single and ligature substitution. The lookups run for the script

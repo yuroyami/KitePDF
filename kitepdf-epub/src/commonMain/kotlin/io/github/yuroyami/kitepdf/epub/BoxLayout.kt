@@ -1058,8 +1058,6 @@ internal class BoxLayout(
         val face = cells.firstOrNull()?.face ?: return false
         if (cells.any { it.face !== face }) return false
         val gsub = face.gsub ?: return false
-        // Marks go into the order the font expects, as HarfBuzz normalizes them.
-        CombiningClass.reorder(cells) { it.ch.code }
         val cps = IntArray(cells.size) { cells[it].ch.code }
         val script = TextShaper.script(cps, gsub)
         val forms = if (ArabicJoining.hasArabic(cps)) ArabicJoining.forms(cps) else null
