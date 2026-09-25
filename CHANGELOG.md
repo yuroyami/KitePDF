@@ -424,6 +424,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A grey ICC profile maps full grey to white, whatever its white point tag says.
   With a D65 tag, full grey drew as #ebffff and mid grey as #768295, where mutool
   draws #ffffff and #808080 (#311).
+- Three scene tests of text selection no longer fail on a loaded machine. A frame
+  that ran past the long-press timeout while a test finger was down turned the
+  gesture into a long press. The tests now send the first move with no frame after
+  the press (#310).
 - A finger held still on a selection handle before it drags keeps the selection.
   The long press under the handle reached its timeout and started a new selection
   at the handle, so a pause of half a second lost the words already chosen (#313).
