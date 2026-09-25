@@ -17,7 +17,7 @@ private const val MAX_MASK_COLUMN_MAP: Int = 1_000_000
  * platform backend can wrap in a bitmap.
  *
  * Drives every sample through the image's resolved [KiteColorSpace], so it covers:
- *   - DeviceGray / DeviceRGB / DeviceCMYK (process-CMYK polynomial)
+ *   - DeviceGray / DeviceRGB / DeviceCMYK (PDFium's Adobe CMYK table, [AdobeCmyk])
  *   - Indexed (palette lookup) at any bit depth
  *   - ICCBased / CalGray / CalRGB (device-equivalent fallback)
  *   - 1/2/4/8/16 bits per component, with `/Decode` remapping
