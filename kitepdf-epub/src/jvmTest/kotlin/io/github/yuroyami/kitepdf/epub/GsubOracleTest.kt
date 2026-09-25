@@ -45,9 +45,7 @@ class GsubOracleTest {
     private fun kitepdf(font: File, word: String): List<Int> {
         val face = face(font)
         val gsub = face.gsub ?: return word.codePoints().toArray().map { face.gidFor(it) }
-        val ordered = word.codePoints().toArray().toMutableList()
-        CombiningClass.reorder(ordered) { it }
-        val cps = ordered.toIntArray()
+        val cps = word.codePoints().toArray()
         val script = TextShaper.script(cps, gsub)
         val forms = if (ArabicJoining.hasArabic(cps)) ArabicJoining.forms(cps) else null
         return TextShaper.shape(face, gsub, script, cps, IntArray(cps.size) { face.gidFor(cps[it]) }, forms, optionalLigatures = true).map { it.gid }
@@ -66,7 +64,8 @@ class GsubOracleTest {
             "اردو", "پاکستان", "زبان", "محبت", "کتاب", "نستعلیق", "لاہور", "خوبصورت", "ٹیلیفون", "بھائی", "ہے",
         ),
         "NotoSerifHebrew-Regular.otf" to listOf("שָׁלוֹם", "עברית", "בְּרֵאשִׁית", "יִשְׂרָאֵל", "הַמֶּלֶךְ"),
-        "NotoSerifThai-Regular.otf" to listOf("ภาษา", "ไทย", "สวัสดี", "ประเทศ", "กรุงเทพ"),
+        "NotoSerifThai-Regular.otf" to listOf("ภาษา", "ไทย", "สวัสดี", "ประเทศ", "กรุงเทพ", "น้ำ", "ทำ", "คำ", "กำลัง", "ต่ำ", "จำนวน"),
+        "NotoSerifLao-Regular.otf" to listOf("ພາສາ", "ລາວ", "ນ້ຳ", "ຄຳ", "ທຳ"),
         "NotoSerifDevanagari-Regular.otf" to listOf(
             "हिन्दी", "नमस्ते", "क्षत्रिय", "कि", "धर्म", "कर्म", "पुत्र", "विद्या", "श्री", "द्वार",
             "प्रेम", "ज़िंदगी", "फ़िल्म", "स्त्री", "आत्मा", "राष्ट्र", "कृष्ण", "हृदय", "र्क", "मैं",
@@ -208,9 +207,10 @@ class GsubOracleTest {
     }
 
     /**
-     * Random words of Latin, Vietnamese, Greek, Cyrillic and Hebrew letters with up to three
-     * combining marks each shape to the glyphs HarfBuzz gives (#316). HarfBuzz decomposes a
-     * letter that marks follow and composes it again with the marks the font has a glyph for.
+     * Random words of Latin, Vietnamese, Greek, Cyrillic, Hebrew, Thai and Lao letters with up to
+     * three combining marks each shape to the glyphs HarfBuzz gives (#316, #317). HarfBuzz
+     * decomposes a letter that marks follow and composes it again with the marks the font has a
+     * glyph for, and it splits Thai and Lao sara am before it puts the marks in order.
      */
     @Test
     fun random_words_with_marks_shape_to_the_glyphs_harfbuzz_gives() {
@@ -228,6 +228,14 @@ class GsubOracleTest {
             ),
             Triple("NotoSerif-Regular.otf", (0x0430..0x044F).toList() + listOf(0x0415, 0x0418, 0x0456), listOf(0x0300, 0x0301, 0x0306, 0x0308, 0x030F, 0x0311)),
             Triple("NotoSerifHebrew-Regular.otf", (0x05D0..0x05EA).toList(), (0x05B0..0x05BC).toList() + listOf(0x05BF, 0x05C1, 0x05C2, 0x05C7)),
+            Triple(
+                "NotoSerifThai-Regular.otf", (0x0E01..0x0E2E).toList() + listOf(0x0E32, 0x0E40, 0x0E44),
+                listOf(0x0E31, 0x0E33, 0x0E33) + (0x0E34..0x0E3A) + (0x0E47..0x0E4E),
+            ),
+            Triple(
+                "NotoSerifLao-Regular.otf", (0x0E81..0x0EAE).filter { it !in listOf(0x0E83, 0x0E85, 0x0E8B, 0x0EA4, 0x0EA6) } + listOf(0x0EB2, 0x0EC0),
+                listOf(0x0EB1, 0x0EB3, 0x0EB3) + (0x0EB4..0x0EBC) + (0x0EC8..0x0ECD),
+            ),
         )
         val failures = ArrayList<String>()
         var total = 0

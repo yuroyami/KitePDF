@@ -68,9 +68,14 @@ internal object TextShaper {
             IndicShaper.shape(gsub, script, glyphs, prepared.codePoints, face::gidFor, optionalLigatures)
         } else {
             val arabic = script == "arab" || script == "syrc"
+            // Thai and Lao split sara am before normalization, as HarfBuzz's Thai shaper does.
+            val split = if (script == "thai" || script == "lao ") decomposeSaraAm(codePoints) else null
             // A word of whole letters that the font has needs no normalization.
-            val normal = if (gids.none { it == 0 } && codePoints.none { Normalizer.isMark(it) }) null else {
-                Normalizer.normalize(codePoints, IntArray(codePoints.size) { it }, { face.gidFor(it) != 0 }, arabicMarks = arabic)
+            val normal = if (split == null && gids.none { it == 0 } && codePoints.none { Normalizer.isMark(it) }) null else {
+                Normalizer.normalize(
+                    split?.codePoints ?: codePoints, split?.sources ?: IntArray(codePoints.size) { it },
+                    { face.gidFor(it) != 0 }, arabicMarks = arabic,
+                )
             }
             val cps = normal?.codePoints ?: codePoints
             for ((j, cp) in cps.withIndex()) {
@@ -86,6 +91,43 @@ internal object TextShaper {
         }
         hideIgnorables(face, glyphs, ignorables)
         return glyphs
+    }
+
+    /**
+     * HarfBuzz's preprocessing of Thai and Lao (#317): sara am decomposes into nikhahit and
+     * sara aa, and the nikhahit moves back over the above-base marks before it, as Uniscribe
+     * orders them. The characters that move share the source of the first of them. Null when
+     * the run has no sara am.
+     */
+    fun decomposeSaraAm(cps: IntArray): Normalizer.Result? {
+        if (cps.none { it == 0x0E33 || it == 0x0EB3 }) return null
+        val codes = ArrayList<Int>(cps.size + 2)
+        val srcs = ArrayList<Int>(cps.size + 2)
+        for ((k, u) in cps.withIndex()) {
+            if (u != 0x0E33 && u != 0x0EB3) { codes += u; srcs += k; continue }
+            codes += u - 0x0E33 + 0x0E4D
+            codes += u - 1
+            srcs += k
+            srcs += k
+            val end = codes.size
+            var start = end - 2
+            while (start > 0 && isAboveBaseMark(codes[start - 1])) start--
+            if (start + 2 < end) {
+                codes.add(start, codes.removeAt(end - 2))
+                srcs.add(start, srcs.removeAt(end - 2))
+            }
+            // The letter before the marks joins their cluster.
+            val from = maxOf(start - 1, 0)
+            val first = srcs.subList(from, end).min()
+            for (j in from until end) srcs[j] = first
+        }
+        return Normalizer.Result(codes.toIntArray(), srcs.toIntArray())
+    }
+
+    /** The Thai and Lao marks above the base that a nikhahit from sara am moves past. */
+    private fun isAboveBaseMark(cp: Int): Boolean {
+        val u = cp and 0x0080.inv()
+        return u == 0x0E31 || u in 0x0E34..0x0E37 || u == 0x0E3B || u in 0x0E47..0x0E4E
     }
 
     /** The ligating features of Arabic, for which HarfBuzz lets a ZWJ break a ligature as a ZWNJ does. */

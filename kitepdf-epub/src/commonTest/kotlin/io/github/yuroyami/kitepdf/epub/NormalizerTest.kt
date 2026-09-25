@@ -3,6 +3,7 @@ package io.github.yuroyami.kitepdf.epub
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 
 /** The normalization of [Normalizer] before GSUB, after HarfBuzz's default mode (#316). */
@@ -36,6 +37,15 @@ class NormalizerTest {
     fun a_letter_the_font_lacks_decomposes() {
         assertContentEquals(intArrayOf(0x00E9), normalize(0x00E9).codePoints)
         assertContentEquals(intArrayOf(0x0065, 0x0301), normalize(0x00E9) { it != 0x00E9 }.codePoints)
+    }
+
+    @Test
+    fun thai_sara_am_splits_and_its_nikhahit_moves_over_the_tone_mark() {
+        // Do, mai chattawa, sara am: the nikhahit goes before the tone mark, as HarfBuzz puts it.
+        val split = assertNotNull(TextShaper.decomposeSaraAm(intArrayOf(0x0E14, 0x0E4B, 0x0E33)))
+        assertContentEquals(intArrayOf(0x0E14, 0x0E4D, 0x0E4B, 0x0E32), split.codePoints)
+        assertContentEquals(intArrayOf(0, 0, 0, 0), split.sources)
+        assertNull(TextShaper.decomposeSaraAm(intArrayOf(0x0E14, 0x0E32)))
     }
 
     @Test

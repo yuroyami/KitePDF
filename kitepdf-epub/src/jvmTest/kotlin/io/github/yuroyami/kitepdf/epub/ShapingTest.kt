@@ -62,9 +62,8 @@ class ShapingTest {
         val arabic = Normalizer.normalize(intArrayOf(0x0630, 0x064B, 0x06DC), intArrayOf(0, 1, 2), { true }, arabicMarks = true)
         assertEquals(listOf(0x0630, 0x06DC, 0x064B), arabic.codePoints.toList())
         // Superscript Alaph, class 36, goes before a zqapha below of class 220.
-        val syriac = mutableListOf(0x0724, 0x0734, 0x0711)
-        CombiningClass.reorder(syriac) { it }
-        assertEquals(listOf(0x0724, 0x0711, 0x0734), syriac)
+        val syriac = Normalizer.normalize(intArrayOf(0x0724, 0x0734, 0x0711), intArrayOf(0, 1, 2), { true }, arabicMarks = true)
+        assertEquals(listOf(0x0724, 0x0711, 0x0734), syriac.codePoints.toList())
     }
 
     @Test
