@@ -46,8 +46,9 @@ internal object TextShaper {
 
     /**
      * Shapes the characters [codePoints] of one run in [script], whose glyphs before shaping are
-     * [gids]: through [IndicShaper] for the scripts of India, [KhmerShaper] for Khmer, and
-     * [Normalizer] and GSUB in the stages of [stages] for the rest. [forms] are the Arabic joining forms of the run,
+     * [gids]: through [IndicShaper] for the scripts of India, [KhmerShaper] for Khmer,
+     * [MyanmarShaper] for Myanmar, and [Normalizer] and GSUB in the stages of [stages] for the
+     * rest. [forms] are the Arabic joining forms of the run,
      * when it has Arabic. The cluster of each glyph is the index of its first character in
      * [codePoints].
      */
@@ -74,6 +75,10 @@ internal object TextShaper {
             val prepared = KhmerShaper.prepare(codePoints) { face.gidFor(it) != 0 }
             addPrepared(prepared)
             KhmerShaper.shape(gsub, script, glyphs, prepared.codePoints, face::gidFor, optionalLigatures)
+        } else if (MyanmarShaper.handles(script, gsub)) {
+            val prepared = MyanmarShaper.prepare(codePoints) { face.gidFor(it) != 0 }
+            addPrepared(prepared)
+            MyanmarShaper.shape(gsub, script, glyphs, prepared.codePoints, face::gidFor, optionalLigatures)
         } else {
             val arabic = script == "arab" || script == "syrc"
             // Thai and Lao split sara am before normalization, as HarfBuzz's Thai shaper does.

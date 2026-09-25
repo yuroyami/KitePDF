@@ -443,6 +443,8 @@ public class OpenTypeGsub private constructor(
 
         /** The GDEF class of [g], or one made from what the caller knows when the font has no classes. */
         private fun glyphClass(g: GsubGlyph): Int {
+            // HarfBuzz gives a glyph that a shaper inserted no class until a lookup replaces it.
+            if (g.inserted && !g.substituted) return 0
             gdef?.glyphClasses?.let { return it.classOf(g.gid) }
             return when {
                 g.isMark -> MARK
@@ -909,11 +911,18 @@ public class GsubGlyph(
     /** True when a multiple substitution produced this glyph and no ligature has joined it since. A shaper may clear it. */
     public var multiplied: Boolean = false
 
+    /**
+     * True for a glyph a shaper inserted, such as a dotted circle. Until a substitution replaces
+     * it, it has no glyph class, so no lookup flag passes over it, as in HarfBuzz.
+     */
+    public var inserted: Boolean = false
+
     internal fun copy(gid: Int): GsubGlyph = GsubGlyph(gid, cluster, features, isMark, ignorable).also {
         it.components = components
         it.substituted = substituted
         it.ligated = ligated
         it.multiplied = multiplied
+        it.inserted = inserted
         it.syllable = syllable
         it.shaperData = shaperData
     }

@@ -131,6 +131,17 @@ class OpenTypeGsubTest {
     }
 
     @Test
+    fun a_glyph_a_shaper_inserted_has_no_class_and_blocks_a_ligature() {
+        // The ligature passes over base glyphs, and glyph 60 is a base in GDEF.
+        val table = gsub(listOf("DFLT" to listOf(0)), listOf("liga" to listOf(0)), listOf(lookup(4, ligature(9, 1, 2), flag = 0x2)))
+        val t = assertNotNull(OpenTypeGsub.from(table, gdef(1 to 3, 2 to 3, 60 to 1)))
+        assertEquals(listOf(9, 60), shape(t, run(1, 60, 2), listOf(listOf("liga"))))
+        // A dotted circle a shaper inserted has no class yet, as in HarfBuzz, so it blocks the ligature.
+        val glyphs = run(1, 60, 2).also { it[1].inserted = true }
+        assertEquals(listOf(1, 60, 2), shape(t, glyphs, listOf(listOf("liga"))))
+    }
+
+    @Test
     fun a_reverse_chain_substitutes_in_place_from_the_end() {
         val t = assertNotNull(OpenTypeGsub.from(gsub(listOf("DFLT" to listOf(0)), listOf("rclt" to listOf(0)), listOf(lookup(8, reverse(1, ahead = 2, to = 11))))))
         assertEquals(listOf(1, 11, 2), shape(t, run(1, 1, 2), listOf(listOf("rclt"))))

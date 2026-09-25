@@ -124,7 +124,7 @@ internal object Syllables {
             if (g.syllable != last && g.syllable and 0xF == broken) {
                 last = g.syllable
                 if (repha != null) while (i < glyphs.size && glyphs[i].syllable == last && category(glyphs[i]) == repha) i++
-                glyphs.add(i, GsubGlyph(circle, g.cluster, g.features).also { it.syllable = last; it.shaperData = shaperData })
+                glyphs.add(i, GsubGlyph(circle, g.cluster, g.features).also { it.syllable = last; it.shaperData = shaperData; it.inserted = true })
             }
             i++
         }
