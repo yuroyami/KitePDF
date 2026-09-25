@@ -12,11 +12,13 @@ data class OracleFixture(val name: String, val bytes: ByteArray, val budget: Dou
 
 /**
  * A fixture whose page is 200 by 200 points and draws [content] with [resources].
- * The [extra] objects are numbered from 5.
+ * The [extra] objects are numbered from 5, and [catalog] adds entries to the catalog.
  */
-internal fun oracleFixture(name: String, content: String, resources: String, extra: List<ByteArray>, budget: Double): OracleFixture {
+internal fun oracleFixture(
+    name: String, content: String, resources: String, extra: List<ByteArray>, budget: Double, catalog: String = "",
+): OracleFixture {
     val objects = listOf(
-        "<< /Type /Catalog /Pages 2 0 R >>".toByteArray(),
+        "<< /Type /Catalog /Pages 2 0 R $catalog>>".toByteArray(),
         "<< /Type /Pages /Kids [3 0 R] /Count 1 >>".toByteArray(),
         "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] /Resources << $resources >> /Contents 4 0 R >>".toByteArray(),
         pdfStream(content.toByteArray()),

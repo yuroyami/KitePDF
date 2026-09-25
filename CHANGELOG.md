@@ -415,6 +415,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - An RGB lookup-table profile interpolates on a grid of 17 points a side, the grid
   MuPDF asks Little CMS for, instead of 33. The page of RGB swatches scores 0.00010
   against mutool instead of 0.00047 (#201).
+- A CMYK output intent converts DeviceCMYK. The catalog of a PDF/X file names the
+  profile of its press as its output intent, and DeviceCMYK now converts through that
+  profile wherever the resources name no `/DefaultCMYK`, as MuPDF does. Before,
+  DeviceCMYK always converted through a table for U.S. Web Coated (SWOP), so the
+  black of a press profile measured #231f20 where mutool draws #111111. MuPDF also
+  proofs RGB and grey content through the press, and KitePDF does not (#312).
 - A grey ICC profile maps full grey to white, whatever its white point tag says.
   With a D65 tag, full grey drew as #ebffff and mid grey as #768295, where mutool
   draws #ffffff and #808080 (#311).
