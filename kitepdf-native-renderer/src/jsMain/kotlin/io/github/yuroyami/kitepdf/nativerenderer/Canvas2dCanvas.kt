@@ -88,12 +88,12 @@ public class Canvas2dCanvas(ctx: CanvasRenderingContext2D) : KiteCanvas {
         path: KitePath, ctm: KiteMatrix, color: RgbColor, evenOdd: Boolean,
         alpha: Double, blendMode: KiteBlendMode,
     ) {
-        val p = toPath2D(path, ctm)
         ctx.save()
         try {
             ctx.fillStyle = color.toCssRgba(alpha)
-            // Path2D + fill(path, fillRule): fillRule is "evenodd" or "nonzero"
-            paint(blendMode) { ctx.asDynamic().fill(p, if (evenOdd) "evenodd" else "nonzero") }
+            emitPath(path, ctm)
+            // fill(fillRule): fillRule is "evenodd" or "nonzero"
+            paint(blendMode) { ctx.asDynamic().fill(if (evenOdd) "evenodd" else "nonzero") }
         } finally {
             ctx.restore()
         }
@@ -106,7 +106,6 @@ public class Canvas2dCanvas(ctx: CanvasRenderingContext2D) : KiteCanvas {
         lineCap: Int, lineJoin: Int, miterLimit: Double,
     ) {
         val pen = strokePen(ctm, lineWidth)
-        val p = toPath2D(path, pen.pathMatrix)
         ctx.save()
         try {
             // An elliptical pen strokes in user space: the canvas applies its transform to
@@ -123,7 +122,9 @@ public class Canvas2dCanvas(ctx: CanvasRenderingContext2D) : KiteCanvas {
                 ctx.setLineDash(dashArray.map { it * pen.dashScale }.toTypedArray())
                 ctx.lineDashOffset = dashPhase * pen.dashScale
             }
-            paint(blendMode) { ctx.stroke(p) }
+            // The points go in under the pen's transform, as the stroke reads them.
+            emitPath(path, pen.pathMatrix)
+            paint(blendMode) { ctx.stroke() }
         } finally {
             ctx.restore()
         }
@@ -159,8 +160,8 @@ public class Canvas2dCanvas(ctx: CanvasRenderingContext2D) : KiteCanvas {
                     val glyphMatrix = textToDevice
                         .concat(KiteMatrix.translation(penX + glyph.xOffset * unitScale, glyph.yOffset * unitScale))
                         .concat(KiteMatrix(unitScale, 0.0, 0.0, unitScale, 0.0, 0.0))
-                    val p = toPath2D(outline, glyphMatrix)
-                    paint(blendMode) { ctx.asDynamic().fill(p, "nonzero") }
+                    emitPath(outline, glyphMatrix)
+                    paint(blendMode) { ctx.asDynamic().fill("nonzero") }
                     drewAny = true
                 }
                 penX += glyph.advanceWidth * advanceScale + glyph.advanceAdjust
@@ -298,8 +299,8 @@ public class Canvas2dCanvas(ctx: CanvasRenderingContext2D) : KiteCanvas {
                 corner(x0, y0, true); corner(x1, y0, false); corner(x1, y1, false); corner(x0, y1, false)
                 close()
             }.build()
-            val area = toPath2D(region, KiteMatrix.IDENTITY)
-            paint(blendMode) { ctx.asDynamic().fill(area, "nonzero") }
+            emitPath(region, KiteMatrix.IDENTITY)
+            paint(blendMode) { ctx.asDynamic().fill("nonzero") }
         } finally {
             ctx.restore()
         }
@@ -650,6 +651,31 @@ public class Canvas2dCanvas(ctx: CanvasRenderingContext2D) : KiteCanvas {
     }
 
     /* ─── Helpers ─────────────────────────────────────────────────────────── */
+
+    /**
+     * Makes [src] under [ctm] the current path of [ctx], under the transform that [ctx] has
+     * now. A paint then fills or strokes it with no Path2D object for each paint (#130). A
+     * clip keeps a Path2D of its own.
+     */
+    private fun emitPath(src: KitePath, ctm: KiteMatrix) {
+        ctx.beginPath()
+        for (seg in src.segments) {
+            when (seg) {
+                is KitePath.Segment.MoveTo -> ctx.moveTo(ctm.transformX(seg.x, seg.y), ctm.transformY(seg.x, seg.y))
+                is KitePath.Segment.LineTo -> ctx.lineTo(ctm.transformX(seg.x, seg.y), ctm.transformY(seg.x, seg.y))
+                is KitePath.Segment.CurveTo -> ctx.bezierCurveTo(
+                    ctm.transformX(seg.x1, seg.y1), ctm.transformY(seg.x1, seg.y1),
+                    ctm.transformX(seg.x2, seg.y2), ctm.transformY(seg.x2, seg.y2),
+                    ctm.transformX(seg.x3, seg.y3), ctm.transformY(seg.x3, seg.y3),
+                )
+                is KitePath.Segment.QuadTo -> ctx.quadraticCurveTo(
+                    ctm.transformX(seg.x1, seg.y1), ctm.transformY(seg.x1, seg.y1),
+                    ctm.transformX(seg.x2, seg.y2), ctm.transformY(seg.x2, seg.y2),
+                )
+                KitePath.Segment.Close -> ctx.closePath()
+            }
+        }
+    }
 
     private fun toPath2D(src: KitePath, ctm: KiteMatrix): Path2D {
         val p = Path2D()

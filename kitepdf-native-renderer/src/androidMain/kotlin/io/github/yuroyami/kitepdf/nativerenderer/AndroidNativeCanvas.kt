@@ -74,7 +74,7 @@ public class AndroidNativeCanvas(private val canvas: AndroidCanvas) : KiteCanvas
         path: KitePath, ctm: KiteMatrix, color: RgbColor, evenOdd: Boolean,
         alpha: Double, blendMode: KiteBlendMode,
     ) {
-        val p = toAndroidPath(path, ctm).apply {
+        val p = toAndroidPath(path, ctm, scratchPath).apply {
             fillType = if (evenOdd) Path.FillType.EVEN_ODD else Path.FillType.WINDING
         }
         val paint = Paint().apply {
@@ -93,7 +93,7 @@ public class AndroidNativeCanvas(private val canvas: AndroidCanvas) : KiteCanvas
         lineCap: Int, lineJoin: Int, miterLimit: Double,
     ) {
         val pen = strokePen(ctm, lineWidth)
-        val p = toAndroidPath(path, pen.pathMatrix)
+        val p = toAndroidPath(path, pen.pathMatrix, scratchPath)
         val paint = Paint().apply {
             isAntiAlias = true
             style = Paint.Style.STROKE
@@ -157,7 +157,7 @@ public class AndroidNativeCanvas(private val canvas: AndroidCanvas) : KiteCanvas
                 val glyphMatrix = textToDevice
                     .concat(KiteMatrix.translation(penX + glyph.xOffset * unitScale, glyph.yOffset * unitScale))
                     .concat(KiteMatrix(unitScale, 0.0, 0.0, unitScale, 0.0, 0.0))
-                val p = toAndroidPath(outline, glyphMatrix).apply { fillType = Path.FillType.WINDING }
+                val p = toAndroidPath(outline, glyphMatrix, scratchPath).apply { fillType = Path.FillType.WINDING }
                 canvas.drawPath(p, paint)
                 drewAny = true
             }
@@ -338,7 +338,7 @@ public class AndroidNativeCanvas(private val canvas: AndroidCanvas) : KiteCanvas
             applyPaintBlend(blendMode)
         }
         if (clipPath != null) {
-            val cp = toAndroidPath(clipPath, ctm).apply { fillType = Path.FillType.WINDING }
+            val cp = toAndroidPath(clipPath, ctm, scratchPath).apply { fillType = Path.FillType.WINDING }
             canvas.drawPath(cp, paint)
         } else {
             canvas.drawPaint(paint)
@@ -564,8 +564,15 @@ public class AndroidNativeCanvas(private val canvas: AndroidCanvas) : KiteCanvas
 
     /* ─── Helpers ─────────────────────────────────────────────────────────── */
 
-    private fun toAndroidPath(src: KitePath, ctm: KiteMatrix): Path {
-        val out = Path()
+    /**
+     * One path that fills, strokes, glyphs and shadings reuse, since a draw copies the path it
+     * paints. A clip builds its own (#130).
+     */
+    private val scratchPath = Path()
+
+    /** [src] under [ctm], rewound into [into] or in a new path. */
+    private fun toAndroidPath(src: KitePath, ctm: KiteMatrix, into: Path? = null): Path {
+        val out = into?.apply { rewind() } ?: Path()
         for (seg in src.segments) {
             when (seg) {
                 is KitePath.Segment.MoveTo -> {

@@ -100,6 +100,7 @@ public class SkiaCanvas(private val canvas: SkCanvas) : KiteCanvas {
             this.blendMode = paintBlend(blendMode)
         }
         canvas.drawPath(sk, paint)
+        sk.close()
     }
 
     override fun strokePath(
@@ -151,6 +152,7 @@ public class SkiaCanvas(private val canvas: SkCanvas) : KiteCanvas {
                 canvas.restore()
             }
         }
+        sk.close()
     }
 
     override fun drawGlyphs(
@@ -188,6 +190,7 @@ public class SkiaCanvas(private val canvas: SkCanvas) : KiteCanvas {
                     .concat(KiteMatrix(unitScale, 0.0, 0.0, unitScale, 0.0, 0.0))
                 val sk = toSkPath(outline, glyphMatrix).apply { fillMode = PathFillMode.WINDING }
                 canvas.drawPath(sk, paint)
+                sk.close()
             }
             penX += glyph.advanceWidth * advanceScale + glyph.advanceAdjust
         }
@@ -416,6 +419,7 @@ public class SkiaCanvas(private val canvas: SkCanvas) : KiteCanvas {
         if (clipPath != null) {
             val sk = toSkPath(clipPath, ctm).apply { fillMode = PathFillMode.WINDING }
             canvas.drawPath(sk, paint)
+            sk.close()
         } else {
             // `sh` operator over the whole device area: paint a huge rect.
             canvas.drawPaint(paint)
@@ -428,7 +432,9 @@ public class SkiaCanvas(private val canvas: SkCanvas) : KiteCanvas {
         val sk = toSkPath(path, ctm).apply {
             fillMode = if (evenOdd) PathFillMode.EVEN_ODD else PathFillMode.WINDING
         }
+        // The clip keeps its own copy of the path.
         canvas.clipPath(sk, antiAlias = true)
+        sk.close()
     }
 
     override fun popClip() {
@@ -646,9 +652,15 @@ public class SkiaCanvas(private val canvas: SkCanvas) : KiteCanvas {
 
     /* ─── Helpers ─────────────────────────────────────────────────────────── */
 
+    /**
+     * One builder that every path reuses. [toSkPath] detaches each path from it, and the
+     * caller closes the path once drawn, so no native object waits for its cleaner (#130).
+     */
+    private val builder = PathBuilder()
+
     private fun toSkPath(src: KitePath, ctm: KiteMatrix): SkPath {
-        // skiko 0.148: Path is immutable; build via PathBuilder then snapshot().
-        val b = PathBuilder()
+        // skiko 0.148: Path is immutable; build via PathBuilder then detach().
+        val b = builder.reset()
         for (seg in src.segments) {
             when (seg) {
                 is KitePath.Segment.MoveTo -> {
@@ -684,7 +696,7 @@ public class SkiaCanvas(private val canvas: SkCanvas) : KiteCanvas {
                 KitePath.Segment.Close -> b.closePath()
             }
         }
-        return b.snapshot()
+        return b.detach()
     }
 
     private fun pdfMatrixToSkia(m: KiteMatrix): Matrix33 = Matrix33(
