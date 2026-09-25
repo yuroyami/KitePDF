@@ -66,6 +66,20 @@ public class PageRenderer(
     private val formState: io.github.yuroyami.kitepdf.PdfFormState? = null,
 ) {
 
+    /** [PageRenderer] whose render stops between operators once [cancellation] reads true (#188). */
+    public constructor(
+        canvas: KiteCanvas,
+        resolver: IndirectResolver,
+        formState: io.github.yuroyami.kitepdf.PdfFormState?,
+        cancellation: io.github.yuroyami.kitepdf.core.KiteCancellation?,
+    ) : this(canvas, resolver, formState) {
+        this.cancellation = cancellation
+    }
+
+    /** Stops the render between operators once it reads true (#188). */
+    private var cancellation: io.github.yuroyami.kitepdf.core.KiteCancellation? = null
+
+
     /** The document's cache of parsed content, when [resolver] is a whole document (#118). */
     private val document: io.github.yuroyami.kitepdf.PdfDocument? = resolver as? io.github.yuroyami.kitepdf.PdfDocument
 
@@ -189,6 +203,9 @@ public class PageRenderer(
      */
     private var dispatchedOps = 0L
 
+    /** True once [cancellation] read true: every later operator is skipped. */
+    private var cancelled = false
+
     /** True while content must not be painted (inside a hidden OC section). */
     private fun ocHidden(): Boolean = ocHiddenDepth > 0
 
@@ -257,6 +274,7 @@ public class PageRenderer(
         pageCropBox = page.cropBox
         formDepth = 0
         dispatchedOps = 0L
+        cancelled = false
         optionalContent = page.internalDocument.optionalContent
         markedContentStack.clear()
         ocHiddenDepth = 0
@@ -1045,7 +1063,12 @@ public class PageRenderer(
         patterns: Map<String, KitePattern>,
         properties: Map<String, PdfObject>,
     ) {
-        if (++dispatchedOps > MAX_DISPATCHED_OPS) return
+        if (++dispatchedOps > MAX_DISPATCHED_OPS || cancelled) return
+        // A caller that gave up on the render stops it between operators, as MuPDF's cookie does (#188).
+        if (dispatchedOps and 31L == 0L && cancellation?.isCancelled() == true) {
+            cancelled = true
+            return
+        }
         // d1 (uncolored) Type3 glyph procs and uncoloured pattern cells must not change colour state.
         if (type3IgnoreColor && op.operator in TYPE3_COLOR_OPS) return
         val a = op.operands

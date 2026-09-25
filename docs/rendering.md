@@ -423,6 +423,18 @@ Turned or skewed text, a glyph with an em over 256 pixels, and text in a blend m
 - **Platform choice:** AWT on JVM and CoreGraphics on Apple are fast. Skia is also fast but has larger memory overhead.
 - **Background color:** Transparent backgrounds (alpha = 0) may be slightly slower than opaque on some platforms.
 
+## Cancelling a render
+
+A long page can be abandoned while it renders. Pass a `KiteCancellation` to `renderTo`: the renderer reads it every 32 operators, and once it reads true the page paints nothing more and returns with the canvas closed. What was painted so far stays on the canvas.
+
+```kotlin
+val job = coroutineContext.job
+page.renderTo(canvas, ctm, KiteCancellation { !job.isActive })
+ensureActive()   // a cancelled render leaves a partial page: do not show it
+```
+
+PDF pages honour the signal. Other formats render their pages to the end.
+
 ## Memory
 
 A `PdfDocument` keeps two caches, so that a page drawn again, at another zoom or after a scroll back, costs less:

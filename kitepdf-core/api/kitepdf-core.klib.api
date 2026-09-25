@@ -67,6 +67,10 @@ abstract fun interface io.github.yuroyami.kitepdf.core.parser/IndirectResolver {
     abstract fun resolve(io.github.yuroyami.kitepdf.core.parser/PdfReference): io.github.yuroyami.kitepdf.core.parser/PdfObject? // io.github.yuroyami.kitepdf.core.parser/IndirectResolver.resolve|resolve(io.github.yuroyami.kitepdf.core.parser.PdfReference){}[0]
 }
 
+abstract fun interface io.github.yuroyami.kitepdf.core/KiteCancellation { // io.github.yuroyami.kitepdf.core/KiteCancellation|null[0]
+    abstract fun isCancelled(): kotlin/Boolean // io.github.yuroyami.kitepdf.core/KiteCancellation.isCancelled|isCancelled(){}[0]
+}
+
 abstract fun interface io.github.yuroyami.kitepdf.core/KiteWarningSink { // io.github.yuroyami.kitepdf.core/KiteWarningSink|null[0]
     abstract fun warn(kotlin/String) // io.github.yuroyami.kitepdf.core/KiteWarningSink.warn|warn(kotlin.String){}[0]
 }
@@ -139,6 +143,7 @@ abstract interface io.github.yuroyami.kitepdf.core/KitePage { // io.github.yuroy
 
     abstract fun displayToDeviceBase(): io.github.yuroyami.kitepdf.core.render/KiteMatrix // io.github.yuroyami.kitepdf.core/KitePage.displayToDeviceBase|displayToDeviceBase(){}[0]
     abstract fun renderTo(io.github.yuroyami.kitepdf.core.render/KiteCanvas, io.github.yuroyami.kitepdf.core.render/KiteMatrix = ...) // io.github.yuroyami.kitepdf.core/KitePage.renderTo|renderTo(io.github.yuroyami.kitepdf.core.render.KiteCanvas;io.github.yuroyami.kitepdf.core.render.KiteMatrix){}[0]
+    open fun renderTo(io.github.yuroyami.kitepdf.core.render/KiteCanvas, io.github.yuroyami.kitepdf.core.render/KiteMatrix, io.github.yuroyami.kitepdf.core/KiteCancellation) // io.github.yuroyami.kitepdf.core/KitePage.renderTo|renderTo(io.github.yuroyami.kitepdf.core.render.KiteCanvas;io.github.yuroyami.kitepdf.core.render.KiteMatrix;io.github.yuroyami.kitepdf.core.KiteCancellation){}[0]
     open fun textContent(): io.github.yuroyami.kitepdf.core/KiteStructuredText? // io.github.yuroyami.kitepdf.core/KitePage.textContent|textContent(){}[0]
 }
 

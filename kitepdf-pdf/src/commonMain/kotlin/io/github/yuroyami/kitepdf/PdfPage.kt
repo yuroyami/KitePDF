@@ -1,5 +1,6 @@
 package io.github.yuroyami.kitepdf
 
+import io.github.yuroyami.kitepdf.core.KiteCancellation
 import io.github.yuroyami.kitepdf.core.KiteRectangle
 
 import io.github.yuroyami.kitepdf.core.KitePage
@@ -315,6 +316,26 @@ public class PdfPage internal constructor(
      */
     override fun renderTo(canvas: KiteCanvas, deviceCtm: KiteMatrix) {
         PageRenderer(canvas, document).render(this, deviceCtm)
+    }
+
+    /** [renderTo] that stops between operators once [cancellation] reads true (#188). */
+    override fun renderTo(canvas: KiteCanvas, deviceCtm: KiteMatrix, cancellation: KiteCancellation) {
+        PageRenderer(canvas, document, null, cancellation).render(this, deviceCtm)
+    }
+
+    /**
+     * [renderTo] with the form state, the annotation filter and a [cancellation] that stops
+     * the render between operators once it reads true. The page returns with the canvas
+     * closed and what it painted so far (#188).
+     */
+    public fun renderTo(
+        canvas: KiteCanvas,
+        deviceCtm: KiteMatrix,
+        formState: PdfFormState?,
+        cancellation: KiteCancellation,
+        annotations: (PdfAnnotation) -> Boolean = { true },
+    ) {
+        PageRenderer(canvas, document, formState, cancellation).render(this, deviceCtm, annotations)
     }
 
     /**
