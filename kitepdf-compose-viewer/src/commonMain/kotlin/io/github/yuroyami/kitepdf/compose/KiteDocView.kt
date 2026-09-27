@@ -971,13 +971,25 @@ private fun KitePageRaster(
     )
     val onRendered by rememberUpdatedState(onPageRendered)
 
+    // The slot's size reaches the raster size only once it stops changing: a window drag, a split
+    // screen or an animated size would start a raster per frame at sizes never used again. The
+    // bitmap on screen is scaled into the slot meanwhile, and a first size is taken at once (#390).
+    val latestBase by rememberUpdatedState(baseSize)
+    val settledBase by produceState(baseSize, page) {
+        snapshotFlow { latestBase }.collectLatest { size ->
+            if (size == value) return@collectLatest
+            if (value.width > 0 && value.height > 0) delay(RESIZE_SETTLE_DEBOUNCE_MS)
+            value = size
+        }
+    }
+
     // A zoom that is not finite never reaches here, but the raster size must not round NaN (#338).
     val zoomScale = if (settledZoom.isFinite()) settledZoom.coerceAtLeast(0.01f) else 1f
     val scale = spec.quality * zoomScale
     // A side that rounds below one pixel keeps one, so every accepted quality gives a page (#422).
     val raster = fitWithin(
-        (baseSize.width * scale).roundToInt().coerceAtLeast(if (baseSize.width > 0f) 1 else 0),
-        (baseSize.height * scale).roundToInt().coerceAtLeast(if (baseSize.height > 0f) 1 else 0),
+        (settledBase.width * scale).roundToInt().coerceAtLeast(if (settledBase.width > 0) 1 else 0),
+        (settledBase.height * scale).roundToInt().coerceAtLeast(if (settledBase.height > 0) 1 else 0),
         kitePageAspect(page),
         spec.maxBitmapLongSide,
     )
@@ -985,7 +997,7 @@ private fun KitePageRaster(
     // and floors other strokes at a fifth of that. When the raster is larger than its
     // final on-screen size (supersampling), both must grow by the same ratio or
     // sub-pixel strokes fade in the downscale. (Upscaling can only thicken them, so 1 is safe.)
-    val visualWidth = baseSize.width * zoomScale
+    val visualWidth = settledBase.width * zoomScale
     val hairline = if (spec.preserveHairlines && visualWidth > 0f) {
         max(1f, raster.width / visualWidth)
     } else 1f
@@ -1325,6 +1337,9 @@ private const val EDGE_MARKER_GUTTER_RATIO = 0.5f
 private const val EDGE_MARKER_MIN_HEIGHT_RATIO = 3f
 
 private const val ZOOM_SETTLE_DEBOUNCE_MS = 220L
+
+/** How long a page slot's size must hold before its raster follows it (#390). */
+private const val RESIZE_SETTLE_DEBOUNCE_MS = 220L
 
 /** Fade-in duration for a freshly rasterized page bitmap. */
 private const val PAGE_FADE_MS = 160
