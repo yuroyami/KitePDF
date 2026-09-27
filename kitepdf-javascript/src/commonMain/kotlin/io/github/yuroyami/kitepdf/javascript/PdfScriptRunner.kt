@@ -25,7 +25,11 @@ import io.github.yuroyami.kitepdf.core.script.KiteScriptException
  * ```
  *
  * Nothing here touches the file. Values land in [formState], which a viewer draws and the editor
- * saves. One runner belongs to one document and to one thread, because the engine does.
+ * saves. One runner belongs to one document.
+ *
+ * A runner can be called from any thread. A KiteJS engine belongs to the thread that opened it, so
+ * the runner opens its engine on a thread of its own and runs every call there, one at a time and
+ * in order. [close] stops that thread. The callbacks below run on it too.
  *
  * Scripts are untrusted input, so [policy] decides whether they run at all and how long they may
  * take, and anything that reaches outside the document arrives at [onRequest] for the host to
@@ -51,15 +55,17 @@ public class PdfScriptRunner(
      * so a script that measures time behaves the same on every run.
      */
     private val clock: (() -> Long)? = null,
+    /**
+     * The engine to run the scripts on, instead of a KiteJS engine the runner opens itself. It
+     * belongs to the thread that made it, so the runner runs on the caller's thread and the
+     * caller keeps every call on that thread.
+     */
     engine: KiteScriptEngine? = null,
 ) : io.github.yuroyami.kitepdf.PdfScriptHandler, AutoCloseable {
 
     /**
-     * The engine, opened when the first script runs rather than when the runner is made.
-     *
-     * An engine belongs to the thread that opened it, and a viewer keeps its scripts off the
-     * thread it draws on, so the runner may be made on one thread and used on another. Opening
-     * it on first use puts it on the thread that will run it.
+     * The engine, opened when the first script runs rather than when the runner is made, and
+     * always on [scriptThread].
      */
     private val engineSource = engine
     private val ownEngine: KiteScriptEngine by lazy {
@@ -70,6 +76,18 @@ public class PdfScriptRunner(
         )
     }
 
+    /** The thread the runner's own engine lives on, started by the first call (#355). */
+    private val scriptThread = lazy { startScriptThread() }
+
+    @kotlin.concurrent.Volatile
+    private var closed = false
+
+    /** Runs [block] on the thread the engine belongs to, and waits for it. */
+    private fun <T> onScriptThread(block: () -> T): T {
+        check(!closed) { "the script runner is closed" }
+        return if (engineSource != null) block() else scriptThread.value.call(block)
+    }
+
     private val host = PdfScriptHost(
         document,
         formState,
@@ -77,7 +95,7 @@ public class PdfScriptRunner(
     )
 
     /** Every script that failed since the runner opened, newest last. */
-    public val failures: List<KiteScriptException> get() = failureList
+    public val failures: List<KiteScriptException> get() = failureCopy
 
     /**
      * What the engine did with each `"use asm"` function in the document, one line each. Empty
@@ -88,9 +106,20 @@ public class PdfScriptRunner(
      * happened and, if not, the first thing in the module that stopped it.
      */
     public val asmReports: List<String>
-        get() = if (!started) emptyList() else (ownEngine as? KiteJsScriptEngine)?.asmReports.orEmpty()
+        get() = onScriptThread {
+            if (!started) emptyList() else (ownEngine as? KiteJsScriptEngine)?.asmReports.orEmpty()
+        }
 
     private val failureList = ArrayList<KiteScriptException>()
+
+    /** [failureList] as the other threads may read it: a new list after every failure. */
+    @kotlin.concurrent.Volatile
+    private var failureCopy: List<KiteScriptException> = emptyList()
+
+    private fun recordFailure(failure: KiteScriptException) {
+        failureList.add(failure)
+        failureCopy = failureList.toList()
+    }
     private var started = false
     private var eventStartedAt: Long = 0
     private var documentSpent: Long = 0
@@ -153,43 +182,42 @@ public class PdfScriptRunner(
 
     override fun commit(fieldName: String, value: String): Boolean = setFieldValue(fieldName, value)
 
-    public fun runDocumentOpen(): List<KiteScriptException> {
+    public fun runDocumentOpen(): List<KiteScriptException> = onScriptThread {
         val before = failureList.size
         runDocumentScripts()
         (document.openAction as? PdfAction.JavaScript)?.let { runAction(it, "openAction") }
-        return failureList.drop(before)
+        failureList.drop(before)
     }
 
     /**
      * Runs every document-level script in the order of their names (ISO 32000-1 §7.7.4). A script
      * that fails is recorded and the ones after it still run.
      */
-    public fun runDocumentScripts(): List<KiteScriptException> {
+    public fun runDocumentScripts(): List<KiteScriptException> = onScriptThread {
         val before = failureList.size
         for ((name, source) in document.documentJavaScripts.entries.sortedBy { it.key }) {
             evaluate(source, name)
         }
-        return failureList.drop(before)
+        failureList.drop(before)
     }
 
     /** Runs the page's open script, its `/AA /O` entry (ISO 32000-1 §12.6.3, Table 195). */
-    public fun runPageOpen(pageIndex: Int): KiteScriptException? {
+    public fun runPageOpen(pageIndex: Int): KiteScriptException? = onScriptThread {
         currentPage = pageIndex
-        val action = document.pages.getOrNull(pageIndex)?.openAction as? PdfAction.JavaScript ?: return null
-        return runAction(action, "page $pageIndex open")
+        val action = document.pages.getOrNull(pageIndex)?.openAction as? PdfAction.JavaScript
+        action?.let { runAction(it, "page $pageIndex open") }
     }
 
     /** Runs the page's close script, its `/AA /C` entry. */
-    public fun runPageClose(pageIndex: Int): KiteScriptException? {
-        val action = document.pages.getOrNull(pageIndex)?.closeAction as? PdfAction.JavaScript ?: return null
-        return runAction(action, "page $pageIndex close")
+    public fun runPageClose(pageIndex: Int): KiteScriptException? = onScriptThread {
+        val action = document.pages.getOrNull(pageIndex)?.closeAction as? PdfAction.JavaScript
+        action?.let { runAction(it, "page $pageIndex close") }
     }
 
     /** Runs one JavaScript action, such as a link's or a button's. */
-    public fun run(action: PdfAction.JavaScript): String? {
+    public fun run(action: PdfAction.JavaScript): String? = onScriptThread {
         prepare()
-        if (!policy.enabled) return null
-        return evaluate(action.script, "action")
+        if (!policy.enabled) null else evaluate(action.script, "action")
     }
 
     private fun runAction(action: PdfAction.JavaScript, name: String): KiteScriptException? {
@@ -226,20 +254,23 @@ public class PdfScriptRunner(
         selectionStart: Int = (formState.value(fieldName) ?: "").length,
         selectionEnd: Int = selectionStart,
         commit: Boolean = false,
-    ): KeystrokeResult {
+    ): KeystrokeResult = onScriptThread {
         prepare()
-        val script = keystrokeScript(fieldName) ?: return KeystrokeResult(true, mergedValue(fieldName, change, selectionStart, selectionEnd))
-        if (!policy.enabled) return KeystrokeResult(true, mergedValue(fieldName, change, selectionStart, selectionEnd))
-        val result = dispatch(
-            script, "keystroke",
-            mapOf(
-                "name" to "Keystroke", "type" to "Field", "field" to fieldName,
-                "value" to (formState.value(fieldName) ?: ""), "change" to change,
-                "selStart" to selectionStart.toDouble(), "selEnd" to selectionEnd.toDouble(),
-                "willCommit" to false,
-            ),
-        )
-        return KeystrokeResult(result.rc, if (result.rc) mergedValue(fieldName, result.change, selectionStart, selectionEnd) else formState.value(fieldName) ?: "")
+        val script = keystrokeScript(fieldName)
+        if (script == null || !policy.enabled) {
+            KeystrokeResult(true, mergedValue(fieldName, change, selectionStart, selectionEnd))
+        } else {
+            val result = dispatch(
+                script, "keystroke",
+                mapOf(
+                    "name" to "Keystroke", "type" to "Field", "field" to fieldName,
+                    "value" to (formState.value(fieldName) ?: ""), "change" to change,
+                    "selStart" to selectionStart.toDouble(), "selEnd" to selectionEnd.toDouble(),
+                    "willCommit" to false,
+                ),
+            )
+            KeystrokeResult(result.rc, if (result.rc) mergedValue(fieldName, result.change, selectionStart, selectionEnd) else formState.value(fieldName) ?: "")
+        }
     }
 
     /**
@@ -250,7 +281,9 @@ public class PdfScriptRunner(
      *
      * Returns false when a script refused the value, in which case nothing was stored.
      */
-    public fun setFieldValue(fieldName: String, value: String): Boolean {
+    public fun setFieldValue(fieldName: String, value: String): Boolean = onScriptThread { commitOnThread(fieldName, value) }
+
+    private fun commitOnThread(fieldName: String, value: String): Boolean {
         prepare()
         if (!policy.enabled) {
             formState.setValue(fieldName, value)
@@ -275,7 +308,7 @@ public class PdfScriptRunner(
             if (!result.rc) return false
             formState.setValue(fieldName, result.value)
         } ?: formState.setValue(fieldName, value)
-        runCalculations()
+        calculateAll()
         formatAll()
         return true
     }
@@ -284,9 +317,12 @@ public class PdfScriptRunner(
      * Runs every calculate script, in the order of the form's `/CO` array (ISO 32000-1 §12.7.2).
      * A form with no order runs them in the order its fields appear.
      */
-    public fun runCalculations() {
+    public fun runCalculations(): Unit = onScriptThread {
         prepare()
-        if (!policy.enabled) return
+        if (policy.enabled) calculateAll()
+    }
+
+    private fun calculateAll() {
         for (name in calculationOrder()) {
             val field = document.formField(name) ?: continue
             val action = field.additionalActions?.calculate as? PdfAction.JavaScript ?: continue
@@ -305,7 +341,9 @@ public class PdfScriptRunner(
      * The text a field shows, after its format script has had it. The stored value does not
      * change: a formatted total still calculates as a number.
      */
-    public fun formattedValue(fieldName: String): String {
+    public fun formattedValue(fieldName: String): String = onScriptThread { formatOnThread(fieldName) }
+
+    private fun formatOnThread(fieldName: String): String {
         prepare()
         val stored = formState.value(fieldName) ?: ""
         if (!policy.enabled) return stored
@@ -330,22 +368,23 @@ public class PdfScriptRunner(
     /** Runs a widget's blur script, which a viewer fires when the field loses the caret. */
     override fun blur(fieldName: String): Unit = widgetEvent(fieldName, "Blur") { it.blur }
 
-    private inline fun widgetEvent(
+    private fun widgetEvent(
         fieldName: String,
         eventName: String,
         select: (io.github.yuroyami.kitepdf.PdfWidgetActions) -> PdfAction?,
-    ) {
+    ): Unit = onScriptThread {
         prepare()
-        if (!policy.enabled) return
-        val actions = document.formField(fieldName)?.additionalActions ?: return
-        val action = select(actions) as? PdfAction.JavaScript ?: return
-        dispatch(
-            action.script, eventName.lowercase(),
-            mapOf(
-                "name" to eventName, "type" to "Field", "field" to fieldName,
-                "value" to (formState.value(fieldName) ?: ""),
-            ),
-        )
+        val actions = if (policy.enabled) document.formField(fieldName)?.additionalActions else null
+        val action = actions?.let(select) as? PdfAction.JavaScript
+        if (action != null) {
+            dispatch(
+                action.script, eventName.lowercase(),
+                mapOf(
+                    "name" to eventName, "type" to "Field", "field" to fieldName,
+                    "value" to (formState.value(fieldName) ?: ""),
+                ),
+            )
+        }
     }
 
     /* ─── timers ────────────────────────────────────────────────────────── */
@@ -357,13 +396,12 @@ public class PdfScriptRunner(
      * A viewer calls this once per frame. Nothing runs on its own: a document cannot take the
      * thread from the host.
      */
-    override fun pumpTimers(nowMillis: Long): Long? {
-        if (!started || !policy.enabled) return null
+    override fun pumpTimers(nowMillis: Long): Long? = onScriptThread {
+        if (!started || !policy.enabled) return@onScriptThread null
         for (code in host.dueTimers(nowMillis)) {
             evaluate(code, "timer")
         }
-        val next = host.nextTimerDue() ?: return null
-        return (next - nowMillis).coerceAtLeast(0)
+        host.nextTimerDue()?.let { next -> (next - nowMillis).coerceAtLeast(0) }
     }
 
     /** True when a script is waiting on a timer, so a viewer knows to keep pumping. */
@@ -372,7 +410,13 @@ public class PdfScriptRunner(
     /* ─── the engine ────────────────────────────────────────────────────── */
 
     private fun dispatch(script: String, name: String, info: Map<String, Any?>): PdfScriptHost.EventResult {
-        ownEngine.defineValue("__kiteEventInfo", info)
+        try {
+            ownEngine.defineValue("__kiteEventInfo", info)
+        } catch (e: KiteScriptException) {
+            // The event never reached its script, so it changes nothing.
+            recordFailure(e)
+            return PdfScriptHost.EventResult(rc = true, value = info["value"] as? String ?: "", change = info["change"] as? String ?: "")
+        }
         // The script runs as a function body, which is where a field's script lives in Acrobat,
         // so its own `var` declarations stay out of the global scope.
         evaluate("__kiteEvent(__kiteEventInfo, function () {\n$script\n})", name)
@@ -386,7 +430,7 @@ public class PdfScriptRunner(
         return try {
             ownEngine.evaluate(source, name)
         } catch (e: KiteScriptException) {
-            failureList.add(e)
+            recordFailure(e)
             null
         } finally {
             documentSpent += (now() - eventStartedAt).coerceAtLeast(0)
@@ -435,7 +479,7 @@ public class PdfScriptRunner(
     private fun formatAll() {
         for (field in document.formFields) {
             if (field.additionalActions?.format == null) continue
-            formattedValue(field.fullyQualifiedName)
+            formatOnThread(field.fullyQualifiedName)
         }
     }
 
@@ -450,8 +494,19 @@ public class PdfScriptRunner(
     }
 
     override fun close() {
+        if (closed) return
+        closed = true
         // Nothing to close when no script ever ran, because no engine was ever opened.
-        if (started) ownEngine.close()
+        if (engineSource != null || !scriptThread.isInitialized()) {
+            if (started) ownEngine.close()
+            return
+        }
+        val thread = scriptThread.value
+        try {
+            thread.call { if (started) ownEngine.close() }
+        } finally {
+            thread.close()
+        }
     }
 }
 
