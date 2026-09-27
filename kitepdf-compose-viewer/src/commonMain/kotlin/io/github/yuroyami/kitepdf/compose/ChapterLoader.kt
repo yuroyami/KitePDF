@@ -4,7 +4,9 @@ import io.github.yuroyami.kitepdf.core.KiteDocument
 import io.github.yuroyami.kitepdf.core.KiteLocation
 import androidx.compose.runtime.MonotonicFrameClock
 import androidx.compose.runtime.withFrameNanos
+import kotlin.coroutines.ContinuationInterceptor
 import kotlin.coroutines.coroutineContext
+import kotlinx.coroutines.CoroutineDispatcher
 
 /**
  * One slot in the strip the viewer scrolls through.
@@ -88,3 +90,19 @@ internal fun loadOrder(chapterCount: Int, around: Int): List<Int> {
  */
 internal suspend fun <T> onComposeThread(block: () -> T): T =
     if (coroutineContext[MonotonicFrameClock] != null) withFrameNanos { block() } else block()
+
+/**
+ * Returns on the composition's thread after a wait that another thread ended: a `withContext`,
+ * a `delay` or a channel receive.
+ *
+ * With a dispatcher that never dispatches, as `ImageComposeScene` has by default, the caller goes
+ * on running on the thread that ended the wait. A snapshot or a scroll from there runs Compose's
+ * layout observers on that thread too (#443). So with such a dispatcher, wait for a frame, which
+ * resumes on the composition's thread. An app's dispatcher brings the caller back by itself, and
+ * this returns at once.
+ */
+internal suspend fun backOnComposeThread() {
+    val context = coroutineContext
+    val dispatcher = context[ContinuationInterceptor] as? CoroutineDispatcher ?: return
+    if (context[MonotonicFrameClock] != null && !dispatcher.isDispatchNeeded(context)) withFrameNanos {}
+}

@@ -273,6 +273,8 @@ public fun KiteDocView(
                 state.scriptsRan()
             }
         }
+        // The page scripts watch the reader with snapshots, which only the composition's thread takes (#443).
+        backOnComposeThread()
         // Then each page's open and close scripts, as the reader lands on pages. They take a
         // page's index in the document, which only a PDF has (#366).
         if (state.document is PdfDocument) state.runPageScripts(handler, scriptLane)
