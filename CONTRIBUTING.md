@@ -71,13 +71,7 @@ The EPUB sweep checks every book's page count against `kitepdf-native-renderer/s
 ./gradlew :kitepdf-native-renderer:jvmTest --tests "*EpubDifferentialTest*" -Dkitepdf.epub.updatePages=true
 ```
 
-The render benchmark is timing-sensitive and runs only behind a flag:
-
-```bash
-./gradlew :kitepdf-native-renderer:jvmTest -PslowTests
-```
-
-It is a local check. No CI job passes the flag, so run it yourself before a change that could slow rendering.
+The render benchmark runs with the other JVM tests of `kitepdf-native-renderer`. It counts the fastest of three runs of each open and each page render, and it scales its budgets by a fixed sort that it times in the same run, so machine load does not fail it.
 
 Each published module keeps a dump of its public API in its `api/` directory. A change to the public API changes that dump too. Run this and commit the changed `api/` files in the same commit:
 
