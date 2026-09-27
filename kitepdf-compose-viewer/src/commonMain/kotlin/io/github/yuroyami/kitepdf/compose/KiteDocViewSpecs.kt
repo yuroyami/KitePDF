@@ -208,9 +208,11 @@ public sealed interface KiteRenderSpec {
     }
 
     /**
-     * Redraw each page into a live `Canvas` every
-     * composition, transformed by zoom/pan via the same GPU layer: no bitmap
-     * (lower memory). Vector content stays sharp at rest on every platform. Once a
+     * Draw each page into a live `Canvas`, transformed by zoom/pan via the same GPU
+     * layer: no bitmap (lower memory). Vector content stays sharp at rest on every
+     * platform. The page draws again when its size, the theme or this spec changes.
+     * A change to the overlay, such as a search hit or a highlight, and each frame
+     * of a pinch replay the drawing that the page recorded. Once a
      * zoom settles, the page draws again at it, so images keep the detail the zoom
      * shows and a hairline stays about one screen pixel wide (#418).
      * On Android the vector display list replays under the live transform, so it
@@ -220,8 +222,10 @@ public sealed interface KiteRenderSpec {
      * deep-zoom crispness, and low memory.
      *
      * The page is drawn inside the Compose draw pass, on the UI thread, and it is
-     * parsed and painted again on every redraw, so a dense page can drop frames.
-     * [Rasterized] renders off the main thread instead.
+     * parsed and painted again on every redraw, so a dense page can drop frames. Each
+     * draw also converts the page's images to bitmaps again, so a page of large
+     * scans, such as a comic, is better in [Rasterized], which renders off the main
+     * thread.
      *
      * @param hairlineWidthPx the width in device pixels of a stroke whose line width
      *   is 0; 1 = the one device pixel of ISO 32000-1, 8.4.3.2. Other thin strokes
