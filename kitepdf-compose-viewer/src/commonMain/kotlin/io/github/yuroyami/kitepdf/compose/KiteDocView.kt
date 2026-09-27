@@ -691,7 +691,7 @@ private fun PagedLayout(
         val isCurrent = index == pagerState.currentPage
         val page = state.pageAt(index)
         if (page == null) {
-            ChapterGapSlot(state, index, Orientation.Vertical, colors, chapterPlaceholder)
+            ChapterGapSlot(state, index, Orientation.Vertical, colors, chapterPlaceholder, letterboxed = true)
         } else PageBox(
             page = page,
             pageIndex = index,
@@ -768,7 +768,7 @@ private fun SinglePageLayout(
     val haptics = LocalHapticFeedback.current
     val only = state.pageAt(layout.pageIndex)
     if (only == null) {
-        ChapterGapSlot(state, layout.pageIndex, Orientation.Vertical, colors, chapterPlaceholder)
+        ChapterGapSlot(state, layout.pageIndex, Orientation.Vertical, colors, chapterPlaceholder, letterboxed = true)
         return
     }
     PageBox(
@@ -1214,9 +1214,23 @@ private fun ChapterGapSlot(
     chapterPlaceholder: (@Composable (chapter: Int) -> Unit)?,
     /** True in the continuous strip, where the slot's length follows its shape and must stay representable. */
     inStrip: Boolean = false,
+    /** True in a pager, where the slot fills the viewport and the placeholder is fitted inside it as a page is. */
+    letterboxed: Boolean = false,
 ) {
     val chapter = state.chapterAt(index) ?: return
     val aspect = state.placeholderAspect()
+    if (letterboxed) {
+        // The shape of the page that replaces it, so the slot does not jump when the chapter lands (#353).
+        BoxWithConstraints(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            val fit = fitWithin(constraints.maxWidth, constraints.maxHeight, aspect)
+            if (fit == IntSize.Zero) return@BoxWithConstraints
+            val size = with(LocalDensity.current) { DpSize(fit.width.toDp(), fit.height.toDp()) }
+            Box(Modifier.size(size).background(colors.pageBackground), contentAlignment = Alignment.Center) {
+                chapterPlaceholder?.invoke(chapter)
+            }
+        }
+        return
+    }
     val sizing = if (inStrip) {
         Modifier.stripSlot(orientation, aspect) { 1 }
     } else {
