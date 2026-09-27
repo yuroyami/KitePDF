@@ -287,8 +287,15 @@ public class KiteDocViewState(
     /**
      * A position to save now and reopen with later. Survives a font size, page
      * size or margin change: hand it to [rememberKiteDocViewState].
+     *
+     * It lays nothing out: on a chapter that is not laid out yet, the reader is at
+     * its start, which is the bookmark (#379).
      */
-    public fun currentBookmark(): KiteBookmark = document.bookmarkOf(currentLocation)
+    public fun currentBookmark(): KiteBookmark {
+        val here = currentLocation
+        if (!document.isChapterReady(here.chapter)) return KiteBookmark.Flow(here.chapter, 0)
+        return document.bookmarkOf(here)
+    }
 
     /** True once every chapter is laid out and [pageCount] is final. */
     public val isComplete: Boolean
