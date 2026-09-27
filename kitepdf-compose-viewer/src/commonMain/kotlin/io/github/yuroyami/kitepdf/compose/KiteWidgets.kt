@@ -187,7 +187,11 @@ public fun KiteThumbnailStrip(
             val aspect = if (page != null) kitePageAspect(page) else state.placeholderAspect()
             val widthPx = (heightPx * aspect).roundToInt().coerceAtLeast(1)
             val shownFor = remember { arrayOfNulls<KitePage>(1) }
-            val bitmap by produceState<ImageBitmap?>(null, page, heightPx, pageBackground) {
+            // A thumbnail is page paint, so it takes the viewer's theme and decorator (#419).
+            val theme = state.viewerTheme
+            val decorator = state.viewerDecorator
+            val paper = paperColor(pageBackground, theme)
+            val bitmap by produceState<ImageBitmap?>(null, page, heightPx, paper, theme, decorator) {
                 // Same mandatory guard as KitePageRaster: an exception escaping
                 // produceState aborts the host app, so a failed thumbnail must
                 // degrade to its placeholder instead. A chapter still laying out
@@ -195,7 +199,7 @@ public fun KiteThumbnailStrip(
                 // thumbnail of the same page keeps the old one (#430).
                 val result = page?.let {
                     rasterizer.rasterizeCachedOrNull(
-                        null, it, widthPx, heightPx, pageBackground, 1f, null, index,
+                        null, it, widthPx, heightPx, paper, 1f, theme, index, canvasDecorator = decorator,
                     )?.first
                 }
                 value = when {
@@ -211,7 +215,7 @@ public fun KiteThumbnailStrip(
                     .height(thumbnailHeight)
                     .aspectRatio(aspect)
                     .clip(shape)
-                    .background(pageBackground)
+                    .background(paper)
                     .border(
                         width = 2.dp,
                         color = if (selected) selectedBorderColor else Color.Transparent,

@@ -241,8 +241,8 @@ public sealed interface KiteRenderSpec {
  *
  * @param pageBackground painted behind page content. Most documents assume
  *   white paper and paint none themselves. When [theme] is set, the theme's paper
- *   colour replaces it on pages, but placeholders and chapter gaps still use it,
- *   and it stays part of the raster cache key (#419, #394).
+ *   colour replaces it everywhere the viewer paints a page: the page, its
+ *   placeholder, a chapter gap and the thumbnails.
  * @param viewportBackground the letterbox/gutter colour around pages.
  * @param theme optional reading theme ([ReaderTheme.Dark]/[ReaderTheme.Sepia]/
  *   [ReaderTheme.Light]). When set, page content colours are remapped (text,
