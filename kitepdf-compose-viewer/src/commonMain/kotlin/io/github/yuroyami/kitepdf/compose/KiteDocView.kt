@@ -30,6 +30,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.mutableStateOf
@@ -766,14 +767,14 @@ private fun PagedLayout(
             ChapterGapSlot(
                 state, index, Orientation.Vertical, colors, chapterPlaceholder, letterboxed = true,
                 gestures = if (isCurrent) Modifier.kiteTransformGestures(state, zoomSpec, scope, onTap) else Modifier,
-                zoom = if (isCurrent) state.zoom else 1f,
-                pan = if (isCurrent) state.panOffset else androidx.compose.ui.geometry.Offset.Zero,
+                zoom = if (isCurrent) ({ state.zoom }) else NO_ZOOM,
+                pan = if (isCurrent) ({ state.panOffset }) else NO_PAN,
             )
         } else PageBox(
             page = page,
             pageIndex = index,
-            zoom = if (isCurrent) state.zoom else 1f,
-            pan = if (isCurrent) state.panOffset else androidx.compose.ui.geometry.Offset.Zero,
+            zoom = if (isCurrent) ({ state.zoom }) else NO_ZOOM,
+            pan = if (isCurrent) ({ state.panOffset }) else NO_PAN,
             gestures = if (isCurrent) {
                 Modifier.kiteTransformGestures(state, zoomSpec, scope, onTap).kiteSelectionGestures(state, haptics)
             } else Modifier,
@@ -791,7 +792,9 @@ private fun PagedLayout(
     // KiteDocViewState (nav widgets). An
     // active text selection takes the swipe away too, so the page cannot turn
     // under a selection drag.
-    val pagerScrollEnabled = userScrollEnabled && !state.overflows && !state.isSelectionActive
+    // Read through a derived state, so a zoom frame recomposes the pager only when the flag flips (#373).
+    val overflows by remember(state) { derivedStateOf { state.overflows } }
+    val pagerScrollEnabled = userScrollEnabled && !overflows && !state.isSelectionActive
     when (layout.orientation) {
         Orientation.Horizontal -> HorizontalPager(
             state = pagerState,
@@ -866,16 +869,16 @@ private fun SinglePageLayout(
         ChapterGapSlot(
             state, slot, Orientation.Vertical, colors, chapterPlaceholder, letterboxed = true,
             gestures = Modifier.kiteTransformGestures(state, zoomSpec, scope, onTap),
-            zoom = state.zoom,
-            pan = state.panOffset,
+            zoom = { state.zoom },
+            pan = { state.panOffset },
         )
         return
     }
     PageBox(
         page = only,
         pageIndex = slot,
-        zoom = state.zoom,
-        pan = state.panOffset,
+        zoom = { state.zoom },
+        pan = { state.panOffset },
         gestures = Modifier.kiteTransformGestures(state, zoomSpec, scope, onTap).kiteSelectionGestures(state, haptics),
         settledZoom = settledZoom,
         renderSpec = renderSpec,
@@ -889,12 +892,17 @@ private fun SinglePageLayout(
 
 /* ── shared page slot (paged/single): letterbox fit + transform ───────────── */
 
+/** The zoom and the pan of a pager slot that is not on screen: none. */
+private val NO_ZOOM: () -> Float = { 1f }
+private val NO_PAN: () -> androidx.compose.ui.geometry.Offset = { androidx.compose.ui.geometry.Offset.Zero }
+
 @Composable
 private fun PageBox(
     page: KitePage,
     pageIndex: Int,
-    zoom: Float,
-    pan: androidx.compose.ui.geometry.Offset,
+    /** The zoom and the pan of the slot's layer, read by the layer itself, so a gesture frame recomposes nothing (#373). */
+    zoom: () -> Float,
+    pan: () -> androidx.compose.ui.geometry.Offset,
     gestures: Modifier,
     settledZoom: Float,
     renderSpec: KiteRenderSpec,
@@ -916,10 +924,12 @@ private fun PageBox(
             .fillMaxSize()
             .then(gestures)
             .graphicsLayer {
-                scaleX = zoom
-                scaleY = zoom
-                translationX = pan.x
-                translationY = pan.y
+                val z = zoom()
+                val p = pan()
+                scaleX = z
+                scaleY = z
+                translationX = p.x
+                translationY = p.y
             },
         contentAlignment = Alignment.Center,
     ) {
@@ -1377,8 +1387,8 @@ private fun ChapterGapSlot(
     letterboxed: Boolean = false,
     /** A pager slot's taps and zoom gestures, and the zoom and pan it draws at, as a page's. */
     gestures: Modifier = Modifier,
-    zoom: Float = 1f,
-    pan: androidx.compose.ui.geometry.Offset = androidx.compose.ui.geometry.Offset.Zero,
+    zoom: () -> Float = NO_ZOOM,
+    pan: () -> androidx.compose.ui.geometry.Offset = NO_PAN,
 ) {
     val chapter = state.chapterAt(index) ?: return
     val aspect = state.placeholderAspect()
@@ -1389,10 +1399,12 @@ private fun ChapterGapSlot(
                 .fillMaxSize()
                 .then(gestures)
                 .graphicsLayer {
-                    scaleX = zoom
-                    scaleY = zoom
-                    translationX = pan.x
-                    translationY = pan.y
+                    val z = zoom()
+                    val p = pan()
+                    scaleX = z
+                    scaleY = z
+                    translationX = p.x
+                    translationY = p.y
                 },
             contentAlignment = Alignment.Center,
         ) {
@@ -1535,8 +1547,8 @@ private fun SpreadLayout(
         ChapterGapSlot(
             state, slot, Orientation.Vertical, colors, chapterPlaceholder, letterboxed = true,
             gestures = Modifier.kiteTransformGestures(state, zoomSpec, scope, onTap),
-            zoom = state.zoom,
-            pan = state.panOffset,
+            zoom = { state.zoom },
+            pan = { state.panOffset },
         )
         return
     }
@@ -1569,7 +1581,9 @@ private fun SpreadLayout(
 
     val scope = rememberCoroutineScope()
     val haptics = LocalHapticFeedback.current
-    val pagerScrollEnabled = userScrollEnabled && !state.overflows && !state.isSelectionActive
+    // Read through a derived state, so a zoom frame recomposes the pager only when the flag flips (#373).
+    val overflows by remember(state) { derivedStateOf { state.overflows } }
+    val pagerScrollEnabled = userScrollEnabled && !overflows && !state.isSelectionActive
     val spreadContent: @Composable (Int) -> Unit = { spread ->
         val isCurrent = spread == pagerState.currentPage
         SpreadBox(
@@ -1577,8 +1591,8 @@ private fun SpreadLayout(
             leftIndex = 2 * spread,
             rightIndex = (2 * spread + 1).takeIf { it < state.itemCount },
             reverseOrder = layout.reverseLayout,
-            zoom = if (isCurrent) state.zoom else 1f,
-            pan = if (isCurrent) state.panOffset else Offset.Zero,
+            zoom = if (isCurrent) ({ state.zoom }) else NO_ZOOM,
+            pan = if (isCurrent) ({ state.panOffset }) else NO_PAN,
             gestures = if (isCurrent) {
                 Modifier.kiteTransformGestures(state, zoomSpec, scope, onTap).kiteSelectionGestures(state, haptics)
             } else Modifier,
@@ -1623,8 +1637,8 @@ private fun SpreadBox(
     leftIndex: Int,
     rightIndex: Int?,
     reverseOrder: Boolean,
-    zoom: Float,
-    pan: Offset,
+    zoom: () -> Float,
+    pan: () -> Offset,
     gestures: Modifier,
     recordGeometry: Boolean,
     settledZoom: Float,
@@ -1649,10 +1663,12 @@ private fun SpreadBox(
             .fillMaxSize()
             .then(gestures)
             .graphicsLayer {
-                scaleX = zoom
-                scaleY = zoom
-                translationX = pan.x
-                translationY = pan.y
+                val z = zoom()
+                val p = pan()
+                scaleX = z
+                scaleY = z
+                translationX = p.x
+                translationY = p.y
             },
         contentAlignment = AbsoluteAlignment.TopLeft,
     ) {
