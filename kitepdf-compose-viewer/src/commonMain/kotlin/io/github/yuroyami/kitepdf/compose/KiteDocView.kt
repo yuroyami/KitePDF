@@ -880,9 +880,10 @@ private fun KitePageRaster(
     // A zoom that is not finite never reaches here, but the raster size must not round NaN (#338).
     val zoomScale = if (settledZoom.isFinite()) settledZoom.coerceAtLeast(0.01f) else 1f
     val scale = spec.quality * zoomScale
+    // A side that rounds below one pixel keeps one, so every accepted quality gives a page (#422).
     val raster = fitWithin(
-        (baseSize.width * scale).roundToInt(),
-        (baseSize.height * scale).roundToInt(),
+        (baseSize.width * scale).roundToInt().coerceAtLeast(if (baseSize.width > 0f) 1 else 0),
+        (baseSize.height * scale).roundToInt().coerceAtLeast(if (baseSize.height > 0f) 1 else 0),
         kitePageAspect(page),
         spec.maxBitmapLongSide,
     )
@@ -928,10 +929,12 @@ private fun KitePageRaster(
         label = "pdf-page-raster",
     ) { bmp ->
         if (bmp != null) {
+            // The raster has the page's shape up to rounding, so it fills the slot. Fitted, a
+            // raster of a pixel or two kept its rounded shape and drew as a sliver (#422).
             Image(
                 bitmap = bmp,
                 contentDescription = null,
-                contentScale = ContentScale.Fit,
+                contentScale = ContentScale.FillBounds,
                 modifier = Modifier.fillMaxSize(),
             )
         } else if (pagePlaceholder != null) {
