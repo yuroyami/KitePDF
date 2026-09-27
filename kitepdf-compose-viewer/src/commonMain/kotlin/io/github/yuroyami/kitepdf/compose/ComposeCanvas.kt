@@ -14,6 +14,7 @@ import androidx.compose.ui.graphics.PathFillType
 import androidx.compose.ui.graphics.PathSegment
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.graphics.isSupported
 import io.github.yuroyami.kitepdf.core.kiteWarn
@@ -30,6 +31,7 @@ import io.github.yuroyami.kitepdf.core.font.KiteFontFamily
 import io.github.yuroyami.kitepdf.core.font.FontSpec
 import io.github.yuroyami.kitepdf.core.font.TextGlyph
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Shader
 import androidx.compose.ui.graphics.ShaderBrush
 import io.github.yuroyami.kitepdf.core.render.KiteBlendMode
 import io.github.yuroyami.kitepdf.core.render.KiteBitmapCache
@@ -80,6 +82,8 @@ public class ComposeCanvas internal constructor(
      * page: image sampling and the hairline follow the pixels on screen, not the pixels drawn.
      */
     private val magnification: Float,
+    /** The platform's gradient between two circles, or null where it has none. A test can take it away. */
+    private val twoCircleShader: (Float, Float, Float, Float, Float, Float, List<Color>, List<Float>) -> Shader? = ::twoCircleGradient,
 ) : KiteCanvas {
 
     /**
@@ -460,6 +464,21 @@ public class ComposeCanvas internal constructor(
         val det = ctm.a * ctm.d - ctm.b * ctm.c
         if (det == 0.0 || !det.isFinite()) return
 
+        // Without a region the shading covers the whole canvas (the `sh` operator), taken back into shading space.
+        val region = clipPath ?: KitePath.Builder().apply {
+            val w = drawScope.size.width.toDouble()
+            val h = drawScope.size.height.toDouble()
+            fun corner(x: Double, y: Double, first: Boolean) {
+                val sx = (ctm.d * (x - ctm.e) - ctm.c * (y - ctm.f)) / det
+                val sy = (ctm.a * (y - ctm.f) - ctm.b * (x - ctm.e)) / det
+                if (first) moveTo(sx, sy) else lineTo(sx, sy)
+            }
+            corner(0.0, 0.0, true); corner(w, 0.0, false); corner(w, h, false); corner(0.0, h, false)
+            close()
+        }.build()
+        val composeBlend = paintBlend(blendMode)
+        val a = alpha.toFloat().coerceIn(0f, 1f)
+
         val brush: Brush = when (shading) {
             is KiteShading.Axial -> {
                 val c = shading.coords
@@ -475,10 +494,17 @@ public class ComposeCanvas internal constructor(
                 val c = shading.coords
                 val r0 = c[2].coerceAtLeast(0.0)
                 val r1 = c[5].coerceAtLeast(0.1 / sqrt(abs(det)))
-                twoCircleGradient(
+                val native = twoCircleShader(
                     c[0].toFloat(), c[1].toFloat(), r0.toFloat(), c[3].toFloat(), c[4].toFloat(), r1.toFloat(),
                     composeStops.map { it.second }, composeStops.map { it.first },
-                )?.let { ShaderBrush(it) } ?: oneCircleGradient(c[0], c[1], r0, c[3], c[4], r1, composeStops)
+                )
+                if (native == null && (c[0] != c[3] || c[1] != c[4])) {
+                    // No gradient between two circles here, and one around the end circle would
+                    // move an off-centre shading, so draw its pixels (#413).
+                    drawTwoCircles(c[0], c[1], r0, c[3], c[4], r1, composeStops, ctm, region, a, composeBlend)
+                    return
+                }
+                native?.let { ShaderBrush(it) } ?: oneCircleGradient(c[0], c[1], r0, c[3], c[4], r1, composeStops)
             }
             is KiteShading.Unsupported -> {
                 // Background fall-back: solid colour if the spec gave one.
@@ -491,23 +517,46 @@ public class ComposeCanvas internal constructor(
             else -> return // complex shading types already handled by paintComplexShading
         }
 
-        // Without a region the shading covers the whole canvas (the `sh` operator), taken back into shading space.
-        val region = clipPath ?: KitePath.Builder().apply {
-            val w = drawScope.size.width.toDouble()
-            val h = drawScope.size.height.toDouble()
-            fun corner(x: Double, y: Double, first: Boolean) {
-                val sx = (ctm.d * (x - ctm.e) - ctm.c * (y - ctm.f)) / det
-                val sy = (ctm.a * (y - ctm.f) - ctm.b * (x - ctm.e)) / det
-                if (first) moveTo(sx, sy) else lineTo(sx, sy)
-            }
-            corner(0.0, 0.0, true); corner(w, 0.0, false); corner(w, h, false); corner(0.0, h, false)
-            close()
-        }.build()
-        val composeBlend = paintBlend(blendMode)
-        val a = alpha.toFloat().coerceIn(0f, 1f)
         drawScope.withTransform({ transform(ctm.toComposeMatrix()) }) {
             val cp = toComposePath(region, KiteMatrix.IDENTITY, scratchPath).apply { fillType = PathFillType.NonZero }
             drawPath(cp, brush = brush, alpha = a, blendMode = composeBlend)
+        }
+    }
+
+    /**
+     * Draws a gradient between two circles, in shading space under [ctm], as an image of the
+     * device pixels of [region]. See [twoCircleImage]. A large region is drawn at a lower
+     * resolution and scaled up, which a smooth gradient hides.
+     */
+    private fun drawTwoCircles(
+        x0: Double, y0: Double, r0: Double, x1: Double, y1: Double, r1: Double,
+        stops: Array<Pair<Float, Color>>,
+        ctm: KiteMatrix,
+        region: KitePath,
+        alpha: Float,
+        blend: ComposeBlendMode,
+    ) {
+        val toShading = ctm.invert() ?: return
+        val devicePath = toComposePath(region, ctm).apply { fillType = PathFillType.NonZero }
+        val bounds = devicePath.getBounds().intersect(Rect(Offset.Zero, drawScope.size))
+        if (bounds.width <= 0f || bounds.height <= 0f) return
+        val left = kotlin.math.floor(bounds.left.toDouble())
+        val top = kotlin.math.floor(bounds.top.toDouble())
+        val w = kotlin.math.ceil(bounds.right.toDouble()) - left
+        val h = kotlin.math.ceil(bounds.bottom.toDouble()) - top
+        val pixelSize = if (w * h <= TWO_CIRCLE_MAX_PIXELS) 1.0 else sqrt(w * h / TWO_CIRCLE_MAX_PIXELS)
+        val width = kotlin.math.ceil(w / pixelSize).toInt()
+        val height = kotlin.math.ceil(h / pixelSize).toInt()
+        val image = twoCircleImage(x0, y0, r0, x1, y1, r1, stops, toShading, left, top, width, height, pixelSize) ?: return
+        drawScope.clipPath(devicePath) {
+            drawImage(
+                image = image,
+                dstOffset = androidx.compose.ui.unit.IntOffset(left.toInt(), top.toInt()),
+                dstSize = IntSize(kotlin.math.ceil(width * pixelSize).toInt(), kotlin.math.ceil(height * pixelSize).toInt()),
+                alpha = alpha,
+                blendMode = blend,
+                filterQuality = FilterQuality.Low,
+            )
         }
     }
 
