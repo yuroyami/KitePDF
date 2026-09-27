@@ -684,6 +684,25 @@ internal class BoxLayout(
 
     // ---- inline layout -------------------------------------------------------
 
+    /**
+     * How many characters of the block's text each of [lines] stands for, in code points: from
+     * its first character to the next line's. A space dropped at a break counts for the line
+     * before it and an added hyphen for none, so the lines add up to the text of [runs] in every
+     * layout, and a reading position survives a change of font or width (#434).
+     */
+    private fun sourceLengths(lines: List<List<Cell>>, runs: List<InlineRun>): IntArray {
+        val total = runs.sumOf { codePointCount(it.text) }
+        val starts = IntArray(lines.size)
+        var next = total
+        for (i in lines.indices.reversed()) {
+            val first = lines[i].minOfOrNull { if (it.src >= 0) it.src else Int.MAX_VALUE } ?: Int.MAX_VALUE
+            starts[i] = minOf(first, next)
+            next = starts[i]
+        }
+        if (starts.isNotEmpty()) starts[0] = 0
+        return IntArray(lines.size) { i -> (if (i + 1 < lines.size) starts[i + 1] else total) - starts[i] }
+    }
+
     private fun layoutInline(
         runs: List<InlineRun>, contentW: Double, contentLeft: Double, topY: Double,
         style: ComputedStyle, marker: String?, markerColor: RgbColor,
@@ -711,6 +730,7 @@ internal class BoxLayout(
             // positive indent eats into the first line's budget.
             firstLineIndent = style.textIndentPt.coerceAtLeast(0.0),
         )
+        val lengths = sourceLengths(cellLines, runs)
         val visualLines = bidiLines(cellLines, baseLevel) // logical → visual order (UAX #9)
         val out = ArrayList<PositionedLine>(cellLines.size)
         var y = topY
@@ -759,7 +779,7 @@ internal class BoxLayout(
                 markerRun(marker, style.fontSizePt, contentLeft, contentLeft + contentW, rtl, markerColor)?.let(placed::add)
             }
             placed.addAll(placeRuns(cells, xStart, extraPerSpace, images))
-            out.add(PositionedLine(placed, y, lineHeight, ascent, images))
+            out.add(PositionedLine(placed, y, lineHeight, ascent, images, lengths[i]))
             y += lineHeight
         }
         if (out.isEmpty()) {
@@ -919,6 +939,10 @@ internal class BoxLayout(
         val backgroundColor: CssBackground? = null,
         // The bidi level of the character, from [bidiLevels]; odd for right to left.
         val level: Int = 0,
+        // Where the cell's character sits in the block's text, in code points. A ligature keeps
+        // its first character's. -1 for a space and for a cell the layout adds, such as a
+        // hyphen, so a line starts at its first other character.
+        var src: Int = -1,
     )
 
     private sealed class Token {
@@ -952,6 +976,8 @@ internal class BoxLayout(
         var word = ArrayList<Cell>()
         var wordW = 0.0
         var softHyphens = ArrayList<Int>()
+        // The next character's place in the block's text; it counts what draws nothing too.
+        var srcAt = 0
         fun endWord() {
             if (word.isNotEmpty()) {
                 val ligated = shapeWord(word)   // GSUB: joining forms, ligatures, contextual substitutions
@@ -1007,6 +1033,8 @@ internal class BoxLayout(
             // content width. Undecodable images are skipped like block ones.
             if (run.imageSrc != null) {
                 endWord()
+                val src = srcAt
+                srcAt += codePointCount(run.text)
                 val svg = run.imageSvg ?: if (run.imageSrc.endsWith(".svg", true)) loadSvg(run.imageSrc) else null
                 val img = if (svg == null) loadImage(run.imageSrc) else null
                 val iw: Double; val ih: Double
@@ -1031,7 +1059,7 @@ internal class BoxLayout(
                     run.color, 0.0, null,
                     href = run.href, imageWidth = w, imageHeight = h, image = img, svgImage = svg,
                     imageAlt = run.imageAlt, imageObjectFit = run.imageObjectFit, imageZipPath = run.imageSrc,
-                    level = levelsOfRun?.get(0) ?: 0,
+                    level = levelsOfRun?.get(0) ?: 0, src = src,
                 )
                 tokens.add(Token.Word(listOf(cell), inlineSize))
                 continue
@@ -1048,7 +1076,7 @@ internal class BoxLayout(
             }
             val spec = fontSpec(run.family, run.bold, run.italic)
             val face = run.fontFamilyNames.firstNotNullOfOrNull { fonts.match(it, run.bold, run.italic) }
-            fun cellFor(cp: Int, level: Int): Cell {
+            fun cellFor(cp: Int, level: Int, src: Int): Cell {
                 // font-variant: small-caps. Prefer the face's real `smcp` glyph;
                 // otherwise synthesize: the UPPERCASE form at 0.8x size (the cell
                 // then carries the uppercase char, a documented extraction quirk).
@@ -1077,11 +1105,11 @@ internal class BoxLayout(
                     val gid = if (smcpGid >= 0) smcpGid else f.gidFor(c)
                     Cell(c, penAdvance1000(f, gid, c) * cellFs / 1000.0, cellFs, spec, run.color, shift, run.underline, f, gid,
                         rubyGroup = run.rubyGroup, rubyText = run.rubyText, href = run.href,
-                        lineThrough = run.lineThrough, backgroundColor = run.backgroundColor, level = level)
+                        lineThrough = run.lineThrough, backgroundColor = run.backgroundColor, level = level, src = src)
                 } else {
                     Cell(c, FontMetrics.advancePt(c, cellFs, run.bold, run.italic, run.family), cellFs, spec, run.color, shift, run.underline,
                         rubyGroup = run.rubyGroup, rubyText = run.rubyText, href = run.href,
-                        lineThrough = run.lineThrough, backgroundColor = run.backgroundColor, level = level)
+                        lineThrough = run.lineThrough, backgroundColor = run.backgroundColor, level = level, src = src)
                 }
                 // letter-spacing: added to every glyph advance, kept in sync
                 // between the wrap width and the drawn advance (like kerning).
@@ -1096,6 +1124,7 @@ internal class BoxLayout(
             while (at < run.text.length) {
                 val cp = codePointAt(run.text, at)
                 val level = levelsOfRun?.get(at) ?: 0
+                val src = srcAt++
                 at += charCount(cp)
                 when {
                     cp == '\n'.code -> { endWord(); tokens.add(Token.Break) }
@@ -1117,7 +1146,7 @@ internal class BoxLayout(
                         // stays with the char before it, and anything after an opener
                         // stays with the opener (an opener must not end a line).
                         endWord()
-                        val cell = cellFor(cp, level)
+                        val cell = cellFor(cp, level, src)
                         val last = tokens.lastOrNull()
                         val bindsBack = last is Token.Word && last.cells.isNotEmpty() &&
                             (isCloser(cp) || isOpener(last.cells.last().cp))
@@ -1128,7 +1157,7 @@ internal class BoxLayout(
                             tokens.add(Token.Word(listOf(cell), cell.width))
                         }
                     }
-                    else -> { val c = cellFor(cp, level); word.add(c); wordW += c.width }
+                    else -> { val c = cellFor(cp, level, src); word.add(c); wordW += c.width }
                 }
             }
         }
@@ -1212,6 +1241,7 @@ internal class BoxLayout(
                     base.spec, base.color, base.shift, base.underline, face, g.gid, kernAfter1000 = spacing,
                     rubyGroup = base.rubyGroup, rubyText = base.rubyText, href = base.href,
                     lineThrough = base.lineThrough, backgroundColor = base.backgroundColor, level = base.level,
+                    src = base.src,
                 ).also {
                     it.ligComponents = g.components; it.text = text
                     if (g.shaperData and TextShaper.INVISIBLE != 0) { it.invisible = true; it.width = 0.0 }

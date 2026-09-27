@@ -61,9 +61,10 @@ public sealed class KiteBookmark {
      *
      * @param chapter the spine item, zero-based.
      * @param charOffset how far into the chapter's text the position is, in
-     *   characters of reading order. Re-flowing moves the words to another
-     *   page, but not to another offset. Hyphenation can shift it by a few
-     *   characters; this is a reading position, not a pointer.
+     *   characters (code points) of reading order, not glyphs. Re-flowing moves
+     *   the words to another page, but not to another offset: a new font, a
+     *   ligature or an added hyphen does not change it. It resolves to the page
+     *   that holds that character, so it is a reading position, not a pointer.
      * @param fragment an element id (`<h2 id="part-two">`), when the position
      *   came from a link or a table-of-contents entry. It wins over
      *   [charOffset] when it resolves.

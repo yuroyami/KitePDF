@@ -760,9 +760,12 @@ public class EpubDocument internal constructor(
     private fun anchorYIn(summary: ChapterSummary, id: String): Double? =
         summary.anchors.firstOrNull { it.first == id }?.second
 
-    /** Characters of text on one page, the unit [KiteBookmark.Flow.charOffset] counts in. */
+    /**
+     * Characters of the book's text on one page, the unit [KiteBookmark.Flow.charOffset] counts
+     * in. It counts characters, not glyphs, so a ligature or an added hyphen moves no position (#434).
+     */
     private fun textLengthOf(page: PageRender): Int =
-        page.lines.sumOf { line -> line.runs.sumOf { it.glyphs.size } }
+        page.lines.sumOf { it.sourceLength }
 
     private fun collectAnchors(box: LayoutBox, sink: (String, Double) -> Unit) {
         when (box) {

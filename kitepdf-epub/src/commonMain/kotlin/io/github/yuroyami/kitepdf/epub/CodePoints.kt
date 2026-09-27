@@ -20,6 +20,17 @@ internal fun appendCodePoint(out: StringBuilder, cp: Int) {
 /** The number of UTF-16 chars that [cp] takes. */
 internal fun charCount(cp: Int): Int = if (cp >= 0x10000) 2 else 1
 
+/** How many code points [text] holds, a surrogate pair as one. */
+internal fun codePointCount(text: CharSequence): Int {
+    var n = 0
+    var i = 0
+    while (i < text.length) {
+        i += charCount(codePointAt(text, i))
+        n++
+    }
+    return n
+}
+
 /** The code points of [text], a surrogate pair as one. */
 internal fun codePointsOf(text: CharSequence): IntArray {
     val out = IntArray(text.length)
