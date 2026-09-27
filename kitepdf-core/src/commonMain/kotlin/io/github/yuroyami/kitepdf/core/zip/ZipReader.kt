@@ -103,6 +103,33 @@ public class ZipReader private constructor(
     }
 
     /**
+     * The first [maxBytes] bytes of [name], or all of them when the entry is shorter, or null
+     * when it is absent or unreadable. It inflates only as far as it needs and checks no
+     * CRC-32, so it reads a file's header without the rest of it.
+     */
+    public fun readPrefix(name: String, maxBytes: Int): ByteArray? {
+        val e = entries[name] ?: return null
+        if ((e.flags and 0x41) != 0 || maxBytes <= 0) return null
+        val lo = e.localHeaderOffset.toIntOrNull() ?: return null
+        if (!hasRange(lo, 30) || u32(lo) != LOCAL_FILE_SIG) return null
+        if ((u16(lo + 6) and 0x41) != 0 || u16(lo + 8) != e.method) return null
+        val dataStart = checkedEnd(lo.toLong(), 30L + u16(lo + 26).toLong() + u16(lo + 28).toLong()) ?: return null
+        val limit = minOf(maxBytes, maxEntryBytes)
+        // A streaming writer leaves the sizes unknown; then the prefix may run into what follows.
+        val dataEnd = if (e.compressedSize >= 0) checkedEnd(dataStart.toLong(), e.compressedSize) ?: return null else bytes.size
+        return when (e.method) {
+            0 -> bytes.copyOfRange(dataStart, minOf(dataEnd, dataStart + limit))
+            8 -> {
+                val out = ByteArrayBuilder(initialCapacity = minOf(limit, 64 * 1024))
+                // The inflater throws once it passes the limit, which ends the read with the prefix in hand.
+                runCatching { Inflater(bytes, dataStart, dataEnd, limit).inflateTo(out) }
+                out.toByteArray().let { if (it.size > limit) it.copyOf(limit) else it }.takeIf { it.isNotEmpty() }
+            }
+            else -> null
+        }
+    }
+
+    /**
      * True when [name]'s bytes match the CRC-32 the archive claims, false when
      * they do not, null when the entry is absent, unreadable, or carries no
      * CRC to check against.

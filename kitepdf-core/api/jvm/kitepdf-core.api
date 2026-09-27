@@ -2482,6 +2482,7 @@ public final class io/github/yuroyami/kitepdf/core/zip/ZipReader {
 	public final fun entry (Ljava/lang/String;)Lio/github/yuroyami/kitepdf/core/zip/ZipEntryInfo;
 	public final fun getNames ()Ljava/util/Set;
 	public final fun read (Ljava/lang/String;)[B
+	public final fun readPrefix (Ljava/lang/String;I)[B
 	public final fun readText (Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;
 	public static synthetic fun readText$default (Lio/github/yuroyami/kitepdf/core/zip/ZipReader;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Ljava/lang/String;
 	public final fun verify (Ljava/lang/String;)Ljava/lang/Boolean;

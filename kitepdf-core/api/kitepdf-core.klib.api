@@ -1688,6 +1688,7 @@ final class io.github.yuroyami.kitepdf.core.zip/ZipReader { // io.github.yuroyam
 
     final fun entry(kotlin/String): io.github.yuroyami.kitepdf.core.zip/ZipEntryInfo? // io.github.yuroyami.kitepdf.core.zip/ZipReader.entry|entry(kotlin.String){}[0]
     final fun read(kotlin/String): kotlin/ByteArray? // io.github.yuroyami.kitepdf.core.zip/ZipReader.read|read(kotlin.String){}[0]
+    final fun readPrefix(kotlin/String, kotlin/Int): kotlin/ByteArray? // io.github.yuroyami.kitepdf.core.zip/ZipReader.readPrefix|readPrefix(kotlin.String;kotlin.Int){}[0]
     final fun readText(kotlin/String, kotlin/String? = ...): kotlin/String? // io.github.yuroyami.kitepdf.core.zip/ZipReader.readText|readText(kotlin.String;kotlin.String?){}[0]
     final fun verify(kotlin/String): kotlin/Boolean? // io.github.yuroyami.kitepdf.core.zip/ZipReader.verify|verify(kotlin.String){}[0]
 
