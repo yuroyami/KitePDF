@@ -18,9 +18,9 @@ import io.github.yuroyami.kitepdf.core.render.SoftMask
 import io.github.yuroyami.kitepdf.core.render.gridFitImage
 import io.github.yuroyami.kitepdf.core.render.imageSampling
 import io.github.yuroyami.kitepdf.core.render.sampleStops
-import io.github.yuroyami.kitepdf.core.render.shrinkRgba
 import io.github.yuroyami.kitepdf.core.render.strokePen
 import io.github.yuroyami.kitepdf.core.render.toRgbaBytes
+import io.github.yuroyami.kitepdf.core.render.toShrunkRgbaBytes
 import org.jetbrains.skia.BlendMode as SkiaBlendMode
 import org.jetbrains.skia.Canvas as SkCanvas
 import org.jetbrains.skia.Color
@@ -505,11 +505,11 @@ public class SkiaCanvas(private val canvas: SkCanvas) : KiteCanvas {
             null
         }
         KiteImageData.Kind.RAW -> try {
-            image.toRgbaBytes()?.let { rgba ->
-                // An image drawn smaller than its pixels is averaged down first, so fine detail fades instead of dropping out.
+            // An image drawn smaller than its pixels is averaged down first, so fine detail fades instead
+            // of dropping out, and it converts and shrinks a band of rows at a time (#381).
+            image.toShrunkRgbaBytes(sampling.shrinkX, sampling.shrinkY)?.let { pixels ->
                 val w = sampling.shrunkWidth(image.width)
                 val h = sampling.shrunkHeight(image.height)
-                val pixels = if (sampling.shrinks) shrinkRgba(rgba, image.width, image.height, sampling.shrinkX, sampling.shrinkY) else rgba
                 // toRgbaBytes() emits straight (non-premultiplied) R,G,B,A
                 // per pixel, matching RGBA_8888. UNPREMUL honours the alpha
                 // channel (SMask alpha, ImageMask stencil transparency);

@@ -21,9 +21,9 @@ import io.github.yuroyami.kitepdf.core.render.gridFitImage
 import io.github.yuroyami.kitepdf.core.render.imageSampling
 import io.github.yuroyami.kitepdf.core.render.sampleStops
 import io.github.yuroyami.kitepdf.core.render.shrinkArgb
-import io.github.yuroyami.kitepdf.core.render.shrinkRgba
 import io.github.yuroyami.kitepdf.core.render.strokePen
 import io.github.yuroyami.kitepdf.core.render.toRgbaBytes
+import io.github.yuroyami.kitepdf.core.render.toShrunkRgbaBytes
 import java.awt.AlphaComposite
 import java.awt.BasicStroke
 import java.awt.Color
@@ -536,13 +536,9 @@ public class AwtCanvas(private var g: Graphics2D) : KiteCanvas {
             // ImageMask stencils, is assembled into a flat RGBA8888 buffer by the
             // shared rasterizer (the same path the Compose/Skia backends use). Wrap
             // it in an ARGB BufferedImage so ImageMask + SMask alpha survive.
-            else -> image.toRgbaBytes()?.let { rgba ->
-                if (!sampling.shrinks) return@let rgbaToBufferedImage(rgba, image.width, image.height)
-                rgbaToBufferedImage(
-                    shrinkRgba(rgba, image.width, image.height, sampling.shrinkX, sampling.shrinkY),
-                    sampling.shrunkWidth(image.width),
-                    sampling.shrunkHeight(image.height),
-                )
+            // An image drawn smaller converts and shrinks a band of rows at a time (#381).
+            else -> image.toShrunkRgbaBytes(sampling.shrinkX, sampling.shrinkY)?.let { rgba ->
+                rgbaToBufferedImage(rgba, sampling.shrunkWidth(image.width), sampling.shrunkHeight(image.height))
             }
         }
     } catch (t: Throwable) {

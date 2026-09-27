@@ -11,6 +11,9 @@ public const val KITE_DEFAULT_MAX_RASTER_PIXELS: Long = 40_000_000L
 /** Keep the soft-mask remap acceleration from becoming a second huge bitmap. */
 private const val MAX_MASK_COLUMN_MAP: Int = 1_000_000
 
+/** The RGBA bytes of one band of rows that [toShrunkRgbaBytes] converts at a time. */
+private const val BAND_RGBA_BYTES: Long = 4L * 1024 * 1024
+
 /**
  * Assemble a [Kind.RAW][KiteImageData.Kind.RAW] image's already-decoded samples
  * into a flat RGBA8888 buffer (R,G,B,A per pixel, row-major, no padding) that a
@@ -91,6 +94,77 @@ public fun KiteImageData.toRgbaBytes(): ByteArray? {
     applySoftMaskAlpha(out)
     unblendMatte(out)
     return out
+}
+
+/**
+ * [toRgbaBytes], averaged down by [shrinkX] columns and [shrinkY] rows as [shrinkRgba] does.
+ * The image converts a band of rows at a time, so a large scan drawn small never becomes one
+ * full-size RGBA array, and the pixel limit applies to the smaller output (#381).
+ */
+public fun KiteImageData.toShrunkRgbaBytes(shrinkX: Int, shrinkY: Int): ByteArray? =
+    toShrunkRgbaBytes(shrinkX, shrinkY, BAND_RGBA_BYTES)
+
+/** [toShrunkRgbaBytes] with bands of about [bandBytes] of RGBA. A test makes them small. */
+internal fun KiteImageData.toShrunkRgbaBytes(shrinkX: Int, shrinkY: Int, bandBytes: Long): ByteArray? {
+    val fx = shrinkX.coerceAtLeast(1)
+    val fy = shrinkY.coerceAtLeast(1)
+    if (fx == 1 && fy == 1) return toRgbaBytes()
+    val w = width
+    val h = height
+    if (w <= 0 || h <= 0 || w.toLong() * h > Int.MAX_VALUE) return null
+    val outWidth = (w + fx - 1) / fx
+    val outHeight = (h + fy - 1) / fy
+    if (outWidth.toLong() * outHeight > KITE_DEFAULT_MAX_RASTER_PIXELS) return null
+    val src = pixelBytes ?: return null
+    // The space and the row size come from the whole image, as toRgbaBytes finds them.
+    val space = if (isImageMask) null else resolvedColorSpace ?: inferDeviceSpace(src, w * h) ?: return null
+    val components = when {
+        isImageMask || space is KiteColorSpace.Indexed -> 1
+        else -> space?.componentCount ?: return null
+    }
+    val rowBytes = packedRowBytes(w, components, if (isImageMask) 1 else bitsPerComponent) ?: return null
+    if (src.size.toLong() < rowBytes.toLong() * h) return null
+    val out = ByteArray(outWidth * outHeight * 4)
+    // Whole blocks of shrinkY rows, so each band averages down as the whole image would.
+    val bandRows = (bandBytes / (w.toLong() * 4 * fy)).coerceIn(1L, (h / fy + 1).toLong()).toInt() * fy
+    var y = 0
+    while (y < h) {
+        val rows = minOf(bandRows, h - y)
+        val band = rowBand(y, rows, src, rowBytes, space).toRgbaBytes() ?: return null
+        shrinkRgba(band, w, rows, fx, fy).copyInto(out, (y / fy) * outWidth * 4)
+        y += rows
+    }
+    return out
+}
+
+/**
+ * Rows [y] until [y] + [rows] of this image, as an image of their own. The alpha plane is taken
+ * at the image's size, with the same resampling that [applySoftMaskAlpha] does for the whole image.
+ */
+private fun KiteImageData.rowBand(y: Int, rows: Int, src: ByteArray, rowBytes: Int, space: KiteColorSpace?): KiteImageData {
+    val alpha = softMaskAlpha?.takeIf { softMaskWidth > 0 && softMaskHeight > 0 && softMaskWidth.toLong() * softMaskHeight <= Int.MAX_VALUE }
+        ?.let { mask ->
+            val mw = softMaskWidth
+            val mh = softMaskHeight
+            ByteArray(width * rows).also { band ->
+                var i = 0
+                for (row in y until y + rows) {
+                    val sameSize = mw == width && mh == height
+                    val rowBase = if (sameSize) row.toLong() * width else (row.toLong() * mh / height) * mw
+                    for (x in 0 until width) {
+                        val index = rowBase + if (sameSize) x.toLong() else x.toLong() * mw / width
+                        band[i++] = if (index < mask.size) mask[index.toInt()] else 0xFF.toByte()
+                    }
+                }
+            }
+        }
+    return KiteImageData(
+        width = width, height = rows, bitsPerComponent = bitsPerComponent, colorSpace = colorSpace, kind = kind,
+        encodedBytes = encodedBytes, pixelBytes = src.copyOfRange(y * rowBytes, (y + rows) * rowBytes),
+        softMaskAlpha = alpha, softMaskWidth = if (alpha != null) width else 0, softMaskHeight = if (alpha != null) rows else 0,
+        resolvedColorSpace = space ?: resolvedColorSpace, decode = decode, isImageMask = isImageMask, maskFill = maskFill,
+        colorKeyMask = colorKeyMask, softMaskMatte = softMaskMatte, interpolate = interpolate,
+    )
 }
 
 /**

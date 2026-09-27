@@ -16,6 +16,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   font once for all the pages, thumbnails and text extractions that use it, within
   a budget of 32 MB by default. `PdfFont.retainedBytes` gives the estimate that
   the budget counts (#383).
+- `KiteImageData.toShrunkRgbaBytes` converts an image and averages it down a band
+  of rows at a time. Every canvas uses it, so a large scan drawn small no longer
+  becomes one full-size RGBA array first, and a scan above 40 megapixels draws
+  when it is drawn small (#381).
 
 ## [0.11.0] - 2026-09-25
 
