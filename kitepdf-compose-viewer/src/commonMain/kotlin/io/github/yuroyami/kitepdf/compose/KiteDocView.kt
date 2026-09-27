@@ -47,6 +47,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.layout.ContentScale
@@ -1059,16 +1060,20 @@ private fun KitePageVector(
         // displayToDeviceBase() maps page space onto a top-left, Y-down device box
         // (PDF folds in the display-box origin + /Rotate; EPUB its top-left flip).
         val deviceCtm = KiteMatrix.scaling(scale, scale).concat(page.displayToDeviceBase())
-        val base = ComposeCanvas(this, textMeasurer, spec.hairlineWidthPx)
-        val themed = theme?.wrap(base) ?: base
-        val target = spec.canvasDecorator?.invoke(themed) ?: themed
-        failure.guard("page") {
-            if (skipWidgets && page is PdfPage) {
-                page.renderTo(target, deviceCtm, formState = null, cancellation = NEVER_CANCELLED) {
-                    it.subtype != PdfAnnotation.Subtype.Widget
+        // The page ends at its slot, as the bitmap's edge ends it in Rasterized mode: content
+        // outside the page, such as bleed, never paints the gap or the next page (#417).
+        clipRect {
+            val base = ComposeCanvas(this, textMeasurer, spec.hairlineWidthPx)
+            val themed = theme?.wrap(base) ?: base
+            val target = spec.canvasDecorator?.invoke(themed) ?: themed
+            failure.guard("page") {
+                if (skipWidgets && page is PdfPage) {
+                    page.renderTo(target, deviceCtm, formState = null, cancellation = NEVER_CANCELLED) {
+                        it.subtype != PdfAnnotation.Subtype.Widget
+                    }
+                } else {
+                    page.renderTo(target, deviceCtm)
                 }
-            } else {
-                page.renderTo(target, deviceCtm)
             }
         }
         // Paper over whatever the failed draw left, so the page shows as blank, not half drawn.
