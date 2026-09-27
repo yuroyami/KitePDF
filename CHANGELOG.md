@@ -32,6 +32,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `isComplete` is false until then. `KiteDocView` builds the list off the main
   thread and shows `chapterPlaceholder` meanwhile, where the first frame built
   every page object (#387).
+- `EpubPage`, `XpsPage` and `SvgPage` stop a render once its `KiteCancellation`
+  reads true: a book page between two lines or boxes, an XPS or SVG page before
+  its next element. They drew the whole page before (#370).
 
 ## [0.11.0] - 2026-09-25
 

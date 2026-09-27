@@ -425,7 +425,7 @@ Turned or skewed text, a glyph with an em over 256 pixels, and text in a blend m
 
 ## Cancelling a render
 
-A long page can be abandoned while it renders. Pass a `KiteCancellation` to `renderTo`: the renderer reads it every 32 operators, and once it reads true the page paints nothing more and returns with the canvas closed. What was painted so far stays on the canvas.
+A long page can be abandoned while it renders. Pass a `KiteCancellation` to `renderTo`: once it reads true, the page paints nothing more and returns with the canvas closed. What was painted so far stays on the canvas.
 
 ```kotlin
 val job = coroutineContext.job
@@ -433,7 +433,7 @@ page.renderTo(canvas, ctm, KiteCancellation { !job.isActive })
 ensureActive()   // a cancelled render leaves a partial page: do not show it
 ```
 
-PDF pages honour the signal. A comic page stops after it reads its image and before it decodes it. Other formats render their pages to the end.
+Every format honours the signal. A PDF page reads it every 32 operators, a book page between two lines or boxes, and an XPS or SVG page before each element. A comic page reads it after it reads its image and before it decodes it.
 
 ## Memory
 

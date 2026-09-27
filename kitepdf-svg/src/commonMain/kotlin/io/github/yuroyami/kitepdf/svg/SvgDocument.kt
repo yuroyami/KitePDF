@@ -1,5 +1,6 @@
 package io.github.yuroyami.kitepdf.svg
 
+import io.github.yuroyami.kitepdf.core.KiteCancellation
 import io.github.yuroyami.kitepdf.core.KiteDocument
 import io.github.yuroyami.kitepdf.core.KiteFormatException
 import io.github.yuroyami.kitepdf.core.KitePage
@@ -64,9 +65,15 @@ public class SvgPage internal constructor(
      */
     override fun displayToDeviceBase(): KiteMatrix = KiteMatrix.IDENTITY
 
-    override fun renderTo(canvas: KiteCanvas, deviceCtm: KiteMatrix) {
+    override fun renderTo(canvas: KiteCanvas, deviceCtm: KiteMatrix): Unit = render(canvas, deviceCtm, null)
+
+    /** [renderTo] that stops before the next element once [cancellation] reads true (#370). */
+    override fun renderTo(canvas: KiteCanvas, deviceCtm: KiteMatrix, cancellation: KiteCancellation): Unit =
+        render(canvas, deviceCtm, cancellation)
+
+    private fun render(canvas: KiteCanvas, deviceCtm: KiteMatrix, cancellation: KiteCancellation?) {
         canvas.beginPage(displayWidth, displayHeight, deviceCtm)
-        image.render(canvas, deviceCtm)
+        image.render(canvas, deviceCtm, loadResource = null, stop = cancellation)
         canvas.endPage()
     }
 }

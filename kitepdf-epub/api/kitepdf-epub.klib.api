@@ -184,6 +184,7 @@ final class io.github.yuroyami.kitepdf.epub/EpubPage : io.github.yuroyami.kitepd
     final fun displayToDeviceBase(): io.github.yuroyami.kitepdf.core.render/KiteMatrix // io.github.yuroyami.kitepdf.epub/EpubPage.displayToDeviceBase|displayToDeviceBase(){}[0]
     final fun readingOrder(): kotlin.collections/List<io.github.yuroyami.kitepdf.epub/EpubReadingItem> // io.github.yuroyami.kitepdf.epub/EpubPage.readingOrder|readingOrder(){}[0]
     final fun renderTo(io.github.yuroyami.kitepdf.core.render/KiteCanvas, io.github.yuroyami.kitepdf.core.render/KiteMatrix) // io.github.yuroyami.kitepdf.epub/EpubPage.renderTo|renderTo(io.github.yuroyami.kitepdf.core.render.KiteCanvas;io.github.yuroyami.kitepdf.core.render.KiteMatrix){}[0]
+    final fun renderTo(io.github.yuroyami.kitepdf.core.render/KiteCanvas, io.github.yuroyami.kitepdf.core.render/KiteMatrix, io.github.yuroyami.kitepdf.core/KiteCancellation) // io.github.yuroyami.kitepdf.epub/EpubPage.renderTo|renderTo(io.github.yuroyami.kitepdf.core.render.KiteCanvas;io.github.yuroyami.kitepdf.core.render.KiteMatrix;io.github.yuroyami.kitepdf.core.KiteCancellation){}[0]
     final fun textContent(): io.github.yuroyami.kitepdf.core/KiteStructuredText // io.github.yuroyami.kitepdf.epub/EpubPage.textContent|textContent(){}[0]
 }
 

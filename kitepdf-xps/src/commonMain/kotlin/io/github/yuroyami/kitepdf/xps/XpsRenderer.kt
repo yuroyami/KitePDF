@@ -28,7 +28,12 @@ internal class XpsRenderBudget {
 }
 
 /** FixedPage/Canvas/Path/Glyphs traversal, ECMA-388 §§10-14 and §16. */
-internal class XpsRenderer(private val packageData: XpsPackage, private val pagePart: String) {
+internal class XpsRenderer(
+    private val packageData: XpsPackage,
+    private val pagePart: String,
+    /** Stops the render before the next element once it reads true (#370). */
+    private val cancellation: io.github.yuroyami.kitepdf.core.KiteCancellation? = null,
+) {
     private var pageBox = KiteRectangle(0.0, 0.0, 816.0, 1056.0)
     private var pageCtm = KiteMatrix.IDENTITY
     private var textLines: MutableList<KiteTextLine>? = null
@@ -58,6 +63,7 @@ internal class XpsRenderer(private val packageData: XpsPackage, private val page
         el: KiteXmlNode.Element, base: String, inherited: XpsResources,
         canvas: KiteCanvas, parent: KiteMatrix, depth: Int,
     ) {
+        if (cancellation?.isCancelled() == true) return
         if (depth > 64 || !budget.take()) { kiteWarn { "xps: drawing work limit" }; return }
         try {
             val scope = resources(el, base, inherited)
