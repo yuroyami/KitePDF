@@ -412,4 +412,91 @@ class LinkTapSceneTest {
             assertEquals(0, offered)
         }
     }
+
+    /* ─── PDF actions: a page turn and a script, both on page 0 of two ───── */
+
+    private fun pdfWithActions(): ByteArray {
+        val sb = StringBuilder("%PDF-1.4\n")
+        val offsets = ArrayList<Int>()
+        fun add(s: String) {
+            offsets.add(sb.length)
+            sb.append(s)
+        }
+        add("1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n")
+        add("2 0 obj\n<< /Type /Pages /Kids [3 0 R 4 0 R] /Count 2 /MediaBox [0 0 200 200] >>\nendobj\n")
+        add("3 0 obj\n<< /Type /Page /Parent 2 0 R /Resources << >> /Annots [5 0 R 6 0 R] >>\nendobj\n")
+        add("4 0 obj\n<< /Type /Page /Parent 2 0 R /Resources << >> >>\nendobj\n")
+        add("5 0 obj\n<< /Type /Annot /Subtype /Link /Rect [20 20 90 90] /A << /S /Named /N /NextPage >> >>\nendobj\n")
+        add("6 0 obj\n<< /Type /Annot /Subtype /Link /Rect [110 110 180 180] /A << /S /JavaScript /JS (app.alert\\(1\\)) >> >>\nendobj\n")
+        val xref = sb.length
+        sb.append("xref\n0 7\n0000000000 65535 f \n")
+        for (o in offsets) sb.append("${o.toString().padStart(10, '0')} 00000 n \n")
+        sb.append("trailer\n<< /Size 7 /Root 1 0 R >>\nstartxref\n$xref\n%%EOF\n")
+        return sb.toString().encodeToByteArray()
+    }
+
+    /** Records the script actions that the viewer runs. */
+    private class ScriptRecorder(document: io.github.yuroyami.kitepdf.PdfDocument) : io.github.yuroyami.kitepdf.PdfScriptHandler {
+        override val formState = io.github.yuroyami.kitepdf.PdfFormState(document)
+        val ran: MutableList<String> = java.util.Collections.synchronizedList(ArrayList())
+        override fun runAction(action: PdfAction.JavaScript) { ran += action.script }
+    }
+
+    /** Lays out [doc] in [layout] with [scripts], and runs [block] once page 0 has a place. */
+    private fun withPdfViewer(
+        doc: io.github.yuroyami.kitepdf.PdfDocument,
+        layout: KiteDocLayout = KiteDocLayout.Default,
+        scripts: io.github.yuroyami.kitepdf.PdfScriptHandler? = null,
+        block: (KiteDocViewState, CoroutineScope, SceneTestDriver) -> Unit,
+    ) {
+        lateinit var state: KiteDocViewState
+        lateinit var scope: CoroutineScope
+        ImageComposeScene(width = 200, height = 320, density = Density(1f)) {
+            state = rememberKiteDocViewState(doc)
+            scope = rememberCoroutineScope()
+            KiteDocView(state = state, modifier = Modifier.fillMaxSize(), layout = layout, scripts = scripts)
+        }.use { scene ->
+            val driver = SceneTestDriver(scene)
+            driver.pumpUntilState { state.pageGeometry.containsKey(0) }
+            block(state, scope, driver)
+        }
+    }
+
+    /** A link that names a page turn turns the page, where it went to the host (#433). */
+    @Test
+    fun a_next_page_link_turns_the_page() {
+        withPdfViewer(KitePDF.open(pdfWithActions())) { state, scope, driver ->
+            val offered = mutableListOf<KiteLinkAction>()
+            val tap = assertNotNull(state.displayToViewport(0, 55.0, 145.0))
+            assertTrue(handleLinkTap(state, scope, { offered += it; true }, tap))
+            driver.pumpUntilState { state.currentPage == 1 }
+            assertEquals(1, state.currentPage)
+            assertTrue(offered.isEmpty(), "the host got a page turn that the viewer performs: $offered")
+        }
+    }
+
+    @Test
+    fun a_script_link_runs_in_the_scripts_of_the_view() {
+        val doc = KitePDF.open(pdfWithActions())
+        val scripts = ScriptRecorder(doc)
+        withPdfViewer(doc, scripts = scripts) { state, scope, driver ->
+            val offered = mutableListOf<KiteLinkAction>()
+            val tap = assertNotNull(state.displayToViewport(0, 145.0, 55.0))
+            assertTrue(handleLinkTap(state, scope, { offered += it; true }, tap))
+            driver.pumpUntilState { scripts.ran.isNotEmpty() }
+            assertEquals(listOf("app.alert(1)"), scripts.ran.toList())
+            assertTrue(offered.isEmpty(), "the host got a script link that the view runs: $offered")
+        }
+    }
+
+    @Test
+    fun a_go_to_link_in_a_single_page_view_goes_to_the_host() {
+        withPdfViewer(KitePDF.open(pdfWithLinks()), layout = KiteDocLayout.SinglePage(0)) { state, scope, _ ->
+            val tap = assertNotNull(state.displayToViewport(0, 55.0, 145.0))
+            val offered = mutableListOf<KiteLinkAction>()
+            assertTrue(handleLinkTap(state, scope, { offered += it; true }, tap), "the host took the link")
+            assertTrue((offered.single() as KiteLinkAction.Pdf).action is PdfAction.GoTo)
+            assertFalse(handleLinkTap(state, scope, null, tap), "a link nobody takes must fall through to onTap")
+        }
+    }
 }

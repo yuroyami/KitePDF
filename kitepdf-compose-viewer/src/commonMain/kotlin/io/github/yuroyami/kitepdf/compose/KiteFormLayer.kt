@@ -235,14 +235,24 @@ private suspend fun performInViewer(
             val page = document?.resolveDestination(action.destination)?.pageIndex
             if (page != null) state.animateScrollToPage(page) else onLinkTap?.invoke(KiteLinkAction.Pdf(action))
         }
-        is PdfAction.Named -> when (action.name) {
-            PdfAction.NamedActionType.NextPage -> state.nextPage()
-            PdfAction.NamedActionType.PrevPage -> state.previousPage()
-            PdfAction.NamedActionType.FirstPage -> state.animateScrollToPage(0)
-            PdfAction.NamedActionType.LastPage -> state.animateScrollToPage(state.itemCount - 1)
-            else -> onLinkTap?.invoke(KiteLinkAction.Pdf(action))
-        }
+        is PdfAction.Named -> if (action.name.turnsPage()) state.turnPage(action.name) else onLinkTap?.invoke(KiteLinkAction.Pdf(action))
         else -> onLinkTap?.invoke(KiteLinkAction.Pdf(action))
+    }
+}
+
+/** True for the named actions that turn the page: next, previous, first and last (ISO 32000-1, Table 212). */
+internal fun PdfAction.NamedActionType.turnsPage(): Boolean =
+    this == PdfAction.NamedActionType.NextPage || this == PdfAction.NamedActionType.PrevPage ||
+        this == PdfAction.NamedActionType.FirstPage || this == PdfAction.NamedActionType.LastPage
+
+/** Turns the page as the named action [name] asks. Does nothing for a name that is not a page turn. */
+internal suspend fun KiteDocViewState.turnPage(name: PdfAction.NamedActionType) {
+    when (name) {
+        PdfAction.NamedActionType.NextPage -> nextPage()
+        PdfAction.NamedActionType.PrevPage -> previousPage()
+        PdfAction.NamedActionType.FirstPage -> animateScrollToPage(0)
+        PdfAction.NamedActionType.LastPage -> animateScrollToPage(itemCount - 1)
+        else -> Unit
     }
 }
 
