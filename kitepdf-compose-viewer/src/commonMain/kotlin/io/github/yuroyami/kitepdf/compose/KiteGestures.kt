@@ -223,7 +223,7 @@ internal fun Modifier.kiteTransformGestures(
                 while (true) {
                     val event = awaitPointerEvent() // Main pass: after the inner scrollable
                     val pointersDown = event.changes.count { it.pressed }
-                    if (pointersDown == 1 && state.isZoomed && !state.isSelectionActive) {
+                    if (pointersDown == 1 && state.overflows && !state.isSelectionActive) {
                         val pan = event.calculatePan()
                         if (pan != Offset.Zero) {
                             val consumed = state.panBy(pan)

@@ -63,10 +63,10 @@ class ViewerInputLimitsSceneTest {
     }
 
     @Test
-    fun a_zoom_that_is_not_a_number_is_ignored() = withoutEscapes {
+    fun a_zoom_that_is_not_a_number_is_ignored() = forBothEffectOrders { queued -> withoutEscapes {
         val doc = pdf(200.0 to 200.0)
         lateinit var state: KiteDocViewState
-        val (scene, driver) = drivenScene(200, 200, queued = false) {
+        val (scene, driver) = drivenScene(200, 200, queued) {
             state = rememberKiteDocViewState(doc)
             KiteDocView(state = state, modifier = Modifier.fillMaxSize(), layout = KiteDocLayout.SinglePage(0))
         }
@@ -80,7 +80,7 @@ class ViewerInputLimitsSceneTest {
             state.setZoom(Float.POSITIVE_INFINITY, focal = Offset(Float.NaN, 3f))
             assertEquals(1f, state.zoom)
         }
-    }
+    } }
 
     @Test
     fun animation_and_pan_ignore_input_that_is_not_finite() = runBlocking {

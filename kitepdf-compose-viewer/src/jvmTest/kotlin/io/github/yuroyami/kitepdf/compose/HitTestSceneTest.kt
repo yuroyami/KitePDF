@@ -1,12 +1,10 @@
 package io.github.yuroyami.kitepdf.compose
 
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.ui.ImageComposeScene
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.toComposeImageBitmap
 import androidx.compose.ui.graphics.toPixelMap
-import androidx.compose.ui.unit.Density
 import androidx.compose.ui.use
 import io.github.yuroyami.kitepdf.KitePDF
 import io.github.yuroyami.kitepdf.writer.PdfBuilder
@@ -40,14 +38,14 @@ class HitTestSceneTest {
     }
 
     @Test
-    fun single_page_hit_test_at_zoom_1_and_zoom_2() {
+    fun single_page_hit_test_at_zoom_1_and_zoom_2() = forBothEffectOrders { queued ->
         val doc = KitePDF.open(redPagePdf())
         lateinit var state: KiteDocViewState
-        ImageComposeScene(width = 400, height = 400, density = Density(1f)) {
+        val (scene, driver) = drivenScene(400, 400, queued) {
             state = rememberKiteDocViewState(doc)
             KiteDocView(state = state, modifier = Modifier.fillMaxSize(), layout = KiteDocLayout.SinglePage(0))
-        }.use { scene ->
-            val driver = SceneTestDriver(scene)
+        }
+        scene.use {
             driver.pumpUntil { px -> px[200, 200].red > 0.8f }
 
             // Zoom 1: the 200x200pt page letterboxes to the full 400x400
@@ -73,16 +71,17 @@ class HitTestSceneTest {
     }
 
     @Test
-    fun continuous_strip_maps_each_page_and_misses_the_gap() {
+    fun continuous_strip_maps_each_page_and_misses_the_gap() = forBothEffectOrders { queued ->
         val doc = KitePDF.open(redPagePdf(2))
         lateinit var state: KiteDocViewState
         // 200x320 viewport, 8dp spacing at density 1: page 0 at y 0..200,
         // page 1 from y 208 (the KiteDocViewSceneTest geometry).
-        ImageComposeScene(width = 200, height = 320, density = Density(1f)) {
+        val (scene, driver) = drivenScene(200, 320, queued) {
             state = rememberKiteDocViewState(doc)
             KiteDocView(state = state, modifier = Modifier.fillMaxSize())
-        }.use { scene ->
-            SceneTestDriver(scene).pumpUntil { px ->
+        }
+        scene.use {
+            driver.pumpUntil { px ->
                 px[100, 100].red > 0.8f && px[100, 300].red > 0.8f
             }
 

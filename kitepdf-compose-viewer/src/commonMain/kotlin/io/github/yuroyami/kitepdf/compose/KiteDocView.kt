@@ -195,7 +195,9 @@ public fun KiteDocView(
         state.scriptScope = scriptScope
         state.scriptLane = scriptLane
         state.selectionEnabled = selectionEnabled
-        state.zoomRange = zoomSpec.minZoom..zoomSpec.maxZoom
+        // A continuous strip does not zoom out below fit: it would shrink into a band (#398).
+        val floor = if (layout is KiteDocLayout.Continuous) maxOf(1f, zoomSpec.minZoom) else zoomSpec.minZoom
+        state.zoomRange = floor..maxOf(floor, zoomSpec.maxZoom)
         state.panAxes = when (layout) {
             is KiteDocLayout.Continuous -> when (layout.orientation) {
                 Orientation.Vertical -> KiteDocViewState.PanAxes.XOnly
@@ -717,11 +719,12 @@ private fun PagedLayout(
             geometryInto = if (isCurrent) state else null,
         )
     }
-    // While zoomed, the pager's own swipe is off so one-finger drags pan the
-    // page; paging stays available through KiteDocViewState (nav widgets). An
+    // While the zoomed page overflows the viewport, the pager's own swipe is off so
+    // one-finger drags pan the page; paging stays available through
+    // KiteDocViewState (nav widgets). An
     // active text selection takes the swipe away too, so the page cannot turn
     // under a selection drag.
-    val pagerScrollEnabled = userScrollEnabled && !state.isZoomed && !state.isSelectionActive
+    val pagerScrollEnabled = userScrollEnabled && !state.overflows && !state.isSelectionActive
     when (layout.orientation) {
         Orientation.Horizontal -> HorizontalPager(
             state = pagerState,
@@ -1372,7 +1375,7 @@ private fun SpreadLayout(
 
     val scope = rememberCoroutineScope()
     val haptics = LocalHapticFeedback.current
-    val pagerScrollEnabled = userScrollEnabled && !state.isZoomed && !state.isSelectionActive
+    val pagerScrollEnabled = userScrollEnabled && !state.overflows && !state.isSelectionActive
     val spreadContent: @Composable (Int) -> Unit = { spread ->
         val isCurrent = spread == pagerState.currentPage
         SpreadBox(
