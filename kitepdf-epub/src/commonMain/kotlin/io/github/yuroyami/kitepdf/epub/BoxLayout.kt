@@ -24,6 +24,7 @@ import io.github.yuroyami.kitepdf.core.font.TextGlyph
 import io.github.yuroyami.kitepdf.core.render.KiteImageData
 import io.github.yuroyami.kitepdf.core.render.RgbColor
 import io.github.yuroyami.kitepdf.core.text.Hyphenator
+import io.github.yuroyami.kitepdf.core.KiteLineEnd
 import kotlin.math.roundToInt
 
 // GSUB ligature features, applied required-first: Arabic lam-alef (`rlig`) then
@@ -724,11 +725,13 @@ internal class BoxLayout(
             val (l, r) = insetsFor(i)
             (contentW - l - r).coerceAtLeast(1.0)
         }
+        val ends = ArrayList<KiteLineEnd>()
         val cellLines = wrap(
             tokenize(runs, style.hyphensAuto, contentW, bidiLevels(runs, baseLevel), inlineImageRoom(style)), contentW, preserve, availAt,
             // Negative (hanging) indents keep today's behaviour: only a
             // positive indent eats into the first line's budget.
             firstLineIndent = style.textIndentPt.coerceAtLeast(0.0),
+            ends = ends,
         )
         val lengths = sourceLengths(cellLines, runs)
         val visualLines = bidiLines(cellLines, baseLevel) // logical → visual order (UAX #9)
@@ -779,7 +782,7 @@ internal class BoxLayout(
                 markerRun(marker, style.fontSizePt, contentLeft, contentLeft + contentW, rtl, markerColor)?.let(placed::add)
             }
             placed.addAll(placeRuns(cells, xStart, extraPerSpace, images))
-            out.add(PositionedLine(placed, y, lineHeight, ascent, images, lengths[i]))
+            out.add(PositionedLine(placed, y, lineHeight, ascent, images, lengths[i], ends[i]))
             y += lineHeight
         }
         if (out.isEmpty()) {
@@ -1323,12 +1326,17 @@ internal class BoxLayout(
         availAt: ((Int) -> Double)? = null,
         /** `text-indent` of the block's first line; that line's budget shrinks to match. */
         firstLineIndent: Double = 0.0,
+        /** Receives how each line ends, one entry per line, for copied text (#438). */
+        ends: MutableList<KiteLineEnd>? = null,
     ): List<List<Cell>> {
         val lines = ArrayList<List<Cell>>()
         var line = ArrayList<Cell>()
         var lineW = 0.0
         var pendingSpaces = ArrayList<Cell>()
-        fun commit() { lines.add(line); line = ArrayList(); lineW = 0.0; pendingSpaces = ArrayList() }
+        fun commit(end: KiteLineEnd) {
+            lines.add(line); ends?.add(end)
+            line = ArrayList(); lineW = 0.0; pendingSpaces = ArrayList()
+        }
         // Placement shifts the first line by the indent, so the budget must
         // shrink by the same amount or the packed line overflows the content
         // edge by up to the indent width (issue #6). Composes with float
@@ -1338,7 +1346,7 @@ internal class BoxLayout(
             return if (lines.isEmpty()) (base - firstLineIndent).coerceAtLeast(1.0) else base
         }
         for (tok in tokens) when (tok) {
-            is Token.Break -> commit()
+            is Token.Break -> commit(KiteLineEnd.HARD)
             is Token.Space -> when {
                 preserve -> { line.add(tok.cell); lineW += tok.width }
                 line.isNotEmpty() -> pendingSpaces.add(tok.cell)
@@ -1371,7 +1379,7 @@ internal class BoxLayout(
                         val prefix = cells.subList(0, split)
                         line.addAll(prefix); lineW += prefix.sumOf { it.width }
                         line.add(hyphenCell(cells[split - 1])); lineW += splitHyphenW
-                        commit()
+                        commit(KiteLineEnd.HYPHEN)
                         cells = cells.subList(split, cells.size)
                         points = points.mapNotNull { if (it > split) it - split else null }
                         space = 0.0
@@ -1379,12 +1387,14 @@ internal class BoxLayout(
                         line.addAll(cells); lineW += w // unsplittable + nothing before: overflow rather than loop
                         break
                     } else {
-                        commit(); space = 0.0 // retry on a fresh line
+                        // The spaces before the word, dropped here or kept on the line, are the break.
+                        val atSpace = spaces.isNotEmpty() || line.last().cp == ' '.code
+                        commit(if (atSpace) KiteLineEnd.SPACE else KiteLineEnd.NONE); space = 0.0 // retry on a fresh line
                     }
                 }
             }
         }
-        if (line.isNotEmpty() || lines.isEmpty()) lines.add(line)
+        if (line.isNotEmpty() || lines.isEmpty()) { lines.add(line); ends?.add(KiteLineEnd.HARD) }
         return lines
     }
 

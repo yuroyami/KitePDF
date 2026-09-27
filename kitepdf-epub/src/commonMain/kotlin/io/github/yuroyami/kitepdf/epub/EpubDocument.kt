@@ -1545,6 +1545,7 @@ public class EpubPage internal constructor(
                 ),
                 charEdges = edges.toDoubleArray(),
                 vertical = true,
+                end = line.end,
             )
         }
         val top = displayY(page, line.yTop)
@@ -1553,6 +1554,7 @@ public class EpubPage internal constructor(
             // Display-space rect: y-min lives in [KiteRectangle.bottom] (see KiteStructuredText).
             bounds = io.github.yuroyami.kitepdf.core.KiteRectangle(edges.first(), top, edges.last(), top + line.height),
             charEdges = edges.toDoubleArray(),
+            end = line.end,
         )
     }
 

@@ -1006,7 +1006,8 @@ public class KiteDocViewState(
             pageIndex = page,
             start = start,
             end = end,
-            text = text.textRange(start, end),
+            // As a reader copies it: a wrapped paragraph is one line, a hyphenated word whole (#438).
+            text = text.copyText(start, end),
             quads = text.quadsFor(start, end),
         )
         if (sel.start == selection?.start && sel.end == selection?.end && sel.pageIndex == selection?.pageIndex) return
@@ -1514,8 +1515,10 @@ public data class KitePageHit(
  * A finalized or in-progress text selection on one page (cross-page
  * selection is out of scope). [start]/[end] are INCLUSIVE flattened char
  * indices into the page's [io.github.yuroyami.kitepdf.core.KiteStructuredText]
- * reading order; [text] carries `\n`/`\n\n` line/block separators exactly
- * like the extraction text; [quads] are display-space, one per line touched.
+ * reading order; [text] is the range as a reader copies it
+ * ([io.github.yuroyami.kitepdf.core.KiteStructuredText.copyText]): `\n\n`
+ * between blocks, and a wrapped paragraph of a book as one line; [quads] are
+ * display-space, one per line touched.
  */
 public data class KiteTextSelection(
     val pageIndex: Int,

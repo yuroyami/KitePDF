@@ -111,6 +111,16 @@ public class io/github/yuroyami/kitepdf/core/KiteFormatException : java/lang/Run
 	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/Throwable;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 }
 
+public final class io/github/yuroyami/kitepdf/core/KiteLineEnd : java/lang/Enum {
+	public static final field HARD Lio/github/yuroyami/kitepdf/core/KiteLineEnd;
+	public static final field HYPHEN Lio/github/yuroyami/kitepdf/core/KiteLineEnd;
+	public static final field NONE Lio/github/yuroyami/kitepdf/core/KiteLineEnd;
+	public static final field SPACE Lio/github/yuroyami/kitepdf/core/KiteLineEnd;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lio/github/yuroyami/kitepdf/core/KiteLineEnd;
+	public static fun values ()[Lio/github/yuroyami/kitepdf/core/KiteLineEnd;
+}
+
 public final class io/github/yuroyami/kitepdf/core/KiteLocation : java/lang/Comparable {
 	public static final field Companion Lio/github/yuroyami/kitepdf/core/KiteLocation$Companion;
 	public fun <init> (II)V
@@ -227,6 +237,7 @@ public final class io/github/yuroyami/kitepdf/core/KiteSearchHit {
 public final class io/github/yuroyami/kitepdf/core/KiteStructuredText {
 	public fun <init> (Ljava/util/List;)V
 	public final fun charIndexAt (DD)Ljava/lang/Integer;
+	public final fun copyText (II)Ljava/lang/String;
 	public final fun getBlocks ()Ljava/util/List;
 	public final fun getCharCount ()I
 	public final fun getPlainText ()Ljava/lang/String;
@@ -242,10 +253,11 @@ public final class io/github/yuroyami/kitepdf/core/KiteTextBlock {
 }
 
 public final class io/github/yuroyami/kitepdf/core/KiteTextLine {
-	public fun <init> (Ljava/lang/String;Lio/github/yuroyami/kitepdf/core/KiteRectangle;[DZ)V
-	public synthetic fun <init> (Ljava/lang/String;Lio/github/yuroyami/kitepdf/core/KiteRectangle;[DZILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun <init> (Ljava/lang/String;Lio/github/yuroyami/kitepdf/core/KiteRectangle;[DZLio/github/yuroyami/kitepdf/core/KiteLineEnd;)V
+	public synthetic fun <init> (Ljava/lang/String;Lio/github/yuroyami/kitepdf/core/KiteRectangle;[DZLio/github/yuroyami/kitepdf/core/KiteLineEnd;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public final fun getBounds ()Lio/github/yuroyami/kitepdf/core/KiteRectangle;
 	public final fun getCharEdges ()[D
+	public final fun getEnd ()Lio/github/yuroyami/kitepdf/core/KiteLineEnd;
 	public final fun getText ()Ljava/lang/String;
 	public final fun getVertical ()Z
 }
