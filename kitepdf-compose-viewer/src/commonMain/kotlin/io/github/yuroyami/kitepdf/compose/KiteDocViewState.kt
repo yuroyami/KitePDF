@@ -973,6 +973,20 @@ public class KiteDocViewState(
     }
 
     /** The text of the page in slot [index], or null when it cannot be read: such a page acts as one without text (#334). */
+    /**
+     * Builds [page]'s text on the raster dispatcher. A page keeps its text once built, so the
+     * selection gesture then finds it ready instead of building it on the main thread (#380).
+     * A failure is left to the gesture, which reads the text again and says why it cannot.
+     */
+    internal suspend fun prepareText(page: KitePage) {
+        try {
+            withContext(kitepdfRasterDispatcher()) { page.textContent() }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Throwable) {
+        }
+    }
+
     private fun textAt(index: Int): KiteStructuredText? {
         val page = pageAt(index) ?: return null
         return try {
