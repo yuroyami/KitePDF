@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `KiteDocView.onEpubLinkTap` receives every tapped internal EPUB link before the
   viewer scrolls to it. A host can show a note that the book does not mark as a
   note, and keep the reader on the page (#444).
+- `PdfDocument.fontCacheBudgetBytes` and `dropFontCache`: a document parses each
+  font once for all the pages, thumbnails and text extractions that use it, within
+  a budget of 32 MB by default. `PdfFont.retainedBytes` gives the estimate that
+  the budget counts (#383).
 
 ## [0.11.0] - 2026-09-25
 

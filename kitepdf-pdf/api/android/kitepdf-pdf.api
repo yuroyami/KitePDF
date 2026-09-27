@@ -546,10 +546,12 @@ public final class io/github/yuroyami/kitepdf/PdfDestination$ViewFit$XYZ : io/gi
 
 public final class io/github/yuroyami/kitepdf/PdfDocument : io/github/yuroyami/kitepdf/core/KiteDocument, io/github/yuroyami/kitepdf/core/parser/IndirectResolver {
 	public static final field Companion Lio/github/yuroyami/kitepdf/PdfDocument$Companion;
+	public static final field DEFAULT_FONT_CACHE_BUDGET_BYTES J
 	public static final field DEFAULT_IMAGE_CACHE_BUDGET_BYTES J
 	public static final field DEFAULT_OPERATION_CACHE_BUDGET_BYTES J
 	public fun bookmarkOf (Lio/github/yuroyami/kitepdf/core/KiteLocation;)Lio/github/yuroyami/kitepdf/core/KiteBookmark;
 	public final fun dropDecodedImageCache ()V
+	public final fun dropFontCache ()V
 	public final fun dropOperationCache ()V
 	public final fun edit (Lkotlin/random/Random;)Lio/github/yuroyami/kitepdf/writer/PdfEditor;
 	public static synthetic fun edit$default (Lio/github/yuroyami/kitepdf/PdfDocument;Lkotlin/random/Random;ILjava/lang/Object;)Lio/github/yuroyami/kitepdf/writer/PdfEditor;
@@ -563,6 +565,7 @@ public final class io/github/yuroyami/kitepdf/PdfDocument : io/github/yuroyami/k
 	public final fun getCatalog ()Lio/github/yuroyami/kitepdf/core/parser/PdfDictionary;
 	public fun getChapterCount ()I
 	public final fun getDocumentJavaScripts ()Ljava/util/Map;
+	public final fun getFontCacheBudgetBytes ()J
 	public final fun getFormFields ()Ljava/util/List;
 	public final fun getImageCacheBudgetBytes ()J
 	public final fun getInfo ()Lio/github/yuroyami/kitepdf/PdfDocumentInfo;
@@ -600,6 +603,7 @@ public final class io/github/yuroyami/kitepdf/PdfDocument : io/github/yuroyami/k
 	public fun prepareChapter (I)V
 	public fun resolve (Lio/github/yuroyami/kitepdf/core/parser/PdfReference;)Lio/github/yuroyami/kitepdf/core/parser/PdfObject;
 	public final fun resolveDestination (Lio/github/yuroyami/kitepdf/core/parser/PdfObject;)Lio/github/yuroyami/kitepdf/PdfDestination;
+	public final fun setFontCacheBudgetBytes (J)V
 	public final fun setImageCacheBudgetBytes (J)V
 	public final fun setOperationCacheBudgetBytes (J)V
 }

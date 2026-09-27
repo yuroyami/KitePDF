@@ -4,6 +4,7 @@ import io.github.yuroyami.kitepdf.PdfPage
 import io.github.yuroyami.kitepdf.content.ContentStreamParser
 import io.github.yuroyami.kitepdf.content.Operation
 import io.github.yuroyami.kitepdf.core.font.PdfFont
+import io.github.yuroyami.kitepdf.core.parser.PdfReference
 import io.github.yuroyami.kitepdf.core.parser.PdfArray
 import io.github.yuroyami.kitepdf.core.parser.PdfInt
 import io.github.yuroyami.kitepdf.core.parser.PdfName
@@ -201,7 +202,10 @@ public object TextExtractor {
     private fun loadFonts(page: PdfPage): Map<String, PdfFont> {
         val resolver = page.internalDocument
         val fonts = page.resources?.getDict("Font", resolver) ?: return emptyMap()
-        return fonts.map.mapValues { (_, ref) -> PdfFont.from(ref, resolver) }
+        return fonts.map.mapValues { (_, ref) ->
+            (ref as? PdfReference)?.let { reference -> resolver.font(reference.objectNumber) { PdfFont.from(ref, resolver) } }
+                ?: PdfFont.from(ref, resolver)
+        }
     }
 
     private fun decode(s: PdfString, font: PdfFont?): String =

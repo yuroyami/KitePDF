@@ -51,6 +51,9 @@ public class TrueTypeFont private constructor(
     /** How many glyphs hold their point form in memory. For tests and diagnostics. */
     internal val cachedOutlines: Int get() = glyphLock.withLock { cache.size }
 
+    /** The bytes of the font program that this face keeps. */
+    internal val programBytes: Int get() = reader.size
+
     /** Convert a unicode codepoint to a glyph index, or 0 (.notdef) if unmapped. */
     public fun glyphIdForCodePoint(codePoint: Int): Int = cmap.glyphIdFor(codePoint)
 

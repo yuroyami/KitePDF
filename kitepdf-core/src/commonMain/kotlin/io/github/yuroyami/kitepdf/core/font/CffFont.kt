@@ -70,6 +70,10 @@ public class CffFont private constructor(
 
     public val numGlyphs: Int get() = charStrings.size
 
+    /** The bytes of the charstrings and subroutines that this font keeps. */
+    internal val programBytes: Int
+        get() = charStrings.sumOf { it.size } + globalSubrs.sumOf { it.size } + localSubrsPerFd.sumOf { fd -> fd.sumOf { it.size } }
+
     private val outlineCache = HashMap<Int, io.github.yuroyami.kitepdf.core.render.KitePath?>()
 
     /** Outlines mapped into glyph space, filled only for a glyph whose FontDict has a matrix. */

@@ -14,6 +14,7 @@ import io.github.yuroyami.kitepdf.core.withLock
 import io.github.yuroyami.kitepdf.core.PdfFormatException
 import io.github.yuroyami.kitepdf.core.KiteWrongPasswordException
 import io.github.yuroyami.kitepdf.core.kiteWarn
+import io.github.yuroyami.kitepdf.core.font.PdfFont
 import io.github.yuroyami.kitepdf.core.render.KiteImageData
 import io.github.yuroyami.kitepdf.crypto.Decryptor
 import io.github.yuroyami.kitepdf.crypto.StandardSecurityHandler
@@ -368,6 +369,82 @@ public class PdfDocument private constructor(
         lock.withLock {
             operationCache.clear()
             cachedOperationBytes = 0L
+        }
+    }
+
+    /**
+     * Parsed fonts, keyed by the object number of the font dictionary, in order from the
+     * font used least recently (#383).
+     */
+    private val fontCache = LinkedHashMap<Long, PdfFont>()
+
+    /** The estimated bytes of the fonts in [fontCache]. */
+    internal var cachedFontBytes = 0L
+        private set
+
+    /** Test hook: fonts built through [font]. */
+    internal var fontParseCount = 0
+        private set
+
+    /**
+     * The most bytes of parsed fonts that this document keeps, so that a page drawn again, a
+     * thumbnail or a text extraction does not parse its fonts again. A font counts as about
+     * twice its embedded program, so a 10 MB CJK font takes about 20 MB. The font used least
+     * recently leaves first, and a font larger than the whole budget is not kept. The default
+     * is [DEFAULT_FONT_CACHE_BUDGET_BYTES]; 0 keeps none. Lower it for a small heap, and call
+     * [dropFontCache] when the app runs low on memory.
+     */
+    public var fontCacheBudgetBytes: Long = DEFAULT_FONT_CACHE_BUDGET_BYTES
+        set(value) {
+            lock.withLock {
+                field = value.coerceAtLeast(0L)
+                trimFontCache()
+            }
+        }
+
+    /**
+     * The font of the dictionary that object [objectNumber] holds. On a miss, [build] makes it
+     * outside the lock, and the first font stored wins.
+     */
+    internal fun font(objectNumber: Long, build: () -> PdfFont): PdfFont {
+        lock.withLock {
+            fontCache.remove(objectNumber)?.let { hit ->
+                // Put it back at the end, as the font used most recently.
+                fontCache[objectNumber] = hit
+                return hit
+            }
+        }
+        val built = build()
+        val bytes = built.retainedBytes
+        return lock.withLock {
+            fontParseCount++
+            fontCache[objectNumber]?.let { return@withLock it }
+            if (bytes <= fontCacheBudgetBytes) {
+                fontCache[objectNumber] = built
+                cachedFontBytes += bytes
+                trimFontCache()
+            }
+            built
+        }
+    }
+
+    /** Removes the fonts used least recently until the cache fits its budget. Call it with [lock] held. */
+    private fun trimFontCache() {
+        val fonts = fontCache.values.iterator()
+        while (cachedFontBytes > fontCacheBudgetBytes && fonts.hasNext()) {
+            cachedFontBytes -= fonts.next().retainedBytes
+            fonts.remove()
+        }
+    }
+
+    /**
+     * Frees the parsed fonts that this document keeps, for example when the app runs low on
+     * memory. A font parses again when a page that uses it is next drawn.
+     */
+    public fun dropFontCache() {
+        lock.withLock {
+            fontCache.clear()
+            cachedFontBytes = 0L
         }
     }
 
@@ -857,6 +934,9 @@ public class PdfDocument private constructor(
 
         /** The default of [operationCacheBudgetBytes]: 16 MB, enough for one dense page or many plain ones. */
         public const val DEFAULT_OPERATION_CACHE_BUDGET_BYTES: Long = 16L * 1024 * 1024
+
+        /** The default of [fontCacheBudgetBytes]: 32 MB, enough for one large CJK font and many subset fonts. */
+        public const val DEFAULT_FONT_CACHE_BUDGET_BYTES: Long = 32L * 1024 * 1024
 
         public fun open(
             bytes: ByteArray,

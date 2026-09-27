@@ -1,5 +1,7 @@
 package io.github.yuroyami.kitepdf.core.font
 
+import io.github.yuroyami.kitepdf.core.KiteLock
+import io.github.yuroyami.kitepdf.core.withLock
 import io.github.yuroyami.kitepdf.core.render.KiteMatrix
 import io.github.yuroyami.kitepdf.core.render.KitePath
 
@@ -41,13 +43,19 @@ internal class Type1Font private constructor(
 
     private val outlineCache = HashMap<String, KitePath?>()
 
+    /** Guards [outlineCache]: a document shares one font between the threads that render its pages (#383). */
+    private val outlineLock = KiteLock()
+
+    /** The bytes of the charstrings and subroutines that this font keeps. */
+    val programBytes: Int get() = subrs.sumOf { it.size } + charStrings.values.sumOf { it.size }
+
     fun outlineForGlyphName(glyphName: String): KitePath? {
-        if (outlineCache.containsKey(glyphName)) return outlineCache[glyphName]
+        outlineLock.withLock { if (outlineCache.containsKey(glyphName)) return outlineCache[glyphName] }
         val cs = charStrings[glyphName]
         val path = if (cs == null) null else runCatching {
             Type1CharstringInterpreter(decryptCharstring(cs, lenIV), subrs, ::seacCharstring).interpret()
         }.getOrNull()?.let { raw -> glyphSpace?.let { raw.mappedBy(it) } ?: raw }
-        outlineCache[glyphName] = path
+        outlineLock.withLock { outlineCache[glyphName] = path }
         return path
     }
 
