@@ -1,13 +1,16 @@
 package io.github.yuroyami.kitepdf.compose
 
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.font.createFontFamilyResolver
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
 import io.github.yuroyami.kitepdf.PdfDocument
+import io.github.yuroyami.kitepdf.core.render.KiteBitmapCache
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
 /**
  * A soft mask's transfer function maps each mask value before it gates the content (ISO
@@ -93,5 +96,21 @@ class SoftMaskTransferTest {
                 assertEquals(0.75f, pixels[x, y].red, 0.02f, "$kind mask of $group at ($x, $y): ${pixels[x, y]}")
             }
         }
+    }
+
+    /** The canvas that draws a gated mask shares the bitmaps of its page, so an image in many masks converts once (#371). */
+    @Test
+    fun a_gated_mask_converts_its_image_into_the_bitmaps_of_the_page() {
+        val page = maskedPdf("Luminosity", "q 100 0 0 100 0 0 cm BI /W 2 /H 2 /CS /G /BPC 8 ID xxxx EI Q").pages[0]
+        val bitmaps = KiteBitmapCache<ImageBitmap>()
+        val density = Density(1f)
+        val measurer = TextMeasurer(createFontFamilyResolver(), density, LayoutDirection.Ltr)
+        androidx.compose.ui.graphics.drawscope.CanvasDrawScope().draw(
+            density, LayoutDirection.Ltr, androidx.compose.ui.graphics.Canvas(ImageBitmap(100, 100)), androidx.compose.ui.geometry.Size(100f, 100f),
+        ) {
+            val canvas = ComposeCanvas(this, measurer, 1f, false, 1f, maskTables = false, bitmaps = bitmaps)
+            page.renderTo(canvas, io.github.yuroyami.kitepdf.core.render.KiteMatrix(1.0, 0.0, 0.0, -1.0, 0.0, 100.0))
+        }
+        assertTrue(bitmaps.heldBytes > 0, "the mask converted its image into a cache of its own")
     }
 }

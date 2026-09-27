@@ -88,6 +88,12 @@ public class ComposeCanvas internal constructor(
     private val twoCircleShader: (Float, Float, Float, Float, Float, Float, List<Color>, List<Float>) -> Shader? = ::twoCircleGradient,
     /** True where a colour filter can apply a soft mask's whole transfer table. A test can take it away. */
     private val maskTables: Boolean = maskTableFilters,
+    /**
+     * Bitmaps built from images, so that an image drawn many times converts once (#117). The
+     * canvas of a soft mask shares them with its page (#371). The keys hold the images, so a
+     * cache that outlives a draw keeps decoded images alive past every other budget.
+     */
+    private val bitmaps: KiteBitmapCache<ImageBitmap> = KiteBitmapCache(),
 ) : KiteCanvas {
 
     /**
@@ -408,9 +414,6 @@ public class ComposeCanvas internal constructor(
         }
     }
 
-    /** Bitmaps built from images, so that an image drawn many times converts once (#117). */
-    private val bitmaps = KiteBitmapCache<ImageBitmap>()
-
     /** The image as a bitmap, averaged down when [sampling] shrinks it, so fine detail fades instead of dropping out. */
     private fun bitmapFor(image: KiteImageData, sampling: KiteImageSampling): ImageBitmap? {
         val decoded = when (image.kind) {
@@ -657,7 +660,7 @@ public class ComposeCanvas internal constructor(
             // Unpainted parts of a luminosity group show the black backdrop, whose luminosity is zero.
             if (luminosity) drawRect(Color.Black)
             scale(1f / pixelSize.toFloat(), pivot = Offset.Zero) {
-                val canvas = ComposeCanvas(this, textMeasurer, hairlineWidthPx, skipSystemFontText, magnification, twoCircleShader, maskTables)
+                val canvas = ComposeCanvas(this, textMeasurer, hairlineWidthPx, skipSystemFontText, magnification, twoCircleShader, maskTables, bitmaps)
                 nested = canvas
                 renderMask(canvas)
             }

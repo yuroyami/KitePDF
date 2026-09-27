@@ -262,7 +262,7 @@ KiteDocView(state, renderSpec = spec)
 
 ### `KiteRenderSpec.Vectorized`
 
-Re-execute each page's content stream into a live Canvas every composition, transformed by zoom/pan via a GPU layer. No bitmap; lower memory footprint, resolution-independent quality.
+Draw each page's content into a live Canvas, transformed by zoom/pan via a GPU layer. No bitmap; lower memory footprint, resolution-independent quality. The page draws again when its size, its settled zoom, the theme or the render spec changes. A change to the overlay, such as a search hit or a highlight, and each frame of a pinch replay the drawing that the page recorded.
 
 ```kotlin
 val spec = KiteRenderSpec.Vectorized(
@@ -285,7 +285,7 @@ KiteDocView(state, renderSpec = spec)
 
     **Rasterized** wins on gesture smoothness: scroll and pan never re-execute the PDF engine. It trades memory (one bitmap) and rasterization latency for instant playback.
     
-    **Vectorized** wins on memory and true resolution independence but re-draws on every composition. On Android the vector display list replays under the live transform so zoom stays crisp mid-pinch; on Skia targets (iOS, desktop, web) the layer is texture-cached so deep in-gesture zoom softens until the draw re-runs.
+    **Vectorized** wins on memory and true resolution independence, but it draws on the UI thread. Each draw of a page parses its content and converts its images to bitmaps again, so a page of large scans, such as a comic, is better in Rasterized. On Android the vector display list replays under the live transform so zoom stays crisp mid-pinch; on Skia targets (iOS, desktop, web) the layer is texture-cached so deep in-gesture zoom softens until the draw re-runs.
     
     For most apps, **Rasterized with `rerasterizeOnZoom=true`** is the sweet spot: responsive gestures and crisp zoom, with a small memory footprint per page.
 
