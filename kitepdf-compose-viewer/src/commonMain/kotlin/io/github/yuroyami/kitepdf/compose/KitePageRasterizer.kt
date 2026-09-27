@@ -198,6 +198,7 @@ public class KitePageRasterizer(
                 hairlineBits = hairlineWidthPx.toRawBits(),
                 withoutWidgets = skipWidgets,
                 canvasDecorator = canvasDecorator,
+                fontEnvironment = textMeasurer,
             )
             val hit = cache.get(key)
             if (hit != null) {
