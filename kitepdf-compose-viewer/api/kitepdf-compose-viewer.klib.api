@@ -271,6 +271,7 @@ final class io.github.yuroyami.kitepdf.compose/KiteDocViewState { // io.github.y
     final fun currentBookmark(): io.github.yuroyami.kitepdf.core/KiteBookmark // io.github.yuroyami.kitepdf.compose/KiteDocViewState.currentBookmark|currentBookmark(){}[0]
     final fun highlightAt(androidx.compose.ui.geometry/Offset): io.github.yuroyami.kitepdf.compose/KiteHighlight? // io.github.yuroyami.kitepdf.compose/KiteDocViewState.highlightAt|highlightAt(androidx.compose.ui.geometry.Offset){}[0]
     final fun hitTest(androidx.compose.ui.geometry/Offset): io.github.yuroyami.kitepdf.compose/KitePageHit? // io.github.yuroyami.kitepdf.compose/KiteDocViewState.hitTest|hitTest(androidx.compose.ui.geometry.Offset){}[0]
+    final fun hitTestDisplay(androidx.compose.ui.geometry/Offset): io.github.yuroyami.kitepdf.compose/KitePageHit? // io.github.yuroyami.kitepdf.compose/KiteDocViewState.hitTestDisplay|hitTestDisplay(androidx.compose.ui.geometry.Offset){}[0]
     final fun pageRenderState(kotlin/Int): io.github.yuroyami.kitepdf.compose/KitePageRenderState? // io.github.yuroyami.kitepdf.compose/KiteDocViewState.pageRenderState|pageRenderState(kotlin.Int){}[0]
     final fun panBy(androidx.compose.ui.geometry/Offset): androidx.compose.ui.geometry/Offset // io.github.yuroyami.kitepdf.compose/KiteDocViewState.panBy|panBy(androidx.compose.ui.geometry.Offset){}[0]
     final fun resetZoom() // io.github.yuroyami.kitepdf.compose/KiteDocViewState.resetZoom|resetZoom(){}[0]

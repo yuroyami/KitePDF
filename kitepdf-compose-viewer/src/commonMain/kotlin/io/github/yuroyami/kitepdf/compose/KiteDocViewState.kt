@@ -1126,17 +1126,23 @@ public class KiteDocViewState(
     }
 
     /**
-     * Like [hitTest] but stops in DISPLAY space (y-down points, the space
-     * [io.github.yuroyami.kitepdf.core.KiteStructuredText] geometry lives in).
+     * Maps a viewport point to the page under it, in the page's display space: points from the
+     * top-left corner of the page as it is shown, y down, with its rotation applied, whatever
+     * the format. Null when the point lands on background or spacing.
+     *
+     * Search hits, [highlights] and the geometry of
+     * [io.github.yuroyami.kitepdf.core.KiteStructuredText] use this space, so a point from here
+     * can mark the page where the reader tapped. [hitTest] gives the page's own space instead
+     * (#432).
      */
-    internal fun hitTestDisplay(viewportOffset: Offset): Triple<Int, Double, Double>? {
+    public fun hitTestDisplay(viewportOffset: Offset): KitePageHit? {
         if (viewportSize == IntSize.Zero || zoom <= 0f) return null
         val centre = Offset(viewportSize.width / 2f, viewportSize.height / 2f)
         val content = centre + (viewportOffset - centre - panOffset) / zoom
         for ((index, rect) in pageGeometry) {
             if (rect.width <= 0f || rect.height <= 0f || !rect.contains(content)) continue
             val page = pageAt(index) ?: continue
-            return Triple(
+            return KitePageHit(
                 index,
                 (content.x - rect.left) / rect.width * page.displayWidth,
                 (content.y - rect.top) / rect.height * page.displayHeight,
@@ -1154,7 +1160,8 @@ public class KiteDocViewState(
      * logic composes), locates the page slot from the geometry the layout
      * reported, then maps display-space points through the inverse of
      * [KitePage.displayToDeviceBase] into page space: PDF pages get user
-     * space (y-up, rotation unfolded), EPUB pages their document space.
+     * space (y-up, rotation unfolded), EPUB pages their document space. To
+     * mark the page where the reader tapped, use [hitTestDisplay].
      */
     public fun hitTest(viewportOffset: Offset): KitePageHit? {
         val (index, devX, devY) = hitTestDisplay(viewportOffset) ?: return null
@@ -1676,12 +1683,17 @@ internal class ReaderAnchor(
 internal class ScrollAnchor(val slot: Int, val offsetPx: Int = 0, val pageFraction: Float = 0f)
 
 /**
- * A [KiteDocViewState.hitTest] result: the page under a viewport point and the
- * point in that page's own space. For a PDF that is the page's user space, y-up,
- * with rotation unfolded, in the file's own coordinates: a page whose crop box
- * does not start at 0 gives points offset by that start. For an EPUB page it is
- * display points, y-up from the page's bottom-left. Other formats use their own
- * page space (#432).
+ * The page under a viewport point, and a point on that page.
+ *
+ * From [KiteDocViewState.hitTest], the point is in the page's own space. For a PDF
+ * that is the page's user space, y-up, with rotation unfolded, in the file's own
+ * coordinates: a page whose crop box does not start at 0 gives points offset by
+ * that start. For an EPUB page it is display points, y-up from the page's
+ * bottom-left. Other formats use their own page space.
+ *
+ * From [KiteDocViewState.hitTestDisplay], the point is in display space for every
+ * format: points from the top-left corner of the page as it is shown, y down. That
+ * is the space of search hits and highlights (#432).
  */
 public data class KitePageHit(
     val pageIndex: Int,
