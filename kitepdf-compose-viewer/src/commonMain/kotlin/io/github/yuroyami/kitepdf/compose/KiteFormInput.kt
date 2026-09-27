@@ -62,6 +62,7 @@ private fun FieldInput(state: KiteDocViewState, scripts: PdfScriptHandler, field
             while (true) {
                 val edit = pipeline.next() ?: break
                 val kept = withContext(lane) { askScript(scripts, fieldName, edit).also { state.scriptsRan() } }
+                backOnComposeThread()
                 val before = pipeline.screen
                 pipeline.answered(kept)
                 val after = pipeline.screen

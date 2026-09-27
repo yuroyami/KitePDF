@@ -124,7 +124,11 @@ internal fun KiteFormRevision(state: KiteDocViewState, scripts: PdfScriptHandler
         val stop = form.onChange { changed.trySend(Unit) }
         try {
             state.formRevision = form.revision
-            for (signal in changed) state.formRevision = form.revision
+            for (signal in changed) {
+                // A change on the script thread resumes this loop there (#443).
+                backOnComposeThread()
+                state.formRevision = form.revision
+            }
         } finally {
             stop()
         }
@@ -180,7 +184,11 @@ internal fun handleWidgetTap(
         if (actions.isEmpty()) scriptCall("mouseUp", Unit) { scripts.mouseUp(name, target.widgetIndex) }
         for (action in actions) {
             if (!scriptCall("runWidgetAction", true) { scripts.runWidgetAction(name, action) }) {
-                withContext(viewer) { performInViewer(state, document, onLinkTap, action) }
+                withContext(viewer) {
+                    // A viewer dispatcher that never dispatches leaves this on the script thread (#443).
+                    backOnComposeThread()
+                    performInViewer(state, document, onLinkTap, action)
+                }
             }
         }
         state.scriptsRan()

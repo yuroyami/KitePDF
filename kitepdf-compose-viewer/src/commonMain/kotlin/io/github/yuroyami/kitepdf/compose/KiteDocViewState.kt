@@ -512,6 +512,8 @@ public class KiteDocViewState(
                         scriptCall("pageOpened", Unit) { handler.pageOpened(page) }
                         scriptsRan()
                     }
+                    // The flow takes its next snapshot on the thread this returns on (#443).
+                    backOnComposeThread()
                 }
         } finally {
             val last = open
@@ -535,6 +537,7 @@ public class KiteDocViewState(
         val lane = scriptLane ?: return
         // The lane runs one call at a time in order, so this returns after the calls before it.
         kotlinx.coroutines.withContext(lane) {}
+        backOnComposeThread()
     }
 
     /** What the reader sees in the focused field, which a keystroke script may not have answered for yet. */
