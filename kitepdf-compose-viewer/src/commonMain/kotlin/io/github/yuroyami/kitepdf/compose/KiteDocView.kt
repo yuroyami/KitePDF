@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.absoluteOffset
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -34,6 +35,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.ui.AbsoluteAlignment
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
@@ -1441,6 +1443,8 @@ private fun SpreadBox(
             }
         }
     }
+    // Pages are placed from the physical left, as their hit rectangles are, so a right-to-left
+    // app does not draw a page on one side and hit-test it on the other (#401).
     BoxWithConstraints(
         Modifier
             .fillMaxSize()
@@ -1451,6 +1455,7 @@ private fun SpreadBox(
                 translationX = pan.x
                 translationY = pan.y
             },
+        contentAlignment = AbsoluteAlignment.TopLeft,
     ) {
         val density = LocalDensity.current
         val fullW = constraints.maxWidth
@@ -1471,7 +1476,7 @@ private fun SpreadBox(
             val dpSize = with(density) { DpSize(fit.width.toDp(), fit.height.toDp()) }
             Box(
                 Modifier
-                    .padding(start = dpOffset.width, top = dpOffset.height)
+                    .absoluteOffset(x = dpOffset.width, y = dpOffset.height)
                     .size(dpSize),
             ) {
                 PageSlotContent(
