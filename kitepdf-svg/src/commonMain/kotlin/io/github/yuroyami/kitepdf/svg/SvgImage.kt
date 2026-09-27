@@ -1,5 +1,6 @@
 package io.github.yuroyami.kitepdf.svg
 
+import io.github.yuroyami.kitepdf.core.KiteCancellation
 import io.github.yuroyami.kitepdf.core.xml.KiteXml
 import io.github.yuroyami.kitepdf.core.xml.KiteXmlNode
 
@@ -93,16 +94,24 @@ public class SvgImage private constructor(
         canvas: KiteCanvas,
         ctm: KiteMatrix,
         loadResource: ((String) -> ByteArray?)? = null,
+    ): Unit = render(canvas, ctm, loadResource, stop = null)
+
+    /** [render] that stops before the next element once [stop] reads true (#370). */
+    internal fun render(
+        canvas: KiteCanvas,
+        ctm: KiteMatrix,
+        loadResource: ((String) -> ByteArray?)?,
+        stop: KiteCancellation?,
     ) {
         val vb = viewBox
         if (vb == null || vb[2] <= 0 || vb[3] <= 0) {
-            walk(root, ctm, Paint(viewport = ctm, viewportWidth = width, viewportHeight = height), canvas, loadResource, depth = 0)
+            walk(root, ctm, Paint(viewport = ctm, viewportWidth = width, viewportHeight = height), canvas, loadResource, depth = 0, stop = stop)
             return
         }
         val fit = viewBoxFit(vb, width, height, root.attrs["preserveAspectRatio"] ?: root.attrs["preserveaspectratio"])
         if (fit.slice) canvas.pushClip(KitePath.Builder().apply { rectangle(0.0, 0.0, width, height) }.build(), ctm, evenOdd = false)
         try {
-            walk(root, compose(ctm, fit.matrix), Paint(viewport = ctm, viewportWidth = vb[2], viewportHeight = vb[3]), canvas, loadResource, depth = 0)
+            walk(root, compose(ctm, fit.matrix), Paint(viewport = ctm, viewportWidth = vb[2], viewportHeight = vb[3]), canvas, loadResource, depth = 0, stop = stop)
         } finally {
             if (fit.slice) canvas.popClip()
         }
@@ -170,7 +179,9 @@ public class SvgImage private constructor(
         canvas: KiteCanvas,
         load: ((String) -> ByteArray?)?,
         depth: Int,
+        stop: KiteCancellation? = null,
     ) {
+        if (stop?.isCancelled() == true) return
         if (depth > MAX_DEPTH) return                       // <use> cycles
         if (isDisplayNone(el)) return
         // A transform may come from a style declaration too, like any presentation property (#182).
@@ -190,7 +201,7 @@ public class SvgImage private constructor(
             )
         }
         try {
-            paintElement(el, ctm, paint, canvas, load, depth)
+            paintElement(el, ctm, paint, canvas, load, depth, stop)
         } finally {
             if (groupAlpha < 1.0) canvas.endTransparencyGroup()
             if (clip != null) canvas.popClip()
@@ -204,17 +215,18 @@ public class SvgImage private constructor(
         canvas: KiteCanvas,
         load: ((String) -> ByteArray?)?,
         depth: Int,
+        stop: KiteCancellation?,
     ) {
         when (el.tag.lowercase()) {
             "svg" -> if (depth == 0) {
-                for (c in el.children) if (c is KiteXmlNode.Element) walk(c, ctm, paint, canvas, load, depth + 1)
+                for (c in el.children) if (c is KiteXmlNode.Element) walk(c, ctm, paint, canvas, load, depth + 1, stop)
             } else {
-                drawNestedSvg(el, ctm, paint, canvas, load, depth)
+                drawNestedSvg(el, ctm, paint, canvas, load, depth, stop)
             }
             "g", "a" ->
-                for (c in el.children) if (c is KiteXmlNode.Element) walk(c, ctm, paint, canvas, load, depth + 1)
-            "switch" -> firstPassingChild(el)?.let { walk(it, ctm, paint, canvas, load, depth + 1) }
-            "use" -> drawUse(el, ctm, paint, canvas, load, depth)
+                for (c in el.children) if (c is KiteXmlNode.Element) walk(c, ctm, paint, canvas, load, depth + 1, stop)
+            "switch" -> firstPassingChild(el)?.let { walk(it, ctm, paint, canvas, load, depth + 1, stop) }
+            "use" -> drawUse(el, ctm, paint, canvas, load, depth, stop)
             "image" -> drawImage(el, ctm, paint, canvas, load)
             "text" -> drawText(el, ctm, paint, canvas, depth)
             "path" -> el.attrs["d"]?.let { paintShape(parsePath(it), ctm, paint, canvas) }
@@ -256,6 +268,7 @@ public class SvgImage private constructor(
         canvas: KiteCanvas,
         load: ((String) -> ByteArray?)?,
         depth: Int,
+        stop: KiteCancellation?,
     ) {
         fun size(name: String, whole: Double): Double {
             val raw = el.attrs[name]?.trim() ?: return whole
@@ -271,7 +284,7 @@ public class SvgImage private constructor(
         val innerPaint = paint.copy(viewportWidth = vb?.get(2) ?: w, viewportHeight = vb?.get(3) ?: h)
         canvas.pushClip(KitePath.Builder().apply { rectangle(0.0, 0.0, w, h) }.build(), origin, evenOdd = false)
         try {
-            for (c in el.children) if (c is KiteXmlNode.Element) walk(c, inner, innerPaint, canvas, load, depth + 1)
+            for (c in el.children) if (c is KiteXmlNode.Element) walk(c, inner, innerPaint, canvas, load, depth + 1, stop)
         } finally {
             canvas.popClip()
         }
@@ -288,15 +301,16 @@ public class SvgImage private constructor(
         canvas: KiteCanvas,
         load: ((String) -> ByteArray?)?,
         depth: Int,
+        stop: KiteCancellation?,
     ) {
         val id = el.attrs["href"]?.trim()?.removePrefix("#")?.takeIf { it.isNotEmpty() } ?: return
         val target = byId[id] ?: return
         val moved = compose(ctm, KiteMatrix.translation(num(el, "x", paint), num(el, "y", paint)))
         // <symbol> is invisible on its own but paints through <use>, as a group.
         if (target.tag.lowercase() == "symbol") {
-            for (c in target.children) if (c is KiteXmlNode.Element) walk(c, moved, paint, canvas, load, depth + 1)
+            for (c in target.children) if (c is KiteXmlNode.Element) walk(c, moved, paint, canvas, load, depth + 1, stop)
         } else {
-            walk(target, moved, paint, canvas, load, depth + 1)
+            walk(target, moved, paint, canvas, load, depth + 1, stop)
         }
     }
 

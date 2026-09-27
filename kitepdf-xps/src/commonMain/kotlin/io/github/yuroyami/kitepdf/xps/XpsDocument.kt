@@ -1,5 +1,6 @@
 package io.github.yuroyami.kitepdf.xps
 
+import io.github.yuroyami.kitepdf.core.KiteCancellation
 import io.github.yuroyami.kitepdf.core.KiteDocument
 import io.github.yuroyami.kitepdf.core.KiteFormatException
 import io.github.yuroyami.kitepdf.core.KiteMetadata
@@ -105,7 +106,13 @@ public class XpsPage internal constructor(
     override val displayHeight: Double get() = height * POINTS_PER_UNIT
     override fun displayToDeviceBase(): KiteMatrix = KiteMatrix.IDENTITY
 
-    override fun renderTo(canvas: KiteCanvas, deviceCtm: KiteMatrix) {
+    override fun renderTo(canvas: KiteCanvas, deviceCtm: KiteMatrix): Unit = render(canvas, deviceCtm, null)
+
+    /** [renderTo] that stops before the next element once [cancellation] reads true (#370). */
+    override fun renderTo(canvas: KiteCanvas, deviceCtm: KiteMatrix, cancellation: KiteCancellation): Unit =
+        render(canvas, deviceCtm, cancellation)
+
+    private fun render(canvas: KiteCanvas, deviceCtm: KiteMatrix, cancellation: KiteCancellation?) {
         canvas.beginPage(displayWidth, displayHeight, deviceCtm)
         try {
             val page = packageData.page(part)
@@ -116,7 +123,7 @@ public class XpsPage internal constructor(
                 val ctm = deviceCtm.concat(KiteMatrix.scaling(POINTS_PER_UNIT, POINTS_PER_UNIT))
                 val clip = KitePath.Builder().apply { rectangle(0.0, 0.0, width, height) }.build()
                 canvas.pushClip(clip, ctm, false)
-                try { XpsRenderer(packageData, part).render(page, canvas, ctm) } finally { canvas.popClip() }
+                try { XpsRenderer(packageData, part, cancellation).render(page, canvas, ctm) } finally { canvas.popClip() }
             }
         } finally { canvas.endPage() }
     }

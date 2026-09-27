@@ -1,5 +1,6 @@
 package io.github.yuroyami.kitepdf.epub
 
+import io.github.yuroyami.kitepdf.core.KiteCancellation
 import io.github.yuroyami.kitepdf.svg.SvgImage
 
 import io.github.yuroyami.kitepdf.core.xml.KiteXmlNode
@@ -1081,12 +1082,18 @@ public class EpubPage internal constructor(
      */
     private fun displayY(page: PageRender, docY: Double): Double = page.margin + (docY - page.startY)
 
-    override fun renderTo(canvas: KiteCanvas, deviceCtm: KiteMatrix) {
+    override fun renderTo(canvas: KiteCanvas, deviceCtm: KiteMatrix): Unit = render(canvas, deviceCtm, null)
+
+    /** [renderTo] that stops between two paint steps, such as two lines, once [cancellation] reads true (#370). */
+    override fun renderTo(canvas: KiteCanvas, deviceCtm: KiteMatrix, cancellation: KiteCancellation): Unit =
+        render(canvas, deviceCtm, cancellation)
+
+    private fun render(canvas: KiteCanvas, deviceCtm: KiteMatrix, cancellation: KiteCancellation?) {
         val page = laidOut()
-        if (page.vertical) renderVerticalTo(page, canvas, deviceCtm) else renderHorizontalTo(page, canvas, deviceCtm)
+        if (page.vertical) renderVerticalTo(page, canvas, deviceCtm, cancellation) else renderHorizontalTo(page, canvas, deviceCtm, cancellation)
     }
 
-    private fun renderHorizontalTo(page: PageRender, canvas: KiteCanvas, deviceCtm: KiteMatrix) {
+    private fun renderHorizontalTo(page: PageRender, canvas: KiteCanvas, deviceCtm: KiteMatrix, cancellation: KiteCancellation?) {
         canvas.beginPage(displayWidth, displayHeight, deviceCtm)
         val margin = page.margin
         val startY = page.startY
@@ -1124,7 +1131,7 @@ public class EpubPage internal constructor(
         }
 
         paintInOrder(
-            page,
+            page, cancellation,
             deco = { box -> paintBox(box, canvas, deviceCtm, margin, startY, bandBottom, ::yUp) },
             line = ::paintLine,
             image = { box ->
@@ -1144,7 +1151,7 @@ public class EpubPage internal constructor(
      * Full-width glyphs stand upright, centred on the column's em axis;
      * everything else rotates 90 degrees clockwise around the shared baseline.
      */
-    private fun renderVerticalTo(page: PageRender, canvas: KiteCanvas, deviceCtm: KiteMatrix) {
+    private fun renderVerticalTo(page: PageRender, canvas: KiteCanvas, deviceCtm: KiteMatrix, cancellation: KiteCancellation?) {
         canvas.beginPage(displayWidth, displayHeight, deviceCtm)
         val margin = page.margin
         val startY = page.startY
@@ -1226,7 +1233,7 @@ public class EpubPage internal constructor(
         }
 
         paintInOrder(
-            page,
+            page, cancellation,
             deco = { box -> paintBoxVertical(box, canvas, deviceCtm, margin, startY, bandBottom, ::colX) },
             line = ::paintLine,
             image = { box ->
@@ -1242,9 +1249,16 @@ public class EpubPage internal constructor(
 
     /**
      * Paints the backgrounds and borders, the lines and the block images of [page] in the order
-     * that [Paginator] numbered them, which follows CSS 2.1, Appendix E (#172).
+     * that [Paginator] numbered them, which follows CSS 2.1, Appendix E (#172). Stops before the
+     * next step once [cancellation] reads true.
      */
-    private fun paintInOrder(page: PageRender, deco: (LayoutBox) -> Unit, line: (PositionedLine) -> Unit, image: (ImageBox) -> Unit) {
+    private fun paintInOrder(
+        page: PageRender,
+        cancellation: KiteCancellation?,
+        deco: (LayoutBox) -> Unit,
+        line: (PositionedLine) -> Unit,
+        image: (ImageBox) -> Unit,
+    ) {
         // Each step is its rank, then its kind, then its index in the page's list.
         val steps = LongArray(page.decoBoxes.size + page.lines.size + page.images.size)
         var n = 0
@@ -1254,6 +1268,7 @@ public class EpubPage internal constructor(
         page.images.forEachIndexed { i, box -> step(box.contentRank, 2, i) }
         steps.sort()
         for (s in steps) {
+            if (cancellation?.isCancelled() == true) return
             val index = (s and 0x3FFFFFFF).toInt()
             when ((s ushr 30 and 3).toInt()) {
                 0 -> deco(page.decoBoxes[index])
