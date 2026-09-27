@@ -487,6 +487,24 @@ class IncrementalEpubSceneTest {
         }
     }
 
+    /**
+     * The one-page overload shows its page without laying out the whole book in composition.
+     * It checked the page against `pageCount`, which lays out every chapter (#351).
+     */
+    @Test
+    fun the_one_page_overload_never_asks_for_the_whole_document() = forBothEffectOrders { queued ->
+        val spy = WholeDocumentSpy(book())
+        val (scene, driver) = drivenScene(200, 260, queued) {
+            KiteDocView(document = spy, page = 3, modifier = Modifier.fillMaxSize())
+        }
+        scene.use {
+            assertEquals(null, spy.touched, "composition read ${spy.touched}")
+            driver.pumpUntilState { spy.isComplete }
+            driver.pumpFrames(3)
+            assertEquals(null, spy.touched, "the viewer read ${spy.touched}")
+        }
+    }
+
     /** Delegates everything, and records any read of the two eager members. */
     private class WholeDocumentSpy(private val inner: KiteDocument) : KiteDocument by inner {
         var touched: String? = null
