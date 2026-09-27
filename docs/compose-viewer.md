@@ -570,6 +570,23 @@ KiteDocView(
 
 An ordinary internal link never reaches this callback.
 
+Some books do not mark their notes. An endnote call can be a plain
+`<a href="notes.xhtml#n19">[19]</a>`. For such a book, pass `onEpubLinkTap`. The
+viewer offers it every internal link before it scrolls. A reference goes to
+`onEpubReferenceTap` first, and reaches `onEpubLinkTap` only when that callback
+returns `false`. Return `true` to keep the reader on the page.
+
+```kotlin
+KiteDocView(
+    state = state,
+    onEpubLinkTap = { link ->
+        // This book keeps its endnotes in one chapter and does not mark the links to them.
+        val note = if (link.href.substringBefore('#') == notesChapter) book.linkTarget(link.href) else null
+        note?.let { showNote(it.text); true } ?: false
+    },
+)
+```
+
 ## Navigation widgets
 
 Ready-made UI components for common patterns. They all take a `KiteDocViewState`, so they work from anywhere in your tree; inside the viewport (via `overlay`), in your top bar, in a side panel.

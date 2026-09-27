@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `KiteDocView.onEpubLinkTap` receives every tapped internal EPUB link before the
+  viewer scrolls to it. A host can show a note that the book does not mark as a
+  note, and keep the reader on the page (#444).
+
 ## [0.11.0] - 2026-09-25
 
 This release adds `kitepdf-xps` for XPS and OpenXPS, runs the JavaScript inside

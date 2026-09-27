@@ -5,6 +5,8 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.ImageComposeScene
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.PointerType
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.use
 import io.github.yuroyami.kitepdf.KitePDF
@@ -317,6 +319,96 @@ class LinkTapSceneTest {
             driver.pumpUntil { state.pageGeometry.isNotEmpty() }
             var offered = 0
             assertTrue(handleLinkTap(state, scope, null, centreOf(link)) { offered++; true })
+            assertEquals(0, offered)
+        }
+    }
+
+    /** Lays out [doc] in a viewer and runs [block] once the pages have a place. */
+    private fun withViewer(doc: EpubDocument, block: (KiteDocViewState, CoroutineScope, SceneTestDriver) -> Unit) {
+        lateinit var state: KiteDocViewState
+        lateinit var scope: CoroutineScope
+        ImageComposeScene(width = 200, height = 320, density = Density(1f)) {
+            state = rememberKiteDocViewState(doc)
+            scope = rememberCoroutineScope()
+            KiteDocView(state = state, modifier = Modifier.fillMaxSize())
+        }.use { scene ->
+            val driver = SceneTestDriver(scene)
+            driver.pumpUntil { state.pageGeometry.isNotEmpty() }
+            block(state, scope, driver)
+        }
+    }
+
+    /** A host can show a note that the book does not mark as one: every internal link goes to it first (#444). */
+    @Test
+    fun an_ordinary_internal_link_goes_to_the_host_before_the_viewer_scrolls() {
+        val doc = epubWithLink()
+        val link = (doc.pages[0] as io.github.yuroyami.kitepdf.epub.EpubPage).links.single()
+        withViewer(doc) { state, scope, driver ->
+            val offered = mutableListOf<String>()
+            assertTrue(handleLinkTap(state, scope, null, centreOf(link), onEpubLinkTap = { offered += it.href; true }))
+            assertEquals(listOf("OEBPS/ch2.xhtml"), offered)
+            driver.pumpFrames(10)
+            assertEquals(0, state.currentPage, "the viewer stays on the page the reader tapped")
+
+            // Declined by the host: the viewer follows the link as before.
+            assertTrue(handleLinkTap(state, scope, null, centreOf(link), onEpubLinkTap = { false }))
+            driver.pumpUntil { state.currentPage > 0 }
+            assertTrue(state.currentPage > 0, "the viewer scrolled to chapter two")
+        }
+    }
+
+    @Test
+    fun a_real_tap_on_an_internal_link_reaches_the_link_callback_of_the_view() {
+        val doc = epubWithLink()
+        val link = (doc.pages[0] as io.github.yuroyami.kitepdf.epub.EpubPage).links.single()
+        lateinit var state: KiteDocViewState
+        val offered = mutableListOf<String>()
+        ImageComposeScene(width = 200, height = 320, density = Density(1f)) {
+            state = rememberKiteDocViewState(doc)
+            KiteDocView(
+                state = state, modifier = Modifier.fillMaxSize(), zoomSpec = KiteZoomSpec(doubleTapEnabled = false),
+                onEpubLinkTap = { offered += it.href; true },
+            )
+        }.use { scene ->
+            val driver = SceneTestDriver(scene)
+            driver.pumpUntilState { state.pageGeometry.isNotEmpty() }
+            scene.sendPointerEvent(PointerEventType.Press, centreOf(link), type = PointerType.Touch)
+            scene.sendPointerEvent(PointerEventType.Release, centreOf(link), type = PointerType.Touch)
+            driver.pumpUntilState { offered.isNotEmpty() }
+            assertEquals(listOf("OEBPS/ch2.xhtml"), offered)
+            driver.pumpFrames(10)
+            assertEquals(0, state.currentPage, "the viewer scrolled although the host consumed the tap")
+        }
+    }
+
+    @Test
+    fun a_reference_goes_to_the_reference_callback_before_the_link_callback() {
+        val doc = epubWithNote()
+        val link = (doc.pages[0] as io.github.yuroyami.kitepdf.epub.EpubPage).links.single()
+        withViewer(doc) { state, scope, driver ->
+            val calls = mutableListOf<String>()
+            fun tap(referenceConsumes: Boolean) = handleLinkTap(
+                state, scope, null, centreOf(link),
+                onEpubLinkTap = { calls += "link"; true },
+                onEpubReferenceTap = { calls += "reference"; referenceConsumes },
+            )
+            assertTrue(tap(referenceConsumes = true))
+            assertEquals(listOf("reference"), calls, "a consumed reference also went to the link callback")
+            calls.clear()
+            assertTrue(tap(referenceConsumes = false))
+            assertEquals(listOf("reference", "link"), calls, "a declined reference did not go to the link callback")
+            driver.pumpFrames(10)
+            assertEquals(0, state.currentPage, "the viewer scrolled although the link callback consumed the tap")
+        }
+    }
+
+    @Test
+    fun an_external_link_never_reaches_the_link_callback() {
+        val doc = epubWithExternalLink()
+        val link = (doc.pages[0] as io.github.yuroyami.kitepdf.epub.EpubPage).links.single()
+        withViewer(doc) { state, scope, _ ->
+            var offered = 0
+            assertTrue(handleLinkTap(state, scope, { true }, centreOf(link), onEpubLinkTap = { offered++; true }))
             assertEquals(0, offered)
         }
     }

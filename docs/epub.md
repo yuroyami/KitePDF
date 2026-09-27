@@ -248,7 +248,8 @@ id sits on a short inline anchor, as in `<p><a id="fn1">1.</a> The note.</p>`, t
 text is the whole paragraph. A glossary term comes with its definitions.
 
 `KiteDocView` does the hit test for you: its `onEpubReferenceTap` receives each
-tapped reference before the viewer scrolls (see [Compose viewer](compose-viewer.md)).
+tapped reference before the viewer scrolls, and its `onEpubLinkTap` receives every
+tapped internal link (see [Compose viewer](compose-viewer.md)).
 
 ## Typography
 
