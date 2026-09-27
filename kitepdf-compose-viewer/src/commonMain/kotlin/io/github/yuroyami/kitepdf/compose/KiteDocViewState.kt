@@ -316,8 +316,24 @@ public class KiteDocViewState(
     public var panOffset: Offset by mutableStateOf(Offset.Zero)
         internal set
 
-    /** True once zoomed in beyond the minimum (with a small epsilon). */
+    /**
+     * True once zoomed in beyond the minimum (with a small epsilon). A double tap from here goes
+     * back to the minimum. Whether a drag pans or turns the page depends on whether the zoomed
+     * page overflows the viewport, not on this flag, so a range that does not start at 1 still
+     * routes the gestures by what shows (#398).
+     */
     public val isZoomed: Boolean get() = zoom > zoomRange.start + EPSILON
+
+    /**
+     * True while the zoomed content overflows the viewport on an axis the reader can pan: a
+     * one-finger drag then pans the page, and a pager does not swipe (#398).
+     */
+    internal val overflows: Boolean
+        get() {
+            if (viewportSize == IntSize.Zero) return false
+            val (_, slack) = panRoom(zoom)
+            return (panAxes.x && slack.x > EPSILON) || (panAxes.y && slack.y > EPSILON)
+        }
 
     /**
      * Search hits to paint as translucent quads over their pages (colour:
@@ -665,10 +681,13 @@ public class KiteDocViewState(
         zoomAnimation = null
     }
 
-    /** Snaps back to the minimum zoom and recentres. */
+    /**
+     * Snaps back to fit, zoom 1, clamped into the zoom range, and recentres. A range that starts
+     * below 1 lets a reader zoom out, but a page turn still shows the page at fit (#398).
+     */
     public fun resetZoom() {
         stopZoomAnimation()
-        zoom = zoomRange.start
+        zoom = 1f.coerceIn(zoomRange.start, zoomRange.endInclusive)
         panOffset = Offset.Zero
     }
 
@@ -691,10 +710,42 @@ public class KiteDocViewState(
         return panOffset - old
     }
 
+    /**
+     * [offset] kept inside the pan bounds at [zoom]. The bounds follow the content, not the
+     * viewport: on each axis the zoomed content may move by half of what it overflows the
+     * viewport, around the pan that centres it. So a letterboxed page that still fits one axis
+     * does not move on it, and never slides into empty margins (#400).
+     */
     internal fun clampPan(offset: Offset, zoom: Float): Offset {
-        val maxX = ((viewportSize.width * (zoom - 1f)) / 2f).coerceAtLeast(0f)
-        val maxY = ((viewportSize.height * (zoom - 1f)) / 2f).coerceAtLeast(0f)
-        return Offset(offset.x.coerceIn(-maxX, maxX), offset.y.coerceIn(-maxY, maxY))
+        val (centred, slack) = panRoom(zoom)
+        return Offset(
+            offset.x.coerceIn(centred.x - slack.x, centred.x + slack.x),
+            offset.y.coerceIn(centred.y - slack.y, centred.y + slack.y),
+        )
+    }
+
+    /** Per axis at [zoom]: the pan that centres the content, and how far it may move from there. */
+    private fun panRoom(zoom: Float): Pair<Offset, Offset> {
+        val width = viewportSize.width.toFloat()
+        val height = viewportSize.height.toFloat()
+        val content = panContent() ?: Rect(0f, 0f, width, height)
+        val centred = Offset(-zoom * (content.center.x - width / 2f), -zoom * (content.center.y - height / 2f))
+        val slack = Offset(
+            ((zoom * content.width - width) / 2f).coerceAtLeast(0f),
+            ((zoom * content.height - height) / 2f).coerceAtLeast(0f),
+        )
+        return centred to slack
+    }
+
+    /**
+     * What a pager shows before zoom: the union of the rectangles of its current page or spread.
+     * Null in a continuous strip, whose content spans the viewport, and before the first layout.
+     */
+    private fun panContent(): Rect? {
+        if (panAxes != PanAxes.Both) return null
+        var union: Rect? = null
+        for (rect in pageGeometry.values) union = union?.let { Rect(minOf(it.left, rect.left), minOf(it.top, rect.top), maxOf(it.right, rect.right), maxOf(it.bottom, rect.bottom)) } ?: rect
+        return union
     }
 
     /* ── text selection ────────────────────────────────────────────── */
