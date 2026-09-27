@@ -195,11 +195,29 @@ internal fun handleWidgetTap(
     }
     // A text or choice field takes the caret, which is what opens the keyboard.
     if (field.type == PdfFormField.FieldType.Text || field.type == PdfFormField.FieldType.Choice) {
-        state.focusField(name, target.widgetIndex)
+        val box = target.widget.rect?.let { KiteDocViewState.WidgetBox(hit.pageIndex, displayRectOf(page, it)) }
+        state.focusField(name, target.widgetIndex, box)
     } else {
         state.blurFocusedField()
     }
     return true
+}
+
+/** [rect], in [page]'s own space, as a rectangle in its display space: y down, from the page's top-left. */
+private fun displayRectOf(page: KitePage, rect: io.github.yuroyami.kitepdf.core.KiteRectangle): androidx.compose.ui.geometry.Rect {
+    val toDisplay = page.displayToDeviceBase()
+    val corners = listOf(
+        toDisplay.transformPoint(rect.left, rect.bottom),
+        toDisplay.transformPoint(rect.right, rect.top),
+        toDisplay.transformPoint(rect.left, rect.top),
+        toDisplay.transformPoint(rect.right, rect.bottom),
+    )
+    return androidx.compose.ui.geometry.Rect(
+        corners.minOf { it.first }.toFloat(),
+        corners.minOf { it.second }.toFloat(),
+        corners.maxOf { it.first }.toFloat(),
+        corners.maxOf { it.second }.toFloat(),
+    )
 }
 
 /**

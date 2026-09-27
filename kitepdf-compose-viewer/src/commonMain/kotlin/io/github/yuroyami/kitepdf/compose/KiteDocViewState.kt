@@ -459,10 +459,29 @@ public class KiteDocViewState(
     /** Which widget of [focusedField] has the caret: its place in the field's widgets. */
     private var focusedWidget = 0
 
+    /** A widget's slot, and its rectangle in the page's display space: y down, from the page's top-left. */
+    internal class WidgetBox(val slot: Int, val rect: Rect)
+
+    /** The widget of [focusedField] that took the caret, or null when that is not known. */
+    internal var focusedWidgetBox: WidgetBox? = null
+        private set
+
+    /**
+     * Where the widget with the caret sits in the viewport, in pixels, or null when that is not
+     * known. The keyboard input sits there, so the platform keeps the widget in view (#362).
+     */
+    internal fun focusedWidgetArea(): Rect? {
+        val box = focusedWidgetBox ?: return null
+        val topLeft = displayToViewport(box.slot, box.rect.left.toDouble(), box.rect.top.toDouble()) ?: return null
+        val bottomRight = displayToViewport(box.slot, box.rect.right.toDouble(), box.rect.bottom.toDouble()) ?: return null
+        return Rect(topLeft, bottomRight)
+    }
+
     /** Puts the caret in one widget of a field, telling the document's scripts that it took the focus. */
-    internal fun focusField(fieldName: String, widgetIndex: Int = 0) {
+    internal fun focusField(fieldName: String, widgetIndex: Int = 0, box: WidgetBox? = null) {
         if (focusedField == fieldName) return
         blurFocusedField()
+        focusedWidgetBox = box
         focusedField = fieldName
         focusedWidget = widgetIndex
         val handler = scripts ?: return
@@ -480,6 +499,7 @@ public class KiteDocViewState(
     internal fun blurFocusedField() {
         val name = focusedField ?: return
         focusedField = null
+        focusedWidgetBox = null
         val typed = editingText
         editingText = null
         val widget = focusedWidget
