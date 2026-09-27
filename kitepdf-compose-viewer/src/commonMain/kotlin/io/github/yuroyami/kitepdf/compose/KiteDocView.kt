@@ -203,6 +203,8 @@ public fun KiteDocView(
         state.scriptScope = scriptScope
         state.scriptLane = scriptLane
         state.selectionEnabled = selectionEnabled
+        // Vectorized mode keeps no page bitmaps, so it lets go of the ones a raster mode kept (#395).
+        if (renderSpec !is KiteRenderSpec.Rasterized) state.bitmapCacheFor(0L)
         // A continuous strip does not zoom out below fit: it would shrink into a band (#398).
         val floor = if (layout is KiteDocLayout.Continuous) maxOf(1f, zoomSpec.minZoom) else zoomSpec.minZoom
         state.zoomRange = floor..maxOf(floor, zoomSpec.maxZoom)
@@ -930,7 +932,9 @@ private fun KitePageRaster(
     val shownFor = remember { arrayOfNulls<KitePage>(1) }
     var render by remember { mutableStateOf(KitePageRenderState.Loading) }
     val retry = state?.retriesOf(pageIndex) ?: 0
-    val rastered by produceState<Pair<ImageBitmap, Boolean>?>(null, page, raster, colors.pageBackground, colors.theme, hairline, cache, drawsFormLayer, spec.canvasDecorator, retry) {
+    // Keyed on the paper the page is drawn on, so a background change that a theme hides renders nothing again (#394).
+    val paper = paperColor(colors.pageBackground, colors.theme)
+    val rastered by produceState<Pair<ImageBitmap, Boolean>?>(null, page, raster, paper, colors.theme, hairline, cache, drawsFormLayer, spec.canvasDecorator, retry) {
         // Off the main thread: a 10-30ms page raster on the UI thread
         // janks scroll and pinch. The rasterizer serializes pages on its mutex
         // (TextMeasurer's cache is not thread-safe) but the main thread stays

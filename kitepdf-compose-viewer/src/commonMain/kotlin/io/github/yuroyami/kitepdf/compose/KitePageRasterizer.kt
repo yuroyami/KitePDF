@@ -193,8 +193,8 @@ public class KitePageRasterizer(
                 pageIdentity = page,
                 w = widthPx,
                 h = heightPx,
-                bgArgb = background.toArgb(),
-                themeId = theme?.hashCode() ?: 0,
+                bgArgb = paperColor(background, theme).toArgb(),
+                theme = theme,
                 hairlineBits = hairlineWidthPx.toRawBits(),
                 withoutWidgets = skipWidgets,
                 canvasDecorator = canvasDecorator,
@@ -335,7 +335,7 @@ public class KitePageRasterizer(
             }
         }
         // The theme owns the paper colour when set; else use `background`.
-        val bg = theme?.background?.let { Color(it.r.toFloat(), it.g.toFloat(), it.b.toFloat()) } ?: background
+        val bg = paperColor(background, theme)
         val bitmap = ImageBitmap(w, h)
         var usedSystemFont = false
         CanvasDrawScope().draw(density, layoutDirection, Canvas(bitmap), Size(w.toFloat(), h.toFloat())) {
@@ -413,3 +413,7 @@ internal fun fitWithin(boxW: Int, boxH: Int, aspect: Float, maxLongSide: Int = I
     }
     return IntSize(w.coerceAtLeast(1), h.coerceAtLeast(1))
 }
+
+/** The colour a page is drawn on: the theme's paper when a theme is set, else [background]. */
+internal fun paperColor(background: Color, theme: ReaderTheme?): Color =
+    theme?.background?.let { Color(it.r.toFloat(), it.g.toFloat(), it.b.toFloat()) } ?: background

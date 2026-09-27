@@ -11,7 +11,7 @@ import kotlin.test.assertTrue
 class PageBitmapCacheTest {
 
     private fun key(id: Any, w: Int = 100, h: Int = 100) =
-        PageBitmapCache.Key(id, w, h, bgArgb = -1, themeId = 0, hairlineBits = 0)
+        PageBitmapCache.Key(id, w, h, bgArgb = -1, theme = null, hairlineBits = 0)
 
     @Test
     fun second_lookup_returns_the_same_instance_and_produces_once() {
