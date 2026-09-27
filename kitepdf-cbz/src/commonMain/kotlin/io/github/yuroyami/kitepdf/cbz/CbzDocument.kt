@@ -32,8 +32,11 @@ public class CbzDocument private constructor(
     internal val entryNames: List<String>,
 ) : KiteDocument {
 
+    /** The comic's decoded scans, kept for a page drawn again (#386). */
+    private val decoded = CbzImageCache(DECODED_IMAGE_BYTES)
+
     override val pages: List<KitePage> = entryNames.map { name ->
-        CbzPage({ zip.read(name) }, name)
+        CbzPage({ zip.read(name) }, name, readHeader = { zip.readPrefix(name, HEADER_BYTES) }, decoded = decoded)
     }
 
     override val pageCount: Int get() = pages.size
@@ -85,3 +88,12 @@ public class CbzDocument private constructor(
             }
     }
 }
+
+/**
+ * How much of an entry the size read inflates: every header that ImageDims reads, and the
+ * metadata that a JPEG usually puts before its size. A header past it falls back to the whole entry.
+ */
+private const val HEADER_BYTES = 128 * 1024
+
+/** The decoded scans a comic keeps: 64 MB, one or two large pages. */
+private const val DECODED_IMAGE_BYTES = 64L * 1024 * 1024

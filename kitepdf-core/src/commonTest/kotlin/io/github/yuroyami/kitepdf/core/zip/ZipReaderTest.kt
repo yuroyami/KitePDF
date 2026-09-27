@@ -38,6 +38,26 @@ class ZipReaderTest {
         assertContentEquals(long, ZipReader(zip).read("b.bin"))
     }
 
+    /** A prefix reads an image header without the image: stored, deflated, and sized only by a descriptor (#386). */
+    @Test
+    fun a_prefix_is_the_start_of_the_entry() {
+        val zip = ZipFixture.build(
+            listOf(
+                ZipFixture.Spec("s.bin", long),
+                ZipFixture.Spec("d.bin", long, deflate = true),
+                ZipFixture.Spec("h.bin", long, deflate = true, dataDescriptor = true, hideSizes = true),
+            ),
+        )
+        val r = ZipReader(zip)
+        for (name in listOf("s.bin", "d.bin", "h.bin")) {
+            assertContentEquals(long.copyOf(100), r.readPrefix(name, 100), name)
+            // A prefix longer than the entry is the whole entry.
+            assertContentEquals(long, r.readPrefix(name, long.size * 2), name)
+        }
+        assertNull(r.readPrefix("absent.bin", 100))
+        assertNull(r.readPrefix("s.bin", 0))
+    }
+
     /* ─── ZIP64 ──────────────────────────────────────────────────────────── */
 
     @Test
