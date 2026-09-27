@@ -477,6 +477,9 @@ KiteDocView(
 )
 ```
 
+A PDF of more than 200 pages shows the same slot for its first frames. It builds
+its page list off the main thread, and then opens at the page the state asked for.
+
 ### Reading the position
 
 | Member | Use it for |

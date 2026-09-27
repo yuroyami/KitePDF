@@ -149,8 +149,9 @@ import kotlinx.coroutines.launch
  * @param pagePlaceholder shown in a page's slot until its raster is ready.
  *   Defaults to a plain [KiteDocViewColors.pageBackground] box.
  * @param chapterPlaceholder shown in the slot a chapter holds while it is still
- *   being laid out. Only reflowable EPUB reaches this: a PDF is never mid-layout.
- *   [KiteDocLayout.Spread] pairs pages across the whole book, so it shows the
+ *   being laid out. A reflowable EPUB reaches this, and so does a PDF of more than
+ *   200 pages for its first frames, while it builds its page list off the main
+ *   thread. [KiteDocLayout.Spread] pairs pages across the whole book, so it shows the
  *   placeholder until every chapter is laid out. Defaults to an empty
  *   page-coloured box.
  * @param overlay HUD layer drawn over the viewport; receives [state] and a
