@@ -121,11 +121,23 @@ public interface PdfScriptHandler {
     }
 
     /**
-     * Runs the timers a script set, and answers how long to wait before the next one, or null
-     * when none is waiting. The viewer calls this once a frame while [hasTimers] is true.
+     * Runs the timers a script set that are due, and answers how long to wait before the next
+     * one, or null when none is waiting. [nowMillis] is the viewer's frame time. A handler may
+     * measure its timers on a clock of its own, as `PdfScriptRunner` does.
+     *
+     * A viewer calls this on a frame while [hasTimers] is true, and waits for as long as the
+     * answer says before it calls again.
      */
     public fun pumpTimers(nowMillis: Long): Long? = null
 
     /** True when a script is waiting on a timer. */
     public val hasTimers: Boolean get() = false
+
+    /**
+     * Calls [listener] when a script sets or clears a timer, from the thread the script runs on,
+     * and returns a function that stops the listening. A viewer pumps the timers only while one
+     * waits, so it learns here of a timer that a script set outside the viewer's own calls. The
+     * default reports nothing, and a viewer then checks [hasTimers] after each call it makes.
+     */
+    public fun onTimersChanged(listener: () -> Unit): () -> Unit = {}
 }
