@@ -531,12 +531,20 @@ you have handled it; `false` lets the tap fall through to `onTap`.
 KiteDocView(
     state = state,
     onLinkTap = { link ->
-        link.uri?.let { openInBrowser(it); true } ?: false
+        val uri = link.uri
+        if (uri != null && (uri.startsWith("https://") || uri.startsWith("http://"))) {
+            openInBrowser(uri)
+            true
+        } else {
+            false
+        }
     },
 )
 ```
 
-`link.uri` answers for both formats, so opening web links needs no `when`. When
+A document can name any scheme, `file:`, `intent:` and `javascript:` included, so
+open only the ones you trust. `link.uri` answers for both formats, so opening web
+links needs no `when`. When
 you do need the format-native payload:
 
 | Case | Comes from | Carries |
@@ -547,9 +555,9 @@ you do need the format-native payload:
 ```kotlin
 onLinkTap = { link ->
     when (link) {
-        is KiteLinkAction.Uri -> { openInBrowser(link.uri); true }
+        is KiteLinkAction.Uri -> openIfWeb(link.uri)
         is KiteLinkAction.Pdf -> when (val action = link.action) {
-            is PdfAction.Uri -> { openInBrowser(action.uri); true }
+            is PdfAction.Uri -> openIfWeb(action.uri)
             is PdfAction.Launch -> { warnAboutLaunch(action.filename); true }
             else -> false
         }
