@@ -608,6 +608,12 @@ public class KiteDocViewState(
      *   pinch centroid or double-tap position). Unspecified = viewport centre.
      */
     public fun setZoom(zoom: Float, focal: Offset = Offset.Unspecified) {
+        // A zoom request takes over from a zoom animation still running (#405).
+        stopZoomAnimation()
+        applyZoom(zoom, focal)
+    }
+
+    private fun applyZoom(zoom: Float, focal: Offset) {
         if (!zoom.isFinite()) return
         val new = zoom.coerceIn(zoomRange.start, zoomRange.endInclusive)
         val old = this.zoom
@@ -624,7 +630,14 @@ public class KiteDocViewState(
         this.zoom = new
     }
 
-    /** Animates zoom to [target] (clamped), keeping [focal] stationary throughout. A target that is not finite is ignored. */
+    /**
+     * Animates zoom to [target] (clamped), keeping [focal] stationary throughout. A target that is
+     * not finite is ignored.
+     *
+     * One zoom animation runs at a time. A new one takes over, and a finger on the page, [setZoom],
+     * [panBy] or [resetZoom] stops it where it is (#405). This call then throws a
+     * `CancellationException`, as a Compose scroll animation does when it is interrupted.
+     */
     public suspend fun animateZoomTo(
         target: Float,
         focal: Offset = Offset.Unspecified,
@@ -632,11 +645,29 @@ public class KiteDocViewState(
     ) {
         if (!target.isFinite()) return
         val clamped = target.coerceIn(zoomRange.start, zoomRange.endInclusive)
-        animate(zoom, clamped, animationSpec = animationSpec) { value, _ -> setZoom(value, focal) }
+        kotlinx.coroutines.coroutineScope {
+            stopZoomAnimation()
+            val job = coroutineContext[kotlinx.coroutines.Job]
+            zoomAnimation = job
+            try {
+                animate(zoom, clamped, animationSpec = animationSpec) { value, _ -> applyZoom(value, focal) }
+            } finally {
+                if (zoomAnimation === job) zoomAnimation = null
+            }
+        }
+    }
+
+    /** The zoom animation that runs now, so a finger or a zoom request can stop it. */
+    private var zoomAnimation: kotlinx.coroutines.Job? = null
+
+    private fun stopZoomAnimation() {
+        zoomAnimation?.cancel()
+        zoomAnimation = null
     }
 
     /** Snaps back to the minimum zoom and recentres. */
     public fun resetZoom() {
+        stopZoomAnimation()
         zoom = zoomRange.start
         panOffset = Offset.Zero
     }
@@ -649,6 +680,8 @@ public class KiteDocViewState(
      */
     public fun panBy(delta: Offset): Offset {
         if (!delta.x.isFinite() || !delta.y.isFinite()) return Offset.Zero
+        // A finger that pans takes over from a zoom animation still running (#405).
+        stopZoomAnimation()
         val allowed = Offset(
             if (panAxes.x) delta.x else 0f,
             if (panAxes.y) delta.y else 0f,
