@@ -15,6 +15,8 @@ import androidx.compose.ui.graphics.PathSegment
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.withTransform
+import androidx.compose.ui.graphics.isSupported
+import io.github.yuroyami.kitepdf.core.kiteWarn
 import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
@@ -779,28 +781,8 @@ public class ComposeCanvas internal constructor(
 
     private fun RgbColor.toCompose(): Color = Color(r.toFloat(), g.toFloat(), b.toFloat(), 1f)
 
-    /**
-     * Map a PDF blend mode to its Compose equivalent. All 16 PDF blend modes
-     * have a 1:1 Compose counterpart, so this is a clean enum dispatch.
-     */
-    private fun KiteBlendMode.toCompose(): ComposeBlendMode = when (this) {
-        KiteBlendMode.Normal -> ComposeBlendMode.SrcOver
-        KiteBlendMode.Multiply -> ComposeBlendMode.Multiply
-        KiteBlendMode.Screen -> ComposeBlendMode.Screen
-        KiteBlendMode.Overlay -> ComposeBlendMode.Overlay
-        KiteBlendMode.Darken -> ComposeBlendMode.Darken
-        KiteBlendMode.Lighten -> ComposeBlendMode.Lighten
-        KiteBlendMode.ColorDodge -> ComposeBlendMode.ColorDodge
-        KiteBlendMode.ColorBurn -> ComposeBlendMode.ColorBurn
-        KiteBlendMode.HardLight -> ComposeBlendMode.Hardlight
-        KiteBlendMode.SoftLight -> ComposeBlendMode.Softlight
-        KiteBlendMode.Difference -> ComposeBlendMode.Difference
-        KiteBlendMode.Exclusion -> ComposeBlendMode.Exclusion
-        KiteBlendMode.Hue -> ComposeBlendMode.Hue
-        KiteBlendMode.Saturation -> ComposeBlendMode.Saturation
-        KiteBlendMode.Color -> ComposeBlendMode.Color
-        KiteBlendMode.Luminosity -> ComposeBlendMode.Luminosity
-    }
+    /** The Compose blend mode that paints this PDF blend mode here. See [composeBlendMode]. */
+    private fun KiteBlendMode.toCompose(): ComposeBlendMode = composeBlendMode(this) { it.isSupported() }
 
     private fun FontSpec.toComposeFamily(): FontFamily = when (family) {
         KiteFontFamily.Serif -> FontFamily.Serif
@@ -813,6 +795,47 @@ public class ComposeCanvas internal constructor(
 
     private fun FontSpec.toComposeStyle(): FontStyle =
         if (italic) FontStyle.Italic else FontStyle.Normal
+}
+
+/**
+ * The Compose blend mode that paints [mode] on a platform that paints the modes [supported]
+ * accepts. Android before API 29 paints only the Porter-Duff modes and draws the others as
+ * Normal (#412). There Multiply becomes Modulate, which gives the same colour for an opaque paint
+ * over an opaque page, so a highlight keeps its text visible. The other modes stay, and the first
+ * one met is logged.
+ */
+internal fun composeBlendMode(mode: KiteBlendMode, supported: (ComposeBlendMode) -> Boolean): ComposeBlendMode {
+    val wanted = mode.toComposeBlendMode()
+    if (supported(wanted)) return wanted
+    if (mode == KiteBlendMode.Multiply && supported(ComposeBlendMode.Modulate)) return ComposeBlendMode.Modulate
+    if (!unsupportedBlendLogged) {
+        unsupportedBlendLogged = true
+        kiteWarn { "render: this platform cannot paint the $mode blend mode, so it paints as Normal" }
+    }
+    return wanted
+}
+
+@kotlin.concurrent.Volatile
+private var unsupportedBlendLogged = false
+
+/** A PDF blend mode's Compose twin. All 16 PDF blend modes have one. */
+private fun KiteBlendMode.toComposeBlendMode(): ComposeBlendMode = when (this) {
+    KiteBlendMode.Normal -> ComposeBlendMode.SrcOver
+    KiteBlendMode.Multiply -> ComposeBlendMode.Multiply
+    KiteBlendMode.Screen -> ComposeBlendMode.Screen
+    KiteBlendMode.Overlay -> ComposeBlendMode.Overlay
+    KiteBlendMode.Darken -> ComposeBlendMode.Darken
+    KiteBlendMode.Lighten -> ComposeBlendMode.Lighten
+    KiteBlendMode.ColorDodge -> ComposeBlendMode.ColorDodge
+    KiteBlendMode.ColorBurn -> ComposeBlendMode.ColorBurn
+    KiteBlendMode.HardLight -> ComposeBlendMode.Hardlight
+    KiteBlendMode.SoftLight -> ComposeBlendMode.Softlight
+    KiteBlendMode.Difference -> ComposeBlendMode.Difference
+    KiteBlendMode.Exclusion -> ComposeBlendMode.Exclusion
+    KiteBlendMode.Hue -> ComposeBlendMode.Hue
+    KiteBlendMode.Saturation -> ComposeBlendMode.Saturation
+    KiteBlendMode.Color -> ComposeBlendMode.Color
+    KiteBlendMode.Luminosity -> ComposeBlendMode.Luminosity
 }
 
 /**
