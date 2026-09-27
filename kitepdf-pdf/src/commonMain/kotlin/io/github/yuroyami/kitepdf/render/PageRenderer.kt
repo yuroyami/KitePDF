@@ -152,6 +152,9 @@ public class PageRenderer(
     // Nesting past MAX_MARKED_CONTENT_DEPTH is counted here, not stored (#166).
     private var markedContentOverflow = 0
 
+    // True once this page dropped a clip past MAX_CLIP_DEPTH, so it warns once (#335).
+    private var clipCapWarned = false
+
     /** The deepest marked-content nesting the last render stored. For tests. */
     internal var deepestMarkedContent: Int = 0
         private set
@@ -242,6 +245,7 @@ public class PageRenderer(
         dispatchedOps = 0L
         markedContentStack.clear()
         ocHiddenDepth = 0
+        clipCapWarned = false
         canvas.beginPage(page.rotatedWidth, page.rotatedHeight, deviceCtm)
         try {
             renderAnnotations(page, GraphicsStack(GraphicsState(ctm = deviceCtm)), annotations)
@@ -280,6 +284,7 @@ public class PageRenderer(
         optionalContent = page.internalDocument.optionalContent
         markedContentStack.clear()
         ocHiddenDepth = 0
+        clipCapWarned = false
         markedContentOverflow = 0
         deepestMarkedContent = 0
         clipSaveFloor = 0
@@ -1373,6 +1378,15 @@ public class PageRenderer(
         val evenOdd = pendingClip == 2
         pendingClip = 0
         if (path.isEmpty()) return
+        // A content stream can push clips without end, and each one is a save on the canvas.
+        // Past the cap they are dropped with one warning, as the other nesting caps do (#335).
+        if (activeClipCount >= MAX_CLIP_DEPTH) {
+            if (!clipCapWarned) {
+                clipCapWarned = true
+                kiteWarn { "render: more than $MAX_CLIP_DEPTH clips are active, so later clips are dropped" }
+            }
+            return
+        }
         canvas.pushClip(path.build(), state.current.ctm, evenOdd)
         activeClipCount++
     }
@@ -2541,6 +2555,9 @@ public class PageRenderer(
         const val MAX_TILES = 20_000L
         /** Max Form-XObject nesting depth before bailing (recursion guard). */
         const val MAX_FORM_DEPTH = 15
+
+        /** Clips a page may have active at once. A real page stays far below it (#335). */
+        const val MAX_CLIP_DEPTH = 1024
 
         /** Marked-content nesting stored per page, the same bound as the graphics state (#166). */
         const val MAX_MARKED_CONTENT_DEPTH = 4096

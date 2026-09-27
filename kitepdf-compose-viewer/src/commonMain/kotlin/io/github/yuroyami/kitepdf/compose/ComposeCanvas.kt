@@ -14,7 +14,6 @@ import androidx.compose.ui.graphics.PathFillType
 import androidx.compose.ui.graphics.PathSegment
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.TextStyle
@@ -66,9 +65,9 @@ import kotlin.math.sqrt
  *     when the renderer requests one; later `restore` composites the layer
  *     back with the requested blend mode + alpha.
  *
- * Clipping uses Compose's [clipPath] inside a recursive scope; transparency
- * groups use the lower-level `Canvas.saveLayer` so they can span multiple
- * `DrawScope` operations.
+ * Clips and transparency groups use the lower-level `Canvas.save`, `clipPath`
+ * and `saveLayer`, so they span many `DrawScope` operations, and each clip is
+ * applied once however many paints it covers.
  */
 public class ComposeCanvas(
     private val drawScope: DrawScope,
@@ -96,42 +95,58 @@ public class ComposeCanvas(
     internal var usedSystemFontText: Boolean = false
         private set
 
-    private val clipStack = ArrayDeque<ClipFrame>()
-    /** Count of open transparency groups, for matching beginGroup/endGroup pairs. */
-    private var openGroups = 0
+    /**
+     * What each open save on the canvas holds, oldest first: a clip, or the layer of a
+     * transparency group or a soft mask. A clip is applied once when it is pushed and restored
+     * when it is popped, as `SkiaCanvas` does, so a paint costs the same at any clip depth and
+     * never recurses once per clip (#335). Clips and layers share one stack, so a restore always
+     * undoes the save it belongs to.
+     */
+    private val saves = ArrayDeque<Save>()
+
+    private enum class Save { Clip, Layer }
 
     override fun beginPage(widthPt: Double, heightPt: Double, deviceCtm: KiteMatrix) {
-        clipStack.clear()
-        openGroups = 0
+        restoreAll()
         groups.clear()
     }
 
     override fun endPage() {
-        // Close any still-open transparency groups (defensive: well-formed
-        // PDFs always pair them, but malformed ones leak).
-        while (openGroups > 0) {
-            drawScope.drawContext.canvas.restore()
-            openGroups--
-        }
-        clipStack.clear()
+        // Close anything still open (defensive: well-formed PDFs always pair them,
+        // but malformed ones leak).
+        restoreAll()
         groups.clear()
+    }
+
+    private fun restoreAll() {
+        while (saves.isNotEmpty()) {
+            saves.removeLast()
+            drawScope.drawContext.canvas.restore()
+        }
+    }
+
+    /** Restores the newest layer, and first any clip opened inside it. */
+    private fun restoreThroughLayer() {
+        while (saves.isNotEmpty()) {
+            val top = saves.removeLast()
+            drawScope.drawContext.canvas.restore()
+            if (top == Save.Layer) return
+        }
     }
 
     override fun fillPath(
         path: KitePath, ctm: KiteMatrix, color: RgbColor, evenOdd: Boolean,
         alpha: Double, blendMode: KiteBlendMode,
     ) {
-        withActiveClips {
-            val composePath = toComposePath(path, ctm, scratchPath).apply {
-                fillType = if (evenOdd) PathFillType.EvenOdd else PathFillType.NonZero
-            }
-            drawScope.drawPath(
-                path = composePath,
-                color = color.toCompose(),
-                alpha = alpha.toFloat().coerceIn(0f, 1f),
-                blendMode = paintBlend(blendMode),
-            )
+        val composePath = toComposePath(path, ctm, scratchPath).apply {
+            fillType = if (evenOdd) PathFillType.EvenOdd else PathFillType.NonZero
         }
+        drawScope.drawPath(
+            path = composePath,
+            color = color.toCompose(),
+            alpha = alpha.toFloat().coerceIn(0f, 1f),
+            blendMode = paintBlend(blendMode),
+        )
     }
 
     override fun strokePath(
@@ -140,42 +155,40 @@ public class ComposeCanvas(
         dashArray: List<Double>?, dashPhase: Double,
         lineCap: Int, lineJoin: Int, miterLimit: Double,
     ) {
-        withActiveClips {
-            // The hairline scales with a supersampled raster, so thin strokes keep their
-            // on-screen weight after the downscale.
-            val pen = strokePen(ctm, lineWidth, hairlineWidthPx.toDouble())
-            val composePath = toComposePath(path, pen.pathMatrix, scratchPath)
-            val dash = composeDashIntervals(dashArray, pen.dashScale)
-                ?.let { PathEffect.dashPathEffect(it, (dashPhase * pen.dashScale).toFloat()) }
-            val cap = when (lineCap) {
-                1 -> androidx.compose.ui.graphics.StrokeCap.Round
-                2 -> androidx.compose.ui.graphics.StrokeCap.Square
-                else -> androidx.compose.ui.graphics.StrokeCap.Butt
-            }
-            val join = when (lineJoin) {
-                1 -> androidx.compose.ui.graphics.StrokeJoin.Round
-                2 -> androidx.compose.ui.graphics.StrokeJoin.Bevel
-                else -> androidx.compose.ui.graphics.StrokeJoin.Miter
-            }
-            val stroke: DrawScope.() -> Unit = {
-                drawPath(
-                    path = composePath,
-                    color = color.toCompose(),
-                    alpha = alpha.toFloat().coerceIn(0f, 1f),
-                    style = Stroke(
-                        width = pen.width.toFloat(),
-                        cap = cap,
-                        join = join,
-                        miter = miterLimit.toFloat().coerceAtLeast(1f),
-                        pathEffect = dash,
-                    ),
-                    blendMode = paintBlend(blendMode),
-                )
-            }
-            // An elliptical pen strokes in user space under the matrix.
-            val m = pen.strokeMatrix
-            if (m == null) drawScope.stroke() else drawScope.withTransform({ transform(m.toComposeMatrix()) }, stroke)
+        // The hairline scales with a supersampled raster, so thin strokes keep their
+        // on-screen weight after the downscale.
+        val pen = strokePen(ctm, lineWidth, hairlineWidthPx.toDouble())
+        val composePath = toComposePath(path, pen.pathMatrix, scratchPath)
+        val dash = composeDashIntervals(dashArray, pen.dashScale)
+            ?.let { PathEffect.dashPathEffect(it, (dashPhase * pen.dashScale).toFloat()) }
+        val cap = when (lineCap) {
+            1 -> androidx.compose.ui.graphics.StrokeCap.Round
+            2 -> androidx.compose.ui.graphics.StrokeCap.Square
+            else -> androidx.compose.ui.graphics.StrokeCap.Butt
         }
+        val join = when (lineJoin) {
+            1 -> androidx.compose.ui.graphics.StrokeJoin.Round
+            2 -> androidx.compose.ui.graphics.StrokeJoin.Bevel
+            else -> androidx.compose.ui.graphics.StrokeJoin.Miter
+        }
+        val stroke: DrawScope.() -> Unit = {
+            drawPath(
+                path = composePath,
+                color = color.toCompose(),
+                alpha = alpha.toFloat().coerceIn(0f, 1f),
+                style = Stroke(
+                    width = pen.width.toFloat(),
+                    cap = cap,
+                    join = join,
+                    miter = miterLimit.toFloat().coerceAtLeast(1f),
+                    pathEffect = dash,
+                ),
+                blendMode = paintBlend(blendMode),
+            )
+        }
+        // An elliptical pen strokes in user space under the matrix.
+        val m = pen.strokeMatrix
+        if (m == null) drawScope.stroke() else drawScope.withTransform({ transform(m.toComposeMatrix()) }, stroke)
     }
 
     override fun drawGlyphs(
@@ -190,12 +203,10 @@ public class ComposeCanvas(
         blendMode: KiteBlendMode,
     ) {
         if (glyphs.isEmpty()) return
-        withActiveClips {
-            if (hasOutlines) {
-                drawTextViaOutlines(glyphs, fontSize, unitsPerEm, textToDevice, color, alpha, blendMode)
-            } else {
-                drawTextViaSystemFont(glyphs, fontSize, fontSpec, textToDevice, color, alpha, blendMode)
-            }
+        if (hasOutlines) {
+            drawTextViaOutlines(glyphs, fontSize, unitsPerEm, textToDevice, color, alpha, blendMode)
+        } else {
+            drawTextViaSystemFont(glyphs, fontSize, fontSpec, textToDevice, color, alpha, blendMode)
         }
     }
 
@@ -370,16 +381,14 @@ public class ComposeCanvas(
         // and the edges of an unrotated image move outwards onto whole pixels, as in MuPDF (#300).
         val device = gridFitImage(ctm)
         val sampling = imageSampling(image.width, image.height, device, image.interpolate)
-        withActiveClips {
-            val bitmap = bitmaps.getOrPut(image, sampling, { it.width.toLong() * it.height * 4 }) { bitmapFor(image, sampling) }
-            if (bitmap != null) {
-                drawBitmap(
-                    bitmap, device, alpha.toFloat().coerceIn(0f, 1f),
-                    if (sampling.smooth) FilterQuality.Low else FilterQuality.None, paintBlend(blendMode),
-                )
-            } else {
-                drawPlaceholder(ctm)
-            }
+        val bitmap = bitmaps.getOrPut(image, sampling, { it.width.toLong() * it.height * 4 }) { bitmapFor(image, sampling) }
+        if (bitmap != null) {
+            drawBitmap(
+                bitmap, device, alpha.toFloat().coerceIn(0f, 1f),
+                if (sampling.smooth) FilterQuality.Low else FilterQuality.None, paintBlend(blendMode),
+            )
+        } else {
+            drawPlaceholder(ctm)
         }
     }
 
@@ -486,13 +495,11 @@ public class ComposeCanvas(
             corner(0.0, 0.0, true); corner(w, 0.0, false); corner(w, h, false); corner(0.0, h, false)
             close()
         }.build()
-        withActiveClips {
-            val composeBlend = paintBlend(blendMode)
-            val a = alpha.toFloat().coerceIn(0f, 1f)
-            drawScope.withTransform({ transform(ctm.toComposeMatrix()) }) {
-                val cp = toComposePath(region, KiteMatrix.IDENTITY, scratchPath).apply { fillType = PathFillType.NonZero }
-                drawPath(cp, brush = brush, alpha = a, blendMode = composeBlend)
-            }
+        val composeBlend = paintBlend(blendMode)
+        val a = alpha.toFloat().coerceIn(0f, 1f)
+        drawScope.withTransform({ transform(ctm.toComposeMatrix()) }) {
+            val cp = toComposePath(region, KiteMatrix.IDENTITY, scratchPath).apply { fillType = PathFillType.NonZero }
+            drawPath(cp, brush = brush, alpha = a, blendMode = composeBlend)
         }
     }
 
@@ -527,6 +534,7 @@ public class ComposeCanvas(
         // Outer layer: holds the masked content.
         val outerPaint = Paint()
         composeCanvas.saveLayer(infiniteRect(), outerPaint)
+        saves.addLast(Save.Layer)
         // The content and the mask composite as usual, also inside a knockout group.
         groups.addLast(Group(layered = false, knockout = false))
         try {
@@ -568,6 +576,7 @@ public class ComposeCanvas(
                 }
             }
             composeCanvas.saveLayer(infiniteRect(), maskPaint)
+            saves.addLast(Save.Layer)
             try {
                 if (kind == SoftMask.Kind.Luminosity) {
                     // Unpainted mask pixels stay black -> luminance 0 -> fully
@@ -576,11 +585,11 @@ public class ComposeCanvas(
                 }
                 renderMask(this)
             } finally {
-                composeCanvas.restore()
+                restoreThroughLayer()
             }
         } finally {
             groups.removeLastOrNull()
-            composeCanvas.restore()
+            restoreThroughLayer()
         }
     }
 
@@ -630,11 +639,18 @@ public class ComposeCanvas(
         val composePath = toComposePath(path, ctm).apply {
             fillType = if (evenOdd) PathFillType.EvenOdd else PathFillType.NonZero
         }
-        clipStack.addLast(ClipFrame(composePath))
+        val canvas = drawScope.drawContext.canvas
+        canvas.save()
+        canvas.clipPath(composePath)
+        saves.addLast(Save.Clip)
     }
 
     override fun popClip() {
-        if (clipStack.isNotEmpty()) clipStack.removeLast()
+        // The renderer pops a clip before it ends the group the clip was pushed in. A pop that
+        // finds a layer on top would restore that layer instead, so it is ignored.
+        if (saves.lastOrNull() != Save.Clip) return
+        saves.removeLast()
+        drawScope.drawContext.canvas.restore()
     }
 
     /**
@@ -683,7 +699,7 @@ public class ComposeCanvas(
         val canvas = drawScope.drawContext.canvas
         val overBackdrop = !isolated && !knockout && !nested && blendMode == KiteBlendMode.Normal
         if (!overBackdrop || !saveLayerOverBackdrop(canvas, rect, paint)) canvas.saveLayer(rect, paint)
-        openGroups++
+        saves.addLast(Save.Layer)
     }
 
     /** An open group: whether it opened a layer, and whether its paints knock out. */
@@ -702,26 +718,11 @@ public class ComposeCanvas(
 
     override fun endTransparencyGroup() {
         if (groups.removeLastOrNull()?.layered != true) return
-        if (openGroups <= 0) return
-        drawScope.drawContext.canvas.restore()
-        openGroups--
+        if (Save.Layer !in saves) return
+        restoreThroughLayer()
     }
 
     /* ─── Helpers ─────────────────────────────────────────────────────────── */
-
-    private fun withActiveClips(block: () -> Unit) {
-        applyClipsThen(0, block)
-    }
-
-    private fun applyClipsThen(index: Int, block: () -> Unit) {
-        if (index >= clipStack.size) {
-            block(); return
-        }
-        val frame = clipStack[index]
-        drawScope.clipPath(frame.path) {
-            applyClipsThen(index + 1, block)
-        }
-    }
 
     /**
      * One circle standing in for a radial shading between two circles, on a platform
@@ -834,8 +835,6 @@ public class ComposeCanvas(
         if (italic) FontStyle.Italic else FontStyle.Normal
 
     private val PI = kotlin.math.PI
-
-    private data class ClipFrame(val path: Path)
 }
 
 /**
