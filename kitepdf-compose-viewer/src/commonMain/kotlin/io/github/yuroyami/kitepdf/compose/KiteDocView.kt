@@ -234,8 +234,11 @@ public fun KiteDocView(
     // the gesture settles, GPU-scaling the existing bitmap in between. Only the
     // rasterized path re-renders on settle; vector draws are resolution-free.
     val rerasterizeOnZoom = (renderSpec as? KiteRenderSpec.Rasterized)?.rerasterizeOnZoom == true
-    val settledZoom by produceState(1f, state, rerasterizeOnZoom) {
-        if (!rerasterizeOnZoom) {
+    // A Vectorized page draws again at each settled zoom too, so its images and hairlines follow
+    // the pixels on screen (#418).
+    val tracksZoom = rerasterizeOnZoom || renderSpec is KiteRenderSpec.Vectorized
+    val settledZoom by produceState(1f, state, tracksZoom) {
+        if (!tracksZoom) {
             value = 1f
             return@produceState
         }
@@ -675,7 +678,7 @@ private fun PageSlotContent(
             drawsFormLayer = drawsForm,
             state = state,
         )
-        is KiteRenderSpec.Vectorized -> KitePageVector(page, renderSpec, colors, slot, skipWidgets = drawsForm)
+        is KiteRenderSpec.Vectorized -> KitePageVector(page, renderSpec, colors, slot, skipWidgets = drawsForm, magnification = settledZoom)
     }
 }
 
@@ -1071,6 +1074,8 @@ internal fun ReportFreshRaster(rastered: Pair<ImageBitmap, Boolean>?, report: (I
  * continuous mode, per-page in paged/single). In continuous mode a gesture frame
  * only moves that layer, so the page does not redraw; in the paged layouts a
  * gesture frame recomposes the page slot, and the page redraws with it (#373).
+ * Once a zoom settles, the page draws again at it: image sampling and the
+ * hairline follow the pixels on screen, not the pixels of the slot (#418).
  *
  * `onPageRendered` is intentionally not honoured here: there is no [ImageBitmap]
  * to hand back. Use [KiteRenderSpec.Rasterized] (or [KitePageRasterizer] directly) if
@@ -1084,6 +1089,8 @@ private fun KitePageVector(
     modifier: Modifier,
     /** True when a form layer draws this page's widgets, so the page must leave them out. */
     skipWidgets: Boolean = false,
+    /** The settled zoom the layer shows the page at, which image sampling and hairlines follow. */
+    magnification: Float = 1f,
 ) {
     val textMeasurer = rememberTextMeasurer()
     val theme = colors.theme
@@ -1101,7 +1108,7 @@ private fun KitePageVector(
         // The page ends at its slot, as the bitmap's edge ends it in Rasterized mode: content
         // outside the page, such as bleed, never paints the gap or the next page (#417).
         clipRect {
-            val base = ComposeCanvas(this, textMeasurer, spec.hairlineWidthPx)
+            val base = ComposeCanvas(this, textMeasurer, spec.hairlineWidthPx, skipSystemFontText = false, magnification = magnification)
             val themed = theme?.wrap(base) ?: base
             val target = spec.canvasDecorator?.invoke(themed) ?: themed
             failure.guard("page") {
