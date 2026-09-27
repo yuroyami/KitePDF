@@ -177,6 +177,9 @@ public fun KiteThumbnailStrip(
     val scope = rememberCoroutineScope()
     val density = LocalDensity.current
     val heightPx = with(density) { thumbnailHeight.roundToPx() }.coerceAtLeast(1)
+    // Thumbnails keep their bitmaps in a small cache of their own, so one that scrolls out and
+    // back is a lookup, not a raster (#391). A new decorator draws differently: a new cache.
+    val thumbnails = remember(state.viewerDecorator) { PageBitmapCache(THUMBNAIL_CACHE_BYTES) }
 
     LazyRow(
         modifier = modifier,
@@ -200,7 +203,7 @@ public fun KiteThumbnailStrip(
                 // thumbnail of the same page keeps the old one (#430).
                 val result = page?.let {
                     rasterizer.rasterizeCachedOrNull(
-                        null, it, widthPx, heightPx, paper, 1f, theme, index, canvasDecorator = decorator,
+                        thumbnails, it, widthPx, heightPx, paper, 1f, theme, index, canvasDecorator = decorator,
                     )?.first
                 }
                 value = when {
@@ -319,3 +322,6 @@ public fun KiteOutlinePanel(
         }
     }
 }
+
+/** What the bitmaps of one thumbnail strip may hold: about sixty thumbnails of a phone. */
+private const val THUMBNAIL_CACHE_BYTES = 8L * 1024 * 1024
