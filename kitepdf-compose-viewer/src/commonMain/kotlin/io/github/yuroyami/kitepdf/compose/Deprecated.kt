@@ -81,7 +81,7 @@ private fun KiteLinkAction.toLegacyAction(): PdfAction = when (this) {
 
 @Deprecated(
     "Renamed to rememberKiteDocViewState, which takes any KiteDocument",
-    ReplaceWith("rememberKiteDocViewState(document, initialPage)"),
+    ReplaceWith("rememberKiteDocViewState(document = document, initialPage = initialPage)"),
 )
 @Composable
 public fun rememberPdfViewState(document: PdfDocument, initialPage: Int = 0): KiteDocViewState =
@@ -89,7 +89,7 @@ public fun rememberPdfViewState(document: PdfDocument, initialPage: Int = 0): Ki
 
 @Deprecated(
     "Renamed to rememberKiteDocViewState, which takes any KiteDocument",
-    ReplaceWith("rememberKiteDocViewState(document, initialPage)"),
+    ReplaceWith("rememberKiteDocViewState(document = document, initialPage = initialPage)"),
 )
 @Composable
 public fun rememberEpubViewState(document: EpubDocument, initialPage: Int = 0): KiteDocViewState =
@@ -99,7 +99,9 @@ public fun rememberEpubViewState(document: EpubDocument, initialPage: Int = 0): 
 @Composable
 public fun rememberPdfRasterizer(): KitePageRasterizer = rememberKitePageRasterizer()
 
-@Deprecated("Renamed to KiteDocView", ReplaceWith("KiteDocView(state, modifier, layout, zoomSpec, renderSpec, colors, pageSpacing, userScrollEnabled, selectionEnabled, onPageRendered, pagePlaceholder, overlay, onTap)"))
+// No quick fix: onLinkTap changed its type, and a replacement that drops it or shifts the
+// arguments compiles and breaks links (#435).
+@Deprecated("Renamed to KiteDocView. Pass the same arguments by name. onLinkTap now takes a KiteLinkAction, and KiteLinkAction.Pdf holds the PdfAction.")
 @Composable
 public fun PdfView(
     state: KiteDocViewState,
@@ -135,7 +137,8 @@ public fun PdfView(
     )
 }
 
-@Deprecated("Renamed to KiteDocView, which takes any KiteDocument", ReplaceWith("KiteDocView(document, modifier, page, background, null, pageSpacing, selectionEnabled, onPageRendered, onTap)"))
+// No quick fix, for the reason given on the PdfView above.
+@Deprecated("Renamed to KiteDocView, which takes any KiteDocument. Pass the same arguments by name. onLinkTap now takes a KiteLinkAction, and KiteLinkAction.Pdf holds the PdfAction.")
 @Composable
 public fun PdfView(
     document: PdfDocument,
@@ -161,7 +164,8 @@ public fun PdfView(
     )
 }
 
-@Deprecated("Renamed to KiteDocView, which takes any KiteDocument", ReplaceWith("KiteDocView(document, modifier, page, background, theme, pageSpacing, true, onPageRendered, onTap)"))
+// No quick fix, for the reason given on the PdfView above.
+@Deprecated("Renamed to KiteDocView, which takes any KiteDocument. Pass the same arguments by name. onLinkTap now takes a KiteLinkAction, and KiteLinkAction.Pdf holds the PdfAction.")
 @Composable
 public fun EpubView(
     document: EpubDocument,
@@ -187,7 +191,15 @@ public fun EpubView(
     )
 }
 
-@Deprecated("Renamed to KiteSelectionMenu", ReplaceWith("KiteSelectionMenu(state, items, modifier, highlightColors, onHighlightColorPicked, clearSelectionOnColorPick, alignment, showWhileSelecting, containerColor, contentColor, container, itemContent, colorSwatch)"))
+@Deprecated(
+    "Renamed to KiteSelectionMenu",
+    ReplaceWith(
+        "KiteSelectionMenu(state = state, items = items, modifier = modifier, highlightColors = highlightColors, " +
+            "onHighlightColorPicked = onHighlightColorPicked, clearSelectionOnColorPick = clearSelectionOnColorPick, " +
+            "alignment = alignment, showWhileSelecting = showWhileSelecting, containerColor = containerColor, " +
+            "contentColor = contentColor, container = container, itemContent = itemContent, colorSwatch = colorSwatch)",
+    ),
+)
 @Composable
 public fun BoxScope.PdfSelectionMenu(
     state: KiteDocViewState,
@@ -204,21 +216,31 @@ public fun BoxScope.PdfSelectionMenu(
     itemContent: (@Composable (item: KiteSelectionMenuItem, selection: KiteTextSelection) -> Unit)? = null,
     colorSwatch: (@Composable (color: Color, onPick: () -> Unit) -> Unit)? = null,
 ): Unit = KiteSelectionMenu(
-    state, items, modifier, highlightColors, onHighlightColorPicked,
-    clearSelectionOnColorPick, alignment, showWhileSelecting, containerColor,
-    contentColor, container, itemContent, colorSwatch,
+    state = state, items = items, modifier = modifier, highlightColors = highlightColors,
+    onHighlightColorPicked = onHighlightColorPicked, clearSelectionOnColorPick = clearSelectionOnColorPick,
+    alignment = alignment, showWhileSelecting = showWhileSelecting, containerColor = containerColor,
+    contentColor = contentColor, container = container, itemContent = itemContent, colorSwatch = colorSwatch,
 )
 
-@Deprecated("Renamed to KitePageIndicator", ReplaceWith("KitePageIndicator(state, modifier, textStyle, format)"))
+@Deprecated(
+    "Renamed to KitePageIndicator",
+    ReplaceWith("KitePageIndicator(state = state, modifier = modifier, textStyle = textStyle, format = format)"),
+)
 @Composable
 public fun PdfPageIndicator(
     state: KiteDocViewState,
     modifier: Modifier = Modifier,
     textStyle: TextStyle = TextStyle.Default,
     format: (currentPage: Int, pageCount: Int) -> String = { c, t -> "${c + 1} / $t" },
-): Unit = KitePageIndicator(state, modifier, textStyle, format)
+): Unit = KitePageIndicator(state = state, modifier = modifier, textStyle = textStyle, format = format)
 
-@Deprecated("Renamed to KiteNavigationControls", ReplaceWith("KiteNavigationControls(state, modifier, contentColor, containerColor, textStyle)"))
+@Deprecated(
+    "Renamed to KiteNavigationControls",
+    ReplaceWith(
+        "KiteNavigationControls(state = state, modifier = modifier, contentColor = contentColor, " +
+            "containerColor = containerColor, textStyle = textStyle)",
+    ),
+)
 @Composable
 public fun PdfNavigationControls(
     state: KiteDocViewState,
@@ -226,9 +248,17 @@ public fun PdfNavigationControls(
     contentColor: Color = Color.White,
     containerColor: Color = Color(0xB3222222),
     textStyle: TextStyle = TextStyle.Default,
-): Unit = KiteNavigationControls(state, modifier, contentColor, containerColor, textStyle)
+): Unit = KiteNavigationControls(
+    state = state, modifier = modifier, contentColor = contentColor, containerColor = containerColor, textStyle = textStyle,
+)
 
-@Deprecated("Renamed to KiteThumbnailStrip", ReplaceWith("KiteThumbnailStrip(state, modifier, thumbnailHeight, spacing, contentPadding, selectedBorderColor, pageBackground)"))
+@Deprecated(
+    "Renamed to KiteThumbnailStrip",
+    ReplaceWith(
+        "KiteThumbnailStrip(state = state, modifier = modifier, thumbnailHeight = thumbnailHeight, spacing = spacing, " +
+            "contentPadding = contentPadding, selectedBorderColor = selectedBorderColor, pageBackground = pageBackground)",
+    ),
+)
 @Composable
 public fun PdfThumbnailStrip(
     state: KiteDocViewState,
@@ -239,11 +269,18 @@ public fun PdfThumbnailStrip(
     selectedBorderColor: Color = Color(0xFF4A90D9),
     pageBackground: Color = Color.White,
 ): Unit = KiteThumbnailStrip(
-    state, modifier, thumbnailHeight, spacing, contentPadding,
-    selectedBorderColor, pageBackground,
+    state = state, modifier = modifier, thumbnailHeight = thumbnailHeight, spacing = spacing,
+    contentPadding = contentPadding, selectedBorderColor = selectedBorderColor, pageBackground = pageBackground,
 )
 
-@Deprecated("Renamed to KiteOutlinePanel", ReplaceWith("KiteOutlinePanel(state, modifier, outline, contentPadding, textStyle, textColor, disabledTextColor, currentPageColor, indent, onNavigate)"))
+@Deprecated(
+    "Renamed to KiteOutlinePanel",
+    ReplaceWith(
+        "KiteOutlinePanel(state = state, modifier = modifier, outline = outline, contentPadding = contentPadding, " +
+            "textStyle = textStyle, textColor = textColor, disabledTextColor = disabledTextColor, " +
+            "currentPageColor = currentPageColor, indent = indent, onNavigate = onNavigate)",
+    ),
+)
 @Composable
 public fun PdfOutlinePanel(
     state: KiteDocViewState,
@@ -257,6 +294,7 @@ public fun PdfOutlinePanel(
     indent: Dp = 16.dp,
     onNavigate: ((KiteOutlineItem) -> Unit)? = null,
 ): Unit = KiteOutlinePanel(
-    state, modifier, outline, contentPadding, textStyle, textColor,
-    disabledTextColor, currentPageColor, indent, onNavigate,
+    state = state, modifier = modifier, outline = outline, contentPadding = contentPadding,
+    textStyle = textStyle, textColor = textColor, disabledTextColor = disabledTextColor,
+    currentPageColor = currentPageColor, indent = indent, onNavigate = onNavigate,
 )
