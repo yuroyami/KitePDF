@@ -6,6 +6,8 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.layout.calculateEndPadding
+import androidx.compose.foundation.layout.calculateStartPadding
 import androidx.compose.foundation.interaction.DragInteraction
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -20,10 +22,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.VerticalPager
-import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.pager.PagerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -32,6 +34,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
@@ -58,6 +61,7 @@ import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.Dp
@@ -303,26 +307,30 @@ public fun KiteDocView(
             .onSizeChanged { state.viewportSize = it },
     ) {
         if (state.itemCount > 0) {
-            when (layout) {
-                is KiteDocLayout.Continuous -> ContinuousLayout(
-                    state, layout, zoomSpec, renderSpec, colors, pageSpacing,
-                    userScrollEnabled, settledZoom, onPageRendered, pagePlaceholder,
-                    chapterPlaceholder, linkAwareTap,
-                )
-                is KiteDocLayout.Paged -> PagedLayout(
-                    state, layout, zoomSpec, renderSpec, colors, pageSpacing,
-                    userScrollEnabled, settledZoom, onPageRendered, pagePlaceholder,
-                    chapterPlaceholder, linkAwareTap,
-                )
-                is KiteDocLayout.Spread -> SpreadLayout(
-                    state, layout, zoomSpec, renderSpec, colors, pageSpacing,
-                    userScrollEnabled, settledZoom, onPageRendered, pagePlaceholder,
-                    chapterPlaceholder, linkAwareTap,
-                )
-                is KiteDocLayout.SinglePage -> SinglePageLayout(
-                    state, layout, zoomSpec, renderSpec, colors,
-                    settledZoom, onPageRendered, pagePlaceholder, chapterPlaceholder, linkAwareTap,
-                )
+            // A new state gets a new layout, containers and all, so nothing of the old document's
+            // strip reaches the new one's pages (#346).
+            key(state) {
+                when (layout) {
+                    is KiteDocLayout.Continuous -> ContinuousLayout(
+                        state, layout, zoomSpec, renderSpec, colors, pageSpacing,
+                        userScrollEnabled, settledZoom, onPageRendered, pagePlaceholder,
+                        chapterPlaceholder, linkAwareTap,
+                    )
+                    is KiteDocLayout.Paged -> PagedLayout(
+                        state, layout, zoomSpec, renderSpec, colors, pageSpacing,
+                        userScrollEnabled, settledZoom, onPageRendered, pagePlaceholder,
+                        chapterPlaceholder, linkAwareTap,
+                    )
+                    is KiteDocLayout.Spread -> SpreadLayout(
+                        state, layout, zoomSpec, renderSpec, colors, pageSpacing,
+                        userScrollEnabled, settledZoom, onPageRendered, pagePlaceholder,
+                        chapterPlaceholder, linkAwareTap,
+                    )
+                    is KiteDocLayout.SinglePage -> SinglePageLayout(
+                        state, layout, zoomSpec, renderSpec, colors,
+                        settledZoom, onPageRendered, pagePlaceholder, chapterPlaceholder, linkAwareTap,
+                    )
+                }
             }
         }
         overlay?.invoke(this, state)
@@ -473,21 +481,33 @@ private fun ContinuousLayout(
     chapterPlaceholder: (@Composable (chapter: Int) -> Unit)?,
     onTap: ((Offset) -> Unit)?,
 ) {
-    // Seed from currentPage, not pendingPage: this runs during composition,
-    // but the outgoing layout only publishes its farewell position from
-    // onDispose (the apply phase, strictly later), so pendingPage here is
-    // always one layout switch stale. currentPage reads the still-attached
-    // outgoing adapter live and falls back to pendingPage on first composition.
-    val listState = rememberLazyListState(
-        initialFirstVisibleItemIndex = state.slotFor(state.currentScrollPosition.location)
-            .coerceIn(0, (state.itemCount - 1).coerceAtLeast(0)),
-        initialFirstVisibleItemScrollOffset = state.currentScrollPosition.offsetPx,
-    )
+    // The state owns the position: the layout is keyed on the state, a strip on the other axis
+    // gets a new list too, each list is seeded from the state, and none saves anything of its own
+    // (#345, #346, #352). The seed reads the position live: the outgoing list parks its own only
+    // from onDispose, which runs after this composition.
+    val orientation = layout.orientation
+    val density = LocalDensity.current
+    val direction = LocalLayoutDirection.current
+    val listState = remember(orientation) {
+        val padding = layout.contentPadding
+        val crossPx = with(density) {
+            if (orientation == Orientation.Vertical) {
+                state.viewportSize.width - (padding.calculateStartPadding(direction) + padding.calculateEndPadding(direction)).roundToPx()
+            } else {
+                state.viewportSize.height - (padding.calculateTopPadding() + padding.calculateBottomPadding()).roundToPx()
+            }
+        }
+        val (index, offset) = state.stripSeed(orientation, crossPx)
+        LazyListState(index, offset)
+    }
     DisposableEffect(state, listState) {
+        // A strip on the other axis starts unpanned: the old pan lies on the axis this one scrolls.
+        if (state.stripOrientation.let { it != null && it != orientation }) state.panOffset = Offset.Zero
+        state.stripOrientation = orientation
         val adapter = LazyListScrollAdapter(listState)
         state.adapter = adapter
         onDispose {
-            state.park(adapter.currentPage, adapter.leadingPage, adapter.scrollOffsetPx)
+            state.park(adapter.currentPage, adapter.leadingPage, adapter.scrollOffsetPx, adapter.leadingSlotLength ?: 0)
             if (state.adapter === adapter) state.adapter = null
         }
     }
@@ -674,10 +694,10 @@ private fun PagedLayout(
     chapterPlaceholder: (@Composable (chapter: Int) -> Unit)?,
     onTap: ((Offset) -> Unit)?,
 ) {
-    // currentPage, not pendingPage: see ContinuousLayout's seed comment.
-    val pagerState = rememberPagerState(
-        initialPage = state.currentPage.coerceIn(0, (state.itemCount - 1).coerceAtLeast(0)),
-    ) { state.itemCount }
+    // Seeded from the state and saving nothing of its own; see ContinuousLayout's seed comment.
+    val pagerState = remember {
+        PagerState(currentPage = state.currentPage.coerceIn(0, (state.itemCount - 1).coerceAtLeast(0))) { state.itemCount }
+    }
     val pagerAdapter = remember(pagerState) { PagerScrollAdapter(pagerState) }
     DisposableEffect(state, pagerAdapter) {
         state.adapter = pagerAdapter
@@ -1348,14 +1368,8 @@ private fun Modifier.stripSlot(orientation: Orientation, aspect: Float, naturalC
         val bounded = if (vertical) constraints.hasBoundedWidth else constraints.hasBoundedHeight
         val cross = (if (!bounded) naturalCrossPx() else if (vertical) constraints.maxWidth else constraints.maxHeight)
             .coerceAtLeast(1)
-        // As a Float first: a very long page overflows an Int.
-        val wanted = (if (vertical) cross / aspect else cross * aspect).coerceIn(1f, MAX_SLOT_LENGTH).roundToInt()
-        val fitted = if (vertical) {
-            androidx.compose.ui.unit.Constraints.fitPrioritizingWidth(cross, cross, wanted, wanted)
-        } else {
-            androidx.compose.ui.unit.Constraints.fitPrioritizingHeight(wanted, wanted, cross, cross)
-        }
-        val length = if (vertical) fitted.maxHeight else fitted.maxWidth
+        val wanted = wantedSlotLength(vertical, aspect, cross)
+        val length = stripSlotLength(vertical, aspect, cross)
         val pageCross = if (length >= wanted) {
             cross
         } else {
@@ -1376,6 +1390,22 @@ private fun Modifier.stripSlot(orientation: Orientation, aspect: Float, naturalC
 
 /** More than any length Compose can represent, to keep the Float to Int step in range. */
 private const val MAX_SLOT_LENGTH = 1_000_000f
+
+/** The length a strip slot asks for on the scroll axis, for a page of [aspect] that is [cross] px across. */
+private fun wantedSlotLength(vertical: Boolean, aspect: Float, cross: Int): Int =
+    // As a Float first: a very long page overflows an Int.
+    (if (vertical) cross / aspect else cross * aspect).coerceIn(1f, MAX_SLOT_LENGTH).roundToInt()
+
+/** The length a strip slot gets on the scroll axis: [wantedSlotLength], capped to what Compose can hold. */
+internal fun stripSlotLength(vertical: Boolean, aspect: Float, cross: Int): Int {
+    val wanted = wantedSlotLength(vertical, aspect, cross)
+    val fitted = if (vertical) {
+        androidx.compose.ui.unit.Constraints.fitPrioritizingWidth(cross, cross, wanted, wanted)
+    } else {
+        androidx.compose.ui.unit.Constraints.fitPrioritizingHeight(wanted, wanted, cross, cross)
+    }
+    return if (vertical) fitted.maxHeight else fitted.maxWidth
+}
 
 /**
  * Lets the reader reach the ends of a zoomed strip (#397). The zoom scales the strip around the
@@ -1433,10 +1463,10 @@ private fun SpreadLayout(
 ) {
     // Spreads pair by index, so the strip must be final before pairing.
     val spreadCount = (state.pageCount + 1) / 2
-    // currentPage, not pendingPage: see ContinuousLayout's seed comment.
-    val pagerState = rememberPagerState(
-        initialPage = (state.currentPage / 2).coerceIn(0, spreadCount - 1),
-    ) { spreadCount }
+    // Seeded from the state and saving nothing of its own; see ContinuousLayout's seed comment.
+    val pagerState = remember {
+        PagerState(currentPage = (state.currentPage / 2).coerceIn(0, spreadCount - 1)) { (state.pageCount + 1) / 2 }
+    }
     DisposableEffect(state, pagerState) {
         // The page the state holds, which the pager's last adapter parked when it left (#402).
         val adapter = SpreadScrollAdapter(pagerState, initialPage = state.currentPage)
