@@ -94,12 +94,6 @@ kotlin {
 // control jvmTest. Declaring them as inputs also keeps test up-to-date checks
 // honest when a knob changes.
 tasks.withType<Test>().configureEach {
-    // RenderBenchmarkTest is a wall-clock budget that fails under machine
-    // load. Run it on demand with -PslowTests.
-    if (!project.hasProperty("slowTests")) {
-        filter.excludeTestsMatching("*RenderBenchmarkTest")
-    }
-
     val kitePdfProperties = System.getProperties()
         .stringPropertyNames()
         .filter { it.startsWith("kitepdf.") }
