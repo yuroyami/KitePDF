@@ -575,18 +575,46 @@ private fun androidx.compose.foundation.lazy.LazyItemScope.ContinuousPageItem(
                 IntSize((h * aspect).roundToInt().coerceAtLeast(1), h)
             }
         }
-        val slot = Modifier.fillMaxSize()
-            .highlightOverlay(state, page, pageIndex, colors)
-        when (renderSpec) {
-            is KiteRenderSpec.Rasterized -> KitePageRaster(
-                page, pageIndex, baseSize, settledZoom, renderSpec, colors,
-                onPageRendered, pagePlaceholder, slot,
-                cache = state.bitmapCacheFor(renderSpec.cacheBudgetBytes),
-            )
-            is KiteRenderSpec.Vectorized -> KitePageVector(
-                page, renderSpec, colors, slot,
-            )
-        }
+        PageSlotContent(
+            state, page, pageIndex, baseSize, settledZoom, renderSpec, colors,
+            onPageRendered, pagePlaceholder, Modifier.fillMaxSize(),
+        )
+    }
+}
+
+/**
+ * One page drawn into its slot, with the live form and the highlights over it. Every layout
+ * draws its pages through here, so each one shows what a script or the reader changed in the
+ * form, in both render modes (#358). With a form layer the page itself leaves the file's
+ * widgets out, so a cleared or hidden field does not show its old appearance underneath.
+ */
+@Composable
+private fun PageSlotContent(
+    state: KiteDocViewState,
+    page: KitePage,
+    pageIndex: Int,
+    baseSize: IntSize,
+    settledZoom: Float,
+    renderSpec: KiteRenderSpec,
+    colors: KiteDocViewColors,
+    onPageRendered: ((Int, ImageBitmap) -> Unit)?,
+    pagePlaceholder: (@Composable (Int) -> Unit)?,
+    modifier: Modifier,
+) {
+    val drawsForm = state.scripts != null && page is PdfPage
+    val formTextMeasurer = rememberTextMeasurer()
+    val formFailure = remember(page) { DrawFailure() }
+    val slot = modifier
+        .kiteFormLayer(page, state.scripts, formTextMeasurer, 1f, state.formRevision, formFailure)
+        .highlightOverlay(state, page, pageIndex, colors)
+    when (renderSpec) {
+        is KiteRenderSpec.Rasterized -> KitePageRaster(
+            page, pageIndex, baseSize, settledZoom, renderSpec, colors,
+            onPageRendered, pagePlaceholder, slot,
+            cache = state.bitmapCacheFor(renderSpec.cacheBudgetBytes),
+            drawsFormLayer = drawsForm,
+        )
+        is KiteRenderSpec.Vectorized -> KitePageVector(page, renderSpec, colors, slot, skipWidgets = drawsForm)
     }
 }
 
@@ -796,22 +824,10 @@ private fun PageBox(
         }
         if (fit != IntSize.Zero) {
             val dpSize = with(density) { DpSize(fit.width.toDp(), fit.height.toDp()) }
-            val formTextMeasurer = androidx.compose.ui.text.rememberTextMeasurer()
-            val formFailure = remember(page) { DrawFailure() }
-            val slot = Modifier.size(dpSize)
-                .kiteFormLayer(page, state.scripts, formTextMeasurer, 1f, state.formRevision, formFailure)
-                .highlightOverlay(state, page, pageIndex, colors)
-            when (renderSpec) {
-                is KiteRenderSpec.Rasterized -> KitePageRaster(
-                    page, pageIndex, fit, settledZoom, renderSpec, colors,
-                    onPageRendered, pagePlaceholder, slot,
-                    cache = state.bitmapCacheFor(renderSpec.cacheBudgetBytes),
-                    drawsFormLayer = state.scripts != null && page is io.github.yuroyami.kitepdf.PdfPage,
-                )
-                is KiteRenderSpec.Vectorized -> KitePageVector(
-                    page, renderSpec, colors, slot,
-                )
-            }
+            PageSlotContent(
+                state, page, pageIndex, fit, settledZoom, renderSpec, colors,
+                onPageRendered, pagePlaceholder, Modifier.size(dpSize),
+            )
         }
     }
 }
@@ -946,6 +962,8 @@ private fun KitePageVector(
     spec: KiteRenderSpec.Vectorized,
     colors: KiteDocViewColors,
     modifier: Modifier,
+    /** True when a form layer draws this page's widgets, so the page must leave them out. */
+    skipWidgets: Boolean = false,
 ) {
     val textMeasurer = rememberTextMeasurer()
     val theme = colors.theme
@@ -962,8 +980,15 @@ private fun KitePageVector(
         val deviceCtm = KiteMatrix.scaling(scale, scale).concat(page.displayToDeviceBase())
         val base = ComposeCanvas(this, textMeasurer, spec.hairlineWidthPx)
         val themed = theme?.wrap(base) ?: base
+        val target = spec.canvasDecorator?.invoke(themed) ?: themed
         failure.guard("page") {
-            page.renderTo(spec.canvasDecorator?.invoke(themed) ?: themed, deviceCtm)
+            if (skipWidgets && page is PdfPage) {
+                page.renderTo(target, deviceCtm, formState = null, cancellation = NEVER_CANCELLED) {
+                    it.subtype != PdfAnnotation.Subtype.Widget
+                }
+            } else {
+                page.renderTo(target, deviceCtm)
+            }
         }
         // Paper over whatever the failed draw left, so the page shows as blank, not half drawn.
         if (failure.failed) drawRect(paper)
@@ -1159,6 +1184,9 @@ private const val ZOOM_SETTLE_DEBOUNCE_MS = 220L
 
 /** Fade-in duration for a freshly rasterized page bitmap. */
 private const val PAGE_FADE_MS = 160
+
+/** The cancellation of a live draw, which nothing cancels. */
+private val NEVER_CANCELLED = io.github.yuroyami.kitepdf.core.KiteCancellation { false }
 
 /**
  * The slot a chapter occupies while it is still being laid out: one page-shaped
@@ -1383,16 +1411,10 @@ private fun SpreadBox(
                     .padding(start = dpOffset.width, top = dpOffset.height)
                     .size(dpSize),
             ) {
-                val slotModifier = Modifier.fillMaxSize()
-                    .highlightOverlay(state, page, pageIndex, colors)
-                when (renderSpec) {
-                    is KiteRenderSpec.Rasterized -> KitePageRaster(
-                        page, pageIndex, fit, settledZoom, renderSpec, colors,
-                        onPageRendered, pagePlaceholder, slotModifier,
-                        cache = state.bitmapCacheFor(renderSpec.cacheBudgetBytes),
-                    )
-                    is KiteRenderSpec.Vectorized -> KitePageVector(page, renderSpec, colors, slotModifier)
-                }
+                PageSlotContent(
+                    state, page, pageIndex, fit, settledZoom, renderSpec, colors,
+                    onPageRendered, pagePlaceholder, Modifier.fillMaxSize(),
+                )
             }
         }
 
