@@ -532,7 +532,37 @@ public class KiteDocViewState(
         pendingScrollOffset = offsetPx
     }
     internal var zoomRange: ClosedFloatingPointRange<Float> by mutableStateOf(1f..8f)
-    internal var viewportSize: IntSize by mutableStateOf(IntSize.Zero)
+    /**
+     * The viewport's size in px. A change keeps the point of the page at the viewport's centre
+     * where it can, and fits the pan into the new bounds, so a zoomed page never ends up outside a
+     * smaller viewport, whether it shrank from a resize, a split screen or a rotation (#399).
+     */
+    internal var viewportSize: IntSize
+        get() = viewportSizeState
+        set(value) {
+            val old = viewportSizeState
+            if (value == old) return
+            viewportSizeState = value
+            val pan = panOffset
+            if (pan == Offset.Zero) return
+            val ratio = if (old.width > 0 && old.height > 0) pageWidthIn(value) / pageWidthIn(old) else 1f
+            panOffset = clampPan(if (ratio.isFinite() && ratio > 0f) pan * ratio else pan, zoom)
+        }
+    private var viewportSizeState by mutableStateOf(IntSize.Zero)
+
+    /**
+     * How wide the current page is drawn in a viewport of [size] before zoom: the viewport's width
+     * in a vertical strip, its height times the page's shape in a horizontal one, and the fitted
+     * page in a pager. The pan scales with it when the viewport changes size.
+     */
+    private fun pageWidthIn(size: IntSize): Float {
+        val aspect = pageAt(currentPage)?.let(::kitePageAspect) ?: 1f
+        return when (panAxes) {
+            PanAxes.XOnly -> size.width.toFloat()
+            PanAxes.YOnly -> size.height * aspect
+            else -> minOf(size.width.toFloat(), size.height * aspect)
+        }
+    }
 
     /**
      * Per-page on-screen geometry in UNTRANSFORMED viewport space (before the
