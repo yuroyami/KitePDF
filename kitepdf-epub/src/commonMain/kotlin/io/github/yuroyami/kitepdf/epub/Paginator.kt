@@ -104,7 +104,14 @@ internal object Paginator {
             val forcedBefore = forceNext || u.breakBefore
             forceNext = false
             when {
-                cur.isEmpty() -> cur.add(u)
+                cur.isEmpty() -> {
+                    // Only the first page starts above its first unit: every later page starts at
+                    // one. When the margins, borders and padding above that unit push it past the
+                    // page's end, the page starts at the unit instead, as a margin at a page break
+                    // is dropped (CSS Fragmentation 3, 5.2, #442).
+                    if (u.bottom > curStart + pageContentHeight) curStart = u.top
+                    cur.add(u)
+                }
                 forcedBefore -> { page(u.top, emptyList()); cur.add(u) }
                 u.bottom > curStart + pageContentHeight -> {
                     val pull = pullback(u, cur, pageContentHeight)

@@ -8,7 +8,8 @@ import kotlin.test.assertTrue
 
 /**
  * An image with `display: none` generates no box: it is not drawn and takes no room (#424). A
- * tall inline image is scaled to fit the page, as a block image is (#426).
+ * tall inline image is scaled to fit the page, as a block image is (#426), and the margins of the
+ * blocks around a tall image do not push it off its page (#442).
  */
 class HiddenAndTallImageTest {
 
@@ -83,22 +84,23 @@ class HiddenAndTallImageTest {
     }
 
     @Test
-    fun a_tall_inline_image_is_scaled_to_the_page() {
-        // 180pt of content. A 12pt line puts 7.2pt of its box below the baseline the image sits on.
+    fun a_tall_image_is_scaled_to_the_page_and_drawn_on_it() {
+        // 180pt of content, from y = 10 to 190. A 12pt line puts 7.2pt of its box below the
+        // baseline an inline image sits on, so the inline image gets 172.8pt (#426).
         val settings = EpubSettings(pageWidth = 200.0, pageHeight = 200.0, margin = 10.0)
-        for (inParagraph in listOf(true, false)) {
-            val img = """<img src="pic.png" style="width:9pt;height:900pt"/>"""
+        for (display in listOf("inline", "block")) for (inParagraph in listOf(true, false)) {
+            val name = "$display, inParagraph=$inParagraph"
+            val img = """<img src="pic.png" style="display:$display;width:9pt;height:900pt"/>"""
             val doc = open(if (inParagraph) "<p>$img</p>" else img, settings = settings)
             val image = draw(doc).calls.filterIsInstance<RecordingCanvas.Call.Image>().single()
             val height = kotlin.math.abs(image.ctm.d)
             val width = kotlin.math.abs(image.ctm.a)
-            assertEquals(172.8, height, 1e-6, "inParagraph=$inParagraph: the image and its line fill the 180pt of content")
-            assertEquals(9.0 / 900.0, width / height, 1e-6, "inParagraph=$inParagraph: the image kept its shape")
-            if (!inParagraph) {
-                val bottom = minOf(image.ctm.f, image.ctm.f + image.ctm.d)
-                val top = maxOf(image.ctm.f, image.ctm.f + image.ctm.d)
-                assertTrue(bottom >= -1e-6 && top <= 200.0 + 1e-6, "the image runs off the page: $bottom..$top")
-            }
+            assertEquals(if (display == "inline") 172.8 else 180.0, height, 1e-6, "$name: the image and its line fill the 180pt of content")
+            assertEquals(9.0 / 900.0, width / height, 1e-6, "$name: the image kept its shape")
+            // The paragraph's margin above the image does not push it off the page (#442).
+            val bottom = minOf(image.ctm.f, image.ctm.f + image.ctm.d)
+            val top = maxOf(image.ctm.f, image.ctm.f + image.ctm.d)
+            assertTrue(bottom >= 10.0 - 1e-6 && top <= 190.0 + 1e-6, "$name: the image runs off the page: $bottom..$top")
         }
     }
 }
