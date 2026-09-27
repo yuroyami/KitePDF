@@ -395,6 +395,11 @@ public class KiteDocViewState(
      */
     public var searchHighlights: List<KiteSearchHit> by mutableStateOf(emptyList())
 
+    /** [searchHighlights] by page, built once for each list, so a page's overlay reads only its own hits (#372). */
+    internal val searchHitsByPage: Map<Int, List<KiteSearchHit>> by androidx.compose.runtime.derivedStateOf {
+        searchHighlights.groupBy { it.pageIndex }
+    }
+
     /**
      * App-owned highlights, each with its own fill colour and its own optional
      * margin marker. Painted over the page after [searchHighlights], in list
@@ -414,6 +419,11 @@ public class KiteDocViewState(
      * See [KiteHighlight] for the per-entry knobs.
      */
     public var highlights: List<KiteHighlight> by mutableStateOf(emptyList())
+
+    /** [highlights] by page, in their order, built once for each list (#372). */
+    internal val highlightsByPage: Map<Int, List<KiteHighlight>> by androidx.compose.runtime.derivedStateOf {
+        highlights.groupBy { it.hit.pageIndex }
+    }
 
     /**
      * The slot the viewport rests on: the snapped page in paged mode, the page
@@ -1198,8 +1208,8 @@ public class KiteDocViewState(
      */
     public fun highlightAt(viewportOffset: Offset): KiteHighlight? {
         val (page, x, y) = hitTestDisplay(viewportOffset) ?: return null
-        return highlights.asReversed().firstOrNull { highlight ->
-            highlight.hit.pageIndex == page && highlight.hit.quads.any { quad ->
+        return highlightsByPage[page].orEmpty().asReversed().firstOrNull { highlight ->
+            highlight.hit.quads.any { quad ->
                 val rect = quad.normalized()
                 x >= rect.left && x <= rect.right && y >= rect.bottom && y <= rect.top
             }

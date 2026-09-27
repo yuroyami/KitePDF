@@ -1138,7 +1138,9 @@ private fun KitePageVector(
     val textMeasurer = rememberTextMeasurer()
     val theme = colors.theme
     val failure = remember(page) { DrawFailure() }
-    Canvas(modifier) {
+    // A layer of its own, so an overlay change above it, a hit, a highlight, the selection or a
+    // form value, records the overlay again and not the page (#372).
+    Canvas(modifier.graphicsLayer()) {
         val paper = theme?.background?.let { Color(it.r.toFloat(), it.g.toFloat(), it.b.toFloat()) } ?: colors.pageBackground
         drawRect(paper)
         val w = size.width
@@ -1217,13 +1219,12 @@ private fun Modifier.highlightOverlay(
         size = Size(((q.right - q.left) * sx).toFloat(), ((q.top - q.bottom) * sy).toFloat()),
     )
 
-    for (hit in state.searchHighlights) {
-        if (hit.pageIndex != pageIndex) continue
+    for (hit in state.searchHitsByPage[pageIndex].orEmpty()) {
         for (q in hit.quads) quad(q, colors.searchHighlight)
     }
-    for (highlight in state.highlights) {
+    for (highlight in state.highlightsByPage[pageIndex].orEmpty()) {
         val hit = highlight.hit
-        if (hit.pageIndex != pageIndex || hit.quads.isEmpty()) continue
+        if (hit.quads.isEmpty()) continue
         // Null colour means "behave exactly like searchHighlights", so wrapping
         // a plain hit in a KiteHighlight changes nothing on screen.
         val fill = highlight.color ?: colors.searchHighlight
