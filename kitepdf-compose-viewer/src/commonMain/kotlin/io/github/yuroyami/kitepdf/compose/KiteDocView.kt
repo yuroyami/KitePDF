@@ -643,8 +643,11 @@ private fun androidx.compose.foundation.lazy.LazyItemScope.ContinuousPageItem(
                 IntSize((h * aspect).roundToInt().coerceAtLeast(1), h)
             }
         }
+        // Only a page the reader sees at the zoom draws at the settled zoom. The list lays out at
+        // zoom 1, so it composes pages that the zoom has pushed out of view (#376).
+        val inView by remember(state, pageIndex) { derivedStateOf { state.inZoomedView(pageIndex) } }
         PageSlotContent(
-            state, page, pageIndex, baseSize, settledZoom, renderSpec, colors,
+            state, page, pageIndex, baseSize, if (inView) settledZoom else 1f, renderSpec, colors,
             onPageRendered, pagePlaceholder, Modifier.fillMaxSize(),
         )
     }
