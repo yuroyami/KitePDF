@@ -7,6 +7,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -37,13 +38,20 @@ import io.github.yuroyami.kitepdf.PdfScriptHandler
 internal fun KiteFormInput(state: KiteDocViewState, scripts: PdfScriptHandler?) {
     val fieldName = state.focusedField ?: return
     if (scripts == null) return
-    val requester = remember(fieldName) { FocusRequester() }
-    var value by remember(fieldName) {
+    // One input per field, so a new field starts with its own caret and its own focus history.
+    key(fieldName) { FieldInput(state, scripts, fieldName) }
+}
+
+@Composable
+private fun FieldInput(state: KiteDocViewState, scripts: PdfScriptHandler, fieldName: String) {
+    val requester = remember { FocusRequester() }
+    var value by remember {
         val text = scripts.formState.value(fieldName) ?: ""
         mutableStateOf(TextFieldValue(text, TextRange(text.length)))
     }
+    var hadFocus by remember { mutableStateOf(false) }
 
-    LaunchedEffect(fieldName) { requester.requestFocus() }
+    LaunchedEffect(Unit) { requester.requestFocus() }
 
     BasicTextField(
         value = value,
@@ -71,7 +79,15 @@ internal fun KiteFormInput(state: KiteDocViewState, scripts: PdfScriptHandler?) 
             .size(1.dp)
             .alpha(0f)
             .focusRequester(requester)
-            .onFocusChanged { focus -> if (!focus.isFocused) state.blurFocusedField() },
+            .onFocusChanged { focus ->
+                // The first event comes when the input attaches, before the request above lands,
+                // and it says "not focused". Only a field that had the caret can lose it (#356).
+                if (focus.isFocused) {
+                    hadFocus = true
+                } else if (hadFocus && state.focusedField == fieldName) {
+                    state.blurFocusedField()
+                }
+            },
     )
 }
 
