@@ -157,6 +157,14 @@ public interface KiteDocument {
     public fun pageCountIn(chapter: Int): Int = pageCount
 
     /**
+     * The chapters on screen now. A document that drops laid-out chapters to stay within a
+     * memory budget keeps these, so a tap, a long press or a draw on the screen does not wait
+     * for a layout. A viewer calls it each time the chapters on screen change. Does nothing
+     * by default.
+     */
+    public fun keepChapters(chapters: Set<Int>) {}
+
+    /**
      * The page at [location]. Prepares its chapter first.
      *
      * The same location answers the same object for the life of the document,

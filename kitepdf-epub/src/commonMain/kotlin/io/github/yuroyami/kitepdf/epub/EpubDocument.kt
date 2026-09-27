@@ -190,6 +190,9 @@ public class EpubDocument internal constructor(
     /** The estimated bytes the live chapters hold, kept under the budget. */
     private var liveBytes = 0L
 
+    /** The chapters on screen, which the budget never drops (#377). */
+    private var kept: Set<Int> = emptySet()
+
     /** Ticks on every use of a chapter's pages, to stamp [LiveChapter.lastUse]. */
     private var useClock = 0L
 
@@ -421,10 +424,22 @@ public class EpubDocument internal constructor(
     }
 
     /**
+     * Keeps [chapters] in memory past the budget, so that a gesture or a draw on the screen
+     * does not lay a chapter out again on the UI thread (#377). The chapters kept before are
+     * dropped again when the budget needs the room.
+     */
+    override fun keepChapters(chapters: Set<Int>) {
+        tableLock.withLock {
+            kept = chapters.toSet()
+            trimToBudget()
+        }
+    }
+
+    /**
      * Under [tableLock]: drops the least recently used chapters until the live
      * set fits [EpubSettings.layoutCacheBytes]. One chapter always stays,
      * however large: a book that is one spine document has nothing smaller
-     * to drop.
+     * to drop. A chapter in [kept] stays too, even past the budget.
      */
     private fun trimToBudget() {
         val budget = settings.layoutCacheBytes
@@ -435,12 +450,13 @@ public class EpubDocument internal constructor(
             for (c in parsed.spineIndices) {
                 val entry = live[c] ?: continue
                 count++
+                if (c in kept) continue
                 if (entry.lastUse < oldest) {
                     oldest = entry.lastUse
                     victim = c
                 }
             }
-            if (count <= 1) return
+            if (count <= 1 || victim < 0) return
             live[victim] = null
             liveBytes -= summaries[victim]?.bytes ?: 0L
         }
