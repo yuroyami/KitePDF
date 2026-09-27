@@ -502,8 +502,12 @@ public class PdfScriptRunner(
 
     /** The order the form asks for its calculations, its `/CO` array, or the field order. */
     private fun calculationOrder(): List<String> {
-        val acro = document.catalog.getDict("AcroForm", document)
-        val order = acro?.get("CO")?.resolve(document) as? PdfArray
+        // A /CO that points at a missing object reads as absent, and the field order applies (#441).
+        val order = try {
+            document.catalog.getDict("AcroForm", document)?.get("CO")?.resolve(document) as? PdfArray
+        } catch (_: io.github.yuroyami.kitepdf.core.PdfFormatException) {
+            null
+        }
         if (order == null || order.isEmpty()) {
             return document.formFields.filter { it.additionalActions?.calculate != null }.map { it.fullyQualifiedName }
         }

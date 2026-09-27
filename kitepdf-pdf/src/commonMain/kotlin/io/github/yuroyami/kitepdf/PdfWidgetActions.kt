@@ -61,8 +61,9 @@ public data class PdfWidgetActions(
 
         /** Reads `/AA` from [dict], or null when it has none. */
         internal fun parse(dict: PdfDictionary?, refs: IndirectResolver): PdfWidgetActions? {
-            val aa = dict?.getDict("AA", refs) ?: return null
-            fun action(key: String): PdfAction? = PdfAction.parse(aa.getDict(key, refs), refs)
+            // A trigger that points at a missing object reads as absent, and the others stay (#441).
+            val aa = missingAsNull { dict?.getDict("AA", refs) } ?: return null
+            fun action(key: String): PdfAction? = missingAsNull { PdfAction.parse(aa.getDict(key, refs), refs) }
             return PdfWidgetActions(
                 mouseEnter = action("E"),
                 mouseExit = action("X"),
@@ -114,8 +115,8 @@ public data class PdfDocumentActions(
     public companion object {
 
         internal fun parse(catalog: PdfDictionary, refs: IndirectResolver): PdfDocumentActions? {
-            val aa = catalog.getDict("AA", refs) ?: return null
-            fun action(key: String): PdfAction? = PdfAction.parse(aa.getDict(key, refs), refs)
+            val aa = missingAsNull { catalog.getDict("AA", refs) } ?: return null
+            fun action(key: String): PdfAction? = missingAsNull { PdfAction.parse(aa.getDict(key, refs), refs) }
             return PdfDocumentActions(
                 willClose = action("WC"),
                 willSave = action("WS"),

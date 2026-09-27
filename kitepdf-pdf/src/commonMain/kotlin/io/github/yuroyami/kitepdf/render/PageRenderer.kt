@@ -468,29 +468,39 @@ public class PageRenderer(
     ) {
         for (annot in page.annotations) {
             if (!accept(annot)) continue
-            if (isHiddenNow(annot)) continue
-            // Invisible hides only a non-standard subtype with no handler (§12.5.3, #64).
-            if (annot.isInvisible && annot.subtype == Subtype.Other) continue
-            // Popup annotations are only shown when their parent is opened, never
-            // painted inline by a viewer.
-            if (annot.subtype == Subtype.Popup) continue
-            // An annotation on a switched-off layer is skipped (§12.5.2, #54).
-            val oc = optionalContent
-            val ocEntry = annot.raw["OC"]
-            if (oc != null && ocEntry != null && !isOcObjectVisible(ocEntry, oc)) continue
-            // A form being filled draws from the live value, not from the appearance the file
-            // stores, because that one still shows what the field held when it was written.
-            val liveAppearance = liveWidgetAppearance(annot)
-            val stream = annot.appearanceStream
-            when {
-                liveAppearance != null -> renderAppearanceForRect(liveAppearance, annot.rect, state)
-                stream != null -> renderAppearanceForRect(
-                    stream, annot.rect, state, noZoom = annot.isNoZoom, opacity = opacityOf(annot),
-                )
-                // A state-keyed appearance whose /AS names no entry paints nothing (#59).
-                hasStateAppearances(annot) -> Unit
-                else -> synthesizeAppearance(annot, state)
+            try {
+                renderAnnotation(annot, state)
+            } catch (failure: Exception) {
+                // One annotation that cannot be drawn is skipped, and the page and the other
+                // annotations still draw (#441). The drawing it started unwinds on its own.
+                kiteWarn { "annotation: one cannot be drawn and is skipped: ${failure.message}" }
             }
+        }
+    }
+
+    private fun renderAnnotation(annot: io.github.yuroyami.kitepdf.PdfAnnotation, state: GraphicsStack) {
+        if (isHiddenNow(annot)) return
+        // Invisible hides only a non-standard subtype with no handler (§12.5.3, #64).
+        if (annot.isInvisible && annot.subtype == Subtype.Other) return
+        // Popup annotations are only shown when their parent is opened, never
+        // painted inline by a viewer.
+        if (annot.subtype == Subtype.Popup) return
+        // An annotation on a switched-off layer is skipped (§12.5.2, #54).
+        val oc = optionalContent
+        val ocEntry = annot.raw["OC"]
+        if (oc != null && ocEntry != null && !isOcObjectVisible(ocEntry, oc)) return
+        // A form being filled draws from the live value, not from the appearance the file
+        // stores, because that one still shows what the field held when it was written.
+        val liveAppearance = liveWidgetAppearance(annot)
+        val stream = annot.appearanceStream
+        when {
+            liveAppearance != null -> renderAppearanceForRect(liveAppearance, annot.rect, state)
+            stream != null -> renderAppearanceForRect(
+                stream, annot.rect, state, noZoom = annot.isNoZoom, opacity = opacityOf(annot),
+            )
+            // A state-keyed appearance whose /AS names no entry paints nothing (#59).
+            hasStateAppearances(annot) -> Unit
+            else -> synthesizeAppearance(annot, state)
         }
     }
 
@@ -531,7 +541,7 @@ public class PageRenderer(
         }.coerceIn(0.0, 1.0)
 
     private fun hasStateAppearances(annot: io.github.yuroyami.kitepdf.PdfAnnotation): Boolean =
-        annot.raw.getDict("AP", resolver)?.get("N")?.resolve(resolver) is PdfDictionary
+        missingAsNull { annot.raw.getDict("AP", resolver)?.get("N")?.resolve(resolver) } is PdfDictionary
 
     /**
      * Map a Form XObject appearance to fill the annotation's /Rect, per
