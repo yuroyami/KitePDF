@@ -40,13 +40,19 @@ class PagedPublicationTest {
         }
     }
 
-    /** The pager stand-in: PagedLikeAdapter, so publications may correct it. */
-    private class RecordingAdapter : PagedLikeAdapter {
+    /**
+     * The pager stand-in. It follows landings, so publications may correct it, and it keeps its
+     * index rather than its key, so every correction shows in [calls].
+     */
+    private class RecordingAdapter : KiteScrollAdapter {
         val calls = mutableListOf<Int>()
         var page = 0
         override val currentPage: Int get() = page
+        override val followsKeys: Boolean get() = false
         override suspend fun scrollToPage(page: Int) { this.page = page; calls.add(page) }
         override suspend fun animateScrollToPage(page: Int) = scrollToPage(page)
+        override fun captureAnchor() = ScrollAnchor(page)
+        override fun requestSlot(slot: Int, anchor: ScrollAnchor) { page = slot; calls.add(slot) }
     }
 
     private fun pagedState(doc: KiteDocument, mark: KiteBookmark, at: Int): Pair<KiteDocViewState, RecordingAdapter> {
