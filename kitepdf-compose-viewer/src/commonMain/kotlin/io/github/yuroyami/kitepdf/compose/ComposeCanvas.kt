@@ -49,7 +49,6 @@ import io.github.yuroyami.kitepdf.core.render.shrinkArgb
 import io.github.yuroyami.kitepdf.core.render.shrinkRgba
 import io.github.yuroyami.kitepdf.core.render.strokePen
 import kotlin.math.abs
-import kotlin.math.atan2
 import kotlin.math.sqrt
 
 /**
@@ -257,11 +256,13 @@ public class ComposeCanvas(
             return
         }
 
-        val sx = sqrt(textMatrix.a * textMatrix.a + textMatrix.b * textMatrix.b)
-        val sy = sqrt(textMatrix.c * textMatrix.c + textMatrix.d * textMatrix.d)
-        val rotationRadians = atan2(textMatrix.b, textMatrix.a)
-        val rotationDegrees = (rotationRadians * 180.0 / PI).toFloat()
-        val renderedSize = fontSize * sy
+        // The whole text matrix applies to every glyph, shear and reflection included (ISO
+        // 32000-1, 9.4.4, #416). The text is measured at the matrix's own scale and drawn under
+        // the rest of it, y flipped, because host text runs y down and text space runs y up.
+        val scale = sqrt(abs(textMatrix.a * textMatrix.d - textMatrix.b * textMatrix.c))
+        if (!scale.isFinite() || scale <= 0.0) return
+        val rest = textMatrix.concat(KiteMatrix(1.0 / scale, 0.0, 0.0, -1.0 / scale, 0.0, 0.0))
+        val renderedSize = fontSize * scale
 
         // renderedSize is already in DEVICE PIXELS (font size × text-matrix scale, which
         // includes the page raster scale). A Compose `Sp` size is re-multiplied by the device
@@ -290,11 +291,7 @@ public class ComposeCanvas(
         // retry a few times (the window is a microsecond-scale map purge) and,
         // if the cache is truly hot, skip this run: one missing fallback-font
         // run on one page beats a dead app.
-        drawScope.withTransform({
-            translate(textMatrix.e.toFloat(), textMatrix.f.toFloat())
-            if (rotationDegrees != 0f) rotate(rotationDegrees, pivot = Offset.Zero)
-            if (sy != 0.0 && sx != sy) scale(scaleX = (sx / sy).toFloat(), scaleY = 1f, pivot = Offset.Zero)
-        }) {
+        drawScope.withTransform({ transform(rest.toComposeMatrix()) }) {
             // Each piece starts where the document's own advances put it (ISO 32000-1, 9.4.4),
             // character and word spacing included (#121). A piece of one glyph keeps the host
             // face's shape, as on AWT and in MuPDF for a base-14 font. A longer piece is fitted
@@ -316,8 +313,8 @@ public class ComposeCanvas(
                         drawText(textLayoutResult = layout, blendMode = paintBlend(blendMode))
                     }
                 }
-                // renderedSize already carries sy, so the text-space adjustment needs it too.
-                penX += piece.sumOf { it.advanceWidth } * renderedSize / 1_000.0 + piece.last().advanceAdjust * sy
+                // The pen moves in text space, measured at the matrix's scale as the text is.
+                penX += (piece.sumOf { it.advanceWidth } * fontSize / 1_000.0 + piece.last().advanceAdjust) * scale
             }
         }
     }
@@ -833,8 +830,6 @@ public class ComposeCanvas(
 
     private fun FontSpec.toComposeStyle(): FontStyle =
         if (italic) FontStyle.Italic else FontStyle.Normal
-
-    private val PI = kotlin.math.PI
 }
 
 /**
