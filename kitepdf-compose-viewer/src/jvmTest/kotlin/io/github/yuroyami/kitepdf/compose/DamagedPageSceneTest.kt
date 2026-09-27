@@ -44,8 +44,11 @@ class DamagedPageSceneTest {
         }
     }
 
-    /** A one-page PDF, 200 by 200 points, with [pageEntries] in its page dictionary and [objects] after it. */
-    private fun pdf(pageEntries: String, vararg objects: String): ByteArray {
+    /**
+     * A one-page PDF with [pageEntries] in its page dictionary, [pagesEntries] in its page tree
+     * root and [objects] after it. The page is 200 by 200 points unless [pagesEntries] says else.
+     */
+    private fun pdf(pageEntries: String, vararg objects: String, pagesEntries: String = "/Count 1 /MediaBox [0 0 200 200]"): ByteArray {
         val sb = StringBuilder("%PDF-1.7\n")
         val offsets = ArrayList<Int>()
         fun add(body: String) {
@@ -53,7 +56,7 @@ class DamagedPageSceneTest {
             sb.append("${offsets.size} 0 obj\n$body\nendobj\n")
         }
         add("<< /Type /Catalog /Pages 2 0 R >>")
-        add("<< /Type /Pages /Kids [3 0 R] /Count 1 /MediaBox [0 0 200 200] >>")
+        add("<< /Type /Pages /Kids [3 0 R] $pagesEntries >>")
         add("<< /Type /Page /Parent 2 0 R /Resources << >> $pageEntries >>")
         objects.forEach(::add)
         val xref = sb.length
@@ -155,6 +158,41 @@ class DamagedPageSceneTest {
             driver.pumpFrames(4)
             assertNull(state.selection)
             assertEquals(false, state.isSelectionActive, "a long press that selected nothing gives the page back")
+        }
+    }
+
+    /** A PDF whose `/Count` says three pages while its tree holds one shows that one page (#329). */
+    @Test
+    fun a_pdf_that_declares_more_pages_than_it_has_shows_the_real_ones() = withoutEscapes {
+        val doc = PdfDocument.open(
+            pdf("/Contents 4 0 R", stream("", "1 0 0 rg 0 0 100 100 re f"), pagesEntries = "/Count 3 /MediaBox [0 0 100 100]"),
+        )
+        lateinit var state: KiteDocViewState
+        val (scene, driver) = drivenScene(200, 800, queued = false) {
+            state = rememberKiteDocViewState(doc)
+            KiteDocView(state = state, modifier = Modifier.fillMaxSize())
+        }
+        scene.use {
+            val started = System.currentTimeMillis()
+            while (System.currentTimeMillis() - started < 1_500) driver.pumpFrames(0)
+            assertEquals(1, state.itemCount)
+        }
+    }
+
+    /** A page with no `/MediaBox` anywhere composes, drawn as a US Letter page (#330). */
+    @Test
+    fun a_page_without_a_media_box_is_shown() = withoutEscapes {
+        val doc = PdfDocument.open(
+            pdf("/Contents 4 0 R", stream("", "1 0 0 rg 10 10 100 100 re f"), pagesEntries = "/Count 1"),
+        )
+        lateinit var state: KiteDocViewState
+        val (scene, driver) = drivenScene(200, 200, queued = false) {
+            state = rememberKiteDocViewState(doc)
+            KiteDocView(state = state, modifier = Modifier.fillMaxSize())
+        }
+        scene.use {
+            driver.pumpUntilState { state.pageGeometry.isNotEmpty() }
+            assertEquals(612.0 / 792.0, doc.pages[0].displayWidth / doc.pages[0].displayHeight)
         }
     }
 }
