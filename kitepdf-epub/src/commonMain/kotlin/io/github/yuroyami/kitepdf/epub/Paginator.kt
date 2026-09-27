@@ -31,10 +31,12 @@ internal class PageRender(
 
 /**
  * Slices a positioned box tree into pages. Content units (lines, images) fill
- * pages greedily and never split. Honours page-break control: a forced
- * `break-before`/`break-after` starts a new page; `break-inside: avoid` moves a
- * block whole to the next page when it fits there; and orphans/widows (min 2)
- * keep a paragraph from leaving a single dangling line at a page edge.
+ * pages greedily and never split. Honours page-break control on every block
+ * around a unit, not only the text block that owns a line (CSS Fragmentation 3,
+ * 3.1 and 3.2, #423): a forced `break-before`/`break-after` starts a new page;
+ * `break-inside: avoid` moves a block whole to the next page when it fits there;
+ * and orphans/widows (min 2) keep a paragraph from leaving a single dangling
+ * line at a page edge.
  * Background/border boxes attach to every page they intersect (clipped when
  * painted).
  */
@@ -73,10 +75,19 @@ internal object Paginator {
         val links = ArrayList<LayoutBox>()
         collect(root, lines, images, deco, links)
 
-        val units = ArrayList<Unit_>()
-        for (l in lines) l.owner?.let { o -> units.add(Unit_(l.yTop, l.yTop + l.height, l, null, o, l.ownerIndex, o.lines.size)) }
-        for (im in images) units.add(Unit_(im.y, im.bottom, null, im, im, 0, 1))
-        units.sortBy { it.top }
+        // In tree order, each unit with the blocks around it, so a break on any of them applies:
+        // before the first unit of a block and after its last one.
+        val ordered = ArrayList<Unit_>()
+        gatherUnits(root, emptyList(), ordered)
+        val firstOf = HashMap<LayoutBox, Unit_>()
+        val lastOf = HashMap<LayoutBox, Unit_>()
+        for (u in ordered) for (b in u.chain) {
+            if (b !in firstOf) firstOf[b] = u
+            lastOf[b] = u
+        }
+        for ((b, u) in firstOf) if (b.style.breakBefore) u.breakBefore = true
+        for ((b, u) in lastOf) if (b.style.breakAfter) u.breakAfter = true
+        val units = ordered.sortedBy { it.top }
 
         val starts = ArrayList<Double>()
         val buckets = ArrayList<ArrayList<Unit_>>()
@@ -90,7 +101,7 @@ internal object Paginator {
         }
 
         for (u in units) {
-            val forcedBefore = forceNext || (u.line != null && u.ownerIndex == 0 && u.owner.style.breakBefore)
+            val forcedBefore = forceNext || u.breakBefore
             forceNext = false
             when {
                 cur.isEmpty() -> cur.add(u)
@@ -104,7 +115,7 @@ internal object Paginator {
                 }
                 else -> cur.add(u)
             }
-            if (u.line != null && u.ownerIndex == u.ownerCount - 1 && u.owner.style.breakAfter) forceNext = true
+            if (u.breakAfter) forceNext = true
         }
         starts.add(curStart); buckets.add(cur)
 
@@ -132,6 +143,15 @@ internal object Paginator {
 
     /** How many trailing units of [u]'s block to push to the next page (widows/orphans/avoid). */
     private fun pullback(u: Unit_, cur: List<Unit_>, pageContentHeight: Double): Int {
+        // break-inside: avoid on a block around the unit, outermost first: the block's units on
+        // this page move with it when the whole block fits a page and something precedes it here.
+        for (b in u.chain) {
+            if (!b.style.breakInsideAvoid || b is TextBlockBox) continue
+            var onPage = 0
+            var k = cur.lastIndex
+            while (k >= 0 && b in cur[k].chain) { onPage++; k-- }
+            if (onPage in 1 until cur.size && b.borderBoxHeight <= pageContentHeight) return onPage
+        }
         val line = u.line ?: return 0
         val owner = u.owner as? TextBlockBox ?: return 0
         var onPage = 0
@@ -152,7 +172,29 @@ internal object Paginator {
         val top: Double, val bottom: Double,
         val line: PositionedLine?, val image: ImageBox?,
         val owner: LayoutBox, val ownerIndex: Int, val ownerCount: Int,
-    )
+        /** The boxes around the unit, from the root down to [owner]. */
+        val chain: List<LayoutBox>,
+    ) {
+        /** A block this unit starts forces a page break before it. */
+        var breakBefore = false
+
+        /** A block this unit ends forces a page break after it. */
+        var breakAfter = false
+    }
+
+    /** The lines and images under [box], in tree order, each with the boxes around it. */
+    private fun gatherUnits(box: LayoutBox, around: List<LayoutBox>, out: MutableList<Unit_>) {
+        val chain = around + box
+        when (box) {
+            is BlockBox -> for (c in box.children) gatherUnits(c, chain, out)
+            is TableBox -> for (r in box.rows) for (cell in r.cells) gatherUnits(cell, chain + r, out)
+            is TableRowBox -> {}
+            is TextBlockBox -> for (l in box.lines) l.owner?.let { o ->
+                out.add(Unit_(l.yTop, l.yTop + l.height, l, null, o, l.ownerIndex, o.lines.size, chain))
+            }
+            is ImageBox -> out.add(Unit_(box.y, box.bottom, null, box, box, 0, 1, chain))
+        }
+    }
 
     private fun collect(
         box: LayoutBox, lines: ArrayList<PositionedLine>, images: ArrayList<ImageBox>,
