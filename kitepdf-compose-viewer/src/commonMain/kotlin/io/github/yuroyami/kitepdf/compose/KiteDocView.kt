@@ -313,6 +313,20 @@ internal fun handleLinkTap(
     onLinkTap: ((KiteLinkAction) -> Boolean)?,
     offset: Offset,
     onEpubReferenceTap: ((EpubLink) -> Boolean)? = null,
+): Boolean = try {
+    linkTap(state, scope, onLinkTap, offset, onEpubReferenceTap)
+} catch (failure: Throwable) {
+    // A page whose links cannot be read acts as a page without links (#334).
+    io.github.yuroyami.kitepdf.core.kiteWarn { "tap: the links of a page cannot be read: ${failure.message}" }
+    false
+}
+
+private fun linkTap(
+    state: KiteDocViewState,
+    scope: kotlinx.coroutines.CoroutineScope,
+    onLinkTap: ((KiteLinkAction) -> Boolean)?,
+    offset: Offset,
+    onEpubReferenceTap: ((EpubLink) -> Boolean)?,
 ): Boolean {
     val hit = state.hitTest(offset) ?: return false
     when (val page = state.pageAt(hit.pageIndex)) {
@@ -781,8 +795,9 @@ private fun PageBox(
         if (fit != IntSize.Zero) {
             val dpSize = with(density) { DpSize(fit.width.toDp(), fit.height.toDp()) }
             val formTextMeasurer = androidx.compose.ui.text.rememberTextMeasurer()
+            val formFailure = remember(page) { DrawFailure() }
             val slot = Modifier.size(dpSize)
-                .kiteFormLayer(page, state.scripts, formTextMeasurer, 1f, state.formRevision)
+                .kiteFormLayer(page, state.scripts, formTextMeasurer, 1f, state.formRevision, formFailure)
                 .highlightOverlay(state, page, pageIndex, colors)
             when (renderSpec) {
                 is KiteRenderSpec.Rasterized -> KitePageRaster(
@@ -930,8 +945,10 @@ private fun KitePageVector(
 ) {
     val textMeasurer = rememberTextMeasurer()
     val theme = colors.theme
+    val failure = remember(page) { DrawFailure() }
     Canvas(modifier) {
-        drawRect(theme?.background?.let { Color(it.r.toFloat(), it.g.toFloat(), it.b.toFloat()) } ?: colors.pageBackground)
+        val paper = theme?.background?.let { Color(it.r.toFloat(), it.g.toFloat(), it.b.toFloat()) } ?: colors.pageBackground
+        drawRect(paper)
         val w = size.width
         val h = size.height
         val scale = if (page.displayWidth > 0.0) w / page.displayWidth else 0.0
@@ -941,7 +958,31 @@ private fun KitePageVector(
         val deviceCtm = KiteMatrix.scaling(scale, scale).concat(page.displayToDeviceBase())
         val base = ComposeCanvas(this, textMeasurer, spec.hairlineWidthPx)
         val themed = theme?.wrap(base) ?: base
-        page.renderTo(spec.canvasDecorator?.invoke(themed) ?: themed, deviceCtm)
+        failure.guard("page") {
+            page.renderTo(spec.canvasDecorator?.invoke(themed) ?: themed, deviceCtm)
+        }
+        // Paper over whatever the failed draw left, so the page shows as blank, not half drawn.
+        if (failure.failed) drawRect(paper)
+    }
+}
+
+/**
+ * Keeps a draw in the Compose draw pass from ending the host app, as the raster guard does for
+ * rasters (#333). An exception there reaches the platform's uncaught-exception handler. A failed
+ * draw is logged once, and the same page is not parsed again on every frame.
+ */
+internal class DrawFailure {
+    var failed: Boolean = false
+        private set
+
+    inline fun guard(what: String, draw: () -> Unit) {
+        if (failed) return
+        try {
+            draw()
+        } catch (error: Throwable) {
+            failed = true
+            io.github.yuroyami.kitepdf.core.kiteWarn { "render: the $what failed to draw: ${error.message ?: error::class.simpleName}" }
+        }
     }
 }
 

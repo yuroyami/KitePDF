@@ -638,10 +638,21 @@ public class KiteDocViewState(
         selectionInProgress = true
         val (pageIndex, x, y) = hitTestDisplay(viewportOffset) ?: return
         val location = anchorAt(pageIndex) ?: return
-        val text = pageAt(pageIndex)?.textContent() ?: return
+        val text = textAt(pageIndex) ?: return
         val idx = text.charIndexAt(x, y) ?: return
         selectionAnchor = location to idx
         applySelection(text, pageIndex, idx, idx)
+    }
+
+    /** The text of the page in slot [index], or null when it cannot be read: such a page acts as one without text (#334). */
+    private fun textAt(index: Int): KiteStructuredText? {
+        val page = pageAt(index) ?: return null
+        return try {
+            page.textContent()
+        } catch (failure: Throwable) {
+            kiteWarn { "selection: the text of page $index cannot be read: ${failure.message}" }
+            null
+        }
     }
 
     /**
@@ -654,7 +665,7 @@ public class KiteDocViewState(
         val page = indexOf(location)
         val (pageIndex, x, y) = hitTestDisplay(viewportOffset) ?: return
         if (page < 0 || pageIndex != page) return
-        val text = pageAt(page)?.textContent() ?: return
+        val text = textAt(page) ?: return
         val idx = text.charIndexAt(x, y) ?: return
         applySelection(text, page, minOf(anchor, idx), maxOf(anchor, idx))
     }

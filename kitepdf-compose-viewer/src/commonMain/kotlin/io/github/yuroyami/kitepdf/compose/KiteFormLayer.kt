@@ -38,6 +38,8 @@ internal fun Modifier.kiteFormLayer(
     hairlineWidthPx: Float,
     /** Read by the caller so a change repaints this layer and nothing else. */
     @Suppress("UNUSED_PARAMETER") revision: Int,
+    /** Remembered per page by the caller: a widget layer that failed once stays off (#333). */
+    failure: DrawFailure = DrawFailure(),
 ): Modifier {
     if (scripts == null || page !is PdfPage) return this
     return drawWithContent {
@@ -48,8 +50,10 @@ internal fun Modifier.kiteFormLayer(
         if (!scale.isFinite() || scale <= 0.0) return@drawWithContent
         val deviceCtm = KiteMatrix.scaling(scale, scale).concat(page.displayToDeviceBase())
         val canvas = ComposeCanvas(this, textMeasurer, hairlineWidthPx)
-        page.renderAnnotationsTo(canvas, deviceCtm, scripts.formState) {
-            it.subtype == PdfAnnotation.Subtype.Widget
+        failure.guard("form layer") {
+            page.renderAnnotationsTo(canvas, deviceCtm, scripts.formState) {
+                it.subtype == PdfAnnotation.Subtype.Widget
+            }
         }
     }
 }
@@ -123,7 +127,13 @@ internal fun handleWidgetTap(
     if (scripts == null) return false
     val hit = state.hitTest(offset) ?: return false
     val page = state.pageAt(hit.pageIndex) as? PdfPage ?: return false
-    val field = page.formFieldAt(hit.x, hit.y) ?: return false
+    val field = try {
+        page.formFieldAt(hit.x, hit.y)
+    } catch (failure: Throwable) {
+        // A page whose fields cannot be read acts as a page without fields (#334).
+        io.github.yuroyami.kitepdf.core.kiteWarn { "tap: the fields of a page cannot be read: ${failure.message}" }
+        null
+    } ?: return false
     val name = field.fullyQualifiedName
     if (scripts.formState.isReadOnly(name)) return true
     // The scripts of a widget may take a while, so they go to the script thread. A test with no

@@ -167,10 +167,10 @@ public sealed class PdfAction {
                 "JavaScript" -> {
                     val script = when (val js = dict["JS"]) {
                         is PdfString -> js.asText()
-                        is PdfStream -> io.github.yuroyami.kitepdf.core.filters.FilterChain.decode(js).decodeToString()
+                        is PdfStream -> scriptText(js)
                         is PdfReference -> when (val resolved = refs.resolve(js)) {
                             is PdfString -> resolved.asText()
-                            is PdfStream -> io.github.yuroyami.kitepdf.core.filters.FilterChain.decode(resolved).decodeToString()
+                            is PdfStream -> scriptText(resolved)
                             else -> ""
                         }
                         else -> ""
@@ -198,6 +198,17 @@ public sealed class PdfAction {
          * (ISO 32000-1 §7.11). For the dict form, /UF (Unicode) is preferred
          * over /F. We return whichever flavour we can recover as text.
          */
+        /**
+         * The text of a `/JS` stream, or an empty script when its filters fail: the action then
+         * does nothing, and parsing the page's annotations does not fail with it (#334).
+         */
+        private fun scriptText(stream: PdfStream): String = try {
+            io.github.yuroyami.kitepdf.core.filters.FilterChain.decode(stream).decodeToString()
+        } catch (failure: Exception) {
+            io.github.yuroyami.kitepdf.core.kiteWarn { "action: a JavaScript stream cannot be decoded: ${failure.message}" }
+            ""
+        }
+
         private fun fileSpecToString(obj: PdfObject?, refs: IndirectResolver): String? {
             val resolved = when (obj) {
                 is PdfReference -> refs.resolve(obj)

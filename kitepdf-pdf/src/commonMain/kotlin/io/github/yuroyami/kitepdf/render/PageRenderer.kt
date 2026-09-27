@@ -1004,7 +1004,7 @@ public class PageRenderer(
         pendingClip = 0
         val scope = openScope()
         try {
-            val parse = { ContentStreamParser.parse(io.github.yuroyami.kitepdf.core.filters.FilterChain.decode(formStream), childColorSpaces) }
+            val parse = { ContentStreamParser.parse(io.github.yuroyami.kitepdf.PageContents.decodeNested(formStream, "form XObject"), childColorSpaces) }
             // A form with resources of its own parses the same way wherever it is drawn, so its
             // operations come from the document's cache. Without them it reads the page's (#118).
             val ops = if (ownResources) cachedOperations(objectNumber, parse) else parse()
@@ -2422,7 +2422,7 @@ public class PageRenderer(
         val clipBase = activeClipCount
         val scope = openScope()
         try {
-            val parse = { ContentStreamParser.parse(io.github.yuroyami.kitepdf.core.filters.FilterChain.decode(proc), colorSpaces) }
+            val parse = { ContentStreamParser.parse(io.github.yuroyami.kitepdf.PageContents.decodeNested(proc, "Type 3 glyph"), colorSpaces) }
             // A glyph drawn many times parses once, when its font has resources of its own (#118).
             val ops = if (data.resources != null) cachedOperations(procObject, parse) else parse()
             val pathBuilder = KitePath.Builder()
