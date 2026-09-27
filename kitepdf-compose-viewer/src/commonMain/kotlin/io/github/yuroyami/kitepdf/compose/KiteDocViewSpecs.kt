@@ -176,10 +176,11 @@ public sealed interface KiteRenderSpec {
      *   pixel ceiling to this value squared, so any side length allowed here
      *   also renders.
      * @param rerasterizeOnZoom after a zoom settles, re-render at the zoomed
-     *   resolution instead of upscaling the base raster. The bitmap stops growing
-     *   at [maxBitmapLongSide], so a zoom past that stays soft. A pager renders its
-     *   current page again; a continuous strip renders every composed page again,
-     *   at its full size. Costs one rasterization per page and settled zoom.
+     *   resolution instead of upscaling the base raster. The zoom rounds up to a
+     *   quarter of an octave (1, 1.19, 1.41, 1.68, 2 and so on), so pinches that
+     *   settle close together share one raster. The bitmap stops growing at
+     *   [maxBitmapLongSide], so a zoom past that stays soft. Only the pages in view
+     *   render at the zoom. Costs one rasterization per page in view and zoom step.
      * @param preserveHairlines scale the engine's stroke floors by the ratio of the
      *   raster to the screen, so a zero-width stroke stays one screen pixel and other
      *   sub-pixel strokes (ECG traces, fine table rules) keep their weight when the
