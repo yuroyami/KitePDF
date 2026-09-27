@@ -21,6 +21,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import io.github.yuroyami.kitepdf.PdfScriptHandler
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.withContext
 
@@ -37,15 +38,15 @@ import kotlinx.coroutines.withContext
  * and the value is committed when the field loses the caret or the reader presses done.
  */
 @Composable
-internal fun KiteFormInput(state: KiteDocViewState, scripts: PdfScriptHandler?) {
+internal fun KiteFormInput(state: KiteDocViewState, scripts: PdfScriptHandler?, lane: CoroutineDispatcher) {
     val fieldName = state.focusedField ?: return
     if (scripts == null) return
     // One input per field, so a new field starts with its own caret and its own focus history.
-    key(fieldName) { FieldInput(state, scripts, fieldName) }
+    key(fieldName) { FieldInput(state, scripts, fieldName, lane) }
 }
 
 @Composable
-private fun FieldInput(state: KiteDocViewState, scripts: PdfScriptHandler, fieldName: String) {
+private fun FieldInput(state: KiteDocViewState, scripts: PdfScriptHandler, fieldName: String, lane: CoroutineDispatcher) {
     val requester = remember { FocusRequester() }
     val pipeline = remember { KeystrokePipeline(scripts.formState.value(fieldName) ?: "") }
     var value by remember { mutableStateOf(TextFieldValue(pipeline.screen, TextRange(pipeline.screen.length))) }
@@ -60,7 +61,7 @@ private fun FieldInput(state: KiteDocViewState, scripts: PdfScriptHandler, field
         for (signal in typed) {
             while (true) {
                 val edit = pipeline.next() ?: break
-                val kept = withContext(kitepdfScriptDispatcher()) { askScript(scripts, fieldName, edit) }
+                val kept = withContext(lane) { askScript(scripts, fieldName, edit) }
                 val before = pipeline.screen
                 pipeline.answered(kept)
                 val after = pipeline.screen

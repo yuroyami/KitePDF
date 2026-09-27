@@ -79,8 +79,12 @@ public class PdfScriptRunner(
     /** The thread the runner's own engine lives on, started by the first call (#355). */
     private val scriptThread = lazy { startScriptThread() }
 
+    /** Read by the deadline check on the script thread, so a close stops a running script (#365). */
     @kotlin.concurrent.Volatile
     private var closed = false
+
+    /** True once the document's own scripts ran, which happens once per runner (#365). */
+    private var documentOpenRan = false
 
     /** Runs [block] on the thread the engine belongs to, and waits for it. */
     private fun <T> onScriptThread(block: () -> T): T {
@@ -156,10 +160,13 @@ public class PdfScriptRunner(
 
     /**
      * Runs the document's own scripts and then its open action, which is what a viewer does when
-     * the file opens (ISO 32000-1 §7.7.4 and §12.6.4.16). Returns the scripts that failed.
+     * the file opens (ISO 32000-1 §7.7.4 and §12.6.4.16). They run once for each runner, so a
+     * viewer that reports the document open again runs nothing (#365). [runDocumentOpen] runs
+     * them again and returns the scripts that failed.
      */
     override fun documentOpened() {
-        runDocumentOpen()
+        val first = onScriptThread { !documentOpenRan.also { documentOpenRan = true } }
+        if (first) runDocumentOpen()
     }
 
     override fun pageOpened(pageIndex: Int) {
@@ -489,6 +496,8 @@ public class PdfScriptRunner(
      * more instructions the engine ran.
      */
     private fun deadlinePassed(): Boolean {
+        // A runner that is closing stops the script it runs at the next check (#365).
+        if (closed) return true
         if (policy.budgetMillis <= 0 && policy.documentBudgetMillis <= 0) return false
         val now = now()
         if (policy.budgetMillis > 0 && now - eventStartedAt > policy.budgetMillis) {

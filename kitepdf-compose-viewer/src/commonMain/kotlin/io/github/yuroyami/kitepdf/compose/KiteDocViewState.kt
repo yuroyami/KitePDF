@@ -380,6 +380,16 @@ public class KiteDocViewState(
     /** Where script work is posted, so a long script never runs on the thread that draws. */
     internal var scriptScope: kotlinx.coroutines.CoroutineScope? = null
 
+    /** The lane this state's view calls the scripts on, one call at a time (#365). */
+    internal var scriptLane: kotlinx.coroutines.CoroutineDispatcher? = null
+
+    /**
+     * The handler whose document open scripts already ran for this state, so a view that leaves
+     * and comes back does not run them again (#365). Written on the script lane.
+     */
+    @kotlin.concurrent.Volatile
+    internal var openedScripts: io.github.yuroyami.kitepdf.PdfScriptHandler? = null
+
     /** Which widget of [focusedField] has the caret: its place in the field's widgets. */
     private var focusedWidget = 0
 
@@ -390,13 +400,16 @@ public class KiteDocViewState(
         focusedField = fieldName
         focusedWidget = widgetIndex
         val handler = scripts ?: return
-        post { handler.focus(fieldName, widgetIndex) }
+        post("focus") { handler.focus(fieldName, widgetIndex) }
     }
 
     /**
      * Takes the caret out of the focused field and commits what the reader sees in it: the
      * document's keystroke, validate, calculate and format scripts run on the whole value, as
      * they do when a reader leaves a field.
+     *
+     * The commit runs on a scope of its own. The view may be leaving, and its scope with it, and
+     * the value the reader typed must not be lost with them (#365).
      */
     internal fun blurFocusedField() {
         val name = focusedField ?: return
@@ -405,27 +418,46 @@ public class KiteDocViewState(
         editingText = null
         val widget = focusedWidget
         val handler = scripts ?: return
-        post {
-            handler.commit(name, typed ?: handler.formState.value(name) ?: "")
-            handler.blur(name, widget)
+        val work = {
+            scriptCall("commit", false) { handler.commit(name, typed ?: handler.formState.value(name) ?: "") }
+            scriptCall("blur", Unit) { handler.blur(name, widget) }
         }
+        val lane = scriptLane
+        if (lane == null) work() else kotlinx.coroutines.CoroutineScope(lane).launch { work() }
+    }
+
+    /**
+     * Commits the field that has the caret, as leaving it does, and returns once the document's
+     * scripts have finished with it and with every call the viewer made to them before.
+     *
+     * A tap on the host's own button, such as Save or Submit, does not take the caret out of the
+     * field. Call this first, so the value the reader typed last has gone through the field's
+     * scripts and into the form before the host reads the form. Call it on the main thread.
+     */
+    public suspend fun commitFocusedField() {
+        blurFocusedField()
+        val lane = scriptLane ?: return
+        // The lane runs one call at a time in order, so this returns after the calls before it.
+        kotlinx.coroutines.withContext(lane) {}
     }
 
     /** What the reader sees in the focused field, which a keystroke script may not have answered for yet. */
     internal var editingText: String? = null
 
     /**
-     * Runs [work] on the script thread, or here when no scope is set, as a test has none. The
-     * form's own listener publishes what the work changed (#357), so nothing here writes state
-     * that composition reads from the script thread (#364).
+     * Runs [work] on the script lane, or here when there is no view to give one. The form's own
+     * listener publishes what the work changed (#357), so nothing here writes state that
+     * composition reads from the script thread (#364). A handler that fails is logged under
+     * [what] (#365).
      */
-    internal fun post(work: () -> Unit) {
+    internal fun post(what: String, work: () -> Unit) {
         val scope = scriptScope
-        if (scope == null) {
-            work()
+        val lane = scriptLane
+        if (scope == null || lane == null) {
+            scriptCall(what, Unit, work)
             return
         }
-        scope.launch(kitepdfScriptDispatcher()) { work() }
+        scope.launch(lane) { scriptCall(what, Unit, work) }
     }
 
     /**

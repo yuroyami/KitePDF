@@ -159,6 +159,7 @@ public final class io/github/yuroyami/kitepdf/compose/KiteDocViewState {
 	public final fun animateZoomTo-ubNVwUQ (FJLandroidx/compose/animation/core/AnimationSpec;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public static synthetic fun animateZoomTo-ubNVwUQ$default (Lio/github/yuroyami/kitepdf/compose/KiteDocViewState;FJLandroidx/compose/animation/core/AnimationSpec;Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
 	public final fun clearSelection ()V
+	public final fun commitFocusedField (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public final fun currentBookmark ()Lio/github/yuroyami/kitepdf/core/KiteBookmark;
 	public final fun getCurrentLocation ()Lio/github/yuroyami/kitepdf/core/KiteLocation;
 	public final fun getCurrentPage ()I
