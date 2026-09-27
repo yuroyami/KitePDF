@@ -579,6 +579,15 @@ public class KiteDocViewState(
      */
     internal var pendingLeadingPage: Int? = null
 
+    /** False while the viewer shows one fixed page, which navigation does not turn (#336). */
+    internal val canNavigate: Boolean get() = adapter !is FixedPageAdapter
+
+    /** The slot of the first chapter that is not laid out yet, or null when every chapter is. */
+    internal fun firstPendingSlot(): Int? {
+        val chapter = (0 until document.chapterCount).firstOrNull { !document.isChapterReady(it) } ?: return null
+        return slotFor(KiteLocation(chapter, 0)).takeIf { it >= 0 }
+    }
+
     /** Remembers the position of a viewer that is not attached. */
     internal fun park(page: Int, leadingPage: Int? = null, offsetPx: Int = 0, slotLength: Int = 0) {
         pendingPage = page

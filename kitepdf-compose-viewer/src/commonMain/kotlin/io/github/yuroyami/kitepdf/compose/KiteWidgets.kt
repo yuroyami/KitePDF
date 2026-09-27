@@ -77,7 +77,8 @@ public fun KitePageIndicator(
 }
 
 /**
- * Previous / "x of y" / next pill. Buttons auto-disable at the ends.
+ * Previous / "x of y" / next pill. The buttons turn off at the ends, and on a
+ * fixed page ([KiteDocLayout.SinglePage]), which navigation does not turn.
  *
  * Float it over the pages via [KiteDocView]'s `overlay` slot:
  * ```kotlin
@@ -103,7 +104,7 @@ public fun KiteNavigationControls(
     ) {
         ChevronButton(
             pointsLeft = true,
-            enabled = state.currentPage > 0,
+            enabled = state.canNavigate && state.currentPage > 0,
             tint = contentColor,
             onClick = { scope.launch { state.previousPage() } },
         )
@@ -114,7 +115,7 @@ public fun KiteNavigationControls(
         )
         ChevronButton(
             pointsLeft = false,
-            enabled = state.currentPage < state.itemCount - 1,
+            enabled = state.canNavigate && state.currentPage < state.itemCount - 1,
             tint = contentColor,
             onClick = { scope.launch { state.nextPage() } },
         )

@@ -79,7 +79,13 @@ public sealed interface KiteDocLayout {
         }
     }
 
-    /** Exactly one fixed page, letterboxed to fit the viewport. */
+    /**
+     * Exactly one fixed page, letterboxed to fit the viewport. [pageIndex] counts the pages of
+     * the whole document, as [io.github.yuroyami.kitepdf.core.KiteDocument.pages] does. A
+     * reflowable book that is still laying out shows a chapter placeholder until the chapters
+     * before the page are laid out, and then the page. An index outside the document shows its
+     * nearest page and logs a warning. Navigation does not turn a fixed page.
+     */
     @Immutable
     public data class SinglePage(val pageIndex: Int) : KiteDocLayout
 
