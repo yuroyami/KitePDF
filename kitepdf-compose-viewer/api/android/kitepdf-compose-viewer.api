@@ -181,9 +181,11 @@ public final class io/github/yuroyami/kitepdf/compose/KiteDocViewState {
 	public final fun isSelectionActive ()Z
 	public final fun isZoomed ()Z
 	public final fun nextPage (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun pageRenderState (I)Lio/github/yuroyami/kitepdf/compose/KitePageRenderState;
 	public final fun panBy-MK-Hz9U (J)J
 	public final fun previousPage (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public final fun resetZoom ()V
+	public final fun retryPage (I)V
 	public final fun scrollTo (Lio/github/yuroyami/kitepdf/compose/KiteScrollPosition;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public final fun scrollTo (Lio/github/yuroyami/kitepdf/core/KiteBookmark;ZLkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public final fun scrollTo (Lio/github/yuroyami/kitepdf/core/KiteLocation;ZLkotlin/coroutines/Continuation;)Ljava/lang/Object;
@@ -297,6 +299,15 @@ public final class io/github/yuroyami/kitepdf/compose/KitePageRasterizer {
 public final class io/github/yuroyami/kitepdf/compose/KitePageRasterizerKt {
 	public static final fun rememberKitePageRasterizer (JLandroidx/compose/runtime/Composer;I)Lio/github/yuroyami/kitepdf/compose/KitePageRasterizer;
 	public static final fun rememberKitePageRasterizer (Landroidx/compose/runtime/Composer;I)Lio/github/yuroyami/kitepdf/compose/KitePageRasterizer;
+}
+
+public final class io/github/yuroyami/kitepdf/compose/KitePageRenderState : java/lang/Enum {
+	public static final field Failed Lio/github/yuroyami/kitepdf/compose/KitePageRenderState;
+	public static final field Loading Lio/github/yuroyami/kitepdf/compose/KitePageRenderState;
+	public static final field Ready Lio/github/yuroyami/kitepdf/compose/KitePageRenderState;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lio/github/yuroyami/kitepdf/compose/KitePageRenderState;
+	public static fun values ()[Lio/github/yuroyami/kitepdf/compose/KitePageRenderState;
 }
 
 public abstract interface class io/github/yuroyami/kitepdf/compose/KiteRenderSpec {

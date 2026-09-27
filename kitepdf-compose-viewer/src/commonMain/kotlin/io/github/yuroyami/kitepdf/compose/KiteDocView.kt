@@ -31,6 +31,7 @@ import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
@@ -632,6 +633,7 @@ private fun PageSlotContent(
             onPageRendered, pagePlaceholder, slot,
             cache = state.bitmapCacheFor(renderSpec.cacheBudgetBytes),
             drawsFormLayer = drawsForm,
+            state = state,
         )
         is KiteRenderSpec.Vectorized -> KitePageVector(page, renderSpec, colors, slot, skipWidgets = drawsForm)
     }
@@ -888,6 +890,8 @@ private fun KitePageRaster(
     cache: PageBitmapCache? = null,
     /** True when a form layer draws this page's widgets, so the bitmap must leave them out. */
     drawsFormLayer: Boolean = false,
+    /** Where the page's render state goes, and its retry count comes from. */
+    state: KiteDocViewState? = null,
 ) {
     // The spec's long-side cap is the sizing authority in this path, so the
     // rasterizer's pixel ceiling must never undercut maxBitmapLongSide².
@@ -918,7 +922,11 @@ private fun KitePageRaster(
         max(1f, raster.width / visualWidth)
     } else 1f
 
-    val rastered by produceState<Pair<ImageBitmap, Boolean>?>(null, page, raster, colors.pageBackground, colors.theme, hairline, cache, drawsFormLayer, spec.canvasDecorator) {
+    // The page the shown bitmap belongs to, so a failed upgrade keeps it for that page only.
+    val shownFor = remember { arrayOfNulls<KitePage>(1) }
+    var render by remember { mutableStateOf(KitePageRenderState.Loading) }
+    val retry = state?.retriesOf(pageIndex) ?: 0
+    val rastered by produceState<Pair<ImageBitmap, Boolean>?>(null, page, raster, colors.pageBackground, colors.theme, hairline, cache, drawsFormLayer, spec.canvasDecorator, retry) {
         // Off the main thread: a 10-30ms page raster on the UI thread
         // janks scroll and pinch. The rasterizer serializes pages on its mutex
         // (TextMeasurer's cache is not thread-safe) but the main thread stays
@@ -926,16 +934,30 @@ private fun KitePageRaster(
         // prefetch (KiteDocLayout.Paged offscreenPages) hides first-render latency.
         // rasterizeCachedOrNull carries the mandatory failure guard: an
         // exception escaping produceState aborts the HOST APP.
-        value = if (raster == IntSize.Zero) {
-            null
-        } else {
-            rasterizer.rasterizeCachedOrNull(
-                cache, page, raster.width, raster.height,
-                colors.pageBackground, hairline, colors.theme, pageIndex,
-                skipWidgets = drawsFormLayer,
-                canvasDecorator = spec.canvasDecorator,
-            )
+        if (raster == IntSize.Zero) {
+            value = null
+            return@produceState
         }
+        render = KitePageRenderState.Loading
+        val result = rasterizer.rasterizeCachedOrNull(
+            cache, page, raster.width, raster.height,
+            colors.pageBackground, hairline, colors.theme, pageIndex,
+            skipWidgets = drawsFormLayer,
+            canvasDecorator = spec.canvasDecorator,
+        )
+        // A failed upgrade, such as a crisp-zoom raster out of memory, keeps the last good
+        // bitmap of this page instead of blanking it, and says it failed (#430).
+        value = when {
+            result != null -> result.also { shownFor[0] = page }
+            shownFor[0] === page -> value?.let { it.first to false }
+            else -> null
+        }
+        render = if (result != null) KitePageRenderState.Ready else KitePageRenderState.Failed
+    }
+    val shownRender = render
+    if (state != null) {
+        SideEffect { state.noteRender(pageIndex, shownRender) }
+        DisposableEffect(state, pageIndex) { onDispose { state.noteRender(pageIndex, null) } }
     }
     val bitmap = rastered?.first
 

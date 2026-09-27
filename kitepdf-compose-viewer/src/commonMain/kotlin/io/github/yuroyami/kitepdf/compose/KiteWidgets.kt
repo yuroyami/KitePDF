@@ -41,6 +41,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import io.github.yuroyami.kitepdf.core.KitePage
 import io.github.yuroyami.kitepdf.core.KiteDocument
 import io.github.yuroyami.kitepdf.core.KiteOutlineItem
 import kotlin.math.roundToInt
@@ -185,15 +186,22 @@ public fun KiteThumbnailStrip(
             val page = state.pageAt(index)
             val aspect = if (page != null) kitePageAspect(page) else state.placeholderAspect()
             val widthPx = (heightPx * aspect).roundToInt().coerceAtLeast(1)
+            val shownFor = remember { arrayOfNulls<KitePage>(1) }
             val bitmap by produceState<ImageBitmap?>(null, page, heightPx, pageBackground) {
                 // Same mandatory guard as KitePageRaster: an exception escaping
                 // produceState aborts the host app, so a failed thumbnail must
                 // degrade to its placeholder instead. A chapter still laying out
-                // has no page yet and simply shows its empty slot.
-                value = page?.let {
+                // has no page yet and simply shows its empty slot. A failed new
+                // thumbnail of the same page keeps the old one (#430).
+                val result = page?.let {
                     rasterizer.rasterizeCachedOrNull(
                         null, it, widthPx, heightPx, pageBackground, 1f, null, index,
                     )?.first
+                }
+                value = when {
+                    result != null -> result.also { shownFor[0] = page }
+                    page != null && shownFor[0] === page -> value
+                    else -> null
                 }
             }
             val selected = index == state.currentPage
