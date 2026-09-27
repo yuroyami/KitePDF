@@ -49,6 +49,9 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
@@ -480,15 +483,17 @@ private fun ContinuousLayout(
 
     val scope = rememberCoroutineScope()
     val haptics = LocalHapticFeedback.current
+    val stripEnds = remember(state) { StripEndsPan(state) }
     // Magnifier-style zoom: scale the whole strip around the viewport centre.
     // The scroll axis stays native (the list keeps scrolling while zoomed);
-    // pan covers the cross axis only. Gestures sit OUTSIDE the layer so they
-    // see untransformed viewport coordinates.
+    // pan covers the cross axis, and the scroll axis at the strip's ends only.
+    // Gestures sit OUTSIDE the layer so they see untransformed viewport coordinates.
     Box(
         Modifier
             .fillMaxSize()
             .kiteTransformGestures(state, zoomSpec, scope, onTap)
             .kiteSelectionGestures(state, haptics)
+            .nestedScroll(stripEnds)
             .graphicsLayer {
                 scaleX = state.zoom
                 scaleY = state.zoom
@@ -1322,6 +1327,38 @@ private fun Modifier.stripSlot(orientation: Orientation, aspect: Float, naturalC
 
 /** More than any length Compose can represent, to keep the Float to Int step in range. */
 private const val MAX_SLOT_LENGTH = 1_000_000f
+
+/**
+ * Lets the reader reach the ends of a zoomed strip (#397). The zoom scales the strip around the
+ * viewport centre, so with the list at its start or its end a band of the zoomed content lies
+ * outside the viewport. The drag the list cannot use there moves the page along the scroll
+ * axis instead, within that band, and a drag back spends that pan before the list scrolls. The
+ * list works in its own unscaled pixels, and the pan in viewport pixels, hence the zoom factor.
+ */
+private class StripEndsPan(private val state: KiteDocViewState) : NestedScrollConnection {
+
+    private fun along(offset: Offset): Float = if (state.panAxes == KiteDocViewState.PanAxes.XOnly) offset.y else offset.x
+
+    private fun offsetAlong(value: Float): Offset =
+        if (state.panAxes == KiteDocViewState.PanAxes.XOnly) Offset(0f, value) else Offset(value, 0f)
+
+    override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+        val drag = along(available)
+        val pan = along(state.panOffset)
+        if (drag == 0f || pan == 0f || (drag > 0f) == (pan > 0f)) return Offset.Zero
+        // A drag back toward the list takes the page back first.
+        val wanted = drag * state.zoom
+        val moved = state.panAlongScrollAxis(if (kotlin.math.abs(wanted) > kotlin.math.abs(pan)) -pan else wanted)
+        return offsetAlong(moved / state.zoom)
+    }
+
+    override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
+        if (source != NestedScrollSource.UserInput) return Offset.Zero
+        val drag = along(available)
+        if (drag == 0f) return Offset.Zero
+        return offsetAlong(state.panAlongScrollAxis(drag * state.zoom) / state.zoom)
+    }
+}
 
 /* ── spread pager: two pages per item, like an open book ───────────── */
 

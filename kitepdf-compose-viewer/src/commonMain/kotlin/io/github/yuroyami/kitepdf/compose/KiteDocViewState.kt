@@ -716,6 +716,20 @@ public class KiteDocViewState(
      * viewport, around the pan that centres it. So a letterboxed page that still fits one axis
      * does not move on it, and never slides into empty margins (#400).
      */
+    /**
+     * Moves the pan along a continuous strip's scroll axis by [delta] viewport px, within the
+     * zoomed strip's bounds, and returns what it moved. Only the strip's ends use it: a
+     * one-finger pan leaves that axis to the list (#397).
+     */
+    internal fun panAlongScrollAxis(delta: Float): Float {
+        if (!delta.isFinite() || delta == 0f) return 0f
+        stopZoomAnimation()
+        val old = panOffset
+        val vertical = panAxes == PanAxes.XOnly
+        panOffset = clampPan(if (vertical) Offset(old.x, old.y + delta) else Offset(old.x + delta, old.y), zoom)
+        return if (vertical) panOffset.y - old.y else panOffset.x - old.x
+    }
+
     internal fun clampPan(offset: Offset, zoom: Float): Offset {
         val (centred, slack) = panRoom(zoom)
         return Offset(
