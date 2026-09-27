@@ -1002,7 +1002,7 @@ public class KiteDocViewState(
         val keyedAfter = keyed?.let { item -> items.indexOfFirst { it.key == item.key } } ?: -1
         val keyedLands = if (adapter.followsKeys && keyedAfter >= 0 && abs(keyedAfter - keyedSlot) < KEY_REACH) keyedAfter else keyedSlot
         val readerLands = keyedLands + (readerSlot - keyedSlot)
-        if (readerLands != target) adapter.requestSlot(target, captured)
+        if (readerLands != target) adapter.requestSlot(target, captured) else adapter.expectSlot(target, keyedLands)
     }
 
     /** Publishes when a ready chapter still holds a placeholder, as it does when someone else laid it out (#341). */
@@ -1323,11 +1323,23 @@ internal interface KiteScrollAdapter {
      * cancel it between a change of the strip and the measure that shows it (#343).
      */
     fun requestSlot(slot: Int, anchor: ScrollAnchor) {}
+
+    /**
+     * Tells the container where its own key matching will put the reader, [slot], and its
+     * leading edge, [leadingSlot], at the next measure. Until that measure its index still
+     * counts slots of the old strip, so [currentPage] and [leadingPage] answer these instead:
+     * a navigation that starts in between must not start from other content.
+     */
+    fun expectSlot(slot: Int, leadingSlot: Int) {}
 }
 
 /** Continuous mode: "current" = the visible item whose centre is nearest the viewport centre. */
 internal class LazyListScrollAdapter(private val listState: LazyListState) : KiteScrollAdapter {
-    override val leadingPage: Int get() = listState.firstVisibleItemIndex
+    override val leadingPage: Int
+        get() {
+            expected?.let { (_, lead, before) -> if (listState.layoutInfo === before) return lead }
+            return listState.firstVisibleItemIndex
+        }
     override val scrollOffsetPx: Int get() = listState.firstVisibleItemScrollOffset
     suspend fun scrollToPageOffset(page: Int, offsetPx: Int) = listState.scrollToItem(page, offsetPx)
 
@@ -1338,10 +1350,14 @@ internal class LazyListScrollAdapter(private val listState: LazyListState) : Kit
      */
     private var requested: Pair<Int, LazyListLayoutInfo>? = null
 
+    /** The reader's and the leading slot that key matching gives at the next measure, and the layout they replace. */
+    private var expected: Triple<Int, Int, LazyListLayoutInfo>? = null
+
     override val currentPage: Int
         get() {
             val info = listState.layoutInfo
             requested?.let { (slot, before) -> if (info === before) return slot }
+            expected?.let { (slot, _, before) -> if (info === before) return slot }
             val visible = info.visibleItemsInfo
             if (visible.isEmpty()) return listState.firstVisibleItemIndex
             val viewportCentre = (info.viewportStartOffset + info.viewportEndOffset) / 2
@@ -1349,7 +1365,7 @@ internal class LazyListScrollAdapter(private val listState: LazyListState) : Kit
                 ?: listState.firstVisibleItemIndex
         }
 
-    override val keyedSlot: Int get() = listState.firstVisibleItemIndex
+    override val keyedSlot: Int get() = leadingPage
 
     // A request makes the list forget the key it anchors on until it measures again.
     override val followsKeys: Boolean get() = requested?.let { (_, before) -> listState.layoutInfo !== before } ?: true
@@ -1363,7 +1379,12 @@ internal class LazyListScrollAdapter(private val listState: LazyListState) : Kit
 
     override fun requestSlot(slot: Int, anchor: ScrollAnchor) {
         requested = slot to listState.layoutInfo
+        expected = null
         listState.requestScrollToItem(slot, -anchor.offsetPx)
+    }
+
+    override fun expectSlot(slot: Int, leadingSlot: Int) {
+        expected = Triple(slot, leadingSlot, listState.layoutInfo)
     }
 
     override suspend fun scrollToPage(page: Int) = listState.scrollToItem(page)
@@ -1377,9 +1398,25 @@ internal class PagerScrollAdapter(private val pagerState: PagerState) : KiteScro
     /** The layout a correction was asked against. The pager forgets its key until it measures again. */
     private var requestedAgainst: PagerLayoutInfo? = null
 
+    /** The slot that key matching gives at the next measure, and the layout it replaces. */
+    private var expected: Pair<Int, PagerLayoutInfo>? = null
+
     override val followsKeys: Boolean get() = requestedAgainst?.let { pagerState.layoutInfo !== it } ?: true
 
-    override val currentPage: Int get() = pagerState.currentPage
+    override val currentPage: Int
+        get() {
+            val pending = expected
+            if (pending != null) {
+                // Read the layout only while an expectation is open, so a reader does not follow every scroll frame.
+                if (pagerState.layoutInfo === pending.second) return pending.first
+                expected = null
+            }
+            return pagerState.currentPage
+        }
+
+    override fun expectSlot(slot: Int, leadingSlot: Int) {
+        expected = slot to pagerState.layoutInfo
+    }
     override suspend fun scrollToPage(page: Int) = pagerState.scrollToPage(page)
     override suspend fun animateScrollToPage(page: Int) = pagerState.animateScrollToPage(page)
 
@@ -1390,6 +1427,7 @@ internal class PagerScrollAdapter(private val pagerState: PagerState) : KiteScro
         // Outside a drag the page snaps straight into place: a correction that cancels a settle
         // animation must not leave the pager between two pages.
         requestedAgainst = pagerState.layoutInfo
+        expected = null
         pagerState.requestScrollToPage(slot, if (dragging) anchor.pageFraction else 0f)
     }
 }
