@@ -1,12 +1,17 @@
 package io.github.yuroyami.kitepdf.compose
 
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MonotonicFrameClock
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshots.Snapshot
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.ImageComposeScene
 import androidx.compose.ui.InternalComposeUiApi
 import androidx.compose.ui.Modifier
@@ -126,29 +131,6 @@ class EffectThreadSceneTest {
             javax.swing.JLabel(), java.awt.event.KeyEvent.KEY_TYPED, 0L, 0, java.awt.event.KeyEvent.VK_UNDEFINED, char,
         )
         scene.sendKeyEvent(KeyEvent(Key.Unknown, KeyEventType.Unknown, codePoint = char.code, nativeEvent = awt))
-    }
-
-    /**
-     * Runs [body] and returns the writes to Compose state that viewer code made meanwhile on
-     * another thread than this one, each as the viewer frame that made it.
-     */
-    private fun viewerWritesOffThread(body: () -> Unit): List<String> {
-        val here = Thread.currentThread()
-        val found = Collections.synchronizedList(ArrayList<String>())
-        val observer = Snapshot.registerGlobalWriteObserver {
-            val thread = Thread.currentThread()
-            if (thread !== here) {
-                Throwable().stackTrace
-                    .firstOrNull { it.className.startsWith(VIEWER_PACKAGE) && !it.className.startsWith(EffectThreadSceneTest::class.java.name) }
-                    ?.let { found += "$it on ${thread.name}" }
-            }
-        }
-        try {
-            body()
-        } finally {
-            observer.dispose()
-        }
-        return found.toList()
     }
 
     /**
@@ -350,6 +332,38 @@ class EffectThreadSceneTest {
     }
 
     @Test
+    fun rasters_and_a_resize_land_on_the_composition_thread() {
+        // The default order only: an app's order dispatches, so it cannot leave an effect on the pool.
+        val doc = pagesPdf(3)
+        var shown by mutableStateOf(false)
+        var width by mutableStateOf(200)
+        lateinit var state: KiteDocViewState
+        val (scene, driver) = drivenScene(300, 300, queued = false) {
+            state = rememberKiteDocViewState(doc)
+            if (shown) {
+                Column {
+                    Box(Modifier.size(width.dp, 200.dp)) {
+                        KiteDocView(state = state, modifier = Modifier.fillMaxSize(), layout = KiteDocLayout.SinglePage(0))
+                    }
+                    KiteThumbnailStrip(state)
+                }
+            }
+        }
+        scene.use {
+            val offThread = viewerWritesOffThread {
+                shown = true
+                driver.pumpUntilState { state.pageRenderState(0) == KitePageRenderState.Ready }
+                // The new size settles after a pause, and the page renders again at it.
+                width = 150
+                driver.pumpFrames(2)
+                Thread.sleep(400)
+                driver.pumpFrames(20)
+            }
+            assertEquals(emptyList(), offThread)
+        }
+    }
+
+    @Test
     fun commit_focused_field_returns_on_the_composition_thread() {
         forBothEffectOrders { queued ->
             val doc = pagesPdf(1)
@@ -371,9 +385,5 @@ class EffectThreadSceneTest {
                 assertSame(Thread.currentThread(), returnedOn.get())
             }
         }
-    }
-
-    private companion object {
-        const val VIEWER_PACKAGE = "io.github.yuroyami.kitepdf.compose."
     }
 }

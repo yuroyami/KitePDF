@@ -206,6 +206,7 @@ public fun KiteThumbnailStrip(
                         thumbnails, it, widthPx, heightPx, paper, 1f, theme, index, canvasDecorator = decorator,
                     )?.first
                 }
+                backOnComposeThread()
                 value = when {
                     result != null -> result.also { shownFor[0] = page }
                     page != null && shownFor[0] === page -> value
