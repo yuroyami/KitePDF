@@ -380,13 +380,17 @@ public class KiteDocViewState(
     /** Where script work is posted, so a long script never runs on the thread that draws. */
     internal var scriptScope: kotlinx.coroutines.CoroutineScope? = null
 
-    /** Puts the caret in a field, telling the document's scripts that it took the focus. */
-    internal fun focusField(fieldName: String) {
+    /** Which widget of [focusedField] has the caret: its place in the field's widgets. */
+    private var focusedWidget = 0
+
+    /** Puts the caret in one widget of a field, telling the document's scripts that it took the focus. */
+    internal fun focusField(fieldName: String, widgetIndex: Int = 0) {
         if (focusedField == fieldName) return
         blurFocusedField()
         focusedField = fieldName
+        focusedWidget = widgetIndex
         val handler = scripts ?: return
-        post { handler.focus(fieldName) }
+        post { handler.focus(fieldName, widgetIndex) }
     }
 
     /**
@@ -399,10 +403,11 @@ public class KiteDocViewState(
         focusedField = null
         val typed = editingText
         editingText = null
+        val widget = focusedWidget
         val handler = scripts ?: return
         post {
             handler.commit(name, typed ?: handler.formState.value(name) ?: "")
-            handler.blur(name)
+            handler.blur(name, widget)
         }
     }
 

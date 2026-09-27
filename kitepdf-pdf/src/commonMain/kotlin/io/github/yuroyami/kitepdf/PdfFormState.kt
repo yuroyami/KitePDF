@@ -1,5 +1,8 @@
 package io.github.yuroyami.kitepdf
 
+import io.github.yuroyami.kitepdf.core.parser.PdfDictionary
+import io.github.yuroyami.kitepdf.core.parser.PdfReference
+import io.github.yuroyami.kitepdf.core.parser.PdfString
 import io.github.yuroyami.kitepdf.core.withLock
 
 /**
@@ -110,6 +113,50 @@ public class PdfFormState(private val document: PdfDocument) {
         return (flags and HIDDEN_FLAG) != 0
     }
 
+    /** What this state says about the field's visibility, or null when it leaves that to the file. */
+    internal fun hiddenOverride(fieldName: String): Boolean? = lock.withLock { hidden[fieldName] }
+
+    /**
+     * Gives each selected field its default value (`/DV`) back, or no value when it has none, as
+     * a reset-form action and a script's `resetForm` do (ISO 32000-1, 12.7.5.3). A name selects
+     * that field and every field below it, so `address` selects `address.street`. With
+     * [exclude], every field that the names do not select is reset instead. With no names at
+     * all, every field is reset. A push button and a signature keep theirs, and visibility and
+     * read-only changes stay (#439).
+     */
+    public fun resetForm(fields: Collection<String>? = null, exclude: Boolean = false) {
+        for (field in document.formFields) {
+            val name = field.fullyQualifiedName
+            if (fields != null) {
+                val named = fields.any { name == it || name.startsWith("$it.") }
+                if (named == exclude) continue
+            }
+            if (field.type == PdfFormField.FieldType.Signature) continue
+            if (field.type == PdfFormField.FieldType.Button && (field.flags and PUSH_BUTTON_FLAG) != 0) continue
+            val empty = if (field.type == PdfFormField.FieldType.Button) "Off" else ""
+            val default = field.defaultValue ?: empty
+            // When the file's own value is the default, the file's appearance shows it as it is.
+            if ((field.value ?: empty) == default) reset(name) else setValue(name, default)
+        }
+    }
+
+    /**
+     * Performs a reset-form action: the fields it names, by name or by reference, or every field
+     * but those when its Include/Exclude flag is set, or every field when it names none. See the
+     * other [resetForm].
+     */
+    public fun resetForm(action: PdfAction.ResetForm) {
+        val names = action.fields?.mapNotNull { entry ->
+            // A reference that leads nowhere names no field.
+            when (val item = if (entry is PdfReference) document.resolve(entry) else entry) {
+                is PdfString -> item.asText()
+                is PdfDictionary -> runCatching { PdfFormField.qualifiedNameOf(item, document) }.getOrNull()
+                else -> null
+            }
+        }
+        resetForm(names, exclude = names != null && (action.flags and INCLUDE_EXCLUDE_FLAG) != 0)
+    }
+
     /** Hides or shows the field, whatever the file's own flag says. */
     public fun setHidden(fieldName: String, value: Boolean) {
         if (document.formField(fieldName) == null) return
@@ -144,6 +191,12 @@ public class PdfFormState(private val document: PdfDocument) {
     private companion object {
         /** `/F` bit 2: the annotation is not displayed. */
         private const val HIDDEN_FLAG = 1 shl 1
+
+        /** `/Ff` bit 17 of a button field: a push button, which holds no value. */
+        private const val PUSH_BUTTON_FLAG = 1 shl 16
+
+        /** Reset-form `/Flags` bit 1: reset every field except the named ones (ISO 32000-1, Table 239). */
+        private const val INCLUDE_EXCLUDE_FLAG = 1
     }
 
     private fun publish(change: Change) {

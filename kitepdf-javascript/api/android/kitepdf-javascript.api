@@ -142,10 +142,12 @@ public final class io/github/yuroyami/kitepdf/javascript/PdfScriptRunner : io/gi
 	public fun <init> (Lio/github/yuroyami/kitepdf/PdfDocument;Lio/github/yuroyami/kitepdf/PdfFormState;Lio/github/yuroyami/kitepdf/javascript/PdfScriptPolicy;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function0;Lio/github/yuroyami/kitepdf/core/script/KiteScriptEngine;)V
 	public synthetic fun <init> (Lio/github/yuroyami/kitepdf/PdfDocument;Lio/github/yuroyami/kitepdf/PdfFormState;Lio/github/yuroyami/kitepdf/javascript/PdfScriptPolicy;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function0;Lio/github/yuroyami/kitepdf/core/script/KiteScriptEngine;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public fun blur (Ljava/lang/String;)V
+	public fun blur (Ljava/lang/String;I)V
 	public fun close ()V
 	public fun commit (Ljava/lang/String;Ljava/lang/String;)Z
 	public fun documentOpened ()V
 	public fun focus (Ljava/lang/String;)V
+	public fun focus (Ljava/lang/String;I)V
 	public final fun formattedValue (Ljava/lang/String;)Ljava/lang/String;
 	public final fun getAsmReports ()Ljava/util/List;
 	public final fun getCurrentPage ()I
@@ -158,7 +160,9 @@ public final class io/github/yuroyami/kitepdf/javascript/PdfScriptRunner : io/gi
 	public final fun keystroke (Ljava/lang/String;Ljava/lang/String;IIZ)Lio/github/yuroyami/kitepdf/javascript/PdfScriptRunner$KeystrokeResult;
 	public static synthetic fun keystroke$default (Lio/github/yuroyami/kitepdf/javascript/PdfScriptRunner;Ljava/lang/String;Ljava/lang/String;IIZILjava/lang/Object;)Lio/github/yuroyami/kitepdf/javascript/PdfScriptRunner$KeystrokeResult;
 	public fun mouseDown (Ljava/lang/String;)V
+	public fun mouseDown (Ljava/lang/String;I)V
 	public fun mouseUp (Ljava/lang/String;)V
+	public fun mouseUp (Ljava/lang/String;I)V
 	public fun pageClosed (I)V
 	public fun pageOpened (I)V
 	public fun pumpTimers (J)Ljava/lang/Long;
@@ -169,6 +173,7 @@ public final class io/github/yuroyami/kitepdf/javascript/PdfScriptRunner : io/gi
 	public final fun runDocumentScripts ()Ljava/util/List;
 	public final fun runPageClose (I)Lio/github/yuroyami/kitepdf/core/script/KiteScriptException;
 	public final fun runPageOpen (I)Lio/github/yuroyami/kitepdf/core/script/KiteScriptException;
+	public fun runWidgetAction (Ljava/lang/String;Lio/github/yuroyami/kitepdf/PdfAction;)Z
 	public final fun setCurrentPage (I)V
 	public final fun setFieldValue (Ljava/lang/String;Ljava/lang/String;)Z
 	public final fun setFileName (Ljava/lang/String;)V

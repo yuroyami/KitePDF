@@ -368,23 +368,65 @@ public class PdfScriptRunner(
     /** Runs a widget's blur script, which a viewer fires when the field loses the caret. */
     override fun blur(fieldName: String): Unit = widgetEvent(fieldName, "Blur") { it.blur }
 
+    /** Runs the mouse down script of one widget of the field, such as one button of a radio group. */
+    override fun mouseDown(fieldName: String, widgetIndex: Int): Unit = widgetEvent(fieldName, "MouseDown", widgetIndex) { it.mouseDown }
+
+    /** Runs the mouse up script of one widget of the field. */
+    override fun mouseUp(fieldName: String, widgetIndex: Int): Unit = widgetEvent(fieldName, "MouseUp", widgetIndex) { it.mouseUp }
+
+    /** Runs the focus script of one widget of the field. */
+    override fun focus(fieldName: String, widgetIndex: Int): Unit = widgetEvent(fieldName, "Focus", widgetIndex) { it.focus }
+
+    /** Runs the blur script of one widget of the field. */
+    override fun blur(fieldName: String, widgetIndex: Int): Unit = widgetEvent(fieldName, "Blur", widgetIndex) { it.blur }
+
+    /**
+     * Performs one action of a widget's `/A` chain. A script runs as the field's mouse up event,
+     * which is where Acrobat keeps a button's mouse up script, and a form reset is followed by a
+     * calculation round, as MuPDF does after one.
+     */
+    override fun runWidgetAction(fieldName: String, action: PdfAction): Boolean = when (action) {
+        is PdfAction.JavaScript -> {
+            onScriptThread {
+                prepare()
+                if (policy.enabled) fieldEvent(fieldName, "MouseUp", action)
+            }
+            true
+        }
+        is PdfAction.ResetForm -> {
+            onScriptThread {
+                formState.resetForm(action)
+                prepare()
+                if (policy.enabled) calculateAll()
+            }
+            true
+        }
+        else -> false
+    }
+
+    /** Runs one trigger of a field: of widget [widgetIndex] when given, else of its first widget. */
     private fun widgetEvent(
         fieldName: String,
         eventName: String,
+        widgetIndex: Int? = null,
         select: (io.github.yuroyami.kitepdf.PdfWidgetActions) -> PdfAction?,
     ): Unit = onScriptThread {
         prepare()
-        val actions = if (policy.enabled) document.formField(fieldName)?.additionalActions else null
+        val field = if (policy.enabled) document.formField(fieldName) else null
+        val actions = if (widgetIndex == null) field?.additionalActions else field?.widgets?.getOrNull(widgetIndex)?.additionalActions
         val action = actions?.let(select) as? PdfAction.JavaScript
-        if (action != null) {
-            dispatch(
-                action.script, eventName.lowercase(),
-                mapOf(
-                    "name" to eventName, "type" to "Field", "field" to fieldName,
-                    "value" to (formState.value(fieldName) ?: ""),
-                ),
-            )
-        }
+        if (action != null) fieldEvent(fieldName, eventName, action)
+    }
+
+    /** Runs [action] as the [eventName] event of the field. Call it on the script thread. */
+    private fun fieldEvent(fieldName: String, eventName: String, action: PdfAction.JavaScript) {
+        dispatch(
+            action.script, eventName.lowercase(),
+            mapOf(
+                "name" to eventName, "type" to "Field", "field" to fieldName,
+                "value" to (formState.value(fieldName) ?: ""),
+            ),
+        )
     }
 
     /* ─── timers ────────────────────────────────────────────────────────── */

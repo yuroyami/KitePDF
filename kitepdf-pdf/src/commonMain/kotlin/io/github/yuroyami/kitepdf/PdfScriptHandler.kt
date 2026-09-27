@@ -45,6 +45,52 @@ public interface PdfScriptHandler {
     public fun blur(fieldName: String) {}
 
     /**
+     * A pointer went down on one widget of a field: [widgetIndex] is its place in
+     * [PdfFormField.widgets]. Each button of a radio group, and each copy of a field on another
+     * page, has scripts of its own, so a handler that runs scripts runs that widget's (#359).
+     * The default passes the call on without the widget.
+     */
+    public fun mouseDown(fieldName: String, widgetIndex: Int) {
+        mouseDown(fieldName)
+    }
+
+    /** A pointer came up on one widget of a field. See the other [mouseDown]. */
+    public fun mouseUp(fieldName: String, widgetIndex: Int) {
+        mouseUp(fieldName)
+    }
+
+    /** One widget of a field took the caret. See [mouseDown] with a widget. */
+    public fun focus(fieldName: String, widgetIndex: Int) {
+        focus(fieldName)
+    }
+
+    /** One widget of a field lost the caret. See [mouseDown] with a widget. */
+    public fun blur(fieldName: String, widgetIndex: Int) {
+        blur(fieldName)
+    }
+
+    /**
+     * The reader released a widget of [fieldName] whose `/A` entry holds [action], or chains it
+     * through `/Next` (ISO 32000-1, 12.5.6.19). A viewer calls this once for each action of the
+     * chain, in order, and the chain takes the place of the widget's mouse up script (Table 194).
+     *
+     * Performs a script or a form reset and returns true. Returns false for any other action,
+     * which the viewer performs itself: a go-to or a page turn in the document, and a link, a
+     * submit or a print through the host.
+     */
+    public fun runWidgetAction(fieldName: String, action: PdfAction): Boolean = when (action) {
+        is PdfAction.JavaScript -> {
+            runAction(action)
+            true
+        }
+        is PdfAction.ResetForm -> {
+            formState.resetForm(action)
+            true
+        }
+        else -> false
+    }
+
+    /**
      * The reader typed into a field. [change] is what is being inserted, replacing the text
      * between [selectionStart] and [selectionEnd].
      *

@@ -86,11 +86,20 @@ public class PdfFormField internal constructor(
          */
         public val borderStyle: String? = null,
         internal val dict: PdfDictionary,
+        /**
+         * The action performed when the widget is activated (`/A`, ISO 32000-1 §12.5.6.19): what
+         * a push button does on release, such as a reset, a submit or a script. Null when the
+         * widget has none.
+         */
+        public val action: PdfAction? = null,
     ) {
         override fun toString(): String = "Widget(rect=$rect, onState=$onStateName)"
     }
 
-    /** The scripts of the field's first widget, or of the field itself when the two are merged. */
+    /**
+     * The scripts of the field's first widget, or of the field itself when the two are merged.
+     * Each button of a radio group has scripts of its own: read those from [widgets].
+     */
     public val additionalActions: PdfWidgetActions? get() = widgets.firstOrNull()?.additionalActions
 
     /** `/Ff` bit 1: the field is read-only. */
@@ -266,6 +275,7 @@ public class PdfFormField internal constructor(
                     caption = (dict.getDict("MK", refs)?.get("CA")?.resolve(refs) as? PdfString)?.asText(),
                     borderStyle = borderStyleOf(dict, refs),
                     dict = dict,
+                    action = missingAsNull { PdfAction.parse(dict.getDict("A", refs), refs) },
                 )
             }
             val (widgetDict, widgetRef) = widgetPairs.first()

@@ -294,9 +294,17 @@ internal class PdfScriptHost(
     /** Set by the runner, because a calculation round is the runner's own job. */
     var calculateNow: (() -> Unit)? = null
 
+    /**
+     * `doc.resetForm`: every field, or the ones named and every field below them, gets its
+     * default value back (#439). A single name counts as a list of one.
+     */
     private fun resetForm(fields: Any?) {
-        val names = (fields as? List<*>)?.mapNotNull { it?.let { v -> text(v) } }
-        if (names.isNullOrEmpty()) state.resetAll() else names.forEach { state.reset(it) }
+        val names = when (fields) {
+            null -> null
+            is List<*> -> fields.mapNotNull { it?.let { v -> text(v) } }
+            else -> listOf(text(fields))
+        }
+        state.resetForm(names)
     }
 
     /* ─── timers ────────────────────────────────────────────────────────── */

@@ -79,16 +79,21 @@ abstract interface io.github.yuroyami.kitepdf/PdfScriptHandler { // io.github.yu
         open fun <get-hasTimers>(): kotlin/Boolean // io.github.yuroyami.kitepdf/PdfScriptHandler.hasTimers.<get-hasTimers>|<get-hasTimers>(){}[0]
 
     open fun blur(kotlin/String) // io.github.yuroyami.kitepdf/PdfScriptHandler.blur|blur(kotlin.String){}[0]
+    open fun blur(kotlin/String, kotlin/Int) // io.github.yuroyami.kitepdf/PdfScriptHandler.blur|blur(kotlin.String;kotlin.Int){}[0]
     open fun commit(kotlin/String, kotlin/String): kotlin/Boolean // io.github.yuroyami.kitepdf/PdfScriptHandler.commit|commit(kotlin.String;kotlin.String){}[0]
     open fun documentOpened() // io.github.yuroyami.kitepdf/PdfScriptHandler.documentOpened|documentOpened(){}[0]
     open fun focus(kotlin/String) // io.github.yuroyami.kitepdf/PdfScriptHandler.focus|focus(kotlin.String){}[0]
+    open fun focus(kotlin/String, kotlin/Int) // io.github.yuroyami.kitepdf/PdfScriptHandler.focus|focus(kotlin.String;kotlin.Int){}[0]
     open fun keystroke(kotlin/String, kotlin/String, kotlin/Int, kotlin/Int): kotlin/String? // io.github.yuroyami.kitepdf/PdfScriptHandler.keystroke|keystroke(kotlin.String;kotlin.String;kotlin.Int;kotlin.Int){}[0]
     open fun mouseDown(kotlin/String) // io.github.yuroyami.kitepdf/PdfScriptHandler.mouseDown|mouseDown(kotlin.String){}[0]
+    open fun mouseDown(kotlin/String, kotlin/Int) // io.github.yuroyami.kitepdf/PdfScriptHandler.mouseDown|mouseDown(kotlin.String;kotlin.Int){}[0]
     open fun mouseUp(kotlin/String) // io.github.yuroyami.kitepdf/PdfScriptHandler.mouseUp|mouseUp(kotlin.String){}[0]
+    open fun mouseUp(kotlin/String, kotlin/Int) // io.github.yuroyami.kitepdf/PdfScriptHandler.mouseUp|mouseUp(kotlin.String;kotlin.Int){}[0]
     open fun pageClosed(kotlin/Int) // io.github.yuroyami.kitepdf/PdfScriptHandler.pageClosed|pageClosed(kotlin.Int){}[0]
     open fun pageOpened(kotlin/Int) // io.github.yuroyami.kitepdf/PdfScriptHandler.pageOpened|pageOpened(kotlin.Int){}[0]
     open fun pumpTimers(kotlin/Long): kotlin/Long? // io.github.yuroyami.kitepdf/PdfScriptHandler.pumpTimers|pumpTimers(kotlin.Long){}[0]
     open fun runAction(io.github.yuroyami.kitepdf/PdfAction.JavaScript) // io.github.yuroyami.kitepdf/PdfScriptHandler.runAction|runAction(io.github.yuroyami.kitepdf.PdfAction.JavaScript){}[0]
+    open fun runWidgetAction(kotlin/String, io.github.yuroyami.kitepdf/PdfAction): kotlin/Boolean // io.github.yuroyami.kitepdf/PdfScriptHandler.runWidgetAction|runWidgetAction(kotlin.String;io.github.yuroyami.kitepdf.PdfAction){}[0]
 }
 
 final class io.github.yuroyami.kitepdf.content/Operation { // io.github.yuroyami.kitepdf.content/Operation|null[0]
@@ -1001,6 +1006,8 @@ final class io.github.yuroyami.kitepdf/PdfFormField { // io.github.yuroyami.kite
     }
 
     final class Widget { // io.github.yuroyami.kitepdf/PdfFormField.Widget|null[0]
+        final val action // io.github.yuroyami.kitepdf/PdfFormField.Widget.action|{}action[0]
+            final fun <get-action>(): io.github.yuroyami.kitepdf/PdfAction? // io.github.yuroyami.kitepdf/PdfFormField.Widget.action.<get-action>|<get-action>(){}[0]
         final val additionalActions // io.github.yuroyami.kitepdf/PdfFormField.Widget.additionalActions|{}additionalActions[0]
             final fun <get-additionalActions>(): io.github.yuroyami.kitepdf/PdfWidgetActions? // io.github.yuroyami.kitepdf/PdfFormField.Widget.additionalActions.<get-additionalActions>|<get-additionalActions>(){}[0]
         final val borderStyle // io.github.yuroyami.kitepdf/PdfFormField.Widget.borderStyle|{}borderStyle[0]
@@ -1034,6 +1041,8 @@ final class io.github.yuroyami.kitepdf/PdfFormState { // io.github.yuroyami.kite
     final fun onChange(kotlin/Function1<io.github.yuroyami.kitepdf/PdfFormState.Change, kotlin/Unit>): kotlin/Function0<kotlin/Unit> // io.github.yuroyami.kitepdf/PdfFormState.onChange|onChange(kotlin.Function1<io.github.yuroyami.kitepdf.PdfFormState.Change,kotlin.Unit>){}[0]
     final fun reset(kotlin/String) // io.github.yuroyami.kitepdf/PdfFormState.reset|reset(kotlin.String){}[0]
     final fun resetAll() // io.github.yuroyami.kitepdf/PdfFormState.resetAll|resetAll(){}[0]
+    final fun resetForm(io.github.yuroyami.kitepdf/PdfAction.ResetForm) // io.github.yuroyami.kitepdf/PdfFormState.resetForm|resetForm(io.github.yuroyami.kitepdf.PdfAction.ResetForm){}[0]
+    final fun resetForm(kotlin.collections/Collection<kotlin/String>? = ..., kotlin/Boolean = ...) // io.github.yuroyami.kitepdf/PdfFormState.resetForm|resetForm(kotlin.collections.Collection<kotlin.String>?;kotlin.Boolean){}[0]
     final fun setHidden(kotlin/String, kotlin/Boolean) // io.github.yuroyami.kitepdf/PdfFormState.setHidden|setHidden(kotlin.String;kotlin.Boolean){}[0]
     final fun setReadOnly(kotlin/String, kotlin/Boolean) // io.github.yuroyami.kitepdf/PdfFormState.setReadOnly|setReadOnly(kotlin.String;kotlin.Boolean){}[0]
     final fun setValue(kotlin/String, kotlin/String) // io.github.yuroyami.kitepdf/PdfFormState.setValue|setValue(kotlin.String;kotlin.String){}[0]
@@ -1221,6 +1230,7 @@ final class io.github.yuroyami.kitepdf/PdfPage : io.github.yuroyami.kitepdf.core
     final fun renderTo(io.github.yuroyami.kitepdf.core.render/KiteCanvas, io.github.yuroyami.kitepdf.core.render/KiteMatrix, io.github.yuroyami.kitepdf/PdfFormState?, kotlin/Function1<io.github.yuroyami.kitepdf/PdfAnnotation, kotlin/Boolean> = ...) // io.github.yuroyami.kitepdf/PdfPage.renderTo|renderTo(io.github.yuroyami.kitepdf.core.render.KiteCanvas;io.github.yuroyami.kitepdf.core.render.KiteMatrix;io.github.yuroyami.kitepdf.PdfFormState?;kotlin.Function1<io.github.yuroyami.kitepdf.PdfAnnotation,kotlin.Boolean>){}[0]
     final fun renderTo(io.github.yuroyami.kitepdf.core.render/KiteCanvas, io.github.yuroyami.kitepdf.core.render/KiteMatrix, kotlin/Function1<io.github.yuroyami.kitepdf/PdfAnnotation, kotlin/Boolean>) // io.github.yuroyami.kitepdf/PdfPage.renderTo|renderTo(io.github.yuroyami.kitepdf.core.render.KiteCanvas;io.github.yuroyami.kitepdf.core.render.KiteMatrix;kotlin.Function1<io.github.yuroyami.kitepdf.PdfAnnotation,kotlin.Boolean>){}[0]
     final fun textContent(): io.github.yuroyami.kitepdf.core/KiteStructuredText // io.github.yuroyami.kitepdf/PdfPage.textContent|textContent(){}[0]
+    final fun widgetAt(kotlin/Double, kotlin/Double, io.github.yuroyami.kitepdf/PdfFormState? = ...): io.github.yuroyami.kitepdf/PdfWidgetHit? // io.github.yuroyami.kitepdf/PdfPage.widgetAt|widgetAt(kotlin.Double;kotlin.Double;io.github.yuroyami.kitepdf.PdfFormState?){}[0]
 }
 
 final class io.github.yuroyami.kitepdf/PdfPermissions { // io.github.yuroyami.kitepdf/PdfPermissions|null[0]
@@ -1490,6 +1500,15 @@ final class io.github.yuroyami.kitepdf/PdfWidgetActions { // io.github.yuroyami.
     final object Companion // io.github.yuroyami.kitepdf/PdfWidgetActions.Companion|null[0]
 }
 
+final class io.github.yuroyami.kitepdf/PdfWidgetHit { // io.github.yuroyami.kitepdf/PdfWidgetHit|null[0]
+    final val field // io.github.yuroyami.kitepdf/PdfWidgetHit.field|{}field[0]
+        final fun <get-field>(): io.github.yuroyami.kitepdf/PdfFormField // io.github.yuroyami.kitepdf/PdfWidgetHit.field.<get-field>|<get-field>(){}[0]
+    final val widget // io.github.yuroyami.kitepdf/PdfWidgetHit.widget|{}widget[0]
+        final fun <get-widget>(): io.github.yuroyami.kitepdf/PdfFormField.Widget // io.github.yuroyami.kitepdf/PdfWidgetHit.widget.<get-widget>|<get-widget>(){}[0]
+    final val widgetIndex // io.github.yuroyami.kitepdf/PdfWidgetHit.widgetIndex|{}widgetIndex[0]
+        final fun <get-widgetIndex>(): kotlin/Int // io.github.yuroyami.kitepdf/PdfWidgetHit.widgetIndex.<get-widgetIndex>|<get-widgetIndex>(){}[0]
+}
+
 final class io.github.yuroyami.kitepdf/PdfXmpMetadata { // io.github.yuroyami.kitepdf/PdfXmpMetadata|null[0]
     constructor <init>(kotlin/String? = ..., kotlin.collections/List<kotlin/String> = ..., kotlin/String? = ..., kotlin/String? = ..., kotlin.collections/List<kotlin/String> = ..., kotlin/String? = ..., kotlin/String? = ..., kotlin/String? = ..., kotlin/String? = ..., kotlin/String? = ..., kotlin/String? = ..., kotlin/String) // io.github.yuroyami.kitepdf/PdfXmpMetadata.<init>|<init>(kotlin.String?;kotlin.collections.List<kotlin.String>;kotlin.String?;kotlin.String?;kotlin.collections.List<kotlin.String>;kotlin.String?;kotlin.String?;kotlin.String?;kotlin.String?;kotlin.String?;kotlin.String?;kotlin.String){}[0]
 
@@ -1599,6 +1618,8 @@ sealed class io.github.yuroyami.kitepdf.parser/XrefEntry { // io.github.yuroyami
 sealed class io.github.yuroyami.kitepdf/PdfAction { // io.github.yuroyami.kitepdf/PdfAction|null[0]
     abstract val raw // io.github.yuroyami.kitepdf/PdfAction.raw|{}raw[0]
         abstract fun <get-raw>(): io.github.yuroyami.kitepdf.core.parser/PdfDictionary // io.github.yuroyami.kitepdf/PdfAction.raw.<get-raw>|<get-raw>(){}[0]
+
+    final fun withNext(io.github.yuroyami.kitepdf.core.parser/IndirectResolver): kotlin.collections/List<io.github.yuroyami.kitepdf/PdfAction> // io.github.yuroyami.kitepdf/PdfAction.withNext|withNext(io.github.yuroyami.kitepdf.core.parser.IndirectResolver){}[0]
 
     final enum class NamedActionType : kotlin/Enum<io.github.yuroyami.kitepdf/PdfAction.NamedActionType> { // io.github.yuroyami.kitepdf/PdfAction.NamedActionType|null[0]
         enum entry FirstPage // io.github.yuroyami.kitepdf/PdfAction.NamedActionType.FirstPage|null[0]
