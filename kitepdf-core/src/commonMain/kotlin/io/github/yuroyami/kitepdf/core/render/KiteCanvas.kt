@@ -19,6 +19,11 @@ import io.github.yuroyami.kitepdf.core.font.TextGlyph
  *   - `SkiaCanvas` (`:kitepdf-skia-renderer`): paints into a Skia `Canvas`.
  *   - `AwtCanvas` / `AndroidNativeCanvas` / `CoreGraphicsCanvas` / `Canvas2dCanvas`
  *     (`:kitepdf-native-renderer`): host-platform raster backends.
+ *
+ * A canvas draws one page at a time, on the thread that drives it. Several canvases may draw
+ * pages of one document at the same time on several threads: a viewer draws a Vectorized page
+ * on the UI thread while it rasterizes other pages on a pool. So a canvas must not share mutable
+ * state with another canvas without a lock.
  */
 public interface KiteCanvas {
 
