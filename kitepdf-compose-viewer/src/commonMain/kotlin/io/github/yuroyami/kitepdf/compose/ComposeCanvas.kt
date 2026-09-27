@@ -595,9 +595,12 @@ public class ComposeCanvas internal constructor(
         renderMask: (KiteCanvas) -> Unit,
     ) {
         val composeCanvas = drawScope.drawContext.canvas
+        // Outside its box the mask is zero, since the renderer passes the page box when the backdrop
+        // lets content through. So both layers cover the box, not the whole canvas (#384).
+        val bounds = maskBounds(maskBBox, maskCtm)
         // Outer layer: holds the masked content.
         val outerPaint = Paint()
-        composeCanvas.saveLayer(infiniteRect(), outerPaint)
+        composeCanvas.saveLayer(bounds, outerPaint)
         saves.addLast(Save.Layer)
         // The content and the mask composite as usual, also inside a knockout group.
         groups.addLast(Group(layered = false, knockout = false))
@@ -619,13 +622,13 @@ public class ComposeCanvas internal constructor(
                 blendMode = ComposeBlendMode.DstIn
                 (if (maskTables) softMaskFilter(kind, transfer) else softMaskMatrix(kind, transfer))?.let { colorFilter = it }
             }
-            composeCanvas.saveLayer(infiniteRect(), maskPaint)
+            composeCanvas.saveLayer(bounds, maskPaint)
             saves.addLast(Save.Layer)
             try {
                 if (kind == SoftMask.Kind.Luminosity) {
                     // Unpainted mask pixels stay black -> luminance 0 -> fully
                     // masked out, per the spec's black-backdrop rule.
-                    drawScope.drawRect(Color.Black, size = drawScope.size)
+                    drawScope.drawRect(Color.Black, topLeft = bounds.topLeft, size = bounds.size)
                 }
                 renderMask(this)
             } finally {
@@ -678,6 +681,25 @@ public class ComposeCanvas internal constructor(
             blendMode = ComposeBlendMode.DstIn,
             filterQuality = FilterQuality.Low,
         )
+    }
+
+    /** [box] under [ctm] on this canvas, rounded out to whole pixels and cut to the canvas; empty when they do not meet. */
+    private fun maskBounds(box: KiteRectangle, ctm: KiteMatrix): Rect {
+        val xs = doubleArrayOf(
+            ctm.transformX(box.left, box.bottom), ctm.transformX(box.right, box.bottom),
+            ctm.transformX(box.right, box.top), ctm.transformX(box.left, box.top),
+        )
+        val ys = doubleArrayOf(
+            ctm.transformY(box.left, box.bottom), ctm.transformY(box.right, box.bottom),
+            ctm.transformY(box.right, box.top), ctm.transformY(box.left, box.top),
+        )
+        if (xs.any { !it.isFinite() } || ys.any { !it.isFinite() }) return infiniteRect()
+        val canvas = infiniteRect()
+        val left = kotlin.math.floor(xs.min()).toFloat().coerceAtLeast(canvas.left)
+        val top = kotlin.math.floor(ys.min()).toFloat().coerceAtLeast(canvas.top)
+        val right = kotlin.math.ceil(xs.max()).toFloat().coerceAtMost(canvas.right)
+        val bottom = kotlin.math.ceil(ys.max()).toFloat().coerceAtMost(canvas.bottom)
+        return if (right > left && bottom > top) Rect(left, top, right, bottom) else Rect.Zero
     }
 
     private fun infiniteRect(): Rect {
