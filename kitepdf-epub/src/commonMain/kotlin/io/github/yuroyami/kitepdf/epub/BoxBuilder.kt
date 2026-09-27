@@ -107,6 +107,9 @@ internal class BoxBuilder(
                     val src = child.attrs["src"] ?: child.attrs["href"] ?: child.attrs["xlink:href"]
                     if (src != null && src.isNotBlank()) {
                         val cs = resolver.compute(child, childAncestors, style)
+                        // A hidden image generates no box: it is not decoded, drawn or given room
+                        // (CSS Display 3, 2.5, #424).
+                        if (cs.display == Display.NONE) continue
                         val aw = child.attrs["width"]?.trim()?.removeSuffix("px")?.toDoubleOrNull()
                         val ah = child.attrs["height"]?.trim()?.removeSuffix("px")?.toDoubleOrNull()
                         // img is inline by default (CSS): it flows on the line
@@ -430,6 +433,8 @@ internal class BoxBuilder(
                         val src = child.attrs["src"] ?: child.attrs["href"] ?: child.attrs["xlink:href"]
                         if (src != null && src.isNotBlank()) {
                             val cs = resolver.compute(child, childAncestors, style)
+                            // A hidden image generates no box, in inline content too (#424).
+                            if (cs.display == Display.NONE) continue
                             val aw = child.attrs["width"]?.trim()?.removeSuffix("px")?.toDoubleOrNull()?.times(0.75)
                             val ah = child.attrs["height"]?.trim()?.removeSuffix("px")?.toDoubleOrNull()?.times(0.75)
                             inl.addImage(resolveHref(src), style, cs.widthPt ?: aw, cs.heightPt ?: ah, child.attrs["alt"], cs.objectFit)
