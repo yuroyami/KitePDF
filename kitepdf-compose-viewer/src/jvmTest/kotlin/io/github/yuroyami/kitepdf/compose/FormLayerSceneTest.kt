@@ -128,7 +128,8 @@ class FormLayerSceneTest {
             val driver = SceneTestDriver(scene)
             driver.pumpUntil { state.pageGeometry.isNotEmpty() }
             driver.pumpUntil { scripts.events.contains("open") }
-            assertTrue(scripts.events.contains("page 0"), "the page's own trigger fired: ${scripts.events}")
+            // The page's own trigger runs after the document's, on the script lane.
+            driver.pumpUntilState { scripts.events.contains("page 0") }
 
             // The button is [20..90] x [20..60] in user space, so display y 140..180: centre (55, 160).
             scene.sendPointerEvent(PointerEventType.Press, Offset(55f, 160f), type = PointerType.Touch)
@@ -170,6 +171,9 @@ class FormLayerSceneTest {
         }.use { scene ->
             val driver = SceneTestDriver(scene)
             driver.pumpUntil { state.pageGeometry.isNotEmpty() }
+            // The page's open script runs on the script lane, and on a loaded machine it can run
+            // after the tap below. Its entry must not land among the field's.
+            driver.pumpUntilState { scripts.events.contains("page 0") }
 
             // The text field is [20..180] x [120..160] user space, so display y 40..80: centre (100, 60).
             scene.sendPointerEvent(PointerEventType.Press, Offset(100f, 60f), type = PointerType.Touch)
