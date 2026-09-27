@@ -304,7 +304,13 @@ public class PdfPage internal constructor(
                 is PdfReference -> document.resolve(item) as? PdfDictionary
                 else -> null
             } ?: return@mapNotNull null
-            PdfAnnotation.parse(dict, document)
+            try {
+                PdfAnnotation.parse(dict, document)
+            } catch (failure: Exception) {
+                // One broken annotation is skipped. The others still draw and still take taps (#334).
+                io.github.yuroyami.kitepdf.core.kiteWarn { "annotation: one cannot be read and is skipped: ${failure.message}" }
+                null
+            }
         }
     }
 

@@ -104,9 +104,15 @@ public sealed class KitePattern {
                     val yStep = (dict.getReal("YStep")) ?: 1.0
                     val paintType = dict.getInt("PaintType")?.toInt() ?: 1
                     val tilingType = dict.getInt("TilingType")?.toInt() ?: 1
+                    // A cell whose filters fail leaves the pattern unusable, not the page (#333).
+                    val cell = try {
+                        io.github.yuroyami.kitepdf.core.filters.FilterChain.decode(stream)
+                    } catch (failure: Exception) {
+                        io.github.yuroyami.kitepdf.core.kiteWarn { "pattern: a tiling cell cannot be decoded: ${failure.message}" }
+                        return null
+                    }
                     Tiling(
-                        matrix, ext, paintType, tilingType, bbox, xStep, yStep,
-                        io.github.yuroyami.kitepdf.core.filters.FilterChain.decode(stream),
+                        matrix, ext, paintType, tilingType, bbox, xStep, yStep, cell,
                         resources = dict.getDict("Resources", refs),
                     )
                 }

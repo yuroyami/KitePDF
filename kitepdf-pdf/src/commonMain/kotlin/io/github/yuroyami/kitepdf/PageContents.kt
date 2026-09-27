@@ -1,6 +1,7 @@
 package io.github.yuroyami.kitepdf
 
 import io.github.yuroyami.kitepdf.core.ByteArrayBuilder
+import io.github.yuroyami.kitepdf.core.kiteWarn
 import io.github.yuroyami.kitepdf.core.filters.FilterChain
 import io.github.yuroyami.kitepdf.core.parser.PdfArray
 import io.github.yuroyami.kitepdf.core.parser.PdfObject
@@ -40,6 +41,16 @@ internal object PageContents {
             buf.toByteArray()
         }
         else -> null
+    }
+
+    /**
+     * Decoded bytes of a nested content stream: a form XObject or a Type 3 glyph procedure. A
+     * stream whose filters fail reads as empty, so that one object draws nothing and the page
+     * around it still draws, as page content does (#333).
+     */
+    fun decodeNested(stream: PdfStream, what: String): ByteArray = decodeOrNull(stream) ?: run {
+        kiteWarn { "render: a $what cannot be decoded and is skipped" }
+        ByteArray(0)
     }
 
     private fun decodeOrNull(stream: PdfStream): ByteArray? =
