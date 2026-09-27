@@ -1,6 +1,7 @@
 package io.github.yuroyami.kitepdf
 
 import io.github.yuroyami.kitepdf.core.KiteRectangle
+import io.github.yuroyami.kitepdf.core.kiteWarn
 
 import io.github.yuroyami.kitepdf.core.parser.IndirectResolver
 import io.github.yuroyami.kitepdf.core.parser.PdfArray
@@ -112,17 +113,31 @@ public class PdfFormField internal constructor(
 
     public companion object {
 
+        /**
+         * Every terminal field of the form. ISO 32000-1, 7.3.10 makes a reference to a missing
+         * object the null object, so each read below treats one as absent, and a field that still
+         * cannot be read is skipped while the others stay (#441).
+         */
         internal fun collect(catalog: PdfDictionary, refs: IndirectResolver): List<PdfFormField> {
-            val acro = catalog.getDict("AcroForm", refs)
+            val acro = missingAsNull { catalog.getDict("AcroForm", refs) }
             val acroDA = (acro?.get("DA") as? PdfString)?.asText()
             val acroQ = (acro?.get("Q") as? PdfInt)?.value?.toInt() ?: 0
             val out = ArrayList<PdfFormField>()
-            for (item in acro?.getArray("Fields", refs) ?: emptyList()) {
+            for (item in missingAsNull { acro?.getArray("Fields", refs) } ?: emptyList()) {
                 val (dict, ref) = resolveDictRef(item, refs) ?: continue
-                walk(dict, ref, refs, parentName = null, inhFT = null, inhDA = acroDA, inhFf = 0, inhV = null, inhQ = acroQ, out)
+                skipIfBroken { walk(dict, ref, refs, parentName = null, inhFT = null, inhDA = acroDA, inhFf = 0, inhV = null, inhQ = acroQ, out) }
             }
             collectStrayWidgets(catalog, refs, acroDA, acroQ, out)
             return out
+        }
+
+        /** Runs one field's [read], and skips that field with a warning when it fails. */
+        private inline fun skipIfBroken(read: () -> Unit) {
+            try {
+                read()
+            } catch (failure: Exception) {
+                kiteWarn { "form: a field cannot be read and is skipped: ${failure.message}" }
+            }
         }
 
         /**
@@ -147,7 +162,7 @@ public class PdfFormField internal constructor(
                 field.fieldReference?.let { seen.add(it) }
             }
             for (pageNode in walkPageTree(catalog, refs)) {
-                val annots = pageNode.getArray("Annots", refs) ?: continue
+                val annots = missingAsNull { pageNode.getArray("Annots", refs) } ?: continue
                 for (item in annots) {
                     val (dict, ref) = resolveDictRef(item, refs) ?: continue
                     if (dict.getName("Subtype") != "Widget") continue
@@ -155,10 +170,12 @@ public class PdfFormField internal constructor(
                     // A widget with no /T of its own belongs to its parent field.
                     val (fieldDict, fieldRef) = ownerOf(dict, ref, refs)
                     if (fieldRef != null && fieldRef != ref && !seen.add(fieldRef)) continue
-                    walk(
-                        fieldDict, fieldRef, refs, parentName = parentChainName(fieldDict, refs),
-                        inhFT = null, inhDA = acroDA, inhFf = 0, inhV = null, inhQ = acroQ, out,
-                    )
+                    skipIfBroken {
+                        walk(
+                            fieldDict, fieldRef, refs, parentName = parentChainName(fieldDict, refs),
+                            inhFT = null, inhDA = acroDA, inhFf = 0, inhV = null, inhQ = acroQ, out,
+                        )
+                    }
                 }
             }
         }
@@ -175,7 +192,7 @@ public class PdfFormField internal constructor(
             var guard = 0
             while (guard++ < MAX_PARENT_DEPTH) {
                 val parentRef = dict["Parent"] as? PdfReference
-                val parent = (dict["Parent"]?.resolve(refs) as? PdfDictionary) ?: break
+                val parent = (missingAsNull { dict["Parent"]?.resolve(refs) } as? PdfDictionary) ?: break
                 dict = parent
                 ref = parentRef
                 if (parent["T"] != null) break
@@ -186,31 +203,31 @@ public class PdfFormField internal constructor(
         /** The dotted name of everything above [node], so a stray widget keeps its full name. */
         private fun parentChainName(node: PdfDictionary, refs: IndirectResolver): String? {
             val names = ArrayList<String>()
-            var current = node["Parent"]?.resolve(refs) as? PdfDictionary
+            var current = missingAsNull { node["Parent"]?.resolve(refs) } as? PdfDictionary
             var guard = 0
             while (current != null && guard++ < MAX_PARENT_DEPTH) {
                 (current["T"] as? PdfString)?.asText()?.let { names.add(0, it) }
-                current = current["Parent"]?.resolve(refs) as? PdfDictionary
+                current = missingAsNull { current?.get("Parent")?.resolve(refs) } as? PdfDictionary
             }
             return names.takeIf { it.isNotEmpty() }?.joinToString(".")
         }
 
         /** Every page dictionary of the document, without building the page objects. */
         private fun walkPageTree(catalog: PdfDictionary, refs: IndirectResolver): List<PdfDictionary> {
-            val root = catalog.getDict("Pages", refs) ?: return emptyList()
+            val root = missingAsNull { catalog.getDict("Pages", refs) } ?: return emptyList()
             val out = ArrayList<PdfDictionary>()
             val queue = ArrayDeque<PdfDictionary>()
             queue.add(root)
             var guard = 0
             while (queue.isNotEmpty() && guard++ < MAX_PAGE_NODES) {
                 val node = queue.removeFirst()
-                val kids = node.getArray("Kids", refs)
+                val kids = missingAsNull { node.getArray("Kids", refs) }
                 if (kids == null) {
                     out.add(node)
                     continue
                 }
                 for (kid in kids) {
-                    (kid.resolve(refs) as? PdfDictionary)?.let { queue.add(it) }
+                    (missingAsNull { kid.resolve(refs) } as? PdfDictionary)?.let { queue.add(it) }
                 }
             }
             return out
@@ -247,7 +264,7 @@ public class PdfFormField internal constructor(
             val v = node["V"]?.let { valueToString(it, refs) } ?: inhV
 
             // A kid is a *sub-field* if it has its own /T; otherwise it's a widget.
-            val kids = node.getArray("Kids", refs)
+            val kids = missingAsNull { node.getArray("Kids", refs) }
             val kidPairs = kids?.mapNotNull { resolveDictRef(it, refs) } ?: emptyList()
             val subFields = kidPairs.filter { (d, _) -> d["T"] != null }
 
@@ -272,7 +289,7 @@ public class PdfFormField internal constructor(
                     reference = widgetRef,
                     onStateName = onStateNameOf(dict, refs),
                     additionalActions = PdfWidgetActions.parse(dict, refs),
-                    caption = (dict.getDict("MK", refs)?.get("CA")?.resolve(refs) as? PdfString)?.asText(),
+                    caption = (missingAsNull { dict.getDict("MK", refs)?.get("CA")?.resolve(refs) } as? PdfString)?.asText(),
                     borderStyle = borderStyleOf(dict, refs),
                     dict = dict,
                     action = missingAsNull { PdfAction.parse(dict.getDict("A", refs), refs) },
@@ -298,7 +315,7 @@ public class PdfFormField internal constructor(
                     options = optionsOf(node, refs),
                     defaultValue = inheritedText(node, "DV", refs),
                     maxLength = (inheritedValue(node, "MaxLen", refs) as? PdfInt)?.value?.toInt(),
-                    tooltip = (widgetDict["TU"]?.resolve(refs) as? PdfString)?.asText(),
+                    tooltip = (missingAsNull { widgetDict["TU"]?.resolve(refs) } as? PdfString)?.asText(),
                     widgets = widgets,
                 ),
             )
@@ -308,11 +325,11 @@ public class PdfFormField internal constructor(
         private fun optionsOf(node: PdfDictionary, refs: IndirectResolver): List<String> {
             val opt = inheritedValue(node, "Opt", refs) as? PdfArray ?: return emptyList()
             return opt.mapNotNull { entry ->
-                when (val item = entry.resolve(refs)) {
+                when (val item = missingAsNull { entry.resolve(refs) }) {
                     is PdfString -> item.asText()
                     // A pair is [export value, what the reader sees], and the reader's text wins.
-                    is PdfArray -> (item.getOrNull(1)?.resolve(refs) as? PdfString)?.asText()
-                        ?: (item.getOrNull(0)?.resolve(refs) as? PdfString)?.asText()
+                    is PdfArray -> (missingAsNull { item.getOrNull(1)?.resolve(refs) } as? PdfString)?.asText()
+                        ?: (missingAsNull { item.getOrNull(0)?.resolve(refs) } as? PdfString)?.asText()
                     else -> null
                 }
             }
@@ -320,7 +337,7 @@ public class PdfFormField internal constructor(
 
         /** `/BS /S` as a word a script understands (ISO 32000-1, 12.5.4, Table 166). */
         private fun borderStyleOf(dict: PdfDictionary, refs: IndirectResolver): String? =
-            when ((dict.getDict("BS", refs)?.get("S")?.resolve(refs) as? PdfName)?.value) {
+            when ((missingAsNull { dict.getDict("BS", refs)?.get("S")?.resolve(refs) } as? PdfName)?.value) {
                 "S" -> "solid"
                 "D" -> "dashed"
                 "B" -> "beveled"
@@ -334,8 +351,9 @@ public class PdfFormField internal constructor(
             var current: PdfDictionary? = node
             var guard = 0
             while (current != null && guard++ < MAX_PARENT_DEPTH) {
-                current[key]?.resolve(refs)?.let { return it }
-                current = current["Parent"]?.resolve(refs) as? PdfDictionary
+                val dict: PdfDictionary = current
+                missingAsNull { dict[key]?.resolve(refs) }?.let { return it }
+                current = missingAsNull { dict["Parent"]?.resolve(refs) } as? PdfDictionary
             }
             return null
         }
@@ -358,7 +376,8 @@ public class PdfFormField internal constructor(
             var guard = 0
             while (node != null && guard++ < MAX_PARENT_DEPTH) {
                 (node["T"] as? PdfString)?.asText()?.let { names.add(0, it) }
-                node = node["Parent"]?.resolve(refs) as? PdfDictionary
+                val child: PdfDictionary = node
+                node = missingAsNull { child["Parent"]?.resolve(refs) } as? PdfDictionary
             }
             return names.takeIf { it.isNotEmpty() }?.joinToString(".")
         }
@@ -368,7 +387,7 @@ public class PdfFormField internal constructor(
          * (ISO 32000-1 §12.7.4.2.1). Null when the widget has no named appearance states.
          */
         private fun onStateNameOf(dict: PdfDictionary, refs: IndirectResolver): String? {
-            val normal = dict.getDict("AP", refs)?.get("N")?.resolve(refs) as? PdfDictionary ?: return null
+            val normal = missingAsNull { dict.getDict("AP", refs)?.get("N")?.resolve(refs) } as? PdfDictionary ?: return null
             return normal.map.keys.firstOrNull { it != "Off" }
         }
 
@@ -380,7 +399,7 @@ public class PdfFormField internal constructor(
             }
 
         private fun valueToString(value: PdfObject, refs: IndirectResolver): String? =
-            when (val v = value.resolve(refs)) {
+            when (val v = missingAsNull { value.resolve(refs) }) {
                 is PdfString -> v.asText()
                 is PdfName -> v.value
                 else -> null

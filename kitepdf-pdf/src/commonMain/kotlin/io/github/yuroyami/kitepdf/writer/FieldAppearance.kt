@@ -12,6 +12,7 @@ import io.github.yuroyami.kitepdf.core.parser.PdfReal
 import io.github.yuroyami.kitepdf.core.parser.PdfReference
 import io.github.yuroyami.kitepdf.core.parser.PdfStream
 import io.github.yuroyami.kitepdf.core.parser.PdfString
+import io.github.yuroyami.kitepdf.missingAsNull
 
 /**
  * Generates a form field's `/AP /N` appearance, the Form XObject a conforming
@@ -221,16 +222,17 @@ internal object FieldAppearance {
         if (width <= 0.0 || height <= 0.0) return null
         val fieldType = inherited(widget, "FT", refs)?.let { (it as? PdfName)?.value } ?: return null
         val flags = (inherited(widget, "Ff", refs) as? PdfInt)?.value?.toInt() ?: 0
-        val mk = widget.getDict("MK", refs)
-        val background = colorOps(mk?.getArray("BG", refs), stroking = false)
-        val border = colorOps(mk?.getArray("BC", refs), stroking = true)
+        // A reference to a missing object reads as absent, so the widget draws what it can (#441).
+        val mk = missingAsNull { widget.getDict("MK", refs) }
+        val background = colorOps(missingAsNull { mk?.getArray("BG", refs) }, stroking = false)
+        val border = colorOps(missingAsNull { mk?.getArray("BC", refs) }, stroking = true)
         val borderWidth = borderWidthOf(widget, refs, hasBorderColor = border != null)
         val da = parseDA((inherited(widget, "DA", refs) as? PdfString)?.asText())
         val quadding = (inherited(widget, "Q", refs) as? PdfInt)?.value?.toInt() ?: 0
 
         val isPushButton = fieldType == "Btn" && (flags and PUSH_BUTTON) != 0
         val text = when {
-            isPushButton -> (mk?.get("CA")?.resolve(refs) as? PdfString)?.asText() ?: ""
+            isPushButton -> (missingAsNull { mk?.get("CA")?.resolve(refs) } as? PdfString)?.asText() ?: ""
             fieldType == "Tx" || fieldType == "Ch" -> valueOverride ?: valueText(inherited(widget, "V", refs), refs)
             else -> ""
         }
@@ -320,11 +322,11 @@ internal object FieldAppearance {
      * (ISO 32000-1 §12.5.6.19, Table 189): `4` is the check, `l` the filled circle of a radio.
      */
     private fun markOf(mk: PdfDictionary?, refs: IndirectResolver): Char =
-        (mk?.get("CA")?.resolve(refs) as? PdfString)?.asText()?.firstOrNull() ?: '4'
+        (missingAsNull { mk?.get("CA")?.resolve(refs) } as? PdfString)?.asText()?.firstOrNull() ?: '4'
 
     /** The `/AP /N` state that turns the widget on, or null when it names none. */
     private fun onStateNameOf(widget: PdfDictionary, refs: IndirectResolver): String? {
-        val normal = widget.getDict("AP", refs)?.get("N")?.resolve(refs) as? PdfDictionary ?: return null
+        val normal = missingAsNull { widget.getDict("AP", refs)?.get("N")?.resolve(refs) } as? PdfDictionary ?: return null
         return normal.map.keys.firstOrNull { it != "Off" }
     }
 
@@ -333,24 +335,27 @@ internal object FieldAppearance {
         var node: PdfDictionary? = widget
         var guard = 0
         while (node != null && guard++ < MAX_PARENT_DEPTH) {
-            node[key]?.resolve(refs)?.let { return it }
-            node = node["Parent"]?.resolve(refs) as? PdfDictionary
+            val current: PdfDictionary = node
+            missingAsNull { current[key]?.resolve(refs) }?.let { return it }
+            node = missingAsNull { current["Parent"]?.resolve(refs) } as? PdfDictionary
         }
         return null
     }
 
     /** `/BS /W` first, then `/Border`, then the default of 1 when a border colour is set (§12.5.4). */
     private fun borderWidthOf(widget: PdfDictionary, refs: IndirectResolver, hasBorderColor: Boolean): Double {
-        widget.getDict("BS", refs)?.let { bs -> numberOf(bs["W"]?.resolve(refs))?.let { return it } }
-        widget.getArray("Border", refs)?.let { border -> numberOf(border.getOrNull(2)?.resolve(refs))?.let { return it } }
+        missingAsNull { widget.getDict("BS", refs) }?.let { bs -> numberOf(missingAsNull { bs["W"]?.resolve(refs) })?.let { return it } }
+        missingAsNull { widget.getArray("Border", refs) }?.let { border ->
+            numberOf(missingAsNull { border.getOrNull(2)?.resolve(refs) })?.let { return it }
+        }
         return if (hasBorderColor) 1.0 else 0.0
     }
 
     /** A field value as the text to draw: a string for text, a name for a choice. */
-    private fun valueText(value: PdfObject?, refs: IndirectResolver): String = when (val v = value?.resolve(refs)) {
+    private fun valueText(value: PdfObject?, refs: IndirectResolver): String = when (val v = missingAsNull { value?.resolve(refs) }) {
         is PdfString -> v.asText()
         is PdfName -> v.value
-        is PdfArray -> (v.getOrNull(0)?.resolve(refs) as? PdfString)?.asText() ?: ""
+        is PdfArray -> (missingAsNull { v.getOrNull(0)?.resolve(refs) } as? PdfString)?.asText() ?: ""
         else -> ""
     }
 

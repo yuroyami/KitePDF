@@ -176,16 +176,18 @@ public data class PdfAnnotation(
          * checkbox/radio widgets render blank before.
          */
         private fun selectAppearance(dict: PdfDictionary, refs: IndirectResolver): PdfStream? {
-            val n = dict.getDict("AP", refs)?.get("N")?.resolve(refs) ?: return null
+            // An appearance that points at a missing object is no appearance, so the annotation
+            // keeps its place and a widget draws from its field (#441).
+            val n = missingAsNull { dict.getDict("AP", refs)?.get("N")?.resolve(refs) } ?: return null
             return when (n) {
                 is PdfStream -> n
                 is PdfDictionary -> {
                     // A named state with no entry has no appearance, so nothing
                     // paints (#59). Only a missing /AS falls back to /Off, then
                     // the first state. /AS may be an indirect reference.
-                    val state = (dict["AS"]?.resolve(refs) as? PdfName)?.value
+                    val state = (missingAsNull { dict["AS"]?.resolve(refs) } as? PdfName)?.value
                     val pick = if (state != null) n[state] else n["Off"] ?: n.values.firstOrNull()
-                    pick?.resolve(refs) as? PdfStream
+                    missingAsNull { pick?.resolve(refs) } as? PdfStream
                 }
                 else -> null
             }
