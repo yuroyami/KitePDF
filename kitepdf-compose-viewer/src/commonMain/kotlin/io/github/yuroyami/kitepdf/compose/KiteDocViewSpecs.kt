@@ -20,8 +20,10 @@ public sealed interface KiteDocLayout {
      * natural aspect ratio.
      *
      * Zoom in this mode is magnifier-style: the strip is scaled around the
-     * viewport centre, horizontal pan is a clamped transform, and the scroll
-     * axis keeps scrolling the (scaled) strip natively.
+     * viewport centre, pan across the strip is a clamped transform, and the
+     * scroll axis keeps scrolling the (scaled) strip natively. At either end of
+     * the strip, a drag past the end moves the zoomed page instead, so its first
+     * and last lines come into view. The strip does not zoom out below fit.
      */
     @Immutable
     public data class Continuous(
