@@ -176,12 +176,12 @@ class SelectionHandleDragSceneTest {
             val target = charPoint(line, 4)
 
             scene.sendPointerEvent(PointerEventType.Press, end, type = PointerType.Touch)
-            driver.pumpUntil(maxFrames = 2) { false }
+            driver.pumpFrames(2)
             assertTrue(state.selectionInProgress, "the press claimed the thumb")
             scene.sendPointerEvent(PointerEventType.Move, target, type = PointerType.Touch)
-            driver.pumpUntil(maxFrames = 2) { false }
+            driver.pumpFrames(2)
             scene.sendPointerEvent(PointerEventType.Release, target, type = PointerType.Touch)
-            driver.pumpUntil(maxFrames = 2) { false }
+            driver.pumpFrames(2)
 
             assertEquals("hello", assertNotNull(state.selection).text)
             assertFalse(state.selectionInProgress, "the lift ends the thumb drag")
@@ -202,14 +202,14 @@ class SelectionHandleDragSceneTest {
             val target = charPoint(line, 4)
 
             scene.sendPointerEvent(PointerEventType.Press, end, type = PointerType.Touch)
-            driver.pumpUntil(maxFrames = 2) { false }
+            driver.pumpFrames(2)
             // The long-press timeout of the scene runs on the wall clock and fires in the next frame.
             Thread.sleep(LONG_PRESS_WAIT_MS)
-            driver.pumpUntil(maxFrames = 2) { false }
+            driver.pumpFrames(2)
             scene.sendPointerEvent(PointerEventType.Move, target, type = PointerType.Touch)
-            driver.pumpUntil(maxFrames = 2) { false }
+            driver.pumpFrames(2)
             scene.sendPointerEvent(PointerEventType.Release, target, type = PointerType.Touch)
-            driver.pumpUntil(maxFrames = 2) { false }
+            driver.pumpFrames(2)
 
             assertEquals("hello", assertNotNull(state.selection).text)
         }
@@ -237,7 +237,7 @@ class SelectionHandleDragSceneTest {
             assertFalse(state.selectionInProgress, "a press on bare paper grabs no thumb")
             scene.sendPointerEvent(PointerEventType.Move, away + Offset(20f, 0f), type = PointerType.Touch)
             scene.sendPointerEvent(PointerEventType.Release, away + Offset(20f, 0f), type = PointerType.Touch)
-            driver.pumpUntil(maxFrames = 2) { false }
+            driver.pumpFrames(2)
 
             assertEquals(line.text, assertNotNull(state.selection).text, "the selection survives an unrelated press")
         }

@@ -16,9 +16,7 @@ import kotlin.test.assertTrue
  * Issue #5 at the Compose level: keyed retention plus the publication
  * correction, observed frame by frame. Every test drives a real book through
  * a real KiteDocView in Paged mode and asserts the reader's LOCATION, never
- * the raw index. pumpUntilState returns silently on its frame budget, so
- * every test re-asserts its completion condition afterwards; a timeout can
- * never pass vacuously.
+ * the raw index.
  */
 class PagedAnchorSceneTest {
 

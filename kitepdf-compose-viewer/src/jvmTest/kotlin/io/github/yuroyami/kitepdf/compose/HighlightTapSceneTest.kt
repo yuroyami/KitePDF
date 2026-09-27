@@ -67,7 +67,7 @@ class HighlightTapSceneTest {
             driver.pumpUntilState { state.pageGeometry.isNotEmpty() }
             state.highlights = listOf(mark("saved"))
             revision.value = 1
-            driver.pumpUntilState(maxFrames = 4, timeoutMs = 100) { false }
+            driver.pumpFrames(4)
             fun tap() {
                 scene.sendPointerEvent(PointerEventType.Press, Offset(50f, 50f), type = PointerType.Touch)
                 scene.sendPointerEvent(PointerEventType.Release, Offset(50f, 50f), type = PointerType.Touch)

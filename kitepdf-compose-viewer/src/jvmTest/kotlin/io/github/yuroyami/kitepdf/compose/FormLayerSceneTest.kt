@@ -161,7 +161,7 @@ class FormLayerSceneTest {
             scene.sendPointerEvent(PointerEventType.Press, Offset(100f, 60f), type = PointerType.Touch)
             scene.sendPointerEvent(PointerEventType.Release, Offset(100f, 60f), type = PointerType.Touch)
             driver.pumpUntilState { scripts.events.contains("focus out") }
-            driver.pumpUntilState(maxFrames = 10, timeoutMs = 2_000) { false }
+            driver.pumpFrames(10)
             assertEquals("out", state.focusedField, "the field kept the caret: ${scripts.events}")
             assertFalse(scripts.events.any { it.startsWith("commit") || it.startsWith("blur") }, "${scripts.events}")
 
@@ -169,7 +169,7 @@ class FormLayerSceneTest {
             type(scene, '4')
             driver.pumpUntilState { scripts.formState.value("out") == "4" }
             type(scene, 'x')
-            driver.pumpUntilState(maxFrames = 10, timeoutMs = 2_000) { false }
+            driver.pumpFrames(10)
             assertEquals("4", scripts.formState.value("out"), "a letter is refused")
 
             // Leaving the field commits it, which is what runs validate, calculate and format.

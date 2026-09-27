@@ -290,7 +290,7 @@ class LinkTapSceneTest {
             }
             assertTrue(consumed, "the host consumed the tap")
             assertEquals(listOf("The note."), shown)
-            driver.pumpUntil(maxFrames = 10) { false }
+            driver.pumpFrames(10)
             assertEquals(0, state.currentPage, "the viewer stays on the page the reader tapped")
 
             // Declined by the host: the viewer follows the link as before.
