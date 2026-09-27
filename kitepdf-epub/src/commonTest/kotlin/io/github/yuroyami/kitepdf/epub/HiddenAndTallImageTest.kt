@@ -4,9 +4,11 @@ import io.github.yuroyami.kitepdf.core.render.KiteMatrix
 import io.github.yuroyami.kitepdf.core.render.RecordingCanvas
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
 /**
- * An image with `display: none` generates no box: it is not drawn and takes no room (#424).
+ * An image with `display: none` generates no box: it is not drawn and takes no room (#424). A
+ * tall inline image is scaled to fit the page, as a block image is (#426).
  */
 class HiddenAndTallImageTest {
 
@@ -78,5 +80,25 @@ class HiddenAndTallImageTest {
         }
         // The same image shown draws once, so the fixture can draw it.
         assertEquals(1, imageDraws(draw(open("""<p>Alpha <img src="pic.png" style="width:20pt;height:20pt"/></p><p>Beta</p>"""))))
+    }
+
+    @Test
+    fun a_tall_inline_image_is_scaled_to_the_page() {
+        // 180pt of content. A 12pt line puts 7.2pt of its box below the baseline the image sits on.
+        val settings = EpubSettings(pageWidth = 200.0, pageHeight = 200.0, margin = 10.0)
+        for (inParagraph in listOf(true, false)) {
+            val img = """<img src="pic.png" style="width:9pt;height:900pt"/>"""
+            val doc = open(if (inParagraph) "<p>$img</p>" else img, settings = settings)
+            val image = draw(doc).calls.filterIsInstance<RecordingCanvas.Call.Image>().single()
+            val height = kotlin.math.abs(image.ctm.d)
+            val width = kotlin.math.abs(image.ctm.a)
+            assertEquals(172.8, height, 1e-6, "inParagraph=$inParagraph: the image and its line fill the 180pt of content")
+            assertEquals(9.0 / 900.0, width / height, 1e-6, "inParagraph=$inParagraph: the image kept its shape")
+            if (!inParagraph) {
+                val bottom = minOf(image.ctm.f, image.ctm.f + image.ctm.d)
+                val top = maxOf(image.ctm.f, image.ctm.f + image.ctm.d)
+                assertTrue(bottom >= -1e-6 && top <= 200.0 + 1e-6, "the image runs off the page: $bottom..$top")
+            }
+        }
     }
 }

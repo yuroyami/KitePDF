@@ -706,7 +706,7 @@ internal class BoxLayout(
             (contentW - l - r).coerceAtLeast(1.0)
         }
         val cellLines = wrap(
-            tokenize(runs, style.hyphensAuto, contentW, bidiLevels(runs, baseLevel)), contentW, preserve, availAt,
+            tokenize(runs, style.hyphensAuto, contentW, bidiLevels(runs, baseLevel), inlineImageRoom(style)), contentW, preserve, availAt,
             // Negative (hanging) indents keep today's behaviour: only a
             // positive indent eats into the first line's budget.
             firstLineIndent = style.textIndentPt.coerceAtLeast(0.0),
@@ -927,7 +927,25 @@ internal class BoxLayout(
         object Break : Token()
     }
 
-    private fun tokenize(runs: List<InlineRun>, hyphensAuto: Boolean, contentW: Double = Double.MAX_VALUE, levels: List<IntArray>? = null): List<Token> {
+    /**
+     * How tall a horizontal inline image may be: the page's content height, less what its line
+     * adds below the image, so the image and its line fit one page (#426). An inline image sits on
+     * the baseline, so its line is the image plus the part of the line box below the baseline.
+     */
+    private fun inlineImageRoom(style: ComputedStyle): Double {
+        if (maxImageHeight == Double.MAX_VALUE) return Double.MAX_VALUE
+        val lineHeight = (style.lineHeightPt ?: style.fontSizePt * 1.4) * lineHeightScale
+        val below = (lineHeight - style.fontSizePt * 0.8).coerceAtLeast(0.0)
+        return (maxImageHeight - below).coerceAtLeast(1.0)
+    }
+
+    private fun tokenize(
+        runs: List<InlineRun>,
+        hyphensAuto: Boolean,
+        contentW: Double = Double.MAX_VALUE,
+        levels: List<IntArray>? = null,
+        imageRoom: Double = Double.MAX_VALUE,
+    ): List<Token> {
         val tokens = ArrayList<Token>()
         var word = ArrayList<Cell>()
         var wordW = 0.0
@@ -1000,7 +1018,11 @@ internal class BoxLayout(
                 if (vertical) {
                     if (h > contentW) { w *= contentW / h; h = contentW }
                     if (w > maxImageHeight) { h *= maxImageHeight / w; w = maxImageHeight }
-                } else if (w > contentW) { h *= contentW / w; w = contentW }
+                } else {
+                    if (w > contentW) { h *= contentW / w; w = contentW }
+                    // The block axis gets a budget too, so a tall image is scaled to the page (#426).
+                    if (h > imageRoom) { w *= imageRoom / h; h = imageRoom }
+                }
                 val inlineSize = if (vertical) h else w
                 val cell = Cell(
                     0xFFFC, inlineSize, run.fontSizePt, fontSpec(run.family, run.bold, run.italic),
