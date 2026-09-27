@@ -140,7 +140,8 @@ class ScriptCallsSceneTest {
                     assertTrue("commit out=7" in scripts.events, "${scripts.events}")
                 }
             }
-            assertEquals(emptyList(), uncaught.toList(), "a failure reached the host")
+            // The whole stack of each failure, so a failure that comes rarely says where it came from (#443).
+            assertEquals(emptyList(), uncaught.map { it.stackTraceToString() }, "a failure reached the host")
         } finally {
             Thread.setDefaultUncaughtExceptionHandler(previous)
         }
