@@ -187,9 +187,11 @@ public fun KiteDocView(
     onEpubReferenceTap: ((EpubLink) -> Boolean)? = null,
 ) {
     val scriptScope = rememberCoroutineScope()
+    val scriptLane = remember { newScriptLane() }
     SideEffect {
         state.scripts = scripts
         state.scriptScope = scriptScope
+        state.scriptLane = scriptLane
         state.selectionEnabled = selectionEnabled
         state.zoomRange = zoomSpec.minZoom..zoomSpec.maxZoom
         state.panAxes = when (layout) {
@@ -232,17 +234,26 @@ public fun KiteDocView(
     LaunchedEffect(scripts, state.document) {
         val handler = scripts ?: return@LaunchedEffect
         // A document's own scripts may run for a long time before they show anything, so they
-        // run on their own thread and the reader keeps scrolling meanwhile.
-        withContext(kitepdfScriptDispatcher()) { handler.documentOpened() }
+        // run on the script lane and the reader keeps scrolling meanwhile. They run once for each
+        // handler, however often this view leaves and comes back (#365).
+        withContext(scriptLane) {
+            if (state.openedScripts !== handler) {
+                state.openedScripts = handler
+                scriptCall("documentOpened", Unit) { handler.documentOpened() }
+            }
+        }
     }
     val currentPage = state.currentLocation.chapter
     LaunchedEffect(scripts, currentPage) {
         val handler = scripts ?: return@LaunchedEffect
-        withContext(kitepdfScriptDispatcher()) { handler.pageOpened(currentPage) }
+        withContext(scriptLane) { scriptCall("pageOpened", Unit) { handler.pageOpened(currentPage) } }
     }
-    KiteScriptTimers(scripts)
+    // A field that has the caret when the view leaves commits what the reader typed and lets go
+    // of the caret, even when its input never took the focus (#365).
+    DisposableEffect(state) { onDispose { state.blurFocusedField() } }
+    KiteScriptTimers(scripts, scriptLane)
     KiteFormRevision(state, scripts)
-    KiteFormInput(state, scripts)
+    KiteFormInput(state, scripts, scriptLane)
 
     // Keep callbacks fresh without restarting pointer input during a press or a selection.
     val currentHighlightTap by rememberUpdatedState(onHighlightTap)

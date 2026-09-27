@@ -17,6 +17,7 @@ import io.github.yuroyami.kitepdf.core.KitePage
 import io.github.yuroyami.kitepdf.core.render.KiteMatrix
 import kotlin.coroutines.ContinuationInterceptor
 import kotlin.coroutines.EmptyCoroutineContext
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.launch
@@ -68,16 +69,16 @@ internal fun Modifier.kiteFormLayer(
  * because what a timer does is almost always change what the page shows.
  */
 @Composable
-internal fun KiteScriptTimers(scripts: PdfScriptHandler?) {
+internal fun KiteScriptTimers(scripts: PdfScriptHandler?, lane: CoroutineDispatcher) {
     if (scripts == null) return
-    LaunchedEffect(scripts) {
+    LaunchedEffect(scripts, lane) {
         var running = false
         while (true) {
             val frameTime = withFrameMillis { it }
             // One round at a time: a frame that takes longer than a frame must not queue another.
-            if (!running && scripts.hasTimers) {
+            if (!running && scriptCall("hasTimers", false) { scripts.hasTimers }) {
                 running = true
-                kotlinx.coroutines.withContext(kitepdfScriptDispatcher()) { scripts.pumpTimers(frameTime) }
+                withContext(lane) { scriptCall("pumpTimers", null) { scripts.pumpTimers(frameTime) } }
                 running = false
             }
         }
@@ -123,6 +124,7 @@ internal fun handleWidgetTap(
     onLinkTap: ((KiteLinkAction) -> Boolean)? = null,
 ): Boolean {
     if (scripts == null) return false
+    val lane = state.scriptLane ?: return false
     val hit = state.hitTest(offset) ?: return false
     val page = state.pageAt(hit.pageIndex) as? PdfPage ?: return false
     // The widget under the finger, by its reference and with the live visibility (#359, #360).
@@ -144,13 +146,14 @@ internal fun handleWidgetTap(
     val actions = target.widget.action?.let { action -> document?.let { action.withNext(it) } ?: listOf(action) }.orEmpty()
     // The scripts of a widget may take a while, so they go to the script thread.
     val viewer = scope.coroutineContext[ContinuationInterceptor] ?: EmptyCoroutineContext
-    scope.launch(kitepdfScriptDispatcher()) {
-        scripts.mouseDown(name, target.widgetIndex)
-        toggleIfButton(scripts, field, target.widget)
+    // Each call is guarded, so a handler that fails is logged and the next call still runs (#365).
+    scope.launch(lane) {
+        scriptCall("mouseDown", Unit) { scripts.mouseDown(name, target.widgetIndex) }
+        scriptCall("toggle", Unit) { toggleIfButton(scripts, field, target.widget) }
         // A widget's own action takes the place of its release script (ISO 32000-1, Table 194).
-        if (actions.isEmpty()) scripts.mouseUp(name, target.widgetIndex)
+        if (actions.isEmpty()) scriptCall("mouseUp", Unit) { scripts.mouseUp(name, target.widgetIndex) }
         for (action in actions) {
-            if (!scripts.runWidgetAction(name, action)) {
+            if (!scriptCall("runWidgetAction", true) { scripts.runWidgetAction(name, action) }) {
                 withContext(viewer) { performInViewer(state, document, onLinkTap, action) }
             }
         }

@@ -263,6 +263,7 @@ final class io.github.yuroyami.kitepdf.compose/KiteDocViewState { // io.github.y
     final fun setZoom(kotlin/Float, androidx.compose.ui.geometry/Offset = ...) // io.github.yuroyami.kitepdf.compose/KiteDocViewState.setZoom|setZoom(kotlin.Float;androidx.compose.ui.geometry.Offset){}[0]
     final suspend fun animateScrollToPage(kotlin/Int) // io.github.yuroyami.kitepdf.compose/KiteDocViewState.animateScrollToPage|animateScrollToPage(kotlin.Int){}[0]
     final suspend fun animateZoomTo(kotlin/Float, androidx.compose.ui.geometry/Offset = ..., androidx.compose.animation.core/AnimationSpec<kotlin/Float> = ...) // io.github.yuroyami.kitepdf.compose/KiteDocViewState.animateZoomTo|animateZoomTo(kotlin.Float;androidx.compose.ui.geometry.Offset;androidx.compose.animation.core.AnimationSpec<kotlin.Float>){}[0]
+    final suspend fun commitFocusedField() // io.github.yuroyami.kitepdf.compose/KiteDocViewState.commitFocusedField|commitFocusedField(){}[0]
     final suspend fun nextPage() // io.github.yuroyami.kitepdf.compose/KiteDocViewState.nextPage|nextPage(){}[0]
     final suspend fun previousPage() // io.github.yuroyami.kitepdf.compose/KiteDocViewState.previousPage|previousPage(){}[0]
     final suspend fun scrollTo(io.github.yuroyami.kitepdf.compose/KiteScrollPosition) // io.github.yuroyami.kitepdf.compose/KiteDocViewState.scrollTo|scrollTo(io.github.yuroyami.kitepdf.compose.KiteScrollPosition){}[0]

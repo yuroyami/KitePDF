@@ -20,7 +20,14 @@ public interface PdfScriptHandler {
     /** Where the form's live values are, which the viewer draws and the scripts write. */
     public val formState: PdfFormState
 
-    /** The document opened: run its own scripts and its open action. */
+    /**
+     * The document opened: run its own scripts and its open action.
+     *
+     * A viewer calls this once for each handler, however often its view leaves and comes back. A
+     * viewer made with a new state calls it again, for example after a configuration change that
+     * did not keep the state, so a handler that outlives its viewer runs the scripts on the first
+     * call only, as `PdfScriptRunner` does.
+     */
     public fun documentOpened() {}
 
     /** The reader reached this page: run its open script. */
