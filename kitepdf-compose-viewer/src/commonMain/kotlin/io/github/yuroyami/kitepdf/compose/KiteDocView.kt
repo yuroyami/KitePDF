@@ -1185,15 +1185,15 @@ private fun Modifier.highlightOverlay(
     state.selection?.takeIf { it.pageIndex == pageIndex }?.let { sel ->
         for (q in sel.quads) quad(q, colors.selectionHighlight)
         drawSelectionHandles(
-            sel.quads, sx, sy, colors.selectionHandle,
+            state.selectionCarets, sx, sy, colors.selectionHandle,
             colors.selectionHandlePainter ?: KiteSelectionHandleDefaults.CaretAndDot,
         )
     }
 }
 
 /**
- * The two grab markers that bound the active selection, placed on the leading
- * edge of the first quad and the trailing edge of the last. The marker's look
+ * The two grab markers that bound the active selection, placed on the carets at
+ * its logical start and end. The marker's look
  * comes from [painter] ([KiteDocViewColors.selectionHandlePainter], defaulting to
  * [KiteSelectionHandleDefaults.CaretAndDot]); this function owns only the
  * placement math.
@@ -1205,32 +1205,36 @@ private fun Modifier.highlightOverlay(
  * cannot end up unreachable.
  */
 private fun DrawScope.drawSelectionHandles(
-    quads: List<io.github.yuroyami.kitepdf.core.KiteRectangle>,
+    carets: Pair<io.github.yuroyami.kitepdf.core.KiteCaret?, io.github.yuroyami.kitepdf.core.KiteCaret?>?,
     sx: Float,
     sy: Float,
     color: Color,
     painter: KiteSelectionHandlePainter,
 ) {
-    val first = quads.firstOrNull() ?: return
-    val last = quads.lastOrNull() ?: return
-
-    // Display rectangles keep y-min in `bottom` (y grows downward): `bottom` is
-    // the TOP edge on screen, the same convention as the quad fill above.
+    val (start, end) = carets ?: return
+    // Each end sits on its own caret: the logical start and end of the selected text, which is
+    // on the right of a right-to-left run and across the column of a vertical one (#406).
     with(painter) {
-        drawHandle(
-            edge = KiteSelectionHandleEdge.Start,
-            x = (first.left * sx).toFloat(),
-            top = (first.bottom * sy).toFloat(),
-            bottom = (first.top * sy).toFloat(),
-            color = color,
-        )
-        drawHandle(
-            edge = KiteSelectionHandleEdge.End,
-            x = (last.right * sx).toFloat(),
-            top = (last.bottom * sy).toFloat(),
-            bottom = (last.top * sy).toFloat(),
-            color = color,
-        )
+        for ((edge, caret) in listOf(KiteSelectionHandleEdge.Start to start, KiteSelectionHandleEdge.End to end)) {
+            if (caret == null) continue
+            if (caret.vertical) {
+                drawColumnHandle(
+                    edge = edge,
+                    y = (caret.position * sy).toFloat(),
+                    left = (caret.from * sx).toFloat(),
+                    right = (caret.to * sx).toFloat(),
+                    color = color,
+                )
+            } else {
+                drawHandle(
+                    edge = edge,
+                    x = (caret.position * sx).toFloat(),
+                    top = (caret.from * sy).toFloat(),
+                    bottom = (caret.to * sy).toFloat(),
+                    color = color,
+                )
+            }
+        }
     }
 }
 

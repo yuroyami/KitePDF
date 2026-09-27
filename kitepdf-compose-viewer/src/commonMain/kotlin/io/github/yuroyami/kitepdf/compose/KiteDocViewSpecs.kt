@@ -6,6 +6,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.Immutable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.rotate
 import io.github.yuroyami.kitepdf.core.render.ReaderTheme
 
 /**
@@ -293,7 +294,8 @@ public enum class KiteSelectionHandleEdge { Start, End }
  * horizontal position; [top]/[bottom] are the boundary line's vertical extent,
  * all in page-slot pixels. Size the marker against `bottom - top` (the line
  * height) so it scales with the text through thumbnails and deep zoom, like
- * [KiteSelectionHandleDefaults.CaretAndDot] does.
+ * [KiteSelectionHandleDefaults.CaretAndDot] does. A boundary in vertical text,
+ * where a line is a column, goes to [drawColumnHandle] instead.
  *
  * Drawing does not move the grab target. A thumb is dragged by pressing near
  * the boundary line, not near the shape you paint, so a marker drawn far from
@@ -308,6 +310,26 @@ public fun interface KiteSelectionHandlePainter {
         bottom: Float,
         color: Color,
     )
+
+    /**
+     * Draws the marker for a boundary in vertical text, where a line is a column running down
+     * the page: [y] is the boundary's position down the column, and [left]/[right] the column's
+     * extent, in page-slot pixels. The default turns [drawHandle] a quarter turn clockwise, so a
+     * marker drawn below a line sits to the left of a column.
+     */
+    public fun DrawScope.drawColumnHandle(
+        edge: KiteSelectionHandleEdge,
+        y: Float,
+        left: Float,
+        right: Float,
+        color: Color,
+    ) {
+        val centre = (left + right) / 2f
+        val half = (right - left) / 2f
+        rotate(90f, pivot = androidx.compose.ui.geometry.Offset(centre, y)) {
+            drawHandle(edge, centre, y - half, y + half, color)
+        }
+    }
 }
 
 public object KiteSelectionHandleDefaults {

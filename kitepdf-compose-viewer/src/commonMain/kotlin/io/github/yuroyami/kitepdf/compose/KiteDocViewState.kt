@@ -861,6 +861,13 @@ public class KiteDocViewState(
         internal set
 
     /**
+     * The carets at the start and the end of [selection], in its page's display space, set
+     * with it. The handles sit on them in every direction of text (#406).
+     */
+    internal var selectionCarets: Pair<io.github.yuroyami.kitepdf.core.KiteCaret?, io.github.yuroyami.kitepdf.core.KiteCaret?>? = null
+        private set
+
+    /**
      * True while text selection owns the pointer, and while the selection it
      * produced is still on screen.
      *
@@ -933,6 +940,7 @@ public class KiteDocViewState(
         isSelectionActive = false
         selectionInProgress = false
         handleDragInProgress = false
+        selectionCarets = null
         if (selection != null) {
             selection = null
             onSelectionChange?.invoke(null)
@@ -1019,18 +1027,21 @@ public class KiteDocViewState(
      * Where the [edge] thumb of the active selection sits, in viewport pixels,
      * or null when nothing is selected (or the page has no geometry yet).
      *
-     * The point is on the boundary line itself, at mid-height, rather than on
-     * whatever a [KiteSelectionHandlePainter] drew around it. That keeps the
-     * grab target the same for every painter, and it doubles as the text
-     * position a drag maps back to, so grabbing a thumb never nudges the
-     * selection by itself.
+     * The point is at the caret of that end, halfway across its line and a
+     * quarter of a char inside the selection, rather than on whatever a
+     * [KiteSelectionHandlePainter] drew around it. That keeps the grab target
+     * the same for every painter and every direction of text, and it doubles
+     * as the text position a drag maps back to, so grabbing a thumb never
+     * nudges the selection by itself (#406).
      */
     internal fun handlePoint(edge: KiteSelectionHandleEdge): Offset? {
         val sel = selection ?: return null
-        val quad = (if (edge == KiteSelectionHandleEdge.Start) sel.quads.firstOrNull() else sel.quads.lastOrNull())
-            ?: return null
-        val x = if (edge == KiteSelectionHandleEdge.Start) quad.left else quad.right
-        return displayToViewport(sel.pageIndex, x, (quad.bottom + quad.top) / 2.0)
+        val caret = (if (edge == KiteSelectionHandleEdge.Start) selectionCarets?.first else selectionCarets?.second) ?: return null
+        // A quarter of the char inside its caret: the boundary itself belongs to the char next to
+        // it too, and a still grab there would add that char to the selection.
+        val along = caret.position + (caret.inside - caret.position) * 0.25
+        val across = (caret.from + caret.to) / 2.0
+        return if (caret.vertical) displayToViewport(sel.pageIndex, across, along) else displayToViewport(sel.pageIndex, along, across)
     }
 
     /**
@@ -1062,6 +1073,7 @@ public class KiteDocViewState(
             quads = text.quadsFor(start, end),
         )
         if (sel.start == selection?.start && sel.end == selection?.end && sel.pageIndex == selection?.pageIndex) return
+        selectionCarets = text.caretAt(start, after = false) to text.caretAt(end, after = true)
         selection = sel
         onSelectionChange?.invoke(sel)
     }

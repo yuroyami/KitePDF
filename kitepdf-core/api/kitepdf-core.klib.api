@@ -1733,6 +1733,21 @@ final class io.github.yuroyami.kitepdf.core/ByteReader { // io.github.yuroyami.k
     final fun unread() // io.github.yuroyami.kitepdf.core/ByteReader.unread|unread(){}[0]
 }
 
+final class io.github.yuroyami.kitepdf.core/KiteCaret { // io.github.yuroyami.kitepdf.core/KiteCaret|null[0]
+    constructor <init>(kotlin/Double, kotlin/Double, kotlin/Double, kotlin/Double, kotlin/Boolean) // io.github.yuroyami.kitepdf.core/KiteCaret.<init>|<init>(kotlin.Double;kotlin.Double;kotlin.Double;kotlin.Double;kotlin.Boolean){}[0]
+
+    final val from // io.github.yuroyami.kitepdf.core/KiteCaret.from|{}from[0]
+        final fun <get-from>(): kotlin/Double // io.github.yuroyami.kitepdf.core/KiteCaret.from.<get-from>|<get-from>(){}[0]
+    final val inside // io.github.yuroyami.kitepdf.core/KiteCaret.inside|{}inside[0]
+        final fun <get-inside>(): kotlin/Double // io.github.yuroyami.kitepdf.core/KiteCaret.inside.<get-inside>|<get-inside>(){}[0]
+    final val position // io.github.yuroyami.kitepdf.core/KiteCaret.position|{}position[0]
+        final fun <get-position>(): kotlin/Double // io.github.yuroyami.kitepdf.core/KiteCaret.position.<get-position>|<get-position>(){}[0]
+    final val to // io.github.yuroyami.kitepdf.core/KiteCaret.to|{}to[0]
+        final fun <get-to>(): kotlin/Double // io.github.yuroyami.kitepdf.core/KiteCaret.to.<get-to>|<get-to>(){}[0]
+    final val vertical // io.github.yuroyami.kitepdf.core/KiteCaret.vertical|{}vertical[0]
+        final fun <get-vertical>(): kotlin/Boolean // io.github.yuroyami.kitepdf.core/KiteCaret.vertical.<get-vertical>|<get-vertical>(){}[0]
+}
+
 final class io.github.yuroyami.kitepdf.core/KiteLocation : kotlin/Comparable<io.github.yuroyami.kitepdf.core/KiteLocation> { // io.github.yuroyami.kitepdf.core/KiteLocation|null[0]
     constructor <init>(kotlin/Int, kotlin/Int) // io.github.yuroyami.kitepdf.core/KiteLocation.<init>|<init>(kotlin.Int;kotlin.Int){}[0]
 
@@ -1849,6 +1864,7 @@ final class io.github.yuroyami.kitepdf.core/KiteStructuredText { // io.github.yu
     final val plainText // io.github.yuroyami.kitepdf.core/KiteStructuredText.plainText|{}plainText[0]
         final fun <get-plainText>(): kotlin/String // io.github.yuroyami.kitepdf.core/KiteStructuredText.plainText.<get-plainText>|<get-plainText>(){}[0]
 
+    final fun caretAt(kotlin/Int, kotlin/Boolean): io.github.yuroyami.kitepdf.core/KiteCaret? // io.github.yuroyami.kitepdf.core/KiteStructuredText.caretAt|caretAt(kotlin.Int;kotlin.Boolean){}[0]
     final fun charIndexAt(kotlin/Double, kotlin/Double): kotlin/Int? // io.github.yuroyami.kitepdf.core/KiteStructuredText.charIndexAt|charIndexAt(kotlin.Double;kotlin.Double){}[0]
     final fun copyText(kotlin/Int, kotlin/Int): kotlin/String // io.github.yuroyami.kitepdf.core/KiteStructuredText.copyText|copyText(kotlin.Int;kotlin.Int){}[0]
     final fun quadsFor(kotlin/Int, kotlin/Int): kotlin.collections/List<io.github.yuroyami.kitepdf.core/KiteRectangle> // io.github.yuroyami.kitepdf.core/KiteStructuredText.quadsFor|quadsFor(kotlin.Int;kotlin.Int){}[0]

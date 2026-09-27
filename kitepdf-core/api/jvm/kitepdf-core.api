@@ -72,6 +72,15 @@ public abstract interface class io/github/yuroyami/kitepdf/core/KiteCancellation
 	public abstract fun isCancelled ()Z
 }
 
+public final class io/github/yuroyami/kitepdf/core/KiteCaret {
+	public fun <init> (DDDDZ)V
+	public final fun getFrom ()D
+	public final fun getInside ()D
+	public final fun getPosition ()D
+	public final fun getTo ()D
+	public final fun getVertical ()Z
+}
+
 public abstract interface class io/github/yuroyami/kitepdf/core/KiteDocument {
 	public fun bookmarkOf (Lio/github/yuroyami/kitepdf/core/KiteLocation;)Lio/github/yuroyami/kitepdf/core/KiteBookmark;
 	public fun getChapterCount ()I
@@ -236,6 +245,7 @@ public final class io/github/yuroyami/kitepdf/core/KiteSearchHit {
 
 public final class io/github/yuroyami/kitepdf/core/KiteStructuredText {
 	public fun <init> (Ljava/util/List;)V
+	public final fun caretAt (IZ)Lio/github/yuroyami/kitepdf/core/KiteCaret;
 	public final fun charIndexAt (DD)Ljava/lang/Integer;
 	public final fun copyText (II)Ljava/lang/String;
 	public final fun getBlocks ()Ljava/util/List;

@@ -393,7 +393,12 @@ public final class io/github/yuroyami/kitepdf/compose/KiteSelectionHandleEdge : 
 }
 
 public abstract interface class io/github/yuroyami/kitepdf/compose/KiteSelectionHandlePainter {
+	public fun drawColumnHandle-kKL39v8 (Landroidx/compose/ui/graphics/drawscope/DrawScope;Lio/github/yuroyami/kitepdf/compose/KiteSelectionHandleEdge;FFFJ)V
 	public abstract fun drawHandle-kKL39v8 (Landroidx/compose/ui/graphics/drawscope/DrawScope;Lio/github/yuroyami/kitepdf/compose/KiteSelectionHandleEdge;FFFJ)V
+}
+
+public final class io/github/yuroyami/kitepdf/compose/KiteSelectionHandlePainter$DefaultImpls {
+	public static fun drawColumnHandle-kKL39v8 (Lio/github/yuroyami/kitepdf/compose/KiteSelectionHandlePainter;Landroidx/compose/ui/graphics/drawscope/DrawScope;Lio/github/yuroyami/kitepdf/compose/KiteSelectionHandleEdge;FFFJ)V
 }
 
 public final class io/github/yuroyami/kitepdf/compose/KiteSelectionMenuDefaults {
