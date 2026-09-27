@@ -173,9 +173,13 @@ public class PdfDocument private constructor(
     /**
      * Number of pages. Before [pages] materializes this reads the root
      * `/Pages /Count`, so a 10,000-page document answers a UI badge
-     * without constructing 10,000 page objects; a missing/negative/lying
-     * `/Count` falls through to the real tree walk, and once [pages] exists
-     * its size is authoritative.
+     * without constructing 10,000 page objects. Once [pages] exists its size
+     * is authoritative.
+     *
+     * A damaged file can declare a count its page tree does not hold. A missing
+     * or negative `/Count`, or one larger than the number of objects in the
+     * file, falls through to the tree walk. Any other declared count is
+     * trusted until [pages] exists, so use [pageCountIn] for the exact count.
      */
     override val pageCount: Int
         get() = if (pagesInitialized) pages.size else declaredCountOrWalk()
@@ -184,8 +188,17 @@ public class PdfDocument private constructor(
         val declared = runCatching {
             catalog.getDict("Pages", this)?.getInt("Count")?.toInt()
         }.getOrNull()
-        return if (declared != null && declared >= 0) declared else pages.size
+        // Every page is an object of its own, so a count above the object count cannot be true.
+        return if (declared != null && declared >= 0 && declared <= xref.size) declared else pages.size
     }
+
+    /**
+     * The pages the page tree really holds. `/Count` is the number of leaves under a page
+     * tree node (ISO 32000-1, 7.7.3.2), and a damaged file can declare more or fewer than
+     * it has, so the leaves decide. A viewer that trusted a larger count read past the end
+     * of [pages] (#329).
+     */
+    override fun pageCountIn(chapter: Int): Int = if (chapter == 0) pages.size else 0
 
     /** Indirect-object-number → zero-based page index. Built alongside [pages].
      *  Written only inside the SYNCHRONIZED [pages] lazy; readers touch [pages]

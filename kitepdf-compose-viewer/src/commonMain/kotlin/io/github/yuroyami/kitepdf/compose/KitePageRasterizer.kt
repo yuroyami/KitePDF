@@ -379,8 +379,16 @@ public fun rememberKitePageRasterizer(maxBitmapPixels: Long): KitePageRasterizer
  * box so landscape /Rotate 90/270 PDF pages report the on-screen aspect the
  * rasterized bitmap actually has, not the unrotated MediaBox aspect.
  */
-internal fun kitePageAspect(page: KitePage): Float =
-    (page.displayWidth / page.displayHeight).toFloat().let { if (it.isFinite() && it > 0f) it else 1f }
+internal fun kitePageAspect(page: KitePage): Float {
+    // A page whose size cannot be read is drawn square rather than ending the app in composition (#330).
+    val aspect = try {
+        (page.displayWidth / page.displayHeight).toFloat()
+    } catch (failure: Exception) {
+        io.github.yuroyami.kitepdf.core.kiteWarn { "layout: a page size cannot be read: ${failure.message}" }
+        1f
+    }
+    return if (aspect.isFinite() && aspect > 0f) aspect else 1f
+}
 
 /**
  * Largest size with aspect ratio [aspect] (w/h) that fits inside [boxW]×[boxH],

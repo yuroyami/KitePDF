@@ -8,6 +8,7 @@ import io.github.yuroyami.kitepdf.core.KiteStructuredText
 
 import io.github.yuroyami.kitepdf.core.ByteArrayBuilder
 import io.github.yuroyami.kitepdf.core.PdfFormatException
+import io.github.yuroyami.kitepdf.core.kiteWarn
 import io.github.yuroyami.kitepdf.core.filters.FilterChain
 import io.github.yuroyami.kitepdf.core.parser.PdfArray
 import io.github.yuroyami.kitepdf.core.parser.PdfDictionary
@@ -65,9 +66,11 @@ public class PdfPage internal constructor(
      * missing or non-numeric coordinate defaults to 0.0 rather than throwing.
      * A single garbage entry must not break a whole page (lenient-salvage).
      */
-    private fun readBox(key: String): KiteRectangle? {
-        val arr = missingAsNull { node.getArray(key, document) } ?: return null
-        if (arr.size < 4) return null
+    private fun readBox(key: String): KiteRectangle? = boxOf(missingAsNull { node.getArray(key, document) })
+
+    /** [readBox] for an array already in hand, such as one the page inherits from the page tree. */
+    private fun boxOf(arr: PdfArray?): KiteRectangle? {
+        if (arr == null || arr.size < 4) return null
         fun coord(i: Int): Double {
             val raw = arr[i]
             val v = if (raw is PdfReference) document.resolve(raw) else raw
@@ -82,14 +85,22 @@ public class PdfPage internal constructor(
         return KiteRectangle(coord(0), coord(1), coord(2), coord(3)).normalized()
     }
 
-    /** Page box in PDF user-space units (1/72 inch). [left, bottom, right, top]. */
+    /**
+     * Page box in PDF user-space units (1/72 inch). [left, bottom, right, top].
+     *
+     * ISO 32000-1, 7.7.3.3 makes `/MediaBox` required and inheritable. A damaged page with no
+     * usable box, whether missing, shorter than four numbers or empty, gets a US Letter box of
+     * 612 x 792 with a warning, as MuPDF does, so the page still shows (#330).
+     */
     public val mediaBox: KiteRectangle by lazy {
-        readBox("MediaBox") ?: inherited.mediaBox?.let(KiteRectangle::fromPdfArray)
-            ?: throw PdfFormatException("Page has no /MediaBox")
+        val box = readBox("MediaBox") ?: boxOf(inherited.mediaBox)
+        if (box != null && box.right > box.left && box.top > box.bottom) return@lazy box
+        kiteWarn { "page ${index + 1}: no usable /MediaBox, so it is shown as US Letter" }
+        KiteRectangle(0.0, 0.0, 612.0, 792.0)
     }
 
     public val cropBox: KiteRectangle by lazy {
-        readBox("CropBox") ?: inherited.cropBox?.let(KiteRectangle::fromPdfArray) ?: mediaBox
+        readBox("CropBox") ?: boxOf(inherited.cropBox) ?: mediaBox
     }
 
     /**
