@@ -237,9 +237,9 @@ public class PdfDocument private constructor(
      * The most bytes of decoded images that this document keeps, so that an image
      * drawn again, on another page or at another zoom, does not decode again. The
      * image used least recently leaves first, and an image larger than the whole
-     * budget is not kept. The default is [DEFAULT_IMAGE_CACHE_BUDGET_BYTES]; 0 keeps
-     * no image. Lower it for a small heap, and call [dropDecodedImageCache] when the
-     * app runs low on memory.
+     * budget is not kept, so it decodes again on every render. The default is
+     * [DEFAULT_IMAGE_CACHE_BUDGET_BYTES]; 0 keeps no image. Lower it for a small heap,
+     * and call [dropDecodedImageCache] when the app runs low on memory.
      */
     public var imageCacheBudgetBytes: Long = DEFAULT_IMAGE_CACHE_BUDGET_BYTES
         set(value) {

@@ -26,9 +26,7 @@ import io.github.yuroyami.kitepdf.core.render.KiteMaskTransfer
 import io.github.yuroyami.kitepdf.core.render.gridFitImage
 import io.github.yuroyami.kitepdf.core.render.imageSampling
 import io.github.yuroyami.kitepdf.core.render.shrinkArgb
-import io.github.yuroyami.kitepdf.core.render.shrinkRgba
 import io.github.yuroyami.kitepdf.core.render.strokePen
-import io.github.yuroyami.kitepdf.core.render.toRgbaBytes
 import io.github.yuroyami.kitepdf.core.render.KiteMatrix
 import io.github.yuroyami.kitepdf.core.render.KiteCanvas
 import io.github.yuroyami.kitepdf.core.render.KitePath
@@ -37,6 +35,7 @@ import io.github.yuroyami.kitepdf.core.render.RgbColor
 import io.github.yuroyami.kitepdf.core.render.SoftMask
 import io.github.yuroyami.kitepdf.core.render.paintComplexShading
 import io.github.yuroyami.kitepdf.core.render.sampleStops
+import io.github.yuroyami.kitepdf.core.render.toShrunkRgbaBytes
 
 /**
  * [KiteCanvas] backed by [android.graphics.Canvas].
@@ -435,13 +434,9 @@ public class AndroidNativeCanvas(private val canvas: AndroidCanvas) : KiteCanvas
             }
             // Decoded samples: what every successful JPEG / JPX / JBIG2 decode
             // produces, plus plain Flate images. Straight-alpha RGBA from core.
-            KiteImageData.Kind.RAW -> image.toRgbaBytes()?.let { rgba ->
-                if (!sampling.shrinks) return@let rgbaBitmap(rgba, image.width, image.height)
-                rgbaBitmap(
-                    shrinkRgba(rgba, image.width, image.height, sampling.shrinkX, sampling.shrinkY),
-                    sampling.shrunkWidth(image.width),
-                    sampling.shrunkHeight(image.height),
-                )
+            // An image drawn smaller converts and shrinks a band of rows at a time (#381).
+            KiteImageData.Kind.RAW -> image.toShrunkRgbaBytes(sampling.shrinkX, sampling.shrinkY)?.let { rgba ->
+                rgbaBitmap(rgba, sampling.shrunkWidth(image.width), sampling.shrunkHeight(image.height))
             }
             else -> null
         }

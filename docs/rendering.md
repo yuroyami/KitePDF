@@ -439,7 +439,7 @@ PDF pages honour the signal. A comic page stops after it reads its image and bef
 
 A `PdfDocument` keeps three caches, so that a page drawn again, at another zoom or after a scroll back, costs less:
 
-- **Decoded images**, up to `imageCacheBudgetBytes` (default 32 MB). An image drawn on many pages decodes once.
+- **Decoded images**, up to `imageCacheBudgetBytes` (default 32 MB). An image drawn on many pages decodes once. An image larger than the budget is not kept, so it decodes again each time a page that shows it draws.
 - **Parsed content**, up to `operationCacheBudgetBytes` (default 16 MB). A page drawn again, and a form drawn many times, parse their content once. A dense page of 100,000 operators takes about 12 MB.
 - **Parsed fonts**, up to `fontCacheBudgetBytes` (default 32 MB). A font parses once for all the pages, thumbnails and text extractions that use it. A font counts as about twice its embedded program, so a 10 MB CJK font takes about 20 MB.
 

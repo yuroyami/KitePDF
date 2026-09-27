@@ -1302,6 +1302,7 @@ public final class io/github/yuroyami/kitepdf/core/render/ImageGridFitKt {
 public final class io/github/yuroyami/kitepdf/core/render/ImageRasterKt {
 	public static final field KITE_DEFAULT_MAX_RASTER_PIXELS J
 	public static final fun toRgbaBytes (Lio/github/yuroyami/kitepdf/core/render/KiteImageData;)[B
+	public static final fun toShrunkRgbaBytes (Lio/github/yuroyami/kitepdf/core/render/KiteImageData;II)[B
 }
 
 public final class io/github/yuroyami/kitepdf/core/render/ImageSamplingKt {

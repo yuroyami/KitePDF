@@ -19,8 +19,8 @@ import io.github.yuroyami.kitepdf.core.render.SoftMask
 import io.github.yuroyami.kitepdf.core.render.gridFitImage
 import io.github.yuroyami.kitepdf.core.render.imageSampling
 import io.github.yuroyami.kitepdf.core.render.sampleStops
-import io.github.yuroyami.kitepdf.core.render.shrinkRgba
 import io.github.yuroyami.kitepdf.core.render.strokePen
+import io.github.yuroyami.kitepdf.core.render.toShrunkRgbaBytes
 import kotlinx.cinterop.CValue
 import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.cinterop.addressOf
@@ -95,7 +95,6 @@ import platform.CoreGraphics.CGPoint
 import platform.CoreGraphics.CGRectMake
 import platform.CoreGraphics.kCGGradientDrawsAfterEndLocation
 import platform.CoreGraphics.kCGGradientDrawsBeforeStartLocation
-import io.github.yuroyami.kitepdf.core.render.toRgbaBytes
 import platform.CoreFoundation.CFStringCreateWithCString
 import platform.CoreFoundation.kCFStringEncodingUTF8
 import platform.CoreGraphics.CGContextAddPath
@@ -499,8 +498,8 @@ public class CoreGraphicsCanvas(private val ctx: CGContextRef) : KiteCanvas {
      */
     private fun rawCgImage(image: KiteImageData, sampling: KiteImageSampling): platform.CoreGraphics.CGImageRef? {
         val pixels = rgbaImages.getOrPut(image, sampling, { it.rgba.size.toLong() }) {
-            val full = image.toRgbaBytes() ?: return@getOrPut null
-            val rgba = if (sampling.shrinks) shrinkRgba(full, image.width, image.height, sampling.shrinkX, sampling.shrinkY) else full
+            // An image drawn smaller converts and shrinks a band of rows at a time (#381).
+            val rgba = image.toShrunkRgbaBytes(sampling.shrinkX, sampling.shrinkY) ?: return@getOrPut null
             RgbaImage(rgba, sampling.shrunkWidth(image.width), sampling.shrunkHeight(image.height))
         } ?: return null
         val width = pixels.width
