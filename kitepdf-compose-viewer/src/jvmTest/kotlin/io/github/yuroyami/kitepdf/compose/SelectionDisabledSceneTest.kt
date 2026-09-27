@@ -91,7 +91,7 @@ class SelectionDisabledSceneTest {
             assertTrue(state.isSelectionActive)
 
             enabled.value = false
-            driver.pumpUntil(maxFrames = 4) { false }
+            driver.pumpFrames(4)
 
             assertNull(state.selection, "switching selection off drops the live selection")
             assertFalse(state.isSelectionActive, "and hands scrolling and panning back")

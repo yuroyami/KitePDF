@@ -208,7 +208,7 @@ class SelectionSceneTest {
             driver.pumpUntil { state.pageGeometry.isNotEmpty() }
             // One-finger pan only engages while zoomed in.
             state.setZoom(2f)
-            driver.pumpUntil(maxFrames = 2) { false }
+            driver.pumpFrames(2)
 
             /**
              * Presses, drags 30px up, and reports the pan taken BEFORE the release. The move
@@ -217,13 +217,13 @@ class SelectionSceneTest {
              */
             fun dragUp(): Offset {
                 state.panOffset = Offset.Zero
-                driver.pumpUntil(maxFrames = 2) { false }
+                driver.pumpFrames(2)
                 scene.sendPointerEvent(PointerEventType.Press, Offset(100f, 120f), type = PointerType.Touch)
                 scene.sendPointerEvent(PointerEventType.Move, Offset(100f, 90f), type = PointerType.Touch)
-                driver.pumpUntil(maxFrames = 2) { false }
+                driver.pumpFrames(2)
                 val panned = state.panOffset
                 scene.sendPointerEvent(PointerEventType.Release, Offset(100f, 90f), type = PointerType.Touch)
-                driver.pumpUntil(maxFrames = 2) { false }
+                driver.pumpFrames(2)
                 return panned
             }
 
@@ -242,7 +242,7 @@ class SelectionSceneTest {
             assertEquals(Offset.Zero, locked, "the page must not pan under an active selection (got $locked)")
 
             state.clearSelection()
-            driver.pumpUntil(maxFrames = 2) { false }
+            driver.pumpFrames(2)
             val again = dragUp()
             assertTrue(again.y < -1f, "clearing the selection restores panning (got $again)")
         }
@@ -282,11 +282,11 @@ class SelectionSceneTest {
              * which locks the strip (#310).
              */
             fun dragUp() {
-                driver.pumpUntil(maxFrames = 2) { false }
+                driver.pumpFrames(2)
                 scene.sendPointerEvent(PointerEventType.Press, Offset(100f, 180f), type = PointerType.Touch)
                 for (y in intArrayOf(140, 110, 80, 60, 40)) {
                     scene.sendPointerEvent(PointerEventType.Move, Offset(100f, y.toFloat()), type = PointerType.Touch)
-                    driver.pumpUntil(maxFrames = 2) { false }
+                    driver.pumpFrames(2)
                 }
                 scene.sendPointerEvent(PointerEventType.Release, Offset(100f, 40f), type = PointerType.Touch)
             }
@@ -297,7 +297,7 @@ class SelectionSceneTest {
             state.beginSelection(Offset(100f, 100f))
             assertTrue(state.isSelectionActive)
             dragUp()
-            val locked = driver.pumpUntil(maxFrames = 40) { false }.toComposeImageBitmap().toPixelMap()
+            val locked = driver.pumpFrames(40).toComposeImageBitmap().toPixelMap()
             assertTrue(
                 locked[100, 190].red > 0.8f && locked[100, 190].blue < 0.2f,
                 "the strip must not scroll under an active selection (bottom pixel ${locked[100, 190]})",
@@ -305,7 +305,7 @@ class SelectionSceneTest {
             assertEquals(0, state.currentPage)
 
             state.clearSelection()
-            driver.pumpUntil(maxFrames = 2) { false }
+            driver.pumpFrames(2)
             dragUp()
             val free = driver.pumpUntil { px -> px[100, 190].blue > 0.8f }.toComposeImageBitmap().toPixelMap()
             assertTrue(

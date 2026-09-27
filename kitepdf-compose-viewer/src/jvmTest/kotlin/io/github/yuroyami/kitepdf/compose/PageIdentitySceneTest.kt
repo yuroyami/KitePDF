@@ -47,7 +47,7 @@ class PageIdentitySceneTest {
             val driver = SceneTestDriver(scene)
             driver.pumpUntilState(maxFrames = 3000, timeoutMs = 60_000) { doc.isComplete }
             // A few more frames so the last landing's recomposition has happened.
-            driver.pumpUntilState(maxFrames = 30, timeoutMs = 2_000) { false }
+            driver.pumpFrames(30)
             assertTrue(doc.isComplete, "the book never finished laying out")
             assertTrue(0 in renders, "page 0 was never rasterized")
             assertSame(state.pageAt(0), state.pageAt(0), "the same slot must answer the same page object")
