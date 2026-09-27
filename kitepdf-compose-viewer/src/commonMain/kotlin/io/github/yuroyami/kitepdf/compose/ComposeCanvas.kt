@@ -259,8 +259,13 @@ public class ComposeCanvas internal constructor(
                 val glyphMatrix = textMatrix
                     .concat(KiteMatrix.translation(penX + glyph.xOffset * unitScale, glyph.yOffset * unitScale))
                     .concat(KiteMatrix(unitScale, 0.0, 0.0, unitScale, 0.0, 0.0))
-                val cp = toComposePath(outline, glyphMatrix, scratchPath).apply { fillType = PathFillType.NonZero }
-                drawScope.drawPath(cp, color = color, alpha = a, blendMode = composeBlend)
+                // A glyph drawn again on the page reuses its path, under its own matrix (#382).
+                val cp = glyphPaths.getOrPut(GlyphOutline(outline)) {
+                    toComposePath(outline, KiteMatrix.IDENTITY).apply { fillType = PathFillType.NonZero }
+                }
+                drawScope.withTransform({ transform(glyphMatrix.toComposeMatrix()) }) {
+                    drawPath(cp, color = color, alpha = a, blendMode = composeBlend)
+                }
             }
             penX += glyph.advanceWidth * advanceScale + glyph.advanceAdjust
         }
@@ -863,6 +868,21 @@ public class ComposeCanvas internal constructor(
      * paints. A clip keeps its own, because the clip stack holds it (#130).
      */
     private val scratchPath = Path()
+
+    /** The paths of the glyph outlines this canvas drew, in glyph space. */
+    private val glyphPaths = HashMap<GlyphOutline, Path>()
+
+    /** How many glyph outlines this canvas converted to paths. For tests. */
+    internal val convertedGlyphs: Int get() = glyphPaths.size
+
+    /**
+     * An outline by identity: a font hands out one object per glyph, and comparing the segments
+     * of two outlines costs about as much as converting one. The hash reads a few segments only.
+     */
+    private class GlyphOutline(val path: KitePath) {
+        override fun equals(other: Any?): Boolean = other is GlyphOutline && other.path === path
+        override fun hashCode(): Int = path.segments.size * 31 + (path.segments.firstOrNull()?.hashCode() ?: 0)
+    }
 
     /** [src] under [ctm], rewound into [into] or in a new path. */
     private fun toComposePath(src: KitePath, ctm: KiteMatrix, into: Path? = null): Path {
