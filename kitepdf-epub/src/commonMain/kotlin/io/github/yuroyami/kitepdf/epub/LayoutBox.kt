@@ -173,6 +173,8 @@ internal class PositionedLine(
     val ascent: Double,
     /** Inline images on this line (bottom on the baseline). */
     val images: List<PlacedImage> = emptyList(),
+    /** How many characters of its block's text the line stands for; reading positions count these (#434). */
+    val sourceLength: Int = 0,
 ) {
     /** Owning box + line index, filled after layout, for the paginator's widows/orphans. */
     var owner: TextBlockBox? = null
