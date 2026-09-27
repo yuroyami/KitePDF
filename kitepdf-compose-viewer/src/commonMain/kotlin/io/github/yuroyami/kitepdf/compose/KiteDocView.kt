@@ -673,7 +673,9 @@ private fun PagedLayout(
     // moves the index while the reader stays on the same content, and that
     // must not cost them their zoom.
     LaunchedEffect(state, pagerState, zoomSpec.resetZoomOnPageChange) {
-        var last: io.github.yuroyami.kitepdf.core.KiteLocation? = null
+        // The page the pager appears on is not a change of page, so a zoom the host set or
+        // restored before it appeared stays (#403).
+        var last: io.github.yuroyami.kitepdf.core.KiteLocation? = state.anchorAt(pagerState.settledPage)
         snapshotFlow { pagerState.settledPage }.collect { settled ->
             val location = state.anchorAt(settled)
             if (location == last) return@collect
@@ -1308,8 +1310,14 @@ private fun SpreadLayout(
             if (state.adapter === adapter) state.adapter = null
         }
     }
+    // Landing on another spread recentres the pan and, per spec, resets the zoom. The spread the
+    // pager appears on is not a change, and a spread is compared by its first page (#403).
     LaunchedEffect(state, pagerState, zoomSpec.resetZoomOnPageChange) {
-        snapshotFlow { pagerState.settledPage }.collect {
+        var last = state.anchorAt(pagerState.settledPage * 2)
+        snapshotFlow { pagerState.settledPage }.collect { settled ->
+            val location = state.anchorAt(settled * 2)
+            if (location == last) return@collect
+            last = location
             state.panOffset = Offset.Zero
             if (zoomSpec.resetZoomOnPageChange) state.resetZoom()
         }
