@@ -433,7 +433,7 @@ page.renderTo(canvas, ctm, KiteCancellation { !job.isActive })
 ensureActive()   // a cancelled render leaves a partial page: do not show it
 ```
 
-PDF pages honour the signal. Other formats render their pages to the end.
+PDF pages honour the signal. A comic page stops after it reads its image and before it decodes it. Other formats render their pages to the end.
 
 ## Memory
 
