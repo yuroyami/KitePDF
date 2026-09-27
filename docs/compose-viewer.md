@@ -257,7 +257,7 @@ KiteDocView(state, renderSpec = spec)
 
 - **`quality`** (default 1.0): supersampling multiplier over on-screen pixels. `1.0` = rasterize exactly at display resolution (fastest and sharpest). `>1.0` (e.g. 1.5) oversamples for screenshots or print-like export. `<1.0` undersamples for cheap thumbnails.
 - **`maxBitmapLongSide`** (default 4096): hard memory cap. Large pages and deep zoom won't exceed this on the longest side.
-- **`rerasterizeOnZoom`** (default true): after a zoom settles, re-render the visible page at the zoomed resolution so deep zoom stays crisp. Costs one extra rasterization per zoom settle.
+- **`rerasterizeOnZoom`** (default true): after a zoom settles, re-render the visible page at the zoomed resolution so deep zoom stays crisp. The zoom rounds up to a quarter of an octave (1, 1.19, 1.41, 1.68, 2 and so on), so pinches that settle close together share one raster. Costs one extra rasterization per zoom step.
 - **`preserveHairlines`** (default true): scale the engine's stroke floors by the ratio of the raster to the screen. A zero-width stroke then stays one screen pixel wide, and other sub-pixel strokes (ECG traces, fine table rules) keep their weight when the bitmap is downscaled.
 
 ### `KiteRenderSpec.Vectorized`

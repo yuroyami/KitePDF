@@ -1,5 +1,6 @@
 package io.github.yuroyami.kitepdf.compose
 
+import kotlin.math.pow
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
@@ -1032,7 +1033,9 @@ private fun KitePageRaster(
 
     // A zoom that is not finite never reaches here, but the raster size must not round NaN (#338).
     val zoomScale = if (settledZoom.isFinite()) settledZoom.coerceAtLeast(0.01f) else 1f
-    val scale = spec.quality * zoomScale
+    // Pinches that settle near each other share one raster: the zoom rounds up to a bucket (#375).
+    val bucket = zoomBucket(zoomScale)
+    val scale = spec.quality * bucket
     // A side that rounds below one pixel keeps one, so every accepted quality gives a page (#422).
     val raster = fitWithin(
         (settledBase.width * scale).roundToInt().coerceAtLeast(if (settledBase.width > 0) 1 else 0),
@@ -1044,7 +1047,9 @@ private fun KitePageRaster(
     // and floors other strokes at a fifth of that. When the raster is larger than its
     // final on-screen size (supersampling), both must grow by the same ratio or
     // sub-pixel strokes fade in the downscale. (Upscaling can only thicken them, so 1 is safe.)
-    val visualWidth = settledBase.width * zoomScale
+    // The bucket stands for the zoom here too, so the hairline, part of the raster key, is the same
+    // across the bucket. A hairline then shows at most a sixth thinner than one screen pixel.
+    val visualWidth = settledBase.width * bucket
     val hairline = if (spec.preserveHairlines && visualWidth > 0f) {
         max(1f, raster.width / visualWidth)
     } else 1f
@@ -1746,3 +1751,16 @@ private fun SpreadBox(
         }
     }
 }
+
+/**
+ * [zoom] rounded up to the next step of a quarter of an octave: 1, 1.19, 1.41, 1.68, 2 and so on.
+ * A raster at the bucket is at most 19% wider than the page on screen, so it stays sharp, and
+ * pinches that settle at 1.37 and 1.41 share one raster (#375).
+ */
+internal fun zoomBucket(zoom: Float): Float {
+    // A zoom a rounding error above a step stays on that step, so zoom 1 stays 1.
+    val steps = kotlin.math.ceil(kotlin.math.log2(zoom.toDouble()) * ZOOM_STEPS_PER_OCTAVE - 1e-3)
+    return 2.0.pow(steps / ZOOM_STEPS_PER_OCTAVE).toFloat()
+}
+
+private const val ZOOM_STEPS_PER_OCTAVE = 4.0
