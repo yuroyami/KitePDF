@@ -587,6 +587,23 @@ public class EpubDocument internal constructor(
         null
     }
 
+    /**
+     * The location of the book's page [pageIndex], laying out chapters in order until one holds
+     * it. Without the layout the index names no page, and it read as the start of the book (#349).
+     * An index past the end gives the last page.
+     */
+    private fun pageLocation(pageIndex: Int): KiteLocation {
+        var remaining = pageIndex.coerceAtLeast(0)
+        var last = KiteLocation(0, 0)
+        for (c in parsed.spineIndices) {
+            val pages = summaryOf(c)?.pageCount ?: continue
+            if (remaining < pages) return KiteLocation(c, remaining)
+            remaining -= pages
+            if (pages > 0) last = KiteLocation(c, pages - 1)
+        }
+        return last
+    }
+
     /* ── whole-document views (these lay out everything) ──────────────────── */
 
     private fun prepareAll() {
@@ -729,14 +746,15 @@ public class EpubDocument internal constructor(
     }
 
     /**
-     * Where [bookmark] sits now. Prepares its chapter and no other. A fragment
-     * wins over an offset; both clamp into range rather than failing.
+     * Where [bookmark] sits now. A [KiteBookmark.Flow] prepares its chapter and
+     * no other; a fragment wins over an offset, and both clamp into range rather
+     * than failing. A [KiteBookmark.Page] counts the pages of the whole book, so
+     * it lays out the chapters before its page, in order, and clamps to the last
+     * page. Save a book's position as a Flow bookmark, as [bookmarkOf] gives.
      */
     override fun locate(bookmark: KiteBookmark): KiteLocation {
         val chapter = bookmark.chapter.coerceIn(0, (chapterCount - 1).coerceAtLeast(0))
-        if (bookmark is KiteBookmark.Page) {
-            return locationOf(bookmark.pageIndex) ?: KiteLocation(chapter, 0)
-        }
+        if (bookmark is KiteBookmark.Page) return pageLocation(bookmark.pageIndex)
         val flow = bookmark as KiteBookmark.Flow
         val summary = summaryOf(chapter) ?: return KiteLocation(chapter, 0)
         val last = summary.pageCount - 1

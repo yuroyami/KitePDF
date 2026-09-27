@@ -45,11 +45,13 @@ public data class KiteLocation(
  */
 public sealed class KiteBookmark {
 
-    /** The chapter this position lives in. Resolving needs only this chapter. */
+    /** The chapter this position lives in. Resolving a [Flow] bookmark needs only this chapter. */
     public abstract val chapter: Int
 
     /**
      * A page index in a PDF. Pages are fixed, so the index IS the position.
+     * A reflowable book can resolve one too, but it lays out every chapter
+     * before the page to count them. A book's position is a [Flow] bookmark.
      */
     public data class Page(val pageIndex: Int) : KiteBookmark() {
         init { require(pageIndex >= 0) { "pageIndex must be >= 0 (was $pageIndex)" } }
