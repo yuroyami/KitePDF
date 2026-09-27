@@ -31,6 +31,11 @@ internal class PageBitmapCache(private val maxBytes: Long) {
         val withoutWidgets: Boolean = false,
         /** Keep the function itself: a hash alone could alias distinct ink filters. */
         val canvasDecorator: KiteCanvasDecorator? = null,
+        /**
+         * The text measurer that drew the page's system-font text. A new font environment,
+         * such as another font family resolver, renders that text again (#421).
+         */
+        val fontEnvironment: Any? = null,
     )
 
     // Access-ordered behaviour done manually: Kotlin common LinkedHashMap has

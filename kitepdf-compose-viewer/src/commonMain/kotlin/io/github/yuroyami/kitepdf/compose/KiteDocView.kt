@@ -934,7 +934,8 @@ private fun KitePageRaster(
     val retry = state?.retriesOf(pageIndex) ?: 0
     // Keyed on the paper the page is drawn on, so a background change that a theme hides renders nothing again (#394).
     val paper = paperColor(colors.pageBackground, colors.theme)
-    val rastered by produceState<Pair<ImageBitmap, Boolean>?>(null, page, raster, paper, colors.theme, hairline, cache, drawsFormLayer, spec.canvasDecorator, retry) {
+    // Keyed on the rasterizer too: a new font environment gives a new one, and the text renders again (#421).
+    val rastered by produceState<Pair<ImageBitmap, Boolean>?>(null, page, raster, paper, colors.theme, hairline, cache, drawsFormLayer, spec.canvasDecorator, retry, rasterizer) {
         // Off the main thread: a 10-30ms page raster on the UI thread
         // janks scroll and pinch. The rasterizer serializes pages on its mutex
         // (TextMeasurer's cache is not thread-safe) but the main thread stays
