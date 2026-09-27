@@ -89,6 +89,7 @@ abstract interface io.github.yuroyami.kitepdf/PdfScriptHandler { // io.github.yu
     open fun mouseDown(kotlin/String, kotlin/Int) // io.github.yuroyami.kitepdf/PdfScriptHandler.mouseDown|mouseDown(kotlin.String;kotlin.Int){}[0]
     open fun mouseUp(kotlin/String) // io.github.yuroyami.kitepdf/PdfScriptHandler.mouseUp|mouseUp(kotlin.String){}[0]
     open fun mouseUp(kotlin/String, kotlin/Int) // io.github.yuroyami.kitepdf/PdfScriptHandler.mouseUp|mouseUp(kotlin.String;kotlin.Int){}[0]
+    open fun onTimersChanged(kotlin/Function0<kotlin/Unit>): kotlin/Function0<kotlin/Unit> // io.github.yuroyami.kitepdf/PdfScriptHandler.onTimersChanged|onTimersChanged(kotlin.Function0<kotlin.Unit>){}[0]
     open fun pageClosed(kotlin/Int) // io.github.yuroyami.kitepdf/PdfScriptHandler.pageClosed|pageClosed(kotlin.Int){}[0]
     open fun pageOpened(kotlin/Int) // io.github.yuroyami.kitepdf/PdfScriptHandler.pageOpened|pageOpened(kotlin.Int){}[0]
     open fun pumpTimers(kotlin/Long): kotlin/Long? // io.github.yuroyami.kitepdf/PdfScriptHandler.pumpTimers|pumpTimers(kotlin.Long){}[0]

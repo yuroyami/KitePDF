@@ -104,6 +104,7 @@ final class io.github.yuroyami.kitepdf.javascript/PdfScriptRunner : io.github.yu
     final fun mouseDown(kotlin/String, kotlin/Int) // io.github.yuroyami.kitepdf.javascript/PdfScriptRunner.mouseDown|mouseDown(kotlin.String;kotlin.Int){}[0]
     final fun mouseUp(kotlin/String) // io.github.yuroyami.kitepdf.javascript/PdfScriptRunner.mouseUp|mouseUp(kotlin.String){}[0]
     final fun mouseUp(kotlin/String, kotlin/Int) // io.github.yuroyami.kitepdf.javascript/PdfScriptRunner.mouseUp|mouseUp(kotlin.String;kotlin.Int){}[0]
+    final fun onTimersChanged(kotlin/Function0<kotlin/Unit>): kotlin/Function0<kotlin/Unit> // io.github.yuroyami.kitepdf.javascript/PdfScriptRunner.onTimersChanged|onTimersChanged(kotlin.Function0<kotlin.Unit>){}[0]
     final fun pageClosed(kotlin/Int) // io.github.yuroyami.kitepdf.javascript/PdfScriptRunner.pageClosed|pageClosed(kotlin.Int){}[0]
     final fun pageOpened(kotlin/Int) // io.github.yuroyami.kitepdf.javascript/PdfScriptRunner.pageOpened|pageOpened(kotlin.Int){}[0]
     final fun pumpTimers(kotlin/Long): kotlin/Long? // io.github.yuroyami.kitepdf.javascript/PdfScriptRunner.pumpTimers|pumpTimers(kotlin.Long){}[0]

@@ -312,21 +312,23 @@ internal class PdfScriptHost(
     private fun setTimer(code: String, period: Long, repeats: Boolean): Int {
         val id = nextTimerId++
         // Acrobat takes the period in milliseconds and a zero means "as often as you can", which
-        // a viewer answers at its own frame rate rather than in a loop.
+        // a viewer answers at its own frame rate rather than in a loop. The delay counts from
+        // now on the runner's clock, not from the last pump, which may be long ago (#367).
         val safePeriod = if (period <= 0) 0L else period
-        timers[id] = Timer(id, code, safePeriod, repeats, clockMillis + safePeriod)
+        timers[id] = Timer(id, code, safePeriod, repeats, clock() + safePeriod)
         hasTimers = true
+        timersChanged?.invoke()
         return id
     }
 
     private fun clearTimer(id: Int) {
-        timers.remove(id)
+        if (timers.remove(id) == null) return
         hasTimers = timers.isNotEmpty()
+        timersChanged?.invoke()
     }
 
     /** The timers due at [now], oldest first, and the queue is updated for the next round. */
     fun dueTimers(now: Long): List<String> {
-        clockMillis = now
         val due = timers.values.filter { it.dueAt <= now }.sortedBy { it.dueAt }
         for (timer in due) {
             if (timer.repeats) timer.dueAt = now + timer.period else timers.remove(timer.id)
@@ -343,7 +345,11 @@ internal class PdfScriptHost(
     var hasTimers: Boolean = false
         private set
 
-    private var clockMillis: Long = 0
+    /** The runner's clock, which the timers are measured on. Set by the runner. */
+    var clock: () -> Long = { 0L }
+
+    /** Called when a script sets or clears a timer. Set by the runner. */
+    var timersChanged: (() -> Unit)? = null
 
     /* ─── small conversions ─────────────────────────────────────────────── */
 

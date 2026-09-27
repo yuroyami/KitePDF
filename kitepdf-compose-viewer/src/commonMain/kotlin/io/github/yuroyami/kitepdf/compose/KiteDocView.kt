@@ -240,6 +240,7 @@ public fun KiteDocView(
             if (state.openedScripts !== handler) {
                 state.openedScripts = handler
                 scriptCall("documentOpened", Unit) { handler.documentOpened() }
+                state.scriptsRan()
             }
         }
         // Then each page's open and close scripts, as the reader lands on pages. They take a
@@ -249,7 +250,7 @@ public fun KiteDocView(
     // A field that has the caret when the view leaves commits what the reader typed and lets go
     // of the caret, even when its input never took the focus (#365).
     DisposableEffect(state) { onDispose { state.blurFocusedField() } }
-    KiteScriptTimers(scripts, scriptLane)
+    KiteScriptTimers(state, scripts, scriptLane)
     KiteFormRevision(state, scripts)
     KiteFormInput(state, scripts, scriptLane)
 

@@ -163,6 +163,7 @@ public final class io/github/yuroyami/kitepdf/javascript/PdfScriptRunner : io/gi
 	public fun mouseDown (Ljava/lang/String;I)V
 	public fun mouseUp (Ljava/lang/String;)V
 	public fun mouseUp (Ljava/lang/String;I)V
+	public fun onTimersChanged (Lkotlin/jvm/functions/Function0;)Lkotlin/jvm/functions/Function0;
 	public fun pageClosed (I)V
 	public fun pageOpened (I)V
 	public fun pumpTimers (J)Ljava/lang/Long;

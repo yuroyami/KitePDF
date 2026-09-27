@@ -22,6 +22,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 
 /**
  * The form layer: the widgets of a page, drawn over the page itself and redrawn on their own.
@@ -62,28 +63,47 @@ internal fun Modifier.kiteFormLayer(
 }
 
 /**
- * Runs the timers a script set, once a frame, for as long as one is waiting.
+ * Runs the timers a script set, on a frame, for as long as one is waiting.
  *
  * Nothing in a document runs on its own: a script asks for a timer and the viewer decides when to
- * call it, which is what keeps a document from taking the thread. A frame is the right pace,
+ * call it, which is what keeps a document from taking the thread. A frame is the right moment,
  * because what a timer does is almost always change what the page shows.
+ *
+ * With no timer waiting, the pump sleeps and asks for no frame, so a form that is only shown lets
+ * the device rest (#368). It wakes when a script sets a timer: the handler reports it through
+ * [PdfScriptHandler.onTimersChanged], and the viewer checks after each call it makes itself.
+ * Between two timers it sleeps until the next one is due.
  */
 @Composable
-internal fun KiteScriptTimers(scripts: PdfScriptHandler?, lane: CoroutineDispatcher) {
+internal fun KiteScriptTimers(state: KiteDocViewState, scripts: PdfScriptHandler?, lane: CoroutineDispatcher) {
     if (scripts == null) return
-    LaunchedEffect(scripts, lane) {
-        var running = false
-        while (true) {
-            val frameTime = withFrameMillis { it }
-            // One round at a time: a frame that takes longer than a frame must not queue another.
-            if (!running && scriptCall("hasTimers", false) { scripts.hasTimers }) {
-                running = true
-                withContext(lane) { scriptCall("pumpTimers", null) { scripts.pumpTimers(frameTime) } }
-                running = false
+    LaunchedEffect(state, scripts, lane) {
+        val wake = Channel<Unit>(Channel.CONFLATED)
+        state.timerWake = wake
+        val stop = scriptCall("onTimersChanged", {}) { scripts.onTimersChanged { wake.trySend(Unit) } }
+        try {
+            while (true) {
+                if (!scriptCall("hasTimers", false) { scripts.hasTimers }) {
+                    wake.receive()
+                    continue
+                }
+                val frameTime = withFrameMillis { it }
+                val wait = withContext(lane) { scriptCall("pumpTimers", null) { scripts.pumpTimers(frameTime) } }
+                // Sleep until the next timer is due, less the frame the next round waits for,
+                // unless a script sets a sooner one in the meantime.
+                if (wait != null && wait > FRAME_MILLIS) {
+                    withTimeoutOrNull(wait - FRAME_MILLIS) { wake.receive() }
+                }
             }
+        } finally {
+            stop()
+            if (state.timerWake === wake) state.timerWake = null
         }
     }
 }
+
+/** About one frame at 60 frames a second. */
+private const val FRAME_MILLIS = 16L
 
 /**
  * Keeps [KiteDocViewState.formRevision] in step with the form, whoever changed it: a tap, a
@@ -157,6 +177,7 @@ internal fun handleWidgetTap(
                 withContext(viewer) { performInViewer(state, document, onLinkTap, action) }
             }
         }
+        state.scriptsRan()
     }
     // A text or choice field takes the caret, which is what opens the keyboard.
     if (field.type == PdfFormField.FieldType.Text || field.type == PdfFormField.FieldType.Choice) {

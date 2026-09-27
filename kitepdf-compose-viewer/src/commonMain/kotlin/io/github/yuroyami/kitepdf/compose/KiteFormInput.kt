@@ -61,7 +61,7 @@ private fun FieldInput(state: KiteDocViewState, scripts: PdfScriptHandler, field
         for (signal in typed) {
             while (true) {
                 val edit = pipeline.next() ?: break
-                val kept = withContext(lane) { askScript(scripts, fieldName, edit) }
+                val kept = withContext(lane) { askScript(scripts, fieldName, edit).also { state.scriptsRan() } }
                 val before = pipeline.screen
                 pipeline.answered(kept)
                 val after = pipeline.screen

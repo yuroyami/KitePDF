@@ -423,6 +423,7 @@ public class KiteDocViewState(
         val work = {
             scriptCall("commit", false) { handler.commit(name, typed ?: handler.formState.value(name) ?: "") }
             scriptCall("blur", Unit) { handler.blur(name, widget) }
+            scriptsRan()
         }
         val lane = scriptLane
         if (lane == null) work() else kotlinx.coroutines.CoroutineScope(lane).launch { work() }
@@ -448,6 +449,7 @@ public class KiteDocViewState(
                         open?.let { previous -> scriptCall("pageClosed", Unit) { handler.pageClosed(previous) } }
                         open = page
                         scriptCall("pageOpened", Unit) { handler.pageOpened(page) }
+                        scriptsRan()
                     }
                 }
         } finally {
@@ -488,9 +490,22 @@ public class KiteDocViewState(
         val lane = scriptLane
         if (scope == null || lane == null) {
             scriptCall(what, Unit, work)
+            scriptsRan()
             return
         }
-        scope.launch(lane) { scriptCall(what, Unit, work) }
+        scope.launch(lane) {
+            scriptCall(what, Unit, work)
+            scriptsRan()
+        }
+    }
+
+    /** Wakes the timer pump, which sleeps while no timer waits. Set by the pump (#368). */
+    @kotlin.concurrent.Volatile
+    internal var timerWake: kotlinx.coroutines.channels.SendChannel<Unit>? = null
+
+    /** Tells the timer pump that the scripts ran, because a script may have set a timer (#368). */
+    internal fun scriptsRan() {
+        timerWake?.trySend(Unit)
     }
 
     /**

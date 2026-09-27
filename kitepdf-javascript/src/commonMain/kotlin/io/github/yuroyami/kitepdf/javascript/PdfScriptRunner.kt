@@ -4,6 +4,7 @@ import io.github.yuroyami.kitepdf.PdfAction
 import io.github.yuroyami.kitepdf.PdfDocument
 import io.github.yuroyami.kitepdf.PdfFormState
 import io.github.yuroyami.kitepdf.core.parser.PdfArray
+import io.github.yuroyami.kitepdf.core.withLock
 import io.github.yuroyami.kitepdf.core.script.KiteScriptEngine
 import io.github.yuroyami.kitepdf.core.script.KiteScriptException
 
@@ -96,7 +97,13 @@ public class PdfScriptRunner(
         document,
         formState,
         PdfScriptHost.Hooks(onAlert, onConsole, onRequest, onResponse),
-    )
+    ).also { host ->
+        host.clock = { now() }
+        host.timersChanged = { timerLock.withLock { timerListeners.toList() }.forEach { it() } }
+    }
+
+    private val timerLock = io.github.yuroyami.kitepdf.core.KiteLock()
+    private val timerListeners = ArrayList<() -> Unit>()
 
     /** Every script that failed since the runner opened, newest last. */
     public val failures: List<KiteScriptException> get() = failureCopy
@@ -439,18 +446,26 @@ public class PdfScriptRunner(
     /* ─── timers ────────────────────────────────────────────────────────── */
 
     /**
-     * Runs the timers a script set with `app.setInterval` or `app.setTimeOut` and that are due at
-     * [nowMillis]. Returns how long to wait before the next one, or null when none is waiting.
+     * Runs the timers a script set with `app.setInterval` or `app.setTimeOut` that are due, and
+     * returns how long to wait before the next one, or null when none is waiting.
      *
-     * A viewer calls this once per frame. Nothing runs on its own: a document cannot take the
+     * The timers run on the runner's clock, the one the budgets use, and [nowMillis] is not
+     * read: a timer fires after its delay, counted from the moment a script set it, whatever time
+     * base the caller pumps with (#367). Nothing runs on its own: a document cannot take the
      * thread from the host.
      */
     override fun pumpTimers(nowMillis: Long): Long? = onScriptThread {
         if (!started || !policy.enabled) return@onScriptThread null
-        for (code in host.dueTimers(nowMillis)) {
+        for (code in host.dueTimers(now())) {
             evaluate(code, "timer")
         }
-        host.nextTimerDue()?.let { next -> (next - nowMillis).coerceAtLeast(0) }
+        host.nextTimerDue()?.let { next -> (next - now()).coerceAtLeast(0) }
+    }
+
+    /** Reports each timer a script sets or clears, from the script thread (#368). */
+    override fun onTimersChanged(listener: () -> Unit): () -> Unit {
+        timerLock.withLock { timerListeners += listener }
+        return { timerLock.withLock { timerListeners -= listener } }
     }
 
     /** True when a script is waiting on a timer, so a viewer knows to keep pumping. */
