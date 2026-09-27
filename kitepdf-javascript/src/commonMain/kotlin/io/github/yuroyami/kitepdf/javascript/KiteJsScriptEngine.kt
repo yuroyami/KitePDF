@@ -61,12 +61,12 @@ public class KiteJsScriptEngine(
         if (value.isNullish) null else value.asString()
     }
 
-    override fun defineFunction(name: String, function: (List<Any?>) -> Any?) {
+    override fun defineFunction(name: String, function: (List<Any?>) -> Any?): Unit = guarded(name) {
         val (owner, key) = ownerOf(name)
         owner.function(key) { args -> function(args.map { it.toKotlin() }) }
     }
 
-    override fun defineValue(name: String, value: Any?) {
+    override fun defineValue(name: String, value: Any?): Unit = guarded(name) {
         val (owner, key) = ownerOf(name)
         owner[key] = value
     }

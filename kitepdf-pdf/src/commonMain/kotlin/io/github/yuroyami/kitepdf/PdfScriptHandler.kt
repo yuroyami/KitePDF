@@ -9,6 +9,11 @@ package io.github.yuroyami.kitepdf
  *
  * Every method is allowed to do nothing: a handler that runs no scripts is a valid handler, and a
  * viewer with no handler behaves as it always did.
+ *
+ * A viewer calls these methods off its drawing thread, one at a time and in the order the events
+ * happen, but not always from the same thread. A handler whose engine belongs to one thread moves
+ * each call there itself, as `PdfScriptRunner` does. [hasTimers] is the exception: a viewer reads
+ * it on its drawing thread every frame, so it must answer at once.
  */
 public interface PdfScriptHandler {
 

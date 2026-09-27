@@ -227,10 +227,12 @@ internal class PdfScriptHost(
         else -> null
     }
 
-    /** The page the reader is on, which a viewer keeps up to date. */
+    /** The page the reader is on, which a viewer keeps up to date from its own thread. */
+    @kotlin.concurrent.Volatile
     var currentPage: Int = 0
 
     /** The name a host gave the file, for `this.documentFileName`. */
+    @kotlin.concurrent.Volatile
     var fileName: String = ""
 
     private fun pageWords(pageIndex: Int): List<String> {
@@ -305,11 +307,13 @@ internal class PdfScriptHost(
         // a viewer answers at its own frame rate rather than in a loop.
         val safePeriod = if (period <= 0) 0L else period
         timers[id] = Timer(id, code, safePeriod, repeats, clockMillis + safePeriod)
+        hasTimers = true
         return id
     }
 
     private fun clearTimer(id: Int) {
         timers.remove(id)
+        hasTimers = timers.isNotEmpty()
     }
 
     /** The timers due at [now], oldest first, and the queue is updated for the next round. */
@@ -319,6 +323,7 @@ internal class PdfScriptHost(
         for (timer in due) {
             if (timer.repeats) timer.dueAt = now + timer.period else timers.remove(timer.id)
         }
+        hasTimers = timers.isNotEmpty()
         return due.map { it.code }
     }
 
@@ -326,7 +331,9 @@ internal class PdfScriptHost(
     fun nextTimerDue(): Long? = timers.values.minOfOrNull { it.dueAt }
 
     /** True when a script has a timer waiting. */
-    val hasTimers: Boolean get() = timers.isNotEmpty()
+    @kotlin.concurrent.Volatile
+    var hasTimers: Boolean = false
+        private set
 
     private var clockMillis: Long = 0
 
