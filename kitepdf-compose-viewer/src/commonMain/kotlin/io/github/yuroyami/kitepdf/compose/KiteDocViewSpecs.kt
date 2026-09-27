@@ -210,9 +210,9 @@ public sealed interface KiteRenderSpec {
     /**
      * Redraw each page into a live `Canvas` every
      * composition, transformed by zoom/pan via the same GPU layer: no bitmap
-     * (lower memory). Vector content stays sharp at rest on every platform, but
-     * images keep the resolution they have at zoom 1, and hairlines thicken as the
-     * zoom grows (#418).
+     * (lower memory). Vector content stays sharp at rest on every platform. Once a
+     * zoom settles, the page draws again at it, so images keep the detail the zoom
+     * shows and a hairline stays about one screen pixel wide (#418).
      * On Android the vector display list replays under the live transform, so it
      * stays crisp even mid-pinch; on Skia targets (iOS/desktop/web) the layer is
      * texture-cached, so deep in-gesture zoom softens until the draw re-runs.

@@ -68,27 +68,38 @@ import kotlin.math.sqrt
  * and `saveLayer`, so they span many `DrawScope` operations, and each clip is
  * applied once however many paints it covers.
  */
-public class ComposeCanvas(
+public class ComposeCanvas internal constructor(
     private val drawScope: DrawScope,
     private val textMeasurer: TextMeasurer,
+    private val hairlineWidthPx: Float,
+    private val skipSystemFontText: Boolean,
     /**
-     * The width in raster pixels of a stroke whose line width is 0. Defaults to 1, the one
-     * device pixel of ISO 32000-1, 8.4.3.2. Other thin strokes widen to a fifth of it, as
-     * [strokePen] describes. When rasterizing supersampled (raster larger than its on-screen
-     * size), pass the supersample factor instead, so thin strokes keep their weight after
-     * the downscale.
+     * How much the output is magnified after this draw, as by the zoom layer of a Vectorized
+     * page: image sampling and the hairline follow the pixels on screen, not the pixels drawn.
      */
-    private val hairlineWidthPx: Float = 1f,
-    /**
-     * When true, system-font text runs are not measured or drawn; the canvas
-     * only records that one was encountered in [usedSystemFontText]. The
-     * off-main raster path uses this: Compose's skiko text stack shares
-     * process-global state with the host UI thread, so measuring or drawing
-     * through it is only safe on the main thread. A pool-thread render probes
-     * with this flag and, when it trips, the page is re-rendered on Main.
-     */
-    private val skipSystemFontText: Boolean = false,
+    private val magnification: Float,
 ) : KiteCanvas {
+
+    /**
+     * A canvas that draws into [drawScope].
+     *
+     * @param hairlineWidthPx the width in raster pixels of a stroke whose line width is 0.
+     *   Defaults to 1, the one device pixel of ISO 32000-1, 8.4.3.2. Other thin strokes widen
+     *   to a fifth of it, as [strokePen] describes. When rasterizing supersampled (raster
+     *   larger than its on-screen size), pass the supersample factor instead, so thin strokes
+     *   keep their weight after the downscale.
+     * @param skipSystemFontText when true, system-font text runs are not measured or drawn;
+     *   the canvas only records that one was encountered. The off-main raster path uses this:
+     *   Compose's skiko text stack shares process-global state with the host UI thread, so
+     *   measuring or drawing through it is only safe on the main thread. A pool-thread render
+     *   probes with this flag and, when it trips, the page is re-rendered on Main.
+     */
+    public constructor(
+        drawScope: DrawScope,
+        textMeasurer: TextMeasurer,
+        hairlineWidthPx: Float = 1f,
+        skipSystemFontText: Boolean = false,
+    ) : this(drawScope, textMeasurer, hairlineWidthPx, skipSystemFontText, magnification = 1f)
 
     /** True once a system-font run was skipped because of [skipSystemFontText]. */
     internal var usedSystemFontText: Boolean = false
@@ -155,8 +166,8 @@ public class ComposeCanvas(
         lineCap: Int, lineJoin: Int, miterLimit: Double,
     ) {
         // The hairline scales with a supersampled raster, so thin strokes keep their
-        // on-screen weight after the downscale.
-        val pen = strokePen(ctm, lineWidth, hairlineWidthPx.toDouble())
+        // on-screen weight after the downscale, and shrinks with a magnified one (#418).
+        val pen = strokePen(ctm, lineWidth, hairlineWidthPx.toDouble() / magnification)
         val composePath = toComposePath(path, pen.pathMatrix, scratchPath)
         val dash = composeDashIntervals(dashArray, pen.dashScale)
             ?.let { PathEffect.dashPathEffect(it, (dashPhase * pen.dashScale).toFloat()) }
@@ -370,8 +381,12 @@ public class ComposeCanvas(
     override fun drawImage(image: KiteImageData, ctm: KiteMatrix, alpha: Double, blendMode: KiteBlendMode) {
         // One sampling policy on every canvas (#122, #123). The ctm maps to this scope's pixels,
         // and the edges of an unrotated image move outwards onto whole pixels, as in MuPDF (#300).
-        val device = gridFitImage(ctm)
-        val sampling = imageSampling(image.width, image.height, device, image.interpolate)
+        // Magnified output samples for the pixels on screen, and snaps to none: a zoom layer
+        // would enlarge both the averaged detail and the snap (#418).
+        val device = if (magnification == 1f) gridFitImage(ctm) else ctm
+        val m = magnification.toDouble()
+        val onScreen = KiteMatrix(device.a * m, device.b * m, device.c * m, device.d * m, device.e, device.f)
+        val sampling = imageSampling(image.width, image.height, onScreen, image.interpolate)
         val bitmap = bitmaps.getOrPut(image, sampling, { it.width.toLong() * it.height * 4 }) { bitmapFor(image, sampling) }
         if (bitmap != null) {
             drawBitmap(
