@@ -66,7 +66,9 @@ public sealed interface KiteDocLayout {
      * visual order (page 2k on the right), for right-to-left books.
      * Navigation stays logical (`nextPage()` = index +1; the visible spread
      * advances every second step). Meant for fixed-layout content (PDF,
-     * pre-paginated EPUB); reflowable EPUB gains nothing from it.
+     * pre-paginated EPUB); reflowable EPUB gains nothing from it. Spreads pair
+     * the pages of the whole book, so a book shows a chapter placeholder until
+     * every chapter is laid out.
      */
     @Immutable
     public data class Spread(

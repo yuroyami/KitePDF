@@ -147,8 +147,9 @@ import kotlinx.coroutines.launch
  *   Defaults to a plain [KiteDocViewColors.pageBackground] box.
  * @param chapterPlaceholder shown in the slot a chapter holds while it is still
  *   being laid out. Only reflowable EPUB reaches this: a PDF is never mid-layout.
- *   [KiteDocLayout.Spread] lays the whole book out before it pairs pages, so it
- *   never shows one (#337). Defaults to an empty page-coloured box.
+ *   [KiteDocLayout.Spread] pairs pages across the whole book, so it shows the
+ *   placeholder until every chapter is laid out. Defaults to an empty
+ *   page-coloured box.
  * @param overlay HUD layer drawn over the viewport; receives [state] and a
  *   [BoxScope] for alignment. Widgets here float above the pages:
  *   [KiteNavigationControls], [KitePageIndicator], [KiteThumbnailStrip] or
@@ -1478,11 +1479,24 @@ private fun SpreadLayout(
     chapterPlaceholder: (@Composable (chapter: Int) -> Unit)?,
     onTap: ((Offset) -> Unit)?,
 ) {
-    // Spreads pair by index, so the strip must be final before pairing.
-    val spreadCount = (state.pageCount + 1) / 2
+    // Spreads pair pages across the whole book, so they wait until every chapter is laid out and
+    // on the strip. Until then the chapter placeholder shows, and the loader lays the book out
+    // behind it, off this thread. Reading pageCount here laid the book out on this thread (#337).
+    if (!state.stripSettled) {
+        val scope = rememberCoroutineScope()
+        val slot = state.currentPage.takeIf { state.pageAt(it) == null } ?: state.firstPendingSlot() ?: state.currentPage
+        ChapterGapSlot(
+            state, slot, Orientation.Vertical, colors, chapterPlaceholder, letterboxed = true,
+            gestures = Modifier.kiteTransformGestures(state, zoomSpec, scope, onTap),
+            zoom = state.zoom,
+            pan = state.panOffset,
+        )
+        return
+    }
+    val spreadCount = (state.itemCount + 1) / 2
     // Seeded from the state and saving nothing of its own; see ContinuousLayout's seed comment.
     val pagerState = remember {
-        PagerState(currentPage = (state.currentPage / 2).coerceIn(0, spreadCount - 1)) { (state.pageCount + 1) / 2 }
+        PagerState(currentPage = (state.currentPage / 2).coerceIn(0, spreadCount - 1)) { (state.itemCount + 1) / 2 }
     }
     DisposableEffect(state, pagerState) {
         // The page the state holds, which the pager's last adapter parked when it left (#402).
@@ -1514,7 +1528,7 @@ private fun SpreadLayout(
         SpreadBox(
             state = state,
             leftIndex = 2 * spread,
-            rightIndex = (2 * spread + 1).takeIf { it < state.pageCount },
+            rightIndex = (2 * spread + 1).takeIf { it < state.itemCount },
             reverseOrder = layout.reverseLayout,
             zoom = if (isCurrent) state.zoom else 1f,
             pan = if (isCurrent) state.panOffset else Offset.Zero,
@@ -1527,6 +1541,7 @@ private fun SpreadLayout(
             colors = colors,
             onPageRendered = onPageRendered,
             pagePlaceholder = pagePlaceholder,
+            chapterPlaceholder = chapterPlaceholder,
         )
     }
     when (layout.orientation) {
@@ -1570,6 +1585,7 @@ private fun SpreadBox(
     colors: KiteDocViewColors,
     onPageRendered: ((Int, ImageBitmap) -> Unit)?,
     pagePlaceholder: (@Composable (Int) -> Unit)?,
+    chapterPlaceholder: (@Composable (chapter: Int) -> Unit)?,
 ) {
     if (recordGeometry) {
         DisposableEffect(state, leftIndex, rightIndex) {
@@ -1599,7 +1615,15 @@ private fun SpreadBox(
 
         @Composable
         fun slot(pageIndex: Int, regionLeft: Int, regionWidth: Int) {
-            val page = state.pageAt(pageIndex) ?: return
+            val page = state.pageAt(pageIndex)
+            if (page == null) {
+                // A chapter whose layout failed stays a placeholder, in its half of the spread.
+                val region = with(density) { DpSize(regionWidth.toDp(), fullH.toDp()) }
+                Box(Modifier.absoluteOffset(x = with(density) { regionLeft.toDp() }).size(region)) {
+                    ChapterGapSlot(state, pageIndex, Orientation.Vertical, colors, chapterPlaceholder, letterboxed = true)
+                }
+                return
+            }
             val fit = fitWithin(regionWidth, fullH, kitePageAspect(page))
             if (fit == IntSize.Zero) return
             val left = regionLeft + (regionWidth - fit.width) / 2f

@@ -579,6 +579,16 @@ public class KiteDocViewState(
      */
     internal var pendingLeadingPage: Int? = null
 
+    /**
+     * True once the strip holds the pages of the whole document: every chapter is laid out and
+     * published, or the loader has laid out all it can and a chapter that failed stays a
+     * placeholder. Spreads pair pages from the strip only then (#337).
+     */
+    internal val stripSettled: Boolean get() = (isComplete && itemCount == knownPageCount) || loaderDone
+
+    /** Set once the chapter loader has laid out every chapter it can. */
+    private var loaderDone: Boolean by mutableStateOf(false)
+
     /** False while the viewer shows one fixed page, which navigation does not turn (#336). */
     internal val canNavigate: Boolean get() = adapter !is FixedPageAdapter
 
@@ -1366,6 +1376,10 @@ public class KiteDocViewState(
                 publishIfStale()
                 readerChapter()
             }
+        }
+        onComposeThread {
+            publishIfStale()
+            loaderDone = true
         }
     }
 
