@@ -51,7 +51,11 @@ public sealed interface KiteDocLayout {
          * index +1. See [pagedFor] for automatic selection.
          */
         val reverseLayout: Boolean = false,
-    ) : KiteDocLayout
+    ) : KiteDocLayout {
+        init {
+            require(offscreenPages >= 0) { "offscreenPages must be >= 0 (was $offscreenPages)" }
+        }
+    }
 
     /**
      * Two-page spreads: one snap-pager item shows pages (2k, 2k+1) side by
@@ -67,7 +71,11 @@ public sealed interface KiteDocLayout {
         val orientation: Orientation = Orientation.Horizontal,
         val offscreenPages: Int = 1,
         val reverseLayout: Boolean = false,
-    ) : KiteDocLayout
+    ) : KiteDocLayout {
+        init {
+            require(offscreenPages >= 0) { "offscreenPages must be >= 0 (was $offscreenPages)" }
+        }
+    }
 
     /** Exactly one fixed page, letterboxed to fit the viewport. */
     @Immutable
@@ -95,6 +103,8 @@ public sealed interface KiteDocLayout {
  *
  * @param pinchEnabled two-finger pinch zoom.
  * @param doubleTapEnabled double-tap toggles between [minZoom] and [doubleTapZoom].
+ * @param doubleTapZoom the zoom a double tap goes to. It must be finite and above 0, and a
+ *   double tap clamps it into [minZoom]..[maxZoom], as every zoom change is clamped.
  * @param panEnabled one-finger pan while zoomed in.
  * @param resetZoomOnPageChange in [KiteDocLayout.Paged] mode, snap zoom back to
  *   [minZoom] when the user lands on another page. Disable when zoom is driven
@@ -113,6 +123,7 @@ public data class KiteZoomSpec(
     init {
         require(minZoom > 0f) { "minZoom must be > 0 (was $minZoom)" }
         require(maxZoom >= minZoom) { "maxZoom ($maxZoom) must be >= minZoom ($minZoom)" }
+        require(doubleTapZoom.isFinite() && doubleTapZoom > 0f) { "doubleTapZoom must be finite and > 0 (was $doubleTapZoom)" }
     }
 
     public companion object {
