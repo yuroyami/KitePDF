@@ -35,10 +35,13 @@ public class PdfFormState(private val document: PdfDocument) {
 
     /**
      * How many changes this state has seen. A viewer that keeps a drawn page can
-     * compare it with the number it drew at to know whether anything moved.
+     * compare it with the number it drew at to know whether anything moved. It is read
+     * under the same lock that guards the writes, so a thread that did not write it still
+     * sees the latest number (#364).
      */
-    public var revision: Int = 0
-        private set
+    public val revision: Int get() = lock.withLock { changes }
+
+    private var changes = 0
 
     /** What changed, for a listener that redraws only the widgets that moved. */
     public class Change internal constructor(
@@ -67,7 +70,7 @@ public class PdfFormState(private val document: PdfDocument) {
     public fun setValue(fieldName: String, value: String) {
         if (document.formField(fieldName) == null) return
         val changed = lock.withLock {
-            if (values[fieldName] == value) false else { values[fieldName] = value; revision++; true }
+            if (values[fieldName] == value) false else { values[fieldName] = value; changes++; true }
         }
         if (changed) publish(Change(fieldName, value))
     }
@@ -75,7 +78,7 @@ public class PdfFormState(private val document: PdfDocument) {
     /** Drops this state's value for [fieldName], so the file's own value shows again. */
     public fun reset(fieldName: String) {
         val removed = lock.withLock {
-            if (values.remove(fieldName) == null) false else { revision++; true }
+            if (values.remove(fieldName) == null) false else { changes++; true }
         }
         if (removed) publish(Change(fieldName, value(fieldName) ?: ""))
     }
@@ -88,7 +91,7 @@ public class PdfFormState(private val document: PdfDocument) {
             values.clear()
             hidden.clear()
             readOnly.clear()
-            revision++
+            changes++
             names
         }
         for (name in touched) publish(Change(name, value(name) ?: ""))
@@ -111,7 +114,7 @@ public class PdfFormState(private val document: PdfDocument) {
     public fun setHidden(fieldName: String, value: Boolean) {
         if (document.formField(fieldName) == null) return
         val changed = lock.withLock {
-            if (hidden[fieldName] == value) false else { hidden[fieldName] = value; revision++; true }
+            if (hidden[fieldName] == value) false else { hidden[fieldName] = value; changes++; true }
         }
         if (changed) publish(Change(fieldName, this.value(fieldName) ?: "", flagsOnly = true))
     }
@@ -124,7 +127,7 @@ public class PdfFormState(private val document: PdfDocument) {
     public fun setReadOnly(fieldName: String, value: Boolean) {
         if (document.formField(fieldName) == null) return
         val changed = lock.withLock {
-            if (readOnly[fieldName] == value) false else { readOnly[fieldName] = value; revision++; true }
+            if (readOnly[fieldName] == value) false else { readOnly[fieldName] = value; changes++; true }
         }
         if (changed) publish(Change(fieldName, this.value(fieldName) ?: "", flagsOnly = true))
     }

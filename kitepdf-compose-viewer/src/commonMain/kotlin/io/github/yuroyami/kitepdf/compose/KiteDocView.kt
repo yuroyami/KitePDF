@@ -234,15 +234,14 @@ public fun KiteDocView(
         // A document's own scripts may run for a long time before they show anything, so they
         // run on their own thread and the reader keeps scrolling meanwhile.
         withContext(kitepdfScriptDispatcher()) { handler.documentOpened() }
-        state.formRevision = handler.formState.revision
     }
     val currentPage = state.currentLocation.chapter
     LaunchedEffect(scripts, currentPage) {
         val handler = scripts ?: return@LaunchedEffect
         withContext(kitepdfScriptDispatcher()) { handler.pageOpened(currentPage) }
-        state.formRevision = handler.formState.revision
     }
-    KiteScriptTimers(scripts) { state.formRevision = scripts?.formState?.revision ?: 0 }
+    KiteScriptTimers(scripts)
+    KiteFormRevision(state, scripts)
     KiteFormInput(state, scripts)
 
     // Keep callbacks fresh without restarting pointer input during a press or a selection.

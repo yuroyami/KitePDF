@@ -390,36 +390,43 @@ public class KiteDocViewState(
     }
 
     /**
-     * Takes the caret out of the focused field and commits what it holds: the document's
-     * validate, calculate and format scripts run, as they do when a reader leaves a field.
+     * Takes the caret out of the focused field and commits what the reader sees in it: the
+     * document's keystroke, validate, calculate and format scripts run on the whole value, as
+     * they do when a reader leaves a field.
      */
     internal fun blurFocusedField() {
         val name = focusedField ?: return
         focusedField = null
+        val typed = editingText
+        editingText = null
         val handler = scripts ?: return
         post {
-            handler.commit(name, handler.formState.value(name) ?: "")
+            handler.commit(name, typed ?: handler.formState.value(name) ?: "")
             handler.blur(name)
         }
     }
 
-    /** Runs [work] on the script thread, or here when no scope is set, as a test has none. */
+    /** What the reader sees in the focused field, which a keystroke script may not have answered for yet. */
+    internal var editingText: String? = null
+
+    /**
+     * Runs [work] on the script thread, or here when no scope is set, as a test has none. The
+     * form's own listener publishes what the work changed (#357), so nothing here writes state
+     * that composition reads from the script thread (#364).
+     */
     internal fun post(work: () -> Unit) {
         val scope = scriptScope
         if (scope == null) {
             work()
-            formRevision = scripts?.formState?.revision ?: formRevision
             return
         }
-        scope.launch(kitepdfScriptDispatcher()) {
-            work()
-            formRevision = scripts?.formState?.revision ?: formRevision
-        }
+        scope.launch(kitepdfScriptDispatcher()) { work() }
     }
 
     /**
      * Changes whenever the form does, so the field layer repaints and the page bitmap does not.
-     * A script that writes a field twenty times a second costs twenty overlay draws.
+     * A script that writes a field twenty times a second costs twenty overlay draws. Written
+     * only on the composition's thread, by [KiteFormRevision].
      */
     internal var formRevision: Int by mutableIntStateOf(0)
 

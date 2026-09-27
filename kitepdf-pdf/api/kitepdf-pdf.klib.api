@@ -1025,8 +1025,7 @@ final class io.github.yuroyami.kitepdf/PdfFormState { // io.github.yuroyami.kite
 
     final val changedFields // io.github.yuroyami.kitepdf/PdfFormState.changedFields|{}changedFields[0]
         final fun <get-changedFields>(): kotlin.collections/Set<kotlin/String> // io.github.yuroyami.kitepdf/PdfFormState.changedFields.<get-changedFields>|<get-changedFields>(){}[0]
-
-    final var revision // io.github.yuroyami.kitepdf/PdfFormState.revision|{}revision[0]
+    final val revision // io.github.yuroyami.kitepdf/PdfFormState.revision|{}revision[0]
         final fun <get-revision>(): kotlin/Int // io.github.yuroyami.kitepdf/PdfFormState.revision.<get-revision>|<get-revision>(){}[0]
 
     final fun isChanged(kotlin/String): kotlin/Boolean // io.github.yuroyami.kitepdf/PdfFormState.isChanged|isChanged(kotlin.String){}[0]
