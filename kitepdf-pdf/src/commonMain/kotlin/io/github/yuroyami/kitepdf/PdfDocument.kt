@@ -200,6 +200,20 @@ public class PdfDocument private constructor(
      */
     override fun pageCountIn(chapter: Int): Int = if (chapter == 0) pages.size else 0
 
+    /**
+     * Each widget annotation's field, and the widget's place among the field's widgets, by the
+     * widget's object reference. A tap finds its widget here instead of by rectangle (#359).
+     */
+    internal val widgetOwners: Map<PdfReference, Pair<PdfFormField, Int>> by lazy {
+        val owners = HashMap<PdfReference, Pair<PdfFormField, Int>>()
+        for (field in formFields) {
+            field.widgets.forEachIndexed { index, widget ->
+                widget.reference?.let { owners.getOrPut(it) { field to index } }
+            }
+        }
+        owners
+    }
+
     /** Indirect-object-number → zero-based page index. Built alongside [pages].
      *  Written only inside the SYNCHRONIZED [pages] lazy; readers touch [pages]
      *  first, so the map is complete and immutable by the time anyone reads it. */

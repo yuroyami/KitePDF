@@ -254,7 +254,7 @@ public fun KiteDocView(
     val linkAwareTap: (Offset) -> Unit = remember(state, tapScope) {
         { offset ->
             state.clearSelection()
-            if (!handleWidgetTap(state, currentScripts, offset, tapScope)) {
+            if (!handleWidgetTap(state, currentScripts, offset, tapScope, currentLinkTap)) {
                 state.blurFocusedField()
                 val highlight = state.highlightAt(offset)
                 val consumed = highlight != null && currentHighlightTap?.invoke(highlight) == true

@@ -281,15 +281,30 @@ public class PdfPage internal constructor(
      * The form field whose widget covers the point, in page space, or null when none does.
      *
      * A viewer uses it to decide what a tap hit: a push button to press, a check box to toggle,
-     * a text field to put the caret in. The topmost widget wins, as it does for links.
+     * a text field to put the caret in. The topmost widget wins, as it does for links. See
+     * [widgetAt] for the widget itself.
      */
-    public fun formFieldAt(x: Double, y: Double): PdfFormField? {
-        for (annotation in annotations.asReversed()) {
-            if (annotation.subtype != PdfAnnotation.Subtype.Widget || annotation.isHidden) continue
+    public fun formFieldAt(x: Double, y: Double): PdfFormField? = widgetAt(x, y)?.field
+
+    /**
+     * The form widget under a point in page space, with its field, or null when none is there.
+     *
+     * The topmost widget wins, as it does for links. It is matched by its object reference, not
+     * by its rectangle, so a tap acts on the widget under the finger: a form that repeats a
+     * layout on every page edits the field of this page, and each button of a radio group is its
+     * own (#359). With a [formState], a widget that a script hid lets the tap through to what
+     * lies below it, and one that a script showed again takes it (#360).
+     */
+    public fun widgetAt(x: Double, y: Double, formState: PdfFormState? = null): PdfWidgetHit? {
+        val owners = document.widgetOwners
+        for ((reference, annotation) in annotationEntries.asReversed()) {
+            if (annotation.subtype != PdfAnnotation.Subtype.Widget) continue
+            val (field, index) = reference?.let { owners[it] } ?: continue
+            val hidden = formState?.hiddenOverride(field.fullyQualifiedName) ?: annotation.isHidden
+            if (hidden) continue
             val rect = annotation.rect
             if (x < rect.left || x > rect.right || y < rect.bottom || y > rect.top) continue
-            document.formFields.firstOrNull { field -> field.widgets.any { it.rect == rect } }
-                ?.let { return it }
+            return PdfWidgetHit(field, field.widgets[index], index)
         }
         return null
     }
@@ -307,7 +322,10 @@ public class PdfPage internal constructor(
      * Annotations attached to this page (links, highlights, etc.). Parsed from
      * the page's `/Annots` array; empty when the page has none.
      */
-    public val annotations: List<PdfAnnotation> by lazy {
+    public val annotations: List<PdfAnnotation> by lazy { annotationEntries.map { it.second } }
+
+    /** The page's annotations in `/Annots` order, each with the reference that reaches it, or null for an inline one. */
+    internal val annotationEntries: List<Pair<PdfReference?, PdfAnnotation>> by lazy {
         val arr = node.getArray("Annots", document) ?: return@lazy emptyList()
         arr.mapNotNull { item ->
             val dict = when (item) {
@@ -316,7 +334,7 @@ public class PdfPage internal constructor(
                 else -> null
             } ?: return@mapNotNull null
             try {
-                PdfAnnotation.parse(dict, document)
+                (item as? PdfReference) to PdfAnnotation.parse(dict, document)
             } catch (failure: Exception) {
                 // One broken annotation is skipped. The others still draw and still take taps (#334).
                 io.github.yuroyami.kitepdf.core.kiteWarn { "annotation: one cannot be read and is skipped: ${failure.message}" }
@@ -409,3 +427,13 @@ public class PdfPage internal constructor(
         PageRenderer(canvas, document, formState).renderAnnotations(this, deviceCtm, annotations)
     }
 }
+
+/** A form widget found under a point, with the field it shows. See [PdfPage.widgetAt]. */
+public class PdfWidgetHit internal constructor(
+    /** The field the widget belongs to. */
+    public val field: PdfFormField,
+    /** The widget under the point: one button of a radio group, not its first. */
+    public val widget: PdfFormField.Widget,
+    /** Where [widget] is in [PdfFormField.widgets], which a script handler takes to run that widget's scripts. */
+    public val widgetIndex: Int,
+)

@@ -34,6 +34,33 @@ import io.github.yuroyami.kitepdf.core.parser.PdfString
 public sealed class PdfAction {
     public abstract val raw: PdfDictionary
 
+    /**
+     * This action followed by the actions its `/Next` entry chains after it, in the order to
+     * perform them (ISO 32000-1, 12.6.2). `/Next` holds one action or an array of them, and each
+     * may have a `/Next` of its own. A chain that loops, or runs past 32 actions, stops there.
+     */
+    public fun withNext(refs: IndirectResolver): List<PdfAction> {
+        val out = arrayListOf(this)
+        val seen = HashSet<PdfReference>()
+        // Actions in a /Next array run in order, each followed by its own /Next, depth first.
+        fun follow(entry: PdfObject?) {
+            if (entry == null || out.size >= MAX_CHAIN) return
+            if (entry is PdfReference && !seen.add(entry)) return
+            when (val value = if (entry is PdfReference) refs.resolve(entry) else entry) {
+                is PdfArray -> for (item in value) follow(item)
+                is PdfDictionary -> {
+                    if (out.any { it.raw === value }) return
+                    val action = parse(value, refs) ?: return
+                    out += action
+                    follow(value["Next"])
+                }
+                else -> {}
+            }
+        }
+        follow(raw["Next"])
+        return out
+    }
+
     public data class GoTo(
         /** Unresolved /D. Pass through [PdfDocument.resolveDestination] for the typed view. */
         val destination: PdfObject,
@@ -116,6 +143,9 @@ public sealed class PdfAction {
     }
 
     public companion object {
+
+        /** The most actions [withNext] follows, which no real form comes near. */
+        private const val MAX_CHAIN = 32
 
         /**
          * Parse an /A action dict (or anything that has `/S` and the right

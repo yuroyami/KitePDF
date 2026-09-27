@@ -468,7 +468,7 @@ public class PageRenderer(
     ) {
         for (annot in page.annotations) {
             if (!accept(annot)) continue
-            if (annot.isHidden) continue   // /F Hidden or NoView (§12.5.3)
+            if (isHiddenNow(annot)) continue
             // Invisible hides only a non-standard subtype with no handler (§12.5.3, #64).
             if (annot.isInvisible && annot.subtype == Subtype.Other) continue
             // Popup annotations are only shown when their parent is opened, never
@@ -483,7 +483,6 @@ public class PageRenderer(
             val liveAppearance = liveWidgetAppearance(annot)
             val stream = annot.appearanceStream
             when {
-                liveAppearance === HIDDEN_WIDGET -> Unit
                 liveAppearance != null -> renderAppearanceForRect(liveAppearance, annot.rect, state)
                 stream != null -> renderAppearanceForRect(
                     stream, annot.rect, state, noZoom = annot.isNoZoom, opacity = opacityOf(annot),
@@ -496,14 +495,27 @@ public class PageRenderer(
     }
 
     /**
+     * Whether [annot] is hidden: by the live form when a script hid its field or showed it again,
+     * else by its own `/F` Hidden or NoView flag (§12.5.3). A tap on a widget is decided the same
+     * way, so a reader never taps a widget they cannot see (#360).
+     */
+    private fun isHiddenNow(annot: io.github.yuroyami.kitepdf.PdfAnnotation): Boolean {
+        val state = formState
+        if (state != null && annot.subtype == Subtype.Widget) {
+            val name = io.github.yuroyami.kitepdf.PdfFormField.qualifiedNameOf(annot.raw, resolver)
+            if (name != null) state.hiddenOverride(name)?.let { return it }
+        }
+        return annot.isHidden
+    }
+
+    /**
      * The appearance a widget gets from [formState], or null when the state says nothing about it
-     * and the file's own appearance applies. [HIDDEN_WIDGET] means the state hides the field.
+     * and the file's own appearance applies.
      */
     private fun liveWidgetAppearance(annot: io.github.yuroyami.kitepdf.PdfAnnotation): PdfStream? {
         val state = formState ?: return null
         if (annot.subtype != Subtype.Widget) return null
         val name = io.github.yuroyami.kitepdf.PdfFormField.qualifiedNameOf(annot.raw, resolver) ?: return null
-        if (state.isHidden(name)) return HIDDEN_WIDGET
         if (!state.isChanged(name)) return null
         return io.github.yuroyami.kitepdf.writer.FieldAppearance.synthesize(
             annot.raw, annot.rect.width, annot.rect.height, resolver, valueOverride = state.value(name) ?: "",
@@ -2539,9 +2551,6 @@ public class PageRenderer(
     }
 
     private companion object {
-        /** Stands for "the live form state hides this widget", which is not "it has no appearance". */
-        val HIDDEN_WIDGET = PdfStream(PdfDictionary(emptyMap()), ByteArray(0))
-
         /** The glyph space of [KiteCanvas.hostGlyphOutline] outlines. */
         const val HOST_UNITS_PER_EM = 1000
 

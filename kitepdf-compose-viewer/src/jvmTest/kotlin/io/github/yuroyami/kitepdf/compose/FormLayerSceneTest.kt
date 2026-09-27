@@ -111,9 +111,19 @@ class FormLayerSceneTest {
         val doc = PdfDocument.open(formPdf())
         val scripts = FakeScripts(doc)
         lateinit var state: KiteDocViewState
+        val taps = java.util.Collections.synchronizedList(ArrayList<Offset>())
+        // What the output field shows, in order: the press writes it, then the timer does.
+        val shown = java.util.Collections.synchronizedList(ArrayList<String>())
+        scripts.formState.onChange { if (it.fieldName == "out") shown += it.value }
         ImageComposeScene(width = 200, height = 200, density = Density(1f)) {
             state = rememberKiteDocViewState(doc)
-            KiteDocView(state = state, modifier = Modifier.fillMaxSize(), scripts = scripts)
+            KiteDocView(
+                state = state,
+                modifier = Modifier.fillMaxSize(),
+                zoomSpec = KiteZoomSpec(doubleTapEnabled = false),
+                scripts = scripts,
+                onTap = { taps += it },
+            )
         }.use { scene ->
             val driver = SceneTestDriver(scene)
             driver.pumpUntil { state.pageGeometry.isNotEmpty() }
@@ -121,19 +131,21 @@ class FormLayerSceneTest {
             assertTrue(scripts.events.contains("page 0"), "the page's own trigger fired: ${scripts.events}")
 
             // The button is [20..90] x [20..60] in user space, so display y 140..180: centre (55, 160).
-            assertTrue(handleWidgetTap(state, scripts, Offset(55f, 160f)), "the button consumed the tap")
+            scene.sendPointerEvent(PointerEventType.Press, Offset(55f, 160f), type = PointerType.Touch)
+            scene.sendPointerEvent(PointerEventType.Release, Offset(55f, 160f), type = PointerType.Touch)
+            driver.pumpUntilState { scripts.events.contains("up press") }
             assertEquals(listOf("down press", "up press"), scripts.events.drop(2))
-            assertEquals("pressed", scripts.formState.value("out"))
-            // handleWidgetTap with no scope runs the press where it stands, which is what keeps
-            // this assertion in order; the viewer passes its own scope and posts instead.
+            assertTrue(taps.isEmpty(), "the button consumed the tap")
 
             // The timer the press started is pumped by the viewer, a frame at a time.
             driver.pumpUntil { scripts.ticks >= 3 }
-            assertEquals("tick 3", scripts.formState.value("out"))
+            assertEquals(listOf("pressed", "tick 1", "tick 2", "tick 3"), shown.toList())
             assertFalse(scripts.hasTimers, "the timer stopped itself")
 
-            // A tap on empty page space is not a widget.
-            assertFalse(handleWidgetTap(state, scripts, Offset(150f, 190f)))
+            // A tap on empty page space is not a widget, so it is the page's.
+            scene.sendPointerEvent(PointerEventType.Press, Offset(150f, 190f), type = PointerType.Touch)
+            scene.sendPointerEvent(PointerEventType.Release, Offset(150f, 190f), type = PointerType.Touch)
+            driver.pumpUntilState { taps.size == 1 }
         }
     }
 

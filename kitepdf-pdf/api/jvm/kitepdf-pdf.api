@@ -76,6 +76,7 @@ public final class io/github/yuroyami/kitepdf/PdfAcroForm$Companion {
 public abstract class io/github/yuroyami/kitepdf/PdfAction {
 	public static final field Companion Lio/github/yuroyami/kitepdf/PdfAction$Companion;
 	public abstract fun getRaw ()Lio/github/yuroyami/kitepdf/core/parser/PdfDictionary;
+	public final fun withNext (Lio/github/yuroyami/kitepdf/core/parser/IndirectResolver;)Ljava/util/List;
 }
 
 public final class io/github/yuroyami/kitepdf/PdfAction$Companion {
@@ -721,6 +722,7 @@ public final class io/github/yuroyami/kitepdf/PdfFormField$FieldType : java/lang
 }
 
 public final class io/github/yuroyami/kitepdf/PdfFormField$Widget {
+	public final fun getAction ()Lio/github/yuroyami/kitepdf/PdfAction;
 	public final fun getAdditionalActions ()Lio/github/yuroyami/kitepdf/PdfWidgetActions;
 	public final fun getBorderStyle ()Ljava/lang/String;
 	public final fun getCaption ()Ljava/lang/String;
@@ -740,6 +742,9 @@ public final class io/github/yuroyami/kitepdf/PdfFormState {
 	public final fun onChange (Lkotlin/jvm/functions/Function1;)Lkotlin/jvm/functions/Function0;
 	public final fun reset (Ljava/lang/String;)V
 	public final fun resetAll ()V
+	public final fun resetForm (Lio/github/yuroyami/kitepdf/PdfAction$ResetForm;)V
+	public final fun resetForm (Ljava/util/Collection;Z)V
+	public static synthetic fun resetForm$default (Lio/github/yuroyami/kitepdf/PdfFormState;Ljava/util/Collection;ZILjava/lang/Object;)V
 	public final fun setHidden (Ljava/lang/String;Z)V
 	public final fun setReadOnly (Ljava/lang/String;Z)V
 	public final fun setValue (Ljava/lang/String;Ljava/lang/String;)V
@@ -883,6 +888,8 @@ public final class io/github/yuroyami/kitepdf/PdfPage : io/github/yuroyami/kitep
 	public static synthetic fun renderTo$default (Lio/github/yuroyami/kitepdf/PdfPage;Lio/github/yuroyami/kitepdf/core/render/KiteCanvas;Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;Lio/github/yuroyami/kitepdf/PdfFormState;Lio/github/yuroyami/kitepdf/core/KiteCancellation;Lkotlin/jvm/functions/Function1;ILjava/lang/Object;)V
 	public static synthetic fun renderTo$default (Lio/github/yuroyami/kitepdf/PdfPage;Lio/github/yuroyami/kitepdf/core/render/KiteCanvas;Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;Lio/github/yuroyami/kitepdf/PdfFormState;Lkotlin/jvm/functions/Function1;ILjava/lang/Object;)V
 	public fun textContent ()Lio/github/yuroyami/kitepdf/core/KiteStructuredText;
+	public final fun widgetAt (DDLio/github/yuroyami/kitepdf/PdfFormState;)Lio/github/yuroyami/kitepdf/PdfWidgetHit;
+	public static synthetic fun widgetAt$default (Lio/github/yuroyami/kitepdf/PdfPage;DDLio/github/yuroyami/kitepdf/PdfFormState;ILjava/lang/Object;)Lio/github/yuroyami/kitepdf/PdfWidgetHit;
 }
 
 public final class io/github/yuroyami/kitepdf/PdfPermissions {
@@ -949,33 +956,43 @@ public final class io/github/yuroyami/kitepdf/PdfRasterGeometryKt {
 
 public abstract interface class io/github/yuroyami/kitepdf/PdfScriptHandler {
 	public fun blur (Ljava/lang/String;)V
+	public fun blur (Ljava/lang/String;I)V
 	public fun commit (Ljava/lang/String;Ljava/lang/String;)Z
 	public fun documentOpened ()V
 	public fun focus (Ljava/lang/String;)V
+	public fun focus (Ljava/lang/String;I)V
 	public abstract fun getFormState ()Lio/github/yuroyami/kitepdf/PdfFormState;
 	public fun getHasTimers ()Z
 	public fun keystroke (Ljava/lang/String;Ljava/lang/String;II)Ljava/lang/String;
 	public fun mouseDown (Ljava/lang/String;)V
+	public fun mouseDown (Ljava/lang/String;I)V
 	public fun mouseUp (Ljava/lang/String;)V
+	public fun mouseUp (Ljava/lang/String;I)V
 	public fun pageClosed (I)V
 	public fun pageOpened (I)V
 	public fun pumpTimers (J)Ljava/lang/Long;
 	public fun runAction (Lio/github/yuroyami/kitepdf/PdfAction$JavaScript;)V
+	public fun runWidgetAction (Ljava/lang/String;Lio/github/yuroyami/kitepdf/PdfAction;)Z
 }
 
 public final class io/github/yuroyami/kitepdf/PdfScriptHandler$DefaultImpls {
 	public static fun blur (Lio/github/yuroyami/kitepdf/PdfScriptHandler;Ljava/lang/String;)V
+	public static fun blur (Lio/github/yuroyami/kitepdf/PdfScriptHandler;Ljava/lang/String;I)V
 	public static fun commit (Lio/github/yuroyami/kitepdf/PdfScriptHandler;Ljava/lang/String;Ljava/lang/String;)Z
 	public static fun documentOpened (Lio/github/yuroyami/kitepdf/PdfScriptHandler;)V
 	public static fun focus (Lio/github/yuroyami/kitepdf/PdfScriptHandler;Ljava/lang/String;)V
+	public static fun focus (Lio/github/yuroyami/kitepdf/PdfScriptHandler;Ljava/lang/String;I)V
 	public static fun getHasTimers (Lio/github/yuroyami/kitepdf/PdfScriptHandler;)Z
 	public static fun keystroke (Lio/github/yuroyami/kitepdf/PdfScriptHandler;Ljava/lang/String;Ljava/lang/String;II)Ljava/lang/String;
 	public static fun mouseDown (Lio/github/yuroyami/kitepdf/PdfScriptHandler;Ljava/lang/String;)V
+	public static fun mouseDown (Lio/github/yuroyami/kitepdf/PdfScriptHandler;Ljava/lang/String;I)V
 	public static fun mouseUp (Lio/github/yuroyami/kitepdf/PdfScriptHandler;Ljava/lang/String;)V
+	public static fun mouseUp (Lio/github/yuroyami/kitepdf/PdfScriptHandler;Ljava/lang/String;I)V
 	public static fun pageClosed (Lio/github/yuroyami/kitepdf/PdfScriptHandler;I)V
 	public static fun pageOpened (Lio/github/yuroyami/kitepdf/PdfScriptHandler;I)V
 	public static fun pumpTimers (Lio/github/yuroyami/kitepdf/PdfScriptHandler;J)Ljava/lang/Long;
 	public static fun runAction (Lio/github/yuroyami/kitepdf/PdfScriptHandler;Lio/github/yuroyami/kitepdf/PdfAction$JavaScript;)V
+	public static fun runWidgetAction (Lio/github/yuroyami/kitepdf/PdfScriptHandler;Ljava/lang/String;Lio/github/yuroyami/kitepdf/PdfAction;)Z
 }
 
 public final class io/github/yuroyami/kitepdf/PdfViewerPreferences {
@@ -1127,6 +1144,12 @@ public final class io/github/yuroyami/kitepdf/PdfWidgetActions {
 }
 
 public final class io/github/yuroyami/kitepdf/PdfWidgetActions$Companion {
+}
+
+public final class io/github/yuroyami/kitepdf/PdfWidgetHit {
+	public final fun getField ()Lio/github/yuroyami/kitepdf/PdfFormField;
+	public final fun getWidget ()Lio/github/yuroyami/kitepdf/PdfFormField$Widget;
+	public final fun getWidgetIndex ()I
 }
 
 public final class io/github/yuroyami/kitepdf/PdfXmpMetadata {
