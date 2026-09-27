@@ -26,8 +26,11 @@ internal class XpsBrushes(
     private val budget: XpsRenderBudget,
     private val renderVisual: (XpsResource, KiteCanvas, KiteMatrix, XpsResources, Int) -> Unit,
 ) {
-    private data class Image(val data: KiteImageData, val width: Double, val height: Double)
-    private val images = HashMap<String, Image?>()
+    /** A decoded image brush, and its size in XPS units at the image's own resolution. */
+    internal data class Image(val data: KiteImageData, val width: Double, val height: Double)
+
+    /** Image parts that did not decode in this render, so a brush used again does not try again. */
+    private val unreadable = HashSet<String>()
 
     fun solid(resource: XpsResource): XpsColor? {
         if (resource.node.tag != "solidcolorbrush") return null
@@ -70,15 +73,19 @@ internal class XpsBrushes(
         var source = resource.node.attrs["imagesource"] ?: return null
         if (source.startsWith("{ColorConvertedBitmap ")) source = source.removePrefix("{ColorConvertedBitmap ").substringBefore(' ')
         val part = resolvePart(resource.base, source) ?: return null
-        if (images.containsKey(part)) return images[part]
-        val image = runCatching {
-            val bytes = packageData.read(part) ?: return@runCatching null
-            val decoded = KiteImageData.fromEncodedImage(bytes) ?: return@runCatching null
-            val dpi = imageDpi(bytes)
-            Image(decoded, decoded.width * 96.0 / dpi.first, decoded.height * 96.0 / dpi.second)
-        }.getOrNull()
-        images[part] = image
-        return image
+        if (part in unreadable) return null
+        // The package keeps decoded brushes across renders, so a page drawn again does not decode again (#385).
+        return packageData.image(part) {
+            runCatching {
+                val bytes = packageData.read(part) ?: return@runCatching null
+                val decoded = KiteImageData.fromEncodedImage(bytes) ?: return@runCatching null
+                val dpi = imageDpi(bytes)
+                Image(decoded, decoded.width * 96.0 / dpi.first, decoded.height * 96.0 / dpi.second)
+            }.getOrNull()
+        } ?: run {
+            unreadable += part
+            null
+        }
     }
 
     private fun tiles(

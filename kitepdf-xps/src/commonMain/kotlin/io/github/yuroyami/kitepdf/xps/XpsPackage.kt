@@ -6,10 +6,17 @@ import io.github.yuroyami.kitepdf.core.text.TextEncoding
 import io.github.yuroyami.kitepdf.core.withLock
 import io.github.yuroyami.kitepdf.core.xml.KiteXml
 import io.github.yuroyami.kitepdf.core.xml.KiteXmlNode
+import io.github.yuroyami.kitepdf.core.xml.KiteXmlToken
 import io.github.yuroyami.kitepdf.core.zip.ZipReader
 
 /** OPC part access, ECMA-388 §9 and the OPC ZIP mapping in ISO/IEC 29500-2. */
-internal class XpsPackage(bytes: ByteArray) {
+internal class XpsPackage(
+    bytes: ByteArray,
+    /** The markup of the parsed pages the package keeps. */
+    parsedPageBytes: Long = PARSED_PAGE_BYTES,
+    /** The decoded image brushes the package keeps. */
+    imageBytes: Long = IMAGE_BYTES,
+) {
     private val zip = ZipReader(bytes)
     private val names = buildMap {
         for (name in zip.names) {
@@ -43,6 +50,61 @@ internal class XpsPackage(bytes: ByteArray) {
         }
         null
     }.getOrNull()
+
+    /**
+     * The first [maxBytes] bytes of [part], or of its first piece when the part is interleaved,
+     * inflated only as far as they go.
+     */
+    private fun readPrefix(part: String, maxBytes: Int): ByteArray? = runCatching {
+        val name = names[part.lowercase()]
+            ?: names["${part.lowercase()}/[0].piece"]
+            ?: names["${part.lowercase()}/[0].last.piece"]
+            ?: return@runCatching null
+        zip.readPrefix(name, maxBytes)
+    }.getOrNull()
+
+    /**
+     * The root element of [part] with its attributes and without children, read from the first
+     * bytes of the part only. Null when those bytes hold no whole start tag (#385).
+     */
+    fun rootTag(part: String): KiteXmlNode.Element? {
+        val head = readPrefix(part, ROOT_TAG_BYTES) ?: return null
+        // The tokenizer of the full parse, so the tag reads the same either way.
+        val tag = KiteXml.tokenize(TextEncoding.decode(head)).firstOrNull { it is KiteXmlToken.Open } as KiteXmlToken.Open?
+        return tag?.let { KiteXmlNode.Element(it.name, it.attrs) }
+    }
+
+    /**
+     * The parsed markup of the fixed page [part]. The package keeps it for the next render or
+     * text read, within its budget of markup, so a page no longer keeps its tree for
+     * the life of the document (#385).
+     */
+    fun page(part: String): KiteXmlNode.Element? {
+        val key = part.lowercase()
+        lock.withLock { pages.get(key) }?.let { return it.root }
+        val bytes = read(part) ?: return null
+        val root = runCatching { KiteXml.parse(TextEncoding.decode(bytes)).elements().firstOrNull() }.getOrNull()
+            ?.takeIf { it.tag == "fixedpage" } ?: return null
+        lock.withLock { pages.put(key, ParsedPage(root, bytes.size.toLong())) }
+        return root
+    }
+
+    /**
+     * The decoded image brush of [part]. The package keeps it for later renders within its
+     * budget, and runs [decode] only on a miss (#385).
+     */
+    fun image(part: String, decode: () -> XpsBrushes.Image?): XpsBrushes.Image? {
+        val key = part.lowercase()
+        lock.withLock { images.get(key) }?.let { return it }
+        return decode()?.also { image -> lock.withLock { images.put(key, image) } }
+    }
+
+    private class ParsedPage(val root: KiteXmlNode.Element, val markupBytes: Long)
+
+    private val pages = ByteBudgetCache<ParsedPage>(parsedPageBytes) { it.markupBytes }
+    private val images = ByteBudgetCache<XpsBrushes.Image>(imageBytes) { image ->
+        (image.data.pixelBytes?.size ?: image.data.encodedBytes.size).toLong() + (image.data.softMaskAlpha?.size ?: 0)
+    }
 
     fun xml(part: String): KiteXmlNode.Element? = read(part)?.let { bytes ->
         runCatching { KiteXml.parse(TextEncoding.decode(bytes)).elements().firstOrNull() }.getOrNull()
@@ -110,6 +172,43 @@ internal class XpsPackage(bytes: ByteArray) {
             "application/vnd.ms-package.xps-fixeddocumentsequence+xml",
             "application/oxps-fixeddocumentsequence+xml",
         )
+
+        /** The bytes read for a root start tag, which comes after at most a declaration and comments. */
+        const val ROOT_TAG_BYTES = 16 * 1024
+
+        /** The markup of the parsed pages a package keeps. */
+        const val PARSED_PAGE_BYTES = 4L * 1024 * 1024
+
+        /** The decoded image brushes a package keeps, the same budget as the decoded scans of a comic. */
+        const val IMAGE_BYTES = 64L * 1024 * 1024
+    }
+}
+
+/**
+ * Values by key, the least recently used dropped first once their sizes pass [maxBytes]. A value
+ * larger than the whole budget is not kept, so it cannot push every other one out. Callers hold a lock.
+ */
+private class ByteBudgetCache<V : Any>(private val maxBytes: Long, private val sizeOf: (V) -> Long) {
+    /** Oldest use first. */
+    private val entries = LinkedHashMap<String, V>()
+    private var bytes = 0L
+
+    // Taken out and put back, so the entry moves to the newest end.
+    fun get(key: String): V? = entries.remove(key)?.also { entries[key] = it }
+
+    fun put(key: String, value: V) {
+        val size = sizeOf(value)
+        if (size > maxBytes) return
+        entries.remove(key)?.let { bytes -= sizeOf(it) }
+        entries[key] = value
+        bytes += size
+        val oldest = entries.entries.iterator()
+        while (bytes > maxBytes && oldest.hasNext()) {
+            val entry = oldest.next()
+            if (entry.key == key) continue
+            bytes -= sizeOf(entry.value)
+            oldest.remove()
+        }
     }
 }
 

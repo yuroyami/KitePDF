@@ -90,9 +90,17 @@ public class XpsPage internal constructor(
     private val fallbackWidth: Double,
     private val fallbackHeight: Double,
 ) : KitePage {
-    private val root by lazy { packageData.xml(part)?.takeIf { it.tag == "fixedpage" } }
-    private val width: Double get() = root?.number("width", fallbackWidth)?.positive() ?: fallbackWidth.positive()
-    private val height: Double get() = root?.number("height", fallbackHeight)?.positive() ?: fallbackHeight.positive()
+    /**
+     * The size from the start tag of the page, read from the first bytes of its part only, so a
+     * layout that measures many pages does not parse each one (#385). The full parse stands in
+     * when those bytes hold no whole tag, and the PageContent size when the page has none.
+     */
+    private val size: Pair<Double, Double> by lazy {
+        val root = (packageData.rootTag(part) ?: packageData.page(part))?.takeIf { it.tag == "fixedpage" }
+        (root?.number("width", fallbackWidth) ?: fallbackWidth) to (root?.number("height", fallbackHeight) ?: fallbackHeight)
+    }
+    private val width: Double get() = size.first.positive()
+    private val height: Double get() = size.second.positive()
     override val displayWidth: Double get() = width * POINTS_PER_UNIT
     override val displayHeight: Double get() = height * POINTS_PER_UNIT
     override fun displayToDeviceBase(): KiteMatrix = KiteMatrix.IDENTITY
@@ -100,7 +108,7 @@ public class XpsPage internal constructor(
     override fun renderTo(canvas: KiteCanvas, deviceCtm: KiteMatrix) {
         canvas.beginPage(displayWidth, displayHeight, deviceCtm)
         try {
-            val page = root
+            val page = packageData.page(part)
             if (page == null) {
                 val sheet = KitePath.Builder().apply { rectangle(0.0, 0.0, displayWidth, displayHeight) }.build()
                 canvas.fillPath(sheet, deviceCtm, RgbColor(0.9, 0.9, 0.9), false)
@@ -115,7 +123,7 @@ public class XpsPage internal constructor(
 
     /** Built once, on first use: a selection drag asks for it at the rate of pointer events (#380). */
     private val text: KiteStructuredText by lazy {
-        root?.let {
+        packageData.page(part)?.let {
             XpsRenderer(packageData, part).text(it, KiteMatrix.scaling(POINTS_PER_UNIT, POINTS_PER_UNIT))
         } ?: KiteStructuredText(emptyList())
     }
