@@ -288,7 +288,6 @@ public fun KiteDocView(
     DisposableEffect(state) { onDispose { state.blurFocusedField() } }
     KiteScriptTimers(state, scripts, scriptLane)
     KiteFormRevision(state, scripts)
-    KiteFormInput(state, scripts, scriptLane)
 
     // Keep callbacks fresh without restarting pointer input during a press or a selection.
     val currentHighlightTap by rememberUpdatedState(onHighlightTap)
@@ -317,6 +316,9 @@ public fun KiteDocView(
             .clipToBounds()
             .onSizeChanged { state.viewportSize = it },
     ) {
+        // The keyboard input of the field with the caret: inside this box, so the host's layout
+        // never sees it, and first, so the pages above it take every tap (#362).
+        KiteFormInput(state, scripts, scriptLane)
         if (state.itemCount > 0) {
             // A new state gets a new layout, containers and all, so nothing of the old document's
             // strip reaches the new one's pages (#346).

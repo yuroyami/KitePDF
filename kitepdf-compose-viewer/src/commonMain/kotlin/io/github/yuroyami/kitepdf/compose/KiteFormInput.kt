@@ -1,6 +1,5 @@
 package io.github.yuroyami.kitepdf.compose
 
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -16,11 +15,19 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.TextFieldValue
-import androidx.compose.ui.unit.dp
+import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.unit.Constraints
+import io.github.yuroyami.kitepdf.PdfAction
+import io.github.yuroyami.kitepdf.PdfDocument
+import io.github.yuroyami.kitepdf.PdfFormField
 import io.github.yuroyami.kitepdf.PdfScriptHandler
+import kotlin.math.roundToInt
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.withContext
@@ -33,20 +40,79 @@ import kotlinx.coroutines.withContext
  * refuse a character, which is how a form keeps letters out of a number field, and Chrome's
  * engine asks it for every character (ISO 32000-1, 12.6.3, the keystroke trigger).
  *
- * The platform keyboard is opened by a text field with no size and no colour, focused while a
- * widget has the caret. Everything it produces goes through [PdfScriptHandler.keystroke] first,
- * and the value is committed when the field loses the caret or the reader presses done.
+ * The platform keyboard is opened by a text field with no colour, focused while a widget has the
+ * caret. It lies over the widget and under the pages, so the platform keeps the widget in view
+ * above the keyboard and the pages still take every tap. It takes keys the way the field asks
+ * (see [fieldInputOptions]). Everything it produces goes through [PdfScriptHandler.keystroke]
+ * first, and the value is committed when the field loses the caret or the reader presses done.
+ *
+ * Call it as the first child of the viewer's box, so the host's layout never sees it (#362).
  */
 @Composable
 internal fun KiteFormInput(state: KiteDocViewState, scripts: PdfScriptHandler?, lane: CoroutineDispatcher) {
     val fieldName = state.focusedField ?: return
     if (scripts == null) return
+    val field = remember(state.document, fieldName) {
+        (state.document as? PdfDocument)?.formFields?.firstOrNull { it.fullyQualifiedName == fieldName }
+    }
     // One input per field, so a new field starts with its own caret and its own focus history.
-    key(fieldName) { FieldInput(state, scripts, fieldName, lane) }
+    key(fieldName) { FieldInput(state, scripts, fieldName, lane, fieldInputOptions(field)) }
+}
+
+/** How the input for a field takes keys: on one line or several, with which keyboard, and how many. */
+internal class FieldInputOptions(val singleLine: Boolean, val keyboard: KeyboardOptions, val maxLength: Int?)
+
+/**
+ * The input options that [field] asks for (ISO 32000-1, 12.7.4.3, Table 228). A multi-line
+ * field takes line breaks, a password field gets a password keyboard with no suggestions, a field
+ * with a number format gets a number keyboard, and `/MaxLen` caps the length (#362).
+ */
+internal fun fieldInputOptions(field: PdfFormField?): FieldInputOptions {
+    val flags = field?.flags ?: 0
+    val text = field?.type == PdfFormField.FieldType.Text
+    val multiline = field?.isMultiline == true
+    val password = text && flags and PASSWORD_FLAG != 0
+    val numeric = (field?.additionalActions?.format as? PdfAction.JavaScript)?.script
+        ?.let { "AFNumber_Format" in it || "AFPercent_Format" in it } == true
+    return FieldInputOptions(
+        singleLine = !multiline,
+        keyboard = KeyboardOptions(
+            keyboardType = when {
+                password -> KeyboardType.Password
+                numeric -> KeyboardType.Decimal
+                else -> KeyboardType.Text
+            },
+            imeAction = if (multiline) ImeAction.Default else ImeAction.Done,
+            autoCorrectEnabled = !password && flags and DO_NOT_SPELL_CHECK_FLAG == 0,
+        ),
+        maxLength = field?.maxLength?.takeIf { text && it > 0 },
+    )
+}
+
+/** Text field flags: bit 14 is Password, bit 23 DoNotSpellCheck. */
+private const val PASSWORD_FLAG = 1 shl 13
+private const val DO_NOT_SPELL_CHECK_FLAG = 1 shl 22
+
+/**
+ * Sizes and places the input over the widget with the caret, or in the corner when that is not
+ * known. The node itself takes no room, so the viewer's box keeps its size.
+ */
+private fun Modifier.overFocusedWidget(state: KiteDocViewState): Modifier = layout { measurable, _ ->
+    val area = state.focusedWidgetArea()
+    val width = (area?.width?.roundToInt() ?: 1).coerceAtLeast(1)
+    val height = (area?.height?.roundToInt() ?: 1).coerceAtLeast(1)
+    val placeable = measurable.measure(Constraints.fixed(width, height))
+    layout(0, 0) { placeable.place(area?.left?.roundToInt() ?: 0, area?.top?.roundToInt() ?: 0) }
 }
 
 @Composable
-private fun FieldInput(state: KiteDocViewState, scripts: PdfScriptHandler, fieldName: String, lane: CoroutineDispatcher) {
+private fun FieldInput(
+    state: KiteDocViewState,
+    scripts: PdfScriptHandler,
+    fieldName: String,
+    lane: CoroutineDispatcher,
+    options: FieldInputOptions,
+) {
     val requester = remember { FocusRequester() }
     val pipeline = remember { KeystrokePipeline(scripts.formState.value(fieldName) ?: "") }
     var value by remember { mutableStateOf(TextFieldValue(pipeline.screen, TextRange(pipeline.screen.length))) }
@@ -81,17 +147,22 @@ private fun FieldInput(state: KiteDocViewState, scripts: PdfScriptHandler, field
             // first would mean waiting on the thread it runs on, which may be busy with a
             // document that works for minutes.
             val previous = value
+            // A key that would take the value past the field's length is not taken. A shorter
+            // value is, even one still too long, so the reader can always delete.
+            val max = options.maxLength
+            if (max != null && next.text.length > max && next.text.length > previous.text.length) return@BasicTextField
             value = next
             if (next.text == previous.text) return@BasicTextField
             pipeline.typed(editOf(previous.text, next.text))
             state.editingText = next.text
             typed.trySend(Unit)
         },
-        singleLine = true,
-        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+        singleLine = options.singleLine,
+        keyboardOptions = options.keyboard,
         keyboardActions = KeyboardActions(onDone = { state.blurFocusedField() }),
+        visualTransformation = if (options.keyboard.keyboardType == KeyboardType.Password) PasswordVisualTransformation() else VisualTransformation.None,
         modifier = Modifier
-            .size(1.dp)
+            .overFocusedWidget(state)
             .alpha(0f)
             .focusRequester(requester)
             .onFocusChanged { focus ->
