@@ -113,9 +113,14 @@ public class XpsPage internal constructor(
         } finally { canvas.endPage() }
     }
 
-    override fun textContent(): KiteStructuredText = root?.let {
-        XpsRenderer(packageData, part).text(it, KiteMatrix.scaling(POINTS_PER_UNIT, POINTS_PER_UNIT))
-    } ?: KiteStructuredText(emptyList())
+    /** Built once, on first use: a selection drag asks for it at the rate of pointer events (#380). */
+    private val text: KiteStructuredText by lazy {
+        root?.let {
+            XpsRenderer(packageData, part).text(it, KiteMatrix.scaling(POINTS_PER_UNIT, POINTS_PER_UNIT))
+        } ?: KiteStructuredText(emptyList())
+    }
+
+    override fun textContent(): KiteStructuredText = text
 
     private fun Double.positive(): Double = if (isFinite() && this > 0) this else 1.0
 

@@ -85,6 +85,7 @@ import kotlin.math.max
 import kotlin.math.roundToInt
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.launch
 
@@ -660,6 +661,14 @@ private fun PageSlotContent(
     modifier: Modifier,
 ) {
     val drawsForm = state.scripts != null && page is PdfPage
+    // The page's text, built off the main thread once the reader rests on the page, so a long
+    // press on a dense page does not build it on the main thread (#380).
+    if (state.selectionEnabled) {
+        LaunchedEffect(state, page, pageIndex) {
+            snapshotFlow { state.currentPage == pageIndex && state.adapter?.isScrollInProgress != true }.first { it }
+            state.prepareText(page)
+        }
+    }
     val formTextMeasurer = rememberTextMeasurer()
     val formFailure = remember(page) { DrawFailure() }
     val slot = modifier
