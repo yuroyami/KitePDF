@@ -46,6 +46,30 @@ class KiteMaskTransferTest {
     }
 
     @Test
+    fun a_line_is_nearly_linear_and_a_curve_is_not() {
+        assertTrue(KiteMaskTransfer.of { it }.isNearlyLinear)
+        assertTrue(KiteMaskTransfer.of { 1 - it }.isNearlyLinear)
+        assertTrue(KiteMaskTransfer.of { 0.5 * it + 0.25 }.isNearlyLinear)
+        // The line closest to x * x misses the table by about 17 levels at each end (#445).
+        assertTrue(!KiteMaskTransfer.of { it * it }.isNearlyLinear)
+    }
+
+    @Test
+    fun drawn_mask_pixels_become_black_with_the_mask_value_as_alpha() {
+        val square = KiteMaskTransfer.of { it * it }
+        // A luminosity group over black: white, mid grey, pure green and black.
+        val drawn = intArrayOf(0xFFFFFFFF.toInt(), 0xFF808080.toInt(), 0xFF00FF00.toInt(), 0xFF000000.toInt())
+        square.toMaskAlpha(drawn, luminosity = true)
+        // Grey 128 squares to 64; green has luminosity 0.59 * 255, about 150, which squares to 88.
+        assertEquals(listOf(255, 64, 88, 0), drawn.map { it ushr 24 })
+        assertTrue(drawn.all { it and 0xFFFFFF == 0 }, "the pixels are black")
+        // An alpha group: its alpha goes through the table, its colour does not count.
+        val alphas = intArrayOf(0x80FF0000.toInt(), 0x00FFFFFF)
+        square.toMaskAlpha(alphas, luminosity = false)
+        assertEquals(listOf(64, 0), alphas.map { it ushr 24 })
+    }
+
+    @Test
     fun the_byte_table_holds_every_level() {
         val bytes = KiteMaskTransfer.of { 1 - it }.toByteArray()
         assertEquals(256, bytes.size)
