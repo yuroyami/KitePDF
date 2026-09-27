@@ -284,6 +284,10 @@ final class io.github.yuroyami.kitepdf.compose/KiteDocViewState { // io.github.y
     final suspend fun scrollTo(io.github.yuroyami.kitepdf.core/KiteBookmark, kotlin/Boolean = ...) // io.github.yuroyami.kitepdf.compose/KiteDocViewState.scrollTo|scrollTo(io.github.yuroyami.kitepdf.core.KiteBookmark;kotlin.Boolean){}[0]
     final suspend fun scrollTo(io.github.yuroyami.kitepdf.core/KiteLocation, kotlin/Boolean = ...) // io.github.yuroyami.kitepdf.compose/KiteDocViewState.scrollTo|scrollTo(io.github.yuroyami.kitepdf.core.KiteLocation;kotlin.Boolean){}[0]
     final suspend fun scrollToPage(kotlin/Int) // io.github.yuroyami.kitepdf.compose/KiteDocViewState.scrollToPage|scrollToPage(kotlin.Int){}[0]
+
+    final object Companion { // io.github.yuroyami.kitepdf.compose/KiteDocViewState.Companion|null[0]
+        final fun saver(io.github.yuroyami.kitepdf.core/KiteDocument): androidx.compose.runtime.saveable/Saver<io.github.yuroyami.kitepdf.compose/KiteDocViewState, kotlin/Any> // io.github.yuroyami.kitepdf.compose/KiteDocViewState.Companion.saver|saver(io.github.yuroyami.kitepdf.core.KiteDocument){}[0]
+    }
 }
 
 final class io.github.yuroyami.kitepdf.compose/KiteHighlight { // io.github.yuroyami.kitepdf.compose/KiteHighlight|null[0]

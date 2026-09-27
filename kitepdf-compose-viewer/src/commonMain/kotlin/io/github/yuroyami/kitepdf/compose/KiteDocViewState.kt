@@ -17,8 +17,10 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.saveable.Saver
+import androidx.compose.runtime.saveable.listSaver
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.isSpecified
@@ -46,10 +48,15 @@ import kotlinx.coroutines.withContext
  * Takes any [KiteDocument], so a [io.github.yuroyami.kitepdf.PdfDocument] and
  * an [io.github.yuroyami.kitepdf.epub.EpubDocument] both go here; one viewer
  * path serves both formats.
+ *
+ * The state is saved with [KiteDocViewState.saver], so the reading position
+ * survives a configuration change and the end of the process. The state is
+ * the only thing that saves the position: the viewer's scroll containers save
+ * nothing of their own.
  */
 @Composable
 public fun rememberKiteDocViewState(document: KiteDocument, initialPage: Int = 0): KiteDocViewState =
-    remember(document) { KiteDocViewState(document, initialPage) }
+    rememberSaveable(document, saver = KiteDocViewState.saver(document)) { KiteDocViewState(document, initialPage) }
 
 /**
  * Remembers a [KiteDocViewState] opened at [bookmark], a position saved from an
@@ -66,12 +73,12 @@ public fun rememberKiteDocViewState(document: KiteDocument, initialPage: Int = 0
  */
 @Composable
 public fun rememberKiteDocViewState(document: KiteDocument, bookmark: KiteBookmark): KiteDocViewState =
-    remember(document) { KiteDocViewState(document, bookmark) }
+    rememberSaveable(document, saver = KiteDocViewState.saver(document)) { KiteDocViewState(document, bookmark) }
 
 /** Remembers a state reopened at a page and continuous scroll offset. */
 @Composable
 public fun rememberKiteDocViewState(document: KiteDocument, position: KiteScrollPosition): KiteDocViewState =
-    remember(document) { KiteDocViewState(document, position) }
+    rememberSaveable(document, saver = KiteDocViewState.saver(document)) { KiteDocViewState(document, position) }
 
 /**
  * Observable state + control surface of a [KiteDocView].
@@ -573,10 +580,35 @@ public class KiteDocViewState(
     internal var pendingLeadingPage: Int? = null
 
     /** Remembers the position of a viewer that is not attached. */
-    internal fun park(page: Int, leadingPage: Int? = null, offsetPx: Int = 0) {
+    internal fun park(page: Int, leadingPage: Int? = null, offsetPx: Int = 0, slotLength: Int = 0) {
         pendingPage = page
         pendingLeadingPage = leadingPage
         pendingScrollOffset = offsetPx
+        parkedSlotLength = slotLength
+    }
+
+    /**
+     * The axis of the continuous strip this state was last shown in. A strip on the other axis
+     * converts the scroll offset by the two lengths of the leading slot (#352).
+     */
+    internal var stripOrientation: androidx.compose.foundation.gestures.Orientation? = null
+
+    /** The length of the leading slot on the scroll axis when a continuous strip parked. */
+    private var parkedSlotLength: Int = 0
+
+    /**
+     * Where a new continuous list for this state starts: the leading slot, and the offset into it
+     * on [orientation]'s axis. A slot [crossPx] across is as long as the strip will lay it out.
+     */
+    internal fun stripSeed(orientation: androidx.compose.foundation.gestures.Orientation, crossPx: Int): Pair<Int, Int> {
+        val at = currentScrollPosition
+        val index = inStrip(slotFor(at.location))
+        val old = stripOrientation
+        val oldLength = (adapter as? LazyListScrollAdapter)?.leadingSlotLength ?: parkedSlotLength
+        val page = pageAt(index)
+        if (old == null || old == orientation || oldLength <= 0 || crossPx <= 0 || page == null) return index to at.offsetPx
+        val newLength = stripSlotLength(orientation == androidx.compose.foundation.gestures.Orientation.Vertical, kitePageAspect(page), crossPx)
+        return index to (at.offsetPx.toLong() * newLength / oldLength).toInt().coerceIn(0, newLength)
     }
     internal var zoomRange: ClosedFloatingPointRange<Float> by mutableStateOf(1f..8f)
     /**
@@ -1467,15 +1499,60 @@ public class KiteDocViewState(
         }
     }
 
-    private companion object {
-        const val EPSILON = 0.001f
+    /**
+     * What a saved state holds: the page and scroll offset of a fixed-layout page, or a bookmark
+     * in a reflowable book, which survives a change of font or page size. A chapter that is not
+     * laid out yet saves its start, so saving never lays one out.
+     */
+    private fun savedPosition(): List<Any> {
+        val at = currentScrollPosition
+        val chapter = at.location.chapter
+        val mark = if (document.isChapterReady(chapter)) document.bookmarkOf(at.location) else null
+        return if (mark is KiteBookmark.Flow) {
+            listOf(SAVED_FLOW, mark.chapter, mark.charOffset, mark.fragment ?: "")
+        } else {
+            listOf(SAVED_SCROLL, chapter, at.location.page, at.offsetPx)
+        }
+    }
+
+    public companion object {
+        private const val EPSILON = 0.001f
 
         /**
          * How far a lazy container searches for a key it anchors on, in slots. Compose looks
          * within 100 slots of the old index (`LazyLayoutNearestRangeState`), and a landing that
          * moves the key further is corrected by hand.
          */
-        const val KEY_REACH = 90
+        private const val KEY_REACH = 90
+
+        private const val SAVED_SCROLL = 0
+        private const val SAVED_FLOW = 1
+
+        /**
+         * Saves the reading position of a state for [document], so it survives a configuration
+         * change and the end of the process. [rememberKiteDocViewState] uses it. The viewer's
+         * scroll containers save nothing of their own, so a host that builds its own state saves
+         * it with this:
+         *
+         * ```kotlin
+         * val state = rememberSaveable(book, saver = KiteDocViewState.saver(book)) { KiteDocViewState(book) }
+         * ```
+         *
+         * It saves the position only: the page and scroll offset of a fixed-layout document, or
+         * a bookmark in a reflowable book. The zoom and a selection start again.
+         */
+        public fun saver(document: KiteDocument): Saver<KiteDocViewState, Any> = listSaver(
+            save = { it.savedPosition() },
+            restore = { saved ->
+                val a = (saved[1] as Int).coerceAtLeast(0)
+                val b = (saved[2] as Int).coerceAtLeast(0)
+                if (saved[0] == SAVED_FLOW) {
+                    KiteDocViewState(document, KiteBookmark.Flow(a, b, (saved[3] as String).ifEmpty { null }))
+                } else {
+                    KiteDocViewState(document, KiteScrollPosition(KiteLocation(a, b), (saved[3] as Int).coerceAtLeast(0)))
+                }
+            },
+        )
     }
 }
 
@@ -1620,6 +1697,9 @@ internal interface KiteScrollAdapter {
 /** Continuous mode: "current" = the visible item whose centre is nearest the viewport centre. */
 internal class LazyListScrollAdapter(private val listState: LazyListState) : KiteScrollAdapter {
     override val isScrollInProgress: Boolean get() = listState.isScrollInProgress
+
+    /** The length of the leading slot on the scroll axis, or null before the list has measured it. */
+    val leadingSlotLength: Int? get() = listState.layoutInfo.visibleItemsInfo.firstOrNull { it.index == leadingPage }?.size
     override val leadingPage: Int
         get() {
             expected?.let { (_, lead, before) -> if (listState.layoutInfo === before) return lead }

@@ -151,6 +151,7 @@ public final class io/github/yuroyami/kitepdf/compose/KiteDocViewKt {
 
 public final class io/github/yuroyami/kitepdf/compose/KiteDocViewState {
 	public static final field $stable I
+	public static final field Companion Lio/github/yuroyami/kitepdf/compose/KiteDocViewState$Companion;
 	public fun <init> (Lio/github/yuroyami/kitepdf/core/KiteDocument;I)V
 	public synthetic fun <init> (Lio/github/yuroyami/kitepdf/core/KiteDocument;IILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public fun <init> (Lio/github/yuroyami/kitepdf/core/KiteDocument;Lio/github/yuroyami/kitepdf/compose/KiteScrollPosition;)V
@@ -197,6 +198,10 @@ public final class io/github/yuroyami/kitepdf/compose/KiteDocViewState {
 	public final fun setSearchHighlights (Ljava/util/List;)V
 	public final fun setZoom-Uv8p0NA (FJ)V
 	public static synthetic fun setZoom-Uv8p0NA$default (Lio/github/yuroyami/kitepdf/compose/KiteDocViewState;FJILjava/lang/Object;)V
+}
+
+public final class io/github/yuroyami/kitepdf/compose/KiteDocViewState$Companion {
+	public final fun saver (Lio/github/yuroyami/kitepdf/core/KiteDocument;)Landroidx/compose/runtime/saveable/Saver;
 }
 
 public final class io/github/yuroyami/kitepdf/compose/KiteDocViewStateKt {
