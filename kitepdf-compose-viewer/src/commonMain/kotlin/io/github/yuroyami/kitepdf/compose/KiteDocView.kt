@@ -168,8 +168,12 @@ import kotlinx.coroutines.launch
  *   perform itself: a URL, a remote GoTo, a Launch. Return true after handling
  *   it (e.g. opening the URL in a browser); false lets the tap fall through to
  *   [onTap]. Internal go-to-page links (PDF destinations, EPUB internal hrefs)
- *   never reach this: the viewer scrolls to the target page directly. An
- *   internal EPUB link goes to `onEpubReferenceTap` and `onEpubLinkTap` first.
+ *   never reach this: the viewer scrolls to the target page directly. It turns
+ *   the page for a PDF link that names NextPage, PrevPage, FirstPage or
+ *   LastPage, and it runs a script link in [scripts] when that is set. In
+ *   [KiteDocLayout.SinglePage], which cannot move, an internal PDF link comes
+ *   here. An internal EPUB link goes to `onEpubReferenceTap` and
+ *   `onEpubLinkTap` first.
  *   See [KiteLinkAction] for the payload; `link.uri` covers both formats.
  */
 @Composable
@@ -415,12 +419,32 @@ private fun linkTap(
                     ?: (ann.action as? PdfAction.GoTo)?.destination
                 val target = doc.resolveDestination(rawDest)?.pageIndex
                 if (target != null) {
-                    scope.launch { state.animateScrollToPage(target) }
-                    return true
+                    if (state.canNavigate) {
+                        scope.launch { state.animateScrollToPage(target) }
+                        return true
+                    }
+                    // A view of one fixed page cannot move, so the host gets the link (#433).
+                    val goTo = ann.action ?: rawDest?.let { PdfAction.GoTo(it, raw = io.github.yuroyami.kitepdf.core.parser.PdfDictionary(emptyMap())) }
+                    return goTo != null && onLinkTap?.invoke(KiteLinkAction.Pdf(goTo)) == true
                 }
                 val action = ann.action
                     ?: ann.uri?.let { PdfAction.Uri(it, isMap = false, raw = io.github.yuroyami.kitepdf.core.parser.PdfDictionary(emptyMap())) }
                     ?: return false
+                // A page turn that a link names, the viewer performs itself (#433).
+                if (action is PdfAction.Named && action.name.turnsPage() && state.canNavigate) {
+                    scope.launch { state.turnPage(action.name) }
+                    return true
+                }
+                // A script link runs in the document's scripts, when the view has a handler (#433).
+                val scripts = state.scripts
+                val lane = state.scriptLane
+                if (action is PdfAction.JavaScript && scripts != null && lane != null) {
+                    scope.launch(lane) {
+                        scriptCall("runAction", Unit) { scripts.runAction(action) }
+                        state.scriptsRan()
+                    }
+                    return true
+                }
                 return onLinkTap?.invoke(KiteLinkAction.Pdf(action)) == true
             }
             return false

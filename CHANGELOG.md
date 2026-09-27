@@ -35,6 +35,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `EpubPage`, `XpsPage` and `SvgPage` stop a render once its `KiteCancellation`
   reads true: a book page between two lines or boxes, an XPS or SVG page before
   its next element. They drew the whole page before (#370).
+- `KiteDocView` turns the page for a PDF link that names NextPage, PrevPage,
+  FirstPage or LastPage, and runs a script link in its `scripts` handler. Both
+  went to `onLinkTap`. In `KiteDocLayout.SinglePage` an internal PDF link now
+  goes to `onLinkTap`, where the tap did nothing (#433).
 
 ## [0.11.0] - 2026-09-25
 
