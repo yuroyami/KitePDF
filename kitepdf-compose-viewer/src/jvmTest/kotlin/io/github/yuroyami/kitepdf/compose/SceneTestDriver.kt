@@ -248,6 +248,33 @@ internal class LatchedDocument(
 }
 
 /**
+ * Runs [body] and returns the writes to Compose state that viewer code made meanwhile on another
+ * thread than this one, each as the viewer frame that made it. A frame of a test or of this file
+ * is not viewer code (#443, #429).
+ */
+internal fun viewerWritesOffThread(body: () -> Unit): List<String> {
+    val here = Thread.currentThread()
+    val found = java.util.Collections.synchronizedList(ArrayList<String>())
+    val observer = androidx.compose.runtime.snapshots.Snapshot.registerGlobalWriteObserver {
+        val thread = Thread.currentThread()
+        if (thread !== here) {
+            Throwable().stackTrace.firstOrNull { frame ->
+                val owner = frame.className.substringBefore('$')
+                owner.startsWith(VIEWER_PACKAGE) && !owner.endsWith("Test") && !owner.endsWith("TestKt") && !owner.endsWith(".SceneTestDriverKt")
+            }?.let { found += "$it on ${thread.name}" }
+        }
+    }
+    try {
+        body()
+    } finally {
+        observer.dispose()
+    }
+    return found.toList()
+}
+
+private const val VIEWER_PACKAGE = "io.github.yuroyami.kitepdf.compose."
+
+/**
  * Runs [body] and fails when anything reached the uncaught-exception handler meanwhile. That
  * handler is where a failure in an effect, a gesture or a pool thread goes, and on Android it
  * ends the host app.

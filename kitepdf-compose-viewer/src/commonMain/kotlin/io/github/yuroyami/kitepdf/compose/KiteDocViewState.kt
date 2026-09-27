@@ -11,12 +11,14 @@ import androidx.compose.foundation.pager.PagerLayoutInfo
 import androidx.compose.foundation.pager.PagerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.MonotonicFrameClock
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.neverEqualPolicy
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.listSaver
@@ -34,6 +36,9 @@ import io.github.yuroyami.kitepdf.core.KitePage
 import io.github.yuroyami.kitepdf.core.KiteSearchHit
 import io.github.yuroyami.kitepdf.core.KiteStructuredText
 import io.github.yuroyami.kitepdf.core.kiteWarn
+import kotlin.coroutines.ContinuationInterceptor
+import kotlin.coroutines.CoroutineContext
+import kotlin.coroutines.EmptyCoroutineContext
 import kotlin.math.abs
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -91,6 +96,11 @@ public fun rememberKiteDocViewState(document: KiteDocument, position: KiteScroll
  * recompose their readers automatically. Navigation suspends until finished;
  * calls made before the state is attached to a composed [KiteDocView] are
  * remembered and applied on attach.
+ *
+ * The suspend calls, such as [scrollTo] and [animateZoomTo], may come from any thread. They run
+ * on the thread of the [KiteDocView] that shows the state, so do not block that thread to wait
+ * for one. The calls that do not suspend, such as [setZoom] and [clearSelection], belong on the
+ * main thread.
  */
 @Stable
 public class KiteDocViewState(
@@ -128,34 +138,27 @@ public class KiteDocViewState(
 
     /* ── chapters and the item strip ──────────────────────────────────────── */
 
-    /** Bumped whenever a chapter finishes laying out, to rebuild [items]. */
-    private var chaptersReady by mutableIntStateOf(0)
+    /**
+     * The strip as of the latest publication. One snapshot value, built again only by
+     * [onChapterReady], so a read from any thread sees a whole strip (#429). Every publication
+     * tells the readers, even one that left the strip as it was.
+     */
+    private var strip: List<DocItem> by mutableStateOf(buildItems(document), neverEqualPolicy())
 
-    /** Call after a chapter lands, on the main thread. */
+    /** Call after a chapter lands, on the composition's thread. */
     internal fun onChapterReady() {
-        chaptersReady++
+        strip = buildItems(document)
     }
-
-    private var cachedItems: List<DocItem> = emptyList()
-    private var cachedEpoch = -1
 
     /**
      * What the viewer scrolls through: one entry per laid-out page, plus one
      * page-shaped placeholder for each chapter still being laid out.
      *
-     * Memoized per publication (main thread only): a chapter laid out but not
-     * yet published stays invisible until [onChapterReady], so the pager's
-     * count, key and content callbacks always agree on one strip version.
+     * Built per publication: a chapter laid out but not yet published stays
+     * invisible until [onChapterReady], so the pager's count, key and content
+     * callbacks always agree on one strip version.
      */
-    internal val items: List<DocItem>
-        get() {
-            val epoch = chaptersReady // snapshot read so a landing recomposes readers
-            if (epoch != cachedEpoch) {
-                cachedItems = buildItems(document)
-                cachedEpoch = epoch
-            }
-            return cachedItems
-        }
+    internal val items: List<DocItem> get() = strip
 
     /** How many slots the strip has. This is what the lists and pagers count. */
     internal val itemCount: Int get() = items.size
@@ -300,7 +303,7 @@ public class KiteDocViewState(
     /** True once every chapter is laid out and [pageCount] is final. */
     public val isComplete: Boolean
         get() {
-            chaptersReady
+            strip
             return document.isComplete
         }
 
@@ -310,7 +313,7 @@ public class KiteDocViewState(
      */
     public val knownPageCount: Int
         get() {
-            chaptersReady
+            strip
             return document.knownPageCount
         }
 
@@ -530,11 +533,11 @@ public class KiteDocViewState(
      *
      * A tap on the host's own button, such as Save or Submit, does not take the caret out of the
      * field. Call this first, so the value the reader typed last has gone through the field's
-     * scripts and into the form before the host reads the form. Call it on the main thread.
+     * scripts and into the form before the host reads the form.
      */
-    public suspend fun commitFocusedField() {
+    public suspend fun commitFocusedField(): Unit = onViewerThread {
         blurFocusedField()
-        val lane = scriptLane ?: return
+        val lane = scriptLane ?: return@onViewerThread
         // The lane runs one call at a time in order, so this returns after the calls before it.
         kotlinx.coroutines.withContext(lane) {}
         backOnComposeThread()
@@ -755,8 +758,8 @@ public class KiteDocViewState(
         target: Float,
         focal: Offset = Offset.Unspecified,
         animationSpec: AnimationSpec<Float> = spring(),
-    ) {
-        if (!target.isFinite()) return
+    ): Unit = onViewerThread {
+        if (!target.isFinite()) return@onViewerThread
         val clamped = target.coerceIn(zoomRange.start, zoomRange.endInclusive)
         kotlinx.coroutines.coroutineScope {
             stopZoomAnimation()
@@ -1178,8 +1181,47 @@ public class KiteDocViewState(
 
     /* ── navigation ───────────────────────────────────────────────────────── */
 
+    /** The composition's thread of the viewer that shows this state, and a context that runs there. */
+    private class ViewerThread(val marker: Any, val context: CoroutineContext)
+
+    @kotlin.concurrent.Volatile
+    private var viewerThread: ViewerThread? = null
+
+    /**
+     * Makes the calling thread this state's viewer thread until the caller is cancelled. The
+     * viewer that shows this state calls it from an effect, which starts on the composition's
+     * thread.
+     */
+    internal suspend fun attachViewerThread() {
+        val context = kotlinx.coroutines.currentCoroutineContext()
+        val viewer = ViewerThread(
+            currentThreadMarker(),
+            (context[ContinuationInterceptor] ?: EmptyCoroutineContext) + (context[MonotonicFrameClock] ?: EmptyCoroutineContext),
+        )
+        viewerThread = viewer
+        try {
+            kotlinx.coroutines.awaitCancellation()
+        } finally {
+            if (viewerThread === viewer) viewerThread = null
+        }
+    }
+
+    /**
+     * Runs [block] on the thread of the viewer that shows this state, with the viewer's frame
+     * clock, so a host may call the suspend API from any thread (#429). On that thread it runs in
+     * place. With no viewer it runs in place too, and a navigation waits for the viewer.
+     */
+    private suspend fun <T> onViewerThread(block: suspend () -> T): T {
+        val viewer = viewerThread
+        if (viewer == null || currentThreadMarker() == viewer.marker) return block()
+        return withContext(viewer.context) {
+            backOnComposeThread()
+            block()
+        }
+    }
+
     /** Jumps to slot [page] (coerced into range) without animation. */
-    public suspend fun scrollToPage(page: Int) {
+    public suspend fun scrollToPage(page: Int): Unit = onViewerThread {
         val target = page.coerceIn(0, (itemCount - 1).coerceAtLeast(0))
         leaveSelectionFor(target)
         park(target)
@@ -1187,7 +1229,7 @@ public class KiteDocViewState(
     }
 
     /** Animates to slot [page] (coerced into range). */
-    public suspend fun animateScrollToPage(page: Int) {
+    public suspend fun animateScrollToPage(page: Int): Unit = onViewerThread {
         val target = page.coerceIn(0, (itemCount - 1).coerceAtLeast(0))
         leaveSelectionFor(target)
         park(target)
@@ -1221,7 +1263,7 @@ public class KiteDocViewState(
      * its chapter when the page is past the chapter's end, else the next slot in
      * reading order.
      */
-    public suspend fun scrollTo(location: KiteLocation, animate: Boolean = false) {
+    public suspend fun scrollTo(location: KiteLocation, animate: Boolean = false): Unit = onViewerThread {
         scrollToLocation(location, animate, 0)
     }
 
@@ -1264,17 +1306,17 @@ public class KiteDocViewState(
      * offset on their scroll axis; the other layouts navigate to its page.
      * Calls before composition are retained for the initial list measurement.
      */
-    public suspend fun scrollTo(position: KiteScrollPosition) {
+    public suspend fun scrollTo(position: KiteScrollPosition): Unit = onViewerThread {
         scrollToLocation(position.location, animate = false, offsetPx = position.offsetPx)
     }
 
     /** Jumps to a saved reading position, laying out only its chapter. */
-    public suspend fun scrollTo(bookmark: KiteBookmark, animate: Boolean = false) {
+    public suspend fun scrollTo(bookmark: KiteBookmark, animate: Boolean = false): Unit = onViewerThread {
         // Cover the locate window too: a publication during locate() must
         // already correct toward the bookmark's chapter, not the old slot.
         if (bookmark is KiteBookmark.Flow) navigationTarget = flowTarget(bookmark)
         try {
-            val location = locateGuarded(bookmark) ?: return
+            val location = locateGuarded(bookmark) ?: return@onViewerThread
             publishChapter()
             scrollTo(location, animate)
         } finally {
@@ -1510,14 +1552,14 @@ public class KiteDocViewState(
      * laying it out when the current one runs out. Chapters with no pages are
      * skipped (#347).
      */
-    public suspend fun nextPage() {
-        val target = locationAfter(currentLocation) ?: return
+    public suspend fun nextPage(): Unit = onViewerThread {
+        val target = locationAfter(currentLocation) ?: return@onViewerThread
         scrollTo(target, animate = true)
     }
 
     /** The previous page in reading order, crossing back a chapter if needed and skipping empty ones. */
-    public suspend fun previousPage() {
-        val target = locationBefore(currentLocation) ?: return
+    public suspend fun previousPage(): Unit = onViewerThread {
+        val target = locationBefore(currentLocation) ?: return@onViewerThread
         scrollTo(target, animate = true)
     }
 

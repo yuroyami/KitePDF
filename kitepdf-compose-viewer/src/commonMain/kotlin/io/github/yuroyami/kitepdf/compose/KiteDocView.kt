@@ -245,10 +245,13 @@ public fun KiteDocView(
         }
         snapshotFlow { state.zoom }.collectLatest { z ->
             delay(ZOOM_SETTLE_DEBOUNCE_MS)
+            backOnComposeThread()
             value = z
         }
     }
 
+    // A host may navigate from any thread: its calls come to this one (#429).
+    LaunchedEffect(state) { state.attachViewerThread() }
     // The saved position, in an effect of its own, so a drag or a failure while it resolves
     // cannot stop the loader below (#344).
     LaunchedEffect(state, state.document) { state.openSavedPosition() }
@@ -980,7 +983,10 @@ private fun KitePageRaster(
     val settledBase by produceState(baseSize, page) {
         snapshotFlow { latestBase }.collectLatest { size ->
             if (size == value) return@collectLatest
-            if (value.width > 0 && value.height > 0) delay(RESIZE_SETTLE_DEBOUNCE_MS)
+            if (value.width > 0 && value.height > 0) {
+                delay(RESIZE_SETTLE_DEBOUNCE_MS)
+                backOnComposeThread()
+            }
             value = size
         }
     }
@@ -1030,6 +1036,7 @@ private fun KitePageRaster(
             skipWidgets = drawsFormLayer,
             canvasDecorator = spec.canvasDecorator,
         )
+        backOnComposeThread()
         // A failed upgrade, such as a crisp-zoom raster out of memory, keeps the last good
         // bitmap of this page instead of blanking it, and says it failed (#430).
         value = when {
