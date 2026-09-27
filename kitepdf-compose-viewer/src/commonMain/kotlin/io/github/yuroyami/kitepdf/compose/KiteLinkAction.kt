@@ -15,10 +15,20 @@ import io.github.yuroyami.kitepdf.PdfAction
  *    Launch, JavaScript, a form submit), so they arrive as [Pdf] with the
  *    parsed [PdfAction] untouched.
  *
- * Opening web links needs no `when`, because both cases answer [uri]:
+ * Opening web links needs no `when`, because both cases answer [uri]. A
+ * document can name any scheme, `file:`, `intent:` and `javascript:` included,
+ * so open only the ones you trust:
  *
  * ```kotlin
- * onLinkTap = { link -> link.uri?.let { openInBrowser(it); true } ?: false }
+ * onLinkTap = { link ->
+ *     val uri = link.uri
+ *     if (uri != null && (uri.startsWith("https://") || uri.startsWith("http://"))) {
+ *         openInBrowser(uri)
+ *         true
+ *     } else {
+ *         false
+ *     }
+ * }
  * ```
  */
 public sealed class KiteLinkAction {

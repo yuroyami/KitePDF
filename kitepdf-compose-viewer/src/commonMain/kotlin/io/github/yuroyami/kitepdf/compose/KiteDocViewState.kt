@@ -1487,8 +1487,11 @@ internal class ScrollAnchor(val slot: Int, val offsetPx: Int = 0, val pageFracti
 
 /**
  * A [KiteDocViewState.hitTest] result: the page under a viewport point and the
- * point in that page's own space (PDF: user space, y-up from the display
- * box's bottom-left with rotation unfolded; EPUB: the page's document space).
+ * point in that page's own space. For a PDF that is the page's user space, y-up,
+ * with rotation unfolded, in the file's own coordinates: a page whose crop box
+ * does not start at 0 gives points offset by that start. For an EPUB page it is
+ * display points, y-up from the page's bottom-left. Other formats use their own
+ * page space (#432).
  */
 public data class KitePageHit(
     val pageIndex: Int,

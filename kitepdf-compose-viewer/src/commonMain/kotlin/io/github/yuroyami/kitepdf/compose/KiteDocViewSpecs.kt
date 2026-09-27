@@ -150,12 +150,13 @@ public data class KiteZoomSpec(
 public sealed interface KiteRenderSpec {
 
     /**
-     * Vector-render each page once into a bitmap per size/zoom bucket, then draw
-     * that bitmap and GPU-transform it during gestures, so scrolling and zoom
-     * never redraw the page itself. Heavy gesturing is cheap and
-     * content-independent; the costs are one rasterization hitch per bucket and
-     * softness when zoomed past the raster resolution until the zoom settles and
-     * it re-rasterizes. Best for slow devices and dense pages.
+     * Vector-render each page into a bitmap for its size and its settled zoom,
+     * then draw that bitmap and GPU-transform it during gestures, so scrolling
+     * and zoom never redraw the page itself. Heavy gesturing is cheap and
+     * content-independent; the costs are one rasterization per page size and
+     * per settled zoom, and softness when zoomed past the raster resolution
+     * until the zoom settles and it re-rasterizes. Best for slow devices and
+     * dense pages.
      *
      * @param quality supersampling multiplier over the on-screen pixel size.
      *   1 = rasterize exactly at display resolution (sharpest *and* cheapest,
@@ -165,9 +166,11 @@ public sealed interface KiteRenderSpec {
      *   memory on huge pages and deep zooms. The viewer's rasterizer raises its
      *   pixel ceiling to this value squared, so any side length allowed here
      *   also renders.
-     * @param rerasterizeOnZoom after a zoom settles, re-render the visible page
-     *   at the zoomed resolution so deep zoom stays crisp instead of upscaling
-     *   the base raster. Costs one extra rasterization per zoom settle.
+     * @param rerasterizeOnZoom after a zoom settles, re-render at the zoomed
+     *   resolution instead of upscaling the base raster. The bitmap stops growing
+     *   at [maxBitmapLongSide], so a zoom past that stays soft. A pager renders its
+     *   current page again; a continuous strip renders every composed page again,
+     *   at its full size. Costs one rasterization per page and settled zoom.
      * @param preserveHairlines scale the engine's stroke floors by the ratio of the
      *   raster to the screen, so a zero-width stroke stays one screen pixel and other
      *   sub-pixel strokes (ECG traces, fine table rules) keep their weight when the
@@ -198,7 +201,9 @@ public sealed interface KiteRenderSpec {
     /**
      * Redraw each page into a live `Canvas` every
      * composition, transformed by zoom/pan via the same GPU layer: no bitmap
-     * (lower memory), resolution-independent quality at rest on every platform.
+     * (lower memory). Vector content stays sharp at rest on every platform, but
+     * images keep the resolution they have at zoom 1, and hairlines thicken as the
+     * zoom grows (#418).
      * On Android the vector display list replays under the live transform, so it
      * stays crisp even mid-pinch; on Skia targets (iOS/desktop/web) the layer is
      * texture-cached, so deep in-gesture zoom softens until the draw re-runs.
@@ -235,8 +240,9 @@ public sealed interface KiteRenderSpec {
  * Colours used by [KiteDocView].
  *
  * @param pageBackground painted behind page content. Most documents assume
- *   white paper and paint none themselves. Ignored when [theme] is set: the
- *   theme owns the paper colour then.
+ *   white paper and paint none themselves. When [theme] is set, the theme's paper
+ *   colour replaces it on pages, but placeholders and chapter gaps still use it,
+ *   and it stays part of the raster cache key (#419, #394).
  * @param viewportBackground the letterbox/gutter colour around pages.
  * @param theme optional reading theme ([ReaderTheme.Dark]/[ReaderTheme.Sepia]/
  *   [ReaderTheme.Light]). When set, page content colours are remapped (text,

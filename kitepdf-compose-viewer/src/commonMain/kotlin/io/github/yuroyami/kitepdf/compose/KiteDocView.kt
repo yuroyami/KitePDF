@@ -105,8 +105,8 @@ import kotlinx.coroutines.launch
  * KitePageIndicator(state)
  * ```
  *
- * By default ([KiteRenderSpec.Rasterized]) pages are vector-rendered once into an
- * [ImageBitmap] per (page, size, zoom bucket) and then drawn as plain images, so
+ * By default ([KiteRenderSpec.Rasterized]) pages are vector-rendered into an
+ * [ImageBitmap] per page, size and settled zoom and then drawn as plain images, so
  * scrolling, panning and pinching never redraw the page itself.
  * Switch to [KiteRenderSpec.Vectorized] for resolution-independent, bitmap-free
  * drawing. See [KiteRenderSpec] for the per-mode knobs and [KiteZoomSpec] for
@@ -132,14 +132,18 @@ import kotlinx.coroutines.launch
  *   the way of panning.
  * @param userScrollEnabled gesture scrolling/swiping of the layout itself.
  *   Disable to drive paging exclusively through [KiteDocViewState] (nav buttons).
- * @param onPageRendered fires whenever a page finishes a FRESH rasterization,
- *   with the bitmap ready for export, e.g. via [encodeToPng]. Cache hits from
- *   the page-bitmap LRU do not re-fire it.
+ * @param onPageRendered fires whenever a page finishes a FRESH screen raster:
+ *   once per page and bitmap size, so again at each settled zoom when crisp zoom
+ *   is on. It is the bitmap on screen, not an export: it leaves out the form
+ *   widgets when a form layer draws them (a `scripts` handler on a PDF), and it
+ *   never fires in [KiteRenderSpec.Vectorized] mode (#431). Cache hits from the
+ *   page-bitmap LRU do not re-fire it.
  * @param pagePlaceholder shown in a page's slot until its raster is ready.
  *   Defaults to a plain [KiteDocViewColors.pageBackground] box.
  * @param chapterPlaceholder shown in the slot a chapter holds while it is still
  *   being laid out. Only reflowable EPUB reaches this: a PDF is never mid-layout.
- *   Defaults to an empty page-coloured box.
+ *   [KiteDocLayout.Spread] lays the whole book out before it pairs pages, so it
+ *   never shows one (#337). Defaults to an empty page-coloured box.
  * @param overlay HUD layer drawn over the viewport; receives [state] and a
  *   [BoxScope] for alignment. Widgets here float above the pages:
  *   [KiteNavigationControls], [KitePageIndicator], [KiteThumbnailStrip] or
@@ -1006,10 +1010,11 @@ internal fun ReportFreshRaster(rastered: Pair<ImageBitmap, Boolean>?, report: (I
 
 /**
  * Draws [page] straight into a live [Canvas]
- * at the slot's layout resolution. No intermediate bitmap, so memory stays low
- * and quality is resolution-independent. Zoom/pan are applied by the enclosing
- * `graphicsLayer` (strip-level in continuous mode, per-page in paged/single),
- * so the draw lambda re-runs on recomposition, not on every gesture frame.
+ * at the slot's layout resolution. No intermediate bitmap, so memory stays low.
+ * Zoom/pan are applied by the enclosing `graphicsLayer` (strip-level in
+ * continuous mode, per-page in paged/single). In continuous mode a gesture frame
+ * only moves that layer, so the page does not redraw; in the paged layouts a
+ * gesture frame recomposes the page slot, and the page redraws with it (#373).
  *
  * `onPageRendered` is intentionally not honoured here: there is no [ImageBitmap]
  * to hand back. Use [KiteRenderSpec.Rasterized] (or [KitePageRasterizer] directly) if

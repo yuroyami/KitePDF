@@ -36,8 +36,10 @@ import kotlinx.coroutines.sync.withLock
  *
  * [rasterize] runs synchronously on the calling thread; [rasterizeOffMain]
  * moves the work to [kitepdfRasterDispatcher] (a background pool on
- * JVM/Android/Apple, Main on JS/Wasm) so a complex page never janks scrolling
- * or pinch. [KiteDocView] uses that path.
+ * JVM/Android/Apple, Main on JS/Wasm) so a complex page does not jank scrolling
+ * or pinch. [KiteDocView] uses that path. A page with text in a system font is
+ * the exception: the host's text stack belongs to the main thread, so such a
+ * page is drawn a second time there, in full (#131).
  */
 @Stable
 public class KitePageRasterizer(
