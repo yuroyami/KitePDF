@@ -2,10 +2,6 @@ package io.github.yuroyami.kitepdf.compose
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
@@ -18,6 +14,7 @@ import io.github.yuroyami.kitepdf.PdfScriptHandler
 import io.github.yuroyami.kitepdf.core.KitePage
 import io.github.yuroyami.kitepdf.core.render.KiteMatrix
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.launch
 
 /**
@@ -66,7 +63,7 @@ internal fun Modifier.kiteFormLayer(
  * because what a timer does is almost always change what the page shows.
  */
 @Composable
-internal fun KiteScriptTimers(scripts: PdfScriptHandler?, onChanged: () -> Unit) {
+internal fun KiteScriptTimers(scripts: PdfScriptHandler?) {
     if (scripts == null) return
     LaunchedEffect(scripts) {
         var running = false
@@ -75,10 +72,8 @@ internal fun KiteScriptTimers(scripts: PdfScriptHandler?, onChanged: () -> Unit)
             // One round at a time: a frame that takes longer than a frame must not queue another.
             if (!running && scripts.hasTimers) {
                 running = true
-                val before = scripts.formState.revision
                 kotlinx.coroutines.withContext(kitepdfScriptDispatcher()) { scripts.pumpTimers(frameTime) }
                 running = false
-                if (scripts.formState.revision != before) onChanged()
             }
         }
     }
@@ -94,21 +89,24 @@ internal fun CoroutineScope.postToScripts(work: () -> Unit) {
     launch(kitepdfScriptDispatcher()) { work() }
 }
 
-/** Keeps a number that changes whenever the form does, so a layer can repaint on it. */
+/**
+ * Keeps [KiteDocViewState.formRevision] in step with the form, whoever changed it: a tap, a
+ * script, a timer or the host. A change can come from any thread, and it is published on the
+ * composition's thread, the one that reads it (#357, #364).
+ */
 @Composable
-internal fun rememberFormRevision(scripts: PdfScriptHandler?): Int {
-    var revision by remember(scripts) { mutableIntStateOf(scripts?.formState?.revision ?: 0) }
-    LaunchedEffect(scripts) {
-        val state = scripts?.formState ?: return@LaunchedEffect
-        val stop = state.onChange { revision = state.revision }
+internal fun KiteFormRevision(state: KiteDocViewState, scripts: PdfScriptHandler?) {
+    LaunchedEffect(state, scripts) {
+        val form = scripts?.formState ?: return@LaunchedEffect
+        val changed = Channel<Unit>(Channel.CONFLATED)
+        val stop = form.onChange { changed.trySend(Unit) }
         try {
-            // The flow of changes ends with the composition that watches it.
-            kotlinx.coroutines.awaitCancellation()
+            state.formRevision = form.revision
+            for (signal in changed) state.formRevision = form.revision
         } finally {
             stop()
         }
     }
-    return revision
 }
 
 /**
@@ -136,6 +134,9 @@ internal fun handleWidgetTap(
     } ?: return false
     val name = field.fullyQualifiedName
     if (scripts.formState.isReadOnly(name)) return true
+    // The field that had the caret commits first, so this widget's scripts read the totals
+    // that commit computes (#363).
+    if (state.focusedField != name) state.blurFocusedField()
     // The scripts of a widget may take a while, so they go to the script thread. A test with no
     // scope runs them where it stands, which keeps its assertions in order.
     val press = {

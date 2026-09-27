@@ -10,6 +10,8 @@ import androidx.compose.ui.input.key.KeyEvent
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.PointerType
+import androidx.compose.ui.graphics.toComposeImageBitmap
+import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.use
 import io.github.yuroyami.kitepdf.PdfDocument
@@ -190,6 +192,146 @@ class FormLayerSceneTest {
             javax.swing.JLabel(), java.awt.event.KeyEvent.KEY_TYPED, 0L, 0, java.awt.event.KeyEvent.VK_UNDEFINED, char,
         )
         scene.sendKeyEvent(KeyEvent(Key.Unknown, KeyEventType.Unknown, codePoint = char.code, nativeEvent = awt))
+    }
+
+    /**
+     * A key typed in the middle of a value while the script still weighs the one before it.
+     * The script refuses the letter and takes the digit, and the digit stays where it was
+     * typed (#363).
+     */
+    @Test
+    fun typing_in_the_middle_goes_through_a_slow_script_in_order() {
+        val doc = PdfDocument.open(formPdf())
+        val scripts = object : PdfScriptHandler {
+            override val formState: PdfFormState = PdfFormState(doc)
+            override fun keystroke(fieldName: String, change: String, selectionStart: Int, selectionEnd: Int): String? {
+                Thread.sleep(80)
+                if (change.any { !it.isDigit() }) return null
+                val current = formState.value(fieldName) ?: ""
+                val start = selectionStart.coerceIn(0, current.length)
+                return current.substring(0, start) + change + current.substring(selectionEnd.coerceIn(start, current.length))
+            }
+        }
+        scripts.formState.setValue("out", "123")
+        lateinit var state: KiteDocViewState
+        ImageComposeScene(width = 200, height = 200, density = Density(1f)) {
+            state = rememberKiteDocViewState(doc)
+            KiteDocView(state = state, modifier = Modifier.fillMaxSize(), zoomSpec = KiteZoomSpec(doubleTapEnabled = false), scripts = scripts)
+        }.use { scene ->
+            val driver = SceneTestDriver(scene)
+            driver.pumpUntil { state.pageGeometry.isNotEmpty() }
+            scene.sendPointerEvent(PointerEventType.Press, Offset(100f, 60f), type = PointerType.Touch)
+            scene.sendPointerEvent(PointerEventType.Release, Offset(100f, 60f), type = PointerType.Touch)
+            driver.pumpUntilState { state.focusedField == "out" }
+            driver.pumpFrames(4)
+            // The caret starts at the end, so two steps left put it after the 1. The text field reads
+            // its value at composition, so each key gets a frame, as keys from a keyboard do.
+            repeat(2) {
+                press(scene, Key.DirectionLeft)
+                driver.pumpFrames(1)
+            }
+            // Both keys go in before the script has answered the first.
+            type(scene, 'x')
+            driver.pumpFrames(1)
+            type(scene, '9')
+            driver.pumpUntilState { scripts.formState.value("out") == "1923" }
+            driver.pumpFrames(10)
+            assertEquals("1923", scripts.formState.value("out"))
+        }
+    }
+
+    /** A tap whose script writes a field repaints the form, with no timer running (#357). */
+    @Test
+    fun a_button_that_writes_a_field_repaints_the_form() {
+        val doc = PdfDocument.open(formPdf())
+        val scripts = object : PdfScriptHandler {
+            override val formState: PdfFormState = PdfFormState(doc)
+            override fun mouseUp(fieldName: String) {
+                if (fieldName == "press") formState.setValue("out", "88888888")
+            }
+        }
+        lateinit var state: KiteDocViewState
+        ImageComposeScene(width = 200, height = 200, density = Density(1f)) {
+            state = rememberKiteDocViewState(doc)
+            KiteDocView(
+                state = state,
+                modifier = Modifier.fillMaxSize(),
+                layout = KiteDocLayout.SinglePage(0),
+                zoomSpec = KiteZoomSpec(doubleTapEnabled = false),
+                scripts = scripts,
+            )
+        }.use { scene ->
+            val driver = SceneTestDriver(scene)
+            driver.pumpUntil { state.pageGeometry.isNotEmpty() }
+            // Past the page's fade-in, so no animation redraws the form by chance.
+            val before = darkPixelsInField(driver.pumpFrames(60).toComposeImageBitmap().toPixelMap())
+            // The button is [20..90] x [20..60] in user space, so display y 140..180: centre (55, 160).
+            scene.sendPointerEvent(PointerEventType.Press, Offset(55f, 160f), type = PointerType.Touch)
+            scene.sendPointerEvent(PointerEventType.Release, Offset(55f, 160f), type = PointerType.Touch)
+            driver.pumpUntilState { scripts.formState.value("out") == "88888888" }
+            driver.pumpUntil { darkPixelsInField(it) > before + 20 }
+        }
+    }
+
+    /** A value the host writes while the viewer is idle shows without anything else moving (#357). */
+    @Test
+    fun a_value_the_host_writes_repaints_the_form() {
+        val doc = PdfDocument.open(formPdf())
+        val scripts = object : PdfScriptHandler {
+            override val formState: PdfFormState = PdfFormState(doc)
+        }
+        lateinit var state: KiteDocViewState
+        ImageComposeScene(width = 200, height = 200, density = Density(1f)) {
+            state = rememberKiteDocViewState(doc)
+            KiteDocView(state = state, modifier = Modifier.fillMaxSize(), layout = KiteDocLayout.SinglePage(0), scripts = scripts)
+        }.use { scene ->
+            val driver = SceneTestDriver(scene)
+            driver.pumpUntil { state.pageGeometry.isNotEmpty() }
+            // Past the page's fade-in, so no animation redraws the form by chance.
+            val before = darkPixelsInField(driver.pumpFrames(60).toComposeImageBitmap().toPixelMap())
+            scripts.formState.setValue("out", "88888888")
+            driver.pumpUntil { darkPixelsInField(it) > before + 20 }
+        }
+    }
+
+    /** Leaving one field for another commits the first before the second one's scripts run (#363). */
+    @Test
+    fun the_old_field_commits_before_the_new_widget_is_pressed() {
+        val doc = PdfDocument.open(formPdf())
+        val scripts = FakeScripts(doc)
+        lateinit var state: KiteDocViewState
+        ImageComposeScene(width = 200, height = 200, density = Density(1f)) {
+            state = rememberKiteDocViewState(doc)
+            KiteDocView(state = state, modifier = Modifier.fillMaxSize(), zoomSpec = KiteZoomSpec(doubleTapEnabled = false), scripts = scripts)
+        }.use { scene ->
+            val driver = SceneTestDriver(scene)
+            driver.pumpUntil { state.pageGeometry.isNotEmpty() }
+            scene.sendPointerEvent(PointerEventType.Press, Offset(100f, 60f), type = PointerType.Touch)
+            scene.sendPointerEvent(PointerEventType.Release, Offset(100f, 60f), type = PointerType.Touch)
+            driver.pumpUntilState { scripts.events.contains("focus out") }
+            scene.sendPointerEvent(PointerEventType.Press, Offset(55f, 160f), type = PointerType.Touch)
+            scene.sendPointerEvent(PointerEventType.Release, Offset(55f, 160f), type = PointerType.Touch)
+            driver.pumpUntilState { scripts.events.contains("up press") }
+            val events = scripts.events
+            assertTrue(events.indexOf("blur out") in 0 until events.indexOf("down press"), "the order was $events")
+        }
+    }
+
+    /** Dark pixels in the text field's area, display y 40..80 and x 20..180. */
+    private fun darkPixelsInField(pixels: androidx.compose.ui.graphics.PixelMap): Int {
+        var dark = 0
+        for (y in 42 until 78) for (x in 22 until 178) {
+            val c = pixels[x, y]
+            if (c.red + c.green + c.blue < 1.2f) dark++
+        }
+        return dark
+    }
+
+    /** Sends one key press and release as a desktop keyboard does, for keys that type nothing. */
+    @OptIn(InternalComposeUiApi::class)
+    private fun press(scene: ImageComposeScene, key: Key) {
+        scene.sendKeyEvent(KeyEvent(key, KeyEventType.KeyDown))
+        scene.sendKeyEvent(KeyEvent(key, KeyEventType.KeyUp))
     }
 
     /** An edit is reduced to the text put in and the range it replaces, which is what a script sees. */
