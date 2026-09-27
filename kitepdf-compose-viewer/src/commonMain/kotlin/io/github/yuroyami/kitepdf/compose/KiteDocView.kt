@@ -809,11 +809,27 @@ private fun SinglePageLayout(
     chapterPlaceholder: (@Composable (chapter: Int) -> Unit)?,
     onTap: ((Offset) -> Unit)?,
 ) {
-    require(layout.pageIndex in 0 until state.itemCount) {
-        "page ${layout.pageIndex} is out of bounds (document has ${state.itemCount} page(s))"
+    // The index counts the pages of the whole document, as for a PDF, not the slots of the strip.
+    // Each chapter that lands recomposes this: a book that is still laying out places the page
+    // once the chapters before it are ready, and shows a placeholder until then (#336).
+    val known = state.knownPageCount
+    val wanted = when {
+        layout.pageIndex < 0 -> 0
+        state.isComplete && layout.pageIndex >= known -> (known - 1).coerceAtLeast(0)
+        else -> layout.pageIndex
     }
-    DisposableEffect(state, layout.pageIndex) {
-        val adapter = FixedPageAdapter(layout.pageIndex)
+    if (wanted != layout.pageIndex) {
+        remember(layout.pageIndex, wanted) {
+            io.github.yuroyami.kitepdf.core.kiteWarn {
+                "SinglePage(${layout.pageIndex}) is outside the document's $known page(s); showing page $wanted"
+            }
+        }
+    }
+    val slot = state.document.locationOf(wanted)?.let { state.slotFor(it) }?.takeIf { it >= 0 }
+        ?: state.firstPendingSlot()
+        ?: 0
+    DisposableEffect(state, slot) {
+        val adapter = FixedPageAdapter(slot)
         state.adapter = adapter
         onDispose {
             state.park(adapter.currentPage)
@@ -822,11 +838,11 @@ private fun SinglePageLayout(
     }
     val scope = rememberCoroutineScope()
     val haptics = LocalHapticFeedback.current
-    val only = state.pageAt(layout.pageIndex)
+    val only = state.pageAt(slot)
     if (only == null) {
         // The same taps and zoom gestures as a page, so a host's onTap still works here (#409).
         ChapterGapSlot(
-            state, layout.pageIndex, Orientation.Vertical, colors, chapterPlaceholder, letterboxed = true,
+            state, slot, Orientation.Vertical, colors, chapterPlaceholder, letterboxed = true,
             gestures = Modifier.kiteTransformGestures(state, zoomSpec, scope, onTap),
             zoom = state.zoom,
             pan = state.panOffset,
@@ -835,7 +851,7 @@ private fun SinglePageLayout(
     }
     PageBox(
         page = only,
-        pageIndex = layout.pageIndex,
+        pageIndex = slot,
         zoom = state.zoom,
         pan = state.panOffset,
         gestures = Modifier.kiteTransformGestures(state, zoomSpec, scope, onTap).kiteSelectionGestures(state, haptics),
