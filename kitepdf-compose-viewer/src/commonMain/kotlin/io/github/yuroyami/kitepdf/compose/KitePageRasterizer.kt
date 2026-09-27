@@ -291,6 +291,33 @@ public class KitePageRasterizer(
         rasterizeInternal(page, widthPx, heightPx, background, hairlineWidthPx, theme, skipSystemFontText = false, canvasDecorator = canvasDecorator).first
 
     /**
+     * [rasterize] for an export of a form: a PDF page draws its fields with the values that
+     * [formState] holds, the ones the reader typed and the scripts wrote, as the viewer shows
+     * them. Other pages ignore [formState].
+     *
+     * The bitmaps that [KiteDocView]'s `onPageRendered` gives leave the fields out while a form
+     * layer draws them, so export a filled form with this call (#431).
+     *
+     * ```kotlin
+     * val bitmap = rasterizer.rasterize(page, 1240, 1754, formState = scripts.formState)
+     * val png = bitmap.encodeToPng()
+     * ```
+     */
+    public fun rasterize(
+        page: KitePage,
+        widthPx: Int,
+        heightPx: Int,
+        formState: io.github.yuroyami.kitepdf.PdfFormState?,
+        background: Color = Color.White,
+        hairlineWidthPx: Float = 1f,
+        theme: ReaderTheme? = null,
+        canvasDecorator: KiteCanvasDecorator? = null,
+    ): ImageBitmap = rasterizeInternal(
+        page, widthPx, heightPx, background, hairlineWidthPx, theme,
+        skipSystemFontText = false, canvasDecorator = canvasDecorator, formState = formState,
+    ).first
+
+    /**
      * [rasterize] plus the system-font probe flag: second value is true when
      * the page hit the system-font fallback while [skipSystemFontText] was set
      * (those runs were left undrawn and the bitmap is incomplete).
@@ -306,6 +333,7 @@ public class KitePageRasterizer(
         skipWidgets: Boolean = false,
         canvasDecorator: KiteCanvasDecorator? = null,
         cancellation: KiteCancellation? = null,
+        formState: io.github.yuroyami.kitepdf.PdfFormState? = null,
     ): Pair<ImageBitmap, Boolean> {
         require(widthPx > 0 && heightPx > 0) { "bitmap dimensions must be > 0" }
         require(widthPx.toLong() * heightPx.toLong() <= maxBitmapPixels) {
@@ -349,6 +377,9 @@ public class KitePageRasterizer(
             // A viewer with a live form draws the widgets in its own layer, so the bitmap must
             // leave them out or each field would be drawn twice, the stale one underneath.
             when {
+                formState != null && page is io.github.yuroyami.kitepdf.PdfPage -> page.renderTo(
+                    canvas, deviceCtm, formState, cancellation = cancellation ?: NEVER_CANCELLED,
+                )
                 skipWidgets && page is io.github.yuroyami.kitepdf.PdfPage -> page.renderTo(
                     canvas, deviceCtm, formState = null, cancellation = cancellation ?: NEVER_CANCELLED,
                 ) { it.subtype != io.github.yuroyami.kitepdf.PdfAnnotation.Subtype.Widget }
