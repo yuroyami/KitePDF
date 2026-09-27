@@ -47,6 +47,7 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
@@ -485,7 +486,7 @@ private fun ContinuousLayout(
         val pageItem: @Composable androidx.compose.foundation.lazy.LazyItemScope.(Int) -> Unit = { index ->
             val page = state.pageAt(index)
             if (page == null) {
-                ChapterGapSlot(state, index, layout.orientation, colors, chapterPlaceholder)
+                ChapterGapSlot(state, index, layout.orientation, colors, chapterPlaceholder, inStrip = true)
             } else {
                 ContinuousPageItem(
                     state = state,
@@ -546,9 +547,11 @@ private fun androidx.compose.foundation.lazy.LazyItemScope.ContinuousPageItem(
     pagePlaceholder: (@Composable (Int) -> Unit)?,
 ) {
     val aspect = kitePageAspect(page)
-    val sizing = when (orientation) {
-        Orientation.Vertical -> Modifier.fillParentMaxWidth().aspectRatio(aspect)
-        Orientation.Horizontal -> Modifier.fillParentMaxHeight().aspectRatio(aspect)
+    val slotDensity = LocalDensity.current
+    val sizing = Modifier.stripSlot(orientation, aspect) {
+        with(slotDensity) {
+            (if (orientation == Orientation.Vertical) page.displayWidth else page.displayHeight).dp.roundToPx()
+        }
     }
     DisposableEffect(state, pageIndex) {
         onDispose { state.pageGeometry.remove(pageIndex) }
@@ -847,7 +850,9 @@ private fun KitePageRaster(
     )
     val onRendered by rememberUpdatedState(onPageRendered)
 
-    val scale = spec.quality * settledZoom.coerceAtLeast(0.01f)
+    // A zoom that is not finite never reaches here, but the raster size must not round NaN (#338).
+    val zoomScale = if (settledZoom.isFinite()) settledZoom.coerceAtLeast(0.01f) else 1f
+    val scale = spec.quality * zoomScale
     val raster = fitWithin(
         (baseSize.width * scale).roundToInt(),
         (baseSize.height * scale).roundToInt(),
@@ -858,7 +863,7 @@ private fun KitePageRaster(
     // and floors other strokes at a fifth of that. When the raster is larger than its
     // final on-screen size (supersampling), both must grow by the same ratio or
     // sub-pixel strokes fade in the downscale. (Upscaling can only thicken them, so 1 is safe.)
-    val visualWidth = baseSize.width * settledZoom
+    val visualWidth = baseSize.width * zoomScale
     val hairline = if (spec.preserveHairlines && visualWidth > 0f) {
         max(1f, raster.width / visualWidth)
     } else 1f
@@ -1168,19 +1173,67 @@ private fun ChapterGapSlot(
     orientation: Orientation,
     colors: KiteDocViewColors,
     chapterPlaceholder: (@Composable (chapter: Int) -> Unit)?,
+    /** True in the continuous strip, where the slot's length follows its shape and must stay representable. */
+    inStrip: Boolean = false,
 ) {
     val chapter = state.chapterAt(index) ?: return
     val aspect = state.placeholderAspect()
-    Box(
+    val sizing = if (inStrip) {
+        Modifier.stripSlot(orientation, aspect) { 1 }
+    } else {
         Modifier
             .then(if (orientation == Orientation.Vertical) Modifier.fillMaxWidth() else Modifier.fillMaxHeight())
             .aspectRatio(aspect)
-            .background(colors.pageBackground),
+    }
+    Box(
+        sizing.background(colors.pageBackground),
         contentAlignment = Alignment.Center,
     ) {
         chapterPlaceholder?.invoke(chapter)
     }
 }
+
+/**
+ * Sizes a slot of the continuous strip: the full cross axis, and the length that the page's
+ * [aspect] gives. Compose packs constraints into one Long, so a slot far longer than wide
+ * cannot be represented and threw in measure (#332). Such a page is capped at the longest
+ * length Compose can hold, keeps its shape, and is centred on the cross axis. [naturalCrossPx]
+ * sizes a strip whose cross axis is unbounded.
+ */
+private fun Modifier.stripSlot(orientation: Orientation, aspect: Float, naturalCrossPx: () -> Int): Modifier =
+    layout { measurable, constraints ->
+        val vertical = orientation == Orientation.Vertical
+        val bounded = if (vertical) constraints.hasBoundedWidth else constraints.hasBoundedHeight
+        val cross = (if (!bounded) naturalCrossPx() else if (vertical) constraints.maxWidth else constraints.maxHeight)
+            .coerceAtLeast(1)
+        // As a Float first: a very long page overflows an Int.
+        val wanted = (if (vertical) cross / aspect else cross * aspect).coerceIn(1f, MAX_SLOT_LENGTH).roundToInt()
+        val fitted = if (vertical) {
+            androidx.compose.ui.unit.Constraints.fitPrioritizingWidth(cross, cross, wanted, wanted)
+        } else {
+            androidx.compose.ui.unit.Constraints.fitPrioritizingHeight(wanted, wanted, cross, cross)
+        }
+        val length = if (vertical) fitted.maxHeight else fitted.maxWidth
+        val pageCross = if (length >= wanted) {
+            cross
+        } else {
+            (if (vertical) length * aspect else length / aspect).roundToInt().coerceIn(1, cross)
+        }
+        val placeable = measurable.measure(
+            if (vertical) {
+                androidx.compose.ui.unit.Constraints.fixed(pageCross, length)
+            } else {
+                androidx.compose.ui.unit.Constraints.fixed(length, pageCross)
+            },
+        )
+        layout(if (vertical) cross else length, if (vertical) length else cross) {
+            val offset = (cross - pageCross) / 2
+            placeable.place(if (vertical) offset else 0, if (vertical) 0 else offset)
+        }
+    }
+
+/** More than any length Compose can represent, to keep the Float to Int step in range. */
+private const val MAX_SLOT_LENGTH = 1_000_000f
 
 /* ── spread pager: two pages per item, like an open book ───────────── */
 

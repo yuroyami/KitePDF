@@ -479,16 +479,19 @@ public class KiteDocViewState(
     /* ── zoom ─────────────────────────────────────────────────────────────── */
 
     /**
-     * Sets [zoom] immediately, clamped to the active [KiteZoomSpec] range.
+     * Sets [zoom] immediately, clamped to the active [KiteZoomSpec] range. A zoom that is not a
+     * finite number, such as a fit ratio of 0 / 0 taken before layout, is ignored (#338).
      *
      * @param focal viewport-space point to keep visually stationary (e.g. the
      *   pinch centroid or double-tap position). Unspecified = viewport centre.
      */
     public fun setZoom(zoom: Float, focal: Offset = Offset.Unspecified) {
+        if (!zoom.isFinite()) return
         val new = zoom.coerceIn(zoomRange.start, zoomRange.endInclusive)
         val old = this.zoom
         if (new == old) return
-        panOffset = if (focal.isSpecified && viewportSize != IntSize.Zero) {
+        val stationary = focal.isSpecified && focal.x.isFinite() && focal.y.isFinite()
+        panOffset = if (stationary && viewportSize != IntSize.Zero) {
             // Keep the focal point stationary: screen = centre + (content-centre)·zoom + pan
             val centre = Offset(viewportSize.width / 2f, viewportSize.height / 2f)
             val f = focal - centre
@@ -499,12 +502,13 @@ public class KiteDocViewState(
         this.zoom = new
     }
 
-    /** Animates zoom to [target] (clamped), keeping [focal] stationary throughout. */
+    /** Animates zoom to [target] (clamped), keeping [focal] stationary throughout. A target that is not finite is ignored. */
     public suspend fun animateZoomTo(
         target: Float,
         focal: Offset = Offset.Unspecified,
         animationSpec: AnimationSpec<Float> = spring(),
     ) {
+        if (!target.isFinite()) return
         val clamped = target.coerceIn(zoomRange.start, zoomRange.endInclusive)
         animate(zoom, clamped, animationSpec = animationSpec) { value, _ -> setZoom(value, focal) }
     }
@@ -518,9 +522,11 @@ public class KiteDocViewState(
     /**
      * Pans by [delta] (viewport px), clamped to the zoomed content bounds.
      * Returns the portion actually consumed. The gesture layer hands the
-     * remainder back to the underlying scroll container.
+     * remainder back to the underlying scroll container. A delta that is not
+     * finite is ignored.
      */
     public fun panBy(delta: Offset): Offset {
+        if (!delta.x.isFinite() || !delta.y.isFinite()) return Offset.Zero
         val allowed = Offset(
             if (panAxes.x) delta.x else 0f,
             if (panAxes.y) delta.y else 0f,
