@@ -1851,16 +1851,26 @@ internal class LazyListScrollAdapter(private val listState: LazyListState) : Kit
     /** The reader's and the leading slot that key matching gives at the next measure, and the layout they replace. */
     private var expected: Triple<Int, Int, LazyListLayoutInfo>? = null
 
+    /**
+     * The slot nearest the viewport's centre. The list's layout changes on every scroll frame,
+     * and this changes only when another slot comes nearest, so a reader recomposes only then (#374).
+     */
+    private val centreSlot = androidx.compose.runtime.derivedStateOf {
+        val info = listState.layoutInfo
+        val visible = info.visibleItemsInfo
+        if (visible.isEmpty()) return@derivedStateOf listState.firstVisibleItemIndex
+        val viewportCentre = (info.viewportStartOffset + info.viewportEndOffset) / 2
+        visible.minByOrNull { abs((it.offset + it.size / 2) - viewportCentre) }?.index
+            ?: listState.firstVisibleItemIndex
+    }
+
     override val currentPage: Int
         get() {
-            val info = listState.layoutInfo
-            requested?.let { (slot, before) -> if (info === before) return slot }
-            expected?.let { (slot, _, before) -> if (info === before) return slot }
-            val visible = info.visibleItemsInfo
-            if (visible.isEmpty()) return listState.firstVisibleItemIndex
-            val viewportCentre = (info.viewportStartOffset + info.viewportEndOffset) / 2
-            return visible.minByOrNull { abs((it.offset + it.size / 2) - viewportCentre) }?.index
-                ?: listState.firstVisibleItemIndex
+            // An open request or expectation reads the layout until the list measures again, a
+            // frame at most, and then it is dropped.
+            requested?.let { (slot, before) -> if (listState.layoutInfo === before) return slot else requested = null }
+            expected?.let { (slot, _, before) -> if (listState.layoutInfo === before) return slot else expected = null }
+            return centreSlot.value
         }
 
     override val keyedSlot: Int get() = leadingPage
