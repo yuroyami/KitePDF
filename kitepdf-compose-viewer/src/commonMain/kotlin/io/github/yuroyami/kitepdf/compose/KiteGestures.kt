@@ -183,7 +183,8 @@ internal fun Modifier.kiteTransformGestures(
                 } else null,
             )
         }
-        .pointerInput(state, spec.pinchEnabled) {
+        // Keyed on every flag the block reads, so a changed flag applies to the next gesture (#404).
+        .pointerInput(state, spec.pinchEnabled, spec.panEnabled) {
             if (!spec.pinchEnabled) return@pointerInput
             awaitEachGesture {
                 awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
