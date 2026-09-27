@@ -74,4 +74,45 @@ class EpubSvgTest {
         }
         assertEquals(1, images.size, "the cover picture reached the canvas")
     }
+
+    /** A 1x1 24-bit BMP, so a test can tell it from [EpubFixtures.bmp2x1]. */
+    private fun bmp1x1(): ByteArray {
+        val h = ByteArray(54)
+        h[0] = 'B'.code.toByte(); h[1] = 'M'.code.toByte()
+        fun le32(o: Int, v: Int) { var s = 0; var i = o; while (s < 32) { h[i++] = ((v ushr s) and 0xFF).toByte(); s += 8 } }
+        fun le16(o: Int, v: Int) { h[o] = (v and 0xFF).toByte(); h[o + 1] = ((v ushr 8) and 0xFF).toByte() }
+        le32(2, 58); le32(10, 54); le32(14, 40); le32(18, 1); le32(22, 1)
+        le16(26, 1); le16(28, 24); le32(34, 4)
+        return h + byteArrayOf(0, 0xFF.toByte(), 0, 0)
+    }
+
+    @Test
+    fun an_svg_file_loads_its_image_from_its_own_folder_in_every_position() {
+        // The SVG and its picture sit in OEBPS/images, the chapter in OEBPS/Text. A decoy with the
+        // same name sits next to the chapter, so a lookup from the wrong folder draws the decoy (#425).
+        val wrapper = """<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12"><image href="p.bmp" width="12" height="12"/></svg>"""
+        val extras = listOf(
+            "OEBPS/images/wrapper.svg" to wrapper.encodeToByteArray(),
+            "OEBPS/images/p.bmp" to EpubFixtures.bmp2x1(),
+            "OEBPS/Text/p.bmp" to bmp1x1(),
+        )
+        val img = """<img src="../images/wrapper.svg"/>"""
+        val vertical = "html { writing-mode: vertical-rl }"
+        val cases = listOf(
+            Triple("block", """<img style="display:block" src="../images/wrapper.svg"/>""", ""),
+            Triple("inline", "<p>$img</p>", ""),
+            Triple("inline, in a link", """<p><a href="#x">$img</a></p>""", ""),
+            Triple("block, vertical", """<img style="display:block" src="../images/wrapper.svg"/>""", vertical),
+            Triple("inline, vertical", "<p>$img</p>", vertical),
+        )
+        for ((name, body, css) in cases) {
+            val sheets = if (css.isEmpty()) emptyList() else listOf("book.css" to css)
+            val doc = EpubDocument.open(EpubFixtures.epubFoldered(listOf(body), sheets, extras))
+            val images = doc.pages.flatMap { page ->
+                RecordingCanvas().also { page.renderTo(it) }.calls.filterIsInstance<RecordingCanvas.Call.Image>()
+            }
+            assertEquals(1, images.size, "$name: the SVG's picture reached the canvas once")
+            assertEquals(2, images.single().image.width, "$name: the picture came from the chapter's folder, not the SVG's")
+        }
+    }
 }

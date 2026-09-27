@@ -986,14 +986,15 @@ public class EpubPage internal constructor(
     /** The laid-out page, fetched per operation: holding it would defeat the budget. */
     private fun laidOut(): PageRender = doc.render(chapter, index)
 
-    /** Reads files an SVG references, relative to [baseDir] inside the archive. */
     /**
-     * The folder an image box's SVG resolves its own links against: the folder of its file,
-     * or the chapter's folder for an `<svg>` written in the chapter (RFC 3986, 5.2, #276).
+     * The folder an image's SVG resolves its own links against: the folder of the image file
+     * at [zipPath], or the chapter's folder for an `<svg>` written in the chapter (RFC 3986,
+     * 5.2, #276). Block and inline images use the same rule (#425).
      */
-    private fun resourceDir(box: ImageBox): String =
-        if (box.zipPath.isEmpty()) doc.chapterDir(chapter) else box.zipPath.substringBeforeLast('/', "")
+    private fun resourceDir(zipPath: String): String =
+        if (zipPath.isEmpty()) doc.chapterDir(chapter) else zipPath.substringBeforeLast('/', "")
 
+    /** Reads files an SVG references, relative to [baseDir] inside the archive. */
     private fun svgLoader(baseDir: String): (String) -> ByteArray? =
         { href -> doc.svgResource(baseDir, href) }
 
@@ -1056,7 +1057,7 @@ public class EpubPage internal constructor(
             // Inline images: bottom on the baseline, next to the text runs.
             for (im in line.images) {
                 paintImage(canvas, deviceCtm, im.image, im.svg, im.width, im.height,
-                    margin + im.x, base, im.objectFit, doc.chapterDir(chapter))
+                    margin + im.x, base, im.objectFit, resourceDir(im.zipPath))
             }
         }
 
@@ -1069,7 +1070,7 @@ public class EpubPage internal constructor(
                 val inset = imageInset(box.style)
                 paintImage(canvas, deviceCtm, box.image, box.svg, box.drawWidth, box.drawHeight,
                     margin + box.x + inset.inlineStart, yUp(box.bottom - inset.blockEnd), box.style.objectFit,
-                    resourceDir(box))
+                    resourceDir(box.zipPath))
             },
         )
         canvas.endPage()
@@ -1158,7 +1159,7 @@ public class EpubPage internal constructor(
             for (im in line.images) {
                 val top = margin + im.x
                 paintImage(canvas, deviceCtm, im.image, im.svg, im.width, im.height,
-                    axisX(0.0), displayHeight - top - im.height, im.objectFit, doc.chapterDir(chapter))
+                    axisX(0.0), displayHeight - top - im.height, im.objectFit, resourceDir(im.zipPath))
             }
         }
 
@@ -1171,7 +1172,7 @@ public class EpubPage internal constructor(
                 val left = minOf(colX(box.y + inset.blockStart), colX(box.bottom - inset.blockEnd))
                 val top = margin + box.x + inset.inlineStart
                 paintImage(canvas, deviceCtm, box.image, box.svg, box.drawWidth, box.drawHeight,
-                    left, displayHeight - top - box.drawHeight, box.style.objectFit, resourceDir(box))
+                    left, displayHeight - top - box.drawHeight, box.style.objectFit, resourceDir(box.zipPath))
             },
         )
         canvas.endPage()

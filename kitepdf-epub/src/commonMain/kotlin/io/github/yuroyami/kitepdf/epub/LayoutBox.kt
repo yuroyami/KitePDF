@@ -160,6 +160,8 @@ internal class PlacedImage(
     /** The `alt` text, for the reading order. Empty means decorative. */
     val alt: String? = null,
     val objectFit: ObjectFit = ObjectFit.FILL,
+    /** The image's file in the archive; empty for an `<svg>` written in the chapter. */
+    val zipPath: String = "",
 )
 
 /** A laid-out line inside a [TextBlockBox]; [yTop] is absolute document-down. */
