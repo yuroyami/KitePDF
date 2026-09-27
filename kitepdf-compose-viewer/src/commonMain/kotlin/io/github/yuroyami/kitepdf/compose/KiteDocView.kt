@@ -425,8 +425,11 @@ private val SCHEME_REGEX = Regex("^[a-zA-Z][a-zA-Z0-9+.-]*:")
  * KiteDocView(document = doc, page = 0, modifier = Modifier.fillMaxWidth()) // one page
  * ```
  *
- * @param page index of the single page to show, or `null` (default) for the
- *   whole document as a continuous vertical scroll.
+ * @param page index of the single page to show, counted over the whole
+ *   document, or `null` (default) for the whole document as a continuous
+ *   vertical scroll. A book that is still laying out shows a placeholder until
+ *   the chapters before the page are laid out, and an index outside the
+ *   document shows its nearest page, as [KiteDocLayout.SinglePage] does.
  * @param background colour painted behind page content. Ignored when [theme]
  *   is set (the theme owns the paper colour).
  * @param theme optional reading theme: [ReaderTheme.Dark] for night mode,
@@ -448,9 +451,7 @@ public fun KiteDocView(
     onTap: ((Offset) -> Unit)? = null,
     onLinkTap: ((KiteLinkAction) -> Boolean)? = null,
 ) {
-    require(page == null || page in 0 until document.pageCount) {
-        "page $page is out of bounds (document has ${document.pageCount} page(s))"
-    }
+    // No check against pageCount here: for a book it lays out every chapter on this thread (#351).
     KiteDocView(
         state = rememberKiteDocViewState(document),
         modifier = modifier,
