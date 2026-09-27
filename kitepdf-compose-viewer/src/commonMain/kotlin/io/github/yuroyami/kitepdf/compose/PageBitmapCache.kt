@@ -1,6 +1,7 @@
 package io.github.yuroyami.kitepdf.compose
 
 import androidx.compose.ui.graphics.ImageBitmap
+import io.github.yuroyami.kitepdf.core.render.ReaderTheme
 
 /**
  * LRU cache of rasterized page bitmaps, so scrolling back through a
@@ -21,8 +22,10 @@ internal class PageBitmapCache(private val maxBytes: Long) {
         val pageIdentity: Any,
         val w: Int,
         val h: Int,
+        /** The paper colour the page is drawn on: the theme's when one is set (#394). */
         val bgArgb: Int,
-        val themeId: Int,
+        /** The theme itself, compared by value: two themes with equal hashes must not share pixels (#420). */
+        val theme: ReaderTheme?,
         val hairlineBits: Int,
         /** True when the page was drawn without its form widgets, because a form layer draws them. */
         val withoutWidgets: Boolean = false,

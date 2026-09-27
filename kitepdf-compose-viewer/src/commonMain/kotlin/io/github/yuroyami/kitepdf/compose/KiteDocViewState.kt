@@ -631,7 +631,12 @@ public class KiteDocViewState(
     private var bitmapCacheBudget = -1L
 
     internal fun bitmapCacheFor(budgetBytes: Long): PageBitmapCache? {
-        if (budgetBytes <= 0L) return null
+        if (budgetBytes <= 0L) {
+            // A cache the host turned off lets go of the bitmaps it held (#395).
+            bitmapCache = null
+            bitmapCacheBudget = 0L
+            return null
+        }
         if (bitmapCacheBudget != budgetBytes) {
             bitmapCache = PageBitmapCache(budgetBytes)
             bitmapCacheBudget = budgetBytes
