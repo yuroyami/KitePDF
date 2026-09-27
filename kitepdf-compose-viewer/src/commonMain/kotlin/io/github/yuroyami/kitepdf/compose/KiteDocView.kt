@@ -242,11 +242,9 @@ public fun KiteDocView(
                 scriptCall("documentOpened", Unit) { handler.documentOpened() }
             }
         }
-    }
-    val currentPage = state.currentLocation.chapter
-    LaunchedEffect(scripts, currentPage) {
-        val handler = scripts ?: return@LaunchedEffect
-        withContext(scriptLane) { scriptCall("pageOpened", Unit) { handler.pageOpened(currentPage) } }
+        // Then each page's open and close scripts, as the reader lands on pages. They take a
+        // page's index in the document, which only a PDF has (#366).
+        if (state.document is PdfDocument) state.runPageScripts(handler, scriptLane)
     }
     // A field that has the caret when the view leaves commits what the reader typed and lets go
     // of the caret, even when its input never took the focus (#365).

@@ -34,6 +34,8 @@ import io.github.yuroyami.kitepdf.core.KiteStructuredText
 import io.github.yuroyami.kitepdf.core.kiteWarn
 import kotlin.math.abs
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.withContext
 
 /**
@@ -424,6 +426,37 @@ public class KiteDocViewState(
         }
         val lane = scriptLane
         if (lane == null) work() else kotlinx.coroutines.CoroutineScope(lane).launch { work() }
+    }
+
+    /**
+     * Runs each page's open and close scripts as the reader lands on pages, with the page's index
+     * in the document (ISO 32000-1, 12.6.3, Table 195). A page counts once the scroll or the page
+     * turn settles on it, so a swipe that comes back runs nothing, and a fling runs the scripts of
+     * the page it stops on only. The page that is open closes when the view leaves (#366).
+     */
+    internal suspend fun runPageScripts(
+        handler: io.github.yuroyami.kitepdf.PdfScriptHandler,
+        lane: kotlinx.coroutines.CoroutineDispatcher,
+    ) {
+        var open: Int? = null
+        try {
+            androidx.compose.runtime.snapshotFlow { if (adapter?.isScrollInProgress == true) null else currentLocation.page }
+                .filterNotNull()
+                .distinctUntilChanged()
+                .collect { page ->
+                    withContext(lane) {
+                        open?.let { previous -> scriptCall("pageClosed", Unit) { handler.pageClosed(previous) } }
+                        open = page
+                        scriptCall("pageOpened", Unit) { handler.pageOpened(page) }
+                    }
+                }
+        } finally {
+            val last = open
+            // The view is leaving and its scope with it, so the close runs on a scope of its own.
+            if (last != null) {
+                kotlinx.coroutines.CoroutineScope(lane).launch { scriptCall("pageClosed", Unit) { handler.pageClosed(last) } }
+            }
+        }
     }
 
     /**
@@ -1362,6 +1395,9 @@ internal interface KiteScrollAdapter {
     /** The slot whose key the container keeps in place when the strip changes under it. */
     val keyedSlot: Int get() = currentPage
 
+    /** True while a drag, a fling or an animation moves the container, so its page is not settled. */
+    val isScrollInProgress: Boolean get() = false
+
     /**
      * False when the container keeps its index, not its key, at its next measure: always for a
      * container without keys, and while a correction waits for that measure.
@@ -1385,6 +1421,7 @@ internal interface KiteScrollAdapter {
 
 /** Continuous mode: "current" = the visible item whose centre is nearest the viewport centre. */
 internal class LazyListScrollAdapter(private val listState: LazyListState) : KiteScrollAdapter {
+    override val isScrollInProgress: Boolean get() = listState.isScrollInProgress
     override val leadingPage: Int
         get() {
             expected?.let { (_, lead, before) -> if (listState.layoutInfo === before) return lead }
@@ -1442,6 +1479,7 @@ internal class LazyListScrollAdapter(private val listState: LazyListState) : Kit
 }
 
 internal class PagerScrollAdapter(private val pagerState: PagerState) : KiteScrollAdapter {
+    override val isScrollInProgress: Boolean get() = pagerState.isScrollInProgress
     /** True while a finger drags the pager. A correction then keeps the page offset, so the drag goes on. */
     var dragging: Boolean = false
 
@@ -1490,6 +1528,7 @@ internal class PagerScrollAdapter(private val pagerState: PagerState) : KiteScro
  * visible spread advances every second step.
  */
 internal class SpreadScrollAdapter(private val pagerState: PagerState) : KiteScrollAdapter {
+    override val isScrollInProgress: Boolean get() = pagerState.isScrollInProgress
     /**
      * The last logically-requested page. Within one spread, +1 must actually
      * advance (0 -> 1 stays on spread 0, the next +1 reaches spread 1), so

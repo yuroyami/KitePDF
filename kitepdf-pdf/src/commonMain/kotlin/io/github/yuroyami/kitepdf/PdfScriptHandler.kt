@@ -30,10 +30,16 @@ public interface PdfScriptHandler {
      */
     public fun documentOpened() {}
 
-    /** The reader reached this page: run its open script. */
+    /**
+     * The reader landed on this page: run its open script. A viewer calls this when a scroll or a
+     * page turn settles on the page, with the page's index in the document.
+     */
     public fun pageOpened(pageIndex: Int) {}
 
-    /** The reader left this page: run its close script. */
+    /**
+     * The reader left this page, for another page or because the view closed: run its close
+     * script. A viewer calls this before it opens the next page.
+     */
     public fun pageClosed(pageIndex: Int) {}
 
     /** The reader tapped something whose action is a script, such as a link. */
