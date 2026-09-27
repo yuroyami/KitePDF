@@ -615,6 +615,14 @@ public class KiteDocViewState(
     internal var adapter: KiteScrollAdapter? by mutableStateOf(null)
     internal var pendingPage: Int = initialPage.coerceAtLeast(0)
 
+    init {
+        // A large PDF builds its page list in the background, so the strip holds a placeholder
+        // at first. A page it cannot hold yet opens like a saved position, once the list exists (#387).
+        if (initialPage > 0 && document.chapterCount == 1 && !document.isChapterReady(0)) {
+            openAt = KiteBookmark.Page(initialPage)
+        }
+    }
+
     /**
      * The first visible slot when a continuous layout detached, which [pendingScrollOffset]
      * is measured from. Null when that slot is [pendingPage]. [pendingPage] stays the slot

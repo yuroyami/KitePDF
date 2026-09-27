@@ -169,6 +169,7 @@ public class PdfDocument private constructor(
     }
 
     /** Set inside the [pages] initializer so [pageCount] can switch sources. */
+    @kotlin.concurrent.Volatile
     private var pagesInitialized = false
 
     /**
@@ -200,6 +201,33 @@ public class PdfDocument private constructor(
      * of [pages] (#329).
      */
     override fun pageCountIn(chapter: Int): Int = if (chapter == 0) pages.size else 0
+
+    /**
+     * The `/Count` of the root page tree node when it is possible, else null. Read once: the
+     * viewer asks [isChapterReady] often.
+     */
+    private val declaredPageCount: Int? by lazy {
+        runCatching { catalog.getDict("Pages", this)?.getInt("Count")?.toInt() }.getOrNull()
+            ?.takeIf { it >= 0 && it <= xref.size }
+    }
+
+    /**
+     * True while the page list of a large document is not built. Then its one chapter is not
+     * ready, so a viewer shows a placeholder and builds the list off the main thread with
+     * [prepareChapter], instead of building thousands of page objects in its first frame (#387).
+     * A document whose `/Count` is small, missing or impossible builds its list on first use.
+     */
+    private fun pageListDeferred(): Boolean =
+        !pagesInitialized && (declaredPageCount ?: 0) > DEFERRED_PAGE_LIST_ABOVE
+
+    override fun isChapterReady(chapter: Int): Boolean = chapter != 0 || !pageListDeferred()
+
+    /** Builds the page list, which is the layout of the one chapter of a PDF. */
+    override fun prepareChapter(chapter: Int) {
+        if (chapter == 0) pages
+    }
+
+    override val isComplete: Boolean get() = !pageListDeferred()
 
     /**
      * Each widget annotation's field, and the widget's place among the field's widgets, by the
@@ -937,6 +965,12 @@ public class PdfDocument private constructor(
 
         /** The default of [fontCacheBudgetBytes]: 32 MB, enough for one large CJK font and many subset fonts. */
         public const val DEFAULT_FONT_CACHE_BUDGET_BYTES: Long = 32L * 1024 * 1024
+
+        /**
+         * The declared page count above which the page list waits for [prepareChapter]. Building a
+         * page object took about 10 to 20 microseconds on a desktop JVM, so 200 pages fit in a frame.
+         */
+        private const val DEFERRED_PAGE_LIST_ABOVE = 200
 
         public fun open(
             bytes: ByteArray,

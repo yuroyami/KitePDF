@@ -21,6 +21,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   becomes one full-size RGBA array first, and a scan above 40 megapixels draws
   when it is drawn small (#381).
 
+### Changed
+
+- A `PdfDocument` whose `/Count` declares more than 200 pages reports its one
+  chapter as not ready until `prepareChapter(0)` builds the page list, and
+  `isComplete` is false until then. `KiteDocView` builds the list off the main
+  thread and shows `chapterPlaceholder` meanwhile, where the first frame built
+  every page object (#387).
+
 ## [0.11.0] - 2026-09-25
 
 This release adds `kitepdf-xps` for XPS and OpenXPS, runs the JavaScript inside
