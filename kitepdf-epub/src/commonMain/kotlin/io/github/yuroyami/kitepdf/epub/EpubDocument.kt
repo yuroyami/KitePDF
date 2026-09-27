@@ -465,26 +465,41 @@ public class EpubDocument internal constructor(
 
     /**
      * What [pages] hold in memory: [BYTES_PER_GLYPH] per glyph (measured on
-     * the JVM over the corpus, an estimate everywhere) plus the samples of
-     * every image on them, counted once each.
+     * the JVM over the corpus, an estimate everywhere), the samples of every
+     * image on them and the size of every SVG file they draw, each counted
+     * once, and [BYTES_PER_PAGE] for each page. A chapter of SVG images
+     * counted as nothing, so no budget ever dropped it (#396).
      */
     private fun estimateBytes(pages: List<PageRender>): Long {
         var glyphs = 0L
         var imageBytes = 0L
         val seen = HashSet<KiteImageData>()
+        val seenSvg = HashSet<String>()
         fun count(image: KiteImageData?) {
             if (image != null && seen.add(image)) {
                 imageBytes += image.encodedBytes.size.toLong() + (image.pixelBytes?.size ?: 0)
             }
         }
+        // A floor for the tree the parse of an SVG file keeps: its size in the book.
+        fun countSvg(zipPath: String) {
+            if (zipPath.isNotEmpty() && seenSvg.add(zipPath)) {
+                imageBytes += parsed.zip.entry(zipPath)?.uncompressedSize?.coerceAtLeast(0L) ?: 0L
+            }
+        }
         for (page in pages) {
             for (line in page.lines) {
                 for (run in line.runs) glyphs += run.glyphs.size
-                for (im in line.images) count(im.image)
+                for (im in line.images) {
+                    count(im.image)
+                    if (im.svg != null) countSvg(im.zipPath)
+                }
             }
-            for (box in page.images) count(box.image)
+            for (box in page.images) {
+                count(box.image)
+                if (box.svg != null) countSvg(box.zipPath)
+            }
         }
-        return glyphs * BYTES_PER_GLYPH + imageBytes
+        return glyphs * BYTES_PER_GLYPH + imageBytes + pages.size * BYTES_PER_PAGE
     }
 
     /** Whether [chapter]'s document has been read and parsed yet. */
@@ -843,6 +858,9 @@ public class EpubDocument internal constructor(
          * corpus, rounded down because Android objects are smaller.
          */
         private const val BYTES_PER_GLYPH = 160L
+
+        /** A floor for what a page holds besides its glyphs and images: the page and its lists. An estimate. */
+        private const val BYTES_PER_PAGE = 2048L
 
         public fun open(
             bytes: ByteArray,
