@@ -1303,7 +1303,8 @@ private fun SpreadLayout(
         initialPage = (state.currentPage / 2).coerceIn(0, spreadCount - 1),
     ) { spreadCount }
     DisposableEffect(state, pagerState) {
-        val adapter = SpreadScrollAdapter(pagerState)
+        // The page the state holds, which the pager's last adapter parked when it left (#402).
+        val adapter = SpreadScrollAdapter(pagerState, initialPage = state.currentPage)
         state.adapter = adapter
         onDispose {
             state.park(adapter.currentPage)

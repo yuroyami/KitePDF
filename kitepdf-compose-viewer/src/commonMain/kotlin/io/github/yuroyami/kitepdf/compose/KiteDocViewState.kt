@@ -1542,15 +1542,20 @@ internal class PagerScrollAdapter(private val pagerState: PagerState) : KiteScro
  * order), so nextPage()/previousPage() remain plain index +1/-1 and the
  * visible spread advances every second step.
  */
-internal class SpreadScrollAdapter(private val pagerState: PagerState) : KiteScrollAdapter {
+internal class SpreadScrollAdapter(
+    private val pagerState: PagerState,
+    /** The page the reader was on, so a pager that comes back keeps the second page of a spread. */
+    initialPage: Int = pagerState.currentPage * 2,
+) : KiteScrollAdapter {
     override val isScrollInProgress: Boolean get() = pagerState.isScrollInProgress
     /**
      * The last logically-requested page. Within one spread, +1 must actually
      * advance (0 -> 1 stays on spread 0, the next +1 reaches spread 1), so
      * the adapter remembers it; a user swipe onto another spread supersedes
-     * it and "current" snaps back to that spread's first page.
+     * it and "current" snaps back to that spread's first page. It is snapshot
+     * state, so a step inside one spread reaches every observer (#402).
      */
-    private var logical = pagerState.currentPage * 2
+    private var logical by mutableIntStateOf(initialPage)
 
     override val currentPage: Int
         get() = if (logical / 2 == pagerState.currentPage) logical else pagerState.currentPage * 2
