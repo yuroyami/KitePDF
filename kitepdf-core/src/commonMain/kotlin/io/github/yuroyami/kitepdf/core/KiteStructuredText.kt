@@ -139,6 +139,24 @@ public class KiteStructuredText(public val blocks: List<KiteTextBlock>) {
     }
 
     /**
+     * Where a selection that starts at the flattened char [index] begins, or where one that
+     * ends at it ends when [after] is true: the char's logical edge, as a caret across its line.
+     * Lines keep their own direction, so the start of a right-to-left run is its right edge,
+     * and a caret in a vertical line runs across the column. Null for an index with no char.
+     */
+    public fun caretAt(index: Int, after: Boolean): KiteCaret? {
+        val ref = flatChars.getOrNull(index) ?: return null
+        val line = blocks[ref.block].lines[ref.line]
+        val edge = line.charEdges[if (after) ref.char + 1 else ref.char]
+        val inside = line.charEdges[if (after) ref.char else ref.char + 1]
+        return if (line.vertical) {
+            KiteCaret(edge, inside, line.bounds.left, line.bounds.right, vertical = true)
+        } else {
+            KiteCaret(edge, inside, line.bounds.bottom, line.bounds.top, vertical = false)
+        }
+    }
+
+    /**
      * The text of the inclusive flattened range as a reader copies it. Blocks
      * are separated by `\n\n`, and the lines of one block join as their
      * [KiteTextLine.end] says: a paragraph the layout wrapped copies as one
@@ -273,6 +291,19 @@ public class KiteTextLine(
         }
     }
 }
+
+/**
+ * A caret at a char boundary, in display space. [position] is where it sits along its line: x on
+ * a horizontal line, y in a [vertical] one. It spans the line from [from] to [to] across it. [inside]
+ * is the other edge of the char the caret belongs to, so it gives the direction into that char.
+ */
+public class KiteCaret(
+    public val position: Double,
+    public val inside: Double,
+    public val from: Double,
+    public val to: Double,
+    public val vertical: Boolean,
+)
 
 /** One search match: display-space [quads] (one per line touched) on page [pageIndex]. */
 public class KiteSearchHit(

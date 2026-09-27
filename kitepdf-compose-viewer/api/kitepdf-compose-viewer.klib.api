@@ -42,6 +42,7 @@ final enum class io.github.yuroyami.kitepdf.compose/KiteSelectionHandleEdge : ko
 
 abstract fun interface io.github.yuroyami.kitepdf.compose/KiteSelectionHandlePainter { // io.github.yuroyami.kitepdf.compose/KiteSelectionHandlePainter|null[0]
     abstract fun (androidx.compose.ui.graphics.drawscope/DrawScope).drawHandle(io.github.yuroyami.kitepdf.compose/KiteSelectionHandleEdge, kotlin/Float, kotlin/Float, kotlin/Float, androidx.compose.ui.graphics/Color) // io.github.yuroyami.kitepdf.compose/KiteSelectionHandlePainter.drawHandle|drawHandle@androidx.compose.ui.graphics.drawscope.DrawScope(io.github.yuroyami.kitepdf.compose.KiteSelectionHandleEdge;kotlin.Float;kotlin.Float;kotlin.Float;androidx.compose.ui.graphics.Color){}[0]
+    open fun (androidx.compose.ui.graphics.drawscope/DrawScope).drawColumnHandle(io.github.yuroyami.kitepdf.compose/KiteSelectionHandleEdge, kotlin/Float, kotlin/Float, kotlin/Float, androidx.compose.ui.graphics/Color) // io.github.yuroyami.kitepdf.compose/KiteSelectionHandlePainter.drawColumnHandle|drawColumnHandle@androidx.compose.ui.graphics.drawscope.DrawScope(io.github.yuroyami.kitepdf.compose.KiteSelectionHandleEdge;kotlin.Float;kotlin.Float;kotlin.Float;androidx.compose.ui.graphics.Color){}[0]
 }
 
 sealed interface io.github.yuroyami.kitepdf.compose/KiteDocLayout { // io.github.yuroyami.kitepdf.compose/KiteDocLayout|null[0]
