@@ -88,14 +88,10 @@ class DamagedPageSceneTest {
         }
     }
 
-    /**
-     * Thirty thousand nested clips overflow the stack in the Compose canvas. The draw pass catches
-     * that as it catches an exception (on the JVM and Android; Kotlin/Native cannot catch it).
-     */
+    /** A draw that overflows the stack is caught like an exception, on the JVM and Android. */
     @Test
     fun a_vectorized_page_that_overflows_the_stack_shows_its_paper() = withoutEscapes {
-        val content = "0 0 200 200 re W n\n".repeat(30_000) + "1 0 0 rg 0 0 200 200 re f"
-        val doc = PdfDocument.open(pdf("/Contents 4 0 R", stream("", content)))
+        val doc = OnePage(ThrowingPage(StackOverflowError("deep page")))
         val (scene, driver) = drivenScene(100, 100, queued = false) {
             KiteDocView(
                 state = rememberKiteDocViewState(doc),
@@ -108,6 +104,53 @@ class DamagedPageSceneTest {
         scene.use {
             val frame = driver.pumpFrames(4).toComposeImageBitmap().toPixelMap()
             assertEquals(Color.Green, frame[50, 50], "the page shows its paper, not a half-drawn page")
+        }
+    }
+
+    /**
+     * Thirty thousand clips used to recurse once per clip in every paint and overflow the stack.
+     * Each clip is now applied once, the renderer stops at its cap, and the page paints in both
+     * render modes (#335).
+     */
+    @Test
+    fun a_page_with_thirty_thousand_clips_paints() = withoutEscapes {
+        val content = "0 0 200 200 re W n\n".repeat(30_000) + "1 0 0 rg 0 0 200 200 re f"
+        val doc = PdfDocument.open(pdf("/Contents 4 0 R", stream("", content)))
+        for (spec in listOf(KiteRenderSpec.Vectorized(), KiteRenderSpec.Rasterized())) {
+            val (scene, driver) = drivenScene(100, 100, queued = false) {
+                KiteDocView(
+                    state = rememberKiteDocViewState(doc),
+                    modifier = Modifier.fillMaxSize(),
+                    layout = KiteDocLayout.SinglePage(0),
+                    renderSpec = spec,
+                    colors = KiteDocViewColors(pageBackground = Color.Green),
+                )
+            }
+            scene.use {
+                val frame = driver.pumpUntil { it[50, 50] == Color.Red }.toComposeImageBitmap().toPixelMap()
+                assertEquals(Color.Red, frame[50, 50], "$spec")
+            }
+        }
+    }
+
+    /** A clip still clips: half the page is clipped away, and the fill shows only in the other half. */
+    @Test
+    fun a_clip_still_limits_the_paint() = withoutEscapes {
+        val content = "q 0 0 100 200 re W n 1 0 0 rg 0 0 200 200 re f Q"
+        val doc = PdfDocument.open(pdf("/Contents 4 0 R", stream("", content)))
+        val (scene, driver) = drivenScene(100, 100, queued = false) {
+            KiteDocView(
+                state = rememberKiteDocViewState(doc),
+                modifier = Modifier.fillMaxSize(),
+                layout = KiteDocLayout.SinglePage(0),
+                renderSpec = KiteRenderSpec.Vectorized(),
+                colors = KiteDocViewColors(pageBackground = Color.Green),
+            )
+        }
+        scene.use {
+            val frame = driver.pumpUntil { it[25, 50] == Color.Red }.toComposeImageBitmap().toPixelMap()
+            assertEquals(Color.Red, frame[25, 50], "inside the clip")
+            assertEquals(Color.Green, frame[75, 50], "outside the clip")
         }
     }
 
