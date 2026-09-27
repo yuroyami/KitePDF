@@ -8,9 +8,11 @@ import androidx.compose.ui.graphics.ImageBitmap
  * instance lives on each [KiteDocViewState]; entries cost `w * h * 4` bytes and
  * the eldest are evicted until the total fits [maxBytes].
  *
- * NOT thread-safe by design: every access happens inside the raster
+ * NOT thread-safe by design: every read and write happens inside the raster
  * coroutine, which serializes on [KitePageRasterizer]'s mutex, so adding a
- * second lock here would only duplicate it.
+ * second lock here would only duplicate it. [KiteDocViewState] may swap the
+ * whole instance from composition when the budget changes; a raster in flight
+ * then writes to the old instance, which is dropped.
  */
 internal class PageBitmapCache(private val maxBytes: Long) {
 
