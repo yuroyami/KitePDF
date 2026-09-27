@@ -714,6 +714,21 @@ public class KiteDocViewState(
     internal val pageGeometry = mutableStateMapOf<Int, Rect>()
 
     /**
+     * True when slot [index] shows in the viewport at the current zoom and pan, by the geometry
+     * its layout reported. A slot with no geometry yet counts as shown.
+     */
+    internal fun inZoomedView(index: Int): Boolean {
+        val rect = pageGeometry[index] ?: return true
+        val size = viewportSize
+        if (size == IntSize.Zero || zoom <= 0f) return true
+        // The viewport in content space: the zoom layer scales about the centre, then pans.
+        val centre = Offset(size.width / 2f, size.height / 2f)
+        val topLeft = centre + (Offset.Zero - centre - panOffset) / zoom
+        val bottomRight = centre + (Offset(size.width.toFloat(), size.height.toFloat()) - centre - panOffset) / zoom
+        return rect.overlaps(Rect(topLeft, bottomRight))
+    }
+
+    /**
      * The viewport-filling content node INSIDE the zoom/pan layer, the anchor
      * page slots measure their rects against (continuous mode; paged/single
      * slots compute their letterbox rect directly from constraints).
