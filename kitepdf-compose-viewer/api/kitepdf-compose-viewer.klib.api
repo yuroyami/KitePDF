@@ -17,6 +17,18 @@ final enum class io.github.yuroyami.kitepdf.compose/KiteMarkerSide : kotlin/Enum
     final fun values(): kotlin/Array<io.github.yuroyami.kitepdf.compose/KiteMarkerSide> // io.github.yuroyami.kitepdf.compose/KiteMarkerSide.values|values#static(){}[0]
 }
 
+final enum class io.github.yuroyami.kitepdf.compose/KitePageRenderState : kotlin/Enum<io.github.yuroyami.kitepdf.compose/KitePageRenderState> { // io.github.yuroyami.kitepdf.compose/KitePageRenderState|null[0]
+    enum entry Failed // io.github.yuroyami.kitepdf.compose/KitePageRenderState.Failed|null[0]
+    enum entry Loading // io.github.yuroyami.kitepdf.compose/KitePageRenderState.Loading|null[0]
+    enum entry Ready // io.github.yuroyami.kitepdf.compose/KitePageRenderState.Ready|null[0]
+
+    final val entries // io.github.yuroyami.kitepdf.compose/KitePageRenderState.entries|#static{}entries[0]
+        final fun <get-entries>(): kotlin.enums/EnumEntries<io.github.yuroyami.kitepdf.compose/KitePageRenderState> // io.github.yuroyami.kitepdf.compose/KitePageRenderState.entries.<get-entries>|<get-entries>#static(){}[0]
+
+    final fun valueOf(kotlin/String): io.github.yuroyami.kitepdf.compose/KitePageRenderState // io.github.yuroyami.kitepdf.compose/KitePageRenderState.valueOf|valueOf#static(kotlin.String){}[0]
+    final fun values(): kotlin/Array<io.github.yuroyami.kitepdf.compose/KitePageRenderState> // io.github.yuroyami.kitepdf.compose/KitePageRenderState.values|values#static(){}[0]
+}
+
 final enum class io.github.yuroyami.kitepdf.compose/KiteSelectionHandleEdge : kotlin/Enum<io.github.yuroyami.kitepdf.compose/KiteSelectionHandleEdge> { // io.github.yuroyami.kitepdf.compose/KiteSelectionHandleEdge|null[0]
     enum entry End // io.github.yuroyami.kitepdf.compose/KiteSelectionHandleEdge.End|null[0]
     enum entry Start // io.github.yuroyami.kitepdf.compose/KiteSelectionHandleEdge.Start|null[0]
@@ -258,8 +270,10 @@ final class io.github.yuroyami.kitepdf.compose/KiteDocViewState { // io.github.y
     final fun currentBookmark(): io.github.yuroyami.kitepdf.core/KiteBookmark // io.github.yuroyami.kitepdf.compose/KiteDocViewState.currentBookmark|currentBookmark(){}[0]
     final fun highlightAt(androidx.compose.ui.geometry/Offset): io.github.yuroyami.kitepdf.compose/KiteHighlight? // io.github.yuroyami.kitepdf.compose/KiteDocViewState.highlightAt|highlightAt(androidx.compose.ui.geometry.Offset){}[0]
     final fun hitTest(androidx.compose.ui.geometry/Offset): io.github.yuroyami.kitepdf.compose/KitePageHit? // io.github.yuroyami.kitepdf.compose/KiteDocViewState.hitTest|hitTest(androidx.compose.ui.geometry.Offset){}[0]
+    final fun pageRenderState(kotlin/Int): io.github.yuroyami.kitepdf.compose/KitePageRenderState? // io.github.yuroyami.kitepdf.compose/KiteDocViewState.pageRenderState|pageRenderState(kotlin.Int){}[0]
     final fun panBy(androidx.compose.ui.geometry/Offset): androidx.compose.ui.geometry/Offset // io.github.yuroyami.kitepdf.compose/KiteDocViewState.panBy|panBy(androidx.compose.ui.geometry.Offset){}[0]
     final fun resetZoom() // io.github.yuroyami.kitepdf.compose/KiteDocViewState.resetZoom|resetZoom(){}[0]
+    final fun retryPage(kotlin/Int) // io.github.yuroyami.kitepdf.compose/KiteDocViewState.retryPage|retryPage(kotlin.Int){}[0]
     final fun setZoom(kotlin/Float, androidx.compose.ui.geometry/Offset = ...) // io.github.yuroyami.kitepdf.compose/KiteDocViewState.setZoom|setZoom(kotlin.Float;androidx.compose.ui.geometry.Offset){}[0]
     final suspend fun animateScrollToPage(kotlin/Int) // io.github.yuroyami.kitepdf.compose/KiteDocViewState.animateScrollToPage|animateScrollToPage(kotlin.Int){}[0]
     final suspend fun animateZoomTo(kotlin/Float, androidx.compose.ui.geometry/Offset = ..., androidx.compose.animation.core/AnimationSpec<kotlin/Float> = ...) // io.github.yuroyami.kitepdf.compose/KiteDocViewState.animateZoomTo|animateZoomTo(kotlin.Float;androidx.compose.ui.geometry.Offset;androidx.compose.animation.core.AnimationSpec<kotlin.Float>){}[0]

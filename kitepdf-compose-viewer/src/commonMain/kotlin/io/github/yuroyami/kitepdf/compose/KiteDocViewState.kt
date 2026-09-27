@@ -312,6 +312,31 @@ public class KiteDocViewState(
     public var zoom: Float by mutableFloatStateOf(1f)
         private set
 
+    /** How the raster of each page on screen stands, by slot (#430). */
+    private val renderStates = mutableStateMapOf<Int, KitePageRenderState>()
+
+    /** How many times the host asked each slot to render again. */
+    private val retries = mutableStateMapOf<Int, Int>()
+
+    /**
+     * How the raster of the page in slot [pageIndex] stands: loading, ready or failed, or null
+     * while that page is not on screen. A host can show a failed page with a retry button in its
+     * `pagePlaceholder`. A page that failed keeps the last bitmap it had, and [retryPage] renders
+     * it again. Rasterized mode only: a Vectorized page draws on every frame.
+     */
+    public fun pageRenderState(pageIndex: Int): KitePageRenderState? = renderStates[pageIndex]
+
+    /** Renders the page in slot [pageIndex] again, for example after its raster failed. */
+    public fun retryPage(pageIndex: Int) {
+        retries[pageIndex] = (retries[pageIndex] ?: 0) + 1
+    }
+
+    internal fun retriesOf(pageIndex: Int): Int = retries[pageIndex] ?: 0
+
+    internal fun noteRender(pageIndex: Int, render: KitePageRenderState?) {
+        if (render == null) renderStates.remove(pageIndex) else if (renderStates[pageIndex] != render) renderStates[pageIndex] = render
+    }
+
     /** Pan translation in viewport px, applied after [zoom] around the viewport centre. */
     public var panOffset: Offset by mutableStateOf(Offset.Zero)
         internal set
