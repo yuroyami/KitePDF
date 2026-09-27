@@ -342,20 +342,14 @@ public class ComposeCanvas(
             usedSystemFontText = true
             return null
         }
-        val style = TextStyle(
-            // 1000 px whatever the density and font scale, as in drawTextViaSystemFont.
-            fontSize = TextUnit((1000.0 / (drawScope.density * drawScope.fontScale)).toFloat(), TextUnitType.Sp),
-            fontFamily = fontSpec.toComposeFamily(),
-            fontWeight = fontSpec.toComposeWeight(),
-            fontStyle = fontSpec.toComposeStyle(),
-        )
-        val layout = measureOrNull(text, style) ?: return null
-        val baseline = layout.firstBaseline.toDouble()
+        // Real glyph contours from the host face. The text layout's range path is the selection
+        // highlight, rectangles, which stroked an O as a box (ISO 32000-1, 9.3.6, #415).
+        val path = hostTextPath(text, fontSpec) ?: return null
         val b = KitePath.Builder()
-        for (seg in layout.getPathForRange(0, text.length)) {
+        for (seg in path) {
             val p = seg.points
             fun x(i: Int) = p[i].toDouble()
-            fun y(i: Int) = baseline - p[i]
+            fun y(i: Int) = -p[i].toDouble()
             when (seg.type) {
                 PathSegment.Type.Move -> b.moveTo(x(0), y(1))
                 PathSegment.Type.Line -> b.lineTo(x(2), y(3))
