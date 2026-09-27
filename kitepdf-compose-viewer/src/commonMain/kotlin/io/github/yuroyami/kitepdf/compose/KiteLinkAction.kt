@@ -7,8 +7,9 @@ import io.github.yuroyami.kitepdf.PdfAction
  * [KiteDocView]'s `onLinkTap`.
  *
  * In-document jumps never arrive here: the viewer scrolls to the target page
- * itself. What reaches you is everything else, and it differs by format, so
- * this type carries the format-native payload instead of flattening it:
+ * itself, except in `KiteDocLayout.SinglePage`, which cannot move. What reaches
+ * you is everything else, and it differs by format, so this type carries the
+ * format-native payload instead of flattening it:
  *
  *  - EPUB links are plain hrefs, so they arrive as [Uri].
  *  - PDF links carry a whole `/A` action dictionary (a URI, a remote GoTo, a
