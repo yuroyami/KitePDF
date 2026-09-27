@@ -77,6 +77,9 @@ public class EpubDocument internal constructor(
     override val outline: List<KiteOutlineItem>
         get() {
             val resolved = isComplete
+            // One list for each state of the book, so a panel that reads it on every
+            // recomposition neither builds it nor flattens it again (#391).
+            outlineCache?.let { (forResolved, list) -> if (forResolved == resolved) return list }
             fun href(e: TocEntry): String? =
                 e.href?.let { if (e.fragment != null) "$it#${e.fragment}" else it }
             fun map(e: TocEntry): KiteOutlineItem = KiteOutlineItem(
@@ -85,8 +88,12 @@ public class EpubDocument internal constructor(
                 children = e.children.map(::map),
                 target = href(e)?.let { bookmarkOf(it) },
             )
-            return parsed.toc.entries.map(::map)
+            return parsed.toc.entries.map(::map).also { outlineCache = resolved to it }
         }
+
+    /** The last [outline], and whether the book was laid out when it was built. */
+    @kotlin.concurrent.Volatile
+    private var outlineCache: Pair<Boolean, List<KiteOutlineItem>>? = null
 
     public val pageWidth: Double get() = settings.pageWidth
     public val pageHeight: Double get() = settings.pageHeight
