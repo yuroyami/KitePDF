@@ -524,9 +524,9 @@ public class ComposeCanvas internal constructor(
      * the content, render it, then over-paint the mask group with
      * [ComposeBlendMode.DstIn] so the mask's alpha clips the content.
      *
-     * A colour matrix turns the mask layer into alpha. A matrix can only scale
-     * and offset, so the [transfer] function applies as the straight line
-     * closest to its table: exact for a linear function such as an inverter.
+     * A colour filter turns the mask layer into alpha through the [transfer]
+     * function: its whole table on Skia, the closest straight line on Android.
+     * See [softMaskFilter].
      */
     override fun applySoftMask(
         kind: SoftMask.Kind,
@@ -548,38 +548,12 @@ public class ComposeCanvas internal constructor(
             // Inner layer with DstIn: subsequent draws will multiply by the
             // existing layer's alpha, so the mask keeps only what it covers.
             // For a Luminosity mask (§11.6.5.2) the mask group composites over
-            // an opaque BLACK backdrop and its LUMINANCE becomes the alpha:
-            // a colour-matrix filter moves 0.299R+0.587G+0.114B into A at the
-            // layer restore, mirroring the Skia backend's LUMA filter.
-            // The /TR line then maps the alpha: A' = slope * A + offset. The offset of a
-            // Compose colour matrix is in levels from 0 to 255.
-            val slope = (transfer?.slope ?: 1.0).toFloat()
-            val offset = ((transfer?.offset ?: 0.0) * 255).toFloat()
+            // an opaque BLACK backdrop and its LUMINANCE becomes the alpha at the
+            // layer restore, mirroring the Skia backend's LUMA filter. The /TR
+            // function then maps the alpha.
             val maskPaint = Paint().apply {
                 blendMode = ComposeBlendMode.DstIn
-                if (kind == SoftMask.Kind.Luminosity) {
-                    colorFilter = androidx.compose.ui.graphics.ColorFilter.colorMatrix(
-                        androidx.compose.ui.graphics.ColorMatrix(
-                            floatArrayOf(
-                                0f, 0f, 0f, 0f, 0f,
-                                0f, 0f, 0f, 0f, 0f,
-                                0f, 0f, 0f, 0f, 0f,
-                                0.299f * slope, 0.587f * slope, 0.114f * slope, 0f, offset,
-                            ),
-                        ),
-                    )
-                } else if (transfer != null) {
-                    colorFilter = androidx.compose.ui.graphics.ColorFilter.colorMatrix(
-                        androidx.compose.ui.graphics.ColorMatrix(
-                            floatArrayOf(
-                                1f, 0f, 0f, 0f, 0f,
-                                0f, 1f, 0f, 0f, 0f,
-                                0f, 0f, 1f, 0f, 0f,
-                                0f, 0f, 0f, slope, offset,
-                            ),
-                        ),
-                    )
-                }
+                softMaskFilter(kind, transfer)?.let { colorFilter = it }
             }
             composeCanvas.saveLayer(infiniteRect(), maskPaint)
             saves.addLast(Save.Layer)
