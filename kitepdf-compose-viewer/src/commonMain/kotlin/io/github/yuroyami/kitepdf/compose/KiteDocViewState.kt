@@ -929,6 +929,7 @@ public class KiteDocViewState(
     /** Jumps to slot [page] (coerced into range) without animation. */
     public suspend fun scrollToPage(page: Int) {
         val target = page.coerceIn(0, (itemCount - 1).coerceAtLeast(0))
+        leaveSelectionFor(target)
         park(target)
         adapter?.scrollToPage(target)
     }
@@ -936,8 +937,19 @@ public class KiteDocViewState(
     /** Animates to slot [page] (coerced into range). */
     public suspend fun animateScrollToPage(page: Int) {
         val target = page.coerceIn(0, (itemCount - 1).coerceAtLeast(0))
+        leaveSelectionFor(target)
         park(target)
         adapter?.animateScrollToPage(target)
+    }
+
+    /**
+     * Drops a selection on another slot than [slot]. A selection holds the scroll and the pan
+     * while the reader acts on its words, so one left behind by a navigation would lock the page
+     * the reader went to, and the selection menu would offer words they cannot see (#407).
+     */
+    private fun leaveSelectionFor(slot: Int) {
+        val selected = selection
+        if (selected != null && selected.pageIndex != slot) clearSelection()
     }
 
     /**
@@ -968,6 +980,7 @@ public class KiteDocViewState(
             val index = navigableSlot(location)
             val continuous = adapter as? LazyListScrollAdapter
             if (!animate && continuous != null) {
+                leaveSelectionFor(index)
                 park(index, offsetPx = offsetPx)
                 continuous.scrollToPageOffset(index, offsetPx)
             } else {
