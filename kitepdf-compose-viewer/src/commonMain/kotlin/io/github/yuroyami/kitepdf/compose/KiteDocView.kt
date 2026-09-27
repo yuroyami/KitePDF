@@ -272,6 +272,10 @@ public fun KiteDocView(
     // Which side the reader reached a placeholder from, so its chapter lands on the right page (#348).
     // It follows the item, not the slot number: a placeholder that becomes a page keeps its slot.
     LaunchedEffect(state) { snapshotFlow { state.readerItem() }.collect { state.noteReaderItem(it) } }
+    // The chapters on screen stay laid out, so a long press, a link tap or a Vectorized draw on
+    // them does not lay a dropped chapter out again on the UI thread (#377).
+    LaunchedEffect(state) { snapshotFlow { state.chaptersOnScreen() }.collect { state.document.keepChapters(it) } }
+    DisposableEffect(state) { onDispose { state.document.keepChapters(emptySet()) } }
 
     // The document's own scripts: its open action once, then each page's as the reader
     // reaches it, and the timers a script set, pumped a frame at a time.

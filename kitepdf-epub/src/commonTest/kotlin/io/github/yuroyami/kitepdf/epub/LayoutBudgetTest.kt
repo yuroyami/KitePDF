@@ -56,6 +56,43 @@ class LayoutBudgetTest {
         assertTrue(doc.isChapterLive(0), "rendering it brought the chapter back")
     }
 
+    /** A chapter on screen stays laid out while the reader searches the book, so a gesture on it lays nothing out (#377). */
+    @Test
+    fun a_kept_chapter_stays_past_the_budget() {
+        val doc = book(budget = 0)
+        draws(doc.page(KiteLocation(0, 0)))
+        doc.keepChapters(setOf(0))
+        // A search reads the text of every chapter.
+        for (c in 1 until doc.chapterCount) doc.page(KiteLocation(c, 0)).textContent()
+        assertTrue(doc.isChapterLive(0), "the budget dropped the chapter on screen")
+        // A budget of zero keeps nothing else: each chapter the search reads drops again at once.
+        assertEquals(1, doc.liveChapterCount, "the budget still drops the chapters off screen")
+    }
+
+    @Test
+    fun a_chapter_no_longer_kept_drops_again() {
+        val doc = book(budget = 0)
+        draws(doc.page(KiteLocation(0, 0)))
+        doc.keepChapters(setOf(0))
+        draws(doc.page(KiteLocation(1, 0)))
+        assertTrue(doc.isChapterLive(0))
+        doc.keepChapters(emptySet())
+        // The next chapter the reader uses takes the place of the one they left.
+        draws(doc.page(KiteLocation(1, 0)))
+        assertFalse(doc.isChapterLive(0), "the chapter that the reader left stays past the budget")
+    }
+
+    @Test
+    fun letting_chapters_go_trims_to_the_budget_at_once() {
+        val doc = book(budget = 0)
+        doc.keepChapters(setOf(0, 1))
+        draws(doc.page(KiteLocation(0, 0)))
+        draws(doc.page(KiteLocation(1, 0)))
+        assertEquals(2, doc.liveChapterCount, "two chapters on screen stay past the budget")
+        doc.keepChapters(emptySet())
+        assertEquals(1, doc.liveChapterCount)
+    }
+
     @Test
     fun the_page_object_survives_eviction() {
         val doc = book(budget = 0)

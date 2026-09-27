@@ -91,6 +91,7 @@ public abstract interface class io/github/yuroyami/kitepdf/core/KiteDocument {
 	public abstract fun getPages ()Ljava/util/List;
 	public fun isChapterReady (I)Z
 	public fun isComplete ()Z
+	public fun keepChapters (Ljava/util/Set;)V
 	public fun locate (Lio/github/yuroyami/kitepdf/core/KiteBookmark;)Lio/github/yuroyami/kitepdf/core/KiteLocation;
 	public fun locationOf (I)Lio/github/yuroyami/kitepdf/core/KiteLocation;
 	public fun page (Lio/github/yuroyami/kitepdf/core/KiteLocation;)Lio/github/yuroyami/kitepdf/core/KitePage;
@@ -107,6 +108,7 @@ public final class io/github/yuroyami/kitepdf/core/KiteDocument$DefaultImpls {
 	public static fun getOutline (Lio/github/yuroyami/kitepdf/core/KiteDocument;)Ljava/util/List;
 	public static fun isChapterReady (Lio/github/yuroyami/kitepdf/core/KiteDocument;I)Z
 	public static fun isComplete (Lio/github/yuroyami/kitepdf/core/KiteDocument;)Z
+	public static fun keepChapters (Lio/github/yuroyami/kitepdf/core/KiteDocument;Ljava/util/Set;)V
 	public static fun locate (Lio/github/yuroyami/kitepdf/core/KiteDocument;Lio/github/yuroyami/kitepdf/core/KiteBookmark;)Lio/github/yuroyami/kitepdf/core/KiteLocation;
 	public static fun locationOf (Lio/github/yuroyami/kitepdf/core/KiteDocument;I)Lio/github/yuroyami/kitepdf/core/KiteLocation;
 	public static fun page (Lio/github/yuroyami/kitepdf/core/KiteDocument;Lio/github/yuroyami/kitepdf/core/KiteLocation;)Lio/github/yuroyami/kitepdf/core/KitePage;

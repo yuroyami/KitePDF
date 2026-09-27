@@ -20,6 +20,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   of rows at a time. Every canvas uses it, so a large scan drawn small no longer
   becomes one full-size RGBA array first, and a scan above 40 megapixels draws
   when it is drawn small (#381).
+- `KiteDocument.keepChapters` names the chapters on screen, and `EpubDocument`
+  keeps them laid out past its layout budget. `KiteDocView` calls it, so a long
+  press, a link tap or a Vectorized draw on a visible page no longer lays a
+  dropped chapter out again on the UI thread (#377).
 
 ### Changed
 

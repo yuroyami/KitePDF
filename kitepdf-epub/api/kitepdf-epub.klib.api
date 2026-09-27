@@ -100,6 +100,7 @@ final class io.github.yuroyami.kitepdf.epub/EpubDocument : io.github.yuroyami.ki
     final fun bookmarkOf(io.github.yuroyami.kitepdf.core/KiteLocation): io.github.yuroyami.kitepdf.core/KiteBookmark.Flow // io.github.yuroyami.kitepdf.epub/EpubDocument.bookmarkOf|bookmarkOf(io.github.yuroyami.kitepdf.core.KiteLocation){}[0]
     final fun bookmarkOf(kotlin/String): io.github.yuroyami.kitepdf.core/KiteBookmark.Flow? // io.github.yuroyami.kitepdf.epub/EpubDocument.bookmarkOf|bookmarkOf(kotlin.String){}[0]
     final fun isChapterReady(kotlin/Int): kotlin/Boolean // io.github.yuroyami.kitepdf.epub/EpubDocument.isChapterReady|isChapterReady(kotlin.Int){}[0]
+    final fun keepChapters(kotlin.collections/Set<kotlin/Int>) // io.github.yuroyami.kitepdf.epub/EpubDocument.keepChapters|keepChapters(kotlin.collections.Set<kotlin.Int>){}[0]
     final fun linkTarget(kotlin/String): io.github.yuroyami.kitepdf.epub/EpubLinkTarget? // io.github.yuroyami.kitepdf.epub/EpubDocument.linkTarget|linkTarget(kotlin.String){}[0]
     final fun locate(io.github.yuroyami.kitepdf.core/KiteBookmark): io.github.yuroyami.kitepdf.core/KiteLocation // io.github.yuroyami.kitepdf.epub/EpubDocument.locate|locate(io.github.yuroyami.kitepdf.core.KiteBookmark){}[0]
     final fun locationOf(kotlin/Int): io.github.yuroyami.kitepdf.core/KiteLocation? // io.github.yuroyami.kitepdf.epub/EpubDocument.locationOf|locationOf(kotlin.Int){}[0]

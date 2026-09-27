@@ -180,6 +180,11 @@ of a second each. Page counts, anchors and bookmarks survive the drop, so
 navigation never waits. One chapter always stays, so a book that is a single
 spine document keeps that document whole.
 
+The chapters on screen stay too. `KiteDocView` names them with
+`keepChapters`, so a long press or a link tap on the page the reader sees never
+waits for a layout, even while a search reads the rest of the book. An app that
+draws pages without the viewer can call `book.keepChapters(setOf(chapter))`.
+
 Embedded fonts sit outside that budget and stay small on their own: a font
 file is parsed once per book, however many stylesheets or chapters declare it,
 and it keeps one outline per glyph it has drawn.

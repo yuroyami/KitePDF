@@ -9,6 +9,7 @@ public final class io/github/yuroyami/kitepdf/svg/SvgDocument : io/github/yuroya
 	public fun getPages ()Ljava/util/List;
 	public fun isChapterReady (I)Z
 	public fun isComplete ()Z
+	public fun keepChapters (Ljava/util/Set;)V
 	public fun locate (Lio/github/yuroyami/kitepdf/core/KiteBookmark;)Lio/github/yuroyami/kitepdf/core/KiteLocation;
 	public fun locationOf (I)Lio/github/yuroyami/kitepdf/core/KiteLocation;
 	public fun page (Lio/github/yuroyami/kitepdf/core/KiteLocation;)Lio/github/yuroyami/kitepdf/core/KitePage;

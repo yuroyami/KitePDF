@@ -219,6 +219,10 @@ public class KiteDocViewState(
      */
     internal fun anchorAt(index: Int): KiteLocation? = items.getOrNull(index)?.anchor
 
+    /** The chapters of the page slots that the viewer has composed, which are the ones on screen. */
+    internal fun chaptersOnScreen(): Set<Int> =
+        pageGeometry.keys.mapNotNullTo(HashSet()) { slot -> (items.getOrNull(slot) as? DocItem.Page)?.location?.chapter }
+
     /**
      * Where the reader in slot [index] is, in terms that survive a change of the strip. A
      * placeholder remembers the side the reader came from, so a chapter the reader paged back

@@ -157,6 +157,7 @@ abstract interface io.github.yuroyami.kitepdf.core/KiteDocument { // io.github.y
 
     open fun bookmarkOf(io.github.yuroyami.kitepdf.core/KiteLocation): io.github.yuroyami.kitepdf.core/KiteBookmark // io.github.yuroyami.kitepdf.core/KiteDocument.bookmarkOf|bookmarkOf(io.github.yuroyami.kitepdf.core.KiteLocation){}[0]
     open fun isChapterReady(kotlin/Int): kotlin/Boolean // io.github.yuroyami.kitepdf.core/KiteDocument.isChapterReady|isChapterReady(kotlin.Int){}[0]
+    open fun keepChapters(kotlin.collections/Set<kotlin/Int>) // io.github.yuroyami.kitepdf.core/KiteDocument.keepChapters|keepChapters(kotlin.collections.Set<kotlin.Int>){}[0]
     open fun locate(io.github.yuroyami.kitepdf.core/KiteBookmark): io.github.yuroyami.kitepdf.core/KiteLocation // io.github.yuroyami.kitepdf.core/KiteDocument.locate|locate(io.github.yuroyami.kitepdf.core.KiteBookmark){}[0]
     open fun locationOf(kotlin/Int): io.github.yuroyami.kitepdf.core/KiteLocation? // io.github.yuroyami.kitepdf.core/KiteDocument.locationOf|locationOf(kotlin.Int){}[0]
     open fun page(io.github.yuroyami.kitepdf.core/KiteLocation): io.github.yuroyami.kitepdf.core/KitePage // io.github.yuroyami.kitepdf.core/KiteDocument.page|page(io.github.yuroyami.kitepdf.core.KiteLocation){}[0]
