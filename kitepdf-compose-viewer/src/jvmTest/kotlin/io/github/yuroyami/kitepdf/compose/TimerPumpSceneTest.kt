@@ -11,6 +11,8 @@ import java.util.concurrent.atomic.AtomicInteger
 import kotlin.test.Test
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withContext
 
 /**
  * The script timer pump runs only while a timer waits: with none, the viewer asks for no frame,
@@ -48,6 +50,13 @@ class TimerPumpSceneTest {
         @Volatile private var next = 0L
 
         override val hasTimers: Boolean get() = active
+
+        /** How many times a page's open script ran. */
+        val opened = AtomicInteger()
+
+        override fun pageOpened(pageIndex: Int) {
+            opened.incrementAndGet()
+        }
 
         override fun pumpTimers(nowMillis: Long): Long? {
             pumps.incrementAndGet()
@@ -129,7 +138,11 @@ class TimerPumpSceneTest {
                 KiteDocView(state = state, modifier = Modifier.fillMaxSize(), scripts = scripts)
             }
             scene.use {
-                driver.pumpUntilState { state.pageGeometry.isNotEmpty() }
+                driver.pumpUntilState { state.pageGeometry.isNotEmpty() && scripts.opened.get() >= 1 }
+                // The open scripts wake the pump when they end. On a loaded machine they can end after
+                // the timer starts, and each wake pumps once more, so let them land first.
+                runBlocking { withContext(state.scriptLane!!) {} }
+                driver.pumpFrames(2)
                 scripts.start(nextMillis = 60_000)
                 driver.pumpUntilState { scripts.pumps.get() >= 1 }
                 driver.pumpFrames(40)
