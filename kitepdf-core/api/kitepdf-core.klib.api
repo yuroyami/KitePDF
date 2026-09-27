@@ -80,6 +80,19 @@ final enum class io.github.yuroyami.kitepdf.core.render/KiteRenderingIntent : ko
     }
 }
 
+final enum class io.github.yuroyami.kitepdf.core/KiteLineEnd : kotlin/Enum<io.github.yuroyami.kitepdf.core/KiteLineEnd> { // io.github.yuroyami.kitepdf.core/KiteLineEnd|null[0]
+    enum entry HARD // io.github.yuroyami.kitepdf.core/KiteLineEnd.HARD|null[0]
+    enum entry HYPHEN // io.github.yuroyami.kitepdf.core/KiteLineEnd.HYPHEN|null[0]
+    enum entry NONE // io.github.yuroyami.kitepdf.core/KiteLineEnd.NONE|null[0]
+    enum entry SPACE // io.github.yuroyami.kitepdf.core/KiteLineEnd.SPACE|null[0]
+
+    final val entries // io.github.yuroyami.kitepdf.core/KiteLineEnd.entries|#static{}entries[0]
+        final fun <get-entries>(): kotlin.enums/EnumEntries<io.github.yuroyami.kitepdf.core/KiteLineEnd> // io.github.yuroyami.kitepdf.core/KiteLineEnd.entries.<get-entries>|<get-entries>#static(){}[0]
+
+    final fun valueOf(kotlin/String): io.github.yuroyami.kitepdf.core/KiteLineEnd // io.github.yuroyami.kitepdf.core/KiteLineEnd.valueOf|valueOf#static(kotlin.String){}[0]
+    final fun values(): kotlin/Array<io.github.yuroyami.kitepdf.core/KiteLineEnd> // io.github.yuroyami.kitepdf.core/KiteLineEnd.values|values#static(){}[0]
+}
+
 abstract fun interface io.github.yuroyami.kitepdf.core.parser/IndirectResolver { // io.github.yuroyami.kitepdf.core.parser/IndirectResolver|null[0]
     abstract fun resolve(io.github.yuroyami.kitepdf.core.parser/PdfReference): io.github.yuroyami.kitepdf.core.parser/PdfObject? // io.github.yuroyami.kitepdf.core.parser/IndirectResolver.resolve|resolve(io.github.yuroyami.kitepdf.core.parser.PdfReference){}[0]
 }
@@ -1837,6 +1850,7 @@ final class io.github.yuroyami.kitepdf.core/KiteStructuredText { // io.github.yu
         final fun <get-plainText>(): kotlin/String // io.github.yuroyami.kitepdf.core/KiteStructuredText.plainText.<get-plainText>|<get-plainText>(){}[0]
 
     final fun charIndexAt(kotlin/Double, kotlin/Double): kotlin/Int? // io.github.yuroyami.kitepdf.core/KiteStructuredText.charIndexAt|charIndexAt(kotlin.Double;kotlin.Double){}[0]
+    final fun copyText(kotlin/Int, kotlin/Int): kotlin/String // io.github.yuroyami.kitepdf.core/KiteStructuredText.copyText|copyText(kotlin.Int;kotlin.Int){}[0]
     final fun quadsFor(kotlin/Int, kotlin/Int): kotlin.collections/List<io.github.yuroyami.kitepdf.core/KiteRectangle> // io.github.yuroyami.kitepdf.core/KiteStructuredText.quadsFor|quadsFor(kotlin.Int;kotlin.Int){}[0]
     final fun search(kotlin/String, kotlin/Boolean = ..., kotlin/Int = ...): kotlin.collections/List<io.github.yuroyami.kitepdf.core/KiteSearchHit> // io.github.yuroyami.kitepdf.core/KiteStructuredText.search|search(kotlin.String;kotlin.Boolean;kotlin.Int){}[0]
     final fun textRange(kotlin/Int, kotlin/Int): kotlin/String // io.github.yuroyami.kitepdf.core/KiteStructuredText.textRange|textRange(kotlin.Int;kotlin.Int){}[0]
@@ -1850,12 +1864,14 @@ final class io.github.yuroyami.kitepdf.core/KiteTextBlock { // io.github.yuroyam
 }
 
 final class io.github.yuroyami.kitepdf.core/KiteTextLine { // io.github.yuroyami.kitepdf.core/KiteTextLine|null[0]
-    constructor <init>(kotlin/String, io.github.yuroyami.kitepdf.core/KiteRectangle, kotlin/DoubleArray, kotlin/Boolean = ...) // io.github.yuroyami.kitepdf.core/KiteTextLine.<init>|<init>(kotlin.String;io.github.yuroyami.kitepdf.core.KiteRectangle;kotlin.DoubleArray;kotlin.Boolean){}[0]
+    constructor <init>(kotlin/String, io.github.yuroyami.kitepdf.core/KiteRectangle, kotlin/DoubleArray, kotlin/Boolean = ..., io.github.yuroyami.kitepdf.core/KiteLineEnd = ...) // io.github.yuroyami.kitepdf.core/KiteTextLine.<init>|<init>(kotlin.String;io.github.yuroyami.kitepdf.core.KiteRectangle;kotlin.DoubleArray;kotlin.Boolean;io.github.yuroyami.kitepdf.core.KiteLineEnd){}[0]
 
     final val bounds // io.github.yuroyami.kitepdf.core/KiteTextLine.bounds|{}bounds[0]
         final fun <get-bounds>(): io.github.yuroyami.kitepdf.core/KiteRectangle // io.github.yuroyami.kitepdf.core/KiteTextLine.bounds.<get-bounds>|<get-bounds>(){}[0]
     final val charEdges // io.github.yuroyami.kitepdf.core/KiteTextLine.charEdges|{}charEdges[0]
         final fun <get-charEdges>(): kotlin/DoubleArray // io.github.yuroyami.kitepdf.core/KiteTextLine.charEdges.<get-charEdges>|<get-charEdges>(){}[0]
+    final val end // io.github.yuroyami.kitepdf.core/KiteTextLine.end|{}end[0]
+        final fun <get-end>(): io.github.yuroyami.kitepdf.core/KiteLineEnd // io.github.yuroyami.kitepdf.core/KiteTextLine.end.<get-end>|<get-end>(){}[0]
     final val text // io.github.yuroyami.kitepdf.core/KiteTextLine.text|{}text[0]
         final fun <get-text>(): kotlin/String // io.github.yuroyami.kitepdf.core/KiteTextLine.text.<get-text>|<get-text>(){}[0]
     final val vertical // io.github.yuroyami.kitepdf.core/KiteTextLine.vertical|{}vertical[0]

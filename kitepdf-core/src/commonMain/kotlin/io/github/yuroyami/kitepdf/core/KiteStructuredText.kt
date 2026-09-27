@@ -139,6 +139,41 @@ public class KiteStructuredText(public val blocks: List<KiteTextBlock>) {
     }
 
     /**
+     * The text of the inclusive flattened range as a reader copies it. Blocks
+     * are separated by `\n\n`, and the lines of one block join as their
+     * [KiteTextLine.end] says: a paragraph the layout wrapped copies as one
+     * line, a word it hyphenated copies whole, and a break the text holds
+     * stays `\n`. Lines that end [KiteLineEnd.HARD], as every fixed-layout
+     * line does, copy as [textRange] gives them.
+     */
+    public fun copyText(start: Int, endInclusive: Int): String {
+        if (flatChars.isEmpty()) return ""
+        val a = start.coerceIn(0, flatChars.size - 1)
+        val b = endInclusive.coerceIn(a, flatChars.size - 1)
+        return buildString {
+            var prev: CharRef? = null
+            for (i in a..b) {
+                val ref = flatChars[i]
+                val line = blocks[ref.block].lines[ref.line]
+                val p = prev
+                if (p != null && ref.block != p.block) {
+                    append("\n\n")
+                } else if (p != null && ref.line != p.line) {
+                    when (blocks[p.block].lines[p.line].end) {
+                        KiteLineEnd.HARD -> append('\n')
+                        KiteLineEnd.SPACE -> append(' ')
+                        KiteLineEnd.HYPHEN, KiteLineEnd.NONE -> {}
+                    }
+                }
+                prev = ref
+                // The hyphen the layout added is not part of the text.
+                if (line.end == KiteLineEnd.HYPHEN && ref.char == line.text.lastIndex && line.text.endsWith('-')) continue
+                append(line.text[ref.char])
+            }
+        }
+    }
+
+    /**
      * Display-space quads (one per line touched) for the inclusive flattened
      * range. Search hits use the same walker.
      */
@@ -194,6 +229,24 @@ public class KiteStructuredText(public val blocks: List<KiteTextBlock>) {
 public class KiteTextBlock(public val lines: List<KiteTextLine>)
 
 /**
+ * How a [KiteTextLine] ends, which decides how [KiteStructuredText.copyText]
+ * joins it to the next line of its block.
+ */
+public enum class KiteLineEnd {
+    /** The text itself breaks the line, as a `<br>` does, or the line is fixed on its page: copied text keeps a line break. */
+    HARD,
+
+    /** The layout wrapped the line at a space: copied text joins it to the next line with one space. */
+    SPACE,
+
+    /** The layout wrapped the line inside a word and added the hyphen: copied text leaves the hyphen out and joins the halves. */
+    HYPHEN,
+
+    /** The layout wrapped the line where the text has no space, as between two CJK characters: copied text joins the lines directly. */
+    NONE,
+}
+
+/**
  * One laid-out line. [charEdges] has `text.length + 1` display-space
  * boundaries: `charEdges[i]` is where char `i` starts, the final entry where
  * the line ends. That is enough to build sub-line highlight quads.
@@ -211,6 +264,8 @@ public class KiteTextLine(
     public val charEdges: DoubleArray,
     /** True when this line is a column of vertical text: see [charEdges]. */
     public val vertical: Boolean = false,
+    /** How the line ends, for [KiteStructuredText.copyText]. A reflowable page sets it; a fixed page keeps [KiteLineEnd.HARD]. */
+    public val end: KiteLineEnd = KiteLineEnd.HARD,
 ) {
     init {
         require(charEdges.size == text.length + 1) {

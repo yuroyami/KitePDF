@@ -7,6 +7,7 @@ import io.github.yuroyami.kitepdf.epub.css.CssBackground
 import io.github.yuroyami.kitepdf.epub.css.DecorationLine
 import io.github.yuroyami.kitepdf.epub.css.ObjectFit
 import io.github.yuroyami.kitepdf.core.font.FontSpec
+import io.github.yuroyami.kitepdf.core.KiteLineEnd
 import io.github.yuroyami.kitepdf.core.font.TextGlyph
 import io.github.yuroyami.kitepdf.core.render.KiteImageData
 import io.github.yuroyami.kitepdf.core.render.RgbColor
@@ -175,6 +176,8 @@ internal class PositionedLine(
     val images: List<PlacedImage> = emptyList(),
     /** How many characters of its block's text the line stands for; reading positions count these (#434). */
     val sourceLength: Int = 0,
+    /** How the layout broke the line, which copied text follows (#438). */
+    val end: KiteLineEnd = KiteLineEnd.HARD,
 ) {
     /** Owning box + line index, filled after layout, for the paginator's widows/orphans. */
     var owner: TextBlockBox? = null
