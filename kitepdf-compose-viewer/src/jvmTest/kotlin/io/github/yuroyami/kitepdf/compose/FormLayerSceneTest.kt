@@ -2,8 +2,14 @@ package io.github.yuroyami.kitepdf.compose
 
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.ImageComposeScene
+import androidx.compose.ui.InternalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEvent
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.PointerType
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.use
 import io.github.yuroyami.kitepdf.PdfDocument
@@ -129,6 +135,11 @@ class FormLayerSceneTest {
         }
     }
 
+    /**
+     * A real tap and real keys, the way a reader fills a field. The input's first focus event
+     * arrives before its focus request lands and says "not focused", which used to commit the
+     * field empty and take the caret away at once (#356).
+     */
     @Test
     fun a_tap_on_a_text_field_takes_the_caret_and_typing_goes_through_the_scripts() {
         val doc = PdfDocument.open(formPdf())
@@ -136,28 +147,49 @@ class FormLayerSceneTest {
         lateinit var state: KiteDocViewState
         ImageComposeScene(width = 200, height = 200, density = Density(1f)) {
             state = rememberKiteDocViewState(doc)
-            KiteDocView(state = state, modifier = Modifier.fillMaxSize(), scripts = scripts)
+            KiteDocView(
+                state = state,
+                modifier = Modifier.fillMaxSize(),
+                zoomSpec = KiteZoomSpec(doubleTapEnabled = false),
+                scripts = scripts,
+            )
         }.use { scene ->
             val driver = SceneTestDriver(scene)
             driver.pumpUntil { state.pageGeometry.isNotEmpty() }
 
             // The text field is [20..180] x [120..160] user space, so display y 40..80: centre (100, 60).
-            assertTrue(handleWidgetTap(state, scripts, Offset(100f, 60f)), "the field consumed the tap")
-            assertEquals("out", state.focusedField)
-            // The focus script runs on the script thread, so the viewer does not wait for it.
-            driver.pumpUntil { scripts.events.contains("focus out") }
+            scene.sendPointerEvent(PointerEventType.Press, Offset(100f, 60f), type = PointerType.Touch)
+            scene.sendPointerEvent(PointerEventType.Release, Offset(100f, 60f), type = PointerType.Touch)
+            driver.pumpUntilState { scripts.events.contains("focus out") }
+            driver.pumpUntilState(maxFrames = 10, timeoutMs = 2_000) { false }
+            assertEquals("out", state.focusedField, "the field kept the caret: ${scripts.events}")
+            assertFalse(scripts.events.any { it.startsWith("commit") || it.startsWith("blur") }, "${scripts.events}")
 
             // A digit is taken and a letter is refused, as the field's keystroke script says.
-            assertEquals("4", scripts.keystroke("out", "4", 0, 0))
-            scripts.formState.setValue("out", "4")
-            assertEquals(null, scripts.keystroke("out", "x", 1, 1), "a letter is refused")
+            type(scene, '4')
+            driver.pumpUntilState { scripts.formState.value("out") == "4" }
+            type(scene, 'x')
+            driver.pumpUntilState(maxFrames = 10, timeoutMs = 2_000) { false }
+            assertEquals("4", scripts.formState.value("out"), "a letter is refused")
 
             // Leaving the field commits it, which is what runs validate, calculate and format.
             state.blurFocusedField()
+            driver.pumpUntilState { scripts.events.contains("blur out") }
             assertEquals(null, state.focusedField)
-            driver.pumpUntil { scripts.events.contains("commit out=4") }
-            driver.pumpUntil { scripts.events.contains("blur out") }
+            assertEquals(
+                listOf("down out", "up out", "focus out", "commit out=4", "blur out"),
+                scripts.events.dropWhile { !it.startsWith("down") },
+            )
         }
+    }
+
+    /** Types [char] into the focused node as a desktop keyboard does: a typed event from AWT. */
+    @OptIn(InternalComposeUiApi::class)
+    private fun type(scene: ImageComposeScene, char: Char) {
+        val awt = java.awt.event.KeyEvent(
+            javax.swing.JLabel(), java.awt.event.KeyEvent.KEY_TYPED, 0L, 0, java.awt.event.KeyEvent.VK_UNDEFINED, char,
+        )
+        scene.sendKeyEvent(KeyEvent(Key.Unknown, KeyEventType.Unknown, codePoint = char.code, nativeEvent = awt))
     }
 
     /** An edit is reduced to the text put in and the range it replaces, which is what a script sees. */
