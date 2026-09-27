@@ -44,6 +44,11 @@ internal fun Modifier.kiteFormLayer(
     @Suppress("UNUSED_PARAMETER") revision: Int,
     /** Remembered per page by the caller: a widget layer that failed once stays off (#333). */
     failure: DrawFailure = DrawFailure(),
+    /**
+     * The reader theme of the page under the widgets, so a field is not painted in the file's own
+     * colours over a dark page (#419). The canvas decorator is page paint only and stays out.
+     */
+    theme: io.github.yuroyami.kitepdf.core.render.ReaderTheme? = null,
 ): Modifier {
     if (scripts == null || page !is PdfPage) return this
     return drawWithContent {
@@ -53,7 +58,8 @@ internal fun Modifier.kiteFormLayer(
         val scale = size.width / width
         if (!scale.isFinite() || scale <= 0.0) return@drawWithContent
         val deviceCtm = KiteMatrix.scaling(scale, scale).concat(page.displayToDeviceBase())
-        val canvas = ComposeCanvas(this, textMeasurer, hairlineWidthPx)
+        val base = ComposeCanvas(this, textMeasurer, hairlineWidthPx)
+        val canvas = theme?.wrap(base) ?: base
         failure.guard("form layer") {
             page.renderAnnotationsTo(canvas, deviceCtm, scripts.formState) {
                 it.subtype == PdfAnnotation.Subtype.Widget

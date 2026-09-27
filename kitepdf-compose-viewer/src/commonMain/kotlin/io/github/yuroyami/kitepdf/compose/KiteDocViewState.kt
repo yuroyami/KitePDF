@@ -312,6 +312,12 @@ public class KiteDocViewState(
     public var zoom: Float by mutableFloatStateOf(1f)
         private set
 
+    /** The viewer's reader theme, which the thumbnail strip draws with (#419). */
+    internal var viewerTheme: io.github.yuroyami.kitepdf.core.render.ReaderTheme? by mutableStateOf(null)
+
+    /** The viewer's canvas decorator, which the thumbnail strip draws with (#419). */
+    internal var viewerDecorator: KiteCanvasDecorator? by mutableStateOf(null)
+
     /** How the raster of each page on screen stands, by slot (#430). */
     private val renderStates = mutableStateMapOf<Int, KitePageRenderState>()
 

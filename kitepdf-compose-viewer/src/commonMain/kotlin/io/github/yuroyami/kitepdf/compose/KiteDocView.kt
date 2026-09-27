@@ -202,6 +202,12 @@ public fun KiteDocView(
         state.scripts = scripts
         state.scriptScope = scriptScope
         state.scriptLane = scriptLane
+        // The thumbnail strip draws pages as the viewer does: with its theme and its decorator (#419).
+        state.viewerTheme = colors.theme
+        state.viewerDecorator = when (renderSpec) {
+            is KiteRenderSpec.Rasterized -> renderSpec.canvasDecorator
+            is KiteRenderSpec.Vectorized -> renderSpec.canvasDecorator
+        }
         state.selectionEnabled = selectionEnabled
         // Vectorized mode keeps no page bitmaps, so it lets go of the ones a raster mode kept (#395).
         if (renderSpec !is KiteRenderSpec.Rasterized) state.bitmapCacheFor(0L)
@@ -631,7 +637,12 @@ private fun PageSlotContent(
     val formTextMeasurer = rememberTextMeasurer()
     val formFailure = remember(page) { DrawFailure() }
     val slot = modifier
-        .kiteFormLayer(page, state.scripts, formTextMeasurer, 1f, state.formRevision, formFailure)
+        .kiteFormLayer(
+            page, state.scripts, formTextMeasurer,
+            // The form layer draws at screen resolution, so a hairline is one screen pixel unless the spec says else.
+            (renderSpec as? KiteRenderSpec.Vectorized)?.hairlineWidthPx ?: 1f,
+            state.formRevision, formFailure, colors.theme,
+        )
         .highlightOverlay(state, page, pageIndex, colors)
     when (renderSpec) {
         is KiteRenderSpec.Rasterized -> KitePageRaster(
@@ -993,7 +1004,8 @@ private fun KitePageRaster(
         } else if (pagePlaceholder != null) {
             pagePlaceholder(pageIndex)
         } else {
-            Box(Modifier.fillMaxSize().background(colors.pageBackground))
+            // The theme's paper, so night mode does not flash white before a page lands (#419).
+            Box(Modifier.fillMaxSize().background(paperColor(colors.pageBackground, colors.theme)))
         }
     }
 }
@@ -1297,7 +1309,7 @@ private fun ChapterGapSlot(
             val fit = fitWithin(constraints.maxWidth, constraints.maxHeight, aspect)
             if (fit == IntSize.Zero) return@BoxWithConstraints
             val size = with(LocalDensity.current) { DpSize(fit.width.toDp(), fit.height.toDp()) }
-            Box(Modifier.size(size).background(colors.pageBackground), contentAlignment = Alignment.Center) {
+            Box(Modifier.size(size).background(paperColor(colors.pageBackground, colors.theme)), contentAlignment = Alignment.Center) {
                 chapterPlaceholder?.invoke(chapter)
             }
         }
@@ -1311,7 +1323,7 @@ private fun ChapterGapSlot(
             .aspectRatio(aspect)
     }
     Box(
-        sizing.background(colors.pageBackground),
+        sizing.background(paperColor(colors.pageBackground, colors.theme)),
         contentAlignment = Alignment.Center,
     ) {
         chapterPlaceholder?.invoke(chapter)
