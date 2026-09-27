@@ -76,6 +76,51 @@ class ConcurrencyStressTest {
         }
     }
 
+    /** The document shares one parsed font between the threads, so its glyph caches take writes from all of them (#383). */
+    @Test
+    fun eight_threads_share_one_parsed_font() {
+        val widths = (listOf(250) + List(32) { 0 } + listOf(600)).joinToString(" ")
+        val text = (0 until 40).joinToString(" ") { "(A A) Tj" }
+        val pdf = TestPdf.onePage(
+            content = "BT /F1 10 Tf 20 100 Td $text /F2 10 Tf (the standard font too) Tj ET",
+            resources = "/Font << /F1 5 0 R /F2 8 0 R >>",
+            mediaBox = "0 0 300 300",
+            extra = listOf(
+                "<< /Type /Font /Subtype /TrueType /BaseFont /SquareTest /FirstChar 32 /LastChar 65 /Widths [$widths] " +
+                    "/FontDescriptor 6 0 R /Encoding /WinAnsiEncoding >>",
+                "<< /Type /FontDescriptor /FontName /SquareTest /Flags 32 /FontBBox [0 0 500 500] /ItalicAngle 0 " +
+                    "/Ascent 500 /Descent 0 /CapHeight 500 /StemV 80 /FontFile2 7 0 R >>",
+                TestPdf.Stream("", TestFonts.squareAndSpaceTtf()),
+                "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+            ),
+        )
+        fun glyphs(doc: PdfDocument) = RecordingCanvas().also { doc.pages[0].renderTo(it, KiteMatrix.IDENTITY) }
+            .calls.filterIsInstance<RecordingCanvas.Call.Glyphs>().flatMap { run -> run.glyphs.map { it.gid to (it.outline != null) } }
+        val baseline = glyphs(KitePDF.open(pdf))
+        assertTrue(baseline.any { it.second }, "the baseline draws outlines")
+
+        repeat(20) { iteration ->
+            val fresh = KitePDF.open(pdf) // a cold font cache every iteration
+            val errors = ConcurrentLinkedQueue<String>()
+            val start = CountDownLatch(1)
+            val threads = (0 until 8).map { t ->
+                thread(start = true) {
+                    start.await()
+                    try {
+                        repeat(5) { if (glyphs(fresh) != baseline) errors.add("iter $iteration thread $t drew other glyphs") }
+                    } catch (e: Throwable) {
+                        errors.add("iter $iteration thread $t threw: $e")
+                    }
+                }
+            }
+            start.countDown()
+            threads.forEach { it.join() }
+            assertTrue(errors.isEmpty(), errors.joinToString("\n"))
+            // Threads that miss together may each parse a font once; after that, every render hits.
+            assertTrue(fresh.fontParseCount <= 16, "the fonts parsed ${fresh.fontParseCount} times")
+        }
+    }
+
     @Test
     fun all_threads_on_the_same_page_share_one_image_decode() {
         val doc = buildDoc()

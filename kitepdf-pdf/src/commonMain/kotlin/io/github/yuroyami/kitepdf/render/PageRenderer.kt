@@ -1059,7 +1059,9 @@ public class PageRenderer(
     private fun loadFonts(resources: PdfDictionary?): Map<String, PdfFont> {
         val fonts = resources?.getDict("Font", resolver) ?: return emptyMap()
         return fonts.map.mapValues { (_, ref) ->
-            val font = PdfFont.from(ref, resolver)
+            // The document parses a font once for every render of every page that uses it (#383).
+            val font = (ref as? PdfReference)?.let { reference -> document?.font(reference.objectNumber) { PdfFont.from(ref, resolver) } }
+                ?: PdfFont.from(ref, resolver)
             if (font.subtype == "Type3" && font !in type3Data) {
                 val dict = ref.resolve(resolver) as? PdfDictionary
                 type3Data[font] = dict?.let { Type3Data.parse(it, resolver) }

@@ -838,6 +838,9 @@ final class io.github.yuroyami.kitepdf/PdfDocument : io.github.yuroyami.kitepdf.
     final val xref // io.github.yuroyami.kitepdf/PdfDocument.xref|{}xref[0]
         final fun <get-xref>(): kotlin.collections/Map<kotlin/Long, io.github.yuroyami.kitepdf.parser/XrefEntry> // io.github.yuroyami.kitepdf/PdfDocument.xref.<get-xref>|<get-xref>(){}[0]
 
+    final var fontCacheBudgetBytes // io.github.yuroyami.kitepdf/PdfDocument.fontCacheBudgetBytes|{}fontCacheBudgetBytes[0]
+        final fun <get-fontCacheBudgetBytes>(): kotlin/Long // io.github.yuroyami.kitepdf/PdfDocument.fontCacheBudgetBytes.<get-fontCacheBudgetBytes>|<get-fontCacheBudgetBytes>(){}[0]
+        final fun <set-fontCacheBudgetBytes>(kotlin/Long) // io.github.yuroyami.kitepdf/PdfDocument.fontCacheBudgetBytes.<set-fontCacheBudgetBytes>|<set-fontCacheBudgetBytes>(kotlin.Long){}[0]
     final var imageCacheBudgetBytes // io.github.yuroyami.kitepdf/PdfDocument.imageCacheBudgetBytes|{}imageCacheBudgetBytes[0]
         final fun <get-imageCacheBudgetBytes>(): kotlin/Long // io.github.yuroyami.kitepdf/PdfDocument.imageCacheBudgetBytes.<get-imageCacheBudgetBytes>|<get-imageCacheBudgetBytes>(){}[0]
         final fun <set-imageCacheBudgetBytes>(kotlin/Long) // io.github.yuroyami.kitepdf/PdfDocument.imageCacheBudgetBytes.<set-imageCacheBudgetBytes>|<set-imageCacheBudgetBytes>(kotlin.Long){}[0]
@@ -846,6 +849,7 @@ final class io.github.yuroyami.kitepdf/PdfDocument : io.github.yuroyami.kitepdf.
         final fun <set-operationCacheBudgetBytes>(kotlin/Long) // io.github.yuroyami.kitepdf/PdfDocument.operationCacheBudgetBytes.<set-operationCacheBudgetBytes>|<set-operationCacheBudgetBytes>(kotlin.Long){}[0]
 
     final fun dropDecodedImageCache() // io.github.yuroyami.kitepdf/PdfDocument.dropDecodedImageCache|dropDecodedImageCache(){}[0]
+    final fun dropFontCache() // io.github.yuroyami.kitepdf/PdfDocument.dropFontCache|dropFontCache(){}[0]
     final fun dropOperationCache() // io.github.yuroyami.kitepdf/PdfDocument.dropOperationCache|dropOperationCache(){}[0]
     final fun edit(kotlin.random/Random? = ...): io.github.yuroyami.kitepdf.writer/PdfEditor // io.github.yuroyami.kitepdf/PdfDocument.edit|edit(kotlin.random.Random?){}[0]
     final fun formField(kotlin/String): io.github.yuroyami.kitepdf/PdfFormField? // io.github.yuroyami.kitepdf/PdfDocument.formField|formField(kotlin.String){}[0]
@@ -855,6 +859,8 @@ final class io.github.yuroyami.kitepdf/PdfDocument : io.github.yuroyami.kitepdf.
     final fun resolveDestination(io.github.yuroyami.kitepdf.core.parser/PdfObject?): io.github.yuroyami.kitepdf/PdfDestination? // io.github.yuroyami.kitepdf/PdfDocument.resolveDestination|resolveDestination(io.github.yuroyami.kitepdf.core.parser.PdfObject?){}[0]
 
     final object Companion { // io.github.yuroyami.kitepdf/PdfDocument.Companion|null[0]
+        final const val DEFAULT_FONT_CACHE_BUDGET_BYTES // io.github.yuroyami.kitepdf/PdfDocument.Companion.DEFAULT_FONT_CACHE_BUDGET_BYTES|{}DEFAULT_FONT_CACHE_BUDGET_BYTES[0]
+            final fun <get-DEFAULT_FONT_CACHE_BUDGET_BYTES>(): kotlin/Long // io.github.yuroyami.kitepdf/PdfDocument.Companion.DEFAULT_FONT_CACHE_BUDGET_BYTES.<get-DEFAULT_FONT_CACHE_BUDGET_BYTES>|<get-DEFAULT_FONT_CACHE_BUDGET_BYTES>(){}[0]
         final const val DEFAULT_IMAGE_CACHE_BUDGET_BYTES // io.github.yuroyami.kitepdf/PdfDocument.Companion.DEFAULT_IMAGE_CACHE_BUDGET_BYTES|{}DEFAULT_IMAGE_CACHE_BUDGET_BYTES[0]
             final fun <get-DEFAULT_IMAGE_CACHE_BUDGET_BYTES>(): kotlin/Long // io.github.yuroyami.kitepdf/PdfDocument.Companion.DEFAULT_IMAGE_CACHE_BUDGET_BYTES.<get-DEFAULT_IMAGE_CACHE_BUDGET_BYTES>|<get-DEFAULT_IMAGE_CACHE_BUDGET_BYTES>(){}[0]
         final const val DEFAULT_OPERATION_CACHE_BUDGET_BYTES // io.github.yuroyami.kitepdf/PdfDocument.Companion.DEFAULT_OPERATION_CACHE_BUDGET_BYTES|{}DEFAULT_OPERATION_CACHE_BUDGET_BYTES[0]

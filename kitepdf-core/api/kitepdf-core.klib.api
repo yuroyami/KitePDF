@@ -550,6 +550,8 @@ final class io.github.yuroyami.kitepdf.core.font/PdfFont { // io.github.yuroyami
         final fun <get-isComposite>(): kotlin/Boolean // io.github.yuroyami.kitepdf.core.font/PdfFont.isComposite.<get-isComposite>|<get-isComposite>(){}[0]
     final val isVertical // io.github.yuroyami.kitepdf.core.font/PdfFont.isVertical|{}isVertical[0]
         final fun <get-isVertical>(): kotlin/Boolean // io.github.yuroyami.kitepdf.core.font/PdfFont.isVertical.<get-isVertical>|<get-isVertical>(){}[0]
+    final val retainedBytes // io.github.yuroyami.kitepdf.core.font/PdfFont.retainedBytes|{}retainedBytes[0]
+        final fun <get-retainedBytes>(): kotlin/Long // io.github.yuroyami.kitepdf.core.font/PdfFont.retainedBytes.<get-retainedBytes>|<get-retainedBytes>(){}[0]
     final val subtype // io.github.yuroyami.kitepdf.core.font/PdfFont.subtype|{}subtype[0]
         final fun <get-subtype>(): kotlin/String // io.github.yuroyami.kitepdf.core.font/PdfFont.subtype.<get-subtype>|<get-subtype>(){}[0]
     final val unitsPerEm // io.github.yuroyami.kitepdf.core.font/PdfFont.unitsPerEm|{}unitsPerEm[0]

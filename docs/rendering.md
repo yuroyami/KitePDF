@@ -437,17 +437,19 @@ PDF pages honour the signal. Other formats render their pages to the end.
 
 ## Memory
 
-A `PdfDocument` keeps two caches, so that a page drawn again, at another zoom or after a scroll back, costs less:
+A `PdfDocument` keeps three caches, so that a page drawn again, at another zoom or after a scroll back, costs less:
 
 - **Decoded images**, up to `imageCacheBudgetBytes` (default 32 MB). An image drawn on many pages decodes once.
 - **Parsed content**, up to `operationCacheBudgetBytes` (default 16 MB). A page drawn again, and a form drawn many times, parse their content once. A dense page of 100,000 operators takes about 12 MB.
+- **Parsed fonts**, up to `fontCacheBudgetBytes` (default 32 MB). A font parses once for all the pages, thumbnails and text extractions that use it. A font counts as about twice its embedded program, so a 10 MB CJK font takes about 20 MB.
 
-Each cache drops what it used least recently first. Lower the budgets for a small heap, and call `dropDecodedImageCache()` and `dropOperationCache()` when the app runs low on memory:
+Each cache drops what it used least recently first. Lower the budgets for a small heap, and call `dropDecodedImageCache()`, `dropOperationCache()` and `dropFontCache()` when the app runs low on memory:
 
 ```kotlin
 val doc = PdfDocument.open(bytes)
 doc.imageCacheBudgetBytes = 16L * 1024 * 1024
 doc.operationCacheBudgetBytes = 8L * 1024 * 1024
+doc.fontCacheBudgetBytes = 16L * 1024 * 1024
 ```
 
 ## Next steps

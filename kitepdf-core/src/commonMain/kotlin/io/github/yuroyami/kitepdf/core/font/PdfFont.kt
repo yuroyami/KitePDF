@@ -1,5 +1,7 @@
 package io.github.yuroyami.kitepdf.core.font
 
+import io.github.yuroyami.kitepdf.core.KiteLock
+import io.github.yuroyami.kitepdf.core.withLock
 import io.github.yuroyami.kitepdf.core.filters.FilterChain
 import io.github.yuroyami.kitepdf.core.parser.IndirectResolver
 import io.github.yuroyami.kitepdf.core.parser.PdfArray
@@ -63,6 +65,19 @@ public class PdfFont private constructor(
 ) {
 
     public val isComposite: Boolean get() = composite != null
+
+    /**
+     * An estimate of the memory that this font holds, in bytes: twice its embedded program, for
+     * the program and the outlines parsed from it, and a fixed share for its encoding tables. A
+     * cache of fonts stays within its budget by this number. A bundled standard 14 program is
+     * shared by every document, so it does not count.
+     */
+    public val retainedBytes: Long
+        get() {
+            val program = embeddedTtf?.programBytes ?: embeddedCff?.programBytes ?: embeddedType1?.programBytes
+                ?: composite?.let { it.ttf?.programBytes ?: it.cff?.programBytes } ?: 0
+            return TABLE_BYTES + 2L * program
+        }
 
     public val hasEmbeddedOutlines: Boolean
         get() = embeddedTtf != null || embeddedCff != null || embeddedType1 != null ||
@@ -248,9 +263,12 @@ public class PdfFont private constructor(
 
     private val gidCache = HashMap<Int, Int>()
 
+    /** Guards [gidCache]: a document shares one font between the threads that render its pages (#383). */
+    private val gidLock = KiteLock()
+
     private fun simpleGid(code: Int): Int {
         if (composite != null) return 0
-        gidCache[code]?.let { return it }
+        gidLock.withLock { gidCache[code] }?.let { return it }
         val gid = when {
             embeddedTtf != null -> {
                 val ttf = embeddedTtf
@@ -271,7 +289,7 @@ public class PdfFont private constructor(
                 if (byName >= 0) byName else cff.glyphIdForCodePoint(resolveByteToUnicode(code)).coerceAtLeast(0)
             } ?: 0
         }
-        gidCache[code] = gid
+        gidLock.withLock { gidCache[code] = gid }
         return gid
     }
 
@@ -338,6 +356,9 @@ public class PdfFont private constructor(
     }
 
     public companion object {
+
+        /** The share of [retainedBytes] for the encoding, width and Unicode tables of a font. */
+        private const val TABLE_BYTES = 16L * 1024
 
         /** Name parts of CJK fonts in a serif style, such as MS-Mincho, PMingLiU, STSong, SimSun and Batang. */
         private val CJK_SERIF = listOf("Mincho", "Ming", "Song", "SimSun", "Batang", "Myungjo")
