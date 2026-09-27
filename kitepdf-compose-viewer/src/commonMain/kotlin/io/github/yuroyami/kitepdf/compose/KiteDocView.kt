@@ -691,7 +691,13 @@ private fun PagedLayout(
         val isCurrent = index == pagerState.currentPage
         val page = state.pageAt(index)
         if (page == null) {
-            ChapterGapSlot(state, index, Orientation.Vertical, colors, chapterPlaceholder, letterboxed = true)
+            // The same taps and zoom gestures as a page, so a host's onTap still works here (#409).
+            ChapterGapSlot(
+                state, index, Orientation.Vertical, colors, chapterPlaceholder, letterboxed = true,
+                gestures = if (isCurrent) Modifier.kiteTransformGestures(state, zoomSpec, scope, onTap) else Modifier,
+                zoom = if (isCurrent) state.zoom else 1f,
+                pan = if (isCurrent) state.panOffset else androidx.compose.ui.geometry.Offset.Zero,
+            )
         } else PageBox(
             page = page,
             pageIndex = index,
@@ -768,7 +774,13 @@ private fun SinglePageLayout(
     val haptics = LocalHapticFeedback.current
     val only = state.pageAt(layout.pageIndex)
     if (only == null) {
-        ChapterGapSlot(state, layout.pageIndex, Orientation.Vertical, colors, chapterPlaceholder, letterboxed = true)
+        // The same taps and zoom gestures as a page, so a host's onTap still works here (#409).
+        ChapterGapSlot(
+            state, layout.pageIndex, Orientation.Vertical, colors, chapterPlaceholder, letterboxed = true,
+            gestures = Modifier.kiteTransformGestures(state, zoomSpec, scope, onTap),
+            zoom = state.zoom,
+            pan = state.panOffset,
+        )
         return
     }
     PageBox(
@@ -1219,12 +1231,27 @@ private fun ChapterGapSlot(
     inStrip: Boolean = false,
     /** True in a pager, where the slot fills the viewport and the placeholder is fitted inside it as a page is. */
     letterboxed: Boolean = false,
+    /** A pager slot's taps and zoom gestures, and the zoom and pan it draws at, as a page's. */
+    gestures: Modifier = Modifier,
+    zoom: Float = 1f,
+    pan: androidx.compose.ui.geometry.Offset = androidx.compose.ui.geometry.Offset.Zero,
 ) {
     val chapter = state.chapterAt(index) ?: return
     val aspect = state.placeholderAspect()
     if (letterboxed) {
         // The shape of the page that replaces it, so the slot does not jump when the chapter lands (#353).
-        BoxWithConstraints(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        BoxWithConstraints(
+            Modifier
+                .fillMaxSize()
+                .then(gestures)
+                .graphicsLayer {
+                    scaleX = zoom
+                    scaleY = zoom
+                    translationX = pan.x
+                    translationY = pan.y
+                },
+            contentAlignment = Alignment.Center,
+        ) {
             val fit = fitWithin(constraints.maxWidth, constraints.maxHeight, aspect)
             if (fit == IntSize.Zero) return@BoxWithConstraints
             val size = with(LocalDensity.current) { DpSize(fit.width.toDp(), fit.height.toDp()) }
