@@ -15,3 +15,5 @@ internal actual fun softMaskFilter(kind: SoftMask.Kind, transfer: KiteMaskTransf
     if (table == null) return luminosity
     return org.jetbrains.skia.ColorFilter.makeComposed(table, luminosity.asSkiaColorFilter()).asComposeColorFilter()
 }
+
+internal actual val maskTableFilters: Boolean = true

@@ -12,6 +12,15 @@ import io.github.yuroyami.kitepdf.core.render.SoftMask
  */
 internal expect fun softMaskFilter(kind: SoftMask.Kind, transfer: KiteMaskTransfer?): ColorFilter?
 
+/**
+ * True where [softMaskFilter] applies a transfer function by its whole table. Where it is false,
+ * the canvas gates a mask whose transfer is not nearly linear by its pixels (#445).
+ */
+internal expect val maskTableFilters: Boolean
+
+/** The most pixels the image of a mask group has when a canvas gates by pixels: 4 MB of them, a small share of a phone's heap. */
+internal const val MASK_MAX_PIXELS: Double = 1_048_576.0
+
 /** A colour matrix that moves the luminosity of a colour, 0.299 R + 0.587 G + 0.114 B, into its alpha, and clears its colour. */
 internal val LUMINOSITY_TO_ALPHA: FloatArray = floatArrayOf(
     0f, 0f, 0f, 0f, 0f,

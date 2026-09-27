@@ -539,6 +539,12 @@ public class AndroidNativeCanvas(private val canvas: AndroidCanvas) : KiteCanvas
         try {
             render()
             val luminosity = kind == SoftMask.Kind.Luminosity
+            if (transfer != null && !transfer.isNearlyLinear) {
+                // Android has no table colour filter, and the closest line would bend the mask,
+                // so gate by the mask group's pixels (#445).
+                gateByMaskPixels(luminosity, transfer, renderMask)
+                return
+            }
             val maskPaint = Paint().apply {
                 blendMode = AndroidBlendMode.DST_IN
                 // ISO 32000-1, 11.5.3: a luminosity mask gates by the group's brightness,
@@ -559,6 +565,41 @@ public class AndroidNativeCanvas(private val canvas: AndroidCanvas) : KiteCanvas
             groups.removeLastOrNull()
             canvas.restore()
             openLayers--
+        }
+    }
+
+    /**
+     * Gates the open layer by a soft mask whose [transfer] only a table gives: draws the mask
+     * group into a bitmap of the whole canvas, turns its pixels into mask values through the
+     * table (see [KiteMaskTransfer.toMaskAlpha]), and keeps the layer only where that bitmap is.
+     * The whole canvas, because the mask outside its group is the value of the backdrop. A large
+     * canvas draws the mask at a lower resolution and scales it up.
+     */
+    private fun gateByMaskPixels(luminosity: Boolean, transfer: KiteMaskTransfer, renderMask: (KiteCanvas) -> Unit) {
+        val width = canvas.width
+        val height = canvas.height
+        if (width <= 0 || height <= 0) return
+        val pixels = width.toDouble() * height
+        val scale = if (pixels <= MASK_MAX_PIXELS) 1f else kotlin.math.sqrt(MASK_MAX_PIXELS / pixels).toFloat()
+        val w = kotlin.math.ceil(width * scale).toInt()
+        val h = kotlin.math.ceil(height * scale).toInt()
+        val group = android.graphics.Bitmap.createBitmap(w, h, android.graphics.Bitmap.Config.ARGB_8888)
+        try {
+            val offscreen = AndroidCanvas(group)
+            // Unpainted parts of a luminosity group show the black backdrop, whose luminosity is zero.
+            if (luminosity) offscreen.drawColor(Color.BLACK)
+            offscreen.scale(scale, scale)
+            renderMask(AndroidNativeCanvas(offscreen))
+            val argb = IntArray(w * h)
+            group.getPixels(argb, 0, w, 0, 0, w, h)
+            transfer.toMaskAlpha(argb, luminosity)
+            group.setPixels(argb, 0, w, 0, 0, w, h)
+            canvas.save()
+            canvas.scale(1f / scale, 1f / scale)
+            canvas.drawBitmap(group, 0f, 0f, Paint(Paint.FILTER_BITMAP_FLAG).apply { blendMode = AndroidBlendMode.DST_IN })
+            canvas.restore()
+        } finally {
+            group.recycle()
         }
     }
 
@@ -647,10 +688,14 @@ public class AndroidNativeCanvas(private val canvas: AndroidCanvas) : KiteCanvas
     }
 }
 
+/** The most pixels the bitmap of a mask group has when the canvas gates by pixels: 4 MB of them. */
+private const val MASK_MAX_PIXELS = 1_048_576.0
+
 /**
  * A colour matrix that turns the mask layer into alpha: the luminosity 0.30 R + 0.59 G + 0.11 B
  * when [luminosity] is true, or else the alpha itself. A matrix can only scale and offset, so
- * [transfer] applies as the straight line closest to its table. The offset is in levels from 0 to 255.
+ * [transfer] applies as the straight line closest to its table, which the canvas uses only when
+ * that line is within a level of the table. The offset is in levels from 0 to 255.
  */
 private fun maskToAlpha(luminosity: Boolean, transfer: KiteMaskTransfer?): FloatArray {
     val slope = (transfer?.slope ?: 1.0).toFloat()

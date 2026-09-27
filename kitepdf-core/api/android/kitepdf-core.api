@@ -1609,7 +1609,9 @@ public final class io/github/yuroyami/kitepdf/core/render/KiteMaskTransfer {
 	public final fun get (I)I
 	public final fun getOffset ()D
 	public final fun getSlope ()D
+	public final fun isNearlyLinear ()Z
 	public final fun toByteArray ()[B
+	public final fun toMaskAlpha ([IZ)V
 }
 
 public final class io/github/yuroyami/kitepdf/core/render/KiteMaskTransfer$Companion {

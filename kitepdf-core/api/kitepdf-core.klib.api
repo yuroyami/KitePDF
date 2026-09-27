@@ -1125,6 +1125,8 @@ final class io.github.yuroyami.kitepdf.core.render/KiteImageSampling { // io.git
 }
 
 final class io.github.yuroyami.kitepdf.core.render/KiteMaskTransfer { // io.github.yuroyami.kitepdf.core.render/KiteMaskTransfer|null[0]
+    final val isNearlyLinear // io.github.yuroyami.kitepdf.core.render/KiteMaskTransfer.isNearlyLinear|{}isNearlyLinear[0]
+        final fun <get-isNearlyLinear>(): kotlin/Boolean // io.github.yuroyami.kitepdf.core.render/KiteMaskTransfer.isNearlyLinear.<get-isNearlyLinear>|<get-isNearlyLinear>(){}[0]
     final val offset // io.github.yuroyami.kitepdf.core.render/KiteMaskTransfer.offset|{}offset[0]
         final fun <get-offset>(): kotlin/Double // io.github.yuroyami.kitepdf.core.render/KiteMaskTransfer.offset.<get-offset>|<get-offset>(){}[0]
     final val slope // io.github.yuroyami.kitepdf.core.render/KiteMaskTransfer.slope|{}slope[0]
@@ -1132,6 +1134,7 @@ final class io.github.yuroyami.kitepdf.core.render/KiteMaskTransfer { // io.gith
 
     final fun get(kotlin/Int): kotlin/Int // io.github.yuroyami.kitepdf.core.render/KiteMaskTransfer.get|get(kotlin.Int){}[0]
     final fun toByteArray(): kotlin/ByteArray // io.github.yuroyami.kitepdf.core.render/KiteMaskTransfer.toByteArray|toByteArray(){}[0]
+    final fun toMaskAlpha(kotlin/IntArray, kotlin/Boolean) // io.github.yuroyami.kitepdf.core.render/KiteMaskTransfer.toMaskAlpha|toMaskAlpha(kotlin.IntArray;kotlin.Boolean){}[0]
 
     final object Companion { // io.github.yuroyami.kitepdf.core.render/KiteMaskTransfer.Companion|null[0]
         final fun of(kotlin/Function1<kotlin/Double, kotlin/Double>): io.github.yuroyami.kitepdf.core.render/KiteMaskTransfer // io.github.yuroyami.kitepdf.core.render/KiteMaskTransfer.Companion.of|of(kotlin.Function1<kotlin.Double,kotlin.Double>){}[0]

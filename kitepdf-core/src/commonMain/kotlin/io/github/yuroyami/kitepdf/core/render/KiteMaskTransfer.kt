@@ -25,6 +25,12 @@ public class KiteMaskTransfer private constructor(private val table: IntArray) {
     /** The mask value of that line for group value 0, from 0 to 1. */
     public val offset: Double
 
+    /**
+     * True when the line of [slope] and [offset] stays within one level of the table at every
+     * level, so a backend that can only scale and offset gives the right mask.
+     */
+    public val isNearlyLinear: Boolean
+
     init {
         // A least-squares fit over the 256 levels.
         var sx = 0.0; var sy = 0.0; var sxx = 0.0; var sxy = 0.0
@@ -36,6 +42,26 @@ public class KiteMaskTransfer private constructor(private val table: IntArray) {
         val n = 256.0
         slope = (n * sxy - sx * sy) / (n * sxx - sx * sx)
         offset = (sy - slope * sx) / n
+        isNearlyLinear = (0..255).all { kotlin.math.abs(table[it] - (slope * it + offset * 255)) <= 1.0 }
+    }
+
+    /**
+     * Turns the pixels of a drawn mask group into mask values, in place, for a backend that
+     * gates by pixels because it has no table colour filter. Each pixel of [argb], straight
+     * ARGB, becomes black with the alpha of its mask value: its luminosity 0.30 R + 0.59 G
+     * + 0.11 B with [luminosity], else its alpha, through the table (ISO 32000-1, 11.5.3 and
+     * 11.6.5.2). A luminosity group is drawn over opaque black, so its pixels are opaque.
+     */
+    public fun toMaskAlpha(argb: IntArray, luminosity: Boolean) {
+        for (i in argb.indices) {
+            val p = argb[i]
+            val level = if (luminosity) {
+                ((p ushr 16 and 0xFF) * 0.30 + (p ushr 8 and 0xFF) * 0.59 + (p and 0xFF) * 0.11 + 0.5).toInt()
+            } else {
+                p ushr 24
+            }
+            argb[i] = this[level] shl 24
+        }
     }
 
     public companion object {

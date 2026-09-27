@@ -3,6 +3,7 @@ package io.github.yuroyami.kitepdf.compose
 import io.github.yuroyami.kitepdf.core.render.paintComplexShading
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.BlendMode as ComposeBlendMode
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.FilterQuality
@@ -15,6 +16,7 @@ import androidx.compose.ui.graphics.PathSegment
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipPath
+import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.graphics.isSupported
 import io.github.yuroyami.kitepdf.core.kiteWarn
@@ -84,6 +86,8 @@ public class ComposeCanvas internal constructor(
     private val magnification: Float,
     /** The platform's gradient between two circles, or null where it has none. A test can take it away. */
     private val twoCircleShader: (Float, Float, Float, Float, Float, Float, List<Color>, List<Float>) -> Shader? = ::twoCircleGradient,
+    /** True where a colour filter can apply a soft mask's whole transfer table. A test can take it away. */
+    private val maskTables: Boolean = maskTableFilters,
 ) : KiteCanvas {
 
     /**
@@ -596,6 +600,12 @@ public class ComposeCanvas internal constructor(
         groups.addLast(Group(layered = false, knockout = false))
         try {
             render()
+            if (transfer != null && !maskTables && !transfer.isNearlyLinear) {
+                // No filter here takes the whole table (Android), and the closest line would
+                // bend the mask, so gate by the mask group's pixels (#445).
+                gateByMaskPixels(kind, transfer, renderMask)
+                return
+            }
             // Inner layer with DstIn: subsequent draws will multiply by the
             // existing layer's alpha, so the mask keeps only what it covers.
             // For a Luminosity mask (§11.6.5.2) the mask group composites over
@@ -604,7 +614,7 @@ public class ComposeCanvas internal constructor(
             // function then maps the alpha.
             val maskPaint = Paint().apply {
                 blendMode = ComposeBlendMode.DstIn
-                softMaskFilter(kind, transfer)?.let { colorFilter = it }
+                (if (maskTables) softMaskFilter(kind, transfer) else softMaskMatrix(kind, transfer))?.let { colorFilter = it }
             }
             composeCanvas.saveLayer(infiniteRect(), maskPaint)
             saves.addLast(Save.Layer)
@@ -622,6 +632,49 @@ public class ComposeCanvas internal constructor(
             groups.removeLastOrNull()
             restoreThroughLayer()
         }
+    }
+
+    /**
+     * Gates the open layer by a soft mask whose [transfer] only a table gives: draws the mask
+     * group into an image of the whole canvas, turns its pixels into mask values through the
+     * table (see [KiteMaskTransfer.toMaskAlpha]), and keeps the layer only where that image is.
+     * The whole canvas, because the mask outside its group is the value of the backdrop. A
+     * large canvas draws the mask at a lower resolution and scales it up.
+     */
+    private fun gateByMaskPixels(kind: SoftMask.Kind, transfer: KiteMaskTransfer, renderMask: (KiteCanvas) -> Unit) {
+        val w = drawScope.size.width.toDouble()
+        val h = drawScope.size.height.toDouble()
+        if (!(w >= 1.0 && h >= 1.0)) return
+        val pixelSize = if (w * h <= MASK_MAX_PIXELS) 1.0 else sqrt(w * h / MASK_MAX_PIXELS)
+        val width = kotlin.math.ceil(w / pixelSize).toInt()
+        val height = kotlin.math.ceil(h / pixelSize).toInt()
+        val group = ImageBitmap(width, height)
+        val luminosity = kind == SoftMask.Kind.Luminosity
+        var nested: ComposeCanvas? = null
+        androidx.compose.ui.graphics.drawscope.CanvasDrawScope().draw(
+            drawScope, drawScope.layoutDirection, androidx.compose.ui.graphics.Canvas(group), Size(width.toFloat(), height.toFloat()),
+        ) {
+            // Unpainted parts of a luminosity group show the black backdrop, whose luminosity is zero.
+            if (luminosity) drawRect(Color.Black)
+            scale(1f / pixelSize.toFloat(), pivot = Offset.Zero) {
+                val canvas = ComposeCanvas(this, textMeasurer, hairlineWidthPx, skipSystemFontText, magnification, twoCircleShader, maskTables)
+                nested = canvas
+                renderMask(canvas)
+            }
+        }
+        if (nested?.usedSystemFontText == true) usedSystemFontText = true
+        val argb = IntArray(width * height)
+        group.readPixels(argb)
+        transfer.toMaskAlpha(argb, luminosity)
+        val rgba = ByteArray(argb.size * 4)
+        for (i in argb.indices) rgba[4 * i + 3] = (argb[i] ushr 24).toByte()
+        val mask = ImageDecoder.decodeRaw(rgba, width, height) ?: return
+        drawScope.drawImage(
+            image = mask,
+            dstSize = IntSize(kotlin.math.ceil(width * pixelSize).toInt(), kotlin.math.ceil(height * pixelSize).toInt()),
+            blendMode = ComposeBlendMode.DstIn,
+            filterQuality = FilterQuality.Low,
+        )
     }
 
     private fun infiniteRect(): Rect {

@@ -17,12 +17,18 @@ import kotlin.test.assertEquals
 class SoftMaskTransferTest {
 
     /**
-     * A 100 x 100 page that fills black through a soft mask of [kind] with the transfer x * x.
-     * The mask group is 0.5 everywhere: a black fill at alpha 0.5 for an alpha mask, a grey
-     * of 0.5 for a luminosity mask.
+     * The soft masks of the tests, each 0.5 everywhere: an alpha mask whose group fills black at
+     * alpha 0.5, a luminosity mask whose group fills a grey of 0.5, and a luminosity mask whose
+     * group fills white at alpha 0.5 over the black backdrop.
      */
-    private fun maskedPdf(kind: String): PdfDocument {
-        val group = if (kind == "Alpha") "/GS2 gs 0 g 0 0 100 100 re f" else "0.5 g 0 0 100 100 re f"
+    private val masks = listOf(
+        "Alpha" to "/GS2 gs 0 g 0 0 100 100 re f",
+        "Luminosity" to "0.5 g 0 0 100 100 re f",
+        "Luminosity" to "/GS2 gs 1 g 0 0 100 100 re f",
+    )
+
+    /** A 100 x 100 page that fills black through a soft mask of [kind], whose group draws [group], with the transfer x * x. */
+    private fun maskedPdf(kind: String, group: String): PdfDocument {
         val sb = StringBuilder("%PDF-1.7\n")
         val offsets = ArrayList<Int>()
         fun add(body: String) {
@@ -56,11 +62,36 @@ class SoftMaskTransferTest {
 
     @Test
     fun a_curved_transfer_gates_the_content_by_its_table() {
-        for (kind in listOf("Alpha", "Luminosity")) {
-            val page = maskedPdf(kind).pages[0]
+        for ((kind, group) in masks) {
+            val page = maskedPdf(kind, group).pages[0]
             val pixel = rasterizer().rasterize(page, 100, 100).toPixelMap()[50, 50]
             // Black gated at 0.25 over white paper leaves 0.75. The line fit gave about 0.67.
-            assertEquals(0.75f, pixel.red, 0.02f, "$kind mask: $pixel")
+            assertEquals(0.75f, pixel.red, 0.02f, "$kind mask of $group: $pixel")
+        }
+    }
+
+    /**
+     * Where no colour filter takes the whole table, as on Android, the canvas gates by the mask
+     * group's pixels and gives the same page (#445).
+     */
+    @Test
+    fun a_curved_transfer_gates_the_same_without_a_table_filter() {
+        for ((kind, group) in masks) {
+            val page = maskedPdf(kind, group).pages[0]
+            val bitmap = androidx.compose.ui.graphics.ImageBitmap(100, 100)
+            val density = Density(1f)
+            val measurer = TextMeasurer(createFontFamilyResolver(), density, LayoutDirection.Ltr)
+            androidx.compose.ui.graphics.drawscope.CanvasDrawScope().draw(
+                density, LayoutDirection.Ltr, androidx.compose.ui.graphics.Canvas(bitmap), androidx.compose.ui.geometry.Size(100f, 100f),
+            ) {
+                drawRect(androidx.compose.ui.graphics.Color.White)
+                val canvas = ComposeCanvas(this, measurer, 1f, false, 1f, maskTables = false)
+                page.renderTo(canvas, io.github.yuroyami.kitepdf.core.render.KiteMatrix(1.0, 0.0, 0.0, -1.0, 0.0, 100.0))
+            }
+            val pixels = bitmap.toPixelMap()
+            for ((x, y) in listOf(50 to 50, 5 to 5, 95 to 95)) {
+                assertEquals(0.75f, pixels[x, y].red, 0.02f, "$kind mask of $group at ($x, $y): ${pixels[x, y]}")
+            }
         }
     }
 }
