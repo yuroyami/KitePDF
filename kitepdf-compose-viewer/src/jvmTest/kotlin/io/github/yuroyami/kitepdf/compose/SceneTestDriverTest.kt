@@ -72,6 +72,7 @@ class SceneTestDriverTest {
             input = 5
             driver.pumpFrames(0)
         }
+        effects?.release()
         return seen
     }
 }

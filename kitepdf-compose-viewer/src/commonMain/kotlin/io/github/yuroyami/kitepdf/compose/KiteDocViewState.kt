@@ -5,7 +5,9 @@ import kotlinx.coroutines.launch
 import androidx.compose.animation.core.AnimationSpec
 import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.spring
+import androidx.compose.foundation.lazy.LazyListLayoutInfo
 import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.pager.PagerLayoutInfo
 import androidx.compose.foundation.pager.PagerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
@@ -29,7 +31,9 @@ import io.github.yuroyami.kitepdf.core.KiteLocation
 import io.github.yuroyami.kitepdf.core.KitePage
 import io.github.yuroyami.kitepdf.core.KiteSearchHit
 import io.github.yuroyami.kitepdf.core.KiteStructuredText
+import io.github.yuroyami.kitepdf.core.kiteWarn
 import kotlin.math.abs
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.withContext
 
 /**
@@ -185,13 +189,66 @@ public class KiteDocViewState(
     }
 
     /**
+     * The first slot at or after [location]: its own page, its chapter's placeholder, or the
+     * next slot in reading order when the location has none, as for an empty chapter. The last
+     * slot when nothing follows it (#347).
+     */
+    internal fun slotAtOrAfter(location: KiteLocation): Int {
+        val strip = items
+        val exact = slotFor(location)
+        if (exact >= 0) return exact
+        val next = strip.indexOfFirst { it.anchor >= location }
+        return if (next >= 0) next else (strip.size - 1).coerceAtLeast(0)
+    }
+
+    /**
      * The reading position of slot [index]: a page's own location, or the first
      * page of the chapter whose placeholder sits there. Null past the strip.
      */
-    internal fun anchorAt(index: Int): KiteLocation? = when (val item = items.getOrNull(index)) {
-        is DocItem.Page -> item.location
-        is DocItem.ChapterGap -> KiteLocation(item.chapter, 0)
+    internal fun anchorAt(index: Int): KiteLocation? = items.getOrNull(index)?.anchor
+
+    /**
+     * Where the reader in slot [index] is, in terms that survive a change of the strip. A
+     * placeholder remembers the side the reader came from, so a chapter the reader paged back
+     * onto opens at its last page when it lands (#348).
+     */
+    internal fun readerAnchorAt(index: Int): ReaderAnchor? = when (val item = items.getOrNull(index)) {
+        is DocItem.Page -> ReaderAnchor(item.location)
+        is DocItem.ChapterGap -> ReaderAnchor(
+            KiteLocation(item.chapter, 0),
+            onPlaceholder = true,
+            fromEnd = lastReadPage?.let { it.chapter > item.chapter } == true,
+        )
         null -> null
+    }
+
+    /** The slot [anchor] names in the strip as it stands now. */
+    internal fun slotOf(anchor: ReaderAnchor): Int {
+        val chapter = anchor.location.chapter
+        if (!anchor.onPlaceholder || !document.isChapterReady(chapter)) return slotAtOrAfter(anchor.location)
+        val pages = document.pageCountIn(chapter)
+        if (pages == 0) {
+            // The chapter came out empty: the reader goes on in the direction they were moving.
+            if (!anchor.fromEnd) return slotAtOrAfter(anchor.location)
+            val before = items.indexOfLast { it.anchor.chapter < chapter }
+            return if (before >= 0) before else slotAtOrAfter(anchor.location)
+        }
+        return slotFor(KiteLocation(chapter, if (anchor.fromEnd) pages - 1 else 0))
+    }
+
+    /**
+     * The last page, not placeholder, that the reader was on. It tells which side a
+     * placeholder was reached from.
+     */
+    internal var lastReadPage: KiteLocation? = null
+        private set
+
+    /** The item the reader is on now: a page, a placeholder, or null in an empty strip. */
+    internal fun readerItem(): DocItem? = items.getOrNull(currentPage)
+
+    /** Records the item the reader is on. The viewer calls it whenever that item changes. */
+    internal fun noteReaderItem(item: DocItem?) {
+        if (item is DocItem.Page) lastReadPage = item.location
     }
 
     /**
@@ -552,8 +609,11 @@ public class KiteDocViewState(
             if (!value) clearSelection()
         }
 
-    /** The fixed anchor (page, flattened char index) of an active drag. */
-    private var selectionAnchor: Pair<Int, Int>? = null
+    /**
+     * The fixed anchor of an active drag: the page and a flattened char index. A location, not a
+     * slot, so a chapter landing mid-drag does not strand it (#350).
+     */
+    private var selectionAnchor: Pair<KiteLocation, Int>? = null
 
     public fun clearSelection() {
         selectionAnchor = null
@@ -577,9 +637,10 @@ public class KiteDocViewState(
         isSelectionActive = true
         selectionInProgress = true
         val (pageIndex, x, y) = hitTestDisplay(viewportOffset) ?: return
+        val location = anchorAt(pageIndex) ?: return
         val text = pageAt(pageIndex)?.textContent() ?: return
         val idx = text.charIndexAt(x, y) ?: return
-        selectionAnchor = pageIndex to idx
+        selectionAnchor = location to idx
         applySelection(text, pageIndex, idx, idx)
     }
 
@@ -589,9 +650,10 @@ public class KiteDocViewState(
      * scope); points past the page or off any line keep the last state.
      */
     internal fun extendSelection(viewportOffset: Offset) {
-        val (page, anchor) = selectionAnchor ?: return
+        val (location, anchor) = selectionAnchor ?: return
+        val page = indexOf(location)
         val (pageIndex, x, y) = hitTestDisplay(viewportOffset) ?: return
-        if (pageIndex != page) return
+        if (page < 0 || pageIndex != page) return
         val text = pageAt(page)?.textContent() ?: return
         val idx = text.charIndexAt(x, y) ?: return
         applySelection(text, page, minOf(anchor, idx), maxOf(anchor, idx))
@@ -622,7 +684,8 @@ public class KiteDocViewState(
     internal fun beginHandleDrag(edge: KiteSelectionHandleEdge) {
         if (!selectionEnabled) return
         val sel = selection ?: return
-        selectionAnchor = sel.pageIndex to if (edge == KiteSelectionHandleEdge.Start) sel.end else sel.start
+        val location = anchorAt(sel.pageIndex) ?: return
+        selectionAnchor = location to if (edge == KiteSelectionHandleEdge.Start) sel.end else sel.start
         isSelectionActive = true
         selectionInProgress = true
         handleDragInProgress = true
@@ -781,7 +844,9 @@ public class KiteDocViewState(
      * Prefer this over [scrollToPage] on a reflowable book: a location is exact
      * whatever has been laid out so far, while a page number is not. A location
      * that does not exist (stale bookmark, empty or out-of-range chapter)
-     * clamps to the nearest real slot and still counts as done.
+     * goes to the nearest real slot and still counts as done: the last page of
+     * its chapter when the page is past the chapter's end, else the next slot in
+     * reading order.
      */
     public suspend fun scrollTo(location: KiteLocation, animate: Boolean = false) {
         scrollToLocation(location, animate, 0)
@@ -791,16 +856,7 @@ public class KiteDocViewState(
         navigationTarget = location
         try {
             prepareFor(location)
-            val exact = indexOf(location)
-            val index = if (exact >= 0) exact else run {
-                // The location does not exist: chapter out of range, page past
-                // the chapter's end, or an empty spine item. Clamp to the
-                // nearest real slot and count the navigation as done, so a
-                // stale bookmark cannot wedge the open loop.
-                val last = (document.pageCountIn(location.chapter) - 1).coerceAtLeast(0)
-                val inChapter = indexOf(KiteLocation(location.chapter, last))
-                if (inChapter >= 0) inChapter else (itemCount - 1).coerceAtLeast(0)
-            }
+            val index = navigableSlot(location)
             val continuous = adapter as? LazyListScrollAdapter
             if (!animate && continuous != null) {
                 park(index, offsetPx = offsetPx)
@@ -812,6 +868,21 @@ public class KiteDocViewState(
         } finally {
             navigationTarget = null
         }
+    }
+
+    /**
+     * The slot for [location], or the nearest real one when it has none: the last page of its
+     * chapter for a page past the end, else the next slot in reading order (#347).
+     */
+    private fun navigableSlot(location: KiteLocation): Int {
+        val exact = indexOf(location)
+        if (exact >= 0) return exact
+        val chapter = location.chapter
+        if (chapter < document.chapterCount && document.isChapterReady(chapter)) {
+            val last = document.pageCountIn(chapter) - 1
+            if (last >= 0 && location.page > last) return slotFor(KiteLocation(chapter, last))
+        }
+        return slotAtOrAfter(location)
     }
 
     /**
@@ -827,12 +898,9 @@ public class KiteDocViewState(
     public suspend fun scrollTo(bookmark: KiteBookmark, animate: Boolean = false) {
         // Cover the locate window too: a publication during locate() must
         // already correct toward the bookmark's chapter, not the old slot.
-        if (bookmark is KiteBookmark.Flow) {
-            val chapter = bookmark.chapter.coerceIn(0, (document.chapterCount - 1).coerceAtLeast(0))
-            navigationTarget = KiteLocation(chapter, 0)
-        }
+        if (bookmark is KiteBookmark.Flow) navigationTarget = flowTarget(bookmark)
         try {
-            val location = withContext(kitepdfRasterDispatcher()) { document.locate(bookmark) }
+            val location = locateGuarded(bookmark) ?: return
             publishChapter()
             scrollTo(location, animate)
         } finally {
@@ -840,56 +908,200 @@ public class KiteDocViewState(
         }
     }
 
+    private fun flowTarget(bookmark: KiteBookmark.Flow): KiteLocation =
+        KiteLocation(bookmark.chapter.coerceIn(0, (document.chapterCount - 1).coerceAtLeast(0)), 0)
+
+    /** [KiteDocument.locate] off the main thread, or null when the layout it needs failed (#331). */
+    private suspend fun locateGuarded(bookmark: KiteBookmark): KiteLocation? = try {
+        withContext(kitepdfRasterDispatcher()) { document.locate(bookmark) }
+    } catch (cancelled: CancellationException) {
+        throw cancelled
+    } catch (failure: Throwable) {
+        if (bookmark is KiteBookmark.Flow) onComposeThread { failedChapters += flowTarget(bookmark).chapter }
+        kiteWarn { "navigation: $bookmark could not be resolved: ${failure.message ?: failure::class.simpleName}" }
+        null
+    }
+
+    /** Chapters whose layout threw. They stay placeholders, and nothing lays them out again (#331). */
+    private val failedChapters = HashSet<Int>()
+
     /**
-     * Publishes freshly laid-out chapters to the strip and, in paged mode,
-     * keeps the reader's slot pointing at the same content.
-     *
-     * Capture, bump and verify all run on the main thread inside one frame
-     * window, so no other writer can slip between the read and the
-     * correction, and the corrected index is in place before that frame
-     * measures. The pager's own key matching covers shifts this path never
-     * sees (a publication racing a user swipe); this path covers what the
-     * key window cannot (shifts past roughly 130 slots) and does it with no
-     * wrong frame. Corrections target the slot the keys would pick anyway,
-     * so the two mechanisms never fight.
+     * Lays [chapter] out off the main thread, unless it is ready or failed before. Returns false
+     * when its layout throws: the failure is logged once and the chapter keeps its placeholder,
+     * where an exception used to end the host app (#331).
      */
-    internal suspend fun publishChapter() {
-        val paged = adapter as? PagedLikeAdapter
-        // Captured BEFORE the strip changes: where the reader semantically is.
-        val slotBefore = paged?.currentPage ?: pendingPage
-        val anchor = navigationTarget ?: anchorAt(slotBefore)
-        val selectionBefore = selection?.let { it to anchorAt(it.pageIndex) }
-        onComposeThread { onChapterReady() }
-        // Selection indices are raw slots; keep them on the same content.
-        selectionBefore?.let { (sel, loc) ->
-            val moved = loc?.let { indexOf(it) } ?: -1
-            if (moved < 0) clearSelection()
-            else if (moved != sel.pageIndex) selection = sel.copy(pageIndex = moved)
+    internal suspend fun prepareChapterGuarded(chapter: Int): Boolean {
+        if (chapter in failedChapters) return false
+        if (document.isChapterReady(chapter)) return true
+        return try {
+            withContext(kitepdfRasterDispatcher()) { document.prepareChapter(chapter) }
+            true
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (failure: Throwable) {
+            onComposeThread { failedChapters += chapter }
+            kiteWarn { "layout: chapter $chapter failed: ${failure.message ?: failure::class.simpleName}" }
+            false
         }
-        if (paged == null || anchor == null) return
-        val target = slotFor(anchor)
-        // Correct only when the raw index provably did not move by itself: a
-        // swipe (or an already-applied keyed remeasure) changes it, and then
-        // the pager speaks for the reader.
-        if (target >= 0 && target != slotBefore && paged.currentPage == slotBefore) {
+    }
+
+    /** Publishes freshly laid-out chapters at the next frame. See [publishNow]. */
+    internal suspend fun publishChapter() {
+        onComposeThread { publishNow() }
+    }
+
+    /**
+     * Publishes freshly laid-out chapters to the strip and keeps the reader on the same
+     * content, in one block on the main thread with no suspension point in it.
+     *
+     * Capture, bump and correction cannot be split up. A suspension between them let the
+     * composition react to the new strip first, and in an app the correction was cancelled
+     * together with the loader (#343). The correction goes through the container's request
+     * API, which applies at the next measure of the same frame, so no scroll in progress can
+     * refuse it. It runs only where the container's own key matching would put the reader on
+     * other content, so a landing the keys handle leaves a drag or a fling alone (#342).
+     */
+    internal fun publishNow() {
+        val adapter = adapter
+        val captured = adapter?.captureAnchor()
+        val readerSlot = captured?.slot ?: pendingPage
+        val reader = navigationTarget?.let { ReaderAnchor(it) } ?: readerAnchorAt(readerSlot)
+        val keyedSlot = if (captured != null) adapter.keyedSlot else -1
+        val keyed = items.getOrNull(keyedSlot)
+        val parkedLeading = if (adapter == null) pendingLeadingPage?.let { readerAnchorAt(it) } else null
+        val selected = selection?.let { it to anchorAt(it.pageIndex) }
+
+        onChapterReady()
+
+        selected?.let { (sel, location) -> moveSelection(sel, location) }
+        val target = reader?.let { slotOf(it) } ?: return
+        if (adapter == null) {
             pendingPage = target
-            paged.scrollToPage(target)
+            pendingLeadingPage = parkedLeading?.let { slotOf(it) }
+            return
+        }
+        if (captured == null) return
+        // A navigation in flight wins: its target goes to the leading edge, as the jump puts it.
+        if (navigationTarget != null) {
+            adapter.requestSlot(target, ScrollAnchor(target))
+            return
+        }
+        // Where the container's own key matching puts the reader: it finds the key of its anchor
+        // slot again, but only within a window around the old index.
+        val keyedAfter = keyed?.let { item -> items.indexOfFirst { it.key == item.key } } ?: -1
+        val keyedLands = if (adapter.followsKeys && keyedAfter >= 0 && abs(keyedAfter - keyedSlot) < KEY_REACH) keyedAfter else keyedSlot
+        val readerLands = keyedLands + (readerSlot - keyedSlot)
+        if (readerLands != target) adapter.requestSlot(target, captured)
+    }
+
+    /** Publishes when a ready chapter still holds a placeholder, as it does when someone else laid it out (#341). */
+    private fun publishIfStale() {
+        if (items.any { it is DocItem.ChapterGap && document.isChapterReady(it.chapter) }) publishNow()
+    }
+
+    /** Keeps the selection on its words after the strip changed, and tells the host (#350). */
+    private fun moveSelection(sel: KiteTextSelection, location: KiteLocation?) {
+        val moved = location?.let { indexOf(it) } ?: -1
+        when {
+            moved < 0 -> clearSelection()
+            moved != sel.pageIndex -> {
+                val next = sel.copy(pageIndex = moved)
+                selection = next
+                onSelectionChange?.invoke(next)
+            }
         }
     }
 
     /**
-     * Resolves [openAt], consuming it only on success: a cancellation
-     * mid-jump leaves the bookmark set and the restarted effect retries.
+     * Lays out every chapter that is not ready, the one nearest the reader first, and publishes
+     * each as it lands.
+     *
+     * One loader serves a viewer for as long as it shows this state. It asks where the reader is
+     * after every chapter, so it follows them without restarting, where a restart per chapter
+     * left abandoned layouts running on the pool (#378). It publishes whenever the strip is
+     * behind the document, as it is when someone else laid chapters out, so no ready chapter
+     * stays a placeholder (#341). A chapter whose layout fails stays a placeholder (#331).
+     */
+    internal suspend fun loadChapters() {
+        var around = onComposeThread {
+            publishIfStale()
+            readerChapter()
+        }
+        // A chapter whose layout returned without making it ready is left to a later navigation.
+        val declined = HashSet<Int>()
+        while (true) {
+            val next = loadOrder(document.chapterCount, around).firstOrNull {
+                !document.isChapterReady(it) && it !in failedChapters && it !in declined
+            } ?: break
+            if (prepareChapterGuarded(next) && !document.isChapterReady(next)) declined += next
+            around = onComposeThread {
+                publishIfStale()
+                readerChapter()
+            }
+        }
+    }
+
+    private fun readerChapter(): Int = (navigationTarget ?: currentLocation).chapter
+
+    /**
+     * Resolves the saved position the state was opened with, then drops it.
+     *
+     * A drag before the jump lands means the reader chose where to be, so the saved position is
+     * dropped rather than pulling them back later. The jump goes through the container's
+     * request API, which a scroll in progress cannot refuse (#344). A cancellation before the
+     * jump keeps the position, and the next attach tries again.
      */
     internal suspend fun openSavedPosition() {
-        openScrollAt?.let { position ->
-            scrollTo(position)
-            openScrollAt = null
+        val scrollAt = openScrollAt
+        val mark = openAt
+        if (scrollAt == null && mark == null) return
+        opening = true
+        try {
+            val target = when {
+                userMovedWhileOpening -> null
+                scrollAt != null -> scrollAt.location
+                else -> {
+                    if (mark is KiteBookmark.Flow) navigationTarget = flowTarget(mark)
+                    locateGuarded(mark!!)
+                }
+            }
+            if (target != null && !userMovedWhileOpening) {
+                navigationTarget = target
+                prepareFor(target)
+            }
+            onComposeThread {
+                if (target != null && !userMovedWhileOpening) jumpNow(navigableSlot(target), scrollAt?.offsetPx ?: 0)
+                openScrollAt = null
+                openAt = null
+            }
+        } finally {
+            navigationTarget = null
+            opening = false
+        }
+    }
+
+    /** True while [openSavedPosition] runs. */
+    private var opening = false
+
+    /** True once the reader dragged the viewer, which cancels a pending open (#344). */
+    private var userMovedWhileOpening = false
+
+    /** The viewer calls this when a finger starts to drag its list or pager. */
+    internal fun onUserDrag() {
+        userMovedWhileOpening = true
+        // The reader took over: a landing no longer pulls them toward the saved position.
+        if (opening) navigationTarget = null
+    }
+
+    /** Puts [slot] at the leading edge, [offsetPx] past it, at the next measure, or parks it. */
+    private fun jumpNow(slot: Int, offsetPx: Int) {
+        val adapter = adapter
+        if (adapter == null) {
+            park(slot, offsetPx = offsetPx)
             return
         }
-        val mark = openAt ?: return
-        scrollTo(mark)
-        openAt = null
+        pendingPage = slot
+        adapter.requestSlot(slot, ScrollAnchor(slot, offsetPx = -offsetPx))
     }
 
     /** Test-only: attach [adapter] as the paged adapter. */
@@ -906,38 +1118,58 @@ public class KiteDocViewState(
      * target does not exist yet.
      */
     private suspend fun prepareFor(location: KiteLocation) {
-        if (location.chapter !in 0 until document.chapterCount) return
-        val ready = document.isChapterReady(location.chapter)
-        if (ready && indexOf(KiteLocation(location.chapter, 0)) >= 0) return
-        if (!ready) withContext(kitepdfRasterDispatcher()) { document.prepareChapter(location.chapter) }
+        val chapter = location.chapter
+        if (chapter !in 0 until document.chapterCount) return
+        // Ready and published, as pages or, for an empty chapter, as nothing (#347).
+        val published = items.none { it is DocItem.ChapterGap && it.chapter == chapter }
+        if (document.isChapterReady(chapter) && published) return
+        if (!prepareChapterGuarded(chapter)) return
         publishChapter()
     }
 
     /**
      * The next page in reading order, crossing into the following chapter and
-     * laying it out when the current one runs out.
+     * laying it out when the current one runs out. Chapters with no pages are
+     * skipped (#347).
      */
     public suspend fun nextPage() {
-        val here = currentLocation
-        val inChapter = document.pageCountIn(here.chapter)
-        if (here.page + 1 < inChapter) {
-            scrollTo(KiteLocation(here.chapter, here.page + 1), animate = true)
-        } else if (here.chapter + 1 < document.chapterCount) {
-            scrollTo(KiteLocation(here.chapter + 1, 0), animate = true)
-        }
+        val target = locationAfter(currentLocation) ?: return
+        scrollTo(target, animate = true)
     }
 
-    /** The previous page in reading order, crossing back a chapter if needed. */
+    /** The previous page in reading order, crossing back a chapter if needed and skipping empty ones. */
     public suspend fun previousPage() {
-        val here = currentLocation
-        if (here.page > 0) {
-            scrollTo(KiteLocation(here.chapter, here.page - 1), animate = true)
-        } else if (here.chapter > 0) {
-            val previous = here.chapter - 1
-            prepareFor(KiteLocation(previous, 0))
-            val last = (document.pageCountIn(previous) - 1).coerceAtLeast(0)
-            scrollTo(KiteLocation(previous, last), animate = true)
+        val target = locationBefore(currentLocation) ?: return
+        scrollTo(target, animate = true)
+    }
+
+    /**
+     * The location after [here] in reading order, or null at the end. Chapters are laid out off
+     * the main thread to count their pages. One that failed or is not ready keeps its
+     * placeholder, which is then the next slot.
+     */
+    private suspend fun locationAfter(here: KiteLocation): KiteLocation? {
+        if (prepareChapterGuarded(here.chapter) && document.isChapterReady(here.chapter) &&
+            here.page + 1 < document.pageCountIn(here.chapter)
+        ) {
+            return KiteLocation(here.chapter, here.page + 1)
         }
+        for (chapter in here.chapter + 1 until document.chapterCount) {
+            if (!prepareChapterGuarded(chapter) || !document.isChapterReady(chapter)) return KiteLocation(chapter, 0)
+            if (document.pageCountIn(chapter) > 0) return KiteLocation(chapter, 0)
+        }
+        return null
+    }
+
+    /** The location before [here] in reading order, or null at the start. See [locationAfter]. */
+    private suspend fun locationBefore(here: KiteLocation): KiteLocation? {
+        if (here.page > 0) return KiteLocation(here.chapter, here.page - 1)
+        for (chapter in here.chapter - 1 downTo 0) {
+            if (!prepareChapterGuarded(chapter) || !document.isChapterReady(chapter)) return KiteLocation(chapter, 0)
+            val pages = document.pageCountIn(chapter)
+            if (pages > 0) return KiteLocation(chapter, pages - 1)
+        }
+        return null
     }
 
     internal data class PanAxes(val x: Boolean, val y: Boolean) {
@@ -950,8 +1182,33 @@ public class KiteDocViewState(
 
     private companion object {
         const val EPSILON = 0.001f
+
+        /**
+         * How far a lazy container searches for a key it anchors on, in slots. Compose looks
+         * within 100 slots of the old index (`LazyLayoutNearestRangeState`), and a landing that
+         * moves the key further is corrected by hand.
+         */
+        const val KEY_REACH = 90
     }
 }
+
+/**
+ * Where the reader is, in terms that survive a change of the strip: a page, or the placeholder
+ * of a chapter together with the side the reader came from.
+ */
+internal class ReaderAnchor(
+    val location: KiteLocation,
+    /** True when [location] names a placeholder, whose chapter was not laid out. */
+    val onPlaceholder: Boolean = false,
+    /** True for a placeholder reached by moving backwards: its chapter opens at its last page. */
+    val fromEnd: Boolean = false,
+)
+
+/**
+ * Where a slot sits in the viewport: its offset from the leading edge in pixels for a list, the
+ * fraction of a page it is scrolled by for a pager.
+ */
+internal class ScrollAnchor(val slot: Int, val offsetPx: Int = 0, val pageFraction: Float = 0f)
 
 /**
  * A [KiteDocViewState.hitTest] result: the page under a viewport point and the
@@ -1034,10 +1291,28 @@ internal interface KiteScrollAdapter {
     val scrollOffsetPx: Int get() = 0
     suspend fun scrollToPage(page: Int)
     suspend fun animateScrollToPage(page: Int)
-}
 
-/** Adapters whose container is index-tracked and needs publication corrections. */
-internal interface PagedLikeAdapter : KiteScrollAdapter
+    /**
+     * The reader's slot and where it sits in the viewport, taken before the strip changes. Null
+     * for a layout that does not follow chapter landings.
+     */
+    fun captureAnchor(): ScrollAnchor? = null
+
+    /** The slot whose key the container keeps in place when the strip changes under it. */
+    val keyedSlot: Int get() = currentPage
+
+    /**
+     * False when the container keeps its index, not its key, at its next measure: always for a
+     * container without keys, and while a correction waits for that measure.
+     */
+    val followsKeys: Boolean get() = true
+
+    /**
+     * Puts [slot] where [anchor] was, at the next measure. It does not suspend, so nothing can
+     * cancel it between a change of the strip and the measure that shows it (#343).
+     */
+    fun requestSlot(slot: Int, anchor: ScrollAnchor) {}
+}
 
 /** Continuous mode: "current" = the visible item whose centre is nearest the viewport centre. */
 internal class LazyListScrollAdapter(private val listState: LazyListState) : KiteScrollAdapter {
@@ -1045,9 +1320,17 @@ internal class LazyListScrollAdapter(private val listState: LazyListState) : Kit
     override val scrollOffsetPx: Int get() = listState.firstVisibleItemScrollOffset
     suspend fun scrollToPageOffset(page: Int, offsetPx: Int) = listState.scrollToItem(page, offsetPx)
 
+    /**
+     * A slot asked for through [requestSlot], with the layout it was asked against. Until the
+     * list measures again its layout info still describes the old strip, and the requested slot
+     * is where the reader is.
+     */
+    private var requested: Pair<Int, LazyListLayoutInfo>? = null
+
     override val currentPage: Int
         get() {
             val info = listState.layoutInfo
+            requested?.let { (slot, before) -> if (info === before) return slot }
             val visible = info.visibleItemsInfo
             if (visible.isEmpty()) return listState.firstVisibleItemIndex
             val viewportCentre = (info.viewportStartOffset + info.viewportEndOffset) / 2
@@ -1055,14 +1338,49 @@ internal class LazyListScrollAdapter(private val listState: LazyListState) : Kit
                 ?: listState.firstVisibleItemIndex
         }
 
+    override val keyedSlot: Int get() = listState.firstVisibleItemIndex
+
+    // A request makes the list forget the key it anchors on until it measures again.
+    override val followsKeys: Boolean get() = requested?.let { (_, before) -> listState.layoutInfo !== before } ?: true
+
+    override fun captureAnchor(): ScrollAnchor {
+        val slot = currentPage
+        val item = listState.layoutInfo.visibleItemsInfo.firstOrNull { it.index == slot }
+        // An item the list has not measured yet was placed by a request, at its own offset.
+        return ScrollAnchor(slot, offsetPx = item?.offset ?: -listState.firstVisibleItemScrollOffset)
+    }
+
+    override fun requestSlot(slot: Int, anchor: ScrollAnchor) {
+        requested = slot to listState.layoutInfo
+        listState.requestScrollToItem(slot, -anchor.offsetPx)
+    }
+
     override suspend fun scrollToPage(page: Int) = listState.scrollToItem(page)
     override suspend fun animateScrollToPage(page: Int) = listState.animateScrollToItem(page)
 }
 
-internal class PagerScrollAdapter(private val pagerState: PagerState) : PagedLikeAdapter {
+internal class PagerScrollAdapter(private val pagerState: PagerState) : KiteScrollAdapter {
+    /** True while a finger drags the pager. A correction then keeps the page offset, so the drag goes on. */
+    var dragging: Boolean = false
+
+    /** The layout a correction was asked against. The pager forgets its key until it measures again. */
+    private var requestedAgainst: PagerLayoutInfo? = null
+
+    override val followsKeys: Boolean get() = requestedAgainst?.let { pagerState.layoutInfo !== it } ?: true
+
     override val currentPage: Int get() = pagerState.currentPage
     override suspend fun scrollToPage(page: Int) = pagerState.scrollToPage(page)
     override suspend fun animateScrollToPage(page: Int) = pagerState.animateScrollToPage(page)
+
+    override fun captureAnchor(): ScrollAnchor =
+        ScrollAnchor(pagerState.currentPage, pageFraction = pagerState.currentPageOffsetFraction)
+
+    override fun requestSlot(slot: Int, anchor: ScrollAnchor) {
+        // Outside a drag the page snaps straight into place: a correction that cancels a settle
+        // animation must not leave the pager between two pages.
+        requestedAgainst = pagerState.layoutInfo
+        pagerState.requestScrollToPage(slot, if (dragging) anchor.pageFraction else 0f)
+    }
 }
 
 /**

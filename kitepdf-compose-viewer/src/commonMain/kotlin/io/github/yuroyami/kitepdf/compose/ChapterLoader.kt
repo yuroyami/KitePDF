@@ -4,8 +4,6 @@ import io.github.yuroyami.kitepdf.core.KiteDocument
 import io.github.yuroyami.kitepdf.core.KiteLocation
 import androidx.compose.runtime.MonotonicFrameClock
 import androidx.compose.runtime.withFrameNanos
-import kotlinx.coroutines.ensureActive
-import kotlinx.coroutines.withContext
 import kotlin.coroutines.coroutineContext
 
 /**
@@ -23,8 +21,12 @@ internal sealed interface DocItem {
 
     val key: String
 
+    /** The reading position of this slot: a page's own, or the first page of a placeholder's chapter. */
+    val anchor: KiteLocation
+
     data class Page(val location: KiteLocation) : DocItem {
         override val key: String get() = "p${location.chapter}.${location.page}"
+        override val anchor: KiteLocation get() = location
     }
 
     data class ChapterGap(val chapter: Int) : DocItem {
@@ -32,6 +34,7 @@ internal sealed interface DocItem {
         // gap and page zero never coexist, and sharing the key lets keyed
         // containers carry a waiting reader onto the landed chapter.
         override val key: String get() = "p$chapter.0"
+        override val anchor: KiteLocation get() = KiteLocation(chapter, 0)
     }
 }
 
@@ -75,34 +78,13 @@ internal fun loadOrder(chapterCount: Int, around: Int): List<Int> {
 }
 
 /**
- * Runs [block] where Compose state may be written.
+ * Runs [block] where Compose state may be written, and returns its result.
  *
  * Layout happens on the raster pool, and a coroutine that came back from
  * `withContext` can resume on that pool when the caller's context has no
  * dispatcher of its own. Snapshot state must not be written from there, so wait
- * for a frame first: that always resumes on the composition's thread.
+ * for a frame first: that always resumes on the composition's thread, inside
+ * the frame, before it recomposes and measures.
  */
-internal suspend fun onComposeThread(block: () -> Unit) {
+internal suspend fun <T> onComposeThread(block: () -> T): T =
     if (coroutineContext[MonotonicFrameClock] != null) withFrameNanos { block() } else block()
-}
-
-/**
- * Lays out every chapter of [document] in [order], newest priority first,
- * calling [onChapterReady] on the calling context after each one.
- *
- * Layout is pure Kotlin and never touches the platform text stack, so it runs
- * on the raster pool. Cancellation lands between chapters: one chapter is small
- * enough that finishing it and throwing the result away costs little.
- */
-internal suspend fun loadChapters(
-    document: KiteDocument,
-    order: List<Int>,
-    onChapterReady: suspend () -> Unit,
-) {
-    for (chapter in order) {
-        coroutineContext.ensureActive()
-        if (document.isChapterReady(chapter)) continue
-        withContext(kitepdfRasterDispatcher()) { document.prepareChapter(chapter) }
-        onChapterReady()
-    }
-}

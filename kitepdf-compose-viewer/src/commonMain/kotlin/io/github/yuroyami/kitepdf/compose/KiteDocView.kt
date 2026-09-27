@@ -6,6 +6,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.interaction.DragInteraction
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -215,25 +216,15 @@ public fun KiteDocView(
         }
     }
 
-    // Lay the rest of the book out behind the reader. Keyed on the chapter
-    // being read; with keyed retention the raw index no longer flaps under
-    // landings, so this restarts only when the reader truly changes chapter.
-    val readingChapter = state.currentLocation.chapter
-    LaunchedEffect(state, state.document, readingChapter) {
-        // The saved position first, so the loader never starts from chapter 0
-        // and shifts the strip out from under the page we are about to show.
-        // openAt is consumed inside only after the jump lands, so a restart
-        // mid-flight retries instead of silently losing the bookmark.
-        state.openSavedPosition()
-        val document = state.document
-        if (document.isComplete) return@LaunchedEffect
-        // A previous run may have laid a chapter out and been cancelled
-        // before publishing it; one publication up front reconciles that.
-        state.publishChapter()
-        loadChapters(document, loadOrder(document.chapterCount, readingChapter)) {
-            state.publishChapter()
-        }
-    }
+    // The saved position, in an effect of its own, so a drag or a failure while it resolves
+    // cannot stop the loader below (#344).
+    LaunchedEffect(state, state.document) { state.openSavedPosition() }
+    // Lay the rest of the book out behind the reader. One loader for as long as this state is
+    // shown: it follows the reader by itself, so it is not keyed on a value read here (#343).
+    LaunchedEffect(state, state.document) { state.loadChapters() }
+    // Which side the reader reached a placeholder from, so its chapter lands on the right page (#348).
+    // It follows the item, not the slot number: a placeholder that becomes a page keeps its slot.
+    LaunchedEffect(state) { snapshotFlow { state.readerItem() }.collect { state.noteReaderItem(it) } }
 
     // The document's own scripts: its open action once, then each page's as the reader
     // reaches it, and the timers a script set, pumped a frame at a time.
@@ -455,6 +446,9 @@ private fun ContinuousLayout(
             if (state.adapter === adapter) state.adapter = null
         }
     }
+    LaunchedEffect(state, listState) {
+        listState.interactionSource.interactions.collect { if (it is DragInteraction.Start) state.onUserDrag() }
+    }
 
     val scope = rememberCoroutineScope()
     val haptics = LocalHapticFeedback.current
@@ -601,12 +595,23 @@ private fun PagedLayout(
     val pagerState = rememberPagerState(
         initialPage = state.currentPage.coerceIn(0, (state.itemCount - 1).coerceAtLeast(0)),
     ) { state.itemCount }
-    DisposableEffect(state, pagerState) {
-        val adapter = PagerScrollAdapter(pagerState)
-        state.adapter = adapter
+    val pagerAdapter = remember(pagerState) { PagerScrollAdapter(pagerState) }
+    DisposableEffect(state, pagerAdapter) {
+        state.adapter = pagerAdapter
         onDispose {
-            state.park(adapter.currentPage)
-            if (state.adapter === adapter) state.adapter = null
+            state.park(pagerAdapter.currentPage)
+            if (state.adapter === pagerAdapter) state.adapter = null
+        }
+    }
+    LaunchedEffect(state, pagerAdapter) {
+        pagerState.interactionSource.interactions.collect { interaction ->
+            when (interaction) {
+                is DragInteraction.Start -> {
+                    pagerAdapter.dragging = true
+                    state.onUserDrag()
+                }
+                is DragInteraction.Stop, is DragInteraction.Cancel -> pagerAdapter.dragging = false
+            }
         }
     }
     // Landing on another page recentres the pan (and, per spec, the zoom).

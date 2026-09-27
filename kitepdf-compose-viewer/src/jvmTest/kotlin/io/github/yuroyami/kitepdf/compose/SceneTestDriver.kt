@@ -133,8 +133,21 @@ internal class QueuedEffects : CoroutineDispatcher() {
 
     private val tasks = ConcurrentLinkedQueue<Runnable>()
 
+    @Volatile
+    private var released = false
+
     override fun dispatch(context: CoroutineContext, block: Runnable) {
-        tasks.add(block)
+        if (released) kotlinx.coroutines.Dispatchers.Default.dispatch(context, block) else tasks.add(block)
+    }
+
+    /**
+     * Hands the queued work, and any work dispatched later, to the pool. After a test closes its
+     * scene nothing drains the queue, and a raster stranded in it would hold the process-wide
+     * render lock, which hangs every later raster in the test JVM.
+     */
+    fun release() {
+        released = true
+        while (true) kotlinx.coroutines.Dispatchers.Default.dispatch(kotlin.coroutines.EmptyCoroutineContext, tasks.poll() ?: return)
     }
 
     /**
@@ -148,6 +161,108 @@ internal class QueuedEffects : CoroutineDispatcher() {
     private companion object {
         const val MAX_TASKS_PER_FRAME = 100_000
     }
+}
+
+/* ── effect orders ───────────────────────────────────────────────────────────── */
+
+/**
+ * Runs [body] twice: with the scene's default effect order, then with an app's order through
+ * [QueuedEffects]. A failure names the order it happened in. Landing and zoom tests use it, so
+ * they cannot pass in an order no app uses (#328).
+ */
+internal inline fun forBothEffectOrders(body: (queued: Boolean) -> Unit) {
+    for (queued in listOf(false, true)) {
+        try {
+            body(queued)
+        } catch (failure: AssertionError) {
+            val order = if (queued) "app effect order" else "default effect order"
+            throw AssertionError("$order: ${failure.message}", failure)
+        } finally {
+            releaseLeftovers()
+        }
+    }
+}
+
+/** Queued scene contexts and latched documents that the current test made. */
+private val leftovers = ThreadLocal.withInitial { ArrayList<() -> Unit>() }
+
+/**
+ * Lets whatever a finished or failed test left waiting run to its end: the queue of a closed
+ * scene, and a chapter layout still held on a latch. Either one can hold a pool thread or the
+ * render lock, and a later test would wait on it forever.
+ */
+internal fun releaseLeftovers() {
+    val pending = leftovers.get()
+    pending.forEach { it() }
+    pending.clear()
+}
+
+/** A scene of [content] and its driver, with effects in the default order or, with [queued], an app's. */
+internal fun drivenScene(
+    width: Int,
+    height: Int,
+    queued: Boolean,
+    content: @androidx.compose.runtime.Composable () -> Unit,
+): Pair<ImageComposeScene, SceneTestDriver> {
+    val density = androidx.compose.ui.unit.Density(1f)
+    if (!queued) {
+        val scene = ImageComposeScene(width, height, density, content = content)
+        return scene to SceneTestDriver(scene)
+    }
+    val effects = QueuedEffects()
+    leftovers.get() += effects::release
+    val scene = ImageComposeScene(width, height, density, coroutineContext = effects, content = content)
+    return scene to SceneTestDriver(scene, effects)
+}
+
+/**
+ * Delegates everything, but holds the layout of chapter [held] until [release]: a slow chapter,
+ * with the timing in the test's hands. Opening at a bookmark in that chapter waits the same way.
+ */
+internal class LatchedDocument(
+    private val inner: io.github.yuroyami.kitepdf.core.KiteDocument,
+    private val held: Int,
+) : io.github.yuroyami.kitepdf.core.KiteDocument by inner {
+    private val latch = java.util.concurrent.CountDownLatch(1)
+
+    init {
+        leftovers.get() += ::release
+    }
+
+    fun release() = latch.countDown()
+
+    override fun prepareChapter(chapter: Int) {
+        if (chapter == held) latch.await()
+        inner.prepareChapter(chapter)
+    }
+
+    override fun pageCountIn(chapter: Int): Int {
+        if (chapter == held) latch.await()
+        return inner.pageCountIn(chapter)
+    }
+
+    override fun locate(bookmark: io.github.yuroyami.kitepdf.core.KiteBookmark): io.github.yuroyami.kitepdf.core.KiteLocation {
+        if (bookmark is io.github.yuroyami.kitepdf.core.KiteBookmark.Flow && bookmark.chapter == held) latch.await()
+        return inner.locate(bookmark)
+    }
+}
+
+/**
+ * Runs [body] and fails when anything reached the uncaught-exception handler meanwhile. That
+ * handler is where a failure in an effect, a gesture or a pool thread goes, and on Android it
+ * ends the host app.
+ */
+internal inline fun <T> withoutEscapes(body: () -> T): T {
+    val escaped = java.util.Collections.synchronizedList(ArrayList<Throwable>())
+    val previous = Thread.getDefaultUncaughtExceptionHandler()
+    Thread.setDefaultUncaughtExceptionHandler { _, failure -> escaped += failure }
+    val result = try {
+        body()
+    } finally {
+        Thread.setDefaultUncaughtExceptionHandler(previous)
+    }
+    if (escaped.isNotEmpty()) throw AssertionError("a failure escaped to the uncaught-exception handler: $escaped", escaped.first())
+    return result
 }
 
 /* ── shared fixture ──────────────────────────────────────────────────────────── */
