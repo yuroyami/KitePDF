@@ -45,6 +45,15 @@ internal sealed class LayoutBox {
     var lastRank: Int = -1
 
     /**
+     * True when the layout starts a page at this box: a set of columns taller than a page does,
+     * so that each page holds whole columns (#34).
+     */
+    var forcedBreakBefore: Boolean = false
+
+    /** True for a block whose content the layout moved into columns (#34). */
+    var inColumns: Boolean = false
+
+    /**
      * True when this box paints through an effect: a transparency group for an [ComputedStyle.opacity]
      * below 1, a clip for [ComputedStyle.clipsOverflow], or a [ComputedStyle.transform]. Such a box
      * paints as one group (#28).
@@ -71,6 +80,9 @@ internal class BlockBox(
      * their own. Drives href-fragment -> page navigation.
      */
     val anchors = ArrayList<String>()
+
+    /** The rules between this block's columns, one box each with a left border, when it has columns (#34). */
+    val columnRules = ArrayList<BlockBox>()
 }
 
 /**

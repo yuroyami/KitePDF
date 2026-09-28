@@ -96,7 +96,10 @@ internal object Paginator {
             if (b !in firstOf) firstOf[b] = u
             lastOf[b] = u
         }
-        for ((b, u) in firstOf) if (b.style.breakBefore) u.breakBefore = true
+        for ((b, u) in firstOf) {
+            if (b.style.breakBefore || b.forcedBreakBefore) u.breakBefore = true
+            if (b.forcedBreakBefore) u.columnStart = true
+        }
         for ((b, u) in lastOf) if (b.style.breakAfter) u.breakAfter = true
         val units = ordered.sortedBy { it.top }
 
@@ -120,7 +123,8 @@ internal object Paginator {
                     // one. When the margins, borders and padding above that unit push it past the
                     // page's end, the page starts at the unit instead, as a margin at a page break
                     // is dropped (CSS Fragmentation 3, 5.2, #442).
-                    if (u.bottom > curStart + pageContentHeight) curStart = u.top
+                    // Page-tall columns line up with the pages only when their page starts at them (#34).
+                    if (u.bottom > curStart + pageContentHeight || u.columnStart) curStart = u.top
                     cur.add(u)
                 }
                 forcedBefore -> { page(u.top, emptyList()); cur.add(u) }
@@ -167,13 +171,16 @@ internal object Paginator {
         // this page move with it when the whole block fits a page and something precedes it here.
         for (b in u.chain) {
             // A flex or grid container keeps its items together, as break-inside: avoid does (#33, #35).
-            val atomic = b.style.display == Display.FLEX || b.style.display == Display.GRID
+            // So does a set of columns, which fits a page whenever the layout did not split it (#34).
+            val atomic = b.style.display == Display.FLEX || b.style.display == Display.GRID || b.inColumns
             if (!(b.style.breakInsideAvoid || atomic) || b is TextBlockBox) continue
             var onPage = 0
             var k = cur.lastIndex
             while (k >= 0 && b in cur[k].chain) { onPage++; k-- }
             if (onPage in 1 until cur.size && b.borderBoxHeight <= pageContentHeight) return onPage
         }
+        // The layout already placed the lines of a set of columns page by page, so none moves back (#34).
+        if (u.chain.any { it.inColumns }) return 0
         val line = u.line ?: return 0
         val owner = u.owner as? TextBlockBox ?: return 0
         var onPage = 0
@@ -202,6 +209,9 @@ internal object Paginator {
 
         /** A block this unit ends forces a page break after it. */
         var breakAfter = false
+
+        /** This unit starts page-tall columns, so its page starts at its top (#34). */
+        var columnStart = false
     }
 
     /** The lines and images under [box], in tree order, each with the boxes around it. */
@@ -226,7 +236,12 @@ internal object Paginator {
         if (box.embed != null) embeds.add(box)
         if (box.hasEffects) effects.add(box)
         when (box) {
-            is BlockBox -> { if (decorated(box.style)) deco.add(box); for (c in box.children) collect(c, lines, images, deco, links, embeds, effects) }
+            is BlockBox -> {
+                if (decorated(box.style)) deco.add(box)
+                // A column rule paints with its block's background and border (#34).
+                for (rule in box.columnRules) { rule.decoRank = box.decoRank; deco.add(rule) }
+                for (c in box.children) collect(c, lines, images, deco, links, embeds, effects)
+            }
             is TableBox -> {
                 if (decorated(box.style)) deco.add(box)
                 for (r in box.rows) { if (decorated(r.style)) deco.add(r); for (cell in r.cells) collect(cell, lines, images, deco, links, embeds, effects) }

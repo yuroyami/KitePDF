@@ -392,6 +392,15 @@ The layout engine covers what real books use:
   of its content, so a short caption stays on one line. A container keeps its
   items on one page when it fits a page. `inline-flex` still lays out inline,
   and an image does not stretch across its line.
+- **Columns**: `column-count`, `column-width` and `columns` lay a block out in
+  columns, with `column-gap` (1em when `normal`) and `column-rule` between
+  them. The columns balance. A child with `column-span: all` takes the whole
+  width and starts a new set of columns below it. A block kept together with
+  `break-inside: avoid`, and a block with a background or a border, moves into
+  a column whole. A set of columns that fits a page moves to the next page
+  whole when the rest of the page is too short. A longer set starts a page,
+  fills whole pages of columns in reading order, and balances the last page.
+  Vertical writing does not lay out columns.
 - **Grid layout**: `display: grid` places its children in tracks.
   `grid-template-columns` and `grid-template-rows` take lengths, percentages,
   `fr`, `auto`, `min-content`, `max-content`, `minmax()`, `fit-content()` and

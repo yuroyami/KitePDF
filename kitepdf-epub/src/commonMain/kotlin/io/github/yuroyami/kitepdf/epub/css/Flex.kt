@@ -35,6 +35,8 @@ internal data class FlexStyle(
     val alignContent: FlexJustify = FlexJustify.STRETCH,
     val rowGap: Double = 0.0,
     val columnGap: Double = 0.0,
+    /** True while `column-gap` is `normal`, which is 1em between the columns of a multi-column block (#34). */
+    val columnGapNormal: Boolean = true,
     val grow: Double = 0.0,
     val shrink: Double = 1.0,
     val basis: FlexBasis = FlexBasis.Auto,
@@ -76,11 +78,12 @@ internal object FlexValues {
             "align-self" -> align(words.lastOrNull() ?: return null)?.let { style.copy(alignSelf = it) }
             "gap", "grid-gap" -> {
                 val row = gap(words.getOrNull(0) ?: return null, length) ?: return null
-                val column = words.getOrNull(1)?.let { gap(it, length) ?: return null } ?: row
-                style.copy(rowGap = row, columnGap = column)
+                val columnWord = words.getOrNull(1) ?: words[0]
+                val column = gap(columnWord, length) ?: return null
+                style.copy(rowGap = row, columnGap = column, columnGapNormal = columnWord == "normal")
             }
             "row-gap", "grid-row-gap" -> gap(v, length)?.let { style.copy(rowGap = it) }
-            "column-gap", "grid-column-gap" -> gap(v, length)?.let { style.copy(columnGap = it) }
+            "column-gap", "grid-column-gap" -> gap(v, length)?.let { style.copy(columnGap = it, columnGapNormal = v == "normal") }
             "order" -> v.toIntOrNull()?.let { style.copy(order = it) }
             "flex-grow" -> factor(v)?.let { style.copy(grow = it) }
             "flex-shrink" -> factor(v)?.let { style.copy(shrink = it) }
