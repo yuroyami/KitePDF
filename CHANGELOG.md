@@ -41,7 +41,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   goes to `onLinkTap`, where the tap did nothing (#433).
 - On the desktop and the web, Ctrl or Cmd with the wheel zooms `KiteDocView`, and
   the page keys and Ctrl or Cmd with plus, minus and 0 work once a press gives the
-  view the focus (#411).
+  view the focus. A mouse press and drag on text selects at once (#411).
 
 ## [0.11.0] - 2026-09-25
 

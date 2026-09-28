@@ -922,10 +922,11 @@ public class KiteDocViewState(
     /* ── text selection ────────────────────────────────────────────── */
 
     /**
-     * The active text selection, or null. Set by the long-press-drag gesture;
-     * observe via snapshot reads or [onSelectionChange]. The viewer never
-     * touches the clipboard itself. Read [KiteTextSelection.text] and copy in
-     * the app (see the sample's selection actions).
+     * The active text selection, or null. Set by the long-press-drag gesture,
+     * and by a mouse press and drag on text; observe via snapshot reads or
+     * [onSelectionChange]. The viewer never touches the clipboard itself. Read
+     * [KiteTextSelection.text] and copy in the app (see the sample's selection
+     * actions). On a desktop, bind Ctrl or Cmd with C to that copy.
      */
     public var selection: KiteTextSelection? by mutableStateOf(null)
         internal set
