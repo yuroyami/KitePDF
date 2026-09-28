@@ -675,6 +675,17 @@ public class PdfDocument private constructor(
         PdfFormField.collect(catalog, this)
     }
 
+    /**
+     * The digital signatures of the document, one for each signed signature field, in the
+     * order of [formFields]. A signature field that is not signed yet is not listed.
+     */
+    public val signatures: List<PdfSignature> by lazy {
+        formFields.filter { it.type == PdfFormField.FieldType.Signature }.mapNotNull { PdfSignature.of(it, this) }
+    }
+
+    /** The file's bytes, zero-copy, for code in this module that only reads them. */
+    internal val fileBytes: ByteArray get() = input
+
     /** Look up a form field by its fully-qualified name; null if not present. */
     public fun formField(fullyQualifiedName: String): PdfFormField? =
         formFields.firstOrNull { it.fullyQualifiedName == fullyQualifiedName }

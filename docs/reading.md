@@ -343,6 +343,56 @@ editor.setTextFieldValue(field, "Jane Doe")
 val updated = editor.saveIncremental()
 ```
 
+## Signatures
+
+`doc.signatures` lists the signed signature fields of a document. `validate` checks one
+signature against the file:
+
+```kotlin
+val anchors = listOf(rootCertificateDer) // DER certificates that your app trusts
+for (signature in doc.signatures) {
+    val result = signature.validate(anchors)
+    println("${signature.field.fullyQualifiedName}: ${result.status}, signed by ${result.signer?.commonName}")
+    if (result.isModifiedAfterSigning) println("The file changed after this signature.")
+}
+```
+
+`validate` hashes almost the whole file, so call it off the main thread.
+
+| Status | Meaning |
+| --- | --- |
+| `Valid` | The signature matches the signed bytes and the signer's certificate. |
+| `DigestMismatch` | The signed bytes changed after signing. |
+| `Invalid` | The signature does not match the signer's certificate. |
+| `Unsupported` | The signature uses an algorithm that KitePDF does not check. |
+| `Malformed` | The byte range, the signature or its certificates cannot be read. |
+
+The result also gives:
+
+- `signer` and `chain`: the signer's certificate, then each issuer that KitePDF finds in the
+  signature, in the document security store (`/DSS`) or in your trust anchors. KitePDF checks
+  the signature of each link.
+- `isTrusted`: true when the status is `Valid` and the chain contains one of your trust anchors.
+- `isModifiedAfterSigning`: true when the file holds bytes that the signature does not cover.
+  Usually a revision was appended after signing. That can be a permitted change, such as a
+  second signature or a filled field.
+- `signedTime`: the time inside the signed data. The signer states it, or for a document
+  timestamp, the timestamp authority states it.
+
+KitePDF checks these encodings: `adbe.pkcs7.detached`, `ETSI.CAdES.detached`,
+`adbe.pkcs7.sha1`, `adbe.x509.rsa_sha1` and document timestamps (`ETSI.RFC3161`). It checks
+RSA (PKCS #1 v1.5 and PSS) and ECDSA on the P-256, P-384 and P-521 curves, with SHA-1,
+SHA-256, SHA-384 and SHA-512. The byte range must skip exactly the signature's own `/Contents`
+string, so content slipped into that gap makes the signature `Malformed`. When a CAdES
+signature names its certificate in a signed attribute, that certificate must be the one that
+signed.
+
+KitePDF does not check revocation (CRL or OCSP), the validity dates of the certificates
+(`notBefore` and `notAfter` give them), or whether a change after signing is one that the
+document permits. `name`, `reason`, `location` and `signingTime` are what the signing
+application wrote. When `isModifiedAfterSigning` is true, a later revision can have replaced
+them.
+
 ## Advanced
 
 ### Page Labels

@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `PdfDocument.signatures` and `PdfSignature.validate` check the digital signatures
+  of a signed PDF. A signature is `Valid`, `DigestMismatch`, `Invalid`,
+  `Unsupported` or `Malformed`. The result names the signer, gives the certificate
+  chain, says whether the chain reaches a trust anchor of the caller, and says
+  whether the file changed after signing. KitePDF checks CMS, CAdES and PKCS #1
+  signatures and document timestamps, with RSA (PKCS #1 v1.5 and PSS) and ECDSA on
+  P-256, P-384 and P-521 (#203).
+
 - `KiteDocView.onEpubLinkTap` receives every tapped internal EPUB link before the
   viewer scrolls to it. A host can show a note that the book does not mark as a
   note, and keep the reader on the page (#444).

@@ -46,3 +46,4 @@ Things a previous change taught the hard way. One line each. Delete a line when 
 - A Gradle init script that adds a test source folder for one run leaves its classes in `build/classes/kotlin/jvm/test`, and every later plain `jvmTest` runs them. Delete that folder and `build/kotlin/compileTestKotlinJvm` after such a run.
 - `ImageComposeScene` and the desktop take `NoOpPlatformPrefetchScheduler` in Compose 1.12, so lazy-list prefetch and a `LazyLayoutCacheWindow` never run there. A prefetch that a scene test can see must be the viewer's own (#437).
 - `KiteBitmapCache` keys hold the `KiteImageData`, and its budget counts only the bitmaps. A cache that outlives one draw keeps decoded images alive past every other budget (#371).
+- Homebrew's `mutool` is built without OpenSSL, so `mutool sign -v` cannot check a signature and `mutool sign -s` cannot make one. Poppler's `pdfsig` can check one, and `SignatureOracleTest` runs it (#203).
