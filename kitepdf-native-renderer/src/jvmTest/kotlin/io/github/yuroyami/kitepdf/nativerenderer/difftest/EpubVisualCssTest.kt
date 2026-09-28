@@ -218,6 +218,23 @@ class EpubVisualCssTest {
     }
 
     @Test
+    fun a_box_with_a_negative_z_index_paints_under_the_body_text() {
+        val img = raster(
+            """<div style="position:relative"><div style="position:absolute;z-index:-1;left:0;top:0;width:300px;height:60px;background-color:#00ff00"></div>""" +
+                """<p style="margin:0;font-size:30px;color:#000000">Over green</p></div>""",
+        )
+        var green = 0
+        var dark = 0
+        for (y in 48 until 93) for (x in 48 until 270) {
+            val (r, g, b) = rgb(img, x, y)
+            if (g > 200 && r < 60 && b < 60) green++
+            if (r < 60 && g < 60 && b < 60) dark++
+        }
+        assertTrue(green > 100, "the green box did not paint")
+        assertTrue(dark > 50, "the green box painted over the text")
+    }
+
+    @Test
     fun hidden_overflow_clips_the_content_but_not_the_border() {
         val child = """<div style="width:300px;height:40px;background-color:#00ff00"></div>"""
         val clipped = raster("""<div style="width:100px;height:40px;overflow:hidden">$child</div>""")
