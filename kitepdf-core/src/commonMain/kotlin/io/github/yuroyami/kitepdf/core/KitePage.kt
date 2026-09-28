@@ -45,6 +45,14 @@ public interface KitePage {
         renderTo(canvas, deviceCtm)
 
     /**
+     * True when the page draws text in a host font, because the text has no outlines of its
+     * own, and false when it draws none. Null when the page does not know before it draws. A
+     * rasterizer that draws host-font text on one thread only goes there at once for a page
+     * that says true, instead of drawing the page twice (#131).
+     */
+    public val drawsHostFontText: Boolean? get() = null
+
+    /**
      * Structured text for extraction / search / selection, in display space
      * (see [KiteStructuredText] for the coordinate convention), or `null`
      * when the handler does not expose it. Both handlers implement this:

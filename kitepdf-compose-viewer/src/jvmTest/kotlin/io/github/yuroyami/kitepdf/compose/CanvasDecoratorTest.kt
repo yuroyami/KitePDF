@@ -80,6 +80,44 @@ class CanvasDecoratorTest {
         assertPaint(renderer.rasterizeOffMain(page, 200, 200, canvasDecorator = decorator), Color.Green)
     }
 
+    /** A page of one "H" without outlines, which draws through a host font; [says] is its hint. */
+    private fun hostFontPage(says: Boolean?) = object : KitePage {
+        override val displayWidth = 200.0
+        override val displayHeight = 200.0
+        override val drawsHostFontText: Boolean? = says
+        override fun displayToDeviceBase() = KiteMatrix(1.0, 0.0, 0.0, -1.0, 0.0, 200.0)
+        override fun renderTo(canvas: KiteCanvas, deviceCtm: KiteMatrix) {
+            canvas.beginPage(200.0, 200.0, deviceCtm)
+            canvas.drawGlyphs(
+                listOf(TextGlyph(0, 1, -1, "H", 700.0, null, false)),
+                40.0, 1000, false, FontSpec(KiteFontFamily.Serif, false, false),
+                deviceCtm.concat(KiteMatrix.translation(20.0, 100.0)), RgbColor.BLACK,
+            )
+            canvas.endPage()
+        }
+    }
+
+    @Test
+    fun a_page_that_draws_host_font_text_renders_once() = runBlocking {
+        val passes = AtomicInteger()
+        val decorator: KiteCanvasDecorator = { inner -> passes.incrementAndGet(); inner }
+        // A page that says so goes to the host-font pass at once (#131).
+        val px = rasterizer().rasterizeOffMain(hostFontPage(says = true), 200, 200, canvasDecorator = decorator).toPixelMap()
+        assertEquals(1, passes.get(), "the page was drawn more than once")
+        var inked = 0
+        for (y in 0 until 200) for (x in 0 until 200) if (px[x, y].red < 0.5f) inked++
+        assertTrue(inked > 20, "the host-font text was not drawn")
+
+        // A page that does not say so is probed once, and its next raster goes there at once.
+        passes.set(0)
+        val renderer = rasterizer()
+        val page = hostFontPage(says = null)
+        renderer.rasterizeOffMain(page, 200, 200, canvasDecorator = decorator)
+        assertEquals(2, passes.get(), "the first raster probes and draws again")
+        renderer.rasterizeOffMain(page, 300, 300, canvasDecorator = decorator)
+        assertEquals(3, passes.get(), "the next raster of the page probed again")
+    }
+
     @Test
     fun off_main_system_font_retry_creates_a_fresh_wrapper() = runBlocking {
         val passes = AtomicInteger()

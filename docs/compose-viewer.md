@@ -369,9 +369,11 @@ operation, override both overloads.
 With `by inner`, Kotlin sends an overload that the wrapper does not override
 straight to `inner`.
 
-Rasterization can run on a background thread and repeat on Main when a page
-needs system-font text. Create a fresh wrapper in the function, keep it
-repeatable, and never retain the supplied canvas. Cache hits do not invoke it.
+Rasterization runs on a background thread, and a page with system-font text
+renders on Main. A page that does not say beforehand that it has such text
+renders off Main first and then again on Main, so the function can run twice
+for one bitmap. Create a fresh wrapper in the function, keep it repeatable,
+and never retain the supplied canvas. Cache hits do not invoke it.
 Remember the function for cache reuse; replace it when captured rendering
 settings change so the viewer redraws with a new cache key.
 
@@ -864,6 +866,7 @@ Freshly rasterized pages fade in smoothly rather than popping (160 ms by default
 
 - **Lazy composition**: Continuous mode composes only visible pages and their immediate offscreen neighbours (paged mode pre-renders `offscreenPages` on each side). Millions of pages are supported; only visible ones cost anything.
 - **Rasterization is off the main thread**: `KiteDocView` renders page bitmaps through `KitePageRasterizer.rasterizeOffMain()` on a background pool after composition settles, so scrolling and input stay responsive; results land through a page-bitmap LRU cache. The jitter on a page turn is avoided by pre-fetching neighbours while idle.
+- **System-font text renders on Main**: a page whose text has no font outlines of its own, such as the text of a book without embedded fonts, renders on the main thread, because the host text stack is not safe to use from two threads. `KitePage.drawsHostFontText` lets a page say so up front, and an EPUB page does, so such a page renders once. A page that does not say so renders off Main first, and the viewer remembers it for its next raster.
 - **A page scrolled past stops rendering**: cancelling the coroutine of `rasterizeOffMain()` stops a PDF page between operators and throws a `CancellationException` instead of returning a partial bitmap.
 - **Synchronous escape hatch**: `KitePageRasterizer.rasterize()` still runs on the calling thread for callers that need a bitmap right now; text measurement inside it is serialized internally, so either entry point is safe to use.
 - **Zoom settle debounce**: By default, `rerasterizeOnZoom=true` waits approximately 220 ms after zoom stops before re-rendering, so quick pinch-and-release doesn't thrash the rasterizer.

@@ -54,6 +54,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- `KitePage.drawsHostFontText` lets a page say that it draws text in a host
+  font. `KitePageRasterizer.rasterizeOffMain` then renders the page on Main at
+  once, and a page that drew such text renders there at once the next time.
+  Such a page was drawn in full off Main first, and that bitmap was thrown
+  away. An EPUB page answers from its layout, so a book without fonts of its
+  own renders each page once, not twice (#131).
+
 - `KiteDocLayout.Spread` pairs pages as the document declares: an EPUB's
   page-spread properties and `rendition:spread`, and a PDF's `/PageLayout` of
   TwoPageRight or TwoColumnRight. A document that declares nothing pairs as

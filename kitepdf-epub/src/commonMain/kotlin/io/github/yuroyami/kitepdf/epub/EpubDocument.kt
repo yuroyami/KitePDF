@@ -1117,6 +1117,20 @@ public class EpubPage internal constructor(
     /** The laid-out page, fetched per operation: holding it would defeat the budget. */
     private fun laidOut(): PageRender = doc.render(chapter, index)
 
+    /**
+     * True when a run of this page's text has no embedded outlines, which is the case for every
+     * run of a book without fonts of its own. Null when an SVG on the page may draw text of its
+     * own, and false otherwise (#131).
+     */
+    override val drawsHostFontText: Boolean?
+        get() {
+            val page = laidOut()
+            if (page.lines.any { line -> line.runs.any { !it.hasOutlines && it.glyphs.isNotEmpty() } }) return true
+            val svg = page.images.any { it.svg != null || it.zipPath.endsWith(".svg", true) } ||
+                page.lines.any { line -> line.images.any { it.svg != null || it.zipPath.endsWith(".svg", true) } }
+            return if (svg) null else false
+        }
+
     /** One rectangle per line of the text inside the element [id] on this page, in display space (#36). */
     internal fun rectsOf(id: String): List<io.github.yuroyami.kitepdf.core.KiteRectangle> {
         val page = laidOut()
