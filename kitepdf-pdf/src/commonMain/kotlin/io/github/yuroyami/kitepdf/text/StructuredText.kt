@@ -483,32 +483,7 @@ internal class TextCollectorCanvas : KiteCanvas {
     }
 
     /** The device box of [path], or of the unit square an image fills when it is null. */
-    private fun boxOf(path: KitePath?, ctm: KiteMatrix): KiteRectangle? {
-        var left = Double.POSITIVE_INFINITY
-        var bottom = Double.POSITIVE_INFINITY
-        var right = Double.NEGATIVE_INFINITY
-        var top = Double.NEGATIVE_INFINITY
-        fun point(x: Double, y: Double) {
-            val px = ctm.transformX(x, y)
-            val py = ctm.transformY(x, y)
-            if (!px.isFinite() || !py.isFinite()) return
-            left = minOf(left, px); right = maxOf(right, px)
-            bottom = minOf(bottom, py); top = maxOf(top, py)
-        }
-        // An image fills the unit square of its matrix. A curve stays inside its control points.
-        if (path == null) {
-            point(0.0, 0.0); point(1.0, 0.0); point(0.0, 1.0); point(1.0, 1.0)
-        } else {
-            for (s in path.segments) when (s) {
-                is KitePath.Segment.MoveTo -> point(s.x, s.y)
-                is KitePath.Segment.LineTo -> point(s.x, s.y)
-                is KitePath.Segment.CurveTo -> { point(s.x1, s.y1); point(s.x2, s.y2); point(s.x3, s.y3) }
-                is KitePath.Segment.QuadTo -> { point(s.x1, s.y1); point(s.x2, s.y2) }
-                KitePath.Segment.Close -> Unit
-            }
-        }
-        return if (left > right || bottom > top) null else KiteRectangle(left, bottom, right, top)
-    }
+    private fun boxOf(path: KitePath?, ctm: KiteMatrix): KiteRectangle? = (path ?: UNIT_SQUARE).bounds(ctm)
 
     override fun beginPage(widthPt: Double, heightPt: Double, deviceCtm: KiteMatrix) {}
     override fun endPage() {}
@@ -533,6 +508,10 @@ internal class TextCollectorCanvas : KiteCanvas {
         if (clipPath != null) ink(clipPath, ctm)
     }
     override fun drawImage(image: KiteImageData, ctm: KiteMatrix, alpha: Double): Unit = ink(null, ctm)
+
+    private companion object {
+        val UNIT_SQUARE = KitePath.Builder().apply { rectangle(0.0, 0.0, 1.0, 1.0) }.build()
+    }
 }
 
 /**

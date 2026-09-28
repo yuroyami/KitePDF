@@ -66,6 +66,13 @@ public interface KitePage {
      * Empty when the page has no text or its format gives no order (#208).
      */
     public fun readingOrder(): List<KiteReadingItem> = emptyList()
+
+    /**
+     * The links of this page, each with its area and where it leads (#433). XPS and SVG pages
+     * give theirs here. A PDF page gives its links with their actions as `PdfPage.annotations`,
+     * and an EPUB page as `EpubPage.links`, so this list is empty for both.
+     */
+    public val hyperlinks: List<KiteLink> get() = emptyList()
 }
 
 /**

@@ -37,6 +37,16 @@ internal class XpsRenderer(
     private var pageBox = KiteRectangle(0.0, 0.0, 816.0, 1056.0)
     private var pageCtm = KiteMatrix.IDENTITY
     private var textLines: MutableList<KiteTextLine>? = null
+    private var linkPass: XpsLinkPass? = null
+
+    /** An element with a link or a name that the link pass is inside, with the box of what it draws so far. */
+    private class Marked(val uri: String?, val name: String?) {
+        var linkBox: KiteRectangle? = null
+        var nameBox: KiteRectangle? = null
+    }
+    private val marked = ArrayList<Marked>()
+    // The box of each open clip in display space, cut by the ones outside it. Null is empty.
+    private val clipBoxes = ArrayList<KiteRectangle?>()
     private val budget = XpsRenderBudget()
     private val activeVisuals = HashSet<KiteXmlNode.Element>()
     private val brushes = XpsBrushes(packageData, budget) { resource, canvas, ctm, scope, depth ->
@@ -59,6 +69,37 @@ internal class XpsRenderer(
         return KiteStructuredText(lines.map { KiteTextBlock(listOf(it)) })
     }
 
+    /**
+     * The links and the named elements of the page, each over the box of the geometry it draws
+     * inside its clips, in the space of [ctm] (#433). Nothing is painted and no brush is read.
+     */
+    fun links(root: KiteXmlNode.Element, ctm: KiteMatrix): XpsLinkPass {
+        val pass = XpsLinkPass()
+        linkPass = pass
+        render(root, NoopCanvas, ctm)
+        return pass
+    }
+
+    /** Adds [box] to the innermost open link and to every open named element. */
+    private fun mark(box: KiteRectangle?) {
+        box ?: return
+        val clip = clipBoxes.lastOrNull()
+        val shown = if (clipBoxes.isEmpty()) box else clip?.let { cut(box, it) } ?: return
+        var linked = false
+        for (i in marked.indices.reversed()) {
+            val m = marked[i]
+            if (m.uri != null && !linked) {
+                m.linkBox = m.linkBox?.union(shown) ?: shown
+                linked = true
+            }
+            if (m.name != null) m.nameBox = m.nameBox?.union(shown) ?: shown
+        }
+    }
+
+    private fun cut(a: KiteRectangle, b: KiteRectangle): KiteRectangle? =
+        KiteRectangle(maxOf(a.left, b.left), maxOf(a.bottom, b.bottom), minOf(a.right, b.right), minOf(a.top, b.top))
+            .takeIf { it.left <= it.right && it.bottom <= it.top }
+
     private fun walk(
         el: KiteXmlNode.Element, base: String, inherited: XpsResources,
         canvas: KiteCanvas, parent: KiteMatrix, depth: Int,
@@ -72,6 +113,18 @@ internal class XpsRenderer(
             val opacity = el.number("opacity", 1.0).coerceIn(0.0, 1.0)
             // A clip is the geometry's fill area, without its unfilled figures (ECMA-388, 11.2.1, #268).
             if (clip != null) canvas.pushClip(clip.fill, ctm.concat(clip.transform), clip.evenOdd)
+            // The link pass notes FixedPage.NavigateUri and Name, and the clips, as it goes (#433).
+            val pass = linkPass
+            val mark = if (pass == null) null else {
+                val uri = el.attrs["fixedpage.navigateuri"]?.trim()?.takeIf { it.isNotEmpty() }
+                val name = el.attrs["name"]?.trim()?.takeIf { it.isNotEmpty() }
+                if (uri != null || name != null) Marked(uri, name).also { marked += it } else null
+            }
+            if (pass != null && clip != null) {
+                val box = clip.fill.bounds(ctm.concat(clip.transform))
+                val outer = clipBoxes.lastOrNull()
+                clipBoxes += if (clipBoxes.isEmpty()) box else if (box == null || outer == null) null else cut(box, outer)
+            }
             try {
                 if (opacity < 1.0) canvas.beginTransparencyGroup(pageBox, pageCtm, isolated = true, alpha = opacity)
                 try {
@@ -91,7 +144,7 @@ internal class XpsRenderer(
                         }
                     }
                     val mask = property(el, "opacitymask", base, scope)
-                    if (mask != null && textLines == null) {
+                    if (mask != null && textLines == null && pass == null) {
                         canvas.applySoftMask(SoftMask.Kind.Alpha, pageBox, pageCtm, paint) { maskCanvas ->
                             val inverse = ctm.invert()
                             val maskPath = rectangle(pageBox).let { if (inverse == null) it else transformPath(it, inverse.concat(pageCtm)) }
@@ -99,7 +152,15 @@ internal class XpsRenderer(
                         }
                     } else paint()
                 } finally { if (opacity < 1.0) canvas.endTransparencyGroup() }
-            } finally { if (clip != null) canvas.popClip() }
+            } finally {
+                if (clip != null) canvas.popClip()
+                if (pass != null && clip != null) clipBoxes.removeAt(clipBoxes.lastIndex)
+                if (pass != null && mark != null) {
+                    marked.removeAt(marked.lastIndex)
+                    mark.uri?.let { uri -> mark.linkBox?.let { pass.links += uri to it } }
+                    mark.name?.let { name -> mark.nameBox?.let { pass.names.getOrPut(name) { it } } }
+                }
+            }
         } catch (_: Exception) {
             kiteWarn { "xps: skipped unreadable ${el.tag} element" }
         }
@@ -111,6 +172,17 @@ internal class XpsRenderer(
     ) {
         if (textLines != null) return
         val geo = geometry(el, "data", scope) ?: return
+        if (linkPass != null) {
+            // The area is the geometry that the path fills or strokes.
+            val m = ctm.concat(geo.transform)
+            val fill = if (property(el, "fill", base, scope) != null) geo.fill.bounds(m) else null
+            val stroke = if (property(el, "stroke", base, scope) == null) null else geo.stroke.bounds()?.let { box ->
+                val half = el.number("strokethickness", 1.0).coerceAtLeast(0.0) / 2
+                rectangle(KiteRectangle(box.left - half, box.bottom - half, box.right + half, box.top + half)).bounds(m)
+            }
+            mark(if (fill != null && stroke != null) fill.union(stroke) else fill ?: stroke)
+            return
+        }
         val fillPath = transformPath(geo.fill, geo.transform)
         val strokePath = transformPath(geo.stroke, geo.transform)
         property(el, "fill", base, scope)?.let { brushes.fill(it, fillPath, geo.evenOdd, canvas, ctm, scope, depth + 1) }
@@ -131,10 +203,21 @@ internal class XpsRenderer(
         canvas: KiteCanvas, ctm: KiteMatrix, depth: Int,
     ) {
         val font = el.attrs["fonturi"]?.let { packageData.font(base, it) }
-        val run = layoutGlyphs(el, font, textLines == null && canvas.resolvesGlyphOutlines, budget.remaining)
+        val run = layoutGlyphs(el, font, textLines == null && linkPass == null && canvas.resolvesGlyphOutlines, budget.remaining)
         budget.take(run.glyphs.size)
         if (run.fontSize <= 0) return
         textLines?.let { lines -> extract(run, ctm)?.let(lines::add); return }
+        if (linkPass != null) {
+            // Each glyph's advance, from 0.2 em below the baseline to 0.8 em above it, as text boxes are.
+            var box: KiteRectangle? = null
+            for (placed in run.glyphs) {
+                val width = placed.glyph.advanceWidth * run.fontSize / 1000.0
+                val glyph = rectangle(KiteRectangle(0.0, -run.fontSize * 0.2, width, run.fontSize * 0.8)).bounds(ctm.concat(placed.transform))
+                if (glyph != null) box = box?.union(glyph) ?: glyph
+            }
+            mark(box)
+            return
+        }
         val brush = property(el, "fill", base, scope) ?: return
         val solid = brushes.solid(brush)
         // Substitute text has no outline to fill with the brush. It stays readable in
@@ -271,17 +354,3 @@ internal fun transformPath(path: KitePath, matrix: KiteMatrix): KitePath = KiteP
     }
 })
 
-internal fun bounds(path: KitePath): KiteRectangle? {
-    val points = ArrayList<Pair<Double, Double>>()
-    for (segment in path.segments) when (segment) {
-        is KitePath.Segment.MoveTo -> points.add(segment.x to segment.y)
-        is KitePath.Segment.LineTo -> points.add(segment.x to segment.y)
-        is KitePath.Segment.QuadTo -> { points.add(segment.x1 to segment.y1); points.add(segment.x2 to segment.y2) }
-        is KitePath.Segment.CurveTo -> {
-            points.add(segment.x1 to segment.y1); points.add(segment.x2 to segment.y2); points.add(segment.x3 to segment.y3)
-        }
-        KitePath.Segment.Close -> Unit
-    }
-    return if (points.isEmpty()) null else KiteRectangle(points.minOf { it.first }, points.minOf { it.second },
-        points.maxOf { it.first }, points.maxOf { it.second })
-}

@@ -84,6 +84,9 @@ internal fun accessNodes(page: KitePage, formState: PdfFormState?, strings: Kite
         is EpubPage -> for (link in runCatching { page.links }.getOrDefault(emptyList())) {
             out += PageAccessNode(link.rect, textIn(text, link.rect) ?: link.href.substringAfterLast('/').ifEmpty { strings.link }, AccessKind.LINK)
         }
+        else -> for (link in runCatching { page.hyperlinks }.getOrDefault(emptyList())) {
+            out += PageAccessNode(link.rect, textIn(text, link.rect) ?: link.uri ?: strings.link, AccessKind.LINK)
+        }
     }
     if (page is PdfPage && formState != null) {
         for (annotation in runCatching { page.annotations }.getOrDefault(emptyList())) {

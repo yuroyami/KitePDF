@@ -40,6 +40,29 @@ Damaged drawing elements are skipped independently. An unreadable referenced
 page retains its position as a placeholder, so later page numbers stay stable.
 A package with no recoverable sequence or page references does not open.
 
+## Links
+
+`XpsPage.hyperlinks` gives each element with a `FixedPage.NavigateUri` as a
+`KiteLink`. The link's `rect` is the box of what the element draws, inside its
+clips, in points from the top-left corner of the page. A path counts when it has
+a fill or a stroke.
+
+- A URI with a scheme, such as `https://`, leaves the document. It is in `uri`.
+- A relative URI leads inside the package. It can name a page part, a fixed
+  document, or an element by its `Name`, as the `LinkTarget` entries of the page
+  references list it. `target` gives the page, and `targetY` the top of the named
+  element on that page.
+
+```kotlin
+for (link in page.hyperlinks) {
+    val uri = link.uri
+    if (uri != null) println("${link.rect} opens $uri")
+    else println("${link.rect} goes to ${link.target} at ${link.targetY}")
+}
+```
+
+`KiteDocView` follows these links the same way it follows PDF links.
+
 ## Rendering scope
 
 The handler reads abbreviated and expanded paths, glyph runs, embedded
@@ -49,7 +72,7 @@ brushes use the shared canvas, with transforms and clipping.
 
 Remaining limits include repeated/reflected gradients (pad fallback), non-solid
 stroke brushes, JPEG XR, external ICC colour conversion, StoryFragments reading
-order, links/outlines, print tickets, signatures and editing. Sideways text,
+order, outlines, print tickets, signatures and editing. Sideways text,
 synthetic font styles and extracted text boxes use approximations. Transparency
 and gradients also depend on the selected backend's capabilities. The module's [API documentation](https://yuroyami.github.io/KitePDF/api/kitepdf-xps/index.html)
 describes the supported brushes and the remaining fidelity limits.

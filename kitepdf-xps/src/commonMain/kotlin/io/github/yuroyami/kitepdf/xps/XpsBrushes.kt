@@ -60,7 +60,7 @@ internal class XpsBrushes(
             val node = resource.node
             val brushTransform = transform(node, scope)
             val brushCtm = ctm.concat(brushTransform)
-            val brushBox = brushTransform.invert()?.let { bounds(transformPath(path, it)) } ?: bounds(path) ?: return
+            val brushBox = brushTransform.invert()?.let { path.bounds(it) } ?: path.bounds() ?: return
             val alpha = node.number("opacity", 1.0).coerceIn(0.0, 1.0)
             when (node.tag) {
                 "imagebrush", "visualbrush" -> tiles(resource, brushBox, canvas, brushCtm, scope, alpha, depth)

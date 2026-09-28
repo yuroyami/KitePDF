@@ -1,8 +1,10 @@
 package io.github.yuroyami.kitepdf.svg
 
+import io.github.yuroyami.kitepdf.core.KiteBookmark
 import io.github.yuroyami.kitepdf.core.KiteCancellation
 import io.github.yuroyami.kitepdf.core.KiteDocument
 import io.github.yuroyami.kitepdf.core.KiteFormatException
+import io.github.yuroyami.kitepdf.core.KiteLink
 import io.github.yuroyami.kitepdf.core.KitePage
 import io.github.yuroyami.kitepdf.core.render.KiteCanvas
 import io.github.yuroyami.kitepdf.core.render.KiteMatrix
@@ -12,7 +14,8 @@ import io.github.yuroyami.kitepdf.core.render.KiteMatrix
  * it the same way it opens a PDF or a comic.
  *
  * The page is the SVG's own viewport, 1 px = 1 pt; a viewer scales to fit.
- * Everything is drawn as vectors, so zooming stays sharp.
+ * Everything is drawn as vectors, so zooming stays sharp. The page gives each
+ * `<a>` with an `href` as a link in [KitePage.hyperlinks].
  *
  * ```kotlin
  * val doc = SvgDocument.open(bytes)
@@ -75,5 +78,19 @@ public class SvgPage internal constructor(
         canvas.beginPage(displayWidth, displayHeight, deviceCtm)
         image.render(canvas, deviceCtm, loadResource = null, stop = cancellation)
         canvas.endPage()
+    }
+
+    private val linkPass: SvgLinkCanvas by lazy { image.links(KiteMatrix.IDENTITY) }
+
+    /**
+     * Each `<a>` with an `href`, over the box of what it draws. A link to `#id` brings the
+     * element with that id to the top of the view. Any other link leaves the document (#433).
+     */
+    override val hyperlinks: List<KiteLink> by lazy {
+        linkPass.links.mapNotNull { (href, rect) ->
+            if (!href.startsWith("#")) return@mapNotNull KiteLink(rect, uri = href)
+            val box = linkPass.ids[href.substring(1)] ?: return@mapNotNull null
+            KiteLink(rect, target = KiteBookmark.Page(0), targetY = { box.bottom })
+        }
     }
 }
