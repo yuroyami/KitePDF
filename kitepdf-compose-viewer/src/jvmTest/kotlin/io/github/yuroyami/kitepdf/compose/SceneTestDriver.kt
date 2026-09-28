@@ -197,6 +197,11 @@ internal fun releaseLeftovers() {
     pending.clear()
 }
 
+/** Runs [release] when the current test ends, so a test double that holds threads lets them go. */
+internal fun releaseAtEnd(release: () -> Unit) {
+    leftovers.get() += release
+}
+
 /** A scene of [content] and its driver, with effects in the default order or, with [queued], an app's. */
 internal fun drivenScene(
     width: Int,

@@ -56,6 +56,22 @@ class LayoutBudgetTest {
         assertTrue(doc.isChapterLive(0), "rendering it brought the chapter back")
     }
 
+    /** A viewer asks whether a page is in memory without laying it out, and brings it back off the UI thread (#377). */
+    @Test
+    fun a_page_says_whether_its_content_is_in_memory_without_laying_it_out() {
+        val doc = book(budget = 0)
+        val page = doc.page(KiteLocation(0, 1))
+        draws(page)
+        assertTrue(page.isContentLoaded)
+        for (c in 1 until doc.chapterCount) doc.prepareChapter(c)
+        draws(doc.page(KiteLocation(1, 0)))
+        assertFalse(page.isContentLoaded)
+        assertFalse(doc.isChapterLive(0), "asking lays nothing out")
+        page.loadContent()
+        assertTrue(page.isContentLoaded)
+        assertTrue(doc.isChapterLive(0))
+    }
+
     /** A chapter on screen stays laid out while the reader searches the book, so a gesture on it lays nothing out (#377). */
     @Test
     fun a_kept_chapter_stays_past_the_budget() {

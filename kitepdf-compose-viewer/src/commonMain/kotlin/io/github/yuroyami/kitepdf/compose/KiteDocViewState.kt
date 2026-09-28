@@ -1083,6 +1083,9 @@ public class KiteDocViewState(
 
     private fun textAt(index: Int): KiteStructuredText? {
         val page = pageAt(index) ?: return null
+        // Its chapter would lay out here on the UI thread (#377). The page is on screen, so its
+        // raster or its draw is bringing the content back; until then it acts as a page without text.
+        if (!page.isContentLoaded) return null
         return try {
             page.textContent()
         } catch (failure: Throwable) {

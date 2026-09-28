@@ -340,6 +340,8 @@ final class io.github.yuroyami.kitepdf.epub/EpubPage : io.github.yuroyami.kitepd
         final fun <get-embeds>(): kotlin.collections/List<io.github.yuroyami.kitepdf.epub/EpubEmbed> // io.github.yuroyami.kitepdf.epub/EpubPage.embeds.<get-embeds>|<get-embeds>(){}[0]
     final val height // io.github.yuroyami.kitepdf.epub/EpubPage.height|{}height[0]
         final fun <get-height>(): kotlin/Double // io.github.yuroyami.kitepdf.epub/EpubPage.height.<get-height>|<get-height>(){}[0]
+    final val isContentLoaded // io.github.yuroyami.kitepdf.epub/EpubPage.isContentLoaded|{}isContentLoaded[0]
+        final fun <get-isContentLoaded>(): kotlin/Boolean // io.github.yuroyami.kitepdf.epub/EpubPage.isContentLoaded.<get-isContentLoaded>|<get-isContentLoaded>(){}[0]
     final val links // io.github.yuroyami.kitepdf.epub/EpubPage.links|{}links[0]
         final fun <get-links>(): kotlin.collections/List<io.github.yuroyami.kitepdf.epub/EpubLink> // io.github.yuroyami.kitepdf.epub/EpubPage.links.<get-links>|<get-links>(){}[0]
     final val location // io.github.yuroyami.kitepdf.epub/EpubPage.location|{}location[0]
@@ -350,6 +352,7 @@ final class io.github.yuroyami.kitepdf.epub/EpubPage : io.github.yuroyami.kitepd
         final fun <get-width>(): kotlin/Double // io.github.yuroyami.kitepdf.epub/EpubPage.width.<get-width>|<get-width>(){}[0]
 
     final fun displayToDeviceBase(): io.github.yuroyami.kitepdf.core.render/KiteMatrix // io.github.yuroyami.kitepdf.epub/EpubPage.displayToDeviceBase|displayToDeviceBase(){}[0]
+    final fun loadContent() // io.github.yuroyami.kitepdf.epub/EpubPage.loadContent|loadContent(){}[0]
     final fun readingOrder(): kotlin.collections/List<io.github.yuroyami.kitepdf.core/KiteReadingItem> // io.github.yuroyami.kitepdf.epub/EpubPage.readingOrder|readingOrder(){}[0]
     final fun renderTo(io.github.yuroyami.kitepdf.core.render/KiteCanvas, io.github.yuroyami.kitepdf.core.render/KiteMatrix) // io.github.yuroyami.kitepdf.epub/EpubPage.renderTo|renderTo(io.github.yuroyami.kitepdf.core.render.KiteCanvas;io.github.yuroyami.kitepdf.core.render.KiteMatrix){}[0]
     final fun renderTo(io.github.yuroyami.kitepdf.core.render/KiteCanvas, io.github.yuroyami.kitepdf.core.render/KiteMatrix, io.github.yuroyami.kitepdf.core/KiteCancellation) // io.github.yuroyami.kitepdf.epub/EpubPage.renderTo|renderTo(io.github.yuroyami.kitepdf.core.render.KiteCanvas;io.github.yuroyami.kitepdf.core.render.KiteMatrix;io.github.yuroyami.kitepdf.core.KiteCancellation){}[0]

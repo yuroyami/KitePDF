@@ -53,6 +53,21 @@ public interface KitePage {
     public val drawsHostFontText: Boolean? get() = null
 
     /**
+     * False when the content of this page is not in memory, so that drawing the page or reading
+     * its text would lay its chapter out on the calling thread first. A document that drops
+     * laid-out chapters to stay within a memory budget answers false for a page of a dropped
+     * chapter. Reading it lays nothing out. True by default.
+     */
+    public val isContentLoaded: Boolean get() = true
+
+    /**
+     * Brings the content of this page back into memory: lays its chapter out again when a
+     * memory budget dropped it. It blocks while it does that, so call it off the main thread.
+     * Does nothing by default.
+     */
+    public fun loadContent() {}
+
+    /**
      * Structured text for extraction / search / selection, in display space
      * (see [KiteStructuredText] for the coordinate convention), or `null`
      * when the handler does not expose it. Both handlers implement this:
