@@ -390,7 +390,12 @@ The layout engine covers what real books use:
   the box's room and paints nothing of its own, and a child can show itself
   again with `visibility: visible`. A box with an opacity or a clip paints
   where a positioned box with `z-index: 0` paints. Inline elements take none
-  of the three. Known limitation:
+  of the three. `border-radius` rounds the background, the border, a block
+  image and an overflow clip. `box-shadow` paints the outer shadows outside the
+  box, and a blur fades out in a few steps rather than as a true blur. An inset
+  shadow does not paint, a rounded border takes the colour of its first edge
+  with a width, and in vertical writing corners stay square and shadows do not
+  paint. Known limitation:
   in `direction: rtl` text, `text-indent` shifts from the left edge rather
   than the inline-start (right) edge; lines still stay inside the content
   box.

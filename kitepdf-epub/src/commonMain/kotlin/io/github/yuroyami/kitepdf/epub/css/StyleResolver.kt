@@ -220,6 +220,75 @@ internal class StyleResolver(
         return b.build()
     }
 
+    /** One radius: a length in points, or a percentage of the box's side, or null when it is neither. */
+    private fun radiusValue(b: Builder, raw: String): CssRadius? {
+        val t = raw.trim()
+        if (t.endsWith('%')) return t.dropLast(1).trim().toDoubleOrNull()?.takeIf { it >= 0.0 }?.let { CssRadius(it / 100.0, percent = true) }
+        return CssValues.length(t, b.fontSizePt, rootFontSizePt, 0.0)?.takeIf { it >= 0.0 }?.let { CssRadius(it, percent = false) }
+    }
+
+    /** A `border-*-radius` longhand: one radius, or a horizontal and a vertical one. */
+    private fun cornerValue(b: Builder, v: String): Pair<CssRadius, CssRadius>? {
+        val parts = v.trim().split(WHITESPACE).filter { it.isNotEmpty() }
+        if (parts.size !in 1..2) return null
+        val rx = radiusValue(b, parts[0]) ?: return null
+        val ry = parts.getOrNull(1)?.let { radiusValue(b, it) ?: return null } ?: rx
+        return rx to ry
+    }
+
+    /**
+     * The `border-radius` shorthand: one to four horizontal radii for top-left, top-right,
+     * bottom-right and bottom-left, then after a slash the vertical ones (CSS Backgrounds 3, 5.1).
+     */
+    private fun radiiValue(b: Builder, v: String): CornerRadii? {
+        fun corners(part: String): List<CssRadius>? {
+            val values = part.trim().split(WHITESPACE).filter { it.isNotEmpty() }.map { radiusValue(b, it) ?: return null }
+            return when (values.size) {
+                1 -> List(4) { values[0] }
+                2 -> listOf(values[0], values[1], values[0], values[1])
+                3 -> listOf(values[0], values[1], values[2], values[1])
+                4 -> values
+                else -> null
+            }
+        }
+        val halves = v.split('/')
+        if (halves.size > 2) return null
+        val x = corners(halves[0]) ?: return null
+        val y = halves.getOrNull(1)?.let { corners(it) ?: return null } ?: x
+        return CornerRadii(x, y)
+    }
+
+    /**
+     * The `box-shadow` list: each shadow is two to four lengths, a colour and `inset`, in any
+     * order of the colour and the keyword (CSS Backgrounds 3, 7.1). Null when a shadow is not valid.
+     */
+    private fun shadowsValue(b: Builder, v: String): List<BoxShadow>? {
+        if (v.trim().lowercase() == "none") return emptyList()
+        return CssParser.splitTopLevel(v, ',').map { part ->
+            var inset = false
+            var color: io.github.yuroyami.kitepdf.core.render.RgbColor? = null
+            var alpha = 1.0
+            val lengths = ArrayList<Double>()
+            for (token in CssParser.splitTopLevel(part.trim().replace(WHITESPACE, " "), ' ')) {
+                val t = token.trim()
+                if (t.isEmpty()) continue
+                val length = CssValues.length(t, b.fontSizePt, rootFontSizePt, 0.0)
+                when {
+                    t.equals("inset", ignoreCase = true) -> inset = true
+                    length != null && lengths.size < 4 -> lengths += length
+                    t.equals("currentcolor", ignoreCase = true) -> color = null
+                    CssValues.alpha(t) != null -> {
+                        color = CssValues.color(t)
+                        alpha = CssValues.alpha(t) ?: 1.0
+                    }
+                    else -> return null
+                }
+            }
+            if (lengths.size < 2) return null
+            BoxShadow(lengths[0], lengths[1], lengths.getOrElse(2) { 0.0 }.coerceAtLeast(0.0), lengths.getOrElse(3) { 0.0 }, color, alpha, inset)
+        }
+    }
+
     /** A CSS `opacity`: a number or a percentage, clamped to 0..1, or null when it is neither. */
     private fun opacityValue(v: String): Double? {
         val t = v.trim()
@@ -312,6 +381,12 @@ internal class StyleResolver(
                 "hidden", "collapse" -> b.visible = false
                 "visible" -> b.visible = true
             }
+            "border-radius" -> radiiValue(b, v)?.let { b.radii = it }
+            "border-top-left-radius" -> cornerValue(b, v)?.let { (rx, ry) -> b.radii = (b.radii ?: CornerRadii.ZERO).with(0, rx, ry) }
+            "border-top-right-radius" -> cornerValue(b, v)?.let { (rx, ry) -> b.radii = (b.radii ?: CornerRadii.ZERO).with(1, rx, ry) }
+            "border-bottom-right-radius" -> cornerValue(b, v)?.let { (rx, ry) -> b.radii = (b.radii ?: CornerRadii.ZERO).with(2, rx, ry) }
+            "border-bottom-left-radius" -> cornerValue(b, v)?.let { (rx, ry) -> b.radii = (b.radii ?: CornerRadii.ZERO).with(3, rx, ry) }
+            "box-shadow", "-webkit-box-shadow" -> shadowsValue(b, v)?.let { b.shadows = it }
             // A scroll container clips too, and a page cannot scroll, so every value but visible clips.
             "overflow", "overflow-x", "overflow-y" -> when (v.trim().lowercase().substringBefore(' ')) {
                 "hidden", "clip", "scroll", "auto" -> b.clipsOverflow = true
@@ -578,6 +653,8 @@ internal class StyleResolver(
         var opacity = 1.0 // not inherited
         var visible = parent.visible // inherited
         var clipsOverflow = false // not inherited
+        var radii: CornerRadii? = null // not inherited
+        var shadows: List<BoxShadow> = emptyList() // not inherited
 
         fun build(): ComputedStyle {
             val outOfFlow = position == CssPosition.ABSOLUTE || position == CssPosition.FIXED || cssFloat != CssFloat.NONE
@@ -614,7 +691,7 @@ internal class StyleResolver(
                 minWidthPt, minHeightPt, maxHeightPt,
                 borderCollapse, borderSpacingPt,
                 cssFloat, clear, tableLayoutFixed, lineThrough, zIndex,
-                opacity, visible, clipsOverflow,
+                opacity, visible, clipsOverflow, radii, shadows,
             )
         }
     }

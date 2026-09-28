@@ -144,6 +144,10 @@ internal data class ComputedStyle(
     val visible: Boolean = true,
     /** True for an `overflow` other than `visible`: the content is clipped to the padding box (#28). Not inherited. */
     val clipsOverflow: Boolean = false,
+    /** `border-radius` and its longhands, or null for square corners (#28). Not inherited. */
+    val radii: CornerRadii? = null,
+    /** `box-shadow`, in the order the rule lists them, the first on top (#28). Not inherited. */
+    val shadows: List<BoxShadow> = emptyList(),
 ) {
     val mono: Boolean get() = fontFamily == GenericFont.MONO
 
