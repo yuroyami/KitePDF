@@ -22,6 +22,7 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.PointerType
 import androidx.compose.ui.input.pointer.isCtrlPressed
 import androidx.compose.ui.input.pointer.isMetaPressed
 import androidx.compose.ui.unit.LayoutDirection
@@ -59,7 +60,7 @@ internal fun Modifier.kiteSelectionGestures(
     haptics: HapticFeedback? = null,
 ): Modifier {
     if (!state.selectionEnabled) return this
-    return kiteHandleDragGesture(state, haptics).pointerInput(state, haptics) {
+    return kiteHandleDragGesture(state, haptics).kiteMouseSelection(state).pointerInput(state, haptics) {
         // The finger is on the words it is choosing, so the words are covered.
         // The ticks are the channel that is not: a long-press buzz when the
         // anchor lands, then one tick per change of the selected TEXT while
@@ -93,6 +94,41 @@ internal fun Modifier.kiteSelectionGestures(
         )
     }
 }
+
+/**
+ * A mouse press that drags on text selects at once, as text does on a desktop. A finger still
+ * needs the long press, since its drag scrolls (#411). The drag must pass the touch slop first,
+ * so a click still reaches the tap handlers. A drag that starts off the text is left to the page,
+ * which pans or scrolls with it.
+ */
+private fun Modifier.kiteMouseSelection(state: KiteDocViewState): Modifier =
+    pointerInput(state) {
+        awaitEachGesture {
+            val down = awaitFirstDown(requireUnconsumed = false)
+            if (down.type != PointerType.Mouse) return@awaitEachGesture
+            var change = down
+            while ((change.position - down.position).getDistance() <= viewConfiguration.touchSlop) {
+                change = awaitPointerEvent().changes.fastFirstOrNull { it.id == down.id } ?: return@awaitEachGesture
+                if (!change.pressed || change.isConsumed) return@awaitEachGesture
+            }
+            // A drag on a selection thumb belongs to the thumb.
+            if (state.handleDragInProgress) return@awaitEachGesture
+            state.beginSelection(down.position)
+            if (state.selection == null) {
+                state.endSelectionGesture()
+                return@awaitEachGesture
+            }
+            state.extendSelection(change.position)
+            change.consume()
+            while (true) {
+                val moved = awaitPointerEvent().changes.fastFirstOrNull { it.id == down.id } ?: break
+                if (!moved.pressed) break
+                state.extendSelection(moved.position)
+                moved.consume()
+            }
+            state.endSelectionGesture()
+        }
+    }
 
 /**
  * How far from a selection thumb a press still counts as grabbing it.

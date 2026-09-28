@@ -242,6 +242,7 @@ On the desktop and the web, and on a tablet with a mouse or a keyboard, the view
 | Page Up, Shift with Space, the up arrow | Previous page | `userScrollEnabled = false` |
 | The left and right arrows | Previous and next page; swapped where pages advance to the left | `userScrollEnabled = false` |
 | Home and End | First and last page | `userScrollEnabled = false` |
+| A mouse press and drag on text | Selects the text at once | `selectionEnabled = false` |
 
 The keys work once the viewer has the focus, which a press on it gives. A form field with the caret keeps its keys.
 
@@ -393,7 +394,25 @@ Clear either channel by assigning an empty list.
 
 ## Text selection
 
-A long press anchors a selection, dragging extends it, and the result lands in `state.selection` (with `state.onSelectionChange` for a callback). The viewer never touches the clipboard: read `selection.text` and copy it in your app.
+A long press anchors a selection, dragging extends it, and the result lands in `state.selection` (with `state.onSelectionChange` for a callback). A mouse press and drag on text selects at once, without the long press. The viewer never touches the clipboard: read `selection.text` and copy it in your app. On a desktop, bind Ctrl or Cmd with C to that copy:
+
+```kotlin
+val clipboard = LocalClipboardManager.current
+KiteDocView(
+    state = state,
+    modifier = Modifier.onKeyEvent { event ->
+        val copy = event.type == KeyEventType.KeyDown && event.key == Key.C &&
+            (event.isCtrlPressed || event.isMetaPressed)
+        val text = state.selection?.text
+        if (copy && text != null) {
+            clipboard.setText(AnnotatedString(text))
+            true
+        } else {
+            false
+        }
+    },
+)
+```
 
 While a selection is live, `state.isSelectionActive` is `true`, and the viewer suppresses one-finger panning and the list or pager's own scrolling so the page cannot move out from under the selection. Two-finger pinch zoom keeps working. The flag turns on the moment the long press fires and stays on until `state.clearSelection()`, which any tap on the page also calls.
 
