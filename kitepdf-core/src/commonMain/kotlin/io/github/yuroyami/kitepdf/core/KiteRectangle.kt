@@ -28,6 +28,14 @@ public data class KiteRectangle(val left: Double, val bottom: Double, val right:
         top = maxOf(bottom, top),
     )
 
+    /** The smallest rectangle that holds this one and [other], both with their corners sorted. */
+    public fun union(other: KiteRectangle): KiteRectangle = KiteRectangle(
+        left = minOf(left, right, other.left, other.right),
+        bottom = minOf(bottom, top, other.bottom, other.top),
+        right = maxOf(left, right, other.left, other.right),
+        top = maxOf(bottom, top, other.bottom, other.top),
+    )
+
     public companion object {
         /**
          * Parse a 4-element PDF rectangle array. Tolerant: a non-numeric entry

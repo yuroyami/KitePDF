@@ -1,10 +1,13 @@
 package io.github.yuroyami.kitepdf.epub
 
+import io.github.yuroyami.kitepdf.core.KiteRectangle
 import io.github.yuroyami.kitepdf.core.KiteRole
 import io.github.yuroyami.kitepdf.core.KiteReadingItem
+import io.github.yuroyami.kitepdf.core.render.RecordingCanvas
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 /** The accessibility reading order: roles, order, and what stays out of it. */
@@ -33,6 +36,61 @@ class ReadingOrderTest {
             listOf(KiteRole.LIST_ITEM, KiteRole.QUOTE, KiteRole.CODE),
             items.map { it.role },
         )
+    }
+
+    @Test
+    fun each_item_has_the_box_of_its_words() {
+        val long = (1..30).joinToString(" ") { "word$it" }
+        val page = EpubDocument.open(
+            EpubFixtures.epub(
+                """<h1>Part One</h1><p>$long</p><p style="transform: translateX(40px)">Moved words</p>""" +
+                    """<p>Text <img src="cat.bmp" alt="inline cat"/></p>""" +
+                    """<img src="cat.bmp" alt="block cat" style="display: block; width: 60px; height: 30px"/>""",
+                extraEntries = listOf("OEBPS/cat.bmp" to EpubFixtures.bmp2x1()),
+            ),
+        ).pages.first()
+        val items = page.readingOrder()
+        val blocks = page.textContent().blocks
+        assertTrue(blocks[1].lines.size > 1, "the long paragraph wraps")
+        val boxes = blocks.map { block -> block.lines.map { it.bounds }.reduce { a, b -> a.union(b) } }
+        assertEquals(boxes, items.filter { it.role != KiteRole.IMAGE }.map { it.bounds }, "each text item's box is its block's")
+        assertTrue(boxes[2].left > boxes[1].left + 20, "the moved paragraph's box moves with it")
+        // Each picture's box is where the page draws it.
+        val images = items.filter { it.role == KiteRole.IMAGE }
+        assertEquals(listOf("inline cat", "block cat"), images.map { it.text })
+        assertBoxesDrawn(page, images)
+    }
+
+    @Test
+    fun an_inline_picture_on_a_vertical_page_has_the_box_it_is_drawn_in() {
+        for (mode in listOf("vertical-rl", "vertical-lr")) {
+            val page = EpubDocument.open(
+                EpubFixtures.epub(
+                    // A vertical page paints no transform, so the box does not move either.
+                    """<style>html{writing-mode:$mode}</style><p style="transform: translateX(30px)">縦書き<img src="cat.bmp" alt="inline cat" style="width: 40px; height: 20px"/></p>""",
+                    extraEntries = listOf("OEBPS/cat.bmp" to EpubFixtures.bmp2x1()),
+                ),
+            ).pages.first()
+            assertBoxesDrawn(page, page.readingOrder().filter { it.role == KiteRole.IMAGE }, mode)
+        }
+    }
+
+    /** Checks that [images] have the display boxes of the pictures [page] draws, top first. */
+    private fun assertBoxesDrawn(page: EpubPage, images: List<KiteReadingItem>, label: String = "") {
+        val drawn = RecordingCanvas().also { page.renderTo(it) }.calls.filterIsInstance<RecordingCanvas.Call.Image>().map { call ->
+            // The page draws y up, and each image fills the unit square of its matrix.
+            val corners = listOf(0.0 to 0.0, 1.0 to 0.0, 0.0 to 1.0, 1.0 to 1.0)
+            val xs = corners.map { (x, y) -> call.ctm.transformX(x, y) }
+            val ys = corners.map { (x, y) -> page.displayHeight - call.ctm.transformY(x, y) }
+            KiteRectangle(xs.min(), ys.min(), xs.max(), ys.max())
+        }
+        assertEquals(images.size, drawn.size, "$label: one draw for each picture")
+        for ((item, box) in images.sortedBy { it.bounds?.bottom }.zip(drawn.sortedBy { it.bottom })) {
+            val bounds = assertNotNull(item.bounds, "$label: ${item.text} has no box")
+            for ((got, want) in listOf(bounds.left to box.left, bounds.bottom to box.bottom, bounds.right to box.right, bounds.top to box.top)) {
+                assertEquals(want, got, 0.01, "$label: ${item.text} is at $bounds, drawn at $box")
+            }
+        }
     }
 
     @Test

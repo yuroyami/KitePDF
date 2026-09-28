@@ -669,7 +669,15 @@ KiteDocView(
 
 ## Accessibility
 
-A screen reader finds each page of `KiteDocView` by name ("Page 3 of 12", or "Page 3" while a book still lays out), and the buttons of `KiteNavigationControls`, the thumbnails of `KiteThumbnailStrip` and the colours of `KiteSelectionMenu` by name and role. The hidden input of a form field carries the field's tooltip, or its name. The text on a page, its links and its fields are not in the semantics tree yet.
+A screen reader finds each page of `KiteDocView` by name ("Page 3 of 12", or "Page 3" while a book still lays out), and the buttons of `KiteNavigationControls`, the thumbnails of `KiteThumbnailStrip` and the colours of `KiteSelectionMenu` by name and role. The hidden input of a form field carries the field's tooltip, or its name.
+
+On the page itself, a screen reader finds:
+
+- The text, one node per item of `KitePage.readingOrder()`, in that order and at its place on the page. A heading is marked as one, and a picture reads its alternative text.
+- Each link, as a button named by the words under it. Activating it follows the link, as a tap does.
+- With a `scripts` handler, each form field: a text field or a list with its value, a check box or a radio button with its state, named by the field's tooltip, or its name. Activating it acts as a tap does.
+
+A page builds these nodes once it shows and the view rests, off the main thread.
 
 The names are English by default. Provide your own words through `LocalKiteViewerStrings`:
 
@@ -679,6 +687,7 @@ CompositionLocalProvider(
         page = { number, count -> if (count == null) "Seite $number" else "Seite $number von $count" },
         previousPage = "Vorherige Seite",
         nextPage = "Nächste Seite",
+        link = "Verweis",
     ),
 ) {
     KiteDocView(state)

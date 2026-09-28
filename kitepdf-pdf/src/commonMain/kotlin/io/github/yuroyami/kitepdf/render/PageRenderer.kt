@@ -150,24 +150,24 @@ public class PageRenderer(
     private var ocHiddenDepth = 0
 
     /**
-     * One open marked-content section: whether it hides its content, and its marked-content
-     * id (ISO 32000-1, 14.7.4.2), [NO_MCID] for none, or [ARTIFACT] for an `/Artifact` (#208).
+     * One open marked-content section: whether it hides its content, its marked-content id
+     * (ISO 32000-1, 14.7.4.2), [NO_MCID] for none, or [ARTIFACT] for an `/Artifact`, and whether
+     * a form opened it (#208).
      */
-    private class MarkedSection(val hidden: Boolean, val id: Int)
+    private class MarkedSection(val hidden: Boolean, val id: Int, val inForm: Boolean = false)
 
     /**
      * The marked-content id of the page content being drawn, which a tagged PDF's structure
-     * points at, or null. Null inside an artifact, and inside a form, whose ids belong to the
-     * form's own stream (#208).
+     * points at, or null. Null inside an artifact. The ids a form gives belong to the form's own
+     * stream, so inside a form the id is the one the page put around it (#208, #427).
      */
     internal val currentMcid: Int?
         get() {
-            if (formDepth > 0) return null
             var id: Int? = null
             for (i in markedContentStack.indices.reversed()) {
                 val section = markedContentStack[i]
                 if (section.id == ARTIFACT) return null
-                if (id == null && section.id >= 0) id = section.id
+                if (id == null && section.id >= 0 && !section.inForm) id = section.id
             }
             return id
         }
@@ -1398,7 +1398,7 @@ public class PageRenderer(
                 if (markedContentStack.size >= MAX_MARKED_CONTENT_DEPTH) { markedContentOverflow++; return }
                 val tag = a.getOrNull(0) as? PdfName
                 val hidden = tag?.value == "OC" && isOcOperandHidden(a.getOrNull(1), properties)
-                markedContentStack.addLast(MarkedSection(hidden, markedContentId(tag, a.getOrNull(1), properties)))
+                markedContentStack.addLast(MarkedSection(hidden, markedContentId(tag, a.getOrNull(1), properties), inForm = formDepth > 0))
                 if (hidden) ocHiddenDepth++
                 if (markedContentStack.size > deepestMarkedContent) deepestMarkedContent = markedContentStack.size
             }

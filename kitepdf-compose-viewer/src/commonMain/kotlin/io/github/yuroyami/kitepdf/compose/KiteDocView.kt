@@ -392,7 +392,7 @@ public fun KiteDocView(
             // A new state gets a new layout, containers and all, so nothing of the old document's
             // strip reaches the new one's pages (#346).
             key(state) {
-                CompositionLocalProvider(LocalKitePageOverlay provides pageOverlay) {
+                CompositionLocalProvider(LocalKitePageOverlay provides pageOverlay, LocalViewerTap provides linkAwareTap) {
                     when (layout) {
                         is KiteDocLayout.Continuous -> ContinuousLayout(
                             state, layout, zoomSpec, renderSpec, colors, pageSpacing,
@@ -824,6 +824,8 @@ private fun PageSlotContent(
             )
             is KiteRenderSpec.Vectorized -> KitePageVector(page, renderSpec, colors, slot, skipWidgets = drawsForm, magnification = settledZoom)
         }
+        // What a screen reader finds on the page: its text, links and fields at their places (#427).
+        PageSemantics(state, page, pageIndex, Modifier.fillMaxSize())
         // The host's elements, in the page's frame, so the zoom and pan move them with the page (#30).
         if (pageOverlay != null) PageOverlay(page, pageIndex, pageOverlay, Modifier.fillMaxSize())
     }

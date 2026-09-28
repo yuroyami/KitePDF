@@ -27,6 +27,7 @@ import androidx.compose.runtime.staticCompositionLocalOf
  * @param highlightColor the name of a colour of the selection menu from its place, starting at 1,
  *   and the count of colours.
  * @param formField the name of the input of a form field that has no tooltip and no name.
+ * @param link the name of a link that has no text on the page and no address.
  */
 @Immutable
 public class KiteViewerStrings(
@@ -37,6 +38,7 @@ public class KiteViewerStrings(
     public val nextPage: String = "Next page",
     public val highlightColor: (number: Int, count: Int) -> String = { number, count -> "Highlight colour $number of $count" },
     public val formField: String = "Form field",
+    public val link: String = "Link",
 )
 
 /** The [KiteViewerStrings] of the viewer and the widgets below it. */

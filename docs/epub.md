@@ -452,6 +452,10 @@ for (item in page.readingOrder()) {
 }
 ```
 
+`bounds` gives each item's place on the page in display space: points from the
+top-left corner, y down. A text item takes the box of its words, and a picture
+the box it is drawn in.
+
 Left out: anything marked `aria-hidden="true"` or `role="presentation"`, and
 an image with `alt=""`, which is how authors mark decoration. `aria-label`
 replaces an element's text, and both `aria-hidden` and `epub:type` reach down

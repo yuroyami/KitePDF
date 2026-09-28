@@ -55,6 +55,9 @@ public enum class KiteRole {
  *   item then holds the words of that element only.
  * @property alphabet the phonetic alphabet of [pronunciation], such as `ipa`, or null.
  * @property language the language of [text] when the source gives one, such as `fr`, or null.
+ * @property bounds where the item is on its page, in display space: points from the top-left
+ *   corner, y down, with the smaller y in [KiteRectangle.bottom]. Null when the page cannot
+ *   tell, such as for a PDF figure whose structure gives no box (#427).
  */
 public class KiteReadingItem(
     public val role: KiteRole,
@@ -64,6 +67,7 @@ public class KiteReadingItem(
     public val pronunciation: String? = null,
     public val alphabet: String? = null,
     public val language: String? = null,
+    public val bounds: KiteRectangle? = null,
 ) {
     override fun toString(): String =
         "KiteReadingItem($role${if (headingLevel > 0) " h$headingLevel" else ""}: ${text.take(40)})"

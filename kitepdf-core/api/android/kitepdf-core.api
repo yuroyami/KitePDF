@@ -218,9 +218,10 @@ public abstract interface annotation class io/github/yuroyami/kitepdf/core/KiteR
 }
 
 public final class io/github/yuroyami/kitepdf/core/KiteReadingItem {
-	public fun <init> (Lio/github/yuroyami/kitepdf/core/KiteRole;Ljava/lang/String;ILjava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)V
-	public synthetic fun <init> (Lio/github/yuroyami/kitepdf/core/KiteRole;Ljava/lang/String;ILjava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun <init> (Lio/github/yuroyami/kitepdf/core/KiteRole;Ljava/lang/String;ILjava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Lio/github/yuroyami/kitepdf/core/KiteRectangle;)V
+	public synthetic fun <init> (Lio/github/yuroyami/kitepdf/core/KiteRole;Ljava/lang/String;ILjava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Lio/github/yuroyami/kitepdf/core/KiteRectangle;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public final fun getAlphabet ()Ljava/lang/String;
+	public final fun getBounds ()Lio/github/yuroyami/kitepdf/core/KiteRectangle;
 	public final fun getHeadingLevel ()I
 	public final fun getLanguage ()Ljava/lang/String;
 	public final fun getPronunciation ()Ljava/lang/String;
@@ -249,6 +250,7 @@ public final class io/github/yuroyami/kitepdf/core/KiteRectangle {
 	public fun hashCode ()I
 	public final fun normalized ()Lio/github/yuroyami/kitepdf/core/KiteRectangle;
 	public fun toString ()Ljava/lang/String;
+	public final fun union (Lio/github/yuroyami/kitepdf/core/KiteRectangle;)Lio/github/yuroyami/kitepdf/core/KiteRectangle;
 }
 
 public final class io/github/yuroyami/kitepdf/core/KiteRectangle$Companion {

@@ -422,12 +422,14 @@ final class io.github.yuroyami.kitepdf.compose/KiteTextSelection { // io.github.
 }
 
 final class io.github.yuroyami.kitepdf.compose/KiteViewerStrings { // io.github.yuroyami.kitepdf.compose/KiteViewerStrings|null[0]
-    constructor <init>(kotlin/Function2<kotlin/Int, kotlin/Int?, kotlin/String> = ..., kotlin/String = ..., kotlin/String = ..., kotlin/Function2<kotlin/Int, kotlin/Int, kotlin/String> = ..., kotlin/String = ...) // io.github.yuroyami.kitepdf.compose/KiteViewerStrings.<init>|<init>(kotlin.Function2<kotlin.Int,kotlin.Int?,kotlin.String>;kotlin.String;kotlin.String;kotlin.Function2<kotlin.Int,kotlin.Int,kotlin.String>;kotlin.String){}[0]
+    constructor <init>(kotlin/Function2<kotlin/Int, kotlin/Int?, kotlin/String> = ..., kotlin/String = ..., kotlin/String = ..., kotlin/Function2<kotlin/Int, kotlin/Int, kotlin/String> = ..., kotlin/String = ..., kotlin/String = ...) // io.github.yuroyami.kitepdf.compose/KiteViewerStrings.<init>|<init>(kotlin.Function2<kotlin.Int,kotlin.Int?,kotlin.String>;kotlin.String;kotlin.String;kotlin.Function2<kotlin.Int,kotlin.Int,kotlin.String>;kotlin.String;kotlin.String){}[0]
 
     final val formField // io.github.yuroyami.kitepdf.compose/KiteViewerStrings.formField|{}formField[0]
         final fun <get-formField>(): kotlin/String // io.github.yuroyami.kitepdf.compose/KiteViewerStrings.formField.<get-formField>|<get-formField>(){}[0]
     final val highlightColor // io.github.yuroyami.kitepdf.compose/KiteViewerStrings.highlightColor|{}highlightColor[0]
         final fun <get-highlightColor>(): kotlin/Function2<kotlin/Int, kotlin/Int, kotlin/String> // io.github.yuroyami.kitepdf.compose/KiteViewerStrings.highlightColor.<get-highlightColor>|<get-highlightColor>(){}[0]
+    final val link // io.github.yuroyami.kitepdf.compose/KiteViewerStrings.link|{}link[0]
+        final fun <get-link>(): kotlin/String // io.github.yuroyami.kitepdf.compose/KiteViewerStrings.link.<get-link>|<get-link>(){}[0]
     final val nextPage // io.github.yuroyami.kitepdf.compose/KiteViewerStrings.nextPage|{}nextPage[0]
         final fun <get-nextPage>(): kotlin/String // io.github.yuroyami.kitepdf.compose/KiteViewerStrings.nextPage.<get-nextPage>|<get-nextPage>(){}[0]
     final val page // io.github.yuroyami.kitepdf.compose/KiteViewerStrings.page|{}page[0]

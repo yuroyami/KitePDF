@@ -1841,10 +1841,12 @@ final class io.github.yuroyami.kitepdf.core/KiteOutlineItem { // io.github.yuroy
 }
 
 final class io.github.yuroyami.kitepdf.core/KiteReadingItem { // io.github.yuroyami.kitepdf.core/KiteReadingItem|null[0]
-    constructor <init>(io.github.yuroyami.kitepdf.core/KiteRole, kotlin/String, kotlin/Int = ..., kotlin/String? = ..., kotlin/String? = ..., kotlin/String? = ..., kotlin/String? = ...) // io.github.yuroyami.kitepdf.core/KiteReadingItem.<init>|<init>(io.github.yuroyami.kitepdf.core.KiteRole;kotlin.String;kotlin.Int;kotlin.String?;kotlin.String?;kotlin.String?;kotlin.String?){}[0]
+    constructor <init>(io.github.yuroyami.kitepdf.core/KiteRole, kotlin/String, kotlin/Int = ..., kotlin/String? = ..., kotlin/String? = ..., kotlin/String? = ..., kotlin/String? = ..., io.github.yuroyami.kitepdf.core/KiteRectangle? = ...) // io.github.yuroyami.kitepdf.core/KiteReadingItem.<init>|<init>(io.github.yuroyami.kitepdf.core.KiteRole;kotlin.String;kotlin.Int;kotlin.String?;kotlin.String?;kotlin.String?;kotlin.String?;io.github.yuroyami.kitepdf.core.KiteRectangle?){}[0]
 
     final val alphabet // io.github.yuroyami.kitepdf.core/KiteReadingItem.alphabet|{}alphabet[0]
         final fun <get-alphabet>(): kotlin/String? // io.github.yuroyami.kitepdf.core/KiteReadingItem.alphabet.<get-alphabet>|<get-alphabet>(){}[0]
+    final val bounds // io.github.yuroyami.kitepdf.core/KiteReadingItem.bounds|{}bounds[0]
+        final fun <get-bounds>(): io.github.yuroyami.kitepdf.core/KiteRectangle? // io.github.yuroyami.kitepdf.core/KiteReadingItem.bounds.<get-bounds>|<get-bounds>(){}[0]
     final val headingLevel // io.github.yuroyami.kitepdf.core/KiteReadingItem.headingLevel|{}headingLevel[0]
         final fun <get-headingLevel>(): kotlin/Int // io.github.yuroyami.kitepdf.core/KiteReadingItem.headingLevel.<get-headingLevel>|<get-headingLevel>(){}[0]
     final val language // io.github.yuroyami.kitepdf.core/KiteReadingItem.language|{}language[0]
@@ -1886,6 +1888,7 @@ final class io.github.yuroyami.kitepdf.core/KiteRectangle { // io.github.yuroyam
     final fun hashCode(): kotlin/Int // io.github.yuroyami.kitepdf.core/KiteRectangle.hashCode|hashCode(){}[0]
     final fun normalized(): io.github.yuroyami.kitepdf.core/KiteRectangle // io.github.yuroyami.kitepdf.core/KiteRectangle.normalized|normalized(){}[0]
     final fun toString(): kotlin/String // io.github.yuroyami.kitepdf.core/KiteRectangle.toString|toString(){}[0]
+    final fun union(io.github.yuroyami.kitepdf.core/KiteRectangle): io.github.yuroyami.kitepdf.core/KiteRectangle // io.github.yuroyami.kitepdf.core/KiteRectangle.union|union(io.github.yuroyami.kitepdf.core.KiteRectangle){}[0]
 
     final object Companion { // io.github.yuroyami.kitepdf.core/KiteRectangle.Companion|null[0]
         final fun fromPdfArray(io.github.yuroyami.kitepdf.core.parser/PdfArray): io.github.yuroyami.kitepdf.core/KiteRectangle // io.github.yuroyami.kitepdf.core/KiteRectangle.Companion.fromPdfArray|fromPdfArray(io.github.yuroyami.kitepdf.core.parser.PdfArray){}[0]
