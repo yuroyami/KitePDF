@@ -395,7 +395,14 @@ The layout engine covers what real books use:
   box, and a blur fades out in a few steps rather than as a true blur. An inset
   shadow does not paint, a rounded border takes the colour of its first edge
   with a width, and in vertical writing corners stay square and shadows do not
-  paint. Known limitation:
+  paint.
+- **Backgrounds**: the first layer of `background-image` paints over the
+  background colour: a raster or SVG file, or a `linear-gradient` with an
+  angle or a `to` direction and positioned stops. `background-size` (`cover`,
+  `contain` or lengths), `background-position` and `background-repeat` apply,
+  as do the same parts of the `background` shorthand. A `url()` in a stylesheet
+  resolves against that stylesheet's folder. A gradient whose stops differ in
+  alpha does not paint, and a radial gradient does not paint. Known limitation:
   in `direction: rtl` text, `text-indent` shifts from the left edge rather
   than the inline-start (right) edge; lines still stay inside the content
   box.

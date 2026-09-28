@@ -148,6 +148,8 @@ internal data class ComputedStyle(
     val radii: CornerRadii? = null,
     /** `box-shadow`, in the order the rule lists them, the first on top (#28). Not inherited. */
     val shadows: List<BoxShadow> = emptyList(),
+    /** The first `background-image` layer with its size, position and repeat, or null (#28). Not inherited. */
+    val backgroundLayer: CssBackgroundLayer? = null,
 ) {
     val mono: Boolean get() = fontFamily == GenericFont.MONO
 

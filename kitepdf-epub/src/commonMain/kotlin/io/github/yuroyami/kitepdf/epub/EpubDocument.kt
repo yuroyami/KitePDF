@@ -13,6 +13,12 @@ import io.github.yuroyami.kitepdf.epub.css.Origin
 import io.github.yuroyami.kitepdf.epub.css.ObjectFit
 import io.github.yuroyami.kitepdf.epub.css.StyleResolver
 import io.github.yuroyami.kitepdf.epub.css.StyleRule
+import io.github.yuroyami.kitepdf.core.render.KiteFunction
+import io.github.yuroyami.kitepdf.core.render.KiteColorSpace
+import io.github.yuroyami.kitepdf.core.render.KiteShading
+import io.github.yuroyami.kitepdf.epub.css.GradientStop
+import io.github.yuroyami.kitepdf.epub.css.CssBackgroundLayer
+import io.github.yuroyami.kitepdf.epub.css.CssBackgroundImage
 import io.github.yuroyami.kitepdf.epub.css.grownRadii
 import io.github.yuroyami.kitepdf.epub.css.innerRadii
 import io.github.yuroyami.kitepdf.epub.css.roundedRect
@@ -936,6 +942,41 @@ public class EpubDocument internal constructor(
     private fun loadSvg(zipPath: String): SvgImage? =
         parsed.zip.read(zipPath)?.let { SvgImage.parse(it) }
 
+    private val backgroundLock = KiteLock()
+
+    /** Decoded background pictures by zip path, oldest use first, within [BACKGROUND_BYTES] (#28). */
+    private val backgrounds = LinkedHashMap<String, Any?>()
+    private var backgroundBytes = 0L
+
+    /**
+     * The picture of a `background-image` at [zipPath]: a decoded raster or a parsed SVG, or null.
+     * A page paints its backgrounds on every render, so the document keeps them within a budget.
+     */
+    internal fun backgroundPicture(zipPath: String): Any? {
+        backgroundLock.withLock {
+            if (backgrounds.containsKey(zipPath)) return backgrounds.remove(zipPath).also { backgrounds[zipPath] = it }
+        }
+        val picture: Any? = if (zipPath.endsWith(".svg", true)) loadSvg(zipPath) else loadImage(zipPath)
+        val size = (picture as? KiteImageData)?.let { (it.pixelBytes?.size ?: it.encodedBytes.size).toLong() } ?: 1024L
+        backgroundLock.withLock {
+            if (size > BACKGROUND_BYTES) return picture
+            backgrounds.remove(zipPath)?.let { backgroundBytes -= sizeOfBackground(it) }
+            backgrounds[zipPath] = picture
+            backgroundBytes += size
+            val oldest = backgrounds.entries.iterator()
+            while (backgroundBytes > BACKGROUND_BYTES && oldest.hasNext()) {
+                val entry = oldest.next()
+                if (entry.key == zipPath) continue
+                backgroundBytes -= sizeOfBackground(entry.value)
+                oldest.remove()
+            }
+        }
+        return picture
+    }
+
+    private fun sizeOfBackground(picture: Any?): Long =
+        (picture as? KiteImageData)?.let { (it.pixelBytes?.size ?: it.encodedBytes.size).toLong() } ?: 1024L
+
     /**
      * Reads a file an `<image>` inside an SVG points at, resolved against the
      * directory that SVG lives in. Fixed-layout comics wrap each page's JPEG
@@ -1610,6 +1651,13 @@ public class EpubPage internal constructor(
         }
 
         s.backgroundColor?.let { rectFill(canvas, ctm, xDev, yUp(botDoc), w, yUp(topDoc) - yUp(botDoc), it.color, it.alpha) }
+        if (s.backgroundLayer != null) {
+            // The layer is cut to the part of the box on this page, as the colour is.
+            val band = KitePath.Builder().apply { rectangle(xDev, yUp(botDoc), w, yUp(topDoc) - yUp(botDoc)) }.build()
+            canvas.pushClip(band, ctm, evenOdd = false)
+            paintBackgroundLayer(box, canvas, ctm, xDev, yUp(box.bottom), xDev + w, yUp(box.y), null)
+            canvas.popClip()
+        }
 
         val eT = s.borderTop.effective; val eB = s.borderBottom.effective
         val eL = s.borderLeft.effective; val eR = s.borderRight.effective
@@ -1643,6 +1691,7 @@ public class EpubPage internal constructor(
                 val shape = KitePath.Builder().apply { roundedRect(left, bottom, right, top, radii) }.build()
                 canvas.fillPath(shape, ctm, bg.color, evenOdd = false, alpha = bg.alpha, blendMode = KiteBlendMode.Normal)
             }
+            paintBackgroundLayer(box, canvas, ctm, left, bottom, right, top, radii)
             val eT = s.borderTop.effective; val eR = s.borderRight.effective
             val eB = s.borderBottom.effective; val eL = s.borderLeft.effective
             val edge = listOf(s.borderTop, s.borderRight, s.borderBottom, s.borderLeft).firstOrNull { it.effective > 0 }
@@ -1659,6 +1708,161 @@ public class EpubPage internal constructor(
         } finally {
             if (sliced) canvas.popClip()
         }
+    }
+
+    /**
+     * [box]'s background image or gradient, over its colour and under its border. It is sized
+     * and placed in the padding box, repeated as the style asks, and cut to the border box, with
+     * that box's rounded corners [radii] (CSS Backgrounds 3, 3; #28). The box is from ([left],
+     * [bottom]) to ([right], [top]) in the page's y-up space.
+     */
+    private fun paintBackgroundLayer(
+        box: LayoutBox, canvas: KiteCanvas, ctm: KiteMatrix,
+        left: Double, bottom: Double, right: Double, top: Double, radii: DoubleArray?,
+    ) {
+        val layer = box.style.backgroundLayer ?: return
+        val s = box.style
+        val pl = left + s.borderLeft.effective
+        val pr = right - s.borderRight.effective
+        val pt = top - s.borderTop.effective
+        val pb = bottom + s.borderBottom.effective
+        if (pr <= pl || pt <= pb) return
+        val border = KitePath.Builder().apply { roundedRect(left, bottom, right, top, radii) }.build()
+        canvas.pushClip(border, ctm, evenOdd = false)
+        try {
+            when (val image = layer.image) {
+                is CssBackgroundImage.LinearGradient -> paintGradient(canvas, ctm, image, pl, pb, pr, pt, border)
+                is CssBackgroundImage.Url -> paintBackgroundImage(canvas, ctm, layer, image.url, left, bottom, right, top, pl, pb, pr, pt)
+            }
+        } finally {
+            canvas.popClip()
+        }
+    }
+
+    /**
+     * A background picture in the padding box from ([pl], [pb]) to ([pr], [pt]), tiled over the
+     * border box from ([left], [bottom]) to ([right], [top]) when it repeats. A size of auto is
+     * the picture's own, in CSS pixels.
+     */
+    private fun paintBackgroundImage(
+        canvas: KiteCanvas, ctm: KiteMatrix, layer: CssBackgroundLayer, url: String,
+        left: Double, bottom: Double, right: Double, top: Double,
+        pl: Double, pb: Double, pr: Double, pt: Double,
+    ) {
+        // A stylesheet's url is absolute already, with a leading slash; a style attribute's is the document's.
+        val path = EpubDocument.resolvePath(doc.chapterDir(chapter), url)
+        val picture = doc.backgroundPicture(path)
+        val image = picture as? KiteImageData
+        val svg = picture as? SvgImage
+        val iw = (svg?.width ?: image?.width?.toDouble() ?: return) * CSS_PX
+        val ih = (svg?.height ?: image?.height?.toDouble() ?: return) * CSS_PX
+        if (iw <= 0.0 || ih <= 0.0) return
+        val areaW = pr - pl
+        val areaH = pt - pb
+        val size = layer.size
+        val (tw, th) = when {
+            size.cover -> maxOf(areaW / iw, areaH / ih).let { iw * it to ih * it }
+            size.contain -> minOf(areaW / iw, areaH / ih).let { iw * it to ih * it }
+            else -> {
+                val w = size.width?.resolve(areaW)
+                val h = size.height?.resolve(areaH)
+                when {
+                    w != null && h != null -> w to h
+                    w != null -> w to w * ih / iw
+                    h != null -> h * iw / ih to h
+                    else -> iw to ih
+                }
+            }
+        }
+        if (tw <= 0.0 || th <= 0.0 || !tw.isFinite() || !th.isFinite()) return
+        // A percentage lines that point of the picture up with that point of the area. CSS y runs down.
+        val x0 = pl + (if (layer.x.percent) (areaW - tw) * layer.x.value else layer.x.value)
+        val top0 = pt - (if (layer.y.percent) (areaH - th) * layer.y.value else layer.y.value)
+        fun starts(origin: Double, step: Double, from: Double, to: Double, repeat: Boolean): List<Double> {
+            if (!repeat) return listOf(origin)
+            var first = origin - kotlin.math.ceil((origin - from) / step) * step
+            val out = ArrayList<Double>()
+            while (first < to && out.size < MAX_BACKGROUND_TILES) { out += first; first += step }
+            return out
+        }
+        val xs = starts(x0, tw, left, right, layer.repeatX)
+        // Tops of the rows, from the top of the box down.
+        val tops = starts(-top0, th, -top, -bottom, layer.repeatY).map { -it }
+        if (xs.size * tops.size > MAX_BACKGROUND_TILES) return
+        for (x in xs) for (t in tops) {
+            paintImage(canvas, ctm, image, svg, tw, th, x, t - th, ObjectFit.FILL, path.substringBeforeLast('/', ""))
+        }
+    }
+
+    /**
+     * A `linear-gradient` over the padding box from ([pl], [pb]) to ([pr], [pt]), through the
+     * canvas's axial shading, inside [clip]. A gradient whose stops differ in alpha does not paint,
+     * since the shading has no alpha of its own; stops that share one alpha paint at it.
+     */
+    private fun paintGradient(
+        canvas: KiteCanvas, ctm: KiteMatrix, gradient: CssBackgroundImage.LinearGradient,
+        pl: Double, pb: Double, pr: Double, pt: Double, clip: KitePath,
+    ) {
+        val alpha = gradient.stops.first().alpha
+        if (gradient.stops.any { kotlin.math.abs(it.alpha - alpha) > 1e-6 } || alpha <= 0.0) return
+        val w = pr - pl
+        val h = pt - pb
+        val radians = gradient.angleFor(w, h) * kotlin.math.PI / 180.0
+        val sin = kotlin.math.sin(radians)
+        val cos = kotlin.math.cos(radians)
+        // CSS Images 3, 3.1.1: the line runs through the centre, long enough that its ends touch the corners.
+        val length = kotlin.math.abs(w * sin) + kotlin.math.abs(h * cos)
+        if (length <= 0.0) return
+        val cx = (pl + pr) / 2
+        val cy = (pb + pt) / 2
+        // 0 degrees points up, and y runs up here.
+        val coords = doubleArrayOf(cx - sin * length / 2, cy - cos * length / 2, cx + sin * length / 2, cy + cos * length / 2)
+        val shading = KiteShading.Axial(
+            KiteColorSpace.DeviceRGB, background = null, bbox = null, coords = coords, domain = doubleArrayOf(0.0, 1.0),
+            function = gradientFunction(gradient.stops, length) ?: return, extendStart = true, extendEnd = true,
+        )
+        canvas.fillShading(shading, ctm, clip, alpha = alpha, blendMode = KiteBlendMode.Normal)
+    }
+
+    /**
+     * The colour of the gradient along its line, from 0 to 1: a straight blend between each
+     * pair of stops. A stop without a position sits halfway between its neighbours that have one,
+     * and no stop goes back before the one before it (CSS Images 3, 3.5.3).
+     */
+    private fun gradientFunction(stops: List<GradientStop>, length: Double): KiteFunction? {
+        val positions = arrayOfNulls<Double>(stops.size)
+        for ((i, stop) in stops.withIndex()) positions[i] = stop.position?.resolve(length)?.div(length)
+        if (positions[0] == null) positions[0] = 0.0
+        if (positions[stops.lastIndex] == null) positions[stops.lastIndex] = 1.0
+        var i = 1
+        while (i < stops.size) {
+            if (positions[i] == null) {
+                val start = i - 1
+                var end = i
+                while (positions[end] == null) end++
+                val from = positions[start]!!
+                val to = positions[end]!!
+                for (k in start + 1 until end) positions[k] = from + (to - from) * (k - start) / (end - start)
+                i = end
+            }
+            i++
+        }
+        var max = Double.NEGATIVE_INFINITY
+        val at = DoubleArray(stops.size) { k -> maxOf(positions[k]!!, max).also { max = it } }
+        // The function runs over 0 to 1: the colour before the first stop and after the last stays flat.
+        val points = ArrayList<Pair<Double, RgbColor>>()
+        if (at.first() > 0.0) points += 0.0 to stops.first().color
+        for (k in stops.indices) points += at[k].coerceIn(0.0, 1.0) to stops[k].color
+        if (at.last() < 1.0) points += 1.0 to stops.last().color
+        if (points.size < 2) return null
+        fun rgb(c: RgbColor) = doubleArrayOf(c.r, c.g, c.b)
+        val segments = (0 until points.size - 1).map { k ->
+            KiteFunction.Type2(doubleArrayOf(0.0, 1.0), null, rgb(points[k].second), rgb(points[k + 1].second), 1.0)
+        }
+        if (segments.size == 1) return segments[0]
+        val bounds = DoubleArray(points.size - 2) { k -> points[k + 1].first }
+        val encode = DoubleArray(segments.size * 2) { k -> if (k % 2 == 0) 0.0 else 1.0 }
+        return KiteFunction.Type3(doubleArrayOf(0.0, 1.0), null, segments, bounds, encode)
     }
 
     /**
@@ -2052,6 +2256,15 @@ public class EpubPage internal constructor(
 
 /** The rings that stand in for the gaussian of a `box-shadow` blur (#28). */
 private const val SHADOW_RINGS = 6
+
+/** The background pictures a document keeps decoded (#28). */
+private const val BACKGROUND_BYTES = 32L * 1024 * 1024
+
+/** The most copies of a repeated background picture one box paints; a pattern of tiny tiles draws none. */
+private const val MAX_BACKGROUND_TILES = 4096
+
+/** Points in a CSS pixel. */
+private const val CSS_PX = 0.75
 
 /** The grey of a media element without a poster. */
 private val MEDIA_PLACEHOLDER = RgbColor(0.85, 0.85, 0.85)
