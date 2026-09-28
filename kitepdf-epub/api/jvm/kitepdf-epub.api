@@ -29,6 +29,8 @@ public final class io/github/yuroyami/kitepdf/epub/EpubDocument : io/github/yuro
 	public fun pageIndexOf (Lio/github/yuroyami/kitepdf/core/KiteLocation;)Ljava/lang/Integer;
 	public final fun pageOf (Ljava/lang/String;)Ljava/lang/Integer;
 	public fun prepareChapter (I)V
+	public final fun resource (Ljava/lang/String;)[B
+	public final fun resourceType (Ljava/lang/String;)Ljava/lang/String;
 	public final fun search (Ljava/lang/String;Z)Lkotlin/sequences/Sequence;
 	public static synthetic fun search$default (Lio/github/yuroyami/kitepdf/epub/EpubDocument;Ljava/lang/String;ZILjava/lang/Object;)Lkotlin/sequences/Sequence;
 	public final fun withFontSize (D)Lio/github/yuroyami/kitepdf/epub/EpubDocument;
@@ -74,6 +76,31 @@ public final class io/github/yuroyami/kitepdf/epub/EpubLinkTarget {
 	public final fun getType ()Ljava/lang/String;
 }
 
+public final class io/github/yuroyami/kitepdf/epub/EpubMedia {
+	public final fun getAutoplay ()Z
+	public final fun getControls ()Z
+	public final fun getId ()Ljava/lang/String;
+	public final fun getKind ()Lio/github/yuroyami/kitepdf/epub/EpubMediaKind;
+	public final fun getLoop ()Z
+	public final fun getMuted ()Z
+	public final fun getPoster ()Ljava/lang/String;
+	public final fun getRect ()Lio/github/yuroyami/kitepdf/core/KiteRectangle;
+	public final fun getSources ()Ljava/util/List;
+}
+
+public final class io/github/yuroyami/kitepdf/epub/EpubMediaKind : java/lang/Enum {
+	public static final field AUDIO Lio/github/yuroyami/kitepdf/epub/EpubMediaKind;
+	public static final field VIDEO Lio/github/yuroyami/kitepdf/epub/EpubMediaKind;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lio/github/yuroyami/kitepdf/epub/EpubMediaKind;
+	public static fun values ()[Lio/github/yuroyami/kitepdf/epub/EpubMediaKind;
+}
+
+public final class io/github/yuroyami/kitepdf/epub/EpubMediaSource {
+	public final fun getHref ()Ljava/lang/String;
+	public final fun getType ()Ljava/lang/String;
+}
+
 public final class io/github/yuroyami/kitepdf/epub/EpubMetadata {
 	public static final field Companion Lio/github/yuroyami/kitepdf/epub/EpubMetadata$Companion;
 	public final fun getCoverImagePath ()Ljava/lang/String;
@@ -95,6 +122,7 @@ public final class io/github/yuroyami/kitepdf/epub/EpubPage : io/github/yuroyami
 	public final fun getHeight ()D
 	public final fun getLinks ()Ljava/util/List;
 	public final fun getLocation ()Lio/github/yuroyami/kitepdf/core/KiteLocation;
+	public final fun getMedia ()Ljava/util/List;
 	public final fun getWidth ()D
 	public final fun readingOrder ()Ljava/util/List;
 	public fun renderTo (Lio/github/yuroyami/kitepdf/core/render/KiteCanvas;Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;)V

@@ -149,6 +149,9 @@ internal class ParsedEpub(
         opf.items.associateBy { EpubDocument.resolvePath(opf.baseDir, it.href) }
     }
 
+    /** The media type that the manifest gives the file at [path], or null. */
+    fun mediaTypeOf(path: String): String? = itemsByPath[path]?.mediaType
+
     /**
      * The zip paths of the items that the fallback chain of the item at [path] names after it,
      * in order. Empty for a path that is not in the manifest or has no fallback (#27).

@@ -364,15 +364,21 @@ internal class BoxLayout(
         // viewport and paints as vectors; raster images decode to a KiteImageData.
         val svg = box.svg ?: if (box.zipPath.endsWith(".svg", true)) loadSvg(box.zipPath)?.also { box.svg = it } else null
         val intrinsicW: Double; val intrinsicH: Double
+        val media = box.media
         if (svg != null) {
             intrinsicW = svg.width; intrinsicH = svg.height
         } else {
-            val img = loadImage(box.zipPath)
-            if (img == null || img.width <= 0 || img.height <= 0) {
+            val img = if (box.zipPath.isEmpty()) null else loadImage(box.zipPath)
+            if (img != null && img.width > 0 && img.height > 0) {
+                box.image = img
+                intrinsicW = img.width.toDouble(); intrinsicH = img.height.toDouble()
+            } else if (media != null) {
+                // A media element without a poster keeps its room: 16:9 for a video, a 40 pt bar
+                // for an audio player, at the content width unless the element says otherwise (#29).
+                if (media.kind == EpubMediaKind.VIDEO) { intrinsicW = 16.0; intrinsicH = 9.0 } else { intrinsicW = contentW; intrinsicH = 40.0 }
+            } else {
                 box.x = contentLeft; box.y = topY; box.borderBoxWidth = 0.0; box.borderBoxHeight = 0.0; return
             }
-            box.image = img
-            intrinsicW = img.width.toDouble(); intrinsicH = img.height.toDouble()
         }
         val aspect = intrinsicH / intrinsicW
         // Honour explicit CSS width/height (then the HTML width/height attributes),

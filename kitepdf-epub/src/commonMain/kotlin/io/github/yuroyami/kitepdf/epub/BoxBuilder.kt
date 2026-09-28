@@ -130,6 +130,11 @@ internal class BoxBuilder(
                     }
                     continue
                 }
+                if (child.tag == "video" || child.tag == "audio") {
+                    val cs = resolver.compute(child, childAncestors, style)
+                    if (cs.display != Display.NONE) mediaBox(child, cs, sem)?.let { box -> flush(); children.add(box) }
+                    continue
+                }
                 if (child.tag == "svg") { // inline SVG: paint as a vector image box
                     val cs = resolver.compute(child, childAncestors, style)
                     // A hidden sprite sheet or glyph cache generates no box (CSS 2.1, 9.2.4, #275).
@@ -161,6 +166,35 @@ internal class BoxBuilder(
     }
 
     /** An image announces its `alt` (or `aria-label`); `alt=""` means decorative. */
+    /**
+     * The box of a `<video>` or an `<audio>` element (#29). The poster fills it, else a placeholder
+     * does. The element's children are the path for a reader that plays nothing, so they are not
+     * built. An audio element without controls is not rendered (HTML, 4.8.10).
+     */
+    private fun mediaBox(el: KiteXmlNode.Element, cs: ComputedStyle, parentSem: BoxSemantics?): ImageBox? {
+        val video = el.tag == "video"
+        if (!video && "controls" !in el.attrs) return null
+        fun href(src: String) = if (MEDIA_SCHEME.containsMatchIn(src)) src.trim() else resolveHref(src)
+        val sources = buildList {
+            el.attrs["src"]?.takeIf { it.isNotBlank() }?.let { add(EpubMediaSource(href(it), el.attrs["type"])) }
+            for (source in el.children) {
+                if (source !is KiteXmlNode.Element || source.tag != "source") continue
+                source.attrs["src"]?.takeIf { it.isNotBlank() }?.let { add(EpubMediaSource(href(it), source.attrs["type"])) }
+            }
+        }
+        val poster = el.attrs["poster"]?.takeIf { video && it.isNotBlank() }?.let { resolveHref(it) }
+        val aw = el.attrs["width"]?.trim()?.removeSuffix("px")?.toDoubleOrNull()?.times(0.75)
+        val ah = el.attrs["height"]?.trim()?.removeSuffix("px")?.toDoubleOrNull()?.times(0.75)
+        return ImageBox(cs, poster ?: "", attrWidth = aw, attrHeight = ah).also {
+            it.media = MediaInfo(
+                if (video) EpubMediaKind.VIDEO else EpubMediaKind.AUDIO, sources, poster,
+                controls = "controls" in el.attrs, autoplay = "autoplay" in el.attrs,
+                loop = "loop" in el.attrs, muted = "muted" in el.attrs, id = el.attrs["id"],
+            )
+            it.semantics = BoxSemantics.of(el.tag, el.attrs, parentSem)
+        }
+    }
+
     private fun imageSemantics(el: KiteXmlNode.Element, parentSem: BoxSemantics?): BoxSemantics {
         val base = BoxSemantics.of(el.tag, el.attrs, parentSem)
         val alt = el.attrs["alt"]
@@ -439,6 +473,12 @@ internal class BoxBuilder(
                             val ah = child.attrs["height"]?.trim()?.removeSuffix("px")?.toDoubleOrNull()?.times(0.75)
                             inl.addImage(resolveHref(src), style, cs.widthPt ?: aw, cs.heightPt ?: ah, child.attrs["alt"], cs.objectFit)
                         }
+                        continue
+                    }
+                    if (child.tag == "video" || child.tag == "audio") {
+                        // A media element takes a block of its own, as a block image does.
+                        val cs = resolver.compute(child, childAncestors, style)
+                        if (cs.display != Display.NONE) mediaBox(child, cs, parentSem)?.let { hoist(listOf(it)) }
                         continue
                     }
                     if (child.tag == "svg") {
@@ -742,3 +782,6 @@ internal fun collapsedWins(challenger: Edge, holder: Edge): Boolean = when {
     challenger.width != holder.width -> challenger.width > holder.width
     else -> challenger.style.ordinal < holder.style.ordinal
 }
+
+/** A media source with a scheme, such as https, which stays a URL instead of a zip path. */
+private val MEDIA_SCHEME = Regex("^[a-zA-Z][a-zA-Z0-9+.-]*:")

@@ -858,6 +858,16 @@ public class EpubDocument internal constructor(
      */
     public fun pageOf(href: String): Int? = pageIndexOfHref(href)
 
+    /**
+     * The bytes of the book's file at [path], a zip path as [EpubMedia.sources], [EpubMedia.poster]
+     * and [EpubLink.href] give it, or null when the book has no such file. The feed for a player of
+     * the book's media (#29). A fragment after `#` is ignored.
+     */
+    public fun resource(path: String): ByteArray? = parsed.zip.read(path.substringBefore('#'))
+
+    /** The media type that the manifest gives the file at [path], or null when it gives none. */
+    public fun resourceType(path: String): String? = parsed.mediaTypeOf(path.substringBefore('#'))
+
     /** The image at [zipPath], or the first item of its manifest fallback chain that decodes (#27). */
     private fun loadImage(zipPath: String): KiteImageData? {
         for (path in listOf(zipPath) + parsed.fallbackPaths(zipPath)) {
@@ -1142,9 +1152,14 @@ public class EpubPage internal constructor(
             image = { box ->
                 // The picture fills the content box, inside the border and padding (#101).
                 val inset = imageInset(box.style)
-                paintImage(canvas, deviceCtm, box.image, box.svg, box.drawWidth, box.drawHeight,
-                    margin + box.x + inset.inlineStart, yUp(box.bottom - inset.blockEnd), box.style.objectFit,
-                    resourceDir(box.zipPath))
+                val left = margin + box.x + inset.inlineStart
+                val bottom = yUp(box.bottom - inset.blockEnd)
+                if (box.media != null && box.image == null) {
+                    paintMediaPlaceholder(canvas, deviceCtm, left, bottom, box.drawWidth, box.drawHeight)
+                } else {
+                    paintImage(canvas, deviceCtm, box.image, box.svg, box.drawWidth, box.drawHeight,
+                        left, bottom, box.style.objectFit, resourceDir(box.zipPath))
+                }
             },
         )
         canvas.endPage()
@@ -1245,8 +1260,12 @@ public class EpubPage internal constructor(
                 val inset = imageInset(box.style)
                 val left = minOf(colX(box.y + inset.blockStart), colX(box.bottom - inset.blockEnd))
                 val top = margin + box.x + inset.inlineStart
-                paintImage(canvas, deviceCtm, box.image, box.svg, box.drawWidth, box.drawHeight,
-                    left, displayHeight - top - box.drawHeight, box.style.objectFit, resourceDir(box.zipPath))
+                if (box.media != null && box.image == null) {
+                    paintMediaPlaceholder(canvas, deviceCtm, left, displayHeight - top - box.drawHeight, box.drawWidth, box.drawHeight)
+                } else {
+                    paintImage(canvas, deviceCtm, box.image, box.svg, box.drawWidth, box.drawHeight,
+                        left, displayHeight - top - box.drawHeight, box.style.objectFit, resourceDir(box.zipPath))
+                }
             },
         )
         canvas.endPage()
@@ -1412,6 +1431,48 @@ public class EpubPage internal constructor(
         val t = maxOf(y0Doc, startY); val b = minOf(y1Doc, bandBottom)
         if (b <= t) return
         rectFill(canvas, ctm, xDev, yUp(b), w, yUp(t) - yUp(b), color)
+    }
+
+    /**
+     * A grey box with a play triangle, for a media element without a poster (#29). [left] and
+     * [bottom] are in the page's y-up space, as [paintImage] takes them.
+     */
+    private fun paintMediaPlaceholder(canvas: KiteCanvas, deviceCtm: KiteMatrix, left: Double, bottom: Double, width: Double, height: Double) {
+        if (width <= 0.0 || height <= 0.0) return
+        rectFill(canvas, deviceCtm, left, bottom, width, height, MEDIA_PLACEHOLDER)
+        val size = minOf(width, height) * 0.4
+        val cx = left + width / 2.0
+        val cy = bottom + height / 2.0
+        val triangle = KitePath.Builder().apply {
+            moveTo(cx - size * 0.35, cy - size / 2.0)
+            lineTo(cx - size * 0.35, cy + size / 2.0)
+            lineTo(cx + size * 0.5, cy)
+            close()
+        }.build()
+        canvas.fillPath(triangle, deviceCtm, MEDIA_PLAY, evenOdd = false, alpha = 1.0, blendMode = KiteBlendMode.Normal)
+    }
+
+    /**
+     * The `<video>` and `<audio>` elements on this page, in painting order, each with its box, its
+     * sources and its flags (#29). A player that an app places over [EpubMedia.rect] plays what the
+     * page shows the poster or the placeholder of.
+     */
+    public val media: List<EpubMedia> get() = buildMedia(laidOut())
+
+    private fun buildMedia(page: PageRender): List<EpubMedia> = page.images.mapNotNull { box ->
+        val info = box.media ?: return@mapNotNull null
+        val inset = imageInset(box.style)
+        val (left, top) = if (page.vertical) {
+            minOf(columnX(page, box.y + inset.blockStart), columnX(page, box.bottom - inset.blockEnd)) to page.margin + box.x + inset.inlineStart
+        } else {
+            (page.margin + box.x + inset.inlineStart) to displayY(page, box.y + inset.blockStart)
+        }
+        EpubMedia(
+            io.github.yuroyami.kitepdf.core.KiteRectangle(left, top, left + box.drawWidth, top + box.drawHeight),
+            info.kind,
+            info.sources.map { EpubMediaSource(it.href, it.type ?: doc.resourceType(it.href)) },
+            info.poster, info.controls, info.autoplay, info.loop, info.muted, info.id,
+        )
     }
 
     private fun rectFill(
@@ -1649,3 +1710,9 @@ public class EpubPage internal constructor(
         const val UPRIGHT_CENTER = 0.38
     }
 }
+
+/** The grey of a media element without a poster. */
+private val MEDIA_PLACEHOLDER = RgbColor(0.85, 0.85, 0.85)
+
+/** The play triangle on it. */
+private val MEDIA_PLAY = RgbColor(0.45, 0.45, 0.45)

@@ -85,6 +85,8 @@ internal class ImageBox(
     val attrHeight: Double? = null,
 ) : LayoutBox() {
     var image: KiteImageData? = null
+    /** The facts of a `<video>` or an `<audio>` element that this box stands for, else null (#29). */
+    var media: MediaInfo? = null
     /** When the picture itself paints, after the background and border (#172). */
     var contentRank: Int = 0
     /** Physical image dimensions; the border box uses the layout's logical axes. */
