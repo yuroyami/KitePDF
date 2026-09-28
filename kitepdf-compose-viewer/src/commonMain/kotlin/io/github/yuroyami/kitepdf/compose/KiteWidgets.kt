@@ -1,5 +1,9 @@
 package io.github.yuroyami.kitepdf.compose
 
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.Role
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -129,11 +133,14 @@ private fun ChevronButton(
     tint: Color,
     onClick: () -> Unit,
 ) {
+    val strings = LocalKiteViewerStrings.current
     Box(
         Modifier
             .size(36.dp)
             .clip(CircleShape)
-            .clickable(enabled = enabled, onClick = onClick),
+            .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
+            // A screen reader names the button (#427).
+            .semantics { contentDescription = if (pointsLeft) strings.previousPage else strings.nextPage },
         contentAlignment = Alignment.Center,
     ) {
         val color = if (enabled) tint else tint.copy(alpha = tint.alpha * 0.35f)
@@ -180,6 +187,7 @@ public fun KiteThumbnailStrip(
     // Thumbnails keep their bitmaps in a small cache of their own, so one that scrolls out and
     // back is a lookup, not a raster (#391). A new decorator draws differently: a new cache.
     val thumbnails = remember(state.viewerDecorator) { PageBitmapCache(THUMBNAIL_CACHE_BYTES) }
+    val strings = LocalKiteViewerStrings.current
 
     LazyRow(
         modifier = modifier,
@@ -215,6 +223,7 @@ public fun KiteThumbnailStrip(
             }
             val selected = index == state.currentPage
             val shape = RoundedCornerShape(4.dp)
+            val label = strings.page(index + 1, if (state.isComplete) state.knownPageCount else null)
             Box(
                 Modifier
                     .height(thumbnailHeight)
@@ -226,7 +235,12 @@ public fun KiteThumbnailStrip(
                         color = if (selected) selectedBorderColor else Color.Transparent,
                         shape = shape,
                     )
-                    .clickable { scope.launch { state.animateScrollToPage(index) } },
+                    .clickable(role = Role.Button) { scope.launch { state.animateScrollToPage(index) } }
+                    // A screen reader names the page and says which one the reader is on (#427).
+                    .semantics {
+                        contentDescription = label
+                        this.selected = selected
+                    },
             ) {
                 bitmap?.let {
                     Image(
@@ -302,11 +316,11 @@ public fun KiteOutlinePanel(
                     .fillMaxWidth()
                     .then(
                         when {
-                            target != null -> Modifier.clickable {
+                            target != null -> Modifier.clickable(role = Role.Button) {
                                 scope.launch { state.scrollTo(target, animate = true) }
                                 onNavigate?.invoke(item)
                             }
-                            page != null -> Modifier.clickable {
+                            page != null -> Modifier.clickable(role = Role.Button) {
                                 scope.launch { state.animateScrollToPage(page) }
                                 onNavigate?.invoke(item)
                             }

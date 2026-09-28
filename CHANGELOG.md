@@ -50,6 +50,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `Paged` and `Spread` a drag past the edge of a zoomed page turns it (#410).
 - `KiteDocViewState.selectionBounds` gives the box of the selection in viewport
   pixels (#408).
+- A screen reader finds each page, the page buttons, the thumbnails, the colours
+  of the selection menu and the input of a form field by name. `KiteViewerStrings`
+  and `LocalKiteViewerStrings` let a host translate the names (#427).
 
 ## [0.11.0] - 2026-09-25
 

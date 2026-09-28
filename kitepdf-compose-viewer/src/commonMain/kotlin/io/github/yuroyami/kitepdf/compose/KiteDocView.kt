@@ -1,5 +1,9 @@
 package io.github.yuroyami.kitepdf.compose
 
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -764,6 +768,7 @@ private fun PageSlotContent(
     }
     val formTextMeasurer = rememberTextMeasurer()
     val formFailure = remember(page) { DrawFailure() }
+    val strings = LocalKiteViewerStrings.current
     val slot = modifier
         .kiteFormLayer(
             page, state.scripts, formTextMeasurer,
@@ -772,6 +777,11 @@ private fun PageSlotContent(
             state.formRevision, formFailure, colors.theme,
         )
         .highlightOverlay(state, page, pageIndex, colors)
+        // A screen reader names the page, as the page indicator numbers it (#427).
+        .semantics {
+            contentDescription = strings.page(pageIndex + 1, if (state.isComplete) state.knownPageCount else null)
+            role = Role.Image
+        }
     when (renderSpec) {
         is KiteRenderSpec.Rasterized -> KitePageRaster(
             page, pageIndex, baseSize, settledZoom, renderSpec, colors,
