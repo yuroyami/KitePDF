@@ -91,6 +91,12 @@ public class KitePageRasterizer(
     }
 
     /**
+     * The last page that drew host-font text, so its next raster, after a zoom or a resize, goes
+     * to Main without a probe (#131). Read and written under [renderMutex].
+     */
+    private var hostFontPage: KitePage? = null
+
+    /**
      * [rasterize], off the main thread where the platform allows. Cancelling the
      * calling coroutine stops a PDF page between operators and throws a
      * CancellationException instead of returning a partial bitmap (#188).
@@ -146,11 +152,16 @@ public class KitePageRasterizer(
         // A page the viewer no longer needs stops between operators when its coroutine is cancelled (#188).
         val job = kotlinx.coroutines.currentCoroutineContext()[kotlinx.coroutines.Job]
         val cancellation = job?.let { KiteCancellation { !it.isActive } }
-        val (probe, usedSystemFont) = kotlinx.coroutines.withContext(kitepdfRasterDispatcher()) {
-            rasterizeInternal(page, widthPx, heightPx, background, hairlineWidthPx, theme, skipSystemFontText = true, skipWidgets = skipWidgets, canvasDecorator = canvasDecorator, cancellation = cancellation)
+        val probe = kotlinx.coroutines.withContext(kitepdfRasterDispatcher()) {
+            // A page that draws host-font text, as it says or as it did the last time, goes to Main
+            // at once: a probe would draw it in full only to throw the bitmap away (#131). The page
+            // answers here, off Main, because an answer can lay its chapter out.
+            if (hostFontPage === page || page.drawsHostFontText == true) null
+            else rasterizeInternal(page, widthPx, heightPx, background, hairlineWidthPx, theme, skipSystemFontText = true, skipWidgets = skipWidgets, canvasDecorator = canvasDecorator, cancellation = cancellation)
         }
         kotlinx.coroutines.currentCoroutineContext().ensureActive()
-        if (!usedSystemFont) return probe
+        if (probe != null && !probe.second) return probe.first
+        hostFontPage = page
         return onMainOrCaller {
             rasterizeInternal(page, widthPx, heightPx, background, hairlineWidthPx, theme, skipSystemFontText = false, skipWidgets = skipWidgets, canvasDecorator = canvasDecorator, cancellation = cancellation).first
         }.also { kotlinx.coroutines.currentCoroutineContext().ensureActive() }

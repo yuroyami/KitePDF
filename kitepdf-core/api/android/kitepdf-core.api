@@ -198,6 +198,7 @@ public abstract interface class io/github/yuroyami/kitepdf/core/KitePage {
 	public abstract fun displayToDeviceBase ()Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;
 	public abstract fun getDisplayHeight ()D
 	public abstract fun getDisplayWidth ()D
+	public fun getDrawsHostFontText ()Ljava/lang/Boolean;
 	public abstract fun renderTo (Lio/github/yuroyami/kitepdf/core/render/KiteCanvas;Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;)V
 	public fun renderTo (Lio/github/yuroyami/kitepdf/core/render/KiteCanvas;Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;Lio/github/yuroyami/kitepdf/core/KiteCancellation;)V
 	public static synthetic fun renderTo$default (Lio/github/yuroyami/kitepdf/core/KitePage;Lio/github/yuroyami/kitepdf/core/render/KiteCanvas;Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;ILjava/lang/Object;)V
@@ -205,6 +206,7 @@ public abstract interface class io/github/yuroyami/kitepdf/core/KitePage {
 }
 
 public final class io/github/yuroyami/kitepdf/core/KitePage$DefaultImpls {
+	public static fun getDrawsHostFontText (Lio/github/yuroyami/kitepdf/core/KitePage;)Ljava/lang/Boolean;
 	public static fun renderTo (Lio/github/yuroyami/kitepdf/core/KitePage;Lio/github/yuroyami/kitepdf/core/render/KiteCanvas;Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;Lio/github/yuroyami/kitepdf/core/KiteCancellation;)V
 	public static synthetic fun renderTo$default (Lio/github/yuroyami/kitepdf/core/KitePage;Lio/github/yuroyami/kitepdf/core/render/KiteCanvas;Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;ILjava/lang/Object;)V
 	public static fun textContent (Lio/github/yuroyami/kitepdf/core/KitePage;)Lio/github/yuroyami/kitepdf/core/KiteStructuredText;

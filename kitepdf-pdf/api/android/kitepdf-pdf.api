@@ -867,6 +867,7 @@ public final class io/github/yuroyami/kitepdf/PdfPage : io/github/yuroyami/kitep
 	public final fun getDisplayBox ()Lio/github/yuroyami/kitepdf/core/KiteRectangle;
 	public fun getDisplayHeight ()D
 	public fun getDisplayWidth ()D
+	public fun getDrawsHostFontText ()Ljava/lang/Boolean;
 	public final fun getHeight ()D
 	public final fun getIndex ()I
 	public final fun getLabel ()Ljava/lang/String;

@@ -171,6 +171,8 @@ abstract interface io.github.yuroyami.kitepdf.core/KitePage { // io.github.yuroy
         abstract fun <get-displayHeight>(): kotlin/Double // io.github.yuroyami.kitepdf.core/KitePage.displayHeight.<get-displayHeight>|<get-displayHeight>(){}[0]
     abstract val displayWidth // io.github.yuroyami.kitepdf.core/KitePage.displayWidth|{}displayWidth[0]
         abstract fun <get-displayWidth>(): kotlin/Double // io.github.yuroyami.kitepdf.core/KitePage.displayWidth.<get-displayWidth>|<get-displayWidth>(){}[0]
+    open val drawsHostFontText // io.github.yuroyami.kitepdf.core/KitePage.drawsHostFontText|{}drawsHostFontText[0]
+        open fun <get-drawsHostFontText>(): kotlin/Boolean? // io.github.yuroyami.kitepdf.core/KitePage.drawsHostFontText.<get-drawsHostFontText>|<get-drawsHostFontText>(){}[0]
 
     abstract fun displayToDeviceBase(): io.github.yuroyami.kitepdf.core.render/KiteMatrix // io.github.yuroyami.kitepdf.core/KitePage.displayToDeviceBase|displayToDeviceBase(){}[0]
     abstract fun renderTo(io.github.yuroyami.kitepdf.core.render/KiteCanvas, io.github.yuroyami.kitepdf.core.render/KiteMatrix = ...) // io.github.yuroyami.kitepdf.core/KitePage.renderTo|renderTo(io.github.yuroyami.kitepdf.core.render.KiteCanvas;io.github.yuroyami.kitepdf.core.render.KiteMatrix){}[0]
