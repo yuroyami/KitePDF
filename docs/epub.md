@@ -383,7 +383,14 @@ The layout engine covers what real books use:
   images on the baseline, `::before`/`::after` generated content,
   `text-transform`, letter/word spacing, and small-caps. A page paints in the
   order of CSS 2.1, Appendix E: backgrounds and borders, then floats, then lines
-  and block images in document order, then positioned boxes by `z-index`. Known limitation:
+  and block images in document order, then positioned boxes by `z-index`.
+- **Visual effects**: `opacity` below 1 paints the box and its content as one
+  group at that opacity. `overflow` other than `visible` clips the content to
+  the padding box, and the box's own border stays. `visibility: hidden` keeps
+  the box's room and paints nothing of its own, and a child can show itself
+  again with `visibility: visible`. A box with an opacity or a clip paints
+  where a positioned box with `z-index: 0` paints. Inline elements take none
+  of the three. Known limitation:
   in `direction: rtl` text, `text-indent` shifts from the left edge rather
   than the inline-start (right) edge; lines still stay inside the content
   box.

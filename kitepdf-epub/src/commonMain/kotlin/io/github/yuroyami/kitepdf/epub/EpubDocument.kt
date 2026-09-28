@@ -30,6 +30,7 @@ import io.github.yuroyami.kitepdf.core.render.KiteImageData
 import io.github.yuroyami.kitepdf.core.render.KiteMatrix
 import io.github.yuroyami.kitepdf.core.render.KiteCanvas
 import io.github.yuroyami.kitepdf.core.render.KitePath
+import io.github.yuroyami.kitepdf.core.KiteRectangle
 import io.github.yuroyami.kitepdf.core.render.RgbColor
 
 /**
@@ -1243,6 +1244,16 @@ public class EpubPage internal constructor(
             page, cancellation,
             deco = { box -> paintBox(box, canvas, deviceCtm, margin, startY, bandBottom, ::yUp) },
             line = ::paintLine,
+            begin = { scope ->
+                val s = scope.box.style
+                // The padding box, in page space, y up.
+                val left = margin + scope.box.x + s.borderLeft.effective
+                val right = margin + scope.box.x + scope.box.borderBoxWidth - s.borderRight.effective
+                val top = yUp(scope.box.y + s.borderTop.effective)
+                val bottom = yUp(scope.box.bottom - s.borderBottom.effective)
+                openEffect(canvas, deviceCtm, scope, KiteRectangle(left, bottom, right, top))
+            },
+            end = { scope -> closeEffect(canvas, scope) },
             image = { box ->
                 // The picture fills the content box, inside the border and padding (#101).
                 val inset = imageInset(box.style)
@@ -1350,6 +1361,16 @@ public class EpubPage internal constructor(
             page, cancellation,
             deco = { box -> paintBoxVertical(box, canvas, deviceCtm, margin, startY, bandBottom, ::colX) },
             line = ::paintLine,
+            begin = { scope ->
+                val s = scope.box.style
+                // The block axis runs across the columns and the inline axis down the page.
+                val a = colX(scope.box.y + s.borderTop.effective)
+                val b = colX(scope.box.bottom - s.borderBottom.effective)
+                val top = margin + scope.box.x + s.borderLeft.effective
+                val bottom = margin + scope.box.x + scope.box.borderBoxWidth - s.borderRight.effective
+                openEffect(canvas, deviceCtm, scope, KiteRectangle(minOf(a, b), displayHeight - bottom, maxOf(a, b), displayHeight - top))
+            },
+            end = { scope -> closeEffect(canvas, scope) },
             image = { box ->
                 val inset = imageInset(box.style)
                 val left = minOf(colX(box.y + inset.blockStart), colX(box.bottom - inset.blockEnd))
@@ -1376,6 +1397,8 @@ public class EpubPage internal constructor(
         deco: (LayoutBox) -> Unit,
         line: (PositionedLine) -> Unit,
         image: (ImageBox) -> Unit,
+        begin: (EffectScope) -> Unit = {},
+        end: (EffectScope) -> Unit = {},
     ) {
         // Each step is its rank, then its kind, then its index in the page's list.
         val steps = LongArray(page.decoBoxes.size + page.lines.size + page.images.size)
@@ -1385,15 +1408,68 @@ public class EpubPage internal constructor(
         page.lines.forEachIndexed { i, l -> step(l.paintRank, 1, i) }
         page.images.forEachIndexed { i, box -> step(box.contentRank, 2, i) }
         steps.sort()
-        for (s in steps) {
-            if (cancellation?.isCancelled() == true) return
-            val index = (s and 0x3FFFFFFF).toInt()
-            when ((s ushr 30 and 3).toInt()) {
-                0 -> deco(page.decoBoxes[index])
-                1 -> line(page.lines[index])
-                else -> image(page.images[index])
+        // A box that paints as one group owns a stretch of ranks, so its group or clip opens
+        // before the first step in the stretch and closes after the last. Stretches nest (#28).
+        val scopes = effectScopes(page)
+        val open = ArrayList<EffectScope>()
+        var next = 0
+        try {
+            for (s in steps) {
+                if (cancellation?.isCancelled() == true) return
+                val rank = (s ushr 32).toInt()
+                while (open.isNotEmpty() && open.last().last < rank) end(open.removeAt(open.lastIndex))
+                while (next < scopes.size && scopes[next].first <= rank) {
+                    val scope = scopes[next++]
+                    if (scope.last < rank) continue
+                    begin(scope)
+                    open += scope
+                }
+                val index = (s and 0x3FFFFFFF).toInt()
+                // A box with visibility hidden keeps its room and paints nothing of its own (CSS 2.1, 11.2).
+                when ((s ushr 30 and 3).toInt()) {
+                    0 -> page.decoBoxes[index].let { if (it.style.visible) deco(it) }
+                    1 -> page.lines[index].let { if (it.owner?.style?.visible != false) line(it) }
+                    else -> page.images[index].let { if (it.style.visible) image(it) }
+                }
             }
+        } finally {
+            // A cancelled render still leaves the canvas balanced.
+            while (open.isNotEmpty()) end(open.removeAt(open.lastIndex))
         }
+    }
+
+    /** The ranks that one box wraps in a transparency group, or in a clip when [clip] (#28). */
+    private class EffectScope(val box: LayoutBox, val clip: Boolean, val first: Int, val last: Int)
+
+    /** The effect stretches on [page], outer ones first where they start at the same rank. */
+    private fun effectScopes(page: PageRender): List<EffectScope> {
+        if (page.effectBoxes.isEmpty()) return emptyList()
+        val scopes = ArrayList<EffectScope>()
+        for (box in page.effectBoxes) {
+            if (box.lastRank < box.decoRank) continue
+            if (box.style.opacity < 1.0) scopes += EffectScope(box, clip = false, box.decoRank, box.lastRank)
+            // Overflow clips the content, not the box's own background and border, which paint first.
+            if (box.style.clipsOverflow && box.lastRank > box.decoRank) scopes += EffectScope(box, clip = true, box.decoRank + 1, box.lastRank)
+        }
+        return scopes.sortedWith(compareBy<EffectScope> { it.first }.thenByDescending { it.last }.thenBy { it.clip })
+    }
+
+    /** Opens [scope]'s effect: a clip to [paddingBox], or a group over the page with the box's opacity. */
+    private fun openEffect(canvas: KiteCanvas, ctm: KiteMatrix, scope: EffectScope, paddingBox: KiteRectangle) {
+        if (scope.clip) {
+            val path = KitePath.Builder().apply { rectangle(paddingBox.left, paddingBox.bottom, paddingBox.width, paddingBox.height) }.build()
+            canvas.pushClip(path, ctm, evenOdd = false)
+        } else {
+            // The group spans the page, since content can reach outside its box.
+            canvas.beginTransparencyGroup(
+                KiteRectangle(0.0, 0.0, displayWidth, displayHeight), ctm,
+                isolated = true, knockout = false, alpha = scope.box.style.opacity, blendMode = KiteBlendMode.Normal,
+            )
+        }
+    }
+
+    private fun closeEffect(canvas: KiteCanvas, scope: EffectScope) {
+        if (scope.clip) canvas.popClip() else canvas.endTransparencyGroup()
     }
 
     /**

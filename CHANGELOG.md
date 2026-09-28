@@ -51,6 +51,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   book's duration, narrators and active classes. `EpubDocument.locateFragment`
   gives the page and the line rectangles of the element that a fragment names,
   so an app can highlight the clip that plays (#36).
+- EPUB pages paint `opacity`, `overflow` and `visibility`. A box below full
+  opacity paints with its content as one group, an overflow other than
+  `visible` clips the content to the padding box, and a hidden box keeps its
+  room and paints nothing of its own (#28).
 
 ### Changed
 

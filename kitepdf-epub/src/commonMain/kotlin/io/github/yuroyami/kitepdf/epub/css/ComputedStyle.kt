@@ -138,6 +138,12 @@ internal data class ComputedStyle(
     val lineThrough: DecorationLine? = null,
     /** `z-index` of a positioned box, null for `auto` (CSS 2.1, 9.9.1, #172). Not inherited. */
     val zIndex: Int? = null,
+    /** `opacity`, 0 to 1; below 1 the box and its content paint as one group (CSS Color 4, 14, #28). Not inherited. */
+    val opacity: Double = 1.0,
+    /** False for `visibility: hidden` or `collapse`: the box keeps its room and paints nothing of its own. Inherited. */
+    val visible: Boolean = true,
+    /** True for an `overflow` other than `visible`: the content is clipped to the padding box (#28). Not inherited. */
+    val clipsOverflow: Boolean = false,
 ) {
     val mono: Boolean get() = fontFamily == GenericFont.MONO
 

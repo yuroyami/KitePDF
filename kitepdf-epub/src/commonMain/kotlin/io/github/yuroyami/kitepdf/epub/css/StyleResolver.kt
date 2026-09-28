@@ -220,6 +220,13 @@ internal class StyleResolver(
         return b.build()
     }
 
+    /** A CSS `opacity`: a number or a percentage, clamped to 0..1, or null when it is neither. */
+    private fun opacityValue(v: String): Double? {
+        val t = v.trim()
+        val n = if (t.endsWith('%')) t.dropLast(1).trim().toDoubleOrNull()?.div(100.0) else t.toDoubleOrNull()
+        return n?.takeIf { it.isFinite() }?.coerceIn(0.0, 1.0)
+    }
+
     private fun apply(b: Builder, prop: String, v: String) {
         fun len(ref: Double) = CssValues.length(v, b.fontSizePt, rootFontSizePt, ref)
         when (prop) {
@@ -300,6 +307,16 @@ internal class StyleResolver(
                 "both" -> CssClear.BOTH; else -> CssClear.NONE
             }
             "z-index" -> b.zIndex = v.trim().toIntOrNull()
+            "opacity" -> opacityValue(v)?.let { b.opacity = it }
+            "visibility" -> when (v.trim().lowercase()) {
+                "hidden", "collapse" -> b.visible = false
+                "visible" -> b.visible = true
+            }
+            // A scroll container clips too, and a page cannot scroll, so every value but visible clips.
+            "overflow", "overflow-x", "overflow-y" -> when (v.trim().lowercase().substringBefore(' ')) {
+                "hidden", "clip", "scroll", "auto" -> b.clipsOverflow = true
+                "visible" -> if (prop == "overflow") b.clipsOverflow = false
+            }
             "position" -> b.position = when (v.trim().lowercase()) {
                 "absolute" -> CssPosition.ABSOLUTE; "fixed" -> CssPosition.FIXED
                 "relative" -> CssPosition.RELATIVE; else -> CssPosition.STATIC
@@ -558,6 +575,9 @@ internal class StyleResolver(
         var clear = CssClear.NONE // not inherited
         var tableLayoutFixed = false // not inherited
         var zIndex: Int? = null // not inherited
+        var opacity = 1.0 // not inherited
+        var visible = parent.visible // inherited
+        var clipsOverflow = false // not inherited
 
         fun build(): ComputedStyle {
             val outOfFlow = position == CssPosition.ABSOLUTE || position == CssPosition.FIXED || cssFloat != CssFloat.NONE
@@ -594,6 +614,7 @@ internal class StyleResolver(
                 minWidthPt, minHeightPt, maxHeightPt,
                 borderCollapse, borderSpacingPt,
                 cssFloat, clear, tableLayoutFixed, lineThrough, zIndex,
+                opacity, visible, clipsOverflow,
             )
         }
     }
