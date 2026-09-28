@@ -10,6 +10,7 @@ import androidx.compose.ui.use
 import io.github.yuroyami.kitepdf.PdfDocument
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
 /**
  * A zoom range that does not start at 1 routes the gestures by what shows: a drag pans a page
@@ -69,7 +70,8 @@ class MinZoomSceneTest {
                     assertEquals(2f, state.zoom, "$name: the zoom is clamped to the minimum")
                     drag(scene, driver, from = 130f, to = 100f)
                     driver.pumpFrames(30)
-                    assertEquals(-30f, state.panOffset.x, 1f, "$name: the drag did not pan the page")
+                    // The pan goes on after the release and slows down (#410), so it moves at least as far as the finger.
+                    assertTrue(state.panOffset.x <= -29f, "$name: the drag did not pan the page: ${state.panOffset.x}")
                     assertEquals(0, state.currentPage, "$name: the drag turned the page")
                 }
             }

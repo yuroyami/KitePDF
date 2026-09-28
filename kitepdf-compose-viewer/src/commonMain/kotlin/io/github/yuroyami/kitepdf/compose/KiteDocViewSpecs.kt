@@ -117,7 +117,9 @@ public sealed interface KiteDocLayout {
  * @param doubleTapEnabled double-tap toggles between [minZoom] and [doubleTapZoom].
  * @param doubleTapZoom the zoom a double tap goes to. It must be finite and above 0, and a
  *   double tap clamps it into [minZoom]..[maxZoom], as every zoom change is clamped.
- * @param panEnabled one-finger pan while zoomed in.
+ * @param panEnabled one-finger pan while zoomed in. A quick release lets the pan go on and
+ *   slow down, and in [KiteDocLayout.Paged] and [KiteDocLayout.Spread] a drag that goes on past
+ *   the edge of the page turns it.
  * @param resetZoomOnPageChange in [KiteDocLayout.Paged] and [KiteDocLayout.Spread], snap
  *   zoom back to [minZoom] when the reader lands on another page or spread. The page a
  *   pager first shows is not a change, so a zoom set before the pager appears stays.

@@ -1,5 +1,6 @@
 package io.github.yuroyami.kitepdf.compose
 
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
@@ -842,6 +843,12 @@ private fun PagedLayout(
 
     val scope = rememberCoroutineScope()
     val haptics = LocalHapticFeedback.current
+    // A drag past the edge of a zoomed page turns it, the way this pager turns (#410).
+    val direction = LocalLayoutDirection.current
+    val pageTurn = remember(layout, direction) {
+        val horizontal = layout.orientation == Orientation.Horizontal
+        PageTurn(layout.orientation, reversed = (horizontal && direction == LayoutDirection.Rtl) != layout.reverseLayout, spread = false)
+    }
     val pageContent: @Composable (Int) -> Unit = { index ->
         val isCurrent = index == pagerState.currentPage
         val page = state.pageAt(index)
@@ -859,7 +866,7 @@ private fun PagedLayout(
             zoom = if (isCurrent) ({ state.zoom }) else NO_ZOOM,
             pan = if (isCurrent) ({ state.panOffset }) else NO_PAN,
             gestures = if (isCurrent) {
-                Modifier.kiteTransformGestures(state, zoomSpec, scope, onTap).kiteSelectionGestures(state, haptics)
+                Modifier.kiteTransformGestures(state, zoomSpec, scope, onTap, pageTurn).kiteSelectionGestures(state, haptics)
             } else Modifier,
             settledZoom = if (isCurrent) settledZoom else 1f,
             renderSpec = renderSpec,
@@ -1669,6 +1676,12 @@ private fun SpreadLayout(
 
     val scope = rememberCoroutineScope()
     val haptics = LocalHapticFeedback.current
+    // A drag past the edge of a zoomed spread turns it, the way this pager turns (#410).
+    val direction = LocalLayoutDirection.current
+    val pageTurn = remember(layout, direction) {
+        val horizontal = layout.orientation == Orientation.Horizontal
+        PageTurn(layout.orientation, reversed = (horizontal && direction == LayoutDirection.Rtl) != layout.reverseLayout, spread = true)
+    }
     // Read through a derived state, so a zoom frame recomposes the pager only when the flag flips (#373).
     val overflows by remember(state) { derivedStateOf { state.overflows } }
     val pagerScrollEnabled = userScrollEnabled && !overflows && !state.isSelectionActive
@@ -1682,7 +1695,7 @@ private fun SpreadLayout(
             zoom = if (isCurrent) ({ state.zoom }) else NO_ZOOM,
             pan = if (isCurrent) ({ state.panOffset }) else NO_PAN,
             gestures = if (isCurrent) {
-                Modifier.kiteTransformGestures(state, zoomSpec, scope, onTap).kiteSelectionGestures(state, haptics)
+                Modifier.kiteTransformGestures(state, zoomSpec, scope, onTap, pageTurn).kiteSelectionGestures(state, haptics)
             } else Modifier,
             recordGeometry = isCurrent,
             settledZoom = if (isCurrent) settledZoom else 1f,

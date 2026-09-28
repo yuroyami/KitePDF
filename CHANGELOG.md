@@ -42,6 +42,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - On the desktop and the web, Ctrl or Cmd with the wheel zooms `KiteDocView`, and
   the page keys and Ctrl or Cmd with plus, minus and 0 work once a press gives the
   view the focus. A mouse press and drag on text selects at once (#411).
+- The pan of a zoomed page goes on after a quick release and slows down, and in
+  `Paged` and `Spread` a drag past the edge of a zoomed page turns it (#410).
 
 ## [0.11.0] - 2026-09-25
 
