@@ -65,6 +65,8 @@ internal class BoxBuilder(
         val sem = BoxSemantics.of(el.tag, el.attrs, parentSem)
         // A pronunciation on the block covers the text it holds itself (#39).
         speechHint(el, ancestors)?.let(inl::beginSpeech)
+        // The block's text carries the ids of the block and the elements around it (#36).
+        inl.beginIds((listOf(el) + ancestors).asReversed().mapNotNull { e -> e.attrs["id"]?.takeIf { it.isNotBlank() } })
 
         fun flush() {
             if (inl.hasContent()) {
@@ -108,6 +110,8 @@ internal class BoxBuilder(
             is KiteXmlNode.Element -> {
                 if (child.tag == "br") { inl.addBreak(); continue }
                 if (child.tag == "img" || child.tag == "image") {
+                    // An image's id is an anchor, as an inline element's is, so a link or a fragment finds its page (#36).
+                    child.attrs["id"]?.takeIf { it.isNotBlank() }?.let(pendingAnchors::add)
                     val src = child.attrs["src"] ?: child.attrs["href"] ?: child.attrs["xlink:href"]
                     if (src != null && src.isNotBlank()) {
                         val cs = resolver.compute(child, childAncestors, style)
@@ -515,6 +519,8 @@ internal class BoxBuilder(
         if (link != null) inl.beginLink(link)
         val speech = speechHint(el, ancestors)
         if (speech != null) inl.beginSpeech(speech)
+        val id = el.attrs["id"]?.takeIf { it.isNotBlank() }
+        if (id != null) inl.beginId(id)
         val background = inl.beginBackground(style.backgroundColor)
         try {
             if (el.tag == "ruby") { processRuby(el, style, ancestors, inl, anchorSink, hoist, parentSem); return }
@@ -528,6 +534,7 @@ internal class BoxBuilder(
                     if (child.tag == "br") { inl.addBreak(); continue }
                     if (child.tag == "img" || child.tag == "image") {
                         // Inline image: flows on the line, bottom on the baseline.
+                        child.attrs["id"]?.takeIf { it.isNotBlank() }?.let(anchorSink::add)
                         val src = child.attrs["src"] ?: child.attrs["href"] ?: child.attrs["xlink:href"]
                         if (src != null && src.isNotBlank()) {
                             val cs = resolver.compute(child, childAncestors, style)
@@ -586,6 +593,7 @@ internal class BoxBuilder(
             resolver.computePseudo(el, ancestors, style, PseudoSide.AFTER)?.let { inl.appendText(it.text, it.style) }
         } finally {
             inl.endBackground(background)
+            if (id != null) inl.endId()
             if (speech != null) inl.endSpeech()
             if (link != null) inl.endLink()
         }
@@ -693,6 +701,16 @@ internal class BoxBuilder(
 
         fun endSpeech() { speech = speechStack.removeLastOrNull() }
 
+        // The ids of the elements around the text, one list per element, outermost first (#36).
+        private val idStack = ArrayDeque<List<String>>()
+        private var ids: List<String> = emptyList()
+
+        fun beginIds(base: List<String>) { ids = base }
+
+        fun beginId(id: String) { idStack.addLast(ids); ids = ids + id }
+
+        fun endId() { ids = idStack.removeLastOrNull() ?: ids }
+
         /** The `<a href>` target in force, which a block lifted out of the link inherits. */
         val activeLink: String? get() = linkHref
 
@@ -792,6 +810,7 @@ internal class BoxBuilder(
             rubyGroup = rubyGroup, rubyText = rubyText,
             href = linkHref,
             speech = speech,
+            ids = ids,
             letterSpacingPt = style.letterSpacingPt, wordSpacingPt = style.wordSpacingPt,
             smallCaps = style.smallCaps,
             lineThrough = style.lineThrough,

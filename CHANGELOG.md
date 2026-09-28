@@ -46,6 +46,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `ssml:alphabet`, and the reading order gives an element with a pronunciation
   an item of its own. `EpubMetadata.pronunciationLexicons` lists the book's
   pronunciation lexicons (#39).
+- `EpubDocument.mediaOverlayOf` reads a chapter's media overlay into its clips,
+  with nested sequences flattened, and `EpubMetadata.narration` gives the
+  book's duration, narrators and active classes. `EpubDocument.locateFragment`
+  gives the page and the line rectangles of the element that a fragment names,
+  so an app can highlight the clip that plays (#36).
 
 ### Changed
 
@@ -138,6 +143,8 @@ with 0.10.0. The Changed section lists them.
 
 ### Fixed
 
+- A link or a fragment that names an image's `id` finds the image's page in an
+  EPUB. The id was never an anchor, so the link went to the chapter start (#36).
 - Viewer tap handlers now use current host callbacks after recomposition, so annotation
   actions do not retain the state from before a mark was created or edited.
 

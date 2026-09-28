@@ -292,6 +292,26 @@ In `KiteDocView`, place the player in the `pageOverlay` slot with
 `Modifier.displayRect(media.rect)`, and it stays on the box at any zoom (see
 [Compose viewer](compose-viewer.md#draw-over-a-place-on-a-page)).
 
+### Read-along narration
+
+A book with media overlays pairs each piece of its text with a clip of
+audio. `book.mediaOverlayOf(chapter)` gives a chapter's clips in document
+order, and `book.epubMetadata.narration` gives the book's duration, narrators
+and active classes. `book.locateFragment(clip.textHref)` gives the page that
+shows a clip's text and one rectangle per line of it, ready for a highlight:
+
+```kotlin
+val overlay = book.mediaOverlayOf(chapter) ?: return
+for (clip in overlay.clips) {
+    val audio = clip.audioHref?.let(book::resource) ?: continue
+    val where = book.locateFragment(clip.textHref)
+    play(audio, from = clip.clipBegin, to = clip.clipEnd, highlight = where)
+}
+```
+
+The engine plays nothing itself. Show the active class as a highlight colour,
+not as a new style, because a new style would lay the page out again.
+
 ### Scripted content and embedded documents
 
 This library runs no script. `book.isScripted(chapter)` says whether a chapter

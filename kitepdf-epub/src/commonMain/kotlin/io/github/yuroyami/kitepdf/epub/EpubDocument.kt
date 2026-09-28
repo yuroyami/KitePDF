@@ -133,6 +133,34 @@ public class EpubDocument internal constructor(
     public val scriptedChapters: List<Int> get() = parsed.spineIndices.filter(parsed::isScripted)
 
     /**
+     * [chapter]'s media overlay: the clips of its synchronised narration, in document order, or
+     * null when the chapter has none (#36). Parsed on first use, without laying the chapter out.
+     * [locateFragment] finds each clip's text on the page.
+     *
+     * @throws IndexOutOfBoundsException when [chapter] is not a chapter of the book.
+     */
+    public fun mediaOverlayOf(chapter: Int): EpubMediaOverlay? = parsed.mediaOverlay(chapter)
+
+    /**
+     * Where the element that [href] names is on screen: the page that shows its first line, and
+     * one rectangle per line of it on that page (#36). [href] is a zip path with a fragment, as
+     * [EpubOverlayClip.textHref] and [EpubPage.links] give it. An element without text of its own
+     * gives its page from the anchor map, with no rectangle. Null when the book has no such
+     * chapter or element. Lays out the chapter.
+     */
+    public fun locateFragment(href: String): EpubFragmentBox? {
+        val id = href.substringAfter('#', "").takeIf { it.isNotEmpty() } ?: return null
+        val chapter = chapterOfPath(href.substringBefore('#')) ?: return null
+        for ((index, page) in pagesIn(chapter).withIndex()) {
+            val rects = page.rectsOf(id)
+            if (rects.isNotEmpty()) return EpubFragmentBox(KiteLocation(chapter, index), rects)
+        }
+        val summary = summaryOf(chapter) ?: return null
+        val y = anchorYIn(summary, id) ?: return null
+        return EpubFragmentBox(KiteLocation(chapter, localPageOf(summary, y)), emptyList())
+    }
+
+    /**
      * The reader-origin cascade layer built from [settings]: universal rules
      * that outrank author-important, so the user's font/color/justify choice
      * always wins. Empty for all-default settings (zero cascade impact).
@@ -1088,6 +1116,33 @@ public class EpubPage internal constructor(
 
     /** The laid-out page, fetched per operation: holding it would defeat the budget. */
     private fun laidOut(): PageRender = doc.render(chapter, index)
+
+    /** One rectangle per line of the text inside the element [id] on this page, in display space (#36). */
+    internal fun rectsOf(id: String): List<io.github.yuroyami.kitepdf.core.KiteRectangle> {
+        val page = laidOut()
+        val out = ArrayList<io.github.yuroyami.kitepdf.core.KiteRectangle>()
+        for (line in page.lines) {
+            var start = Double.POSITIVE_INFINITY
+            var end = Double.NEGATIVE_INFINITY
+            for (run in line.runs) {
+                if (run.isAnnotation || id !in run.ids) continue
+                start = minOf(start, run.x)
+                end = maxOf(end, run.x + run.paintWidth)
+            }
+            if (start > end) continue
+            out += if (page.vertical) {
+                // A column: the text runs down the page, and the column spans the line's height across it.
+                val a = columnX(page, line.yTop)
+                val b = columnX(page, line.yTop + line.height)
+                io.github.yuroyami.kitepdf.core.KiteRectangle(minOf(a, b), page.margin + start, maxOf(a, b), page.margin + end)
+            } else {
+                io.github.yuroyami.kitepdf.core.KiteRectangle(
+                    page.margin + start, displayY(page, line.yTop), page.margin + end, displayY(page, line.yTop + line.height),
+                )
+            }
+        }
+        return out
+    }
 
     /**
      * The folder an image's SVG resolves its own links against: the folder of the image file

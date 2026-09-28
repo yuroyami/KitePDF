@@ -5,13 +5,17 @@ import io.github.yuroyami.kitepdf.core.xml.KiteXmlToken
 
 import io.github.yuroyami.kitepdf.core.zip.ZipReader
 
-/** One `<manifest>` entry. [fallback] is the id of the item to use when this one cannot be rendered. */
+/**
+ * One `<manifest>` entry. [fallback] is the id of the item to use when this one cannot be rendered.
+ * [mediaOverlay] is the id of the item that narrates this one (#36).
+ */
 internal class OpfItem(
     val id: String,
     val href: String,
     val mediaType: String?,
     val properties: String?,
     val fallback: String? = null,
+    val mediaOverlay: String? = null,
 ) {
     fun hasProperty(p: String): Boolean = properties?.split(' ', '\t', '\n')?.any { it == p } == true
 }
@@ -35,6 +39,10 @@ internal class OpfPackage(
     val spineProperties: List<String?> = emptyList(),
     /** `<meta property="primary-writing-mode">` ("vertical-rl" and friends), or null. */
     val primaryWritingMode: String? = null,
+    /** The media overlay metadata of the whole book (#36). */
+    val narration: EpubNarration = EpubNarration.NONE,
+    /** The `media:duration` of each media overlay item, by item id, in seconds (#36). */
+    val overlayDurations: Map<String, Double> = emptyMap(),
 ) {
     val itemsById: Map<String, OpfItem> = items.associateBy { it.id }
 
@@ -90,6 +98,8 @@ public class EpubMetadata internal constructor(
      * manifest lists, for a speech engine to read with [EpubDocument.resource] (#39).
      */
     public val pronunciationLexicons: List<String> = emptyList(),
+    /** The media overlay metadata of the book: duration, narrators and active classes (#36). */
+    public val narration: EpubNarration = EpubNarration.NONE,
 ) {
     public companion object {
         internal val EMPTY = EpubMetadata(null, emptyList(), null, null, null, false)
@@ -119,6 +129,10 @@ internal object Opf {
 
         var capture: String? = null
         var captureIdIsUnique = false
+        // Media overlay metadata: the whole book's, and the durations that refine one item (#36).
+        var captureRefines: String? = null
+        val media = HashMap<String, MutableList<String>>()
+        val overlayDurations = HashMap<String, Double>()
 
         for (t in KiteXml.tokenize(xml)) when (t) {
             is KiteXmlToken.Open -> {
@@ -128,7 +142,7 @@ internal object Opf {
                     "item" -> {
                         val id = t.attrs["id"]; val href = t.attrs["href"]
                         if (id != null && href != null) {
-                            items.add(OpfItem(id, href, t.attrs["media-type"], t.attrs["properties"], t.attrs["fallback"]))
+                            items.add(OpfItem(id, href, t.attrs["media-type"], t.attrs["properties"], t.attrs["fallback"], t.attrs["media-overlay"]))
                         }
                     }
                     "itemref" -> t.attrs["idref"]?.let { spine.add(it); spineProps.add(t.attrs["properties"]) }
@@ -144,6 +158,10 @@ internal object Opf {
                         }
                         if (t.attrs["name"] == "fixed-layout" && t.attrs["content"]?.equals("true", true) == true) {
                             renditionValues.getOrPut("layout") { "pre-paginated" }
+                        }
+                        if (property != null && property.startsWith("media:")) {
+                            capture = property
+                            captureRefines = t.attrs["refines"]?.trim()?.removePrefix("#")
                         }
                         if (t.attrs["property"] == "primary-writing-mode") capture = "primaryWritingMode"
                         if (t.attrs["name"] == "primary-writing-mode") primaryWritingMode = t.attrs["content"]?.trim()
@@ -165,6 +183,15 @@ internal object Opf {
                 else -> {
                     val name = capture
                     if (name != null && name.startsWith("rendition:")) renditionValues.getOrPut(name.removePrefix("rendition:")) { t.text.trim() }
+                    if (name != null && name.startsWith("media:")) {
+                        val value = t.text.trim()
+                        val refines = captureRefines
+                        when {
+                            value.isEmpty() -> Unit
+                            refines == null -> media.getOrPut(name) { ArrayList() }.add(value)
+                            name == "media:duration" -> SmilClock.seconds(value)?.let { overlayDurations.getOrPut(refines) { it } }
+                        }
+                    }
                 }
             }
             is KiteXmlToken.Close -> capture = null
@@ -175,6 +202,13 @@ internal object Opf {
             uniqueId ?: identifiers.firstOrNull(),
             title, creators, language, identifiers, metaCover,
             renditionValues, spineProps, primaryWritingMode,
+            narration = EpubNarration(
+                duration = media["media:duration"]?.firstNotNullOfOrNull { SmilClock.seconds(it) },
+                narrators = media["media:narrator"].orEmpty(),
+                activeClass = media["media:active-class"]?.firstOrNull(),
+                playbackActiveClass = media["media:playback-active-class"]?.firstOrNull(),
+            ),
+            overlayDurations = overlayDurations,
         )
     }
 }

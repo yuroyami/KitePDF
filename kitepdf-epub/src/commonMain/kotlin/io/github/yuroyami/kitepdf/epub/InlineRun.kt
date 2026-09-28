@@ -65,6 +65,11 @@ internal data class InlineRun(
     val backgroundColor: CssBackground? = null,
     /** The pronunciation of the element this run's text belongs to, or null (#39). */
     val speech: SpeechHint? = null,
+    /**
+     * The ids of the elements around this run's text, outermost first, so a fragment finds its
+     * lines (#36). One list per element, so runs of one element share it.
+     */
+    val ids: List<String> = emptyList(),
 ) {
     companion object {
         val BLACK = RgbColor(0.0, 0.0, 0.0)
