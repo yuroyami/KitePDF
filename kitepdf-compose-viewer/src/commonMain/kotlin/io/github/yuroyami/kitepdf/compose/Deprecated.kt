@@ -74,10 +74,19 @@ public typealias TextSelection = KiteTextSelection
 public typealias PageHit = KitePageHit
 
 /** Old callbacks took a [PdfAction]; EPUB links were faked into one. */
-private fun KiteLinkAction.toLegacyAction(): PdfAction = when (this) {
-    is KiteLinkAction.Pdf -> action
-    is KiteLinkAction.Uri -> PdfAction.Uri(uri, isMap = false, raw = PdfDictionary(emptyMap()))
+/**
+ * The link as the old `onLinkTap` took it, or null for a link it never saw. That callback only
+ * got the links the viewer could not follow, and a link out of the book as a URI action.
+ */
+private fun KiteLinkAction.toLegacyAction(): PdfAction? = when {
+    followedByViewer -> null
+    this is KiteLinkAction.Pdf -> action
+    else -> uri?.let { PdfAction.Uri(it, isMap = false, raw = PdfDictionary(emptyMap())) }
 }
+
+/** [cb] as a callback of the new `onLinkTap`, which sees every link. */
+internal fun legacyLinkTap(cb: (PdfAction) -> Boolean): (KiteLinkAction) -> Boolean =
+    { link -> link.toLegacyAction()?.let(cb) == true }
 
 @Deprecated(
     "Renamed to rememberKiteDocViewState, which takes any KiteDocument",
@@ -133,7 +142,7 @@ public fun PdfView(
         pagePlaceholder = pagePlaceholder,
         overlay = overlay,
         onTap = onTap,
-        onLinkTap = onLinkTap?.let { cb -> { link: KiteLinkAction -> cb(link.toLegacyAction()) } },
+        onLinkTap = onLinkTap?.let(::legacyLinkTap),
     )
 }
 
@@ -160,7 +169,7 @@ public fun PdfView(
         selectionEnabled = selectionEnabled,
         onPageRendered = onPageRendered,
         onTap = onTap,
-        onLinkTap = onLinkTap?.let { cb -> { link: KiteLinkAction -> cb(link.toLegacyAction()) } },
+        onLinkTap = onLinkTap?.let(::legacyLinkTap),
     )
 }
 
@@ -187,7 +196,7 @@ public fun EpubView(
         pageSpacing = pageSpacing,
         onPageRendered = onPageRendered,
         onTap = onTap,
-        onLinkTap = onLinkTap?.let { cb -> { link: KiteLinkAction -> cb(link.toLegacyAction()) } },
+        onLinkTap = onLinkTap?.let(::legacyLinkTap),
     )
 }
 

@@ -174,6 +174,8 @@ internal fun handleWidgetTap(
     val document = state.document as? PdfDocument
     // What the widget does on release, and what its /Next entry chains after it (#361).
     val actions = target.widget.action?.let { action -> document?.let { action.withNext(it) } ?: listOf(action) }.orEmpty()
+    // Where the widget sits, in display space, for an action that goes to the host.
+    val box = page.pageToDisplay(target.widget.rect ?: io.github.yuroyami.kitepdf.core.KiteRectangle(hit.x, hit.y, hit.x, hit.y))
     // The scripts of a widget may take a while, so they go to the script thread.
     val viewer = scope.coroutineContext[ContinuationInterceptor] ?: EmptyCoroutineContext
     // Each call is guarded, so a handler that fails is logged and the next call still runs (#365).
@@ -187,7 +189,7 @@ internal fun handleWidgetTap(
                 withContext(viewer) {
                     // A viewer dispatcher that never dispatches leaves this on the script thread (#443).
                     backOnComposeThread()
-                    performInViewer(state, document, onLinkTap, action)
+                    performInViewer(state, document, onLinkTap, action, hit.pageIndex, box)
                 }
             }
         }
@@ -222,21 +224,25 @@ private fun displayRectOf(page: KitePage, rect: io.github.yuroyami.kitepdf.core.
 
 /**
  * Performs a widget action that moves the viewer: a go-to in this document or a page-turn named
- * action. Any other action, such as a link, a submit or a print, goes to the host's [onLinkTap].
+ * action. Any other action, such as a link, a submit or a print, goes to the host's [onLinkTap],
+ * with the widget's page and its [box] in display space.
  */
 private suspend fun performInViewer(
     state: KiteDocViewState,
     document: PdfDocument?,
     onLinkTap: ((KiteLinkAction) -> Boolean)?,
     action: PdfAction,
+    pageIndex: Int,
+    box: io.github.yuroyami.kitepdf.core.KiteRectangle,
 ) {
+    fun toHost() = onLinkTap?.invoke(KiteLinkAction.Pdf(action, pageIndex, box, target = null))
     when (action) {
         is PdfAction.GoTo -> {
             val page = document?.resolveDestination(action.destination)?.pageIndex
-            if (page != null) state.animateScrollToPage(page) else onLinkTap?.invoke(KiteLinkAction.Pdf(action))
+            if (page != null) state.animateScrollToPage(page) else toHost()
         }
-        is PdfAction.Named -> if (action.name.turnsPage()) state.turnPage(action.name) else onLinkTap?.invoke(KiteLinkAction.Pdf(action))
-        else -> onLinkTap?.invoke(KiteLinkAction.Pdf(action))
+        is PdfAction.Named -> if (action.name.turnsPage()) state.turnPage(action.name) else toHost()
+        else -> toHost()
     }
 }
 

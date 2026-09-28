@@ -142,6 +142,16 @@ public final class io/github/yuroyami/kitepdf/core/KiteLink {
 	public fun toString ()Ljava/lang/String;
 }
 
+public final class io/github/yuroyami/kitepdf/core/KiteLinkKind : java/lang/Enum {
+	public static final field BIBLIOGRAPHY_REFERENCE Lio/github/yuroyami/kitepdf/core/KiteLinkKind;
+	public static final field GLOSSARY_REFERENCE Lio/github/yuroyami/kitepdf/core/KiteLinkKind;
+	public static final field LINK Lio/github/yuroyami/kitepdf/core/KiteLinkKind;
+	public static final field NOTE_REFERENCE Lio/github/yuroyami/kitepdf/core/KiteLinkKind;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lio/github/yuroyami/kitepdf/core/KiteLinkKind;
+	public static fun values ()[Lio/github/yuroyami/kitepdf/core/KiteLinkKind;
+}
+
 public final class io/github/yuroyami/kitepdf/core/KiteLocation : java/lang/Comparable {
 	public static final field Companion Lio/github/yuroyami/kitepdf/core/KiteLocation$Companion;
 	public fun <init> (II)V

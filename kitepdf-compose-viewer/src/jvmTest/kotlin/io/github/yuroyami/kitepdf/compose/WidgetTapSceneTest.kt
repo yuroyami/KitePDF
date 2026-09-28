@@ -277,8 +277,14 @@ class WidgetTapSceneTest {
                 scene.use {
                     tap(55f, 160f)
                     driver.pumpUntilState { links.isNotEmpty() }
-                    val uri = (links.single() as KiteLinkAction.Pdf).action as PdfAction.Uri
+                    val link = links.single() as KiteLinkAction.Pdf
+                    val uri = link.action as PdfAction.Uri
                     assertEquals("https://example.com/", uri.uri)
+                    // The widget's page and its box, in display space, where the reader tapped.
+                    assertEquals(0, link.pageIndex)
+                    // The button's /Rect [20 20 90 60] on a 200 pt page is y 140 to 180 from the top.
+                    assertEquals(io.github.yuroyami.kitepdf.core.KiteRectangle(20.0, 140.0, 90.0, 180.0), link.rect)
+                    assertEquals(null, link.target)
                     assertTrue(scripts.events.indexOf("action go JavaScript") < scripts.events.indexOf("link"), "${scripts.events}")
                 }
             }

@@ -92,12 +92,4 @@ class DeprecatedAliasTest {
         assertEquals(null, image?.kind)
         assertEquals(KiteImageData.Kind.RAW, KiteImageData.Kind.valueOf("RAW"))
     }
-
-    @Test
-    fun old_link_callbacks_still_receive_a_pdf_action() {
-        // The deprecated composables map KiteLinkAction back to the old
-        // payload, including the fabricated URI action EPUB links used to get.
-        val fromEpub = KiteLinkAction.Uri("https://example.org/out")
-        assertEquals("https://example.org/out", fromEpub.uri)
-    }
 }
