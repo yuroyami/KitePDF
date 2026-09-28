@@ -129,6 +129,66 @@ class EpubVisualCssTest {
         assertColor(blurred, 80, 66, 255, 255, 255, "inside a box without a background", tol = 2)
     }
 
+    /**
+     * A book whose chapter sits in `OEBPS/text` and links `OEBPS/css/deep/style.css`, which holds
+     * [css], with the red picture at `OEBPS/images/red.png`. A url such as `../../images/red.png`
+     * finds the picture only against the sheet's folder.
+     */
+    private fun linkedRaster(css: String, body: String): BufferedImage {
+        val container = """<?xml version="1.0"?><container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container"><rootfiles><rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/></rootfiles></container>"""
+        val opf = """<?xml version="1.0"?><package xmlns="http://www.idpf.org/2007/opf" version="3.0"><manifest>""" +
+            """<item id="c1" href="text/c1.xhtml" media-type="application/xhtml+xml"/><item id="css" href="css/deep/style.css" media-type="text/css"/>""" +
+            """<item id="red" href="images/red.png" media-type="image/png"/></manifest><spine><itemref idref="c1"/></spine></package>"""
+        val chapter = """<?xml version="1.0"?><html xmlns="http://www.w3.org/1999/xhtml"><head><link rel="stylesheet" href="../css/deep/style.css"/></head><body>$body</body></html>"""
+        val bytes = EpubCorpus.storedZip(
+            listOf(
+                "mimetype" to "application/epub+zip".encodeToByteArray(),
+                "META-INF/container.xml" to container.encodeToByteArray(),
+                "OEBPS/content.opf" to opf.encodeToByteArray(),
+                "OEBPS/text/c1.xhtml" to chapter.encodeToByteArray(),
+                "OEBPS/css/deep/style.css" to css.encodeToByteArray(),
+                "OEBPS/images/red.png" to EpubCorpus.redPng(),
+            ),
+        )
+        return EpubCorpus.rasterize(EpubDocument.open(bytes).pages.first())
+    }
+
+    @Test
+    fun a_background_image_resolves_against_its_sheet_and_is_sized_placed_and_repeated() {
+        val stretched = linkedRaster(".bg { background-image: url(../../images/red.png); background-size: 100% 100%; }", """<div class="bg" style="width:100px;height:100px"></div>""")
+        assertColor(stretched, 50, 50, 255, 0, 0, "the top-left of the stretched picture")
+        assertColor(stretched, 120, 120, 255, 0, 0, "the bottom-right of the stretched picture")
+        assertColor(stretched, 130, 60, 255, 255, 255, "right of the box")
+
+        // One 15 point copy in the middle of the 75 point box, from the shorthand.
+        val centred = linkedRaster(".bg { background: url(../../images/red.png) no-repeat center / 20px 20px; }", """<div class="bg" style="width:100px;height:100px"></div>""")
+        assertColor(centred, 85, 85, 255, 0, 0, "the middle of the box")
+        assertColor(centred, 55, 55, 255, 255, 255, "the corner of the box")
+
+        // Small copies repeat over the whole box.
+        val tiled = linkedRaster(".bg { background-image: url(../../images/red.png); background-size: 10px 10px; }", """<div class="bg" style="width:100px;height:100px"></div>""")
+        for ((x, y) in listOf(50 to 50, 85 to 85, 120 to 120, 60 to 110)) assertColor(tiled, x, y, 255, 0, 0, "a tile")
+    }
+
+    @Test
+    fun a_linear_gradient_runs_along_its_angle() {
+        val across = raster("""<div style="width:200px;height:50px;background-image:linear-gradient(to right, #000000, #ffffff)"></div>""")
+        // The box runs from 48 to 198 across.
+        assertTrue(rgb(across, 52, 60).first < 40, "the left end is not black: ${rgb(across, 52, 60)}")
+        assertTrue(rgb(across, 194, 60).first > 215, "the right end is not white: ${rgb(across, 194, 60)}")
+        assertColor(across, 123, 60, 128, 128, 128, "the middle", tol = 16)
+        val degrees = raster("""<div style="width:200px;height:50px;background-image:linear-gradient(90deg, #000000, #ffffff)"></div>""")
+        assertColor(degrees, 123, 60, 128, 128, 128, "the middle of the 90 degree gradient", tol = 16)
+        // Down by default, with a stop placed at 25%: black to 25%, then to white. The box runs
+        // from 48 to 198 down, so row 80 is 21% of the way, black only because of the stop.
+        val down = raster("""<div style="width:100px;height:200px;background-image:linear-gradient(#000000 25%, #ffffff)"></div>""")
+        assertTrue(rgb(down, 80, 80).first < 20, "the top quarter is not black: ${rgb(down, 80, 80)}")
+        assertTrue(rgb(down, 80, 190).first > 200, "the bottom is not white")
+        // Stops that differ in alpha do not paint.
+        val fade = raster("""<div style="width:200px;height:50px;background-image:linear-gradient(to right, #000000, rgba(0,0,0,0))"></div>""")
+        assertColor(fade, 60, 60, 255, 255, 255, "a gradient with a fade")
+    }
+
     @Test
     fun hidden_overflow_clips_the_content_but_not_the_border() {
         val child = """<div style="width:300px;height:40px;background-color:#00ff00"></div>"""

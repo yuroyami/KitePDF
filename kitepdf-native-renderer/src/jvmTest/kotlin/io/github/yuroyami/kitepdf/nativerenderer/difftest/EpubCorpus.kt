@@ -146,7 +146,7 @@ object EpubCorpus {
         return sig + chunk("IHDR", be32(2) + be32(2) + byteArrayOf(8, 2, 0, 0, 0)) + chunk("IDAT", zlib) + chunk("IEND", ByteArray(0))
     }
 
-    private fun storedZip(entries: List<Pair<String, ByteArray>>): ByteArray {
+    internal fun storedZip(entries: List<Pair<String, ByteArray>>): ByteArray {
         val out = ArrayList<Byte>()
         fun u16(v: Int) { out.add((v and 0xFF).toByte()); out.add(((v ushr 8) and 0xFF).toByte()) }
         fun u32(v: Long) { var s = 0; while (s < 32) { out.add(((v ushr s) and 0xFF).toByte()); s += 8 } }

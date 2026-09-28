@@ -220,6 +220,47 @@ internal class StyleResolver(
         return b.build()
     }
 
+    /** The background parser, with lengths in this element's font. */
+    private fun backgrounds(b: Builder) = BackgroundParser { CssValues.length(it, b.fontSizePt, rootFontSizePt, 0.0) }
+
+    /**
+     * The layer part of the `background` shorthand: its image, position, size after a slash and
+     * repeat. As in CSS, the shorthand resets what it does not name (CSS Backgrounds 3, 3.10).
+     */
+    private fun backgroundShorthand(b: Builder, v: String) {
+        val parser = backgrounds(b)
+        val layer = CssParser.splitTopLevel(v, ',').firstOrNull()?.trim().orEmpty()
+        var image: CssBackgroundImage? = null
+        val position = ArrayList<String>()
+        val size = ArrayList<String>()
+        var inSize = false
+        var repeat: Pair<Boolean, Boolean>? = null
+        for (token in CssParser.splitTopLevel(layer.replace(WHITESPACE, " "), ' ').filter { it.isNotBlank() }) {
+            val lower = token.trim().lowercase()
+            if (lower.startsWith("url(") || lower.startsWith("linear-gradient(")) {
+                image = parser.image(token.trim())
+                continue
+            }
+            // A slash starts the size, with or without spaces around it.
+            for ((i, part) in lower.split('/').withIndex()) {
+                if (i > 0) inSize = true
+                if (part.isEmpty()) continue
+                when {
+                    parser.repeat(part) != null -> repeat = parser.repeat(part)
+                    part == "cover" || part == "contain" || part == "auto" -> size += part
+                    part in POSITION_WORDS || parser.offset(part) != null -> if (inSize) size += part else position += part
+                }
+            }
+        }
+        b.bgImage = image
+        b.bgSize = size.takeIf { it.isNotEmpty() }?.let { parser.size(it.joinToString(" ")) } ?: CssBackgroundSize()
+        val (x, y) = position.takeIf { it.isNotEmpty() }?.let { parser.position(it.joinToString(" ")) } ?: (CssOffset.ZERO to CssOffset.ZERO)
+        b.bgX = x
+        b.bgY = y
+        b.bgRepeatX = repeat?.first ?: true
+        b.bgRepeatY = repeat?.second ?: true
+    }
+
     /** One radius: a length in points, or a percentage of the box's side, or null when it is neither. */
     private fun radiusValue(b: Builder, raw: String): CssRadius? {
         val t = raw.trim()
@@ -312,8 +353,17 @@ internal class StyleResolver(
             }
             "color" -> CssValues.color(v)?.let { b.color = it }
             "background-color" -> b.backgroundColor = background(v)
-            "background" -> CssParser.splitTopLevel(v.trim().replace(WHITESPACE, " "), ' ')
-                .firstOrNull { CssValues.alpha(it) != null }?.let { b.backgroundColor = background(it) }
+            "background" -> {
+                CssParser.splitTopLevel(v.trim().replace(WHITESPACE, " "), ' ')
+                    .firstOrNull { CssValues.alpha(it) != null }?.let { b.backgroundColor = background(it) }
+                backgroundShorthand(b, v)
+            }
+            "background-image" -> b.bgImage = backgrounds(b).image(v)
+            "background-size" -> backgrounds(b).size(v)?.let { b.bgSize = it }
+            "background-position" -> backgrounds(b).position(v)?.let { (x, y) -> b.bgX = x; b.bgY = y }
+            "background-position-x" -> backgrounds(b).offset(v)?.let { b.bgX = it }
+            "background-position-y" -> backgrounds(b).offset(v)?.let { b.bgY = it }
+            "background-repeat" -> backgrounds(b).repeat(v)?.let { (x, y) -> b.bgRepeatX = x; b.bgRepeatY = y }
             "text-align" -> parseAlign(v)?.let { b.textAlign = it }
             "text-indent" -> len(refWidthPt)?.let { b.textIndentPt = it }
             "line-height" -> resolveLineHeight(b, v)
@@ -655,6 +705,12 @@ internal class StyleResolver(
         var clipsOverflow = false // not inherited
         var radii: CornerRadii? = null // not inherited
         var shadows: List<BoxShadow> = emptyList() // not inherited
+        var bgImage: CssBackgroundImage? = null // not inherited
+        var bgSize = CssBackgroundSize()
+        var bgX = CssOffset.ZERO
+        var bgY = CssOffset.ZERO
+        var bgRepeatX = true
+        var bgRepeatY = true
 
         fun build(): ComputedStyle {
             val outOfFlow = position == CssPosition.ABSOLUTE || position == CssPosition.FIXED || cssFloat != CssFloat.NONE
@@ -692,11 +748,13 @@ internal class StyleResolver(
                 borderCollapse, borderSpacingPt,
                 cssFloat, clear, tableLayoutFixed, lineThrough, zIndex,
                 opacity, visible, clipsOverflow, radii, shadows,
+                bgImage?.let { CssBackgroundLayer(it, bgSize, bgX, bgY, bgRepeatX, bgRepeatY) },
             )
         }
     }
 
     private companion object {
+        val POSITION_WORDS = setOf("left", "right", "top", "bottom", "center")
         const val INLINE_SPEC = 0xFFFFFF
         val WHITESPACE = Regex("\\s+")
     }

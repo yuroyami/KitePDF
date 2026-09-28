@@ -58,6 +58,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - EPUB pages paint `border-radius` on the background, the border, block images
   and overflow clips, and `box-shadow` as outer shadows whose blur fades in a
   few steps (#28).
+- EPUB pages paint a `background-image`, a raster or SVG file or a
+  `linear-gradient`, with its size, position and repeat. A `url()` in a
+  stylesheet now resolves against that stylesheet's folder (#28).
 
 ### Changed
 

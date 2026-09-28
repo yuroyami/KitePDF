@@ -176,7 +176,7 @@ internal class ParsedEpub(
             tree, docDir,
             onLink = { sheet -> rules.addAll(sheetRules(sheet)) },
             onInline = { text ->
-                val css = CssParser.parseAll(inlineImports(zip, text, docDir, 0, HashSet()), Origin.AUTHOR)
+                val css = CssParser.parseAll(absoluteUrls(inlineImports(zip, text, docDir, 0, HashSet()), docDir), Origin.AUTHOR)
                 rules.addAll(css.rules)
                 for (rule in css.fontFaces) loadFace(rule, docDir)?.let(faces::add)
             },
@@ -205,7 +205,7 @@ internal class ParsedEpub(
     private fun sheetRules(path: String): List<StyleRule> {
         sheetLock.withLock { sheetCache[path] }?.let { return it }
         val text = zip.readText(path) ?: ""
-        val rules = CssParser.parse(inlineImports(zip, text, dirOf(path), 0, hashSetOf(path)), Origin.AUTHOR)
+        val rules = CssParser.parse(absoluteUrls(inlineImports(zip, text, dirOf(path), 0, hashSetOf(path)), dirOf(path)), Origin.AUTHOR)
         return sheetLock.withLock { sheetCache.getOrPut(path) { sheetCount++; rules } }
     }
 
@@ -369,11 +369,28 @@ internal class ParsedEpub(
             return IMPORT_RE.replace(css) { m ->
                 val path = EpubDocument.resolvePath(baseDir, m.groupValues[1])
                 if (!visited.add(path)) ""
-                else zip.readText(path)?.let { inlineImports(zip, it, dirOf(path), depth + 1, visited) } ?: ""
+                else zip.readText(path)?.let { absoluteUrls(inlineImports(zip, it, dirOf(path), depth + 1, visited), dirOf(path)) } ?: ""
             }
         }
 
         private fun dirOf(path: String): String = path.substringBeforeLast('/', "")
+
+        /**
+         * [css] with every relative `url()` made absolute against [baseDir], with a leading slash,
+         * so a rule keeps the folder of its own sheet in whichever document it applies (#28).
+         */
+        internal fun absoluteUrls(css: String, baseDir: String): String {
+            if (!css.contains("url(", ignoreCase = true)) return css
+            return URL_RE.replace(css) { m ->
+                val raw = m.groupValues[2].trim()
+                if (raw.isEmpty() || raw.startsWith('/') || raw.startsWith('#') || URL_SCHEME.containsMatchIn(raw)) m.value
+                else "url(\"/" + EpubDocument.resolvePath(baseDir, raw) + "\")"
+            }
+        }
+
+        private val URL_RE = Regex("""url\(\s*(["']?)([^"')]*)\1\s*\)""", RegexOption.IGNORE_CASE)
+
+        private val URL_SCHEME = Regex("^[a-zA-Z][a-zA-Z0-9+.-]*:")
 
         private val VIEWBOX_SEPARATOR = Regex("[\\s,]+")
 
