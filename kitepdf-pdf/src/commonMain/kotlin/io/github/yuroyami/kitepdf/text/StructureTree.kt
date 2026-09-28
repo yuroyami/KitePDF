@@ -1,11 +1,13 @@
 package io.github.yuroyami.kitepdf.text
 
 import io.github.yuroyami.kitepdf.PdfDocument
+import io.github.yuroyami.kitepdf.core.KiteRectangle
 import io.github.yuroyami.kitepdf.core.parser.PdfArray
 import io.github.yuroyami.kitepdf.core.parser.PdfDictionary
 import io.github.yuroyami.kitepdf.core.parser.PdfInt
 import io.github.yuroyami.kitepdf.core.parser.PdfName
 import io.github.yuroyami.kitepdf.core.parser.PdfObject
+import io.github.yuroyami.kitepdf.core.parser.PdfReal
 import io.github.yuroyami.kitepdf.core.parser.PdfReference
 import io.github.yuroyami.kitepdf.core.parser.PdfString
 
@@ -15,6 +17,8 @@ import io.github.yuroyami.kitepdf.core.parser.PdfString
  *
  * @property type the standard structure type that the role map leads to, such as `P` or `H1`.
  * @property ownType the type the element gives itself, before the role map.
+ * @property bbox the box that the element's layout attributes give it, in the default user space
+ *   of its page, or null (#427).
  */
 internal class StructElement(
     val type: String,
@@ -23,6 +27,7 @@ internal class StructElement(
     val actualText: String?,
     val lang: String?,
     val kids: List<StructKid>,
+    val bbox: KiteRectangle? = null,
 )
 
 /** A kid of a [StructElement]: a marked-content sequence on a page, or another element. */
@@ -40,6 +45,7 @@ internal object StructureTree {
     fun parse(document: PdfDocument): List<StructElement>? {
         val root = runCatching { document.catalog.getDict("StructTreeRoot", document) }.getOrNull() ?: return null
         val roleMap = runCatching { root.getDict("RoleMap", document) }.getOrNull()
+        val classMap = runCatching { root.getDict("ClassMap", document) }.getOrNull()
         val visited = HashSet<Long>()
         var budget = MAX_ELEMENTS
 
@@ -60,6 +66,41 @@ internal object StructureTree {
                 t = next
             }
             return t
+        }
+
+        fun number(o: PdfObject?): Double? = when (val v = resolve(o)) {
+            is PdfInt -> v.value.toDouble()
+            is PdfReal -> v.value
+            else -> null
+        }
+
+        // The BBox of an attribute object, or of a list of them with revision numbers between.
+        fun bboxIn(o: PdfObject?): KiteRectangle? {
+            fun one(v: PdfObject?): KiteRectangle? {
+                val attributes = resolve(v) as? PdfDictionary ?: return null
+                val owner = attributes.getName("O")
+                if (owner != null && owner != "Layout") return null
+                val box = resolve(attributes["BBox"]) as? PdfArray ?: return null
+                if (box.size < 4) return null
+                val n = List(4) { number(box[it]) ?: return null }
+                return KiteRectangle(n[0], n[1], n[2], n[3]).normalized()
+            }
+            return when (val v = resolve(o)) {
+                is PdfArray -> v.firstNotNullOfOrNull { one(it) }
+                else -> one(v)
+            }
+        }
+
+        // ISO 32000-1, 14.8.5.4.3: the layout BBox of a figure, a formula or a table, from the
+        // element's own attributes, then from its attribute classes (14.7.5.2).
+        fun bboxOf(dict: PdfDictionary): KiteRectangle? {
+            bboxIn(dict["A"])?.let { return it }
+            val classes = when (val c = resolve(dict["C"])) {
+                is PdfName -> listOf(c)
+                is PdfArray -> c.mapNotNull { resolve(it) as? PdfName }
+                else -> emptyList()
+            }
+            return classes.firstNotNullOfOrNull { bboxIn(classMap?.get(it.value)) }
         }
 
         fun kidsOf(raw: PdfObject?, page: Long?, depth: Int, into: MutableList<StructKid>, element: (PdfReference?, PdfDictionary, Long?, Int) -> StructElement?) {
@@ -94,7 +135,10 @@ internal object StructureTree {
             val pg = pageOf(dict) ?: page
             val kids = ArrayList<StructKid>()
             kidsOf(dict["K"], pg, depth, kids, ::element)
-            return StructElement(standard(own), own, text(dict, "Alt"), text(dict, "ActualText"), text(dict, "Lang"), kids)
+            return StructElement(
+                standard(own), own, text(dict, "Alt"), text(dict, "ActualText"), text(dict, "Lang"), kids,
+                runCatching { bboxOf(dict) }.getOrNull(),
+            )
         }
 
         val roots = ArrayList<StructKid>()

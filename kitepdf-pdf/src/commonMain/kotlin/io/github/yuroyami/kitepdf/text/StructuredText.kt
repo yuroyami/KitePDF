@@ -11,6 +11,7 @@ import io.github.yuroyami.kitepdf.core.render.KiteMatrix
 import io.github.yuroyami.kitepdf.render.PageRenderer
 import io.github.yuroyami.kitepdf.core.render.KiteCanvas
 import io.github.yuroyami.kitepdf.core.render.KitePath
+import io.github.yuroyami.kitepdf.core.render.KiteShading
 import io.github.yuroyami.kitepdf.core.render.RgbColor
 
 /**
@@ -371,7 +372,7 @@ internal object StructuredTextExtractor {
 
 /**
  * Canvas that records every `drawText` call. Path and image ops are
- * dropped. They don't contribute to text extraction.
+ * dropped, unless [inkBoxes] asks for their boxes.
  */
 internal class TextCollectorCanvas : KiteCanvas {
     data class TextRun(
@@ -456,10 +457,63 @@ internal class TextCollectorCanvas : KiteCanvas {
     /** Reads the marked-content id of the content being drawn, when a reading order needs it (#208). */
     var mcid: () -> Int? = { null }
 
+    /**
+     * When set, the device box of every path and image drawn, by the marked-content id it
+     * belongs to, so a reading order can place content that is not text (#427).
+     */
+    var inkBoxes: MutableMap<Int, KiteRectangle>? = null
+
+    // The box of each open clip, cut by the ones outside it, while inkBoxes is set. Null is empty.
+    private val clips = ArrayDeque<KiteRectangle?>()
+
+    private fun ink(path: KitePath?, ctm: KiteMatrix) {
+        val boxes = inkBoxes ?: return
+        val id = mcid() ?: return
+        val box = clipped(boxOf(path, ctm)) ?: return
+        boxes[id] = boxes[id]?.union(box) ?: box
+    }
+
+    /** [box] cut by the open clips, or null when nothing of it shows. */
+    private fun clipped(box: KiteRectangle?): KiteRectangle? {
+        box ?: return null
+        if (clips.isEmpty()) return box
+        val clip = clips.last() ?: return null
+        val cut = KiteRectangle(maxOf(box.left, clip.left), maxOf(box.bottom, clip.bottom), minOf(box.right, clip.right), minOf(box.top, clip.top))
+        return cut.takeIf { it.left <= it.right && it.bottom <= it.top }
+    }
+
+    /** The device box of [path], or of the unit square an image fills when it is null. */
+    private fun boxOf(path: KitePath?, ctm: KiteMatrix): KiteRectangle? {
+        var left = Double.POSITIVE_INFINITY
+        var bottom = Double.POSITIVE_INFINITY
+        var right = Double.NEGATIVE_INFINITY
+        var top = Double.NEGATIVE_INFINITY
+        fun point(x: Double, y: Double) {
+            val px = ctm.transformX(x, y)
+            val py = ctm.transformY(x, y)
+            if (!px.isFinite() || !py.isFinite()) return
+            left = minOf(left, px); right = maxOf(right, px)
+            bottom = minOf(bottom, py); top = maxOf(top, py)
+        }
+        // An image fills the unit square of its matrix. A curve stays inside its control points.
+        if (path == null) {
+            point(0.0, 0.0); point(1.0, 0.0); point(0.0, 1.0); point(1.0, 1.0)
+        } else {
+            for (s in path.segments) when (s) {
+                is KitePath.Segment.MoveTo -> point(s.x, s.y)
+                is KitePath.Segment.LineTo -> point(s.x, s.y)
+                is KitePath.Segment.CurveTo -> { point(s.x1, s.y1); point(s.x2, s.y2); point(s.x3, s.y3) }
+                is KitePath.Segment.QuadTo -> { point(s.x1, s.y1); point(s.x2, s.y2) }
+                KitePath.Segment.Close -> Unit
+            }
+        }
+        return if (left > right || bottom > top) null else KiteRectangle(left, bottom, right, top)
+    }
+
     override fun beginPage(widthPt: Double, heightPt: Double, deviceCtm: KiteMatrix) {}
     override fun endPage() {}
-    override fun fillPath(path: KitePath, ctm: KiteMatrix, color: RgbColor, evenOdd: Boolean, alpha: Double, blendMode: KiteBlendMode) {}
-    override fun strokePath(path: KitePath, ctm: KiteMatrix, color: RgbColor, lineWidth: Double, alpha: Double, blendMode: KiteBlendMode, dashArray: List<Double>?, dashPhase: Double, lineCap: Int, lineJoin: Int, miterLimit: Double) {}
+    override fun fillPath(path: KitePath, ctm: KiteMatrix, color: RgbColor, evenOdd: Boolean, alpha: Double, blendMode: KiteBlendMode): Unit = ink(path, ctm)
+    override fun strokePath(path: KitePath, ctm: KiteMatrix, color: RgbColor, lineWidth: Double, alpha: Double, blendMode: KiteBlendMode, dashArray: List<Double>?, dashPhase: Double, lineCap: Int, lineJoin: Int, miterLimit: Double): Unit = ink(path, ctm)
     override val resolvesGlyphOutlines: Boolean get() = false
     override fun drawGlyphs(
         glyphs: List<TextGlyph>, fontSize: Double, unitsPerEm: Int, hasOutlines: Boolean,
@@ -467,9 +521,18 @@ internal class TextCollectorCanvas : KiteCanvas {
     ) {
         runs.add(TextRun(glyphs, fontSpec, fontSize, textToDevice, mcid()))
     }
-    override fun pushClip(path: KitePath, ctm: KiteMatrix, evenOdd: Boolean) {}
-    override fun popClip() {}
-    override fun drawImage(image: KiteImageData, ctm: KiteMatrix, alpha: Double) {}
+    override fun pushClip(path: KitePath, ctm: KiteMatrix, evenOdd: Boolean) {
+        if (inkBoxes != null) clips.addLast(clipped(boxOf(path, ctm)))
+    }
+    override fun popClip() {
+        if (inkBoxes != null) clips.removeLastOrNull()
+    }
+
+    // A shading fills its clip path. With none, it fills a clip region this canvas cannot see, so it adds no box.
+    override fun fillShading(shading: KiteShading, ctm: KiteMatrix, clipPath: KitePath?, alpha: Double, blendMode: KiteBlendMode) {
+        if (clipPath != null) ink(clipPath, ctm)
+    }
+    override fun drawImage(image: KiteImageData, ctm: KiteMatrix, alpha: Double): Unit = ink(null, ctm)
 }
 
 /**

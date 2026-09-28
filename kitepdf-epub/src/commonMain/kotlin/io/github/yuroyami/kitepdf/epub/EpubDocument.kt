@@ -2173,13 +2173,16 @@ public class EpubPage internal constructor(
         var speech: SpeechHint? = null
         var top = 0.0
         var words = ArrayList<String>()
+        // Where the words are on the page, for a screen reader's focus (#427).
+        var bounds: KiteRectangle? = null
 
         fun flushText() {
             val o = owner
             if (o != null && words.isNotEmpty()) {
-                readingItem(o.semantics, words.joinToString(" "), speech)?.let { out.add(top to it) }
+                readingItem(o.semantics, words.joinToString(" "), speech, bounds)?.let { out.add(top to it) }
             }
             words = ArrayList()
+            bounds = null
         }
 
         for (line in page.lines) {
@@ -2189,11 +2192,16 @@ public class EpubPage internal constructor(
             val parts = if (owner?.semantics?.label != null) listOf(null to line.runs) else speechParts(line)
             for ((hint, runs) in parts) {
                 if (hint !== speech) { flushText(); speech = hint; top = line.yTop }
-                extractLine(page, line, runs)?.let { words.add(it.text) }
+                extractLine(page, line, runs)?.let { text ->
+                    words.add(text.text)
+                    val box = movedLine(text, displayTransformAt(page, line.paintRank)).bounds
+                    bounds = bounds?.union(box) ?: box
+                }
             }
             for (img in line.images) {
                 if (img.alt?.isEmpty() == true) continue   // decorative
-                out.add(line.yTop to KiteReadingItem(KiteRole.IMAGE, img.alt.orEmpty()))
+                val box = movedRect(inlineImageRect(page, line, img), displayTransformAt(page, line.paintRank))
+                out.add(line.yTop to KiteReadingItem(KiteRole.IMAGE, img.alt.orEmpty(), bounds = box))
             }
         }
         flushText()
@@ -2201,16 +2209,39 @@ public class EpubPage internal constructor(
         for (img in page.images) {
             val sem = img.semantics ?: continue
             if (sem.hidden) continue
-            out.add(img.y to KiteReadingItem(KiteRole.IMAGE, sem.label.orEmpty(), sourceType = sem.epubType))
+            val box = movedRect(imageRect(page, img), displayTransformAt(page, img.contentRank))
+            out.add(img.y to KiteReadingItem(KiteRole.IMAGE, sem.label.orEmpty(), sourceType = sem.epubType, bounds = box))
         }
         return out.sortedBy { it.first }.map { it.second }
     }
 
-    private fun readingItem(sem: BoxSemantics?, text: String, speech: SpeechHint?): KiteReadingItem? {
+    /**
+     * Where the painter draws the inline picture [img] of [line], in display space: on the
+     * baseline of a horizontal line, or from the line-over side of a vertical one.
+     */
+    private fun inlineImageRect(page: PageRender, line: PositionedLine, img: PlacedImage): KiteRectangle {
+        if (page.vertical) {
+            val bandBottom = page.startY + (displayWidth - 2 * page.margin)
+            val x = columnX(
+                page,
+                if (page.verticalLr) minOf(line.yTop + line.height, bandBottom) - line.ascent else line.yTop + line.ascent,
+            )
+            val top = page.margin + img.x
+            return KiteRectangle(x, top, x + img.width, top + img.height)
+        }
+        val baseline = displayY(page, line.yTop + line.ascent)
+        val left = page.margin + img.x
+        return KiteRectangle(left, baseline - img.height, left + img.width, baseline)
+    }
+
+    private fun readingItem(sem: BoxSemantics?, text: String, speech: SpeechHint?, bounds: KiteRectangle?): KiteReadingItem? {
         if (sem?.hidden == true) return null
         val spoken = (sem?.label ?: text).trim()
         if (spoken.isEmpty()) return null
-        return KiteReadingItem(sem?.role ?: KiteRole.TEXT, spoken, sem?.headingLevel ?: 0, sem?.epubType, speech?.phoneme, speech?.alphabet)
+        return KiteReadingItem(
+            sem?.role ?: KiteRole.TEXT, spoken, sem?.headingLevel ?: 0, sem?.epubType, speech?.phoneme, speech?.alphabet,
+            bounds = bounds,
+        )
     }
 
     /** The runs of [line] in reading order, cut where the pronunciation they belong to changes. */

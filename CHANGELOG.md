@@ -69,6 +69,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   page reads its structure tree, with the role map, `/Alt`, `/ActualText` and
   `/Lang`, and leaves artifacts out; a page without tags reads its text blocks
   in layout order (#208).
+- `KiteDocView` gives a screen reader each page's text in reading order, one node
+  per item at its place, its links as buttons, and with a `scripts` handler its
+  form fields with their state. A link or a field node acts as a tap does.
+  `KiteReadingItem.bounds` gives an item's place on its page, and
+  `KiteViewerStrings.link` names a link that has no words. A PDF figure takes its
+  place from its layout `/BBox` attribute, or else from what it paints. A tagged
+  PDF page that holds only figures now reads them, and content that a form draws
+  inside a tagged sequence of the page joins that sequence (#427).
 
 ### Changed
 

@@ -427,8 +427,14 @@ Each paragraph, heading, list item, table cell, caption and figure is one item,
 and the role map turns a custom type into a standard one. `sourceType` keeps the
 type the file names, such as `Footnote`, and `language` the nearest `/Lang`.
 Artifacts, such as running heads and page numbers, and content that no element
-names stay out. A page without tagged content gives its text blocks in layout
-order.
+names stay out. Content that a form XObject draws inside a tagged sequence of
+the page belongs to that sequence. A page without tagged content gives its text
+blocks in layout order.
+
+`bounds` gives each item's place on the page in display space: points from the
+top-left corner, y down. A text item takes the box of its words. A figure takes
+the `/BBox` of its layout attributes, or else the box of what it paints inside
+its clip. `bounds` is null when neither exists.
 
 ## Installation
 
