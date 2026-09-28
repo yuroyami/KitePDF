@@ -26,6 +26,8 @@ final class io.github.yuroyami.kitepdf.xps/XpsPage : io.github.yuroyami.kitepdf.
         final fun <get-displayHeight>(): kotlin/Double // io.github.yuroyami.kitepdf.xps/XpsPage.displayHeight.<get-displayHeight>|<get-displayHeight>(){}[0]
     final val displayWidth // io.github.yuroyami.kitepdf.xps/XpsPage.displayWidth|{}displayWidth[0]
         final fun <get-displayWidth>(): kotlin/Double // io.github.yuroyami.kitepdf.xps/XpsPage.displayWidth.<get-displayWidth>|<get-displayWidth>(){}[0]
+    final val hyperlinks // io.github.yuroyami.kitepdf.xps/XpsPage.hyperlinks|{}hyperlinks[0]
+        final fun <get-hyperlinks>(): kotlin.collections/List<io.github.yuroyami.kitepdf.core/KiteLink> // io.github.yuroyami.kitepdf.xps/XpsPage.hyperlinks.<get-hyperlinks>|<get-hyperlinks>(){}[0]
 
     final fun displayToDeviceBase(): io.github.yuroyami.kitepdf.core.render/KiteMatrix // io.github.yuroyami.kitepdf.xps/XpsPage.displayToDeviceBase|displayToDeviceBase(){}[0]
     final fun renderTo(io.github.yuroyami.kitepdf.core.render/KiteCanvas, io.github.yuroyami.kitepdf.core.render/KiteMatrix) // io.github.yuroyami.kitepdf.xps/XpsPage.renderTo|renderTo(io.github.yuroyami.kitepdf.core.render.KiteCanvas;io.github.yuroyami.kitepdf.core.render.KiteMatrix){}[0]

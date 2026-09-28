@@ -1,5 +1,7 @@
 package io.github.yuroyami.kitepdf.core.render
 
+import io.github.yuroyami.kitepdf.core.KiteRectangle
+
 /**
  * A geometric path accumulated by `m`/`l`/`c`/`v`/`y`/`h`/`re` operators
  * before being painted by `S`/`f`/`B`/`n`.
@@ -12,6 +14,32 @@ package io.github.yuroyami.kitepdf.core.render
 public data class KitePath(val segments: List<Segment>) {
 
     public fun isEmpty(): Boolean = segments.isEmpty()
+
+    /**
+     * The box of this path's points under [matrix]. It counts the control points, so it holds
+     * every curve. Null for a path with no finite point.
+     */
+    public fun bounds(matrix: KiteMatrix = KiteMatrix.IDENTITY): KiteRectangle? {
+        var left = Double.POSITIVE_INFINITY
+        var bottom = Double.POSITIVE_INFINITY
+        var right = Double.NEGATIVE_INFINITY
+        var top = Double.NEGATIVE_INFINITY
+        fun point(x: Double, y: Double) {
+            val px = matrix.transformX(x, y)
+            val py = matrix.transformY(x, y)
+            if (!px.isFinite() || !py.isFinite()) return
+            left = minOf(left, px); right = maxOf(right, px)
+            bottom = minOf(bottom, py); top = maxOf(top, py)
+        }
+        for (s in segments) when (s) {
+            is Segment.MoveTo -> point(s.x, s.y)
+            is Segment.LineTo -> point(s.x, s.y)
+            is Segment.CurveTo -> { point(s.x1, s.y1); point(s.x2, s.y2); point(s.x3, s.y3) }
+            is Segment.QuadTo -> { point(s.x1, s.y1); point(s.x2, s.y2) }
+            Segment.Close -> Unit
+        }
+        return if (left > right || bottom > top) null else KiteRectangle(left, bottom, right, top)
+    }
 
     public sealed class Segment {
         public data class MoveTo(val x: Double, val y: Double) : Segment()

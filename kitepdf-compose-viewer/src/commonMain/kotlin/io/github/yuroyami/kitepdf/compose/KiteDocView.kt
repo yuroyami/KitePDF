@@ -85,6 +85,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
+import io.github.yuroyami.kitepdf.core.KiteBookmark
 import io.github.yuroyami.kitepdf.core.KiteDocument
 import io.github.yuroyami.kitepdf.core.KitePage
 import io.github.yuroyami.kitepdf.PdfAction
@@ -521,7 +522,31 @@ private fun linkTap(
             }
             return false
         }
-        else -> return false
+        else -> {
+            // An XPS or SVG page gives plain links: an address, or a page and a height on it (#433).
+            val links = page?.hyperlinks.orEmpty()
+            if (links.isEmpty()) return false
+            val (_, x, y) = state.hitTestDisplay(offset) ?: return false
+            for (link in links.asReversed()) {
+                val r = link.rect
+                if (x < r.left || x > r.right || y < r.bottom || y > r.top) continue
+                link.uri?.let { return onLinkTap?.invoke(KiteLinkAction.Uri(it)) == true }
+                val target = link.target ?: return false
+                // A view of one fixed page cannot move, so the tap goes on to onTap.
+                if (!state.canNavigate) return false
+                scope.launch {
+                    if (target is KiteBookmark.Page) {
+                        // The height can mean reading the target page, so it is found off the main thread.
+                        val top = withContext(kitepdfRasterDispatcher()) { runCatching { link.targetY }.getOrNull() }
+                        state.animateScrollToPagePoint(target.pageIndex, top)
+                    } else {
+                        state.scrollTo(target, animate = true)
+                    }
+                }
+                return true
+            }
+            return false
+        }
     }
 }
 

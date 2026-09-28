@@ -3,8 +3,10 @@ package io.github.yuroyami.kitepdf.xps
 import io.github.yuroyami.kitepdf.core.KiteCancellation
 import io.github.yuroyami.kitepdf.core.KiteDocument
 import io.github.yuroyami.kitepdf.core.KiteFormatException
+import io.github.yuroyami.kitepdf.core.KiteLink
 import io.github.yuroyami.kitepdf.core.KiteMetadata
 import io.github.yuroyami.kitepdf.core.KitePage
+import io.github.yuroyami.kitepdf.core.KiteRectangle
 import io.github.yuroyami.kitepdf.core.KiteStructuredText
 import io.github.yuroyami.kitepdf.core.kiteWarn
 import io.github.yuroyami.kitepdf.core.render.KiteCanvas
@@ -51,6 +53,7 @@ public class XpsDocument private constructor(
             val sequence = packageData.xml(sequencePart)
                 ?: throw KiteFormatException("xps: unreadable fixed document sequence")
             val pages = ArrayList<XpsPage>()
+            val links = XpsLinkIndex()
             for (reference in sequence.elements().filter { it.tag == "documentreference" }) {
                 val docPart = resolvePart(sequencePart, reference.attrs["source"].orEmpty()) ?: continue
                 val document = packageData.xml(docPart)
@@ -60,10 +63,15 @@ public class XpsDocument private constructor(
                 }
                 for (page in document.elements().filter { it.tag == "pagecontent" }) {
                     val part = resolvePart(docPart, page.attrs["source"].orEmpty()) ?: continue
-                    pages.add(XpsPage(packageData, part, page.number("width", 816.0), page.number("height", 1056.0)))
+                    // The names that links can point at on this page.
+                    val targets = page.elements().filter { it.tag == "pagecontent.linktargets" }
+                        .flatMap { it.elements() }.filter { it.tag == "linktarget" }.mapNotNull { it.attrs["name"] }
+                    links.addPage(docPart, part, pages.size, targets)
+                    pages.add(XpsPage(packageData, part, page.number("width", 816.0), page.number("height", 1056.0), links))
                 }
             }
             if (pages.isEmpty()) throw KiteFormatException("xps: no page references")
+            links.pages = pages
             return XpsDocument(pages, KiteMetadata(language = sequence.attrs["lang"]))
         }
 
@@ -90,6 +98,7 @@ public class XpsPage internal constructor(
     private val part: String,
     private val fallbackWidth: Double,
     private val fallbackHeight: Double,
+    private val linkIndex: XpsLinkIndex = XpsLinkIndex(),
 ) : KitePage {
     /**
      * The size from the start tag of the page, read from the first bytes of its part only, so a
@@ -136,6 +145,25 @@ public class XpsPage internal constructor(
     }
 
     override fun textContent(): KiteStructuredText = text
+
+    /** Built once, on first use: the page's links and the boxes of its named elements (#433). */
+    private val linkPass: XpsLinkPass by lazy {
+        packageData.page(part)?.let {
+            XpsRenderer(packageData, part).links(it, KiteMatrix.scaling(POINTS_PER_UNIT, POINTS_PER_UNIT))
+        } ?: XpsLinkPass()
+    }
+
+    /**
+     * Each element with a `FixedPage.NavigateUri`, over the box of what it draws. A link with a
+     * scheme leaves the document. A relative one leads to a page, or to the element whose `Name`
+     * it gives, and brings that element to the top of the view (#433).
+     */
+    override val hyperlinks: List<KiteLink> by lazy {
+        linkPass.links.mapNotNull { (uri, rect) -> linkIndex.link(part, uri, rect) }
+    }
+
+    /** Where the element named [name] is drawn on this page, in display space, or null. */
+    internal fun namedBox(name: String): KiteRectangle? = linkPass.names[name]
 
     private fun Double.positive(): Double = if (isFinite() && this > 0) this else 1.0
 

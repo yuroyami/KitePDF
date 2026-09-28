@@ -191,6 +191,8 @@ abstract interface io.github.yuroyami.kitepdf.core/KitePage { // io.github.yuroy
         abstract fun <get-displayWidth>(): kotlin/Double // io.github.yuroyami.kitepdf.core/KitePage.displayWidth.<get-displayWidth>|<get-displayWidth>(){}[0]
     open val drawsHostFontText // io.github.yuroyami.kitepdf.core/KitePage.drawsHostFontText|{}drawsHostFontText[0]
         open fun <get-drawsHostFontText>(): kotlin/Boolean? // io.github.yuroyami.kitepdf.core/KitePage.drawsHostFontText.<get-drawsHostFontText>|<get-drawsHostFontText>(){}[0]
+    open val hyperlinks // io.github.yuroyami.kitepdf.core/KitePage.hyperlinks|{}hyperlinks[0]
+        open fun <get-hyperlinks>(): kotlin.collections/List<io.github.yuroyami.kitepdf.core/KiteLink> // io.github.yuroyami.kitepdf.core/KitePage.hyperlinks.<get-hyperlinks>|<get-hyperlinks>(){}[0]
 
     abstract fun displayToDeviceBase(): io.github.yuroyami.kitepdf.core.render/KiteMatrix // io.github.yuroyami.kitepdf.core/KitePage.displayToDeviceBase|displayToDeviceBase(){}[0]
     abstract fun renderTo(io.github.yuroyami.kitepdf.core.render/KiteCanvas, io.github.yuroyami.kitepdf.core.render/KiteMatrix = ...) // io.github.yuroyami.kitepdf.core/KitePage.renderTo|renderTo(io.github.yuroyami.kitepdf.core.render.KiteCanvas;io.github.yuroyami.kitepdf.core.render.KiteMatrix){}[0]
@@ -1217,6 +1219,7 @@ final class io.github.yuroyami.kitepdf.core.render/KitePath { // io.github.yuroy
     final val segments // io.github.yuroyami.kitepdf.core.render/KitePath.segments|{}segments[0]
         final fun <get-segments>(): kotlin.collections/List<io.github.yuroyami.kitepdf.core.render/KitePath.Segment> // io.github.yuroyami.kitepdf.core.render/KitePath.segments.<get-segments>|<get-segments>(){}[0]
 
+    final fun bounds(io.github.yuroyami.kitepdf.core.render/KiteMatrix = ...): io.github.yuroyami.kitepdf.core/KiteRectangle? // io.github.yuroyami.kitepdf.core.render/KitePath.bounds|bounds(io.github.yuroyami.kitepdf.core.render.KiteMatrix){}[0]
     final fun component1(): kotlin.collections/List<io.github.yuroyami.kitepdf.core.render/KitePath.Segment> // io.github.yuroyami.kitepdf.core.render/KitePath.component1|component1(){}[0]
     final fun copy(kotlin.collections/List<io.github.yuroyami.kitepdf.core.render/KitePath.Segment> = ...): io.github.yuroyami.kitepdf.core.render/KitePath // io.github.yuroyami.kitepdf.core.render/KitePath.copy|copy(kotlin.collections.List<io.github.yuroyami.kitepdf.core.render.KitePath.Segment>){}[0]
     final fun equals(kotlin/Any?): kotlin/Boolean // io.github.yuroyami.kitepdf.core.render/KitePath.equals|equals(kotlin.Any?){}[0]
@@ -1774,6 +1777,21 @@ final class io.github.yuroyami.kitepdf.core/KiteCaret { // io.github.yuroyami.ki
         final fun <get-to>(): kotlin/Double // io.github.yuroyami.kitepdf.core/KiteCaret.to.<get-to>|<get-to>(){}[0]
     final val vertical // io.github.yuroyami.kitepdf.core/KiteCaret.vertical|{}vertical[0]
         final fun <get-vertical>(): kotlin/Boolean // io.github.yuroyami.kitepdf.core/KiteCaret.vertical.<get-vertical>|<get-vertical>(){}[0]
+}
+
+final class io.github.yuroyami.kitepdf.core/KiteLink { // io.github.yuroyami.kitepdf.core/KiteLink|null[0]
+    constructor <init>(io.github.yuroyami.kitepdf.core/KiteRectangle, kotlin/String? = ..., io.github.yuroyami.kitepdf.core/KiteBookmark? = ..., kotlin/Function0<kotlin/Double?>? = ...) // io.github.yuroyami.kitepdf.core/KiteLink.<init>|<init>(io.github.yuroyami.kitepdf.core.KiteRectangle;kotlin.String?;io.github.yuroyami.kitepdf.core.KiteBookmark?;kotlin.Function0<kotlin.Double?>?){}[0]
+
+    final val rect // io.github.yuroyami.kitepdf.core/KiteLink.rect|{}rect[0]
+        final fun <get-rect>(): io.github.yuroyami.kitepdf.core/KiteRectangle // io.github.yuroyami.kitepdf.core/KiteLink.rect.<get-rect>|<get-rect>(){}[0]
+    final val target // io.github.yuroyami.kitepdf.core/KiteLink.target|{}target[0]
+        final fun <get-target>(): io.github.yuroyami.kitepdf.core/KiteBookmark? // io.github.yuroyami.kitepdf.core/KiteLink.target.<get-target>|<get-target>(){}[0]
+    final val targetY // io.github.yuroyami.kitepdf.core/KiteLink.targetY|{}targetY[0]
+        final fun <get-targetY>(): kotlin/Double? // io.github.yuroyami.kitepdf.core/KiteLink.targetY.<get-targetY>|<get-targetY>(){}[0]
+    final val uri // io.github.yuroyami.kitepdf.core/KiteLink.uri|{}uri[0]
+        final fun <get-uri>(): kotlin/String? // io.github.yuroyami.kitepdf.core/KiteLink.uri.<get-uri>|<get-uri>(){}[0]
+
+    final fun toString(): kotlin/String // io.github.yuroyami.kitepdf.core/KiteLink.toString|toString(){}[0]
 }
 
 final class io.github.yuroyami.kitepdf.core/KiteLocation : kotlin/Comparable<io.github.yuroyami.kitepdf.core/KiteLocation> { // io.github.yuroyami.kitepdf.core/KiteLocation|null[0]

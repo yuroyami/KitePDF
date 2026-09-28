@@ -77,6 +77,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   place from its layout `/BBox` attribute, or else from what it paints. A tagged
   PDF page that holds only figures now reads them, and content that a form draws
   inside a tagged sequence of the page joins that sequence (#427).
+- `KitePage.hyperlinks` gives the links of an XPS or an SVG page as `KiteLink`s.
+  Each covers the box of what it draws, and leads to an address outside the
+  document or to a page and a height inside it. XPS reads `FixedPage.NavigateUri`
+  and the `LinkTarget` names of its page references, and SVG reads `<a href>`.
+  `KiteDocView` follows these links and names them to a screen reader.
+  `KitePath.bounds` gives the box of a path under a matrix (#433).
 
 ### Changed
 

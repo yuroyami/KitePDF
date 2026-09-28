@@ -117,6 +117,12 @@ public class SvgImage private constructor(
         }
     }
 
+    /**
+     * Where the links of the image are, in the space of [ctm]: each `<a>` with an `href` over
+     * the box of what it draws, and the box of each element with an `id` (#433).
+     */
+    internal fun links(ctm: KiteMatrix): SvgLinkCanvas = SvgLinkCanvas().also { render(it, ctm, loadResource = null, stop = null) }
+
     private class Fit(val matrix: KiteMatrix, val slice: Boolean)
 
     /**
@@ -200,9 +206,16 @@ public class SvgImage private constructor(
                 isolated = true, knockout = false, alpha = groupAlpha, blendMode = KiteBlendMode.Normal,
             )
         }
+        // A link pass notes each link and each element with an id around what it draws (#433).
+        val links = canvas as? SvgLinkCanvas
+        val href = if (links != null && el.tag.lowercase() == "a") el.attrs["href"]?.trim()?.takeIf { it.isNotEmpty() } else null
+        val id = if (links != null) el.attrs["id"]?.takeIf { it.isNotEmpty() } else null
+        val noted = href != null || id != null
+        if (noted) links?.open(href, id)
         try {
             paintElement(el, ctm, paint, canvas, load, depth, stop)
         } finally {
+            if (noted) links?.close()
             if (groupAlpha < 1.0) canvas.endTransparencyGroup()
             if (clip != null) canvas.popClip()
         }

@@ -590,6 +590,11 @@ FirstPage or LastPage) turns the page, and a script link runs in `scripts` when
 you pass a handler. `KiteDocLayout.SinglePage` cannot move, so there an internal
 PDF link goes to `onLinkTap` as a go-to action.
 
+XPS and SVG pages give their links as `KitePage.hyperlinks`. The viewer follows
+one that leads inside the document, and in a vertical `Continuous` strip it
+scrolls the named element to the top of the viewport. In `SinglePage` such a tap
+falls through to `onTap`. A link that leaves the document goes to `onLinkTap`.
+
 Everything else goes to `onLinkTap` as a `KiteLinkAction`. Return `true` once
 you have handled it; `false` lets the tap fall through to `onTap`.
 
@@ -615,7 +620,7 @@ you do need the format-native payload:
 
 | Case | Comes from | Carries |
 |---|---|---|
-| `KiteLinkAction.Uri` | an EPUB href with a scheme | the URL |
+| `KiteLinkAction.Uri` | an EPUB href with a scheme, or an XPS or SVG link that leaves the document | the URL |
 | `KiteLinkAction.Pdf` | any PDF `/A` action the viewer does not perform itself | the parsed `PdfAction` (a URI, a remote GoTo, a Launch, JavaScript, a form submit) |
 
 ```kotlin

@@ -200,6 +200,7 @@ public final class io/github/yuroyami/kitepdf/epub/EpubPage : io/github/yuroyami
 	public fun getDrawsHostFontText ()Ljava/lang/Boolean;
 	public final fun getEmbeds ()Ljava/util/List;
 	public final fun getHeight ()D
+	public fun getHyperlinks ()Ljava/util/List;
 	public final fun getLinks ()Ljava/util/List;
 	public final fun getLocation ()Lio/github/yuroyami/kitepdf/core/KiteLocation;
 	public final fun getMedia ()Ljava/util/List;
