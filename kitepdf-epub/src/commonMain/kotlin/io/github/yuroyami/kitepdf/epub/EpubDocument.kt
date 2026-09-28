@@ -858,8 +858,13 @@ public class EpubDocument internal constructor(
      */
     public fun pageOf(href: String): Int? = pageIndexOfHref(href)
 
-    private fun loadImage(zipPath: String): KiteImageData? =
-        parsed.zip.read(zipPath)?.let { KiteImageData.fromEncodedImage(it) }
+    /** The image at [zipPath], or the first item of its manifest fallback chain that decodes (#27). */
+    private fun loadImage(zipPath: String): KiteImageData? {
+        for (path in listOf(zipPath) + parsed.fallbackPaths(zipPath)) {
+            parsed.zip.read(path)?.let { KiteImageData.fromEncodedImage(it) }?.let { return it }
+        }
+        return null
+    }
 
     private fun loadSvg(zipPath: String): SvgImage? =
         parsed.zip.read(zipPath)?.let { SvgImage.parse(it) }

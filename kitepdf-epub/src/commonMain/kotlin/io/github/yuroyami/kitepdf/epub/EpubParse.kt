@@ -129,7 +129,7 @@ internal class ParsedEpub(
         val docDir = path.substringBeforeLast('/', "")
         // An entry that will not inflate becomes an empty document: the chapter
         // yields no pages, which is what skipping it used to do.
-        val tree = HtmlParser.parse(zip.readText(path) ?: "")
+        val tree = HtmlParser.parse(zip.readText(path) ?: "").also(::resolveSwitches)
         val rules = ArrayList<StyleRule>()
         val faces = ArrayList<EmbeddedFace>()
         walkStyleSources(
@@ -142,6 +142,20 @@ internal class ParsedEpub(
             },
         )
         return ParsedSpine(tree, rules, docDir, parseViewport(tree), path, faces)
+    }
+
+    /** Manifest items by their zip path, for the fallback of a resource that a document names by path. */
+    private val itemsByPath: Map<String, OpfItem> by lazy {
+        opf.items.associateBy { EpubDocument.resolvePath(opf.baseDir, it.href) }
+    }
+
+    /**
+     * The zip paths of the items that the fallback chain of the item at [path] names after it,
+     * in order. Empty for a path that is not in the manifest or has no fallback (#27).
+     */
+    fun fallbackPaths(path: String): List<String> {
+        val item = itemsByPath[path] ?: return emptyList()
+        return opf.fallbackChain(item.id).drop(1).map { EpubDocument.resolvePath(opf.baseDir, it.href) }
     }
 
     /** One stylesheet's rules, parsed once however many chapters link it. */
@@ -200,7 +214,8 @@ internal class ParsedEpub(
                 ?: throw EpubFormatException("META-INF/container.xml missing or unreadable")
             val opf = Opf.parse(zip, opfPath)
                 ?: throw EpubFormatException("OPF not found at $opfPath")
-            val contentPaths = opf.spineIdrefs.mapNotNull { opf.itemsById[it]?.href }
+            // A spine item of a type this engine does not render shows its fallback document (#27).
+            val contentPaths = opf.spineIdrefs.mapNotNull { opf.contentDocument(it)?.href }
                 .map { EpubDocument.resolvePath(opf.baseDir, it) }
             if (contentPaths.isEmpty()) throw EpubFormatException("spine is empty in $opfPath")
 
@@ -349,3 +364,36 @@ internal class ParsedEpub(
         }
     }
 }
+
+/**
+ * Replaces each `epub:switch` in [el] with the children of its first `case` whose required
+ * namespace this engine renders, else with those of its `default` (EPUB 3.0.1 Content Documents,
+ * 5.1). The switch is deprecated in EPUB 3.3, but books still carry it, and painting every branch
+ * showed the content twice (#27).
+ */
+internal fun resolveSwitches(el: KiteXmlNode.Element) {
+    var i = 0
+    while (i < el.children.size) {
+        val child = el.children[i]
+        if (child !is KiteXmlNode.Element) {
+            i++
+            continue
+        }
+        if (child.tag != "switch") {
+            resolveSwitches(child)
+            i++
+            continue
+        }
+        val branches = child.children.filterIsInstance<KiteXmlNode.Element>()
+        val chosen = branches.firstOrNull { it.tag == "case" && it.attrs["required-namespace"]?.trim() in SWITCH_NAMESPACES }
+            ?: branches.firstOrNull { it.tag == "default" }
+        val replacement = chosen?.children.orEmpty()
+        el.children.removeAt(i)
+        el.children.addAll(i, replacement)
+        for (node in replacement) if (node is KiteXmlNode.Element) node.parent = el
+        // The branch may hold a switch of its own, so the loop reads the new children too.
+    }
+}
+
+/** The namespaces a `case` may require for this engine to render it: XHTML and SVG, not MathML (#32). */
+private val SWITCH_NAMESPACES = setOf("http://www.w3.org/1999/xhtml", "http://www.w3.org/2000/svg")

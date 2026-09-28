@@ -5,8 +5,14 @@ import io.github.yuroyami.kitepdf.core.xml.KiteXmlToken
 
 import io.github.yuroyami.kitepdf.core.zip.ZipReader
 
-/** One `<manifest>` entry. */
-internal class OpfItem(val id: String, val href: String, val mediaType: String?, val properties: String?) {
+/** One `<manifest>` entry. [fallback] is the id of the item to use when this one cannot be rendered. */
+internal class OpfItem(
+    val id: String,
+    val href: String,
+    val mediaType: String?,
+    val properties: String?,
+    val fallback: String? = null,
+) {
     fun hasProperty(p: String): Boolean = properties?.split(' ', '\t', '\n')?.any { it == p } == true
 }
 
@@ -31,6 +37,32 @@ internal class OpfPackage(
     val primaryWritingMode: String? = null,
 ) {
     val itemsById: Map<String, OpfItem> = items.associateBy { it.id }
+
+    /**
+     * The item [id] and the items its `fallback` chain names after it, in order (EPUB 3.3, 3.5.2):
+     * at most [MAX_FALLBACK_HOPS] hops, and a chain that comes back to an item ends there.
+     */
+    fun fallbackChain(id: String): List<OpfItem> {
+        val out = ArrayList<OpfItem>()
+        val seen = HashSet<String>()
+        var next: String? = id
+        while (next != null && out.size <= MAX_FALLBACK_HOPS && seen.add(next)) {
+            val item = itemsById[next] ?: break
+            out += item
+            next = item.fallback
+        }
+        return out
+    }
+
+    /**
+     * The document that the spine item [id] renders: the item itself when it is XHTML or SVG,
+     * else the first item of its fallback chain that is (#27). A chain without one keeps the
+     * item, which renders what it can.
+     */
+    fun contentDocument(id: String): OpfItem? {
+        val chain = fallbackChain(id)
+        return chain.firstOrNull { it.mediaType?.lowercase() in CONTENT_TYPES } ?: chain.firstOrNull()
+    }
 
     /** Whether the spine item at [index] is fixed-layout (per-item override, else global). */
     fun fixedLayoutAt(index: Int): Boolean {
@@ -92,7 +124,9 @@ internal object Opf {
                     "package" -> uidRef = t.attrs["unique-identifier"]
                     "item" -> {
                         val id = t.attrs["id"]; val href = t.attrs["href"]
-                        if (id != null && href != null) items.add(OpfItem(id, href, t.attrs["media-type"], t.attrs["properties"]))
+                        if (id != null && href != null) {
+                            items.add(OpfItem(id, href, t.attrs["media-type"], t.attrs["properties"], t.attrs["fallback"]))
+                        }
                     }
                     "itemref" -> t.attrs["idref"]?.let { spine.add(it); spineProps.add(t.attrs["properties"]) }
                     "spine" -> { direction = t.attrs["page-progression-direction"]; tocNcx = t.attrs["toc"] }
@@ -133,3 +167,9 @@ internal object Opf {
         )
     }
 }
+
+/** The longest `fallback` chain followed; a longer one is a mistake or a trap. */
+internal const val MAX_FALLBACK_HOPS = 16
+
+/** The media types of the documents a spine item may render: XHTML, HTML from EPUB 2 converters, and SVG. */
+private val CONTENT_TYPES = setOf("application/xhtml+xml", "text/html", "image/svg+xml")

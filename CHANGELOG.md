@@ -55,6 +55,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A screen reader finds each page, the page buttons, the thumbnails, the colours
   of the selection menu and the input of a form field by name. `KiteViewerStrings`
   and `LocalKiteViewerStrings` let a host translate the names (#427).
+- EPUB books follow the manifest fallback chain: a spine item that is not XHTML or
+  SVG shows its fallback document, and an image that does not decode draws its
+  fallback. An `epub:switch` shows one branch, where it painted all of them (#27).
 
 ## [0.11.0] - 2026-09-25
 

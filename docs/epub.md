@@ -312,7 +312,7 @@ The layout engine covers what real books use:
 
 ## Books that are not quite right
 
-Two habits of real EPUBs that the engine absorbs rather than rejecting.
+Three habits of real EPUBs that the engine absorbs rather than rejecting.
 
 **Encodings.** The spec says UTF-8 or UTF-16. Books ship Windows-1252 anyway,
 sometimes while their own XML declaration claims UTF-8. Every entry is read by
@@ -324,6 +324,13 @@ is read as Windows-1252, which never fails.
 **Archives.** The reader handles ZIP64 records and entries whose sizes only
 the trailing data descriptor knows, and it verifies every entry's CRC. A
 mismatch is reported, not fatal: half a broken book beats no book.
+
+**Resources the engine cannot render.** A manifest item can name a `fallback`
+item. A spine item that is not XHTML or SVG shows the first document of its
+fallback chain, and an image that does not decode draws the first fallback
+that does. The chain stops after 16 hops and at an item it has seen. An
+`epub:switch` shows its first `case` for XHTML or SVG, else its `default`;
+a case that needs MathML is skipped.
 
 ## Accessibility
 
