@@ -97,6 +97,13 @@ public class KitePageRasterizer(
     private var hostFontPage: KitePage? = null
 
     /**
+     * True when a page is first drawn off the main thread without host-font text, to find out
+     * whether it needs the main thread at all (#131). Where rasters already run on the UI
+     * thread, as in a browser, that probe only doubles the work, so a page draws once (#389).
+     */
+    internal var probesOffMain: Boolean = !rastersOnUiThread
+
+    /**
      * [rasterize], off the main thread where the platform allows. Cancelling the
      * calling coroutine stops a PDF page between operators and throws a
      * CancellationException instead of returning a partial bitmap (#188).
@@ -152,7 +159,7 @@ public class KitePageRasterizer(
         // A page the viewer no longer needs stops between operators when its coroutine is cancelled (#188).
         val job = kotlinx.coroutines.currentCoroutineContext()[kotlinx.coroutines.Job]
         val cancellation = job?.let { KiteCancellation { !it.isActive } }
-        val probe = kotlinx.coroutines.withContext(kitepdfRasterDispatcher()) {
+        val probe = if (!probesOffMain) null else kotlinx.coroutines.withContext(kitepdfRasterDispatcher()) {
             // A page that draws host-font text, as it says or as it did the last time, goes to Main
             // at once: a probe would draw it in full only to throw the bitmap away (#131). The page
             // answers here, off Main, because an answer can lay its chapter out.

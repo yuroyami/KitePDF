@@ -5,3 +5,5 @@ import kotlinx.coroutines.Dispatchers
 
 /** Single-threaded canvas: workers can't share it, so stay on Main. */
 internal actual fun kitepdfRasterDispatcher(): CoroutineDispatcher = Dispatchers.Main
+
+internal actual val rastersOnUiThread: Boolean = true

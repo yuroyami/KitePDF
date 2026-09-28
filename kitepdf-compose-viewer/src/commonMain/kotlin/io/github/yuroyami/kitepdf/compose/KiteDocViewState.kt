@@ -44,7 +44,9 @@ import kotlin.coroutines.CoroutineContext
 import kotlin.coroutines.EmptyCoroutineContext
 import kotlin.math.abs
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.withContext
 
@@ -1644,6 +1646,15 @@ public class KiteDocViewState(
             val next = loadOrder(document.chapterCount, around).firstOrNull {
                 !document.isChapterReady(it) && it !in failedChapters && it !in declined
             } ?: break
+            // Away from the reader, a layout on the UI thread waits until the view rests (#389).
+            if (layoutWaitsForRest && abs(next - around) > 1 && onComposeThread { restedMotion != motion() }) {
+                awaitRest()
+                around = onComposeThread {
+                    publishIfStale()
+                    readerChapter()
+                }
+                continue
+            }
             if (prepareChapterGuarded(next) && !document.isChapterReady(next)) declined += next
             around = onComposeThread {
                 publishIfStale()
@@ -1657,6 +1668,37 @@ public class KiteDocViewState(
     }
 
     private fun readerChapter(): Int = (navigationTarget ?: currentLocation).chapter
+
+    /**
+     * True when a chapter away from the reader lays out only while the view rests. Where layout
+     * runs on the UI thread, as in a browser, a layout during a scroll or a pinch stalls it (#389).
+     * The reader's chapter and its neighbours lay out at once in any case.
+     */
+    internal var layoutWaitsForRest: Boolean = rastersOnUiThread
+
+    /** How long the view stays still before a chapter away from the reader lays out. */
+    internal var restMillis: Long = REST_MILLIS
+
+    /** The motion of the view when it last rested, or null. */
+    private var restedMotion: List<Any?>? = null
+
+    /** What moves the view: a scroll in progress, the scroll position, the zoom and the pan. */
+    private fun motion(): List<Any?> = listOf(adapter?.isScrollInProgress == true, currentScrollPosition, zoom, panOffset)
+
+    /** Waits until the view has not moved for [restMillis], and returns on the composition's thread. */
+    private suspend fun awaitRest() {
+        while (true) {
+            androidx.compose.runtime.snapshotFlow { adapter?.isScrollInProgress == true }.first { !it }
+            val before = onComposeThread { motion() }
+            delay(restMillis)
+            backOnComposeThread()
+            val after = onComposeThread { motion() }
+            if (after == before && after[0] == false) {
+                restedMotion = after
+                return
+            }
+        }
+    }
 
     /**
      * Resolves the saved position the state was opened with, then drops it.
@@ -1820,6 +1862,9 @@ public class KiteDocViewState(
          * moves the key further is corrected by hand.
          */
         private const val KEY_REACH = 90
+
+        /** How long the view must rest before a chapter away from the reader lays out on the UI thread (#389). */
+        private const val REST_MILLIS = 400L
 
         private const val SAVED_SCROLL = 0
         private const val SAVED_FLOW = 1

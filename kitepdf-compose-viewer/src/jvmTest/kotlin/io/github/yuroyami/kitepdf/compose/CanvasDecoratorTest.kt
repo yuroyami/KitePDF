@@ -119,6 +119,19 @@ class CanvasDecoratorTest {
     }
 
     @Test
+    fun without_the_off_main_probe_a_page_draws_once() = runBlocking {
+        // Where rasters run on the UI thread, as in a browser, the probe only doubles the work (#389).
+        val passes = AtomicInteger()
+        val decorator: KiteCanvasDecorator = { inner -> passes.incrementAndGet(); inner }
+        val renderer = rasterizer().apply { probesOffMain = false }
+        val px = renderer.rasterizeOffMain(hostFontPage(says = null), 200, 200, canvasDecorator = decorator).toPixelMap()
+        assertEquals(1, passes.get(), "the page was drawn more than once")
+        var inked = 0
+        for (y in 0 until 200) for (x in 0 until 200) if (px[x, y].red < 0.5f) inked++
+        assertTrue(inked > 20, "the host-font text was not drawn")
+    }
+
+    @Test
     fun off_main_system_font_retry_creates_a_fresh_wrapper() = runBlocking {
         val passes = AtomicInteger()
         val textCalls = AtomicInteger()

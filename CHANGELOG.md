@@ -121,6 +121,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- In a browser, `KiteDocView` lays out an EPUB chapter away from the reader only
+  after the view has rested for 400 ms, and it renders a page in one pass instead
+  of two. The reader's chapter and its neighbours still lay out at once. A scroll
+  or a pinch no longer stutters while a large book loads (#389).
+
 - `EpubRole` and `EpubReadingItem` are now deprecated names of the shared
   `KiteRole` and `KiteReadingItem`, and `epubType` of `sourceType`. Code that
   uses the old names still compiles, and a library built against the old
