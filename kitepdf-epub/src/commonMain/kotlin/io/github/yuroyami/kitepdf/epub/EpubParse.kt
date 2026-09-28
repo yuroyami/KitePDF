@@ -56,6 +56,8 @@ internal class ParsedEpub(
     val renditions: List<EpubRendition>,
     /** Whether the manifest marks each spine document `scripted`, parallel to [spinePaths] (#40). */
     private val manifestScripted: List<Boolean> = List(spinePaths.size) { false },
+    /** The zip path of each spine document's media overlay, and its duration, parallel to [spinePaths] (#36). */
+    private val overlays: List<Pair<String, Double?>?> = List(spinePaths.size) { null },
 ) {
 
     val spineCount: Int get() = spinePaths.size
@@ -65,6 +67,17 @@ internal class ParsedEpub(
 
     /** Whether every chapter keeps fixed pages. */
     val allFixed: Boolean = renditions.isNotEmpty() && renditions.all { it.layout == EpubLayout.PRE_PAGINATED }
+
+    private val overlayLock = KiteLock()
+    private val overlayCache = arrayOfNulls<EpubMediaOverlay>(spinePaths.size)
+
+    /** [chapter]'s media overlay, parsed on first use and kept, or null when it has none (#36). */
+    fun mediaOverlay(chapter: Int): EpubMediaOverlay? {
+        val (path, duration) = overlays[chapter] ?: return null
+        overlayLock.withLock { overlayCache[chapter] }?.let { return it }
+        val overlay = EpubMediaOverlay(SmilParser.clips(zip.readText(path).orEmpty(), path), duration)
+        return overlayLock.withLock { overlayCache[chapter] ?: overlay.also { overlayCache[chapter] = it } }
+    }
 
     private val scriptLock = KiteLock()
     private val scriptFound = arrayOfNulls<Boolean>(spinePaths.size)
@@ -265,6 +278,11 @@ internal class ParsedEpub(
                 baseDir = if (opf.direction?.lowercase() == "rtl") Direction.RTL else Direction.LTR,
                 renditions = present.map { opf.renditionAt(it.second) },
                 manifestScripted = present.map { opf.contentDocument(opf.spineIdrefs[it.second])?.hasProperty("scripted") == true },
+                overlays = present.map { (_, index) ->
+                    val overlayId = opf.contentDocument(opf.spineIdrefs[index])?.mediaOverlay ?: return@map null
+                    val item = opf.itemsById[overlayId] ?: return@map null
+                    EpubDocument.resolvePath(opf.baseDir, item.href) to opf.overlayDurations[overlayId]
+                },
             )
         }
 
@@ -284,6 +302,7 @@ internal class ParsedEpub(
                 rendition = opf.rendition,
                 pronunciationLexicons = opf.items.filter { it.mediaType?.lowercase() == "application/pls+xml" }
                     .map { EpubDocument.resolvePath(opf.baseDir, it.href) },
+                narration = opf.narration,
             )
         }
 

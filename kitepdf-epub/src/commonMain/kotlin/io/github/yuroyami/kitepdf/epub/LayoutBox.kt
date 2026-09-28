@@ -151,6 +151,8 @@ internal class PlacedRun(
     val paintWidth: Double = glyphs.sumOf { it.advanceWidth } * fontSize / 1000.0,
     /** The pronunciation of the element the run's text belongs to (see [InlineRun.speech]). */
     val speech: SpeechHint? = null,
+    /** The ids of the elements around the run's text (see [InlineRun.ids]). */
+    val ids: List<String> = emptyList(),
 )
 
 /**

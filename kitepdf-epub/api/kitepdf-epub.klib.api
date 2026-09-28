@@ -189,7 +189,9 @@ final class io.github.yuroyami.kitepdf.epub/EpubDocument : io.github.yuroyami.ki
     final fun keepChapters(kotlin.collections/Set<kotlin/Int>) // io.github.yuroyami.kitepdf.epub/EpubDocument.keepChapters|keepChapters(kotlin.collections.Set<kotlin.Int>){}[0]
     final fun linkTarget(kotlin/String): io.github.yuroyami.kitepdf.epub/EpubLinkTarget? // io.github.yuroyami.kitepdf.epub/EpubDocument.linkTarget|linkTarget(kotlin.String){}[0]
     final fun locate(io.github.yuroyami.kitepdf.core/KiteBookmark): io.github.yuroyami.kitepdf.core/KiteLocation // io.github.yuroyami.kitepdf.epub/EpubDocument.locate|locate(io.github.yuroyami.kitepdf.core.KiteBookmark){}[0]
+    final fun locateFragment(kotlin/String): io.github.yuroyami.kitepdf.epub/EpubFragmentBox? // io.github.yuroyami.kitepdf.epub/EpubDocument.locateFragment|locateFragment(kotlin.String){}[0]
     final fun locationOf(kotlin/Int): io.github.yuroyami.kitepdf.core/KiteLocation? // io.github.yuroyami.kitepdf.epub/EpubDocument.locationOf|locationOf(kotlin.Int){}[0]
+    final fun mediaOverlayOf(kotlin/Int): io.github.yuroyami.kitepdf.epub/EpubMediaOverlay? // io.github.yuroyami.kitepdf.epub/EpubDocument.mediaOverlayOf|mediaOverlayOf(kotlin.Int){}[0]
     final fun page(io.github.yuroyami.kitepdf.core/KiteLocation): io.github.yuroyami.kitepdf.epub/EpubPage // io.github.yuroyami.kitepdf.epub/EpubDocument.page|page(io.github.yuroyami.kitepdf.core.KiteLocation){}[0]
     final fun pageCountIn(kotlin/Int): kotlin/Int // io.github.yuroyami.kitepdf.epub/EpubDocument.pageCountIn|pageCountIn(kotlin.Int){}[0]
     final fun pageIndexOf(io.github.yuroyami.kitepdf.core/KiteLocation): kotlin/Int? // io.github.yuroyami.kitepdf.epub/EpubDocument.pageIndexOf|pageIndexOf(io.github.yuroyami.kitepdf.core.KiteLocation){}[0]
@@ -226,6 +228,13 @@ final class io.github.yuroyami.kitepdf.epub/EpubEmbed { // io.github.yuroyami.ki
 
 final class io.github.yuroyami.kitepdf.epub/EpubFormatException : io.github.yuroyami.kitepdf.core/KiteFormatException { // io.github.yuroyami.kitepdf.epub/EpubFormatException|null[0]
     constructor <init>(kotlin/String, kotlin/Throwable? = ...) // io.github.yuroyami.kitepdf.epub/EpubFormatException.<init>|<init>(kotlin.String;kotlin.Throwable?){}[0]
+}
+
+final class io.github.yuroyami.kitepdf.epub/EpubFragmentBox { // io.github.yuroyami.kitepdf.epub/EpubFragmentBox|null[0]
+    final val location // io.github.yuroyami.kitepdf.epub/EpubFragmentBox.location|{}location[0]
+        final fun <get-location>(): io.github.yuroyami.kitepdf.core/KiteLocation // io.github.yuroyami.kitepdf.epub/EpubFragmentBox.location.<get-location>|<get-location>(){}[0]
+    final val rects // io.github.yuroyami.kitepdf.epub/EpubFragmentBox.rects|{}rects[0]
+        final fun <get-rects>(): kotlin.collections/List<io.github.yuroyami.kitepdf.core/KiteRectangle> // io.github.yuroyami.kitepdf.epub/EpubFragmentBox.rects.<get-rects>|<get-rects>(){}[0]
 }
 
 final class io.github.yuroyami.kitepdf.epub/EpubLink { // io.github.yuroyami.kitepdf.epub/EpubLink|null[0]
@@ -271,6 +280,13 @@ final class io.github.yuroyami.kitepdf.epub/EpubMedia { // io.github.yuroyami.ki
         final fun <get-sources>(): kotlin.collections/List<io.github.yuroyami.kitepdf.epub/EpubMediaSource> // io.github.yuroyami.kitepdf.epub/EpubMedia.sources.<get-sources>|<get-sources>(){}[0]
 }
 
+final class io.github.yuroyami.kitepdf.epub/EpubMediaOverlay { // io.github.yuroyami.kitepdf.epub/EpubMediaOverlay|null[0]
+    final val clips // io.github.yuroyami.kitepdf.epub/EpubMediaOverlay.clips|{}clips[0]
+        final fun <get-clips>(): kotlin.collections/List<io.github.yuroyami.kitepdf.epub/EpubOverlayClip> // io.github.yuroyami.kitepdf.epub/EpubMediaOverlay.clips.<get-clips>|<get-clips>(){}[0]
+    final val duration // io.github.yuroyami.kitepdf.epub/EpubMediaOverlay.duration|{}duration[0]
+        final fun <get-duration>(): kotlin/Double? // io.github.yuroyami.kitepdf.epub/EpubMediaOverlay.duration.<get-duration>|<get-duration>(){}[0]
+}
+
 final class io.github.yuroyami.kitepdf.epub/EpubMediaSource { // io.github.yuroyami.kitepdf.epub/EpubMediaSource|null[0]
     final val href // io.github.yuroyami.kitepdf.epub/EpubMediaSource.href|{}href[0]
         final fun <get-href>(): kotlin/String // io.github.yuroyami.kitepdf.epub/EpubMediaSource.href.<get-href>|<get-href>(){}[0]
@@ -287,6 +303,8 @@ final class io.github.yuroyami.kitepdf.epub/EpubMetadata { // io.github.yuroyami
         final fun <get-identifier>(): kotlin/String? // io.github.yuroyami.kitepdf.epub/EpubMetadata.identifier.<get-identifier>|<get-identifier>(){}[0]
     final val language // io.github.yuroyami.kitepdf.epub/EpubMetadata.language|{}language[0]
         final fun <get-language>(): kotlin/String? // io.github.yuroyami.kitepdf.epub/EpubMetadata.language.<get-language>|<get-language>(){}[0]
+    final val narration // io.github.yuroyami.kitepdf.epub/EpubMetadata.narration|{}narration[0]
+        final fun <get-narration>(): io.github.yuroyami.kitepdf.epub/EpubNarration // io.github.yuroyami.kitepdf.epub/EpubMetadata.narration.<get-narration>|<get-narration>(){}[0]
     final val pronunciationLexicons // io.github.yuroyami.kitepdf.epub/EpubMetadata.pronunciationLexicons|{}pronunciationLexicons[0]
         final fun <get-pronunciationLexicons>(): kotlin.collections/List<kotlin/String> // io.github.yuroyami.kitepdf.epub/EpubMetadata.pronunciationLexicons.<get-pronunciationLexicons>|<get-pronunciationLexicons>(){}[0]
     final val rendition // io.github.yuroyami.kitepdf.epub/EpubMetadata.rendition|{}rendition[0]
@@ -297,6 +315,34 @@ final class io.github.yuroyami.kitepdf.epub/EpubMetadata { // io.github.yuroyami
         final fun <get-title>(): kotlin/String? // io.github.yuroyami.kitepdf.epub/EpubMetadata.title.<get-title>|<get-title>(){}[0]
 
     final object Companion // io.github.yuroyami.kitepdf.epub/EpubMetadata.Companion|null[0]
+}
+
+final class io.github.yuroyami.kitepdf.epub/EpubNarration { // io.github.yuroyami.kitepdf.epub/EpubNarration|null[0]
+    final val activeClass // io.github.yuroyami.kitepdf.epub/EpubNarration.activeClass|{}activeClass[0]
+        final fun <get-activeClass>(): kotlin/String? // io.github.yuroyami.kitepdf.epub/EpubNarration.activeClass.<get-activeClass>|<get-activeClass>(){}[0]
+    final val duration // io.github.yuroyami.kitepdf.epub/EpubNarration.duration|{}duration[0]
+        final fun <get-duration>(): kotlin/Double? // io.github.yuroyami.kitepdf.epub/EpubNarration.duration.<get-duration>|<get-duration>(){}[0]
+    final val narrators // io.github.yuroyami.kitepdf.epub/EpubNarration.narrators|{}narrators[0]
+        final fun <get-narrators>(): kotlin.collections/List<kotlin/String> // io.github.yuroyami.kitepdf.epub/EpubNarration.narrators.<get-narrators>|<get-narrators>(){}[0]
+    final val playbackActiveClass // io.github.yuroyami.kitepdf.epub/EpubNarration.playbackActiveClass|{}playbackActiveClass[0]
+        final fun <get-playbackActiveClass>(): kotlin/String? // io.github.yuroyami.kitepdf.epub/EpubNarration.playbackActiveClass.<get-playbackActiveClass>|<get-playbackActiveClass>(){}[0]
+}
+
+final class io.github.yuroyami.kitepdf.epub/EpubOverlayClip { // io.github.yuroyami.kitepdf.epub/EpubOverlayClip|null[0]
+    final val audioHref // io.github.yuroyami.kitepdf.epub/EpubOverlayClip.audioHref|{}audioHref[0]
+        final fun <get-audioHref>(): kotlin/String? // io.github.yuroyami.kitepdf.epub/EpubOverlayClip.audioHref.<get-audioHref>|<get-audioHref>(){}[0]
+    final val clipBegin // io.github.yuroyami.kitepdf.epub/EpubOverlayClip.clipBegin|{}clipBegin[0]
+        final fun <get-clipBegin>(): kotlin/Double // io.github.yuroyami.kitepdf.epub/EpubOverlayClip.clipBegin.<get-clipBegin>|<get-clipBegin>(){}[0]
+    final val clipEnd // io.github.yuroyami.kitepdf.epub/EpubOverlayClip.clipEnd|{}clipEnd[0]
+        final fun <get-clipEnd>(): kotlin/Double? // io.github.yuroyami.kitepdf.epub/EpubOverlayClip.clipEnd.<get-clipEnd>|<get-clipEnd>(){}[0]
+    final val epubType // io.github.yuroyami.kitepdf.epub/EpubOverlayClip.epubType|{}epubType[0]
+        final fun <get-epubType>(): kotlin/String? // io.github.yuroyami.kitepdf.epub/EpubOverlayClip.epubType.<get-epubType>|<get-epubType>(){}[0]
+    final val id // io.github.yuroyami.kitepdf.epub/EpubOverlayClip.id|{}id[0]
+        final fun <get-id>(): kotlin/String? // io.github.yuroyami.kitepdf.epub/EpubOverlayClip.id.<get-id>|<get-id>(){}[0]
+    final val textHref // io.github.yuroyami.kitepdf.epub/EpubOverlayClip.textHref|{}textHref[0]
+        final fun <get-textHref>(): kotlin/String // io.github.yuroyami.kitepdf.epub/EpubOverlayClip.textHref.<get-textHref>|<get-textHref>(){}[0]
+
+    final fun toString(): kotlin/String // io.github.yuroyami.kitepdf.epub/EpubOverlayClip.toString|toString(){}[0]
 }
 
 final class io.github.yuroyami.kitepdf.epub/EpubPage : io.github.yuroyami.kitepdf.core/KitePage { // io.github.yuroyami.kitepdf.epub/EpubPage|null[0]

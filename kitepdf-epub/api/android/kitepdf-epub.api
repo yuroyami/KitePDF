@@ -24,7 +24,9 @@ public final class io/github/yuroyami/kitepdf/epub/EpubDocument : io/github/yuro
 	public fun keepChapters (Ljava/util/Set;)V
 	public final fun linkTarget (Ljava/lang/String;)Lio/github/yuroyami/kitepdf/epub/EpubLinkTarget;
 	public fun locate (Lio/github/yuroyami/kitepdf/core/KiteBookmark;)Lio/github/yuroyami/kitepdf/core/KiteLocation;
+	public final fun locateFragment (Ljava/lang/String;)Lio/github/yuroyami/kitepdf/epub/EpubFragmentBox;
 	public fun locationOf (I)Lio/github/yuroyami/kitepdf/core/KiteLocation;
+	public final fun mediaOverlayOf (I)Lio/github/yuroyami/kitepdf/epub/EpubMediaOverlay;
 	public synthetic fun page (Lio/github/yuroyami/kitepdf/core/KiteLocation;)Lio/github/yuroyami/kitepdf/core/KitePage;
 	public fun page (Lio/github/yuroyami/kitepdf/core/KiteLocation;)Lio/github/yuroyami/kitepdf/epub/EpubPage;
 	public fun pageCountIn (I)I
@@ -81,6 +83,11 @@ public final class io/github/yuroyami/kitepdf/epub/EpubFormatException : io/gith
 	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/Throwable;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 }
 
+public final class io/github/yuroyami/kitepdf/epub/EpubFragmentBox {
+	public final fun getLocation ()Lio/github/yuroyami/kitepdf/core/KiteLocation;
+	public final fun getRects ()Ljava/util/List;
+}
+
 public final class io/github/yuroyami/kitepdf/epub/EpubLayout : java/lang/Enum {
 	public static final field PRE_PAGINATED Lio/github/yuroyami/kitepdf/epub/EpubLayout;
 	public static final field REFLOWABLE Lio/github/yuroyami/kitepdf/epub/EpubLayout;
@@ -133,6 +140,11 @@ public final class io/github/yuroyami/kitepdf/epub/EpubMediaKind : java/lang/Enu
 	public static fun values ()[Lio/github/yuroyami/kitepdf/epub/EpubMediaKind;
 }
 
+public final class io/github/yuroyami/kitepdf/epub/EpubMediaOverlay {
+	public final fun getClips ()Ljava/util/List;
+	public final fun getDuration ()Ljava/lang/Double;
+}
+
 public final class io/github/yuroyami/kitepdf/epub/EpubMediaSource {
 	public final fun getHref ()Ljava/lang/String;
 	public final fun getType ()Ljava/lang/String;
@@ -144,6 +156,7 @@ public final class io/github/yuroyami/kitepdf/epub/EpubMetadata {
 	public final fun getCreators ()Ljava/util/List;
 	public final fun getIdentifier ()Ljava/lang/String;
 	public final fun getLanguage ()Ljava/lang/String;
+	public final fun getNarration ()Lio/github/yuroyami/kitepdf/epub/EpubNarration;
 	public final fun getPronunciationLexicons ()Ljava/util/List;
 	public final fun getRendition ()Lio/github/yuroyami/kitepdf/epub/EpubRendition;
 	public final fun getRightToLeft ()Z
@@ -153,6 +166,13 @@ public final class io/github/yuroyami/kitepdf/epub/EpubMetadata {
 public final class io/github/yuroyami/kitepdf/epub/EpubMetadata$Companion {
 }
 
+public final class io/github/yuroyami/kitepdf/epub/EpubNarration {
+	public final fun getActiveClass ()Ljava/lang/String;
+	public final fun getDuration ()Ljava/lang/Double;
+	public final fun getNarrators ()Ljava/util/List;
+	public final fun getPlaybackActiveClass ()Ljava/lang/String;
+}
+
 public final class io/github/yuroyami/kitepdf/epub/EpubOrientation : java/lang/Enum {
 	public static final field AUTO Lio/github/yuroyami/kitepdf/epub/EpubOrientation;
 	public static final field LANDSCAPE Lio/github/yuroyami/kitepdf/epub/EpubOrientation;
@@ -160,6 +180,16 @@ public final class io/github/yuroyami/kitepdf/epub/EpubOrientation : java/lang/E
 	public static fun getEntries ()Lkotlin/enums/EnumEntries;
 	public static fun valueOf (Ljava/lang/String;)Lio/github/yuroyami/kitepdf/epub/EpubOrientation;
 	public static fun values ()[Lio/github/yuroyami/kitepdf/epub/EpubOrientation;
+}
+
+public final class io/github/yuroyami/kitepdf/epub/EpubOverlayClip {
+	public final fun getAudioHref ()Ljava/lang/String;
+	public final fun getClipBegin ()D
+	public final fun getClipEnd ()Ljava/lang/Double;
+	public final fun getEpubType ()Ljava/lang/String;
+	public final fun getId ()Ljava/lang/String;
+	public final fun getTextHref ()Ljava/lang/String;
+	public fun toString ()Ljava/lang/String;
 }
 
 public final class io/github/yuroyami/kitepdf/epub/EpubPage : io/github/yuroyami/kitepdf/core/KitePage {
