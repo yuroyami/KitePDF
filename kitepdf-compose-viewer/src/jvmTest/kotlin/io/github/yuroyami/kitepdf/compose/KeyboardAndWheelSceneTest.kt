@@ -115,6 +115,19 @@ class KeyboardAndWheelSceneTest {
     }
 
     @Test
+    fun page_keys_turn_a_whole_spread_in_the_spread_layout() {
+        withViewer(layout = KiteDocLayout.Spread()) { scene, state, driver ->
+            driver.pumpUntilState { state.stripSettled }
+            click(scene)
+            driver.pumpFrames(30)
+            key(scene, Key.PageDown)
+            driver.pumpUntilState { state.currentPage == 2 }
+            key(scene, Key.PageUp)
+            driver.pumpUntilState { state.currentPage == 0 }
+        }
+    }
+
+    @Test
     fun a_field_with_the_caret_keeps_the_page_keys() {
         withViewer { scene, state, driver ->
             click(scene)
