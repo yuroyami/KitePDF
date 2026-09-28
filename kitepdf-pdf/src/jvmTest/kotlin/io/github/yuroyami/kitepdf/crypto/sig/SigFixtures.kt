@@ -255,7 +255,28 @@ internal object SigFixtures {
         val holeKey: String = "Contents",
         /** The first signed byte: above 0 leaves the start of the file unsigned. */
         val rangeStart: Int = 0,
+        /** The DocMDP level of a certification signature, or null for an approval signature. */
+        val certification: Int? = null,
+        /** The `/Lock` dictionary of the signature field, or null. */
+        val lock: String? = null,
+        /** The value of a text field `Name` on the page, or null for a form with the signature field alone. */
+        val textField: String? = null,
     )
+
+    /** The object numbers of a [signedPdf], for revisions that change them. */
+    class Numbers(val content: Int, val textField: Int, val next: Int) {
+        val catalog = 1
+        val page = 3
+        val signatureField = 4
+        val signature = 5
+    }
+
+    /** The object numbers that [signedPdf] gives for [o]. */
+    fun numbers(o: PdfOptions = PdfOptions()): Numbers {
+        val dss = o.dssCerts.size + o.dssCrls.size + o.dssOcsps.size
+        val content = if (dss > 0) 7 + dss else 6
+        return Numbers(content = content, textField = content + 1, next = content + if (o.textField != null) 2 else 1)
+    }
 
     /**
      * A one-page PDF with one signature field, signed by [sign], which gets the signed bytes and
@@ -264,34 +285,46 @@ internal object SigFixtures {
     fun signedPdf(o: PdfOptions = PdfOptions(), sign: (ByteArray) -> ByteArray): ByteArray {
         val placeholder = "[0 0000000000 0000000000 0000000000]"
         val dss = o.dssCerts + o.dssCrls + o.dssOcsps
-        val objects = mutableListOf(
-            "<< /Type /Catalog /Pages 2 0 R /AcroForm << /Fields [4 0 R] /SigFlags 3 >>" + (if (dss.isNotEmpty()) " /DSS 6 0 R" else "") + " >>",
-            "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
-            "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] /Annots [4 0 R] >>",
-            "<< /Type /Annot /Subtype /Widget /FT /Sig /T (Signature1) /Rect [0 0 0 0] /F 132 /P 3 0 R /V 5 0 R >>",
+        val n = numbers(o)
+        val fields = "4 0 R" + (if (o.textField != null) " ${n.textField} 0 R" else "")
+        // A level of 0 writes the DocMDP reference without /P, which means level 2.
+        val docMdp = o.certification?.let { level ->
+            val p = if (level == 0) "" else "/P $level "
+            "/Reference [<< /Type /SigRef /TransformMethod /DocMDP /TransformParams << /Type /TransformParams $p/V /1.2 >> >>] "
+        } ?: ""
+        val objects = mutableListOf<ByteArray>()
+        fun add(body: String) {
+            objects += body.toByteArray(Charsets.ISO_8859_1)
+        }
+        add(
+            "<< /Type /Catalog /Pages 2 0 R /AcroForm << /Fields [$fields] /SigFlags 3 >>" + (if (dss.isNotEmpty()) " /DSS 6 0 R" else "") +
+                (if (o.certification != null) " /Perms << /DocMDP 5 0 R >>" else "") + " >>",
+        )
+        add("<< /Type /Pages /Kids [3 0 R] /Count 1 >>")
+        add("<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] /Annots [$fields] /Contents ${n.content} 0 R >>")
+        add("<< /Type /Annot /Subtype /Widget /FT /Sig /T (Signature1) /Rect [0 0 0 0] /F 132 /P 3 0 R /V 5 0 R" + (o.lock?.let { " /Lock $it" } ?: "") + " >>")
+        add(
             "<< /Type /${o.type} /Filter /Adobe.PPKLite /SubFilter /${o.subFilter} /Name (KitePDF Test) /Reason (Testing) " +
-                "/Location (Here) /M (D:20260928120000Z) ${o.extraEntries} /ByteRange $placeholder " +
+                "/Location (Here) /M (D:20260928120000Z) ${o.extraEntries} $docMdp/ByteRange $placeholder " +
                 (if (o.holeKey != "Contents") "/Contents <00> " else "") + "/${o.holeKey} <${"0".repeat(o.holeSize * 2)}> >>",
         )
         if (dss.isNotEmpty()) {
             // The streams follow the DSS dictionary, object 6, in the order of these three arrays.
             var next = 7
             fun refs(items: List<ByteArray>) = items.joinToString(" ") { "${next++} 0 R" }
-            objects += "<< /Certs [${refs(o.dssCerts)}] /CRLs [${refs(o.dssCrls)}] /OCSPs [${refs(o.dssOcsps)}] >>"
+            add("<< /Certs [${refs(o.dssCerts)}] /CRLs [${refs(o.dssCrls)}] /OCSPs [${refs(o.dssOcsps)}] >>")
+            for (der in dss) objects += "<< /Length ${der.size} >>\nstream\n".toByteArray(Charsets.ISO_8859_1) + der + "\nendstream".toByteArray(Charsets.ISO_8859_1)
         }
-        val streams = dss
+        add(stream("0 0 1 rg 20 20 50 50 re f"))
+        if (o.textField != null) add("<< /Type /Annot /Subtype /Widget /FT /Tx /T (Name) /Rect [20 150 180 170] /F 4 /P 3 0 R /V (${o.textField}) >>")
         val out = java.io.ByteArrayOutputStream()
-        out.write("%PDF-1.7\n%âãÏÓ\n".toByteArray(Charsets.ISO_8859_1))
+        out.write("%PDF-1.7\n%\u00E2\u00E3\u00CF\u00D3\n".toByteArray(Charsets.ISO_8859_1))
         val offsets = ArrayList<Int>()
         for ((i, body) in objects.withIndex()) {
             offsets += out.size()
-            out.write("${i + 1} 0 obj\n$body\nendobj\n".toByteArray(Charsets.ISO_8859_1))
-        }
-        for ((i, der) in streams.withIndex()) {
-            offsets += out.size()
-            out.write("${objects.size + i + 1} 0 obj\n<< /Length ${der.size} >>\nstream\n".toByteArray(Charsets.ISO_8859_1))
-            out.write(der)
-            out.write("\nendstream\nendobj\n".toByteArray(Charsets.ISO_8859_1))
+            out.write("${i + 1} 0 obj\n".toByteArray(Charsets.ISO_8859_1))
+            out.write(body)
+            out.write("\nendobj\n".toByteArray(Charsets.ISO_8859_1))
         }
         val xref = out.size()
         val count = offsets.size + 1
@@ -312,18 +345,62 @@ internal object SigFixtures {
         return pdf
     }
 
-    /** [pdf] with an incremental update appended: a new /Info dictionary, as an editor saving after signing writes. */
-    fun appendRevision(pdf: ByteArray): ByteArray {
+    /** The body of a stream object that holds [data]. */
+    fun stream(data: String): String = "<< /Length ${data.length} >>\nstream\n$data\nendstream"
+
+    /**
+     * [pdf] with an incremental update appended, as an editor saving after signing writes: the
+     * objects of [objects] by number, new or replacing, and [trailer] entries in the new trailer.
+     */
+    fun update(pdf: ByteArray, objects: Map<Int, String>, trailer: String = ""): ByteArray {
         val text = String(pdf, Charsets.ISO_8859_1)
         val prev = text.substring(text.lastIndexOf("startxref") + "startxref".length).trim().lines().first().trim()
-        val size = Regex("/Size (\\d+)").findAll(text).last().groupValues[1].toInt()
+        val size = maxOf(Regex("/Size (\\d+)").findAll(text).last().groupValues[1].toInt(), objects.keys.max() + 1)
         val out = java.io.ByteArrayOutputStream()
         out.write(pdf)
-        val objectAt = out.size()
-        out.write("$size 0 obj\n<< /Title (Changed after signing) >>\nendobj\n".toByteArray(Charsets.ISO_8859_1))
+        val offsets = objects.toSortedMap().map { (number, body) ->
+            val at = out.size()
+            out.write("$number 0 obj\n$body\nendobj\n".toByteArray(Charsets.ISO_8859_1))
+            number to at
+        }
         val xref = out.size()
-        out.write("xref\n$size 1\n%010d 00000 n \ntrailer\n<< /Size ${size + 1} /Root 1 0 R /Info $size 0 R /Prev $prev >>\nstartxref\n$xref\n%%EOF\n".format(objectAt).toByteArray(Charsets.ISO_8859_1))
+        out.write("xref\n".toByteArray(Charsets.ISO_8859_1))
+        for ((number, at) in offsets) out.write("$number 1\n%010d 00000 n \n".format(at).toByteArray(Charsets.ISO_8859_1))
+        out.write("trailer\n<< /Size $size /Root 1 0 R $trailer /Prev $prev >>\nstartxref\n$xref\n%%EOF\n".toByteArray(Charsets.ISO_8859_1))
         return out.toByteArray()
+    }
+
+    /**
+     * [update] with a cross-reference stream in place of a table, as most writers since PDF 1.5
+     * save (ISO 32000-1, 7.5.8). The stream is an object of the update itself.
+     */
+    fun updateWithXrefStream(pdf: ByteArray, objects: Map<Int, String>): ByteArray {
+        val text = String(pdf, Charsets.ISO_8859_1)
+        val prev = text.substring(text.lastIndexOf("startxref") + "startxref".length).trim().lines().first().trim()
+        val xrefNumber = maxOf(Regex("/Size (\\d+)").findAll(text).last().groupValues[1].toInt(), objects.keys.max() + 1)
+        val out = java.io.ByteArrayOutputStream()
+        out.write(pdf)
+        val offsets = objects.toSortedMap().map { (number, body) ->
+            val at = out.size()
+            out.write("$number 0 obj\n$body\nendobj\n".toByteArray(Charsets.ISO_8859_1))
+            number to at
+        }
+        val xrefAt = out.size()
+        val entries = offsets + (xrefNumber to xrefAt)
+        // Each entry: type 1, a four-byte offset, a two-byte generation.
+        val data = java.io.ByteArrayOutputStream()
+        for ((_, at) in entries) data.write(byteArrayOf(1, (at ushr 24).toByte(), (at ushr 16).toByte(), (at ushr 8).toByte(), at.toByte(), 0, 0))
+        val index = entries.joinToString(" ") { "${it.first} 1" }
+        out.write("$xrefNumber 0 obj\n<< /Type /XRef /Size ${xrefNumber + 1} /Root 1 0 R /Prev $prev /W [1 4 2] /Index [$index] /Length ${data.size()} >>\nstream\n".toByteArray(Charsets.ISO_8859_1))
+        out.write(data.toByteArray())
+        out.write("\nendstream\nendobj\nstartxref\n$xrefAt\n%%EOF\n".toByteArray(Charsets.ISO_8859_1))
+        return out.toByteArray()
+    }
+
+    /** [pdf] with an incremental update appended: a new /Info dictionary, as an editor saving after signing writes. */
+    fun appendRevision(pdf: ByteArray): ByteArray {
+        val size = Regex("/Size (\\d+)").findAll(String(pdf, Charsets.ISO_8859_1)).last().groupValues[1].toInt()
+        return update(pdf, mapOf(size to "<< /Title (Changed after signing) >>"), trailer = "/Info $size 0 R")
     }
 
     /** [bytes] as PEM, such as a certificate or a PKCS #8 private key. */

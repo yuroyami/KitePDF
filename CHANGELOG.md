@@ -28,6 +28,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Acrobat's `adbe-revocationInfoArchival` attribute, and those that the caller
   passes to `validate` as `revocationData`. Only data that the issuer signed
   counts, or an OCSP responder that the issuer delegated to (#447).
+- `PdfSignatureValidation.changes` lists what later revisions changed after a
+  signature, such as a field value, an annotation, a signature, the document
+  security store or page content, and says whether each change is permitted.
+  `PdfSignature.certificationLevel` gives the DocMDP level of a certification
+  signature, and a `/Lock` on the signature field applies too.
+  `areChangesPermitted` sums it up (#448).
 
 - `KiteDocView.onEpubLinkTap` receives every tapped internal EPUB link before the
   viewer scrolls to it. A host can show a note that the book does not mark as a

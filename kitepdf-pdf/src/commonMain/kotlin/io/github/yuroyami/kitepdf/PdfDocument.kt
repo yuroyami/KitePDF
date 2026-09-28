@@ -686,6 +686,18 @@ public class PdfDocument private constructor(
     /** The file's bytes, zero-copy, for code in this module that only reads them. */
     internal val fileBytes: ByteArray get() = input
 
+    /**
+     * The document as it was when the file ended at byte [end]: the revision that a signature
+     * covers. It shares this document's security handler, since every revision of a file keeps
+     * one encryption. Null when those bytes do not hold a readable revision (#448).
+     */
+    internal fun revisionEndingAt(end: Int): PdfDocument? = runCatching {
+        if (end <= 0 || end > input.size) return null
+        val bytes = input.copyOf(end)
+        val chain = parseWithPrevChain(ByteReader(bytes))
+        PdfDocument(version, bytes, chain.entries, chain.trailer, security).takeIf { isStructurallyUsable(it) }
+    }.getOrNull()
+
     /** Look up a form field by its fully-qualified name; null if not present. */
     public fun formField(fullyQualifiedName: String): PdfFormField? =
         formFields.firstOrNull { it.fullyQualifiedName == fullyQualifiedName }
