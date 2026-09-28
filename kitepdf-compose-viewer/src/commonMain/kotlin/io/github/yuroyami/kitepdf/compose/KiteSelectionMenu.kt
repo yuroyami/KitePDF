@@ -1,5 +1,7 @@
 package io.github.yuroyami.kitepdf.compose
 
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
 import kotlin.math.roundToInt
 import androidx.compose.ui.layout.layout
 import androidx.compose.foundation.background
@@ -113,6 +115,7 @@ public fun BoxScope.KiteSelectionMenu(
 ) {
     val selection = state.selection ?: return
     if (state.selectionInProgress && !showWhileSelecting) return
+    val strings = LocalKiteViewerStrings.current
 
     val body: @Composable () -> Unit = {
         Column(
@@ -136,7 +139,8 @@ public fun BoxScope.KiteSelectionMenu(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    for (color in highlightColors) {
+                    for ((place, color) in highlightColors.withIndex()) {
+                        val label = strings.highlightColor(place + 1, highlightColors.size)
                         val pick = {
                             onHighlightColorPicked(selection, color)
                             if (clearSelectionOnColorPick) state.clearSelection()
@@ -144,7 +148,7 @@ public fun BoxScope.KiteSelectionMenu(
                         if (colorSwatch != null) {
                             colorSwatch(color, pick)
                         } else {
-                            DefaultColorSwatch(color, pick)
+                            DefaultColorSwatch(color, label, pick)
                         }
                     }
                 }
@@ -224,13 +228,15 @@ private fun DefaultMenuChip(
 }
 
 @Composable
-private fun DefaultColorSwatch(color: Color, onPick: () -> Unit) {
+private fun DefaultColorSwatch(color: Color, label: String, onPick: () -> Unit) {
     Box(
         modifier = Modifier
             .size(26.dp)
             .clip(CircleShape)
             .background(color)
             .border(1.dp, Color(0x33000000), CircleShape)
-            .clickable(role = Role.Button, onClick = onPick),
+            .clickable(role = Role.Button, onClick = onPick)
+            // A screen reader names the colour by its place (#427).
+            .semantics { contentDescription = label },
     )
 }

@@ -63,7 +63,7 @@ class FormInputSceneTest {
         add("<< /Type /Annot /Subtype /Widget /FT /Tx /T (notes) /Ff 4096 /V () /Rect [20 60 180 140] /DA (/Helv 12 Tf 0 g) >>")
         add("<< /Type /Annot /Subtype /Widget /FT /Tx /T (code) /Ff 8192 /MaxLen 4 /V () /Rect [20 20 90 50] /DA (/Helv 12 Tf 0 g) >>")
         add(
-            "<< /Type /Annot /Subtype /Widget /FT /Tx /T (amount) /V () /Rect [110 20 180 50] /DA (/Helv 12 Tf 0 g) " +
+            "<< /Type /Annot /Subtype /Widget /FT /Tx /T (amount) /TU (Amount in euros) /V () /Rect [110 20 180 50] /DA (/Helv 12 Tf 0 g) " +
                 "/AA << /F << /S /JavaScript /JS (AFNumber_Format\\(2, 0, 0, 0, \"\", true\\);) >> >> >>",
         )
         val xref = sb.length
@@ -126,6 +126,19 @@ class FormInputSceneTest {
         }
         driver.pumpUntilState { state.pageGeometry.isNotEmpty() }
         return Triple(scene, driver) { state }
+    }
+
+    /** A screen reader names the input by the field's tooltip, else by the field's own name (#427). */
+    @Test
+    fun the_input_carries_the_tooltip_or_the_name_of_its_field() {
+        val doc = formPdf()
+        val (scene, driver, _) = viewer(doc, queued = true)
+        scene.use {
+            val amount = focus(scene, driver, 145f, 165f)
+            assertEquals(listOf("Amount in euros"), amount.config.getOrNull(SemanticsProperties.ContentDescription))
+            val name = focus(scene, driver, 100f, 35f)
+            assertEquals(listOf("name"), name.config.getOrNull(SemanticsProperties.ContentDescription))
+        }
     }
 
     /** Taps the field at ([x], [y]) and waits until its input has the focus. */

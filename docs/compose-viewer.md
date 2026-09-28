@@ -639,6 +639,24 @@ KiteDocView(
 )
 ```
 
+## Accessibility
+
+A screen reader finds each page of `KiteDocView` by name ("Page 3 of 12", or "Page 3" while a book still lays out), and the buttons of `KiteNavigationControls`, the thumbnails of `KiteThumbnailStrip` and the colours of `KiteSelectionMenu` by name and role. The hidden input of a form field carries the field's tooltip, or its name. The text on a page, its links and its fields are not in the semantics tree yet.
+
+The names are English by default. Provide your own words through `LocalKiteViewerStrings`:
+
+```kotlin
+CompositionLocalProvider(
+    LocalKiteViewerStrings provides KiteViewerStrings(
+        page = { number, count -> if (count == null) "Seite $number" else "Seite $number von $count" },
+        previousPage = "Vorherige Seite",
+        nextPage = "Nächste Seite",
+    ),
+) {
+    KiteDocView(state)
+}
+```
+
 ## Navigation widgets
 
 Ready-made UI components for common patterns. They all take a `KiteDocViewState`, so they work from anywhere in your tree; inside the viewport (via `overlay`), in your top bar, in a side panel.

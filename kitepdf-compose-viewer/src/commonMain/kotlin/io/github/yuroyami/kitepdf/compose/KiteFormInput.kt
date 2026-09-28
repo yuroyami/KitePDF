@@ -1,5 +1,7 @@
 package io.github.yuroyami.kitepdf.compose
 
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -56,7 +58,10 @@ internal fun KiteFormInput(state: KiteDocViewState, scripts: PdfScriptHandler?, 
         (state.document as? PdfDocument)?.formFields?.firstOrNull { it.fullyQualifiedName == fieldName }
     }
     // One input per field, so a new field starts with its own caret and its own focus history.
-    key(fieldName) { FieldInput(state, scripts, fieldName, lane, fieldInputOptions(field)) }
+    // A screen reader names the input by the field's tooltip, else its own name (#427).
+    val label = field?.tooltip?.takeIf { it.isNotBlank() } ?: field?.partialName?.takeIf { it.isNotBlank() }
+        ?: LocalKiteViewerStrings.current.formField
+    key(fieldName) { FieldInput(state, scripts, fieldName, lane, fieldInputOptions(field), label) }
 }
 
 /** How the input for a field takes keys: on one line or several, with which keyboard, and how many. */
@@ -112,6 +117,7 @@ private fun FieldInput(
     fieldName: String,
     lane: CoroutineDispatcher,
     options: FieldInputOptions,
+    label: String,
 ) {
     val requester = remember { FocusRequester() }
     val pipeline = remember { KeystrokePipeline(scripts.formState.value(fieldName) ?: "") }
@@ -163,6 +169,7 @@ private fun FieldInput(
         visualTransformation = if (options.keyboard.keyboardType == KeyboardType.Password) PasswordVisualTransformation() else VisualTransformation.None,
         modifier = Modifier
             .overFocusedWidget(state)
+            .semantics { contentDescription = label }
             .alpha(0f)
             .focusRequester(requester)
             .onFocusChanged { focus ->

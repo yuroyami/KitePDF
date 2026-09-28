@@ -448,6 +448,22 @@ public final class io/github/yuroyami/kitepdf/compose/KiteTextSelection {
 	public fun toString ()Ljava/lang/String;
 }
 
+public final class io/github/yuroyami/kitepdf/compose/KiteViewerStrings {
+	public static final field $stable I
+	public fun <init> ()V
+	public fun <init> (Lkotlin/jvm/functions/Function2;Ljava/lang/String;Ljava/lang/String;Lkotlin/jvm/functions/Function2;Ljava/lang/String;)V
+	public synthetic fun <init> (Lkotlin/jvm/functions/Function2;Ljava/lang/String;Ljava/lang/String;Lkotlin/jvm/functions/Function2;Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun getFormField ()Ljava/lang/String;
+	public final fun getHighlightColor ()Lkotlin/jvm/functions/Function2;
+	public final fun getNextPage ()Ljava/lang/String;
+	public final fun getPage ()Lkotlin/jvm/functions/Function2;
+	public final fun getPreviousPage ()Ljava/lang/String;
+}
+
+public final class io/github/yuroyami/kitepdf/compose/KiteViewerStringsKt {
+	public static final fun getLocalKiteViewerStrings ()Landroidx/compose/runtime/ProvidableCompositionLocal;
+}
+
 public final class io/github/yuroyami/kitepdf/compose/KiteWidgetsKt {
 	public static final fun KiteNavigationControls-t6yy7ic (Lio/github/yuroyami/kitepdf/compose/KiteDocViewState;Landroidx/compose/ui/Modifier;JJLandroidx/compose/ui/text/TextStyle;Landroidx/compose/runtime/Composer;II)V
 	public static final fun KiteOutlinePanel-uPlxQME (Lio/github/yuroyami/kitepdf/compose/KiteDocViewState;Landroidx/compose/ui/Modifier;Ljava/util/List;Landroidx/compose/foundation/layout/PaddingValues;Landroidx/compose/ui/text/TextStyle;JJJFLkotlin/jvm/functions/Function1;Landroidx/compose/runtime/Composer;II)V
