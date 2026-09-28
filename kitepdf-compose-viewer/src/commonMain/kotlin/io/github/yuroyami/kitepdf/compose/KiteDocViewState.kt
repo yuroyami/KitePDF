@@ -26,6 +26,7 @@ import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
+import io.github.yuroyami.kitepdf.core.KiteRectangle
 import androidx.compose.ui.geometry.isSpecified
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.LayoutCoordinates
@@ -1207,6 +1208,31 @@ public class KiteDocViewState(
         )
         val centre = Offset(viewportSize.width / 2f, viewportSize.height / 2f)
         return centre + (content - centre) * zoom + panOffset
+    }
+
+    /**
+     * [hitTestDisplay] run backwards for a rectangle: [rect], in the display space of the page
+     * [pageIndex], to the viewport pixels it is painted at under the current zoom and pan. Null
+     * while that page has no place in the layout: a paged layout places only its current page.
+     *
+     * It reads snapshot state, so an element placed with it in the viewer's `overlay` follows
+     * the page as it scrolls and zooms, and keeps its own size. To draw at the page's scale
+     * instead, use the viewer's `pageOverlay` (#30).
+     */
+    public fun displayRectToViewport(pageIndex: Int, rect: KiteRectangle): Rect? {
+        val corner = displayToViewport(pageIndex, minOf(rect.left, rect.right), minOf(rect.bottom, rect.top)) ?: return null
+        val opposite = displayToViewport(pageIndex, maxOf(rect.left, rect.right), maxOf(rect.bottom, rect.top)) ?: return null
+        return Rect(corner, opposite)
+    }
+
+    /**
+     * [hitTest] run backwards for a rectangle: [rect], in the page space of the page [pageIndex],
+     * such as the rectangle of a PDF annotation, to the viewport pixels it is painted at. Null
+     * while that page has no place in the layout. See [displayRectToViewport].
+     */
+    public fun pageRectToViewport(pageIndex: Int, rect: KiteRectangle): Rect? {
+        val page = pageAt(pageIndex) ?: return null
+        return displayRectToViewport(pageIndex, page.pageToDisplay(rect))
     }
 
     /**

@@ -42,6 +42,7 @@ import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.VerticalPager
 import androidx.compose.foundation.pager.PagerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
@@ -174,6 +175,11 @@ import kotlinx.coroutines.launch
  *   [BoxScope] for alignment. Widgets here float above the pages:
  *   [KiteNavigationControls], [KitePageIndicator], [KiteThumbnailStrip] or
  *   anything of your own.
+ * @param pageOverlay drawn over each page that the layout composes, in the page's own
+ *   frame, so it moves and scales with the page. Place an element on a rectangle of the
+ *   page with [KitePageOverlayScope.displayRect] or [KitePageOverlayScope.pageRect]. For an
+ *   element that keeps its size on screen at any zoom, use [overlay] and
+ *   [KiteDocViewState.displayRectToViewport] instead.
  * @param onTap single-tap on the page, reported with the tap position. The tap
  *   does not consume pan/swipe, so it coexists with navigation. Typical use is
  *   toggling a HUD's visibility. Held back until the double-tap window lapses
@@ -207,6 +213,7 @@ public fun KiteDocView(
     pagePlaceholder: (@Composable (pageIndex: Int) -> Unit)? = null,
     chapterPlaceholder: (@Composable (chapter: Int) -> Unit)? = null,
     overlay: (@Composable BoxScope.(KiteDocViewState) -> Unit)? = null,
+    pageOverlay: (@Composable KitePageOverlayScope.() -> Unit)? = null,
     onTap: ((Offset) -> Unit)? = null,
     onLinkTap: ((KiteLinkAction) -> Boolean)? = null,
     /**
@@ -385,26 +392,28 @@ public fun KiteDocView(
             // A new state gets a new layout, containers and all, so nothing of the old document's
             // strip reaches the new one's pages (#346).
             key(state) {
-                when (layout) {
-                    is KiteDocLayout.Continuous -> ContinuousLayout(
-                        state, layout, zoomSpec, renderSpec, colors, pageSpacing,
-                        userScrollEnabled, settledZoom, onPageRendered, pagePlaceholder,
-                        chapterPlaceholder, linkAwareTap,
-                    )
-                    is KiteDocLayout.Paged -> PagedLayout(
-                        state, layout, zoomSpec, renderSpec, colors, pageSpacing,
-                        userScrollEnabled, settledZoom, onPageRendered, pagePlaceholder,
-                        chapterPlaceholder, linkAwareTap,
-                    )
-                    is KiteDocLayout.Spread -> SpreadLayout(
-                        state, layout, zoomSpec, renderSpec, colors, pageSpacing,
-                        userScrollEnabled, settledZoom, onPageRendered, pagePlaceholder,
-                        chapterPlaceholder, linkAwareTap,
-                    )
-                    is KiteDocLayout.SinglePage -> SinglePageLayout(
-                        state, layout, zoomSpec, renderSpec, colors,
-                        settledZoom, onPageRendered, pagePlaceholder, chapterPlaceholder, linkAwareTap,
-                    )
+                CompositionLocalProvider(LocalKitePageOverlay provides pageOverlay) {
+                    when (layout) {
+                        is KiteDocLayout.Continuous -> ContinuousLayout(
+                            state, layout, zoomSpec, renderSpec, colors, pageSpacing,
+                            userScrollEnabled, settledZoom, onPageRendered, pagePlaceholder,
+                            chapterPlaceholder, linkAwareTap,
+                        )
+                        is KiteDocLayout.Paged -> PagedLayout(
+                            state, layout, zoomSpec, renderSpec, colors, pageSpacing,
+                            userScrollEnabled, settledZoom, onPageRendered, pagePlaceholder,
+                            chapterPlaceholder, linkAwareTap,
+                        )
+                        is KiteDocLayout.Spread -> SpreadLayout(
+                            state, layout, zoomSpec, renderSpec, colors, pageSpacing,
+                            userScrollEnabled, settledZoom, onPageRendered, pagePlaceholder,
+                            chapterPlaceholder, linkAwareTap,
+                        )
+                        is KiteDocLayout.SinglePage -> SinglePageLayout(
+                            state, layout, zoomSpec, renderSpec, colors,
+                            settledZoom, onPageRendered, pagePlaceholder, chapterPlaceholder, linkAwareTap,
+                        )
+                    }
                 }
             }
         }
@@ -789,7 +798,8 @@ private fun PageSlotContent(
     val formTextMeasurer = rememberTextMeasurer()
     val formFailure = remember(page) { DrawFailure() }
     val strings = LocalKiteViewerStrings.current
-    val slot = modifier
+    val slot = Modifier
+        .fillMaxSize()
         .kiteFormLayer(
             page, state.scripts, formTextMeasurer,
             // The form layer draws at screen resolution, so a hairline is one screen pixel unless the spec says else.
@@ -802,15 +812,20 @@ private fun PageSlotContent(
             contentDescription = strings.page(pageIndex + 1, if (state.isComplete) state.knownPageCount else null)
             role = Role.Image
         }
-    when (renderSpec) {
-        is KiteRenderSpec.Rasterized -> KitePageRaster(
-            page, pageIndex, baseSize, settledZoom, renderSpec, colors,
-            onPageRendered, pagePlaceholder, slot,
-            cache = state.bitmapCacheFor(renderSpec.cacheBudgetBytes),
-            drawsFormLayer = drawsForm,
-            state = state,
-        )
-        is KiteRenderSpec.Vectorized -> KitePageVector(page, renderSpec, colors, slot, skipWidgets = drawsForm, magnification = settledZoom)
+    val pageOverlay = LocalKitePageOverlay.current
+    Box(modifier) {
+        when (renderSpec) {
+            is KiteRenderSpec.Rasterized -> KitePageRaster(
+                page, pageIndex, baseSize, settledZoom, renderSpec, colors,
+                onPageRendered, pagePlaceholder, slot,
+                cache = state.bitmapCacheFor(renderSpec.cacheBudgetBytes),
+                drawsFormLayer = drawsForm,
+                state = state,
+            )
+            is KiteRenderSpec.Vectorized -> KitePageVector(page, renderSpec, colors, slot, skipWidgets = drawsForm, magnification = settledZoom)
+        }
+        // The host's elements, in the page's frame, so the zoom and pan move them with the page (#30).
+        if (pageOverlay != null) PageOverlay(page, pageIndex, pageOverlay, Modifier.fillMaxSize())
     }
 }
 

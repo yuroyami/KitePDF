@@ -24,6 +24,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   keeps them laid out past its layout budget. `KiteDocView` calls it, so a long
   press, a link tap or a Vectorized draw on a visible page no longer lays a
   dropped chapter out again on the UI thread (#377).
+- `KiteDocView.pageOverlay` draws over each page in the page's own frame.
+  `KitePageOverlayScope.pageRect` and `displayRect` place an element on a
+  rectangle of the page, and the element stays there at any zoom (#30).
+- `KiteDocViewState.pageRectToViewport` and `displayRectToViewport` give the
+  viewport rectangle of a rectangle on a page. They are `hitTest` and
+  `hitTestDisplay` in reverse (#30).
 
 ### Changed
 
