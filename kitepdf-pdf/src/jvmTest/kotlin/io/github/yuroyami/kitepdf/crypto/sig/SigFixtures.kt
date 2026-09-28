@@ -92,7 +92,7 @@ internal object SigFixtures {
     }
 
     /** A v3 certificate for [keys], named [cn], signed by [issuer] or by itself when [issuer] is null. */
-    fun certificate(cn: String, keys: KeyPair, issuer: Identity?, ca: Boolean, serial: Long, notAfter: String = "360101000000Z"): Identity {
+    fun certificate(cn: String, keys: KeyPair, issuer: Identity?, ca: Boolean, serial: Long, notAfter: String = "360101000000Z", ocspSigning: Boolean = false): Identity {
         val subjectName = name(cn)
         val ski = sha("SHA-1", keys.public.encoded)
         val signerKeys = issuer?.keys ?: keys
@@ -102,6 +102,7 @@ internal object SigFixtures {
             seq(oid("2.5.29.19"), Asn1.encode(0x01, byteArrayOf(-1)), octets(if (ca) seq(Asn1.encode(0x01, byteArrayOf(-1))) else seq())),
             seq(oid("2.5.29.14"), octets(octets(ski))),
         )
+        if (ocspSigning) extensions += seq(oid("2.5.29.37"), octets(seq(oid("1.3.6.1.5.5.7.3.9"))))
         val tbs = seq(
             tagged(0xA0, int(2)),
             int(serial),
@@ -135,6 +136,8 @@ internal object SigFixtures {
         val ecOid: String = ECDSA_SHA256,
         /** Changes the signature after signing. */
         val corruptSignature: Boolean = false,
+        /** The revocation field of the SignedData, [1]: CRLs, and OCSP responses as other formats. */
+        val revocation: List<ByteArray> = emptyList(),
     )
 
     /**
@@ -177,6 +180,7 @@ internal object SigFixtures {
             set(algorithm(o.digestOid)),
             encapsulated,
             *(if (certs.isEmpty()) emptyArray() else arrayOf(tagged(0xA0, *certs.map { it.cert }.toTypedArray()))),
+            *(if (o.revocation.isEmpty()) emptyArray() else arrayOf(tagged(0xA1, *o.revocation.toTypedArray()))),
             set(signerInfo),
         )
         return seq(oid("1.2.840.113549.1.7.2"), tagged(0xA0, signedData))
@@ -197,6 +201,47 @@ internal object SigFixtures {
 
     fun hex(b: ByteArray): String = b.joinToString("") { "%02X".format(it) }
 
+    /** The bits of [identity]'s public key, which an OCSP response hashes. */
+    fun keyBits(identity: Identity): ByteArray = Asn1.read(identity.keys.public.encoded, 0)!!.children[1].bitString()!!
+
+    /** A v2 CRL that [issuer] signs, listing [revoked] serial numbers as revoked on [revokedAt] (RFC 5280, 5.1). */
+    fun crl(issuer: Identity, revoked: List<BigInteger>, revokedAt: String = "260901000000Z", signer: Identity = issuer): ByteArray {
+        val entries = revoked.map { seq(int(it), utcTime(revokedAt)) }
+        val tbs = seq(
+            int(1),
+            signer.signatureAlgorithm,
+            issuer.name,
+            utcTime("260920000000Z"),
+            utcTime("261020000000Z"),
+            *(if (entries.isEmpty()) emptyArray() else arrayOf(seq(*entries.toTypedArray()))),
+        )
+        return seq(tbs, signer.signatureAlgorithm, bits(signer.sign(tbs)))
+    }
+
+    /** One status of an OCSP response: good, or revoked at a time. */
+    class OcspStatus(val cert: Identity, val issuer: Identity, val revokedAt: String? = null)
+
+    /**
+     * An OCSP response that [responder] signs about [statuses] (RFC 6960, 4.2.1), naming the
+     * responder by its name or by the SHA-1 of its key, and carrying [certs].
+     */
+    fun ocsp(responder: Identity, statuses: List<OcspStatus>, byKey: Boolean = false, certs: List<Identity> = emptyList()): ByteArray {
+        val singles = statuses.map { s ->
+            val id = seq(algorithm(SHA1, NULL), octets(sha("SHA-1", s.cert.issuerName)), octets(sha("SHA-1", keyBits(s.issuer))), int(s.cert.serial))
+            val status = s.revokedAt?.let { tagged(0xA1, generalizedTime(it)) } ?: byteArrayOf(0x80.toByte(), 0)
+            seq(id, status, generalizedTime("20260925000000Z"))
+        }
+        val responderId = if (byKey) tagged(0xA2, octets(sha("SHA-1", keyBits(responder)))) else tagged(0xA1, responder.name)
+        val data = seq(responderId, generalizedTime("20260925000000Z"), seq(*singles.toTypedArray()))
+        val basic = seq(
+            data,
+            responder.signatureAlgorithm,
+            bits(responder.sign(data)),
+            *(if (certs.isEmpty()) emptyArray() else arrayOf(tagged(0xA0, seq(*certs.map { it.cert }.toTypedArray())))),
+        )
+        return seq(Asn1.encode(0x0A, byteArrayOf(0)), tagged(0xA0, seq(oid("1.3.6.1.5.5.7.48.1.1"), octets(basic))))
+    }
+
     /** Options for [signedPdf]. */
     class PdfOptions(
         val subFilter: String = "adbe.pkcs7.detached",
@@ -204,6 +249,8 @@ internal object SigFixtures {
         val extraEntries: String = "",
         val holeSize: Int = 16384,
         val dssCerts: List<ByteArray> = emptyList(),
+        val dssCrls: List<ByteArray> = emptyList(),
+        val dssOcsps: List<ByteArray> = emptyList(),
         /** The key whose string holds the signature. Anything but `Contents` leaves `/Contents <00>` as a decoy. */
         val holeKey: String = "Contents",
         /** The first signed byte: above 0 leaves the start of the file unsigned. */
@@ -216,8 +263,9 @@ internal object SigFixtures {
      */
     fun signedPdf(o: PdfOptions = PdfOptions(), sign: (ByteArray) -> ByteArray): ByteArray {
         val placeholder = "[0 0000000000 0000000000 0000000000]"
+        val dss = o.dssCerts + o.dssCrls + o.dssOcsps
         val objects = mutableListOf(
-            "<< /Type /Catalog /Pages 2 0 R /AcroForm << /Fields [4 0 R] /SigFlags 3 >>" + (if (o.dssCerts.isNotEmpty()) " /DSS 6 0 R" else "") + " >>",
+            "<< /Type /Catalog /Pages 2 0 R /AcroForm << /Fields [4 0 R] /SigFlags 3 >>" + (if (dss.isNotEmpty()) " /DSS 6 0 R" else "") + " >>",
             "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
             "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] /Annots [4 0 R] >>",
             "<< /Type /Annot /Subtype /Widget /FT /Sig /T (Signature1) /Rect [0 0 0 0] /F 132 /P 3 0 R /V 5 0 R >>",
@@ -225,10 +273,13 @@ internal object SigFixtures {
                 "/Location (Here) /M (D:20260928120000Z) ${o.extraEntries} /ByteRange $placeholder " +
                 (if (o.holeKey != "Contents") "/Contents <00> " else "") + "/${o.holeKey} <${"0".repeat(o.holeSize * 2)}> >>",
         )
-        if (o.dssCerts.isNotEmpty()) {
-            objects += "<< /Certs [${o.dssCerts.indices.joinToString(" ") { "${7 + it} 0 R" }}] >>"
+        if (dss.isNotEmpty()) {
+            // The streams follow the DSS dictionary, object 6, in the order of these three arrays.
+            var next = 7
+            fun refs(items: List<ByteArray>) = items.joinToString(" ") { "${next++} 0 R" }
+            objects += "<< /Certs [${refs(o.dssCerts)}] /CRLs [${refs(o.dssCrls)}] /OCSPs [${refs(o.dssOcsps)}] >>"
         }
-        val streams = o.dssCerts.map { it }
+        val streams = dss
         val out = java.io.ByteArrayOutputStream()
         out.write("%PDF-1.7\n%âãÏÓ\n".toByteArray(Charsets.ISO_8859_1))
         val offsets = ArrayList<Int>()

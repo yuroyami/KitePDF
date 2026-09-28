@@ -13,6 +13,17 @@ internal class CmsSigner(
 ) {
     val hasSignedAttributes: Boolean get() = signedAttributes != null
 
+    /**
+     * The CRLs and OCSP responses that Acrobat keeps in the signed attribute
+     * `adbe-revocationInfoArchival` (ISO 32000-1, 12.8.3.3.2).
+     */
+    fun archivedRevocation(): Pair<List<Crl>, List<OcspResponse>> {
+        val archive = attribute(CmsSignedData.REVOCATION_ARCHIVAL) ?: return emptyList<Crl>() to emptyList()
+        val crls = archive.context(0)?.children?.firstOrNull()?.children.orEmpty().mapNotNull { Crl.parse(it.bytes, it.start) }
+        val ocsps = archive.context(1)?.children?.firstOrNull()?.children.orEmpty().mapNotNull { OcspResponse.parse(it.bytes, it.start) }
+        return crls to ocsps
+    }
+
     /** The first value of the signed attribute [oid], or null when the signer has none. */
     fun attribute(oid: String): Asn1Node? = signedAttributes?.children
         ?.firstOrNull { it.children.firstOrNull()?.oid() == oid }
@@ -38,6 +49,10 @@ internal class CmsSignedData(
     val signers: List<CmsSigner>,
     val contentType: String?,
     val content: ByteArray?,
+    /** The CRLs of the revocation field (RFC 5652, 10.2.1). */
+    val crls: List<Crl> = emptyList(),
+    /** The OCSP responses of the revocation field, which RFC 5940 puts there. */
+    val ocsps: List<OcspResponse> = emptyList(),
 ) {
     companion object {
         const val SIGNED_DATA = "1.2.840.113549.1.7.2"
@@ -46,6 +61,8 @@ internal class CmsSignedData(
         const val SIGNING_CERTIFICATE = "1.2.840.113549.1.9.16.2.12"
         const val SIGNING_CERTIFICATE_V2 = "1.2.840.113549.1.9.16.2.47"
         const val TST_INFO = "1.2.840.113549.1.9.16.1.4"
+        const val REVOCATION_ARCHIVAL = "1.2.840.113583.1.1.8"
+        private const val OCSP_RESPONSE_INFO = "1.3.6.1.5.5.7.16.2"
 
         /** The SignedData in [bytes], or null when they do not hold one. Bytes after it, such as the zeros that pad a PDF signature, are ignored. */
         fun parse(bytes: ByteArray): CmsSignedData? = runCatching {
@@ -58,11 +75,16 @@ internal class CmsSignedData(
                 .filter { it.tag == Asn1.SEQUENCE }
                 .mapNotNull { X509.parse(it.bytes, it.start) }
             val signers = parts.lastOrNull()?.takeIf { it.tag == Asn1.SET }?.children.orEmpty().mapNotNull(::signerOf)
+            // [1]: each choice is a CRL, or another format such as an OCSP response.
+            val revocation = parts.firstOrNull { it.tag == 0xA1 }?.children.orEmpty()
             CmsSignedData(
                 certificates = certificates,
                 signers = signers,
                 contentType = encapsulated.children.firstOrNull()?.oid(),
                 content = encapsulated.context(0)?.children?.firstOrNull()?.takeIf { it.tag == Asn1.OCTET_STRING || it.tag == 0x24 }?.content(),
+                crls = revocation.filter { it.tag == Asn1.SEQUENCE }.mapNotNull { Crl.parse(it.bytes, it.start) },
+                ocsps = revocation.filter { it.tag == 0xA1 && it.children.firstOrNull()?.oid() == OCSP_RESPONSE_INFO }
+                    .mapNotNull { other -> other.children.getOrNull(1)?.let { OcspResponse.parse(it.bytes, it.start) } },
             )
         }.getOrNull()
 

@@ -72,6 +72,18 @@ final enum class io.github.yuroyami.kitepdf/PageMode : kotlin/Enum<io.github.yur
     }
 }
 
+final enum class io.github.yuroyami.kitepdf/PdfRevocation : kotlin/Enum<io.github.yuroyami.kitepdf/PdfRevocation> { // io.github.yuroyami.kitepdf/PdfRevocation|null[0]
+    enum entry Good // io.github.yuroyami.kitepdf/PdfRevocation.Good|null[0]
+    enum entry Revoked // io.github.yuroyami.kitepdf/PdfRevocation.Revoked|null[0]
+    enum entry Unknown // io.github.yuroyami.kitepdf/PdfRevocation.Unknown|null[0]
+
+    final val entries // io.github.yuroyami.kitepdf/PdfRevocation.entries|#static{}entries[0]
+        final fun <get-entries>(): kotlin.enums/EnumEntries<io.github.yuroyami.kitepdf/PdfRevocation> // io.github.yuroyami.kitepdf/PdfRevocation.entries.<get-entries>|<get-entries>#static(){}[0]
+
+    final fun valueOf(kotlin/String): io.github.yuroyami.kitepdf/PdfRevocation // io.github.yuroyami.kitepdf/PdfRevocation.valueOf|valueOf#static(kotlin.String){}[0]
+    final fun values(): kotlin/Array<io.github.yuroyami.kitepdf/PdfRevocation> // io.github.yuroyami.kitepdf/PdfRevocation.values|values#static(){}[0]
+}
+
 abstract interface io.github.yuroyami.kitepdf/PdfScriptHandler { // io.github.yuroyami.kitepdf/PdfScriptHandler|null[0]
     abstract val formState // io.github.yuroyami.kitepdf/PdfScriptHandler.formState|{}formState[0]
         abstract fun <get-formState>(): io.github.yuroyami.kitepdf/PdfFormState // io.github.yuroyami.kitepdf/PdfScriptHandler.formState.<get-formState>|<get-formState>(){}[0]
@@ -626,6 +638,10 @@ final class io.github.yuroyami.kitepdf/PdfCertificate { // io.github.yuroyami.ki
         final fun <get-notAfter>(): io.github.yuroyami.kitepdf/PdfDate? // io.github.yuroyami.kitepdf/PdfCertificate.notAfter.<get-notAfter>|<get-notAfter>(){}[0]
     final val notBefore // io.github.yuroyami.kitepdf/PdfCertificate.notBefore|{}notBefore[0]
         final fun <get-notBefore>(): io.github.yuroyami.kitepdf/PdfDate? // io.github.yuroyami.kitepdf/PdfCertificate.notBefore.<get-notBefore>|<get-notBefore>(){}[0]
+    final val revocation // io.github.yuroyami.kitepdf/PdfCertificate.revocation|{}revocation[0]
+        final fun <get-revocation>(): io.github.yuroyami.kitepdf/PdfRevocation // io.github.yuroyami.kitepdf/PdfCertificate.revocation.<get-revocation>|<get-revocation>(){}[0]
+    final val revokedAt // io.github.yuroyami.kitepdf/PdfCertificate.revokedAt|{}revokedAt[0]
+        final fun <get-revokedAt>(): io.github.yuroyami.kitepdf/PdfDate? // io.github.yuroyami.kitepdf/PdfCertificate.revokedAt.<get-revokedAt>|<get-revokedAt>(){}[0]
     final val serialNumber // io.github.yuroyami.kitepdf/PdfCertificate.serialNumber|{}serialNumber[0]
         final fun <get-serialNumber>(): kotlin/String // io.github.yuroyami.kitepdf/PdfCertificate.serialNumber.<get-serialNumber>|<get-serialNumber>(){}[0]
     final val subject // io.github.yuroyami.kitepdf/PdfCertificate.subject|{}subject[0]
@@ -1367,7 +1383,7 @@ final class io.github.yuroyami.kitepdf/PdfSignature { // io.github.yuroyami.kite
         final fun <get-subFilter>(): kotlin/String? // io.github.yuroyami.kitepdf/PdfSignature.subFilter.<get-subFilter>|<get-subFilter>(){}[0]
 
     final fun toString(): kotlin/String // io.github.yuroyami.kitepdf/PdfSignature.toString|toString(){}[0]
-    final fun validate(kotlin.collections/List<kotlin/ByteArray> = ...): io.github.yuroyami.kitepdf/PdfSignatureValidation // io.github.yuroyami.kitepdf/PdfSignature.validate|validate(kotlin.collections.List<kotlin.ByteArray>){}[0]
+    final fun validate(kotlin.collections/List<kotlin/ByteArray> = ..., kotlin.collections/List<kotlin/ByteArray> = ...): io.github.yuroyami.kitepdf/PdfSignatureValidation // io.github.yuroyami.kitepdf/PdfSignature.validate|validate(kotlin.collections.List<kotlin.ByteArray>;kotlin.collections.List<kotlin.ByteArray>){}[0]
 }
 
 final class io.github.yuroyami.kitepdf/PdfSignatureValidation { // io.github.yuroyami.kitepdf/PdfSignatureValidation|null[0]

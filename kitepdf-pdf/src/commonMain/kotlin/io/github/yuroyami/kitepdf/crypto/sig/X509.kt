@@ -23,11 +23,15 @@ internal class X509(
     val notBefore: String?,
     val notAfter: String?,
     val key: PublicKey?,
+    /** The bits of the subject public key, which an OCSP response hashes to name a key. */
+    val publicKeyBits: ByteArray,
     val signatureAlgorithm: String,
     val signatureParameters: Asn1Node?,
     val signature: ByteArray,
     val subjectKeyId: ByteArray?,
     val isCa: Boolean,
+    /** The extended key usages (RFC 5280, 4.2.1.12), such as OCSP signing. */
+    val extendedKeyUsages: List<String>,
 ) {
     /** The name's common name, or the whole name when it has none. */
     val commonName: String get() = subject.split(", ").firstOrNull { it.startsWith("CN=") }?.removePrefix("CN=") ?: subject
@@ -54,12 +58,14 @@ internal class X509(
             val extensions = fields.drop(i).firstOrNull { it.tag == 0xA3 }?.children?.firstOrNull()?.children.orEmpty()
             var subjectKeyId: ByteArray? = null
             var isCa = false
+            var usages = emptyList<String>()
             for (ext in extensions) {
                 val id = ext.children.firstOrNull()?.oid()
                 val value = ext.children.lastOrNull()?.takeIf { it.tag == Asn1.OCTET_STRING }?.content() ?: continue
                 when (id) {
                     "2.5.29.14" -> subjectKeyId = Asn1.read(value, 0)?.content()
                     "2.5.29.19" -> isCa = Asn1.read(value, 0)?.children?.firstOrNull()?.let { it.tag == 0x01 && it.content().firstOrNull()?.toInt() != 0 } ?: false
+                    "2.5.29.37" -> usages = Asn1.read(value, 0)?.children.orEmpty().mapNotNull { it.oid() }
                 }
             }
             val algorithm = cert.children[1]
@@ -76,11 +82,13 @@ internal class X509(
                 notBefore = validity.children.getOrNull(0)?.time(),
                 notAfter = validity.children.getOrNull(1)?.time(),
                 key = keyOf(spki),
+                publicKeyBits = spki.children.getOrNull(1)?.bitString() ?: return null,
                 signatureAlgorithm = algorithm.children.firstOrNull()?.oid() ?: return null,
                 signatureParameters = algorithm.children.getOrNull(1),
                 signature = cert.children[2].bitString() ?: return null,
                 subjectKeyId = subjectKeyId,
                 isCa = isCa,
+                extendedKeyUsages = usages,
             )
         }.getOrNull()
 

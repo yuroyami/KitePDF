@@ -44,10 +44,17 @@ public class PdfSignature internal constructor(
      * Checks the signature against the file. [trustAnchors] are the DER encodings of the
      * certificates the caller trusts. An entry that is not a certificate is ignored. The check
      * hashes the signed bytes, which are almost the whole file, so run it off the main thread.
-     * It does not check revocation, and it does not check that the certificates were valid at
-     * the time of signing: [PdfCertificate.notBefore] and [PdfCertificate.notAfter] give the dates.
+     *
+     * [PdfCertificate.revocation] reports revocation from the CRLs and OCSP responses that the
+     * document carries, in its document security store and in the signature, and from
+     * [revocationData], each a DER CRL or OCSP response that the caller fetched. KitePDF fetches
+     * nothing from the network. It does not check that the certificates were valid at the time
+     * of signing: [PdfCertificate.notBefore] and [PdfCertificate.notAfter] give the dates.
      */
-    public fun validate(trustAnchors: List<ByteArray> = emptyList()): PdfSignatureValidation = SignatureValidator(
+    public fun validate(
+        trustAnchors: List<ByteArray> = emptyList(),
+        revocationData: List<ByteArray> = emptyList(),
+    ): PdfSignatureValidation = SignatureValidator(
         file = document.fileBytes,
         byteRange = byteRange,
         subFilter = subFilter,
@@ -58,8 +65,9 @@ public class PdfSignature internal constructor(
             is PdfArray -> cert.mapNotNull { (it.resolve(document) as? PdfString)?.bytes }
             else -> emptyList()
         },
-        documentCerts = documentCertificates(document),
+        documentCerts = documentStreams(document, "Certs"),
         trustAnchors = trustAnchors,
+        revocationData = documentStreams(document, "CRLs") + documentStreams(document, "OCSPs") + revocationData,
     ).validate()
 
     override fun toString(): String = "PdfSignature(${field.fullyQualifiedName}, $subFilter)"
@@ -84,10 +92,13 @@ public class PdfSignature internal constructor(
             )
         }.getOrNull()
 
-        /** The certificates of the document security store (`/DSS /Certs`, ISO 32000-2, 12.8.4.3), which long-term signatures keep there. */
-        private fun documentCertificates(document: PdfDocument): List<ByteArray> = runCatching {
-            val certs = document.catalog.getDict("DSS", document)?.getArray("Certs", document) ?: return emptyList()
-            certs.mapNotNull { item -> (item.resolve(document) as? PdfStream)?.let { runCatching { FilterChain.decode(it) }.getOrNull() } }
+        /**
+         * The streams of the document security store under [key]: `Certs`, `CRLs` or `OCSPs`
+         * (ISO 32000-2, 12.8.4.3). A long-term signature keeps its validation data there.
+         */
+        private fun documentStreams(document: PdfDocument, key: String): List<ByteArray> = runCatching {
+            val items = document.catalog.getDict("DSS", document)?.getArray(key, document) ?: return emptyList()
+            items.mapNotNull { item -> (item.resolve(document) as? PdfStream)?.let { runCatching { FilterChain.decode(it) }.getOrNull() } }
         }.getOrDefault(emptyList())
     }
 }
@@ -159,10 +170,26 @@ public class PdfCertificate internal constructor(
     public val notBefore: PdfDate?,
     /** The end of the validity period, or null when it cannot be read. */
     public val notAfter: PdfDate?,
+    /** What the revocation data says about this certificate. */
+    public val revocation: PdfRevocation,
+    /** When the certificate was revoked, or null when it was not or the data does not say. */
+    public val revokedAt: PdfDate?,
     private val der: ByteArray,
 ) {
     /** The certificate in DER. */
     public val encoded: ByteArray get() = der.copyOf()
 
     override fun toString(): String = "PdfCertificate($subject)"
+}
+
+/** What the revocation data says about a certificate of a signature's chain. */
+public enum class PdfRevocation {
+    /** A CRL or an OCSP response that the certificate's issuer signed says that it is good. */
+    Good,
+
+    /** A CRL or an OCSP response that the certificate's issuer signed says that it was revoked. */
+    Revoked,
+
+    /** No revocation data that KitePDF can check covers the certificate, as for a root. */
+    Unknown,
 }

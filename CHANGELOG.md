@@ -22,6 +22,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   whether the file changed after signing. KitePDF checks CMS, CAdES and PKCS #1
   signatures and document timestamps, with RSA (PKCS #1 v1.5 and PSS) and ECDSA on
   P-256, P-384 and P-521 (#203).
+- `PdfCertificate.revocation` says whether each certificate of a signature's chain
+  is `Good`, `Revoked` (with `revokedAt`) or `Unknown`. KitePDF reads the CRLs and
+  OCSP responses of the document security store, of the signature, and of
+  Acrobat's `adbe-revocationInfoArchival` attribute, and those that the caller
+  passes to `validate` as `revocationData`. Only data that the issuer signed
+  counts, or an OCSP responder that the issuer delegated to (#447).
 
 - `KiteDocView.onEpubLinkTap` receives every tapped internal EPUB link before the
   viewer scrolls to it. A host can show a note that the book does not mark as a
