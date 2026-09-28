@@ -9,3 +9,9 @@ import kotlinx.coroutines.CoroutineDispatcher
  * touch the canvas.
  */
 internal expect fun kitepdfRasterDispatcher(): CoroutineDispatcher
+
+/**
+ * True where [kitepdfRasterDispatcher] is the UI thread, as in a browser. There, a chapter far
+ * from the reader lays out only while the view rests, and a page renders in one pass (#389).
+ */
+internal expect val rastersOnUiThread: Boolean
