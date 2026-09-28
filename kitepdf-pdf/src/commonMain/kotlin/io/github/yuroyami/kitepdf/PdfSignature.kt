@@ -37,8 +37,16 @@ public class PdfSignature internal constructor(
      * between the parts holds the signature itself.
      */
     public val byteRange: List<Long>,
+    /**
+     * The permission level when this is a certification signature (`/DocMDP`, ISO 32000-1,
+     * 12.8.2.2): 1 allows no change, 2 allows filling in forms and signing, and 3 also allows
+     * annotations. Null for an approval signature.
+     */
+    public val certificationLevel: Int?,
     private val document: PdfDocument,
     private val dictionary: PdfDictionary,
+    /** The FieldMDP lock of this signature, from its field's `/Lock` or its own reference. */
+    private val lock: RevisionChanges.FieldLock?,
 ) {
     /**
      * Checks the signature against the file. [trustAnchors] are the DER encodings of the
@@ -54,7 +62,26 @@ public class PdfSignature internal constructor(
     public fun validate(
         trustAnchors: List<ByteArray> = emptyList(),
         revocationData: List<ByteArray> = emptyList(),
-    ): PdfSignatureValidation = SignatureValidator(
+    ): PdfSignatureValidation {
+        val result = check(trustAnchors, revocationData)
+        return result.withChanges(if (!result.isModifiedAfterSigning) emptyList() else changesAfterSigning())
+    }
+
+    /**
+     * The changes that later revisions made, judged at the document's certification level, or
+     * null when the signed revision cannot be read (#448). A document has one certification
+     * signature at most, and it comes first, so its level holds for every later signature.
+     */
+    private fun changesAfterSigning(): List<PdfRevisionChange>? {
+        if (byteRange.size < 2) return null
+        val end = byteRange[byteRange.size - 2] + byteRange[byteRange.size - 1]
+        if (end > Int.MAX_VALUE) return null
+        val signed = document.revisionEndingAt(end.toInt()) ?: return null
+        val level = document.signatures.firstNotNullOfOrNull { it.certificationLevel }
+        return runCatching { RevisionChanges.between(signed, document, level, lock) }.getOrNull()
+    }
+
+    private fun check(trustAnchors: List<ByteArray>, revocationData: List<ByteArray>): PdfSignatureValidation = SignatureValidator(
         file = document.fileBytes,
         byteRange = byteRange,
         subFilter = subFilter,
@@ -77,6 +104,10 @@ public class PdfSignature internal constructor(
         fun of(field: PdfFormField, document: PdfDocument): PdfSignature? = runCatching {
             val dict = field.fieldDict.getDict("V", document) ?: return null
             fun text(key: String) = (dict[key]?.resolve(document) as? PdfString)?.asText()
+            // The signature references (ISO 32000-1, Table 253): a DocMDP one certifies, a FieldMDP one locks fields.
+            val references = dict.getArray("Reference", document).orEmpty().mapNotNull { it.resolve(document) as? PdfDictionary }
+            fun params(method: String) = references.firstOrNull { it.getName("TransformMethod") == method }?.getDict("TransformParams", document)
+            val docMdp = references.any { it.getName("TransformMethod") == "DocMDP" }
             PdfSignature(
                 field = field,
                 subFilter = dict.getName("SubFilter"),
@@ -87,8 +118,11 @@ public class PdfSignature internal constructor(
                 contactInfo = text("ContactInfo"),
                 signingTime = (dict["M"]?.resolve(document) as? PdfString)?.asAsciiOrNull()?.let(PdfDate::parse),
                 byteRange = dict.getArray("ByteRange", document)?.mapNotNull { (it.resolve(document) as? PdfInt)?.value }.orEmpty(),
+                // A DocMDP reference without /P means level 2.
+                certificationLevel = if (docMdp) ((params("DocMDP")?.get("P") as? PdfInt)?.value?.toInt() ?: 2).coerceIn(1, 3) else null,
                 document = document,
                 dictionary = dict,
+                lock = RevisionChanges.FieldLock.of(field.fieldDict.getDict("Lock", document) ?: params("FieldMDP"), document),
             )
         }.getOrNull()
 
@@ -131,9 +165,21 @@ public class PdfSignatureValidation internal constructor(
     public val signedTime: PdfDate?,
     /** Why [status] is not [Status.Valid], in words, or null when it is. */
     public val detail: String?,
+    /**
+     * The changes that later revisions made after signing, each with whether the certification
+     * level and the field locks allow it. Empty when the file did not change after signing.
+     * Null when KitePDF cannot read the signed revision to compare it.
+     */
+    public val changes: List<PdfRevisionChange>? = null,
 ) {
     /** True when [status] is [Status.Valid]. */
     public val isValid: Boolean get() = status == Status.Valid
+
+    /** True when the file did not change after signing, or every change is permitted. */
+    public val areChangesPermitted: Boolean get() = changes?.all { it.isPermitted } ?: !isModifiedAfterSigning
+
+    internal fun withChanges(changes: List<PdfRevisionChange>?): PdfSignatureValidation =
+        PdfSignatureValidation(status, signer, chain, isTrusted, isModifiedAfterSigning, signedTime, detail, changes)
 
     /** Whether a signature matches the signed bytes and the signer's certificate. */
     public enum class Status {
@@ -192,4 +238,39 @@ public enum class PdfRevocation {
 
     /** No revocation data that KitePDF can check covers the certificate, as for a root. */
     Unknown,
+}
+
+/**
+ * A change that a later revision made after a signature (ISO 32000-1, 12.8.2.2), with whether
+ * the certification level and the field locks allow it. Without a certification signature,
+ * KitePDF applies the permissions of level 3.
+ */
+public class PdfRevisionChange internal constructor(
+    /** What kind of change it is. */
+    public val kind: Kind,
+    /** What the change touches, in words, such as `the value of field Name` or `a Text annotation on page 2`. */
+    public val subject: String,
+    /** The number of the object that changed. */
+    public val objectNumber: Long,
+    /** True when the certification level and the field locks allow the change. */
+    public val isPermitted: Boolean,
+) {
+    public enum class Kind {
+        /** The value of a form field, or how its widget shows it. Level 2 and up allow it, unless a lock covers the field. */
+        FieldValue,
+
+        /** A new signature, a new signature field, or a document timestamp. Level 2 and up allow a signature; a timestamp is always allowed. */
+        Signature,
+
+        /** An annotation that is not a form widget. Level 3 allows it. */
+        Annotation,
+
+        /** The document security store, which long-term validation adds to. Always allowed. */
+        SecurityStore,
+
+        /** Any other change, such as page content, a new form field or the catalog. Never allowed. */
+        Other,
+    }
+
+    override fun toString(): String = "PdfRevisionChange($kind, $subject, permitted=$isPermitted)"
 }

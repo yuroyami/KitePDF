@@ -979,6 +979,25 @@ public final class io/github/yuroyami/kitepdf/PdfRasterGeometryKt {
 	public static synthetic fun rasterGeometry$default (Lio/github/yuroyami/kitepdf/PdfPage;DJILjava/lang/Object;)Lio/github/yuroyami/kitepdf/PdfRasterGeometry;
 }
 
+public final class io/github/yuroyami/kitepdf/PdfRevisionChange {
+	public final fun getKind ()Lio/github/yuroyami/kitepdf/PdfRevisionChange$Kind;
+	public final fun getObjectNumber ()J
+	public final fun getSubject ()Ljava/lang/String;
+	public final fun isPermitted ()Z
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/github/yuroyami/kitepdf/PdfRevisionChange$Kind : java/lang/Enum {
+	public static final field Annotation Lio/github/yuroyami/kitepdf/PdfRevisionChange$Kind;
+	public static final field FieldValue Lio/github/yuroyami/kitepdf/PdfRevisionChange$Kind;
+	public static final field Other Lio/github/yuroyami/kitepdf/PdfRevisionChange$Kind;
+	public static final field SecurityStore Lio/github/yuroyami/kitepdf/PdfRevisionChange$Kind;
+	public static final field Signature Lio/github/yuroyami/kitepdf/PdfRevisionChange$Kind;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lio/github/yuroyami/kitepdf/PdfRevisionChange$Kind;
+	public static fun values ()[Lio/github/yuroyami/kitepdf/PdfRevisionChange$Kind;
+}
+
 public final class io/github/yuroyami/kitepdf/PdfRevocation : java/lang/Enum {
 	public static final field Good Lio/github/yuroyami/kitepdf/PdfRevocation;
 	public static final field Revoked Lio/github/yuroyami/kitepdf/PdfRevocation;
@@ -1033,6 +1052,7 @@ public final class io/github/yuroyami/kitepdf/PdfScriptHandler$DefaultImpls {
 
 public final class io/github/yuroyami/kitepdf/PdfSignature {
 	public final fun getByteRange ()Ljava/util/List;
+	public final fun getCertificationLevel ()Ljava/lang/Integer;
 	public final fun getContactInfo ()Ljava/lang/String;
 	public final fun getField ()Lio/github/yuroyami/kitepdf/PdfFormField;
 	public final fun getLocation ()Ljava/lang/String;
@@ -1047,7 +1067,9 @@ public final class io/github/yuroyami/kitepdf/PdfSignature {
 }
 
 public final class io/github/yuroyami/kitepdf/PdfSignatureValidation {
+	public final fun getAreChangesPermitted ()Z
 	public final fun getChain ()Ljava/util/List;
+	public final fun getChanges ()Ljava/util/List;
 	public final fun getDetail ()Ljava/lang/String;
 	public final fun getSignedTime ()Lio/github/yuroyami/kitepdf/PdfDate;
 	public final fun getSigner ()Lio/github/yuroyami/kitepdf/PdfCertificate;

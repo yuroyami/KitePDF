@@ -401,8 +401,26 @@ string, so content slipped into that gap makes the signature `Malformed`. When a
 signature names its certificate in a signed attribute, that certificate must be the one that
 signed.
 
+When a revision was appended after signing, `changes` lists what it changed, and
+`areChangesPermitted` says whether every change is allowed:
+
+```kotlin
+for (change in result.changes.orEmpty()) {
+    println("${change.subject}: ${if (change.isPermitted) "permitted" else "not permitted"}")
+}
+```
+
+A certification signature sets what may change (`certificationLevel`, ISO 32000-1,
+12.8.2.2): level 1 allows nothing, level 2 allows filling in form fields and signing, and
+level 3 also allows annotations. Without a certification signature, the permissions of level 3
+apply, as Acrobat applies them. A lock on the signature field (`/Lock`) takes the fields it
+names out of what may be filled in. The document security store may always grow, and a
+document timestamp may always be added, as long-term validation does. Any other change, such as
+new page content or a new form field, is never permitted. `changes` is null when KitePDF cannot
+read the signed revision to compare it.
+
 KitePDF does not check the validity dates of the certificates (`notBefore` and `notAfter`
-give them), or whether a change after signing is one that the document permits. `name`, `reason`, `location` and `signingTime` are what the signing
+give them). `name`, `reason`, `location` and `signingTime` are what the signing
 application wrote. When `isModifiedAfterSigning` is true, a later revision can have replaced
 them.
 

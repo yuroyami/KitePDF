@@ -1362,9 +1362,38 @@ final class io.github.yuroyami.kitepdf/PdfRasterGeometry { // io.github.yuroyami
     final fun toString(): kotlin/String // io.github.yuroyami.kitepdf/PdfRasterGeometry.toString|toString(){}[0]
 }
 
+final class io.github.yuroyami.kitepdf/PdfRevisionChange { // io.github.yuroyami.kitepdf/PdfRevisionChange|null[0]
+    final val isPermitted // io.github.yuroyami.kitepdf/PdfRevisionChange.isPermitted|{}isPermitted[0]
+        final fun <get-isPermitted>(): kotlin/Boolean // io.github.yuroyami.kitepdf/PdfRevisionChange.isPermitted.<get-isPermitted>|<get-isPermitted>(){}[0]
+    final val kind // io.github.yuroyami.kitepdf/PdfRevisionChange.kind|{}kind[0]
+        final fun <get-kind>(): io.github.yuroyami.kitepdf/PdfRevisionChange.Kind // io.github.yuroyami.kitepdf/PdfRevisionChange.kind.<get-kind>|<get-kind>(){}[0]
+    final val objectNumber // io.github.yuroyami.kitepdf/PdfRevisionChange.objectNumber|{}objectNumber[0]
+        final fun <get-objectNumber>(): kotlin/Long // io.github.yuroyami.kitepdf/PdfRevisionChange.objectNumber.<get-objectNumber>|<get-objectNumber>(){}[0]
+    final val subject // io.github.yuroyami.kitepdf/PdfRevisionChange.subject|{}subject[0]
+        final fun <get-subject>(): kotlin/String // io.github.yuroyami.kitepdf/PdfRevisionChange.subject.<get-subject>|<get-subject>(){}[0]
+
+    final fun toString(): kotlin/String // io.github.yuroyami.kitepdf/PdfRevisionChange.toString|toString(){}[0]
+
+    final enum class Kind : kotlin/Enum<io.github.yuroyami.kitepdf/PdfRevisionChange.Kind> { // io.github.yuroyami.kitepdf/PdfRevisionChange.Kind|null[0]
+        enum entry Annotation // io.github.yuroyami.kitepdf/PdfRevisionChange.Kind.Annotation|null[0]
+        enum entry FieldValue // io.github.yuroyami.kitepdf/PdfRevisionChange.Kind.FieldValue|null[0]
+        enum entry Other // io.github.yuroyami.kitepdf/PdfRevisionChange.Kind.Other|null[0]
+        enum entry SecurityStore // io.github.yuroyami.kitepdf/PdfRevisionChange.Kind.SecurityStore|null[0]
+        enum entry Signature // io.github.yuroyami.kitepdf/PdfRevisionChange.Kind.Signature|null[0]
+
+        final val entries // io.github.yuroyami.kitepdf/PdfRevisionChange.Kind.entries|#static{}entries[0]
+            final fun <get-entries>(): kotlin.enums/EnumEntries<io.github.yuroyami.kitepdf/PdfRevisionChange.Kind> // io.github.yuroyami.kitepdf/PdfRevisionChange.Kind.entries.<get-entries>|<get-entries>#static(){}[0]
+
+        final fun valueOf(kotlin/String): io.github.yuroyami.kitepdf/PdfRevisionChange.Kind // io.github.yuroyami.kitepdf/PdfRevisionChange.Kind.valueOf|valueOf#static(kotlin.String){}[0]
+        final fun values(): kotlin/Array<io.github.yuroyami.kitepdf/PdfRevisionChange.Kind> // io.github.yuroyami.kitepdf/PdfRevisionChange.Kind.values|values#static(){}[0]
+    }
+}
+
 final class io.github.yuroyami.kitepdf/PdfSignature { // io.github.yuroyami.kitepdf/PdfSignature|null[0]
     final val byteRange // io.github.yuroyami.kitepdf/PdfSignature.byteRange|{}byteRange[0]
         final fun <get-byteRange>(): kotlin.collections/List<kotlin/Long> // io.github.yuroyami.kitepdf/PdfSignature.byteRange.<get-byteRange>|<get-byteRange>(){}[0]
+    final val certificationLevel // io.github.yuroyami.kitepdf/PdfSignature.certificationLevel|{}certificationLevel[0]
+        final fun <get-certificationLevel>(): kotlin/Int? // io.github.yuroyami.kitepdf/PdfSignature.certificationLevel.<get-certificationLevel>|<get-certificationLevel>(){}[0]
     final val contactInfo // io.github.yuroyami.kitepdf/PdfSignature.contactInfo|{}contactInfo[0]
         final fun <get-contactInfo>(): kotlin/String? // io.github.yuroyami.kitepdf/PdfSignature.contactInfo.<get-contactInfo>|<get-contactInfo>(){}[0]
     final val field // io.github.yuroyami.kitepdf/PdfSignature.field|{}field[0]
@@ -1387,8 +1416,12 @@ final class io.github.yuroyami.kitepdf/PdfSignature { // io.github.yuroyami.kite
 }
 
 final class io.github.yuroyami.kitepdf/PdfSignatureValidation { // io.github.yuroyami.kitepdf/PdfSignatureValidation|null[0]
+    final val areChangesPermitted // io.github.yuroyami.kitepdf/PdfSignatureValidation.areChangesPermitted|{}areChangesPermitted[0]
+        final fun <get-areChangesPermitted>(): kotlin/Boolean // io.github.yuroyami.kitepdf/PdfSignatureValidation.areChangesPermitted.<get-areChangesPermitted>|<get-areChangesPermitted>(){}[0]
     final val chain // io.github.yuroyami.kitepdf/PdfSignatureValidation.chain|{}chain[0]
         final fun <get-chain>(): kotlin.collections/List<io.github.yuroyami.kitepdf/PdfCertificate> // io.github.yuroyami.kitepdf/PdfSignatureValidation.chain.<get-chain>|<get-chain>(){}[0]
+    final val changes // io.github.yuroyami.kitepdf/PdfSignatureValidation.changes|{}changes[0]
+        final fun <get-changes>(): kotlin.collections/List<io.github.yuroyami.kitepdf/PdfRevisionChange>? // io.github.yuroyami.kitepdf/PdfSignatureValidation.changes.<get-changes>|<get-changes>(){}[0]
     final val detail // io.github.yuroyami.kitepdf/PdfSignatureValidation.detail|{}detail[0]
         final fun <get-detail>(): kotlin/String? // io.github.yuroyami.kitepdf/PdfSignatureValidation.detail.<get-detail>|<get-detail>(){}[0]
     final val isModifiedAfterSigning // io.github.yuroyami.kitepdf/PdfSignatureValidation.isModifiedAfterSigning|{}isModifiedAfterSigning[0]
