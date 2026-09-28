@@ -499,4 +499,40 @@ class LinkTapSceneTest {
             assertFalse(handleLinkTap(state, scope, null, tap), "a link nobody takes must fall through to onTap")
         }
     }
+
+    /** Page 0 links to the height 150 of page 1, a tall page; page 2 follows, so the strip can scroll that far. */
+    private fun pdfWithPlaceLink(): ByteArray {
+        val sb = StringBuilder("%PDF-1.4\n")
+        val offsets = ArrayList<Int>()
+        fun add(s: String) {
+            offsets.add(sb.length)
+            sb.append(s)
+        }
+        add("1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n")
+        add("2 0 obj\n<< /Type /Pages /Kids [3 0 R 4 0 R 5 0 R] /Count 3 >>\nendobj\n")
+        add("3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] /Resources << >> /Annots [6 0 R] >>\nendobj\n")
+        add("4 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 600] /Resources << >> >>\nendobj\n")
+        add("5 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 600] /Resources << >> >>\nendobj\n")
+        add("6 0 obj\n<< /Type /Annot /Subtype /Link /Rect [20 20 90 90] /Dest [4 0 R /XYZ 0 150 null] >>\nendobj\n")
+        val xref = sb.length
+        sb.append("xref\n0 7\n0000000000 65535 f \n")
+        for (o in offsets) sb.append("${o.toString().padStart(10, '0')} 00000 n \n")
+        sb.append("trailer\n<< /Size 7 /Root 1 0 R >>\nstartxref\n$xref\n%%EOF\n")
+        return sb.toString().encodeToByteArray()
+    }
+
+    /** A link to a place on a page scrolls to that place, where it landed at the top of the page (#433). */
+    @Test
+    fun a_link_to_a_place_on_a_page_scrolls_to_that_place() {
+        withPdfViewer(KitePDF.open(pdfWithPlaceLink())) { state, scope, driver ->
+            val tap = assertNotNull(state.displayToViewport(0, 55.0, 145.0))
+            assertTrue(handleLinkTap(state, scope, null, tap))
+            driver.pumpUntilState { state.currentScrollPosition.location.page == 1 && state.currentScrollPosition.offsetPx > 0 }
+            driver.pumpFrames(30)
+            val position = state.currentScrollPosition
+            assertEquals(1, position.location.page)
+            // The page is 600 tall in a 200 wide strip, so its slot is 600 px, and height 150 from the bottom is 450 px down.
+            assertEquals(450f, position.offsetPx.toFloat(), 2f, "the strip did not scroll to the place: $position")
+        }
+    }
 }

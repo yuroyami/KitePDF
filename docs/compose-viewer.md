@@ -557,7 +557,9 @@ chapter. Prefer `knownPageCount` with `isComplete`.
 
 A tap on a link inside the document is handled for you: internal jumps (PDF
 destinations, EPUB hrefs into another chapter) scroll to the target page and
-never reach your code. A PDF link that names a page turn (NextPage, PrevPage,
+never reach your code. In a vertical `Continuous` strip, a PDF link to a place on
+a page, such as `/XYZ` or `/FitH`, scrolls that place to the top of the viewport.
+A PDF link that names a page turn (NextPage, PrevPage,
 FirstPage or LastPage) turns the page, and a script link runs in `scripts` when
 you pass a handler. `KiteDocLayout.SinglePage` cannot move, so there an internal
 PDF link goes to `onLinkTap` as a go-to action.
