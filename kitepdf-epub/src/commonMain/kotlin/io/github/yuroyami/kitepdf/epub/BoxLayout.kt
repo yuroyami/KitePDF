@@ -168,6 +168,8 @@ internal class BoxLayout(
         var contentW = s.widthPt ?: (availWidth - extra)
         s.maxWidthPt?.let { if (contentW > it) contentW = it }
         s.minWidthPt?.let { if (contentW < it) contentW = it } // min wins over max
+        // An embedded document's default width never pushes it past its column (#40).
+        if (box.embed != null) contentW = contentW.coerceAtMost(availWidth - extra)
         contentW = contentW.coerceAtLeast(0.0)
 
         box.borderBoxWidth = bL + s.paddingLeftPt + contentW + s.paddingRightPt + bR
@@ -376,6 +378,9 @@ internal class BoxLayout(
                 // A media element without a poster keeps its room: 16:9 for a video, a 40 pt bar
                 // for an audio player, at the content width unless the element says otherwise (#29).
                 if (media.kind == EpubMediaKind.VIDEO) { intrinsicW = 16.0; intrinsicH = 9.0 } else { intrinsicW = contentW; intrinsicH = 40.0 }
+            } else if (box.embed != null) {
+                // A frame keeps the room of a browser's frame unless it says otherwise (#40).
+                intrinsicW = EMBED_DEFAULT_WIDTH_PT; intrinsicH = EMBED_DEFAULT_HEIGHT_PT
             } else {
                 box.x = contentLeft; box.y = topY; box.borderBoxWidth = 0.0; box.borderBoxHeight = 0.0; return
             }
@@ -399,7 +404,7 @@ internal class BoxLayout(
         val physicalRoomH = if (vertical) room else blockRoom
         val ew = box.style.widthPt ?: box.attrWidth
         val eh = box.style.heightPt ?: box.attrHeight
-        var w = ew ?: (eh?.let { it / aspect } ?: physicalRoomW)
+        var w = ew ?: (eh?.let { it / aspect } ?: if (box.embed != null) intrinsicW else physicalRoomW)
         var h = eh ?: (w * aspect)
         // object-fit: contain. When both dimensions are fixed, letterbox the image to
         // preserve its aspect ratio inside the box (default `fill` stretches to w×h).

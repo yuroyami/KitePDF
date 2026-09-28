@@ -292,6 +292,28 @@ In `KiteDocView`, place the player in the `pageOverlay` slot with
 `Modifier.displayRect(media.rect)`, and it stays on the box at any zoom (see
 [Compose viewer](compose-viewer.md#draw-over-a-place-on-a-page)).
 
+### Scripted content and embedded documents
+
+This library runs no script. `book.isScripted(chapter)` says whether a chapter
+is scripted: its manifest item has the `scripted` property, or its document has
+a `script` element. `book.scriptedChapters` lists those chapters. A scripted
+chapter shows what its markup shows without a script, `noscript` content
+included, and an app can hand the chapter to a web engine instead.
+
+An `<iframe>`, and an `<object>` whose type is HTML or XHTML, keep a box on the
+page. The box takes the element's `width` and `height`, then its CSS size, and
+else 300 by 150 CSS pixels, as in a browser. A frame's box stays empty. An
+object's box shows the element's fallback children, and grows when they need
+more room. `EpubPage.embeds` lists the boxes on a page, with the document that
+each one embeds:
+
+```kotlin
+for (embed in page.embeds) {
+    // embed.href is a zip path for book.resource, or a URL.
+    placeWebView(embed.rect, embed.href)
+}
+```
+
 ## Typography
 
 The layout engine covers what real books use:

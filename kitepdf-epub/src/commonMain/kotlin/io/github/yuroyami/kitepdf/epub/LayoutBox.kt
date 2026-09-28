@@ -35,6 +35,9 @@ internal sealed class LayoutBox {
     /** The target of an inline `<a href>` this block was lifted out of (#214). */
     var linkHref: String? = null
 
+    /** The facts of an `<iframe>` or an HTML `<object>` that this box stands for, else null (#40). */
+    var embed: EmbedInfo? = null
+
     /** When the background and border of this box paint, from [Paginator] (#172). */
     var decoRank: Int = 0
 

@@ -32,6 +32,8 @@ internal class BoxBuilder(
     private val resolver: StyleResolver,
     /** Zip path of the document being built; the base for `#fragment` links. */
     private val docPath: String = "",
+    /** The media type that the manifest gives a zip path, for an `<object>` without a `type` (#40). */
+    private val mediaTypeOf: (String) -> String? = { null },
     private val resolveHref: (String) -> String,
 ) {
     fun build(root: KiteXmlNode.Element): BlockBox =
@@ -135,6 +137,17 @@ internal class BoxBuilder(
                     if (cs.display != Display.NONE) mediaBox(child, cs, sem)?.let { box -> flush(); children.add(box) }
                     continue
                 }
+                if (child.tag == "iframe" || child.tag == "object") {
+                    val cs = resolver.compute(child, childAncestors, style)
+                    if (cs.display == Display.NONE) continue
+                    val box = embedBox(child, cs, childAncestors, sem)
+                    if (box != null) {
+                        flush()
+                        children.add(box)
+                        continue
+                    }
+                    // Any other object shows its fallback children, as it did.
+                }
                 if (child.tag == "svg") { // inline SVG: paint as a vector image box
                     val cs = resolver.compute(child, childAncestors, style)
                     // A hidden sprite sheet or glyph cache generates no box (CSS 2.1, 9.2.4, #275).
@@ -193,6 +206,42 @@ internal class BoxBuilder(
             )
             it.semantics = BoxSemantics.of(el.tag, el.attrs, parentSem)
         }
+    }
+
+    /**
+     * The box of an `<iframe>`, or of an `<object>` that embeds an HTML or XHTML document, else
+     * null (#40). A frame keeps an empty box. An object's box holds its fallback children, and is
+     * at least as large as the element asks. Both default to 300 by 150 CSS pixels, as in a
+     * browser, and a script-less reader paints nothing else there.
+     */
+    private fun embedBox(
+        el: KiteXmlNode.Element,
+        cs: ComputedStyle,
+        ancestors: List<KiteXmlNode.Element>,
+        parentSem: BoxSemantics?,
+    ): LayoutBox? {
+        val frame = el.tag == "iframe"
+        val raw = (if (frame) el.attrs["src"] else el.attrs["data"])?.trim().orEmpty()
+        val url = MEDIA_SCHEME.containsMatchIn(raw)
+        val href = if (raw.isEmpty() || url) raw else resolveHref(raw)
+        val type = el.attrs["type"]?.substringBefore(';')?.trim()?.lowercase()?.takeIf { it.isNotEmpty() }
+            ?: href.takeIf { it.isNotEmpty() && !url }?.let { mediaTypeOf(it.substringBefore('#')) }?.lowercase()
+        if (!frame && type !in EMBED_DOCUMENT_TYPES && !(type == null && isDocumentPath(href))) return null
+        val aw = el.attrs["width"]?.trim()?.removeSuffix("px")?.toDoubleOrNull()?.times(0.75)
+        val ah = el.attrs["height"]?.trim()?.removeSuffix("px")?.toDoubleOrNull()?.times(0.75)
+        val info = EmbedInfo(if (frame) EpubEmbedKind.FRAME else EpubEmbedKind.OBJECT, href, type, el.attrs["id"])
+        if (frame) {
+            return ImageBox(cs, "", attrWidth = aw, attrHeight = ah).also {
+                it.embed = info
+                it.semantics = BoxSemantics.of(el.tag, el.attrs, parentSem)
+            }
+        }
+        val sized = cs.copy(
+            display = Display.BLOCK,
+            widthPt = cs.widthPt ?: aw ?: EMBED_DEFAULT_WIDTH_PT,
+            heightPt = cs.heightPt ?: ah ?: EMBED_DEFAULT_HEIGHT_PT,
+        )
+        return buildBlock(el, sized, ancestors, null, BLACK, parentSem = parentSem).also { it.embed = info }
     }
 
     private fun imageSemantics(el: KiteXmlNode.Element, parentSem: BoxSemantics?): BoxSemantics {
@@ -480,6 +529,16 @@ internal class BoxBuilder(
                         val cs = resolver.compute(child, childAncestors, style)
                         if (cs.display != Display.NONE) mediaBox(child, cs, parentSem)?.let { hoist(listOf(it)) }
                         continue
+                    }
+                    if (child.tag == "iframe" || child.tag == "object") {
+                        // An embedded document takes a block of its own, as a media element does.
+                        val cs = resolver.compute(child, childAncestors, style)
+                        if (cs.display == Display.NONE) continue
+                        val box = embedBox(child, cs, childAncestors, parentSem)
+                        if (box != null) {
+                            hoist(linked(listOf(box), inl))
+                            continue
+                        }
                     }
                     if (child.tag == "svg") {
                         // An <svg> in inline content is an inline replaced element, like an
@@ -785,3 +844,9 @@ internal fun collapsedWins(challenger: Edge, holder: Edge): Boolean = when {
 
 /** A media source with a scheme, such as https, which stays a URL instead of a zip path. */
 private val MEDIA_SCHEME = Regex("^[a-zA-Z][a-zA-Z0-9+.-]*:")
+
+/** Whether [href] names an HTML or XHTML document by its extension. */
+private fun isDocumentPath(href: String): Boolean {
+    val path = href.substringBefore('#').substringBefore('?').lowercase()
+    return path.endsWith(".xhtml") || path.endsWith(".html") || path.endsWith(".htm") || path.endsWith(".xht")
+}
