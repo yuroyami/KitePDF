@@ -112,7 +112,8 @@ public sealed interface KiteDocLayout {
  * through [KiteDocViewState.setZoom], so an app driving zoom from its own slider
  * (gestures disabled) still declares its range here.
  *
- * @param pinchEnabled two-finger pinch zoom.
+ * @param pinchEnabled two-finger pinch zoom, Ctrl or Cmd with the wheel or a trackpad pinch,
+ *   and Ctrl or Cmd with plus, minus and 0 on a keyboard.
  * @param doubleTapEnabled double-tap toggles between [minZoom] and [doubleTapZoom].
  * @param doubleTapZoom the zoom a double tap goes to. It must be finite and above 0, and a
  *   double tap clamps it into [minZoom]..[maxZoom], as every zoom change is clamped.
