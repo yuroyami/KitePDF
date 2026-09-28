@@ -302,6 +302,21 @@ internal fun Modifier.kiteTransformGestures(
         }
 }
 
+/**
+ * Turns to the next or the previous page in reading order, or to the next or the previous
+ * whole spread when [spread] is true. [KiteDocViewState.nextPage] moves one page, which inside a
+ * spread can be the other page of the same spread.
+ */
+internal suspend fun KiteDocViewState.turn(forward: Boolean, spread: Boolean) {
+    if (!spread) {
+        if (forward) nextPage() else previousPage()
+        return
+    }
+    val first = currentPage / 2 * 2
+    val target = if (forward) first + 2 else first - 2
+    if (target in 0 until itemCount) animateScrollToPage(target)
+}
+
 /** The zoom factor of one wheel notch with Ctrl or Cmd held. A trackpad sends parts of a notch. */
 private const val WHEEL_ZOOM_STEP = 1.1f
 
@@ -333,8 +348,9 @@ internal fun keyAction(
         }
     }
     if (!paging) return null
-    val next: suspend (KiteDocViewState) -> Unit = { it.nextPage() }
-    val previous: suspend (KiteDocViewState) -> Unit = { it.previousPage() }
+    val spread = layout is KiteDocLayout.Spread
+    val next: suspend (KiteDocViewState) -> Unit = { it.turn(forward = true, spread) }
+    val previous: suspend (KiteDocViewState) -> Unit = { it.turn(forward = false, spread) }
     val (horizontal, reversed) = when (layout) {
         is KiteDocLayout.Paged -> (layout.orientation == androidx.compose.foundation.gestures.Orientation.Horizontal) to layout.reverseLayout
         is KiteDocLayout.Spread -> (layout.orientation == androidx.compose.foundation.gestures.Orientation.Horizontal) to layout.reverseLayout
