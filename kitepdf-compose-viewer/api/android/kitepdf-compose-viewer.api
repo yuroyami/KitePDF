@@ -145,7 +145,7 @@ public final class io/github/yuroyami/kitepdf/compose/KiteDocViewColors {
 }
 
 public final class io/github/yuroyami/kitepdf/compose/KiteDocViewKt {
-	public static final fun KiteDocView-Hf_F6X8 (Lio/github/yuroyami/kitepdf/compose/KiteDocViewState;Landroidx/compose/ui/Modifier;Lio/github/yuroyami/kitepdf/compose/KiteDocLayout;Lio/github/yuroyami/kitepdf/compose/KiteZoomSpec;Lio/github/yuroyami/kitepdf/compose/KiteRenderSpec;Lio/github/yuroyami/kitepdf/compose/KiteDocViewColors;FZZLkotlin/jvm/functions/Function2;Lkotlin/jvm/functions/Function3;Lkotlin/jvm/functions/Function3;Lkotlin/jvm/functions/Function4;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function1;Lio/github/yuroyami/kitepdf/PdfScriptHandler;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function1;Landroidx/compose/runtime/Composer;III)V
+	public static final fun KiteDocView-gqJSuOo (Lio/github/yuroyami/kitepdf/compose/KiteDocViewState;Landroidx/compose/ui/Modifier;Lio/github/yuroyami/kitepdf/compose/KiteDocLayout;Lio/github/yuroyami/kitepdf/compose/KiteZoomSpec;Lio/github/yuroyami/kitepdf/compose/KiteRenderSpec;Lio/github/yuroyami/kitepdf/compose/KiteDocViewColors;FZZLkotlin/jvm/functions/Function2;Lkotlin/jvm/functions/Function3;Lkotlin/jvm/functions/Function3;Lkotlin/jvm/functions/Function4;Lkotlin/jvm/functions/Function3;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function1;Lio/github/yuroyami/kitepdf/PdfScriptHandler;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function1;Landroidx/compose/runtime/Composer;III)V
 	public static final fun KiteDocView-lryUbJg (Lio/github/yuroyami/kitepdf/core/KiteDocument;Landroidx/compose/ui/Modifier;Ljava/lang/Integer;JLio/github/yuroyami/kitepdf/core/render/ReaderTheme;FZLkotlin/jvm/functions/Function2;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function1;Landroidx/compose/runtime/Composer;II)V
 }
 
@@ -162,6 +162,7 @@ public final class io/github/yuroyami/kitepdf/compose/KiteDocViewState {
 	public final fun clearSelection ()V
 	public final fun commitFocusedField (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public final fun currentBookmark ()Lio/github/yuroyami/kitepdf/core/KiteBookmark;
+	public final fun displayRectToViewport (ILio/github/yuroyami/kitepdf/core/KiteRectangle;)Landroidx/compose/ui/geometry/Rect;
 	public final fun getCurrentLocation ()Lio/github/yuroyami/kitepdf/core/KiteLocation;
 	public final fun getCurrentPage ()I
 	public final fun getCurrentScrollPosition ()Lio/github/yuroyami/kitepdf/compose/KiteScrollPosition;
@@ -184,6 +185,7 @@ public final class io/github/yuroyami/kitepdf/compose/KiteDocViewState {
 	public final fun isSelectionActive ()Z
 	public final fun isZoomed ()Z
 	public final fun nextPage (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun pageRectToViewport (ILio/github/yuroyami/kitepdf/core/KiteRectangle;)Landroidx/compose/ui/geometry/Rect;
 	public final fun pageRenderState (I)Lio/github/yuroyami/kitepdf/compose/KitePageRenderState;
 	public final fun panBy-MK-Hz9U (J)J
 	public final fun previousPage (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
@@ -287,6 +289,13 @@ public final class io/github/yuroyami/kitepdf/compose/KitePageHit {
 	public final fun getY ()D
 	public fun hashCode ()I
 	public fun toString ()Ljava/lang/String;
+}
+
+public abstract interface class io/github/yuroyami/kitepdf/compose/KitePageOverlayScope {
+	public abstract fun displayRect (Landroidx/compose/ui/Modifier;Lio/github/yuroyami/kitepdf/core/KiteRectangle;)Landroidx/compose/ui/Modifier;
+	public abstract fun getPage ()Lio/github/yuroyami/kitepdf/core/KitePage;
+	public abstract fun getPageIndex ()I
+	public abstract fun pageRect (Landroidx/compose/ui/Modifier;Lio/github/yuroyami/kitepdf/core/KiteRectangle;)Landroidx/compose/ui/Modifier;
 }
 
 public final class io/github/yuroyami/kitepdf/compose/KitePageRasterizer {

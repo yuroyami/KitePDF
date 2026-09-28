@@ -733,6 +733,38 @@ KiteDocView(
 )
 ```
 
+## Draw over a place on a page
+
+The `pageOverlay` slot draws over each page, in the page's own frame. It moves and scales with the page, so an element placed on a rectangle of the page stays on that rectangle at any zoom. Use it for a note badge, a video surface or a mark of your own:
+
+```kotlin
+KiteDocView(
+    state,
+    pageOverlay = {
+        // pageIndex and page name the page under this overlay.
+        for (note in notesOn(pageIndex)) {
+            NoteBadge(Modifier.pageRect(note.rect))
+        }
+    },
+)
+```
+
+Two modifiers size an element to a rectangle of the page and place it there:
+
+- `pageRect` takes the page's own space. This is the space of `hitTest` and of the `rect` of a PDF annotation.
+- `displayRect` takes display space: points from the top-left corner of the page as it is shown, y down. This is the space of `hitTestDisplay`, of search hits, and of `EpubLink.rect` and `EpubMedia.rect`.
+
+An element in `pageOverlay` grows with the page when the reader zooms in. For an element that keeps its size on screen, such as a pin, use the `overlay` slot and ask the state where the rectangle is:
+
+```kotlin
+KiteDocView(state, overlay = { state ->
+    val bounds = state.pageRectToViewport(pageIndex = 0, rect = note.rect)
+    if (bounds != null) Pin(Modifier.absoluteOffset { bounds.topLeft.round() })
+})
+```
+
+`pageRectToViewport` and `displayRectToViewport` are `hitTest` and `hitTestDisplay` in reverse. They return null while the page has no place in the layout. A paged layout places only its current page. A composable that reads them follows the page as it scrolls and zooms.
+
 ## Export rendered pages
 
 Capture a page bitmap and save it as PNG:

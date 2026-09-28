@@ -278,6 +278,10 @@ for (media in page.media) {
 }
 ```
 
+In `KiteDocView`, place the player in the `pageOverlay` slot with
+`Modifier.displayRect(media.rect)`, and it stays on the box at any zoom (see
+[Compose viewer](compose-viewer.md#draw-over-a-place-on-a-page)).
+
 ## Typography
 
 The layout engine covers what real books use:
