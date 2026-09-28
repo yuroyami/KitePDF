@@ -101,6 +101,7 @@ internal class SvgStyles(root: KiteXmlNode.Element) {
             "fill-rule", "display", "visibility", "transform", "clip-path", "font-size", "font-family",
             "font-weight", "font-style", "text-anchor", "stroke-dasharray", "stroke-dashoffset",
             "stroke-linecap", "stroke-linejoin", "stroke-miterlimit", "stop-color", "stop-opacity",
+            "mask", "mask-type",
         )
 
         /** The same declaration grammar for a standalone gradient parser. */

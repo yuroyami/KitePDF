@@ -44,7 +44,8 @@ import kotlin.math.PI
  * `fill`, `stroke`, `stroke-width`, `opacity`, `fill-opacity`,
  * `stroke-opacity`, `fill-rule`, `display` and `visibility` with inheritance;
  * `transform` (translate/scale/rotate/skewX/skewY/matrix); linear and radial
- * gradients as paint; and `clip-path`. Embedded `<style>` rules support type,
+ * gradients and `<pattern>` tiles as paint; `clip-path`; and `mask`, by
+ * luminance or by alpha. Embedded `<style>` rules support type,
  * universal, class and ID selectors, their compounds and comma lists, with
  * specificity, source order and `!important` (SVG 1.1, section 6).
  * Combinators, attribute/pseudo selectors, CSS escapes, at-rules and external
@@ -53,7 +54,7 @@ import kotlin.math.PI
  * Text is measured against standard-font metrics and drawn through a host
  * typeface, because SVG ships no font file of its own.
  *
- * Not drawn: patterns, masks, filters, and animation.
+ * Not drawn: filters and animation.
  */
 public class SvgImage private constructor(
     private val root: KiteXmlNode.Element,
@@ -173,6 +174,9 @@ public class SvgImage private constructor(
         /** Percentage bases in current viewport user units (SVG 2, section 8.9). */
         val viewportWidth: Double = 0.0,
         val viewportHeight: Double = 0.0,
+        /** How many pattern tiles and masks the walk is inside, which bounds their nesting (#209). */
+        val patternDepth: Int = 0,
+        val maskDepth: Int = 0,
     )
 
     // The canvas travels as a parameter, exactly like ctm and Paint: a field
@@ -212,8 +216,17 @@ public class SvgImage private constructor(
         val id = if (links != null) el.attrs["id"]?.takeIf { it.isNotEmpty() } else null
         val noted = href != null || id != null
         if (noted) links?.open(href, id)
+        val mask = maskOf(el, paint)
         try {
-            paintElement(el, ctm, paint, canvas, load, depth, stop)
+            if (mask == null) {
+                paintElement(el, ctm, paint, canvas, load, depth, stop)
+            } else {
+                canvas.applySoftMask(
+                    mask.kind, mask.region, ctm,
+                    render = { paintElement(el, ctm, paint, canvas, load, depth, stop) },
+                    renderMask = { maskCanvas -> drawMask(mask, ctm, paint, maskCanvas, load, depth, stop) },
+                )
+            }
         } finally {
             if (noted) links?.close()
             if (groupAlpha < 1.0) canvas.endTransparencyGroup()
@@ -242,25 +255,25 @@ public class SvgImage private constructor(
             "use" -> drawUse(el, ctm, paint, canvas, load, depth, stop)
             "image" -> drawImage(el, ctm, paint, canvas, load)
             "text" -> drawText(el, ctm, paint, canvas, depth)
-            "path" -> el.attrs["d"]?.let { paintShape(parsePath(it), ctm, paint, canvas) }
-            "rect" -> paintShape(rect(el.attrs, paint), ctm, paint, canvas)
+            "path" -> el.attrs["d"]?.let { paintShape(parsePath(it), ctm, paint, canvas, load = load, depth = depth, stop = stop) }
+            "rect" -> paintShape(rect(el.attrs, paint), ctm, paint, canvas, load = load, depth = depth, stop = stop)
             "circle" -> paintShape(
                 ellipse(num(el, "cx", paint), num(el, "cy", paint), num(el, "r", paint), num(el, "r", paint)),
-                ctm, paint, canvas,
+                ctm, paint, canvas, load = load, depth = depth, stop = stop,
             )
             "ellipse" -> paintShape(
                 ellipse(num(el, "cx", paint), num(el, "cy", paint), num(el, "rx", paint), num(el, "ry", paint)),
-                ctm, paint, canvas,
+                ctm, paint, canvas, load = load, depth = depth, stop = stop,
             )
             "line" -> paintShape(
                 KitePath.Builder().apply {
                     moveTo(num(el, "x1", paint), num(el, "y1", paint))
                     lineTo(num(el, "x2", paint), num(el, "y2", paint))
                 }.build(),
-                ctm, paint, canvas, forceStroke = true,
+                ctm, paint, canvas, forceStroke = true, load = load, depth = depth, stop = stop,
             )
-            "polyline" -> el.attrs["points"]?.let { paintShape(polyline(it, close = false), ctm, paint, canvas) }
-            "polygon" -> el.attrs["points"]?.let { paintShape(polyline(it, close = true), ctm, paint, canvas) }
+            "polyline" -> el.attrs["points"]?.let { paintShape(polyline(it, close = false), ctm, paint, canvas, load = load, depth = depth, stop = stop) }
+            "polygon" -> el.attrs["points"]?.let { paintShape(polyline(it, close = true), ctm, paint, canvas, load = load, depth = depth, stop = stop) }
         }
     }
 
@@ -632,12 +645,18 @@ public class SvgImage private constructor(
         else -> null
     }
 
-    private fun paintShape(path: KitePath, ctm: KiteMatrix, paint: Paint, canvas: KiteCanvas, forceStroke: Boolean = false) {
+    private fun paintShape(
+        path: KitePath, ctm: KiteMatrix, paint: Paint, canvas: KiteCanvas, forceStroke: Boolean = false,
+        load: ((String) -> ByteArray?)? = null, depth: Int = 0, stop: KiteCancellation? = null,
+    ) {
         if (!paint.visible || path.segments.isEmpty()) return
         if (!forceStroke) {
             val gradient = paint.fillRef?.let { gradientFor(it, path) }
+            val pattern = if (gradient == null) paint.fillRef?.let { patternFor(it, path, paint) } else null
             if (gradient != null) {
                 paintGradient(gradient.first, gradient.second, path, ctm, paint.opacity * paint.fillOpacity, canvas)
+            } else if (pattern != null) {
+                paintPattern(pattern, path, paint.evenOdd, ctm, paint.opacity * paint.fillOpacity, paint, canvas, load, depth, stop)
             } else {
                 paint.fill?.let {
                     canvas.fillPath(path, ctm, it, paint.evenOdd, paint.opacity * paint.fillOpacity, KiteBlendMode.Normal)
@@ -650,14 +669,19 @@ public class SvgImage private constructor(
         // A gradient stroke fills the outline of the stroke. Its bounding box units are those
         // of the shape's own geometry (SVG 1.1, 7.11), so the gradient maps as for the fill.
         val strokeGradient = paint.strokeRef?.let { gradientFor(it, path) }
-        if (strokeGradient != null) {
+        // A pattern stroke fills the outline of the stroke too, with the shape's bounding box.
+        val strokePattern = if (strokeGradient == null) paint.strokeRef?.let { patternFor(it, path, paint) } else null
+        if (strokeGradient != null || strokePattern != null) {
             val scale = sqrt(ctm.a * ctm.a + ctm.b * ctm.b + ctm.c * ctm.c + ctm.d * ctm.d)
             val outline = path.strokeOutline(
                 paint.strokeW, paint.lineCap, paint.lineJoin, paint.miterLimit, paint.dash, paint.dashOffset,
                 tolerance = if (scale > 0.0) 0.25 / scale else 0.1,
             )
-            if (!outline.isEmpty()) {
+            if (outline.isEmpty()) return
+            if (strokeGradient != null) {
                 paintGradient(strokeGradient.first, strokeGradient.second, outline, ctm, paint.opacity * paint.strokeOpacity, canvas)
+            } else if (strokePattern != null) {
+                paintPattern(strokePattern, outline, false, ctm, paint.opacity * paint.strokeOpacity, paint, canvas, load, depth, stop)
             }
             return
         }
@@ -698,6 +722,185 @@ public class SvgImage private constructor(
             render = { canvas.fillShading(shading, gradientCtm, inGradient, alpha, KiteBlendMode.Normal) },
             renderMask = { it.fillShading(opacity, gradientCtm, inGradient) },
         )
+    }
+
+    /**
+     * A `<pattern>` paint server, its `href` chain resolved (SVG 1.1, 13.3): the element whose
+     * children draw, the tile in pattern space, the map from pattern space to the shape's user
+     * space, and the map from content to the tile, whose origin is the tile's top-left corner.
+     */
+    private class PatternTile(
+        val content: KiteXmlNode.Element,
+        val x: Double, val y: Double, val w: Double, val h: Double,
+        val toUser: KiteMatrix,
+        val contentMatrix: KiteMatrix,
+    )
+
+    /**
+     * The pattern that `url(#id)` names for a shape of outline [path], or null when it names none.
+     * A pattern inside a pattern's own tile is not drawn, so the shape takes its fallback colour,
+     * and nesting cannot multiply tiles without bound (#209).
+     */
+    private fun patternFor(id: String, path: KitePath, paint: Paint): PatternTile? {
+        if (paint.patternDepth > 0) return null
+        // Attributes and children a pattern lacks come from the one its href names (SVG 1.1, 13.3).
+        val chain = ArrayList<KiteXmlNode.Element>()
+        var def = byId[id]
+        while (def != null && def.tag.lowercase() == "pattern" && chain.size < MAX_HREF_CHAIN && def !in chain) {
+            chain += def
+            def = def.attrs["href"]?.trim()?.removePrefix("#")?.let { byId[it] }
+        }
+        if (chain.isEmpty()) return null
+        fun attr(name: String): String? = chain.firstNotNullOfOrNull { it.attrs[name] ?: it.attrs[name.lowercase()] }?.trim()
+        val content = chain.firstOrNull { e -> e.children.any { it is KiteXmlNode.Element } } ?: chain.first()
+        val box = boundsOf(path)
+        val x: Double; val y: Double; val w: Double; val h: Double
+        if (attr("patternUnits") == "userSpaceOnUse") {
+            x = attr("x")?.let { parseLen(it, paint.fontSize, paint.viewportWidth) } ?: 0.0
+            y = attr("y")?.let { parseLen(it, paint.fontSize, paint.viewportHeight) } ?: 0.0
+            w = attr("width")?.let { parseLen(it, paint.fontSize, paint.viewportWidth) } ?: 0.0
+            h = attr("height")?.let { parseLen(it, paint.fontSize, paint.viewportHeight) } ?: 0.0
+        } else {
+            // objectBoundingBox, the default: fractions of the shape's own box, which must have an area.
+            box ?: return null
+            x = box[0] + fraction(attr("x"), 0.0) * (box[2] - box[0])
+            y = box[1] + fraction(attr("y"), 0.0) * (box[3] - box[1])
+            w = fraction(attr("width"), 0.0) * (box[2] - box[0])
+            h = fraction(attr("height"), 0.0) * (box[3] - box[1])
+        }
+        val viewBox = attr("viewBox")?.let { numbers(it) }?.takeIf { it.size >= 4 && it[2] > 0 && it[3] > 0 }
+        val contentMatrix = when {
+            viewBox != null -> viewBoxFit(viewBox, w, h, attr("preserveAspectRatio")).matrix
+            attr("patternContentUnits") == "objectBoundingBox" -> {
+                box ?: return null
+                KiteMatrix.scaling(box[2] - box[0], box[3] - box[1])
+            }
+            else -> KiteMatrix.IDENTITY
+        }
+        val toUser = attr("patternTransform")?.let { parseTransform(it) } ?: KiteMatrix.IDENTITY
+        return PatternTile(content, x, y, w, h, toUser, contentMatrix)
+    }
+
+    /**
+     * Fills [region], a path in user space under [ctm], with the tiles of [t] that meet it. Each
+     * tile clips its content, and the fill's [alpha] applies once to the whole fill. A tile of no
+     * area paints nothing, and so does a fill that would need more than [MAX_PATTERN_TILES] tiles.
+     */
+    private fun paintPattern(
+        t: PatternTile, region: KitePath, evenOdd: Boolean, ctm: KiteMatrix, alpha: Double, paint: Paint,
+        canvas: KiteCanvas, load: ((String) -> ByteArray?)?, depth: Int, stop: KiteCancellation?,
+    ) {
+        if (!(t.w > 0.0 && t.h > 0.0 && t.w.isFinite() && t.h.isFinite())) return
+        val inverse = t.toUser.invert() ?: return
+        val b = boundsOf(transformPath(region, inverse)) ?: return
+        val m0 = kotlin.math.floor((b[0] - t.x) / t.w)
+        val m1 = ceil((b[2] - t.x) / t.w)
+        val n0 = kotlin.math.floor((b[1] - t.y) / t.h)
+        val n1 = ceil((b[3] - t.y) / t.h)
+        val tiles = (m1 - m0) * (n1 - n0)
+        if (!tiles.isFinite() || tiles <= 0.0 || tiles > MAX_PATTERN_TILES) return
+        val patternCtm = compose(ctm, t.toUser)
+        // The content inherits from the pattern's own ancestors, as a clip path's does.
+        val contentPaint = clipPaintOf(t.content, paint).copy(patternDepth = paint.patternDepth + 1, maskDepth = paint.maskDepth)
+        canvas.pushClip(region, ctm, evenOdd)
+        try {
+            if (alpha < 1.0) {
+                canvas.beginTransparencyGroup(
+                    KiteRectangle(0.0, 0.0, width, height), paint.viewport,
+                    isolated = true, knockout = false, alpha = alpha, blendMode = KiteBlendMode.Normal,
+                )
+            }
+            try {
+                for (n in n0.toInt() until n1.toInt()) for (m in m0.toInt() until m1.toInt()) {
+                    if (stop?.isCancelled() == true) return
+                    val ox = t.x + m * t.w
+                    val oy = t.y + n * t.h
+                    canvas.pushClip(KitePath.Builder().apply { rectangle(ox, oy, t.w, t.h) }.build(), patternCtm, evenOdd = false)
+                    try {
+                        val tileCtm = compose(patternCtm, compose(KiteMatrix.translation(ox, oy), t.contentMatrix))
+                        for (c in t.content.children) if (c is KiteXmlNode.Element) walk(c, tileCtm, contentPaint, canvas, load, depth + 1, stop)
+                    } finally {
+                        canvas.popClip()
+                    }
+                }
+            } finally {
+                if (alpha < 1.0) canvas.endTransparencyGroup()
+            }
+        } finally {
+            canvas.popClip()
+        }
+    }
+
+    /**
+     * A `mask="url(#id)"` (SVG 1.1, 14.4): the `<mask>` element, whether its luminance or its
+     * alpha masks, its region in the element's user space, and the map for its content.
+     */
+    private class MaskRef(
+        val def: KiteXmlNode.Element,
+        val kind: SoftMask.Kind,
+        val region: KiteRectangle,
+        val contentMatrix: KiteMatrix,
+    )
+
+    /**
+     * The mask of [el], or null when it names none. A mask inside the content of two masks is
+     * not applied, so a mask that names itself ends (#209).
+     */
+    private fun maskOf(el: KiteXmlNode.Element, paint: Paint): MaskRef? {
+        val id = urlRef(styleOrAttr(el, "mask")) ?: return null
+        if (paint.maskDepth >= MAX_MASK_NESTING) return null
+        val def = byId[id]?.takeIf { it.tag.lowercase() == "mask" } ?: return null
+        fun attr(name: String): String? = (def.attrs[name] ?: def.attrs[name.lowercase()])?.trim()
+        val userUnits = attr("maskUnits") == "userSpaceOnUse"
+        val contentBox = attr("maskContentUnits") == "objectBoundingBox"
+        val box = if (!userUnits || contentBox) boundsOfElement(el, paint, 0) else null
+        // With objectBoundingBox units, an element with no area shows nothing (SVG 1.1, 14.4).
+        val empty = KiteRectangle(0.0, 0.0, 0.0, 0.0)
+        val region = if (userUnits) {
+            val x = parseLen(attr("x") ?: "-10%", paint.fontSize, paint.viewportWidth)
+            val y = parseLen(attr("y") ?: "-10%", paint.fontSize, paint.viewportHeight)
+            val w = parseLen(attr("width") ?: "120%", paint.fontSize, paint.viewportWidth)
+            val h = parseLen(attr("height") ?: "120%", paint.fontSize, paint.viewportHeight)
+            KiteRectangle(x, y, x + w, y + h)
+        } else if (box == null) {
+            empty
+        } else {
+            val bw = box[2] - box[0]
+            val bh = box[3] - box[1]
+            val x = box[0] + fraction(attr("x"), -0.1) * bw
+            val y = box[1] + fraction(attr("y"), -0.1) * bh
+            KiteRectangle(x, y, x + fraction(attr("width"), 1.2) * bw, y + fraction(attr("height"), 1.2) * bh)
+        }
+        val contentMatrix = if (!contentBox) KiteMatrix.IDENTITY else if (box == null) KiteMatrix.scaling(0.0, 0.0) else {
+            KiteMatrix(box[2] - box[0], 0.0, 0.0, box[3] - box[1], box[0], box[1])
+        }
+        // CSS Masking 1, 7.1: mask-type picks the alpha of the content over its luminance.
+        val kind = if (styleOrAttr(def, "mask-type")?.trim() == "alpha") SoftMask.Kind.Alpha else SoftMask.Kind.Luminosity
+        return MaskRef(def, kind, region, contentMatrix)
+    }
+
+    /** Draws the content of [mask] onto [canvas], clipped to the mask's region. */
+    private fun drawMask(
+        mask: MaskRef, ctm: KiteMatrix, paint: Paint, canvas: KiteCanvas,
+        load: ((String) -> ByteArray?)?, depth: Int, stop: KiteCancellation?,
+    ) {
+        val r = mask.region
+        if (!(r.right > r.left && r.top > r.bottom)) return
+        val contentPaint = clipPaintOf(mask.def, paint).copy(patternDepth = paint.patternDepth, maskDepth = paint.maskDepth + 1)
+        canvas.pushClip(KitePath.Builder().apply { rectangle(r.left, r.bottom, r.right - r.left, r.top - r.bottom) }.build(), ctm, evenOdd = false)
+        try {
+            val contentCtm = compose(ctm, mask.contentMatrix)
+            for (c in mask.def.children) if (c is KiteXmlNode.Element) walk(c, contentCtm, contentPaint, canvas, load, depth + 1, stop)
+        } finally {
+            canvas.popClip()
+        }
+    }
+
+    /** A number or a percentage as a fraction, such as `0.5` or `50%`, or [fallback] when absent or not one. */
+    private fun fraction(raw: String?, fallback: Double): Double {
+        val s = raw?.trim() ?: return fallback
+        val v = if (s.endsWith("%")) s.dropLast(1).trim().toDoubleOrNull()?.div(100.0) else s.toDoubleOrNull()
+        return v?.takeIf { it.isFinite() } ?: fallback
     }
 
     /**
@@ -854,6 +1057,7 @@ public class SvgImage private constructor(
             miterLimit = declaration("stroke-miterlimit")?.toDoubleOrNull()?.takeIf { it >= 1.0 } ?: p.miterLimit,
             viewport = p.viewport,
             viewportWidth = p.viewportWidth, viewportHeight = p.viewportHeight,
+            patternDepth = p.patternDepth, maskDepth = p.maskDepth,
         )
     }
 
@@ -959,6 +1163,15 @@ public class SvgImage private constructor(
     public companion object {
         /** A `<use>` chain deeper than this is a cycle; stop rather than hang. */
         private const val MAX_DEPTH = 32
+
+        /** The most tiles one pattern fill draws, as for a PDF tiling pattern. */
+        private const val MAX_PATTERN_TILES = 20_000.0
+
+        /** The longest `href` chain a pattern follows. */
+        private const val MAX_HREF_CHAIN = 16
+
+        /** How many masks deep a mask still applies. */
+        private const val MAX_MASK_NESTING = 2
 
         /** Elements whose opacity composites their children as one group. */
         private val CONTAINERS = setOf("svg", "g", "a", "switch", "use")
