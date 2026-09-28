@@ -46,9 +46,10 @@ internal sealed class LayoutBox {
 
     /**
      * True when this box paints through an effect: a transparency group for an [ComputedStyle.opacity]
-     * below 1, or a clip for [ComputedStyle.clipsOverflow]. Such a box paints as one group (#28).
+     * below 1, a clip for [ComputedStyle.clipsOverflow], or a [ComputedStyle.transform]. Such a box
+     * paints as one group (#28).
      */
-    val hasEffects: Boolean get() = this !is TextBlockBox && (style.opacity < 1.0 || style.clipsOverflow)
+    val hasEffects: Boolean get() = this !is TextBlockBox && (style.opacity < 1.0 || style.clipsOverflow || style.transform != null)
 
     val bottom: Double get() = y + borderBoxHeight
 }

@@ -22,6 +22,7 @@ import io.github.yuroyami.kitepdf.epub.css.CssBackgroundImage
 import io.github.yuroyami.kitepdf.epub.css.grownRadii
 import io.github.yuroyami.kitepdf.epub.css.innerRadii
 import io.github.yuroyami.kitepdf.epub.css.roundedRect
+import io.github.yuroyami.kitepdf.epub.css.transformMatrix
 import io.github.yuroyami.kitepdf.core.KiteBookmark
 import io.github.yuroyami.kitepdf.core.KiteDocument
 import io.github.yuroyami.kitepdf.core.KiteLocation
@@ -1195,8 +1196,12 @@ public class EpubPage internal constructor(
                 val b = columnX(page, line.yTop + line.height)
                 io.github.yuroyami.kitepdf.core.KiteRectangle(minOf(a, b), page.margin + start, maxOf(a, b), page.margin + end)
             } else {
-                io.github.yuroyami.kitepdf.core.KiteRectangle(
-                    page.margin + start, displayY(page, line.yTop), page.margin + end, displayY(page, line.yTop + line.height),
+                // A transformed box moves the element with its paint (#28).
+                movedRect(
+                    io.github.yuroyami.kitepdf.core.KiteRectangle(
+                        page.margin + start, displayY(page, line.yTop), page.margin + end, displayY(page, line.yTop + line.height),
+                    ),
+                    displayTransformAt(page, line.paintRank),
                 )
             }
         }
@@ -1262,34 +1267,43 @@ public class EpubPage internal constructor(
             canvas.fillPath(rect, deviceCtm, bg, evenOdd = false)
         }
 
+        // The matrix of the steps being painted: the page's, or a transformed box's inside its stretch (#28).
+        var ctm = deviceCtm
+        val saved = ArrayList<KiteMatrix>()
+
         fun paintLine(line: PositionedLine) {
             val base = yUp(line.yTop + line.ascent)
             for (run in line.runs) {
                 val tm = KiteMatrix.translation(margin + run.x, base + run.baselineShift)
-                paintRunBackground(run, canvas, deviceCtm.concat(tm))
+                paintRunBackground(run, canvas, ctm.concat(tm))
             }
             for (run in line.runs) {
                 val tm = KiteMatrix.translation(margin + run.x, base + run.baselineShift)
                 if (run.glyphs.isNotEmpty()) canvas.drawGlyphs(
                     run.glyphs, run.fontSize, unitsPerEm = run.unitsPerEm, hasOutlines = run.hasOutlines,
-                    fontSpec = run.fontSpec, textToDevice = deviceCtm.concat(tm),
+                    fontSpec = run.fontSpec, textToDevice = ctm.concat(tm),
                     color = run.color, alpha = 1.0, blendMode = KiteBlendMode.Normal,
                 )
-                paintRunLines(run, canvas) { shift -> deviceCtm.concat(KiteMatrix.translation(margin + run.x, base + shift)) }
+                paintRunLines(run, canvas) { shift -> ctm.concat(KiteMatrix.translation(margin + run.x, base + shift)) }
             }
             // Inline images: bottom on the baseline, next to the text runs.
             for (im in line.images) {
-                paintImage(canvas, deviceCtm, im.image, im.svg, im.width, im.height,
+                paintImage(canvas, ctm, im.image, im.svg, im.width, im.height,
                     margin + im.x, base, im.objectFit, resourceDir(im.zipPath))
             }
         }
 
         paintInOrder(
             page, cancellation,
-            deco = { box -> paintBox(box, canvas, deviceCtm, margin, startY, bandBottom, ::yUp) },
+            deco = { box -> paintBox(box, canvas, ctm, margin, startY, bandBottom, ::yUp) },
             line = ::paintLine,
             begin = { scope ->
                 val s = scope.box.style
+                if (scope.kind == EffectKind.TRANSFORM) {
+                    saved += ctm
+                    ctm = ctm.concat(yUpMatrix(displayTransform(page, scope.box) ?: KiteMatrix.IDENTITY))
+                    return@paintInOrder
+                }
                 // The padding box, in page space, y up.
                 val left = margin + scope.box.x + s.borderLeft.effective
                 val right = margin + scope.box.x + scope.box.borderBoxWidth - s.borderRight.effective
@@ -1299,9 +1313,9 @@ public class EpubPage internal constructor(
                     s.radii?.resolve(scope.box.borderBoxWidth, scope.box.borderBoxHeight),
                     s.borderLeft.effective, s.borderTop.effective, s.borderRight.effective, s.borderBottom.effective,
                 )
-                openEffect(canvas, deviceCtm, scope, KiteRectangle(left, bottom, right, top), radii)
+                openEffect(canvas, ctm, scope, KiteRectangle(left, bottom, right, top), radii)
             },
-            end = { scope -> closeEffect(canvas, scope) },
+            end = { scope -> if (scope.kind == EffectKind.TRANSFORM) ctm = saved.removeAt(saved.lastIndex) else closeEffect(canvas, scope) },
             image = { box ->
                 // The picture fills the content box, inside the border and padding (#101).
                 val inset = imageInset(box.style)
@@ -1314,12 +1328,12 @@ public class EpubPage internal constructor(
                 )
                 if (radii != null) {
                     val shape = KitePath.Builder().apply { roundedRect(left, bottom, left + box.drawWidth, bottom + box.drawHeight, radii) }.build()
-                    canvas.pushClip(shape, deviceCtm, evenOdd = false)
+                    canvas.pushClip(shape, ctm, evenOdd = false)
                 }
                 if (box.media != null && box.image == null) {
-                    paintMediaPlaceholder(canvas, deviceCtm, left, bottom, box.drawWidth, box.drawHeight)
+                    paintMediaPlaceholder(canvas, ctm, left, bottom, box.drawWidth, box.drawHeight)
                 } else {
-                    paintImage(canvas, deviceCtm, box.image, box.svg, box.drawWidth, box.drawHeight,
+                    paintImage(canvas, ctm, box.image, box.svg, box.drawWidth, box.drawHeight,
                         left, bottom, box.style.objectFit, resourceDir(box.zipPath))
                 }
                 if (radii != null) canvas.popClip()
@@ -1496,8 +1510,13 @@ public class EpubPage internal constructor(
         }
     }
 
-    /** The ranks that one box wraps in a transparency group, or in a clip when [clip] (#28). */
-    private class EffectScope(val box: LayoutBox, val clip: Boolean, val first: Int, val last: Int)
+    /** What an effect stretch does to its steps, outermost first where stretches start together (#28). */
+    private enum class EffectKind { TRANSFORM, GROUP, CLIP }
+
+    /** The ranks that one box paints through a transform, a transparency group or a clip (#28). */
+    private class EffectScope(val box: LayoutBox, val kind: EffectKind, val first: Int, val last: Int) {
+        val clip: Boolean get() = kind == EffectKind.CLIP
+    }
 
     /** The effect stretches on [page], outer ones first where they start at the same rank. */
     private fun effectScopes(page: PageRender): List<EffectScope> {
@@ -1505,11 +1524,13 @@ public class EpubPage internal constructor(
         val scopes = ArrayList<EffectScope>()
         for (box in page.effectBoxes) {
             if (box.lastRank < box.decoRank) continue
-            if (box.style.opacity < 1.0) scopes += EffectScope(box, clip = false, box.decoRank, box.lastRank)
+            // A transform moves the box and all it holds, so it comes first; vertical pages do not transform.
+            if (box.style.transform != null && !page.vertical) scopes += EffectScope(box, EffectKind.TRANSFORM, box.decoRank, box.lastRank)
+            if (box.style.opacity < 1.0) scopes += EffectScope(box, EffectKind.GROUP, box.decoRank, box.lastRank)
             // Overflow clips the content, not the box's own background and border, which paint first.
-            if (box.style.clipsOverflow && box.lastRank > box.decoRank) scopes += EffectScope(box, clip = true, box.decoRank + 1, box.lastRank)
+            if (box.style.clipsOverflow && box.lastRank > box.decoRank) scopes += EffectScope(box, EffectKind.CLIP, box.decoRank + 1, box.lastRank)
         }
-        return scopes.sortedWith(compareBy<EffectScope> { it.first }.thenByDescending { it.last }.thenBy { it.clip })
+        return scopes.sortedWith(compareBy<EffectScope> { it.first }.thenByDescending { it.last }.thenBy { it.kind.ordinal })
     }
 
     /**
@@ -1531,6 +1552,51 @@ public class EpubPage internal constructor(
 
     private fun closeEffect(canvas: KiteCanvas, scope: EffectScope) {
         if (scope.clip) canvas.popClip() else canvas.endTransparencyGroup()
+    }
+
+    /**
+     * [box]'s `transform` in the display space of [page], y down, about its `transform-origin`
+     * in its border box. Null without a transform, and in vertical writing (#28).
+     */
+    private fun displayTransform(page: PageRender, box: LayoutBox): KiteMatrix? {
+        val functions = box.style.transform ?: return null
+        if (page.vertical) return null
+        val w = box.borderBoxWidth
+        val h = box.borderBoxHeight
+        val (ox, oy) = box.style.transformOrigin
+        return transformMatrix(functions, w, h, page.margin + box.x + ox.resolve(w), displayY(page, box.y) + oy.resolve(h))
+    }
+
+    /** [m], a matrix of the display space with y down, as the same motion of the page space with y up. */
+    private fun yUpMatrix(m: KiteMatrix): KiteMatrix =
+        KiteMatrix(m.a, -m.b, -m.c, m.d, m.c * displayHeight + m.e, displayHeight - m.d * displayHeight - m.f)
+
+    /**
+     * The transforms of the boxes whose paint stretch holds [rank], outermost applied last, in
+     * display space. Null when none holds it (#28).
+     */
+    private fun displayTransformAt(page: PageRender, rank: Int): KiteMatrix? {
+        // Stretches nest, so the boxes that hold the rank, by first rank, run from the outermost in.
+        val holders = page.effectBoxes
+            .filter { it.style.transform != null && rank >= it.decoRank && rank <= it.lastRank }
+            .sortedBy { it.decoRank }
+        if (holders.isEmpty()) return null
+        var m = KiteMatrix.IDENTITY
+        // An inner box moves first, inside the space its outer box then moves.
+        for (box in holders) displayTransform(page, box)?.let { m = m.concat(it) }
+        return m
+    }
+
+    /** The bounding box of [r], a display-space rectangle with the smaller y in bottom, moved by [m]. */
+    private fun movedRect(r: KiteRectangle, m: KiteMatrix?): KiteRectangle {
+        if (m == null) return r
+        val xs = DoubleArray(4)
+        val ys = DoubleArray(4)
+        for ((i, p) in listOf(r.left to r.bottom, r.right to r.bottom, r.left to r.top, r.right to r.top).withIndex()) {
+            xs[i] = m.transformX(p.first, p.second)
+            ys[i] = m.transformY(p.first, p.second)
+        }
+        return KiteRectangle(xs.min(), ys.min(), xs.max(), ys.max())
     }
 
     /**
@@ -2040,10 +2106,11 @@ public class EpubPage internal constructor(
                 val end = runEnd(page, runs[j])
                 out.add(
                     EpubLink(
+                        // A transformed box moves its links with its paint (#28).
                         rect = if (page.vertical) {
                             io.github.yuroyami.kitepdf.core.KiteRectangle(acrossLow, start, acrossHigh, end)
                         } else {
-                            io.github.yuroyami.kitepdf.core.KiteRectangle(start, acrossLow, end, acrossHigh)
+                            movedRect(io.github.yuroyami.kitepdf.core.KiteRectangle(start, acrossLow, end, acrossHigh), displayTransformAt(page, line.paintRank))
                         },
                         href = href,
                         kind = doc.linkKind(chapter, href),
@@ -2064,8 +2131,9 @@ public class EpubPage internal constructor(
                 val left = page.margin + box.x
                 out.add(
                     EpubLink(
-                        rect = io.github.yuroyami.kitepdf.core.KiteRectangle(
-                            left, displayY(page, top), left + box.borderBoxWidth, displayY(page, bottom),
+                        rect = movedRect(
+                            io.github.yuroyami.kitepdf.core.KiteRectangle(left, displayY(page, top), left + box.borderBoxWidth, displayY(page, bottom)),
+                            displayTransformAt(page, box.decoRank),
                         ),
                         href = href,
                         kind = doc.linkKind(chapter, href),
@@ -2181,10 +2249,20 @@ public class EpubPage internal constructor(
         }
         for (line in page.lines) {
             if (line.owner !== curOwner) { flush(); curOwner = line.owner }
-            extractLine(page, line)?.let(curLines::add)
+            extractLine(page, line)?.let { curLines += movedLine(it, displayTransformAt(page, line.paintRank)) }
         }
         flush()
         return KiteStructuredText(blocks)
+    }
+
+    /**
+     * [line] moved by [m] when [m] only moves and scales, so its char edges stay in order along
+     * it. The text of a turned, skewed or mirrored box stays where the layout put it (#28).
+     */
+    private fun movedLine(line: KiteTextLine, m: KiteMatrix?): KiteTextLine {
+        if (m == null || line.vertical || m.b != 0.0 || m.c != 0.0 || m.a <= 0.0 || m.d <= 0.0) return line
+        val edges = DoubleArray(line.charEdges.size) { m.a * line.charEdges[it] + m.e }
+        return KiteTextLine(line.text, movedRect(line.bounds, m), edges, line.vertical, line.end)
     }
 
     private fun extractLine(page: PageRender, line: PositionedLine, only: List<PlacedRun> = line.runs): KiteTextLine? {

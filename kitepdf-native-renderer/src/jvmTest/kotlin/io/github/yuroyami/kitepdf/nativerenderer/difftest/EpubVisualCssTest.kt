@@ -190,6 +190,34 @@ class EpubVisualCssTest {
     }
 
     @Test
+    fun a_transform_moves_turns_and_scales_the_paint_about_its_origin() {
+        // 100 by 40 pixels are 75 by 30 points, from (48, 48); the move is 75 by 37.5 points.
+        val moved = raster("""<div style="width:100px;height:40px;background-color:#ff0000;transform:translate(100px, 50px)"></div><p>After</p>""")
+        assertColor(moved, 160, 100, 255, 0, 0, "the moved box")
+        assertColor(moved, 80, 60, 255, 255, 255, "where the box was")
+
+        // A quarter turn about the centre (85.5, 55.5) makes a 15 by 75 point box.
+        val turned = raster("""<div style="width:100px;height:20px;background-color:#ff0000;transform:rotate(90deg)"></div>""")
+        assertColor(turned, 85, 25, 255, 0, 0, "the turned box above its old top")
+        assertColor(turned, 60, 55, 255, 255, 255, "the old left end")
+
+        // An eighth turn runs clockwise on screen: the right end of a bar goes down, not up.
+        val eighth = raster("""<div style="width:100px;height:10px;background-color:#ff0000;transform:rotate(45deg)"></div>""")
+        assertColor(eighth, 110, 76, 255, 0, 0, "the right end of the bar, turned down")
+        assertColor(eighth, 110, 27, 255, 255, 255, "where a turn the other way would put it")
+
+        // Twice the size from the top-left corner: 75 by 30 points instead of 37.5 by 15.
+        val scaled = raster("""<div style="width:50px;height:20px;background-color:#ff0000;transform:scale(2);transform-origin:0 0"></div>""")
+        assertColor(scaled, 110, 70, 255, 0, 0, "the grown box")
+        assertColor(scaled, 130, 70, 255, 255, 255, "past the grown box")
+
+        // The layout does not move: the paragraph after a moved box sits where it sits after a still one.
+        val still = raster("""<div style="width:100px;height:40px;background-color:#ff0000"></div><p style="color:#0000ff">After</p>""")
+        val movedBlue = raster("""<div style="width:100px;height:40px;background-color:#ff0000;transform:translate(100px, 50px)"></div><p style="color:#0000ff">After</p>""")
+        assertEquals(firstBlueRow(still), firstBlueRow(movedBlue), "the transform moved the layout")
+    }
+
+    @Test
     fun hidden_overflow_clips_the_content_but_not_the_border() {
         val child = """<div style="width:300px;height:40px;background-color:#00ff00"></div>"""
         val clipped = raster("""<div style="width:100px;height:40px;overflow:hidden">$child</div>""")
