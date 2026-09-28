@@ -109,6 +109,12 @@ public class PdfFormField internal constructor(
     /** `/Ff` bit 13 (text fields): multi-line. */
     public val isMultiline: Boolean get() = type == FieldType.Text && (flags and (1 shl 12)) != 0
 
+    /**
+     * `/Ff` bit 26 (text fields): the value is rich text, XHTML kept in `/RV` next to the plain
+     * value in [value] (ISO 32000-1, 12.7.3.4).
+     */
+    public val isRichText: Boolean get() = type == FieldType.Text && (flags and (1 shl 25)) != 0
+
     override fun toString(): String = "PdfFormField($fullyQualifiedName, $type, value=$value)"
 
     public companion object {

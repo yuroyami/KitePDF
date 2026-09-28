@@ -308,22 +308,37 @@ public class PdfEditor internal constructor(
             ),
         )
         val da = FieldAppearance.parseDA(field.defaultAppearance)
-        val ap = FieldAppearance.build(value, abs(rect.width), abs(rect.height), da, fontRef)
+        val ap = FieldAppearance.build(value, abs(rect.width), abs(rect.height), da, fontRef, field.isMultiline, field.quadding)
         val apDict = PdfDictionary(linkedMapOf("N" to (addObject(ap) as PdfObject)))
         val vStr = PdfString(PdfText.encodeTextString(value))
+        // A rich text field keeps its rich value in step with the plain one, so a reader that
+        // shows the rich value shows the new text too (ISO 32000-1, 12.7.3.4, #204).
+        val rv = if (field.isRichText) PdfString(PdfText.encodeTextString(richBodyOf(value))) else null
 
         val widgetRef = field.widgetReference ?: fieldRef
         if (widgetRef == fieldRef) {
             // Merged field+widget: one object carries both /V and /AP.
             val d = LinkedHashMap(field.fieldDict.map)
             d["V"] = vStr
+            rv?.let { d["RV"] = it }
             d["AP"] = apDict
             updateObject(fieldRef, PdfDictionary(d))
         } else {
-            updateObject(fieldRef, withEntry(field.fieldDict, "V", vStr))
+            val fieldEntries = LinkedHashMap(field.fieldDict.map)
+            fieldEntries["V"] = vStr
+            rv?.let { fieldEntries["RV"] = it }
+            updateObject(fieldRef, PdfDictionary(fieldEntries))
             updateObject(widgetRef, withEntry(field.widgetDict, "AP", apDict))
         }
         clearNeedAppearances()
+    }
+
+    /** [value] as the XHTML body of a rich text value, one paragraph a line, with no style of its own. */
+    private fun richBodyOf(value: String): String {
+        fun escape(t: String) = t.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+        val paragraphs = value.split("\r\n", "\r", "\n").joinToString("") { "<p>${escape(it)}</p>" }
+        return """<?xml version="1.0"?><body xmlns="http://www.w3.org/1999/xhtml" xmlns:xfa="http://www.xfa.org/schema/xfa-data/1.0/" """ +
+            """xfa:APIVersion="Acroform:2.7.0.0" xfa:spec="2.1">$paragraphs</body>"""
     }
 
     /**

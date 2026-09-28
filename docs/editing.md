@@ -77,7 +77,8 @@ val filled = editor.saveIncremental()
 The method:
 
 - Updates the field's `/V` (value) entry.
-- Regenerates the widget's `/AP /N` (normal appearance), using the field's `/DA` (default appearance) string to recover font, size, and color.
+- Regenerates the widget's `/AP /N` (normal appearance), using the field's `/DA` (default appearance) string to recover font, size, and color. A multi-line field wraps the value at its width and breaks it at each line break, from the top; a single-line field draws one line in its middle. `/Q` aligns each line.
+- For a rich text field (`isRichText`), also writes the value as the rich value `/RV`, one paragraph a line, so a reader that shows the rich value shows the new text.
 - Clears the form's `/NeedAppearances` flag so conforming viewers use the appearance we generated.
 - Buttons and choice fields have their own methods: `setCheckbox(field, checked)`, `setButtonValue(field, exportValue)` for radio groups, and `setChoiceValue(field, value)` for dropdowns and list boxes.
 

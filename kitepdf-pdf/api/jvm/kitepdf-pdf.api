@@ -709,6 +709,7 @@ public final class io/github/yuroyami/kitepdf/PdfFormField {
 	public final fun getWidgets ()Ljava/util/List;
 	public final fun isMultiline ()Z
 	public final fun isReadOnly ()Z
+	public final fun isRichText ()Z
 	public fun toString ()Ljava/lang/String;
 }
 
