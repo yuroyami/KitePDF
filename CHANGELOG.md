@@ -58,6 +58,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - EPUB books follow the manifest fallback chain: a spine item that is not XHTML or
   SVG shows its fallback document, and an image that does not decode draws its
   fallback. An `epub:switch` shows one branch, where it painted all of them (#27).
+- EPUB `<video>` and `<audio>` elements keep a box, painted with the poster or a
+  placeholder. `EpubPage.media` lists them with their sources and flags, and
+  `EpubDocument.resource` and `resourceType` read the book's files for a player
+  (#29).
 
 ## [0.11.0] - 2026-09-25
 
