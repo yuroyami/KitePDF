@@ -16,6 +16,7 @@ import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.IntRect
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.LayoutDirection
 import io.github.yuroyami.kitepdf.core.KitePage
@@ -163,6 +164,7 @@ public class KitePageRasterizer(
         theme: ReaderTheme?,
         skipWidgets: Boolean = false,
         canvasDecorator: KiteCanvasDecorator? = null,
+        region: IntRect? = null,
     ): ImageBitmap {
         // A page the viewer no longer needs stops between operators when its coroutine is cancelled (#188).
         val job = kotlinx.coroutines.currentCoroutineContext()[kotlinx.coroutines.Job]
@@ -172,13 +174,13 @@ public class KitePageRasterizer(
             // at once: a probe would draw it in full only to throw the bitmap away (#131). The page
             // answers here, off Main, because an answer can lay its chapter out.
             if (hostFontPage === page || page.drawsHostFontText == true) null
-            else rasterizeInternal(page, widthPx, heightPx, background, hairlineWidthPx, theme, skipSystemFontText = true, skipWidgets = skipWidgets, canvasDecorator = canvasDecorator, cancellation = cancellation)
+            else rasterizeInternal(page, widthPx, heightPx, background, hairlineWidthPx, theme, skipSystemFontText = true, skipWidgets = skipWidgets, canvasDecorator = canvasDecorator, cancellation = cancellation, region = region)
         }
         kotlinx.coroutines.currentCoroutineContext().ensureActive()
         if (probe != null && !probe.second) return probe.first
         hostFontPage = page
         return onMainOrCaller {
-            rasterizeInternal(page, widthPx, heightPx, background, hairlineWidthPx, theme, skipSystemFontText = false, skipWidgets = skipWidgets, canvasDecorator = canvasDecorator, cancellation = cancellation).first
+            rasterizeInternal(page, widthPx, heightPx, background, hairlineWidthPx, theme, skipSystemFontText = false, skipWidgets = skipWidgets, canvasDecorator = canvasDecorator, cancellation = cancellation, region = region).first
         }.also { kotlinx.coroutines.currentCoroutineContext().ensureActive() }
     }
 
@@ -211,6 +213,7 @@ public class KitePageRasterizer(
         skipWidgets: Boolean = false,
         canvasDecorator: KiteCanvasDecorator? = null,
         priority: () -> Int = { RasterPriority.VISIBLE },
+        region: IntRect? = null,
     ): Pair<ImageBitmap, Boolean> {
         val key = cache?.let {
             PageBitmapCache.Key(
@@ -223,6 +226,7 @@ public class KitePageRasterizer(
                 withoutWidgets = skipWidgets,
                 canvasDecorator = canvasDecorator,
                 fontEnvironment = textMeasurer,
+                region = region,
             )
         }
         if (cache != null && key != null) cache.get(key)?.let { return it to false }
@@ -232,7 +236,7 @@ public class KitePageRasterizer(
             if (hit != null) {
                 hit to false
             } else {
-                val bmp = rasterizeOffMainLocked(page, widthPx, heightPx, background, hairlineWidthPx, theme, skipWidgets, canvasDecorator)
+                val bmp = rasterizeOffMainLocked(page, widthPx, heightPx, background, hairlineWidthPx, theme, skipWidgets, canvasDecorator, region)
                 if (cache != null && key != null) cache.put(key, bmp)
                 bmp to true
             }
@@ -267,10 +271,11 @@ public class KitePageRasterizer(
         skipWidgets: Boolean = false,
         canvasDecorator: KiteCanvasDecorator? = null,
         priority: () -> Int = { RasterPriority.VISIBLE },
+        region: IntRect? = null,
     ): Pair<ImageBitmap, Boolean>? {
         for (attempt in 0 until 2) {
             try {
-                return rasterizeCachedOffMain(cache, page, widthPx, heightPx, background, hairlineWidthPx, theme, skipWidgets, canvasDecorator, priority)
+                return rasterizeCachedOffMain(cache, page, widthPx, heightPx, background, hairlineWidthPx, theme, skipWidgets, canvasDecorator, priority, region)
             } catch (cancelled: kotlinx.coroutines.CancellationException) {
                 throw cancelled
             } catch (failure: Throwable) {
@@ -363,10 +368,15 @@ public class KitePageRasterizer(
         canvasDecorator: KiteCanvasDecorator? = null,
         cancellation: KiteCancellation? = null,
         formState: io.github.yuroyami.kitepdf.PdfFormState? = null,
+        /** The part of the page drawn [widthPx] × [heightPx] that the bitmap holds, or null for all of it (#375). */
+        region: IntRect? = null,
     ): Pair<ImageBitmap, Boolean> {
         require(widthPx > 0 && heightPx > 0) { "bitmap dimensions must be > 0" }
-        require(widthPx.toLong() * heightPx.toLong() <= maxBitmapPixels) {
-            "page bitmap is ${widthPx}x$heightPx pixels; limit is $maxBitmapPixels pixels"
+        require(region == null || (region.width > 0 && region.height > 0)) { "a region must not be empty" }
+        val bitmapW = region?.width ?: widthPx
+        val bitmapH = region?.height ?: heightPx
+        require(bitmapW.toLong() * bitmapH.toLong() <= maxBitmapPixels) {
+            "page bitmap is ${bitmapW}x$bitmapH pixels; limit is $maxBitmapPixels pixels"
         }
         require(page.displayWidth.isFinite() && page.displayWidth > 0.0) {
             "page display width must be finite and > 0"
@@ -394,12 +404,14 @@ public class KitePageRasterizer(
         }
         // The theme owns the paper colour when set; else use `background`.
         val bg = paperColor(background, theme)
-        val bitmap = ImageBitmap(w, h)
+        val bitmap = ImageBitmap(bitmapW, bitmapH)
         var usedSystemFont = false
-        CanvasDrawScope().draw(density, layoutDirection, Canvas(bitmap), Size(w.toFloat(), h.toFloat())) {
+        CanvasDrawScope().draw(density, layoutDirection, Canvas(bitmap), Size(bitmapW.toFloat(), bitmapH.toFloat())) {
             drawRect(bg, size = size)
-            // concat(b) applies b FIRST, so displayToDeviceBase() runs before the scale.
-            val deviceCtm = KiteMatrix.scaling(s, s).concat(page.displayToDeviceBase())
+            // concat(b) applies b FIRST, so displayToDeviceBase() runs before the scale, and a
+            // region's offset last: the page is drawn whole, and the bitmap keeps that part of it.
+            val whole = KiteMatrix.scaling(s, s).concat(page.displayToDeviceBase())
+            val deviceCtm = region?.let { KiteMatrix.translation(-it.left.toDouble(), -it.top.toDouble()).concat(whole) } ?: whole
             val base = ComposeCanvas(this, textMeasurer, hairlineWidthPx, skipSystemFontText)
             val themed = theme?.wrap(base) ?: base
             val canvas = canvasDecorator?.invoke(themed) ?: themed
