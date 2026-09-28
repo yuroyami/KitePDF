@@ -29,6 +29,8 @@ internal class PageRender(
     val linkBoxes: List<LayoutBox> = emptyList(),
     /** Boxes of embedded documents that reach onto this page (#40). */
     val embedBoxes: List<LayoutBox> = emptyList(),
+    /** Boxes that paint through a group or a clip and reach onto this page (#28). */
+    val effectBoxes: List<LayoutBox> = emptyList(),
 )
 
 /**
@@ -59,8 +61,11 @@ internal object Paginator {
         val deco = ArrayList<LayoutBox>()
         val links = ArrayList<LayoutBox>()
         val embeds = ArrayList<LayoutBox>()
-        collect(root, lines, images, deco, links, embeds)
-        return PageRender(0.0, lines, images, deco, pageWidth, pageHeight, margin = 0.0, linkBoxes = links, embedBoxes = embeds)
+        val effects = ArrayList<LayoutBox>()
+        collect(root, lines, images, deco, links, embeds, effects)
+        return PageRender(
+            0.0, lines, images, deco, pageWidth, pageHeight, margin = 0.0, linkBoxes = links, embedBoxes = embeds, effectBoxes = effects,
+        )
     }
 
     fun paginate(
@@ -77,7 +82,8 @@ internal object Paginator {
         val deco = ArrayList<LayoutBox>()
         val links = ArrayList<LayoutBox>()
         val embeds = ArrayList<LayoutBox>()
-        collect(root, lines, images, deco, links, embeds)
+        val effects = ArrayList<LayoutBox>()
+        collect(root, lines, images, deco, links, embeds, effects)
 
         // In tree order, each unit with the blocks around it, so a break on any of them applies:
         // before the first unit of a block and after its last one.
@@ -149,6 +155,7 @@ internal object Paginator {
                 verticalLr = verticalLr,
                 linkBoxes = links.filter { it.y < end && it.bottom > start },
                 embedBoxes = embeds.filter { it.y < end && it.bottom > start },
+                effectBoxes = effects.filter { it.y < end && it.bottom > start },
             )
         }
     }
@@ -210,15 +217,16 @@ internal object Paginator {
 
     private fun collect(
         box: LayoutBox, lines: ArrayList<PositionedLine>, images: ArrayList<ImageBox>,
-        deco: ArrayList<LayoutBox>, links: ArrayList<LayoutBox>, embeds: ArrayList<LayoutBox>,
+        deco: ArrayList<LayoutBox>, links: ArrayList<LayoutBox>, embeds: ArrayList<LayoutBox>, effects: ArrayList<LayoutBox>,
     ) {
         if (box.linkHref != null) links.add(box)
         if (box.embed != null) embeds.add(box)
+        if (box.hasEffects) effects.add(box)
         when (box) {
-            is BlockBox -> { if (decorated(box.style)) deco.add(box); for (c in box.children) collect(c, lines, images, deco, links, embeds) }
+            is BlockBox -> { if (decorated(box.style)) deco.add(box); for (c in box.children) collect(c, lines, images, deco, links, embeds, effects) }
             is TableBox -> {
                 if (decorated(box.style)) deco.add(box)
-                for (r in box.rows) { if (decorated(r.style)) deco.add(r); for (cell in r.cells) collect(cell, lines, images, deco, links, embeds) }
+                for (r in box.rows) { if (decorated(r.style)) deco.add(r); for (cell in r.cells) collect(cell, lines, images, deco, links, embeds, effects) }
             }
             is TableRowBox -> {}
             is TextBlockBox -> lines.addAll(box.lines)
@@ -261,6 +269,9 @@ internal object Paginator {
                         c is TextBlockBox -> content(c)
                         c.style.position != CssPosition.STATIC -> (if (z < 0) negative else if (z > 0) positive else zero) += c
                         c.style.cssFloat != CssFloat.NONE -> floats += c
+                        // An opacity below 1, like a clip of the overflow here, paints the box as one group,
+                        // in the layer of a positioned box with z-index 0 (CSS Color 4, 14; #28).
+                        c.hasEffects -> zero += c
                         else -> { blocks += c; content(c); walk(c) }
                     }
                 }
@@ -273,6 +284,7 @@ internal object Paginator {
             for (item in flow) if (item is PositionedLine) item.paintRank = rank++ else (item as ImageBox).contentRank = rank++
             for (c in zero) group(c)
             for (c in positive.sortedBy { it.style.zIndex }) group(c)
+            box.lastRank = rank - 1
         }
         group(root)
     }

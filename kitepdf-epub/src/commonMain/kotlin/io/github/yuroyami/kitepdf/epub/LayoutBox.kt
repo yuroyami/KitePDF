@@ -41,6 +41,15 @@ internal sealed class LayoutBox {
     /** When the background and border of this box paint, from [Paginator] (#172). */
     var decoRank: Int = 0
 
+    /** The last paint rank of this box's own group, for a box that paints as one group, else -1 (#28). */
+    var lastRank: Int = -1
+
+    /**
+     * True when this box paints through an effect: a transparency group for an [ComputedStyle.opacity]
+     * below 1, or a clip for [ComputedStyle.clipsOverflow]. Such a box paints as one group (#28).
+     */
+    val hasEffects: Boolean get() = this !is TextBlockBox && (style.opacity < 1.0 || style.clipsOverflow)
+
     val bottom: Double get() = y + borderBoxHeight
 }
 
