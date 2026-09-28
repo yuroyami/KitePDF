@@ -59,6 +59,13 @@ public interface KitePage {
      * EPUB pages natively, PDF pages by adapting their structured text.
      */
     public fun textContent(): KiteStructuredText? = null
+
+    /**
+     * This page's content in the order a reader that speaks would say it, each item with the
+     * role its source gave it: the elements of an EPUB page, the structure of a tagged PDF page.
+     * Empty when the page has no text or its format gives no order (#208).
+     */
+    public fun readingOrder(): List<KiteReadingItem> = emptyList()
 }
 
 /**

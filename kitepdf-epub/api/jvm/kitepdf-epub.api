@@ -204,7 +204,7 @@ public final class io/github/yuroyami/kitepdf/epub/EpubPage : io/github/yuroyami
 	public final fun getLocation ()Lio/github/yuroyami/kitepdf/core/KiteLocation;
 	public final fun getMedia ()Ljava/util/List;
 	public final fun getWidth ()D
-	public final fun readingOrder ()Ljava/util/List;
+	public fun readingOrder ()Ljava/util/List;
 	public fun renderTo (Lio/github/yuroyami/kitepdf/core/render/KiteCanvas;Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;)V
 	public fun renderTo (Lio/github/yuroyami/kitepdf/core/render/KiteCanvas;Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;Lio/github/yuroyami/kitepdf/core/KiteCancellation;)V
 	public fun textContent ()Lio/github/yuroyami/kitepdf/core/KiteStructuredText;
@@ -219,16 +219,6 @@ public final class io/github/yuroyami/kitepdf/epub/EpubPageSpread : java/lang/En
 	public static fun values ()[Lio/github/yuroyami/kitepdf/epub/EpubPageSpread;
 }
 
-public final class io/github/yuroyami/kitepdf/epub/EpubReadingItem {
-	public final fun getAlphabet ()Ljava/lang/String;
-	public final fun getEpubType ()Ljava/lang/String;
-	public final fun getHeadingLevel ()I
-	public final fun getPronunciation ()Ljava/lang/String;
-	public final fun getRole ()Lio/github/yuroyami/kitepdf/epub/EpubRole;
-	public final fun getText ()Ljava/lang/String;
-	public fun toString ()Ljava/lang/String;
-}
-
 public final class io/github/yuroyami/kitepdf/epub/EpubRendition {
 	public final fun getFlow ()Lio/github/yuroyami/kitepdf/epub/EpubFlow;
 	public final fun getLayout ()Lio/github/yuroyami/kitepdf/epub/EpubLayout;
@@ -238,19 +228,8 @@ public final class io/github/yuroyami/kitepdf/epub/EpubRendition {
 	public fun toString ()Ljava/lang/String;
 }
 
-public final class io/github/yuroyami/kitepdf/epub/EpubRole : java/lang/Enum {
-	public static final field CAPTION Lio/github/yuroyami/kitepdf/epub/EpubRole;
-	public static final field CODE Lio/github/yuroyami/kitepdf/epub/EpubRole;
-	public static final field HEADING Lio/github/yuroyami/kitepdf/epub/EpubRole;
-	public static final field IMAGE Lio/github/yuroyami/kitepdf/epub/EpubRole;
-	public static final field LIST_ITEM Lio/github/yuroyami/kitepdf/epub/EpubRole;
-	public static final field PAGE_BREAK Lio/github/yuroyami/kitepdf/epub/EpubRole;
-	public static final field QUOTE Lio/github/yuroyami/kitepdf/epub/EpubRole;
-	public static final field TABLE_CELL Lio/github/yuroyami/kitepdf/epub/EpubRole;
-	public static final field TEXT Lio/github/yuroyami/kitepdf/epub/EpubRole;
-	public static fun getEntries ()Lkotlin/enums/EnumEntries;
-	public static fun valueOf (Ljava/lang/String;)Lio/github/yuroyami/kitepdf/epub/EpubRole;
-	public static fun values ()[Lio/github/yuroyami/kitepdf/epub/EpubRole;
+public final class io/github/yuroyami/kitepdf/epub/EpubSemanticsKt {
+	public static final fun getEpubType (Lio/github/yuroyami/kitepdf/core/KiteReadingItem;)Ljava/lang/String;
 }
 
 public final class io/github/yuroyami/kitepdf/epub/EpubSettings {

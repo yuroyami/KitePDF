@@ -884,6 +884,7 @@ public final class io/github/yuroyami/kitepdf/PdfPage : io/github/yuroyami/kitep
 	public final fun getUserUnit ()D
 	public final fun getWidth ()D
 	public final fun pageToDeviceBase ()Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;
+	public fun readingOrder ()Ljava/util/List;
 	public final fun renderAnnotationsTo (Lio/github/yuroyami/kitepdf/core/render/KiteCanvas;Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;Lio/github/yuroyami/kitepdf/PdfFormState;Lkotlin/jvm/functions/Function1;)V
 	public static synthetic fun renderAnnotationsTo$default (Lio/github/yuroyami/kitepdf/PdfPage;Lio/github/yuroyami/kitepdf/core/render/KiteCanvas;Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;Lio/github/yuroyami/kitepdf/PdfFormState;Lkotlin/jvm/functions/Function1;ILjava/lang/Object;)V
 	public fun renderTo (Lio/github/yuroyami/kitepdf/core/render/KiteCanvas;Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;)V

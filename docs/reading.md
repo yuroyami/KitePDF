@@ -408,6 +408,28 @@ if (doc.markInfo != null) {
 }
 ```
 
+`readingOrder()` gives a page's content in the order a screen reader says it,
+each item with its role. It is the same call and the same `KiteReadingItem` as
+on an EPUB page, so one loop reads both formats:
+
+```kotlin
+for (item in page.readingOrder()) {
+    when (item.role) {
+        KiteRole.HEADING -> speakHeading(item.text, item.headingLevel)
+        KiteRole.IMAGE -> describe(item.text)          // the /Alt text
+        else -> speak(item.text)
+    }
+}
+```
+
+A tagged page follows its structure tree, not the order the content draws in.
+Each paragraph, heading, list item, table cell, caption and figure is one item,
+and the role map turns a custom type into a standard one. `sourceType` keeps the
+type the file names, such as `Footnote`, and `language` the nearest `/Lang`.
+Artifacts, such as running heads and page numbers, and content that no element
+names stay out. A page without tagged content gives its text blocks in layout
+order.
+
 ## Installation
 
 Add KitePDF to your `build.gradle.kts`:

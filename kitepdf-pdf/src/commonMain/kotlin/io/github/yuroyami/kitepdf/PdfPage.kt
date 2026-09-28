@@ -255,6 +255,18 @@ public class PdfPage internal constructor(
 
     override fun textContent(): KiteStructuredText = kiteTextContent
 
+    /**
+     * This page's content in the order a screen reader says it (#208). A tagged page follows its
+     * structure tree: one item per paragraph, heading, list item, table cell, caption or figure,
+     * with the role its structure type gives, and artifacts such as running heads left out. A
+     * page without tagged content gives its text blocks in layout order.
+     */
+    override fun readingOrder(): List<io.github.yuroyami.kitepdf.core.KiteReadingItem> = readingItems
+
+    private val readingItems: List<io.github.yuroyami.kitepdf.core.KiteReadingItem> by lazy {
+        io.github.yuroyami.kitepdf.text.PdfReadingOrder.of(this, document)
+    }
+
     /** Internal accessor used by the structured-text extractor to reach the document resolver. */
     internal val internalDocument: PdfDocument get() = document
 

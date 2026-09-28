@@ -146,8 +146,31 @@ public class PageRenderer(
     // (ISO 32000-1 §8.11). markedContentStack tracks every open BMC/BDC so EMC
     // pops the matching one; ocHiddenDepth counts how many open sections are
     // currently hiding content. Painting is skipped while it is > 0.
-    private val markedContentStack = ArrayDeque<Boolean>()
+    private val markedContentStack = ArrayDeque<MarkedSection>()
     private var ocHiddenDepth = 0
+
+    /**
+     * One open marked-content section: whether it hides its content, and its marked-content
+     * id (ISO 32000-1, 14.7.4.2), [NO_MCID] for none, or [ARTIFACT] for an `/Artifact` (#208).
+     */
+    private class MarkedSection(val hidden: Boolean, val id: Int)
+
+    /**
+     * The marked-content id of the page content being drawn, which a tagged PDF's structure
+     * points at, or null. Null inside an artifact, and inside a form, whose ids belong to the
+     * form's own stream (#208).
+     */
+    internal val currentMcid: Int?
+        get() {
+            if (formDepth > 0) return null
+            var id: Int? = null
+            for (i in markedContentStack.indices.reversed()) {
+                val section = markedContentStack[i]
+                if (section.id == ARTIFACT) return null
+                if (id == null && section.id >= 0) id = section.id
+            }
+            return id
+        }
 
     // Nesting past MAX_MARKED_CONTENT_DEPTH is counted here, not stored (#166).
     private var markedContentOverflow = 0
@@ -328,6 +351,21 @@ public class PageRenderer(
     /* ─── Optional-content visibility ────────────────────────────────────────── */
 
     /** Whether a `BDC /OC <operand>` introduces a hidden section. */
+    /**
+     * The id of a `BDC` section: [ARTIFACT] for an `/Artifact` tag, else the `/MCID` of its
+     * property list, given inline or by a name in `/Properties`, else [NO_MCID] (#208).
+     */
+    private fun markedContentId(tag: PdfName?, operand: PdfObject?, properties: Map<String, PdfObject>): Int {
+        if (tag?.value == "Artifact") return ARTIFACT
+        val list = when (operand) {
+            is PdfName -> properties[operand.value] ?: pageProperties[operand.value]
+            else -> operand
+        } ?: return NO_MCID
+        val dict = missingAsNull { list.resolve(resolver) } as? PdfDictionary ?: return NO_MCID
+        val id = (dict["MCID"] as? PdfInt)?.value ?: return NO_MCID
+        return if (id in 0..Int.MAX_VALUE) id.toInt() else NO_MCID
+    }
+
     private fun isOcOperandHidden(operand: PdfObject?, properties: Map<String, PdfObject>): Boolean {
         val oc = optionalContent ?: return false
         val target = when (operand) {
@@ -1360,19 +1398,20 @@ public class PageRenderer(
                 if (markedContentStack.size >= MAX_MARKED_CONTENT_DEPTH) { markedContentOverflow++; return }
                 val tag = a.getOrNull(0) as? PdfName
                 val hidden = tag?.value == "OC" && isOcOperandHidden(a.getOrNull(1), properties)
-                markedContentStack.addLast(hidden)
+                markedContentStack.addLast(MarkedSection(hidden, markedContentId(tag, a.getOrNull(1), properties)))
                 if (hidden) ocHiddenDepth++
                 if (markedContentStack.size > deepestMarkedContent) deepestMarkedContent = markedContentStack.size
             }
             "BMC" -> {
                 if (markedContentStack.size >= MAX_MARKED_CONTENT_DEPTH) { markedContentOverflow++; return }
-                markedContentStack.addLast(false)
+                val tag = a.getOrNull(0) as? PdfName
+                markedContentStack.addLast(MarkedSection(false, if (tag?.value == "Artifact") ARTIFACT else NO_MCID))
                 if (markedContentStack.size > deepestMarkedContent) deepestMarkedContent = markedContentStack.size
             }
             "EMC" -> {
                 if (markedContentOverflow > 0) { markedContentOverflow--; return }
                 if (markedContentStack.size <= markedContentFloor) return
-                val wasHidden = markedContentStack.removeLast()
+                val wasHidden = markedContentStack.removeLast().hidden
                 if (wasHidden && ocHiddenDepth > 0) ocHiddenDepth--
             }
 
@@ -2582,6 +2621,12 @@ public class PageRenderer(
 
         /** Marked-content nesting stored per page, the same bound as the graphics state (#166). */
         const val MAX_MARKED_CONTENT_DEPTH = 4096
+
+        /** A marked-content section without an id. */
+        private const val NO_MCID = -1
+
+        /** An `/Artifact` section, whose content is no part of the structure (ISO 32000-1, 14.8.2.2). */
+        private const val ARTIFACT = -2
 
         /** A soft mask box that bounds nothing, for a group whose /BBox cannot be read (#255). */
         private val UNBOUNDED_MASK_BOX = io.github.yuroyami.kitepdf.core.KiteRectangle(-1.0e7, -1.0e7, 1.0e7, 1.0e7)

@@ -445,8 +445,8 @@ would say it, each item carrying the role its source element declared.
 ```kotlin
 for (item in page.readingOrder()) {
     when (item.role) {
-        EpubRole.HEADING -> speakHeading(item.text, item.headingLevel)
-        EpubRole.IMAGE -> describe(item.text)          // the alt text
+        KiteRole.HEADING -> speakHeading(item.text, item.headingLevel)
+        KiteRole.IMAGE -> describe(item.text)          // the alt text
         else -> speak(item.text)
     }
 }

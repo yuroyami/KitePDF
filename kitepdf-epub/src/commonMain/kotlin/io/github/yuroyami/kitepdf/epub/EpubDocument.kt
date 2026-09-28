@@ -26,6 +26,8 @@ import io.github.yuroyami.kitepdf.epub.css.transformMatrix
 import io.github.yuroyami.kitepdf.core.KiteBookmark
 import io.github.yuroyami.kitepdf.core.KiteDocument
 import io.github.yuroyami.kitepdf.core.KiteLocation
+import io.github.yuroyami.kitepdf.core.KiteRole
+import io.github.yuroyami.kitepdf.core.KiteReadingItem
 import io.github.yuroyami.kitepdf.core.KiteLock
 import io.github.yuroyami.kitepdf.core.withLock
 import io.github.yuroyami.kitepdf.core.KiteMetadata
@@ -2164,9 +2166,9 @@ public class EpubPage internal constructor(
      * for (item in page.readingOrder()) speak(item.role, item.text)
      * ```
      */
-    public fun readingOrder(): List<EpubReadingItem> {
+    override fun readingOrder(): List<KiteReadingItem> {
         val page = laidOut()
-        val out = ArrayList<Pair<Double, EpubReadingItem>>()
+        val out = ArrayList<Pair<Double, KiteReadingItem>>()
         var owner: TextBlockBox? = null
         var speech: SpeechHint? = null
         var top = 0.0
@@ -2191,7 +2193,7 @@ public class EpubPage internal constructor(
             }
             for (img in line.images) {
                 if (img.alt?.isEmpty() == true) continue   // decorative
-                out.add(line.yTop to EpubReadingItem(EpubRole.IMAGE, img.alt.orEmpty()))
+                out.add(line.yTop to KiteReadingItem(KiteRole.IMAGE, img.alt.orEmpty()))
             }
         }
         flushText()
@@ -2199,16 +2201,16 @@ public class EpubPage internal constructor(
         for (img in page.images) {
             val sem = img.semantics ?: continue
             if (sem.hidden) continue
-            out.add(img.y to EpubReadingItem(EpubRole.IMAGE, sem.label.orEmpty(), epubType = sem.epubType))
+            out.add(img.y to KiteReadingItem(KiteRole.IMAGE, sem.label.orEmpty(), sourceType = sem.epubType))
         }
         return out.sortedBy { it.first }.map { it.second }
     }
 
-    private fun readingItem(sem: BoxSemantics?, text: String, speech: SpeechHint?): EpubReadingItem? {
+    private fun readingItem(sem: BoxSemantics?, text: String, speech: SpeechHint?): KiteReadingItem? {
         if (sem?.hidden == true) return null
         val spoken = (sem?.label ?: text).trim()
         if (spoken.isEmpty()) return null
-        return EpubReadingItem(sem?.role ?: EpubRole.TEXT, spoken, sem?.headingLevel ?: 0, sem?.epubType, speech?.phoneme, speech?.alphabet)
+        return KiteReadingItem(sem?.role ?: KiteRole.TEXT, spoken, sem?.headingLevel ?: 0, sem?.epubType, speech?.phoneme, speech?.alphabet)
     }
 
     /** The runs of [line] in reading order, cut where the pronunciation they belong to changes. */

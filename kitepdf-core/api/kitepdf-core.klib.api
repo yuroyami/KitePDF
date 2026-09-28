@@ -93,6 +93,24 @@ final enum class io.github.yuroyami.kitepdf.core/KiteLineEnd : kotlin/Enum<io.gi
     final fun values(): kotlin/Array<io.github.yuroyami.kitepdf.core/KiteLineEnd> // io.github.yuroyami.kitepdf.core/KiteLineEnd.values|values#static(){}[0]
 }
 
+final enum class io.github.yuroyami.kitepdf.core/KiteRole : kotlin/Enum<io.github.yuroyami.kitepdf.core/KiteRole> { // io.github.yuroyami.kitepdf.core/KiteRole|null[0]
+    enum entry CAPTION // io.github.yuroyami.kitepdf.core/KiteRole.CAPTION|null[0]
+    enum entry CODE // io.github.yuroyami.kitepdf.core/KiteRole.CODE|null[0]
+    enum entry HEADING // io.github.yuroyami.kitepdf.core/KiteRole.HEADING|null[0]
+    enum entry IMAGE // io.github.yuroyami.kitepdf.core/KiteRole.IMAGE|null[0]
+    enum entry LIST_ITEM // io.github.yuroyami.kitepdf.core/KiteRole.LIST_ITEM|null[0]
+    enum entry PAGE_BREAK // io.github.yuroyami.kitepdf.core/KiteRole.PAGE_BREAK|null[0]
+    enum entry QUOTE // io.github.yuroyami.kitepdf.core/KiteRole.QUOTE|null[0]
+    enum entry TABLE_CELL // io.github.yuroyami.kitepdf.core/KiteRole.TABLE_CELL|null[0]
+    enum entry TEXT // io.github.yuroyami.kitepdf.core/KiteRole.TEXT|null[0]
+
+    final val entries // io.github.yuroyami.kitepdf.core/KiteRole.entries|#static{}entries[0]
+        final fun <get-entries>(): kotlin.enums/EnumEntries<io.github.yuroyami.kitepdf.core/KiteRole> // io.github.yuroyami.kitepdf.core/KiteRole.entries.<get-entries>|<get-entries>#static(){}[0]
+
+    final fun valueOf(kotlin/String): io.github.yuroyami.kitepdf.core/KiteRole // io.github.yuroyami.kitepdf.core/KiteRole.valueOf|valueOf#static(kotlin.String){}[0]
+    final fun values(): kotlin/Array<io.github.yuroyami.kitepdf.core/KiteRole> // io.github.yuroyami.kitepdf.core/KiteRole.values|values#static(){}[0]
+}
+
 abstract fun interface io.github.yuroyami.kitepdf.core.parser/IndirectResolver { // io.github.yuroyami.kitepdf.core.parser/IndirectResolver|null[0]
     abstract fun resolve(io.github.yuroyami.kitepdf.core.parser/PdfReference): io.github.yuroyami.kitepdf.core.parser/PdfObject? // io.github.yuroyami.kitepdf.core.parser/IndirectResolver.resolve|resolve(io.github.yuroyami.kitepdf.core.parser.PdfReference){}[0]
 }
@@ -176,6 +194,7 @@ abstract interface io.github.yuroyami.kitepdf.core/KitePage { // io.github.yuroy
 
     abstract fun displayToDeviceBase(): io.github.yuroyami.kitepdf.core.render/KiteMatrix // io.github.yuroyami.kitepdf.core/KitePage.displayToDeviceBase|displayToDeviceBase(){}[0]
     abstract fun renderTo(io.github.yuroyami.kitepdf.core.render/KiteCanvas, io.github.yuroyami.kitepdf.core.render/KiteMatrix = ...) // io.github.yuroyami.kitepdf.core/KitePage.renderTo|renderTo(io.github.yuroyami.kitepdf.core.render.KiteCanvas;io.github.yuroyami.kitepdf.core.render.KiteMatrix){}[0]
+    open fun readingOrder(): kotlin.collections/List<io.github.yuroyami.kitepdf.core/KiteReadingItem> // io.github.yuroyami.kitepdf.core/KitePage.readingOrder|readingOrder(){}[0]
     open fun renderTo(io.github.yuroyami.kitepdf.core.render/KiteCanvas, io.github.yuroyami.kitepdf.core.render/KiteMatrix, io.github.yuroyami.kitepdf.core/KiteCancellation) // io.github.yuroyami.kitepdf.core/KitePage.renderTo|renderTo(io.github.yuroyami.kitepdf.core.render.KiteCanvas;io.github.yuroyami.kitepdf.core.render.KiteMatrix;io.github.yuroyami.kitepdf.core.KiteCancellation){}[0]
     open fun textContent(): io.github.yuroyami.kitepdf.core/KiteStructuredText? // io.github.yuroyami.kitepdf.core/KitePage.textContent|textContent(){}[0]
 }
@@ -1819,6 +1838,27 @@ final class io.github.yuroyami.kitepdf.core/KiteOutlineItem { // io.github.yuroy
         final fun <get-target>(): io.github.yuroyami.kitepdf.core/KiteBookmark? // io.github.yuroyami.kitepdf.core/KiteOutlineItem.target.<get-target>|<get-target>(){}[0]
     final val title // io.github.yuroyami.kitepdf.core/KiteOutlineItem.title|{}title[0]
         final fun <get-title>(): kotlin/String // io.github.yuroyami.kitepdf.core/KiteOutlineItem.title.<get-title>|<get-title>(){}[0]
+}
+
+final class io.github.yuroyami.kitepdf.core/KiteReadingItem { // io.github.yuroyami.kitepdf.core/KiteReadingItem|null[0]
+    constructor <init>(io.github.yuroyami.kitepdf.core/KiteRole, kotlin/String, kotlin/Int = ..., kotlin/String? = ..., kotlin/String? = ..., kotlin/String? = ..., kotlin/String? = ...) // io.github.yuroyami.kitepdf.core/KiteReadingItem.<init>|<init>(io.github.yuroyami.kitepdf.core.KiteRole;kotlin.String;kotlin.Int;kotlin.String?;kotlin.String?;kotlin.String?;kotlin.String?){}[0]
+
+    final val alphabet // io.github.yuroyami.kitepdf.core/KiteReadingItem.alphabet|{}alphabet[0]
+        final fun <get-alphabet>(): kotlin/String? // io.github.yuroyami.kitepdf.core/KiteReadingItem.alphabet.<get-alphabet>|<get-alphabet>(){}[0]
+    final val headingLevel // io.github.yuroyami.kitepdf.core/KiteReadingItem.headingLevel|{}headingLevel[0]
+        final fun <get-headingLevel>(): kotlin/Int // io.github.yuroyami.kitepdf.core/KiteReadingItem.headingLevel.<get-headingLevel>|<get-headingLevel>(){}[0]
+    final val language // io.github.yuroyami.kitepdf.core/KiteReadingItem.language|{}language[0]
+        final fun <get-language>(): kotlin/String? // io.github.yuroyami.kitepdf.core/KiteReadingItem.language.<get-language>|<get-language>(){}[0]
+    final val pronunciation // io.github.yuroyami.kitepdf.core/KiteReadingItem.pronunciation|{}pronunciation[0]
+        final fun <get-pronunciation>(): kotlin/String? // io.github.yuroyami.kitepdf.core/KiteReadingItem.pronunciation.<get-pronunciation>|<get-pronunciation>(){}[0]
+    final val role // io.github.yuroyami.kitepdf.core/KiteReadingItem.role|{}role[0]
+        final fun <get-role>(): io.github.yuroyami.kitepdf.core/KiteRole // io.github.yuroyami.kitepdf.core/KiteReadingItem.role.<get-role>|<get-role>(){}[0]
+    final val sourceType // io.github.yuroyami.kitepdf.core/KiteReadingItem.sourceType|{}sourceType[0]
+        final fun <get-sourceType>(): kotlin/String? // io.github.yuroyami.kitepdf.core/KiteReadingItem.sourceType.<get-sourceType>|<get-sourceType>(){}[0]
+    final val text // io.github.yuroyami.kitepdf.core/KiteReadingItem.text|{}text[0]
+        final fun <get-text>(): kotlin/String // io.github.yuroyami.kitepdf.core/KiteReadingItem.text.<get-text>|<get-text>(){}[0]
+
+    final fun toString(): kotlin/String // io.github.yuroyami.kitepdf.core/KiteReadingItem.toString|toString(){}[0]
 }
 
 final class io.github.yuroyami.kitepdf.core/KiteRectangle { // io.github.yuroyami.kitepdf.core/KiteRectangle|null[0]

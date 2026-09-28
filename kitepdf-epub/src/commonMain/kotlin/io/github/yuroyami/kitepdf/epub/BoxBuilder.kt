@@ -1,5 +1,7 @@
 package io.github.yuroyami.kitepdf.epub
 
+import io.github.yuroyami.kitepdf.core.KiteRole
+
 import io.github.yuroyami.kitepdf.svg.SvgImage
 
 import io.github.yuroyami.kitepdf.core.css.CssValues
@@ -265,7 +267,7 @@ internal class BoxBuilder(
         val base = BoxSemantics.of(el.tag, el.attrs, parentSem)
         val alt = el.attrs["alt"]
         return BoxSemantics(
-            role = EpubRole.IMAGE,
+            role = KiteRole.IMAGE,
             label = base?.label ?: alt?.takeIf { it.isNotBlank() },
             epubType = base?.epubType,
             hidden = base?.hidden == true || alt?.isEmpty() == true,
@@ -282,7 +284,7 @@ internal class BoxBuilder(
             (c as? KiteXmlNode.Element)?.takeIf { it.tag == tag }?.let { it.textContent().replace(WHITESPACE, " ").trim() }
         }?.takeIf { it.isNotEmpty() }
         return BoxSemantics(
-            role = EpubRole.IMAGE,
+            role = KiteRole.IMAGE,
             label = base?.label ?: childText("title") ?: childText("desc"),
             epubType = base?.epubType,
             hidden = base?.hidden == true,
