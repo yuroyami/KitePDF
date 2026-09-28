@@ -11,10 +11,10 @@ import io.github.yuroyami.kitepdf.core.render.KiteCanvas
  *
  * A fresh wrapper is created for each paint pass. Rasterization can call this
  * on a background thread and repeat the pass on Main for system-font text, so
- * wrappers must be repeatable and must not retain the supplied canvas. A
- * Vectorized page calls it on the UI thread, possibly while a raster of the same
- * document calls it on a background thread, so wrappers must not share mutable
- * state without a lock. A cache
+ * wrappers must be repeatable and must not retain the supplied canvas. Two pages
+ * can rasterize at once on two background threads, and a Vectorized page calls it
+ * on the UI thread at the same time, so wrappers must not share mutable state
+ * without a lock. A cache
  * hit performs no paint pass. Remember the function in composition for cache
  * reuse, and provide a new function when captured rendering settings change.
  *

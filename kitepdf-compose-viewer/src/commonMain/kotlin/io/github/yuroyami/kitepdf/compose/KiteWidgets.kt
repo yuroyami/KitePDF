@@ -212,6 +212,7 @@ public fun KiteThumbnailStrip(
                 val result = page?.let {
                     rasterizer.rasterizeCachedOrNull(
                         thumbnails, it, widthPx, heightPx, paper, 1f, theme, index, canvasDecorator = decorator,
+                        priority = { RasterPriority.THUMBNAIL },
                     )?.first
                 }
                 backOnComposeThread()

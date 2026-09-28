@@ -2016,6 +2016,9 @@ internal interface KiteScrollAdapter {
     /** The slot whose key the container keeps in place when the strip changes under it. */
     val keyedSlot: Int get() = currentPage
 
+    /** True when [slot] shows in the viewport now, and not only as a page composed ahead of it. */
+    fun shows(slot: Int): Boolean = slot == currentPage
+
     /** True while a drag, a fling or an animation moves the container, so its page is not settled. */
     val isScrollInProgress: Boolean get() = false
 
@@ -2043,6 +2046,8 @@ internal interface KiteScrollAdapter {
 /** Continuous mode: "current" = the visible item whose centre is nearest the viewport centre. */
 internal class LazyListScrollAdapter(private val listState: LazyListState) : KiteScrollAdapter {
     override val isScrollInProgress: Boolean get() = listState.isScrollInProgress
+
+    override fun shows(slot: Int): Boolean = listState.layoutInfo.visibleItemsInfo.any { it.index == slot }
 
     /** The length of the leading slot on the scroll axis, or null before the list has measured it. */
     val leadingSlotLength: Int? get() = listState.layoutInfo.visibleItemsInfo.firstOrNull { it.index == leadingPage }?.size
@@ -2134,6 +2139,8 @@ internal class LazyListScrollAdapter(private val listState: LazyListState) : Kit
 
 internal class PagerScrollAdapter(private val pagerState: PagerState) : KiteScrollAdapter {
     override val isScrollInProgress: Boolean get() = pagerState.isScrollInProgress
+
+    override fun shows(slot: Int): Boolean = pagerState.layoutInfo.visiblePagesInfo.any { it.index == slot }
     /** True while a finger drags the pager. A correction then keeps the page offset, so the drag goes on. */
     var dragging: Boolean = false
 
@@ -2188,6 +2195,12 @@ internal class SpreadScrollAdapter(
     initialPage: Int = plans.current.firstPageOf(pagerState.currentPage),
 ) : KiteScrollAdapter {
     override val isScrollInProgress: Boolean get() = pagerState.isScrollInProgress
+
+    override fun shows(slot: Int): Boolean {
+        val spread = plans.current.spreadOf(slot)
+        return pagerState.layoutInfo.visiblePagesInfo.any { it.index == spread }
+    }
+
     /**
      * The last logically-requested page. Within one spread, +1 must actually
      * advance (0 -> 1 stays on spread 0, the next +1 reaches spread 1), so

@@ -74,4 +74,32 @@ class PageBitmapCacheTest {
         assertFalse(cache.contains(k), "a saturated cost is larger than every usable budget")
         assertEquals(0L, cache.trackedBytes)
     }
+
+    @Test
+    fun concurrent_use_keeps_the_budget() {
+        // Two pages rasterize at once, so the cache takes calls from several threads (#370).
+        val cache = PageBitmapCache(maxBytes = 200_000)
+        val bitmap = ImageBitmap(50, 50)
+        val failure = java.util.concurrent.atomic.AtomicReference<Throwable>()
+        val threads = List(8) { t ->
+            Thread {
+                try {
+                    val random = java.util.Random(t.toLong())
+                    repeat(5_000) {
+                        val key = PageBitmapCache.Key(pageIdentity = random.nextInt(40), w = 50, h = 50 + random.nextInt(4), bgArgb = 0, theme = null, hairlineBits = 0)
+                        if (random.nextBoolean()) cache.put(key, bitmap) else cache.get(key)
+                    }
+                } catch (e: Throwable) {
+                    failure.compareAndSet(null, e)
+                }
+            }
+        }
+        threads.forEach { it.start() }
+        threads.forEach { it.join() }
+        failure.get()?.let { throw AssertionError("the cache failed under concurrent use", it) }
+        assertTrue(cache.trackedBytes in 0..200_000, "tracked bytes ${cache.trackedBytes}")
+        val key = PageBitmapCache.Key(pageIdentity = "after", w = 10, h = 10, bgArgb = 0, theme = null, hairlineBits = 0)
+        cache.put(key, bitmap)
+        assertSame(bitmap, cache.get(key))
+    }
 }

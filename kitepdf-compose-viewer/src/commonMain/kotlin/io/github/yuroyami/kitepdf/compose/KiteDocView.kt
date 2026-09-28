@@ -1200,10 +1200,10 @@ private fun KitePageRaster(
     // Keyed on the rasterizer too: a new font environment gives a new one, and the text renders again (#421).
     val rastered by produceState<Pair<ImageBitmap, Boolean>?>(null, page, raster, paper, colors.theme, hairline, cache, drawsFormLayer, spec.canvasDecorator, retry, rasterizer) {
         // Off the main thread: a 10-30ms page raster on the UI thread
-        // janks scroll and pinch. The rasterizer serializes pages on its mutex
-        // (TextMeasurer's cache is not thread-safe) but the main thread stays
-        // free; the bitmap cache turns scroll-back into a lookup, and neighbour
-        // prefetch (KiteDocLayout.Paged offscreenPages) hides first-render latency.
+        // janks scroll and pinch. The rasterizer runs two pages at once, a page on
+        // screen before a page drawn ahead (#370); the bitmap cache turns scroll-back
+        // into a lookup, and neighbour prefetch (KiteDocLayout.Paged offscreenPages)
+        // hides first-render latency.
         // rasterizeCachedOrNull carries the mandatory failure guard: an
         // exception escaping produceState aborts the HOST APP.
         if (raster == IntSize.Zero) {
@@ -1216,6 +1216,7 @@ private fun KitePageRaster(
             colors.pageBackground, hairline, colors.theme, pageIndex,
             skipWidgets = drawsFormLayer,
             canvasDecorator = spec.canvasDecorator,
+            priority = { rasterPriorityOf(state, pageIndex) },
         )
         backOnComposeThread()
         // A failed upgrade, such as a crisp-zoom raster out of memory, keeps the last good
