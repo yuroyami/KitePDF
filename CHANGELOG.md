@@ -139,6 +139,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- A page whose bitmap the `maxBitmapLongSide` cap cuts down now draws the part
+  on screen again in tiles of 1,024 pixels at full resolution, over the capped
+  bitmap. Deep zoom stays sharp at any zoom, and a very tall page is sharp at
+  zoom 1. The tiles follow a pan once it rests, and they go through the bitmap
+  cache, so panning back is a lookup (#375).
+
 - Two pages rasterize at once, and a page on screen renders before the pages
   drawn ahead of it and before thumbnails. One process-wide lock used to render
   every page in arrival order, so thumbnails and prefetched pages could delay the

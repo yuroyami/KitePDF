@@ -188,16 +188,20 @@ public sealed interface KiteRenderSpec {
      *   1 = rasterize exactly at display resolution (sharpest *and* cheapest,
      *   the default). >1 = oversample, e.g. for screenshots or print-ish export.
      *   <1 = undersample for cheap previews/thumbnails.
-     * @param maxBitmapLongSide hard cap on the longest bitmap side, protecting
-     *   memory on huge pages and deep zooms. The viewer's rasterizer raises its
-     *   pixel ceiling to this value squared, so any side length allowed here
-     *   also renders.
+     * @param maxBitmapLongSide hard cap on the longest side of a page's whole
+     *   bitmap, protecting memory on huge pages and deep zooms. The viewer's
+     *   rasterizer raises its pixel ceiling to this value squared, so any side
+     *   length allowed here also renders. A page that needs more pixels keeps
+     *   the capped bitmap, and the part on screen draws over it in tiles at full
+     *   resolution. On Android, stay at or below the GPU's texture limit, 4096 on
+     *   many devices: a larger bitmap draws blank there.
      * @param rerasterizeOnZoom after a zoom settles, re-render at the zoomed
      *   resolution instead of upscaling the base raster. The zoom rounds up to a
      *   quarter of an octave (1, 1.19, 1.41, 1.68, 2 and so on), so pinches that
-     *   settle close together share one raster. The bitmap stops growing at
-     *   [maxBitmapLongSide], so a zoom past that stays soft. Only the pages in view
-     *   render at the zoom. Costs one rasterization per page in view and zoom step.
+     *   settle close together share one raster. Past [maxBitmapLongSide], tiles of
+     *   1,024 pixels draw the part on screen, so deep zoom and very tall pages stay
+     *   sharp. Only the pages in view render at the zoom. Costs one rasterization
+     *   per page in view and zoom step, and one per tile.
      * @param preserveHairlines scale the engine's stroke floors by the ratio of the
      *   raster to the screen, so a zero-width stroke stays one screen pixel and other
      *   sub-pixel strokes (ECG traces, fine table rules) keep their weight when the

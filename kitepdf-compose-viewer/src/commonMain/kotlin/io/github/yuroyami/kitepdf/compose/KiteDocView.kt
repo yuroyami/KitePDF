@@ -71,6 +71,9 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntRect
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
@@ -1240,15 +1243,40 @@ private fun KitePageRaster(
     }
     val bitmap = rastered?.first
 
+    // The page at this zoom in full, which the long-side cap may have cut down. When it has, the
+    // part on screen is drawn again at full resolution in tiles, so deep zoom and a tall page stay
+    // sharp (#375).
+    val full = IntSize((settledBase.width * scale).roundToInt(), (settledBase.height * scale).roundToInt())
+    val tiled = state != null && bitmap != null && (full.width > raster.width + 1 || full.height > raster.height + 1)
+
     // Fade the bitmap in once it lands instead of popping (and keep the previous
     // frame visible across a re-raster), so the placeholder→page hand-off and any
     // crisp-zoom refresh read as a smooth dissolve rather than a flash.
     // onPageRendered fires only on FRESH rasterization, never on cache hits.
     ReportFreshRaster(rastered) { bmp -> onRendered?.invoke(pageIndex, bmp) }
+    Box(modifier) {
+        PageBitmap(bitmap, pageIndex, colors, pagePlaceholder)
+        if (tiled && state != null) {
+            PageTiles(
+                page, pageIndex, state, full, settledBase, rasterizer, cache,
+                paper, colors, hairline, drawsFormLayer, spec.canvasDecorator,
+            )
+        }
+    }
+}
+
+/** The page's whole bitmap, faded in once it lands, or the placeholder until then. */
+@Composable
+private fun PageBitmap(
+    bitmap: ImageBitmap?,
+    pageIndex: Int,
+    colors: KiteDocViewColors,
+    pagePlaceholder: (@Composable (Int) -> Unit)?,
+) {
     Crossfade(
         targetState = bitmap,
         animationSpec = tween(durationMillis = PAGE_FADE_MS),
-        modifier = modifier,
+        modifier = Modifier.fillMaxSize(),
         label = "pdf-page-raster",
     ) { bmp ->
         if (bmp != null) {
@@ -1268,6 +1296,93 @@ private fun KitePageRaster(
         }
     }
 }
+
+/**
+ * The part of [page] on screen, drawn at the full resolution [full] in tiles of [TILE_PX]
+ * pixels over the page's capped bitmap, in a slot of [slot] pixels (#375). The tiles follow
+ * a pan once it rests, the tile nearest the middle of the view first. They go through the
+ * render gate and the bitmap cache like a page, so a tile that scrolls back is a lookup.
+ */
+@Composable
+private fun PageTiles(
+    page: KitePage,
+    pageIndex: Int,
+    state: KiteDocViewState,
+    full: IntSize,
+    slot: IntSize,
+    rasterizer: KitePageRasterizer,
+    cache: PageBitmapCache?,
+    paper: Color,
+    colors: KiteDocViewColors,
+    hairline: Float,
+    drawsFormLayer: Boolean,
+    canvasDecorator: KiteCanvasDecorator?,
+) {
+    if (slot.width <= 0 || slot.height <= 0 || full.width <= 0 || full.height <= 0) return
+    // The part on screen, once the view rests on it: a pan does not start tiles on every frame.
+    val shown by produceState<Rect?>(null, state, pageIndex) {
+        snapshotFlow { state.visiblePartOf(pageIndex) }.collectLatest { part ->
+            delay(TILE_SETTLE_MS)
+            backOnComposeThread()
+            value = part
+        }
+    }
+    val sx = full.width.toFloat() / slot.width
+    val sy = full.height.toFloat() / slot.height
+    val tiles = remember(shown, full, slot) { shown?.let { tilesOver(it, sx, sy, full) }.orEmpty() }
+    val bitmaps = remember(page, full, paper, colors.theme, hairline, canvasDecorator) { mutableStateMapOf<IntRect, ImageBitmap>() }
+    LaunchedEffect(page, full, tiles, paper, colors.theme, hairline, drawsFormLayer, canvasDecorator) {
+        // A tile that left the view gives its memory back; the cache keeps it for a return.
+        bitmaps.keys.retainAll(tiles.toSet())
+        val middle = shown?.center ?: return@LaunchedEffect
+        for (tile in tiles.sortedBy { (Offset(it.center.x / sx, it.center.y / sy) - middle).getDistanceSquared() }) {
+            if (tile in bitmaps) continue
+            val result = rasterizer.rasterizeCachedOrNull(
+                cache, page, full.width, full.height, colors.pageBackground, hairline, colors.theme, pageIndex,
+                skipWidgets = drawsFormLayer,
+                canvasDecorator = canvasDecorator,
+                priority = { rasterPriorityOf(state, pageIndex) },
+                region = tile,
+            )
+            backOnComposeThread()
+            if (result != null) bitmaps[tile] = result.first
+        }
+    }
+    Canvas(Modifier.fillMaxSize()) {
+        for ((tile, bmp) in bitmaps) {
+            // Two tiles that meet round their shared edge the same way, so no seam shows between them.
+            val left = (tile.left / sx).roundToInt()
+            val top = (tile.top / sy).roundToInt()
+            val right = (tile.right / sx).roundToInt()
+            val bottom = (tile.bottom / sy).roundToInt()
+            if (right <= left || bottom <= top) continue
+            drawImage(bmp, dstOffset = IntOffset(left, top), dstSize = IntSize(right - left, bottom - top))
+        }
+    }
+}
+
+/** The tiles of a page drawn [full] that meet [part] of its slot, which the page's pixels scale by [sx] and [sy]. */
+internal fun tilesOver(part: Rect, sx: Float, sy: Float, full: IntSize): List<IntRect> {
+    val firstColumn = (part.left * sx / TILE_PX).toInt().coerceAtLeast(0)
+    val lastColumn = ((part.right * sx - 1) / TILE_PX).toInt().coerceAtMost((full.width - 1) / TILE_PX)
+    val firstRow = (part.top * sy / TILE_PX).toInt().coerceAtLeast(0)
+    val lastRow = ((part.bottom * sy - 1) / TILE_PX).toInt().coerceAtMost((full.height - 1) / TILE_PX)
+    val out = ArrayList<IntRect>()
+    for (row in firstRow..lastRow) for (column in firstColumn..lastColumn) {
+        out += IntRect(column * TILE_PX, row * TILE_PX, minOf((column + 1) * TILE_PX, full.width), minOf((row + 1) * TILE_PX, full.height))
+        if (out.size >= MAX_TILES) return out
+    }
+    return out
+}
+
+/** The side of a tile in pixels: large enough that a phone screen needs a dozen at most (#375). */
+internal const val TILE_PX = 1024
+
+/** The most tiles of one page at once, which bounds the memory of a very large view. */
+private const val MAX_TILES = 48
+
+/** How long a pan rests before the tiles follow it. */
+private const val TILE_SETTLE_MS = 120L
 
 /**
  * Calls [report] once for each fresh bitmap in [rastered]. The effect reads the value

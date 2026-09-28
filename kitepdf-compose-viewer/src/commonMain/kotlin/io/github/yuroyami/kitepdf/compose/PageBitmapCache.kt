@@ -36,6 +36,8 @@ internal class PageBitmapCache(private val maxBytes: Long) {
          * such as another font family resolver, renders that text again (#421).
          */
         val fontEnvironment: Any? = null,
+        /** The part of the page drawn [w] × [h] that the bitmap holds, for a tile; null for the whole page (#375). */
+        val region: androidx.compose.ui.unit.IntRect? = null,
     )
 
     // Access-ordered behaviour done manually: Kotlin common LinkedHashMap has
@@ -53,8 +55,10 @@ internal class PageBitmapCache(private val maxBytes: Long) {
      * negative value.
      */
     private fun bytesOf(key: Key): Long {
-        if (key.w <= 0 || key.h <= 0) return 0L
-        val pixels = key.w.toLong() * key.h.toLong() // Int² still fits Long.
+        val w = key.region?.width ?: key.w
+        val h = key.region?.height ?: key.h
+        if (w <= 0 || h <= 0) return 0L
+        val pixels = w.toLong() * h.toLong() // Int² still fits Long.
         return if (pixels > Long.MAX_VALUE / 4L) Long.MAX_VALUE else pixels * 4L
     }
 
