@@ -26,7 +26,15 @@ import androidx.compose.ui.input.pointer.PointerType
 import androidx.compose.ui.input.pointer.isCtrlPressed
 import androidx.compose.ui.input.pointer.isMetaPressed
 import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.animation.core.AnimationState
+import androidx.compose.animation.core.animateDecay
+import androidx.compose.animation.core.exponentialDecay
+import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.ui.input.pointer.util.VelocityTracker
+import kotlin.math.abs
+import kotlin.math.hypot
 import kotlin.math.pow
+import kotlinx.coroutines.Job
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.util.fastAny
@@ -217,6 +225,8 @@ internal fun Modifier.kiteTransformGestures(
     spec: KiteZoomSpec,
     scope: CoroutineScope,
     onTap: ((Offset) -> Unit)? = null,
+    /** How the pager around this page turns, so a drag past the edge of a zoomed page turns it; null outside a pager. */
+    pageTurn: PageTurn? = null,
 ): Modifier {
     if (!spec.pinchEnabled && !spec.doubleTapEnabled && !spec.panEnabled && onTap == null) return this
     return this
@@ -280,27 +290,82 @@ internal fun Modifier.kiteTransformGestures(
                 }
             }
         }
-        .pointerInput(state, spec.panEnabled) {
+        .pointerInput(state, spec.panEnabled, pageTurn) {
             if (!spec.panEnabled) return@pointerInput
+            var fling: Job? = null
             awaitEachGesture {
-                awaitFirstDown(requireUnconsumed = false)
+                val down = awaitFirstDown(requireUnconsumed = false)
+                // A finger on the page stops the fling of the last pan.
+                fling?.cancel()
+                val velocity = VelocityTracker()
+                velocity.addPosition(down.uptimeMillis, down.position)
+                var panned = false
+                var pinched = false
+                // How far the finger went on past the edge of the page, along the pager's axis.
+                var pastEdge = 0f
                 while (true) {
                     val event = awaitPointerEvent() // Main pass: after the inner scrollable
                     val pointersDown = event.changes.count { it.pressed }
+                    if (pointersDown > 1) pinched = true
                     if (pointersDown == 1 && state.overflows && !state.isSelectionActive) {
+                        event.changes.fastFirstOrNull { it.pressed }?.let { velocity.addPosition(it.uptimeMillis, it.position) }
                         val pan = event.calculatePan()
                         if (pan != Offset.Zero) {
                             val consumed = state.panBy(pan)
                             if (consumed != Offset.Zero) {
+                                panned = true
                                 event.changes.fastForEach { it.consume() }
                             }
+                            if (pageTurn != null) pastEdge += pageTurn.along(pan - consumed)
                         }
                     }
                     if (!event.changes.fastAny { it.pressed }) break
                 }
+                if (pinched) return@awaitEachGesture
+                // A drag that went on past the edge turns the page, as a pager at fit does (#410).
+                if (pageTurn != null && abs(pastEdge) >= PAGE_TURN_DRAG.toPx()) {
+                    val forward = (pastEdge < 0) != pageTurn.reversed
+                    scope.launch { state.turn(forward, pageTurn.spread) }
+                    return@awaitEachGesture
+                }
+                if (!panned) return@awaitEachGesture
+                // The pan goes on after the finger lifts and slows down, as a scroll does (#410).
+                val (vx, vy) = velocity.calculateVelocity()
+                val speed = hypot(vx, vy)
+                if (speed < MIN_FLING_SPEED.toPx()) return@awaitEachGesture
+                fling = scope.launch {
+                    var last = 0f
+                    AnimationState(0f, speed).animateDecay(exponentialDecay()) {
+                        val step = value - last
+                        last = value
+                        val moved = state.panBy(Offset(vx / speed * step, vy / speed * step))
+                        // Both edges reached: nothing is left to move.
+                        if (moved == Offset.Zero && step > 0.5f) cancelAnimation()
+                    }
+                }
             }
         }
 }
+
+/**
+ * How the pager around a page turns: along [orientation], with the next page before the
+ * current one when [reversed], and by whole spreads when [spread].
+ */
+internal class PageTurn(val orientation: Orientation, val reversed: Boolean, val spread: Boolean) {
+    /** The part of [delta] along the pager's axis. */
+    fun along(delta: Offset): Float = if (orientation == Orientation.Horizontal) delta.x else delta.y
+
+    override fun equals(other: Any?): Boolean =
+        other is PageTurn && other.orientation == orientation && other.reversed == reversed && other.spread == spread
+
+    override fun hashCode(): Int = orientation.hashCode() * 31 + reversed.hashCode() * 7 + spread.hashCode()
+}
+
+/** How far past the edge of a zoomed page a drag goes to turn the page. */
+private val PAGE_TURN_DRAG = 64.dp
+
+/** The slowest release that flings a pan, per second. */
+private val MIN_FLING_SPEED = 50.dp
 
 /**
  * Turns to the next or the previous page in reading order, or to the next or the previous

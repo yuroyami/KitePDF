@@ -224,6 +224,8 @@ KiteDocView(state, zoomSpec = spec)
 
 These bounds are honoured by both gestures and programmatic calls (`setZoom`, `animateZoomTo`), so an app driving zoom from a slider is governed by the same range.
 
+A zoomed page pans with one finger. A quick release lets the pan go on and slow down, and a new touch stops it. In `Paged` and `Spread`, a drag that goes on past the edge of a zoomed page turns the page, the way the pager turns.
+
 To disable zoom entirely:
 
 ```kotlin
