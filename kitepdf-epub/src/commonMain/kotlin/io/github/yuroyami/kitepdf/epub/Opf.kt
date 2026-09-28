@@ -85,6 +85,11 @@ public class EpubMetadata internal constructor(
     public val rightToLeft: Boolean,
     /** How the whole book asks to be shown. [EpubDocument.renditionOf] gives the values of one chapter (#37). */
     public val rendition: EpubRendition = EpubRendition.DEFAULT,
+    /**
+     * The zip paths of the pronunciation lexicons (PLS documents, `application/pls+xml`) that the
+     * manifest lists, for a speech engine to read with [EpubDocument.resource] (#39).
+     */
+    public val pronunciationLexicons: List<String> = emptyList(),
 ) {
     public companion object {
         internal val EMPTY = EpubMetadata(null, emptyList(), null, null, null, false)

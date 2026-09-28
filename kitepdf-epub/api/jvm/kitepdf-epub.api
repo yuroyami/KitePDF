@@ -144,6 +144,7 @@ public final class io/github/yuroyami/kitepdf/epub/EpubMetadata {
 	public final fun getCreators ()Ljava/util/List;
 	public final fun getIdentifier ()Ljava/lang/String;
 	public final fun getLanguage ()Ljava/lang/String;
+	public final fun getPronunciationLexicons ()Ljava/util/List;
 	public final fun getRendition ()Lio/github/yuroyami/kitepdf/epub/EpubRendition;
 	public final fun getRightToLeft ()Z
 	public final fun getTitle ()Ljava/lang/String;
@@ -188,8 +189,10 @@ public final class io/github/yuroyami/kitepdf/epub/EpubPageSpread : java/lang/En
 }
 
 public final class io/github/yuroyami/kitepdf/epub/EpubReadingItem {
+	public final fun getAlphabet ()Ljava/lang/String;
 	public final fun getEpubType ()Ljava/lang/String;
 	public final fun getHeadingLevel ()I
+	public final fun getPronunciation ()Ljava/lang/String;
 	public final fun getRole ()Lio/github/yuroyami/kitepdf/epub/EpubRole;
 	public final fun getText ()Ljava/lang/String;
 	public fun toString ()Ljava/lang/String;

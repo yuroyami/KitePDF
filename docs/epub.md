@@ -409,3 +409,16 @@ Left out: anything marked `aria-hidden="true"` or `role="presentation"`, and
 an image with `alt=""`, which is how authors mark decoration. `aria-label`
 replaces an element's text, and both `aria-hidden` and `epub:type` reach down
 the subtree, so a footnote's paragraphs stay footnote.
+
+A book can tell a speech engine how to say a word with the `ssml:ph` and
+`ssml:alphabet` attributes. The item for that element then carries them as
+`pronunciation` and `alphabet`, and holds that element's words only, so the
+text around it goes to items of its own. `book.epubMetadata.pronunciationLexicons`
+lists the book's pronunciation lexicons (PLS documents) for the engine to load:
+
+```kotlin
+for (path in book.epubMetadata.pronunciationLexicons) engine.addLexicon(book.resource(path))
+for (item in page.readingOrder()) {
+    if (item.pronunciation != null) speakPhonemes(item.pronunciation, item.alphabet) else speak(item.text)
+}
+```

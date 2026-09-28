@@ -282,6 +282,8 @@ internal class ParsedEpub(
                 rightToLeft = opf.direction?.lowercase() == "rtl" ||
                     (opf.direction == null && opf.primaryWritingMode?.lowercase() == "vertical-rl"),
                 rendition = opf.rendition,
+                pronunciationLexicons = opf.items.filter { it.mediaType?.lowercase() == "application/pls+xml" }
+                    .map { EpubDocument.resolvePath(opf.baseDir, it.href) },
             )
         }
 

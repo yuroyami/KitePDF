@@ -42,6 +42,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   page, 300 by 150 CSS pixels unless they set a size. An object's box shows its
   fallback children. `EpubPage.embeds` lists the boxes with the document that
   each one embeds (#40).
+- `EpubReadingItem.pronunciation` and `alphabet` carry a book's `ssml:ph` and
+  `ssml:alphabet`, and the reading order gives an element with a pronunciation
+  an item of its own. `EpubMetadata.pronunciationLexicons` lists the book's
+  pronunciation lexicons (#39).
 
 ### Changed
 

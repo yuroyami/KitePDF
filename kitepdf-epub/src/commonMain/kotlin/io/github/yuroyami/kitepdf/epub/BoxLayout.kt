@@ -928,6 +928,8 @@ internal class BoxLayout(
         val rubyGroup: Int = -1, val rubyText: String? = null,
         // Link target when inside <a href> (see InlineRun.href).
         val href: String? = null,
+        // The pronunciation of the element the character belongs to (see InlineRun.speech).
+        val speech: SpeechHint? = null,
         // Inline image cell (cp = U+FFFC): natural draw size + decoded
         // payload. `width` is the pen advance (justification may stretch it);
         // `imageWidth` is what the image actually draws at.
@@ -1118,11 +1120,11 @@ internal class BoxLayout(
                 val cell = if (f != null) {
                     val gid = if (smcpGid >= 0) smcpGid else f.gidFor(c)
                     Cell(c, penAdvance1000(f, gid, c) * cellFs / 1000.0, cellFs, spec, run.color, shift, run.underline, f, gid,
-                        rubyGroup = run.rubyGroup, rubyText = run.rubyText, href = run.href,
+                        rubyGroup = run.rubyGroup, rubyText = run.rubyText, href = run.href, speech = run.speech,
                         lineThrough = run.lineThrough, backgroundColor = run.backgroundColor, level = level, src = src)
                 } else {
                     Cell(c, FontMetrics.advancePt(c, cellFs, run.bold, run.italic, run.family), cellFs, spec, run.color, shift, run.underline,
-                        rubyGroup = run.rubyGroup, rubyText = run.rubyText, href = run.href,
+                        rubyGroup = run.rubyGroup, rubyText = run.rubyText, href = run.href, speech = run.speech,
                         lineThrough = run.lineThrough, backgroundColor = run.backgroundColor, level = level, src = src)
                 }
                 // letter-spacing: added to every glyph advance, kept in sync
@@ -1151,7 +1153,7 @@ internal class BoxLayout(
                         // word-spacing adds to spaces; letter-spacing to every advance.
                         tokens.add(Token.Space(Cell(
                             ' '.code, sw + run.wordSpacingPt + run.letterSpacingPt, fs, spec, run.color, shift, run.underline,
-                            href = run.href, lineThrough = run.lineThrough, backgroundColor = run.backgroundColor, level = level,
+                            href = run.href, speech = run.speech, lineThrough = run.lineThrough, backgroundColor = run.backgroundColor, level = level,
                         )))
                     }
                     // Ruby bases do not split per CJK char: the whole base is one token.
@@ -1219,7 +1221,8 @@ internal class BoxLayout(
     }
 
     /** Cells that GSUB may join: a ligature never spans a change of paint, link or ruby group. */
-    private fun shapesWith(a: Cell, b: Cell): Boolean = samePaint(a, b) && a.href == b.href && a.rubyGroup == b.rubyGroup
+    private fun shapesWith(a: Cell, b: Cell): Boolean =
+        samePaint(a, b) && a.href == b.href && a.speech === b.speech && a.rubyGroup == b.rubyGroup
 
     /**
      * Appends the cells of the shaped [glyphs] of [run] to [out]. A glyph that still stands for
@@ -1253,7 +1256,7 @@ internal class BoxLayout(
                 Cell(
                     base.cp, (penAdvance1000(face, g.gid, base.cp) + spacing) * base.fontSize / 1000.0, base.fontSize,
                     base.spec, base.color, base.shift, base.underline, face, g.gid, kernAfter1000 = spacing,
-                    rubyGroup = base.rubyGroup, rubyText = base.rubyText, href = base.href,
+                    rubyGroup = base.rubyGroup, rubyText = base.rubyText, href = base.href, speech = base.speech,
                     lineThrough = base.lineThrough, backgroundColor = base.backgroundColor, level = base.level,
                     src = base.src,
                 ).also {
@@ -1416,7 +1419,7 @@ internal class BoxLayout(
         val face = c.face
         return Cell(
             '-'.code, hyphenWidth(c), c.fontSize, c.spec, c.color, c.shift, c.underline, face, face?.gidFor('-'.code) ?: -1,
-            href = c.href, lineThrough = c.lineThrough, backgroundColor = c.backgroundColor, level = c.level,
+            href = c.href, speech = c.speech, lineThrough = c.lineThrough, backgroundColor = c.backgroundColor, level = c.level,
         )
     }
 
@@ -1479,14 +1482,14 @@ internal class BoxLayout(
             val glyphs = ArrayList<TextGlyph>()
             // An image cell always ends a text run, even when glued to a word (#99).
             while (i < cells.size && cells[i].cp != ' '.code && !cells[i].isImage && cells[i].rubyGroup == c.rubyGroup &&
-                cells[i].href == c.href && samePaint(cells[i], c)
+                cells[i].href == c.href && cells[i].speech === c.speech && samePaint(cells[i], c)
             ) {
                 glyphs.add(glyphFor(cells[i])); x += cells[i].width + cells[i].padAfter; i++
             }
             out.add(PlacedRun(
                 glyphs, startX, fs, spec, col, sh, ul,
                 hasOutlines = face != null, unitsPerEm = face?.unitsPerEm ?: 1000,
-                href = c.href, lineThrough = c.lineThrough, backgroundColor = c.backgroundColor,
+                href = c.href, speech = c.speech, lineThrough = c.lineThrough, backgroundColor = c.backgroundColor,
                 paintWidth = x - startX,
             ))
         }
