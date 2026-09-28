@@ -1643,20 +1643,27 @@ public class EpubPage internal constructor(
         val page = laidOut()
         val out = ArrayList<Pair<Double, EpubReadingItem>>()
         var owner: TextBlockBox? = null
+        var speech: SpeechHint? = null
         var top = 0.0
         var words = ArrayList<String>()
 
         fun flushText() {
             val o = owner
             if (o != null && words.isNotEmpty()) {
-                readingItem(o.semantics, words.joinToString(" "))?.let { out.add(top to it) }
+                readingItem(o.semantics, words.joinToString(" "), speech)?.let { out.add(top to it) }
             }
             words = ArrayList()
         }
 
         for (line in page.lines) {
-            if (line.owner !== owner) { flushText(); owner = line.owner; top = line.yTop }
-            extractLine(page, line)?.let { words.add(it.text) }
+            if (line.owner !== owner) { flushText(); owner = line.owner; speech = null; top = line.yTop }
+            // A pronunciation splits the text, so its phoneme covers exactly its own span. A block
+            // that a label replaces is one item, whatever its runs say (#39).
+            val parts = if (owner?.semantics?.label != null) listOf(null to line.runs) else speechParts(line)
+            for ((hint, runs) in parts) {
+                if (hint !== speech) { flushText(); speech = hint; top = line.yTop }
+                extractLine(page, line, runs)?.let { words.add(it.text) }
+            }
             for (img in line.images) {
                 if (img.alt?.isEmpty() == true) continue   // decorative
                 out.add(line.yTop to EpubReadingItem(EpubRole.IMAGE, img.alt.orEmpty()))
@@ -1672,11 +1679,28 @@ public class EpubPage internal constructor(
         return out.sortedBy { it.first }.map { it.second }
     }
 
-    private fun readingItem(sem: BoxSemantics?, text: String): EpubReadingItem? {
+    private fun readingItem(sem: BoxSemantics?, text: String, speech: SpeechHint?): EpubReadingItem? {
         if (sem?.hidden == true) return null
         val spoken = (sem?.label ?: text).trim()
         if (spoken.isEmpty()) return null
-        return EpubReadingItem(sem?.role ?: EpubRole.TEXT, spoken, sem?.headingLevel ?: 0, sem?.epubType)
+        return EpubReadingItem(sem?.role ?: EpubRole.TEXT, spoken, sem?.headingLevel ?: 0, sem?.epubType, speech?.phoneme, speech?.alphabet)
+    }
+
+    /** The runs of [line] in reading order, cut where the pronunciation they belong to changes. */
+    private fun speechParts(line: PositionedLine): List<Pair<SpeechHint?, List<PlacedRun>>> {
+        val parts = ArrayList<Pair<SpeechHint?, List<PlacedRun>>>()
+        var current = ArrayList<PlacedRun>()
+        var hint: SpeechHint? = null
+        for (run in line.runs.filter { !it.isAnnotation && it.glyphs.isNotEmpty() }.sortedBy { it.x }) {
+            if (current.isNotEmpty() && run.speech !== hint) {
+                parts += hint to current
+                current = ArrayList()
+            }
+            hint = run.speech
+            current += run
+        }
+        if (current.isNotEmpty()) parts += hint to current
+        return parts
     }
 
     /* ── structured text (extraction / search) ───────────────────────────── */
@@ -1706,8 +1730,8 @@ public class EpubPage internal constructor(
         return KiteStructuredText(blocks)
     }
 
-    private fun extractLine(page: PageRender, line: PositionedLine): KiteTextLine? {
-        val runs = line.runs
+    private fun extractLine(page: PageRender, line: PositionedLine, only: List<PlacedRun> = line.runs): KiteTextLine? {
+        val runs = only
             .filter { !it.isAnnotation && it.glyphs.isNotEmpty() }
             .sortedBy { it.x }
         if (runs.isEmpty()) return null

@@ -149,6 +149,8 @@ internal class PlacedRun(
     val backgroundColor: CssBackground? = null,
     /** Includes justified spaces, even when no glyph is painted for them. */
     val paintWidth: Double = glyphs.sumOf { it.advanceWidth } * fontSize / 1000.0,
+    /** The pronunciation of the element the run's text belongs to (see [InlineRun.speech]). */
+    val speech: SpeechHint? = null,
 )
 
 /**

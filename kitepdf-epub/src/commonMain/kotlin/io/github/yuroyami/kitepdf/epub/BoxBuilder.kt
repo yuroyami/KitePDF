@@ -63,6 +63,8 @@ internal class BoxBuilder(
 
         // The element's own accessibility facts, shared by every box it makes.
         val sem = BoxSemantics.of(el.tag, el.attrs, parentSem)
+        // A pronunciation on the block covers the text it holds itself (#39).
+        speechHint(el, ancestors)?.let(inl::beginSpeech)
 
         fun flush() {
             if (inl.hasContent()) {
@@ -242,6 +244,17 @@ internal class BoxBuilder(
             heightPt = cs.heightPt ?: ah ?: EMBED_DEFAULT_HEIGHT_PT,
         )
         return buildBlock(el, sized, ancestors, null, BLACK, parentSem = parentSem).also { it.embed = info }
+    }
+
+    /**
+     * The pronunciation [el] gives its text, `ssml:ph`, in the alphabet of the nearest
+     * `ssml:alphabet` on it or above it, or null (#39). The parser keeps local names, so the
+     * attributes read as `ph` and `alphabet`.
+     */
+    private fun speechHint(el: KiteXmlNode.Element, ancestors: List<KiteXmlNode.Element>): SpeechHint? {
+        val phoneme = el.attrs["ph"]?.trim()?.takeIf { it.isNotEmpty() } ?: return null
+        val alphabet = (el.attrs["alphabet"] ?: ancestors.firstNotNullOfOrNull { it.attrs["alphabet"] })?.trim()
+        return SpeechHint(phoneme, alphabet?.takeIf { it.isNotEmpty() })
     }
 
     private fun imageSemantics(el: KiteXmlNode.Element, parentSem: BoxSemantics?): BoxSemantics {
@@ -500,6 +513,8 @@ internal class BoxBuilder(
 
         val link = if (el.tag == "a") el.attrs["href"]?.takeIf { it.isNotBlank() }?.let(::resolveLink) else null
         if (link != null) inl.beginLink(link)
+        val speech = speechHint(el, ancestors)
+        if (speech != null) inl.beginSpeech(speech)
         val background = inl.beginBackground(style.backgroundColor)
         try {
             if (el.tag == "ruby") { processRuby(el, style, ancestors, inl, anchorSink, hoist, parentSem); return }
@@ -571,6 +586,7 @@ internal class BoxBuilder(
             resolver.computePseudo(el, ancestors, style, PseudoSide.AFTER)?.let { inl.appendText(it.text, it.style) }
         } finally {
             inl.endBackground(background)
+            if (speech != null) inl.endSpeech()
             if (link != null) inl.endLink()
         }
     }
@@ -668,6 +684,14 @@ internal class BoxBuilder(
         fun beginLink(href: String) { linkStack.addLast(linkHref); linkHref = href }
 
         fun endLink() { linkHref = linkStack.removeLastOrNull() }
+
+        // Active ssml:ph: the element's pronunciation, one instance per element (#39).
+        private val speechStack = ArrayDeque<SpeechHint?>()
+        private var speech: SpeechHint? = null
+
+        fun beginSpeech(hint: SpeechHint) { speechStack.addLast(speech); speech = hint }
+
+        fun endSpeech() { speech = speechStack.removeLastOrNull() }
 
         /** The `<a href>` target in force, which a block lifted out of the link inherits. */
         val activeLink: String? get() = linkHref
@@ -767,6 +791,7 @@ internal class BoxBuilder(
             fontFamilyNames = style.fontFamilyNames,
             rubyGroup = rubyGroup, rubyText = rubyText,
             href = linkHref,
+            speech = speech,
             letterSpacingPt = style.letterSpacingPt, wordSpacingPt = style.wordSpacingPt,
             smallCaps = style.smallCaps,
             lineThrough = style.lineThrough,

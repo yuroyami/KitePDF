@@ -59,10 +59,24 @@ public class EpubReadingItem internal constructor(
      * ...), or null. EPUB's own semantic vocabulary, passed through as-is.
      */
     public val epubType: String? = null,
+    /**
+     * How a speech engine says [text], from the source's `ssml:ph`, or null. The item holds the
+     * text of that element only, so the pronunciation covers exactly its own words (#39).
+     */
+    public val pronunciation: String? = null,
+    /** The phonetic alphabet of [pronunciation], such as `ipa` or `x-sampa`, from `ssml:alphabet`. */
+    public val alphabet: String? = null,
 ) {
     override fun toString(): String =
         "EpubReadingItem($role${if (headingLevel > 0) " h$headingLevel" else ""}: ${text.take(40)})"
 }
+
+/**
+ * A pronunciation that an element gives its text for a speech engine: `ssml:ph`, in the
+ * alphabet of the nearest `ssml:alphabet` (#39). One instance per element, so the element's
+ * text stays one span however the layout splits it.
+ */
+internal class SpeechHint(val phoneme: String, val alphabet: String?)
 
 /** The accessibility facts a box carries from its source element. */
 internal class BoxSemantics(

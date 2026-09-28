@@ -63,6 +63,8 @@ internal data class InlineRun(
     val lineThrough: DecorationLine? = null,
     /** Inline box background, including the nearest painted inline ancestor. */
     val backgroundColor: CssBackground? = null,
+    /** The pronunciation of the element this run's text belongs to, or null (#39). */
+    val speech: SpeechHint? = null,
 ) {
     companion object {
         val BLACK = RgbColor(0.0, 0.0, 0.0)

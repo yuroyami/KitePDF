@@ -287,6 +287,8 @@ final class io.github.yuroyami.kitepdf.epub/EpubMetadata { // io.github.yuroyami
         final fun <get-identifier>(): kotlin/String? // io.github.yuroyami.kitepdf.epub/EpubMetadata.identifier.<get-identifier>|<get-identifier>(){}[0]
     final val language // io.github.yuroyami.kitepdf.epub/EpubMetadata.language|{}language[0]
         final fun <get-language>(): kotlin/String? // io.github.yuroyami.kitepdf.epub/EpubMetadata.language.<get-language>|<get-language>(){}[0]
+    final val pronunciationLexicons // io.github.yuroyami.kitepdf.epub/EpubMetadata.pronunciationLexicons|{}pronunciationLexicons[0]
+        final fun <get-pronunciationLexicons>(): kotlin.collections/List<kotlin/String> // io.github.yuroyami.kitepdf.epub/EpubMetadata.pronunciationLexicons.<get-pronunciationLexicons>|<get-pronunciationLexicons>(){}[0]
     final val rendition // io.github.yuroyami.kitepdf.epub/EpubMetadata.rendition|{}rendition[0]
         final fun <get-rendition>(): io.github.yuroyami.kitepdf.epub/EpubRendition // io.github.yuroyami.kitepdf.epub/EpubMetadata.rendition.<get-rendition>|<get-rendition>(){}[0]
     final val rightToLeft // io.github.yuroyami.kitepdf.epub/EpubMetadata.rightToLeft|{}rightToLeft[0]
@@ -325,10 +327,14 @@ final class io.github.yuroyami.kitepdf.epub/EpubPage : io.github.yuroyami.kitepd
 }
 
 final class io.github.yuroyami.kitepdf.epub/EpubReadingItem { // io.github.yuroyami.kitepdf.epub/EpubReadingItem|null[0]
+    final val alphabet // io.github.yuroyami.kitepdf.epub/EpubReadingItem.alphabet|{}alphabet[0]
+        final fun <get-alphabet>(): kotlin/String? // io.github.yuroyami.kitepdf.epub/EpubReadingItem.alphabet.<get-alphabet>|<get-alphabet>(){}[0]
     final val epubType // io.github.yuroyami.kitepdf.epub/EpubReadingItem.epubType|{}epubType[0]
         final fun <get-epubType>(): kotlin/String? // io.github.yuroyami.kitepdf.epub/EpubReadingItem.epubType.<get-epubType>|<get-epubType>(){}[0]
     final val headingLevel // io.github.yuroyami.kitepdf.epub/EpubReadingItem.headingLevel|{}headingLevel[0]
         final fun <get-headingLevel>(): kotlin/Int // io.github.yuroyami.kitepdf.epub/EpubReadingItem.headingLevel.<get-headingLevel>|<get-headingLevel>(){}[0]
+    final val pronunciation // io.github.yuroyami.kitepdf.epub/EpubReadingItem.pronunciation|{}pronunciation[0]
+        final fun <get-pronunciation>(): kotlin/String? // io.github.yuroyami.kitepdf.epub/EpubReadingItem.pronunciation.<get-pronunciation>|<get-pronunciation>(){}[0]
     final val role // io.github.yuroyami.kitepdf.epub/EpubReadingItem.role|{}role[0]
         final fun <get-role>(): io.github.yuroyami.kitepdf.epub/EpubRole // io.github.yuroyami.kitepdf.epub/EpubReadingItem.role.<get-role>|<get-role>(){}[0]
     final val text // io.github.yuroyami.kitepdf.epub/EpubReadingItem.text|{}text[0]
