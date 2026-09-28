@@ -6,7 +6,10 @@ internal enum class FlexDirection { ROW, ROW_REVERSE, COLUMN, COLUMN_REVERSE }
 /** `flex-wrap` (5.2). */
 internal enum class FlexWrap { NOWRAP, WRAP, WRAP_REVERSE }
 
-/** `justify-content`, and `align-content`, which shares its keywords and adds STRETCH (8.2, 8.4). */
+/**
+ * `justify-content` and `align-content` (8.2, 8.4). STRETCH is also their initial `normal`: a flex
+ * container places its items from the start then, and a grid stretches its auto tracks.
+ */
 internal enum class FlexJustify { START, END, CENTER, SPACE_BETWEEN, SPACE_AROUND, SPACE_EVENLY, STRETCH, LEFT, RIGHT }
 
 /** `align-items` and `align-self` (8.3). AUTO is `align-self`'s initial value: the container's `align-items`. */
@@ -27,7 +30,7 @@ internal sealed class FlexBasis {
 internal data class FlexStyle(
     val direction: FlexDirection = FlexDirection.ROW,
     val wrap: FlexWrap = FlexWrap.NOWRAP,
-    val justify: FlexJustify = FlexJustify.START,
+    val justify: FlexJustify = FlexJustify.STRETCH,
     val alignItems: FlexAlign = FlexAlign.STRETCH,
     val alignContent: FlexJustify = FlexJustify.STRETCH,
     val rowGap: Double = 0.0,
@@ -67,8 +70,8 @@ internal object FlexValues {
                 for (w in words) s = direction(w)?.let { s.copy(direction = it) } ?: wrap(w)?.let { s.copy(wrap = it) } ?: return null
                 s
             }
-            "justify-content" -> justify(words.lastOrNull() ?: return null, stretchAs = FlexJustify.START)?.let { style.copy(justify = it) }
-            "align-content" -> justify(words.lastOrNull() ?: return null, stretchAs = FlexJustify.STRETCH)?.let { style.copy(alignContent = it) }
+            "justify-content" -> justify(words.lastOrNull() ?: return null)?.let { style.copy(justify = it) }
+            "align-content" -> justify(words.lastOrNull() ?: return null)?.let { style.copy(alignContent = it) }
             "align-items" -> align(words.lastOrNull() ?: return null)?.takeIf { it != FlexAlign.AUTO }?.let { style.copy(alignItems = it) }
             "align-self" -> align(words.lastOrNull() ?: return null)?.let { style.copy(alignSelf = it) }
             "gap", "grid-gap" -> {
@@ -103,14 +106,14 @@ internal object FlexValues {
     }
 
     // CSS Box Alignment 3: `safe` and `unsafe` come first, so the keyword is the last word.
-    private fun justify(v: String, stretchAs: FlexJustify): FlexJustify? = when (v) {
-        "flex-start", "start", "normal", "baseline" -> FlexJustify.START
+    private fun justify(v: String): FlexJustify? = when (v) {
+        "normal", "stretch" -> FlexJustify.STRETCH
+        "flex-start", "start", "baseline" -> FlexJustify.START
         "flex-end", "end" -> FlexJustify.END
         "center" -> FlexJustify.CENTER
         "space-between" -> FlexJustify.SPACE_BETWEEN
         "space-around" -> FlexJustify.SPACE_AROUND
         "space-evenly" -> FlexJustify.SPACE_EVENLY
-        "stretch" -> stretchAs
         "left" -> FlexJustify.LEFT
         "right" -> FlexJustify.RIGHT
         else -> null

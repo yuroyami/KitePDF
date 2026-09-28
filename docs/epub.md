@@ -392,6 +392,19 @@ The layout engine covers what real books use:
   of its content, so a short caption stays on one line. A container keeps its
   items on one page when it fits a page. `inline-flex` still lays out inline,
   and an image does not stretch across its line.
+- **Grid layout**: `display: grid` places its children in tracks.
+  `grid-template-columns` and `grid-template-rows` take lengths, percentages,
+  `fr`, `auto`, `min-content`, `max-content`, `minmax()`, `fit-content()` and
+  `repeat()`, including `repeat(auto-fill, ...)` and `repeat(auto-fit, ...)`,
+  which repeat as often as the tracks fit. Items take line numbers, negative
+  ones counted from the end, and spans, through `grid-column`, `grid-row` and
+  `grid-area`. The others fill the rows in order. `gap`, `grid-auto-rows`,
+  `grid-auto-columns`, `justify-items`, `justify-self`, `align-items`,
+  `align-self`, `justify-content` and `align-content` apply. A fixed row grows
+  to hold its tallest item, where CSS would let the item overflow into the
+  next row. Named lines and areas, `grid-auto-flow: column`, `dense`,
+  `subgrid` and `inline-grid` are not read: such an item is placed
+  automatically. A grid keeps its items on one page when it fits a page.
 - **Visual effects**: `opacity` below 1 paints the box and its content as one
   group at that opacity. `overflow` other than `visible` clips the content to
   the padding box, and the box's own border stays. `visibility: hidden` keeps
