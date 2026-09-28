@@ -13,6 +13,9 @@ name: CI
 # - `api` checks the public API of each published module against the dump in
 #   its api/ directory. It runs on macOS, the one host that compiles every
 #   target, so the Apple-only declarations are checked too.
+# - `consumer` publishes the JVM artifacts to Maven Local and builds the
+#   project in consumer-test/ against them, by coordinates, as an application
+#   does. A broken POM or a missing dependency fails there before a release.
 
 on:
   push:
@@ -237,6 +240,39 @@ jobs:
       # run ./gradlew updateKotlinAbi and commit the api/ files with it.
       - name: Check the public API against the dumps
         run: ./gradlew checkKotlinAbi --continue --stacktrace
+
+  consumer:
+    runs-on: macos-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Cache Konan (native compiler + prebuilt deps)
+        uses: actions/cache@v4
+        with:
+          path: ~/.konan
+          key: konan-${{ runner.os }}-${{ hashFiles('gradle/libs.versions.toml') }}
+          restore-keys: konan-${{ runner.os }}-
+
+      # Maven Local needs no signing key, so the signing that a release uses is off here.
+      - name: Publish the JVM artifacts to Maven Local
+        run: >
+          ./gradlew publishKotlinMultiplatformPublicationToMavenLocal publishJvmPublicationToMavenLocal
+          -PRELEASE_SIGNING_ENABLED=false --stacktrace
+
+      - name: Build and test a consumer against them
+        run: ./gradlew -p consumer-test test --stacktrace
 
   js:
     runs-on: ubuntu-latest
