@@ -486,6 +486,8 @@ internal class StyleResolver(
             "table-layout" -> b.tableLayoutFixed = v.trim().lowercase() == "fixed"
             else -> if (prop.removePrefix("-webkit-") in FlexValues.PROPERTIES) {
                 FlexValues.apply(b.flex, prop, v) { CssValues.length(it, b.fontSizePt, rootFontSizePt, refWidthPt) }?.let { b.flex = it }
+            } else if (prop.removePrefix("-webkit-") in COLUMN_PROPERTIES) {
+                columnValue(b, prop.removePrefix("-webkit-"), v)
             } else if (prop in GridValues.PROPERTIES) {
                 GridValues.apply(b.grid, prop, v) { CssValues.length(it, b.fontSizePt, rootFontSizePt, refWidthPt) }?.let { b.grid = it }
             }
@@ -516,6 +518,46 @@ internal class StyleResolver(
         "groove" -> BorderStyle.GROOVE
         "inset" -> BorderStyle.INSET
         else -> null
+    }
+
+    /** The multi-column properties (CSS Multi-column Layout 1, #34). A value that is not valid changes nothing. */
+    private fun columnValue(b: Builder, prop: String, v: String) {
+        val t = v.trim().lowercase()
+        fun count(w: String): Int? = w.toIntOrNull()?.takeIf { it >= 1 }
+        fun width(w: String): Double? = CssValues.length(w, b.fontSizePt, rootFontSizePt, refWidthPt)?.takeIf { it > 0.0 && it.isFinite() }
+        fun rule(w: String): Boolean {
+            borderStyle(w)?.let { b.ruleStyle = it; return true }
+            CssValues.color(w)?.let { b.ruleColor = it; return true }
+            borderW(b, w)?.takeIf { it >= 0.0 }?.let { b.ruleWidth = it; return true }
+            return false
+        }
+        when (prop) {
+            "column-count" -> if (t == "auto") b.columnCount = null else count(t)?.let { b.columnCount = it }
+            "column-width" -> if (t == "auto") b.columnWidth = null else width(t)?.let { b.columnWidth = it }
+            "columns" -> {
+                // A width and a count in either order, `auto` for either (2.3).
+                var c: Int? = null
+                var w: Double? = null
+                for (word in t.split(WHITESPACE).filter { it.isNotEmpty() }) {
+                    if (word == "auto") continue
+                    count(word)?.let { c = it } ?: width(word)?.let { w = it } ?: return
+                }
+                b.columnCount = c
+                b.columnWidth = w
+            }
+            "column-rule" -> {
+                val words = t.split(WHITESPACE).filter { it.isNotEmpty() }
+                b.ruleWidth = 2.25; b.ruleStyle = BorderStyle.NONE; b.ruleColor = null
+                for (word in words) if (!rule(word)) return
+            }
+            "column-rule-width" -> borderW(b, t)?.takeIf { it >= 0.0 }?.let { b.ruleWidth = it }
+            "column-rule-style" -> borderStyle(t)?.let { b.ruleStyle = it }
+            "column-rule-color" -> CssValues.color(t)?.let { b.ruleColor = it }
+            "column-span" -> when (t) {
+                "all" -> b.columnSpanAll = true
+                "none" -> b.columnSpanAll = false
+            }
+        }
     }
 
     private fun sizeValue(b: Builder, v: String, ref: Double): Double? = when (v.trim().lowercase()) {
@@ -727,6 +769,12 @@ internal class StyleResolver(
         var transformOrigin = CssOffset.HALF to CssOffset.HALF // not inherited
         var flex = FlexStyle() // not inherited
         var grid = GridStyle() // not inherited
+        var columnCount: Int? = null // not inherited
+        var columnWidth: Double? = null // not inherited
+        var ruleWidth = 2.25 // medium; not inherited
+        var ruleStyle = BorderStyle.NONE // not inherited
+        var ruleColor: io.github.yuroyami.kitepdf.core.render.RgbColor? = null // currentColor; not inherited
+        var columnSpanAll = false // not inherited
 
         fun build(): ComputedStyle {
             // CSS Flexible Box Layout 1, 4: an in-flow child of a flex container is a flex item. It is
@@ -775,6 +823,11 @@ internal class StyleResolver(
                 bgImage?.let { CssBackgroundLayer(it, bgSize, bgX, bgY, bgRepeatX, bgRepeatY) },
                 transform, transformOrigin,
                 flex, grid,
+                Columns(
+                    count = columnCount, width = columnWidth,
+                    rule = Edge(ruleWidth, ruleColor ?: color, ruleStyle).takeIf { it.visible && ruleWidth > 0.0 },
+                    spanAll = columnSpanAll,
+                ),
             )
         }
     }
@@ -783,6 +836,12 @@ internal class StyleResolver(
         val POSITION_WORDS = setOf("left", "right", "top", "bottom", "center")
         const val INLINE_SPEC = 0xFFFFFF
         val WHITESPACE = Regex("\\s+")
+
+        /** The multi-column properties, read with or without the `-webkit-` prefix (#34). */
+        val COLUMN_PROPERTIES = setOf(
+            "column-count", "column-width", "columns", "column-rule", "column-rule-width", "column-rule-style",
+            "column-rule-color", "column-span",
+        )
     }
 }
 

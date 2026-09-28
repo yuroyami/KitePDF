@@ -158,6 +158,8 @@ internal data class ComputedStyle(
     val flex: FlexStyle = FlexStyle(),
     /** The grid properties, as a container and as an item (#35). Not inherited. */
     val grid: GridStyle = GridStyle(),
+    /** The multi-column properties (#34). Not inherited. */
+    val columns: Columns = Columns(),
 ) {
     val mono: Boolean get() = fontFamily == GenericFont.MONO
 

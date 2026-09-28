@@ -12,6 +12,7 @@ import io.github.yuroyami.kitepdf.epub.css.CssPosition
 import io.github.yuroyami.kitepdf.epub.css.CssVAlign
 import io.github.yuroyami.kitepdf.epub.css.DecorationLine
 import io.github.yuroyami.kitepdf.epub.css.Display
+import io.github.yuroyami.kitepdf.epub.css.Edge
 import io.github.yuroyami.kitepdf.epub.css.Direction
 import io.github.yuroyami.kitepdf.epub.css.FlexAlign
 import io.github.yuroyami.kitepdf.epub.css.FlexBasis
@@ -204,13 +205,18 @@ internal class BoxLayout(
         var prevBottom = 0.0
         var first = true
         val floatsBefore = activeFloats.size
-        // A flex or grid container places its children as items instead of stacking them (#33, #35).
+        // A flex or grid container places its children as items instead of stacking them (#33, #35),
+        // and a block with columns moves them into its columns (#34).
         val itemLayout = s.display == Display.FLEX || s.display == Display.GRID
-        val flexChildren = if (itemLayout) emptyList() else box.children
+        val gap = if (s.flex.columnGapNormal) s.fontSizePt else s.flex.columnGap
+        val columnCount = if (itemLayout || vertical) 1 else s.columns.countIn(contentW, gap)
+        val flexChildren = if (itemLayout || columnCount > 1) emptyList() else box.children
         if (itemLayout) {
             val definite = s.heightPt?.let { h -> h.coerceAtMost(s.maxHeightPt ?: h).coerceAtLeast(s.minHeightPt ?: 0.0) }
             cursorY += if (s.display == Display.GRID) layoutGrid(box, contentLeft, contentW, contentTop, definite)
             else layoutFlex(box, contentLeft, contentW, contentTop, definite)
+        } else if (columnCount > 1) {
+            cursorY += layoutColumns(box, contentLeft, contentW, contentTop, columnCount, gap)
         }
         for (child in flexChildren) {
             // Out-of-flow (position:absolute/fixed): queued now, placed once its
@@ -880,6 +886,181 @@ internal class BoxLayout(
     private fun marginTop(b: LayoutBox): Double = if (b is TextBlockBox) 0.0 else b.style.marginTopPt
 
     private fun marginBottom(b: LayoutBox): Double = if (b is TextBlockBox) 0.0 else b.style.marginBottomPt
+
+    // ---- multi-column layout ---------------------------------------------------
+
+    /**
+     * A piece of a set of columns that moves into a column whole: a line, a block image, or a
+     * box kept together (#34). [move] shifts it and all it holds.
+     */
+    private class ColumnUnit(val top: Double, val bottom: Double, val move: (Double, Double) -> Unit) {
+        var dx = 0.0
+        var dy = 0.0
+    }
+
+    /**
+     * Lays the children of [box] out in [count] columns with [gap] between them (CSS Multi-column
+     * Layout 1). Each run of children between two that span the columns lays out in one column's
+     * width, then moves into balanced columns. Returns the content height the columns take.
+     */
+    private fun layoutColumns(box: BlockBox, contentLeft: Double, contentW: Double, contentTop: Double, count: Int, gap: Double): Double {
+        val colW = ((contentW - gap * (count - 1)) / count).coerceAtLeast(1.0)
+        box.inColumns = true
+        box.columnRules.clear()
+        var y = contentTop
+        var run = ArrayList<LayoutBox>()
+        fun flush() {
+            if (run.isNotEmpty()) y = columnRun(box, run, contentLeft, colW, gap, count, y)
+            run = ArrayList()
+        }
+        for (child in box.children) {
+            val pos = if (child is TextBlockBox) CssPosition.STATIC else child.style.position
+            if (pos == CssPosition.ABSOLUTE || pos == CssPosition.FIXED) {
+                pendingAbs.add(PendingAbs(child, if (pos == CssPosition.FIXED) pageCb else currentCb))
+                continue
+            }
+            if (child !is TextBlockBox && child.style.columns.spanAll) {
+                flush()
+                // 6.1: a spanning element takes the whole width, between two sets of columns.
+                layoutChild(child, contentLeft, contentW, y + marginTop(child))
+                y = child.bottom + marginBottom(child)
+            } else {
+                run += child
+            }
+        }
+        flush()
+        return y - contentTop
+    }
+
+    /**
+     * Lays [children] out in one column [colW] wide at [top], then moves them into [count]
+     * columns. They balance (7.1) when they fit a page. A longer run starts a page, fills whole
+     * pages of columns, and balances the last one, so the reading order stays column after column.
+     * Returns the bottom of the columns.
+     */
+    private fun columnRun(box: BlockBox, children: List<LayoutBox>, left: Double, colW: Double, gap: Double, count: Int, top: Double): Double {
+        var cursor = top
+        var prevBottom = 0.0
+        var first = true
+        for (child in children) {
+            val topMargin = marginTop(child)
+            layoutChild(child, left, colW, cursor + if (first) topMargin else maxOf(prevBottom, topMargin))
+            cursor = child.bottom
+            prevBottom = marginBottom(child)
+            first = false
+        }
+        val units = ArrayList<ColumnUnit>()
+        val holders = ArrayList<Pair<LayoutBox, ColumnUnit>>()
+        for (child in children) columnUnits(child, units, holders)
+        if (units.isEmpty()) return cursor + prevBottom
+        val pageHeight = maxImageHeight
+        val longRun = columnsNeeded(units, 0, pageHeight) > count
+        // A run that crosses a page starts one, so each page holds whole columns.
+        if (longRun) children.first().forcedBreakBefore = true
+        var i = 0
+        var chunkTop = units.first().top
+        var bottom = chunkTop
+        while (i < units.size) {
+            // Each page of columns is a page tall, and the last one balances.
+            val height = if (columnsNeeded(units, i, pageHeight) > count) pageHeight else balancedHeight(units, i, count)
+            var used = 0
+            var chunkBottom = chunkTop
+            for (col in 0 until count) {
+                if (i >= units.size) break
+                val colTop = units[i].top
+                val start = i
+                while (i < units.size && (i == start || units[i].bottom - colTop <= height + FLEX_EPSILON)) {
+                    val u = units[i]
+                    u.dx = col * (colW + gap)
+                    u.dy = chunkTop + (u.top - colTop) - u.top
+                    u.move(u.dx, u.dy)
+                    chunkBottom = maxOf(chunkBottom, u.bottom + u.dy)
+                    i++
+                }
+                used++
+            }
+            box.style.columns.rule?.let { rule ->
+                for (col in 1 until used) {
+                    val x = left + col * (colW + gap) - gap / 2 - rule.width / 2
+                    columnRule(box, rule, x, chunkTop, chunkBottom - chunkTop)
+                }
+            }
+            bottom = chunkBottom
+            if (i < units.size) chunkTop += pageHeight
+        }
+        // A block that holds units moved with its first one, so its place and its anchors follow them.
+        for ((holder, firstUnit) in holders) { holder.x += firstUnit.dx; holder.y += firstUnit.dy }
+        return bottom
+    }
+
+    /** The units of [b], in order: its lines, or [b] whole when it is kept together. */
+    private fun columnUnits(b: LayoutBox, out: MutableList<ColumnUnit>, holders: MutableList<Pair<LayoutBox, ColumnUnit>>) {
+        when (b) {
+            is TextBlockBox -> for (line in b.lines) out += ColumnUnit(line.yTop, line.yTop + line.height) { dx, dy ->
+                line.yTop += dy
+                for (r in line.runs) r.x += dx
+                for (im in line.images) im.x += dx
+            }
+            is BlockBox -> if (keptTogether(b)) {
+                out += ColumnUnit(b.y, b.bottom) { dx, dy -> shiftSubtree(b, dx, dy) }
+            } else {
+                val before = out.size
+                for (c in b.children) columnUnits(c, out, holders)
+                if (out.size > before) holders += b to out[before]
+            }
+            is TableRowBox -> {}
+            else -> out += ColumnUnit(b.y, b.bottom) { dx, dy -> shiftSubtree(b, dx, dy) }
+        }
+    }
+
+    /** True for a block that moves into a column whole: one that paints a box, keeps together or lays out its own items. */
+    private fun keptTogether(b: BlockBox): Boolean {
+        val s = b.style
+        val painted = s.backgroundColor != null || s.backgroundLayer != null || s.shadows.isNotEmpty() ||
+            s.borderTop.effective > 0 || s.borderRight.effective > 0 || s.borderBottom.effective > 0 || s.borderLeft.effective > 0
+        return painted || s.breakInsideAvoid || b.hasEffects || b.linkHref != null || b.embed != null || b.inColumns ||
+            s.display == Display.FLEX || s.display == Display.GRID
+    }
+
+    /** How many columns of [height] the units from [from] fill, never splitting a unit. */
+    private fun columnsNeeded(units: List<ColumnUnit>, from: Int, height: Double): Int {
+        if (from >= units.size) return 0
+        var columns = 1
+        var colTop = units[from].top
+        for (k in from + 1 until units.size) {
+            val u = units[k]
+            if (u.bottom - colTop > height + FLEX_EPSILON) {
+                columns++
+                colTop = u.top
+            }
+        }
+        return columns
+    }
+
+    /** The least column height at which the units from [from] fit [count] columns (7.1). */
+    private fun balancedHeight(units: List<ColumnUnit>, from: Int, count: Int): Double {
+        val total = units.last().bottom - units[from].top
+        var lo = total / count
+        var hi = total
+        if (columnsNeeded(units, from, lo) <= count) return lo
+        repeat(40) {
+            val mid = (lo + hi) / 2
+            if (columnsNeeded(units, from, mid) <= count) hi = mid else lo = mid
+        }
+        return hi
+    }
+
+    /** Adds a rule [height] tall at [x] and [top] to [box]'s columns, as a box with a left border. */
+    private fun columnRule(box: BlockBox, rule: Edge, x: Double, top: Double, height: Double) {
+        if (height <= 0.0) return
+        val style = ComputedStyle.initial(box.style.fontSizePt).copy(borderLeft = rule)
+        box.columnRules += BlockBox(style, emptyList()).also {
+            it.x = x
+            it.y = top
+            it.borderBoxWidth = rule.width
+            it.borderBoxHeight = height
+        }
+    }
 
     // ---- grid layout ---------------------------------------------------------
 

@@ -89,6 +89,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   container kept its children stacked in one column before. A container that
   fits a page moves to the next page whole, and a link that is itself a block,
   such as a flex item or `a { display: block }`, now covers its box (#33).
+- EPUB lays out columns (CSS Multi-column Layout 1): `column-count`,
+  `column-width`, `columns`, `column-gap`, `column-rule` and
+  `column-span: all`. The columns balance. A set that is taller than a page
+  starts a page and fills whole pages of columns, so the text still reads column
+  after column. A block with columns laid out as one column before (#34).
 - EPUB lays out `display: grid` (CSS Grid Layout 1): track lists with lengths,
   percentages, `fr`, `auto`, `minmax()`, `repeat()` and `repeat(auto-fill)`,
   items placed by line numbers and spans or filled in row by row, `gap`, auto
