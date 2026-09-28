@@ -2,6 +2,7 @@ package io.github.yuroyami.kitepdf.compose
 
 import androidx.compose.ui.graphics.ImageBitmap
 import io.github.yuroyami.kitepdf.core.render.ReaderTheme
+import io.github.yuroyami.kitepdf.core.withLock
 
 /**
  * LRU cache of rasterized page bitmaps, so scrolling back through a
@@ -9,11 +10,10 @@ import io.github.yuroyami.kitepdf.core.render.ReaderTheme
  * instance lives on each [KiteDocViewState]; entries cost `w * h * 4` bytes and
  * the eldest are evicted until the total fits [maxBytes].
  *
- * NOT thread-safe by design: every read and write happens inside the raster
- * coroutine, which serializes on [KitePageRasterizer]'s mutex, so adding a
- * second lock here would only duplicate it. [KiteDocViewState] may swap the
- * whole instance from composition when the budget changes; a raster in flight
- * then writes to the old instance, which is dropped.
+ * Thread-safe: rasters of several pages run at once (#370), so every read and
+ * write takes the cache's own lock. [KiteDocViewState] may swap the whole
+ * instance from composition when the budget changes; a raster in flight then
+ * writes to the old instance, which is dropped.
  */
 internal class PageBitmapCache(private val maxBytes: Long) {
 
@@ -41,8 +41,11 @@ internal class PageBitmapCache(private val maxBytes: Long) {
     // Access-ordered behaviour done manually: Kotlin common LinkedHashMap has
     // no accessOrder constructor, so a hit re-inserts to refresh recency.
     private val entries = LinkedHashMap<Key, ImageBitmap>()
-    var trackedBytes = 0L
-        private set
+    private val lock = io.github.yuroyami.kitepdf.core.KiteLock()
+
+    private var bytes = 0L
+
+    val trackedBytes: Long get() = lock.withLock { bytes }
 
     /**
      * Saturating byte estimate. Raster dimensions normally stay small, but a
@@ -68,31 +71,35 @@ internal class PageBitmapCache(private val maxBytes: Long) {
     /** The cached bitmap for [key] refreshed as most recently used, or null. */
     fun get(key: Key): ImageBitmap? {
         if (maxBytes <= 0L) return null
-        val hit = entries.remove(key) ?: return null
-        entries[key] = hit // re-insert: most recently used
-        return hit
+        return lock.withLock {
+            val hit = entries.remove(key) ?: return@withLock null
+            entries[key] = hit // re-insert: most recently used
+            hit
+        }
     }
 
     /** Inserts [bitmap] under [key] and evicts eldest entries over budget. */
     fun put(key: Key, bitmap: ImageBitmap) {
         if (maxBytes <= 0L) return
-        if (entries.remove(key) != null) trackedBytes -= bytesOf(key)
-        val cost = bytesOf(key)
-        // The caller still receives an oversized freshly-rendered bitmap, but
-        // retaining it would make the advertised cache budget meaningless.
-        if (cost == Long.MAX_VALUE || cost > maxBytes) return
-        entries[key] = bitmap
-        trackedBytes += cost
-        val it = entries.keys.iterator()
-        while (trackedBytes > maxBytes && it.hasNext()) {
-            val eldest = it.next()
-            it.remove()
-            trackedBytes -= bytesOf(eldest)
+        lock.withLock {
+            if (entries.remove(key) != null) bytes -= bytesOf(key)
+            val cost = bytesOf(key)
+            // The caller still receives an oversized freshly-rendered bitmap, but
+            // retaining it would make the advertised cache budget meaningless.
+            if (cost == Long.MAX_VALUE || cost > maxBytes) return
+            entries[key] = bitmap
+            bytes += cost
+            val it = entries.keys.iterator()
+            while (bytes > maxBytes && it.hasNext()) {
+                val eldest = it.next()
+                it.remove()
+                bytes -= bytesOf(eldest)
+            }
         }
     }
 
     /** True when [key] is cached (test/diagnostic aid; does not touch recency). */
-    fun contains(key: Key): Boolean = entries.containsKey(key)
+    fun contains(key: Key): Boolean = lock.withLock { entries.containsKey(key) }
 
-    val size: Int get() = entries.size
+    val size: Int get() = lock.withLock { entries.size }
 }

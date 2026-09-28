@@ -121,6 +121,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Two pages rasterize at once, and a page on screen renders before the pages
+  drawn ahead of it and before thumbnails. One process-wide lock used to render
+  every page in arrival order, so thumbnails and prefetched pages could delay the
+  page that the reader looks at. The page bitmap cache is now thread-safe (#370).
+
 - In a browser, `KiteDocView` lays out an EPUB chapter away from the reader only
   after the view has rested for 400 ms, and it renders a page in one pass instead
   of two. The reader's chapter and its neighbours still lay out at once. A scroll

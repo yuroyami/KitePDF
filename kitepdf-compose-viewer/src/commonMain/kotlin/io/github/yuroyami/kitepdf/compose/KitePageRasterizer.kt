@@ -60,20 +60,23 @@ public class KitePageRasterizer(
         require(maxBitmapPixels > 0L) { "maxBitmapPixels must be > 0" }
     }
 
-    private companion object {
+    internal companion object {
         /**
-         * One mutex for the whole process, not one per rasterizer. Compose's
-         * skiko text stack keeps a PROCESS-GLOBAL style cache (a plain HashMap
-         * behind `ParagraphBuilder.makeSkTextStyle`), so two pages measuring
-         * text on different pool threads corrupt it even when each owns a
-         * private [TextMeasurer]. A per-instance mutex looked safe and was not:
-         * every page slot remembers its own rasterizer, so slots serialized
-         * against themselves and raced each other, which is exactly the
-         * ConcurrentModificationException abort seen in production (iOS,
-         * 2026-08-05). Parallelism between pages is lost, but the MAIN thread
-         * stays free, which is the point of the off-main path.
+         * One gate for the whole process: two rasters run at once where the platform has
+         * threads to spare, and a free slot goes to a page on screen before a page drawn ahead
+         * or a thumbnail (#370). A browser has one thread, so it runs one raster at a time.
          */
-        private val renderMutex = kotlinx.coroutines.sync.Mutex()
+        internal val rasterGate = RasterGate(if (rastersOnUiThread) 1 else 2)
+
+        /**
+         * Serializes host-font text where it cannot run on Main. Compose's skiko text stack
+         * keeps a process-global style cache (a plain HashMap behind
+         * `ParagraphBuilder.makeSkTextStyle`), so two pages that measure text on two pool
+         * threads corrupt it, even when each owns a private [TextMeasurer]. That race aborted
+         * an app on iOS. Main is one thread, so the host-font pass is safe there; without a
+         * Main dispatcher it runs on the caller, behind this lock.
+         */
+        private val hostTextMutex = kotlinx.coroutines.sync.Mutex()
 
         /** The cancellation of a render nobody can cancel. */
         private val NEVER_CANCELLED = KiteCancellation { false }
@@ -92,8 +95,9 @@ public class KitePageRasterizer(
 
     /**
      * The last page that drew host-font text, so its next raster, after a zoom or a resize, goes
-     * to Main without a probe (#131). Read and written under [renderMutex].
+     * to Main without a probe (#131). Two rasters can race on it, which costs at most one probe.
      */
+    @kotlin.concurrent.Volatile
     private var hostFontPage: KitePage? = null
 
     /**
@@ -114,6 +118,10 @@ public class KitePageRasterizer(
      * of ours can exclude that thread, so the only safe place to measure or
      * draw through it is the main thread itself. Pages whose glyphs all have
      * embedded outlines (the common PDF case) stay entirely on the pool.
+     *
+     * Two rasters run at once across the process. This call waits for a free slot
+     * with the priority of a page on screen, ahead of the pages that a viewer draws
+     * in advance and of thumbnails (#370).
      */
     public suspend fun rasterizeOffMain(
         page: KitePage,
@@ -136,12 +144,12 @@ public class KitePageRasterizer(
         hairlineWidthPx: Float = 1f,
         theme: ReaderTheme? = null,
         canvasDecorator: KiteCanvasDecorator?,
-    ): ImageBitmap = renderMutex.withLock {
+    ): ImageBitmap = rasterGate.withPermit({ RasterPriority.VISIBLE }) {
         rasterizeOffMainLocked(page, widthPx, heightPx, background, hairlineWidthPx, theme, canvasDecorator = canvasDecorator)
     }
 
     /**
-     * The off-main render body. Must be called with [renderMutex] held.
+     * The off-main render body. Must be called with a slot of [rasterGate].
      * Probes on the raster pool with system-font text skipped; if the page
      * needed such text, discards the probe and re-renders fully on Main so
      * the skiko text stack is only touched from the host UI thread.
@@ -176,22 +184,21 @@ public class KitePageRasterizer(
 
     /**
      * Runs [block] on [Dispatchers.Main] when a Main dispatcher exists on this
-     * platform, else on the calling context (headless JVM without a Swing/JavaFX
-     * main loop, where the pre-fix behaviour is also the only option).
+     * platform, else on the calling context behind [hostTextMutex] (a headless JVM
+     * without a Swing/JavaFX main loop), so two host-font passes never overlap.
      */
     private suspend fun <T> onMainOrCaller(block: () -> T): T =
         if (mainDispatcherAvailable) {
             kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) { block() }
         } else {
-            block()
+            hostTextMutex.withLock { block() }
         }
 
     /**
-     * [rasterizeOffMain] through [cache]: a hit returns the cached
-     * bitmap, a miss rasterizes and inserts. The cache is touched only under
-     * [renderMutex], honouring its single-owner contract. Second value of the
-     * pair: true when this call actually rasterized (drives `onPageRendered`,
-     * which must not re-fire on cache hits).
+     * [rasterizeOffMain] through [cache]: a hit returns the cached bitmap at once, a miss
+     * waits for a slot of [rasterGate] at [priority], then rasterizes and inserts. Second value
+     * of the pair: true when this call actually rasterized (drives `onPageRendered`, which must
+     * not re-fire on cache hits).
      */
     internal suspend fun rasterizeCachedOffMain(
         cache: PageBitmapCache?,
@@ -203,11 +210,10 @@ public class KitePageRasterizer(
         theme: ReaderTheme?,
         skipWidgets: Boolean = false,
         canvasDecorator: KiteCanvasDecorator? = null,
-    ): Pair<ImageBitmap, Boolean> = renderMutex.withLock {
-        if (cache == null) {
-            rasterizeOffMainLocked(page, widthPx, heightPx, background, hairlineWidthPx, theme, skipWidgets, canvasDecorator) to true
-        } else {
-            val key = PageBitmapCache.Key(
+        priority: () -> Int = { RasterPriority.VISIBLE },
+    ): Pair<ImageBitmap, Boolean> {
+        val key = cache?.let {
+            PageBitmapCache.Key(
                 pageIdentity = page,
                 w = widthPx,
                 h = heightPx,
@@ -218,12 +224,16 @@ public class KitePageRasterizer(
                 canvasDecorator = canvasDecorator,
                 fontEnvironment = textMeasurer,
             )
-            val hit = cache.get(key)
+        }
+        if (cache != null && key != null) cache.get(key)?.let { return it to false }
+        return rasterGate.withPermit(priority) {
+            // Another raster of the same page may have filled the cache while this one waited.
+            val hit = if (cache != null && key != null) cache.get(key) else null
             if (hit != null) {
                 hit to false
             } else {
                 val bmp = rasterizeOffMainLocked(page, widthPx, heightPx, background, hairlineWidthPx, theme, skipWidgets, canvasDecorator)
-                cache.put(key, bmp)
+                if (cache != null && key != null) cache.put(key, bmp)
                 bmp to true
             }
         }
@@ -256,10 +266,11 @@ public class KitePageRasterizer(
         pageIndex: Int,
         skipWidgets: Boolean = false,
         canvasDecorator: KiteCanvasDecorator? = null,
+        priority: () -> Int = { RasterPriority.VISIBLE },
     ): Pair<ImageBitmap, Boolean>? {
         for (attempt in 0 until 2) {
             try {
-                return rasterizeCachedOffMain(cache, page, widthPx, heightPx, background, hairlineWidthPx, theme, skipWidgets, canvasDecorator)
+                return rasterizeCachedOffMain(cache, page, widthPx, heightPx, background, hairlineWidthPx, theme, skipWidgets, canvasDecorator, priority)
             } catch (cancelled: kotlinx.coroutines.CancellationException) {
                 throw cancelled
             } catch (failure: Throwable) {
