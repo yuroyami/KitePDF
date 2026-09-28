@@ -357,7 +357,7 @@ with the reason behind each gap.
 | Colour | ICC profiles and rendering intents apply. Overprint is not simulated. |
 | Text | Text comes as blocks, lines and spans, with no word splitting and no tag tree. |
 | Shaping | Hangul jamo are not composed into syllables. A font without its own shaping tables gets no Arabic or Thai fallback forms. |
-| EPUB | A book that mixes fixed-layout and reflowable chapters is laid out as reflowable. English hyphenation uses a small word list. |
+| EPUB | English hyphenation uses a small word list. |
 | Browser | With Canvas2D, an image appears one frame late, because the browser decodes it in the background. |
 | Rendering | AWT on the JVM and Skia are the two complete renderers. |
 | CI | CI runs the tests on the JVM, the Android host, the iOS simulator, macOS, Node and a headless browser. Android devices, Wasm, and native Linux and Windows are not tested there. |

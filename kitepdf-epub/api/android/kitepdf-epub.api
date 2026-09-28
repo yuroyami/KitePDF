@@ -29,6 +29,7 @@ public final class io/github/yuroyami/kitepdf/epub/EpubDocument : io/github/yuro
 	public fun pageIndexOf (Lio/github/yuroyami/kitepdf/core/KiteLocation;)Ljava/lang/Integer;
 	public final fun pageOf (Ljava/lang/String;)Ljava/lang/Integer;
 	public fun prepareChapter (I)V
+	public final fun renditionOf (I)Lio/github/yuroyami/kitepdf/epub/EpubRendition;
 	public final fun resource (Ljava/lang/String;)[B
 	public final fun resourceType (Ljava/lang/String;)Ljava/lang/String;
 	public final fun search (Ljava/lang/String;Z)Lkotlin/sequences/Sequence;
@@ -47,9 +48,27 @@ public final class io/github/yuroyami/kitepdf/epub/EpubDocument$Companion {
 	public static synthetic fun openOrNull$default (Lio/github/yuroyami/kitepdf/epub/EpubDocument$Companion;[BLio/github/yuroyami/kitepdf/epub/EpubSettings;ILjava/lang/Object;)Lio/github/yuroyami/kitepdf/epub/EpubDocument;
 }
 
+public final class io/github/yuroyami/kitepdf/epub/EpubFlow : java/lang/Enum {
+	public static final field AUTO Lio/github/yuroyami/kitepdf/epub/EpubFlow;
+	public static final field PAGINATED Lio/github/yuroyami/kitepdf/epub/EpubFlow;
+	public static final field SCROLLED_CONTINUOUS Lio/github/yuroyami/kitepdf/epub/EpubFlow;
+	public static final field SCROLLED_DOC Lio/github/yuroyami/kitepdf/epub/EpubFlow;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lio/github/yuroyami/kitepdf/epub/EpubFlow;
+	public static fun values ()[Lio/github/yuroyami/kitepdf/epub/EpubFlow;
+}
+
 public final class io/github/yuroyami/kitepdf/epub/EpubFormatException : io/github/yuroyami/kitepdf/core/KiteFormatException {
 	public fun <init> (Ljava/lang/String;Ljava/lang/Throwable;)V
 	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/Throwable;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+}
+
+public final class io/github/yuroyami/kitepdf/epub/EpubLayout : java/lang/Enum {
+	public static final field PRE_PAGINATED Lio/github/yuroyami/kitepdf/epub/EpubLayout;
+	public static final field REFLOWABLE Lio/github/yuroyami/kitepdf/epub/EpubLayout;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lio/github/yuroyami/kitepdf/epub/EpubLayout;
+	public static fun values ()[Lio/github/yuroyami/kitepdf/epub/EpubLayout;
 }
 
 public final class io/github/yuroyami/kitepdf/epub/EpubLink {
@@ -107,11 +126,21 @@ public final class io/github/yuroyami/kitepdf/epub/EpubMetadata {
 	public final fun getCreators ()Ljava/util/List;
 	public final fun getIdentifier ()Ljava/lang/String;
 	public final fun getLanguage ()Ljava/lang/String;
+	public final fun getRendition ()Lio/github/yuroyami/kitepdf/epub/EpubRendition;
 	public final fun getRightToLeft ()Z
 	public final fun getTitle ()Ljava/lang/String;
 }
 
 public final class io/github/yuroyami/kitepdf/epub/EpubMetadata$Companion {
+}
+
+public final class io/github/yuroyami/kitepdf/epub/EpubOrientation : java/lang/Enum {
+	public static final field AUTO Lio/github/yuroyami/kitepdf/epub/EpubOrientation;
+	public static final field LANDSCAPE Lio/github/yuroyami/kitepdf/epub/EpubOrientation;
+	public static final field PORTRAIT Lio/github/yuroyami/kitepdf/epub/EpubOrientation;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lio/github/yuroyami/kitepdf/epub/EpubOrientation;
+	public static fun values ()[Lio/github/yuroyami/kitepdf/epub/EpubOrientation;
 }
 
 public final class io/github/yuroyami/kitepdf/epub/EpubPage : io/github/yuroyami/kitepdf/core/KitePage {
@@ -130,11 +159,29 @@ public final class io/github/yuroyami/kitepdf/epub/EpubPage : io/github/yuroyami
 	public fun textContent ()Lio/github/yuroyami/kitepdf/core/KiteStructuredText;
 }
 
+public final class io/github/yuroyami/kitepdf/epub/EpubPageSpread : java/lang/Enum {
+	public static final field CENTER Lio/github/yuroyami/kitepdf/epub/EpubPageSpread;
+	public static final field LEFT Lio/github/yuroyami/kitepdf/epub/EpubPageSpread;
+	public static final field RIGHT Lio/github/yuroyami/kitepdf/epub/EpubPageSpread;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lio/github/yuroyami/kitepdf/epub/EpubPageSpread;
+	public static fun values ()[Lio/github/yuroyami/kitepdf/epub/EpubPageSpread;
+}
+
 public final class io/github/yuroyami/kitepdf/epub/EpubReadingItem {
 	public final fun getEpubType ()Ljava/lang/String;
 	public final fun getHeadingLevel ()I
 	public final fun getRole ()Lio/github/yuroyami/kitepdf/epub/EpubRole;
 	public final fun getText ()Ljava/lang/String;
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/github/yuroyami/kitepdf/epub/EpubRendition {
+	public final fun getFlow ()Lio/github/yuroyami/kitepdf/epub/EpubFlow;
+	public final fun getLayout ()Lio/github/yuroyami/kitepdf/epub/EpubLayout;
+	public final fun getOrientation ()Lio/github/yuroyami/kitepdf/epub/EpubOrientation;
+	public final fun getPageSpread ()Lio/github/yuroyami/kitepdf/epub/EpubPageSpread;
+	public final fun getSpread ()Lio/github/yuroyami/kitepdf/epub/EpubSpread;
 	public fun toString ()Ljava/lang/String;
 }
 
@@ -186,6 +233,16 @@ public final class io/github/yuroyami/kitepdf/epub/EpubSettings {
 	public final fun getUsePublisherCss ()Z
 	public fun hashCode ()I
 	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/github/yuroyami/kitepdf/epub/EpubSpread : java/lang/Enum {
+	public static final field AUTO Lio/github/yuroyami/kitepdf/epub/EpubSpread;
+	public static final field BOTH Lio/github/yuroyami/kitepdf/epub/EpubSpread;
+	public static final field LANDSCAPE Lio/github/yuroyami/kitepdf/epub/EpubSpread;
+	public static final field NONE Lio/github/yuroyami/kitepdf/epub/EpubSpread;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lio/github/yuroyami/kitepdf/epub/EpubSpread;
+	public static fun values ()[Lio/github/yuroyami/kitepdf/epub/EpubSpread;
 }
 
 public final class io/github/yuroyami/kitepdf/epub/EpubTargetKind : java/lang/Enum {

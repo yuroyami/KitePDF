@@ -7,6 +7,30 @@
 // - Show declarations: true
 
 // Library unique name: <io.github.yuroyami:kitepdf-epub>
+final enum class io.github.yuroyami.kitepdf.epub/EpubFlow : kotlin/Enum<io.github.yuroyami.kitepdf.epub/EpubFlow> { // io.github.yuroyami.kitepdf.epub/EpubFlow|null[0]
+    enum entry AUTO // io.github.yuroyami.kitepdf.epub/EpubFlow.AUTO|null[0]
+    enum entry PAGINATED // io.github.yuroyami.kitepdf.epub/EpubFlow.PAGINATED|null[0]
+    enum entry SCROLLED_CONTINUOUS // io.github.yuroyami.kitepdf.epub/EpubFlow.SCROLLED_CONTINUOUS|null[0]
+    enum entry SCROLLED_DOC // io.github.yuroyami.kitepdf.epub/EpubFlow.SCROLLED_DOC|null[0]
+
+    final val entries // io.github.yuroyami.kitepdf.epub/EpubFlow.entries|#static{}entries[0]
+        final fun <get-entries>(): kotlin.enums/EnumEntries<io.github.yuroyami.kitepdf.epub/EpubFlow> // io.github.yuroyami.kitepdf.epub/EpubFlow.entries.<get-entries>|<get-entries>#static(){}[0]
+
+    final fun valueOf(kotlin/String): io.github.yuroyami.kitepdf.epub/EpubFlow // io.github.yuroyami.kitepdf.epub/EpubFlow.valueOf|valueOf#static(kotlin.String){}[0]
+    final fun values(): kotlin/Array<io.github.yuroyami.kitepdf.epub/EpubFlow> // io.github.yuroyami.kitepdf.epub/EpubFlow.values|values#static(){}[0]
+}
+
+final enum class io.github.yuroyami.kitepdf.epub/EpubLayout : kotlin/Enum<io.github.yuroyami.kitepdf.epub/EpubLayout> { // io.github.yuroyami.kitepdf.epub/EpubLayout|null[0]
+    enum entry PRE_PAGINATED // io.github.yuroyami.kitepdf.epub/EpubLayout.PRE_PAGINATED|null[0]
+    enum entry REFLOWABLE // io.github.yuroyami.kitepdf.epub/EpubLayout.REFLOWABLE|null[0]
+
+    final val entries // io.github.yuroyami.kitepdf.epub/EpubLayout.entries|#static{}entries[0]
+        final fun <get-entries>(): kotlin.enums/EnumEntries<io.github.yuroyami.kitepdf.epub/EpubLayout> // io.github.yuroyami.kitepdf.epub/EpubLayout.entries.<get-entries>|<get-entries>#static(){}[0]
+
+    final fun valueOf(kotlin/String): io.github.yuroyami.kitepdf.epub/EpubLayout // io.github.yuroyami.kitepdf.epub/EpubLayout.valueOf|valueOf#static(kotlin.String){}[0]
+    final fun values(): kotlin/Array<io.github.yuroyami.kitepdf.epub/EpubLayout> // io.github.yuroyami.kitepdf.epub/EpubLayout.values|values#static(){}[0]
+}
+
 final enum class io.github.yuroyami.kitepdf.epub/EpubLinkKind : kotlin/Enum<io.github.yuroyami.kitepdf.epub/EpubLinkKind> { // io.github.yuroyami.kitepdf.epub/EpubLinkKind|null[0]
     enum entry BIBLIOGRAPHY_REFERENCE // io.github.yuroyami.kitepdf.epub/EpubLinkKind.BIBLIOGRAPHY_REFERENCE|null[0]
     enum entry GLOSSARY_REFERENCE // io.github.yuroyami.kitepdf.epub/EpubLinkKind.GLOSSARY_REFERENCE|null[0]
@@ -31,6 +55,30 @@ final enum class io.github.yuroyami.kitepdf.epub/EpubMediaKind : kotlin/Enum<io.
     final fun values(): kotlin/Array<io.github.yuroyami.kitepdf.epub/EpubMediaKind> // io.github.yuroyami.kitepdf.epub/EpubMediaKind.values|values#static(){}[0]
 }
 
+final enum class io.github.yuroyami.kitepdf.epub/EpubOrientation : kotlin/Enum<io.github.yuroyami.kitepdf.epub/EpubOrientation> { // io.github.yuroyami.kitepdf.epub/EpubOrientation|null[0]
+    enum entry AUTO // io.github.yuroyami.kitepdf.epub/EpubOrientation.AUTO|null[0]
+    enum entry LANDSCAPE // io.github.yuroyami.kitepdf.epub/EpubOrientation.LANDSCAPE|null[0]
+    enum entry PORTRAIT // io.github.yuroyami.kitepdf.epub/EpubOrientation.PORTRAIT|null[0]
+
+    final val entries // io.github.yuroyami.kitepdf.epub/EpubOrientation.entries|#static{}entries[0]
+        final fun <get-entries>(): kotlin.enums/EnumEntries<io.github.yuroyami.kitepdf.epub/EpubOrientation> // io.github.yuroyami.kitepdf.epub/EpubOrientation.entries.<get-entries>|<get-entries>#static(){}[0]
+
+    final fun valueOf(kotlin/String): io.github.yuroyami.kitepdf.epub/EpubOrientation // io.github.yuroyami.kitepdf.epub/EpubOrientation.valueOf|valueOf#static(kotlin.String){}[0]
+    final fun values(): kotlin/Array<io.github.yuroyami.kitepdf.epub/EpubOrientation> // io.github.yuroyami.kitepdf.epub/EpubOrientation.values|values#static(){}[0]
+}
+
+final enum class io.github.yuroyami.kitepdf.epub/EpubPageSpread : kotlin/Enum<io.github.yuroyami.kitepdf.epub/EpubPageSpread> { // io.github.yuroyami.kitepdf.epub/EpubPageSpread|null[0]
+    enum entry CENTER // io.github.yuroyami.kitepdf.epub/EpubPageSpread.CENTER|null[0]
+    enum entry LEFT // io.github.yuroyami.kitepdf.epub/EpubPageSpread.LEFT|null[0]
+    enum entry RIGHT // io.github.yuroyami.kitepdf.epub/EpubPageSpread.RIGHT|null[0]
+
+    final val entries // io.github.yuroyami.kitepdf.epub/EpubPageSpread.entries|#static{}entries[0]
+        final fun <get-entries>(): kotlin.enums/EnumEntries<io.github.yuroyami.kitepdf.epub/EpubPageSpread> // io.github.yuroyami.kitepdf.epub/EpubPageSpread.entries.<get-entries>|<get-entries>#static(){}[0]
+
+    final fun valueOf(kotlin/String): io.github.yuroyami.kitepdf.epub/EpubPageSpread // io.github.yuroyami.kitepdf.epub/EpubPageSpread.valueOf|valueOf#static(kotlin.String){}[0]
+    final fun values(): kotlin/Array<io.github.yuroyami.kitepdf.epub/EpubPageSpread> // io.github.yuroyami.kitepdf.epub/EpubPageSpread.values|values#static(){}[0]
+}
+
 final enum class io.github.yuroyami.kitepdf.epub/EpubRole : kotlin/Enum<io.github.yuroyami.kitepdf.epub/EpubRole> { // io.github.yuroyami.kitepdf.epub/EpubRole|null[0]
     enum entry CAPTION // io.github.yuroyami.kitepdf.epub/EpubRole.CAPTION|null[0]
     enum entry CODE // io.github.yuroyami.kitepdf.epub/EpubRole.CODE|null[0]
@@ -47,6 +95,19 @@ final enum class io.github.yuroyami.kitepdf.epub/EpubRole : kotlin/Enum<io.githu
 
     final fun valueOf(kotlin/String): io.github.yuroyami.kitepdf.epub/EpubRole // io.github.yuroyami.kitepdf.epub/EpubRole.valueOf|valueOf#static(kotlin.String){}[0]
     final fun values(): kotlin/Array<io.github.yuroyami.kitepdf.epub/EpubRole> // io.github.yuroyami.kitepdf.epub/EpubRole.values|values#static(){}[0]
+}
+
+final enum class io.github.yuroyami.kitepdf.epub/EpubSpread : kotlin/Enum<io.github.yuroyami.kitepdf.epub/EpubSpread> { // io.github.yuroyami.kitepdf.epub/EpubSpread|null[0]
+    enum entry AUTO // io.github.yuroyami.kitepdf.epub/EpubSpread.AUTO|null[0]
+    enum entry BOTH // io.github.yuroyami.kitepdf.epub/EpubSpread.BOTH|null[0]
+    enum entry LANDSCAPE // io.github.yuroyami.kitepdf.epub/EpubSpread.LANDSCAPE|null[0]
+    enum entry NONE // io.github.yuroyami.kitepdf.epub/EpubSpread.NONE|null[0]
+
+    final val entries // io.github.yuroyami.kitepdf.epub/EpubSpread.entries|#static{}entries[0]
+        final fun <get-entries>(): kotlin.enums/EnumEntries<io.github.yuroyami.kitepdf.epub/EpubSpread> // io.github.yuroyami.kitepdf.epub/EpubSpread.entries.<get-entries>|<get-entries>#static(){}[0]
+
+    final fun valueOf(kotlin/String): io.github.yuroyami.kitepdf.epub/EpubSpread // io.github.yuroyami.kitepdf.epub/EpubSpread.valueOf|valueOf#static(kotlin.String){}[0]
+    final fun values(): kotlin/Array<io.github.yuroyami.kitepdf.epub/EpubSpread> // io.github.yuroyami.kitepdf.epub/EpubSpread.values|values#static(){}[0]
 }
 
 final enum class io.github.yuroyami.kitepdf.epub/EpubTargetKind : kotlin/Enum<io.github.yuroyami.kitepdf.epub/EpubTargetKind> { // io.github.yuroyami.kitepdf.epub/EpubTargetKind|null[0]
@@ -120,6 +181,7 @@ final class io.github.yuroyami.kitepdf.epub/EpubDocument : io.github.yuroyami.ki
     final fun pageIndexOf(io.github.yuroyami.kitepdf.core/KiteLocation): kotlin/Int? // io.github.yuroyami.kitepdf.epub/EpubDocument.pageIndexOf|pageIndexOf(io.github.yuroyami.kitepdf.core.KiteLocation){}[0]
     final fun pageOf(kotlin/String): kotlin/Int? // io.github.yuroyami.kitepdf.epub/EpubDocument.pageOf|pageOf(kotlin.String){}[0]
     final fun prepareChapter(kotlin/Int) // io.github.yuroyami.kitepdf.epub/EpubDocument.prepareChapter|prepareChapter(kotlin.Int){}[0]
+    final fun renditionOf(kotlin/Int): io.github.yuroyami.kitepdf.epub/EpubRendition // io.github.yuroyami.kitepdf.epub/EpubDocument.renditionOf|renditionOf(kotlin.Int){}[0]
     final fun resource(kotlin/String): kotlin/ByteArray? // io.github.yuroyami.kitepdf.epub/EpubDocument.resource|resource(kotlin.String){}[0]
     final fun resourceType(kotlin/String): kotlin/String? // io.github.yuroyami.kitepdf.epub/EpubDocument.resourceType|resourceType(kotlin.String){}[0]
     final fun search(kotlin/String, kotlin/Boolean = ...): kotlin.sequences/Sequence<io.github.yuroyami.kitepdf.core/KiteSearchHit> // io.github.yuroyami.kitepdf.epub/EpubDocument.search|search(kotlin.String;kotlin.Boolean){}[0]
@@ -198,6 +260,8 @@ final class io.github.yuroyami.kitepdf.epub/EpubMetadata { // io.github.yuroyami
         final fun <get-identifier>(): kotlin/String? // io.github.yuroyami.kitepdf.epub/EpubMetadata.identifier.<get-identifier>|<get-identifier>(){}[0]
     final val language // io.github.yuroyami.kitepdf.epub/EpubMetadata.language|{}language[0]
         final fun <get-language>(): kotlin/String? // io.github.yuroyami.kitepdf.epub/EpubMetadata.language.<get-language>|<get-language>(){}[0]
+    final val rendition // io.github.yuroyami.kitepdf.epub/EpubMetadata.rendition|{}rendition[0]
+        final fun <get-rendition>(): io.github.yuroyami.kitepdf.epub/EpubRendition // io.github.yuroyami.kitepdf.epub/EpubMetadata.rendition.<get-rendition>|<get-rendition>(){}[0]
     final val rightToLeft // io.github.yuroyami.kitepdf.epub/EpubMetadata.rightToLeft|{}rightToLeft[0]
         final fun <get-rightToLeft>(): kotlin/Boolean // io.github.yuroyami.kitepdf.epub/EpubMetadata.rightToLeft.<get-rightToLeft>|<get-rightToLeft>(){}[0]
     final val title // io.github.yuroyami.kitepdf.epub/EpubMetadata.title|{}title[0]
@@ -242,6 +306,21 @@ final class io.github.yuroyami.kitepdf.epub/EpubReadingItem { // io.github.yuroy
         final fun <get-text>(): kotlin/String // io.github.yuroyami.kitepdf.epub/EpubReadingItem.text.<get-text>|<get-text>(){}[0]
 
     final fun toString(): kotlin/String // io.github.yuroyami.kitepdf.epub/EpubReadingItem.toString|toString(){}[0]
+}
+
+final class io.github.yuroyami.kitepdf.epub/EpubRendition { // io.github.yuroyami.kitepdf.epub/EpubRendition|null[0]
+    final val flow // io.github.yuroyami.kitepdf.epub/EpubRendition.flow|{}flow[0]
+        final fun <get-flow>(): io.github.yuroyami.kitepdf.epub/EpubFlow // io.github.yuroyami.kitepdf.epub/EpubRendition.flow.<get-flow>|<get-flow>(){}[0]
+    final val layout // io.github.yuroyami.kitepdf.epub/EpubRendition.layout|{}layout[0]
+        final fun <get-layout>(): io.github.yuroyami.kitepdf.epub/EpubLayout // io.github.yuroyami.kitepdf.epub/EpubRendition.layout.<get-layout>|<get-layout>(){}[0]
+    final val orientation // io.github.yuroyami.kitepdf.epub/EpubRendition.orientation|{}orientation[0]
+        final fun <get-orientation>(): io.github.yuroyami.kitepdf.epub/EpubOrientation // io.github.yuroyami.kitepdf.epub/EpubRendition.orientation.<get-orientation>|<get-orientation>(){}[0]
+    final val pageSpread // io.github.yuroyami.kitepdf.epub/EpubRendition.pageSpread|{}pageSpread[0]
+        final fun <get-pageSpread>(): io.github.yuroyami.kitepdf.epub/EpubPageSpread? // io.github.yuroyami.kitepdf.epub/EpubRendition.pageSpread.<get-pageSpread>|<get-pageSpread>(){}[0]
+    final val spread // io.github.yuroyami.kitepdf.epub/EpubRendition.spread|{}spread[0]
+        final fun <get-spread>(): io.github.yuroyami.kitepdf.epub/EpubSpread // io.github.yuroyami.kitepdf.epub/EpubRendition.spread.<get-spread>|<get-spread>(){}[0]
+
+    final fun toString(): kotlin/String // io.github.yuroyami.kitepdf.epub/EpubRendition.toString|toString(){}[0]
 }
 
 final class io.github.yuroyami.kitepdf.epub/EpubSettings { // io.github.yuroyami.kitepdf.epub/EpubSettings|null[0]

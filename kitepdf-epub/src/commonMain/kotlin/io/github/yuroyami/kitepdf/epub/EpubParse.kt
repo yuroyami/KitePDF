@@ -52,10 +52,17 @@ internal class ParsedEpub(
     val metadata: EpubMetadata,
     val toc: TableOfContents,
     val baseDir: Direction,
-    val fixedLayout: Boolean,
+    /** How each spine document asks to be shown, parallel to [spinePaths] (#37). */
+    val renditions: List<EpubRendition>,
 ) {
 
     val spineCount: Int get() = spinePaths.size
+
+    /** Whether [chapter] keeps the fixed pages its author set, rather than reflowing. */
+    fun isFixed(chapter: Int): Boolean = renditions.getOrNull(chapter)?.layout == EpubLayout.PRE_PAGINATED
+
+    /** Whether every chapter keeps fixed pages. */
+    val allFixed: Boolean = renditions.isNotEmpty() && renditions.all { it.layout == EpubLayout.PRE_PAGINATED }
 
     val spineIndices: IntRange get() = spinePaths.indices
 
@@ -218,22 +225,25 @@ internal class ParsedEpub(
             val opf = Opf.parse(zip, opfPath)
                 ?: throw EpubFormatException("OPF not found at $opfPath")
             // A spine item of a type this engine does not render shows its fallback document (#27).
-            val contentPaths = opf.spineIdrefs.mapNotNull { opf.contentDocument(it)?.href }
-                .map { EpubDocument.resolvePath(opf.baseDir, it) }
+            // Each document keeps the index of its spine entry, whose properties it takes (#37).
+            val spine = opf.spineIdrefs.indices.mapNotNull { index ->
+                val href = opf.contentDocument(opf.spineIdrefs[index])?.href ?: return@mapNotNull null
+                EpubDocument.resolvePath(opf.baseDir, href) to index
+            }
+            val contentPaths = spine.map { it.first }
             if (contentPaths.isEmpty()) throw EpubFormatException("spine is empty in $opfPath")
 
-            val present = contentPaths.filter { it in zip.names }
+            val present = spine.filter { it.first in zip.names }
             if (present.isEmpty()) throw EpubFormatException("spine has no readable documents")
 
             return ParsedEpub(
                 zip = zip,
                 opf = opf,
-                spinePaths = present,
+                spinePaths = present.map { it.first },
                 metadata = buildMetadata(opf),
                 toc = TocParser.parse(zip, opf, contentPaths) { base, href -> EpubDocument.resolvePath(base, href) },
                 baseDir = if (opf.direction?.lowercase() == "rtl") Direction.RTL else Direction.LTR,
-                fixedLayout = opf.renditionLayout == "pre-paginated" ||
-                    contentPaths.indices.all { opf.fixedLayoutAt(it) },
+                renditions = present.map { opf.renditionAt(it.second) },
             )
         }
 
@@ -250,6 +260,7 @@ internal class ParsedEpub(
                 // declares no direction of its own.
                 rightToLeft = opf.direction?.lowercase() == "rtl" ||
                     (opf.direction == null && opf.primaryWritingMode?.lowercase() == "vertical-rl"),
+                rendition = opf.rendition,
             )
         }
 

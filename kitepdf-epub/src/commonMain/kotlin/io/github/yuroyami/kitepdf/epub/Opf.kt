@@ -29,8 +29,8 @@ internal class OpfPackage(
     val language: String?,
     val identifiers: List<String>,
     val metaCoverId: String?,
-    /** Global `rendition:layout` ("pre-paginated" / "reflowable"), or null. */
-    val renditionLayout: String? = null,
+    /** The book's rendition properties from the package metadata, by name without the `rendition:` prefix. */
+    val renditionValues: Map<String, String> = emptyMap(),
     /** `properties` of each spine `<itemref>`, parallel to [spineIdrefs]. */
     val spineProperties: List<String?> = emptyList(),
     /** `<meta property="primary-writing-mode">` ("vertical-rl" and friends), or null. */
@@ -64,15 +64,11 @@ internal class OpfPackage(
         return chain.firstOrNull { it.mediaType?.lowercase() in CONTENT_TYPES } ?: chain.firstOrNull()
     }
 
-    /** Whether the spine item at [index] is fixed-layout (per-item override, else global). */
-    fun fixedLayoutAt(index: Int): Boolean {
-        val props = spineProperties.getOrNull(index)
-        if (props != null) {
-            if (props.contains("rendition:layout-pre-paginated")) return true
-            if (props.contains("rendition:layout-reflowable")) return false
-        }
-        return renditionLayout == "pre-paginated"
-    }
+    /** How the whole book asks to be shown (#37). */
+    val rendition: EpubRendition = EpubRendition.ofBook(renditionValues)
+
+    /** How the spine item at [index] asks to be shown: its own properties, else the book's (#37). */
+    fun renditionAt(index: Int): EpubRendition = EpubRendition.ofChapter(rendition, spineProperties.getOrNull(index))
 }
 
 /**
@@ -87,6 +83,8 @@ public class EpubMetadata internal constructor(
     public val coverImagePath: String?,
     /** True for `page-progression-direction="rtl"` books (Arabic/Hebrew/vertical CJK). */
     public val rightToLeft: Boolean,
+    /** How the whole book asks to be shown. [EpubDocument.renditionOf] gives the values of one chapter (#37). */
+    public val rendition: EpubRendition = EpubRendition.DEFAULT,
 ) {
     public companion object {
         internal val EMPTY = EpubMetadata(null, emptyList(), null, null, null, false)
@@ -110,7 +108,7 @@ internal object Opf {
         var language: String? = null
         val identifiers = ArrayList<String>()
         var metaCover: String? = null
-        var renditionLayout: String? = null
+        val renditionValues = HashMap<String, String>()
         var primaryWritingMode: String? = null
         val spineProps = ArrayList<String?>()
 
@@ -132,10 +130,16 @@ internal object Opf {
                     "spine" -> { direction = t.attrs["page-progression-direction"]; tocNcx = t.attrs["toc"] }
                     "meta" -> {
                         if (t.attrs["name"] == "cover") metaCover = t.attrs["content"]
-                        // rendition:layout via EPUB3 property (value in text) or legacy name/content.
-                        if (t.attrs["property"] == "rendition:layout") capture = "renditionLayout"
-                        if (t.attrs["name"] == "rendition:layout") renditionLayout = t.attrs["content"]?.trim()
-                        if (t.attrs["name"] == "fixed-layout" && t.attrs["content"]?.equals("true", true) == true) renditionLayout = "pre-paginated"
+                        // Rendition properties as an EPUB 3 property with the value in the text, or as a
+                        // legacy name and content. The first value of each wins.
+                        val property = t.attrs["property"]
+                        if (property != null && property.startsWith("rendition:")) capture = property
+                        t.attrs["name"]?.takeIf { it.startsWith("rendition:") }?.let { name ->
+                            t.attrs["content"]?.trim()?.let { renditionValues.getOrPut(name.removePrefix("rendition:")) { it } }
+                        }
+                        if (t.attrs["name"] == "fixed-layout" && t.attrs["content"]?.equals("true", true) == true) {
+                            renditionValues.getOrPut("layout") { "pre-paginated" }
+                        }
                         if (t.attrs["property"] == "primary-writing-mode") capture = "primaryWritingMode"
                         if (t.attrs["name"] == "primary-writing-mode") primaryWritingMode = t.attrs["content"]?.trim()
                     }
@@ -152,9 +156,11 @@ internal object Opf {
                 "identifier" -> t.text.trim().takeIf { it.isNotEmpty() }?.let {
                     identifiers.add(it); if (captureIdIsUnique && uniqueId == null) uniqueId = it
                 }
-                "renditionLayout" -> if (renditionLayout == null) renditionLayout = t.text.trim()
                 "primaryWritingMode" -> if (primaryWritingMode == null) primaryWritingMode = t.text.trim()
-                else -> {}
+                else -> {
+                    val name = capture
+                    if (name != null && name.startsWith("rendition:")) renditionValues.getOrPut(name.removePrefix("rendition:")) { t.text.trim() }
+                }
             }
             is KiteXmlToken.Close -> capture = null
         }
@@ -163,7 +169,7 @@ internal object Opf {
             baseDir, items, spine, direction, tocNcx,
             uniqueId ?: identifiers.firstOrNull(),
             title, creators, language, identifiers, metaCover,
-            renditionLayout, spineProps, primaryWritingMode,
+            renditionValues, spineProps, primaryWritingMode,
         )
     }
 }

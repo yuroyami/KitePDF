@@ -30,8 +30,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `KiteDocViewState.pageRectToViewport` and `displayRectToViewport` give the
   viewport rectangle of a rectangle on a page. They are `hitTest` and
   `hitTestDisplay` in reverse (#30).
+- `EpubMetadata.rendition` and `EpubDocument.renditionOf` give the rendition
+  properties of EPUB 3.3: layout, spread, orientation and flow for the book and
+  for each chapter, and the side of a spread that a chapter's first page asks
+  for (#37).
+- `KiteDocLayout.Spread.firstPageAlone` shows the first page alone and pairs the
+  pages after it (#37).
 
 ### Changed
+
+- `KiteDocLayout.Spread` pairs pages as the document declares: an EPUB's
+  page-spread properties and `rendition:spread`, and a PDF's `/PageLayout` of
+  TwoPageRight or TwoColumnRight. A document that declares nothing pairs as
+  before (#37).
+- An EPUB that mixes fixed-layout and reflowable chapters lays out each chapter
+  its own way. `EpubDocument.isFixedLayout` is true only when every chapter is
+  fixed (#37).
 
 - A `PdfDocument` whose `/Count` declares more than 200 pages reports its one
   chapter as not ready until `prepareChapter(0)` builds the page list, and

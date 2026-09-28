@@ -373,13 +373,12 @@ private val MIN_FLING_SPEED = 50.dp
  * spread can be the other page of the same spread.
  */
 internal suspend fun KiteDocViewState.turn(forward: Boolean, spread: Boolean) {
-    if (!spread) {
+    val spreads = (adapter as? SpreadScrollAdapter)?.takeIf { spread }
+    if (spreads == null) {
         if (forward) nextPage() else previousPage()
         return
     }
-    val first = currentPage / 2 * 2
-    val target = if (forward) first + 2 else first - 2
-    if (target in 0 until itemCount) animateScrollToPage(target)
+    spreads.neighbourSpreadPage(forward)?.let { animateScrollToPage(it) }
 }
 
 /** The zoom factor of one wheel notch with Ctrl or Cmd held. A trackpad sends parts of a notch. */

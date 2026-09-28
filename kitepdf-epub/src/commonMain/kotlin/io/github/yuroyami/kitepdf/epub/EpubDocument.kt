@@ -104,8 +104,20 @@ public class EpubDocument internal constructor(
     private val contentWidth: Double get() = settings.pageWidth - 2 * settings.margin
     private val pageContentHeight: Double get() = settings.pageHeight - 2 * settings.margin
 
-    /** True for a pre-paginated (fixed-layout) book: one page per spine, no reflow. */
-    public val isFixedLayout: Boolean get() = parsed.fixedLayout
+    /**
+     * True for a pre-paginated (fixed-layout) book: one page per chapter, no reflow. A book that
+     * mixes fixed and reflowable chapters is false, and [renditionOf] tells its chapters apart.
+     */
+    public val isFixedLayout: Boolean get() = parsed.allFixed
+
+    /**
+     * How [chapter] asks to be shown: the rendition properties of its spine entry, and the
+     * book's for the rest. A chapter whose layout is [EpubLayout.PRE_PAGINATED] is one page at
+     * the size it declares, and the others reflow, in the same book (#37).
+     *
+     * @throws IndexOutOfBoundsException when [chapter] is not a chapter of the book.
+     */
+    public fun renditionOf(chapter: Int): EpubRendition = parsed.renditions[chapter]
 
     /**
      * The reader-origin cascade layer built from [settings]: universal rules
@@ -213,7 +225,7 @@ public class EpubDocument internal constructor(
     private fun buildDocRoot(chapter: Int): BlockBox {
         val sp = parsed.spine(chapter)
         val (layoutWidth, layoutHeight) =
-            if (parsed.fixedLayout) viewportOf(chapter) else contentWidth to pageContentHeight
+            if (parsed.isFixed(chapter)) viewportOf(chapter) else contentWidth to pageContentHeight
         val resolver = StyleResolver(
             sp.rules, settings.fontSize, layoutWidth, parsed.baseDir, layoutHeight,
             readerRules = readerRules, useAuthorCss = settings.usePublisherCss,
@@ -232,16 +244,16 @@ public class EpubDocument internal constructor(
      * Vertical writing: the writing mode the first spine root resolves, if it
      * is a vertical one. `vertical-rl` is Japanese tategaki, columns running
      * right to left; `vertical-lr` lays out the same way with the columns
-     * running the other direction. One mode per document; mixed
-     * horizontal/vertical spines follow the first (a noted limit). Fixed-layout
-     * books stay on the pre-paginated path regardless.
+     * running the other direction. One mode per document, read from the first
+     * reflowable chapter; mixed horizontal/vertical spines follow it (a noted
+     * limit). Fixed-layout chapters stay on the pre-paginated path regardless.
      */
     internal val verticalMode: io.github.yuroyami.kitepdf.epub.css.WritingMode? by lazy {
-        if (parsed.fixedLayout) return@lazy null
+        val first = parsed.spineIndices.firstOrNull { !parsed.isFixed(it) } ?: return@lazy null
         // The spine root box wraps the document node (initial style); the html
         // element's computed style sits one level down and body's below that,
         // so walk the first-child chain a few levels.
-        var box: LayoutBox? = if (parsed.spineCount == 0) null else buildDocRoot(0)
+        var box: LayoutBox? = buildDocRoot(first)
         var depth = 0
         while (box != null && depth < 4) {
             val s = when (box) {
@@ -266,7 +278,7 @@ public class EpubDocument internal constructor(
         get() = verticalMode == io.github.yuroyami.kitepdf.epub.css.WritingMode.VERTICAL_LR
 
     private fun fixedSpine(chapter: Int): FixedSpine? {
-        if (!parsed.fixedLayout) return null
+        if (!parsed.isFixed(chapter)) return null
         val (w, h) = viewportOf(chapter)
         return FixedSpine(buildDocRoot(chapter), w, h)
     }
@@ -726,7 +738,7 @@ public class EpubDocument internal constructor(
 
     /** Chapter-local document y to a page index inside that chapter. */
     private fun localPageOf(summary: ChapterSummary, y: Double): Int {
-        if (parsed.fixedLayout) return 0
+        // A fixed chapter has one page, so it gives 0 here.
         val starts = summary.startYs
         var p = 0
         for (k in starts.indices) if (starts[k] <= y + 1e-9) p = k else break
