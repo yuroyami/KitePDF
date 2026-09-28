@@ -100,6 +100,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   rows and columns, and the alignment properties. A grid kept its children
   stacked in one column before. In a flex or grid layout, an image without a
   size of its own counts at its natural size (#35).
+- A rich text field draws its rich value (`/RV`, XHTML with `/DS` as the default
+  style): paragraphs and spans with their font family, size, weight, style,
+  colour, alignment and underline. A multi-line text field wraps its value and
+  breaks it at line breaks, where it drew one line before. Filling a rich text
+  field keeps `/RV` in step with the new value, and `PdfFormField.isRichText`
+  says which fields have one (#204).
 - SVG draws `<pattern>` paint servers and `mask`. A pattern tiles its content over
   a fill or a stroke with its units, `viewBox`, `patternTransform` and `href`
   chain. A mask shows the element by the luminance of its content, or by its

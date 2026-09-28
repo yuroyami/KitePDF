@@ -315,6 +315,7 @@ Each `PdfFormField` carries:
 - `flags`: bit flags (read-only, multi-line, etc.)
 - `isReadOnly`: true if the field cannot be edited
 - `isMultiline`: true for multi-line text fields
+- `isRichText`: true for a text field whose value is also rich text, XHTML in `/RV`
 - `quadding`: text alignment: 0 = left, 1 = center, 2 = right
 - `rect`: the first widget's placement rectangle (nullable)
 - `widgets`: every place the field is drawn. A radio group has one per button, and a field
@@ -326,6 +327,12 @@ Each `PdfFormField` carries:
 
 Some files write their widgets straight onto the page and never build the `/AcroForm` field
 tree. KitePDF reads those too, as Chrome does, so `formFields` is not empty for them.
+
+A field with no appearance of its own draws one from its entries. A rich text field draws its
+rich value: paragraphs and spans with their font family, size, weight, style, colour, alignment
+and underline, in the standard fonts, with `/DS` as the default style. A multi-line field wraps
+its value. A media annotation (`Screen`, `Movie` or `RichMedia`) draws its own appearance, usually
+a poster, and KitePDF plays nothing.
 
 To fill form fields, use the editor (see the [editing guide](editing.md)):
 

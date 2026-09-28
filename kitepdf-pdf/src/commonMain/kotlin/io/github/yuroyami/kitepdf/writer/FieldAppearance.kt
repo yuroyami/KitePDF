@@ -62,18 +62,20 @@ internal object FieldAppearance {
         height: Double,
         da: DefaultAppearance,
         fontRef: PdfReference,
+        /** The field wraps its value on several lines (`/Ff` bit 13, #204). */
+        multiline: Boolean = false,
+        /** `/Q`: 0 left, 1 centre, 2 right. */
+        quadding: Int = 0,
     ): PdfStream {
-        val size = if (da.fontSize > 0.0) da.fontSize else (height - 2.0).coerceIn(6.0, 12.0)
-        // Rough vertical centring of a single line; baseline above the box bottom.
-        val baseline = ((height - size) / 2.0 + size * 0.2).coerceAtLeast(2.0)
+        val size = if (da.fontSize > 0.0) da.fontSize else if (multiline) 12.0 else (height - 2.0).coerceIn(6.0, 12.0)
         val clipW = (width - 2.0).coerceAtLeast(0.0)
         val clipH = (height - 2.0).coerceAtLeast(0.0)
 
         val content = ByteArrayBuilder(64)
-        content.ascii("/Tx BMC\nq\n1 1 ${fmt(clipW)} ${fmt(clipH)} re W n\nBT\n")
-        content.ascii("${da.colorOps}\n/${da.fontName} ${fmt(size)} Tf\n2 ${fmt(baseline)} Td\n")
-        PdfObjectWriter.writeObject(PdfString(PdfText.encodeContentString(value)), content)
-        content.ascii(" Tj\nET\nQ\nEMC\n")
+        content.ascii("/Tx BMC\nq\n1 1 ${fmt(clipW)} ${fmt(clipH)} re W n\n")
+        val paragraphs = plainParagraphs(value, StandardFont.Helvetica, size, da.colorOps, quadding)
+        FieldText.write(FieldText.lines(paragraphs, width - 4.0, multiline), width, height, 2.0, multiline, content) { da.fontName }
+        content.ascii("Q\nEMC\n")
 
         val resources = PdfDictionary(
             linkedMapOf("Font" to PdfDictionary(linkedMapOf(da.fontName to fontRef as PdfObject))),
@@ -273,34 +275,43 @@ internal object FieldAppearance {
                 "${fmt(inset)} ${fmt(inset)} ${fmt(width - borderWidth)} ${fmt(height - borderWidth)} re S\n",
             )
         }
-        if (text.isNotEmpty()) {
-            val pad = (borderWidth + 1.0).coerceAtLeast(1.0)
-            val size = if (da.fontSize > 0.0) da.fontSize else autoSize(height, isPushButton)
-            val advance = StandardFont.Helvetica.stringWidth(text, size)
-            // A push button centres its caption; a variable text field follows /Q
-            // (ISO 32000-1 §12.7.3.1, Table 222): 0 left, 1 centre, 2 right.
-            val x = when {
-                isPushButton || quadding == 1 -> ((width - advance) / 2.0).coerceAtLeast(pad)
-                quadding == 2 -> (width - pad - advance).coerceAtLeast(pad)
-                else -> pad
+        val multiline = fieldType == "Tx" && (flags and MULTILINE) != 0
+        val size = if (da.fontSize > 0.0) da.fontSize else if (multiline) 12.0 else autoSize(height, isPushButton)
+        // A rich text field draws its styled value (§12.7.3.4) until a reader or a script changes it.
+        val rich = if (fieldType == "Tx" && (flags and RICH_TEXT) != 0 && valueOverride == null) {
+            richValueOf(widget, refs)?.let { rv ->
+                RichText.paragraphs(rv, (inherited(widget, "DS", refs) as? PdfString)?.asText(), size, da.colorOps)
             }
-            val baseline = ((height - size) / 2.0 + size * 0.2).coerceAtLeast(pad)
+        } else null
+        // A push button centres its caption; a variable text field follows /Q
+        // (ISO 32000-1 §12.7.3.1, Table 222): 0 left, 1 centre, 2 right.
+        val paragraphs = rich ?: plainParagraphs(text, StandardFont.Helvetica, size, da.colorOps, if (isPushButton) 1 else quadding)
+        val used = LinkedHashSet<StandardFont>()
+        if (paragraphs.any { p -> p.runs.any { it.text.isNotEmpty() } }) {
+            val pad = (borderWidth + 1.0).coerceAtLeast(1.0)
             content.ascii("/Tx BMC\nq\n")
             content.ascii("${fmt(pad)} ${fmt(pad)} ${fmt((width - 2 * pad).coerceAtLeast(0.0))} ${fmt((height - 2 * pad).coerceAtLeast(0.0))} re W n\n")
-            content.ascii("BT\n${da.colorOps}\n/${da.fontName} ${fmt(size)} Tf\n${fmt(x)} ${fmt(baseline)} Td\n")
-            PdfObjectWriter.writeObject(PdfString(PdfText.encodeContentString(text)), content)
-            content.ascii(" Tj\nET\nQ\nEMC\n")
+            // The plain value draws in the font the default appearance names, and rich text in the standard fonts.
+            FieldText.write(FieldText.lines(paragraphs, width - 2 * pad, multiline), width, height, pad, multiline, content) { font ->
+                used += font
+                if (rich == null) da.fontName else FieldText.conventionalName(font)
+            }
+            content.ascii("Q\nEMC\n")
         }
         content.ascii("Q\n")
 
-        val font = PdfDictionary(
-            linkedMapOf(
-                "Type" to PdfName("Font"),
-                "Subtype" to PdfName("Type1"),
-                "BaseFont" to PdfName("Helvetica"),
-                "Encoding" to PdfName("WinAnsiEncoding"),
-            ),
-        )
+        val fonts = LinkedHashMap<String, PdfObject>()
+        for (font in used.ifEmpty { setOf(StandardFont.Helvetica) }) {
+            val name = if (rich == null) da.fontName else FieldText.conventionalName(font)
+            fonts[name] = PdfDictionary(
+                linkedMapOf(
+                    "Type" to PdfName("Font"),
+                    "Subtype" to PdfName("Type1"),
+                    "BaseFont" to PdfName(font.baseFont),
+                    "Encoding" to PdfName("WinAnsiEncoding"),
+                ),
+            )
+        }
         return PdfStream(
             dict = PdfDictionary(
                 linkedMapOf(
@@ -308,13 +319,23 @@ internal object FieldAppearance {
                     "Subtype" to PdfName("Form"),
                     "FormType" to PdfInt(1),
                     "BBox" to PdfArray(listOf(PdfReal(0.0), PdfReal(0.0), PdfReal(width), PdfReal(height))),
-                    "Resources" to PdfDictionary(
-                        linkedMapOf("Font" to PdfDictionary(linkedMapOf(da.fontName to font as PdfObject))),
-                    ),
+                    "Resources" to PdfDictionary(linkedMapOf("Font" to PdfDictionary(fonts))),
                 ),
             ),
             rawBytes = content.toByteArray(),
         )
+    }
+
+    /** [text] as paragraphs of one style, a line break starting each new one. */
+    internal fun plainParagraphs(text: String, font: StandardFont, size: Double, color: String, align: Int): List<FieldParagraph> =
+        text.split("\r\n", "\r", "\n").map { line -> FieldParagraph(listOf(FieldRun(line, font, size, color)), align) }
+
+    /** The rich text value `/RV` of the field, a text string or a text stream, or null (§12.7.3.4). */
+    internal fun richValueOf(dict: PdfDictionary, refs: IndirectResolver): String? = when (val rv = inherited(dict, "RV", refs)) {
+        is PdfString -> rv.asText()
+        // A stream that does not decode leaves the plain value to draw.
+        is PdfStream -> runCatching { io.github.yuroyami.kitepdf.core.filters.FilterChain.decode(rv).decodeToString() }.getOrNull()
+        else -> null
     }
 
     /**
@@ -365,6 +386,12 @@ internal object FieldAppearance {
      */
     private fun autoSize(height: Double, isButton: Boolean): Double =
         (height - if (isButton) 4.0 else 2.0).coerceIn(4.0, 12.0)
+
+    /** `/Ff` bit 13: the text field wraps its value on several lines. */
+    private const val MULTILINE = 1 shl 12
+
+    /** `/Ff` bit 26: the text field's value is rich text, in `/RV`. */
+    private const val RICH_TEXT = 1 shl 25
 
     /** `/Ff` bit 17: the button is a push button, so it has a caption instead of a state. */
     private const val PUSH_BUTTON = 1 shl 16

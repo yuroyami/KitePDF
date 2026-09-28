@@ -979,6 +979,8 @@ final class io.github.yuroyami.kitepdf/PdfFormField { // io.github.yuroyami.kite
         final fun <get-isMultiline>(): kotlin/Boolean // io.github.yuroyami.kitepdf/PdfFormField.isMultiline.<get-isMultiline>|<get-isMultiline>(){}[0]
     final val isReadOnly // io.github.yuroyami.kitepdf/PdfFormField.isReadOnly|{}isReadOnly[0]
         final fun <get-isReadOnly>(): kotlin/Boolean // io.github.yuroyami.kitepdf/PdfFormField.isReadOnly.<get-isReadOnly>|<get-isReadOnly>(){}[0]
+    final val isRichText // io.github.yuroyami.kitepdf/PdfFormField.isRichText|{}isRichText[0]
+        final fun <get-isRichText>(): kotlin/Boolean // io.github.yuroyami.kitepdf/PdfFormField.isRichText.<get-isRichText>|<get-isRichText>(){}[0]
     final val maxLength // io.github.yuroyami.kitepdf/PdfFormField.maxLength|{}maxLength[0]
         final fun <get-maxLength>(): kotlin/Int? // io.github.yuroyami.kitepdf/PdfFormField.maxLength.<get-maxLength>|<get-maxLength>(){}[0]
     final val options // io.github.yuroyami.kitepdf/PdfFormField.options|{}options[0]
