@@ -910,6 +910,8 @@ private fun PagedLayout(
             last = location
             state.panOffset = androidx.compose.ui.geometry.Offset.Zero
             if (zoomSpec.resetZoomOnPageChange) state.resetZoom()
+            // A link to a place on the page shows that place at the top, as far as the pan goes (#433).
+            state.takeLandingPan()?.let { state.panOffset = it }
         }
     }
 
@@ -1750,6 +1752,7 @@ private fun SpreadLayout(
             last = location
             state.panOffset = Offset.Zero
             if (zoomSpec.resetZoomOnPageChange) state.resetZoom()
+            state.takeLandingPan()?.let { state.panOffset = it }
         }
     }
 

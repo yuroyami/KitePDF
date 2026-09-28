@@ -121,9 +121,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `KiteDocView` turns the page for a PDF link that names NextPage, PrevPage,
   FirstPage or LastPage, and runs a script link in its `scripts` handler. Both
   went to `onLinkTap`. In `KiteDocLayout.SinglePage` an internal PDF link now
-  goes to `onLinkTap`, where the tap did nothing. In a vertical `Continuous`
-  strip, a link to a place on a page (`/XYZ`, `/FitH`, `/FitBH`, `/FitR`) scrolls
-  that place to the top of the viewport (#433).
+  goes to `onLinkTap`, where the tap did nothing. A link to a place on a page
+  (`/XYZ`, `/FitH`, `/FitBH`, `/FitR`) brings that place to the top of the
+  viewport at the reader's zoom. A vertical `Continuous` strip scrolls there, and
+  a horizontal strip or a pager pans across the page as far as the page lets it
+  (#433).
 - On the desktop and the web, Ctrl or Cmd with the wheel zooms `KiteDocView`, and
   the page keys and Ctrl or Cmd with plus, minus and 0 work once a press gives the
   view the focus. A mouse press and drag on text selects at once (#411).
