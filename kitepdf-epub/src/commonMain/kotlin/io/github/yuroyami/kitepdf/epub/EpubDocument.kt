@@ -13,6 +13,9 @@ import io.github.yuroyami.kitepdf.epub.css.Origin
 import io.github.yuroyami.kitepdf.epub.css.ObjectFit
 import io.github.yuroyami.kitepdf.epub.css.StyleResolver
 import io.github.yuroyami.kitepdf.epub.css.StyleRule
+import io.github.yuroyami.kitepdf.epub.css.grownRadii
+import io.github.yuroyami.kitepdf.epub.css.innerRadii
+import io.github.yuroyami.kitepdf.epub.css.roundedRect
 import io.github.yuroyami.kitepdf.core.KiteBookmark
 import io.github.yuroyami.kitepdf.core.KiteDocument
 import io.github.yuroyami.kitepdf.core.KiteLocation
@@ -1251,7 +1254,11 @@ public class EpubPage internal constructor(
                 val right = margin + scope.box.x + scope.box.borderBoxWidth - s.borderRight.effective
                 val top = yUp(scope.box.y + s.borderTop.effective)
                 val bottom = yUp(scope.box.bottom - s.borderBottom.effective)
-                openEffect(canvas, deviceCtm, scope, KiteRectangle(left, bottom, right, top))
+                val radii = innerRadii(
+                    s.radii?.resolve(scope.box.borderBoxWidth, scope.box.borderBoxHeight),
+                    s.borderLeft.effective, s.borderTop.effective, s.borderRight.effective, s.borderBottom.effective,
+                )
+                openEffect(canvas, deviceCtm, scope, KiteRectangle(left, bottom, right, top), radii)
             },
             end = { scope -> closeEffect(canvas, scope) },
             image = { box ->
@@ -1259,12 +1266,22 @@ public class EpubPage internal constructor(
                 val inset = imageInset(box.style)
                 val left = margin + box.x + inset.inlineStart
                 val bottom = yUp(box.bottom - inset.blockEnd)
+                // Rounded corners clip the picture to its content box, with the corners made smaller by the insets (#28).
+                val radii = innerRadii(
+                    box.style.radii?.resolve(box.borderBoxWidth, box.borderBoxHeight),
+                    inset.inlineStart, inset.blockStart, inset.inlineEnd, inset.blockEnd,
+                )
+                if (radii != null) {
+                    val shape = KitePath.Builder().apply { roundedRect(left, bottom, left + box.drawWidth, bottom + box.drawHeight, radii) }.build()
+                    canvas.pushClip(shape, deviceCtm, evenOdd = false)
+                }
                 if (box.media != null && box.image == null) {
                     paintMediaPlaceholder(canvas, deviceCtm, left, bottom, box.drawWidth, box.drawHeight)
                 } else {
                     paintImage(canvas, deviceCtm, box.image, box.svg, box.drawWidth, box.drawHeight,
                         left, bottom, box.style.objectFit, resourceDir(box.zipPath))
                 }
+                if (radii != null) canvas.popClip()
             },
         )
         canvas.endPage()
@@ -1454,10 +1471,13 @@ public class EpubPage internal constructor(
         return scopes.sortedWith(compareBy<EffectScope> { it.first }.thenByDescending { it.last }.thenBy { it.clip })
     }
 
-    /** Opens [scope]'s effect: a clip to [paddingBox], or a group over the page with the box's opacity. */
-    private fun openEffect(canvas: KiteCanvas, ctm: KiteMatrix, scope: EffectScope, paddingBox: KiteRectangle) {
+    /**
+     * Opens [scope]'s effect: a clip to [paddingBox] with its corner [radii], or a group over the
+     * page with the box's opacity.
+     */
+    private fun openEffect(canvas: KiteCanvas, ctm: KiteMatrix, scope: EffectScope, paddingBox: KiteRectangle, radii: DoubleArray? = null) {
         if (scope.clip) {
-            val path = KitePath.Builder().apply { rectangle(paddingBox.left, paddingBox.bottom, paddingBox.width, paddingBox.height) }.build()
+            val path = KitePath.Builder().apply { roundedRect(paddingBox.left, paddingBox.bottom, paddingBox.right, paddingBox.top, radii) }.build()
             canvas.pushClip(path, ctm, evenOdd = false)
         } else {
             // The group spans the page, since content can reach outside its box.
@@ -1583,6 +1603,11 @@ public class EpubPage internal constructor(
         val topDoc = maxOf(box.y, startY)
         val botDoc = minOf(box.bottom, bandBottom)
         if (botDoc <= topDoc || w <= 0.0) return
+        val radii = s.radii?.resolve(w, box.borderBoxHeight)
+        if (radii != null || s.shadows.isNotEmpty()) {
+            paintShapedBox(box, canvas, ctm, xDev, radii, startY, bandBottom, yUp)
+            return
+        }
 
         s.backgroundColor?.let { rectFill(canvas, ctm, xDev, yUp(botDoc), w, yUp(topDoc) - yUp(botDoc), it.color, it.alpha) }
 
@@ -1592,6 +1617,89 @@ public class EpubPage internal constructor(
         if (eB > 0) horizontalEdge(canvas, ctm, xDev, w, box.bottom - eB, box.bottom, startY, bandBottom, yUp, s.borderBottom.color)
         if (eL > 0) rectFill(canvas, ctm, xDev, yUp(botDoc), eL, yUp(topDoc) - yUp(botDoc), s.borderLeft.color)
         if (eR > 0) rectFill(canvas, ctm, xDev + w - eR, yUp(botDoc), eR, yUp(topDoc) - yUp(botDoc), s.borderRight.color)
+    }
+
+    /**
+     * A box with rounded corners or shadows: its outer shadows, then its background and its
+     * border as shapes, cut to the page's band when the box goes on past it (#28). The border
+     * ring takes one colour, that of the first edge with a width.
+     */
+    private fun paintShapedBox(
+        box: LayoutBox, canvas: KiteCanvas, ctm: KiteMatrix, left: Double, radii: DoubleArray?,
+        startY: Double, bandBottom: Double, yUp: (Double) -> Double,
+    ) {
+        val s = box.style
+        val right = left + box.borderBoxWidth
+        val top = yUp(box.y)
+        val bottom = yUp(box.bottom)
+        val sliced = box.y < startY || box.bottom > bandBottom
+        if (sliced) {
+            val band = KitePath.Builder().apply { rectangle(0.0, yUp(bandBottom), displayWidth, yUp(startY) - yUp(bandBottom)) }.build()
+            canvas.pushClip(band, ctm, evenOdd = false)
+        }
+        try {
+            paintShadows(canvas, ctm, s, left, bottom, right, top, radii)
+            s.backgroundColor?.let { bg ->
+                val shape = KitePath.Builder().apply { roundedRect(left, bottom, right, top, radii) }.build()
+                canvas.fillPath(shape, ctm, bg.color, evenOdd = false, alpha = bg.alpha, blendMode = KiteBlendMode.Normal)
+            }
+            val eT = s.borderTop.effective; val eR = s.borderRight.effective
+            val eB = s.borderBottom.effective; val eL = s.borderLeft.effective
+            val edge = listOf(s.borderTop, s.borderRight, s.borderBottom, s.borderLeft).firstOrNull { it.effective > 0 }
+            if (edge != null) {
+                val ring = KitePath.Builder().apply {
+                    roundedRect(left, bottom, right, top, radii)
+                    // A border wider than the box fills it.
+                    if (left + eL < right - eR && bottom + eB < top - eT) {
+                        roundedRect(left + eL, bottom + eB, right - eR, top - eT, innerRadii(radii, eL, eT, eR, eB))
+                    }
+                }.build()
+                canvas.fillPath(ring, ctm, edge.color, evenOdd = true, alpha = 1.0, blendMode = KiteBlendMode.Normal)
+            }
+        } finally {
+            if (sliced) canvas.popClip()
+        }
+    }
+
+    /**
+     * The outer `box-shadow`s of a box, the first listed on top, outside its border box only
+     * (CSS Backgrounds 3, 7.1.1). A blur is a few rings that fade out, not a real gaussian (#28).
+     */
+    private fun paintShadows(
+        canvas: KiteCanvas, ctm: KiteMatrix, s: ComputedStyle,
+        left: Double, bottom: Double, right: Double, top: Double, radii: DoubleArray?,
+    ) {
+        val outer = s.shadows.filter { !it.inset && it.alpha > 0.0 }
+        if (outer.isEmpty()) return
+        val outside = KitePath.Builder().apply {
+            rectangle(-displayWidth, -displayHeight, displayWidth * 3, displayHeight * 3)
+            roundedRect(left, bottom, right, top, radii)
+        }.build()
+        canvas.pushClip(outside, ctm, evenOdd = true)
+        try {
+            for (shadow in outer.asReversed()) {
+                val color = shadow.color ?: s.color
+                val rings = if (shadow.blur > 0.0) SHADOW_RINGS else 1
+                for (k in 0 until rings) {
+                    // Inside k + 1 rings the alpha is k + 1 shares of the shadow's own, so the blur
+                    // fades evenly from its outer ring to the core. Rings of one colour stack alike in any order.
+                    val before = shadow.alpha * k / rings
+                    val after = shadow.alpha * (k + 1) / rings
+                    val layer = 1.0 - (1.0 - after) / (1.0 - before)
+                    // From half the blur outside the shadow's edge to half the blur inside it. CSS y runs down.
+                    val grow = shadow.spread + if (rings == 1) 0.0 else shadow.blur / 2 - shadow.blur * k / (rings - 1)
+                    val l = left - grow + shadow.x
+                    val r = right + grow + shadow.x
+                    val b = bottom - grow - shadow.y
+                    val t = top + grow - shadow.y
+                    if (r <= l || t <= b) continue
+                    val shape = KitePath.Builder().apply { roundedRect(l, b, r, t, grownRadii(radii, grow)) }.build()
+                    canvas.fillPath(shape, ctm, color, evenOdd = false, alpha = layer, blendMode = KiteBlendMode.Normal)
+                }
+            }
+        } finally {
+            canvas.popClip()
+        }
     }
 
     private fun horizontalEdge(
@@ -1941,6 +2049,9 @@ public class EpubPage internal constructor(
         const val UPRIGHT_CENTER = 0.38
     }
 }
+
+/** The rings that stand in for the gaussian of a `box-shadow` blur (#28). */
+private const val SHADOW_RINGS = 6
 
 /** The grey of a media element without a poster. */
 private val MEDIA_PLACEHOLDER = RgbColor(0.85, 0.85, 0.85)

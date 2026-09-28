@@ -14,8 +14,8 @@ import kotlin.test.assertTrue
  */
 class EpubVisualCssTest {
 
-    private fun raster(body: String): BufferedImage =
-        EpubCorpus.rasterize(EpubDocument.open(EpubCorpus.epub(body)).pages.first())
+    private fun raster(body: String, extra: List<Pair<String, ByteArray>> = emptyList()): BufferedImage =
+        EpubCorpus.rasterize(EpubDocument.open(EpubCorpus.epub(body, extra)).pages.first())
 
     private fun rgb(img: BufferedImage, x: Int, y: Int): Triple<Int, Int, Int> {
         val p = img.getRGB(x, y)
@@ -80,6 +80,53 @@ class EpubVisualCssTest {
         assertTrue(darkIn(child, 48, 100) > 20, "a visible child of a hidden box did not paint")
         // A child that says nothing inherits the hidden visibility.
         assertEquals(0, darkIn(raster("""<div style="visibility:hidden"><p>Inherited</p></div>"""), 0, 200))
+    }
+
+    @Test
+    fun border_radius_rounds_the_background_the_border_an_image_and_a_clip() {
+        // 100 pixels are 75 points, so a circle of radius 37.5 around (85.5, 85.5).
+        val circle = raster("""<div style="width:100px;height:100px;background-color:#ff0000;border-radius:50%"></div>""")
+        assertColor(circle, 85, 85, 255, 0, 0, "the middle of the circle")
+        assertColor(circle, 86, 49, 255, 0, 0, "the top of the circle")
+        assertColor(circle, 50, 50, 255, 255, 255, "the corner outside the circle")
+
+        // A 6 pixel border is 4.5 points, and the corners round with a 15 point radius.
+        val ring = raster("""<div style="width:100px;height:60px;border:6px solid #0000ff;border-radius:20px"></div>""")
+        assertColor(ring, 90, 50, 0, 0, 255, "the top border")
+        assertColor(ring, 49, 49, 255, 255, 255, "the rounded corner")
+        assertColor(ring, 90, 70, 255, 255, 255, "the inside of the border")
+
+        val picture = raster(
+            """<img src="pic.png" style="display:block;width:100px;height:100px;border-radius:50%"/>""",
+            listOf("OEBPS/pic.png" to EpubCorpus.redPng()),
+        )
+        assertColor(picture, 85, 85, 255, 0, 0, "the middle of the round picture")
+        assertColor(picture, 50, 50, 255, 255, 255, "the corner of the round picture")
+
+        val clip = raster(
+            """<div style="width:100px;height:100px;overflow:hidden;border-radius:50%">""" +
+                """<div style="width:100px;height:100px;background-color:#00ff00"></div></div>""",
+        )
+        assertColor(clip, 85, 85, 0, 255, 0, "the child in the round clip")
+        assertColor(clip, 50, 50, 255, 255, 255, "the child outside the round clip")
+    }
+
+    @Test
+    fun box_shadow_paints_an_offset_copy_outside_the_box_and_a_blur_fades() {
+        // The box is 75 by 37.5 points at (48, 48), and the shadow 7.5 points right and down.
+        val solid = raster("""<div style="width:100px;height:50px;background-color:#ffffff;box-shadow:10px 10px 0 #000000"></div>""")
+        assertColor(solid, 127, 70, 0, 0, 0, "the shadow right of the box")
+        assertColor(solid, 80, 70, 255, 255, 255, "under the box")
+        assertColor(solid, 50, 89, 255, 255, 255, "left of the shadow below the box")
+        assertColor(solid, 80, 89, 0, 0, 0, "the shadow below the box")
+
+        // A 20 pixel blur is 15 points: it fades from 7.5 points outside the box's edge at 123.
+        val blurred = raster("""<div style="width:100px;height:50px;box-shadow:0 0 20px #000000"></div>""")
+        val near = rgb(blurred, 125, 66).first
+        val far = rgb(blurred, 129, 66).first
+        assertEquals(255, rgb(blurred, 132, 66).first, "the blur reaches too far")
+        assertTrue(near < far && far < 255, "the blur does not fade out: $near near the box, $far farther away")
+        assertColor(blurred, 80, 66, 255, 255, 255, "inside a box without a background", tol = 2)
     }
 
     @Test

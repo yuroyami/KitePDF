@@ -290,7 +290,7 @@ internal object Paginator {
     }
 
     private fun decorated(s: ComputedStyle): Boolean =
-        s.backgroundColor != null ||
+        s.backgroundColor != null || s.shadows.isNotEmpty() ||
             s.borderTop.effective > 0 || s.borderRight.effective > 0 ||
             s.borderBottom.effective > 0 || s.borderLeft.effective > 0
 }

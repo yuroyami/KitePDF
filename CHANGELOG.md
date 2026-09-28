@@ -55,6 +55,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   opacity paints with its content as one group, an overflow other than
   `visible` clips the content to the padding box, and a hidden box keeps its
   room and paints nothing of its own (#28).
+- EPUB pages paint `border-radius` on the background, the border, block images
+  and overflow clips, and `box-shadow` as outer shadows whose blur fades in a
+  few steps (#28).
 
 ### Changed
 
