@@ -83,6 +83,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and the `LinkTarget` names of its page references, and SVG reads `<a href>`.
   `KiteDocView` follows these links and names them to a screen reader.
   `KitePath.bounds` gives the box of a path under a matrix (#433).
+- SVG draws `<pattern>` paint servers and `mask`. A pattern tiles its content over
+  a fill or a stroke with its units, `viewBox`, `patternTransform` and `href`
+  chain. A mask shows the element by the luminance of its content, or by its
+  alpha with `mask-type: alpha`, inside the mask's region (#209).
 
 ### Changed
 
