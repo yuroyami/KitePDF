@@ -183,7 +183,8 @@ import kotlinx.coroutines.launch
  *   perform itself: a URL, a remote GoTo, a Launch. Return true after handling
  *   it (e.g. opening the URL in a browser); false lets the tap fall through to
  *   [onTap]. Internal go-to-page links (PDF destinations, EPUB internal hrefs)
- *   never reach this: the viewer scrolls to the target page directly. It turns
+ *   never reach this: the viewer scrolls to the target page directly, and in a
+ *   vertical continuous strip to the place on it that a PDF link names. It turns
  *   the page for a PDF link that names NextPage, PrevPage, FirstPage or
  *   LastPage, and it runs a script link in [scripts] when that is set. In
  *   [KiteDocLayout.SinglePage], which cannot move, an internal PDF link comes
@@ -454,10 +455,13 @@ private fun linkTap(
                 if (hit.x < r.left || hit.x > r.right || hit.y < r.bottom || hit.y > r.top) continue
                 val rawDest = ann.rawDestination
                     ?: (ann.action as? PdfAction.GoTo)?.destination
-                val target = doc.resolveDestination(rawDest)?.pageIndex
+                val destination = doc.resolveDestination(rawDest)
+                val target = destination?.pageIndex
                 if (target != null) {
                     if (state.canNavigate) {
-                        scope.launch { state.animateScrollToPage(target) }
+                        // A link to a place on the page scrolls to that place, not to the top (#433).
+                        val y = state.pageAt(target)?.let { destination.displayY(it) }
+                        scope.launch { state.animateScrollToPagePoint(target, y) }
                         return true
                     }
                     // A view of one fixed page cannot move, so the host gets the link (#433).
@@ -513,6 +517,22 @@ private fun linkTap(
 }
 
 private val SCHEME_REGEX = Regex("^[a-zA-Z][a-zA-Z0-9+.-]*:")
+
+/**
+ * The display-space height of the top that this destination names on [page], or null when it
+ * shows the whole page or keeps the current top (ISO 32000-1, 12.3.2.2, Table 151).
+ */
+internal fun io.github.yuroyami.kitepdf.PdfDestination.displayY(page: KitePage): Double? {
+    val (left, top) = when (val fit = view) {
+        is io.github.yuroyami.kitepdf.PdfDestination.ViewFit.XYZ -> (fit.left ?: 0.0) to fit.top
+        is io.github.yuroyami.kitepdf.PdfDestination.ViewFit.FitH -> 0.0 to fit.top
+        is io.github.yuroyami.kitepdf.PdfDestination.ViewFit.FitBH -> 0.0 to fit.top
+        is io.github.yuroyami.kitepdf.PdfDestination.ViewFit.FitR -> fit.left to fit.top
+        else -> return null
+    }
+    if (top == null || !top.isFinite() || !left.isFinite()) return null
+    return page.displayToDeviceBase().transformPoint(left, top).second
+}
 
 /**
  * Convenience entry point: remembers its own state internally. Takes any

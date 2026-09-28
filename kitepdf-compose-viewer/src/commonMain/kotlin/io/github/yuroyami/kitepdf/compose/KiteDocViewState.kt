@@ -1,5 +1,6 @@
 package io.github.yuroyami.kitepdf.compose
 
+import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
 
 import androidx.compose.animation.core.AnimationSpec
@@ -1327,6 +1328,27 @@ public class KiteDocViewState(
     }
 
     /**
+     * Scrolls a vertical continuous strip so that the display-space height [y] of the page in
+     * [slot] sits at the top of the viewport, as a link to a place on a page asks (#433). Without
+     * [y], in another layout or before the strip shows a page, it turns to the page.
+     */
+    internal suspend fun animateScrollToPagePoint(slot: Int, y: Double?): Unit = onViewerThread {
+        val continuous = adapter as? LazyListScrollAdapter
+        val page = pageAt(slot)
+        val length = if (continuous != null && page != null && y != null && stripOrientation != androidx.compose.foundation.gestures.Orientation.Horizontal) {
+            continuous.verticalSlotLength(kitePageAspect(page)) { pageAt(it)?.let(::kitePageAspect) }
+        } else null
+        if (length == null || page == null || y == null || page.displayHeight <= 0.0) {
+            animateScrollToPage(slot)
+            return@onViewerThread
+        }
+        val offset = ((y / page.displayHeight).coerceIn(0.0, 1.0) * length).roundToInt()
+        leaveSelectionFor(slot)
+        park(slot, offsetPx = offset)
+        continuous?.animateScrollToPageOffset(slot, offset)
+    }
+
+    /**
      * Drops a selection on another slot than [slot]. A selection holds the scroll and the pan
      * while the reader acts on its words, so one left behind by a navigation would lock the page
      * the reader went to, and the selection menu would offer words they cannot see (#407).
@@ -1903,6 +1925,21 @@ internal class LazyListScrollAdapter(private val listState: LazyListState) : Kit
         }
     override val scrollOffsetPx: Int get() = listState.firstVisibleItemScrollOffset
     suspend fun scrollToPageOffset(page: Int, offsetPx: Int) = listState.scrollToItem(page, offsetPx)
+
+    suspend fun animateScrollToPageOffset(page: Int, offsetPx: Int) = listState.animateScrollToItem(page, offsetPx)
+
+    /**
+     * The height of the slot of a page of [aspect] in this vertical strip, from the width of a slot
+     * in view, whose page's aspect [aspectOf] gives, or null with no page in view.
+     */
+    fun verticalSlotLength(aspect: Float, aspectOf: (Int) -> Float?): Int? {
+        for (item in listState.layoutInfo.visibleItemsInfo) {
+            val shown = aspectOf(item.index) ?: continue
+            val cross = (item.size * shown).roundToInt()
+            return stripSlotLength(vertical = true, aspect = aspect, cross = cross)
+        }
+        return null
+    }
 
     /**
      * A slot asked for through [requestSlot], with the layout it was asked against. Until the
