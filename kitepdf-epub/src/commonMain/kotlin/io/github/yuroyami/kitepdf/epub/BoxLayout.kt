@@ -13,6 +13,12 @@ import io.github.yuroyami.kitepdf.epub.css.CssVAlign
 import io.github.yuroyami.kitepdf.epub.css.DecorationLine
 import io.github.yuroyami.kitepdf.epub.css.Display
 import io.github.yuroyami.kitepdf.epub.css.Direction
+import io.github.yuroyami.kitepdf.epub.css.FlexAlign
+import io.github.yuroyami.kitepdf.epub.css.FlexBasis
+import io.github.yuroyami.kitepdf.epub.css.FlexDirection
+import io.github.yuroyami.kitepdf.epub.css.FlexJustify
+import io.github.yuroyami.kitepdf.epub.css.FlexStyle
+import io.github.yuroyami.kitepdf.epub.css.FlexWrap
 import io.github.yuroyami.kitepdf.epub.css.ObjectFit
 import io.github.yuroyami.kitepdf.epub.css.GenericFont
 import io.github.yuroyami.kitepdf.epub.css.TextAlign
@@ -156,7 +162,12 @@ internal class BoxLayout(
         }
     }
 
-    private fun layoutBlock(box: BlockBox, xLeft: Double, availWidth: Double, topY: Double) {
+    /**
+     * Lays out [box] at [topY] in a column [availWidth] wide from [xLeft]. A flex container that
+     * places [box] as its item gives [forcedWidth], the border-box width it resolved; the box then
+     * starts at [xLeft] and takes that width whatever its own width and margins say (#33).
+     */
+    private fun layoutBlock(box: BlockBox, xLeft: Double, availWidth: Double, topY: Double, forcedWidth: Double? = null) {
         val s = box.style
         // A positioned box is the containing block for its out-of-flow
         // descendants, so it opens one and fills it in once its size is known.
@@ -170,10 +181,15 @@ internal class BoxLayout(
         s.minWidthPt?.let { if (contentW < it) contentW = it } // min wins over max
         // An embedded document's default width never pushes it past its column (#40).
         if (box.embed != null) contentW = contentW.coerceAtMost(availWidth - extra)
+        if (forcedWidth != null) contentW = forcedWidth - (bL + s.paddingLeftPt + s.paddingRightPt + bR)
         contentW = contentW.coerceAtLeast(0.0)
 
         box.borderBoxWidth = bL + s.paddingLeftPt + contentW + s.paddingRightPt + bR
-        val leftMargin = if (s.marginLeftAuto && s.marginRightAuto) maxOf(0.0, (availWidth - box.borderBoxWidth) / 2) else s.marginLeftPt
+        val leftMargin = when {
+            forcedWidth != null -> 0.0
+            s.marginLeftAuto && s.marginRightAuto -> maxOf(0.0, (availWidth - box.borderBoxWidth) / 2)
+            else -> s.marginLeftPt
+        }
         box.x = xLeft + leftMargin
         box.y = topY
         val contentLeft = box.x + bL + s.paddingLeftPt
@@ -183,7 +199,13 @@ internal class BoxLayout(
         var prevBottom = 0.0
         var first = true
         val floatsBefore = activeFloats.size
-        for (child in box.children) {
+        // A flex container places its children as flex items instead of stacking them (#33).
+        val flexChildren = if (s.display == Display.FLEX) emptyList() else box.children
+        if (s.display == Display.FLEX) {
+            val definite = s.heightPt?.let { h -> h.coerceAtMost(s.maxHeightPt ?: h).coerceAtLeast(s.minHeightPt ?: 0.0) }
+            cursorY += layoutFlex(box, contentLeft, contentW, contentTop, definite)
+        }
+        for (child in flexChildren) {
             // Out-of-flow (position:absolute/fixed): queued now, placed once its
             // containing block knows its own size. It never advances the
             // normal-flow cursor. Fixed-layout pages use this to overlay panels.
@@ -443,6 +465,409 @@ internal class BoxLayout(
         s.marginLeftAuto || s.direction == Direction.RTL -> leftover - mR
         else -> mL
     }.coerceIn(0.0, leftover)
+
+    // ---- flex layout ---------------------------------------------------------
+
+    /**
+     * One flex item while its container lays it out (#33). The sizes are border-box sizes on the
+     * main axis. The margins are those at the main-start and main-end sides, an auto one as 0.
+     */
+    private class FlexItem(val box: LayoutBox, val flex: FlexStyle) {
+        var marginStart = 0.0
+        var marginEnd = 0.0
+        var autoStart = false
+        var autoEnd = false
+        var base = 0.0
+        var min = 0.0
+        var max = Double.MAX_VALUE
+        var hypo = 0.0
+        var target = 0.0
+        var frozen = false
+        /** The distance from the item's border-box top to its first baseline. */
+        var baseline = 0.0
+        val outer: Double get() = marginStart + target + marginEnd
+    }
+
+    /**
+     * Places the children of the flex container [box] as flex items (CSS Flexible Box Layout 1,
+     * 9) in its content box, [contentW] wide at [contentLeft] and [contentTop]. [definiteHeight] is
+     * the container's content height when its style fixes one. Returns the content height the
+     * items need.
+     */
+    private fun layoutFlex(box: BlockBox, contentLeft: Double, contentW: Double, contentTop: Double, definiteHeight: Double?): Double {
+        val items = ArrayList<FlexItem>()
+        for (child in box.children) {
+            val pos = if (child is TextBlockBox) CssPosition.STATIC else child.style.position
+            if (pos == CssPosition.ABSOLUTE || pos == CssPosition.FIXED) {
+                pendingAbs.add(PendingAbs(child, if (pos == CssPosition.FIXED) pageCb else currentCb))
+                continue
+            }
+            if (child is TableRowBox) continue
+            // An anonymous item around loose text has the initial flex values, not its container's.
+            items += FlexItem(child, if (child is TextBlockBox) FlexStyle() else child.style.flex)
+        }
+        // `order` moves an item on the screen, a stable sort keeping the source order among equals (5.4).
+        items.sortBy { it.flex.order }
+        if (items.isEmpty()) return 0.0
+        return if (box.style.flex.row) flexRow(box, items, contentLeft, contentW, contentTop, definiteHeight)
+        else flexColumn(box, items, contentLeft, contentW, contentTop, definiteHeight)
+    }
+
+    private fun flexRow(box: BlockBox, items: List<FlexItem>, contentLeft: Double, contentW: Double, contentTop: Double, definiteHeight: Double?): Double {
+        val fs = box.style.flex
+        // Main-start is the right side in a right-to-left row and in a left-to-right reversed one.
+        val fromRight = (box.style.direction == Direction.RTL) != (fs.direction == FlexDirection.ROW_REVERSE)
+        val gap = fs.columnGap
+        for (item in items) {
+            val b = item.box
+            val s = b.style
+            val anonymous = b is TextBlockBox
+            val left = if (anonymous || s.marginLeftAuto) 0.0 else s.marginLeftPt
+            val right = if (anonymous || s.marginRightAuto) 0.0 else s.marginRightPt
+            item.marginStart = if (fromRight) right else left
+            item.marginEnd = if (fromRight) left else right
+            item.autoStart = !anonymous && (if (fromRight) s.marginRightAuto else s.marginLeftAuto)
+            item.autoEnd = !anonymous && (if (fromRight) s.marginLeftAuto else s.marginRightAuto)
+            val insets = horizontalInsets(b)
+            val width = if (anonymous || b is ImageBox) null else s.widthPt
+            // 9.2.3: the flex base size, from flex-basis, else from the width, else from the content.
+            item.base = when (val basis = item.flex.basis) {
+                is FlexBasis.Length -> basis.pt + insets
+                is FlexBasis.Percent -> basis.fraction * contentW + insets
+                FlexBasis.Content -> maxContentWidth(b, contentW)
+                FlexBasis.Auto -> width?.let { it + insets } ?: maxContentWidth(b, contentW)
+            }
+            // 4.5: an item does not shrink below its content, or below its width when that is smaller.
+            var min = if (!anonymous && s.minWidthPt != null) s.minWidthPt + insets else minContentWidth(b, contentW)
+            if (width != null && (anonymous || s.minWidthPt == null)) min = minOf(min, width + insets)
+            item.min = min
+            item.max = maxOf(min, if (!anonymous && s.maxWidthPt != null) s.maxWidthPt + insets else Double.MAX_VALUE)
+            item.hypo = item.base.coerceIn(item.min, item.max)
+        }
+        val lines = flexLines(items, contentW, gap, fs.wrap != FlexWrap.NOWRAP)
+
+        // Each line resolves its lengths, then lays its items out at them.
+        class Line(val items: List<FlexItem>) { var cross = 0.0; var baseline = 0.0 }
+        val laid = lines.map { line ->
+            resolveFlexibleLengths(line, contentW - gap * (line.size - 1))
+            val l = Line(line)
+            for (item in line) {
+                layoutFlexItem(item.box, contentLeft, contentTop, item.target)
+                // An image keeps its own size, which can be less than the room it was given.
+                item.target = item.box.borderBoxWidth
+                item.baseline = firstBaseline(item.box) ?: item.box.borderBoxHeight
+            }
+            // 9.4: the line is as tall as its tallest item, baseline items aligned on their baselines.
+            val aligned = line.filter { alignOf(it, fs) == FlexAlign.BASELINE }
+            l.baseline = aligned.maxOfOrNull { marginTop(it.box) + it.baseline } ?: 0.0
+            l.cross = line.maxOf { item ->
+                if (alignOf(item, fs) == FlexAlign.BASELINE) l.baseline - item.baseline + item.box.borderBoxHeight + marginBottom(item.box)
+                else marginTop(item.box) + item.box.borderBoxHeight + marginBottom(item.box)
+            }
+            l
+        }
+        // A single line fills a container whose height is fixed (9.4, step 8).
+        if (laid.size == 1 && definiteHeight != null) laid[0].cross = maxOf(laid[0].cross, definiteHeight)
+        val rowGap = fs.rowGap
+        val used = laid.sumOf { it.cross } + rowGap * (laid.size - 1)
+        // 8.4: align-content shares out the height that a fixed container has left over.
+        var lineTop = contentTop
+        var between = 0.0
+        if (definiteHeight != null && laid.size > 1) {
+            val free = definiteHeight - used
+            val (offset, spacing) = distribute(fs.alignContent, free, laid.size)
+            lineTop += offset
+            between = spacing
+            if (fs.alignContent == FlexJustify.STRETCH && free > 0.0) for (l in laid) l.cross += free / laid.size
+        }
+        val order = if (fs.wrap == FlexWrap.WRAP_REVERSE) laid.asReversed() else laid
+        for (l in order) {
+            placeRowLine(l.items, fs, fromRight, contentLeft, contentW, gap, lineTop, l.cross, l.baseline)
+            lineTop += l.cross + rowGap + between
+        }
+        return if (definiteHeight != null) maxOf(definiteHeight, used) else used
+    }
+
+    /** Places the items of one row line along the line and across it. */
+    private fun placeRowLine(
+        line: List<FlexItem>, fs: FlexStyle, fromRight: Boolean,
+        contentLeft: Double, contentW: Double, gap: Double, lineTop: Double, cross: Double, baseline: Double,
+    ) {
+        var free = contentW - line.sumOf { it.outer } - gap * (line.size - 1)
+        // 8.1: auto margins take the free space before justify-content does.
+        val autos = line.sumOf { (if (it.autoStart) 1 else 0) + (if (it.autoEnd) 1 else 0) }
+        val autoShare = if (free > 0.0 && autos > 0) free / autos else 0.0
+        if (autoShare > 0.0) free = 0.0
+        val justify = when (fs.justify) {
+            FlexJustify.LEFT -> if (fromRight) FlexJustify.END else FlexJustify.START
+            FlexJustify.RIGHT -> if (fromRight) FlexJustify.START else FlexJustify.END
+            else -> fs.justify
+        }
+        val (offset, between) = distribute(justify, free, line.size)
+        var m = offset
+        for (item in line) {
+            val b = item.box
+            m += item.marginStart + (if (item.autoStart) autoShare else 0.0)
+            val x = if (fromRight) contentLeft + contentW - m - item.target else contentLeft + m
+            m += item.target + item.marginEnd + (if (item.autoEnd) autoShare else 0.0) + gap + between
+            val top = marginTop(b)
+            val outerCross = top + b.borderBoxHeight + marginBottom(b)
+            val y = lineTop + when (alignOf(item, fs)) {
+                FlexAlign.STRETCH -> {
+                    // A box whose height is auto grows to the line, and its content stays at its top.
+                    // An image keeps its aspect ratio instead of stretching.
+                    if (b !is ImageBox && (b is TextBlockBox || b.style.heightPt == null)) {
+                        b.borderBoxHeight = maxOf(b.borderBoxHeight, cross - top - marginBottom(b))
+                    }
+                    top
+                }
+                FlexAlign.END -> cross - outerCross + top
+                FlexAlign.CENTER -> (cross - outerCross) / 2 + top
+                FlexAlign.BASELINE -> baseline - item.baseline
+                else -> top
+            }
+            shiftSubtree(b, x - b.x, y - b.y)
+        }
+    }
+
+    private fun flexColumn(box: BlockBox, items: List<FlexItem>, contentLeft: Double, contentW: Double, contentTop: Double, definiteHeight: Double?): Double {
+        val fs = box.style.flex
+        val rtl = box.style.direction == Direction.RTL
+        val gap = fs.rowGap
+        for (item in items) {
+            val b = item.box
+            val s = b.style
+            val anonymous = b is TextBlockBox
+            val left = if (anonymous || s.marginLeftAuto) 0.0 else s.marginLeftPt
+            val right = if (anonymous || s.marginRightAuto) 0.0 else s.marginRightPt
+            val room = (contentW - left - right).coerceAtLeast(0.0)
+            // The cross size: the whole width when the item stretches, else the width its content asks.
+            val width = when {
+                !anonymous && b !is ImageBox && s.widthPt != null -> s.widthPt + horizontalInsets(b)
+                alignOf(item, fs) == FlexAlign.STRETCH -> room
+                else -> maxContentWidth(b, room).coerceAtMost(room)
+            }
+            layoutFlexItem(b, contentLeft, contentTop, width)
+            item.marginStart = marginTop(b)
+            item.marginEnd = marginBottom(b)
+            val insets = verticalInsets(b)
+            val content = b.borderBoxHeight
+            item.base = when (val basis = item.flex.basis) {
+                is FlexBasis.Length -> basis.pt + insets
+                is FlexBasis.Percent -> definiteHeight?.let { basis.fraction * it + insets } ?: content
+                else -> if (!anonymous && b !is ImageBox && s.heightPt != null) s.heightPt + insets else content
+            }
+            // Laid-out content is never cut, so an item never shrinks below it.
+            item.min = content
+            item.max = maxOf(content, if (!anonymous && s.maxHeightPt != null) s.maxHeightPt + insets else Double.MAX_VALUE)
+            item.hypo = item.base.coerceIn(item.min, item.max)
+        }
+        val mainSize = definiteHeight ?: (items.sumOf { it.marginStart + it.hypo + it.marginEnd } + gap * (items.size - 1))
+        resolveFlexibleLengths(items, mainSize - gap * (items.size - 1))
+        for (item in items) item.box.borderBoxHeight = maxOf(item.box.borderBoxHeight, item.target)
+        val free = mainSize - items.sumOf { it.outer } - gap * (items.size - 1)
+        val justify = when (fs.justify) {
+            FlexJustify.LEFT, FlexJustify.RIGHT -> FlexJustify.START
+            else -> fs.justify
+        }
+        val (offset, between) = distribute(justify, free, items.size)
+        var m = offset
+        for (item in items) {
+            val b = item.box
+            m += item.marginStart
+            val y = if (fs.reverse) contentTop + mainSize - m - item.target else contentTop + m
+            m += item.target + item.marginEnd + gap + between
+            val left = if (b is TextBlockBox || b.style.marginLeftAuto) 0.0 else b.style.marginLeftPt
+            val right = if (b is TextBlockBox || b.style.marginRightAuto) 0.0 else b.style.marginRightPt
+            val slack = contentW - left - b.borderBoxWidth - right
+            // Across a column, start is the left side, or the right one in a right-to-left container.
+            val x = contentLeft + left + when (alignOf(item, fs)) {
+                FlexAlign.CENTER -> slack / 2
+                FlexAlign.END -> if (rtl) 0.0 else slack
+                FlexAlign.STRETCH -> 0.0
+                else -> if (rtl) slack else 0.0
+            }
+            shiftSubtree(b, x - b.x, y - b.y)
+        }
+        return maxOf(mainSize, items.sumOf { it.outer } + gap * (items.size - 1))
+    }
+
+    /** The items in lines no longer than [room] with [gap] between them, or in one line when they do not wrap (9.3). */
+    private fun flexLines(items: List<FlexItem>, room: Double, gap: Double, wrap: Boolean): List<List<FlexItem>> {
+        if (!wrap) return listOf(items)
+        val lines = ArrayList<List<FlexItem>>()
+        var line = ArrayList<FlexItem>()
+        var used = 0.0
+        for (item in items) {
+            val outer = item.marginStart + item.hypo + item.marginEnd
+            if (line.isNotEmpty() && used + gap + outer > room + FLEX_EPSILON) {
+                lines += line
+                line = ArrayList()
+                used = 0.0
+            }
+            used += if (line.isEmpty()) outer else gap + outer
+            line += item
+        }
+        if (line.isNotEmpty()) lines += line
+        return lines
+    }
+
+    /**
+     * 9.7: grows or shrinks the [items] of one line to fill [room], by their grow and their
+     * shrink scaled by base size, freezing each item that meets its min or max until none moves.
+     */
+    private fun resolveFlexibleLengths(items: List<FlexItem>, room: Double) {
+        val growing = items.sumOf { it.marginStart + it.hypo + it.marginEnd } < room
+        for (item in items) {
+            item.target = item.hypo
+            val factor = if (growing) item.flex.grow else item.flex.shrink
+            item.frozen = factor == 0.0 || (growing && item.base > item.hypo) || (!growing && item.base < item.hypo)
+        }
+        fun freeSpace() = room - items.sumOf { it.marginStart + it.marginEnd + if (it.frozen) it.target else it.base }
+        val initialFree = freeSpace()
+        repeat(items.size + 1) {
+            val open = items.filter { !it.frozen }
+            if (open.isEmpty()) return
+            var free = freeSpace()
+            // A sum of factors below 1 hands out only that share of the space (9.7, step 4b).
+            val factors = open.sumOf { if (growing) it.flex.grow else it.flex.shrink }
+            if (factors < 1.0 && kotlin.math.abs(initialFree * factors) < kotlin.math.abs(free)) free = initialFree * factors
+            val scaled = open.sumOf { it.flex.shrink * it.base }
+            for (item in open) {
+                item.target = when {
+                    growing -> item.base + free * item.flex.grow / factors
+                    scaled > 0.0 -> item.base + free * item.flex.shrink * item.base / scaled
+                    else -> item.base
+                }
+            }
+            var violation = 0.0
+            val clamped = HashMap<FlexItem, Double>()
+            for (item in open) {
+                val c = item.target.coerceIn(item.min, item.max)
+                violation += c - item.target
+                clamped[item] = c
+            }
+            for (item in open) {
+                val c = clamped.getValue(item)
+                val freeze = when {
+                    violation == 0.0 -> true
+                    violation > 0.0 -> c > item.target
+                    else -> c < item.target
+                }
+                item.target = c
+                if (freeze) item.frozen = true
+            }
+        }
+    }
+
+    /**
+     * Where the first of [count] items or lines starts, and the extra space between two of them,
+     * when [justify] shares out [free]. Space that is not there falls back to the start (8.2).
+     */
+    private fun distribute(justify: FlexJustify, free: Double, count: Int): Pair<Double, Double> = when (justify) {
+        FlexJustify.END -> free to 0.0
+        FlexJustify.CENTER -> free / 2 to 0.0
+        FlexJustify.SPACE_BETWEEN -> if (free > 0.0 && count > 1) 0.0 to free / (count - 1) else 0.0 to 0.0
+        FlexJustify.SPACE_AROUND -> if (free > 0.0) free / count / 2 to free / count else 0.0 to 0.0
+        FlexJustify.SPACE_EVENLY -> if (free > 0.0) free / (count + 1) to free / (count + 1) else 0.0 to 0.0
+        else -> 0.0 to 0.0
+    }
+
+    private fun alignOf(item: FlexItem, container: FlexStyle): FlexAlign =
+        item.flex.alignSelf.takeIf { it != FlexAlign.AUTO } ?: container.alignItems
+
+    /** Lays [b] out as a flex item with its border box [width] wide from [left] at [top]. */
+    private fun layoutFlexItem(b: LayoutBox, left: Double, top: Double, width: Double) {
+        when (b) {
+            is BlockBox -> layoutBlock(b, left, width, top, forcedWidth = width)
+            is TextBlockBox -> layoutTextBlock(b, left, width, top)
+            is ImageBox -> {
+                // The image's own margins would narrow and move it, so they sit outside the room it gets.
+                val s = b.style
+                val mL = if (s.marginLeftAuto) 0.0 else s.marginLeftPt
+                val mR = if (s.marginRightAuto) 0.0 else s.marginRightPt
+                layoutImage(b, left - mL, width + mL + mR, top)
+            }
+            is TableBox -> layoutTable(b, left, width, top)
+            is TableRowBox -> {}
+        }
+    }
+
+    /**
+     * The border-box width [b] takes when nothing wraps its text, its max-content width. [room]
+     * is the width an image or a table is measured in.
+     */
+    private fun maxContentWidth(b: LayoutBox, room: Double): Double = when (b) {
+        is TextBlockBox -> textMaxContent(b)
+        is BlockBox -> {
+            val s = b.style
+            s.widthPt?.let { it + horizontalInsets(b) } ?: run {
+                fun outer(c: LayoutBox) = maxContentWidth(c, room) + horizontalMargins(c)
+                val inner = if (s.display == Display.FLEX && s.flex.row) {
+                    val shown = b.children.filter { it !is TableRowBox && (it is TextBlockBox || (it.style.position != CssPosition.ABSOLUTE && it.style.position != CssPosition.FIXED)) }
+                    shown.sumOf(::outer) + s.flex.columnGap * (shown.size - 1).coerceAtLeast(0)
+                } else {
+                    b.children.maxOfOrNull(::outer) ?: 0.0
+                }
+                inner + horizontalInsets(b)
+            }
+        }
+        is ImageBox -> {
+            layoutImage(b, 0.0, room, 0.0)
+            b.borderBoxWidth
+        }
+        is TableBox -> room
+        is TableRowBox -> 0.0
+    }
+
+    /**
+     * The border-box width the content of [b] cannot go below without breaking a word, its
+     * min-content width. The item's own width is not part of it (4.5).
+     */
+    private fun minContentWidth(b: LayoutBox, room: Double): Double = when (b) {
+        is TextBlockBox -> measureContent(b).second
+        is BlockBox -> measureContent(b).second + horizontalInsets(b)
+        is ImageBox -> maxContentWidth(b, room)
+        else -> 0.0
+    }
+
+    /** The longest line of [box]'s text, laid out with room enough that no line wraps. */
+    private fun textMaxContent(box: TextBlockBox): Double {
+        val lines = layoutInline(box.runs, FLEX_UNBOUNDED, 0.0, 0.0, box.style, box.marker, box.markerColor)
+        var widest = 0.0
+        for ((i, ln) in lines.withIndex()) {
+            var lo = Double.MAX_VALUE
+            var hi = -Double.MAX_VALUE
+            for (r in ln.runs) { lo = minOf(lo, r.x); hi = maxOf(hi, r.x + r.paintWidth) }
+            for (im in ln.images) { lo = minOf(lo, im.x); hi = maxOf(hi, im.x + im.width) }
+            if (hi > lo) widest = maxOf(widest, hi - lo + if (i == 0) box.style.textIndentPt.coerceAtLeast(0.0) else 0.0)
+        }
+        // A hair more than the text keeps the final layout from breaking it on a rounding difference.
+        return if (widest > 0.0) widest + FLEX_EPSILON else 0.0
+    }
+
+    /** The distance from [b]'s border-box top to its first line's baseline, or null when it has no line. */
+    private fun firstBaseline(b: LayoutBox): Double? = when (b) {
+        is TextBlockBox -> b.lines.firstOrNull()?.let { it.yTop + it.ascent - b.y }
+        is BlockBox -> b.children.firstNotNullOfOrNull { c -> firstBaseline(c)?.let { it + c.y - b.y } }
+        else -> null
+    }
+
+    private fun horizontalInsets(b: LayoutBox): Double = if (b is TextBlockBox) 0.0 else b.style.let {
+        it.borderLeft.effective + it.paddingLeftPt + it.paddingRightPt + it.borderRight.effective
+    }
+
+    private fun verticalInsets(b: LayoutBox): Double = if (b is TextBlockBox) 0.0 else b.style.let {
+        it.borderTop.effective + it.paddingTopPt + it.paddingBottomPt + it.borderBottom.effective
+    }
+
+    private fun horizontalMargins(b: LayoutBox): Double = if (b is TextBlockBox) 0.0 else b.style.let {
+        (if (it.marginLeftAuto) 0.0 else it.marginLeftPt) + (if (it.marginRightAuto) 0.0 else it.marginRightPt)
+    }
+
+    private fun marginTop(b: LayoutBox): Double = if (b is TextBlockBox) 0.0 else b.style.marginTopPt
+
+    private fun marginBottom(b: LayoutBox): Double = if (b is TextBlockBox) 0.0 else b.style.marginBottomPt
 
     /** `start` and `end` resolve against the text direction; `left` and `right` never flip (#169). */
     private fun resolvedAlign(style: ComputedStyle): TextAlign = when (style.textAlign) {
@@ -1596,6 +2021,12 @@ internal class BoxLayout(
     private fun isOpener(cp: Int): Boolean = cp in CJK_OPENERS
 
     private companion object {
+        /** A width no line of text reaches, to measure text that does not wrap (#33). */
+        const val FLEX_UNBOUNDED = 1.0e6
+
+        /** Room for a rounding difference between a measure and the layout after it, in points (#33). */
+        const val FLEX_EPSILON = 0.01
+
         val BLACK = RgbColor(0.0, 0.0, 0.0)
         val EMPTY_SPEC = FontSpec(KiteFontFamily.Serif, bold = false, italic = false)
         /** Ruby reading size as a fraction of its base's font size. */

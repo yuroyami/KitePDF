@@ -102,7 +102,7 @@ internal class BoxBuilder(
         fun injectPseudo(side: PseudoSide) {
             if (isRoot) return
             val pc = resolver.computePseudo(el, ancestors, style, side) ?: return
-            if (pc.style.display == Display.BLOCK) { flush(); children.add(pseudoBlock(pc)) }
+            if (pc.style.display == Display.BLOCK || pc.style.display == Display.FLEX) { flush(); children.add(pseudoBlock(pc)) }
             else inl.appendText(pc.text, pc.style)
         }
         injectPseudo(PseudoSide.BEFORE)
@@ -181,6 +181,8 @@ internal class BoxBuilder(
         return BlockBox(style, children).also { box ->
             el.attrs["id"]?.let(box.anchors::add)
             if (el.tag == "a") el.attrs["name"]?.let(box.anchors::add) // legacy anchor
+            // A block-level link, such as a flex item or `a { display: block }`, covers its whole box (#33).
+            if (el.tag == "a") el.attrs["href"]?.takeIf { it.isNotBlank() }?.let { box.linkHref = resolveLink(it) }
             box.anchors += pendingAnchors
             box.semantics = sem
         }
@@ -493,7 +495,7 @@ internal class BoxBuilder(
         for (c in el.children) {
             if (c !is KiteXmlNode.Element) continue
             val cs = resolver.compute(c, childAncestors, style)
-            if (cs.display == Display.TABLE_CELL || cs.display == Display.BLOCK) {
+            if (cs.display == Display.TABLE_CELL || cs.display == Display.BLOCK || cs.display == Display.FLEX) {
                 val cell = buildBlock(c, cs, childAncestors, null, BLACK, parentSem = parentSem)
                 cell.colspan = c.attrs["colspan"]?.toIntOrNull()?.coerceAtLeast(1) ?: 1
                 cell.rowspan = c.attrs["rowspan"]?.toIntOrNull()?.coerceAtLeast(1) ?: 1

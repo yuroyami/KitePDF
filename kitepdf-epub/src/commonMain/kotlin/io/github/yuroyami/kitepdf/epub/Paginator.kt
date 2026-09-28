@@ -3,6 +3,7 @@ package io.github.yuroyami.kitepdf.epub
 import io.github.yuroyami.kitepdf.epub.css.ComputedStyle
 import io.github.yuroyami.kitepdf.epub.css.CssFloat
 import io.github.yuroyami.kitepdf.epub.css.CssPosition
+import io.github.yuroyami.kitepdf.epub.css.Display
 
 /** Everything to paint on one page: its document-space top plus the boxes on it. */
 internal class PageRender(
@@ -165,7 +166,8 @@ internal object Paginator {
         // break-inside: avoid on a block around the unit, outermost first: the block's units on
         // this page move with it when the whole block fits a page and something precedes it here.
         for (b in u.chain) {
-            if (!b.style.breakInsideAvoid || b is TextBlockBox) continue
+            // A flex container keeps its items together, as break-inside: avoid does (#33).
+            if (!(b.style.breakInsideAvoid || b.style.display == Display.FLEX) || b is TextBlockBox) continue
             var onPage = 0
             var k = cur.lastIndex
             while (k >= 0 && b in cur[k].chain) { onPage++; k-- }
