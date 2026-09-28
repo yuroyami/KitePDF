@@ -1,5 +1,7 @@
 package io.github.yuroyami.kitepdf.compose
 
+import kotlin.math.roundToInt
+import androidx.compose.ui.layout.layout
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -95,7 +97,12 @@ public fun BoxScope.KiteSelectionMenu(
     highlightColors: List<Color> = emptyList(),
     onHighlightColorPicked: ((KiteTextSelection, Color) -> Unit)? = null,
     clearSelectionOnColorPick: Boolean = true,
-    alignment: Alignment = Alignment.TopCenter,
+    /**
+     * Where the menu sits in the box. Null, the default, places it above the selection, or below
+     * it when there is no room above, centred on it and kept inside the box. That needs the menu
+     * in the viewer's `overlay`, where [KiteDocViewState.selectionBounds] is measured.
+     */
+    alignment: Alignment? = null,
     /** Show the menu even while the selection drag is still under the finger. */
     showWhileSelecting: Boolean = false,
     containerColor: Color = KiteSelectionMenuDefaults.ContainerColor,
@@ -145,7 +152,8 @@ public fun BoxScope.KiteSelectionMenu(
         }
     }
 
-    Box(modifier = modifier.align(alignment).padding(10.dp)) {
+    val placement = if (alignment != null) Modifier.align(alignment) else Modifier.matchParentSize().nearSelection(state)
+    Box(modifier = placement.then(modifier).padding(10.dp)) {
         if (container != null) {
             container(selection, body)
         } else {
@@ -160,6 +168,27 @@ public fun BoxScope.KiteSelectionMenu(
                 body()
             }
         }
+    }
+}
+
+/**
+ * Lays the menu out above [KiteDocViewState.selectionBounds], or below it when there is no room
+ * above, centred on it and clamped into the box (#408). The box keeps the top-left corner of
+ * the screen while the selection has no bounds.
+ */
+private fun Modifier.nearSelection(state: KiteDocViewState): Modifier = layout { measurable, constraints ->
+    val menu = measurable.measure(constraints.copy(minWidth = 0, minHeight = 0))
+    val width = constraints.maxWidth
+    val height = constraints.maxHeight
+    layout(width, height) {
+        val bounds = state.selectionBounds
+        val x = if (bounds == null) 0 else (bounds.center.x - menu.width / 2f).roundToInt().coerceIn(0, (width - menu.width).coerceAtLeast(0))
+        val y = when {
+            bounds == null -> 0
+            bounds.top - menu.height >= 0 -> (bounds.top - menu.height).roundToInt()
+            else -> bounds.bottom.roundToInt()
+        }.coerceIn(0, (height - menu.height).coerceAtLeast(0))
+        menu.place(x, y)
     }
 }
 

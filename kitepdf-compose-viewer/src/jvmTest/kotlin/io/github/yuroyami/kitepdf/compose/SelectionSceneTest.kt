@@ -260,6 +260,8 @@ class SelectionSceneTest {
             PdfBuilder()
                 .page(width = 200.0, height = 200.0) {
                     setFillRgb(1.0, 0.0, 0.0); rectangle(0.0, 0.0, 200.0, 200.0); fill()
+                    // A line to select, well above the bottom row the checks read.
+                    setFillRgb(0.0, 0.0, 0.0); text(io.github.yuroyami.kitepdf.writer.StandardFont.Helvetica, 12.0, 10.0, 100.0, "Words to select")
                 }
                 .page(width = 200.0, height = 200.0) {
                     setFillRgb(0.0, 0.0, 1.0); rectangle(0.0, 0.0, 200.0, 200.0); fill()
@@ -291,10 +293,9 @@ class SelectionSceneTest {
                 scene.sendPointerEvent(PointerEventType.Release, Offset(100f, 40f), type = PointerType.Touch)
             }
 
-            // The fixture has no text layer, so this long press sets the lock
-            // without ever producing a selection: exactly the in-between state
-            // the gate has to cover.
-            state.beginSelection(Offset(100f, 100f))
+            // A long press on the line locks the strip. A page without text no longer locks (#408),
+            // so the fixture has a line to select.
+            state.beginSelection(Offset(20f, 96f))
             assertTrue(state.isSelectionActive)
             dragUp()
             val locked = driver.pumpFrames(40).toComposeImageBitmap().toPixelMap()

@@ -1018,19 +1018,44 @@ public class KiteDocViewState(
         }
     }
 
+    /**
+     * The bounds of [selection] in viewport pixels, under the current zoom and pan, or null without
+     * a selection or while its page has no place on screen. It reads snapshot state, so a menu
+     * placed by it follows the page as it moves (#408).
+     */
+    public val selectionBounds: androidx.compose.ui.geometry.Rect?
+        get() {
+            val sel = selection ?: return null
+            var left = Float.POSITIVE_INFINITY
+            var top = Float.POSITIVE_INFINITY
+            var right = Float.NEGATIVE_INFINITY
+            var bottom = Float.NEGATIVE_INFINITY
+            for (quad in sel.quads) {
+                for ((x, y) in listOf(quad.left to quad.bottom, quad.right to quad.top)) {
+                    val point = displayToViewport(sel.pageIndex, x, y) ?: return null
+                    left = minOf(left, point.x)
+                    top = minOf(top, point.y)
+                    right = maxOf(right, point.x)
+                    bottom = maxOf(bottom, point.y)
+                }
+            }
+            return if (left <= right && top <= bottom) androidx.compose.ui.geometry.Rect(left, top, right, bottom) else null
+        }
+
     /** Long-press: anchor the selection at the char under [viewportOffset]. */
     internal fun beginSelection(viewportOffset: Offset) {
         if (!selectionEnabled) return
         selectionAnchor = null
-        // Claim the gesture up front. The hit test below can fail, and even a
-        // successful one only produces `selection` a few statements later; pan
-        // has to be off for the whole drag, not from whenever the model catches
-        // up. `endSelectionGesture` hands the lock back if nothing anchored.
+        val (pageIndex, x, y) = hitTestDisplay(viewportOffset) ?: return
+        // A page without text, such as a scan or a comic page, never takes the lock, so the
+        // press still pans it (#408).
+        val text = textAt(pageIndex)?.takeIf { it.blocks.isNotEmpty() } ?: return
+        // Claim the gesture before the char lookup. A press between the words of a page with
+        // text anchors nothing, and pan has to be off for the whole drag all the same.
+        // `endSelectionGesture` hands the lock back if nothing anchored.
         isSelectionActive = true
         selectionInProgress = true
-        val (pageIndex, x, y) = hitTestDisplay(viewportOffset) ?: return
         val location = anchorAt(pageIndex) ?: return
-        val text = textAt(pageIndex) ?: return
         val idx = text.charIndexAt(x, y) ?: return
         selectionAnchor = location to idx
         applySelection(text, pageIndex, idx, idx)
