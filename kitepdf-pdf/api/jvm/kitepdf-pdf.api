@@ -897,6 +897,8 @@ public final class io/github/yuroyami/kitepdf/PdfPage : io/github/yuroyami/kitep
 	public final fun getTrimBox ()Lio/github/yuroyami/kitepdf/core/KiteRectangle;
 	public final fun getUserUnit ()D
 	public final fun getWidth ()D
+	public fun isContentLoaded ()Z
+	public fun loadContent ()V
 	public final fun pageToDeviceBase ()Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;
 	public fun readingOrder ()Ljava/util/List;
 	public final fun renderAnnotationsTo (Lio/github/yuroyami/kitepdf/core/render/KiteCanvas;Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;Lio/github/yuroyami/kitepdf/PdfFormState;Lkotlin/jvm/functions/Function1;)V

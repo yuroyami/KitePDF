@@ -45,6 +45,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -456,7 +457,11 @@ private fun linkTap(
     onEpubReferenceTap: ((EpubLink) -> Boolean)?,
 ): Boolean {
     val hit = state.hitTest(offset) ?: return false
-    when (val page = state.pageAt(hit.pageIndex)) {
+    val tapped = state.pageAt(hit.pageIndex)
+    // A page whose content is not in memory would lay its chapter out here on the UI thread
+    // (#377). Its raster or its draw brings the content back; until then it has no links.
+    if (tapped != null && !tapped.isContentLoaded) return false
+    when (val page = tapped) {
         is PdfPage -> {
             val doc = state.document as? PdfDocument ?: return false
             for (ann in page.annotations.asReversed()) {
@@ -1307,11 +1312,23 @@ private fun KitePageVector(
     val textMeasurer = rememberTextMeasurer()
     val theme = colors.theme
     val failure = remember(page) { DrawFailure() }
+    // A page whose chapter the layout budget dropped would lay it out here, on the UI thread
+    // (#377). It shows its paper instead, and its chapter comes back on the raster dispatcher.
+    var loads by remember(page) { mutableIntStateOf(0) }
+    if (!page.isContentLoaded) {
+        LaunchedEffect(page, loads) {
+            withContext(kitepdfRasterDispatcher()) { runCatching { page.loadContent() } }
+            backOnComposeThread()
+            loads++
+        }
+    }
     // A layer of its own, so an overlay change above it, a hit, a highlight, the selection or a
     // form value, records the overlay again and not the page (#372).
     Canvas(modifier.graphicsLayer()) {
         val paper = theme?.background?.let { Color(it.r.toFloat(), it.g.toFloat(), it.b.toFloat()) } ?: colors.pageBackground
         drawRect(paper)
+        // The count of loads is read first, so the page draws again once its content is back.
+        if (loads < 0 || !page.isContentLoaded) return@Canvas
         val w = size.width
         val h = size.height
         val scale = if (page.displayWidth > 0.0) w / page.displayWidth else 0.0

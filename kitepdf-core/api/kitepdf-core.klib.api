@@ -193,9 +193,12 @@ abstract interface io.github.yuroyami.kitepdf.core/KitePage { // io.github.yuroy
         open fun <get-drawsHostFontText>(): kotlin/Boolean? // io.github.yuroyami.kitepdf.core/KitePage.drawsHostFontText.<get-drawsHostFontText>|<get-drawsHostFontText>(){}[0]
     open val hyperlinks // io.github.yuroyami.kitepdf.core/KitePage.hyperlinks|{}hyperlinks[0]
         open fun <get-hyperlinks>(): kotlin.collections/List<io.github.yuroyami.kitepdf.core/KiteLink> // io.github.yuroyami.kitepdf.core/KitePage.hyperlinks.<get-hyperlinks>|<get-hyperlinks>(){}[0]
+    open val isContentLoaded // io.github.yuroyami.kitepdf.core/KitePage.isContentLoaded|{}isContentLoaded[0]
+        open fun <get-isContentLoaded>(): kotlin/Boolean // io.github.yuroyami.kitepdf.core/KitePage.isContentLoaded.<get-isContentLoaded>|<get-isContentLoaded>(){}[0]
 
     abstract fun displayToDeviceBase(): io.github.yuroyami.kitepdf.core.render/KiteMatrix // io.github.yuroyami.kitepdf.core/KitePage.displayToDeviceBase|displayToDeviceBase(){}[0]
     abstract fun renderTo(io.github.yuroyami.kitepdf.core.render/KiteCanvas, io.github.yuroyami.kitepdf.core.render/KiteMatrix = ...) // io.github.yuroyami.kitepdf.core/KitePage.renderTo|renderTo(io.github.yuroyami.kitepdf.core.render.KiteCanvas;io.github.yuroyami.kitepdf.core.render.KiteMatrix){}[0]
+    open fun loadContent() // io.github.yuroyami.kitepdf.core/KitePage.loadContent|loadContent(){}[0]
     open fun readingOrder(): kotlin.collections/List<io.github.yuroyami.kitepdf.core/KiteReadingItem> // io.github.yuroyami.kitepdf.core/KitePage.readingOrder|readingOrder(){}[0]
     open fun renderTo(io.github.yuroyami.kitepdf.core.render/KiteCanvas, io.github.yuroyami.kitepdf.core.render/KiteMatrix, io.github.yuroyami.kitepdf.core/KiteCancellation) // io.github.yuroyami.kitepdf.core/KitePage.renderTo|renderTo(io.github.yuroyami.kitepdf.core.render.KiteCanvas;io.github.yuroyami.kitepdf.core.render.KiteMatrix;io.github.yuroyami.kitepdf.core.KiteCancellation){}[0]
     open fun textContent(): io.github.yuroyami.kitepdf.core/KiteStructuredText? // io.github.yuroyami.kitepdf.core/KitePage.textContent|textContent(){}[0]

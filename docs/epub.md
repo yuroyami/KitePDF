@@ -195,6 +195,13 @@ The chapters on screen stay too. `KiteDocView` names them with
 waits for a layout, even while a search reads the rest of the book. An app that
 draws pages without the viewer can call `book.keepChapters(setOf(chapter))`.
 
+A chapter that dropped while it was off screen comes back off the main thread
+when it scrolls into view. `page.isContentLoaded` says whether a page's chapter
+is in memory, and reading it lays nothing out. `page.loadContent()` lays the
+chapter out again, so call it off the main thread. Until the content is back,
+`KiteDocView` draws the page's paper in Vectorized mode, and a long press or a
+link tap on it finds no text and no links.
+
 Embedded fonts sit outside that budget and stay small on their own: a font
 file is parsed once per book, however many stylesheets or chapters declare it,
 and it keeps one outline per glyph it has drawn.

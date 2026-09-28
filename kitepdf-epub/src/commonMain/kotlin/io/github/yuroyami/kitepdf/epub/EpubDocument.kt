@@ -627,6 +627,11 @@ public class EpubDocument internal constructor(
 
     /* ── what a page reads from its chapter ───────────────────────────────── */
 
+    /** Brings [chapter]'s pages into memory, laying the chapter out again if the budget dropped it. */
+    internal fun loadChapter(chapter: Int) {
+        if (chapter in parsed.spineIndices) livePages(chapter)
+    }
+
     /** Page [index] of [chapter] to paint, in memory, laid out again if it was dropped. */
     internal fun render(chapter: Int, index: Int): PageRender {
         val pages = livePages(chapter)
@@ -1164,6 +1169,14 @@ public class EpubPage internal constructor(
 
     /** The laid-out page, fetched per operation: holding it would defeat the budget. */
     private fun laidOut(): PageRender = doc.render(chapter, index)
+
+    /** False while the layout budget has dropped this page's chapter (#377). */
+    override val isContentLoaded: Boolean get() = doc.isChapterLive(chapter)
+
+    /** Lays this page's chapter out again when the layout budget dropped it (#377). */
+    override fun loadContent() {
+        doc.loadChapter(chapter)
+    }
 
     /**
      * True when a run of this page's text has no embedded outlines, which is the case for every

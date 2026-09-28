@@ -210,6 +210,8 @@ public abstract interface class io/github/yuroyami/kitepdf/core/KitePage {
 	public abstract fun getDisplayWidth ()D
 	public fun getDrawsHostFontText ()Ljava/lang/Boolean;
 	public fun getHyperlinks ()Ljava/util/List;
+	public fun isContentLoaded ()Z
+	public fun loadContent ()V
 	public fun readingOrder ()Ljava/util/List;
 	public abstract fun renderTo (Lio/github/yuroyami/kitepdf/core/render/KiteCanvas;Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;)V
 	public fun renderTo (Lio/github/yuroyami/kitepdf/core/render/KiteCanvas;Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;Lio/github/yuroyami/kitepdf/core/KiteCancellation;)V
@@ -220,6 +222,8 @@ public abstract interface class io/github/yuroyami/kitepdf/core/KitePage {
 public final class io/github/yuroyami/kitepdf/core/KitePage$DefaultImpls {
 	public static fun getDrawsHostFontText (Lio/github/yuroyami/kitepdf/core/KitePage;)Ljava/lang/Boolean;
 	public static fun getHyperlinks (Lio/github/yuroyami/kitepdf/core/KitePage;)Ljava/util/List;
+	public static fun isContentLoaded (Lio/github/yuroyami/kitepdf/core/KitePage;)Z
+	public static fun loadContent (Lio/github/yuroyami/kitepdf/core/KitePage;)V
 	public static fun readingOrder (Lio/github/yuroyami/kitepdf/core/KitePage;)Ljava/util/List;
 	public static fun renderTo (Lio/github/yuroyami/kitepdf/core/KitePage;Lio/github/yuroyami/kitepdf/core/render/KiteCanvas;Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;Lio/github/yuroyami/kitepdf/core/KiteCancellation;)V
 	public static synthetic fun renderTo$default (Lio/github/yuroyami/kitepdf/core/KitePage;Lio/github/yuroyami/kitepdf/core/render/KiteCanvas;Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;ILjava/lang/Object;)V

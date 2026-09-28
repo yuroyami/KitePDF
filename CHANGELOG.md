@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `KitePage.isContentLoaded` says whether a page's content is in memory, and
+  `KitePage.loadContent` brings it back. An EPUB page answers false while the
+  layout budget has dropped its chapter. `KiteDocView` uses them, so a Vectorized
+  draw, a long press or a link tap on such a page no longer lays the chapter out
+  on the UI thread. The page shows its paper until the content is back (#377).
+
 - `PdfDocument.signatures` and `PdfSignature.validate` check the digital signatures
   of a signed PDF. A signature is `Valid`, `DigestMismatch`, `Invalid`,
   `Unsupported` or `Malformed`. The result names the signer, gives the certificate
