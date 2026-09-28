@@ -484,6 +484,9 @@ internal class StyleResolver(
             }
             "border-spacing" -> len(b.fontSizePt)?.let { b.borderSpacingPt = it.coerceAtLeast(0.0) }
             "table-layout" -> b.tableLayoutFixed = v.trim().lowercase() == "fixed"
+            else -> if (prop.removePrefix("-webkit-") in FlexValues.PROPERTIES) {
+                FlexValues.apply(b.flex, prop, v) { CssValues.length(it, b.fontSizePt, rootFontSizePt, refWidthPt) }?.let { b.flex = it }
+            }
         }
     }
 
@@ -561,7 +564,8 @@ internal class StyleResolver(
         "inline" -> Display.INLINE
         "inline-block" -> Display.INLINE_BLOCK
         "list-item" -> Display.LIST_ITEM
-        "block", "flex", "grid", "flow-root", "table-caption" -> Display.BLOCK
+        "flex", "-webkit-flex" -> Display.FLEX
+        "block", "grid", "flow-root", "table-caption" -> Display.BLOCK
         "table", "inline-table" -> Display.TABLE
         "table-row" -> Display.TABLE_ROW
         "table-cell" -> Display.TABLE_CELL
@@ -718,8 +722,16 @@ internal class StyleResolver(
         var bgRepeatY = true
         var transform: List<CssTransform>? = null // not inherited
         var transformOrigin = CssOffset.HALF to CssOffset.HALF // not inherited
+        var flex = FlexStyle() // not inherited
 
         fun build(): ComputedStyle {
+            // CSS Flexible Box Layout 1, 4: an in-flow child of a flex container is a flex item. It is
+            // blockified, and float does not apply to it (#33).
+            val flexItem = parent.display == Display.FLEX && position != CssPosition.ABSOLUTE && position != CssPosition.FIXED
+            if (flexItem) {
+                cssFloat = CssFloat.NONE
+                if (display == Display.INLINE || display == Display.INLINE_BLOCK) display = Display.BLOCK
+            }
             val outOfFlow = position == CssPosition.ABSOLUTE || position == CssPosition.FIXED || cssFloat != CssFloat.NONE
             // CSS Text Decoration 3, 2.1: lines reach in-flow descendants only, never the
             // contents of an inline block or of a floated or positioned box (#265).
@@ -757,6 +769,7 @@ internal class StyleResolver(
                 opacity, visible, clipsOverflow, radii, shadows,
                 bgImage?.let { CssBackgroundLayer(it, bgSize, bgX, bgY, bgRepeatX, bgRepeatY) },
                 transform, transformOrigin,
+                flex,
             )
         }
     }

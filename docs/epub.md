@@ -384,6 +384,14 @@ The layout engine covers what real books use:
   `text-transform`, letter/word spacing, and small-caps. A page paints in the
   order of CSS 2.1, Appendix E: backgrounds and borders, then floats, then lines
   and block images in document order, then positioned boxes by `z-index`.
+- **Flex layout**: `display: flex` lays its children out as flex items, in a
+  row or a column and either one reversed. `flex-wrap`, `justify-content`,
+  `align-items`, `align-self`, `align-content`, `gap`, `order` and `flex` with
+  its grow, shrink and basis apply, and so do auto margins. Loose text in the
+  container becomes an item of its own. An item's size starts from the width
+  of its content, so a short caption stays on one line. A container keeps its
+  items on one page when it fits a page. `inline-flex` still lays out inline,
+  and an image does not stretch across its line.
 - **Visual effects**: `opacity` below 1 paints the box and its content as one
   group at that opacity. `overflow` other than `visible` clips the content to
   the padding box, and the box's own border stays. `visibility: hidden` keeps

@@ -83,6 +83,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and the `LinkTarget` names of its page references, and SVG reads `<a href>`.
   `KiteDocView` follows these links and names them to a screen reader.
   `KitePath.bounds` gives the box of a path under a matrix (#433).
+- EPUB lays out `display: flex` (CSS Flexible Box Layout 1): rows and columns
+  and their reversed forms, wrapping, `justify-content`, `align-items`,
+  `align-self`, `align-content`, `gap`, `order`, `flex` and auto margins. A flex
+  container kept its children stacked in one column before. A container that
+  fits a page moves to the next page whole, and a link that is itself a block,
+  such as a flex item or `a { display: block }`, now covers its box (#33).
 - SVG draws `<pattern>` paint servers and `mask`. A pattern tiles its content over
   a fill or a stroke with its units, `viewBox`, `patternTransform` and `href`
   chain. A mask shows the element by the luminance of its content, or by its
