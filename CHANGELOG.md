@@ -147,6 +147,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- The Compose viewer asks the platform decoder for a JPEG at 1/2, 1/4 or 1/8 of
+  its size when it draws that small, and averages only the rest. That is the path
+  for a JPEG that the core cannot decode, such as an arithmetic-coded one. Skia
+  decodes straight to the smaller size, and Android passes it as `inSampleSize`.
+  On Android, `ImageDecoder.decodeRaw` no longer copies the whole image into a
+  second `IntArray` (#381).
+
 - A page whose bitmap the `maxBitmapLongSide` cap cuts down now draws the part
   on screen again in tiles of 1,024 pixels at full resolution, over the capped
   bitmap. Deep zoom stays sharp at any zoom, and a very tall page is sharp at
