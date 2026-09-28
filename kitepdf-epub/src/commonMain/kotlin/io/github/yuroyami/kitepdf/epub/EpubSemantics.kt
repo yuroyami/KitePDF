@@ -1,75 +1,25 @@
 package io.github.yuroyami.kitepdf.epub
 
-/**
- * What a piece of content IS, for readers that speak rather than draw.
- * Taken from the source element, so `<h2>` is a heading whatever CSS does to
- * it and a styled `<div>` that only looks like one is not.
- */
-public enum class EpubRole {
-    /** Running text: `<p>`, a bare text block, anything with no better name. */
-    TEXT,
+import io.github.yuroyami.kitepdf.core.KiteReadingItem
+import io.github.yuroyami.kitepdf.core.KiteRole
 
-    /** `<h1>`..`<h6>`; the depth is in [EpubReadingItem.headingLevel]. */
-    HEADING,
+/** What a piece of content is, for readers that speak rather than draw. */
+@Deprecated(
+    "Renamed to KiteRole, which the pages of every format use (#208)",
+    ReplaceWith("KiteRole", "io.github.yuroyami.kitepdf.core.KiteRole"),
+)
+public typealias EpubRole = KiteRole
 
-    /** One `<li>`. */
-    LIST_ITEM,
+/** One stop in a page's reading order. */
+@Deprecated(
+    "Renamed to KiteReadingItem, which the pages of every format give (#208)",
+    ReplaceWith("KiteReadingItem", "io.github.yuroyami.kitepdf.core.KiteReadingItem"),
+)
+public typealias EpubReadingItem = KiteReadingItem
 
-    /** `<blockquote>`. */
-    QUOTE,
-
-    /** `<pre>` or `<code>`. */
-    CODE,
-
-    /** `<td>` / `<th>`. */
-    TABLE_CELL,
-
-    /** `<figcaption>`. */
-    CAPTION,
-
-    /** An image; the text is its `alt` (or `aria-label`), empty when it has none. */
-    IMAGE,
-
-    /** `epub:type="pagebreak"`: the print edition's page number, not content. */
-    PAGE_BREAK,
-}
-
-/**
- * One stop in a page's reading order: what a screen reader would announce,
- * in the order it would announce it.
- *
- * ```kotlin
- * for (item in book.readingOrder(page = 3)) {
- *     when (item.role) {
- *         EpubRole.HEADING -> speakHeading(item.text, item.headingLevel)
- *         else -> speak(item.text)
- *     }
- * }
- * ```
- */
-public class EpubReadingItem internal constructor(
-    /** What this item is. */
-    public val role: EpubRole,
-    /** The words to announce. Never blank except for an image with no `alt`. */
-    public val text: String,
-    /** 1..6 for a [EpubRole.HEADING], 0 for everything else. */
-    public val headingLevel: Int = 0,
-    /**
-     * The `epub:type` the source declared (`footnote`, `noteref`, `pagebreak`,
-     * ...), or null. EPUB's own semantic vocabulary, passed through as-is.
-     */
-    public val epubType: String? = null,
-    /**
-     * How a speech engine says [text], from the source's `ssml:ph`, or null. The item holds the
-     * text of that element only, so the pronunciation covers exactly its own words (#39).
-     */
-    public val pronunciation: String? = null,
-    /** The phonetic alphabet of [pronunciation], such as `ipa` or `x-sampa`, from `ssml:alphabet`. */
-    public val alphabet: String? = null,
-) {
-    override fun toString(): String =
-        "EpubReadingItem($role${if (headingLevel > 0) " h$headingLevel" else ""}: ${text.take(40)})"
-}
+/** The `epub:type` that the source declared, or null. */
+@Deprecated("Renamed to sourceType, which a tagged PDF fills too (#208)", ReplaceWith("sourceType"))
+public val KiteReadingItem.epubType: String? get() = sourceType
 
 /**
  * A pronunciation that an element gives its text for a speech engine: `ssml:ph`, in the
@@ -80,7 +30,7 @@ internal class SpeechHint(val phoneme: String, val alphabet: String?)
 
 /** The accessibility facts a box carries from its source element. */
 internal class BoxSemantics(
-    val role: EpubRole,
+    val role: KiteRole,
     val headingLevel: Int = 0,
     /** `aria-label`, or an image's `alt`: replaces the box's own text. */
     val label: String? = null,
@@ -111,18 +61,18 @@ internal class BoxSemantics(
                 attrs["role"]?.trim()?.lowercase() in setOf("presentation", "none")
             val label = attrs["aria-label"]?.takeIf { it.isNotBlank() }
             val role = when {
-                epubType?.contains("pagebreak", ignoreCase = true) == true -> EpubRole.PAGE_BREAK
-                tag.length == 2 && tag[0] == 'h' && tag[1] in '1'..'6' -> EpubRole.HEADING
-                tag == "li" -> EpubRole.LIST_ITEM
-                tag == "blockquote" -> EpubRole.QUOTE
-                tag == "pre" || tag == "code" -> EpubRole.CODE
-                tag == "td" || tag == "th" -> EpubRole.TABLE_CELL
-                tag == "figcaption" -> EpubRole.CAPTION
-                tag == "img" || tag == "image" -> EpubRole.IMAGE
-                else -> EpubRole.TEXT
+                epubType?.contains("pagebreak", ignoreCase = true) == true -> KiteRole.PAGE_BREAK
+                tag.length == 2 && tag[0] == 'h' && tag[1] in '1'..'6' -> KiteRole.HEADING
+                tag == "li" -> KiteRole.LIST_ITEM
+                tag == "blockquote" -> KiteRole.QUOTE
+                tag == "pre" || tag == "code" -> KiteRole.CODE
+                tag == "td" || tag == "th" -> KiteRole.TABLE_CELL
+                tag == "figcaption" -> KiteRole.CAPTION
+                tag == "img" || tag == "image" -> KiteRole.IMAGE
+                else -> KiteRole.TEXT
             }
-            val level = if (role == EpubRole.HEADING) tag[1] - '0' else 0
-            if (role == EpubRole.TEXT && !hidden && label == null && epubType == null) return null
+            val level = if (role == KiteRole.HEADING) tag[1] - '0' else 0
+            if (role == KiteRole.TEXT && !hidden && label == null && epubType == null) return null
             return BoxSemantics(role, level, label, epubType, hidden)
         }
     }

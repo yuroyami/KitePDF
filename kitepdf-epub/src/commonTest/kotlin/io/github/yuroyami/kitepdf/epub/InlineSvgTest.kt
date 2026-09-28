@@ -1,5 +1,7 @@
 package io.github.yuroyami.kitepdf.epub
 
+import io.github.yuroyami.kitepdf.core.KiteRole
+
 import io.github.yuroyami.kitepdf.core.render.RecordingCanvas
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -24,7 +26,7 @@ class InlineSvgTest {
         assertEquals(1, green.size, "the icon paints once")
         val p = page(body)
         assertEquals("Before after", p.textContent().plainText.trim(), "the picture adds no text")
-        assertTrue(p.readingOrder().any { it.role == EpubRole.IMAGE && it.text == "icon" }, "${p.readingOrder()}")
+        assertTrue(p.readingOrder().any { it.role == KiteRole.IMAGE && it.text == "icon" }, "${p.readingOrder()}")
     }
 
     @Test
@@ -49,6 +51,6 @@ class InlineSvgTest {
     fun an_svg_hidden_from_assistive_technology_stays_out_of_the_reading_order() {
         val hidden = icon.replace("<svg ", """<svg aria-hidden="true" """)
         val items = page("<p>Before <span>$hidden</span> after</p>").readingOrder()
-        assertTrue(items.none { it.role == EpubRole.IMAGE }, "$items")
+        assertTrue(items.none { it.role == KiteRole.IMAGE }, "$items")
     }
 }

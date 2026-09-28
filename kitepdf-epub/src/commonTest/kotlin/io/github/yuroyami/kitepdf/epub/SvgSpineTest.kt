@@ -1,5 +1,7 @@
 package io.github.yuroyami.kitepdf.epub
 
+import io.github.yuroyami.kitepdf.core.KiteRole
+
 import io.github.yuroyami.kitepdf.core.render.RecordingCanvas
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -76,7 +78,7 @@ class SvgSpineTest {
     fun the_reading_order_names_the_svg_chapter_by_its_title() {
         val doc = EpubDocument.open(book(plate))
         val items = doc.pages[1].readingOrder()
-        assertEquals(listOf(EpubRole.IMAGE to "Plate one"), items.map { it.role to it.text })
+        assertEquals(listOf(KiteRole.IMAGE to "Plate one"), items.map { it.role to it.text })
         val untitled = EpubDocument.open(book(plate.replace("<title>Plate one</title>", "<desc>A green field</desc>")))
         assertEquals("A green field", untitled.pages[1].readingOrder().single().text)
     }

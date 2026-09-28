@@ -566,6 +566,11 @@ public class PdfDocument private constructor(
     /** Document language tag (BCP 47), e.g. "en-US", "fr-CA". `null` when /Lang is absent. */
     public val language: String? get() = (catalog["Lang"] as? PdfString)?.asText()
 
+    /** The logical structure of a tagged PDF, its root elements in logical order, or null without one (#208). */
+    internal val structureTree: List<io.github.yuroyami.kitepdf.text.StructElement>? by lazy {
+        io.github.yuroyami.kitepdf.text.StructureTree.parse(this)
+    }
+
     /**
      * The catalog's `/OpenAction`, run when the document opens (ISO 32000-1
      * §12.6.2). Null when the document defines none.

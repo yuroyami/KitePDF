@@ -373,12 +373,14 @@ internal object StructuredTextExtractor {
  * Canvas that records every `drawText` call. Path and image ops are
  * dropped. They don't contribute to text extraction.
  */
-private class TextCollectorCanvas : KiteCanvas {
+internal class TextCollectorCanvas : KiteCanvas {
     data class TextRun(
         val glyphs: List<TextGlyph>,
         val fontSpec: FontSpec,
         val fontSize: Double,
         val textMatrix: KiteMatrix,
+        /** The marked-content id the run was drawn in, which a tagged PDF's structure names (#208). */
+        val mcid: Int? = null,
     ) {
         fun toSpan(): PdfTextSpan? {
             if (glyphs.isEmpty()) return null
@@ -451,6 +453,9 @@ private class TextCollectorCanvas : KiteCanvas {
 
     val runs = mutableListOf<TextRun>()
 
+    /** Reads the marked-content id of the content being drawn, when a reading order needs it (#208). */
+    var mcid: () -> Int? = { null }
+
     override fun beginPage(widthPt: Double, heightPt: Double, deviceCtm: KiteMatrix) {}
     override fun endPage() {}
     override fun fillPath(path: KitePath, ctm: KiteMatrix, color: RgbColor, evenOdd: Boolean, alpha: Double, blendMode: KiteBlendMode) {}
@@ -460,7 +465,7 @@ private class TextCollectorCanvas : KiteCanvas {
         glyphs: List<TextGlyph>, fontSize: Double, unitsPerEm: Int, hasOutlines: Boolean,
         fontSpec: FontSpec, textToDevice: KiteMatrix, color: RgbColor, alpha: Double, blendMode: KiteBlendMode,
     ) {
-        runs.add(TextRun(glyphs, fontSpec, fontSize, textToDevice))
+        runs.add(TextRun(glyphs, fontSpec, fontSize, textToDevice, mcid()))
     }
     override fun pushClip(path: KitePath, ctm: KiteMatrix, evenOdd: Boolean) {}
     override fun popClip() {}

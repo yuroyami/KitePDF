@@ -64,8 +64,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - EPUB pages paint two-dimensional `transform`s about their `transform-origin`.
   Links and fragment rectangles move with the box, and so does the page text
   of a box that only moves and scales (#28).
+- `KitePage.readingOrder()` gives the content of a page of any format in the
+  order a screen reader says it, as `KiteReadingItem`s with a `KiteRole`. A PDF
+  page reads its structure tree, with the role map, `/Alt`, `/ActualText` and
+  `/Lang`, and leaves artifacts out; a page without tags reads its text blocks
+  in layout order (#208).
 
 ### Changed
+
+- `EpubRole` and `EpubReadingItem` are now deprecated names of the shared
+  `KiteRole` and `KiteReadingItem`, and `epubType` of `sourceType`. Code that
+  uses the old names still compiles, and a library built against the old
+  classes needs a rebuild (#208).
 
 - `KitePage.drawsHostFontText` lets a page say that it draws text in a host
   font. `KitePageRasterizer.rasterizeOffMain` then renders the page on Main at
