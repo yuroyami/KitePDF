@@ -163,6 +163,7 @@ internal class BoxLayout(
                 ln.yTop += dy
                 for (r in ln.runs) r.x += dx
                 for (im in ln.images) im.x += dx
+                for (m in ln.maths) m.x += dx
             }
             is ImageBox -> {}
         }
@@ -1000,6 +1001,7 @@ internal class BoxLayout(
                 line.yTop += dy
                 for (r in line.runs) r.x += dx
                 for (im in line.images) im.x += dx
+                for (m in line.maths) m.x += dx
             }
             is BlockBox -> if (keptTogether(b)) {
                 out += ColumnUnit(b.y, b.bottom) { dx, dy -> shiftSubtree(b, dx, dy) }
@@ -1707,6 +1709,14 @@ internal class BoxLayout(
                 lineHeight += imgH - ascent
                 ascent = imgH
             }
+            // A formula grows the line by its height above the baseline and its depth below it (#32).
+            val mathAscent = cells.maxOfOrNull { it.math?.ascent ?: 0.0 } ?: 0.0
+            val mathDescent = cells.maxOfOrNull { it.math?.descent ?: 0.0 } ?: 0.0
+            if (mathAscent > ascent) {
+                lineHeight += mathAscent - ascent
+                ascent = mathAscent
+            }
+            if (mathDescent > lineHeight - ascent) lineHeight = ascent + mathDescent
 
             val (leftInset, rightInset) = insetsFor(i)
             val lineAvail = (contentW - leftInset - rightInset).coerceAtLeast(1.0)
@@ -1732,12 +1742,13 @@ internal class BoxLayout(
 
             val placed = ArrayList<PlacedRun>()
             val images = ArrayList<PlacedImage>()
+            val maths = ArrayList<PlacedMath>()
             if (i == 0 && marker != null) {
                 val rtl = style.direction == Direction.RTL
                 markerRun(marker, style.fontSizePt, contentLeft, contentLeft + contentW, rtl, markerColor)?.let(placed::add)
             }
-            placed.addAll(placeRuns(cells, xStart, extraPerSpace, images))
-            out.add(PositionedLine(placed, y, lineHeight, ascent, images, lengths[i], ends[i]))
+            placed.addAll(placeRuns(cells, xStart, extraPerSpace, images, maths))
+            out.add(PositionedLine(placed, y, lineHeight, ascent, images, lengths[i], ends[i], maths))
             y += lineHeight
         }
         if (out.isEmpty()) {
@@ -1887,6 +1898,9 @@ internal class BoxLayout(
         val imageObjectFit: ObjectFit = ObjectFit.FILL,
         // The image's file in the archive; empty for an <svg> written in the chapter.
         val imageZipPath: String = "",
+        // A formula cell (cp = U+FFFC): its layout and what the reading order says for it (#32).
+        val math: MathBox? = null,
+        val mathText: String = "",
         // How many glyphs a ligature cell replaced; 1 for everything else.
         var ligComponents: Int = 1,
         // The text of a cell that stands for several characters, such as a ligature; null means [cp].
@@ -2024,6 +2038,26 @@ internal class BoxLayout(
                     level = levelsOfRun?.get(0) ?: 0, src = src,
                 )
                 tokens.add(Token.Word(listOf(cell), inlineSize))
+                continue
+            }
+            // A formula: one unbreakable cell as wide as its layout (#32).
+            if (run.math != null) {
+                endWord()
+                val src = srcAt
+                srcAt += codePointCount(run.text)
+                val box = MathLayout(run.family, run.fontSizePt).layout(run.math)
+                tokens.add(
+                    Token.Word(
+                        listOf(
+                            Cell(
+                                0xFFFC, box.width, run.fontSizePt, fontSpec(run.family, run.bold, run.italic), run.color, 0.0, null,
+                                href = run.href, math = box, mathText = run.math.readingText,
+                                level = levelsOfRun?.get(0) ?: 0, src = src,
+                            ),
+                        ),
+                        box.width,
+                    ),
+                )
                 continue
             }
             // Never mix ruby groups (or ruby and plain text) inside one word: the
@@ -2380,6 +2414,7 @@ internal class BoxLayout(
         xStart: Double,
         extraPerSpace: Double,
         imageSink: MutableList<PlacedImage>? = null,
+        mathSink: MutableList<PlacedMath>? = null,
     ): List<PlacedRun> {
         val out = ArrayList<PlacedRun>()
         var x = xStart
@@ -2410,6 +2445,14 @@ internal class BoxLayout(
                 }
                 x += width; i++; continue
             }
+            // A formula cell: emit a PlacedMath and advance the pen (#32).
+            if (c.math != null) {
+                closeGroup(x)
+                mathSink?.add(PlacedMath(x + c.padBefore, c.math, c.color, c.mathText))
+                x += c.padBefore + c.width + c.padAfter
+                i++
+                continue
+            }
             // Inline image cell: emit a PlacedImage and advance the pen.
             if (c.isImage) {
                 closeGroup(x)
@@ -2427,7 +2470,7 @@ internal class BoxLayout(
             val spec = c.spec; val fs = c.fontSize; val col = c.color; val sh = c.shift; val ul = c.underline; val face = c.face
             val glyphs = ArrayList<TextGlyph>()
             // An image cell always ends a text run, even when glued to a word (#99).
-            while (i < cells.size && cells[i].cp != ' '.code && !cells[i].isImage && cells[i].rubyGroup == c.rubyGroup &&
+            while (i < cells.size && cells[i].cp != ' '.code && !cells[i].isImage && cells[i].math == null && cells[i].rubyGroup == c.rubyGroup &&
                 cells[i].href == c.href && cells[i].speech === c.speech && cells[i].ids === c.ids && samePaint(cells[i], c)
             ) {
                 glyphs.add(glyphFor(cells[i])); x += cells[i].width + cells[i].padAfter; i++

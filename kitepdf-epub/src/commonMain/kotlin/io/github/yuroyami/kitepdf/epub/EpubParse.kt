@@ -468,5 +468,5 @@ internal fun resolveSwitches(el: KiteXmlNode.Element) {
     }
 }
 
-/** The namespaces a `case` may require for this engine to render it: XHTML and SVG, not MathML (#32). */
-private val SWITCH_NAMESPACES = setOf("http://www.w3.org/1999/xhtml", "http://www.w3.org/2000/svg")
+/** The namespaces a `case` may require for this engine to render it: XHTML, SVG and MathML (#32). */
+private val SWITCH_NAMESPACES = setOf("http://www.w3.org/1999/xhtml", "http://www.w3.org/2000/svg", "http://www.w3.org/1998/Math/MathML")

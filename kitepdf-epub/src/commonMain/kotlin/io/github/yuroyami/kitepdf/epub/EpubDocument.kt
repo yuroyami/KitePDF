@@ -579,6 +579,7 @@ public class EpubDocument internal constructor(
         for (page in pages) {
             for (line in page.lines) {
                 for (run in line.runs) glyphs += run.glyphs.size
+                for (m in line.maths) glyphs += m.box.items.size
                 for (im in line.images) {
                     count(im.image)
                     if (im.svg != null) countSvg(im.zipPath)
@@ -1186,7 +1187,8 @@ public class EpubPage internal constructor(
     override val drawsHostFontText: Boolean?
         get() {
             val page = laidOut()
-            if (page.lines.any { line -> line.runs.any { !it.hasOutlines && it.glyphs.isNotEmpty() } }) return true
+            // A formula draws its glyphs in a host font too (#32).
+            if (page.lines.any { line -> line.maths.isNotEmpty() || line.runs.any { !it.hasOutlines && it.glyphs.isNotEmpty() } }) return true
             val svg = page.images.any { it.svg != null || it.zipPath.endsWith(".svg", true) } ||
                 page.lines.any { line -> line.images.any { it.svg != null || it.zipPath.endsWith(".svg", true) } }
             return if (svg) null else false
@@ -1306,6 +1308,8 @@ public class EpubPage internal constructor(
                 paintImage(canvas, ctm, im.image, im.svg, im.width, im.height,
                     margin + im.x, base, im.objectFit, resourceDir(im.zipPath))
             }
+            // Formulas: their baselines on the line's (#32).
+            for (m in line.maths) paintMath(canvas, ctm, m, margin + m.x, base)
         }
 
         paintInOrder(
@@ -1650,6 +1654,31 @@ public class EpubPage internal constructor(
     }
 
     /** CSS 2.1, section 14.2: every inline fragment paints its own background, with its alpha (#253). */
+    /** Paints formula [m] with its baseline at ([x], [baseline]) in the page's y-up space (#32). */
+    private fun paintMath(canvas: KiteCanvas, ctm: KiteMatrix, m: PlacedMath, x: Double, baseline: Double) {
+        for (item in m.box.items) when (item) {
+            is MathItem.Glyphs -> canvas.drawGlyphs(
+                item.glyphs, item.fontSize, unitsPerEm = 1000, hasOutlines = false, fontSpec = item.spec,
+                textToDevice = ctm.concat(KiteMatrix.translation(x + item.x, baseline - item.y)).concat(KiteMatrix.scaling(1.0, item.scaleY)),
+                color = m.color, alpha = 1.0, blendMode = KiteBlendMode.Normal,
+            )
+            is MathItem.Rule -> {
+                val left = x + item.x
+                val top = baseline - item.y
+                val rect = KitePath.Builder().apply {
+                    moveTo(left, top); lineTo(left + item.width, top); lineTo(left + item.width, top - item.height); lineTo(left, top - item.height); close()
+                }.build()
+                canvas.fillPath(rect, ctm, m.color, evenOdd = false)
+            }
+            is MathItem.Stroke -> {
+                val line = KitePath.Builder().apply {
+                    item.points.forEachIndexed { i, (px, py) -> if (i == 0) moveTo(x + px, baseline - py) else lineTo(x + px, baseline - py) }
+                }.build()
+                canvas.strokePath(line, ctm, m.color, item.width, lineCap = 1, lineJoin = 1)
+            }
+        }
+    }
+
     private fun paintRunBackground(run: PlacedRun, canvas: KiteCanvas, ctm: KiteMatrix) {
         run.backgroundColor?.let {
             rectFill(canvas, ctm, 0.0, -0.2 * run.fontSize, run.paintWidth, run.fontSize, it.color, it.alpha)
@@ -2315,12 +2344,27 @@ public class EpubPage internal constructor(
         val runs = only
             .filter { !it.isAnnotation && it.glyphs.isNotEmpty() }
             .sortedBy { it.x }
-        if (runs.isEmpty()) return null
+        // A formula reads as its linear text, spread over its width, where it stands in the line (#32).
+        val maths = if (only === line.runs) line.maths.sortedBy { it.x } else emptyList()
+        if (runs.isEmpty() && maths.isEmpty()) return null
         val sb = StringBuilder()
         val edges = ArrayList<Double>()
         var penEnd = Double.NaN
         var penSize = 0.0
+        var nextMath = 0
+        fun formulasBefore(limit: Double) {
+            while (nextMath < maths.size && maths[nextMath].x < limit) {
+                val m = maths[nextMath++]
+                val x = page.margin + m.x
+                if (!penEnd.isNaN() && x - penEnd > penSize * SPACE_GAP_EM && sb.isNotEmpty() && sb.last() != ' ') {
+                    edges.add(penEnd); sb.append(' ')
+                }
+                for (k in m.text.indices) { edges.add(x + m.box.width * k / m.text.length); sb.append(m.text[k]) }
+                penEnd = x + m.box.width
+            }
+        }
         for (run in runs) {
+            formulasBefore(run.x)
             var x = page.margin + run.x
             // Words are separate runs with a pen gap where the collapsed space
             // was; restore it as one space char spanning the gap. The smaller of
@@ -2338,6 +2382,7 @@ public class EpubPage internal constructor(
             penEnd = x
             penSize = run.fontSize
         }
+        formulasBefore(Double.MAX_VALUE)
         if (sb.isEmpty()) return null
         edges.add(penEnd)
         if (page.vertical) {
