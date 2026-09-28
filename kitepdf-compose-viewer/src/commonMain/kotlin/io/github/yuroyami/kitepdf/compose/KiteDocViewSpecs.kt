@@ -61,21 +61,35 @@ public sealed interface KiteDocLayout {
     }
 
     /**
-     * Two-page spreads: one snap-pager item shows pages (2k, 2k+1) side by
-     * side, like an open book; an odd trailing page centres alone.
-     * [reverseLayout] swaps both the swipe direction and the in-spread
-     * visual order (page 2k on the right), for right-to-left books.
-     * Navigation stays logical (`nextPage()` = index +1; the visible spread
-     * advances every second step). Meant for fixed-layout content (PDF,
-     * pre-paginated EPUB); reflowable EPUB gains nothing from it. Spreads pair
-     * the pages of the whole book, so a book shows a chapter placeholder until
-     * every chapter is laid out.
+     * Two-page spreads: one snap-pager item shows two pages side by side, like
+     * an open book. Pages pair in order, (0, 1), (2, 3) and so on, except where
+     * the document declares otherwise (#37):
+     *
+     * - An EPUB chapter whose first page is `page-spread-left` or
+     *   `page-spread-right` starts or ends a spread on that side, and one that is
+     *   `rendition:page-spread-center` shows alone.
+     * - An EPUB book or chapter with `rendition:spread` none shows its pages
+     *   alone, and with landscape it pairs them only in a landscape viewport.
+     * - A PDF whose `/PageLayout` is TwoPageRight or TwoColumnRight puts its
+     *   first page on the right, so a left-to-right book shows it alone.
+     *
+     * A page without a partner centres alone. [reverseLayout] swaps both the
+     * swipe direction and the in-spread visual order (the first page on the
+     * right), for right-to-left books. Navigation stays logical (`nextPage()` =
+     * index +1; the visible spread advances once the step leaves it). Meant for
+     * fixed-layout content (PDF, pre-paginated EPUB); reflowable EPUB gains
+     * nothing from it. Spreads pair the pages of the whole book, so a book shows
+     * a chapter placeholder until every chapter is laid out.
+     *
+     * @property firstPageAlone shows the first page alone, as a printed book
+     *   shows its cover, and pairs the pages after it.
      */
     @Immutable
     public data class Spread(
         val orientation: Orientation = Orientation.Horizontal,
         val offscreenPages: Int = 1,
         val reverseLayout: Boolean = false,
+        val firstPageAlone: Boolean = false,
     ) : KiteDocLayout {
         init {
             require(offscreenPages >= 0) { "offscreenPages must be >= 0 (was $offscreenPages)" }

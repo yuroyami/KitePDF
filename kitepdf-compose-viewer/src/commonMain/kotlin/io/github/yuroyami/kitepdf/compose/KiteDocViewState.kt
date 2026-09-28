@@ -2068,16 +2068,17 @@ internal class PagerScrollAdapter(private val pagerState: PagerState) : KiteScro
 }
 
 /**
- * Spread mode: pager items are page PAIRS. Logical page indices stay the
- * public currency ([KiteDocViewState.scrollToPage] etc.); this adapter maps them
- * to spread items ("current" reports the spread's first page in reading
- * order), so nextPage()/previousPage() remain plain index +1/-1 and the
- * visible spread advances every second step.
+ * Spread mode: pager items are spreads of one or two pages, as [plans] pairs them. Logical page
+ * indices stay the public currency ([KiteDocViewState.scrollToPage] etc.); this adapter maps them
+ * to spread items ("current" reports the spread's first page in reading order), so
+ * nextPage()/previousPage() remain plain index +1/-1 and the visible spread advances once the
+ * step leaves it.
  */
 internal class SpreadScrollAdapter(
     private val pagerState: PagerState,
+    private val plans: SpreadPlans,
     /** The page the reader was on, so a pager that comes back keeps the second page of a spread. */
-    initialPage: Int = pagerState.currentPage * 2,
+    initialPage: Int = plans.current.firstPageOf(pagerState.currentPage),
 ) : KiteScrollAdapter {
     override val isScrollInProgress: Boolean get() = pagerState.isScrollInProgress
     /**
@@ -2090,16 +2091,37 @@ internal class SpreadScrollAdapter(
     private var logical by mutableIntStateOf(initialPage)
 
     override val currentPage: Int
-        get() = if (logical / 2 == pagerState.currentPage) logical else pagerState.currentPage * 2
+        get() {
+            val plan = plans.current
+            return if (plan.spreadOf(logical) == pagerState.currentPage) logical else plan.firstPageOf(pagerState.currentPage)
+        }
 
     override suspend fun scrollToPage(page: Int) {
         logical = page
-        pagerState.scrollToPage(page / 2)
+        pagerState.scrollToPage(plans.current.spreadOf(page))
     }
 
     override suspend fun animateScrollToPage(page: Int) {
         logical = page
-        pagerState.animateScrollToPage(page / 2)
+        pagerState.animateScrollToPage(plans.current.spreadOf(page))
+    }
+
+    /** The first page of the spread after or before the current one, or null at that end of the book. */
+    fun neighbourSpreadPage(forward: Boolean): Int? {
+        val plan = plans.current
+        val spread = plan.spreadOf(currentPage) + if (forward) 1 else -1
+        return if (spread in 0 until plan.size) plan.firstPageOf(spread) else null
+    }
+
+    /**
+     * Shows [plan] from the next measure, on the spread that holds the page the reader is on. A
+     * turned device or a new pairing setting changes the plan (#37).
+     */
+    fun replan(plan: SpreadPlan) {
+        val page = currentPage
+        plans.current = plan
+        logical = page
+        pagerState.requestScrollToPage(plan.spreadOf(page))
     }
 }
 

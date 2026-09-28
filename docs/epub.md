@@ -43,6 +43,16 @@ Fixed-layout (pre-paginated) books keep their authored viewport. The
 viewport is in CSS pixels, so a page declared 800 by 1200 is 600 by 900
 points. `book.isFixedLayout` tells you which kind you have.
 
+A book can mix fixed and reflowable chapters. Each chapter then keeps its own
+layout: a fixed chapter is one page at its viewport, and a reflowable chapter
+flows over pages of the reader's size. `book.isFixedLayout` is true only when
+every chapter is fixed.
+
+`book.epubMetadata.rendition` gives the rendition properties of the whole
+book: layout, spread, orientation and flow. `book.renditionOf(chapter)` gives
+the values for one chapter, and the side of a spread that its first page asks
+for. `KiteDocLayout.Spread` reads them to pair the pages.
+
 ## Rendering pages
 
 `EpubDocument.pages` is a `List<EpubPage>`, and every page renders through
@@ -124,12 +134,12 @@ the words on screen do not.
 
 `pageCount` and `pages` are the totals for the entire document, so asking for
 either lays every chapter out. So does `KiteDocLayout.Spread`, because it pairs
-pages by index and inserting a chapter would re-pair the book underneath the
-reader. Use `knownPageCount` with `isComplete` for a running total, and
+the pages of the whole book, and a chapter that lands later would re-pair the
+book underneath the reader. Use `knownPageCount` with `isComplete` for a running total, and
 `pageCountIn(chapter)` for one chapter.
 
-Laying out any chapter also reads the first one. The writing mode (horizontal
-or vertical) is one decision per book, read from chapter 1; the hyphenation
+Laying out any chapter also reads the first reflowable one. The writing mode
+(horizontal or vertical) is one decision per book, read from that chapter; the hyphenation
 language is chosen per spine item from its own `xml:lang`/`lang`, falling
 back to the book's OPF language. That is one extra chapter, never the whole
 book.

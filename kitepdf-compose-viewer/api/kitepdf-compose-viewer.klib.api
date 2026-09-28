@@ -105,8 +105,10 @@ sealed interface io.github.yuroyami.kitepdf.compose/KiteDocLayout { // io.github
     }
 
     final class Spread : io.github.yuroyami.kitepdf.compose/KiteDocLayout { // io.github.yuroyami.kitepdf.compose/KiteDocLayout.Spread|null[0]
-        constructor <init>(androidx.compose.foundation.gestures/Orientation = ..., kotlin/Int = ..., kotlin/Boolean = ...) // io.github.yuroyami.kitepdf.compose/KiteDocLayout.Spread.<init>|<init>(androidx.compose.foundation.gestures.Orientation;kotlin.Int;kotlin.Boolean){}[0]
+        constructor <init>(androidx.compose.foundation.gestures/Orientation = ..., kotlin/Int = ..., kotlin/Boolean = ..., kotlin/Boolean = ...) // io.github.yuroyami.kitepdf.compose/KiteDocLayout.Spread.<init>|<init>(androidx.compose.foundation.gestures.Orientation;kotlin.Int;kotlin.Boolean;kotlin.Boolean){}[0]
 
+        final val firstPageAlone // io.github.yuroyami.kitepdf.compose/KiteDocLayout.Spread.firstPageAlone|{}firstPageAlone[0]
+            final fun <get-firstPageAlone>(): kotlin/Boolean // io.github.yuroyami.kitepdf.compose/KiteDocLayout.Spread.firstPageAlone.<get-firstPageAlone>|<get-firstPageAlone>(){}[0]
         final val offscreenPages // io.github.yuroyami.kitepdf.compose/KiteDocLayout.Spread.offscreenPages|{}offscreenPages[0]
             final fun <get-offscreenPages>(): kotlin/Int // io.github.yuroyami.kitepdf.compose/KiteDocLayout.Spread.offscreenPages.<get-offscreenPages>|<get-offscreenPages>(){}[0]
         final val orientation // io.github.yuroyami.kitepdf.compose/KiteDocLayout.Spread.orientation|{}orientation[0]
@@ -117,7 +119,8 @@ sealed interface io.github.yuroyami.kitepdf.compose/KiteDocLayout { // io.github
         final fun component1(): androidx.compose.foundation.gestures/Orientation // io.github.yuroyami.kitepdf.compose/KiteDocLayout.Spread.component1|component1(){}[0]
         final fun component2(): kotlin/Int // io.github.yuroyami.kitepdf.compose/KiteDocLayout.Spread.component2|component2(){}[0]
         final fun component3(): kotlin/Boolean // io.github.yuroyami.kitepdf.compose/KiteDocLayout.Spread.component3|component3(){}[0]
-        final fun copy(androidx.compose.foundation.gestures/Orientation = ..., kotlin/Int = ..., kotlin/Boolean = ...): io.github.yuroyami.kitepdf.compose/KiteDocLayout.Spread // io.github.yuroyami.kitepdf.compose/KiteDocLayout.Spread.copy|copy(androidx.compose.foundation.gestures.Orientation;kotlin.Int;kotlin.Boolean){}[0]
+        final fun component4(): kotlin/Boolean // io.github.yuroyami.kitepdf.compose/KiteDocLayout.Spread.component4|component4(){}[0]
+        final fun copy(androidx.compose.foundation.gestures/Orientation = ..., kotlin/Int = ..., kotlin/Boolean = ..., kotlin/Boolean = ...): io.github.yuroyami.kitepdf.compose/KiteDocLayout.Spread // io.github.yuroyami.kitepdf.compose/KiteDocLayout.Spread.copy|copy(androidx.compose.foundation.gestures.Orientation;kotlin.Int;kotlin.Boolean;kotlin.Boolean){}[0]
         final fun equals(kotlin/Any?): kotlin/Boolean // io.github.yuroyami.kitepdf.compose/KiteDocLayout.Spread.equals|equals(kotlin.Any?){}[0]
         final fun hashCode(): kotlin/Int // io.github.yuroyami.kitepdf.compose/KiteDocLayout.Spread.hashCode|hashCode(){}[0]
         final fun toString(): kotlin/String // io.github.yuroyami.kitepdf.compose/KiteDocLayout.Spread.toString|toString(){}[0]

@@ -1692,26 +1692,33 @@ private fun SpreadLayout(
         )
         return
     }
-    val spreadCount = (state.itemCount + 1) / 2
+    // Pages pair as the document declares, and the plan follows a turned device (#37).
+    val landscape = state.viewportSize.let { it.width > it.height }
+    val strip = state.items
+    val plan = remember(strip, layout.firstPageAlone, layout.reverseLayout, landscape) { spreadPlan(state, layout, landscape) }
+    val plans = remember { SpreadPlans(plan) }
     // Seeded from the state and saving nothing of its own; see ContinuousLayout's seed comment.
     val pagerState = remember {
-        PagerState(currentPage = (state.currentPage / 2).coerceIn(0, spreadCount - 1)) { (state.itemCount + 1) / 2 }
+        PagerState(currentPage = plan.spreadOf(state.currentPage).coerceIn(0, (plan.size - 1).coerceAtLeast(0))) { plans.current.size }
     }
     DisposableEffect(state, pagerState) {
         // The page the state holds, which the pager's last adapter parked when it left (#402).
-        val adapter = SpreadScrollAdapter(pagerState, initialPage = state.currentPage)
+        val adapter = SpreadScrollAdapter(pagerState, plans, initialPage = state.currentPage)
         state.adapter = adapter
         onDispose {
             state.park(adapter.currentPage)
             if (state.adapter === adapter) state.adapter = null
         }
     }
+    SideEffect {
+        if (plans.current !== plan) (state.adapter as? SpreadScrollAdapter)?.replan(plan) ?: run { plans.current = plan }
+    }
     // Landing on another spread recentres the pan and, per spec, resets the zoom. The spread the
     // pager appears on is not a change, and a spread is compared by its first page (#403).
     LaunchedEffect(state, pagerState, zoomSpec.resetZoomOnPageChange) {
-        var last = state.anchorAt(pagerState.settledPage * 2)
+        var last = state.anchorAt(plans.current.firstPageOf(pagerState.settledPage))
         snapshotFlow { pagerState.settledPage }.collect { settled ->
-            val location = state.anchorAt(settled * 2)
+            val location = state.anchorAt(plans.current.firstPageOf(settled))
             if (location == last) return@collect
             last = location
             state.panOffset = Offset.Zero
@@ -1730,12 +1737,13 @@ private fun SpreadLayout(
     // Read through a derived state, so a zoom frame recomposes the pager only when the flag flips (#373).
     val overflows by remember(state) { derivedStateOf { state.overflows } }
     val pagerScrollEnabled = userScrollEnabled && !overflows && !state.isSelectionActive
-    val spreadContent: @Composable (Int) -> Unit = { spread ->
+    val spreadContent: @Composable (Int) -> Unit = spreadContent@{ spread ->
         val isCurrent = spread == pagerState.currentPage
+        val pages = plans.current.spreads.getOrNull(spread) ?: return@spreadContent
         SpreadBox(
             state = state,
-            leftIndex = 2 * spread,
-            rightIndex = (2 * spread + 1).takeIf { it < state.itemCount },
+            leftIndex = pages[0],
+            rightIndex = pages.getOrNull(1),
             reverseOrder = layout.reverseLayout,
             zoom = if (isCurrent) ({ state.zoom }) else NO_ZOOM,
             pan = if (isCurrent) ({ state.panOffset }) else NO_PAN,
@@ -1772,10 +1780,10 @@ private fun SpreadLayout(
 }
 
 /**
- * One spread: reading-order pages [leftIndex] (2k) and [rightIndex] (2k+1,
- * null on an odd tail) letterboxed into the viewport halves. LTR shows 2k on
- * the left; [reverseOrder] (right-to-left books) shows 2k on the RIGHT. A
- * lone trailing page centres across the full width.
+ * One spread: reading-order pages [leftIndex] and [rightIndex] (null for a
+ * page shown alone) letterboxed into the viewport halves. LTR shows [leftIndex]
+ * on the left; [reverseOrder] (right-to-left books) shows it on the RIGHT. A
+ * lone page centres across the full width.
  */
 @Composable
 private fun SpreadBox(

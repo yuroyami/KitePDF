@@ -197,6 +197,30 @@ KiteDocView(
 
 - **`offscreenPages`**: pages kept composed and rasterized on each side of the visible page (default 1). Raise to cover faster flinging; set 0 to minimise memory. While idle, the immediate neighbours are pre-rendered so a swipe never stalls.
 
+### `KiteDocLayout.Spread` (two pages side by side)
+
+Two pages per screen, like an open book. Swipe or drive it programmatically, as with `Paged`.
+
+```kotlin
+KiteDocView(
+    state,
+    layout = KiteDocLayout.Spread(
+        reverseLayout = false, // true for a right-to-left book
+        firstPageAlone = true, // show the cover alone, then pair the pages after it
+    ),
+)
+```
+
+Pages pair in order, the first two, the next two and so on, except where the document says otherwise:
+
+- An EPUB chapter can ask for its first page on the left side, on the right side, or alone in the centre.
+- An EPUB book or chapter can ask for no spreads, or for spreads in a landscape viewport only.
+- A PDF whose `/PageLayout` is `TwoPageRight` or `TwoColumnRight` puts its first page on the right, so a left-to-right document shows it alone.
+
+A page without a partner shows alone, centred. When the viewport turns between portrait and landscape, the reader stays on the same page.
+
+**Best for:** fixed-layout books, magazines and comics made as two-page spreads.
+
 ### `KiteDocLayout.SinglePage`
 
 Exactly one fixed page, letterboxed to fill the viewport:
