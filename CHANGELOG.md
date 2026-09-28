@@ -36,6 +36,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   for (#37).
 - `KiteDocLayout.Spread.firstPageAlone` shows the first page alone and pairs the
   pages after it (#37).
+- `EpubDocument.isScripted` and `scriptedChapters` tell which chapters are
+  scripted: the manifest marks them, or they have a `script` element (#40).
+- An `<iframe>`, and an `<object>` of an HTML or XHTML type, keep a box on the
+  page, 300 by 150 CSS pixels unless they set a size. An object's box shows its
+  fallback children. `EpubPage.embeds` lists the boxes with the document that
+  each one embeds (#40).
 
 ### Changed
 

@@ -120,6 +120,19 @@ public class EpubDocument internal constructor(
     public fun renditionOf(chapter: Int): EpubRendition = parsed.renditions[chapter]
 
     /**
+     * Whether [chapter] is scripted: its manifest item has the `scripted` property, or its
+     * document has a `script` element (#40). This library runs no script, so a scripted chapter
+     * shows what its markup shows without one, `noscript` content included, and an app can hand
+     * it to a web engine instead. Reads the chapter's markup once, and does not lay it out.
+     *
+     * @throws IndexOutOfBoundsException when [chapter] is not a chapter of the book.
+     */
+    public fun isScripted(chapter: Int): Boolean = parsed.isScripted(chapter)
+
+    /** The scripted chapters, in reading order (#40). Reads the markup of every chapter once. */
+    public val scriptedChapters: List<Int> get() = parsed.spineIndices.filter(parsed::isScripted)
+
+    /**
      * The reader-origin cascade layer built from [settings]: universal rules
      * that outrank author-important, so the user's font/color/justify choice
      * always wins. Empty for all-default settings (zero cascade impact).
@@ -230,7 +243,7 @@ public class EpubDocument internal constructor(
             sp.rules, settings.fontSize, layoutWidth, parsed.baseDir, layoutHeight,
             readerRules = readerRules, useAuthorCss = settings.usePublisherCss,
         )
-        return BoxBuilder(resolver, sp.path) { href -> resolvePath(sp.docDir, href) }.build(sp.tree)
+        return BoxBuilder(resolver, sp.path, parsed::mediaTypeOf) { href -> resolvePath(sp.docDir, href) }.build(sp.tree)
     }
 
     /**
@@ -1473,18 +1486,55 @@ public class EpubPage internal constructor(
 
     private fun buildMedia(page: PageRender): List<EpubMedia> = page.images.mapNotNull { box ->
         val info = box.media ?: return@mapNotNull null
+        EpubMedia(
+            imageRect(page, box),
+            info.kind,
+            info.sources.map { EpubMediaSource(it.href, it.type ?: doc.resourceType(it.href)) },
+            info.poster, info.controls, info.autoplay, info.loop, info.muted, info.id,
+        )
+    }
+
+    /**
+     * The inline frames and the HTML objects on this page, in document order, each with its box
+     * and the document it embeds (#40). The page keeps a frame's box empty and paints an object's
+     * fallback children there, so an app can place a web view over [EpubEmbed.rect].
+     */
+    public val embeds: List<EpubEmbed> get() = buildEmbeds(laidOut())
+
+    private fun buildEmbeds(page: PageRender): List<EpubEmbed> {
+        // Where this page's share of the block axis ends: its height, or its width in vertical writing.
+        val end = page.startY + (if (page.vertical) page.pageWidth else page.pageHeight) - 2 * page.margin
+        return page.embedBoxes.mapNotNull { box ->
+            val info = box.embed ?: return@mapNotNull null
+            val rect = if (box is ImageBox) imageRect(page, box) else {
+                // An object's content box, cut to this page, as the engine lays it out on both axes.
+                val s = box.style
+                val inlineStart = page.margin + box.x + s.borderLeft.effective + s.paddingLeftPt
+                val inlineSize = box.borderBoxWidth - s.borderLeft.effective - s.paddingLeftPt - s.paddingRightPt - s.borderRight.effective
+                val top = maxOf(box.y + s.borderTop.effective + s.paddingTopPt, page.startY)
+                val bottom = minOf(box.bottom - s.paddingBottomPt - s.borderBottom.effective, end)
+                if (bottom <= top || inlineSize <= 0.0) return@mapNotNull null
+                if (page.vertical) {
+                    val a = columnX(page, top)
+                    val b = columnX(page, bottom)
+                    io.github.yuroyami.kitepdf.core.KiteRectangle(minOf(a, b), inlineStart, maxOf(a, b), inlineStart + inlineSize)
+                } else {
+                    io.github.yuroyami.kitepdf.core.KiteRectangle(inlineStart, displayY(page, top), inlineStart + inlineSize, displayY(page, bottom))
+                }
+            }
+            EpubEmbed(rect, info.kind, info.href, info.type, info.id)
+        }
+    }
+
+    /** The content box of the block image [box] on [page], in display space. */
+    private fun imageRect(page: PageRender, box: ImageBox): io.github.yuroyami.kitepdf.core.KiteRectangle {
         val inset = imageInset(box.style)
         val (left, top) = if (page.vertical) {
             minOf(columnX(page, box.y + inset.blockStart), columnX(page, box.bottom - inset.blockEnd)) to page.margin + box.x + inset.inlineStart
         } else {
             (page.margin + box.x + inset.inlineStart) to displayY(page, box.y + inset.blockStart)
         }
-        EpubMedia(
-            io.github.yuroyami.kitepdf.core.KiteRectangle(left, top, left + box.drawWidth, top + box.drawHeight),
-            info.kind,
-            info.sources.map { EpubMediaSource(it.href, it.type ?: doc.resourceType(it.href)) },
-            info.poster, info.controls, info.autoplay, info.loop, info.muted, info.id,
-        )
+        return io.github.yuroyami.kitepdf.core.KiteRectangle(left, top, left + box.drawWidth, top + box.drawHeight)
     }
 
     private fun rectFill(

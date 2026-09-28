@@ -14,11 +14,13 @@ public final class io/github/yuroyami/kitepdf/epub/EpubDocument : io/github/yuro
 	public final fun getPageHeight ()D
 	public final fun getPageWidth ()D
 	public fun getPages ()Ljava/util/List;
+	public final fun getScriptedChapters ()Ljava/util/List;
 	public final fun getSettings ()Lio/github/yuroyami/kitepdf/epub/EpubSettings;
 	public final fun getTableOfContents ()Lio/github/yuroyami/kitepdf/epub/TableOfContents;
 	public fun isChapterReady (I)Z
 	public fun isComplete ()Z
 	public final fun isFixedLayout ()Z
+	public final fun isScripted (I)Z
 	public fun keepChapters (Ljava/util/Set;)V
 	public final fun linkTarget (Ljava/lang/String;)Lio/github/yuroyami/kitepdf/epub/EpubLinkTarget;
 	public fun locate (Lio/github/yuroyami/kitepdf/core/KiteBookmark;)Lio/github/yuroyami/kitepdf/core/KiteLocation;
@@ -46,6 +48,22 @@ public final class io/github/yuroyami/kitepdf/epub/EpubDocument$Companion {
 	public static synthetic fun open$default (Lio/github/yuroyami/kitepdf/epub/EpubDocument$Companion;[BDDDDILjava/lang/Object;)Lio/github/yuroyami/kitepdf/epub/EpubDocument;
 	public final fun openOrNull ([BLio/github/yuroyami/kitepdf/epub/EpubSettings;)Lio/github/yuroyami/kitepdf/epub/EpubDocument;
 	public static synthetic fun openOrNull$default (Lio/github/yuroyami/kitepdf/epub/EpubDocument$Companion;[BLio/github/yuroyami/kitepdf/epub/EpubSettings;ILjava/lang/Object;)Lio/github/yuroyami/kitepdf/epub/EpubDocument;
+}
+
+public final class io/github/yuroyami/kitepdf/epub/EpubEmbed {
+	public final fun getHref ()Ljava/lang/String;
+	public final fun getId ()Ljava/lang/String;
+	public final fun getKind ()Lio/github/yuroyami/kitepdf/epub/EpubEmbedKind;
+	public final fun getRect ()Lio/github/yuroyami/kitepdf/core/KiteRectangle;
+	public final fun getType ()Ljava/lang/String;
+}
+
+public final class io/github/yuroyami/kitepdf/epub/EpubEmbedKind : java/lang/Enum {
+	public static final field FRAME Lio/github/yuroyami/kitepdf/epub/EpubEmbedKind;
+	public static final field OBJECT Lio/github/yuroyami/kitepdf/epub/EpubEmbedKind;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lio/github/yuroyami/kitepdf/epub/EpubEmbedKind;
+	public static fun values ()[Lio/github/yuroyami/kitepdf/epub/EpubEmbedKind;
 }
 
 public final class io/github/yuroyami/kitepdf/epub/EpubFlow : java/lang/Enum {
@@ -148,6 +166,7 @@ public final class io/github/yuroyami/kitepdf/epub/EpubPage : io/github/yuroyami
 	public final fun getChapter ()I
 	public fun getDisplayHeight ()D
 	public fun getDisplayWidth ()D
+	public final fun getEmbeds ()Ljava/util/List;
 	public final fun getHeight ()D
 	public final fun getLinks ()Ljava/util/List;
 	public final fun getLocation ()Lio/github/yuroyami/kitepdf/core/KiteLocation;

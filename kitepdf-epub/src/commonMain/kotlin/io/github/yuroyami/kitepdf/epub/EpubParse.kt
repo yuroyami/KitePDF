@@ -54,6 +54,8 @@ internal class ParsedEpub(
     val baseDir: Direction,
     /** How each spine document asks to be shown, parallel to [spinePaths] (#37). */
     val renditions: List<EpubRendition>,
+    /** Whether the manifest marks each spine document `scripted`, parallel to [spinePaths] (#40). */
+    private val manifestScripted: List<Boolean> = List(spinePaths.size) { false },
 ) {
 
     val spineCount: Int get() = spinePaths.size
@@ -63,6 +65,24 @@ internal class ParsedEpub(
 
     /** Whether every chapter keeps fixed pages. */
     val allFixed: Boolean = renditions.isNotEmpty() && renditions.all { it.layout == EpubLayout.PRE_PAGINATED }
+
+    private val scriptLock = KiteLock()
+    private val scriptFound = arrayOfNulls<Boolean>(spinePaths.size)
+
+    /**
+     * Whether [chapter] is scripted: the manifest marks it, or its document has a `script`
+     * element. Reads the chapter's markup once, without building its tree (#40).
+     */
+    fun isScripted(chapter: Int): Boolean {
+        if (manifestScripted[chapter]) return true
+        scriptLock.withLock { scriptFound[chapter] }?.let { return it }
+        val text = zip.readText(spinePaths[chapter]).orEmpty()
+        val found = KiteXml.tokenize(text).any { token ->
+            token is KiteXmlToken.Open && token.name.substringAfterLast(':').equals("script", ignoreCase = true)
+        }
+        scriptLock.withLock { scriptFound[chapter] = found }
+        return found
+    }
 
     val spineIndices: IntRange get() = spinePaths.indices
 
@@ -244,6 +264,7 @@ internal class ParsedEpub(
                 toc = TocParser.parse(zip, opf, contentPaths) { base, href -> EpubDocument.resolvePath(base, href) },
                 baseDir = if (opf.direction?.lowercase() == "rtl") Direction.RTL else Direction.LTR,
                 renditions = present.map { opf.renditionAt(it.second) },
+                manifestScripted = present.map { opf.contentDocument(opf.spineIdrefs[it.second])?.hasProperty("scripted") == true },
             )
         }
 

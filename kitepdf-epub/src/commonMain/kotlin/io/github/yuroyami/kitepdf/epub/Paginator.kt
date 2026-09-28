@@ -27,6 +27,8 @@ internal class PageRender(
     val verticalLr: Boolean = false,
     /** Blocks inside a link, clickable as a whole, that reach onto this page. */
     val linkBoxes: List<LayoutBox> = emptyList(),
+    /** Boxes of embedded documents that reach onto this page (#40). */
+    val embedBoxes: List<LayoutBox> = emptyList(),
 )
 
 /**
@@ -56,8 +58,9 @@ internal object Paginator {
         val images = ArrayList<ImageBox>()
         val deco = ArrayList<LayoutBox>()
         val links = ArrayList<LayoutBox>()
-        collect(root, lines, images, deco, links)
-        return PageRender(0.0, lines, images, deco, pageWidth, pageHeight, margin = 0.0, linkBoxes = links)
+        val embeds = ArrayList<LayoutBox>()
+        collect(root, lines, images, deco, links, embeds)
+        return PageRender(0.0, lines, images, deco, pageWidth, pageHeight, margin = 0.0, linkBoxes = links, embedBoxes = embeds)
     }
 
     fun paginate(
@@ -73,7 +76,8 @@ internal object Paginator {
         val images = ArrayList<ImageBox>()
         val deco = ArrayList<LayoutBox>()
         val links = ArrayList<LayoutBox>()
-        collect(root, lines, images, deco, links)
+        val embeds = ArrayList<LayoutBox>()
+        collect(root, lines, images, deco, links, embeds)
 
         // In tree order, each unit with the blocks around it, so a break on any of them applies:
         // before the first unit of a block and after its last one.
@@ -144,6 +148,7 @@ internal object Paginator {
                 vertical = vertical,
                 verticalLr = verticalLr,
                 linkBoxes = links.filter { it.y < end && it.bottom > start },
+                embedBoxes = embeds.filter { it.y < end && it.bottom > start },
             )
         }
     }
@@ -205,14 +210,15 @@ internal object Paginator {
 
     private fun collect(
         box: LayoutBox, lines: ArrayList<PositionedLine>, images: ArrayList<ImageBox>,
-        deco: ArrayList<LayoutBox>, links: ArrayList<LayoutBox>,
+        deco: ArrayList<LayoutBox>, links: ArrayList<LayoutBox>, embeds: ArrayList<LayoutBox>,
     ) {
         if (box.linkHref != null) links.add(box)
+        if (box.embed != null) embeds.add(box)
         when (box) {
-            is BlockBox -> { if (decorated(box.style)) deco.add(box); for (c in box.children) collect(c, lines, images, deco, links) }
+            is BlockBox -> { if (decorated(box.style)) deco.add(box); for (c in box.children) collect(c, lines, images, deco, links, embeds) }
             is TableBox -> {
                 if (decorated(box.style)) deco.add(box)
-                for (r in box.rows) { if (decorated(r.style)) deco.add(r); for (cell in r.cells) collect(cell, lines, images, deco, links) }
+                for (r in box.rows) { if (decorated(r.style)) deco.add(r); for (cell in r.cells) collect(cell, lines, images, deco, links, embeds) }
             }
             is TableRowBox -> {}
             is TextBlockBox -> lines.addAll(box.lines)
