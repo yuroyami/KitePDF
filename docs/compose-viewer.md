@@ -583,17 +583,20 @@ chapter. Prefer `knownPageCount` with `isComplete`.
 
 A tap on a link inside the document is handled for you: internal jumps (PDF
 destinations, EPUB hrefs into another chapter) scroll to the target page and
-never reach your code. In a vertical `Continuous` strip, a PDF link to a place on
-a page, such as `/XYZ` or `/FitH`, scrolls that place to the top of the viewport.
+never reach your code. A PDF link to a place on a page, such as `/XYZ` or
+`/FitH`, brings that place to the top of the viewport at the reader's zoom. A
+vertical `Continuous` strip scrolls there. A horizontal strip and a pager pan
+across the page, as far as the page lets them. A pager that resets its zoom on a
+page turn shows the whole page, so the place is on screen.
 A PDF link that names a page turn (NextPage, PrevPage,
 FirstPage or LastPage) turns the page, and a script link runs in `scripts` when
 you pass a handler. `KiteDocLayout.SinglePage` cannot move, so there an internal
 PDF link goes to `onLinkTap` as a go-to action.
 
 XPS and SVG pages give their links as `KitePage.hyperlinks`. The viewer follows
-one that leads inside the document, and in a vertical `Continuous` strip it
-scrolls the named element to the top of the viewport. In `SinglePage` such a tap
-falls through to `onTap`. A link that leaves the document goes to `onLinkTap`.
+one that leads inside the document, and brings the element it names to the top
+of the viewport the same way. In `SinglePage` such a tap falls through to
+`onTap`. A link that leaves the document goes to `onLinkTap`.
 
 Everything else goes to `onLinkTap` as a `KiteLinkAction`. Return `true` once
 you have handled it; `false` lets the tap fall through to `onTap`.

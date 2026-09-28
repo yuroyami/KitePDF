@@ -1,5 +1,6 @@
 package io.github.yuroyami.kitepdf.compose
 
+import androidx.compose.foundation.gestures.animateScrollBy
 import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
 
@@ -1354,24 +1355,80 @@ public class KiteDocViewState(
     }
 
     /**
-     * Scrolls a vertical continuous strip so that the display-space height [y] of the page in
-     * [slot] sits at the top of the viewport, as a link to a place on a page asks (#433). Without
-     * [y], in another layout or before the strip shows a page, it turns to the page.
+     * Brings the display-space height [y] of the page in [slot] to the top of the viewport, at the
+     * reader's zoom and pan, as a link to a place on a page asks (#433). A vertical strip scrolls
+     * there. A horizontal strip turns to the page and pans across it, and a pager does the same
+     * once it lands. The view goes as far as the page lets it. Without [y] it turns to the page.
      */
     internal suspend fun animateScrollToPagePoint(slot: Int, y: Double?): Unit = onViewerThread {
-        val continuous = adapter as? LazyListScrollAdapter
         val page = pageAt(slot)
-        val length = if (continuous != null && page != null && y != null && stripOrientation != androidx.compose.foundation.gestures.Orientation.Horizontal) {
-            continuous.verticalSlotLength(kitePageAspect(page)) { pageAt(it)?.let(::kitePageAspect) }
-        } else null
-        if (length == null || page == null || y == null || page.displayHeight <= 0.0) {
+        if (y == null || !y.isFinite() || page == null || page.displayHeight <= 0.0) {
             animateScrollToPage(slot)
             return@onViewerThread
         }
-        val offset = ((y / page.displayHeight).coerceIn(0.0, 1.0) * length).roundToInt()
+        val continuous = adapter as? LazyListScrollAdapter
+        if (continuous == null) {
+            // A pager recentres the pan when it lands on another page, so the landing pans then.
+            if (pageGeometry.containsKey(slot) && adapter?.isScrollInProgress != true) {
+                panToShowAtTop(slot, y)?.let { panOffset = it }
+            } else {
+                landing = slot to y
+                animateScrollToPage(slot)
+            }
+            return@onViewerThread
+        }
+        if (stripOrientation == androidx.compose.foundation.gestures.Orientation.Horizontal) {
+            animateScrollToPage(slot)
+            panToShowAtTop(slot, y)?.let { panOffset = it }
+            return@onViewerThread
+        }
+        val length = continuous.verticalSlotLength(kitePageAspect(page)) { pageAt(it)?.let(::kitePageAspect) }
+        if (length == null) {
+            animateScrollToPage(slot)
+            return@onViewerThread
+        }
+        // The zoom scales about the viewport's centre and the pan moves the result, so the top of
+        // the screen shows the strip at (centre + pan) / zoom above the centre, not at its top.
+        val centre = viewportSize.height / 2f
+        val shift = (centre + panOffset.y) / zoom - centre
+        val offset = ((y / page.displayHeight).coerceIn(0.0, 1.0) * length + shift).roundToInt()
         leaveSelectionFor(slot)
-        park(slot, offsetPx = offset)
-        continuous?.animateScrollToPageOffset(slot, offset)
+        if (offset >= 0) {
+            park(slot, offsetPx = offset)
+            continuous.animateScrollToPageOffset(slot, offset)
+        } else {
+            // The place is nearer the top of its page than that, so the strip goes on into the page before.
+            park(slot)
+            continuous.animateScrollToPageOffset(slot, 0)
+            continuous.animateScrollBy(offset.toFloat())
+        }
+    }
+
+    /** A height on a page that a link asks a pager to show at the top once it lands there (#433). */
+    private var landing: Pair<Int, Double>? = null
+
+    /**
+     * The pan that shows the height a link asked for, now that the pager landed, or null. The
+     * request is spent either way, so no later landing uses it.
+     */
+    internal fun takeLandingPan(): Offset? {
+        val (slot, y) = landing ?: return null
+        landing = null
+        return panToShowAtTop(slot, y)
+    }
+
+    /**
+     * The pan that brings the display-space height [y] of the page in [slot] to the top of the
+     * viewport at the present zoom, inside the pan bounds, or null before the page has a place.
+     */
+    private fun panToShowAtTop(slot: Int, y: Double): Offset? {
+        val rect = pageGeometry[slot] ?: return null
+        val page = pageAt(slot) ?: return null
+        if (page.displayHeight <= 0.0 || viewportSize == IntSize.Zero) return null
+        val centre = viewportSize.height / 2f
+        val at = rect.top + (y / page.displayHeight).coerceIn(0.0, 1.0).toFloat() * rect.height
+        // A content point shows at centre + (point - centre) * zoom + pan, as hitTestDisplay inverts.
+        return clampPan(Offset(panOffset.x, -(centre + (at - centre) * zoom)), zoom)
     }
 
     /**
@@ -1953,6 +2010,11 @@ internal class LazyListScrollAdapter(private val listState: LazyListState) : Kit
     suspend fun scrollToPageOffset(page: Int, offsetPx: Int) = listState.scrollToItem(page, offsetPx)
 
     suspend fun animateScrollToPageOffset(page: Int, offsetPx: Int) = listState.animateScrollToItem(page, offsetPx)
+
+    /** Scrolls the strip by [px], back toward its start when [px] is negative. */
+    suspend fun animateScrollBy(px: Float) {
+        listState.animateScrollBy(px)
+    }
 
     /**
      * The height of the slot of a page of [aspect] in this vertical strip, from the width of a slot
