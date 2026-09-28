@@ -164,6 +164,6 @@ See **[Headless rendering](rendering.md)**.
 
 ## Status
 
-KitePDF is pre-1.0 and actively developed. Reading, text extraction, metadata, outlines, annotations, forms, encrypted documents, the Compose viewer, headless rendering, editing, redaction, signing preparation, PDF creation, and the supported JBIG2/JPEG 2000 profiles all work today. Signature validation, less common form widgets, advanced color management, broader image-codec profiles, and more document handlers are on the way.
+KitePDF is pre-1.0 and actively developed. Reading, text extraction, metadata, outlines, annotations, forms, encrypted documents, the Compose viewer, headless rendering, editing, redaction, signing preparation, signature validation, PDF creation, and the supported JBIG2/JPEG 2000 profiles all work today. Less common form widgets, advanced color management, broader image-codec profiles, and more document handlers are on the way.
 
 If a PDF renders incorrectly, [open an issue](https://github.com/yuroyami/KitePDF/issues) with the file attached. Every rendering fix ships with a regression test.

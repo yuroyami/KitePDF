@@ -56,7 +56,7 @@ The text of any page with its position, and search across a whole document.
 <td width="33%" valign="top">
 
 **Change**<br>
-Fill forms, edit pages, redact for real, encrypt, and prepare a signature.
+Fill forms, edit pages, redact for real, encrypt, and prepare a signature. Check the signatures that a file already has.
 
 </td>
 <td width="33%" valign="top">
@@ -351,7 +351,7 @@ with the reason behind each gap.
 | Topic | What to expect |
 | --- | --- |
 | Annotations | You can read them, but there is no API to create them yet. |
-| Signing | `PdfSigner` prepares the signature field and its byte range. Your app supplies the signature itself, and KitePDF does not check signatures. |
+| Signing | `PdfSigner` prepares the signature field and its byte range, and your app supplies the signature itself. `PdfSignature.validate` checks a signature, but not revocation or the dates of its certificates. |
 | Redaction | A few things survive, such as a large background fill and a clipping path's outline. The [editing guide](https://yuroyami.github.io/KitePDF/editing/#redaction-limitations) lists them all. |
 | Encryption | Files encrypted with RC4 open, but only AES files can be edited. New files use AES-256. |
 | Colour | ICC profiles and rendering intents apply. Overprint is not simulated. |

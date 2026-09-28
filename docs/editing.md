@@ -383,7 +383,7 @@ The editor's incremental-save mode is the foundation for digital signature workf
 3. Sign that byte range (typically `[0, savedBytes.size)`) with a cryptographic signature algorithm.
 4. Write the signature object into the document (another incremental append).
 
-`PdfSigner` implements this flow: `prepareSignature(fieldName)` stages the signature field and placeholder, `saveForSigning()` returns the bytes plus the exact `/ByteRange` to sign, and `PdfSigner.embedSignature(bytes, byteRange, cms)` patches your DER `SignedData` in without moving a byte. KitePDF does no signature cryptography itself; the CMS blob comes from your application (on the JVM, `java.security` builds one in a few lines).
+`PdfSigner` implements this flow: `prepareSignature(fieldName)` stages the signature field and placeholder, `saveForSigning()` returns the bytes plus the exact `/ByteRange` to sign, and `PdfSigner.embedSignature(bytes, byteRange, cms)` patches your DER `SignedData` in without moving a byte. KitePDF does not sign: the CMS blob comes from your application (on the JVM, `java.security` builds one in a few lines). To check the result, open it and call `validate` on its signature (see [Signatures](reading.md#signatures)).
 
 ## Encrypted documents
 

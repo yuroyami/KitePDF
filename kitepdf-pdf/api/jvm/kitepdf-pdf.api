@@ -410,6 +410,17 @@ public final class io/github/yuroyami/kitepdf/PdfAttachment {
 public final class io/github/yuroyami/kitepdf/PdfAttachment$Companion {
 }
 
+public final class io/github/yuroyami/kitepdf/PdfCertificate {
+	public final fun getCommonName ()Ljava/lang/String;
+	public final fun getEncoded ()[B
+	public final fun getIssuer ()Ljava/lang/String;
+	public final fun getNotAfter ()Lio/github/yuroyami/kitepdf/PdfDate;
+	public final fun getNotBefore ()Lio/github/yuroyami/kitepdf/PdfDate;
+	public final fun getSerialNumber ()Ljava/lang/String;
+	public final fun getSubject ()Ljava/lang/String;
+	public fun toString ()Ljava/lang/String;
+}
+
 public final class io/github/yuroyami/kitepdf/PdfDate {
 	public static final field Companion Lio/github/yuroyami/kitepdf/PdfDate$Companion;
 	public fun <init> (IIIIIICII)V
@@ -584,6 +595,7 @@ public final class io/github/yuroyami/kitepdf/PdfDocument : io/github/yuroyami/k
 	public fun getPages ()Ljava/util/List;
 	public final fun getPermissions ()Lio/github/yuroyami/kitepdf/PdfPermissions;
 	public final fun getRawBytes ()[B
+	public final fun getSignatures ()Ljava/util/List;
 	public final fun getTrailer ()Lio/github/yuroyami/kitepdf/core/parser/PdfDictionary;
 	public final fun getVersion ()Ljava/lang/String;
 	public final fun getViewerPreferences ()Lio/github/yuroyami/kitepdf/PdfViewerPreferences;
@@ -1004,6 +1016,44 @@ public final class io/github/yuroyami/kitepdf/PdfScriptHandler$DefaultImpls {
 	public static fun pumpTimers (Lio/github/yuroyami/kitepdf/PdfScriptHandler;J)Ljava/lang/Long;
 	public static fun runAction (Lio/github/yuroyami/kitepdf/PdfScriptHandler;Lio/github/yuroyami/kitepdf/PdfAction$JavaScript;)V
 	public static fun runWidgetAction (Lio/github/yuroyami/kitepdf/PdfScriptHandler;Ljava/lang/String;Lio/github/yuroyami/kitepdf/PdfAction;)Z
+}
+
+public final class io/github/yuroyami/kitepdf/PdfSignature {
+	public final fun getByteRange ()Ljava/util/List;
+	public final fun getContactInfo ()Ljava/lang/String;
+	public final fun getField ()Lio/github/yuroyami/kitepdf/PdfFormField;
+	public final fun getLocation ()Ljava/lang/String;
+	public final fun getName ()Ljava/lang/String;
+	public final fun getReason ()Ljava/lang/String;
+	public final fun getSigningTime ()Lio/github/yuroyami/kitepdf/PdfDate;
+	public final fun getSubFilter ()Ljava/lang/String;
+	public final fun isDocumentTimestamp ()Z
+	public fun toString ()Ljava/lang/String;
+	public final fun validate (Ljava/util/List;)Lio/github/yuroyami/kitepdf/PdfSignatureValidation;
+	public static synthetic fun validate$default (Lio/github/yuroyami/kitepdf/PdfSignature;Ljava/util/List;ILjava/lang/Object;)Lio/github/yuroyami/kitepdf/PdfSignatureValidation;
+}
+
+public final class io/github/yuroyami/kitepdf/PdfSignatureValidation {
+	public final fun getChain ()Ljava/util/List;
+	public final fun getDetail ()Ljava/lang/String;
+	public final fun getSignedTime ()Lio/github/yuroyami/kitepdf/PdfDate;
+	public final fun getSigner ()Lio/github/yuroyami/kitepdf/PdfCertificate;
+	public final fun getStatus ()Lio/github/yuroyami/kitepdf/PdfSignatureValidation$Status;
+	public final fun isModifiedAfterSigning ()Z
+	public final fun isTrusted ()Z
+	public final fun isValid ()Z
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/github/yuroyami/kitepdf/PdfSignatureValidation$Status : java/lang/Enum {
+	public static final field DigestMismatch Lio/github/yuroyami/kitepdf/PdfSignatureValidation$Status;
+	public static final field Invalid Lio/github/yuroyami/kitepdf/PdfSignatureValidation$Status;
+	public static final field Malformed Lio/github/yuroyami/kitepdf/PdfSignatureValidation$Status;
+	public static final field Unsupported Lio/github/yuroyami/kitepdf/PdfSignatureValidation$Status;
+	public static final field Valid Lio/github/yuroyami/kitepdf/PdfSignatureValidation$Status;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lio/github/yuroyami/kitepdf/PdfSignatureValidation$Status;
+	public static fun values ()[Lio/github/yuroyami/kitepdf/PdfSignatureValidation$Status;
 }
 
 public final class io/github/yuroyami/kitepdf/PdfViewerPreferences {
