@@ -12,7 +12,20 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.isSpecified
 import androidx.compose.ui.hapticfeedback.HapticFeedback
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEvent
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.isCtrlPressed
+import androidx.compose.ui.input.key.isMetaPressed
+import androidx.compose.ui.input.key.isShiftPressed
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.isCtrlPressed
+import androidx.compose.ui.input.pointer.isMetaPressed
+import androidx.compose.ui.unit.LayoutDirection
+import kotlin.math.pow
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.util.fastAny
@@ -216,6 +229,21 @@ internal fun Modifier.kiteTransformGestures(
                 }
             }
         }
+        // Ctrl or Cmd with the wheel zooms about the pointer, as a desktop viewer does. A browser
+        // sends a trackpad pinch as such a wheel event too (#411).
+        .pointerInput(state, spec.pinchEnabled) {
+            if (!spec.pinchEnabled) return@pointerInput
+            awaitPointerEventScope {
+                while (true) {
+                    val event = awaitPointerEvent(PointerEventPass.Initial)
+                    if (event.type != PointerEventType.Scroll) continue
+                    if (!event.keyboardModifiers.isCtrlPressed && !event.keyboardModifiers.isMetaPressed) continue
+                    val change = event.changes.fastFirstOrNull { it.scrollDelta.y != 0f } ?: continue
+                    state.setZoom(state.zoom * WHEEL_ZOOM_STEP.pow(-change.scrollDelta.y), focal = change.position)
+                    event.changes.fastForEach { it.consume() }
+                }
+            }
+        }
         .pointerInput(state, spec.panEnabled) {
             if (!spec.panEnabled) return@pointerInput
             awaitEachGesture {
@@ -236,4 +264,56 @@ internal fun Modifier.kiteTransformGestures(
                 }
             }
         }
+}
+
+/** The zoom factor of one wheel notch with Ctrl or Cmd held. A trackpad sends parts of a notch. */
+private const val WHEEL_ZOOM_STEP = 1.1f
+
+/** The zoom factor of one Ctrl or Cmd with plus or minus. */
+private const val KEY_ZOOM_STEP = 1.25f
+
+/**
+ * What [event] asks the view to do in [layout], or null for a key the view does not use (#411).
+ * Page Down, Space and the arrow keys go forward in reading order, Page Up, Shift with Space and
+ * the other arrows go back, and Home and End go to the ends. Where pages advance to the left, in
+ * a horizontal layout that is right to left or reversed, the left arrow goes forward. Ctrl or Cmd
+ * with plus, minus and 0 zooms in, out and back to fit. [paging] and [zooming] turn either set off.
+ */
+internal fun keyAction(
+    event: KeyEvent,
+    layout: KiteDocLayout,
+    direction: LayoutDirection,
+    paging: Boolean,
+    zooming: Boolean,
+): (suspend (KiteDocViewState) -> Unit)? {
+    if (event.type != KeyEventType.KeyDown) return null
+    if (event.isCtrlPressed || event.isMetaPressed) {
+        if (!zooming) return null
+        return when (event.key) {
+            Key.Equals, Key.Plus, Key.NumPadAdd -> { state -> state.animateZoomTo(state.zoom * KEY_ZOOM_STEP) }
+            Key.Minus, Key.NumPadSubtract -> { state -> state.animateZoomTo(state.zoom / KEY_ZOOM_STEP) }
+            Key.Zero, Key.NumPad0 -> { state -> state.resetZoom() }
+            else -> null
+        }
+    }
+    if (!paging) return null
+    val next: suspend (KiteDocViewState) -> Unit = { it.nextPage() }
+    val previous: suspend (KiteDocViewState) -> Unit = { it.previousPage() }
+    val (horizontal, reversed) = when (layout) {
+        is KiteDocLayout.Paged -> (layout.orientation == androidx.compose.foundation.gestures.Orientation.Horizontal) to layout.reverseLayout
+        is KiteDocLayout.Spread -> (layout.orientation == androidx.compose.foundation.gestures.Orientation.Horizontal) to layout.reverseLayout
+        is KiteDocLayout.Continuous -> (layout.orientation == androidx.compose.foundation.gestures.Orientation.Horizontal) to false
+        else -> false to false
+    }
+    val forwardIsLeft = horizontal && ((direction == LayoutDirection.Rtl) != reversed)
+    return when (event.key) {
+        Key.PageDown, Key.DirectionDown -> next
+        Key.PageUp, Key.DirectionUp -> previous
+        Key.Spacebar -> if (event.isShiftPressed) previous else next
+        Key.DirectionRight -> if (forwardIsLeft) previous else next
+        Key.DirectionLeft -> if (forwardIsLeft) next else previous
+        Key.MoveHome -> { state -> state.animateScrollToPage(0) }
+        Key.MoveEnd -> { state -> state.animateScrollToPage((state.itemCount - 1).coerceAtLeast(0)) }
+        else -> null
+    }
 }

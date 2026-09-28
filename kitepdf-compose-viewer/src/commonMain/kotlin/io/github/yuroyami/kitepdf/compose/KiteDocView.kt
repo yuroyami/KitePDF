@@ -1,5 +1,14 @@
 package io.github.yuroyami.kitepdf.compose
 
+import androidx.compose.foundation.focusable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
 import kotlin.math.pow
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.tween
@@ -138,7 +147,8 @@ import kotlinx.coroutines.launch
  *   Turn it off for a document shown as a picture, a chart, a scan, a trace,
  *   where a text selection means nothing and a stray long press only gets in
  *   the way of panning.
- * @param userScrollEnabled gesture scrolling/swiping of the layout itself.
+ * @param userScrollEnabled gesture scrolling/swiping of the layout itself, and the page keys
+ *   of a keyboard once a press gives the view the focus.
  *   Disable to drive paging exclusively through [KiteDocViewState] (nav buttons).
  * @param onPageRendered fires whenever a page finishes a FRESH screen raster:
  *   once per page and bitmap size, so again at each settled zoom when crisp zoom
@@ -334,11 +344,33 @@ public fun KiteDocView(
         }
     }
 
+    // Keys page and zoom once the view has the focus, which a press on it gives (#411). A press
+    // never takes the focus from something inside the view, such as the caret of a form field.
+    val keyFocus = remember { FocusRequester() }
+    val focusInside = remember { booleanArrayOf(false) }
+    val direction = LocalLayoutDirection.current
     Box(
         modifier
             .background(colors.viewportBackground)
             .clipToBounds()
-            .onSizeChanged { state.viewportSize = it },
+            .onSizeChanged { state.viewportSize = it }
+            .onFocusChanged { focusInside[0] = it.hasFocus }
+            .focusRequester(keyFocus)
+            .onKeyEvent { event ->
+                // A field with the caret keeps its keys, even the ones it does not use.
+                if (state.focusedField != null) return@onKeyEvent false
+                val action = keyAction(event, layout, direction, paging = userScrollEnabled, zooming = zoomSpec.pinchEnabled)
+                    ?: return@onKeyEvent false
+                tapScope.launch { action(state) }
+                true
+            }
+            .focusable()
+            .pointerInput(keyFocus) {
+                awaitEachGesture {
+                    awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+                    if (!focusInside[0]) keyFocus.requestFocus()
+                }
+            },
     ) {
         // The keyboard input of the field with the caret: inside this box, so the host's layout
         // never sees it, and first, so the pages above it take every tap (#362).

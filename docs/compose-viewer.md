@@ -230,6 +230,21 @@ To disable zoom entirely:
 KiteDocView(state, zoomSpec = KiteZoomSpec.Disabled)
 ```
 
+### Mouse, trackpad and keyboard
+
+On the desktop and the web, and on a tablet with a mouse or a keyboard, the viewer also takes these inputs:
+
+| Input | What it does | Turned off by |
+|---|---|---|
+| Ctrl or Cmd with the wheel, or a trackpad pinch | Zooms about the pointer | `pinchEnabled = false` |
+| Ctrl or Cmd with plus, minus or 0 | Zooms in, zooms out, goes back to fit | `pinchEnabled = false` |
+| Page Down, Space, the down arrow | Next page | `userScrollEnabled = false` |
+| Page Up, Shift with Space, the up arrow | Previous page | `userScrollEnabled = false` |
+| The left and right arrows | Previous and next page; swapped where pages advance to the left | `userScrollEnabled = false` |
+| Home and End | First and last page | `userScrollEnabled = false` |
+
+The keys work once the viewer has the focus, which a press on it gives. A form field with the caret keeps its keys.
+
 ## Rendering: rasterized vs. vectorized
 
 The `renderSpec` parameter controls how pages become pixels. Choose the right trade-off for your use case.
