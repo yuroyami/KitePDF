@@ -43,9 +43,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   signature, and a `/Lock` on the signature field applies too.
   `areChangesPermitted` sums it up (#448).
 
-- `KiteDocView.onEpubLinkTap` receives every tapped internal EPUB link before the
-  viewer scrolls to it. A host can show a note that the book does not mark as a
-  note, and keep the reader on the page (#444).
 - `PdfDocument.fontCacheBudgetBytes` and `dropFontCache`: a document parses each
   font once for all the pages, thumbnails and text extractions that use it, within
   a budget of 32 MB by default. `PdfFont.retainedBytes` gives the estimate that
@@ -147,6 +144,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Breaking: `KiteDocView.onLinkTap` receives every link that the reader taps, in
+  every format, before the viewer acts on it. It used to get only the links the
+  viewer could not follow. Return `true` to keep the viewer from acting, or
+  `false` to let it follow the link, turn the page or run the script as before.
+  A host can now show a note in place, or keep a history for a back button, in a
+  PDF, an EPUB, an XPS or an SVG file alike (#444). A host that returns `true`
+  for every link stops the viewer from following links inside the document.
+- Breaking: `KiteLinkAction` gives `uri`, `target`, `kind`, `pageIndex` and
+  `rect` for every format. `KiteLinkAction.Uri` is gone: an EPUB link arrives as
+  `KiteLinkAction.Epub`, and an XPS or SVG link as `KiteLinkAction.Plain`. The
+  new `KiteLinkKind` says whether a link refers to a note, a glossary entry or a
+  bibliography entry.
+- Breaking: `KiteDocView.onEpubReferenceTap` is removed. A reference now reaches
+  `onLinkTap` with its `kind` set.
+- In `KiteDocLayout.SinglePage`, a link inside an EPUB book that `onLinkTap` does
+  not take now goes on to `onTap`, as a PDF link does. The view could not move,
+  so the tap did nothing.
+
 - The Compose viewer asks the platform decoder for a JPEG at 1/2, 1/4 or 1/8 of
   its size when it draws that small, and averages only the rest. That is the path
   for a JPEG that the core cannot decode, such as an arithmetic-coded one. Skia
@@ -203,9 +218,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   reads true: a book page between two lines or boxes, an XPS or SVG page before
   its next element. They drew the whole page before (#370).
 - `KiteDocView` turns the page for a PDF link that names NextPage, PrevPage,
-  FirstPage or LastPage, and runs a script link in its `scripts` handler. Both
-  went to `onLinkTap`. In `KiteDocLayout.SinglePage` an internal PDF link now
-  goes to `onLinkTap`, where the tap did nothing. A link to a place on a page
+  FirstPage or LastPage, and runs a script link in its `scripts` handler, once
+  `onLinkTap` lets the link go. Both only went to `onLinkTap` before. A link to a place on a page
   (`/XYZ`, `/FitH`, `/FitBH`, `/FitR`) brings that place to the top of the
   viewport at the reader's zoom. A vertical `Continuous` strip scrolls there, and
   a horizontal strip or a pager pans across the page as far as the page lets it

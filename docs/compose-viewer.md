@@ -581,25 +581,28 @@ chapter. Prefer `knownPageCount` with `isComplete`.
 
 ## Link taps
 
-A tap on a link inside the document is handled for you: internal jumps (PDF
-destinations, EPUB hrefs into another chapter) scroll to the target page and
-never reach your code. A PDF link to a place on a page, such as `/XYZ` or
-`/FitH`, brings that place to the top of the viewport at the reader's zoom. A
-vertical `Continuous` strip scrolls there. A horizontal strip and a pager pan
-across the page, as far as the page lets them. A pager that resets its zoom on a
-page turn shows the whole page, so the place is on screen.
-A PDF link that names a page turn (NextPage, PrevPage,
-FirstPage or LastPage) turns the page, and a script link runs in `scripts` when
-you pass a handler. `KiteDocLayout.SinglePage` cannot move, so there an internal
-PDF link goes to `onLinkTap` as a go-to action.
+Every link that the reader taps goes to `onLinkTap` first, in every format: PDF,
+EPUB, XPS and SVG. The callback runs before the viewer does anything. Return
+`true` to keep the viewer from acting, for example after you open a web address
+or show a note in a popup. Return `false`, or pass no callback, and the viewer
+does what the link asks where it can:
 
-XPS and SVG pages give their links as `KitePage.hyperlinks`. The viewer follows
-one that leads inside the document, and brings the element it names to the top
-of the viewport the same way. In `SinglePage` such a tap falls through to
-`onTap`. A link that leaves the document goes to `onLinkTap`.
+- A link inside the document moves the view to its target. A PDF link to a
+  place on a page, such as `/XYZ` or `/FitH`, brings that place to the top of
+  the viewport at the reader's zoom. A vertical `Continuous` strip scrolls there.
+  A horizontal strip and a pager pan across the page, as far as the page lets
+  them. A pager that resets its zoom on a page turn shows the whole page, so the
+  place is on screen. An XPS or SVG link does the same with the element that it
+  names.
+- A PDF link that names a page turn (NextPage, PrevPage, FirstPage or LastPage)
+  turns the page.
+- A PDF script link runs in `scripts`, when you pass a handler.
+- Anything else, such as a web address, does nothing, and the tap goes on to
+  `onTap`.
 
-Everything else goes to `onLinkTap` as a `KiteLinkAction`. Return `true` once
-you have handled it; `false` lets the tap fall through to `onTap`.
+`KiteDocLayout.SinglePage` cannot move, so there a declined link inside the
+document goes on to `onTap` too. A screen reader that activates a link goes
+through the same callback as a finger.
 
 ```kotlin
 KiteDocView(
@@ -610,31 +613,46 @@ KiteDocView(
             openInBrowser(uri)
             true
         } else {
-            false
+            false // the viewer follows a link inside the document
         }
     },
 )
 ```
 
 A document can name any scheme, `file:`, `intent:` and `javascript:` included, so
-open only the ones you trust. `link.uri` answers for both formats, so opening web
-links needs no `when`. When
-you do need the format-native payload:
+open only the ones you trust.
+
+Every link gives the same facts, whatever its format:
+
+| Property | What it is |
+|---|---|
+| `uri` | the address outside the document, or null |
+| `target` | the place inside the document, as a `KiteBookmark`, or null |
+| `kind` | what the link is for: `LINK`, `NOTE_REFERENCE`, `GLOSSARY_REFERENCE` or `BIBLIOGRAPHY_REFERENCE` |
+| `pageIndex` | the page that holds the link |
+| `rect` | the link's area on that page, in display space |
+
+`kind` comes from the document's markup. Only EPUB books mark their references
+today, so a PDF, XPS or SVG link is `LINK`. To place a popup next to a link, turn
+its `rect` into viewport coordinates with
+`state.displayRectToViewport(link.pageIndex, link.rect)`.
+
+When you need what only one format has, match the subclass:
 
 | Case | Comes from | Carries |
 |---|---|---|
-| `KiteLinkAction.Uri` | an EPUB href with a scheme, or an XPS or SVG link that leaves the document | the URL |
-| `KiteLinkAction.Pdf` | any PDF `/A` action the viewer does not perform itself | the parsed `PdfAction` (a URI, a remote GoTo, a Launch, JavaScript, a form submit) |
+| `KiteLinkAction.Pdf` | a PDF link, or a form widget's action that the viewer does not perform | the parsed `PdfAction`: a go-to, a URI, a remote go-to, a Launch, JavaScript, a form submit |
+| `KiteLinkAction.Epub` | an EPUB link | the `EpubLink`, whose `href` `EpubDocument.linkTarget` reads |
+| `KiteLinkAction.Plain` | an XPS or SVG link | the page's `KiteLink` |
 
 ```kotlin
 onLinkTap = { link ->
-    when (link) {
-        is KiteLinkAction.Uri -> openIfWeb(link.uri)
-        is KiteLinkAction.Pdf -> when (val action = link.action) {
-            is PdfAction.Uri -> openIfWeb(action.uri)
-            is PdfAction.Launch -> { warnAboutLaunch(action.filename); true }
-            else -> false
-        }
+    val action = (link as? KiteLinkAction.Pdf)?.action
+    if (action is PdfAction.Launch) {
+        warnAboutLaunch(action.filename)
+        true
+    } else {
+        false
     }
 }
 ```
@@ -642,38 +660,57 @@ onLinkTap = { link ->
 ### Notes in place
 
 An EPUB link can mark itself as a reference to a note, a glossary entry or a
-bibliography entry (see `EpubLink.kind` in [EPUB](epub.md)). The viewer offers
-such a link to `onEpubReferenceTap` before it scrolls. Return `true` to keep the
-reader on the page, for example after you show the note in a popup. Return
-`false` and the viewer scrolls to the target as usual.
+bibliography entry (see `EpubLink.kind` in [EPUB](epub.md)). Such a link arrives
+with its `kind` set. Show the note and return `true` to keep the reader on the
+page. Return `false` and the viewer scrolls to the note as usual.
 
 ```kotlin
 KiteDocView(
     state = state,
-    onEpubReferenceTap = { link ->
-        book.linkTarget(link.href)?.let { note -> showNote(note.text); true } ?: false
-    },
-)
-```
-
-An ordinary internal link never reaches this callback.
-
-Some books do not mark their notes. An endnote call can be a plain
-`<a href="notes.xhtml#n19">[19]</a>`. For such a book, pass `onEpubLinkTap`. The
-viewer offers it every internal link before it scrolls. A reference goes to
-`onEpubReferenceTap` first, and reaches `onEpubLinkTap` only when that callback
-returns `false`. Return `true` to keep the reader on the page.
-
-```kotlin
-KiteDocView(
-    state = state,
-    onEpubLinkTap = { link ->
-        // This book keeps its endnotes in one chapter and does not mark the links to them.
-        val note = if (link.href.substringBefore('#') == notesChapter) book.linkTarget(link.href) else null
+    onLinkTap = { link ->
+        val href = (link as? KiteLinkAction.Epub)?.link?.href
+        val note = if (link.kind == KiteLinkKind.NOTE_REFERENCE && href != null) book.linkTarget(href) else null
         note?.let { showNote(it.text); true } ?: false
     },
 )
 ```
+
+Some books do not mark their notes. An endnote call can be a plain
+`<a href="notes.xhtml#n19">[19]</a>`, which arrives as a `LINK`. Check where it
+leads instead:
+
+```kotlin
+onLinkTap = { link ->
+    val href = (link as? KiteLinkAction.Epub)?.link?.href
+    // This book keeps its endnotes in one chapter and does not mark the links to them.
+    val note = if (href != null && href.substringBefore('#') == notesChapter) book.linkTarget(href) else null
+    note?.let { showNote(it.text); true } ?: false
+}
+```
+
+### A back button
+
+A link inside the document passes through `onLinkTap` before the view moves, so
+the callback can save where the reader was. Return `false` to let the viewer
+follow the link:
+
+```kotlin
+val history = remember { mutableStateListOf<KiteBookmark>() }
+val scope = rememberCoroutineScope()
+KiteDocView(
+    state = state,
+    onLinkTap = { link ->
+        if (link.target != null) history += state.currentBookmark()
+        false
+    },
+)
+Button(onClick = { history.removeLastOrNull()?.let { scope.launch { state.scrollTo(it, animate = true) } } }) {
+    Text("Back")
+}
+```
+
+A bookmark survives a reflow, so the button works in a book whose font size
+changed in between.
 
 ## Accessibility
 

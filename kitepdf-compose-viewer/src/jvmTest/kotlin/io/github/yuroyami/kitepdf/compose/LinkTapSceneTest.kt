@@ -11,6 +11,9 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.use
 import io.github.yuroyami.kitepdf.KitePDF
 import io.github.yuroyami.kitepdf.PdfAction
+import io.github.yuroyami.kitepdf.core.KiteBookmark
+import io.github.yuroyami.kitepdf.core.KiteLinkKind
+import io.github.yuroyami.kitepdf.core.KiteRectangle
 import io.github.yuroyami.kitepdf.epub.EpubDocument
 import io.github.yuroyami.kitepdf.epub.EpubSettings
 import java.io.ByteArrayOutputStream
@@ -26,12 +29,11 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 
 /**
- * Taps on links navigate. PDF pages hit-test their Link
- * annotations and follow resolved destinations; EPUB pages hit-test
- * [io.github.yuroyami.kitepdf.epub.EpubPage.links] and follow internal
- * hrefs through [EpubDocument.pageOf]; URI links go to `onLinkTap`.
- * The tap path is exercised through the real composed layout (hitTest
- * geometry) by invoking the internal handler with computed offsets.
+ * Taps on links. Every link goes to `onLinkTap` first, in every format. When the
+ * host does not take it, a PDF link follows its resolved destination, and an
+ * EPUB link follows its internal href. The tap path is exercised through the
+ * real composed layout (hitTest geometry) by invoking the internal handler with
+ * computed offsets.
  */
 class LinkTapSceneTest {
 
@@ -79,7 +81,9 @@ class LinkTapSceneTest {
             driver.pumpUntil { state.pageGeometry.isNotEmpty() }
 
             // PDF links arrive as KiteLinkAction.Pdf with the parsed action intact.
+            val offered = mutableListOf<KiteLinkAction>()
             val onLinkTap: (KiteLinkAction) -> Boolean = { link ->
+                offered += link
                 val action = (link as? KiteLinkAction.Pdf)?.action
                 (action as? PdfAction.Uri)?.let { openedUris.add(it.uri) } != null
             }
@@ -89,13 +93,23 @@ class LinkTapSceneTest {
             assertTrue(handleLinkTap(state, scope, onLinkTap, Offset(55f, 145f)), "GoTo link consumes the tap")
             driver.pumpUntil { state.currentPage == 1 }
             assertEquals(1, state.currentPage, "the destination link navigated to page 2")
-            assertTrue(openedUris.isEmpty(), "the GoTo link never reaches onLinkTap")
+            assertTrue(openedUris.isEmpty(), "the GoTo link opened an address")
+            // The host saw the go-to link first, with the facts that every format gives.
+            val goTo = offered.single() as KiteLinkAction.Pdf
+            assertTrue(goTo.action is PdfAction.GoTo, "${goTo.action}")
+            assertEquals(KiteBookmark.Page(1), goTo.target)
+            assertEquals(null, goTo.uri)
+            assertEquals(KiteLinkKind.LINK, goTo.kind)
+            assertEquals(0, goTo.pageIndex)
+            assertEquals(KiteRectangle(20.0, 110.0, 90.0, 180.0), goTo.rect, "the rect is in display space, y down")
 
             // Back to page 0 for the URI link (rect [110..180] user = display y 20..90).
             scope.launch { state.scrollToPage(0) }
             driver.pumpUntil { state.currentPage == 0 }
             assertTrue(handleLinkTap(state, scope, onLinkTap, Offset(145f, 55f)), "URI link consumed via callback")
             assertEquals(listOf("https://example.com/kite"), openedUris)
+            assertEquals("https://example.com/kite", offered.last().uri)
+            assertEquals(null, offered.last().target)
 
             // Empty page area: not consumed, falls through to onTap.
             assertFalse(handleLinkTap(state, scope, onLinkTap, Offset(100f, 100f)))
@@ -205,37 +219,23 @@ class LinkTapSceneTest {
             ?: error("EPUB fixture failed to open")
     }
 
-    /**
-     * An EPUB href with a scheme reaches the callback as a plain
-     * [KiteLinkAction.Uri]. It used to be wrapped in a fabricated PDF action
-     * with an empty dictionary, which made EPUB apps import PDF types to read
-     * a URL back out.
-     */
+    /** An EPUB href with a scheme reaches the callback with its address, and a declined one falls through. */
     @Test
-    fun epub_external_link_tap_reports_a_plain_uri() {
+    fun epub_external_link_tap_reports_its_uri() {
         val doc = epubWithExternalLink()
         val epubPage = doc.pages[0] as io.github.yuroyami.kitepdf.epub.EpubPage
         val link = epubPage.links.single()
         assertEquals("https://example.org/out", link.href)
-
-        lateinit var state: KiteDocViewState
-        lateinit var scope: CoroutineScope
-        ImageComposeScene(width = 200, height = 320, density = Density(1f)) {
-            state = rememberKiteDocViewState(doc)
-            scope = rememberCoroutineScope()
-            KiteDocView(state = state, modifier = Modifier.fillMaxSize())
-        }.use { scene ->
-            val driver = SceneTestDriver(scene)
-            driver.pumpUntil { state.pageGeometry.isNotEmpty() }
-
+        withViewer(doc) { state, scope, _ ->
             val seen = mutableListOf<KiteLinkAction>()
-            val tap = Offset(
-                ((link.rect.left + link.rect.right) / 2).toFloat(),
-                ((link.rect.bottom + link.rect.top) / 2).toFloat(),
-            )
-            assertTrue(handleLinkTap(state, scope, { seen.add(it); true }, tap))
-            assertEquals(listOf<KiteLinkAction>(KiteLinkAction.Uri("https://example.org/out")), seen)
-            assertEquals("https://example.org/out", seen.single().uri, "uri reads back without a when")
+            assertTrue(handleLinkTap(state, scope, { seen.add(it); true }, centreOf(link)))
+            val tapped = seen.single() as KiteLinkAction.Epub
+            assertEquals("https://example.org/out", tapped.uri, "uri reads back without a when")
+            assertEquals(null, tapped.target)
+            assertEquals(KiteLinkKind.LINK, tapped.kind)
+            assertEquals(link.rect, tapped.rect)
+            // Declined, a link out of the book does nothing, so the tap goes on to onTap.
+            assertFalse(handleLinkTap(state, scope, { false }, centreOf(link)))
         }
     }
 
@@ -275,65 +275,42 @@ class LinkTapSceneTest {
         val doc = epubWithNote()
         val link = (doc.pages[0] as io.github.yuroyami.kitepdf.epub.EpubPage).links.single()
         assertEquals(io.github.yuroyami.kitepdf.epub.EpubLinkKind.NOTE_REFERENCE, link.kind)
-
-        lateinit var state: KiteDocViewState
-        lateinit var scope: CoroutineScope
-        ImageComposeScene(width = 200, height = 320, density = Density(1f)) {
-            state = rememberKiteDocViewState(doc)
-            scope = rememberCoroutineScope()
-            KiteDocView(state = state, modifier = Modifier.fillMaxSize())
-        }.use { scene ->
-            val driver = SceneTestDriver(scene)
-            driver.pumpUntil { state.pageGeometry.isNotEmpty() }
-
+        withViewer(doc) { state, scope, driver ->
             val shown = mutableListOf<String>()
-            val consumed = handleLinkTap(state, scope, null, centreOf(link)) { ref ->
-                doc.linkTarget(ref.href)?.let { shown += it.text } != null
-            }
+            val consumed = handleLinkTap(state, scope, { tapped ->
+                tapped.kind == KiteLinkKind.NOTE_REFERENCE &&
+                    doc.linkTarget((tapped as KiteLinkAction.Epub).link.href)?.let { shown += it.text } != null
+            }, centreOf(link))
             assertTrue(consumed, "the host consumed the tap")
             assertEquals(listOf("The note."), shown)
             driver.pumpFrames(10)
             assertEquals(0, state.currentPage, "the viewer stays on the page the reader tapped")
 
             // Declined by the host: the viewer follows the link as before.
-            val offered = mutableListOf<String>()
-            assertTrue(handleLinkTap(state, scope, null, centreOf(link)) { offered += it.href; false })
-            assertEquals(listOf(link.href), offered)
+            val offered = mutableListOf<KiteLinkAction>()
+            assertTrue(handleLinkTap(state, scope, { offered += it; false }, centreOf(link)))
+            assertEquals(KiteLinkKind.NOTE_REFERENCE, offered.single().kind, "the reference went to the host more than once")
+            assertNotNull(offered.single().target)
             driver.pumpUntil { state.currentPage > 0 }
             assertTrue(state.currentPage > 0, "the viewer scrolled to the note")
         }
     }
 
-    @Test
-    fun an_ordinary_internal_link_never_reaches_the_reference_callback() {
-        val doc = epubWithLink()
-        val link = (doc.pages[0] as io.github.yuroyami.kitepdf.epub.EpubPage).links.single()
+    /** Lays out [doc] in a viewer with [layout] and runs [block] once the pages have a place. */
+    private fun withViewer(
+        doc: EpubDocument,
+        layout: KiteDocLayout = KiteDocLayout.Default,
+        block: (KiteDocViewState, CoroutineScope, SceneTestDriver) -> Unit,
+    ) {
         lateinit var state: KiteDocViewState
         lateinit var scope: CoroutineScope
         ImageComposeScene(width = 200, height = 320, density = Density(1f)) {
             state = rememberKiteDocViewState(doc)
             scope = rememberCoroutineScope()
-            KiteDocView(state = state, modifier = Modifier.fillMaxSize())
+            KiteDocView(state = state, modifier = Modifier.fillMaxSize(), layout = layout)
         }.use { scene ->
             val driver = SceneTestDriver(scene)
-            driver.pumpUntil { state.pageGeometry.isNotEmpty() }
-            var offered = 0
-            assertTrue(handleLinkTap(state, scope, null, centreOf(link)) { offered++; true })
-            assertEquals(0, offered)
-        }
-    }
-
-    /** Lays out [doc] in a viewer and runs [block] once the pages have a place. */
-    private fun withViewer(doc: EpubDocument, block: (KiteDocViewState, CoroutineScope, SceneTestDriver) -> Unit) {
-        lateinit var state: KiteDocViewState
-        lateinit var scope: CoroutineScope
-        ImageComposeScene(width = 200, height = 320, density = Density(1f)) {
-            state = rememberKiteDocViewState(doc)
-            scope = rememberCoroutineScope()
-            KiteDocView(state = state, modifier = Modifier.fillMaxSize())
-        }.use { scene ->
-            val driver = SceneTestDriver(scene)
-            driver.pumpUntil { state.pageGeometry.isNotEmpty() }
+            driver.pumpUntilState { state.pageGeometry.containsKey(0) }
             block(state, scope, driver)
         }
     }
@@ -344,14 +321,20 @@ class LinkTapSceneTest {
         val doc = epubWithLink()
         val link = (doc.pages[0] as io.github.yuroyami.kitepdf.epub.EpubPage).links.single()
         withViewer(doc) { state, scope, driver ->
-            val offered = mutableListOf<String>()
-            assertTrue(handleLinkTap(state, scope, null, centreOf(link), onEpubLinkTap = { offered += it.href; true }))
-            assertEquals(listOf("OEBPS/ch2.xhtml"), offered)
+            val offered = mutableListOf<KiteLinkAction>()
+            assertTrue(handleLinkTap(state, scope, { offered += it; true }, centreOf(link)))
+            val tapped = offered.single() as KiteLinkAction.Epub
+            assertEquals("OEBPS/ch2.xhtml", tapped.link.href)
+            assertEquals(KiteLinkKind.LINK, tapped.kind)
+            assertEquals(null, tapped.uri)
+            assertEquals(doc.bookmarkOf("OEBPS/ch2.xhtml"), tapped.target)
+            assertEquals(0, tapped.pageIndex)
+            assertEquals(link.rect, tapped.rect)
             driver.pumpFrames(10)
             assertEquals(0, state.currentPage, "the viewer stays on the page the reader tapped")
 
             // Declined by the host: the viewer follows the link as before.
-            assertTrue(handleLinkTap(state, scope, null, centreOf(link), onEpubLinkTap = { false }))
+            assertTrue(handleLinkTap(state, scope, { false }, centreOf(link)))
             driver.pumpUntil { state.currentPage > 0 }
             assertTrue(state.currentPage > 0, "the viewer scrolled to chapter two")
         }
@@ -367,7 +350,7 @@ class LinkTapSceneTest {
             state = rememberKiteDocViewState(doc)
             KiteDocView(
                 state = state, modifier = Modifier.fillMaxSize(), zoomSpec = KiteZoomSpec(doubleTapEnabled = false),
-                onEpubLinkTap = { offered += it.href; true },
+                onLinkTap = { offered += (it as KiteLinkAction.Epub).link.href; true },
             )
         }.use { scene ->
             val driver = SceneTestDriver(scene)
@@ -381,35 +364,41 @@ class LinkTapSceneTest {
         }
     }
 
+    /** One fixed page cannot move: a declined link inside the book falls through, as a PDF link does. */
     @Test
-    fun a_reference_goes_to_the_reference_callback_before_the_link_callback() {
-        val doc = epubWithNote()
+    fun an_internal_book_link_on_one_fixed_page_still_reaches_the_host_and_then_falls_through() {
+        val doc = epubWithLink()
         val link = (doc.pages[0] as io.github.yuroyami.kitepdf.epub.EpubPage).links.single()
-        withViewer(doc) { state, scope, driver ->
-            val calls = mutableListOf<String>()
-            fun tap(referenceConsumes: Boolean) = handleLinkTap(
-                state, scope, null, centreOf(link),
-                onEpubLinkTap = { calls += "link"; true },
-                onEpubReferenceTap = { calls += "reference"; referenceConsumes },
-            )
-            assertTrue(tap(referenceConsumes = true))
-            assertEquals(listOf("reference"), calls, "a consumed reference also went to the link callback")
-            calls.clear()
-            assertTrue(tap(referenceConsumes = false))
-            assertEquals(listOf("reference", "link"), calls, "a declined reference did not go to the link callback")
-            driver.pumpFrames(10)
-            assertEquals(0, state.currentPage, "the viewer scrolled although the link callback consumed the tap")
+        withViewer(doc, layout = KiteDocLayout.SinglePage(0)) { state, scope, _ ->
+            // One page is centred in the view, so its link is found through the view's own mapping.
+            val tap = assertNotNull(state.displayRectToViewport(0, link.rect)).center
+            val offered = mutableListOf<KiteLinkAction>()
+            assertFalse(handleLinkTap(state, scope, { offered += it; false }, tap), "a fixed page followed a link")
+            assertEquals(doc.bookmarkOf("OEBPS/ch2.xhtml"), offered.single().target)
+            assertTrue(handleLinkTap(state, scope, { true }, tap), "the host could not take the link")
         }
     }
 
+    /** The deprecated composables' callback only sees what the viewer cannot follow, as before. */
     @Test
-    fun an_external_link_never_reaches_the_link_callback() {
-        val doc = epubWithExternalLink()
-        val link = (doc.pages[0] as io.github.yuroyami.kitepdf.epub.EpubPage).links.single()
-        withViewer(doc) { state, scope, _ ->
-            var offered = 0
-            assertTrue(handleLinkTap(state, scope, { true }, centreOf(link), onEpubLinkTap = { offered++; true }))
-            assertEquals(0, offered)
+    fun the_old_link_callback_only_gets_the_links_the_viewer_cannot_follow() {
+        withPdfViewer(KitePDF.open(pdfWithLinks())) { state, scope, driver ->
+            val seen = mutableListOf<PdfAction>()
+            val legacy = legacyLinkTap { seen += it; true }
+            assertTrue(handleLinkTap(state, scope, legacy, assertNotNull(state.displayToViewport(0, 55.0, 145.0))))
+            driver.pumpUntilState { state.currentPage == 1 }
+            assertTrue(seen.isEmpty(), "the old callback got a go-to link that the viewer follows: $seen")
+            scope.launch { state.scrollToPage(0) }
+            driver.pumpUntilState { state.currentPage == 0 }
+            assertTrue(handleLinkTap(state, scope, legacy, assertNotNull(state.displayToViewport(0, 145.0, 55.0))))
+            assertEquals("https://example.com/kite", (seen.single() as PdfAction.Uri).uri)
+        }
+        val book = epubWithExternalLink()
+        val out = (book.pages[0] as io.github.yuroyami.kitepdf.epub.EpubPage).links.single()
+        withViewer(book) { state, scope, _ ->
+            val seen = mutableListOf<PdfAction>()
+            assertTrue(handleLinkTap(state, scope, legacyLinkTap { seen += it; true }, centreOf(out)))
+            assertEquals("https://example.org/out", (seen.single() as PdfAction.Uri).uri, "a link out of a book is a URI action")
         }
     }
 
@@ -462,16 +451,21 @@ class LinkTapSceneTest {
         }
     }
 
-    /** A link that names a page turn turns the page, where it went to the host (#433). */
+    /** A link that names a page turn turns the page (#433), once the host has seen it and let it go. */
     @Test
     fun a_next_page_link_turns_the_page() {
         withPdfViewer(KitePDF.open(pdfWithActions())) { state, scope, driver ->
-            val offered = mutableListOf<KiteLinkAction>()
             val tap = assertNotNull(state.displayToViewport(0, 55.0, 145.0))
-            assertTrue(handleLinkTap(state, scope, { offered += it; true }, tap))
+            assertTrue(handleLinkTap(state, scope, { true }, tap), "the host could not take the page turn")
+            driver.pumpFrames(10)
+            assertEquals(0, state.currentPage, "the viewer turned the page although the host took the link")
+
+            val offered = mutableListOf<KiteLinkAction>()
+            assertTrue(handleLinkTap(state, scope, { offered += it; false }, tap))
             driver.pumpUntilState { state.currentPage == 1 }
             assertEquals(1, state.currentPage)
-            assertTrue(offered.isEmpty(), "the host got a page turn that the viewer performs: $offered")
+            val named = (offered.single() as KiteLinkAction.Pdf).action as PdfAction.Named
+            assertEquals(PdfAction.NamedActionType.NextPage, named.name)
         }
     }
 
@@ -480,12 +474,25 @@ class LinkTapSceneTest {
         val doc = KitePDF.open(pdfWithActions())
         val scripts = ScriptRecorder(doc)
         withPdfViewer(doc, scripts = scripts) { state, scope, driver ->
-            val offered = mutableListOf<KiteLinkAction>()
             val tap = assertNotNull(state.displayToViewport(0, 145.0, 55.0))
-            assertTrue(handleLinkTap(state, scope, { offered += it; true }, tap))
+            // Taken by the host, the script does not run. Both runs share one script thread, so
+            // a run of the first call would come before the second and show as two entries.
+            assertTrue(handleLinkTap(state, scope, { true }, tap))
+            val offered = mutableListOf<KiteLinkAction>()
+            assertTrue(handleLinkTap(state, scope, { offered += it; false }, tap))
             driver.pumpUntilState { scripts.ran.isNotEmpty() }
-            assertEquals(listOf("app.alert(1)"), scripts.ran.toList())
-            assertTrue(offered.isEmpty(), "the host got a script link that the view runs: $offered")
+            driver.pumpFrames(5)
+            assertEquals(listOf("app.alert(1)"), scripts.ran.toList(), "the view ran a script link that the host took")
+            assertTrue((offered.single() as KiteLinkAction.Pdf).action is PdfAction.JavaScript)
+        }
+    }
+
+    @Test
+    fun a_host_that_takes_a_go_to_link_keeps_the_view_on_its_page() {
+        withPdfViewer(KitePDF.open(pdfWithLinks())) { state, scope, driver ->
+            assertTrue(handleLinkTap(state, scope, { true }, assertNotNull(state.displayToViewport(0, 55.0, 145.0))))
+            driver.pumpFrames(10)
+            assertEquals(0, state.currentPage, "the viewer followed a link that the host took")
         }
     }
 

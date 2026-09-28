@@ -93,6 +93,19 @@ final enum class io.github.yuroyami.kitepdf.core/KiteLineEnd : kotlin/Enum<io.gi
     final fun values(): kotlin/Array<io.github.yuroyami.kitepdf.core/KiteLineEnd> // io.github.yuroyami.kitepdf.core/KiteLineEnd.values|values#static(){}[0]
 }
 
+final enum class io.github.yuroyami.kitepdf.core/KiteLinkKind : kotlin/Enum<io.github.yuroyami.kitepdf.core/KiteLinkKind> { // io.github.yuroyami.kitepdf.core/KiteLinkKind|null[0]
+    enum entry BIBLIOGRAPHY_REFERENCE // io.github.yuroyami.kitepdf.core/KiteLinkKind.BIBLIOGRAPHY_REFERENCE|null[0]
+    enum entry GLOSSARY_REFERENCE // io.github.yuroyami.kitepdf.core/KiteLinkKind.GLOSSARY_REFERENCE|null[0]
+    enum entry LINK // io.github.yuroyami.kitepdf.core/KiteLinkKind.LINK|null[0]
+    enum entry NOTE_REFERENCE // io.github.yuroyami.kitepdf.core/KiteLinkKind.NOTE_REFERENCE|null[0]
+
+    final val entries // io.github.yuroyami.kitepdf.core/KiteLinkKind.entries|#static{}entries[0]
+        final fun <get-entries>(): kotlin.enums/EnumEntries<io.github.yuroyami.kitepdf.core/KiteLinkKind> // io.github.yuroyami.kitepdf.core/KiteLinkKind.entries.<get-entries>|<get-entries>#static(){}[0]
+
+    final fun valueOf(kotlin/String): io.github.yuroyami.kitepdf.core/KiteLinkKind // io.github.yuroyami.kitepdf.core/KiteLinkKind.valueOf|valueOf#static(kotlin.String){}[0]
+    final fun values(): kotlin/Array<io.github.yuroyami.kitepdf.core/KiteLinkKind> // io.github.yuroyami.kitepdf.core/KiteLinkKind.values|values#static(){}[0]
+}
+
 final enum class io.github.yuroyami.kitepdf.core/KiteRole : kotlin/Enum<io.github.yuroyami.kitepdf.core/KiteRole> { // io.github.yuroyami.kitepdf.core/KiteRole|null[0]
     enum entry CAPTION // io.github.yuroyami.kitepdf.core/KiteRole.CAPTION|null[0]
     enum entry CODE // io.github.yuroyami.kitepdf.core/KiteRole.CODE|null[0]

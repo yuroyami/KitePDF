@@ -28,3 +28,24 @@ public class KiteLink(
 
     override fun toString(): String = "KiteLink(${uri ?: target}, $rect)"
 }
+
+/**
+ * What a link is for. A viewer can open a reference in place, such as a note in a popup,
+ * instead of moving the reader away from the page.
+ *
+ * EPUB books mark their references in their markup. KitePDF reads no such marks from the
+ * other formats yet, so their links are [LINK].
+ */
+public enum class KiteLinkKind {
+    /** An ordinary link, or one whose document says nothing more. */
+    LINK,
+
+    /** A reference to a note, such as a footnote or an endnote. */
+    NOTE_REFERENCE,
+
+    /** A reference to a glossary entry. */
+    GLOSSARY_REFERENCE,
+
+    /** A reference to a bibliography entry. */
+    BIBLIOGRAPHY_REFERENCE,
+}

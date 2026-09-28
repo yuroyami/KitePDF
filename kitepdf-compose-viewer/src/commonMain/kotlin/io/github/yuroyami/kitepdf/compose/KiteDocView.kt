@@ -97,8 +97,6 @@ import io.github.yuroyami.kitepdf.PdfAnnotation
 import io.github.yuroyami.kitepdf.PdfDocument
 import io.github.yuroyami.kitepdf.PdfPage
 import io.github.yuroyami.kitepdf.epub.EpubDocument
-import io.github.yuroyami.kitepdf.epub.EpubLink
-import io.github.yuroyami.kitepdf.epub.EpubLinkKind
 import io.github.yuroyami.kitepdf.epub.EpubPage
 import io.github.yuroyami.kitepdf.core.render.KITE_DEFAULT_MAX_RASTER_PIXELS
 import io.github.yuroyami.kitepdf.core.render.ReaderTheme
@@ -190,18 +188,16 @@ import kotlinx.coroutines.launch
  *   toggling a HUD's visibility. Held back until the double-tap window lapses
  *   only when [KiteZoomSpec.doubleTapEnabled] is on. Taps that land on a link
  *   navigate (or go to [onLinkTap]) instead of reaching this callback.
- * @param onLinkTap fires when a tapped link carries something the viewer can't
- *   perform itself: a URL, a remote GoTo, a Launch. Return true after handling
- *   it (e.g. opening the URL in a browser); false lets the tap fall through to
- *   [onTap]. Internal go-to-page links (PDF destinations, EPUB internal hrefs)
- *   never reach this: the viewer scrolls to the target page directly, and in a
- *   vertical continuous strip to the place on it that a PDF link names. It turns
- *   the page for a PDF link that names NextPage, PrevPage, FirstPage or
- *   LastPage, and it runs a script link in [scripts] when that is set. In
- *   [KiteDocLayout.SinglePage], which cannot move, an internal PDF link comes
- *   here. An internal EPUB link goes to `onEpubReferenceTap` and
- *   `onEpubLinkTap` first.
- *   See [KiteLinkAction] for the payload; `link.uri` covers both formats.
+ * @param onLinkTap receives every link the reader taps, in every format, before the viewer
+ *   acts on it. Return true to keep the viewer from acting, for example after you open a web
+ *   address or show a note in a popup. Return false, or pass null, and the viewer does what the
+ *   link asks where it can: it follows a link inside the document, to the place on the page
+ *   that the link names, turns the page for a PDF link that names NextPage, PrevPage,
+ *   FirstPage or LastPage, and runs a PDF script link in [scripts] when that is set. Anything
+ *   else, such as a web address, does nothing, and the tap goes on to [onTap].
+ *   [KiteDocLayout.SinglePage] cannot move, so there a link inside the document goes on to
+ *   [onTap] too. A form widget's action that the viewer does not perform, such as a web
+ *   address or a form submit, comes here as well. See [KiteLinkAction] for what a link gives.
  */
 @Composable
 public fun KiteDocView(
@@ -231,21 +227,6 @@ public fun KiteDocView(
     scripts: io.github.yuroyami.kitepdf.PdfScriptHandler? = null,
     /** Called before links for a saved highlight. Return true to consume the tap. */
     onHighlightTap: ((KiteHighlight) -> Boolean)? = null,
-    /**
-     * Called before the viewer follows any internal EPUB link, whatever its [EpubLink.kind].
-     * Return true to consume the tap, for example to show an endnote that the book does not
-     * mark as a note. Return false, or pass null, and the viewer scrolls to the target. A
-     * reference goes to [onEpubReferenceTap] first, and comes here only when that returns false.
-     */
-    onEpubLinkTap: ((EpubLink) -> Boolean)? = null,
-    /**
-     * Called before the viewer follows an internal EPUB link whose [EpubLink.kind] marks it
-     * as a reference to a note, a glossary entry or a bibliography entry. Return true to
-     * consume the tap, for example after you show [EpubDocument.linkTarget] in a popup.
-     * Return false, or pass null, and the link goes on to [onEpubLinkTap], then the viewer
-     * scrolls to the target.
-     */
-    onEpubReferenceTap: ((EpubLink) -> Boolean)? = null,
 ) {
     val scriptScope = rememberCoroutineScope()
     val scriptLane = remember { newScriptLane() }
@@ -339,8 +320,6 @@ public fun KiteDocView(
     // Keep callbacks fresh without restarting pointer input during a press or a selection.
     val currentHighlightTap by rememberUpdatedState(onHighlightTap)
     val currentLinkTap by rememberUpdatedState(onLinkTap)
-    val currentReferenceTap by rememberUpdatedState(onEpubReferenceTap)
-    val currentEpubLinkTap by rememberUpdatedState(onEpubLinkTap)
     val currentTap by rememberUpdatedState(onTap)
     val currentScripts by rememberUpdatedState(scripts)
     val tapScope = rememberCoroutineScope()
@@ -351,10 +330,7 @@ public fun KiteDocView(
                 state.blurFocusedField()
                 val highlight = state.highlightAt(offset)
                 val consumed = highlight != null && currentHighlightTap?.invoke(highlight) == true
-                val linkConsumed = !consumed && handleLinkTap(
-                    state, tapScope, currentLinkTap, offset,
-                    onEpubLinkTap = currentEpubLinkTap, onEpubReferenceTap = currentReferenceTap,
-                )
+                val linkConsumed = !consumed && handleLinkTap(state, tapScope, currentLinkTap, offset)
                 if (!consumed && !linkConsumed) {
                     currentTap?.invoke(offset)
                 }
@@ -427,24 +403,19 @@ public fun KiteDocView(
 }
 
 /**
- * Consumes a tap that lands on a link: PDF pages hit-test their Link
- * annotations (topmost drawn last, so scanned in reverse) in user space;
- * EPUB pages hit-test [EpubPage.links] in display space. In-document
- * targets animate to the target page; everything else is offered to
- * [onLinkTap]. An EPUB reference to a note, a glossary entry or a
- * bibliography entry goes to [onEpubReferenceTap], and then every internal
- * EPUB link to [onEpubLinkTap], before the viewer follows it. Returns true
- * when the tap was consumed.
+ * Consumes a tap that lands on a link. PDF pages hit-test their Link annotations (topmost drawn
+ * last, so scanned in reverse) in user space; EPUB, XPS and SVG pages hit-test their links in
+ * display space. Every link goes to [onLinkTap] first. When that does not take it, a link inside
+ * the document moves the view to its target, a PDF page-turn link turns the page, and a PDF
+ * script link runs in the view's scripts. Returns true when the tap was consumed.
  */
 internal fun handleLinkTap(
     state: KiteDocViewState,
     scope: kotlinx.coroutines.CoroutineScope,
     onLinkTap: ((KiteLinkAction) -> Boolean)?,
     offset: Offset,
-    onEpubLinkTap: ((EpubLink) -> Boolean)? = null,
-    onEpubReferenceTap: ((EpubLink) -> Boolean)? = null,
 ): Boolean = try {
-    linkTap(state, scope, onLinkTap, offset, onEpubLinkTap, onEpubReferenceTap)
+    linkTap(state, scope, onLinkTap, offset)
 } catch (failure: Throwable) {
     // A page whose links cannot be read acts as a page without links (#334).
     io.github.yuroyami.kitepdf.core.kiteWarn { "tap: the links of a page cannot be read: ${failure.message}" }
@@ -456,8 +427,6 @@ private fun linkTap(
     scope: kotlinx.coroutines.CoroutineScope,
     onLinkTap: ((KiteLinkAction) -> Boolean)?,
     offset: Offset,
-    onEpubLinkTap: ((EpubLink) -> Boolean)?,
-    onEpubReferenceTap: ((EpubLink) -> Boolean)?,
 ): Boolean {
     val hit = state.hitTest(offset) ?: return false
     val tapped = state.pageAt(hit.pageIndex)
@@ -474,37 +443,40 @@ private fun linkTap(
                 val rawDest = ann.rawDestination
                     ?: (ann.action as? PdfAction.GoTo)?.destination
                 val destination = doc.resolveDestination(rawDest)
-                val target = destination?.pageIndex
-                if (target != null) {
-                    if (state.canNavigate) {
-                        // A link to a place on the page scrolls to that place, not to the top (#433).
-                        val y = state.pageAt(target)?.let { destination.displayY(it) }
-                        scope.launch { state.animateScrollToPagePoint(target, y) }
-                        return true
-                    }
-                    // A view of one fixed page cannot move, so the host gets the link (#433).
-                    val goTo = ann.action ?: rawDest?.let { PdfAction.GoTo(it, raw = io.github.yuroyami.kitepdf.core.parser.PdfDictionary(emptyMap())) }
-                    return goTo != null && onLinkTap?.invoke(KiteLinkAction.Pdf(goTo)) == true
-                }
+                val targetPage = destination?.pageIndex
+                val empty = io.github.yuroyami.kitepdf.core.parser.PdfDictionary(emptyMap())
                 val action = ann.action
-                    ?: ann.uri?.let { PdfAction.Uri(it, isMap = false, raw = io.github.yuroyami.kitepdf.core.parser.PdfDictionary(emptyMap())) }
+                    ?: rawDest?.let { PdfAction.GoTo(it, raw = empty) }
+                    ?: ann.uri?.let { PdfAction.Uri(it, isMap = false, raw = empty) }
                     ?: return false
-                // A page turn that a link names, the viewer performs itself (#433).
-                if (action is PdfAction.Named && action.name.turnsPage() && state.canNavigate) {
-                    scope.launch { state.turnPage(action.name) }
-                    return true
-                }
-                // A script link runs in the document's scripts, when the view has a handler (#433).
                 val scripts = state.scripts
                 val lane = state.scriptLane
-                if (action is PdfAction.JavaScript && scripts != null && lane != null) {
-                    scope.launch(lane) {
+                val turn = (action as? PdfAction.Named)?.name?.takeIf { it.turnsPage() }
+                val navigates = state.canNavigate && (targetPage != null || turn != null)
+                val runsScript = action is PdfAction.JavaScript && scripts != null && lane != null
+                val link = KiteLinkAction.Pdf(
+                    action, hit.pageIndex, page.pageToDisplay(r),
+                    targetPage?.let { KiteBookmark.Page(it) }, followedByViewer = navigates || runsScript,
+                )
+                // The host sees every link first, and may keep the viewer from acting on it.
+                if (onLinkTap?.invoke(link) == true) return true
+                when {
+                    navigates && targetPage != null -> {
+                        // A link to a place on the page scrolls to that place, not to the top (#433).
+                        val y = state.pageAt(targetPage)?.let { destination.displayY(it) }
+                        scope.launch { state.animateScrollToPagePoint(targetPage, y) }
+                    }
+                    // A page turn that a link names, the viewer performs itself (#433).
+                    navigates && turn != null -> scope.launch { state.turnPage(turn) }
+                    // A script link runs in the document's scripts, when the view has a handler (#433).
+                    runsScript && action is PdfAction.JavaScript && scripts != null && lane != null -> scope.launch(lane) {
                         scriptCall("runAction", Unit) { scripts.runAction(action) }
                         state.scriptsRan()
                     }
-                    return true
+                    // Nothing the viewer can do, such as a web address: the tap goes on to onTap.
+                    else -> return false
                 }
-                return onLinkTap?.invoke(KiteLinkAction.Pdf(action)) == true
+                return true
             }
             return false
         }
@@ -515,16 +487,13 @@ private fun linkTap(
             for (link in page.links.asReversed()) {
                 val r = link.rect
                 if (hit.x < r.left || hit.x > r.right || dy < r.bottom || dy > r.top) continue
-                if (SCHEME_REGEX.containsMatchIn(link.href)) {
-                    return onLinkTap?.invoke(KiteLinkAction.Uri(link.href)) == true
-                }
-                // The host may show a note or an entry in place instead (#277).
-                if (link.kind != EpubLinkKind.LINK && onEpubReferenceTap?.invoke(link) == true) return true
-                // A book can hold notes that it does not mark as notes, so every link is offered too (#444).
-                if (onEpubLinkTap?.invoke(link) == true) return true
                 // A bookmark needs no layout to build, and following it lays out
                 // the target chapter alone rather than the whole book.
-                val target = (state.document as? EpubDocument)?.bookmarkOf(link.href) ?: return false
+                val target = if (hasScheme(link.href)) null else (state.document as? EpubDocument)?.bookmarkOf(link.href)
+                val navigates = target != null && state.canNavigate
+                // The host may show a note or an entry in place instead (#277, #444).
+                if (onLinkTap?.invoke(KiteLinkAction.Epub(link, hit.pageIndex, target, navigates)) == true) return true
+                if (target == null || !navigates) return false
                 scope.launch { state.scrollTo(target, animate = true) }
                 return true
             }
@@ -538,10 +507,11 @@ private fun linkTap(
             for (link in links.asReversed()) {
                 val r = link.rect
                 if (x < r.left || x > r.right || y < r.bottom || y > r.top) continue
-                link.uri?.let { return onLinkTap?.invoke(KiteLinkAction.Uri(it)) == true }
-                val target = link.target ?: return false
+                val target = link.target
+                val navigates = target != null && state.canNavigate
+                if (onLinkTap?.invoke(KiteLinkAction.Plain(link, hit.pageIndex, navigates)) == true) return true
                 // A view of one fixed page cannot move, so the tap goes on to onTap.
-                if (!state.canNavigate) return false
+                if (target == null || !navigates) return false
                 scope.launch {
                     if (target is KiteBookmark.Page) {
                         // The height can mean reading the target page, so it is found off the main thread.
@@ -557,8 +527,6 @@ private fun linkTap(
         }
     }
 }
-
-private val SCHEME_REGEX = Regex("^[a-zA-Z][a-zA-Z0-9+.-]*:")
 
 /**
  * The display-space height of the top that this destination names on [page], or null when it

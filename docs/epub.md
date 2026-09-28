@@ -269,9 +269,9 @@ The text leaves out ruby readings and the back link to the call site. When the
 id sits on a short inline anchor, as in `<p><a id="fn1">1.</a> The note.</p>`, the
 text is the whole paragraph. A glossary term comes with its definitions.
 
-`KiteDocView` does the hit test for you: its `onEpubReferenceTap` receives each
-tapped reference before the viewer scrolls, and its `onEpubLinkTap` receives every
-tapped internal link (see [Compose viewer](compose-viewer.md)).
+`KiteDocView` does the hit test for you: its `onLinkTap` receives every tapped
+link before the viewer scrolls, with `kind` set for a reference (see
+[Compose viewer](compose-viewer.md)).
 
 ### Audio and video
 

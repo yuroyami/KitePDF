@@ -147,7 +147,7 @@ public final class io/github/yuroyami/kitepdf/compose/KiteDocViewColors {
 }
 
 public final class io/github/yuroyami/kitepdf/compose/KiteDocViewKt {
-	public static final fun KiteDocView-gqJSuOo (Lio/github/yuroyami/kitepdf/compose/KiteDocViewState;Landroidx/compose/ui/Modifier;Lio/github/yuroyami/kitepdf/compose/KiteDocLayout;Lio/github/yuroyami/kitepdf/compose/KiteZoomSpec;Lio/github/yuroyami/kitepdf/compose/KiteRenderSpec;Lio/github/yuroyami/kitepdf/compose/KiteDocViewColors;FZZLkotlin/jvm/functions/Function2;Lkotlin/jvm/functions/Function3;Lkotlin/jvm/functions/Function3;Lkotlin/jvm/functions/Function4;Lkotlin/jvm/functions/Function3;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function1;Lio/github/yuroyami/kitepdf/PdfScriptHandler;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function1;Landroidx/compose/runtime/Composer;III)V
+	public static final fun KiteDocView-B9RQ8LM (Lio/github/yuroyami/kitepdf/compose/KiteDocViewState;Landroidx/compose/ui/Modifier;Lio/github/yuroyami/kitepdf/compose/KiteDocLayout;Lio/github/yuroyami/kitepdf/compose/KiteZoomSpec;Lio/github/yuroyami/kitepdf/compose/KiteRenderSpec;Lio/github/yuroyami/kitepdf/compose/KiteDocViewColors;FZZLkotlin/jvm/functions/Function2;Lkotlin/jvm/functions/Function3;Lkotlin/jvm/functions/Function3;Lkotlin/jvm/functions/Function4;Lkotlin/jvm/functions/Function3;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function1;Lio/github/yuroyami/kitepdf/PdfScriptHandler;Lkotlin/jvm/functions/Function1;Landroidx/compose/runtime/Composer;III)V
 	public static final fun KiteDocView-lryUbJg (Lio/github/yuroyami/kitepdf/core/KiteDocument;Landroidx/compose/ui/Modifier;Ljava/lang/Integer;JLio/github/yuroyami/kitepdf/core/render/ReaderTheme;FZLkotlin/jvm/functions/Function2;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function1;Landroidx/compose/runtime/Composer;II)V
 }
 
@@ -241,31 +241,42 @@ public final class io/github/yuroyami/kitepdf/compose/KiteHighlight {
 
 public abstract class io/github/yuroyami/kitepdf/compose/KiteLinkAction {
 	public static final field $stable I
+	public synthetic fun <init> (ZLkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun getKind ()Lio/github/yuroyami/kitepdf/core/KiteLinkKind;
+	public abstract fun getPageIndex ()I
+	public abstract fun getRect ()Lio/github/yuroyami/kitepdf/core/KiteRectangle;
+	public abstract fun getTarget ()Lio/github/yuroyami/kitepdf/core/KiteBookmark;
+	public abstract fun getUri ()Ljava/lang/String;
+}
+
+public final class io/github/yuroyami/kitepdf/compose/KiteLinkAction$Epub : io/github/yuroyami/kitepdf/compose/KiteLinkAction {
+	public static final field $stable I
+	public fun getKind ()Lio/github/yuroyami/kitepdf/core/KiteLinkKind;
+	public final fun getLink ()Lio/github/yuroyami/kitepdf/epub/EpubLink;
+	public fun getPageIndex ()I
+	public fun getRect ()Lio/github/yuroyami/kitepdf/core/KiteRectangle;
+	public fun getTarget ()Lio/github/yuroyami/kitepdf/core/KiteBookmark;
 	public fun getUri ()Ljava/lang/String;
+	public fun toString ()Ljava/lang/String;
 }
 
 public final class io/github/yuroyami/kitepdf/compose/KiteLinkAction$Pdf : io/github/yuroyami/kitepdf/compose/KiteLinkAction {
 	public static final field $stable I
-	public fun <init> (Lio/github/yuroyami/kitepdf/PdfAction;)V
-	public final fun component1 ()Lio/github/yuroyami/kitepdf/PdfAction;
-	public final fun copy (Lio/github/yuroyami/kitepdf/PdfAction;)Lio/github/yuroyami/kitepdf/compose/KiteLinkAction$Pdf;
-	public static synthetic fun copy$default (Lio/github/yuroyami/kitepdf/compose/KiteLinkAction$Pdf;Lio/github/yuroyami/kitepdf/PdfAction;ILjava/lang/Object;)Lio/github/yuroyami/kitepdf/compose/KiteLinkAction$Pdf;
-	public fun equals (Ljava/lang/Object;)Z
 	public final fun getAction ()Lio/github/yuroyami/kitepdf/PdfAction;
+	public fun getPageIndex ()I
+	public fun getRect ()Lio/github/yuroyami/kitepdf/core/KiteRectangle;
+	public fun getTarget ()Lio/github/yuroyami/kitepdf/core/KiteBookmark;
 	public fun getUri ()Ljava/lang/String;
-	public fun hashCode ()I
 	public fun toString ()Ljava/lang/String;
 }
 
-public final class io/github/yuroyami/kitepdf/compose/KiteLinkAction$Uri : io/github/yuroyami/kitepdf/compose/KiteLinkAction {
+public final class io/github/yuroyami/kitepdf/compose/KiteLinkAction$Plain : io/github/yuroyami/kitepdf/compose/KiteLinkAction {
 	public static final field $stable I
-	public fun <init> (Ljava/lang/String;)V
-	public final fun component1 ()Ljava/lang/String;
-	public final fun copy (Ljava/lang/String;)Lio/github/yuroyami/kitepdf/compose/KiteLinkAction$Uri;
-	public static synthetic fun copy$default (Lio/github/yuroyami/kitepdf/compose/KiteLinkAction$Uri;Ljava/lang/String;ILjava/lang/Object;)Lio/github/yuroyami/kitepdf/compose/KiteLinkAction$Uri;
-	public fun equals (Ljava/lang/Object;)Z
+	public final fun getLink ()Lio/github/yuroyami/kitepdf/core/KiteLink;
+	public fun getPageIndex ()I
+	public fun getRect ()Lio/github/yuroyami/kitepdf/core/KiteRectangle;
+	public fun getTarget ()Lio/github/yuroyami/kitepdf/core/KiteBookmark;
 	public fun getUri ()Ljava/lang/String;
-	public fun hashCode ()I
 	public fun toString ()Ljava/lang/String;
 }
 

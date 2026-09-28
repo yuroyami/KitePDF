@@ -91,17 +91,27 @@ class PlainLinkSceneTest {
             val offered = mutableListOf<KiteLinkAction>()
             val out = assertNotNull(state.displayToViewport(0, 55.0, 55.0))
             assertTrue(handleLinkTap(state, scope, { offered += it; true }, out))
-            assertEquals(listOf<KiteLinkAction>(KiteLinkAction.Uri("https://example.com/x")), offered)
+            val outward = offered.single() as KiteLinkAction.Plain
+            assertEquals("https://example.com/x", outward.uri)
+            assertEquals(null, outward.target)
+            assertEquals(0, outward.pageIndex)
+            assertEquals(KiteRectangle(20.0, 20.0, 90.0, 90.0), outward.rect)
 
+            // A host that takes a link inside the document keeps the view where it is.
             val inside = assertNotNull(state.displayToViewport(0, 145.0, 145.0))
-            assertTrue(handleLinkTap(state, scope, { offered += it; true }, inside))
+            assertTrue(handleLinkTap(state, scope, { true }, inside))
+            driver.pumpFrames(10)
+            assertEquals(0, state.currentScrollPosition.location.page, "the view moved for a link that the host took")
+
+            // Declined, the viewer follows it to its place.
+            assertTrue(handleLinkTap(state, scope, { offered += it; false }, inside))
             driver.pumpUntilState { state.currentScrollPosition.location.page == 1 && state.currentScrollPosition.offsetPx > 0 }
             driver.pumpFrames(30)
             val position = state.currentScrollPosition
             assertEquals(1, position.location.page)
             // The page is 600 tall in a 200 wide strip, so height 150 is 150 px into its slot.
             assertEquals(150f, position.offsetPx.toFloat(), 2f, "the strip did not scroll to the place: $position")
-            assertEquals(1, offered.size, "a link inside the document does not go to the host")
+            assertEquals(KiteBookmark.Page(1), offered.last().target, "the link inside the document did not go to the host first")
 
             // Paper that no link covers falls through to onTap.
             val blank = assertNotNull(state.displayToViewport(1, 100.0, 400.0))
@@ -188,10 +198,11 @@ class PlainLinkSceneTest {
         withViewer(KiteDocLayout.SinglePage(0)) { state, scope, _, _ ->
             val offered = mutableListOf<KiteLinkAction>()
             val inside = assertNotNull(state.displayToViewport(0, 145.0, 145.0))
-            assertFalse(handleLinkTap(state, scope, { offered += it; true }, inside))
+            assertFalse(handleLinkTap(state, scope, { offered += it; it.uri != null }, inside))
             val out = assertNotNull(state.displayToViewport(0, 55.0, 55.0))
-            assertTrue(handleLinkTap(state, scope, { offered += it; true }, out))
-            assertEquals(listOf<KiteLinkAction>(KiteLinkAction.Uri("https://example.com/x")), offered)
+            assertTrue(handleLinkTap(state, scope, { offered += it; it.uri != null }, out))
+            assertEquals(listOf(KiteBookmark.Page(1), null), offered.map { it.target })
+            assertEquals(listOf(null, "https://example.com/x"), offered.map { it.uri })
         }
     }
 
