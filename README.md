@@ -351,7 +351,7 @@ with the reason behind each gap.
 | Topic | What to expect |
 | --- | --- |
 | Annotations | You can read them, but there is no API to create them yet. |
-| Signing | `PdfSigner` prepares the signature field and its byte range, and your app supplies the signature itself. `PdfSignature.validate` checks a signature, but not revocation or the dates of its certificates. |
+| Signing | `PdfSigner` prepares the signature field and its byte range, and your app supplies the signature itself. `PdfSignature.validate` checks a signature and the revocation data that it gets, but fetches nothing and does not check the dates of the certificates. |
 | Redaction | A few things survive, such as a large background fill and a clipping path's outline. The [editing guide](https://yuroyami.github.io/KitePDF/editing/#redaction-limitations) lists them all. |
 | Encryption | Files encrypted with RC4 open, but only AES files can be edited. New files use AES-256. |
 | Colour | ICC profiles and rendering intents apply. Overprint is not simulated. |

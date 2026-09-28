@@ -2,6 +2,7 @@ package io.github.yuroyami.kitepdf.crypto.sig
 
 import io.github.yuroyami.kitepdf.PdfCertificate
 import io.github.yuroyami.kitepdf.PdfDate
+import io.github.yuroyami.kitepdf.PdfRevocation
 import io.github.yuroyami.kitepdf.PdfSignatureValidation
 import io.github.yuroyami.kitepdf.PdfSignatureValidation.Status
 
@@ -20,9 +21,21 @@ internal class SignatureValidator(
     /** Certificates the document keeps outside the signature, such as those of `/DSS`. */
     private val documentCerts: List<ByteArray>,
     trustAnchors: List<ByteArray>,
+    /** CRLs and OCSP responses from the document and the caller, each in DER (#447). */
+    revocationData: List<ByteArray> = emptyList(),
 ) {
     private val anchors = trustAnchors.mapNotNull { X509.parse(it) }
     private var modified = false
+
+    // The revocation data found so far: the document's and the caller's, then the signature's own.
+    private val crls = ArrayList<Crl>()
+    private val ocsps = ArrayList<OcspResponse>()
+
+    init {
+        for (data in revocationData) {
+            Crl.parse(data)?.let { crls += it } ?: OcspResponse.parse(data)?.let { ocsps += it }
+        }
+    }
 
     fun validate(): PdfSignatureValidation {
         val ranges = rangesOf() ?: return result(Status.Malformed, "the byte range is not a list of ascending ranges inside the file")
@@ -112,6 +125,12 @@ internal class SignatureValidator(
     private fun cms(contents: ByteArray, signed: ByteArray): PdfSignatureValidation {
         val cms = CmsSignedData.parse(contents) ?: return result(Status.Malformed, "the signature is not a CMS SignedData")
         val signer = cms.signers.firstOrNull() ?: return result(Status.Malformed, "the signature names no signer")
+        crls += cms.crls
+        ocsps += cms.ocsps
+        signer.archivedRevocation().let { (archivedCrls, archivedOcsps) ->
+            crls += archivedCrls
+            ocsps += archivedOcsps
+        }
         val pool = cms.certificates + pool()
         val cert = pool.firstOrNull { signer.names(it) } ?: return result(Status.Malformed, "the signature holds no certificate for its signer")
         val chain = chainOf(cert, pool)
@@ -196,20 +215,40 @@ internal class SignatureValidator(
     private fun result(status: Status, detail: String?, chain: List<X509> = emptyList(), signedTime: PdfDate? = null): PdfSignatureValidation {
         // Trust speaks for the signer only when the signature holds: an invalid one claims nothing.
         val trusted = status == Status.Valid && chain.any { c -> anchors.any { it.der.contentEquals(c.der) } }
-        val certificates = chain.map(::certificateOf)
+        val certificates = chain.mapIndexed { i, cert -> certificateOf(cert, revocationOf(cert, chain.getOrNull(i + 1))) }
         return PdfSignatureValidation(status, certificates.firstOrNull(), certificates, trusted, modified, signedTime, detail)
+    }
+
+    /**
+     * What the revocation data says about [cert], issued by [issuer]. Only data that the issuer
+     * signed counts, or an OCSP responder that the issuer delegated to. A revocation outweighs
+     * a good status from another source. Without an issuer, as for a root, nothing is known.
+     */
+    private fun revocationOf(cert: X509, issuer: X509?): RevocationResult {
+        issuer ?: return RevocationResult.UNKNOWN
+        val results = crls.filter { it.issuerDer.contentEquals(cert.issuerDer) && it.signedBy(issuer) }.map { it.check(cert) } +
+            ocsps.mapNotNull { it.check(cert, issuer) }
+        return results.firstOrNull { it.state == RevocationState.REVOKED }
+            ?: results.firstOrNull { it.state == RevocationState.GOOD }
+            ?: RevocationResult.UNKNOWN
     }
 
     private companion object {
         const val MAX_CHAIN = 10
 
-        fun certificateOf(cert: X509) = PdfCertificate(
+        fun certificateOf(cert: X509, revocation: RevocationResult) = PdfCertificate(
             subject = cert.subject,
             issuer = cert.issuer,
             commonName = cert.commonName,
             serialNumber = cert.serialHex,
             notBefore = asn1Date(cert.notBefore),
             notAfter = asn1Date(cert.notAfter),
+            revocation = when (revocation.state) {
+                RevocationState.GOOD -> PdfRevocation.Good
+                RevocationState.REVOKED -> PdfRevocation.Revoked
+                RevocationState.UNKNOWN -> PdfRevocation.Unknown
+            },
+            revokedAt = asn1Date(revocation.revokedAt),
             der = cert.der,
         )
 

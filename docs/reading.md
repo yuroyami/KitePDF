@@ -379,6 +379,20 @@ The result also gives:
 - `signedTime`: the time inside the signed data. The signer states it, or for a document
   timestamp, the timestamp authority states it.
 
+Each certificate of the chain has a `revocation`: `Good`, `Revoked` (with `revokedAt`) or
+`Unknown`. KitePDF reads the CRLs and OCSP responses that the document carries: in its
+document security store, in the signature's revocation field, and in Acrobat's
+`adbe-revocationInfoArchival` attribute. Data that you fetched yourself goes in as well:
+
+```kotlin
+val result = signature.validate(anchors, revocationData = listOf(crlDer, ocspResponseDer))
+if (result.signer?.revocation == PdfRevocation.Revoked) println("Revoked on ${result.signer?.revokedAt}")
+```
+
+Only data that the certificate's issuer signed counts, or an OCSP responder that the issuer
+delegated to. A root has no issuer, so its revocation stays `Unknown`. KitePDF fetches nothing
+from the network.
+
 KitePDF checks these encodings: `adbe.pkcs7.detached`, `ETSI.CAdES.detached`,
 `adbe.pkcs7.sha1`, `adbe.x509.rsa_sha1` and document timestamps (`ETSI.RFC3161`). It checks
 RSA (PKCS #1 v1.5 and PSS) and ECDSA on the P-256, P-384 and P-521 curves, with SHA-1,
@@ -387,9 +401,8 @@ string, so content slipped into that gap makes the signature `Malformed`. When a
 signature names its certificate in a signed attribute, that certificate must be the one that
 signed.
 
-KitePDF does not check revocation (CRL or OCSP), the validity dates of the certificates
-(`notBefore` and `notAfter` give them), or whether a change after signing is one that the
-document permits. `name`, `reason`, `location` and `signingTime` are what the signing
+KitePDF does not check the validity dates of the certificates (`notBefore` and `notAfter`
+give them), or whether a change after signing is one that the document permits. `name`, `reason`, `location` and `signingTime` are what the signing
 application wrote. When `isModifiedAfterSigning` is true, a later revision can have replaced
 them.
 

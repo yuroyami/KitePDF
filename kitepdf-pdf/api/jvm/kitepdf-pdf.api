@@ -416,6 +416,8 @@ public final class io/github/yuroyami/kitepdf/PdfCertificate {
 	public final fun getIssuer ()Ljava/lang/String;
 	public final fun getNotAfter ()Lio/github/yuroyami/kitepdf/PdfDate;
 	public final fun getNotBefore ()Lio/github/yuroyami/kitepdf/PdfDate;
+	public final fun getRevocation ()Lio/github/yuroyami/kitepdf/PdfRevocation;
+	public final fun getRevokedAt ()Lio/github/yuroyami/kitepdf/PdfDate;
 	public final fun getSerialNumber ()Ljava/lang/String;
 	public final fun getSubject ()Ljava/lang/String;
 	public fun toString ()Ljava/lang/String;
@@ -977,6 +979,15 @@ public final class io/github/yuroyami/kitepdf/PdfRasterGeometryKt {
 	public static synthetic fun rasterGeometry$default (Lio/github/yuroyami/kitepdf/PdfPage;DJILjava/lang/Object;)Lio/github/yuroyami/kitepdf/PdfRasterGeometry;
 }
 
+public final class io/github/yuroyami/kitepdf/PdfRevocation : java/lang/Enum {
+	public static final field Good Lio/github/yuroyami/kitepdf/PdfRevocation;
+	public static final field Revoked Lio/github/yuroyami/kitepdf/PdfRevocation;
+	public static final field Unknown Lio/github/yuroyami/kitepdf/PdfRevocation;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lio/github/yuroyami/kitepdf/PdfRevocation;
+	public static fun values ()[Lio/github/yuroyami/kitepdf/PdfRevocation;
+}
+
 public abstract interface class io/github/yuroyami/kitepdf/PdfScriptHandler {
 	public fun blur (Ljava/lang/String;)V
 	public fun blur (Ljava/lang/String;I)V
@@ -1031,8 +1042,8 @@ public final class io/github/yuroyami/kitepdf/PdfSignature {
 	public final fun getSubFilter ()Ljava/lang/String;
 	public final fun isDocumentTimestamp ()Z
 	public fun toString ()Ljava/lang/String;
-	public final fun validate (Ljava/util/List;)Lio/github/yuroyami/kitepdf/PdfSignatureValidation;
-	public static synthetic fun validate$default (Lio/github/yuroyami/kitepdf/PdfSignature;Ljava/util/List;ILjava/lang/Object;)Lio/github/yuroyami/kitepdf/PdfSignatureValidation;
+	public final fun validate (Ljava/util/List;Ljava/util/List;)Lio/github/yuroyami/kitepdf/PdfSignatureValidation;
+	public static synthetic fun validate$default (Lio/github/yuroyami/kitepdf/PdfSignature;Ljava/util/List;Ljava/util/List;ILjava/lang/Object;)Lio/github/yuroyami/kitepdf/PdfSignatureValidation;
 }
 
 public final class io/github/yuroyami/kitepdf/PdfSignatureValidation {
