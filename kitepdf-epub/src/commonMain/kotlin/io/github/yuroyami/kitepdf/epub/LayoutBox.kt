@@ -196,6 +196,16 @@ internal class PlacedImage(
     val zipPath: String = "",
 )
 
+/** A formula placed on a line, its baseline on the line's, at document-space inline position [x] (#32). */
+internal class PlacedMath(
+    /** Mutable only for the post-layout `position:relative` shift pass. */
+    var x: Double,
+    val box: MathBox,
+    val color: RgbColor,
+    /** What the reading order says for the formula: its `alttext`, or a linear form of it. */
+    val text: String,
+)
+
 /** A laid-out line inside a [TextBlockBox]; [yTop] is absolute document-down. */
 internal class PositionedLine(
     val runs: List<PlacedRun>,
@@ -209,6 +219,8 @@ internal class PositionedLine(
     val sourceLength: Int = 0,
     /** How the layout broke the line, which copied text follows (#438). */
     val end: KiteLineEnd = KiteLineEnd.HARD,
+    /** Formulas on this line, their baselines on the line's (#32). */
+    val maths: List<PlacedMath> = emptyList(),
 ) {
     /** Owning box + line index, filled after layout, for the paginator's widows/orphans. */
     var owner: TextBlockBox? = null

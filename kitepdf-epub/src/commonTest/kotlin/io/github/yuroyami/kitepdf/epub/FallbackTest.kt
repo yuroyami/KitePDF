@@ -74,7 +74,9 @@ class FallbackTest {
 
     @Test
     fun a_switch_paints_one_branch() {
+        // A case for markup that no engine here renders is skipped; MathML renders since #32.
         val switch = """<epub:switch>
+            <epub:case required-namespace="http://www.xml-cml.org/schema"><p>Case in CML.</p></epub:case>
             <epub:case required-namespace="http://www.w3.org/1998/Math/MathML"><p>Case in MathML.</p></epub:case>
             <epub:case required-namespace="http://www.w3.org/2000/svg"><p>Case in SVG.</p></epub:case>
             <epub:default><p>The default.</p></epub:default>
@@ -83,14 +85,14 @@ class FallbackTest {
             manifest = """<item id="c1" href="c1.xhtml" media-type="application/xhtml+xml"/>""",
             spine = listOf("c1"), files = listOf("c1.xhtml" to xhtml(switch)),
         ).page(KiteLocation(0, 0)).textContent().plainText
-        assertTrue("Case in SVG." in chosen, chosen)
-        assertFalse("MathML" in chosen || "default" in chosen, "more than one branch painted: $chosen")
+        assertTrue("Case in MathML." in chosen, chosen)
+        assertFalse("CML" in chosen || "SVG" in chosen || "default" in chosen, "more than one branch painted: $chosen")
 
-        val onlyMath = """<epub:switch><epub:case required-namespace="http://www.w3.org/1998/Math/MathML"><p>Case in MathML.</p></epub:case>
+        val onlyChemistry = """<epub:switch><epub:case required-namespace="http://www.xml-cml.org/schema"><p>Case in CML.</p></epub:case>
             <epub:default><p>The default.</p></epub:default></epub:switch>"""
         val fallback = book(
             manifest = """<item id="c1" href="c1.xhtml" media-type="application/xhtml+xml"/>""",
-            spine = listOf("c1"), files = listOf("c1.xhtml" to xhtml(onlyMath)),
+            spine = listOf("c1"), files = listOf("c1.xhtml" to xhtml(onlyChemistry)),
         ).page(KiteLocation(0, 0)).textContent().plainText
         assertEquals("The default.", fallback.trim())
     }

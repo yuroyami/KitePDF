@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- EPUB books render presentation MathML. A formula sits on its line, or centred
+  on a line of its own with `display="block"`, with fractions, scripts, limits,
+  radicals, tables, stretching fences, `mstyle`, `menclose` and the legacy
+  `mfenced`. Scripts shrink by 0.71 a level down to half size, and operators take
+  TeX's spaces. Text extraction, search and the reading order read a formula as
+  its `alttext` or a linear form, in its place in the sentence. An `epub:switch`
+  case for MathML now renders (#32).
+
 - `KitePage.isContentLoaded` says whether a page's content is in memory, and
   `KitePage.loadContent` brings it back. An EPUB page answers false while the
   layout budget has dropped its chapter. `KiteDocView` uses them, so a Vectorized

@@ -12,6 +12,8 @@ import io.github.yuroyami.kitepdf.epub.css.ComputedStyle
 import io.github.yuroyami.kitepdf.epub.css.CssBackground
 import io.github.yuroyami.kitepdf.epub.css.CssFloat
 import io.github.yuroyami.kitepdf.epub.css.Display
+import io.github.yuroyami.kitepdf.epub.css.TextAlign
+import io.github.yuroyami.kitepdf.epub.css.WritingMode
 import io.github.yuroyami.kitepdf.epub.css.Edge
 import io.github.yuroyami.kitepdf.epub.css.ListType
 import io.github.yuroyami.kitepdf.epub.css.ObjectFit
@@ -143,6 +145,19 @@ internal class BoxBuilder(
                 if (child.tag == "video" || child.tag == "audio") {
                     val cs = resolver.compute(child, childAncestors, style)
                     if (cs.display != Display.NONE) mediaBox(child, cs, sem)?.let { box -> flush(); children.add(box) }
+                    continue
+                }
+                if (child.tag == "math") {
+                    val cs = resolver.compute(child, childAncestors, style)
+                    if (cs.display == Display.NONE) continue
+                    child.attrs["id"]?.takeIf { it.isNotBlank() }?.let(pendingAnchors::add)
+                    val math = MathParser.parse(child)
+                    when {
+                        // The layout sets formulas horizontally only, so vertical text keeps the linear text.
+                        style.writingMode != WritingMode.HORIZONTAL -> inl.appendText(math.readingText, cs)
+                        math.display || cs.display == Display.BLOCK -> { flush(); children.add(mathBlock(math, cs)) }
+                        else -> inl.addMath(math, cs)
+                    }
                     continue
                 }
                 if (child.tag == "iframe" || child.tag == "object") {
@@ -556,6 +571,19 @@ internal class BoxBuilder(
                         if (cs.display != Display.NONE) mediaBox(child, cs, parentSem)?.let { hoist(listOf(it)) }
                         continue
                     }
+                    if (child.tag == "math") {
+                        val cs = resolver.compute(child, childAncestors, style)
+                        if (cs.display == Display.NONE) continue
+                        child.attrs["id"]?.takeIf { it.isNotBlank() }?.let(anchorSink::add)
+                        val math = MathParser.parse(child)
+                        when {
+                            style.writingMode != WritingMode.HORIZONTAL -> inl.appendText(math.readingText, cs)
+                            // A display formula inside a paragraph takes a block of its own, centred.
+                            math.display || cs.display == Display.BLOCK -> hoist(listOf(mathBlock(math, cs)))
+                            else -> inl.addMath(math, cs)
+                        }
+                        continue
+                    }
                     if (child.tag == "iframe" || child.tag == "object") {
                         // An embedded document takes a block of its own, as a media element does.
                         val cs = resolver.compute(child, childAncestors, style)
@@ -731,6 +759,15 @@ internal class BoxBuilder(
             pendingSpace = false; lastWasBreak = true
         }
 
+        /** A `<math>` element: one U+FFFC run carrying the formula (#32). */
+        fun addMath(math: MathRoot, style: ComputedStyle) {
+            if (pendingSpace && blockHasContent && !lastWasBreak) {
+                runs.add(pendingSpaceRun ?: makeRun(" ", style))
+            }
+            pendingSpace = false; lastWasBreak = false; blockHasContent = true
+            runs.add(makeRun("\uFFFC", style).copy(math = math))
+        }
+
         /** An inline `<img>`: one U+FFFC run carrying the source + size hints. */
         fun addImage(
             src: String, style: ComputedStyle, cssW: Double?, cssH: Double?, alt: String? = null,
@@ -821,6 +858,17 @@ internal class BoxBuilder(
             backgroundColor = style.backgroundColor.takeIf { style.display == Display.INLINE || style.display == Display.INLINE_BLOCK }
                 ?: backgroundColor,
         )
+    }
+
+    /** A display formula: a block of its own, the formula centred on its line (#32). */
+    private fun mathBlock(math: MathRoot, cs: ComputedStyle): BlockBox {
+        val inl = Inline()
+        inl.addMath(MathRoot(math.body, display = true, alt = math.alt), cs)
+        // Half an em above and below, as a reading system sets display math apart, unless the book
+        // sets more. A text block has no margins of its own, so a block around it holds them.
+        val room = cs.fontSizePt * 0.5
+        val block = cs.copy(display = Display.BLOCK, marginTopPt = maxOf(cs.marginTopPt, room), marginBottomPt = maxOf(cs.marginBottomPt, room))
+        return BlockBox(block, listOf(TextBlockBox(cs.copy(display = Display.BLOCK, textAlign = TextAlign.CENTER), inl.take())))
     }
 
     private fun marker(style: ComputedStyle, ordinal: Int): String? = when (style.listType) {

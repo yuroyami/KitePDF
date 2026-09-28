@@ -452,6 +452,30 @@ The layout engine covers what real books use:
   than the inline-start (right) edge; lines still stay inside the content
   box.
 
+### Mathematics
+
+A `<math>` element renders as presentation MathML. A formula sits on the baseline of its line
+and grows the line when it is taller. With `display="block"` it takes a line of its own,
+centred, with half an em of room above and below.
+
+- **Tokens**: `mi`, `mn`, `mo`, `mtext`, `ms` and `mspace`. A single-letter identifier is italic.
+  `mathvariant` sets bold, italic, sans-serif and monospace, and it maps double-struck, script
+  and fraktur letters to their Unicode math letters, such as ℝ.
+- **Layout**: `mrow`, `mfrac` with `linethickness`, `msub`, `msup`, `msubsup`, `munder`,
+  `mover`, `munderover`, `msqrt`, `mroot`, `mtable` with `columnalign`, `mstyle` with
+  `displaystyle`, `scriptlevel` and `mathvariant`, `mphantom`, `menclose` with box and strike
+  notations, the legacy `mfenced`, and `semantics`, which shows its presentation child.
+- **Sizes and spaces**: each script level draws 0.71 times as large, down to half the base
+  size. Operators take the spaces that TeX gives them. Fences stretch to the height of the row
+  they enclose. A large operator such as ∑ grows in display style, and its limits sit above and
+  below it there, and at script places inline.
+
+The glyphs draw in the host font, and the engine measures them with the Standard 14 metrics, so
+a formula needs no font in the book. The text of a page reads a formula as its `alttext`, or as a
+linear form such as `x=(−b±√(b^2−4ac))/(2a)`, so selection, search and the reading order find it
+in its place. Content MathML does not render: a formula shows its presentation markup. In
+vertical text, a formula reads as its linear text.
+
 ## Books that are not quite right
 
 Three habits of real EPUBs that the engine absorbs rather than rejecting.
@@ -471,8 +495,8 @@ mismatch is reported, not fatal: half a broken book beats no book.
 item. A spine item that is not XHTML or SVG shows the first document of its
 fallback chain, and an image that does not decode draws the first fallback
 that does. The chain stops after 16 hops and at an item it has seen. An
-`epub:switch` shows its first `case` for XHTML or SVG, else its `default`;
-a case that needs MathML is skipped.
+`epub:switch` shows its first `case` for XHTML, SVG or MathML, else its
+`default`.
 
 ## Accessibility
 

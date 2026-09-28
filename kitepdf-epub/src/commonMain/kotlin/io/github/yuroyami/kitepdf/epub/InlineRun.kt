@@ -70,6 +70,8 @@ internal data class InlineRun(
      * lines (#36). One list per element, so runs of one element share it.
      */
     val ids: List<String> = emptyList(),
+    /** A `<math>` element: one U+FFFC run that the layout sets as a formula (#32). */
+    val math: MathRoot? = null,
 ) {
     companion object {
         val BLACK = RgbColor(0.0, 0.0, 0.0)
