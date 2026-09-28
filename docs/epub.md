@@ -402,7 +402,15 @@ The layout engine covers what real books use:
   `contain` or lengths), `background-position` and `background-repeat` apply,
   as do the same parts of the `background` shorthand. A `url()` in a stylesheet
   resolves against that stylesheet's folder. A gradient whose stops differ in
-  alpha does not paint, and a radial gradient does not paint. Known limitation:
+  alpha does not paint, and a radial gradient does not paint.
+- **Transforms**: `transform` with `translate`, `scale`, `rotate`, `skew` and
+  `matrix`, about its `transform-origin`, moves the paint of a box and all it
+  holds. It does not move the layout. The box paints where a positioned box
+  with `z-index: 0` paints. Links and fragment rectangles move with it. The
+  text that selection and search use moves with a box that only moves and
+  scales, and stays where the layout put it for a turned or skewed box. Only
+  two-dimensional transforms apply, and vertical writing does not transform.
+  Known limitation:
   in `direction: rtl` text, `text-indent` shifts from the left edge rather
   than the inline-start (right) edge; lines still stay inside the content
   box.

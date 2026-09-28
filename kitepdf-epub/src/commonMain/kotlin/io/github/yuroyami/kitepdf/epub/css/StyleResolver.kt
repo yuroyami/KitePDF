@@ -220,6 +220,9 @@ internal class StyleResolver(
         return b.build()
     }
 
+    /** The transform parser, with lengths in this element's font. */
+    private fun transforms(b: Builder) = TransformParser { CssValues.length(it, b.fontSizePt, rootFontSizePt, 0.0) }
+
     /** The background parser, with lengths in this element's font. */
     private fun backgrounds(b: Builder) = BackgroundParser { CssValues.length(it, b.fontSizePt, rootFontSizePt, 0.0) }
 
@@ -359,6 +362,8 @@ internal class StyleResolver(
                 backgroundShorthand(b, v)
             }
             "background-image" -> b.bgImage = backgrounds(b).image(v)
+            "transform", "-webkit-transform" -> transforms(b).transform(v)?.let { b.transform = it.takeIf { list -> list.isNotEmpty() } }
+            "transform-origin", "-webkit-transform-origin" -> transforms(b).origin(v, backgrounds(b))?.let { b.transformOrigin = it }
             "background-size" -> backgrounds(b).size(v)?.let { b.bgSize = it }
             "background-position" -> backgrounds(b).position(v)?.let { (x, y) -> b.bgX = x; b.bgY = y }
             "background-position-x" -> backgrounds(b).offset(v)?.let { b.bgX = it }
@@ -711,6 +716,8 @@ internal class StyleResolver(
         var bgY = CssOffset.ZERO
         var bgRepeatX = true
         var bgRepeatY = true
+        var transform: List<CssTransform>? = null // not inherited
+        var transformOrigin = CssOffset.HALF to CssOffset.HALF // not inherited
 
         fun build(): ComputedStyle {
             val outOfFlow = position == CssPosition.ABSOLUTE || position == CssPosition.FIXED || cssFloat != CssFloat.NONE
@@ -749,6 +756,7 @@ internal class StyleResolver(
                 cssFloat, clear, tableLayoutFixed, lineThrough, zIndex,
                 opacity, visible, clipsOverflow, radii, shadows,
                 bgImage?.let { CssBackgroundLayer(it, bgSize, bgX, bgY, bgRepeatX, bgRepeatY) },
+                transform, transformOrigin,
             )
         }
     }

@@ -150,6 +150,10 @@ internal data class ComputedStyle(
     val shadows: List<BoxShadow> = emptyList(),
     /** The first `background-image` layer with its size, position and repeat, or null (#28). Not inherited. */
     val backgroundLayer: CssBackgroundLayer? = null,
+    /** `transform`, applied right to left, or null for none. It moves paint, not layout (#28). Not inherited. */
+    val transform: List<CssTransform>? = null,
+    /** `transform-origin`, x then y, in the border box. Not inherited. */
+    val transformOrigin: Pair<CssOffset, CssOffset> = CssOffset.HALF to CssOffset.HALF,
 ) {
     val mono: Boolean get() = fontFamily == GenericFont.MONO
 
