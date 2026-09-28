@@ -32,6 +32,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `isComplete` is false until then. `KiteDocView` builds the list off the main
   thread and shows `chapterPlaceholder` meanwhile, where the first frame built
   every page object (#387).
+- `KiteSelectionMenu` places itself above the selection, or below it when there
+  is no room above. Its `alignment` is now nullable, and null is the default; pass
+  an alignment to pin the menu as before. A long press on a page without text no
+  longer stops the page from panning (#408).
 - `EpubPage`, `XpsPage` and `SvgPage` stop a render once its `KiteCancellation`
   reads true: a book page between two lines or boxes, an XPS or SVG page before
   its next element. They drew the whole page before (#370).
@@ -44,6 +48,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   view the focus. A mouse press and drag on text selects at once (#411).
 - The pan of a zoomed page goes on after a quick release and slows down, and in
   `Paged` and `Spread` a drag past the edge of a zoomed page turns it (#410).
+- `KiteDocViewState.selectionBounds` gives the box of the selection in viewport
+  pixels (#408).
 
 ## [0.11.0] - 2026-09-25
 

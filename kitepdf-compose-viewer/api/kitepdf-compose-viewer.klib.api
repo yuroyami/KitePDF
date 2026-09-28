@@ -244,6 +244,8 @@ final class io.github.yuroyami.kitepdf.compose/KiteDocViewState { // io.github.y
         final fun <get-knownPageCount>(): kotlin/Int // io.github.yuroyami.kitepdf.compose/KiteDocViewState.knownPageCount.<get-knownPageCount>|<get-knownPageCount>(){}[0]
     final val pageCount // io.github.yuroyami.kitepdf.compose/KiteDocViewState.pageCount|{}pageCount[0]
         final fun <get-pageCount>(): kotlin/Int // io.github.yuroyami.kitepdf.compose/KiteDocViewState.pageCount.<get-pageCount>|<get-pageCount>(){}[0]
+    final val selectionBounds // io.github.yuroyami.kitepdf.compose/KiteDocViewState.selectionBounds|{}selectionBounds[0]
+        final fun <get-selectionBounds>(): androidx.compose.ui.geometry/Rect? // io.github.yuroyami.kitepdf.compose/KiteDocViewState.selectionBounds.<get-selectionBounds>|<get-selectionBounds>(){}[0]
 
     final var focusedField // io.github.yuroyami.kitepdf.compose/KiteDocViewState.focusedField|{}focusedField[0]
         final fun <get-focusedField>(): kotlin/String? // io.github.yuroyami.kitepdf.compose/KiteDocViewState.focusedField.<get-focusedField>|<get-focusedField>(){}[0]

@@ -458,7 +458,9 @@ KiteDocView(state, overlay = {
 })
 ```
 
-Every visual layer is replaceable: `container` swaps the card, `itemContent` swaps how one action renders, `colorSwatch` swaps how one colour renders, and `alignment` moves the whole menu. For a completely different menu, skip the composable and build your own against `state.selection` and `state.selectionInProgress`; the built-in one is a default, not a contract.
+The menu sits above the selection, or below it when there is no room above, centred on it and kept inside the viewport, so it does not cover the words.
+
+Every visual layer is replaceable: `container` swaps the card, `itemContent` swaps how one action renders, `colorSwatch` swaps how one colour renders, and `alignment` pins the whole menu to one place in the viewport instead. For a completely different menu, skip the composable and build your own against `state.selection`, `state.selectionInProgress` and `state.selectionBounds`, the selection's box in viewport pixels; the built-in one is a default, not a contract.
 
 ### Selection handles
 
