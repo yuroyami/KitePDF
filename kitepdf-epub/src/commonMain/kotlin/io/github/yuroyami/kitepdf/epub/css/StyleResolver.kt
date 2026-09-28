@@ -486,6 +486,8 @@ internal class StyleResolver(
             "table-layout" -> b.tableLayoutFixed = v.trim().lowercase() == "fixed"
             else -> if (prop.removePrefix("-webkit-") in FlexValues.PROPERTIES) {
                 FlexValues.apply(b.flex, prop, v) { CssValues.length(it, b.fontSizePt, rootFontSizePt, refWidthPt) }?.let { b.flex = it }
+            } else if (prop in GridValues.PROPERTIES) {
+                GridValues.apply(b.grid, prop, v) { CssValues.length(it, b.fontSizePt, rootFontSizePt, refWidthPt) }?.let { b.grid = it }
             }
         }
     }
@@ -565,7 +567,8 @@ internal class StyleResolver(
         "inline-block" -> Display.INLINE_BLOCK
         "list-item" -> Display.LIST_ITEM
         "flex", "-webkit-flex" -> Display.FLEX
-        "block", "grid", "flow-root", "table-caption" -> Display.BLOCK
+        "grid" -> Display.GRID
+        "block", "flow-root", "table-caption" -> Display.BLOCK
         "table", "inline-table" -> Display.TABLE
         "table-row" -> Display.TABLE_ROW
         "table-cell" -> Display.TABLE_CELL
@@ -723,11 +726,13 @@ internal class StyleResolver(
         var transform: List<CssTransform>? = null // not inherited
         var transformOrigin = CssOffset.HALF to CssOffset.HALF // not inherited
         var flex = FlexStyle() // not inherited
+        var grid = GridStyle() // not inherited
 
         fun build(): ComputedStyle {
             // CSS Flexible Box Layout 1, 4: an in-flow child of a flex container is a flex item. It is
-            // blockified, and float does not apply to it (#33).
-            val flexItem = parent.display == Display.FLEX && position != CssPosition.ABSOLUTE && position != CssPosition.FIXED
+            // blockified, and float does not apply to it (#33). A grid item is the same (CSS Grid 1, 6, #35).
+            val flexItem = (parent.display == Display.FLEX || parent.display == Display.GRID) &&
+                position != CssPosition.ABSOLUTE && position != CssPosition.FIXED
             if (flexItem) {
                 cssFloat = CssFloat.NONE
                 if (display == Display.INLINE || display == Display.INLINE_BLOCK) display = Display.BLOCK
@@ -769,7 +774,7 @@ internal class StyleResolver(
                 opacity, visible, clipsOverflow, radii, shadows,
                 bgImage?.let { CssBackgroundLayer(it, bgSize, bgX, bgY, bgRepeatX, bgRepeatY) },
                 transform, transformOrigin,
-                flex,
+                flex, grid,
             )
         }
     }

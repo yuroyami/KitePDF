@@ -19,6 +19,11 @@ import io.github.yuroyami.kitepdf.epub.css.FlexDirection
 import io.github.yuroyami.kitepdf.epub.css.FlexJustify
 import io.github.yuroyami.kitepdf.epub.css.FlexStyle
 import io.github.yuroyami.kitepdf.epub.css.FlexWrap
+import io.github.yuroyami.kitepdf.epub.css.GridLine
+import io.github.yuroyami.kitepdf.epub.css.GridSize
+import io.github.yuroyami.kitepdf.epub.css.GridStyle
+import io.github.yuroyami.kitepdf.epub.css.GridTrack
+import io.github.yuroyami.kitepdf.epub.css.GridTracks
 import io.github.yuroyami.kitepdf.epub.css.ObjectFit
 import io.github.yuroyami.kitepdf.epub.css.GenericFont
 import io.github.yuroyami.kitepdf.epub.css.TextAlign
@@ -199,11 +204,13 @@ internal class BoxLayout(
         var prevBottom = 0.0
         var first = true
         val floatsBefore = activeFloats.size
-        // A flex container places its children as flex items instead of stacking them (#33).
-        val flexChildren = if (s.display == Display.FLEX) emptyList() else box.children
-        if (s.display == Display.FLEX) {
+        // A flex or grid container places its children as items instead of stacking them (#33, #35).
+        val itemLayout = s.display == Display.FLEX || s.display == Display.GRID
+        val flexChildren = if (itemLayout) emptyList() else box.children
+        if (itemLayout) {
             val definite = s.heightPt?.let { h -> h.coerceAtMost(s.maxHeightPt ?: h).coerceAtLeast(s.minHeightPt ?: 0.0) }
-            cursorY += layoutFlex(box, contentLeft, contentW, contentTop, definite)
+            cursorY += if (s.display == Display.GRID) layoutGrid(box, contentLeft, contentW, contentTop, definite)
+            else layoutFlex(box, contentLeft, contentW, contentTop, definite)
         }
         for (child in flexChildren) {
             // Out-of-flow (position:absolute/fixed): queued now, placed once its
@@ -814,7 +821,12 @@ internal class BoxLayout(
         }
         is ImageBox -> {
             layoutImage(b, 0.0, room, 0.0)
-            b.borderBoxWidth
+            val s = b.style
+            val sized = s.widthPt != null || s.heightPt != null || b.attrWidth != null || b.attrHeight != null
+            // Without a size of its own, an image's content is its natural size, a CSS pixel (0.75 pt)
+            // for an image pixel, where a block image alone would fill its column (#35).
+            val natural = if (sized) null else (b.svg?.width ?: b.image?.width?.toDouble())?.times(0.75)
+            if (natural == null) b.borderBoxWidth else minOf(b.borderBoxWidth, natural + horizontalInsets(b))
         }
         is TableBox -> room
         is TableRowBox -> 0.0
@@ -868,6 +880,332 @@ internal class BoxLayout(
     private fun marginTop(b: LayoutBox): Double = if (b is TextBlockBox) 0.0 else b.style.marginTopPt
 
     private fun marginBottom(b: LayoutBox): Double = if (b is TextBlockBox) 0.0 else b.style.marginBottomPt
+
+    // ---- grid layout ---------------------------------------------------------
+
+    /** One grid item while its container lays it out: its area, in tracks counted from 0 (#35). */
+    private class GridItem(val box: LayoutBox, val grid: GridStyle, val flex: FlexStyle) {
+        var col = -1
+        var colSpan = 1
+        var row = -1
+        var rowSpan = 1
+    }
+
+    /** One track while its container sizes it: its base size, its growth limit and its sizing functions. */
+    private class GridTrackSize(val size: GridTrack) {
+        var base = 0.0
+        var limit = 0.0
+        val fr: Double get() = (size.max as? GridSize.Fraction)?.fr ?: 0.0
+        val flexible: Boolean get() = size.max is GridSize.Fraction
+        val content: Boolean get() = size.min.intrinsic
+    }
+
+    /**
+     * Places the children of the grid container [box] in its grid (CSS Grid Layout 1): it places
+     * the items (8.5), sizes the columns, lays each item out at its area's width, sizes the rows
+     * from the items (11), and aligns each item in its area. Returns the content height it needs.
+     */
+    private fun layoutGrid(box: BlockBox, contentLeft: Double, contentW: Double, contentTop: Double, definiteHeight: Double?): Double {
+        val s = box.style
+        val g = s.grid
+        val colGap = s.flex.columnGap
+        val rowGap = s.flex.rowGap
+        val items = ArrayList<GridItem>()
+        for (child in box.children) {
+            val pos = if (child is TextBlockBox) CssPosition.STATIC else child.style.position
+            if (pos == CssPosition.ABSOLUTE || pos == CssPosition.FIXED) {
+                pendingAbs.add(PendingAbs(child, if (pos == CssPosition.FIXED) pageCb else currentCb))
+                continue
+            }
+            if (child is TableRowBox) continue
+            // Loose text is an anonymous item with the initial values, not its container's.
+            val anonymous = child is TextBlockBox
+            items += GridItem(child, if (anonymous) GridStyle() else child.style.grid, if (anonymous) FlexStyle() else child.style.flex)
+        }
+        // order-modified document order places the items (8.5).
+        items.sortBy { it.flex.order }
+        if (items.isEmpty()) return definiteHeight ?: 0.0
+        val columns = expandTracks(g.columns, contentW, colGap)
+        val rows = expandTracks(g.rows, definiteHeight, rowGap)
+        placeGridItems(items, columns.size, rows.size)
+        val colCount = maxOf(columns.size, items.maxOf { it.col + it.colSpan })
+        val rowCount = maxOf(rows.size, items.maxOf { it.row + it.rowSpan })
+        val cols = List(colCount) { GridTrackSize(columns.getOrNull(it) ?: g.autoColumns) }
+        sizeGridColumns(cols, items, contentW, colGap, stretch = s.flex.justify == FlexJustify.STRETCH)
+        val (colStart, colBetween) = distribute(s.flex.justify, contentW - cols.sumOf { it.base } - colGap * (colCount - 1), colCount)
+        val colX = DoubleArray(colCount)
+        run {
+            var x = colStart
+            for (i in 0 until colCount) { colX[i] = x; x += cols[i].base + colGap + colBetween }
+        }
+        fun areaWidth(item: GridItem) = (item.col until item.col + item.colSpan).sumOf { cols[it].base } + (colGap + colBetween) * (item.colSpan - 1)
+
+        // Each item lays out at its area's width, or at its own width when it does not stretch.
+        for (item in items) {
+            val b = item.box
+            val left = if (b is TextBlockBox || b.style.marginLeftAuto) 0.0 else b.style.marginLeftPt
+            val right = if (b is TextBlockBox || b.style.marginRightAuto) 0.0 else b.style.marginRightPt
+            val room = (areaWidth(item) - left - right).coerceAtLeast(0.0)
+            val own = if (b is TextBlockBox || b is ImageBox) null else b.style.widthPt
+            val width = when {
+                own != null -> own + horizontalInsets(b)
+                justifyOf(item, g) == FlexAlign.STRETCH -> room
+                else -> maxContentWidth(b, room).coerceAtMost(room)
+            }
+            layoutFlexItem(b, contentLeft, contentTop, width)
+        }
+
+        val rowTracks = List(rowCount) { GridTrackSize(rows.getOrNull(it) ?: g.autoRows) }
+        sizeGridRows(rowTracks, items, definiteHeight, rowGap, stretch = s.flex.alignContent == FlexJustify.STRETCH)
+        val used = rowTracks.sumOf { it.base } + rowGap * (rowCount - 1)
+        val (rowStart, rowBetween) = if (definiteHeight != null) distribute(s.flex.alignContent, definiteHeight - used, rowCount) else 0.0 to 0.0
+        val rowY = DoubleArray(rowCount)
+        run {
+            var y = rowStart
+            for (i in 0 until rowCount) { rowY[i] = y; y += rowTracks[i].base + rowGap + rowBetween }
+        }
+
+        val rtl = s.direction == Direction.RTL
+        for (item in items) {
+            val b = item.box
+            val areaW = areaWidth(item)
+            val areaH = (item.row until item.row + item.rowSpan).sumOf { rowTracks[it].base } + (rowGap + rowBetween) * (item.rowSpan - 1)
+            val anonymous = b is TextBlockBox
+            val mL = if (anonymous || b.style.marginLeftAuto) 0.0 else b.style.marginLeftPt
+            val mR = if (anonymous || b.style.marginRightAuto) 0.0 else b.style.marginRightPt
+            val mT = marginTop(b)
+            val mB = marginBottom(b)
+            val slackX = areaW - mL - b.borderBoxWidth - mR
+            val dx = mL + when (justifyOf(item, g)) {
+                FlexAlign.CENTER -> slackX / 2
+                FlexAlign.END -> slackX
+                else -> 0.0
+            }
+            // Columns run from the right edge in a right-to-left container.
+            val x = if (rtl) contentLeft + contentW - colX[item.col] - dx - b.borderBoxWidth else contentLeft + colX[item.col] + dx
+            val align = item.flex.alignSelf.takeIf { it != FlexAlign.AUTO } ?: s.flex.alignItems
+            if (align == FlexAlign.STRETCH && b !is ImageBox && (anonymous || b.style.heightPt == null)) {
+                b.borderBoxHeight = maxOf(b.borderBoxHeight, areaH - mT - mB)
+            }
+            val slackY = areaH - mT - b.borderBoxHeight - mB
+            val dy = mT + when (align) {
+                FlexAlign.CENTER -> slackY / 2
+                FlexAlign.END -> slackY
+                else -> 0.0
+            }
+            shiftSubtree(b, x - b.x, contentTop + rowY[item.row] + dy - b.y)
+        }
+        return if (definiteHeight != null) maxOf(definiteHeight, used) else used
+    }
+
+    private fun justifyOf(item: GridItem, container: GridStyle): FlexAlign {
+        val own = item.grid.justifySelf.takeIf { it != FlexAlign.AUTO } ?: container.justifyItems
+        // An image keeps its own size across its area (6.6, a replaced element's normal is start).
+        return if (own == FlexAlign.STRETCH && item.box is ImageBox) FlexAlign.START else own
+    }
+
+    /**
+     * The explicit tracks of [tracks], with an auto-fill group repeated as often as it fits
+     * [room] with [gap] between, at least once. Without a room the group appears once (7.2.3.2).
+     */
+    private fun expandTracks(tracks: GridTracks, room: Double?, gap: Double): List<GridTrack> {
+        if (tracks.fill.isEmpty()) return tracks.tracks
+        fun fixed(t: GridTrack): Double? {
+            val min = (t.min as? GridSize.Fixed)?.pt ?: (t.min as? GridSize.Percent)?.let { p -> room?.let { p.fraction * it } }
+            val max = (t.max as? GridSize.Fixed)?.pt ?: (t.max as? GridSize.Percent)?.let { p -> room?.let { p.fraction * it } }
+            return min ?: max
+        }
+        val others = tracks.tracks.sumOf { fixed(it) ?: 0.0 } + gap * tracks.tracks.size
+        val group = tracks.fill.sumOf { fixed(it) ?: 0.0 }
+        val count = if (room == null || group <= 0.0) 1 else {
+            // n groups take n * group + (n * size - 1) gaps within the room left by the other tracks.
+            val one = group + gap * tracks.fill.size
+            ((room - others + gap) / one).toInt().coerceIn(1, GRID_MAX_TRACKS / tracks.fill.size.coerceAtLeast(1))
+        }
+        val expanded = ArrayList<GridTrack>()
+        expanded.addAll(tracks.tracks.subList(0, tracks.fillAt.coerceAtMost(tracks.tracks.size)))
+        repeat(count) { expanded.addAll(tracks.fill) }
+        expanded.addAll(tracks.tracks.subList(tracks.fillAt.coerceAtMost(tracks.tracks.size), tracks.tracks.size))
+        return expanded
+    }
+
+    /**
+     * 8.5: gives every item its area. Items with a row and a column go first, then items with a
+     * row, then the rest in order, row by row from a cursor that never goes back (sparse packing).
+     */
+    private fun placeGridItems(items: List<GridItem>, explicitCols: Int, explicitRows: Int) {
+        // A line number counts from 1 at the start, and from -1 at the end of the explicit grid.
+        fun index(n: Int, explicit: Int): Int = (if (n > 0) n - 1 else explicit + 1 + n).coerceIn(0, GRID_MAX_TRACKS - 1)
+        fun resolve(start: GridLine, end: GridLine, explicit: Int): Pair<Int, Int> = when {
+            start is GridLine.Line && end is GridLine.Line -> {
+                val a = index(start.n, explicit)
+                val b = index(end.n, explicit)
+                if (a == b) a to 1 else minOf(a, b) to kotlin.math.abs(b - a)
+            }
+            start is GridLine.Line && end is GridLine.Span -> index(start.n, explicit) to end.n
+            start is GridLine.Line -> index(start.n, explicit) to 1
+            end is GridLine.Line && start is GridLine.Span -> (index(end.n, explicit) - start.n).coerceAtLeast(0) to start.n
+            end is GridLine.Line -> (index(end.n, explicit) - 1).coerceAtLeast(0) to 1
+            start is GridLine.Span -> -1 to start.n
+            end is GridLine.Span -> -1 to end.n
+            else -> -1 to 1
+        }
+        for (item in items) {
+            val (c, cs) = resolve(item.grid.columnStart, item.grid.columnEnd, explicitCols)
+            val (r, rs) = resolve(item.grid.rowStart, item.grid.rowEnd, explicitRows)
+            item.col = c; item.colSpan = cs.coerceIn(1, GRID_MAX_TRACKS)
+            item.row = r; item.rowSpan = rs.coerceIn(1, GRID_MAX_TRACKS)
+        }
+        // The columns auto-placement wraps at: the explicit ones, or as many as a fixed item or a span needs.
+        val cols = maxOf(explicitCols, items.maxOf { if (it.col >= 0) it.col + it.colSpan else it.colSpan }, 1)
+        val taken = HashSet<Long>()
+        fun key(r: Int, c: Int) = r.toLong() * GRID_MAX_TRACKS + c
+        fun free(r: Int, c: Int, w: Int, h: Int): Boolean {
+            if (c + w > cols && c > 0) return false
+            for (dr in 0 until h) for (dc in 0 until w) if (key(r + dr, c + dc) in taken) return false
+            return true
+        }
+        fun take(item: GridItem) {
+            for (dr in 0 until item.rowSpan) for (dc in 0 until item.colSpan) taken += key(item.row + dr, item.col + dc)
+        }
+        for (item in items) if (item.row >= 0 && item.col >= 0) take(item)
+        for (item in items) if (item.row >= 0 && item.col < 0) {
+            // A full row sends the item to a column after the explicit ones.
+            item.col = (0 until cols).firstOrNull { c -> c + item.colSpan <= cols && free(item.row, c, item.colSpan, item.rowSpan) } ?: cols
+            take(item)
+        }
+        var cursorRow = 0
+        var cursorCol = 0
+        for (item in items) {
+            if (item.row >= 0) continue
+            if (item.col >= 0) {
+                // A fixed column: the next row at or after the cursor where the area is free.
+                if (item.col < cursorCol) cursorRow++
+                var r = cursorRow
+                while (!free(r, item.col, item.colSpan, item.rowSpan) && r < GRID_MAX_TRACKS) r++
+                item.row = r
+                cursorRow = r
+                cursorCol = item.col
+            } else {
+                var r = cursorRow
+                var c = cursorCol
+                while (r < GRID_MAX_TRACKS) {
+                    if (c + item.colSpan > cols && c > 0) { r++; c = 0; continue }
+                    if (free(r, c, item.colSpan, item.rowSpan)) break
+                    c++
+                }
+                item.row = r
+                item.col = c
+                cursorRow = r
+                cursorCol = c + item.colSpan
+            }
+            take(item)
+        }
+    }
+
+    /**
+     * 11.4 to 11.8, for the columns: fixed sizes first, then the content of the items in each
+     * content-sized track, then free space up to each track's limit, then the fractions, and
+     * last, when [stretch] allows it, the auto tracks share what is left.
+     */
+    private fun sizeGridColumns(tracks: List<GridTrackSize>, items: List<GridItem>, width: Double, gap: Double, stretch: Boolean) {
+        fun fixed(size: GridSize): Double? = when (size) {
+            is GridSize.Fixed -> size.pt
+            is GridSize.Percent -> size.fraction * width
+            else -> null
+        }
+        for (t in tracks) {
+            t.base = fixed(t.size.min) ?: 0.0
+            t.limit = fixed(t.size.max) ?: 0.0
+        }
+        for (item in items) {
+            val b = item.box
+            val margins = horizontalMargins(b)
+            val own = if (b is TextBlockBox || b is ImageBox) null else b.style.widthPt
+            val minContent = (own?.let { it + horizontalInsets(b) } ?: minContentWidth(b, width)) + margins
+            val maxContent = maxContentWidth(b, width) + margins
+            val span = tracks.subList(item.col, item.col + item.colSpan)
+            val gaps = gap * (item.colSpan - 1)
+            // A track's minimum grows to the content's min-content, its limit to the max-content.
+            val growBase = span.filter { it.content }
+            val needBase = when (span.firstOrNull { it.content }?.size?.min) {
+                GridSize.MaxContent -> maxContent
+                else -> minContent
+            } - gaps - span.sumOf { it.base }
+            if (needBase > 0.0 && growBase.isNotEmpty()) for (t in growBase) t.base += needBase / growBase.size
+            val growLimit = span.filter { !it.flexible && it.size.max.intrinsic }
+            val needLimit = (if (growLimit.any { it.size.max is GridSize.MinContent }) minContent else maxContent) - gaps - span.sumOf { maxOf(it.base, it.limit) }
+            if (needLimit > 0.0 && growLimit.isNotEmpty()) for (t in growLimit) t.limit = maxOf(t.base, t.limit) + needLimit / growLimit.size
+        }
+        for (t in tracks) if (t.limit < t.base) t.limit = t.base
+        val room = width - gap * (tracks.size - 1)
+        // 11.6: free space grows each track that is not a fraction up to its limit.
+        repeat(tracks.size + 1) {
+            val free = room - tracks.sumOf { it.base }
+            val open = tracks.filter { !it.flexible && it.base < it.limit }
+            if (free <= FLEX_EPSILON || open.isEmpty()) return@repeat
+            val share = free / open.size
+            for (t in open) t.base = minOf(t.limit, t.base + share)
+        }
+        // 11.7: the fractions share what the other tracks leave, but none goes below its base.
+        val flexible = tracks.filter { it.flexible && it.fr > 0.0 }
+        if (flexible.isNotEmpty()) {
+            val frozen = HashSet<GridTrackSize>()
+            repeat(flexible.size + 1) {
+                val open = flexible.filter { it !in frozen }
+                if (open.isEmpty()) return@repeat
+                val left = room - tracks.filter { !it.flexible || it in frozen }.sumOf { it.base } - tracks.filter { it.flexible && it.fr == 0.0 }.sumOf { it.base }
+                val unit = (left / open.sumOf { it.fr }).coerceAtLeast(0.0)
+                val under = open.filter { it.fr * unit < it.base }
+                if (under.isEmpty()) {
+                    for (t in open) t.base = t.fr * unit
+                    return@repeat
+                }
+                frozen += under
+            }
+        } else if (stretch) {
+            // 11.8: with no fraction, the auto tracks share the rest.
+            val free = room - tracks.sumOf { it.base }
+            val auto = tracks.filter { it.size.max is GridSize.Auto }
+            if (free > 0.0 && auto.isNotEmpty()) for (t in auto) t.base += free / auto.size
+        }
+    }
+
+    /** The rows, from their fixed sizes and the heights of the items laid out in them. */
+    private fun sizeGridRows(tracks: List<GridTrackSize>, items: List<GridItem>, height: Double?, gap: Double, stretch: Boolean) {
+        fun fixed(size: GridSize): Double? = when (size) {
+            is GridSize.Fixed -> size.pt
+            is GridSize.Percent -> height?.let { size.fraction * it }
+            else -> null
+        }
+        for (t in tracks) {
+            t.base = fixed(t.size.min) ?: 0.0
+            t.limit = fixed(t.size.max) ?: 0.0
+        }
+        // A row whose size is not fixed takes the tallest item in it; a spanning item shares its extra height.
+        // A fixed row grows too when nothing else can, instead of letting its item overlap the next row,
+        // as a declared block height grows for its content. CSS lets the item overflow there.
+        for (item in items.sortedBy { it.rowSpan }) {
+            val outer = marginTop(item.box) + item.box.borderBoxHeight + marginBottom(item.box)
+            val span = tracks.subList(item.row, item.row + item.rowSpan)
+            val sized = span.filter { fixed(it.size.min) == null || fixed(it.size.max) == null }.ifEmpty { span }
+            val need = outer - span.sumOf { it.base } - gap * (item.rowSpan - 1)
+            if (need > 0.0 && sized.isNotEmpty()) for (t in sized) t.base += need / sized.size
+        }
+        if (height == null) return
+        val room = height - gap * (tracks.size - 1)
+        val flexible = tracks.filter { it.flexible && it.fr > 0.0 }
+        val free = room - tracks.sumOf { it.base }
+        if (free <= 0.0) return
+        if (flexible.isNotEmpty()) {
+            // A fraction row takes its share of what the others leave, and never less than its content.
+            val unit = (room - tracks.filter { !it.flexible }.sumOf { it.base }) / flexible.sumOf { it.fr }
+            for (t in flexible) t.base = maxOf(t.base, t.fr * unit)
+        } else if (stretch) {
+            val auto = tracks.filter { it.size.max is GridSize.Auto }
+            if (auto.isNotEmpty()) for (t in auto) t.base += free / auto.size
+        }
+    }
 
     /** `start` and `end` resolve against the text direction; `left` and `right` never flip (#169). */
     private fun resolvedAlign(style: ComputedStyle): TextAlign = when (style.textAlign) {
@@ -2027,6 +2365,9 @@ internal class BoxLayout(
         /** Room for a rounding difference between a measure and the layout after it, in points (#33). */
         const val FLEX_EPSILON = 0.01
 
+        /** The most tracks a grid has on either axis, which bounds a hostile line number or span (#35). */
+        const val GRID_MAX_TRACKS = 1000
+
         val BLACK = RgbColor(0.0, 0.0, 0.0)
         val EMPTY_SPEC = FontSpec(KiteFontFamily.Serif, bold = false, italic = false)
         /** Ruby reading size as a fraction of its base's font size. */
@@ -2059,3 +2400,7 @@ internal class BoxLayout(
         )
     }
 }
+
+/** True for a track size that the content decides (CSS Grid Layout 1, 7.2). */
+private val GridSize.intrinsic: Boolean
+    get() = this is GridSize.Auto || this is GridSize.MinContent || this is GridSize.MaxContent

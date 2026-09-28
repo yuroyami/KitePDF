@@ -2,7 +2,7 @@ package io.github.yuroyami.kitepdf.epub.css
 
 import io.github.yuroyami.kitepdf.core.render.RgbColor
 
-internal enum class Display { BLOCK, INLINE, INLINE_BLOCK, LIST_ITEM, NONE, TABLE, TABLE_ROW, TABLE_CELL, TABLE_ROW_GROUP, FLEX }
+internal enum class Display { BLOCK, INLINE, INLINE_BLOCK, LIST_ITEM, NONE, TABLE, TABLE_ROW, TABLE_CELL, TABLE_ROW_GROUP, FLEX, GRID }
 /** START and END follow the text direction. LEFT and RIGHT never flip (#169). */
 internal enum class TextAlign { START, END, LEFT, RIGHT, CENTER, JUSTIFY }
 internal enum class WhiteSpaceMode { NORMAL, PRE, NOWRAP, PRE_WRAP, PRE_LINE }
@@ -156,6 +156,8 @@ internal data class ComputedStyle(
     val transformOrigin: Pair<CssOffset, CssOffset> = CssOffset.HALF to CssOffset.HALF,
     /** The flex properties, as a container and as an item (#33). Not inherited. */
     val flex: FlexStyle = FlexStyle(),
+    /** The grid properties, as a container and as an item (#35). Not inherited. */
+    val grid: GridStyle = GridStyle(),
 ) {
     val mono: Boolean get() = fontFamily == GenericFont.MONO
 

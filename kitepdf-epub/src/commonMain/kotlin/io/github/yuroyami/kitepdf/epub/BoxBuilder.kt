@@ -102,7 +102,7 @@ internal class BoxBuilder(
         fun injectPseudo(side: PseudoSide) {
             if (isRoot) return
             val pc = resolver.computePseudo(el, ancestors, style, side) ?: return
-            if (pc.style.display == Display.BLOCK || pc.style.display == Display.FLEX) { flush(); children.add(pseudoBlock(pc)) }
+            if (pc.style.display == Display.BLOCK || pc.style.display == Display.FLEX || pc.style.display == Display.GRID) { flush(); children.add(pseudoBlock(pc)) }
             else inl.appendText(pc.text, pc.style)
         }
         injectPseudo(PseudoSide.BEFORE)
@@ -495,7 +495,7 @@ internal class BoxBuilder(
         for (c in el.children) {
             if (c !is KiteXmlNode.Element) continue
             val cs = resolver.compute(c, childAncestors, style)
-            if (cs.display == Display.TABLE_CELL || cs.display == Display.BLOCK || cs.display == Display.FLEX) {
+            if (cs.display == Display.TABLE_CELL || cs.display == Display.BLOCK || cs.display == Display.FLEX || cs.display == Display.GRID) {
                 val cell = buildBlock(c, cs, childAncestors, null, BLACK, parentSem = parentSem)
                 cell.colspan = c.attrs["colspan"]?.toIntOrNull()?.coerceAtLeast(1) ?: 1
                 cell.rowspan = c.attrs["rowspan"]?.toIntOrNull()?.coerceAtLeast(1) ?: 1

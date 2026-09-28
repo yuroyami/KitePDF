@@ -89,6 +89,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   container kept its children stacked in one column before. A container that
   fits a page moves to the next page whole, and a link that is itself a block,
   such as a flex item or `a { display: block }`, now covers its box (#33).
+- EPUB lays out `display: grid` (CSS Grid Layout 1): track lists with lengths,
+  percentages, `fr`, `auto`, `minmax()`, `repeat()` and `repeat(auto-fill)`,
+  items placed by line numbers and spans or filled in row by row, `gap`, auto
+  rows and columns, and the alignment properties. A grid kept its children
+  stacked in one column before. In a flex or grid layout, an image without a
+  size of its own counts at its natural size (#35).
 - SVG draws `<pattern>` paint servers and `mask`. A pattern tiles its content over
   a fill or a stroke with its units, `viewBox`, `patternTransform` and `href`
   chain. A mask shows the element by the luminance of its content, or by its

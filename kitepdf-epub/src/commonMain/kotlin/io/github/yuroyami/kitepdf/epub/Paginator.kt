@@ -166,8 +166,9 @@ internal object Paginator {
         // break-inside: avoid on a block around the unit, outermost first: the block's units on
         // this page move with it when the whole block fits a page and something precedes it here.
         for (b in u.chain) {
-            // A flex container keeps its items together, as break-inside: avoid does (#33).
-            if (!(b.style.breakInsideAvoid || b.style.display == Display.FLEX) || b is TextBlockBox) continue
+            // A flex or grid container keeps its items together, as break-inside: avoid does (#33, #35).
+            val atomic = b.style.display == Display.FLEX || b.style.display == Display.GRID
+            if (!(b.style.breakInsideAvoid || atomic) || b is TextBlockBox) continue
             var onPage = 0
             var k = cur.lastIndex
             while (k >= 0 && b in cur[k].chain) { onPage++; k-- }
