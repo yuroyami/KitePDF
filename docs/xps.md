@@ -22,8 +22,8 @@ println("${firstPage.displayWidth} x ${firstPage.displayHeight} points")
 val text = firstPage.textContent().plainText
 ```
 
-Add `io.github.yuroyami:kitepdf:0.11.0` for all handlers, or
-`io.github.yuroyami:kitepdf-xps:0.11.0` for XPS alone.
+Add `io.github.yuroyami:kitepdf:0.12.0` for all handlers, or
+`io.github.yuroyami:kitepdf-xps:0.12.0` for XPS alone.
 
 ## Package and page model
 
