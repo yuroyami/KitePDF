@@ -1,7 +1,7 @@
 package io.github.yuroyami.kitepdf.core.filters
 
-import io.github.yuroyami.kiteimage.codec.CcittFax
-import io.github.yuroyami.kiteimage.codec.CcittOptions
+import io.github.yuroyami.kiteimagecodec.codec.CcittFax
+import io.github.yuroyami.kiteimagecodec.codec.CcittOptions
 import io.github.yuroyami.kitepdf.core.parser.PdfBoolean
 import io.github.yuroyami.kitepdf.core.parser.PdfDictionary
 
@@ -33,7 +33,7 @@ public object CcittFaxFilter : PdfFilter {
 
         val opts = CcittOptions(columns, rows, endOfBlock, blackIs1, encodedByteAlign, endOfLine)
         // The algorithm (T.4/T.6 + the shared G4 core JBIG2's MMR regions use)
-        // lives in KiteImage since the codec consolidation.
+        // lives in KiteImageCodec since the codec consolidation.
         return CcittFax.decode(input, k, opts)
     }
 }

@@ -1,9 +1,9 @@
 package io.github.yuroyami.kitepdf.core.render
 
-import io.github.yuroyami.kiteimage.ImageFormat
-import io.github.yuroyami.kiteimage.KiteImage
-import io.github.yuroyami.kiteimage.codec.Jbig2Decoder
-import io.github.yuroyami.kiteimage.codec.JpxDecoder
+import io.github.yuroyami.kiteimagecodec.ImageFormat
+import io.github.yuroyami.kiteimagecodec.KiteImageCodec
+import io.github.yuroyami.kiteimagecodec.codec.Jbig2Decoder
+import io.github.yuroyami.kiteimagecodec.codec.JpxDecoder
 import io.github.yuroyami.kitepdf.core.kiteWarn
 import io.github.yuroyami.kitepdf.core.filters.FilterChain
 import io.github.yuroyami.kitepdf.core.filters.TerminalDecodeResult
@@ -225,7 +225,7 @@ public class KiteImageData internal constructor(
                     // Prefix filters, e.g. /Filter [/ASCII85Decode /DCTDecode], must
                     // be undone before the bytes are a JFIF file at all (D-5).
                     val terminal = terminalBytesOf(stream)
-                    val bm = runCatching { KiteImage.decode(terminal.bytes) }.getOrNull()
+                    val bm = runCatching { KiteImageCodec.decode(terminal.bytes) }.getOrNull()
                     // ISO 32000-1, 8.9.5.2: /ColorSpace and /Decode belong to the image, not to
                     // its filter. The decoder returns RGB, which holds the samples of a grey or a
                     // three-component JPEG exactly, so those keep the declared space. A
@@ -323,7 +323,7 @@ public class KiteImageData internal constructor(
          * The format and pixel dimensions are sniffed from the bytes.
          *
          * PNG, GIF, BMP, JPEG, JPEG 2000, TIFF and lossless WebP are decoded in
-         * pure Kotlin by the shared KiteImage engine into a [Kind.RAW] image that
+         * pure Kotlin by the shared KiteImageCodec engine into a [Kind.RAW] image that
          * renders on every backend. Lossy WebP has no decoder yet and returns null. A JPEG the native decoder can't handle (arithmetic coding,
          * 12-bit) falls back to the host platform's loader ([Kind.JPEG] with the
          * file in [encodedBytes]). Unrecognised formats return null, so callers
@@ -333,10 +333,10 @@ public class KiteImageData internal constructor(
             return when (ImageFormat.sniff(bytes)) {
                 ImageFormat.PNG, ImageFormat.GIF, ImageFormat.BMP, ImageFormat.JP2,
                 ImageFormat.WEBP, ImageFormat.TIFF ->
-                    runCatching { KiteImage.decode(bytes) }.getOrNull()?.toKiteImageData()
+                    runCatching { KiteImageCodec.decode(bytes) }.getOrNull()?.toKiteImageData()
                 ImageFormat.JPEG -> {
-                    runCatching { KiteImage.decode(bytes) }.getOrNull()?.let { return it.toKiteImageData() }
-                    // Streams KiteImage can't handle (arithmetic coding, 12-bit)
+                    runCatching { KiteImageCodec.decode(bytes) }.getOrNull()?.let { return it.toKiteImageData() }
+                    // Streams KiteImageCodec can't handle (arithmetic coding, 12-bit)
                     // defer to the host platform's loader.
                     val (w, h) = jpegFrame(bytes) ?: return null
                     if (w <= 0 || h <= 0) return null
@@ -450,7 +450,7 @@ public class KiteImageData internal constructor(
                     val bpc = (mdict.getInt("BitsPerComponent") ?: 8L).toInt()
                     bytes?.let { grayPlane(it, bpc, mw, mh) }?.let { Triple(it, mw, mh) }
                 }
-                Kind.JPEG -> runCatching { KiteImage.decode(terminalBytesOf(mask).bytes) }.getOrNull()
+                Kind.JPEG -> runCatching { KiteImageCodec.decode(terminalBytesOf(mask).bytes) }.getOrNull()
                     ?.takeIf { it.width.toLong() * it.height <= MAX_MASK_SAMPLES }
                     ?.let { bm ->
                         val rgb = bm.toRgbBytes()
