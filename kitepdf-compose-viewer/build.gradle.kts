@@ -76,9 +76,10 @@ kotlin {
         commonMain.dependencies {
             implementation(projects.kitepdfPdf)
             implementation(projects.kitepdfEpub)
-            implementation(libs.compose.runtime)
-            implementation(libs.compose.foundation)
-            implementation(libs.compose.ui)
+            // KiteDocView's public API takes and returns Compose types, so Compose is part of it.
+            api(libs.compose.runtime)
+            api(libs.compose.foundation)
+            api(libs.compose.ui)
         }
 
         commonTest.dependencies {

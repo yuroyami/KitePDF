@@ -126,6 +126,8 @@ kotlin {
 
         commonTest.dependencies {
             implementation(kotlin("test"))
+            // The image tests compare with the engine's own decode, which kitepdf-core keeps to itself.
+            implementation(libs.kiteimagecodec)
         }
 
         // Test-only: the shared mutool acceptance check. The module is internal and never published.
