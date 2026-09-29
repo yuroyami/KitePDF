@@ -150,6 +150,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `io.github.yuroyami:kiteimage`. Code that calls the engine directly through
   KitePDF's dependency changes its imports, and `KiteImage.decode` becomes
   `KiteImageCodec.decode`. KitePDF's own API does not change.
+- A PDF's JPEG or JPEG 2000 image without a mask keeps only its encoded data,
+  and a draw decodes it at the size it draws: at a half, a quarter or an eighth
+  of its pixels, inside the JPEG's own transform or by dropping wavelet levels.
+  A 3,000 by 2,000 JPEG loaded and drawn at an eighth allocates 2.3 MB, where
+  the full decode alone took 24 MB. The image cache counts such an image as its
+  file size, so a scan stays cached. `KiteImageData.retainedBytes` gives what an
+  image holds (#381).
 
 - Breaking: `KiteDocView.onLinkTap` receives every link that the reader taps, in
   every format, before the viewer acts on it. It used to get only the links the

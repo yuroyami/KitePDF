@@ -1128,6 +1128,7 @@ final class io.github.yuroyami.kitepdf.core.render/KiteImageData { // io.github.
     final val width // io.github.yuroyami.kitepdf.core.render/KiteImageData.width|{}width[0]
         final fun <get-width>(): kotlin/Int // io.github.yuroyami.kitepdf.core.render/KiteImageData.width.<get-width>|<get-width>(){}[0]
 
+    final fun retainedBytes(): kotlin/Long // io.github.yuroyami.kitepdf.core.render/KiteImageData.retainedBytes|retainedBytes(){}[0]
     final fun withIntent(io.github.yuroyami.kitepdf.core.render/KiteRenderingIntent, kotlin/Boolean = ...): io.github.yuroyami.kitepdf.core.render/KiteImageData // io.github.yuroyami.kitepdf.core.render/KiteImageData.withIntent|withIntent(io.github.yuroyami.kitepdf.core.render.KiteRenderingIntent;kotlin.Boolean){}[0]
 
     final enum class Kind : kotlin/Enum<io.github.yuroyami.kitepdf.core.render/KiteImageData.Kind> { // io.github.yuroyami.kitepdf.core.render/KiteImageData.Kind|null[0]

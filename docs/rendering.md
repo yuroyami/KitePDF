@@ -440,6 +440,7 @@ Every format honours the signal. A PDF page reads it every 32 operators, a book 
 A `PdfDocument` keeps three caches, so that a page drawn again, at another zoom or after a scroll back, costs less:
 
 - **Decoded images**, up to `imageCacheBudgetBytes` (default 32 MB). An image drawn on many pages decodes once. An image larger than the budget is not kept, so it decodes again each time a page that shows it draws.
+  A JPEG or JPEG 2000 image without a mask keeps only its encoded data, so a scan counts as its file size. Each draw decodes it at the size it draws, at a half, a quarter or an eighth of its pixels where it can, so a 600 dpi scan on a phone screen never exists at its full size.
 - **Parsed content**, up to `operationCacheBudgetBytes` (default 16 MB). A page drawn again, and a form drawn many times, parse their content once. A dense page of 100,000 operators takes about 12 MB.
 - **Parsed fonts**, up to `fontCacheBudgetBytes` (default 32 MB). A font parses once for all the pages, thumbnails and text extractions that use it. A font counts as about twice its embedded program, so a 10 MB CJK font takes about 20 MB.
 

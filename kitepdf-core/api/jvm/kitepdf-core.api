@@ -1636,6 +1636,7 @@ public final class io/github/yuroyami/kitepdf/core/render/KiteImageData {
 	public final fun getSoftMaskWidth ()I
 	public final fun getWidth ()I
 	public final fun isImageMask ()Z
+	public final fun retainedBytes ()J
 	public final fun withIntent (Lio/github/yuroyami/kitepdf/core/render/KiteRenderingIntent;Z)Lio/github/yuroyami/kitepdf/core/render/KiteImageData;
 	public static synthetic fun withIntent$default (Lio/github/yuroyami/kitepdf/core/render/KiteImageData;Lio/github/yuroyami/kitepdf/core/render/KiteRenderingIntent;ZILjava/lang/Object;)Lio/github/yuroyami/kitepdf/core/render/KiteImageData;
 }
