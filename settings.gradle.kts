@@ -17,14 +17,14 @@ dependencyResolutionManagement {
     }
 }
 
-// Point at a local KiteImage checkout to develop the two repositories together:
-// ./gradlew build -PkiteImagePath=../KiteImage. Without it, KiteImage resolves
-// from Maven Central like any other dependency.
-providers.gradleProperty("kiteImagePath").orNull?.let { path ->
+// Point at a local KiteImageCodec checkout to develop the two repositories together:
+// ./gradlew build -PkiteImageCodecPath=../KiteImageCodec. Without it, KiteImageCodec
+// resolves from Maven Central like any other dependency.
+providers.gradleProperty("kiteImageCodecPath").orNull?.let { path ->
     includeBuild(path) {
         dependencySubstitution {
-            substitute(module("io.github.yuroyami:kiteimage"))
-                .using(project(":kiteimage"))
+            substitute(module("io.github.yuroyami:kiteimagecodec"))
+                .using(project(":kiteimagecodec"))
         }
     }
 }

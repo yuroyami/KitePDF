@@ -89,7 +89,7 @@ kotlin {
             // The one runtime dependency: the Kite lineage's shared image engine.
             // Image codecs (JPEG incl. progressive, PNG, GIF, JPX, JBIG2, CCITT)
             // live there now; everything else here stays kotlin-stdlib-only.
-            api(libs.kiteimage)
+            api(libs.kiteimagecodec)
         }
 
         commonTest.dependencies {

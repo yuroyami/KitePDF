@@ -19,10 +19,8 @@ skiko = "0.150.1"
 
 # KiteImageCodec. The Kite lineage's shared image engine, and :kitepdf-core's one
 # runtime dependency beyond kotlin-stdlib. Up to 0.1.0 it was published as
-# `kiteimage`. From 0.2.0 it is `kiteimagecodec`, with the package
-# io.github.yuroyami.kiteimagecodec, so moving past 0.1.0 changes the coordinates
-# and the imports.
-kiteimage = "0.1.0"
+# `kiteimage`, with the package io.github.yuroyami.kiteimage.
+kiteimagecodec = "0.2.0"
 
 # KiteJS. The Kite lineage's JavaScript engine. Used ONLY by :kitepdf-javascript,
 # so no other module carries a script engine.
@@ -35,7 +33,7 @@ ktor = "3.6.0"
 [libraries] ######################################################################################
 # KiteImageCodec supplies every image codec :kitepdf-core decodes through: JPEG
 # (baseline and progressive), PNG, GIF, BMP, JPEG 2000, JBIG2 and CCITT.
-kiteimage = { module = "io.github.yuroyami:kiteimage", version.ref = "kiteimage" }
+kiteimagecodec = { module = "io.github.yuroyami:kiteimagecodec", version.ref = "kiteimagecodec" }
 
 # KiteJS runs document JavaScript, :kitepdf-javascript only.
 kitejs = { module = "io.github.yuroyami:kitejs", version.ref = "kitejs" }

@@ -144,6 +144,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Breaking: the image engine is now KiteImageCodec 0.2.0, the new name of
+  KiteImage. `kitepdf-core` pulls in `io.github.yuroyami:kiteimagecodec`, with
+  the package `io.github.yuroyami.kiteimagecodec`, in place of
+  `io.github.yuroyami:kiteimage`. Code that calls the engine directly through
+  KitePDF's dependency changes its imports, and `KiteImage.decode` becomes
+  `KiteImageCodec.decode`. KitePDF's own API does not change.
+
 - Breaking: `KiteDocView.onLinkTap` receives every link that the reader taps, in
   every format, before the viewer acts on it. It used to get only the links the
   viewer could not follow. Return `true` to keep the viewer from acting, or
