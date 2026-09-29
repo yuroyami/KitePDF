@@ -109,6 +109,8 @@ internal fun KiteImageData.toShrunkRgbaBytes(shrinkX: Int, shrinkY: Int, bandByt
     val fx = shrinkX.coerceAtLeast(1)
     val fy = shrinkY.coerceAtLeast(1)
     if (fx == 1 && fy == 1) return toRgbaBytes()
+    // A JPEG or JPEG 2000 image decodes at a reduced size first, and the bands average the rest (#381).
+    reducedFor(fx, fy)?.let { (reduced, r) -> return reduced.toShrunkRgbaBytes(fx / r, fy / r, bandBytes) }
     val w = width
     val h = height
     if (w <= 0 || h <= 0 || w.toLong() * h > Int.MAX_VALUE) return null

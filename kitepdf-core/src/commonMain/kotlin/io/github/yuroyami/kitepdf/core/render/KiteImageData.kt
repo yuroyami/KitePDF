@@ -26,8 +26,11 @@ import io.github.yuroyami.kitepdf.core.parser.PdfStream
  *
  * The decoded byte buffer's interpretation depends on the filter chain:
  *
- *   - `DCTDecode` → JPEG file in [encodedBytes]; decoded by the host platform's
- *     image loader (see `ImageDecoder` in `:kitepdf-compose-viewer`).
+ *   - `DCTDecode` → decoded by KiteImageCodec into a [Kind.RAW] image. An image
+ *     without a mask keeps only its encoded data and decodes at the size it draws
+ *     ([toShrunkRgbaBytes]). A JPEG that KiteImageCodec cannot decode, such as an
+ *     arithmetic-coded one, falls back to [Kind.JPEG] with the file in
+ *     [encodedBytes], for the host platform's image loader.
  *   - `FlateDecode` / `LZWDecode` / `CCITTFaxDecode` / ASCII / RunLength → pixel
  *     samples already decoded into [pixelBytes]; [toRgbaBytes] assembles RGBA
  *     using [resolvedColorSpace], [bitsPerComponent], and [decode].
@@ -35,8 +38,9 @@ import io.github.yuroyami.kitepdf.core.parser.PdfStream
  *     arithmetic path) into a 1-bpc DeviceGray RAW image; unsupported JBIG2
  *     flavours fall back to [Kind.JBIG2] with the payload in [encodedBytes].
  *   - `JPXDecode` (JPEG 2000) → decoded in pure Kotlin ([JpxDecoder], part 1
- *     baseline) into an 8-bpc RAW image; unsupported flavours fall back to
- *     [Kind.JPEG2000] with the payload in [encodedBytes].
+ *     baseline) into an 8-bpc RAW image, on demand at the size it draws, as a
+ *     JPEG is; unsupported flavours fall back to [Kind.JPEG2000] with the
+ *     payload in [encodedBytes].
  *
  * Callers should switch on [kind] to pick the right rendering path. Stencil masks
  * (`/ImageMask true`) carry [isImageMask] and are tinted by [maskFill].
@@ -53,8 +57,7 @@ public class KiteImageData internal constructor(
     public val kind: Kind,
     /** Encoded bytes, for kinds that defer decoding to a platform image loader. */
     public val encodedBytes: ByteArray,
-    /** Pixel bytes, populated for [Kind.RAW] (already run through the filter chain). */
-    public val pixelBytes: ByteArray? = null,
+    pixelBytes: ByteArray? = null,
     /**
      * Soft-mask alpha (ISO 32000-1 §11.6.5.2), normalised to 8-bit grayscale:
      * one byte per pixel, 0 = transparent, 255 = opaque, row-major over
@@ -100,7 +103,42 @@ public class KiteImageData internal constructor(
      * it, because browsers smooth an enlarged image by default.
      */
     public val interpolate: Boolean = false,
+    /** The encoded samples of a [Kind.RAW] image that decodes when a draw needs it, in place of [pixelBytes]. */
+    internal val samples: KiteImageSamples? = null,
 ) {
+
+    private val storedPixels: ByteArray? = pixelBytes
+
+    /**
+     * Pixel bytes, populated for [Kind.RAW] (already run through the filter chain). A PDF's
+     * JPEG or JPEG 2000 image without a mask keeps only its encoded data, and each read of
+     * this decodes it at full size. A draw calls [toShrunkRgbaBytes] instead, which decodes
+     * the image at the size it draws (#381).
+     */
+    public val pixelBytes: ByteArray? get() = storedPixels ?: samples?.decode(1)?.bytes
+
+    /**
+     * The bytes that this image holds in memory: its samples, its encoded data and its soft
+     * mask. A PDF's JPEG or JPEG 2000 image without a mask holds only its encoded data (#381).
+     */
+    public fun retainedBytes(): Long =
+        encodedBytes.size.toLong() + (storedPixels?.size ?: 0) + (samples?.encodedSize ?: 0) + (softMaskAlpha?.size ?: 0)
+
+    /**
+     * This image decoded with each side divided by the largest of 1, 2, 4 and 8 that divides
+     * neither shrink factor past its value, as an image of its own, with that divisor. Null for
+     * an image that holds its samples already.
+     */
+    internal fun reducedFor(shrinkX: Int, shrinkY: Int): Pair<KiteImageData, Int>? {
+        val source = samples ?: return null
+        var r = 1
+        while (r < 8 && r * 2 <= shrinkX && r * 2 <= shrinkY) r *= 2
+        val decoded = source.decode(r) ?: return null
+        return KiteImageData(
+            decoded.width, decoded.height, 8, colorSpace, Kind.RAW, ByteArray(0), pixelBytes = decoded.bytes,
+            resolvedColorSpace = resolvedColorSpace, decode = decode, maskFill = maskFill, interpolate = interpolate,
+        ) to r
+    }
 
     /** This image with [interpolate] set to [on]. */
     internal fun withInterpolate(on: Boolean): KiteImageData = if (on == interpolate) this else copy(interpolate = on)
@@ -127,10 +165,10 @@ public class KiteImageData internal constructor(
         resolvedColorSpace: KiteColorSpace? = this.resolvedColorSpace,
     ): KiteImageData = KiteImageData(
         width = width, height = height, bitsPerComponent = bitsPerComponent, colorSpace = colorSpace, kind = kind,
-        encodedBytes = encodedBytes, pixelBytes = pixelBytes,
+        encodedBytes = encodedBytes, pixelBytes = storedPixels,
         softMaskAlpha = softMaskAlpha, softMaskWidth = softMaskWidth, softMaskHeight = softMaskHeight,
         resolvedColorSpace = resolvedColorSpace, decode = decode, isImageMask = isImageMask, maskFill = maskFill,
-        colorKeyMask = colorKeyMask, softMaskMatte = softMaskMatte, interpolate = interpolate,
+        colorKeyMask = colorKeyMask, softMaskMatte = softMaskMatte, interpolate = interpolate, samples = samples,
     )
 
     public enum class Kind {
@@ -225,16 +263,29 @@ public class KiteImageData internal constructor(
                     // Prefix filters, e.g. /Filter [/ASCII85Decode /DCTDecode], must
                     // be undone before the bytes are a JFIF file at all (D-5).
                     val terminal = terminalBytesOf(stream)
-                    val bm = runCatching { KiteImageCodec.decode(terminal.bytes) }.getOrNull()
                     // ISO 32000-1, 8.9.5.2: /ColorSpace and /Decode belong to the image, not to
                     // its filter. The decoder returns RGB, which holds the samples of a grey or a
                     // three-component JPEG exactly, so those keep the declared space. A
                     // four-component JPEG is already converted, so it stays device RGB (#72).
                     val declared = if (isMask) null else resolvedCs
                     val declaredComps = if (declared is KiteColorSpace.Indexed) 1 else declared?.componentCount ?: 0
-                    val keep = bm != null && declared != null && (declaredComps == 1 || declaredComps == 3) &&
+                    val keepsSpace = declared != null && (declaredComps == 1 || declaredComps == 3) &&
                         jpegFrame(terminal.bytes)?.get(2) == declaredComps
-                    if (bm != null) KiteImageData(
+                    // The image keeps its encoded data and decodes at the size it draws (#381). A
+                    // mask, a colour key or a palette needs exact samples, and a reduced decode
+                    // averages them, so such an image decodes in full here as before.
+                    val lazy = if (alpha == null && colorKey == null && !isMask && declared !is KiteColorSpace.Indexed) {
+                        KiteImageSamples.jpeg(terminal.bytes, gray = keepsSpace && declaredComps == 1)
+                    } else {
+                        null
+                    }
+                    val bm = if (lazy != null) null else runCatching { KiteImageCodec.decode(terminal.bytes) }.getOrNull()
+                    val keep = (lazy != null || bm != null) && keepsSpace
+                    if (lazy != null) KiteImageData(
+                        lazy.width, lazy.height, 8, if (keep) cs else "DeviceRGB", Kind.RAW, encodedBytes = ByteArray(0),
+                        resolvedColorSpace = if (keep) declared else KiteColorSpace.DeviceRGB, decode = if (keep) decodeArr else null,
+                        maskFill = fillColor, samples = lazy,
+                    ) else if (bm != null) KiteImageData(
                         bm.width, bm.height, 8, if (keep) cs else "DeviceRGB", Kind.RAW,
                         encodedBytes = ByteArray(0), pixelBytes = if (keep && declaredComps == 1) bm.toGrayBytes() else bm.toRgbBytes(),
                         softMaskAlpha = alpha, softMaskWidth = smW, softMaskHeight = smH, softMaskMatte = matte,
@@ -277,8 +328,15 @@ public class KiteImageData internal constructor(
                 Kind.JPEG2000 -> {
                     // Same prefix-filter requirement as JPEG above (D-5).
                     val terminal = terminalBytesOf(stream)
-                    val raw = runCatching { JpxDecoder.decode(terminal.bytes) }.getOrNull()
-                    if (raw != null) {
+                    // The image keeps its encoded data and decodes at the size it draws (#381), unless
+                    // a mask, a colour key or its own opacity channel needs the samples now.
+                    val lazy = if (alpha == null && colorKey == null && !isMask) KiteImageSamples.jpx(terminal.bytes) else null
+                    val raw = if (lazy != null) null else runCatching { JpxDecoder.decode(terminal.bytes) }.getOrNull()
+                    if (lazy != null) KiteImageData(
+                        lazy.width, lazy.height, 8, lazy.colorSpace, Kind.RAW, encodedBytes = ByteArray(0),
+                        resolvedColorSpace = if (lazy.colorSpace == "DeviceRGB") KiteColorSpace.DeviceRGB else KiteColorSpace.DeviceGray,
+                        maskFill = fillColor, samples = lazy,
+                    ) else if (raw != null) {
                         val smaskRaw = dict["SMaskInData"]
                         val smaskInData = ((if (smaskRaw is io.github.yuroyami.kitepdf.core.parser.PdfReference) refs?.resolve(smaskRaw) else smaskRaw) as? PdfInt)
                             ?.value?.toInt() ?: 0
@@ -657,8 +715,9 @@ public class KiteImageData internal constructor(
          * since both sizes come from an untrusted file.
          */
         private fun KiteImageData.alignedToMaskGrid(): KiteImageData {
-            val src = pixelBytes ?: return this
+            // The mask check comes first: reading the samples of an image that decodes on demand decodes it.
             if (softMaskAlpha == null || kind != Kind.RAW || isImageMask) return this
+            val src = pixelBytes ?: return this
             if (bitsPerComponent != 8 || width <= 0 || height <= 0) return this
             val mw = softMaskWidth
             val mh = softMaskHeight

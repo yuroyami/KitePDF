@@ -1251,7 +1251,3 @@ internal data class PageInheritable(
         rotate = (missingAsNull { node["Rotate"]?.resolve(refs) } as? PdfInt)?.value ?: rotate,
     )
 }
-
-/** The bytes that a decoded image holds: its samples, its encoded data and its soft mask. */
-internal fun KiteImageData.retainedBytes(): Long =
-    encodedBytes.size.toLong() + (pixelBytes?.size ?: 0) + (softMaskAlpha?.size ?: 0)
