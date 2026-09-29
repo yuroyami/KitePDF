@@ -69,7 +69,6 @@ internal object RichText {
                     if (text.isNotEmpty()) runs += FieldRun(text, s.font(), s.size, s.color, s.underline)
                 }
                 is KiteXmlNode.Element -> if (child.tag == "br") endParagraph().also { align = s.align } else walk(child, s, depth + 1)
-                else -> {}
             }
             if (block) endParagraph()
         }

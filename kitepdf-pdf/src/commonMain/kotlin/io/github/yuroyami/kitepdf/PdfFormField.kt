@@ -213,7 +213,7 @@ public class PdfFormField internal constructor(
             var guard = 0
             while (current != null && guard++ < MAX_PARENT_DEPTH) {
                 (current["T"] as? PdfString)?.asText()?.let { names.add(0, it) }
-                current = missingAsNull { current?.get("Parent")?.resolve(refs) } as? PdfDictionary
+                current = missingAsNull { current.get("Parent")?.resolve(refs) } as? PdfDictionary
             }
             return names.takeIf { it.isNotEmpty() }?.joinToString(".")
         }

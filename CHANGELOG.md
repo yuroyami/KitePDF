@@ -155,11 +155,14 @@ section lists them.
 ### Changed
 
 - Breaking: the image engine is now KiteImageCodec 0.2.0, the new name of
-  KiteImage. `kitepdf-core` pulls in `io.github.yuroyami:kiteimagecodec`, with
-  the package `io.github.yuroyami.kiteimagecodec`, in place of
-  `io.github.yuroyami:kiteimage`. Code that calls the engine directly through
-  KitePDF's dependency changes its imports, and `KiteImage.decode` becomes
-  `KiteImageCodec.decode`. KitePDF's own API does not change.
+  KiteImage, and `kitepdf-core` keeps it to itself. KitePDF's own API has no
+  engine type in it, so an app that uses only KitePDF changes nothing. An app
+  that calls the engine directly now adds `io.github.yuroyami:kiteimagecodec`
+  itself, imports the package `io.github.yuroyami.kiteimagecodec`, and calls
+  `KiteImageCodec.decode` where it called `KiteImage.decode`.
+- `kitepdf-compose-viewer` passes Compose runtime, foundation and ui on to apps,
+  because `KiteDocView`'s API takes and returns their types. An app that already
+  declares Compose sees no change.
 - A PDF's JPEG or JPEG 2000 image without a mask keeps only its encoded data,
   and a draw decodes it at the size it draws: at a half, a quarter or an eighth
   of its pixels, inside the JPEG's own transform or by dropping wavelet levels.
