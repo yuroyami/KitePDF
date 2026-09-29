@@ -46,13 +46,13 @@ kotlin {
 }
 ```
 
-Its runtime dependencies are `kotlin-stdlib` and the pure-Kotlin KiteImage codec engine. It runs on every target listed under [Platform support](platforms.md).
+Its runtime dependencies are `kotlin-stdlib` and the pure-Kotlin KiteImageCodec engine. It runs on every target listed under [Platform support](platforms.md).
 
 Drawing a page to the screen is the one job that needs a platform, so the rendering bindings are separate, opt-in artifacts. Add the one that matches how you draw:
 
 | Artifact | Add it when you want |
 |---|---|
-| `io.github.yuroyami:kitepdf` | The engine: read, write and edit PDFs, **and** read EPUBs. Pure Kotlin (stdlib plus KiteImage codecs). |
+| `io.github.yuroyami:kitepdf` | The engine: read, write and edit PDFs, **and** read EPUBs. Pure Kotlin (stdlib plus KiteImageCodec). |
 | `io.github.yuroyami:kitepdf-compose-viewer` | A Compose `KiteDocView` for PDF and EPUB, drawn straight into a `DrawScope`. |
 | `io.github.yuroyami:kitepdf-net` | Optional. Opens a document straight from a URL; the only artifact that pulls in Ktor. |
 | `io.github.yuroyami:kitepdf-native-renderer` | Headless page → image through the platform canvas (AWT, CoreGraphics, `android.graphics`, Canvas2D). |

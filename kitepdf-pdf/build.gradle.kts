@@ -9,7 +9,7 @@ plugins {
 
 /*
  * :kitepdf-pdf is the PDF handler. Its only runtime dependencies are
- * kotlin-stdlib and :kitepdf-core (which in turn brings in KiteImage for the
+ * kotlin-stdlib and :kitepdf-core (which in turn brings in KiteImageCodec for the
  * image codecs). No UI framework: Compose Multiplatform lives in :sample and
  * in the renderer modules, not here.
  *
