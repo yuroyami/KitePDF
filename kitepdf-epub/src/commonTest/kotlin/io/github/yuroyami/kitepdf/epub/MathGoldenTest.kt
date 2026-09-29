@@ -24,7 +24,10 @@ class MathGoldenTest {
     private val matrix = "<math $ns display=\"block\"><mi>A</mi><mo>=</mo><mrow><mo>(</mo><mtable><mtr><mtd><mi>a</mi></mtd>" +
         "<mtd><mi>b</mi></mtd></mtr><mtr><mtd><mi>c</mi></mtd><mtd><mi>d</mi></mtd></mtr></mtable><mo>)</mo></mrow></math>"
 
-    private fun r(v: Double): String = ((v * 100).roundToLong() / 100.0).toString()
+    // Whole hundredths: Double.toString writes 1.0 on the JVM and 1 on JS, which changed the hash.
+    private fun r(v: Double): String = (v * 100).roundToLong().toString()
+
+    private fun rgb(c: io.github.yuroyami.kitepdf.core.render.RgbColor): String = listOf(c.r, c.g, c.b).joinToString(",", transform = ::r)
 
     private fun m(t: KiteMatrix): String = listOf(t.a, t.b, t.c, t.d, t.e, t.f).joinToString(",", transform = ::r)
 
@@ -40,8 +43,8 @@ class MathGoldenTest {
         return calls.joinToString("\n") { c ->
             when (c) {
                 is RecordingCanvas.Call.Glyphs -> "G ${c.text} ${r(c.fontSize)} ${m(c.textToDevice)} ${c.fontSpec}"
-                is RecordingCanvas.Call.Fill -> "F ${box(c.path)} ${m(c.ctm)} ${c.color}"
-                is RecordingCanvas.Call.Stroke -> "S ${box(c.path)} ${r(c.lineWidth)} ${m(c.ctm)} ${c.color}"
+                is RecordingCanvas.Call.Fill -> "F ${box(c.path)} ${m(c.ctm)} ${rgb(c.color)}"
+                is RecordingCanvas.Call.Stroke -> "S ${box(c.path)} ${r(c.lineWidth)} ${m(c.ctm)} ${rgb(c.color)}"
                 else -> c::class.simpleName.orEmpty()
             }
         }
@@ -51,8 +54,8 @@ class MathGoldenTest {
 
     @Test
     fun theReferenceFormulasDrawAsWhenTheyWereChecked() {
-        assertEquals("1c3778e8257a2277be6e826497afb1371b43a3a4", sha1(stream(quadratic)), "the quadratic formula")
-        assertEquals("fa6fb300fe30b7e6d337cc9d2aaff8645bca7162", sha1(stream(nested)), "the nested fraction")
-        assertEquals("ffca4c4a4a21b919130359fbe00e9968525d9654", sha1(stream(matrix)), "the matrix")
+        assertEquals("5fc0bceab2c89e0ff8b5cfa48787ab587529ae11", sha1(stream(quadratic)), "the quadratic formula")
+        assertEquals("b1514169429f2347645bacbbbbc2fc63bb47728e", sha1(stream(nested)), "the nested fraction")
+        assertEquals("cdbfc4b978e85fb012f3ae5707424f9e02168e92", sha1(stream(matrix)), "the matrix")
     }
 }
