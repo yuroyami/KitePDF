@@ -98,13 +98,13 @@ doc.pages[0].extractText()   // "Hello from PdfBuilder"
 
 ## Install
 
-Every artifact is on Maven Central at `0.11.0`. Most apps need just two lines: one to
+Every artifact is on Maven Central at `0.12.0`. Most apps need just two lines: one to
 open documents, and one to show them.
 
 ```kotlin
 commonMain.dependencies {
-    implementation("io.github.yuroyami:kitepdf:0.11.0")                  // opens every format
-    implementation("io.github.yuroyami:kitepdf-compose-viewer:0.11.0")   // shows them with KiteDocView
+    implementation("io.github.yuroyami:kitepdf:0.12.0")                  // opens every format
+    implementation("io.github.yuroyami:kitepdf-compose-viewer:0.12.0")   // shows them with KiteDocView
 }
 ```
 
@@ -115,21 +115,21 @@ kotlin {
     sourceSets {
         commonMain.dependencies {
             // Every format: PDF, EPUB, CBZ, SVG, XPS and OpenXPS
-            implementation("io.github.yuroyami:kitepdf:0.11.0")
+            implementation("io.github.yuroyami:kitepdf:0.12.0")
 
             // Or one format only
-            implementation("io.github.yuroyami:kitepdf-pdf:0.11.0")
-            implementation("io.github.yuroyami:kitepdf-epub:0.11.0")
-            implementation("io.github.yuroyami:kitepdf-cbz:0.11.0")
-            implementation("io.github.yuroyami:kitepdf-svg:0.11.0")
-            implementation("io.github.yuroyami:kitepdf-xps:0.11.0")
+            implementation("io.github.yuroyami:kitepdf-pdf:0.12.0")
+            implementation("io.github.yuroyami:kitepdf-epub:0.12.0")
+            implementation("io.github.yuroyami:kitepdf-cbz:0.12.0")
+            implementation("io.github.yuroyami:kitepdf-svg:0.12.0")
+            implementation("io.github.yuroyami:kitepdf-xps:0.12.0")
 
             // Optional, depending on what you build
-            implementation("io.github.yuroyami:kitepdf-compose-viewer:0.11.0")   // KiteDocView for Compose Multiplatform
-            implementation("io.github.yuroyami:kitepdf-native-renderer:0.11.0")  // page-to-image on the platform canvas
-            implementation("io.github.yuroyami:kitepdf-skia-renderer:0.11.0")    // page-to-image on Skia (on Android, add one repository)
-            implementation("io.github.yuroyami:kitepdf-javascript:0.11.0")       // runs the JavaScript inside PDFs (pulls in KiteJS)
-            implementation("io.github.yuroyami:kitepdf-net:0.11.0")              // loads documents from a URL (add a Ktor engine too)
+            implementation("io.github.yuroyami:kitepdf-compose-viewer:0.12.0")   // KiteDocView for Compose Multiplatform
+            implementation("io.github.yuroyami:kitepdf-native-renderer:0.12.0")  // page-to-image on the platform canvas
+            implementation("io.github.yuroyami:kitepdf-skia-renderer:0.12.0")    // page-to-image on Skia (on Android, add one repository)
+            implementation("io.github.yuroyami:kitepdf-javascript:0.12.0")       // runs the JavaScript inside PDFs (pulls in KiteJS)
+            implementation("io.github.yuroyami:kitepdf-net:0.12.0")              // loads documents from a URL (add a Ktor engine too)
         }
     }
 }

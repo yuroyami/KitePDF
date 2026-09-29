@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-09-29
+
+This release checks the digital signatures of a signed PDF, gives every page a
+reading order for screen readers, and lays out MathML, flex, grid and
+multi-column pages in EPUB. It decodes a PDF's JPEG and JPEG 2000 images at the
+size they draw, and moves the image engine to KiteImageCodec 0.2.0. It closes
+127 issues. Most of them are Compose viewer bugs in threading, layout, gestures
+and forms. Some API changes break source compatibility with 0.11.0. The Changed
+section lists them.
+
 ### Added
 
 - EPUB books render presentation MathML. A formula sits on its line, or centred
