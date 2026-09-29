@@ -148,7 +148,7 @@ kotlin {
 Good to know:
 
 - `kitepdf-core` comes with every document artifact, so you never add it yourself.
-- The document artifacts depend only on `kotlin-stdlib` and KiteImage, which decodes the images.
+- The document artifacts depend only on `kotlin-stdlib` and KiteImageCodec, which decodes the images.
 - In a plain Android or JVM project, put the same lines in your usual `dependencies { }` block.
 
 ## A quick tour
@@ -394,5 +394,5 @@ comes from:
 - the hyphenation patterns of the hyph-utf8 project, each under the license in its file header
 
 Part of the Kite family: [KiteCore](https://github.com/yuroyami/KiteCore),
-[KiteImage](https://github.com/yuroyami/KiteImage),
+[KiteImageCodec](https://github.com/yuroyami/KiteImageCodec),
 [KiteQR](https://github.com/yuroyami/KiteQR).

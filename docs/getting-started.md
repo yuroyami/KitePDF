@@ -24,7 +24,7 @@ KitePDF is published to Maven Central as twelve artifacts: the `kitepdf` umbrell
     }
     ```
 
-The core `kitepdf` artifact depends on `kotlin-stdlib` and the pure-Kotlin KiteImage codec engine. It works on every Kotlin target (JVM, Android, Native, JS, wasmJs).
+The core `kitepdf` artifact depends on `kotlin-stdlib` and the pure-Kotlin KiteImageCodec engine. It works on every Kotlin target (JVM, Android, Native, JS, wasmJs).
 
 ## Step 2: Open your first PDF
 

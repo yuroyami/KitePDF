@@ -72,7 +72,7 @@ but it is not a substitute for compiling and running those target variants.
 
 ### `kitepdf`: the core engine
 
-No platform or native dependencies: only `kotlin-stdlib` and the pure-Kotlin KiteImage codec module. Parse, decrypt, extract text, edit, redact, fill forms, and build PDFs from scratch. No UI or platform binding; just the PDF spec in pure Kotlin. Use this when you need:
+No platform or native dependencies: only `kotlin-stdlib` and the pure-Kotlin KiteImageCodec module. Parse, decrypt, extract text, edit, redact, fill forms, and build PDFs from scratch. No UI or platform binding; just the PDF spec in pure Kotlin. Use this when you need:
 
 - Server-side PDF processing (CLI tools, batch jobs, REST APIs)
 - Text extraction and metadata reading

@@ -17,8 +17,11 @@ activityCompose = "1.14.0-alpha03"
 # renderer Compose uses, without the Compose runtime sitting on top.
 skiko = "0.150.1"
 
-# KiteImage. The Kite lineage's shared image engine, and :kitepdf-core's one
-# runtime dependency beyond kotlin-stdlib.
+# KiteImageCodec. The Kite lineage's shared image engine, and :kitepdf-core's one
+# runtime dependency beyond kotlin-stdlib. Up to 0.1.0 it was published as
+# `kiteimage`. From 0.2.0 it is `kiteimagecodec`, with the package
+# io.github.yuroyami.kiteimagecodec, so moving past 0.1.0 changes the coordinates
+# and the imports.
 kiteimage = "0.1.0"
 
 # KiteJS. The Kite lineage's JavaScript engine. Used ONLY by :kitepdf-javascript,
@@ -26,11 +29,11 @@ kiteimage = "0.1.0"
 kitejs = "0.2.0"
 
 # Ktor client. Used ONLY by :kitepdf-net, the optional remote-loading artifact.
-# No other module may depend on it: the engine stays kotlin-stdlib + KiteImage.
+# No other module may depend on it: the engine stays kotlin-stdlib + KiteImageCodec.
 ktor = "3.6.0"
 
 [libraries] ######################################################################################
-# KiteImage supplies every image codec :kitepdf-core decodes through: JPEG
+# KiteImageCodec supplies every image codec :kitepdf-core decodes through: JPEG
 # (baseline and progressive), PNG, GIF, BMP, JPEG 2000, JBIG2 and CCITT.
 kiteimage = { module = "io.github.yuroyami:kiteimage", version.ref = "kiteimage" }
 
