@@ -16,8 +16,9 @@ class SupplementaryPlaneTest {
         val text = "a\uD835\uDC00b"
         assertEquals(0x1D400, codePointAt(text, 1))
         assertContentEquals(intArrayOf(0x61, 0x1D400, 0x62), codePointsOf(text))
-        // A lone surrogate stays a character of its own.
-        assertContentEquals(intArrayOf(0xD835, 0x62), codePointsOf("\uD835b"))
+        // A lone surrogate stays a character of its own. It is built at run time: UTF-8 cannot hold
+        // a lone surrogate, so a literal one reaches a JS test as a question mark.
+        assertContentEquals(intArrayOf(0xD835, 0x62), codePointsOf(charArrayOf(0xD835.toChar(), 'b').concatToString()))
         assertEquals("\uD835\uDC00", CharText.of(0x1D400))
     }
 
