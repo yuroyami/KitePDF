@@ -366,6 +366,25 @@ class IncrementalEpubSceneTest {
         }
     }
 
+    /** A chapter whose markup nests far too deep lays out. Its layout overflowed the stack, so it stayed a placeholder (#450). */
+    @Test
+    fun a_chapter_with_deeply_nested_markup_lays_out() = forBothEffectOrders { queued ->
+        val deep = "<div>".repeat(3_000) + "<p>Deep words.</p>" + "</div>".repeat(3_000)
+        val doc = EpubDocument.open(multiSpineEpub(listOf(deep, "<p>The next chapter.</p>")), settings)
+        withoutEscapes {
+            lateinit var state: KiteDocViewState
+            val (scene, driver) = drivenScene(200, 260, queued) {
+                state = rememberKiteDocViewState(doc)
+                KiteDocView(state = state, modifier = Modifier.fillMaxSize())
+            }
+            scene.use {
+                driver.pumpUntilState { doc.isChapterReady(1) }
+                assertTrue(doc.isChapterReady(0), "the deep chapter is laid out")
+                driver.pumpUntilState { state.items.none { it is DocItem.ChapterGap } }
+            }
+        }
+    }
+
     /**
      * Scrolling across chapters that are not laid out does not restart the loader, which left
      * the abandoned layouts running side by side (#378).
