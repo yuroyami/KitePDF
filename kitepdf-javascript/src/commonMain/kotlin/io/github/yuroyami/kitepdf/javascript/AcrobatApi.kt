@@ -305,6 +305,7 @@ internal object AcrobatApi {
     function (n) {
       var raw = host.fieldProp(n, 'value');
       var type = host.fieldProp(n, 'type');
+      if (Array.isArray(raw)) return raw;
       if (type === 'text' || type === 'combobox' || type === 'listbox') {
         var asNumber = Number(raw);
         // A text field whose value looks like a number reads as one, which is what every
@@ -313,7 +314,9 @@ internal object AcrobatApi {
       }
       return raw === null ? '' : raw;
     },
-    function (n, v) { setFieldProp(n, 'value', v === null || v === undefined ? '' : String(v)); });
+    function (n, v) {
+      setFieldProp(n, 'value', Array.isArray(v) ? v.map(String) : (v === null || v === undefined ? '' : String(v)));
+    });
   defineFieldProp('valueAsString', function (n) {
     var v = host.fieldProp(n, 'value');
     return v === null ? '' : String(v);
@@ -358,6 +361,8 @@ internal object AcrobatApi {
   defineFieldProp('alignment', function (n) { return fieldProp(n, 'alignment'); });
   defineFieldProp('comb', function (n) { return !!fieldProp(n, 'comb'); });
   defineFieldProp('editable', function (n) { return !!fieldProp(n, 'editable'); });
+  defineFieldProp('multipleSelection', function (n) { return !!fieldProp(n, 'multipleSelection'); });
+  defineFieldProp('commitOnSelChange', function (n) { return !!fieldProp(n, 'commitOnSelChange'); });
   defineFieldProp('password', function (n) { return !!fieldProp(n, 'password'); });
   defineFieldProp('userName', function (n) { return fieldProp(n, 'userName'); });
 

@@ -45,6 +45,21 @@ public final class io/github/yuroyami/kitepdf/compose/ImageDecoder_androidKt {
 	public static final fun encodeToPng (Landroidx/compose/ui/graphics/ImageBitmap;)[B
 }
 
+public final class io/github/yuroyami/kitepdf/compose/KiteChoiceInputKt {
+	public static final fun getLocalKiteChoiceStrings ()Landroidx/compose/runtime/ProvidableCompositionLocal;
+}
+
+public final class io/github/yuroyami/kitepdf/compose/KiteChoiceStrings {
+	public static final field $stable I
+	public fun <init> ()V
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun getEmptyOption ()Ljava/lang/String;
+	public final fun getNoMatches ()Ljava/lang/String;
+	public final fun getNoOptions ()Ljava/lang/String;
+	public final fun getRejected ()Ljava/lang/String;
+}
+
 public abstract interface class io/github/yuroyami/kitepdf/compose/KiteDocLayout {
 	public static final field Companion Lio/github/yuroyami/kitepdf/compose/KiteDocLayout$Companion;
 }
@@ -159,6 +174,7 @@ public final class io/github/yuroyami/kitepdf/compose/KiteDocViewState {
 	public fun <init> (Lio/github/yuroyami/kitepdf/core/KiteDocument;Lio/github/yuroyami/kitepdf/compose/KiteScrollPosition;)V
 	public fun <init> (Lio/github/yuroyami/kitepdf/core/KiteDocument;Lio/github/yuroyami/kitepdf/core/KiteBookmark;)V
 	public final fun animateScrollToPage (ILkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun animateScrollToSlot (ILkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public final fun animateZoomTo-ubNVwUQ (FJLandroidx/compose/animation/core/AnimationSpec;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public static synthetic fun animateZoomTo-ubNVwUQ$default (Lio/github/yuroyami/kitepdf/compose/KiteDocViewState;FJLandroidx/compose/animation/core/AnimationSpec;Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
 	public final fun clearSelection ()V
@@ -168,6 +184,7 @@ public final class io/github/yuroyami/kitepdf/compose/KiteDocViewState {
 	public final fun getCurrentLocation ()Lio/github/yuroyami/kitepdf/core/KiteLocation;
 	public final fun getCurrentPage ()I
 	public final fun getCurrentScrollPosition ()Lio/github/yuroyami/kitepdf/compose/KiteScrollPosition;
+	public final fun getCurrentSlot ()I
 	public final fun getDocument ()Lio/github/yuroyami/kitepdf/core/KiteDocument;
 	public final fun getFocusedField ()Ljava/lang/String;
 	public final fun getHighlights ()Ljava/util/List;
@@ -186,6 +203,7 @@ public final class io/github/yuroyami/kitepdf/compose/KiteDocViewState {
 	public final fun isComplete ()Z
 	public final fun isSelectionActive ()Z
 	public final fun isZoomed ()Z
+	public final fun locationOf (I)Lio/github/yuroyami/kitepdf/core/KiteLocation;
 	public final fun nextPage (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public final fun pageRectToViewport (ILio/github/yuroyami/kitepdf/core/KiteRectangle;)Landroidx/compose/ui/geometry/Rect;
 	public final fun pageRenderState (I)Lio/github/yuroyami/kitepdf/compose/KitePageRenderState;
@@ -199,11 +217,13 @@ public final class io/github/yuroyami/kitepdf/compose/KiteDocViewState {
 	public static synthetic fun scrollTo$default (Lio/github/yuroyami/kitepdf/compose/KiteDocViewState;Lio/github/yuroyami/kitepdf/core/KiteBookmark;ZLkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
 	public static synthetic fun scrollTo$default (Lio/github/yuroyami/kitepdf/compose/KiteDocViewState;Lio/github/yuroyami/kitepdf/core/KiteLocation;ZLkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
 	public final fun scrollToPage (ILkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun scrollToSlot (ILkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public final fun setHighlights (Ljava/util/List;)V
 	public final fun setOnSelectionChange (Lkotlin/jvm/functions/Function1;)V
 	public final fun setSearchHighlights (Ljava/util/List;)V
 	public final fun setZoom-Uv8p0NA (FJ)V
 	public static synthetic fun setZoom-Uv8p0NA$default (Lio/github/yuroyami/kitepdf/compose/KiteDocViewState;FJILjava/lang/Object;)V
+	public final fun slotOf (Lio/github/yuroyami/kitepdf/core/KiteLocation;)Ljava/lang/Integer;
 }
 
 public final class io/github/yuroyami/kitepdf/compose/KiteDocViewState$Companion {
@@ -235,6 +255,7 @@ public final class io/github/yuroyami/kitepdf/compose/KiteHighlight {
 	public final fun getEdgeMarkerSide ()Lio/github/yuroyami/kitepdf/compose/KiteMarkerSide;
 	public final fun getHit ()Lio/github/yuroyami/kitepdf/core/KiteSearchHit;
 	public final fun getId ()Ljava/lang/String;
+	public final fun getLocation ()Lio/github/yuroyami/kitepdf/core/KiteLocation;
 	public fun hashCode ()I
 	public fun toString ()Ljava/lang/String;
 }
@@ -291,12 +312,18 @@ public final class io/github/yuroyami/kitepdf/compose/KiteMarkerSide : java/lang
 public final class io/github/yuroyami/kitepdf/compose/KitePageHit {
 	public static final field $stable I
 	public fun <init> (IDD)V
+	public fun <init> (IDDLio/github/yuroyami/kitepdf/core/KiteLocation;)V
+	public synthetic fun <init> (IDDLio/github/yuroyami/kitepdf/core/KiteLocation;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public final fun component1 ()I
 	public final fun component2 ()D
 	public final fun component3 ()D
+	public final fun component4 ()Lio/github/yuroyami/kitepdf/core/KiteLocation;
 	public final fun copy (IDD)Lio/github/yuroyami/kitepdf/compose/KitePageHit;
+	public final fun copy (IDDLio/github/yuroyami/kitepdf/core/KiteLocation;)Lio/github/yuroyami/kitepdf/compose/KitePageHit;
 	public static synthetic fun copy$default (Lio/github/yuroyami/kitepdf/compose/KitePageHit;IDDILjava/lang/Object;)Lio/github/yuroyami/kitepdf/compose/KitePageHit;
+	public static synthetic fun copy$default (Lio/github/yuroyami/kitepdf/compose/KitePageHit;IDDLio/github/yuroyami/kitepdf/core/KiteLocation;ILjava/lang/Object;)Lio/github/yuroyami/kitepdf/compose/KitePageHit;
 	public fun equals (Ljava/lang/Object;)Z
+	public final fun getLocation ()Lio/github/yuroyami/kitepdf/core/KiteLocation;
 	public final fun getPageIndex ()I
 	public final fun getX ()D
 	public final fun getY ()D
@@ -453,15 +480,21 @@ public final class io/github/yuroyami/kitepdf/compose/KiteSelectionMenuKt {
 public final class io/github/yuroyami/kitepdf/compose/KiteTextSelection {
 	public static final field $stable I
 	public fun <init> (IIILjava/lang/String;Ljava/util/List;)V
+	public fun <init> (IIILjava/lang/String;Ljava/util/List;Lio/github/yuroyami/kitepdf/core/KiteLocation;)V
+	public synthetic fun <init> (IIILjava/lang/String;Ljava/util/List;Lio/github/yuroyami/kitepdf/core/KiteLocation;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public final fun component1 ()I
 	public final fun component2 ()I
 	public final fun component3 ()I
 	public final fun component4 ()Ljava/lang/String;
 	public final fun component5 ()Ljava/util/List;
+	public final fun component6 ()Lio/github/yuroyami/kitepdf/core/KiteLocation;
 	public final fun copy (IIILjava/lang/String;Ljava/util/List;)Lio/github/yuroyami/kitepdf/compose/KiteTextSelection;
+	public final fun copy (IIILjava/lang/String;Ljava/util/List;Lio/github/yuroyami/kitepdf/core/KiteLocation;)Lio/github/yuroyami/kitepdf/compose/KiteTextSelection;
 	public static synthetic fun copy$default (Lio/github/yuroyami/kitepdf/compose/KiteTextSelection;IIILjava/lang/String;Ljava/util/List;ILjava/lang/Object;)Lio/github/yuroyami/kitepdf/compose/KiteTextSelection;
+	public static synthetic fun copy$default (Lio/github/yuroyami/kitepdf/compose/KiteTextSelection;IIILjava/lang/String;Ljava/util/List;Lio/github/yuroyami/kitepdf/core/KiteLocation;ILjava/lang/Object;)Lio/github/yuroyami/kitepdf/compose/KiteTextSelection;
 	public fun equals (Ljava/lang/Object;)Z
 	public final fun getEnd ()I
+	public final fun getLocation ()Lio/github/yuroyami/kitepdf/core/KiteLocation;
 	public final fun getPageIndex ()I
 	public final fun getQuads ()Ljava/util/List;
 	public final fun getStart ()I

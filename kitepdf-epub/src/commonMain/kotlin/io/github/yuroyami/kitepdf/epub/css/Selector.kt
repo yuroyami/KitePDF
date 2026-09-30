@@ -1,5 +1,6 @@
 package io.github.yuroyami.kitepdf.epub.css
 
+import io.github.yuroyami.kitepdf.core.kiteWarn
 import io.github.yuroyami.kitepdf.core.xml.KiteXmlNode
 
 import io.github.yuroyami.kitepdf.epub.elementParent
@@ -238,7 +239,7 @@ internal class Selector(
             return Selector(parts, combs)
         }
 
-        private fun parseSimple(t: String): SimpleSelector {
+        private fun parseSimple(t: String, inNegation: Boolean = false): SimpleSelector {
             var tag: String? = null
             var id: String? = null
             val classes = ArrayList<String>()
@@ -300,7 +301,7 @@ internal class Selector(
                             // drops the selector; single-colon unknown names remain
                             // pseudo-classes (which never match).
                             name == "first-line" || name == "first-letter" || doubleColon -> unsupportedPseudo = true
-                            else -> pseudos.add(parsePseudoClass(name, arg))
+                            else -> pseudos.add(parsePseudoClass(name, arg, inNegation))
                         }
                     }
                     else -> i++ // tolerate stray chars
@@ -309,7 +310,7 @@ internal class Selector(
             return SimpleSelector(tag, id, classes, attrs, pseudos, pseudoElement, unsupportedPseudo)
         }
 
-        private fun parsePseudoClass(name: String, arg: String?): PseudoClass = when (name) {
+        private fun parsePseudoClass(name: String, arg: String?, inNegation: Boolean): PseudoClass = when (name) {
             "first-child" -> PseudoClass.FirstChild
             "last-child" -> PseudoClass.LastChild
             "only-child" -> PseudoClass.OnlyChild
@@ -320,12 +321,19 @@ internal class Selector(
             "link" -> PseudoClass.Link
             "nth-child" -> parseNth(arg)?.let { (a, b) -> PseudoClass.NthChild(a, b) } ?: PseudoClass.Unknown
             "not" -> {
-                val inner = arg?.trim()?.takeIf { it.isNotEmpty() }?.let { parseSimple(it) }
-                // One compound argument only: an inner pseudo-anything is out of scope.
-                if (inner == null || inner.pseudoElement != null || inner.unsupportedPseudoElement ||
-                    inner.pseudos.isNotEmpty()
-                ) PseudoClass.Unknown
-                else PseudoClass.Not(inner)
+                // Selectors 3, 6.6.7 forbids nested negation. Reject it before parsing
+                // its argument; recursing first can exhaust a Native thread's stack.
+                if (inNegation) {
+                    kiteWarn { "epub: nested :not() selector is skipped" }
+                    PseudoClass.Unknown
+                } else {
+                    val inner = arg?.trim()?.takeIf { it.isNotEmpty() }?.let { parseSimple(it, inNegation = true) }
+                    // One compound argument only: an inner pseudo-anything is out of scope.
+                    if (inner == null || inner.pseudoElement != null || inner.unsupportedPseudoElement ||
+                        inner.pseudos.isNotEmpty()
+                    ) PseudoClass.Unknown
+                    else PseudoClass.Not(inner)
+                }
             }
             // Interaction states never hold in a paginated renderer.
             "visited", "hover", "focus", "active" -> PseudoClass.Unknown

@@ -57,7 +57,7 @@ internal object HtmlParser {
      */
     fun parse(xhtml: String): KiteXmlNode.Element {
         val root = KiteXmlNode.Element("#root", emptyMap())
-        val stack = ArrayList<KiteXmlNode.Element>().apply { add(root) }
+        val stack = OpenElements().apply { add(root) }
         var warned = false
 
         for (t in KiteXml.tokenize(xhtml)) when (t) {
@@ -81,8 +81,8 @@ internal object HtmlParser {
                 if (t.name in VOID) continue
                 // Pop to the nearest matching open tag; tolerate mismatched nesting
                 // by leaving the stack alone if no match is open.
-                val idx = stack.indexOfLast { it.tag == t.name }
-                if (idx >= 1) while (stack.size > idx) stack.removeAt(stack.lastIndex)
+                val idx = stack.lastIndexOf(t.name)
+                if (idx >= 1) stack.popTo(idx)
             }
             is KiteXmlToken.Text -> stack.last().children.add(KiteXmlNode.Text(t.text))
         }
@@ -90,17 +90,13 @@ internal object HtmlParser {
     }
 
     /** Apply optional-end-tag rules before opening [opening]. */
-    private fun implicitClose(stack: ArrayList<KiteXmlNode.Element>, opening: String) {
+    private fun implicitClose(stack: OpenElements, opening: String) {
         // Close the nearest still-open item of [itemTags], but stop (close nothing)
         // if a [barriers] container is reached first -- that means the new item
         // belongs to a nested list/table opened inside the outer item.
         fun closeItem(itemTags: Set<String>, barriers: Set<String>) {
-            for (k in stack.indices.reversed()) {
-                if (k < 1) return
-                val tag = stack[k].tag
-                if (tag in barriers) return
-                if (tag in itemTags) { while (stack.size > k) stack.removeAt(stack.lastIndex); return }
-            }
+            val item = stack.lastIndexOf(itemTags)
+            if (item >= 1 && item > stack.lastIndexOf(barriers)) stack.popTo(item)
         }
         when {
             opening in LIST_ITEM -> closeItem(LIST_ITEM, LIST_CONTAINER)
@@ -109,8 +105,45 @@ internal object HtmlParser {
             opening in TABLE_CELL -> closeItem(TABLE_CELL, ROW_SCOPE)
         }
         if (opening in CLOSES_P) {
-            val pIdx = stack.indexOfLast { it.tag == "p" }
-            if (pIdx >= 1) while (stack.size > pIdx) stack.removeAt(stack.lastIndex)
+            val pIdx = stack.lastIndexOf("p")
+            if (pIdx >= 1) stack.popTo(pIdx)
+        }
+    }
+
+    /**
+     * Index the nearest open occurrence of each tag instead of rescanning the stack (#452).
+     * Each entry remembers the previous occurrence, so popping a mismatched or implied close
+     * restores every affected tag. Each element is pushed and popped at most once.
+     */
+    private class OpenElements {
+        private val elements = ArrayList<KiteXmlNode.Element>()
+        private val previous = ArrayList<Int>()
+        private val nearest = HashMap<String, Int>()
+
+        val lastIndex: Int get() = elements.lastIndex
+
+        operator fun get(index: Int): KiteXmlNode.Element = elements[index]
+        fun last(): KiteXmlNode.Element = elements.last()
+        fun lastIndexOf(tag: String): Int = nearest[tag] ?: -1
+
+        fun lastIndexOf(tags: Set<String>): Int {
+            var index = -1
+            for (tag in tags) index = maxOf(index, lastIndexOf(tag))
+            return index
+        }
+
+        fun add(element: KiteXmlNode.Element) {
+            previous.add(nearest.put(element.tag, elements.size) ?: -1)
+            elements.add(element)
+        }
+
+        /** Remove the matching element at [index] and every element opened after it. */
+        fun popTo(index: Int) {
+            while (elements.size > index) {
+                val tag = elements.removeAt(elements.lastIndex).tag
+                val before = previous.removeAt(previous.lastIndex)
+                if (before < 0) nearest.remove(tag) else nearest[tag] = before
+            }
         }
     }
 }

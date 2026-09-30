@@ -352,7 +352,7 @@ public fun KiteDocView(
             .focusRequester(keyFocus)
             .onKeyEvent { event ->
                 // A field with the caret keeps its keys, even the ones it does not use.
-                if (state.focusedField != null) return@onKeyEvent false
+                if (state.focusedField != null || state.choiceField != null) return@onKeyEvent false
                 val action = keyAction(event, layout, direction, paging = userScrollEnabled, zooming = zoomSpec.pinchEnabled)
                     ?: return@onKeyEvent false
                 tapScope.launch { action(state) }
@@ -398,6 +398,7 @@ public fun KiteDocView(
                 }
             }
         }
+        KiteChoiceInput(state, scripts)
         overlay?.invoke(this, state)
     }
 }

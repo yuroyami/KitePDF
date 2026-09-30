@@ -116,8 +116,87 @@ public interface PdfScriptHandler {
      * and format. Returns false when a script refused the value.
      */
     public fun commit(fieldName: String, value: String): Boolean {
+        formState.choiceField(fieldName)?.let { field ->
+            val selection = field.choiceSelectionForValue(value) ?: return false
+            return formState.setChoiceSelection(fieldName, selection, formState.fieldRevision(fieldName))
+        }
         formState.setValue(fieldName, value)
         return true
+    }
+
+    /**
+     * True when [commitChoice] accepts an entire multiple selection as one transaction. An old
+     * string-only handler returns false, so a viewer can explain why it cannot edit a multiple
+     * selection instead of silently dropping its other values (ISO 32000-1, 12.7.4.4).
+     */
+    public val supportsMultipleChoices: Boolean get() = false
+
+    /**
+     * Runs the selection-change keystroke without storing it. A viewer calls this for each
+     * proposed row, including deferred lists, then calls [commitChoice] when the reader commits
+     * (Adobe Acrobat JavaScript reference, Field/Keystroke and commitOnSelChange).
+     * Returns the accepted, possibly rewritten choice, or null when it was refused.
+     *
+     * The default adapts a single display label through [keystroke]. A multiple selection needs
+     * [supportsMultipleChoices]; a capable typed handler can override this for its own scripts.
+     */
+    public fun choiceKeystroke(fieldName: String, selection: PdfChoiceSelection): PdfChoiceSelection? {
+        val field = formState.choiceField(fieldName) ?: return null
+        var candidate = field.validateChoiceSelection(selection) ?: return null
+        if (formState.isReadOnly(fieldName) || formState.isHidden(fieldName)) return null
+        if (candidate.indices.size > 1) {
+            if (supportsMultipleChoices) return candidate
+            io.github.yuroyami.kitepdf.core.kiteWarn { "choice '$fieldName': handler requires a typed multiple-selection override" }
+            return null
+        }
+        val revision = formState.fieldRevision(fieldName)
+        val option = candidate.indices.singleOrNull()?.let { index -> field.choiceOptions.first { it.index == index } }
+        val label = option?.label ?: candidate.freeText.orEmpty()
+        // A legacy handler merges against its existing scalar/export value. Replace all of
+        // that string, even when its display label has a different length.
+        val rewritten = keystroke(fieldName, label, 0, formState.value(fieldName).orEmpty().length) ?: return null
+        if (rewritten != label) {
+            candidate = field.choiceOptions.firstOrNull { it.label == rewritten }?.let { PdfChoiceSelection(listOf(it.index)) }
+                ?: if (field.isEditableCombo) PdfChoiceSelection(emptyList(), freeText = rewritten) else return null
+        }
+        if (formState.fieldRevision(fieldName) != revision || formState.isReadOnly(fieldName) || formState.isHidden(fieldName)) return null
+        return candidate
+    }
+
+    /**
+     * Runs a choice keystroke with the previous accepted draft as its event value. A deferred
+     * selection has not reached [formState], so a viewer supplies it here for consecutive row
+     * changes. The default retains the two-argument custom-handler compatibility path.
+     */
+    public fun choiceKeystroke(fieldName: String, selection: PdfChoiceSelection, previous: PdfChoiceSelection): PdfChoiceSelection? =
+        choiceKeystroke(fieldName, selection)
+
+    /**
+     * Finishes a choice transaction after [choiceKeystroke]: commit keystroke, validate, store,
+     * calculate and format. This does not repeat the selection-change keystroke. Typed text in
+     * an editable combo instead runs ordinary [keystroke] calls before this commit.
+     *
+     * This compatibility adapter passes a single export value to [commit]. Multiple selections
+     * and ambiguous duplicate exports need an override, because a string cannot retain them.
+     * A custom handler that supports them overrides this method and [supportsMultipleChoices].
+     * A custom [commit] override remains responsible for checking changes to the field's flags
+     * while its scripts run; this adapter cannot make an arbitrary override atomic.
+     */
+    public fun commitChoice(fieldName: String, selection: PdfChoiceSelection): Boolean {
+        val field = formState.choiceField(fieldName) ?: return false
+        val candidate = field.validateChoiceSelection(selection) ?: return false
+        if (candidate.indices.size > 1) {
+            io.github.yuroyami.kitepdf.core.kiteWarn { "choice '$fieldName': handler requires a typed multiple-selection override" }
+            return false
+        }
+        if (formState.isReadOnly(fieldName) || formState.isHidden(fieldName)) return false
+        val export = field.choiceValues(candidate).singleOrNull().orEmpty()
+        // A legacy commit calls setValue, which resolves duplicate exports to the first option.
+        if (field.choiceSelectionForValue(export) != candidate) {
+            io.github.yuroyami.kitepdf.core.kiteWarn { "choice '$fieldName': handler requires a typed override for this option identity" }
+            return false
+        }
+        return commit(fieldName, export)
     }
 
     /**

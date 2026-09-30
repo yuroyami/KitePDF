@@ -27,6 +27,10 @@ import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
+import io.github.yuroyami.kitepdf.PdfChoiceSelection
+import io.github.yuroyami.kitepdf.PdfDocument
+import io.github.yuroyami.kitepdf.PdfFormField
+import io.github.yuroyami.kitepdf.PdfPage
 import io.github.yuroyami.kitepdf.core.KiteRectangle
 import androidx.compose.ui.geometry.isSpecified
 import androidx.compose.ui.graphics.Color
@@ -189,9 +193,37 @@ public class KiteDocViewState(
         return 1f / 1.4142f
     }
 
-    /** The slot showing [location], or -1 when its chapter is not laid out. */
-    internal fun indexOf(location: KiteLocation): Int =
-        items.indexOfFirst { it is DocItem.Page && it.location == location }
+    /**
+     * The real page in [slot], or null for a placeholder or an out-of-range slot.
+     * Reads only the published strip: it never lays out a chapter (#340).
+     */
+    public fun locationOf(slot: Int): KiteLocation? = (items.getOrNull(slot) as? DocItem.Page)?.location
+
+    /**
+     * The exact published slot of [location], or null while that page is unavailable.
+     * Unlike navigation, this never substitutes a placeholder or lays out a chapter.
+     */
+    public fun slotOf(location: KiteLocation): Int? = slotsByLocation[location]
+
+    private val slotsByLocation: Map<KiteLocation, Int> by androidx.compose.runtime.derivedStateOf {
+        buildMap {
+            items.forEachIndexed { slot, item -> if (item is DocItem.Page) put(item.location, slot) }
+        }
+    }
+
+    /** The slot showing [location], or -1 when its chapter is not published. */
+    internal fun indexOf(location: KiteLocation): Int = slotOf(location) ?: -1
+
+    /** Only the prefix before the first gap has known global page indices. */
+    private val knownGlobalPrefix: Int by androidx.compose.runtime.derivedStateOf {
+        items.indexOfFirst { it is DocItem.ChapterGap }.let { if (it < 0) items.size else it }
+    }
+
+    private fun slotOf(hit: KiteSearchHit): Int? {
+        val location = hit.location
+        return if (location != null) slotOf(location)
+        else hit.pageIndex.takeIf { it >= 0 && it < knownGlobalPrefix }
+    }
 
     /**
      * Where [location] is now: its own slot, or the placeholder its chapter is
@@ -401,12 +433,17 @@ public class KiteDocViewState(
      * Every hit here paints in the same colour. For marks that each carry their
      * own colour, or that want a marker in the page margin, use [highlights]
      * instead. Both channels paint, [searchHighlights] first.
+     *
+     * A hit's location wins over its legacy integer. Without a location, the integer is a
+     * global page index and paints only once all preceding chapter sizes are published.
      */
     public var searchHighlights: List<KiteSearchHit> by mutableStateOf(emptyList())
 
-    /** [searchHighlights] by page, built once for each list, so a page's overlay reads only its own hits (#372). */
+    /** Hits resolved to published slots once per list or strip change (#340, #372). */
     internal val searchHitsByPage: Map<Int, List<KiteSearchHit>> by androidx.compose.runtime.derivedStateOf {
-        searchHighlights.groupBy { it.pageIndex }
+        val groups = LinkedHashMap<Int, MutableList<KiteSearchHit>>()
+        for (hit in searchHighlights) slotOf(hit)?.let { groups.getOrPut(it) { ArrayList() }.add(hit) }
+        groups
     }
 
     /**
@@ -418,20 +455,25 @@ public class KiteDocViewState(
      * ```kotlin
      * state.highlights = notes.map { note ->
      *     KiteHighlight(
-     *         hit = KiteSearchHit(note.pageIndex, note.quads, note.text),
+     *         hit = KiteSearchHit(note.location, note.quads, note.text),
      *         color = note.category.tint,
      *         edgeMarker = true,
      *     )
      * }
      * ```
      *
+     * Save the selection's location with the quads. They survive chapter publication and
+     * reopening with the same content and layout, but must be recomputed after a reflow.
+     * Unlocated hits follow the global-index fallback of [searchHighlights].
      * See [KiteHighlight] for the per-entry knobs.
      */
     public var highlights: List<KiteHighlight> by mutableStateOf(emptyList())
 
-    /** [highlights] by page, in their order, built once for each list (#372). */
+    /** Marks resolved to published slots, in host order, shared by painting and taps. */
     internal val highlightsByPage: Map<Int, List<KiteHighlight>> by androidx.compose.runtime.derivedStateOf {
-        highlights.groupBy { it.hit.pageIndex }
+        val groups = LinkedHashMap<Int, MutableList<KiteHighlight>>()
+        for (highlight in highlights) slotOf(highlight.hit)?.let { groups.getOrPut(it) { ArrayList() }.add(highlight) }
+        groups
     }
 
     /**
@@ -446,6 +488,9 @@ public class KiteDocViewState(
      */
     public val currentPage: Int
         get() = adapter?.currentPage ?: inStrip(pendingPage)
+
+    /** Explicitly named alias of [currentPage]; includes chapter placeholders. */
+    public val currentSlot: Int get() = currentPage
 
     /** [slot] clamped into the strip, so a start page past the end opens at the last page (#262). */
     private fun inStrip(slot: Int): Int = slot.coerceIn(0, (itemCount - 1).coerceAtLeast(0))
@@ -496,15 +541,251 @@ public class KiteDocViewState(
         return Rect(topLeft, bottomRight)
     }
 
+    /** One open widget, with transaction data owned by the serial script lane. */
+    internal class ChoiceSession(
+        val name: String,
+        val widget: Int,
+        val box: WidgetBox?,
+        val handler: io.github.yuroyami.kitepdf.PdfScriptHandler,
+    ) {
+        var ready by mutableStateOf(false)
+        @kotlin.concurrent.Volatile var cancelled = false
+        @kotlin.concurrent.Volatile var expectedRevision = handler.formState.fieldRevision(name)
+        var acceptedSelection = handler.formState.choiceSelection(name)
+        var draft = acceptedSelection
+        var dirty = false
+        // The request counter belongs to the viewer thread and scopes asynchronous replies.
+        var request = 0
+    }
+
+    private var choiceSession: ChoiceSession? by mutableStateOf(null)
+    internal val choiceInputSession: ChoiceSession? get() = choiceSession
+    internal var formInputGeneration: Int by mutableIntStateOf(0)
+        private set
+    internal val choiceField: String? get() = choiceSession?.name
+    internal val choiceWidgetBox: WidgetBox? get() = choiceSession?.box
+    internal val choiceWidgetIndex: Int get() = choiceSession?.widget ?: 0
+    internal var choiceDraft: PdfChoiceSelection? by mutableStateOf(null)
+        private set
+    internal var choiceCommitPending: Boolean by mutableStateOf(false)
+        private set
+    internal var choiceRejected: Boolean by mutableStateOf(false)
+        private set
+    internal var captureChoiceInput: ((ChoiceSession) -> (() -> Unit)?)? = null
+    internal var choiceKeyHandler: ((androidx.compose.ui.input.key.KeyEvent) -> Boolean)? = null
+
+    internal fun choiceWidgetArea(): Rect? {
+        val box = choiceWidgetBox ?: return null
+        return displayRectToViewport(box.slot, KiteRectangle(
+            box.rect.left.toDouble(), box.rect.top.toDouble(), box.rect.right.toDouble(), box.rect.bottom.toDouble(),
+        ))
+    }
+
+    /** Opens a picker or list, with a text caret only for an editable combo (ISO 32000-1, 12.7.4.4). */
+    internal fun openChoice(fieldName: String, widgetIndex: Int = 0, box: WidgetBox? = null) {
+        val handler = scripts ?: return
+        val field = (document as? PdfDocument)?.formField(fieldName) ?: return
+        if (field.type != PdfFormField.FieldType.Choice || handler.formState.isReadOnly(fieldName) || handler.formState.isHidden(fieldName)) return
+        if (choiceField == fieldName && choiceWidgetIndex == widgetIndex && choiceSession?.handler === handler) return
+        blurFocusedField()
+        choiceSession = ChoiceSession(fieldName, widgetIndex, box, handler)
+        choiceDraft = handler.formState.choiceSelection(fieldName)
+        choiceCommitPending = true
+        choiceRejected = false
+        if (field.isEditableCombo) focusField(fieldName, widgetIndex, box)
+        else focusChoice(requireNotNull(choiceSession))
+    }
+
+    /** Establishes the baseline after the previous widget's queued blur has finished. */
+    private fun focusChoice(session: ChoiceSession) {
+        val work = {
+            scriptCall("focus", Unit) { session.handler.focus(session.name, session.widget) }
+            session.expectedRevision = session.handler.formState.fieldRevision(session.name)
+            session.acceptedSelection = session.handler.formState.choiceSelection(session.name)
+            session.draft = session.acceptedSelection
+            scriptsRan()
+            session.draft
+        }
+        val answer: (PdfChoiceSelection?) -> Unit = { selection ->
+            if (choiceSession === session) {
+                session.ready = true
+                if (session.request == 0) {
+                    choiceDraft = selection
+                    choiceCommitPending = false
+                }
+            }
+        }
+        val lane = scriptLane
+        val scope = scriptScope
+        if (lane == null || scope == null) answer(work())
+        else kotlinx.coroutines.CoroutineScope(lane).launch {
+            val selection = work()
+            scope.launch {
+                backOnComposeThread()
+                answer(selection)
+            }
+        }
+    }
+
+    /** Every row proposal runs selection /K; deferred lists keep its accepted result until blur. */
+    internal fun chooseChoice(selection: PdfChoiceSelection, commit: Boolean = true) {
+        val session = choiceSession ?: return
+        val field = (document as? PdfDocument)?.formField(session.name) ?: return
+        val valid = field.validateChoiceSelection(selection)
+        if (valid == null || session.handler.formState.isReadOnly(session.name) || session.handler.formState.isHidden(session.name)) {
+            choiceRejected = true
+            return
+        }
+        choiceDraft = valid
+        choiceRejected = false
+        val request = ++session.request
+        choiceCommitPending = true
+        val handler = session.handler
+        val flushInput = captureChoiceInput?.invoke(session)
+        val work = {
+            flushInput?.invoke()
+            val accepted = if (!choiceIsCurrent(session)) null else scriptCall("choice keystroke", null) {
+                handler.choiceKeystroke(session.name, valid, session.draft ?: PdfChoiceSelection(emptyList()))
+            }
+            val kept = accepted != null && choiceIsCurrent(session)
+            if (kept) {
+                session.draft = accepted
+                session.dirty = true
+            }
+            val finished = kept && (!commit || commitChoice(session))
+            scriptsRan()
+            Pair(finished, session.draft)
+        }
+        val answer: (Pair<Boolean, PdfChoiceSelection?>) -> Unit = { (accepted, draft) ->
+            if (choiceSession === session && request == session.request) {
+                choiceCommitPending = false
+                choiceRejected = !accepted
+                choiceDraft = draft
+                if (commit) {
+                    editingText = null
+                    if (!accepted && focusedField == session.name) formInputGeneration++
+                }
+                if (handler.formState.fieldRevision(session.name) != session.expectedRevision) dismissChoice(commit = false)
+            }
+        }
+        val lane = scriptLane
+        val scope = scriptScope
+        if (lane == null || scope == null) answer(work())
+        else kotlinx.coroutines.CoroutineScope(lane).launch {
+            val result = work()
+            scope.launch {
+                backOnComposeThread()
+                answer(result)
+            }
+        }
+    }
+
+    /** Called on the script lane, including before and after a slow user callback. */
+    private fun choiceIsCurrent(session: ChoiceSession): Boolean = !session.cancelled &&
+        session.handler.formState.fieldRevision(session.name) == session.expectedRevision &&
+        !session.handler.formState.isReadOnly(session.name) && !session.handler.formState.isHidden(session.name)
+
+    private fun commitChoice(session: ChoiceSession): Boolean {
+        if (!choiceIsCurrent(session)) return false
+        val selection = session.draft ?: return false
+        val accepted = scriptCall("choice commit", false) { session.handler.commitChoice(session.name, selection) }
+        if (accepted) {
+            session.expectedRevision = session.handler.formState.fieldRevision(session.name)
+            session.acceptedSelection = session.handler.formState.choiceSelection(session.name)
+            session.draft = session.acceptedSelection
+            session.dirty = false
+        } else restoreChoice(session)
+        return accepted
+    }
+
+    /** Roll back only our own editable keystrokes, preserving newer resets or script writes. */
+    private fun restoreChoice(session: ChoiceSession) {
+        val accepted = session.acceptedSelection ?: return
+        if (session.handler.formState.setChoiceSelection(session.name, accepted, session.expectedRevision)) {
+            session.expectedRevision = session.handler.formState.fieldRevision(session.name)
+            session.draft = accepted
+            session.dirty = false
+        }
+    }
+
+    /** Finalizes after queued previews, or cancels them and restores accepted editable input. */
+    internal fun dismissChoice(commit: Boolean = true) {
+        val session = choiceSession ?: return
+        val flushInput = if (commit) captureChoiceInput?.invoke(session) else null
+        if (!commit) {
+            session.cancelled = true
+            val revision = session.expectedRevision
+            if (session.handler.formState.cancelChoiceTransaction(session.name, revision)) session.expectedRevision = revision + 1
+        }
+        choiceSession = null
+        choiceDraft = null
+        choiceCommitPending = false
+        choiceRejected = false
+        choiceKeyHandler = null
+        if (focusedField == session.name) {
+            formInputGeneration++
+            focusedField = null
+            focusedWidgetBox = null
+            editingText = null
+        }
+        val work = {
+            if (commit) {
+                flushInput?.invoke()
+                if (session.dirty) commitChoice(session)
+            } else restoreChoice(session)
+            scriptCall("blur", Unit) { session.handler.blur(session.name, session.widget) }
+            scriptsRan()
+        }
+        val lane = scriptLane
+        if (lane == null) work() else kotlinx.coroutines.CoroutineScope(lane).launch { work() }
+    }
+
+    /** Moves keyboard focus among the visible editable text and choice widgets in annotation order. */
+    internal fun focusNextFormField(backwards: Boolean = false) {
+        val handler = scripts ?: return
+        val currentName = choiceField ?: focusedField
+        val currentWidget = choiceSession?.widget ?: focusedWidget
+        data class Entry(val name: String, val widget: Int, val box: WidgetBox)
+        val entries = ArrayList<Entry>()
+        for (slot in pageGeometry.keys.sorted()) {
+            val page = pageAt(slot) as? PdfPage ?: continue
+            for (annotation in page.annotations) {
+                if (annotation.subtype != io.github.yuroyami.kitepdf.PdfAnnotation.Subtype.Widget) continue
+                val rect = annotation.rect
+                val hit = page.widgetAt((rect.left + rect.right) / 2, (rect.bottom + rect.top) / 2, handler.formState) ?: continue
+                val field = hit.field
+                val name = field.fullyQualifiedName
+                if (field.type !in listOf(PdfFormField.FieldType.Text, PdfFormField.FieldType.Choice) || handler.formState.isReadOnly(name)) continue
+                val display = page.pageToDisplay(rect)
+                entries.add(Entry(name, hit.widgetIndex, WidgetBox(slot, Rect(display.left.toFloat(), display.bottom.toFloat(), display.right.toFloat(), display.top.toFloat()))))
+            }
+        }
+        val at = entries.indexOfFirst { it.name == currentName && it.widget == currentWidget }
+        blurFocusedField()
+        val next = entries.getOrNull(if (backwards) at - 1 else at + 1) ?: return
+        val field = (document as? PdfDocument)?.formField(next.name) ?: return
+        if (field.type == PdfFormField.FieldType.Choice) openChoice(next.name, next.widget, next.box)
+        else focusField(next.name, next.widget, next.box)
+    }
+
     /** Puts the caret in one widget of a field, telling the document's scripts that it took the focus. */
     internal fun focusField(fieldName: String, widgetIndex: Int = 0, box: WidgetBox? = null) {
-        if (focusedField == fieldName) return
-        blurFocusedField()
+        val field = (document as? PdfDocument)?.formField(fieldName)
+        if (field?.type == PdfFormField.FieldType.Choice &&
+            (!field.isEditableCombo || choiceField != fieldName || choiceWidgetIndex != widgetIndex)) {
+            openChoice(fieldName, widgetIndex, box)
+            return
+        }
+        if (focusedField == fieldName && focusedWidget == widgetIndex) return
+        if (choiceField != fieldName) blurFocusedField() else blurTextField()
+        formInputGeneration++
         focusedWidgetBox = box
         focusedField = fieldName
         focusedWidget = widgetIndex
         val handler = scripts ?: return
-        post("focus") { handler.focus(fieldName, widgetIndex) }
+        val choice = choiceSession
+        if (choice != null && choice.name == fieldName) focusChoice(choice)
+        else post("focus") { handler.focus(fieldName, widgetIndex) }
     }
 
     /**
@@ -516,7 +797,12 @@ public class KiteDocViewState(
      * the value the reader typed must not be lost with them (#365).
      */
     internal fun blurFocusedField() {
+        if (choiceSession != null) dismissChoice() else blurTextField()
+    }
+
+    private fun blurTextField(commit: Boolean = true) {
         val name = focusedField ?: return
+        formInputGeneration++
         focusedField = null
         focusedWidgetBox = null
         val typed = editingText
@@ -524,7 +810,11 @@ public class KiteDocViewState(
         val widget = focusedWidget
         val handler = scripts ?: return
         val work = {
-            scriptCall("commit", false) { handler.commit(name, typed ?: handler.formState.value(name) ?: "") }
+            if (commit) scriptCall("commit", false) {
+                if (typed != null && (document as? PdfDocument)?.formField(name)?.isEditableCombo == true) {
+                    handler.commitChoice(name, PdfChoiceSelection(emptyList(), freeText = typed))
+                } else handler.commit(name, typed ?: handler.formState.value(name) ?: "")
+            }
             scriptCall("blur", Unit) { handler.blur(name, widget) }
             scriptsRan()
         }
@@ -583,7 +873,7 @@ public class KiteDocViewState(
     }
 
     /** What the reader sees in the focused field, which a keystroke script may not have answered for yet. */
-    internal var editingText: String? = null
+    internal var editingText: String? by mutableStateOf(null)
 
     /**
      * Runs [work] on the script lane, or here when there is no view to give one. The form's own
@@ -1206,6 +1496,7 @@ public class KiteDocViewState(
             // As a reader copies it: a wrapped paragraph is one line, a hyphenated word whole (#438).
             text = text.copyText(start, end),
             quads = text.quadsFor(start, end),
+            location = locationOf(page),
         )
         if (sel.start == selection?.start && sel.end == selection?.end && sel.pageIndex == selection?.pageIndex) return
         selectionCarets = text.caretAt(start, after = false) to text.caretAt(end, after = true)
@@ -1279,6 +1570,7 @@ public class KiteDocViewState(
                 index,
                 (content.x - rect.left) / rect.width * page.displayWidth,
                 (content.y - rect.top) / rect.height * page.displayHeight,
+                locationOf(index),
             )
         }
         return null
@@ -1301,7 +1593,7 @@ public class KiteDocViewState(
         val page = pageAt(index) ?: return null
         val inv = page.displayToDeviceBase().invert() ?: return null
         val (x, y) = inv.transformPoint(devX, devY)
-        return KitePageHit(index, x, y)
+        return KitePageHit(index, x, y, locationOf(index))
     }
 
     /**
@@ -1360,7 +1652,13 @@ public class KiteDocViewState(
         }
     }
 
-    /** Jumps to slot [page] (coerced into range) without animation. */
+    /** Jumps to [slot] without animation. Slots include chapter placeholders. */
+    public suspend fun scrollToSlot(slot: Int): Unit = scrollToPage(slot)
+
+    /** Animates to [slot]. Slots include chapter placeholders. */
+    public suspend fun animateScrollToSlot(slot: Int): Unit = animateScrollToPage(slot)
+
+    /** Jumps to slot [page] (coerced into range) without animation. See [scrollToSlot]. */
     public suspend fun scrollToPage(page: Int): Unit = onViewerThread {
         val target = page.coerceIn(0, (itemCount - 1).coerceAtLeast(0))
         leaveSelectionFor(target)
@@ -1602,7 +1900,7 @@ public class KiteDocViewState(
         val keyedSlot = if (captured != null) adapter.keyedSlot else -1
         val keyed = items.getOrNull(keyedSlot)
         val parkedLeading = if (adapter == null) pendingLeadingPage?.let { readerAnchorAt(it) } else null
-        val selected = selection?.let { it to anchorAt(it.pageIndex) }
+        val selected = selection?.let { it to (it.location ?: locationOf(it.pageIndex)) }
 
         onChapterReady()
 
@@ -1949,10 +2247,20 @@ internal class ScrollAnchor(val slot: Int, val offsetPx: Int = 0, val pageFracti
  * is the space of search hits and highlights (#432).
  */
 public data class KitePageHit(
+    /** The viewer slot when this result was produced. Use [location] after publication. */
     val pageIndex: Int,
     val x: Double,
     val y: Double,
-)
+    /** Exact page in the current layout; always present on viewer-produced results. */
+    val location: KiteLocation? = null,
+) {
+    /** Legacy constructor for callers that do not yet carry a location. */
+    public constructor(pageIndex: Int, x: Double, y: Double) : this(pageIndex, x, y, null)
+
+    /** Keeps the original copy signature and preserves this result's location. */
+    public fun copy(pageIndex: Int = this.pageIndex, x: Double = this.x, y: Double = this.y): KitePageHit =
+        KitePageHit(pageIndex, x, y, location)
+}
 
 /**
  * A finalized or in-progress text selection on one page (cross-page
@@ -1964,12 +2272,28 @@ public data class KitePageHit(
  * display-space, one per line touched.
  */
 public data class KiteTextSelection(
+    /** The viewer slot when this selection was produced. Persist [location] instead. */
     val pageIndex: Int,
     val start: Int,
     val end: Int,
     val text: String,
     val quads: List<io.github.yuroyami.kitepdf.core.KiteRectangle>,
-)
+    /** Exact page in this layout. A reflow changes both this coordinate and the quads. */
+    val location: KiteLocation? = null,
+) {
+    /** Legacy constructor for callers that do not yet carry a location. */
+    public constructor(pageIndex: Int, start: Int, end: Int, text: String, quads: List<KiteRectangle>) :
+        this(pageIndex, start, end, text, quads, null)
+
+    /** Keeps the original copy signature and preserves this selection's location. */
+    public fun copy(
+        pageIndex: Int = this.pageIndex,
+        start: Int = this.start,
+        end: Int = this.end,
+        text: String = this.text,
+        quads: List<KiteRectangle> = this.quads,
+    ): KiteTextSelection = KiteTextSelection(pageIndex, start, end, text, quads, location)
+}
 
 /**
  * One entry of [KiteDocViewState.highlights]: where to paint ([hit]) plus how to
@@ -2006,7 +2330,10 @@ public data class KiteHighlight(
     val edgeMarkerSide: KiteMarkerSide = KiteMarkerSide.End,
     /** Stable host identity, returned intact by [KiteDocViewState.highlightAt]. */
     val id: String? = null,
-)
+) {
+    /** The page of [hit], in its current layout, when the producer supplied it. */
+    public val location: KiteLocation? get() = hit.location
+}
 
 /**
  * Which page margin an edge marker is painted in.

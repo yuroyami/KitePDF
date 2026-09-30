@@ -1,6 +1,7 @@
 package io.github.yuroyami.kitepdf.epub.css
 
 import io.github.yuroyami.kitepdf.core.css.CssValues
+import io.github.yuroyami.kitepdf.core.kiteWarn
 
 /**
  * A forgiving CSS parser for the EPUB subset. Strips comments, scans rules by
@@ -13,22 +14,25 @@ import io.github.yuroyami.kitepdf.core.css.CssValues
  */
 internal object CssParser {
 
+    // Leave room for the caller on a 512 KB Apple thread, including debug builds (#451).
+    const val MAX_NESTING = 32
+
     fun parse(text: String, origin: Origin): List<StyleRule> = parseAll(text, origin).rules
 
     fun parseAll(text: String, origin: Origin): ParsedCss {
         val css = stripComments(text)
         val rules = ArrayList<StyleRule>()
         val faces = ArrayList<FontFaceRule>()
-        parseInto(css, 0, css.length, origin, rules, faces)
+        parseInto(css, 0, css.length, origin, rules, faces, 0)
         return ParsedCss(rules, faces)
     }
 
-    private fun parseInto(css: String, start: Int, end: Int, origin: Origin, out: ArrayList<StyleRule>, faces: ArrayList<FontFaceRule>) {
+    private fun parseInto(css: String, start: Int, end: Int, origin: Origin, out: ArrayList<StyleRule>, faces: ArrayList<FontFaceRule>, nesting: Int) {
         var i = start
         while (i < end) {
             while (i < end && css[i].isWhitespace()) i++
             if (i >= end) break
-            if (css[i] == '@') { i = handleAtRule(css, i, end, origin, out, faces); continue }
+            if (css[i] == '@') { i = handleAtRule(css, i, end, origin, out, faces, nesting); continue }
             val brace = css.indexOf('{', i)
             if (brace < 0 || brace >= end) break
             val prelude = css.substring(i, brace).trim()
@@ -41,7 +45,7 @@ internal object CssParser {
         }
     }
 
-    private fun handleAtRule(css: String, at: Int, end: Int, origin: Origin, out: ArrayList<StyleRule>, faces: ArrayList<FontFaceRule>): Int {
+    private fun handleAtRule(css: String, at: Int, end: Int, origin: Origin, out: ArrayList<StyleRule>, faces: ArrayList<FontFaceRule>, nesting: Int): Int {
         var j = at + 1
         while (j < end && (css[j].isLetterOrDigit() || css[j] == '-')) j++
         val keyword = css.substring(at + 1, j).lowercase()
@@ -51,7 +55,13 @@ internal object CssParser {
         if (brace < 0 || brace >= end || (semi in 0 until brace)) return if (semi < 0 || semi >= end) end else semi + 1
         val close = matchBrace(css, brace, end)
         when (keyword) {
-            "media", "supports" -> parseInto(css, brace + 1, close, origin, out, faces) // flatten: always-matching
+            "media", "supports" -> {
+                if (nesting >= MAX_NESTING) {
+                    kiteWarn { "epub: CSS blocks nested beyond $MAX_NESTING levels are skipped" }
+                } else {
+                    parseInto(css, brace + 1, close, origin, out, faces, nesting + 1) // flatten: always-matching
+                }
+            }
             "font-face" -> parseFontFace(css.substring(brace + 1, close))?.let { faces.add(it) }
             // @page / @keyframes / unknown: skip the whole block.
         }

@@ -1931,8 +1931,12 @@ final class io.github.yuroyami.kitepdf.core/KiteRectangle { // io.github.yuroyam
 }
 
 final class io.github.yuroyami.kitepdf.core/KiteSearchHit { // io.github.yuroyami.kitepdf.core/KiteSearchHit|null[0]
+    constructor <init>(io.github.yuroyami.kitepdf.core/KiteLocation, kotlin.collections/List<io.github.yuroyami.kitepdf.core/KiteRectangle>, kotlin/String) // io.github.yuroyami.kitepdf.core/KiteSearchHit.<init>|<init>(io.github.yuroyami.kitepdf.core.KiteLocation;kotlin.collections.List<io.github.yuroyami.kitepdf.core.KiteRectangle>;kotlin.String){}[0]
     constructor <init>(kotlin/Int, kotlin.collections/List<io.github.yuroyami.kitepdf.core/KiteRectangle>, kotlin/String) // io.github.yuroyami.kitepdf.core/KiteSearchHit.<init>|<init>(kotlin.Int;kotlin.collections.List<io.github.yuroyami.kitepdf.core.KiteRectangle>;kotlin.String){}[0]
+    constructor <init>(kotlin/Int, kotlin.collections/List<io.github.yuroyami.kitepdf.core/KiteRectangle>, kotlin/String, io.github.yuroyami.kitepdf.core/KiteLocation?) // io.github.yuroyami.kitepdf.core/KiteSearchHit.<init>|<init>(kotlin.Int;kotlin.collections.List<io.github.yuroyami.kitepdf.core.KiteRectangle>;kotlin.String;io.github.yuroyami.kitepdf.core.KiteLocation?){}[0]
 
+    final val location // io.github.yuroyami.kitepdf.core/KiteSearchHit.location|{}location[0]
+        final fun <get-location>(): io.github.yuroyami.kitepdf.core/KiteLocation? // io.github.yuroyami.kitepdf.core/KiteSearchHit.location.<get-location>|<get-location>(){}[0]
     final val pageIndex // io.github.yuroyami.kitepdf.core/KiteSearchHit.pageIndex|{}pageIndex[0]
         final fun <get-pageIndex>(): kotlin/Int // io.github.yuroyami.kitepdf.core/KiteSearchHit.pageIndex.<get-pageIndex>|<get-pageIndex>(){}[0]
     final val quads // io.github.yuroyami.kitepdf.core/KiteSearchHit.quads|{}quads[0]
@@ -1956,6 +1960,7 @@ final class io.github.yuroyami.kitepdf.core/KiteStructuredText { // io.github.yu
     final fun copyText(kotlin/Int, kotlin/Int): kotlin/String // io.github.yuroyami.kitepdf.core/KiteStructuredText.copyText|copyText(kotlin.Int;kotlin.Int){}[0]
     final fun quadsFor(kotlin/Int, kotlin/Int): kotlin.collections/List<io.github.yuroyami.kitepdf.core/KiteRectangle> // io.github.yuroyami.kitepdf.core/KiteStructuredText.quadsFor|quadsFor(kotlin.Int;kotlin.Int){}[0]
     final fun search(kotlin/String, kotlin/Boolean = ..., kotlin/Int = ...): kotlin.collections/List<io.github.yuroyami.kitepdf.core/KiteSearchHit> // io.github.yuroyami.kitepdf.core/KiteStructuredText.search|search(kotlin.String;kotlin.Boolean;kotlin.Int){}[0]
+    final fun search(kotlin/String, kotlin/Boolean = ..., kotlin/Int = ..., io.github.yuroyami.kitepdf.core/KiteLocation?): kotlin.collections/List<io.github.yuroyami.kitepdf.core/KiteSearchHit> // io.github.yuroyami.kitepdf.core/KiteStructuredText.search|search(kotlin.String;kotlin.Boolean;kotlin.Int;io.github.yuroyami.kitepdf.core.KiteLocation?){}[0]
     final fun textRange(kotlin/Int, kotlin/Int): kotlin/String // io.github.yuroyami.kitepdf.core/KiteStructuredText.textRange|textRange(kotlin.Int;kotlin.Int){}[0]
 }
 
