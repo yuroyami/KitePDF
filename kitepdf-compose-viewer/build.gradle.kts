@@ -26,10 +26,10 @@ fun currentOsSkikoRuntime(): Provider<MinimalExternalModuleDependency> {
 }
 
 /*
- * :kitepdf-compose is the optional Compose Multiplatform binding for KitePDF.
+ * :kitepdf-compose-viewer is the optional Compose Multiplatform binding for KitePDF.
  *
- * The :kitepdf core stays pure-Kotlin-stdlib so CLI / server consumers don't
- * pull in any UI dependencies. Anything Compose-specific lives here.
+ * The document artifacts carry no UI dependency, so CLI / server consumers
+ * pull in none. Anything Compose-specific lives here.
  */
 kotlin {
     explicitApi()

@@ -3,10 +3,10 @@ package io.github.yuroyami.kitepdf.compose
 import androidx.compose.ui.graphics.ImageBitmap
 
 /**
- * Platform-supplied image decoder. KitePDF's core stays pure-Kotlin-stdlib;
- * actual JPEG / PNG / etc. decoding rides on whatever the host platform
- * already provides: Skia on the JVM, iOS, macOS and the web, and
- * BitmapFactory on Android.
+ * Platform-supplied image decoder. KitePDF's core decodes images with
+ * KiteImageCodec; an encoded image that the core cannot decode comes here, to
+ * the decoder the host platform already provides: Skia on the JVM, iOS, macOS
+ * and the web, and BitmapFactory on Android.
  *
  * The actual implementations live in :kitepdf-compose-viewer's platform source sets.
  * If a platform can't decode the bytes (corrupt JPEG, unsupported format),
