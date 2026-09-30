@@ -1,5 +1,6 @@
 package io.github.yuroyami.kitepdf.epub
 
+import io.github.yuroyami.kitepdf.core.kiteWarn
 import io.github.yuroyami.kitepdf.core.xml.KiteXml
 import io.github.yuroyami.kitepdf.core.xml.KiteXmlNode
 import io.github.yuroyami.kitepdf.core.xml.KiteXmlToken
@@ -40,17 +41,40 @@ internal object HtmlParser {
     private val TABLE_SCOPE = setOf("table")
     private val ROW_SCOPE = setOf("table", "thead", "tbody", "tfoot")
 
-    /** Parse [xhtml] into a synthetic `#root` element holding the document. */
+    /** The layout keeps only rows, cells and columns under these, so another child would lose its text. */
+    private val TABLE_PARTS = setOf("table", "thead", "tbody", "tfoot", "tr", "colgroup")
+
+    /**
+     * The deepest level of an element, with `html` at level 1. Layout recurses once for each level,
+     * and in a debug build 51 nested grid containers overflow the 512 KB stack of a secondary
+     * thread on Apple platforms (#450).
+     */
+    const val MAX_DEPTH = 32
+
+    /**
+     * Parse [xhtml] into a synthetic `#root` element holding the document. An element nested
+     * deeper than [MAX_DEPTH] moves up to that level, or above a table part, and keeps its text.
+     */
     fun parse(xhtml: String): KiteXmlNode.Element {
         val root = KiteXmlNode.Element("#root", emptyMap())
         val stack = ArrayList<KiteXmlNode.Element>().apply { add(root) }
+        var warned = false
 
         for (t in KiteXml.tokenize(xhtml)) when (t) {
             is KiteXmlToken.Open -> {
                 implicitClose(stack, t.name)
                 val el = KiteXmlNode.Element(t.name, t.attrs)
-                el.parent = stack.last()
-                stack.last().children.add(el)
+                // Past the limit, the parent is the last ancestor inside it, as in Blink and WebKit.
+                var at = minOf(stack.lastIndex, MAX_DEPTH - 1)
+                if (at < stack.lastIndex) {
+                    while (stack[at].tag in TABLE_PARTS) at--
+                    if (!warned) {
+                        warned = true
+                        kiteWarn { "epub: more than $MAX_DEPTH elements are nested, so deeper elements are moved up" }
+                    }
+                }
+                el.parent = stack[at]
+                stack[at].children.add(el)
                 if (!t.selfClose && t.name !in VOID) stack.add(el)
             }
             is KiteXmlToken.Close -> {

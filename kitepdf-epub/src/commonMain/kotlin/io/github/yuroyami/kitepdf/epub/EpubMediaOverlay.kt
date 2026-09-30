@@ -108,15 +108,18 @@ internal object SmilParser {
         val root = runCatching { KiteXml.parse(xml) }.getOrNull() ?: return emptyList()
         val body = find(root, "body") ?: return emptyList()
         val out = ArrayList<EpubOverlayClip>()
-        fun walk(el: KiteXmlNode.Element, type: String?) {
+        // A list of elements to visit, and no recursion: sequences can nest deeper than a stack can follow (#450).
+        val pending = arrayListOf<Pair<KiteXmlNode.Element, String?>>(body to null)
+        while (pending.isNotEmpty()) {
+            val (el, type) = pending.removeAt(pending.lastIndex)
             // The parser keeps local names, so epub:type reads as type.
             val own = el.attrs["type"]?.trim()?.takeIf { it.isNotEmpty() } ?: type
-            when (el.tag) {
-                "par" -> clip(el, own, dir)?.let(out::add)
-                else -> for (child in el.children) if (child is KiteXmlNode.Element) walk(child, own)
+            if (el.tag == "par") {
+                clip(el, own, dir)?.let(out::add)
+                continue
             }
+            for (i in el.children.indices.reversed()) (el.children[i] as? KiteXmlNode.Element)?.let { pending.add(it to own) }
         }
-        walk(body, null)
         return out
     }
 
@@ -141,9 +144,14 @@ internal object SmilParser {
         return if (fragment.isEmpty()) path else "$path#$fragment"
     }
 
-    private fun find(el: KiteXmlNode.Element, tag: String): KiteXmlNode.Element? {
-        if (el.tag == tag) return el
-        for (child in el.children) if (child is KiteXmlNode.Element) find(child, tag)?.let { return it }
+    /** The first element named [tag] at or under [root], in document order. */
+    private fun find(root: KiteXmlNode.Element, tag: String): KiteXmlNode.Element? {
+        val pending = arrayListOf(root)
+        while (pending.isNotEmpty()) {
+            val el = pending.removeAt(pending.lastIndex)
+            if (el.tag == tag) return el
+            for (i in el.children.indices.reversed()) (el.children[i] as? KiteXmlNode.Element)?.let(pending::add)
+        }
         return null
     }
 }

@@ -50,3 +50,5 @@ Things a previous change taught the hard way. One line each. Delete a line when 
 - Kotlin/JS prints a whole `Double` as `1`, while the JVM prints `1.0`. A golden text built with `toString()` on a `Double` passes on the JVM and fails on JS. Round to a `Long` first.
 - A lone surrogate in a string literal becomes `?` on Kotlin/JS. Build it from `Char` values with `charArrayOf(...).concatToString()`.
 - The publish plugin's HTTP client times out after 60 seconds, which is too short for a 430 MB bundle, and the error says only "timeout". Pass `-PSONATYPE_CONNECT_TIMEOUT_SECONDS=1800` to `publishAndReleaseToMavenCentral`.
+- A debug build for Kotlin/Native takes about 10 KB of stack for each level of EPUB layout, three times a release build, and a secondary thread on Apple platforms has 512 KB. Measure a nesting limit there, not on the JVM (#450).
+- The page text has a line break wherever a narrow box wraps, so two words that a test looks for can sit on two lines. Fold white space before the search, or wrapped text reads as lost text (#450).
