@@ -228,15 +228,18 @@ internal class BoxLayout(
                 pendingAbs.add(PendingAbs(child, if (pos == CssPosition.FIXED) pageCb else currentCb))
                 continue
             }
+            // An anonymous text box shares its block's style, so the block's own clear and float
+            // must not apply to it again (#454).
+            val anonymous = child is TextBlockBox
             // clear: the flow cursor drops below matching floats before this
             // child lays out (margin collapse across clearance not modelled).
-            if (child.style.clear != CssClear.NONE) {
+            if (!anonymous && child.style.clear != CssClear.NONE) {
                 cursorY = maxOf(cursorY, clearY(child.style.clear))
             }
             // float:left/right leaves the flow: it lays out against the content
             // edge at the current y, registers an exclusion band that shortens
             // overlapping text lines, and does not advance the flow cursor.
-            if (child.style.cssFloat != CssFloat.NONE && child !is TableRowBox) {
+            if (!anonymous && child.style.cssFloat != CssFloat.NONE && child !is TableRowBox) {
                 val topMargin = if (child is BlockBox) child.style.marginTopPt else 0.0
                 placeFloat(child, contentLeft, contentW, cursorY + topMargin)
                 continue
