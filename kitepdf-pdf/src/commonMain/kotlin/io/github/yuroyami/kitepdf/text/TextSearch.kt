@@ -1,6 +1,7 @@
 package io.github.yuroyami.kitepdf.text
 
 import io.github.yuroyami.kitepdf.core.KiteSearchHit
+import io.github.yuroyami.kitepdf.core.KiteLocation
 import io.github.yuroyami.kitepdf.PdfDocument
 import io.github.yuroyami.kitepdf.PdfPage
 
@@ -22,10 +23,11 @@ public typealias PdfSearchHit = KiteSearchHit
  * a Turkish dotless ı will not match `I` under locale-free folding.
  *
  * Quads are in DISPLAY space: the y-down `[0, displayWidth] x
- * [0, displayHeight]` box with page rotation folded in.
+ * [0, displayHeight]` box with page rotation folded in. Each hit's location is
+ * chapter 0 and this page's index; its legacy index remains the global page index.
  */
 public fun PdfPage.search(needle: String, ignoreCase: Boolean = true): List<PdfSearchHit> =
-    textContent().search(needle, ignoreCase, pageIndex = index)
+    textContent().search(needle, ignoreCase, pageIndex = index, location = KiteLocation(0, index))
 
 /**
  * Find [needle] across the whole document, page by page. The result is a

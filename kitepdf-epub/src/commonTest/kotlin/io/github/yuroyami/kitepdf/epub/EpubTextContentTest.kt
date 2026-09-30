@@ -1,8 +1,10 @@
 package io.github.yuroyami.kitepdf.epub
 
+import io.github.yuroyami.kitepdf.core.KiteLocation
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 /**
@@ -43,6 +45,7 @@ class EpubTextContentTest {
         val hits = doc.search("BRAVE NEW").toList()
         assertEquals(1, hits.size)
         assertEquals(0, hits[0].pageIndex)
+        assertEquals(KiteLocation(0, 0), hits[0].location)
         assertEquals("brave new", hits[0].text)
         assertEquals(1, hits[0].quads.size, "single-line match yields one quad")
     }
@@ -58,6 +61,35 @@ class EpubTextContentTest {
         val hits = doc.search(phrase).toList()
         assertEquals(1, hits.size, "phrase across the break: '$phrase'")
         assertEquals(2, hits[0].quads.size, "one quad per line touched")
+    }
+
+    @Test
+    fun document_search_stamps_chapter_locations_and_preserves_global_indices() {
+        val doc = EpubDocument.open(
+            EpubFixtures.epubMultiSpine(List(3) { chapter ->
+                (0 until 18).joinToString("") { paragraph ->
+                    "<p>needle chapter $chapter paragraph $paragraph has enough words to wrap across lines.</p>"
+                }
+            }),
+            EpubSettings(pageWidth = 220.0, pageHeight = 240.0),
+        )
+        doc.prepareChapter(2)
+        assertFalse(doc.isChapterReady(0))
+        val results = doc.search("needle")
+        assertFalse(doc.isChapterReady(0), "creating the sequence stays lazy")
+
+        val hits = results.toList()
+        assertEquals(54, hits.size)
+        assertTrue(doc.isComplete, "whole-book search still prepares every chapter")
+        assertEquals(setOf(0, 1, 2), hits.map { assertNotNull(it.location).chapter }.toSet())
+        assertTrue(hits.any { assertNotNull(it.location).page > 0 }, "fixture spans pages within a chapter")
+        for (hit in hits) {
+            val location = assertNotNull(hit.location)
+            assertEquals(doc.pageIndexOf(location), hit.pageIndex)
+            assertEquals(location, doc.locationOf(hit.pageIndex))
+        }
+        val lastChapterHit = hits.first { it.location?.chapter == 2 }
+        assertTrue(lastChapterHit.pageIndex > assertNotNull(lastChapterHit.location).page)
     }
 
     @Test

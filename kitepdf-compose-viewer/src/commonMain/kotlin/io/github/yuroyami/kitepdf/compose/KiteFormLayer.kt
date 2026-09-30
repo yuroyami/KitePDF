@@ -10,6 +10,7 @@ import androidx.compose.runtime.withFrameMillis
 import io.github.yuroyami.kitepdf.PdfAction
 import io.github.yuroyami.kitepdf.PdfAnnotation
 import io.github.yuroyami.kitepdf.PdfDocument
+import io.github.yuroyami.kitepdf.PdfChoiceSelection
 import io.github.yuroyami.kitepdf.PdfFormField
 import io.github.yuroyami.kitepdf.PdfPage
 import io.github.yuroyami.kitepdf.PdfScriptHandler
@@ -17,6 +18,7 @@ import io.github.yuroyami.kitepdf.core.KitePage
 import io.github.yuroyami.kitepdf.core.render.KiteMatrix
 import kotlin.coroutines.ContinuationInterceptor
 import kotlin.coroutines.EmptyCoroutineContext
+import kotlin.math.floor
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.channels.Channel
@@ -195,12 +197,30 @@ internal fun handleWidgetTap(
         }
         state.scriptsRan()
     }
-    // A text or choice field takes the caret, which is what opens the keyboard.
-    if (field.type == PdfFormField.FieldType.Text || field.type == PdfFormField.FieldType.Choice) {
-        val box = target.widget.rect?.let { KiteDocViewState.WidgetBox(hit.pageIndex, displayRectOf(page, it)) }
-        state.focusField(name, target.widgetIndex, box)
-    } else {
-        state.blurFocusedField()
+    val inputBox = target.widget.rect?.let { KiteDocViewState.WidgetBox(hit.pageIndex, displayRectOf(page, it)) }
+    when (field.type) {
+        PdfFormField.FieldType.Text -> state.focusField(name, target.widgetIndex, inputBox)
+        // A choice opens its own control. Only Combo + Edit takes the text keyboard
+        // (ISO 32000-1, 12.7.4.4, Table 229).
+        PdfFormField.FieldType.Choice -> {
+            state.openChoice(name, target.widgetIndex, inputBox)
+            if (!field.isCombo) {
+                val rect = target.widget.rect?.normalized()
+                val chosen = state.choiceDraft ?: PdfChoiceSelection(emptyList())
+                val padding = field.choiceContentPadding(target.widgetIndex)
+                val visible = (((rect?.height ?: 0.0) - padding * 2) / field.choiceRowHeight).toInt().coerceAtLeast(1)
+                val first = field.choiceOptions.indexOfFirst { it.index == field.choiceTopIndexFor(chosen, visible) }.coerceAtLeast(0)
+                val row = rect?.takeIf { hit.y <= it.top - padding && hit.y >= it.bottom + padding }?.let { floor((it.top - hit.y - padding) / field.choiceRowHeight).toInt() }
+                val option = row?.takeIf { it >= 0 && it <= visible }?.let { field.choiceOptions.getOrNull(first + it) }
+                if (option != null) {
+                    val indices = if (field.isMultiSelect) {
+                        if (option.index in chosen.indices) chosen.indices - option.index else (chosen.indices + option.index).sorted()
+                    } else listOf(option.index)
+                    if (indices != chosen.indices) state.chooseChoice(PdfChoiceSelection(indices), field.commitOnSelectionChange)
+                }
+            }
+        }
+        else -> state.blurFocusedField()
     }
     return true
 }

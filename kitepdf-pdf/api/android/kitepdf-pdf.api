@@ -423,6 +423,32 @@ public final class io/github/yuroyami/kitepdf/PdfCertificate {
 	public fun toString ()Ljava/lang/String;
 }
 
+public final class io/github/yuroyami/kitepdf/PdfChoiceOption {
+	public fun <init> (ILjava/lang/String;Ljava/lang/String;)V
+	public final fun component1 ()I
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()Ljava/lang/String;
+	public final fun copy (ILjava/lang/String;Ljava/lang/String;)Lio/github/yuroyami/kitepdf/PdfChoiceOption;
+	public static synthetic fun copy$default (Lio/github/yuroyami/kitepdf/PdfChoiceOption;ILjava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Lio/github/yuroyami/kitepdf/PdfChoiceOption;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getExportValue ()Ljava/lang/String;
+	public final fun getIndex ()I
+	public final fun getLabel ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/github/yuroyami/kitepdf/PdfChoiceSelection {
+	public fun <init> (Ljava/util/List;Ljava/lang/String;Ljava/util/List;)V
+	public synthetic fun <init> (Ljava/util/List;Ljava/lang/String;Ljava/util/List;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getFreeText ()Ljava/lang/String;
+	public final fun getIndices ()Ljava/util/List;
+	public final fun getUnresolvedValues ()Ljava/util/List;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
 public final class io/github/yuroyami/kitepdf/PdfDate {
 	public static final field Companion Lio/github/yuroyami/kitepdf/PdfDate$Companion;
 	public fun <init> (IIIIIICII)V
@@ -705,8 +731,18 @@ public final class io/github/yuroyami/kitepdf/PdfDocumentInfo$Trapped : java/lan
 
 public final class io/github/yuroyami/kitepdf/PdfFormField {
 	public static final field Companion Lio/github/yuroyami/kitepdf/PdfFormField$Companion;
+	public final fun choiceContentPadding (I)D
+	public static synthetic fun choiceContentPadding$default (Lio/github/yuroyami/kitepdf/PdfFormField;IILjava/lang/Object;)D
+	public final fun choiceSelectionForValue (Ljava/lang/String;)Lio/github/yuroyami/kitepdf/PdfChoiceSelection;
+	public final fun choiceTopIndexFor (Lio/github/yuroyami/kitepdf/PdfChoiceSelection;I)I
+	public final fun choiceValues (Lio/github/yuroyami/kitepdf/PdfChoiceSelection;)Ljava/util/List;
 	public final fun getAdditionalActions ()Lio/github/yuroyami/kitepdf/PdfWidgetActions;
+	public final fun getChoiceOptions ()Ljava/util/List;
+	public final fun getChoiceRowHeight ()D
+	public final fun getChoiceSelection ()Lio/github/yuroyami/kitepdf/PdfChoiceSelection;
+	public final fun getCommitOnSelectionChange ()Z
 	public final fun getDefaultAppearance ()Ljava/lang/String;
+	public final fun getDefaultChoiceSelection ()Lio/github/yuroyami/kitepdf/PdfChoiceSelection;
 	public final fun getDefaultValue ()Ljava/lang/String;
 	public final fun getFieldReference ()Lio/github/yuroyami/kitepdf/core/parser/PdfReference;
 	public final fun getFlags ()I
@@ -717,14 +753,19 @@ public final class io/github/yuroyami/kitepdf/PdfFormField {
 	public final fun getQuadding ()I
 	public final fun getRect ()Lio/github/yuroyami/kitepdf/core/KiteRectangle;
 	public final fun getTooltip ()Ljava/lang/String;
+	public final fun getTopIndex ()I
 	public final fun getType ()Lio/github/yuroyami/kitepdf/PdfFormField$FieldType;
 	public final fun getValue ()Ljava/lang/String;
 	public final fun getWidgetReference ()Lio/github/yuroyami/kitepdf/core/parser/PdfReference;
 	public final fun getWidgets ()Ljava/util/List;
+	public final fun isCombo ()Z
+	public final fun isEditableCombo ()Z
+	public final fun isMultiSelect ()Z
 	public final fun isMultiline ()Z
 	public final fun isReadOnly ()Z
 	public final fun isRichText ()Z
 	public fun toString ()Ljava/lang/String;
+	public final fun validateChoiceSelection (Lio/github/yuroyami/kitepdf/PdfChoiceSelection;)Lio/github/yuroyami/kitepdf/PdfChoiceSelection;
 }
 
 public final class io/github/yuroyami/kitepdf/PdfFormField$Companion {
@@ -754,6 +795,9 @@ public final class io/github/yuroyami/kitepdf/PdfFormField$Widget {
 
 public final class io/github/yuroyami/kitepdf/PdfFormState {
 	public fun <init> (Lio/github/yuroyami/kitepdf/PdfDocument;)V
+	public final fun cancelChoiceTransaction (Ljava/lang/String;I)Z
+	public final fun choiceSelection (Ljava/lang/String;)Lio/github/yuroyami/kitepdf/PdfChoiceSelection;
+	public final fun fieldRevision (Ljava/lang/String;)I
 	public final fun getChangedFields ()Ljava/util/Set;
 	public final fun getRevision ()I
 	public final fun isChanged (Ljava/lang/String;)Z
@@ -765,6 +809,8 @@ public final class io/github/yuroyami/kitepdf/PdfFormState {
 	public final fun resetForm (Lio/github/yuroyami/kitepdf/PdfAction$ResetForm;)V
 	public final fun resetForm (Ljava/util/Collection;Z)V
 	public static synthetic fun resetForm$default (Lio/github/yuroyami/kitepdf/PdfFormState;Ljava/util/Collection;ZILjava/lang/Object;)V
+	public final fun setChoiceSelection (Ljava/lang/String;Lio/github/yuroyami/kitepdf/PdfChoiceSelection;)Z
+	public final fun setChoiceSelection (Ljava/lang/String;Lio/github/yuroyami/kitepdf/PdfChoiceSelection;I)Z
 	public final fun setHidden (Ljava/lang/String;Z)V
 	public final fun setReadOnly (Ljava/lang/String;Z)V
 	public final fun setValue (Ljava/lang/String;Ljava/lang/String;)V
@@ -772,6 +818,7 @@ public final class io/github/yuroyami/kitepdf/PdfFormState {
 }
 
 public final class io/github/yuroyami/kitepdf/PdfFormState$Change {
+	public final fun getChoiceSelection ()Lio/github/yuroyami/kitepdf/PdfChoiceSelection;
 	public final fun getFieldName ()Ljava/lang/String;
 	public final fun getFlagsOnly ()Z
 	public final fun getValue ()Ljava/lang/String;
@@ -1010,12 +1057,16 @@ public final class io/github/yuroyami/kitepdf/PdfRevocation : java/lang/Enum {
 public abstract interface class io/github/yuroyami/kitepdf/PdfScriptHandler {
 	public fun blur (Ljava/lang/String;)V
 	public fun blur (Ljava/lang/String;I)V
+	public fun choiceKeystroke (Ljava/lang/String;Lio/github/yuroyami/kitepdf/PdfChoiceSelection;)Lio/github/yuroyami/kitepdf/PdfChoiceSelection;
+	public fun choiceKeystroke (Ljava/lang/String;Lio/github/yuroyami/kitepdf/PdfChoiceSelection;Lio/github/yuroyami/kitepdf/PdfChoiceSelection;)Lio/github/yuroyami/kitepdf/PdfChoiceSelection;
 	public fun commit (Ljava/lang/String;Ljava/lang/String;)Z
+	public fun commitChoice (Ljava/lang/String;Lio/github/yuroyami/kitepdf/PdfChoiceSelection;)Z
 	public fun documentOpened ()V
 	public fun focus (Ljava/lang/String;)V
 	public fun focus (Ljava/lang/String;I)V
 	public abstract fun getFormState ()Lio/github/yuroyami/kitepdf/PdfFormState;
 	public fun getHasTimers ()Z
+	public fun getSupportsMultipleChoices ()Z
 	public fun keystroke (Ljava/lang/String;Ljava/lang/String;II)Ljava/lang/String;
 	public fun mouseDown (Ljava/lang/String;)V
 	public fun mouseDown (Ljava/lang/String;I)V
@@ -1032,11 +1083,15 @@ public abstract interface class io/github/yuroyami/kitepdf/PdfScriptHandler {
 public final class io/github/yuroyami/kitepdf/PdfScriptHandler$DefaultImpls {
 	public static fun blur (Lio/github/yuroyami/kitepdf/PdfScriptHandler;Ljava/lang/String;)V
 	public static fun blur (Lio/github/yuroyami/kitepdf/PdfScriptHandler;Ljava/lang/String;I)V
+	public static fun choiceKeystroke (Lio/github/yuroyami/kitepdf/PdfScriptHandler;Ljava/lang/String;Lio/github/yuroyami/kitepdf/PdfChoiceSelection;)Lio/github/yuroyami/kitepdf/PdfChoiceSelection;
+	public static fun choiceKeystroke (Lio/github/yuroyami/kitepdf/PdfScriptHandler;Ljava/lang/String;Lio/github/yuroyami/kitepdf/PdfChoiceSelection;Lio/github/yuroyami/kitepdf/PdfChoiceSelection;)Lio/github/yuroyami/kitepdf/PdfChoiceSelection;
 	public static fun commit (Lio/github/yuroyami/kitepdf/PdfScriptHandler;Ljava/lang/String;Ljava/lang/String;)Z
+	public static fun commitChoice (Lio/github/yuroyami/kitepdf/PdfScriptHandler;Ljava/lang/String;Lio/github/yuroyami/kitepdf/PdfChoiceSelection;)Z
 	public static fun documentOpened (Lio/github/yuroyami/kitepdf/PdfScriptHandler;)V
 	public static fun focus (Lio/github/yuroyami/kitepdf/PdfScriptHandler;Ljava/lang/String;)V
 	public static fun focus (Lio/github/yuroyami/kitepdf/PdfScriptHandler;Ljava/lang/String;I)V
 	public static fun getHasTimers (Lio/github/yuroyami/kitepdf/PdfScriptHandler;)Z
+	public static fun getSupportsMultipleChoices (Lio/github/yuroyami/kitepdf/PdfScriptHandler;)Z
 	public static fun keystroke (Lio/github/yuroyami/kitepdf/PdfScriptHandler;Ljava/lang/String;Ljava/lang/String;II)Ljava/lang/String;
 	public static fun mouseDown (Lio/github/yuroyami/kitepdf/PdfScriptHandler;Ljava/lang/String;)V
 	public static fun mouseDown (Lio/github/yuroyami/kitepdf/PdfScriptHandler;Ljava/lang/String;I)V

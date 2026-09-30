@@ -32,6 +32,8 @@ public class PdfFormState(private val document: PdfDocument) {
 
     private val lock = io.github.yuroyami.kitepdf.core.KiteLock()
     private val values = HashMap<String, String>()
+    private val choices = HashMap<String, PdfChoiceSelection>()
+    private val fieldChanges = HashMap<String, Int>()
     private val hidden = HashMap<String, Boolean>()
     private val readOnly = HashMap<String, Boolean>()
     private val listeners = ArrayList<(Change) -> Unit>()
@@ -54,9 +56,104 @@ public class PdfFormState(private val document: PdfDocument) {
         public val value: String,
         /** True when the change was visibility or read-only rather than the value. */
         public val flagsOnly: Boolean = false,
-    )
+    ) {
+        /** The complete choice value when this change belongs to a choice field. */
+        public val choiceSelection: PdfChoiceSelection? get() = typedChoice
+        internal var typedChoice: PdfChoiceSelection? = null
+    }
 
-    /** The value the reader sees: what this state holds, or the file's own value. */
+    /** Changes and reset requests for this field alone; useful for discarding a stale edit. */
+    public fun fieldRevision(fieldName: String): Int = lock.withLock { fieldChanges[fieldName] ?: 0 }
+
+    /**
+     * Cancels a pending choice edit only while its [expectedRevision] is still current.
+     * This advances the field revision without changing its value or requesting a redraw,
+     * so an Escape during validation can prevent the eventual store (ISO 32000-1, 12.6.3
+     * and 12.7.4.4). If the edit already committed or another change intervened, returns
+     * false and leaves that newer state intact.
+     */
+    public fun cancelChoiceTransaction(fieldName: String, expectedRevision: Int): Boolean {
+        if (choiceField(fieldName) == null) return false
+        return lock.withLock {
+            if ((fieldChanges[fieldName] ?: 0) != expectedRevision) false
+            else { invalidate(fieldName); true }
+        }
+    }
+
+    internal fun choiceField(fieldName: String): PdfFormField? = document.formField(fieldName)?.takeIf {
+        it.type == PdfFormField.FieldType.Choice
+    }
+
+    /** The complete live choice value, falling back to the unchanged source file. */
+    public fun choiceSelection(fieldName: String): PdfChoiceSelection? =
+        lock.withLock { choices[fieldName] } ?: choiceField(fieldName)?.choiceSelection
+
+    /**
+     * Stores one validated selection and publishes one revision. Returns false for a missing
+     * field or an invalid value. Programmatic writes, like [setValue], may update read-only
+     * fields. A user transaction should use the overload with an expected field revision.
+     */
+    public fun setChoiceSelection(fieldName: String, selection: PdfChoiceSelection): Boolean =
+        setChoice(fieldName, selection, expectedRevision = null, sourceValue = false)
+
+    /**
+     * Commits only if the field has not changed since [expectedRevision] and remains visible
+     * and writable. The revision check and update share one lock, so a late script cannot
+     * replace a newer choice or one whose flags changed while the script ran.
+     * This overload can also restore the exact parsed source or default selection, including
+     * unresolved source values, when an editor cancels an edit. Arbitrary unresolved values
+     * remain invalid; user commits should first call [PdfFormField.validateChoiceSelection].
+     */
+    public fun setChoiceSelection(fieldName: String, selection: PdfChoiceSelection, expectedRevision: Int): Boolean =
+        setChoice(fieldName, selection, expectedRevision, sourceValue = false)
+
+    private fun setChoice(
+        fieldName: String, selection: PdfChoiceSelection, expectedRevision: Int?, sourceValue: Boolean,
+        invalidateOnNoChange: Boolean = false,
+    ): Boolean {
+        val field = choiceField(fieldName) ?: return false
+        val restoresSource = expectedRevision != null &&
+            (selection == field.choiceSelection || selection == field.defaultChoiceSelection)
+        val valid = if (sourceValue || restoresSource) selection else field.validateChoiceSelection(selection)
+        if (valid == null) {
+            io.github.yuroyami.kitepdf.core.kiteWarn { "form: refused invalid choice for $fieldName" }
+            return false
+        }
+        val sourceHidden = isHidden(fieldName)
+        val scalar = field.choiceValues(valid).firstOrNull() ?: ""
+        var event: Change? = null
+        val accepted = lock.withLock {
+            if (expectedRevision != null && ((fieldChanges[fieldName] ?: 0) != expectedRevision ||
+                    (readOnly[fieldName] ?: field.isReadOnly) || (hidden[fieldName] ?: sourceHidden))) return@withLock false
+            if ((choices[fieldName] ?: field.choiceSelection) != valid) {
+                choices[fieldName] = valid
+                values[fieldName] = scalar
+                changed(fieldName)
+                event = Change(fieldName, scalar).also { it.typedChoice = valid }
+            } else if (invalidateOnNoChange) {
+                invalidate(fieldName)
+            }
+            true
+        }
+        event?.let(::publish)
+        return accepted
+    }
+
+    private fun changed(fieldName: String) {
+        changes++
+        invalidate(fieldName)
+    }
+
+    /** A reset cancels pending edits even when it has no visible value to replace. */
+    private fun invalidate(fieldName: String) {
+        fieldChanges[fieldName] = (fieldChanges[fieldName] ?: 0) + 1
+    }
+
+    /**
+     * The live scalar value, or the file's own value. For choices this is a lossy view: the
+     * first selected export in option order, never a joined list. Use [choiceSelection] for
+     * multiple selections and to distinguish an empty selection from an empty export.
+     */
     public fun value(fieldName: String): String? =
         lock.withLock { values[fieldName] } ?: document.formField(fieldName)?.value
 
@@ -71,33 +168,47 @@ public class PdfFormState(private val document: PdfDocument) {
      * such field, so a script that names a missing field cannot grow the state.
      */
     public fun setValue(fieldName: String, value: String) {
-        if (document.formField(fieldName) == null) return
+        val field = document.formField(fieldName) ?: return
+        if (field.type == PdfFormField.FieldType.Choice) {
+            val selection = field.choiceSelectionForValue(value)
+            if (selection != null) setChoiceSelection(fieldName, selection)
+            else io.github.yuroyami.kitepdf.core.kiteWarn { "form: refused unavailable choice value for $fieldName" }
+            return
+        }
         val changed = lock.withLock {
-            if (values[fieldName] == value) false else { values[fieldName] = value; changes++; true }
+            if (values[fieldName] == value) false else { values[fieldName] = value; changed(fieldName); true }
         }
         if (changed) publish(Change(fieldName, value))
     }
 
     /** Drops this state's value for [fieldName], so the file's own value shows again. */
     public fun reset(fieldName: String) {
+        if (document.formField(fieldName) == null) return
         val removed = lock.withLock {
-            if (values.remove(fieldName) == null) false else { changes++; true }
+            choices.remove(fieldName)
+            if (values.remove(fieldName) == null) {
+                invalidate(fieldName)
+                false
+            } else { changed(fieldName); true }
         }
-        if (removed) publish(Change(fieldName, value(fieldName) ?: ""))
+        if (removed) publish(Change(fieldName, value(fieldName) ?: "").also { it.typedChoice = choiceSelection(fieldName) })
     }
 
     /** Drops every value, visibility and read-only change this state holds. */
     public fun resetAll() {
+        val allNames = document.formFields.map { it.fullyQualifiedName }
         val touched = lock.withLock {
+            for (name in allNames) invalidate(name)
             if (values.isEmpty() && hidden.isEmpty() && readOnly.isEmpty()) return
             val names = values.keys + hidden.keys + readOnly.keys
             values.clear()
+            choices.clear()
             hidden.clear()
             readOnly.clear()
             changes++
             names
         }
-        for (name in touched) publish(Change(name, value(name) ?: ""))
+        for (name in touched) publish(Change(name, value(name) ?: "").also { it.typedChoice = choiceSelection(name) })
     }
 
     /**
@@ -133,6 +244,11 @@ public class PdfFormState(private val document: PdfDocument) {
             }
             if (field.type == PdfFormField.FieldType.Signature) continue
             if (field.type == PdfFormField.FieldType.Button && (field.flags and PUSH_BUTTON_FLAG) != 0) continue
+            if (field.type == PdfFormField.FieldType.Choice) {
+                if (field.defaultChoiceSelection == field.choiceSelection) reset(name)
+                else setChoice(name, field.defaultChoiceSelection, expectedRevision = null, sourceValue = true, invalidateOnNoChange = true)
+                continue
+            }
             val empty = if (field.type == PdfFormField.FieldType.Button) "Off" else ""
             val default = field.defaultValue ?: empty
             // When the file's own value is the default, the file's appearance shows it as it is.
@@ -161,9 +277,9 @@ public class PdfFormState(private val document: PdfDocument) {
     public fun setHidden(fieldName: String, value: Boolean) {
         if (document.formField(fieldName) == null) return
         val changed = lock.withLock {
-            if (hidden[fieldName] == value) false else { hidden[fieldName] = value; changes++; true }
+            if (hidden[fieldName] == value) false else { hidden[fieldName] = value; changed(fieldName); true }
         }
-        if (changed) publish(Change(fieldName, this.value(fieldName) ?: "", flagsOnly = true))
+        if (changed) publish(Change(fieldName, this.value(fieldName) ?: "", flagsOnly = true).also { it.typedChoice = choiceSelection(fieldName) })
     }
 
     /** Whether the reader may change the field: the file's own flag, unless this state says otherwise. */
@@ -174,9 +290,9 @@ public class PdfFormState(private val document: PdfDocument) {
     public fun setReadOnly(fieldName: String, value: Boolean) {
         if (document.formField(fieldName) == null) return
         val changed = lock.withLock {
-            if (readOnly[fieldName] == value) false else { readOnly[fieldName] = value; changes++; true }
+            if (readOnly[fieldName] == value) false else { readOnly[fieldName] = value; changed(fieldName); true }
         }
-        if (changed) publish(Change(fieldName, this.value(fieldName) ?: "", flagsOnly = true))
+        if (changed) publish(Change(fieldName, this.value(fieldName) ?: "", flagsOnly = true).also { it.typedChoice = choiceSelection(fieldName) })
     }
 
     /**

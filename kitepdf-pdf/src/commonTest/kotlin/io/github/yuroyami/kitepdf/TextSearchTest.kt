@@ -1,6 +1,7 @@
 package io.github.yuroyami.kitepdf
 
 import io.github.yuroyami.kitepdf.text.search
+import io.github.yuroyami.kitepdf.core.KiteLocation
 import io.github.yuroyami.kitepdf.writer.PdfBuilder
 import io.github.yuroyami.kitepdf.writer.StandardFont
 import kotlin.test.Test
@@ -55,6 +56,7 @@ class TextSearchTest {
         val page = hyphenatedDoc().pages[0]
         val hits = page.search("map shows")
         assertEquals(1, hits.size)
+        assertEquals(KiteLocation(0, 0), hits.single().location)
         val quad = hits.single().quads.single()
         assertTrue(quad.width > 0 && quad.height > 0, "non-empty quad")
         assertTrue(quad.left >= 0 && quad.right <= 612.0 && quad.bottom >= 0 && quad.top <= 792.0)
@@ -93,6 +95,7 @@ class TextSearchTest {
         val hits = doc.search("needle").toList()
         assertEquals(1, hits.size)
         assertEquals(1, hits.single().pageIndex)
+        assertEquals(KiteLocation(0, 1), hits.single().location)
     }
 
     /* ─── /Rotate 90 ─────────────────────────────────────────────────────── */

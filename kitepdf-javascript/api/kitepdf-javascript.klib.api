@@ -82,6 +82,8 @@ final class io.github.yuroyami.kitepdf.javascript/PdfScriptRunner : io.github.yu
         final fun <get-hasTimers>(): kotlin/Boolean // io.github.yuroyami.kitepdf.javascript/PdfScriptRunner.hasTimers.<get-hasTimers>|<get-hasTimers>(){}[0]
     final val policy // io.github.yuroyami.kitepdf.javascript/PdfScriptRunner.policy|{}policy[0]
         final fun <get-policy>(): io.github.yuroyami.kitepdf.javascript/PdfScriptPolicy // io.github.yuroyami.kitepdf.javascript/PdfScriptRunner.policy.<get-policy>|<get-policy>(){}[0]
+    final val supportsMultipleChoices // io.github.yuroyami.kitepdf.javascript/PdfScriptRunner.supportsMultipleChoices|{}supportsMultipleChoices[0]
+        final fun <get-supportsMultipleChoices>(): kotlin/Boolean // io.github.yuroyami.kitepdf.javascript/PdfScriptRunner.supportsMultipleChoices.<get-supportsMultipleChoices>|<get-supportsMultipleChoices>(){}[0]
 
     final var currentPage // io.github.yuroyami.kitepdf.javascript/PdfScriptRunner.currentPage|{}currentPage[0]
         final fun <get-currentPage>(): kotlin/Int // io.github.yuroyami.kitepdf.javascript/PdfScriptRunner.currentPage.<get-currentPage>|<get-currentPage>(){}[0]
@@ -92,8 +94,11 @@ final class io.github.yuroyami.kitepdf.javascript/PdfScriptRunner : io.github.yu
 
     final fun blur(kotlin/String) // io.github.yuroyami.kitepdf.javascript/PdfScriptRunner.blur|blur(kotlin.String){}[0]
     final fun blur(kotlin/String, kotlin/Int) // io.github.yuroyami.kitepdf.javascript/PdfScriptRunner.blur|blur(kotlin.String;kotlin.Int){}[0]
+    final fun choiceKeystroke(kotlin/String, io.github.yuroyami.kitepdf/PdfChoiceSelection): io.github.yuroyami.kitepdf/PdfChoiceSelection? // io.github.yuroyami.kitepdf.javascript/PdfScriptRunner.choiceKeystroke|choiceKeystroke(kotlin.String;io.github.yuroyami.kitepdf.PdfChoiceSelection){}[0]
+    final fun choiceKeystroke(kotlin/String, io.github.yuroyami.kitepdf/PdfChoiceSelection, io.github.yuroyami.kitepdf/PdfChoiceSelection): io.github.yuroyami.kitepdf/PdfChoiceSelection? // io.github.yuroyami.kitepdf.javascript/PdfScriptRunner.choiceKeystroke|choiceKeystroke(kotlin.String;io.github.yuroyami.kitepdf.PdfChoiceSelection;io.github.yuroyami.kitepdf.PdfChoiceSelection){}[0]
     final fun close() // io.github.yuroyami.kitepdf.javascript/PdfScriptRunner.close|close(){}[0]
     final fun commit(kotlin/String, kotlin/String): kotlin/Boolean // io.github.yuroyami.kitepdf.javascript/PdfScriptRunner.commit|commit(kotlin.String;kotlin.String){}[0]
+    final fun commitChoice(kotlin/String, io.github.yuroyami.kitepdf/PdfChoiceSelection): kotlin/Boolean // io.github.yuroyami.kitepdf.javascript/PdfScriptRunner.commitChoice|commitChoice(kotlin.String;io.github.yuroyami.kitepdf.PdfChoiceSelection){}[0]
     final fun documentOpened() // io.github.yuroyami.kitepdf.javascript/PdfScriptRunner.documentOpened|documentOpened(){}[0]
     final fun focus(kotlin/String) // io.github.yuroyami.kitepdf.javascript/PdfScriptRunner.focus|focus(kotlin.String){}[0]
     final fun focus(kotlin/String, kotlin/Int) // io.github.yuroyami.kitepdf.javascript/PdfScriptRunner.focus|focus(kotlin.String;kotlin.Int){}[0]

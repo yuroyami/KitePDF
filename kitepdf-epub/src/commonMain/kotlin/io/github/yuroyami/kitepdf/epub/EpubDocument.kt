@@ -768,11 +768,13 @@ public class EpubDocument internal constructor(
      * incremental results). Same matching rules as [KiteStructuredText.search]:
      * case-insensitive by default, line breaks read as one space, a
      * hyphenated line break joins directly, matches never cross blocks.
+     * Each hit carries its chapter/page location in this layout and its global
+     * page index. Iterating the sequence prepares the whole book, as [pages] does.
      */
     public fun search(needle: String, ignoreCase: Boolean = true): Sequence<KiteSearchHit> = sequence {
         if (needle.isEmpty()) return@sequence
         for ((i, page) in pages.withIndex()) {
-            yieldAll(page.textContent().search(needle, ignoreCase, pageIndex = i))
+            yieldAll(page.textContent().search(needle, ignoreCase, pageIndex = i, location = page.location))
         }
     }
 

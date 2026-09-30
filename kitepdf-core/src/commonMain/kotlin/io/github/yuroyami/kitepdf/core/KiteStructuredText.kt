@@ -29,7 +29,21 @@ public class KiteStructuredText(public val blocks: List<KiteTextBlock>) {
      *
      * @param pageIndex stamped onto each hit (the model itself is page-local).
      */
-    public fun search(needle: String, ignoreCase: Boolean = true, pageIndex: Int = -1): List<KiteSearchHit> {
+    public fun search(needle: String, ignoreCase: Boolean = true, pageIndex: Int = -1): List<KiteSearchHit> =
+        search(needle, ignoreCase, pageIndex, location = null)
+
+    /**
+     * [search] with an explicit page [location] in the current layout. The caller owns
+     * the page coordinate: structured text alone cannot recover its chapter or page.
+     * [pageIndex] keeps its caller-supplied meaning and may be -1 when unknown.
+     * Neither the location nor the quads are a content anchor that survives reflow.
+     */
+    public fun search(
+        needle: String,
+        ignoreCase: Boolean = true,
+        pageIndex: Int = -1,
+        location: KiteLocation?,
+    ): List<KiteSearchHit> {
         if (needle.isEmpty()) return emptyList()
         val hits = ArrayList<KiteSearchHit>()
         for (block in blocks) {
@@ -55,7 +69,7 @@ public class KiteStructuredText(public val blocks: List<KiteTextBlock>) {
                 val entries = (from until from + needle.length)
                     .filter { refLine[it] >= 0 } // joiner spaces carry no geometry
                     .map { refLine[it] to refChar[it] }
-                hits.add(KiteSearchHit(pageIndex, lineQuads(block, entries), text.substring(from, from + needle.length)))
+                hits.add(KiteSearchHit(pageIndex, lineQuads(block, entries), text.substring(from, from + needle.length), location))
                 from += needle.length
             }
         }
@@ -305,9 +319,26 @@ public class KiteCaret(
     public val vertical: Boolean,
 )
 
-/** One search match: display-space [quads] (one per line touched) on page [pageIndex]. */
+/**
+ * One search match: display-space [quads] (one per line touched) at [location].
+ * The location is a coordinate in the current layout, so it and the quads must
+ * be recomputed when that layout changes. It is not a reflow-stable content anchor.
+ *
+ * Document search keeps [pageIndex] as a global page index. A standalone
+ * [KiteStructuredText.search] keeps the caller's supplied index, or -1 when unknown.
+ * Located consumers use [location] when present, even if the old index is stale.
+ */
 public class KiteSearchHit(
     public val pageIndex: Int,
     public val quads: List<KiteRectangle>,
     public val text: String,
-)
+    public val location: KiteLocation?,
+) {
+    /** An unlocated result; kept with its original signature for existing callers. */
+    public constructor(pageIndex: Int, quads: List<KiteRectangle>, text: String) :
+        this(pageIndex, quads, text, location = null)
+
+    /** A located result whose global page index is unknown. */
+    public constructor(location: KiteLocation, quads: List<KiteRectangle>, text: String) :
+        this(-1, quads, text, location)
+}

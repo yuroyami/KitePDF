@@ -9,6 +9,7 @@ import io.github.yuroyami.kitepdf.core.parser.PdfDictionary
 import io.github.yuroyami.kitepdf.core.parser.PdfInt
 import io.github.yuroyami.kitepdf.core.parser.PdfName
 import io.github.yuroyami.kitepdf.core.parser.PdfObject
+import io.github.yuroyami.kitepdf.core.parser.PdfReal
 import io.github.yuroyami.kitepdf.core.parser.PdfReference
 import io.github.yuroyami.kitepdf.core.parser.PdfString
 
@@ -29,7 +30,7 @@ public class PdfFormField internal constructor(
     /** This field's own `/T`, or null for an anonymous node. */
     public val partialName: String?,
     public val type: FieldType,
-    /** `/V` rendered as text (text fields) or the selected name (buttons/choices). */
+    /** `/V` as text; for choices, the first selected export value. Use [choiceSelection] for all values. */
     public val value: String?,
     /** Variable-text default appearance string (`/DA`), inherited if absent. */
     public val defaultAppearance: String?,
@@ -47,7 +48,8 @@ public class PdfFormField internal constructor(
     internal val widgetDict: PdfDictionary,
     /**
      * The choices of a list box or a combo box, in the order the file lists them (`/Opt`,
-     * ISO 32000-1 §12.7.4.4). Empty for every other kind of field.
+     * ISO 32000-1 §12.7.4.4). This legacy label view omits malformed entries; use [choiceOptions]
+     * to retain original option indices and export values.
      */
     public val options: List<String> = emptyList(),
     /** The value the field goes back to when the form is reset (`/DV`), or null when it has none. */
@@ -114,6 +116,91 @@ public class PdfFormField internal constructor(
      * value in [value] (ISO 32000-1, 12.7.3.4).
      */
     public val isRichText: Boolean get() = type == FieldType.Text && (flags and (1 shl 25)) != 0
+
+    /** The original `/Opt` indices, exports and labels (ISO 32000-1, 12.7.4.4). */
+    public val choiceOptions: List<PdfChoiceOption> get() = parsedChoices
+    private var parsedChoices: List<PdfChoiceOption> = choiceSnapshot(options.mapIndexed { index, label -> PdfChoiceOption(index, label, label) })
+
+    /** The complete source `/V`, with `/I` resolving duplicate exports when consistent. */
+    public val choiceSelection: PdfChoiceSelection get() = parsedSelection
+    private var parsedSelection: PdfChoiceSelection = PdfChoiceSelection(emptyList())
+
+    /** The complete reset value `/DV`, or an empty selection (ISO 32000-1, 12.7.3.1). */
+    public val defaultChoiceSelection: PdfChoiceSelection get() = parsedDefaultSelection
+    private var parsedDefaultSelection: PdfChoiceSelection = PdfChoiceSelection(emptyList())
+
+    /** `/Ff` bit 18: a combo rather than a list (ISO 32000-1, Table 230). */
+    public val isCombo: Boolean get() = type == FieldType.Choice && (flags and (1 shl 17)) != 0
+
+    /** `/Ff` bit 19 is meaningful only for a combo (ISO 32000-1, Table 230). */
+    public val isEditableCombo: Boolean get() = isCombo && (flags and (1 shl 18)) != 0
+
+    /** `/Ff` bit 22 allows several selected list options (ISO 32000-1, Table 230). */
+    public val isMultiSelect: Boolean get() = type == FieldType.Choice && !isCombo && (flags and (1 shl 21)) != 0
+
+    /** `/Ff` bit 27 commits a selection change immediately (ISO 32000-1, Table 230). */
+    public val commitOnSelectionChange: Boolean get() = type == FieldType.Choice && (flags and (1 shl 26)) != 0
+
+    /** Original option index at the top of a list, `/TI`, clamped to a non-negative value. */
+    public val topIndex: Int get() = parsedTopIndex
+    private var parsedTopIndex: Int = 0
+
+    /** Height of one displayed choice row in PDF points, using `/DA` (ISO 32000-1, 12.7.3.3). */
+    public val choiceRowHeight: Double get() = io.github.yuroyami.kitepdf.writer.FieldAppearance.parseDA(defaultAppearance)
+        .fontSize.takeIf { it > 0.0 }?.times(1.2) ?: 14.4
+
+    /** Content inset of a choice widget in PDF points, accounting for its own border. */
+    public fun choiceContentPadding(widgetIndex: Int = 0): Double = choicePadding.getOrElse(widgetIndex) { 1.0 }
+    private var choicePadding: List<Double> = emptyList()
+
+    /**
+     * Original option index at the top of the displayed list. Starts at `/TI` and moves to
+     * the first selected row if no selected row is visible, so drawing and pointer hit tests
+     * use the same viewport. Returns zero when no usable options remain.
+     */
+    public fun choiceTopIndexFor(selection: PdfChoiceSelection, visibleRows: Int): Int {
+        var first = choiceOptions.indexOfFirst { it.index >= topIndex }.takeIf { it >= 0 } ?: 0
+        val selectedPositions = choiceOptions.mapIndexedNotNull { index, option -> index.takeIf { option.index in selection.indices } }
+        if (selectedPositions.isNotEmpty() && selectedPositions.none { it in first until first + visibleRows.coerceAtLeast(1) }) {
+            first = selectedPositions.first()
+        }
+        return choiceOptions.getOrNull(first)?.index ?: 0
+    }
+
+    /**
+     * Validates a new selection and sorts its indices in original option order. Duplicate,
+     * unavailable or disallowed indices, mixed text/indices and unresolved source values are
+     * refused with null. An empty selection is valid (ISO 32000-1, 12.7.4.4).
+     */
+    public fun validateChoiceSelection(selection: PdfChoiceSelection): PdfChoiceSelection? {
+        if (type != FieldType.Choice || selection.unresolvedValues.isNotEmpty()) return null
+        if (selection.freeText != null) {
+            return selection.takeIf { isEditableCombo && it.indices.isEmpty() }
+        }
+        if ((!isMultiSelect && selection.indices.size > 1) || selection.indices.distinct().size != selection.indices.size) return null
+        val available = choiceOptions.mapTo(HashSet()) { it.index }
+        if (selection.indices.any { it !in available }) return null
+        return PdfChoiceSelection(selection.indices.sorted())
+    }
+
+    /**
+     * Adapts a scalar export value to one option, choosing the first duplicate export. Empty
+     * text clears a noneditable field only when it has no empty export option. Other unmatched
+     * values are valid only for an editable combo (ISO 32000-1, 12.7.4.4).
+     */
+    public fun choiceSelectionForValue(value: String): PdfChoiceSelection? {
+        if (type != FieldType.Choice) return null
+        choiceOptions.firstOrNull { it.exportValue == value }?.let { return PdfChoiceSelection(listOf(it.index)) }
+        if (isEditableCombo) return PdfChoiceSelection(emptyList(), freeText = value)
+        return if (value.isEmpty()) PdfChoiceSelection(emptyList()) else null
+    }
+
+    /** Export values in option order, followed by unresolved source strings; text stays scalar. */
+    public fun choiceValues(selection: PdfChoiceSelection): List<String> {
+        selection.freeText?.let { return listOf(it) }
+        val optionsByIndex = choiceOptions.associateBy { it.index }
+        return selection.indices.sorted().mapNotNull { optionsByIndex[it]?.exportValue } + selection.unresolvedValues
+    }
 
     override fun toString(): String = "PdfFormField($fullyQualifiedName, $type, value=$value)"
 
@@ -304,12 +391,19 @@ public class PdfFormField internal constructor(
             val (widgetDict, widgetRef) = widgetPairs.first()
             val rect = widgets.first().rect
 
+            val choiceOptions = choiceOptionsOf(node, refs)
+            val choice = fieldType(ft) == FieldType.Choice
+            val sourceChoice = if (choice) selectionOf(node, "V", choiceOptions, ff, refs, useIndices = true) else PdfChoiceSelection(emptyList())
+            val defaultChoice = if (choice) selectionOf(node, "DV", choiceOptions, ff, refs, useIndices = false) else PdfChoiceSelection(emptyList())
+            fun scalar(selection: PdfChoiceSelection): String? = selection.freeText
+                ?: selection.indices.firstOrNull()?.let { index -> choiceOptions.firstOrNull { it.index == index }?.exportValue }
+                ?: selection.unresolvedValues.firstOrNull()
             out.add(
                 PdfFormField(
                     fullyQualifiedName = name ?: "",
                     partialName = partial,
                     type = fieldType(ft),
-                    value = v,
+                    value = if (choice) scalar(sourceChoice) else v,
                     defaultAppearance = da,
                     flags = ff,
                     quadding = q,
@@ -318,27 +412,91 @@ public class PdfFormField internal constructor(
                     widgetReference = widgetRef,
                     fieldDict = node,
                     widgetDict = widgetDict,
-                    options = optionsOf(node, refs),
-                    defaultValue = inheritedText(node, "DV", refs),
+                    options = choiceSnapshot(choiceOptions.map { it.label }),
+                    defaultValue = if (choice) scalar(defaultChoice) else inheritedText(node, "DV", refs),
                     maxLength = (inheritedValue(node, "MaxLen", refs) as? PdfInt)?.value?.toInt(),
                     tooltip = (missingAsNull { widgetDict["TU"]?.resolve(refs) } as? PdfString)?.asText(),
                     widgets = widgets,
-                ),
+                ).also { field ->
+                    field.parsedChoices = choiceSnapshot(choiceOptions)
+                    field.choicePadding = widgets.map { widget ->
+                        val mk = missingAsNull { widget.dict.getDict("MK", refs) }
+                        val fallback = if (missingAsNull { mk?.getArray("BC", refs) }?.isNotEmpty() == true) 1.0 else 0.0
+                        val widthObject = missingAsNull { widget.dict.getDict("BS", refs)?.get("W")?.resolve(refs) }
+                            ?: missingAsNull { widget.dict.getArray("Border", refs)?.getOrNull(2)?.resolve(refs) }
+                        val width = when (widthObject) {
+                            is PdfInt -> widthObject.value.toDouble()
+                            is PdfReal -> widthObject.value
+                            else -> fallback
+                        }
+                        (width + 1.0).takeIf { it.isFinite() }?.coerceAtLeast(1.0) ?: 1.0
+                    }
+                    field.parsedSelection = sourceChoice
+                    field.parsedDefaultSelection = defaultChoice
+                    field.parsedTopIndex = ((inheritedValue(node, "TI", refs) as? PdfInt)?.value ?: 0L)
+                        .coerceIn(0L, Int.MAX_VALUE.toLong()).toInt()
+                },
             )
         }
 
-        /** `/Opt`: the choices of a list box or a combo box (ISO 32000-1, 12.7.4.4). */
-        private fun optionsOf(node: PdfDictionary, refs: IndirectResolver): List<String> {
+        /** `/Opt`: skip damaged entries without renumbering the survivors (ISO 32000-1, Table 231). */
+        private fun choiceOptionsOf(node: PdfDictionary, refs: IndirectResolver): List<PdfChoiceOption> {
             val opt = inheritedValue(node, "Opt", refs) as? PdfArray ?: return emptyList()
-            return opt.mapNotNull { entry ->
-                when (val item = missingAsNull { entry.resolve(refs) }) {
+            return opt.mapIndexedNotNull { index, entry ->
+                val item = missingAsNull { entry.resolve(refs) }
+                val export = when (item) {
                     is PdfString -> item.asText()
-                    // A pair is [export value, what the reader sees], and the reader's text wins.
-                    is PdfArray -> (missingAsNull { item.getOrNull(1)?.resolve(refs) } as? PdfString)?.asText()
-                        ?: (missingAsNull { item.getOrNull(0)?.resolve(refs) } as? PdfString)?.asText()
+                    is PdfArray -> (missingAsNull { item.getOrNull(0)?.resolve(refs) } as? PdfString)?.asText()
                     else -> null
                 }
+                if (export == null) {
+                    kiteWarn { "form: skipped malformed choice option $index" }
+                    null
+                } else {
+                    val label = if (item is PdfArray) (missingAsNull { item.getOrNull(1)?.resolve(refs) } as? PdfString)?.asText() ?: export else export
+                    PdfChoiceOption(index, export, label)
+                }
             }
+        }
+
+        /** `/I` disambiguates exports only when it agrees with `/V`; invalid source values survive. */
+        private fun selectionOf(
+            node: PdfDictionary, key: String, options: List<PdfChoiceOption>, flags: Int,
+            refs: IndirectResolver, useIndices: Boolean,
+        ): PdfChoiceSelection {
+            val raw = inheritedValue(node, key, refs)
+            val values = when (raw) {
+                is PdfString -> listOf(raw.asText())
+                // The old scalar reader salvaged name objects used where a string was required.
+                is PdfName -> listOf(raw.value)
+                is PdfArray -> raw.mapNotNull { (missingAsNull { it.resolve(refs) } as? PdfString)?.asText() }
+                else -> emptyList()
+            }
+            val indexed = if (useIndices) (inheritedValue(node, "I", refs) as? PdfArray)?.mapNotNull {
+                (missingAsNull { it.resolve(refs) } as? PdfInt)?.value?.takeIf { it in 0..Int.MAX_VALUE.toLong() }?.toInt()
+            } else null
+            val byIndex = options.associateBy { it.index }
+            if (indexed != null && indexed.distinct().size == indexed.size && indexed.all { it in byIndex }) {
+                val exports = indexed.sorted().map { byIndex.getValue(it).exportValue }
+                val labels = indexed.sorted().map { byIndex.getValue(it).label }
+                if ((raw == null && indexed.isNotEmpty()) || exports.sorted() == values.sorted() || labels.sorted() == values.sorted()) {
+                    return PdfChoiceSelection(indexed.sorted())
+                }
+            }
+            if (indexed != null) kiteWarn { "form: ignored inconsistent or damaged choice indices" }
+            val selected = ArrayList<Int>()
+            val unresolved = ArrayList<String>()
+            for (value in values) {
+                // 12.7.4.4 describes label-valued /V; many writers store exports instead.
+                // Recognise both on input while the live/script API consistently uses exports.
+                val option = options.firstOrNull { it.exportValue == value && it.index !in selected }
+                    ?: options.firstOrNull { it.label == value && it.index !in selected }
+                if (option == null) unresolved += value else selected += option.index
+            }
+            val editable = flags and (1 shl 17) != 0 && flags and (1 shl 18) != 0
+            if (editable && selected.isEmpty() && unresolved.size == 1) return PdfChoiceSelection(emptyList(), freeText = unresolved.single())
+            if (unresolved.isNotEmpty()) kiteWarn { "form: choice $key preserves ${unresolved.size} unavailable source values" }
+            return PdfChoiceSelection(selected.sorted(), unresolvedValues = unresolved)
         }
 
         /** `/BS /S` as a word a script understands (ISO 32000-1, 12.5.4, Table 166). */

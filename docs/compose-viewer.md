@@ -30,6 +30,87 @@ commits it: validate, then calculate, then format.
 
 `state.focusedField` says which field has the caret, and it is null when none has.
 
+Choice fields use the control their PDF flags specify (ISO 32000-1, 12.7.4.4):
+
+- A noneditable combo opens an option picker. Its entries show display labels, and choosing
+  one stores its export value without opening the text keyboard.
+- An editable combo also takes typed text and filters suggestions by their display labels.
+- A list shows its option rows inside the widget. A multiple-selection list toggles individual
+  rows while retaining the other selected options. `CommitOnSelChange` commits each proposed
+  selection immediately; otherwise leaving the list or pressing Enter commits its draft.
+
+Arrow keys, Home and End move through options. Space toggles the current row; Enter accepts
+and Escape discards a pending draft. Tab and Shift+Tab move between editable form widgets.
+Choice options expose their selected state to accessibility services. Only an editable combo
+uses text input. A refused script transaction restores the committed selection.
+
+The field model keeps option identity separately from the text that is shown or exported:
+
+```kotlin
+val field = requireNotNull(doc.formField("interests"))
+val options: List<PdfChoiceOption> = field.choiceOptions
+// Each option has index, exportValue and label. index is its original /Opt position.
+val proposed = PdfChoiceSelection(indices = options.take(2).map { it.index })
+
+// Preview runs the selection-change keystroke without changing the live value.
+val preview = runner.choiceKeystroke(field.fullyQualifiedName, proposed)
+// Commit the accepted preview when the reader accepts it or leaves the field.
+val accepted = preview != null && runner.commitChoice(field.fullyQualifiedName, preview)
+val current: PdfChoiceSelection? = runner.formState.choiceSelection(field.fullyQualifiedName)
+```
+
+`choiceKeystroke` returns the accepted, possibly rewritten draft, or null when a script
+refuses it. A deferred list calls it on each selection change and retains that draft outside
+the live form state. `commitChoice` runs the commit keystroke, validation, store, calculation
+and formatting without repeating the selection-change event. The viewer orders both calls
+on its script lane; an immediate commit runs them consecutively. Typed text in an editable
+combo uses ordinary text keystrokes before its final typed choice commit.
+
+`choiceOptions` preserves distinct options even when their labels or exports are equal, and
+retains original indices when damaged entries are skipped. The older `options: List<String>`
+remains a display-label view. Use `choiceSelection`, including its complete `indices` list,
+for selections. An editable combo can instead hold `freeText`. Empty indices with no text
+mean no selection; this differs from an option whose export string is empty. Selection lists
+are immutable snapshots. Unknown source values stay readable in `unresolvedValues` until a
+valid edit replaces them, so opening a damaged form does not silently erase its value.
+
+`PdfFormState.value(name)` and `Change.value` remain scalar compatibility views. For multiple
+selections they return the **first selected export value in original option order**. They
+never join the values into one string. `setValue(name, value)` replaces the selection with one
+matching export, choosing the first matching option when exports are duplicated. Unmatched
+text is accepted only by editable combos; an empty string clears a noneditable field when
+there is no empty-export option. Use typed indices when a duplicate or empty option must be
+identified exactly.
+
+`formState.setChoiceSelection(name, selection)` updates live state directly and returns false
+for an invalid selection. It publishes one revision and one `Change` containing the complete
+`choiceSelection`; it does not execute scripts. Programmatic writes can update read-only
+fields. Custom user transactions can capture `fieldRevision(name)` and pass that revision to
+the three-argument setter, which atomically refuses stale, hidden or read-only targets.
+That overload also restores an exact parsed source/default selection when cancelling an
+edit, including its unresolved source values. New user commits still pass through
+`field.validateChoiceSelection`; arbitrary unresolved values remain invalid.
+`cancelChoiceTransaction(name, expectedRevision)` invalidates a still-pending choice edit
+without changing its value or redraw revision. A validation result using the cancelled
+revision can no longer store its value; cancellation after an intervening commit returns
+false and preserves that committed value.
+`reset(name)` restores the file's source value, `resetAll()` also drops visibility/read-only
+overrides, and `resetForm()` applies the typed `/DV` defaults.
+
+An existing custom `PdfScriptHandler` keeps its string methods. The default `choiceKeystroke`
+adapter passes a single display label through the existing `keystroke` hook. Separately,
+the default `commitChoice` adapter passes its export value to the existing `commit` hook;
+it refuses multiple selections or a duplicate identity that the string API cannot preserve.
+A handler supporting those cases overrides `commitChoice` and `supportsMultipleChoices`,
+and overrides `choiceKeystroke` when its selection previews need custom script processing.
+The supplied `PdfScriptRunner` supports typed choices and the JavaScript `value`,
+`valueAsString`, `currentValueIndices` and `getItemAt` export/display distinctions.
+
+These are live editing APIs. They do not save the document. The writer's existing scalar
+`PdfEditor.setChoiceValue` remains separate; saving complete typed multiple selections,
+their array `/V` and `/I` entries, and matching saved appearances is outside this change.
+Do not save a multiple selection by passing the scalar `value(name)` view to that method.
+
 ### Where the scripts run
 
 On a thread of their own. A form script finishes in milliseconds, but a document that carries a
@@ -408,7 +489,7 @@ state.searchHighlights = document.search("invoice").toList()
 ```kotlin
 state.highlights = notes.map { note ->
     KiteHighlight(
-        hit = KiteSearchHit(note.pageIndex, note.quads, note.text),
+        hit = KiteSearchHit(note.location, note.quads, note.text),
         color = note.category.tint,       // null keeps KiteDocViewColors.searchHighlight
         edgeMarker = true,                // a pill in the page margin
         edgeMarkerColor = Color(0xFFEF6C00),
@@ -417,6 +498,51 @@ state.highlights = notes.map { note ->
 ```
 
 The marker sits in the page's right margin, level with the highlighted text, so a reader can tell a note lives on the page without hunting for the words. It scales with the rendered page, so it keeps its proportions in a thumbnail and at deep zoom alike, and its inner edge is clamped past the highlighted quads so it never paints over the words.
+
+A page location is `(chapter, page within chapter)` in the current layout. Save it with
+selection quads instead of saving the selection's transient strip slot:
+
+```kotlin
+state.onSelectionChange = { selection ->
+    if (selection != null) {
+        val location = requireNotNull(selection.location)
+        state.highlights = listOf(
+            KiteHighlight(KiteSearchHit(location, selection.quads, selection.text), id = "note-1")
+        )
+    }
+}
+```
+
+`KiteTextSelection.location`, `KitePageHit.location` and `KiteHighlight.location` identify
+the real page even while earlier chapters are loading. Document searches also populate
+`KiteSearchHit.location`. For standalone structured text, supply the coordinate with
+`text.search("invoice", location = location)`. A location takes precedence over a hit's
+legacy integer, including when the requested page is not published yet. An unavailable
+located hit waits for its own page; it never paints at the legacy integer.
+
+An old hit with no location treats `pageIndex` as a global page index, matching document
+search. It paints only in the published prefix before the first pending chapter. PDF
+behavior is unchanged. An old persisted EPUB note containing only a strip slot needs
+its original chapter mapping to migrate; a slot alone cannot recover the intended page.
+
+Locations and quads survive the publication of other chapters and reopening identical
+content with identical layout settings. They must be recomputed after font, viewport,
+margin or resource changes. Durable annotations across reflow need a content range,
+which this page-coordinate API does not provide.
+
+`state.locationOf(slot)` and `state.slotOf(location)` are exact, nonblocking lookups of
+the published strip. They return null for pending or invalid pages and perform no layout.
+Use `state.scrollTo(location)` to prepare and navigate to a location. `currentSlot`,
+`scrollToSlot` and `animateScrollToSlot` explicitly name the strip coordinate. The older
+`currentPage`, `scrollToPage`, selection/hit `pageIndex`, thumbnail callback indices,
+`onPageRendered` and overlay indices still mean strip slots. Document-search indices
+and `SinglePage.pageIndex` retain their global-page meaning.
+
+The original constructors and JVM `copy`/`copy$default` signatures of `KitePageHit` and
+`KiteTextSelection` are retained. A legacy copy preserves its source location; use the
+new `copy(location = ...)` argument to change it explicitly. Locations now participate
+in data-class equality, hashing and `toString`, and are the last destructured component.
+The old `KiteSearchHit` constructor and `KiteStructuredText.search` overload also remain.
 
 Clear either channel by assigning an empty list.
 

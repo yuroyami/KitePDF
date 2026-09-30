@@ -1,7 +1,9 @@
 package io.github.yuroyami.kitepdf.javascript
 
 import io.github.yuroyami.kitepdf.PdfAction
+import io.github.yuroyami.kitepdf.PdfChoiceSelection
 import io.github.yuroyami.kitepdf.PdfDocument
+import io.github.yuroyami.kitepdf.PdfFormField
 import io.github.yuroyami.kitepdf.PdfFormState
 import io.github.yuroyami.kitepdf.core.parser.PdfArray
 import io.github.yuroyami.kitepdf.core.withLock
@@ -196,6 +198,48 @@ public class PdfScriptRunner(
 
     override fun commit(fieldName: String, value: String): Boolean = setFieldValue(fieldName, value)
 
+    override val supportsMultipleChoices: Boolean get() = true
+
+    /** Runs only the selection-change event; deferred selection remains outside the live state. */
+    override fun choiceKeystroke(fieldName: String, selection: PdfChoiceSelection): PdfChoiceSelection? = onScriptThread {
+        choiceKeystrokeOnThread(fieldName, selection, formState.choiceSelection(fieldName) ?: PdfChoiceSelection(emptyList()))
+    }
+
+    override fun choiceKeystroke(fieldName: String, selection: PdfChoiceSelection, previous: PdfChoiceSelection): PdfChoiceSelection? = onScriptThread {
+        choiceKeystrokeOnThread(fieldName, selection, previous)
+    }
+
+    private fun choiceKeystrokeOnThread(fieldName: String, selection: PdfChoiceSelection, previous: PdfChoiceSelection): PdfChoiceSelection? {
+        val field = document.formField(fieldName) ?: return null
+        var candidate = field.validateChoiceSelection(selection) ?: return null
+        if (formState.isReadOnly(fieldName) || formState.isHidden(fieldName)) return null
+        val revision = formState.fieldRevision(fieldName)
+        prepare()
+        val script = keystrokeScript(fieldName)
+        if (policy.enabled && script != null) {
+            val info = mutableMapOf<String, Any?>(
+                "name" to "Keystroke", "type" to "Field", "field" to fieldName,
+                "value" to choiceEventValue(field, previous, face = field.isCombo),
+                "change" to choiceEventValue(field, candidate, face = true), "willCommit" to false,
+                "selStart" to 0.0, "selEnd" to choiceEventValue(field, previous, face = true).length.toDouble(),
+            )
+            if (candidate.freeText == null) info["changeEx"] = field.choiceValues(candidate).singleOrNull().orEmpty()
+            val result = dispatch(script, "choice selection", info)
+            if (!result.rc) return null
+            if (candidate.indices.size <= 1) {
+                candidate = choiceRewrite(field, candidate, result.change, face = true) ?: return null
+            }
+        }
+        return candidate.takeIf {
+            formState.fieldRevision(fieldName) == revision && !formState.isReadOnly(fieldName) && !formState.isHidden(fieldName)
+        }
+    }
+
+    /** One choice change follows the Acrobat Field event sequence without flattening its values. */
+    override fun commitChoice(fieldName: String, selection: PdfChoiceSelection): Boolean = onScriptThread {
+        commitChoiceOnThread(fieldName, selection)
+    }
+
     public fun runDocumentOpen(): List<KiteScriptException> = onScriptThread {
         val before = failureList.size
         runDocumentScripts()
@@ -265,7 +309,7 @@ public class PdfScriptRunner(
     public fun keystroke(
         fieldName: String,
         change: String,
-        selectionStart: Int = (formState.value(fieldName) ?: "").length,
+        selectionStart: Int = editingValue(fieldName).length,
         selectionEnd: Int = selectionStart,
         commit: Boolean = false,
     ): KeystrokeResult = onScriptThread {
@@ -278,12 +322,12 @@ public class PdfScriptRunner(
                 script, "keystroke",
                 mapOf(
                     "name" to "Keystroke", "type" to "Field", "field" to fieldName,
-                    "value" to (formState.value(fieldName) ?: ""), "change" to change,
+                    "value" to editingValue(fieldName), "change" to change,
                     "selStart" to selectionStart.toDouble(), "selEnd" to selectionEnd.toDouble(),
                     "willCommit" to false,
                 ),
             )
-            KeystrokeResult(result.rc, if (result.rc) mergedValue(fieldName, result.change, selectionStart, selectionEnd) else formState.value(fieldName) ?: "")
+            KeystrokeResult(result.rc, if (result.rc) mergedValue(fieldName, result.change, selectionStart, selectionEnd) else editingValue(fieldName))
         }
     }
 
@@ -299,11 +343,15 @@ public class PdfScriptRunner(
 
     private fun commitOnThread(fieldName: String, value: String): Boolean {
         prepare()
+        val field = document.formField(fieldName) ?: return false
+        if (field.type == PdfFormField.FieldType.Choice) {
+            val selection = field.choiceSelectionForValue(value) ?: return false
+            return commitChoiceOnThread(fieldName, selection)
+        }
         if (!policy.enabled) {
             formState.setValue(fieldName, value)
             return true
         }
-        val field = document.formField(fieldName) ?: return false
         keystrokeScript(fieldName)?.let { script ->
             val result = dispatch(
                 script, "keystroke",
@@ -327,6 +375,68 @@ public class PdfScriptRunner(
         return true
     }
 
+    private fun commitChoiceOnThread(fieldName: String, selection: PdfChoiceSelection): Boolean {
+        val field = document.formField(fieldName) ?: return false
+        var candidate = field.validateChoiceSelection(selection) ?: return false
+        if (formState.isReadOnly(fieldName) || formState.isHidden(fieldName)) return false
+        val revision = formState.fieldRevision(fieldName)
+        prepare()
+        if (policy.enabled) {
+            keystrokeScript(fieldName)?.let { script ->
+                val result = dispatch(
+                    script, "choice commit",
+                    mapOf(
+                        "name" to "Keystroke", "type" to "Field", "field" to fieldName,
+                        "value" to choiceEventValue(field, candidate, face = true),
+                        "change" to "", "changeEx" to "", "willCommit" to true,
+                    ),
+                )
+                if (!result.rc) return false
+                candidate = choiceRewrite(field, candidate, result.value, face = true) ?: return false
+            }
+            (field.additionalActions?.validate as? PdfAction.JavaScript)?.let { action ->
+                val result = dispatch(
+                    action.script, "choice validate",
+                    mapOf(
+                        "name" to "Validate", "type" to "Field", "field" to fieldName,
+                        "value" to choiceEventValue(field, candidate, face = field.isCombo),
+                    ),
+                )
+                if (!result.rc) return false
+                candidate = choiceRewrite(field, candidate, result.value, face = field.isCombo) ?: return false
+            }
+        }
+        // A script, another edit or a visibility/read-only change invalidates this transaction.
+        // The revision check and store share the state's lock, including the final flag check.
+        if (!formState.setChoiceSelection(fieldName, candidate, revision)) return false
+        if (policy.enabled) {
+            calculateAll()
+            formatAll()
+        }
+        return true
+    }
+
+    /** Adobe's event.value uses the combo face value and is empty for a multiple selection. */
+    private fun choiceEventValue(field: PdfFormField, selection: PdfChoiceSelection, face: Boolean): String {
+        val values = field.choiceValues(selection)
+        if (values.size > 1) return ""
+        if (!face) return values.singleOrNull().orEmpty()
+        return selection.indices.singleOrNull()?.let { index -> field.choiceOptions.firstOrNull { it.index == index }?.label }
+            ?: selection.freeText ?: selection.unresolvedValues.singleOrNull().orEmpty()
+    }
+
+    private fun choiceRewrite(field: PdfFormField, current: PdfChoiceSelection, value: String, face: Boolean): PdfChoiceSelection? {
+        // Acrobat ignores event.value assignments for a list holding multiple selections.
+        if (current.indices.size > 1 || value == choiceEventValue(field, current, face)) return current
+        if (!face) return field.choiceSelectionForValue(value)
+        field.choiceOptions.firstOrNull { it.label == value }?.let { return PdfChoiceSelection(listOf(it.index)) }
+        return when {
+            field.isEditableCombo -> PdfChoiceSelection(emptyList(), freeText = value)
+            value.isEmpty() -> PdfChoiceSelection(emptyList())
+            else -> null
+        }
+    }
+
     /**
      * Runs every calculate script, in the order of the form's `/CO` array (ISO 32000-1 §12.7.2).
      * A form with no order runs them in the order its fields appear.
@@ -344,10 +454,10 @@ public class PdfScriptRunner(
                 action.script, "calculate",
                 mapOf(
                     "name" to "Calculate", "type" to "Field", "field" to name,
-                    "value" to (formState.value(name) ?: ""),
+                    "value" to (formState.choiceSelection(name)?.let { choiceEventValue(field, it, face = false) } ?: formState.value(name).orEmpty()),
                 ),
             )
-            if (result.rc) formState.setValue(name, result.value)
+            if (result.rc && formState.choiceSelection(name)?.indices.orEmpty().size <= 1) formState.setValue(name, result.value)
         }
     }
 
@@ -359,14 +469,16 @@ public class PdfScriptRunner(
 
     private fun formatOnThread(fieldName: String): String {
         prepare()
-        val stored = formState.value(fieldName) ?: ""
+        val field = document.formField(fieldName)
+        val stored = if (field != null) formState.choiceSelection(fieldName)?.let { choiceEventValue(field, it, face = field.isCombo) }
+            ?: formState.value(fieldName).orEmpty() else ""
         if (!policy.enabled) return stored
-        val field = document.formField(fieldName) ?: return stored
-        val action = field.additionalActions?.format as? PdfAction.JavaScript ?: return stored
+        val action = field?.additionalActions?.format as? PdfAction.JavaScript ?: return stored
         val result = dispatch(
             action.script, "format",
             mapOf("name" to "Format", "type" to "Field", "field" to fieldName, "value" to stored),
         )
+        if (formState.choiceSelection(fieldName)?.indices.orEmpty().size > 1) return stored
         return if (result.rc) result.value else stored
     }
 
@@ -557,10 +669,18 @@ public class PdfScriptRunner(
         (document.formField(fieldName)?.additionalActions?.keystroke as? PdfAction.JavaScript)?.script
 
     private fun mergedValue(fieldName: String, change: String, start: Int, end: Int): String {
-        val current = formState.value(fieldName) ?: ""
+        val current = editingValue(fieldName)
         val from = start.coerceIn(0, current.length)
         val to = end.coerceIn(from, current.length)
         return current.substring(0, from) + change + current.substring(to)
+    }
+
+    private fun editingValue(fieldName: String): String {
+        val field = document.formField(fieldName)
+        if (field?.isEditableCombo == true) {
+            formState.choiceSelection(fieldName)?.let { return choiceEventValue(field, it, face = true) }
+        }
+        return formState.value(fieldName).orEmpty()
     }
 
     override fun close() {
@@ -579,4 +699,3 @@ public class PdfScriptRunner(
         }
     }
 }
-

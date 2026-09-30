@@ -300,6 +300,9 @@ public final class io/github/yuroyami/kitepdf/core/KiteRole : java/lang/Enum {
 
 public final class io/github/yuroyami/kitepdf/core/KiteSearchHit {
 	public fun <init> (ILjava/util/List;Ljava/lang/String;)V
+	public fun <init> (ILjava/util/List;Ljava/lang/String;Lio/github/yuroyami/kitepdf/core/KiteLocation;)V
+	public fun <init> (Lio/github/yuroyami/kitepdf/core/KiteLocation;Ljava/util/List;Ljava/lang/String;)V
+	public final fun getLocation ()Lio/github/yuroyami/kitepdf/core/KiteLocation;
 	public final fun getPageIndex ()I
 	public final fun getQuads ()Ljava/util/List;
 	public final fun getText ()Ljava/lang/String;
@@ -315,7 +318,9 @@ public final class io/github/yuroyami/kitepdf/core/KiteStructuredText {
 	public final fun getPlainText ()Ljava/lang/String;
 	public final fun quadsFor (II)Ljava/util/List;
 	public final fun search (Ljava/lang/String;ZI)Ljava/util/List;
+	public final fun search (Ljava/lang/String;ZILio/github/yuroyami/kitepdf/core/KiteLocation;)Ljava/util/List;
 	public static synthetic fun search$default (Lio/github/yuroyami/kitepdf/core/KiteStructuredText;Ljava/lang/String;ZIILjava/lang/Object;)Ljava/util/List;
+	public static synthetic fun search$default (Lio/github/yuroyami/kitepdf/core/KiteStructuredText;Ljava/lang/String;ZILio/github/yuroyami/kitepdf/core/KiteLocation;ILjava/lang/Object;)Ljava/util/List;
 	public final fun textRange (II)Ljava/lang/String;
 }
 

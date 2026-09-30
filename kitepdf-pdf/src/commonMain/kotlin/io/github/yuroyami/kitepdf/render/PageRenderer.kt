@@ -565,9 +565,20 @@ public class PageRenderer(
         if (annot.subtype != Subtype.Widget) return null
         val name = io.github.yuroyami.kitepdf.PdfFormField.qualifiedNameOf(annot.raw, resolver) ?: return null
         if (!state.isChanged(name)) return null
+        choiceAppearance(annot, state.choiceSelection(name))?.let { return it }
         return io.github.yuroyami.kitepdf.writer.FieldAppearance.synthesize(
             annot.raw, annot.rect.width, annot.rect.height, resolver, valueOverride = state.value(name) ?: "",
         )
+    }
+
+    /** The label and selected rows of a choice field, shared by loaded and changed widgets. */
+    private fun choiceAppearance(
+        annot: io.github.yuroyami.kitepdf.PdfAnnotation,
+        selection: io.github.yuroyami.kitepdf.PdfChoiceSelection? = null,
+    ): PdfStream? {
+        val name = io.github.yuroyami.kitepdf.PdfFormField.qualifiedNameOf(annot.raw, resolver) ?: return null
+        val field = document?.formField(name)?.takeIf { it.type == io.github.yuroyami.kitepdf.PdfFormField.FieldType.Choice } ?: return null
+        return ChoiceAppearance.build(field, selection ?: field.choiceSelection, annot.raw, annot.rect.width, annot.rect.height, resolver)
     }
 
     /** `/CA`, the annotation's constant opacity (ISO 32000-1, Table 164), 1 when absent. */
@@ -734,7 +745,7 @@ public class PageRenderer(
             // own entries, the way §12.7.3.3 describes and MuPDF does on page load. Without this
             // a form written without appearance streams renders as an empty sheet (#127).
             Subtype.Widget -> {
-                val appearance = io.github.yuroyami.kitepdf.writer.FieldAppearance.synthesize(
+                val appearance = choiceAppearance(annot) ?: io.github.yuroyami.kitepdf.writer.FieldAppearance.synthesize(
                     annot.raw, rect.width, rect.height, resolver,
                 )
                 if (appearance != null) renderAppearanceForRect(appearance, rect, state)

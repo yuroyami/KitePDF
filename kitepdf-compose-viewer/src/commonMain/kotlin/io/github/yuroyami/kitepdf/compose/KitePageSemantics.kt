@@ -14,6 +14,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.disabled
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.isTraversalGroup
 import androidx.compose.ui.semantics.onClick
@@ -55,6 +56,7 @@ internal class PageAccessNode(
     val kind: AccessKind,
     val state: String? = null,
     val checked: Boolean? = null,
+    val enabled: Boolean = true,
 )
 
 /** The viewer's tap, which a link or a field node runs at its centre, as a finger would. */
@@ -96,7 +98,13 @@ internal fun accessNodes(page: KitePage, formState: PdfFormState?, strings: Kite
             val hit = runCatching { page.widgetAt((r.left + r.right) / 2, (r.bottom + r.top) / 2, formState) }.getOrNull() ?: continue
             val field = hit.field
             val name = field.tooltip?.takeIf { it.isNotBlank() } ?: field.partialName?.takeIf { it.isNotBlank() } ?: strings.formField
-            val value = formState.value(field.fullyQualifiedName)
+            val value = if (field.type == PdfFormField.FieldType.Choice) {
+                val chosen = formState.choiceSelection(field.fullyQualifiedName)
+                chosen?.let { selection ->
+                    field.choiceOptions.filter { it.index in selection.indices }.map { it.label }
+                        .plus(listOfNotNull(selection.freeText)).plus(selection.unresolvedValues).joinToString(", ")
+                }
+            } else formState.value(field.fullyQualifiedName)
             val kind = when (field.type) {
                 PdfFormField.FieldType.Text -> AccessKind.TEXT_FIELD
                 PdfFormField.FieldType.Choice -> AccessKind.CHOICE
@@ -109,7 +117,7 @@ internal fun accessNodes(page: KitePage, formState: PdfFormState?, strings: Kite
             }
             val onState = hit.widget.onStateName
             val checked = if (kind == AccessKind.CHECKBOX || kind == AccessKind.RADIO) onState != null && value == onState else null
-            out += PageAccessNode(page.pageToDisplay(r), name, kind, state = value?.takeIf { checked == null }, checked = checked)
+            out += PageAccessNode(page.pageToDisplay(r), name, kind, state = value?.takeIf { checked == null }, checked = checked, enabled = !formState.isReadOnly(field.fullyQualifiedName))
         }
     }
     return out
@@ -226,7 +234,7 @@ private fun androidx.compose.ui.semantics.SemanticsPropertyReceiver.describe(nod
             contentDescription = node.label
             role = Role.DropdownList
             node.state?.let { stateDescription = it }
-            onClick { act() }
+            if (node.enabled) onClick { act() } else disabled()
         }
         AccessKind.CHECKBOX -> {
             contentDescription = node.label

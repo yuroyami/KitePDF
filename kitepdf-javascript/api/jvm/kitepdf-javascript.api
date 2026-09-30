@@ -143,8 +143,11 @@ public final class io/github/yuroyami/kitepdf/javascript/PdfScriptRunner : io/gi
 	public synthetic fun <init> (Lio/github/yuroyami/kitepdf/PdfDocument;Lio/github/yuroyami/kitepdf/PdfFormState;Lio/github/yuroyami/kitepdf/javascript/PdfScriptPolicy;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function0;Lio/github/yuroyami/kitepdf/core/script/KiteScriptEngine;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public fun blur (Ljava/lang/String;)V
 	public fun blur (Ljava/lang/String;I)V
+	public fun choiceKeystroke (Ljava/lang/String;Lio/github/yuroyami/kitepdf/PdfChoiceSelection;)Lio/github/yuroyami/kitepdf/PdfChoiceSelection;
+	public fun choiceKeystroke (Ljava/lang/String;Lio/github/yuroyami/kitepdf/PdfChoiceSelection;Lio/github/yuroyami/kitepdf/PdfChoiceSelection;)Lio/github/yuroyami/kitepdf/PdfChoiceSelection;
 	public fun close ()V
 	public fun commit (Ljava/lang/String;Ljava/lang/String;)Z
+	public fun commitChoice (Ljava/lang/String;Lio/github/yuroyami/kitepdf/PdfChoiceSelection;)Z
 	public fun documentOpened ()V
 	public fun focus (Ljava/lang/String;)V
 	public fun focus (Ljava/lang/String;I)V
@@ -156,6 +159,7 @@ public final class io/github/yuroyami/kitepdf/javascript/PdfScriptRunner : io/gi
 	public fun getFormState ()Lio/github/yuroyami/kitepdf/PdfFormState;
 	public fun getHasTimers ()Z
 	public final fun getPolicy ()Lio/github/yuroyami/kitepdf/javascript/PdfScriptPolicy;
+	public fun getSupportsMultipleChoices ()Z
 	public fun keystroke (Ljava/lang/String;Ljava/lang/String;II)Ljava/lang/String;
 	public final fun keystroke (Ljava/lang/String;Ljava/lang/String;IIZ)Lio/github/yuroyami/kitepdf/javascript/PdfScriptRunner$KeystrokeResult;
 	public static synthetic fun keystroke$default (Lio/github/yuroyami/kitepdf/javascript/PdfScriptRunner;Ljava/lang/String;Ljava/lang/String;IIZILjava/lang/Object;)Lio/github/yuroyami/kitepdf/javascript/PdfScriptRunner$KeystrokeResult;

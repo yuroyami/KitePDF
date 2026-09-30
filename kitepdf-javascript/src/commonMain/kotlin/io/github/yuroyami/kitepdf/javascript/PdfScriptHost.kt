@@ -1,6 +1,7 @@
 package io.github.yuroyami.kitepdf.javascript
 
 import io.github.yuroyami.kitepdf.PdfDocument
+import io.github.yuroyami.kitepdf.PdfChoiceSelection
 import io.github.yuroyami.kitepdf.PdfFormField
 import io.github.yuroyami.kitepdf.PdfFormState
 import io.github.yuroyami.kitepdf.core.parser.PdfArray
@@ -102,7 +103,7 @@ internal class PdfScriptHost(
     private fun fieldProp(name: String, prop: String): Any? {
         val field = document.formField(name) ?: return null
         return when (prop) {
-            "value" -> state.value(name) ?: ""
+            "value" -> choiceValue(field) ?: state.value(name) ?: ""
             "type" -> typeName(field)
             "readonly" -> state.isReadOnly(name)
             "hidden" -> state.isHidden(name)
@@ -110,17 +111,21 @@ internal class PdfScriptHost(
             "multiline" -> field.isMultiline
             "page" -> document.pageIndexOfField(field)?.toDouble() ?: -1.0
             "rect" -> field.rect?.let { listOf(it.left, it.top, it.right, it.bottom) }
-            "numItems" -> field.options.size.toDouble()
+            "numItems" -> ((field.choiceOptions.maxOfOrNull { it.index } ?: -1) + 1).toDouble()
             "defaultValue" -> field.defaultValue ?: ""
             "charLimit" -> (field.maxLength ?: 0).toDouble()
             "alignment" -> when (field.quadding) { 1 -> "center"; 2 -> "right"; else -> "left" }
             "comb" -> (field.flags and COMB) != 0
-            "editable" -> (field.flags and EDITABLE) != 0
+            "editable" -> field.isEditableCombo
+            "multipleSelection" -> field.isMultiSelect
+            "commitOnSelChange" -> field.commitOnSelectionChange
             "password" -> (field.flags and PASSWORD) != 0
             "checked" -> isChecked(field)
             "defaultChecked" -> (field.defaultValue ?: "").let { it.isNotEmpty() && it != "Off" }
             "caption" -> field.widgets.firstOrNull()?.caption ?: ""
-            "currentValueIndices" -> field.options.indexOf(state.value(name)).toDouble()
+            "currentValueIndices" -> state.choiceSelection(name)?.indices.orEmpty().let { indices ->
+                when (indices.size) { 0 -> -1.0; 1 -> indices.single().toDouble(); else -> indices.map { it.toDouble() } }
+            }
             "userName" -> field.tooltip ?: ""
             "textSize" -> textSizeOf(field)
             "borderStyle" -> field.widgets.firstOrNull()?.borderStyle ?: "solid"
@@ -133,18 +138,43 @@ internal class PdfScriptHost(
     private fun setFieldProp(name: String, prop: String, value: Any?) {
         val field = document.formField(name) ?: return
         when (prop) {
-            "value" -> state.setValue(name, text(value))
+            "value" -> if (field.type == PdfFormField.FieldType.Choice) {
+                choiceSelection(field, value)?.let { state.setChoiceSelection(name, it) }
+            } else state.setValue(name, text(value))
             "hidden" -> state.setHidden(name, value == true)
             "readonly" -> state.setReadOnly(name, value == true)
             "checked" -> state.setValue(name, if (value == true) onStateOf(field) else "Off")
             "currentValueIndices" -> {
-                val index = (value as? Double)?.toInt() ?: return
-                field.options.getOrNull(index)?.let { state.setValue(name, it) }
+                val values = if (value is List<*>) value else listOf(value)
+                val indices = values.map { entry ->
+                    val number = entry as? Double ?: return
+                    if (!number.isFinite() || number % 1.0 != 0.0 || number < -1.0 || number > Int.MAX_VALUE) return
+                    number.toInt()
+                }
+                state.setChoiceSelection(name, PdfChoiceSelection(if (indices == listOf(-1)) emptyList() else indices))
             }
             // The rest are appearance details the renderer does not read yet. A script that sets
             // them must not fail, so they are accepted and ignored.
             else -> Unit
         }
+    }
+
+    /** Acrobat Field.value exposes export strings, with an array only for multiple values. */
+    private fun choiceValue(field: PdfFormField): Any? {
+        val selection = state.choiceSelection(field.fullyQualifiedName) ?: return null
+        val values = field.choiceValues(selection)
+        return if (values.size > 1) values else values.singleOrNull().orEmpty()
+    }
+
+    private fun choiceSelection(field: PdfFormField, value: Any?): PdfChoiceSelection? {
+        if (value !is List<*>) return field.choiceSelectionForValue(text(value))
+        if (!field.isMultiSelect && value.size > 1) return null
+        val indices = ArrayList<Int>()
+        for (entry in value) {
+            val option = field.choiceOptions.firstOrNull { it.exportValue == text(entry) && it.index !in indices } ?: return null
+            indices.add(option.index)
+        }
+        return field.validateChoiceSelection(PdfChoiceSelection(indices))
     }
 
     private fun typeName(field: PdfFormField): String = when (field.type) {
@@ -173,8 +203,11 @@ internal class PdfScriptHost(
 
 
 
-    private fun itemAt(name: String, index: Int, exportValue: Boolean): String =
-        document.formField(name)?.options?.getOrNull(index) ?: ""
+    private fun itemAt(name: String, index: Int, exportValue: Boolean): String {
+        val options = document.formField(name)?.choiceOptions ?: return ""
+        val option = if (index == -1) options.lastOrNull() else options.firstOrNull { it.index == index }
+        return option?.let { if (exportValue) it.exportValue else it.label }.orEmpty()
+    }
 
     /** The size in the field's `/DA` string, or 0 when it asks the viewer to fit the box. */
     private fun textSizeOf(field: PdfFormField): Double {
