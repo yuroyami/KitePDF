@@ -9,6 +9,10 @@ import io.github.yuroyami.kitepdf.core.font.TextGlyph
  * every text / vector / border / CSS-background colour a page paints. Images and
  * gradients pass through untouched, so photos never invert.
  *
+ * [Dark] and [Sepia] keep text readable: a colour with a contrast of 4.5 or more
+ * on white paper keeps at least 4.5 on the theme's paper, and a weaker colour keeps
+ * the contrast it had (WCAG 2.2, 1.4.3).
+ *
  * Format-neutral: it themes any [KiteCanvas] (PDF or EPUB). Hand a theme to a
  * rasterizer, or wrap a canvas yourself:
  *
@@ -41,28 +45,35 @@ public class ReaderTheme(
         /** No colour change; white paper. */
         public val Light: ReaderTheme = ReaderTheme(RgbColor.WHITE) { it }
 
-        /** Night mode: dark paper, content colours inverted in lightness (hue preserved). */
-        public val Dark: ReaderTheme = ReaderTheme(RgbColor(0.11, 0.11, 0.12), ::invertLightness)
-
-        // Declared before Sepia, which reads them while the companion initializes.
+        // Declared before the themes, which read them while the companion initializes.
+        private val DARK_PAPER = RgbColor(0.11, 0.11, 0.12)
         private val SEPIA_PAPER = RgbColor(0.93, 0.87, 0.75)
         private val SEPIA_INK = RgbColor(0.30, 0.24, 0.18)
+        private val DARK_CONTRAST = ThemeContrast(DARK_PAPER, lightest = RgbColor.WHITE, strongest = invertLightness(RgbColor.BLACK))
+        private val SEPIA_CONTRAST = ThemeContrast(SEPIA_PAPER, lightest = SEPIA_PAPER, strongest = SEPIA_INK)
+
+        /** Night mode: dark paper, content colours inverted in lightness (hue preserved). */
+        public val Dark: ReaderTheme = ReaderTheme(DARK_PAPER, ::toDark)
 
         /** Warm reading: cream paper, ink softened toward warm brown. */
         public val Sepia: ReaderTheme = ReaderTheme(SEPIA_PAPER, ::toSepia)
 
+        private fun toDark(c: RgbColor): RgbColor = DARK_CONTRAST.keep(c, invertLightness(c))
+
         /**
          * Maps each channel onto the range from the brown ink to the cream paper. White
          * stays paper and black becomes the ink, so a light fill stays light under dark
-         * text instead of turning into a dark box (#253).
+         * text instead of turning into a dark box (#253). A middle grey then darkens to
+         * keep its contrast (#456).
          */
         private fun toSepia(c: RgbColor): RgbColor {
             fun mix(ink: Double, paper: Double, v: Double) = ink * (1.0 - v) + paper * v
-            return RgbColor(
+            val tinted = RgbColor(
                 mix(SEPIA_INK.r, SEPIA_PAPER.r, c.r),
                 mix(SEPIA_INK.g, SEPIA_PAPER.g, c.g),
                 mix(SEPIA_INK.b, SEPIA_PAPER.b, c.b),
             )
+            return SEPIA_CONTRAST.keep(c, tinted)
         }
 
         /**
@@ -70,7 +81,8 @@ public class ReaderTheme(
          * becomes near-white, but a saturated link keeps its colour instead of
          * flipping to its complement (as a naive per-channel invert would). Pure
          * grays invert cleanly; coloured content shifts lightness by the same
-         * delta, keeping its chroma spread.
+         * delta, keeping its chroma spread. Pure blue has the middle lightness here,
+         * so it stays blue, and [toDark] then lightens it to keep its contrast (#457).
          */
         private fun invertLightness(c: RgbColor): RgbColor {
             val mx = maxOf(c.r, c.g, c.b)
@@ -81,6 +93,77 @@ public class ReaderTheme(
             fun sh(v: Double) = (v + d).coerceIn(0.0, 1.0)
             return RgbColor(sh(c.r), sh(c.g), sh(c.b))
         }
+    }
+}
+
+/**
+ * Moves a theme's tinted colour to the luminance that keeps the contrast its source colour had on
+ * white paper, measured as in WCAG 2.2 (#456, #457). Below [KNEE] the contrast stays the same. From
+ * [KNEE] to 21, the most white paper allows, it compresses onto the range up to the contrast of
+ * [strongest], the colour the theme gives black. The mapping keeps the order of lightness, so a box
+ * and the text on it never swap.
+ */
+internal class ThemeContrast(
+    paper: RgbColor,
+    /** The colour a tint moves toward to get lighter: white on dark paper, the paper on light paper. */
+    lightest: RgbColor,
+    strongest: RgbColor,
+) {
+    private val paperY = luminance(paper)
+    private val lightestY = luminance(lightest)
+    private val lightestLinear = linear(lightest)
+    private val darkPaper = paperY < luminance(strongest)
+    private val best = ratio(paperY, luminance(strongest))
+
+    /** [tinted], with the luminance that gives it the contrast on the paper that [source] had on white. */
+    fun keep(source: RgbColor, tinted: RgbColor): RgbColor {
+        val target = targetLuminance(ratio(1.0, luminance(source)))
+        val y = luminance(tinted)
+        if (kotlin.math.abs(y - target) < 1e-6) return tinted
+        val (r, g, b) = linear(tinted)
+        val moved = if (y > target) {
+            // Darker: scale the light, which keeps the chromaticity.
+            val k = target / y
+            Triple(r * k, g * k, b * k)
+        } else {
+            // Lighter: mix toward the lightest colour of the theme, in linear light.
+            val s = ((target - y) / (lightestY - y)).coerceIn(0.0, 1.0)
+            Triple(r + s * (lightestLinear.first - r), g + s * (lightestLinear.second - g), b + s * (lightestLinear.third - b))
+        }
+        return RgbColor(encode(moved.first), encode(moved.second), encode(moved.third))
+    }
+
+    private fun targetLuminance(onWhite: Double): Double {
+        val contrast = when {
+            onWhite <= KNEE || best <= KNEE -> minOf(onWhite, best)
+            else -> {
+                val t = kotlin.math.ln(onWhite / KNEE) / kotlin.math.ln(MOST / KNEE)
+                KNEE * kotlin.math.exp(t * kotlin.math.ln(best / KNEE))
+            }
+        }
+        return if (darkPaper) contrast * (paperY + 0.05) - 0.05 else (paperY + 0.05) / contrast - 0.05
+    }
+
+    private companion object {
+        /** The contrast that normal text needs (WCAG 2.2, 1.4.3). */
+        const val KNEE = 4.5
+
+        /** Black on white. */
+        const val MOST = 21.0
+
+        fun ratio(a: Double, b: Double): Double = (maxOf(a, b) + 0.05) / (minOf(a, b) + 0.05)
+
+        fun channel(v: Double): Double =
+            if (v <= 0.04045) v / 12.92 else kotlin.math.exp(2.4 * kotlin.math.ln((v + 0.055) / 1.055))
+
+        fun encode(v: Double): Double {
+            val c = v.coerceIn(0.0, 1.0)
+            return if (c <= 0.0031308) c * 12.92 else 1.055 * kotlin.math.exp(kotlin.math.ln(c) / 2.4) - 0.055
+        }
+
+        fun linear(c: RgbColor): Triple<Double, Double, Double> = Triple(channel(c.r), channel(c.g), channel(c.b))
+
+        fun luminance(c: RgbColor): Double = linear(c).let { (r, g, b) -> 0.2126 * r + 0.7152 * g + 0.0722 * b }
     }
 }
 

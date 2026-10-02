@@ -59,6 +59,78 @@ class ThemedCanvasTest {
         assertEquals(RgbColor(0.30, 0.24, 0.18), ink)
     }
 
+    /** WCAG relative luminance of an sRGB colour. */
+    private fun luminance(c: RgbColor): Double {
+        fun lin(v: Double) = if (v <= 0.04045) v / 12.92 else kotlin.math.exp(2.4 * kotlin.math.ln((v + 0.055) / 1.055))
+        return 0.2126 * lin(c.r) + 0.7152 * lin(c.g) + 0.0722 * lin(c.b)
+    }
+
+    /** The WCAG contrast ratio of [a] against [b]. */
+    private fun contrast(a: RgbColor, b: RgbColor): Double {
+        val (hi, lo) = luminance(a).let { la -> luminance(b).let { lb -> maxOf(la, lb) to minOf(la, lb) } }
+        return (hi + 0.05) / (lo + 0.05)
+    }
+
+    @Test
+    fun sepia_keeps_readable_grey_text_readable() {
+        // #606060 has contrast 6.3 on white paper; normal text needs 4.5 (#456).
+        val grey = RgbColor.gray(96.0 / 255.0)
+        assertTrue(contrast(grey, RgbColor.WHITE) > 4.5)
+        val mapped = fillColorThrough(ReaderTheme.Sepia, grey)
+        val ratio = contrast(mapped, ReaderTheme.Sepia.background)
+        assertTrue(ratio >= 4.5, "grey text on sepia paper has contrast $ratio, mapped to $mapped")
+        assertTrue(mapped.r > mapped.b, "the grey stays warm: $mapped")
+    }
+
+    @Test
+    fun dark_keeps_saturated_blue_text_readable() {
+        // Pure blue has contrast 8.6 on white paper and kept 2.0 on dark paper (#457).
+        val blue = RgbColor(0.0, 0.0, 1.0)
+        val mapped = fillColorThrough(ReaderTheme.Dark, blue)
+        val ratio = contrast(mapped, ReaderTheme.Dark.background)
+        assertTrue(ratio >= 4.5, "blue text on dark paper has contrast $ratio, mapped to $mapped")
+        assertTrue(mapped.b > mapped.r && mapped.b > mapped.g, "the blue stays blue: $mapped")
+    }
+
+    @Test
+    fun every_theme_keeps_text_readable_where_light_paper_does() {
+        val inks = listOf(
+            RgbColor.BLACK, RgbColor.gray(0.25), RgbColor.gray(96.0 / 255.0), RgbColor.gray(0.45),
+            RgbColor(0.0, 0.0, 1.0), RgbColor(0.0, 0.0, 0.5), RgbColor(0.8, 0.0, 0.0), RgbColor(0.0, 0.5, 0.0),
+            RgbColor(0.5, 0.0, 0.5), RgbColor(0.6, 0.3, 0.0),
+        )
+        for (theme in listOf(ReaderTheme.Dark, ReaderTheme.Sepia)) for (ink in inks) {
+            val before = contrast(ink, RgbColor.WHITE)
+            val after = contrast(fillColorThrough(theme, ink), theme.background)
+            assertTrue(before < 4.5 || after >= 4.5, "$theme: $ink had contrast $before on white paper and has $after")
+        }
+    }
+
+    @Test
+    fun text_on_an_author_painted_box_stays_readable() {
+        // Dark text on a light box, and light text on a dark box, as a book paints a call-out or a header.
+        val pairs = listOf(
+            RgbColor.BLACK to RgbColor.gray(0.93),
+            RgbColor.gray(0.2) to RgbColor(1.0, 1.0, 0.8),
+            RgbColor.WHITE to RgbColor(0.0, 0.0, 0.5),
+            RgbColor.WHITE to RgbColor(0.2, 0.2, 0.2),
+        )
+        for (theme in listOf(ReaderTheme.Dark, ReaderTheme.Sepia)) for ((ink, box) in pairs) {
+            val ratio = contrast(fillColorThrough(theme, ink), fillColorThrough(theme, box))
+            assertTrue(ratio >= 4.5, "$theme: $ink on $box has contrast $ratio")
+        }
+    }
+
+    @Test
+    fun a_theme_keeps_the_order_of_lightness() {
+        // A lighter colour stays lighter, so a box never swaps places with the text on it.
+        for (theme in listOf(ReaderTheme.Dark, ReaderTheme.Sepia)) {
+            val mapped = (0..20).map { luminance(fillColorThrough(theme, RgbColor.gray(it / 20.0))) }
+            val ordered = if (theme == ReaderTheme.Dark) mapped.zipWithNext { a, b -> a >= b } else mapped.zipWithNext { a, b -> a <= b }
+            assertTrue(ordered.all { it }, "$theme: luminances $mapped")
+        }
+    }
+
     @Test
     fun light_wrap_is_identity_passthrough() {
         val rec = RecordingCanvas()
