@@ -12,14 +12,29 @@ import kotlin.test.assertFailsWith
 class ImageDiffTest {
 
     @Test
-    fun accepts_a_single_rounding_pixel() {
+    fun accepts_a_single_rounding_pixel_and_compares_the_pixels_both_have() {
         val kite = BufferedImage(100, 100, BufferedImage.TYPE_INT_RGB)
         val reference = BufferedImage(101, 99, BufferedImage.TYPE_INT_RGB)
 
         val result = ImageDiff.compare(kite, reference)
 
         assertEquals(100, result.width)
-        assertEquals(100, result.height)
+        assertEquals(99, result.height)
+    }
+
+    @Test
+    fun a_rounding_pixel_does_not_resample_the_page() {
+        // A sharp edge that both renders share. Scaling the wider reference to the KitePDF width
+        // would blur it and score a difference that no engine drew (#461).
+        fun page(width: Int) = BufferedImage(width, 100, BufferedImage.TYPE_INT_RGB).also { image ->
+            val g = image.createGraphics()
+            g.color = java.awt.Color.WHITE
+            g.fillRect(0, 0, width, 100)
+            g.color = java.awt.Color.BLACK
+            for (x in 10 until 90 step 4) g.fillRect(x, 10, 2, 80)
+            g.dispose()
+        }
+        assertEquals(0.0, ImageDiff.compare(page(100), page(101)).meanAbsError)
     }
 
     @Test

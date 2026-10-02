@@ -42,6 +42,29 @@ class ThreeWayDiffTest {
     }
 
     @Test
+    fun a_rounding_pixel_compares_the_pixels_all_three_have() {
+        // MuPDF one pixel wider, the shared pixels equal: no difference, no resampling (#461).
+        val wide = BufferedImage(121, 120, BufferedImage.TYPE_INT_RGB).also { image ->
+            val g = image.createGraphics()
+            g.drawImage(page(mark), 0, 0, null)
+            g.color = Color.WHITE
+            g.fillRect(120, 0, 1, 120)
+            g.dispose()
+        }
+        val result = ThreeWayDiff.compare(page(mark), wide, page(mark))
+        assertEquals(0.0, result.kiteMupdf)
+        assertEquals(120, result.width)
+    }
+
+    @Test
+    fun a_result_without_its_map_keeps_its_numbers() {
+        val full = ThreeWayDiff.compare(page(mark), page(), page())
+        val kept = full.withoutMap()
+        assertNull(kept.map, "the report keeps no full-size image (#460)")
+        assertEquals(full.copy(map = null), kept)
+    }
+
+    @Test
     fun a_mark_that_only_pdfium_draws_is_not_a_kitepdf_fault() {
         val result = ThreeWayDiff.compare(page(), page(), page(mark))
         assertFalse(result.kiteIsOutlier)
