@@ -55,12 +55,14 @@ class CssNestingSceneTest {
                 }
                 val text = assertNotNull(doc.page(KiteLocation(0, 0)).textContent())
                 assertEquals("Still here.", text.plainText.trim(), "the damaged CSS must preserve the chapter text")
-                // Only the valid rule after the deep construct can make these text pixels blue.
+                // Only the valid rule after the deep construct can make these text pixels blue. An
+                // antialiased blue stroke on white keeps its blue above its red and green at any
+                // coverage, and black text never does, so this holds for a thin face as well (#485).
                 driver.pumpUntil { pixels ->
                     (0 until 200 step 2).sumOf { y ->
                         (0 until 200 step 2).count { x ->
                             val color = pixels[x, y]
-                            color.blue > 0.8f && color.red < 0.3f && color.green < 0.3f
+                            color.blue - maxOf(color.red, color.green) > 0.3f
                         }
                     } > 15
                 }
