@@ -62,6 +62,8 @@ public class PdfFont private constructor(
     private val composite: CompositeFont?,
     /** The bundled program of a standard 14 font that the file names and does not embed. */
     private val builtinCff: CffFont? = null,
+    /** The `/Flags` of the font descriptor (ISO 32000-1, 9.8.2), or 0 without one. */
+    private val flags: Int = 0,
 ) {
 
     public val isComposite: Boolean get() = composite != null
@@ -103,9 +105,10 @@ public class PdfFont private constructor(
             ?: (embeddedCff ?: embeddedType1 ?: composite?.cff ?: builtinCff)?.let { 1000 }
 
     /**
-     * Platform-neutral substitute-font descriptor, derived from [baseFont], for
-     * canvases that render non-embedded fonts through a host typeface. Centralises
-     * the family/style choice the render backends used to each make inline.
+     * Platform-neutral substitute-font descriptor, derived from [baseFont] and the
+     * font descriptor's Serif flag, for canvases that render non-embedded fonts
+     * through a host typeface. Centralises the family/style choice the render
+     * backends used to each make inline.
      */
     public val fontSpec: FontSpec
         get() = FontSpec(
@@ -113,6 +116,8 @@ public class PdfFont private constructor(
                 baseFont.startsWith("Times") -> KiteFontFamily.Serif
                 baseFont.startsWith("Courier") -> KiteFontFamily.Monospace
                 CJK_SERIF.any { it in baseFont } -> KiteFontFamily.Serif
+                // ISO 32000-1, 9.8.2, Table 123: the Serif flag, which MuPDF also reads to pick its substitute (#472).
+                (flags and FLAG_SERIF) != 0 -> KiteFontFamily.Serif
                 else -> KiteFontFamily.SansSerif
             },
             bold = "Bold" in baseFont,
@@ -347,8 +352,11 @@ public class PdfFont private constructor(
         /** The share of [retainedBytes] for the encoding, width and Unicode tables of a font. */
         private const val TABLE_BYTES = 16L * 1024
 
-        /** Name parts of CJK fonts in a serif style, such as MS-Mincho, PMingLiU, STSong, SimSun and Batang. */
-        private val CJK_SERIF = listOf("Mincho", "Ming", "Song", "SimSun", "Batang", "Myungjo")
+        /**
+         * Name parts of CJK fonts in a serif style, such as MS-Mincho, PMingLiU, STSong, SimSun and Batang,
+         * and the Japanese Mincho faces HiraMinProN-W3, Ryumin-Light and KozMinPro-Regular.
+         */
+        private val CJK_SERIF = listOf("Mincho", "Ming", "Song", "SimSun", "Batang", "Myungjo", "HiraMin", "Ryumin", "KozMin")
 
         /**
          * Build a [PdfFont] from one resource entry. [refs] resolves indirect
@@ -378,6 +386,7 @@ public class PdfFont private constructor(
                     defaultWidth = 1000,
                     embeddedTtf = null, embeddedCff = null, embeddedType1 = null,
                     composite = comp,
+                    flags = comp.flags,
                 )
             }
 
@@ -414,7 +423,7 @@ public class PdfFont private constructor(
             return PdfFont(
                 baseFont, subtype, nameTable, unicodeTable, toUnicode,
                 wt.widths, wt.present, wt.missingWidth,
-                embeddedTtf, embeddedCff, embeddedType1, composite = null, builtinCff = builtinCff,
+                embeddedTtf, embeddedCff, embeddedType1, composite = null, builtinCff = builtinCff, flags = flags,
             )
         }
 
@@ -443,6 +452,8 @@ public class PdfFont private constructor(
 
         /* ─── /Encoding + /Differences ───────────────────────────────────── */
 
+        /** /Flags bit 2 (value 2): a serif font (ISO 32000-1, 9.8.2, Table 123). */
+        private const val FLAG_SERIF = 1 shl 1
         /** /Flags bit 3 (value 4): symbolic font (ISO 32000-1 Table 121). */
         private const val FLAG_SYMBOLIC = 1 shl 2
         /** /Flags bit 6 (value 32): non-symbolic. */

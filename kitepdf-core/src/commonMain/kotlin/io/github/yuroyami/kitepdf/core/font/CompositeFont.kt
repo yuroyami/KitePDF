@@ -59,6 +59,8 @@ internal class CompositeFont(
     private val unicodeKeyed: Boolean = false,
     /** The Adobe collection the CIDs belong to, such as Japan1, or null for another collection. */
     private val ordering: String? = null,
+    /** The `/Flags` of the descendant's font descriptor (ISO 32000-1, 9.8.2), or 0 without one. */
+    val flags: Int = 0,
 ) {
 
     /**
@@ -182,6 +184,7 @@ internal class CompositeFont(
                 vertical, verticalWidths,
                 unicodeKeyed = encodingCMap == null && PredefinedCMaps.isUnicodeKeyed(encodingName),
                 ordering = ordering,
+                flags = descriptor?.getInt("Flags")?.toInt() ?: 0,
             )
         }
 
