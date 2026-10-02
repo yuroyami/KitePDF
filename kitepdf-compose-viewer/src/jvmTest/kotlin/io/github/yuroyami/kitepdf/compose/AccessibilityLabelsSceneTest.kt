@@ -4,7 +4,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.ui.ImageComposeScene
+import io.github.yuroyami.kitepdf.compose.EdtImageComposeScene as ImageComposeScene
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
@@ -13,7 +13,6 @@ import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.use
 import io.github.yuroyami.kitepdf.KitePDF
 import io.github.yuroyami.kitepdf.writer.PdfBuilder
 import io.github.yuroyami.kitepdf.writer.StandardFont
@@ -34,14 +33,14 @@ class AccessibilityLabelsSceneTest {
         }.build(),
     )
 
-    private fun nodes(scene: ImageComposeScene): List<SemanticsNode> {
+    private fun nodes(scene: ImageComposeScene): List<SemanticsNode> = onTestUiThread {
         val out = ArrayList<SemanticsNode>()
         fun walk(node: SemanticsNode) {
             out += node
             node.children.forEach(::walk)
         }
         scene.semanticsOwners.forEach { walk(it.unmergedRootSemanticsNode) }
-        return out
+        return@onTestUiThread out
     }
 
     private fun named(scene: ImageComposeScene, name: String): SemanticsNode? =
@@ -113,9 +112,9 @@ class AccessibilityLabelsSceneTest {
         }.use { scene ->
             val driver = SceneTestDriver(scene)
             driver.pumpUntilState { state.pageGeometry.isNotEmpty() }
-            state.beginSelection(assertNotNull(state.displayToViewport(0, 22.0, 45.0)))
-            state.extendSelection(assertNotNull(state.displayToViewport(0, 90.0, 45.0)))
-            state.endSelectionGesture()
+            onTestUiThread { state.beginSelection(assertNotNull(state.displayToViewport(0, 22.0, 45.0))) }
+            onTestUiThread { state.extendSelection(assertNotNull(state.displayToViewport(0, 90.0, 45.0))) }
+            onTestUiThread { state.endSelectionGesture() }
             driver.pumpFrames(5)
             assertNotNull(named(scene, "Highlight colour 1 of 2"))
             assertNotNull(named(scene, "Highlight colour 2 of 2"))

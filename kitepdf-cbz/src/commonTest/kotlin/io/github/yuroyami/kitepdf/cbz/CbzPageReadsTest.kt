@@ -1,11 +1,15 @@
 package io.github.yuroyami.kitepdf.cbz
 
+import io.github.yuroyami.kitepdf.core.render.KiteBitmapCache
 import io.github.yuroyami.kitepdf.core.render.KiteImageData
 import io.github.yuroyami.kitepdf.core.render.KiteMatrix
 import io.github.yuroyami.kitepdf.core.render.RecordingCanvas
+import io.github.yuroyami.kitepdf.core.render.imageSampling
+import io.github.yuroyami.kitepdf.core.render.toRgbaBytes
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
+import kotlin.test.assertNotSame
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -83,5 +87,44 @@ class CbzPageReadsTest {
         val canvas = RecordingCanvas()
         doc.pages[1].renderTo(canvas)
         assertEquals(1, images(canvas).size)
+    }
+
+    @Test
+    fun converted_pixels_survive_a_scan_eviction_and_a_zero_decode_budget() {
+        val bmp = CbzFixtures.bmp2x1()
+        val imageBytes = assertNotNull(KiteImageData.fromEncodedImage(bmp)).pixelBytes!!.size.toLong()
+        for (budget in listOf(0L, imageBytes)) {
+            val decoded = CbzImageCache(budget)
+            val page = CbzPage({ bmp }, "p.bmp", readHeader = { bmp }, decoded = decoded)
+            val bitmaps = KiteBitmapCache<ByteArray>()
+            var conversions = 0
+            fun convert(image: KiteImageData) = bitmaps.getOrPut(
+                image, imageSampling(image.width, image.height, KiteMatrix.IDENTITY, false), { it.size.toLong() },
+            ) { conversions++; image.toRgbaBytes() }
+            val first = images(RecordingCanvas().also { page.renderTo(it) }).single().image
+            assertNotNull(convert(first))
+            // Evict p.bmp when the budget can hold one scan; zero already retained nothing.
+            decoded.put("other.bmp", assertNotNull(KiteImageData.fromEncodedImage(bmp)))
+            assertNull(decoded.get("p.bmp"))
+            val second = images(RecordingCanvas().also { page.renderTo(it) }).single().image
+            assertNotSame(first, second)
+            assertNotNull(convert(second))
+            assertEquals(1, conversions, "budget $budget must not invalidate converted pixels")
+        }
+    }
+
+    @Test
+    fun the_same_entry_name_in_different_comics_keeps_distinct_pixels() {
+        val bytes = CbzFixtures.comic("page.bmp" to CbzFixtures.bmp2x1())
+        val bitmaps = KiteBitmapCache<ByteArray>()
+        var conversions = 0
+        repeat(2) {
+            val document = CbzDocument.open(bytes)
+            val image = images(RecordingCanvas().also { document.pages[0].renderTo(it) }).single().image
+            bitmaps.getOrPut(
+                image, imageSampling(image.width, image.height, KiteMatrix.IDENTITY, false), { it.size.toLong() },
+            ) { conversions++; image.toRgbaBytes() }
+        }
+        assertEquals(2, conversions, "identical paths from independent documents must not alias")
     }
 }

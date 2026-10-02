@@ -2,7 +2,7 @@ package io.github.yuroyami.kitepdf.compose
 
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.ui.ImageComposeScene
+import io.github.yuroyami.kitepdf.compose.EdtImageComposeScene as ImageComposeScene
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
@@ -12,7 +12,6 @@ import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.font.createFontFamilyResolver
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
-import androidx.compose.ui.use
 import io.github.yuroyami.kitepdf.PdfDocument
 import io.github.yuroyami.kitepdf.core.KitePage
 import io.github.yuroyami.kitepdf.core.font.FontSpec
@@ -76,7 +75,7 @@ class CanvasDecoratorTest {
         val page = document().pages[0]
         val renderer = rasterizer()
         val decorator = Ink(green)
-        assertPaint(renderer.rasterize(page, 200, 200, canvasDecorator = decorator), Color.Green)
+        assertPaint(onTestUiThread { renderer.rasterize(page, 200, 200, canvasDecorator = decorator) }, Color.Green)
         assertPaint(renderer.rasterizeOffMain(page, 200, 200, canvasDecorator = decorator), Color.Green)
     }
 
@@ -176,8 +175,8 @@ class CanvasDecoratorTest {
         val theme = ReaderTheme(RgbColor.WHITE) { color ->
             if (color == green) yellow else color
         }
-        assertPaint(rasterizer().rasterize(document().pages[0], 200, 200,
-            theme = theme, canvasDecorator = Ink(green)), Color.Yellow)
+        assertPaint(onTestUiThread { rasterizer().rasterize(document().pages[0], 200, 200,
+            theme = theme, canvasDecorator = Ink(green)) }, Color.Yellow)
     }
 
     @Test

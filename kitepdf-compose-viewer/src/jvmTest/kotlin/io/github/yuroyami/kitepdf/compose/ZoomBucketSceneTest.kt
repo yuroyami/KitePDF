@@ -2,7 +2,6 @@ package io.github.yuroyami.kitepdf.compose
 
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.use
 import io.github.yuroyami.kitepdf.PdfDocument
 import java.util.Collections
 import kotlin.test.Test
@@ -56,7 +55,7 @@ class ZoomBucketSceneTest {
             driver.pumpUntilState { widths.isNotEmpty() }
             fun settleAt(zoom: Float): List<Int> {
                 widths.clear()
-                state.setZoom(zoom)
+                onTestUiThread { state.setZoom(zoom) }
                 Thread.sleep(300)
                 driver.pumpFrames(40)
                 Thread.sleep(300)

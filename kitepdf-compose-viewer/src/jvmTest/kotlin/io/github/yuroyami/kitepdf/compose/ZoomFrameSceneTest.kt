@@ -2,7 +2,6 @@ package io.github.yuroyami.kitepdf.compose
 
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.use
 import io.github.yuroyami.kitepdf.PdfDocument
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.test.Test
@@ -55,7 +54,7 @@ class ZoomFrameSceneTest {
                     val before = paints.get()
                     // One zoom step per frame, as a pinch gives. The zoom never rests long enough to settle.
                     repeat(30) { i ->
-                        state.setZoom(1f + (i + 1) * 0.05f)
+                        onTestUiThread { state.setZoom(1f + (i + 1) * 0.05f) }
                         driver.pumpFrames(1)
                     }
                     val during = paints.get() - before
@@ -89,7 +88,7 @@ class ZoomFrameSceneTest {
                     starts.clear()
                     counting = true
                     repeat(30) { i ->
-                        state.setZoom(1f + (i + 1) * 0.05f)
+                        onTestUiThread { state.setZoom(1f + (i + 1) * 0.05f) }
                         driver.pumpFrames(1)
                     }
                     counting = false

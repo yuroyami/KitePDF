@@ -385,11 +385,12 @@ KiteDocView(state, renderSpec = spec)
 
 ### `KiteRenderSpec.Vectorized`
 
-Draw each page's content into a live Canvas, transformed by zoom/pan via a GPU layer. No bitmap; lower memory footprint, resolution-independent quality. The page draws again when its size, its settled zoom, the theme or the render spec changes. A change to the overlay, such as a search hit or a highlight, and each frame of a pinch replay the drawing that the page recorded.
+Draw each page's content into a live Canvas, transformed by zoom/pan via a GPU layer. There is no whole-page raster; embedded images use a bounded cache of converted bitmaps shared by the pages of the viewer. The page draws again when its size, its settled zoom, the theme or the render spec changes. A change to the overlay, such as a search hit or a highlight, and each frame of a pinch replay the drawing that the page recorded.
 
 ```kotlin
 val spec = KiteRenderSpec.Vectorized(
     hairlineWidthPx = 1f, // width of a zero-width stroke, in device pixels
+    imageCacheBudgetBytes = 16L * 1024 * 1024, // shared by this viewer's pages
 )
 KiteDocView(state, renderSpec = spec)
 ```
@@ -397,18 +398,21 @@ KiteDocView(state, renderSpec = spec)
 **When to use:**
 - Simple pages with minimal content (forms, text-only documents).
 - Deep zoom crispness matters more than gesture smoothness.
-- Memory is scarce (no bitmap overhead).
+- Whole-page raster memory would be too large; tune the embedded-image budget separately.
 - Every composition must stay crisp (e.g. animation).
 
 **Parameters:**
 
 - **`hairlineWidthPx`** (default 1.0): the width in device pixels of a stroke whose line width is 0. `1.0` is the one device pixel of ISO 32000-1, 8.4.3.2. Other thin strokes (ECG traces, fine borders) widen to a fifth of this width, as MuPDF draws them, so they stay visible without turning into solid pixels.
+- **`imageCacheBudgetBytes`** (default 16 MiB): the converted-image budget shared by the pages of one `KiteDocViewState`. Unchanged images reuse resident bitmaps at the same sampling size across redraws and page recycling. Zero disables reuse between draws; negative values are rejected. Least recently used entries are evicted first, and an image larger than the budget is drawn without retaining it. Leaving vector mode, disposing the viewer, or changing the budget releases the cache's references. Recorded drawing layers may still hold those bitmaps until the layers are released.
+
+A PDF image XObject, a CBZ entry and an EPUB image resource each carry an identity for the document. The identity outlives the decoded image, so an image decoded again reuses its bitmap. The cache keys hold only these identities, never image buffers or documents. PDF stencils, images with a `/Mask`, images under a page's default colour space, inline images and SVG resources get a new identity on each decode, so they do not reuse a bitmap. A custom image producer can give its images an identity with `KiteImageIdentity().child(resourcePath)` and `KiteImageData.withIdentity(identity)`. Keep one root identity per open document. Use a new identity when the pixels, masks, size or colour interpretation change. Do not change an image's buffers after you draw it, also in a canvas decorator.
 
 !!! warning "Rasterized vs. Vectorized trade-off"
 
     **Rasterized** wins on gesture smoothness: scroll and pan never re-execute the PDF engine. It trades memory (one bitmap) and rasterization latency for instant playback.
     
-    **Vectorized** wins on memory and true resolution independence, but it draws on the UI thread. Each draw of a page parses its content and converts its images to bitmaps again, so a page of large scans, such as a comic, is better in Rasterized. On Android the vector display list replays under the live transform so zoom stays crisp mid-pinch; on Skia targets (iOS, desktop, web) the layer is texture-cached so deep in-gesture zoom softens until the draw re-runs.
+    **Vectorized** avoids a whole-page raster, but it draws on the UI thread. Each real redraw parses the page content. Cached image bitmaps are reused. A first conversion, an evicted image or a new sampling size still converts on the UI thread. A page of large scans, such as a comic, is better in Rasterized. On Android the vector display list replays under the live transform so zoom stays crisp mid-pinch; on Skia targets (iOS, desktop, web) the layer is texture-cached so deep in-gesture zoom softens until the draw re-runs.
     
     For most apps, **Rasterized with `rerasterizeOnZoom=true`** is the sweet spot: responsive gestures and crisp zoom, with a small memory footprint per page.
 
@@ -993,28 +997,50 @@ This callback fires every time a page finishes rasterizing (i.e. the bitmap is r
 
 ## Custom viewer: KitePageRasterizer
 
-If you need a viewer that doesn't fit the built-in layouts (e.g. a thumbnail grid, an image-gallery-style pager, or a PNG batch export), use `KitePageRasterizer` directly:
+If you need a viewer that doesn't fit the built-in layouts (e.g. a thumbnail grid, an image-gallery-style pager, or a PNG batch export), use `KitePageRasterizer` directly. Start a suspend export from a coroutine:
 
 ```kotlin
 @Composable
-fun MyCustomPdfViewer(document: PdfDocument) {
+fun MyCustomPdfViewer(document: PdfDocument, onBitmap: (ImageBitmap) -> Unit) {
     val rasterizer = rememberKitePageRasterizer()
-    
-    for (pageIndex in 0 until document.pageCount) {
-        val page = document.pages[pageIndex]
-        val bitmap = rasterizer.rasterize(
+    LaunchedEffect(document, rasterizer) {
+        val page = document.pages[0]
+        val bitmap = rasterizer.rasterizeOffMain(
             page,
             widthPx = 1080,
-            heightPx = 1440,
+            heightPx = (1080 * page.displayHeight / page.displayWidth).toInt(),
             background = Color.White,
             hairlineWidthPx = 1f,
         )
-        // Use bitmap for your own layout
+        onBitmap(bitmap)
     }
 }
 ```
 
 `rememberKitePageRasterizer()` wires the rasterizer to the composition's density, layout direction, and text measurement engine. For off-composition rasterization (e.g. a background job), construct `KitePageRasterizer` directly if you already have a `TextMeasurer`.
+
+Every synchronous `rasterize` overload requires the platform UI thread: Android's main
+Looper, Apple's main thread, the browser thread, or the AWT event dispatch thread on
+desktop JVM. Calls on other threads throw `IllegalStateException` before allocating or
+drawing. The same requirement applies when a directly constructed `ComposeCanvas` draws
+system-font text or asks for host glyph outlines. Compose's shared text cache is not safe
+for simultaneous UI and worker access (#428).
+
+Use `rasterizeOffMain` from a worker coroutine or for a headless JVM export. Geometry and
+embedded outlines stay on the raster pool; host text goes to the UI thread. Desktop uses
+asynchronous AWT dispatch even when no coroutine Main provider is installed, and works
+with `java.awt.headless=true`. Do not block the UI thread with `runBlocking` or a future
+wait while exporting. Custom desktop `ImageComposeScene` integrations must also create,
+measure and draw their scenes on the AWT event dispatch thread.
+
+Pass `formState` to export a filled form. The suspend overload copies all accepted form
+values, typed choice selections and field flags before waiting for a raster slot. Both
+paint passes see that snapshot even if the reader edits the form meanwhile:
+
+```kotlin
+val bitmap = rasterizer.rasterizeOffMain(page, 1240, 1754, formState = scripts.formState)
+val png = bitmap.encodeToPng()
+```
 
 ## Placeholder while rasterizing
 
@@ -1050,7 +1076,7 @@ Freshly rasterized pages fade in smoothly rather than popping (160 ms by default
 - **System-font text renders on Main**: a page whose text has no font outlines of its own, such as the text of a book without embedded fonts, renders on the main thread, because the host text stack is not safe to use from two threads. `KitePage.drawsHostFontText` lets a page say so up front, and an EPUB page does, so such a page renders once. A page that does not say so renders off Main first, and the viewer remembers it for its next raster.
 - **In a browser, everything runs on the UI thread**: JS and Wasm have one thread, so rasters and chapter layout run there. The viewer lays out the reader's chapter and its neighbours at once, and every other chapter only after the view has rested for 400 ms, so a scroll or a pinch does not stall while a book loads. A page renders in one pass there, because a probe off the main thread gains nothing. A long document script still blocks the page.
 - **A page scrolled past stops rendering**: cancelling the coroutine of `rasterizeOffMain()` stops a PDF page between operators and throws a `CancellationException` instead of returning a partial bitmap.
-- **Synchronous escape hatch**: `KitePageRasterizer.rasterize()` runs on the calling thread for callers that need a bitmap right now. It takes no slot and no lock, so call it on the main thread for a page that may draw text in a system font: the host text stack is not safe to use from two threads.
+- **Synchronous UI export**: `KitePageRasterizer.rasterize()` requires the platform UI thread and refuses other callers before drawing. Background jobs use `rasterizeOffMain()`, including exports with live form state.
 - **Zoom settle debounce**: By default, `rerasterizeOnZoom=true` waits approximately 220 ms after zoom stops before re-rendering, so quick pinch-and-release doesn't thrash the rasterizer.
 
 ## See also

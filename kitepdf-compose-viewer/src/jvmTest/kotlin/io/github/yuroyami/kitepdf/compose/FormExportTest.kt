@@ -58,9 +58,9 @@ class FormExportTest {
         val form = PdfFormState(doc)
         form.setValue("name", "WWWW")
         val rasterizer = rasterizer()
-        assertTrue(inkInField(rasterizer.rasterize(page, 200, 200, formState = form)) > 50, "the typed value is drawn")
+        assertTrue(inkInField(onTestUiThread { rasterizer.rasterize(page, 200, 200, formState = form) }) > 50, "the typed value is drawn")
         // The file's own empty value, with no appearance to draw.
-        assertEquals(0, inkInField(rasterizer.rasterize(page, 200, 200)), "the file's value is empty")
-        assertEquals(0, inkInField(rasterizer.rasterize(page, 200, 200, formState = null)), "no form state draws the file's value")
+        assertEquals(0, inkInField(onTestUiThread { rasterizer.rasterize(page, 200, 200) }), "the file's value is empty")
+        assertEquals(0, inkInField(onTestUiThread { rasterizer.rasterize(page, 200, 200, formState = null) }), "no form state draws the file's value")
     }
 }

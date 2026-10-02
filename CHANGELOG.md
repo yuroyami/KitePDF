@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Vectorized pages share a bounded cache of converted image bitmaps across redraws
+  and page recycling. `imageCacheBudgetBytes` defaults to 16 MiB per viewer state;
+  zero disables reuse between draws. Image identities survive ordinary PDF, CBZ
+  and EPUB source reconstruction without retaining decoded image buffers. Cold
+  conversion still runs on the UI thread (#371).
+
+- Compose synchronous `KitePageRasterizer.rasterize` calls now require the platform UI
+  thread and throw before drawing on another thread. Direct `ComposeCanvas` host text
+  has the same check. Migrate worker exports to `rasterizeOffMain`, which now also accepts
+  live form state and copies it for a coherent export. Headless JVM exports dispatch host
+  text asynchronously to the AWT event dispatch thread without a coroutine Main provider.
+  Custom desktop Compose scenes must use that thread for their own text too (#428).
+
 ## [0.12.0] - 2026-09-29
 
 This release checks the digital signatures of a signed PDF, gives every page a

@@ -2,13 +2,12 @@ package io.github.yuroyami.kitepdf.compose
 
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.ui.ImageComposeScene
+import io.github.yuroyami.kitepdf.compose.EdtImageComposeScene as ImageComposeScene
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.PointerType
 import androidx.compose.ui.unit.Density
-import androidx.compose.ui.use
 import io.github.yuroyami.kitepdf.KitePDF
 import io.github.yuroyami.kitepdf.core.KiteRectangle
 import io.github.yuroyami.kitepdf.core.KiteSearchHit
@@ -37,8 +36,8 @@ class HighlightTapSceneTest {
             state.highlights = listOf(mark("first"), mark("top"))
             assertEquals("top", state.highlightAt(Offset(50f, 50f))?.id)
             assertNull(state.highlightAt(Offset(50f, 70f)), "space between lines must not activate a mark")
-            state.setZoom(2f)
-            state.panBy(Offset(12f, 8f))
+            onTestUiThread { state.setZoom(2f) }
+            onTestUiThread { state.panBy(Offset(12f, 8f)) }
             val point = state.displayToViewport(0, 50.0, 50.0)!!
             assertEquals("top", state.highlightAt(point)?.id)
             state.highlights = listOf(mark("first"))

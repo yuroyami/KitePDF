@@ -71,7 +71,7 @@ class SoftMaskBoundsTest {
         val recorder = LayerRecorder(Canvas(bitmap))
         val density = Density(1f)
         val measurer = TextMeasurer(createFontFamilyResolver(), density, LayoutDirection.Ltr)
-        CanvasDrawScope().draw(density, LayoutDirection.Ltr, recorder, Size(200f, 200f)) {
+        CanvasDrawScope().drawOnTestUiThread(density, LayoutDirection.Ltr, recorder, Size(200f, 200f)) {
             drawRect(Color.White)
             doc.pages[0].renderTo(ComposeCanvas(this, measurer), KiteMatrix(1.0, 0.0, 0.0, -1.0, 0.0, 200.0))
         }

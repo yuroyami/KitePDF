@@ -1,7 +1,7 @@
 package io.github.yuroyami.kitepdf.compose
 
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.ui.ImageComposeScene
+import io.github.yuroyami.kitepdf.compose.EdtImageComposeScene as ImageComposeScene
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.SemanticsActions
@@ -10,7 +10,6 @@ import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.unit.Density
-import androidx.compose.ui.use
 import io.github.yuroyami.kitepdf.PdfAction
 import io.github.yuroyami.kitepdf.PdfDocument
 import io.github.yuroyami.kitepdf.PdfFormState
@@ -61,14 +60,14 @@ class PageSemanticsSceneTest {
         override fun keystroke(fieldName: String, change: String, selectionStart: Int, selectionEnd: Int): String = change
     }
 
-    private fun nodes(scene: ImageComposeScene): List<SemanticsNode> {
+    private fun nodes(scene: ImageComposeScene): List<SemanticsNode> = onTestUiThread {
         val out = ArrayList<SemanticsNode>()
         fun walk(node: SemanticsNode) {
             out += node
             node.children.forEach(::walk)
         }
         scene.semanticsOwners.forEach { walk(it.unmergedRootSemanticsNode) }
-        return out
+        return@onTestUiThread out
     }
 
     private fun described(scene: ImageComposeScene, name: String): SemanticsNode? =
@@ -101,18 +100,18 @@ class PageSemanticsSceneTest {
 
                 val link = assertNotNull(described(scene, "Visit site"), "$render: no node names the link")
                 assertEquals(Role.Button, link.config.getOrNull(SemanticsProperties.Role))
-                link.config[SemanticsActions.OnClick].action!!.invoke()
+                onTestUiThread { link.config[SemanticsActions.OnClick].action!!.invoke() }
                 driver.pumpUntilState { tapped.isNotEmpty() }
                 assertEquals("https://example.com/site", ((tapped.single() as KiteLinkAction.Pdf).action as PdfAction.Uri).uri)
 
                 val email = assertNotNull(described(scene, "Email address"), "$render: no node names the text field")
-                email.config[SemanticsActions.OnClick].action!!.invoke()
+                onTestUiThread { email.config[SemanticsActions.OnClick].action!!.invoke() }
                 driver.pumpUntilState { state.focusedField == "email" }
 
                 val agree = assertNotNull(described(scene, "I agree"), "$render: no node names the check box")
                 assertEquals(Role.Checkbox, agree.config.getOrNull(SemanticsProperties.Role))
                 assertEquals(ToggleableState.Off, agree.config.getOrNull(SemanticsProperties.ToggleableState))
-                agree.config[SemanticsActions.OnClick].action!!.invoke()
+                onTestUiThread { agree.config[SemanticsActions.OnClick].action!!.invoke() }
                 driver.pumpUntilState {
                     described(scene, "I agree")?.config?.getOrNull(SemanticsProperties.ToggleableState) == ToggleableState.On
                 }

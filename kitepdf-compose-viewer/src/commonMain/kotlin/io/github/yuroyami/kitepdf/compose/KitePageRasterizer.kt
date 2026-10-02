@@ -24,7 +24,6 @@ import io.github.yuroyami.kitepdf.core.kiteWarn
 import io.github.yuroyami.kitepdf.core.render.KITE_DEFAULT_MAX_RASTER_PIXELS
 import io.github.yuroyami.kitepdf.core.render.KiteMatrix
 import io.github.yuroyami.kitepdf.core.render.ReaderTheme
-import kotlinx.coroutines.sync.withLock
 
 /**
  * Imperative page → [ImageBitmap] pipeline. This is the raster engine behind
@@ -35,7 +34,9 @@ import kotlinx.coroutines.sync.withLock
  * Obtain one inside composition with [rememberKitePageRasterizer], or construct it
  * directly off-composition when you already hold a [TextMeasurer].
  *
- * [rasterize] runs synchronously on the calling thread; [rasterizeOffMain]
+ * [rasterize] requires the platform UI thread and refuses other callers before
+ * drawing. On desktop JVM this is the AWT event dispatch thread, including headless
+ * exports. [rasterizeOffMain] is the suspend entry point for any calling thread; it
  * moves the work to [kitepdfRasterDispatcher] (a background pool on
  * JVM/Android/Apple, Main on JS/Wasm) so a complex page does not jank scrolling
  * or pinch. [KiteDocView] uses that path. A page with text in a system font is
@@ -69,29 +70,8 @@ public class KitePageRasterizer(
          */
         internal val rasterGate = RasterGate(if (rastersOnUiThread) 1 else 2)
 
-        /**
-         * Serializes host-font text where it cannot run on Main. Compose's skiko text stack
-         * keeps a process-global style cache (a plain HashMap behind
-         * `ParagraphBuilder.makeSkTextStyle`), so two pages that measure text on two pool
-         * threads corrupt it, even when each owns a private [TextMeasurer]. That race aborted
-         * an app on iOS. Main is one thread, so the host-font pass is safe there; without a
-         * Main dispatcher it runs on the caller, behind this lock.
-         */
-        private val hostTextMutex = kotlinx.coroutines.sync.Mutex()
-
         /** The cancellation of a render nobody can cancel. */
         private val NEVER_CANCELLED = KiteCancellation { false }
-
-        /**
-         * True when this platform provides a usable [kotlinx.coroutines.Dispatchers.Main].
-         * A headless JVM without a Swing/JavaFX main loop has none; there the
-         * system-font re-render runs on the calling context instead.
-         */
-        private val mainDispatcherAvailable: Boolean by lazy {
-            runCatching {
-                kotlinx.coroutines.Dispatchers.Main.isDispatchNeeded(kotlin.coroutines.EmptyCoroutineContext)
-            }.isSuccess
-        }
     }
 
     /**
@@ -114,11 +94,13 @@ public class KitePageRasterizer(
      * CancellationException instead of returning a partial bitmap (#188).
      *
      * Pages that fall back to system-font text (EPUB body text, PDFs without
-     * embedded outlines) are re-rendered on [Dispatchers.Main]: skiko's text
+     * embedded outlines) are re-rendered on the platform UI thread: skiko's text
      * stack shares process-global state with the host UI thread, and no lock
      * of ours can exclude that thread, so the only safe place to measure or
      * draw through it is the main thread itself. Pages whose glyphs all have
      * embedded outlines (the common PDF case) stay entirely on the pool.
+     * Desktop JVM uses the AWT event dispatch thread even in headless mode, without
+     * requiring a coroutine Main dispatcher. Never block that thread waiting for this call.
      *
      * Two rasters run at once across the process. This call waits for a free slot
      * with the priority of a page on screen, ahead of the pages that a viewer draws
@@ -150,6 +132,35 @@ public class KitePageRasterizer(
     }
 
     /**
+     * Exports the accepted live values of [formState] from any coroutine dispatcher.
+     * The state is copied before waiting for a raster slot, so both paint passes use
+     * the same field values, choice selections and visibility (ISO 32000-1,
+     * 12.7). Later edits do not change an export already in progress. Other page types
+     * ignore the form state. Unlike the viewer's cached page bitmap, this includes widgets.
+     *
+     * This is the suspend replacement for synchronous [rasterize] form exports on a worker.
+     * Cancellation and text-thread dispatch follow the other [rasterizeOffMain] overloads.
+     */
+    public suspend fun rasterizeOffMain(
+        page: KitePage,
+        widthPx: Int,
+        heightPx: Int,
+        formState: io.github.yuroyami.kitepdf.PdfFormState?,
+        background: Color = Color.White,
+        hairlineWidthPx: Float = 1f,
+        theme: ReaderTheme? = null,
+        canvasDecorator: KiteCanvasDecorator? = null,
+    ): ImageBitmap {
+        val snapshot = formState?.snapshot()
+        return rasterGate.withPermit({ RasterPriority.VISIBLE }) {
+            rasterizeOffMainLocked(
+                page, widthPx, heightPx, background, hairlineWidthPx, theme,
+                canvasDecorator = canvasDecorator, formState = snapshot,
+            )
+        }
+    }
+
+    /**
      * The off-main render body. Must be called with a slot of [rasterGate].
      * Probes on the raster pool with system-font text skipped; if the page
      * needed such text, discards the probe and re-renders fully on Main so
@@ -165,6 +176,7 @@ public class KitePageRasterizer(
         skipWidgets: Boolean = false,
         canvasDecorator: KiteCanvasDecorator? = null,
         region: IntRect? = null,
+        formState: io.github.yuroyami.kitepdf.PdfFormState? = null,
     ): ImageBitmap {
         // A page the viewer no longer needs stops between operators when its coroutine is cancelled (#188).
         val job = kotlinx.coroutines.currentCoroutineContext()[kotlinx.coroutines.Job]
@@ -174,27 +186,15 @@ public class KitePageRasterizer(
             // at once: a probe would draw it in full only to throw the bitmap away (#131). The page
             // answers here, off Main, because an answer can lay its chapter out.
             if (hostFontPage === page || page.drawsHostFontText == true) null
-            else rasterizeInternal(page, widthPx, heightPx, background, hairlineWidthPx, theme, skipSystemFontText = true, skipWidgets = skipWidgets, canvasDecorator = canvasDecorator, cancellation = cancellation, region = region)
+            else rasterizeInternal(page, widthPx, heightPx, background, hairlineWidthPx, theme, skipSystemFontText = true, skipWidgets = skipWidgets, canvasDecorator = canvasDecorator, cancellation = cancellation, region = region, formState = formState)
         }
         kotlinx.coroutines.currentCoroutineContext().ensureActive()
         if (probe != null && !probe.second) return probe.first
         hostFontPage = page
-        return onMainOrCaller {
-            rasterizeInternal(page, widthPx, heightPx, background, hairlineWidthPx, theme, skipSystemFontText = false, skipWidgets = skipWidgets, canvasDecorator = canvasDecorator, cancellation = cancellation, region = region).first
+        return onHostTextThread {
+            rasterizeInternal(page, widthPx, heightPx, background, hairlineWidthPx, theme, skipSystemFontText = false, skipWidgets = skipWidgets, canvasDecorator = canvasDecorator, cancellation = cancellation, region = region, formState = formState).first
         }.also { kotlinx.coroutines.currentCoroutineContext().ensureActive() }
     }
-
-    /**
-     * Runs [block] on [Dispatchers.Main] when a Main dispatcher exists on this
-     * platform, else on the calling context behind [hostTextMutex] (a headless JVM
-     * without a Swing/JavaFX main loop), so two host-font passes never overlap.
-     */
-    private suspend fun <T> onMainOrCaller(block: () -> T): T =
-        if (mainDispatcherAvailable) {
-            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) { block() }
-        } else {
-            hostTextMutex.withLock { block() }
-        }
 
     /**
      * [rasterizeOffMain] through [cache]: a hit returns the cached bitmap at once, a miss
@@ -295,6 +295,11 @@ public class KitePageRasterizer(
      * ratio, `widthPx * displayHeight / displayWidth`: a shorter bitmap cuts off
      * the bottom of the page, and a taller one leaves background below it.
      *
+     * Requires the platform UI thread (AWT event dispatch thread on desktop JVM).
+     * Throws [IllegalStateException] before allocation or page traversal on another
+     * thread. Use [rasterizeOffMain] for a background export, even for an outlined page:
+     * a decorator or fallback may still reach Compose's shared text cache (#428).
+     *
      * @param background colour painted before page content (documents assume paper).
      * @param hairlineWidthPx the width in raster pixels of a stroke whose line width
      *   is 0. See [ComposeCanvas]. Pass the raster:on-screen ratio (>1) when rendering
@@ -321,8 +326,10 @@ public class KitePageRasterizer(
         hairlineWidthPx: Float = 1f,
         theme: ReaderTheme? = null,
         canvasDecorator: KiteCanvasDecorator?,
-    ): ImageBitmap =
-        rasterizeInternal(page, widthPx, heightPx, background, hairlineWidthPx, theme, skipSystemFontText = false, canvasDecorator = canvasDecorator).first
+    ): ImageBitmap {
+        requireHostTextThread()
+        return rasterizeInternal(page, widthPx, heightPx, background, hairlineWidthPx, theme, skipSystemFontText = false, canvasDecorator = canvasDecorator).first
+    }
 
     /**
      * [rasterize] for an export of a form: a PDF page draws its fields with the values that
@@ -333,7 +340,7 @@ public class KitePageRasterizer(
      * layer draws them, so export a filled form with this call (#431).
      *
      * ```kotlin
-     * val bitmap = rasterizer.rasterize(page, 1240, 1754, formState = scripts.formState)
+     * val bitmap = rasterizer.rasterizeOffMain(page, 1240, 1754, formState = scripts.formState)
      * val png = bitmap.encodeToPng()
      * ```
      */
@@ -346,10 +353,13 @@ public class KitePageRasterizer(
         hairlineWidthPx: Float = 1f,
         theme: ReaderTheme? = null,
         canvasDecorator: KiteCanvasDecorator? = null,
-    ): ImageBitmap = rasterizeInternal(
-        page, widthPx, heightPx, background, hairlineWidthPx, theme,
-        skipSystemFontText = false, canvasDecorator = canvasDecorator, formState = formState,
-    ).first
+    ): ImageBitmap {
+        requireHostTextThread()
+        return rasterizeInternal(
+            page, widthPx, heightPx, background, hairlineWidthPx, theme,
+            skipSystemFontText = false, canvasDecorator = canvasDecorator, formState = formState,
+        ).first
+    }
 
     /**
      * [rasterize] plus the system-font probe flag: second value is true when

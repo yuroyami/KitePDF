@@ -7,7 +7,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PixelMap
-import androidx.compose.ui.use
 import io.github.yuroyami.kitepdf.core.KiteDocument
 import io.github.yuroyami.kitepdf.core.KitePage
 import io.github.yuroyami.kitepdf.core.render.KiteCanvas
@@ -94,7 +93,7 @@ class RasterFailureSceneTest {
                 driver.pumpUntil { red(it) }
                 driver.pumpUntilState { state.pageRenderState(0) == KitePageRenderState.Ready }
                 // A crisp-zoom raster of 1,600 px, which the page cannot draw.
-                state.setZoom(4f)
+                onTestUiThread { state.setZoom(4f) }
                 driver.pumpUntilState { state.pageRenderState(0) == KitePageRenderState.Failed }
                 driver.pumpFrames(30)
                 driver.pumpUntil { red(it) }

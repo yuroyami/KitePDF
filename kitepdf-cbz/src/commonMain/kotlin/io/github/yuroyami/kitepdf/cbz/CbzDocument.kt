@@ -6,6 +6,7 @@ import io.github.yuroyami.kitepdf.core.KiteOutlineItem
 import io.github.yuroyami.kitepdf.core.KiteDocument
 import io.github.yuroyami.kitepdf.core.KiteFormatException
 import io.github.yuroyami.kitepdf.core.KitePage
+import io.github.yuroyami.kitepdf.core.render.KiteImageIdentity
 import io.github.yuroyami.kitepdf.core.zip.ZipReader
 
 /** Entry extensions that count as comic pages. */
@@ -35,8 +36,14 @@ public class CbzDocument private constructor(
     /** The comic's decoded scans, kept for a page drawn again (#386). */
     private val decoded = CbzImageCache(DECODED_IMAGE_BYTES)
 
+    /** Lightweight source keys outlive decoded scans without retaining the archive (#371). */
+    private val imageIdentities = KiteImageIdentity()
+
     override val pages: List<KitePage> = entryNames.map { name ->
-        CbzPage({ zip.read(name) }, name, readHeader = { zip.readPrefix(name, HEADER_BYTES) }, decoded = decoded)
+        CbzPage(
+            { zip.read(name) }, name, readHeader = { zip.readPrefix(name, HEADER_BYTES) },
+            decoded = decoded, imageIdentity = imageIdentities.child(name),
+        )
     }
 
     override val pageCount: Int get() = pages.size

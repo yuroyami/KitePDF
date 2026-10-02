@@ -1384,6 +1384,7 @@ public final class io/github/yuroyami/kitepdf/core/render/KiteBitmapCache {
 	public fun <init> ()V
 	public fun <init> (J)V
 	public synthetic fun <init> (JILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun clear ()V
 	public final fun getHeldBytes ()J
 	public final fun getOrPut (Lio/github/yuroyami/kitepdf/core/render/KiteImageData;Lio/github/yuroyami/kitepdf/core/render/KiteImageSampling;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function0;)Ljava/lang/Object;
 }
@@ -1642,6 +1643,7 @@ public final class io/github/yuroyami/kitepdf/core/render/KiteImageData {
 	public final fun getWidth ()I
 	public final fun isImageMask ()Z
 	public final fun retainedBytes ()J
+	public final fun withIdentity (Lio/github/yuroyami/kitepdf/core/render/KiteImageIdentity;)Lio/github/yuroyami/kitepdf/core/render/KiteImageData;
 	public final fun withIntent (Lio/github/yuroyami/kitepdf/core/render/KiteRenderingIntent;Z)Lio/github/yuroyami/kitepdf/core/render/KiteImageData;
 	public static synthetic fun withIntent$default (Lio/github/yuroyami/kitepdf/core/render/KiteImageData;Lio/github/yuroyami/kitepdf/core/render/KiteRenderingIntent;ZILjava/lang/Object;)Lio/github/yuroyami/kitepdf/core/render/KiteImageData;
 }
@@ -1663,6 +1665,13 @@ public final class io/github/yuroyami/kitepdf/core/render/KiteImageData$Kind : j
 	public static fun getEntries ()Lkotlin/enums/EnumEntries;
 	public static fun valueOf (Ljava/lang/String;)Lio/github/yuroyami/kitepdf/core/render/KiteImageData$Kind;
 	public static fun values ()[Lio/github/yuroyami/kitepdf/core/render/KiteImageData$Kind;
+}
+
+public final class io/github/yuroyami/kitepdf/core/render/KiteImageIdentity {
+	public fun <init> ()V
+	public final fun child (Ljava/lang/String;)Lio/github/yuroyami/kitepdf/core/render/KiteImageIdentity;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
 }
 
 public final class io/github/yuroyami/kitepdf/core/render/KiteImageSampling {

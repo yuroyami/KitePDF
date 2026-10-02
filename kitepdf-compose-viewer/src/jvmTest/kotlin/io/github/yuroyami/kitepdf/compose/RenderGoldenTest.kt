@@ -44,7 +44,7 @@ class RenderGoldenTest {
         val density = Density(1f)
         val ld = LayoutDirection.Ltr
         val tm = TextMeasurer(createFontFamilyResolver(), density, ld)
-        CanvasDrawScope().draw(density, ld, Canvas(bmp), Size(w.toFloat(), h.toFloat())) {
+        CanvasDrawScope().drawOnTestUiThread(density, ld, Canvas(bmp), Size(w.toFloat(), h.toFloat())) {
             drawRect(Color.White, size = size)
             page.renderTo(ComposeCanvas(this, tm), KiteMatrix(scale, 0.0, 0.0, -scale, 0.0, h.toDouble()))
         }
@@ -86,7 +86,7 @@ class RenderGoldenTest {
             val bmp = ImageBitmap(w, h)
             val d = Density(density)
             val tm = TextMeasurer(createFontFamilyResolver(), d, LayoutDirection.Ltr)
-            CanvasDrawScope().draw(d, LayoutDirection.Ltr, Canvas(bmp), Size(w.toFloat(), h.toFloat())) {
+            CanvasDrawScope().drawOnTestUiThread(d, LayoutDirection.Ltr, Canvas(bmp), Size(w.toFloat(), h.toFloat())) {
                 drawRect(Color.White, size = size)
                 page.renderTo(ComposeCanvas(this, tm), KiteMatrix(scale, 0.0, 0.0, -scale, 0.0, h.toDouble()))
             }

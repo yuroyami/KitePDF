@@ -5,7 +5,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.PointerType
-import androidx.compose.ui.use
 import io.github.yuroyami.kitepdf.core.KiteBookmark
 import io.github.yuroyami.kitepdf.epub.EpubDocument
 import io.github.yuroyami.kitepdf.epub.EpubSettings
@@ -64,7 +63,7 @@ class RestingLoaderSceneTest {
             var step = 0
             pumpFor(driver, 2000) {
                 if (System.nanoTime() - zoomedAt > 100_000_000L) {
-                    state.setZoom(1.2f + step++ * 0.01f)
+                    onTestUiThread { state.setZoom(1.2f + step++ * 0.01f) }
                     zoomedAt = System.nanoTime()
                 }
             }

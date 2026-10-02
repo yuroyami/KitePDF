@@ -6,7 +6,6 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.PixelMap
 import androidx.compose.ui.unit.IntRect
 import androidx.compose.ui.unit.IntSize
-import androidx.compose.ui.use
 import io.github.yuroyami.kitepdf.PdfDocument
 import io.github.yuroyami.kitepdf.core.KiteLocation
 import kotlin.test.Test
@@ -66,7 +65,7 @@ class TileSceneTest {
         }
         scene.use {
             driver.pumpUntil { it[50, 50].red < 0.9f }
-            state.setZoom(8f)
+            onTestUiThread { state.setZoom(8f) }
             driver.pumpUntil { contrast(it, IntRect(40, 40, 60, 60)) > 0.6f }
         }
     }

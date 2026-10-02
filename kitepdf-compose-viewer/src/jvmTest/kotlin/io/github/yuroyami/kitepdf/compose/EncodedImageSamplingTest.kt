@@ -40,7 +40,7 @@ class EncodedImageSamplingTest {
         val image = KiteImageData.fromEncodedImage(arithmeticJpeg) ?: error("no image")
         assertEquals(KiteImageData.Kind.JPEG, image.kind, "KiteImage must refuse arithmetic coding for this test to mean anything")
         val bitmap = ImageBitmap(w, h)
-        CanvasDrawScope().draw(Density(1f), LayoutDirection.Ltr, Canvas(bitmap), Size(w.toFloat(), h.toFloat())) {
+        CanvasDrawScope().drawOnTestUiThread(Density(1f), LayoutDirection.Ltr, Canvas(bitmap), Size(w.toFloat(), h.toFloat())) {
             ComposeCanvas(this, TextMeasurer(createFontFamilyResolver(), Density(1f), LayoutDirection.Ltr))
                 .drawImage(image, KiteMatrix(w.toDouble(), 0.0, 0.0, -h.toDouble(), 0.0, h.toDouble()), 1.0)
         }

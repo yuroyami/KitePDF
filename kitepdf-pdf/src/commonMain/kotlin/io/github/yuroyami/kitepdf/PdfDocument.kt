@@ -16,6 +16,7 @@ import io.github.yuroyami.kitepdf.core.KiteWrongPasswordException
 import io.github.yuroyami.kitepdf.core.kiteWarn
 import io.github.yuroyami.kitepdf.core.font.PdfFont
 import io.github.yuroyami.kitepdf.core.render.KiteImageData
+import io.github.yuroyami.kitepdf.core.render.KiteImageIdentity
 import io.github.yuroyami.kitepdf.crypto.Decryptor
 import io.github.yuroyami.kitepdf.crypto.StandardSecurityHandler
 import io.github.yuroyami.kitepdf.core.filters.FilterChain
@@ -257,6 +258,9 @@ public class PdfDocument private constructor(
      */
     private val decodedImageCache = LinkedHashMap<Long, KiteImageData>()
 
+    /** Image keys survive decoded-cache eviction without keeping this document or its bytes (#371). */
+    private val imageIdentities = KiteImageIdentity()
+
     /** The bytes that the images in [decodedImageCache] hold. */
     internal var decodedImageBytes = 0L
         private set
@@ -289,12 +293,15 @@ public class PdfDocument private constructor(
     /** First writer wins; racing decoders converge on one instance. */
     internal fun cacheImage(objectNumber: Long, image: KiteImageData): KiteImageData = lock.withLock {
         decodedImageCache[objectNumber]?.let { return@withLock it }
-        val bytes = image.retainedBytes()
-        if (bytes > imageCacheBudgetBytes) return@withLock image
-        decodedImageCache[objectNumber] = image
+        // Only images whose pixels are independent of the drawing state enter here. Stencils,
+        // resource-local default colour spaces and other uncached variants keep fresh identities.
+        val identified = image.withIdentity(imageIdentities.child(objectNumber.toString()))
+        val bytes = identified.retainedBytes()
+        if (bytes > imageCacheBudgetBytes) return@withLock identified
+        decodedImageCache[objectNumber] = identified
         decodedImageBytes += bytes
         trimImageCache()
-        image
+        identified
     }
 
     /** Removes the images used least recently until the cache fits its budget. Call it with [lock] held. */

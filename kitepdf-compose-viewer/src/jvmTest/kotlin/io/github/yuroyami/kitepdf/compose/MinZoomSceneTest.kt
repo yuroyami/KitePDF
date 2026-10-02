@@ -1,12 +1,11 @@
 package io.github.yuroyami.kitepdf.compose
 
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.ui.ImageComposeScene
+import io.github.yuroyami.kitepdf.compose.EdtImageComposeScene as ImageComposeScene
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.PointerType
-import androidx.compose.ui.use
 import io.github.yuroyami.kitepdf.PdfDocument
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -99,7 +98,7 @@ class MinZoomSceneTest {
                 driver.pumpFrames(10)
                 drag(scene, driver, from = 180f, to = 20f)
                 driver.pumpUntilState { state.currentPage == 1 }
-                state.setZoom(0.6f)
+                onTestUiThread { state.setZoom(0.6f) }
                 driver.pumpFrames(10)
                 drag(scene, driver, from = 180f, to = 20f)
                 driver.pumpUntilState { state.currentPage == 2 }
@@ -144,7 +143,7 @@ class MinZoomSceneTest {
             }
             scene.use {
                 driver.pumpFrames(10)
-                state.setZoom(0.5f)
+                onTestUiThread { state.setZoom(0.5f) }
                 driver.pumpFrames(2)
                 assertEquals(1f, state.zoom)
             }

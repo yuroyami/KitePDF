@@ -8,6 +8,7 @@ import io.github.yuroyami.kitepdf.core.zip.ZipReader
 
 import io.github.yuroyami.kitepdf.core.KiteLock
 import io.github.yuroyami.kitepdf.core.withLock
+import io.github.yuroyami.kitepdf.core.render.KiteImageIdentity
 import io.github.yuroyami.kitepdf.epub.css.CssParser
 import io.github.yuroyami.kitepdf.epub.css.Direction
 import io.github.yuroyami.kitepdf.epub.css.FontFaceRule
@@ -61,6 +62,9 @@ internal class ParsedEpub(
 ) {
 
     val spineCount: Int get() = spinePaths.size
+
+    /** The same immutable image resources survive chapter eviction and settings changes (#371). */
+    val imageIdentities = KiteImageIdentity()
 
     /** Whether [chapter] keeps the fixed pages its author set, rather than reflowing. */
     fun isFixed(chapter: Int): Boolean = renditions.getOrNull(chapter)?.layout == EpubLayout.PRE_PAGINATED

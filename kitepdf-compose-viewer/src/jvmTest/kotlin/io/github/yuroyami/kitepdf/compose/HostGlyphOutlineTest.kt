@@ -53,7 +53,7 @@ class HostGlyphOutlineTest {
     private fun render(content: String): PixelMap {
         val bitmap = ImageBitmap(300, 300)
         val page = pdf(content).pages[0]
-        CanvasDrawScope().draw(density, LayoutDirection.Ltr, Canvas(bitmap), Size(300f, 300f)) {
+        CanvasDrawScope().drawOnTestUiThread(density, LayoutDirection.Ltr, Canvas(bitmap), Size(300f, 300f)) {
             drawRect(Color.White, size = size)
             page.renderTo(ComposeCanvas(this, measurer), page.pageToDeviceBase())
         }
@@ -72,7 +72,7 @@ class HostGlyphOutlineTest {
     @Test
     fun a_host_outline_has_the_curves_of_its_letter() {
         lateinit var outline: KitePath
-        CanvasDrawScope().draw(density, LayoutDirection.Ltr, Canvas(ImageBitmap(10, 10)), Size(10f, 10f)) {
+        CanvasDrawScope().drawOnTestUiThread(density, LayoutDirection.Ltr, Canvas(ImageBitmap(10, 10)), Size(10f, 10f)) {
             outline = assertNotNull(ComposeCanvas(this, measurer).hostGlyphOutline("O", FontSpec(KiteFontFamily.SansSerif, false, false)))
         }
         assertTrue(

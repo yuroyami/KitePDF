@@ -8,13 +8,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.PointerType
-import androidx.compose.ui.use
 import io.github.yuroyami.kitepdf.PdfDocument
 import io.github.yuroyami.kitepdf.PdfFormState
 import io.github.yuroyami.kitepdf.PdfScriptHandler
 import io.github.yuroyami.kitepdf.epub.EpubDocument
 import io.github.yuroyami.kitepdf.epub.EpubSettings
-import kotlinx.coroutines.runBlocking
 import java.util.Collections
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -65,7 +63,7 @@ class PageScriptsSceneTest {
                 }
                 // Between frames, as an app's main thread runs it: a list scrolled inside a frame
                 // would measure in the middle of composition.
-                fun go(page: Int) = runBlocking { state.scrollToPage(page) }
+                fun go(page: Int) = driver.runOnUi { state.scrollToPage(page) }
                 scene.use {
                     fun waitFor(what: String, check: () -> Boolean) = try {
                         driver.pumpUntilState(check = check)

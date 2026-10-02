@@ -12,7 +12,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshots.Snapshot
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.ImageComposeScene
+import io.github.yuroyami.kitepdf.compose.EdtImageComposeScene as ImageComposeScene
 import androidx.compose.ui.InternalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -22,7 +22,6 @@ import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.PointerType
 import androidx.compose.ui.layout.layout
-import androidx.compose.ui.use
 import io.github.yuroyami.kitepdf.PdfDocument
 import io.github.yuroyami.kitepdf.PdfFormState
 import io.github.yuroyami.kitepdf.PdfScriptHandler
@@ -181,9 +180,9 @@ class EffectThreadSceneTest {
             }
             scene.use {
                 driver.pumpUntilState { back.get() != null }
-                assertSame(Thread.currentThread(), back.get())
+                assertSame(onTestUiThread { Thread.currentThread() }, back.get())
                 // The premise: under the default dispatcher the effect goes on on the pool thread.
-                if (!queued) assertNotSame(Thread.currentThread(), stranded.get())
+                if (!queued) assertNotSame(onTestUiThread { Thread.currentThread() }, stranded.get())
             }
         }
     }
@@ -219,7 +218,7 @@ class EffectThreadSceneTest {
                 // No frame for a while, so a snapshot taken meanwhile comes from another thread.
                 Thread.sleep(300)
                 driver.pumpUntilState { threads.isNotEmpty() }
-                assertEquals(listOf(Thread.currentThread()), threads.toList())
+                assertEquals(listOf(onTestUiThread { Thread.currentThread() }), threads.toList())
             }
         }
     }
@@ -247,12 +246,12 @@ class EffectThreadSceneTest {
             scene.use {
                 driver.pumpUntilState { inFirstPage.count == 0L }
                 // The reader moves while the script runs, so the page scripts have a change to look at after it.
-                runBlocking { state.scrollToPage(1) }
+                driver.runOnUi { state.scrollToPage(1) }
                 driver.pumpFrames(3)
                 leaveFirstPage.countDown()
                 Thread.sleep(300)
                 driver.pumpUntilState { threads.isNotEmpty() }
-                assertEquals(listOf(Thread.currentThread()), threads.toList())
+                assertEquals(listOf(onTestUiThread { Thread.currentThread() }), threads.toList())
             }
         }
     }
@@ -290,7 +289,7 @@ class EffectThreadSceneTest {
                 // No frame for a while, so a jump made meanwhile comes from another thread.
                 Thread.sleep(300)
                 driver.pumpUntilState { state.currentPage == 7 }
-                assertEquals(setOf(Thread.currentThread()), measuredOn.toSet())
+                assertEquals(setOf(onTestUiThread { Thread.currentThread() }), measuredOn.toSet())
             }
         }
     }
@@ -377,12 +376,14 @@ class EffectThreadSceneTest {
             }
             scene.use {
                 driver.pumpUntilState { state.pageGeometry.isNotEmpty() }
-                scope.launch {
-                    state.commitFocusedField()
-                    returnedOn.set(Thread.currentThread())
+                onTestUiThread {
+                    scope.launch {
+                        state.commitFocusedField()
+                        returnedOn.set(Thread.currentThread())
+                    }
                 }
                 driver.pumpUntilState { returnedOn.get() != null }
-                assertSame(Thread.currentThread(), returnedOn.get())
+                assertSame(onTestUiThread { Thread.currentThread() }, returnedOn.get())
             }
         }
     }

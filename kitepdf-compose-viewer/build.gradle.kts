@@ -10,6 +10,12 @@ plugins {
     alias(libs.plugins.dokka)
 }
 
+// Exercise desktop exports without a display server as well as without a coroutine Main
+// provider. The headless scene and host-text passes still share the real AWT thread (#428).
+tasks.withType<Test>().configureEach {
+    systemProperty("java.awt.headless", "true")
+}
+
 /** Host-OS Skiko native runtime, needed by jvmTest to rasterize an ImageBitmap headlessly. */
 fun currentOsSkikoRuntime(): Provider<MinimalExternalModuleDependency> {
     val os = OperatingSystem.current()

@@ -48,6 +48,28 @@ public class PdfFormState(private val document: PdfDocument) {
 
     private var changes = 0
 
+    /**
+     * Captures the accepted values, choice selections and field flags at one instant. A
+     * renderer can keep this copy through a suspended or repeated draw, so a script cannot
+     * change the form halfway through constructing its appearances (ISO 32000-1, 12.7.3.3).
+     * All state and revision counters are copied together under the same lock.
+     *
+     * The copy can be edited and reset independently. It starts with the same [revision]
+     * and [fieldRevision] values, but has no change listeners. It still reads unchanged
+     * fields and their defaults from the same document, which must remain open while the
+     * copy is used; this does not clone or save the document.
+     */
+    public fun snapshot(): PdfFormState = lock.withLock {
+        PdfFormState(document).also { copy ->
+            copy.values.putAll(values)
+            copy.choices.putAll(choices)
+            copy.fieldChanges.putAll(fieldChanges)
+            copy.hidden.putAll(hidden)
+            copy.readOnly.putAll(readOnly)
+            copy.changes = changes
+        }
+    }
+
     /** What changed, for a listener that redraws only the widgets that moved. */
     public class Change internal constructor(
         /** The fully qualified name of the field that changed. */

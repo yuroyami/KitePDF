@@ -5,11 +5,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.PointerType
-import androidx.compose.ui.use
 import io.github.yuroyami.kitepdf.KitePDF
 import io.github.yuroyami.kitepdf.writer.PdfBuilder
 import io.github.yuroyami.kitepdf.writer.StandardFont
-import kotlinx.coroutines.runBlocking
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -41,16 +39,16 @@ class SelectionNavigationSceneTest {
             scene.use {
                 driver.pumpUntilState { state.pageGeometry.isNotEmpty() }
                 // The line's baseline is at 150 pt, so display y 50 minus half the text height.
-                state.beginSelection(Offset(22f, 46f))
-                state.extendSelection(Offset(60f, 46f))
-                state.endSelectionGesture()
+                onTestUiThread { state.beginSelection(Offset(22f, 46f)) }
+                onTestUiThread { state.extendSelection(Offset(60f, 46f)) }
+                onTestUiThread { state.endSelectionGesture() }
                 assertNotNull(state.selection, "the test selected nothing")
                 // A navigation to the selection's own page keeps it.
-                runBlocking { state.scrollToPage(0) }
+                driver.runOnUi { state.scrollToPage(0) }
                 driver.pumpFrames(5)
                 assertNotNull(state.selection)
 
-                runBlocking { state.scrollToPage(1) }
+                driver.runOnUi { state.scrollToPage(1) }
                 driver.pumpFrames(5)
                 assertNull(state.selection)
                 assertFalse(state.isSelectionActive, "the scroll lock stayed on the new page")

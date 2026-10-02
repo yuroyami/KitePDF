@@ -4,7 +4,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.ImageComposeScene
+import io.github.yuroyami.kitepdf.compose.EdtImageComposeScene as ImageComposeScene
 import androidx.compose.ui.InternalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -13,11 +13,9 @@ import androidx.compose.ui.input.key.KeyEvent
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.PointerType
-import androidx.compose.ui.use
 import io.github.yuroyami.kitepdf.PdfDocument
 import io.github.yuroyami.kitepdf.PdfFormState
 import io.github.yuroyami.kitepdf.PdfScriptHandler
-import kotlinx.coroutines.runBlocking
 import java.util.Collections
 import java.util.concurrent.CountDownLatch
 import kotlin.test.Test
@@ -135,7 +133,7 @@ class ScriptCallsSceneTest {
                     // The failures above did not stop the viewer: the field still commits.
                     type(scene, '7')
                     driver.pumpUntilState { scripts.formState.value("out") == "7" }
-                    state.blurFocusedField()
+                    onTestUiThread { state.blurFocusedField() }
                     driver.pumpUntilState { "blur out" in scripts.events }
                     assertTrue("commit out=7" in scripts.events, "${scripts.events}")
                 }
@@ -195,7 +193,7 @@ class ScriptCallsSceneTest {
                 driver.pumpFrames(4)
                 type(scene, '4')
                 driver.pumpUntilState { scripts.formState.value("out") == "4" }
-                runBlocking { state.commitFocusedField() }
+                driver.runOnUi { state.commitFocusedField() }
                 // No frame in between: the commit is done when the call returns.
                 assertTrue("commit out=4" in scripts.events, "${scripts.events}")
                 assertTrue("blur out" in scripts.events, "${scripts.events}")

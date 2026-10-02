@@ -24,6 +24,10 @@ import io.github.yuroyami.kitepdf.core.parser.PdfStream
  * masks). PDF fills it from a `/XObject` `/Image` resource entry (ISO 32000-1
  * §8.9.5); EPUB fills it from a decoded PNG, JPEG or GIF.
  *
+ * Treat this image's exposed arrays as immutable while rendering it. A canvas may
+ * keep converted pixels across draws. Changed content needs a new image or a new
+ * revision identity through [withIdentity], so an earlier bitmap cannot be reused.
+ *
  * The decoded byte buffer's interpretation depends on the filter chain:
  *
  *   - `DCTDecode` → decoded by KiteImageCodec into a [Kind.RAW] image. An image
@@ -107,13 +111,32 @@ public class KiteImageData internal constructor(
     internal val samples: KiteImageSamples? = null,
 ) {
 
+    /** A non-owning key for platform bitmaps; unrelated factory results start independently. */
+    internal var bitmapIdentity: KiteImageIdentity = KiteImageIdentity()
+        private set
+
     private val storedPixels: ByteArray? = pixelBytes
+
+    /**
+     * A shallow view carrying [identity] for a platform bitmap cache. Reconstructed images
+     * of one immutable resource can share a bitmap without the cache retaining their source
+     * samples. This copies no pixel arrays and changes no rendering behaviour (#371).
+     *
+     * Reuse an identity only for equal pixels and interpretation: dimensions, masks,
+     * colour space, decode ranges and stencil tint must match. A resource edit needs a new
+     * identity or revision child. The arrays exposed by this image must remain unchanged
+     * while the identity is reused. Assign the source identity before [withIntent], which
+     * derives a distinct identity when its colour conversion changes the pixels.
+     */
+    public fun withIdentity(identity: KiteImageIdentity): KiteImageData =
+        if (bitmapIdentity == identity) this else copy(identity = identity)
 
     /**
      * Pixel bytes, populated for [Kind.RAW] (already run through the filter chain). A PDF's
      * JPEG or JPEG 2000 image without a mask keeps only its encoded data, and each read of
      * this decodes it at full size. A draw calls [toShrunkRgbaBytes] instead, which decodes
      * the image at the size it draws (#381).
+     * Treat the returned samples as read-only; see the image's identity contract above.
      */
     public val pixelBytes: ByteArray? get() = storedPixels ?: samples?.decode(1)?.bytes
 
@@ -141,7 +164,8 @@ public class KiteImageData internal constructor(
     }
 
     /** This image with [interpolate] set to [on]. */
-    internal fun withInterpolate(on: Boolean): KiteImageData = if (on == interpolate) this else copy(interpolate = on)
+    internal fun withInterpolate(on: Boolean): KiteImageData =
+        if (on == interpolate) this else copy(interpolate = on, identity = bitmapIdentity)
 
     /** The images [withIntent] made from this one, two per intent. */
     private var renderings: Array<KiteImageData?>? = null
@@ -157,19 +181,23 @@ public class KiteImageData internal constructor(
         if (space === resolvedColorSpace) return this
         val all = renderings ?: arrayOfNulls<KiteImageData>(8).also { renderings = it }
         val slot = 2 * intent.ordinal + if (blackPointCompensation) 1 else 0
-        return all[slot] ?: copy(resolvedColorSpace = space).also { all[slot] = it }
+        return all[slot] ?: copy(
+            resolvedColorSpace = space,
+            identity = bitmapIdentity.rendering(intent, blackPointCompensation),
+        ).also { all[slot] = it }
     }
 
     private fun copy(
         interpolate: Boolean = this.interpolate,
         resolvedColorSpace: KiteColorSpace? = this.resolvedColorSpace,
+        identity: KiteImageIdentity = KiteImageIdentity(),
     ): KiteImageData = KiteImageData(
         width = width, height = height, bitsPerComponent = bitsPerComponent, colorSpace = colorSpace, kind = kind,
         encodedBytes = encodedBytes, pixelBytes = storedPixels,
         softMaskAlpha = softMaskAlpha, softMaskWidth = softMaskWidth, softMaskHeight = softMaskHeight,
         resolvedColorSpace = resolvedColorSpace, decode = decode, isImageMask = isImageMask, maskFill = maskFill,
         colorKeyMask = colorKeyMask, softMaskMatte = softMaskMatte, interpolate = interpolate, samples = samples,
-    )
+    ).also { it.bitmapIdentity = identity }
 
     public enum class Kind {
         /** Pixel data already flat in [pixelBytes] (Flate/LZW/CCITT/ASCII/RLE). */

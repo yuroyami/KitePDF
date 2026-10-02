@@ -1,7 +1,7 @@
 package io.github.yuroyami.kitepdf.compose
 
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.ui.ImageComposeScene
+import io.github.yuroyami.kitepdf.compose.EdtImageComposeScene as ImageComposeScene
 import androidx.compose.ui.InternalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -13,7 +13,6 @@ import androidx.compose.ui.input.pointer.PointerType
 import androidx.compose.ui.graphics.toComposeImageBitmap
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.unit.Density
-import androidx.compose.ui.use
 import io.github.yuroyami.kitepdf.PdfDocument
 import io.github.yuroyami.kitepdf.PdfFormState
 import io.github.yuroyami.kitepdf.PdfScriptHandler
@@ -191,7 +190,7 @@ class FormLayerSceneTest {
             assertEquals("4", scripts.formState.value("out"), "a letter is refused")
 
             // Leaving the field commits it, which is what runs validate, calculate and format.
-            state.blurFocusedField()
+            onTestUiThread { state.blurFocusedField() }
             driver.pumpUntilState { scripts.events.contains("blur out") }
             assertEquals(null, state.focusedField)
             assertEquals(
@@ -404,7 +403,7 @@ class FormLayerSceneTest {
             driver.pumpUntilState { scripts.finished.count == 0L }
             assertEquals("late", scripts.formState.value("out"))
             assertTrue(
-                scripts.thread != Thread.currentThread().name,
+                scripts.thread != onTestUiThread { Thread.currentThread().name },
                 "the script ran on its own thread, not the test's: ${scripts.thread}",
             )
         }

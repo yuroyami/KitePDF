@@ -10,7 +10,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.use
 import io.github.yuroyami.kitepdf.PdfDocument
 import io.github.yuroyami.kitepdf.core.KiteLocation
 import io.github.yuroyami.kitepdf.epub.EpubDocument
@@ -20,7 +19,6 @@ import java.util.concurrent.atomic.AtomicReference
 import kotlin.math.abs
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlinx.coroutines.runBlocking
 
 /**
  * The viewer state is the only saved position. A new state opens at its own place (#346), a
@@ -80,11 +78,11 @@ class PositionOwnershipSceneTest {
             scene.use {
                 val name = layout::class.simpleName
                 driver.settles({ "$name: the viewer attaches" }) { state.adapter != null }
-                runBlocking { state.scrollTo(KiteLocation(0, 4)) }
+                driver.runOnUi { state.scrollTo(KiteLocation(0, 4)) }
                 driver.settles({ "$name: the viewer goes to page 4" }) { state.currentPage == 4 }
                 show = false
                 driver.settles({ "$name: the viewer leaves" }) { state.adapter == null }
-                runBlocking { state.scrollTo(KiteLocation(0, 8)) }
+                driver.runOnUi { state.scrollTo(KiteLocation(0, 8)) }
                 assertEquals(8, state.currentPage, "$name: the state holds the place set while the viewer is away")
                 show = true
                 driver.settles({ "$name: the viewer comes back on page 8" }) { state.adapter != null && state.currentPage == 8 }
@@ -118,7 +116,7 @@ class PositionOwnershipSceneTest {
                 val name = layout::class.simpleName
                 val before = current.get()
                 driver.settles({ "$name: the viewer attaches" }) { before.adapter != null }
-                runBlocking { before.scrollTo(target) }
+                driver.runOnUi { before.scrollTo(target) }
                 driver.settles({ "$name: the reader reaches $target" }) { before.currentLocation == target }
                 val mark = before.currentBookmark()
                 val expected = EpubDocument.open(bytes, narrow).locate(mark)
@@ -151,7 +149,7 @@ class PositionOwnershipSceneTest {
             scene.use {
                 driver.settles({ "the viewer attaches" }) { state.adapter != null }
                 val place = KiteScrollPosition(KiteLocation(0, 1), 250)
-                runBlocking { state.scrollTo(place) }
+                driver.runOnUi { state.scrollTo(place) }
                 driver.settles({ "the strip scrolls to $place" }) { state.currentScrollPosition == place }
                 orientation = Orientation.Horizontal
                 // A 200 x 300 page is 213 px wide in a strip 320 px tall: 250 of 300 px is 178 of 213.
@@ -162,8 +160,8 @@ class PositionOwnershipSceneTest {
 
                 orientation = Orientation.Vertical
                 driver.settles({ "the vertical strip keeps page 1" }) { state.currentScrollPosition.location == KiteLocation(0, 1) }
-                state.setZoom(2f)
-                state.panBy(Offset(80f, 0f))
+                onTestUiThread { state.setZoom(2f) }
+                onTestUiThread { state.panBy(Offset(80f, 0f)) }
                 assertEquals(80f, state.panOffset.x, 0.5f, "a vertical strip pans across")
                 orientation = Orientation.Horizontal
                 driver.pumpFrames(3)

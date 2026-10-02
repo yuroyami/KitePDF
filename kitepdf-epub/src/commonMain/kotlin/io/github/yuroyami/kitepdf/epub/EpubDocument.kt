@@ -945,7 +945,9 @@ public class EpubDocument internal constructor(
     /** The image at [zipPath], or the first item of its manifest fallback chain that decodes (#27). */
     private fun loadImage(zipPath: String): KiteImageData? {
         for (path in listOf(zipPath) + parsed.fallbackPaths(zipPath)) {
-            parsed.zip.read(path)?.let { KiteImageData.fromEncodedImage(it) }?.let { return it }
+            parsed.zip.read(path)?.let { KiteImageData.fromEncodedImage(it) }?.let {
+                return it.withIdentity(parsed.imageIdentities.child(path))
+            }
         }
         return null
     }

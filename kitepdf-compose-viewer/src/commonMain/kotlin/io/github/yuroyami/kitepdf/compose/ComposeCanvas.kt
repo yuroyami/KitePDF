@@ -72,6 +72,12 @@ import kotlin.math.sqrt
  * Clips and transparency groups use the lower-level `Canvas.save`, `clipPath`
  * and `saveLayer`, so they span many `DrawScope` operations, and each clip is
  * applied once however many paints it covers.
+ *
+ * System-font drawing and host glyph outlines require the platform UI thread
+ * (the AWT event dispatch thread on desktop JVM). A call on another thread throws
+ * [IllegalStateException] before accessing the host text stack. For background
+ * exports use [KitePageRasterizer.rasterizeOffMain]. A canvas that skips system text
+ * can probe on a worker, but that incomplete bitmap is not an export (#428).
  */
 public class ComposeCanvas internal constructor(
     private val drawScope: DrawScope,
@@ -88,9 +94,10 @@ public class ComposeCanvas internal constructor(
     /** True where a colour filter can apply a soft mask's whole transfer table. A test can take it away. */
     private val maskTables: Boolean = maskTableFilters,
     /**
-     * Bitmaps built from images, so that an image drawn many times converts once (#117). The
-     * canvas of a soft mask shares them with its page (#371). The keys hold the images, so a
-     * cache that outlives a draw keeps decoded images alive past every other budget.
+     * Bitmaps built from images, so that an image drawn many times converts once (#117). A
+     * vector viewer shares its bounded store across draws, and a soft mask shares its page's
+     * store. Keys contain only image identities, so eviction of decoded source images still
+     * releases their bytes (#371). Eviction never recycles a bitmap held by a recorded layer.
      */
     private val bitmaps: KiteBitmapCache<ImageBitmap> = KiteBitmapCache(),
 ) : KiteCanvas {
@@ -286,6 +293,7 @@ public class ComposeCanvas internal constructor(
             usedSystemFontText = true
             return
         }
+        requireHostTextThread()
 
         // The whole text matrix applies to every glyph, shear and reflection included (ISO
         // 32000-1, 9.4.4, #416). The text is measured at the matrix's own scale and drawn under
@@ -312,16 +320,6 @@ public class ComposeCanvas internal constructor(
             fontWeight = fontSpec.toComposeWeight(),
             fontStyle = fontSpec.toComposeStyle(),
         )
-        // Compose's skiko text stack keeps a process-global style cache that is
-        // not thread-safe. The library's own off-main path never reaches this
-        // point (skipSystemFontText probes on the pool, the real render runs on
-        // Main), but the public synchronous rasterize() can still be called from
-        // an arbitrary app thread while the host UI lays out its own text, and
-        // that race surfaces here as a ConcurrentModificationException. Losing
-        // one text run to an abort of the whole process is a terrible trade, so
-        // retry a few times (the window is a microsecond-scale map purge) and,
-        // if the cache is truly hot, skip this run: one missing fallback-font
-        // run on one page beats a dead app.
         drawScope.withTransform({ transform(rest.toComposeMatrix()) }) {
             // Each piece starts where the document's own advances put it (ISO 32000-1, 9.4.4),
             // character and word spacing included (#121). A piece of one glyph keeps the host
@@ -331,7 +329,7 @@ public class ComposeCanvas internal constructor(
             for (piece in spacedPieces(glyphs)) {
                 val pieceText = piece.joinToString("") { it.text }
                 if (pieceText.isNotBlank()) {
-                    val layout = measureOrNull(pieceText, style) ?: return@withTransform
+                    val layout = textMeasurer.measure(text = pieceText, style = style)
                     val metricScale = if (piece.size == 1) 1f else systemFontMetricScale(
                         glyphs = piece,
                         renderedSize = renderedSize,
@@ -350,18 +348,6 @@ public class ComposeCanvas internal constructor(
         }
     }
 
-    /** Measures [text], retrying the race on skiko's style cache a few times; null when the cache stays hot. */
-    private fun measureOrNull(text: String, style: TextStyle): androidx.compose.ui.text.TextLayoutResult? {
-        repeat(5) {
-            try {
-                return textMeasurer.measure(text = text, style = style)
-            } catch (race: ConcurrentModificationException) {
-                // Try again: the window is a microsecond-scale map purge.
-            }
-        }
-        return null
-    }
-
     /**
      * The outline of [text] in the host face [drawGlyphs] draws a font without
      * embedded outlines in, at 1000 units per em with y up (#85). Off the main
@@ -373,6 +359,7 @@ public class ComposeCanvas internal constructor(
             usedSystemFontText = true
             return null
         }
+        requireHostTextThread()
         // Real glyph contours from the host face. The text layout's range path is the selection
         // highlight, rectangles, which stroked an O as a box (ISO 32000-1, 9.3.6, #415).
         val path = hostTextPath(text, fontSpec) ?: return null
@@ -418,8 +405,13 @@ public class ComposeCanvas internal constructor(
         }
     }
 
+    /** Conversions performed by this paint pass, excluding hits in the shared bitmap cache. */
+    internal var convertedImages: Int = 0
+        private set
+
     /** The image as a bitmap, averaged down when [sampling] shrinks it, so fine detail fades instead of dropping out. */
     private fun bitmapFor(image: KiteImageData, sampling: KiteImageSampling): ImageBitmap? {
+        convertedImages++
         val bytes = when (image.kind) {
             // RAW (FlateDecode etc.): samples are already inflated. Assemble RGBA
             // and build a bitmap directly. Covers the common embedded-PNG case.

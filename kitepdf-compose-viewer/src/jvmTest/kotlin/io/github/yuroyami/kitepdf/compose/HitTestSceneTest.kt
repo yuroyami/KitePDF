@@ -5,7 +5,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.toComposeImageBitmap
 import androidx.compose.ui.graphics.toPixelMap
-import androidx.compose.ui.use
 import io.github.yuroyami.kitepdf.KitePDF
 import io.github.yuroyami.kitepdf.core.KiteRectangle
 import io.github.yuroyami.kitepdf.core.KiteSearchHit
@@ -62,13 +61,13 @@ class HitTestSceneTest {
             // Zoom 2 around a focal: the page point under the focal must not
             // move (that is the definition of focal zoom), and the viewport
             // centre still maps somewhere consistent.
-            state.setZoom(2f, focal = Offset(100f, 100f))
+            onTestUiThread { state.setZoom(2f, focal = Offset(100f, 100f)) }
             driver.pumpUntil { true }
             assertHit(state.hitTest(Offset(100f, 100f)), 0, 50.0, 150.0)
 
             // Zooming around the centre keeps the centre fixed on the page centre.
-            state.resetZoom()
-            state.setZoom(2f)
+            onTestUiThread { state.resetZoom() }
+            onTestUiThread { state.setZoom(2f) }
             driver.pumpUntil { true }
             assertHit(state.hitTest(Offset(200f, 200f)), 0, 100.0, 100.0)
         }

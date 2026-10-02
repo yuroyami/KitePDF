@@ -57,7 +57,7 @@ class SystemFontMetricScaleTest {
             val secondOrigin = 10.0 + targetWidth + 10.0
             val bitmap = ImageBitmap(320, 100)
 
-            CanvasDrawScope().draw(
+            CanvasDrawScope().drawOnTestUiThread(
                 density = density,
                 layoutDirection = LayoutDirection.Ltr,
                 canvas = Canvas(bitmap),

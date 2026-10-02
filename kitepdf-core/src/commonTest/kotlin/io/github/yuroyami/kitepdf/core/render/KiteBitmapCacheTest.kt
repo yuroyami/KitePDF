@@ -2,6 +2,7 @@ package io.github.yuroyami.kitepdf.core.render
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNotEquals
 import kotlin.test.assertNull
 import kotlin.test.assertSame
 
@@ -68,6 +69,70 @@ class KiteBitmapCacheTest {
         assertEquals(2, builds)
         assertEquals(0L, cache.heldBytes)
         repeat(2) { assertNull(cache.getOrPut(image(), sampling, { it.bytes }) { builds++; null }) }
+        assertEquals(4, builds)
+    }
+
+    @Test
+    fun reconstructed_images_reuse_a_resource_but_documents_and_revisions_do_not() {
+        val cache = KiteBitmapCache<Bitmap>()
+        val document = KiteImageIdentity()
+        val sampling = imageSampling(64, 64, atItsSize, false)
+        var builds = 0
+        fun bitmap(identity: KiteImageIdentity) = cache.getOrPut(image().withIdentity(identity), sampling, { it.bytes }) {
+            builds++; Bitmap(100)
+        }
+        val original = bitmap(document.child("image/7"))
+        assertSame(original, bitmap(document.child("image/7")))
+        assertEquals(1, builds)
+        bitmap(KiteImageIdentity().child("image/7"))
+        bitmap(document.child("image/7").child("revision 2"))
+        assertEquals(3, builds)
+        assertNotEquals(document.child("a/b"), document.child("a").child("b"))
+    }
+
+    @Test
+    fun interpolation_does_not_duplicate_pixels_but_sampling_still_does() {
+        val cache = KiteBitmapCache<Bitmap>()
+        val original = image()
+        var builds = 0
+        val sampling = imageSampling(64, 64, atItsSize, false)
+        val first = cache.getOrPut(original, sampling, { it.bytes }) { builds++; Bitmap(100) }
+        assertSame(first, cache.getOrPut(original.withInterpolate(true), sampling, { it.bytes }) { builds++; Bitmap(100) })
+        assertSame(original, original.withIntent(KiteRenderingIntent.Perceptual))
+        assertEquals(1, builds)
+    }
+
+    @Test
+    fun disabled_budgets_and_invalid_sizes_never_accumulate_entries() {
+        val sampling = imageSampling(64, 64, atItsSize, false)
+        for ((budget, size) in listOf(0L to 1L, -1L to 1L, 100L to 0L, 100L to -1L)) {
+            val cache = KiteBitmapCache<Bitmap>(budget)
+            val image = image()
+            var builds = 0
+            repeat(2) { cache.getOrPut(image, sampling, { it.bytes }) { builds++; Bitmap(size) } }
+            assertEquals(2, builds, "budget=$budget size=$size")
+            assertEquals(0L, cache.heldBytes)
+        }
+    }
+
+    @Test
+    fun clear_releases_entries_and_long_sized_entries_cannot_overflow_accounting() {
+        val cache = KiteBitmapCache<Bitmap>(Long.MAX_VALUE)
+        val sampling = imageSampling(64, 64, atItsSize, false)
+        val a = image()
+        val b = image()
+        var builds = 0
+        fun get(image: KiteImageData) = cache.getOrPut(image, sampling, { it.bytes }) {
+            builds++; Bitmap(Long.MAX_VALUE)
+        }
+        get(a)
+        get(b)
+        assertEquals(Long.MAX_VALUE, cache.heldBytes)
+        get(a)
+        assertEquals(3, builds, "the second giant entry must evict the first")
+        cache.clear()
+        assertEquals(0L, cache.heldBytes)
+        get(a)
         assertEquals(4, builds)
     }
 }

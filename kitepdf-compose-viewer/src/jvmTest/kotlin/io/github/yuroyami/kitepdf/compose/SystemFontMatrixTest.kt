@@ -52,7 +52,7 @@ class SystemFontMatrixTest {
         val bitmap = ImageBitmap(300, 300)
         val density = Density(1f)
         val measurer = TextMeasurer(createFontFamilyResolver(), density, LayoutDirection.Ltr)
-        CanvasDrawScope().draw(density, LayoutDirection.Ltr, Canvas(bitmap), Size(300f, 300f)) {
+        CanvasDrawScope().drawOnTestUiThread(density, LayoutDirection.Ltr, Canvas(bitmap), Size(300f, 300f)) {
             drawRect(Color.White, size = size)
             val canvas = ComposeCanvas(this, measurer)
             canvas.beginPage(300.0, 300.0, KiteMatrix.IDENTITY)

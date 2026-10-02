@@ -63,7 +63,7 @@ class WriteThenViewTest {
         val density = Density(1f)
         val ld = LayoutDirection.Ltr
         val tm = TextMeasurer(createFontFamilyResolver(), density, ld)
-        CanvasDrawScope().draw(density, ld, Canvas(bmp), Size(w.toFloat(), h.toFloat())) {
+        CanvasDrawScope().drawOnTestUiThread(density, ld, Canvas(bmp), Size(w.toFloat(), h.toFloat())) {
             drawRect(Color.White, size = size)
             page.renderTo(ComposeCanvas(this, tm), KiteMatrix(1.0, 0.0, 0.0, -1.0, 0.0, h.toDouble()))
         }

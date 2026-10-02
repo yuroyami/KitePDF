@@ -67,7 +67,7 @@ class SoftMaskTransferTest {
     fun a_curved_transfer_gates_the_content_by_its_table() {
         for ((kind, group) in masks) {
             val page = maskedPdf(kind, group).pages[0]
-            val pixel = rasterizer().rasterize(page, 100, 100).toPixelMap()[50, 50]
+            val pixel = onTestUiThread { rasterizer().rasterize(page, 100, 100) }.toPixelMap()[50, 50]
             // Black gated at 0.25 over white paper leaves 0.75. The line fit gave about 0.67.
             assertEquals(0.75f, pixel.red, 0.02f, "$kind mask of $group: $pixel")
         }
@@ -84,7 +84,7 @@ class SoftMaskTransferTest {
             val bitmap = androidx.compose.ui.graphics.ImageBitmap(100, 100)
             val density = Density(1f)
             val measurer = TextMeasurer(createFontFamilyResolver(), density, LayoutDirection.Ltr)
-            androidx.compose.ui.graphics.drawscope.CanvasDrawScope().draw(
+            androidx.compose.ui.graphics.drawscope.CanvasDrawScope().drawOnTestUiThread(
                 density, LayoutDirection.Ltr, androidx.compose.ui.graphics.Canvas(bitmap), androidx.compose.ui.geometry.Size(100f, 100f),
             ) {
                 drawRect(androidx.compose.ui.graphics.Color.White)
@@ -105,7 +105,7 @@ class SoftMaskTransferTest {
         val bitmaps = KiteBitmapCache<ImageBitmap>()
         val density = Density(1f)
         val measurer = TextMeasurer(createFontFamilyResolver(), density, LayoutDirection.Ltr)
-        androidx.compose.ui.graphics.drawscope.CanvasDrawScope().draw(
+        androidx.compose.ui.graphics.drawscope.CanvasDrawScope().drawOnTestUiThread(
             density, LayoutDirection.Ltr, androidx.compose.ui.graphics.Canvas(ImageBitmap(100, 100)), androidx.compose.ui.geometry.Size(100f, 100f),
         ) {
             val canvas = ComposeCanvas(this, measurer, 1f, false, 1f, maskTables = false, bitmaps = bitmaps)

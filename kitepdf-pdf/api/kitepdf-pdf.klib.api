@@ -1163,6 +1163,7 @@ final class io.github.yuroyami.kitepdf/PdfFormState { // io.github.yuroyami.kite
     final fun setHidden(kotlin/String, kotlin/Boolean) // io.github.yuroyami.kitepdf/PdfFormState.setHidden|setHidden(kotlin.String;kotlin.Boolean){}[0]
     final fun setReadOnly(kotlin/String, kotlin/Boolean) // io.github.yuroyami.kitepdf/PdfFormState.setReadOnly|setReadOnly(kotlin.String;kotlin.Boolean){}[0]
     final fun setValue(kotlin/String, kotlin/String) // io.github.yuroyami.kitepdf/PdfFormState.setValue|setValue(kotlin.String;kotlin.String){}[0]
+    final fun snapshot(): io.github.yuroyami.kitepdf/PdfFormState // io.github.yuroyami.kitepdf/PdfFormState.snapshot|snapshot(){}[0]
     final fun value(kotlin/String): kotlin/String? // io.github.yuroyami.kitepdf/PdfFormState.value|value(kotlin.String){}[0]
 
     final class Change { // io.github.yuroyami.kitepdf/PdfFormState.Change|null[0]

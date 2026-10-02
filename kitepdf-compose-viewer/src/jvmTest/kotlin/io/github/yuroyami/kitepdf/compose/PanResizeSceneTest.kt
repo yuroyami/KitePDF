@@ -10,7 +10,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.use
 import io.github.yuroyami.kitepdf.PdfDocument
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -69,8 +68,8 @@ class PanResizeSceneTest {
             scene.use {
                 driver.pumpUntilState { state.pageGeometry.isNotEmpty() || layout is KiteDocLayout.Continuous }
                 driver.pumpFrames(4)
-                state.setZoom(zoom)
-                state.panBy(pan)
+                onTestUiThread { state.setZoom(zoom) }
+                onTestUiThread { state.panBy(pan) }
                 driver.pumpFrames(2)
                 for ((size, expected) in steps) {
                     box = size
