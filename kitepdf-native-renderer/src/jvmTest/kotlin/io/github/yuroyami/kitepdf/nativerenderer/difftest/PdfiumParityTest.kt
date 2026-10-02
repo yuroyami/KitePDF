@@ -54,7 +54,6 @@ class PdfiumParityTest {
         val KNOWN_GAPS: Map<String, Int> = mapOf(
             // The vertical forms draw right since #471. The kanji still draw in a sans-serif face.
             "public-pdfa-vertical-text p0" to 472,
-            "public-verapdf-device-cmyk p0" to 470,
         )
 
         /**

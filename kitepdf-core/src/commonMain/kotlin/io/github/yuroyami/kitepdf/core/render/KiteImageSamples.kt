@@ -18,7 +18,9 @@ internal class KiteImageSamples private constructor(
     private val jpx: Boolean,
     /** For a JPEG: one grey sample a pixel, else three RGB samples. A JPEG 2000 image decides itself. */
     private val gray: Boolean,
-    /** The colour space the samples come in, `DeviceGray` or `DeviceRGB`. */
+    /** For a four-component JPEG of a PDF: its headers, so that it decodes to four CMYK samples a pixel (#470). */
+    private val ink: JpegInk.Layout?,
+    /** The colour space the samples come in, `DeviceGray`, `DeviceRGB` or `DeviceCMYK`. */
     val colorSpace: String,
 ) {
     /** The bytes this holds: the encoded image. */
@@ -28,6 +30,8 @@ internal class KiteImageSamples private constructor(
     fun decode(reduction: Int): Decoded? = runCatching {
         if (jpx) {
             JpxDecoder.decode(bytes, reduction)?.let { Decoded(it.width, it.height, it.pixelBytes) }
+        } else if (ink != null) {
+            JpegInk.decode(bytes, ink, reduction)
         } else {
             val bitmap = KiteImageCodec.decodeReduced(bytes, reduction)
             Decoded(bitmap.width, bitmap.height, if (gray) bitmap.toGrayBytes() else bitmap.toRgbBytes())
@@ -41,12 +45,14 @@ internal class KiteImageSamples private constructor(
          * [bytes], a JPEG, as samples that decode on demand, or null when KiteImageCodec cannot
          * decode it. A decode at an eighth reads every entropy-coded byte, so it fails where the
          * full decode would, and the caller can still hand the file to the platform decoder.
+         * With [ink], the samples are CMYK, and one of the four components checks the file.
          */
-        fun jpeg(bytes: ByteArray, gray: Boolean): KiteImageSamples? {
+        fun jpeg(bytes: ByteArray, gray: Boolean, ink: JpegInk.Layout? = null): KiteImageSamples? {
             val info = runCatching { KiteImageCodec.probe(bytes) }.getOrNull() ?: return null
             if (!info.isDecodable || info.width <= 0 || info.height <= 0) return null
-            val samples = KiteImageSamples(bytes, info.width, info.height, jpx = false, gray, if (gray) "DeviceGray" else "DeviceRGB")
-            return samples.takeIf { it.decode(8) != null }
+            val space = if (ink != null) "DeviceCMYK" else if (gray) "DeviceGray" else "DeviceRGB"
+            val samples = KiteImageSamples(bytes, info.width, info.height, jpx = false, gray, ink, space)
+            return samples.takeIf { if (ink != null) JpegInk.decodes(bytes, ink) else it.decode(8) != null }
         }
 
         /**
@@ -59,7 +65,7 @@ internal class KiteImageSamples private constructor(
             if (!info.isDecodable || info.width <= 0 || info.height <= 0) return null
             val check = runCatching { JpxDecoder.decode(bytes, 8) }.getOrNull() ?: return null
             if (check.alpha != null) return null
-            return KiteImageSamples(bytes, info.width, info.height, jpx = true, gray = false, check.colorSpace)
+            return KiteImageSamples(bytes, info.width, info.height, jpx = true, gray = false, ink = null, check.colorSpace)
         }
     }
 }
