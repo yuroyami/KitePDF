@@ -52,3 +52,6 @@ Things a previous change taught the hard way. One line each. Delete a line when 
 - A debug build for Kotlin/Native takes about 10 KB of stack for each level of EPUB layout, three times a release build, and a secondary thread on Apple platforms has 512 KB. Measure a nesting limit there, not on the JVM (#450).
 - The page text has a line break wherever a narrow box wraps, so two words that a test looks for can sit on two lines. Fold white space before the search, or wrapped text reads as lost text (#450).
 - Git treats a PDF without NUL bytes as text, and `core.autocrlf=input` rewrote the line endings of a corpus PDF on commit, so its SHA-256 no longer matched. `.gitattributes` marks PDF and EPUB binary; keep it that way.
+- JFR's default execution samples do not see native frames, so zlib inflate and Java2D drawing vanish from a profile. Add native-method samples or a stage timer before you trust the shares (#462).
+- Thread CPU time moves with machine load too: the same scanned page measured 100 to 162 ms on different runs. Compare a change before and after in one JVM, with the runs alternating (#462).
+- In a git worktree under `.claude/worktrees`, Gradle's file watching missed source edits and called the compile UP-TO-DATE on stale classes. Build there with `--no-watch-fs`.
