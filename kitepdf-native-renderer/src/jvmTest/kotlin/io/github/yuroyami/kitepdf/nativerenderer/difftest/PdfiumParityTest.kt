@@ -52,7 +52,7 @@ class PdfiumParityTest {
          * The goal is an empty map. Drop-in corpus pages run only where the corpus exists.
          */
         val KNOWN_GAPS: Map<String, Int> = mapOf(
-            // The vertical forms draw right since #471. The kanji still draw in a sans-serif face.
+            // The serif face of the JVM draws kanji and kana in a Chinese Song face, not a Japanese Mincho.
             "public-pdfa-vertical-text p0" to 472,
         )
 
