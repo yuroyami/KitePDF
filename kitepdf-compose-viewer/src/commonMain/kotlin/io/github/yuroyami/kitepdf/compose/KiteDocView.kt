@@ -905,14 +905,17 @@ private fun PagedLayout(
         val horizontal = layout.orientation == Orientation.Horizontal
         PageTurn(layout.orientation, reversed = (horizontal && direction == LayoutDirection.Rtl) != layout.reverseLayout, spread = false)
     }
+    val pagerPlace = remember { NodePlace() }
     val pageContent: @Composable (Int) -> Unit = { index ->
         val isCurrent = index == pagerState.currentPage
         val page = state.pageAt(index)
+        val pagePlace = remember { NodePlace() }
+        val pageTap = remember(pagePlace, onTap) { pagerTap(pagerPlace, pagePlace, onTap) }
         if (page == null) {
             // The same taps and zoom gestures as a page, so a host's onTap still works here (#409).
             ChapterGapSlot(
                 state, index, Orientation.Vertical, colors, chapterPlaceholder, letterboxed = true,
-                gestures = if (isCurrent) Modifier.kiteTransformGestures(state, zoomSpec, scope, onTap) else Modifier,
+                gestures = if (isCurrent) pagePlace.modifier.kiteTransformGestures(state, zoomSpec, scope, pageTap) else Modifier,
                 zoom = if (isCurrent) ({ state.zoom }) else NO_ZOOM,
                 pan = if (isCurrent) ({ state.panOffset }) else NO_PAN,
             )
@@ -922,7 +925,7 @@ private fun PagedLayout(
             zoom = if (isCurrent) ({ state.zoom }) else NO_ZOOM,
             pan = if (isCurrent) ({ state.panOffset }) else NO_PAN,
             gestures = if (isCurrent) {
-                Modifier.kiteTransformGestures(state, zoomSpec, scope, onTap, pageTurn).kiteSelectionGestures(state, haptics)
+                pagePlace.modifier.kiteTransformGestures(state, zoomSpec, scope, pageTap, pageTurn).kiteSelectionGestures(state, haptics)
             } else Modifier,
             settledZoom = if (isCurrent) settledZoom else 1f,
             renderSpec = renderSpec,
@@ -940,11 +943,14 @@ private fun PagedLayout(
     // under a selection drag.
     // Read through a derived state, so a zoom frame recomposes the pager only when the flag flips (#373).
     val overflows by remember(state) { derivedStateOf { state.overflows } }
-    val pagerScrollEnabled = userScrollEnabled && !overflows && !state.isSelectionActive
+    // A page turn that code started keeps the pager's drag off, so a tap during it reaches the page (#455).
+    val turning by remember(pagerAdapter) { derivedStateOf { pagerAdapter.isTurning } }
+    val pagerScrollEnabled = userScrollEnabled && !overflows && !state.isSelectionActive && !turning
+    val pagerModifier = Modifier.fillMaxSize().then(pagerPlace.modifier).kiteStrayTaps(onTap)
     when (layout.orientation) {
         Orientation.Horizontal -> HorizontalPager(
             state = pagerState,
-            modifier = Modifier.fillMaxSize(),
+            modifier = pagerModifier,
             pageSpacing = pageSpacing,
             beyondViewportPageCount = layout.offscreenPages,
             userScrollEnabled = pagerScrollEnabled,
@@ -955,7 +961,7 @@ private fun PagedLayout(
         ) { pageContent(it) }
         Orientation.Vertical -> VerticalPager(
             state = pagerState,
-            modifier = Modifier.fillMaxSize(),
+            modifier = pagerModifier,
             pageSpacing = pageSpacing,
             beyondViewportPageCount = layout.offscreenPages,
             userScrollEnabled = pagerScrollEnabled,
@@ -1878,10 +1884,15 @@ private fun SpreadLayout(
     }
     // Read through a derived state, so a zoom frame recomposes the pager only when the flag flips (#373).
     val overflows by remember(state) { derivedStateOf { state.overflows } }
-    val pagerScrollEnabled = userScrollEnabled && !overflows && !state.isSelectionActive
+    // A spread turn that code started keeps the pager's drag off, so a tap during it reaches the page (#455).
+    val turning by remember(state) { derivedStateOf { (state.adapter as? SpreadScrollAdapter)?.isTurning == true } }
+    val pagerScrollEnabled = userScrollEnabled && !overflows && !state.isSelectionActive && !turning
+    val pagerPlace = remember { NodePlace() }
     val spreadContent: @Composable (Int) -> Unit = spreadContent@{ spread ->
         val isCurrent = spread == pagerState.currentPage
         val pages = plans.current.spreads.getOrNull(spread) ?: return@spreadContent
+        val spreadPlace = remember { NodePlace() }
+        val spreadTap = remember(spreadPlace, onTap) { pagerTap(pagerPlace, spreadPlace, onTap) }
         SpreadBox(
             state = state,
             leftIndex = pages[0],
@@ -1890,7 +1901,7 @@ private fun SpreadLayout(
             zoom = if (isCurrent) ({ state.zoom }) else NO_ZOOM,
             pan = if (isCurrent) ({ state.panOffset }) else NO_PAN,
             gestures = if (isCurrent) {
-                Modifier.kiteTransformGestures(state, zoomSpec, scope, onTap, pageTurn).kiteSelectionGestures(state, haptics)
+                spreadPlace.modifier.kiteTransformGestures(state, zoomSpec, scope, spreadTap, pageTurn).kiteSelectionGestures(state, haptics)
             } else Modifier,
             recordGeometry = isCurrent,
             settledZoom = if (isCurrent) settledZoom else 1f,
@@ -1901,10 +1912,11 @@ private fun SpreadLayout(
             chapterPlaceholder = chapterPlaceholder,
         )
     }
+    val pagerModifier = Modifier.fillMaxSize().then(pagerPlace.modifier).kiteStrayTaps(onTap)
     when (layout.orientation) {
         Orientation.Horizontal -> HorizontalPager(
             state = pagerState,
-            modifier = Modifier.fillMaxSize(),
+            modifier = pagerModifier,
             pageSpacing = pageSpacing,
             beyondViewportPageCount = layout.offscreenPages,
             userScrollEnabled = pagerScrollEnabled,
@@ -1912,7 +1924,7 @@ private fun SpreadLayout(
         ) { spreadContent(it) }
         Orientation.Vertical -> VerticalPager(
             state = pagerState,
-            modifier = Modifier.fillMaxSize(),
+            modifier = pagerModifier,
             pageSpacing = pageSpacing,
             beyondViewportPageCount = layout.offscreenPages,
             userScrollEnabled = pagerScrollEnabled,
