@@ -52,8 +52,8 @@ class PdfiumParityTest {
          * The goal is an empty map. Drop-in corpus pages run only where the corpus exists.
          */
         val KNOWN_GAPS: Map<String, Int> = mapOf(
-            // Both #471 and #472 need fixing before this page passes.
-            "public-pdfa-vertical-text p0" to 471,
+            // The vertical forms draw right since #471. The kanji still draw in a sans-serif face.
+            "public-pdfa-vertical-text p0" to 472,
             "public-verapdf-device-cmyk p0" to 470,
         )
 

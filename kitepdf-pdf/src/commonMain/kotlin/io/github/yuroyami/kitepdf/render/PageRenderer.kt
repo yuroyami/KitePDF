@@ -2106,6 +2106,8 @@ public class PageRenderer(
         // Writing mode 1 stacks the glyphs down the page, each from its own origin (9.7.4.3).
         val vertical = font.verticalMetrics(bytes)?.takeIf { it.size == glyphs.size && it.isNotEmpty() }
             ?.let { verticalRun(it, glyphs, t, textMatrix, hScale) }
+        // A host face draws a column in its vertical presentation forms, and extraction keeps the text (#471).
+        val painted = if (vertical != null && !font.hasOutlines) VerticalForms.of(glyphs) else glyphs
 
         // One run to the canvas. A vertical run goes glyph by glyph to a canvas that
         // paints, and as one column to a canvas that reads text, so its line runs down.
@@ -2115,7 +2117,7 @@ public class PageRenderer(
                     glyphs, t.fontSize, unitsPerEm, hasOutlines, font.fontSpec, finalMatrix, color,
                     alpha = alpha, blendMode = state.current.blendMode,
                 )
-                canvas.resolvesGlyphOutlines -> for ((i, glyph) in glyphs.withIndex()) {
+                canvas.resolvesGlyphOutlines -> for ((i, glyph) in painted.withIndex()) {
                     canvas.drawGlyphs(
                         listOf(glyph), t.fontSize, unitsPerEm, hasOutlines, font.fontSpec,
                         pageMatrix.concat(vertical.placements[i]), color,
@@ -2137,7 +2139,7 @@ public class PageRenderer(
                 (fillPattern is KitePattern.Shading || fillPattern is KitePattern.Tiling)
             // A font without a program strokes, clips and fills with a pattern through the
             // outlines of the host face that stands in for it (ISO 32000-1, 9.3.6 and 9.6.2.2, #85).
-            val hostShapes = if ((doStroke || doClip || patternFill) && !font.hasOutlines) hostOutlined(glyphs, font) else null
+            val hostShapes = if ((doStroke || doClip || patternFill) && !font.hasOutlines) hostOutlined(painted, font) else null
             val shapes = hostShapes ?: glyphs
             val shapeUnits = if (hostShapes != null) HOST_UNITS_PER_EM else font.unitsPerEm ?: 1000
             val placements = vertical?.placements
