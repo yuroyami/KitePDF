@@ -126,6 +126,7 @@ internal fun KiteImageData.toShrunkRgbaBytes(shrinkX: Int, shrinkY: Int, bandByt
     }
     val rowBytes = packedRowBytes(w, components, if (isImageMask) 1 else bitsPerComponent) ?: return null
     if (src.size.toLong() < rowBytes.toLong() * h) return null
+    shrinkSamples(src, rowBytes, space, fx, fy, outWidth, outHeight)?.let { return it }
     val out = ByteArray(outWidth * outHeight * 4)
     // Whole blocks of shrinkY rows, so each band averages down as the whole image would.
     val bandRows = (bandBytes / (w.toLong() * 4 * fy)).coerceIn(1L, (h / fy + 1).toLong()).toInt() * fy
@@ -137,6 +138,133 @@ internal fun KiteImageData.toShrunkRgbaBytes(shrinkX: Int, shrinkY: Int, bandByt
         y += rows
     }
     return out
+}
+
+/**
+ * [toShrunkRgbaBytes] for an image of one sample a pixel at 1, 2, 4 or 8 bits, without an alpha plane
+ * or a colour key, as a scanned page is: the colour of each pixel then depends on its sample alone.
+ * [toRgbaBytes] gives the colour of each sample value, and each block sums those colours as
+ * [shrinkRgba] sums its pixels. The pixels are the same, without a pass over full-size RGBA, which
+ * was half the time of a scanned page (#462). Null when the image does not qualify.
+ */
+private fun KiteImageData.shrinkSamples(
+    src: ByteArray, rowBytes: Int, space: KiteColorSpace?, fx: Int, fy: Int, outWidth: Int, outHeight: Int,
+): ByteArray? {
+    if (softMaskAlpha != null || colorKeyMask != null) return null
+    val bits = if (isImageMask) 1 else bitsPerComponent
+    if (bits != 1 && bits != 2 && bits != 4 && bits != 8) return null
+    if (!isImageMask && space !is KiteColorSpace.Indexed && space?.componentCount != 1) return null
+    if (width.toLong() * bits > Int.MAX_VALUE) return null
+    val colours = sampleColours(bits, space) ?: return null
+    // The channels of each colour times its alpha, as shrinkRgba weights a pixel, and then the alpha.
+    val weighted = LongArray(colours.size) { i ->
+        val alpha = colours[i or 3].toLong() and 0xFF
+        if (i and 3 == 3) alpha else (colours[i].toLong() and 0xFF) * alpha
+    }
+    // A 1-bit block of a power-of-two width counts its set bits a byte at a time.
+    val ones = if (bits == 1 && fx and (fx - 1) == 0) IntArray(outWidth) else null
+    val sums = LongArray(outWidth * 4)
+    val out = ByteArray(outWidth * outHeight * 4)
+    for (oy in 0 until outHeight) {
+        val y0 = oy * fy
+        val y1 = minOf(height, y0 + fy)
+        if (ones != null) {
+            ones.fill(0)
+            for (y in y0 until y1) countOnes(src, y * rowBytes, fx, ones)
+            // A block of n pixels with k set bits holds n - k pixels of colour 0 and k of colour 1.
+            for (ox in 0 until outWidth) {
+                val n = (minOf(width, ox * fx + fx) - ox * fx).toLong() * (y1 - y0)
+                val k = ones[ox].toLong()
+                for (c in 0 until 4) sums[4 * ox + c] = (n - k) * weighted[c] + k * weighted[4 + c]
+            }
+        } else {
+            sums.fill(0)
+            for (y in y0 until y1) addSamples(src, y * rowBytes, bits, fx, weighted, sums)
+        }
+        for (ox in 0 until outWidth) {
+            val count = (y1 - y0) * (minOf(width, ox * fx + fx) - ox * fx)
+            val a = sums[4 * ox + 3]
+            val o = (oy * outWidth + ox) * 4
+            if (a > 0) {
+                out[o] = ((sums[4 * ox] + a / 2) / a).toInt().toByte()
+                out[o + 1] = ((sums[4 * ox + 1] + a / 2) / a).toInt().toByte()
+                out[o + 2] = ((sums[4 * ox + 2] + a / 2) / a).toInt().toByte()
+            }
+            out[o + 3] = ((a + count / 2) / count).toInt().toByte()
+        }
+    }
+    return out
+}
+
+/** The RGBA that [toRgbaBytes] gives each of the 2^[bits] sample values of this image, in order. */
+private fun KiteImageData.sampleColours(bits: Int, space: KiteColorSpace?): ByteArray? {
+    val values = 1 shl bits
+    val samples = ByteArray((values * bits + 7) / 8)
+    for (v in 0 until values) {
+        val bit = v * bits
+        samples[bit / 8] = (samples[bit / 8].toInt() or (v shl (8 - bits - bit % 8))).toByte()
+    }
+    return KiteImageData(
+        width = values, height = 1, bitsPerComponent = bitsPerComponent, colorSpace = colorSpace, kind = kind,
+        encodedBytes = ByteArray(0), pixelBytes = samples, resolvedColorSpace = space, decode = decode,
+        isImageMask = isImageMask, maskFill = maskFill,
+    ).toRgbaBytes()
+}
+
+/** Adds the set bits of the 1-bit row at [start] to the block of [fx] pixels that each lies in. [fx] is a power of two. */
+private fun KiteImageData.countOnes(src: ByteArray, start: Int, fx: Int, ones: IntArray) {
+    val whole = width / 8
+    val tail = width % 8
+    // The bits of the last byte that lie past the right edge do not count.
+    val last = if (tail == 0) 0 else src[start + whole].toInt() and (0xFF shl (8 - tail)) and 0xFF
+    if (fx >= 8) {
+        val bytesPerBlock = fx / 8
+        for (i in 0 until whole) ones[i / bytesPerBlock] += (src[start + i].toInt() and 0xFF).countOneBits()
+        if (tail != 0) ones[whole / bytesPerBlock] += last.countOneBits()
+        return
+    }
+    val perByte = 8 / fx
+    val mask = (1 shl fx) - 1
+    for (i in 0..whole) {
+        val b = if (i < whole) src[start + i].toInt() and 0xFF else last
+        if (b == 0) continue
+        for (j in 0 until minOf(perByte, ones.size - i * perByte)) {
+            ones[i * perByte + j] += ((b ushr (8 - fx * (j + 1))) and mask).countOneBits()
+        }
+    }
+}
+
+/** Adds the weighted colour of each sample of the row at [start] to the sums of its block of [fx] pixels. */
+private fun KiteImageData.addSamples(src: ByteArray, start: Int, bits: Int, fx: Int, weighted: LongArray, sums: LongArray) {
+    val mask = (1 shl bits) - 1
+    var x = 0
+    var s = 0
+    while (x < width) {
+        val end = if (fx >= width - x) width else x + fx
+        var r = 0L
+        var g = 0L
+        var b = 0L
+        var a = 0L
+        while (x < end) {
+            val sample = if (bits == 8) {
+                src[start + x].toInt() and 0xFF
+            } else {
+                val bit = x * bits
+                (src[start + (bit ushr 3)].toInt() ushr (8 - bits - (bit and 7))) and mask
+            }
+            val c = 4 * sample
+            r += weighted[c]
+            g += weighted[c + 1]
+            b += weighted[c + 2]
+            a += weighted[c + 3]
+            x++
+        }
+        sums[s] += r
+        sums[s + 1] += g
+        sums[s + 2] += b
+        sums[s + 3] += a
+        s += 4
+    }
 }
 
 /**
