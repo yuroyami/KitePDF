@@ -3,9 +3,12 @@ package io.github.yuroyami.kitepdf.nativerenderer.difftest
 import io.github.yuroyami.kitepdf.KitePDF
 import io.github.yuroyami.kitepdf.difftest.CorpusSelection
 import io.github.yuroyami.kitepdf.nativerenderer.AwtPdfRasterizer
+import java.awt.image.BufferedImage
+import java.lang.management.ManagementFactory
 import kotlin.system.measureNanoTime
 import kotlin.test.Test
 import kotlin.test.assertTrue
+import org.junit.Assume.assumeTrue
 
 /**
  * Open and render budgets at 1x through the AWT rasterizer: the slowest open
@@ -23,7 +26,8 @@ import kotlin.test.assertTrue
  *   budgets, the budgets grow by the same ratio. A faster machine keeps them.
  *
  * The numbers print so runs can be compared over time. Corpus files are optional; the
- * synthetic fixtures always run.
+ * synthetic fixtures always run. With `KITEPDF_BENCH=true`, the scanned books of [ScannedPdfs]
+ * run under the same render budget as well.
  */
 class RenderBenchmarkTest {
 
@@ -116,6 +120,70 @@ class RenderBenchmarkTest {
         )
     }
 
+    /**
+     * The scanned books of [ScannedPdfs], each under [RENDER_BUDGET_MS] per page as above (#462).
+     * Here the budget applies to the thread's CPU time. A scanned page holds tens of megabytes, so
+     * on a machine that is short of memory its wall time measures the swapping: one loaded run took
+     * 3.1 s of wall time and 0.4 s of CPU time a page. The test prints both.
+     *
+     * Every page must draw its scan: a page that draws nothing is fast, and would hide a decoder
+     * that stopped working.
+     */
+    @Test
+    fun scanned_books_hold_the_render_budget() {
+        val enabled = System.getenv("KITEPDF_BENCH") == "true" || System.getProperty("kitepdf.bench") == "true"
+        // Skipped, not passed, when nobody asked for it (#191). Making and rendering the books takes a minute.
+        assumeTrue("Run with KITEPDF_BENCH=true to render the scanned books.", enabled)
+        val books = ScannedPdfs.all()
+        // Warm-up, and the check that each page draws its scan.
+        for (book in books) {
+            val doc = KitePDF.open(book.bytes)
+            for ((i, page) in doc.pages.withIndex()) {
+                val dark = darkShare(AwtPdfRasterizer.renderToImage(page))
+                assertTrue(dark > MIN_DARK_SHARE, "${book.name} page $i draws only $dark of its pixels dark")
+            }
+        }
+        kernelMs()
+
+        val kernelBefore = kernelMs()
+        val threads = ManagementFactory.getThreadMXBean()
+        var worstMs = 0.0
+        var worstName = ""
+        val lines = StringBuilder()
+        for (book in books) {
+            val pages = KitePDF.open(book.bytes).pages.size
+            var wall = Long.MAX_VALUE
+            var cpu = Long.MAX_VALUE
+            // As above: a fresh document in each run, and the fastest run counts.
+            repeat(RUNS) {
+                val cpuStart = threads.currentThreadCpuTime
+                val wallStart = System.nanoTime()
+                val doc = KitePDF.open(book.bytes)
+                for (page in doc.pages) AwtPdfRasterizer.renderToImage(page)
+                wall = minOf(wall, System.nanoTime() - wallStart)
+                cpu = minOf(cpu, threads.currentThreadCpuTime - cpuStart)
+            }
+            val cpuMs = cpu / 1_000_000.0 / pages
+            lines.append(" ${book.name}=${round2(cpuMs)}ms/page cpu,${round2(wall / 1_000_000.0 / pages)}ms/page wall")
+            if (cpuMs > worstMs) {
+                worstMs = cpuMs
+                worstName = book.name
+            }
+        }
+        val kernel = maxOf(kernelBefore, kernelMs())
+        val load = maxOf(1.0, kernel / KERNEL_REFERENCE_MS)
+        val budget = RENDER_BUDGET_MS * load
+        println("[scan bench] books=${books.size}$lines kernel=${round2(kernel)}ms load=${round2(load)}")
+        assertTrue(worstMs < budget, "render budget: $worstName averages ${worstMs}ms/page of CPU time, must be < ${budget}ms")
+    }
+
+    /** The share of [image]'s pixels darker than mid grey. */
+    private fun darkShare(image: BufferedImage): Double {
+        val pixels = image.getRGB(0, 0, image.width, image.height, null, 0, image.width)
+        val dark = pixels.count { p -> (p shr 16 and 0xFF) + (p shr 8 and 0xFF) + (p and 0xFF) < 3 * 160 }
+        return dark.toDouble() / pixels.size
+    }
+
     private fun round2(v: Double) = (v * 100).toInt() / 100.0
 
     private companion object {
@@ -131,5 +199,8 @@ class RenderBenchmarkTest {
 
         /** The kernel on the machine that set the budgets, idle: 12.9 to 13.6 ms in three runs. */
         const val KERNEL_REFERENCE_MS = 13.0
+
+        /** A page of text draws about 12% of its pixels darker than mid grey at 1x. A blank page draws none. */
+        const val MIN_DARK_SHARE = 0.05
     }
 }

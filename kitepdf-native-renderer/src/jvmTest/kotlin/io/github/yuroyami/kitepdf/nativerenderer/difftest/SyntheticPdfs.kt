@@ -485,7 +485,7 @@ object SyntheticPdfs {
     }
 
     /** Minimal classic-xref PDF writer. Object numbers are assigned in insertion order, 1-based. */
-    private class Pdf {
+    class Pdf {
         private val objects = mutableListOf<ByteArray>()
 
         fun obj(body: String): Int = obj(body.encodeToByteArray())
@@ -493,6 +493,13 @@ object SyntheticPdfs {
         fun obj(body: ByteArray): Int {
             objects.add(body)
             return objects.size
+        }
+
+        /** The number of an object that [set] writes later, so that two objects can name each other. */
+        fun reserve(): Int = obj(ByteArray(0))
+
+        fun set(number: Int, body: String) {
+            objects[number - 1] = body.encodeToByteArray()
         }
 
         fun stream(dict: String, data: ByteArray): Int {
