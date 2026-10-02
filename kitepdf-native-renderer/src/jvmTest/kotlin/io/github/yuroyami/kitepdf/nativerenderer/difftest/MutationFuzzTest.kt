@@ -1,6 +1,7 @@
 package io.github.yuroyami.kitepdf.nativerenderer.difftest
 
 import io.github.yuroyami.kitepdf.PdfDocument
+import io.github.yuroyami.kitepdf.difftest.CorpusSelection
 import io.github.yuroyami.kitepdf.core.KiteFormatException
 import io.github.yuroyami.kitepdf.core.KiteWrongPasswordException
 import io.github.yuroyami.kitepdf.core.render.NoopCanvas
@@ -30,15 +31,9 @@ class MutationFuzzTest {
         const val WATCHDOG_SECONDS = 10L
     }
 
-    private fun corpusPdfs(): List<Pair<String, ByteArray>> {
-        var d: File? = File(System.getProperty("user.dir")).absoluteFile
-        while (d != null && !File(d, "settings.gradle.kts").exists()) d = d.parentFile
-        val dir = d?.let { File(it, "corpus/pdf") } ?: return emptyList()
-        return dir.listFiles { f -> f.extension == "pdf" }
-            ?.sortedBy { it.name }
-            ?.map { it.name to it.readBytes() }
-            ?: emptyList()
-    }
+    private fun corpusPdfs(): List<Pair<String, ByteArray>> =
+        CorpusSelection.configuredDocuments("pdf", GeneratedPdfs.all().map { it.name }.toSet())
+            .map { it.name to it.file.readBytes() }
 
     @Test
     fun mutants_never_crash_the_engine() {

@@ -95,3 +95,36 @@ kotlin {
         }
     }
 }
+
+// Test workers need the same corpus/page/oracle knobs as the build JVM. Snapshot
+// external corpus and oracle inputs so an expanded corpus invalidates a cached run.
+tasks.withType<Test>().configureEach {
+    val kitePdfProperties = System.getProperties()
+        .stringPropertyNames()
+        .filter { it.startsWith("kitepdf.") }
+        .associateWith(System::getProperty)
+    systemProperties(kitePdfProperties)
+    inputs.properties(kitePdfProperties)
+
+    val pdfCorpus = kitePdfProperties["kitepdf.corpus"]?.let(::file)
+        ?: rootProject.file("corpus/pdf")
+    inputs.files(fileTree(pdfCorpus) { include { it.isDirectory || it.file.extension.equals("pdf", ignoreCase = true) } })
+        .withPropertyName("kitePdfCorpus")
+        .withPathSensitivity(PathSensitivity.RELATIVE)
+
+    val mutoolCandidates = buildList {
+        kitePdfProperties["kitepdf.mutool"]?.let { add(file(it)) }
+        System.getenv("MUTOOL")?.takeIf(String::isNotBlank)?.let { add(file(it)) }
+        for (name in listOf("mutool", "mutool.exe")) {
+            add(rootProject.file("mupdf-master/build/release/$name"))
+            add(rootProject.file("mupdf-master/build/debug/$name"))
+            (System.getenv("PATH") ?: "")
+                .split(File.pathSeparator)
+                .filter(String::isNotBlank)
+                .forEach { add(file("$it/$name")) }
+        }
+    }.distinct()
+    inputs.files(mutoolCandidates)
+        .withPropertyName("mutoolCandidates")
+        .withPathSensitivity(PathSensitivity.NONE)
+}

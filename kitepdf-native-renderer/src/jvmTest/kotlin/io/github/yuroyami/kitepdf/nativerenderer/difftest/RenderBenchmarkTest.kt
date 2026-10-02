@@ -1,8 +1,8 @@
 package io.github.yuroyami.kitepdf.nativerenderer.difftest
 
 import io.github.yuroyami.kitepdf.KitePDF
+import io.github.yuroyami.kitepdf.difftest.CorpusSelection
 import io.github.yuroyami.kitepdf.nativerenderer.AwtPdfRasterizer
-import java.io.File
 import kotlin.system.measureNanoTime
 import kotlin.test.Test
 import kotlin.test.assertTrue
@@ -26,13 +26,6 @@ import kotlin.test.assertTrue
  * synthetic fixtures always run.
  */
 class RenderBenchmarkTest {
-
-    private fun corpusPdfs(): List<File> {
-        var d: File? = File(System.getProperty("user.dir")).absoluteFile
-        while (d != null && !File(d, "settings.gradle.kts").exists()) d = d.parentFile
-        val dir = d?.let { File(it, "corpus/pdf") } ?: return emptyList()
-        return dir.listFiles { f -> f.extension == "pdf" }?.sortedBy { it.name } ?: emptyList()
-    }
 
     /** The fastest of [RUNS] runs of [block], in milliseconds. */
     private inline fun fastestMs(block: () -> Unit): Double {
@@ -63,13 +56,16 @@ class RenderBenchmarkTest {
     fun open_and_render_budgets_hold() {
         val docs = ArrayList<Pair<String, ByteArray>>()
         for (fx in SyntheticPdfs.all() + GeneratedPdfs.all()) docs.add(fx.name to fx.bytes)
-        for (f in corpusPdfs()) docs.add(f.name to f.readBytes())
+        CorpusSelection.configuredDocuments("pdf", docs.map { it.first }.toSet())
+            .forEach { docs.add(it.name to it.file.readBytes()) }
+        // Every page, so one slow page between the sampled ones still counts against the budget.
+        val selection = CorpusSelection.Pages(allPages = true)
         assertTrue(docs.isNotEmpty())
 
         // Warm-up: JIT + font caches.
         for ((_, bytes) in docs) {
             val doc = KitePDF.open(bytes)
-            for (p in doc.pages) AwtPdfRasterizer.renderToImage(p)
+            for (i in selection.indices(doc.pages.size)) AwtPdfRasterizer.renderToImage(doc.pages[i])
         }
         kernelMs()
 
@@ -79,6 +75,7 @@ class RenderBenchmarkTest {
         var worstRenderMs = 0.0
         var worstRenderName = ""
         var pageCount = 0
+        var availablePages = 0
         for ((name, bytes) in docs) {
             var doc = KitePDF.open(bytes) // pre-warm anything file-global once
             val openMs = fastestMs { doc = KitePDF.open(bytes) }
@@ -86,12 +83,16 @@ class RenderBenchmarkTest {
                 worstOpenMs = openMs
                 worstOpenName = name
             }
-            val pages = doc.pages.size
-            if (pages == 0) continue
-            // A fresh document in each run, so each run pays the first render of every page,
+            val pages = selection.indices(doc.pages.size)
+            availablePages += doc.pages.size
+            assertTrue(pages.isNotEmpty(), "$name contains no renderable pages")
+            // A fresh document in each run, so each run pays the first render of every selected page,
             // image decoding and font parsing included, as a viewer that opens the file does.
-            val docMs = fastestMs { for (p in KitePDF.open(bytes).pages) AwtPdfRasterizer.renderToImage(p) } / pages
-            pageCount += pages
+            val docMs = fastestMs {
+                val fresh = KitePDF.open(bytes)
+                for (i in pages) AwtPdfRasterizer.renderToImage(fresh.pages[i])
+            } / pages.size
+            pageCount += pages.size
             if (docMs > worstRenderMs) {
                 worstRenderMs = docMs
                 worstRenderName = name
@@ -103,7 +104,7 @@ class RenderBenchmarkTest {
         val openBudget = OPEN_BUDGET_MS * load
         val renderBudget = RENDER_BUDGET_MS * load
         println(
-            "[render bench] docs=${docs.size} pages=$pageCount " +
+            "[render bench] docs=${docs.size} selectedPages=$pageCount availablePages=$availablePages selection=${selection.describe()} " +
                 "worstOpen=${round2(worstOpenMs)}ms ($worstOpenName) " +
                 "worstRender=${round2(worstRenderMs)}ms/page ($worstRenderName) " +
                 "kernel=${round2(kernel)}ms load=${round2(load)}",

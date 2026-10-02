@@ -108,10 +108,10 @@ tasks.withType<Test>().configureEach {
         ?: rootProject.file("corpus/pdf")
     val epubCorpus = kitePdfProperties["kitepdf.epub.corpus"]?.let(::file)
         ?: rootProject.file("corpus/epub")
-    inputs.files(fileTree(pdfCorpus) { include("**/*.pdf") })
+    inputs.files(fileTree(pdfCorpus) { include { it.isDirectory || it.file.extension.equals("pdf", ignoreCase = true) } })
         .withPropertyName("kitePdfCorpus")
         .withPathSensitivity(PathSensitivity.RELATIVE)
-    inputs.files(fileTree(epubCorpus) { include("**/*.epub") })
+    inputs.files(fileTree(epubCorpus) { include { it.isDirectory || it.file.extension.equals("epub", ignoreCase = true) } })
         .withPropertyName("kiteEpubCorpus")
         .withPathSensitivity(PathSensitivity.RELATIVE)
 

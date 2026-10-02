@@ -1,5 +1,6 @@
 package io.github.yuroyami.kitepdf.nativerenderer.difftest
 
+import io.github.yuroyami.kitepdf.difftest.CorpusSelection
 import io.github.yuroyami.kitepdf.epub.EpubDocument
 import io.github.yuroyami.kitepdf.core.render.KiteMatrix
 import io.github.yuroyami.kitepdf.core.render.RecordingCanvas
@@ -23,9 +24,8 @@ class EpubDrawStreamHashTest {
         out.parentFile?.mkdirs()
         val corpus = ArrayList<Pair<String, ByteArray>>().apply {
             addAll(EpubCorpus.synthetic())
-            val dir = Corpus.repoCorpus("epub")
-            dir?.listFiles { f -> f.extension == "epub" }?.sortedBy { it.name }?.forEach {
-                add(it.name to it.readBytes())
+            CorpusSelection.configuredDocuments("epub", map { it.first }.toSet()).forEach {
+                add("${it.name}.epub" to it.file.readBytes())
             }
         }
         val lines = ArrayList<String>()

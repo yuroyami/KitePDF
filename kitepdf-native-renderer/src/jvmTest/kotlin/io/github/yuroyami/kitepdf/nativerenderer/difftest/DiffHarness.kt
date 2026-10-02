@@ -1,5 +1,6 @@
 package io.github.yuroyami.kitepdf.nativerenderer.difftest
 
+import io.github.yuroyami.kitepdf.difftest.CorpusSelection
 import io.github.yuroyami.kitepdf.difftest.ImageDiff
 import io.github.yuroyami.kitepdf.difftest.MuPdfOracle
 import io.github.yuroyami.kitepdf.difftest.PdfRenderOracle
@@ -11,7 +12,7 @@ import javax.imageio.ImageIO
 import kotlin.math.abs
 
 /**
- * Differential rendering harness. For every page of every corpus PDF it
+ * Differential rendering harness. For each selected page of every corpus PDF it
  * rasterizes with KitePDF, rasterizes the same page with the MuPDF oracle
  * (when available), pixel-diffs the two, and emits a worst-first report plus
  * the kite / reference / heatmap PNGs for inspection.
@@ -23,18 +24,11 @@ object DiffHarness {
 
     const val DEFAULT_DPI = 96
 
-    /** Pages scored per doc. Override with -Dkitepdf.diff.maxpages; default 6. */
+    /** Sample size per doc, default 6. -Dkitepdf.diff.allpages=true scores every page. */
     val MAX_PAGES_PER_DOC: Int
         get() = parseMaxPages(System.getProperty("kitepdf.diff.maxpages"))
 
-    internal fun parseMaxPages(raw: String?): Int {
-        if (raw == null) return 6
-        val value = raw.toIntOrNull()
-        require(value != null && value >= 1) {
-            "kitepdf.diff.maxpages must be a positive integer (was '$raw')"
-        }
-        return value
-    }
+    internal fun parseMaxPages(raw: String?): Int = CorpusSelection.parseMaxPages(raw)
 
     data class PageResult(
         val doc: String,
@@ -62,6 +56,8 @@ object DiffHarness {
         val oraclePath: String,
         val dpi: Int,
         val outDir: File,
+        val coverage: Map<String, Pair<Int, List<Int>>> = emptyMap(),
+        val selection: String = "",
     ) {
         private val scored get() = results.mapNotNull { it.score }
         val meanScore: Double? get() = scored.takeIf { it.isNotEmpty() }?.average()
@@ -79,8 +75,10 @@ object DiffHarness {
 
         fun summary(): String = buildString {
             appendLine("[difftest] oracle=${if (oracleAvailable) oraclePath else "none (KitePDF-only smoke)"} dpi=$dpi")
+            appendLine("[difftest] selection=$selection selectedPages=${coverage.values.sumOf { it.second.size }} " +
+                "availablePages=${coverage.values.sumOf { it.first }} documents=${results.map { it.doc }.distinct().size}")
             appendLine(
-                "[difftest] pages=${results.size} " +
+                "[difftest] pageResults=${results.size} " +
                     "renderFailures=${results.count { !it.rendered }} " +
                     "blank=${results.count { it.rendered && !it.nonBlank }} " +
                     "oracleComparisonFailures=${oracleFailures.size}",
@@ -104,12 +102,24 @@ object DiffHarness {
                 else "**none**: KitePDF-only smoke (set `-Dkitepdf.mutool=…` or build `mupdf-master`)",
             )
             md.appendLine("- DPI: $dpi")
+            md.appendLine("- Selection: $selection")
+            md.appendLine("- Selected pages: ${coverage.values.sumOf { it.second.size }} / ${coverage.values.sumOf { it.first }} available in opened documents")
             md.appendLine(
-                "- Pages: ${results.size} · Render failures: ${results.count { !it.rendered }} · " +
+                "- Page results (including open failures): ${results.size} · Render failures: ${results.count { !it.rendered }} · " +
                     "Blank: ${results.count { it.rendered && !it.nonBlank }}",
             )
             if (oracleAvailable) md.appendLine("- Oracle/comparison failures: ${oracleFailures.size}")
             meanScore?.let { md.appendLine("- Mean score (MAE vs MuPDF): ${"%.4f".format(it)}") }
+            md.appendLine()
+            md.appendLine("## Coverage")
+            md.appendLine()
+            md.appendLine("Page indices are zero-based. Documents that fail to open remain failures below.")
+            md.appendLine()
+            md.appendLine("| Doc | Available | Selected | Page indices |")
+            md.appendLine("|---|---:|---:|---|")
+            coverage.forEach { (name, pages) ->
+                md.appendLine("| $name | ${pages.first} | ${pages.second.size} | ${pages.second.joinToString()} |")
+            }
             md.appendLine()
             md.appendLine("Worst-rendering pages first. Score = normalized mean abs error vs MuPDF, 0 = identical.")
             md.appendLine()
@@ -152,6 +162,8 @@ object DiffHarness {
         val scale = dpi / 72.0
         val oracleAvailable = oracle.available
         val results = mutableListOf<PageResult>()
+        val selection = CorpusSelection.configuredPages()
+        val coverage = linkedMapOf<String, Pair<Int, List<Int>>>()
 
         for (entry in corpus) {
             val doc = try {
@@ -162,8 +174,9 @@ object DiffHarness {
             }
 
             val kitePageCount = doc.pages.size
-            val pageCount = kitePageCount.coerceAtMost(MAX_PAGES_PER_DOC)
-            if (pageCount == 0) {
+            val pages = selection.indices(kitePageCount)
+            coverage[entry.name] = kitePageCount to pages
+            if (pages.isEmpty()) {
                 results += fail(entry, 0, "document contains no renderable pages")
                 continue
             }
@@ -181,7 +194,7 @@ object DiffHarness {
             }
             val docOut = File(outDir, "out/${entry.name}").apply { mkdirs() }
 
-            for (i in 0 until pageCount) {
+            for (i in pages) {
                 try {
                     val kiteImg = AwtPdfRasterizer.renderToImage(doc.pages[i], scale = scale)
                     val kitePng = File(docOut, "p$i.kite.png")
@@ -249,7 +262,7 @@ object DiffHarness {
             }
         }
 
-        return Report(results, oracleAvailable, oracle.describe(), dpi, outDir)
+        return Report(results, oracleAvailable, oracle.describe(), dpi, outDir, coverage, selection.describe())
     }
 
     private fun fail(entry: Corpus.Entry, page: Int, error: String) = PageResult(

@@ -2,6 +2,8 @@ package io.github.yuroyami.kitepdf.epub
 
 import io.github.yuroyami.kitepdf.core.render.RecordingCanvas
 import java.io.File
+import java.nio.file.Files
+import java.util.zip.ZipFile
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
@@ -39,6 +41,45 @@ class FontFallbackTest {
         doc.pages.flatMap { page ->
             RecordingCanvas().also { page.renderTo(it) }.calls.filterIsInstance<RecordingCanvas.Call.Glyphs>()
         }
+
+    /** Select by archive contents, so a font-loading regression cannot silently choose another book. */
+    private fun smallestBookWithEmbeddedFonts(directory: File): File? {
+        if (!directory.isDirectory) return null
+        val fontExtensions = setOf("ttf", "otf", "ttc", "woff", "woff2")
+        return directory.walkTopDown().onFail { _, error -> throw error }
+            .filter { it.isFile && it.extension.equals("epub", ignoreCase = true) }
+            .sortedWith(compareBy<File> { it.length() }.thenBy { it.relativeTo(directory).invariantSeparatorsPath })
+            .firstOrNull { book ->
+                ZipFile(book).use { zip ->
+                    zip.entries().asSequence().any { entry ->
+                        !entry.isDirectory && entry.name.substringAfterLast('.').lowercase() in fontExtensions
+                    }
+                }
+            }
+    }
+
+    @Test
+    fun a_smaller_fontless_book_does_not_displace_embedded_font_coverage() {
+        val directory = Files.createTempDirectory("kitepdf-font-corpus-").toFile()
+        try {
+            val fontless = File(directory, "small.epub").apply {
+                writeBytes(EpubFixtures.epub("<body><p>No embedded fonts</p></body>"))
+            }
+            assertNull(smallestBookWithEmbeddedFonts(directory), "a fontless corpus cannot exercise outlined glyphs")
+            val embedded = File(directory, "nested/embedded.EPUB").apply {
+                parentFile.mkdirs()
+                // Selection inspects resource names; no font parsing is involved in this fixture.
+                writeBytes(EpubFixtures.epub(
+                    "<body><p>Embedded font</p></body>",
+                    listOf("OEBPS/Fonts/Embedded.TTF" to ByteArray(512)),
+                ))
+            }
+            assertTrue(fontless.length() < embedded.length())
+            assertEquals(embedded, smallestBookWithEmbeddedFonts(directory))
+        } finally {
+            directory.deleteRecursively()
+        }
+    }
 
     @Test
     fun fallback_for_prefers_a_face_that_has_the_glyph() {
@@ -101,19 +142,24 @@ class FontFallbackTest {
     fun real_book_draws_no_notdef_with_outlines() {
         var d: File? = File(System.getProperty("user.dir")).absoluteFile
         while (d != null && !File(d, "settings.gradle.kts").exists()) d = d.parentFile
-        val book = d?.let { File(it, "corpus/epub") }?.listFiles { f -> f.extension == "epub" }
-            ?.minByOrNull { it.length() }.orSkip("An EPUB corpus")
+        val book = d?.let { smallestBookWithEmbeddedFonts(File(it, "corpus/epub")) }
+            .orSkip("An EPUB corpus book containing an embedded font resource")
+        println("[font-fallback] selected corpus book: ${book.name} (${book.length()} bytes)")
         val doc = EpubDocument.open(book.readBytes())
-        for (page in doc.pages) {
+        var outlinedRuns = 0
+        for ((pageIndex, page) in doc.pages.withIndex()) {
             val calls = RecordingCanvas().also { page.renderTo(it) }.calls
             for (run in calls.filterIsInstance<RecordingCanvas.Call.Glyphs>()) {
                 if (run.hasOutlines) {
+                    if (run.glyphs.isNotEmpty()) outlinedRuns++
                     assertTrue(
                         run.glyphs.none { it.gid == 0 },
-                        "page: .notdef drawn with outlines for text '${run.text}'",
+                        "${book.name} page $pageIndex: .notdef drawn with outlines for text '${run.text}'",
                     )
                 }
             }
         }
+        println("[font-fallback] ${book.name}: $outlinedRuns outlined glyph runs")
+        assertTrue(outlinedRuns > 0, "${book.name} contains embedded fonts but exercised no outlined glyph runs")
     }
 }

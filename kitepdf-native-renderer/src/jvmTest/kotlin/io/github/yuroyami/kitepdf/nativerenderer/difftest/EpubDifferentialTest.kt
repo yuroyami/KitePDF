@@ -1,5 +1,6 @@
 package io.github.yuroyami.kitepdf.nativerenderer.difftest
 
+import io.github.yuroyami.kitepdf.difftest.CorpusSelection
 import io.github.yuroyami.kitepdf.difftest.ImageDiff
 import io.github.yuroyami.kitepdf.difftest.MuPdfOracle
 import io.github.yuroyami.kitepdf.difftest.PdfRenderOracle
@@ -39,13 +40,8 @@ class EpubDifferentialTest {
         val corpus = ArrayList<Pair<String, ByteArray>>().apply {
             addAll(EpubCorpus.synthetic())
             // Real books from the git-ignored repo-root corpus/epub (or -Dkitepdf.epub.corpus).
-            val dir = Corpus.resolveCorpusDirectory(
-                propertyName = "kitepdf.epub.corpus",
-                configuredPath = System.getProperty("kitepdf.epub.corpus"),
-                fallback = Corpus.repoCorpus("epub"),
-            )
-            dir?.listFiles { f -> f.isFile && f.extension.equals("epub", ignoreCase = true) }
-                ?.sortedBy { it.name }?.forEach { add(it.nameWithoutExtension to it.readBytes()) }
+            CorpusSelection.configuredDocuments("epub", map { it.first }.toSet())
+                .forEach { add(it.name to it.file.readBytes()) }
         }
 
         val lines = ArrayList<String>()

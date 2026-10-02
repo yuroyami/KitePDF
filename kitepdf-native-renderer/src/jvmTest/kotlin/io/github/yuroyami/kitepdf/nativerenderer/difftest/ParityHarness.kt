@@ -1,6 +1,7 @@
 package io.github.yuroyami.kitepdf.nativerenderer.difftest
 
 import io.github.yuroyami.kitepdf.KitePDF
+import io.github.yuroyami.kitepdf.difftest.CorpusSelection
 import io.github.yuroyami.kitepdf.difftest.ColorFixtures
 import io.github.yuroyami.kitepdf.difftest.GradientFixtures
 import io.github.yuroyami.kitepdf.difftest.GroupFixtures
@@ -91,6 +92,8 @@ object ParityHarness {
         val exemptions: Map<String, Exemption>,
         val dpi: Int,
         val outDir: File,
+        val coverage: Map<String, Pair<Int, List<Int>>> = emptyMap(),
+        val selection: String = "",
     ) {
         /** True when an [Exemption] explains every finding of [result]. */
         fun isExempt(result: PageResult): Boolean {
@@ -114,6 +117,8 @@ object ParityHarness {
 
         fun summary(): String = buildString {
             appendLine("[parity] mupdf=${MuPdfOracle.describe()} pdfium=${PdfiumOracle.describe()} dpi=$dpi")
+            appendLine("[parity] selection=$selection selectedPages=${coverage.values.sumOf { it.second.size }} " +
+                "availablePages=${coverage.values.sumOf { it.first }} documents=${(coverage.keys + results.map { it.doc }).size}")
             appendLine("[parity] " + Verdict.entries.joinToString(" ") { v -> "${v.name}=${results.count { it.verdict == v }}" })
             append("[parity] report: ${File(outDir, "parity.md").absolutePath}")
         }
@@ -125,12 +130,24 @@ object ParityHarness {
             md.appendLine("- MuPDF: `${MuPdfOracle.describe()}`")
             md.appendLine("- PDFium: `${PdfiumOracle.describe()}`")
             md.appendLine("- DPI: $dpi")
+            md.appendLine("- Selection: $selection")
+            md.appendLine("- Selected pages: ${coverage.values.sumOf { it.second.size }} / ${coverage.values.sumOf { it.first }} available in opened documents")
             md.appendLine("- " + Verdict.entries.joinToString(" · ") { v -> "${v.label}: ${results.count { it.verdict == v }}" })
             md.appendLine()
             md.appendLine(
                 "Distances are the mean absolute error over RGB. A tile is ${ThreeWayDiff.TILE} pixels. " +
                     "The map is red where KitePDF alone differs, blue where PDFium alone differs, and green where MuPDF alone differs.",
             )
+            md.appendLine()
+            md.appendLine("## Coverage")
+            md.appendLine()
+            md.appendLine("Page indices are zero-based. Documents that fail to open remain findings below.")
+            md.appendLine()
+            md.appendLine("| Doc | Available | Selected | Page indices |")
+            md.appendLine("|---|---:|---:|---|")
+            coverage.forEach { (name, pages) ->
+                md.appendLine("| $name | ${pages.first} | ${pages.second.size} | ${pages.second.joinToString()} |")
+            }
             md.appendLine()
             md.appendLine("| Doc | Pg | Verdict | K-M | K-P | M-P | Tiles K/P/M | Why | Renders |")
             md.appendLine("|---|---:|---|---:|---:|---:|---|---|---|")
@@ -160,13 +177,15 @@ object ParityHarness {
 
     /** The drop-in and synthetic corpus, the parity fixtures, and every shared oracle fixture. */
     fun documents(outDir: File): List<Document> {
-        val docs = Corpus.assemble(outDir).map { Document(it.name, it.pdf) }.toMutableList()
+        val icc = IccFixtures.all() + (IccFixtures.intents() + IccFixtures.outputIntent()).map { it.fixture }
+        val shared = ColorFixtures.all() + GradientFixtures.all() + GroupFixtures.all() + ImageFixtures.all() + icc
+        val reserved = ParityFixtures.all().map { it.name } + shared.map { "fixture-${it.name}" }
+        val docs = Corpus.assemble(outDir, reserved.toSet()).map { Document(it.name, it.pdf) }.toMutableList()
         val inputs = File(outDir, "parity-inputs").apply { mkdirs() }
         for (f in ParityFixtures.all()) {
             docs += Document(f.name, File(inputs, "${f.name}.pdf").apply { writeBytes(f.bytes) })
         }
-        val icc = IccFixtures.all() + (IccFixtures.intents() + IccFixtures.outputIntent()).map { it.fixture }
-        for (f in ColorFixtures.all() + GradientFixtures.all() + GroupFixtures.all() + ImageFixtures.all() + icc) {
+        for (f in shared) {
             val pdf = File(inputs, "${f.name}.pdf").apply { writeBytes(f.bytes) }
             docs += Document("fixture-${f.name}", pdf)
         }
@@ -184,15 +203,18 @@ object ParityHarness {
         pdfium: PdfiumOracle = PdfiumOracle,
     ): Report {
         val results = ArrayList<PageResult>()
-        for (document in documents) results += runDocument(document, dpi, outDir, maxPages, mupdf, pdfium)
-        return Report(results, knownGaps, exemptions, dpi, outDir)
+        val selection = CorpusSelection.Pages(maxPages, CorpusSelection.parseAllPages(System.getProperty("kitepdf.diff.allpages")))
+        val coverage = linkedMapOf<String, Pair<Int, List<Int>>>()
+        for (document in documents) results += runDocument(document, dpi, outDir, selection, coverage, mupdf, pdfium)
+        return Report(results, knownGaps, exemptions, dpi, outDir, coverage, selection.describe())
     }
 
     private fun runDocument(
         document: Document,
         dpi: Int,
         outDir: File,
-        maxPages: Int,
+        selection: CorpusSelection.Pages,
+        coverage: MutableMap<String, Pair<Int, List<Int>>>,
         mupdf: PdfRenderOracle,
         pdfium: PdfiumOracle,
     ): List<PageResult> {
@@ -222,10 +244,21 @@ object ParityHarness {
                 notes = emptyList(),
             )
         }
-        val pages = kitePages.coerceAtMost(maxPages)
-        val pdfiumText = if (pages > 0) pdfium.extractText(document.pdf, 1, pages) else emptyMap()
+        val pages = selection.indices(kitePages)
+        coverage[document.name] = kitePages to pages
+        // Extract only selected pages, grouping adjacent ones so all-pages mode still
+        // uses one oracle invocation rather than one process per page.
+        val pdfiumText = mutableMapOf<Int, PdfiumOracle.TextResult>()
+        var cursor = 0
+        while (cursor < pages.size) {
+            val first = pages[cursor]
+            var last = first
+            while (cursor + 1 < pages.size && pages[cursor + 1] == last + 1) last = pages[++cursor]
+            pdfiumText.putAll(pdfium.extractText(document.pdf, first + 1, last + 1))
+            cursor++
+        }
         val docOut = File(outDir, "parity/${document.name}").apply { mkdirs() }
-        for (i in 0 until pages) {
+        for (i in pages) {
             results += runPage(document, kiteDoc, i, dpi, outDir, docOut, mupdf, pdfium, pdfiumText[i + 1])
         }
         return results
@@ -339,7 +372,8 @@ object ParityHarness {
     /**
      * The characters of [pdfium] that [kite] lacks, counted with repeats. Both sides are
      * NFKC-normalized and lose their whitespace, because the engines insert spaces and line
-     * breaks differently.
+     * breaks differently. PDFium writes U+0002 for a hyphen at the end of a line, where MuPDF
+     * and KitePDF write `-`, so it counts as `-`.
      */
     internal fun missingCharacters(pdfium: String, kite: String): String {
         fun bag(text: String): Map<Int, Int> =
@@ -348,7 +382,7 @@ object ParityHarness {
                 .groupingBy { it }.eachCount()
         val kiteBag = bag(kite)
         return buildString {
-            for ((cp, count) in bag(pdfium)) {
+            for ((cp, count) in bag(pdfium.replace('\u0002', '-'))) {
                 repeat((count - (kiteBag[cp] ?: 0)).coerceAtLeast(0)) { appendCodePoint(cp) }
             }
         }
