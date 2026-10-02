@@ -33,6 +33,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   one. The Serif flag of the font descriptor picks Mincho over Gothic. On Skia and
   CoreGraphics such text lost its Han, kana and Hangul characters, since the Latin
   faces those canvases picked have none (#472).
+- In a desktop Compose scene that draws on a thread other than the AWT event dispatch
+  thread, such as the `ImageComposeScene` of a test, a screenshot tool or a server, a
+  Vectorized page and the form layer draw their system-font text again. Since #428
+  such a page showed no text, and an EPUB page none at all. Their canvas draws inside
+  the scene's own draw pass, where Compose draws the scene's text (#464).
 
 ### Changed
 

@@ -78,7 +78,9 @@ import kotlin.math.sqrt
  * (the AWT event dispatch thread on desktop JVM). A call on another thread throws
  * [IllegalStateException] before accessing the host text stack. For background
  * exports use [KitePageRasterizer.rasterizeOffMain]. A canvas that skips system text
- * can probe on a worker, but that incomplete bitmap is not an export (#428).
+ * can probe on a worker, but that incomplete bitmap is not an export (#428). The canvas
+ * of a Vectorized page in `KiteDocView` draws inside its scene's own draw pass, so its
+ * host text takes the thread that scene draws on (#464).
  */
 public class ComposeCanvas internal constructor(
     private val drawScope: DrawScope,
@@ -101,6 +103,13 @@ public class ComposeCanvas internal constructor(
      * releases their bytes (#371). Eviction never recycles a bitmap held by a recorded layer.
      */
     private val bitmaps: KiteBitmapCache<ImageBitmap> = KiteBitmapCache(),
+    /**
+     * True for the canvas of a Vectorized page, which the viewer makes and draws on inside the
+     * Compose draw pass of its scene. That thread already draws the scene's own text with the
+     * same [textMeasurer], so host text there takes the thread the scene draws on, even off the
+     * platform UI thread, as an `ImageComposeScene` on a thread of its own does (#464).
+     */
+    private val inSceneDrawPass: Boolean = false,
 ) : KiteCanvas {
 
     /**
@@ -294,7 +303,7 @@ public class ComposeCanvas internal constructor(
             usedSystemFontText = true
             return
         }
-        requireHostTextThread()
+        if (!inSceneDrawPass) requireHostTextThread()
 
         // The whole text matrix applies to every glyph, shear and reflection included (ISO
         // 32000-1, 9.4.4, #416). The text is measured at the matrix's own scale and drawn under
@@ -362,7 +371,7 @@ public class ComposeCanvas internal constructor(
             usedSystemFontText = true
             return null
         }
-        requireHostTextThread()
+        if (!inSceneDrawPass) requireHostTextThread()
         // Real glyph contours from the host face. The text layout's range path is the selection
         // highlight, rectangles, which stroked an O as a box (ISO 32000-1, 9.3.6, #415).
         val path = hostTextPath(text, fontSpec) ?: return null
@@ -661,7 +670,10 @@ public class ComposeCanvas internal constructor(
             // Unpainted parts of a luminosity group show the black backdrop, whose luminosity is zero.
             if (luminosity) drawRect(Color.Black)
             scale(1f / pixelSize.toFloat(), pivot = Offset.Zero) {
-                val canvas = ComposeCanvas(this, textMeasurer, hairlineWidthPx, skipSystemFontText, magnification, twoCircleShader, maskTables, bitmaps)
+                val canvas = ComposeCanvas(
+                    this, textMeasurer, hairlineWidthPx, skipSystemFontText, magnification, twoCircleShader, maskTables, bitmaps,
+                    inSceneDrawPass,
+                )
                 nested = canvas
                 renderMask(canvas)
             }

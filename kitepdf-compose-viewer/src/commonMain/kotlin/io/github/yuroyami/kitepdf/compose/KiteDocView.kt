@@ -1436,9 +1436,12 @@ private fun KitePageVector(
         // The page ends at its slot, as the bitmap's edge ends it in Rasterized mode: content
         // outside the page, such as bleed, never paints the gap or the next page (#417).
         clipRect {
+            // The page draws here, inside this scene's draw pass, on the thread that draws the
+            // scene's own text with this measurer, so its host text draws there too (#464).
             val base = ComposeCanvas(
                 this, textMeasurer, spec.hairlineWidthPx, skipSystemFontText = false, magnification = magnification,
                 bitmaps = imageCache ?: io.github.yuroyami.kitepdf.core.render.KiteBitmapCache(),
+                inSceneDrawPass = true,
             )
             val themed = theme?.wrap(base) ?: base
             val target = spec.canvasDecorator?.invoke(themed) ?: themed

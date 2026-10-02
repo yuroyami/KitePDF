@@ -1031,7 +1031,11 @@ embedded outlines stay on the raster pool; host text goes to the UI thread. Desk
 asynchronous AWT dispatch even when no coroutine Main provider is installed, and works
 with `java.awt.headless=true`. Do not block the UI thread with `runBlocking` or a future
 wait while exporting. Custom desktop `ImageComposeScene` integrations must also create,
-measure and draw their scenes on the AWT event dispatch thread.
+measure and draw their scenes on the AWT event dispatch thread. One part needs no such
+thread: a Vectorized page and the form layer draw their host text inside the scene's own
+draw pass, where Compose draws the scene's text, so a scene on a thread of its own shows
+that text too (#464). A Rasterized page and an export still send host text to the AWT
+event dispatch thread.
 
 Pass `formState` to export a filled form. The suspend overload copies all accepted form
 values, typed choice selections and field flags before waiting for a raster slot. Both
