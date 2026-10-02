@@ -36,6 +36,8 @@ import kotlin.math.hypot
 import kotlin.math.pow
 import kotlinx.coroutines.Job
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.onPlaced
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.util.fastAny
 import androidx.compose.ui.util.fastFirstOrNull
@@ -346,6 +348,37 @@ internal fun Modifier.kiteTransformGestures(
             }
         }
 }
+
+/** The coordinates of one layout node, recorded as it is placed. */
+internal class NodePlace {
+    private var coordinates: LayoutCoordinates? = null
+
+    /** Goes on the node, in front of the modifiers whose positions it maps. */
+    val modifier: Modifier = Modifier.onPlaced { coordinates = it }
+
+    /** [local], a position in [node], as a position in this node, or [local] while either is not placed. */
+    fun positionOf(node: NodePlace, local: Offset): Offset {
+        val self = coordinates?.takeIf { it.isAttached } ?: return local
+        val other = node.coordinates?.takeIf { it.isAttached } ?: return local
+        return self.localPositionOf(other, local)
+    }
+}
+
+/**
+ * [onTap] for a page of a pager, with the position in the pager rather than in the page. A page
+ * moves during a turn, and a host that finds the edge from the position must read the place
+ * that the reader tapped (#455). At rest the two positions are the same.
+ */
+internal fun pagerTap(pager: NodePlace, page: NodePlace, onTap: ((Offset) -> Unit)?): ((Offset) -> Unit)? =
+    onTap?.let { tap -> { local -> tap(pager.positionOf(page, local)) } }
+
+/**
+ * Reports a tap that no page took, at its place in the pager. Only the current page has
+ * gestures, so a tap on a page that slides in during a turn, or on the gap between two pages,
+ * lands here (#455). A page's own tap detector consumes the press first, so no tap fires twice.
+ */
+internal fun Modifier.kiteStrayTaps(onTap: ((Offset) -> Unit)?): Modifier =
+    if (onTap == null) this else pointerInput(onTap) { detectTapGestures(onTap = onTap) }
 
 /**
  * How the pager around a page turns: along [orientation], with the next page before the

@@ -2385,6 +2385,12 @@ internal interface KiteScrollAdapter {
     val isScrollInProgress: Boolean get() = false
 
     /**
+     * True while a page turn that code started, not a finger, moves the container. A pager takes
+     * the press of a tap to stop its scroll, so a pager turns its own drag off meanwhile (#455).
+     */
+    val isTurning: Boolean get() = false
+
+    /**
      * False when the container keeps its index, not its key, at its next measure: always for a
      * container without keys, and while a correction waits for that measure.
      */
@@ -2502,6 +2508,9 @@ internal class LazyListScrollAdapter(private val listState: LazyListState) : Kit
 internal class PagerScrollAdapter(private val pagerState: PagerState) : KiteScrollAdapter {
     override val isScrollInProgress: Boolean get() = pagerState.isScrollInProgress
 
+    private var turns by mutableIntStateOf(0)
+    override val isTurning: Boolean get() = turns > 0
+
     override fun shows(slot: Int): Boolean = pagerState.layoutInfo.visiblePagesInfo.any { it.index == slot }
     /** True while a finger drags the pager. A correction then keeps the page offset, so the drag goes on. */
     var dragging: Boolean = false
@@ -2529,7 +2538,14 @@ internal class PagerScrollAdapter(private val pagerState: PagerState) : KiteScro
         expected = slot to pagerState.layoutInfo
     }
     override suspend fun scrollToPage(page: Int) = pagerState.scrollToPage(page)
-    override suspend fun animateScrollToPage(page: Int) = pagerState.animateScrollToPage(page)
+    override suspend fun animateScrollToPage(page: Int) {
+        turns++
+        try {
+            pagerState.animateScrollToPage(page)
+        } finally {
+            turns--
+        }
+    }
 
     override fun captureAnchor(): ScrollAnchor =
         ScrollAnchor(pagerState.currentPage, pageFraction = pagerState.currentPageOffsetFraction)
@@ -2558,6 +2574,9 @@ internal class SpreadScrollAdapter(
 ) : KiteScrollAdapter {
     override val isScrollInProgress: Boolean get() = pagerState.isScrollInProgress
 
+    private var turns by mutableIntStateOf(0)
+    override val isTurning: Boolean get() = turns > 0
+
     override fun shows(slot: Int): Boolean {
         val spread = plans.current.spreadOf(slot)
         return pagerState.layoutInfo.visiblePagesInfo.any { it.index == spread }
@@ -2585,7 +2604,12 @@ internal class SpreadScrollAdapter(
 
     override suspend fun animateScrollToPage(page: Int) {
         logical = page
-        pagerState.animateScrollToPage(plans.current.spreadOf(page))
+        turns++
+        try {
+            pagerState.animateScrollToPage(plans.current.spreadOf(page))
+        } finally {
+            turns--
+        }
     }
 
     /** The first page of the spread after or before the current one, or null at that end of the book. */
