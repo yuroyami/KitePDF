@@ -41,6 +41,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- A PDF's JPEG no longer decodes when it loads only to check the file, which took
+  about a third of a page's render time; its first draw decodes it. A file whose
+  headers KiteImageCodec reads and whose data it cannot decode now reaches a canvas
+  as a `Kind.RAW` image whose decode fails, with the file in `encodedBytes`, and the
+  built-in canvases hand it to the platform decoder there, as they do a `Kind.JPEG`
+  image. A custom `KiteCanvas` that draws such a file through its platform should do
+  the same (#475).
+
 - A media element without a poster paints a plain grey box. The play triangle on it
   promised playback that the engine does not do; `kitepdf-media` draws its own play
   button (#31).

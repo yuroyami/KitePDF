@@ -566,6 +566,8 @@ public class SkiaCanvas(private val canvas: SkCanvas) : KiteCanvas {
                 // OPAQUE would discard it, rendering masks as solid black.
                 Image.makeRaster(ImageInfo(w, h, ColorType.RGBA_8888, ColorAlphaType.UNPREMUL), pixels, w * 4)
             }
+                // A JPEG whose data KiteImageCodec could not decode goes to Skia's decoder, as above (#475).
+                ?: image.encodedBytes.takeIf { it.isNotEmpty() }?.let { Image.makeFromEncoded(it) }
         } catch (t: Throwable) {
             null
         }

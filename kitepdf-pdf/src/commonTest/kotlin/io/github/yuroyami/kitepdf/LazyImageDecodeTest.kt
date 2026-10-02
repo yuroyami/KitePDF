@@ -16,6 +16,7 @@ import kotlin.math.abs
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
@@ -137,6 +138,36 @@ class LazyImageDecodeTest {
         // A colour key compares exact samples, which a reduced decode averages away.
         val keyed = image(bytes, extra = mapOf("Mask" to PdfArray(List(6) { PdfInt(if (it % 2 == 0) 0L else 10L) })))
         assertEquals(w.toLong() * h * 3, keyed.retainedBytes(), "the keyed image does not hold its samples")
+    }
+
+    /**
+     * [bytes] with a run of its entropy-coded data set to ones, a bit string no Huffman code
+     * is (ISO/IEC 10918-1, C.2): the headers read, and the data does not decode.
+     */
+    private val damaged = bytes.copyOf().also { file ->
+        fun u16(at: Int) = ((file[at].toInt() and 0xFF) shl 8) or (file[at + 1].toInt() and 0xFF)
+        var at = 2
+        while ((file[at + 1].toInt() and 0xFF) != 0xDA) at += 2 + u16(at + 2)
+        val data = at + 2 + u16(at + 2)
+        val from = data + (file.size - data) / 3
+        for (i in from until from + 64 step 2) {
+            file[i] = 0xFF.toByte()
+            file[i + 1] = 0
+        }
+    }
+
+    @Test
+    fun a_jpeg_whose_data_does_not_decode_loads_without_a_decode_and_keeps_its_file() {
+        assertTrue(KiteImageCodec.probe(damaged).isDecodable, "the headers of the damaged file read")
+        assertTrue(runCatching { KiteImageCodec.decode(damaged) }.isFailure, "the data of the damaged file decodes")
+        val image = image(damaged)
+        // A decode when the file loaded would have found the damage and made it the platform's JPEG (#475).
+        assertEquals(KiteImageData.Kind.RAW, image.kind)
+        assertContentEquals(damaged, image.encodedBytes)
+        assertEquals(damaged.size.toLong(), image.retainedBytes(), "the file counts once")
+        // The first draw finds the damage, and a canvas hands encodedBytes to the platform decoder.
+        assertNull(image.toShrunkRgbaBytes(4, 4))
+        assertNull(image.toRgbaBytes())
     }
 
     @Test

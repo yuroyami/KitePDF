@@ -503,11 +503,15 @@ public class CoreGraphicsCanvas(private val ctx: CGContextRef) : KiteCanvas {
     }
 
     private fun decodeImage(image: KiteImageData, sampling: KiteImageSampling): platform.CoreGraphics.CGImageRef? {
-        if (image.kind == KiteImageData.Kind.RAW) return rawCgImage(image, sampling)
-        val bytes = image.encodedBytes
-        if (bytes.isEmpty()) return null
+        // A JPEG whose data KiteImageCodec could not decode goes to Image I/O, as an encoded one does (#475).
+        if (image.kind == KiteImageData.Kind.RAW) return rawCgImage(image, sampling) ?: encodedCgImage(image.encodedBytes)
         if (image.kind !in IMAGE_KINDS_DECODABLE_BY_CG) return null
+        return encodedCgImage(image.encodedBytes)
+    }
 
+    /** An encoded JPEG or JPEG 2000 file through Image I/O, or null for no bytes or a file it cannot read. */
+    private fun encodedCgImage(bytes: ByteArray): platform.CoreGraphics.CGImageRef? {
+        if (bytes.isEmpty()) return null
         val cfData = bytes.toCFData() ?: return null
         try {
             val source = CGImageSourceCreateWithData(cfData, null) ?: return null

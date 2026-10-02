@@ -113,10 +113,6 @@ internal object JpegInk {
         return KiteImageSamples.Decoded(width, height, samples)
     }
 
-    /** True when the first component of [jpeg] decodes, at an eighth of its size. */
-    fun decodes(jpeg: ByteArray, layout: Layout): Boolean =
-        runCatching { KiteImageCodec.decodeReduced(component(jpeg, layout, 0), 8) }.isSuccess
-
     /** A copy of [jpeg] that decodes to [index], one of its four components, as R, G and B. */
     private fun component(jpeg: ByteArray, layout: Layout, index: Int): ByteArray {
         val own = layout.tables[index]
