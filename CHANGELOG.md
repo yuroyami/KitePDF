@@ -41,6 +41,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- `KitePageRasterizer` keeps the coverage of the glyphs it draws from their own outlines,
+  up to 4 MB, as MuPDF keeps its glyph cache. It fills each glyph's path once for each size
+  and position, adds a run of opaque text into one bitmap and draws that once, so a page of
+  3,800 Helvetica glyphs spends about 60% less on its text, and a page drawn again fills no
+  glyph. A glyph's origin rounds to a quarter of a pixel below 24 pixels to the em, so text
+  in a raster can move by an eighth of a pixel at most. Vectorized pages still draw each
+  glyph as a path, so that they stay sharp under a pinch (#382).
+
 - A PDF's JPEG no longer decodes when it loads only to check the file, which took
   about a third of a page's render time; its first draw decodes it. A file whose
   headers KiteImageCodec reads and whose data it cannot decode now reaches a canvas

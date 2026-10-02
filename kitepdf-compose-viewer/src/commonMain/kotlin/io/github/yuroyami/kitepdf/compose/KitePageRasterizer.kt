@@ -82,6 +82,13 @@ public class KitePageRasterizer(
     private var hostFontPage: KitePage? = null
 
     /**
+     * The coverage of the glyphs this rasterizer drew from their outlines, shared by its rasters,
+     * so a page of text fills each letter once per size and position, and a page drawn again
+     * fills none (#382).
+     */
+    internal val glyphMasks: GlyphMaskCache = GlyphMaskCache()
+
+    /**
      * True when a page is first drawn off the main thread without host-font text, to find out
      * whether it needs the main thread at all (#131). Where rasters already run on the UI
      * thread, as in a browser, that probe only doubles the work, so a page draws once (#389).
@@ -422,7 +429,9 @@ public class KitePageRasterizer(
             // region's offset last: the page is drawn whole, and the bitmap keeps that part of it.
             val whole = KiteMatrix.scaling(s, s).concat(page.displayToDeviceBase())
             val deviceCtm = region?.let { KiteMatrix.translation(-it.left.toDouble(), -it.top.toDouble()).concat(whole) } ?: whole
-            val base = ComposeCanvas(this, textMeasurer, hairlineWidthPx, skipSystemFontText)
+            val base = ComposeCanvas(
+                this, textMeasurer, hairlineWidthPx, skipSystemFontText, magnification = 1f, glyphMasks = glyphMasks,
+            )
             val themed = theme?.wrap(base) ?: base
             val canvas = canvasDecorator?.invoke(themed) ?: themed
             // A viewer with a live form draws the widgets in its own layer, so the bitmap must

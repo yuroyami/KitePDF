@@ -55,6 +55,7 @@ import io.github.yuroyami.kitepdf.core.render.shrinkArgb
 import io.github.yuroyami.kitepdf.core.render.strokePen
 import io.github.yuroyami.kitepdf.core.render.toShrunkRgbaBytes
 import kotlin.math.abs
+import kotlin.math.ceil
 import kotlin.math.sqrt
 
 /**
@@ -110,6 +111,12 @@ public class ComposeCanvas internal constructor(
      * platform UI thread, as an `ImageComposeScene` on a thread of its own does (#464).
      */
     private val inSceneDrawPass: Boolean = false,
+    /**
+     * The coverage of glyphs drawn before, for a canvas whose pixels are device pixels, as a
+     * raster's are. Null for a canvas drawn under a transform of its own, such as a Vectorized
+     * page, which keeps every glyph a path so that it stays sharp under a pinch (#382).
+     */
+    private val glyphMasks: GlyphMaskCache? = null,
 ) : KiteCanvas {
 
     /**
@@ -266,6 +273,14 @@ public class ComposeCanvas internal constructor(
         val color = color.toCompose()
         val composeBlend = paintBlend(blendMode)
         val a = alpha.toFloat().coerceIn(0f, 1f)
+        // Opaque text in the normal blend mode adds the cached coverage of its glyphs into one
+        // bitmap and draws that once, since a Compose draw costs as much as a small glyph (#382).
+        // Two glyphs of one colour over each other cover a pixel by 1 - (1 - a)(1 - b) either
+        // way. Translucent text and another blend mode would paint an overlap twice, and a
+        // knockout group paints with Src, which would clear the empty pixels of the run's box,
+        // so those fill each glyph's path.
+        val masks = if (a == 1f && blendMode == KiteBlendMode.Normal && !knockingOut) glyphMasks else null
+        val run = if (masks != null) ArrayList<RunGlyph>(glyphs.size) else null
         var penX = 0.0
         for (glyph in glyphs) {
             val outline = glyph.outline
@@ -276,16 +291,98 @@ public class ComposeCanvas internal constructor(
                 val glyphMatrix = textMatrix
                     .concat(KiteMatrix.translation(penX + glyph.xOffset * unitScale, glyph.yOffset * unitScale))
                     .concat(KiteMatrix(unitScale, 0.0, 0.0, unitScale, 0.0, 0.0))
-                // A glyph drawn again on the page reuses its path, under its own matrix (#382).
-                val cp = glyphPaths.getOrPut(GlyphOutline(outline)) {
-                    toComposePath(outline, KiteMatrix.IDENTITY).apply { fillType = PathFillType.NonZero }
-                }
-                drawScope.withTransform({ transform(glyphMatrix.toComposeMatrix()) }) {
-                    drawPath(cp, color = color, alpha = a, blendMode = composeBlend)
+                val placed = masks?.place(outline, glyphMatrix, unitsPerEm)
+                if (placed != null) {
+                    run?.add(RunGlyph(placed, outline, glyphMatrix))
+                } else {
+                    fillGlyph(outline, glyphMatrix, color, a, composeBlend)
                 }
             }
             penX += glyph.advanceWidth * advanceScale + glyph.advanceAdjust
         }
+        if (!run.isNullOrEmpty() && !drawRun(run, color)) {
+            for (g in run) fillGlyph(g.outline, g.matrix, color, a, composeBlend)
+        }
+    }
+
+    /** One glyph of a run that draws from masks: where its mask lands, and its outline should the run draw paths after all. */
+    private class RunGlyph(val placed: GlyphMaskCache.Placement, val outline: KitePath, val matrix: KiteMatrix)
+
+    /** [outline] under [glyphMatrix], filled as a path. A glyph drawn again on the page reuses its path (#382). */
+    private fun fillGlyph(outline: KitePath, glyphMatrix: KiteMatrix, color: Color, alpha: Float, blend: ComposeBlendMode) {
+        val cp = glyphPaths.getOrPut(GlyphOutline(outline)) {
+            toComposePath(outline, KiteMatrix.IDENTITY).apply { fillType = PathFillType.NonZero }
+        }
+        drawScope.withTransform({ transform(glyphMatrix.toComposeMatrix()) }) {
+            drawPath(cp, color = color, alpha = alpha, blendMode = blend)
+        }
+    }
+
+    /**
+     * The masks of [run] added into one bitmap of [color] over the part of the canvas they
+     * cover, and drawn once. True when drawn, or when none of it lies on the canvas. False, with
+     * nothing drawn, for a run spread so thinly that its box would cost more than its paths.
+     */
+    private fun drawRun(run: List<RunGlyph>, color: Color): Boolean {
+        var left = Int.MAX_VALUE
+        var top = Int.MAX_VALUE
+        var right = Int.MIN_VALUE
+        var bottom = Int.MIN_VALUE
+        var covered = 0L
+        for (g in run) {
+            val m = g.placed.mask
+            val x = g.placed.x + m.left
+            val y = g.placed.y + m.top
+            left = minOf(left, x)
+            top = minOf(top, y)
+            right = maxOf(right, x + m.width)
+            bottom = maxOf(bottom, y + m.height)
+            covered += m.width.toLong() * m.height
+        }
+        // Only the part on the canvas needs pixels.
+        left = maxOf(left, 0)
+        top = maxOf(top, 0)
+        right = minOf(right, ceil(drawScope.size.width).toInt())
+        bottom = minOf(bottom, ceil(drawScope.size.height).toInt())
+        if (right <= left || bottom <= top) return true
+        val w = right - left
+        val h = bottom - top
+        val area = w.toLong() * h
+        if (area > MAX_RUN_PIXELS || area > 8 * covered + 4096) return false
+        val coverage = ByteArray((area).toInt())
+        for (g in run) {
+            val m = g.placed.mask
+            val ox = g.placed.x + m.left - left
+            val oy = g.placed.y + m.top - top
+            for (my in maxOf(0, -oy) until minOf(m.height, h - oy)) {
+                var src = my * m.width + maxOf(0, -ox)
+                var dst = (oy + my) * w + ox + maxOf(0, -ox)
+                for (mx in maxOf(0, -ox) until minOf(m.width, w - ox)) {
+                    val b = m.coverage[src++].toInt() and 0xFF
+                    if (b != 0) {
+                        val k = coverage[dst].toInt() and 0xFF
+                        coverage[dst] = (k + b - (k * b + 127) / 255).toByte()
+                    }
+                    dst++
+                }
+            }
+        }
+        val r = (color.red * 255f + 0.5f).toInt().toByte()
+        val g = (color.green * 255f + 0.5f).toInt().toByte()
+        val b = (color.blue * 255f + 0.5f).toInt().toByte()
+        val rgba = ByteArray(coverage.size * 4)
+        for (i in coverage.indices) {
+            val k = coverage[i]
+            if (k.toInt() != 0) {
+                rgba[4 * i] = r
+                rgba[4 * i + 1] = g
+                rgba[4 * i + 2] = b
+                rgba[4 * i + 3] = k
+            }
+        }
+        val bitmap = ImageDecoder.decodeRaw(rgba, w, h) ?: return false
+        drawScope.drawImage(bitmap, Offset(left.toFloat(), top.toFloat()))
+        return true
     }
 
     private fun drawTextViaSystemFont(
@@ -899,42 +996,6 @@ public class ComposeCanvas internal constructor(
         override fun hashCode(): Int = path.segments.size * 31 + (path.segments.firstOrNull()?.hashCode() ?: 0)
     }
 
-    /** [src] under [ctm], rewound into [into] or in a new path. */
-    private fun toComposePath(src: KitePath, ctm: KiteMatrix, into: Path? = null): Path {
-        val out = into?.apply { rewind() } ?: Path()
-        for (seg in src.segments) {
-            when (seg) {
-                is KitePath.Segment.MoveTo -> {
-                    val x = ctm.transformX(seg.x, seg.y)
-                    val y = ctm.transformY(seg.x, seg.y)
-                    out.moveTo(x.toFloat(), y.toFloat())
-                }
-                is KitePath.Segment.LineTo -> {
-                    val x = ctm.transformX(seg.x, seg.y)
-                    val y = ctm.transformY(seg.x, seg.y)
-                    out.lineTo(x.toFloat(), y.toFloat())
-                }
-                is KitePath.Segment.CurveTo -> {
-                    val x1 = ctm.transformX(seg.x1, seg.y1)
-                    val y1 = ctm.transformY(seg.x1, seg.y1)
-                    val x2 = ctm.transformX(seg.x2, seg.y2)
-                    val y2 = ctm.transformY(seg.x2, seg.y2)
-                    val x3 = ctm.transformX(seg.x3, seg.y3)
-                    val y3 = ctm.transformY(seg.x3, seg.y3)
-                    out.cubicTo(x1.toFloat(), y1.toFloat(), x2.toFloat(), y2.toFloat(), x3.toFloat(), y3.toFloat())
-                }
-                is KitePath.Segment.QuadTo -> {
-                    val x1 = ctm.transformX(seg.x1, seg.y1)
-                    val y1 = ctm.transformY(seg.x1, seg.y1)
-                    val x2 = ctm.transformX(seg.x2, seg.y2)
-                    val y2 = ctm.transformY(seg.x2, seg.y2)
-                    out.quadraticTo(x1.toFloat(), y1.toFloat(), x2.toFloat(), y2.toFloat())
-                }
-                KitePath.Segment.Close -> out.close()
-            }
-        }
-        return out
-    }
 
     private fun RgbColor.toCompose(): Color = Color(r.toFloat(), g.toFloat(), b.toFloat(), 1f)
 
@@ -1046,4 +1107,44 @@ internal fun composeDashIntervals(dashArray: List<Double>?, scale: Double): Floa
     val d = dashArray?.map { v -> (v * scale).toFloat().let { if (it.isFinite()) it.coerceAtLeast(0f) else 0f } } ?: return null
     if (d.isEmpty() || d.none { it > 0f }) return null
     return (if (d.size % 2 == 1) d + d else d).toFloatArray()
+}
+
+/** The pixels a run of glyphs may add its coverage into at most: about four megapixels. */
+private const val MAX_RUN_PIXELS = 4L * 1024 * 1024
+
+/** [src] under [ctm], rewound into [into] or in a new path. */
+internal fun toComposePath(src: KitePath, ctm: KiteMatrix, into: Path? = null): Path {
+    val out = into?.apply { rewind() } ?: Path()
+    for (seg in src.segments) {
+        when (seg) {
+            is KitePath.Segment.MoveTo -> {
+                val x = ctm.transformX(seg.x, seg.y)
+                val y = ctm.transformY(seg.x, seg.y)
+                out.moveTo(x.toFloat(), y.toFloat())
+            }
+            is KitePath.Segment.LineTo -> {
+                val x = ctm.transformX(seg.x, seg.y)
+                val y = ctm.transformY(seg.x, seg.y)
+                out.lineTo(x.toFloat(), y.toFloat())
+            }
+            is KitePath.Segment.CurveTo -> {
+                val x1 = ctm.transformX(seg.x1, seg.y1)
+                val y1 = ctm.transformY(seg.x1, seg.y1)
+                val x2 = ctm.transformX(seg.x2, seg.y2)
+                val y2 = ctm.transformY(seg.x2, seg.y2)
+                val x3 = ctm.transformX(seg.x3, seg.y3)
+                val y3 = ctm.transformY(seg.x3, seg.y3)
+                out.cubicTo(x1.toFloat(), y1.toFloat(), x2.toFloat(), y2.toFloat(), x3.toFloat(), y3.toFloat())
+            }
+            is KitePath.Segment.QuadTo -> {
+                val x1 = ctm.transformX(seg.x1, seg.y1)
+                val y1 = ctm.transformY(seg.x1, seg.y1)
+                val x2 = ctm.transformX(seg.x2, seg.y2)
+                val y2 = ctm.transformY(seg.x2, seg.y2)
+                out.quadraticTo(x1.toFloat(), y1.toFloat(), x2.toFloat(), y2.toFloat())
+            }
+            KitePath.Segment.Close -> out.close()
+        }
+    }
+    return out
 }
