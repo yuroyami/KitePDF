@@ -428,8 +428,13 @@ public class ComposeCanvas internal constructor(
             // RAW (FlateDecode etc.): samples are already inflated. Assemble RGBA
             // and build a bitmap directly. Covers the common embedded-PNG case.
             // An image drawn smaller converts and shrinks a band of rows at a time (#381).
-            KiteImageData.Kind.RAW -> return image.toShrunkRgbaBytes(sampling.shrinkX, sampling.shrinkY)?.let { rgba ->
-                ImageDecoder.decodeRaw(rgba, sampling.shrunkWidth(image.width), sampling.shrunkHeight(image.height))
+            KiteImageData.Kind.RAW -> {
+                val rgba = image.toShrunkRgbaBytes(sampling.shrinkX, sampling.shrinkY)
+                if (rgba != null) {
+                    return ImageDecoder.decodeRaw(rgba, sampling.shrunkWidth(image.width), sampling.shrunkHeight(image.height))
+                }
+                // A JPEG whose data KiteImageCodec could not decode goes to the platform decoder below (#475).
+                image.encodedBytes.takeIf { it.isNotEmpty() } ?: return null
             }
             // An encoded image that the core could not decode goes to the platform decoder. Skia and
             // Android read JPEG and shrink it inside the decoder by up to 8 (#381). They have no JPEG

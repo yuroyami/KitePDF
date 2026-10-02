@@ -557,8 +557,7 @@ public class AwtCanvas(private var g: Graphics2D) : KiteCanvas {
     /** The image as a bitmap, averaged down when [sampling] shrinks it, so fine detail fades instead of dropping out (#122). */
     private fun decodeImage(image: KiteImageData, sampling: KiteImageSampling): BufferedImage? = try {
         when (image.kind) {
-            KiteImageData.Kind.JPEG, KiteImageData.Kind.JPEG2000 ->
-                decodeJpeg(image.encodedBytes)?.let { if (sampling.shrinks) shrink(it, sampling) else it }
+            KiteImageData.Kind.JPEG, KiteImageData.Kind.JPEG2000 -> decodeEncoded(image.encodedBytes, sampling)
             // Every other kind, RAW (Flate/LZW/CCITT/PNG-predictor decoded) and
             // ImageMask stencils, is assembled into a flat RGBA8888 buffer by the
             // shared rasterizer (the same path the Compose/Skia backends use). Wrap
@@ -567,10 +566,17 @@ public class AwtCanvas(private var g: Graphics2D) : KiteCanvas {
             else -> image.toShrunkRgbaBytes(sampling.shrinkX, sampling.shrinkY)?.let { rgba ->
                 rgbaToBufferedImage(rgba, sampling.shrunkWidth(image.width), sampling.shrunkHeight(image.height))
             }
+                // A JPEG whose data KiteImageCodec could not decode goes to ImageIO, as above (#475).
+                ?: image.encodedBytes.takeIf { image.kind == KiteImageData.Kind.RAW && it.isNotEmpty() }
+                    ?.let { decodeEncoded(it, sampling) }
         }
     } catch (t: Throwable) {
         null
     }
+
+    /** An encoded JPEG through ImageIO, averaged down as [sampling] asks. */
+    private fun decodeEncoded(bytes: ByteArray, sampling: KiteImageSampling): BufferedImage? =
+        decodeJpeg(bytes)?.let { if (sampling.shrinks) shrink(it, sampling) else it }
 
     /** [image] averaged down as [sampling] asks. getRGB gives straight ARGB whatever the image type. */
     private fun shrink(image: BufferedImage, sampling: KiteImageSampling): BufferedImage {

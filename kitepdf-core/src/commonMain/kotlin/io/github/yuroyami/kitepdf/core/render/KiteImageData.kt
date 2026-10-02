@@ -32,10 +32,12 @@ import io.github.yuroyami.kitepdf.core.parser.PdfStream
  *
  *   - `DCTDecode` → decoded by KiteImageCodec into a [Kind.RAW] image. An image
  *     without a mask keeps only its encoded data and decodes at the size it draws
- *     ([toShrunkRgbaBytes]). A four-component JPEG gives CMYK samples, which the
- *     image's own colour space converts. A JPEG that KiteImageCodec cannot
- *     decode, such as an arithmetic-coded one, falls back to [Kind.JPEG] with the
- *     file in [encodedBytes], for the host platform's image loader.
+ *     ([toShrunkRgbaBytes]), with the file in [encodedBytes] for the host
+ *     platform's image loader if that decode fails. A four-component JPEG gives
+ *     CMYK samples, which the image's own colour space converts. A JPEG whose
+ *     headers name a coding KiteImageCodec does not decode, such as an
+ *     arithmetic-coded one, falls back to [Kind.JPEG] with the file in
+ *     [encodedBytes], for the host platform's image loader.
  *   - `FlateDecode` / `LZWDecode` / `CCITTFaxDecode` / ASCII / RunLength → pixel
  *     samples already decoded into [pixelBytes]; [toRgbaBytes] assembles RGBA
  *     using [resolvedColorSpace], [bitsPerComponent], and [decode].
@@ -60,7 +62,13 @@ public class KiteImageData internal constructor(
     public val bitsPerComponent: Int,
     public val colorSpace: String,
     public val kind: Kind,
-    /** Encoded bytes, for kinds that defer decoding to a platform image loader. */
+    /**
+     * Encoded bytes, for kinds that defer decoding to a platform image loader. A PDF's JPEG
+     * that is a [Kind.RAW] image decoding at the size it draws keeps its file here too. Its
+     * headers were read when it loaded, not its data, so its first decode can still fail; a
+     * canvas then hands these bytes to the platform loader, as for a [Kind.JPEG] image (#475).
+     * Every other [Kind.RAW] image leaves this empty.
+     */
     public val encodedBytes: ByteArray,
     pixelBytes: ByteArray? = null,
     /**
@@ -146,7 +154,8 @@ public class KiteImageData internal constructor(
      * mask. A PDF's JPEG or JPEG 2000 image without a mask holds only its encoded data (#381).
      */
     public fun retainedBytes(): Long =
-        encodedBytes.size.toLong() + (storedPixels?.size ?: 0) + (samples?.encodedSize ?: 0) + (softMaskAlpha?.size ?: 0)
+        (if (samples?.holds(encodedBytes) == true) 0 else encodedBytes.size).toLong() +
+            (storedPixels?.size ?: 0) + (samples?.encodedSize ?: 0) + (softMaskAlpha?.size ?: 0)
 
     /**
      * This image decoded with each side divided by the largest of 1, 2, 4 and 8 that divides
@@ -320,8 +329,10 @@ public class KiteImageData internal constructor(
                     val bm = if (lazy != null || inked != null) null else runCatching { KiteImageCodec.decode(terminal.bytes) }.getOrNull()
                     // The RGB of a four-component JPEG is converted already, so it stays device RGB.
                     val keep = keepsSpace && (lazy != null || inked != null || (bm != null && ink == null))
+                    // The file stays in encodedBytes as well, the same array, for a canvas to hand to the
+                    // platform decoder if the first draw finds data that KiteImageCodec cannot decode (#475).
                     if (lazy != null) KiteImageData(
-                        lazy.width, lazy.height, 8, if (keep) cs else "DeviceRGB", Kind.RAW, encodedBytes = ByteArray(0),
+                        lazy.width, lazy.height, 8, if (keep) cs else "DeviceRGB", Kind.RAW, encodedBytes = terminal.bytes,
                         resolvedColorSpace = if (keep) declared else KiteColorSpace.DeviceRGB, decode = if (keep) decodeArr else null,
                         maskFill = fillColor, samples = lazy,
                     ) else if (inked != null) KiteImageData(
