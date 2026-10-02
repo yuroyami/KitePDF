@@ -105,10 +105,11 @@ public class PdfFont private constructor(
             ?: (embeddedCff ?: embeddedType1 ?: composite?.cff ?: builtinCff)?.let { 1000 }
 
     /**
-     * Platform-neutral substitute-font descriptor, derived from [baseFont] and the
-     * font descriptor's Serif flag, for canvases that render non-embedded fonts
-     * through a host typeface. Centralises the family/style choice the render
-     * backends used to each make inline.
+     * Platform-neutral substitute-font descriptor, derived from [baseFont], the
+     * font descriptor's Serif flag and a CIDFont's character collection, for
+     * canvases that render non-embedded fonts through a host typeface.
+     * Centralises the family/style choice the render backends used to each make
+     * inline.
      */
     public val fontSpec: FontSpec
         get() = FontSpec(
@@ -123,6 +124,8 @@ public class PdfFont private constructor(
             bold = "Bold" in baseFont,
             italic = "Italic" in baseFont || "Oblique" in baseFont,
             name = baseFont,
+            // The collection picks a face that draws its own Han forms (ISO 32000-1, 9.7.3, #472).
+            language = FontSpec.languageOfOrdering(composite?.ordering),
         )
 
     /* ─── Decoding + layout ──────────────────────────────────────────────── */

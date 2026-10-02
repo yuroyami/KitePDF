@@ -2,6 +2,7 @@ package io.github.yuroyami.kitepdf.nativerenderer.difftest
 
 import io.github.yuroyami.kitepdf.difftest.CorpusSelection
 import io.github.yuroyami.kitepdf.epub.EpubDocument
+import io.github.yuroyami.kitepdf.core.font.FontSpec
 import io.github.yuroyami.kitepdf.core.render.KiteMatrix
 import io.github.yuroyami.kitepdf.core.render.RecordingCanvas
 import java.io.File
@@ -50,6 +51,13 @@ class EpubDrawStreamHashTest {
     }
 
     /**
+     * The spec as its data class printed it before it had a language, and the language after it
+     * when there is one, so hashes from before and after a new field of [FontSpec] compare.
+     */
+    private fun spec(s: FontSpec): String =
+        "FontSpec(family=${s.family}, bold=${s.bold}, italic=${s.italic}, name=${s.name})" + (s.language?.let { " $it" } ?: "")
+
+    /**
      * A run-stable serialization of a call: structural fields only, no
      * identity hash codes (KiteImageData and friends are reference types).
      */
@@ -60,7 +68,7 @@ class EpubDrawStreamHashTest {
         is RecordingCanvas.Call.Stroke ->
             "S ${c.path} ${c.ctm} ${c.color} ${c.lineWidth} ${c.alpha} ${c.blendMode} ${c.lineCap} ${c.lineJoin} ${c.miterLimit}"
         is RecordingCanvas.Call.Glyphs ->
-            "G ${c.text} ${c.fontSize} ${c.unitsPerEm} ${c.hasOutlines} ${c.fontSpec} ${c.textToDevice} ${c.color} ${c.alpha} ${c.blendMode}"
+            "G ${c.text} ${c.fontSize} ${c.unitsPerEm} ${c.hasOutlines} ${spec(c.fontSpec)} ${c.textToDevice} ${c.color} ${c.alpha} ${c.blendMode}"
         is RecordingCanvas.Call.PushClip -> "PC ${c.path} ${c.ctm} ${c.evenOdd}"
         RecordingCanvas.Call.PopClip -> "pc"
         is RecordingCanvas.Call.Image -> "I ${c.image.width}x${c.image.height} ${c.ctm} ${c.alpha}"

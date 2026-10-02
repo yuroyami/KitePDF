@@ -325,7 +325,9 @@ public class AwtCanvas(private var g: Graphics2D) : KiteCanvas {
             g.transform(tx)
             withComposite(blendMode, alpha) {
                 g.color = color.toAwt()
-                g.font = systemFontFor(fontSpec, renderedSize.toFloat())
+                val face = hostFace(fontSpec)
+                val font = systemFontFor(fontSpec, renderedSize.toFloat(), face)
+                val logical = if (face == null) font else systemFontFor(fontSpec, renderedSize.toFloat(), null)
                 // Position each glyph by the PDF's OWN advance widths (1/1000 em),
                 // not the substitute font's natural metrics, otherwise spacing
                 // drifts and glyphs crowd together / overlap.
@@ -333,7 +335,10 @@ public class AwtCanvas(private var g: Graphics2D) : KiteCanvas {
                 val advScale = renderedSize / 1000.0
                 for (glyph in glyphs) {
                     val t = glyph.text
-                    if (t.isNotEmpty() && t != " ") g.drawString(t, penX.toFloat(), 0f)
+                    if (t.isNotEmpty() && t != " ") {
+                        g.font = displayFont(font, logical, t)
+                        g.drawString(t, penX.toFloat(), 0f)
+                    }
                     // advScale already carries sy (renderedSize), so the text-space
                     // spacing adjust needs the same factor to stay in step.
                     penX += glyph.advanceWidth * advScale + glyph.advanceAdjust * sy
@@ -352,13 +357,35 @@ public class AwtCanvas(private var g: Graphics2D) : KiteCanvas {
         val key = fontSpec.copy(name = "") to text
         hostOutlines[key]?.let { return it }
         if (hostOutlines.size >= HOST_OUTLINE_CACHE_SIZE) hostOutlines.clear()
-        val shape = systemFontFor(fontSpec, 1000f).createGlyphVector(OUTLINE_CONTEXT, text).outline
+        val face = hostFace(fontSpec)
+        val font = systemFontFor(fontSpec, 1000f, face)
+        val logical = if (face == null) font else systemFontFor(fontSpec, 1000f, null)
+        val shape = displayFont(font, logical, text).createGlyphVector(OUTLINE_CONTEXT, text).outline
         return outlineOf(shape).also { hostOutlines[key] = it }
     }
 
-    /** Map a non-embedded PDF font to a JVM logical font (mirrors ComposeCanvas's family/style choice). */
-    private fun systemFontFor(spec: FontSpec, sizePx: Float): Font {
-        val family = when (spec.family) {
+    /**
+     * The first installed face of [spec]'s CJK language, or null to draw in a logical font. The
+     * logical Serif font draws Han characters in whichever CJK face the JVM lists first, a Chinese
+     * one on macOS, so a Japanese Mincho font drew Chinese glyph forms (#472).
+     */
+    private fun hostFace(spec: FontSpec): String? = spec.hostFaces.firstOrNull { it in installedFamilies }
+
+    /**
+     * [font] when it has a glyph for every character of [text], else [logical]. A logical font
+     * draws a character from the next face of its fallback chain, while one CJK face can lack a
+     * character that another has, such as the vertical forms of U+FE10 to U+FE19, and would draw
+     * a box for it.
+     */
+    private fun displayFont(font: Font, logical: Font, text: String): Font =
+        if (font === logical || font.canDisplayUpTo(text) == -1) font else logical
+
+    /**
+     * Map a non-embedded PDF font to the JVM font [face], or to a logical font when it is null
+     * (mirrors ComposeCanvas's family/style choice).
+     */
+    private fun systemFontFor(spec: FontSpec, sizePx: Float, face: String?): Font {
+        val family = face ?: when (spec.family) {
             KiteFontFamily.Serif -> Font.SERIF
             KiteFontFamily.Monospace -> Font.MONOSPACED
             KiteFontFamily.SansSerif -> Font.SANS_SERIF
@@ -1358,6 +1385,14 @@ public class AwtCanvas(private var g: Graphics2D) : KiteCanvas {
 
         /** The largest em, in pixels, whose glyphs go to the cache. A larger glyph is filled as a path. */
         const val GLYPH_CACHE_MAX_EM = 256.0
+
+        /** The English family names of the host's fonts, which [Font] accepts whatever the default locale. */
+        val installedFamilies: Set<String> by lazy {
+            runCatching {
+                java.awt.GraphicsEnvironment.getLocalGraphicsEnvironment()
+                    .getAvailableFontFamilyNames(java.util.Locale.ENGLISH).toHashSet()
+            }.getOrDefault(emptySet())
+        }
 
         /** Host glyph outlines per font and text, shared by every canvas. Cleared when full. */
         val hostOutlines = java.util.concurrent.ConcurrentHashMap<Pair<FontSpec, String>, KitePath>()

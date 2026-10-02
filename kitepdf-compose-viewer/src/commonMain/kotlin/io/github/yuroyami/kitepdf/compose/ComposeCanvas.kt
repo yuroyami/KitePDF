@@ -26,6 +26,7 @@ import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.intl.LocaleList
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.TextUnitType
@@ -316,9 +317,11 @@ public class ComposeCanvas internal constructor(
         val style = TextStyle(
             color = composeColor,
             fontSize = TextUnit(spValue, TextUnitType.Sp),
-            fontFamily = fontSpec.toComposeFamily(),
+            fontFamily = hostFontFamily(fontSpec) ?: fontSpec.toComposeFamily(),
             fontWeight = fontSpec.toComposeWeight(),
             fontStyle = fontSpec.toComposeStyle(),
+            // The locale picks the CJK fallback face of the font's language (#472).
+            localeList = fontSpec.language?.let { LocaleList(it) },
         )
         drawScope.withTransform({ transform(rest.toComposeMatrix()) }) {
             // Each piece starts where the document's own advances put it (ISO 32000-1, 9.4.4),

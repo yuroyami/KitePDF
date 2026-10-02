@@ -1,5 +1,6 @@
 package io.github.yuroyami.kitepdf.skia
 
+import io.github.yuroyami.kitepdf.core.font.FontSpec
 import io.github.yuroyami.kitepdf.core.font.KiteFontFamily
 import org.jetbrains.skia.FontMgr
 import org.jetbrains.skia.FontStyle
@@ -37,6 +38,46 @@ internal object SkiaSystemFonts {
         },
         style,
     )
+
+    /**
+     * The typeface for [spec]. A font of a CJK language takes a face of that language first: the
+     * Latin faces above have no Han, kana or Hangul glyphs, and a Han character takes the form of
+     * whichever CJK face draws it (#472). Without a named face, the host is asked for any face of
+     * the language that draws [FontSpec.languageSample].
+     */
+    fun resolve(spec: FontSpec, style: FontStyle): Typeface? {
+        val sample = spec.languageSample ?: return resolve(spec.family, style)
+        val language = spec.language ?: return resolve(spec.family, style)
+        val cjk = try {
+            val mgr = FontMgr.default
+            spec.hostFaces.firstNotNullOfOrNull { mgr.matchFamilyStyle(it, style) }
+                ?: mgr.matchFamilyStyleCharacter(genericName(spec.family), style, arrayOf(language), sample)
+        } catch (t: Throwable) {
+            null
+        }
+        return cjk ?: resolve(spec.family, style)
+    }
+
+    /**
+     * A face of [spec]'s CJK language that draws [codePoint], for a character the face of
+     * [resolve] lacks, or null without a language. One CJK face can lack a character another
+     * has, such as the vertical forms of U+FE10 to U+FE19, and Skia would draw glyph 0 for it.
+     */
+    fun fallback(spec: FontSpec, style: FontStyle, codePoint: Int): Typeface? {
+        val language = spec.language ?: return null
+        if (spec.languageSample == null) return null
+        return try {
+            FontMgr.default.matchFamilyStyleCharacter(genericName(spec.family), style, arrayOf(language), codePoint)
+        } catch (t: Throwable) {
+            null
+        }
+    }
+
+    private fun genericName(family: KiteFontFamily): String = when (family) {
+        KiteFontFamily.Serif -> "serif"
+        KiteFontFamily.SansSerif -> "sans-serif"
+        KiteFontFamily.Monospace -> "monospace"
+    }
 
     /** First candidate the host has, else any family it does have. */
     fun resolveCandidates(candidates: List<String>, style: FontStyle): Typeface? = try {

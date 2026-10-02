@@ -4,6 +4,7 @@ import android.graphics.Paint
 import android.graphics.Typeface
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.asComposePath
+import androidx.compose.ui.text.font.FontFamily
 import io.github.yuroyami.kitepdf.core.font.FontSpec
 import io.github.yuroyami.kitepdf.core.font.KiteFontFamily
 
@@ -23,6 +24,11 @@ internal actual fun hostTextPath(text: String, fontSpec: FontSpec): Path? {
     Paint().apply {
         typeface = Typeface.create(base, style)
         textSize = 1000f
+        // The locale picks the CJK fallback face of the font's language (#472).
+        fontSpec.language?.let { textLocale = java.util.Locale.forLanguageTag(it) }
     }.getTextPath(text, 0, text.length, 0f, 0f, path)
     return path.asComposePath()
 }
+
+/** Android's own fallback picks a face of the locale's language, serif or not, from the generic family. */
+internal actual fun hostFontFamily(fontSpec: FontSpec): FontFamily? = null

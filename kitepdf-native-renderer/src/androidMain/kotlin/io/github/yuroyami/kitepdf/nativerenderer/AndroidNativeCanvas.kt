@@ -208,6 +208,7 @@ public class AndroidNativeCanvas(private val canvas: AndroidCanvas) : KiteCanvas
                 this.color = color.toArgb(alpha)
                 typeface = systemFontFor(fontSpec)
                 textSize = renderedSize.toFloat()
+                fontSpec.language?.let { textLocale = java.util.Locale.forLanguageTag(it) }
                 applyPaintBlend(blendMode)
             }
             // Position each glyph by the PDF's OWN advance widths (1/1000 em),
@@ -239,6 +240,7 @@ public class AndroidNativeCanvas(private val canvas: AndroidCanvas) : KiteCanvas
         Paint().apply {
             typeface = systemFontFor(fontSpec)
             textSize = 1000f
+            fontSpec.language?.let { textLocale = java.util.Locale.forLanguageTag(it) }
         }.getTextPath(text, 0, text.length, 0f, 0f, path)
         val b = KitePath.Builder()
         val it = path.pathIterator
@@ -260,7 +262,11 @@ public class AndroidNativeCanvas(private val canvas: AndroidCanvas) : KiteCanvas
         return b.build()
     }
 
-    /** Map a non-embedded PDF font to an Android logical font (mirrors AwtCanvas's family/style choice). */
+    /**
+     * Map a non-embedded PDF font to an Android logical font (mirrors AwtCanvas's family/style
+     * choice). The paint's text locale then picks the CJK fallback face of the font's language,
+     * since the logical serif face draws Han characters in the fallback of the device locale (#472).
+     */
     private fun systemFontFor(spec: FontSpec): Typeface {
         val base = when (spec.family) {
             KiteFontFamily.Serif -> Typeface.SERIF

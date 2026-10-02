@@ -528,18 +528,23 @@ public final class io/github/yuroyami/kitepdf/core/font/Encodings {
 
 public final class io/github/yuroyami/kitepdf/core/font/FontSpec {
 	public static final field Companion Lio/github/yuroyami/kitepdf/core/font/FontSpec$Companion;
-	public fun <init> (Lio/github/yuroyami/kitepdf/core/font/KiteFontFamily;ZZLjava/lang/String;)V
-	public synthetic fun <init> (Lio/github/yuroyami/kitepdf/core/font/KiteFontFamily;ZZLjava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun <init> (Lio/github/yuroyami/kitepdf/core/font/KiteFontFamily;ZZLjava/lang/String;Ljava/lang/String;)V
+	public synthetic fun <init> (Lio/github/yuroyami/kitepdf/core/font/KiteFontFamily;ZZLjava/lang/String;Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public final fun component1 ()Lio/github/yuroyami/kitepdf/core/font/KiteFontFamily;
 	public final fun component2 ()Z
 	public final fun component3 ()Z
 	public final fun component4 ()Ljava/lang/String;
-	public final fun copy (Lio/github/yuroyami/kitepdf/core/font/KiteFontFamily;ZZLjava/lang/String;)Lio/github/yuroyami/kitepdf/core/font/FontSpec;
-	public static synthetic fun copy$default (Lio/github/yuroyami/kitepdf/core/font/FontSpec;Lio/github/yuroyami/kitepdf/core/font/KiteFontFamily;ZZLjava/lang/String;ILjava/lang/Object;)Lio/github/yuroyami/kitepdf/core/font/FontSpec;
+	public final fun component5 ()Ljava/lang/String;
+	public final fun copy (Lio/github/yuroyami/kitepdf/core/font/KiteFontFamily;ZZLjava/lang/String;Ljava/lang/String;)Lio/github/yuroyami/kitepdf/core/font/FontSpec;
+	public static synthetic fun copy$default (Lio/github/yuroyami/kitepdf/core/font/FontSpec;Lio/github/yuroyami/kitepdf/core/font/KiteFontFamily;ZZLjava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Lio/github/yuroyami/kitepdf/core/font/FontSpec;
 	public fun equals (Ljava/lang/Object;)Z
 	public final fun getBold ()Z
+	public final fun getCjkScript ()Lio/github/yuroyami/kitepdf/core/font/KiteCjkScript;
 	public final fun getFamily ()Lio/github/yuroyami/kitepdf/core/font/KiteFontFamily;
+	public final fun getHostFaces ()Ljava/util/List;
 	public final fun getItalic ()Z
+	public final fun getLanguage ()Ljava/lang/String;
+	public final fun getLanguageSample ()Ljava/lang/Integer;
 	public final fun getName ()Ljava/lang/String;
 	public fun hashCode ()I
 	public fun toString ()Ljava/lang/String;
@@ -680,6 +685,16 @@ public final class io/github/yuroyami/kitepdf/core/font/Hhea {
 public final class io/github/yuroyami/kitepdf/core/font/Hmtx {
 	public fun <init> ([I)V
 	public final fun advanceWidth (I)I
+}
+
+public final class io/github/yuroyami/kitepdf/core/font/KiteCjkScript : java/lang/Enum {
+	public static final field Japanese Lio/github/yuroyami/kitepdf/core/font/KiteCjkScript;
+	public static final field Korean Lio/github/yuroyami/kitepdf/core/font/KiteCjkScript;
+	public static final field SimplifiedChinese Lio/github/yuroyami/kitepdf/core/font/KiteCjkScript;
+	public static final field TraditionalChinese Lio/github/yuroyami/kitepdf/core/font/KiteCjkScript;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lio/github/yuroyami/kitepdf/core/font/KiteCjkScript;
+	public static fun values ()[Lio/github/yuroyami/kitepdf/core/font/KiteCjkScript;
 }
 
 public final class io/github/yuroyami/kitepdf/core/font/KiteFontFamily : java/lang/Enum {

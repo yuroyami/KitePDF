@@ -10,6 +10,19 @@ open annotation class io.github.yuroyami.kitepdf.core/KiteRawApi : kotlin/Annota
     constructor <init>() // io.github.yuroyami.kitepdf.core/KiteRawApi.<init>|<init>(){}[0]
 }
 
+final enum class io.github.yuroyami.kitepdf.core.font/KiteCjkScript : kotlin/Enum<io.github.yuroyami.kitepdf.core.font/KiteCjkScript> { // io.github.yuroyami.kitepdf.core.font/KiteCjkScript|null[0]
+    enum entry Japanese // io.github.yuroyami.kitepdf.core.font/KiteCjkScript.Japanese|null[0]
+    enum entry Korean // io.github.yuroyami.kitepdf.core.font/KiteCjkScript.Korean|null[0]
+    enum entry SimplifiedChinese // io.github.yuroyami.kitepdf.core.font/KiteCjkScript.SimplifiedChinese|null[0]
+    enum entry TraditionalChinese // io.github.yuroyami.kitepdf.core.font/KiteCjkScript.TraditionalChinese|null[0]
+
+    final val entries // io.github.yuroyami.kitepdf.core.font/KiteCjkScript.entries|#static{}entries[0]
+        final fun <get-entries>(): kotlin.enums/EnumEntries<io.github.yuroyami.kitepdf.core.font/KiteCjkScript> // io.github.yuroyami.kitepdf.core.font/KiteCjkScript.entries.<get-entries>|<get-entries>#static(){}[0]
+
+    final fun valueOf(kotlin/String): io.github.yuroyami.kitepdf.core.font/KiteCjkScript // io.github.yuroyami.kitepdf.core.font/KiteCjkScript.valueOf|valueOf#static(kotlin.String){}[0]
+    final fun values(): kotlin/Array<io.github.yuroyami.kitepdf.core.font/KiteCjkScript> // io.github.yuroyami.kitepdf.core.font/KiteCjkScript.values|values#static(){}[0]
+}
+
 final enum class io.github.yuroyami.kitepdf.core.font/KiteFontFamily : kotlin/Enum<io.github.yuroyami.kitepdf.core.font/KiteFontFamily> { // io.github.yuroyami.kitepdf.core.font/KiteFontFamily|null[0]
     enum entry Monospace // io.github.yuroyami.kitepdf.core.font/KiteFontFamily.Monospace|null[0]
     enum entry SansSerif // io.github.yuroyami.kitepdf.core.font/KiteFontFamily.SansSerif|null[0]
@@ -319,14 +332,22 @@ final class io.github.yuroyami.kitepdf.core.font/Contour { // io.github.yuroyami
 }
 
 final class io.github.yuroyami.kitepdf.core.font/FontSpec { // io.github.yuroyami.kitepdf.core.font/FontSpec|null[0]
-    constructor <init>(io.github.yuroyami.kitepdf.core.font/KiteFontFamily, kotlin/Boolean, kotlin/Boolean, kotlin/String = ...) // io.github.yuroyami.kitepdf.core.font/FontSpec.<init>|<init>(io.github.yuroyami.kitepdf.core.font.KiteFontFamily;kotlin.Boolean;kotlin.Boolean;kotlin.String){}[0]
+    constructor <init>(io.github.yuroyami.kitepdf.core.font/KiteFontFamily, kotlin/Boolean, kotlin/Boolean, kotlin/String = ..., kotlin/String? = ...) // io.github.yuroyami.kitepdf.core.font/FontSpec.<init>|<init>(io.github.yuroyami.kitepdf.core.font.KiteFontFamily;kotlin.Boolean;kotlin.Boolean;kotlin.String;kotlin.String?){}[0]
 
     final val bold // io.github.yuroyami.kitepdf.core.font/FontSpec.bold|{}bold[0]
         final fun <get-bold>(): kotlin/Boolean // io.github.yuroyami.kitepdf.core.font/FontSpec.bold.<get-bold>|<get-bold>(){}[0]
+    final val cjkScript // io.github.yuroyami.kitepdf.core.font/FontSpec.cjkScript|{}cjkScript[0]
+        final fun <get-cjkScript>(): io.github.yuroyami.kitepdf.core.font/KiteCjkScript? // io.github.yuroyami.kitepdf.core.font/FontSpec.cjkScript.<get-cjkScript>|<get-cjkScript>(){}[0]
     final val family // io.github.yuroyami.kitepdf.core.font/FontSpec.family|{}family[0]
         final fun <get-family>(): io.github.yuroyami.kitepdf.core.font/KiteFontFamily // io.github.yuroyami.kitepdf.core.font/FontSpec.family.<get-family>|<get-family>(){}[0]
+    final val hostFaces // io.github.yuroyami.kitepdf.core.font/FontSpec.hostFaces|{}hostFaces[0]
+        final fun <get-hostFaces>(): kotlin.collections/List<kotlin/String> // io.github.yuroyami.kitepdf.core.font/FontSpec.hostFaces.<get-hostFaces>|<get-hostFaces>(){}[0]
     final val italic // io.github.yuroyami.kitepdf.core.font/FontSpec.italic|{}italic[0]
         final fun <get-italic>(): kotlin/Boolean // io.github.yuroyami.kitepdf.core.font/FontSpec.italic.<get-italic>|<get-italic>(){}[0]
+    final val language // io.github.yuroyami.kitepdf.core.font/FontSpec.language|{}language[0]
+        final fun <get-language>(): kotlin/String? // io.github.yuroyami.kitepdf.core.font/FontSpec.language.<get-language>|<get-language>(){}[0]
+    final val languageSample // io.github.yuroyami.kitepdf.core.font/FontSpec.languageSample|{}languageSample[0]
+        final fun <get-languageSample>(): kotlin/Int? // io.github.yuroyami.kitepdf.core.font/FontSpec.languageSample.<get-languageSample>|<get-languageSample>(){}[0]
     final val name // io.github.yuroyami.kitepdf.core.font/FontSpec.name|{}name[0]
         final fun <get-name>(): kotlin/String // io.github.yuroyami.kitepdf.core.font/FontSpec.name.<get-name>|<get-name>(){}[0]
 
@@ -334,7 +355,8 @@ final class io.github.yuroyami.kitepdf.core.font/FontSpec { // io.github.yuroyam
     final fun component2(): kotlin/Boolean // io.github.yuroyami.kitepdf.core.font/FontSpec.component2|component2(){}[0]
     final fun component3(): kotlin/Boolean // io.github.yuroyami.kitepdf.core.font/FontSpec.component3|component3(){}[0]
     final fun component4(): kotlin/String // io.github.yuroyami.kitepdf.core.font/FontSpec.component4|component4(){}[0]
-    final fun copy(io.github.yuroyami.kitepdf.core.font/KiteFontFamily = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/String = ...): io.github.yuroyami.kitepdf.core.font/FontSpec // io.github.yuroyami.kitepdf.core.font/FontSpec.copy|copy(io.github.yuroyami.kitepdf.core.font.KiteFontFamily;kotlin.Boolean;kotlin.Boolean;kotlin.String){}[0]
+    final fun component5(): kotlin/String? // io.github.yuroyami.kitepdf.core.font/FontSpec.component5|component5(){}[0]
+    final fun copy(io.github.yuroyami.kitepdf.core.font/KiteFontFamily = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/String = ..., kotlin/String? = ...): io.github.yuroyami.kitepdf.core.font/FontSpec // io.github.yuroyami.kitepdf.core.font/FontSpec.copy|copy(io.github.yuroyami.kitepdf.core.font.KiteFontFamily;kotlin.Boolean;kotlin.Boolean;kotlin.String;kotlin.String?){}[0]
     final fun equals(kotlin/Any?): kotlin/Boolean // io.github.yuroyami.kitepdf.core.font/FontSpec.equals|equals(kotlin.Any?){}[0]
     final fun hashCode(): kotlin/Int // io.github.yuroyami.kitepdf.core.font/FontSpec.hashCode|hashCode(){}[0]
     final fun toString(): kotlin/String // io.github.yuroyami.kitepdf.core.font/FontSpec.toString|toString(){}[0]

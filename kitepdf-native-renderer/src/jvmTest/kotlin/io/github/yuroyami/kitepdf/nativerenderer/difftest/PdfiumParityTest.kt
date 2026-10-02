@@ -51,10 +51,7 @@ class PdfiumParityTest {
          * Pages where PDFium does better today, each with the open issue that records it.
          * The goal is an empty map. Drop-in corpus pages run only where the corpus exists.
          */
-        val KNOWN_GAPS: Map<String, Int> = mapOf(
-            // The serif face of the JVM draws kanji and kana in a Chinese Song face, not a Japanese Mincho.
-            "public-pdfa-vertical-text p0" to 472,
-        )
+        val KNOWN_GAPS: Map<String, Int> = mapOf()
 
         /**
          * Pages where KitePDF alone differs and is still right, each with the reason from the
