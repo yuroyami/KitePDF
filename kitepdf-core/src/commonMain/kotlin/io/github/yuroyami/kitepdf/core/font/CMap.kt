@@ -192,15 +192,18 @@ public class CMap private constructor(
         return null
     }
 
+    /** The text that [code] maps to, read as one whole code whatever the codespaces say. */
+    internal fun textFor(code: Int): String? = lookup(code)
+
     private fun lookup(code: Int): String? {
         bfChars[code]?.let { return it }
         for (r in bfRanges) {
             if (code !in r.lo..r.hi) continue
             if (r.replacements != null) return r.replacements.getOrNull(code - r.lo)
             val base = r.base ?: continue
-            // Increment the LAST code unit of the destination across the range.
+            // The last code point of the destination counts up across the range.
             val cp = base + (code - r.lo)
-            if (cp in 0..0x10FFFF) return charArrayOfCodepoint(cp).concatToString()
+            if (cp in 0..0x10FFFF) return r.prefix + charArrayOfCodepoint(cp).concatToString()
         }
         return null
     }
@@ -220,6 +223,8 @@ public class CMap private constructor(
         val base: Int?,
         /** Explicit per-code replacements for `bfrange <lo> <hi> [...]`. */
         val replacements: List<String>?,
+        /** The characters of a sequential destination before its last code point, which [base] holds. */
+        val prefix: String = "",
     )
 
     internal data class CidRange(val lo: Int, val hi: Int, val baseCid: Int)
@@ -316,13 +321,23 @@ public class CMap private constructor(
                 val hi = bytesToInt(hiTok.bytes)
                 when (val dst = lexer.nextToken()) {
                     is Token.StringLiteral -> {
-                        // Sequential range. Per Adobe TN 5411, the destination's
-                        // LAST code unit is incremented across the range. For a
-                        // 4-byte UTF-16BE destination (a surrogate pair / non-BMP
-                        // codepoint) we decode it to a full codepoint and use that
-                        // as the base so surrogate math is done in codepoint space.
-                        val baseCp = utf16BEToBaseCodepoint(dst.bytes)
-                        out.add(BfRange(lo, hi, base = baseCp, replacements = null))
+                        // Sequential range. The whole string is the mapping, and its last
+                        // character counts up across the range (ISO 32000-1, 9.10.3, #467).
+                        // A surrogate pair counts up as one code point.
+                        val text = if (dst.bytes.size >= 2 && dst.bytes.size % 2 == 0) utf16BEToString(dst.bytes) else ""
+                        if (text.isEmpty()) {
+                            out.add(BfRange(lo, hi, base = utf16BEToBaseCodepoint(dst.bytes), replacements = null))
+                        } else {
+                            val n = text.length
+                            val pair = n >= 2 && text[n - 1].isLowSurrogate() && text[n - 2].isHighSurrogate()
+                            val last = if (pair) {
+                                0x10000 + ((text[n - 2].code - 0xD800) shl 10) + (text[n - 1].code - 0xDC00)
+                            } else {
+                                text[n - 1].code
+                            }
+                            val prefix = text.substring(0, if (pair) n - 2 else n - 1)
+                            out.add(BfRange(lo, hi, base = last, replacements = null, prefix = prefix))
+                        }
                     }
                     Token.ArrayOpen -> {
                         // Per-code replacements: collect strings until ArrayClose.

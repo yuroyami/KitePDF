@@ -125,21 +125,8 @@ public class PdfFont private constructor(
     /** Decode show-text bytes (from a `Tj` / `TJ` operand) to unicode text. */
     public fun decode(bytes: ByteArray): String {
         composite?.let { return it.decode(bytes) }
-        toUnicode?.let { return it.decodeAll(bytes) }
-        val sb = StringBuilder(bytes.size)
-        for (b in bytes) {
-            val cp = unicodeForByte[b.toInt() and 0xFF]
-            when {
-                cp == 0 -> sb.append((b.toInt() and 0xFF).toChar())
-                cp < 0x10000 -> sb.append(cp.toChar())
-                else -> {
-                    val s = cp - 0x10000
-                    sb.append((0xD800 + (s ushr 10)).toChar())
-                    sb.append((0xDC00 + (s and 0x3FF)).toChar())
-                }
-            }
-        }
-        return sb.toString()
+        // A simple font has one-byte codes, whatever codespace its ToUnicode declares (ISO 32000-1, 9.6.1, #466).
+        return buildString(bytes.size) { for (b in bytes) append(decodeSingle(b.toInt() and 0xFF)) }
     }
 
     /**
@@ -337,7 +324,7 @@ public class PdfFont private constructor(
     }
 
     private fun decodeSingle(code: Int): String {
-        toUnicode?.decode(byteArrayOf(code.toByte()), 0)?.let { return it.first }
+        toUnicode?.textFor(code and 0xFF)?.let { return it }
         val cp = unicodeForByte[code and 0xFF]
         return when {
             cp == 0 -> (code and 0xFF).toChar().toString()
@@ -397,7 +384,19 @@ public class PdfFont private constructor(
             // Simple-font pipeline (Type 1 / TrueType / Type1C / Type 3).
             val descriptor = dict["FontDescriptor"]?.resolve(refs) as? PdfDictionary
             val flags = descriptor?.getInt("Flags")?.toInt() ?: 0
-            val nameTable = resolveEncoding(dict, baseFont, subtype, flags, refs)
+
+            // /FontFile3 holds a bare CFF program or, since PDF 1.6, a whole OpenType font.
+            val fontFile2 = descriptor?.let { loadEmbeddedTtf(it, refs) }
+            val fontFile3 = if (fontFile2 == null) descriptor?.let { loadFontFile3(it, refs) } else null
+            val embeddedTtf = fontFile2 ?: fontFile3?.let { FontFile3.trueType(it) }
+            val embeddedCff = if (embeddedTtf == null) fontFile3?.let { FontFile3.cff(it) } else null
+            val embeddedType1 = if (embeddedTtf == null && embeddedCff == null)
+                descriptor?.let { loadEmbeddedType1(it, refs) } else null
+
+            // An embedded program's own encoding is the base when the font names none (ISO 32000-1,
+            // Tables 111 and 114, #469). A standard 14 font that is not embedded keeps the default.
+            val builtIn = embeddedCff?.builtInEncoding ?: embeddedType1?.builtInEncoding
+            val nameTable = resolveEncoding(dict, baseFont, subtype, flags, refs, builtIn)
             // ZapfDingbats names its glyphs a1 to a206, which only its own list maps (#305).
             val dingbats = Standard14Widths.canonicalName(baseFont) == "ZapfDingbats"
             val unicodeTable = IntArray(256) { i ->
@@ -407,13 +406,6 @@ public class PdfFont private constructor(
             val toUnicode = loadToUnicode(dict, refs)
             val wt = resolveWidths(dict, baseFont, nameTable, refs)
 
-            // /FontFile3 holds a bare CFF program or, since PDF 1.6, a whole OpenType font.
-            val fontFile2 = descriptor?.let { loadEmbeddedTtf(it, refs) }
-            val fontFile3 = if (fontFile2 == null) descriptor?.let { loadFontFile3(it, refs) } else null
-            val embeddedTtf = fontFile2 ?: fontFile3?.let { FontFile3.trueType(it) }
-            val embeddedCff = if (embeddedTtf == null) fontFile3?.let { FontFile3.cff(it) } else null
-            val embeddedType1 = if (embeddedTtf == null && embeddedCff == null)
-                descriptor?.let { loadEmbeddedType1(it, refs) } else null
             // A standard 14 font that the file does not embed draws from the bundled program
             // (ISO 32000-1, 9.6.2.2). A Type 3 font draws from its own glyph procedures.
             val builtinCff = if (subtype != "Type3" && embeddedTtf == null && embeddedCff == null && embeddedType1 == null)
@@ -462,16 +454,18 @@ public class PdfFont private constructor(
             subtype: String,
             flags: Int,
             refs: IndirectResolver,
+            /** The embedded program's own encoding, or null. */
+            builtIn: Array<String?>?,
         ): Array<String?> {
             val raw = dict["Encoding"]?.resolve(refs)
+            val default = builtIn ?: defaultEncodingFor(baseFont, subtype, flags)
             return when {
-                raw is PdfName -> namedEncoding(raw.value) ?: defaultEncodingFor(baseFont, subtype, flags)
+                raw is PdfName -> namedEncoding(raw.value) ?: default
                 raw is PdfDictionary -> {
-                    val baseName = raw.getName("BaseEncoding")
-                    val baseArr = baseName?.let(::namedEncoding) ?: defaultEncodingFor(baseFont, subtype, flags)
+                    val baseArr = raw.getName("BaseEncoding")?.let(::namedEncoding) ?: default
                     applyDifferences(baseArr.copyOf(), raw.getArray("Differences"))
                 }
-                else -> defaultEncodingFor(baseFont, subtype, flags)
+                else -> default
             }
         }
 

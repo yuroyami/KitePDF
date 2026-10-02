@@ -51,7 +51,8 @@ object ParityHarness {
     /** What PDFium does better on a page. */
     enum class FindingKind { OPEN, PAGES, RENDER, SIZE, PIXELS, TEXT }
 
-    data class Finding(val kind: FindingKind, val text: String) {
+    /** [missing] holds the characters of a [FindingKind.TEXT] finding that KitePDF does not extract. */
+    data class Finding(val kind: FindingKind, val text: String, val missing: String = "") {
         override fun toString(): String = text
     }
 
@@ -62,14 +63,23 @@ object ParityHarness {
 
         /** The spec leaves the look to the reader, such as the icon of a note, so no engine is the reference. */
         READER_DEFINED("Reader-defined"),
+
+        /** PDFium alone goes against the spec, and MuPDF agrees with KitePDF. */
+        PDFIUM_WRONG("PDFium wrong"),
     }
 
     /**
      * A page where KitePDF alone differs and is still right, for the [reason] from the
      * spec. It covers the pixel finding while KitePDF alone differs in at most
-     * [maxKiteTiles] tiles, so a new fault on the same page still fails.
+     * [maxKiteTiles] tiles, and a text finding whose missing characters are all in
+     * [pdfiumOnlyText], so a new fault on the same page still fails.
      */
-    data class Exemption(val kind: ExemptionKind, val maxKiteTiles: Int, val reason: String)
+    data class Exemption(
+        val kind: ExemptionKind,
+        val maxKiteTiles: Int,
+        val reason: String,
+        val pdfiumOnlyText: String = "",
+    )
 
     data class PageResult(
         val doc: String,
@@ -98,10 +108,16 @@ object ParityHarness {
         /** True when an [Exemption] explains every finding of [result]. */
         fun isExempt(result: PageResult): Boolean {
             val entry = exemptions[result.key] ?: return false
-            val diff = result.diff ?: return false
-            return result.findings.all { it.kind == FindingKind.PIXELS } &&
-                diff.pageOutlier != ThreeWayDiff.Engine.KITE &&
-                diff.outlierTiles.getValue(ThreeWayDiff.Engine.KITE) <= entry.maxKiteTiles
+            return result.findings.all { finding ->
+                when (finding.kind) {
+                    FindingKind.PIXELS -> result.diff?.let { diff ->
+                        diff.pageOutlier != ThreeWayDiff.Engine.KITE &&
+                            diff.outlierTiles.getValue(ThreeWayDiff.Engine.KITE) <= entry.maxKiteTiles
+                    } == true
+                    FindingKind.TEXT -> finding.missing.isNotEmpty() && missingCharacters(finding.missing, entry.pdfiumOnlyText).isEmpty()
+                    else -> false
+                }
+            }
         }
 
         /** Pages where PDFium does better, with no open issue and no exemption that explains it. */
@@ -297,7 +313,7 @@ object ParityHarness {
             val kiteText = runCatching { kiteDoc.pages[i].extractText() }.getOrElse { "" }
             val missing = missingCharacters(pdfiumText.text, kiteText)
             if (missing.isNotEmpty()) {
-                findings += Finding(FindingKind.TEXT, "PDFium extracts ${missing.length} characters that KitePDF does not: \"${missing.take(40)}\"")
+                findings += Finding(FindingKind.TEXT, "PDFium extracts ${missing.length} characters that KitePDF does not: \"${missing.take(40)}\"", missing)
             }
         }
 

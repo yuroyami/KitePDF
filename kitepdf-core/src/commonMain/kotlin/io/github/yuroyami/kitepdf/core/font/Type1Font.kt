@@ -70,6 +70,9 @@ internal class Type1Font private constructor(
         return decryptCharstring(cs, lenIV)
     }
 
+    /** The program's own code-to-glyph-name map, which a PDF font without `/Encoding` uses (#469). */
+    internal val builtInEncoding: Array<String?> get() = encoding
+
     /** Look up a glyph by byte code via the font's built-in /Encoding. */
     fun outlineForByte(code: Int): KitePath? {
         val name = encoding.getOrNull(code and 0xFF) ?: return null
@@ -205,15 +208,17 @@ internal class Type1Font private constructor(
             if (tail.contains("StandardEncoding") && tail.contains("def")) {
                 return Encodings.standardEncoding.copyOf()
             }
-            // Otherwise scan for "dup <int> /<name> put" lines.
-            val out: Array<String?> = Encodings.standardEncoding.copyOf()
+            // Otherwise scan for "dup <int> /<name> put" lines. A custom array starts as all
+            // .notdef, so a code it does not set has no glyph.
+            val out = arrayOfNulls<String>(256)
             val regex = Regex("""dup\s+(\d+)\s+/(\S+)\s+put""")
+            var found = false
             for (match in regex.findAll(text.substring(encodingMark))) {
                 val code = match.groupValues[1].toIntOrNull() ?: continue
                 val name = match.groupValues[2]
-                if (code in 0..255) out[code] = name
+                if (code in 0..255) { out[code] = name; found = true }
             }
-            return out
+            return if (found) out else Encodings.standardEncoding.copyOf()
         }
 
         private fun parseLenIV(plaintext: ByteArray): Int {
