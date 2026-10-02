@@ -334,6 +334,8 @@ final class io.github.yuroyami.kitepdf.epub/EpubPage : io.github.yuroyami.kitepd
         final fun <get-displayHeight>(): kotlin/Double // io.github.yuroyami.kitepdf.epub/EpubPage.displayHeight.<get-displayHeight>|<get-displayHeight>(){}[0]
     final val displayWidth // io.github.yuroyami.kitepdf.epub/EpubPage.displayWidth|{}displayWidth[0]
         final fun <get-displayWidth>(): kotlin/Double // io.github.yuroyami.kitepdf.epub/EpubPage.displayWidth.<get-displayWidth>|<get-displayWidth>(){}[0]
+    final val document // io.github.yuroyami.kitepdf.epub/EpubPage.document|{}document[0]
+        final fun <get-document>(): io.github.yuroyami.kitepdf.epub/EpubDocument // io.github.yuroyami.kitepdf.epub/EpubPage.document.<get-document>|<get-document>(){}[0]
     final val drawsHostFontText // io.github.yuroyami.kitepdf.epub/EpubPage.drawsHostFontText|{}drawsHostFontText[0]
         final fun <get-drawsHostFontText>(): kotlin/Boolean? // io.github.yuroyami.kitepdf.epub/EpubPage.drawsHostFontText.<get-drawsHostFontText>|<get-drawsHostFontText>(){}[0]
     final val embeds // io.github.yuroyami.kitepdf.epub/EpubPage.embeds|{}embeds[0]

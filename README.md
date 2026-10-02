@@ -130,6 +130,7 @@ kotlin {
             implementation("io.github.yuroyami:kitepdf-skia-renderer:0.12.0")    // page-to-image on Skia (on Android, add one repository)
             implementation("io.github.yuroyami:kitepdf-javascript:0.12.0")       // runs the JavaScript inside PDFs (pulls in KiteJS)
             implementation("io.github.yuroyami:kitepdf-net:0.12.0")              // loads documents from a URL (add a Ktor engine too)
+            implementation("io.github.yuroyami:kitepdf-media:0.12.0")            // plays EPUB audio and video in KiteDocView (pulls in KitePlayer)
         }
     }
 }
@@ -138,11 +139,12 @@ kotlin {
 ### What else you need
 
 > [!IMPORTANT]
-> Two artifacts need something extra. Without it, the build or the download fails.
+> Three artifacts need something extra. Without it, the build, the download or the playback fails.
 
 | If you add | You also need |
 | --- | --- |
 | `kitepdf-net` | **A Ktor client engine** such as `io.ktor:ktor-client-cio:3.6.0`, or the OkHttp, Darwin or JS engine. KitePDF downloads through the engine you pick. |
+| `kitepdf-media` | **Android `minSdk` 26**, and on iOS the **linker flags and privacy manifest entries** that [KitePlayer's install guide](https://github.com/yuroyami/KitePlayer#install) lists. It publishes Android, iOS and the desktop JVM only. |
 | `kitepdf-skia-renderer` on Android | **One more repository**: `maven("https://maven.pkg.jetbrains.space/public/p/compose/dev")`. Skia's Android build lives there, not on Maven Central. |
 
 Good to know:

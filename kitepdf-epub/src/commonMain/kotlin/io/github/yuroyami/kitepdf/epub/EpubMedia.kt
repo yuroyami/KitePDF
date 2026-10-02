@@ -14,8 +14,9 @@ public class EpubMediaSource internal constructor(public val href: String, publi
 
 /**
  * A `<video>` or an `<audio>` element on an [EpubPage]: where it sits, what it plays and how. The
- * page paints the poster there, or a grey box with a play triangle, so an app can place its own
- * player over [rect] and read the bytes with [EpubDocument.resource].
+ * page paints the poster there, or a plain grey box, so an app can place its own player over
+ * [rect] and read the bytes with [EpubDocument.resource]. The `kitepdf-media` artifact is such a
+ * player, and draws the play control (#31).
  *
  * @property rect the box in display space, y down, with the smaller y in [KiteRectangle.bottom],
  *   as [EpubLink.rect] is.

@@ -93,6 +93,7 @@ nav:
       - Compose viewer: compose-viewer.md
       - Reading PDFs: reading.md
       - Reading EPUBs: epub.md
+      - Book audio and video: media.md
       - XPS and OpenXPS: xps.md
       - Creating PDFs: writing.md
       - Editing & redaction: editing.md

@@ -56,6 +56,7 @@ dependencies {
     dokka(project(":kitepdf-javascript"))
     dokka(project(":kitepdf-net"))
     dokka(project(":kitepdf-compose-viewer"))
+    dokka(project(":kitepdf-media"))
     dokka(project(":kitepdf-native-renderer"))
     dokka(project(":kitepdf-skia-renderer"))
 }
@@ -102,7 +103,7 @@ allprojects {
 // when the code and the dump differ; `updateKotlinAbi` writes the dump again.
 val publishedModules = setOf(
     "kitepdf", "kitepdf-core", "kitepdf-pdf", "kitepdf-epub", "kitepdf-cbz", "kitepdf-xps",
-    "kitepdf-svg", "kitepdf-javascript", "kitepdf-net", "kitepdf-compose-viewer",
+    "kitepdf-svg", "kitepdf-javascript", "kitepdf-net", "kitepdf-compose-viewer", "kitepdf-media",
     "kitepdf-native-renderer", "kitepdf-skia-renderer",
 )
 subprojects {

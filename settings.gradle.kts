@@ -54,6 +54,7 @@ include(":kitepdf-svg")             // SVG renderer + standalone .svg handler
 include(":kitepdf-javascript")      // runs document JavaScript on KiteJS
 include(":kitepdf-compose-viewer")  // Compose UI (PdfView)
 include(":kitepdf-net")             // optional: open documents from a URL
+include(":kitepdf-media")           // optional: play EPUB audio and video with KitePlayer
 include(":kitepdf-skia-renderer")   // Skia rasterizer
 include(":kitepdf-native-renderer") // AWT / Android / CoreGraphics / Canvas2D rasterizers
 include(":kitepdf-difftest")        // internal: shared differential-test oracle (not published)

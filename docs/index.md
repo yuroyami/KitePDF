@@ -55,6 +55,7 @@ Drawing a page to the screen is the one job that needs a platform, so the render
 | `io.github.yuroyami:kitepdf` | The engine: read, write and edit PDFs, **and** read EPUBs. Pure Kotlin (stdlib plus KiteImageCodec). |
 | `io.github.yuroyami:kitepdf-compose-viewer` | A Compose `KiteDocView` for PDF and EPUB, drawn straight into a `DrawScope`. |
 | `io.github.yuroyami:kitepdf-net` | Optional. Opens a document straight from a URL; the only artifact that pulls in Ktor. |
+| `io.github.yuroyami:kitepdf-media` | Optional. Plays the audio and video of an EPUB in `KiteDocView`; the only artifact that pulls in a player and FFmpeg. |
 | `io.github.yuroyami:kitepdf-native-renderer` | Headless page → image through the platform canvas (AWT, CoreGraphics, `android.graphics`, Canvas2D). |
 | `io.github.yuroyami:kitepdf-skia-renderer` | Headless page → image through Skia / Skiko: one API on JVM, Android, Apple, Linux and web. |
 
