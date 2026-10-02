@@ -260,9 +260,13 @@ public class CMap private constructor(
             return CMap(codeWidth, codespaces, bfChars, bfRanges, cidChars, cidRanges, writingMode)
         }
 
+        // Each block reader returns at the end of the stream too. The lexer gives end of file
+        // again on every call, so a CMap cut off inside a block would loop forever.
+
         private fun parseCodeSpaceRange(lexer: Lexer, out: MutableList<Codespace>) {
             while (true) {
                 val tok = lexer.nextToken()
+                if (tok == Token.EndOfFile) return
                 if (tok is Token.Keyword && tok.value == "endcodespacerange") return
                 if (tok !is Token.StringLiteral) continue
                 val hi = lexer.nextToken() as? Token.StringLiteral ?: continue
@@ -287,6 +291,7 @@ public class CMap private constructor(
         private fun parseBfChar(lexer: Lexer, out: MutableMap<Int, String>) {
             while (true) {
                 val tok = lexer.nextToken()
+                if (tok == Token.EndOfFile) return
                 if (tok is Token.Keyword && tok.value == "endbfchar") return
                 if (tok !is Token.StringLiteral) continue
                 val dst = lexer.nextToken()
@@ -303,6 +308,7 @@ public class CMap private constructor(
         private fun parseBfRange(lexer: Lexer, out: MutableList<BfRange>) {
             while (true) {
                 val loTok = lexer.nextToken()
+                if (loTok == Token.EndOfFile) return
                 if (loTok is Token.Keyword && loTok.value == "endbfrange") return
                 if (loTok !is Token.StringLiteral) continue
                 val hiTok = lexer.nextToken() as? Token.StringLiteral ?: continue
@@ -323,7 +329,7 @@ public class CMap private constructor(
                         val reps = mutableListOf<String>()
                         while (true) {
                             val item = lexer.nextToken()
-                            if (item == Token.ArrayClose) break
+                            if (item == Token.ArrayClose || item == Token.EndOfFile) break
                             if (item is Token.StringLiteral) reps.add(utf16BEToString(item.bytes))
                         }
                         out.add(BfRange(lo, hi, base = null, replacements = reps))
@@ -336,6 +342,7 @@ public class CMap private constructor(
         private fun parseCidChar(lexer: Lexer, out: MutableMap<Int, Int>) {
             while (true) {
                 val tok = lexer.nextToken()
+                if (tok == Token.EndOfFile) return
                 if (tok is Token.Keyword && tok.value == "endcidchar") return
                 if (tok !is Token.StringLiteral) continue
                 val cidTok = lexer.nextToken()
@@ -347,6 +354,7 @@ public class CMap private constructor(
         private fun parseCidRange(lexer: Lexer, out: MutableList<CidRange>) {
             while (true) {
                 val loTok = lexer.nextToken()
+                if (loTok == Token.EndOfFile) return
                 if (loTok is Token.Keyword && loTok.value == "endcidrange") return
                 if (loTok !is Token.StringLiteral) continue
                 val hiTok = lexer.nextToken() as? Token.StringLiteral ?: continue
