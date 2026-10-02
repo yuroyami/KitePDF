@@ -154,7 +154,14 @@ public class PageRenderer(
      * (ISO 32000-1, 14.7.4.2), [NO_MCID] for none, or [ARTIFACT] for an `/Artifact`, and whether
      * a form opened it (#208).
      */
-    private class MarkedSection(val hidden: Boolean, val id: Int, val inForm: Boolean = false)
+    private class MarkedSection(val hidden: Boolean, val id: Int, val inForm: Boolean = false, val actualText: ActualText? = null)
+
+    /** The `/ActualText` of one marked-content sequence: it replaces the text drawn inside (ISO 32000-1, 14.9.4). */
+    internal class ActualText(val text: String)
+
+    /** The outermost `/ActualText` around the content being drawn, or null (#468). */
+    internal val currentActualText: ActualText?
+        get() = markedContentStack.firstOrNull { it.actualText != null }?.actualText
 
     /**
      * The marked-content id of the page content being drawn, which a tagged PDF's structure
@@ -364,6 +371,17 @@ public class PageRenderer(
         val dict = missingAsNull { list.resolve(resolver) } as? PdfDictionary ?: return NO_MCID
         val id = (dict["MCID"] as? PdfInt)?.value ?: return NO_MCID
         return if (id in 0..Int.MAX_VALUE) id.toInt() else NO_MCID
+    }
+
+    /** The `/ActualText` of a `BDC` property list, given inline or named in `/Properties`, or null. */
+    private fun actualTextOf(operand: PdfObject?, properties: Map<String, PdfObject>): ActualText? {
+        val list = when (operand) {
+            is PdfName -> properties[operand.value] ?: pageProperties[operand.value]
+            else -> operand
+        } ?: return null
+        val dict = missingAsNull { list.resolve(resolver) } as? PdfDictionary ?: return null
+        val text = missingAsNull { dict["ActualText"]?.resolve(resolver) } as? PdfString ?: return null
+        return ActualText(text.asText())
     }
 
     private fun isOcOperandHidden(operand: PdfObject?, properties: Map<String, PdfObject>): Boolean {
@@ -1409,7 +1427,10 @@ public class PageRenderer(
                 if (markedContentStack.size >= MAX_MARKED_CONTENT_DEPTH) { markedContentOverflow++; return }
                 val tag = a.getOrNull(0) as? PdfName
                 val hidden = tag?.value == "OC" && isOcOperandHidden(a.getOrNull(1), properties)
-                markedContentStack.addLast(MarkedSection(hidden, markedContentId(tag, a.getOrNull(1), properties), inForm = formDepth > 0))
+                markedContentStack.addLast(MarkedSection(
+                    hidden, markedContentId(tag, a.getOrNull(1), properties), inForm = formDepth > 0,
+                    actualText = actualTextOf(a.getOrNull(1), properties),
+                ))
                 if (hidden) ocHiddenDepth++
                 if (markedContentStack.size > deepestMarkedContent) deepestMarkedContent = markedContentStack.size
             }

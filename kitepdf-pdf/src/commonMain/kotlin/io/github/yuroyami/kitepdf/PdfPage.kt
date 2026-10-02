@@ -230,7 +230,11 @@ public class PdfPage internal constructor(
         return document.operations(number, parse)
     }
 
-    /** Extract page text using the naive Tj/TJ/' / " operator scan. */
+    /**
+     * The page's text as one string, in the order of its content stream. Text inside form
+     * XObjects counts, and `/ActualText` replaces the text it marks. Use [structuredText] for
+     * positions and reading order.
+     */
     public fun extractText(): String = TextExtractor.extract(this)
 
     /**

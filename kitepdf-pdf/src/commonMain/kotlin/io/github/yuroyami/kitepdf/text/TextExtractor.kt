@@ -1,14 +1,18 @@
 package io.github.yuroyami.kitepdf.text
 
+import io.github.yuroyami.kitepdf.PageContents
+import io.github.yuroyami.kitepdf.PdfDocument
 import io.github.yuroyami.kitepdf.PdfPage
 import io.github.yuroyami.kitepdf.content.ContentStreamParser
 import io.github.yuroyami.kitepdf.content.Operation
 import io.github.yuroyami.kitepdf.core.font.PdfFont
+import io.github.yuroyami.kitepdf.core.parser.PdfDictionary
 import io.github.yuroyami.kitepdf.core.parser.PdfReference
 import io.github.yuroyami.kitepdf.core.parser.PdfArray
 import io.github.yuroyami.kitepdf.core.parser.PdfInt
 import io.github.yuroyami.kitepdf.core.parser.PdfName
 import io.github.yuroyami.kitepdf.core.parser.PdfReal
+import io.github.yuroyami.kitepdf.core.parser.PdfStream
 import io.github.yuroyami.kitepdf.core.parser.PdfString
 
 /**
@@ -31,8 +35,13 @@ import io.github.yuroyami.kitepdf.core.parser.PdfString
  * size-scaled heuristics read the `Tf` size times the `Tm` scale, since a
  * producer may set `Tf` to 1 and carry the real size in the matrix.
  *
+ * A form XObject that the page draws with `Do` adds its text in place, read with the form's
+ * own fonts (ISO 32000-1, 8.10, #459). A marked-content sequence with `/ActualText` adds that
+ * text in place of the text it encloses (14.9.4, #468).
+ *
  * This is the cheap linear path: it tracks `Tm` but not `cm` or the wider
- * graphics stack. [PdfPage.structuredText] is the precise one.
+ * graphics stack, so the order is the order of the content stream.
+ * [PdfPage.structuredText] gives positions and reading order.
  */
 public object TextExtractor {
 
@@ -40,115 +49,200 @@ public object TextExtractor {
         // The renderer's colour spaces, so inline images end at the same byte (#266).
         val colorSpaces = ContentStreamParser.colorSpaces(page.resources, page.internalDocument)
         val ops = page.operations(colorSpaces)
-        return extract(ops, loadFonts(page))
+        val sb = StringBuilder()
+        Walk(page.internalDocument, page.resources, sb).run(ops, page.resources, depth = 0)
+        return tidy(sb)
     }
 
-    /** Font-blind overload for callers that have operations but no resources. */
-    public fun extract(ops: List<Operation>): String = extract(ops, emptyMap())
-
-    private fun extract(ops: List<Operation>, fonts: Map<String, PdfFont>): String {
+    /** Font-blind overload for callers that have operations but no resources: it draws no forms. */
+    public fun extract(ops: List<Operation>): String {
         val sb = StringBuilder()
-        var inText = false
-        var font: PdfFont? = null
-        var fontSize = 0.0
+        Walk(null, null, sb).run(ops, null, depth = 0)
+        return tidy(sb)
+    }
 
-        // Text-line baseline Y in text space (origin of the current line, per the
-        // text-line matrix Tlm). A pure-horizontal Td/Tm keeps the same Y, so no
-        // newline is emitted; only a genuine vertical move opens a new line.
-        var lineY = Double.NaN
-        var haveLine = false
-        // Tm Y-basis length. Producers that write `/F1 1 Tf` carry the real font
-        // size here, so the size-scaled heuristics below need it (#22).
-        var tmScaleY = 1.0
+    private fun tidy(sb: StringBuilder): String = sb.toString()
+        .replace(SPACES_RUN, " ")
+        .replace(BLANK_LINES_RUN, "\n\n")
+        .trim()
 
-        for (op in ops) {
-            when (op.operator) {
-                "BT" -> {
-                    inText = true
-                    lineY = 0.0
-                    haveLine = false
-                    tmScaleY = 1.0 // Tm resets to identity at BT.
-                }
-                "ET" -> {
-                    if (inText) sb.append('\n')
-                    inText = false
-                    haveLine = false
-                }
-                "Tf" -> {
-                    font = (op.operands.firstOrNull() as? PdfName)?.let { fonts[it.value] }
-                    fontSize = (op.operands.getOrNull(1) as? PdfReal)?.value
-                        ?: (op.operands.getOrNull(1) as? PdfInt)?.value?.toDouble()
-                        ?: fontSize
-                }
-                "Td", "TD" -> {
-                    // tx ty relative to the current line origin, in PRE-Tm units,
-                    // so scale it to keep lineY in the same space as Tm's f. Only
-                    // a vertical shift beyond the threshold counts as a new line.
-                    val ty = number(op.operands.getOrNull(1))
-                    val newY = (if (haveLine) lineY else 0.0) + ty * tmScaleY
-                    maybeBreakLine(sb, inText, newY, lineY, haveLine, fontSize * tmScaleY)
-                    lineY = newY
-                    haveLine = true
-                }
-                "Tm" -> {
-                    // a b c d e f: f is the new line-origin Y in text space, and
-                    // c/d give the Y-basis length (the scale the size rides on).
-                    val c = number(op.operands.getOrNull(2))
-                    val d = number(op.operands.getOrNull(3))
-                    val scale = kotlin.math.sqrt(c * c + d * d)
-                    tmScaleY = if (scale.isFinite() && scale > 0.0) scale else 1.0
-                    val newY = number(op.operands.getOrNull(5))
-                    maybeBreakLine(sb, inText, newY, lineY, haveLine, fontSize * tmScaleY)
-                    lineY = newY
-                    haveLine = true
-                }
-                "T*" -> {
-                    // Always advances to the next line (by leading).
-                    if (inText) sb.append('\n')
-                    haveLine = true
-                }
-                "Tj" -> {
-                    val s = op.operands.firstOrNull() as? PdfString ?: continue
-                    sb.append(decode(s, font))
-                }
-                "'" -> {
-                    sb.append('\n')
-                    val s = op.operands.firstOrNull() as? PdfString ?: continue
-                    sb.append(decode(s, font))
-                }
-                "\"" -> {
-                    sb.append('\n')
-                    // operands: aw ac string. The string is last.
-                    val s = op.operands.lastOrNull() as? PdfString ?: continue
-                    sb.append(decode(s, font))
-                }
-                "TJ" -> {
-                    val arr = op.operands.firstOrNull() as? PdfArray ?: continue
-                    // TJ numbers are in thousandths of a text-space em, applied to
-                    // the pen before the font-size scale. A negative adjustment
-                    // moves the pen forward (a gap). Scale the word-break threshold
-                    // with the effective font size so a large font needs a
-                    // proportionally larger gap to read as a space.
-                    val emThreshold = wordGapThreshold(fontSize * tmScaleY)
-                    for (item in arr) {
-                        when (item) {
-                            is PdfString -> sb.append(decode(item, font))
-                            is PdfReal -> {
-                                if (item.value <= emThreshold) sb.append(' ')
+    /** One extraction: the text so far, and the state that spans form XObjects. */
+    private class Walk(
+        private val document: PdfDocument?,
+        /** A form without resources of its own reads the page's (ISO 32000-1, 7.8.3). */
+        private val pageResources: PdfDictionary?,
+        private val sb: StringBuilder,
+    ) {
+        /** Operations left to read, forms included, so repeated forms cannot multiply without end. */
+        private var budget = MAX_OPS
+
+        /** Forms being read, so a form that draws itself stops. */
+        private val openForms = HashSet<Long>()
+
+        /** Open `/ActualText` sequences: their own text replaces what they enclose. */
+        private var replacing = 0
+
+        fun run(ops: List<Operation>, resources: PdfDictionary?, depth: Int) {
+            val fonts = loadFonts(resources)
+            // Each entry says whether that marked-content sequence opened an ActualText replacement.
+            val marked = ArrayList<Boolean>()
+            var inText = false
+            var font: PdfFont? = null
+            var fontSize = 0.0
+
+            // Text-line baseline Y in text space (origin of the current line, per the
+            // text-line matrix Tlm). A pure-horizontal Td/Tm keeps the same Y, so no
+            // newline is emitted; only a genuine vertical move opens a new line.
+            var lineY = Double.NaN
+            var haveLine = false
+            // Tm Y-basis length. Producers that write `/F1 1 Tf` carry the real font
+            // size here, so the size-scaled heuristics below need it (#22).
+            var tmScaleY = 1.0
+
+            for (op in ops) {
+                if (--budget < 0) break
+                when (op.operator) {
+                    "Do" -> {
+                        val name = (op.operands.firstOrNull() as? PdfName)?.value
+                        if (name != null && depth < MAX_FORM_DEPTH) form(name, resources, depth)
+                    }
+                    "BDC" -> {
+                        val actual = actualText(op.operands.getOrNull(1), resources)
+                        if (actual != null && replacing == 0) sb.append(actual)
+                        marked.add(actual != null)
+                        if (actual != null) replacing++
+                    }
+                    "BMC" -> marked.add(false)
+                    "EMC" -> if (marked.isNotEmpty() && marked.removeAt(marked.lastIndex)) replacing--
+                    "BT" -> {
+                        inText = true
+                        lineY = 0.0
+                        haveLine = false
+                        tmScaleY = 1.0 // Tm resets to identity at BT.
+                    }
+                    "ET" -> {
+                        if (inText) sb.append('\n')
+                        inText = false
+                        haveLine = false
+                    }
+                    "Tf" -> {
+                        font = (op.operands.firstOrNull() as? PdfName)?.let { fonts[it.value] }
+                        fontSize = (op.operands.getOrNull(1) as? PdfReal)?.value
+                            ?: (op.operands.getOrNull(1) as? PdfInt)?.value?.toDouble()
+                            ?: fontSize
+                    }
+                    "Td", "TD" -> {
+                        // tx ty relative to the current line origin, in PRE-Tm units,
+                        // so scale it to keep lineY in the same space as Tm's f. Only
+                        // a vertical shift beyond the threshold counts as a new line.
+                        val ty = number(op.operands.getOrNull(1))
+                        val newY = (if (haveLine) lineY else 0.0) + ty * tmScaleY
+                        maybeBreakLine(sb, inText, newY, lineY, haveLine, fontSize * tmScaleY)
+                        lineY = newY
+                        haveLine = true
+                    }
+                    "Tm" -> {
+                        // a b c d e f: f is the new line-origin Y in text space, and
+                        // c/d give the Y-basis length (the scale the size rides on).
+                        val c = number(op.operands.getOrNull(2))
+                        val d = number(op.operands.getOrNull(3))
+                        val scale = kotlin.math.sqrt(c * c + d * d)
+                        tmScaleY = if (scale.isFinite() && scale > 0.0) scale else 1.0
+                        val newY = number(op.operands.getOrNull(5))
+                        maybeBreakLine(sb, inText, newY, lineY, haveLine, fontSize * tmScaleY)
+                        lineY = newY
+                        haveLine = true
+                    }
+                    "T*" -> {
+                        // Always advances to the next line (by leading).
+                        if (inText) sb.append('\n')
+                        haveLine = true
+                    }
+                    "Tj" -> {
+                        val s = op.operands.firstOrNull() as? PdfString ?: continue
+                        if (replacing == 0) sb.append(decode(s, font))
+                    }
+                    "'" -> {
+                        sb.append('\n')
+                        val s = op.operands.firstOrNull() as? PdfString ?: continue
+                        if (replacing == 0) sb.append(decode(s, font))
+                    }
+                    "\"" -> {
+                        sb.append('\n')
+                        // operands: aw ac string. The string is last.
+                        val s = op.operands.lastOrNull() as? PdfString ?: continue
+                        if (replacing == 0) sb.append(decode(s, font))
+                    }
+                    "TJ" -> {
+                        if (replacing > 0) continue
+                        val arr = op.operands.firstOrNull() as? PdfArray ?: continue
+                        // TJ numbers are in thousandths of a text-space em, applied to
+                        // the pen before the font-size scale. A negative adjustment
+                        // moves the pen forward (a gap). Scale the word-break threshold
+                        // with the effective font size so a large font needs a
+                        // proportionally larger gap to read as a space.
+                        val emThreshold = wordGapThreshold(fontSize * tmScaleY)
+                        for (item in arr) {
+                            when (item) {
+                                is PdfString -> sb.append(decode(item, font))
+                                is PdfReal -> {
+                                    if (item.value <= emThreshold) sb.append(' ')
+                                }
+                                is PdfInt -> {
+                                    if (item.value.toDouble() <= emThreshold) sb.append(' ')
+                                }
+                                else -> { /* ignore */ }
                             }
-                            is PdfInt -> {
-                                if (item.value.toDouble() <= emThreshold) sb.append(' ')
-                            }
-                            else -> { /* ignore */ }
                         }
                     }
                 }
             }
+            // A sequence this stream left open ends with it.
+            for (opened in marked) if (opened) replacing--
         }
-        return sb.toString()
-            .replace(SPACES_RUN, " ")
-            .replace(BLANK_LINES_RUN, "\n\n")
-            .trim()
+
+        /** Reads the form XObject [name] of [resources] in place, with its own resources. */
+        private fun form(name: String, resources: PdfDictionary?, depth: Int) {
+            val doc = document ?: return
+            val entry = resources?.getDict("XObject", doc)?.get(name) ?: return
+            val stream = runCatching { entry.resolve(doc) }.getOrNull() as? PdfStream ?: return
+            if (stream.dict.getName("Subtype") != "Form") return
+            val number = (entry as? PdfReference)?.objectNumber
+            if (number != null && !openForms.add(number)) return
+            try {
+                val own = stream.dict.getDict("Resources", doc)
+                val formResources = own ?: pageResources
+                val colorSpaces = ContentStreamParser.colorSpaces(formResources, doc)
+                val parse = { ContentStreamParser.parse(PageContents.decodeNested(stream, "form XObject"), colorSpaces) }
+                // A form with resources of its own parses the same way wherever it is drawn (#118).
+                val ops = if (own != null && number != null) doc.operations(number, parse) else parse()
+                run(ops, formResources, depth + 1)
+            } finally {
+                if (number != null) openForms.remove(number)
+            }
+        }
+
+        /** The `/ActualText` of a `BDC` property list, given inline or named in `/Properties`, or null. */
+        private fun actualText(operand: Any?, resources: PdfDictionary?): String? {
+            val doc = document
+            val props = when (operand) {
+                is PdfDictionary -> operand
+                is PdfName -> doc?.let { resources?.getDict("Properties", it)?.getDict(operand.value, it) }
+                else -> null
+            } ?: return null
+            val value = props["ActualText"]?.let { v -> if (doc != null) runCatching { v.resolve(doc) }.getOrNull() else v }
+            return (value as? PdfString)?.asText()
+        }
+
+        /** Resolve the `/Font` entries of [resources] to [PdfFont]s (same path the renderer uses). */
+        private fun loadFonts(resources: PdfDictionary?): Map<String, PdfFont> {
+            val resolver = document ?: return emptyMap()
+            val fonts = resources?.getDict("Font", resolver) ?: return emptyMap()
+            return fonts.map.mapValues { (_, ref) ->
+                (ref as? PdfReference)?.let { reference -> resolver.font(reference.objectNumber) { PdfFont.from(ref, resolver) } }
+                    ?: PdfFont.from(ref, resolver)
+            }
+        }
     }
 
     private fun number(v: Any?): Double = when (v) {
@@ -198,18 +292,12 @@ public object TextExtractor {
         }
     }
 
-    /** Resolve the page's `/Resources /Font` entries to [PdfFont]s (same path the renderer uses). */
-    private fun loadFonts(page: PdfPage): Map<String, PdfFont> {
-        val resolver = page.internalDocument
-        val fonts = page.resources?.getDict("Font", resolver) ?: return emptyMap()
-        return fonts.map.mapValues { (_, ref) ->
-            (ref as? PdfReference)?.let { reference -> resolver.font(reference.objectNumber) { PdfFont.from(ref, resolver) } }
-                ?: PdfFont.from(ref, resolver)
-        }
-    }
-
     private fun decode(s: PdfString, font: PdfFont?): String =
         font?.decode(s.bytes) ?: s.asText()
+
+    /** Form nesting and operations read per page, the renderer's bounds. */
+    private const val MAX_FORM_DEPTH = 15
+    private const val MAX_OPS = 20_000_000L
 
     // Compiled once, not per extract() call.
     private val SPACES_RUN = Regex("[ \\t]+")
