@@ -290,12 +290,21 @@ public class PdfDocument private constructor(
         decodedImageCache.remove(objectNumber)?.also { decodedImageCache[objectNumber] = it }
     }
 
+    /**
+     * The identity of image XObject [objectNumber] for this document. A converted bitmap of the
+     * image outlives its decoded samples under it (#371, #465).
+     */
+    internal fun imageIdentity(objectNumber: Long): KiteImageIdentity = imageIdentities.child(objectNumber.toString())
+
+    /** The identity of an inline image whose pixels follow from its bytes alone, [key] naming them (#465). */
+    internal fun inlineImageIdentity(key: String): KiteImageIdentity = imageIdentities.child("inline").child(key)
+
     /** First writer wins; racing decoders converge on one instance. */
     internal fun cacheImage(objectNumber: Long, image: KiteImageData): KiteImageData = lock.withLock {
         decodedImageCache[objectNumber]?.let { return@withLock it }
         // Only images whose pixels are independent of the drawing state enter here. Stencils,
         // resource-local default colour spaces and other uncached variants keep fresh identities.
-        val identified = image.withIdentity(imageIdentities.child(objectNumber.toString()))
+        val identified = image.withIdentity(imageIdentity(objectNumber))
         val bytes = identified.retainedBytes()
         if (bytes > imageCacheBudgetBytes) return@withLock identified
         decodedImageCache[objectNumber] = identified

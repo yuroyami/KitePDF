@@ -911,7 +911,12 @@ public class PageRenderer(
         }
         if (doc == null || key == null || masked) {
             doc?.countImageDecode()
-            return KiteImageData.from(slot.stream, resolver, fillColor)
+            val image = KiteImageData.from(slot.stream, resolver, fillColor)
+            if (doc == null || key == null) return image
+            // Not kept decoded, but the same pixels on every draw, so a converted bitmap is reused (#465).
+            // A stencil is painted in the fill colour, which is part of its pixels.
+            val id = doc.imageIdentity(key)
+            return image.withIdentity(if (stencil) id.child(fillKey(fillColor)) else id)
         }
         doc.cachedImage(key)?.let { return it }
         doc.countImageDecode()
@@ -963,8 +968,33 @@ public class PageRenderer(
         val colorName = (entries["ColorSpace"] as? PdfName)?.value
         val colorSpace = colorName?.let { namedColorSpace(it, colorSpaces) }
             ?: DefaultColorSpaces.imageSpace(entries["ColorSpace"], colorSpaces, resolver)
-        return runCatching { KiteImageData.from(stream, resolver, s.fillColor, colorSpace) }.getOrNull()
-            ?.withIntent(imageIntent(stream.dict, s), s.blackPointCompensation)
+        val image = runCatching { KiteImageData.from(stream, resolver, s.fillColor, colorSpace) }.getOrNull() ?: return null
+        // In a device space with no default in force, the bytes alone give the pixels, and the fill
+        // colour too for a stencil. The same inline image then reuses its converted bitmap (#465).
+        val doc = resolver as? io.github.yuroyami.kitepdf.PdfDocument
+        val device = entries["ColorSpace"] == null ||
+            (colorName in DEVICE_SPACE_NAMES && namedColorSpace(colorName!!, colorSpaces) in DEVICE_SPACES)
+        val identified = if (doc != null && device) {
+            val stencil = (entries["ImageMask"] as? io.github.yuroyami.kitepdf.core.parser.PdfBoolean)?.value == true
+            val key = "${blob.size}:${fnv64(blob)}" + if (stencil) ":${fillKey(s.fillColor)}" else ""
+            image.withIdentity(doc.inlineImageIdentity(key))
+        } else {
+            image
+        }
+        return identified.withIntent(imageIntent(stream.dict, s), s.blackPointCompensation)
+    }
+
+    /** The fill colour that a stencil is painted in, as part of an image identity. */
+    private fun fillKey(color: RgbColor): String = "fill:${color.r},${color.g},${color.b}"
+
+    /** The 64-bit FNV-1a hash of [bytes]. */
+    private fun fnv64(bytes: ByteArray): String {
+        var h = -0x340d631b7bdddcdbL
+        for (b in bytes) {
+            h = h xor (b.toLong() and 0xFF)
+            h *= 0x100000001b3L
+        }
+        return h.toULong().toString(16)
     }
 
     /** Expand the abbreviated inline-image dictionary keys (§8.9.7 Table 92). */
@@ -2649,6 +2679,10 @@ public class PageRenderer(
         const val MAX_TILES = 20_000L
         /** Max Form-XObject nesting depth before bailing (recursion guard). */
         const val MAX_FORM_DEPTH = 15
+
+        /** The names of the device colour spaces an inline image can give, abbreviations included. */
+        private val DEVICE_SPACE_NAMES = setOf("DeviceGray", "G", "DeviceRGB", "RGB", "DeviceCMYK", "CMYK")
+        private val DEVICE_SPACES = setOf(KiteColorSpace.DeviceGray, KiteColorSpace.DeviceRGB, KiteColorSpace.DeviceCMYK)
 
         /** Clips a page may have active at once. A real page stays far below it (#335). */
         const val MAX_CLIP_DEPTH = 1024
