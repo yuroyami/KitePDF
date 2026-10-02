@@ -15,7 +15,7 @@ class ImageExportTest {
     @Test
     fun encodeToPng_produces_a_valid_png() {
         val bmp = ImageBitmap(8, 8)
-        CanvasDrawScope().draw(Density(1f), LayoutDirection.Ltr, Canvas(bmp), Size(8f, 8f)) {
+        CanvasDrawScope().drawOnTestUiThread(Density(1f), LayoutDirection.Ltr, Canvas(bmp), Size(8f, 8f)) {
             drawRect(Color.Red, size = size)
         }
         val png = assertNotNull(bmp.encodeToPng(), "encodeToPng returned null")

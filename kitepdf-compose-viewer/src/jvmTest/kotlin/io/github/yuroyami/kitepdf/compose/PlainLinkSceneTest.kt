@@ -2,14 +2,13 @@ package io.github.yuroyami.kitepdf.compose
 
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.ui.ImageComposeScene
+import io.github.yuroyami.kitepdf.compose.EdtImageComposeScene as ImageComposeScene
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.SemanticsNode
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.unit.Density
-import androidx.compose.ui.use
 import io.github.yuroyami.kitepdf.core.KiteBookmark
 import io.github.yuroyami.kitepdf.core.KiteDocument
 import io.github.yuroyami.kitepdf.core.KiteLink
@@ -135,7 +134,7 @@ class PlainLinkSceneTest {
         // At 150 the place is below the top the zoom shows; at 40 it is above it, on the page before.
         for (target in listOf(150.0, 40.0)) {
             withViewer(KiteDocLayout.Default, document(target)) { state, scope, driver, _ ->
-                state.setZoom(2f)
+                onTestUiThread { state.setZoom(2f) }
                 followToPageOne(state, scope, driver)
                 assertEquals(0f, screenY(state, 1, target), 2f, "the height $target is not at the top of the screen")
             }
@@ -145,7 +144,7 @@ class PlainLinkSceneTest {
     @Test
     fun a_zoomed_horizontal_strip_pans_the_place_to_the_top_of_the_screen() {
         withViewer(KiteDocLayout.Continuous(androidx.compose.foundation.gestures.Orientation.Horizontal), document(300.0)) { state, scope, driver, _ ->
-            state.setZoom(2f)
+            onTestUiThread { state.setZoom(2f) }
             followToPageOne(state, scope, driver)
             assertEquals(0f, screenY(state, 1, 300.0), 2f, "the pan did not bring the place to the top")
         }
@@ -154,7 +153,7 @@ class PlainLinkSceneTest {
     @Test
     fun a_zoomed_pager_that_keeps_its_zoom_pans_the_place_to_the_top_of_the_screen() {
         withViewer(KiteDocLayout.Paged(), document(300.0), KiteZoomSpec(resetZoomOnPageChange = false)) { state, scope, driver, _ ->
-            state.setZoom(2f)
+            onTestUiThread { state.setZoom(2f) }
             driver.pumpFrames(2)
             // A place on the page in view pans there at once.
             val here = assertNotNull(state.displayToViewport(0, 55.0, 435.0))
@@ -171,7 +170,7 @@ class PlainLinkSceneTest {
     @Test
     fun a_zoomed_spread_that_keeps_its_zoom_pans_toward_the_place() {
         withViewer(KiteDocLayout.Spread(firstPageAlone = true), document(300.0), KiteZoomSpec(resetZoomOnPageChange = false)) { state, scope, driver, _ ->
-            state.setZoom(2f)
+            onTestUiThread { state.setZoom(2f) }
             driver.pumpFrames(2)
             followToPageOne(state, scope, driver)
             // Two tall pages side by side are short on screen, so the pan stops at its bound, well above the centre.
@@ -183,7 +182,7 @@ class PlainLinkSceneTest {
     @Test
     fun a_pager_that_resets_its_zoom_shows_the_whole_page_it_lands_on() {
         withViewer(KiteDocLayout.Paged(), document(300.0)) { state, scope, driver, _ ->
-            state.setZoom(2f)
+            onTestUiThread { state.setZoom(2f) }
             driver.pumpFrames(2)
             followToPageOne(state, scope, driver)
             assertEquals(1f, state.zoom)
@@ -209,14 +208,14 @@ class PlainLinkSceneTest {
     @Test
     fun a_screen_reader_finds_each_link_as_a_button() {
         withViewer(KiteDocLayout.Default) { _, _, driver, scene ->
-            fun nodes(): List<SemanticsNode> {
+            fun nodes(): List<SemanticsNode> = onTestUiThread {
                 val out = ArrayList<SemanticsNode>()
                 fun walk(node: SemanticsNode) {
                     out += node
                     node.children.forEach(::walk)
                 }
                 scene.semanticsOwners.forEach { walk(it.unmergedRootSemanticsNode) }
-                return out
+                return@onTestUiThread out
             }
             fun named(name: String) = nodes().firstOrNull { it.config.getOrNull(SemanticsProperties.ContentDescription).orEmpty().contains(name) }
             driver.pumpUntilState { named("https://example.com/x") != null }

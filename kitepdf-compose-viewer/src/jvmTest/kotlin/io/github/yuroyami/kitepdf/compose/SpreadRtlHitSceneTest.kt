@@ -9,7 +9,6 @@ import androidx.compose.ui.graphics.toComposeImageBitmap
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.LayoutDirection
-import androidx.compose.ui.use
 import io.github.yuroyami.kitepdf.PdfDocument
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -72,8 +71,8 @@ class SpreadRtlHitSceneTest {
                         driver.pumpUntil { drawn(it, 50) != null && drawn(it, 150) != null }
                         for (zoomed in listOf(false, true)) {
                             if (zoomed) {
-                                state.setZoom(2f)
-                                state.panBy(Offset(30f, 0f))
+                                onTestUiThread { state.setZoom(2f) }
+                                onTestUiThread { state.panBy(Offset(30f, 0f)) }
                             }
                             val map = driver.pumpFrames(30).toComposeImageBitmap().toPixelMap()
                             for (x in listOf(50, 150)) {

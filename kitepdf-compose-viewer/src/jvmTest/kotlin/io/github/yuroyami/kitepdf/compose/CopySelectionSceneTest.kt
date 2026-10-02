@@ -1,11 +1,10 @@
 package io.github.yuroyami.kitepdf.compose
 
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.ui.ImageComposeScene
+import io.github.yuroyami.kitepdf.compose.EdtImageComposeScene as ImageComposeScene
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.unit.Density
-import androidx.compose.ui.use
 import io.github.yuroyami.kitepdf.core.KiteTextLine
 import io.github.yuroyami.kitepdf.epub.EpubDocument
 import io.github.yuroyami.kitepdf.epub.EpubSettings
@@ -35,8 +34,8 @@ class CopySelectionSceneTest {
             SceneTestDriver(scene).pumpUntilState { state.pageGeometry.isNotEmpty() }
             // Display space is viewport space here: a 200 pt page in a 200 px slot.
             fun at(line: KiteTextLine, edge: Int) = Offset(line.charEdges[edge].toFloat(), ((line.bounds.bottom + line.bounds.top) / 2).toFloat())
-            state.beginSelection(at(lines.first(), 0) + Offset(1f, 0f))
-            state.extendSelection(at(lines.last(), lines.last().text.length) + Offset(-1f, 0f))
+            onTestUiThread { state.beginSelection(at(lines.first(), 0) + Offset(1f, 0f)) }
+            onTestUiThread { state.extendSelection(at(lines.last(), lines.last().text.length) + Offset(-1f, 0f)) }
             val text = assertNotNull(state.selection).text
             assertFalse('\n' in text, "no line break inside the paragraph: $text")
             assertTrue(text.length > 50 && words.startsWith(text), "the selection is the book's text: $text")

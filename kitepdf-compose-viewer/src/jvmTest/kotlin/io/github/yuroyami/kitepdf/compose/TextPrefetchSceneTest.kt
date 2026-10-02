@@ -3,7 +3,6 @@ package io.github.yuroyami.kitepdf.compose
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.use
 import io.github.yuroyami.kitepdf.core.KiteDocument
 import io.github.yuroyami.kitepdf.core.KitePage
 import io.github.yuroyami.kitepdf.core.KiteRectangle
@@ -51,12 +50,12 @@ class TextPrefetchSceneTest {
                 KiteDocView(state = state, modifier = Modifier.fillMaxSize(), layout = KiteDocLayout.SinglePage(0))
             }
             scene.use {
-                val main = Thread.currentThread()
+                val main = onTestUiThread { Thread.currentThread() }
                 driver.pumpUntilState { page.builtOn != null }
                 assertNotSame(main, page.builtOn, "the page's text was built on the main thread")
                 // The long press then finds it ready.
-                state.beginSelection(Offset(25f, 10f))
-                state.extendSelection(Offset(55f, 10f))
+                onTestUiThread { state.beginSelection(Offset(25f, 10f)) }
+                onTestUiThread { state.extendSelection(Offset(55f, 10f)) }
                 assertEquals("abcd", state.selection?.text)
             }
         }

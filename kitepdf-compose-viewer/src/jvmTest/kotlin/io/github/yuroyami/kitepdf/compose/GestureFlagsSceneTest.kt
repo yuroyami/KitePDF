@@ -5,7 +5,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.ExperimentalComposeUiApi
-import androidx.compose.ui.ImageComposeScene
+import io.github.yuroyami.kitepdf.compose.EdtImageComposeScene as ImageComposeScene
 import androidx.compose.ui.InternalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -13,7 +13,6 @@ import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.PointerId
 import androidx.compose.ui.input.pointer.PointerType
 import androidx.compose.ui.scene.ComposeScenePointer
-import androidx.compose.ui.use
 import io.github.yuroyami.kitepdf.PdfDocument
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -73,7 +72,7 @@ class GestureFlagsSceneTest {
             }
             scene.use {
                 driver.pumpUntilState { state.pageGeometry.isNotEmpty() }
-                state.setZoom(2f)
+                onTestUiThread { state.setZoom(2f) }
                 driver.pumpFrames(4)
                 val start = state.panOffset.x
                 twoFingerPan(scene, driver)

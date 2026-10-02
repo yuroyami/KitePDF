@@ -6,7 +6,6 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toComposeImageBitmap
 import androidx.compose.ui.graphics.toPixelMap
-import androidx.compose.ui.use
 import io.github.yuroyami.kitepdf.core.KiteDocument
 import io.github.yuroyami.kitepdf.core.KitePage
 import io.github.yuroyami.kitepdf.core.KiteRectangle
@@ -54,9 +53,9 @@ class SelectionHandleDirectionSceneTest {
         }
         scene.use {
             driver.pumpUntilState { state.pageGeometry.isNotEmpty() }
-            state.beginSelection(from)
-            state.extendSelection(to)
-            state.endSelectionGesture()
+            onTestUiThread { state.beginSelection(from) }
+            onTestUiThread { state.extendSelection(to) }
+            onTestUiThread { state.endSelectionGesture() }
             check(state, driver)
         }
     }
@@ -65,8 +64,8 @@ class SelectionHandleDirectionSceneTest {
     private fun assertStillGrabsKeep(state: KiteDocViewState, text: String) {
         for (edge in KiteSelectionHandleEdge.entries) {
             state.beginHandleDrag(edge)
-            state.extendSelection(state.handlePoint(edge)!!)
-            state.endSelectionGesture()
+            onTestUiThread { state.extendSelection(state.handlePoint(edge)!!) }
+            onTestUiThread { state.endSelectionGesture() }
             assertEquals(text, state.selection?.text, "a still grab on the $edge handle keeps the selection")
         }
     }

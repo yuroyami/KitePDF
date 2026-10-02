@@ -8,7 +8,6 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.PointerType
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.use
 import io.github.yuroyami.kitepdf.PdfDocument
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.test.Test

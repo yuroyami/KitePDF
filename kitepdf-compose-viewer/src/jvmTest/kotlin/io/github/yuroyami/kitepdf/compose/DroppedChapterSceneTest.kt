@@ -5,7 +5,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.PointerType
-import androidx.compose.ui.use
 import io.github.yuroyami.kitepdf.core.KiteCancellation
 import io.github.yuroyami.kitepdf.core.KiteDocument
 import io.github.yuroyami.kitepdf.core.KiteLink
@@ -128,7 +127,7 @@ class DroppedChapterSceneTest {
     @Test
     fun a_vectorized_page_of_a_dropped_chapter_shows_its_paper_until_the_content_is_back() = forBothEffectOrders { queued ->
         val epub = bookWithChapter0Dropped()
-        val doc = WatchedDocument(epub, Thread.currentThread())
+        val doc = WatchedDocument(epub, onTestUiThread { Thread.currentThread() })
         val state = KiteDocViewState(doc)
         val (scene, driver) = drivenScene(200, 260, queued) {
             KiteDocView(state = state, modifier = Modifier.fillMaxSize(), renderSpec = KiteRenderSpec.Vectorized())
@@ -148,16 +147,16 @@ class DroppedChapterSceneTest {
     @Test
     fun a_long_press_and_a_tap_on_a_dropped_chapter_read_nothing_on_the_ui_thread() = forBothEffectOrders { queued ->
         val epub = bookWithChapter0Dropped()
-        val doc = WatchedDocument(epub, Thread.currentThread())
+        val doc = WatchedDocument(epub, onTestUiThread { Thread.currentThread() })
         val state = KiteDocViewState(doc)
         val (scene, driver) = drivenScene(200, 260, queued) {
             KiteDocView(state = state, modifier = Modifier.fillMaxSize())
         }
         scene.use {
             driver.pumpUntilState { state.adapter != null && state.pageGeometry.containsKey(0) }
-            state.beginSelection(Offset(100f, 60f))
+            onTestUiThread { state.beginSelection(Offset(100f, 60f)) }
             assertNull(state.selection, "a page out of memory has no text to select yet")
-            state.endSelectionGesture()
+            onTestUiThread { state.endSelectionGesture() }
             scene.sendPointerEvent(PointerEventType.Press, Offset(100f, 60f), type = PointerType.Touch)
             scene.sendPointerEvent(PointerEventType.Release, Offset(100f, 60f), type = PointerType.Touch)
             // A single tap lands once the double-tap time is over.

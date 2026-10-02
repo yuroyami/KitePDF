@@ -1,6 +1,6 @@
 package io.github.yuroyami.kitepdf.compose
 
-import androidx.compose.ui.ImageComposeScene
+import io.github.yuroyami.kitepdf.compose.EdtImageComposeScene as ImageComposeScene
 import androidx.compose.ui.graphics.PixelMap
 import androidx.compose.ui.graphics.toComposeImageBitmap
 import androidx.compose.ui.graphics.toPixelMap
@@ -11,6 +11,9 @@ import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
 import kotlin.coroutines.CoroutineContext
 import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.async
+import kotlinx.coroutines.runBlocking
 import org.jetbrains.skia.Image
 
 /**
@@ -36,6 +39,18 @@ internal class SceneTestDriver(
 ) {
 
     private var timeNanos = 0L
+
+    /** Runs a suspending host call while its scene and the EDT remain able to make progress. */
+    fun <T> runOnUi(block: suspend CoroutineScope.() -> T): T {
+        check(!java.awt.EventQueue.isDispatchThread()) { "the scene driver belongs to the test control thread" }
+        val work = onTestUiThread { CoroutineScope(TestUiDispatcher).async(block = block) }
+        try {
+            if (!work.isCompleted) pumpUntilState { work.isCompleted }
+            return runBlocking { work.await() }
+        } finally {
+            work.cancel()
+        }
+    }
 
     /**
      * Render frames until [check] passes against the latest frame. Returns that frame.
@@ -108,9 +123,11 @@ internal class SceneTestDriver(
     }
 
     private fun frame(): Image {
-        val img = scene.render(timeNanos)
-        effects?.drain()
-        return img
+        return onTestUiThread {
+            val img = scene.render(timeNanos)
+            effects?.drain()
+            img
+        }
     }
 
     private companion object {
@@ -137,17 +154,23 @@ internal class QueuedEffects : CoroutineDispatcher() {
     private var released = false
 
     override fun dispatch(context: CoroutineContext, block: Runnable) {
-        if (released) kotlinx.coroutines.Dispatchers.Default.dispatch(context, block) else tasks.add(block)
+        if (released) {
+            TestUiDispatcher.dispatch(context, block)
+        } else {
+            tasks.add(block)
+            // Release may have drained the queue between the first check and this insertion.
+            if (released && tasks.remove(block)) TestUiDispatcher.dispatch(context, block)
+        }
     }
 
     /**
-     * Hands the queued work, and any work dispatched later, to the pool. After a test closes its
+     * Hands the queued work, and any work dispatched later, to the EDT. After a test closes its
      * scene nothing drains the queue, and a raster stranded in it would hold the process-wide
      * render lock, which hangs every later raster in the test JVM.
      */
     fun release() {
         released = true
-        while (true) kotlinx.coroutines.Dispatchers.Default.dispatch(kotlin.coroutines.EmptyCoroutineContext, tasks.poll() ?: return)
+        while (true) TestUiDispatcher.dispatch(kotlin.coroutines.EmptyCoroutineContext, tasks.poll() ?: return)
     }
 
     /**
@@ -155,7 +178,9 @@ internal class QueuedEffects : CoroutineDispatcher() {
      * queues itself forever stops at a cap and goes on after the next frame, as in an app.
      */
     fun drain() {
-        repeat(MAX_TASKS_PER_FRAME) { (tasks.poll() ?: return).run() }
+        onTestUiThread {
+            repeat(MAX_TASKS_PER_FRAME) { (tasks.poll() ?: return@onTestUiThread).run() }
+        }
     }
 
     private companion object {
@@ -254,11 +279,11 @@ internal class LatchedDocument(
 
 /**
  * Runs [body] and returns the writes to Compose state that viewer code made meanwhile on another
- * thread than this one, each as the viewer frame that made it. A frame of a test or of this file
+ * thread than the EDT, each as the viewer frame that made it. A frame of a test or of this file
  * is not viewer code (#443, #429).
  */
 internal fun viewerWritesOffThread(body: () -> Unit): List<String> {
-    val here = Thread.currentThread()
+    val here = onTestUiThread { Thread.currentThread() }
     val found = java.util.Collections.synchronizedList(ArrayList<String>())
     val observer = androidx.compose.runtime.snapshots.Snapshot.registerGlobalWriteObserver {
         val thread = Thread.currentThread()

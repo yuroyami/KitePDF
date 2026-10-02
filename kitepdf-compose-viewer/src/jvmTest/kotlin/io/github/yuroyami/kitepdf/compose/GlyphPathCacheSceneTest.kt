@@ -37,7 +37,7 @@ class GlyphPathCacheSceneTest {
     private fun draw(block: (ComposeCanvas) -> Unit): Pair<IntArray, ComposeCanvas> {
         val bitmap = ImageBitmap(200, 60)
         lateinit var canvas: ComposeCanvas
-        CanvasDrawScope().draw(Density(1f), LayoutDirection.Ltr, Canvas(bitmap), Size(200f, 60f)) {
+        CanvasDrawScope().drawOnTestUiThread(Density(1f), LayoutDirection.Ltr, Canvas(bitmap), Size(200f, 60f)) {
             drawRect(Color.White)
             canvas = ComposeCanvas(this, measurer)
             block(canvas)

@@ -1,5 +1,7 @@
 package io.github.yuroyami.kitepdf.compose
 
+import io.github.yuroyami.kitepdf.compose.EdtImageComposeScene as ImageComposeScene
+
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -13,7 +15,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.PointerType
-import androidx.compose.ui.use
 import io.github.yuroyami.kitepdf.core.KiteBookmark
 import io.github.yuroyami.kitepdf.core.KiteDocument
 import io.github.yuroyami.kitepdf.core.KiteLocation
@@ -448,7 +449,7 @@ class IncrementalEpubSceneTest {
             val quad = text.quadsFor(char, char).first()
             return Offset(((quad.left + quad.right) / 2).toFloat(), ((quad.top + quad.bottom) / 2).toFloat())
         }
-        state.beginSelection(pointAt(2))
+        onTestUiThread { state.beginSelection(pointAt(2)) }
         assertEquals(2, state.selection?.start)
 
         doc.prepareChapter(0)
@@ -460,7 +461,7 @@ class IncrementalEpubSceneTest {
         state.pageGeometry.clear()
         state.pageGeometry[slotAfter] = androidx.compose.ui.geometry.Rect(0f, 0f, 200f, 200f)
 
-        state.extendSelection(pointAt(12))
+        onTestUiThread { state.extendSelection(pointAt(12)) }
         assertEquals(2, state.selection?.start)
         assertEquals(12, state.selection?.end, "the drag stopped following the finger")
     }
@@ -596,7 +597,7 @@ class IncrementalEpubSceneTest {
     }
 
     /** A slow drag with a pause before the lift, so it moves the content and does not fling. */
-    private fun drag(scene: androidx.compose.ui.ImageComposeScene, driver: SceneTestDriver, from: Offset, to: Offset) {
+    private fun drag(scene: ImageComposeScene, driver: SceneTestDriver, from: Offset, to: Offset) {
         scene.sendPointerEvent(PointerEventType.Press, from, type = PointerType.Touch)
         val steps = 8
         for (step in 1..steps) {

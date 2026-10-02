@@ -3,7 +3,6 @@ package io.github.yuroyami.kitepdf.compose
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.use
 import io.github.yuroyami.kitepdf.PdfDocument
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -57,12 +56,12 @@ class PanContentSceneTest {
                     val name = case.layout::class.simpleName
                     driver.pumpUntilState { state.pageGeometry.isNotEmpty() }
                     driver.pumpFrames(4)
-                    state.setZoom(2f)
-                    state.panBy(Offset(0f, 1000f))
+                    onTestUiThread { state.setZoom(2f) }
+                    onTestUiThread { state.panBy(Offset(0f, 1000f)) }
                     assertEquals(0f, state.panOffset.y, 0.5f, "$name: a page that fits the height moved vertically")
-                    state.panBy(Offset(10_000f, 0f))
+                    onTestUiThread { state.panBy(Offset(10_000f, 0f)) }
                     assertEquals(case.maxPanX, state.panOffset.x, 0.5f, "$name: the pan went past the page")
-                    state.panBy(Offset(-20_000f, 0f))
+                    onTestUiThread { state.panBy(Offset(-20_000f, 0f)) }
                     assertEquals(-case.maxPanX, state.panOffset.x, 0.5f, "$name: the pan went past the page")
                 }
             }

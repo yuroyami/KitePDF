@@ -2,11 +2,10 @@ package io.github.yuroyami.kitepdf.compose
 
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.ui.ImageComposeScene
+import io.github.yuroyami.kitepdf.compose.EdtImageComposeScene as ImageComposeScene
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.unit.Density
-import androidx.compose.ui.use
 import io.github.yuroyami.kitepdf.KitePDF
 import io.github.yuroyami.kitepdf.core.KiteTextLine
 import io.github.yuroyami.kitepdf.writer.PdfBuilder
@@ -58,10 +57,10 @@ class SelectionDisabledSceneTest {
         }.use { scene ->
             SceneTestDriver(scene).pumpUntil { state.pageGeometry.isNotEmpty() }
 
-            state.beginSelection(charPoint(line, 0))
+            onTestUiThread { state.beginSelection(charPoint(line, 0)) }
             assertNull(state.selection, "nothing anchors while selection is off")
             assertFalse(state.isSelectionActive, "and the page is never locked for it")
-            state.extendSelection(charPoint(line, 6))
+            onTestUiThread { state.extendSelection(charPoint(line, 6)) }
             assertNull(state.selection, "extending is inert too")
         }
     }
@@ -84,9 +83,9 @@ class SelectionDisabledSceneTest {
             val driver = SceneTestDriver(scene)
             driver.pumpUntil { state.pageGeometry.isNotEmpty() }
 
-            state.beginSelection(charPoint(line, 0))
-            state.extendSelection(charPoint(line, line.text.length - 1))
-            state.endSelectionGesture()
+            onTestUiThread { state.beginSelection(charPoint(line, 0)) }
+            onTestUiThread { state.extendSelection(charPoint(line, line.text.length - 1)) }
+            onTestUiThread { state.endSelectionGesture() }
             assertNotNull(state.selection, "selection works while it is enabled")
             assertTrue(state.isSelectionActive)
 
@@ -110,7 +109,7 @@ class SelectionDisabledSceneTest {
         }.use { scene ->
             SceneTestDriver(scene).pumpUntil { state.pageGeometry.isNotEmpty() }
 
-            state.beginSelection(charPoint(line, 0))
+            onTestUiThread { state.beginSelection(charPoint(line, 0)) }
             assertNotNull(state.selection, "the default is unchanged for every existing caller")
         }
     }

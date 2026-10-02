@@ -6,7 +6,6 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.IntSize
-import androidx.compose.ui.use
 import io.github.yuroyami.kitepdf.core.KiteBookmark
 import io.github.yuroyami.kitepdf.core.KiteDocument
 import io.github.yuroyami.kitepdf.core.KiteLocation
@@ -143,9 +142,9 @@ class PublicLocationSceneTest {
                 val text = assertNotNull(first.page(target).textContent())
                 fun pointAt(char: Int): Offset = viewportPoint(state, target, text.quadsFor(char, char).first())
                 state.onSelectionChange = { callbacks += it }
-                state.beginSelection(pointAt(0))
-                state.extendSelection(pointAt(6))
-                state.endSelectionGesture()
+                onTestUiThread { state.beginSelection(pointAt(0)) }
+                onTestUiThread { state.extendSelection(pointAt(6)) }
+                onTestUiThread { state.endSelectionGesture() }
                 val selection = assertNotNull(state.selection)
                 assertEquals(target, selection.location)
                 assertEquals(target, callbacks.last()?.location)
@@ -153,7 +152,7 @@ class PublicLocationSceneTest {
                 end = selection.end
                 val hit = KiteSearchHit(selection.pageIndex, selection.quads, selection.text, location = selection.location)
                 saved = encode(hit)
-                state.clearSelection()
+                onTestUiThread { state.clearSelection() }
                 val mark = KiteHighlight(hit, color = Color.Magenta, id = "saved")
                 assertEquals(target, mark.location)
                 state.highlights = listOf(mark)

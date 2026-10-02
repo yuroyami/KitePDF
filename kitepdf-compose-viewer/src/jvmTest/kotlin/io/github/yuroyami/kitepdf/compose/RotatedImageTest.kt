@@ -40,7 +40,7 @@ class RotatedImageTest {
     private fun render(ctm: KiteMatrix): ImageBitmap {
         val bmp = ImageBitmap(side, side)
         val s = side.toFloat()
-        CanvasDrawScope().draw(Density(1f), LayoutDirection.Ltr, Canvas(bmp), Size(s, s)) {
+        CanvasDrawScope().drawOnTestUiThread(Density(1f), LayoutDirection.Ltr, Canvas(bmp), Size(s, s)) {
             val canvas = ComposeCanvas(
                 this,
                 TextMeasurer(createFontFamilyResolver(), Density(1f), LayoutDirection.Ltr),

@@ -15,7 +15,6 @@ import androidx.compose.ui.graphics.toComposeImageBitmap
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.LayoutDirection
-import androidx.compose.ui.use
 import io.github.yuroyami.kitepdf.KitePDF
 import io.github.yuroyami.kitepdf.core.KiteRectangle
 import kotlin.math.abs
@@ -124,7 +123,7 @@ class PageOverlaySceneTest {
                         // The page fills the 400 px viewport, two pixels a point, and zooms around the centre.
                         val expected = if (zoom == 1f) Rect(180f, 170f, 260f, 210f) else Rect(150f, 125f, 350f, 225f)
                         driver.pumpUntil { px -> px.boundsOf(isBlue) != null }
-                        if (zoom != 1f) state.setZoom(zoom)
+                        if (zoom != 1f) onTestUiThread { state.setZoom(zoom) }
                         var pixels: PixelMap? = null
                         driver.pumpUntil { px -> pixels = px; px.boundsOf(isBlue)?.let { abs(it.left - expected.left) <= 1f } == true }
                         val drawn = pixels!!.boundsOf(isBlue)

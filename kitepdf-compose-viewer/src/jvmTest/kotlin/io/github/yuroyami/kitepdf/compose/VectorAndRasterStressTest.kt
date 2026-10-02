@@ -51,10 +51,10 @@ class VectorAndRasterStressTest {
 
     private val measurer = TextMeasurer(createFontFamilyResolver(), Density(1f), LayoutDirection.Ltr)
 
-    /** What KitePageVector does: a new canvas over the page, in the calling thread, without a lock. */
+    /** What KitePageVector does: a new canvas over the page, on the EDT, without a render lock. */
     private fun vectorDraw(page: KitePage): IntArray {
         val bitmap = ImageBitmap(width, height)
-        CanvasDrawScope().draw(Density(1f), LayoutDirection.Ltr, Canvas(bitmap), Size(width.toFloat(), height.toFloat())) {
+        CanvasDrawScope().drawOnTestUiThread(Density(1f), LayoutDirection.Ltr, Canvas(bitmap), Size(width.toFloat(), height.toFloat())) {
             drawRect(Color.White)
             val scale = width / page.displayWidth
             page.renderTo(ComposeCanvas(this, measurer), io.github.yuroyami.kitepdf.core.render.KiteMatrix.scaling(scale, scale).concat(page.displayToDeviceBase()))
@@ -94,7 +94,7 @@ class VectorAndRasterStressTest {
                 }
             }
             start.countDown()
-            // The test thread plays the UI thread.
+            // Vector operations marshal to the EDT while pool rasters continue.
             repeat(3) {
                 for ((i, page) in doc.pages.withIndex()) {
                     if (!vectorDraw(page).contentEquals(vectorBaseline[i])) errors += "iteration $iteration, vector draw of page $i differs"

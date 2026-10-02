@@ -5,14 +5,12 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.use
 import io.github.yuroyami.kitepdf.core.KiteDocument
 import io.github.yuroyami.kitepdf.core.KitePage
 import io.github.yuroyami.kitepdf.epub.EpubDocument
 import io.github.yuroyami.kitepdf.epub.EpubSettings
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlinx.coroutines.runBlocking
 
 /**
  * Spreads pair the pages of the whole book, so a book in `Spread` shows a chapter placeholder
@@ -112,7 +110,7 @@ class SpreadBookSceneTest {
             scene.use {
                 // The book never completes, so the spreads wait for the loader to do all it can.
                 driver.pumpUntilState { state.stripSettled }
-                runBlocking { state.scrollToPage(gap) }
+                driver.runOnUi { state.scrollToPage(gap) }
                 val half = if (gap % 2 == 0) 100 else 300
                 driver.pumpUntil { it[half, 100].let { p -> p.red > 0.8f && p.green < 0.3f } }
             }

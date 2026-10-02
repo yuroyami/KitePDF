@@ -243,6 +243,7 @@ public fun KiteDocView(
         state.selectionEnabled = selectionEnabled
         // Vectorized mode keeps no page bitmaps, so it lets go of the ones a raster mode kept (#395).
         if (renderSpec !is KiteRenderSpec.Rasterized) state.bitmapCacheFor(0L)
+        state.vectorImageCacheFor((renderSpec as? KiteRenderSpec.Vectorized)?.imageCacheBudgetBytes ?: 0L)
         // A continuous strip does not zoom out below fit: it would shrink into a band (#398).
         val floor = if (layout is KiteDocLayout.Continuous) maxOf(1f, zoomSpec.minZoom) else zoomSpec.minZoom
         state.zoomRange = floor..maxOf(floor, zoomSpec.maxZoom)
@@ -290,6 +291,7 @@ public fun KiteDocView(
     // them does not lay a dropped chapter out again on the UI thread (#377).
     LaunchedEffect(state) { snapshotFlow { state.chaptersOnScreen() }.collect { state.document.keepChapters(it) } }
     DisposableEffect(state) { onDispose { state.document.keepChapters(emptySet()) } }
+    DisposableEffect(state) { onDispose { state.vectorImageCacheFor(0L) } }
 
     // The document's own scripts: its open action once, then each page's as the reader
     // reaches it, and the timers a script set, pumped a frame at a time.
@@ -824,7 +826,10 @@ private fun PageSlotContent(
                 drawsFormLayer = drawsForm,
                 state = state,
             )
-            is KiteRenderSpec.Vectorized -> KitePageVector(page, renderSpec, colors, slot, skipWidgets = drawsForm, magnification = settledZoom)
+            is KiteRenderSpec.Vectorized -> KitePageVector(
+                page, renderSpec, colors, slot, skipWidgets = drawsForm, magnification = settledZoom,
+                imageCache = state.vectorImageCacheFor(renderSpec.imageCacheBudgetBytes),
+            )
         }
         // What a screen reader finds on the page: its text, links and fields at their places (#427).
         PageSemantics(state, page, pageIndex, Modifier.fillMaxSize())
@@ -1392,6 +1397,8 @@ private fun KitePageVector(
     skipWidgets: Boolean = false,
     /** The settled zoom the layer shows the page at, which image sampling and hairlines follow. */
     magnification: Float = 1f,
+    /** The viewer's bounded store holds bitmap pixels and non-owning image IDs, never source images. */
+    imageCache: io.github.yuroyami.kitepdf.core.render.KiteBitmapCache<ImageBitmap>? = null,
 ) {
     val textMeasurer = rememberTextMeasurer()
     val theme = colors.theme
@@ -1423,7 +1430,10 @@ private fun KitePageVector(
         // The page ends at its slot, as the bitmap's edge ends it in Rasterized mode: content
         // outside the page, such as bleed, never paints the gap or the next page (#417).
         clipRect {
-            val base = ComposeCanvas(this, textMeasurer, spec.hairlineWidthPx, skipSystemFontText = false, magnification = magnification)
+            val base = ComposeCanvas(
+                this, textMeasurer, spec.hairlineWidthPx, skipSystemFontText = false, magnification = magnification,
+                bitmaps = imageCache ?: io.github.yuroyami.kitepdf.core.render.KiteBitmapCache(),
+            )
             val themed = theme?.wrap(base) ?: base
             val target = spec.canvasDecorator?.invoke(themed) ?: themed
             failure.guard("page") {

@@ -34,6 +34,7 @@ import io.github.yuroyami.kitepdf.PdfPage
 import io.github.yuroyami.kitepdf.core.KiteRectangle
 import androidx.compose.ui.geometry.isSpecified
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.unit.IntSize
 import io.github.yuroyami.kitepdf.core.KiteBookmark
@@ -42,6 +43,7 @@ import io.github.yuroyami.kitepdf.core.KiteLocation
 import io.github.yuroyami.kitepdf.core.KitePage
 import io.github.yuroyami.kitepdf.core.KiteSearchHit
 import io.github.yuroyami.kitepdf.core.KiteStructuredText
+import io.github.yuroyami.kitepdf.core.render.KiteBitmapCache
 import io.github.yuroyami.kitepdf.core.kiteWarn
 import kotlin.coroutines.ContinuationInterceptor
 import kotlin.coroutines.CoroutineContext
@@ -1081,6 +1083,19 @@ public class KiteDocViewState(
             bitmapCacheBudget = budgetBytes
         }
         return bitmapCache
+    }
+
+    /** One converted-image budget for all vector slots, including pages recycled by the strip (#371). */
+    private var vectorImageCache: KiteBitmapCache<ImageBitmap>? = null
+    private var vectorImageCacheBudget = 0L
+
+    internal fun vectorImageCacheFor(budgetBytes: Long): KiteBitmapCache<ImageBitmap>? {
+        if (budgetBytes <= 0L || vectorImageCacheBudget != budgetBytes) {
+            vectorImageCache?.clear()
+            vectorImageCache = if (budgetBytes > 0L) KiteBitmapCache(budgetBytes) else null
+            vectorImageCacheBudget = budgetBytes.coerceAtLeast(0L)
+        }
+        return vectorImageCache
     }
 
     /* ── zoom ─────────────────────────────────────────────────────────────── */

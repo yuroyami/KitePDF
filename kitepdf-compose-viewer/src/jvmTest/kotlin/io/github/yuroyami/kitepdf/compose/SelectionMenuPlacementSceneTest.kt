@@ -3,13 +3,12 @@ package io.github.yuroyami.kitepdf.compose
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.ImageComposeScene
+import io.github.yuroyami.kitepdf.compose.EdtImageComposeScene as ImageComposeScene
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.unit.Density
-import androidx.compose.ui.use
 import io.github.yuroyami.kitepdf.KitePDF
 import io.github.yuroyami.kitepdf.writer.PdfBuilder
 import io.github.yuroyami.kitepdf.writer.StandardFont
@@ -63,9 +62,9 @@ class SelectionMenuPlacementSceneTest {
 
     /** Selects the line on page 1 at display y [y], from x 22 to x 90. */
     private fun select(state: KiteDocViewState, y: Double) {
-        state.beginSelection(assertNotNull(state.displayToViewport(0, 22.0, y)))
-        state.extendSelection(assertNotNull(state.displayToViewport(0, 90.0, y)))
-        state.endSelectionGesture()
+        onTestUiThread { state.beginSelection(assertNotNull(state.displayToViewport(0, 22.0, y))) }
+        onTestUiThread { state.extendSelection(assertNotNull(state.displayToViewport(0, 90.0, y))) }
+        onTestUiThread { state.endSelectionGesture() }
     }
 
     @Test
@@ -78,7 +77,7 @@ class SelectionMenuPlacementSceneTest {
             val below = assertNotNull(menu())
             assertTrue(below.top >= top.bottom, "the menu at $below covers the selection at $top")
 
-            state.clearSelection()
+            onTestUiThread { state.clearSelection() }
             select(state, 275.0)
             driver.pumpFrames(5)
             val bottom = assertNotNull(state.selectionBounds)
@@ -101,11 +100,11 @@ class SelectionMenuPlacementSceneTest {
     @Test
     fun a_long_press_on_a_page_without_text_takes_no_lock() {
         withMenu(alignment = null) { state, driver, _ ->
-            kotlinx.coroutines.runBlocking { state.scrollToPage(1) }
+            driver.runOnUi { state.scrollToPage(1) }
             driver.pumpUntilState { state.pageGeometry.containsKey(1) && state.currentPage == 1 }
-            state.beginSelection(assertNotNull(state.displayToViewport(1, 50.0, 250.0)))
+            onTestUiThread { state.beginSelection(assertNotNull(state.displayToViewport(1, 50.0, 250.0))) }
             assertFalse(state.isSelectionActive, "a page without text took the pan lock")
-            state.endSelectionGesture()
+            onTestUiThread { state.endSelectionGesture() }
         }
     }
 }

@@ -244,10 +244,11 @@ public sealed interface KiteRenderSpec {
      * deep-zoom crispness, and low memory.
      *
      * The page is drawn inside the Compose draw pass, on the UI thread, and it is
-     * parsed and painted again on every redraw, so a dense page can drop frames. Each
-     * draw also converts the page's images to bitmaps again, so a page of large
-     * scans, such as a comic, is better in [Rasterized], which renders off the main
-     * thread.
+     * parsed and painted again on every redraw, so a dense page can drop frames.
+     * Unchanged images reuse their converted bitmaps across draws at the same sampling
+     * size, within [imageCacheBudgetBytes]. The first conversion and cache misses still
+     * run on the UI thread. A page of large scans, such as a comic, is better in
+     * [Rasterized], which renders off the main thread.
      *
      * @param hairlineWidthPx the width in device pixels of a stroke whose line width
      *   is 0; 1 = the one device pixel of ISO 32000-1, 8.4.3.2. Other thin strokes
@@ -259,9 +260,29 @@ public sealed interface KiteRenderSpec {
         val hairlineWidthPx: Float = 1f,
         /** Wraps each live page paint pass on the UI thread. */
         val canvasDecorator: KiteCanvasDecorator? = null,
+        /**
+         * Byte budget of converted image bitmaps shared by the pages of one [KiteDocViewState].
+         * Unchanged images at the same sampling size reuse these bitmaps across draws (#371).
+         * 0 disables retention; an image larger than the budget is drawn without caching it.
+         * This does not move the first conversion off the UI thread or hold a page for loading.
+         */
+        val imageCacheBudgetBytes: Long = 16L * 1024 * 1024,
     ) : KiteRenderSpec {
+        /** Keeps the original constructor and its default arguments for existing callers. */
+        public constructor(
+            hairlineWidthPx: Float = 1f,
+            canvasDecorator: KiteCanvasDecorator? = null,
+        ) : this(hairlineWidthPx, canvasDecorator, 16L * 1024 * 1024)
+
+        /** Keeps the original copy signature while preserving this spec's image-cache budget. */
+        public fun copy(
+            hairlineWidthPx: Float = this.hairlineWidthPx,
+            canvasDecorator: KiteCanvasDecorator? = this.canvasDecorator,
+        ): Vectorized = Vectorized(hairlineWidthPx, canvasDecorator, imageCacheBudgetBytes)
+
         init {
             require(hairlineWidthPx > 0f) { "hairlineWidthPx must be > 0 (was $hairlineWidthPx)" }
+            require(imageCacheBudgetBytes >= 0L) { "imageCacheBudgetBytes must be >= 0 (was $imageCacheBudgetBytes)" }
         }
     }
 

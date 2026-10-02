@@ -34,7 +34,7 @@ class TwoCircleRasterTest {
         )
         assertNotNull(shader, "the desktop has a gradient between two circles")
         val bitmap = ImageBitmap(size, size)
-        CanvasDrawScope().draw(Density(1f), LayoutDirection.Ltr, Canvas(bitmap), Size(size.toFloat(), size.toFloat())) {
+        CanvasDrawScope().drawOnTestUiThread(Density(1f), LayoutDirection.Ltr, Canvas(bitmap), Size(size.toFloat(), size.toFloat())) {
             drawRect(ShaderBrush(shader))
         }
         return bitmap.toPixelMap()
@@ -103,7 +103,7 @@ class TwoCircleRasterTest {
         val bitmap = ImageBitmap(200, 200)
         val density = Density(1f)
         val measurer = androidx.compose.ui.text.TextMeasurer(androidx.compose.ui.text.font.createFontFamilyResolver(), density, LayoutDirection.Ltr)
-        CanvasDrawScope().draw(density, LayoutDirection.Ltr, Canvas(bitmap), Size(200f, 200f)) {
+        CanvasDrawScope().drawOnTestUiThread(density, LayoutDirection.Ltr, Canvas(bitmap), Size(200f, 200f)) {
             drawRect(Color.White)
             val canvas = if (withoutPlatformGradient) {
                 ComposeCanvas(this, measurer, 1f, false, 1f, twoCircleShader = { _, _, _, _, _, _, _, _ -> null })
@@ -135,7 +135,7 @@ class TwoCircleRasterTest {
         val bitmap = ImageBitmap(200, 200)
         val density = Density(1f)
         val measurer = androidx.compose.ui.text.TextMeasurer(androidx.compose.ui.text.font.createFontFamilyResolver(), density, LayoutDirection.Ltr)
-        CanvasDrawScope().draw(density, LayoutDirection.Ltr, Canvas(bitmap), Size(200f, 200f)) {
+        CanvasDrawScope().drawOnTestUiThread(density, LayoutDirection.Ltr, Canvas(bitmap), Size(200f, 200f)) {
             drawRect(Color.White)
             val canvas = if (withoutPlatformGradient) {
                 ComposeCanvas(this, measurer, 1f, false, 1f, twoCircleShader = { _, _, _, _, _, _, _, _ -> null })

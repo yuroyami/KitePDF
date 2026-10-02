@@ -1,7 +1,7 @@
 package io.github.yuroyami.kitepdf.compose
 
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.ui.ImageComposeScene
+import io.github.yuroyami.kitepdf.compose.EdtImageComposeScene as ImageComposeScene
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.toComposeImageBitmap
@@ -9,7 +9,6 @@ import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.PointerType
 import androidx.compose.ui.unit.Density
-import androidx.compose.ui.use
 import io.github.yuroyami.kitepdf.KitePDF
 import io.github.yuroyami.kitepdf.writer.PdfBuilder
 import io.github.yuroyami.kitepdf.writer.StandardFont
@@ -61,9 +60,9 @@ class SelectionSceneTest {
             )
 
             // Long-press on the first char of line 1, drag to the end of line 2.
-            state.beginSelection(mid(lines[0], 0) + Offset(1f, 0f))
+            onTestUiThread { state.beginSelection(mid(lines[0], 0) + Offset(1f, 0f)) }
             assertNotNull(state.selection, "long-press anchors a selection")
-            state.extendSelection(mid(lines[1], lines[1].text.length) + Offset(-1f, 0f))
+            onTestUiThread { state.extendSelection(mid(lines[1], lines[1].text.length) + Offset(-1f, 0f)) }
 
             val sel = assertNotNull(state.selection)
             assertEquals(0, sel.pageIndex)
@@ -84,7 +83,7 @@ class SelectionSceneTest {
             assertTrue(p.blue > p.red, "selection overlay tints the page ($p)")
 
             // Clearing resets state and notifies.
-            state.clearSelection()
+            onTestUiThread { state.clearSelection() }
             assertNull(state.selection)
             assertNull(changes.last())
         }
@@ -100,10 +99,10 @@ class SelectionSceneTest {
         }.use { scene ->
             SceneTestDriver(scene).pumpUntil { state.pageGeometry.isNotEmpty() }
             // Long-press on an empty page region: no crash, no selection.
-            state.beginSelection(Offset(100f, 190f))
+            onTestUiThread { state.beginSelection(Offset(100f, 190f)) }
             assertNull(state.selection)
             // Extending without an anchor is inert too.
-            state.extendSelection(Offset(50f, 60f))
+            onTestUiThread { state.extendSelection(Offset(50f, 60f)) }
             assertNull(state.selection)
         }
     }
@@ -127,10 +126,10 @@ class SelectionSceneTest {
 
             // Long press on bare paper: locked while the drag runs even though
             // no selection ever materializes, released when the drag ends.
-            state.beginSelection(Offset(100f, 190f))
+            onTestUiThread { state.beginSelection(Offset(100f, 190f)) }
             assertTrue(state.isSelectionActive, "the lock is on from the long press, before any selection exists")
             assertNull(state.selection)
-            state.endSelectionGesture()
+            onTestUiThread { state.endSelectionGesture() }
             assertFalse(state.isSelectionActive, "a gesture that anchored nothing gives pan back")
 
             // Long press on text: locked, and it survives the finger lifting.
@@ -139,13 +138,13 @@ class SelectionSceneTest {
                 (line.charEdges[0] + 1).toFloat(),
                 ((line.bounds.bottom + line.bounds.top) / 2).toFloat(),
             )
-            state.beginSelection(onText)
+            onTestUiThread { state.beginSelection(onText) }
             assertNotNull(state.selection)
             assertTrue(state.isSelectionActive)
-            state.endSelectionGesture()
+            onTestUiThread { state.endSelectionGesture() }
             assertTrue(state.isSelectionActive, "the page stays put while the selection is on screen")
 
-            state.clearSelection()
+            onTestUiThread { state.clearSelection() }
             assertFalse(state.isSelectionActive, "clearing the selection gives pan back")
         }
     }
@@ -172,22 +171,22 @@ class SelectionSceneTest {
                 (line.charEdges[0] + 1).toFloat(),
                 ((line.bounds.bottom + line.bounds.top) / 2).toFloat(),
             )
-            state.beginSelection(onText)
+            onTestUiThread { state.beginSelection(onText) }
             assertTrue(state.selectionInProgress, "in progress from the long press")
             assertNotNull(state.selection)
 
-            state.endSelectionGesture()
+            onTestUiThread { state.endSelectionGesture() }
             assertFalse(state.selectionInProgress, "the lift ends the drag")
             assertTrue(state.isSelectionActive, "but the selection lock stays for the menu")
             assertNotNull(state.selection)
 
             // A fresh drag over the same selection goes back into progress.
-            state.beginSelection(onText)
+            onTestUiThread { state.beginSelection(onText) }
             assertTrue(state.selectionInProgress)
-            state.endSelectionGesture()
+            onTestUiThread { state.endSelectionGesture() }
             assertFalse(state.selectionInProgress)
 
-            state.clearSelection()
+            onTestUiThread { state.clearSelection() }
             assertFalse(state.selectionInProgress)
         }
     }
@@ -207,7 +206,7 @@ class SelectionSceneTest {
             val driver = SceneTestDriver(scene)
             driver.pumpUntil { state.pageGeometry.isNotEmpty() }
             // One-finger pan only engages while zoomed in.
-            state.setZoom(2f)
+            onTestUiThread { state.setZoom(2f) }
             driver.pumpFrames(2)
 
             /**
@@ -231,17 +230,17 @@ class SelectionSceneTest {
             assertTrue(free.y < -1f, "a plain one-finger drag pans the zoomed page (got $free)")
 
             val line = doc.pages[0].textContent().blocks.first().lines.first()
-            state.beginSelection(
+            onTestUiThread { state.beginSelection(
                 Offset(
                     (line.charEdges[0] + 1).toFloat(),
                     ((line.bounds.bottom + line.bounds.top) / 2).toFloat(),
                 ),
-            )
+            ) }
             assertTrue(state.isSelectionActive)
             val locked = dragUp()
             assertEquals(Offset.Zero, locked, "the page must not pan under an active selection (got $locked)")
 
-            state.clearSelection()
+            onTestUiThread { state.clearSelection() }
             driver.pumpFrames(2)
             val again = dragUp()
             assertTrue(again.y < -1f, "clearing the selection restores panning (got $again)")
@@ -295,7 +294,7 @@ class SelectionSceneTest {
 
             // A long press on the line locks the strip. A page without text no longer locks (#408),
             // so the fixture has a line to select.
-            state.beginSelection(Offset(20f, 96f))
+            onTestUiThread { state.beginSelection(Offset(20f, 96f)) }
             assertTrue(state.isSelectionActive)
             dragUp()
             val locked = driver.pumpFrames(40).toComposeImageBitmap().toPixelMap()
@@ -305,7 +304,7 @@ class SelectionSceneTest {
             )
             assertEquals(0, state.currentPage)
 
-            state.clearSelection()
+            onTestUiThread { state.clearSelection() }
             driver.pumpFrames(2)
             dragUp()
             val free = driver.pumpUntil { px -> px[100, 190].blue > 0.8f }.toComposeImageBitmap().toPixelMap()

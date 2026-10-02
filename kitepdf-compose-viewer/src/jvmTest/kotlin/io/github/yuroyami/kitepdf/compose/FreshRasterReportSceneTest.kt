@@ -4,9 +4,8 @@ import androidx.compose.runtime.RememberObserver
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.ui.ImageComposeScene
+import io.github.yuroyami.kitepdf.compose.EdtImageComposeScene as ImageComposeScene
 import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.use
 import kotlin.test.Test
 import kotlin.test.assertEquals
 

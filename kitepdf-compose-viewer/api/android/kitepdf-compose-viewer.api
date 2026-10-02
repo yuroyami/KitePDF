@@ -348,6 +348,8 @@ public final class io/github/yuroyami/kitepdf/compose/KitePageRasterizer {
 	public static synthetic fun rasterize-ww6aTOc$default (Lio/github/yuroyami/kitepdf/compose/KitePageRasterizer;Lio/github/yuroyami/kitepdf/core/KitePage;IIJFLio/github/yuroyami/kitepdf/core/render/ReaderTheme;Lkotlin/jvm/functions/Function1;ILjava/lang/Object;)Landroidx/compose/ui/graphics/ImageBitmap;
 	public final fun rasterize-yrwZFoE (Lio/github/yuroyami/kitepdf/core/KitePage;IILio/github/yuroyami/kitepdf/PdfFormState;JFLio/github/yuroyami/kitepdf/core/render/ReaderTheme;Lkotlin/jvm/functions/Function1;)Landroidx/compose/ui/graphics/ImageBitmap;
 	public static synthetic fun rasterize-yrwZFoE$default (Lio/github/yuroyami/kitepdf/compose/KitePageRasterizer;Lio/github/yuroyami/kitepdf/core/KitePage;IILio/github/yuroyami/kitepdf/PdfFormState;JFLio/github/yuroyami/kitepdf/core/render/ReaderTheme;Lkotlin/jvm/functions/Function1;ILjava/lang/Object;)Landroidx/compose/ui/graphics/ImageBitmap;
+	public final fun rasterizeOffMain-FHprtrg (Lio/github/yuroyami/kitepdf/core/KitePage;IILio/github/yuroyami/kitepdf/PdfFormState;JFLio/github/yuroyami/kitepdf/core/render/ReaderTheme;Lkotlin/jvm/functions/Function1;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static synthetic fun rasterizeOffMain-FHprtrg$default (Lio/github/yuroyami/kitepdf/compose/KitePageRasterizer;Lio/github/yuroyami/kitepdf/core/KitePage;IILio/github/yuroyami/kitepdf/PdfFormState;JFLio/github/yuroyami/kitepdf/core/render/ReaderTheme;Lkotlin/jvm/functions/Function1;Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
 	public final fun rasterizeOffMain-uDo3WH8 (Lio/github/yuroyami/kitepdf/core/KitePage;IIJFLio/github/yuroyami/kitepdf/core/render/ReaderTheme;Lkotlin/jvm/functions/Function1;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public static synthetic fun rasterizeOffMain-uDo3WH8$default (Lio/github/yuroyami/kitepdf/compose/KitePageRasterizer;Lio/github/yuroyami/kitepdf/core/KitePage;IIJFLio/github/yuroyami/kitepdf/core/render/ReaderTheme;Lkotlin/jvm/functions/Function1;Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
 	public final fun rasterizeOffMain-ww6aTOc (Lio/github/yuroyami/kitepdf/core/KitePage;IIJFLio/github/yuroyami/kitepdf/core/render/ReaderTheme;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
@@ -405,13 +407,19 @@ public final class io/github/yuroyami/kitepdf/compose/KiteRenderSpec$Vectorized 
 	public fun <init> ()V
 	public fun <init> (FLkotlin/jvm/functions/Function1;)V
 	public synthetic fun <init> (FLkotlin/jvm/functions/Function1;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun <init> (FLkotlin/jvm/functions/Function1;J)V
+	public synthetic fun <init> (FLkotlin/jvm/functions/Function1;JILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public final fun component1 ()F
 	public final fun component2 ()Lkotlin/jvm/functions/Function1;
+	public final fun component3 ()J
 	public final fun copy (FLkotlin/jvm/functions/Function1;)Lio/github/yuroyami/kitepdf/compose/KiteRenderSpec$Vectorized;
+	public final fun copy (FLkotlin/jvm/functions/Function1;J)Lio/github/yuroyami/kitepdf/compose/KiteRenderSpec$Vectorized;
 	public static synthetic fun copy$default (Lio/github/yuroyami/kitepdf/compose/KiteRenderSpec$Vectorized;FLkotlin/jvm/functions/Function1;ILjava/lang/Object;)Lio/github/yuroyami/kitepdf/compose/KiteRenderSpec$Vectorized;
+	public static synthetic fun copy$default (Lio/github/yuroyami/kitepdf/compose/KiteRenderSpec$Vectorized;FLkotlin/jvm/functions/Function1;JILjava/lang/Object;)Lio/github/yuroyami/kitepdf/compose/KiteRenderSpec$Vectorized;
 	public fun equals (Ljava/lang/Object;)Z
 	public final fun getCanvasDecorator ()Lkotlin/jvm/functions/Function1;
 	public final fun getHairlineWidthPx ()F
+	public final fun getImageCacheBudgetBytes ()J
 	public fun hashCode ()I
 	public fun toString ()Ljava/lang/String;
 }

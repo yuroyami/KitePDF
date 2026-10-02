@@ -37,7 +37,7 @@ class BlendFallbackTest {
     /** A 20 x 10 page: white, black on its left half, and a yellow highlight over all of it in [mode]. */
     private fun highlight(mode: BlendMode): List<Color> {
         val bitmap = ImageBitmap(20, 10)
-        CanvasDrawScope().draw(Density(1f), LayoutDirection.Ltr, Canvas(bitmap), Size(20f, 10f)) {
+        CanvasDrawScope().drawOnTestUiThread(Density(1f), LayoutDirection.Ltr, Canvas(bitmap), Size(20f, 10f)) {
             drawRect(Color.White)
             drawRect(Color.Black, size = Size(10f, 10f))
             drawRect(Color.Yellow, topLeft = Offset.Zero, size = size, blendMode = mode)

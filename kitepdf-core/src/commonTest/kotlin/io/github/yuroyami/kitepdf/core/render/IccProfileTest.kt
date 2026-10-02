@@ -4,6 +4,7 @@ import kotlin.math.pow
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
+import kotlin.test.assertNotEquals
 import kotlin.test.assertNull
 import kotlin.test.assertSame
 import kotlin.test.assertTrue
@@ -259,6 +260,34 @@ class IccProfileTest {
         val state = GraphicsState(fillColorSpace = icc, fillColor = icc.toRgb(k), fillComponents = k)
             .withColorRendering(KiteRenderingIntent.Perceptual, blackPointCompensation = false)
         assertEquals(perceptual.toRgb(k), state.fillColor)
+    }
+
+    @Test
+    fun reconstructed_images_share_only_the_same_intent_and_black_point_variant() {
+        val identity = KiteImageIdentity().child("image")
+        fun image() = KiteImageData(
+            1, 1, 8, "ICCBased", KiteImageData.Kind.RAW, ByteArray(0),
+            pixelBytes = byteArrayOf(0, 0, 0, -1),
+            resolvedColorSpace = KiteColorSpace.IccBased(IccProfile.parse(intentCmyk())!!),
+        ).withIdentity(identity)
+        val cache = KiteBitmapCache<ByteArray>()
+        val sampling = imageSampling(1, 1, KiteMatrix.IDENTITY, false)
+        var builds = 0
+        fun pixels(image: KiteImageData): ByteArray? = cache.getOrPut(image, sampling, { it.size.toLong() }) {
+            builds++
+            image.toRgbaBytes()
+        }
+        val perceptual = image().withIntent(KiteRenderingIntent.Perceptual, false)
+        val first = assertNotNull(pixels(perceptual))
+        assertSame(first, pixels(image().withIntent(KiteRenderingIntent.Perceptual, false)))
+        assertEquals(1, builds, "reconstruction must preserve a matching colour conversion")
+        val relative = assertNotNull(pixels(image().withIntent(KiteRenderingIntent.RelativeColorimetric, false)))
+        val compensated = assertNotNull(pixels(image().withIntent(KiteRenderingIntent.Perceptual, true)))
+        assertEquals(3, builds)
+        assertNotEquals(first.toList(), relative.toList(), "different ICC tables must paint differently")
+        assertNotEquals(first.toList(), compensated.toList(), "black point compensation must change these pixels")
+        assertNotEquals(identity.child("intent:0:false"), perceptual.bitmapIdentity,
+            "public resource names cannot collide with internal variants")
     }
 
     @Test

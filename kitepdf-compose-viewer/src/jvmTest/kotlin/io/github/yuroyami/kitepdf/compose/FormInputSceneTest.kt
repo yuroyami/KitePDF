@@ -6,7 +6,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.ui.ImageComposeScene
+import io.github.yuroyami.kitepdf.compose.EdtImageComposeScene as ImageComposeScene
 import androidx.compose.ui.InternalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -23,7 +23,6 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.use
 import io.github.yuroyami.kitepdf.PdfDocument
 import io.github.yuroyami.kitepdf.PdfFormState
 import io.github.yuroyami.kitepdf.PdfScriptHandler
@@ -103,12 +102,12 @@ class FormInputSceneTest {
     }
 
     /** The text input that has the focus, or null. */
-    private fun focusedInput(scene: ImageComposeScene): SemanticsNode? {
+    private fun focusedInput(scene: ImageComposeScene): SemanticsNode? = onTestUiThread {
         fun walk(node: SemanticsNode): SemanticsNode? {
             if (node.config.getOrNull(SemanticsProperties.Focused) == true && node.config.getOrNull(SemanticsProperties.EditableText) != null) return node
             return node.children.firstNotNullOfOrNull { walk(it) }
         }
-        return scene.semanticsOwners.firstNotNullOfOrNull { walk(it.unmergedRootSemanticsNode) }
+        return@onTestUiThread scene.semanticsOwners.firstNotNullOfOrNull { walk(it.unmergedRootSemanticsNode) }
     }
 
     /** A 200 x 200 viewer of [doc] on its first page, with a stand-in for the scripts. */

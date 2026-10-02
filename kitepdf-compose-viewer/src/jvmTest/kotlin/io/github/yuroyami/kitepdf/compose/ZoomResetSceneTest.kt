@@ -2,9 +2,7 @@ package io.github.yuroyami.kitepdf.compose
 
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.use
 import io.github.yuroyami.kitepdf.PdfDocument
-import kotlinx.coroutines.runBlocking
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
@@ -39,7 +37,7 @@ class ZoomResetSceneTest {
             forBothEffectOrders { queued ->
                 val doc = PdfDocument.open(pagesPdf(6))
                 val state = KiteDocViewState(doc)
-                state.setZoom(2f)
+                onTestUiThread { state.setZoom(2f) }
                 val width = if (layout is KiteDocLayout.Spread) 400 else 200
                 val (scene, driver) = drivenScene(width, 200, queued) {
                     KiteDocView(state = state, modifier = Modifier.fillMaxSize(), layout = layout)
@@ -50,7 +48,7 @@ class ZoomResetSceneTest {
                     driver.pumpFrames(10)
                     assertEquals(2f, state.zoom, "$name: the zoom was reset as the pager appeared")
                     // Between frames, as an app's main thread runs it.
-                    runBlocking { state.scrollToPage(4) }
+                    driver.runOnUi { state.scrollToPage(4) }
                     driver.pumpUntilState { state.zoom == 1f }
                 }
             }

@@ -2,7 +2,7 @@ package io.github.yuroyami.kitepdf.compose
 
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.ui.ImageComposeScene
+import io.github.yuroyami.kitepdf.compose.EdtImageComposeScene as ImageComposeScene
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.pointer.PointerEventType
@@ -10,7 +10,6 @@ import androidx.compose.ui.input.pointer.PointerType
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
-import androidx.compose.ui.use
 import io.github.yuroyami.kitepdf.PdfDocument
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -61,7 +60,7 @@ class ZoomedPanSceneTest {
         }.use { scene ->
             val driver = SceneTestDriver(scene)
             driver.pumpUntilState { state.pageGeometry.isNotEmpty() }
-            state.setZoom(3f)
+            onTestUiThread { state.setZoom(3f) }
             driver.pumpFrames(5)
             block(scene, state, driver)
         }

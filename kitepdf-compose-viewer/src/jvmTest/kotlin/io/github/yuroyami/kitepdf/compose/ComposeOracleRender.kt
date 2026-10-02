@@ -26,7 +26,7 @@ internal fun renderWithCompose(bytes: ByteArray): BufferedImage {
     val bmp = ImageBitmap(w, h)
     val density = Density(1f)
     val tm = TextMeasurer(createFontFamilyResolver(), density, LayoutDirection.Ltr)
-    CanvasDrawScope().draw(density, LayoutDirection.Ltr, Canvas(bmp), Size(w.toFloat(), h.toFloat())) {
+    CanvasDrawScope().drawOnTestUiThread(density, LayoutDirection.Ltr, Canvas(bmp), Size(w.toFloat(), h.toFloat())) {
         drawRect(Color.White, size = size)
         page.renderTo(ComposeCanvas(this, tm), KiteMatrix(1.0, 0.0, 0.0, -1.0, 0.0, h.toDouble()))
     }

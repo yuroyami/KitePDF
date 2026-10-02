@@ -1,16 +1,14 @@
 package io.github.yuroyami.kitepdf.compose
 
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.ui.ImageComposeScene
+import io.github.yuroyami.kitepdf.compose.EdtImageComposeScene as ImageComposeScene
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.PixelMap
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.PointerType
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.use
 import io.github.yuroyami.kitepdf.PdfDocument
-import kotlinx.coroutines.runBlocking
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -79,8 +77,8 @@ class StripEndsSceneTest {
             }
             scene.use {
                 driver.pumpUntil { red(it, 25) }
-                state.setZoom(2f)
-                runBlocking { state.scrollToPage(0) }
+                onTestUiThread { state.setZoom(2f) }
+                driver.runOnUi { state.scrollToPage(0) }
                 // At zoom 2 the first page's top band sits 300 px above the viewport.
                 driver.pumpUntil { !red(it, 50) }
 
@@ -97,7 +95,7 @@ class StripEndsSceneTest {
                 assertEquals(0, state.currentPage)
 
                 // At the end of the list, an upward drag spends the pan and then reaches the last band.
-                runBlocking { state.scrollToPage(2) }
+                driver.runOnUi { state.scrollToPage(2) }
                 driver.pumpFrames(10)
                 drag(scene, driver, from = 550f, to = 50f)
                 assertEquals(-300f, state.panOffset.y, 1f)

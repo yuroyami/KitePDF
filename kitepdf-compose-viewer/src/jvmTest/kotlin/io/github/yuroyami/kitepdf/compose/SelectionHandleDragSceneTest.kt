@@ -1,13 +1,12 @@
 package io.github.yuroyami.kitepdf.compose
 
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.ui.ImageComposeScene
+import io.github.yuroyami.kitepdf.compose.EdtImageComposeScene as ImageComposeScene
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.PointerType
 import androidx.compose.ui.unit.Density
-import androidx.compose.ui.use
 import io.github.yuroyami.kitepdf.KitePDF
 import io.github.yuroyami.kitepdf.core.KiteTextLine
 import io.github.yuroyami.kitepdf.writer.PdfBuilder
@@ -64,9 +63,9 @@ class SelectionHandleDragSceneTest {
 
     /** Long-press-drags a selection over the whole of the first line. */
     private fun selectFirstLine(state: KiteDocViewState, line: KiteTextLine) {
-        state.beginSelection(charPoint(line, 0))
-        state.extendSelection(charPoint(line, line.text.length - 1))
-        state.endSelectionGesture()
+        onTestUiThread { state.beginSelection(charPoint(line, 0)) }
+        onTestUiThread { state.extendSelection(charPoint(line, line.text.length - 1)) }
+        onTestUiThread { state.endSelectionGesture() }
         assertEquals(line.text, assertNotNull(state.selection).text)
     }
 
@@ -101,8 +100,8 @@ class SelectionHandleDragSceneTest {
 
             state.beginHandleDrag(KiteSelectionHandleEdge.Start)
             assertTrue(state.selectionInProgress, "grabbing a thumb starts a drag")
-            state.extendSelection(charPoint(line, 6))
-            state.endSelectionGesture()
+            onTestUiThread { state.extendSelection(charPoint(line, 6)) }
+            onTestUiThread { state.endSelectionGesture() }
 
             assertEquals("world", assertNotNull(state.selection).text, "the start moved, the end stayed")
             assertFalse(state.selectionInProgress)
@@ -118,8 +117,8 @@ class SelectionHandleDragSceneTest {
             selectFirstLine(state, line)
 
             state.beginHandleDrag(KiteSelectionHandleEdge.End)
-            state.extendSelection(charPoint(line, 4))
-            state.endSelectionGesture()
+            onTestUiThread { state.extendSelection(charPoint(line, 4)) }
+            onTestUiThread { state.endSelectionGesture() }
 
             assertEquals("hello", assertNotNull(state.selection).text)
         }
@@ -135,8 +134,8 @@ class SelectionHandleDragSceneTest {
             // Grab the START thumb and haul it past the end of the selection,
             // down onto the second line: the old end becomes the new start.
             state.beginHandleDrag(KiteSelectionHandleEdge.Start)
-            state.extendSelection(charPoint(second, 5))
-            state.endSelectionGesture()
+            onTestUiThread { state.extendSelection(charPoint(second, 5)) }
+            onTestUiThread { state.endSelectionGesture() }
 
             val sel = assertNotNull(state.selection)
             assertEquals("d\nsecond", sel.text, "the ends swapped instead of collapsing")
@@ -152,9 +151,9 @@ class SelectionHandleDragSceneTest {
             selectFirstLine(state, line)
 
             state.beginHandleDrag(KiteSelectionHandleEdge.End)
-            state.extendSelection(charPoint(line, 4))
-            state.extendSelection(Offset(190f, 195f)) // bare paper, below both lines
-            state.endSelectionGesture()
+            onTestUiThread { state.extendSelection(charPoint(line, 4)) }
+            onTestUiThread { state.extendSelection(Offset(190f, 195f)) } // bare paper, below both lines
+            onTestUiThread { state.endSelectionGesture() }
 
             assertEquals("hello", assertNotNull(state.selection).text, "an off-text drag point changes nothing")
         }

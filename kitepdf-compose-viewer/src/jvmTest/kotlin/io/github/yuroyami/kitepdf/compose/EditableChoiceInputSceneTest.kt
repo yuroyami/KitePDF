@@ -1,7 +1,7 @@
 package io.github.yuroyami.kitepdf.compose
 
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.ui.ImageComposeScene
+import io.github.yuroyami.kitepdf.compose.EdtImageComposeScene as ImageComposeScene
 import androidx.compose.ui.InternalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Rect
@@ -11,7 +11,6 @@ import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.semantics.SemanticsNode
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
-import androidx.compose.ui.use
 import io.github.yuroyami.kitepdf.PdfChoiceSelection
 import io.github.yuroyami.kitepdf.PdfDocument
 import io.github.yuroyami.kitepdf.PdfFormState
@@ -70,12 +69,12 @@ class EditableChoiceInputSceneTest {
         override fun blur(fieldName: String) { blurred.countDown() }
     }
 
-    private fun input(scene: ImageComposeScene): SemanticsNode? {
+    private fun input(scene: ImageComposeScene): SemanticsNode? = onTestUiThread {
         fun walk(node: SemanticsNode): SemanticsNode? {
             if (node.config.getOrNull(SemanticsProperties.Focused) == true && node.config.getOrNull(SemanticsProperties.EditableText) != null) return node
             return node.children.firstNotNullOfOrNull(::walk)
         }
-        return scene.semanticsOwners.firstNotNullOfOrNull { walk(it.unmergedRootSemanticsNode) }
+        return@onTestUiThread scene.semanticsOwners.firstNotNullOfOrNull { walk(it.unmergedRootSemanticsNode) }
     }
 
     @OptIn(InternalComposeUiApi::class)
@@ -85,7 +84,7 @@ class EditableChoiceInputSceneTest {
     }
 
     private fun open(state: KiteDocViewState, widget: Int) {
-        state.openChoice("choice", widget, KiteDocViewState.WidgetBox(0, if (widget == 0) Rect(20f, 20f, 180f, 60f) else Rect(20f, 100f, 180f, 140f)))
+        onTestUiThread { state.openChoice("choice", widget, KiteDocViewState.WidgetBox(0, if (widget == 0) Rect(20f, 20f, 180f, 60f) else Rect(20f, 100f, 180f, 140f))) }
     }
 
     @Test
@@ -104,7 +103,7 @@ class EditableChoiceInputSceneTest {
             assertEquals("Small", input(scene)!!.config[SemanticsProperties.EditableText].text)
             type(scene, 'e')
             driver.pumpUntilState { scripts.formState.value("choice") == "Smalle" }
-            state.dismissChoice(commit = false)
+            onTestUiThread { state.dismissChoice(commit = false) }
             driver.pumpUntilState { scripts.formState.choiceSelection("choice") == PdfChoiceSelection(listOf(0)) }
             assertTrue(scripts.commits.isEmpty(), "Escape must not commit typed text")
         }
@@ -127,7 +126,7 @@ class EditableChoiceInputSceneTest {
                 type(scene, 'x')
                 driver.pumpUntilState { scripts.entered.count == 0L }
                 type(scene, 'y')
-                state.dismissChoice()
+                onTestUiThread { state.dismissChoice() }
                 scripts.release.countDown()
                 driver.pumpUntilState { scripts.commits.isNotEmpty() }
                 assertEquals(listOf("x", "y"), scripts.keys.toList(), "the in-flight key must not run twice")
@@ -153,7 +152,7 @@ class EditableChoiceInputSceneTest {
                 driver.pumpUntilState { input(scene) != null }
                 type(scene, 'x')
                 driver.pumpUntilState { scripts.entered.count == 0L }
-                state.dismissChoice(commit = false)
+                onTestUiThread { state.dismissChoice(commit = false) }
                 scripts.release.countDown()
                 driver.pumpUntilState { scripts.blurred.count == 0L }
                 driver.pumpFrames(2)
@@ -194,9 +193,9 @@ class EditableChoiceInputSceneTest {
                 driver.pumpUntilState { state.pageGeometry.isNotEmpty() }
                 open(state, 0)
                 driver.pumpUntilState { input(scene) != null }
-                state.chooseChoice(PdfChoiceSelection(listOf(1)))
+                onTestUiThread { state.chooseChoice(PdfChoiceSelection(listOf(1))) }
                 driver.pumpUntilState { entered.count == 0L }
-                state.dismissChoice(commit = false)
+                onTestUiThread { state.dismissChoice(commit = false) }
                 release.countDown()
                 driver.pumpUntilState { blurred.count == 0L }
                 assertEquals(false, accepted.get(), "Escape invalidates the revision captured before final validation")

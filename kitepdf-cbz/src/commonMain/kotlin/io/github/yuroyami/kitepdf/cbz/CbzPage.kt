@@ -4,6 +4,7 @@ import io.github.yuroyami.kitepdf.core.KiteCancellation
 import io.github.yuroyami.kitepdf.core.KitePage
 import io.github.yuroyami.kitepdf.core.render.KiteCanvas
 import io.github.yuroyami.kitepdf.core.render.KiteImageData
+import io.github.yuroyami.kitepdf.core.render.KiteImageIdentity
 import io.github.yuroyami.kitepdf.core.render.KiteMatrix
 import io.github.yuroyami.kitepdf.core.render.KitePath
 import io.github.yuroyami.kitepdf.core.render.RgbColor
@@ -20,6 +21,8 @@ public class CbzPage internal constructor(
     private val readHeader: () -> ByteArray? = readEntry,
     /** The comic's decoded scans, so a page drawn again does not decode again. */
     private val decoded: CbzImageCache? = null,
+    /** The immutable archive entry, kept distinct from entries of every other comic (#371). */
+    private val imageIdentity: KiteImageIdentity = KiteImageIdentity(),
 ) : KitePage {
 
     /** Stands in when neither the header nor a full decode yields a size. */
@@ -54,7 +57,8 @@ public class CbzPage internal constructor(
                 canvas.endPage()
                 return
             }
-            bytes?.let { KiteImageData.fromEncodedImage(it) }?.also { decoded?.put(entryName, it) }
+            bytes?.let { KiteImageData.fromEncodedImage(it) }?.withIdentity(imageIdentity)
+                ?.also { decoded?.put(entryName, it) }
         }
         if (image == null) {
             // A page that cannot decode shows a grey sheet rather than nothing (#129).

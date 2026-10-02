@@ -3,7 +3,6 @@ package io.github.yuroyami.kitepdf.compose
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.PixelMap
-import androidx.compose.ui.use
 import io.github.yuroyami.kitepdf.PdfDocument
 import kotlin.test.Test
 
@@ -46,7 +45,7 @@ class VectorZoomSceneTest {
         }
         scene.use {
             driver.pumpUntil(check = drawn)
-            state.setZoom(8f)
+            onTestUiThread { state.setZoom(8f) }
             driver.pumpUntil(check = zoomed)
         }
     }

@@ -2,7 +2,6 @@ package io.github.yuroyami.kitepdf.compose
 
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.use
 import io.github.yuroyami.kitepdf.PdfDocument
 import java.util.Collections
 import kotlin.test.Test
@@ -55,7 +54,7 @@ class ZoomedRasterSceneTest {
                 driver.pumpFrames(10)
                 rendered.clear()
                 // Zoom 8 about the centre: the reader sees the middle of page 1 only.
-                state.setZoom(8f)
+                onTestUiThread { state.setZoom(8f) }
                 driver.pumpUntilState { rendered.any { it.second > 400 } }
                 Thread.sleep(500)
                 driver.pumpFrames(30)

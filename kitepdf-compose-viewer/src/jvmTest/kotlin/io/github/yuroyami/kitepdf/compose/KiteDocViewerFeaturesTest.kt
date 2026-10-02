@@ -7,7 +7,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshots.Snapshot
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.ImageComposeScene
+import io.github.yuroyami.kitepdf.compose.EdtImageComposeScene as ImageComposeScene
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asSkiaBitmap
 import androidx.compose.ui.graphics.toComposeImageBitmap
@@ -16,7 +16,6 @@ import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.font.createFontFamilyResolver
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
-import androidx.compose.ui.use
 import io.github.yuroyami.kitepdf.KitePDF
 import io.github.yuroyami.kitepdf.writer.PdfBuilder
 import kotlin.test.Test
@@ -124,7 +123,7 @@ class KiteDocViewerFeaturesTest {
         // 4× supersample of a 200px-wide on-screen box. The ink of a line is 255 minus the
         // red channel, summed down one column across it, so a solid pixel row is 255.
         fun ink(hairlineWidthPx: Float, centreY: Int): Int {
-            val sk = rasterizer.rasterize(page, 800, 800, hairlineWidthPx = hairlineWidthPx).asSkiaBitmap()
+            val sk = onTestUiThread { rasterizer.rasterize(page, 800, 800, hairlineWidthPx = hairlineWidthPx) }.asSkiaBitmap()
             return (centreY - 20..centreY + 20).sumOf { 255 - ((sk.getColor(400, it) shr 16) and 0xFF) }
         }
 

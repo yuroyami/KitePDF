@@ -223,6 +223,7 @@ final class <#A: kotlin/Any> io.github.yuroyami.kitepdf.core.render/KiteBitmapCa
     final val heldBytes // io.github.yuroyami.kitepdf.core.render/KiteBitmapCache.heldBytes|{}heldBytes[0]
         final fun <get-heldBytes>(): kotlin/Long // io.github.yuroyami.kitepdf.core.render/KiteBitmapCache.heldBytes.<get-heldBytes>|<get-heldBytes>(){}[0]
 
+    final fun clear() // io.github.yuroyami.kitepdf.core.render/KiteBitmapCache.clear|clear(){}[0]
     final fun getOrPut(io.github.yuroyami.kitepdf.core.render/KiteImageData, io.github.yuroyami.kitepdf.core.render/KiteImageSampling, kotlin/Function1<#A, kotlin/Long>, kotlin/Function0<#A?>): #A? // io.github.yuroyami.kitepdf.core.render/KiteBitmapCache.getOrPut|getOrPut(io.github.yuroyami.kitepdf.core.render.KiteImageData;io.github.yuroyami.kitepdf.core.render.KiteImageSampling;kotlin.Function1<1:0,kotlin.Long>;kotlin.Function0<1:0?>){}[0]
 
     final object Companion { // io.github.yuroyami.kitepdf.core.render/KiteBitmapCache.Companion|null[0]
@@ -1129,6 +1130,7 @@ final class io.github.yuroyami.kitepdf.core.render/KiteImageData { // io.github.
         final fun <get-width>(): kotlin/Int // io.github.yuroyami.kitepdf.core.render/KiteImageData.width.<get-width>|<get-width>(){}[0]
 
     final fun retainedBytes(): kotlin/Long // io.github.yuroyami.kitepdf.core.render/KiteImageData.retainedBytes|retainedBytes(){}[0]
+    final fun withIdentity(io.github.yuroyami.kitepdf.core.render/KiteImageIdentity): io.github.yuroyami.kitepdf.core.render/KiteImageData // io.github.yuroyami.kitepdf.core.render/KiteImageData.withIdentity|withIdentity(io.github.yuroyami.kitepdf.core.render.KiteImageIdentity){}[0]
     final fun withIntent(io.github.yuroyami.kitepdf.core.render/KiteRenderingIntent, kotlin/Boolean = ...): io.github.yuroyami.kitepdf.core.render/KiteImageData // io.github.yuroyami.kitepdf.core.render/KiteImageData.withIntent|withIntent(io.github.yuroyami.kitepdf.core.render.KiteRenderingIntent;kotlin.Boolean){}[0]
 
     final enum class Kind : kotlin/Enum<io.github.yuroyami.kitepdf.core.render/KiteImageData.Kind> { // io.github.yuroyami.kitepdf.core.render/KiteImageData.Kind|null[0]
@@ -1151,6 +1153,14 @@ final class io.github.yuroyami.kitepdf.core.render/KiteImageData { // io.github.
         final fun from(io.github.yuroyami.kitepdf.core.parser/PdfStream, io.github.yuroyami.kitepdf.core.parser/IndirectResolver?, io.github.yuroyami.kitepdf.core.render/RgbColor?, io.github.yuroyami.kitepdf.core.render/KiteColorSpace?): io.github.yuroyami.kitepdf.core.render/KiteImageData // io.github.yuroyami.kitepdf.core.render/KiteImageData.Companion.from|from(io.github.yuroyami.kitepdf.core.parser.PdfStream;io.github.yuroyami.kitepdf.core.parser.IndirectResolver?;io.github.yuroyami.kitepdf.core.render.RgbColor?;io.github.yuroyami.kitepdf.core.render.KiteColorSpace?){}[0]
         final fun fromEncodedImage(kotlin/ByteArray): io.github.yuroyami.kitepdf.core.render/KiteImageData? // io.github.yuroyami.kitepdf.core.render/KiteImageData.Companion.fromEncodedImage|fromEncodedImage(kotlin.ByteArray){}[0]
     }
+}
+
+final class io.github.yuroyami.kitepdf.core.render/KiteImageIdentity { // io.github.yuroyami.kitepdf.core.render/KiteImageIdentity|null[0]
+    constructor <init>() // io.github.yuroyami.kitepdf.core.render/KiteImageIdentity.<init>|<init>(){}[0]
+
+    final fun child(kotlin/String): io.github.yuroyami.kitepdf.core.render/KiteImageIdentity // io.github.yuroyami.kitepdf.core.render/KiteImageIdentity.child|child(kotlin.String){}[0]
+    final fun equals(kotlin/Any?): kotlin/Boolean // io.github.yuroyami.kitepdf.core.render/KiteImageIdentity.equals|equals(kotlin.Any?){}[0]
+    final fun hashCode(): kotlin/Int // io.github.yuroyami.kitepdf.core.render/KiteImageIdentity.hashCode|hashCode(){}[0]
 }
 
 final class io.github.yuroyami.kitepdf.core.render/KiteImageSampling { // io.github.yuroyami.kitepdf.core.render/KiteImageSampling|null[0]

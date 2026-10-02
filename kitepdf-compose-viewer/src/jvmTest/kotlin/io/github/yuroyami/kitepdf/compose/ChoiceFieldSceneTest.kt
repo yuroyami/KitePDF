@@ -4,7 +4,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.ImageComposeScene
+import io.github.yuroyami.kitepdf.compose.EdtImageComposeScene as ImageComposeScene
 import androidx.compose.ui.InternalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -19,7 +19,6 @@ import androidx.compose.ui.semantics.SemanticsNode
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
-import androidx.compose.ui.use
 import androidx.compose.ui.text.AnnotatedString
 import io.github.yuroyami.kitepdf.PdfChoiceSelection
 import io.github.yuroyami.kitepdf.PdfDocument
@@ -106,9 +105,9 @@ class ChoiceFieldSceneTest {
         return Viewer(scene, driver) { state }
     }
 
-    private fun nodes(scene: ImageComposeScene): List<SemanticsNode> {
+    private fun nodes(scene: ImageComposeScene): List<SemanticsNode> = onTestUiThread {
         fun flatten(node: SemanticsNode): List<SemanticsNode> = listOf(node) + node.children.flatMap { flatten(it) }
-        return scene.semanticsOwners.flatMap { flatten(it.unmergedRootSemanticsNode) }
+        return@onTestUiThread scene.semanticsOwners.flatMap { flatten(it.unmergedRootSemanticsNode) }
     }
 
     private fun options(scene: ImageComposeScene): List<SemanticsNode> = nodes(scene).filter {
@@ -312,7 +311,7 @@ class ChoiceFieldSceneTest {
                 driver.pumpUntilState { scripts.formState.value("size") == "medium" && state().choiceField == null }
                 open()
                 val input = assertNotNull(nodes(scene).firstOrNull { it.config.getOrNull(SemanticsProperties.EditableText) != null })
-                assertTrue(input.config[SemanticsActions.SetText].action!!.invoke(AnnotatedString("XL")))
+                assertTrue(onTestUiThread { input.config[SemanticsActions.SetText].action!!.invoke(AnnotatedString("XL")) })
                 driver.pumpUntilState { options(scene).isEmpty() && state().editingText == "XL" }
                 press(scene, Key.Enter)
                 driver.pumpUntilState { scripts.formState.value("size") == "XL" }
@@ -444,7 +443,7 @@ class ChoiceFieldSceneTest {
                 open()
                 driver.pumpUntilState { nodes(scene).any { it.config.getOrNull(SemanticsProperties.Focused) == true && it.config.getOrNull(SemanticsProperties.EditableText) != null } }
                 val input = assertNotNull(nodes(scene).firstOrNull { it.config.getOrNull(SemanticsProperties.EditableText) != null })
-                assertTrue(input.config[SemanticsActions.SetText].action!!.invoke(AnnotatedString("XL")))
+                assertTrue(onTestUiThread { input.config[SemanticsActions.SetText].action!!.invoke(AnnotatedString("XL")) })
                 driver.pumpUntilState { state().editingText == "XL" && scripts.formState.value("size") == "XL" }
                 press(scene, Key.Escape)
                 driver.pumpUntilState { state().choiceField == null && scripts.formState.value("size") == "small" }

@@ -8,7 +8,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.unit.IntSize
-import androidx.compose.ui.use
 import io.github.yuroyami.kitepdf.PdfDocument
 import io.github.yuroyami.kitepdf.writer.PdfBuilder
 import kotlinx.coroutines.runBlocking
@@ -72,12 +71,12 @@ class ViewerInputLimitsSceneTest {
         }
         scene.use {
             driver.pumpUntilState { state.pageGeometry.isNotEmpty() }
-            state.setZoom(Float.NaN)
+            onTestUiThread { state.setZoom(Float.NaN) }
             assertEquals(1f, state.zoom)
             // Past the 220 ms settle, where a NaN zoom used to reach the raster size.
             val started = System.currentTimeMillis()
             while (System.currentTimeMillis() - started < 400) driver.pumpFrames(0)
-            state.setZoom(Float.POSITIVE_INFINITY, focal = Offset(Float.NaN, 3f))
+            onTestUiThread { state.setZoom(Float.POSITIVE_INFINITY, focal = Offset(Float.NaN, 3f)) }
             assertEquals(1f, state.zoom)
         }
     } }
@@ -86,12 +85,12 @@ class ViewerInputLimitsSceneTest {
     fun animation_and_pan_ignore_input_that_is_not_finite() = runBlocking {
         val state = KiteDocViewState(pdf(200.0 to 200.0))
         state.viewportSize = IntSize(200, 200)
-        state.setZoom(2f)
+        onTestUiThread { state.setZoom(2f) }
         state.animateZoomTo(Float.NaN)
         assertEquals(2f, state.zoom)
-        assertEquals(Offset.Zero, state.panBy(Offset(Float.NaN, 5f)))
+        assertEquals(Offset.Zero, onTestUiThread { state.panBy(Offset(Float.NaN, 5f)) })
         assertEquals(Offset.Zero, state.panOffset)
-        state.setZoom(2f, focal = Offset(Float.POSITIVE_INFINITY, 0f))
+        onTestUiThread { state.setZoom(2f, focal = Offset(Float.POSITIVE_INFINITY, 0f)) }
         assertEquals(Offset.Zero, state.panOffset, "a focal point that is not finite zooms around the centre")
     }
 
