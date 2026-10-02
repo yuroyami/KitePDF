@@ -120,4 +120,61 @@ class ImageIdentityTest {
         assertEquals(2, bitmaps.conversions)
         assertFalse(pixels[0].contentEquals(pixels[1]), "the form's calibrated grey must differ from device grey")
     }
+
+    private val stencil = TestPdf.stream(
+        "00>",
+        "/Type /XObject /Subtype /Image /Width 1 /Height 1 /ImageMask true /BitsPerComponent 1 /Filter /ASCIIHexDecode",
+    )
+
+    @Test
+    fun a_stencil_drawn_again_in_the_same_colour_reuses_its_bitmap() {
+        // Stencils are decoded on each draw, but their pixels only change with the fill colour (#465).
+        val document = PdfDocument.open(TestPdf.onePage("1 0 0 rg /Im1 Do", resources = "/XObject << /Im1 5 0 R >>", extra = listOf(stencil)))
+        val bitmaps = Bitmaps()
+        repeat(2) { document.images().forEach(bitmaps::convert) }
+        assertEquals(2, document.imageDecodeCount)
+        assertEquals(1, bitmaps.conversions)
+    }
+
+    @Test
+    fun an_image_with_a_mask_reuses_its_bitmap_across_draws() {
+        // The ink layer of a scan with a /Mask is not kept decoded, but its pixels never change (#465).
+        val document = PdfDocument.open(TestPdf.onePage(
+            "/Im1 Do",
+            resources = "/XObject << /Im1 5 0 R >>",
+            extra = listOf(
+                TestPdf.stream(
+                    "80>",
+                    "/Type /XObject /Subtype /Image /Width 1 /Height 1 /ColorSpace /DeviceGray /BitsPerComponent 8 " +
+                        "/Mask 6 0 R /Filter /ASCIIHexDecode",
+                ),
+                stencil,
+            ),
+        ))
+        val bitmaps = Bitmaps()
+        repeat(2) { document.images().forEach(bitmaps::convert) }
+        assertEquals(1, bitmaps.conversions)
+    }
+
+    @Test
+    fun an_inline_image_in_a_device_space_reuses_its_bitmap() {
+        val document = PdfDocument.open(TestPdf.onePage(
+            "BI /W 1 /H 1 /CS /G /BPC 8 /F /AHx ID 80> EI BI /W 1 /H 1 /CS /G /BPC 8 /F /AHx ID 40> EI",
+        ))
+        val bitmaps = Bitmaps()
+        repeat(2) { document.images().forEach(bitmaps::convert) }
+        assertEquals(2, bitmaps.conversions, "two different inline images, each converted once")
+    }
+
+    @Test
+    fun an_inline_image_in_a_resource_space_converts_on_each_draw() {
+        // A named space can mean another thing in another resource dictionary, so it gets no shared bitmap.
+        val document = PdfDocument.open(TestPdf.onePage(
+            "BI /W 1 /H 1 /CS /CS0 /BPC 8 /F /AHx ID 80> EI",
+            resources = "/ColorSpace << /CS0 /DeviceGray >>",
+        ))
+        val bitmaps = Bitmaps()
+        repeat(2) { document.images().forEach(bitmaps::convert) }
+        assertEquals(2, bitmaps.conversions)
+    }
 }
