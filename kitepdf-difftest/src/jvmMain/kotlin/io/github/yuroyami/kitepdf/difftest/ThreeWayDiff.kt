@@ -1,7 +1,6 @@
 package io.github.yuroyami.kitepdf.difftest
 
 import java.awt.Color
-import java.awt.RenderingHints
 import java.awt.image.BufferedImage
 import kotlin.math.abs
 
@@ -61,9 +60,15 @@ public object ThreeWayDiff {
         val tiles: Int,
         /** The tile where KitePDF alone differs the most, or null when it never does. */
         val worstKiteTile: Tile?,
-        /** Red where KitePDF alone differs, blue where PDFium alone differs, green where MuPDF alone differs. */
-        val map: BufferedImage,
+        /**
+         * Red where KitePDF alone differs, blue where PDFium alone differs, green where MuPDF alone
+         * differs. Null after [withoutMap].
+         */
+        val map: BufferedImage?,
     ) {
+        /** This result without its full-size map, for a report that keeps every page's result (#460). */
+        fun withoutMap(): Result = copy(map = null)
+
         /** True when KitePDF alone differs, on some tile or on the whole page. */
         val kiteIsOutlier: Boolean get() = pageOutlier == Engine.KITE || outlierTiles.getValue(Engine.KITE) > 0
     }
@@ -81,16 +86,17 @@ public object ThreeWayDiff {
 
     /**
      * Compares the three renders of one page. Each reference may differ from the KitePDF
-     * size by one pixel, for rounding, and is then scaled to it.
+     * size by one pixel, for rounding. The comparison then covers the pixels that all three
+     * have, unscaled, so a resample cannot blur the page (#461).
      */
     public fun compare(kite: BufferedImage, mupdf: BufferedImage, pdfium: BufferedImage): Result {
-        val w = kite.width
-        val h = kite.height
         for ((name, image) in listOf("MuPDF" to mupdf, "PDFium" to pdfium)) {
-            require(abs(image.width - w) <= 1 && abs(image.height - h) <= 1) {
-                "page dimensions differ: KitePDF=${w}x$h, $name=${image.width}x${image.height}"
+            require(abs(image.width - kite.width) <= 1 && abs(image.height - kite.height) <= 1) {
+                "page dimensions differ: KitePDF=${kite.width}x${kite.height}, $name=${image.width}x${image.height}"
             }
         }
+        val w = minOf(kite.width, mupdf.width, pdfium.width)
+        val h = minOf(kite.height, mupdf.height, pdfium.height)
         val k = rgb(kite, w, h)
         val m = rgb(mupdf, w, h)
         val p = rgb(pdfium, w, h)
@@ -185,15 +191,14 @@ public object ThreeWayDiff {
         }
     }
 
-    /** The pixels of [src] flattened onto white at [w] by [h], as packed RGB. */
+    /** The top-left [w] by [h] pixels of [src] flattened onto white, unscaled, as packed RGB. */
     private fun rgb(src: BufferedImage, w: Int, h: Int): IntArray {
         val out = BufferedImage(w, h, BufferedImage.TYPE_INT_RGB)
         val g = out.createGraphics()
         try {
-            g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR)
             g.color = Color.WHITE
             g.fillRect(0, 0, w, h)
-            g.drawImage(src, 0, 0, w, h, null)
+            g.drawImage(src, 0, 0, null)
         } finally {
             g.dispose()
         }

@@ -335,8 +335,11 @@ object ParityHarness {
             if (referencesAgree) findings += Finding(FindingKind.SIZE, "the page size differs from both references: $sizes") else notes += "page sizes differ: $sizes"
             return result(document, i, findings, notes, null, base)
         }
-        val diff = ThreeWayDiff.compare(kite, m, p)
-        ImageIO.write(diff.map, "png", File(outDir, "$base.map.png"))
+        // The map goes to disk; the report keeps only the numbers, so its memory does not grow with every page (#460).
+        val diff = ThreeWayDiff.compare(kite, m, p).let { full ->
+            full.map?.let { ImageIO.write(it, "png", File(outDir, "$base.map.png")) }
+            full.withoutMap()
+        }
         val everyEngineAlone = ThreeWayDiff.Engine.entries.all { diff.outlierTiles.getValue(it) > 0 }
         if (diff.kiteIsOutlier && everyEngineAlone && diff.pageOutlier != ThreeWayDiff.Engine.KITE) {
             notes += "each engine alone differs in some tiles, so the tiles where KitePDF alone differs prove nothing"

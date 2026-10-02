@@ -58,14 +58,14 @@ public object ImageDiff {
                     "reference=${reference.width}x${reference.height}"
             }
         }
-        val refSized =
-            if (reference.width != a.width || reference.height != a.height)
-                resizeTo(reference, a.width, a.height)
-            else reference
-        val b = flattenOntoWhite(refSized)
+        // A size off by one pixel is rounding: compare the pixels both have, unscaled, so a
+        // resample cannot blur the whole page (#461). A larger difference, which only
+        // reflowable content allows, still scales the reference.
+        val rounding = abs(reference.width - a.width) <= 1 && abs(reference.height - a.height) <= 1
+        val b = flattenOntoWhite(if (rounding) reference else resizeTo(reference, a.width, a.height))
 
-        val w = a.width
-        val h = a.height
+        val w = minOf(a.width, b.width)
+        val h = minOf(a.height, b.height)
         val heatmap = BufferedImage(w, h, BufferedImage.TYPE_INT_RGB)
 
         var sumErr = 0L
