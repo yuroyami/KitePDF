@@ -63,6 +63,11 @@ public class CffFont private constructor(
     private val regionCounts: IntArray = IntArray(0),
     /** For CFF2: the `vsindex` of each FontDict's Private DICT, the default for its charstrings. */
     private val fdVsindex: IntArray = IntArray(0),
+    /**
+     * The program's own code-to-glyph-name map, which a PDF font without `/Encoding` uses
+     * (ISO 32000-1, Table 111, #469). Null for a CID-keyed or CFF2 program, or the Expert encoding.
+     */
+    internal val builtInEncoding: Array<String?>? = null,
 ) {
 
     /** The bits of a Private DICT the subsetter re-emits (hints are dropped). */
@@ -276,6 +281,10 @@ public class CffFont private constructor(
             for ((gid, gn) in glyphNames.withIndex()) {
                 if (gn != null) nameToGid[gn] = gid
             }
+            val encodingOffset = (topDict[16]?.firstOrNull() as? Double)?.toInt() ?: 0
+            val builtInEncoding = if (isCidKeyed) null else runCatching {
+                readEncoding(reader, encodingOffset, glyphNames, stringResolver)
+            }.getOrNull()
 
             // ── Private DICT + Local Subrs (per FontDict for CID-keyed) ───
             val priv = parsePrivateAndFdData(reader, topDict, isCidKeyed, numGlyphs)
@@ -309,7 +318,49 @@ public class CffFont private constructor(
                 glyphSpaceMatrices = fontMatrices.map(::glyphSpaceMatrix),
                 charsetCids = charsetCids,
                 charsetGids = charsetGids,
+                builtInEncoding = builtInEncoding,
             )
+        }
+
+        /**
+         * The Encoding at [offset], Top DICT operator 16 (Adobe Technical Note 5176, 12): 0 is
+         * StandardEncoding, and 1, the Expert encoding, gives null. Format 0 lists one code per
+         * glyph from glyph 1 on, format 1 lists ranges of codes, and the high bit of the format
+         * adds supplements: extra codes for glyphs named by string id.
+         */
+        private fun readEncoding(
+            reader: TtfReader,
+            offset: Int,
+            glyphNames: Array<String?>,
+            name: (Int) -> String,
+        ): Array<String?>? {
+            if (offset == 0) return Encodings.standardEncoding
+            if (offset == 1) return null
+            reader.seek(offset)
+            val format = reader.u8()
+            val out = arrayOfNulls<String>(256)
+            when (format and 0x7F) {
+                0 -> {
+                    val codes = reader.u8()
+                    for (gid in 1..codes) out[reader.u8()] = glyphNames.getOrNull(gid)
+                }
+                1 -> {
+                    var gid = 1
+                    repeat(reader.u8()) {
+                        val first = reader.u8()
+                        val left = reader.u8()
+                        for (code in first..minOf(first + left, 255)) out[code] = glyphNames.getOrNull(gid++)
+                    }
+                }
+                else -> return null
+            }
+            if (format and 0x80 != 0) {
+                repeat(reader.u8()) {
+                    val code = reader.u8()
+                    out[code] = name(reader.u16())
+                }
+            }
+            return out
         }
 
         /**

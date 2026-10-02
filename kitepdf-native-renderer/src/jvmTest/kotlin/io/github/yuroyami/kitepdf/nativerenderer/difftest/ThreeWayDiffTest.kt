@@ -93,4 +93,18 @@ class ThreeWayDiffTest {
         // PDFium's line-end hyphen, U+0002, is the `-` that the other engines write.
         assertEquals("", ParityHarness.missingCharacters("com\u0002bining", "com-bining"))
     }
+
+    @Test
+    fun a_text_exemption_covers_only_the_characters_it_names() {
+        fun result(missing: String) = ParityHarness.PageResult(
+            "doc", 0, ParityHarness.Verdict.PDFIUM_BETTER,
+            listOf(ParityHarness.Finding(ParityHarness.FindingKind.TEXT, "missing", missing)), emptyList(),
+        )
+        val exemption = ParityHarness.Exemption(ParityHarness.ExemptionKind.PDFIUM_WRONG, 0, "mirrored", pdfiumOnlyText = "))")
+        val report = ParityHarness.Report(emptyList(), emptyMap(), mapOf("doc p0" to exemption), 96, java.io.File("."))
+        assertTrue(report.isExempt(result("))")))
+        assertTrue(report.isExempt(result(")")))
+        assertFalse(report.isExempt(result(")))")), "a third parenthesis is a new fault")
+        assertFalse(report.isExempt(result(")x")), "another character is a new fault")
+    }
 }

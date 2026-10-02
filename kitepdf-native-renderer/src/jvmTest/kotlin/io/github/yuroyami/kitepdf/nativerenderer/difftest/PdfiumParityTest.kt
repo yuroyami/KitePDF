@@ -52,24 +52,17 @@ class PdfiumParityTest {
          * The goal is an empty map. Drop-in corpus pages run only where the corpus exists.
          */
         val KNOWN_GAPS: Map<String, Int> = mapOf(
-            "public-joss-ogre-relativity p1" to 469,
-            "public-pdfa-column-reading-order p0" to 466,
             "public-pdfa-default-rgb-inheritance p0" to 459,
             // Both #471 and #472 need fixing before this page passes.
             "public-pdfa-vertical-text p0" to 471,
             "public-verapdf-device-cmyk p0" to 470,
-            "public-verapdf-subset-font p0" to 466,
             "public-wikimedia-editing-arabic-wikipedia p0" to 468,
-            // Page 10 also needs a text exemption after #467: PDFium mirrors "(" in right-to-left text.
-            "public-wikimedia-editing-arabic-wikipedia p5" to 467,
-            "public-wikimedia-editing-arabic-wikipedia p10" to 467,
-            "public-wikimedia-editing-arabic-wikipedia p16" to 467,
-            "public-wikimedia-editing-arabic-wikipedia p27" to 467,
         )
 
         /**
          * Pages where KitePDF alone differs and is still right, each with the reason from the
-         * spec. Only the pixel finding of the page is covered, up to the tiles recorded.
+         * spec. An entry covers the pixel finding up to the tiles recorded, and only the text
+         * that it names as PDFium's own.
          */
         val EXEMPTIONS: Map<String, ParityHarness.Exemption> = mapOf(
             "doom p0" to ParityHarness.Exemption(
@@ -83,6 +76,13 @@ class PdfiumParityTest {
                 maxKiteTiles = 2,
                 reason = "a note without an appearance stream shows an icon of the reader's own design " +
                     "(ISO 32000-1, 12.5.6.4). Each engine draws its own art at its own size",
+            ),
+            "public-wikimedia-editing-arabic-wikipedia p10" to ParityHarness.Exemption(
+                ParityHarness.ExemptionKind.PDFIUM_WRONG,
+                maxKiteTiles = 0,
+                pdfiumOnlyText = "))",
+                reason = "the ToUnicode map gives \"(\" and \")\" for the two parentheses of each date (ISO 32000-1, " +
+                    "9.10.2). PDFium mirrors the \"(\" in right-to-left text and reports two \")\". MuPDF follows the map",
             ),
             "parity-annot-caret-attachment p0" to ParityHarness.Exemption(
                 ParityHarness.ExemptionKind.READER_DEFINED,

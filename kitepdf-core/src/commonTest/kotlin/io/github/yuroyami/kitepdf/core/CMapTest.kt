@@ -73,6 +73,22 @@ class CMapTest {
     }
 
     @Test
+    fun a_range_with_a_string_of_several_characters_increments_the_last_one() {
+        // ISO 32000-1, 9.10.3: the whole string is the mapping, and its last byte counts up (#467).
+        val cmap = CMap.parse(
+            ("1 begincodespacerange <0000> <FFFF> endcodespacerange 3 beginbfrange " +
+                "<1552> <1553> <06440622> <0001> <0002> <00660066> <0010> <0011> <D835DC00> endbfrange").encodeToByteArray(),
+        )
+        assertEquals("\u0644\u0622", cmap.decodeAll(byteArrayOf(0x15, 0x52)))
+        assertEquals("\u0644\u0623", cmap.decodeAll(byteArrayOf(0x15, 0x53)))
+        assertEquals("ff", cmap.decodeAll(byteArrayOf(0x00, 0x01)))
+        assertEquals("fg", cmap.decodeAll(byteArrayOf(0x00, 0x02)))
+        // One character outside the BMP still counts up as a code point: U+1D400, then U+1D401.
+        assertEquals("\uD835\uDC00", cmap.decodeAll(byteArrayOf(0x00, 0x10)))
+        assertEquals("\uD835\uDC01", cmap.decodeAll(byteArrayOf(0x00, 0x11)))
+    }
+
+    @Test
     fun unmapped_codes_return_null_via_decode() {
         val cmap = CMap.parse(
             """1 begincodespacerange <00> <FF> endcodespacerange
