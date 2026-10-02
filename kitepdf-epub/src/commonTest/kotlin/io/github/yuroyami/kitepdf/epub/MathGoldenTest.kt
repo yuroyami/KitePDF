@@ -1,6 +1,7 @@
 package io.github.yuroyami.kitepdf.epub
 
 import io.github.yuroyami.kitepdf.core.KiteLocation
+import io.github.yuroyami.kitepdf.core.font.FontSpec
 import io.github.yuroyami.kitepdf.core.render.KiteMatrix
 import io.github.yuroyami.kitepdf.core.render.KitePath
 import io.github.yuroyami.kitepdf.core.render.RecordingCanvas
@@ -31,6 +32,14 @@ class MathGoldenTest {
 
     private fun m(t: KiteMatrix): String = listOf(t.a, t.b, t.c, t.d, t.e, t.f).joinToString(",", transform = ::r)
 
+    /**
+     * The spec as its data class printed it before it had a language, and the language after it
+     * when there is one, so a new field of [FontSpec] does not change the hash of a formula that
+     * draws the same.
+     */
+    private fun spec(s: FontSpec): String =
+        "FontSpec(family=${s.family}, bold=${s.bold}, italic=${s.italic}, name=${s.name})" + (s.language?.let { " $it" } ?: "")
+
     private fun box(path: KitePath): String = path.bounds()?.let { listOf(it.left, it.bottom, it.right, it.top).joinToString(",", transform = ::r) } ?: "-"
 
     /** The page's draw calls in text, coordinates to a hundredth of a point. */
@@ -42,7 +51,7 @@ class MathGoldenTest {
         val calls = RecordingCanvas().also { doc.page(KiteLocation(0, 0)).renderTo(it) }.calls
         return calls.joinToString("\n") { c ->
             when (c) {
-                is RecordingCanvas.Call.Glyphs -> "G ${c.text} ${r(c.fontSize)} ${m(c.textToDevice)} ${c.fontSpec}"
+                is RecordingCanvas.Call.Glyphs -> "G ${c.text} ${r(c.fontSize)} ${m(c.textToDevice)} ${spec(c.fontSpec)}"
                 is RecordingCanvas.Call.Fill -> "F ${box(c.path)} ${m(c.ctm)} ${rgb(c.color)}"
                 is RecordingCanvas.Call.Stroke -> "S ${box(c.path)} ${r(c.lineWidth)} ${m(c.ctm)} ${rgb(c.color)}"
                 else -> c::class.simpleName.orEmpty()

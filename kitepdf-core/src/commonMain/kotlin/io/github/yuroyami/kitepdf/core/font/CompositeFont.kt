@@ -58,7 +58,7 @@ internal class CompositeFont(
     /** True when /Encoding is a predefined CMap whose codes are UTF-16, such as UniJIS-UCS2-H. */
     private val unicodeKeyed: Boolean = false,
     /** The Adobe collection the CIDs belong to, such as Japan1, or null for another collection. */
-    private val ordering: String? = null,
+    val ordering: String? = null,
     /** The `/Flags` of the descendant's font descriptor (ISO 32000-1, 9.8.2), or 0 without one. */
     val flags: Int = 0,
 ) {

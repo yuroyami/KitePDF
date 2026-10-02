@@ -2,6 +2,7 @@ package io.github.yuroyami.kitepdf.nativerenderer
 
 import io.github.yuroyami.kitepdf.core.KiteRectangle
 import io.github.yuroyami.kitepdf.core.font.FontSpec
+import io.github.yuroyami.kitepdf.core.font.KiteCjkScript
 import io.github.yuroyami.kitepdf.core.font.TextGlyph
 import io.github.yuroyami.kitepdf.core.render.KITE_DEFAULT_MAX_RASTER_PIXELS
 import io.github.yuroyami.kitepdf.core.render.KiteBitmapCache
@@ -306,7 +307,13 @@ public class CoreGraphicsCanvas(private val ctx: CGContextRef) : KiteCanvas {
         }
     }
 
-    private fun systemFontName(spec: FontSpec): String = when (spec.family) {
+    /**
+     * The PostScript name of the face a non-embedded font draws in. Times, Helvetica and Courier
+     * have no Han, kana or Hangul glyphs, and this path draws one glyph at a time with no font
+     * cascade, so a font of a CJK language takes a face of that language that macOS and iOS ship
+     * (#472).
+     */
+    private fun systemFontName(spec: FontSpec): String = cjkFontName(spec) ?: when (spec.family) {
         io.github.yuroyami.kitepdf.core.font.KiteFontFamily.Serif -> when {
             spec.bold && spec.italic -> "Times-BoldItalic"
             spec.bold -> "Times-Bold"
@@ -324,6 +331,30 @@ public class CoreGraphicsCanvas(private val ctx: CGContextRef) : KiteCanvas {
             spec.bold -> "Helvetica-Bold"
             spec.italic -> "Helvetica-Oblique"
             else -> "Helvetica"
+        }
+    }
+
+    /** The Hiragino, Songti, PingFang or Apple Korean face of [spec]'s language, or null for another language. */
+    private fun cjkFontName(spec: FontSpec): String? {
+        val serif = spec.family == io.github.yuroyami.kitepdf.core.font.KiteFontFamily.Serif
+        return when (spec.cjkScript) {
+            KiteCjkScript.Japanese -> if (serif) {
+                if (spec.bold) "HiraMinProN-W6" else "HiraMinProN-W3"
+            } else {
+                if (spec.bold) "HiraKakuProN-W6" else "HiraKakuProN-W3"
+            }
+            KiteCjkScript.SimplifiedChinese -> if (serif) {
+                if (spec.bold) "STSongti-SC-Bold" else "STSongti-SC-Regular"
+            } else {
+                if (spec.bold) "PingFangSC-Semibold" else "PingFangSC-Regular"
+            }
+            KiteCjkScript.TraditionalChinese -> if (serif) {
+                if (spec.bold) "STSongti-TC-Bold" else "STSongti-TC-Regular"
+            } else {
+                if (spec.bold) "PingFangTC-Semibold" else "PingFangTC-Regular"
+            }
+            KiteCjkScript.Korean -> if (serif) "AppleMyungjo" else if (spec.bold) "AppleSDGothicNeo-Bold" else "AppleSDGothicNeo-Regular"
+            null -> null
         }
     }
 

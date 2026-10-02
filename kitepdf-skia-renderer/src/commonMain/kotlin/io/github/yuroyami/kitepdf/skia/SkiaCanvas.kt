@@ -41,6 +41,7 @@ import org.jetbrains.skia.PathFillMode
 import org.jetbrains.skia.PathVerb
 import org.jetbrains.skia.Shader
 import org.jetbrains.skia.TextBlob
+import org.jetbrains.skia.TextBlobBuilder
 import org.jetbrains.skia.Gradient
 import org.jetbrains.skia.Color4f
 import org.jetbrains.skia.FilterTileMode
@@ -226,7 +227,7 @@ public class SkiaCanvas(private val canvas: SkCanvas) : KiteCanvas {
         val typeface = systemTypeface(fontSpec) ?: return
         val skFont = Font(typeface, renderedSize)
         // renderedSize already carries sy, so the text-space adjustment needs it too.
-        val run = placedRun(glyphs, skFont, renderedSize / 1000.0, sy) ?: return
+        val run = placedRun(glyphs, skFont, renderedSize / 1000.0, sy, fontSpec) ?: return
         canvas.save()
         try {
             canvas.translate(textMatrix.e.toFloat(), textMatrix.f.toFloat())
@@ -241,9 +242,12 @@ public class SkiaCanvas(private val canvas: SkCanvas) : KiteCanvas {
     /**
      * The characters of [glyphs] in [font], each glyph placed where the document's own
      * advances put it (ISO 32000-1, 9.4.4), character and word spacing included (#121).
-     * The characters of one glyph, such as a ligature, keep the host face's spacing.
+     * The characters of one glyph, such as a ligature, keep the host face's spacing. A
+     * character that [font] lacks draws in a fallback face of [spec]'s language (#472).
      */
-    private fun placedRun(glyphs: List<TextGlyph>, font: Font, advanceScale: Double, adjustScale: Double): TextBlob? {
+    private fun placedRun(
+        glyphs: List<TextGlyph>, font: Font, advanceScale: Double, adjustScale: Double, spec: FontSpec,
+    ): TextBlob? {
         val capacity = glyphs.sumOf { it.text.length }
         if (capacity == 0) return null
         val codePoints = IntArray(capacity)
@@ -265,13 +269,44 @@ public class SkiaCanvas(private val canvas: SkCanvas) : KiteCanvas {
         }
         val ids = font.getUTF32Glyphs(codePoints.copyOf(n))
         val widths = font.getWidths(ids)
+        val fonts = fallbackFonts(font, codePoints, ids, widths, spec)
         val xs = FloatArray(n)
         var x = 0.0
         for (k in 0 until n) {
             x = if (origins[k].isNaN()) x + widths[k - 1] else origins[k]
             xs[k] = x.toFloat()
         }
-        return TextBlob.makeFromPosH(ids, xs, 0f, font)
+        if (fonts == null) return TextBlob.makeFromPosH(ids, xs, 0f, font)
+        val builder = TextBlobBuilder()
+        var start = 0
+        for (k in 1..n) {
+            if (k < n && fonts[k] === fonts[start]) continue
+            builder.appendRunPosH(fonts[start], ids.copyOfRange(start, k), xs.copyOfRange(start, k), 0f)
+            start = k
+        }
+        return builder.build()
+    }
+
+    /**
+     * The font of each of the [ids] of [codePoints], or null when [font] draws them all. A
+     * character that [font] has no glyph for takes a face of [spec]'s language that has one,
+     * and its entries of [ids] and [widths] change to that face's.
+     */
+    private fun fallbackFonts(font: Font, codePoints: IntArray, ids: ShortArray, widths: FloatArray, spec: FontSpec): Array<Font>? {
+        if (spec.language == null || ids.none { it == 0.toShort() }) return null
+        val style = font.typeface?.fontStyle ?: FontStyle.NORMAL
+        val faces = HashMap<Int, Font?>()
+        return Array(ids.size) { k ->
+            if (ids[k] != 0.toShort()) return@Array font
+            val fallback = faces.getOrPut(codePoints[k]) {
+                SkiaSystemFonts.fallback(spec, style, codePoints[k])?.let { Font(it, font.size) }
+            } ?: return@Array font
+            val id = fallback.getUTF32Glyphs(intArrayOf(codePoints[k]))[0]
+            if (id == 0.toShort()) return@Array font
+            ids[k] = id
+            widths[k] = fallback.getWidths(shortArrayOf(id))[0]
+            fallback
+        }
     }
 
     /**
@@ -281,15 +316,30 @@ public class SkiaCanvas(private val canvas: SkCanvas) : KiteCanvas {
     override fun hostGlyphOutline(text: String, fontSpec: FontSpec): KitePath? {
         val typeface = systemTypeface(fontSpec) ?: return null
         val font = Font(typeface, 1000f)
-        val ids = font.getStringGlyphs(text)
+        val codePoints = text.codePointArray()
+        val ids = font.getUTF32Glyphs(codePoints)
         val advances = font.getWidths(ids)
+        val fonts = fallbackFonts(font, codePoints, ids, advances, fontSpec)
         val b = KitePath.Builder()
         var penX = 0.0
         for (k in ids.indices) {
-            font.getPath(ids[k])?.let { appendFlipped(b, it, penX) }
+            (fonts?.get(k) ?: font).getPath(ids[k])?.let { appendFlipped(b, it, penX) }
             penX += advances[k]
         }
         return b.build()
+    }
+
+    /** The Unicode code points of this string, a surrogate pair read as one. */
+    private fun String.codePointArray(): IntArray {
+        val out = IntArray(length)
+        var n = 0
+        var i = 0
+        while (i < length) {
+            val pair = this[i].isHighSurrogate() && i + 1 < length && this[i + 1].isLowSurrogate()
+            out[n++] = if (pair) 0x10000 + ((this[i].code - 0xD800) shl 10) + (this[i + 1].code - 0xDC00) else this[i].code
+            i += if (pair) 2 else 1
+        }
+        return out.copyOf(n)
     }
 
     /** Appends a Skia glyph path, whose y runs down, moved right by [dx] and with y up. */
@@ -317,7 +367,7 @@ public class SkiaCanvas(private val canvas: SkCanvas) : KiteCanvas {
             spec.italic -> FontStyle.ITALIC
             else -> FontStyle.NORMAL
         }
-        return SkiaSystemFonts.resolve(spec.family, style)
+        return SkiaSystemFonts.resolve(spec, style)
     }
 
     override fun fillShading(

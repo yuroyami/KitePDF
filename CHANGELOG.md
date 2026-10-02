@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `FontSpec.language` carries the BCP 47 tag of a substitute font's language, and
+  `FontSpec.cjkScript`, `FontSpec.hostFaces` and `FontSpec.languageSample` tell a
+  custom canvas which host faces draw it. A PDF CIDFont names its language through
+  the Adobe character collection of its CIDSystemInfo or its predefined CMap. The
+  constructor and `copy` take a fifth parameter with a default, so source compiles
+  unchanged, while a binary built against 0.12.0 that constructs a `FontSpec` needs
+  a rebuild (#472).
+
+### Fixed
+
+- A non-embedded CJK font draws in a host face of its own language and style: a
+  Japanese Mincho font draws in a Mincho face, not a Chinese Song face or a Gothic
+  one. The Serif flag of the font descriptor picks Mincho over Gothic. On Skia and
+  CoreGraphics such text lost its Han, kana and Hangul characters, since the Latin
+  faces those canvases picked have none (#472).
+
 ### Changed
 
 - Vectorized pages share a bounded cache of converted image bitmaps across redraws

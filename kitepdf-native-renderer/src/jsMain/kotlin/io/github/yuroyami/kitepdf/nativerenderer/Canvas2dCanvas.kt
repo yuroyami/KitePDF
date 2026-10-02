@@ -227,13 +227,19 @@ public class Canvas2dCanvas(ctx: CanvasRenderingContext2D) : KiteCanvas {
         }
     }
 
-    /** Map a non-embedded PDF font to a CSS `font` string (mirrors AwtCanvas's family/style choice). */
+    /**
+     * Map a non-embedded PDF font to a CSS `font` string (mirrors AwtCanvas's family/style choice).
+     * A font of a CJK language lists the faces of that language before the generic family, which
+     * the browser would fill from a CJK face of its own locale (#472).
+     */
     private fun systemFontFor(spec: FontSpec, sizePx: Double): String {
-        val family = when (spec.family) {
+        val generic = when (spec.family) {
             KiteFontFamily.Serif -> "serif"
             KiteFontFamily.Monospace -> "monospace"
             KiteFontFamily.SansSerif -> "sans-serif"
         }
+        // CSS Fonts 4, 5.1: a family name in quotes is never read as a generic family or keyword.
+        val family = (spec.hostFaces.map { "\"$it\"" } + generic).joinToString(", ")
         val bold = if (spec.bold) "bold " else ""
         val italic = if (spec.italic) "italic " else ""
         return "$italic$bold${sizePx}px $family"
