@@ -32,9 +32,10 @@ import io.github.yuroyami.kitepdf.core.parser.PdfStream
  *
  *   - `DCTDecode` → decoded by KiteImageCodec into a [Kind.RAW] image. An image
  *     without a mask keeps only its encoded data and decodes at the size it draws
- *     ([toShrunkRgbaBytes]). A JPEG that KiteImageCodec cannot decode, such as an
- *     arithmetic-coded one, falls back to [Kind.JPEG] with the file in
- *     [encodedBytes], for the host platform's image loader.
+ *     ([toShrunkRgbaBytes]). A four-component JPEG gives CMYK samples, which the
+ *     image's own colour space converts. A JPEG that KiteImageCodec cannot
+ *     decode, such as an arithmetic-coded one, falls back to [Kind.JPEG] with the
+ *     file in [encodedBytes], for the host platform's image loader.
  *   - `FlateDecode` / `LZWDecode` / `CCITTFaxDecode` / ASCII / RunLength → pixel
  *     samples already decoded into [pixelBytes]; [toRgbaBytes] assembles RGBA
  *     using [resolvedColorSpace], [bitsPerComponent], and [decode].
@@ -293,26 +294,41 @@ public class KiteImageData internal constructor(
                     val terminal = terminalBytesOf(stream)
                     // ISO 32000-1, 8.9.5.2: /ColorSpace and /Decode belong to the image, not to
                     // its filter. The decoder returns RGB, which holds the samples of a grey or a
-                    // three-component JPEG exactly, so those keep the declared space. A
-                    // four-component JPEG is already converted, so it stays device RGB (#72).
+                    // three-component JPEG exactly, so those keep the declared space (#72).
                     val declared = if (isMask) null else resolvedCs
                     val declaredComps = if (declared is KiteColorSpace.Indexed) 1 else declared?.componentCount ?: 0
-                    val keepsSpace = declared != null && (declaredComps == 1 || declaredComps == 3) &&
-                        jpegFrame(terminal.bytes)?.get(2) == declaredComps
+                    val frameComps = jpegFrame(terminal.bytes)?.get(2)
+                    // 7.4.8, Table 13: a four-component JPEG decodes to CMYK samples, normal ink as
+                    // stored, which KiteImageCodec's RGB has lost. JpegInk reads them, and they keep
+                    // the declared space too (#470).
+                    val ink = if (declaredComps == 4 && frameComps == 4) {
+                        runCatching { JpegInk.layout(terminal.bytes, terminal.terminalParams?.getInt("ColorTransform")?.toInt()) }.getOrNull()
+                    } else {
+                        null
+                    }
+                    val keepsSpace = declared != null && frameComps == declaredComps &&
+                        (declaredComps == 1 || declaredComps == 3 || ink != null)
                     // The image keeps its encoded data and decodes at the size it draws (#381). A
                     // mask, a colour key or a palette needs exact samples, and a reduced decode
                     // averages them, so such an image decodes in full here as before.
                     val lazy = if (alpha == null && colorKey == null && !isMask && declared !is KiteColorSpace.Indexed) {
-                        KiteImageSamples.jpeg(terminal.bytes, gray = keepsSpace && declaredComps == 1)
+                        KiteImageSamples.jpeg(terminal.bytes, gray = keepsSpace && declaredComps == 1, ink)
                     } else {
                         null
                     }
-                    val bm = if (lazy != null) null else runCatching { KiteImageCodec.decode(terminal.bytes) }.getOrNull()
-                    val keep = (lazy != null || bm != null) && keepsSpace
+                    val inked = if (lazy == null && ink != null) JpegInk.decode(terminal.bytes, ink, 1) else null
+                    val bm = if (lazy != null || inked != null) null else runCatching { KiteImageCodec.decode(terminal.bytes) }.getOrNull()
+                    // The RGB of a four-component JPEG is converted already, so it stays device RGB.
+                    val keep = keepsSpace && (lazy != null || inked != null || (bm != null && ink == null))
                     if (lazy != null) KiteImageData(
                         lazy.width, lazy.height, 8, if (keep) cs else "DeviceRGB", Kind.RAW, encodedBytes = ByteArray(0),
                         resolvedColorSpace = if (keep) declared else KiteColorSpace.DeviceRGB, decode = if (keep) decodeArr else null,
                         maskFill = fillColor, samples = lazy,
+                    ) else if (inked != null) KiteImageData(
+                        inked.width, inked.height, 8, cs, Kind.RAW, encodedBytes = ByteArray(0), pixelBytes = inked.bytes,
+                        softMaskAlpha = alpha, softMaskWidth = smW, softMaskHeight = smH, softMaskMatte = matte,
+                        resolvedColorSpace = declared, decode = decodeArr,
+                        isImageMask = isMask, maskFill = fillColor, colorKeyMask = colorKey,
                     ) else if (bm != null) KiteImageData(
                         bm.width, bm.height, 8, if (keep) cs else "DeviceRGB", Kind.RAW,
                         encodedBytes = ByteArray(0), pixelBytes = if (keep && declaredComps == 1) bm.toGrayBytes() else bm.toRgbBytes(),
