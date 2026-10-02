@@ -1,0 +1,3 @@
+# Test documents are pinned by SHA-256; git must store their exact bytes.
+*.pdf binary
+*.epub binary
