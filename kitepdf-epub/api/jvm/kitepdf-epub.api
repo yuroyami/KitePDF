@@ -197,6 +197,7 @@ public final class io/github/yuroyami/kitepdf/epub/EpubPage : io/github/yuroyami
 	public final fun getChapter ()I
 	public fun getDisplayHeight ()D
 	public fun getDisplayWidth ()D
+	public final fun getDocument ()Lio/github/yuroyami/kitepdf/epub/EpubDocument;
 	public fun getDrawsHostFontText ()Ljava/lang/Boolean;
 	public final fun getEmbeds ()Ljava/util/List;
 	public final fun getHeight ()D

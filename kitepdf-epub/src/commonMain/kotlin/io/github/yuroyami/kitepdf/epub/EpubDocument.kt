@@ -1172,6 +1172,12 @@ public class EpubPage internal constructor(
     private val pageHeight: Double,
 ) : KitePage {
 
+    /**
+     * The book this page belongs to, for the bytes of its resources: a player that plays an
+     * element of [media] reads its sources with [EpubDocument.resource] (#31).
+     */
+    public val document: EpubDocument get() = doc
+
     /** The laid-out page, fetched per operation: holding it would defeat the budget. */
     private fun laidOut(): PageRender = doc.render(chapter, index)
 
@@ -2030,22 +2036,13 @@ public class EpubPage internal constructor(
     }
 
     /**
-     * A grey box with a play triangle, for a media element without a poster (#29). [left] and
-     * [bottom] are in the page's y-up space, as [paintImage] takes them.
+     * A grey box, for a media element without a poster (#29). It draws no play button, because a
+     * page plays nothing by itself: a player such as `kitepdf-media` draws its own control over
+     * the box (#31). [left] and [bottom] are in the page's y-up space, as [paintImage] takes them.
      */
     private fun paintMediaPlaceholder(canvas: KiteCanvas, deviceCtm: KiteMatrix, left: Double, bottom: Double, width: Double, height: Double) {
         if (width <= 0.0 || height <= 0.0) return
         rectFill(canvas, deviceCtm, left, bottom, width, height, MEDIA_PLACEHOLDER)
-        val size = minOf(width, height) * 0.4
-        val cx = left + width / 2.0
-        val cy = bottom + height / 2.0
-        val triangle = KitePath.Builder().apply {
-            moveTo(cx - size * 0.35, cy - size / 2.0)
-            lineTo(cx - size * 0.35, cy + size / 2.0)
-            lineTo(cx + size * 0.5, cy)
-            close()
-        }.build()
-        canvas.fillPath(triangle, deviceCtm, MEDIA_PLAY, evenOdd = false, alpha = 1.0, blendMode = KiteBlendMode.Normal)
     }
 
     /**
@@ -2441,6 +2438,3 @@ private const val CSS_PX = 0.75
 
 /** The grey of a media element without a poster. */
 private val MEDIA_PLACEHOLDER = RgbColor(0.85, 0.85, 0.85)
-
-/** The play triangle on it. */
-private val MEDIA_PLAY = RgbColor(0.45, 0.45, 0.45)

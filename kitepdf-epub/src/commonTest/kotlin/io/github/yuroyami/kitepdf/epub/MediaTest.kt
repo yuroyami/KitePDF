@@ -73,9 +73,10 @@ class MediaTest {
         assertEquals(40.0, media.rect.top - media.rect.bottom, 0.5, "an audio player is a 40 pt bar")
         val canvas = RecordingCanvas().also { page(doc).renderTo(it) }
         val fills = canvas.calls.filterIsInstance<RecordingCanvas.Call.Fill>().map { it.color }
-        // The placeholder is a grey box with a darker play triangle on it.
+        // The placeholder is a plain grey box. A page plays nothing, so it draws no play button (#31).
         assertTrue(RgbColor(0.85, 0.85, 0.85) in fills, "no placeholder box was painted: $fills")
-        assertTrue(RgbColor(0.45, 0.45, 0.45) in fills, "no play triangle was painted: $fills")
+        assertEquals(1, fills.count { it == RgbColor(0.85, 0.85, 0.85) }, "the placeholder is one box: $fills")
+        assertFalse(RgbColor(0.45, 0.45, 0.45) in fills, "a play triangle was painted with no player: $fills")
         assertFalse("Fallback words." in page(doc).textContent().plainText, "the fallback children were painted")
     }
 

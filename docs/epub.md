@@ -278,14 +278,19 @@ link before the viewer scrolls, with `kind` set for a reference (see
 A `<video>` or an `<audio>` element with controls keeps a box of its own on
 the page. The box takes the element's `width` and `height`, then its CSS size,
 then the size of its poster, and else a 16:9 box at the text width for a video
-or a 40 pt bar for an audio player. The page paints the poster there, or a grey
-box with a play triangle. The element's own children, the text for a reader
+or a 40 pt bar for an audio player. The page paints the poster there, or a plain
+grey box. The element's own children, the text for a reader
 that plays nothing, are not painted. An audio element without controls is not
 shown, as in a browser.
 
+To play them in `KiteDocView`, add the optional `kitepdf-media` artifact and pass
+`KiteMediaOverlay()` to the viewer's `pageOverlay` (see
+[Book audio and video](media.md)).
+
 `EpubPage.media` lists the elements on a page with their box, kind, sources in
-order, poster and flags. The engine plays nothing itself: read the bytes with
-`EpubDocument.resource` and hand them to a player that you place over the box.
+order, poster and flags. The engine plays nothing itself: to use a player of your
+own, read the bytes with `EpubDocument.resource` and hand them to a player that
+you place over the box.
 
 ```kotlin
 for (media in page.media) {

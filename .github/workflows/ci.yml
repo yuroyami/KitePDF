@@ -107,7 +107,7 @@ jobs:
           :kitepdf-difftest:jvmTest :kitepdf-core:jvmTest :kitepdf-pdf:jvmTest :kitepdf-epub:jvmTest
           :kitepdf-cbz:jvmTest :kitepdf-svg:jvmTest :kitepdf-xps:jvmTest
           :kitepdf-skia-renderer:jvmTest :kitepdf-compose-viewer:jvmTest
-          :kitepdf:jvmTest :kitepdf-net:jvmTest :kitepdf-javascript:jvmTest --continue --stacktrace
+          :kitepdf:jvmTest :kitepdf-net:jvmTest :kitepdf-javascript:jvmTest :kitepdf-media:jvmTest --continue --stacktrace
 
       - name: Test common code through Android host variants
         run: >
@@ -124,6 +124,7 @@ jobs:
           :kitepdf-native-renderer:compileAndroidMain
           :kitepdf-skia-renderer:compileAndroidMain
           :kitepdf-compose-viewer:compileAndroidMain
+          :kitepdf-media:compileAndroidMain
           --continue --stacktrace
 
       - name: Test :kitepdf-native-renderer (JVM oracle + fuzz tests)
@@ -207,6 +208,7 @@ jobs:
           :kitepdf-native-renderer:compileKotlinIosSimulatorArm64
           :kitepdf-skia-renderer:compileKotlinIosSimulatorArm64
           :kitepdf-compose-viewer:compileKotlinIosSimulatorArm64
+          :kitepdf-media:compileKotlinIosSimulatorArm64
           --continue --stacktrace
 
       - name: Test macOS arm64 suites and CoreGraphics renderer

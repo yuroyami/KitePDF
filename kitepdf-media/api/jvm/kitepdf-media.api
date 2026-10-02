@@ -1,0 +1,5 @@
+public final class io/github/yuroyami/kitepdf/media/KiteMediaOverlayKt {
+	public static final fun EpubMediaPlayer (Lio/github/yuroyami/kitepdf/epub/EpubMedia;Lio/github/yuroyami/kitepdf/epub/EpubDocument;Landroidx/compose/ui/Modifier;ZLkotlin/jvm/functions/Function0;Landroidx/compose/runtime/Composer;II)V
+	public static final fun KiteMediaOverlay (Lio/github/yuroyami/kitepdf/compose/KitePageOverlayScope;ZLkotlin/jvm/functions/Function0;Landroidx/compose/runtime/Composer;II)V
+}
+

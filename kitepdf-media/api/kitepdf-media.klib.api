@@ -1,0 +1,10 @@
+// Klib ABI Dump
+// Targets: [iosArm64, iosSimulatorArm64]
+// Rendering settings:
+// - Signature version: 2
+// - Show manifest properties: true
+// - Show declarations: true
+
+// Library unique name: <io.github.yuroyami:kitepdf-media>
+final fun (io.github.yuroyami.kitepdf.compose/KitePageOverlayScope).io.github.yuroyami.kitepdf.media/KiteMediaOverlay(kotlin/Boolean, kotlin/Function0<io.github.yuroyami.kiteplayer/KitePlayer?>?, androidx.compose.runtime/Composer?, kotlin/Int, kotlin/Int) // io.github.yuroyami.kitepdf.media/KiteMediaOverlay|KiteMediaOverlay@io.github.yuroyami.kitepdf.compose.KitePageOverlayScope(kotlin.Boolean;kotlin.Function0<io.github.yuroyami.kiteplayer.KitePlayer?>?;androidx.compose.runtime.Composer?;kotlin.Int;kotlin.Int){}[0]
+final fun io.github.yuroyami.kitepdf.media/EpubMediaPlayer(io.github.yuroyami.kitepdf.epub/EpubMedia, io.github.yuroyami.kitepdf.epub/EpubDocument, androidx.compose.ui/Modifier?, kotlin/Boolean, kotlin/Function0<io.github.yuroyami.kiteplayer/KitePlayer?>?, androidx.compose.runtime/Composer?, kotlin/Int, kotlin/Int) // io.github.yuroyami.kitepdf.media/EpubMediaPlayer|EpubMediaPlayer(io.github.yuroyami.kitepdf.epub.EpubMedia;io.github.yuroyami.kitepdf.epub.EpubDocument;androidx.compose.ui.Modifier?;kotlin.Boolean;kotlin.Function0<io.github.yuroyami.kiteplayer.KitePlayer?>?;androidx.compose.runtime.Composer?;kotlin.Int;kotlin.Int){}[0]
