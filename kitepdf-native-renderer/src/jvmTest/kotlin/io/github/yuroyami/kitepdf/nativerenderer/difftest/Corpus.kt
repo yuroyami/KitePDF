@@ -1,5 +1,6 @@
 package io.github.yuroyami.kitepdf.nativerenderer.difftest
 
+import io.github.yuroyami.kitepdf.difftest.CorpusSelection
 import java.io.File
 
 /**
@@ -18,16 +19,9 @@ object Corpus {
     data class Entry(val name: String, val pdf: File, val synthetic: Boolean)
 
     /** The repo-root `corpus/<sub>` directory (found by walking up to settings.gradle.kts). */
-    fun repoCorpus(sub: String): File? {
-        var d: File? = File(System.getProperty("user.dir")).absoluteFile
-        while (d != null) {
-            if (File(d, "settings.gradle.kts").exists()) return File(d, "corpus/$sub")
-            d = d.parentFile
-        }
-        return null
-    }
+    fun repoCorpus(sub: String): File? = CorpusSelection.repoCorpus(sub)
 
-    fun assemble(outDir: File): List<Entry> {
+    fun assemble(outDir: File, reservedNames: Set<String> = emptySet()): List<Entry> {
         val inputs = File(outDir, "inputs").apply { mkdirs() }
         val entries = mutableListOf<Entry>()
 
@@ -37,17 +31,8 @@ object Corpus {
             entries += Entry(fx.name, f, synthetic = true)
         }
 
-        val dropIn = resolveCorpusDirectory(
-            propertyName = "kitepdf.corpus",
-            configuredPath = System.getProperty("kitepdf.corpus"),
-            fallback = repoCorpus("pdf"),
-        )
-        if (dropIn != null && dropIn.isDirectory) {
-            dropIn.walkTopDown()
-                .filter { it.isFile && it.extension.equals("pdf", ignoreCase = true) }
-                .sortedBy { it.path }
-                .forEach { entries += Entry(it.nameWithoutExtension, it, synthetic = false) }
-        }
+        CorpusSelection.configuredDocuments("pdf", reservedNames + entries.map { it.name })
+            .forEach { entries += Entry(it.name, it.file, synthetic = false) }
         return entries
     }
 
@@ -55,12 +40,5 @@ object Corpus {
         propertyName: String,
         configuredPath: String?,
         fallback: File?,
-    ): File? {
-        if (configuredPath == null) return fallback
-        val directory = File(configuredPath)
-        require(directory.isDirectory) {
-            "$propertyName points to a missing or non-directory corpus: ${directory.absolutePath}"
-        }
-        return directory
-    }
+    ): File? = CorpusSelection.resolveDirectory(propertyName, configuredPath, fallback)
 }

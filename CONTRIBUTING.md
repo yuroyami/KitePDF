@@ -20,7 +20,7 @@ Breaking any of these fails the change, however good the code is.
 - Do not delete or weaken the pure-Kotlin codecs when adding a platform fast path. They are the only implementation on most targets.
 - Do not touch `mupdf-master/` or `readium-kt-toolkit/`. They are read-only reference clones.
 - Do not change on-screen rendering defaults (background, spacing, fade timings) without an issue that says so.
-- Do not commit corpus files. They are git-ignored on purpose and user supplied.
+- Commit a corpus document only when `corpus/manifest.json` lists it with its license. Your own documents stay git-ignored, because they can be copyrighted.
 
 ## The references
 
@@ -38,7 +38,8 @@ Run this before every commit.
 ```bash
 ./gradlew :kitepdf-core:jvmTest :kitepdf-pdf:jvmTest :kitepdf-epub:jvmTest \
           :kitepdf-compose-viewer:jvmTest :kitepdf-skia-renderer:jvmTest \
-          :kitepdf-native-renderer:jvmTest :kitepdf-javascript:jvmTest
+          :kitepdf-native-renderer:jvmTest :kitepdf-javascript:jvmTest \
+          :kitepdf-difftest:jvmTest
 ```
 
 ```bash
@@ -107,7 +108,11 @@ KITEPDF_BENCH=true ./gradlew :kitepdf-native-renderer:jvmTest --tests "*Benchmar
 
 ## The corpus
 
-The repo root holds a `corpus/` folder with `pdf/` and `epub/` subfolders. It is git-ignored and user supplied, so a clean checkout scores fewer pages than a local machine with documents in it. Never commit its contents.
+The repo root holds `corpus/pdf/` and `corpus/epub/`. The public documents that `corpus/manifest.json` lists are tracked, with their credits and license texts, so a clean checkout tests them. The renderer test tasks run `python3 tools/corpus.py verify` first, which checks every listed file against its byte count and SHA-256. The [corpus guide](corpus/README.md) explains how to add a public document.
+
+Your own documents go in the same folders and stay git-ignored. They make your local counts differ from CI.
+
+The PDF sweep scores up to six evenly spaced pages per document. Use `-Dkitepdf.diff.allpages=true` to score every page, and read the selected and scored counts in the report. The EPUB sweep renders every page; its MuPDF comparison of page 0 is for information only.
 
 When you touch a feature with no real-world coverage, grow the corpus: add a generated fixture straight away, and ask for a real file when a synthetic one cannot prove the case.
 

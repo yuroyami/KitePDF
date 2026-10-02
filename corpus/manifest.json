@@ -1,0 +1,840 @@
+{
+  "schema_version": 1,
+  "description": "Reviewed public test documents. Existing private or legacy corpus files are not covered by these licences.",
+  "entries": [
+    {
+      "id": "idpf-cole-voyage-of-life",
+      "path": "corpus/epub/idpf-cole-voyage-of-life.epub",
+      "title": "Thomas Cole - The Voyage of Life",
+      "creators": "Jesse Dylan",
+      "source_url": "https://github.com/IDPF/epub3-samples/tree/46d7e07e1b39b2d0a0245ececaf896edcd9de4b2/30/cole-voyage-of-life",
+      "download_url": "https://github.com/IDPF/epub3-samples/releases/download/20230704/cole-voyage-of-life.epub",
+      "license": "CC-BY-SA-3.0",
+      "license_url": "https://creativecommons.org/licenses/by-sa/3.0/",
+      "attribution": "Thomas Cole - The Voyage of Life; Jesse Dylan. IDPF EPUB 3 Samples, release 20230704. Licensed CC BY-SA 3.0. Downloaded unchanged; retain attribution and share-alike notices. Paintings by Thomas Cole. Upstream attribution URL: https://en.wikipedia.org/wiki/The_Voyage_of_Life .",
+      "sha256": "e38ed606ff604e638f737efaf66e0fd0b2997c3eab7432bcba9a00a81a925cf3",
+      "bytes": 970980,
+      "coverage_tags": [
+        "epub3",
+        "mixed-layout",
+        "reflow",
+        "fixed-layout",
+        "per-spine-rendition",
+        "landscape",
+        "jpeg-images"
+      ],
+      "license_evidence": "The unchanged EPUB package explicitly licenses the publication under CC BY-SA 3.0. The package metadata matches the source at the release-tag revision except line endings. No embedded fonts are present.",
+      "source_revision": "46d7e07e1b39b2d0a0245ececaf896edcd9de4b2",
+      "publication_kind": "third-party-feature-sample",
+      "contributors": [],
+      "publishers": [],
+      "embedded_rights_notices": [
+        "This work is licensed under a Creative Commons Attribution-ShareAlike 3.0 Unported License."
+      ],
+      "retrieved_at": "2026-10-01T00:39:19.270484+00:00",
+      "artifact_pinning_note": "Downloaded unchanged from release 20230704; SHA-256 pins the ZIP bytes. Source is pinned to the commit resolved from that release tag; release container and source can differ in text line endings.",
+      "modified": false,
+      "release_tag": "20230704",
+      "release_asset_id": 115540658,
+      "attribution_urls": [
+        "https://en.wikipedia.org/wiki/The_Voyage_of_Life"
+      ],
+      "license_evidence_details": {
+        "statement": "The unchanged EPUB package explicitly licenses the publication under CC BY-SA 3.0. The package metadata matches the source at the release-tag revision except line endings. No embedded fonts are present.",
+        "source_url": "https://github.com/IDPF/epub3-samples/blob/46d7e07e1b39b2d0a0245ececaf896edcd9de4b2/30/cole-voyage-of-life/EPUB/cole.opf",
+        "archive_member": "EPUB/cole.opf"
+      },
+      "upstream_revision": "46d7e07e1b39b2d0a0245ececaf896edcd9de4b2",
+      "retrieved_on": "2026-10-01"
+    },
+    {
+      "id": "idpf-page-blanche",
+      "path": "corpus/epub/idpf-page-blanche.epub",
+      "title": "Page Blanche",
+      "creators": "Boulet; Bagieu Pénélope",
+      "source_url": "https://github.com/IDPF/epub3-samples/tree/46d7e07e1b39b2d0a0245ececaf896edcd9de4b2/30/page-blanche",
+      "download_url": "https://github.com/IDPF/epub3-samples/releases/download/20230704/page-blanche.epub",
+      "license": "CC-BY-SA-3.0",
+      "license_url": "https://creativecommons.org/licenses/by-sa/3.0/",
+      "attribution": "Page Blanche; Boulet, Bagieu Pénélope, Vincent Gros, éditions Delcourt. IDPF EPUB 3 Samples, release 20230704. Licensed CC BY-SA 3.0. Downloaded unchanged; retain attribution and share-alike notices.",
+      "sha256": "d2efb562f17d43cef50578d4d67dd7fd991f8f254b6f5a7c28bde7461ea783eb",
+      "bytes": 3136922,
+      "coverage_tags": [
+        "epub3",
+        "fixed-layout",
+        "xhtml-spine",
+        "jpeg-images",
+        "comic",
+        "page-spreads",
+        "french"
+      ],
+      "license_evidence": "The unchanged EPUB package explicitly licenses the publication under CC BY-SA 3.0. The package metadata matches the source at the release-tag revision except line endings. No embedded fonts are present.",
+      "source_revision": "46d7e07e1b39b2d0a0245ececaf896edcd9de4b2",
+      "publication_kind": "published-excerpt",
+      "contributors": [
+        "Vincent Gros"
+      ],
+      "publishers": [
+        "éditions Delcourt"
+      ],
+      "embedded_rights_notices": [
+        "This work is shared with the public using the Attribution-ShareAlike 3.0 Unported (CC BY-SA 3.0) license."
+      ],
+      "retrieved_at": "2026-10-01T00:39:19.261772+00:00",
+      "artifact_pinning_note": "Downloaded unchanged from release 20230704; SHA-256 pins the ZIP bytes. Source is pinned to the commit resolved from that release tag; release container and source can differ in text line endings.",
+      "modified": false,
+      "release_tag": "20230704",
+      "release_asset_id": 115540750,
+      "license_evidence_details": {
+        "statement": "The unchanged EPUB package explicitly licenses the publication under CC BY-SA 3.0. The package metadata matches the source at the release-tag revision except line endings. No embedded fonts are present.",
+        "source_url": "https://github.com/IDPF/epub3-samples/blob/46d7e07e1b39b2d0a0245ececaf896edcd9de4b2/30/page-blanche/EPUB/package.opf",
+        "archive_member": "EPUB/package.opf"
+      },
+      "upstream_revision": "46d7e07e1b39b2d0a0245ececaf896edcd9de4b2",
+      "retrieved_on": "2026-10-01"
+    },
+    {
+      "id": "idpf-regime-anticancer-arabic",
+      "path": "corpus/epub/idpf-regime-anticancer-arabic.epub",
+      "title": "Le Vrai Régime anti-cancer",
+      "creators": "Pr David Khayat; Nathalie Hutter-Lardeau; Marina Khalil Fayad",
+      "source_url": "https://github.com/IDPF/epub3-samples/tree/46d7e07e1b39b2d0a0245ececaf896edcd9de4b2/30/regime-anticancer-arabic",
+      "download_url": "https://github.com/IDPF/epub3-samples/releases/download/20230704/regime-anticancer-arabic.epub",
+      "license": "CC-BY-SA-3.0",
+      "license_url": "https://creativecommons.org/licenses/by-sa/3.0/",
+      "attribution": "Le Vrai Régime anti-cancer; Pr David Khayat, Nathalie Hutter-Lardeau, Marina Khalil Fayad, Vincent Gros, Hachette Antoine. IDPF EPUB 3 Samples, release 20230704. Licensed CC BY-SA 3.0. Downloaded unchanged; retain attribution and share-alike notices.",
+      "sha256": "5d10bf6a73f461b7b23294b6e34b72f2a1184c9543a424b4a0f737ed33967e96",
+      "bytes": 110694,
+      "coverage_tags": [
+        "epub3",
+        "reflow",
+        "arabic",
+        "rtl",
+        "complex-script",
+        "system-fonts"
+      ],
+      "license_evidence": "The unchanged EPUB package explicitly licenses the publication under CC BY-SA 3.0. The package metadata matches the source at the release-tag revision except line endings. No embedded fonts are present.",
+      "source_revision": "46d7e07e1b39b2d0a0245ececaf896edcd9de4b2",
+      "publication_kind": "published-excerpt",
+      "contributors": [
+        "Vincent Gros"
+      ],
+      "publishers": [
+        "Hachette Antoine"
+      ],
+      "embedded_rights_notices": [
+        "This work is shared with the public using the Attribution-ShareAlike 3.0 Unported (CC BY-SA 3.0) license."
+      ],
+      "retrieved_at": "2026-10-01T00:39:19.268271+00:00",
+      "artifact_pinning_note": "Downloaded unchanged from release 20230704; SHA-256 pins the ZIP bytes. Source is pinned to the commit resolved from that release tag; release container and source can differ in text line endings.",
+      "modified": false,
+      "release_tag": "20230704",
+      "release_asset_id": 115540755,
+      "license_evidence_details": {
+        "statement": "The unchanged EPUB package explicitly licenses the publication under CC BY-SA 3.0. The package metadata matches the source at the release-tag revision except line endings. No embedded fonts are present.",
+        "source_url": "https://github.com/IDPF/epub3-samples/blob/46d7e07e1b39b2d0a0245ececaf896edcd9de4b2/30/regime-anticancer-arabic/EPUB/package.opf",
+        "archive_member": "EPUB/package.opf"
+      },
+      "upstream_revision": "46d7e07e1b39b2d0a0245ececaf896edcd9de4b2",
+      "retrieved_on": "2026-10-01"
+    },
+    {
+      "id": "idpf-svg-in-spine",
+      "path": "corpus/epub/idpf-svg-in-spine.epub",
+      "title": "SVG in Spine",
+      "creators": "ePub Sample project",
+      "source_url": "https://github.com/IDPF/epub3-samples/tree/46d7e07e1b39b2d0a0245ececaf896edcd9de4b2/30/svg-in-spine",
+      "download_url": "https://github.com/IDPF/epub3-samples/releases/download/20230704/svg-in-spine.epub",
+      "license": "CC-BY-SA-3.0 AND CC-BY-3.0",
+      "license_url": "https://creativecommons.org/licenses/by-sa/3.0/",
+      "attribution": "SVG in Spine; ePub Sample project, Takeshi Kanai, ePub Sample. IDPF EPUB 3 Samples, release 20230704. Licensed CC BY-SA 3.0. Downloaded unchanged; retain attribution and share-alike notices. The flyer and two Tsuru SVG resources retain their explicitly declared CC BY 3.0 licences.",
+      "sha256": "ed6b1b9e99245ac7747ced1a2f90bad1acab558280cffc7daed3e54ee48e49bb",
+      "bytes": 687362,
+      "coverage_tags": [
+        "epub3",
+        "fixed-layout",
+        "svg-spine",
+        "svg-images",
+        "jpeg-images",
+        "page-spreads"
+      ],
+      "license_evidence": "OPS/content.opf declares CC BY-SA 3.0 for the publication and cover, and explicitly refines three resources (img002, page003, page004) to CC BY 3.0. All notices and assets are retained unchanged. No embedded fonts are present.",
+      "source_revision": "46d7e07e1b39b2d0a0245ececaf896edcd9de4b2",
+      "publication_kind": "third-party-feature-sample",
+      "contributors": [
+        "Takeshi Kanai"
+      ],
+      "publishers": [
+        "ePub Sample"
+      ],
+      "embedded_rights_notices": [
+        "This work is licensed under a Creative Commons Attribution (CC BY SA) license."
+      ],
+      "retrieved_at": "2026-10-01T00:39:19.265948+00:00",
+      "artifact_pinning_note": "Downloaded unchanged from release 20230704; SHA-256 pins the ZIP bytes. Source is pinned to the commit resolved from that release tag; release container and source can differ in text line endings.",
+      "modified": false,
+      "release_tag": "20230704",
+      "release_asset_id": 115540759,
+      "license_components": [
+        {
+          "scope": "Publication and cover page page001",
+          "license": "CC-BY-SA-3.0",
+          "license_url": "https://creativecommons.org/licenses/by-sa/3.0/"
+        },
+        {
+          "scope": "OPS/Images/flyer.jpg (img002), OPS/Images/Tsuru_wiki-1b.svg (page003), OPS/Images/Tsuru_wiki-2b.svg (page004)",
+          "license": "CC-BY-3.0",
+          "license_url": "https://creativecommons.org/licenses/by/3.0/"
+        }
+      ],
+      "license_evidence_details": {
+        "statement": "OPS/content.opf declares CC BY-SA 3.0 for the publication and cover, and explicitly refines three resources (img002, page003, page004) to CC BY 3.0. All notices and assets are retained unchanged. No embedded fonts are present.",
+        "source_url": "https://github.com/IDPF/epub3-samples/blob/46d7e07e1b39b2d0a0245ececaf896edcd9de4b2/30/svg-in-spine/OPS/content.opf",
+        "archive_member": "OPS/content.opf"
+      },
+      "upstream_revision": "46d7e07e1b39b2d0a0245ececaf896edcd9de4b2",
+      "retrieved_on": "2026-10-01"
+    },
+    {
+      "id": "joss-ogre-relativity",
+      "path": "corpus/pdf/public-joss-ogre-relativity.pdf",
+      "title": "OGRe: An Object-Oriented General Relativity Package for Mathematica",
+      "creators": "Barak Shoshany",
+      "source_url": "https://joss.theoj.org/papers/10.21105/joss.03416",
+      "download_url": "https://raw.githubusercontent.com/openjournals/joss-papers/5af614174907c1f079ea0c0c461285cfee9a6aca/joss.03416/10.21105.joss.03416.pdf",
+      "license": "CC-BY-4.0",
+      "license_url": "https://joss.theoj.org/papers/10.21105/joss.03416",
+      "attribution": "OGRe: An Object-Oriented General Relativity Package for Mathematica. Barak Shoshany. CC-BY-4.0. Unchanged copy; source: https://joss.theoj.org/papers/10.21105/joss.03416",
+      "upstream_revision": "5af614174907c1f079ea0c0c461285cfee9a6aca",
+      "coverage_tags": [
+        "scientific-paper",
+        "mathematics",
+        "tensor-notation",
+        "embedded-fonts",
+        "subset-fonts",
+        "soft-masks"
+      ],
+      "license_evidence": "The individual published article page explicitly licenses this work under CC BY 4.0; the unchanged PDF carries the same licence notice. Download comes from the publisher Open Journals archive at the recorded commit. JOSS separately licenses included code snippets under MIT.",
+      "sha256": "01d3a2ea77957629daad8a28447938b8b5607334078ae5cdfe72a381bb272b1f",
+      "bytes": 137386,
+      "pages": 4,
+      "pdf_metadata": {
+        "Title": "OGRe: An Object-Oriented General Relativity Package for Mathematica",
+        "Creator": "LaTeX with hyperref package",
+        "Producer": "XeTeX 0.99998",
+        "Tagged": "no",
+        "Form": "none",
+        "PDF version": "1.5"
+      },
+      "feature_evidence": "pdfinfo reports four pages produced with LaTeX hyperref/XeTeX. The published article contains general-relativity tensor notation and mathematics. pdffonts reports embedded subset text and math fonts; pdfimages reports RGB images with grayscale soft masks.",
+      "coverage_limitations": "Feature presence was inspected; rendering correctness and standards conformance were not certified during acquisition.",
+      "retrieved_on": "2026-10-01"
+    },
+    {
+      "id": "joss-ryacas-algebra",
+      "path": "corpus/pdf/public-joss-ryacas-algebra.pdf",
+      "title": "Ryacas: A computer algebra system in R",
+      "creators": "Mikkel Meyer Andersen; Søren Højsgaard",
+      "source_url": "https://joss.theoj.org/papers/10.21105/joss.01763",
+      "download_url": "https://raw.githubusercontent.com/openjournals/joss-papers/5af614174907c1f079ea0c0c461285cfee9a6aca/joss.01763/10.21105.joss.01763.pdf",
+      "license": "CC-BY-4.0",
+      "license_url": "https://joss.theoj.org/papers/10.21105/joss.01763",
+      "attribution": "Ryacas: A computer algebra system in R. Mikkel Meyer Andersen; Søren Højsgaard. CC-BY-4.0. Unchanged copy; source: https://joss.theoj.org/papers/10.21105/joss.01763",
+      "upstream_revision": "5af614174907c1f079ea0c0c461285cfee9a6aca",
+      "coverage_tags": [
+        "scientific-paper",
+        "mathematics",
+        "code-listings",
+        "embedded-fonts",
+        "subset-fonts",
+        "soft-masks"
+      ],
+      "license_evidence": "The individual published article page explicitly licenses this work under CC BY 4.0; the unchanged PDF carries the same licence notice. Download comes from the publisher Open Journals archive at the recorded commit. JOSS separately licenses included code snippets under MIT.",
+      "sha256": "8ad9ad1aa75c6cc51a399bc4243afb467b1306d68ce9f8d62a3b789d7eae6860",
+      "bytes": 120611,
+      "pages": 2,
+      "pdf_metadata": {
+        "Title": "Ryacas: A computer algebra system in R",
+        "Creator": "LaTeX with hyperref package",
+        "Producer": "XeTeX 0.99998",
+        "Tagged": "no",
+        "Form": "none",
+        "PDF version": "1.5"
+      },
+      "feature_evidence": "pdfinfo reports two pages produced with LaTeX hyperref/XeTeX. The published article contains symbolic mathematics and R code listings. pdffonts reports embedded subset text/monospace fonts; pdfimages reports RGB images with grayscale soft masks.",
+      "coverage_limitations": "Feature presence was inspected; rendering correctness and standards conformance were not certified during acquisition.",
+      "retrieved_on": "2026-10-01"
+    },
+    {
+      "id": "pdfa-actualtext-ocr",
+      "path": "corpus/pdf/public-pdfa-actualtext-ocr.pdf",
+      "title": "ActualText replaces OCR errors",
+      "creators": "PDF Association",
+      "source_url": "https://github.com/pdf-association/techniques-for-accessible-pdf/blob/3e31095d8aeea941eccbbb766a23369374c2e9a6/fundamentals/2-text/G2_06-ActualText-provides-correct-extractable-characters-in-place-of-OCR-errors/UA1_Tpdf-G2_06.pdf",
+      "download_url": "https://raw.githubusercontent.com/pdf-association/techniques-for-accessible-pdf/3e31095d8aeea941eccbbb766a23369374c2e9a6/fundamentals/2-text/G2_06-ActualText-provides-correct-extractable-characters-in-place-of-OCR-errors/UA1_Tpdf-G2_06.pdf",
+      "license": "CC-BY-4.0",
+      "license_url": "https://github.com/pdf-association/techniques-for-accessible-pdf/blob/3e31095d8aeea941eccbbb766a23369374c2e9a6/LICENSE",
+      "attribution": "ActualText replaces OCR errors. PDF Association. CC-BY-4.0. Unchanged copy; source: https://github.com/pdf-association/techniques-for-accessible-pdf/blob/3e31095d8aeea941eccbbb766a23369374c2e9a6/fundamentals/2-text/G2_06-ActualText-provides-correct-extractable-characters-in-place-of-OCR-errors/UA1_Tpdf-G2_06.pdf",
+      "upstream_revision": "3e31095d8aeea941eccbbb766a23369374c2e9a6",
+      "coverage_tags": [
+        "tagged-pdf",
+        "pdf-ua",
+        "actualtext",
+        "ocr",
+        "embedded-fonts",
+        "subset-fonts",
+        "images"
+      ],
+      "license_evidence": "The PDF Association repository LICENSE grants CC BY 4.0; its README identifies each technique PDF as repository content. The selected technique README and YAML were inspected and contain no separate licence exception.",
+      "sha256": "d7de1e10e633b7e6b5e93d7c45c9153e225eee5ae1e961186b93ae21d00025f0",
+      "bytes": 45373,
+      "pages": 1,
+      "pdf_metadata": {
+        "Title": "PDF106 G2_06 Example Technique for Accessible PDF",
+        "Author": "PDF Association",
+        "Tagged": "yes",
+        "Form": "none",
+        "PDF version": "1.7"
+      },
+      "feature_evidence": "pdfinfo reports tagged PDF 1.7. The technique README describes an image of scanned text, invisible OCR text and ActualText on a Span tag; pdfimages finds a 700x47 indexed image and pdffonts finds an embedded Calibri subset.",
+      "coverage_limitations": "Feature presence was inspected; rendering correctness and standards conformance were not certified during acquisition.",
+      "retrieved_on": "2026-10-01"
+    },
+    {
+      "id": "pdfa-annotation-tab-order",
+      "path": "corpus/pdf/public-pdfa-annotation-tab-order.pdf",
+      "title": "Correct tab order for pages with annotations",
+      "creators": "PDF Association",
+      "source_url": "https://github.com/pdf-association/techniques-for-accessible-pdf/blob/3e31095d8aeea941eccbbb766a23369374c2e9a6/fundamentals/4-logical-content-order/G4_05-Tab-order-for-pages-with-annotations-correctly-set/UA1_Tpdf-G4_05.pdf",
+      "download_url": "https://raw.githubusercontent.com/pdf-association/techniques-for-accessible-pdf/3e31095d8aeea941eccbbb766a23369374c2e9a6/fundamentals/4-logical-content-order/G4_05-Tab-order-for-pages-with-annotations-correctly-set/UA1_Tpdf-G4_05.pdf",
+      "license": "CC-BY-4.0",
+      "license_url": "https://github.com/pdf-association/techniques-for-accessible-pdf/blob/3e31095d8aeea941eccbbb766a23369374c2e9a6/LICENSE",
+      "attribution": "Correct tab order for pages with annotations. PDF Association. CC-BY-4.0. Unchanged copy; source: https://github.com/pdf-association/techniques-for-accessible-pdf/blob/3e31095d8aeea941eccbbb766a23369374c2e9a6/fundamentals/4-logical-content-order/G4_05-Tab-order-for-pages-with-annotations-correctly-set/UA1_Tpdf-G4_05.pdf",
+      "upstream_revision": "3e31095d8aeea941eccbbb766a23369374c2e9a6",
+      "coverage_tags": [
+        "tagged-pdf",
+        "pdf-ua",
+        "annotations",
+        "tab-order",
+        "acroform",
+        "embedded-fonts",
+        "subset-fonts"
+      ],
+      "license_evidence": "The PDF Association repository LICENSE grants CC BY 4.0; its README identifies each technique PDF as repository content. The selected technique README and YAML were inspected and contain no separate licence exception.",
+      "sha256": "ae8d29468f6000db0ef6c6c42a2e83d20720617879fd4e3d25255fe665411a3f",
+      "bytes": 868914,
+      "pages": 1,
+      "pdf_metadata": {
+        "Title": "PDF113 G4_05 Example Technique for Accessible PDF",
+        "Author": "PDF Association",
+        "Tagged": "yes",
+        "Form": "AcroForm",
+        "PDF version": "1.7"
+      },
+      "feature_evidence": "pdfinfo reports tagged PDF 1.7 and an AcroForm. mutool shows three AcroForm Fields references (33, 35, 28). The technique README identifies annotation/form-field tab order driven by logical content order. pdffonts confirms embedded full and subset Calibri fonts.",
+      "coverage_limitations": "Feature presence was inspected; rendering correctness and standards conformance were not certified during acquisition.",
+      "retrieved_on": "2026-10-01"
+    },
+    {
+      "id": "pdfa-colorburn",
+      "path": "corpus/pdf/public-pdfa-colorburn.pdf",
+      "title": "ColorBurn blend-mode differential",
+      "creators": "PDF Association",
+      "source_url": "https://github.com/pdf-association/pdf-differences/blob/907fe96e52b73e491489eee545c47b119bf9989b/ColorBurn-ColorDodge/ColorBurn.pdf",
+      "download_url": "https://raw.githubusercontent.com/pdf-association/pdf-differences/907fe96e52b73e491489eee545c47b119bf9989b/ColorBurn-ColorDodge/ColorBurn.pdf",
+      "license": "CC-BY-4.0",
+      "license_url": "https://github.com/pdf-association/pdf-differences/blob/907fe96e52b73e491489eee545c47b119bf9989b/README.md",
+      "attribution": "ColorBurn blend-mode differential. PDF Association. CC-BY-4.0. Unchanged copy; source: https://github.com/pdf-association/pdf-differences/blob/907fe96e52b73e491489eee545c47b119bf9989b/ColorBurn-ColorDodge/ColorBurn.pdf",
+      "upstream_revision": "907fe96e52b73e491489eee545c47b119bf9989b",
+      "coverage_tags": [
+        "transparency",
+        "blend-modes",
+        "vector"
+      ],
+      "license_evidence": "Repository README explicitly identifies PDF Association as the PDF copyright holder and licenses PDF files under CC BY 4.0. The Apache licence in this repository applies to source code, not these PDFs.",
+      "sha256": "ef2416ff47d4ac4a5cee17335bccbcd7732ee7bbfde619971b48b56af7240fb6",
+      "bytes": 3357,
+      "pages": 1,
+      "pdf_metadata": {
+        "Tagged": "no",
+        "Form": "none",
+        "PDF version": "1.7"
+      },
+      "feature_evidence": "The file-specific upstream README identifies ColorBurn blending in a DeviceRGB transparency group with RGB stripe/rectangle vector graphics. pdfimages reports no raster images.",
+      "coverage_limitations": "Feature presence was inspected; rendering correctness and standards conformance were not certified during acquisition.",
+      "retrieved_on": "2026-10-01"
+    },
+    {
+      "id": "pdfa-column-reading-order",
+      "path": "corpus/pdf/public-pdfa-column-reading-order.pdf",
+      "title": "Correct reading order for columns",
+      "creators": "PDF Association",
+      "source_url": "https://github.com/pdf-association/techniques-for-accessible-pdf/blob/3e31095d8aeea941eccbbb766a23369374c2e9a6/fundamentals/4-logical-content-order/G4_03-Content-in-columns-correctly-ordered/UA1_Tpdf-G4_03.pdf",
+      "download_url": "https://raw.githubusercontent.com/pdf-association/techniques-for-accessible-pdf/3e31095d8aeea941eccbbb766a23369374c2e9a6/fundamentals/4-logical-content-order/G4_03-Content-in-columns-correctly-ordered/UA1_Tpdf-G4_03.pdf",
+      "license": "CC-BY-4.0",
+      "license_url": "https://github.com/pdf-association/techniques-for-accessible-pdf/blob/3e31095d8aeea941eccbbb766a23369374c2e9a6/LICENSE",
+      "attribution": "Correct reading order for columns. PDF Association. CC-BY-4.0. Unchanged copy; source: https://github.com/pdf-association/techniques-for-accessible-pdf/blob/3e31095d8aeea941eccbbb766a23369374c2e9a6/fundamentals/4-logical-content-order/G4_03-Content-in-columns-correctly-ordered/UA1_Tpdf-G4_03.pdf",
+      "upstream_revision": "3e31095d8aeea941eccbbb766a23369374c2e9a6",
+      "coverage_tags": [
+        "tagged-pdf",
+        "pdf-ua",
+        "multicolumn",
+        "reading-order",
+        "embedded-fonts",
+        "subset-fonts"
+      ],
+      "license_evidence": "The PDF Association repository LICENSE grants CC BY 4.0; its README identifies each technique PDF as repository content. The selected technique README and YAML were inspected and contain no separate licence exception.",
+      "sha256": "b823997dc8bbecb5e2b22ff9463912aeed8e67de62ccb02fc57d36d928b3d745",
+      "bytes": 31344,
+      "pages": 1,
+      "pdf_metadata": {
+        "Title": "PDF111 G4_03 Example Technique for Accessible PDF",
+        "Author": "PDF Association",
+        "Tagged": "yes",
+        "Form": "none",
+        "PDF version": "1.7"
+      },
+      "feature_evidence": "pdfinfo reports tagged PDF 1.7. The technique README identifies two columns tagged in the intended logical order. pdffonts confirms embedded subsets of Calibri and ArialMT.",
+      "coverage_limitations": "Feature presence was inspected; rendering correctness and standards conformance were not certified during acquisition.",
+      "retrieved_on": "2026-10-01"
+    },
+    {
+      "id": "pdfa-default-rgb-inheritance",
+      "path": "corpus/pdf/public-pdfa-default-rgb-inheritance.pdf",
+      "title": "Inherited default RGB colour spaces",
+      "creators": "PDF Association",
+      "source_url": "https://github.com/pdf-association/pdf-differences/blob/907fe96e52b73e491489eee545c47b119bf9989b/DefaultColorSpaces/DefaultRGBColourSpaces-inherit.pdf",
+      "download_url": "https://raw.githubusercontent.com/pdf-association/pdf-differences/907fe96e52b73e491489eee545c47b119bf9989b/DefaultColorSpaces/DefaultRGBColourSpaces-inherit.pdf",
+      "license": "CC-BY-4.0",
+      "license_url": "https://github.com/pdf-association/pdf-differences/blob/907fe96e52b73e491489eee545c47b119bf9989b/README.md",
+      "attribution": "Inherited default RGB colour spaces. PDF Association. CC-BY-4.0. Unchanged copy; source: https://github.com/pdf-association/pdf-differences/blob/907fe96e52b73e491489eee545c47b119bf9989b/DefaultColorSpaces/DefaultRGBColourSpaces-inherit.pdf",
+      "upstream_revision": "907fe96e52b73e491489eee545c47b119bf9989b",
+      "coverage_tags": [
+        "default-colour-space",
+        "resource-inheritance",
+        "vector"
+      ],
+      "license_evidence": "Repository README explicitly identifies PDF Association as the PDF copyright holder and licenses PDF files under CC BY 4.0. The Apache licence in this repository applies to source code, not these PDFs.",
+      "sha256": "a6cd5a5fc4aebae91a56ea509a84c8fb7985e143c68824db7ffabd7505896efe",
+      "bytes": 5645,
+      "pages": 1,
+      "pdf_metadata": {
+        "Tagged": "no",
+        "Form": "none",
+        "PDF version": "1.3"
+      },
+      "feature_evidence": "The file-specific upstream README identifies a PDF 1.3 legacy resource-inheritance test using DefaultRGB resources and CalRGB matrices that swap color components. pdfinfo confirms PDF 1.3; pdfimages reports no raster images.",
+      "coverage_limitations": "Feature presence was inspected; rendering correctness and standards conformance were not certified during acquisition.",
+      "retrieved_on": "2026-10-01"
+    },
+    {
+      "id": "pdfa-pdf20-black-point-compensation",
+      "path": "corpus/pdf/public-pdfa-pdf20-black-point-compensation.pdf",
+      "title": "PDF 2.0 image with black-point compensation",
+      "creators": "PDF Association",
+      "source_url": "https://github.com/pdf-association/pdf20examples/blob/c20f2c17bfcc4baab7cfe62e70fae64caf14d5fa/PDF%202.0%20image%20with%20BPC.pdf",
+      "download_url": "https://raw.githubusercontent.com/pdf-association/pdf20examples/c20f2c17bfcc4baab7cfe62e70fae64caf14d5fa/PDF%202.0%20image%20with%20BPC.pdf",
+      "license": "CC-BY-SA-4.0",
+      "license_url": "https://github.com/pdf-association/pdf20examples/blob/c20f2c17bfcc4baab7cfe62e70fae64caf14d5fa/LICENSE.md",
+      "attribution": "PDF 2.0 image with black-point compensation. PDF Association. CC-BY-SA-4.0. Unchanged copy; source: https://github.com/pdf-association/pdf20examples/blob/c20f2c17bfcc4baab7cfe62e70fae64caf14d5fa/PDF%202.0%20image%20with%20BPC.pdf",
+      "upstream_revision": "c20f2c17bfcc4baab7cfe62e70fae64caf14d5fa",
+      "coverage_tags": [
+        "pdf-2.0",
+        "images",
+        "black-point-compensation",
+        "jpeg"
+      ],
+      "license_evidence": "The pinned repository LICENSE.md explicitly applies CC BY-SA 4.0 to the example PDF 2.0 files, including this selected file, and requires the same licence for contributed examples.",
+      "sha256": "fc517dd0d4c72d1b11e3449acc3e816d2719dc14e69a7e14b84da02808103370",
+      "bytes": 8989,
+      "pages": 1,
+      "pdf_metadata": {
+        "Tagged": "no",
+        "Form": "none",
+        "PDF version": "2.0"
+      },
+      "feature_evidence": "pdfinfo reports PDF 2.0. The upstream example description identifies image black-point compensation; pdfimages reports two 72x72 RGB JPEG images. This is a targeted BPC example, not evidence of a wide-gamut asset.",
+      "coverage_limitations": "Feature presence was inspected; rendering correctness and standards conformance were not certified during acquisition.",
+      "retrieved_on": "2026-10-01"
+    },
+    {
+      "id": "pdfa-pdf20-page-output-intent",
+      "path": "corpus/pdf/public-pdfa-pdf20-page-output-intent.pdf",
+      "title": "PDF 2.0 with page-level output intent",
+      "creators": "PDF Association",
+      "source_url": "https://github.com/pdf-association/pdf20examples/blob/c20f2c17bfcc4baab7cfe62e70fae64caf14d5fa/PDF%202.0%20with%20page%20level%20output%20intent.pdf",
+      "download_url": "https://raw.githubusercontent.com/pdf-association/pdf20examples/c20f2c17bfcc4baab7cfe62e70fae64caf14d5fa/PDF%202.0%20with%20page%20level%20output%20intent.pdf",
+      "license": "CC-BY-SA-4.0",
+      "license_url": "https://github.com/pdf-association/pdf20examples/blob/c20f2c17bfcc4baab7cfe62e70fae64caf14d5fa/LICENSE.md",
+      "attribution": "PDF 2.0 with page-level output intent. PDF Association. CC-BY-SA-4.0. Unchanged copy; source: https://github.com/pdf-association/pdf20examples/blob/c20f2c17bfcc4baab7cfe62e70fae64caf14d5fa/PDF%202.0%20with%20page%20level%20output%20intent.pdf",
+      "upstream_revision": "c20f2c17bfcc4baab7cfe62e70fae64caf14d5fa",
+      "coverage_tags": [
+        "pdf-2.0",
+        "page-output-intent",
+        "rgb-icc"
+      ],
+      "license_evidence": "The pinned repository LICENSE.md explicitly applies CC BY-SA 4.0 to the example PDF 2.0 files, including this selected file, and requires the same licence for contributed examples.",
+      "sha256": "7c13afe3078a4c202184edce3169f7bc842c8fd3db9da7140af6bc0b3b2fa44a",
+      "bytes": 10538,
+      "pages": 2,
+      "pdf_metadata": {
+        "Tagged": "no",
+        "Form": "none",
+        "PDF version": "2.0"
+      },
+      "feature_evidence": "pdfinfo reports PDF 2.0 and two pages. Upstream identifies page-level RGB output intents; pdfimages reports one RGB image on each page. This sample provides RGB ICC/output-intent structure, not verified wide-gamut coverage.",
+      "coverage_limitations": "Feature presence was inspected; rendering correctness and standards conformance were not certified during acquisition.",
+      "retrieved_on": "2026-10-01"
+    },
+    {
+      "id": "pdfa-pdf20-utf8-strings",
+      "path": "corpus/pdf/public-pdfa-pdf20-utf8-strings.pdf",
+      "title": "PDF 2.0 UTF-8 text-string examples",
+      "creators": "Peter Wyatt; PDF Association",
+      "source_url": "https://github.com/pdf-association/pdf20examples/blob/c20f2c17bfcc4baab7cfe62e70fae64caf14d5fa/pdf20-utf8-test.pdf",
+      "download_url": "https://raw.githubusercontent.com/pdf-association/pdf20examples/c20f2c17bfcc4baab7cfe62e70fae64caf14d5fa/pdf20-utf8-test.pdf",
+      "license": "CC-BY-SA-4.0",
+      "license_url": "https://github.com/pdf-association/pdf20examples/blob/c20f2c17bfcc4baab7cfe62e70fae64caf14d5fa/LICENSE.md",
+      "attribution": "PDF 2.0 UTF-8 text-string examples. Peter Wyatt; PDF Association. CC-BY-SA-4.0. Unchanged copy; source: https://github.com/pdf-association/pdf20examples/blob/c20f2c17bfcc4baab7cfe62e70fae64caf14d5fa/pdf20-utf8-test.pdf",
+      "upstream_revision": "c20f2c17bfcc4baab7cfe62e70fae64caf14d5fa",
+      "coverage_tags": [
+        "pdf-2.0",
+        "utf8-metadata",
+        "bookmarks",
+        "optional-content",
+        "annotations",
+        "tagged-pdf"
+      ],
+      "license_evidence": "The pinned repository LICENSE.md explicitly applies CC BY-SA 4.0 to the example PDF 2.0 files, including this selected file, and requires the same licence for contributed examples.",
+      "sha256": "a7ca717ef062df0a65e58487d26358c81424b76084a2000ca1c74b9e5776b7a1",
+      "bytes": 13926,
+      "pages": 1,
+      "pdf_metadata": {
+        "Title": "表ポあA鷗ŒéＢ逍Üßªąñ丂㐀𠀀",
+        "Author": "Peter Wyatt",
+        "Creator": "By hand",
+        "Producer": "By hand",
+        "Tagged": "yes",
+        "Form": "none",
+        "PDF version": "2.0"
+      },
+      "feature_evidence": "pdfinfo reports PDF 2.0, tagged content, and the Unicode title 表ポあA鷗ŒéＢ逍Üßªąñ丂㐀𠀀. The upstream example identifies UTF-8 strings in metadata, outlines, optional content and annotations. This is UTF-8 document-string coverage rather than a multilingual body-text rendering claim.",
+      "coverage_limitations": "Feature presence was inspected; rendering correctness and standards conformance were not certified during acquisition.",
+      "retrieved_on": "2026-10-01"
+    },
+    {
+      "id": "pdfa-vertical-text",
+      "path": "corpus/pdf/public-pdfa-vertical-text.pdf",
+      "title": "Vertical text positioning",
+      "creators": "PDF Association",
+      "source_url": "https://github.com/pdf-association/pdf-differences/blob/907fe96e52b73e491489eee545c47b119bf9989b/VerticalText/VerticalText.pdf",
+      "download_url": "https://raw.githubusercontent.com/pdf-association/pdf-differences/907fe96e52b73e491489eee545c47b119bf9989b/VerticalText/VerticalText.pdf",
+      "license": "CC-BY-4.0",
+      "license_url": "https://github.com/pdf-association/pdf-differences/blob/907fe96e52b73e491489eee545c47b119bf9989b/README.md",
+      "attribution": "Vertical text positioning. PDF Association. CC-BY-4.0. Unchanged copy; source: https://github.com/pdf-association/pdf-differences/blob/907fe96e52b73e491489eee545c47b119bf9989b/VerticalText/VerticalText.pdf",
+      "upstream_revision": "907fe96e52b73e491489eee545c47b119bf9989b",
+      "coverage_tags": [
+        "vertical-text",
+        "font-positioning",
+        "japanese",
+        "font-substitution"
+      ],
+      "license_evidence": "Repository README explicitly identifies PDF Association as the PDF copyright holder and licenses PDF files under CC BY 4.0. The Apache licence in this repository applies to source code, not these PDFs.",
+      "sha256": "64df210d4b119e2af344911a6711764a3569c970265b8b61a2fa08b6c1fe073c",
+      "bytes": 5164,
+      "pages": 1,
+      "pdf_metadata": {
+        "Tagged": "no",
+        "Form": "none",
+        "PDF version": "1.7"
+      },
+      "feature_evidence": "The file-specific upstream README identifies Japanese vertical text and explicitly requires a substitute font supporting vertical writing. pdffonts reports unembedded HiraMinPro-W3-Identity-V CID Type 0 with Identity-V encoding and unembedded TimesNewRomanPSMT.",
+      "coverage_limitations": "Feature presence was inspected; rendering correctness and standards conformance were not certified during acquisition. The PDF does not embed its Japanese or Latin fonts; output depends on available substitute fonts.",
+      "retrieved_on": "2026-10-01"
+    },
+    {
+      "id": "verapdf-device-cmyk",
+      "path": "corpus/pdf/public-verapdf-device-cmyk.pdf",
+      "title": "veraPDF PDF/A-2b device-colour test 6.2.4.3 t02",
+      "creators": "veraPDF Consortium and contributors",
+      "source_url": "https://github.com/veraPDF/veraPDF-corpus/blob/bb75f4f0073d9350dfd058c0162a367e6fadf25e/PDF_A-2b/6.2%20Graphics/6.2.4.3%20Uncalibrated%20-Device%20colour%20spaces/veraPDF%20test%20suite%206-2-4-3-t02-pass-a.pdf",
+      "download_url": "https://raw.githubusercontent.com/veraPDF/veraPDF-corpus/bb75f4f0073d9350dfd058c0162a367e6fadf25e/PDF_A-2b/6.2%20Graphics/6.2.4.3%20Uncalibrated%20-Device%20colour%20spaces/veraPDF%20test%20suite%206-2-4-3-t02-pass-a.pdf",
+      "license": "CC-BY-4.0",
+      "license_url": "https://github.com/veraPDF/veraPDF-corpus/blob/bb75f4f0073d9350dfd058c0162a367e6fadf25e/README.md",
+      "attribution": "veraPDF PDF/A-2b device-colour test 6.2.4.3 t02. veraPDF Consortium and contributors. CC-BY-4.0. Unchanged copy; source: https://github.com/veraPDF/veraPDF-corpus/blob/bb75f4f0073d9350dfd058c0162a367e6fadf25e/PDF_A-2b/6.2%20Graphics/6.2.4.3%20Uncalibrated%20-Device%20colour%20spaces/veraPDF%20test%20suite%206-2-4-3-t02-pass-a.pdf",
+      "upstream_revision": "bb75f4f0073d9350dfd058c0162a367e6fadf25e",
+      "coverage_tags": [
+        "pdf-a",
+        "device-colour-space",
+        "output-intent",
+        "cmyk",
+        "icc",
+        "images",
+        "jpeg"
+      ],
+      "license_evidence": "veraPDF-corpus README applies CC BY 4.0 to the test corpus. Selected files are original veraPDF-labelled cases; no files were taken from the separately named Isartor third-party directory.",
+      "sha256": "b14803d7c5decf13421ce05da8e6d33395f3a85e5b1a7171468c607bfdc52dbc",
+      "bytes": 392949,
+      "pages": 1,
+      "pdf_metadata": {
+        "Tagged": "no",
+        "Form": "none",
+        "PDF version": "1.7"
+      },
+      "feature_evidence": "pdfimages reports a 300x232 four-component CMYK JPEG. mutool object 3 is a GTS_PDFA1 OutputIntent with Coated FOGRA27 (ISO 12647-2:2004); its DestOutputProfile object 7 has /N 4. This proves CMYK image/ICC structures, not wide-gamut rendering correctness or independent PDF/A conformance.",
+      "coverage_limitations": "Feature presence was inspected; rendering correctness and standards conformance were not certified during acquisition.",
+      "retrieved_on": "2026-10-01"
+    },
+    {
+      "id": "verapdf-subset-font",
+      "path": "corpus/pdf/public-verapdf-subset-font.pdf",
+      "title": "veraPDF PDF/A-2b subset-font embedding",
+      "creators": "veraPDF Consortium and contributors",
+      "source_url": "https://github.com/veraPDF/veraPDF-corpus/blob/bb75f4f0073d9350dfd058c0162a367e6fadf25e/PDF_A-2b/6.2%20Graphics/6.2.11%20Fonts/6.2.11.4%20Embedding/6.2.11.4.2%20Subset%20embedding/veraPDF%20test%20suite%206-2-11-4-2-t01-pass-a.pdf",
+      "download_url": "https://raw.githubusercontent.com/veraPDF/veraPDF-corpus/bb75f4f0073d9350dfd058c0162a367e6fadf25e/PDF_A-2b/6.2%20Graphics/6.2.11%20Fonts/6.2.11.4%20Embedding/6.2.11.4.2%20Subset%20embedding/veraPDF%20test%20suite%206-2-11-4-2-t01-pass-a.pdf",
+      "license": "CC-BY-4.0",
+      "license_url": "https://github.com/veraPDF/veraPDF-corpus/blob/bb75f4f0073d9350dfd058c0162a367e6fadf25e/README.md",
+      "attribution": "veraPDF PDF/A-2b subset-font embedding. veraPDF Consortium and contributors. CC-BY-4.0. Unchanged copy; source: https://github.com/veraPDF/veraPDF-corpus/blob/bb75f4f0073d9350dfd058c0162a367e6fadf25e/PDF_A-2b/6.2%20Graphics/6.2.11%20Fonts/6.2.11.4%20Embedding/6.2.11.4.2%20Subset%20embedding/veraPDF%20test%20suite%206-2-11-4-2-t01-pass-a.pdf",
+      "upstream_revision": "bb75f4f0073d9350dfd058c0162a367e6fadf25e",
+      "coverage_tags": [
+        "embedded-fonts",
+        "subset-fonts",
+        "pdf-a",
+        "cff-fonts"
+      ],
+      "license_evidence": "veraPDF-corpus README applies CC BY 4.0 to the test corpus. Selected files are original veraPDF-labelled cases; no files were taken from the separately named Isartor third-party directory.",
+      "sha256": "049a3231486ea79c7eb73a8a05e1351e4d80b67a8a3d189b018661859b815106",
+      "bytes": 9807,
+      "pages": 1,
+      "pdf_metadata": {
+        "Tagged": "no",
+        "Form": "none",
+        "PDF version": "1.4"
+      },
+      "feature_evidence": "pdffonts reports MIJADQ+AdobeNaskh-Medium as embedded, subset Type 1C with a Unicode map. The upstream path identifies PDF/A-2b subset-embedding coverage; this intake does not independently certify PDF/A conformance.",
+      "coverage_limitations": "Feature presence was inspected; rendering correctness and standards conformance were not certified during acquisition.",
+      "retrieved_on": "2026-10-01"
+    },
+    {
+      "id": "verapdf-ua1-form",
+      "path": "corpus/pdf/public-verapdf-ua1-form.pdf",
+      "title": "veraPDF PDF/UA-1 form alternative-name test",
+      "creators": "veraPDF Consortium and contributors",
+      "source_url": "https://github.com/veraPDF/veraPDF-corpus/blob/bb75f4f0073d9350dfd058c0162a367e6fadf25e/PDF_UA-1/7.18%20Annotations/7.18.4%20Forms/7.18.4-t01-pass-a.pdf",
+      "download_url": "https://raw.githubusercontent.com/veraPDF/veraPDF-corpus/bb75f4f0073d9350dfd058c0162a367e6fadf25e/PDF_UA-1/7.18%20Annotations/7.18.4%20Forms/7.18.4-t01-pass-a.pdf",
+      "license": "CC-BY-4.0",
+      "license_url": "https://github.com/veraPDF/veraPDF-corpus/blob/bb75f4f0073d9350dfd058c0162a367e6fadf25e/README.md",
+      "attribution": "veraPDF PDF/UA-1 form alternative-name test. veraPDF Consortium and contributors. CC-BY-4.0. Unchanged copy; source: https://github.com/veraPDF/veraPDF-corpus/blob/bb75f4f0073d9350dfd058c0162a367e6fadf25e/PDF_UA-1/7.18%20Annotations/7.18.4%20Forms/7.18.4-t01-pass-a.pdf",
+      "upstream_revision": "bb75f4f0073d9350dfd058c0162a367e6fadf25e",
+      "coverage_tags": [
+        "tagged-pdf",
+        "pdf-ua",
+        "acroform",
+        "embedded-fonts",
+        "subset-fonts"
+      ],
+      "license_evidence": "veraPDF-corpus README applies CC BY 4.0 to the test corpus. Selected files are original veraPDF-labelled cases; no files were taken from the separately named Isartor third-party directory.",
+      "sha256": "eebd601e070cfa18b46837436149157036e44420d07e6c575120c5d22a2148c6",
+      "bytes": 29426,
+      "pages": 1,
+      "pdf_metadata": {
+        "Title": "Widget-pass",
+        "Author": "veraPDF Consortium",
+        "Creator": "veraPDF Test Builder",
+        "Producer": "veraPDF Test Builder 1.0",
+        "Tagged": "yes",
+        "Form": "AcroForm",
+        "PDF version": "1.6"
+      },
+      "feature_evidence": "pdfinfo reports tagged PDF 1.6 and an AcroForm. mutool shows one AcroForm Fields reference (32); the test outline describes a Widget annotation nested within Form. pdffonts confirms embedded subsets of Liberation Sans/Serif.",
+      "coverage_limitations": "Feature presence was inspected; rendering correctness and standards conformance were not certified during acquisition.",
+      "retrieved_on": "2026-10-01"
+    },
+    {
+      "id": "w3c-cnt-mathml-support",
+      "path": "corpus/epub/w3c-cnt-mathml-support.epub",
+      "title": "cnt-mathml-support",
+      "creators": "Dan Lazin",
+      "source_url": "https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/cnt-mathml-support",
+      "download_url": "https://w3c.github.io/epub-tests/tests/cnt-mathml-support.epub",
+      "license": "W3C-20150513",
+      "license_url": "https://www.w3.org/copyright/software-license-2015/",
+      "attribution": "cnt-mathml-support by Dan Lazin. W3C EPUB test suite contributors; W3C Software and Document License (2015). Downloaded unchanged. Preserve the full licence notice and existing notices.",
+      "sha256": "ad0c8c1583a6d9873dfd759da827f077182adf9e494356d89d9f81996ad0968e",
+      "bytes": 2109,
+      "coverage_tags": [
+        "epub3",
+        "reflow",
+        "mathml"
+      ],
+      "license_evidence": "The unchanged EPUB package links dcterms:rights to the 2015 W3C Software and Document license and names W3C as rights holder. Every uncompressed ZIP member matches its Git blob at the recorded source revision. No separate asset licence exception was found in its contents.",
+      "source_revision": "54092b4233253e9aac80e93ec4782b380b4b3403",
+      "publication_kind": "third-party-conformance-sample",
+      "contributors": [],
+      "publishers": [
+        "W3C"
+      ],
+      "embedded_rights_notices": [],
+      "retrieved_at": "2026-10-01T00:39:19.273062+00:00",
+      "artifact_pinning_note": "Official Pages artifact URL is mutable; no downloadable EPUB in the Git tree or immutable release was available. SHA-256 pins the exact ZIP bytes and retrieval must fail on mismatch. All 5 non-directory members match the pinned source revision.",
+      "modified": false,
+      "license_evidence_details": {
+        "statement": "The unchanged EPUB package links dcterms:rights to the 2015 W3C Software and Document license and names W3C as rights holder. Every uncompressed ZIP member matches its Git blob at the recorded source revision. No separate asset licence exception was found in its contents.",
+        "source_url": "https://github.com/w3c/epub-tests/blob/54092b4233253e9aac80e93ec4782b380b4b3403/tests/cnt-mathml-support/EPUB/package.opf",
+        "archive_member": "EPUB/package.opf"
+      },
+      "upstream_revision": "54092b4233253e9aac80e93ec4782b380b4b3403",
+      "retrieved_on": "2026-10-01"
+    },
+    {
+      "id": "w3c-css-epub-writing-mode",
+      "path": "corpus/epub/w3c-css-epub-writing-mode.epub",
+      "title": "css-epub-writing-mode",
+      "creators": "Wendy Reid",
+      "source_url": "https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/css-epub-writing-mode",
+      "download_url": "https://w3c.github.io/epub-tests/tests/css-epub-writing-mode.epub",
+      "license": "W3C-20150513",
+      "license_url": "https://www.w3.org/copyright/software-license-2015/",
+      "attribution": "css-epub-writing-mode by Wendy Reid. W3C EPUB test suite contributors; W3C Software and Document License (2015). Downloaded unchanged. Preserve the full licence notice and existing notices.",
+      "sha256": "8587211ac0fb0585a9b29d746478bd3ef161d3f327996d57ce0aa1a22218839d",
+      "bytes": 2975,
+      "coverage_tags": [
+        "epub3",
+        "vertical-text",
+        "css-prefixed-writing-mode",
+        "multi-spine"
+      ],
+      "license_evidence": "The unchanged EPUB package links dcterms:rights to the 2015 W3C Software and Document license and names W3C as rights holder. Every uncompressed ZIP member matches its Git blob at the recorded source revision. No separate asset licence exception was found in its contents.",
+      "source_revision": "54092b4233253e9aac80e93ec4782b380b4b3403",
+      "publication_kind": "third-party-conformance-sample",
+      "contributors": [],
+      "publishers": [
+        "W3C"
+      ],
+      "embedded_rights_notices": [],
+      "retrieved_at": "2026-10-01T00:39:19.272544+00:00",
+      "artifact_pinning_note": "Official Pages artifact URL is mutable; no downloadable EPUB in the Git tree or immutable release was available. SHA-256 pins the exact ZIP bytes and retrieval must fail on mismatch. All 7 non-directory members match the pinned source revision.",
+      "modified": false,
+      "license_evidence_details": {
+        "statement": "The unchanged EPUB package links dcterms:rights to the 2015 W3C Software and Document license and names W3C as rights holder. Every uncompressed ZIP member matches its Git blob at the recorded source revision. No separate asset licence exception was found in its contents.",
+        "source_url": "https://github.com/w3c/epub-tests/blob/54092b4233253e9aac80e93ec4782b380b4b3403/tests/css-epub-writing-mode/EPUB/package.opf",
+        "archive_member": "EPUB/package.opf"
+      },
+      "upstream_revision": "54092b4233253e9aac80e93ec4782b380b4b3403",
+      "retrieved_on": "2026-10-01"
+    },
+    {
+      "id": "w3c-nav-non-text-img",
+      "path": "corpus/epub/w3c-nav-non-text_img.epub",
+      "title": "nav-non-text_img",
+      "creators": "Ivan Herman",
+      "source_url": "https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/nav-non-text_img",
+      "download_url": "https://w3c.github.io/epub-tests/tests/nav-non-text_img.epub",
+      "license": "W3C-20150513",
+      "license_url": "https://www.w3.org/copyright/software-license-2015/",
+      "attribution": "nav-non-text_img by Ivan Herman. W3C EPUB test suite contributors; W3C Software and Document License (2015). Downloaded unchanged. Preserve the full licence notice and existing notices.",
+      "sha256": "b9973684bdc6c384108c578b965d6844f1af3f1823ba5c4dbe97488c65be6c2d",
+      "bytes": 239875,
+      "coverage_tags": [
+        "epub3",
+        "reflow",
+        "accessibility",
+        "navigation",
+        "alt-text",
+        "jpeg-images"
+      ],
+      "license_evidence": "The unchanged EPUB package links dcterms:rights to the 2015 W3C Software and Document license and names W3C as rights holder. Every uncompressed ZIP member matches its Git blob at the recorded source revision. No separate asset licence exception was found in its contents.",
+      "source_revision": "54092b4233253e9aac80e93ec4782b380b4b3403",
+      "publication_kind": "third-party-conformance-sample",
+      "contributors": [],
+      "publishers": [
+        "W3C"
+      ],
+      "embedded_rights_notices": [],
+      "retrieved_at": "2026-10-01T00:39:19.274092+00:00",
+      "artifact_pinning_note": "Official Pages artifact URL is mutable; no downloadable EPUB in the Git tree or immutable release was available. SHA-256 pins the exact ZIP bytes and retrieval must fail on mismatch. All 7 non-directory members match the pinned source revision.",
+      "modified": false,
+      "license_evidence_details": {
+        "statement": "The unchanged EPUB package links dcterms:rights to the 2015 W3C Software and Document license and names W3C as rights holder. Every uncompressed ZIP member matches its Git blob at the recorded source revision. No separate asset licence exception was found in its contents.",
+        "source_url": "https://github.com/w3c/epub-tests/blob/54092b4233253e9aac80e93ec4782b380b4b3403/tests/nav-non-text_img/EPUB/package.opf",
+        "archive_member": "EPUB/package.opf"
+      },
+      "upstream_revision": "54092b4233253e9aac80e93ec4782b380b4b3403",
+      "retrieved_on": "2026-10-01"
+    },
+    {
+      "id": "w3c-pkg-spine-nonlinear-activation",
+      "path": "corpus/epub/w3c-pkg-spine-nonlinear-activation.epub",
+      "title": "pkg-spine-nonlinear-activation",
+      "creators": "Dave Cramer",
+      "source_url": "https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/pkg-spine-nonlinear-activation",
+      "download_url": "https://w3c.github.io/epub-tests/tests/pkg-spine-nonlinear-activation.epub",
+      "license": "W3C-20150513",
+      "license_url": "https://www.w3.org/copyright/software-license-2015/",
+      "attribution": "pkg-spine-nonlinear-activation by Dave Cramer. W3C EPUB test suite contributors; W3C Software and Document License (2015). Downloaded unchanged. Preserve the full licence notice and existing notices.",
+      "sha256": "ba236ee2d78ccb649cf7a51ecba5483304e4f3c35d7b470ebe391179a677b014",
+      "bytes": 2334,
+      "coverage_tags": [
+        "epub3",
+        "reflow",
+        "nonlinear-spine",
+        "internal-links",
+        "navigation"
+      ],
+      "license_evidence": "The unchanged EPUB package links dcterms:rights to the 2015 W3C Software and Document license and names W3C as rights holder. Every uncompressed ZIP member matches its Git blob at the recorded source revision. No separate asset licence exception was found in its contents.",
+      "source_revision": "54092b4233253e9aac80e93ec4782b380b4b3403",
+      "publication_kind": "third-party-conformance-sample",
+      "contributors": [],
+      "publishers": [
+        "W3C"
+      ],
+      "embedded_rights_notices": [],
+      "retrieved_at": "2026-10-01T00:39:19.274675+00:00",
+      "artifact_pinning_note": "Official Pages artifact URL is mutable; no downloadable EPUB in the Git tree or immutable release was available. SHA-256 pins the exact ZIP bytes and retrieval must fail on mismatch. All 6 non-directory members match the pinned source revision.",
+      "modified": false,
+      "license_evidence_details": {
+        "statement": "The unchanged EPUB package links dcterms:rights to the 2015 W3C Software and Document license and names W3C as rights holder. Every uncompressed ZIP member matches its Git blob at the recorded source revision. No separate asset licence exception was found in its contents.",
+        "source_url": "https://github.com/w3c/epub-tests/blob/54092b4233253e9aac80e93ec4782b380b4b3403/tests/pkg-spine-nonlinear-activation/EPUB/package.opf",
+        "archive_member": "EPUB/package.opf"
+      },
+      "upstream_revision": "54092b4233253e9aac80e93ec4782b380b4b3403",
+      "retrieved_on": "2026-10-01"
+    },
+    {
+      "id": "wikimedia-editing-arabic-wikipedia",
+      "path": "corpus/pdf/public-wikimedia-editing-arabic-wikipedia.pdf",
+      "title": "Editing Arabic Wikipedia, Part I: Principles and Visual Editor",
+      "creators": "Abbad Diraneyya; Sandra Hanbo; Michel Bakni; Raya Sharbain (cover design)",
+      "source_url": "https://commons.wikimedia.org/w/index.php?title=File:Editing_Arabic_Wikipedia_Part_I_Principles_and_Visual_Editor.pdf&oldid=845800819",
+      "download_url": "https://upload.wikimedia.org/wikipedia/commons/2/20/Editing_Arabic_Wikipedia_Part_I_Principles_and_Visual_Editor.pdf",
+      "license": "CC-BY-SA-4.0",
+      "license_url": "https://creativecommons.org/licenses/by-sa/4.0/",
+      "attribution": "Editing Arabic Wikipedia, Part I: Principles and Visual Editor. Abbad Diraneyya; Sandra Hanbo; Michel Bakni; Raya Sharbain (cover design). CC-BY-SA-4.0. Unchanged copy; source: https://commons.wikimedia.org/w/index.php?title=File:Editing_Arabic_Wikipedia_Part_I_Principles_and_Visual_Editor.pdf&oldid=845800819",
+      "upstream_revision": "Commons file upload 2023-05-26T21:41; description oldid=845800819; SHA-256 pins downloaded bytes",
+      "coverage_tags": [
+        "arabic",
+        "rtl",
+        "multilingual",
+        "illustrated-guide",
+        "screenshots",
+        "tables",
+        "embedded-fonts",
+        "subset-fonts",
+        "soft-masks"
+      ],
+      "license_evidence": "Commons file-specific description records an own-work CC BY-SA 4.0 grant by the copyright holder. The PDF itself additionally states CC BY 4.0 on page 2. This entry conservatively records the file-page share-alike grant and preserves all internal notices. No altered or extracted pages.",
+      "sha256": "c26d3759dee81c0a67fa3e97f802a91dc73dfa7f92ae601fab5ba8e19d953d25",
+      "bytes": 2028315,
+      "pages": 28,
+      "pdf_metadata": {
+        "Producer": "PDFill PDF Editor 15.0",
+        "Tagged": "no",
+        "Form": "none",
+        "PDF version": "1.4"
+      },
+      "feature_evidence": "pdfinfo reports 28 pages. The source and PDF identify an Arabic Wikipedia editing guide with Arabic right-to-left body text, Latin interface/code terms, screenshots and tables. pdffonts reports embedded full 29LTAzer Light/Regular/Black CID TrueType fonts and Calibri subsets, with Unicode maps. pdfimages reports many screenshots and grayscale soft masks.",
+      "coverage_limitations": "Feature presence was inspected; rendering correctness and standards conformance were not certified during acquisition. The Commons description is revision-pinned; its upload URL is the current-file endpoint, so SHA-256 and byte count must be checked on every fetch.",
+      "retrieved_on": "2026-10-01"
+    }
+  ]
+}

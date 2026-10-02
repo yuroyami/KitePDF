@@ -14,6 +14,15 @@ plugins {
     alias(libs.plugins.dokka)
 }
 
+// The public corpus documents are tracked (#194). This check also runs before an otherwise
+// up-to-date renderer task, so a missing or changed file cannot shrink a green run.
+val verifyPublicCorpus = tasks.register<Exec>("verifyPublicCorpus") {
+    group = "verification"
+    description = "Verify every licensed public-corpus file against its manifest, without network access."
+    workingDir(rootDir)
+    commandLine("python3", "tools/corpus.py", "verify")
+}
+
 allprojects {
     group = "io.github.yuroyami"
     // Single source of truth: `version` in gradle.properties. Hardcoding it here
@@ -26,6 +35,12 @@ allprojects {
     // the builder's grow-by-doubling copy.
     tasks.withType<Test>().configureEach {
         maxHeapSize = "3g"
+        if (project.name in setOf("kitepdf-native-renderer", "kitepdf-skia-renderer") && name == "jvmTest") {
+            dependsOn(verifyPublicCorpus)
+            inputs.file(rootProject.file("corpus/manifest.json"))
+                .withPropertyName("publicCorpusManifest")
+                .withPathSensitivity(PathSensitivity.NONE)
+        }
     }
 }
 
@@ -99,4 +114,3 @@ subprojects {
         }
     }
 }
-

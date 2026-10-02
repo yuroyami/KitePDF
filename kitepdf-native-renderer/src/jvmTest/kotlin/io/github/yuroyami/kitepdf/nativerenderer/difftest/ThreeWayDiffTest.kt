@@ -90,5 +90,7 @@ class ThreeWayDiffTest {
         assertEquals("", ParityHarness.missingCharacters("of\r\nfice", "oﬃce"))
         assertEquals("ll", ParityHarness.missingCharacters("hello", "heo"))
         assertEquals("", ParityHarness.missingCharacters("abc", "a b c d"))
+        // PDFium's line-end hyphen, U+0002, is the `-` that the other engines write.
+        assertEquals("", ParityHarness.missingCharacters("com\u0002bining", "com-bining"))
     }
 }

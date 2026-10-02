@@ -51,7 +51,21 @@ class PdfiumParityTest {
          * Pages where PDFium does better today, each with the open issue that records it.
          * The goal is an empty map. Drop-in corpus pages run only where the corpus exists.
          */
-        val KNOWN_GAPS: Map<String, Int> = emptyMap()
+        val KNOWN_GAPS: Map<String, Int> = mapOf(
+            "public-joss-ogre-relativity p1" to 469,
+            "public-pdfa-column-reading-order p0" to 466,
+            "public-pdfa-default-rgb-inheritance p0" to 459,
+            // Both #471 and #472 need fixing before this page passes.
+            "public-pdfa-vertical-text p0" to 471,
+            "public-verapdf-device-cmyk p0" to 470,
+            "public-verapdf-subset-font p0" to 466,
+            "public-wikimedia-editing-arabic-wikipedia p0" to 468,
+            // Page 10 also needs a text exemption after #467: PDFium mirrors "(" in right-to-left text.
+            "public-wikimedia-editing-arabic-wikipedia p5" to 467,
+            "public-wikimedia-editing-arabic-wikipedia p10" to 467,
+            "public-wikimedia-editing-arabic-wikipedia p16" to 467,
+            "public-wikimedia-editing-arabic-wikipedia p27" to 467,
+        )
 
         /**
          * Pages where KitePDF alone differs and is still right, each with the reason from the

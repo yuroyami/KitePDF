@@ -1,11 +1,15 @@
 # Differential rendering harness
 
-The correctness scoreboard. It renders each corpus PDF page with **KitePDF** and
+The correctness scoreboard. It renders selected corpus PDF pages with **KitePDF** and
 with **MuPDF** (`mutool draw`, the in-repo oracle), pixel-diffs the two, and
 ranks the worst-rendering pages first. Every rendering fix is graded against
 it.
 
 ## Run
+
+The public corpus documents are tracked, and the test task checks them with
+`python3 tools/corpus.py verify` before it runs. The [corpus guide](../corpus/README.md)
+covers attribution, local drop-ins and how to add a public document.
 
 ```bash
 ./gradlew :kitepdf-native-renderer:jvmTest \
@@ -30,7 +34,8 @@ Open `report.md` and start at the top. That is the worst-rendering page.
 | `kitepdf.mutool` | _auto_ | explicit `mutool` binary path |
 | `kitepdf.corpus` | repo-root `corpus/pdf` | extra real-world PDF directory |
 | `kitepdf.diff.dpi` | `96` | positive render density for both engines |
-| `kitepdf.diff.maxpages` | `6` | positive maximum pages scored per document |
+| `kitepdf.diff.maxpages` | `6` | positive maximum evenly spaced pages selected per document |
+| `kitepdf.diff.allpages` | `false` | select every PDF page, overriding the sample limit |
 | `kitepdf.diff.budget` | `0.05` | finite max per-page MAE from `0.0` to `1.0` |
 | `kitepdf.diff.updateBaseline` | `false` | write this run's per-page scores to the baseline file instead of checking them |
 | `kitepdf.difftest.out` | `build/difftest` | output directory |
@@ -87,24 +92,31 @@ Example: tighten the gate and crank density once correctness improves:
   fills/strokes/curves, transparency, multi-page. Deterministic, no external
   files, and both engines render the same bytes, so any divergence is a real
   KitePDF gap.
-- **Drop-in real-world PDFs**: put `.pdf` files in the repo-root `corpus/pdf/`
-  (or point `-Dkitepdf.corpus` elsewhere). Only the first
-  `DiffHarness.MAX_PAGES_PER_DOC` pages of each are scored, to bound runtime.
+- **Public and local PDFs**: the pinned manifest supplies 15 public PDFs. Put
+  additional local `.pdf` files in the repo-root `corpus/pdf/`, or point
+  `-Dkitepdf.corpus` elsewhere. Discovery is recursive and ordered by relative
+  path; duplicate file stems receive distinct report names. Files outside the
+  public manifest remain local and are not licensed by that manifest.
+- **Page selection**: the default is up to six evenly spaced pages per document,
+  including the first and last pages. A limit of one selects page 0. Set
+  `-Dkitepdf.diff.allpages=true` to select every page. The report records the
+  selected page indices and available page counts, separate from successful
+  oracle scores. The default run selects 25 of the 47 public PDF pages.
+
+The EPUB sweep (`--tests '*EpubDifferentialTest*'`) renders every page produced
+by KitePDF and checks recorded per-book page counts. Its optional MuPDF
+comparison covers page 0 only and is informational because reflow can differ.
+What the corpus still lacks is tracked in
+[#215](https://github.com/yuroyami/KitePDF/issues/215).
 
 ## The oracle (`mutool`)
 
 Located automatically from `-Dkitepdf.mutool`, `$MUTOOL`, the in-repo build, or
-`$PATH`. To build it from the bundled source **without** the optional MuJS
-dependency (which isn't vendored):
-
-```bash
-make -C mupdf-master build=release HAVE_X11=no HAVE_GLUT=no mujs=no -j4
-# → mupdf-master/build/release/mutool
-```
-
-`mujs=no` disables MuPDF's JavaScript engine (`-DFZ_ENABLE_JS=0`); rendering
-doesn't use it. Without any oracle the harness still runs as a KitePDF-only
-smoke pass and emits the report.
+`$PATH`. Use an installed `mutool`, such as the Homebrew binary at
+`/opt/homebrew/bin/mutool`. The `mupdf-master/` checkout is a read-only reference
+with empty third-party submodules; do not try to build it. Record the oracle
+version when comparing scores. Without any oracle the harness still runs as a
+KitePDF-only smoke pass and emits the report without oracle scores.
 
 ## The parity check (PDFium)
 

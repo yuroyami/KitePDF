@@ -48,6 +48,13 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
+      - name: Test the public-corpus tool
+        run: python3 -m unittest discover -s tools -p test_corpus.py -v
+
+      # The public documents are in the checkout; this fails on a changed or missing one.
+      - name: Verify the licensed public documents
+        run: python3 tools/corpus.py verify
+
       # Distribution packages can disable ICC, changing CMYK scores for the
       # same renderer. Keep the oracle version and colour management fixed.
       - name: Cache colour-managed MuPDF 1.27.2
@@ -97,7 +104,7 @@ jobs:
       - name: Test every module (JVM)
         run: >
           ./gradlew
-          :kitepdf-core:jvmTest :kitepdf-pdf:jvmTest :kitepdf-epub:jvmTest
+          :kitepdf-difftest:jvmTest :kitepdf-core:jvmTest :kitepdf-pdf:jvmTest :kitepdf-epub:jvmTest
           :kitepdf-cbz:jvmTest :kitepdf-svg:jvmTest :kitepdf-xps:jvmTest
           :kitepdf-skia-renderer:jvmTest :kitepdf-compose-viewer:jvmTest
           :kitepdf:jvmTest :kitepdf-net:jvmTest :kitepdf-javascript:jvmTest --continue --stacktrace
@@ -129,6 +136,17 @@ jobs:
           name: test-reports-jvm
           path: '**/build/reports/tests/**'
           if-no-files-found: ignore
+
+      - name: Upload public-corpus inventory and credits
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: public-corpus-inventory
+          path: |
+            corpus/manifest.json
+            corpus/ATTRIBUTION.md
+            corpus/receipt.json
+          if-no-files-found: error
 
       # On failure, also keep what diagnoses a CI-only regression: rendered
       # pages, mutool references and heatmaps, sweep and benchmark reports,

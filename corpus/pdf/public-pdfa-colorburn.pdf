@@ -1,0 +1,129 @@
+%PDF-1.7
+%%μῦ
+%
+% Copyright 2023 PDF Association, Inc. https://www.pdfa.org
+%
+% Table 134 - Standard separable blend modes in ISO 32000-2, ColorBurn definition was updated, where:
+%  cb = color of the backdrop (i.e. object below)
+%  cs = source color (i.e. object on top)
+%
+% ISO 32000-1:2008
+%   ColorBurn: 1 - min(1, (1 - cb)/cs) if cs > 0
+%              0                       if cs = 0
+%
+% ISO 32000-2
+%   ColorBurn: 1                       if cb = 1
+%              0                       if 1 - cb >= cs
+%              1 - ((1 - cb)/cs)       otherwise
+%
+% NOTE 12 Darkens the backdrop colour to reflect the source colour. Painting with
+% white produces no change.
+%
+% NOTE 13 This function is formulated in a different way here than it is in ISO 32000-1:2008.
+% However, it produces the same results except in one special edge case. For ColorBurn,
+% the special case is cb = 1 and cs = 0, where the result is now 1 instead of 0.
+% The rationale for the change is that for any given cb, the result should be a continuous function of cs.
+%
+% cb = 1 when RGB is full intensity. 
+% cs = 0 is white for RGB.
+%
+
+1 0 obj % Document catalog
+<<
+    /Pages 2 0 R
+    /Type /Catalog
+>>
+endobj
+
+2 0 obj % Page tree root node
+<<
+    /Type /Pages
+    /Count 1
+    /Kids [ 3 0 R ]
+>>
+endobj
+
+3 0 obj % Page object
+<<
+    /Type /Page
+    /Parent 2 0 R
+    /Contents 5 0 R
+    /Group << /S /Transparency /CS /DeviceRGB /I false /K false >>
+    /MediaBox [ 0 0 500 500 ]
+    /Resources <<
+        /Font      << /Helv << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> >>
+        /XObject   << /Fm0 4 0 R >>
+        /ExtGState << /GSColorBurn << /BM /ColorBurn >> >>
+    >>
+>>
+endobj
+
+4 0 obj % Form XObject with DeviceRGB transparency group
+<<
+    /Subtype /Form
+    /FormType 1
+    /Matrix [ 1 0 0 1 0 0 ]
+    /Group << /Type /Group /S /Transparency /CS /DeviceRGB /I false /K false >>
+    /Resources <<  >>
+    /BBox [ 100 150 400 300 ]
+    /Length 54
+>>
+stream
+	0.0 0.0 1.0 rg  % 100% pure blue
+	0 0 500 500 re f
+endstream
+endobj
+
+5 0 obj % Page content stream
+<<
+   /Length 980
+>>
+stream
+q
+	% Pale gray page
+    0.9 g 
+    0 0 500 500 re f
+    
+    0 g % Black text
+    BT
+        1 0 0 1 100 100 Tm
+        /Helv 10 Tf
+        12 TL
+        (Backdrop: DeviceRGB high intensity vertical stripes (1.0, 0.9 and 0.8)) '
+        (Source: pure Blue rect in Form XObject with DeviceRGB transparency group) '
+        (BM: ColorBurn, Blending CS: DeviceRGB) '
+    ET
+Q
+q
+	% Backdrop verticl stripes
+    0.0 0.0 0.0 rg   160 200 20 200 re f % Black
+    1.0 0.0 0.0 rg   180 200 20 200 re f % 100% red
+    0.9 0.0 0.0 rg   200 200 20 200 re f
+    0.8 0.0 0.0 rg   220 200 20 200 re f
+    0.0 1.0 0.0 rg   240 200 20 200 re f % 100% green
+    0.0 0.9 0.0 rg   260 200 20 200 re f
+    0.0 0.8 0.0 rg   280 200 20 200 re f
+    0.0 0.0 1.0 rg   300 200 20 200 re f % 100% blue
+    0.0 0.0 0.9 rg   320 200 20 200 re f
+    0.0 0.0 0.8 rg   340 200 20 200 re f
+    1.0 1.0 1.0 rg   360 200 20 200 re f % white
+Q
+q
+    /GSColorBurn gs	  
+    /Fm0 Do
+Q
+endstream
+endobj
+xref
+0 6
+0000000000 65535 f
+0000001144 00000 n
+0000001228 00000 n
+0000001330 00000 n
+0000001738 00000 n
+0000002104 00000 n
+trailer
+<< /Root 1 0 R /Size 6 >>
+startxref
+3166
+%%EOF

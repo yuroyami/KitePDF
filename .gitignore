@@ -3,6 +3,7 @@ build/
 .kotlin/
 .idea/
 .DS_Store
+tools/__pycache__/
 local.properties
 captures/
 *.iml
@@ -11,17 +12,47 @@ xcuserdata/
 **/Podfile.lock
 mupdf-master/
 
-# Test corpora: drop your own PDFs/EPUBs under corpus/{pdf,epub}; never commit
-# them (large / copyrighted). The README + .gitkeep files stay tracked so the
-# structure exists out of the box.
+# Test corpora. The public documents that corpus/manifest.json lists are tracked,
+# one line each below, with their credits and license notices. Your own PDFs and
+# EPUBs under corpus/{pdf,epub} stay local: they can be copyrighted.
 corpus/*
 !corpus/README.md
+!corpus/manifest.json
+!corpus/ATTRIBUTION.md
+!corpus/licenses/
+corpus/licenses/*
+!corpus/licenses/*.html
+!corpus/licenses/*.txt
+!corpus/licenses/README.md
 !corpus/pdf/
 !corpus/epub/
 corpus/pdf/*
 corpus/epub/*
 !corpus/pdf/.gitkeep
 !corpus/epub/.gitkeep
+!corpus/epub/idpf-cole-voyage-of-life.epub
+!corpus/epub/idpf-page-blanche.epub
+!corpus/epub/idpf-regime-anticancer-arabic.epub
+!corpus/epub/idpf-svg-in-spine.epub
+!corpus/epub/w3c-cnt-mathml-support.epub
+!corpus/epub/w3c-css-epub-writing-mode.epub
+!corpus/epub/w3c-nav-non-text_img.epub
+!corpus/epub/w3c-pkg-spine-nonlinear-activation.epub
+!corpus/pdf/public-joss-ogre-relativity.pdf
+!corpus/pdf/public-joss-ryacas-algebra.pdf
+!corpus/pdf/public-pdfa-actualtext-ocr.pdf
+!corpus/pdf/public-pdfa-annotation-tab-order.pdf
+!corpus/pdf/public-pdfa-colorburn.pdf
+!corpus/pdf/public-pdfa-column-reading-order.pdf
+!corpus/pdf/public-pdfa-default-rgb-inheritance.pdf
+!corpus/pdf/public-pdfa-pdf20-black-point-compensation.pdf
+!corpus/pdf/public-pdfa-pdf20-page-output-intent.pdf
+!corpus/pdf/public-pdfa-pdf20-utf8-strings.pdf
+!corpus/pdf/public-pdfa-vertical-text.pdf
+!corpus/pdf/public-verapdf-device-cmyk.pdf
+!corpus/pdf/public-verapdf-subset-font.pdf
+!corpus/pdf/public-verapdf-ua1-form.pdf
+!corpus/pdf/public-wikimedia-editing-arabic-wikipedia.pdf
 readium-kt-toolkit/
 
 # Project ledger (audit, roadmap and execution history). Lives in its own

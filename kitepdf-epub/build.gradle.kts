@@ -94,3 +94,11 @@ kotlin {
         }
     }
 }
+
+// FontFallbackTest selects an embedded-font book from this optional local corpus.
+// Adding or replacing a book must invalidate a cached test result (#194).
+tasks.withType<Test>().configureEach {
+    inputs.files(fileTree(rootProject.file("corpus/epub")) {
+        include { it.isDirectory || it.file.extension.equals("epub", ignoreCase = true) }
+    }).withPropertyName("fontFallbackCorpus").withPathSensitivity(PathSensitivity.RELATIVE)
+}
