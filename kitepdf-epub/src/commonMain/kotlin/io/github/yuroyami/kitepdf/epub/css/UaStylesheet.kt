@@ -31,6 +31,8 @@ internal object UaStylesheet {
         caption,figcaption{display:block;text-align:center}
         cite,dfn,em,i,var{font-style:italic}
         code,kbd,samp,tt{font-family:monospace}
+        col{display:table-column}
+        colgroup{display:table-column-group}
         dd{display:block;margin:0 0 0 40px}
         del,s,strike{text-decoration:line-through}
         div{display:block}

@@ -37,6 +37,12 @@ internal class StyleResolver(
 
     fun initial(): ComputedStyle = ComputedStyle.initial(rootFontSizePt, direction = baseDirection)
 
+    /**
+     * The style of an anonymous box with [display] inside a box styled [parent]: inherited
+     * properties come from [parent], the others take their initial values (CSS 2.1, 17.2.1).
+     */
+    fun anonymous(parent: ComputedStyle, display: Display): ComputedStyle = build(parent, emptyMap()).copy(display = display)
+
     /** [ancestors]: immediate parent first, outward to the root. [parent] = its computed style. */
     fun compute(el: KiteXmlNode.Element, ancestors: List<KiteXmlNode.Element>, parent: ComputedStyle): ComputedStyle {
         val bestWeight = HashMap<String, Long>()

@@ -52,11 +52,13 @@ internal class BoxBuilder(
         isRoot: Boolean = false,
         /** The ancestor's semantics: `aria-hidden` and `epub:type` reach down. */
         parentSem: BoxSemantics? = null,
+        /** An anonymous box: [el] is a stand-in, so it is no ancestor of its children and has no pseudo. */
+        anonymous: Boolean = false,
     ): BlockBox {
         val children = ArrayList<LayoutBox>()
         val inl = Inline()
         var pendingMarker = marker
-        val childAncestors = if (isRoot) ancestors else listOf(el) + ancestors
+        val childAncestors = if (isRoot || anonymous) ancestors else listOf(el) + ancestors
         var ordinal = el.attrs["start"]?.toIntOrNull() ?: 1
         // Ids seen on inline descendants (they get no box of their own). The
         // first block-level box hoisted after an id claims it, so a footnote
@@ -102,7 +104,7 @@ internal class BoxBuilder(
         // block-display pseudo becomes a synthetic block child; anything else
         // flows inline.
         fun injectPseudo(side: PseudoSide) {
-            if (isRoot) return
+            if (isRoot || anonymous) return
             val pc = resolver.computePseudo(el, ancestors, style, side) ?: return
             if (pc.style.display == Display.BLOCK || pc.style.display == Display.FLEX || pc.style.display == Display.GRID) { flush(); children.add(pseudoBlock(pc)) }
             else inl.appendText(pc.text, pc.style)
@@ -332,7 +334,7 @@ internal class BoxBuilder(
 
     /**
      * Build a `display:table` element, flattening row groups. Returns the
-     * caption block (extracted, laid ABOVE the table) followed by the
+     * caption blocks (extracted, laid ABOVE the table) followed by the
      * [TableBox]; `<col>`/`<colgroup>` widths pin their columns; under
      * `border-collapse: collapse` each shared cell edge is painted once.
      */
@@ -343,25 +345,37 @@ internal class BoxBuilder(
         parentSem: BoxSemantics? = null,
     ): List<LayoutBox> {
         val rows = ArrayList<TableRowBox>()
-        var caption: BlockBox? = null
+        val captions = ArrayList<BlockBox>()
         val childAncestors = listOf(el) + ancestors
-        fun addRowsFrom(container: KiteXmlNode.Element, containerAncestors: List<KiteXmlNode.Element>) {
+        // A row group passes its own style down, so its rows inherit from it (CSS 2.1, 6.2, #463).
+        fun addRowsFrom(container: KiteXmlNode.Element, containerAncestors: List<KiteXmlNode.Element>, containerStyle: ComputedStyle) {
             val anc = listOf(container) + containerAncestors
+            // A run of children that are not rows goes in one anonymous row (CSS 2.1, 17.2.1, #453).
+            val stray = ArrayList<KiteXmlNode>()
+            fun flushStray() {
+                if (stray.any { !it.isTableWhiteSpace() }) {
+                    val rowStyle = resolver.anonymous(containerStyle, Display.TABLE_ROW)
+                    rows.add(TableRowBox(rowStyle, rowCells(stray, anc, rowStyle, parentSem)))
+                }
+                stray.clear()
+            }
             for (c in container.children) {
-                if (c !is KiteXmlNode.Element) continue
-                if (c.tag == "caption" && caption == null) {
-                    caption = buildBlock(c, resolver.compute(c, anc, style), anc, null, BLACK, parentSem = parentSem)
+                if (c !is KiteXmlNode.Element) { stray.add(c); continue }
+                if (c.tag == "caption") {
+                    captions.add(buildBlock(c, resolver.compute(c, anc, containerStyle), anc, null, BLACK, parentSem = parentSem))
                     continue
                 }
-                val cs = resolver.compute(c, anc, style)
+                val cs = resolver.compute(c, anc, containerStyle)
                 when (cs.display) {
-                    Display.TABLE_ROW -> rows.add(buildRow(c, cs, anc, parentSem))
-                    Display.TABLE_ROW_GROUP -> addRowsFrom(c, anc)
-                    else -> {}
+                    Display.NONE -> {}
+                    Display.TABLE_ROW -> { flushStray(); rows.add(buildRow(c, cs, anc, parentSem)) }
+                    Display.TABLE_ROW_GROUP -> { flushStray(); addRowsFrom(c, anc, cs) }
+                    else -> stray.add(c)
                 }
             }
+            flushStray()
         }
-        addRowsFrom(el, ancestors)
+        addRowsFrom(el, ancestors, style)
         placeCells(rows)
         val table = if (style.borderCollapse) {
             // The table's own border joins the collapse, and a collapsed table has no padding (CSS 2.1, 17.6.2).
@@ -376,7 +390,7 @@ internal class BoxBuilder(
         } else {
             TableBox(style, rows, scanColWidths(el, style, childAncestors))
         }
-        return listOfNotNull(caption, table)
+        return captions + table
     }
 
     /** `<col span width>` / `<colgroup width>` -> column index -> width (pt). */
@@ -505,20 +519,51 @@ internal class BoxBuilder(
         ancestors: List<KiteXmlNode.Element>,
         parentSem: BoxSemantics? = null,
     ): TableRowBox {
+        return TableRowBox(style, rowCells(el.children, listOf(el) + ancestors, style, parentSem))
+    }
+
+    /**
+     * The cells of a row whose children are [nodes]. A run of children that are not cells goes in
+     * one anonymous cell, and white space between cells makes no box (CSS 2.1, 17.2.1, #453).
+     */
+    private fun rowCells(
+        nodes: List<KiteXmlNode>,
+        ancestors: List<KiteXmlNode.Element>,
+        rowStyle: ComputedStyle,
+        parentSem: BoxSemantics?,
+    ): List<BlockBox> {
         val cells = ArrayList<BlockBox>()
-        val childAncestors = listOf(el) + ancestors
-        for (c in el.children) {
-            if (c !is KiteXmlNode.Element) continue
-            val cs = resolver.compute(c, childAncestors, style)
-            if (cs.display == Display.TABLE_CELL || cs.display == Display.BLOCK || cs.display == Display.FLEX || cs.display == Display.GRID) {
-                val cell = buildBlock(c, cs, childAncestors, null, BLACK, parentSem = parentSem)
-                cell.colspan = c.attrs["colspan"]?.toIntOrNull()?.coerceAtLeast(1) ?: 1
-                cell.rowspan = c.attrs["rowspan"]?.toIntOrNull()?.coerceAtLeast(1) ?: 1
-                cells.add(cell)
+        val stray = ArrayList<KiteXmlNode>()
+        fun flushStray() {
+            if (stray.any { !it.isTableWhiteSpace() }) {
+                val holder = KiteXmlNode.Element("", emptyMap(), ArrayList(stray))
+                val cellStyle = resolver.anonymous(rowStyle, Display.TABLE_CELL)
+                cells.add(buildBlock(holder, cellStyle, ancestors, null, BLACK, parentSem = parentSem, anonymous = true))
+            }
+            stray.clear()
+        }
+        for (c in nodes) {
+            if (c !is KiteXmlNode.Element) { stray.add(c); continue }
+            val cs = resolver.compute(c, ancestors, rowStyle)
+            when (cs.display) {
+                Display.NONE -> {}
+                Display.TABLE_CELL -> {
+                    flushStray()
+                    cells.add(buildBlock(c, cs, ancestors, null, BLACK, parentSem = parentSem).also { cell ->
+                        cell.colspan = c.attrs["colspan"]?.toIntOrNull()?.coerceAtLeast(1) ?: 1
+                        cell.rowspan = c.attrs["rowspan"]?.toIntOrNull()?.coerceAtLeast(1) ?: 1
+                    })
+                }
+                else -> stray.add(c)
             }
         }
-        return TableRowBox(style, cells)
+        flushStray()
+        return cells
     }
+
+    /** Text of CSS white space only, which a table drops between its parts (CSS 2.1, 17.2.1, step 1). */
+    private fun KiteXmlNode.isTableWhiteSpace(): Boolean =
+        this is KiteXmlNode.Text && text.all { it == ' ' || it == '\t' || it == '\n' || it == '\r' || it == '\u000C' }
 
     private fun processInline(
         el: KiteXmlNode.Element,
