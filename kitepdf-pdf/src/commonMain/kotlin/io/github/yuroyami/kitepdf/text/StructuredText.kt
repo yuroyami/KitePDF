@@ -189,9 +189,11 @@ internal object StructuredTextExtractor {
 
     fun extract(page: PdfPage): PdfStructuredText {
         val collector = TextCollectorCanvas()
-        PageRenderer(collector, accessDocument(page)).render(page, KiteMatrix.IDENTITY)
+        val renderer = PageRenderer(collector, accessDocument(page))
+        collector.actualText = { renderer.currentActualText }
+        renderer.render(page, KiteMatrix.IDENTITY)
 
-        val spans = collector.runs.mapNotNull { it.toSpan() }
+        val spans = withActualText(collector.runs).mapNotNull { it.toSpan() }
         if (spans.isEmpty()) {
             return PdfStructuredText(page.width, page.height, emptyList())
         }
@@ -201,6 +203,41 @@ internal object StructuredTextExtractor {
         val blocks = clusterBlocks(clusterLines(across))
         val columnBlocks = clusterColumnBlocks(clusterColumns(down))
         return PdfStructuredText(page.width, page.height, mergeByTop(blocks, columnBlocks))
+    }
+
+    /**
+     * The runs drawn inside one `/ActualText` sequence read as its text (ISO 32000-1, 14.9.4,
+     * #468). The first run carries it, spread evenly over its glyphs, and the others drop out, so
+     * a gap between runs puts no space inside the replacement.
+     */
+    private fun withActualText(runs: List<TextCollectorCanvas.TextRun>): List<TextCollectorCanvas.TextRun> {
+        if (runs.none { it.actualText != null }) return runs
+        val out = ArrayList<TextCollectorCanvas.TextRun>(runs.size)
+        var i = 0
+        while (i < runs.size) {
+            val run = runs[i]
+            val scope = run.actualText
+            if (scope == null) { out += run; i++; continue }
+            val parts = codePoints(scope.text)
+            val n = run.glyphs.size
+            out += run.copy(glyphs = run.glyphs.mapIndexed { k, g ->
+                g.copy(text = parts.subList(parts.size * k / n, parts.size * (k + 1) / n).joinToString(""))
+            })
+            while (i < runs.size && runs[i].actualText === scope) i++
+        }
+        return out
+    }
+
+    /** [text] split into code points, a surrogate pair kept whole. */
+    private fun codePoints(text: String): List<String> {
+        val out = ArrayList<String>(text.length)
+        var i = 0
+        while (i < text.length) {
+            val pair = text[i].isHighSurrogate() && i + 1 < text.length && text[i + 1].isLowSurrogate()
+            out += text.substring(i, if (pair) i + 2 else i + 1)
+            i += if (pair) 2 else 1
+        }
+        return out
     }
 
     /**
@@ -382,6 +419,8 @@ internal class TextCollectorCanvas : KiteCanvas {
         val textMatrix: KiteMatrix,
         /** The marked-content id the run was drawn in, which a tagged PDF's structure names (#208). */
         val mcid: Int? = null,
+        /** The outermost `/ActualText` the run was drawn in, which replaces its text (#468). */
+        val actualText: PageRenderer.ActualText? = null,
     ) {
         fun toSpan(): PdfTextSpan? {
             if (glyphs.isEmpty()) return null
@@ -457,6 +496,9 @@ internal class TextCollectorCanvas : KiteCanvas {
     /** Reads the marked-content id of the content being drawn, when a reading order needs it (#208). */
     var mcid: () -> Int? = { null }
 
+    /** Reads the outermost `/ActualText` around the content being drawn (#468). */
+    var actualText: () -> PageRenderer.ActualText? = { null }
+
     /**
      * When set, the device box of every path and image drawn, by the marked-content id it
      * belongs to, so a reading order can place content that is not text (#427).
@@ -494,7 +536,7 @@ internal class TextCollectorCanvas : KiteCanvas {
         glyphs: List<TextGlyph>, fontSize: Double, unitsPerEm: Int, hasOutlines: Boolean,
         fontSpec: FontSpec, textToDevice: KiteMatrix, color: RgbColor, alpha: Double, blendMode: KiteBlendMode,
     ) {
-        runs.add(TextRun(glyphs, fontSpec, fontSize, textToDevice, mcid()))
+        runs.add(TextRun(glyphs, fontSpec, fontSize, textToDevice, mcid(), actualText()))
     }
     override fun pushClip(path: KitePath, ctm: KiteMatrix, evenOdd: Boolean) {
         if (inkBoxes != null) clips.addLast(clipped(boxOf(path, ctm)))
