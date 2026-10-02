@@ -60,7 +60,10 @@ internal fun Modifier.kiteFormLayer(
         val scale = size.width / width
         if (!scale.isFinite() || scale <= 0.0) return@drawWithContent
         val deviceCtm = KiteMatrix.scaling(scale, scale).concat(page.displayToDeviceBase())
-        val base = ComposeCanvas(this, textMeasurer, hairlineWidthPx)
+        // Inside this scene's draw pass, as a Vectorized page draws, so field text draws here (#464).
+        val base = ComposeCanvas(
+            this, textMeasurer, hairlineWidthPx, skipSystemFontText = false, magnification = 1f, inSceneDrawPass = true,
+        )
         val canvas = theme?.wrap(base) ?: base
         failure.guard("form layer") {
             page.renderAnnotationsTo(canvas, deviceCtm, scripts.formState) {
