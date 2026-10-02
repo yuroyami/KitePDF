@@ -72,6 +72,10 @@ public fun KiteImageData.toRgbaBytes(): ByteArray? {
                 out[o++] = src[i++]; out[o++] = src[i++]; out[o++] = src[i++]; out[o++] = opaque
             }
         }
+        // One sample a pixel below 8 bits has at most 16 colours, so each converts once (#477).
+        bpc < 8 && sourceComponents == 1 -> {
+            if (!unpackFromTable(src, w, h, bpc, sourceRowBytes, cs, out)) return null
+        }
         cs is KiteColorSpace.Indexed -> {
             if (!unpackIndexed(src, w, h, bpc, cs, out)) return null
         }
@@ -197,19 +201,12 @@ private fun KiteImageData.shrinkSamples(
 }
 
 /** The RGBA that [toRgbaBytes] gives each of the 2^[bits] sample values of this image, in order. */
-private fun KiteImageData.sampleColours(bits: Int, space: KiteColorSpace?): ByteArray? {
-    val values = 1 shl bits
-    val samples = ByteArray((values * bits + 7) / 8)
-    for (v in 0 until values) {
-        val bit = v * bits
-        samples[bit / 8] = (samples[bit / 8].toInt() or (v shl (8 - bits - bit % 8))).toByte()
-    }
-    return KiteImageData(
-        width = values, height = 1, bitsPerComponent = bitsPerComponent, colorSpace = colorSpace, kind = kind,
-        encodedBytes = ByteArray(0), pixelBytes = samples, resolvedColorSpace = space, decode = decode,
+private fun KiteImageData.sampleColours(bits: Int, space: KiteColorSpace?): ByteArray? =
+    KiteImageData(
+        width = 1 shl bits, height = 1, bitsPerComponent = bitsPerComponent, colorSpace = colorSpace, kind = kind,
+        encodedBytes = ByteArray(0), pixelBytes = everySample(bits), resolvedColorSpace = space, decode = decode,
         isImageMask = isImageMask, maskFill = maskFill,
     ).toRgbaBytes()
-}
 
 /** Adds the set bits of the 1-bit row at [start] to the block of [fx] pixels that each lies in. [fx] is a power of two. */
 private fun KiteImageData.countOnes(src: ByteArray, start: Int, fx: Int, ones: IntArray) {
@@ -347,6 +344,55 @@ private fun KiteImageData.unpackIndexed(
         }
     }
     return true
+}
+
+/**
+ * One sample a pixel at 1, 2 or 4 bits: each of the 2, 4 or 16 sample values converts once,
+ * through [unpackIndexed] or [unpackGeneral] as a pixel of it would, and each pixel copies the
+ * colour of its sample. The general path converted every pixel through doubles, 8.4 million times
+ * for a bilevel Letter page at 300 dpi, and a calibrated space made an [RgbColor] for each (#477).
+ */
+private fun KiteImageData.unpackFromTable(
+    src: ByteArray, w: Int, h: Int, bpc: Int, rowBytes: Int, cs: KiteColorSpace, out: ByteArray,
+): Boolean {
+    val values = 1 shl bpc
+    val colours = ByteArray(values * 4)
+    val converted = if (cs is KiteColorSpace.Indexed) {
+        unpackIndexed(everySample(bpc), values, 1, bpc, cs, colours)
+    } else {
+        unpackGeneral(everySample(bpc), values, 1, bpc, cs, colours)
+    }
+    if (!converted) return false
+    val mask = values - 1
+    val perByte = 8 / bpc
+    var o = 0
+    for (y in 0 until h) {
+        var i = y * rowBytes
+        var x = 0
+        while (x < w) {
+            val b = src[i++].toInt()
+            val end = minOf(w, x + perByte)
+            var shift = 8 - bpc
+            while (x < end) {
+                val c = 4 * ((b ushr shift) and mask)
+                out[o++] = colours[c]; out[o++] = colours[c + 1]; out[o++] = colours[c + 2]; out[o++] = colours[c + 3]
+                shift -= bpc
+                x++
+            }
+        }
+    }
+    return true
+}
+
+/** Each of the 2^[bits] sample values in order, packed as a row of an image is. */
+private fun everySample(bits: Int): ByteArray {
+    val values = 1 shl bits
+    val samples = ByteArray((values * bits + 7) / 8)
+    for (v in 0 until values) {
+        val bit = v * bits
+        samples[bit / 8] = (samples[bit / 8].toInt() or (v shl (8 - bits - bit % 8))).toByte()
+    }
+    return samples
 }
 
 /** General path: normalise each component to [0,1], apply /Decode, then toRgb. */
