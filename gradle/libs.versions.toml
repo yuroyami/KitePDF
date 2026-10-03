@@ -29,6 +29,10 @@ kitejs = "0.2.0"
 # EPUB audio and video artifact. It carries FFmpeg through KiteFFmpeg.
 kiteplayer = "0.2.0"
 
+# Robolectric, for the Android host tests of :kitepdf-compose-viewer only: its native graphics
+# draw a Compose canvas on the JVM, so Android text can be checked without a device.
+robolectric = "4.17"
+
 # Ktor client. Used ONLY by :kitepdf-net, the optional remote-loading artifact.
 # No other module may depend on it: the engine stays kotlin-stdlib + KiteImageCodec.
 ktor = "3.6.0"
@@ -42,6 +46,8 @@ kiteimagecodec = { module = "io.github.yuroyami:kiteimagecodec", version.ref = "
 kitejs = { module = "io.github.yuroyami:kitejs", version.ref = "kitejs" }
 kiteplayer = { module = "io.github.yuroyami:kiteplayer", version.ref = "kiteplayer" }
 kiteplayer-compose = { module = "io.github.yuroyami:kiteplayer-compose", version.ref = "kiteplayer" }
+
+robolectric = { module = "org.robolectric:robolectric", version.ref = "robolectric" }
 
 # Ktor, :kitepdf-net only. ktor-client-core carries no engine; the consumer
 # picks one (CIO, OkHttp, Darwin, Js...) exactly as with any Ktor library.

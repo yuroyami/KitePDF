@@ -75,10 +75,10 @@ import kotlin.math.sqrt
  * and `saveLayer`, so they span many `DrawScope` operations, and each clip is
  * applied once however many paints it covers.
  *
- * On the desktop JVM, iOS and macOS, system-font text and host glyph outlines are shaped
- * by Skia itself, not by Compose's text stack, so they draw on any thread (#131). On
- * Android and in a browser they go through Compose's text and require the platform UI
- * thread; a call on another thread throws [IllegalStateException] before accessing the
+ * On the desktop JVM, iOS, macOS and Android, system-font text and host glyph outlines
+ * are shaped by the platform's own text engine, not by Compose's text stack, so they draw
+ * on any thread (#131, #487). In a browser they go through Compose's text and require the
+ * UI thread; a call on another thread throws [IllegalStateException] before accessing the
  * host text stack. For background exports use [KitePageRasterizer.rasterizeOffMain]. A
  * canvas that skips system text can probe on a worker, but that incomplete bitmap is not
  * an export (#428). The canvas of a Vectorized page in `KiteDocView` draws inside its
@@ -120,7 +120,7 @@ public class ComposeCanvas internal constructor(
     private val glyphMasks: GlyphMaskCache? = null,
     /**
      * True to draw host-font text with [hostTextLine], which needs no UI thread, where the
-     * platform has it (#131). A test sets it false to draw through Compose's text as Android does.
+     * platform has it (#131). A test sets it false to draw through Compose's text as a browser does.
      */
     private val hostLines: Boolean = hostTextAnyThread,
 ) : KiteCanvas {
