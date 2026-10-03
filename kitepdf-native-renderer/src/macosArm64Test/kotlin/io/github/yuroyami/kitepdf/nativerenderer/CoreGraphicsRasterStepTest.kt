@@ -23,8 +23,8 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 /**
- * The raster step on CoreGraphics (#209, #308). The context's user space is its device space,
- * with y up, and a raster's first row is the top of its box.
+ * The raster step on CoreGraphics (#209, #308). A bitmap context's device space runs down
+ * while its user space runs up, and a raster's first row is the top of its box either way.
  */
 @OptIn(ExperimentalForeignApi::class)
 class CoreGraphicsRasterStepTest {
@@ -95,5 +95,35 @@ class CoreGraphicsRasterStepTest {
         assertRgb(pixels, 12, 7, listOf(255, 255, 255))
         assertRgb(pixels, 2, 7, listOf(0, 255, 0))
         assertRgb(pixels, 7, 17, listOf(0, 255, 0))
+    }
+
+    @Test
+    fun a_box_off_the_middle_reads_and_draws_its_own_rows() {
+        // The bottom five rows are red, and the box runs from y 0 to 8: in device space, which
+        // runs down, from 12 to 20. A box in the middle reads the same either way up.
+        val pixels = render { c ->
+            fill(c, 0.0, 0.0, 20.0, 5.0, RgbColor(1.0, 0.0, 0.0))
+            val ran = c.rasterStep(KiteRectangle(0.0, 0.0, 10.0, 8.0), KiteMatrix.IDENTITY) { scope ->
+                assertEquals(8, scope.height)
+                assertEquals(0.0, scope.toPixels.transformY(0.0, 8.0), 1e-9)
+                assertEquals(8.0, scope.toPixels.transformY(0.0, 0.0), 1e-9)
+                val backdrop = assertNotNull(scope.backdrop())
+                // Row 2 is y 5 to 6, and row 3 is y 4 to 5.
+                assertEquals(-1, backdrop[0, 2])
+                assertEquals(0xFFFF0000.toInt(), backdrop[0, 3])
+                val top = scope.render { fill(c, 0.0, 6.0, 20.0, 8.0, RgbColor(0.0, 0.0, 1.0)) }
+                assertEquals(0xFF0000FF.toInt(), top[0, 1])
+                assertEquals(0, top[0, 2] ushr 24)
+                scope.draw(top, alpha = 1.0, blendMode = KiteBlendMode.Normal)
+                true
+            }
+            assertTrue(ran)
+        }
+        // The blue rows land where they were painted, the red ones stay, and nothing lands above the box.
+        assertRgb(pixels, 3, 7, listOf(0, 0, 255))
+        assertRgb(pixels, 3, 6, listOf(0, 0, 255))
+        assertRgb(pixels, 3, 5, listOf(255, 255, 255))
+        assertRgb(pixels, 3, 2, listOf(255, 0, 0))
+        assertRgb(pixels, 3, 12, listOf(255, 255, 255))
     }
 }
