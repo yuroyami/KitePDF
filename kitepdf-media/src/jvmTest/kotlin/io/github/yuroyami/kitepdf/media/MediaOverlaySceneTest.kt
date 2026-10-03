@@ -22,7 +22,6 @@ import kotlin.math.abs
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
@@ -95,8 +94,9 @@ class MediaOverlaySceneTest {
         waitUntil(timeoutMillis = 30_000) { player.state.value.status.isActive }
         waitUntil(timeoutMillis = 10_000) { onAllNodesWithContentDescription("Pause").fetchSemanticsNodes().isNotEmpty() }
         onNodeWithContentDescription("Pause").performClick()
-        waitForIdle()
-        assertFalse(player.state.value.muted, "the first touch did not turn the sound on")
+        // The player takes the command on its own thread, so its state turns after Compose is idle.
+        val unmuted = runCatching { waitUntil(timeoutMillis = 10_000) { !player.state.value.muted } }.isSuccess
+        assertTrue(unmuted, "the first touch did not turn the sound on")
         assertTrue(player.state.value.status.isActive, "the first touch paused instead")
     }
 
