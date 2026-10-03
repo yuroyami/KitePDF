@@ -19,6 +19,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `CoreGraphicsCanvas`. Which of them can read the backdrop, and where, is in the rendering
   guide (#209, #308).
 
+- `io.github.yuroyami:kitepdf-webview`, a new optional artifact: `KiteScriptOverlay()` in the
+  viewer's `pageOverlay` shows the scripted content of an EPUB in the platform's own web
+  engine, in islands over the page: the documents of its inline frames and HTML objects, over
+  their boxes, and its scripted fixed-layout pages, whole. The rest of each page stays on the
+  library's own rendering. Every file a web view asks for comes from the book, under an origin
+  of the book's own, with a content security policy that keeps the page to it, so nothing
+  loads from the network; `allowRemote = true` lets an embedded `https` document load. A link
+  in a web view goes through `onLinkTap` and the viewer, as a tapped link does. A web view's
+  state starts over when its page leaves the composition. On the desktop JVM the web views
+  are JavaFX's, drawn offscreen in JavaFX's embedding and painted on the page, so they clip,
+  scroll and zoom with it; an app adds JavaFX for its platform, and `KiteDesktopWebEngine`
+  lets it plug in another engine, such as Chromium. `EpubPage.webIslands()` and `EpubWebView`
+  show islands in a layout of an app's own (#41).
+
 - `EpubDocument.chapterPath(chapter)` names the zip path of a chapter's own document, which
   a web engine loads to run a scripted fixed-layout page. `EpubLink` has a public
   constructor, for a link that comes from outside the page's markup. In `KiteDocView`, an

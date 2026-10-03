@@ -57,6 +57,7 @@ dependencies {
     dokka(project(":kitepdf-net"))
     dokka(project(":kitepdf-compose-viewer"))
     dokka(project(":kitepdf-media"))
+    dokka(project(":kitepdf-webview"))
     dokka(project(":kitepdf-native-renderer"))
     dokka(project(":kitepdf-skia-renderer"))
 }
@@ -104,7 +105,7 @@ allprojects {
 val publishedModules = setOf(
     "kitepdf", "kitepdf-core", "kitepdf-pdf", "kitepdf-epub", "kitepdf-cbz", "kitepdf-xps",
     "kitepdf-svg", "kitepdf-javascript", "kitepdf-net", "kitepdf-compose-viewer", "kitepdf-media",
-    "kitepdf-native-renderer", "kitepdf-skia-renderer",
+    "kitepdf-webview", "kitepdf-native-renderer", "kitepdf-skia-renderer",
 )
 subprojects {
     if (name !in publishedModules) return@subprojects

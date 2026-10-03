@@ -65,7 +65,7 @@ jobs:
         run: |
           for module in \
             kitepdf kitepdf-core kitepdf-pdf kitepdf-epub kitepdf-cbz kitepdf-svg kitepdf-xps kitepdf-javascript kitepdf-net \
-            kitepdf-compose-viewer kitepdf-media kitepdf-native-renderer kitepdf-skia-renderer
+            kitepdf-compose-viewer kitepdf-media kitepdf-webview kitepdf-native-renderer kitepdf-skia-renderer
           do
             test -f "build/dokka/html/$module/index.html"
           done
