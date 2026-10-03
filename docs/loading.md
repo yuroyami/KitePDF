@@ -103,7 +103,7 @@ It reads the whole document into memory, so keep it off the main thread for anyt
 
 ### Remote URL
 
-Networking lives in a separate artifact. The engine depends on `kotlin-stdlib` and KiteImageCodec only, and `kitepdf-net` is the one place Ktor enters the build, so you pay for it only if you use it.
+Networking lives in a separate artifact. The engine depends on `kotlin-stdlib`, KiteImageCodec and `kotlinx-coroutines-core` only, and `kitepdf-net` is the one place Ktor enters the build, so you pay for it only if you use it.
 
 ```kotlin
 dependencies {
@@ -139,6 +139,13 @@ KiteDoc.openUrl(url, client) { header("Authorization", "Bearer $token") }
 ```
 
 `downloadBytes(url, client)` gets you the raw body when you want to cache or hash it before deciding what to do.
+
+A book can also name images and fonts by URL. `EpubResourceFetcher(client)` fetches them on the same client, over `https` only and at most 16 MiB each, when you put it in the book's settings (see [Resources on the web](epub.md#resources-on-the-web)):
+
+```kotlin
+val settings = EpubSettings(resourceFetcher = EpubResourceFetcher(client))
+val doc = KiteDoc.openUrl("https://example.com/book.epub", client, epubSettings = settings)
+```
 
 Ktor does not ship for `androidNative*` or `wasmWasi`, so neither does `kitepdf-net`. The engine artifacts still do.
 

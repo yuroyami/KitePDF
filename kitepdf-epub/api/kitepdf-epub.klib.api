@@ -130,6 +130,10 @@ final enum class io.github.yuroyami.kitepdf.epub/ReaderFontFamily : kotlin/Enum<
     final fun values(): kotlin/Array<io.github.yuroyami.kitepdf.epub/ReaderFontFamily> // io.github.yuroyami.kitepdf.epub/ReaderFontFamily.values|values#static(){}[0]
 }
 
+abstract fun interface io.github.yuroyami.kitepdf.epub/EpubResourceFetcher { // io.github.yuroyami.kitepdf.epub/EpubResourceFetcher|null[0]
+    abstract suspend fun fetch(kotlin/String): kotlin/ByteArray? // io.github.yuroyami.kitepdf.epub/EpubResourceFetcher.fetch|fetch(kotlin.String){}[0]
+}
+
 final class io.github.yuroyami.kitepdf.epub/EpubDocument : io.github.yuroyami.kitepdf.core/KiteDocument { // io.github.yuroyami.kitepdf.epub/EpubDocument|null[0]
     final val chapterCount // io.github.yuroyami.kitepdf.epub/EpubDocument.chapterCount|{}chapterCount[0]
         final fun <get-chapterCount>(): kotlin/Int // io.github.yuroyami.kitepdf.epub/EpubDocument.chapterCount.<get-chapterCount>|<get-chapterCount>(){}[0]
@@ -157,6 +161,8 @@ final class io.github.yuroyami.kitepdf.epub/EpubDocument : io.github.yuroyami.ki
         final fun <get-pageWidth>(): kotlin/Double // io.github.yuroyami.kitepdf.epub/EpubDocument.pageWidth.<get-pageWidth>|<get-pageWidth>(){}[0]
     final val pages // io.github.yuroyami.kitepdf.epub/EpubDocument.pages|{}pages[0]
         final fun <get-pages>(): kotlin.collections/List<io.github.yuroyami.kitepdf.epub/EpubPage> // io.github.yuroyami.kitepdf.epub/EpubDocument.pages.<get-pages>|<get-pages>(){}[0]
+    final val remoteArrivals // io.github.yuroyami.kitepdf.epub/EpubDocument.remoteArrivals|{}remoteArrivals[0]
+        final fun <get-remoteArrivals>(): kotlinx.coroutines.flow/StateFlow<kotlin/Int> // io.github.yuroyami.kitepdf.epub/EpubDocument.remoteArrivals.<get-remoteArrivals>|<get-remoteArrivals>(){}[0]
     final val scriptedChapters // io.github.yuroyami.kitepdf.epub/EpubDocument.scriptedChapters|{}scriptedChapters[0]
         final fun <get-scriptedChapters>(): kotlin.collections/List<kotlin/Int> // io.github.yuroyami.kitepdf.epub/EpubDocument.scriptedChapters.<get-scriptedChapters>|<get-scriptedChapters>(){}[0]
     final val settings // io.github.yuroyami.kitepdf.epub/EpubDocument.settings|{}settings[0]
@@ -166,6 +172,7 @@ final class io.github.yuroyami.kitepdf.epub/EpubDocument : io.github.yuroyami.ki
 
     final fun bookmarkOf(io.github.yuroyami.kitepdf.core/KiteLocation): io.github.yuroyami.kitepdf.core/KiteBookmark.Flow // io.github.yuroyami.kitepdf.epub/EpubDocument.bookmarkOf|bookmarkOf(io.github.yuroyami.kitepdf.core.KiteLocation){}[0]
     final fun bookmarkOf(kotlin/String): io.github.yuroyami.kitepdf.core/KiteBookmark.Flow? // io.github.yuroyami.kitepdf.epub/EpubDocument.bookmarkOf|bookmarkOf(kotlin.String){}[0]
+    final fun hasRemoteResources(kotlin/Int): kotlin/Boolean // io.github.yuroyami.kitepdf.epub/EpubDocument.hasRemoteResources|hasRemoteResources(kotlin.Int){}[0]
     final fun isChapterReady(kotlin/Int): kotlin/Boolean // io.github.yuroyami.kitepdf.epub/EpubDocument.isChapterReady|isChapterReady(kotlin.Int){}[0]
     final fun isScripted(kotlin/Int): kotlin/Boolean // io.github.yuroyami.kitepdf.epub/EpubDocument.isScripted|isScripted(kotlin.Int){}[0]
     final fun keepChapters(kotlin.collections/Set<kotlin/Int>) // io.github.yuroyami.kitepdf.epub/EpubDocument.keepChapters|keepChapters(kotlin.collections.Set<kotlin.Int>){}[0]
@@ -187,6 +194,7 @@ final class io.github.yuroyami.kitepdf.epub/EpubDocument : io.github.yuroyami.ki
     final fun withMargin(kotlin/Double): io.github.yuroyami.kitepdf.epub/EpubDocument // io.github.yuroyami.kitepdf.epub/EpubDocument.withMargin|withMargin(kotlin.Double){}[0]
     final fun withPageSize(kotlin/Double, kotlin/Double): io.github.yuroyami.kitepdf.epub/EpubDocument // io.github.yuroyami.kitepdf.epub/EpubDocument.withPageSize|withPageSize(kotlin.Double;kotlin.Double){}[0]
     final fun withSettings(io.github.yuroyami.kitepdf.epub/EpubSettings): io.github.yuroyami.kitepdf.epub/EpubDocument // io.github.yuroyami.kitepdf.epub/EpubDocument.withSettings|withSettings(io.github.yuroyami.kitepdf.epub.EpubSettings){}[0]
+    final suspend fun fetchRemoteResources(kotlin/Int, kotlin/Boolean = ...) // io.github.yuroyami.kitepdf.epub/EpubDocument.fetchRemoteResources|fetchRemoteResources(kotlin.Int;kotlin.Boolean){}[0]
     final suspend fun prepareChapter(kotlin/Int, kotlin.coroutines/SuspendFunction0<kotlin/Unit>) // io.github.yuroyami.kitepdf.epub/EpubDocument.prepareChapter|prepareChapter(kotlin.Int;kotlin.coroutines.SuspendFunction0<kotlin.Unit>){}[0]
 
     final object Companion { // io.github.yuroyami.kitepdf.epub/EpubDocument.Companion|null[0]
@@ -351,6 +359,8 @@ final class io.github.yuroyami.kitepdf.epub/EpubPage : io.github.yuroyami.kitepd
         final fun <get-location>(): io.github.yuroyami.kitepdf.core/KiteLocation // io.github.yuroyami.kitepdf.epub/EpubPage.location.<get-location>|<get-location>(){}[0]
     final val media // io.github.yuroyami.kitepdf.epub/EpubPage.media|{}media[0]
         final fun <get-media>(): kotlin.collections/List<io.github.yuroyami.kitepdf.epub/EpubMedia> // io.github.yuroyami.kitepdf.epub/EpubPage.media.<get-media>|<get-media>(){}[0]
+    final val remoteVersion // io.github.yuroyami.kitepdf.epub/EpubPage.remoteVersion|{}remoteVersion[0]
+        final fun <get-remoteVersion>(): kotlin/Int // io.github.yuroyami.kitepdf.epub/EpubPage.remoteVersion.<get-remoteVersion>|<get-remoteVersion>(){}[0]
     final val width // io.github.yuroyami.kitepdf.epub/EpubPage.width|{}width[0]
         final fun <get-width>(): kotlin/Double // io.github.yuroyami.kitepdf.epub/EpubPage.width.<get-width>|<get-width>(){}[0]
 
@@ -378,7 +388,7 @@ final class io.github.yuroyami.kitepdf.epub/EpubRendition { // io.github.yuroyam
 }
 
 final class io.github.yuroyami.kitepdf.epub/EpubSettings { // io.github.yuroyami.kitepdf.epub/EpubSettings|null[0]
-    constructor <init>(kotlin/Double = ..., kotlin/Double = ..., kotlin/Double = ..., kotlin/Double = ..., io.github.yuroyami.kitepdf.epub/ReaderFontFamily? = ..., kotlin/Double = ..., io.github.yuroyami.kitepdf.core.render/RgbColor? = ..., io.github.yuroyami.kitepdf.core.render/RgbColor? = ..., kotlin/Boolean? = ..., kotlin/Boolean = ..., kotlin/Long = ..., kotlin/Boolean? = ...) // io.github.yuroyami.kitepdf.epub/EpubSettings.<init>|<init>(kotlin.Double;kotlin.Double;kotlin.Double;kotlin.Double;io.github.yuroyami.kitepdf.epub.ReaderFontFamily?;kotlin.Double;io.github.yuroyami.kitepdf.core.render.RgbColor?;io.github.yuroyami.kitepdf.core.render.RgbColor?;kotlin.Boolean?;kotlin.Boolean;kotlin.Long;kotlin.Boolean?){}[0]
+    constructor <init>(kotlin/Double = ..., kotlin/Double = ..., kotlin/Double = ..., kotlin/Double = ..., io.github.yuroyami.kitepdf.epub/ReaderFontFamily? = ..., kotlin/Double = ..., io.github.yuroyami.kitepdf.core.render/RgbColor? = ..., io.github.yuroyami.kitepdf.core.render/RgbColor? = ..., kotlin/Boolean? = ..., kotlin/Boolean = ..., kotlin/Long = ..., kotlin/Boolean? = ..., io.github.yuroyami.kitepdf.epub/EpubResourceFetcher? = ...) // io.github.yuroyami.kitepdf.epub/EpubSettings.<init>|<init>(kotlin.Double;kotlin.Double;kotlin.Double;kotlin.Double;io.github.yuroyami.kitepdf.epub.ReaderFontFamily?;kotlin.Double;io.github.yuroyami.kitepdf.core.render.RgbColor?;io.github.yuroyami.kitepdf.core.render.RgbColor?;kotlin.Boolean?;kotlin.Boolean;kotlin.Long;kotlin.Boolean?;io.github.yuroyami.kitepdf.epub.EpubResourceFetcher?){}[0]
 
     final val backgroundColor // io.github.yuroyami.kitepdf.epub/EpubSettings.backgroundColor|{}backgroundColor[0]
         final fun <get-backgroundColor>(): io.github.yuroyami.kitepdf.core.render/RgbColor? // io.github.yuroyami.kitepdf.epub/EpubSettings.backgroundColor.<get-backgroundColor>|<get-backgroundColor>(){}[0]
@@ -400,6 +410,8 @@ final class io.github.yuroyami.kitepdf.epub/EpubSettings { // io.github.yuroyami
         final fun <get-pageHeight>(): kotlin/Double // io.github.yuroyami.kitepdf.epub/EpubSettings.pageHeight.<get-pageHeight>|<get-pageHeight>(){}[0]
     final val pageWidth // io.github.yuroyami.kitepdf.epub/EpubSettings.pageWidth|{}pageWidth[0]
         final fun <get-pageWidth>(): kotlin/Double // io.github.yuroyami.kitepdf.epub/EpubSettings.pageWidth.<get-pageWidth>|<get-pageWidth>(){}[0]
+    final val resourceFetcher // io.github.yuroyami.kitepdf.epub/EpubSettings.resourceFetcher|{}resourceFetcher[0]
+        final fun <get-resourceFetcher>(): io.github.yuroyami.kitepdf.epub/EpubResourceFetcher? // io.github.yuroyami.kitepdf.epub/EpubSettings.resourceFetcher.<get-resourceFetcher>|<get-resourceFetcher>(){}[0]
     final val textColor // io.github.yuroyami.kitepdf.epub/EpubSettings.textColor|{}textColor[0]
         final fun <get-textColor>(): io.github.yuroyami.kitepdf.core.render/RgbColor? // io.github.yuroyami.kitepdf.epub/EpubSettings.textColor.<get-textColor>|<get-textColor>(){}[0]
     final val usePublisherCss // io.github.yuroyami.kitepdf.epub/EpubSettings.usePublisherCss|{}usePublisherCss[0]
@@ -409,6 +421,7 @@ final class io.github.yuroyami.kitepdf.epub/EpubSettings { // io.github.yuroyami
     final fun component10(): kotlin/Boolean // io.github.yuroyami.kitepdf.epub/EpubSettings.component10|component10(){}[0]
     final fun component11(): kotlin/Long // io.github.yuroyami.kitepdf.epub/EpubSettings.component11|component11(){}[0]
     final fun component12(): kotlin/Boolean? // io.github.yuroyami.kitepdf.epub/EpubSettings.component12|component12(){}[0]
+    final fun component13(): io.github.yuroyami.kitepdf.epub/EpubResourceFetcher? // io.github.yuroyami.kitepdf.epub/EpubSettings.component13|component13(){}[0]
     final fun component2(): kotlin/Double // io.github.yuroyami.kitepdf.epub/EpubSettings.component2|component2(){}[0]
     final fun component3(): kotlin/Double // io.github.yuroyami.kitepdf.epub/EpubSettings.component3|component3(){}[0]
     final fun component4(): kotlin/Double // io.github.yuroyami.kitepdf.epub/EpubSettings.component4|component4(){}[0]
@@ -417,7 +430,7 @@ final class io.github.yuroyami.kitepdf.epub/EpubSettings { // io.github.yuroyami
     final fun component7(): io.github.yuroyami.kitepdf.core.render/RgbColor? // io.github.yuroyami.kitepdf.epub/EpubSettings.component7|component7(){}[0]
     final fun component8(): io.github.yuroyami.kitepdf.core.render/RgbColor? // io.github.yuroyami.kitepdf.epub/EpubSettings.component8|component8(){}[0]
     final fun component9(): kotlin/Boolean? // io.github.yuroyami.kitepdf.epub/EpubSettings.component9|component9(){}[0]
-    final fun copy(kotlin/Double = ..., kotlin/Double = ..., kotlin/Double = ..., kotlin/Double = ..., io.github.yuroyami.kitepdf.epub/ReaderFontFamily? = ..., kotlin/Double = ..., io.github.yuroyami.kitepdf.core.render/RgbColor? = ..., io.github.yuroyami.kitepdf.core.render/RgbColor? = ..., kotlin/Boolean? = ..., kotlin/Boolean = ..., kotlin/Long = ..., kotlin/Boolean? = ...): io.github.yuroyami.kitepdf.epub/EpubSettings // io.github.yuroyami.kitepdf.epub/EpubSettings.copy|copy(kotlin.Double;kotlin.Double;kotlin.Double;kotlin.Double;io.github.yuroyami.kitepdf.epub.ReaderFontFamily?;kotlin.Double;io.github.yuroyami.kitepdf.core.render.RgbColor?;io.github.yuroyami.kitepdf.core.render.RgbColor?;kotlin.Boolean?;kotlin.Boolean;kotlin.Long;kotlin.Boolean?){}[0]
+    final fun copy(kotlin/Double = ..., kotlin/Double = ..., kotlin/Double = ..., kotlin/Double = ..., io.github.yuroyami.kitepdf.epub/ReaderFontFamily? = ..., kotlin/Double = ..., io.github.yuroyami.kitepdf.core.render/RgbColor? = ..., io.github.yuroyami.kitepdf.core.render/RgbColor? = ..., kotlin/Boolean? = ..., kotlin/Boolean = ..., kotlin/Long = ..., kotlin/Boolean? = ..., io.github.yuroyami.kitepdf.epub/EpubResourceFetcher? = ...): io.github.yuroyami.kitepdf.epub/EpubSettings // io.github.yuroyami.kitepdf.epub/EpubSettings.copy|copy(kotlin.Double;kotlin.Double;kotlin.Double;kotlin.Double;io.github.yuroyami.kitepdf.epub.ReaderFontFamily?;kotlin.Double;io.github.yuroyami.kitepdf.core.render.RgbColor?;io.github.yuroyami.kitepdf.core.render.RgbColor?;kotlin.Boolean?;kotlin.Boolean;kotlin.Long;kotlin.Boolean?;io.github.yuroyami.kitepdf.epub.EpubResourceFetcher?){}[0]
     final fun equals(kotlin/Any?): kotlin/Boolean // io.github.yuroyami.kitepdf.epub/EpubSettings.equals|equals(kotlin.Any?){}[0]
     final fun hashCode(): kotlin/Int // io.github.yuroyami.kitepdf.epub/EpubSettings.hashCode|hashCode(){}[0]
     final fun toString(): kotlin/String // io.github.yuroyami.kitepdf.epub/EpubSettings.toString|toString(){}[0]

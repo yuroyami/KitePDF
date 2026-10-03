@@ -56,7 +56,10 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.yield
+import io.github.yuroyami.kitepdf.epub.EpubDocument
+import io.github.yuroyami.kitepdf.epub.EpubPage
 import kotlin.coroutines.coroutineContext
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
@@ -918,6 +921,32 @@ public class KiteDocViewState(
      * only on the composition's thread, by [KiteFormRevision].
      */
     internal var formRevision: Int by mutableIntStateOf(0)
+
+    /**
+     * How many of the book's remote resources have landed, as [EpubDocument.remoteArrivals] last
+     * said (#38). Written only on the composition's thread, by [followRemoteArrivals].
+     */
+    internal var remoteArrivals: Int by mutableIntStateOf(0)
+
+    /**
+     * What [page]'s pixels depend on besides the viewer's own settings: for an EPUB page, the
+     * remote pictures of its chapter that have landed since it painted (#38). It reads
+     * [remoteArrivals], so a landing composes the pages on screen again, and a page whose
+     * chapter painted the picture draws again.
+     */
+    internal fun contentVersionOf(page: KitePage): Int {
+        if (remoteArrivals < 0) return 0
+        return (page as? EpubPage)?.remoteVersion ?: 0
+    }
+
+    /** Copies [EpubDocument.remoteArrivals] into [remoteArrivals] for as long as the view shows this state (#38). */
+    internal suspend fun followRemoteArrivals() {
+        val epub = document as? EpubDocument ?: return
+        epub.remoteArrivals.collect { landed ->
+            backOnComposeThread()
+            remoteArrivals = landed
+        }
+    }
 
     internal var adapter: KiteScrollAdapter? by mutableStateOf(null)
     internal var pendingPage: Int = initialPage.coerceAtLeast(0)
@@ -1886,6 +1915,7 @@ public class KiteDocViewState(
         if (chapter in failedChapters) return false
         if (document.isChapterReady(chapter)) return true
         return try {
+            awaitRemoteLayout(chapter)
             if (layoutPausesForFrames) prepareInSlices(chapter)
             else withContext(kitepdfRasterDispatcher()) { document.prepareChapter(chapter) }
             true
@@ -1897,6 +1927,24 @@ public class KiteDocViewState(
             false
         }
     }
+
+    /**
+     * Waits at most [remoteWait] for the remote fonts, and the remote images whose markup gives no
+     * size, that size [chapter]'s layout, when the book has a fetcher (#38). Whatever lands later
+     * keeps fetching: a picture with a declared size paints once it lands, and the rest show in
+     * the next document over the book, so the chapter keeps its pages.
+     */
+    private suspend fun awaitRemoteLayout(chapter: Int) {
+        val epub = document as? EpubDocument ?: return
+        if (epub.settings.resourceFetcher == null) return
+        withTimeoutOrNull(remoteWait) {
+            withContext(kitepdfRasterDispatcher()) { epub.fetchRemoteResources(chapter, layoutOnly = true) }
+        }
+        backOnComposeThread()
+    }
+
+    /** How long a chapter waits for the remote resources that size its layout (#38). */
+    internal var remoteWait: Duration = REMOTE_WAIT
 
     /**
      * True when a chapter lays out on the UI thread in slices, with a frame drawn between two. In a
@@ -2233,6 +2281,9 @@ public class KiteDocViewState(
 
         /** Half a frame at 60 Hz: the rest of the frame is the page's own work (#389). */
         private val LAYOUT_SLICE = 8.milliseconds
+
+        /** A remote font or image that sizes a chapter delays its layout this long at most (#38). */
+        private val REMOTE_WAIT = 2000.milliseconds
 
         private const val SAVED_SCROLL = 0
         private const val SAVED_FLOW = 1

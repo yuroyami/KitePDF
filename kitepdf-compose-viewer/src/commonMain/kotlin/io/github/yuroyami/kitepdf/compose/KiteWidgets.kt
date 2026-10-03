@@ -203,7 +203,9 @@ public fun KiteThumbnailStrip(
             val theme = state.viewerTheme
             val decorator = state.viewerDecorator
             val paper = paperColor(pageBackground, theme)
-            val bitmap by produceState<ImageBitmap?>(null, page, heightPx, paper, theme, decorator) {
+            // A remote picture that lands in the page draws the thumbnail again (#38).
+            val contentVersion = page?.let { state.contentVersionOf(it) } ?: 0
+            val bitmap by produceState<ImageBitmap?>(null, page, heightPx, paper, theme, decorator, contentVersion) {
                 // Same mandatory guard as KitePageRaster: an exception escaping
                 // produceState aborts the host app, so a failed thumbnail must
                 // degrade to its placeholder instead. A chapter still laying out
@@ -212,7 +214,7 @@ public fun KiteThumbnailStrip(
                 val result = page?.let {
                     rasterizer.rasterizeCachedOrNull(
                         thumbnails, it, widthPx, heightPx, paper, 1f, theme, index, canvasDecorator = decorator,
-                        priority = { RasterPriority.THUMBNAIL },
+                        priority = { RasterPriority.THUMBNAIL }, contentVersion = contentVersion,
                     )?.first
                 }
                 backOnComposeThread()

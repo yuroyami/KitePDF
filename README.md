@@ -150,7 +150,7 @@ kotlin {
 Good to know:
 
 - `kitepdf-core` comes with every document artifact, so you never add it yourself.
-- The document artifacts depend only on `kotlin-stdlib` and KiteImageCodec, which decodes the images.
+- The document artifacts depend only on `kotlin-stdlib` and KiteImageCodec, which decodes the images. `kitepdf-epub` adds `kotlinx-coroutines-core`, which fetches the resources a book names by URL.
 - In a plain Android or JVM project, put the same lines in your usual `dependencies { }` block.
 
 ## A quick tour

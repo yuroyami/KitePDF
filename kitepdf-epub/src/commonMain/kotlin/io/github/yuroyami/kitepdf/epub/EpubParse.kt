@@ -29,6 +29,12 @@ internal class ParsedSpine(
     val path: String,
     /** Faces from this document's own inline `<style>` blocks. Almost always empty. */
     val localFaces: List<EmbeddedFace>,
+    /**
+     * Every `@font-face` of this document's inline `<style>` blocks, with the folder its urls
+     * resolve against. A rule whose first source is remote is resolved by each document, not in
+     * [localFaces] (#38).
+     */
+    val faceRules: List<Pair<FontFaceRule, String>> = emptyList(),
 ) {
     /** What each note, glossary and bibliography link in this document is for, by href (#227). */
     val linkKinds: Map<String, EpubLinkKind> by lazy {
@@ -59,6 +65,8 @@ internal class ParsedEpub(
     private val manifestScripted: List<Boolean> = List(spinePaths.size) { false },
     /** The zip path of each spine document's media overlay, and its duration, parallel to [spinePaths] (#36). */
     private val overlays: List<Pair<String, Double?>?> = List(spinePaths.size) { null },
+    /** Whether the manifest marks each spine document `remote-resources`, parallel to [spinePaths] (#38). */
+    private val manifestRemote: List<Boolean> = List(spinePaths.size) { false },
 ) {
 
     val spineCount: Int get() = spinePaths.size
@@ -103,6 +111,59 @@ internal class ParsedEpub(
 
     val spineIndices: IntRange get() = spinePaths.indices
 
+    /** The bytes of the book's remote resources, for every document over this parse (#38). */
+    val remote = RemoteResources(spinePaths.size)
+
+    private val remoteLock = KiteLock()
+    private val remoteRefCache = arrayOfNulls<RemoteRefs>(spinePaths.size)
+
+    /**
+     * Whether [chapter] names a resource outside the container: the manifest marks it
+     * `remote-resources` (EPUB 3.3, D.6.4), or its markup or styles name an http or https URL (#38).
+     */
+    fun hasRemoteResources(chapter: Int): Boolean = manifestRemote[chapter] || remoteRefs(chapter).all.isNotEmpty()
+
+    /**
+     * The http and https URLs that [chapter] names, found in its markup and its styles without a
+     * layout (#38). The layout needs an image whose markup gives no width or no height, since its
+     * bytes size its box, and a font. The rest only paint: an image whose markup gives both, a
+     * background, and a picture inside an `<svg>`. A rule of a style sheet counts whether or not
+     * an element matches it.
+     */
+    fun remoteRefs(chapter: Int): RemoteRefs {
+        remoteLock.withLock { remoteRefCache[chapter] }?.let { return it }
+        val sp = spine(chapter)
+        val layout = LinkedHashSet<String>()
+        val all = LinkedHashSet<String>()
+        fun px(value: String?) = value?.trim()?.removeSuffix("px")?.toDoubleOrNull()?.takeIf { it > 0.0 }
+        fun walk(el: KiteXmlNode.Element, inSvg: Boolean) {
+            val src = when (el.tag) {
+                "img", "image" -> el.attrs["src"] ?: el.attrs["href"] ?: el.attrs["xlink:href"]
+                "video" -> el.attrs["poster"]
+                else -> null
+            }?.let { EpubDocument.resolvePath(sp.docDir, it) }
+            if (src != null && isRemoteUrl(src)) {
+                all += src
+                // An `<svg>` paints its own pictures, and a box whose markup gives both sides keeps them.
+                if (!inSvg && (px(el.attrs["width"]) == null || px(el.attrs["height"]) == null)) layout += src
+            }
+            el.attrs["style"]?.let { remoteCssUrls(it, all) }
+            for (c in el.children) if (c is KiteXmlNode.Element) walk(c, inSvg || el.tag == "svg")
+        }
+        walk(sp.tree, inSvg = false)
+        for (rule in sp.rules) for (declaration in rule.declarations) remoteCssUrls(declaration.value, all)
+        for ((rule, _) in fontFaceRules + sp.faceRules) for (url in remoteSourcesOf(rule)) {
+            layout += url
+            all += url
+        }
+        val refs = RemoteRefs(layout.toList(), all.toList())
+        return remoteLock.withLock { remoteRefCache[chapter] ?: refs.also { remoteRefCache[chapter] = it } }
+    }
+
+    /** Whether a font of [chapter] may come from a remote source, so each document resolves its faces (#38). */
+    fun hasRemoteFonts(chapter: Int): Boolean =
+        fontFaceRules.any { (rule, _) -> remoteFirst(rule) } || spine(chapter).faceRules.any { (rule, _) -> remoteFirst(rule) }
+
     private val spineLock = KiteLock()
     private val spineCache = arrayOfNulls<ParsedSpine>(spinePaths.size)
 
@@ -144,15 +205,16 @@ internal class ParsedEpub(
     val fontFilesParsed: Int get() = programLock.withLock { programCount }
 
     /**
-     * Every `@font-face` declared by a stylesheet in the OPF manifest, loaded from
-     * the zip. Built once, on the first chapter layout, not at open time.
+     * Every `@font-face` declared by a stylesheet in the OPF manifest, with the
+     * folder its urls resolve against. Read once, on the first chapter layout,
+     * not at open time.
      *
      * `url()` resolves against the stylesheet's own directory, which is what CSS
      * says and what a book with its CSS and its documents in different folders
      * needs. Faces declared inside a document's inline `<style>` are not here;
      * they belong to that one document (see [ParsedSpine.localFaces]).
      */
-    val fonts: FontRegistry by lazy {
+    val fontFaceRules: List<Pair<FontFaceRule, String>> by lazy {
         val found = ArrayList<Pair<FontFaceRule, String>>()
         for (item in opf.items) {
             if (item.mediaType != "text/css" && !item.href.endsWith(".css", ignoreCase = true)) continue
@@ -161,8 +223,17 @@ internal class ParsedEpub(
             if ("@font-face" !in text) continue // cheap reject: most books have none
             for (rule in CssParser.parseAll(text, Origin.AUTHOR).fontFaces) found.add(rule to dirOf(path))
         }
+        found
+    }
+
+    /**
+     * The faces of [fontFaceRules], loaded from the zip. A rule whose first source is remote takes
+     * its next one here; a document whose fonts may be remote resolves its own faces (#38).
+     */
+    val fonts: FontRegistry by lazy {
+        val found = fontFaceRules
         if (found.isEmpty()) FontRegistry.EMPTY
-        else FontRegistry(found.mapNotNull { (rule, dir) -> loadFace(rule, dir) })
+        else FontRegistry(found.mapNotNull { (rule, dir) -> loadFace(rule, dir) { null } })
     }
 
     /** Obfuscated zip path -> algorithm URI, for the mangled fonts some retailers ship. */
@@ -176,16 +247,20 @@ internal class ParsedEpub(
         val tree = HtmlParser.parse(zip.readText(path) ?: "").also(::resolveSwitches)
         val rules = ArrayList<StyleRule>()
         val faces = ArrayList<EmbeddedFace>()
+        val faceRules = ArrayList<Pair<FontFaceRule, String>>()
         walkStyleSources(
             tree, docDir,
             onLink = { sheet -> rules.addAll(sheetRules(sheet)) },
             onInline = { text ->
                 val css = CssParser.parseAll(absoluteUrls(inlineImports(zip, text, docDir, 0, HashSet()), docDir), Origin.AUTHOR)
                 rules.addAll(css.rules)
-                for (rule in css.fontFaces) loadFace(rule, docDir)?.let(faces::add)
+                for (rule in css.fontFaces) {
+                    faceRules += rule to docDir
+                    if (!remoteFirst(rule)) loadFace(rule, docDir) { null }?.let(faces::add)
+                }
             },
         )
-        return ParsedSpine(tree, rules, docDir, parseViewport(tree), path, faces)
+        return ParsedSpine(tree, rules, docDir, parseViewport(tree), path, faces, faceRules)
     }
 
     /** Manifest items by their zip path, for the fallback of a resource that a document names by path. */
@@ -213,17 +288,52 @@ internal class ParsedEpub(
         return sheetLock.withLock { sheetCache.getOrPut(path) { sheetCount++; rules } }
     }
 
-    private fun loadFace(rule: FontFaceRule, dir: String): EmbeddedFace? {
-        // Prefer the cheapest format to unpack: raw SFNT (.ttf/.otf), then WOFF 1.0
-        // (zlib tables), then WOFF2 (brotli + glyf transform). Otherwise take the
-        // first src and let signature sniffing in FontRegistry.face sort it out.
-        val url = rule.srcUrls.firstOrNull { it.endsWith(".ttf", true) || it.endsWith(".otf", true) }
-            ?: rule.srcUrls.firstOrNull { it.endsWith(".woff", true) }
-            ?: rule.srcUrls.firstOrNull { it.endsWith(".woff2", true) }
-            ?: rule.srcUrls.firstOrNull()
-            ?: return null
-        val program = programAt(fontPath(dir, url)) ?: return null
-        return EmbeddedFace(rule.family, rule.bold, rule.italic, program)
+    /**
+     * The face of [rule], from the first of its sources in [sourceOrder] that is in the book, or
+     * from a remote one before it whose bytes [remoteBytes] has (#38). A remote source without
+     * bytes yields to the next source, as a browser tries the list in turn (CSS Fonts 4, 4.3).
+     */
+    fun loadFace(rule: FontFaceRule, dir: String, remoteBytes: (String) -> ByteArray?): EmbeddedFace? {
+        for (url in sourceOrder(rule)) {
+            val program = if (isRemoteUrl(url)) remoteProgram(url, remoteBytes(url)) ?: continue else programAt(fontPath(dir, url))
+            return program?.let { EmbeddedFace(rule.family, rule.bold, rule.italic, it) }
+        }
+        return null
+    }
+
+    /**
+     * [rule]'s sources, the cheapest format to unpack first: raw SFNT (.ttf/.otf), then WOFF 1.0
+     * (zlib tables), then WOFF2 (brotli + glyf transform), then the rest as declared, which
+     * signature sniffing in [FontProgram.parse] sorts out.
+     */
+    private fun sourceOrder(rule: FontFaceRule): List<String> = rule.srcUrls.sortedBy { url ->
+        when {
+            url.endsWith(".ttf", true) || url.endsWith(".otf", true) -> 0
+            url.endsWith(".woff", true) -> 1
+            url.endsWith(".woff2", true) -> 2
+            else -> 3
+        }
+    }
+
+    /** Whether [rule] tries a remote source before any source in the book (#38). */
+    private fun remoteFirst(rule: FontFaceRule): Boolean = sourceOrder(rule).firstOrNull()?.let(::isRemoteUrl) == true
+
+    /** The remote sources that [rule] tries before its first source in the book, in order (#38). */
+    private fun remoteSourcesOf(rule: FontFaceRule): List<String> = sourceOrder(rule).takeWhile(::isRemoteUrl)
+
+    /**
+     * The program of the remote font [url] whose bytes are [bytes], parsed once per URL. Null
+     * without bytes, even once another chapter has parsed it: a chapter laid out before the font
+     * landed keeps laying out without it.
+     */
+    private fun remoteProgram(url: String, bytes: ByteArray?): FontProgram? {
+        if (bytes == null) return null
+        programLock.withLock { if (programCache.containsKey(url)) return programCache[url] }
+        val parsed = FontProgram.parse(bytes)
+        return programLock.withLock {
+            if (programCache.containsKey(url)) programCache[url]
+            else { programCount++; programCache[url] = parsed; parsed }
+        }
     }
 
     /** The program of the font file at [path], parsed on first use and shared by every face after. */
@@ -282,6 +392,7 @@ internal class ParsedEpub(
                 baseDir = if (opf.direction?.lowercase() == "rtl") Direction.RTL else Direction.LTR,
                 renditions = present.map { opf.renditionAt(it.second) },
                 manifestScripted = present.map { opf.contentDocument(opf.spineIdrefs[it.second])?.hasProperty("scripted") == true },
+                manifestRemote = present.map { opf.contentDocument(opf.spineIdrefs[it.second])?.hasProperty("remote-resources") == true },
                 overlays = present.map { (_, index) ->
                     val overlayId = opf.contentDocument(opf.spineIdrefs[index])?.mediaOverlay ?: return@map null
                     val item = opf.itemsById[overlayId] ?: return@map null
@@ -393,6 +504,15 @@ internal class ParsedEpub(
         }
 
         private val URL_RE = Regex("""url\(\s*(["']?)([^"')]*)\1\s*\)""", RegexOption.IGNORE_CASE)
+
+        /** Adds each http or https `url()` of the CSS [text] to [into] (#38). */
+        private fun remoteCssUrls(text: String, into: MutableSet<String>) {
+            if (!text.contains("url(", ignoreCase = true)) return
+            for (m in URL_RE.findAll(text)) {
+                val url = m.groupValues[2].trim()
+                if (isRemoteUrl(url)) into += url.substringBefore('#')
+            }
+        }
 
         private val URL_SCHEME = Regex("^[a-zA-Z][a-zA-Z0-9+.-]*:")
 

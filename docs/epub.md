@@ -346,6 +346,48 @@ for (embed in page.embeds) {
 }
 ```
 
+### Resources on the web
+
+A book can name an image, a font or a background by an `https` URL instead of a
+file in its container (EPUB 3.3, section 3.6). `book.hasRemoteResources(chapter)`
+says whether a chapter does: its manifest item has the `remote-resources`
+property, or its markup or styles name such a URL.
+
+A fetch tells the URL's server that the book was opened, so the engine fetches
+nothing on its own. Give it a fetcher to load them, `kitepdf-net`'s or one of
+your own:
+
+```kotlin
+val settings = EpubSettings(resourceFetcher = EpubResourceFetcher(client))   // kitepdf-net
+val book = EpubDocument.open(bytes, settings)
+```
+
+A fetcher gets `https` URLs only, each once per book. A plain `http` URL is
+never fetched, as EPUB Reading Systems 3.3 asks. The book keeps what lands for
+its whole life, 32 MiB at most.
+
+Layout never waits for the network:
+
+- An image whose markup gives its `width` and `height` keeps that box, and its
+  page paints the picture once the bytes land. `EpubPage.remoteVersion` moves
+  then, and `book.remoteArrivals` counts the arrivals for a viewer to follow.
+- An image without both sizes, and a font, size the layout. A chapter laid out
+  before they land keeps their absence for the life of that document, so its
+  page count holds. The next document over the book, such as one from
+  `withSettings`, finds them.
+
+To have them in the first layout, wait for them first, with a time limit of
+your own. `KiteDocView` waits two seconds:
+
+```kotlin
+withTimeoutOrNull(2.seconds) { book.fetchRemoteResources(chapter, layoutOnly = true) }
+book.prepareChapter(chapter)
+```
+
+Without a fetcher, or when a fetch fails, a remote image shows its manifest
+fallback, else the empty box its markup gives, and a remote font gives way to
+the next source of its `@font-face`.
+
 ## Typography
 
 The layout engine covers what real books use:

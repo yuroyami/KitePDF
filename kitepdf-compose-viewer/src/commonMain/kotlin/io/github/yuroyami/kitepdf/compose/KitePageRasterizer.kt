@@ -232,6 +232,7 @@ public class KitePageRasterizer(
         canvasDecorator: KiteCanvasDecorator? = null,
         priority: () -> Int = { RasterPriority.VISIBLE },
         region: IntRect? = null,
+        contentVersion: Int = 0,
     ): Pair<ImageBitmap, Boolean> {
         val key = cache?.let {
             PageBitmapCache.Key(
@@ -245,6 +246,7 @@ public class KitePageRasterizer(
                 canvasDecorator = canvasDecorator,
                 fontEnvironment = textMeasurer,
                 region = region,
+                contentVersion = contentVersion,
             )
         }
         if (cache != null && key != null) cache.get(key)?.let { return it to false }
@@ -290,10 +292,11 @@ public class KitePageRasterizer(
         canvasDecorator: KiteCanvasDecorator? = null,
         priority: () -> Int = { RasterPriority.VISIBLE },
         region: IntRect? = null,
+        contentVersion: Int = 0,
     ): Pair<ImageBitmap, Boolean>? {
         for (attempt in 0 until 2) {
             try {
-                return rasterizeCachedOffMain(cache, page, widthPx, heightPx, background, hairlineWidthPx, theme, skipWidgets, canvasDecorator, priority, region)
+                return rasterizeCachedOffMain(cache, page, widthPx, heightPx, background, hairlineWidthPx, theme, skipWidgets, canvasDecorator, priority, region, contentVersion)
             } catch (cancelled: kotlinx.coroutines.CancellationException) {
                 throw cancelled
             } catch (failure: Throwable) {
