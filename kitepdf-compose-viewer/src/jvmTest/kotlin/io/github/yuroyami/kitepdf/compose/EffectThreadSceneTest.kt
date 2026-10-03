@@ -170,15 +170,26 @@ class EffectThreadSceneTest {
         forBothEffectOrders { queued ->
             val stranded = AtomicReference<Thread?>()
             val back = AtomicReference<Thread?>()
+            // The hop holds until the effect waits in it, so a pool thread ends the wait. An empty
+            // hop could end before the effect suspended, which then went on on its own thread.
+            val entered = CountDownLatch(1)
+            val release = CountDownLatch(1)
+            releaseAtEnd { release.countDown() }
             val (scene, driver) = drivenScene(10, 10, queued) {
                 LaunchedEffect(Unit) {
-                    withContext(Dispatchers.Default) {}
+                    withContext(Dispatchers.Default) {
+                        entered.countDown()
+                        release.await(10, TimeUnit.SECONDS)
+                    }
                     stranded.set(Thread.currentThread())
                     backOnComposeThread()
                     back.set(Thread.currentThread())
                 }
             }
             scene.use {
+                // The frame that started the effect has returned, so the effect waits in the hop.
+                driver.pumpUntilState { entered.count == 0L }
+                release.countDown()
                 driver.pumpUntilState { back.get() != null }
                 assertSame(onTestUiThread { Thread.currentThread() }, back.get())
                 // The premise: under the default dispatcher the effect goes on on the pool thread.
