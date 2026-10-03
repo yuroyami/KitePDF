@@ -347,16 +347,18 @@ each one embeds:
 
 ```kotlin
 for (embed in page.embeds) {
-    // embed.href is a zip path for book.resource, or a URL.
-    placeWebView(embed.rect, embed.href)
+    // embed.href is a zip path for book.resource, or a URL. An app may show it in a view of its own.
+    showEmbedded(embed.rect, embed.href)
 }
 ```
+
+The scripts of a chapter run in [Scripts in an EPUB](javascript.md#scripts-in-an-epub); the
+documents of these frames and objects do not run there yet.
 
 Each box stays on one page, as an image does: a box that does not fit what is
 left of a page moves whole to the next one. Only an object taller than a page
 goes on from page to page, and its `isWhole` is false there. `book.chapterPath(chapter)`
-names the zip path of a chapter's own document, which a web engine loads to run
-a scripted fixed-layout page.
+names the zip path of a chapter's own document.
 
 ### Resources on the web
 

@@ -136,9 +136,10 @@ public class EpubDocument internal constructor(
 
     /**
      * Whether [chapter] is scripted: its manifest item has the `scripted` property, or its
-     * document has a `script` element (#40). This library runs no script, so a scripted chapter
-     * shows what its markup shows without one, `noscript` content included, and an app can hand
-     * it to a web engine instead. Reads the chapter's markup once, and does not lay it out.
+     * document has a `script` element (#40). Without a script handler such a chapter shows what
+     * its markup shows, `noscript` content included; [EpubScriptSession], or `EpubScriptRunner`
+     * of `kitepdf-javascript`, runs its scripts over this library's own layout (#235). Reads the
+     * chapter's markup once, and does not lay it out.
      *
      * @throws IndexOutOfBoundsException when [chapter] is not a chapter of the book.
      */
@@ -1216,9 +1217,9 @@ public class EpubDocument internal constructor(
     public fun resourceType(path: String): String? = parsed.mediaTypeOf(path.substringBefore('#'))
 
     /**
-     * The zip path of [chapter]'s document, as [resource] takes it: what a web engine loads to
-     * run a scripted fixed-layout page (#41). Throws [IndexOutOfBoundsException] for a chapter
-     * the book does not have.
+     * The zip path of [chapter]'s document, as [resource] takes it, for a host that reads or shows
+     * the chapter's own markup (#41). Throws [IndexOutOfBoundsException] for a chapter the book
+     * does not have.
      */
     public fun chapterPath(chapter: Int): String = parsed.spinePaths[chapter]
 

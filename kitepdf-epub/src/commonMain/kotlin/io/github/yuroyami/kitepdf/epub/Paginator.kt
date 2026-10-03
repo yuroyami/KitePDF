@@ -230,8 +230,8 @@ internal object Paginator {
         val chain = around + box
         when (box) {
             is BlockBox -> {
-                // A web engine shows an HTML object's document over its whole box, so the box
-                // is one unit, as an image is, and its fallback stays on the page it starts (#41).
+                // An HTML object's document shows over its whole box, so the box is one unit, as
+                // an image is, and its fallback stays on the page it starts (#41).
                 if (box.embed != null) out.add(Unit_(box.y, box.bottom, null, null, box, 0, 1, chain))
                 for (c in box.children) gatherUnits(c, chain, out)
             }
