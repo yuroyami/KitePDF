@@ -191,6 +191,11 @@ public interface KiteCanvas {
      *   against a transparent backdrop, which is exact unless a paint inside
      *   blends in a mode other than Normal.
      *
+     * A non-isolated group with such a paint, which is a knockout group or has
+     * an alpha below 1 or a blend mode of its own, does not come here when the
+     * canvas's [rasterStep] can read the backdrop: the PDF renderer composites
+     * it from rasters as §11.4.8 says, and draws the result in one step.
+     *
      * Default implementation: a no-op pair so backends that don't model
      * groups still render their content (just without isolation). That's
      * incorrect for fancy compositing but produces something visible.

@@ -18,7 +18,11 @@ import javax.imageio.ImageIO
 import org.jetbrains.skia.EncodedImageFormat
 import org.jetbrains.skia.Image
 
-/** Renders the first page of [bytes] at 72 dpi through [ComposeCanvas], as the viewer does. */
+/**
+ * Renders the first page of [bytes] at 72 dpi through [ComposeCanvas], as the viewer's
+ * rasterizer does: the canvas knows the bitmap it draws into, so a raster step reads the
+ * backdrop from it (#308).
+ */
 internal fun renderWithCompose(bytes: ByteArray): BufferedImage {
     val page = PdfDocument.open(bytes).pages[0]
     val w = page.width.toInt()
@@ -28,7 +32,7 @@ internal fun renderWithCompose(bytes: ByteArray): BufferedImage {
     val tm = TextMeasurer(createFontFamilyResolver(), density, LayoutDirection.Ltr)
     CanvasDrawScope().drawOnTestUiThread(density, LayoutDirection.Ltr, Canvas(bmp), Size(w.toFloat(), h.toFloat())) {
         drawRect(Color.White, size = size)
-        page.renderTo(ComposeCanvas(this, tm), KiteMatrix(1.0, 0.0, 0.0, -1.0, 0.0, h.toDouble()))
+        page.renderTo(ComposeCanvas(this, tm, 1f, false, magnification = 1f, target = bmp), KiteMatrix(1.0, 0.0, 0.0, -1.0, 0.0, h.toDouble()))
     }
     val png = Image.makeFromBitmap(bmp.asSkiaBitmap()).encodeToData(EncodedImageFormat.PNG)!!.bytes
     return ImageIO.read(ByteArrayInputStream(png))
