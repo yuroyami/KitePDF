@@ -30,10 +30,6 @@ its engine, KiteJS, builds for: Android, JVM, iOS, macOS arm64, Linux x64 and
 arm64, Windows, JS and wasmJs. It has no tvOS, watchOS, Android Native or
 wasmWasi build.
 
-`kitepdf-webview`, which shows the scripted content of an EPUB in the platform's
-own web view, covers Android and the JVM, where JavaFX supplies the web view. See
-[Scripted books](webview.md).
-
 Intel macOS, tvOS x64 and watchOS x64 are off everywhere. Kotlin 2.3 deprecated
 those targets.
 
@@ -44,9 +40,8 @@ those targets.
     and macOS, and the core/pdf/epub/cbz/svg/xps/umbrella/net suites on JS/Node.
     Common code is also run through Android host-test variants, while the
     Android, iOS and browser rendering backends are compiled and the macOS
-    CoreGraphics backend is tested. The web views of `kitepdf-webview` run their
-    tests on an emulator and under a virtual display. Other Android device
-    rendering, Canvas2D, wasm and Linux/Windows native are not executed in CI.
+    CoreGraphics backend is tested. Android device rendering, Canvas2D, wasm
+    and Linux/Windows native are not executed in CI.
 
 ## Verification coverage
 
@@ -57,7 +52,7 @@ workflow currently provides the following coverage on pushes and pull requests:
 | Target | Document and script modules | Rendering and viewer |
 | --- | --- | --- |
 | JVM on Linux | Unit tests, including umbrella and network modules | AWT, Skia and Compose tests; MuPDF differential tests |
-| Android | Host tests for core, PDF, EPUB, CBZ, SVG, XPS, umbrella and JavaScript | Android, Skia and Compose compile checks; the web view's tests on an emulator, and no other device pixel tests |
+| Android | Host tests for core, PDF, EPUB, CBZ, SVG, XPS, umbrella and JavaScript | Android, Skia and Compose compile checks; no emulator or device pixel tests |
 | iOS simulator arm64 | Core, PDF, EPUB, CBZ, SVG, XPS and JavaScript common tests | Native, Skia and Compose compile checks; no rendering tests |
 | macOS arm64 | Core, PDF, EPUB, CBZ, SVG, XPS, umbrella and JavaScript common tests | CoreGraphics tests; Skia and Compose native targets are not explicitly checked |
 | JS on Node | Core, PDF, EPUB, CBZ, SVG, XPS, umbrella, network and JavaScript tests | Browser renderer and viewer compile checks; no browser pixel tests |
@@ -223,7 +218,6 @@ Each artifact declares its own `minSdk`. Your app must satisfy the highest one y
 | `kitepdf`, `-pdf`, `-epub`, `-core` | 21 | The engine uses no newer platform API. |
 | `kitepdf-skia-renderer` | 21 | Skiko carries its own rendering stack. On Android it also needs the Compose dev repository, see [Headless rendering](rendering.md#cross-platform-skia-kitepdf-skia-renderer). |
 | `kitepdf-compose-viewer` | 24 | The Compose Multiplatform floor. |
-| `kitepdf-webview` | 24 | It draws over `kitepdf-compose-viewer`. |
 | `kitepdf-native-renderer` | 29 | `Paint.setBlendMode`. Below API 29, blend modes would fall back to `SRC_OVER`. |
 
 ### Gaps that are not built yet
