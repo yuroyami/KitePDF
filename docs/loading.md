@@ -108,7 +108,7 @@ Networking lives in a separate artifact. The engine depends on `kotlin-stdlib`, 
 ```kotlin
 dependencies {
     implementation("io.github.yuroyami:kitepdf-net:0.12.0")
-    implementation("io.ktor:ktor-client-cio:3.5.2")   // or OkHttp, Darwin, Js
+    implementation("io.ktor:ktor-client-cio:3.6.0")   // or OkHttp, Darwin, Js
 }
 ```
 
