@@ -116,6 +116,7 @@ jobs:
           :kitepdf-epub:testAndroidHostTest :kitepdf-cbz:testAndroidHostTest
           :kitepdf-svg:testAndroidHostTest :kitepdf-xps:testAndroidHostTest :kitepdf:testAndroidHostTest
           :kitepdf-javascript:testAndroidHostTest
+          :kitepdf-compose-viewer:testAndroidHostTest
           --continue --stacktrace
 
       - name: Compile Android rendering backends

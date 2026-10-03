@@ -6,14 +6,16 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import io.github.yuroyami.kitepdf.core.font.FontSpec
 
 /**
- * One piece of host-font text, laid out by Skia's own paragraph engine with the family names,
- * style and glyph rasterization that Compose's text gives it, so that it draws the pixels
- * Compose's text drew, a fallback face for a character the face lacks included.
+ * One piece of host-font text, laid out by the platform's own text engine with what Compose's
+ * text gives it, so that it draws the pixels Compose's text drew, a fallback face for a
+ * character the face lacks included: Skia's paragraph engine with Compose's family names, style
+ * and glyph rasterization on the desktop JVM, iOS and macOS, and Android's text stack with
+ * Compose's paint on Android.
  *
- * Compose's text stack keeps a process-wide style cache in Kotlin, and two threads that measure
- * through it at once broke it on iOS (db082392, #428), so a page with host-font text was drawn on
- * the UI thread. Skia's engine does not go through that cache, so a piece laid out here can be
- * drawn on any thread, and such a page renders off the UI thread in one pass (#131).
+ * Compose's text stack keeps caches in Kotlin, and two threads that measured through them at
+ * once broke them on iOS (db082392, #428), so a page with host-font text was drawn on the UI
+ * thread. Neither engine goes through those caches, so a piece laid out here can be drawn on any
+ * thread, and such a page renders off the UI thread in one pass (#131, #487).
  */
 internal interface HostTextLine {
     /** The advance of the piece, in pixels. */
@@ -24,9 +26,9 @@ internal interface HostTextLine {
 }
 
 /**
- * True where [hostTextLine] shapes host-font text: on the desktop JVM, iOS and macOS. Android
- * draws text through its own framework under Compose, and a browser has no host faces for
- * Skia to find, so both keep Compose's text on the UI thread.
+ * True where [hostTextLine] shapes host-font text: on the desktop JVM, iOS, macOS and Android.
+ * A browser has no host faces for Skia to find and one thread to draw on, so it keeps
+ * Compose's text.
  */
 internal expect val hostTextAnyThread: Boolean
 

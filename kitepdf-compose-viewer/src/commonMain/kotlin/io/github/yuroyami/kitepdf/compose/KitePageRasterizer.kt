@@ -39,10 +39,9 @@ import io.github.yuroyami.kitepdf.core.render.ReaderTheme
  * exports. [rasterizeOffMain] is the suspend entry point for any calling thread; it
  * moves the work to [kitepdfRasterDispatcher] (a background pool on
  * JVM/Android/Apple, Main on JS/Wasm) so a complex page does not jank scrolling
- * or pinch. [KiteDocView] uses that path. On the desktop JVM, iOS and macOS, a page
- * with text in a system font draws there too, since Skia shapes that text itself
- * (#131). On Android such a page is drawn on the main thread, where Compose's text
- * stack belongs.
+ * or pinch. [KiteDocView] uses that path. A page with text in a system font draws
+ * there too, since the platform's own text engine shapes that text on any thread
+ * (#131, #487).
  */
 @Stable
 public class KitePageRasterizer(
@@ -91,7 +90,8 @@ public class KitePageRasterizer(
 
     /**
      * True where host-font text needs no UI thread, so [rasterizeOffMain] draws every page in one
-     * pass on the pool (#131). A test sets it false to run the probe and the UI pass, as Android does.
+     * pass on the pool (#131). A test sets it false to run the probe and the UI pass that
+     * Compose's text needs.
      */
     internal var textOffMain: Boolean = hostTextAnyThread
 
@@ -107,12 +107,9 @@ public class KitePageRasterizer(
      * calling coroutine stops a PDF page between operators and throws a
      * CancellationException instead of returning a partial bitmap (#188).
      *
-     * On the desktop JVM, iOS and macOS every page draws once on the pool, system-font
-     * text included: Skia shapes that text itself, outside Compose's text stack (#131).
-     * On Android, pages that fall back to system-font text (EPUB body text, PDFs without
-     * embedded outlines) are rendered on the platform UI thread: Compose's text stack keeps
-     * a process-wide cache that the UI thread shares, and no lock of ours can exclude that
-     * thread. Pages whose glyphs all have embedded outlines stay on the pool there too.
+     * Every page draws once on the pool, system-font text included: the platform's own
+     * text engine shapes that text, outside Compose's text stack, whose process-wide caches
+     * the UI thread shares (#131, #487). In a browser the pool is the UI thread itself.
      * Never block the UI thread waiting for this call.
      *
      * Two rasters run at once across the process. This call waits for a free slot

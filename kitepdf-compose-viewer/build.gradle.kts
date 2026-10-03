@@ -45,6 +45,7 @@ kotlin {
         namespace = "io.github.yuroyami.kitepdf.compose"
         compileSdk = 37
         minSdk = 24
+        withHostTest { isIncludeAndroidResources = true }
     }
 
     jvm()
@@ -95,6 +96,10 @@ kotlin {
         jvmTest.dependencies {
             implementation(currentOsSkikoRuntime())
             implementation(projects.kitepdfDifftest)
+        }
+
+        getByName("androidHostTest").dependencies {
+            implementation(libs.robolectric)
         }
     }
 }
