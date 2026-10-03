@@ -321,8 +321,11 @@ for (clip in overlay.clips) {
 }
 ```
 
-The engine plays nothing itself. Show the active class as a highlight colour,
-not as a new style, because a new style would lay the page out again.
+The engine plays nothing itself. The optional `kitepdf-media` artifact reads a
+book aloud in `KiteDocView` with `KiteReadAloud` (see
+[Book audio and video](media.md#read-a-book-aloud)). If you play the clips
+yourself, show the active class as a highlight colour, not as a new style,
+because a new style would lay the page out again.
 
 ### Scripted content and embedded documents
 

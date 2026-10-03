@@ -43,6 +43,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `http` and `file` included, never plays (#491). It publishes Android (`minSdk` 26),
   iOS and the desktop JVM. Without it, nothing changes and no codec ships (#31).
 - `EpubPage.document`: the book a page belongs to, for the bytes of its media (#31).
+- `KiteReadAloud(state, playing)` in `kitepdf-media` reads an EPUB aloud with its media
+  overlays and follows the text in `KiteDocView`. It starts at the first clip on the
+  reader's page, plays each clip from its `clipBegin` to its `clipEnd` out of the book's
+  own audio, and goes on with the next chapter that has an overlay (EPUB Reading Systems
+  3.3, 9.1 and 9.2.2). The text being read gets one entry in `KiteDocViewState.highlights`,
+  with the id `READ_ALOUD_HIGHLIGHT_ID`, and the viewer turns to its page. The book's
+  active class shows as that highlight and is never added to the element. A clip without
+  audio, or with audio the player cannot open, is skipped (#36).
 
 - `FontSpec.language` carries the BCP 47 tag of a substitute font's language, and
   `FontSpec.cjkScript`, `FontSpec.hostFaces` and `FontSpec.languageSample` tell a
