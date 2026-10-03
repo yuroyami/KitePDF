@@ -3,3 +3,8 @@ public final class io/github/yuroyami/kitepdf/media/KiteMediaOverlayKt {
 	public static final fun KiteMediaOverlay (Lio/github/yuroyami/kitepdf/compose/KitePageOverlayScope;ZLkotlin/jvm/functions/Function0;Landroidx/compose/runtime/Composer;II)V
 }
 
+public final class io/github/yuroyami/kitepdf/media/KiteReadAloudKt {
+	public static final field READ_ALOUD_HIGHLIGHT_ID Ljava/lang/String;
+	public static final fun KiteReadAloud-dgCr-O4 (Lio/github/yuroyami/kitepdf/compose/KiteDocViewState;ZLandroidx/compose/ui/graphics/Color;Lkotlin/jvm/functions/Function0;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function0;Landroidx/compose/runtime/Composer;II)V
+}
+

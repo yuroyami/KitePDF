@@ -23,9 +23,13 @@ internal fun mediaItems(media: EpubMedia, document: EpubDocument, allowRemote: B
         when {
             isHttps(source.href) -> if (allowRemote) MediaItem(source.href) else null
             hasScheme(source.href) -> null
-            else -> document.resource(source.href)?.let { MediaItem.from(MediaIo.ofBytes(it), label = source.href) }
+            else -> bookItem(document, source.href)
         }
     }
+
+/** The file [href] of [document]'s zip as an item, read once into an array that every open seeks in, or null without it. */
+internal fun bookItem(document: EpubDocument, href: String): MediaItem? =
+    document.resource(href)?.let { MediaItem.from(MediaIo.ofBytes(it), label = href) }
 
 /** True when [href] is an absolute `https` URL, the one scheme a remote source plays over (EPUB Reading Systems 3.3, 3.3). */
 internal fun isHttps(href: String): Boolean = href.startsWith("https://", ignoreCase = true)

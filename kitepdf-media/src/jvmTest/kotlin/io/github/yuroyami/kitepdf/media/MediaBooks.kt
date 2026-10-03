@@ -29,10 +29,14 @@ internal object MediaBooks {
             "OEBPS/chapter1.xhtml" to chapter.encodeToByteArray(),
         )
         for ((name, bytes) in files) entries["OEBPS/$name"] = bytes
+        return EpubDocument.open(storedZip(entries))
+    }
+
+    /** A zip of [entries] in their order, every one stored, as an EPUB's mimetype must be (EPUB OCF 3.3, 4.3). */
+    fun storedZip(entries: Map<String, ByteArray>): ByteArray {
         val out = ByteArrayOutputStream()
         ZipOutputStream(out).use { zip ->
             for ((name, bytes) in entries) {
-                // Stored entries, as an EPUB's mimetype must be (EPUB OCF 3.3, 4.3).
                 val entry = ZipEntry(name).apply {
                     method = ZipEntry.STORED
                     size = bytes.size.toLong()
@@ -43,7 +47,7 @@ internal object MediaBooks {
                 zip.closeEntry()
             }
         }
-        return EpubDocument.open(out.toByteArray())
+        return out.toByteArray()
     }
 
     fun firstPage(doc: EpubDocument): EpubPage = doc.pages.first()
