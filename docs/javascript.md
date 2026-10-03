@@ -200,6 +200,10 @@ its value and checkedness; `<canvas>`; and the syntax KiteJS does not have yet, 
 ([KiteJS#12](https://github.com/yuroyami/KiteJS/issues/12)). A script that uses one fails to
 parse and is listed in `failures`, and the chapter goes on as its other scripts leave it.
 
+In `KiteDocView`, pass the runner as `epubScripts`, and the viewer opens chapters, sends taps,
+pumps timers and follows the scripts' changes itself; see
+[A book's scripts](compose-viewer.md#a-books-scripts).
+
 `EpubScriptPolicy` sets how long each call may run: opening a chapter, a tap, a round of timers.
 `EpubScriptPolicy.DENY` runs nothing. The runner keeps its engines on a thread of its own, as
 `PdfScriptRunner` does. `EpubScriptSession` in `kitepdf-epub` is the same thing over any

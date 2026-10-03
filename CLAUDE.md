@@ -57,3 +57,4 @@ Things a previous change taught the hard way. One line each. Delete a line when 
 - JFR's default execution samples do not see native frames, so zlib inflate and Java2D drawing vanish from a profile. Add native-method samples or a stage timer before you trust the shares (#462).
 - Thread CPU time moves with machine load too: the same scanned page measured 100 to 162 ms on different runs. Compare a change before and after in one JVM, with the runs alternating (#462).
 - In a git worktree under `.claude/worktrees`, Gradle's file watching missed source edits and called the compile UP-TO-DATE on stale classes. Build there with `--no-watch-fs`.
+- A KiteJS host function that returns Kotlin `null` gives the script `undefined`, not `null`, so a script-side check written `=== null` never matches. The EPUB DOM prelude compares host answers with `== null` (#41).

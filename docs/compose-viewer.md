@@ -111,6 +111,25 @@ These are live editing APIs. They do not save the document. The writer's existin
 their array `/V` and `/I` entries, and matching saved appearances is outside this change.
 Do not save a multiple selection by passing the scalar `value(name)` view to that method.
 
+### A book's scripts
+
+An EPUB chapter can carry scripts too: a quiz, or a fixed-layout page whose button changes a
+picture. Pass `epubScripts`, and `kitepdf-javascript` provides a handler for it as well:
+
+```kotlin
+val scripts = remember(book) { EpubScriptRunner(book) }
+DisposableEffect(scripts) { onDispose { scripts.close() } }
+KiteDocView(state = state, epubScripts = scripts)
+```
+
+The viewer runs a scripted chapter's scripts when the reader first reaches it. A tap on one of
+its pages goes to the scripts first, as a `click` on the element under it, and the viewer
+follows a link there only when no script prevented the click. A change of `location` that a
+script asks for goes the way of a tapped link, through `onLinkTap`. The viewer pumps the timers
+the scripts set, and when a script changes its chapter, the chapter is laid out again: the
+viewer takes the page counts again, since the chapter can gain or lose pages, and draws the
+changed pages. [Scripts in an EPUB](javascript.md#scripts-in-an-epub) says what the scripts see.
+
 ### Where the scripts run
 
 On a thread of their own. A form script finishes in milliseconds, but a document that carries a
@@ -731,6 +750,8 @@ does what the link asks where it can:
 - A PDF link that names a page turn (NextPage, PrevPage, FirstPage or LastPage)
   turns the page.
 - A PDF script link runs in `scripts`, when you pass a handler.
+- On a page of a scripted EPUB chapter, with `epubScripts`, the scripts see the tap
+  first, and a link that a script prevented is not followed.
 - Anything else, such as a web address, does nothing, and the tap goes on to
   `onTap`.
 

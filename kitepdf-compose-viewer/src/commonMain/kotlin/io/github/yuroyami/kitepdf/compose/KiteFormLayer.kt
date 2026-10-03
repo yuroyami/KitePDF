@@ -22,6 +22,8 @@ import kotlin.math.floor
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.channels.Channel
+import io.github.yuroyami.kitepdf.epub.EpubScriptHandler
+import kotlinx.coroutines.channels.SendChannel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
@@ -89,27 +91,58 @@ internal fun Modifier.kiteFormLayer(
 internal fun KiteScriptTimers(state: KiteDocViewState, scripts: PdfScriptHandler?, lane: CoroutineDispatcher) {
     if (scripts == null) return
     LaunchedEffect(state, scripts, lane) {
-        val wake = Channel<Unit>(Channel.CONFLATED)
-        state.timerWake = wake
-        val stop = scriptCall("onTimersChanged", {}) { scripts.onTimersChanged { wake.trySend(Unit) } }
-        try {
-            while (true) {
-                if (!scriptCall("hasTimers", false) { scripts.hasTimers }) {
-                    wake.receive()
-                    continue
-                }
-                val frameTime = withFrameMillis { it }
-                val wait = withContext(lane) { scriptCall("pumpTimers", null) { scripts.pumpTimers(frameTime) } }
-                // Sleep until the next timer is due, less the frame the next round waits for,
-                // unless a script sets a sooner one in the meantime.
-                if (wait != null && wait > FRAME_MILLIS) {
-                    withTimeoutOrNull(wait - FRAME_MILLIS) { wake.receive() }
-                }
+        pumpScriptTimers(
+            lane, scripts::hasTimers, scripts::pumpTimers, scripts::onTimersChanged,
+            wakeAt = { state.timerWake = it }, wakesAt = { state.timerWake === it },
+        )
+    }
+}
+
+/** [KiteScriptTimers] for the scripts of an EPUB, which a book's own handler runs (#41). */
+@Composable
+internal fun KiteEpubScriptTimers(state: KiteDocViewState, scripts: EpubScriptHandler?, lane: CoroutineDispatcher) {
+    if (scripts == null) return
+    LaunchedEffect(state, scripts, lane) {
+        pumpScriptTimers(
+            lane, scripts::hasTimers, scripts::pumpTimers, scripts::onTimersChanged,
+            wakeAt = { state.epubTimerWake = it }, wakesAt = { state.epubTimerWake === it },
+        )
+    }
+}
+
+/**
+ * The pump of [KiteScriptTimers]: while a timer waits, a frame, then the due timers on [lane],
+ * then a sleep until the next one is due. The channel it sleeps on goes to [wakeAt], so a call
+ * the viewer makes itself can wake it.
+ */
+private suspend fun pumpScriptTimers(
+    lane: CoroutineDispatcher,
+    hasTimers: () -> Boolean,
+    pump: (Long) -> Long?,
+    onTimersChanged: (() -> Unit) -> () -> Unit,
+    wakeAt: (SendChannel<Unit>?) -> Unit,
+    wakesAt: (SendChannel<Unit>) -> Boolean,
+) {
+    val wake = Channel<Unit>(Channel.CONFLATED)
+    wakeAt(wake)
+    val stop = scriptCall("onTimersChanged", {}) { onTimersChanged { wake.trySend(Unit) } }
+    try {
+        while (true) {
+            if (!scriptCall("hasTimers", false) { hasTimers() }) {
+                wake.receive()
+                continue
             }
-        } finally {
-            stop()
-            if (state.timerWake === wake) state.timerWake = null
+            val frameTime = withFrameMillis { it }
+            val wait = withContext(lane) { scriptCall("pumpTimers", null) { pump(frameTime) } }
+            // Sleep until the next timer is due, less the frame the next round waits for,
+            // unless a script sets a sooner one in the meantime.
+            if (wait != null && wait > FRAME_MILLIS) {
+                withTimeoutOrNull(wait - FRAME_MILLIS) { wake.receive() }
+            }
         }
+    } finally {
+        stop()
+        if (wakesAt(wake)) wakeAt(null)
     }
 }
 
