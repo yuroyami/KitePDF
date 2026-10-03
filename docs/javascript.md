@@ -186,8 +186,12 @@ attributes, `id`, `className`, `classList`, `dataset`, `hidden`, `style`, `match
 button, a label, a `summary` and a submit button do what a click on them does in a browser.
 `getComputedStyle` answers `display`, `visibility`, `color`, `background-color`, `font-size`,
 `font-weight`, `font-style`, `opacity`, `text-align`, `position`, `float`, `width`, `height`,
-`z-index`, `left` and `top`, and `getBoundingClientRect` answers where the element is on its
-page, in CSS pixels.
+`z-index`, `left` and `top`. An element's `style` answers the CSS properties by their camel-case
+and dashed names, with a number as a browser writes it back, `0.5` for `.5`, and any other name
+is a plain property of the object. `getBoundingClientRect`, `offsetWidth` and their relatives
+answer where the element is on its page, in CSS pixels; when the script changed the chapter
+since it was laid out, it is laid out again first, as a browser does, so an element the script
+just added has its size.
 
 A tap goes to the element under it as `pointerdown`, `mousedown`, `pointerup`, `mouseup` and
 `click`. `tap` answers true when a script prevented the click, and then a viewer does not follow
@@ -196,18 +200,30 @@ soon as the script returns, and the chapter may gain or lose pages: `book.chapte
 for a viewer to take the page counts again, and `page.chapterVersion` for it to draw the page
 again. The changes belong to the book, so a new font size keeps them.
 
+Each book has an origin of its own, shared by its chapters: `epub://` and a host made from the
+package's unique identifier, so the book has it each time it opens. `self.origin` and
+`location.origin` answer it, and `location.href` is the origin and the chapter's path.
+
 Nothing reaches outside the book. There is no `fetch` or `XMLHttpRequest`. A change of
 `location`, `window.open` and a script's own click on a link go to the listeners of
-`onNavigate`, with a zip path and its fragment for a place in the book. `alert`, `confirm` and
-`prompt` go to `onConsole`, and answer as dismissed.
+`onNavigate`, with a zip path and its fragment for a place in the book; an address under the
+book's origin is such a place. `alert`, `confirm` and `prompt` go to `onConsole`, and answer as
+dismissed. `failures` keeps the last hundred, since a timer that throws each time it runs would
+otherwise grow it for as long as the book is open.
 
 Not there yet: the documents of `<iframe>` and `<object>` elements, whose boxes stay as they are;
 form controls drawn on the page, since an `<input>` has no box yet, though scripts read and set
-its value and checkedness; `<canvas>`; and the syntax KiteJS does not have yet, `class`
+its value and checkedness; drawing on a `<canvas>`, whose `getContext` answers `null`
+([#501](https://github.com/yuroyami/KitePDF/issues/501)); and the syntax KiteJS does not have yet, `class`
 ([KiteJS#2](https://github.com/yuroyami/KiteJS/issues/2)), `const` in the head of a `for` loop
 ([KiteJS#11](https://github.com/yuroyami/KiteJS/issues/11)) and `async`
 ([KiteJS#12](https://github.com/yuroyami/KiteJS/issues/12)). A script that uses one fails to
 parse and is listed in `failures`, and the chapter goes on as its other scripts leave it.
+
+Real books keep this true: `ScriptedBookGateTest` runs the scripted books of the public corpus,
+the W3C tests of spine-level scripting and an IDPF sample that drives its pages with jQuery 1.7.1,
+and checks what each page shows afterwards. A failure a book is known to hit is listed there with
+its issue.
 
 In `KiteDocView`, pass the runner as `epubScripts`, and the viewer opens chapters, sends taps,
 pumps timers and follows the scripts' changes itself; see

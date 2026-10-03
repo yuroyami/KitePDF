@@ -70,3 +70,11 @@ kotlin {
         }
     }
 }
+
+// ScriptedBookGateTest runs the scripted books of the public corpus (#496), so a
+// changed or added book must invalidate a cached test result.
+tasks.withType<Test>().configureEach {
+    inputs.files(fileTree(rootProject.file("corpus/epub")) {
+        include { it.isDirectory || it.file.extension.equals("epub", ignoreCase = true) }
+    }).withPropertyName("scriptedBookCorpus").withPathSensitivity(PathSensitivity.RELATIVE)
+}

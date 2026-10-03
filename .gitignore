@@ -31,6 +31,7 @@ corpus/epub/*
 !corpus/pdf/.gitkeep
 !corpus/epub/.gitkeep
 !corpus/epub/idpf-cole-voyage-of-life.epub
+!corpus/epub/idpf-cole-voyage-of-life-tol.epub
 !corpus/epub/idpf-page-blanche.epub
 !corpus/epub/idpf-regime-anticancer-arabic.epub
 !corpus/epub/idpf-svg-in-spine.epub
@@ -38,6 +39,11 @@ corpus/epub/*
 !corpus/epub/w3c-css-epub-writing-mode.epub
 !corpus/epub/w3c-nav-non-text_img.epub
 !corpus/epub/w3c-pkg-spine-nonlinear-activation.epub
+!corpus/epub/w3c-scr-readingsystem-features.epub
+!corpus/epub/w3c-scr-readingsystem-support.epub
+!corpus/epub/w3c-scr-support.epub
+!corpus/epub/w3c-scr-support_origin.epub
+!corpus/epub/w3c-scr-support_origin_unique.epub
 !corpus/pdf/public-joss-ogre-relativity.pdf
 !corpus/pdf/public-joss-ryacas-algebra.pdf
 !corpus/pdf/public-pdfa-actualtext-ocr.pdf

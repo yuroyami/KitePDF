@@ -268,6 +268,8 @@ public final class io/github/yuroyami/kitepdf/epub/EpubScriptHandler$DefaultImpl
 }
 
 public final class io/github/yuroyami/kitepdf/epub/EpubScriptSession : io/github/yuroyami/kitepdf/epub/EpubScriptHandler, java/lang/AutoCloseable {
+	public static final field Companion Lio/github/yuroyami/kitepdf/epub/EpubScriptSession$Companion;
+	public static final field MAX_FAILURES I
 	public fun <init> (Lio/github/yuroyami/kitepdf/epub/EpubDocument;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function2;Lkotlin/jvm/functions/Function0;I)V
 	public synthetic fun <init> (Lio/github/yuroyami/kitepdf/epub/EpubDocument;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function2;Lkotlin/jvm/functions/Function0;IILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public fun chapterOpened (I)V
@@ -280,6 +282,9 @@ public final class io/github/yuroyami/kitepdf/epub/EpubScriptSession : io/github
 	public fun onTimersChanged (Lkotlin/jvm/functions/Function0;)Lkotlin/jvm/functions/Function0;
 	public fun pumpTimers (J)Ljava/lang/Long;
 	public fun tap (Lio/github/yuroyami/kitepdf/epub/EpubPage;DD)Z
+}
+
+public final class io/github/yuroyami/kitepdf/epub/EpubScriptSession$Companion {
 }
 
 public final class io/github/yuroyami/kitepdf/epub/EpubSemanticsKt {

@@ -38,7 +38,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   WebAssembly: the chapter used least recently closes its engine, and its scripts start over
   from its markup when it opens again (#495, #498). `EpubScriptPolicy` bounds each call. In
   `kitepdf-epub`, `EpubScriptSession` does the same over any `KiteScriptEngine`, with
-  `liveChapters` for the bound, and `EpubScriptHandler` is what a viewer needs from it. `KiteXmlNode.Element.attrs` and `KiteXmlNode.Text.text` can be set, for
+  `liveChapters` for the bound, and `EpubScriptHandler` is what a viewer needs from it. Each
+  book has an origin of its own, shared by its chapters (#500); a script that measures after a
+  change gets the layout as the tree stands, as in a browser (#499); an element's `style`
+  answers CSS property names only and writes numbers back as a browser does, so jQuery 1.7.1
+  runs; and `failures` keeps the last `EpubScriptSession.MAX_FAILURES`. The scripted books of
+  the public corpus, six W3C and IDPF samples, run in `ScriptedBookGateTest` (#496). `KiteXmlNode.Element.attrs` and `KiteXmlNode.Text.text` can be set, for
   the tree a script layer changes (#41).
 
 - `EpubDocument.chapterChanges` counts the changes the book's scripts made to its chapters,

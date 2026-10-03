@@ -10,6 +10,9 @@ and [attribution](../ATTRIBUTION.md). The SVG-in-spine EPUB has both CC BY-SA 3.
 publication terms and CC BY 3.0 terms for specified SVG resources. Preserve
 the package-level and resource-level notices already embedded in every input.
 The W3C notice includes its copyright, permission, warranty, and name-use terms.
+The MIT notice, added on 2026-10-03, is the one jQuery 1.7.1 ships, for the copy of jQuery inside
+the Voyage of Life sample with a textual overlay; the rest of that EPUB is
+CC BY-SA 3.0.
 
 | Notice | Official source | SHA-256 |
 |---|---|---|
@@ -18,6 +21,7 @@ The W3C notice includes its copyright, permission, warranty, and name-use terms.
 | [CC-BY-4.0](CC-BY-4.0.txt) | [Official license](https://creativecommons.org/licenses/by/4.0/legalcode.txt) | `9ba9550ad48438d0836ddab3da480b3b69ffa0aac7b7878b5a0039e7ab429411` |
 | [CC-BY-SA-4.0](CC-BY-SA-4.0.txt) | [Official license](https://creativecommons.org/licenses/by-sa/4.0/legalcode.txt) | `28a9529c7d0bb4dc51f4bf5c116a3d16ef247a052f7591466768ddf563fd1cf5` |
 | [W3C-20150513](W3C-20150513.html) | [Official license](https://www.w3.org/Consortium/Legal/2015/copyright-software-and-document) | `6ab846deec0c5554a4885b57737bf0455b189ae518f6786adb53d1983c14a400` |
+| [MIT](MIT.txt) | [jQuery 1.7.1 license](https://github.com/jquery/jquery/blob/1.7.1/MIT-LICENSE.txt) | `0ade425df7c0386e04fbaa6b49e97a71ec504e53a4c01137c4bfb425a9a92344` |
 
 CC BY-SA files retain their share-alike license. Derivatives must follow the
 applicable adaptation conditions and record their changes. The current public

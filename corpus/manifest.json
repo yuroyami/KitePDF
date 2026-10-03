@@ -835,6 +835,244 @@
       "feature_evidence": "pdfinfo reports 28 pages. The source and PDF identify an Arabic Wikipedia editing guide with Arabic right-to-left body text, Latin interface/code terms, screenshots and tables. pdffonts reports embedded full 29LTAzer Light/Regular/Black CID TrueType fonts and Calibri subsets, with Unicode maps. pdfimages reports many screenshots and grayscale soft masks.",
       "coverage_limitations": "Feature presence was inspected; rendering correctness and standards conformance were not certified during acquisition. The Commons description is revision-pinned; its upload URL is the current-file endpoint, so SHA-256 and byte count must be checked on every fetch.",
       "retrieved_on": "2026-10-01"
+    },
+    {
+      "id": "w3c-scr-support",
+      "path": "corpus/epub/w3c-scr-support.epub",
+      "title": "scr-support",
+      "creators": "Ivan Herman",
+      "source_url": "https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/scr-support",
+      "download_url": "https://w3c.github.io/epub-tests/tests/scr-support.epub",
+      "license": "W3C-20150513",
+      "license_url": "https://www.w3.org/copyright/software-license-2015/",
+      "attribution": "scr-support by Ivan Herman. W3C EPUB test suite contributors; W3C Software and Document License (2015). Downloaded unchanged. Preserve the full licence notice and existing notices.",
+      "sha256": "aa31c20d28fe2d22b7450ebd5a08512c5a0c69d2bf8a832c53ca123b927cad9c",
+      "bytes": 2116,
+      "coverage_tags": [
+        "epub3",
+        "reflow",
+        "scripting",
+        "spine-scripting"
+      ],
+      "license_evidence": "The unchanged EPUB package links dcterms:rights to the 2015 W3C Software and Document license and names W3C as rights holder. Every uncompressed ZIP member matches its Git blob at the recorded source revision. No separate asset licence exception was found in its contents.",
+      "source_revision": "54092b4233253e9aac80e93ec4782b380b4b3403",
+      "publication_kind": "third-party-conformance-sample",
+      "contributors": [],
+      "publishers": [
+        "W3C"
+      ],
+      "embedded_rights_notices": [],
+      "retrieved_at": "2026-10-03T23:25:13.509879+00:00",
+      "artifact_pinning_note": "Official Pages artifact URL is mutable; no downloadable EPUB in the Git tree or immutable release was available. SHA-256 pins the exact ZIP bytes and retrieval must fail on mismatch. All 5 non-directory members match the pinned source revision.",
+      "modified": false,
+      "license_evidence_details": {
+        "statement": "The unchanged EPUB package links dcterms:rights to the 2015 W3C Software and Document license and names W3C as rights holder. Every uncompressed ZIP member matches its Git blob at the recorded source revision. No separate asset licence exception was found in its contents.",
+        "source_url": "https://github.com/w3c/epub-tests/blob/54092b4233253e9aac80e93ec4782b380b4b3403/tests/scr-support/EPUB/package.opf",
+        "archive_member": "EPUB/package.opf"
+      },
+      "upstream_revision": "54092b4233253e9aac80e93ec4782b380b4b3403",
+      "retrieved_on": "2026-10-03"
+    },
+    {
+      "id": "w3c-scr-readingsystem-support",
+      "path": "corpus/epub/w3c-scr-readingsystem-support.epub",
+      "title": "scr-readingsystem-support",
+      "creators": "Ivan Herman",
+      "source_url": "https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/scr-readingsystem-support",
+      "download_url": "https://w3c.github.io/epub-tests/tests/scr-readingsystem-support.epub",
+      "license": "W3C-20150513",
+      "license_url": "https://www.w3.org/copyright/software-license-2015/",
+      "attribution": "scr-readingsystem-support by Ivan Herman. W3C EPUB test suite contributors; W3C Software and Document License (2015). Downloaded unchanged. Preserve the full licence notice and existing notices.",
+      "sha256": "3bcba268893bd1ad350f04651ea83e10740eb6e5b5db708327d1bc432e1a351a",
+      "bytes": 2474,
+      "coverage_tags": [
+        "epub3",
+        "reflow",
+        "scripting",
+        "spine-scripting",
+        "epub-reading-system"
+      ],
+      "license_evidence": "The unchanged EPUB package links dcterms:rights to the 2015 W3C Software and Document license and names W3C as rights holder. Every uncompressed ZIP member matches its Git blob at the recorded source revision. No separate asset licence exception was found in its contents.",
+      "source_revision": "54092b4233253e9aac80e93ec4782b380b4b3403",
+      "publication_kind": "third-party-conformance-sample",
+      "contributors": [],
+      "publishers": [
+        "W3C"
+      ],
+      "embedded_rights_notices": [],
+      "retrieved_at": "2026-10-03T23:25:13.509879+00:00",
+      "artifact_pinning_note": "Official Pages artifact URL is mutable; no downloadable EPUB in the Git tree or immutable release was available. SHA-256 pins the exact ZIP bytes and retrieval must fail on mismatch. All 5 non-directory members match the pinned source revision.",
+      "modified": false,
+      "license_evidence_details": {
+        "statement": "The unchanged EPUB package links dcterms:rights to the 2015 W3C Software and Document license and names W3C as rights holder. Every uncompressed ZIP member matches its Git blob at the recorded source revision. No separate asset licence exception was found in its contents.",
+        "source_url": "https://github.com/w3c/epub-tests/blob/54092b4233253e9aac80e93ec4782b380b4b3403/tests/scr-readingsystem-support/EPUB/package.opf",
+        "archive_member": "EPUB/package.opf"
+      },
+      "upstream_revision": "54092b4233253e9aac80e93ec4782b380b4b3403",
+      "retrieved_on": "2026-10-03"
+    },
+    {
+      "id": "w3c-scr-readingsystem-features",
+      "path": "corpus/epub/w3c-scr-readingsystem-features.epub",
+      "title": "scr-readingsystem-features",
+      "creators": "Ivan Herman",
+      "source_url": "https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/scr-readingsystem-features",
+      "download_url": "https://w3c.github.io/epub-tests/tests/scr-readingsystem-features.epub",
+      "license": "W3C-20150513",
+      "license_url": "https://www.w3.org/copyright/software-license-2015/",
+      "attribution": "scr-readingsystem-features by Ivan Herman. W3C EPUB test suite contributors; W3C Software and Document License (2015). Downloaded unchanged. Preserve the full licence notice and existing notices.",
+      "sha256": "0389847db1e7c48735beeffe38d983eadf9fe9c8237e17d3d46c52baa2193326",
+      "bytes": 2922,
+      "coverage_tags": [
+        "epub3",
+        "reflow",
+        "scripting",
+        "spine-scripting",
+        "epub-reading-system"
+      ],
+      "license_evidence": "The unchanged EPUB package links dcterms:rights to the 2015 W3C Software and Document license and names W3C as rights holder. Every uncompressed ZIP member matches its Git blob at the recorded source revision. No separate asset licence exception was found in its contents.",
+      "source_revision": "54092b4233253e9aac80e93ec4782b380b4b3403",
+      "publication_kind": "third-party-conformance-sample",
+      "contributors": [],
+      "publishers": [
+        "W3C"
+      ],
+      "embedded_rights_notices": [],
+      "retrieved_at": "2026-10-03T23:25:13.509879+00:00",
+      "artifact_pinning_note": "Official Pages artifact URL is mutable; no downloadable EPUB in the Git tree or immutable release was available. SHA-256 pins the exact ZIP bytes and retrieval must fail on mismatch. All 5 non-directory members match the pinned source revision.",
+      "modified": false,
+      "license_evidence_details": {
+        "statement": "The unchanged EPUB package links dcterms:rights to the 2015 W3C Software and Document license and names W3C as rights holder. Every uncompressed ZIP member matches its Git blob at the recorded source revision. No separate asset licence exception was found in its contents.",
+        "source_url": "https://github.com/w3c/epub-tests/blob/54092b4233253e9aac80e93ec4782b380b4b3403/tests/scr-readingsystem-features/EPUB/package.opf",
+        "archive_member": "EPUB/package.opf"
+      },
+      "upstream_revision": "54092b4233253e9aac80e93ec4782b380b4b3403",
+      "retrieved_on": "2026-10-03"
+    },
+    {
+      "id": "w3c-scr-support-origin",
+      "path": "corpus/epub/w3c-scr-support_origin.epub",
+      "title": "scr-support_origin",
+      "creators": "Ivan Herman",
+      "source_url": "https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/scr-support_origin",
+      "download_url": "https://w3c.github.io/epub-tests/tests/scr-support_origin.epub",
+      "license": "W3C-20150513",
+      "license_url": "https://www.w3.org/copyright/software-license-2015/",
+      "attribution": "scr-support_origin by Ivan Herman. W3C EPUB test suite contributors; W3C Software and Document License (2015). Downloaded unchanged. Preserve the full licence notice and existing notices.",
+      "sha256": "540928f8b78c7014fdf9eacb5834d71e823a3af23dcb0e7e70cfbd6dc47b98ae",
+      "bytes": 3246,
+      "coverage_tags": [
+        "epub3",
+        "reflow",
+        "scripting",
+        "spine-scripting",
+        "script-origin",
+        "multi-chapter-scripts"
+      ],
+      "license_evidence": "The unchanged EPUB package links dcterms:rights to the 2015 W3C Software and Document license and names W3C as rights holder. Every uncompressed ZIP member matches its Git blob at the recorded source revision. No separate asset licence exception was found in its contents.",
+      "source_revision": "54092b4233253e9aac80e93ec4782b380b4b3403",
+      "publication_kind": "third-party-conformance-sample",
+      "contributors": [],
+      "publishers": [
+        "W3C"
+      ],
+      "embedded_rights_notices": [],
+      "retrieved_at": "2026-10-03T23:25:13.509879+00:00",
+      "artifact_pinning_note": "Official Pages artifact URL is mutable; no downloadable EPUB in the Git tree or immutable release was available. SHA-256 pins the exact ZIP bytes and retrieval must fail on mismatch. All 7 non-directory members match the pinned source revision.",
+      "modified": false,
+      "license_evidence_details": {
+        "statement": "The unchanged EPUB package links dcterms:rights to the 2015 W3C Software and Document license and names W3C as rights holder. Every uncompressed ZIP member matches its Git blob at the recorded source revision. No separate asset licence exception was found in its contents.",
+        "source_url": "https://github.com/w3c/epub-tests/blob/54092b4233253e9aac80e93ec4782b380b4b3403/tests/scr-support_origin/EPUB/package.opf",
+        "archive_member": "EPUB/package.opf"
+      },
+      "upstream_revision": "54092b4233253e9aac80e93ec4782b380b4b3403",
+      "retrieved_on": "2026-10-03"
+    },
+    {
+      "id": "w3c-scr-support-origin-unique",
+      "path": "corpus/epub/w3c-scr-support_origin_unique.epub",
+      "title": "scr-support_origin_unique",
+      "creators": "Gertjan Franken",
+      "source_url": "https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/scr-support_origin_unique",
+      "download_url": "https://w3c.github.io/epub-tests/tests/scr-support_origin_unique.epub",
+      "license": "W3C-20150513",
+      "license_url": "https://www.w3.org/copyright/software-license-2015/",
+      "attribution": "scr-support_origin_unique by Gertjan Franken. W3C EPUB test suite contributors; W3C Software and Document License (2015). Downloaded unchanged. Preserve the full licence notice and existing notices.",
+      "sha256": "3fd0ddebd9544df43ef4ee65799a824266d80aaaad864c14d27c4c7e8cfeb605",
+      "bytes": 2726,
+      "coverage_tags": [
+        "epub3",
+        "reflow",
+        "scripting",
+        "spine-scripting",
+        "script-origin"
+      ],
+      "license_evidence": "The unchanged EPUB package links dcterms:rights to the 2015 W3C Software and Document license and names W3C as rights holder. Every uncompressed ZIP member matches its Git blob at the recorded source revision. No separate asset licence exception was found in its contents.",
+      "source_revision": "54092b4233253e9aac80e93ec4782b380b4b3403",
+      "publication_kind": "third-party-conformance-sample",
+      "contributors": [],
+      "publishers": [
+        "W3C"
+      ],
+      "embedded_rights_notices": [],
+      "retrieved_at": "2026-10-03T23:25:13.509879+00:00",
+      "artifact_pinning_note": "Official Pages artifact URL is mutable; no downloadable EPUB in the Git tree or immutable release was available. SHA-256 pins the exact ZIP bytes and retrieval must fail on mismatch. All 6 non-directory members match the pinned source revision.",
+      "modified": false,
+      "license_evidence_details": {
+        "statement": "The unchanged EPUB package links dcterms:rights to the 2015 W3C Software and Document license and names W3C as rights holder. Every uncompressed ZIP member matches its Git blob at the recorded source revision. No separate asset licence exception was found in its contents.",
+        "source_url": "https://github.com/w3c/epub-tests/blob/54092b4233253e9aac80e93ec4782b380b4b3403/tests/scr-support_origin_unique/EPUB/package.opf",
+        "archive_member": "EPUB/package.opf"
+      },
+      "upstream_revision": "54092b4233253e9aac80e93ec4782b380b4b3403",
+      "retrieved_on": "2026-10-03"
+    },
+    {
+      "id": "idpf-cole-voyage-of-life-tol",
+      "path": "corpus/epub/idpf-cole-voyage-of-life-tol.epub",
+      "title": "Thomas Cole - The Voyage of Life (textual overlay)",
+      "creators": "Jesse Dylan",
+      "source_url": "https://github.com/IDPF/epub3-samples/tree/46d7e07e1b39b2d0a0245ececaf896edcd9de4b2/30/cole-voyage-of-life-tol",
+      "download_url": "https://github.com/IDPF/epub3-samples/releases/download/20230704/cole-voyage-of-life-tol.epub",
+      "license": "CC-BY-SA-3.0 AND MIT",
+      "license_url": "https://creativecommons.org/licenses/by-sa/3.0/",
+      "attribution": "Thomas Cole - The Voyage of Life (textual overlay); Jesse Dylan. IDPF EPUB 3 Samples, release 20230704. Licensed CC BY-SA 3.0. Includes jQuery 1.7.1, Copyright (c) 2011 John Resig, under the MIT License. Downloaded unchanged; retain attribution, share-alike and MIT notices. Paintings by Thomas Cole. Upstream attribution URL: https://en.wikipedia.org/wiki/The_Voyage_of_Life .",
+      "sha256": "b0027cc7f216b53e4c549029f761d9896d87628660dd161051a313ec3ce94f59",
+      "bytes": 1002693,
+      "coverage_tags": [
+        "epub3",
+        "mixed-layout",
+        "reflow",
+        "fixed-layout",
+        "scripting",
+        "spine-scripting",
+        "jquery",
+        "epub-reading-system",
+        "jpeg-images"
+      ],
+      "license_evidence": "The unchanged EPUB package explicitly licenses the publication under CC BY-SA 3.0. It also carries jQuery 1.7.1 (EPUB/script/jquery-1.7.1.min.js), whose header points to jquery.org/license; that release is dual-licensed under MIT or GPL v2, and this corpus takes it under MIT, whose text from the jQuery 1.7.1 tag is in licenses/MIT.txt. Every ZIP member matches its Git blob at the release-tag revision except line endings. The paintings are by Thomas Cole. No embedded fonts are present.",
+      "source_revision": "46d7e07e1b39b2d0a0245ececaf896edcd9de4b2",
+      "publication_kind": "third-party-feature-sample",
+      "contributors": [],
+      "publishers": [],
+      "embedded_rights_notices": [
+        "This work is licensed under a Creative Commons Attribution-ShareAlike 3.0 Unported License.",
+        "/*! jQuery v1.7.1 jquery.com | jquery.org/license */"
+      ],
+      "retrieved_at": "2026-10-03T23:25:13.509879+00:00",
+      "artifact_pinning_note": "Downloaded unchanged from release 20230704; SHA-256 pins the ZIP bytes. Source is pinned to the commit resolved from that release tag; release container and source differ only in text line endings.",
+      "modified": false,
+      "release_tag": "20230704",
+      "attribution_urls": [
+        "https://en.wikipedia.org/wiki/The_Voyage_of_Life",
+        "https://jquery.org/license"
+      ],
+      "license_evidence_details": {
+        "statement": "The unchanged EPUB package explicitly licenses the publication under CC BY-SA 3.0. It also carries jQuery 1.7.1 (EPUB/script/jquery-1.7.1.min.js), whose header points to jquery.org/license; that release is dual-licensed under MIT or GPL v2, and this corpus takes it under MIT, whose text from the jQuery 1.7.1 tag is in licenses/MIT.txt. Every ZIP member matches its Git blob at the release-tag revision except line endings. The paintings are by Thomas Cole. No embedded fonts are present.",
+        "source_url": "https://github.com/IDPF/epub3-samples/blob/46d7e07e1b39b2d0a0245ececaf896edcd9de4b2/30/cole-voyage-of-life-tol/EPUB/cole.opf",
+        "archive_member": "EPUB/cole.opf"
+      },
+      "upstream_revision": "46d7e07e1b39b2d0a0245ececaf896edcd9de4b2",
+      "retrieved_on": "2026-10-03"
     }
   ]
 }
