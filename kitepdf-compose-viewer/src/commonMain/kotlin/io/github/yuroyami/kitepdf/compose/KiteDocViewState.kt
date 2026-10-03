@@ -22,6 +22,7 @@ import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.neverEqualPolicy
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -55,6 +56,11 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.yield
+import kotlin.coroutines.coroutineContext
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.TimeSource
 
 /**
  * Remembers a [KiteDocViewState] for [document]. Hoist it to drive a
@@ -1880,7 +1886,8 @@ public class KiteDocViewState(
         if (chapter in failedChapters) return false
         if (document.isChapterReady(chapter)) return true
         return try {
-            withContext(kitepdfRasterDispatcher()) { document.prepareChapter(chapter) }
+            if (layoutPausesForFrames) prepareInSlices(chapter)
+            else withContext(kitepdfRasterDispatcher()) { document.prepareChapter(chapter) }
             true
         } catch (cancelled: CancellationException) {
             throw cancelled
@@ -1888,6 +1895,31 @@ public class KiteDocViewState(
             onComposeThread { failedChapters += chapter }
             kiteWarn { "layout: chapter $chapter failed: ${failure.message ?: failure::class.simpleName}" }
             false
+        }
+    }
+
+    /**
+     * True when a chapter lays out on the UI thread in slices, with a frame drawn between two. In a
+     * browser layout cannot leave the UI thread, and a chapter laid out in one call stalled the
+     * page for its whole layout (#389).
+     */
+    internal var layoutPausesForFrames: Boolean = rastersOnUiThread
+
+    /** The time a slice of [prepareInSlices] may take before a frame is drawn. */
+    internal var layoutSlice: Duration = LAYOUT_SLICE
+
+    /**
+     * Lays [chapter] out in steps, each a block of it or a stage such as its pages, and waits for
+     * the next frame once a slice has taken [layoutSlice], so the page keeps drawing while a
+     * chapter lands (#389). Outside a composition, where no frames come, it yields instead.
+     */
+    private suspend fun prepareInSlices(chapter: Int) {
+        var slice = TimeSource.Monotonic.markNow()
+        document.prepareChapter(chapter) {
+            if (slice.elapsedNow() >= layoutSlice) {
+                if (coroutineContext[MonotonicFrameClock] != null) withFrameNanos { } else yield()
+                slice = TimeSource.Monotonic.markNow()
+            }
         }
     }
 
@@ -2198,6 +2230,9 @@ public class KiteDocViewState(
 
         /** How long the view must rest before a chapter away from the reader lays out on the UI thread (#389). */
         private const val REST_MILLIS = 400L
+
+        /** Half a frame at 60 Hz: the rest of the frame is the page's own work (#389). */
+        private val LAYOUT_SLICE = 8.milliseconds
 
         private const val SAVED_SCROLL = 0
         private const val SAVED_FLOW = 1

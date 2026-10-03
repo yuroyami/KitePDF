@@ -43,6 +43,27 @@ internal class BoxBuilder(
     fun build(root: KiteXmlNode.Element): BlockBox =
         buildBlock(root, resolver.initial(), emptyList(), marker = null, markerColor = BLACK, isRoot = true)
 
+    /**
+     * [build] as a [Run] of steps, each the next child of a block element or the end of a block,
+     * so that a caller can stop between two steps and go on later (#389).
+     */
+    fun start(root: KiteXmlNode.Element): Run = Run(root)
+
+    /** One build of [start], a step at a time. */
+    inner class Run internal constructor(root: KiteXmlNode.Element) {
+        private val frames = arrayListOf(BuildFrame(root, resolver.initial(), emptyList(), marker = null, markerColor = BLACK, isRoot = true))
+
+        /** The root's box, once [step] has returned true. */
+        var box: BlockBox? = null
+            private set
+
+        /** Takes the next step, and returns true once [box] is built. */
+        fun step(): Boolean {
+            if (box == null) box = stepFrames(frames)
+            return box != null
+        }
+    }
+
     private fun buildBlock(
         el: KiteXmlNode.Element,
         style: ComputedStyle,
@@ -50,29 +71,75 @@ internal class BoxBuilder(
         marker: String?,
         markerColor: RgbColor,
         isRoot: Boolean = false,
+        parentSem: BoxSemantics? = null,
+        anonymous: Boolean = false,
+    ): BlockBox {
+        val frames = arrayListOf(BuildFrame(el, style, ancestors, marker, markerColor, isRoot, parentSem, anonymous))
+        while (true) stepFrames(frames)?.let { return it }
+    }
+
+    /**
+     * One step of [frames]: the next child of the innermost block element, or the end of that
+     * block, which its parent then hoists. A block child opens a frame of its own instead of a
+     * call, so a [Run] can stop between any two steps (#389). Returns the outermost box once its
+     * frame has closed.
+     */
+    private fun stepFrames(frames: ArrayList<BuildFrame>): BlockBox? {
+        val frame = frames.last()
+        val children = frame.el.children
+        if (frame.next < children.size) {
+            frame.place(children[frame.next++])?.let(frames::add)
+            return null
+        }
+        frames.removeAt(frames.lastIndex)
+        val box = frame.close()
+        val parent = frames.lastOrNull() ?: return box
+        parent.hoist(listOf(box))
+        return null
+    }
+
+    /**
+     * A block element whose children are building: what [buildBlock] kept in its locals. A block
+     * or list-item child opens a frame of its own, and its box joins this one's children as
+     * [hoist] puts it, once that frame has closed.
+     */
+    private inner class BuildFrame(
+        val el: KiteXmlNode.Element,
+        private val style: ComputedStyle,
+        private val ancestors: List<KiteXmlNode.Element>,
+        marker: String?,
+        private val markerColor: RgbColor,
+        private val isRoot: Boolean = false,
         /** The ancestor's semantics: `aria-hidden` and `epub:type` reach down. */
         parentSem: BoxSemantics? = null,
         /** An anonymous box: [el] is a stand-in, so it is no ancestor of its children and has no pseudo. */
-        anonymous: Boolean = false,
-    ): BlockBox {
-        val children = ArrayList<LayoutBox>()
-        val inl = Inline()
-        var pendingMarker = marker
-        val childAncestors = if (isRoot || anonymous) ancestors else listOf(el) + ancestors
-        var ordinal = el.attrs["start"]?.toIntOrNull() ?: 1
+        private val anonymous: Boolean = false,
+    ) {
+        private val children = ArrayList<LayoutBox>()
+        private val inl = Inline()
+        private var pendingMarker = marker
+        private val childAncestors = if (isRoot || anonymous) ancestors else listOf(el) + ancestors
+        private var ordinal = el.attrs["start"]?.toIntOrNull() ?: 1
         // Ids seen on inline descendants (they get no box of their own). The
         // first block-level box hoisted after an id claims it, so a footnote
         // target like <span id><div>note</div></span> anchors to the note
         // itself; ids still waiting at the end attach to this block, as they
         // always did.
-        val pendingAnchors = ArrayList<String>()
+        private val pendingAnchors = ArrayList<String>()
 
         // The element's own accessibility facts, shared by every box it makes.
-        val sem = BoxSemantics.of(el.tag, el.attrs, parentSem)
-        // A pronunciation on the block covers the text it holds itself (#39).
-        speechHint(el, ancestors)?.let(inl::beginSpeech)
-        // The block's text carries the ids of the block and the elements around it (#36).
-        inl.beginIds((listOf(el) + ancestors).asReversed().mapNotNull { e -> e.attrs["id"]?.takeIf { it.isNotBlank() } })
+        private val sem = BoxSemantics.of(el.tag, el.attrs, parentSem)
+
+        /** The index of the next child of [el] to place. */
+        var next = 0
+
+        init {
+            // A pronunciation on the block covers the text it holds itself (#39).
+            speechHint(el, ancestors)?.let(inl::beginSpeech)
+            // The block's text carries the ids of the block and the elements around it (#36).
+            inl.beginIds((listOf(el) + ancestors).asReversed().mapNotNull { e -> e.attrs["id"]?.takeIf { it.isNotBlank() } })
+            injectPseudo(PseudoSide.BEFORE)
+        }
 
         fun flush() {
             if (inl.hasContent()) {
@@ -103,105 +170,112 @@ internal class BoxBuilder(
         // ::before generated content precedes the element's own children. A
         // block-display pseudo becomes a synthetic block child; anything else
         // flows inline.
-        fun injectPseudo(side: PseudoSide) {
+        private fun injectPseudo(side: PseudoSide) {
             if (isRoot || anonymous) return
             val pc = resolver.computePseudo(el, ancestors, style, side) ?: return
             if (pc.style.display == Display.BLOCK || pc.style.display == Display.FLEX || pc.style.display == Display.GRID) { flush(); children.add(pseudoBlock(pc)) }
             else inl.appendText(pc.text, pc.style)
         }
-        injectPseudo(PseudoSide.BEFORE)
 
-        for (child in el.children) when (child) {
-            is KiteXmlNode.Text -> inl.appendText(child.text, style)
-            is KiteXmlNode.Element -> {
-                if (child.tag == "br") { inl.addBreak(); continue }
-                if (child.tag == "img" || child.tag == "image") {
-                    // An image's id is an anchor, as an inline element's is, so a link or a fragment finds its page (#36).
-                    child.attrs["id"]?.takeIf { it.isNotBlank() }?.let(pendingAnchors::add)
-                    val src = child.attrs["src"] ?: child.attrs["href"] ?: child.attrs["xlink:href"]
-                    if (src != null && src.isNotBlank()) {
-                        val cs = resolver.compute(child, childAncestors, style)
-                        // A hidden image generates no box: it is not decoded, drawn or given room
-                        // (CSS Display 3, 2.5, #424).
-                        if (cs.display == Display.NONE) continue
-                        val aw = child.attrs["width"]?.trim()?.removeSuffix("px")?.toDoubleOrNull()
-                        val ah = child.attrs["height"]?.trim()?.removeSuffix("px")?.toDoubleOrNull()
-                        // img is inline by default (CSS): it flows on the line
-                        // unless the author blocks or floats it.
-                        if ((cs.display == Display.INLINE || cs.display == Display.INLINE_BLOCK) &&
-                            cs.cssFloat == CssFloat.NONE
-                        ) {
-                            inl.addImage(resolveHref(src), style, cs.widthPt ?: aw?.times(0.75), cs.heightPt ?: ah?.times(0.75), child.attrs["alt"], cs.objectFit)
-                        } else {
-                            flush()
-                            // The attributes are CSS pixels, 0.75pt each, in block mode too (#112).
-                            children.add(
-                                ImageBox(cs, resolveHref(src), attrWidth = aw?.times(0.75), attrHeight = ah?.times(0.75)).also {
-                                    it.semantics = imageSemantics(child, sem)
-                                },
-                            )
+        /** Places [child]. A block or list-item element comes back as the frame that builds it. */
+        fun place(child: KiteXmlNode): BuildFrame? {
+            when (child) {
+                is KiteXmlNode.Text -> inl.appendText(child.text, style)
+                is KiteXmlNode.Element -> {
+                    if (child.tag == "br") { inl.addBreak(); return null }
+                    if (child.tag == "img" || child.tag == "image") {
+                        // An image's id is an anchor, as an inline element's is, so a link or a fragment finds its page (#36).
+                        child.attrs["id"]?.takeIf { it.isNotBlank() }?.let(pendingAnchors::add)
+                        val src = child.attrs["src"] ?: child.attrs["href"] ?: child.attrs["xlink:href"]
+                        if (src != null && src.isNotBlank()) {
+                            val cs = resolver.compute(child, childAncestors, style)
+                            // A hidden image generates no box: it is not decoded, drawn or given room
+                            // (CSS Display 3, 2.5, #424).
+                            if (cs.display == Display.NONE) return null
+                            val aw = child.attrs["width"]?.trim()?.removeSuffix("px")?.toDoubleOrNull()
+                            val ah = child.attrs["height"]?.trim()?.removeSuffix("px")?.toDoubleOrNull()
+                            // img is inline by default (CSS): it flows on the line
+                            // unless the author blocks or floats it.
+                            if ((cs.display == Display.INLINE || cs.display == Display.INLINE_BLOCK) &&
+                                cs.cssFloat == CssFloat.NONE
+                            ) {
+                                inl.addImage(resolveHref(src), style, cs.widthPt ?: aw?.times(0.75), cs.heightPt ?: ah?.times(0.75), child.attrs["alt"], cs.objectFit)
+                            } else {
+                                flush()
+                                // The attributes are CSS pixels, 0.75pt each, in block mode too (#112).
+                                children.add(
+                                    ImageBox(cs, resolveHref(src), attrWidth = aw?.times(0.75), attrHeight = ah?.times(0.75)).also {
+                                        it.semantics = imageSemantics(child, sem)
+                                    },
+                                )
+                            }
                         }
+                        return null
                     }
-                    continue
-                }
-                if (child.tag == "video" || child.tag == "audio") {
-                    val cs = resolver.compute(child, childAncestors, style)
-                    if (cs.display != Display.NONE) mediaBox(child, cs, sem)?.let { box -> flush(); children.add(box) }
-                    continue
-                }
-                if (child.tag == "math") {
-                    val cs = resolver.compute(child, childAncestors, style)
-                    if (cs.display == Display.NONE) continue
-                    child.attrs["id"]?.takeIf { it.isNotBlank() }?.let(pendingAnchors::add)
-                    val math = MathParser.parse(child)
-                    when {
-                        // The layout sets formulas horizontally only, so vertical text keeps the linear text.
-                        style.writingMode != WritingMode.HORIZONTAL -> inl.appendText(math.readingText, cs)
-                        math.display || cs.display == Display.BLOCK -> { flush(); children.add(mathBlock(math, cs)) }
-                        else -> inl.addMath(math, cs)
+                    if (child.tag == "video" || child.tag == "audio") {
+                        val cs = resolver.compute(child, childAncestors, style)
+                        if (cs.display != Display.NONE) mediaBox(child, cs, sem)?.let { box -> flush(); children.add(box) }
+                        return null
                     }
-                    continue
-                }
-                if (child.tag == "iframe" || child.tag == "object") {
-                    val cs = resolver.compute(child, childAncestors, style)
-                    if (cs.display == Display.NONE) continue
-                    val box = embedBox(child, cs, childAncestors, sem)
-                    if (box != null) {
-                        flush()
-                        children.add(box)
-                        continue
+                    if (child.tag == "math") {
+                        val cs = resolver.compute(child, childAncestors, style)
+                        if (cs.display == Display.NONE) return null
+                        child.attrs["id"]?.takeIf { it.isNotBlank() }?.let(pendingAnchors::add)
+                        val math = MathParser.parse(child)
+                        when {
+                            // The layout sets formulas horizontally only, so vertical text keeps the linear text.
+                            style.writingMode != WritingMode.HORIZONTAL -> inl.appendText(math.readingText, cs)
+                            math.display || cs.display == Display.BLOCK -> { flush(); children.add(mathBlock(math, cs)) }
+                            else -> inl.addMath(math, cs)
+                        }
+                        return null
                     }
-                    // Any other object shows its fallback children, as it did.
-                }
-                if (child.tag == "svg") { // inline SVG: paint as a vector image box
-                    val cs = resolver.compute(child, childAncestors, style)
-                    // A hidden sprite sheet or glyph cache generates no box (CSS 2.1, 9.2.4, #275).
-                    if (cs.display != Display.NONE) SvgImage.fromElement(child)?.let {
-                        flush()
-                        children.add(ImageBox(cs, "", it).also { box -> box.semantics = svgSemantics(child, sem) })
+                    if (child.tag == "iframe" || child.tag == "object") {
+                        val cs = resolver.compute(child, childAncestors, style)
+                        if (cs.display == Display.NONE) return null
+                        val box = embedBox(child, cs, childAncestors, sem)
+                        if (box != null) {
+                            flush()
+                            children.add(box)
+                            return null
+                        }
+                        // Any other object shows its fallback children, as it did.
                     }
-                    continue
-                }
-                val cs = resolver.compute(child, childAncestors, style)
-                when (cs.display) {
-                    Display.NONE -> {}
-                    Display.INLINE, Display.INLINE_BLOCK -> processInline(child, cs, childAncestors, inl, pendingAnchors, ::hoist, sem)
-                    Display.TABLE -> hoist(buildTable(child, cs, childAncestors, sem))
-                    Display.LIST_ITEM -> hoist(listOf(buildBlock(child, cs, childAncestors, marker(cs, ordinal++), cs.color, parentSem = sem)))
-                    // BLOCK, plus stray table parts outside a table: treat as blocks (no text lost).
-                    else -> hoist(listOf(buildBlock(child, cs, childAncestors, null, BLACK, parentSem = sem)))
+                    if (child.tag == "svg") { // inline SVG: paint as a vector image box
+                        val cs = resolver.compute(child, childAncestors, style)
+                        // A hidden sprite sheet or glyph cache generates no box (CSS 2.1, 9.2.4, #275).
+                        if (cs.display != Display.NONE) SvgImage.fromElement(child)?.let {
+                            flush()
+                            children.add(ImageBox(cs, "", it).also { box -> box.semantics = svgSemantics(child, sem) })
+                        }
+                        return null
+                    }
+                    val cs = resolver.compute(child, childAncestors, style)
+                    when (cs.display) {
+                        Display.NONE -> {}
+                        Display.INLINE, Display.INLINE_BLOCK -> processInline(child, cs, childAncestors, inl, pendingAnchors, ::hoist, sem)
+                        Display.TABLE -> hoist(buildTable(child, cs, childAncestors, sem))
+                        Display.LIST_ITEM -> return BuildFrame(child, cs, childAncestors, marker(cs, ordinal++), cs.color, parentSem = sem)
+                        // BLOCK, plus stray table parts outside a table: treat as blocks (no text lost).
+                        else -> return BuildFrame(child, cs, childAncestors, null, BLACK, parentSem = sem)
+                    }
                 }
             }
+            return null
         }
-        injectPseudo(PseudoSide.AFTER)
-        flush()
-        return BlockBox(style, children).also { box ->
-            el.attrs["id"]?.let(box.anchors::add)
-            if (el.tag == "a") el.attrs["name"]?.let(box.anchors::add) // legacy anchor
-            // A block-level link, such as a flex item or `a { display: block }`, covers its whole box (#33).
-            if (el.tag == "a") el.attrs["href"]?.takeIf { it.isNotBlank() }?.let { box.linkHref = resolveLink(it) }
-            box.anchors += pendingAnchors
-            box.semantics = sem
+
+        /** Ends the block: its ::after content, its last text, and its box. */
+        fun close(): BlockBox {
+            injectPseudo(PseudoSide.AFTER)
+            flush()
+            return BlockBox(style, children).also { box ->
+                el.attrs["id"]?.let(box.anchors::add)
+                if (el.tag == "a") el.attrs["name"]?.let(box.anchors::add) // legacy anchor
+                // A block-level link, such as a flex item or `a { display: block }`, covers its whole box (#33).
+                if (el.tag == "a") el.attrs["href"]?.takeIf { it.isNotBlank() }?.let { box.linkHref = resolveLink(it) }
+                box.anchors += pendingAnchors
+                box.semantics = sem
+            }
         }
     }
 

@@ -190,6 +190,17 @@ public interface KiteDocument {
      */
     public fun prepareChapter(chapter: Int) {}
 
+    /**
+     * [prepareChapter], with [checkpoint] called between two steps of the layout, so that a
+     * caller on a thread that must keep drawing frames, as in a browser, can suspend there and
+     * go on after a frame. A document that lays a chapter out in steps calls it; by default the
+     * chapter is prepared at once. No lock is held across a checkpoint, so two callers for one
+     * chapter may each lay it out, and the first to finish keeps its pages. A wrapper that
+     * overrides [prepareChapter] should override this one too: `by` delegation sends it
+     * straight to the wrapped document.
+     */
+    public suspend fun prepareChapter(chapter: Int, checkpoint: suspend () -> Unit): Unit = prepareChapter(chapter)
+
     /** Pages in [chapter]. Prepares it first. Zero for an empty chapter. */
     public fun pageCountIn(chapter: Int): Int = pageCount
 

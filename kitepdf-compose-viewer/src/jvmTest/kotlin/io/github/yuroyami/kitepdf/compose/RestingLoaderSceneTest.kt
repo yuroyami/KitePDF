@@ -6,16 +6,19 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.PointerType
 import io.github.yuroyami.kitepdf.core.KiteBookmark
+import io.github.yuroyami.kitepdf.core.KiteLocation
 import io.github.yuroyami.kitepdf.epub.EpubDocument
 import io.github.yuroyami.kitepdf.epub.EpubSettings
 import kotlin.math.abs
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
+import kotlin.time.Duration.Companion.milliseconds
 
 /**
  * Where chapter layout runs on the UI thread, as in a browser, a chapter away from the reader
- * lays out only while the view rests, so a scroll or a pinch does not stall (#389).
+ * lays out only while the view rests, so a scroll or a pinch does not stall, and a chapter lays
+ * out in slices with a frame drawn between two (#389).
  */
 class RestingLoaderSceneTest {
 
@@ -41,6 +44,42 @@ class RestingLoaderSceneTest {
             each(frame++)
             driver.pumpFrames(1)
             Thread.sleep(15)
+        }
+    }
+
+    @Test
+    fun a_long_chapter_lays_out_over_frames_and_ends_as_one_laid_out_at_once() = forBothEffectOrders { queued ->
+        // Where layout runs on the UI thread, a chapter lays out in slices with a frame between two (#389).
+        val bodies = listOf(
+            "<h1>Start</h1><p>A short first chapter.</p>",
+            "<h1>Long</h1>" + (0 until 400).joinToString("") { "<p>Long chapter paragraph $it with words enough to wrap once or twice in a narrow page.</p>" },
+        )
+        val doc = EpubDocument.open(multiSpineEpub(bodies), settings)
+        val (scene, driver) = drivenScene(200, 260, queued) {
+            val state = rememberKiteDocViewState(doc, KiteBookmark.Flow(chapter = 0)).also {
+                it.layoutPausesForFrames = true
+                it.layoutSlice = 2.milliseconds
+            }
+            KiteDocView(state = state, modifier = Modifier.fillMaxSize())
+        }
+        scene.use {
+            driver.pumpUntilState { doc.isChapterReady(0) }
+            var frames = 0
+            while (!doc.isChapterReady(1)) {
+                driver.pumpFrames(1)
+                frames++
+                check(frames < 5_000) { "the long chapter never landed" }
+            }
+            assertTrue(frames >= 3, "the long chapter landed in $frames frames")
+            val atOnce = EpubDocument.open(multiSpineEpub(bodies), settings).also { it.prepareChapter(1) }
+            assertEquals(atOnce.pageCountIn(1), doc.pageCountIn(1))
+            for (p in 0 until doc.pageCountIn(1)) {
+                assertEquals(
+                    atOnce.page(KiteLocation(1, p)).textContent()?.plainText,
+                    doc.page(KiteLocation(1, p)).textContent()?.plainText,
+                    "page $p",
+                )
+            }
         }
     }
 
