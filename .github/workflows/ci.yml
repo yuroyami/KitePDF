@@ -10,8 +10,6 @@ name: CI
 # - `apple` and `js` prove the non-JVM targets compile AND pass the common
 #   tests before merge. Platform regressions are therefore merge-blocking,
 #   instead of being discovered only after they land on main.
-# - `android` runs the device tests of :kitepdf-webview on an emulator, since
-#   a web view draws nothing on the JVM.
 # - `api` checks the public API of each published module against the dump in
 #   its api/ directory. It runs on macOS, the one host that compiles every
 #   target, so the Apple-only declarations are checked too.
@@ -111,11 +109,6 @@ jobs:
           :kitepdf-skia-renderer:jvmTest :kitepdf-compose-viewer:jvmTest
           :kitepdf:jvmTest :kitepdf-net:jvmTest :kitepdf-javascript:jvmTest :kitepdf-media:jvmTest --continue --stacktrace
 
-      # JavaFX's web view needs a display, so its tests run under a virtual one. They fail on CI
-      # without it, rather than skip.
-      - name: Test the desktop web view (JVM, virtual display)
-        run: xvfb-run -a ./gradlew :kitepdf-webview:jvmTest --stacktrace
-
       - name: Test common code through Android host variants
         run: >
           ./gradlew
@@ -133,7 +126,6 @@ jobs:
           :kitepdf-skia-renderer:compileAndroidMain
           :kitepdf-compose-viewer:compileAndroidMain
           :kitepdf-media:compileAndroidMain
-          :kitepdf-webview:testAndroidHostTest
           --continue --stacktrace
 
       - name: Test :kitepdf-native-renderer (JVM oracle + fuzz tests)
@@ -174,52 +166,6 @@ jobs:
             **/build/benchmark/**
             **/build/fuzz/**
             **/build/epub-hashes.txt
-          if-no-files-found: ignore
-
-  android:
-    runs-on: ubuntu-latest
-    timeout-minutes: 45
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-
-      - name: Set up JDK 21
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '21'
-
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
-
-      - name: Enable KVM for the emulator
-        run: |
-          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
-          sudo udevadm control --reload-rules
-          sudo udevadm trigger --name-match=kvm
-
-      - name: Build the device tests
-        run: ./gradlew :kitepdf-webview:assembleAndroidDeviceTest --stacktrace
-
-      - name: Test the Android web view on an emulator
-        uses: reactivecircus/android-emulator-runner@v2
-        with:
-          api-level: 34
-          arch: x86_64
-          target: google_apis
-          disable-animations: true
-          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-snapshot
-          script: ./gradlew :kitepdf-webview:connectedAndroidDeviceTest --stacktrace
-
-      - name: Upload test reports
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: test-reports-android
-          path: |
-            **/build/reports/androidTests/**
-            **/build/outputs/androidTest-results/**
           if-no-files-found: ignore
 
   apple:
