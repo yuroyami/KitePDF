@@ -1,5 +1,7 @@
 package io.github.yuroyami.kitepdf.epub
 
+import io.github.yuroyami.kitepdf.core.xml.KiteXmlNode
+
 import io.github.yuroyami.kitepdf.core.font.GsubGlyph
 import io.github.yuroyami.kitepdf.core.font.OpenTypeGsub
 import io.github.yuroyami.kitepdf.svg.SvgImage
@@ -1976,6 +1978,8 @@ internal class BoxLayout(
         val speech: SpeechHint? = null,
         // The ids of the elements around the character (see InlineRun.ids).
         val ids: List<String> = emptyList(),
+        // The element the character belongs to, in a chapter that scripts run in (see InlineRun.element).
+        val element: KiteXmlNode.Element? = null,
         // Inline image cell (cp = U+FFFC): natural draw size + decoded
         // payload. `width` is the pen advance (justification may stretch it);
         // `imageWidth` is what the image actually draws at.
@@ -2127,7 +2131,7 @@ internal class BoxLayout(
                 val cell = Cell(
                     0xFFFC, inlineSize, run.fontSizePt, fontSpec(run.family, run.bold, run.italic),
                     run.color, 0.0, null,
-                    href = run.href, imageWidth = w, imageHeight = h, image = img, svgImage = svg,
+                    href = run.href, element = run.element, imageWidth = w, imageHeight = h, image = img, svgImage = svg,
                     imageAlt = run.imageAlt, imageObjectFit = run.imageObjectFit, imageZipPath = run.imageSrc,
                     level = levelsOfRun?.get(0) ?: 0, src = src,
                 )
@@ -2145,7 +2149,7 @@ internal class BoxLayout(
                         listOf(
                             Cell(
                                 0xFFFC, box.width, run.fontSizePt, fontSpec(run.family, run.bold, run.italic), run.color, 0.0, null,
-                                href = run.href, math = box, mathText = run.math.readingText,
+                                href = run.href, element = run.element, math = box, mathText = run.math.readingText,
                                 level = levelsOfRun?.get(0) ?: 0, src = src,
                             ),
                         ),
@@ -2195,10 +2199,12 @@ internal class BoxLayout(
                     val gid = if (smcpGid >= 0) smcpGid else f.gidFor(c)
                     Cell(c, penAdvance1000(f, gid, c) * cellFs / 1000.0, cellFs, spec, run.color, shift, run.underline, f, gid,
                         rubyGroup = run.rubyGroup, rubyText = run.rubyText, href = run.href, speech = run.speech, ids = run.ids,
+                        element = run.element,
                         lineThrough = run.lineThrough, backgroundColor = run.backgroundColor, level = level, src = src)
                 } else {
                     Cell(c, FontMetrics.advancePt(c, cellFs, run.bold, run.italic, run.family), cellFs, spec, run.color, shift, run.underline,
                         rubyGroup = run.rubyGroup, rubyText = run.rubyText, href = run.href, speech = run.speech, ids = run.ids,
+                        element = run.element,
                         lineThrough = run.lineThrough, backgroundColor = run.backgroundColor, level = level, src = src)
                 }
                 // letter-spacing: added to every glyph advance, kept in sync
@@ -2227,7 +2233,8 @@ internal class BoxLayout(
                         // word-spacing adds to spaces; letter-spacing to every advance.
                         tokens.add(Token.Space(Cell(
                             ' '.code, sw + run.wordSpacingPt + run.letterSpacingPt, fs, spec, run.color, shift, run.underline,
-                            href = run.href, speech = run.speech, ids = run.ids, lineThrough = run.lineThrough, backgroundColor = run.backgroundColor, level = level,
+                            href = run.href, speech = run.speech, ids = run.ids, element = run.element,
+                            lineThrough = run.lineThrough, backgroundColor = run.backgroundColor, level = level,
                         )))
                     }
                     // Ruby bases do not split per CJK char: the whole base is one token.
@@ -2331,6 +2338,7 @@ internal class BoxLayout(
                     base.cp, (penAdvance1000(face, g.gid, base.cp) + spacing) * base.fontSize / 1000.0, base.fontSize,
                     base.spec, base.color, base.shift, base.underline, face, g.gid, kernAfter1000 = spacing,
                     rubyGroup = base.rubyGroup, rubyText = base.rubyText, href = base.href, speech = base.speech, ids = base.ids,
+                    element = base.element,
                     lineThrough = base.lineThrough, backgroundColor = base.backgroundColor, level = base.level,
                     src = base.src,
                 ).also {
@@ -2493,7 +2501,8 @@ internal class BoxLayout(
         val face = c.face
         return Cell(
             '-'.code, hyphenWidth(c), c.fontSize, c.spec, c.color, c.shift, c.underline, face, face?.gidFor('-'.code) ?: -1,
-            href = c.href, speech = c.speech, ids = c.ids, lineThrough = c.lineThrough, backgroundColor = c.backgroundColor, level = c.level,
+            href = c.href, speech = c.speech, ids = c.ids, element = c.element,
+            lineThrough = c.lineThrough, backgroundColor = c.backgroundColor, level = c.level,
         )
     }
 
@@ -2534,7 +2543,7 @@ internal class BoxLayout(
                 if (c.underline != null || c.lineThrough != null || c.backgroundColor != null) {
                     out.add(PlacedRun(
                         emptyList(), x, c.fontSize, c.spec, c.color, c.shift, c.underline,
-                        lineThrough = c.lineThrough, backgroundColor = c.backgroundColor, paintWidth = width,
+                        lineThrough = c.lineThrough, backgroundColor = c.backgroundColor, paintWidth = width, element = c.element,
                     ))
                 }
                 x += width; i++; continue
@@ -2551,7 +2560,7 @@ internal class BoxLayout(
             if (c.isImage) {
                 closeGroup(x)
                 imageSink?.add(
-                    PlacedImage(x + c.padBefore, c.imageWidth, c.imageHeight, c.image, c.svgImage, c.imageAlt, c.imageObjectFit, c.imageZipPath),
+                    PlacedImage(x + c.padBefore, c.imageWidth, c.imageHeight, c.image, c.svgImage, c.imageAlt, c.imageObjectFit, c.imageZipPath, c.element),
                 )
                 x += c.padBefore + c.width + c.padAfter
                 i++
@@ -2565,7 +2574,8 @@ internal class BoxLayout(
             val glyphs = ArrayList<TextGlyph>()
             // An image cell always ends a text run, even when glued to a word (#99).
             while (i < cells.size && cells[i].cp != ' '.code && !cells[i].isImage && cells[i].math == null && cells[i].rubyGroup == c.rubyGroup &&
-                cells[i].href == c.href && cells[i].speech === c.speech && cells[i].ids === c.ids && samePaint(cells[i], c)
+                cells[i].href == c.href && cells[i].speech === c.speech && cells[i].ids === c.ids && cells[i].element === c.element &&
+                samePaint(cells[i], c)
             ) {
                 glyphs.add(glyphFor(cells[i])); x += cells[i].width + cells[i].padAfter; i++
             }
@@ -2573,7 +2583,7 @@ internal class BoxLayout(
                 glyphs, startX, fs, spec, col, sh, ul,
                 hasOutlines = face != null, unitsPerEm = face?.unitsPerEm ?: 1000,
                 href = c.href, speech = c.speech, ids = c.ids, lineThrough = c.lineThrough, backgroundColor = c.backgroundColor,
-                paintWidth = x - startX,
+                paintWidth = x - startX, element = c.element,
             ))
         }
         closeGroup(x)

@@ -19,8 +19,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `CoreGraphicsCanvas`. Which of them can read the backdrop, and where, is in the rendering
   guide (#209, #308).
 
-- `EpubDocument.chapterPath(chapter)` names the zip path of a chapter's own document, which
-  a web engine loads to run a scripted fixed-layout page. `EpubLink` has a public
+- `EpubDocument.chapterChanges` counts the changes the book's scripts made to its chapters,
+  for every document over the book, and `EpubPage.chapterVersion` says how many reached a
+  page's chapter. A viewer takes the page counts again when the first moves, since a change
+  can add or take pages, and draws a page again when the second does. A chapter that scripts
+  run in keeps one page even when it has nothing to show, so that its scripts can fill it
+  (#41).
+
+- `EpubDocument.chapterPath(chapter)` names the zip path of a chapter's own document. `EpubLink` has a public
   constructor, for a link that comes from outside the page's markup. In `KiteDocView`, an
   element of the `pageOverlay` hands such a link to `KitePageOverlayScope.followLink(href,
   rect)`, and it goes the way of a tapped link: `onLinkTap` sees it first, then the viewer

@@ -135,6 +135,8 @@ abstract fun interface io.github.yuroyami.kitepdf.epub/EpubResourceFetcher { // 
 }
 
 final class io.github.yuroyami.kitepdf.epub/EpubDocument : io.github.yuroyami.kitepdf.core/KiteDocument { // io.github.yuroyami.kitepdf.epub/EpubDocument|null[0]
+    final val chapterChanges // io.github.yuroyami.kitepdf.epub/EpubDocument.chapterChanges|{}chapterChanges[0]
+        final fun <get-chapterChanges>(): kotlinx.coroutines.flow/StateFlow<kotlin/Int> // io.github.yuroyami.kitepdf.epub/EpubDocument.chapterChanges.<get-chapterChanges>|<get-chapterChanges>(){}[0]
     final val chapterCount // io.github.yuroyami.kitepdf.epub/EpubDocument.chapterCount|{}chapterCount[0]
         final fun <get-chapterCount>(): kotlin/Int // io.github.yuroyami.kitepdf.epub/EpubDocument.chapterCount.<get-chapterCount>|<get-chapterCount>(){}[0]
     final val epubMetadata // io.github.yuroyami.kitepdf.epub/EpubDocument.epubMetadata|{}epubMetadata[0]
@@ -345,6 +347,8 @@ final class io.github.yuroyami.kitepdf.epub/EpubOverlayClip { // io.github.yuroy
 final class io.github.yuroyami.kitepdf.epub/EpubPage : io.github.yuroyami.kitepdf.core/KitePage { // io.github.yuroyami.kitepdf.epub/EpubPage|null[0]
     final val chapter // io.github.yuroyami.kitepdf.epub/EpubPage.chapter|{}chapter[0]
         final fun <get-chapter>(): kotlin/Int // io.github.yuroyami.kitepdf.epub/EpubPage.chapter.<get-chapter>|<get-chapter>(){}[0]
+    final val chapterVersion // io.github.yuroyami.kitepdf.epub/EpubPage.chapterVersion|{}chapterVersion[0]
+        final fun <get-chapterVersion>(): kotlin/Int // io.github.yuroyami.kitepdf.epub/EpubPage.chapterVersion.<get-chapterVersion>|<get-chapterVersion>(){}[0]
     final val displayHeight // io.github.yuroyami.kitepdf.epub/EpubPage.displayHeight|{}displayHeight[0]
         final fun <get-displayHeight>(): kotlin/Double // io.github.yuroyami.kitepdf.epub/EpubPage.displayHeight.<get-displayHeight>|<get-displayHeight>(){}[0]
     final val displayWidth // io.github.yuroyami.kitepdf.epub/EpubPage.displayWidth|{}displayWidth[0]

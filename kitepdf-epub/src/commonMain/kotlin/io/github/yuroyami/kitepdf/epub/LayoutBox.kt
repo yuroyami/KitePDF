@@ -11,6 +11,7 @@ import io.github.yuroyami.kitepdf.core.KiteLineEnd
 import io.github.yuroyami.kitepdf.core.font.TextGlyph
 import io.github.yuroyami.kitepdf.core.render.KiteImageData
 import io.github.yuroyami.kitepdf.core.render.RgbColor
+import io.github.yuroyami.kitepdf.core.xml.KiteXmlNode
 
 /**
  * The CSS box tree the layout engine positions and paints. Unlike a flat
@@ -37,6 +38,9 @@ internal sealed class LayoutBox {
 
     /** The facts of an `<iframe>` or an HTML `<object>` that this box stands for, else null (#40). */
     var embed: EmbedInfo? = null
+
+    /** The element this box stands for, so a tap finds the element a script listens on; null for an anonymous box (#41). */
+    var source: KiteXmlNode.Element? = null
 
     /** When the background and border of this box paint, from [Paginator] (#172). */
     var decoRank: Int = 0
@@ -175,6 +179,8 @@ internal class PlacedRun(
     val speech: SpeechHint? = null,
     /** The ids of the elements around the run's text (see [InlineRun.ids]). */
     val ids: List<String> = emptyList(),
+    /** The innermost element the run's text belongs to (see [InlineRun.element]). */
+    val element: KiteXmlNode.Element? = null,
 )
 
 /**
@@ -194,6 +200,8 @@ internal class PlacedImage(
     val objectFit: ObjectFit = ObjectFit.FILL,
     /** The image's file in the archive; empty for an `<svg>` written in the chapter. */
     val zipPath: String = "",
+    /** The `<img>` or `<svg>` element, in a chapter that scripts run in (see [InlineRun.element]). */
+    val element: KiteXmlNode.Element? = null,
 )
 
 /** A formula placed on a line, its baseline on the line's, at document-space inline position [x] (#32). */

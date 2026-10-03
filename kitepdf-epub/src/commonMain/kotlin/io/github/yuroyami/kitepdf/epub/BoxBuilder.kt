@@ -38,6 +38,12 @@ internal class BoxBuilder(
     private val docPath: String = "",
     /** The media type that the manifest gives a zip path, for an `<object>` without a `type` (#40). */
     private val mediaTypeOf: (String) -> String? = { null },
+    /**
+     * True in a chapter that scripts run in: each text run then keeps the element its text belongs
+     * to, so a tap finds the element a script listens on (#41). Off elsewhere, where a run that
+     * spans two elements stays one run.
+     */
+    private val tracksElements: Boolean = false,
     private val resolveHref: (String) -> String,
 ) {
     fun build(root: KiteXmlNode.Element): BlockBox =
@@ -138,6 +144,8 @@ internal class BoxBuilder(
             speechHint(el, ancestors)?.let(inl::beginSpeech)
             // The block's text carries the ids of the block and the elements around it (#36).
             inl.beginIds((listOf(el) + ancestors).asReversed().mapNotNull { e -> e.attrs["id"]?.takeIf { it.isNotBlank() } })
+            // Text right inside the block belongs to the block (#41).
+            if (tracksElements && !isRoot && !anonymous) inl.beginElement(el)
             injectPseudo(PseudoSide.BEFORE)
         }
 
@@ -199,13 +207,17 @@ internal class BoxBuilder(
                             if ((cs.display == Display.INLINE || cs.display == Display.INLINE_BLOCK) &&
                                 cs.cssFloat == CssFloat.NONE
                             ) {
-                                inl.addImage(resolveHref(src), style, cs.widthPt ?: aw?.times(0.75), cs.heightPt ?: ah?.times(0.75), child.attrs["alt"], cs.objectFit)
+                                inl.addImage(
+                                    resolveHref(src), style, cs.widthPt ?: aw?.times(0.75), cs.heightPt ?: ah?.times(0.75), child.attrs["alt"], cs.objectFit,
+                                    element = child.takeIf { tracksElements },
+                                )
                             } else {
                                 flush()
                                 // The attributes are CSS pixels, 0.75pt each, in block mode too (#112).
                                 children.add(
                                     ImageBox(cs, resolveHref(src), attrWidth = aw?.times(0.75), attrHeight = ah?.times(0.75)).also {
                                         it.semantics = imageSemantics(child, sem)
+                                        it.source = child
                                     },
                                 )
                             }
@@ -235,6 +247,7 @@ internal class BoxBuilder(
                         if (cs.display == Display.NONE) return null
                         val box = embedBox(child, cs, childAncestors, sem)
                         if (box != null) {
+                            box.source = child
                             flush()
                             children.add(box)
                             return null
@@ -246,7 +259,7 @@ internal class BoxBuilder(
                         // A hidden sprite sheet or glyph cache generates no box (CSS 2.1, 9.2.4, #275).
                         if (cs.display != Display.NONE) SvgImage.fromElement(child)?.let {
                             flush()
-                            children.add(ImageBox(cs, "", it).also { box -> box.semantics = svgSemantics(child, sem) })
+                            children.add(ImageBox(cs, "", it).also { box -> box.semantics = svgSemantics(child, sem); box.source = child })
                         }
                         return null
                     }
@@ -269,6 +282,7 @@ internal class BoxBuilder(
             injectPseudo(PseudoSide.AFTER)
             flush()
             return BlockBox(style, children).also { box ->
+                if (!isRoot && !anonymous) box.source = el
                 el.attrs["id"]?.let(box.anchors::add)
                 if (el.tag == "a") el.attrs["name"]?.let(box.anchors::add) // legacy anchor
                 // A block-level link, such as a flex item or `a { display: block }`, covers its whole box (#33).
@@ -306,6 +320,7 @@ internal class BoxBuilder(
                 loop = "loop" in el.attrs, muted = "muted" in el.attrs, id = el.attrs["id"],
             )
             it.semantics = BoxSemantics.of(el.tag, el.attrs, parentSem)
+            it.source = el
         }
     }
 
@@ -464,6 +479,7 @@ internal class BoxBuilder(
         } else {
             TableBox(style, rows, scanColWidths(el, style, childAncestors))
         }
+        table.source = el
         return captions + table
     }
 
@@ -566,6 +582,7 @@ internal class BoxBuilder(
                         it.colspan = cell.colspan; it.rowspan = cell.rowspan
                         it.gridRow = cell.gridRow; it.gridCol = cell.gridCol
                         it.anchors += cell.anchors
+                        it.source = cell.source
                     }
                 },
             )
@@ -659,6 +676,7 @@ internal class BoxBuilder(
         if (speech != null) inl.beginSpeech(speech)
         val id = el.attrs["id"]?.takeIf { it.isNotBlank() }
         if (id != null) inl.beginId(id)
+        if (tracksElements) inl.beginElement(el)
         val background = inl.beginBackground(style.backgroundColor)
         try {
             if (el.tag == "ruby") { processRuby(el, style, ancestors, inl, anchorSink, hoist, parentSem); return }
@@ -680,7 +698,7 @@ internal class BoxBuilder(
                             if (cs.display == Display.NONE) continue
                             val aw = child.attrs["width"]?.trim()?.removeSuffix("px")?.toDoubleOrNull()?.times(0.75)
                             val ah = child.attrs["height"]?.trim()?.removeSuffix("px")?.toDoubleOrNull()?.times(0.75)
-                            inl.addImage(resolveHref(src), style, cs.widthPt ?: aw, cs.heightPt ?: ah, child.attrs["alt"], cs.objectFit)
+                            inl.addImage(resolveHref(src), style, cs.widthPt ?: aw, cs.heightPt ?: ah, child.attrs["alt"], cs.objectFit, element = child.takeIf { tracksElements })
                         }
                         continue
                     }
@@ -709,6 +727,7 @@ internal class BoxBuilder(
                         if (cs.display == Display.NONE) continue
                         val box = embedBox(child, cs, childAncestors, parentSem)
                         if (box != null) {
+                            box.source = child
                             hoist(linked(listOf(box), inl))
                             continue
                         }
@@ -722,6 +741,7 @@ internal class BoxBuilder(
                             inl.addImage(
                                 "", style, cs.widthPt ?: svgSizePt(child.attrs["width"], cs), cs.heightPt ?: svgSizePt(child.attrs["height"], cs),
                                 alt = if (sem.hidden) "" else sem.label, objectFit = cs.objectFit, svg = svg,
+                                element = child.takeIf { tracksElements },
                             )
                         }
                         continue
@@ -744,6 +764,7 @@ internal class BoxBuilder(
             resolver.computePseudo(el, ancestors, style, PseudoSide.AFTER)?.let { inl.appendText(it.text, it.style) }
         } finally {
             inl.endBackground(background)
+            if (tracksElements) inl.endElement()
             if (id != null) inl.endId()
             if (speech != null) inl.endSpeech()
             if (link != null) inl.endLink()
@@ -852,6 +873,14 @@ internal class BoxBuilder(
 
         fun endSpeech() { speech = speechStack.removeLastOrNull() }
 
+        // The innermost element around the text, in a chapter that scripts run in (#41).
+        private val elementStack = ArrayDeque<KiteXmlNode.Element?>()
+        private var element: KiteXmlNode.Element? = null
+
+        fun beginElement(el: KiteXmlNode.Element) { elementStack.addLast(element); element = el }
+
+        fun endElement() { element = elementStack.removeLastOrNull() }
+
         // The ids of the elements around the text, one list per element, outermost first (#36).
         private val idStack = ArrayDeque<List<String>>()
         private var ids: List<String> = emptyList()
@@ -891,13 +920,18 @@ internal class BoxBuilder(
         fun addImage(
             src: String, style: ComputedStyle, cssW: Double?, cssH: Double?, alt: String? = null,
             objectFit: ObjectFit = ObjectFit.FILL, svg: SvgImage? = null,
+            /** The `<img>` or `<svg>` itself, in a chapter that scripts run in (#41). */
+            element: KiteXmlNode.Element? = null,
         ) {
             if (pendingSpace && blockHasContent && !lastWasBreak) {
                 runs.add(pendingSpaceRun ?: makeRun(" ", style))
             }
             pendingSpace = false; lastWasBreak = false; blockHasContent = true
             runs.add(
-                makeRun("￼", style).copy(imageSrc = src, imageSvg = svg, imageCssW = cssW, imageCssH = cssH, imageAlt = alt, imageObjectFit = objectFit),
+                makeRun("￼", style).copy(
+                    imageSrc = src, imageSvg = svg, imageCssW = cssW, imageCssH = cssH, imageAlt = alt, imageObjectFit = objectFit,
+                    element = element ?: this.element,
+                ),
             )
         }
 
@@ -971,6 +1005,7 @@ internal class BoxBuilder(
             href = linkHref,
             speech = speech,
             ids = ids,
+            element = element,
             letterSpacingPt = style.letterSpacingPt, wordSpacingPt = style.wordSpacingPt,
             smallCaps = style.smallCaps,
             lineThrough = style.lineThrough,

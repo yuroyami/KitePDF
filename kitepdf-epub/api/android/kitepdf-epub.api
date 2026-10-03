@@ -7,6 +7,7 @@ public final class io/github/yuroyami/kitepdf/epub/EpubDocument : io/github/yuro
 	public final fun chapterPath (I)Ljava/lang/String;
 	public final fun fetchRemoteResources (IZLkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public static synthetic fun fetchRemoteResources$default (Lio/github/yuroyami/kitepdf/epub/EpubDocument;IZLkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
+	public final fun getChapterChanges ()Lkotlinx/coroutines/flow/StateFlow;
 	public fun getChapterCount ()I
 	public final fun getEpubMetadata ()Lio/github/yuroyami/kitepdf/epub/EpubMetadata;
 	public final fun getFontSize ()D
@@ -205,6 +206,7 @@ public final class io/github/yuroyami/kitepdf/epub/EpubOverlayClip {
 public final class io/github/yuroyami/kitepdf/epub/EpubPage : io/github/yuroyami/kitepdf/core/KitePage {
 	public fun displayToDeviceBase ()Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;
 	public final fun getChapter ()I
+	public final fun getChapterVersion ()I
 	public fun getDisplayHeight ()D
 	public fun getDisplayWidth ()D
 	public final fun getDocument ()Lio/github/yuroyami/kitepdf/epub/EpubDocument;

@@ -32,6 +32,8 @@ internal class PageRender(
     val embedBoxes: List<LayoutBox> = emptyList(),
     /** Boxes that paint through a group or a clip and reach onto this page (#28). */
     val effectBoxes: List<LayoutBox> = emptyList(),
+    /** The boxes of elements that reach onto this page, in a chapter that scripts run in, for a tap to find (#41). */
+    val hitBoxes: List<LayoutBox> = emptyList(),
 )
 
 /**
@@ -55,7 +57,7 @@ internal object Paginator {
      * NO reflow splitting (the content is authored to fit). Collects the whole tree
      * onto a single [PageRender].
      */
-    fun paginateFixed(root: BlockBox, pageWidth: Double, pageHeight: Double): PageRender {
+    fun paginateFixed(root: BlockBox, pageWidth: Double, pageHeight: Double, hits: Boolean = false): PageRender {
         numberPaintOrder(root)
         val lines = ArrayList<PositionedLine>()
         val images = ArrayList<ImageBox>()
@@ -63,9 +65,11 @@ internal object Paginator {
         val links = ArrayList<LayoutBox>()
         val embeds = ArrayList<LayoutBox>()
         val effects = ArrayList<LayoutBox>()
-        collect(root, lines, images, deco, links, embeds, effects)
+        val hitBoxes = if (hits) ArrayList<LayoutBox>() else null
+        collect(root, lines, images, deco, links, embeds, effects, hitBoxes)
         return PageRender(
             0.0, lines, images, deco, pageWidth, pageHeight, margin = 0.0, linkBoxes = links, embedBoxes = embeds, effectBoxes = effects,
+            hitBoxes = hitBoxes.orEmpty(),
         )
     }
 
@@ -73,6 +77,8 @@ internal object Paginator {
         root: BlockBox, pageWidth: Double, pageHeight: Double, margin: Double,
         vertical: Boolean = false,
         verticalLr: Boolean = false,
+        /** Keep the boxes of elements for a tap to find, in a chapter that scripts run in (#41). */
+        hits: Boolean = false,
     ): List<PageRender> {
         // In vertical mode pages are sliced along the logical block axis too,
         // but the per-page budget is the physical page WIDTH (columns).
@@ -84,7 +90,8 @@ internal object Paginator {
         val links = ArrayList<LayoutBox>()
         val embeds = ArrayList<LayoutBox>()
         val effects = ArrayList<LayoutBox>()
-        collect(root, lines, images, deco, links, embeds, effects)
+        val hitBoxes = if (hits) ArrayList<LayoutBox>() else null
+        collect(root, lines, images, deco, links, embeds, effects, hitBoxes)
 
         // In tree order, each unit with the blocks around it, so a break on any of them applies:
         // before the first unit of a block and after its last one.
@@ -164,6 +171,7 @@ internal object Paginator {
                 // the band is not on this page (#41).
                 embedBoxes = embeds.filter { e -> us.any { it.owner === e || e in it.chain } },
                 effectBoxes = effects.filter { it.y < end && it.bottom > start },
+                hitBoxes = hitBoxes?.filter { it.y < end && it.bottom > start }.orEmpty(),
             )
         }
     }
@@ -239,8 +247,10 @@ internal object Paginator {
     private fun collect(
         box: LayoutBox, lines: ArrayList<PositionedLine>, images: ArrayList<ImageBox>,
         deco: ArrayList<LayoutBox>, links: ArrayList<LayoutBox>, embeds: ArrayList<LayoutBox>, effects: ArrayList<LayoutBox>,
+        hits: ArrayList<LayoutBox>?,
     ) {
         if (box.linkHref != null) links.add(box)
+        if (hits != null && box.source != null) hits.add(box)
         if (box.embed != null) embeds.add(box)
         if (box.hasEffects) effects.add(box)
         when (box) {
@@ -248,11 +258,11 @@ internal object Paginator {
                 if (decorated(box.style)) deco.add(box)
                 // A column rule paints with its block's background and border (#34).
                 for (rule in box.columnRules) { rule.decoRank = box.decoRank; deco.add(rule) }
-                for (c in box.children) collect(c, lines, images, deco, links, embeds, effects)
+                for (c in box.children) collect(c, lines, images, deco, links, embeds, effects, hits)
             }
             is TableBox -> {
                 if (decorated(box.style)) deco.add(box)
-                for (r in box.rows) { if (decorated(r.style)) deco.add(r); for (cell in r.cells) collect(cell, lines, images, deco, links, embeds, effects) }
+                for (r in box.rows) { if (decorated(r.style)) deco.add(r); for (cell in r.cells) collect(cell, lines, images, deco, links, embeds, effects, hits) }
             }
             is TableRowBox -> {}
             is TextBlockBox -> lines.addAll(box.lines)
