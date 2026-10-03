@@ -416,6 +416,21 @@ The AWT backend places and caches glyphs the way MuPDF does:
 
 Turned or skewed text, a glyph with an em over 256 pixels, and text in a blend mode other than Normal are filled as paths. They still snap to the same grid.
 
+## Raster steps
+
+Some effects work on what was drawn, not on shapes: an SVG filter blurs, moves or recolours the pixels of an element. A canvas gives them a raster step, `KiteCanvas.rasterStep`: the effect has its content painted into a raster of its box through the canvas, works on the pixels in plain Kotlin, and draws the result back. Every shipped canvas has one. A step can also read the backdrop, the pixels under its box, which only some canvases can give:
+
+| Canvas | Backdrop |
+|---|---|
+| `AwtCanvas` | Always, also inside a group or under a curved clip |
+| `Canvas2dCanvas` | Always: its layers are canvases of their own |
+| `SkiaCanvas` | Outside every group and soft mask layer, on a canvas that Skia can read back |
+| `CoreGraphicsCanvas` | On a bitmap context, outside every group layer |
+| `AndroidNativeCanvas` | In `AndroidPdfBitmapRenderer`, outside every group and soft mask layer |
+| `ComposeCanvas` | In `KitePageRasterizer`, outside every group and soft mask layer |
+
+An effect that needs a backdrop it cannot have draws as it did before raster steps. A box larger than the canvas's pixel budget works at a lower resolution and reads no backdrop. A canvas of your own keeps the default, which runs no step, and its caller draws the content without the effect.
+
 ## Performance tips
 
 - **Scale parameter:** A page rendered at `scale = 0.5` is 4x faster and uses 4x less memory than `scale = 1.0` (area scales quadratically).

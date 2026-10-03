@@ -39,6 +39,7 @@ public final class io/github/yuroyami/kitepdf/skia/SkiaCanvas : io/github/yuroya
 	public fun hostGlyphOutline (Ljava/lang/String;Lio/github/yuroyami/kitepdf/core/font/FontSpec;)Lio/github/yuroyami/kitepdf/core/render/KitePath;
 	public fun popClip ()V
 	public fun pushClip (Lio/github/yuroyami/kitepdf/core/render/KitePath;Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;Z)V
+	public fun rasterStep (Lio/github/yuroyami/kitepdf/core/KiteRectangle;Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;Lio/github/yuroyami/kitepdf/core/render/KiteRasterStep;)Z
 	public fun strokePath (Lio/github/yuroyami/kitepdf/core/render/KitePath;Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;Lio/github/yuroyami/kitepdf/core/render/RgbColor;DDLio/github/yuroyami/kitepdf/core/render/KiteBlendMode;Ljava/util/List;DIID)V
 }
 

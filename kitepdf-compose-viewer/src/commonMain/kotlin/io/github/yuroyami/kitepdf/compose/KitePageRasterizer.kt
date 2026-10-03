@@ -445,7 +445,7 @@ public class KitePageRasterizer(
             val deviceCtm = region?.let { KiteMatrix.translation(-it.left.toDouble(), -it.top.toDouble()).concat(whole) } ?: whole
             val base = ComposeCanvas(
                 this, textMeasurer, hairlineWidthPx, skipSystemFontText, magnification = 1f, glyphMasks = glyphMasks,
-                hostLines = textOffMain,
+                hostLines = textOffMain, target = bitmap,
             )
             val themed = theme?.wrap(base) ?: base
             val canvas = canvasDecorator?.invoke(themed) ?: themed

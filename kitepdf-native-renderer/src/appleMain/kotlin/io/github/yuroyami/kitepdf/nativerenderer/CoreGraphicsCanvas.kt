@@ -13,6 +13,9 @@ import io.github.yuroyami.kitepdf.core.render.KiteMaskTransfer
 import io.github.yuroyami.kitepdf.core.render.KiteMatrix
 import io.github.yuroyami.kitepdf.core.render.KiteCanvas
 import io.github.yuroyami.kitepdf.core.render.KitePath
+import io.github.yuroyami.kitepdf.core.render.KiteRaster
+import io.github.yuroyami.kitepdf.core.render.KiteRasterScope
+import io.github.yuroyami.kitepdf.core.render.KiteRasterStep
 import io.github.yuroyami.kitepdf.core.render.paintComplexShading
 import io.github.yuroyami.kitepdf.core.render.KiteShading
 import io.github.yuroyami.kitepdf.core.render.RgbColor
@@ -45,6 +48,7 @@ import platform.CoreGraphics.CGAffineTransform
 import platform.CoreGraphics.CGAffineTransformInvert
 import platform.CoreGraphics.CGAffineTransformMake
 import platform.CoreGraphics.CGBitmapContextCreate
+import platform.CoreGraphics.CGBitmapContextCreateImage
 import platform.CoreGraphics.CGColorSpaceCreateDeviceGray
 import platform.CoreGraphics.CGContextClipToMask
 import platform.CoreGraphics.CGContextFillRect
@@ -127,12 +131,19 @@ import platform.ImageIO.CGImageSourceCreateWithData
  * to caller code.
  */
 @OptIn(ExperimentalForeignApi::class)
-public class CoreGraphicsCanvas(private val ctx: CGContextRef) : KiteCanvas {
+public class CoreGraphicsCanvas(ctx: CGContextRef) : KiteCanvas {
+
+    /** The context that paints go to: the host's, or the bitmap of a raster step's render. */
+    private var ctx: CGContextRef = ctx
 
     private var openLayers = 0
 
+    /** The transparency layers open on [ctx], whose pixels CoreGraphics keeps to itself until they end. */
+    private var layers = 0
+
     override fun beginPage(widthPt: Double, heightPt: Double, deviceCtm: KiteMatrix) {
         openLayers = 0
+        layers = 0
         groups.clear()
     }
 
@@ -141,6 +152,7 @@ public class CoreGraphicsCanvas(private val ctx: CGContextRef) : KiteCanvas {
             CGContextRestoreGState(ctx)
             openLayers--
         }
+        layers = 0
         groups.clear()
     }
 
@@ -601,6 +613,7 @@ public class CoreGraphicsCanvas(private val ctx: CGContextRef) : KiteCanvas {
         CGContextSetBlendMode(ctx, blendMode.toCG())
         CGContextBeginTransparencyLayer(ctx, null)
         openLayers++
+        layers++
     }
 
     /** An open group: whether it opened a layer, and whether its paints knock out. */
@@ -623,7 +636,177 @@ public class CoreGraphicsCanvas(private val ctx: CGContextRef) : KiteCanvas {
             CGContextEndTransparencyLayer(ctx)
             CGContextRestoreGState(ctx)
             openLayers--
+            layers--
         }
+    }
+
+    /**
+     * The raster step (#209, #308): its box is [region] under [ctm] in device pixels, cut to the
+     * clip. A render paints into a bitmap context of the box, as a soft mask's group does. The
+     * backdrop is a snapshot of the host when it is a bitmap context with no transparency layer
+     * open. Past [MASK_PIXEL_BUDGET] the step works at a lower resolution, and then reads no
+     * backdrop. A raster's first row is the top of the box, where device y is highest.
+     */
+    override fun rasterStep(region: KiteRectangle, ctm: KiteMatrix, step: KiteRasterStep): Boolean {
+        val toDevice = CGContextGetUserSpaceToDeviceSpaceTransform(ctx)
+        val userToDevice = toDevice.useContents { KiteMatrix(a, b, c, d, tx, ty) }
+        val area = maskArea(region, userToDevice.concat(ctm), userToDevice) ?: return false
+        val width = area[2] - area[0]
+        val height = area[3] - area[1]
+        if (width <= 0 || height <= 0) return true
+        val pixels = width.toLong() * height
+        if (pixels > MASK_PIXEL_BUDGET * UNBOUNDED_MASK_FACTOR) return false
+        val scale = if (pixels > MASK_PIXEL_BUDGET) sqrt(MASK_PIXEL_BUDGET.toDouble() / pixels) else 1.0
+        return step.run(CoreGraphicsRasterScope(area[0], area[1], width, height, scale, userToDevice, ctm))
+    }
+
+    /**
+     * One raster step over the box of [boxWidth] by [boxHeight] device pixels whose bottom left
+     * corner is ([x0], [y0]), at [scale]. [userToDevice] is the host's own transform.
+     */
+    private inner class CoreGraphicsRasterScope(
+        private val x0: Int, private val y0: Int, private val boxWidth: Int, private val boxHeight: Int,
+        private val scale: Double, private val userToDevice: KiteMatrix, ctm: KiteMatrix,
+    ) : KiteRasterScope {
+        private val host = ctx
+        private val layered = layers > 0
+        override val width = maxOf(1, ceil(boxWidth * scale).toInt())
+        override val height = maxOf(1, ceil(boxHeight * scale).toInt())
+
+        // Device space runs up and a raster runs down, so the map ends with a flip.
+        override val toPixels: KiteMatrix = KiteMatrix(1.0, 0.0, 0.0, -1.0, 0.0, height.toDouble())
+            .concat(KiteMatrix.scaling(scale, scale))
+            .concat(KiteMatrix.translation(-x0.toDouble(), -y0.toDouble()))
+            .concat(userToDevice).concat(ctm)
+
+        override fun backdrop(): KiteRaster? {
+            if (layered || scale != 1.0) return null
+            // Null for a context that is not a bitmap, such as a PDF or a window's.
+            val snapshot = CGBitmapContextCreateImage(host) ?: return null
+            try {
+                val fullWidth = platform.CoreGraphics.CGImageGetWidth(snapshot).toDouble()
+                val fullHeight = platform.CoreGraphics.CGImageGetHeight(snapshot).toDouble()
+                return paintInBitmap(null) { bitmap ->
+                    CGContextSetBlendMode(bitmap, CGBlendMode.kCGBlendModeCopy)
+                    CGContextDrawImage(bitmap, CGRectMake(-x0.toDouble(), -y0.toDouble(), fullWidth, fullHeight), snapshot)
+                }
+            } finally {
+                CGImageRelease(snapshot)
+            }
+        }
+
+        override fun render(initial: KiteRaster?, content: () -> Unit): KiteRaster {
+            if (initial != null) require(initial.width == width && initial.height == height) { "the initial raster has another size" }
+            return paintInBitmap(initial) { bitmap ->
+                CGContextScaleCTM(bitmap, scale, scale)
+                CGContextTranslateCTM(bitmap, -x0.toDouble(), -y0.toDouble())
+                CGContextConcatCTM(bitmap, userToDevice.toCGAffine())
+                val savedCtx = ctx
+                val savedOpen = openLayers
+                val savedLayers = layers
+                val savedGroups = groups.toList()
+                try {
+                    ctx = bitmap
+                    openLayers = 0
+                    layers = 0
+                    groups.clear()
+                    content()
+                } finally {
+                    // Layers the content left open end on the bitmap.
+                    while (layers > 0) { CGContextEndTransparencyLayer(bitmap); layers-- }
+                    ctx = savedCtx
+                    openLayers = savedOpen
+                    layers = savedLayers
+                    groups.clear()
+                    groups.addAll(savedGroups)
+                }
+            } ?: KiteRaster(width, height)
+        }
+
+        override fun draw(raster: KiteRaster, alpha: Double, blendMode: KiteBlendMode) {
+            require(raster.width == width && raster.height == height) { "the raster has another size" }
+            val rgba = ByteArray(width * height * 4)
+            for (i in raster.pixels.indices) {
+                val p = raster.pixels[i]
+                rgba[4 * i] = (p ushr 16).toByte()
+                rgba[4 * i + 1] = (p ushr 8).toByte()
+                rgba[4 * i + 2] = p.toByte()
+                rgba[4 * i + 3] = (p ushr 24).toByte()
+            }
+            val image = straightImage(rgba, width, height) ?: return
+            try {
+                CGContextSaveGState(host)
+                try {
+                    // Draw in device pixels: undo the host's own transform.
+                    CGContextConcatCTM(host, CGAffineTransformInvert(userToDevice.toCGAffine()))
+                    CGContextSetBlendMode(host, blendMode.toCG())
+                    platform.CoreGraphics.CGContextSetAlpha(host, alpha.coerceIn(0.0, 1.0))
+                    CGContextSetInterpolationQuality(host, if (scale == 1.0) kCGInterpolationNone else kCGInterpolationLow)
+                    CGContextDrawImage(host, CGRectMake(x0.toDouble(), y0.toDouble(), boxWidth.toDouble(), boxHeight.toDouble()), image)
+                } finally {
+                    CGContextRestoreGState(host)
+                }
+            } finally {
+                CGImageRelease(image)
+            }
+        }
+
+        /**
+         * A premultiplied RGBA bitmap context of the step's size, which starts as [initial] or
+         * transparent, given to [paint]; then its pixels as straight ARGB. Null when CoreGraphics
+         * cannot make the context.
+         */
+        private fun paintInBitmap(initial: KiteRaster?, paint: (CGContextRef) -> Unit): KiteRaster? {
+            val rgba = ByteArray(width * height * 4)
+            if (initial != null) {
+                for (i in initial.pixels.indices) {
+                    val p = initial.pixels[i]
+                    val a = p ushr 24
+                    rgba[4 * i] = (((p ushr 16) and 0xFF) * a / 255).toByte()
+                    rgba[4 * i + 1] = (((p ushr 8) and 0xFF) * a / 255).toByte()
+                    rgba[4 * i + 2] = ((p and 0xFF) * a / 255).toByte()
+                    rgba[4 * i + 3] = a.toByte()
+                }
+            }
+            rgba.usePinned { pinned ->
+                val space = CGColorSpaceCreateDeviceRGB()
+                val bitmap = CGBitmapContextCreate(
+                    pinned.addressOf(0), width.toULong(), height.toULong(), 8u, (width * 4).toULong(), space,
+                    CGImageAlphaInfo.kCGImageAlphaPremultipliedLast.value,
+                )
+                CGColorSpaceRelease(space)
+                if (bitmap == null) return null
+                try {
+                    paint(bitmap)
+                } finally {
+                    CGContextRelease(bitmap)
+                }
+            }
+            return KiteRaster(width, height, IntArray(width * height) { i ->
+                val a = rgba[4 * i + 3].toInt() and 0xFF
+                if (a == 0) return@IntArray 0
+                fun straight(k: Int) = minOf(255, ((rgba[4 * i + k].toInt() and 0xFF) * 255 + a / 2) / a)
+                (a shl 24) or (straight(0) shl 16) or (straight(1) shl 8) or straight(2)
+            })
+        }
+    }
+
+    /** A CGImage of straight RGBA pixels, [width] by [height], first row on top. */
+    private fun straightImage(rgba: ByteArray, width: Int, height: Int): CGImageRef? {
+        val cfData = rgba.toCFData() ?: return null
+        val provider = CGDataProviderCreateWithCFData(cfData)
+        CFRelease(cfData)   // the provider holds its own reference
+        if (provider == null) return null
+        val cs = CGColorSpaceCreateDeviceRGB()
+        val img = CGImageCreate(
+            width.toULong(), height.toULong(),
+            8u, 32u, (width * 4).toULong(), cs,
+            CGImageAlphaInfo.kCGImageAlphaLast.value,
+            provider, null, false, CGColorRenderingIntent.kCGRenderingIntentDefault,
+        )
+        CGColorSpaceRelease(cs)
+        CGDataProviderRelease(provider)
+        return img
     }
 
     override fun applySoftMask(
