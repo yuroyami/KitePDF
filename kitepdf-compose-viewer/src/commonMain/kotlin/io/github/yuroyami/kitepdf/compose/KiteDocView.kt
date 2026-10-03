@@ -92,11 +92,13 @@ import androidx.compose.ui.unit.dp
 import io.github.yuroyami.kitepdf.core.KiteBookmark
 import io.github.yuroyami.kitepdf.core.KiteDocument
 import io.github.yuroyami.kitepdf.core.KitePage
+import io.github.yuroyami.kitepdf.core.KiteRectangle
 import io.github.yuroyami.kitepdf.PdfAction
 import io.github.yuroyami.kitepdf.PdfAnnotation
 import io.github.yuroyami.kitepdf.PdfDocument
 import io.github.yuroyami.kitepdf.PdfPage
 import io.github.yuroyami.kitepdf.epub.EpubDocument
+import io.github.yuroyami.kitepdf.epub.EpubLink
 import io.github.yuroyami.kitepdf.epub.EpubPage
 import io.github.yuroyami.kitepdf.core.render.KITE_DEFAULT_MAX_RASTER_PIXELS
 import io.github.yuroyami.kitepdf.core.render.ReaderTheme
@@ -342,6 +344,11 @@ public fun KiteDocView(
         }
     }
 
+    // A link that an element of the page overlay opens goes the way of a tapped link (#41).
+    val overlayLinks: (Int, String, KiteRectangle) -> Boolean = remember(state, tapScope) {
+        { pageIndex, href, rect -> followOverlayLink(state, tapScope, currentLinkTap, pageIndex, href, rect) }
+    }
+
     // Keys page and zoom once the view has the focus, which a press on it gives (#411). A press
     // never takes the focus from something inside the view, such as the caret of a form field.
     val keyFocus = remember { FocusRequester() }
@@ -377,7 +384,11 @@ public fun KiteDocView(
             // A new state gets a new layout, containers and all, so nothing of the old document's
             // strip reaches the new one's pages (#346).
             key(state) {
-                CompositionLocalProvider(LocalKitePageOverlay provides pageOverlay, LocalViewerTap provides linkAwareTap) {
+                CompositionLocalProvider(
+                    LocalKitePageOverlay provides pageOverlay,
+                    LocalViewerTap provides linkAwareTap,
+                    LocalOverlayLinks provides overlayLinks,
+                ) {
                     when (layout) {
                         is KiteDocLayout.Continuous -> ContinuousLayout(
                             state, layout, zoomSpec, renderSpec, colors, pageSpacing,
@@ -531,6 +542,32 @@ private fun linkTap(
             return false
         }
     }
+}
+
+/**
+ * Follows [href], a link that an element of the page overlay opens over [rect] on page
+ * [pageIndex], as [linkTap] follows a tapped link of that page: [onLinkTap] first, then the
+ * viewer for a link inside the document (#41). Returns true when the link was taken.
+ */
+internal fun followOverlayLink(
+    state: KiteDocViewState,
+    scope: kotlinx.coroutines.CoroutineScope,
+    onLinkTap: ((KiteLinkAction) -> Boolean)?,
+    pageIndex: Int,
+    href: String,
+    rect: KiteRectangle,
+): Boolean {
+    if (state.pageAt(pageIndex) is EpubPage) {
+        val target = if (hasScheme(href)) null else (state.document as? EpubDocument)?.bookmarkOf(href)
+        val navigates = target != null && state.canNavigate
+        if (onLinkTap?.invoke(KiteLinkAction.Epub(EpubLink(rect, href), pageIndex, target, navigates)) == true) return true
+        if (target == null || !navigates) return false
+        scope.launch { state.scrollTo(target, animate = true) }
+        return true
+    }
+    // Another page has no paths of its own to resolve, so only an address goes to the host.
+    val link = io.github.yuroyami.kitepdf.core.KiteLink(rect, uri = href.takeIf { hasScheme(it) })
+    return onLinkTap?.invoke(KiteLinkAction.Plain(link, pageIndex)) == true
 }
 
 /**

@@ -172,6 +172,7 @@ final class io.github.yuroyami.kitepdf.epub/EpubDocument : io.github.yuroyami.ki
 
     final fun bookmarkOf(io.github.yuroyami.kitepdf.core/KiteLocation): io.github.yuroyami.kitepdf.core/KiteBookmark.Flow // io.github.yuroyami.kitepdf.epub/EpubDocument.bookmarkOf|bookmarkOf(io.github.yuroyami.kitepdf.core.KiteLocation){}[0]
     final fun bookmarkOf(kotlin/String): io.github.yuroyami.kitepdf.core/KiteBookmark.Flow? // io.github.yuroyami.kitepdf.epub/EpubDocument.bookmarkOf|bookmarkOf(kotlin.String){}[0]
+    final fun chapterPath(kotlin/Int): kotlin/String // io.github.yuroyami.kitepdf.epub/EpubDocument.chapterPath|chapterPath(kotlin.Int){}[0]
     final fun hasRemoteResources(kotlin/Int): kotlin/Boolean // io.github.yuroyami.kitepdf.epub/EpubDocument.hasRemoteResources|hasRemoteResources(kotlin.Int){}[0]
     final fun isChapterReady(kotlin/Int): kotlin/Boolean // io.github.yuroyami.kitepdf.epub/EpubDocument.isChapterReady|isChapterReady(kotlin.Int){}[0]
     final fun isScripted(kotlin/Int): kotlin/Boolean // io.github.yuroyami.kitepdf.epub/EpubDocument.isScripted|isScripted(kotlin.Int){}[0]
@@ -210,6 +211,8 @@ final class io.github.yuroyami.kitepdf.epub/EpubEmbed { // io.github.yuroyami.ki
         final fun <get-href>(): kotlin/String // io.github.yuroyami.kitepdf.epub/EpubEmbed.href.<get-href>|<get-href>(){}[0]
     final val id // io.github.yuroyami.kitepdf.epub/EpubEmbed.id|{}id[0]
         final fun <get-id>(): kotlin/String? // io.github.yuroyami.kitepdf.epub/EpubEmbed.id.<get-id>|<get-id>(){}[0]
+    final val isWhole // io.github.yuroyami.kitepdf.epub/EpubEmbed.isWhole|{}isWhole[0]
+        final fun <get-isWhole>(): kotlin/Boolean // io.github.yuroyami.kitepdf.epub/EpubEmbed.isWhole.<get-isWhole>|<get-isWhole>(){}[0]
     final val kind // io.github.yuroyami.kitepdf.epub/EpubEmbed.kind|{}kind[0]
         final fun <get-kind>(): io.github.yuroyami.kitepdf.epub/EpubEmbedKind // io.github.yuroyami.kitepdf.epub/EpubEmbed.kind.<get-kind>|<get-kind>(){}[0]
     final val rect // io.github.yuroyami.kitepdf.epub/EpubEmbed.rect|{}rect[0]
@@ -230,6 +233,8 @@ final class io.github.yuroyami.kitepdf.epub/EpubFragmentBox { // io.github.yuroy
 }
 
 final class io.github.yuroyami.kitepdf.epub/EpubLink { // io.github.yuroyami.kitepdf.epub/EpubLink|null[0]
+    constructor <init>(io.github.yuroyami.kitepdf.core/KiteRectangle, kotlin/String, io.github.yuroyami.kitepdf.epub/EpubLinkKind = ...) // io.github.yuroyami.kitepdf.epub/EpubLink.<init>|<init>(io.github.yuroyami.kitepdf.core.KiteRectangle;kotlin.String;io.github.yuroyami.kitepdf.epub.EpubLinkKind){}[0]
+
     final val href // io.github.yuroyami.kitepdf.epub/EpubLink.href|{}href[0]
         final fun <get-href>(): kotlin/String // io.github.yuroyami.kitepdf.epub/EpubLink.href.<get-href>|<get-href>(){}[0]
     final val kind // io.github.yuroyami.kitepdf.epub/EpubLink.kind|{}kind[0]

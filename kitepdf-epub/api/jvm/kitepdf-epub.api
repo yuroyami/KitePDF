@@ -4,6 +4,7 @@ public final class io/github/yuroyami/kitepdf/epub/EpubDocument : io/github/yuro
 	public fun bookmarkOf (Lio/github/yuroyami/kitepdf/core/KiteLocation;)Lio/github/yuroyami/kitepdf/core/KiteBookmark$Flow;
 	public synthetic fun bookmarkOf (Lio/github/yuroyami/kitepdf/core/KiteLocation;)Lio/github/yuroyami/kitepdf/core/KiteBookmark;
 	public final fun bookmarkOf (Ljava/lang/String;)Lio/github/yuroyami/kitepdf/core/KiteBookmark$Flow;
+	public final fun chapterPath (I)Ljava/lang/String;
 	public final fun fetchRemoteResources (IZLkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public static synthetic fun fetchRemoteResources$default (Lio/github/yuroyami/kitepdf/epub/EpubDocument;IZLkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
 	public fun getChapterCount ()I
@@ -64,6 +65,7 @@ public final class io/github/yuroyami/kitepdf/epub/EpubEmbed {
 	public final fun getKind ()Lio/github/yuroyami/kitepdf/epub/EpubEmbedKind;
 	public final fun getRect ()Lio/github/yuroyami/kitepdf/core/KiteRectangle;
 	public final fun getType ()Ljava/lang/String;
+	public final fun isWhole ()Z
 }
 
 public final class io/github/yuroyami/kitepdf/epub/EpubEmbedKind : java/lang/Enum {
@@ -103,6 +105,8 @@ public final class io/github/yuroyami/kitepdf/epub/EpubLayout : java/lang/Enum {
 }
 
 public final class io/github/yuroyami/kitepdf/epub/EpubLink {
+	public fun <init> (Lio/github/yuroyami/kitepdf/core/KiteRectangle;Ljava/lang/String;Lio/github/yuroyami/kitepdf/epub/EpubLinkKind;)V
+	public synthetic fun <init> (Lio/github/yuroyami/kitepdf/core/KiteRectangle;Ljava/lang/String;Lio/github/yuroyami/kitepdf/epub/EpubLinkKind;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public final fun getHref ()Ljava/lang/String;
 	public final fun getKind ()Lio/github/yuroyami/kitepdf/epub/EpubLinkKind;
 	public final fun getRect ()Lio/github/yuroyami/kitepdf/core/KiteRectangle;

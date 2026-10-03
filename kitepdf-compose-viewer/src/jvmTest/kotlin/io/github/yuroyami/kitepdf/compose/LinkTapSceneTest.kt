@@ -314,6 +314,46 @@ class LinkTapSceneTest {
         }
     }
 
+    /** A web view over an embedded document opens its links through the page overlay, as a tap does (#41). */
+    @Test
+    fun a_link_that_the_page_overlay_opens_goes_the_way_of_a_tapped_link() {
+        val doc = epubWithLink()
+        var overlay: KitePageOverlayScope? = null
+        val offered = mutableListOf<KiteLinkAction>()
+        var take = true
+        lateinit var state: KiteDocViewState
+        ImageComposeScene(width = 200, height = 320, density = Density(1f)) {
+            state = rememberKiteDocViewState(doc)
+            KiteDocView(
+                state = state, modifier = Modifier.fillMaxSize(),
+                onLinkTap = { offered += it; take },
+                pageOverlay = { if (pageIndex == 0) overlay = this },
+            )
+        }.use { scene ->
+            val driver = SceneTestDriver(scene)
+            driver.pumpUntilState { overlay != null }
+            val rect = KiteRectangle(10.0, 10.0, 50.0, 30.0)
+            assertTrue(onTestUiThread { overlay!!.followLink("OEBPS/ch2.xhtml", rect) }, "the host took it")
+            val action = offered.single() as KiteLinkAction.Epub
+            assertEquals("OEBPS/ch2.xhtml", action.link.href)
+            assertEquals(rect, action.rect)
+            assertEquals(0, action.pageIndex)
+            assertEquals(doc.bookmarkOf("OEBPS/ch2.xhtml"), action.target)
+            driver.pumpFrames(10)
+            assertEquals(0, state.currentPage, "the host took the link, so the view stays")
+
+            // Declined by the host: the viewer follows a link inside the book.
+            take = false
+            assertTrue(onTestUiThread { overlay!!.followLink("OEBPS/ch2.xhtml", rect) })
+            driver.pumpUntil { state.currentPage > 0 }
+            assertTrue(state.currentPage > 0, "the viewer moved to chapter two")
+
+            // An address leaves the book: the host sees it, and the viewer cannot follow it.
+            assertFalse(onTestUiThread { overlay!!.followLink("https://example.org/", rect) })
+            assertEquals("https://example.org/", offered.last().uri)
+        }
+    }
+
     /** A host can show a note that the book does not mark as one: every internal link goes to it first (#444). */
     @Test
     fun an_ordinary_internal_link_goes_to_the_host_before_the_viewer_scrolls() {
