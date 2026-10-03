@@ -1,0 +1,90 @@
+public final class io/github/yuroyami/kitepdf/webview/EpubWebIsland {
+	public static final field $stable I
+	public final fun getContentHeight ()D
+	public final fun getContentWidth ()D
+	public final fun getHref ()Ljava/lang/String;
+	public final fun getKind ()Lio/github/yuroyami/kitepdf/webview/EpubWebIslandKind;
+	public final fun getRect ()Lio/github/yuroyami/kitepdf/core/KiteRectangle;
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/github/yuroyami/kitepdf/webview/EpubWebIslandKind : java/lang/Enum {
+	public static final field FRAME Lio/github/yuroyami/kitepdf/webview/EpubWebIslandKind;
+	public static final field OBJECT Lio/github/yuroyami/kitepdf/webview/EpubWebIslandKind;
+	public static final field PAGE Lio/github/yuroyami/kitepdf/webview/EpubWebIslandKind;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lio/github/yuroyami/kitepdf/webview/EpubWebIslandKind;
+	public static fun values ()[Lio/github/yuroyami/kitepdf/webview/EpubWebIslandKind;
+}
+
+public final class io/github/yuroyami/kitepdf/webview/EpubWebIslandKt {
+	public static final fun webIslands (Lio/github/yuroyami/kitepdf/epub/EpubPage;Z)Ljava/util/List;
+	public static synthetic fun webIslands$default (Lio/github/yuroyami/kitepdf/epub/EpubPage;ZILjava/lang/Object;)Ljava/util/List;
+}
+
+public final class io/github/yuroyami/kitepdf/webview/JavaFxWebEngine : io/github/yuroyami/kitepdf/webview/KiteDesktopWebEngine {
+	public static final field $stable I
+	public static final field INSTANCE Lio/github/yuroyami/kitepdf/webview/JavaFxWebEngine;
+	public final fun isAvailable ()Z
+	public fun open (Ljava/lang/String;Lio/github/yuroyami/kitepdf/webview/KiteDesktopWebHost;)Lio/github/yuroyami/kitepdf/webview/KiteDesktopWebSurface;
+}
+
+public final class io/github/yuroyami/kitepdf/webview/KiteDesktopInput {
+	public static final field $stable I
+	public static final field ALT I
+	public static final field BUTTON_MIDDLE I
+	public static final field BUTTON_PRIMARY I
+	public static final field BUTTON_SECONDARY I
+	public static final field CONTROL I
+	public static final field INSTANCE Lio/github/yuroyami/kitepdf/webview/KiteDesktopInput;
+	public static final field META I
+	public static final field SHIFT I
+}
+
+public abstract interface class io/github/yuroyami/kitepdf/webview/KiteDesktopWebEngine {
+	public abstract fun open (Ljava/lang/String;Lio/github/yuroyami/kitepdf/webview/KiteDesktopWebHost;)Lio/github/yuroyami/kitepdf/webview/KiteDesktopWebSurface;
+}
+
+public final class io/github/yuroyami/kitepdf/webview/KiteDesktopWebEngineKt {
+	public static final fun getLocalKiteDesktopWebEngine ()Landroidx/compose/runtime/ProvidableCompositionLocal;
+}
+
+public abstract interface class io/github/yuroyami/kitepdf/webview/KiteDesktopWebHost {
+	public abstract fun frame ([III)V
+	public abstract fun link (Ljava/lang/String;)V
+}
+
+public abstract interface class io/github/yuroyami/kitepdf/webview/KiteDesktopWebSurface : java/lang/AutoCloseable {
+	public abstract fun focus (Z)V
+	public abstract fun key (Lio/github/yuroyami/kitepdf/webview/KiteKeyAction;ICI)V
+	public abstract fun mouse (Lio/github/yuroyami/kitepdf/webview/KiteMouseAction;FFIII)V
+	public abstract fun resize (IIF)V
+	public abstract fun wheel (FFFFI)V
+}
+
+public final class io/github/yuroyami/kitepdf/webview/KiteKeyAction : java/lang/Enum {
+	public static final field PRESS Lio/github/yuroyami/kitepdf/webview/KiteKeyAction;
+	public static final field RELEASE Lio/github/yuroyami/kitepdf/webview/KiteKeyAction;
+	public static final field TYPE Lio/github/yuroyami/kitepdf/webview/KiteKeyAction;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lio/github/yuroyami/kitepdf/webview/KiteKeyAction;
+	public static fun values ()[Lio/github/yuroyami/kitepdf/webview/KiteKeyAction;
+}
+
+public final class io/github/yuroyami/kitepdf/webview/KiteMouseAction : java/lang/Enum {
+	public static final field ENTER Lio/github/yuroyami/kitepdf/webview/KiteMouseAction;
+	public static final field EXIT Lio/github/yuroyami/kitepdf/webview/KiteMouseAction;
+	public static final field MOVE Lio/github/yuroyami/kitepdf/webview/KiteMouseAction;
+	public static final field PRESS Lio/github/yuroyami/kitepdf/webview/KiteMouseAction;
+	public static final field RELEASE Lio/github/yuroyami/kitepdf/webview/KiteMouseAction;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lio/github/yuroyami/kitepdf/webview/KiteMouseAction;
+	public static fun values ()[Lio/github/yuroyami/kitepdf/webview/KiteMouseAction;
+}
+
+public final class io/github/yuroyami/kitepdf/webview/KiteScriptOverlayKt {
+	public static final fun EpubWebView (Lio/github/yuroyami/kitepdf/webview/EpubWebIsland;Lio/github/yuroyami/kitepdf/epub/EpubDocument;Landroidx/compose/ui/Modifier;Lkotlin/jvm/functions/Function1;Landroidx/compose/runtime/Composer;II)V
+	public static final fun KiteScriptOverlay (Lio/github/yuroyami/kitepdf/compose/KitePageOverlayScope;ZLandroidx/compose/runtime/Composer;II)V
+	public static final fun isWebViewAvailable ()Z
+}
+

@@ -131,6 +131,7 @@ kotlin {
             implementation("io.github.yuroyami:kitepdf-javascript:0.12.0")       // runs the JavaScript inside PDFs (pulls in KiteJS)
             implementation("io.github.yuroyami:kitepdf-net:0.12.0")              // loads documents from a URL (add a Ktor engine too)
             implementation("io.github.yuroyami:kitepdf-media:0.12.0")            // plays EPUB audio and video in KiteDocView (pulls in KitePlayer)
+            implementation("io.github.yuroyami:kitepdf-webview:0.12.0")          // runs scripted EPUB content in the platform's web view
         }
     }
 }
@@ -139,12 +140,13 @@ kotlin {
 ### What else you need
 
 > [!IMPORTANT]
-> Three artifacts need something extra. Without it, the build, the download or the playback fails.
+> Four artifacts need something extra. Without it, the build, the download or the playback fails, or a scripted book shows without its scripts.
 
 | If you add | You also need |
 | --- | --- |
 | `kitepdf-net` | **A Ktor client engine** such as `io.ktor:ktor-client-cio:3.6.0`, or the OkHttp, Darwin or JS engine. KitePDF downloads through the engine you pick. |
 | `kitepdf-media` | **Android `minSdk` 26**, and on iOS the **linker flags and privacy manifest entries** that [KitePlayer's install guide](https://github.com/yuroyami/KitePlayer#install) lists. It publishes Android, iOS and the desktop JVM only. |
+| `kitepdf-webview` on the desktop JVM | **JavaFX for your platform**: `javafx-base`, `-graphics`, `-controls`, `-media` and `-web`, or a JDK that carries them. It compiles against JavaFX and does not bring it. |
 | `kitepdf-skia-renderer` on Android | **One more repository**: `maven("https://maven.pkg.jetbrains.space/public/p/compose/dev")`. Skia's Android build lives there, not on Maven Central. |
 
 Good to know:
@@ -340,6 +342,7 @@ and that difference is the usual reason a first build does not resolve.
 | `-native-renderer` | Android (minSdk 29), JVM, iOS, macOS arm64, tvOS, and JS in the browser |
 | `-skia-renderer` | Android (minSdk 21), JVM, iOS, macOS arm64, tvOS, Linux, and JS and wasmJs in the browser |
 | `-javascript` | Every target KiteJS builds for: Android, JVM, iOS, macOS arm64, Linux, Windows, JS and wasmJs |
+| `-webview` | JVM, with JavaFX. Where a target has no web engine, a scripted book shows the library's own rendering, without its scripts |
 
 [Platform support](https://yuroyami.github.io/KitePDF/platforms/) has the full list,
 with the reason behind each gap.

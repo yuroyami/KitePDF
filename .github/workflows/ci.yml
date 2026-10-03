@@ -109,6 +109,11 @@ jobs:
           :kitepdf-skia-renderer:jvmTest :kitepdf-compose-viewer:jvmTest
           :kitepdf:jvmTest :kitepdf-net:jvmTest :kitepdf-javascript:jvmTest :kitepdf-media:jvmTest --continue --stacktrace
 
+      # JavaFX's web view needs a display, so its tests run under a virtual one. They fail on CI
+      # without it, rather than skip.
+      - name: Test the desktop web view (JVM, virtual display)
+        run: xvfb-run -a ./gradlew :kitepdf-webview:jvmTest --stacktrace
+
       - name: Test common code through Android host variants
         run: >
           ./gradlew

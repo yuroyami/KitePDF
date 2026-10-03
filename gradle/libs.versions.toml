@@ -28,6 +28,10 @@ kitejs = "0.2.0"
 # KitePlayer: the Kite lineage's media player. Used ONLY by :kitepdf-media, the optional
 # EPUB audio and video artifact. It carries FFmpeg through KiteFFmpeg.
 kiteplayer = "0.2.0"
+# JavaFX: its WebView runs the scripted content of a book on the desktop JVM. Used ONLY by
+# :kitepdf-webview, and at compile time only: an app that wants web views on the desktop adds
+# JavaFX for its own platform.
+javafx = "21.0.12"
 
 # Robolectric, for the Android host tests of :kitepdf-compose-viewer only: its native graphics
 # draw a Compose canvas on the JVM, so Android text can be checked without a device.
