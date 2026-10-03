@@ -52,6 +52,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- An EPUB image that gives both sizes and `object-fit: contain` keeps the box its markup
+  asks for, and its picture fits inside it, centred. A block image shrank its box to the
+  picture's aspect, so the text after it moved up, and an inline one stretched its
+  picture over the box as `fill` does (#490).
 - A non-embedded CJK font draws in a host face of its own language and style: a
   Japanese Mincho font draws in a Mincho face, not a Chinese Song face or a Gothic
   one. The Serif flag of the font descriptor picks Mincho over Gothic. On Skia and

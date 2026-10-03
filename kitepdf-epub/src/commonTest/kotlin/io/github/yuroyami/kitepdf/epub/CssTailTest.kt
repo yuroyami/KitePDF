@@ -28,6 +28,50 @@ class CssTailTest {
         assertEquals(0.6, kotlin.math.abs(red.ctm.d), 1e-6, "object-fit:contain preserves aspect (fill would be 1.2)")
     }
 
+    /** The one picture of [body], a 2 by 1 BMP named `pic.bmp`, and where each run of text sits. */
+    private fun picture(body: String): Pair<RecordingCanvas.Call.Image, Map<String, Pair<Double, Double>>> {
+        val doc = EpubDocument.open(EpubFixtures.epub(body, listOf("OEBPS/pic.bmp" to EpubFixtures.bmp2x1())))
+        assertNotNull(doc)
+        val calls = RecordingCanvas().also { doc.pages.single().renderTo(it) }.calls
+        val text = calls.filterIsInstance<RecordingCanvas.Call.Glyphs>().associate { it.text.trim() to (it.textToDevice.e to it.textToDevice.f) }
+        return calls.filterIsInstance<RecordingCanvas.Call.Image>().single() to text
+    }
+
+    @Test
+    fun a_contained_block_image_keeps_its_box_and_centres_the_picture_in_it() {
+        // CSS Images 3, 4.5: object-fit sizes the picture inside the box, never the box (#490).
+        // A 40 by 30 px box is 30 by 22.5 pt; the 2:1 picture fits it at 30 by 15, 3.75 pt from its top and bottom.
+        fun page(fit: String) = picture("""<p>Before</p><img src="pic.bmp" style="display:block;width:40px;height:30px;object-fit:$fit"/><p>After</p>""")
+        val (fill, fillText) = page("fill")
+        val (contain, containText) = page("contain")
+        assertEquals(fillText["After"], containText["After"], "the text after the box stays where it was")
+        assertEquals(30.0, contain.ctm.a, 1e-9)
+        assertEquals(15.0, contain.ctm.d, 1e-9, "the picture keeps its aspect")
+        assertEquals(fill.ctm.e, contain.ctm.e, 1e-9)
+        assertEquals(fill.ctm.f + 3.75, contain.ctm.f, 1e-9, "centred on the block axis of its box")
+
+        // A wide box: the picture fits its height, 30 by 15 pt in a box of 60 by 15, and centres across it.
+        val (wideFill, _) = picture("""<img src="pic.bmp" style="display:block;width:80px;height:20px;object-fit:fill"/>""")
+        val (wide, _) = picture("""<img src="pic.bmp" style="display:block;width:80px;height:20px;object-fit:contain"/>""")
+        assertEquals(30.0, wide.ctm.a, 1e-9)
+        assertEquals(15.0, wide.ctm.d, 1e-9)
+        assertEquals(wideFill.ctm.e + 15.0, wide.ctm.e, 1e-9, "centred on the inline axis of its box")
+        assertEquals(wideFill.ctm.f, wide.ctm.f, 1e-9)
+    }
+
+    @Test
+    fun a_contained_inline_image_is_letterboxed_not_stretched() {
+        fun line(fit: String) = picture("""<p>x <img src="pic.bmp" width="40" height="30" style="object-fit:$fit"/> y</p>""")
+        val (fill, fillText) = line("fill")
+        val (contain, containText) = line("contain")
+        assertEquals(30.0 to 22.5, fill.ctm.a to fill.ctm.d, "fill stretches the picture over its box")
+        assertEquals(30.0, contain.ctm.a, 1e-9)
+        assertEquals(15.0, contain.ctm.d, 1e-9, "contain keeps the picture's 2:1 aspect")
+        assertEquals(fill.ctm.e, contain.ctm.e, 1e-9)
+        assertEquals(fill.ctm.f + 3.75, contain.ctm.f, 1e-9, "centred in the box")
+        assertEquals(fillText["y"], containText["y"], "the box keeps its room on the line")
+    }
+
     // ---- position:absolute (verified in a fixed-layout page) -----------------
 
     private fun fxlWithAbsoluteLeft(left: Int): ByteArray {
