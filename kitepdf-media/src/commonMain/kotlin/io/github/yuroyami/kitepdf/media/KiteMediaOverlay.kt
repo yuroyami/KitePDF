@@ -5,12 +5,17 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -34,6 +39,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
 import io.github.yuroyami.kitepdf.compose.KitePageOverlayScope
 import io.github.yuroyami.kitepdf.epub.EpubDocument
 import io.github.yuroyami.kitepdf.epub.EpubMedia
@@ -48,6 +54,7 @@ import io.github.yuroyami.kiteplayer.compose.KiteRenderPath
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
+import kotlin.math.abs
 import kotlin.time.Duration
 
 /**
@@ -58,9 +65,9 @@ import kotlin.time.Duration
  * KiteDocView(state, pageOverlay = { KiteMediaOverlay() })
  * ```
  *
- * Each element gets an [EpubMediaPlayer] on its box, so it moves and scales with the page. A page
- * that is not an EPUB page, or has no media, draws nothing. An element starts no player until it
- * starts to play, so a page of posters costs nothing.
+ * Each element gets an [EpubMediaPlayer] on its box, so it moves and scales with the page, and the
+ * bar of a video can take it full screen. A page that is not an EPUB page, or has no media, draws
+ * nothing. An element starts no player until it starts to play, so a page of posters costs nothing.
  *
  * @param allowRemote plays a source that the book names by an `https` URL. False by default,
  *   because such a source tells its server that the book was opened. A source of any other
@@ -100,6 +107,15 @@ public fun KitePageOverlayScope.KiteMediaOverlay(
  * the first touch of its controls turns the sound on. [EpubMedia.muted] mutes it from the start. [EpubMedia.loop] plays it again from the start when it
  * ends. The player plays the first source it can, in the element's order, and when it can play none,
  * the poster stays and the button goes.
+ *
+ * The bar of a video has a full-screen button (#482). Full screen shows the same player over the
+ * whole window, in a [Dialog], so playback goes on without a break, and the button, a back gesture
+ * or Escape leaves it. While it is up, the box on the page shows what the page paints there, the
+ * poster where the element has one. On Android, full screen also hides the system bars, and a
+ * landscape video turns the screen to landscape when the activity handles orientation changes
+ * itself, since a recreated activity would close the player. On iOS 16 and later, a landscape
+ * video asks the window scene for landscape. Both turn back to the orientation they found when
+ * full screen ends.
  *
  * The player is closed when this leaves the composition, so a page that scrolls away stops.
  *
@@ -160,10 +176,16 @@ public fun EpubMediaPlayer(
     DisposableEffect(open) {
         onDispose { open?.close() }
     }
+    var fullScreen by remember(open) { mutableStateOf(false) }
 
     Box(modifier) {
         if (open != null && !unplayable) {
-            Playing(open, media, scope, unmuteOnTouch = media.autoplay && !media.muted)
+            Playing(
+                open, media, scope,
+                unmuteOnTouch = media.autoplay && !media.muted,
+                fullScreen = fullScreen,
+                onFullScreen = { fullScreen = it },
+            )
         } else if (!unplayable) {
             PlayButton(Modifier.fillMaxSize()) { start(byAutoplay = false) }
         }
@@ -173,10 +195,18 @@ public fun EpubMediaPlayer(
 /**
  * The element while its player exists: the video, and the transport bar where the element shows one.
  * With [unmuteOnTouch], the first touch of a control turns on the sound that autoplay muted, and the
- * media goes on playing.
+ * media goes on playing. With [fullScreen], the video and its bar show over the whole window instead
+ * of on the box, and [onFullScreen] switches between the two.
  */
 @Composable
-private fun Playing(player: KitePlayer, media: EpubMedia, scope: CoroutineScope, unmuteOnTouch: Boolean) {
+private fun Playing(
+    player: KitePlayer,
+    media: EpubMedia,
+    scope: CoroutineScope,
+    unmuteOnTouch: Boolean,
+    fullScreen: Boolean,
+    onFullScreen: (Boolean) -> Unit,
+) {
     val snapshot by player.state.collectAsState()
     val progress by player.progress.collectAsState()
     val active = snapshot.status.isActive
@@ -191,7 +221,11 @@ private fun Playing(player: KitePlayer, media: EpubMedia, scope: CoroutineScope,
             else -> player.play()
         }
     }
-    if (media.kind == EpubMediaKind.VIDEO) {
+    if (media.kind != EpubMediaKind.VIDEO) {
+        TransportBar(active, progress.position, snapshot.duration, toggle, Modifier.fillMaxSize())
+        return
+    }
+    val video = @Composable {
         Box(Modifier.fillMaxSize()) {
             // Compose draws the frames, so the video clips, scrolls and zooms with the page, and the
             // controls over it take clicks: over a native view, macOS sends a click to the view.
@@ -199,14 +233,28 @@ private fun Playing(player: KitePlayer, media: EpubMedia, scope: CoroutineScope,
             val tap = if (media.controls) Modifier.clickable(onClickLabel = if (active) "Pause" else "Play", onClick = toggle) else Modifier
             Box(Modifier.fillMaxSize().then(tap))
             if (media.controls) {
+                // Over the whole screen, the bar keeps clear of a notch, a cutout and the home indicator.
+                val clear = if (fullScreen) Modifier.windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom)) else Modifier
                 TransportBar(
                     active, progress.position, snapshot.duration, toggle,
-                    Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(TRANSPORT_HEIGHT),
+                    Modifier.align(Alignment.BottomCenter).fillMaxWidth().then(clear).height(TRANSPORT_HEIGHT),
+                    fullScreen = fullScreen,
+                    onFullScreen = { onFullScreen(!fullScreen) },
                 )
             }
         }
-    } else {
-        TransportBar(active, progress.position, snapshot.duration, toggle, Modifier.fillMaxSize())
+    }
+    if (!fullScreen) {
+        video()
+        return
+    }
+    // The video leaves the box and composes in the layer, so one renderer at a time is attached
+    // to the player: the box's detaches as it goes, and the layer's attaches a frame later. The
+    // engine keeps playing between the two, and the box shows what the page paints there.
+    val shape = snapshot.videoSize?.displayAspect?.takeIf { it > 0f } ?: media.rect.let { (abs(it.right - it.left) / abs(it.top - it.bottom)).toFloat() }
+    Dialog(onDismissRequest = { onFullScreen(false) }, properties = fullScreenDialogProperties()) {
+        FullScreenWindow(landscape = shape > 1f)
+        Box(Modifier.fillMaxSize().background(Color.Black)) { video() }
     }
 }
 
@@ -226,9 +274,20 @@ private fun PlayButton(modifier: Modifier, onClick: () -> Unit) {
     }
 }
 
-/** A play or pause toggle, then a bar of how far [position] is into [duration]. */
+/**
+ * A play or pause toggle, then a bar of how far [position] is into [duration]. A video's bar ends with
+ * a button that enters full screen, or leaves it while [fullScreen] is true. Null leaves it out.
+ */
 @Composable
-private fun TransportBar(active: Boolean, position: Duration, duration: Duration?, toggle: () -> Unit, modifier: Modifier) {
+private fun TransportBar(
+    active: Boolean,
+    position: Duration,
+    duration: Duration?,
+    toggle: () -> Unit,
+    modifier: Modifier,
+    fullScreen: Boolean? = null,
+    onFullScreen: () -> Unit = {},
+) {
     Row(modifier.background(SCRIM), verticalAlignment = Alignment.CenterVertically) {
         Box(
             Modifier
@@ -243,11 +302,23 @@ private fun TransportBar(active: Boolean, position: Duration, duration: Duration
             }
         }
         val fraction = if (duration != null && duration > Duration.ZERO) (position / duration).toFloat().coerceIn(0f, 1f) else 0f
-        Canvas(Modifier.weight(1f).height(GLYPH_SIZE).padding(end = 12.dp)) {
+        Canvas(Modifier.weight(1f).height(GLYPH_SIZE).padding(end = if (fullScreen == null) 12.dp else 4.dp)) {
             val y = size.height / 2f
             val h = 4.dp.toPx()
             drawRoundRect(TRACK, Offset(0f, y - h / 2f), Size(size.width, h), CornerRadius(h / 2f))
             drawRoundRect(Color.White, Offset(0f, y - h / 2f), Size(size.width * fraction, h), CornerRadius(h / 2f))
+        }
+        if (fullScreen != null) {
+            Box(
+                Modifier
+                    .fillMaxHeight()
+                    .padding(horizontal = 8.dp)
+                    .semantics { contentDescription = if (fullScreen) "Exit full screen" else "Full screen" }
+                    .clickable(role = Role.Button, onClick = onFullScreen),
+                contentAlignment = Alignment.Center,
+            ) {
+                Canvas(Modifier.size(GLYPH_SIZE)) { drawFullScreenGlyph(inward = fullScreen) }
+            }
         }
     }
 }
@@ -261,6 +332,29 @@ private fun DrawScope.drawPlayGlyph(topLeft: Offset, height: Float) {
         close()
     }
     drawPath(path, Color.White)
+}
+
+/**
+ * Four white corners of a square: pointing out to enter full screen, and with [inward], pointing in
+ * to leave it, as players draw the two.
+ */
+private fun DrawScope.drawFullScreenGlyph(inward: Boolean) {
+    val stroke = size.minDimension * 0.14f
+    val arm = size.minDimension * 0.36f
+    val w = size.width
+    val h = size.height
+    for ((cx, cy) in listOf(0f to 0f, w to 0f, 0f to h, w to h)) {
+        // Outward, each corner is an L whose tip sits in the canvas corner. Inward, the tip sits an
+        // arm's length in from it, and the arms point back to the edges.
+        val dx = if (cx == 0f) 1f else -1f
+        val dy = if (cy == 0f) 1f else -1f
+        val tipX = if (inward) cx + dx * arm else cx
+        val tipY = if (inward) cy + dy * arm else cy
+        val armX = if (inward) -dx else dx
+        val armY = if (inward) -dy else dy
+        drawLine(Color.White, Offset(tipX, tipY), Offset(tipX + armX * arm, tipY), stroke)
+        drawLine(Color.White, Offset(tipX, tipY), Offset(tipX, tipY + armY * arm), stroke)
+    }
 }
 
 /** Two white pause bars filling the canvas. */

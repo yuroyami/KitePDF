@@ -39,11 +39,17 @@ Each media element of a page then gets a player on its box, so it moves and zoom
 
 - Before it starts, the element shows a play button over its poster. A tap starts it.
 - A video plays in its box. With the element's `controls`, a bar along its bottom pauses and plays, and shows how far it is.
+- The bar of a video ends with a full-screen button. Full screen shows the same player over the whole window, so the video goes on without a break, and the button, a back gesture or Escape brings it back to its box.
 - An audio element shows that bar in its own box.
 - `autoplay` starts the element by itself, muted, since browsers let only muted media start unasked. The first touch of its controls turns the sound on. `muted` mutes it from the start, and `loop` plays it again when it ends.
 - The player plays the first of the element's sources that it can. When it can play none, the poster stays and the button goes.
 
 An element makes no player until it starts, so a page of posters costs nothing, and the player closes when its page leaves the screen.
+
+On a phone, full screen does a little more:
+
+- On Android it hides the system bars, and a swipe from an edge shows them for a moment. A landscape video turns the screen to landscape, and back when full screen ends, but only in an activity that handles the turn itself. Declare `android:configChanges="orientation|screenSize"` on the activity for that: Android recreates any other activity when the screen turns, which would close the player.
+- On iOS 16 and later, a landscape video asks for landscape, and for the orientation it found when full screen ends. The app's supported orientations must include landscape.
 
 The overlay draws nothing on a page that is not an EPUB page, so a viewer that shows PDFs too can keep it on.
 

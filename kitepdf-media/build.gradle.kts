@@ -74,6 +74,7 @@ kotlin {
         jvmTest.dependencies {
             implementation(currentOsSkikoRuntime())
             implementation(compose.desktop.currentOs)
+            implementation(libs.compose.navigationevent)
             @OptIn(org.jetbrains.compose.ExperimentalComposeLibrary::class)
             implementation(compose.uiTest)
         }

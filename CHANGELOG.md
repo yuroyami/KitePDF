@@ -42,6 +42,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and an `https` URL only with `allowRemote = true`; a source of any other scheme,
   `http` and `file` included, never plays (#491). It publishes Android (`minSdk` 26),
   iOS and the desktop JVM. Without it, nothing changes and no codec ships (#31).
+  The bar of a video has a full-screen button, which shows the same player over the
+  whole window in a `Dialog`, so the video goes on without a break; the button, a back
+  gesture or Escape brings it back to its box. On Android, full screen hides the system
+  bars and turns a landscape video to landscape in an activity that handles the turn
+  itself, and on iOS 16 and later it asks the window scene for landscape (#482).
 - `EpubPage.document`: the book a page belongs to, for the bytes of its media (#31).
 - `KiteReadAloud(state, playing)` in `kitepdf-media` reads an EPUB aloud with its media
   overlays and follows the text in `KiteDocView`. It starts at the first clip on the

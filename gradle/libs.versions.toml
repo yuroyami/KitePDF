@@ -82,6 +82,9 @@ compose-ui = { module = "org.jetbrains.compose.ui:ui", version.ref = "composeMul
 compose-components-resources = { module = "org.jetbrains.compose.components:components-resources", version.ref = "composeMultiplatform" }
 compose-material3 = { module = "org.jetbrains.compose.material3:material3", version.ref = "composeMaterial3" }
 compose-desktop-currentOs = { module = "org.jetbrains.compose.desktop:desktop", version.ref = "composeMultiplatform" }
+# Compose's back events, the version Compose 1.12.1 requires. Only the tests of :kitepdf-media use it,
+# to send the back event that a desktop window makes of Escape, since a test scene has no window.
+compose-navigationevent = { module = "org.jetbrains.androidx.navigationevent:navigationevent-compose", version = "1.1.0" }
 
 # Android (sample only)
 android-activity-compose = { module = "androidx.activity:activity-compose", version.ref = "activityCompose" }
