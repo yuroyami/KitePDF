@@ -1454,8 +1454,7 @@ public class EpubPage internal constructor(
 
     /**
      * Paints the remote picture at [url] in the box from ([left], [bottom]), [width] by [height],
-     * once its bytes have landed, and returns false while they have not (#38). Its layout had no
-     * picture to size the box by, so `object-fit: contain` letterboxes it here.
+     * once its bytes have landed, and returns false while they have not (#38).
      */
     private fun paintRemoteImage(
         canvas: KiteCanvas, deviceCtm: KiteMatrix, url: String,
@@ -1468,14 +1467,7 @@ public class EpubPage internal constructor(
         val iw = svg?.width ?: image?.width?.toDouble() ?: return false
         val ih = svg?.height ?: image?.height?.toDouble() ?: return false
         if (iw <= 0.0 || ih <= 0.0) return false
-        if (objectFit == ObjectFit.CONTAIN) {
-            val scale = minOf(width / iw, height / ih)
-            val w = iw * scale
-            val h = ih * scale
-            paintImage(canvas, deviceCtm, image, svg, w, h, left + (width - w) / 2.0, bottom + (height - h) / 2.0, objectFit, resourceDir(url))
-        } else {
-            paintImage(canvas, deviceCtm, image, svg, width, height, left, bottom, objectFit, resourceDir(url))
-        }
+        paintImage(canvas, deviceCtm, image, svg, width, height, left, bottom, objectFit, resourceDir(url))
         return true
     }
 
@@ -1879,8 +1871,10 @@ public class EpubPage internal constructor(
 
     /**
      * CSS Writing Modes 4, 3 and 7.2: image orientation/dimensions are physical.
-     * CSS Images 3, 4.3.2 and 4.5: cover preserves intrinsic aspect, centres the content,
-     * and clips it to the replaced element's box in every writing mode (#100, #170).
+     * CSS Images 3, 4.3.2 and 4.5: cover and contain keep the intrinsic aspect and centre the
+     * content, as the initial `object-position` does. Cover fills the replaced element's box
+     * and is clipped to it in every writing mode; contain fits inside it and leaves the rest
+     * of the box empty (#100, #170, #490).
      */
     private fun paintImage(
         canvas: KiteCanvas, deviceCtm: KiteMatrix, image: KiteImageData?, svg: SvgImage?,
@@ -1890,7 +1884,11 @@ public class EpubPage internal constructor(
         val intrinsicH = svg?.height ?: image?.height?.toDouble() ?: return
         if (width <= 0 || height <= 0 || intrinsicW <= 0 || intrinsicH <= 0) return
         val cover = objectFit == ObjectFit.COVER
-        val scale = if (cover) maxOf(width / intrinsicW, height / intrinsicH) else null
+        val scale = when (objectFit) {
+            ObjectFit.COVER -> maxOf(width / intrinsicW, height / intrinsicH)
+            ObjectFit.CONTAIN -> minOf(width / intrinsicW, height / intrinsicH)
+            ObjectFit.FILL -> null
+        }
         val dw = scale?.let { intrinsicW * it } ?: width
         val dh = scale?.let { intrinsicH * it } ?: height
         val x = left + (width - dw) / 2.0

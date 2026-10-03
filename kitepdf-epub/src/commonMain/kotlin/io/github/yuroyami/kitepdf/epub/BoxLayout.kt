@@ -534,14 +534,9 @@ internal class BoxLayout(
         // vertical flow. Only their inline/block allocation swaps (#100).
         val physicalRoomW = if (vertical) blockRoom else room
         val physicalRoomH = if (vertical) room else blockRoom
+        // object-fit fits the picture into this box when it paints, and leaves the box as it is (CSS Images 3, 4.5, #490).
         var w = ew ?: (eh?.let { it / aspect } ?: if (box.embed != null) intrinsicW else physicalRoomW)
         var h = eh ?: (w * aspect)
-        // object-fit: contain. When both dimensions are fixed, letterbox the image to
-        // preserve its aspect ratio inside the box (default `fill` stretches to w×h).
-        if (ew != null && eh != null && box.style.objectFit == ObjectFit.CONTAIN) {
-            val scale = minOf(ew / intrinsicW, eh / intrinsicH)
-            w = intrinsicW * scale; h = intrinsicH * scale
-        }
         val cap = minOf(box.style.maxWidthPt ?: Double.MAX_VALUE, physicalRoomW)
         if (w > cap) { val s = cap / w; w = cap; h *= s }
         // Style clamps (proportional), then the hard page-height cap last.
