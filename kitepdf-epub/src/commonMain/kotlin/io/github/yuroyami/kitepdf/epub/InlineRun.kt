@@ -1,5 +1,7 @@
 package io.github.yuroyami.kitepdf.epub
 
+import io.github.yuroyami.kitepdf.core.xml.KiteXmlNode
+
 import io.github.yuroyami.kitepdf.epub.css.CssBackground
 import io.github.yuroyami.kitepdf.epub.css.CssVAlign
 import io.github.yuroyami.kitepdf.epub.css.DecorationLine
@@ -72,6 +74,12 @@ internal data class InlineRun(
     val ids: List<String> = emptyList(),
     /** A `<math>` element: one U+FFFC run that the layout sets as a formula (#32). */
     val math: MathRoot? = null,
+    /**
+     * The innermost element this run's text belongs to, in a chapter that scripts run in, so a
+     * tap finds the element under it (#41). Null in every other chapter, so runs there split
+     * exactly where they did.
+     */
+    val element: KiteXmlNode.Element? = null,
 ) {
     companion object {
         val BLACK = RgbColor(0.0, 0.0, 0.0)

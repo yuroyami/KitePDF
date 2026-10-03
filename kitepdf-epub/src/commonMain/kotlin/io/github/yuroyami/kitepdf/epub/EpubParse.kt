@@ -13,6 +13,10 @@ import io.github.yuroyami.kitepdf.epub.css.CssParser
 import io.github.yuroyami.kitepdf.epub.css.Direction
 import io.github.yuroyami.kitepdf.epub.css.FontFaceRule
 import io.github.yuroyami.kitepdf.epub.css.Origin
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.MutableStateFlow
 import io.github.yuroyami.kitepdf.epub.css.StyleRule
 
 /**
@@ -36,6 +40,9 @@ internal class ParsedSpine(
      */
     val faceRules: List<Pair<FontFaceRule, String>> = emptyList(),
 ) {
+    /** Whether this document has a `script` element, at any depth (#41). */
+    val hasScript: Boolean by lazy { containsScript(tree) }
+
     /** What each note, glossary and bibliography link in this document is for, by href (#227). */
     val linkKinds: Map<String, EpubLinkKind> by lazy {
         linkKindsIn(tree) { href -> resolveLinkHref(href, path) { EpubDocument.resolvePath(docDir, it) } }
@@ -186,6 +193,58 @@ internal class ParsedEpub(
     fun isSpineParsed(chapter: Int): Boolean =
         chapter in spinePaths.indices && spineLock.withLock { spineCache[chapter] } != null
 
+    /** A tree that scripts made for each chapter, which the layout reads in place of the document's own (#41). */
+    private val scriptedSpines = arrayOfNulls<ParsedSpine>(spinePaths.size)
+
+    /** How many times scripts gave each chapter a new tree (#41). */
+    private val treeVersions = IntArray(spinePaths.size)
+
+    /** How many times scripts gave any chapter a new tree, counted when it happens (#41). */
+    val treeRevision: Int get() = spineLock.withLock { revision }
+    private var revision = 0
+
+    /**
+     * Whether the layout of [chapter] keeps the element of each run and box, so that a tap finds
+     * the element under it: in a chapter the manifest marks `scripted` or whose document has a
+     * script, and in one whose scripts gave it a tree (#41). Every other chapter lays out as it did.
+     */
+    fun tracksElements(chapter: Int): Boolean =
+        manifestScripted[chapter] || treeVersion(chapter) > 0 || spine(chapter).hasScript
+
+    private val treeChanges = MutableStateFlow(0)
+
+    /** How many times scripts gave any chapter a new tree, for every document over this parse (#41). */
+    val chapterChanges: StateFlow<Int> = treeChanges.asStateFlow()
+
+    /**
+     * What the layout reads for [chapter]: the tree and rules that scripts gave it last, else its
+     * document's own parse (#41).
+     */
+    fun layoutSpine(chapter: Int): ParsedSpine = spineLock.withLock { scriptedSpines[chapter] } ?: spine(chapter)
+
+    /** How many times scripts gave [chapter] a new tree: 0 while it shows its document as parsed (#41). */
+    fun treeVersion(chapter: Int): Int = spineLock.withLock { treeVersions[chapter] }
+
+    /**
+     * Makes [tree] what the layout reads for [chapter] from now on, with the rules of its own style
+     * elements and links, and returns the chapter's new tree version (#41). A document over this
+     * parse lays the chapter out again when it next needs it. [announceTreeChange] tells the
+     * viewers, once the caller has the new pages ready.
+     */
+    fun replaceTree(chapter: Int, tree: KiteXmlNode.Element): Int {
+        val built = buildSpine(chapter, tree)
+        return spineLock.withLock {
+            scriptedSpines[chapter] = built
+            revision++
+            ++treeVersions[chapter]
+        }
+    }
+
+    /** Tells every document's viewers that a chapter has a new tree (#41). */
+    fun announceTreeChange() {
+        treeChanges.update { it + 1 }
+    }
+
     /** How many stylesheet files have been parsed. One per file, never one per chapter. */
     val sheetsParsed: Int get() = sheetLock.withLock { sheetCount }
 
@@ -239,12 +298,15 @@ internal class ParsedEpub(
     /** Obfuscated zip path -> algorithm URI, for the mangled fonts some retailers ship. */
     private val obfuscation: Map<String, String> by lazy { parseEncryption(zip) }
 
-    private fun buildSpine(chapter: Int): ParsedSpine {
-        val path = spinePaths[chapter]
-        val docDir = path.substringBeforeLast('/', "")
+    private fun buildSpine(chapter: Int): ParsedSpine =
         // An entry that will not inflate becomes an empty document: the chapter
         // yields no pages, which is what skipping it used to do.
-        val tree = HtmlParser.parse(zip.readText(path) ?: "").also(::resolveSwitches)
+        buildSpine(chapter, HtmlParser.parse(zip.readText(spinePaths[chapter]) ?: "").also(::resolveSwitches))
+
+    /** [chapter]'s parse with [tree] as its document: the rules and faces of its style elements and links. */
+    private fun buildSpine(chapter: Int, tree: KiteXmlNode.Element): ParsedSpine {
+        val path = spinePaths[chapter]
+        val docDir = path.substringBeforeLast('/', "")
         val rules = ArrayList<StyleRule>()
         val faces = ArrayList<EmbeddedFace>()
         val faceRules = ArrayList<Pair<FontFaceRule, String>>()
@@ -594,3 +656,7 @@ internal fun resolveSwitches(el: KiteXmlNode.Element) {
 
 /** The namespaces a `case` may require for this engine to render it: XHTML, SVG and MathML (#32). */
 private val SWITCH_NAMESPACES = setOf("http://www.w3.org/1999/xhtml", "http://www.w3.org/2000/svg", "http://www.w3.org/1998/Math/MathML")
+
+/** Whether [el] or an element under it is a `script` element (#41). */
+internal fun containsScript(el: KiteXmlNode.Element): Boolean =
+    el.tag.substringAfterLast(':') == "script" || el.children.any { it is KiteXmlNode.Element && containsScript(it) }
