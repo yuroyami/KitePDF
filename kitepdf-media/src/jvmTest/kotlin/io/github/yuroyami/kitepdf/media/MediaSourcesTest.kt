@@ -26,6 +26,26 @@ class MediaSourcesTest {
     }
 
     @Test
+    fun a_url_plays_only_over_https_and_only_when_allowed() {
+        val doc = book(
+            """<audio controls="controls">""" +
+                """<source src="https://example.com/a.mp3"/><source src="HTTPS://example.com/b.mp3"/>""" +
+                """<source src="http://example.com/c.mp3"/><source src="file:///etc/hosts"/>""" +
+                """<source src="content://media/external/audio/media/1"/><source src="ftp://example.com/d.mp3"/>""" +
+                """<source src="tone.mp3"/></audio>""",
+            files = mapOf("tone.mp3" to byteArrayOf(1, 2, 3)),
+        )
+        val media = firstPage(doc).media.single()
+        assertEquals(7, media.sources.size, "the book offers every source")
+        assertEquals(
+            listOf("https://example.com/a.mp3", "HTTPS://example.com/b.mp3", "OEBPS/tone.mp3"),
+            mediaItems(media, doc, allowRemote = true).map { it.uri }.toList(),
+            "EPUB Reading Systems 3.3, 3.3 and 3.5: https only, and never a file URL",
+        )
+        assertEquals(listOf("OEBPS/tone.mp3"), mediaItems(media, doc, allowRemote = false).map { it.uri }.toList())
+    }
+
+    @Test
     fun an_item_reads_the_bytes_of_its_entry() = runBlocking {
         val doc = book("""<audio controls="controls" src="tone.mp3"></audio>""", files = mapOf("tone.mp3" to byteArrayOf(7, 8, 9)))
         val item = mediaItems(firstPage(doc).media.single(), doc, allowRemote = false).single()

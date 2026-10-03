@@ -36,9 +36,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the viewer's `pageOverlay` plays the `<video>` and `<audio>` elements of an EPUB page
   on their boxes, with KitePlayer, which decodes through FFmpeg. A tap or `autoplay`
   starts an element (autoplay muted, until the first touch of its controls), and
-  `controls`, `muted` and `loop` work as in a browser. It plays the book's own files, and a URL only with `allowRemote = true`. It
-  publishes Android (`minSdk` 26), iOS and the desktop JVM. Without it, nothing
-  changes and no codec ships (#31).
+  `controls`, `muted` and `loop` work as in a browser. It plays the book's own files,
+  and an `https` URL only with `allowRemote = true`; a source of any other scheme,
+  `http` and `file` included, never plays (#491). It publishes Android (`minSdk` 26),
+  iOS and the desktop JVM. Without it, nothing changes and no codec ships (#31).
 - `EpubPage.document`: the book a page belongs to, for the bytes of its media (#31).
 
 - `FontSpec.language` carries the BCP 47 tag of a substitute font's language, and
