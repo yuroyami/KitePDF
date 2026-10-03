@@ -221,4 +221,8 @@ internal class ThemedCanvas(
         inner.applySoftMask(kind, maskBBox, maskCtm, render, renderMask)
     override fun applySoftMask(kind: SoftMask.Kind, maskBBox: KiteRectangle, maskCtm: KiteMatrix, transfer: KiteMaskTransfer?, render: () -> Unit, renderMask: (KiteCanvas) -> Unit) =
         inner.applySoftMask(kind, maskBBox, maskCtm, transfer, render, renderMask)
+
+    // The step paints through this canvas, so its content takes the theme too.
+    override fun rasterStep(region: KiteRectangle, ctm: KiteMatrix, step: KiteRasterStep): Boolean =
+        inner.rasterStep(region, ctm, step)
 }

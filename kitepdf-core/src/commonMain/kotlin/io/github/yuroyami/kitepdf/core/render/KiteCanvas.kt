@@ -245,6 +245,25 @@ public interface KiteCanvas {
     ) {
         applySoftMask(kind, maskBBox, maskCtm, render, renderMask)
     }
+
+    /**
+     * Runs [step] on the pixels of [region] under [ctm], cut to the current clip. Some effects
+     * work on what was drawn, not on shapes: an SVG filter blurs or moves the pixels of an
+     * element (Filter Effects 1, 15), and a non-isolated transparency group takes the
+     * backdrop's part out of its own pixels before it composites (ISO 32000-1, 11.4.8). The
+     * step reads the backdrop, has content painted into rasters of the box through this canvas,
+     * works on them in plain Kotlin, and draws the result back, all through [KiteRasterScope].
+     *
+     * Returns true when the step ran, and also when nothing of [region] can show, which runs no
+     * step. Returns false when this canvas has no pixels to give or the step declined; the
+     * caller then draws its content without the step. A canvas that draws no pixels, such as
+     * one that collects text, keeps this default, which returns false, so it still sees the
+     * content.
+     *
+     * Every paint the step makes through [KiteRasterScope.render] comes back through this
+     * canvas, so a wrapper that delegates with `by` sees those paints without overriding this.
+     */
+    public fun rasterStep(region: KiteRectangle, ctm: KiteMatrix, step: KiteRasterStep): Boolean = false
 }
 
 /** The unit square that an image fills in its own space (ISO 32000-1, 8.9.4). */

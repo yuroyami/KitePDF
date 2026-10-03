@@ -1457,6 +1457,7 @@ public abstract interface class io/github/yuroyami/kitepdf/core/render/KiteCanva
 	public fun hostGlyphOutline (Ljava/lang/String;Lio/github/yuroyami/kitepdf/core/font/FontSpec;)Lio/github/yuroyami/kitepdf/core/render/KitePath;
 	public abstract fun popClip ()V
 	public abstract fun pushClip (Lio/github/yuroyami/kitepdf/core/render/KitePath;Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;Z)V
+	public fun rasterStep (Lio/github/yuroyami/kitepdf/core/KiteRectangle;Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;Lio/github/yuroyami/kitepdf/core/render/KiteRasterStep;)Z
 	public abstract fun strokePath (Lio/github/yuroyami/kitepdf/core/render/KitePath;Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;Lio/github/yuroyami/kitepdf/core/render/RgbColor;DDLio/github/yuroyami/kitepdf/core/render/KiteBlendMode;Ljava/util/List;DIID)V
 	public static synthetic fun strokePath$default (Lio/github/yuroyami/kitepdf/core/render/KiteCanvas;Lio/github/yuroyami/kitepdf/core/render/KitePath;Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;Lio/github/yuroyami/kitepdf/core/render/RgbColor;DDLio/github/yuroyami/kitepdf/core/render/KiteBlendMode;Ljava/util/List;DIIDILjava/lang/Object;)V
 }
@@ -1476,6 +1477,7 @@ public final class io/github/yuroyami/kitepdf/core/render/KiteCanvas$DefaultImpl
 	public static synthetic fun fillShading$default (Lio/github/yuroyami/kitepdf/core/render/KiteCanvas;Lio/github/yuroyami/kitepdf/core/render/KiteShading;Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;Lio/github/yuroyami/kitepdf/core/render/KitePath;DLio/github/yuroyami/kitepdf/core/render/KiteBlendMode;ILjava/lang/Object;)V
 	public static fun getResolvesGlyphOutlines (Lio/github/yuroyami/kitepdf/core/render/KiteCanvas;)Z
 	public static fun hostGlyphOutline (Lio/github/yuroyami/kitepdf/core/render/KiteCanvas;Ljava/lang/String;Lio/github/yuroyami/kitepdf/core/font/FontSpec;)Lio/github/yuroyami/kitepdf/core/render/KitePath;
+	public static fun rasterStep (Lio/github/yuroyami/kitepdf/core/render/KiteCanvas;Lio/github/yuroyami/kitepdf/core/KiteRectangle;Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;Lio/github/yuroyami/kitepdf/core/render/KiteRasterStep;)Z
 	public static synthetic fun strokePath$default (Lio/github/yuroyami/kitepdf/core/render/KiteCanvas;Lio/github/yuroyami/kitepdf/core/render/KitePath;Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;Lio/github/yuroyami/kitepdf/core/render/RgbColor;DDLio/github/yuroyami/kitepdf/core/render/KiteBlendMode;Ljava/util/List;DIIDILjava/lang/Object;)V
 }
 
@@ -1921,6 +1923,36 @@ public final class io/github/yuroyami/kitepdf/core/render/KitePattern$Unsupporte
 	public fun getMatrix ()Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;
 }
 
+public final class io/github/yuroyami/kitepdf/core/render/KiteRaster {
+	public fun <init> (II)V
+	public fun <init> (II[I)V
+	public final fun copy ()Lio/github/yuroyami/kitepdf/core/render/KiteRaster;
+	public final fun get (II)I
+	public final fun getHeight ()I
+	public final fun getPixels ()[I
+	public final fun getWidth ()I
+}
+
+public abstract interface class io/github/yuroyami/kitepdf/core/render/KiteRasterScope {
+	public abstract fun backdrop ()Lio/github/yuroyami/kitepdf/core/render/KiteRaster;
+	public abstract fun draw (Lio/github/yuroyami/kitepdf/core/render/KiteRaster;DLio/github/yuroyami/kitepdf/core/render/KiteBlendMode;)V
+	public static synthetic fun draw$default (Lio/github/yuroyami/kitepdf/core/render/KiteRasterScope;Lio/github/yuroyami/kitepdf/core/render/KiteRaster;DLio/github/yuroyami/kitepdf/core/render/KiteBlendMode;ILjava/lang/Object;)V
+	public abstract fun getHeight ()I
+	public abstract fun getToPixels ()Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;
+	public abstract fun getWidth ()I
+	public abstract fun render (Lio/github/yuroyami/kitepdf/core/render/KiteRaster;Lkotlin/jvm/functions/Function0;)Lio/github/yuroyami/kitepdf/core/render/KiteRaster;
+	public static synthetic fun render$default (Lio/github/yuroyami/kitepdf/core/render/KiteRasterScope;Lio/github/yuroyami/kitepdf/core/render/KiteRaster;Lkotlin/jvm/functions/Function0;ILjava/lang/Object;)Lio/github/yuroyami/kitepdf/core/render/KiteRaster;
+}
+
+public final class io/github/yuroyami/kitepdf/core/render/KiteRasterScope$DefaultImpls {
+	public static synthetic fun draw$default (Lio/github/yuroyami/kitepdf/core/render/KiteRasterScope;Lio/github/yuroyami/kitepdf/core/render/KiteRaster;DLio/github/yuroyami/kitepdf/core/render/KiteBlendMode;ILjava/lang/Object;)V
+	public static synthetic fun render$default (Lio/github/yuroyami/kitepdf/core/render/KiteRasterScope;Lio/github/yuroyami/kitepdf/core/render/KiteRaster;Lkotlin/jvm/functions/Function0;ILjava/lang/Object;)Lio/github/yuroyami/kitepdf/core/render/KiteRaster;
+}
+
+public abstract interface class io/github/yuroyami/kitepdf/core/render/KiteRasterStep {
+	public abstract fun run (Lio/github/yuroyami/kitepdf/core/render/KiteRasterScope;)Z
+}
+
 public final class io/github/yuroyami/kitepdf/core/render/KiteRenderingIntent : java/lang/Enum {
 	public static final field AbsoluteColorimetric Lio/github/yuroyami/kitepdf/core/render/KiteRenderingIntent;
 	public static final field Companion Lio/github/yuroyami/kitepdf/core/render/KiteRenderingIntent$Companion;
@@ -2109,6 +2141,7 @@ public final class io/github/yuroyami/kitepdf/core/render/NoopCanvas : io/github
 	public fun hostGlyphOutline (Ljava/lang/String;Lio/github/yuroyami/kitepdf/core/font/FontSpec;)Lio/github/yuroyami/kitepdf/core/render/KitePath;
 	public fun popClip ()V
 	public fun pushClip (Lio/github/yuroyami/kitepdf/core/render/KitePath;Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;Z)V
+	public fun rasterStep (Lio/github/yuroyami/kitepdf/core/KiteRectangle;Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;Lio/github/yuroyami/kitepdf/core/render/KiteRasterStep;)Z
 	public fun strokePath (Lio/github/yuroyami/kitepdf/core/render/KitePath;Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;Lio/github/yuroyami/kitepdf/core/render/RgbColor;DDLio/github/yuroyami/kitepdf/core/render/KiteBlendMode;Ljava/util/List;DIID)V
 }
 
@@ -2147,6 +2180,7 @@ public final class io/github/yuroyami/kitepdf/core/render/RecordingCanvas : io/g
 	public fun hostGlyphOutline (Ljava/lang/String;Lio/github/yuroyami/kitepdf/core/font/FontSpec;)Lio/github/yuroyami/kitepdf/core/render/KitePath;
 	public fun popClip ()V
 	public fun pushClip (Lio/github/yuroyami/kitepdf/core/render/KitePath;Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;Z)V
+	public fun rasterStep (Lio/github/yuroyami/kitepdf/core/KiteRectangle;Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;Lio/github/yuroyami/kitepdf/core/render/KiteRasterStep;)Z
 	public fun strokePath (Lio/github/yuroyami/kitepdf/core/render/KitePath;Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;Lio/github/yuroyami/kitepdf/core/render/RgbColor;DDLio/github/yuroyami/kitepdf/core/render/KiteBlendMode;Ljava/util/List;DIID)V
 }
 
