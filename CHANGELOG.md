@@ -19,6 +19,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `CoreGraphicsCanvas`. Which of them can read the backdrop, and where, is in the rendering
   guide (#209, #308).
 
+- `EpubDocument.chapterPath(chapter)` names the zip path of a chapter's own document, which
+  a web engine loads to run a scripted fixed-layout page. `EpubLink` has a public
+  constructor, for a link that comes from outside the page's markup. In `KiteDocView`, an
+  element of the `pageOverlay` hands such a link to `KitePageOverlayScope.followLink(href,
+  rect)`, and it goes the way of a tapped link: `onLinkTap` sees it first, then the viewer
+  follows a link inside the book (#41).
+
 - SVG draws `filter`: a `<filter>` with any of the seventeen primitives of Filter
   Effects 1, from `feGaussianBlur`, `feOffset`, `feFlood`, `feMerge`, `feBlend`,
   `feComposite`, `feColorMatrix`, `feComponentTransfer` and `feDropShadow` to
@@ -90,6 +97,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- An inline frame or an HTML object of an EPUB keeps to one page, as an image does. A frame
+  that moved whole to the next page was listed on the page before it too, with a box that
+  ran past its bottom, and an object split between two pages with its fallback. A chapter of
+  one object without fallback had no page at all. `EpubEmbed.isWhole` is false only for an
+  object taller than a page (#41).
 - A non-isolated transparency group whose paints blend composites as ISO 32000-1,
   11.4.8 says wherever the canvas can read the page under it. Its paints blend with the
   page, and the page's part comes out of the group again before the group composites in

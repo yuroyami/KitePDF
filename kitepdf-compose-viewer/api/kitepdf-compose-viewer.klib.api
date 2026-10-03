@@ -53,6 +53,7 @@ abstract interface io.github.yuroyami.kitepdf.compose/KitePageOverlayScope { // 
 
     abstract fun (androidx.compose.ui/Modifier).displayRect(io.github.yuroyami.kitepdf.core/KiteRectangle): androidx.compose.ui/Modifier // io.github.yuroyami.kitepdf.compose/KitePageOverlayScope.displayRect|displayRect@androidx.compose.ui.Modifier(io.github.yuroyami.kitepdf.core.KiteRectangle){}[0]
     abstract fun (androidx.compose.ui/Modifier).pageRect(io.github.yuroyami.kitepdf.core/KiteRectangle): androidx.compose.ui/Modifier // io.github.yuroyami.kitepdf.compose/KitePageOverlayScope.pageRect|pageRect@androidx.compose.ui.Modifier(io.github.yuroyami.kitepdf.core.KiteRectangle){}[0]
+    open fun followLink(kotlin/String, io.github.yuroyami.kitepdf.core/KiteRectangle): kotlin/Boolean // io.github.yuroyami.kitepdf.compose/KitePageOverlayScope.followLink|followLink(kotlin.String;io.github.yuroyami.kitepdf.core.KiteRectangle){}[0]
 }
 
 sealed interface io.github.yuroyami.kitepdf.compose/KiteDocLayout { // io.github.yuroyami.kitepdf.compose/KiteDocLayout|null[0]

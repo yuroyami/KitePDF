@@ -968,6 +968,8 @@ Two modifiers size an element to a rectangle of the page and place it there:
 - `pageRect` takes the page's own space. This is the space of `hitTest` and of the `rect` of a PDF annotation.
 - `displayRect` takes display space: points from the top-left corner of the page as it is shown, y down. This is the space of `hitTestDisplay`, of search hits, and of `EpubLink.rect` and `EpubMedia.rect`.
 
+An element that opens links, such as a web view over an embedded document, hands each one to `followLink(href, rect)`. The link goes the way of a tapped link of the page: `onLinkTap` sees it first, and when that does not take it, a link inside the document moves the view. On an EPUB page, `href` is a zip path with a fragment, as `EpubLink.href` is, or an address with a scheme.
+
 An element in `pageOverlay` grows with the page when the reader zooms in. For an element that keeps its size on screen, such as a pin, use the `overlay` slot and ask the state where the rectangle is:
 
 ```kotlin

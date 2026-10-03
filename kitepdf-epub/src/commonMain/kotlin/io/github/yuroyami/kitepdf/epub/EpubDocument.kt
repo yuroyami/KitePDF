@@ -529,8 +529,9 @@ public class EpubDocument internal constructor(
                     )
                     // A spine document with nothing to paint contributed no page when the
                     // whole book shared one box tree. Keep that: do not invent a blank page.
-                    val blank = pages.size == 1 &&
-                        pages[0].lines.isEmpty() && pages[0].images.isEmpty() && pages[0].decoBoxes.isEmpty()
+                    // An embedded document is something to show, even with no fallback (#41).
+                    val blank = pages.size == 1 && pages[0].lines.isEmpty() && pages[0].images.isEmpty() &&
+                        pages[0].decoBoxes.isEmpty() && pages[0].embedBoxes.isEmpty()
                     laid = Laid(if (blank) emptyList() else pages, checkNotNull(docRoot))
                     return true
                 }
@@ -1091,6 +1092,13 @@ public class EpubDocument internal constructor(
     public fun resourceType(path: String): String? = parsed.mediaTypeOf(path.substringBefore('#'))
 
     /**
+     * The zip path of [chapter]'s document, as [resource] takes it: what a web engine loads to
+     * run a scripted fixed-layout page (#41). Throws [IndexOutOfBoundsException] for a chapter
+     * the book does not have.
+     */
+    public fun chapterPath(chapter: Int): String = parsed.spinePaths[chapter]
+
+    /**
      * The image at [zipPath], or the first item of its manifest fallback chain that decodes (#27).
      * A remote URL in the chain reads the bytes [remote] gives for it (#38).
      */
@@ -1288,8 +1296,11 @@ internal class FixedSpine(val root: BlockBox, val width: Double, val height: Dou
  * (internal, resolve with the document's href navigation) or an external URL.
  * [kind] says what the link is for, such as a note reference, which a reader can
  * open in place with [EpubDocument.linkTarget].
+ *
+ * The page gives the links of its own markup. Make one for a link that comes from elsewhere,
+ * such as a web view over an embedded document that opens a link (#41).
  */
-public class EpubLink internal constructor(
+public class EpubLink(
     public val rect: io.github.yuroyami.kitepdf.core.KiteRectangle,
     public val href: String,
     public val kind: EpubLinkKind = EpubLinkKind.LINK,
@@ -2341,14 +2352,18 @@ public class EpubPage internal constructor(
         val end = page.startY + (if (page.vertical) page.pageWidth else page.pageHeight) - 2 * page.margin
         return page.embedBoxes.mapNotNull { box ->
             val info = box.embed ?: return@mapNotNull null
+            var whole = true
             val rect = if (box is ImageBox) imageRect(page, box) else {
                 // An object's content box, cut to this page, as the engine lays it out on both axes.
                 val s = box.style
                 val inlineStart = page.margin + box.x + s.borderLeft.effective + s.paddingLeftPt
                 val inlineSize = box.borderBoxWidth - s.borderLeft.effective - s.paddingLeftPt - s.paddingRightPt - s.borderRight.effective
-                val top = maxOf(box.y + s.borderTop.effective + s.paddingTopPt, page.startY)
-                val bottom = minOf(box.bottom - s.paddingBottomPt - s.borderBottom.effective, end)
+                val contentTop = box.y + s.borderTop.effective + s.paddingTopPt
+                val contentBottom = box.bottom - s.paddingBottomPt - s.borderBottom.effective
+                val top = maxOf(contentTop, page.startY)
+                val bottom = minOf(contentBottom, end)
                 if (bottom <= top || inlineSize <= 0.0) return@mapNotNull null
+                whole = top == contentTop && bottom == contentBottom
                 if (page.vertical) {
                     val a = columnX(page, top)
                     val b = columnX(page, bottom)
@@ -2357,7 +2372,7 @@ public class EpubPage internal constructor(
                     io.github.yuroyami.kitepdf.core.KiteRectangle(inlineStart, displayY(page, top), inlineStart + inlineSize, displayY(page, bottom))
                 }
             }
-            EpubEmbed(rect, info.kind, info.href, info.type, info.id)
+            EpubEmbed(rect, info.kind, info.href, info.type, info.id, whole)
         }
     }
 

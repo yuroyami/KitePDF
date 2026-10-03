@@ -159,7 +159,10 @@ internal object Paginator {
                 vertical = vertical,
                 verticalLr = verticalLr,
                 linkBoxes = links.filter { it.y < end && it.bottom > start },
-                embedBoxes = embeds.filter { it.y < end && it.bottom > start },
+                // An embed is on the pages that its own units landed on. A page's band reaches past
+                // the top of the next page when a box moved there whole, so a box that only meets
+                // the band is not on this page (#41).
+                embedBoxes = embeds.filter { e -> us.any { it.owner === e || e in it.chain } },
                 effectBoxes = effects.filter { it.y < end && it.bottom > start },
             )
         }
@@ -218,7 +221,12 @@ internal object Paginator {
     private fun gatherUnits(box: LayoutBox, around: List<LayoutBox>, out: MutableList<Unit_>) {
         val chain = around + box
         when (box) {
-            is BlockBox -> for (c in box.children) gatherUnits(c, chain, out)
+            is BlockBox -> {
+                // A web engine shows an HTML object's document over its whole box, so the box
+                // is one unit, as an image is, and its fallback stays on the page it starts (#41).
+                if (box.embed != null) out.add(Unit_(box.y, box.bottom, null, null, box, 0, 1, chain))
+                for (c in box.children) gatherUnits(c, chain, out)
+            }
             is TableBox -> for (r in box.rows) for (cell in r.cells) gatherUnits(cell, chain + r, out)
             is TableRowBox -> {}
             is TextBlockBox -> for (l in box.lines) l.owner?.let { o ->

@@ -16,12 +16,17 @@ public enum class EpubEmbedKind {
  * type is HTML or XHTML (#40). This library runs no script, so the page keeps the box empty, or
  * paints an object's fallback there, and an app can place a web view over [rect].
  *
+ * Each box stays on one page, as an image does: one that does not fit what is left of a page
+ * moves whole to the next (#41). Only an object taller than a page goes on from page to page.
+ *
  * @property rect the box in display space, y down, with the smaller y in [KiteRectangle.bottom],
  *   as [EpubLink.rect] is. For an object that goes on to the next page, the part on this page.
  * @property href the zip path of the embedded document, as [EpubDocument.resource] reads it, or
  *   a URL with a scheme. Empty when the element names no document.
  * @property type the media type that the element or the manifest gives, or null.
  * @property id the element's own `id`, or null.
+ * @property isWhole false for an object taller than a page, whose [rect] is the part on this
+ *   page: a web view placed over it would show the top of the document on every page (#41).
  */
 public class EpubEmbed internal constructor(
     public val rect: KiteRectangle,
@@ -29,6 +34,7 @@ public class EpubEmbed internal constructor(
     public val href: String,
     public val type: String?,
     public val id: String?,
+    public val isWhole: Boolean = true,
 )
 
 /** What a box of an embedding element keeps of the element. */

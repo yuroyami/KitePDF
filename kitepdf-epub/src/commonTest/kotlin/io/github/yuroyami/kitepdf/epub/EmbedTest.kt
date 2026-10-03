@@ -150,4 +150,56 @@ class EmbedTest {
         val doc = book(listOf("""<script>document.write("x")</script><noscript><p>Shown without script.</p></noscript>"""))
         assertTrue("Shown without script." in page(doc).textContent().plainText)
     }
+
+    @Test
+    fun a_frame_pushed_to_the_next_page_is_listed_there_alone() {
+        // The paragraph leaves too little room for the frame, which moves whole to the next page.
+        val doc = book(listOf("""<p style="height: 400pt">Tall.</p><iframe src="quiz.xhtml" width="400" height="200"></iframe>"""))
+        assertEquals(2, doc.pageCountIn(0))
+        assertTrue(doc.page(KiteLocation(0, 0)).embeds.isEmpty(), "the frame is listed on the page it left")
+        val embed = doc.page(KiteLocation(0, 1)).embeds.single()
+        assertEquals(150.0, embed.rect.h, 0.5)
+    }
+
+    @Test
+    fun an_html_object_moves_whole_to_the_next_page() {
+        // A web engine shows the object's document in place of its fallback, so the box does not split (#41).
+        val doc = book(
+            listOf(
+                """<p style="height: 400pt">Tall.</p><object data="quiz.xhtml" type="application/xhtml+xml" width="400" height="200"><p>Fallback one.</p><p>Fallback two.</p></object>""",
+            ),
+        )
+        assertEquals(2, doc.pageCountIn(0))
+        assertTrue(doc.page(KiteLocation(0, 0)).embeds.isEmpty(), "the object is cut at the end of the first page")
+        val second = doc.page(KiteLocation(0, 1))
+        assertEquals(150.0, second.embeds.single().rect.h, 0.5)
+        assertTrue(second.embeds.single().isWhole)
+        val text = second.textContent().blocks.flatMap { it.lines }.joinToString(" ") { it.text }
+        assertTrue("Fallback one." in text && "Fallback two." in text, "the fallback stays with its box: $text")
+    }
+
+    @Test
+    fun a_chapter_of_one_object_without_fallback_keeps_its_page() {
+        val doc = book(listOf("""<object data="quiz.xhtml" type="application/xhtml+xml"></object>"""))
+        assertEquals(1, doc.pageCountIn(0))
+        assertEquals("OEBPS/quiz.xhtml", page(doc).embeds.single().href)
+    }
+
+    @Test
+    fun a_chapter_names_the_path_of_its_document() {
+        val doc = book(listOf("<p>One.</p>", "<p>Two.</p>"))
+        assertEquals("OEBPS/c0.xhtml", doc.chapterPath(0))
+        assertEquals("OEBPS/c1.xhtml", doc.chapterPath(1))
+        assertEquals("application/xhtml+xml", doc.resourceType(doc.chapterPath(1)))
+    }
+
+    @Test
+    fun an_object_taller_than_a_page_goes_on_and_says_it_is_cut() {
+        // A fallback of forty paragraphs goes on to the next page, and the box with it.
+        val fallback = (1..40).joinToString("") { "<p>Fallback $it.</p>" }
+        val doc = book(listOf("""<object data="quiz.xhtml" type="application/xhtml+xml" width="400" height="1000">$fallback</object>"""))
+        assertTrue(doc.pageCountIn(0) >= 2)
+        assertFalse(doc.page(KiteLocation(0, 0)).embeds.single().isWhole)
+        assertFalse(doc.page(KiteLocation(0, 1)).embeds.single().isWhole)
+    }
 }

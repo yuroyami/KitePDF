@@ -3,6 +3,7 @@ package io.github.yuroyami.kitepdf.compose
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.compositionLocalOf
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.Layout
@@ -43,10 +44,25 @@ public interface KitePageOverlayScope {
      * space of [KiteDocViewState.hitTest] and of the rectangle of a PDF annotation.
      */
     public fun Modifier.pageRect(rect: KiteRectangle): Modifier
+
+    /**
+     * Follows a link that an element of the overlay opens, such as a link in a web view over an
+     * embedded document (#41), as a tap on a link of the page does: the `onLinkTap` of
+     * [KiteDocView] sees it first, and when that does not take it, a link inside the document
+     * moves the view to its target. [href] is a link as the page gives its own: on an EPUB page,
+     * a zip path with a fragment, as `EpubLink.href` is, or an address with a scheme. [rect] is
+     * the area of the link in display space. Call it on the main thread.
+     *
+     * Returns true when the host or the viewer took the link. The default takes none.
+     */
+    public fun followLink(href: String, rect: KiteRectangle): Boolean = false
 }
 
 /** The `pageOverlay` of the viewer that composes the page. */
 internal val LocalKitePageOverlay = compositionLocalOf<(@Composable KitePageOverlayScope.() -> Unit)?> { null }
+
+/** Follows a link that an overlay element opens: a page index, an href and its area on the page. */
+internal val LocalOverlayLinks = staticCompositionLocalOf<(Int, String, KiteRectangle) -> Boolean> { { _, _, _ -> false } }
 
 /**
  * [rect], in the page space of this page, as the display-space rectangle it covers, with the
@@ -74,7 +90,8 @@ internal fun PageOverlay(
     content: @Composable KitePageOverlayScope.() -> Unit,
     modifier: Modifier,
 ) {
-    val scope = remember(page, pageIndex) { PageOverlayScope(pageIndex, page) }
+    val links = LocalOverlayLinks.current
+    val scope = remember(page, pageIndex, links) { PageOverlayScope(pageIndex, page, links) }
     Layout(content = { scope.content() }, modifier = modifier) { measurables, constraints ->
         val width = if (constraints.hasBoundedWidth) constraints.maxWidth else 0
         val height = if (constraints.hasBoundedHeight) constraints.maxHeight else 0
@@ -102,10 +119,16 @@ internal fun PageOverlay(
     }
 }
 
-private class PageOverlayScope(override val pageIndex: Int, override val page: KitePage) : KitePageOverlayScope {
+private class PageOverlayScope(
+    override val pageIndex: Int,
+    override val page: KitePage,
+    private val links: (Int, String, KiteRectangle) -> Boolean,
+) : KitePageOverlayScope {
     override fun Modifier.displayRect(rect: KiteRectangle): Modifier = this then OverlayRectElement(rect.normalized())
 
     override fun Modifier.pageRect(rect: KiteRectangle): Modifier = this then OverlayRectElement(page.pageToDisplay(rect))
+
+    override fun followLink(href: String, rect: KiteRectangle): Boolean = links(pageIndex, href, rect.normalized())
 }
 
 /** The display-space rectangle an overlay element asks for, with the smaller y in [KiteRectangle.bottom]. */

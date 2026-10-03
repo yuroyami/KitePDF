@@ -349,6 +349,12 @@ for (embed in page.embeds) {
 }
 ```
 
+Each box stays on one page, as an image does: a box that does not fit what is
+left of a page moves whole to the next one. Only an object taller than a page
+goes on from page to page, and its `isWhole` is false there. `book.chapterPath(chapter)`
+names the zip path of a chapter's own document, which a web engine loads to run
+a scripted fixed-layout page.
+
 ### Resources on the web
 
 A book can name an image, a font or a background by an `https` URL instead of a
