@@ -125,11 +125,19 @@ class FullScreenSceneTest {
         assertTrue(off.all { abs(it) <= 1f }, "$what: expected $expected, got $actual")
     }
 
-    /** Waits for the position to move on by 300 ms, or to start again from the loop, and for the player to be playing. */
+    /**
+     * Waits for the position to move on by 300 ms, or to start again from the loop, and checks that the
+     * player is still active. The loop buffers for a moment as it starts again, so Buffering counts:
+     * CI caught the clip there, just after the wrap this accepts (#494). A pause leaves the position
+     * where it stopped and reads Paused.
+     */
     private fun ComposeUiTest.assertPlaysOn(player: KitePlayer, what: String) {
         val from = player.position()
-        waitUntil(timeoutMillis = 10_000) { player.position() >= from + 300.milliseconds || player.position() < from }
-        assertEquals(PlaybackStatus.Playing, player.state.value.status, what)
+        val moved = runCatching {
+            waitUntil(timeoutMillis = 10_000) { player.position() >= from + 300.milliseconds || player.position() < from }
+        }.isSuccess
+        val status = player.state.value.status
+        assertTrue(moved && status.isActive, "$what: the position went from $from to ${player.position()}, status $status")
     }
 
     @Test
