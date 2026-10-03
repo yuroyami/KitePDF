@@ -176,3 +176,34 @@ internal const val ISLAND_SCRIPT: String = """(function () {
     k.link(to);
   }, false);
 })();"""
+
+/**
+ * The URLs of a book's files under [base], an origin of the book's own followed by a path, with
+ * a trailing slash: what a web view asks for, and what a link it opens names.
+ */
+internal class BookUrls(val base: String) {
+    init {
+        require(base.endsWith('/')) { "a base ends with a slash: $base" }
+    }
+
+    /** The URL of [path], a zip path, with its fragment kept. */
+    fun urlOf(path: String): String {
+        val fragment = path.substringAfter('#', "")
+        return base + BookFiles.urlPathOf(path.substringBefore('#')) + if (fragment.isEmpty()) "" else "#$fragment"
+    }
+
+    /** The zip path, with its fragment, that [url] names, or null for a URL outside the book. */
+    fun hrefOf(url: String): String? {
+        if (!url.startsWith(base)) return null
+        val rest = url.removePrefix(base)
+        val fragment = rest.substringAfter('#', "")
+        return BookFiles.pathOf(rest) + if (fragment.isEmpty()) "" else "#$fragment"
+    }
+
+    /** True when [url] and [other] name the same document, whatever their fragments. */
+    fun sameDocument(url: String, other: String): Boolean = url.substringBefore('#') == other.substringBefore('#')
+}
+
+/** A token of [bytes] random bytes in hex, for an origin or a path no one else can guess. */
+internal fun randomToken(bytes: Int = 16): String =
+    kotlin.random.Random.nextBytes(bytes).joinToString("") { ((it.toInt() and 0xFF) + 0x100).toString(16).substring(1) }

@@ -10,5 +10,6 @@ is the single place a web engine enters the build. Pass `KiteScriptOverlay` to t
 book's own, and nothing comes from the network. A link that a web view opens goes through
 the view's `onLinkTap`, as a tapped link of the page does.
 
-On the desktop JVM the web views are JavaFX's, drawn offscreen and placed on the page, so an
-app adds JavaFX for its platform; `KiteDesktopWebEngine` lets it plug in another engine.
+On Android the web views are the system's `WebView`, answered from the book by its client.
+On the desktop JVM they are JavaFX's, drawn offscreen and placed on the page, so an app adds
+JavaFX for its platform; `KiteDesktopWebEngine` lets it plug in another engine.

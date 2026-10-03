@@ -342,7 +342,7 @@ and that difference is the usual reason a first build does not resolve.
 | `-native-renderer` | Android (minSdk 29), JVM, iOS, macOS arm64, tvOS, and JS in the browser |
 | `-skia-renderer` | Android (minSdk 21), JVM, iOS, macOS arm64, tvOS, Linux, and JS and wasmJs in the browser |
 | `-javascript` | Every target KiteJS builds for: Android, JVM, iOS, macOS arm64, Linux, Windows, JS and wasmJs |
-| `-webview` | JVM, with JavaFX. Where a target has no web engine, a scripted book shows the library's own rendering, without its scripts |
+| `-webview` | Android (minSdk 24), and JVM with JavaFX. Where a target has no web engine, a scripted book shows the library's own rendering, without its scripts |
 
 [Platform support](https://yuroyami.github.io/KitePDF/platforms/) has the full list,
 with the reason behind each gap.

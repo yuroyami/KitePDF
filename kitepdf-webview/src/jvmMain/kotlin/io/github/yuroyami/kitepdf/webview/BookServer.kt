@@ -39,19 +39,13 @@ internal class BookServer private constructor(document: EpubDocument) {
         server.start()
     }
 
+    private val urls = BookUrls(base)
+
     /** The URL of [path], a zip path, with its fragment kept. */
-    fun urlOf(path: String): String {
-        val fragment = path.substringAfter('#', "")
-        return base + BookFiles.urlPathOf(path.substringBefore('#')) + if (fragment.isEmpty()) "" else "#$fragment"
-    }
+    fun urlOf(path: String): String = urls.urlOf(path)
 
     /** The zip path, with its fragment, that [url] names, or null for a URL outside the book. */
-    fun hrefOf(url: String): String? {
-        if (!url.startsWith(base)) return null
-        val rest = url.removePrefix(base)
-        val fragment = rest.substringAfter('#', "")
-        return BookFiles.pathOf(rest) + if (fragment.isEmpty()) "" else "#$fragment"
-    }
+    fun hrefOf(url: String): String? = urls.hrefOf(url)
 
     private fun answer(exchange: HttpExchange) {
         val raw = exchange.requestURI.rawPath
