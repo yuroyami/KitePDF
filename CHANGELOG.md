@@ -49,6 +49,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   in a raster can move by an eighth of a pixel at most. Vectorized pages still draw each
   glyph as a path, so that they stay sharp under a pinch (#382).
 
+- On the desktop JVM, iOS and macOS, `KitePageRasterizer.rasterizeOffMain` draws
+  system-font text on its own thread, through Skia's paragraph engine with the family
+  names, style and glyph rasterization that Compose's text uses, so the text draws the
+  same pixels, fallback faces included. A page with such text, as in a book without
+  embedded fonts, renders off Main in one pass and takes no time on the UI thread: a
+  page of such a book at 1080 by 1728 rasters in about 13 ms, where it took 17 ms, 16 of
+  them on the UI thread. A `ComposeCanvas` made directly draws such text and host glyph
+  outlines on any thread there too. The synchronous `rasterize` still requires the UI
+  thread, and Android and the browser keep Compose's text on the UI thread (#131).
+
 - A PDF's JPEG no longer decodes when it loads only to check the file, which took
   about a third of a page's render time; its first draw decodes it. A file whose
   headers KiteImageCodec reads and whose data it cannot decode now reaches a canvas

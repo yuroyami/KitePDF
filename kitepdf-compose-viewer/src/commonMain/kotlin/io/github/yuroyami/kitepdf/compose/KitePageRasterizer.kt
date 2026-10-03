@@ -39,9 +39,10 @@ import io.github.yuroyami.kitepdf.core.render.ReaderTheme
  * exports. [rasterizeOffMain] is the suspend entry point for any calling thread; it
  * moves the work to [kitepdfRasterDispatcher] (a background pool on
  * JVM/Android/Apple, Main on JS/Wasm) so a complex page does not jank scrolling
- * or pinch. [KiteDocView] uses that path. A page with text in a system font is
- * the exception: the host's text stack belongs to the main thread, so such a
- * page is drawn a second time there, in full (#131).
+ * or pinch. [KiteDocView] uses that path. On the desktop JVM, iOS and macOS, a page
+ * with text in a system font draws there too, since Skia shapes that text itself
+ * (#131). On Android such a page is drawn on the main thread, where Compose's text
+ * stack belongs.
  */
 @Stable
 public class KitePageRasterizer(
@@ -89,6 +90,12 @@ public class KitePageRasterizer(
     internal val glyphMasks: GlyphMaskCache = GlyphMaskCache()
 
     /**
+     * True where host-font text needs no UI thread, so [rasterizeOffMain] draws every page in one
+     * pass on the pool (#131). A test sets it false to run the probe and the UI pass, as Android does.
+     */
+    internal var textOffMain: Boolean = hostTextAnyThread
+
+    /**
      * True when a page is first drawn off the main thread without host-font text, to find out
      * whether it needs the main thread at all (#131). Where rasters already run on the UI
      * thread, as in a browser, that probe only doubles the work, so a page draws once (#389).
@@ -100,14 +107,13 @@ public class KitePageRasterizer(
      * calling coroutine stops a PDF page between operators and throws a
      * CancellationException instead of returning a partial bitmap (#188).
      *
-     * Pages that fall back to system-font text (EPUB body text, PDFs without
-     * embedded outlines) are re-rendered on the platform UI thread: skiko's text
-     * stack shares process-global state with the host UI thread, and no lock
-     * of ours can exclude that thread, so the only safe place to measure or
-     * draw through it is the main thread itself. Pages whose glyphs all have
-     * embedded outlines (the common PDF case) stay entirely on the pool.
-     * Desktop JVM uses the AWT event dispatch thread even in headless mode, without
-     * requiring a coroutine Main dispatcher. Never block that thread waiting for this call.
+     * On the desktop JVM, iOS and macOS every page draws once on the pool, system-font
+     * text included: Skia shapes that text itself, outside Compose's text stack (#131).
+     * On Android, pages that fall back to system-font text (EPUB body text, PDFs without
+     * embedded outlines) are rendered on the platform UI thread: Compose's text stack keeps
+     * a process-wide cache that the UI thread shares, and no lock of ours can exclude that
+     * thread. Pages whose glyphs all have embedded outlines stay on the pool there too.
+     * Never block the UI thread waiting for this call.
      *
      * Two rasters run at once across the process. This call waits for a free slot
      * with the priority of a page on screen, ahead of the pages that a viewer draws
@@ -169,9 +175,11 @@ public class KitePageRasterizer(
 
     /**
      * The off-main render body. Must be called with a slot of [rasterGate].
-     * Probes on the raster pool with system-font text skipped; if the page
-     * needed such text, discards the probe and re-renders fully on Main so
-     * the skiko text stack is only touched from the host UI thread.
+     * Where host-font text needs no UI thread ([textOffMain]), the page draws once
+     * on the raster pool (#131). Elsewhere it probes on the pool with system-font
+     * text skipped; if the page needed such text, it discards the probe and
+     * re-renders fully on Main so Compose's text stack is only touched from the
+     * host UI thread.
      */
     private suspend fun rasterizeOffMainLocked(
         page: KitePage,
@@ -188,6 +196,12 @@ public class KitePageRasterizer(
         // A page the viewer no longer needs stops between operators when its coroutine is cancelled (#188).
         val job = kotlinx.coroutines.currentCoroutineContext()[kotlinx.coroutines.Job]
         val cancellation = job?.let { KiteCancellation { !it.isActive } }
+        if (textOffMain) {
+            // Host-font text needs no UI thread here, so the page draws once, on the pool (#131).
+            return kotlinx.coroutines.withContext(kitepdfRasterDispatcher()) {
+                rasterizeInternal(page, widthPx, heightPx, background, hairlineWidthPx, theme, skipSystemFontText = false, skipWidgets = skipWidgets, canvasDecorator = canvasDecorator, cancellation = cancellation, region = region, formState = formState).first
+            }.also { kotlinx.coroutines.currentCoroutineContext().ensureActive() }
+        }
         val probe = if (!probesOffMain) null else kotlinx.coroutines.withContext(kitepdfRasterDispatcher()) {
             // A page that draws host-font text, as it says or as it did the last time, goes to Main
             // at once: a probe would draw it in full only to throw the bitmap away (#131). The page
@@ -431,6 +445,7 @@ public class KitePageRasterizer(
             val deviceCtm = region?.let { KiteMatrix.translation(-it.left.toDouble(), -it.top.toDouble()).concat(whole) } ?: whole
             val base = ComposeCanvas(
                 this, textMeasurer, hairlineWidthPx, skipSystemFontText, magnification = 1f, glyphMasks = glyphMasks,
+                hostLines = textOffMain,
             )
             val themed = theme?.wrap(base) ?: base
             val canvas = canvasDecorator?.invoke(themed) ?: themed
