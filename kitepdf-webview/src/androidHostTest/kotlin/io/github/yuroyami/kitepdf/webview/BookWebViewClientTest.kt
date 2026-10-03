@@ -1,5 +1,7 @@
 package io.github.yuroyami.kitepdf.webview
 
+import android.net.Uri
+import android.webkit.WebResourceRequest
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
@@ -33,6 +35,14 @@ class BookWebViewClientTest {
     }
 
     @Test
+    fun a_path_from_the_root_of_the_container_resolves_in_the_book() {
+        // The quiz names its picture as /OEBPS/root.svg, which the web view resolves against the origin.
+        val response = assertNotNull(client.answer("https://btest.book.kitepdf.invalid/OEBPS/root.svg"))
+        assertEquals(200, response.statusCode)
+        assertEquals(doc.resource("OEBPS/root.svg")!!.decodeToString(), response.data.readBytes().decodeToString())
+    }
+
+    @Test
     fun anything_outside_the_book_gets_an_empty_answer_and_never_the_network() {
         for (url in listOf("https://example.org/tracker.png", "http://127.0.0.1:9/outside.png", urls.urlOf("OEBPS/missing.png"))) {
             val response = assertNotNull(client.answer(url), url)
@@ -50,10 +60,27 @@ class BookWebViewClientTest {
     }
 
     @Test
+    fun a_frame_inside_the_island_loads_its_own_documents() {
+        val frame = Request(urls.urlOf(WebBooks.NEXT), mainFrame = false)
+        assertFalse(client.shouldOverrideUrlLoading(null, frame))
+        assertTrue(client.shouldOverrideUrlLoading(null, Request(urls.urlOf(WebBooks.NEXT), mainFrame = true)))
+        assertEquals(listOf(WebBooks.NEXT), links)
+    }
+
+    @Test
     fun a_remote_island_loads_on_its_own_terms() {
         val remote = BookWebViewClient(null, null, "https://example.org/quiz.html", links::add)
         assertNull(remote.answer("https://example.org/quiz.js"))
         assertTrue(remote.follows("https://example.org/next.html"))
         assertEquals(listOf("https://example.org/next.html"), links)
+    }
+
+    private class Request(private val url: String, private val mainFrame: Boolean) : WebResourceRequest {
+        override fun getUrl(): Uri = Uri.parse(url)
+        override fun isForMainFrame(): Boolean = mainFrame
+        override fun isRedirect(): Boolean = false
+        override fun hasGesture(): Boolean = true
+        override fun getMethod(): String = "GET"
+        override fun getRequestHeaders(): Map<String, String> = emptyMap()
     }
 }
