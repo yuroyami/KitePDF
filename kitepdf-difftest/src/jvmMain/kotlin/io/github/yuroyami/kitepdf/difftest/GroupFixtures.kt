@@ -71,6 +71,53 @@ object GroupFixtures {
         knockout("group-knockout", isolated = true, budget = 0.005),
         // The same in a non-isolated knockout group: nothing inside blends, so the result is the same.
         knockout("group-knockout-non-isolated", isolated = false, budget = 0.005),
+        // A non-isolated group that composites in Screen, whose yellow square multiplies onto the
+        // light green page. The backdrop's part comes out before the Screen (ISO 32000-1, 11.4.8),
+        // so the square is (191, 255, 127), where a group that ignored the page shows yellow (#308).
+        oracleFixture(
+            "group-non-isolated-screen",
+            "0.5 1 0.5 rg 0 0 200 200 re f /GS1 gs /Fm1 Do",
+            "/ExtGState << /GS1 << /BM /Screen >> >> /XObject << /Fm1 5 0 R >>",
+            listOf(
+                pdfStream(
+                    "/GM gs 1 1 0 rg 40 40 120 120 re f".toByteArray(),
+                    "/Type /XObject /Subtype /Form /BBox [0 0 200 200] /Group << /S /Transparency /I false >> " +
+                        "/Resources << /ExtGState << /GM << /BM /Multiply >> >> >>",
+                ),
+            ),
+            budget = 0.005,
+        ),
+        // A non-isolated knockout group over a green page: a red square, then a yellow one in
+        // Multiply. The yellow square multiplies onto the page, not onto the red square it knocks
+        // out (11.4.6), so where they overlap it is green (#308).
+        oracleFixture(
+            "group-knockout-non-isolated-multiply",
+            "0 1 0 rg 0 0 200 200 re f /Fm1 Do",
+            "/XObject << /Fm1 5 0 R >>",
+            listOf(
+                pdfStream(
+                    "1 0 0 rg 20 20 100 100 re f /GM gs 1 1 0 rg 80 80 100 100 re f".toByteArray(),
+                    "/Type /XObject /Subtype /Form /BBox [0 0 200 200] /Group << /S /Transparency /I false /K true >> " +
+                        "/Resources << /ExtGState << /GM << /BM /Multiply >> >> >>",
+                ),
+            ),
+            budget = 0.005,
+        ),
+        // All three at once over a page of two colours: a knockout group at alpha 0.7 in Overlay,
+        // whose red square at half alpha is knocked out by a green one in Multiply at 0.8 (#308).
+        oracleFixture(
+            "group-knockout-non-isolated-overlay-alpha",
+            "0.2 0.4 0.8 rg 0 0 100 200 re f 1 0.8 0.2 rg 100 0 100 200 re f /GS1 gs /Fm1 Do",
+            "/ExtGState << /GS1 << /ca 0.7 /BM /Overlay >> >> /XObject << /Fm1 5 0 R >>",
+            listOf(
+                pdfStream(
+                    "/GA gs 1 0 0 rg 20 20 120 120 re f /GM gs 0 0.8 0.3 rg 60 60 120 120 re f".toByteArray(),
+                    "/Type /XObject /Subtype /Form /BBox [0 0 200 200] /Group << /S /Transparency /I false /K true >> " +
+                        "/Resources << /ExtGState << /GA << /ca 0.5 >> /GM << /BM /Multiply /ca 0.8 >> >> >>",
+                ),
+            ),
+            budget = 0.005,
+        ),
     )
 
     /** A green page, then a group, [isolated] or not and painted at [alpha], whose yellow square blends in Multiply. */

@@ -19,6 +19,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `CoreGraphicsCanvas`. Which of them can read the backdrop, and where, is in the rendering
   guide (#209, #308).
 
+- SVG draws `filter`: a `<filter>` with any of the seventeen primitives of Filter
+  Effects 1, from `feGaussianBlur`, `feOffset`, `feFlood`, `feMerge`, `feBlend`,
+  `feComposite`, `feColorMatrix`, `feComponentTransfer` and `feDropShadow` to
+  `feMorphology`, `feTile`, `feImage`, `feTurbulence`, `feConvolveMatrix`,
+  `feDisplacementMap` and the two lighting primitives with their three lights,
+  with named results, subregions, both kinds of units and
+  `color-interpolation-filters`; and the filter functions `blur()`,
+  `drop-shadow()`, `grayscale()`, `sepia()`, `saturate()`, `hue-rotate()`,
+  `invert()`, `opacity()`, `brightness()` and `contrast()`, alone or in a chain. The
+  filter runs in plain Kotlin on the pixels of a raster step, so it draws on every
+  canvas that implements `rasterStep`; another canvas draws the element unfiltered
+  (#209).
+
 - A book's images, fonts and backgrounds that it names by an `https` URL load through
   `EpubSettings.resourceFetcher`, an `EpubResourceFetcher` (EPUB 3.3, 3.6). `kitepdf-net`
   ships one on a Ktor client, `EpubResourceFetcher(client)`, capped at 16 MiB a resource.
@@ -77,6 +90,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- A non-isolated transparency group whose paints blend composites as ISO 32000-1,
+  11.4.8 says wherever the canvas can read the page under it. Its paints blend with the
+  page, and the page's part comes out of the group again before the group composites in
+  its own alpha and blend mode, so a group with a blend mode of its own no longer paints
+  as if it were isolated, nor does one at an alpha below 1 on Android and CoreGraphics.
+  In a non-isolated knockout group, each object blends with the page and replaces what
+  the objects before it left within its shape, where it blended against a transparent
+  backdrop before. The group goes through a raster step: on AWT and Canvas2D always, on
+  Skia outside a layer, on a CoreGraphics bitmap context, and on the bitmaps of
+  `AndroidPdfBitmapRenderer` and `KitePageRasterizer`. Where the canvas cannot read the
+  page, as a Compose canvas on screen cannot, the group paints as a layer, as before, and
+  so does a knockout group whose objects would take more than 100 million pixels of
+  renders, three of its box for each (#308).
 - An EPUB image that gives both sizes and `object-fit: contain` keeps the box its markup
   asks for, and its picture fits inside it, centred. A block image shrank its box to the
   picture's aspect, so the text after it moved up, and an inline one stretched its
@@ -283,18 +309,6 @@ section lists them.
   a fill or a stroke with its units, `viewBox`, `patternTransform` and `href`
   chain. A mask shows the element by the luminance of its content, or by its
   alpha with `mask-type: alpha`, inside the mask's region (#209).
-- SVG draws `filter`: a `<filter>` with any of the seventeen primitives of Filter
-  Effects 1, from `feGaussianBlur`, `feOffset`, `feFlood`, `feMerge`, `feBlend`,
-  `feComposite`, `feColorMatrix`, `feComponentTransfer` and `feDropShadow` to
-  `feMorphology`, `feTile`, `feImage`, `feTurbulence`, `feConvolveMatrix`,
-  `feDisplacementMap` and the two lighting primitives with their three lights,
-  with named results, subregions, both kinds of units and
-  `color-interpolation-filters`; and the filter functions `blur()`,
-  `drop-shadow()`, `grayscale()`, `sepia()`, `saturate()`, `hue-rotate()`,
-  `invert()`, `opacity()`, `brightness()` and `contrast()`, alone or in a chain. The
-  filter runs in plain Kotlin on the pixels of a raster step, so it draws on every
-  canvas that implements `rasterStep`; another canvas draws the element unfiltered
-  (#209).
 
 ### Changed
 

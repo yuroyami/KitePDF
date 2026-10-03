@@ -58,7 +58,7 @@ import io.github.yuroyami.kitepdf.core.parser.PdfString
  * call to [render] starts with a fresh state stack.
  */
 public class PageRenderer(
-    private val canvas: KiteCanvas,
+    canvas: KiteCanvas,
     private val resolver: IndirectResolver,
     /**
      * The document's live form values, when a reader is filling the form. A widget whose field
@@ -80,6 +80,12 @@ public class PageRenderer(
 
     /** Stops the render between operators once it reads true (#188). */
     private var cancellation: io.github.yuroyami.kitepdf.core.KiteCancellation? = null
+
+    /**
+     * The canvas the content draws on: the caller's, or a [KnockoutCanvas] over it while a
+     * non-isolated knockout group whose paints blend renders (#308).
+     */
+    private var canvas: KiteCanvas = canvas
 
 
     /** The document's cache of parsed content, when [resolver] is a whole document (#118). */
@@ -1082,8 +1088,10 @@ public class PageRenderer(
         // Isolation only shows when a paint inside blends in a mode other than Normal (#125).
         // Without such a paint, a group that needs a layer anyway takes the cheaper transparent
         // one, and a group at full alpha in Normal paints straight onto the page.
-        val isolated = if (formBlends(res.extGStates, res.xobjects)) {
-            (groupDict?.get("I") as? io.github.yuroyami.kitepdf.core.parser.PdfBoolean)?.value ?: false
+        val blends = formBlends(res.extGStates, res.xobjects)
+        val declaredIsolated = (groupDict?.get("I") as? io.github.yuroyami.kitepdf.core.parser.PdfBoolean)?.value ?: false
+        val isolated = if (blends) {
+            declaredIsolated
         } else {
             parentState.current.fillAlpha < 1.0 || parentState.current.blendMode != KiteBlendMode.Normal
         }
@@ -1095,55 +1103,135 @@ public class PageRenderer(
         ))
         val savedPatternBase = patternBaseCtm
         patternBaseCtm = parentState.current.ctm
-        val groupOpened = isTransparencyGroup
-        if (groupOpened) {
+        val groupCtm = parentState.current.ctm
+        val groupAlpha = parentState.current.fillAlpha
+        val groupBlend = parentState.current.blendMode
+        if (isTransparencyGroup) {
             // The group's constant alpha + blend mode apply ONCE, to the composite
             // of the whole group onto the backdrop (§11.4.5). If we also left them
             // on the state, every paint inside would multiply them again (double
-            // application). Hand them to beginTransparencyGroup and reset the
-            // in-group state to alpha=1 / Normal so inner paints composite plainly
-            // onto the group's transparent backdrop.
-            canvas.beginTransparencyGroup(
-                bbox = bbox, ctm = parentState.current.ctm,
-                isolated = isolated, knockout = knockout,
-                alpha = parentState.current.fillAlpha,
-                blendMode = parentState.current.blendMode,
-            )
-            // ISO 32000-1, 11.6.6: the soft mask resets to None inside the group too.
+            // application). They go to the group, and the in-group state resets to
+            // alpha=1 / Normal so inner paints composite plainly onto the group's
+            // backdrop. ISO 32000-1, 11.6.6: the soft mask resets to None inside the
+            // group too.
             parentState.replace(parentState.current.copy(
                 fillAlpha = 1.0, strokeAlpha = 1.0, blendMode = KiteBlendMode.Normal,
                 softMask = null, softMaskCtm = null,
             ))
         }
-        // Clip the form's content to its /BBox (§8.10.1) so it cannot overdraw
-        // outside the intended region.
-        val bboxPath = KitePath.Builder().apply {
-            rectangle(bbox.left, bbox.bottom, bbox.right - bbox.left, bbox.top - bbox.bottom)
-        }.build()
-        canvas.pushClip(bboxPath, parentState.current.ctm, false)
-        val clipBase = activeClipCount
-        // A pending W/W* is scoped to the content stream that issued it; don't let
-        // one leak in from (or out to) the caller across the form boundary.
-        val savedPendingClip = pendingClip
-        pendingClip = 0
-        val scope = openScope()
-        try {
+        val ops by lazy {
             val parse = { ContentStreamParser.parse(io.github.yuroyami.kitepdf.PageContents.decodeNested(formStream, "form XObject"), childColorSpaces) }
             // A form with resources of its own parses the same way wherever it is drawn, so its
             // operations come from the document's cache. Without them it reads the page's (#118).
-            val ops = if (ownResources) cachedOperations(objectNumber, parse) else parse()
-            val pathBuilder = KitePath.Builder()
-            for (op in ops) dispatch(op, parentState, pathBuilder, childFonts, childXObjects, childColorSpaces, childExtGStates, childShadings, childPatterns, childProperties)
+            if (ownResources) cachedOperations(objectNumber, parse) else parse()
+        }
+        // The content once. An exactly composited group paints it more than once, so it
+        // leaves the state, the clips and the scopes as it found them.
+        fun paintContent() {
+            parentState.save()
+            // Clip the form's content to its /BBox (§8.10.1) so it cannot overdraw
+            // outside the intended region.
+            val bboxPath = KitePath.Builder().apply {
+                rectangle(bbox.left, bbox.bottom, bbox.right - bbox.left, bbox.top - bbox.bottom)
+            }.build()
+            canvas.pushClip(bboxPath, parentState.current.ctm, false)
+            val clipBase = activeClipCount
+            // A pending W/W* is scoped to the content stream that issued it; don't let
+            // one leak in from (or out to) the caller across the form boundary.
+            val savedPendingClip = pendingClip
+            pendingClip = 0
+            val scope = openScope()
+            try {
+                val pathBuilder = KitePath.Builder()
+                for (op in ops) dispatch(op, parentState, pathBuilder, childFonts, childXObjects, childColorSpaces, childExtGStates, childShadings, childPatterns, childProperties)
+            } finally {
+                closeScope(scope, parentState)
+                pendingClip = savedPendingClip
+                // Drop any clips the form's content left unbalanced, then the BBox clip.
+                while (activeClipCount > clipBase) { canvas.popClip(); activeClipCount-- }
+                canvas.popClip()
+                parentState.restore()
+            }
+        }
+        try {
+            // A non-isolated group whose paints blend needs the backdrop's part taken out
+            // before it composites in its own alpha and blend mode, and a knockout group
+            // composites each object with the backdrop (11.4.8, #308). Where the canvas can
+            // read the backdrop, that is exact; elsewhere the group paints as a layer.
+            val exact = isTransparencyGroup && !declaredIsolated && blends &&
+                (knockout || groupAlpha < 1.0 || groupBlend != KiteBlendMode.Normal) &&
+                compositeExactly(bbox, groupCtm, knockout, groupAlpha, groupBlend, { ops.count { it.operator in PAINTING_OPERATORS } }, ::paintContent)
+            if (!exact) {
+                if (isTransparencyGroup) {
+                    canvas.beginTransparencyGroup(
+                        bbox = bbox, ctm = groupCtm,
+                        isolated = isolated, knockout = knockout,
+                        alpha = groupAlpha, blendMode = groupBlend,
+                    )
+                }
+                try {
+                    paintContent()
+                } finally {
+                    if (isTransparencyGroup) canvas.endTransparencyGroup()
+                }
+            }
         } finally {
-            closeScope(scope, parentState)
-            pendingClip = savedPendingClip
-            // Drop any clips the form's content left unbalanced, then the BBox clip.
-            while (activeClipCount > clipBase) { canvas.popClip(); activeClipCount-- }
-            canvas.popClip()
-            if (groupOpened) canvas.endTransparencyGroup()
             patternBaseCtm = savedPatternBase
             parentState.restore()
         }
+    }
+
+    /**
+     * Composites a non-isolated group whose paints blend as ISO 32000-1, 11.4.8 does, through a
+     * raster step over [bbox] under [ctm] (#308). [content] paints over a copy of the backdrop
+     * and alone, and [GroupRasters.withoutBackdrop] takes the backdrop's part out. A [knockout]
+     * group paints each of its objects through a [KnockoutCanvas] instead, three times each,
+     * so it declines when [objects], the count of its painting operators, would take more
+     * than [KNOCKOUT_PIXEL_BUDGET] pixels of renders. The result lands in the group's own
+     * [alpha] and [blendMode]. Returns false, having drawn nothing, when the canvas cannot
+     * read the backdrop, past that budget, and for a knockout group inside another one.
+     */
+    private fun compositeExactly(
+        bbox: io.github.yuroyami.kitepdf.core.KiteRectangle, ctm: KiteMatrix, knockout: Boolean,
+        alpha: Double, blendMode: KiteBlendMode, objects: () -> Int, content: () -> Unit,
+    ): Boolean {
+        val host = canvas
+        if (knockout && host is KnockoutCanvas) return false
+        return host.rasterStep(bbox, ctm) { scope ->
+            if (knockout && 3L * objects() * scope.width * scope.height > KNOCKOUT_PIXEL_BUDGET) return@rasterStep false
+            val backdrop = scope.backdrop() ?: return@rasterStep false
+            val group = if (!knockout) {
+                val over = scope.render(backdrop, content)
+                val alone = scope.render(null, content)
+                GroupRasters.withoutBackdrop(backdrop, over, alone)
+            } else {
+                val objects = KnockoutCanvas(host, scope, backdrop)
+                canvas = objects
+                try {
+                    content()
+                } finally {
+                    canvas = host
+                }
+                objects.group.result()
+            }
+            scope.draw(group, alpha, blendMode)
+            true
+        }
+    }
+
+    /**
+     * Paints one elementary object of a group, [paint]. Inside a non-isolated knockout group
+     * whose paints blend, the object goes to the [KnockoutCanvas], which paints it more than
+     * once, so [state] goes back to where it was before each time (ISO 32000-1, 11.4.6, #308).
+     */
+    private inline fun element(state: GraphicsStack, crossinline paint: () -> Unit) {
+        val objects = canvas as? KnockoutCanvas
+        if (objects == null || objects.inElement) {
+            paint()
+            return
+        }
+        val before = state.current
+        objects.element(reset = { state.replace(before) }) { paint() }
     }
 
     private fun PdfObject?.toDouble(): Double = when (this) {
@@ -1313,14 +1401,14 @@ public class PageRenderer(
             // Each painting operator ends the path object: it paints, then applies
             // any pending W/W* clip (§8.5.4: the clip uses this same path), then
             // clears the path. `n` paints nothing but still ends the path object.
-            "S" -> { if (!ocHidden()) paintStroke(path, state); applyPendingClip(path, state); path.reset() }
-            "s" -> { path.close(); if (!ocHidden()) paintStroke(path, state); applyPendingClip(path, state); path.reset() }
-            "f", "F" -> { if (!ocHidden()) paintFill(path, state, evenOdd = false); applyPendingClip(path, state); path.reset() }
-            "f*" -> { if (!ocHidden()) paintFill(path, state, evenOdd = true); applyPendingClip(path, state); path.reset() }
-            "B" -> { if (!ocHidden()) { paintFill(path, state, false); paintStroke(path, state) }; applyPendingClip(path, state); path.reset() }
-            "B*" -> { if (!ocHidden()) { paintFill(path, state, true); paintStroke(path, state) }; applyPendingClip(path, state); path.reset() }
-            "b" -> { path.close(); if (!ocHidden()) { paintFill(path, state, false); paintStroke(path, state) }; applyPendingClip(path, state); path.reset() }
-            "b*" -> { path.close(); if (!ocHidden()) { paintFill(path, state, true); paintStroke(path, state) }; applyPendingClip(path, state); path.reset() }
+            "S" -> { if (!ocHidden()) element(state) { paintStroke(path, state) }; applyPendingClip(path, state); path.reset() }
+            "s" -> { path.close(); if (!ocHidden()) element(state) { paintStroke(path, state) }; applyPendingClip(path, state); path.reset() }
+            "f", "F" -> { if (!ocHidden()) element(state) { paintFill(path, state, evenOdd = false) }; applyPendingClip(path, state); path.reset() }
+            "f*" -> { if (!ocHidden()) element(state) { paintFill(path, state, evenOdd = true) }; applyPendingClip(path, state); path.reset() }
+            "B" -> { if (!ocHidden()) element(state) { paintFill(path, state, false); paintStroke(path, state) }; applyPendingClip(path, state); path.reset() }
+            "B*" -> { if (!ocHidden()) element(state) { paintFill(path, state, true); paintStroke(path, state) }; applyPendingClip(path, state); path.reset() }
+            "b" -> { path.close(); if (!ocHidden()) element(state) { paintFill(path, state, false); paintStroke(path, state) }; applyPendingClip(path, state); path.reset() }
+            "b*" -> { path.close(); if (!ocHidden()) element(state) { paintFill(path, state, true); paintStroke(path, state) }; applyPendingClip(path, state); path.reset() }
             "n" -> { applyPendingClip(path, state); path.reset() }
 
             // ─── Clipping (marked pending; applied after the *next* paint) ──
@@ -1376,22 +1464,24 @@ public class PageRenderer(
             "T*" -> moveText(state, 0.0, -state.current.text.leading, setLeading = false)
 
             // ─── Text showing ────────────────────────────────────────────
-            "Tj" -> (a.firstOrNull() as? PdfString)?.let { showText(state, it.bytes) }
+            "Tj" -> (a.firstOrNull() as? PdfString)?.let { element(state) { showText(state, it.bytes) } }
             "'" -> {
                 moveText(state, 0.0, -state.current.text.leading, setLeading = false)
-                (a.firstOrNull() as? PdfString)?.let { showText(state, it.bytes) }
+                (a.firstOrNull() as? PdfString)?.let { element(state) { showText(state, it.bytes) } }
             }
             "\"" -> {
                 state.mutateText { it.copy(wordSpacing = num(a, 0), charSpacing = num(a, 1)) }
                 moveText(state, 0.0, -state.current.text.leading, setLeading = false)
-                (a.lastOrNull() as? PdfString)?.let { showText(state, it.bytes) }
+                (a.lastOrNull() as? PdfString)?.let { element(state) { showText(state, it.bytes) } }
             }
             "TJ" -> (a.firstOrNull() as? PdfArray)?.let { arr ->
-                for (item in arr) when (item) {
-                    is PdfString -> showText(state, item.bytes)
-                    is PdfReal -> adjustTextX(state, -item.value)
-                    is PdfInt -> adjustTextX(state, -item.value.toDouble())
-                    else -> { /* ignore */ }
+                element(state) {
+                    for (item in arr) when (item) {
+                        is PdfString -> showText(state, item.bytes)
+                        is PdfReal -> adjustTextX(state, -item.value)
+                        is PdfInt -> adjustTextX(state, -item.value.toDouble())
+                        else -> { /* ignore */ }
+                    }
                 }
             }
             // ─── Extended graphics state (`gs <name>`) ───────────────────
@@ -1415,14 +1505,16 @@ public class PageRenderer(
                         val image = decodeImageCached(slot, state.current.fillColor, colorSpaces)
                             .withIntent(imageIntent(slot.stream.dict, state.current), state.current.blackPointCompensation)
                         if (paintsNothing(image, state.current)) return
-                        withSoftMask(state.current) { paintImage(image, state.current) }
+                        element(state) { withSoftMask(state.current) { paintImage(image, state.current) } }
                     }
                     // A transparency group takes the soft mask once, on its composited
                     // result, not once per object inside it (ISO 32000-1, 11.6.6, #66).
-                    "Form" -> if (isTransparencyGroup(slot.stream)) {
-                        withSoftMask(state.current) { renderFormXObject(slot.stream, state, slot.objectNumber) }
-                    } else {
-                        renderFormXObject(slot.stream, state, slot.objectNumber)
+                    "Form" -> element(state) {
+                        if (isTransparencyGroup(slot.stream)) {
+                            withSoftMask(state.current) { renderFormXObject(slot.stream, state, slot.objectNumber) }
+                        } else {
+                            renderFormXObject(slot.stream, state, slot.objectNumber)
+                        }
                     }
                 }
             }
@@ -1435,11 +1527,13 @@ public class PageRenderer(
                 val s = state.current
                 // sh paints under the active soft mask like every other painting
                 // operator (ISO 32000-1, 11.6.5.1, #65).
-                withSoftMask(s) {
-                    fillShadingInBBox(
-                        shading.withIntent(s.renderingIntent, s.blackPointCompensation), s.ctm,
-                        clipPath = null, alpha = s.fillAlpha, blendMode = s.blendMode,
-                    )
+                element(state) {
+                    withSoftMask(s) {
+                        fillShadingInBBox(
+                            shading.withIntent(s.renderingIntent, s.blackPointCompensation), s.ctm,
+                            clipPath = null, alpha = s.fillAlpha, blendMode = s.blendMode,
+                        )
+                    }
                 }
             }
 
@@ -1449,7 +1543,7 @@ public class PageRenderer(
                 val blob = op.inlineImage ?: return
                 val img = decodeInlineImage(blob, state.current, colorSpaces) ?: return
                 if (paintsNothing(img, state.current)) return
-                withSoftMask(state.current) { paintImage(img, state.current) }
+                element(state) { withSoftMask(state.current) { paintImage(img, state.current) } }
             }
 
             // ─── Marked content (optional-content visibility) ────────────
@@ -2679,6 +2773,16 @@ public class PageRenderer(
         const val MAX_TILES = 20_000L
         /** Max Form-XObject nesting depth before bailing (recursion guard). */
         const val MAX_FORM_DEPTH = 15
+
+        /**
+         * The pixels a knockout group composited from rasters may render, three renders of its
+         * box for each object: about a second on AWT, or 33 objects over a box of a million
+         * pixels. Past it the group paints as a layer.
+         */
+        const val KNOCKOUT_PIXEL_BUDGET = 100_000_000L
+
+        /** The operators that paint an elementary object (ISO 32000-1, 11.4.6). */
+        val PAINTING_OPERATORS = setOf("S", "s", "f", "F", "f*", "B", "B*", "b", "b*", "Tj", "'", "\"", "TJ", "Do", "sh", "BI")
 
         /** The names of the device colour spaces an inline image can give, abbreviations included. */
         private val DEVICE_SPACE_NAMES = setOf("DeviceGray", "G", "DeviceRGB", "RGB", "DeviceCMYK", "CMYK")
