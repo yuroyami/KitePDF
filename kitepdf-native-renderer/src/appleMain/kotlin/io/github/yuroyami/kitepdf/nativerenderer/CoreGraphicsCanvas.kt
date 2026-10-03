@@ -645,7 +645,9 @@ public class CoreGraphicsCanvas(ctx: CGContextRef) : KiteCanvas {
      * clip. A render paints into a bitmap context of the box, as a soft mask's group does. The
      * backdrop is a snapshot of the host when it is a bitmap context with no transparency layer
      * open. Past [MASK_PIXEL_BUDGET] the step works at a lower resolution, and then reads no
-     * backdrop. A raster's first row is the top of the box, where device y is highest.
+     * backdrop. A raster's first row is the top of the box. Quartz's base space runs up, but a
+     * context's device space can run either way, and a bitmap context's runs down, so the
+     * step reads which way from the context (#308).
      */
     override fun rasterStep(region: KiteRectangle, ctm: KiteMatrix, step: KiteRasterStep): Boolean {
         val toDevice = CGContextGetUserSpaceToDeviceSpaceTransform(ctx)
@@ -657,27 +659,38 @@ public class CoreGraphicsCanvas(ctx: CGContextRef) : KiteCanvas {
         val pixels = width.toLong() * height
         if (pixels > MASK_PIXEL_BUDGET * UNBOUNDED_MASK_FACTOR) return false
         val scale = if (pixels > MASK_PIXEL_BUDGET) sqrt(MASK_PIXEL_BUDGET.toDouble() / pixels) else 1.0
-        return step.run(CoreGraphicsRasterScope(area[0], area[1], width, height, scale, userToDevice, ctm))
+        val userToBase = platform.CoreGraphics.CGContextGetCTM(ctx).useContents { KiteMatrix(a, b, c, d, tx, ty) }
+        val baseToDevice = userToDevice.concat(userToBase.invert() ?: return false)
+        return step.run(CoreGraphicsRasterScope(area[0], area[1], width, height, scale, userToDevice, baseToDevice, ctm))
     }
 
     /**
-     * One raster step over the box of [boxWidth] by [boxHeight] device pixels whose bottom left
-     * corner is ([x0], [y0]), at [scale]. [userToDevice] is the host's own transform.
+     * One raster step over the box of [boxWidth] by [boxHeight] device pixels whose corner of
+     * least x and y is ([x0], [y0]), at [scale]. [userToDevice] is the host's own transform, and
+     * [baseToDevice] maps its base space, which runs up, to device space.
      */
     private inner class CoreGraphicsRasterScope(
         private val x0: Int, private val y0: Int, private val boxWidth: Int, private val boxHeight: Int,
-        private val scale: Double, private val userToDevice: KiteMatrix, ctm: KiteMatrix,
+        private val scale: Double, private val userToDevice: KiteMatrix, private val baseToDevice: KiteMatrix,
+        ctm: KiteMatrix,
     ) : KiteRasterScope {
         private val host = ctx
         private val layered = layers > 0
         override val width = maxOf(1, ceil(boxWidth * scale).toInt())
         override val height = maxOf(1, ceil(boxHeight * scale).toInt())
 
-        // Device space runs up and a raster runs down, so the map ends with a flip.
-        override val toPixels: KiteMatrix = KiteMatrix(1.0, 0.0, 0.0, -1.0, 0.0, height.toDouble())
-            .concat(KiteMatrix.scaling(scale, scale))
+        /**
+         * Device pixels to raster pixels, whose rows run down. Where device space runs up, as
+         * the base space does, the map ends with a flip; a bitmap context's runs down already.
+         */
+        private val deviceToRaster: KiteMatrix = KiteMatrix.scaling(scale, scale)
             .concat(KiteMatrix.translation(-x0.toDouble(), -y0.toDouble()))
-            .concat(userToDevice).concat(ctm)
+            .let { if (baseToDevice.d < 0) it else flip(height).concat(it) }
+
+        override val toPixels: KiteMatrix = deviceToRaster.concat(userToDevice).concat(ctm)
+
+        /** A bitmap context runs up and keeps its top row first, so raster row r is its y of [height] - r. */
+        private fun flip(height: Int) = KiteMatrix(1.0, 0.0, 0.0, -1.0, 0.0, height.toDouble())
 
         override fun backdrop(): KiteRaster? {
             if (layered || scale != 1.0) return null
@@ -687,8 +700,11 @@ public class CoreGraphicsCanvas(ctx: CGContextRef) : KiteCanvas {
                 val fullWidth = platform.CoreGraphics.CGImageGetWidth(snapshot).toDouble()
                 val fullHeight = platform.CoreGraphics.CGImageGetHeight(snapshot).toDouble()
                 return paintInBitmap(null) { bitmap ->
+                    // The snapshot covers the host's base space, one unit a pixel, top row first.
+                    CGContextConcatCTM(bitmap, flip(height).concat(deviceToRaster).concat(baseToDevice).toCGAffine())
                     CGContextSetBlendMode(bitmap, CGBlendMode.kCGBlendModeCopy)
-                    CGContextDrawImage(bitmap, CGRectMake(-x0.toDouble(), -y0.toDouble(), fullWidth, fullHeight), snapshot)
+                    CGContextSetInterpolationQuality(bitmap, kCGInterpolationNone)
+                    CGContextDrawImage(bitmap, CGRectMake(0.0, 0.0, fullWidth, fullHeight), snapshot)
                 }
             } finally {
                 CGImageRelease(snapshot)
@@ -698,9 +714,7 @@ public class CoreGraphicsCanvas(ctx: CGContextRef) : KiteCanvas {
         override fun render(initial: KiteRaster?, content: () -> Unit): KiteRaster {
             if (initial != null) require(initial.width == width && initial.height == height) { "the initial raster has another size" }
             return paintInBitmap(initial) { bitmap ->
-                CGContextScaleCTM(bitmap, scale, scale)
-                CGContextTranslateCTM(bitmap, -x0.toDouble(), -y0.toDouble())
-                CGContextConcatCTM(bitmap, userToDevice.toCGAffine())
+                CGContextConcatCTM(bitmap, flip(height).concat(deviceToRaster).concat(userToDevice).toCGAffine())
                 val savedCtx = ctx
                 val savedOpen = openLayers
                 val savedLayers = layers
@@ -737,12 +751,15 @@ public class CoreGraphicsCanvas(ctx: CGContextRef) : KiteCanvas {
             try {
                 CGContextSaveGState(host)
                 try {
-                    // Draw in device pixels: undo the host's own transform.
+                    // Undo the host's own transform, then go from the image, which runs up with its
+                    // top row first, through raster pixels to device pixels.
+                    val toDevice = deviceToRaster.invert() ?: return
                     CGContextConcatCTM(host, CGAffineTransformInvert(userToDevice.toCGAffine()))
+                    CGContextConcatCTM(host, toDevice.concat(flip(height)).toCGAffine())
                     CGContextSetBlendMode(host, blendMode.toCG())
                     platform.CoreGraphics.CGContextSetAlpha(host, alpha.coerceIn(0.0, 1.0))
                     CGContextSetInterpolationQuality(host, if (scale == 1.0) kCGInterpolationNone else kCGInterpolationLow)
-                    CGContextDrawImage(host, CGRectMake(x0.toDouble(), y0.toDouble(), boxWidth.toDouble(), boxHeight.toDouble()), image)
+                    CGContextDrawImage(host, CGRectMake(0.0, 0.0, width.toDouble(), height.toDouble()), image)
                 } finally {
                     CGContextRestoreGState(host)
                 }

@@ -100,6 +100,19 @@ class CoreGraphicsGroupTest {
     }
 
     @Test
+    fun a_group_over_a_page_of_two_halves_blends_each_with_its_own_half() {
+        // Light green below y 100 and white above. A raster read upside down would swap them.
+        val pixels = render(
+            pdf(
+                "0.5 1 0.5 rg 0 0 200 100 re f 1 g 0 100 200 100 re f /GS1 gs /Fm1 Do", "/GS1 << /BM /Screen >>",
+                "/GM gs 1 1 0 rg 40 40 120 120 re f", "/GM << /BM /Multiply >>",
+            ),
+        )
+        pixels.assertPixel(100, 60, listOf(191, 255, 127))
+        pixels.assertPixel(100, 140, listOf(255, 255, 255))
+    }
+
+    @Test
     fun a_knockout_group_blends_each_object_with_the_page() {
         // The yellow square multiplies onto the green page, not onto the red square it knocks out.
         val pixels = render(
