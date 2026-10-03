@@ -96,6 +96,8 @@ kotlin {
         jvmTest.dependencies {
             implementation(currentOsSkikoRuntime())
             implementation(projects.kitepdfDifftest)
+            // A book's scripts in the view, run on KiteJS (#41).
+            implementation(projects.kitepdfJavascript)
         }
 
         getByName("androidHostTest").dependencies {

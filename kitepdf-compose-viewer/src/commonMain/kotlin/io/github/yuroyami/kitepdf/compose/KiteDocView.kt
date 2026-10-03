@@ -229,11 +229,24 @@ public fun KiteDocView(
     scripts: io.github.yuroyami.kitepdf.PdfScriptHandler? = null,
     /** Called before links for a saved highlight. Return true to consume the tap. */
     onHighlightTap: ((KiteHighlight) -> Boolean)? = null,
+    /**
+     * Runs the scripts of a book's chapters, when the host wants them run (#41).
+     * `EpubScriptRunner` of `kitepdf-javascript` is one; without a handler a scripted chapter
+     * shows what its markup shows, which is the default.
+     *
+     * With a handler the viewer runs a scripted chapter's scripts when the reader first reaches
+     * it, gives each tap on one of its pages to the scripts before it follows a link there, and
+     * follows the link only when no script prevented the tap. It pumps the timers the scripts
+     * set, follows a change of `location` as a link, and takes the page counts again and draws
+     * a page again when a script changed its chapter.
+     */
+    epubScripts: io.github.yuroyami.kitepdf.epub.EpubScriptHandler? = null,
 ) {
     val scriptScope = rememberCoroutineScope()
     val scriptLane = remember { newScriptLane() }
     SideEffect {
         state.scripts = scripts
+        state.epubScripts = epubScripts
         state.scriptScope = scriptScope
         state.scriptLane = scriptLane
         // The thumbnail strip draws pages as the viewer does: with its theme and its decorator (#419).
@@ -288,6 +301,8 @@ public fun KiteDocView(
     LaunchedEffect(state, state.document) { state.loadChapters() }
     // A remote picture that lands draws the pages that painted it again (#38).
     LaunchedEffect(state, state.document) { state.followRemoteArrivals() }
+    // A chapter that the book's scripts changed takes its pages again and draws again (#41).
+    LaunchedEffect(state, state.document) { state.followChapterChanges() }
     // Which side the reader reached a placeholder from, so its chapter lands on the right page (#348).
     // It follows the item, not the slot number: a placeholder that becomes a page keeps its slot.
     LaunchedEffect(state) { snapshotFlow { state.readerItem() }.collect { state.noteReaderItem(it) } }
@@ -321,6 +336,7 @@ public fun KiteDocView(
     // of the caret, even when its input never took the focus (#365).
     DisposableEffect(state) { onDispose { state.blurFocusedField() } }
     KiteScriptTimers(state, scripts, scriptLane)
+    KiteEpubScriptTimers(state, epubScripts, scriptLane)
     KiteFormRevision(state, scripts)
 
     // Keep callbacks fresh without restarting pointer input during a press or a selection.
@@ -328,10 +344,27 @@ public fun KiteDocView(
     val currentLinkTap by rememberUpdatedState(onLinkTap)
     val currentTap by rememberUpdatedState(onTap)
     val currentScripts by rememberUpdatedState(scripts)
+    val currentEpubScripts by rememberUpdatedState(epubScripts)
     val tapScope = rememberCoroutineScope()
+
+    // The book's scripts: a scripted chapter's run when the reader reaches it, and a change of
+    // location that one asks for goes the way of a link (#41).
+    LaunchedEffect(epubScripts, state.document) {
+        val handler = epubScripts ?: return@LaunchedEffect
+        val book = state.document as? EpubDocument ?: return@LaunchedEffect
+        val stop = handler.onNavigate { href ->
+            tapScope.launch { followOverlayLink(state, tapScope, currentLinkTap, state.currentPage, href, KiteRectangle(0.0, 0.0, 0.0, 0.0)) }
+        }
+        try {
+            backOnComposeThread()
+            state.runChapterScripts(book, handler, scriptLane)
+        } finally {
+            stop()
+        }
+    }
+
     val linkAwareTap: (Offset) -> Unit = remember(state, tapScope) {
-        { offset ->
-            state.clearSelection()
+        fun tapAsUsual(offset: Offset) {
             if (!handleWidgetTap(state, currentScripts, offset, tapScope, currentLinkTap)) {
                 state.blurFocusedField()
                 val highlight = state.highlightAt(offset)
@@ -339,6 +372,22 @@ public fun KiteDocView(
                 val linkConsumed = !consumed && handleLinkTap(state, tapScope, currentLinkTap, offset)
                 if (!consumed && !linkConsumed) {
                     currentTap?.invoke(offset)
+                }
+            }
+        }
+        { offset ->
+            state.clearSelection()
+            val scripted = scriptedTap(state, currentEpubScripts, offset)
+            if (scripted == null) {
+                tapAsUsual(offset)
+            } else {
+                // The scripts see the tap first; a link there is followed only when none prevented it (#41).
+                val (handler, page, point) = scripted
+                tapScope.launch {
+                    val prevented = withContext(scriptLane) { scriptCall("tap", false) { handler.tap(page, point.x.toDouble(), point.y.toDouble()) } }
+                    state.epubScriptsRan()
+                    backOnComposeThread()
+                    if (!prevented) tapAsUsual(offset)
                 }
             }
         }
@@ -425,6 +474,24 @@ public fun KiteDocView(
  * the document moves the view to its target, a PDF page-turn link turns the page, and a PDF
  * script link runs in the view's scripts. Returns true when the tap was consumed.
  */
+/**
+ * The book's script handler, the page and the display-space point that a tap at [offset] goes to,
+ * when it lands on a page of a scripted chapter whose content is in memory; else null (#41).
+ */
+internal fun scriptedTap(
+    state: KiteDocViewState,
+    handler: io.github.yuroyami.kitepdf.epub.EpubScriptHandler?,
+    offset: Offset,
+): Triple<io.github.yuroyami.kitepdf.epub.EpubScriptHandler, EpubPage, Offset>? {
+    if (handler == null) return null
+    val hit = state.hitTestDisplay(offset) ?: return null
+    val page = state.pageAt(hit.pageIndex) as? EpubPage ?: return null
+    // A page whose content is not in memory would lay its chapter out here on the UI thread (#377).
+    if (!page.isContentLoaded) return null
+    val scripted = runCatching { page.document.isScripted(page.chapter) }.getOrDefault(false)
+    return if (scripted) Triple(handler, page, Offset(hit.x.toFloat(), hit.y.toFloat())) else null
+}
+
 internal fun handleLinkTap(
     state: KiteDocViewState,
     scope: kotlinx.coroutines.CoroutineScope,

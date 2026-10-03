@@ -510,6 +510,9 @@ public class KiteDocViewState(
     /** The document's script handler, when the host gave the viewer one. */
     internal var scripts: io.github.yuroyami.kitepdf.PdfScriptHandler? by mutableStateOf(null)
 
+    /** The book's script handler, when the host gave the viewer one (#41). */
+    internal var epubScripts: io.github.yuroyami.kitepdf.epub.EpubScriptHandler? = null
+
     /**
      * The form field that has the caret, or null when none has. A viewer shows the platform
      * keyboard while it is set, and what the reader types goes through the document's scripts.
@@ -914,6 +917,59 @@ public class KiteDocViewState(
         timerWake?.trySend(Unit)
     }
 
+    /** Wakes the pump of a book's timers, as [timerWake] does a document's (#41). */
+    @kotlin.concurrent.Volatile
+    internal var epubTimerWake: kotlinx.coroutines.channels.SendChannel<Unit>? = null
+
+    /** Tells the pump of a book's timers that its scripts ran (#41). */
+    internal fun epubScriptsRan() {
+        epubTimerWake?.trySend(Unit)
+    }
+
+    /**
+     * How many times the book's scripts changed its chapters, as [EpubDocument.chapterChanges]
+     * last said (#41). Written only on the composition's thread, by [followChapterChanges].
+     */
+    internal var chapterRevision: Int by mutableIntStateOf(0)
+
+    /**
+     * Takes the page counts again each time the book's scripts change a chapter, since a change
+     * can add or take pages, and draws the pages on screen again through [contentVersionOf] (#41).
+     */
+    internal suspend fun followChapterChanges() {
+        val epub = document as? EpubDocument ?: return
+        epub.chapterChanges.collect { changes ->
+            backOnComposeThread()
+            if (changes == chapterRevision) return@collect
+            chapterRevision = changes
+            publishNow()
+        }
+    }
+
+    /**
+     * Runs the scripts of each scripted chapter that the reader reaches, once a scroll has
+     * settled on it, on [lane] (#41). The handler runs a chapter's scripts the first time only.
+     */
+    internal suspend fun runChapterScripts(
+        book: EpubDocument,
+        handler: io.github.yuroyami.kitepdf.epub.EpubScriptHandler,
+        lane: kotlinx.coroutines.CoroutineDispatcher,
+    ) {
+        androidx.compose.runtime.snapshotFlow { if (adapter?.isScrollInProgress == true) null else currentLocation.chapter }
+            .filterNotNull()
+            .distinctUntilChanged()
+            .collect { chapter ->
+                withContext(lane) {
+                    if (scriptCall("isScripted", false) { book.isScripted(chapter) }) {
+                        scriptCall("chapterOpened", Unit) { handler.chapterOpened(chapter) }
+                        epubScriptsRan()
+                    }
+                }
+                // The flow takes its next snapshot on the thread this returns on (#443).
+                backOnComposeThread()
+            }
+    }
+
     /**
      * Changes whenever the form does, so the field layer repaints and the page bitmap does not.
      * A script that writes a field twenty times a second costs twenty overlay draws. Written
@@ -929,13 +985,15 @@ public class KiteDocViewState(
 
     /**
      * What [page]'s pixels depend on besides the viewer's own settings: for an EPUB page, the
-     * remote pictures of its chapter that have landed since it painted (#38). It reads
-     * [remoteArrivals], so a landing composes the pages on screen again, and a page whose
-     * chapter painted the picture draws again.
+     * remote pictures of its chapter that have landed since it painted (#38), and the changes its
+     * scripts made to its chapter (#41). It reads [remoteArrivals] and [chapterRevision], so a
+     * landing or a change composes the pages on screen again, and a page whose chapter changed
+     * draws again.
      */
     internal fun contentVersionOf(page: KitePage): Int {
-        if (remoteArrivals < 0) return 0
-        return (page as? EpubPage)?.remoteVersion ?: 0
+        // Both counts only grow, so their sum moves whenever either does (#41).
+        if (remoteArrivals < 0 || chapterRevision < 0) return 0
+        return (page as? EpubPage)?.let { it.remoteVersion + it.chapterVersion } ?: 0
     }
 
     /** Copies [EpubDocument.remoteArrivals] into [remoteArrivals] for as long as the view shows this state (#38). */

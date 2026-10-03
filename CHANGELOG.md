@@ -19,6 +19,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `CoreGraphicsCanvas`. Which of them can read the backdrop, and where, is in the rendering
   guide (#209, #308).
 
+- `KiteDocView(epubScripts = EpubScriptRunner(book))` runs a book's scripts in the viewer: a
+  scripted chapter's run when the reader first reaches it, a tap on one of its pages goes to the
+  scripts first and a link there is followed only when no script prevented it, the timers are
+  pumped a frame at a time, a change of `location` goes the way of a tapped link, and a chapter
+  that a script changed is drawn again with the pages it has now. The new parameter comes last,
+  so a call that names its arguments compiles as before (#41).
+
 - `kitepdf-javascript` runs the scripts of an EPUB's chapters on KiteJS, over the library's own
   parse and layout, with no web engine: `EpubScriptRunner(book)` runs a chapter's scripts when
   it opens, sends a tap to the element under it as `pointerdown`, `mousedown`, `pointerup`,
