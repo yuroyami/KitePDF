@@ -454,6 +454,10 @@ operation, override both overloads.
 With `by inner`, Kotlin sends an overload that the wrapper does not override
 straight to `inner`.
 
+`rasterStep` needs no override. An SVG filter or a PDF transparency group that
+works on pixels paints its content back through the canvas that the document
+holds, which is the wrapper, so the wrapper sees those paints as usual.
+
 Rasterization runs on a background thread, and a page renders once, system-font
 text included: off Main on Android, the desktop JVM, iOS and macOS, and in a
 browser on its one thread (#131, #487). Create a fresh wrapper in the function,

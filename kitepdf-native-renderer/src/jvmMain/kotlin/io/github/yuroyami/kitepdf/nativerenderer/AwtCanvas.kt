@@ -14,6 +14,9 @@ import io.github.yuroyami.kitepdf.core.render.KiteMaskTransfer
 import io.github.yuroyami.kitepdf.core.render.KiteMatrix
 import io.github.yuroyami.kitepdf.core.render.KiteCanvas
 import io.github.yuroyami.kitepdf.core.render.KitePath
+import io.github.yuroyami.kitepdf.core.render.KiteRaster
+import io.github.yuroyami.kitepdf.core.render.KiteRasterScope
+import io.github.yuroyami.kitepdf.core.render.KiteRasterStep
 import io.github.yuroyami.kitepdf.core.render.KiteShading
 import io.github.yuroyami.kitepdf.core.render.RgbColor
 import io.github.yuroyami.kitepdf.core.render.SoftMask
@@ -1184,6 +1187,139 @@ public class AwtCanvas(private var g: Graphics2D) : KiteCanvas {
         val dirtyRows = painted.y until painted.y + painted.height
         giveBackMaskBuffer(layer, dirtyRows)
         giveBackMaskBuffer(mask, dirtyRows)
+    }
+
+    /**
+     * The raster step (#209, #308): its box is [region] under the device transform, cut to the
+     * clip and rounded out to whole pixels. Past [maskPixelBudget] the step works at a lower
+     * resolution, as a soft mask does (#264), and then reads no backdrop.
+     */
+    override fun rasterStep(region: KiteRectangle, ctm: KiteMatrix, step: KiteRasterStep): Boolean {
+        val target = g
+        val box = region.normalized()
+        val toDevice = AffineTransform(target.transform).apply {
+            concatenate(AffineTransform(ctm.a, ctm.b, ctm.c, ctm.d, ctm.e, ctm.f))
+        }
+        val area = toDevice.createTransformedShape(Rectangle2D.Double(box.left, box.bottom, box.width, box.height)).bounds2D
+        if (!listOf(area.minX, area.minY, area.maxX, area.maxY).all { it.isFinite() }) return false
+        target.clip?.let { clip ->
+            Rectangle2D.intersect(area, target.transform.createTransformedShape(clip).bounds2D, area)
+        }
+        if (area.isEmpty) return true
+        val bounds = area.bounds
+        if (bounds.width <= 0 || bounds.height <= 0) return true
+        val pixels = bounds.width.toLong() * bounds.height
+        if (pixels > maskPixelBudget * UNBOUNDED_MASK_FACTOR) return false
+        val scale = if (pixels > maskPixelBudget) kotlin.math.sqrt(maskPixelBudget.toDouble() / pixels) else 1.0
+        return step.run(AwtRasterScope(target, bounds, scale, toDevice))
+    }
+
+    /**
+     * The scope of one raster step on [target]: [bounds] in its device pixels, at [scale].
+     * [toDevice] maps the step's region to those device pixels.
+     */
+    private inner class AwtRasterScope(
+        private val target: Graphics2D,
+        private val bounds: java.awt.Rectangle,
+        private val scale: Double,
+        toDevice: AffineTransform,
+    ) : KiteRasterScope {
+        override val width = maxOf(1, kotlin.math.ceil(bounds.width * scale).toInt())
+        override val height = maxOf(1, kotlin.math.ceil(bounds.height * scale).toInt())
+
+        override val toPixels: KiteMatrix = AffineTransform.getScaleInstance(scale, scale).apply {
+            translate(-bounds.x.toDouble(), -bounds.y.toDouble())
+            concatenate(toDevice)
+        }.let { KiteMatrix(it.scaleX, it.shearY, it.shearX, it.scaleY, it.translateX, it.translateY) }
+
+        /**
+         * The page under the box. A soft clip's layer holds paints that have not reached the
+         * page yet, so each soft clip of this level composites what it holds first, and the
+         * pixels come from the graphics under the outermost one.
+         */
+        override fun backdrop(): KiteRaster? {
+            if (scale != 1.0) return null
+            var base = target
+            var dx = 0
+            var dy = 0
+            for (entry in clipStack.asReversed()) {
+                val soft = entry.soft ?: continue
+                if (soft.graphics !== base) continue
+                compositeSoftClip(soft)
+                base = soft.parent
+                dx += soft.bounds.x
+                dy += soft.bounds.y
+            }
+            val image = BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB)
+            transferMaskBackdrop(base, java.awt.Rectangle(bounds.x + dx, bounds.y + dy, width, height), image, null)
+            return KiteRaster(width, height, (image.raster.dataBuffer as DataBufferInt).data)
+        }
+
+        override fun render(initial: KiteRaster?, content: () -> Unit): KiteRaster {
+            val layer = BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB)
+            val data = (layer.raster.dataBuffer as DataBufferInt).data
+            if (initial != null) {
+                require(initial.width == width && initial.height == height) { "the initial raster has another size" }
+                System.arraycopy(initial.pixels, 0, data, 0, data.size)
+            }
+            val layerGraphics = layer.createGraphics()
+            layerGraphics.setRenderingHints(target.renderingHints)
+            if (scale != 1.0) layerGraphics.scale(scale, scale)
+            layerGraphics.translate(-bounds.x.toDouble(), -bounds.y.toDouble())
+            layerGraphics.transform(target.transform)
+            val parent = g
+            val savedClips = clipStack.toList()
+            val savedGroups = groupStack.toList()
+            val savedBlends = layerBlends
+            try {
+                g = layerGraphics
+                clipStack.clear()
+                groupStack.clear()
+                // The paints composite onto the raster itself.
+                layerBlends = null
+                content()
+            } finally {
+                // Clips and groups the content left open end onto the raster.
+                runCatching { while (clipStack.isNotEmpty()) popClip() }
+                runCatching { while (groupStack.isNotEmpty()) endTransparencyGroup() }
+                g = parent
+                clipStack.clear()
+                clipStack.addAll(savedClips)
+                groupStack.clear()
+                groupStack.addAll(savedGroups)
+                layerBlends = savedBlends
+                layerGraphics.dispose()
+            }
+            return KiteRaster(width, height, data)
+        }
+
+        override fun draw(raster: KiteRaster, alpha: Double, blendMode: KiteBlendMode) {
+            require(raster.width == width && raster.height == height) { "the raster has another size" }
+            val a = alpha.toFloat().coerceIn(0f, 1f)
+            val image = BufferedImage(
+                ColorModel.getRGBdefault(),
+                Raster.createPackedRaster(
+                    DataBufferInt(raster.pixels, raster.pixels.size), width, height, width,
+                    intArrayOf(0xFF0000, 0xFF00, 0xFF, -0x1000000), null,
+                ),
+                false, null,
+            )
+            // The result lands as one paint, also in the layer of a soft mask or a soft clip.
+            layerBlends?.record(blendMode)
+            val out = target.create() as Graphics2D
+            try {
+                out.transform = AffineTransform()
+                out.composite = if (blendMode == KiteBlendMode.Normal) AlphaComposite.SrcOver.derive(a) else PdfBlendComposite(blendMode, a)
+                if (scale == 1.0) {
+                    out.drawImage(image, bounds.x, bounds.y, null)
+                } else {
+                    out.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR)
+                    out.drawImage(image, bounds.x, bounds.y, bounds.width, bounds.height, null)
+                }
+            } finally {
+                out.dispose()
+            }
+        }
     }
 
     /** The bounds of the pixels with any alpha, or null when the content painted nothing. */

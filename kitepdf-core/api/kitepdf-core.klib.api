@@ -141,6 +141,10 @@ abstract fun interface io.github.yuroyami.kitepdf.core.parser/IndirectResolver {
     abstract fun resolve(io.github.yuroyami.kitepdf.core.parser/PdfReference): io.github.yuroyami.kitepdf.core.parser/PdfObject? // io.github.yuroyami.kitepdf.core.parser/IndirectResolver.resolve|resolve(io.github.yuroyami.kitepdf.core.parser.PdfReference){}[0]
 }
 
+abstract fun interface io.github.yuroyami.kitepdf.core.render/KiteRasterStep { // io.github.yuroyami.kitepdf.core.render/KiteRasterStep|null[0]
+    abstract fun run(io.github.yuroyami.kitepdf.core.render/KiteRasterScope): kotlin/Boolean // io.github.yuroyami.kitepdf.core.render/KiteRasterStep.run|run(io.github.yuroyami.kitepdf.core.render.KiteRasterScope){}[0]
+}
+
 abstract fun interface io.github.yuroyami.kitepdf.core/KiteCancellation { // io.github.yuroyami.kitepdf.core/KiteCancellation|null[0]
     abstract fun isCancelled(): kotlin/Boolean // io.github.yuroyami.kitepdf.core/KiteCancellation.isCancelled|isCancelled(){}[0]
 }
@@ -175,6 +179,20 @@ abstract interface io.github.yuroyami.kitepdf.core.render/KiteCanvas { // io.git
     open fun endTransparencyGroup() // io.github.yuroyami.kitepdf.core.render/KiteCanvas.endTransparencyGroup|endTransparencyGroup(){}[0]
     open fun fillShading(io.github.yuroyami.kitepdf.core.render/KiteShading, io.github.yuroyami.kitepdf.core.render/KiteMatrix, io.github.yuroyami.kitepdf.core.render/KitePath?, kotlin/Double = ..., io.github.yuroyami.kitepdf.core.render/KiteBlendMode = ...) // io.github.yuroyami.kitepdf.core.render/KiteCanvas.fillShading|fillShading(io.github.yuroyami.kitepdf.core.render.KiteShading;io.github.yuroyami.kitepdf.core.render.KiteMatrix;io.github.yuroyami.kitepdf.core.render.KitePath?;kotlin.Double;io.github.yuroyami.kitepdf.core.render.KiteBlendMode){}[0]
     open fun hostGlyphOutline(kotlin/String, io.github.yuroyami.kitepdf.core.font/FontSpec): io.github.yuroyami.kitepdf.core.render/KitePath? // io.github.yuroyami.kitepdf.core.render/KiteCanvas.hostGlyphOutline|hostGlyphOutline(kotlin.String;io.github.yuroyami.kitepdf.core.font.FontSpec){}[0]
+    open fun rasterStep(io.github.yuroyami.kitepdf.core/KiteRectangle, io.github.yuroyami.kitepdf.core.render/KiteMatrix, io.github.yuroyami.kitepdf.core.render/KiteRasterStep): kotlin/Boolean // io.github.yuroyami.kitepdf.core.render/KiteCanvas.rasterStep|rasterStep(io.github.yuroyami.kitepdf.core.KiteRectangle;io.github.yuroyami.kitepdf.core.render.KiteMatrix;io.github.yuroyami.kitepdf.core.render.KiteRasterStep){}[0]
+}
+
+abstract interface io.github.yuroyami.kitepdf.core.render/KiteRasterScope { // io.github.yuroyami.kitepdf.core.render/KiteRasterScope|null[0]
+    abstract val height // io.github.yuroyami.kitepdf.core.render/KiteRasterScope.height|{}height[0]
+        abstract fun <get-height>(): kotlin/Int // io.github.yuroyami.kitepdf.core.render/KiteRasterScope.height.<get-height>|<get-height>(){}[0]
+    abstract val toPixels // io.github.yuroyami.kitepdf.core.render/KiteRasterScope.toPixels|{}toPixels[0]
+        abstract fun <get-toPixels>(): io.github.yuroyami.kitepdf.core.render/KiteMatrix // io.github.yuroyami.kitepdf.core.render/KiteRasterScope.toPixels.<get-toPixels>|<get-toPixels>(){}[0]
+    abstract val width // io.github.yuroyami.kitepdf.core.render/KiteRasterScope.width|{}width[0]
+        abstract fun <get-width>(): kotlin/Int // io.github.yuroyami.kitepdf.core.render/KiteRasterScope.width.<get-width>|<get-width>(){}[0]
+
+    abstract fun backdrop(): io.github.yuroyami.kitepdf.core.render/KiteRaster? // io.github.yuroyami.kitepdf.core.render/KiteRasterScope.backdrop|backdrop(){}[0]
+    abstract fun draw(io.github.yuroyami.kitepdf.core.render/KiteRaster, kotlin/Double = ..., io.github.yuroyami.kitepdf.core.render/KiteBlendMode = ...) // io.github.yuroyami.kitepdf.core.render/KiteRasterScope.draw|draw(io.github.yuroyami.kitepdf.core.render.KiteRaster;kotlin.Double;io.github.yuroyami.kitepdf.core.render.KiteBlendMode){}[0]
+    abstract fun render(io.github.yuroyami.kitepdf.core.render/KiteRaster? = ..., kotlin/Function0<kotlin/Unit>): io.github.yuroyami.kitepdf.core.render/KiteRaster // io.github.yuroyami.kitepdf.core.render/KiteRasterScope.render|render(io.github.yuroyami.kitepdf.core.render.KiteRaster?;kotlin.Function0<kotlin.Unit>){}[0]
 }
 
 abstract interface io.github.yuroyami.kitepdf.core.script/KiteScriptEngine : kotlin/AutoCloseable { // io.github.yuroyami.kitepdf.core.script/KiteScriptEngine|null[0]
@@ -1387,6 +1405,21 @@ final class io.github.yuroyami.kitepdf.core.render/KitePath { // io.github.yuroy
         final val EMPTY // io.github.yuroyami.kitepdf.core.render/KitePath.Companion.EMPTY|{}EMPTY[0]
             final fun <get-EMPTY>(): io.github.yuroyami.kitepdf.core.render/KitePath // io.github.yuroyami.kitepdf.core.render/KitePath.Companion.EMPTY.<get-EMPTY>|<get-EMPTY>(){}[0]
     }
+}
+
+final class io.github.yuroyami.kitepdf.core.render/KiteRaster { // io.github.yuroyami.kitepdf.core.render/KiteRaster|null[0]
+    constructor <init>(kotlin/Int, kotlin/Int) // io.github.yuroyami.kitepdf.core.render/KiteRaster.<init>|<init>(kotlin.Int;kotlin.Int){}[0]
+    constructor <init>(kotlin/Int, kotlin/Int, kotlin/IntArray) // io.github.yuroyami.kitepdf.core.render/KiteRaster.<init>|<init>(kotlin.Int;kotlin.Int;kotlin.IntArray){}[0]
+
+    final val height // io.github.yuroyami.kitepdf.core.render/KiteRaster.height|{}height[0]
+        final fun <get-height>(): kotlin/Int // io.github.yuroyami.kitepdf.core.render/KiteRaster.height.<get-height>|<get-height>(){}[0]
+    final val pixels // io.github.yuroyami.kitepdf.core.render/KiteRaster.pixels|{}pixels[0]
+        final fun <get-pixels>(): kotlin/IntArray // io.github.yuroyami.kitepdf.core.render/KiteRaster.pixels.<get-pixels>|<get-pixels>(){}[0]
+    final val width // io.github.yuroyami.kitepdf.core.render/KiteRaster.width|{}width[0]
+        final fun <get-width>(): kotlin/Int // io.github.yuroyami.kitepdf.core.render/KiteRaster.width.<get-width>|<get-width>(){}[0]
+
+    final fun copy(): io.github.yuroyami.kitepdf.core.render/KiteRaster // io.github.yuroyami.kitepdf.core.render/KiteRaster.copy|copy(){}[0]
+    final fun get(kotlin/Int, kotlin/Int): kotlin/Int // io.github.yuroyami.kitepdf.core.render/KiteRaster.get|get(kotlin.Int;kotlin.Int){}[0]
 }
 
 final class io.github.yuroyami.kitepdf.core.render/KiteStrokePen { // io.github.yuroyami.kitepdf.core.render/KiteStrokePen|null[0]

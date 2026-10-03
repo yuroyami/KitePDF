@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `KiteCanvas.rasterStep(region, ctm, step)` runs a `KiteRasterStep` on the device pixels
+  of a region: the step reads the backdrop, has content painted into rasters of the box
+  through the canvas, works on the pixels in plain Kotlin and draws the result back in a
+  blend mode at an alpha, all through a `KiteRasterScope`. A `KiteRaster` holds straight
+  ARGB pixels. The method has a default that returns false, so a canvas written before it
+  still compiles and its caller draws without the step. `AwtCanvas` implements it (#209,
+  #308).
+
 - A book's images, fonts and backgrounds that it names by an `https` URL load through
   `EpubSettings.resourceFetcher`, an `EpubResourceFetcher` (EPUB 3.3, 3.6). `kitepdf-net`
   ships one on a Ktor client, `EpubResourceFetcher(client)`, capped at 16 MiB a resource.
