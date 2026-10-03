@@ -19,6 +19,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `CoreGraphicsCanvas`. Which of them can read the backdrop, and where, is in the rendering
   guide (#209, #308).
 
+- `kitepdf-javascript` runs the scripts of an EPUB's chapters on KiteJS, over the library's own
+  parse and layout, with no web engine: `EpubScriptRunner(book)` runs a chapter's scripts when
+  it opens, sends a tap to the element under it as `pointerdown`, `mousedown`, `pointerup`,
+  `mouseup` and `click`, says whether a script prevented it, pumps the timers and passes on a
+  change of `location`. A chapter is a window of its own, with a DOM over its tree, events,
+  timers, `console` and an in-memory `localStorage`; nothing reaches outside the book. What a
+  script changes is laid out again, with the pages the chapter gains or loses, and the changes
+  belong to the book. `EpubScriptPolicy` bounds each call. In `kitepdf-epub`,
+  `EpubScriptSession` does the same over any `KiteScriptEngine`, and `EpubScriptHandler` is what
+  a viewer needs from it. `KiteXmlNode.Element.attrs` and `KiteXmlNode.Text.text` can be set, for
+  the tree a script layer changes (#41).
+
 - `EpubDocument.chapterChanges` counts the changes the book's scripts made to its chapters,
   for every document over the book, and `EpubPage.chapterVersion` says how many reached a
   page's chapter. A viewer takes the page counts again when the first moves, since a change
@@ -103,6 +115,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- An element with the `hidden` attribute no longer shows, as in a browser: the user agent sheet
+  now has `[hidden] { display: none }` (#41).
+
 - An inline frame or an HTML object of an EPUB keeps to one page, as an image does. A frame
   that moved whole to the next page was listed on the page before it too, with a box that
   ran past its bottom, and an object split between two pages with its fallback. A chapter of
@@ -137,6 +152,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the scene's own draw pass, where Compose draws the scene's text (#464).
 
 ### Changed
+
+- `kitepdf-javascript` depends on `kitepdf-epub`, whose scripts it now runs (#41).
 
 - `KitePageRasterizer` keeps the coverage of the glyphs it draws from their own outlines,
   up to 4 MB, as MuPDF keeps its glyph cache. It fills each glyph's path once for each size

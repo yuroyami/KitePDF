@@ -13,7 +13,11 @@ package io.github.yuroyami.kitepdf.core.xml
 public sealed class KiteXmlNode {
     public class Element(
         public val tag: String,
-        public val attrs: Map<String, String>,
+        /**
+         * The attributes, by name. A script layer replaces the map when a script sets or removes
+         * one, on a tree of its own that no layout reads meanwhile (#41).
+         */
+        public var attrs: Map<String, String>,
         public val children: MutableList<KiteXmlNode> = ArrayList(),
     ) : KiteXmlNode() {
         /**
@@ -24,5 +28,6 @@ public sealed class KiteXmlNode {
         public var parent: Element? = null
     }
 
-    public class Text(public val text: String) : KiteXmlNode()
+    /** A text leaf. A script layer changes [text] on a tree of its own, as [Element.attrs] (#41). */
+    public class Text(public var text: String) : KiteXmlNode()
 }

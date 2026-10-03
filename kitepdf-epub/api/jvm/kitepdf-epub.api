@@ -249,6 +249,38 @@ public abstract interface class io/github/yuroyami/kitepdf/epub/EpubResourceFetc
 	public abstract fun fetch (Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 }
 
+public abstract interface class io/github/yuroyami/kitepdf/epub/EpubScriptHandler {
+	public fun chapterOpened (I)V
+	public fun getHasTimers ()Z
+	public fun onNavigate (Lkotlin/jvm/functions/Function1;)Lkotlin/jvm/functions/Function0;
+	public fun onTimersChanged (Lkotlin/jvm/functions/Function0;)Lkotlin/jvm/functions/Function0;
+	public fun pumpTimers (J)Ljava/lang/Long;
+	public fun tap (Lio/github/yuroyami/kitepdf/epub/EpubPage;DD)Z
+}
+
+public final class io/github/yuroyami/kitepdf/epub/EpubScriptHandler$DefaultImpls {
+	public static fun chapterOpened (Lio/github/yuroyami/kitepdf/epub/EpubScriptHandler;I)V
+	public static fun getHasTimers (Lio/github/yuroyami/kitepdf/epub/EpubScriptHandler;)Z
+	public static fun onNavigate (Lio/github/yuroyami/kitepdf/epub/EpubScriptHandler;Lkotlin/jvm/functions/Function1;)Lkotlin/jvm/functions/Function0;
+	public static fun onTimersChanged (Lio/github/yuroyami/kitepdf/epub/EpubScriptHandler;Lkotlin/jvm/functions/Function0;)Lkotlin/jvm/functions/Function0;
+	public static fun pumpTimers (Lio/github/yuroyami/kitepdf/epub/EpubScriptHandler;J)Ljava/lang/Long;
+	public static fun tap (Lio/github/yuroyami/kitepdf/epub/EpubScriptHandler;Lio/github/yuroyami/kitepdf/epub/EpubPage;DD)Z
+}
+
+public final class io/github/yuroyami/kitepdf/epub/EpubScriptSession : io/github/yuroyami/kitepdf/epub/EpubScriptHandler, java/lang/AutoCloseable {
+	public fun <init> (Lio/github/yuroyami/kitepdf/epub/EpubDocument;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function2;Lkotlin/jvm/functions/Function0;)V
+	public synthetic fun <init> (Lio/github/yuroyami/kitepdf/epub/EpubDocument;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function2;Lkotlin/jvm/functions/Function0;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun chapterOpened (I)V
+	public fun close ()V
+	public final fun getDocument ()Lio/github/yuroyami/kitepdf/epub/EpubDocument;
+	public final fun getFailures ()Ljava/util/List;
+	public fun getHasTimers ()Z
+	public fun onNavigate (Lkotlin/jvm/functions/Function1;)Lkotlin/jvm/functions/Function0;
+	public fun onTimersChanged (Lkotlin/jvm/functions/Function0;)Lkotlin/jvm/functions/Function0;
+	public fun pumpTimers (J)Ljava/lang/Long;
+	public fun tap (Lio/github/yuroyami/kitepdf/epub/EpubPage;DD)Z
+}
+
 public final class io/github/yuroyami/kitepdf/epub/EpubSemanticsKt {
 	public static final fun getEpubType (Lio/github/yuroyami/kitepdf/core/KiteReadingItem;)Ljava/lang/String;
 }

@@ -68,7 +68,7 @@ New PDFs with the standard fonts, your own fonts and your images.
 <td width="33%" valign="top">
 
 **Run**<br>
-The JavaScript inside PDF forms, so totals add up and fields format themselves. Experimental.
+The JavaScript inside PDF forms and EPUB chapters, so totals add up and a quiz answers. Experimental.
 
 </td>
 </tr>
@@ -128,7 +128,7 @@ kotlin {
             implementation("io.github.yuroyami:kitepdf-compose-viewer:0.12.0")   // KiteDocView for Compose Multiplatform
             implementation("io.github.yuroyami:kitepdf-native-renderer:0.12.0")  // page-to-image on the platform canvas
             implementation("io.github.yuroyami:kitepdf-skia-renderer:0.12.0")    // page-to-image on Skia (on Android, add one repository)
-            implementation("io.github.yuroyami:kitepdf-javascript:0.12.0")       // runs the JavaScript inside PDFs (pulls in KiteJS)
+            implementation("io.github.yuroyami:kitepdf-javascript:0.12.0")       // runs the JavaScript inside PDFs and EPUBs (pulls in KiteJS)
             implementation("io.github.yuroyami:kitepdf-net:0.12.0")              // loads documents from a URL (add a Ktor engine too)
             implementation("io.github.yuroyami:kitepdf-media:0.12.0")            // plays EPUB audio and video in KiteDocView (pulls in KitePlayer)
         }
@@ -312,11 +312,11 @@ val skiaPng = PdfPageRasterizer.encodeToPng(doc.pages[0], scale = 2.0)  // any S
 draws with Skia, alike on every target, and renders EPUB pages too with
 `EpubPageRasterizer`.
 
-### Run the JavaScript in a PDF
+### Run the JavaScript in a PDF or an EPUB
 
 Many forms add up totals and format their fields with JavaScript. `kitepdf-javascript`
 runs those scripts on [KiteJS](https://github.com/yuroyami/KiteJS), a JavaScript engine
-written in Kotlin. It is experimental, and it runs the scripts of PDF forms only.
+written in Kotlin. It is experimental.
 
 ```kotlin
 PdfScriptRunner(doc, onAlert = { alert -> showDialog(alert.message); 1 }).use { runner ->
@@ -326,7 +326,9 @@ PdfScriptRunner(doc, onAlert = { alert -> showDialog(alert.message); 1 }).use { 
 }
 ```
 
-See [JavaScript](https://yuroyami.github.io/KitePDF/javascript/) for what scripts can reach.
+`EpubScriptRunner` runs the scripts of an EPUB's chapters the same way, over the library's own
+layout, so a quiz or a scripted fixed-layout page works without a web engine. See
+[JavaScript](https://yuroyami.github.io/KitePDF/javascript/) for what scripts can reach.
 
 ## Platforms
 

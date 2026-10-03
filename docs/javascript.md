@@ -1,9 +1,11 @@
 # JavaScript
 
 PDF files carry JavaScript: a form that computes a total, a field that formats what is typed, a
-button that hides another field, a link that runs a script. The core library reads those scripts
-and runs none of them. The `kitepdf-javascript` artifact runs them, on
-[KiteJS](https://github.com/yuroyami/KiteJS), a JavaScript engine written in Kotlin.
+button that hides another field, a link that runs a script. EPUB chapters carry it too, as a quiz
+that checks an answer or a page whose button changes a picture. The core library reads those
+scripts and runs none of them. The `kitepdf-javascript` artifact runs them, on
+[KiteJS](https://github.com/yuroyami/KiteJS), a JavaScript engine written in Kotlin. The scripts
+of a PDF are below; those of an EPUB are in [Scripts in an EPUB](#scripts-in-an-epub).
 
 ```kotlin
 commonMain.dependencies {
@@ -145,6 +147,63 @@ whatever draws, so it is safe from two threads.
 ## Other engines
 
 The runner talks to the `KiteScriptEngine` interface in `kitepdf-core`. `KiteJsScriptEngine` is the KiteJS implementation. Pass your own engine to `PdfScriptRunner` to use another one.
+
+## Scripts in an EPUB
+
+`EpubScriptRunner` runs the scripts of a book's chapters on KiteJS, over the library's own parse
+and layout, so a scripted chapter works on every target with no web engine:
+
+```kotlin
+val book = EpubDocument.open(bytes)
+EpubScriptRunner(book).use { scripts ->
+    scripts.chapterOpened(0)                    // the chapter's scripts, then DOMContentLoaded and load
+    val page = book.page(KiteLocation(0, 0))
+    scripts.tap(page, x = 52.5, y = 90.0)       // a click on the element there, in display space
+}
+```
+
+Each chapter is a window of its own, with an engine of its own. Its scripts run the first time it
+opens, inline and from the book, in document order. A module script does not run, and neither
+does a script at an address outside the book. Once scripts run, `noscript` content no longer
+shows.
+
+They see a DOM over the chapter: `document` with `getElementById`, `querySelector`,
+`querySelectorAll` and the other finders, `createElement` and fragments; nodes and elements with
+the tree walk, `appendChild` and its relatives, `textContent`, `innerHTML` and `outerHTML`,
+attributes, `id`, `className`, `classList`, `dataset`, `hidden`, `style`, `matches` and
+`closest`; events with `addEventListener`, `on` attributes and properties, capture and bubbling,
+`preventDefault` and `stopPropagation`; `setTimeout`, `setInterval` and `requestAnimationFrame`;
+`console`; and `localStorage` and `sessionStorage`, in memory for the book. A check box, a radio
+button, a label, a `summary` and a submit button do what a click on them does in a browser.
+`getComputedStyle` answers `display`, `visibility`, `color`, `background-color`, `font-size`,
+`font-weight`, `font-style`, `opacity`, `text-align`, `position`, `float`, `width`, `height`,
+`z-index`, `left` and `top`, and `getBoundingClientRect` answers where the element is on its
+page, in CSS pixels.
+
+A tap goes to the element under it as `pointerdown`, `mousedown`, `pointerup`, `mouseup` and
+`click`. `tap` answers true when a script prevented the click, and then a viewer does not follow
+a link there. A script that changes its chapter has it laid out again from the changed tree as
+soon as the script returns, and the chapter may gain or lose pages: `book.chapterChanges` moves
+for a viewer to take the page counts again, and `page.chapterVersion` for it to draw the page
+again. The changes belong to the book, so a new font size keeps them.
+
+Nothing reaches outside the book. There is no `fetch` or `XMLHttpRequest`. A change of
+`location`, `window.open` and a script's own click on a link go to the listeners of
+`onNavigate`, with a zip path and its fragment for a place in the book. `alert`, `confirm` and
+`prompt` go to `onConsole`, and answer as dismissed.
+
+Not there yet: the documents of `<iframe>` and `<object>` elements, whose boxes stay as they are;
+form controls drawn on the page, since an `<input>` has no box yet, though scripts read and set
+its value and checkedness; `<canvas>`; and the syntax KiteJS does not have yet, `class`
+([KiteJS#2](https://github.com/yuroyami/KiteJS/issues/2)), `const` in the head of a `for` loop
+([KiteJS#11](https://github.com/yuroyami/KiteJS/issues/11)) and `async`
+([KiteJS#12](https://github.com/yuroyami/KiteJS/issues/12)). A script that uses one fails to
+parse and is listed in `failures`, and the chapter goes on as its other scripts leave it.
+
+`EpubScriptPolicy` sets how long each call may run: opening a chapter, a tap, a round of timers.
+`EpubScriptPolicy.DENY` runs nothing. The runner keeps its engines on a thread of its own, as
+`PdfScriptRunner` does. `EpubScriptSession` in `kitepdf-epub` is the same thing over any
+`KiteScriptEngine`, on the caller's thread.
 
 ## Targets
 
