@@ -98,6 +98,7 @@ public abstract interface class io/github/yuroyami/kitepdf/core/KiteDocument {
 	public fun pageCountIn (I)I
 	public fun pageIndexOf (Lio/github/yuroyami/kitepdf/core/KiteLocation;)Ljava/lang/Integer;
 	public fun prepareChapter (I)V
+	public fun prepareChapter (ILkotlin/jvm/functions/Function1;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 }
 
 public final class io/github/yuroyami/kitepdf/core/KiteDocument$DefaultImpls {
@@ -115,6 +116,7 @@ public final class io/github/yuroyami/kitepdf/core/KiteDocument$DefaultImpls {
 	public static fun pageCountIn (Lio/github/yuroyami/kitepdf/core/KiteDocument;I)I
 	public static fun pageIndexOf (Lio/github/yuroyami/kitepdf/core/KiteDocument;Lio/github/yuroyami/kitepdf/core/KiteLocation;)Ljava/lang/Integer;
 	public static fun prepareChapter (Lio/github/yuroyami/kitepdf/core/KiteDocument;I)V
+	public static fun prepareChapter (Lio/github/yuroyami/kitepdf/core/KiteDocument;ILkotlin/jvm/functions/Function1;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 }
 
 public class io/github/yuroyami/kitepdf/core/KiteFormatException : java/lang/RuntimeException {

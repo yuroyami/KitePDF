@@ -642,6 +642,7 @@ public final class io/github/yuroyami/kitepdf/PdfDocument : io/github/yuroyami/k
 	public fun pageIndexOf (Lio/github/yuroyami/kitepdf/core/KiteLocation;)Ljava/lang/Integer;
 	public final fun pageIndexOfField (Lio/github/yuroyami/kitepdf/PdfFormField;)Ljava/lang/Integer;
 	public fun prepareChapter (I)V
+	public fun prepareChapter (ILkotlin/jvm/functions/Function1;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun resolve (Lio/github/yuroyami/kitepdf/core/parser/PdfReference;)Lio/github/yuroyami/kitepdf/core/parser/PdfObject;
 	public final fun resolveDestination (Lio/github/yuroyami/kitepdf/core/parser/PdfObject;)Lio/github/yuroyami/kitepdf/PdfDestination;
 	public final fun setFontCacheBudgetBytes (J)V

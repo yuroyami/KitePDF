@@ -120,16 +120,39 @@ internal class BoxLayout(
      * measure against; without it the laid-out document height stands in.
      */
     fun layout(root: BlockBox, contentWidth: Double, contentHeight: Double? = null): Double {
+        val run = start(root, contentWidth, contentHeight)
+        while (!run.step()) Unit
+        return root.borderBoxHeight
+    }
+
+    /**
+     * [layout] as a [Run] of steps, each the next child of a block in normal flow or the end of a
+     * block, so that a caller can stop between two steps and go on later (#389). Until the run
+     * ends, this layout serves no other.
+     */
+    fun start(root: BlockBox, contentWidth: Double, contentHeight: Double? = null): Run {
         activeFloats.clear()
         pendingAbs.clear()
         pageCb.left = 0.0; pageCb.top = 0.0
         pageCb.width = contentWidth; pageCb.height = contentHeight ?: 0.0
         currentCb = pageCb
-        layoutBlock(root, xLeft = 0.0, availWidth = contentWidth, topY = 0.0)
-        if (contentHeight == null) pageCb.height = root.borderBoxHeight
-        flushAbs(pageCb)
-        applyRelativeOffsets(root)
-        return root.borderBoxHeight
+        return Run(root, contentHeight)
+    }
+
+    /** One layout of [start], a step at a time. */
+    inner class Run internal constructor(private val root: BlockBox, private val contentHeight: Double?) {
+        private val frames = arrayListOf(BlockFrame(root, xLeft = 0.0, availWidth = pageCb.width, topY = 0.0, forcedWidth = null))
+
+        /** Takes the next step, and returns true once the layout is done. */
+        fun step(): Boolean {
+            if (frames.isEmpty()) return true
+            stepFrames(frames)
+            if (frames.isNotEmpty()) return false
+            if (contentHeight == null) pageCb.height = root.borderBoxHeight
+            flushAbs(pageCb)
+            applyRelativeOffsets(root)
+            return true
+        }
     }
 
     /**
@@ -175,58 +198,105 @@ internal class BoxLayout(
      * starts at [xLeft] and takes that width whatever its own width and margins say (#33).
      */
     private fun layoutBlock(box: BlockBox, xLeft: Double, availWidth: Double, topY: Double, forcedWidth: Double? = null) {
-        val s = box.style
+        val frames = arrayListOf(BlockFrame(box, xLeft, availWidth, topY, forcedWidth))
+        while (frames.isNotEmpty()) stepFrames(frames)
+    }
+
+    /**
+     * One step of [frames]: the next child of the innermost block, or the end of that block. A
+     * block child in normal flow opens a frame of its own instead of a call, so a block nested a
+     * hundred deep costs no stack, and a [Run] can stop between any two steps (#389).
+     */
+    private fun stepFrames(frames: ArrayList<BlockFrame>) {
+        val frame = frames.last()
+        if (frame.next < frame.children.size) {
+            frame.place(frame.children[frame.next++])?.let(frames::add)
+            return
+        }
+        frames.removeAt(frames.lastIndex)
+        frame.close()
+        frames.lastOrNull()?.landed(frame.box)
+    }
+
+    /**
+     * A block whose children are laying out: what the box model resolved when it opened, and the
+     * flow cursor its children move down. [layoutBlock] runs one to its end; a [Run] keeps one for
+     * each block between the root and the child it is at.
+     */
+    private inner class BlockFrame(val box: BlockBox, xLeft: Double, availWidth: Double, topY: Double, forcedWidth: Double?) {
+        private val s = box.style
         // A positioned box is the containing block for its out-of-flow
         // descendants, so it opens one and fills it in once its size is known.
-        val savedCb = currentCb
-        val ownCb = if (s.position != CssPosition.STATIC) AbsContainingBlock() else null
-        if (ownCb != null) currentCb = ownCb
-        val bL = s.borderLeft.effective; val bR = s.borderRight.effective
-        val extra = s.marginLeftPt + s.marginRightPt + bL + bR + s.paddingLeftPt + s.paddingRightPt
-        var contentW = s.widthPt ?: (availWidth - extra)
-        s.maxWidthPt?.let { if (contentW > it) contentW = it }
-        s.minWidthPt?.let { if (contentW < it) contentW = it } // min wins over max
-        // An embedded document's default width never pushes it past its column (#40).
-        if (box.embed != null) contentW = contentW.coerceAtMost(availWidth - extra)
-        if (forcedWidth != null) contentW = forcedWidth - (bL + s.paddingLeftPt + s.paddingRightPt + bR)
-        contentW = contentW.coerceAtLeast(0.0)
+        private val savedCb = currentCb
+        private val ownCb = if (s.position != CssPosition.STATIC) AbsContainingBlock() else null
+        private val bL = s.borderLeft.effective
+        private val contentW: Double
+        private val contentLeft: Double
+        private val contentTop: Double
+        private var cursorY: Double
+        private var prevBottom = 0.0
+        private var first = true
+        private val floatsBefore: Int
 
-        box.borderBoxWidth = bL + s.paddingLeftPt + contentW + s.paddingRightPt + bR
-        val leftMargin = when {
-            forcedWidth != null -> 0.0
-            s.marginLeftAuto && s.marginRightAuto -> maxOf(0.0, (availWidth - box.borderBoxWidth) / 2)
-            else -> s.marginLeftPt
-        }
-        box.x = xLeft + leftMargin
-        box.y = topY
-        val contentLeft = box.x + bL + s.paddingLeftPt
-        val contentTop = box.y + s.borderTop.effective + s.paddingTopPt
+        /** The children that stack in this block's flow, and the index of the next one. */
+        val children: List<LayoutBox>
+        var next = 0
 
-        var cursorY = contentTop
-        var prevBottom = 0.0
-        var first = true
-        val floatsBefore = activeFloats.size
-        // A flex or grid container places its children as items instead of stacking them (#33, #35),
-        // and a block with columns moves them into its columns (#34).
-        val itemLayout = s.display == Display.FLEX || s.display == Display.GRID
-        val gap = if (s.flex.columnGapNormal) s.fontSizePt else s.flex.columnGap
-        val columnCount = if (itemLayout || vertical) 1 else s.columns.countIn(contentW, gap)
-        val flexChildren = if (itemLayout || columnCount > 1) emptyList() else box.children
-        if (itemLayout) {
-            val definite = s.heightPt?.let { h -> h.coerceAtMost(s.maxHeightPt ?: h).coerceAtLeast(s.minHeightPt ?: 0.0) }
-            cursorY += if (s.display == Display.GRID) layoutGrid(box, contentLeft, contentW, contentTop, definite)
-            else layoutFlex(box, contentLeft, contentW, contentTop, definite)
-        } else if (columnCount > 1) {
-            cursorY += layoutColumns(box, contentLeft, contentW, contentTop, columnCount, gap)
+        /** The bottom margin of the block child whose own frame is open above this one. */
+        private var openChildBottom = 0.0
+
+        init {
+            if (ownCb != null) currentCb = ownCb
+            val bR = s.borderRight.effective
+            val extra = s.marginLeftPt + s.marginRightPt + bL + bR + s.paddingLeftPt + s.paddingRightPt
+            var width = s.widthPt ?: (availWidth - extra)
+            s.maxWidthPt?.let { if (width > it) width = it }
+            s.minWidthPt?.let { if (width < it) width = it } // min wins over max
+            // An embedded document's default width never pushes it past its column (#40).
+            if (box.embed != null) width = width.coerceAtMost(availWidth - extra)
+            if (forcedWidth != null) width = forcedWidth - (bL + s.paddingLeftPt + s.paddingRightPt + bR)
+            contentW = width.coerceAtLeast(0.0)
+
+            box.borderBoxWidth = bL + s.paddingLeftPt + contentW + s.paddingRightPt + bR
+            val leftMargin = when {
+                forcedWidth != null -> 0.0
+                s.marginLeftAuto && s.marginRightAuto -> maxOf(0.0, (availWidth - box.borderBoxWidth) / 2)
+                else -> s.marginLeftPt
+            }
+            box.x = xLeft + leftMargin
+            box.y = topY
+            contentLeft = box.x + bL + s.paddingLeftPt
+            contentTop = box.y + s.borderTop.effective + s.paddingTopPt
+
+            cursorY = contentTop
+            floatsBefore = activeFloats.size
+            // A flex or grid container places its children as items instead of stacking them (#33, #35),
+            // and a block with columns moves them into its columns (#34).
+            val itemLayout = s.display == Display.FLEX || s.display == Display.GRID
+            val gap = if (s.flex.columnGapNormal) s.fontSizePt else s.flex.columnGap
+            val columnCount = if (itemLayout || vertical) 1 else s.columns.countIn(contentW, gap)
+            children = if (itemLayout || columnCount > 1) emptyList() else box.children
+            if (itemLayout) {
+                val definite = s.heightPt?.let { h -> h.coerceAtMost(s.maxHeightPt ?: h).coerceAtLeast(s.minHeightPt ?: 0.0) }
+                cursorY += if (s.display == Display.GRID) layoutGrid(box, contentLeft, contentW, contentTop, definite)
+                else layoutFlex(box, contentLeft, contentW, contentTop, definite)
+            } else if (columnCount > 1) {
+                cursorY += layoutColumns(box, contentLeft, contentW, contentTop, columnCount, gap)
+            }
         }
-        for (child in flexChildren) {
+
+        /**
+         * Places [child] in the flow. A block child in normal flow comes back as the frame that
+         * lays it out, and [landed] moves the cursor below it once that frame has closed.
+         */
+        fun place(child: LayoutBox): BlockFrame? {
             // Out-of-flow (position:absolute/fixed): queued now, placed once its
             // containing block knows its own size. It never advances the
             // normal-flow cursor. Fixed-layout pages use this to overlay panels.
             val pos = if (child is TextBlockBox) CssPosition.STATIC else child.style.position
             if (pos == CssPosition.ABSOLUTE || pos == CssPosition.FIXED) {
                 pendingAbs.add(PendingAbs(child, if (pos == CssPosition.FIXED) pageCb else currentCb))
-                continue
+                return null
             }
             // An anonymous text box shares its block's style, so the block's own clear and float
             // must not apply to it again (#454).
@@ -242,45 +312,61 @@ internal class BoxLayout(
             if (!anonymous && child.style.cssFloat != CssFloat.NONE && child !is TableRowBox) {
                 val topMargin = if (child is BlockBox) child.style.marginTopPt else 0.0
                 placeFloat(child, contentLeft, contentW, cursorY + topMargin)
-                continue
+                return null
             }
             // Anonymous text boxes carry no margins; real block children do.
             val topMargin = if (child is BlockBox) child.style.marginTopPt else 0.0
             val botMargin = if (child is BlockBox) child.style.marginBottomPt else 0.0
             val gap = if (first) topMargin else maxOf(prevBottom, topMargin)
+            if (child is BlockBox) {
+                openChildBottom = botMargin
+                return BlockFrame(child, contentLeft, contentW, cursorY + gap, forcedWidth = null)
+            }
             layoutChild(child, contentLeft, contentW, cursorY + gap)
             cursorY = child.bottom
             prevBottom = botMargin
             first = false
-        }
-        cursorY += prevBottom
-        // A float may extend below the last in-flow child; grow the block to
-        // contain it so pagination never splits content across a float (CSS
-        // lets floats overflow their block, a deliberate simplification here).
-        for (k in floatsBefore until activeFloats.size) {
-            cursorY = maxOf(cursorY, activeFloats[k].yBottom)
+            return null
         }
 
-        val natural = cursorY - contentTop
-        var contentH = natural
-        s.heightPt?.let { contentH = it }
-        s.maxHeightPt?.let { if (contentH > it) contentH = it }
-        s.minHeightPt?.let { if (contentH < it) contentH = it } // min wins over max
-        // Reflow safety: a declared height may GROW a box but never clip flowed
-        // content. Clipping would make following siblings (and the next spine)
-        // overlap the overflow at pagination, silently losing book content
-        // (html,body{height:100%} is everywhere in real EPUB CSS).
-        if (contentH < natural) contentH = natural
-        box.borderBoxHeight = s.borderTop.effective + s.paddingTopPt + contentH + s.paddingBottomPt + s.borderBottom.effective
+        /** Moves the cursor below [child], the block child of [place] whose frame has closed. */
+        fun landed(child: BlockBox) {
+            cursorY = child.bottom
+            prevBottom = openChildBottom
+            first = false
+        }
 
-        if (ownCb != null) {
-            // The padding box, which is what CSS measures absolute insets against.
-            ownCb.left = box.x + bL
-            ownCb.top = box.y + s.borderTop.effective
-            ownCb.width = s.paddingLeftPt + contentW + s.paddingRightPt
-            ownCb.height = box.borderBoxHeight - s.borderTop.effective - s.borderBottom.effective
-            currentCb = savedCb
-            flushAbs(ownCb)
+        /** Sizes the block around its laid-out children and places what waited on its size. */
+        fun close() {
+            cursorY += prevBottom
+            // A float may extend below the last in-flow child; grow the block to
+            // contain it so pagination never splits content across a float (CSS
+            // lets floats overflow their block, a deliberate simplification here).
+            for (k in floatsBefore until activeFloats.size) {
+                cursorY = maxOf(cursorY, activeFloats[k].yBottom)
+            }
+
+            val natural = cursorY - contentTop
+            var contentH = natural
+            s.heightPt?.let { contentH = it }
+            s.maxHeightPt?.let { if (contentH > it) contentH = it }
+            s.minHeightPt?.let { if (contentH < it) contentH = it } // min wins over max
+            // Reflow safety: a declared height may GROW a box but never clip flowed
+            // content. Clipping would make following siblings (and the next spine)
+            // overlap the overflow at pagination, silently losing book content
+            // (html,body{height:100%} is everywhere in real EPUB CSS).
+            if (contentH < natural) contentH = natural
+            box.borderBoxHeight = s.borderTop.effective + s.paddingTopPt + contentH + s.paddingBottomPt + s.borderBottom.effective
+
+            if (ownCb != null) {
+                // The padding box, which is what CSS measures absolute insets against.
+                ownCb.left = box.x + bL
+                ownCb.top = box.y + s.borderTop.effective
+                ownCb.width = s.paddingLeftPt + contentW + s.paddingRightPt
+                ownCb.height = box.borderBoxHeight - s.borderTop.effective - s.borderBottom.effective
+                currentCb = savedCb
+                flushAbs(ownCb)
+            }
         }
     }
 

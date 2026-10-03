@@ -187,6 +187,7 @@ final class io.github.yuroyami.kitepdf.epub/EpubDocument : io.github.yuroyami.ki
     final fun withMargin(kotlin/Double): io.github.yuroyami.kitepdf.epub/EpubDocument // io.github.yuroyami.kitepdf.epub/EpubDocument.withMargin|withMargin(kotlin.Double){}[0]
     final fun withPageSize(kotlin/Double, kotlin/Double): io.github.yuroyami.kitepdf.epub/EpubDocument // io.github.yuroyami.kitepdf.epub/EpubDocument.withPageSize|withPageSize(kotlin.Double;kotlin.Double){}[0]
     final fun withSettings(io.github.yuroyami.kitepdf.epub/EpubSettings): io.github.yuroyami.kitepdf.epub/EpubDocument // io.github.yuroyami.kitepdf.epub/EpubDocument.withSettings|withSettings(io.github.yuroyami.kitepdf.epub.EpubSettings){}[0]
+    final suspend fun prepareChapter(kotlin/Int, kotlin.coroutines/SuspendFunction0<kotlin/Unit>) // io.github.yuroyami.kitepdf.epub/EpubDocument.prepareChapter|prepareChapter(kotlin.Int;kotlin.coroutines.SuspendFunction0<kotlin.Unit>){}[0]
 
     final object Companion { // io.github.yuroyami.kitepdf.epub/EpubDocument.Companion|null[0]
         final fun open(kotlin/ByteArray, io.github.yuroyami.kitepdf.epub/EpubSettings): io.github.yuroyami.kitepdf.epub/EpubDocument // io.github.yuroyami.kitepdf.epub/EpubDocument.Companion.open|open(kotlin.ByteArray;io.github.yuroyami.kitepdf.epub.EpubSettings){}[0]

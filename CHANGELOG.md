@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `KiteDocument.prepareChapter(chapter, checkpoint)` lays a chapter out in steps and calls
+  `checkpoint`, a suspend function, between two, so that a caller on a thread that must
+  keep drawing frames can suspend there. An `EpubDocument` steps through each block as it
+  builds the chapter's boxes and as it lays them out, then through the pages; any other
+  document prepares the chapter at once. In a browser the viewer lays a chapter out in
+  slices of 8 ms with a frame drawn between two, where a long chapter froze the page for
+  its whole layout. A wrapper that overrides `prepareChapter(chapter)` with `by`
+  delegation should override this one too (#389).
+
 - `io.github.yuroyami:kitepdf-media`, a new optional artifact: `KiteMediaOverlay()` in
   the viewer's `pageOverlay` plays the `<video>` and `<audio>` elements of an EPUB page
   on their boxes, with KitePlayer, which decodes through FFmpeg. A tap or `autoplay`

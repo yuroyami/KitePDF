@@ -33,6 +33,7 @@ public final class io/github/yuroyami/kitepdf/epub/EpubDocument : io/github/yuro
 	public fun pageIndexOf (Lio/github/yuroyami/kitepdf/core/KiteLocation;)Ljava/lang/Integer;
 	public final fun pageOf (Ljava/lang/String;)Ljava/lang/Integer;
 	public fun prepareChapter (I)V
+	public fun prepareChapter (ILkotlin/jvm/functions/Function1;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public final fun renditionOf (I)Lio/github/yuroyami/kitepdf/epub/EpubRendition;
 	public final fun resource (Ljava/lang/String;)[B
 	public final fun resourceType (Ljava/lang/String;)Ljava/lang/String;

@@ -16,6 +16,7 @@ public final class io/github/yuroyami/kitepdf/xps/XpsDocument : io/github/yuroya
 	public fun pageCountIn (I)I
 	public fun pageIndexOf (Lio/github/yuroyami/kitepdf/core/KiteLocation;)Ljava/lang/Integer;
 	public fun prepareChapter (I)V
+	public fun prepareChapter (ILkotlin/jvm/functions/Function1;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 }
 
 public final class io/github/yuroyami/kitepdf/xps/XpsDocument$Companion {

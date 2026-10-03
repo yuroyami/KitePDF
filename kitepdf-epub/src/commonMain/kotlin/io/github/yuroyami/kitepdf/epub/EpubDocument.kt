@@ -277,6 +277,13 @@ public class EpubDocument internal constructor(
     // ParsedEpub, shared by every re-layout. The tree is most of what a
     // laid-out chapter weighs, so it is never kept past pagination.
     private fun buildDocRoot(chapter: Int): BlockBox {
+        val build = docRootBuild(chapter)
+        while (!build.step()) Unit
+        return checkNotNull(build.box)
+    }
+
+    /** [buildDocRoot] as steps, each the next child of a block element (#389). */
+    private fun docRootBuild(chapter: Int): BoxBuilder.Run {
         val sp = parsed.spine(chapter)
         val (layoutWidth, layoutHeight) =
             if (parsed.isFixed(chapter)) viewportOf(chapter) else contentWidth to pageContentHeight
@@ -284,7 +291,7 @@ public class EpubDocument internal constructor(
             sp.rules, settings.fontSize, layoutWidth, parsed.baseDir, layoutHeight,
             readerRules = readerRules, useAuthorCss = settings.usePublisherCss,
         )
-        return BoxBuilder(resolver, sp.path, parsed::mediaTypeOf) { href -> resolvePath(sp.docDir, href) }.build(sp.tree)
+        return BoxBuilder(resolver, sp.path, parsed::mediaTypeOf) { href -> resolvePath(sp.docDir, href) }.start(sp.tree)
     }
 
     /**
@@ -387,32 +394,76 @@ public class EpubDocument internal constructor(
      * chapters in any order or on any thread.
      */
     private fun paginateChapter(chapter: Int): Laid {
-        val fonts = fontsFor(chapter)
-        val spine = fixedSpine(chapter)
-        if (spine != null) {
-            BoxLayout(::loadImage, ::loadSvg, spine.height, fonts, languageFor(chapter), settings.lineHeightScale)
-                .layout(spine.root, spine.width, spine.height)
-            return Laid(listOf(Paginator.paginateFixed(spine.root, spine.width, spine.height)), spine.root)
+        val layout = ChapterLayout(chapter)
+        while (!layout.step()) Unit
+        return layout.laid
+    }
+
+    /**
+     * [paginateChapter] as steps: the parse of the chapter, each child of a block element as its
+     * box tree builds, each child of a block in normal flow as it lays out, and the pages.
+     * [prepareChapter] with a checkpoint calls the checkpoint between two steps, so that a thread
+     * that must draw frames can stop there (#389).
+     */
+    private inner class ChapterLayout(private val chapter: Int) {
+        private val fonts = fontsFor(chapter)
+        private var stage = 0
+        private var build: BoxBuilder.Run? = null
+        private var docRoot: BlockBox? = null
+        private var root: BlockBox? = null
+        private var run: BoxLayout.Run? = null
+
+        /** The chapter's pages, once [step] has returned true. */
+        lateinit var laid: Laid
+
+        /** Takes the next step, and returns true once [laid] is set. */
+        fun step(): Boolean {
+            when (stage) {
+                0 -> {
+                    val spine = fixedSpine(chapter)
+                    if (spine != null) {
+                        BoxLayout(::loadImage, ::loadSvg, spine.height, fonts, languageFor(chapter), settings.lineHeightScale)
+                            .layout(spine.root, spine.width, spine.height)
+                        laid = Laid(listOf(Paginator.paginateFixed(spine.root, spine.width, spine.height)), spine.root)
+                        return true
+                    }
+                    // Parsing the chapter's document and its style sheets, once for the book.
+                    parsed.spine(chapter)
+                }
+                1 -> build = docRootBuild(chapter)
+                2 -> if (!checkNotNull(build).step()) return false
+                3 -> {
+                    // Vertical writing swaps the budgets: the inline (line-length) budget is
+                    // the page content HEIGHT and each page holds contentWidth of columns.
+                    val inlineBudget = if (isVertical) pageContentHeight else contentWidth
+                    val blockBudget = if (isVertical) contentWidth else pageContentHeight
+                    val built = checkNotNull(checkNotNull(build).box)
+                    val chapterRoot = chapterRoot(built)
+                    build = null
+                    docRoot = built
+                    root = chapterRoot
+                    run = BoxLayout(
+                        ::loadImage, ::loadSvg, blockBudget, fonts, languageFor(chapter),
+                        settings.lineHeightScale, vertical = isVertical,
+                    ).start(chapterRoot, inlineBudget, blockBudget)
+                }
+                4 -> if (!checkNotNull(run).step()) return false
+                else -> {
+                    val pages = Paginator.paginate(
+                        checkNotNull(root), settings.pageWidth, settings.pageHeight, settings.margin,
+                        vertical = isVertical, verticalLr = isVerticalLr,
+                    )
+                    // A spine document with nothing to paint contributed no page when the
+                    // whole book shared one box tree. Keep that: do not invent a blank page.
+                    val blank = pages.size == 1 &&
+                        pages[0].lines.isEmpty() && pages[0].images.isEmpty() && pages[0].decoBoxes.isEmpty()
+                    laid = Laid(if (blank) emptyList() else pages, checkNotNull(docRoot))
+                    return true
+                }
+            }
+            stage++
+            return false
         }
-        // Vertical writing swaps the budgets: the inline (line-length) budget is
-        // the page content HEIGHT and each page holds contentWidth of columns.
-        val inlineBudget = if (isVertical) pageContentHeight else contentWidth
-        val blockBudget = if (isVertical) contentWidth else pageContentHeight
-        val docRoot = buildDocRoot(chapter)
-        val root = chapterRoot(docRoot)
-        BoxLayout(
-            ::loadImage, ::loadSvg, blockBudget, fonts, languageFor(chapter),
-            settings.lineHeightScale, vertical = isVertical,
-        ).layout(root, inlineBudget, blockBudget)
-        val pages = Paginator.paginate(
-            root, settings.pageWidth, settings.pageHeight, settings.margin,
-            vertical = isVertical, verticalLr = isVerticalLr,
-        )
-        // A spine document with nothing to paint contributed no page when the
-        // whole book shared one box tree. Keep that: do not invent a blank page.
-        val blank = pages.size == 1 &&
-            pages[0].lines.isEmpty() && pages[0].images.isEmpty() && pages[0].decoBoxes.isEmpty()
-        return Laid(if (blank) emptyList() else pages, docRoot)
     }
 
     /** One chapter's pages with the box tree they came from, for its anchors. */
@@ -441,14 +492,37 @@ public class EpubDocument internal constructor(
         // two callers for different chapters do not wait on each other.
         chapterLocks[chapter].withLock {
             if (isChapterReady(chapter)) return
-            val laid = paginateChapter(chapter)
-            val summary = summarize(laid)
-            val objects = pageObjectsFor(chapter, summary)
-            tableLock.withLock {
-                summaries[chapter] = summary
-                pageObjects[chapter] = objects
-                publishLive(chapter, laid.pages, summary, lastUse = 0L)
-            }
+            publishPrepared(chapter, paginateChapter(chapter))
+        }
+    }
+
+    /**
+     * Lays [chapter] out a step at a time, each step the parse of the chapter, its box tree, a
+     * child of a block in normal flow, or its pages, and calls [checkpoint] between two (#389).
+     * A viewer on a thread that must draw frames suspends in [checkpoint] once a frame's share
+     * of time is used, and the layout goes on after the frame. No lock is held across a
+     * checkpoint, so two callers for one chapter may each lay it out; the first to finish
+     * publishes its pages, as [prepareChapter] would.
+     */
+    override suspend fun prepareChapter(chapter: Int, checkpoint: suspend () -> Unit) {
+        if (chapter !in parsed.spineIndices) return
+        if (isChapterReady(chapter)) return
+        val layout = ChapterLayout(chapter)
+        while (!layout.step()) checkpoint()
+        chapterLocks[chapter].withLock {
+            if (isChapterReady(chapter)) return
+            publishPrepared(chapter, layout.laid)
+        }
+    }
+
+    /** Under [chapterLocks]: makes [laid] [chapter]'s pages, counted as never used so the budget drops them first. */
+    private fun publishPrepared(chapter: Int, laid: Laid) {
+        val summary = summarize(laid)
+        val objects = pageObjectsFor(chapter, summary)
+        tableLock.withLock {
+            summaries[chapter] = summary
+            pageObjects[chapter] = objects
+            publishLive(chapter, laid.pages, summary, lastUse = 0L)
         }
     }
 
