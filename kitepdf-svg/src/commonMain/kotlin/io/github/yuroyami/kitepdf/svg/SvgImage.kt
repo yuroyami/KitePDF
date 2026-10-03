@@ -15,6 +15,8 @@ import io.github.yuroyami.kitepdf.core.css.CssValues
 import io.github.yuroyami.kitepdf.core.font.FontSpec
 import io.github.yuroyami.kitepdf.core.font.KiteFontFamily
 import io.github.yuroyami.kitepdf.core.render.KiteImageData
+import io.github.yuroyami.kitepdf.core.render.KiteRaster
+import io.github.yuroyami.kitepdf.core.render.KiteRasterScope
 import io.github.yuroyami.kitepdf.core.render.RgbColor
 import io.github.yuroyami.kitepdf.core.render.SoftMask
 import io.github.yuroyami.kitepdf.core.render.spreadOver
@@ -54,7 +56,11 @@ import kotlin.math.PI
  * Text is measured against standard-font metrics and drawn through a host
  * typeface, because SVG ships no font file of its own.
  *
- * Not drawn: filters and animation.
+ * `filter` draws through [KiteCanvas.rasterStep]: a `<filter>` with any of the seventeen
+ * primitives of Filter Effects 1, in linearRGB or sRGB, and the filter functions such as
+ * `blur()` and `drop-shadow()`. A canvas without raster steps draws the element unfiltered.
+ *
+ * Not drawn: animation.
  */
 public class SvgImage private constructor(
     private val root: KiteXmlNode.Element,
@@ -177,6 +183,8 @@ public class SvgImage private constructor(
         /** How many pattern tiles and masks the walk is inside, which bounds their nesting (#209). */
         val patternDepth: Int = 0,
         val maskDepth: Int = 0,
+        /** How many filters the walk is inside, which bounds a filter whose feImage draws itself (#209). */
+        val filterDepth: Int = 0,
     )
 
     // The canvas travels as a parameter, exactly like ctm and Paint: a field
@@ -217,13 +225,19 @@ public class SvgImage private constructor(
         val noted = href != null || id != null
         if (noted) links?.open(href, id)
         val mask = maskOf(el, paint)
+        // Filter Effects 1, 7.1: the filter applies to what the element draws, before its clip, mask and opacity.
+        val filter = filterOf(el, paint, parent, container)
+        val draw = {
+            if (filter == null) paintElement(el, ctm, paint, canvas, load, depth, stop)
+            else paintFiltered(el, ctm, paint, filter, canvas, load, depth, stop)
+        }
         try {
             if (mask == null) {
-                paintElement(el, ctm, paint, canvas, load, depth, stop)
+                draw()
             } else {
                 canvas.applySoftMask(
                     mask.kind, mask.region, ctm,
-                    render = { paintElement(el, ctm, paint, canvas, load, depth, stop) },
+                    render = draw,
                     renderMask = { maskCanvas -> drawMask(mask, ctm, paint, maskCanvas, load, depth, stop) },
                 )
             }
@@ -801,7 +815,7 @@ public class SvgImage private constructor(
         if (!tiles.isFinite() || tiles <= 0.0 || tiles > MAX_PATTERN_TILES) return
         val patternCtm = compose(ctm, t.toUser)
         // The content inherits from the pattern's own ancestors, as a clip path's does.
-        val contentPaint = clipPaintOf(t.content, paint).copy(patternDepth = paint.patternDepth + 1, maskDepth = paint.maskDepth)
+        val contentPaint = clipPaintOf(t.content, paint).copy(patternDepth = paint.patternDepth + 1, maskDepth = paint.maskDepth, filterDepth = paint.filterDepth)
         canvas.pushClip(region, ctm, evenOdd)
         try {
             if (alpha < 1.0) {
@@ -886,13 +900,479 @@ public class SvgImage private constructor(
     ) {
         val r = mask.region
         if (!(r.right > r.left && r.top > r.bottom)) return
-        val contentPaint = clipPaintOf(mask.def, paint).copy(patternDepth = paint.patternDepth, maskDepth = paint.maskDepth + 1)
+        val contentPaint = clipPaintOf(mask.def, paint).copy(patternDepth = paint.patternDepth, maskDepth = paint.maskDepth + 1, filterDepth = paint.filterDepth)
         canvas.pushClip(KitePath.Builder().apply { rectangle(r.left, r.bottom, r.right - r.left, r.top - r.bottom) }.build(), ctm, evenOdd = false)
         try {
             val contentCtm = compose(ctm, mask.contentMatrix)
             for (c in mask.def.children) if (c is KiteXmlNode.Element) walk(c, contentCtm, contentPaint, canvas, load, depth + 1, stop)
         } finally {
             canvas.popClip()
+        }
+    }
+
+    /**
+     * What an element's `filter` asks for (Filter Effects 1, #209): [stages] run one after the
+     * other, each reading what the one before gave, over [region], the union of their regions in
+     * the element's user space as left, top, right and bottom. [blank] is a filter that shows
+     * nothing. The element's own [alpha] applies after the filter, and its content paints with
+     * [content], which leaves that alpha out.
+     */
+    private class FilterUse(
+        val stages: List<FilterStage>,
+        val region: DoubleArray,
+        val blank: Boolean,
+        val alpha: Double,
+        val content: Paint,
+    )
+
+    /** One `<filter>` or one filter function: its primitives over its own region. */
+    private class FilterStage(val primitives: List<FilterPrimitive>, val region: DoubleArray)
+
+    /**
+     * The filters of [el], or null when it has none or when its `filter` is invalid: a reference
+     * to anything but a `<filter>`, or a function this renderer does not know. An invalid value
+     * is ignored, so the element draws without a filter (Filter Effects 1, 7.1 and 13).
+     */
+    private fun filterOf(el: KiteXmlNode.Element, paint: Paint, parent: Paint, container: Boolean): FilterUse? {
+        val raw = styleOrAttr(el, "filter")?.trim() ?: return null
+        if (raw.isEmpty() || raw.equals("none", ignoreCase = true)) return null
+        if (paint.filterDepth >= MAX_FILTER_NESTING) return null
+        val items = filterItems(raw) ?: return null
+        val box = filterBoxOf(el, paint)
+        val stages = ArrayList<FilterStage>()
+        for (item in items) {
+            stages += if (item.startsWith("url(", ignoreCase = true)) {
+                filterStage(urlRef(item) ?: return null, box, paint) ?: return null
+            } else {
+                // A function widens what the stage before it gave, so a blur after a blur keeps its spread.
+                functionStage(item, box, stages.lastOrNull()?.region, paint) ?: return null
+            }
+        }
+        if (stages.isEmpty()) return null
+        val blank = stages.any { !(it.region[2] > it.region[0] && it.region[3] > it.region[1]) }
+        val region = stages.map { it.region }.reduce { a, b ->
+            doubleArrayOf(minOf(a[0], b[0]), minOf(a[1], b[1]), maxOf(a[2], b[2]), maxOf(a[3], b[3]))
+        }
+        // A shape folds its own opacity into its paint, which must wait until the filter has run.
+        val alpha = if (container) 1.0 else (styleOrAttr(el, "opacity")?.toDoubleOrNull() ?: 1.0).coerceIn(0.0, 1.0)
+        val content = (if (container) paint else paint.copy(opacity = parent.opacity)).copy(filterDepth = paint.filterDepth + 1)
+        return FilterUse(stages, region, blank, alpha, content)
+    }
+
+    /** The `url()` references and functions of a `filter` value, or null when one is malformed. */
+    private fun filterItems(raw: String): List<String>? {
+        val out = ArrayList<String>()
+        var i = 0
+        while (i < raw.length) {
+            if (raw[i].isWhitespace() || raw[i] == ',') { i++; continue }
+            val open = raw.indexOf('(', i)
+            if (open < 0) return null
+            var nesting = 0
+            var close = open
+            while (close < raw.length) {
+                if (raw[close] == '(') nesting++
+                if (raw[close] == ')' && --nesting == 0) break
+                close++
+            }
+            if (close >= raw.length) return null
+            out += raw.substring(i, close + 1).trim()
+            i = close + 1
+        }
+        return out
+    }
+
+    /**
+     * The box [el] filters with, [minX, minY, maxX, maxY] in its user space: its geometry, or for
+     * text the em boxes of its runs, as a text clip uses them.
+     */
+    private fun filterBoxOf(el: KiteXmlNode.Element, paint: Paint): DoubleArray? {
+        boundsOfElement(el, paint, 0)?.let { return it }
+        if (el.tag.lowercase() != "text") return null
+        var acc: DoubleArray? = null
+        for (run in layoutText(el, paint, 0)) {
+            val fs = run.paint.fontSize
+            val b = mapBounds(doubleArrayOf(run.x, run.y - 0.8 * fs, run.x + run.width, run.y + 0.2 * fs), turnOf(run))
+            val a = acc
+            acc = if (a == null) b else doubleArrayOf(minOf(a[0], b[0]), minOf(a[1], b[1]), maxOf(a[2], b[2]), maxOf(a[3], b[3]))
+        }
+        return acc
+    }
+
+    /**
+     * The `<filter>` [id] names, for an element of bounding box [box] (Filter Effects 1, 7.2 and
+     * 7.3). The region defaults to the box widened by a tenth on each side. An element without a
+     * box gets an empty region under objectBoundingBox units, which shows nothing, as in a
+     * browser. A filter takes nothing from one its `href` names: Filter Effects 1 dropped the
+     * attribute, and browsers ignore it. Null when [id] names no filter.
+     */
+    private fun filterStage(id: String, box: DoubleArray?, paint: Paint): FilterStage? {
+        val def = byId[id]?.takeIf { it.tag.lowercase() == "filter" } ?: return null
+        fun attr(name: String): String? = (def.attrs[name] ?: def.attrs[name.lowercase()])?.trim()
+        val bx = box?.get(0) ?: 0.0
+        val by = box?.get(1) ?: 0.0
+        val bw = box?.let { it[2] - it[0] } ?: 0.0
+        val bh = box?.let { it[3] - it[1] } ?: 0.0
+        val region = if (attr("filterUnits") == "userSpaceOnUse") {
+            val x = parseLen(attr("x") ?: "-10%", paint.fontSize, paint.viewportWidth)
+            val y = parseLen(attr("y") ?: "-10%", paint.fontSize, paint.viewportHeight)
+            val w = parseLen(attr("width") ?: "120%", paint.fontSize, paint.viewportWidth)
+            val h = parseLen(attr("height") ?: "120%", paint.fontSize, paint.viewportHeight)
+            doubleArrayOf(x, y, x + w, y + h)
+        } else if (box == null || bw <= 0.0 || bh <= 0.0) {
+            doubleArrayOf(0.0, 0.0, 0.0, 0.0)
+        } else {
+            val x = bx + fraction(attr("x"), -0.1) * bw
+            val y = by + fraction(attr("y"), -0.1) * bh
+            doubleArrayOf(x, y, x + fraction(attr("width"), 1.2) * bw, y + fraction(attr("height"), 1.2) * bh)
+        }
+        val units = FilterUnits(attr("primitiveUnits") == "objectBoundingBox", bx, by, bw, bh, paint)
+        val primitives = def.children.filterIsInstance<KiteXmlNode.Element>().mapNotNull { primitiveOf(it, units, paint) }
+        return FilterStage(primitives, region)
+    }
+
+    /**
+     * Lengths of the primitives of one filter in the element's user space: plain user units, or
+     * fractions of the bounding box ([bx], [by], [bw], [bh]) under objectBoundingBox (7.3).
+     */
+    private inner class FilterUnits(
+        val box: Boolean, val bx: Double, val by: Double, val bw: Double, val bh: Double, val paint: Paint,
+    ) {
+        fun x(v: Double) = if (box) v * bw else v
+        fun y(v: Double) = if (box) v * bh else v
+        fun z(v: Double) = if (box) v * sqrt((bw * bw + bh * bh) / 2) else v
+        fun positionX(v: Double) = if (box) bx + v * bw else v
+        fun positionY(v: Double) = if (box) by + v * bh else v
+        fun left(raw: String?): Double? = raw?.let { if (box) bx + fraction(it, 0.0) * bw else parseLen(it, paint.fontSize, paint.viewportWidth) }
+        fun top(raw: String?): Double? = raw?.let { if (box) by + fraction(it, 0.0) * bh else parseLen(it, paint.fontSize, paint.viewportHeight) }
+        fun width(raw: String?): Double? = raw?.let { if (box) fraction(it, 0.0) * bw else parseLen(it, paint.fontSize, paint.viewportWidth) }
+        fun height(raw: String?): Double? = raw?.let { if (box) fraction(it, 0.0) * bh else parseLen(it, paint.fontSize, paint.viewportHeight) }
+    }
+
+    /** One filter primitive element as a [FilterPrimitive], or null for an element that is not one. */
+    private fun primitiveOf(e: KiteXmlNode.Element, units: FilterUnits, paint: Paint): FilterPrimitive? {
+        fun attr(name: String): String? = (e.attrs[name] ?: e.attrs[name.lowercase()])?.trim()
+        fun number(name: String, fallback: Double): Double = attr(name)?.toDoubleOrNull()?.takeIf { it.isFinite() } ?: fallback
+        fun pair(name: String, fallback: Double): DoubleArray {
+            val v = attr(name)?.let { numbers(it) } ?: DoubleArray(0)
+            val first = v.getOrNull(0) ?: fallback
+            return doubleArrayOf(first, v.getOrNull(1) ?: first)
+        }
+        // The colours a primitive names resolve against its own ancestors, as a clip path's content does.
+        val own = clipPaintOf(e, paint)
+        fun colorOf(name: String, opacityName: String?, fallback: String): Pair<FloatArray, Double> {
+            val raw = styleOrAttr(e, name)?.takeUnless { it == "inherit" } ?: fallback
+            val current = raw.equals("currentColor", ignoreCase = true)
+            val rgb = if (current) own.current else CssValues.color(raw) ?: CssValues.color(fallback) ?: RgbColor.BLACK
+            val alpha = if (current) 1.0 else CssValues.alpha(raw) ?: 1.0
+            val opacity = opacityName?.let { styleOrAttr(e, it)?.toDoubleOrNull() } ?: 1.0
+            return floatArrayOf(rgb.r.toFloat(), rgb.g.toFloat(), rgb.b.toFloat()) to (alpha * opacity).coerceIn(0.0, 1.0)
+        }
+        val p: FilterPrimitive = when (e.tag.lowercase()) {
+            "fegaussianblur" -> pair("stdDeviation", 0.0).let { FilterPrimitive.Blur(units.x(it[0]), units.y(it[1])) }
+            "feoffset" -> FilterPrimitive.Offset(units.x(number("dx", 0.0)), units.y(number("dy", 0.0)))
+            "feflood" -> colorOf("flood-color", "flood-opacity", "black").let { FilterPrimitive.Flood(it.first, it.second) }
+            "femerge" -> FilterPrimitive.Merge(
+                e.children.filterIsInstance<KiteXmlNode.Element>().filter { it.tag.lowercase() == "femergenode" }.map { it.attrs["in"]?.trim() },
+            )
+            "feblend" -> FilterPrimitive.Blend(attr("mode")?.lowercase() ?: "normal")
+            "fecomposite" -> FilterPrimitive.Composite(
+                attr("operator")?.lowercase() ?: "over",
+                doubleArrayOf(number("k1", 0.0), number("k2", 0.0), number("k3", 0.0), number("k4", 0.0)),
+            )
+            "fecolormatrix" -> {
+                val values = attr("values")?.let { numbers(it) }
+                FilterPrimitive.ColorMatrix(
+                    when (attr("type")?.lowercase() ?: "matrix") {
+                        "saturate" -> FilterContext.saturate(values?.getOrNull(0) ?: 1.0)
+                        "huerotate" -> FilterContext.hueRotate(values?.getOrNull(0) ?: 0.0)
+                        "luminancetoalpha" -> FilterContext.LUMINANCE_TO_ALPHA
+                        // A matrix of any other length is an error, and the primitive passes its input through.
+                        else -> if (values == null) null else values.takeIf { it.size == 20 }
+                    },
+                )
+            }
+            "fecomponenttransfer" -> {
+                val functions = arrayOfNulls<(Float) -> Float>(4)
+                for (child in e.children.filterIsInstance<KiteXmlNode.Element>()) {
+                    val channel = when (child.tag.lowercase()) { "fefuncr" -> 0; "fefuncg" -> 1; "fefuncb" -> 2; "fefunca" -> 3; else -> continue }
+                    fun cattr(name: String) = (child.attrs[name] ?: child.attrs[name.lowercase()])?.trim()
+                    fun cnum(name: String, fallback: Double) = cattr(name)?.toDoubleOrNull()?.takeIf { it.isFinite() } ?: fallback
+                    functions[channel] = FilterContext.transfer(
+                        cattr("type")?.lowercase() ?: "identity", cattr("tableValues")?.let { numbers(it) } ?: DoubleArray(0),
+                        cnum("slope", 1.0), cnum("intercept", 0.0), cnum("amplitude", 1.0), cnum("exponent", 1.0), cnum("offset", 0.0),
+                    )
+                }
+                FilterPrimitive.ComponentTransfer(functions)
+            }
+            "fedropshadow" -> {
+                val deviation = pair("stdDeviation", 2.0)
+                val (rgb, opacity) = colorOf("flood-color", "flood-opacity", "black")
+                FilterPrimitive.DropShadow(
+                    units.x(number("dx", 2.0)), units.y(number("dy", 2.0)), units.x(deviation[0]), units.y(deviation[1]), rgb, opacity,
+                )
+            }
+            "femorphology" -> pair("radius", 0.0).let {
+                FilterPrimitive.Morphology(units.x(it[0]), units.y(it[1]), erode = attr("operator")?.lowercase() != "dilate")
+            }
+            "fetile" -> FilterPrimitive.Tile()
+            "feimage" -> FilterPrimitive.Image(attr("href") ?: return null, attr("preserveAspectRatio"))
+            "feturbulence" -> {
+                val base = pair("baseFrequency", 0.0)
+                // A negative frequency is an error, which disables the primitive: it draws transparent black.
+                FilterPrimitive.Turbulence(
+                    if (base[0] < 0.0 || base[1] < 0.0) 0.0 else base[0], if (base[0] < 0.0 || base[1] < 0.0) 0.0 else base[1],
+                    number("numOctaves", 1.0).toInt(), number("seed", 0.0),
+                    attr("stitchTiles") == "stitch", attr("type") == "fractalNoise",
+                )
+            }
+            "feconvolvematrix" -> {
+                val order = pair("order", 3.0).map { it.toInt() }
+                val ox = order[0]
+                val oy = order[1]
+                // A kernel of the wrong length is an error, and so is one past MAX_KERNEL: either passes its input through.
+                val kernel = attr("kernelMatrix")?.let { numbers(it) }?.takeIf { ox > 0 && oy > 0 && it.size == ox * oy && it.size <= MAX_KERNEL }
+                val sum = kernel?.sum() ?: 0.0
+                val divisor = number("divisor", if (sum == 0.0) 1.0 else sum).takeIf { it != 0.0 } ?: 1.0
+                val tx = attr("targetX")?.toIntOrNull()?.takeIf { it in 0 until ox } ?: (ox / 2)
+                val ty = attr("targetY")?.toIntOrNull()?.takeIf { it in 0 until oy } ?: (oy / 2)
+                FilterPrimitive.Convolve(
+                    ox, oy, kernel, divisor, number("bias", 0.0), tx, ty,
+                    attr("edgeMode")?.lowercase() ?: "duplicate", attr("preserveAlpha") == "true",
+                )
+            }
+            "fedisplacementmap" -> {
+                fun channel(name: String) = when (attr(name)?.uppercase()) { "R" -> 0; "G" -> 1; "B" -> 2; else -> 3 }
+                // The scale is a length of the primitive units on both axes.
+                FilterPrimitive.Displacement(if (units.box) number("scale", 0.0) * sqrt(units.bw * units.bh) else number("scale", 0.0), channel("xChannelSelector"), channel("yChannelSelector"))
+            }
+            "fediffuselighting", "fespecularlighting" -> {
+                val specular = e.tag.lowercase() == "fespecularlighting"
+                val (rgb, _) = colorOf("lighting-color", null, "white")
+                val light = e.children.filterIsInstance<KiteXmlNode.Element>().firstOrNull { it.tag.lowercase() in LIGHT_SOURCES }?.let { l ->
+                    fun lnum(name: String, fallback: Double) = (l.attrs[name] ?: l.attrs[name.lowercase()])?.trim()?.toDoubleOrNull()?.takeIf { it.isFinite() } ?: fallback
+                    FilterPrimitive.LightSource(
+                        l.tag.lowercase(), lnum("azimuth", 0.0), lnum("elevation", 0.0),
+                        units.positionX(lnum("x", 0.0)), units.positionY(lnum("y", 0.0)), units.z(lnum("z", 0.0)),
+                        units.positionX(lnum("pointsAtX", 0.0)), units.positionY(lnum("pointsAtY", 0.0)), units.z(lnum("pointsAtZ", 0.0)),
+                        lnum("specularExponent", 1.0), (l.attrs["limitingConeAngle"] ?: l.attrs["limitingconeangle"])?.trim()?.toDoubleOrNull(),
+                    )
+                }
+                FilterPrimitive.Lighting(
+                    specular, number("surfaceScale", 1.0),
+                    if (specular) number("specularConstant", 1.0) else number("diffuseConstant", 1.0),
+                    number("specularExponent", 1.0).coerceIn(1.0, 128.0), rgb, light,
+                )
+            }
+            else -> return null
+        }
+        p.input = attr("in")
+        p.input2 = attr("in2")
+        p.result = attr("result")
+        p.x = units.left(attr("x"))
+        p.y = units.top(attr("y"))
+        p.width = units.width(attr("width"))
+        p.height = units.height(attr("height"))
+        p.linear = linearFilters(e)
+        return p
+    }
+
+    /** `color-interpolation-filters`, which inherits: false for sRGB, and true for linearRGB, its initial value, or auto. */
+    private fun linearFilters(e: KiteXmlNode.Element): Boolean {
+        var at: KiteXmlNode.Element? = e
+        var steps = 0
+        while (at != null && steps++ < MAX_DEPTH) {
+            when (styleOrAttr(at, "color-interpolation-filters")?.lowercase()) {
+                "srgb" -> return false
+                "linearrgb", "auto" -> return true
+            }
+            at = at.parent
+        }
+        return true
+    }
+
+    /**
+     * A filter function (Filter Effects 1, 13) as the primitives it stands for, in sRGB. Its
+     * region is [before], the region of the stage before it, or else the element's box widened
+     * by its stroke, and then widened by what a blur or a shadow spreads. Null for a function
+     * this renderer does not know or arguments it cannot read.
+     */
+    private fun functionStage(item: String, box: DoubleArray?, before: DoubleArray?, paint: Paint): FilterStage? {
+        val name = item.substringBefore('(').trim().lowercase()
+        val args = item.substringAfter('(').substringBeforeLast(')').trim()
+        fun amount(fallback: Double): Double? {
+            if (args.isEmpty()) return fallback
+            return if (args.endsWith('%')) args.dropLast(1).trim().toDoubleOrNull()?.div(100.0) else args.toDoubleOrNull()
+        }
+        fun length(raw: String): Double? = lengthOrNull(raw, paint.fontSize)
+        var spread = 0.0
+        val p: FilterPrimitive = when (name) {
+            "blur" -> {
+                val sigma = if (args.isEmpty()) 0.0 else length(args)?.takeIf { it >= 0.0 } ?: return null
+                spread = 3 * sigma
+                FilterPrimitive.Blur(sigma, sigma)
+            }
+            "drop-shadow" -> {
+                val parts = filterArguments(args)
+                val lengths = parts.mapNotNull { length(it) }
+                val color = parts.firstOrNull { length(it) == null }
+                if (lengths.size !in 2..3 || parts.size - lengths.size > 1) return null
+                val sigma = lengths.getOrNull(2)?.takeIf { it >= 0.0 } ?: 0.0
+                val rgb = color?.let { if (it.equals("currentColor", true)) paint.current else CssValues.color(it) ?: return null } ?: paint.current
+                val alpha = color?.let { if (it.equals("currentColor", true)) 1.0 else CssValues.alpha(it) } ?: 1.0
+                spread = 3 * sigma + maxOf(kotlin.math.abs(lengths[0]), kotlin.math.abs(lengths[1]))
+                FilterPrimitive.DropShadow(lengths[0], lengths[1], sigma, sigma, floatArrayOf(rgb.r.toFloat(), rgb.g.toFloat(), rgb.b.toFloat()), alpha)
+            }
+            "grayscale" -> FilterPrimitive.ColorMatrix(FilterContext.grayscale(amount(1.0) ?: return null))
+            "sepia" -> FilterPrimitive.ColorMatrix(FilterContext.sepia(amount(1.0) ?: return null))
+            "saturate" -> FilterPrimitive.ColorMatrix(FilterContext.saturate(amount(1.0)?.takeIf { it >= 0.0 } ?: return null))
+            "hue-rotate" -> FilterPrimitive.ColorMatrix(FilterContext.hueRotate(if (args.isEmpty()) 0.0 else angleOf(args) ?: return null))
+            "invert" -> {
+                val a = (amount(1.0) ?: return null).coerceIn(0.0, 1.0)
+                val f = FilterContext.transfer("table", doubleArrayOf(a, 1 - a), 1.0, 0.0, 1.0, 1.0, 0.0)
+                FilterPrimitive.ComponentTransfer(arrayOf(f, f, f, null))
+            }
+            "opacity" -> {
+                val a = (amount(1.0) ?: return null).coerceIn(0.0, 1.0)
+                FilterPrimitive.ComponentTransfer(arrayOf(null, null, null, FilterContext.transfer("table", doubleArrayOf(0.0, a), 1.0, 0.0, 1.0, 1.0, 0.0)))
+            }
+            "brightness" -> {
+                val a = amount(1.0)?.takeIf { it >= 0.0 } ?: return null
+                val f = FilterContext.transfer("linear", DoubleArray(0), a, 0.0, 1.0, 1.0, 0.0)
+                FilterPrimitive.ComponentTransfer(arrayOf(f, f, f, null))
+            }
+            "contrast" -> {
+                val a = amount(1.0)?.takeIf { it >= 0.0 } ?: return null
+                val f = FilterContext.transfer("linear", DoubleArray(0), a, -0.5 * a + 0.5, 1.0, 1.0, 0.0)
+                FilterPrimitive.ComponentTransfer(arrayOf(f, f, f, null))
+            }
+            else -> return null
+        }
+        p.linear = false
+        val stroke = if (paint.stroke != null || paint.strokeRef != null) paint.strokeW else 0.0
+        val b = before ?: box?.let { doubleArrayOf(it[0] - stroke, it[1] - stroke, it[2] + stroke, it[3] + stroke) }
+            ?: return FilterStage(listOf(p), doubleArrayOf(0.0, 0.0, 0.0, 0.0))
+        return FilterStage(listOf(p), doubleArrayOf(b[0] - spread, b[1] - spread, b[2] + spread, b[3] + spread))
+    }
+
+    /** The space-separated arguments of a function, a nested function such as `rgb()` kept whole. */
+    private fun filterArguments(args: String): List<String> {
+        val out = ArrayList<String>()
+        val current = StringBuilder()
+        var nesting = 0
+        for (c in args) {
+            if (c == '(') nesting++
+            if (c == ')') nesting--
+            if ((c.isWhitespace() || c == ',') && nesting == 0) {
+                if (current.isNotEmpty()) { out += current.toString(); current.clear() }
+            } else {
+                current.append(c)
+            }
+        }
+        if (current.isNotEmpty()) out += current.toString()
+        return out
+    }
+
+    /** A CSS angle in degrees: deg, rad, grad or turn, or a bare zero. */
+    private fun angleOf(raw: String): Double? {
+        val s = raw.trim().lowercase()
+        return when {
+            s.endsWith("deg") -> s.dropLast(3).toDoubleOrNull()
+            s.endsWith("grad") -> s.dropLast(4).toDoubleOrNull()?.times(0.9)
+            s.endsWith("rad") -> s.dropLast(3).toDoubleOrNull()?.times(180 / PI)
+            s.endsWith("turn") -> s.dropLast(4).toDoubleOrNull()?.times(360.0)
+            else -> s.toDoubleOrNull()?.takeIf { it == 0.0 }
+        }
+    }
+
+    /**
+     * Draws [el] through [filter]. Its content paints into a raster step over the filter region,
+     * the filter runs on those pixels, and the result lands at the element's own opacity, inside
+     * the region. A canvas without raster steps draws the element as it is, unless a filter of
+     * the chain has no primitives and so shows nothing.
+     */
+    private fun paintFiltered(
+        el: KiteXmlNode.Element, ctm: KiteMatrix, paint: Paint, filter: FilterUse, canvas: KiteCanvas,
+        load: ((String) -> ByteArray?)?, depth: Int, stop: KiteCancellation?,
+    ) {
+        if (filter.blank) return
+        val r = filter.region
+        canvas.pushClip(KitePath.Builder().apply { rectangle(r[0], r[1], r[2] - r[0], r[3] - r[1]) }.build(), ctm, evenOdd = false)
+        val ran = try {
+            canvas.rasterStep(KiteRectangle(r[0], r[1], r[2], r[3]), ctm) { scope ->
+                runFilter(scope, el, ctm, filter, canvas, load, depth, stop)
+                true
+            }
+        } finally {
+            canvas.popClip()
+        }
+        // A filter without primitives makes transparent black, which the element's own paint is not.
+        if (!ran && filter.stages.none { it.primitives.isEmpty() }) paintElement(el, ctm, paint, canvas, load, depth, stop)
+    }
+
+    private fun runFilter(
+        scope: KiteRasterScope, el: KiteXmlNode.Element, ctm: KiteMatrix, filter: FilterUse, canvas: KiteCanvas,
+        load: ((String) -> ByteArray?)?, depth: Int, stop: KiteCancellation?,
+    ) {
+        val content = filter.content
+        var image = FilterImage.of(scope.render { paintElement(el, ctm, content, canvas, load, depth, stop) })
+        var toPixels = scope.toPixels
+        // A filter keeps four floats a pixel for each result, so a large region runs at a lower resolution.
+        val pixels = scope.width.toLong() * scope.height
+        val shrink = if (pixels > FILTER_MAX_PIXELS) sqrt(pixels.toDouble() / FILTER_MAX_PIXELS) else 1.0
+        val w = if (shrink > 1.0) maxOf(1, (scope.width / shrink).toInt()) else scope.width
+        val h = if (shrink > 1.0) maxOf(1, (scope.height / shrink).toInt()) else scope.height
+        if (shrink > 1.0) {
+            image = image.resized(w, h)
+            toPixels = KiteMatrix.scaling(w.toDouble() / scope.width, h.toDouble() / scope.height).concat(toPixels)
+        }
+        fun flat(color: RgbColor?, opacity: Double): FloatArray? =
+            color?.let { floatArrayOf(it.r.toFloat(), it.g.toFloat(), it.b.toFloat(), (content.opacity * opacity).toFloat().coerceIn(0f, 1f)) }
+        val fill = if (content.fillRef == null) flat(content.fill, content.fillOpacity) else null
+        val stroke = if (content.strokeRef == null) flat(content.stroke, content.strokeOpacity) else null
+        val images = { p: FilterPrimitive.Image, box: DoubleArray ->
+            feImage(scope, p, box, ctm, content, canvas, load, depth, stop)?.let { FilterImage.of(it) }?.let { if (shrink > 1.0) it.resized(w, h) else it }
+        }
+        for (stage in filter.stages) {
+            if (stop?.isCancelled() == true) return
+            image = FilterContext(image, toPixels, stage.region, fill, stroke, images).run(stage.primitives)
+        }
+        if (shrink > 1.0) image = image.resized(scope.width, scope.height)
+        scope.draw(image.toRaster(), alpha = filter.alpha)
+    }
+
+    /**
+     * The pixels of an feImage (Filter Effects 1, 15.18): an element, drawn as `<use>` would draw
+     * it in the filtered element's user space, moved to the top left corner of [box], the
+     * subregion, as browsers draw it; or an image file fitted into [box] by its `preserveAspectRatio`.
+     */
+    private fun feImage(
+        scope: KiteRasterScope, p: FilterPrimitive.Image, box: DoubleArray, ctm: KiteMatrix, paint: Paint, canvas: KiteCanvas,
+        load: ((String) -> ByteArray?)?, depth: Int, stop: KiteCancellation?,
+    ): KiteRaster? {
+        val href = p.href
+        if (href.startsWith("#")) {
+            val target = byId[href.drop(1)] ?: return null
+            val moved = compose(ctm, KiteMatrix.translation(box[0], box[1]))
+            return scope.render { walk(target, moved, paint.copy(filterDepth = paint.filterDepth + 1), canvas, load, depth + 1, stop) }
+        }
+        val bytes = if (href.startsWith("data:")) dataUri(href) else load?.invoke(href)
+        val image = bytes?.let { KiteImageData.fromEncodedImage(it) } ?: return null
+        val iw = image.width.toDouble()
+        val ih = image.height.toDouble()
+        val bw = box[2] - box[0]
+        val bh = box[3] - box[1]
+        if (!(iw > 0.0 && ih > 0.0 && bw > 0.0 && bh > 0.0)) return null
+        val fit = viewBoxFit(doubleArrayOf(0.0, 0.0, iw, ih), bw, bh, p.preserveAspectRatio)
+        val origin = compose(ctm, KiteMatrix.translation(box[0], box[1]))
+        // The image's unit square has row 0 at v=1 and SVG's y grows down, as for <image>.
+        val placed = compose(origin, compose(fit.matrix, KiteMatrix(iw, 0.0, 0.0, -ih, 0.0, ih)))
+        return scope.render {
+            if (fit.slice) canvas.pushClip(KitePath.Builder().apply { rectangle(0.0, 0.0, bw, bh) }.build(), origin, evenOdd = false)
+            try {
+                canvas.drawImage(image, placed)
+            } finally {
+                if (fit.slice) canvas.popClip()
+            }
         }
     }
 
@@ -1057,7 +1537,7 @@ public class SvgImage private constructor(
             miterLimit = declaration("stroke-miterlimit")?.toDoubleOrNull()?.takeIf { it >= 1.0 } ?: p.miterLimit,
             viewport = p.viewport,
             viewportWidth = p.viewportWidth, viewportHeight = p.viewportHeight,
-            patternDepth = p.patternDepth, maskDepth = p.maskDepth,
+            patternDepth = p.patternDepth, maskDepth = p.maskDepth, filterDepth = p.filterDepth,
         )
     }
 
@@ -1172,6 +1652,21 @@ public class SvgImage private constructor(
 
         /** How many masks deep a mask still applies. */
         private const val MAX_MASK_NESTING = 2
+
+        /** How many filters deep a filter still applies, which ends an feImage that draws its own element. */
+        private const val MAX_FILTER_NESTING = 4
+
+        /**
+         * The most pixels a filter runs on. Each result keeps four floats a pixel, so a larger
+         * region runs at a lower resolution and scales back up.
+         */
+        private const val FILTER_MAX_PIXELS = 4_000_000L
+
+        /** The most values a convolution kernel may have, as Skia allows, which bounds the work a pixel. */
+        private const val MAX_KERNEL = 256
+
+        /** The light sources of feDiffuseLighting and feSpecularLighting. */
+        private val LIGHT_SOURCES = setOf("fedistantlight", "fepointlight", "fespotlight")
 
         /** Elements whose opacity composites their children as one group. */
         private val CONTAINERS = setOf("svg", "g", "a", "switch", "use")
