@@ -226,6 +226,13 @@ public class EpubDocument internal constructor(
      */
     internal fun chapterTree(chapter: Int): KiteXmlNode.Element = parsed.layoutSpine(chapter).tree
 
+    /**
+     * [chapter]'s document as parsed, whatever its scripts made of it since: what a chapter's
+     * scripts start from, as a browser loads a page from its file (#498). The caller must not
+     * change it.
+     */
+    internal fun sourceChapterTree(chapter: Int): KiteXmlNode.Element = parsed.spine(chapter).tree
+
     /** Whether [other] is a document over the same book, whose scripts' changes it shares (#41). */
     internal fun sharesBookWith(other: EpubDocument): Boolean = other.parsed === parsed
 

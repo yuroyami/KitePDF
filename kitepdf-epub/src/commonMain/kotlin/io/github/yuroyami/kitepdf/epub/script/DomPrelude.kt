@@ -939,11 +939,27 @@ console.table = console.log;
 console.assert = function (ok) { if (!ok) console.error.apply(console, ['Assertion failed:'].concat(Array.prototype.slice.call(arguments, 1))); };
 console.group = console.groupCollapsed = console.groupEnd = console.time = console.timeEnd = console.count = function () {};
 
+/*
+ * What a book's scripts ask of the reading system (EPUB Reading Systems 3.3, appendix B). A
+ * chapter's scripts change its tree and its styles, which is laid out again, and a tap reaches
+ * them as mouse events; no touch or key event reaches them. A feature this does not know
+ * answers undefined. `name` and `version` are deprecated, and there is no version to give.
+ */
+var features = { 'dom-manipulation': true, 'layout-changes': true, 'spine-scripting': true,
+  'mouse-events': true, 'touch-events': false, 'keyboard-events': false };
+var readingSystem = {
+  name: 'KitePDF', version: '',
+  hasFeature: function (feature) { var f = String(feature); return features.hasOwnProperty(f) ? features[f] : undefined; }
+};
+Object.freeze(readingSystem);
+var navigator = { userAgent: 'KitePDF', appName: 'KitePDF', language: 'en', languages: ['en'], platform: '', onLine: false, cookieEnabled: true, maxTouchPoints: 1 };
+Object.defineProperty(navigator, 'epubReadingSystem', { value: readingSystem, enumerable: true });
+
 var viewport = K.viewport();
 var api = {
   window: global, self: global, top: global, parent: global, frames: global, opener: null, frameElement: null,
   document: document, location: location, console: console,
-  navigator: { userAgent: 'KitePDF', appName: 'KitePDF', language: 'en', languages: ['en'], platform: '', onLine: false, cookieEnabled: true, maxTouchPoints: 1 },
+  navigator: navigator,
   screen: { width: viewport[0], height: viewport[1], availWidth: viewport[0], availHeight: viewport[1], colorDepth: 24 },
   history: { length: 1, state: null, back: function () {}, forward: function () {}, go: function () {}, pushState: function () {}, replaceState: function () {} },
   innerWidth: viewport[0], innerHeight: viewport[1], outerWidth: viewport[0], outerHeight: viewport[1],

@@ -31,11 +31,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   it opens, sends a tap to the element under it as `pointerdown`, `mousedown`, `pointerup`,
   `mouseup` and `click`, says whether a script prevented it, pumps the timers and passes on a
   change of `location`. A chapter is a window of its own, with a DOM over its tree, events,
-  timers, `console` and an in-memory `localStorage`; nothing reaches outside the book. What a
-  script changes is laid out again, with the pages the chapter gains or loses, and the changes
-  belong to the book. `EpubScriptPolicy` bounds each call. In `kitepdf-epub`,
-  `EpubScriptSession` does the same over any `KiteScriptEngine`, and `EpubScriptHandler` is what
-  a viewer needs from it. `KiteXmlNode.Element.attrs` and `KiteXmlNode.Text.text` can be set, for
+  timers, `console`, an in-memory `localStorage` and `navigator.epubReadingSystem`; nothing
+  reaches outside the book. What a script changes is laid out again, with the pages the chapter
+  gains or loses, and the changes belong to the book. Each chapter's engine opens on a thread of
+  its own, and at most `EpubScriptRunner.LIVE_CHAPTERS` stay open, one on JavaScript and
+  WebAssembly: the chapter used least recently closes its engine, and its scripts start over
+  from its markup when it opens again (#495, #498). `EpubScriptPolicy` bounds each call. In
+  `kitepdf-epub`, `EpubScriptSession` does the same over any `KiteScriptEngine`, with
+  `liveChapters` for the bound, and `EpubScriptHandler` is what a viewer needs from it. `KiteXmlNode.Element.attrs` and `KiteXmlNode.Text.text` can be set, for
   the tree a script layer changes (#41).
 
 - `EpubDocument.chapterChanges` counts the changes the book's scripts made to its chapters,

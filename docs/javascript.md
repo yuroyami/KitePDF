@@ -165,7 +165,13 @@ EpubScriptRunner(book).use { scripts ->
 Each chapter is a window of its own, with an engine of its own. Its scripts run the first time it
 opens, inline and from the book, in document order. A module script does not run, and neither
 does a script at an address outside the book. Once scripts run, `noscript` content no longer
-shows.
+shows. A chapter without scripts takes no engine.
+
+At most eight chapters keep their engines open at once (`EpubScriptRunner.LIVE_CHAPTERS`), and
+one on JavaScript and WebAssembly, where every engine shares the page's one thread. Opening one
+more closes the engine of the chapter used least recently, as a reading system unloads the
+chapters the reader left. That chapter keeps what its scripts made of it, and when it opens
+again its scripts start over from its markup, as a page does when it loads again.
 
 They see a DOM over the chapter: `document` with `getElementById`, `querySelector`,
 `querySelectorAll` and the other finders, `createElement` and fragments; nodes and elements with
@@ -173,7 +179,10 @@ the tree walk, `appendChild` and its relatives, `textContent`, `innerHTML` and `
 attributes, `id`, `className`, `classList`, `dataset`, `hidden`, `style`, `matches` and
 `closest`; events with `addEventListener`, `on` attributes and properties, capture and bubbling,
 `preventDefault` and `stopPropagation`; `setTimeout`, `setInterval` and `requestAnimationFrame`;
-`console`; and `localStorage` and `sessionStorage`, in memory for the book. A check box, a radio
+`console`; `localStorage` and `sessionStorage`, in memory for the book; and
+`navigator.epubReadingSystem`, whose `hasFeature` answers true for `dom-manipulation`,
+`layout-changes`, `spine-scripting` and `mouse-events`, false for `touch-events` and
+`keyboard-events`, and undefined for a feature it does not know. A check box, a radio
 button, a label, a `summary` and a submit button do what a click on them does in a browser.
 `getComputedStyle` answers `display`, `visibility`, `color`, `background-color`, `font-size`,
 `font-weight`, `font-style`, `opacity`, `text-align`, `position`, `float`, `width`, `height`,
@@ -205,9 +214,12 @@ pumps timers and follows the scripts' changes itself; see
 [A book's scripts](compose-viewer.md#a-books-scripts).
 
 `EpubScriptPolicy` sets how long each call may run: opening a chapter, a tap, a round of timers.
-`EpubScriptPolicy.DENY` runs nothing. The runner keeps its engines on a thread of its own, as
-`PdfScriptRunner` does. `EpubScriptSession` in `kitepdf-epub` is the same thing over any
-`KiteScriptEngine`, on the caller's thread.
+`EpubScriptPolicy.DENY` runs nothing. The runner runs its calls on a thread of its own, as
+`PdfScriptRunner` does, and opens each chapter's engine on a thread of its own too, since a
+KiteJS engine holds the thread that opened it. A listener of `onNavigate` or `onTimersChanged`
+runs on one of them while a script waits for it, so it hands its work on rather than calling the
+runner. `EpubScriptSession` in `kitepdf-epub` is the same thing over any `KiteScriptEngine`, on
+the caller's thread; its `liveChapters` says how many chapters' engines stay open.
 
 ## Targets
 

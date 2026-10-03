@@ -41,13 +41,20 @@ public class EpubScriptPolicy(
  * ```
  *
  * The scripts of each chapter run in a window of their own, over the library's own parse and
- * layout: [EpubScriptSession] says what they see. A runner can be called from any thread. A
- * KiteJS engine belongs to the thread that opened it, so the runner opens its engines on a
- * thread of its own and runs every call there, one at a time and in order, as `PdfScriptRunner`
- * does. [close] stops that thread.
+ * layout: [EpubScriptSession] says what they see. A runner can be called from any thread. It
+ * runs every call on a thread of its own, one at a time and in order, as `PdfScriptRunner` does.
+ * A KiteJS engine belongs to the thread that opened it, and a thread holds one, so each
+ * chapter's engine opens on a thread of its own too, and the call goes there while it runs that
+ * chapter's scripts (#498). [close] stops every one of them. A listener of [onNavigate] or
+ * [onTimersChanged] runs on one of them while a script waits for it, so it hands its work on, as
+ * `KiteDocView` does, rather than calling the runner.
+ *
+ * At most [LIVE_CHAPTERS] chapters keep their engines open, and on JavaScript and WebAssembly,
+ * which have one thread for every engine, one: opening another closes the engine of the chapter
+ * used least recently, whose scripts start over from its markup when it opens again.
  *
  * @param onConsole gets what scripts print with `console`, and what `alert`, `confirm` and
- *   `prompt` would have shown, on the runner's thread.
+ *   `prompt` would have shown, on one of the runner's threads.
  * @param clock milliseconds on a clock that only goes forward, for the timers, the budget and
  *   `Date.now()`. Leave it unset for the real one; a test sets it so a timer is repeatable.
  */
@@ -67,7 +74,8 @@ public class EpubScriptRunner(
     @kotlin.concurrent.Volatile
     private var closed = false
 
-    /** When the call in progress started, for the budget. Read and written on the script thread. */
+    /** When the call in progress started, for the budget: written on the script thread, read on a chapter's. */
+    @kotlin.concurrent.Volatile
     private var callStartedAt = 0L
 
     /** The session, made on the script thread by the first call that needs it. */
@@ -118,14 +126,17 @@ public class EpubScriptRunner(
         }
     }
 
-    /** The session, made on first use: on the script thread, which its engines then belong to. */
+    /** The session, made on first use on the script thread. Each chapter's engine opens on a thread of its own. */
     private fun sessionHere(): EpubScriptSession = session ?: EpubScriptSession(
         document,
         engineFor = {
-            KiteJsScriptEngine(instructionBudget = policy.instructionBudget, deadline = ::deadlinePassed, clock = clock)
+            ThreadedScriptEngine(startScriptThread()) {
+                KiteJsScriptEngine(instructionBudget = policy.instructionBudget, deadline = ::deadlinePassed, clock = clock)
+            }
         },
         onConsole = onConsole,
         clock = ::now,
+        liveChapters = if (scriptThread.value.isOwnThread) LIVE_CHAPTERS else 1,
     ).also { made ->
         made.onTimersChanged { lock.withLock { timerListeners.toList() }.forEach { it() } }
         made.onNavigate { href -> lock.withLock { navigationListeners.toList() }.forEach { it(href) } }
@@ -149,5 +160,10 @@ public class EpubScriptRunner(
         } finally {
             thread.close()
         }
+    }
+
+    public companion object {
+        /** How many chapters keep their engines open at once where each has a thread of its own. */
+        public const val LIVE_CHAPTERS: Int = 8
     }
 }

@@ -13,6 +13,8 @@ public final class io/github/yuroyami/kitepdf/javascript/EpubScriptPolicy$Compan
 }
 
 public final class io/github/yuroyami/kitepdf/javascript/EpubScriptRunner : io/github/yuroyami/kitepdf/epub/EpubScriptHandler, java/lang/AutoCloseable {
+	public static final field Companion Lio/github/yuroyami/kitepdf/javascript/EpubScriptRunner$Companion;
+	public static final field LIVE_CHAPTERS I
 	public fun <init> (Lio/github/yuroyami/kitepdf/epub/EpubDocument;Lio/github/yuroyami/kitepdf/javascript/EpubScriptPolicy;Lkotlin/jvm/functions/Function2;Lkotlin/jvm/functions/Function0;)V
 	public synthetic fun <init> (Lio/github/yuroyami/kitepdf/epub/EpubDocument;Lio/github/yuroyami/kitepdf/javascript/EpubScriptPolicy;Lkotlin/jvm/functions/Function2;Lkotlin/jvm/functions/Function0;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public fun chapterOpened (I)V
@@ -25,6 +27,9 @@ public final class io/github/yuroyami/kitepdf/javascript/EpubScriptRunner : io/g
 	public fun onTimersChanged (Lkotlin/jvm/functions/Function0;)Lkotlin/jvm/functions/Function0;
 	public fun pumpTimers (J)Ljava/lang/Long;
 	public fun tap (Lio/github/yuroyami/kitepdf/epub/EpubPage;DD)Z
+}
+
+public final class io/github/yuroyami/kitepdf/javascript/EpubScriptRunner$Companion {
 }
 
 public final class io/github/yuroyami/kitepdf/javascript/KiteJsScriptEngine : io/github/yuroyami/kitepdf/core/script/KiteScriptEngine {

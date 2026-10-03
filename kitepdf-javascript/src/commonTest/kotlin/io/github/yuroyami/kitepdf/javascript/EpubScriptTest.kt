@@ -4,6 +4,7 @@ import io.github.yuroyami.kitepdf.core.KiteLocation
 import io.github.yuroyami.kitepdf.core.render.RecordingCanvas
 import io.github.yuroyami.kitepdf.epub.EpubDocument
 import io.github.yuroyami.kitepdf.epub.EpubPage
+import io.github.yuroyami.kitepdf.epub.EpubScriptSession
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -239,5 +240,108 @@ class EpubScriptTest {
             "\"ready\":\"loading\"",
         )
         for (part in expected) assertTrue(part in logged, "$part in $logged")
+    }
+
+    /** A fixed-layout book of [count] pages like [ScriptBooks.buttonPage], each with scripts of its own. */
+    private fun buttonPages(count: Int): EpubDocument = ScriptBooks.book(
+        metadata = """<meta property="rendition:layout">pre-paginated</meta>""",
+        items = (0 until count).map { ScriptBooks.Item("page$it.xhtml", "application/xhtml+xml", properties = "scripted", spine = true) } +
+            ScriptBooks.Item("page.css", "text/css"),
+        files = (0 until count).associate { i ->
+            "page$i.xhtml" to ScriptBooks.xhtml(
+                head = """<meta name="viewport" content="width=300, height=200"/><link rel="stylesheet" type="text/css" href="page.css"/>""",
+                body = """<h1 id="band">Band $i</h1><button id="go" type="button" onclick="paint()">Go</button>""" +
+                    """<script>function paint() { document.getElementById('band').style.background = '${ScriptBooks.BLUE}'; }</script>""",
+            )
+        } + ("page.css" to """body { margin: 0; }
+            |h1 { margin: 0; height: 60px; background: ${ScriptBooks.RED}; color: ${ScriptBooks.RED}; }
+            |#go { display: block; position: absolute; left: 10px; top: 100px; width: 120px; height: 40px; margin: 0; }""".trimMargin()),
+    )
+
+    @Test
+    fun every_scripted_chapter_of_a_book_runs_its_own_scripts() {
+        // KiteJS holds one open engine per thread, and the second chapter's used to fail to open (#498).
+        val book = buttonPages(3)
+        val scripts = runner(book)
+        for (chapter in 0 until 3) scripts.chapterOpened(chapter)
+        val pages = (0 until 3).map { book.page(KiteLocation(it, 0)) }
+
+        scripts.tap(pages[2], 52.5, 90.0)
+        scripts.tap(pages[0], 52.5, 90.0)
+
+        assertEquals(emptyList(), scripts.failures.map { it.message })
+        assertTrue(pages[0].paintsBlue(), "the first chapter's button ran")
+        assertTrue(pages[1].paintsRed() && !pages[1].paintsBlue(), "the second chapter's band was not touched")
+        assertTrue(pages[2].paintsBlue(), "the third chapter's button ran")
+    }
+
+    @Test
+    fun a_chapter_whose_engine_closed_starts_over_from_its_markup() {
+        val book = ScriptBooks.book(
+            items = listOf(
+                ScriptBooks.Item("one.xhtml", "application/xhtml+xml", properties = "scripted", spine = true),
+                ScriptBooks.Item("two.xhtml", "application/xhtml+xml", properties = "scripted", spine = true),
+            ),
+            files = mapOf(
+                "one.xhtml" to ScriptBooks.xhtml(
+                    body = """<p>Markup.</p><script>var runs = (Number(localStorage.getItem('runs')) || 0) + 1; localStorage.setItem('runs', String(runs));
+                        var p = document.createElement('p'); p.textContent = 'Added by run ' + runs + '.'; document.body.appendChild(p);</script>""",
+                ),
+                "two.xhtml" to ScriptBooks.xhtml(body = """<p>Two.</p><script>var two = true;</script>"""),
+            ),
+        )
+        val opened = ArrayList<Int>()
+        // One engine at a time, as where engines share one thread: opening the second chapter closes the first's.
+        val session = EpubScriptSession(book, engineFor = { opened += it; KiteJsScriptEngine() }, liveChapters = 1)
+        try {
+            fun text() = book.page(KiteLocation(0, 0)).textContent().plainText
+            session.chapterOpened(0)
+            assertTrue("Added by run 1." in text(), text())
+
+            session.chapterOpened(1)
+            assertTrue("Added by run 1." in text(), "the chapter keeps what its scripts made of it while they are closed")
+
+            session.chapterOpened(0)
+            assertEquals(listOf(0, 1, 0), opened)
+            assertTrue("Added by run 2." in text(), "the scripts ran again: ${text()}")
+            assertFalse("Added by run 1." in text(), "and over the chapter's markup, not over what the first run made")
+            assertEquals(emptyList(), session.failures.map { it.message })
+        } finally {
+            session.close()
+        }
+    }
+
+    @Test
+    fun an_engine_that_will_not_open_is_a_failure_of_its_chapter() {
+        val book = ScriptBooks.chapter("""<p>Plain.</p><script>var x = 1;</script>""")
+        val session = EpubScriptSession(book, engineFor = { throw IllegalStateException("no engine here") })
+        session.chapterOpened(0)
+        assertFalse(session.tap(book.page(KiteLocation(0, 0)), 10.0, 10.0))
+        assertTrue(session.failures.any { "no engine here" in it.message.orEmpty() }, "${session.failures.map { it.message }}")
+        assertTrue("Plain." in book.page(KiteLocation(0, 0)).textContent().plainText)
+        session.close()
+    }
+
+    @Test
+    fun a_script_finds_the_reading_system_and_what_it_supports() {
+        val console = ArrayList<String>()
+        val book = ScriptBooks.chapter(
+            """<p>Features.</p><script>
+                var ers = navigator.epubReadingSystem;
+                var names = ['dom-manipulation', 'layout-changes', 'spine-scripting', 'mouse-events', 'touch-events', 'keyboard-events', 'no-such-feature'];
+                console.log(ers.name + ' ' + names.map(function (n) { return n + '=' + ers.hasFeature(n, '1.0'); }).join(' '));
+                navigator.epubReadingSystem = null;
+                console.log(typeof navigator.epubReadingSystem.hasFeature);
+            </script>""",
+        )
+        runner(book, console = console).chapterOpened(0)
+        assertEquals(
+            listOf(
+                "log: KitePDF dom-manipulation=true layout-changes=true spine-scripting=true mouse-events=true " +
+                    "touch-events=false keyboard-events=false no-such-feature=undefined",
+                "log: function",
+            ),
+            console,
+        )
     }
 }
