@@ -16,6 +16,7 @@ commonMain.dependencies {
 | Target | Web views |
 |---|---|
 | Desktop JVM | JavaFX's web view, drawn on the page. Add JavaFX for your platform, as below |
+| Android (minSdk 24) | The system's `WebView`, over the page |
 | Other targets | No artifact yet. The pages show the library's own rendering |
 
 ### JavaFX on the desktop
@@ -31,6 +32,10 @@ jvmMain.dependencies {
 ```
 
 A JDK that carries JavaFX, such as a full build of Liberica or Zulu, needs nothing more. The book's files reach the web view over HTTP on the loopback address, through the JDK's `jdk.httpserver` module, so a runtime image that `jlink` cuts down must keep that module. Without JavaFX, or without a display for it to start on, `isWebViewAvailable()` is false and the pages show the library's own rendering.
+
+### Android
+
+The web views are the system's own `WebView`. The book's files reach them under an `https` origin whose host name ends in `.invalid`, so it can never resolve: the web view's client answers every request for it from the book, and every other request with an empty 404 before it leaves the device. Your app needs no permission for this, not even `INTERNET`.
 
 ## Use it
 
@@ -52,7 +57,7 @@ Every file a web view asks for comes from the book, under an origin of the book'
 
 A link that a web view opens goes the way of a tapped link of the page: `onLinkTap` sees it first, and when that does not take it, a link inside the book moves the view to its target. A link to a place in the same document scrolls the island instead. A script that sets the page's location counts as a link too, and the island goes back to its own document.
 
-The reader's mouse and keys reach the web view: a click gives it the keyboard, a wheel over an embedded document scrolls the document, and a wheel over a whole page scrolls the book, since the page has no more to show.
+The reader's mouse and keys reach the web view: a click gives it the keyboard, a wheel over an embedded document scrolls the document, and a wheel over a whole page scrolls the book, since the page has no more to show. On Android the touches over a web view go to it, as they go to any view.
 
 A web view lives while its page is composed. When the viewer drops the page, scrolled far away or rebuilt for a new zoom, the island's state goes with it: the values of its forms and the state of its scripts start over when the page comes back.
 

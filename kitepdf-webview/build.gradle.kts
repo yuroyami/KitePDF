@@ -2,6 +2,7 @@ import org.gradle.internal.os.OperatingSystem
 
 plugins {
     alias(libs.plugins.kotlin.multiplatform)
+    alias(libs.plugins.android.kmp.library)
     alias(libs.plugins.compose.plugin)
     alias(libs.plugins.compose.compiler)
     alias(libs.plugins.vanniktech.publish)
@@ -45,14 +46,30 @@ tasks.withType<Test>().configureEach {
     providers.environmentVariable("DISPLAY").orNull?.let { environment("DISPLAY", it) }
 }
 
+// The module has no Compose resources, and the Compose plugin leaves the device test's copy of
+// them without a place to go, which fails the device test build.
+tasks.matching { it.name == "copyAndroidDeviceTestComposeResourcesToAndroidAssets" }.configureEach { enabled = false }
+
 /*
  * :kitepdf-webview is the ONLY module that mounts a web engine. It shows the scripted content of
  * an EPUB, which this library does not run itself, in the platform's own web view over the
- * viewer's page overlay (#41). The desktop JVM uses JavaFX, which an app adds for its platform.
+ * viewer's page overlay (#41). Android uses the system's WebView; the desktop JVM uses JavaFX,
+ * which an app adds for its platform.
  */
 kotlin {
     explicitApi()
     jvmToolchain(21)
+
+    android {
+        namespace = "io.github.yuroyami.kitepdf.webview"
+        compileSdk = 37
+        minSdk = 24
+        withHostTest {}
+        // A web view needs a device: CI runs these on an emulator.
+        withDeviceTestBuilder { sourceSetTreeName = "test" }.configure {
+            instrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        }
+    }
 
     jvm()
 
@@ -77,6 +94,22 @@ kotlin {
             for (module in listOf("base", "graphics", "controls", "media", "web")) {
                 compileOnly(javafx(module)) { isTransitive = false }
             }
+        }
+
+        getByName("androidHostTest").dependencies {
+            implementation(libs.robolectric)
+            implementation(kotlin("test-junit"))
+        }
+
+        getByName("androidDeviceTest").dependencies {
+            implementation(kotlin("test-junit"))
+            implementation(libs.androidx.test.runner)
+            implementation(libs.androidx.test.core)
+            implementation(libs.androidx.test.ext.junit)
+            implementation(libs.android.activity.compose)
+            @OptIn(org.jetbrains.compose.ExperimentalComposeLibrary::class)
+            implementation(compose.uiTest)
+            implementation(libs.androidx.compose.ui.test.manifest)
         }
 
         jvmTest.dependencies {
