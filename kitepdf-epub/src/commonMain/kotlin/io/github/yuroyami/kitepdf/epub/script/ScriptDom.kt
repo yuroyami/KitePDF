@@ -34,9 +34,11 @@ internal class ScriptDom(source: KiteXmlNode.Element) {
     /** The parser's `#root` element, which holds `<html>`: what a script calls the document. */
     val root: KiteXmlNode.Element
 
-    /** True once a script changed the tree since the last [snapshot]. */
+    /**
+     * True once a script changed the tree since the last [snapshot]. The host sets it when the
+     * layout shows another tree than this one, so the next snapshot replaces it (#498).
+     */
     var dirty: Boolean = false
-        private set
 
     init {
         val from = HashMap<KiteXmlNode.Element, KiteXmlNode.Element>()

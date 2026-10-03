@@ -13,6 +13,12 @@ internal interface ScriptThread {
 
     /** Stops the thread after the work already queued. */
     fun close()
+
+    /**
+     * False where there is one thread and the work runs where it is called, so two engines
+     * cannot be open at once, whichever script thread opened them.
+     */
+    val isOwnThread: Boolean get() = true
 }
 
 /** Starts a thread for one runner. JavaScript and WebAssembly have one thread, so there the work runs where it is called. */

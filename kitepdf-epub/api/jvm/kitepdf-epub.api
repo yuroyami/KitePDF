@@ -268,13 +268,14 @@ public final class io/github/yuroyami/kitepdf/epub/EpubScriptHandler$DefaultImpl
 }
 
 public final class io/github/yuroyami/kitepdf/epub/EpubScriptSession : io/github/yuroyami/kitepdf/epub/EpubScriptHandler, java/lang/AutoCloseable {
-	public fun <init> (Lio/github/yuroyami/kitepdf/epub/EpubDocument;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function2;Lkotlin/jvm/functions/Function0;)V
-	public synthetic fun <init> (Lio/github/yuroyami/kitepdf/epub/EpubDocument;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function2;Lkotlin/jvm/functions/Function0;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun <init> (Lio/github/yuroyami/kitepdf/epub/EpubDocument;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function2;Lkotlin/jvm/functions/Function0;I)V
+	public synthetic fun <init> (Lio/github/yuroyami/kitepdf/epub/EpubDocument;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function2;Lkotlin/jvm/functions/Function0;IILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public fun chapterOpened (I)V
 	public fun close ()V
 	public final fun getDocument ()Lio/github/yuroyami/kitepdf/epub/EpubDocument;
 	public final fun getFailures ()Ljava/util/List;
 	public fun getHasTimers ()Z
+	public final fun getLiveChapters ()I
 	public fun onNavigate (Lkotlin/jvm/functions/Function1;)Lkotlin/jvm/functions/Function0;
 	public fun onTimersChanged (Lkotlin/jvm/functions/Function0;)Lkotlin/jvm/functions/Function0;
 	public fun pumpTimers (J)Ljava/lang/Long;

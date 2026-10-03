@@ -37,8 +37,17 @@ import kotlin.math.roundToLong
  * lays the changed chapters out too. They last as long as the book is open; [close] closes the
  * engines but leaves the changed chapters as they are.
  *
+ * At most [liveChapters] chapters keep their scripts running, as a reading system unloads the
+ * chapters the reader left (#498). Opening one more closes the engine of the chapter used least
+ * recently, whose pages keep what its scripts made of them. When that chapter opens again, its
+ * scripts start over from its own markup, as a page does when it loads again, and so does a
+ * chapter that an earlier session's scripts changed.
+ *
  * @param engineFor opens the engine of one chapter's scripts, the first time it opens. The
- *   session closes it in [close].
+ *   session closes it in [close], or when it makes room for another chapter. An engine that
+ *   will not open is a failure of that chapter, whose scripts then do not run.
+ * @param liveChapters how many chapters' engines may be open at once, at least one. One suits
+ *   engines that cannot share a thread with another open engine.
  * @param onConsole gets what scripts print with `console`, and what `alert`, `confirm` and
  *   `prompt` would have shown, with the level or the dialog's name.
  * @param clock milliseconds on a clock that only goes forward, for the timers and
@@ -49,12 +58,18 @@ public class EpubScriptSession(
     private val engineFor: (chapter: Int) -> KiteScriptEngine,
     private val onConsole: (level: String, message: String) -> Unit = { _, _ -> },
     clock: (() -> Long)? = null,
+    public val liveChapters: Int = Int.MAX_VALUE,
 ) : EpubScriptHandler, AutoCloseable {
+
+    init {
+        require(liveChapters >= 1) { "liveChapters must be at least 1: $liveChapters" }
+    }
 
     private val started = kotlin.time.TimeSource.Monotonic.markNow()
     private val now: () -> Long = clock ?: { started.elapsedNow().inWholeMilliseconds }
 
-    private val chapters = HashMap<Int, ChapterScripts>()
+    /** The chapters whose scripts run, the one used least recently first. */
+    private val chapters = LinkedHashMap<Int, ChapterScripts>()
 
     private val lock = KiteLock()
     private val timerListeners = ArrayList<() -> Unit>()
@@ -123,16 +138,30 @@ public class EpubScriptSession(
     override fun close() {
         if (closed) return
         closed = true
-        for (scripts in chapters.values) runCatching { scripts.engine.close() }
+        for (scripts in chapters.values) scripts.close()
         chapters.clear()
         timersWaiting = false
     }
 
-    /** [chapter]'s scripts, run the first time; null for a chapter the book does not have. */
+    /**
+     * [chapter]'s scripts, run the first time and after its engine was closed to make room;
+     * null for a chapter the book does not have or that has no scripts, which takes no engine
+     * and leaves the others open. The chapter becomes the one used last.
+     */
     private fun open(chapter: Int): ChapterScripts? {
         check(!closed) { "the script session is closed" }
-        if (chapter !in 0 until document.chapterCount) return null
-        chapters[chapter]?.let { return it }
+        if (chapter !in 0 until document.chapterCount || !document.isScripted(chapter)) return null
+        chapters.remove(chapter)?.let { scripts ->
+            chapters[chapter] = scripts
+            return scripts
+        }
+        // Room first: an engine that cannot share its thread opens only once the other has closed.
+        var dropped = false
+        while (chapters.size >= liveChapters) {
+            val eldest = chapters.keys.first()
+            chapters.remove(eldest)?.let { if (it.timers > 0) dropped = true; it.close() }
+        }
+        if (dropped) timersChanged()
         val scripts = ChapterScripts(chapter)
         chapters[chapter] = scripts
         scripts.start()
@@ -155,8 +184,15 @@ public class EpubScriptSession(
 
     /** One chapter's window: its engine, its live tree and what binds the two. */
     private inner class ChapterScripts(val chapter: Int) {
-        val engine: KiteScriptEngine = engineFor(chapter)
-        val dom = ScriptDom(document.chapterTree(chapter))
+        /** Null when it would not open, so nothing runs here. */
+        private val opened: KiteScriptEngine? = try {
+            engineFor(chapter)
+        } catch (failure: Exception) {
+            recordFailure(KiteScriptException("chapter $chapter: the engine did not open: ${failure.message}", failure))
+            null
+        }
+        val engine: KiteScriptEngine get() = checkNotNull(opened)
+        val dom = ScriptDom(document.sourceChapterTree(chapter))
 
         /** The timers and frames its scripts wait on. */
         var timers = 0
@@ -164,8 +200,8 @@ public class EpubScriptSession(
         /** Where the next `document.write` of each script goes: after what the script wrote last. */
         private val writeCursors = HashMap<Int, KiteXmlNode>()
 
-        /** False once the DOM failed to start, so nothing more runs here. */
-        private var usable = true
+        /** False once the engine or the DOM failed to start, so nothing more runs here. */
+        private var usable = opened != null
 
         /** Runs [block] against the engine; a failure is recorded, and answers null. */
         fun <T> call(what: String, block: () -> T): T? {
@@ -184,7 +220,18 @@ public class EpubScriptSession(
             document.replaceChapterTree(chapter, dom.snapshot())
         }
 
+        fun close() {
+            runCatching { opened?.close() }
+        }
+
         fun start() {
+            // The layout shows what scripts made of the chapter before, so it takes this run's
+            // tree even when the scripts change nothing.
+            if (document.chapterVersionOf(chapter) > 0) dom.dirty = true
+            if (!usable) {
+                commit()
+                return
+            }
             bind()
             try {
                 engine.evaluate(DOM_PRELUDE, "kitepdf-dom.js")
@@ -192,6 +239,7 @@ public class EpubScriptSession(
                 // Without its DOM no script of the chapter can run, so none is tried.
                 recordFailure(KiteScriptException("chapter $chapter: the DOM did not start: ${failure.message}", failure))
                 usable = false
+                commit()
                 return
             }
             // Scripts run here, so `noscript` content does not show, as in a browser that runs them.

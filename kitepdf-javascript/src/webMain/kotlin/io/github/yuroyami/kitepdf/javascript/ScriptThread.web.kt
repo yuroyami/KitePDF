@@ -8,4 +8,6 @@ private object InPlaceScriptThread : ScriptThread {
     override fun <T> call(block: () -> T): T = block()
 
     override fun close() {}
+
+    override val isOwnThread: Boolean get() = false
 }

@@ -409,7 +409,7 @@ final class io.github.yuroyami.kitepdf.epub/EpubRendition { // io.github.yuroyam
 }
 
 final class io.github.yuroyami.kitepdf.epub/EpubScriptSession : io.github.yuroyami.kitepdf.epub/EpubScriptHandler, kotlin/AutoCloseable { // io.github.yuroyami.kitepdf.epub/EpubScriptSession|null[0]
-    constructor <init>(io.github.yuroyami.kitepdf.epub/EpubDocument, kotlin/Function1<kotlin/Int, io.github.yuroyami.kitepdf.core.script/KiteScriptEngine>, kotlin/Function2<kotlin/String, kotlin/String, kotlin/Unit> = ..., kotlin/Function0<kotlin/Long>? = ...) // io.github.yuroyami.kitepdf.epub/EpubScriptSession.<init>|<init>(io.github.yuroyami.kitepdf.epub.EpubDocument;kotlin.Function1<kotlin.Int,io.github.yuroyami.kitepdf.core.script.KiteScriptEngine>;kotlin.Function2<kotlin.String,kotlin.String,kotlin.Unit>;kotlin.Function0<kotlin.Long>?){}[0]
+    constructor <init>(io.github.yuroyami.kitepdf.epub/EpubDocument, kotlin/Function1<kotlin/Int, io.github.yuroyami.kitepdf.core.script/KiteScriptEngine>, kotlin/Function2<kotlin/String, kotlin/String, kotlin/Unit> = ..., kotlin/Function0<kotlin/Long>? = ..., kotlin/Int = ...) // io.github.yuroyami.kitepdf.epub/EpubScriptSession.<init>|<init>(io.github.yuroyami.kitepdf.epub.EpubDocument;kotlin.Function1<kotlin.Int,io.github.yuroyami.kitepdf.core.script.KiteScriptEngine>;kotlin.Function2<kotlin.String,kotlin.String,kotlin.Unit>;kotlin.Function0<kotlin.Long>?;kotlin.Int){}[0]
 
     final val document // io.github.yuroyami.kitepdf.epub/EpubScriptSession.document|{}document[0]
         final fun <get-document>(): io.github.yuroyami.kitepdf.epub/EpubDocument // io.github.yuroyami.kitepdf.epub/EpubScriptSession.document.<get-document>|<get-document>(){}[0]
@@ -417,6 +417,8 @@ final class io.github.yuroyami.kitepdf.epub/EpubScriptSession : io.github.yuroya
         final fun <get-failures>(): kotlin.collections/List<io.github.yuroyami.kitepdf.core.script/KiteScriptException> // io.github.yuroyami.kitepdf.epub/EpubScriptSession.failures.<get-failures>|<get-failures>(){}[0]
     final val hasTimers // io.github.yuroyami.kitepdf.epub/EpubScriptSession.hasTimers|{}hasTimers[0]
         final fun <get-hasTimers>(): kotlin/Boolean // io.github.yuroyami.kitepdf.epub/EpubScriptSession.hasTimers.<get-hasTimers>|<get-hasTimers>(){}[0]
+    final val liveChapters // io.github.yuroyami.kitepdf.epub/EpubScriptSession.liveChapters|{}liveChapters[0]
+        final fun <get-liveChapters>(): kotlin/Int // io.github.yuroyami.kitepdf.epub/EpubScriptSession.liveChapters.<get-liveChapters>|<get-liveChapters>(){}[0]
 
     final fun chapterOpened(kotlin/Int) // io.github.yuroyami.kitepdf.epub/EpubScriptSession.chapterOpened|chapterOpened(kotlin.Int){}[0]
     final fun close() // io.github.yuroyami.kitepdf.epub/EpubScriptSession.close|close(){}[0]
