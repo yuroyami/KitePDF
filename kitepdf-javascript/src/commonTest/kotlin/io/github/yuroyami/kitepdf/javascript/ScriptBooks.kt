@@ -62,6 +62,7 @@ internal object ScriptBooks {
         files: Map<String, String>,
         metadata: String = "",
         settings: EpubSettings = EpubSettings(),
+        identifier: String = "scripted",
     ): EpubDocument {
         val container = """<?xml version="1.0"?><container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container"><rootfiles><rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/></rootfiles></container>"""
         val manifest = items.mapIndexed { i, item ->
@@ -70,7 +71,7 @@ internal object ScriptBooks {
         }.joinToString("")
         val spine = items.mapIndexedNotNull { i, item -> if (item.spine) """<itemref idref="i$i"/>""" else null }.joinToString("")
         val opf = """<?xml version="1.0"?><package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="id">
-            <metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:identifier id="id">scripted</dc:identifier><dc:title>Scripted</dc:title>$metadata</metadata>
+            <metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:identifier id="id">$identifier</dc:identifier><dc:title>Scripted</dc:title>$metadata</metadata>
             <manifest>$manifest</manifest><spine>$spine</spine></package>"""
         val entries = listOf(
             "mimetype" to "application/epub+zip",

@@ -20,6 +20,7 @@ f0091ada0476 259 8
 97f0a4130b3a 92 9
 db304e6d86fa 1 boxed
 dff74e8c885b 16 idpf-cole-voyage-of-life
+acb1d027bdcf 7 idpf-cole-voyage-of-life-tol
 02c07befa1d4 10 idpf-page-blanche
 996fcfad8eb8 25 idpf-regime-anticancer-arabic
 0e11af53e99c 6 idpf-svg-in-spine
@@ -35,3 +36,8 @@ d3e1064f6cad 1 table
 d6cee2fbe45c 3 w3c-css-epub-writing-mode
 2dca2c3e7ff7 2 w3c-nav-non-text_img
 59aacc5e4d69 2 w3c-pkg-spine-nonlinear-activation
+ae64ad70b667 1 w3c-scr-readingsystem-features
+0d2c99be4b2f 1 w3c-scr-readingsystem-support
+68f6ea402281 1 w3c-scr-support
+dbd8ab18ee84 2 w3c-scr-support_origin
+7552bc25812a 1 w3c-scr-support_origin_unique

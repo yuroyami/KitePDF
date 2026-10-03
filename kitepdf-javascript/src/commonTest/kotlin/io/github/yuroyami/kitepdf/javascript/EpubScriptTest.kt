@@ -344,4 +344,79 @@ class EpubScriptTest {
             console,
         )
     }
+
+    @Test
+    fun a_script_measures_an_element_it_just_added_and_restyled() {
+        // A browser lays the page out again when a script measures after a change (#499).
+        val console = ArrayList<String>()
+        val book = ScriptBooks.chapter(
+            """<p>Measure.</p><script>
+                var div = document.createElement('div');
+                div.style.width = '40px';
+                div.style.paddingLeft = '8px';
+                div.style.height = '20px';
+                document.body.appendChild(div);
+                var first = div.offsetWidth;
+                div.style.width = '100px';
+                console.log(first + ' ' + div.offsetWidth + ' ' + div.offsetHeight + ' ' + Math.round(div.getBoundingClientRect().width));
+            </script>""",
+        )
+        runner(book, console = console).chapterOpened(0)
+        assertEquals(listOf("log: 48 108 20 108"), console)
+    }
+
+    @Test
+    fun the_chapters_of_a_book_share_its_origin_and_another_book_has_another() {
+        // A reading system gives each book an origin of its own, shared by its chapters (#500).
+        fun book(identifier: String) = ScriptBooks.book(
+            identifier = identifier,
+            items = listOf(
+                ScriptBooks.Item("one.xhtml", "application/xhtml+xml", properties = "scripted", spine = true),
+                ScriptBooks.Item("two.xhtml", "application/xhtml+xml", properties = "scripted", spine = true),
+            ),
+            files = mapOf(
+                "one.xhtml" to ScriptBooks.xhtml(body = "<p>One.</p><script>console.log(self.origin + ' ' + location.href);</script>"),
+                "two.xhtml" to ScriptBooks.xhtml(body = "<p>Two.</p><script>console.log(location.origin + ' ' + location.pathname);</script>"),
+            ),
+        )
+        fun originsOf(identifier: String): List<String> {
+            val console = ArrayList<String>()
+            val scripts = runner(book(identifier), console = console)
+            scripts.chapterOpened(0)
+            scripts.chapterOpened(1)
+            scripts.close()
+            return console.map { it.removePrefix("log: ") }
+        }
+        val (one, two) = originsOf("urn:uuid:one")
+        val origin = one.substringBefore(' ')
+        assertTrue(Regex("epub://[0-9a-f]{16}").matches(origin), origin)
+        assertEquals("$origin $origin/OEBPS/one.xhtml", one)
+        assertEquals("$origin /OEBPS/two.xhtml", two, "the second chapter has the same origin")
+        assertEquals(origin, originsOf("urn:uuid:one")[0].substringBefore(' '), "the book has it each time it opens")
+        assertTrue(origin != originsOf("urn:uuid:two")[0].substringBefore(' '), "another book has another")
+    }
+
+    @Test
+    fun an_address_under_the_books_origin_is_a_place_in_the_book() {
+        val book = ScriptBooks.buttonPage(button = """<button id="go" type="button" onclick="location.href = location.origin + '/OEBPS/next.xhtml#n'">Go</button>""")
+        val scripts = runner(book)
+        val asked = ArrayList<String>()
+        scripts.onNavigate { asked += it }
+        scripts.tap(book.page(KiteLocation(0, 0)), 52.5, 90.0)
+        assertEquals(listOf("OEBPS/next.xhtml#n"), asked)
+    }
+
+    @Test
+    fun a_timer_that_throws_each_time_does_not_grow_the_failures_for_ever() {
+        var now = 0L
+        val book = ScriptBooks.chapter("""<p>Ticks.</p><script>setInterval(function () { null.save(); }, 10);</script>""")
+        val scripts = runner(book, clock = { now })
+        scripts.chapterOpened(0)
+        repeat(EpubScriptSession.MAX_FAILURES + 50) {
+            now += 10
+            scripts.pumpTimers(now)
+        }
+        assertEquals(EpubScriptSession.MAX_FAILURES, scripts.failures.size, "the newest are kept")
+        assertTrue(scripts.hasTimers, "the timer still runs")
+    }
 }

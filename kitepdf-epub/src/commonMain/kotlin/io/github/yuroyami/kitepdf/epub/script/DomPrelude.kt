@@ -7,9 +7,16 @@ package io.github.yuroyami.kitepdf.epub.script
  * scope that is their `window`.
  *
  * Written in the JavaScript every engine of the library runs: functions and prototypes, no
- * `class`, no `async`.
+ * `class`, no `async`. The source is kept in two literals joined at run time, since a JVM class
+ * file holds no string constant over 64 KB.
  */
-internal const val DOM_PRELUDE: String = """(function (global) {
+internal val DOM_PRELUDE: String = buildString {
+    append(DOM_PRELUDE_HEAD)
+    append(DOM_PRELUDE_TAIL)
+}
+
+/** The first part of [DOM_PRELUDE]: the helpers, the nodes and the style objects. */
+private const val DOM_PRELUDE_HEAD: String = """(function (global) {
 var K = global.__kite;
 var wrappers = new Map();
 var rootId = K.root();
@@ -28,6 +35,76 @@ function kebab(name) {
   var out = String(name).replace(/[A-Z]/g, function (c) { return '-' + c.toLowerCase(); });
   if (/^(webkit|moz|ms|o)-/.test(out)) out = '-' + out;
   return out;
+}
+/* The properties a style declaration answers, as a browser's does: any other name is not CSS. */
+var CSS_PROPERTIES = {};
+('align-content align-items align-self all animation animation-delay animation-direction ' +
+  'animation-duration animation-fill-mode animation-iteration-count animation-name ' +
+  'animation-play-state animation-timing-function appearance aspect-ratio backface-visibility ' +
+  'background background-attachment background-blend-mode background-clip background-color ' +
+  'background-image background-origin background-position background-position-x ' +
+  'background-position-y background-repeat background-size block-size border border-block ' +
+  'border-block-color border-block-end border-block-end-color border-block-end-style ' +
+  'border-block-end-width border-block-start border-block-start-color border-block-start-style ' +
+  'border-block-start-width border-block-style border-block-width border-bottom border-bottom-color ' +
+  'border-bottom-left-radius border-bottom-right-radius border-bottom-style border-bottom-width ' +
+  'border-collapse border-color border-end-end-radius border-end-start-radius border-image ' +
+  'border-image-outset border-image-repeat border-image-slice border-image-source ' +
+  'border-image-width border-inline border-inline-color border-inline-end border-inline-end-color ' +
+  'border-inline-end-style border-inline-end-width border-inline-start border-inline-start-color ' +
+  'border-inline-start-style border-inline-start-width border-inline-style border-inline-width ' +
+  'border-left border-left-color border-left-style border-left-width border-radius border-right ' +
+  'border-right-color border-right-style border-right-width border-spacing border-start-end-radius ' +
+  'border-start-start-radius border-style border-top border-top-color border-top-left-radius ' +
+  'border-top-right-radius border-top-style border-top-width border-width bottom ' +
+  'box-decoration-break box-shadow box-sizing break-after break-before break-inside caption-side ' +
+  'caret-color clear clip clip-path clip-rule color color-interpolation color-interpolation-filters ' +
+  'color-scheme column-count column-fill column-gap column-rule column-rule-color column-rule-style ' +
+  'column-rule-width column-span column-width columns contain content content-visibility ' +
+  'counter-increment counter-reset counter-set cursor cx cy d direction display dominant-baseline ' +
+  'empty-cells fill fill-opacity fill-rule filter flex flex-basis flex-direction flex-flow ' +
+  'flex-grow flex-shrink flex-wrap float flood-color flood-opacity font font-family ' +
+  'font-feature-settings font-kerning font-size font-size-adjust font-stretch font-style ' +
+  'font-synthesis font-variant font-variant-caps font-variant-east-asian font-variant-ligatures ' +
+  'font-variant-numeric font-variation-settings font-weight gap grid grid-area grid-auto-columns ' +
+  'grid-auto-flow grid-auto-rows grid-column grid-column-end grid-column-gap grid-column-start ' +
+  'grid-gap grid-row grid-row-end grid-row-gap grid-row-start grid-template grid-template-areas ' +
+  'grid-template-columns grid-template-rows hanging-punctuation height hyphens image-orientation ' +
+  'image-rendering inline-size inset inset-block inset-block-end inset-block-start inset-inline ' +
+  'inset-inline-end inset-inline-start isolation justify-content justify-items justify-self left ' +
+  'letter-spacing lighting-color line-break line-height list-style list-style-image ' +
+  'list-style-position list-style-type margin margin-block margin-block-end margin-block-start ' +
+  'margin-bottom margin-inline margin-inline-end margin-inline-start margin-left margin-right ' +
+  'margin-top marker marker-end marker-mid marker-start mask mask-clip mask-composite mask-image ' +
+  'mask-mode mask-origin mask-position mask-repeat mask-size mask-type max-block-size max-height ' +
+  'max-inline-size max-width min-block-size min-height min-inline-size min-width mix-blend-mode ' +
+  'object-fit object-position opacity order orphans outline outline-color outline-offset ' +
+  'outline-style outline-width overflow overflow-wrap overflow-x overflow-y padding padding-block ' +
+  'padding-block-end padding-block-start padding-bottom padding-inline padding-inline-end ' +
+  'padding-inline-start padding-left padding-right padding-top page-break-after page-break-before ' +
+  'page-break-inside paint-order perspective perspective-origin place-content place-items ' +
+  'place-self pointer-events position quotes r resize right rotate row-gap ruby-align ruby-position ' +
+  'rx ry scale scroll-behavior shape-image-threshold shape-margin shape-outside shape-rendering ' +
+  'stop-color stop-opacity stroke stroke-dasharray stroke-dashoffset stroke-linecap stroke-linejoin ' +
+  'stroke-miterlimit stroke-opacity stroke-width tab-size table-layout text-align text-align-last ' +
+  'text-anchor text-combine-upright text-decoration text-decoration-color text-decoration-line ' +
+  'text-decoration-style text-decoration-thickness text-emphasis text-emphasis-color ' +
+  'text-emphasis-position text-emphasis-style text-indent text-justify text-orientation ' +
+  'text-overflow text-rendering text-shadow text-transform text-underline-offset ' +
+  'text-underline-position top touch-action transform transform-box transform-origin ' +
+  'transform-style transition transition-delay transition-duration transition-property ' +
+  'transition-timing-function translate unicode-bidi user-select vector-effect vertical-align ' +
+  'visibility white-space widows width will-change word-break word-spacing word-wrap writing-mode x ' +
+  'y z-index zoom ').split(' ').forEach(function (n) { if (n) CSS_PROPERTIES[n] = true; });
+/* The CSS property a style declaration's key names, or null for a key that names none. */
+function cssProperty(key) {
+  var name = key.indexOf('-') >= 0 ? key.toLowerCase() : kebab(key);
+  var bare = name.replace(/^-(webkit|moz|ms|o|epub)-/, '');
+  return CSS_PROPERTIES.hasOwnProperty(bare) ? name : null;
+}
+/* A declared value as a browser gives it back: a number keeps its leading zero, so `.5` reads `0.5`. */
+function cssValue(value) {
+  return String(value).replace(/(^|[\s,(\/+*-])\.(\d)/g, '$10.$2');
 }
 function camel(name) {
   return String(name).replace(/-([a-z])/g, function (m, c) { return c.toUpperCase(); });
@@ -490,7 +567,7 @@ function styleOf(el) {
   var decl = {
     getPropertyValue: function (name) {
       var d = read(); name = String(name).toLowerCase();
-      for (var i = d.length - 1; i >= 0; i--) if (d[i].name === name) return d[i].value;
+      for (var i = d.length - 1; i >= 0; i--) if (d[i].name === name) return cssValue(d[i].value);
       return '';
     },
     getPropertyPriority: function (name) {
@@ -515,24 +592,34 @@ function styleOf(el) {
   };
   def(decl, 'cssText', function () { return K.attr(el.__id, 'style') || ''; }, function (v) { if (v == null || v === '') K.removeAttr(el.__id, 'style'); else K.setAttr(el.__id, 'style', String(v)); });
   def(decl, 'length', function () { return read().length; });
+  // A key that names no CSS property is a plain property of the object, as in a browser.
+  var own = {};
   var style = new Proxy(decl, {
     get: function (target, key) {
       if (typeof key !== 'string' || key in target) return target[key];
       if (/^\d+$/.test(key)) return target.item(Number(key));
-      return target.getPropertyValue(kebab(key));
+      var name = cssProperty(key);
+      return name ? target.getPropertyValue(name) : own[key];
     },
     set: function (target, key, value) {
       if (typeof key !== 'string') return false;
       if (key === 'cssText') { target.cssText = value; return true; }
       if (key in target) return false;
-      target.setProperty(kebab(key), value);
+      var name = cssProperty(key);
+      if (name) target.setProperty(name, value); else own[key] = value;
       return true;
+    },
+    has: function (target, key) {
+      return key in target || (typeof key === 'string' && (cssProperty(key) !== null || key in own));
     }
   });
   hidden(el, '__style', style);
   return style;
 }
-function datasetOf(el) {
+"""
+
+/** The rest of [DOM_PRELUDE]: elements, events, the document, the window and what the host calls. */
+private const val DOM_PRELUDE_TAIL: String = """function datasetOf(el) {
   if (el.__dataset) return el.__dataset;
   function attr(key) { return 'data-' + kebab(key); }
   var ds = new Proxy({}, {
@@ -879,11 +966,13 @@ var location = {};
 function navigate(v) { K.navigate(String(v)); }
 def(location, 'href', function () { return K.location(); }, navigate);
 def(location, 'protocol', function () { return 'epub:'; });
-def(location, 'host', function () { return ''; });
-def(location, 'hostname', function () { return ''; });
+/* The book's origin, the same in each of its chapters (#500). */
+var origin = K.origin();
+def(location, 'host', function () { return origin.replace(/^epub:\/\//, ''); });
+def(location, 'hostname', function () { return origin.replace(/^epub:\/\//, ''); });
 def(location, 'port', function () { return ''; });
-def(location, 'origin', function () { return 'null'; });
-def(location, 'pathname', function () { return K.location().replace(/^epub:\/*/, '/').replace(/#.*/, ''); });
+def(location, 'origin', function () { return origin; });
+def(location, 'pathname', function () { return K.location().substring(origin.length).replace(/#.*/, ''); });
 def(location, 'search', function () { return ''; });
 def(location, 'hash', function () { return location.__hash || ''; }, function (v) { v = String(v); location.__hash = v && v.charAt(0) !== '#' ? '#' + v : v; navigate(location.__hash); });
 location.assign = navigate;
@@ -957,7 +1046,7 @@ Object.defineProperty(navigator, 'epubReadingSystem', { value: readingSystem, en
 
 var viewport = K.viewport();
 var api = {
-  window: global, self: global, top: global, parent: global, frames: global, opener: null, frameElement: null,
+  window: global, self: global, top: global, parent: global, frames: global, opener: null, frameElement: null, origin: origin,
   document: document, location: location, console: console,
   navigator: navigator,
   screen: { width: viewport[0], height: viewport[1], availWidth: viewport[0], availHeight: viewport[1], colorDepth: 24 },
@@ -989,7 +1078,10 @@ var api = {
   getComputedStyle: function (el) {
     var id = idOf(el);
     var decl = { getPropertyValue: function (name) { return K.computed(id, String(name).toLowerCase()) || ''; } };
-    return new Proxy(decl, { get: function (t, key) { if (typeof key !== 'string' || key in t) return t[key]; return t.getPropertyValue(kebab(key)); } });
+    return new Proxy(decl, {
+      get: function (t, key) { if (typeof key !== 'string' || key in t) return t[key]; var name = cssProperty(key); return name ? t.getPropertyValue(name) : undefined; },
+      has: function (t, key) { return key in t || (typeof key === 'string' && cssProperty(key) !== null); }
+    });
   },
   matchMedia: function (query) {
     var noop = function () {};

@@ -58,3 +58,5 @@ Things a previous change taught the hard way. One line each. Delete a line when 
 - Thread CPU time moves with machine load too: the same scanned page measured 100 to 162 ms on different runs. Compare a change before and after in one JVM, with the runs alternating (#462).
 - In a git worktree under `.claude/worktrees`, Gradle's file watching missed source edits and called the compile UP-TO-DATE on stale classes. Build there with `--no-watch-fs`.
 - A KiteJS host function that returns Kotlin `null` gives the script `undefined`, not `null`, so a script-side check written `=== null` never matches. The EPUB DOM prelude compares host answers with `== null` (#41).
+- A JVM class file holds no string constant over 64 KB, so a longer Kotlin literal fails the compile with "UTF8 string too large". The EPUB DOM prelude is two constants joined at run time for it.
+- An element's `style` that answers every key as a CSS property hands a string to a script that probes for a method, so jQuery 1.7.1 called `style.removeAttribute` and threw. Answer CSS property names only.

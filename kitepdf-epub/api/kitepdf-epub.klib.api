@@ -426,6 +426,11 @@ final class io.github.yuroyami.kitepdf.epub/EpubScriptSession : io.github.yuroya
     final fun onTimersChanged(kotlin/Function0<kotlin/Unit>): kotlin/Function0<kotlin/Unit> // io.github.yuroyami.kitepdf.epub/EpubScriptSession.onTimersChanged|onTimersChanged(kotlin.Function0<kotlin.Unit>){}[0]
     final fun pumpTimers(kotlin/Long): kotlin/Long? // io.github.yuroyami.kitepdf.epub/EpubScriptSession.pumpTimers|pumpTimers(kotlin.Long){}[0]
     final fun tap(io.github.yuroyami.kitepdf.epub/EpubPage, kotlin/Double, kotlin/Double): kotlin/Boolean // io.github.yuroyami.kitepdf.epub/EpubScriptSession.tap|tap(io.github.yuroyami.kitepdf.epub.EpubPage;kotlin.Double;kotlin.Double){}[0]
+
+    final object Companion { // io.github.yuroyami.kitepdf.epub/EpubScriptSession.Companion|null[0]
+        final const val MAX_FAILURES // io.github.yuroyami.kitepdf.epub/EpubScriptSession.Companion.MAX_FAILURES|{}MAX_FAILURES[0]
+            final fun <get-MAX_FAILURES>(): kotlin/Int // io.github.yuroyami.kitepdf.epub/EpubScriptSession.Companion.MAX_FAILURES.<get-MAX_FAILURES>|<get-MAX_FAILURES>(){}[0]
+    }
 }
 
 final class io.github.yuroyami.kitepdf.epub/EpubSettings { // io.github.yuroyami.kitepdf.epub/EpubSettings|null[0]

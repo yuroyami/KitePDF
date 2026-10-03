@@ -75,6 +75,12 @@ public class EpubScriptSession(
     private val timerListeners = ArrayList<() -> Unit>()
     private val navigationListeners = ArrayList<(String) -> Unit>()
 
+    /**
+     * The book's origin, the same in each chapter and another for another book (#500): a host
+     * made from the package's unique identifier, so the book has it each time it opens.
+     */
+    private val origin: String = "epub://" + originHost(document.epubMetadata.identifier)
+
     /** `localStorage` and `sessionStorage`, one each for the whole book. */
     private val stores = mapOf("local" to LinkedHashMap<String, String>(), "session" to LinkedHashMap<String, String>())
 
@@ -89,7 +95,11 @@ public class EpubScriptSession(
     @kotlin.concurrent.Volatile
     private var closed = false
 
-    /** Every script that failed since the session opened, newest last: a throw, a parse error or the engine's limit. */
+    /**
+     * The scripts that failed since the session opened, newest last: a throw, a parse error or
+     * the engine's limit. It keeps the last [MAX_FAILURES], since a timer that throws each time
+     * it runs would otherwise grow it for as long as the book is open.
+     */
     public val failures: List<KiteScriptException> get() = failureCopy
 
     override val hasTimers: Boolean get() = timersWaiting
@@ -170,6 +180,7 @@ public class EpubScriptSession(
 
     private fun recordFailure(failure: KiteScriptException) {
         failureList.add(failure)
+        if (failureList.size > MAX_FAILURES) failureList.removeAt(0)
         failureCopy = failureList.toList()
     }
 
@@ -336,6 +347,8 @@ public class EpubScriptSession(
             def("connected") { args -> node(args, 0)?.let(dom::isConnected) ?: false }
             def("rect") { args ->
                 val live = element(args, 0) ?: return@def null
+                // A browser lays the page out again when a script measures after a change (#499).
+                commit()
                 val laid = dom.toLayout[live] ?: return@def null
                 val r = document.scriptBoundsOf(chapter, laid) ?: return@def null
                 listOf(r.left / PT_PER_PX, r.bottom / PT_PER_PX, r.width / PT_PER_PX, r.height / PT_PER_PX)
@@ -349,8 +362,14 @@ public class EpubScriptSession(
             def("console") { args -> onConsole(string(args, 0), string(args, 1)); null }
             def("error") { args -> recordFailure(KiteScriptException("chapter $chapter: ${string(args, 0)}")); null }
             def("storage") { args -> storage(string(args, 0), string(args, 1), args.getOrNull(2)?.toString(), args.getOrNull(3)?.toString()) }
-            def("navigate") { args -> navigate(resolveLinkHref(string(args, 0), document.chapterPath(chapter)) { href -> EpubDocument.resolvePath(document.chapterDir(chapter), href) }); null }
-            def("location") { "epub:///" + document.chapterPath(chapter) }
+            def("navigate") { args ->
+                // An address under the book's own origin is a path in the book, from its root.
+                val href = string(args, 0).let { if (it.startsWith("$origin/")) it.substring(origin.length) else it }
+                navigate(resolveLinkHref(href, document.chapterPath(chapter)) { EpubDocument.resolvePath(document.chapterDir(chapter), it) })
+                null
+            }
+            def("location") { "$origin/" + document.chapterPath(chapter) }
+            def("origin") { origin }
             def("timers") { args ->
                 timers = (args.getOrNull(0) as? Double)?.toInt() ?: 0
                 timersChanged()
@@ -401,18 +420,35 @@ public class EpubScriptSession(
         }
     }
 
-    private companion object {
+    public companion object {
+        /** How many failures [failures] keeps. */
+        public const val MAX_FAILURES: Int = 100
+
         /** CSS pixels are 0.75 points, the unit of the layout and of display space. */
-        const val PT_PER_PX = 0.75
+        private const val PT_PER_PX = 0.75
+
+        /**
+         * The host of a book's origin: 64 bits of an FNV-1a hash of [identifier], in hex. A book
+         * without one gets a host of its own each time it opens.
+         */
+        private fun originHost(identifier: String?): String {
+            val key = identifier?.trim()?.takeIf { it.isNotEmpty() }
+                ?: return "book-" + kotlin.random.Random.nextLong().toULong().toString(16)
+            var hash = 0xcbf29ce484222325UL
+            for (b in key.encodeToByteArray()) {
+                hash = (hash xor (b.toULong() and 0xFFUL)) * 0x100000001b3UL
+            }
+            return hash.toString(16).padStart(16, '0')
+        }
 
         /** The types of a classic script (HTML, 4.12.1.1). */
-        val SCRIPT_TYPES = setOf(
+        private val SCRIPT_TYPES = setOf(
             "text/javascript", "application/javascript", "application/ecmascript", "text/ecmascript",
             "application/x-javascript", "text/x-javascript", "text/jscript", "text/livescript",
         )
 
         /** [source] without the `<!--` and `-->` lines old books wrap their scripts in. */
-        fun withoutCommentMarks(source: String): String {
+        private fun withoutCommentMarks(source: String): String {
             val lines = source.lines().toMutableList()
             if (lines.firstOrNull { it.isNotBlank() }?.trim()?.startsWith("<!--") == true) {
                 lines[lines.indexOfFirst { it.isNotBlank() }] = ""

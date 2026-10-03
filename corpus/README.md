@@ -2,10 +2,10 @@
 
 The corpus holds the real documents that the differential harnesses render. It has two parts:
 
-- **Public documents.** The [manifest](manifest.json) lists 23 documents: 15 PDFs with 47 pages, and 8 EPUBs. They are tracked in this repository, so a clean checkout tests them. Each one keeps its own license.
+- **Public documents.** The [manifest](manifest.json) lists 29 documents: 15 PDFs with 47 pages, and 14 EPUBs. They are tracked in this repository, so a clean checkout tests them. Each one keeps its own license.
 - **Local drop-ins.** Put your own PDFs under `pdf/` and EPUBs under `epub/`. Git ignores them, because they can be copyrighted. They add to your local counts but never to the public set.
 
-The EPUBs are publications and small conformance samples. They do not stand for eight full books.
+The EPUBs are publications and small conformance samples. They do not stand for fourteen full books. Six of them carry scripts, which the scripted-book gate runs (#496).
 
 ## Verify the public documents
 
@@ -19,7 +19,7 @@ python3 tools/corpus.py verify
 
 `list` prints the manifest. `fetch` downloads a missing entry from its recorded URL and checks it the same way. Use it to restore a deleted file, or to get the files into another root with `--root /absolute/path`. Downloads go through a cache at `~/.cache/kitepdf/public-corpus`; `fetch --offline` reads only the cache.
 
-Five download URLs can change upstream: the four W3C EPUBs come from a GitHub Pages site, and the Arabic PDF guide comes from the current-file Commons URL. A changed upstream file fails `fetch` on the digest. The tracked copy stays the reference.
+Ten download URLs can change upstream: the nine W3C EPUBs come from a GitHub Pages site, and the Arabic PDF guide comes from the current-file Commons URL. A changed upstream file fails `fetch` on the digest. The tracked copy stays the reference.
 
 ## Run the harnesses
 
@@ -35,13 +35,19 @@ The PDF sweep scores up to six evenly spaced pages per document, including the f
 ./gradlew :kitepdf-native-renderer:jvmTest --tests "*EpubDifferentialTest*"
 ```
 
+```bash
+./gradlew :kitepdf-javascript:jvmTest --tests "*ScriptedBookGateTest*"
+```
+
+The scripted-book gate opens each scripted chapter of the public EPUBs through `EpubScriptRunner`, taps it, runs its timers, and checks what the page shows afterwards. A scripted book added here needs its checks there, and the gate fails until it has them.
+
 The EPUB sweep renders every page that KitePDF paginates, and writes per-book page counts to `kitepdf-native-renderer/build/epub-difftest/report.md`. A render failure or an unexplained change of a recorded page count fails the gate. MuPDF compares page 0 only, and that score is for information, because reflow can differ.
 
 Override the folders with `-Dkitepdf.corpus=/absolute/pdf/path` and `-Dkitepdf.epub.corpus=/absolute/epub/path`. A path that does not exist fails. The [harness guide](../kitepdf-native-renderer/DIFFTEST.md) covers oracle setup, PDFium parity, score budgets and baseline updates.
 
 ## Rights
 
-The documents keep their upstream licenses: CC BY 3.0 and 4.0, CC BY-SA 3.0 and 4.0, and the W3C Software and Document License (2015). The project license does not replace them. [ATTRIBUTION.md](ATTRIBUTION.md) credits each document, the manifest records the license evidence, and [licenses/](licenses/README.md) holds the full license texts. The files are the unchanged upstream bytes.
+The documents keep their upstream licenses: CC BY 3.0 and 4.0, CC BY-SA 3.0 and 4.0, the W3C Software and Document License (2015), and MIT for the copy of jQuery inside one IDPF sample. The project license does not replace them. [ATTRIBUTION.md](ATTRIBUTION.md) credits each document, the manifest records the license evidence, and [licenses/](licenses/README.md) holds the full license texts. The files are the unchanged upstream bytes.
 
 Keep the credits and the license notices when you share a file. Follow the share-alike terms for an adaptation. A generated or reduced derivative needs its own provenance and license review.
 

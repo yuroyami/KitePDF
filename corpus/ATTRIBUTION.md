@@ -1,14 +1,14 @@
 # Public corpus attribution
 
-Credits and license evidence for the 23 unchanged public documents in
+Credits and license evidence for the 29 unchanged public documents in
 [manifest.json](manifest.json). This inventory excludes legacy/private local
 drop-ins. The project license does not replace these documents' licenses.
 The full license texts are preserved under [licenses/](licenses/README.md).
 Retain existing embedded notices and these credits when sharing the files,
-and comply with the applicable attribution, share-alike, and W3C notice terms.
+and comply with the applicable attribution, share-alike, W3C and MIT notice terms.
 
 Generated from the manifest; regenerate these entries when its credits change.
-Source manifest SHA-256: `91165360a3b7b40a740e40c403781e989184745bc84d2fed9f9697ce3606fc02`.
+Source manifest SHA-256: `ff8bf84a3a388866140192bbce19c13e7f81f489928e0f7c080a1494ba82bd48`.
 
 ## Thomas Cole - The Voyage of Life
 
@@ -26,6 +26,24 @@ Thomas Cole - The Voyage of Life; Jesse Dylan. IDPF EPUB 3 Samples, release 2023
 - License evidence: The unchanged EPUB package explicitly licenses the publication under CC BY-SA 3.0. The package metadata matches the source at the release-tag revision except line endings. No embedded fonts are present. [Upstream notice](https://creativecommons.org/licenses/by-sa/3.0/).
 - Preserved embedded rights notice: This work is licensed under a Creative Commons Attribution-ShareAlike 3.0 Unported License.
 - Artifact provenance: Downloaded unchanged from release 20230704; SHA-256 pins the ZIP bytes. Source is pinned to the commit resolved from that release tag; release container and source can differ in text line endings.
+
+## Thomas Cole - The Voyage of Life (textual overlay)
+
+Thomas Cole - The Voyage of Life (textual overlay); Jesse Dylan. IDPF EPUB 3 Samples, release 20230704. Licensed CC BY-SA 3.0. Includes jQuery 1.7.1, Copyright (c) 2011 John Resig, under the MIT License. Downloaded unchanged; retain attribution, share-alike and MIT notices. Paintings by Thomas Cole. Upstream attribution URL: https://en.wikipedia.org/wiki/The_Voyage_of_Life .
+
+- Manifest ID: `idpf-cole-voyage-of-life-tol`.
+- Local payload: `corpus/epub/idpf-cole-voyage-of-life-tol.epub`.
+- Creators: Jesse Dylan.
+- License: [CC-BY-SA-3.0](licenses/CC-BY-SA-3.0.html) and [MIT](licenses/MIT.txt).
+- Source: [idpf-cole-voyage-of-life-tol](https://github.com/IDPF/epub3-samples/tree/46d7e07e1b39b2d0a0245ececaf896edcd9de4b2/30/cole-voyage-of-life-tol).
+- Download: [unchanged upstream file](https://github.com/IDPF/epub3-samples/releases/download/20230704/cole-voyage-of-life-tol.epub).
+- Upstream revision: `46d7e07e1b39b2d0a0245ececaf896edcd9de4b2`.
+- SHA-256: `b0027cc7f216b53e4c549029f761d9896d87628660dd161051a313ec3ce94f59`.
+- Size: 1,002,693 bytes.
+- License evidence: The unchanged EPUB package explicitly licenses the publication under CC BY-SA 3.0. It also carries jQuery 1.7.1 (EPUB/script/jquery-1.7.1.min.js), whose header points to jquery.org/license; that release is dual-licensed under MIT or GPL v2, and this corpus takes it under MIT, whose text from the jQuery 1.7.1 tag is in licenses/MIT.txt. Every ZIP member matches its Git blob at the release-tag revision except line endings. The paintings are by Thomas Cole. No embedded fonts are present. [Upstream notice](https://creativecommons.org/licenses/by-sa/3.0/).
+- Preserved embedded rights notice: This work is licensed under a Creative Commons Attribution-ShareAlike 3.0 Unported License.
+- Preserved embedded rights notice: /*! jQuery v1.7.1 jquery.com | jquery.org/license */
+- Artifact provenance: Downloaded unchanged from release 20230704; SHA-256 pins the ZIP bytes. Source is pinned to the commit resolved from that release tag; release container and source differ only in text line endings.
 
 ## Page Blanche
 
@@ -359,6 +377,91 @@ pkg-spine-nonlinear-activation by Dave Cramer. W3C EPUB test suite contributors;
 - Upstream revision: `54092b4233253e9aac80e93ec4782b380b4b3403`.
 - SHA-256: `ba236ee2d78ccb649cf7a51ecba5483304e4f3c35d7b470ebe391179a677b014`.
 - Size: 2,334 bytes.
+- License evidence: The unchanged EPUB package links dcterms:rights to the 2015 W3C Software and Document license and names W3C as rights holder. Every uncompressed ZIP member matches its Git blob at the recorded source revision. No separate asset licence exception was found in its contents. [Upstream notice](https://www.w3.org/copyright/software-license-2015/).
+- Artifact provenance: Official Pages artifact URL is mutable; no downloadable EPUB in the Git tree or immutable release was available. SHA-256 pins the exact ZIP bytes and retrieval must fail on mismatch. All 6 non-directory members match the pinned source revision.
+
+## scr-readingsystem-features
+
+scr-readingsystem-features by Ivan Herman. W3C EPUB test suite contributors; W3C Software and Document License (2015). Downloaded unchanged. Preserve the full licence notice and existing notices.
+
+- Manifest ID: `w3c-scr-readingsystem-features`.
+- Local payload: `corpus/epub/w3c-scr-readingsystem-features.epub`.
+- Creators: Ivan Herman.
+- Publishers: W3C.
+- License: [W3C-20150513](licenses/W3C-20150513.html).
+- Source: [w3c-scr-readingsystem-features](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/scr-readingsystem-features).
+- Download: [unchanged upstream file](https://w3c.github.io/epub-tests/tests/scr-readingsystem-features.epub).
+- Upstream revision: `54092b4233253e9aac80e93ec4782b380b4b3403`.
+- SHA-256: `0389847db1e7c48735beeffe38d983eadf9fe9c8237e17d3d46c52baa2193326`.
+- Size: 2,922 bytes.
+- License evidence: The unchanged EPUB package links dcterms:rights to the 2015 W3C Software and Document license and names W3C as rights holder. Every uncompressed ZIP member matches its Git blob at the recorded source revision. No separate asset licence exception was found in its contents. [Upstream notice](https://www.w3.org/copyright/software-license-2015/).
+- Artifact provenance: Official Pages artifact URL is mutable; no downloadable EPUB in the Git tree or immutable release was available. SHA-256 pins the exact ZIP bytes and retrieval must fail on mismatch. All 5 non-directory members match the pinned source revision.
+
+## scr-readingsystem-support
+
+scr-readingsystem-support by Ivan Herman. W3C EPUB test suite contributors; W3C Software and Document License (2015). Downloaded unchanged. Preserve the full licence notice and existing notices.
+
+- Manifest ID: `w3c-scr-readingsystem-support`.
+- Local payload: `corpus/epub/w3c-scr-readingsystem-support.epub`.
+- Creators: Ivan Herman.
+- Publishers: W3C.
+- License: [W3C-20150513](licenses/W3C-20150513.html).
+- Source: [w3c-scr-readingsystem-support](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/scr-readingsystem-support).
+- Download: [unchanged upstream file](https://w3c.github.io/epub-tests/tests/scr-readingsystem-support.epub).
+- Upstream revision: `54092b4233253e9aac80e93ec4782b380b4b3403`.
+- SHA-256: `3bcba268893bd1ad350f04651ea83e10740eb6e5b5db708327d1bc432e1a351a`.
+- Size: 2,474 bytes.
+- License evidence: The unchanged EPUB package links dcterms:rights to the 2015 W3C Software and Document license and names W3C as rights holder. Every uncompressed ZIP member matches its Git blob at the recorded source revision. No separate asset licence exception was found in its contents. [Upstream notice](https://www.w3.org/copyright/software-license-2015/).
+- Artifact provenance: Official Pages artifact URL is mutable; no downloadable EPUB in the Git tree or immutable release was available. SHA-256 pins the exact ZIP bytes and retrieval must fail on mismatch. All 5 non-directory members match the pinned source revision.
+
+## scr-support
+
+scr-support by Ivan Herman. W3C EPUB test suite contributors; W3C Software and Document License (2015). Downloaded unchanged. Preserve the full licence notice and existing notices.
+
+- Manifest ID: `w3c-scr-support`.
+- Local payload: `corpus/epub/w3c-scr-support.epub`.
+- Creators: Ivan Herman.
+- Publishers: W3C.
+- License: [W3C-20150513](licenses/W3C-20150513.html).
+- Source: [w3c-scr-support](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/scr-support).
+- Download: [unchanged upstream file](https://w3c.github.io/epub-tests/tests/scr-support.epub).
+- Upstream revision: `54092b4233253e9aac80e93ec4782b380b4b3403`.
+- SHA-256: `aa31c20d28fe2d22b7450ebd5a08512c5a0c69d2bf8a832c53ca123b927cad9c`.
+- Size: 2,116 bytes.
+- License evidence: The unchanged EPUB package links dcterms:rights to the 2015 W3C Software and Document license and names W3C as rights holder. Every uncompressed ZIP member matches its Git blob at the recorded source revision. No separate asset licence exception was found in its contents. [Upstream notice](https://www.w3.org/copyright/software-license-2015/).
+- Artifact provenance: Official Pages artifact URL is mutable; no downloadable EPUB in the Git tree or immutable release was available. SHA-256 pins the exact ZIP bytes and retrieval must fail on mismatch. All 5 non-directory members match the pinned source revision.
+
+## scr-support_origin
+
+scr-support_origin by Ivan Herman. W3C EPUB test suite contributors; W3C Software and Document License (2015). Downloaded unchanged. Preserve the full licence notice and existing notices.
+
+- Manifest ID: `w3c-scr-support-origin`.
+- Local payload: `corpus/epub/w3c-scr-support_origin.epub`.
+- Creators: Ivan Herman.
+- Publishers: W3C.
+- License: [W3C-20150513](licenses/W3C-20150513.html).
+- Source: [w3c-scr-support-origin](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/scr-support_origin).
+- Download: [unchanged upstream file](https://w3c.github.io/epub-tests/tests/scr-support_origin.epub).
+- Upstream revision: `54092b4233253e9aac80e93ec4782b380b4b3403`.
+- SHA-256: `540928f8b78c7014fdf9eacb5834d71e823a3af23dcb0e7e70cfbd6dc47b98ae`.
+- Size: 3,246 bytes.
+- License evidence: The unchanged EPUB package links dcterms:rights to the 2015 W3C Software and Document license and names W3C as rights holder. Every uncompressed ZIP member matches its Git blob at the recorded source revision. No separate asset licence exception was found in its contents. [Upstream notice](https://www.w3.org/copyright/software-license-2015/).
+- Artifact provenance: Official Pages artifact URL is mutable; no downloadable EPUB in the Git tree or immutable release was available. SHA-256 pins the exact ZIP bytes and retrieval must fail on mismatch. All 7 non-directory members match the pinned source revision.
+
+## scr-support_origin_unique
+
+scr-support_origin_unique by Gertjan Franken. W3C EPUB test suite contributors; W3C Software and Document License (2015). Downloaded unchanged. Preserve the full licence notice and existing notices.
+
+- Manifest ID: `w3c-scr-support-origin-unique`.
+- Local payload: `corpus/epub/w3c-scr-support_origin_unique.epub`.
+- Creators: Gertjan Franken.
+- Publishers: W3C.
+- License: [W3C-20150513](licenses/W3C-20150513.html).
+- Source: [w3c-scr-support-origin-unique](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/scr-support_origin_unique).
+- Download: [unchanged upstream file](https://w3c.github.io/epub-tests/tests/scr-support_origin_unique.epub).
+- Upstream revision: `54092b4233253e9aac80e93ec4782b380b4b3403`.
+- SHA-256: `3fd0ddebd9544df43ef4ee65799a824266d80aaaad864c14d27c4c7e8cfeb605`.
+- Size: 2,726 bytes.
 - License evidence: The unchanged EPUB package links dcterms:rights to the 2015 W3C Software and Document license and names W3C as rights holder. Every uncompressed ZIP member matches its Git blob at the recorded source revision. No separate asset licence exception was found in its contents. [Upstream notice](https://www.w3.org/copyright/software-license-2015/).
 - Artifact provenance: Official Pages artifact URL is mutable; no downloadable EPUB in the Git tree or immutable release was available. SHA-256 pins the exact ZIP bytes and retrieval must fail on mismatch. All 6 non-directory members match the pinned source revision.
 
