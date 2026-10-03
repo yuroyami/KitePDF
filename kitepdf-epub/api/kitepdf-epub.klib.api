@@ -194,6 +194,7 @@ final class io.github.yuroyami.kitepdf.epub/EpubDocument : io.github.yuroyami.ki
     final fun withMargin(kotlin/Double): io.github.yuroyami.kitepdf.epub/EpubDocument // io.github.yuroyami.kitepdf.epub/EpubDocument.withMargin|withMargin(kotlin.Double){}[0]
     final fun withPageSize(kotlin/Double, kotlin/Double): io.github.yuroyami.kitepdf.epub/EpubDocument // io.github.yuroyami.kitepdf.epub/EpubDocument.withPageSize|withPageSize(kotlin.Double;kotlin.Double){}[0]
     final fun withSettings(io.github.yuroyami.kitepdf.epub/EpubSettings): io.github.yuroyami.kitepdf.epub/EpubDocument // io.github.yuroyami.kitepdf.epub/EpubDocument.withSettings|withSettings(io.github.yuroyami.kitepdf.epub.EpubSettings){}[0]
+    final suspend fun awaitLayoutResources(kotlin/Int, kotlin.time/Duration) // io.github.yuroyami.kitepdf.epub/EpubDocument.awaitLayoutResources|awaitLayoutResources(kotlin.Int;kotlin.time.Duration){}[0]
     final suspend fun fetchRemoteResources(kotlin/Int, kotlin/Boolean = ...) // io.github.yuroyami.kitepdf.epub/EpubDocument.fetchRemoteResources|fetchRemoteResources(kotlin.Int;kotlin.Boolean){}[0]
     final suspend fun prepareChapter(kotlin/Int, kotlin.coroutines/SuspendFunction0<kotlin/Unit>) // io.github.yuroyami.kitepdf.epub/EpubDocument.prepareChapter|prepareChapter(kotlin.Int;kotlin.coroutines.SuspendFunction0<kotlin.Unit>){}[0]
 

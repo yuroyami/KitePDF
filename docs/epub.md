@@ -380,9 +380,13 @@ To have them in the first layout, wait for them first, with a time limit of
 your own. `KiteDocView` waits two seconds:
 
 ```kotlin
-withTimeoutOrNull(2.seconds) { book.fetchRemoteResources(chapter, layoutOnly = true) }
+book.awaitLayoutResources(chapter, 2.seconds)
 book.prepareChapter(chapter)
 ```
+
+A URL costs that wait once per book. When a wait runs out, the URLs still in
+flight are left out of every later wait, so a font server that hangs delays the
+first chapter that needs it, not every chapter after it. Their fetches go on.
 
 Without a fetcher, or when a fetch fails, a remote image shows its manifest
 fallback, else the empty box its markup gives, and a remote font gives way to

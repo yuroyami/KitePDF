@@ -13,6 +13,7 @@ import java.util.concurrent.atomic.AtomicInteger
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.seconds
 
 /**
  * A picture that a book names by an https URL shows in the viewer: one whose markup gives its
@@ -111,6 +112,28 @@ class RemoteResourceSceneTest {
                 driver.pumpUntilState { doc.remoteArrivals.value == 1 }
                 val after = driver.pumpFrames(10).toComposeImageBitmap().toPixelMap()
                 assertEquals(0, redPixels(after), "the chapter keeps the layout it made without the picture")
+            }
+        }
+    }
+
+    @Test
+    fun a_picture_that_never_lands_delays_only_the_first_chapter_that_needs_it() = forBothEffectOrders { queued ->
+        withoutEscapes {
+            val gate = CompletableDeferred<Unit>()
+            releaseAtEnd { gate.complete(Unit) }
+            val chapters = 12
+            val doc = EpubDocument.open(
+                multiSpineEpub(List(chapters) { """<p>Chapter $it.</p><p><img src="$url" alt="Red"/></p>""" }),
+                EpubSettings(pageWidth = 200.0, pageHeight = 200.0, resourceFetcher = { gate.await(); red }),
+            )
+            val (scene, driver) = drivenScene(200, 200, queued) {
+                val state = rememberKiteDocViewState(doc).also { it.remoteWait = 1.seconds }
+                KiteDocView(state = state, modifier = Modifier.fillMaxSize(), renderSpec = KiteRenderSpec.Rasterized())
+            }
+            scene.use {
+                driver.pumpUntilState { doc.isChapterReady(0) }
+                // Each chapter after the first waited its own second for the same URL, eleven in all (#492).
+                driver.pumpUntilState(timeoutMs = 8_000) { (0 until chapters).all { doc.isChapterReady(it) } }
             }
         }
     }

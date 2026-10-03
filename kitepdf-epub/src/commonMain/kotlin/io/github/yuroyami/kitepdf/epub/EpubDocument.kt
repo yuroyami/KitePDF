@@ -45,6 +45,7 @@ import io.github.yuroyami.kitepdf.core.render.KitePath
 import io.github.yuroyami.kitepdf.core.KiteRectangle
 import io.github.yuroyami.kitepdf.core.render.RgbColor
 import kotlinx.coroutines.flow.StateFlow
+import kotlin.time.Duration
 
 /**
  * A parsed EPUB, reflowed onto fixed-size pages and rendered through the shared
@@ -165,10 +166,10 @@ public class EpubDocument internal constructor(
      * gives keeps that room, and its page paints the picture once its bytes land, which
      * [remoteArrivals] and [EpubPage.remoteVersion] announce. An image without both, and a font,
      * size the layout, so a chapter laid out before they land keeps their absence for the life of
-     * this document, which keeps its pages and its page count. [layoutOnly] fetches just those, for
-     * a caller that waits for them before it lays [chapter] out, within a time limit of its own:
-     * the viewer of `kitepdf-compose-viewer` waits two seconds. Without [layoutOnly], it fetches
-     * every one the chapter names, an `url()` of a rule that matches no element included.
+     * this document, which keeps its pages and its page count. [layoutOnly] fetches just those.
+     * [awaitLayoutResources] waits for them within a time limit, for a caller that lays [chapter]
+     * out next. Without [layoutOnly], it fetches every one the chapter names, an `url()` of a rule
+     * that matches no element included.
      *
      * The fetches belong to the book, not to the caller: cancelling this call stops the wait,
      * and the bytes still land for the next paint and the next document over the book.
@@ -179,6 +180,25 @@ public class EpubDocument internal constructor(
         val refs = parsed.remoteRefs(chapter)
         val pending = (if (layoutOnly) refs.layout else refs.all).mapNotNull { parsed.remote.request(it, fetcher) }
         for (fetch in pending) fetch.await()
+    }
+
+    /**
+     * Fetches the remote resources that size [chapter]'s layout, its fonts and its images without
+     * both a width and a height, and waits at most [wait] for them, for a caller that lays
+     * [chapter] out next (#38). Returns once each has landed or failed, or once [wait] has passed,
+     * and at once without [EpubSettings.resourceFetcher] or for a chapter the book does not have.
+     *
+     * A URL is waited for once per book. When a wait runs out, the URLs still in flight are left
+     * out of every later wait, of this document and of any other over the book, so a font server
+     * that hangs delays the first chapter that names the font by [wait], and not each chapter
+     * after it (#492). Their fetches go on, and what lands shows in the next document over
+     * the book, since this one keeps the layout it made without it. The viewer of
+     * `kitepdf-compose-viewer` waits two seconds before it lays a chapter out.
+     */
+    public suspend fun awaitLayoutResources(chapter: Int, wait: Duration) {
+        val fetcher = settings.resourceFetcher ?: return
+        if (chapter !in parsed.spineIndices) return
+        parsed.remote.awaitLayout(parsed.remoteRefs(chapter).layout, fetcher, wait)
     }
 
     /**
