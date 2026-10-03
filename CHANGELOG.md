@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- A book's images, fonts and backgrounds that it names by an `https` URL load through
+  `EpubSettings.resourceFetcher`, an `EpubResourceFetcher` (EPUB 3.3, 3.6). `kitepdf-net`
+  ships one on a Ktor client, `EpubResourceFetcher(client)`, capped at 16 MiB a resource.
+  Nothing is fetched without a fetcher, and a plain `http` URL never is. An image with a
+  declared size keeps its box and paints once its bytes land, which `EpubPage.remoteVersion`
+  and `EpubDocument.remoteArrivals` announce; `KiteDocView` draws the page again then. An
+  image without one, and a font, size the layout, so `EpubDocument.fetchRemoteResources`
+  fetches them ahead of it, and `KiteDocView` waits up to two seconds for them before it
+  lays a chapter out. `EpubDocument.hasRemoteResources` reads the manifest's
+  `remote-resources` property. `kitepdf-epub`, and with it the `kitepdf` artifact, now
+  depends on `kotlinx-coroutines-core`. The `EpubSettings` constructor and `copy` take a
+  thirteenth parameter with a default, so source compiles unchanged, while a binary built
+  against 0.12.0 that constructs or copies an `EpubSettings` needs a rebuild (#38).
+
 - `KiteDocument.prepareChapter(chapter, checkpoint)` lays a chapter out in steps and calls
   `checkpoint`, a suspend function, between two, so that a caller on a thread that must
   keep drawing frames can suspend there. An `EpubDocument` steps through each block as it

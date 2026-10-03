@@ -4,6 +4,7 @@ import io.github.yuroyami.kitepdf.core.KiteDocument
 import io.github.yuroyami.kitepdf.core.KiteFormatException
 import io.github.yuroyami.kitepdf.core.ByteArrayBuilder
 import io.github.yuroyami.kitepdf.document.KiteDoc
+import io.github.yuroyami.kitepdf.epub.EpubResourceFetcher
 import io.github.yuroyami.kitepdf.epub.EpubSettings
 import io.ktor.client.HttpClient
 import io.ktor.client.request.HttpRequestBuilder
@@ -20,6 +21,47 @@ import kotlinx.coroutines.CancellationException
  * unbounded body can otherwise terminate a mobile or browser host process.
  */
 public const val DEFAULT_MAX_REMOTE_DOCUMENT_BYTES: Int = 128 * 1024 * 1024
+
+/**
+ * Default response-body ceiling for one resource that a book names by URL (16 MiB). A book keeps
+ * every remote resource in memory for its life, and holds 32 MiB of them at most.
+ */
+public const val DEFAULT_MAX_REMOTE_RESOURCE_BYTES: Int = 16 * 1024 * 1024
+
+/**
+ * A fetcher for the resources that a book names by an absolute `https` URL, such as a font or an
+ * image on a web server (EPUB 3.3, 3.6), on your [client] (#38). Set it on the book's settings:
+ *
+ * ```kotlin
+ * val settings = EpubSettings(resourceFetcher = EpubResourceFetcher(client))
+ * val doc = KiteDoc.openUrl("https://example.com/book.epub", client, epubSettings = settings)
+ * ```
+ *
+ * It fetches `https` only, as EPUB Reading Systems 3.3, 3.3 asks: any other URL gets null
+ * without a request. A failure of any kind, a non-2xx status or a body over [maxBytes] included,
+ * gets null too, and the book shows the resource's fallback. As with [openUrl], the client is
+ * yours, and [configure] applies to each GET.
+ *
+ * A fetch tells the URL's server that the book was opened, and the book's author chose that
+ * server, so a book fetches nothing unless its settings carry a fetcher.
+ */
+public fun EpubResourceFetcher(
+    client: HttpClient,
+    maxBytes: Int = DEFAULT_MAX_REMOTE_RESOURCE_BYTES,
+    configure: HttpRequestBuilder.() -> Unit = {},
+): EpubResourceFetcher {
+    require(maxBytes > 0) { "maxBytes must be > 0" }
+    return EpubResourceFetcher { url ->
+        if (!url.startsWith("https://", ignoreCase = true)) return@EpubResourceFetcher null
+        try {
+            fetch(url, client, configure, maxBytes)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            null
+        }
+    }
+}
 
 /**
  * Downloads [url] and opens it as whichever format it turns out to be.

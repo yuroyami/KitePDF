@@ -2,8 +2,11 @@ package io.github.yuroyami.kitepdf.net
 
 import io.github.yuroyami.kitepdf.PdfDocument
 import io.github.yuroyami.kitepdf.core.KiteFormatException
+import io.github.yuroyami.kitepdf.core.KiteLocation
+import io.github.yuroyami.kitepdf.core.render.RecordingCanvas
 import io.github.yuroyami.kitepdf.document.KiteDoc
 import io.github.yuroyami.kitepdf.epub.EpubDocument
+import io.github.yuroyami.kitepdf.epub.EpubSettings
 import io.github.yuroyami.kitepdf.writer.PdfBuilder
 import io.github.yuroyami.kitepdf.writer.StandardFont
 import io.ktor.client.HttpClient
@@ -149,14 +152,89 @@ class RemoteSourcesTest {
         assertEquals("Bearer t0ken", seen)
     }
 
+    /** A client that serves [files] by URL, answers 404 to the rest, and records each URL asked for. */
+    private class Server(private val files: Map<String, ByteArray>) {
+        val asked = ArrayList<String>()
+        val client = HttpClient(
+            MockEngine { request ->
+                val url = request.url.toString()
+                asked += url
+                val bytes = files[url] ?: return@MockEngine respondError(HttpStatusCode.NotFound)
+                respond(ByteReadChannel(bytes), HttpStatusCode.OK, headersOf(HttpHeaders.ContentLength, bytes.size.toString()))
+            },
+        )
+    }
+
+    @Test
+    fun the_resource_fetcher_reads_an_https_resource() = runBlocking {
+        val bytes = ByteArray(300) { it.toByte() }
+        val server = Server(mapOf("https://example.org/font.ttf" to bytes))
+        assertContentEquals(bytes, EpubResourceFetcher(server.client).fetch("https://example.org/font.ttf"))
+        assertNull(EpubResourceFetcher(server.client).fetch("https://example.org/missing.ttf"), "a 404 is null")
+    }
+
+    @Test
+    fun the_resource_fetcher_never_requests_plain_http() = runBlocking {
+        val server = Server(mapOf("http://example.org/font.ttf" to ByteArray(10)))
+        assertNull(EpubResourceFetcher(server.client).fetch("http://example.org/font.ttf"))
+        assertNull(EpubResourceFetcher(server.client).fetch("ftp://example.org/font.ttf"))
+        assertEquals(emptyList(), server.asked, "EPUB Reading Systems 3.3, 3.3: https only")
+    }
+
+    @Test
+    fun the_resource_fetcher_gives_null_past_its_cap_and_on_a_transport_failure() = runBlocking {
+        val server = Server(mapOf("https://example.org/big.png" to ByteArray(64)))
+        assertNull(EpubResourceFetcher(server.client, maxBytes = 63).fetch("https://example.org/big.png"))
+        val broken = HttpClient(MockEngine { throw IllegalStateException("connection reset") })
+        assertNull(EpubResourceFetcher(broken).fetch("https://example.org/big.png"))
+        assertFailsWith<IllegalArgumentException> { EpubResourceFetcher(server.client, maxBytes = 0) }
+        Unit
+    }
+
+    @Test
+    fun the_resource_fetcher_passes_cancellation_through() = runBlocking {
+        val server = Server(mapOf("https://example.org/a.png" to ByteArray(8)))
+        assertFailsWith<CancellationException> {
+            EpubResourceFetcher(server.client) { throw CancellationException("cancelled by caller") }.fetch("https://example.org/a.png")
+        }
+        Unit
+    }
+
+    @Test
+    fun a_downloaded_book_draws_an_image_it_names_by_url() = runBlocking {
+        val picture = "https://images.example.org/pic.bmp"
+        val book = sampleEpub("""<p><img src="$picture" width="40" height="30" alt="A picture"/></p>""")
+        val server = Server(mapOf("https://example.org/a.epub" to book, picture to bmp2x1()))
+        val doc = KiteDoc.openUrl(
+            "https://example.org/a.epub", server.client,
+            epubSettings = EpubSettings(resourceFetcher = EpubResourceFetcher(server.client)),
+        ) as EpubDocument
+        assertTrue(doc.hasRemoteResources(0))
+        doc.fetchRemoteResources(0)
+        val canvas = RecordingCanvas().also { doc.page(KiteLocation(0, 0)).renderTo(it) }
+        assertEquals(1, canvas.calls.count { it is RecordingCanvas.Call.Image })
+        assertEquals(listOf("https://example.org/a.epub", picture), server.asked)
+    }
+
     /* ── fixtures ─────────────────────────────────────────────────────────── */
+
+    /** A 2x1 24-bit BMP: a red pixel and a blue one. */
+    private fun bmp2x1(): ByteArray {
+        val h = ByteArray(54)
+        h[0] = 'B'.code.toByte(); h[1] = 'M'.code.toByte()
+        fun le32(o: Int, v: Int) { var s = 0; var i = o; while (s < 32) { h[i++] = ((v ushr s) and 0xFF).toByte(); s += 8 } }
+        fun le16(o: Int, v: Int) { h[o] = (v and 0xFF).toByte(); h[o + 1] = ((v ushr 8) and 0xFF).toByte() }
+        le32(2, 62); le32(10, 54); le32(14, 40); le32(18, 2); le32(22, 1)
+        le16(26, 1); le16(28, 24); le32(34, 8)
+        return h + byteArrayOf(0, 0, 0xFF.toByte(), 0xFF.toByte(), 0, 0, 0, 0)
+    }
 
     private fun samplePdf(): ByteArray = PdfBuilder()
         .page { text(StandardFont.Helvetica, 24.0, 72.0, 700.0, "page one") }
         .page { text(StandardFont.Helvetica, 24.0, 72.0, 700.0, "page two") }
         .build()
 
-    private fun sampleEpub(): ByteArray {
+    private fun sampleEpub(body: String = "<p>downloaded</p>"): ByteArray {
         val container = """<?xml version="1.0"?><container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container"><rootfiles><rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/></rootfiles></container>"""
         val opf = """<?xml version="1.0"?>
             <package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="id">
@@ -167,7 +245,7 @@ class RemoteSourcesTest {
               <manifest><item id="c1" href="ch1.xhtml" media-type="application/xhtml+xml"/></manifest>
               <spine><itemref idref="c1"/></spine>
             </package>"""
-        val ch1 = """<?xml version="1.0"?><html xmlns="http://www.w3.org/1999/xhtml"><body><p>downloaded</p></body></html>"""
+        val ch1 = """<?xml version="1.0"?><html xmlns="http://www.w3.org/1999/xhtml"><body>$body</body></html>"""
         return storedZip(
             listOf(
                 "mimetype" to "application/epub+zip".encodeToByteArray(),

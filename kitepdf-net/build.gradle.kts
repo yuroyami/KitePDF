@@ -9,7 +9,8 @@ plugins {
 
 /*
  * :kitepdf-net is the ONLY module allowed to depend on Ktor. The document
- * artifacts stay kotlin-stdlib + KiteImageCodec, which is the promise the README makes.
+ * artifacts stay kotlin-stdlib + KiteImageCodec, plus kotlinx.coroutines for EPUB,
+ * which is the promise the README makes.
  *
  * ktor-client-core carries no engine on purpose: the consumer picks one, the
  * same way every Ktor library works. Targets are limited to what Ktor ships,

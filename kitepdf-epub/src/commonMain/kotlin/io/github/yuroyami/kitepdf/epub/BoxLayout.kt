@@ -487,18 +487,25 @@ internal class BoxLayout(
     }
 
     private fun layoutImage(box: ImageBox, contentLeft: Double, contentW: Double, topY: Double) {
+        val ew = box.style.widthPt ?: box.attrWidth
+        val eh = box.style.heightPt ?: box.attrHeight
+        // A remote picture whose box is sized on both sides keeps that box whether or not its
+        // bytes have landed, and the page paints it once they have (#38).
+        val remoteBox = if (box.svg == null && isRemoteUrl(box.zipPath) && ew != null && eh != null && ew > 0.0 && eh > 0.0) ew to eh else null
         // SVG (inline <svg> preset, or a .svg file reference) sizes from its intrinsic
         // viewport and paints as vectors; raster images decode to a KiteImageData.
-        val svg = box.svg ?: if (box.zipPath.endsWith(".svg", true)) loadSvg(box.zipPath)?.also { box.svg = it } else null
+        val svg = box.svg ?: if (remoteBox == null && namesSvg(box.zipPath)) loadSvg(box.zipPath)?.also { box.svg = it } else null
         val intrinsicW: Double; val intrinsicH: Double
         val media = box.media
         if (svg != null) {
             intrinsicW = svg.width; intrinsicH = svg.height
         } else {
-            val img = if (box.zipPath.isEmpty()) null else loadImage(box.zipPath)
+            val img = if (box.zipPath.isEmpty() || remoteBox != null) null else loadImage(box.zipPath)
             if (img != null && img.width > 0 && img.height > 0) {
                 box.image = img
                 intrinsicW = img.width.toDouble(); intrinsicH = img.height.toDouble()
+            } else if (remoteBox != null) {
+                intrinsicW = remoteBox.first; intrinsicH = remoteBox.second
             } else if (media != null) {
                 // A media element without a poster keeps its room: 16:9 for a video, a 40 pt bar
                 // for an audio player, at the content width unless the element says otherwise (#29).
@@ -527,8 +534,6 @@ internal class BoxLayout(
         // vertical flow. Only their inline/block allocation swaps (#100).
         val physicalRoomW = if (vertical) blockRoom else room
         val physicalRoomH = if (vertical) room else blockRoom
-        val ew = box.style.widthPt ?: box.attrWidth
-        val eh = box.style.heightPt ?: box.attrHeight
         var w = ew ?: (eh?.let { it / aspect } ?: if (box.embed != null) intrinsicW else physicalRoomW)
         var h = eh ?: (w * aspect)
         // object-fit: contain. When both dimensions are fixed, letterbox the image to
@@ -1956,8 +1961,8 @@ internal class BoxLayout(
         return PlacedRun(glyphs, x, fontSize, spec, color)
     }
 
-    /** A cell that paints an image rather than a glyph. */
-    private val Cell.isImage: Boolean get() = imageHeight > 0.0 && (image != null || svgImage != null)
+    /** A cell that paints an image rather than a glyph, or a remote one whose page paints it once it lands (#38). */
+    private val Cell.isImage: Boolean get() = imageHeight > 0.0 && (image != null || svgImage != null || isRemoteUrl(imageZipPath))
 
     private class Cell(
         // The character of the cell, as a code point: a character outside the BMP is one cell (#319).
@@ -2100,10 +2105,15 @@ internal class BoxLayout(
                 endWord()
                 val src = srcAt
                 srcAt += codePointCount(run.text)
-                val svg = run.imageSvg ?: if (run.imageSrc.endsWith(".svg", true)) loadSvg(run.imageSrc) else null
-                val img = if (svg == null) loadImage(run.imageSrc) else null
+                // A remote picture sized on both sides keeps its room without its bytes (#38).
+                val cssW = run.imageCssW
+                val cssH = run.imageCssH
+                val remoteBox = run.imageSvg == null && isRemoteUrl(run.imageSrc) && cssW != null && cssH != null && cssW > 0.0 && cssH > 0.0
+                val svg = run.imageSvg ?: if (!remoteBox && namesSvg(run.imageSrc)) loadSvg(run.imageSrc) else null
+                val img = if (svg == null && !remoteBox) loadImage(run.imageSrc) else null
                 val iw: Double; val ih: Double
                 when {
+                    remoteBox && cssW != null && cssH != null -> { iw = cssW; ih = cssH }
                     svg != null && svg.width > 0 && svg.height > 0 -> { iw = svg.width; ih = svg.height }
                     img != null && img.width > 0 && img.height > 0 -> { iw = img.width.toDouble(); ih = img.height.toDouble() }
                     else -> continue

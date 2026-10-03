@@ -44,6 +44,7 @@ import io.github.yuroyami.kitepdf.core.render.KiteCanvas
 import io.github.yuroyami.kitepdf.core.render.KitePath
 import io.github.yuroyami.kitepdf.core.KiteRectangle
 import io.github.yuroyami.kitepdf.core.render.RgbColor
+import kotlinx.coroutines.flow.StateFlow
 
 /**
  * A parsed EPUB, reflowed onto fixed-size pages and rendered through the shared
@@ -144,6 +145,48 @@ public class EpubDocument internal constructor(
 
     /** The scripted chapters, in reading order (#40). Reads the markup of every chapter once. */
     public val scriptedChapters: List<Int> get() = parsed.spineIndices.filter(parsed::isScripted)
+
+    /**
+     * Whether [chapter] names a resource outside the book's container by an `http` or `https`
+     * URL (EPUB 3.3, 3.6): its manifest item has the `remote-resources` property (EPUB 3.3, D.6.4),
+     * or its markup or styles name one for an image, a video poster, a background or a font (#38).
+     * Reads the chapter's markup and styles once, and does not lay it out.
+     *
+     * @throws IndexOutOfBoundsException when [chapter] is not a chapter of the book.
+     */
+    public fun hasRemoteResources(chapter: Int): Boolean = parsed.hasRemoteResources(chapter)
+
+    /**
+     * Fetches [chapter]'s remote resources through [EpubSettings.resourceFetcher], and returns once
+     * each has landed or failed (#38). Only `https` URLs are fetched (EPUB Reading Systems 3.3, 3.3).
+     * Returns at once without a fetcher, or for a chapter the book does not have.
+     *
+     * Layout never waits for the network on its own. An image whose width and height the markup
+     * gives keeps that room, and its page paints the picture once its bytes land, which
+     * [remoteArrivals] and [EpubPage.remoteVersion] announce. An image without both, and a font,
+     * size the layout, so a chapter laid out before they land keeps their absence for the life of
+     * this document, which keeps its pages and its page count. [layoutOnly] fetches just those, for
+     * a caller that waits for them before it lays [chapter] out, within a time limit of its own:
+     * the viewer of `kitepdf-compose-viewer` waits two seconds. Without [layoutOnly], it fetches
+     * every one the chapter names, an `url()` of a rule that matches no element included.
+     *
+     * The fetches belong to the book, not to the caller: cancelling this call stops the wait,
+     * and the bytes still land for the next paint and the next document over the book.
+     */
+    public suspend fun fetchRemoteResources(chapter: Int, layoutOnly: Boolean = false) {
+        val fetcher = settings.resourceFetcher ?: return
+        if (chapter !in parsed.spineIndices) return
+        val refs = parsed.remoteRefs(chapter)
+        val pending = (if (layoutOnly) refs.layout else refs.all).mapNotNull { parsed.remote.request(it, fetcher) }
+        for (fetch in pending) fetch.await()
+    }
+
+    /**
+     * How many of the book's remote resources have landed, for every document over the book
+     * (#38). A viewer collects it, and draws a page again when that page's
+     * [EpubPage.remoteVersion] has moved.
+     */
+    public val remoteArrivals: StateFlow<Int> get() = parsed.remote.arrivals
 
     /**
      * [chapter]'s media overlay: the clips of its synchronised narration, in document order, or
@@ -380,7 +423,16 @@ public class EpubDocument internal constructor(
      * which chapters were laid out before it.
      */
     private fun fontsFor(chapter: Int): FontRegistry {
-        val local = parsed.spine(chapter).localFaces
+        val spine = parsed.spine(chapter)
+        if (parsed.hasRemoteFonts(chapter)) {
+            // A remote face is what the chapter's first layout found, for good, so a layout
+            // after the budget dropped the chapter shapes its text the same way (#38).
+            val faces = (parsed.fontFaceRules + spine.faceRules).mapNotNull { (rule, dir) ->
+                parsed.loadFace(rule, dir) { url -> layoutBytes(chapter, url) }
+            }
+            return FontRegistry(faces)
+        }
+        val local = spine.localFaces
         return if (local.isEmpty()) parsed.fonts else parsed.fonts.with(local)
     }
 
@@ -407,6 +459,8 @@ public class EpubDocument internal constructor(
      */
     private inner class ChapterLayout(private val chapter: Int) {
         private val fonts = fontsFor(chapter)
+        private val image: (String) -> KiteImageData? = { path -> loadImage(path) { url -> layoutBytes(chapter, url) } }
+        private val svg: (String) -> SvgImage? = { path -> loadSvg(path) { url -> layoutBytes(chapter, url) } }
         private var stage = 0
         private var build: BoxBuilder.Run? = null
         private var docRoot: BlockBox? = null
@@ -422,7 +476,7 @@ public class EpubDocument internal constructor(
                 0 -> {
                     val spine = fixedSpine(chapter)
                     if (spine != null) {
-                        BoxLayout(::loadImage, ::loadSvg, spine.height, fonts, languageFor(chapter), settings.lineHeightScale)
+                        BoxLayout(image, svg, spine.height, fonts, languageFor(chapter), settings.lineHeightScale)
                             .layout(spine.root, spine.width, spine.height)
                         laid = Laid(listOf(Paginator.paginateFixed(spine.root, spine.width, spine.height)), spine.root)
                         return true
@@ -443,7 +497,7 @@ public class EpubDocument internal constructor(
                     docRoot = built
                     root = chapterRoot
                     run = BoxLayout(
-                        ::loadImage, ::loadSvg, blockBudget, fonts, languageFor(chapter),
+                        image, svg, blockBudget, fonts, languageFor(chapter),
                         settings.lineHeightScale, vertical = isVertical,
                     ).start(chapterRoot, inlineBudget, blockBudget)
                 }
@@ -1016,34 +1070,87 @@ public class EpubDocument internal constructor(
     /** The media type that the manifest gives the file at [path], or null when it gives none. */
     public fun resourceType(path: String): String? = parsed.mediaTypeOf(path.substringBefore('#'))
 
-    /** The image at [zipPath], or the first item of its manifest fallback chain that decodes (#27). */
-    private fun loadImage(zipPath: String): KiteImageData? {
+    /**
+     * The image at [zipPath], or the first item of its manifest fallback chain that decodes (#27).
+     * A remote URL in the chain reads the bytes [remote] gives for it (#38).
+     */
+    private fun loadImage(zipPath: String, remote: (String) -> ByteArray?): KiteImageData? {
         for (path in listOf(zipPath) + parsed.fallbackPaths(zipPath)) {
-            parsed.zip.read(path)?.let { KiteImageData.fromEncodedImage(it) }?.let {
+            bytesAt(path, remote)?.let { KiteImageData.fromEncodedImage(it) }?.let {
                 return it.withIdentity(parsed.imageIdentities.child(path))
             }
         }
         return null
     }
 
-    private fun loadSvg(zipPath: String): SvgImage? =
-        parsed.zip.read(zipPath)?.let { SvgImage.parse(it) }
+    private fun loadSvg(zipPath: String, remote: (String) -> ByteArray?): SvgImage? =
+        bytesAt(zipPath, remote)?.let { SvgImage.parse(it) }
+
+    /** The bytes of the file at [path] in the archive, or, for a remote URL, those [remote] gives (#38). */
+    private fun bytesAt(path: String, remote: (String) -> ByteArray?): ByteArray? =
+        if (isRemoteUrl(path)) remote(path) else parsed.zip.read(path)
+
+    private val pinLock = KiteLock()
+
+    /** Per chapter, the remote bytes its first layout found, by URL; null for a URL that had not landed. */
+    private val pinned = arrayOfNulls<HashMap<String, ByteArray?>>(parsed.spineCount)
+
+    /**
+     * The bytes of the remote resource [url] as [chapter]'s layout sees them: what had landed when
+     * the chapter's first layout asked, for the life of this document (#38). A chapter laid out
+     * again after the budget dropped it then makes the same pages, so its page count holds. A miss
+     * starts the fetch, so the next document over the book finds the bytes.
+     */
+    private fun layoutBytes(chapter: Int, url: String): ByteArray? {
+        pinLock.withLock { pinned[chapter]?.let { if (it.containsKey(url)) return it[url] } }
+        val bytes = parsed.remote.bytes(url)
+        if (bytes == null) requestRemote(url)
+        return pinLock.withLock {
+            val chapterPins = pinned[chapter] ?: HashMap<String, ByteArray?>().also { pinned[chapter] = it }
+            if (chapterPins.containsKey(url)) chapterPins[url] else bytes.also { chapterPins[url] = it }
+        }
+    }
+
+    /**
+     * The bytes of the remote resource [url] for a paint of [chapter]: what has landed so far. A
+     * miss starts the fetch, and [chapter]'s [EpubPage.remoteVersion] moves when it lands (#38).
+     */
+    private fun paintBytes(chapter: Int, url: String): ByteArray? {
+        parsed.remote.notePainter(url, chapter)
+        return parsed.remote.bytes(url) ?: run {
+            requestRemote(url)
+            null
+        }
+    }
+
+    /** Starts the fetch of [url] through this document's fetcher, if it has one. */
+    private fun requestRemote(url: String) {
+        settings.resourceFetcher?.let { parsed.remote.request(url, it) }
+    }
+
+    /** How many remote resources [chapter] painted before they landed have landed since (#38). */
+    internal fun remoteVersionOf(chapter: Int): Int = parsed.remote.versionOf(chapter)
 
     private val backgroundLock = KiteLock()
 
-    /** Decoded background pictures by zip path, oldest use first, within [BACKGROUND_BYTES] (#28). */
+    /** Decoded pictures that pages paint by path, oldest use first, within [BACKGROUND_BYTES] (#28). */
     private val backgrounds = LinkedHashMap<String, Any?>()
     private var backgroundBytes = 0L
 
     /**
-     * The picture of a `background-image` at [zipPath]: a decoded raster or a parsed SVG, or null.
-     * A page paints its backgrounds on every render, so the document keeps them within a budget.
+     * The picture that [chapter] paints from [zipPath], a decoded raster or a parsed SVG, or null:
+     * a `background-image`, or a remote image whose box its markup sized (#38). A page paints
+     * these on every render, so the document keeps them within a budget. A remote picture that may
+     * still land is not kept, so the paint after it lands finds it.
      */
-    internal fun backgroundPicture(zipPath: String): Any? {
+    internal fun paintPicture(zipPath: String, chapter: Int): Any? {
         backgroundLock.withLock {
             if (backgrounds.containsKey(zipPath)) return backgrounds.remove(zipPath).also { backgrounds[zipPath] = it }
         }
-        val picture: Any? = if (zipPath.endsWith(".svg", true)) loadSvg(zipPath) else loadImage(zipPath)
+        val remote = isRemoteUrl(zipPath)
+        val bytes: (String) -> ByteArray? = { url -> paintBytes(chapter, url) }
+        val picture: Any? = if (namesSvg(zipPath)) loadSvg(zipPath, bytes) else loadImage(zipPath, bytes)
+        if (remote && settings.resourceFetcher != null && parsed.remote.mayLand(zipPath)) return picture
         val size = (picture as? KiteImageData)?.let { (it.pixelBytes?.size ?: it.encodedBytes.size).toLong() } ?: 1024L
         backgroundLock.withLock {
             if (size > BACKGROUND_BYTES) return picture
@@ -1069,8 +1176,10 @@ public class EpubDocument internal constructor(
      * directory that SVG lives in. Fixed-layout comics wrap each page's JPEG
      * in an SVG, so this is how those pages get their picture.
      */
-    internal fun svgResource(baseDir: String, href: String): ByteArray? =
-        parsed.zip.read(resolvePath(baseDir, href.substringBefore('#')))
+    internal fun svgResource(baseDir: String, href: String, chapter: Int): ByteArray? =
+        resolvePath(baseDir, href.substringBefore('#')).let { path ->
+            if (isRemoteUrl(path)) paintBytes(chapter, path) else parsed.zip.read(path)
+        }
 
     /** The directory of [chapter]'s own document, for inline SVG references. */
     internal fun chapterDir(chapter: Int): String = parsed.spine(chapter).docDir
@@ -1109,8 +1218,14 @@ public class EpubDocument internal constructor(
         public fun openOrNull(bytes: ByteArray, settings: EpubSettings = EpubSettings()): EpubDocument? =
             try { open(bytes, settings) } catch (_: EpubFormatException) { null }
 
-        /** Resolve a relative href against [baseDir], normalizing `.`/`..` + percent-decode. */
+        /**
+         * Resolve a relative href against [baseDir], normalizing `.`/`..` + percent-decode. An
+         * absolute http or https URL names a resource outside the container, and stays a URL
+         * without its fragment (EPUB 3.3, 3.6, #38).
+         */
         internal fun resolvePath(baseDir: String, href: String): String {
+            val trimmed = href.trim()
+            if (isRemoteUrl(trimmed)) return trimmed.substringBefore('#')
             val clean = percentDecode(href.substringBefore('#').substringBefore('?'))
             val stack = ArrayList<String>()
             if (!clean.startsWith("/") && baseDir.isNotEmpty()) for (seg in baseDir.split('/')) if (seg.isNotEmpty()) stack.add(seg)
@@ -1211,6 +1326,14 @@ public data class EpubSettings(
      * Each chapter uses the patterns of its own language. The book is not changed.
      */
     val hyphenate: Boolean? = null,
+    /**
+     * Fetches the resources that the book names by an absolute `https` URL instead of a file in
+     * its container (EPUB 3.3, 3.6, #38). `kitepdf-net` ships one on a Ktor client. Null fetches
+     * nothing: a remote image takes its manifest fallback, else keeps the room its markup gives,
+     * and a remote font takes the next source of its rule. See [EpubDocument.fetchRemoteResources]
+     * for when the bytes count.
+     */
+    val resourceFetcher: EpubResourceFetcher? = null,
 ) {
     init {
         require(layoutCacheBytes >= 0L) { "layoutCacheBytes must be >= 0" }
@@ -1317,9 +1440,48 @@ public class EpubPage internal constructor(
     private fun resourceDir(zipPath: String): String =
         if (zipPath.isEmpty()) doc.chapterDir(chapter) else zipPath.substringBeforeLast('/', "")
 
-    /** Reads files an SVG references, relative to [baseDir] inside the archive. */
+    /** Reads files an SVG references, relative to [baseDir] inside the archive, or at an https URL (#38). */
     private fun svgLoader(baseDir: String): (String) -> ByteArray? =
-        { href -> doc.svgResource(baseDir, href) }
+        { href -> doc.svgResource(baseDir, href, chapter) }
+
+    /**
+     * How many remote resources that this page's chapter painted before their bytes landed have
+     * landed since (#38). A viewer that keeps the pixels of a page draws it again when this moves,
+     * so a remote image with a declared size appears in its box. It counts for the whole chapter,
+     * and reads no layout.
+     */
+    public val remoteVersion: Int get() = doc.remoteVersionOf(chapter)
+
+    /**
+     * Paints the remote picture at [url] in the box from ([left], [bottom]), [width] by [height],
+     * once its bytes have landed, and returns false while they have not (#38). Its layout had no
+     * picture to size the box by, so `object-fit: contain` letterboxes it here.
+     */
+    private fun paintRemoteImage(
+        canvas: KiteCanvas, deviceCtm: KiteMatrix, url: String,
+        width: Double, height: Double, left: Double, bottom: Double, objectFit: ObjectFit,
+    ): Boolean {
+        if (width <= 0.0 || height <= 0.0) return false
+        val picture = doc.paintPicture(url, chapter) ?: return false
+        val image = picture as? KiteImageData
+        val svg = picture as? SvgImage
+        val iw = svg?.width ?: image?.width?.toDouble() ?: return false
+        val ih = svg?.height ?: image?.height?.toDouble() ?: return false
+        if (iw <= 0.0 || ih <= 0.0) return false
+        if (objectFit == ObjectFit.CONTAIN) {
+            val scale = minOf(width / iw, height / ih)
+            val w = iw * scale
+            val h = ih * scale
+            paintImage(canvas, deviceCtm, image, svg, w, h, left + (width - w) / 2.0, bottom + (height - h) / 2.0, objectFit, resourceDir(url))
+        } else {
+            paintImage(canvas, deviceCtm, image, svg, width, height, left, bottom, objectFit, resourceDir(url))
+        }
+        return true
+    }
+
+    /** True for a picture that its layout sized without bytes, which a paint reads from the remote store (#38). */
+    private fun paintsRemote(image: KiteImageData?, svg: SvgImage?, path: String): Boolean =
+        image == null && svg == null && isRemoteUrl(path)
 
     /** Where this page sits: its chapter, and its index inside that chapter. */
     public val location: KiteLocation get() = KiteLocation(chapter, index)
@@ -1389,6 +1551,10 @@ public class EpubPage internal constructor(
             }
             // Inline images: bottom on the baseline, next to the text runs.
             for (im in line.images) {
+                if (paintsRemote(im.image, im.svg, im.zipPath)) {
+                    paintRemoteImage(canvas, ctm, im.zipPath, im.width, im.height, margin + im.x, base, im.objectFit)
+                    continue
+                }
                 paintImage(canvas, ctm, im.image, im.svg, im.width, im.height,
                     margin + im.x, base, im.objectFit, resourceDir(im.zipPath))
             }
@@ -1433,10 +1599,12 @@ public class EpubPage internal constructor(
                     val shape = KitePath.Builder().apply { roundedRect(left, bottom, left + box.drawWidth, bottom + box.drawHeight, radii) }.build()
                     canvas.pushClip(shape, ctm, evenOdd = false)
                 }
-                if (box.media != null && box.image == null) {
-                    paintMediaPlaceholder(canvas, ctm, left, bottom, box.drawWidth, box.drawHeight)
-                } else {
-                    paintImage(canvas, ctm, box.image, box.svg, box.drawWidth, box.drawHeight,
+                when {
+                    // A remote picture whose bytes have landed fills its box (#38).
+                    paintsRemote(box.image, box.svg, box.zipPath) &&
+                        paintRemoteImage(canvas, ctm, box.zipPath, box.drawWidth, box.drawHeight, left, bottom, box.style.objectFit) -> Unit
+                    box.media != null && box.image == null -> paintMediaPlaceholder(canvas, ctm, left, bottom, box.drawWidth, box.drawHeight)
+                    else -> paintImage(canvas, ctm, box.image, box.svg, box.drawWidth, box.drawHeight,
                         left, bottom, box.style.objectFit, resourceDir(box.zipPath))
                 }
                 if (radii != null) canvas.popClip()
@@ -1527,6 +1695,10 @@ public class EpubPage internal constructor(
             // line-over side of the baseline, while its height advances the inline pen.
             for (im in line.images) {
                 val top = margin + im.x
+                if (paintsRemote(im.image, im.svg, im.zipPath)) {
+                    paintRemoteImage(canvas, deviceCtm, im.zipPath, im.width, im.height, axisX(0.0), displayHeight - top - im.height, im.objectFit)
+                    continue
+                }
                 paintImage(canvas, deviceCtm, im.image, im.svg, im.width, im.height,
                     axisX(0.0), displayHeight - top - im.height, im.objectFit, resourceDir(im.zipPath))
             }
@@ -1550,11 +1722,14 @@ public class EpubPage internal constructor(
                 val inset = imageInset(box.style)
                 val left = minOf(colX(box.y + inset.blockStart), colX(box.bottom - inset.blockEnd))
                 val top = margin + box.x + inset.inlineStart
-                if (box.media != null && box.image == null) {
-                    paintMediaPlaceholder(canvas, deviceCtm, left, displayHeight - top - box.drawHeight, box.drawWidth, box.drawHeight)
-                } else {
-                    paintImage(canvas, deviceCtm, box.image, box.svg, box.drawWidth, box.drawHeight,
-                        left, displayHeight - top - box.drawHeight, box.style.objectFit, resourceDir(box.zipPath))
+                val bottom = displayHeight - top - box.drawHeight
+                when {
+                    // A remote picture whose bytes have landed fills its box (#38).
+                    paintsRemote(box.image, box.svg, box.zipPath) &&
+                        paintRemoteImage(canvas, deviceCtm, box.zipPath, box.drawWidth, box.drawHeight, left, bottom, box.style.objectFit) -> Unit
+                    box.media != null && box.image == null -> paintMediaPlaceholder(canvas, deviceCtm, left, bottom, box.drawWidth, box.drawHeight)
+                    else -> paintImage(canvas, deviceCtm, box.image, box.svg, box.drawWidth, box.drawHeight,
+                        left, bottom, box.style.objectFit, resourceDir(box.zipPath))
                 }
             },
         )
@@ -1945,7 +2120,7 @@ public class EpubPage internal constructor(
     ) {
         // A stylesheet's url is absolute already, with a leading slash; a style attribute's is the document's.
         val path = EpubDocument.resolvePath(doc.chapterDir(chapter), url)
-        val picture = doc.backgroundPicture(path)
+        val picture = doc.paintPicture(path, chapter)
         val image = picture as? KiteImageData
         val svg = picture as? SvgImage
         val iw = (svg?.width ?: image?.width?.toDouble() ?: return) * CSS_PX

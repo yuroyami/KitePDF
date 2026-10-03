@@ -12,6 +12,9 @@ plugins {
  * :kitepdf-core (zip via Inflate, the font engine, and the render Canvas) and
  * knows nothing about PDF. Reflowable HTML/CSS layout is the format-specific
  * work; everything below it (fonts, codecs, drawing, every platform) is shared.
+ *
+ * kotlinx.coroutines is its one library besides KitePDF's own: a resource that a book names
+ * by an https URL is fetched in the background while the book is read (#38).
  */
 kotlin {
     explicitApi()
@@ -87,10 +90,13 @@ kotlin {
             api(project(":kitepdf-core"))
             // EPUBs carry SVG: cover pages, spine documents, inline <svg>.
             api(project(":kitepdf-svg"))
+            // The fetch of remote resources, and the flow that tells a viewer they landed (#38).
+            api(libs.kotlinx.coroutines.core)
         }
 
         commonTest.dependencies {
             implementation(kotlin("test"))
+            implementation(libs.kotlinx.coroutines.test)
         }
     }
 }

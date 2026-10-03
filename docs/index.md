@@ -46,13 +46,13 @@ kotlin {
 }
 ```
 
-Its runtime dependencies are `kotlin-stdlib` and the pure-Kotlin KiteImageCodec engine. It runs on every target listed under [Platform support](platforms.md).
+Its runtime dependencies are `kotlin-stdlib`, the pure-Kotlin KiteImageCodec engine, and `kotlinx-coroutines-core`, which fetches the resources an EPUB names by URL. It runs on every target listed under [Platform support](platforms.md).
 
 Drawing a page to the screen is the one job that needs a platform, so the rendering bindings are separate, opt-in artifacts. Add the one that matches how you draw:
 
 | Artifact | Add it when you want |
 |---|---|
-| `io.github.yuroyami:kitepdf` | The engine: read, write and edit PDFs, **and** read EPUBs. Pure Kotlin (stdlib plus KiteImageCodec). |
+| `io.github.yuroyami:kitepdf` | The engine: read, write and edit PDFs, **and** read EPUBs. Pure Kotlin (stdlib, KiteImageCodec and kotlinx.coroutines). |
 | `io.github.yuroyami:kitepdf-compose-viewer` | A Compose `KiteDocView` for PDF and EPUB, drawn straight into a `DrawScope`. |
 | `io.github.yuroyami:kitepdf-net` | Optional. Opens a document straight from a URL; the only artifact that pulls in Ktor. |
 | `io.github.yuroyami:kitepdf-media` | Optional. Plays the audio and video of an EPUB in `KiteDocView`; the only artifact that pulls in a player and FFmpeg. |

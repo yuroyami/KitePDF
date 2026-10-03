@@ -37,6 +37,10 @@ robolectric = "4.17"
 # No other module may depend on it: the engine stays kotlin-stdlib + KiteImageCodec.
 ktor = "3.6.0"
 
+# kotlinx.coroutines. :kitepdf-epub fetches a book's remote resources with it (#38), and Compose and
+# Ktor bring the same library to the viewer and :kitepdf-net. The version Ktor itself depends on.
+kotlinxCoroutines = "1.11.0"
+
 [libraries] ######################################################################################
 # KiteImageCodec supplies every image codec :kitepdf-core decodes through: JPEG
 # (baseline and progressive), PNG, GIF, BMP, JPEG 2000, JBIG2 and CCITT.
@@ -54,6 +58,9 @@ robolectric = { module = "org.robolectric:robolectric", version.ref = "robolectr
 ktor-client-core = { module = "io.ktor:ktor-client-core", version.ref = "ktor" }
 ktor-client-cio = { module = "io.ktor:ktor-client-cio", version.ref = "ktor" }
 ktor-client-mock = { module = "io.ktor:ktor-client-mock", version.ref = "ktor" }
+
+kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "kotlinxCoroutines" }
+kotlinx-coroutines-test = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test", version.ref = "kotlinxCoroutines" }
 
 # Skia (no Compose), used by :kitepdf-skia-renderer. `skiko` is the multiplatform
 # root (common org.jetbrains.skia API; resolves skiko-awt on JVM, native

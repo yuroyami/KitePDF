@@ -38,6 +38,8 @@ internal class PageBitmapCache(private val maxBytes: Long) {
         val fontEnvironment: Any? = null,
         /** The part of the page drawn [w] × [h] that the bitmap holds, for a tile; null for the whole page (#375). */
         val region: androidx.compose.ui.unit.IntRect? = null,
+        /** What the page paints besides the viewer's settings, such as remote pictures that landed (#38). */
+        val contentVersion: Int = 0,
     )
 
     // Access-ordered behaviour done manually: Kotlin common LinkedHashMap has

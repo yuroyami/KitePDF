@@ -284,6 +284,8 @@ public fun KiteDocView(
     // Lay the rest of the book out behind the reader. One loader for as long as this state is
     // shown: it follows the reader by itself, so it is not keyed on a value read here (#343).
     LaunchedEffect(state, state.document) { state.loadChapters() }
+    // A remote picture that lands draws the pages that painted it again (#38).
+    LaunchedEffect(state, state.document) { state.followRemoteArrivals() }
     // Which side the reader reached a placeholder from, so its chapter lands on the right page (#348).
     // It follows the item, not the slot number: a placeholder that becomes a page keeps its slot.
     LaunchedEffect(state) { snapshotFlow { state.readerItem() }.collect { state.noteReaderItem(it) } }
@@ -817,6 +819,8 @@ private fun PageSlotContent(
             role = Role.Image
         }
     val pageOverlay = LocalKitePageOverlay.current
+    // Remote pictures of the page's chapter that landed since it painted (#38).
+    val contentVersion = state.contentVersionOf(page)
     Box(modifier) {
         when (renderSpec) {
             is KiteRenderSpec.Rasterized -> KitePageRaster(
@@ -825,10 +829,12 @@ private fun PageSlotContent(
                 cache = state.bitmapCacheFor(renderSpec.cacheBudgetBytes),
                 drawsFormLayer = drawsForm,
                 state = state,
+                contentVersion = contentVersion,
             )
             is KiteRenderSpec.Vectorized -> KitePageVector(
                 page, renderSpec, colors, slot, skipWidgets = drawsForm, magnification = settledZoom,
                 imageCache = state.vectorImageCacheFor(renderSpec.imageCacheBudgetBytes),
+                contentVersion = contentVersion,
             )
         }
         // What a screen reader finds on the page: its text, links and fields at their places (#427).
@@ -1130,6 +1136,8 @@ private fun KitePageRaster(
     drawsFormLayer: Boolean = false,
     /** Where the page's render state goes, and its retry count comes from. */
     state: KiteDocViewState? = null,
+    /** What the page paints besides the viewer's settings; a new value draws it again (#38). */
+    contentVersion: Int = 0,
 ) {
     // The spec's long-side cap is the sizing authority in this path, so the
     // rasterizer's pixel ceiling must never undercut maxBitmapLongSide².
@@ -1186,7 +1194,7 @@ private fun KitePageRaster(
     // Keyed on the paper the page is drawn on, so a background change that a theme hides renders nothing again (#394).
     val paper = paperColor(colors.pageBackground, colors.theme)
     // Keyed on the rasterizer too: a new font environment gives a new one, and the text renders again (#421).
-    val rastered by produceState<Pair<ImageBitmap, Boolean>?>(null, page, raster, paper, colors.theme, hairline, cache, drawsFormLayer, spec.canvasDecorator, retry, rasterizer) {
+    val rastered by produceState<Pair<ImageBitmap, Boolean>?>(null, page, raster, paper, colors.theme, hairline, cache, drawsFormLayer, spec.canvasDecorator, retry, rasterizer, contentVersion) {
         // Off the main thread: a 10-30ms page raster on the UI thread
         // janks scroll and pinch. The rasterizer runs two pages at once, a page on
         // screen before a page drawn ahead (#370); the bitmap cache turns scroll-back
@@ -1205,6 +1213,7 @@ private fun KitePageRaster(
             skipWidgets = drawsFormLayer,
             canvasDecorator = spec.canvasDecorator,
             priority = { rasterPriorityOf(state, pageIndex) },
+            contentVersion = contentVersion,
         )
         backOnComposeThread()
         // A failed upgrade, such as a crisp-zoom raster out of memory, keeps the last good
@@ -1239,7 +1248,7 @@ private fun KitePageRaster(
         if (tiled && state != null) {
             PageTiles(
                 page, pageIndex, state, full, settledBase, rasterizer, cache,
-                paper, colors, hairline, drawsFormLayer, spec.canvasDecorator,
+                paper, colors, hairline, drawsFormLayer, spec.canvasDecorator, contentVersion,
             )
         }
     }
@@ -1297,6 +1306,7 @@ private fun PageTiles(
     hairline: Float,
     drawsFormLayer: Boolean,
     canvasDecorator: KiteCanvasDecorator?,
+    contentVersion: Int,
 ) {
     if (slot.width <= 0 || slot.height <= 0 || full.width <= 0 || full.height <= 0) return
     // The part on screen, once the view rests on it: a pan does not start tiles on every frame.
@@ -1310,8 +1320,8 @@ private fun PageTiles(
     val sx = full.width.toFloat() / slot.width
     val sy = full.height.toFloat() / slot.height
     val tiles = remember(shown, full, slot) { shown?.let { tilesOver(it, sx, sy, full) }.orEmpty() }
-    val bitmaps = remember(page, full, paper, colors.theme, hairline, canvasDecorator) { mutableStateMapOf<IntRect, ImageBitmap>() }
-    LaunchedEffect(page, full, tiles, paper, colors.theme, hairline, drawsFormLayer, canvasDecorator) {
+    val bitmaps = remember(page, full, paper, colors.theme, hairline, canvasDecorator, contentVersion) { mutableStateMapOf<IntRect, ImageBitmap>() }
+    LaunchedEffect(page, full, tiles, paper, colors.theme, hairline, drawsFormLayer, canvasDecorator, contentVersion) {
         // A tile that left the view gives its memory back; the cache keeps it for a return.
         bitmaps.keys.retainAll(tiles.toSet())
         val middle = shown?.center ?: return@LaunchedEffect
@@ -1323,6 +1333,7 @@ private fun PageTiles(
                 canvasDecorator = canvasDecorator,
                 priority = { rasterPriorityOf(state, pageIndex) },
                 region = tile,
+                contentVersion = contentVersion,
             )
             backOnComposeThread()
             if (result != null) bitmaps[tile] = result.first
@@ -1405,6 +1416,8 @@ private fun KitePageVector(
     magnification: Float = 1f,
     /** The viewer's bounded store holds bitmap pixels and non-owning image IDs, never source images. */
     imageCache: io.github.yuroyami.kitepdf.core.render.KiteBitmapCache<ImageBitmap>? = null,
+    /** What the page paints besides the viewer's settings; a new value draws it again (#38). */
+    contentVersion: Int = 0,
 ) {
     val textMeasurer = rememberTextMeasurer()
     val theme = colors.theme
@@ -1424,8 +1437,9 @@ private fun KitePageVector(
     Canvas(modifier.graphicsLayer()) {
         val paper = theme?.background?.let { Color(it.r.toFloat(), it.g.toFloat(), it.b.toFloat()) } ?: colors.pageBackground
         drawRect(paper)
-        // The count of loads is read first, so the page draws again once its content is back.
-        if (loads < 0 || !page.isContentLoaded) return@Canvas
+        // The count of loads is read first, so the page draws again once its content is back,
+        // and the content version, so it draws again once a remote picture lands (#38).
+        if (loads < 0 || contentVersion < 0 || !page.isContentLoaded) return@Canvas
         val w = size.width
         val h = size.height
         val scale = if (page.displayWidth > 0.0) w / page.displayWidth else 0.0
