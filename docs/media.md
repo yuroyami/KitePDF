@@ -49,11 +49,13 @@ The overlay draws nothing on a page that is not an EPUB page, so a viewer that s
 
 ## Sources outside the book
 
-A source can name a URL, such as `https://`, instead of a file inside the book. Such a source tells its server that the book was opened, and the book's author chose the server, so the overlay plays only the book's own files. Pass `allowRemote = true` to play URLs too:
+A source can name an `https` URL instead of a file inside the book. Such a source tells its server that the book was opened, and the book's author chose the server, so the overlay plays only the book's own files. Pass `allowRemote = true` to play `https` URLs too:
 
 ```kotlin
 pageOverlay = { KiteMediaOverlay(allowRemote = true) }
 ```
+
+A source of any other scheme never plays. A plain `http` stream can be watched and changed on its way, and a `file` URL would reach files on the device, which EPUB Reading Systems 3.3 forbids (3.3 and 3.5).
 
 ## Your own player settings
 

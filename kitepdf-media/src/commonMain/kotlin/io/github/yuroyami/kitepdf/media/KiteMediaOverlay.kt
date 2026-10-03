@@ -62,8 +62,9 @@ import kotlin.time.Duration
  * that is not an EPUB page, or has no media, draws nothing. An element starts no player until it
  * starts to play, so a page of posters costs nothing.
  *
- * @param allowRemote plays a source that the book names by a URL, such as `https://`. False by
- *   default, because such a source tells its server that the book was opened.
+ * @param allowRemote plays a source that the book names by an `https` URL. False by default,
+ *   because such a source tells its server that the book was opened. A source of any other
+ *   scheme never plays, `http` and `file` included (EPUB Reading Systems 3.3, 3.3 and 3.5).
  * @param newPlayer makes the player of an element when it starts, or returns null where the platform
  *   cannot play. The default player plays through FFmpeg and the platform's audio output; pass
  *   `{ KitePlayerPlatform.createOrNull(PlayerConfig(...)) }` for settings of your own.
@@ -102,7 +103,7 @@ public fun KitePageOverlayScope.KiteMediaOverlay(
  *
  * The player is closed when this leaves the composition, so a page that scrolls away stops.
  *
- * @param allowRemote plays a source that the book names by a URL. See [KiteMediaOverlay].
+ * @param allowRemote plays a source that the book names by an `https` URL. See [KiteMediaOverlay].
  * @param newPlayer makes the player when the element starts. See [KiteMediaOverlay].
  */
 @Composable
