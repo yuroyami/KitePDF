@@ -43,7 +43,12 @@ import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
-/** Actual host-font resolution, asynchronous dispatch and stable form exports for #428. */
+/**
+ * Actual host-font resolution, asynchronous dispatch and stable form exports for #428. Most tests
+ * force the path Android takes, host text through Compose's text on the UI thread. The desktop
+ * JVM, iOS and macOS shape host text with Skia on any thread instead (#131): the tests at the
+ * end pin that path.
+ */
 class RasterThreadContractTest {
     private val density = Density(1f)
     private val font = FontSpec(KiteFontFamily.SansSerif, false, false)
@@ -111,10 +116,10 @@ class RasterThreadContractTest {
         withContext(Dispatchers.Default) {
             val bitmap = ImageBitmap(200, 200)
             CanvasDrawScope().draw(density, LayoutDirection.Ltr, Canvas(bitmap), Size(200f, 200f)) {
-                val direct = ComposeCanvas(this, measurer)
+                val direct = ComposeCanvas(this, measurer, 1f, false, magnification = 1f, hostLines = false)
                 assertFailsWith<IllegalStateException> { drawText(direct, "H", KiteMatrix.IDENTITY) }
                 assertFailsWith<IllegalStateException> { direct.hostGlyphOutline("O", font) }
-                val probe = ComposeCanvas(this, measurer, skipSystemFontText = true)
+                val probe = ComposeCanvas(this, measurer, 1f, skipSystemFontText = true, magnification = 1f, hostLines = false)
                 drawText(probe, "H", KiteMatrix.IDENTITY)
                 assertNull(probe.hostGlyphOutline("O", font))
                 assertTrue(probe.usedSystemFontText)
@@ -258,8 +263,95 @@ class RasterThreadContractTest {
         }
     }
 
-    private fun renderer(resolutions: MutableList<Boolean> = Collections.synchronizedList(ArrayList())) =
-        KitePageRasterizer(density, LayoutDirection.Ltr, measurer(resolutions))
+    /** A rasterizer that draws host text through Compose, as on Android, unless [throughCompose] is false. */
+    @Test
+    fun a_page_with_host_text_rasters_once_off_the_ui_thread_without_compose_text() = runBlocking {
+        val resolutions = Collections.synchronizedList(ArrayList<Boolean>())
+        val renderer = renderer(resolutions, throughCompose = false)
+        val passes = AtomicInteger()
+        val textThreads = Collections.synchronizedList(ArrayList<Boolean>())
+        val decorator: KiteCanvasDecorator = { inner ->
+            passes.incrementAndGet()
+            object : KiteCanvas by inner {
+                override fun drawGlyphs(glyphs: List<TextGlyph>, fontSize: Double, unitsPerEm: Int,
+                    hasOutlines: Boolean, fontSpec: FontSpec, textToDevice: KiteMatrix,
+                    color: RgbColor, alpha: Double, blendMode: KiteBlendMode) {
+                    textThreads += EventQueue.isDispatchThread()
+                    inner.drawGlyphs(glyphs, fontSize, unitsPerEm, hasOutlines, fontSpec, textToDevice, color, alpha, blendMode)
+                }
+            }
+        }
+        val actual = withContext(Dispatchers.Default) { renderer.rasterizeOffMain(hostPage(), 200, 200, canvasDecorator = decorator) }
+        assertEquals(1, passes.get(), "a page with host text drew more than once")
+        assertEquals(listOf(false), textThreads, "the host text drew on the UI thread")
+        assertEquals(emptyList(), resolutions, "the host text went through Compose's font resolver")
+        assertTrue(pixels(actual).any { it != -1 }, "host text must paint actual pixels")
+        val expected = onTestUiThread { renderer.rasterize(hostPage(), 200, 200) }
+        assertContentEquals(pixels(expected), pixels(actual), "the raster off the UI thread drew other pixels")
+    }
+
+    @Test
+    fun a_direct_canvas_draws_host_text_and_outlines_on_a_worker() = runBlocking {
+        val resolutions = Collections.synchronizedList(ArrayList<Boolean>())
+        val measurer = measurer(resolutions)
+        val bitmap = ImageBitmap(200, 200)
+        withContext(Dispatchers.Default) {
+            CanvasDrawScope().draw(density, LayoutDirection.Ltr, Canvas(bitmap), Size(200f, 200f)) {
+                val canvas = ComposeCanvas(this, measurer)
+                drawText(canvas, "H", KiteMatrix(1.0, 0.0, 0.0, -1.0, 20.0, 100.0))
+                assertTrue(canvas.hostGlyphOutline("O", font)?.isEmpty() == false, "no host outline off the UI thread")
+            }
+        }
+        assertTrue(pixels(bitmap).any { it != -1 }, "host text must paint actual pixels")
+        assertEquals(emptyList(), resolutions, "the host text went through Compose's font resolver")
+    }
+
+    @Test
+    fun skia_text_draws_the_pixels_compose_text_drew() {
+        // Skia's paragraph takes Compose's family names, style, rasterization, line height and
+        // baseline, so a run draws the same pixels on either path: kana, Han, Greek and Cyrillic
+        // from fallback faces too, at sizes whose baselines round either way.
+        val text = "Hello, world. Quick fox \u00e9t\u00e9 \u3044 \u4e2d\u6587 \u0391\u03b2 \u0416"
+        val glyphs = text.map { TextGlyph(0, 1, -1, it.toString(), 560.0, null, false) }
+        val measurer = measurer(Collections.synchronizedList(ArrayList()))
+        fun ink(spec: FontSpec, size: Double, throughCompose: Boolean): IntArray {
+            val bitmap = ImageBitmap(600, 100)
+            onTestUiThread {
+                CanvasDrawScope().draw(density, LayoutDirection.Ltr, Canvas(bitmap), Size(600f, 100f)) {
+                    drawRect(androidx.compose.ui.graphics.Color.White)
+                    ComposeCanvas(this, measurer, 1f, false, magnification = 1f, hostLines = !throughCompose)
+                        .drawGlyphs(glyphs, size, 1000, false, spec, KiteMatrix(1.0, 0.0, 0.0, -1.0, 10.3, 70.6), RgbColor.BLACK)
+                }
+            }
+            return pixels(bitmap)
+        }
+        for (size in listOf(7.0, 9.5, 15.2, 23.3)) for (family in KiteFontFamily.entries) for (bold in listOf(false, true)) for (italic in listOf(false, true)) {
+            val spec = FontSpec(family, bold, italic)
+            val skia = ink(spec, size, throughCompose = false)
+            assertTrue(skia.any { it != -1 }, "$spec at $size drew nothing")
+            assertContentEquals(ink(spec, size, throughCompose = true), skia, "$spec at $size")
+        }
+    }
+
+    @Test
+    fun host_text_on_many_threads_at_once_stays_whole() = runBlocking {
+        // The iOS abort of db082392 was two threads in Compose's text cache at once. Skia's text has no such cache.
+        // Two rasters run at once on the pool while the UI thread draws its own, so three threads draw host text together.
+        val renderer = renderer(throughCompose = false)
+        val reference = pixels(withContext(Dispatchers.Default) { renderer.rasterizeOffMain(hostPage(), 200, 200) })
+        val workers = (0 until 8).map {
+            async(Dispatchers.Default) { List(20) { pixels(renderer.rasterizeOffMain(hostPage(), 200, 200)) } }
+        }
+        val ui = async(Dispatchers.Default) { List(40) { pixels(onTestUiThread { renderer.rasterize(hostPage(), 200, 200) }) } }
+        val all = workers.flatMap { it.await() } + ui.await()
+        assertEquals(200, all.size)
+        assertTrue(all.all { it.contentEquals(reference) }, "a raster drew other pixels under load")
+    }
+
+    private fun renderer(
+        resolutions: MutableList<Boolean> = Collections.synchronizedList(ArrayList()),
+        throughCompose: Boolean = true,
+    ) = KitePageRasterizer(density, LayoutDirection.Ltr, measurer(resolutions)).apply { textOffMain = !throughCompose }
 
     private fun measurer(resolutions: MutableList<Boolean>): TextMeasurer = onTestUiThread {
         val resolver = createFontFamilyResolver()

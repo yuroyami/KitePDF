@@ -2,6 +2,8 @@ package io.github.yuroyami.kitepdf.compose
 
 import android.graphics.Paint
 import android.graphics.Typeface
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.asComposePath
 import androidx.compose.ui.text.font.FontFamily
@@ -32,3 +34,8 @@ internal actual fun hostTextPath(text: String, fontSpec: FontSpec): Path? {
 
 /** Android's own fallback picks a face of the locale's language, serif or not, from the generic family. */
 internal actual fun hostFontFamily(fontSpec: FontSpec): FontFamily? = null
+
+/** Android draws Compose text through its own framework, which keeps it on the UI thread here (#131). */
+internal actual val hostTextAnyThread: Boolean = false
+
+internal actual fun hostTextLine(text: String, fontSpec: FontSpec, sizePx: Float, color: Color, blendMode: BlendMode): HostTextLine? = null

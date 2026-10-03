@@ -1,15 +1,40 @@
+@file:OptIn(ExperimentalTextApi::class)
+
 package io.github.yuroyami.kitepdf.compose
 
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Paint
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.asComposePath
+import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.skiaCanvas
+import androidx.compose.ui.graphics.skiaPaint
+import androidx.compose.ui.text.ExperimentalTextApi
+import androidx.compose.ui.text.FontHinting
+import androidx.compose.ui.text.FontRasterizationSettings
+import androidx.compose.ui.text.FontSmoothing
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.platform.Typeface
 import io.github.yuroyami.kitepdf.core.font.FontSpec
 import io.github.yuroyami.kitepdf.core.font.KiteFontFamily
 import org.jetbrains.skia.Font
+import org.jetbrains.skia.FontEdging
 import org.jetbrains.skia.FontMgr
+import org.jetbrains.skia.FontMgrWithFallback
 import org.jetbrains.skia.FontStyle
+import org.jetbrains.skia.paragraph.FontCollection
+import org.jetbrains.skia.paragraph.HeightMode
+import org.jetbrains.skia.paragraph.Paragraph
+import org.jetbrains.skia.paragraph.ParagraphBuilder
+import org.jetbrains.skia.paragraph.ParagraphStyle
+import org.jetbrains.skia.paragraph.TextStyle
+import org.jetbrains.skia.paragraph.TypefaceFontProviderWithFallback
 import org.jetbrains.skia.Typeface as SkTypeface
+import org.jetbrains.skia.FontHinting as SkFontHinting
+import kotlin.math.ceil
+import kotlin.native.concurrent.ThreadLocal
 
 internal actual fun hostTextPath(text: String, fontSpec: FontSpec): Path? {
     val typeface = hostTypeface(fontSpec) ?: return null
@@ -23,6 +48,115 @@ internal actual fun hostTextPath(text: String, fontSpec: FontSpec): Path? {
         pen += advances[k]
     }
     return out.detach().asComposePath()
+}
+
+internal actual val hostTextAnyThread: Boolean = true
+
+internal actual fun hostTextLine(text: String, fontSpec: FontSpec, sizePx: Float, color: Color, blendMode: BlendMode): HostTextLine? {
+    val shaping = threadShaping ?: HostShaping().also { threadShaping = it }
+    val paint = Paint().also {
+        it.color = color
+        it.blendMode = blendMode
+    }.skiaPaint
+    // The style Compose's own text gave the piece, so that it draws the same pixels: the family
+    // names, the weight and slant, and the platform's rasterization of glyphs.
+    val style = TextStyle()
+        .setFontFamilies(shaping.families(fontSpec))
+        .setFontSize(sizePx)
+        .setFontStyle(styleOf(fontSpec))
+        .setForeground(paint)
+        .apply {
+            fontEdging = textEdging
+            fontHinting = textHinting
+            subpixel = textRasterization.subpixelPositioning
+        }
+    // The paragraph's own style counts toward its line, so it takes the piece's, as Compose's does.
+    shaping.paragraphStyle.textStyle = style
+    val builder = ParagraphBuilder(shaping.paragraphStyle, shaping.fonts)
+    val paragraph = try {
+        builder.pushStyle(style).addText(text).build()
+    } finally {
+        builder.close()
+        style.close()
+    }
+    return SkiaHostTextLine(paragraph.layout(Float.POSITIVE_INFINITY))
+}
+
+/** The glyph rasterization Compose's text uses on this platform. */
+private val textRasterization = FontRasterizationSettings.PlatformDefault
+
+private val textEdging = when (textRasterization.smoothing) {
+    FontSmoothing.None -> FontEdging.ALIAS
+    FontSmoothing.AntiAlias -> FontEdging.ANTI_ALIAS
+    FontSmoothing.SubpixelAntiAlias -> FontEdging.SUBPIXEL_ANTI_ALIAS
+}
+
+private val textHinting = when (textRasterization.hinting) {
+    FontHinting.None -> SkFontHinting.NONE
+    FontHinting.Slight -> SkFontHinting.SLIGHT
+    FontHinting.Normal -> SkFontHinting.NORMAL
+    FontHinting.Full -> SkFontHinting.FULL
+}
+
+/** The [HostShaping] of this thread, made on its first piece. */
+@ThreadLocal
+private var threadShaping: HostShaping? = null
+
+/**
+ * What one thread shapes host text with: a font collection over the host's font manager, as
+ * Compose's text has, with the CJK face of a spec under a name of its own. Skia's paragraph
+ * shapes a word in about 10 us, where its line shaper builds ICU and HarfBuzz iterators for
+ * every call and takes 3 ms. A collection caches the faces it finds without a lock, so each
+ * thread has its own (#131).
+ */
+private class HostShaping {
+    private val faces = TypefaceFontProviderWithFallback()
+    val fonts: FontCollection = FontCollection().setDefaultFontManager(FontMgrWithFallback(faces)).setAssetFontManager(faces)
+
+    /**
+     * As Compose's paragraphs are: tabs become spaces, and a line is as tall as its faces' own
+     * ascent and descent, which a fallback face's taller metrics would otherwise stretch.
+     */
+    val paragraphStyle = ParagraphStyle().apply {
+        replaceTabCharacters = true
+        heightMode = HeightMode.DISABLE_ALL
+    }
+
+    private val families = HashMap<FontSpec, Array<String>>()
+
+    /**
+     * The family names a piece of [spec] looks its face up by: a face of a CJK spec's language,
+     * which [hostFontFamily] gives Compose (#472), else the names Compose looks its generic
+     * family up by. Finding a CJK face asks the font manager, so it is done once a spec.
+     */
+    fun families(spec: FontSpec): Array<String> = families.getOrPut(spec) {
+        val cjk = cjkTypeface(spec, styleOf(spec))
+        if (cjk != null) arrayOf("kitepdf-host-${families.size}".also { faces.registerTypeface(cjk, it) })
+        else composeFamilyNames(spec.family)
+    }
+}
+
+/**
+ * The names Compose looks a generic family up by on Apple platforms, from its own table:
+ * Compose 1.12 keeps it internal, so it is copied here, and a host that has none of them
+ * draws in the font manager's default face, as Compose's text does.
+ */
+private fun composeFamilyNames(family: KiteFontFamily): Array<String> = when (family) {
+    KiteFontFamily.SansSerif -> arrayOf(".AppleSystemUIFont", "Helvetica Neue", "Helvetica")
+    KiteFontFamily.Serif -> arrayOf(".AppleSystemUIFontSerif", "Times", "Times New Roman")
+    KiteFontFamily.Monospace -> arrayOf(".AppleSystemUIFontMonospaced", "Menlo", "Courier")
+}
+
+/** A piece laid out by Skia, drawn on the scope's own Skia canvas, under its transform and clip. */
+private class SkiaHostTextLine(private val paragraph: Paragraph) : HostTextLine {
+    /** Rounded up, as Compose's text measures a piece, so that a piece is fitted as it was. */
+    override val width: Float get() = ceil(paragraph.maxIntrinsicWidth)
+
+    override fun draw(scope: DrawScope) {
+        // The baseline of the line the paragraph paints, which Compose's text places a piece by too.
+        val baseline = paragraph.lineMetrics.firstOrNull()?.baseline?.toFloat() ?: paragraph.alphabeticBaseline
+        scope.drawIntoCanvas { paragraph.paint(it.skiaCanvas, 0f, -baseline) }
+    }
 }
 
 internal actual fun hostFontFamily(fontSpec: FontSpec): FontFamily? {

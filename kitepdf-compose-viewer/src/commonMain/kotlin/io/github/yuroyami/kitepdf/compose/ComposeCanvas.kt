@@ -75,13 +75,14 @@ import kotlin.math.sqrt
  * and `saveLayer`, so they span many `DrawScope` operations, and each clip is
  * applied once however many paints it covers.
  *
- * System-font drawing and host glyph outlines require the platform UI thread
- * (the AWT event dispatch thread on desktop JVM). A call on another thread throws
- * [IllegalStateException] before accessing the host text stack. For background
- * exports use [KitePageRasterizer.rasterizeOffMain]. A canvas that skips system text
- * can probe on a worker, but that incomplete bitmap is not an export (#428). The canvas
- * of a Vectorized page in `KiteDocView` draws inside its scene's own draw pass, so its
- * host text takes the thread that scene draws on (#464).
+ * On the desktop JVM, iOS and macOS, system-font text and host glyph outlines are shaped
+ * by Skia itself, not by Compose's text stack, so they draw on any thread (#131). On
+ * Android and in a browser they go through Compose's text and require the platform UI
+ * thread; a call on another thread throws [IllegalStateException] before accessing the
+ * host text stack. For background exports use [KitePageRasterizer.rasterizeOffMain]. A
+ * canvas that skips system text can probe on a worker, but that incomplete bitmap is not
+ * an export (#428). The canvas of a Vectorized page in `KiteDocView` draws inside its
+ * scene's own draw pass, so its host text takes the thread that scene draws on (#464).
  */
 public class ComposeCanvas internal constructor(
     private val drawScope: DrawScope,
@@ -117,6 +118,11 @@ public class ComposeCanvas internal constructor(
      * page, which keeps every glyph a path so that it stays sharp under a pinch (#382).
      */
     private val glyphMasks: GlyphMaskCache? = null,
+    /**
+     * True to draw host-font text with [hostTextLine], which needs no UI thread, where the
+     * platform has it (#131). A test sets it false to draw through Compose's text as Android does.
+     */
+    private val hostLines: Boolean = hostTextAnyThread,
 ) : KiteCanvas {
 
     /**
@@ -400,6 +406,10 @@ public class ComposeCanvas internal constructor(
             usedSystemFontText = true
             return
         }
+        if (hostLines) {
+            drawTextViaHostLines(glyphs, fontSize, fontSpec, textMatrix, color, alpha, blendMode)
+            return
+        }
         if (!inSceneDrawPass) requireHostTextThread()
 
         // The whole text matrix applies to every glyph, shear and reflection included (ISO
@@ -458,6 +468,53 @@ public class ComposeCanvas internal constructor(
     }
 
     /**
+     * [drawTextViaSystemFont] through [hostTextLine], which needs no UI thread (#131). The run
+     * is placed as there: each piece at the pen the document's advances give it, fitted to its
+     * document width, under the text matrix with y flipped. The size is in device pixels, as a
+     * Skia font takes it, with no density to divide out.
+     */
+    private fun drawTextViaHostLines(
+        glyphs: List<TextGlyph>,
+        fontSize: Double,
+        fontSpec: FontSpec,
+        textMatrix: KiteMatrix,
+        color: RgbColor,
+        alpha: Double,
+        blendMode: KiteBlendMode,
+    ) {
+        val scale = sqrt(abs(textMatrix.a * textMatrix.d - textMatrix.b * textMatrix.c))
+        if (!scale.isFinite() || scale <= 0.0) return
+        val rest = textMatrix.concat(KiteMatrix(1.0 / scale, 0.0, 0.0, -1.0 / scale, 0.0, 0.0))
+        val renderedSize = fontSize * scale
+        if (!(renderedSize > 0.0 && renderedSize < MAX_HOST_TEXT_PX)) return
+        val composeColor = color.toCompose().copy(alpha = alpha.toFloat().coerceIn(0f, 1f))
+        val blend = paintBlend(blendMode)
+        drawScope.withTransform({ transform(rest.toComposeMatrix()) }) {
+            var penX = 0.0
+            for (piece in spacedPieces(glyphs)) {
+                val pieceText = piece.joinToString("") { it.text }
+                if (pieceText.isNotBlank()) {
+                    val line = hostTextLine(pieceText, fontSpec, renderedSize.toFloat(), composeColor, blend)
+                    if (line != null) {
+                        val metricScale = if (piece.size == 1) 1f else systemFontMetricScale(
+                            glyphs = piece,
+                            renderedSize = renderedSize,
+                            measuredWidthPx = line.width.toDouble(),
+                        )
+                        withTransform({
+                            translate(penX.toFloat(), 0f)
+                            if (metricScale != 1f) scale(scaleX = metricScale, scaleY = 1f, pivot = Offset.Zero)
+                        }) {
+                            line.draw(this)
+                        }
+                    }
+                }
+                penX += (piece.sumOf { it.advanceWidth } * fontSize / 1_000.0 + piece.last().advanceAdjust) * scale
+            }
+        }
+    }
+
+    /**
      * The outline of [text] in the host face [drawGlyphs] draws a font without
      * embedded outlines in, at 1000 units per em with y up (#85). Off the main
      * thread it only records the run, as the system-font path does, so the page
@@ -468,7 +525,8 @@ public class ComposeCanvas internal constructor(
             usedSystemFontText = true
             return null
         }
-        if (!inSceneDrawPass) requireHostTextThread()
+        // The outline comes from Skia's own font API where the platform shapes host text itself (#131).
+        if (!hostLines && !inSceneDrawPass) requireHostTextThread()
         // Real glyph contours from the host face. The text layout's range path is the selection
         // highlight, rectangles, which stroked an O as a box (ISO 32000-1, 9.3.6, #415).
         val path = hostTextPath(text, fontSpec) ?: return null
@@ -774,7 +832,7 @@ public class ComposeCanvas internal constructor(
             scale(1f / pixelSize.toFloat(), pivot = Offset.Zero) {
                 val canvas = ComposeCanvas(
                     this, textMeasurer, hairlineWidthPx, skipSystemFontText, magnification, twoCircleShader, maskTables, bitmaps,
-                    inSceneDrawPass,
+                    inSceneDrawPass, hostLines = hostLines,
                 )
                 nested = canvas
                 renderMask(canvas)
@@ -1108,6 +1166,9 @@ internal fun composeDashIntervals(dashArray: List<Double>?, scale: Double): Floa
     if (d.isEmpty() || d.none { it > 0f }) return null
     return (if (d.size % 2 == 1) d + d else d).toFloatArray()
 }
+
+/** The largest host-text size, in pixels to the em, that a font is made at: a page is never that large. */
+private const val MAX_HOST_TEXT_PX = 100_000.0
 
 /** The pixels a run of glyphs may add its coverage into at most: about four megapixels. */
 private const val MAX_RUN_PIXELS = 4L * 1024 * 1024

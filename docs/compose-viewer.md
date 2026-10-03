@@ -454,11 +454,13 @@ operation, override both overloads.
 With `by inner`, Kotlin sends an overload that the wrapper does not override
 straight to `inner`.
 
-Rasterization runs on a background thread, and a page with system-font text
-renders on Main. A page that does not say beforehand that it has such text
-renders off Main first and then again on Main, so the function can run twice
-for one bitmap. Create a fresh wrapper in the function, keep it repeatable,
-and never retain the supplied canvas. Cache hits do not invoke it.
+Rasterization runs on a background thread. On Android a page with system-font
+text renders on Main, and a page that does not say beforehand that it has such
+text renders off Main first and then again on Main, so the function can run
+twice for one bitmap. On the desktop JVM, iOS and macOS such a page renders once
+off Main, and in a browser once on its one thread (#131). Create a fresh wrapper
+in the function, keep it repeatable, and never retain the supplied canvas.
+Cache hits do not invoke it.
 Remember the function for cache reuse; replace it when captured rendering
 settings change so the viewer redraws with a new cache key.
 
@@ -1022,20 +1024,24 @@ fun MyCustomPdfViewer(document: PdfDocument, onBitmap: (ImageBitmap) -> Unit) {
 Every synchronous `rasterize` overload requires the platform UI thread: Android's main
 Looper, Apple's main thread, the browser thread, or the AWT event dispatch thread on
 desktop JVM. Calls on other threads throw `IllegalStateException` before allocating or
-drawing. The same requirement applies when a directly constructed `ComposeCanvas` draws
-system-font text or asks for host glyph outlines. Compose's shared text cache is not safe
-for simultaneous UI and worker access (#428).
+drawing. On Android and in a browser, the same requirement applies when a directly
+constructed `ComposeCanvas` draws system-font text or asks for host glyph outlines, since
+Compose's shared text cache is not safe for simultaneous UI and worker access (#428). On
+the desktop JVM, iOS and macOS such a canvas draws that text through Skia's own paragraph
+engine, which keeps no such cache, so it draws on any thread (#131).
 
 Use `rasterizeOffMain` from a worker coroutine or for a headless JVM export. Geometry and
-embedded outlines stay on the raster pool; host text goes to the UI thread. Desktop uses
+embedded outlines stay on the raster pool. On the desktop JVM, iOS and macOS host text
+stays there too, and the page renders in one pass that never touches the UI thread. On
+Android host text goes to the UI thread. Desktop uses
 asynchronous AWT dispatch even when no coroutine Main provider is installed, and works
 with `java.awt.headless=true`. Do not block the UI thread with `runBlocking` or a future
 wait while exporting. Custom desktop `ImageComposeScene` integrations must also create,
 measure and draw their scenes on the AWT event dispatch thread. One part needs no such
 thread: a Vectorized page and the form layer draw their host text inside the scene's own
 draw pass, where Compose draws the scene's text, so a scene on a thread of its own shows
-that text too (#464). A Rasterized page and an export still send host text to the AWT
-event dispatch thread.
+that text too (#464). A Rasterized page and an export draw their host text on the raster
+pool (#131).
 
 Pass `formState` to export a filled form. The suspend overload copies all accepted form
 values, typed choice selections and field flags before waiting for a raster slot. Both
@@ -1077,7 +1083,7 @@ Freshly rasterized pages fade in smoothly rather than popping (160 ms by default
 - **Lazy composition**: Continuous mode composes only visible pages and their immediate offscreen neighbours (paged mode pre-renders `offscreenPages` on each side). Millions of pages are supported; only visible ones cost anything.
 - **Rasterization is off the main thread**: `KiteDocView` renders page bitmaps through `KitePageRasterizer.rasterizeOffMain()` on a background pool after composition settles, so scrolling and input stay responsive; results land through a page-bitmap LRU cache. The jitter on a page turn is avoided by pre-fetching neighbours while idle.
 - **Two pages render at once, the visible one first**: every viewer and thumbnail strip in the process shares two render slots. A page on screen gets the next free slot before a page drawn ahead, and both come before a thumbnail. A page that scrolls into view while it waits moves ahead. A cache hit needs no slot.
-- **System-font text renders on Main**: a page whose text has no font outlines of its own, such as the text of a book without embedded fonts, renders on the main thread, because the host text stack is not safe to use from two threads. `KitePage.drawsHostFontText` lets a page say so up front, and an EPUB page does, so such a page renders once. A page that does not say so renders off Main first, and the viewer remembers it for its next raster.
+- **System-font text renders off Main, except on Android**: a page whose text has no font outlines of its own, such as the text of a book without embedded fonts, renders on the raster pool on the desktop JVM, iOS and macOS, where Skia's own paragraph engine draws that text on any thread (#131). On Android it renders on the main thread, because Compose's text stack is not safe to use from two threads. `KitePage.drawsHostFontText` lets a page say so up front, and an EPUB page does, so such a page renders once there. A page that does not say so renders off Main first, and the viewer remembers it for its next raster.
 - **In a browser, everything runs on the UI thread**: JS and Wasm have one thread, so rasters and chapter layout run there. The viewer lays out the reader's chapter and its neighbours at once, and every other chapter only after the view has rested for 400 ms, so a scroll or a pinch does not stall while a book loads. A page renders in one pass there, because a probe off the main thread gains nothing. A long document script still blocks the page.
 - **A page scrolled past stops rendering**: cancelling the coroutine of `rasterizeOffMain()` stops a PDF page between operators and throws a `CancellationException` instead of returning a partial bitmap.
 - **Synchronous UI export**: `KitePageRasterizer.rasterize()` requires the platform UI thread and refuses other callers before drawing. Background jobs use `rasterizeOffMain()`, including exports with live form state.

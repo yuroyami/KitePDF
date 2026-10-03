@@ -1,5 +1,7 @@
 package io.github.yuroyami.kitepdf.compose
 
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.asComposePath
 import androidx.compose.ui.text.font.FontFamily
@@ -80,3 +82,8 @@ private fun hostTypeface(spec: FontSpec): SkTypeface? {
         null
     }
 }
+
+/** A browser has no host faces for Skia to find, and a page draws on the only thread anyway (#131). */
+internal actual val hostTextAnyThread: Boolean = false
+
+internal actual fun hostTextLine(text: String, fontSpec: FontSpec, sizePx: Float, color: Color, blendMode: BlendMode): HostTextLine? = null

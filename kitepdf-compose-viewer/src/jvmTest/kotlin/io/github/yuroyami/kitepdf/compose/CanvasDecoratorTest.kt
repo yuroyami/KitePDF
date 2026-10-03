@@ -57,10 +57,11 @@ class CanvasDecoratorTest {
         }
     }
 
-    private fun rasterizer(): KitePageRasterizer {
+    /** A rasterizer; [throughCompose] makes it draw host text through Compose's text on the UI thread, as Android does. */
+    private fun rasterizer(throughCompose: Boolean = false): KitePageRasterizer {
         val density = Density(1f)
         return KitePageRasterizer(density, LayoutDirection.Ltr,
-            TextMeasurer(createFontFamilyResolver(), density, LayoutDirection.Ltr))
+            TextMeasurer(createFontFamilyResolver(), density, LayoutDirection.Ltr)).apply { textOffMain = !throughCompose }
     }
 
     private fun assertPaint(bitmap: ImageBitmap, left: Color) {
@@ -100,8 +101,8 @@ class CanvasDecoratorTest {
     fun a_page_that_draws_host_font_text_renders_once() = runBlocking {
         val passes = AtomicInteger()
         val decorator: KiteCanvasDecorator = { inner -> passes.incrementAndGet(); inner }
-        // A page that says so goes to the host-font pass at once (#131).
-        val px = rasterizer().rasterizeOffMain(hostFontPage(says = true), 200, 200, canvasDecorator = decorator).toPixelMap()
+        // On Android, a page that says so goes to the host-font pass at once (#131).
+        val px = rasterizer(throughCompose = true).rasterizeOffMain(hostFontPage(says = true), 200, 200, canvasDecorator = decorator).toPixelMap()
         assertEquals(1, passes.get(), "the page was drawn more than once")
         var inked = 0
         for (y in 0 until 200) for (x in 0 until 200) if (px[x, y].red < 0.5f) inked++
@@ -109,12 +110,21 @@ class CanvasDecoratorTest {
 
         // A page that does not say so is probed once, and its next raster goes there at once.
         passes.set(0)
-        val renderer = rasterizer()
+        val renderer = rasterizer(throughCompose = true)
         val page = hostFontPage(says = null)
         renderer.rasterizeOffMain(page, 200, 200, canvasDecorator = decorator)
         assertEquals(2, passes.get(), "the first raster probes and draws again")
         renderer.rasterizeOffMain(page, 300, 300, canvasDecorator = decorator)
         assertEquals(3, passes.get(), "the next raster of the page probed again")
+
+        // On the desktop JVM, iOS and macOS, Skia shapes host text off the UI thread, so any page draws once (#131).
+        passes.set(0)
+        val skia = rasterizer()
+        val drawn = skia.rasterizeOffMain(hostFontPage(says = null), 200, 200, canvasDecorator = decorator).toPixelMap()
+        assertEquals(1, passes.get(), "a page with host-font text was drawn more than once")
+        var skiaInked = 0
+        for (y in 0 until 200) for (x in 0 until 200) if (drawn[x, y].red < 0.5f) skiaInked++
+        assertTrue(skiaInked > 20, "the host-font text was not drawn")
     }
 
     @Test
@@ -160,7 +170,7 @@ class CanvasDecoratorTest {
                 }
             }
         }
-        val px = rasterizer().rasterizeOffMain(page, 200, 200, canvasDecorator = decorator).toPixelMap()
+        val px = rasterizer(throughCompose = true).rasterizeOffMain(page, 200, 200, canvasDecorator = decorator).toPixelMap()
         assertEquals(2, passes.get(), "probe and system-font retry need independent wrappers")
         assertEquals(2, textCalls.get(), "both passes must traverse the decorator")
         var greenPixels = 0
