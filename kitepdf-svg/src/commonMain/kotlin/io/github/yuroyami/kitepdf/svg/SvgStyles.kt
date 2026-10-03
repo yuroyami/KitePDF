@@ -101,7 +101,8 @@ internal class SvgStyles(root: KiteXmlNode.Element) {
             "fill-rule", "display", "visibility", "transform", "clip-path", "font-size", "font-family",
             "font-weight", "font-style", "text-anchor", "stroke-dasharray", "stroke-dashoffset",
             "stroke-linecap", "stroke-linejoin", "stroke-miterlimit", "stop-color", "stop-opacity",
-            "mask", "mask-type",
+            "mask", "mask-type", "filter", "flood-color", "flood-opacity", "lighting-color",
+            "color-interpolation-filters",
         )
 
         /** The same declaration grammar for a standalone gradient parser. */
@@ -201,16 +202,17 @@ internal class SvgStyles(root: KiteXmlNode.Element) {
             val lower = value.lowercase()
             if (lower == "inherit") return true
             return when (name) {
-                "color", "stop-color" -> lower == "currentcolor" || CssValues.color(value) != null
+                "color", "stop-color", "flood-color", "lighting-color" -> lower == "currentcolor" || CssValues.color(value) != null
                 "fill", "stroke" -> lower in setOf("none", "currentcolor") || CssValues.color(value) != null ||
                     (value.startsWith("url(") && value.indexOf(')') > 4)
                 "fill-rule" -> lower in setOf("nonzero", "evenodd")
-                "opacity", "fill-opacity", "stroke-opacity", "stop-opacity", "stroke-miterlimit" ->
+                "opacity", "fill-opacity", "stroke-opacity", "stop-opacity", "stroke-miterlimit", "flood-opacity" ->
                     value.toDoubleOrNull()?.isFinite() == true
                 "stroke-width", "stroke-dashoffset", "font-size" -> LENGTH.matches(value)
                 "stroke-linecap" -> lower in setOf("butt", "round", "square")
                 "stroke-linejoin" -> lower in setOf("miter", "miter-clip", "arcs", "round", "bevel")
                 "text-anchor" -> lower in setOf("start", "middle", "end")
+                "color-interpolation-filters" -> lower in setOf("auto", "srgb", "linearrgb")
                 "visibility" -> lower in setOf("visible", "hidden", "collapse")
                 "font-style" -> lower in setOf("normal", "italic", "oblique")
                 "font-weight" -> lower in setOf("normal", "bold", "bolder", "lighter") || value.toIntOrNull()?.let { it in 100..900 } == true

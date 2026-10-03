@@ -281,6 +281,18 @@ section lists them.
   a fill or a stroke with its units, `viewBox`, `patternTransform` and `href`
   chain. A mask shows the element by the luminance of its content, or by its
   alpha with `mask-type: alpha`, inside the mask's region (#209).
+- SVG draws `filter`: a `<filter>` with any of the seventeen primitives of Filter
+  Effects 1, from `feGaussianBlur`, `feOffset`, `feFlood`, `feMerge`, `feBlend`,
+  `feComposite`, `feColorMatrix`, `feComponentTransfer` and `feDropShadow` to
+  `feMorphology`, `feTile`, `feImage`, `feTurbulence`, `feConvolveMatrix`,
+  `feDisplacementMap` and the two lighting primitives with their three lights,
+  with named results, subregions, both kinds of units and
+  `color-interpolation-filters`; and the filter functions `blur()`,
+  `drop-shadow()`, `grayscale()`, `sepia()`, `saturate()`, `hue-rotate()`,
+  `invert()`, `opacity()`, `brightness()` and `contrast()`, alone or in a chain. The
+  filter runs in plain Kotlin on the pixels of a raster step, so it draws on every
+  canvas that implements `rasterStep`; another canvas draws the element unfiltered
+  (#209).
 
 ### Changed
 
