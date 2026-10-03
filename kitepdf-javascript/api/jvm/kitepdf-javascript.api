@@ -1,3 +1,32 @@
+public final class io/github/yuroyami/kitepdf/javascript/EpubScriptPolicy {
+	public static final field Companion Lio/github/yuroyami/kitepdf/javascript/EpubScriptPolicy$Companion;
+	public fun <init> ()V
+	public fun <init> (ZJI)V
+	public synthetic fun <init> (ZJIILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun getBudgetMillis ()J
+	public final fun getEnabled ()Z
+	public final fun getInstructionBudget ()I
+}
+
+public final class io/github/yuroyami/kitepdf/javascript/EpubScriptPolicy$Companion {
+	public final fun getDENY ()Lio/github/yuroyami/kitepdf/javascript/EpubScriptPolicy;
+}
+
+public final class io/github/yuroyami/kitepdf/javascript/EpubScriptRunner : io/github/yuroyami/kitepdf/epub/EpubScriptHandler, java/lang/AutoCloseable {
+	public fun <init> (Lio/github/yuroyami/kitepdf/epub/EpubDocument;Lio/github/yuroyami/kitepdf/javascript/EpubScriptPolicy;Lkotlin/jvm/functions/Function2;Lkotlin/jvm/functions/Function0;)V
+	public synthetic fun <init> (Lio/github/yuroyami/kitepdf/epub/EpubDocument;Lio/github/yuroyami/kitepdf/javascript/EpubScriptPolicy;Lkotlin/jvm/functions/Function2;Lkotlin/jvm/functions/Function0;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun chapterOpened (I)V
+	public fun close ()V
+	public final fun getDocument ()Lio/github/yuroyami/kitepdf/epub/EpubDocument;
+	public final fun getFailures ()Ljava/util/List;
+	public fun getHasTimers ()Z
+	public final fun getPolicy ()Lio/github/yuroyami/kitepdf/javascript/EpubScriptPolicy;
+	public fun onNavigate (Lkotlin/jvm/functions/Function1;)Lkotlin/jvm/functions/Function0;
+	public fun onTimersChanged (Lkotlin/jvm/functions/Function0;)Lkotlin/jvm/functions/Function0;
+	public fun pumpTimers (J)Ljava/lang/Long;
+	public fun tap (Lio/github/yuroyami/kitepdf/epub/EpubPage;DD)Z
+}
+
 public final class io/github/yuroyami/kitepdf/javascript/KiteJsScriptEngine : io/github/yuroyami/kitepdf/core/script/KiteScriptEngine {
 	public static final field Companion Lio/github/yuroyami/kitepdf/javascript/KiteJsScriptEngine$Companion;
 	public static final field DEFAULT_INSTRUCTION_BUDGET I

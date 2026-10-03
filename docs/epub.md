@@ -329,11 +329,14 @@ because a new style would lay the page out again.
 
 ### Scripted content and embedded documents
 
-This library runs no script. `book.isScripted(chapter)` says whether a chapter
-is scripted: its manifest item has the `scripted` property, or its document has
-a `script` element. `book.scriptedChapters` lists those chapters. A scripted
-chapter shows what its markup shows without a script, `noscript` content
-included, and an app can hand the chapter to a web engine instead.
+`book.isScripted(chapter)` says whether a chapter is scripted: its manifest item
+has the `scripted` property, or its document has a `script` element.
+`book.scriptedChapters` lists those chapters. The library runs no script by
+itself: a scripted chapter shows what its markup shows without one, `noscript`
+content included. `EpubScriptRunner` of `kitepdf-javascript` runs a book's
+scripts on KiteJS, over this library's own parse and layout; see
+[Scripts in an EPUB](javascript.md#scripts-in-an-epub). An element with the
+`hidden` attribute does not show, as in a browser.
 
 An `<iframe>`, and an `<object>` whose type is HTML or XHTML, keep a box on the
 page. The box takes the element's `width` and `height`, then its CSS size, and

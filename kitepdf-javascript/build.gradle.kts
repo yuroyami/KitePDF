@@ -61,6 +61,7 @@ kotlin {
     sourceSets {
         commonMain.dependencies {
             api(project(":kitepdf-pdf"))
+            api(project(":kitepdf-epub"))
             implementation(libs.kitejs)
         }
 

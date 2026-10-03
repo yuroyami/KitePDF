@@ -2713,13 +2713,14 @@ sealed class io.github.yuroyami.kitepdf.core.xml/KiteXmlNode { // io.github.yuro
     final class Element : io.github.yuroyami.kitepdf.core.xml/KiteXmlNode { // io.github.yuroyami.kitepdf.core.xml/KiteXmlNode.Element|null[0]
         constructor <init>(kotlin/String, kotlin.collections/Map<kotlin/String, kotlin/String>, kotlin.collections/MutableList<io.github.yuroyami.kitepdf.core.xml/KiteXmlNode> = ...) // io.github.yuroyami.kitepdf.core.xml/KiteXmlNode.Element.<init>|<init>(kotlin.String;kotlin.collections.Map<kotlin.String,kotlin.String>;kotlin.collections.MutableList<io.github.yuroyami.kitepdf.core.xml.KiteXmlNode>){}[0]
 
-        final val attrs // io.github.yuroyami.kitepdf.core.xml/KiteXmlNode.Element.attrs|{}attrs[0]
-            final fun <get-attrs>(): kotlin.collections/Map<kotlin/String, kotlin/String> // io.github.yuroyami.kitepdf.core.xml/KiteXmlNode.Element.attrs.<get-attrs>|<get-attrs>(){}[0]
         final val children // io.github.yuroyami.kitepdf.core.xml/KiteXmlNode.Element.children|{}children[0]
             final fun <get-children>(): kotlin.collections/MutableList<io.github.yuroyami.kitepdf.core.xml/KiteXmlNode> // io.github.yuroyami.kitepdf.core.xml/KiteXmlNode.Element.children.<get-children>|<get-children>(){}[0]
         final val tag // io.github.yuroyami.kitepdf.core.xml/KiteXmlNode.Element.tag|{}tag[0]
             final fun <get-tag>(): kotlin/String // io.github.yuroyami.kitepdf.core.xml/KiteXmlNode.Element.tag.<get-tag>|<get-tag>(){}[0]
 
+        final var attrs // io.github.yuroyami.kitepdf.core.xml/KiteXmlNode.Element.attrs|{}attrs[0]
+            final fun <get-attrs>(): kotlin.collections/Map<kotlin/String, kotlin/String> // io.github.yuroyami.kitepdf.core.xml/KiteXmlNode.Element.attrs.<get-attrs>|<get-attrs>(){}[0]
+            final fun <set-attrs>(kotlin.collections/Map<kotlin/String, kotlin/String>) // io.github.yuroyami.kitepdf.core.xml/KiteXmlNode.Element.attrs.<set-attrs>|<set-attrs>(kotlin.collections.Map<kotlin.String,kotlin.String>){}[0]
         final var parent // io.github.yuroyami.kitepdf.core.xml/KiteXmlNode.Element.parent|{}parent[0]
             final fun <get-parent>(): io.github.yuroyami.kitepdf.core.xml/KiteXmlNode.Element? // io.github.yuroyami.kitepdf.core.xml/KiteXmlNode.Element.parent.<get-parent>|<get-parent>(){}[0]
             final fun <set-parent>(io.github.yuroyami.kitepdf.core.xml/KiteXmlNode.Element?) // io.github.yuroyami.kitepdf.core.xml/KiteXmlNode.Element.parent.<set-parent>|<set-parent>(io.github.yuroyami.kitepdf.core.xml.KiteXmlNode.Element?){}[0]
@@ -2728,8 +2729,9 @@ sealed class io.github.yuroyami.kitepdf.core.xml/KiteXmlNode { // io.github.yuro
     final class Text : io.github.yuroyami.kitepdf.core.xml/KiteXmlNode { // io.github.yuroyami.kitepdf.core.xml/KiteXmlNode.Text|null[0]
         constructor <init>(kotlin/String) // io.github.yuroyami.kitepdf.core.xml/KiteXmlNode.Text.<init>|<init>(kotlin.String){}[0]
 
-        final val text // io.github.yuroyami.kitepdf.core.xml/KiteXmlNode.Text.text|{}text[0]
+        final var text // io.github.yuroyami.kitepdf.core.xml/KiteXmlNode.Text.text|{}text[0]
             final fun <get-text>(): kotlin/String // io.github.yuroyami.kitepdf.core.xml/KiteXmlNode.Text.text.<get-text>|<get-text>(){}[0]
+            final fun <set-text>(kotlin/String) // io.github.yuroyami.kitepdf.core.xml/KiteXmlNode.Text.text.<set-text>|<set-text>(kotlin.String){}[0]
     }
 }
 

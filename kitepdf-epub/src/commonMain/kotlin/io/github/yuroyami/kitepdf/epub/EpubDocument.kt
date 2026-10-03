@@ -225,6 +225,46 @@ public class EpubDocument internal constructor(
      */
     internal fun chapterTree(chapter: Int): KiteXmlNode.Element = parsed.layoutSpine(chapter).tree
 
+    /** Whether [other] is a document over the same book, whose scripts' changes it shares (#41). */
+    internal fun sharesBookWith(other: EpubDocument): Boolean = other.parsed === parsed
+
+    /** The window a script of [chapter] sees, in points: a fixed page's viewport, else a page's content box (#41). */
+    internal fun scriptViewportOf(chapter: Int): Pair<Double, Double> =
+        if (parsed.isFixed(chapter)) viewportOf(chapter) else contentWidth to pageContentHeight
+
+    /**
+     * The cascade's style of [el], an element of a script's own tree for [chapter], under the
+     * rules the chapter was last laid out with (#41).
+     */
+    internal fun scriptStyleOf(chapter: Int, el: KiteXmlNode.Element): ComputedStyle {
+        val sp = parsed.layoutSpine(chapter)
+        val (width, height) = scriptViewportOf(chapter)
+        val resolver = StyleResolver(
+            sp.rules, settings.fontSize, width, parsed.baseDir, height,
+            readerRules = readerRules, useAuthorCss = settings.usePublisherCss,
+        )
+        // The parser's root holds the document, and is no element of it.
+        val chain = ArrayList<KiteXmlNode.Element>()
+        var at: KiteXmlNode.Element? = el
+        while (at != null && at.parent != null) { chain.add(at); at = at.parent }
+        var style = resolver.initial()
+        val ancestors = ArrayList<KiteXmlNode.Element>()
+        for (e in chain.asReversed()) {
+            style = resolver.compute(e, ancestors.toList(), style)
+            ancestors.add(0, e)
+        }
+        return style
+    }
+
+    /**
+     * Where [element], an element of the tree [chapter] was laid out from, is on the first page
+     * that shows it, in display space, or null when no page does (#41).
+     */
+    internal fun scriptBoundsOf(chapter: Int, element: KiteXmlNode.Element): KiteRectangle? {
+        for (page in pagesIn(chapter)) page.boundsOf(element)?.let { return it }
+        return null
+    }
+
     /**
      * Lays [chapter] out from [tree] from now on, as its scripts changed it, and tells every
      * viewer of the book once the new pages are ready (#41). [tree] belongs to the layout from
@@ -1501,6 +1541,52 @@ public class EpubPage internal constructor(
      * page at another value draws it again; [EpubDocument.chapterChanges] says when to look.
      */
     public val chapterVersion: Int get() = doc.chapterVersionOf(chapter)
+
+    /**
+     * Where [element] is on this page, in display space: its boxes, and the text and images
+     * inside it, together. Null when the page shows none of it (#41).
+     */
+    internal fun boundsOf(element: KiteXmlNode.Element): io.github.yuroyami.kitepdf.core.KiteRectangle? {
+        val page = laidOut()
+        var left = Double.POSITIVE_INFINITY
+        var top = Double.POSITIVE_INFINITY
+        var right = Double.NEGATIVE_INFINITY
+        var bottom = Double.NEGATIVE_INFINITY
+        fun add(r: io.github.yuroyami.kitepdf.core.KiteRectangle) {
+            left = minOf(left, r.left); top = minOf(top, r.bottom); right = maxOf(right, r.right); bottom = maxOf(bottom, r.top)
+        }
+        fun inside(e: KiteXmlNode.Element?): Boolean {
+            var at = e
+            while (at != null) { if (at === element) return true; at = at.parent }
+            return false
+        }
+        if (!page.vertical) {
+            val pageBottom = page.startY + page.pageHeight - 2 * page.margin
+            for (box in page.hitBoxes) {
+                if (box.source !== element) continue
+                val boxTop = maxOf(box.y, page.startY)
+                val boxBottom = minOf(box.bottom, pageBottom)
+                if (boxBottom < boxTop) continue
+                val x = page.margin + box.x
+                add(movedRect(KiteRectangle(x, displayY(page, boxTop), x + box.borderBoxWidth, displayY(page, boxBottom)), displayTransformAt(page, box.decoRank)))
+            }
+        }
+        for (line in page.lines) {
+            fun rectOf(start: Double, end: Double): KiteRectangle = if (page.vertical) {
+                val a = columnX(page, line.yTop)
+                val b = columnX(page, line.yTop + line.height)
+                KiteRectangle(minOf(a, b), page.margin + start, maxOf(a, b), page.margin + end)
+            } else {
+                movedRect(
+                    KiteRectangle(page.margin + start, displayY(page, line.yTop), page.margin + end, displayY(page, line.yTop + line.height)),
+                    displayTransformAt(page, line.paintRank),
+                )
+            }
+            for (run in line.runs) if (!run.isAnnotation && inside(run.element)) add(rectOf(run.x, run.x + run.paintWidth))
+            for (image in line.images) if (inside(image.element)) add(rectOf(image.x, image.x + image.width))
+        }
+        return if (left > right) null else KiteRectangle(left, top, right, bottom)
+    }
 
     /**
      * The innermost element painted at ([x], [y]) on this page, in display space, or null where

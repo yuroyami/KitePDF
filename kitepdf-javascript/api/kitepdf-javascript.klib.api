@@ -6,6 +6,42 @@
 // - Show declarations: true
 
 // Library unique name: <io.github.yuroyami:kitepdf-javascript>
+final class io.github.yuroyami.kitepdf.javascript/EpubScriptPolicy { // io.github.yuroyami.kitepdf.javascript/EpubScriptPolicy|null[0]
+    constructor <init>(kotlin/Boolean = ..., kotlin/Long = ..., kotlin/Int = ...) // io.github.yuroyami.kitepdf.javascript/EpubScriptPolicy.<init>|<init>(kotlin.Boolean;kotlin.Long;kotlin.Int){}[0]
+
+    final val budgetMillis // io.github.yuroyami.kitepdf.javascript/EpubScriptPolicy.budgetMillis|{}budgetMillis[0]
+        final fun <get-budgetMillis>(): kotlin/Long // io.github.yuroyami.kitepdf.javascript/EpubScriptPolicy.budgetMillis.<get-budgetMillis>|<get-budgetMillis>(){}[0]
+    final val enabled // io.github.yuroyami.kitepdf.javascript/EpubScriptPolicy.enabled|{}enabled[0]
+        final fun <get-enabled>(): kotlin/Boolean // io.github.yuroyami.kitepdf.javascript/EpubScriptPolicy.enabled.<get-enabled>|<get-enabled>(){}[0]
+    final val instructionBudget // io.github.yuroyami.kitepdf.javascript/EpubScriptPolicy.instructionBudget|{}instructionBudget[0]
+        final fun <get-instructionBudget>(): kotlin/Int // io.github.yuroyami.kitepdf.javascript/EpubScriptPolicy.instructionBudget.<get-instructionBudget>|<get-instructionBudget>(){}[0]
+
+    final object Companion { // io.github.yuroyami.kitepdf.javascript/EpubScriptPolicy.Companion|null[0]
+        final val DENY // io.github.yuroyami.kitepdf.javascript/EpubScriptPolicy.Companion.DENY|{}DENY[0]
+            final fun <get-DENY>(): io.github.yuroyami.kitepdf.javascript/EpubScriptPolicy // io.github.yuroyami.kitepdf.javascript/EpubScriptPolicy.Companion.DENY.<get-DENY>|<get-DENY>(){}[0]
+    }
+}
+
+final class io.github.yuroyami.kitepdf.javascript/EpubScriptRunner : io.github.yuroyami.kitepdf.epub/EpubScriptHandler, kotlin/AutoCloseable { // io.github.yuroyami.kitepdf.javascript/EpubScriptRunner|null[0]
+    constructor <init>(io.github.yuroyami.kitepdf.epub/EpubDocument, io.github.yuroyami.kitepdf.javascript/EpubScriptPolicy = ..., kotlin/Function2<kotlin/String, kotlin/String, kotlin/Unit> = ..., kotlin/Function0<kotlin/Long>? = ...) // io.github.yuroyami.kitepdf.javascript/EpubScriptRunner.<init>|<init>(io.github.yuroyami.kitepdf.epub.EpubDocument;io.github.yuroyami.kitepdf.javascript.EpubScriptPolicy;kotlin.Function2<kotlin.String,kotlin.String,kotlin.Unit>;kotlin.Function0<kotlin.Long>?){}[0]
+
+    final val document // io.github.yuroyami.kitepdf.javascript/EpubScriptRunner.document|{}document[0]
+        final fun <get-document>(): io.github.yuroyami.kitepdf.epub/EpubDocument // io.github.yuroyami.kitepdf.javascript/EpubScriptRunner.document.<get-document>|<get-document>(){}[0]
+    final val failures // io.github.yuroyami.kitepdf.javascript/EpubScriptRunner.failures|{}failures[0]
+        final fun <get-failures>(): kotlin.collections/List<io.github.yuroyami.kitepdf.core.script/KiteScriptException> // io.github.yuroyami.kitepdf.javascript/EpubScriptRunner.failures.<get-failures>|<get-failures>(){}[0]
+    final val hasTimers // io.github.yuroyami.kitepdf.javascript/EpubScriptRunner.hasTimers|{}hasTimers[0]
+        final fun <get-hasTimers>(): kotlin/Boolean // io.github.yuroyami.kitepdf.javascript/EpubScriptRunner.hasTimers.<get-hasTimers>|<get-hasTimers>(){}[0]
+    final val policy // io.github.yuroyami.kitepdf.javascript/EpubScriptRunner.policy|{}policy[0]
+        final fun <get-policy>(): io.github.yuroyami.kitepdf.javascript/EpubScriptPolicy // io.github.yuroyami.kitepdf.javascript/EpubScriptRunner.policy.<get-policy>|<get-policy>(){}[0]
+
+    final fun chapterOpened(kotlin/Int) // io.github.yuroyami.kitepdf.javascript/EpubScriptRunner.chapterOpened|chapterOpened(kotlin.Int){}[0]
+    final fun close() // io.github.yuroyami.kitepdf.javascript/EpubScriptRunner.close|close(){}[0]
+    final fun onNavigate(kotlin/Function1<kotlin/String, kotlin/Unit>): kotlin/Function0<kotlin/Unit> // io.github.yuroyami.kitepdf.javascript/EpubScriptRunner.onNavigate|onNavigate(kotlin.Function1<kotlin.String,kotlin.Unit>){}[0]
+    final fun onTimersChanged(kotlin/Function0<kotlin/Unit>): kotlin/Function0<kotlin/Unit> // io.github.yuroyami.kitepdf.javascript/EpubScriptRunner.onTimersChanged|onTimersChanged(kotlin.Function0<kotlin.Unit>){}[0]
+    final fun pumpTimers(kotlin/Long): kotlin/Long? // io.github.yuroyami.kitepdf.javascript/EpubScriptRunner.pumpTimers|pumpTimers(kotlin.Long){}[0]
+    final fun tap(io.github.yuroyami.kitepdf.epub/EpubPage, kotlin/Double, kotlin/Double): kotlin/Boolean // io.github.yuroyami.kitepdf.javascript/EpubScriptRunner.tap|tap(io.github.yuroyami.kitepdf.epub.EpubPage;kotlin.Double;kotlin.Double){}[0]
+}
+
 final class io.github.yuroyami.kitepdf.javascript/KiteJsScriptEngine : io.github.yuroyami.kitepdf.core.script/KiteScriptEngine { // io.github.yuroyami.kitepdf.javascript/KiteJsScriptEngine|null[0]
     constructor <init>(kotlin/Int = ..., kotlin/Function0<kotlin/Boolean>? = ..., kotlin/Function0<kotlin/Long>? = ..., kotlin/Boolean = ...) // io.github.yuroyami.kitepdf.javascript/KiteJsScriptEngine.<init>|<init>(kotlin.Int;kotlin.Function0<kotlin.Boolean>?;kotlin.Function0<kotlin.Long>?;kotlin.Boolean){}[0]
 
