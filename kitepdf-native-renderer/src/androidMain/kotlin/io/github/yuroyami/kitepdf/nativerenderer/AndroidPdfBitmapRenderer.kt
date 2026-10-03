@@ -40,7 +40,8 @@ public object AndroidPdfBitmapRenderer {
         val bm = Bitmap.createBitmap(geometry.widthPx, geometry.heightPx, Bitmap.Config.ARGB_8888)
         val canvas = AndroidCanvas(bm)
         canvas.drawColor(background)
-        val pdfCanvas = AndroidNativeCanvas(canvas)
+        // The canvas knows its bitmap, so a raster step can read the page under it.
+        val pdfCanvas = AndroidNativeCanvas(canvas).apply { target = bm }
         page.renderTo(pdfCanvas, geometry.deviceCtm)
         return bm
     }

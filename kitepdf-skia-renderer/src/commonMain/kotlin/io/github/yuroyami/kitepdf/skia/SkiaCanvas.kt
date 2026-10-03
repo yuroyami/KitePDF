@@ -12,6 +12,9 @@ import io.github.yuroyami.kitepdf.core.render.KiteBitmapCache
 import io.github.yuroyami.kitepdf.core.render.KiteImageSampling
 import io.github.yuroyami.kitepdf.core.render.KiteMaskTransfer
 import io.github.yuroyami.kitepdf.core.render.KitePath
+import io.github.yuroyami.kitepdf.core.render.KiteRaster
+import io.github.yuroyami.kitepdf.core.render.KiteRasterScope
+import io.github.yuroyami.kitepdf.core.render.KiteRasterStep
 import io.github.yuroyami.kitepdf.core.render.KiteShading
 import io.github.yuroyami.kitepdf.core.render.RgbColor
 import io.github.yuroyami.kitepdf.core.render.SoftMask
@@ -68,15 +71,54 @@ import org.jetbrains.skia.SamplingMode
  * Pair with [PdfPageRasterizer] for the common "give me a `ByteArray` of a
  * page's PNG" use case.
  */
-public class SkiaCanvas(private val canvas: SkCanvas) : KiteCanvas {
+public class SkiaCanvas(canvas: SkCanvas) : KiteCanvas {
+
+    /** The canvas that paints go to: the host's, or the surface of a raster step's render. */
+    private var canvas: SkCanvas = canvas
 
     /** Count of open transparency groups + soft-mask layers, for endPage cleanup. */
     private var openLayers = 0
 
+    /** The open layers of groups and soft masks alone. Skia reads back only the canvas under every layer. */
+    private var layers = 0
+
+    /** The device box of the page, and of each clip on it, since Skia does not tell the bounds of its clip. */
+    private var pageBounds: DoubleArray? = null
+    private val clipBounds = ArrayDeque<DoubleArray>()
+
     override fun beginPage(widthPt: Double, heightPt: Double, deviceCtm: KiteMatrix) {
         // The caller is responsible for sizing the surface; we don't clear.
         openLayers = 0
+        layers = 0
         groups.clear()
+        clipBounds.clear()
+        val page = KitePath.Builder().apply { rectangle(0.0, 0.0, widthPt, heightPt) }.build()
+        pageBounds = deviceBoxOf(page, deviceCtm)
+    }
+
+    /** The canvas's own matrix, which comes before every matrix a paint gives. */
+    private fun localMatrix(): KiteMatrix {
+        val m = canvas.localToDeviceAsMatrix33.mat
+        return KiteMatrix(m[0].toDouble(), m[3].toDouble(), m[1].toDouble(), m[4].toDouble(), m[2].toDouble(), m[5].toDouble())
+    }
+
+    /** The device box of [path] under [ctm], as left, top, right and bottom, or null when it is not finite or empty. */
+    private fun deviceBoxOf(path: KitePath, ctm: KiteMatrix): DoubleArray? {
+        val m = localMatrix().concat(ctm)
+        var left = Double.MAX_VALUE; var top = Double.MAX_VALUE; var right = -Double.MAX_VALUE; var bottom = -Double.MAX_VALUE
+        fun add(px: Double, py: Double) {
+            val dx = m.transformX(px, py); val dy = m.transformY(px, py)
+            left = minOf(left, dx); right = maxOf(right, dx); top = minOf(top, dy); bottom = maxOf(bottom, dy)
+        }
+        for (seg in path.segments) when (seg) {
+            is KitePath.Segment.MoveTo -> add(seg.x, seg.y)
+            is KitePath.Segment.LineTo -> add(seg.x, seg.y)
+            is KitePath.Segment.CurveTo -> { add(seg.x1, seg.y1); add(seg.x2, seg.y2); add(seg.x3, seg.y3) }
+            is KitePath.Segment.QuadTo -> { add(seg.x1, seg.y1); add(seg.x2, seg.y2) }
+            KitePath.Segment.Close -> {}
+        }
+        if (!(left.isFinite() && top.isFinite() && right.isFinite() && bottom.isFinite()) || right < left) return null
+        return doubleArrayOf(left, top, right, bottom)
     }
 
     override fun endPage() {
@@ -84,6 +126,7 @@ public class SkiaCanvas(private val canvas: SkCanvas) : KiteCanvas {
             canvas.restore()
             openLayers--
         }
+        layers = 0
         groups.clear()
     }
 
@@ -485,6 +528,12 @@ public class SkiaCanvas(private val canvas: SkCanvas) : KiteCanvas {
         // The clip keeps its own copy of the path.
         canvas.clipPath(sk, antiAlias = true)
         sk.close()
+        val outer = clipBounds.lastOrNull() ?: pageBounds
+        val inner = deviceBoxOf(path, ctm) ?: doubleArrayOf(0.0, 0.0, 0.0, 0.0)
+        clipBounds.addLast(
+            if (outer == null) inner
+            else doubleArrayOf(maxOf(inner[0], outer[0]), maxOf(inner[1], outer[1]), minOf(inner[2], outer[2]), minOf(inner[3], outer[3])),
+        )
     }
 
     override fun popClip() {
@@ -492,6 +541,7 @@ public class SkiaCanvas(private val canvas: SkCanvas) : KiteCanvas {
             canvas.restore()
             openLayers--
         }
+        clipBounds.removeLastOrNull()
     }
 
     override fun drawImage(image: KiteImageData, ctm: KiteMatrix, alpha: Double) {
@@ -614,6 +664,7 @@ public class SkiaCanvas(private val canvas: SkCanvas) : KiteCanvas {
             canvas.saveLayer(null, paint)
         }
         openLayers++
+        layers++
     }
 
     /** An open group: whether it opened a layer, and whether its paints knock out. */
@@ -635,6 +686,7 @@ public class SkiaCanvas(private val canvas: SkCanvas) : KiteCanvas {
         if (openLayers > 0) {
             canvas.restore()
             openLayers--
+            layers--
         }
     }
 
@@ -658,6 +710,7 @@ public class SkiaCanvas(private val canvas: SkCanvas) : KiteCanvas {
         // group on top with DstIn so the mask's alpha clips the content.
         canvas.saveLayer(null, Paint())
         openLayers++
+        layers++
         // The content and the mask composite as usual, also inside a knockout group.
         groups.addLast(Group(layered = false, knockout = false))
         try {
@@ -682,6 +735,7 @@ public class SkiaCanvas(private val canvas: SkCanvas) : KiteCanvas {
             }
             canvas.saveLayer(null, maskPaint)
             openLayers++
+            layers++
             try {
                 // Opaque black backdrop for the luminosity group: unpainted
                 // pixels stay luminance 0 → alpha 0. (Harmless for Alpha masks,
@@ -694,12 +748,172 @@ public class SkiaCanvas(private val canvas: SkCanvas) : KiteCanvas {
             } finally {
                 canvas.restore()
                 openLayers--
+                layers--
             }
         } finally {
             groups.removeLastOrNull()
             canvas.restore()
             openLayers--
+            layers--
         }
+    }
+
+    /**
+     * The raster step (#209, #308): its box is [region] under the canvas's matrix, cut to the
+     * device clip and rounded out to whole pixels. A render paints into a raster surface of the
+     * box. Skia reads back only the canvas under every layer, so inside a group's or a soft
+     * mask's layer the step gets no backdrop. Past [MAX_STEP_PIXELS] it works at a lower
+     * resolution, and then reads no backdrop either.
+     */
+    override fun rasterStep(region: KiteRectangle, ctm: KiteMatrix, step: KiteRasterStep): Boolean {
+        val local = localMatrix()
+        val toDevice = local.concat(ctm)
+        val box = region.normalized()
+        val xs = doubleArrayOf(
+            toDevice.transformX(box.left, box.bottom), toDevice.transformX(box.right, box.bottom),
+            toDevice.transformX(box.left, box.top), toDevice.transformX(box.right, box.top),
+        )
+        val ys = doubleArrayOf(
+            toDevice.transformY(box.left, box.bottom), toDevice.transformY(box.right, box.bottom),
+            toDevice.transformY(box.left, box.top), toDevice.transformY(box.right, box.top),
+        )
+        if (!xs.all { it.isFinite() } || !ys.all { it.isFinite() }) return false
+        val clip = clipBounds.lastOrNull() ?: pageBounds
+        val left = maxOf(kotlin.math.floor(xs.min()), clip?.let { kotlin.math.floor(it[0]) } ?: -Double.MAX_VALUE)
+        val top = maxOf(kotlin.math.floor(ys.min()), clip?.let { kotlin.math.floor(it[1]) } ?: -Double.MAX_VALUE)
+        val right = minOf(kotlin.math.ceil(xs.max()), clip?.let { kotlin.math.ceil(it[2]) } ?: Double.MAX_VALUE)
+        val bottom = minOf(kotlin.math.ceil(ys.max()), clip?.let { kotlin.math.ceil(it[3]) } ?: Double.MAX_VALUE)
+        if (right <= left || bottom <= top) return true
+        val pixels = (right - left) * (bottom - top)
+        if (pixels > MAX_STEP_PIXELS * 16.0) return false
+        val scale = if (pixels > MAX_STEP_PIXELS) kotlin.math.sqrt(MAX_STEP_PIXELS / pixels) else 1.0
+        return step.run(SkiaRasterScope(left.toInt(), top.toInt(), (right - left).toInt(), (bottom - top).toInt(), scale, local, toDevice))
+    }
+
+    /**
+     * The scope of one raster step: the box of [boxWidth] by [boxHeight] device pixels from
+     * ([x], [y]), at [scale]. [local] is the canvas's own matrix when the step began, and
+     * [toDevice] maps the step's region to the device.
+     */
+    private inner class SkiaRasterScope(
+        private val x: Int, private val y: Int, private val boxWidth: Int, private val boxHeight: Int,
+        private val scale: Double, private val local: KiteMatrix, toDevice: KiteMatrix,
+    ) : KiteRasterScope {
+        private val target = canvas
+        private val layersAtStart = layers
+        override val width = maxOf(1, kotlin.math.ceil(boxWidth * scale).toInt())
+        override val height = maxOf(1, kotlin.math.ceil(boxHeight * scale).toInt())
+        override val toPixels: KiteMatrix = KiteMatrix.scaling(scale, scale)
+            .concat(KiteMatrix.translation(-x.toDouble(), -y.toDouble())).concat(toDevice)
+
+        private val info = ImageInfo(width, height, ColorType.BGRA_8888, ColorAlphaType.UNPREMUL)
+
+        override fun backdrop(): KiteRaster? {
+            if (scale != 1.0 || layersAtStart > 0) return null
+            val bitmap = org.jetbrains.skia.Bitmap()
+            try {
+                if (!bitmap.allocPixels(info) || !target.readPixels(bitmap, x, y)) return null
+                return bitmap.readPixels(info, width * 4, 0, 0)?.let { KiteRaster(width, height, argbOf(it)) }
+            } finally {
+                bitmap.close()
+            }
+        }
+
+        override fun render(initial: KiteRaster?, content: () -> Unit): KiteRaster {
+            val surface = org.jetbrains.skia.Surface.makeRaster(ImageInfo(width, height, ColorType.N32, ColorAlphaType.PREMUL))
+            try {
+                val offscreen = surface.canvas
+                if (initial != null) {
+                    require(initial.width == width && initial.height == height) { "the initial raster has another size" }
+                    val start = Image.makeRaster(info, bgraOf(initial.pixels), width * 4)
+                    try {
+                        offscreen.drawImage(start, 0f, 0f, Paint().apply { blendMode = SkiaBlendMode.SRC })
+                    } finally {
+                        start.close()
+                    }
+                }
+                offscreen.concat(pdfMatrixToSkia(KiteMatrix.scaling(scale, scale).concat(KiteMatrix.translation(-x.toDouble(), -y.toDouble())).concat(local)))
+                val savedCanvas = canvas
+                val savedOpen = openLayers
+                val savedLayers = layers
+                val savedGroups = groups.toList()
+                val savedClips = clipBounds.toList()
+                val savedPage = pageBounds
+                try {
+                    canvas = offscreen
+                    openLayers = 0
+                    layers = 0
+                    groups.clear()
+                    clipBounds.clear()
+                    pageBounds = doubleArrayOf(0.0, 0.0, width.toDouble(), height.toDouble())
+                    content()
+                } finally {
+                    // Saves the content left open end on the surface.
+                    offscreen.restoreToCount(1)
+                    canvas = savedCanvas
+                    openLayers = savedOpen
+                    layers = savedLayers
+                    groups.clear()
+                    groups.addAll(savedGroups)
+                    clipBounds.clear()
+                    clipBounds.addAll(savedClips)
+                    pageBounds = savedPage
+                }
+                val bitmap = org.jetbrains.skia.Bitmap()
+                try {
+                    bitmap.allocPixels(info)
+                    surface.readPixels(bitmap, 0, 0)
+                    return KiteRaster(width, height, bitmap.readPixels(info, width * 4, 0, 0)?.let(::argbOf) ?: IntArray(width * height))
+                } finally {
+                    bitmap.close()
+                }
+            } finally {
+                surface.close()
+            }
+        }
+
+        override fun draw(raster: KiteRaster, alpha: Double, blendMode: KiteBlendMode) {
+            require(raster.width == width && raster.height == height) { "the raster has another size" }
+            val image = Image.makeRaster(info, bgraOf(raster.pixels), width * 4)
+            val paint = Paint().apply {
+                this.alpha = (alpha.coerceIn(0.0, 1.0) * 255).toInt()
+                this.blendMode = blendMode.toSkia()
+            }
+            target.save()
+            try {
+                target.resetMatrix()
+                val dst = Rect.makeXYWH(x.toFloat(), y.toFloat(), boxWidth.toFloat(), boxHeight.toFloat())
+                val mode = if (scale == 1.0) SamplingMode.DEFAULT else SamplingMode.LINEAR
+                target.drawImageRect(image, Rect.makeWH(width.toFloat(), height.toFloat()), dst, mode, paint, true)
+            } finally {
+                target.restore()
+                image.close()
+            }
+        }
+    }
+
+    /** Straight 0xAARRGGBB pixels as the bytes of BGRA_8888. */
+    private fun bgraOf(argb: IntArray): ByteArray {
+        val out = ByteArray(argb.size * 4)
+        for (i in argb.indices) {
+            val p = argb[i]
+            out[4 * i] = p.toByte()
+            out[4 * i + 1] = (p ushr 8).toByte()
+            out[4 * i + 2] = (p ushr 16).toByte()
+            out[4 * i + 3] = (p ushr 24).toByte()
+        }
+        return out
+    }
+
+    /** The bytes of BGRA_8888 as straight 0xAARRGGBB pixels. */
+    private fun argbOf(bgra: ByteArray): IntArray = IntArray(bgra.size / 4) { i ->
+        (bgra[4 * i].toInt() and 0xFF) or ((bgra[4 * i + 1].toInt() and 0xFF) shl 8) or
+            ((bgra[4 * i + 2].toInt() and 0xFF) shl 16) or ((bgra[4 * i + 3].toInt() and 0xFF) shl 24)
+    }
+
+    private companion object {
+        /** The most pixels a raster step works on before it drops to a lower resolution. */
+        const val MAX_STEP_PIXELS = 40_000_000.0
     }
 
     /* ─── Helpers ─────────────────────────────────────────────────────────── */

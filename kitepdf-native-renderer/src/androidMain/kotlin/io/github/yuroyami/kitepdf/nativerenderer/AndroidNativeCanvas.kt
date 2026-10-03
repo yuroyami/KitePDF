@@ -30,6 +30,9 @@ import io.github.yuroyami.kitepdf.core.render.strokePen
 import io.github.yuroyami.kitepdf.core.render.KiteMatrix
 import io.github.yuroyami.kitepdf.core.render.KiteCanvas
 import io.github.yuroyami.kitepdf.core.render.KitePath
+import io.github.yuroyami.kitepdf.core.render.KiteRaster
+import io.github.yuroyami.kitepdf.core.render.KiteRasterScope
+import io.github.yuroyami.kitepdf.core.render.KiteRasterStep
 import io.github.yuroyami.kitepdf.core.render.KiteShading
 import io.github.yuroyami.kitepdf.core.render.RgbColor
 import io.github.yuroyami.kitepdf.core.render.SoftMask
@@ -50,13 +53,26 @@ import io.github.yuroyami.kitepdf.core.render.toShrunkRgbaBytes
  * Blend modes require API 29+ (`Paint.setBlendMode`). The module's minSdk
  * is 29 to match. See :kitepdf-native build.gradle.kts.
  */
-public class AndroidNativeCanvas(private val canvas: AndroidCanvas) : KiteCanvas {
+public class AndroidNativeCanvas(canvas: AndroidCanvas) : KiteCanvas {
+
+    /** The canvas that paints go to: the host's, or the bitmap of a raster step's render. */
+    private var canvas: AndroidCanvas = canvas
 
     /** Open layers from clip pushes + transparency groups. */
     private var openLayers = 0
 
+    /** The open layers of groups and soft masks alone, whose pixels Android keeps to itself. */
+    private var layers = 0
+
+    /**
+     * The bitmap the host canvas draws into, as [AndroidPdfBitmapRenderer]'s does, so a raster
+     * step can read the backdrop from it. Null for a canvas on screen.
+     */
+    internal var target: android.graphics.Bitmap? = null
+
     override fun beginPage(widthPt: Double, heightPt: Double, deviceCtm: KiteMatrix) {
         openLayers = 0
+        layers = 0
         groups.clear()
     }
 
@@ -66,6 +82,7 @@ public class AndroidNativeCanvas(private val canvas: AndroidCanvas) : KiteCanvas
             canvas.restore()
             openLayers--
         }
+        layers = 0
         groups.clear()
     }
 
@@ -495,6 +512,7 @@ public class AndroidNativeCanvas(private val canvas: AndroidCanvas) : KiteCanvas
         }
         canvas.saveLayer(null, paint)
         openLayers++
+        layers++
     }
 
     /** An open group: whether it opened a layer, and whether its paints knock out. */
@@ -518,6 +536,7 @@ public class AndroidNativeCanvas(private val canvas: AndroidCanvas) : KiteCanvas
         if (openLayers > 0) {
             canvas.restore()
             openLayers--
+            layers--
         }
     }
 
@@ -539,6 +558,7 @@ public class AndroidNativeCanvas(private val canvas: AndroidCanvas) : KiteCanvas
     ) {
         canvas.saveLayer(null, Paint())
         openLayers++
+        layers++
         // The content and the mask composite as usual, also inside a knockout group.
         groups.addLast(Group(layered = false, knockout = false))
         try {
@@ -558,6 +578,7 @@ public class AndroidNativeCanvas(private val canvas: AndroidCanvas) : KiteCanvas
             }
             canvas.saveLayer(null, maskPaint)
             openLayers++
+            layers++
             try {
                 // Unpainted parts of the group show the black backdrop, whose luminosity is zero.
                 if (luminosity) canvas.drawColor(Color.BLACK)
@@ -565,13 +586,115 @@ public class AndroidNativeCanvas(private val canvas: AndroidCanvas) : KiteCanvas
             } finally {
                 canvas.restore()
                 openLayers--
+                layers--
             }
         } finally {
             groups.removeLastOrNull()
             canvas.restore()
             openLayers--
+            layers--
         }
     }
+
+    /**
+     * The raster step (#209, #308): its box is [region] under [ctm], which maps to this canvas's
+     * pixels, cut to the clip. A render paints into a bitmap of the box. Only a canvas over a
+     * known [target] bitmap reads a backdrop, and only outside every layer. Past
+     * [STEP_MAX_PIXELS] the step works at a lower resolution, and then reads no backdrop.
+     */
+    override fun rasterStep(region: KiteRectangle, ctm: KiteMatrix, step: KiteRasterStep): Boolean {
+        val b = region.normalized()
+        val xs = doubleArrayOf(ctm.transformX(b.left, b.bottom), ctm.transformX(b.right, b.bottom), ctm.transformX(b.left, b.top), ctm.transformX(b.right, b.top))
+        val ys = doubleArrayOf(ctm.transformY(b.left, b.bottom), ctm.transformY(b.right, b.bottom), ctm.transformY(b.left, b.top), ctm.transformY(b.right, b.top))
+        if (!xs.all { it.isFinite() } || !ys.all { it.isFinite() }) return false
+        val clip = android.graphics.Rect()
+        val clipped = canvas.getClipBounds(clip)
+        if (!clipped) return true
+        val left = maxOf(kotlin.math.floor(xs.min()), clip.left.toDouble())
+        val top = maxOf(kotlin.math.floor(ys.min()), clip.top.toDouble())
+        val right = minOf(kotlin.math.ceil(xs.max()), clip.right.toDouble())
+        val bottom = minOf(kotlin.math.ceil(ys.max()), clip.bottom.toDouble())
+        if (right <= left || bottom <= top) return true
+        val pixels = (right - left) * (bottom - top)
+        if (pixels > STEP_MAX_PIXELS * 16) return false
+        val scale = if (pixels > STEP_MAX_PIXELS) kotlin.math.sqrt(STEP_MAX_PIXELS / pixels) else 1.0
+        return step.run(AndroidRasterScope(left.toInt(), top.toInt(), (right - left).toInt(), (bottom - top).toInt(), scale, ctm))
+    }
+
+    /** One raster step over the box of [boxWidth] by [boxHeight] pixels from ([x], [y]), at [scale]. */
+    private inner class AndroidRasterScope(
+        private val x: Int, private val y: Int, private val boxWidth: Int, private val boxHeight: Int,
+        private val scale: Double, ctm: KiteMatrix,
+    ) : KiteRasterScope {
+        private val host = canvas
+        private val layered = layers > 0
+        override val width = maxOf(1, kotlin.math.ceil(boxWidth * scale).toInt())
+        override val height = maxOf(1, kotlin.math.ceil(boxHeight * scale).toInt())
+        override val toPixels: KiteMatrix = KiteMatrix.scaling(scale, scale)
+            .concat(KiteMatrix.translation(-x.toDouble(), -y.toDouble())).concat(ctm)
+
+        override fun backdrop(): KiteRaster? {
+            val bitmap = target ?: return null
+            if (layered || scale != 1.0 || host !== hostCanvas || x < 0 || y < 0 || x + width > bitmap.width || y + height > bitmap.height) return null
+            val argb = IntArray(width * height)
+            bitmap.getPixels(argb, 0, width, x, y, width, height)
+            return KiteRaster(width, height, argb)
+        }
+
+        override fun render(initial: KiteRaster?, content: () -> Unit): KiteRaster {
+            val bitmap = android.graphics.Bitmap.createBitmap(width, height, android.graphics.Bitmap.Config.ARGB_8888)
+            try {
+                if (initial != null) {
+                    require(initial.width == width && initial.height == height) { "the initial raster has another size" }
+                    bitmap.setPixels(initial.pixels, 0, width, 0, 0, width, height)
+                }
+                val offscreen = AndroidCanvas(bitmap)
+                offscreen.scale(scale.toFloat(), scale.toFloat())
+                offscreen.translate(-x.toFloat(), -y.toFloat())
+                val savedCanvas = canvas
+                val savedOpen = openLayers
+                val savedLayers = layers
+                val savedGroups = groups.toList()
+                try {
+                    canvas = offscreen
+                    openLayers = 0
+                    layers = 0
+                    groups.clear()
+                    content()
+                } finally {
+                    canvas = savedCanvas
+                    openLayers = savedOpen
+                    layers = savedLayers
+                    groups.clear()
+                    groups.addAll(savedGroups)
+                }
+                val argb = IntArray(width * height)
+                bitmap.getPixels(argb, 0, width, 0, 0, width, height)
+                return KiteRaster(width, height, argb)
+            } finally {
+                bitmap.recycle()
+            }
+        }
+
+        override fun draw(raster: KiteRaster, alpha: Double, blendMode: KiteBlendMode) {
+            require(raster.width == width && raster.height == height) { "the raster has another size" }
+            // createBitmap premultiplies the straight pixels on the way in, as Canvas wants.
+            val bitmap = android.graphics.Bitmap.createBitmap(raster.pixels, width, height, android.graphics.Bitmap.Config.ARGB_8888)
+            try {
+                val paint = Paint().apply {
+                    this.alpha = (alpha.coerceIn(0.0, 1.0) * 255).toInt()
+                    isFilterBitmap = scale != 1.0
+                    applyBlendMode(blendMode)
+                }
+                host.drawBitmap(bitmap, null, android.graphics.Rect(x, y, x + boxWidth, y + boxHeight), paint)
+            } finally {
+                bitmap.recycle()
+            }
+        }
+    }
+
+    /** The canvas this one was made with, which draws into [target] when there is one. */
+    private val hostCanvas: AndroidCanvas = canvas
 
     /**
      * Gates the open layer by a soft mask whose [transfer] only a table gives: draws the mask
@@ -695,6 +818,9 @@ public class AndroidNativeCanvas(private val canvas: AndroidCanvas) : KiteCanvas
 
 /** The most pixels the bitmap of a mask group has when the canvas gates by pixels: 4 MB of them. */
 private const val MASK_MAX_PIXELS = 1_048_576.0
+
+/** The most pixels a raster step works on before it drops to a lower resolution: 16 MB of them. */
+private const val STEP_MAX_PIXELS = 4_194_304.0
 
 /**
  * A colour matrix that turns the mask layer into alpha: the luminosity 0.30 R + 0.59 G + 0.11 B

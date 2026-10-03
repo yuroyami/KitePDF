@@ -21,6 +21,9 @@ internal expect val maskTableFilters: Boolean
 /** The most pixels the image of a mask group has when a canvas gates by pixels: 4 MB of them, a small share of a phone's heap. */
 internal const val MASK_MAX_PIXELS: Double = 1_048_576.0
 
+/** The most pixels a raster step works on before it drops to a lower resolution: 64 MB of ARGB. */
+internal const val STEP_MAX_PIXELS: Double = 16_777_216.0
+
 /** A colour matrix that moves the luminosity of a colour, 0.299 R + 0.587 G + 0.114 B, into its alpha, and clears its colour. */
 internal val LUMINOSITY_TO_ALPHA: FloatArray = floatArrayOf(
     0f, 0f, 0f, 0f, 0f,

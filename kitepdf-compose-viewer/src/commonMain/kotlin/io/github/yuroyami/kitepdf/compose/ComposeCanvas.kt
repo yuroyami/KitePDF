@@ -13,6 +13,7 @@ import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathFillType
 import androidx.compose.ui.graphics.PathSegment
+import androidx.compose.ui.graphics.drawscope.CanvasDrawScope
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipPath
@@ -44,6 +45,9 @@ import io.github.yuroyami.kitepdf.core.render.KiteMaskTransfer
 import io.github.yuroyami.kitepdf.core.render.KiteMatrix
 import io.github.yuroyami.kitepdf.core.render.KiteCanvas
 import io.github.yuroyami.kitepdf.core.render.KitePath
+import io.github.yuroyami.kitepdf.core.render.KiteRaster
+import io.github.yuroyami.kitepdf.core.render.KiteRasterScope
+import io.github.yuroyami.kitepdf.core.render.KiteRasterStep
 import io.github.yuroyami.kitepdf.core.render.KiteShading
 import io.github.yuroyami.kitepdf.core.KiteRectangle
 import io.github.yuroyami.kitepdf.core.render.RgbColor
@@ -85,7 +89,7 @@ import kotlin.math.sqrt
  * scene's own draw pass, so its host text takes the thread that scene draws on (#464).
  */
 public class ComposeCanvas internal constructor(
-    private val drawScope: DrawScope,
+    private var drawScope: DrawScope,
     private val textMeasurer: TextMeasurer,
     private val hairlineWidthPx: Float,
     private val skipSystemFontText: Boolean,
@@ -123,6 +127,11 @@ public class ComposeCanvas internal constructor(
      * platform has it (#131). A test sets it false to draw through Compose's text as a browser does.
      */
     private val hostLines: Boolean = hostTextAnyThread,
+    /**
+     * The bitmap this canvas draws into one pixel for one unit, as a rasterizer's is, so a raster
+     * step can read the backdrop from it. Null for a canvas on screen, whose pixels Compose keeps.
+     */
+    private val target: ImageBitmap? = null,
 ) : KiteCanvas {
 
     /**
@@ -922,6 +931,9 @@ public class ComposeCanvas internal constructor(
         canvas.save()
         canvas.clipPath(composePath)
         saves.addLast(Save.Clip)
+        val outer = clipBounds.lastOrNull() ?: wholeBounds()
+        val inner = composePath.getBounds()
+        clipBounds.addLast(Rect(maxOf(inner.left, outer.left), maxOf(inner.top, outer.top), minOf(inner.right, outer.right), minOf(inner.bottom, outer.bottom)))
     }
 
     override fun popClip() {
@@ -929,7 +941,130 @@ public class ComposeCanvas internal constructor(
         // finds a layer on top would restore that layer instead, so it is ignored.
         if (saves.lastOrNull() != Save.Clip) return
         saves.removeLast()
+        clipBounds.removeLastOrNull()
         drawScope.drawContext.canvas.restore()
+    }
+
+    /**
+     * The bounds of each pushed clip, in the units of [drawScope], since a Compose canvas does not
+     * tell the bounds of its clip. A raster step cuts its box to the last.
+     */
+    private val clipBounds = ArrayDeque<Rect>()
+
+    /** What a raster step's box is cut to without a clip: the draw scope, or the box of the render it paints in. */
+    private var stepBounds: Rect? = null
+
+    private fun wholeBounds(): Rect = stepBounds ?: Rect(0f, 0f, drawScope.size.width, drawScope.size.height)
+
+    /**
+     * The raster step (#209, #308): its box is [region] under [ctm], in the units of the draw
+     * scope, cut to the clip and rounded out to whole units. It works at [magnification] pixels a
+     * unit, so a step on a zoomed Vectorized page keeps the detail on screen, and past
+     * [STEP_MAX_PIXELS] at a lower resolution. Only a rasterizer's canvas, which knows the bitmap
+     * it draws into, reads a backdrop, and only outside every layer.
+     */
+    override fun rasterStep(region: KiteRectangle, ctm: KiteMatrix, step: KiteRasterStep): Boolean {
+        val b = region.normalized()
+        val xs = doubleArrayOf(ctm.transformX(b.left, b.bottom), ctm.transformX(b.right, b.bottom), ctm.transformX(b.left, b.top), ctm.transformX(b.right, b.top))
+        val ys = doubleArrayOf(ctm.transformY(b.left, b.bottom), ctm.transformY(b.right, b.bottom), ctm.transformY(b.left, b.top), ctm.transformY(b.right, b.top))
+        if (!xs.all { it.isFinite() } || !ys.all { it.isFinite() }) return false
+        val clip = clipBounds.lastOrNull() ?: wholeBounds()
+        val left = maxOf(kotlin.math.floor(xs.min()), kotlin.math.floor(clip.left.toDouble()))
+        val top = maxOf(kotlin.math.floor(ys.min()), kotlin.math.floor(clip.top.toDouble()))
+        val right = minOf(kotlin.math.ceil(xs.max()), kotlin.math.ceil(clip.right.toDouble()))
+        val bottom = minOf(kotlin.math.ceil(ys.max()), kotlin.math.ceil(clip.bottom.toDouble()))
+        if (right <= left || bottom <= top) return true
+        val units = (right - left) * (bottom - top)
+        val wanted = magnification.toDouble().coerceAtLeast(1.0)
+        if (units * wanted * wanted > STEP_MAX_PIXELS * 16) return false
+        val scale = if (units * wanted * wanted > STEP_MAX_PIXELS) sqrt(STEP_MAX_PIXELS / units) else wanted
+        return step.run(ComposeRasterScope(left.toInt(), top.toInt(), (right - left).toInt(), (bottom - top).toInt(), scale, ctm))
+    }
+
+    /** One raster step over the box of [boxWidth] by [boxHeight] units from ([x], [y]), at [scale] pixels a unit. */
+    private inner class ComposeRasterScope(
+        private val x: Int, private val y: Int, private val boxWidth: Int, private val boxHeight: Int,
+        private val scale: Double, ctm: KiteMatrix,
+    ) : KiteRasterScope {
+        private val scope = drawScope
+        private val layered = Save.Layer in saves
+        override val width = maxOf(1, kotlin.math.ceil(boxWidth * scale).toInt())
+        override val height = maxOf(1, kotlin.math.ceil(boxHeight * scale).toInt())
+        override val toPixels: KiteMatrix = KiteMatrix.scaling(scale, scale)
+            .concat(KiteMatrix.translation(-x.toDouble(), -y.toDouble())).concat(ctm)
+
+        override fun backdrop(): KiteRaster? {
+            val bitmap = target ?: return null
+            if (layered || scale != 1.0 || x < 0 || y < 0 || x + width > bitmap.width || y + height > bitmap.height) return null
+            val argb = IntArray(width * height)
+            bitmap.readPixels(argb, x, y, width, height)
+            return KiteRaster(width, height, argb)
+        }
+
+        override fun render(initial: KiteRaster?, content: () -> Unit): KiteRaster {
+            val bitmap = ImageBitmap(width, height)
+            CanvasDrawScope().draw(scope, scope.layoutDirection, androidx.compose.ui.graphics.Canvas(bitmap), Size(width.toFloat(), height.toFloat())) {
+                if (initial != null) {
+                    require(initial.width == width && initial.height == height) { "the initial raster has another size" }
+                    ImageDecoder.decodeRaw(rgbaOf(initial.pixels), width, height)?.let { drawImage(it, blendMode = ComposeBlendMode.Src) }
+                }
+                val savedScope = drawScope
+                val savedSaves = saves.toList()
+                val savedGroups = groups.toList()
+                val savedClips = clipBounds.toList()
+                val savedBounds = stepBounds
+                withTransform({
+                    scale(scale.toFloat(), scale.toFloat(), pivot = Offset.Zero)
+                    translate(-x.toFloat(), -y.toFloat())
+                }) {
+                    try {
+                        drawScope = this
+                        saves.clear()
+                        groups.clear()
+                        clipBounds.clear()
+                        stepBounds = Rect(x.toFloat(), y.toFloat(), (x + boxWidth).toFloat(), (y + boxHeight).toFloat())
+                        content()
+                    } finally {
+                        // Clips and layers the content left open end on the bitmap.
+                        restoreAll()
+                        drawScope = savedScope
+                        saves.clear()
+                        saves.addAll(savedSaves)
+                        groups.clear()
+                        groups.addAll(savedGroups)
+                        clipBounds.clear()
+                        clipBounds.addAll(savedClips)
+                        stepBounds = savedBounds
+                    }
+                }
+            }
+            val argb = IntArray(width * height)
+            bitmap.readPixels(argb)
+            return KiteRaster(width, height, argb)
+        }
+
+        override fun draw(raster: KiteRaster, alpha: Double, blendMode: KiteBlendMode) {
+            require(raster.width == width && raster.height == height) { "the raster has another size" }
+            val image = ImageDecoder.decodeRaw(rgbaOf(raster.pixels), width, height) ?: return
+            scope.drawImage(
+                image = image, dstOffset = androidx.compose.ui.unit.IntOffset(x, y), dstSize = IntSize(boxWidth, boxHeight),
+                alpha = alpha.toFloat().coerceIn(0f, 1f), blendMode = blendMode.toCompose(),
+                filterQuality = if (scale == 1.0) FilterQuality.None else FilterQuality.Low,
+            )
+        }
+    }
+
+    /** Straight 0xAARRGGBB pixels as straight RGBA bytes. */
+    private fun rgbaOf(argb: IntArray): ByteArray {
+        val out = ByteArray(argb.size * 4)
+        for (i in argb.indices) {
+            val p = argb[i]
+            out[4 * i] = (p ushr 16).toByte()
+            out[4 * i + 1] = (p ushr 8).toByte()
+            out[4 * i + 2] = p.toByte()
+            out[4 * i + 3] = (p ushr 24).toByte()
+        }
+        return out
     }
 
     /**

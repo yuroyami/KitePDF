@@ -13,6 +13,9 @@ import io.github.yuroyami.kitepdf.core.render.KiteMaskTransfer
 import io.github.yuroyami.kitepdf.core.render.KiteMatrix
 import io.github.yuroyami.kitepdf.core.render.KiteCanvas
 import io.github.yuroyami.kitepdf.core.render.KitePath
+import io.github.yuroyami.kitepdf.core.render.KiteRaster
+import io.github.yuroyami.kitepdf.core.render.KiteRasterScope
+import io.github.yuroyami.kitepdf.core.render.KiteRasterStep
 import io.github.yuroyami.kitepdf.core.render.KiteShading
 import io.github.yuroyami.kitepdf.core.render.RgbColor
 import io.github.yuroyami.kitepdf.core.render.SoftMask
@@ -547,6 +550,80 @@ public class Canvas2dCanvas(ctx: CanvasRenderingContext2D) : KiteCanvas {
         contentCtx.globalCompositeOperation = "destination-in"
         contentCtx.drawImage(mask.canvas, 0.0, 0.0)
         composite(content, 1.0, "source-over")
+    }
+
+    /**
+     * The raster step (#209, #308): its box is [region] under [ctm] in device pixels, cut to the
+     * canvas that paints go to now. A render paints into an offscreen canvas of the box, as a
+     * group's layer does, and the backdrop comes from the canvas under the step, a layer or the
+     * page, through getImageData.
+     */
+    override fun rasterStep(region: KiteRectangle, ctm: KiteMatrix, step: KiteRasterStep): Boolean {
+        val area = deviceArea(region, ctm) ?: return false
+        if (area[2] == 0 || area[3] == 0) return true
+        return step.run(Canvas2dRasterScope(area, ctm))
+    }
+
+    /** One raster step over [area], left, top, width and height in device pixels. */
+    private inner class Canvas2dRasterScope(private val area: IntArray, ctm: KiteMatrix) : KiteRasterScope {
+        private val target = ctx
+        private val targetX = originX
+        private val targetY = originY
+        override val width = area[2]
+        override val height = area[3]
+        override val toPixels: KiteMatrix = KiteMatrix.translation(-area[0].toDouble(), -area[1].toDouble()).concat(ctm)
+
+        override fun backdrop(): KiteRaster = KiteRaster(
+            width, height, argbOf(target.getImageData(area[0] - targetX, area[1] - targetY, width.toDouble(), height.toDouble())),
+        )
+
+        override fun render(initial: KiteRaster?, content: () -> Unit): KiteRaster {
+            // The content composites as usual, also inside a knockout group.
+            groups.addLast(Group(null, null, 1.0, KiteBlendMode.Normal))
+            val layer = try {
+                paintInLayer(area) {
+                    if (initial != null) {
+                        require(initial.width == width && initial.height == height) { "the initial raster has another size" }
+                        ctx.putImageData(imageDataOf(initial), 0.0, 0.0)
+                    }
+                    content()
+                }
+            } finally {
+                groups.removeLastOrNull()
+            }
+            val layerCtx = layer.canvas.getContext("2d") as CanvasRenderingContext2D
+            return KiteRaster(width, height, argbOf(layerCtx.getImageData(0.0, 0.0, width.toDouble(), height.toDouble())))
+        }
+
+        override fun draw(raster: KiteRaster, alpha: Double, blendMode: KiteBlendMode) {
+            require(raster.width == width && raster.height == height) { "the raster has another size" }
+            val canvas = document.createElement("canvas") as HTMLCanvasElement
+            canvas.width = width
+            canvas.height = height
+            (canvas.getContext("2d") as CanvasRenderingContext2D).putImageData(imageDataOf(raster), 0.0, 0.0)
+            composite(Layer(canvas, area[0].toDouble(), area[1].toDouble()), alpha.coerceIn(0.0, 1.0), blendMode.toCanvas())
+        }
+
+        /** The straight RGBA of an ImageData as straight 0xAARRGGBB pixels. */
+        private fun argbOf(image: ImageData): IntArray {
+            val data = image.data.asDynamic()
+            return IntArray(width * height) { i ->
+                ((data[4 * i + 3] as Int) shl 24) or ((data[4 * i] as Int) shl 16) or ((data[4 * i + 1] as Int) shl 8) or (data[4 * i + 2] as Int)
+            }
+        }
+
+        private fun imageDataOf(raster: KiteRaster): ImageData {
+            val image = target.createImageData(width.toDouble(), height.toDouble())
+            val data = image.data.asDynamic()
+            for (i in raster.pixels.indices) {
+                val p = raster.pixels[i]
+                data[4 * i] = (p ushr 16) and 0xFF
+                data[4 * i + 1] = (p ushr 8) and 0xFF
+                data[4 * i + 2] = p and 0xFF
+                data[4 * i + 3] = p ushr 24
+            }
+            return image
+        }
     }
 
     /** A layer over [area] that [paint] draws into, through this canvas. */
