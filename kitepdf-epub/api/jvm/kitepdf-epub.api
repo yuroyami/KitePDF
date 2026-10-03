@@ -1,5 +1,6 @@
 public final class io/github/yuroyami/kitepdf/epub/EpubDocument : io/github/yuroyami/kitepdf/core/KiteDocument {
 	public static final field Companion Lio/github/yuroyami/kitepdf/epub/EpubDocument$Companion;
+	public final fun awaitLayoutResources-8Mi8wO0 (IJLkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun bookmarkOf (Lio/github/yuroyami/kitepdf/core/KiteLocation;)Lio/github/yuroyami/kitepdf/core/KiteBookmark$Flow;
 	public synthetic fun bookmarkOf (Lio/github/yuroyami/kitepdf/core/KiteLocation;)Lio/github/yuroyami/kitepdf/core/KiteBookmark;
 	public final fun bookmarkOf (Ljava/lang/String;)Lio/github/yuroyami/kitepdf/core/KiteBookmark$Flow;

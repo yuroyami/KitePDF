@@ -16,10 +16,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   declared size keeps its box and paints once its bytes land, which `EpubPage.remoteVersion`
   and `EpubDocument.remoteArrivals` announce; `KiteDocView` draws the page again then. An
   image without one, and a font, size the layout, so `EpubDocument.fetchRemoteResources`
-  fetches them ahead of it, and `KiteDocView` waits up to two seconds for them before it
-  lays a chapter out. `EpubDocument.hasRemoteResources` reads the manifest's
-  `remote-resources` property. `kitepdf-epub`, and with it the `kitepdf` artifact, now
-  depends on `kotlinx-coroutines-core`. The `EpubSettings` constructor and `copy` take a
+  fetches them ahead of it. `EpubDocument.awaitLayoutResources` waits for them within a
+  time limit, once per URL for the whole book, so a server that hangs delays one chapter
+  and not each (#492); `KiteDocView` waits up to two seconds before it lays a chapter out.
+  `EpubDocument.hasRemoteResources` reads the manifest's `remote-resources` property.
+  `kitepdf-epub`, and with it the `kitepdf` artifact, now depends on
+  `kotlinx-coroutines-core`. The `EpubSettings` constructor and `copy` take a
   thirteenth parameter with a default, so source compiles unchanged, while a binary built
   against 0.12.0 that constructs or copies an `EpubSettings` needs a rebuild (#38).
 

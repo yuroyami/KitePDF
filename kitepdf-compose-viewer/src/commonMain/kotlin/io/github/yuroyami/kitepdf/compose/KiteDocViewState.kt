@@ -56,7 +56,6 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.withContext
-import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.yield
 import io.github.yuroyami.kitepdf.epub.EpubDocument
 import io.github.yuroyami.kitepdf.epub.EpubPage
@@ -1932,14 +1931,13 @@ public class KiteDocViewState(
      * Waits at most [remoteWait] for the remote fonts, and the remote images whose markup gives no
      * size, that size [chapter]'s layout, when the book has a fetcher (#38). Whatever lands later
      * keeps fetching: a picture with a declared size paints once it lands, and the rest show in
-     * the next document over the book, so the chapter keeps its pages.
+     * the next document over the book, so the chapter keeps its pages. A URL that a wait gave up
+     * on is not waited for again, so a stalled font delays one chapter, not each (#492).
      */
     private suspend fun awaitRemoteLayout(chapter: Int) {
         val epub = document as? EpubDocument ?: return
         if (epub.settings.resourceFetcher == null) return
-        withTimeoutOrNull(remoteWait) {
-            withContext(kitepdfRasterDispatcher()) { epub.fetchRemoteResources(chapter, layoutOnly = true) }
-        }
+        withContext(kitepdfRasterDispatcher()) { epub.awaitLayoutResources(chapter, remoteWait) }
         backOnComposeThread()
     }
 

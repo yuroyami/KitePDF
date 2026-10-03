@@ -3,11 +3,14 @@ package io.github.yuroyami.kitepdf.epub
 import io.github.yuroyami.kitepdf.core.KiteLocation
 import io.github.yuroyami.kitepdf.core.render.RecordingCanvas
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.withContext
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
+import kotlin.time.Duration.Companion.seconds
 
 /**
  * A resource that a book names by an https URL instead of a file in its container (EPUB 3.3, 3.6)
@@ -258,6 +261,40 @@ class RemoteResourceTest {
         assertEquals(setOf(sizedUrl, unsizedUrl, backgroundUrl), fetcher.asked.toSet())
         assertEquals(3, fetcher.asked.size, "a URL is fetched once")
         assertEquals(3, render(doc).images().size, "both pictures and the background")
+    }
+
+    @Test
+    fun a_layout_waits_for_a_stalled_url_once_per_book() = runTest {
+        // A picture that sizes every chapter, on a server that never answers, delays the first
+        // chapter's layout by the wait and none after it; another URL gets a wait of its own (#492).
+        val otherUrl = "https://images.example.com/other.bmp"
+        val gate = CompletableDeferred<Unit>()
+        val fetcher = FakeFetcher(mapOf(pictureUrl to EpubFixtures.bmp2x1(), otherUrl to EpubFixtures.bmp2x1()), gate)
+        val unsized = """<p><img src="$pictureUrl" alt=""/></p>"""
+        val doc = book(listOf(unsized, unsized, unsized + """<p><img src="$otherUrl" alt=""/></p>"""), fetcher)
+        val start = testScheduler.currentTime
+        fun waited() = testScheduler.currentTime - start
+
+        doc.awaitLayoutResources(0, 2.seconds)
+        assertEquals(2000L, waited(), "the first chapter waits its time")
+        doc.awaitLayoutResources(1, 2.seconds)
+        doc.withSettings(doc.settings.copy(fontSize = doc.settings.fontSize + 1.0)).awaitLayoutResources(0, 2.seconds)
+        assertEquals(2000L, waited(), "no later wait, of this document or the next, waits for it again")
+        doc.awaitLayoutResources(2, 2.seconds)
+        assertEquals(4000L, waited(), "a URL that no wait gave up on gets one of its own")
+
+        gate.complete(Unit)
+        doc.fetchRemoteResources(2)
+        assertEquals(listOf(pictureUrl, otherUrl), fetcher.asked, "each URL is fetched once")
+        assertEquals(2, doc.remoteArrivals.value, "the fetches went on after the waits gave up, and landed")
+    }
+
+    @Test
+    fun a_layout_wait_ends_when_the_bytes_land() = runTest {
+        val doc = book(listOf("""<p><img src="$pictureUrl" alt=""/></p>"""), FakeFetcher(mapOf(pictureUrl to EpubFixtures.bmp2x1())))
+        // On a real clock: the test's own clock skips ahead while a fetch runs on another thread.
+        withContext(Dispatchers.Default) { doc.awaitLayoutResources(0, 60.seconds) }
+        assertEquals(1, render(doc).images().size, "laid out after the wait, the picture sizes its box")
     }
 
     @Test

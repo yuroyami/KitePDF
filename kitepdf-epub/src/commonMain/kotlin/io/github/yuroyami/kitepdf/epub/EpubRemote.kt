@@ -16,6 +16,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.withTimeoutOrNull
+import kotlin.time.Duration
 
 /**
  * Fetches a resource that a book names by an absolute `https` URL instead of a file in its
@@ -73,6 +75,9 @@ internal class RemoteResources(chapters: Int) {
     private val inFlight = HashMap<String, Deferred<ByteArray?>>()
     private var held = 0L
 
+    /** The URLs that a layout gave up waiting for while they were in flight, which no layout waits for again (#492). */
+    private val waitedOut = HashSet<String>()
+
     /** The chapters that painted each URL before it landed, which paint again once it has. */
     private val painters = HashMap<String, HashSet<Int>>()
     private val versions = IntArray(chapters)
@@ -104,6 +109,21 @@ internal class RemoteResources(chapters: Int) {
         }
         fetch.start()
         return fetch
+    }
+
+    /**
+     * Fetches each of [urls] through [fetcher], as [request] does, and waits at most [wait] for
+     * them all to land or fail. A URL that such a wait already gave up on is left out, and the
+     * URLs still in flight when this wait runs out are left out of every later one: a server that
+     * hangs costs one layout the wait, not every chapter that names it (#492). Their fetches go
+     * on. A wait that is not positive starts the fetches and gives up on none of them.
+     */
+    suspend fun awaitLayout(urls: List<String>, fetcher: EpubResourceFetcher, wait: Duration) {
+        val pending = urls.filter { url -> lock.withLock { url !in waitedOut } }
+            .mapNotNull { url -> request(url, fetcher)?.let { url to it } }
+        if (pending.isEmpty() || !wait.isPositive()) return
+        withTimeoutOrNull(wait) { for ((_, fetch) in pending) fetch.await() }
+            ?: lock.withLock { for ((url, fetch) in pending) if (!fetch.isCompleted) waitedOut += url }
     }
 
     private suspend fun fetchOne(url: String, fetcher: EpubResourceFetcher): ByteArray? {
