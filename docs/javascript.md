@@ -200,6 +200,14 @@ soon as the script returns, and the chapter may gain or lose pages: `book.chapte
 for a viewer to take the page counts again, and `page.chapterVersion` for it to draw the page
 again. The changes belong to the book, so a new font size keeps them.
 
+Each callback that the reader calls itself runs in a call of its own: a listener or an `on`
+handler of a tap or of the load events, a timer, an animation frame. The promise jobs it queued
+run as soon as it returns, before the next callback, as HTML runs a microtask checkpoint after
+each callback it invokes. A script's own `dispatchEvent` or `click()` runs its listeners at once,
+and their jobs wait until the script is done, as in a browser. The timers that fall due together
+run in the order they fell due, and a timer or a frame that an earlier callback cancels does not
+run.
+
 Each book has an origin of its own, shared by its chapters: `epub://` and a host made from the
 package's unique identifier, so the book has it each time it opens. `self.origin` and
 `location.origin` answer it, and `location.href` is the origin and the chapter's path.
