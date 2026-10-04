@@ -36,9 +36,14 @@ public object KiteXml {
         val out = ArrayList<KiteXmlToken>()
         var i = 0
         val n = xml.length
+        // The script or style element whose text is being read: a < in it opens nothing but its end
+        // tag, a comment or a CDATA section, so a lone < of its code stays text.
+        var rawText: String? = null
+        // Where an end tag of each raw text element was last looked for in vain: none follows from there on.
+        val noEndTagFrom = HashMap<String, Int>()
         while (i < n) {
             val c = xml[i]
-            if (c == '<') {
+            if (c == '<' && (rawText == null || opensInRawText(xml, i, rawText))) {
                 when {
                     xml.startsWith("<!--", i) -> { i = xml.indexOf("-->", i).let { if (it < 0) n else it + 3 } }
                     xml.startsWith("<![CDATA[", i) -> {
@@ -50,21 +55,83 @@ public object KiteXml {
                     xml.startsWith("<?", i) -> { i = xml.indexOf("?>", i).let { if (it < 0) n else it + 2 } }
                     xml.startsWith("<!", i) -> { i = xml.indexOf('>', i).let { if (it < 0) n else it + 1 } }
                     else -> {
-                        val end = xml.indexOf('>', i)
+                        val end = tagEnd(xml, i + 1)
                         if (end < 0) { i = n } else {
-                            parseTag(xml.substring(i + 1, end))?.let(out::add)
+                            val token = parseTag(xml.substring(i + 1, end))
+                            if (token != null) {
+                                out.add(token)
+                                // Only an element that closes is read raw, so one left open does not take the rest as text.
+                                if (token is KiteXmlToken.Open && !token.selfClose && token.name in RAW_TEXT &&
+                                    end < (noEndTagFrom[token.name] ?: n)
+                                ) {
+                                    if (hasEndTag(xml, end, token.name)) rawText = token.name else noEndTagFrom[token.name] = end
+                                }
+                                // In raw text only the element's own end tag gets this far.
+                                if (token is KiteXmlToken.Close) rawText = null
+                            }
                             i = end + 1
                         }
                     }
                 }
             } else {
-                val end = xml.indexOf('<', i).let { if (it < 0) n else it }
+                var end = xml.indexOf('<', i + 1).let { if (it < 0) n else it }
+                if (rawText != null) {
+                    while (end < n && !opensInRawText(xml, end, rawText)) end = xml.indexOf('<', end + 1).let { if (it < 0) n else it }
+                }
                 val raw = xml.substring(i, end)
                 if (raw.isNotEmpty()) out.add(KiteXmlToken.Text(decodeEntities(raw)))
                 i = end
             }
         }
         return out
+    }
+
+    /** Whether an end tag of [name] starts after [from]. */
+    private fun hasEndTag(xml: String, from: Int, name: String): Boolean {
+        var at = xml.indexOf("</", from)
+        while (at >= 0) {
+            if (opensInRawText(xml, at, name)) return true
+            at = xml.indexOf("</", at + 2)
+        }
+        return false
+    }
+
+    /** The elements whose text is code, where a lone `<` is no tag. */
+    private val RAW_TEXT = setOf("script", "style")
+
+    /** Whether the `<` at [at], inside the text of a [rawText] element, opens its end tag, a comment or a CDATA section. */
+    private fun opensInRawText(xml: String, at: Int, rawText: String): Boolean {
+        if (xml.startsWith("<!--", at) || xml.startsWith("<![CDATA[", at)) return true
+        if (!xml.startsWith("</", at)) return false
+        // The end tag of the element itself, with or without a namespace prefix.
+        var i = at + 2
+        while (i < xml.length && (xml[i].isLetterOrDigit() || xml[i] == ':' || xml[i] == '-' || xml[i] == '_')) i++
+        return xml.substring(at + 2, i).substringAfterLast(':').equals(rawText, ignoreCase = true)
+    }
+
+    /**
+     * The index of the `>` that ends the tag whose body starts at [from], or -1. A quoted attribute
+     * value may hold a `>` (XML 1.0, 2.3) and in HTML a `<` too, so the end is the first `>` outside
+     * one. A quote that never closes is a typo, not a value, so the tag then ends at the first `>`.
+     */
+    private fun tagEnd(xml: String, from: Int): Int {
+        var quote = '\u0000'
+        var afterEquals = false
+        var i = from
+        while (i < xml.length) {
+            val c = xml[i]
+            if (quote != '\u0000') {
+                if (c == quote) quote = '\u0000'
+            } else when {
+                c == '>' -> return i
+                (c == '"' || c == '\'') && afterEquals -> { quote = c; afterEquals = false }
+                c == '=' -> afterEquals = true
+                c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '\u000C' -> Unit
+                else -> afterEquals = false
+            }
+            i++
+        }
+        return xml.indexOf('>', from)
     }
 
     private fun parseTag(body: String): KiteXmlToken? {
