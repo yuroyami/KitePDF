@@ -11,7 +11,7 @@ The test data of the WHATWG URL Standard, from
 - `toascii.json`: host names through the domain parser.
 
 `WhatwgUrlTest` runs `urltestdata.json`, `setters_tests.json` and `toascii.json` against the URL
-parser of the script layer (#520), and `UrlWptTest` in `kitepdf-javascript` hands the first
+parser of the script layer (#520), and `WebPlatformTest` in `kitepdf-javascript` hands the first
 three to the JavaScript tests of the same commit, which it keeps in its own test resources.
 The files are under the 3-Clause BSD License of the web-platform-tests contributors, in
 `LICENSE.md`.

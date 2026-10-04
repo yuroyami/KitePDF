@@ -1,4 +1,4 @@
-/* Just enough of testharness.js for the URL tests of web-platform-tests: each test runs at once,
+/* Just enough of testharness.js for the tests of this folder: each test runs at once,
    a failing one logs its name and error, and the last script logs the count once every
    promise_test has settled. Not a file of web-platform-tests. */
 var harness = { passed: 0, failed: 0, pending: [] };
@@ -41,5 +41,8 @@ function assert_throws_js(constructor, fn, description) {
     return;
   }
   check(false, description, 'did not throw');
+}
+function assert_own_property(object, name, description) {
+  check(object != null && Object.prototype.hasOwnProperty.call(object, name), description, 'expected an own property ' + show(name));
 }
 function assert_unreached(description) { check(false, description, 'reached unreachable code'); }

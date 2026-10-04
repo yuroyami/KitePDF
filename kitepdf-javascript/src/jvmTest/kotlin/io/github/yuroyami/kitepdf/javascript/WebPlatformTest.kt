@@ -8,18 +8,19 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 /**
- * The `URL` and `URLSearchParams` that a book's scripts see (#520), against the JavaScript tests
- * of the URL Standard in web-platform-tests, run in a chapter as a browser runs them in a page.
+ * Interfaces that a book's scripts see, against their JavaScript tests in web-platform-tests, run
+ * in a chapter as a browser runs them in a page: the `URL` and `URLSearchParams` of the URL
+ * Standard (#520) and the `DOMException` of Web IDL (#530).
  *
  * Each test file runs in a book of its own, after `harness.js`, a small stand-in for
- * testharness.js whose `fetch` answers from the test data that the parser's own test reads in
- * kitepdf-epub, and before `report.js`, which logs the count.
+ * testharness.js whose `fetch` answers from the test data that the URL parser's own test reads
+ * in kitepdf-epub, and before `report.js`, which logs the count.
  *
  * A test that a known gap fails is listed in [gaps] with the issue that tracks it, and a probe
  * that is true while the gap is there. While it is, the test has to fail; once it is not, the
  * test has to pass, so the list stays true.
  */
-class UrlWptTest {
+class WebPlatformTest {
 
     private val runners = ArrayList<EpubScriptRunner>()
 
@@ -43,23 +44,37 @@ class UrlWptTest {
                 "try { o.z = 2; return true; } catch (e) { return false; } })()",
             setOf("URL.searchParams setter, invalid values"),
         ),
-        Gap("#530, DOMException has no legacy constants", "DOMException.INDEX_SIZE_ERR !== 1", setOf("URLSearchParams constructor, DOMException as argument")),
+        // The test is strict and the harness that calls it is not, as there. The second function is
+        // the sloppy caller: one written inside the strict function would be strict as well.
+        Gap(
+            "kitejs#69, strict code called by sloppy code runs as sloppy",
+            "(function (call) { 'use strict'; var o = Object.freeze({ z: 1 }); return call(function () { o.z = 2; }); })" +
+                "(function (fn) { try { fn(); return true; } catch (e) { return false; } })",
+            setOf("URL.searchParams setter, invalid values"),
+        ),
         Gap("#531, FormData is missing", "typeof FormData === 'undefined'", setOf("URLSearchParams constructor, FormData.")),
     )
 
     /** The test files that KiteJS 0.2.0 cannot parse, as each has a const in a for head (kitejs#11, fixed after it). */
     private val dataDriven = listOf("url-constructor.any.js", "url-origin.any.js", "url-setters.any.js", "urlsearchparams-foreach.any.js")
+        .map { "url/$it" }
 
-    private val files = listOf(
+    private val urlFiles = listOf(
         "url-searchparams.any.js", "url-statics-canparse.any.js", "url-statics-parse.any.js", "url-tojson.any.js",
         "urlsearchparams-append.any.js", "urlsearchparams-constructor.any.js", "urlsearchparams-delete.any.js",
         "urlsearchparams-get.any.js", "urlsearchparams-getall.any.js", "urlsearchparams-has.any.js",
         "urlsearchparams-set.any.js", "urlsearchparams-size.any.js", "urlsearchparams-sort.any.js",
         "urlsearchparams-stringifier.any.js",
-    )
+    ).map { "url/$it" }
 
-    private fun resource(name: String): String =
-        checkNotNull(javaClass.getResourceAsStream("/wpt-url/$name")) { "no resource $name" }.readBytes().decodeToString()
+    private val domExceptionFiles = listOf(
+        "DOMException-constants.any.js", "DOMException-constructor-and-prototype.any.js",
+        "DOMException-constructor-behavior.any.js", "DOMException-custom-bindings.any.js",
+    ).map { "webidl/$it" }
+
+    /** A file of `resources/wpt`, by its path there. */
+    private fun resource(path: String): String =
+        checkNotNull(javaClass.getResourceAsStream("/wpt/$path")) { "no resource $path" }.readBytes().decodeToString()
 
     /** The test data of the URL parser, in kitepdf-epub, from the repository root, so any working directory works. */
     private val data: File = run {
@@ -94,10 +109,11 @@ class UrlWptTest {
         gaps.filterIndexed { i, _ -> answers[i] == "true" }
     }
 
-    /** The names of the tests of [name] that fail, and how many pass. A script that does not run at all fails the file. */
-    private fun run(name: String): Pair<List<String>, Int> {
+    /** The names of the tests of the file at [path] that fail, and how many pass. A script that does not run at all fails the file. */
+    private fun run(path: String): Pair<List<String>, Int> {
+        val name = path.substringAfterLast('/')
         val (console, failures) = chapter(
-            linkedMapOf("harness.js" to resource("harness.js"), "data.js" to harnessData, name to resource(name), "report.js" to resource("report.js")),
+            linkedMapOf("harness.js" to resource("harness.js"), "data.js" to harnessData, name to resource(path), "report.js" to resource("report.js")),
         )
         assertTrue(failures.isEmpty(), "$name does not run: $failures")
         val done = console.singleOrNull { it.startsWith("log: DONE ") }
@@ -108,28 +124,28 @@ class UrlWptTest {
         return failing to passed
     }
 
-    /** Runs [names], and fails on a test that fails without an open gap, or that passes while its gap is open. */
-    private fun check(names: List<String>, atLeast: Int) {
+    /** Runs [paths], and fails on a test that fails without an open gap, or that passes while its gap is open. */
+    private fun check(paths: List<String>, atLeast: Int) {
         val expected = openGaps.flatMap { gap -> gap.tests.map { it to gap.issue } }.toMap()
         val unexpected = ArrayList<String>()
         val seen = HashSet<String>()
         var passed = 0
-        for (name in names) {
-            val (failing, ok) = run(name)
+        for (path in paths) {
+            val (failing, ok) = run(path)
             passed += ok
             for (failure in failing) {
                 val test = failure.substringBefore(" :: ")
-                if (test in expected) seen += test else unexpected += "$name: $failure"
+                if (test in expected) seen += test else unexpected += "$path: $failure"
             }
         }
-        val stale = expected.filterKeys { test -> test !in seen && names.any { test in resource(it) } }
+        val stale = expected.filterKeys { test -> test !in seen && paths.any { test in resource(it) } }
         assertTrue(passed >= atLeast, "only $passed tests passed")
         assertTrue(unexpected.isEmpty(), "${unexpected.size} failures, $passed passed:\n" + unexpected.take(60).joinToString("\n"))
         assertTrue(stale.isEmpty(), "these pass although their gap is open, so its probe is wrong: $stale")
     }
 
     @Test
-    fun the_url_tests_of_web_platform_tests_pass_but_for_known_gaps() = check(files, atLeast = 90)
+    fun the_url_tests_pass_but_for_known_gaps() = check(urlFiles, atLeast = 90)
 
     @Test
     fun the_data_driven_url_tests_pass() {
@@ -138,4 +154,7 @@ class UrlWptTest {
         assumeTrue("The KiteJS in use cannot parse a const in a for head (kitejs#11, fixed after 0.2.0).", "log: PROBE yes" in console)
         check(dataDriven, atLeast = 1500)
     }
+
+    @Test
+    fun the_dom_exception_tests_pass() = check(domExceptionFiles, atLeast = 100)
 }
