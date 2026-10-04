@@ -53,6 +53,35 @@ class MetadataTocTest {
     }
 
     @Test
+    fun metadata_values_strip_and_collapse_their_white_space() {
+        // EPUB 3.3 asks a reading system to strip the ends of each metadata value and collapse each
+        // run of white space inside to one space (#515). A comment splits a value's text in two.
+        val opf = """<?xml version="1.0"?>
+            <package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="pub-id">
+              <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
+                <dc:title>
+                  The   Long<!-- a note -->${'\t'}Title
+                </dc:title>
+                <dc:creator>  	  Dave    Cramer   </dc:creator>
+                <dc:creator>   </dc:creator>
+                <dc:language> en </dc:language>
+                <dc:identifier id="pub-id">  urn:uuid:one  </dc:identifier>
+                <meta property="rendition:layout">  pre-paginated </meta>
+                <meta name="rendition:spread" content="  none  "/>
+              </metadata>
+              <manifest><item id="c1" href="ch1.xhtml" media-type="application/xhtml+xml"/></manifest>
+              <spine><itemref idref="c1"/></spine>
+            </package>"""
+        val m = EpubDocument.open(pkg(opf, listOf("OEBPS/ch1.xhtml" to chapter("hi")))).epubMetadata
+        assertEquals("The Long Title", m.title)
+        assertEquals(listOf("Dave Cramer"), m.creators, "a creator of white space alone is no creator")
+        assertEquals("en", m.language)
+        assertEquals("urn:uuid:one", m.identifier)
+        assertEquals(EpubLayout.PRE_PAGINATED, m.rendition.layout)
+        assertEquals(EpubSpread.NONE, m.rendition.spread)
+    }
+
+    @Test
     fun cover_image_property_is_recognised() {
         val opf = """<?xml version="1.0"?>
             <package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="id">

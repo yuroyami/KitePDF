@@ -8,11 +8,11 @@ The reading system under test is the library and its viewer together: `kitepdf-e
 
 | Level | Tests | Passes | Fails | Not applicable |
 |---|---|---|---|---|
-| must | 140 | 91 | 45 | 4 |
+| must | 140 | 92 | 44 | 4 |
 | should | 38 | 14 | 23 | 1 |
 | may | 1 | 0 | 1 | 0 |
 | deprecated | 27 | 16 | 10 | 1 |
-| all | 206 | 121 | 79 | 6 |
+| all | 206 | 122 | 78 | 6 |
 
 ## How the results are known
 
@@ -59,7 +59,7 @@ KITEPDF_EPUB_TESTS=$PWD/../epub-tests/tests ./gradlew :kitepdf-compose-viewer:jv
 | [`pkg-manifest-unknown`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/pkg-manifest-unknown) | must | Passes | Checked: The book opens and shows the pass sentence. |
 | [`pkg-manifest-unlisted-resource`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/pkg-manifest-unlisted-resource) | should | Fails ([#516](https://github.com/yuroyami/KitePDF/issues/516)) | Checked: The image that the manifest does not list does not draw; today it does. |
 | [`pkg-meta-unknown`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/pkg-meta-unknown) | must | Passes | Checked: The book opens with its own title, not the unknown meta's, and shows the pass sentence. |
-| [`pkg-meta-whitespace`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/pkg-meta-whitespace) | must | Fails ([#515](https://github.com/yuroyami/KitePDF/issues/515)) | Checked: The creator reads "Dave Cramer" with one space; today it keeps the run of spaces. |
+| [`pkg-meta-whitespace`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/pkg-meta-whitespace) | must | Passes | Checked: The creator reads "Dave Cramer" with one space, and the title reads as written. |
 | [`pkg-spine-duplicate-item-hyperlink`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/pkg-spine-duplicate-item-hyperlink) | must | Passes | Checked: The link to the repeated document goes to its first place in the spine. |
 | [`pkg-spine-duplicate-item-rendering`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/pkg-spine-duplicate-item-rendering) | must | Passes | Checked: The document listed three times in the spine shows three times, one page each. |
 | [`pkg-spine-duplicate-item-ui`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/pkg-spine-duplicate-item-ui) | must | Passes | Checked: Each of the three places of the repeated document has a bookmark of its own chapter. |
