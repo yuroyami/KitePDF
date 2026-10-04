@@ -13,7 +13,7 @@ import kotlin.math.abs
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
-import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration
 
 /**
  * Where chapter layout runs on the UI thread, as in a browser, a chapter away from the reader
@@ -52,13 +52,16 @@ class RestingLoaderSceneTest {
         // Where layout runs on the UI thread, a chapter lays out in slices with a frame between two (#389).
         val bodies = listOf(
             "<h1>Start</h1><p>A short first chapter.</p>",
-            "<h1>Long</h1>" + (0 until 400).joinToString("") { "<p>Long chapter paragraph $it with words enough to wrap once or twice in a narrow page.</p>" },
+            "<h1>Long</h1>" + (0 until 40).joinToString("") { "<p>Long chapter paragraph $it with words enough to wrap once or twice in a narrow page.</p>" },
         )
         val doc = EpubDocument.open(multiSpineEpub(bodies), settings)
         val (scene, driver) = drivenScene(200, 260, queued) {
             val state = rememberKiteDocViewState(doc, KiteBookmark.Flow(chapter = 0)).also {
                 it.layoutPausesForFrames = true
-                it.layoutSlice = 2.milliseconds
+                // A slice of no time waits for a frame after every step. A slice of 2 ms made the
+                // count of frames hang on the speed of the machine: once the JIT had warmed up, a
+                // fast runner laid the whole chapter out in two slices.
+                it.layoutSlice = Duration.ZERO
             }
             KiteDocView(state = state, modifier = Modifier.fillMaxSize())
         }
