@@ -495,7 +495,7 @@ public class EpubDocument internal constructor(
 
     /** A fixed-layout chapter's page size: what it declares, else the reader's. */
     private fun viewportOf(chapter: Int): Pair<Double, Double> =
-        parsed.layoutSpine(chapter).viewport ?: (settings.pageWidth to settings.pageHeight)
+        parsed.layoutSpine(chapter).viewport?.resolve(settings.pageWidth, settings.pageHeight) ?: (settings.pageWidth to settings.pageHeight)
 
     /**
      * The document's language: the first chapter's own `lang`, else the OPF

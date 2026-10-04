@@ -137,6 +137,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- A fixed-layout page reads its viewport tag as EPUB Reading Systems 3.3 asks: the first
+  `<meta name="viewport">` of a chapter sizes it and a later one is ignored, the first `width`
+  and `height` in it count, and a value is the number it starts with whatever unit follows, so
+  `width=1000px, height=600mm` is 1000 by 600 pixels. A side given as `device-width` or
+  `device-height`, or not given, comes from the reader's page, a lone width or height keeping
+  its aspect ratio. Of two overrides of one property on a spine entry, such as
+  `rendition:layout-reflowable rendition:layout-pre-paginated`, the first counts (#502).
+
 - A package metadata value has the white space at its ends stripped and each run inside
   collapsed to one space, as EPUB 3.3 asks: `<dc:creator>  Dave    Cramer </dc:creator>` reads
   "Dave Cramer". A value split by a comment reads whole, and an element of white space alone,

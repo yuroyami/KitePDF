@@ -46,6 +46,14 @@ Fixed-layout (pre-paginated) books keep their authored viewport. The
 viewport is in CSS pixels, so a page declared 800 by 1200 is 600 by 900
 points. `book.isFixedLayout` tells you which kind you have.
 
+The viewport comes from the first `<meta name="viewport">` of the chapter, and
+from the first `width` and `height` in it, as EPUB Reading Systems 3.3 asks.
+A value is the number it starts with, so `width=1000px` and `width=1000mm` are
+both 1000 pixels. A side given as `device-width` or `device-height`, or not
+given at all, comes from the reader: a tag of `width=device-width,
+height=device-height` makes the page the size you opened the book at, and a
+tag with a width alone keeps the aspect ratio of that size.
+
 A book can mix fixed and reflowable chapters. Each chapter then keeps its own
 layout: a fixed chapter is one page at its viewport, and a reflowable chapter
 flows over pages of the reader's size. `book.isFixedLayout` is true only when
