@@ -10,6 +10,9 @@ name: CI
 # - `apple` and `js` prove the non-JVM targets compile AND pass the common
 #   tests before merge. Platform regressions are therefore merge-blocking,
 #   instead of being discovered only after they land on main.
+# - `other-targets` does the same for the rest of what we publish: it runs the
+#   common tests on Linux x64, wasmJs and wasmWasi, and compiles Linux arm64,
+#   Windows and the Android native ABIs, so none of them rots unseen (#562).
 # - `api` checks the public API of each published module against the dump in
 #   its api/ directory. It runs on macOS, the one host that compiles every
 #   target, so the Apple-only declarations are checked too.
@@ -359,5 +362,73 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: test-reports-js
+          path: '**/build/reports/tests/**'
+          if-no-files-found: ignore
+
+  other-targets:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Cache Konan (native compiler + prebuilt deps)
+        uses: actions/cache@v4
+        with:
+          path: ~/.konan
+          key: konan-${{ runner.os }}-${{ hashFiles('gradle/libs.versions.toml') }}
+          restore-keys: konan-${{ runner.os }}-
+
+      - name: Test Linux x64 common suites
+        run: >
+          ./gradlew
+          :kitepdf-core:linuxX64Test :kitepdf-pdf:linuxX64Test
+          :kitepdf-epub:linuxX64Test :kitepdf-cbz:linuxX64Test
+          :kitepdf-svg:linuxX64Test :kitepdf-xps:linuxX64Test :kitepdf:linuxX64Test
+          --continue --stacktrace
+
+      # Two workers: linking the wasm test binaries four at a time ran a
+      # 4-core, 15 GB machine out of memory and killed the daemon (#562).
+      - name: Test wasmJs and wasmWasi on Node
+        run: >
+          ./gradlew --max-workers=2
+          :kitepdf-core:wasmJsNodeTest :kitepdf-pdf:wasmJsNodeTest
+          :kitepdf-epub:wasmJsNodeTest :kitepdf-cbz:wasmJsNodeTest
+          :kitepdf-svg:wasmJsNodeTest :kitepdf-xps:wasmJsNodeTest :kitepdf:wasmJsNodeTest
+          :kitepdf-core:wasmWasiNodeTest :kitepdf-pdf:wasmWasiNodeTest
+          :kitepdf-epub:wasmWasiNodeTest :kitepdf-cbz:wasmWasiNodeTest
+          :kitepdf-svg:wasmWasiNodeTest :kitepdf-xps:wasmWasiNodeTest :kitepdf:wasmWasiNodeTest
+          --continue --stacktrace
+
+      - name: Compile the other native and wasm targets
+        run: |
+          tasks=""
+          for m in kitepdf-core kitepdf-pdf kitepdf-epub kitepdf-cbz kitepdf-svg kitepdf-xps kitepdf; do
+            for t in LinuxArm64 MingwX64 AndroidNativeArm32 AndroidNativeArm64 AndroidNativeX64 AndroidNativeX86; do
+              tasks="$tasks :$m:compileKotlin$t"
+            done
+          done
+          ./gradlew $tasks \
+            :kitepdf-net:compileKotlinLinuxX64 :kitepdf-net:compileKotlinLinuxArm64 \
+            :kitepdf-net:compileKotlinMingwX64 :kitepdf-net:compileKotlinWasmJs \
+            :kitepdf-skia-renderer:compileKotlinLinuxX64 :kitepdf-skia-renderer:compileKotlinLinuxArm64 \
+            :kitepdf-skia-renderer:compileKotlinWasmJs :kitepdf-compose-viewer:compileKotlinWasmJs \
+            --continue --stacktrace
+
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-reports-other-targets
           path: '**/build/reports/tests/**'
           if-no-files-found: ignore
