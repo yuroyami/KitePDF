@@ -296,7 +296,9 @@ class RemoteResourceTest {
 
         gate.complete(Unit)
         doc.fetchRemoteResources(2)
-        assertEquals(listOf(pictureUrl, otherUrl), fetcher.asked, "each URL is fetched once")
+        // The two fetches can start together on two threads, so either can be recorded first (#559).
+        assertEquals(setOf(pictureUrl, otherUrl), fetcher.asked.toSet())
+        assertEquals(2, fetcher.asked.size, "each URL is fetched once")
         assertEquals(2, doc.remoteArrivals.value, "the fetches went on after the waits gave up, and landed")
     }
 
