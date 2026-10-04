@@ -2,6 +2,7 @@ package io.github.yuroyami.kitepdf.javascript
 
 import io.github.yuroyami.kitepdf.core.KiteLocation
 import io.github.yuroyami.kitepdf.core.render.RecordingCanvas
+import io.github.yuroyami.kitepdf.core.script.KiteScriptException
 import io.github.yuroyami.kitepdf.epub.EpubDocument
 import io.github.yuroyami.kitepdf.epub.EpubPage
 import java.io.File
@@ -9,6 +10,7 @@ import kotlin.math.roundToLong
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
 
@@ -137,11 +139,35 @@ class ScriptedBookGateTest {
     }
 
     @Test
-    fun scr_readingsystem_features_waits_on_const_in_a_for_head() {
+    fun scr_readingsystem_features_lists_each_feature_where_its_script_parses() {
         val run = Run("w3c-scr-readingsystem-features")
-        // Its one script does not parse yet, so the page keeps its failure text (KiteJS#11).
-        assertTrue("does not implement the epubReadingSystem object" in run.text(0), run.text(0))
-        run.assertOnlyKnownFailures()
+        val text = run.text(0)
+        if (!parsesConstInAForHead()) {
+            // Its one script does not parse on KiteJS 0.2.0, so the page keeps its failure text (KiteJS#11).
+            assertTrue("does not implement the epubReadingSystem object" in text, text)
+            run.assertOnlyKnownFailures()
+            return
+        }
+        assertTrue("implements the epubReadingSystem object with the following features" in text, text)
+        assertFalse("does not implement" in text, "the failure text is hidden: $text")
+        val features = listOf(
+            "dom-manipulation: true", "layout-changes: true", "touch-events: false",
+            "mouse-events: true", "keyboard-events: false", "spine-scripting: true",
+        )
+        for (feature in features) assertTrue(feature in text, "the page lists $feature: $text")
+        assertEquals(emptyList(), run.scripts.failures.map { it.message }, "no script fails")
+    }
+
+    /** Whether the engine in use parses a `const` in a `for` head, which KiteJS 0.2.0 does not (KiteJS#11, fixed after it). */
+    private fun parsesConstInAForHead(): Boolean {
+        val engine = KiteJsScriptEngine()
+        return try {
+            engine.evaluate("var n = 0; for (const x of [1, 2]) n += x; n", "probe") == "3"
+        } catch (e: KiteScriptException) {
+            false
+        } finally {
+            engine.close()
+        }
     }
 
     @Test
