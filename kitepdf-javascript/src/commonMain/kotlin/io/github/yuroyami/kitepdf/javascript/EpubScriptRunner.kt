@@ -1,6 +1,7 @@
 package io.github.yuroyami.kitepdf.javascript
 
 import io.github.yuroyami.kitepdf.core.KiteLock
+import io.github.yuroyami.kitepdf.core.script.KiteScriptEngine
 import io.github.yuroyami.kitepdf.core.script.KiteScriptException
 import io.github.yuroyami.kitepdf.core.withLock
 import io.github.yuroyami.kitepdf.epub.EpubDocument
@@ -18,7 +19,10 @@ import io.github.yuroyami.kitepdf.epub.EpubScriptSession
 public class EpubScriptPolicy(
     /** Whether the book's scripts run at all. False makes every call a no-op. */
     public val enabled: Boolean = true,
-    /** How long one call may run before the engine stops it. Zero means no limit. */
+    /**
+     * How long one call may run before the engine stops it. Zero means no limit. The DOM the
+     * library sets up in a chapter's engine before the book's first script does not count (#554).
+     */
     public val budgetMillis: Long = 5_000,
     /**
      * Interpreter steps one engine call may take, as a second line of defence for a loop that
@@ -79,6 +83,10 @@ public class EpubScriptRunner(
     /** When the call in progress started, for the budget: written on the script thread, read on a chapter's. */
     @kotlin.concurrent.Volatile
     private var callStartedAt = 0L
+
+    /** True while a chapter's engine runs the session's own DOM, which the budget leaves out (#554). */
+    @kotlin.concurrent.Volatile
+    private var settingUp = false
 
     /** The session, made on the script thread by the first call that needs it. */
     @kotlin.concurrent.Volatile
@@ -149,7 +157,7 @@ public class EpubScriptRunner(
         engineFor = {
             // Where every engine shares one thread, another runner's engine closes first (#553).
             scriptThread.value.makeRoom(engineUser)
-            ThreadedScriptEngine(startScriptThread()) {
+            OwnDomFirst(ThreadedScriptEngine(startScriptThread()) {
                 // A book's scripts polyfill and patch the built-ins as in a browser, and each chapter has an
                 // engine of its own, so the seal would guard nothing (#537).
                 KiteJsScriptEngine(
@@ -158,7 +166,7 @@ public class EpubScriptRunner(
                     clock = clock,
                     sealBuiltins = false,
                 )
-            }
+            })
         },
         onConsole = onConsole,
         clock = ::now,
@@ -172,7 +180,7 @@ public class EpubScriptRunner(
     /** True once the call in progress has used the policy's time, or the runner is closing. */
     private fun deadlinePassed(): Boolean {
         if (closed) return true
-        if (policy.budgetMillis <= 0) return false
+        if (settingUp || policy.budgetMillis <= 0) return false
         return now() - callStartedAt > policy.budgetMillis
     }
 
@@ -191,6 +199,27 @@ public class EpubScriptRunner(
             }
         } finally {
             thread.close()
+        }
+    }
+
+    /**
+     * A chapter's [engine], whose first script, the session's own DOM, runs outside the budget,
+     * which starts again once it returns: the budget measures the book's scripts, and the DOM
+     * takes hundreds of milliseconds to set up on a slow device (#554).
+     */
+    private inner class OwnDomFirst(private val engine: KiteScriptEngine) : KiteScriptEngine by engine {
+        private var first = true
+
+        override fun evaluate(source: String, name: String): String? {
+            if (!first) return engine.evaluate(source, name)
+            first = false
+            settingUp = true
+            try {
+                return engine.evaluate(source, name)
+            } finally {
+                settingUp = false
+                callStartedAt = now()
+            }
         }
     }
 

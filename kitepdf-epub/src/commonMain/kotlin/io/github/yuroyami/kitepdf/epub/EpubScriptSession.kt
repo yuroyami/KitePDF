@@ -52,7 +52,9 @@ import kotlin.math.roundToLong
  *
  * @param engineFor opens the engine of one chapter's scripts, the first time it opens. The
  *   session closes it in [close], or when it makes room for another chapter. An engine that
- *   will not open is a failure of that chapter, whose scripts then do not run.
+ *   will not open is a failure of that chapter, whose scripts then do not run. The first script
+ *   the session evaluates in it is always the session's own DOM, before any of the book's, so a
+ *   host that limits how long the book's scripts run can leave that one out (#554).
  * @param liveChapters how many chapters' engines may be open at once, at least one. One suits
  *   engines that cannot share a thread with another open engine.
  * @param onConsole gets what scripts print with `console`, and what `alert`, `confirm` and

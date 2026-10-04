@@ -374,6 +374,9 @@ pumps timers and follows the scripts' changes itself; see
 [A book's scripts](compose-viewer.md#a-books-scripts).
 
 `EpubScriptPolicy` sets how long each call may run: opening a chapter, a tap, a round of timers.
+The DOM the library sets up in a chapter's engine before the book's first script is not counted,
+as it takes a few hundred milliseconds and on a slow device seconds, so a tight budget stops the
+book's scripts and never the DOM they need ([#554](https://github.com/yuroyami/KitePDF/issues/554)).
 `EpubScriptPolicy.DENY` runs nothing. The runner runs its calls on a thread of its own, as
 `PdfScriptRunner` does, and opens each chapter's engine on a thread of its own too, since a
 KiteJS engine holds the thread that opened it. A listener of `onNavigate` or `onTimersChanged`
