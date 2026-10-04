@@ -17,9 +17,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   style sheet, an `@import` or a font loads from it as from a file of the book: the store sits on
   the book, so another document over it finds the blob too, and what a chapter shows keeps its
   blob after the script revokes the URL, while a chapter whose engine closes revokes the rest.
-  333 tests of web-platform-tests in `FileAPI/` pass in a chapter; the rest wait on
-  `MessageChannel` (#534), streams (#536), sealed built-ins (#537), element class strings
-  (#538) and KiteJS, for `async` functions and `Float16Array` (#533).
+  337 tests of web-platform-tests in `FileAPI/` pass in a chapter; the rest wait on
+  `MessageChannel` (#534), streams (#536), element class strings (#538) and KiteJS, for `async`
+  functions and `Float16Array` (#533).
 
 - A book's scripts have `TextEncoder` and `TextDecoder` of the Encoding Standard, with every
   encoding and label of its table: UTF-8, UTF-16, the 28 single-byte encodings, gb18030, GBK,
@@ -172,6 +172,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   a rebuild (#472).
 
 ### Fixed
+
+- A book's scripts can add to and wrap the built-in objects, as a browser's can, so a polyfill
+  such as core-js, which Babel's output loads, no longer stops at its first line. A chapter's
+  engine ran with the built-ins sealed, as a PDF's does, where the seal guarded nothing, since
+  each chapter has an engine of its own and every check that matters is on the Kotlin side.
+  `KiteJsScriptEngine` takes `sealBuiltins`, on by default, and `EpubScriptRunner` turns it off
+  (#537).
 
 - In a book's scripts, the promise jobs of a callback the reader calls run before its next
   callback, as HTML runs a microtask checkpoint after each one. Before, a timer's jobs waited for

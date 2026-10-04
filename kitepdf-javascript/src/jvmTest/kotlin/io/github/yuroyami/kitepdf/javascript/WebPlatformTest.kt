@@ -105,17 +105,6 @@ class WebPlatformTest {
             "typeof ReadableStream === 'undefined'",
             names = Regex("^Blob\\.(stream|textStream)\\(\\)|^Reading Blob\\.stream|^textStream method existence"),
         ),
-        // The tests put an iterator on a primitive's prototype, and take it away again.
-        Gap(
-            "#537, a book's scripts cannot add to a built-in object",
-            "(function () { try { Math.kiteSealProbe = 1; } catch (e) { return true; } var sealed = Math.kiteSealProbe !== 1; delete Math.kiteSealProbe; return sealed; })()",
-            setOf(
-                "blobParts not an object: boolean with Boolean.prototype[Symbol.iterator]",
-                "blobParts not an object: string with String.prototype[Symbol.iterator]",
-                "blobParts not an object: number with Number.prototype[Symbol.iterator]",
-                "blobParts not an object: BigInt with BigInt.prototype[Symbol.iterator]",
-            ),
-        ),
         Gap(
             "#538, an element has no class string",
             "Object.prototype.toString.call(document.body) !== '[object HTMLBodyElement]'",

@@ -48,7 +48,7 @@ final class io.github.yuroyami.kitepdf.javascript/EpubScriptRunner : io.github.y
 }
 
 final class io.github.yuroyami.kitepdf.javascript/KiteJsScriptEngine : io.github.yuroyami.kitepdf.core.script/KiteScriptEngine { // io.github.yuroyami.kitepdf.javascript/KiteJsScriptEngine|null[0]
-    constructor <init>(kotlin/Int = ..., kotlin/Function0<kotlin/Boolean>? = ..., kotlin/Function0<kotlin/Long>? = ..., kotlin/Boolean = ...) // io.github.yuroyami.kitepdf.javascript/KiteJsScriptEngine.<init>|<init>(kotlin.Int;kotlin.Function0<kotlin.Boolean>?;kotlin.Function0<kotlin.Long>?;kotlin.Boolean){}[0]
+    constructor <init>(kotlin/Int = ..., kotlin/Function0<kotlin/Boolean>? = ..., kotlin/Function0<kotlin/Long>? = ..., kotlin/Boolean = ..., kotlin/Boolean = ...) // io.github.yuroyami.kitepdf.javascript/KiteJsScriptEngine.<init>|<init>(kotlin.Int;kotlin.Function0<kotlin.Boolean>?;kotlin.Function0<kotlin.Long>?;kotlin.Boolean;kotlin.Boolean){}[0]
 
     final val asmReports // io.github.yuroyami.kitepdf.javascript/KiteJsScriptEngine.asmReports|{}asmReports[0]
         final fun <get-asmReports>(): kotlin.collections/List<kotlin/String> // io.github.yuroyami.kitepdf.javascript/KiteJsScriptEngine.asmReports.<get-asmReports>|<get-asmReports>(){}[0]

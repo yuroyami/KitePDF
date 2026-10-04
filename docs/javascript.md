@@ -106,8 +106,9 @@ PdfScriptRunner(doc, policy = PdfScriptPolicy.LONG_RUNNING)            // a docu
 ```
 
 A script that passes its budget stops and is reported in `runner.failures`. `onStillRunning` is
-asked first, so a viewer can offer to keep waiting, the way a browser does. The built-in objects
-are read-only, and a script reaches nothing outside the engine except what the runner defines.
+asked first, so a viewer can offer to keep waiting, the way a browser does. A PDF's scripts share
+one engine, so its built-in objects are read-only and one script cannot redefine what another
+relies on. A script reaches nothing outside the engine except what the runner defines.
 
 Denying scripts does not stop a reader filling the form: values still go into the form state, and
 only the scripts are silent.
@@ -166,6 +167,13 @@ Each chapter is a window of its own, with an engine of its own. Its scripts run 
 opens, inline and from the book, in document order. A module script does not run, and neither
 does a script at an address outside the book. Once scripts run, `noscript` content no longer
 shows. A chapter without scripts takes no engine.
+
+A chapter's built-in objects are writable, as a browser's are, so a polyfill can add a method the
+engine lacks and a library can wrap one it has
+([#537](https://github.com/yuroyami/KitePDF/issues/537)). A script that breaks a built-in breaks
+only its own chapter. The DOM below still calls the built-ins the book patched, so a patch that
+changes what a method does changes the DOM too
+([#540](https://github.com/yuroyami/KitePDF/issues/540)).
 
 At most eight chapters keep their engines open at once (`EpubScriptRunner.LIVE_CHAPTERS`), and
 one on JavaScript and WebAssembly, where every engine shares the page's one thread. Opening one
@@ -259,7 +267,6 @@ its scripts made, as a page that unloads does.
 `WebPlatformTest` runs the File API tests of web-platform-tests in a chapter. Those that fail wait
 on `MessageChannel` ([#534](https://github.com/yuroyami/KitePDF/issues/534)), on streams, as
 `Blob.stream()` and `Blob.textStream()` do ([#536](https://github.com/yuroyami/KitePDF/issues/536)),
-on a script adding to a built-in prototype ([#537](https://github.com/yuroyami/KitePDF/issues/537)),
 on an element's class string ([#538](https://github.com/yuroyami/KitePDF/issues/538)), or on the
 engine: `Float16Array` and `async` functions, which nine of the files are written in.
 
