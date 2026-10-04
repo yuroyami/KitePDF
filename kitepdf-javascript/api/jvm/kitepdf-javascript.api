@@ -36,8 +36,8 @@ public final class io/github/yuroyami/kitepdf/javascript/KiteJsScriptEngine : io
 	public static final field Companion Lio/github/yuroyami/kitepdf/javascript/KiteJsScriptEngine$Companion;
 	public static final field DEFAULT_INSTRUCTION_BUDGET I
 	public fun <init> ()V
-	public fun <init> (ILkotlin/jvm/functions/Function0;Lkotlin/jvm/functions/Function0;Z)V
-	public synthetic fun <init> (ILkotlin/jvm/functions/Function0;Lkotlin/jvm/functions/Function0;ZILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun <init> (ILkotlin/jvm/functions/Function0;Lkotlin/jvm/functions/Function0;ZZ)V
+	public synthetic fun <init> (ILkotlin/jvm/functions/Function0;Lkotlin/jvm/functions/Function0;ZZILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public fun close ()V
 	public fun defineFunction (Ljava/lang/String;Lkotlin/jvm/functions/Function1;)V
 	public fun defineValue (Ljava/lang/String;Ljava/lang/Object;)V

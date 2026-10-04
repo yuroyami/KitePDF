@@ -131,7 +131,14 @@ public class EpubScriptRunner(
         document,
         engineFor = {
             ThreadedScriptEngine(startScriptThread()) {
-                KiteJsScriptEngine(instructionBudget = policy.instructionBudget, deadline = ::deadlinePassed, clock = clock)
+                // A book's scripts polyfill and patch the built-ins as in a browser, and each chapter has an
+                // engine of its own, so the seal would guard nothing (#537).
+                KiteJsScriptEngine(
+                    instructionBudget = policy.instructionBudget,
+                    deadline = ::deadlinePassed,
+                    clock = clock,
+                    sealBuiltins = false,
+                )
             }
         },
         onConsole = onConsole,

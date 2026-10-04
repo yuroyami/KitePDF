@@ -663,4 +663,32 @@ class EpubScriptTest {
             console,
         )
     }
+
+    @Test
+    fun a_book_polyfills_and_patches_the_built_in_objects_as_in_a_browser() {
+        // A bundled script polyfills a method the engine lacks and wraps one it has, as core-js and
+        // its like do, and a test of web-platform-tests adds an iterator to a primitive's prototype.
+        // A chapter used to run on sealed built-ins, where the first line threw (#537).
+        val console = ArrayList<String>()
+        val book = ScriptBooks.chapter(
+            "<p>Polyfills.</p><script src=\"poly.js\"></script>",
+            extraFiles = mapOf(
+                "poly.js" to """
+                    String.prototype.shout = function () { return this.toUpperCase() + '!'; };
+                    var join = Array.prototype.join, joins = 0;
+                    Array.prototype.join = function (separator) { joins++; return join.call(this, separator); };
+                    Number.prototype[Symbol.iterator] = function () { return [1, 2][Symbol.iterator](); };
+                    var spread = Array.from(7);
+                    delete Number.prototype[Symbol.iterator];
+                    Math.clamp = function (x, lo, hi) { return Math.min(Math.max(x, lo), hi); };
+                    console.log('hi'.shout() + ' ' + [1, 2].join('-') + ' ' + joins + ' ' + spread.length + ' ' +
+                        Math.clamp(9, 0, 5) + ' ' + (Symbol.iterator in Number.prototype));
+                """.trimIndent(),
+            ),
+        )
+        val scripts = runner(book, console = console)
+        scripts.chapterOpened(0)
+        assertEquals(emptyList(), scripts.failures.map { it.message })
+        assertEquals(listOf("log: HI! 1-2 1 2 5 false"), console)
+    }
 }

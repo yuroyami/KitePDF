@@ -13,9 +13,9 @@ import io.github.yuroyami.kitepdf.core.script.KiteScriptException
  *
  * Document scripts are untrusted, so every call runs under [instructionBudget]:
  * a script that never returns fails with a [KiteScriptException] instead of
- * hanging the app. The built-ins are read-only, so one script cannot redefine
- * what another relies on. Scripts reach nothing outside the engine except the
- * functions and values the host defines.
+ * hanging the app. By default the built-ins are read-only, so one script cannot
+ * redefine what another relies on. Scripts reach nothing outside the engine
+ * except the functions and values the host defines.
  */
 public class KiteJsScriptEngine(
     /** Interpreter steps one call may take before it stops. 0 means no limit. */
@@ -36,12 +36,19 @@ public class KiteJsScriptEngine(
      * turning off only to compare the two: a module runs and answers the same either way.
      */
     asmJs: Boolean = true,
+    /**
+     * Whether the built-in objects are read-only. On by default, so a PDF's scripts, which share
+     * one engine, cannot redefine what another relies on. A host that gives each document its own
+     * engine and runs web scripts, which polyfill and patch the built-ins as they do in a browser,
+     * turns it off.
+     */
+    sealBuiltins: Boolean = true,
 ) : KiteScriptEngine {
 
     private val js = KiteJs {
         this.instructionBudget = this@KiteJsScriptEngine.instructionBudget
         safeBuiltins = true
-        sealBuiltins = true
+        this.sealBuiltins = sealBuiltins
         deadline?.let { interruptWhen = it }
         clock?.let { source -> this.clock = { source().toDouble() } }
         this.asmJs = asmJs
