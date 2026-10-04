@@ -21,7 +21,8 @@ internal object FormStates {
                 else -> false
             }
             PseudoKind.INDETERMINATE -> when (local) {
-                "input" -> inputType(el, tree) == "radio" && radioGroup(el, tree).none { tree.attr(it, "checked") != null }
+                // The group holds the radio itself (HTML 4.10.5.1.15), as it does for validity below.
+                "input" -> inputType(el, tree) == "radio" && (radioGroup(el, tree) + el).none { tree.attr(it, "checked") != null }
                 "progress" -> tree.attr(el, "value") == null
                 else -> false
             }

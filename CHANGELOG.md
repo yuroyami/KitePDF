@@ -173,6 +173,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- A checked radio button no longer matches `:indeterminate` when the other buttons of its group
+  are unchecked, as the group it looked in for a checked button left the radio itself out (#551).
+
 - A book's style sheets and its scripts read the selectors of Selectors 4, where `:not()` took
   one simple selector, a pseudo-class it did not know never matched instead of making the
   selector invalid, a script's query that a browser rejects answered, and `:is()` in a style
