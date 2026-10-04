@@ -119,6 +119,10 @@ internal fun linkKindsIn(root: KiteXmlNode.Element, resolve: (String) -> String)
 /** The target of [fragment] in one chapter's tree, or null when the chapter has no such id. */
 internal fun linkTargetIn(root: KiteXmlNode.Element, chapter: Int, href: String, fragment: String): EpubLinkTarget? {
     val anchor = elementById(root, fragment) ?: return null
+    val bookmark = KiteBookmark.Flow(chapter, 0, fragment)
+    // EPUB 3.3 does not allow epub:type on the head or what it holds, and a reading system ignores
+    // it there (Reading Systems 3.3, 10), so a target there is a place in the chapter and no more (#527).
+    if (!inBody(anchor)) return EpubLinkTarget(href, bookmark, EpubTargetKind.OTHER, null, "")
     val holder = noteHolder(anchor)
     var kind = EpubTargetKind.OTHER
     var type: String? = null
@@ -132,7 +136,20 @@ internal fun linkTargetIn(root: KiteXmlNode.Element, chapter: Int, href: String,
         }
         el = el.parent
     }
-    return EpubLinkTarget(href, KiteBookmark.Flow(chapter, 0, fragment), kind, type, noteText(holder))
+    return EpubLinkTarget(href, bookmark, kind, type, noteText(holder))
+}
+
+/** Whether [el] is content: not the html element, the head, or an element in the head. */
+private fun inBody(el: KiteXmlNode.Element): Boolean {
+    var e: KiteXmlNode.Element? = el
+    while (e != null) {
+        when (e.tag) {
+            "body" -> return true
+            "head", "html" -> return false
+        }
+        e = e.parent
+    }
+    return true
 }
 
 /** The element whose `id` is [id], or a legacy `<a name>` of that name. */

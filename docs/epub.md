@@ -233,6 +233,10 @@ for (entry in book.tableOfContents.entries) {
 }
 ```
 
+An entry's label is the text of its link, with each image in it read as its `alt`,
+or its `title` when it has no `alt`, and its white space collapsed, so an entry made
+of a picture still has a name in the outline.
+
 `EpubDocument` also implements the format-neutral `KiteDocument` interface
 (shared with `PdfDocument`): `metadata`, `outline`, `pageCount`, and
 per-page `textContent()` behave the same for both formats, so reader UI can
@@ -278,7 +282,9 @@ if (tapped.kind == EpubLinkKind.NOTE_REFERENCE) {
 
 The text leaves out ruby readings and the back link to the call site. When the
 id sits on a short inline anchor, as in `<p><a id="fn1">1.</a> The note.</p>`, the
-text is the whole paragraph. A glossary term comes with its definitions.
+text is the whole paragraph. A glossary term comes with its definitions. An
+`epub:type` on the head, an element in it, or the html element means nothing, so
+a link to the chapter's `<title>` is of kind `OTHER`, with no text.
 
 `KiteDocView` does the hit test for you: its `onLinkTap` receives every tapped
 link before the viewer scrolls, with `kind` set for a reference (see
