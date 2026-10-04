@@ -142,6 +142,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- A tag whose quoted attribute value holds a `>`, such as `onclick="if (n > 0) next()"`, no
+  longer ends at it, which spilled the rest of the tag into the text and broke the handler, and
+  the code of a `<script>` or `<style>` keeps a `<` that opens no tag, as an HTML tokenizer reads
+  them. `KiteXml` serves the EPUB, SVG, XPS and package parsers alike (#529).
+
 - A resource that an EPUB document carries in a `data:` URL loads: an image source, a CSS
   background, a font of an `@font-face`, a stylesheet or an `@import`, a script and an SVG image
   draw from the bytes the URL holds, as EPUB 3.3 allows. `EpubDocument.resource` and

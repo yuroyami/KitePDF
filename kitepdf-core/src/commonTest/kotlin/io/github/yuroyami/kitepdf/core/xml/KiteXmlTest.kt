@@ -11,6 +11,9 @@ class KiteXmlTest {
         children.filterIsInstance<KiteXmlNode.Element>().firstOrNull { it.tag == tag }
             ?: children.filterIsInstance<KiteXmlNode.Element>().firstNotNullOfOrNull { it.first(tag) }
 
+    private fun KiteXmlNode.Element.all(tag: String): List<KiteXmlNode.Element> =
+        children.filterIsInstance<KiteXmlNode.Element>().flatMap { (if (it.tag == tag) listOf(it) else emptyList()) + it.all(tag) }
+
     private fun KiteXmlNode.Element.text(): String =
         children.joinToString("") {
             when (it) {
@@ -51,6 +54,40 @@ class KiteXmlTest {
     fun comments_prologue_and_cdata_are_handled() {
         val root = KiteXml.parse("""<?xml version="1.0"?><!-- skip --><a><![CDATA[<raw>]]></a>""")
         assertEquals("<raw>", root.first("a")!!.text())
+    }
+
+    @Test
+    fun a_quoted_attribute_value_may_hold_angle_brackets() {
+        // XML allows > in an attribute value, and HTML allows < too: the tag ends at the first >
+        // outside quotes, as a parser of either does.
+        val root = KiteXml.parse("""<p title="a > b" onclick='if (x < y &amp;&amp; y > z) go()' class=plain>Text</p>""")
+        val p = root.first("p")!!
+        assertEquals("a > b", p.attrs["title"])
+        assertEquals("if (x < y && y > z) go()", p.attrs["onclick"])
+        assertEquals("plain", p.attrs["class"])
+        assertEquals("Text", p.text())
+    }
+
+    @Test
+    fun a_script_or_style_reads_a_lone_angle_bracket_as_text() {
+        // Not well-formed XML, but common in converted books: a < in a script that is no tag.
+        val root = KiteXml.parse("<html><script>if (a < b && c > d) { x = '<p>'; }</script><style>p > em { color: red }</style><p>After</p></html>")
+        assertEquals("if (a < b && c > d) { x = '<p>'; }", root.first("script")!!.text())
+        assertEquals("p > em { color: red }", root.first("style")!!.text())
+        assertEquals("After", root.first("p")!!.text())
+        // Well-formed content reads as before: entities decode and CDATA opens.
+        val xhtml = KiteXml.parse("<script>if (a &lt; b) {}</script><script>//<![CDATA[\nif (a < b) {}\n//]]></script>")
+        val scripts = xhtml.children.filterIsInstance<KiteXmlNode.Element>()
+        assertEquals("if (a < b) {}", scripts[0].text())
+        assertEquals("//\nif (a < b) {}\n//", scripts[1].text())
+        // A script left open is read as markup, so it cannot take the rest of the document as code.
+        val open = KiteXml.parse("<html><script>var a = 1;<p>After</p><style>p{}</style><p>Last</p></html>")
+        assertEquals(listOf("After", "Last"), open.all("p").map { it.text() })
+        // An end tag in another case or with a namespace prefix ends it too.
+        val cased = KiteXml.parse("<html><script>a < b</SCRIPT><svg:style>c > d</svg:style><p>After</p></html>")
+        assertEquals("a < b", cased.first("script")!!.text())
+        assertEquals("c > d", cased.first("style")!!.text())
+        assertEquals("After", cased.first("p")!!.text())
     }
 
     @Test
