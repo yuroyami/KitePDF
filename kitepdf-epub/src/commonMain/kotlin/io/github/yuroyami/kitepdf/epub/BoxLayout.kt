@@ -80,6 +80,8 @@ internal class BoxLayout(
      * replaced images keep physical width/height and map them to logical axes.
      */
     private val vertical: Boolean = false,
+    /** Whether an image's path names an SVG, by its name or by the type of a blob it names (#533). */
+    private val isSvg: (String) -> Boolean = ::namesSvg,
 ) {
     private val hyphenator by lazy { Hyphenator.forLanguage(language) ?: Hyphenator.enUs() }
 
@@ -496,7 +498,7 @@ internal class BoxLayout(
         val remoteBox = if (box.svg == null && isRemoteUrl(box.zipPath) && ew != null && eh != null && ew > 0.0 && eh > 0.0) ew to eh else null
         // SVG (inline <svg> preset, or a .svg file reference) sizes from its intrinsic
         // viewport and paints as vectors; raster images decode to a KiteImageData.
-        val svg = box.svg ?: if (remoteBox == null && namesSvg(box.zipPath)) loadSvg(box.zipPath)?.also { box.svg = it } else null
+        val svg = box.svg ?: if (remoteBox == null && isSvg(box.zipPath)) loadSvg(box.zipPath)?.also { box.svg = it } else null
         val intrinsicW: Double; val intrinsicH: Double
         val media = box.media
         if (svg != null) {
@@ -2108,7 +2110,7 @@ internal class BoxLayout(
                 val cssW = run.imageCssW
                 val cssH = run.imageCssH
                 val remoteBox = run.imageSvg == null && isRemoteUrl(run.imageSrc) && cssW != null && cssH != null && cssW > 0.0 && cssH > 0.0
-                val svg = run.imageSvg ?: if (!remoteBox && namesSvg(run.imageSrc)) loadSvg(run.imageSrc) else null
+                val svg = run.imageSvg ?: if (!remoteBox && isSvg(run.imageSrc)) loadSvg(run.imageSrc) else null
                 val img = if (svg == null && !remoteBox) loadImage(run.imageSrc) else null
                 val iw: Double; val ih: Double
                 when {

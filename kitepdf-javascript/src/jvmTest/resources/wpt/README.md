@@ -16,13 +16,20 @@ commit `1d99362b6bca46cc06e731ece8e022f0f1c21695`, unchanged:
 - `common/subset-tests.js`, which `single-byte-decoder.any.js` loads.
 - `html/webappapis/atob/base64.any.js`, the tests of `atob` and `btoa`, and
   `fetch/data-urls/resources/base64.json`, the data it fetches.
+- `FileAPI`: from the folder `FileAPI`, the tests of `Blob`, `File`, `FileReader` and blob URLs.
+  Every `*.any.js` file of `blob`, `file` and `reading-data-section`, with `fileReader.any.js`,
+  `unicode.any.js` and `url/url-format.any.js`. The other files of `url` need a window, an
+  iframe, `fetch` or `XMLHttpRequest`, and `idlharness.any.js` needs the IDL files and
+  idlharness.js of web-platform-tests.
+- `common/gc.js`, which `Blob-stream.any.js` loads.
 
-`WebPlatformTest` runs each file in a chapter of its own, between two files of this folder that
-are not from web-platform-tests: `harness.js`, which stands in for testharness.js, and
-`report.js`, which logs the count. The scripts a file names in a `// META: script=` line run
-before it. `sab.js` stands in for `/common/sab.js`, whose own copy makes a shared buffer through
-`WebAssembly.Memory`, and `harness.js` has the `subsetTestByKey` of
-`/common/subset-tests-by-key.js`. A file named with a `?` query, such as
+`WebPlatformTest` runs each file in a chapter of its own, after `harness.js`, a file of this
+folder that is not from web-platform-tests: it stands in for testharness.js, and logs the count
+once every test has completed. The scripts a file names in a `// META: script=` line run before
+it. `sab.js` stands in for `/common/sab.js`, whose own copy makes a shared buffer through
+`WebAssembly.Memory`; `blob-support.js` stands in for `FileAPI/support/Blob.js`, whose own copy
+writes its promise tests as async functions, which KiteJS cannot parse yet; and `harness.js` has
+the `subsetTestByKey` of `/common/subset-tests-by-key.js`. A file named with a `?` query, such as
 `single-byte-decoder.any.js?TextDecoder`, runs with that query as `location.search`, the
 variant web-platform-tests runs it in. The data that `url-constructor`, `url-origin` and
 `url-setters` fetch is the parser's test data in `kitepdf-epub/src/jvmTest/resources/wpt-url`,
@@ -60,4 +67,18 @@ done
 curl -o common/subset-tests.js $W/common/subset-tests.js
 curl -o html/webappapis/atob/base64.any.js $W/html/webappapis/atob/base64.any.js
 curl -o fetch/data-urls/resources/base64.json $W/fetch/data-urls/resources/base64.json
+for f in blob/Blob-array-buffer blob/Blob-bytes blob/Blob-constructor-detached-buffer \
+  blob/Blob-constructor-endings blob/Blob-constructor blob/Blob-newobject blob/Blob-slice-overflow \
+  blob/Blob-slice blob/Blob-stream blob/Blob-text blob/Blob-textStream \
+  file/File-constructor-endings file/File-constructor fileReader unicode url/url-format \
+  reading-data-section/Determining-Encoding reading-data-section/FileReader-event-handler-attributes \
+  reading-data-section/FileReader-multiple-reads reading-data-section/filereader_abort \
+  reading-data-section/filereader_error reading-data-section/filereader_events \
+  reading-data-section/filereader_readAsArrayBuffer reading-data-section/filereader_readAsBinaryString \
+  reading-data-section/filereader_readAsDataURL reading-data-section/filereader_readAsText \
+  reading-data-section/filereader_readAsText_blob_type_charset reading-data-section/filereader_readystate \
+  reading-data-section/filereader_result; do
+  curl --create-dirs -o FileAPI/$f.any.js $W/FileAPI/$f.any.js
+done
+curl -o common/gc.js $W/common/gc.js
 ```

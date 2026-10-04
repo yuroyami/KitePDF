@@ -575,4 +575,92 @@ class EpubScriptTest {
         assertEquals(EpubScriptSession.MAX_FAILURES, scripts.failures.size, "the newest are kept")
         assertTrue(scripts.hasTimers, "the timer still runs")
     }
+
+    /** Runs the tasks that [scripts] queued, and those that they queue, until none is left. */
+    private fun drain(scripts: EpubScriptRunner, now: Long = 0L) {
+        var rounds = 0
+        while (scripts.hasTimers && rounds++ < 20) scripts.pumpTimers(now)
+        assertFalse(scripts.hasTimers, "the tasks ran out")
+    }
+
+    @Test
+    fun an_image_and_a_stylesheet_load_from_blob_urls_that_a_script_made() {
+        // The File API (#533): a blob URL loads as a file of the book does, and what the chapter's
+        // tree names stays with it after the script revokes the URL, as an image a browser loaded.
+        val book = ScriptBooks.chapter(
+            "<p id=\"text\">Blobs.</p><script src=\"blob.js\"></script>",
+            extraFiles = mapOf(
+                "blob.js" to """
+                    var svg = new Blob(['<svg xmlns="http://www.w3.org/2000/svg" width="60" height="30">' +
+                        '<rect width="60" height="30" fill="${ScriptBooks.RED}"/></svg>'], { type: 'image/svg+xml' });
+                    var img = document.createElement('img');
+                    img.src = URL.createObjectURL(svg);
+                    document.body.appendChild(img);
+                    URL.revokeObjectURL(img.src);
+                    var css = new Blob(['#text { background: ${ScriptBooks.BLUE}; }'], { type: 'text/css' });
+                    var link = document.createElement('link');
+                    link.setAttribute('rel', 'stylesheet');
+                    link.setAttribute('href', URL.createObjectURL(css));
+                    document.head.appendChild(link);
+                """.trimIndent(),
+            ),
+        )
+        val page = book.page(KiteLocation(0, 0))
+        assertFalse(page.paintsRed() || page.paintsBlue(), "nothing before the script runs")
+        val scripts = runner(book)
+        scripts.chapterOpened(0)
+        assertEquals(emptyList(), scripts.failures.map { it.message })
+        assertTrue(page.paintsRed(), "the image from the revoked blob URL")
+        assertTrue(page.paintsBlue(), "the rule of the stylesheet from a blob URL")
+        assertTrue(book.withFontSize(20.0).page(KiteLocation(0, 0)).paintsRed(), "and the chapter laid out again at another size")
+    }
+
+    @Test
+    fun a_blob_url_names_the_books_origin_and_loads_nothing_once_its_chapter_closes() {
+        val console = ArrayList<String>()
+        val book = ScriptBooks.chapter(
+            """<p>Origin.</p><script>
+                var url = URL.createObjectURL(new Blob(['<svg xmlns="http://www.w3.org/2000/svg" width="60" height="30">' +
+                    '<rect width="60" height="30" fill="${ScriptBooks.RED}"/></svg>'], { type: 'image/svg+xml' }));
+                console.log(url);
+                console.log(new URL(url).origin === location.origin);
+                window.later = url;
+            </script>""",
+        )
+        val scripts = runner(book, console = console)
+        scripts.chapterOpened(0)
+        val url = console[0].removePrefix("log: ")
+        assertTrue(Regex("blob:epub://[0-9a-f]{16}/[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}").matches(url), url)
+        assertEquals("log: true", console[1])
+        assertEquals("image/svg+xml", book.resourceType(url))
+        scripts.close()
+        assertEquals(null, book.resource(url), "a chapter that closes revokes the URLs its scripts made, as a page that unloads does")
+    }
+
+    @Test
+    fun a_file_reader_reads_a_blob_in_tasks_of_its_own() {
+        val console = ArrayList<String>()
+        val book = ScriptBooks.chapter(
+            """<p>Reader.</p><script>
+                var log = [];
+                var reader = new FileReader();
+                ['loadstart', 'progress', 'load', 'loadend'].forEach(function (type) {
+                    reader.addEventListener(type, function (e) { log.push(type + ' ' + e.loaded + '/' + e.total); });
+                });
+                reader.addEventListener('loadend', function () { console.log(log.join(', ') + ': ' + reader.result); });
+                reader.readAsText(new Blob(['\u00FEsoup ', new Uint8Array([0xC3, 0xA9])], { type: 'text/plain;charset=iso-8859-1' }));
+                log.push('state ' + reader.readyState);
+                new Blob(['text']).text().then(function (t) { console.log('then ' + t); });
+            </script>""",
+        )
+        val scripts = runner(book, console = console)
+        scripts.chapterOpened(0)
+        assertEquals(emptyList(), console, "nothing is read while the script runs")
+        drain(scripts)
+        assertEquals(
+            // The reader's tasks were queued first. The text decodes as windows-1252, which the label names.
+            listOf("log: state 1, loadstart 0/9, progress 9/9, load 9/9, loadend 9/9: \u00C3\u00BEsoup \u00C3\u00A9", "log: then text"),
+            console,
+        )
+    }
 }
