@@ -2,6 +2,7 @@ package io.github.yuroyami.kitepdf.javascript
 
 import org.junit.Assume.assumeTrue
 import java.io.File
+import kotlin.time.TimeSource
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -10,13 +11,16 @@ import kotlin.test.assertTrue
 /**
  * Interfaces that a book's scripts see, against their JavaScript tests in web-platform-tests, run
  * in a chapter as a browser runs them in a page: the `URL` and `URLSearchParams` of the URL
- * Standard (#520), the `DOMException` of Web IDL (#530), and the `TextEncoder` and
- * `TextDecoder` of the Encoding Standard and the `atob` and `btoa` of HTML (#532).
+ * Standard (#520), the `DOMException` of Web IDL (#530), the `TextEncoder` and `TextDecoder` of
+ * the Encoding Standard and the `atob` and `btoa` of HTML (#532), and the `Blob`, `File`,
+ * `FileReader` and blob URLs of the File API (#533).
  *
  * Each test file runs in a book of its own, after `harness.js`, a small stand-in for
  * testharness.js whose `fetch` answers from the test data that the URL parser's own test reads
- * in kitepdf-epub, and the scripts its META lines name, and before `report.js`, which logs the
- * count. A file named with a query runs as that variant of it, the query in `location.search`.
+ * in kitepdf-epub, and after the scripts its META lines name. The chapter's timers run on a clock
+ * that skips the waits, until the harness logs the count once the page has loaded and every test
+ * has completed. A file named with a query runs as that variant of it, the query in
+ * `location.search`.
  *
  * A test that a known gap fails is listed in [gaps] with the issue that tracks it, and a probe
  * that is true while the gap is there, as is a file that a gap keeps from running at all. While
@@ -67,10 +71,56 @@ class WebPlatformTest {
         Gap(
             "kitejs#73, Float16Array is missing",
             "typeof Float16Array === 'undefined'",
-            setOf("Invalid encodeInto() destination: Float16Array, backed by: ArrayBuffer"),
+            setOf(
+                "Invalid encodeInto() destination: Float16Array, backed by: ArrayBuffer",
+                "Passing a Float16Array as element of the blobParts array should work.",
+            ),
         ),
-        // The test detaches a buffer by transferring it through a port.
-        Gap("#534, MessageChannel is missing", "typeof MessageChannel === 'undefined'", setOf("encodeInto() and a detached output buffer")),
+        // The tests detach a buffer by transferring it through a port.
+        Gap(
+            "#534, MessageChannel is missing",
+            "typeof MessageChannel === 'undefined'",
+            setOf(
+                "encodeInto() and a detached output buffer",
+                "Blob from a detached ArrayBufferView should be empty",
+                "Blob from a detached ArrayBufferView with offset should be empty",
+                "Blob from a detached ArrayBuffer should be empty",
+                "Blob from a detached ArrayBufferView mixed with string, detached part ignored",
+                "Passing a FrozenArray as the blobParts array should work (FrozenArray<MessagePort>).",
+            ),
+        ),
+        Gap(
+            "kitejs#12, async functions are missing",
+            "(function () { try { Function('return async function () {}'); return false; } catch (e) { return true; } })()",
+            setOf(
+                "FileAPI/blob/Blob-array-buffer.any.js", "FileAPI/blob/Blob-bytes.any.js", "FileAPI/blob/Blob-stream.any.js",
+                "FileAPI/blob/Blob-text.any.js", "FileAPI/blob/Blob-textStream.any.js", "FileAPI/unicode.any.js",
+                "FileAPI/reading-data-section/FileReader-multiple-reads.any.js", "FileAPI/reading-data-section/filereader_events.any.js",
+                "FileAPI/reading-data-section/filereader_result.any.js",
+            ),
+        ),
+        // By test name only: the files that test streams are async functions too, and kitejs#12 keeps them from running.
+        Gap(
+            "#536, ReadableStream is missing",
+            "typeof ReadableStream === 'undefined'",
+            names = Regex("^Blob\\.(stream|textStream)\\(\\)|^Reading Blob\\.stream|^textStream method existence"),
+        ),
+        // The tests put an iterator on a primitive's prototype, and take it away again.
+        Gap(
+            "#537, a book's scripts cannot add to a built-in object",
+            "(function () { try { Math.kiteSealProbe = 1; } catch (e) { return true; } var sealed = Math.kiteSealProbe !== 1; delete Math.kiteSealProbe; return sealed; })()",
+            setOf(
+                "blobParts not an object: boolean with Boolean.prototype[Symbol.iterator]",
+                "blobParts not an object: string with String.prototype[Symbol.iterator]",
+                "blobParts not an object: number with Number.prototype[Symbol.iterator]",
+                "blobParts not an object: BigInt with BigInt.prototype[Symbol.iterator]",
+            ),
+        ),
+        Gap(
+            "#538, an element has no class string",
+            "Object.prototype.toString.call(document.body) !== '[object HTMLBodyElement]'",
+            setOf("HTMLBodyElement in fileBits", "Using object fileName"),
+        ),
         Gap(
             "kitejs#71, an arrow function cannot take a rest parameter",
             "(function () { try { Function('return (...a) => a'); return false; } catch (e) { return true; } })()",
@@ -104,8 +154,27 @@ class WebPlatformTest {
         "textencoder-constructor-non-utf.any.js", "textencoder-utf16-surrogates.any.js",
     ).map { "encoding/$it" }
 
+    private val fileApiFiles = listOf(
+        "blob/Blob-array-buffer.any.js", "blob/Blob-bytes.any.js", "blob/Blob-constructor-detached-buffer.any.js",
+        "blob/Blob-constructor-endings.any.js", "blob/Blob-constructor.any.js", "blob/Blob-newobject.any.js",
+        "blob/Blob-slice-overflow.any.js", "blob/Blob-slice.any.js", "blob/Blob-stream.any.js", "blob/Blob-text.any.js",
+        "blob/Blob-textStream.any.js", "file/File-constructor-endings.any.js", "file/File-constructor.any.js",
+        "fileReader.any.js", "unicode.any.js", "url/url-format.any.js",
+        "reading-data-section/Determining-Encoding.any.js", "reading-data-section/FileReader-event-handler-attributes.any.js",
+        "reading-data-section/FileReader-multiple-reads.any.js", "reading-data-section/filereader_abort.any.js",
+        "reading-data-section/filereader_error.any.js", "reading-data-section/filereader_events.any.js",
+        "reading-data-section/filereader_readAsArrayBuffer.any.js", "reading-data-section/filereader_readAsBinaryString.any.js",
+        "reading-data-section/filereader_readAsDataURL.any.js", "reading-data-section/filereader_readAsText.any.js",
+        "reading-data-section/filereader_readAsText_blob_type_charset.any.js", "reading-data-section/filereader_readystate.any.js",
+        "reading-data-section/filereader_result.any.js",
+    ).map { "FileAPI/$it" }
+
     /** The files of this folder that stand in for scripts of web-platform-tests that a test names, null where `harness.js` does. */
-    private val standIns = mapOf("/common/sab.js" to "sab.js", "/common/subset-tests-by-key.js" to null)
+    private val standIns = mapOf(
+        "/common/sab.js" to "sab.js",
+        "/common/subset-tests-by-key.js" to null,
+        "/FileAPI/support/Blob.js" to "blob-support.js",
+    )
 
     /**
      * The scripts that the META lines of [source] name, as paths of `resources/wpt`: a path from
@@ -113,7 +182,21 @@ class WebPlatformTest {
      */
     private fun metaScripts(path: String, source: String): List<String> = source.lines()
         .mapNotNull { Regex("^// META: script=(\\S+)").find(it)?.groupValues?.get(1) }
-        .mapNotNull { if (it in standIns) standIns[it] else if (it.startsWith("/")) it.removePrefix("/") else path.substringBeforeLast('/') + "/" + it }
+        .map { if (it.startsWith("/")) it else normalized("/" + path.substringBeforeLast('/', "") + "/" + it) }
+        .mapNotNull { if (it in standIns) standIns[it] else it.removePrefix("/") }
+
+    /** [path] without its `.` and `..` segments. */
+    private fun normalized(path: String): String {
+        val segments = ArrayList<String>()
+        for (segment in path.split('/')) {
+            when (segment) {
+                "." -> {}
+                ".." -> segments.removeLast()
+                else -> segments += segment
+            }
+        }
+        return segments.joinToString("/")
+    }
 
     /** A file of `resources/wpt`, by its path there. */
     private fun resource(path: String): String =
@@ -135,12 +218,23 @@ class WebPlatformTest {
         (urlData + base64).joinToString(",\n", "var harnessData = {\n", "\n};")
     }
 
-    /** The console of a chapter whose scripts are [files], in order, and the failures of its scripts. */
+    /**
+     * The console of a chapter whose scripts are [files], in order, and the failures of its
+     * scripts, once the harness logged its count or nothing is left to wait for. The chapter's
+     * clock runs as the real one does and jumps over each wait for a timer, so a test that waits
+     * seconds takes none, and a call still has the runner's time limit.
+     */
     private fun chapter(files: Map<String, String>): Pair<List<String>, List<String>> {
         val console = ArrayList<String>()
         val book = ScriptBooks.chapter(files.keys.joinToString("") { "<script src=\"$it\"></script>" }, extraFiles = files)
-        val runner = EpubScriptRunner(book, onConsole = { level, message -> console += "$level: $message" }).also { runners += it }
+        val started = TimeSource.Monotonic.markNow()
+        var skipped = 0L
+        val clock = { started.elapsedNow().inWholeMilliseconds + skipped }
+        val runner = EpubScriptRunner(book, onConsole = { level, message -> console += "$level: $message" }, clock = clock).also { runners += it }
         runner.chapterOpened(0)
+        while (runner.hasTimers && console.none { it.startsWith("log: DONE ") } && skipped < MAX_WAIT_MILLIS) {
+            skipped += runner.pumpTimers(clock()) ?: break
+        }
         return console to runner.failures.map { it.message.orEmpty() }
     }
 
@@ -167,7 +261,6 @@ class WebPlatformTest {
         if (variant.isNotEmpty()) scripts["variant.js"] = "Object.defineProperty(location, 'search', { value: '?$variant', configurable: true });"
         for (script in metaScripts(file, source)) scripts[script.replace('/', '-')] = resource(script)
         scripts[name] = source
-        scripts["report.js"] = resource("report.js")
         val (console, failures) = chapter(scripts)
         val done = console.singleOrNull { it.startsWith("log: DONE ") }
         assertTrue(done != null, "$name did not finish:\n" + console.joinToString("\n"))
@@ -222,4 +315,12 @@ class WebPlatformTest {
 
     @Test
     fun the_encoding_tests_pass_but_for_known_gaps() = check(encodingFiles, atLeast = 1000)
+
+    @Test
+    fun the_file_api_tests_pass_but_for_known_gaps() = check(fileApiFiles, atLeast = 300)
+
+    private companion object {
+        /** How long a chapter may wait on its timers in all, on its clock: past the harness's own ten seconds. */
+        const val MAX_WAIT_MILLIS = 60_000L
+    }
 }

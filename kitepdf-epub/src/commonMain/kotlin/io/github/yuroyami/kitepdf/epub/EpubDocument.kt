@@ -237,6 +237,9 @@ public class EpubDocument internal constructor(
     /** Whether [other] is a document over the same book, whose scripts' changes it shares (#41). */
     internal fun sharesBookWith(other: EpubDocument): Boolean = other.parsed === parsed
 
+    /** The book's blob URL store, which every document over it shares (#533). */
+    internal val blobUrls: BlobUrlStore get() = parsed.blobs
+
     /** The window a script of [chapter] sees, in points: a fixed page's viewport, else a page's content box (#41). */
     internal fun scriptViewportOf(chapter: Int): Pair<Double, Double> =
         if (parsed.isFixed(chapter)) viewportOf(chapter) else contentWidth to pageContentHeight
@@ -585,7 +588,7 @@ public class EpubDocument internal constructor(
                 0 -> {
                     val spine = fixedSpine(chapter)
                     if (spine != null) {
-                        BoxLayout(image, svg, spine.height, fonts, languageFor(chapter), settings.lineHeightScale)
+                        BoxLayout(image, svg, spine.height, fonts, languageFor(chapter), settings.lineHeightScale, isSvg = parsed::namesSvg)
                             .layout(spine.root, spine.width, spine.height)
                         laid = Laid(listOf(Paginator.paginateFixed(spine.root, spine.width, spine.height, hits)), spine.root)
                         return true
@@ -607,7 +610,7 @@ public class EpubDocument internal constructor(
                     root = chapterRoot
                     run = BoxLayout(
                         image, svg, blockBudget, fonts, languageFor(chapter),
-                        settings.lineHeightScale, vertical = isVertical,
+                        settings.lineHeightScale, vertical = isVertical, isSvg = parsed::namesSvg,
                     ).start(chapterRoot, inlineBudget, blockBudget)
                 }
                 4 -> if (!checkNotNull(run).step()) return false
@@ -835,9 +838,7 @@ public class EpubDocument internal constructor(
         }
         // A floor for the tree the parse of an SVG file keeps: its size in the book.
         fun countSvg(zipPath: String) {
-            if (zipPath.isNotEmpty() && seenSvg.add(zipPath)) {
-                imageBytes += parsed.zip.entry(zipPath)?.uncompressedSize?.coerceAtLeast(0L) ?: 0L
-            }
+            if (zipPath.isNotEmpty() && seenSvg.add(zipPath)) imageBytes += parsed.sizeOf(zipPath)
         }
         for (page in pages) {
             for (line in page.lines) {
@@ -1311,7 +1312,7 @@ public class EpubDocument internal constructor(
         }
         val remote = isRemoteUrl(zipPath)
         val bytes: (String) -> ByteArray? = { url -> paintBytes(chapter, url) }
-        val picture: Any? = if (namesSvg(zipPath)) loadSvg(zipPath, bytes) else loadImage(zipPath, bytes)
+        val picture: Any? = if (parsed.namesSvg(zipPath)) loadSvg(zipPath, bytes) else loadImage(zipPath, bytes)
         if (remote && settings.resourceFetcher != null && parsed.remote.mayLand(zipPath)) return picture
         val size = (picture as? KiteImageData)?.let { (it.pixelBytes?.size ?: it.encodedBytes.size).toLong() } ?: 1024L
         backgroundLock.withLock {
@@ -1388,8 +1389,9 @@ public class EpubDocument internal constructor(
         internal fun resolvePath(baseDir: String, href: String): String {
             val trimmed = href.trim()
             if (isRemoteUrl(trimmed)) return trimmed.substringBefore('#')
-            // A data URL carries its resource with it, so it is its own path (#514).
-            if (KiteDataUrl.isDataUrl(trimmed)) return trimmed
+            // A data URL carries its resource with it, so it is its own path (#514), and a blob
+            // URL names a blob of the book's scripts, which the book's blob URL store holds (#533).
+            if (KiteDataUrl.isDataUrl(trimmed) || isBlobUrl(trimmed)) return trimmed
             val clean = percentDecode(href.substringBefore('#').substringBefore('?'))
             val stack = ArrayList<String>()
             if (!clean.startsWith("/") && baseDir.isNotEmpty()) for (seg in baseDir.split('/')) if (seg.isNotEmpty()) stack.add(seg)

@@ -101,6 +101,9 @@ internal class ParsedEpub(
     /** The same immutable image resources survive chapter eviction and settings changes (#371). */
     val imageIdentities = KiteImageIdentity()
 
+    /** The blobs that the book's scripts named with blob URLs, which the reader loads as files of the book (#533). */
+    val blobs = BlobUrlStore()
+
     /** Whether [chapter] keeps the fixed pages its author set, rather than reflowing. */
     fun isFixed(chapter: Int): Boolean = renditions.getOrNull(chapter)?.layout == EpubLayout.PRE_PAGINATED
 
@@ -334,7 +337,7 @@ internal class ParsedEpub(
             tree, docDir,
             onLink = { sheet -> rules.addAll(sheetRules(sheet)) },
             onInline = { text ->
-                val css = CssParser.parseAll(absoluteUrls(inlineImports(zip, text, docDir, 0, HashSet()), docDir), Origin.AUTHOR)
+                val css = CssParser.parseAll(absoluteUrls(inlineImports(text, docDir, 0, HashSet()), docDir), Origin.AUTHOR)
                 rules.addAll(css.rules)
                 for (rule in css.fontFaces) {
                     faceRules += rule to docDir
@@ -350,11 +353,26 @@ internal class ParsedEpub(
         opf.items.associateBy { EpubDocument.resolvePath(opf.baseDir, it.href) }
     }
 
-    /** The media type that the manifest gives the file at [path], or that a data URL declares, or null. */
-    fun mediaTypeOf(path: String): String? = KiteDataUrl.essenceOf(path) ?: itemsByPath[path]?.mediaType
+    /**
+     * The media type that the manifest gives the file at [path], or that a data URL declares, or
+     * the type of the blob a blob URL names (#533), or null.
+     */
+    fun mediaTypeOf(path: String): String? =
+        if (isBlobUrl(path)) blobs.resolve(path)?.essence else KiteDataUrl.essenceOf(path) ?: itemsByPath[path]?.mediaType
 
-    /** The bytes of the file at [path], or of the data URL [path] is (#514). A fragment is ignored. */
-    fun read(path: String): ByteArray? = readAt(zip, path)
+    /** True when [path] names an SVG file, by its name or the type it declares, a blob's included (#533). */
+    fun namesSvg(path: String): Boolean =
+        if (isBlobUrl(path)) blobs.resolve(path)?.essence == "image/svg+xml" else io.github.yuroyami.kitepdf.epub.namesSvg(path)
+
+    /** The bytes of the file at [path], of the data URL [path] is (#514), or of the blob a blob URL names (#533). A fragment is ignored. */
+    fun read(path: String): ByteArray? = readAt(path)
+
+    /** The size in bytes of what [read] answers for [path], without reading it; for a data URL, the length of the URL. */
+    fun sizeOf(path: String): Long = when {
+        KiteDataUrl.isDataUrl(path) -> path.length.toLong()
+        isBlobUrl(path) -> blobs.resolve(path)?.bytes?.size?.toLong() ?: 0L
+        else -> zip.entry(path.substringBefore('#'))?.uncompressedSize?.coerceAtLeast(0L) ?: 0L
+    }
 
     /**
      * The zip paths of the items that the fallback chain of the item at [path] names after it,
@@ -368,8 +386,8 @@ internal class ParsedEpub(
     /** One stylesheet's rules, parsed once however many chapters link it. */
     private fun sheetRules(path: String): List<StyleRule> {
         sheetLock.withLock { sheetCache[path] }?.let { return it }
-        val text = readTextAt(zip, path) ?: ""
-        val rules = CssParser.parse(absoluteUrls(inlineImports(zip, text, dirOf(path), 0, hashSetOf(path)), dirOf(path)), Origin.AUTHOR)
+        val text = readTextAt(path) ?: ""
+        val rules = CssParser.parse(absoluteUrls(inlineImports(text, dirOf(path), 0, hashSetOf(path)), dirOf(path)), Origin.AUTHOR)
         return sheetLock.withLock { sheetCache.getOrPut(path) { sheetCount++; rules } }
     }
 
@@ -424,7 +442,7 @@ internal class ParsedEpub(
     /** The program of the font file at [path], parsed on first use and shared by every face after. */
     private fun programAt(path: String): FontProgram? {
         programLock.withLock { if (programCache.containsKey(path)) return programCache[path] }
-        val raw = readAt(zip, path) ?: return null
+        val raw = readAt(path) ?: return null
         val bytes = obfuscation[path]?.let { Deobfuscate.deobfuscate(raw, it, opf.uniqueId ?: "") } ?: raw
         val parsed = FontProgram.parse(bytes)
         // Parsing ran outside the lock; the first to publish wins, as for chapters.
@@ -440,6 +458,35 @@ internal class ParsedEpub(
         if (own in zip.names) return own
         val fromOpf = EpubDocument.resolvePath(opf.baseDir, url)
         return if (fromOpf in zip.names) fromOpf else own
+    }
+
+    /**
+     * Replace `@import url(...)` / `@import "..."` with the imported sheet's
+     * content, resolved zip-relative, recursively (depth cap 8, visited-set
+     * cycle guard). Media conditions after the target are ignored, matching
+     * the parser's always-on `@media` flattening.
+     */
+    private fun inlineImports(css: String, baseDir: String, depth: Int, visited: MutableSet<String>): String {
+        if (depth >= 8 || "@import" !in css) return css
+        return IMPORT_RE.replace(css) { m ->
+            val path = EpubDocument.resolvePath(baseDir, m.groupValues[1])
+            if (!visited.add(path)) ""
+            else readTextAt(path)?.let { absoluteUrls(inlineImports(it, dirOf(path), depth + 1, visited), dirOf(path)) } ?: ""
+        }
+    }
+
+    /** The bytes of the file at [path] in the zip, of the data URL [path] is (#514), or of the blob a blob URL names (#533). */
+    private fun readAt(path: String): ByteArray? = when {
+        KiteDataUrl.isDataUrl(path) -> KiteDataUrl.decode(path)?.bytes
+        isBlobUrl(path) -> blobs.resolve(path)?.bytes
+        else -> zip.read(path.substringBefore('#'))
+    }
+
+    /** The text of the file at [path] in the zip, of the data URL [path] is (#514), or of the blob a blob URL names (#533). */
+    private fun readTextAt(path: String): String? = when {
+        KiteDataUrl.isDataUrl(path) -> KiteDataUrl.decode(path)?.let { TextEncoding.decode(it.bytes) }
+        isBlobUrl(path) -> blobs.resolve(path)?.let { TextEncoding.decode(it.bytes) }
+        else -> zip.readText(path)
     }
 
     companion object {
@@ -552,36 +599,7 @@ internal class ParsedEpub(
             walk(tree)
         }
 
-        /**
-         * Replace `@import url(...)` / `@import "..."` with the imported sheet's
-         * content, resolved zip-relative, recursively (depth cap 8, visited-set
-         * cycle guard). Media conditions after the target are ignored, matching
-         * the parser's always-on `@media` flattening.
-         */
-        private fun inlineImports(
-            zip: ZipReader,
-            css: String,
-            baseDir: String,
-            depth: Int,
-            visited: MutableSet<String>,
-        ): String {
-            if (depth >= 8 || "@import" !in css) return css
-            return IMPORT_RE.replace(css) { m ->
-                val path = EpubDocument.resolvePath(baseDir, m.groupValues[1])
-                if (!visited.add(path)) ""
-                else readTextAt(zip, path)?.let { absoluteUrls(inlineImports(zip, it, dirOf(path), depth + 1, visited), dirOf(path)) } ?: ""
-            }
-        }
-
         private fun dirOf(path: String): String = path.substringBeforeLast('/', "")
-
-        /** The bytes of the file at [path] in [zip], or of the data URL [path] is (#514). */
-        private fun readAt(zip: ZipReader, path: String): ByteArray? =
-            if (KiteDataUrl.isDataUrl(path)) KiteDataUrl.decode(path)?.bytes else zip.read(path.substringBefore('#'))
-
-        /** The text of the file at [path] in [zip], or of the data URL [path] is (#514). */
-        private fun readTextAt(zip: ZipReader, path: String): String? =
-            if (KiteDataUrl.isDataUrl(path)) KiteDataUrl.decode(path)?.let { TextEncoding.decode(it.bytes) } else zip.readText(path)
 
         /**
          * [css] with every relative `url()` made absolute against [baseDir], with a leading slash,

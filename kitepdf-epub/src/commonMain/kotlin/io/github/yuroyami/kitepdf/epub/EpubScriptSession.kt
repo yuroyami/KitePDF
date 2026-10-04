@@ -11,6 +11,7 @@ import io.github.yuroyami.kitepdf.epub.script.DOM_PRELUDE
 import io.github.yuroyami.kitepdf.epub.script.ScriptDom
 import io.github.yuroyami.kitepdf.epub.script.WhatwgDecoder
 import io.github.yuroyami.kitepdf.epub.script.WhatwgEncoding
+import io.github.yuroyami.kitepdf.epub.script.WhatwgMimeType
 import io.github.yuroyami.kitepdf.epub.script.WhatwgUrl
 import io.github.yuroyami.kitepdf.epub.script.byteString
 import io.github.yuroyami.kitepdf.epub.script.bytesOf
@@ -240,14 +241,20 @@ public class EpubScriptSession(
             return answer
         }
 
-        /** Hands the layout the tree as the scripts left it, when they changed it. */
+        /**
+         * Hands the layout the tree as the scripts left it, when they changed it, and settles the
+         * book's blob URLs: what the tree names stays with it, and what the call revoked goes (#533).
+         */
         fun commit() {
-            if (!dom.dirty) return
-            document.replaceChapterTree(chapter, dom.snapshot())
+            val tree = if (dom.dirty) dom.snapshot() else null
+            if (tree != null) document.replaceChapterTree(chapter, tree)
+            document.blobUrls.settle(chapter, tree)
         }
 
+        /** Closes the engine, which revokes the blob URLs its scripts made, as a browser does when a page unloads (#533). */
         fun close() {
             runCatching { opened?.close() }
+            document.blobUrls.closeChapter(chapter)
         }
 
         fun start() {
@@ -418,6 +425,17 @@ public class EpubScriptSession(
             }
             def("atob") { args -> WhatwgEncoding.atob(string(args, 0)) }
             def("btoa") { args -> WhatwgEncoding.btoa(string(args, 0)) }
+            // The File API (#533): the text a FileReader reads, in the encoding its label names,
+            // else the charset of the blob's type, else UTF-8, a byte order mark first; and the
+            // book's blob URL store.
+            def("blobText") { args ->
+                val encoding = args.getOrNull(1)?.toString()?.let(WhatwgEncoding::forLabel)
+                    ?: WhatwgMimeType.parse(string(args, 2))?.parameters?.get("charset")?.let(WhatwgEncoding::forLabel)
+                    ?: "UTF-8"
+                WhatwgEncoding.decode(bytesOf(string(args, 0)), encoding)
+            }
+            def("blobUrl") { args -> document.blobUrls.create(origin, chapter, bytesOf(string(args, 0)), string(args, 1)) }
+            def("revokeBlobUrl") { args -> document.blobUrls.revoke(string(args, 0)); null }
             def("timers") { args ->
                 timers = (args.getOrNull(0) as? Double)?.toInt() ?: 0
                 timersChanged()
@@ -431,9 +449,16 @@ public class EpubScriptSession(
          * the book has the origin that `location.origin` gives.
          */
         private fun urlParts(url: WhatwgUrl): List<String?> = listOf(
-            url.href(), url.origin(tupleScheme = "epub"), url.protocol, url.username, url.password, url.hostWithPort,
+            url.href(), originOf(url), url.protocol, url.username, url.password, url.hostWithPort,
             url.hostname, url.portString, url.pathname, url.search, url.hash, url.query,
         )
+
+        /**
+         * The origin of [url]. A blob URL that the parser resolves to an entry of the book's store
+         * has the origin of the book that made it, as the URL Standard takes the entry's (#533).
+         */
+        private fun originOf(url: WhatwgUrl): String =
+            if (url.scheme == "blob" && document.blobUrls.isLive(url.href())) origin else url.origin(tupleScheme = "epub")
 
         /** What `getComputedStyle` answers for [property] of [el]: the cascade's value, in CSS pixels. */
         private fun computed(el: KiteXmlNode.Element, property: String): String {

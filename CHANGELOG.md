@@ -9,6 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- A book's scripts have `Blob`, `File` and `FileReader` of the File API, and
+  `URL.createObjectURL` and `URL.revokeObjectURL`. A `FileReader` reads in tasks of its own, with
+  its events in the order the API gives, and `readAsText` takes the charset of the blob's type
+  through a MIME type parser of the MIME Sniffing Standard, `WhatwgMimeType`, which the
+  standard's web-platform-tests data checks. A `blob:` URL has the book's origin, and an image, a
+  style sheet, an `@import` or a font loads from it as from a file of the book: the store sits on
+  the book, so another document over it finds the blob too, and what a chapter shows keeps its
+  blob after the script revokes the URL, while a chapter whose engine closes revokes the rest.
+  333 tests of web-platform-tests in `FileAPI/` pass in a chapter; the rest wait on
+  `MessageChannel` (#534), streams (#536), sealed built-ins (#537), element class strings
+  (#538) and KiteJS, for `async` functions and `Float16Array` (#533).
+
 - A book's scripts have `TextEncoder` and `TextDecoder` of the Encoding Standard, with every
   encoding and label of its table: UTF-8, UTF-16, the 28 single-byte encodings, gb18030, GBK,
   Big5, EUC-JP, ISO-2022-JP, Shift_JIS, EUC-KR, `replacement` and `x-user-defined`, with `fatal`,

@@ -7,13 +7,14 @@ package io.github.yuroyami.kitepdf.epub.script
  * scope that is their `window`.
  *
  * Written in the JavaScript every engine of the library runs: functions, prototypes and
- * generators, no `class`, no `async`. The source is kept in two literals joined at run time, since a JVM class
- * file holds no string constant over 64 KB.
+ * generators, no `class`, no `async`. The source is kept in parts joined at run time, since a
+ * JVM class file holds no string constant over 64 KB.
  */
 internal val DOM_PRELUDE: String = buildString {
     append(DOM_PRELUDE_HEAD)
     append(DOM_PRELUDE_URL)
     append(DOM_PRELUDE_ENCODING)
+    append(DOM_PRELUDE_FILE)
     append(DOM_PRELUDE_TAIL)
 }
 
@@ -411,8 +412,8 @@ function handlerOf(t, type) {
   source.__compiled[key] = { code: code, fn: fn };
   return fn;
 }
-function defineHandlers(target) {
-  HANDLED.forEach(function (type) {
+function defineHandlers(target, types) {
+  (types || HANDLED).forEach(function (type) {
     def(target, 'on' + type, function () {
       return this.__handlers && Object.prototype.hasOwnProperty.call(this.__handlers, 'on' + type) ? this.__handlers['on' + type] : handlerOf(this, type);
     }, function (fn) {
@@ -1077,6 +1078,268 @@ function btoa(data) {
 
 """
 
+/** The part of [DOM_PRELUDE] for files: Blob, File, FileReader, ProgressEvent and blob URLs. */
+private const val DOM_PRELUDE_FILE: String = """/* ---- Blob, File, FileReader and blob URLs, of the File API (#533) ---- */
+
+/* A blob's bytes and type live in a weak map that the methods read, so no script reaches them,
+   and a blob never changes; a file's name and time live in another. */
+var blobs = new WeakMap();
+var files = new WeakMap();
+function blobOf(b, what) {
+  var data = blobs.get(Object(b));
+  if (data === undefined) throw new TypeError(what ? what + ": parameter 1 is not of type 'Blob'." : 'Illegal invocation');
+  return data;
+}
+/* A WebIDL sequence, from what the iterator of an object gives, each value converted as it comes. */
+function idlSequence(v, convert, what) {
+  if (v === null || (typeof v !== 'object' && typeof v !== 'function')) throw new TypeError(what + ': The provided value cannot be converted to a sequence.');
+  var method = v[Symbol.iterator];
+  if (typeof method !== 'function') throw new TypeError(what + ': The object must have a callable @@iterator property.');
+  var it = method.call(v);
+  if (it === null || (typeof it !== 'object' && typeof it !== 'function')) throw new TypeError(what + ': The iterator is not an object.');
+  var next = it.next, out = [];
+  for (;;) {
+    var step = next.call(it);
+    if (step === null || (typeof step !== 'object' && typeof step !== 'function')) throw new TypeError(what + ': The iterator result is not an object.');
+    if (step.done) return out;
+    out.push(convert(step.value));
+  }
+}
+/* A BlobPart, a union of a buffer or a view, a Blob and a USVString: the bytes of a blob or a
+   view over those of a buffer, which the constructor copies once every argument is converted,
+   or else a string. */
+function blobPart(v) {
+  if (v !== null && typeof v === 'object') {
+    var data = blobs.get(v);
+    if (data !== undefined) return data.bytes;
+    if (isBuffer(v, arrayBufferLength) || ArrayBuffer.isView(v)) return bufferView(v);
+  }
+  return usv(v);
+}
+/* The members of a BlobPropertyBag, in the lexicographic order WebIDL reads them in. */
+function blobOptions(v, what) {
+  var bag = idlDictionary(v, what, 'BlobPropertyBag');
+  var endings = bag.endings;
+  endings = endings === undefined ? 'transparent' : domString(endings);
+  if (endings !== 'transparent' && endings !== 'native') {
+    throw new TypeError(what + ": The provided value '" + endings + "' is not a valid enum value of type EndingType.");
+  }
+  var type = bag.type;
+  return { bag: bag, endings: endings, type: type === undefined ? '' : domString(type) };
+}
+/* A blob's type: printable ASCII in lower case, or else empty. */
+function blobType(t) {
+  return /^[\x20-\x7E]*$/.test(t) ? t.toLowerCase() : '';
+}
+/* The bytes of the parts, joined: a string as UTF-8, its line breaks made the platform's own
+   for endings "native". The reading system is its own platform, a line feed on every host. */
+function joinParts(parts, endings) {
+  var chunks = [], total = 0;
+  for (var i = 0; i < parts.length; i++) {
+    var p = parts[i];
+    if (typeof p === 'string') p = bytesOf(K.encode(endings === 'native' ? p.replace(/\r\n?/g, '\n') : p));
+    chunks.push(p);
+    total += p.length;
+  }
+  var out = new Uint8Array(total), at = 0;
+  for (var j = 0; j < chunks.length; j++) { out.set(chunks[j], at); at += chunks[j].length; }
+  return out;
+}
+/* A WebIDL [Clamp] long long: NaN is 0, and the rest is clamped and rounds half to even. */
+function clampLongLong(v) {
+  var x = +v;
+  if (x !== x) return 0;
+  x = Math.min(Math.max(x, -9223372036854775808), 9223372036854775807);
+  var f = Math.floor(x), d = x - f;
+  return d > 0.5 || (d === 0.5 && f % 2 !== 0) ? f + 1 : f;
+}
+/* A WebIDL long long: NaN and the infinities are 0, and the rest truncates toward zero and wraps. */
+function longLong(v) {
+  var x = +v;
+  if (x !== x || x === Infinity || x === -Infinity) return 0;
+  x = (x < 0 ? Math.ceil(x) : Math.floor(x)) % 18446744073709551616;
+  if (x >= 9223372036854775808) x -= 18446744073709551616;
+  else if (x < -9223372036854775808) x += 18446744073709551616;
+  return x;
+}
+
+function Blob() {
+  if (!(this instanceof Blob) || blobs.has(this)) {
+    throw new TypeError("Failed to construct 'Blob': Please use the 'new' operator, this DOM object constructor cannot be called as a function.");
+  }
+  var what = "Failed to construct 'Blob'";
+  var parts = arguments.length > 0 && arguments[0] !== undefined ? idlSequence(arguments[0], blobPart, what) : [];
+  var options = blobOptions(arguments[1], what);
+  blobs.set(this, { bytes: joinParts(parts, options.endings), type: blobType(options.type) });
+}
+interfaceProto(Blob, {}, 'Blob');
+def(Blob.prototype, 'size', function () { return blobOf(this).bytes.length; });
+def(Blob.prototype, 'type', function () { return blobOf(this).type; });
+Blob.prototype.slice = function (start, end, contentType) {
+  var data = blobOf(this), size = data.bytes.length;
+  var from = start === undefined ? 0 : clampLongLong(start);
+  var to = end === undefined ? size : clampLongLong(end);
+  var type = contentType === undefined ? '' : blobType(domString(contentType));
+  from = from < 0 ? Math.max(size + from, 0) : Math.min(from, size);
+  to = to < 0 ? Math.max(size + to, 0) : Math.min(to, size);
+  var out = Object.create(Blob.prototype);
+  blobs.set(out, { bytes: data.bytes.subarray(from, Math.max(from, to)), type: type });
+  return out;
+};
+/* What text(), arrayBuffer() and bytes() answer: a promise that a task of the event loop
+   fulfils, as a browser reads the blob's stream in parallel and queues a task with its bytes. */
+function readBlob(self, packageBytes) {
+  var data;
+  try { data = blobOf(self); } catch (e) { return Promise.reject(e); }
+  return new Promise(function (resolve) {
+    queueTask(function* () { resolve(packageBytes(data.bytes)); });
+  });
+}
+function utf8Text(bytes) { return K.decode('UTF-8', false, false, null, byteString(bytes), true)[0]; }
+Blob.prototype.text = function () { return readBlob(this, utf8Text); };
+Blob.prototype.arrayBuffer = function () { return readBlob(this, function (bytes) { return bytes.slice().buffer; }); };
+Blob.prototype.bytes = function () { return readBlob(this, function (bytes) { return bytes.slice(); }); };
+
+/* File: a Blob with a name and a time. Its options read lastModified after the members of a
+   BlobPropertyBag, as WebIDL reads an inherited dictionary's members first. */
+function File(fileBits, fileName) {
+  if (!(this instanceof File) || blobs.has(this)) {
+    throw new TypeError("Failed to construct 'File': Please use the 'new' operator, this DOM object constructor cannot be called as a function.");
+  }
+  var what = "Failed to construct 'File'";
+  needArgs(arguments, 2, what);
+  var parts = idlSequence(fileBits, blobPart, what);
+  var name = usv(fileName);
+  var options = blobOptions(arguments[2], what);
+  var lastModified = options.bag.lastModified;
+  lastModified = lastModified === undefined ? Date.now() : longLong(lastModified);
+  blobs.set(this, { bytes: joinParts(parts, options.endings), type: blobType(options.type) });
+  files.set(this, { name: name, lastModified: lastModified });
+}
+function fileOf(f) {
+  var data = files.get(Object(f));
+  if (data === undefined) throw new TypeError('Illegal invocation');
+  return data;
+}
+Object.setPrototypeOf(File, Blob);
+interfaceProto(File, Object.create(Blob.prototype), 'File');
+def(File.prototype, 'name', function () { return fileOf(this).name; });
+def(File.prototype, 'lastModified', function () { return fileOf(this).lastModified; });
+def(File.prototype, 'webkitRelativePath', function () { fileOf(this); return ''; });
+
+/* ProgressEvent, of XMLHttpRequest, which a FileReader fires. */
+function progressNumber(v) {
+  if (v === undefined) return 0;
+  var x = +v;
+  if (x !== x || x === Infinity || x === -Infinity) throw new TypeError('The provided double value is non-finite.');
+  return x;
+}
+var ProgressEvent = subEvent(Event, function (init) {
+  this.lengthComputable = !!init.lengthComputable;
+  this.loaded = progressNumber(init.loaded);
+  this.total = progressNumber(init.total);
+});
+
+/* FileReader. Its state lives in a weak map. A read queues each of its events in a task of its
+   own, as the File API reads a blob's stream in parallel: loadstart, then progress once the
+   bytes are read, where there are any, then load and loadend. abort() takes the read's tasks
+   that have not run off the queue. */
+var readers = new WeakMap();
+function readerOf(r) {
+  var s = readers.get(Object(r));
+  if (s === undefined) throw new TypeError('Illegal invocation');
+  return s;
+}
+function FileReader() {
+  if (!(this instanceof FileReader) || readers.has(this)) {
+    throw new TypeError("Failed to construct 'FileReader': Please use the 'new' operator, this DOM object constructor cannot be called as a function.");
+  }
+  readers.set(this, { state: 0, result: null, error: null, read: 0, loaded: 0, total: 0 });
+}
+Object.setPrototypeOf(FileReader, EventTarget);
+interfaceProto(FileReader, Object.create(EventTarget.prototype), 'FileReader');
+['EMPTY', 'LOADING', 'DONE'].forEach(function (name, value) {
+  Object.defineProperty(FileReader, name, { value: value, enumerable: true });
+  Object.defineProperty(FileReader.prototype, name, { value: value, enumerable: true });
+});
+def(FileReader.prototype, 'readyState', function () { return readerOf(this).state; });
+def(FileReader.prototype, 'result', function () { return readerOf(this).result; });
+def(FileReader.prototype, 'error', function () { return readerOf(this).error; });
+defineHandlers(FileReader.prototype, ['loadstart', 'progress', 'load', 'abort', 'error', 'loadend']);
+function progressOf(type, s) {
+  var e = new ProgressEvent(type, { lengthComputable: true, loaded: s.loaded, total: s.total });
+  e.isTrusted = true;
+  return e;
+}
+/* The result of a read: the bytes as the method packages them. */
+function packageData(data, kind, label) {
+  var bytes = data.bytes;
+  if (kind === 'buffer') return bytes.slice().buffer;
+  if (kind === 'binary') return byteString(bytes);
+  if (kind === 'text') return K.blobText(byteString(bytes), label === undefined ? null : label, data.type);
+  return 'data:' + (data.type || 'application/octet-stream') + ';base64,' + K.btoa(byteString(bytes));
+}
+function startRead(reader, args, kind, method) {
+  var s = readerOf(reader);
+  var what = "Failed to execute '" + method + "' on 'FileReader'";
+  needArgs(args, 1, what);
+  var data = blobOf(args[0], what);
+  var label = kind === 'text' && args[1] !== undefined ? domString(args[1]) : undefined;
+  if (s.state === 1) throw new DOMException(what + ': The object is already busy reading Blobs.', 'InvalidStateError');
+  s.state = 1;
+  s.result = null;
+  s.error = null;
+  s.loaded = 0;
+  s.total = data.bytes.length;
+  var read = ++s.read;
+  function task(steps) {
+    var t = function* () { if (s.read === read) yield* steps(); };
+    t.owner = s;
+    queueTask(t);
+  }
+  task(function* () { yield* dispatchSteps(reader, progressOf('loadstart', s)); });
+  if (s.total > 0) task(function* () { s.loaded = s.total; yield* dispatchSteps(reader, progressOf('progress', s)); });
+  task(function* () {
+    s.loaded = s.total;
+    s.state = 2;
+    s.result = packageData(data, kind, label);
+    yield* dispatchSteps(reader, progressOf('load', s));
+    if (s.state !== 1) yield* dispatchSteps(reader, progressOf('loadend', s));
+  });
+}
+FileReader.prototype.readAsArrayBuffer = function (blob) { startRead(this, arguments, 'buffer', 'readAsArrayBuffer'); };
+FileReader.prototype.readAsBinaryString = function (blob) { startRead(this, arguments, 'binary', 'readAsBinaryString'); };
+FileReader.prototype.readAsText = function (blob) { startRead(this, arguments, 'text', 'readAsText'); };
+FileReader.prototype.readAsDataURL = function (blob) { startRead(this, arguments, 'dataurl', 'readAsDataURL'); };
+FileReader.prototype.abort = function () {
+  var s = readerOf(this);
+  if (s.state !== 1) {
+    s.result = null;
+    return;
+  }
+  s.state = 2;
+  s.result = null;
+  s.read++;
+  dropTasks(s);
+  dispatch(this, progressOf('abort', s));
+  if (s.state !== 1) dispatch(this, progressOf('loadend', s));
+};
+
+/* Blob URLs. The store is the book's, on the host, so the reader loads a blob URL that an image,
+   a style sheet or a font names as it loads a file of the book. */
+URL.createObjectURL = function (obj) {
+  var what = "Failed to execute 'createObjectURL' on 'URL'";
+  needArgs(arguments, 1, what);
+  var data = blobOf(obj, what);
+  return K.blobUrl(byteString(data.bytes), data.type);
+};
+URL.revokeObjectURL = function (url) {
+  needArgs(arguments, 1, "Failed to execute 'revokeObjectURL' on 'URL'");
+  K.revokeBlobUrl(usv(url));
+};
+
+"""
+
 /** The rest of [DOM_PRELUDE]: elements, events, the document, the window and what the host calls. */
 private const val DOM_PRELUDE_TAIL: String = """function datasetOf(el) {
   if (el.__dataset) return el.__dataset;
@@ -1480,6 +1743,11 @@ function queueTask(task) {
   tasks.push(task);
   timersChanged();
 }
+/* Takes the tasks of [owner] that have not run off the queue, as abort() of a FileReader does. */
+function dropTasks(owner) {
+  for (var i = tasks.length - 1; i >= 0; i--) if (tasks[i].owner === owner) tasks.splice(i, 1);
+  timersChanged();
+}
 function schedule(fn, ms, args, repeat) {
   if (typeof fn !== 'function') { var code = String(fn); fn = new Function(code); }
   ms = Number(ms) || 0;
@@ -1605,6 +1873,7 @@ var api = {
   document: document, location: location, console: console,
   URL: URL, URLSearchParams: URLSearchParams, webkitURL: URL,
   TextEncoder: TextEncoder, TextDecoder: TextDecoder, atob: atob, btoa: btoa,
+  Blob: Blob, File: File, FileReader: FileReader, ProgressEvent: ProgressEvent,
   navigator: navigator,
   screen: { width: viewport[0], height: viewport[1], availWidth: viewport[0], availHeight: viewport[1], colorDepth: 24 },
   history: { length: 1, state: null, back: function () {}, forward: function () {}, go: function () {}, pushState: function () {}, replaceState: function () {} },

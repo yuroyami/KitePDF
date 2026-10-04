@@ -241,6 +241,28 @@ chapter. The `encoding` tests that fail wait on `MessageChannel`
 ([KiteJS#73](https://github.com/yuroyami/KiteJS/issues/73)) and a rest parameter in an arrow
 function ([KiteJS#71](https://github.com/yuroyami/KiteJS/issues/71)).
 
+`Blob`, `File` and `FileReader` are the File API's. A blob takes strings, buffers, views and
+other blobs, with `endings` and a `type` kept as the standard keeps it, and `slice`, `text`,
+`arrayBuffer` and `bytes`, whose promises settle in a task. A `FileReader` reads in tasks of its
+own and fires `loadstart`, `progress`, `load` and `loadend` in that order, or `abort` and
+`loadend` when `abort()` stops it; `readAsText` takes the encoding its argument names, else the
+charset of the blob's type, else UTF-8, and a byte order mark wins over all three, through the
+decoders of `TextDecoder`.
+
+`URL.createObjectURL` gives a blob a `blob:` URL of the book's origin, and the reader loads an
+image, a style sheet, an `@import` or a font from it as it loads a file of the book.
+`URL.revokeObjectURL` takes it away from the scripts, but what the chapter shows keeps it, as a
+browser keeps an image it loaded: an image whose script revoked its URL right after setting it
+still shows, and still does at another font size. A chapter whose engine closes revokes the URLs
+its scripts made, as a page that unloads does.
+
+`WebPlatformTest` runs the File API tests of web-platform-tests in a chapter. Those that fail wait
+on `MessageChannel` ([#534](https://github.com/yuroyami/KitePDF/issues/534)), on streams, as
+`Blob.stream()` and `Blob.textStream()` do ([#536](https://github.com/yuroyami/KitePDF/issues/536)),
+on a script adding to a built-in prototype ([#537](https://github.com/yuroyami/KitePDF/issues/537)),
+on an element's class string ([#538](https://github.com/yuroyami/KitePDF/issues/538)), or on the
+engine: `Float16Array` and `async` functions, which nine of the files are written in.
+
 Nothing reaches outside the book. There is no `fetch` or `XMLHttpRequest`. A change of
 `location`, `window.open` and a script's own click on a link go to the listeners of
 `onNavigate`, with a zip path and its fragment for a place in the book; an address under the
@@ -251,8 +273,9 @@ otherwise grow it for as long as the book is open.
 Not there yet: the documents of `<iframe>` and `<object>` elements, whose boxes stay as they are;
 form controls drawn on the page, since an `<input>` has no box yet, though scripts read and set
 its value and checkedness; drawing on a `<canvas>`, whose `getContext` answers `null`
-([#501](https://github.com/yuroyami/KitePDF/issues/501)); `Blob`, `File` and `FileReader`
-([#533](https://github.com/yuroyami/KitePDF/issues/533)); `postMessage`, which drops each
+([#501](https://github.com/yuroyami/KitePDF/issues/501)); `ReadableStream` and the rest of the
+Streams Standard, so `Blob.stream()` ([#536](https://github.com/yuroyami/KitePDF/issues/536));
+`postMessage`, which drops each
 message, `MessageChannel` and `structuredClone`
 ([#534](https://github.com/yuroyami/KitePDF/issues/534)); `FormData`
 ([#531](https://github.com/yuroyami/KitePDF/issues/531)); and the syntax KiteJS does not have yet, `class`
