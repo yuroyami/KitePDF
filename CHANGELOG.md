@@ -173,6 +173,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- A book's style sheets and its scripts read the selectors of Selectors 4, where `:not()` took
+  one simple selector, a pseudo-class it did not know never matched instead of making the
+  selector invalid, a script's query that a browser rejects answered, and `:is()` in a style
+  sheet broke at its comma into two selectors. A selector is read from the tokens of CSS Syntax
+  3, with escapes, and has `:is()`, `:where()` and `:-webkit-any()`, `:not()` and `:has()` of
+  any selector list, `:nth-child()` and `:nth-last-child()` with `of S`, `:nth-of-type()`,
+  `:nth-last-of-type()` and `:only-of-type`, the `i` and `s` flags of an attribute selector and a
+  namespace prefix that `@namespace` declares, `:lang()` by the extended filtering of RFC 4647,
+  `:dir()`, `:any-link`, `:defined`, `:open`, `:scope`, and the states of a form control, which
+  it reads from the control's attributes. Specificity is that of Selectors 4, and `:where()`
+  counts nothing. One invalid selector drops its whole rule, and a valid pseudo-class or
+  pseudo-element that never holds in a paginated book, as `:hover` or `::selection`, keeps the
+  rule and matches nothing. A chapter's query takes the case of names from the kind of its
+  document, throws a `SyntaxError` where Chromium does, and has `:scope` as the DOM Standard
+  gives it, `closest()` included. A query called without its argument throws a `TypeError`, and
+  its errors name the method, as Chromium's do. A selector nested beyond 32 levels is dropped
+  with a warning, so a hostile one cannot exhaust a thread's stack. The selector tests of
+  web-platform-tests' `dom/nodes` run in a chapter, and pass but for the attribute case of #545
+  and the `:target` of #550 (#549).
+
 - The objects of a book's scripts have the interfaces a browser gives them, with their class
   strings, where `String(document.body)` was `[object Object]` and only sixteen element
   interfaces existed. Each element of HTML has the interface HTML names for its tag, and

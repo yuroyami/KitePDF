@@ -378,6 +378,7 @@ public class EpubScriptSession(
                 dom.query(scope, string(args, 1), args.getOrNull(2) == true)?.map(dom::idOf)
             }
             def("matches") { args -> element(args, 0)?.let { dom.matches(it, string(args, 1)) } }
+            def("closest") { args -> element(args, 0)?.let { dom.closest(it, string(args, 1))?.map(dom::idOf) } }
             def("html") { args -> node(args, 0)?.let { dom.html(it, args.getOrNull(1) == true) }.orEmpty() }
             def("setHtml") { args -> element(args, 0)?.let { dom.setHtml(it, string(args, 1)) }; null }
             def("insertHtml") { args -> element(args, 0)?.let { dom.insertHtml(it, string(args, 1), string(args, 2)) } }

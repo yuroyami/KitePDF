@@ -322,6 +322,14 @@ book's origin is such a place. `alert`, `confirm` and `prompt` go to `onConsole`
 dismissed. `failures` keeps the last hundred, since a timer that throws each time it runs would
 otherwise grow it for as long as the book is open.
 
+`querySelector`, `querySelectorAll`, `matches` and `closest` read the selectors of Selectors 4,
+as the layout reads a book's style sheets, and throw a `SyntaxError` for one that a browser
+rejects. An HTML chapter compares the names of elements and attributes ignoring case, as Blink
+does, and an XHTML chapter compares them as written. The states of a form control, as
+`:checked` and `:disabled`, follow the control's attributes, and a pseudo-class that never holds
+in a paginated book, as `:hover`, matches nothing, as does `:target` while a chapter opens at no
+fragment (#550).
+
 Not there yet: the documents of `<iframe>` and `<object>` elements, whose boxes stay as they are;
 form controls drawn on the page, since an `<input>` has no box yet, though scripts read and set
 its value and checkedness; drawing on a `<canvas>`, whose `getContext` answers `null`

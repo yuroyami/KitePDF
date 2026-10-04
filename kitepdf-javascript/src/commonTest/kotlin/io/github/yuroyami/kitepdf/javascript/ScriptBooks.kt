@@ -48,12 +48,16 @@ internal object ScriptBooks {
      * A reflowable book of one chapter whose body is [body], on pages 300 by 200 points: an XHTML
      * chapter, or for [html] an HTML one, which the manifest serves as text/html.
      */
-    fun chapter(body: String, extraFiles: Map<String, String> = emptyMap(), html: Boolean = false): EpubDocument {
+    fun chapter(body: String, extraFiles: Map<String, String> = emptyMap(), html: Boolean = false): EpubDocument =
+        page(if (html) html(body = body) else xhtml(body = body), extraFiles, html)
+
+    /** A book whose one scripted chapter is the whole document [source], served as HTML when [html] is true, with [extraFiles]. */
+    fun page(source: String, extraFiles: Map<String, String> = emptyMap(), html: Boolean = false): EpubDocument {
         val name = if (html) "chapter.html" else "chapter.xhtml"
         return book(
             items = listOf(Item(name, if (html) "text/html" else "application/xhtml+xml", properties = "scripted", spine = true)) +
                 extraFiles.keys.map { Item(it, typeOf(it), spine = it.endsWith(".xhtml")) },
-            files = mapOf(name to if (html) html(body = body) else xhtml(body = body)) + extraFiles,
+            files = mapOf(name to source) + extraFiles,
             settings = EpubSettings(pageWidth = 300.0, pageHeight = 200.0, margin = 20.0),
         )
     }

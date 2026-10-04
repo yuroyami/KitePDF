@@ -85,18 +85,28 @@ class CssNestingTest {
     }
 
     @Test
-    fun nested_negation_never_matches_and_does_not_hide_the_following_rule() {
+    fun nested_negation_matches_as_written_and_an_overdeep_one_drops_only_its_rule() {
         val paragraph = HtmlParser.parse("<p>x</p>").children.filterIsInstance<KiteXmlNode.Element>().single()
-        for (depth in listOf(2, 2_000)) {
+        for (depth in listOf(2, 3, CssParser.MAX_NESTING)) {
             val warnings = warningsDuring {
                 val css = ":not(".repeat(depth) + ".hidden" + ")".repeat(depth) + "{color:red}p{color:blue}"
                 val rules = CssParser.parse(css, Origin.AUTHOR)
                 assertEquals(2, rules.size)
-                assertFalse(rules.first().selectors.single().matches(paragraph))
+                // An even number of negations is .hidden, which the paragraph is not.
+                assertEquals(depth % 2 == 1, rules.first().selectors.single().matches(paragraph), "depth $depth")
                 assertTrue(rules.last().selectors.single().matches(paragraph))
             }
+            assertTrue(warnings.isEmpty(), "nesting within the limit emits no warning: $warnings")
+        }
+        for (depth in listOf(CssParser.MAX_NESTING + 1, 2_000)) {
+            val warnings = warningsDuring {
+                val css = ":not(".repeat(depth) + ".hidden" + ")".repeat(depth) + "{color:red}p{color:blue}"
+                val rules = CssParser.parse(css, Origin.AUTHOR)
+                assertEquals(1, rules.size)
+                assertTrue(rules.single().selectors.single().matches(paragraph))
+            }
             assertEquals(1, warnings.size)
-            assertTrue(warnings.single().contains("nested :not()"))
+            assertTrue(warnings.single().contains("nested beyond"))
         }
     }
 

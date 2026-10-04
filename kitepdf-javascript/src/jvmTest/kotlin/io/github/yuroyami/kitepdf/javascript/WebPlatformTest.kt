@@ -1,5 +1,6 @@
 package io.github.yuroyami.kitepdf.javascript
 
+import io.github.yuroyami.kitepdf.epub.EpubDocument
 import org.junit.Assume.assumeTrue
 import java.io.File
 import kotlin.time.TimeSource
@@ -12,15 +13,17 @@ import kotlin.test.assertTrue
  * Interfaces that a book's scripts see, against their JavaScript tests in web-platform-tests, run
  * in a chapter as a browser runs them in a page: the `URL` and `URLSearchParams` of the URL
  * Standard (#520), the `DOMException` of Web IDL (#530), the `TextEncoder` and `TextDecoder` of
- * the Encoding Standard and the `atob` and `btoa` of HTML (#532), and the `Blob`, `File`,
- * `FileReader` and blob URLs of the File API (#533).
+ * the Encoding Standard and the `atob` and `btoa` of HTML (#532), the `Blob`, `File`,
+ * `FileReader` and blob URLs of the File API (#533), and the selector queries of the DOM
+ * Standard (#549).
  *
  * Each test file runs in a book of its own, after `harness.js`, a small stand-in for
  * testharness.js whose `fetch` answers from the test data that the URL parser's own test reads
  * in kitepdf-epub, and after the scripts its META lines name. The chapter's timers run on a clock
  * that skips the waits, until the harness logs the count once the page has loaded and every test
  * has completed. A file named with a query runs as that variant of it, the query in
- * `location.search`.
+ * `location.search`. A page whose markup the tests query runs as the chapter itself, and one
+ * whose tests query the document of a frame it makes runs as that document.
  *
  * A test that a known gap fails is listed in [gaps] with the issue that tracks it, and a probe
  * that is true while the gap is there, as is a file that a gap keeps from running at all. While
@@ -102,6 +105,25 @@ class WebPlatformTest {
         ),
         // Each element is made twice, by createElement and by parsing a document; the second needs DOMParser.
         Gap("#543, DOMParser is missing", "typeof DOMParser === 'undefined'", names = Regex(": useParser$")),
+        // The frame loads its document at #target, and a chapter opens at no fragment. A fragment or a
+        // detached element has no target in a browser either, so those tests pass.
+        Gap(
+            "#550, a chapter has no fragment and no target",
+            "typeof HashChangeEvent === 'undefined'",
+            names = Regex("^(Document|In-document Element)\\.[A-Za-z]+: :target pseudo-class"),
+        ),
+        // In an XML document an attribute keeps the case its markup gives it, and [title] does not match tItLe.
+        Gap(
+            "#545, an attribute's name loses its case",
+            "(function () { var a = document.createElementNS('http://www.w3.org/1999/xhtml', 'a'); a.setAttribute('tItLe', ''); " +
+                "return a.matches('[title]'); })()",
+            names = Regex("not matching title attribute, case sensitivity: #attr-presence \\[\\*\\|TiTlE\\]$"),
+        ),
+        Gap(
+            "kitejs#11, a const in a for head",
+            "(function () { try { Function('for (const x of []) {}'); return false; } catch (e) { return true; } })()",
+            setOf("dom/nodes/Element-matches-namespaced-elements.html"),
+        ),
         Gap(
             "kitejs#71, an arrow function cannot take a rest parameter",
             "(function () { try { Function('return (...a) => a'); return false; } catch (e) { return true; } })()",
@@ -153,6 +175,38 @@ class WebPlatformTest {
     private val reflectionFiles = listOf("embedded", "forms", "grouping", "metadata", "misc", "obsolete", "sections", "tabular", "text")
         .map { "html/dom/reflection-$it.html" }
 
+    /** The tests of `querySelector`, `querySelectorAll`, `matches` and `closest` of the DOM Standard, with Selectors 4 (#549). */
+    private val selectorFiles = listOf(
+        "ParentNode-querySelector-All.html", "ParentNode-querySelector-All-xht.xht", "Element-matches.html",
+        "Element-webkitMatchesSelector.html", "Element-closest.html", "Element-matches-namespaced-elements.html",
+        "ParentNode-querySelector-case-insensitive.html", "ParentNode-querySelector-escapes.html", "ParentNode-querySelector-scope.html",
+        "ParentNode-querySelectors-exclusive.html", "ParentNode-querySelectors-namespaces.html",
+        "ParentNode-querySelectors-space-and-dash-attribute-value.html",
+    ).map { "dom/nodes/$it" }
+
+    /**
+     * The pages whose markup is part of the test, which run as the chapter's own document. The
+     * others run their scripts in a chapter of their own, as an HTML page that leaves out `<body>`
+     * has no `document.body` until #547.
+     */
+    private val markupPages: Set<String> = selectorFiles.toSet()
+
+    /**
+     * A page whose tests run in a frame it makes, as [document], the page the frame loads; [start]
+     * is the call the frame's `load` makes, with the frame or its event standing in as an object
+     * that has the chapter's document.
+     */
+    private class Frame(val document: String, val start: String)
+
+    private val frames = mapOf(
+        "dom/nodes/ParentNode-querySelector-All.html" to Frame("dom/nodes/ParentNode-querySelector-All-content.html", "init({ contentDocument: document })"),
+        "dom/nodes/ParentNode-querySelector-All-xht.xht" to Frame("dom/nodes/ParentNode-querySelector-All-content.xht", "init({ contentDocument: document })"),
+        "dom/nodes/Element-matches.html" to
+            Frame("dom/nodes/ParentNode-querySelector-All-content.html", "init({ target: { contentDocument: document } }, 'matches')"),
+        "dom/nodes/Element-webkitMatchesSelector.html" to
+            Frame("dom/nodes/ParentNode-querySelector-All-content.html", "init({ target: { contentDocument: document } }, 'webkitMatchesSelector')"),
+    )
+
     /** The files of this folder that stand in for scripts of web-platform-tests that a test names, null where `harness.js` does. */
     private val standIns = mapOf(
         "/common/sab.js" to "sab.js",
@@ -202,16 +256,18 @@ class WebPlatformTest {
         (urlData + base64).joinToString(",\n", "var harnessData = {\n", "\n};")
     }
 
+    /** The console of a chapter whose scripts are [files], in order, and the failures of its scripts, as [open] gives them. */
+    private fun chapter(files: Map<String, String>, html: Boolean = false): Pair<List<String>, List<String>> =
+        open(ScriptBooks.chapter(files.keys.joinToString("") { "<script src=\"$it\"></script>" }, extraFiles = files, html = html))
+
     /**
-     * The console of a chapter whose scripts are [files], in order, and the failures of its
-     * scripts, once the harness logged its count or nothing is left to wait for. The chapter's
-     * clock runs as the real one does and jumps over each wait for a timer, so a test that waits
-     * seconds takes none. A call has a minute, as a reflection page runs thousands of
-     * tests in the one call that loads it.
+     * The console of the one chapter of [book], and the failures of its scripts, once the harness
+     * logged its count or nothing is left to wait for. The chapter's clock runs as the real one
+     * does and jumps over each wait for a timer, so a test that waits seconds takes none. A call
+     * has a minute, as a reflection page runs thousands of tests in the one call that loads it.
      */
-    private fun chapter(files: Map<String, String>, html: Boolean = false): Pair<List<String>, List<String>> {
+    private fun open(book: EpubDocument): Pair<List<String>, List<String>> {
         val console = ArrayList<String>()
-        val book = ScriptBooks.chapter(files.keys.joinToString("") { "<script src=\"$it\"></script>" }, extraFiles = files, html = html)
         val started = TimeSource.Monotonic.markNow()
         var skipped = 0L
         val clock = { started.elapsedNow().inWholeMilliseconds + skipped }
@@ -236,6 +292,15 @@ class WebPlatformTest {
     /** What a file did: the names of its tests that fail, the names of those that pass, and the failures of its scripts that did not run. */
     private class FileRun(val failing: List<String>, val passing: List<String>, val broken: List<String>)
 
+    /** A `<script>` element of a page: its `src` in one of the first three groups, as the attribute is quoted, and its text in the fourth. */
+    private val scriptElement = Regex("<script(?:\\s+src=(?:\"([^\"]*)\"|'([^']*)'|([^\\s>]+)))?[^>]*>(.*?)</script>", RegexOption.DOT_MATCHES_ALL)
+
+    private fun srcOf(m: MatchResult): String? = m.groupValues.drop(1).take(3).firstOrNull { it.isNotEmpty() }
+
+    /** The path in `resources/wpt` of the script [src] that the page at [path] names, from the page's folder or the root of web-platform-tests. */
+    private fun scriptPath(path: String, src: String): String =
+        if (src.startsWith("/")) src.removePrefix("/") else normalized("/" + path.substringBeforeLast('/', "") + "/" + src).removePrefix("/")
+
     /**
      * The scripts of the page [source] at [path], in order, as names and sources: each `<script>`
      * element's file, from the folder of the page or the root of web-platform-tests, or its own
@@ -243,20 +308,57 @@ class WebPlatformTest {
      */
     private fun pageScripts(path: String, source: String): Map<String, String> {
         val scripts = LinkedHashMap<String, String>()
-        val folder = path.substringBeforeLast('/', "")
-        val element = Regex("<script(?:\\s+src=(?:\"([^\"]*)\"|'([^']*)'|([^\\s>]+)))?[^>]*>(.*?)</script>", RegexOption.DOT_MATCHES_ALL)
-        for ((i, m) in element.findAll(source).withIndex()) {
-            val src = m.groupValues.drop(1).take(3).firstOrNull { it.isNotEmpty() }
+        for ((i, m) in scriptElement.findAll(source).withIndex()) {
+            val src = srcOf(m)
             when {
-                src == null -> scripts["inline-$i.js"] = m.groupValues[4]
+                src == null -> scripts["inline-$i.js"] = m.groupValues[4].removeCData()
                 src.startsWith("/resources/testharness") -> {}
-                else -> {
-                    val file = if (src.startsWith("/")) src.removePrefix("/") else normalized("/$folder/$src").removePrefix("/")
-                    scripts[file.replace('/', '-')] = resource(file)
-                }
+                else -> scriptPath(path, src).let { scripts[it.replace('/', '-')] = resource(it) }
             }
         }
         return scripts
+    }
+
+    /** The text of an XHTML page's inline script, without the CDATA section that wraps it. */
+    private fun String.removeCData(): String = trim().removePrefix("<![CDATA[").removeSuffix("]]>")
+
+    /**
+     * Runs the page [source] at [path] as the chapter's own document, served as text/html, or as
+     * XHTML for a `.xht` page. The element that loads testharness.js loads `harness.js` and the
+     * harness's data instead, the one that loads testharnessreport.js goes, and each other `src`
+     * names its file as [scriptPath] finds it. A page of [frames] runs as the document its frame
+     * loads instead: the page's scripts run at the end of that document's body, with `async_test`
+     * a stub while they do, so the frame is never made, and then they leave the document, which
+     * has none in the frame, and the frame's call starts the tests in an `async_test` of its own.
+     */
+    private fun runPage(path: String, source: String): Pair<List<String>, List<String>> {
+        val files = linkedMapOf("harness.js" to resource("harness.js"), "data.js" to harnessData)
+        val frame = frames[path]
+        if (frame == null) {
+            val markup = scriptElement.replace(source) { m ->
+                val src = srcOf(m)
+                when {
+                    src == null -> m.value
+                    src == "/resources/testharness.js" -> files.keys.joinToString("") { "<script src=\"$it\"></script>" }
+                    src.startsWith("/resources/testharness") -> ""
+                    else -> scriptPath(path, src).replace('/', '-').also { files[it] = resource(scriptPath(path, src)) }
+                        .let { "<script src=\"$it\"></script>" }
+                }
+            }
+            return open(ScriptBooks.page(markup, files, html = !path.endsWith(".xht")))
+        }
+        files["frame-before.js"] = "var harnessAsyncTest = async_test; async_test = function () {};"
+        files += pageScripts(path, source)
+        files["frame-after.js"] = """
+            async_test = harnessAsyncTest;
+            var harnessScripts = document.getElementsByTagName('script');
+            while (harnessScripts.length) harnessScripts[0].parentNode.removeChild(harnessScripts[0]);
+            async_test(function (t) { t.step_func_done(function () { ${frame.start}; })(); }, 'the frame loads');
+        """.trimIndent()
+        val document = resource(frame.document)
+        val scripts = files.keys.joinToString("") { "<script src=\"$it\"></script>" }
+        val end = document.lastIndexOf("</body>")
+        return open(ScriptBooks.page(document.substring(0, end) + scripts + document.substring(end), files, html = !frame.document.endsWith(".xht")))
     }
 
     /** Runs the file at [path], a query after it naming the variant. A page, a `.html` file, runs in an HTML chapter with its scripts. */
@@ -265,7 +367,7 @@ class WebPlatformTest {
         val variant = path.substringAfter('?', "")
         val name = file.substringAfterLast('/')
         val source = resource(file)
-        val page = file.endsWith(".html")
+        val page = file.endsWith(".html") || file.endsWith(".xht")
         val scripts = linkedMapOf("harness.js" to resource("harness.js"), "data.js" to harnessData)
         if (variant.isNotEmpty()) scripts["variant.js"] = "Object.defineProperty(location, 'search', { value: '?$variant', configurable: true });"
         if (page) {
@@ -274,7 +376,7 @@ class WebPlatformTest {
             for (script in metaScripts(file, source)) scripts[script.replace('/', '-')] = resource(script)
             scripts[name] = source
         }
-        val (console, failures) = chapter(scripts, html = page)
+        val (console, failures) = if (file in markupPages) runPage(file, source) else chapter(scripts, html = page)
         val done = console.singleOrNull { it.startsWith("log: DONE ") }
         assertTrue(done != null, "$name did not finish: $failures\n" + console.takeLast(20).joinToString("\n"))
         val (passed, failed) = done.removePrefix("log: DONE ").split(' ').map { it.toInt() }
@@ -337,6 +439,9 @@ class WebPlatformTest {
 
     @Test
     fun the_interface_tests_pass_but_for_known_gaps() = check(listOf("html/semantics/interfaces.html"), atLeast = 300)
+
+    @Test
+    fun the_selector_tests_pass_but_for_known_gaps() = check(selectorFiles, atLeast = 5_300)
 
     private companion object {
         /** How long a chapter may wait on its timers in all, on its clock: past the harness's own ten seconds. */

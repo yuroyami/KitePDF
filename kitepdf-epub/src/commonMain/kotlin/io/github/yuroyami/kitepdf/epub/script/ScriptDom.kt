@@ -3,6 +3,7 @@ package io.github.yuroyami.kitepdf.epub.script
 import io.github.yuroyami.kitepdf.core.xml.KiteXmlNode
 import io.github.yuroyami.kitepdf.epub.HtmlParser
 import io.github.yuroyami.kitepdf.epub.css.Selector
+import io.github.yuroyami.kitepdf.epub.css.SelectorTree
 
 /**
  * The live tree a chapter's scripts read and change (#41): a copy of the chapter's parse that
@@ -284,14 +285,16 @@ internal class ScriptDom(
 
     /**
      * The elements under [scope] that [selectors] match, in tree order, or null when the list does
-     * not parse. Only the first, when not [all].
+     * not parse. Only the first, when not [all]. The selectors match in the whole tree, and `:scope`
+     * is [scope], or the document element when [scope] is a document (DOM Standard, 4.2.6).
      */
     fun query(scope: KiteXmlNode.Element, selectors: String, all: Boolean): List<KiteXmlNode.Element>? {
-        val parsed = parseSelectors(selectors) ?: return null
+        val parsed = Selector.parseList(selectors) ?: return null
+        val scoping = scope.takeUnless { it.tag.startsWith('#') }
         val out = ArrayList<KiteXmlNode.Element>()
         fun walk(el: KiteXmlNode.Element): Boolean {
             for (c in el.children) if (c is KiteXmlNode.Element) {
-                if (parsed.any { it.matches(c) }) {
+                if (parsed.any { it.matchesElement(c, selectorTree, scoping) }) {
                     out.add(c)
                     if (!all) return true
                 }
@@ -303,33 +306,47 @@ internal class ScriptDom(
         return out
     }
 
-    /** Whether [selectors] match [el], or null when the list does not parse. */
-    fun matches(el: KiteXmlNode.Element, selectors: String): Boolean? = parseSelectors(selectors)?.any { it.matches(el) }
+    /** Whether [selectors] match [el], with [el] as `:scope`, or null when the list does not parse. */
+    fun matches(el: KiteXmlNode.Element, selectors: String): Boolean? =
+        Selector.parseList(selectors)?.any { it.matchesElement(el, selectorTree, el) }
 
-    private fun parseSelectors(text: String): List<Selector>? {
-        val parts = splitSelectors(text)
-        if (parts.isEmpty()) return null
-        return parts.map { Selector.parse(it.trim()) ?: return null }
+    /**
+     * The nearest of [el] and the elements above it that [selectors] match, with [el] as `:scope`, as a
+     * list of none or one, or null when the list does not parse (DOM Standard, 4.9).
+     */
+    fun closest(el: KiteXmlNode.Element, selectors: String): List<KiteXmlNode.Element>? {
+        val parsed = Selector.parseList(selectors) ?: return null
+        var e: KiteXmlNode.Element? = el
+        while (e != null && !e.tag.startsWith('#')) {
+            val at = e
+            if (parsed.any { it.matchesElement(at, selectorTree, el) }) return listOf(at)
+            e = e.parent
+        }
+        return emptyList()
     }
 
-    /** [text] cut at its top-level commas: one inside brackets, parentheses or quotes stays. */
-    private fun splitSelectors(text: String): List<String> {
-        val out = ArrayList<String>()
-        var depth = 0
-        var quote = 0.toChar()
-        var start = 0
-        for (i in text.indices) {
-            val c = text[i]
-            when {
-                quote != 0.toChar() -> if (c == quote) quote = 0.toChar()
-                c == '"' || c == '\'' -> quote = c
-                c == '(' || c == '[' -> depth++
-                c == ')' || c == ']' -> depth--
-                c == ',' && depth == 0 -> { out.add(text.substring(start, i)); start = i + 1 }
-            }
+    /**
+     * The tree as a selector reads it: names with the case and namespace their parse gave them, which an
+     * HTML chapter compares ignoring case, as Blink does, and white space text as content, as browsers
+     * have `:empty`.
+     */
+    private val selectorTree = object : SelectorTree {
+        override fun localName(el: KiteXmlNode.Element): String = nameOf(el).localName
+        override fun namespace(el: KiteXmlNode.Element): String? = nameOf(el).namespace
+        override fun namesIgnoreCase(el: KiteXmlNode.Element): Boolean = html
+        override val htmlDocument: Boolean get() = html
+        override val whitespaceIsEmpty: Boolean get() = false
+
+        override fun sameType(a: KiteXmlNode.Element, b: KiteXmlNode.Element): Boolean {
+            val x = nameOf(a)
+            val y = nameOf(b)
+            return x.localName == y.localName && x.namespace == y.namespace
         }
-        out.add(text.substring(start))
-        return out.filter { it.isNotBlank() }.takeIf { it.size == out.size }.orEmpty()
+
+        override fun attribute(el: KiteXmlNode.Element, namespace: String?, local: String, lower: String, test: (String) -> Boolean): Boolean =
+            el.attrs[lower]?.let(test) ?: false
+
+        override fun attr(el: KiteXmlNode.Element, name: String): String? = el.attrs[name]
     }
 
     /** [node] as HTML: its children only, or the element itself too when [outer]. */

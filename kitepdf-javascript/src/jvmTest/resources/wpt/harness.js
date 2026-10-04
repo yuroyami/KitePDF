@@ -4,7 +4,7 @@
    it fails, and once the page has loaded and every test has completed, the harness logs the
    count; a test still running ten seconds after the page loaded times out. Not a file of
    web-platform-tests. */
-var harness = { passed: 0, failed: 0, tests: [], loaded: false, finished: false, promiseTests: null, timer: 0 };
+var harness = { passed: 0, failed: 0, tests: [], loaded: false, finished: false, promiseTests: null, timer: 0, single: null };
 var STARTED = 1, HAS_RESULT = 2, CLEANING = 3, COMPLETE = 4;
 function describe(e) { return e && e.message !== undefined ? e.name + ': ' + e.message : String(e); }
 function Test(name) {
@@ -154,7 +154,12 @@ function EventWatcher(t, target, types) {
   t.add_cleanup(this.stop_watching);
 }
 function subsetTestByKey(key, testFunction, fn, name) { return testFunction(fn, name); }
-function setup(fn) { if (typeof fn === 'function') fn(); }
+/* A function runs at once; options with single_test make the page one test, named by its title, that done() completes. */
+function setup(fn) {
+  if (typeof fn === 'function') fn();
+  else if (fn && fn.single_test) harness.single = async_test(document.title);
+}
+function done() { if (harness.single) harness.single.done(); }
 function generate_tests(fn, cases) {
   cases.forEach(function (c) { test(function () { fn.apply(null, c.slice(1)); }, c[0]); });
 }
@@ -205,9 +210,12 @@ function assert_throws_js(constructor, fn, description) {
   }
   check(false, description, 'did not throw');
 }
-function assert_throws_dom(name, fn, description) {
+/* The DOMException constructor of the realm the error comes from may come before the function, as testharness.js takes it. */
+function assert_throws_dom(name, constructorOrFn, fnOrDescription, description) {
+  var constructor = DOMException, fn = constructorOrFn;
+  if (typeof fnOrDescription === 'function') { constructor = constructorOrFn; fn = fnOrDescription; } else description = fnOrDescription;
   try { fn(); } catch (e) {
-    check(e instanceof DOMException && e.name === name, description, 'threw ' + show(e) + ', not a ' + name);
+    check(e instanceof constructor && e.name === name, description, 'threw ' + show(e) + ', not a ' + name);
     return;
   }
   check(false, description, 'did not throw');
@@ -219,6 +227,9 @@ function assert_throws_exactly(exception, fn, description) {
     return;
   }
   check(false, description, 'did not throw');
+}
+function assert_idl_attribute(object, name, description) {
+  check(object != null && name in object, description, 'expected ' + show(name) + ' in the prototype chain');
 }
 function assert_own_property(object, name, description) {
   check(object != null && Object.prototype.hasOwnProperty.call(object, name), description, 'expected an own property ' + show(name));
