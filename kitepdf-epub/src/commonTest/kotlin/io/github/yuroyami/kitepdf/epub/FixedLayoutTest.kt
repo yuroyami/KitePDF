@@ -64,6 +64,36 @@ class FixedLayoutTest {
     }
 
     @Test
+    fun the_first_viewport_tag_and_its_first_width_and_height_size_the_page() {
+        // EPUB Reading Systems 3.3, 8.1.2: the first viewport tag counts, and the first width and
+        // height in it; a value is the number it starts with, in pixels, whatever unit follows;
+        // and a side that is not a number is the reader's to supply (#502).
+        fun headed(name: String, vararg contents: String) = "OEBPS/$name" to """<?xml version="1.0"?>
+            <html xmlns="http://www.w3.org/1999/xhtml"><head>${contents.joinToString("") { """<meta name="viewport" content="$it"/>""" }}</head>
+            <body><p>page</p></body></html>""".trimIndent().encodeToByteArray()
+        val doc = EpubDocument.open(
+            fixedEpub(
+                listOf(
+                    headed("p1.xhtml", "width=1000, height=600", "width=500, height=300"),
+                    headed("p2.xhtml", "width=900, height=600, width=1000, height=1000"),
+                    headed("p3.xhtml", "width=1000px, height=600mm"),
+                    headed("p4.xhtml", "width=device-width, height=device-height"),
+                    headed("p5.xhtml", "width=800"),
+                    headed("p6.xhtml", "min-width=50 width = 400 height = 200"),
+                ),
+            ),
+            pageWidth = 400.0, pageHeight = 640.0,
+        )
+        fun size(i: Int) = doc.pages[i].width to doc.pages[i].height
+        assertEquals(750.0 to 450.0, size(0), "the second tag is ignored")
+        assertEquals(675.0 to 450.0, size(1), "a repeated width and height are ignored")
+        assertEquals(750.0 to 450.0, size(2), "the unit after the number is ignored")
+        assertEquals(400.0 to 640.0, size(3), "device-width and device-height are the reader's page")
+        assertEquals(600.0 to 960.0, size(4), "a missing height keeps the reader's aspect ratio")
+        assertEquals(300.0 to 150.0, size(5), "a tag with spaces for commas still gives its size")
+    }
+
+    @Test
     fun each_fixed_page_paints_its_own_content() {
         val doc = EpubDocument.open(fixedEpub())
         assertNotNull(doc)

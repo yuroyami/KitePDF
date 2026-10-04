@@ -51,29 +51,34 @@ public class EpubRendition internal constructor(
             flow = flowOf(values["flow"]) ?: EpubFlow.AUTO,
         )
 
-        /** [book] with the properties of one spine entry, a space-separated list, over it. */
+        /**
+         * [book] with the properties of one spine entry, a space-separated list, over it. Of two
+         * overrides of one property, the first counts (EPUB Reading Systems 3.3, 5.5.1, #502).
+         */
         fun ofChapter(book: EpubRendition, properties: String?): EpubRendition {
-            var layout = book.layout
-            var spread = book.spread
-            var orientation = book.orientation
-            var flow = book.flow
+            var layout: EpubLayout? = null
+            var spread: EpubSpread? = null
+            var orientation: EpubOrientation? = null
+            var flow: EpubFlow? = null
             var pageSpread: EpubPageSpread? = null
-            for (property in properties.orEmpty().split(' ', '\t', '\n', '\r')) {
+            for (property in properties.orEmpty().split(' ', '\t', '\n', '\r', '\u000C')) {
                 val name = property.lowercase()
                 when {
-                    name == "rendition:layout-pre-paginated" -> layout = EpubLayout.PRE_PAGINATED
-                    name == "rendition:layout-reflowable" -> layout = EpubLayout.REFLOWABLE
-                    name.startsWith("rendition:spread-") -> spreadOf(name.removePrefix("rendition:spread-"))?.let { spread = it }
+                    name == "rendition:layout-pre-paginated" -> layout = layout ?: EpubLayout.PRE_PAGINATED
+                    name == "rendition:layout-reflowable" -> layout = layout ?: EpubLayout.REFLOWABLE
+                    name.startsWith("rendition:spread-") -> spread = spread ?: spreadOf(name.removePrefix("rendition:spread-"))
                     name.startsWith("rendition:orientation-") ->
-                        orientationOf(name.removePrefix("rendition:orientation-"))?.let { orientation = it }
-                    name.startsWith("rendition:flow-") -> flowOf(name.removePrefix("rendition:flow-"))?.let { flow = it }
+                        orientation = orientation ?: orientationOf(name.removePrefix("rendition:orientation-"))
+                    name.startsWith("rendition:flow-") -> flow = flow ?: flowOf(name.removePrefix("rendition:flow-"))
                     // EPUB 3.3 drops the prefix from the two sides, and keeps it for the centre.
-                    name == "page-spread-left" || name == "rendition:page-spread-left" -> pageSpread = EpubPageSpread.LEFT
-                    name == "page-spread-right" || name == "rendition:page-spread-right" -> pageSpread = EpubPageSpread.RIGHT
-                    name == "rendition:page-spread-center" || name == "page-spread-center" -> pageSpread = EpubPageSpread.CENTER
+                    name == "page-spread-left" || name == "rendition:page-spread-left" -> pageSpread = pageSpread ?: EpubPageSpread.LEFT
+                    name == "page-spread-right" || name == "rendition:page-spread-right" -> pageSpread = pageSpread ?: EpubPageSpread.RIGHT
+                    name == "rendition:page-spread-center" || name == "page-spread-center" -> pageSpread = pageSpread ?: EpubPageSpread.CENTER
                 }
             }
-            return EpubRendition(layout, spread, orientation, flow, pageSpread)
+            return EpubRendition(
+                layout ?: book.layout, spread ?: book.spread, orientation ?: book.orientation, flow ?: book.flow, pageSpread,
+            )
         }
 
         private fun spreadOf(value: String?): EpubSpread? = when (value?.lowercase()) {

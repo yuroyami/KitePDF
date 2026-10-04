@@ -8,11 +8,11 @@ The reading system under test is the library and its viewer together: `kitepdf-e
 
 | Level | Tests | Passes | Fails | Not applicable |
 |---|---|---|---|---|
-| must | 140 | 92 | 44 | 4 |
+| must | 140 | 95 | 41 | 4 |
 | should | 38 | 14 | 23 | 1 |
 | may | 1 | 0 | 1 | 0 |
-| deprecated | 27 | 16 | 10 | 1 |
-| all | 206 | 122 | 78 | 6 |
+| deprecated | 27 | 20 | 6 | 1 |
+| all | 206 | 129 | 71 | 6 |
 
 ## How the results are known
 
@@ -221,7 +221,7 @@ KITEPDF_EPUB_TESTS=$PWD/../epub-tests/tests ./gradlew :kitepdf-compose-viewer:jv
 | [`fxl-page-spread-center`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/fxl-page-spread-center) | deprecated | Passes | Checked: The first chapter asks for the centre, and the viewer gives it a spread of its own, drawn centred. |
 | [`fxl-spine-overrides_behave-as-global`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/fxl-spine-overrides_behave-as-global) | deprecated | Passes | Checked: The fixed chapter is one page of its viewport and the overriding chapter flows over pages. |
 | [`fxl-spine-overrides_behave-as-global-bis`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/fxl-spine-overrides_behave-as-global-bis) | deprecated | Passes | Checked: The overriding chapter is one fixed page of its viewport between two reflowable ones. |
-| [`fxl-spine-overrides_duplicate`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/fxl-spine-overrides_duplicate) | deprecated | Fails ([#502](https://github.com/yuroyami/KitePDF/issues/502)) | Checked: Of the two overrides on the itemref, the first, reflowable, wins; today the last does. |
+| [`fxl-spine-overrides_duplicate`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/fxl-spine-overrides_duplicate) | deprecated | Passes | Checked: Of the two overrides on the itemref, the first, reflowable, wins. |
 | [`lay-fxl-layout-default`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/lay-fxl-layout-default) | deprecated | Passes | Checked: With no `rendition:layout`, the book is reflowable and flows over pages. |
 | [`lay-fxl-layout-pre-paginated`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/lay-fxl-layout-pre-paginated) | deprecated | Passes | Checked: Each chapter is one 900 by 600 page, in spine order. |
 | [`lay-fxl-layout-pre-paginated-spreads`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/lay-fxl-layout-pre-paginated-spreads) | deprecated | Passes | Checked: The viewer pairs the four pages into two spreads with no lone page between. |
@@ -237,12 +237,12 @@ KITEPDF_EPUB_TESTS=$PWD/../epub-tests/tests ./gradlew :kitepdf-compose-viewer:jv
 | [`lay-fxl-spread-none`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/lay-fxl-spread-none) | deprecated | Passes | Checked: With `spread none`, every page shows alone. |
 | [`lay-fxl-svg-icb_multi`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/lay-fxl-svg-icb_multi) | deprecated | Passes | Checked: Each SVG page takes the size of its own `viewBox`, 900 by 600 and 1200 by 600. |
 | [`lay-fxl-xhtml-icb`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/lay-fxl-xhtml-icb) | deprecated | Fails ([#503](https://github.com/yuroyami/KitePDF/issues/503)) | Judged: The page is clipped to its viewport, so no red shows, but the grid of layered gradients does not paint, and the test asks for the grid. |
-| [`lay-fxl-xhtml-icb_device_sizes`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/lay-fxl-xhtml-icb_device_sizes) | deprecated | Fails ([#502](https://github.com/yuroyami/KitePDF/issues/502)) | Judged: `device-width` and `device-height` are not read, so the page takes the reader's page size. |
+| [`lay-fxl-xhtml-icb_device_sizes`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/lay-fxl-xhtml-icb_device_sizes) | deprecated | Fails ([#503](https://github.com/yuroyami/KitePDF/issues/503)) | Judged: `device-width` and `device-height` give the page the size of the reader's, so it fills the display, but the grid of layered gradients does not paint. |
 | [`lay-fxl-xhtml-icb_invalid_meta`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/lay-fxl-xhtml-icb_invalid_meta) | deprecated | Fails ([#503](https://github.com/yuroyami/KitePDF/issues/503)) | Judged: Width and height are read from the invalid tag and the page is clipped, but the grid of layered gradients does not paint. |
 | [`lay-fxl-xhtml-icb_multi`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/lay-fxl-xhtml-icb_multi) | deprecated | Fails ([#503](https://github.com/yuroyami/KitePDF/issues/503)) | Judged: Each page takes its own viewport and is clipped to it, but the grid of layered gradients does not paint. |
-| [`lay-fxl-xhtml-icb_multi_declarations`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/lay-fxl-xhtml-icb_multi_declarations) | deprecated | Fails ([#502](https://github.com/yuroyami/KitePDF/issues/502)) | Checked: Of two viewport tags, the first sizes the page, 1000 by 600; today the second does. |
-| [`lay-fxl-xhtml-icb_repeated-in-meta`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/lay-fxl-xhtml-icb_repeated-in-meta) | deprecated | Fails ([#502](https://github.com/yuroyami/KitePDF/issues/502)) | Checked: Of a repeated `width` and `height`, the first sizes the page, 900 by 600; today the last does. |
-| [`lay-fxl-xhtml-icb_units`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/lay-fxl-xhtml-icb_units) | deprecated | Fails ([#502](https://github.com/yuroyami/KitePDF/issues/502)) | Checked: `width=1000px, height=600mm` sizes the page 1000 by 600; today the unit drops the whole tag. |
+| [`lay-fxl-xhtml-icb_multi_declarations`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/lay-fxl-xhtml-icb_multi_declarations) | deprecated | Passes | Checked: Of two viewport tags, the first sizes the page, 1000 by 600. |
+| [`lay-fxl-xhtml-icb_repeated-in-meta`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/lay-fxl-xhtml-icb_repeated-in-meta) | deprecated | Passes | Checked: Of a repeated `width` and `height`, the first sizes the page, 900 by 600. |
+| [`lay-fxl-xhtml-icb_units`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/lay-fxl-xhtml-icb_units) | deprecated | Passes | Checked: `width=1000px, height=600mm` sizes the page 1000 by 600. |
 | [`lay-pp-embedded-images`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/lay-pp-embedded-images) | must | Passes | Checked: Each of the nine chapters is one page of its viewport that draws its image, and the title page asks for the centre. |
 | [`lay-pp-embedded-images-svg`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/lay-pp-embedded-images-svg) | must | Passes | Checked: The XHTML title and the SVG plates are one page each of their viewport, each drawing its image. |
 | [`lay-pp-images-in-spine`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/lay-pp-images-in-spine) | must | Passes | Checked: Each image spine item shows its XHTML fallback, as the spine requires; showing the image itself is optional. |
@@ -265,9 +265,9 @@ KITEPDF_EPUB_TESTS=$PWD/../epub-tests/tests ./gradlew :kitepdf-compose-viewer:jv
 | [`lay-pp-xhtml-icb`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/lay-pp-xhtml-icb) | must | Fails ([#503](https://github.com/yuroyami/KitePDF/issues/503)) | Judged: The page is clipped to its viewport, so no red shows, but the grid of layered gradients does not paint, and the test asks for the grid. |
 | [`lay-pp-xhtml-icb_invalid_meta`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/lay-pp-xhtml-icb_invalid_meta) | should | Fails ([#503](https://github.com/yuroyami/KitePDF/issues/503)) | Judged: Width and height are read from the invalid tag and the page is clipped, but the grid of layered gradients does not paint. |
 | [`lay-pp-xhtml-icb_multi`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/lay-pp-xhtml-icb_multi) | must | Fails ([#503](https://github.com/yuroyami/KitePDF/issues/503)) | Judged: Each page takes its own viewport and is clipped to it, but the grid of layered gradients does not paint. |
-| [`lay-pp-xhtml-icb_multi_declarations`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/lay-pp-xhtml-icb_multi_declarations) | must | Fails ([#502](https://github.com/yuroyami/KitePDF/issues/502)) | Checked: Of two viewport tags, the first sizes the page, 1000 by 600; today the second does. |
-| [`lay-pp-xhtml-icb_repeated-in-meta`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/lay-pp-xhtml-icb_repeated-in-meta) | must | Fails ([#502](https://github.com/yuroyami/KitePDF/issues/502)) | Checked: Of a repeated `width` and `height`, the first sizes the page, 900 by 600; today the last does. |
-| [`lay-pp-xhtml-icb_units`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/lay-pp-xhtml-icb_units) | must | Fails ([#502](https://github.com/yuroyami/KitePDF/issues/502)) | Checked: `width=1000px, height=600mm` sizes the page 1000 by 600; today the unit drops the whole tag. |
+| [`lay-pp-xhtml-icb_multi_declarations`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/lay-pp-xhtml-icb_multi_declarations) | must | Passes | Checked: Of two viewport tags, the first sizes the page, 1000 by 600. |
+| [`lay-pp-xhtml-icb_repeated-in-meta`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/lay-pp-xhtml-icb_repeated-in-meta) | must | Passes | Checked: Of a repeated `width` and `height`, the first sizes the page, 900 by 600. |
+| [`lay-pp-xhtml-icb_units`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/lay-pp-xhtml-icb_units) | must | Passes | Checked: `width=1000px, height=600mm` sizes the page 1000 by 600. |
 
 ## Roll Layout
 

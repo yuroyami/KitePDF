@@ -117,6 +117,25 @@ class RenditionTest {
     }
 
     @Test
+    fun of_two_overrides_of_one_property_on_a_spine_entry_the_first_counts() {
+        // EPUB Reading Systems 3.3, 5.5.1: only the first value of a repeated override (#502).
+        val doc = EpubDocument.open(
+            book(
+                """<meta property="rendition:layout">pre-paginated</meta>""",
+                listOf(
+                    fixedChapter to "rendition:layout-reflowable rendition:layout-pre-paginated",
+                    fixedChapter to "page-spread-left page-spread-right rendition:spread-none rendition:spread-both",
+                    fixedChapter to "rendition:spread-sideways rendition:spread-landscape",
+                ),
+            ),
+        )
+        assertEquals(EpubLayout.REFLOWABLE, doc.renditionOf(0).layout)
+        assertEquals(EpubPageSpread.LEFT, doc.renditionOf(1).pageSpread)
+        assertEquals(EpubSpread.NONE, doc.renditionOf(1).spread)
+        assertEquals(EpubSpread.LANDSCAPE, doc.renditionOf(2).spread, "a value the property does not have is no override")
+    }
+
+    @Test
     fun a_spine_entry_without_a_document_does_not_shift_the_properties_of_the_next() {
         val doc = EpubDocument.open(
             book("""<meta property="rendition:layout">pre-paginated</meta>""", listOf(fixedChapter to "page-spread-right", fixedChapter to null), missing = true),

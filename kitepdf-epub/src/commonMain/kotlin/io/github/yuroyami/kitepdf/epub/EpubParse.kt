@@ -20,6 +20,24 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import io.github.yuroyami.kitepdf.epub.css.StyleRule
 
 /**
+ * The initial containing block that a fixed-layout document declares, in points. A side that the
+ * document does not give as a number is null, for the reader to supply (#502).
+ */
+internal class DeclaredIcb(val width: Double?, val height: Double?) {
+    /**
+     * The page size on a reader whose page is [pageWidth] by [pageHeight]. A missing side keeps the
+     * reader's aspect ratio, as a browser sizes a layout viewport whose tag gives one side, and a
+     * tag that gives neither, as `width=device-width, height=device-height` does, is the reader's page.
+     */
+    fun resolve(pageWidth: Double, pageHeight: Double): Pair<Double, Double> = when {
+        width != null && height != null -> width to height
+        width != null -> width to width * pageHeight / pageWidth
+        height != null -> height * pageWidth / pageHeight to height
+        else -> pageWidth to pageHeight
+    }
+}
+
+/**
  * One spine document's font-size-independent parse: its DOM, author CSS rules,
  * base dir and declared viewport. Built on demand by [ParsedEpub.spine].
  */
@@ -27,8 +45,8 @@ internal class ParsedSpine(
     val tree: KiteXmlNode.Element,
     val rules: List<StyleRule>,
     val docDir: String,
-    /** The `<meta name=viewport>` size in points, or null when the document declares none. */
-    val viewport: Pair<Double, Double>?,
+    /** The fixed-layout size the document declares, or null when it declares none. */
+    val viewport: DeclaredIcb?,
     /** Zip path of this spine document, the key for href -> page navigation. */
     val path: String,
     /** Faces from this document's own inline `<style>` blocks. Almost always empty. */
@@ -589,38 +607,50 @@ internal class ParsedEpub(
          * Fixed-layout page size. An SVG document gives it in its root `viewBox` (EPUB 3.3,
          * 8.2.2.6, #26). An XHTML document gives it in `<meta name=viewport>`, else in the
          * width and height of its first `<svg>`.
+         *
+         * Of the viewport tag, EPUB Reading Systems 3.3 (8.1.2) asks for the first tag in document
+         * order and the first `width` and `height` in it, and reads the number a value starts with
+         * as pixels whatever unit follows. A value with no number, such as `device-width`, is the
+         * reader's to supply (#502).
          */
-        private fun parseViewport(tree: KiteXmlNode.Element): Pair<Double, Double>? {
+        private fun parseViewport(tree: KiteXmlNode.Element): DeclaredIcb? {
             val root = tree.children.firstOrNull { it is KiteXmlNode.Element } as KiteXmlNode.Element?
             if (root != null && root.tag.equals("svg", true)) {
                 // The parser lower-cases attribute names, as SvgImage.fromElement notes.
                 val box = (root.attrs["viewBox"] ?: root.attrs["viewbox"])?.trim()?.split(VIEWBOX_SEPARATOR)?.mapNotNull { it.toDoubleOrNull() }
-                if (box != null && box.size == 4 && box[2] > 0 && box[3] > 0) return box[2] * 0.75 to box[3] * 0.75
+                if (box != null && box.size == 4 && box[2] > 0 && box[3] > 0) return DeclaredIcb(box[2] * 0.75, box[3] * 0.75)
             }
-            var result: Pair<Double, Double>? = null
-            var svgSize: Pair<Double, Double>? = null
+            var tag: DeclaredIcb? = null
+            var tagSeen = false
+            var svgSize: DeclaredIcb? = null
             // EPUB 3.3 gives the viewport in CSS pixels, 0.75pt each, the unit the layout uses (#111).
             fun px(s: String?) = s?.trim()?.removeSuffix("px")?.toDoubleOrNull()?.times(0.75)
             fun walk(el: KiteXmlNode.Element) {
-                if (el.tag == "meta" && el.attrs["name"]?.lowercase() == "viewport") {
-                    var w: Double? = null; var h: Double? = null
-                    for (part in (el.attrs["content"] ?: "").split(',', ';')) {
-                        val kv = part.split('=')
-                        if (kv.size == 2) when (kv[0].trim().lowercase()) {
-                            "width" -> w = px(kv[1]); "height" -> h = px(kv[1])
-                        }
-                    }
-                    if (w != null && h != null && w > 0 && h > 0) result = w to h
+                if (!tagSeen && el.tag == "meta" && el.attrs["name"]?.trim()?.lowercase() == "viewport") {
+                    tagSeen = true
+                    val content = el.attrs["content"].orEmpty()
+                    // The first value of each key, found even in a tag whose syntax is wrong.
+                    fun first(key: String) = VIEWPORT_ENTRY.findAll(content).firstOrNull { it.groupValues[1].lowercase() == key }
+                        ?.groupValues?.get(2)?.let { VIEWPORT_NUMBER.find(it)?.value?.toDoubleOrNull() }
+                        ?.takeIf { it > 0 }?.times(0.75)
+                    val w = first("width"); val h = first("height")
+                    if (w != null || h != null) tag = DeclaredIcb(w, h)
                 }
                 if (svgSize == null && el.tag.equals("svg", true)) {
                     val w = px(el.attrs["width"]); val h = px(el.attrs["height"])
-                    if (w != null && h != null && w > 0 && h > 0) svgSize = w to h
+                    if (w != null && h != null && w > 0 && h > 0) svgSize = DeclaredIcb(w, h)
                 }
                 for (c in el.children) if (c is KiteXmlNode.Element) walk(c)
             }
             walk(tree)
-            return result ?: svgSize
+            return tag ?: svgSize
         }
+
+        /** A `key=value` entry of a viewport tag; a key inside a longer name, such as `min-width`, does not count. */
+        private val VIEWPORT_ENTRY = Regex("""(?<![\w-])(width|height)\s*=\s*([^,;\s]*)""", RegexOption.IGNORE_CASE)
+
+        /** The number a viewport value starts with. */
+        private val VIEWPORT_NUMBER = Regex("""^\+?(?:\d+(?:\.\d*)?|\.\d+)""")
     }
 }
 
