@@ -9,7 +9,11 @@ import io.github.yuroyami.kitepdf.core.xml.KiteXmlNode
 import io.github.yuroyami.kitepdf.epub.css.CssPosition
 import io.github.yuroyami.kitepdf.epub.script.DOM_PRELUDE
 import io.github.yuroyami.kitepdf.epub.script.ScriptDom
+import io.github.yuroyami.kitepdf.epub.script.WhatwgDecoder
+import io.github.yuroyami.kitepdf.epub.script.WhatwgEncoding
 import io.github.yuroyami.kitepdf.epub.script.WhatwgUrl
+import io.github.yuroyami.kitepdf.epub.script.byteString
+import io.github.yuroyami.kitepdf.epub.script.bytesOf
 import kotlin.math.roundToLong
 
 /**
@@ -388,6 +392,23 @@ public class EpubScriptSession(
                 val flat = (args.getOrNull(0) as? List<*>).orEmpty().map { it?.toString().orEmpty() }
                 WhatwgUrl.serializeForm(flat.chunked(2).filter { it.size == 2 }.map { it[0] to it[1] })
             }
+            // The Encoding Standard (#532): the encoding a label names, a decoder that goes on from
+            // the state the call before it left, the UTF-8 encoder, and forgiving base64. Bytes
+            // cross as strings whose code units are bytes.
+            def("encoding") { args -> WhatwgEncoding.forLabel(string(args, 0)) }
+            def("decode") { args ->
+                val state = (args.getOrNull(3) as? List<*>)?.map { (it as? Double)?.toInt() ?: 0 }
+                val decoder = WhatwgDecoder(string(args, 0), args.getOrNull(1) == true, args.getOrNull(2) == true, state)
+                listOf(decoder.decode(bytesOf(string(args, 4)), flush = args.getOrNull(5) == true)) + decoder.state
+            }
+            def("encode") { args -> byteString(WhatwgEncoding.utf8Encode(string(args, 0))) }
+            def("encodeInto") { args ->
+                val capacity = ((args.getOrNull(1) as? Double) ?: 0.0).coerceIn(0.0, Int.MAX_VALUE.toDouble()).toInt()
+                val (read, bytes) = WhatwgEncoding.utf8EncodeInto(string(args, 0), capacity)
+                listOf(read, byteString(bytes))
+            }
+            def("atob") { args -> WhatwgEncoding.atob(string(args, 0)) }
+            def("btoa") { args -> WhatwgEncoding.btoa(string(args, 0)) }
             def("timers") { args ->
                 timers = (args.getOrNull(0) as? Double)?.toInt() ?: 0
                 timersChanged()

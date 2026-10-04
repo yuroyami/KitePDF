@@ -85,6 +85,14 @@ carry in order to be correct, listed here with where that data comes from.
    (https://pdfium.googlesource.com/pdfium/+/refs/heads/main/LICENSE).
    tools/generate_adobe_cmyk_table.py extracts the table.
 
+9. Indexes of the WHATWG Encoding Standard
+   Used in: kitepdf-epub .../epub/script/EncodingData.kt
+   The labels of each encoding, the single-byte indexes, the Big5, EUC-KR,
+   gb18030, jis0208 and jis0212 indexes and the gb18030 ranges, from
+   https://encoding.spec.whatwg.org/, which TextDecoder decodes through.
+   tools/generate_encoding_tables.py packs them as base64 VLQ.
+   Copyright WHATWG (Apple, Google, Mozilla, Microsoft), licensed BSD-3-Clause.
+
 --------------------------------------------------------------------------------
 Tools used in development, not distributed
 --------------------------------------------------------------------------------
