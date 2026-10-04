@@ -11,14 +11,21 @@ import io.github.yuroyami.kitepdf.epub.css.Selector
  * of the tree as it stands.
  *
  * An attribute map is never changed in place, only replaced, so a snapshot may share it.
+ *
+ * The tree has the comments of [commented], the chapter parsed again with them, which the layout's
+ * tree drops, and a snapshot drops them again, so a layout never sees one (#544).
  */
-internal class ScriptDom(source: KiteXmlNode.Element, private val html: Boolean = false) {
+internal class ScriptDom(
+    source: KiteXmlNode.Element,
+    private val html: Boolean = false,
+    commented: KiteXmlNode.Element? = null,
+) {
 
     private val ids = HashMap<KiteXmlNode, Int>()
     private val nodes = ArrayList<KiteXmlNode>()
 
-    /** The element each text node sits in: a text node keeps no parent of its own. */
-    private val textParents = HashMap<KiteXmlNode.Text, KiteXmlNode.Element>()
+    /** The element each text node and comment sits in: neither keeps a parent of its own. */
+    private val leafParents = HashMap<KiteXmlNode, KiteXmlNode.Element>()
 
     /** Elements made by a script and not yet in the tree, and every fragment, by number. */
     private val fragments = HashSet<KiteXmlNode.Element>()
@@ -66,7 +73,7 @@ internal class ScriptDom(source: KiteXmlNode.Element, private val html: Boolean 
     init {
         val from = HashMap<KiteXmlNode.Element, KiteXmlNode.Element>()
         val to = HashMap<KiteXmlNode.Element, KiteXmlNode.Element>()
-        root = copy(source, null, from, to, link = true)
+        root = copy(source, null, from, to, link = true, commented = commented)
         fromLayout = from
         toLayout = to
         for (c in root.children) if (c is KiteXmlNode.Element) nameTree(c, root)
@@ -113,26 +120,29 @@ internal class ScriptDom(source: KiteXmlNode.Element, private val html: Boolean 
 
     fun parentOf(node: KiteXmlNode): KiteXmlNode.Element? = when (node) {
         is KiteXmlNode.Element -> node.parent
-        is KiteXmlNode.Text -> textParents[node]
+        is KiteXmlNode.Text, is KiteXmlNode.Comment -> leafParents[node]
     }
 
-    /** 9 for the document, 11 for a fragment, 1 for an element and 3 for text, as the DOM numbers them. */
+    /** 9 for the document, 11 for a fragment, 1 for an element, 3 for text and 8 for a comment, as the DOM numbers them. */
     fun kind(node: KiteXmlNode): Int = when {
         node === root || node in documents -> 9
         node is KiteXmlNode.Text -> 3
+        node is KiteXmlNode.Comment -> 8
         node in fragments && (node as KiteXmlNode.Element).tag == FRAGMENT -> 11
         else -> 1
     }
 
-    /** Every text under [node], in order. */
+    /** Every text under [node], in order, or a text node's or a comment's own data. */
     fun textOf(node: KiteXmlNode): String = when (node) {
         is KiteXmlNode.Text -> node.text
+        is KiteXmlNode.Comment -> node.text
         is KiteXmlNode.Element -> buildString { appendText(node, this) }
     }
 
     private fun appendText(el: KiteXmlNode.Element, out: StringBuilder) {
         for (c in el.children) when (c) {
             is KiteXmlNode.Text -> out.append(c.text)
+            is KiteXmlNode.Comment -> {}
             is KiteXmlNode.Element -> appendText(c, out)
         }
     }
@@ -140,6 +150,7 @@ internal class ScriptDom(source: KiteXmlNode.Element, private val html: Boolean 
     fun setText(node: KiteXmlNode, text: String) {
         when (node) {
             is KiteXmlNode.Text -> node.text = text
+            is KiteXmlNode.Comment -> node.text = text
             is KiteXmlNode.Element -> {
                 clearChildren(node)
                 if (text.isNotEmpty()) append(node, KiteXmlNode.Text(text))
@@ -204,7 +215,7 @@ internal class ScriptDom(source: KiteXmlNode.Element, private val html: Boolean 
         old.children.removeAll { it === child }
         when (child) {
             is KiteXmlNode.Element -> child.parent = null
-            is KiteXmlNode.Text -> textParents.remove(child)
+            is KiteXmlNode.Text, is KiteXmlNode.Comment -> leafParents.remove(child)
         }
         changed()
     }
@@ -224,7 +235,7 @@ internal class ScriptDom(source: KiteXmlNode.Element, private val html: Boolean 
                 child.parent = parent
                 fragments.remove(child)
             }
-            is KiteXmlNode.Text -> textParents[child] = parent
+            is KiteXmlNode.Text, is KiteXmlNode.Comment -> leafParents[child] = parent
         }
     }
 
@@ -250,6 +261,7 @@ internal class ScriptDom(source: KiteXmlNode.Element, private val html: Boolean 
     /** A copy of [node], with its subtree when [deep], on its own. */
     fun clone(node: KiteXmlNode, deep: Boolean): KiteXmlNode = when (node) {
         is KiteXmlNode.Text -> KiteXmlNode.Text(node.text)
+        is KiteXmlNode.Comment -> KiteXmlNode.Comment(node.text)
         is KiteXmlNode.Element -> {
             val out = KiteXmlNode.Element(if (node === root) FRAGMENT else node.tag, node.attrs)
             fragments.add(out)
@@ -322,16 +334,17 @@ internal class ScriptDom(source: KiteXmlNode.Element, private val html: Boolean 
 
     /** [node] as HTML: its children only, or the element itself too when [outer]. */
     fun html(node: KiteXmlNode, outer: Boolean): String = buildString {
-        if (outer || node is KiteXmlNode.Text) serialize(node, this)
+        if (outer || node !is KiteXmlNode.Element) serialize(node, this)
         else for (c in (node as KiteXmlNode.Element).children) serialize(c, this)
     }
 
     private fun serialize(node: KiteXmlNode, out: StringBuilder) {
         when (node) {
             is KiteXmlNode.Text -> {
-                val raw = textParents[node]?.tag in RAW_TEXT
+                val raw = leafParents[node]?.tag in RAW_TEXT
                 out.append(if (raw) node.text else escape(node.text, attribute = false))
             }
+            is KiteXmlNode.Comment -> out.append("<!--").append(node.text).append("-->")
             is KiteXmlNode.Element -> {
                 out.append('<').append(node.tag)
                 for ((k, v) in node.attrs) out.append(' ').append(k).append("=\"").append(escape(v, attribute = true)).append('"')
@@ -390,7 +403,7 @@ internal class ScriptDom(source: KiteXmlNode.Element, private val html: Boolean 
 
     /** The nodes [html] holds, their elements named as the parser names them under [context]. */
     private fun parse(html: String, context: KiteXmlNode.Element?): List<KiteXmlNode> {
-        val parsed = HtmlParser.parse(html).children.toList()
+        val parsed = HtmlParser.parse(html, keepComments = true).children.toList()
         for (c in parsed) {
             if (c is KiteXmlNode.Element) {
                 c.parent = null
@@ -401,11 +414,11 @@ internal class ScriptDom(source: KiteXmlNode.Element, private val html: Boolean 
         return parsed
     }
 
-    /** Records the parent of every text node under [node], which the parser does not keep. */
+    /** Records the parent of every text node and comment under [node], which the parser does not keep. */
     private fun registerTexts(node: KiteXmlNode) {
         if (node !is KiteXmlNode.Element) return
         for (c in node.children) {
-            if (c is KiteXmlNode.Text) textParents[c] = node else registerTexts(c)
+            if (c is KiteXmlNode.Element) registerTexts(c) else leafParents[c] = node
         }
     }
 
@@ -426,7 +439,9 @@ internal class ScriptDom(source: KiteXmlNode.Element, private val html: Boolean 
     /**
      * A copy of [el] and its subtree under [parent]. [from] maps each new element to its original
      * when [link] makes the copy the live tree, and the other way round when the copy is a
-     * snapshot; [to] maps the other direction.
+     * snapshot; [to] maps the other direction. A snapshot has no comments, and the live tree has
+     * those of [commented], [el] as parsed with them, where its children less its comments are
+     * [el]'s, one for one, as two parses of one text give them.
      */
     private fun copy(
         el: KiteXmlNode.Element,
@@ -434,18 +449,47 @@ internal class ScriptDom(source: KiteXmlNode.Element, private val html: Boolean 
         from: HashMap<KiteXmlNode.Element, KiteXmlNode.Element>,
         to: HashMap<KiteXmlNode.Element, KiteXmlNode.Element>,
         link: Boolean,
+        commented: KiteXmlNode.Element? = null,
     ): KiteXmlNode.Element {
         val out = KiteXmlNode.Element(el.tag, el.attrs)
         out.parent = parent
         if (link) { from[el] = out; to[out] = el } else { from[out] = el; to[el] = out }
-        for (c in el.children) {
-            val child = when (c) {
-                is KiteXmlNode.Element -> copy(c, out, from, to, link)
-                is KiteXmlNode.Text -> KiteXmlNode.Text(c.text).also { if (link) textParents[it] = out }
-            }
+        fun add(child: KiteXmlNode) {
             out.children.add(child)
+            if (link && child !is KiteXmlNode.Element) leafParents[child] = out
+        }
+        val shape = commented?.children?.takeIf { sameExceptComments(it, el.children) }
+        if (shape == null) {
+            for (c in el.children) when (c) {
+                is KiteXmlNode.Element -> add(copy(c, out, from, to, link))
+                is KiteXmlNode.Text -> add(KiteXmlNode.Text(c.text))
+                is KiteXmlNode.Comment -> if (link) add(KiteXmlNode.Comment(c.text))
+            }
+        } else {
+            var next = 0
+            for (c in shape) when (c) {
+                is KiteXmlNode.Comment -> add(KiteXmlNode.Comment(c.text))
+                is KiteXmlNode.Element -> add(copy(el.children[next++] as KiteXmlNode.Element, out, from, to, link, c))
+                is KiteXmlNode.Text -> add(KiteXmlNode.Text((el.children[next++] as KiteXmlNode.Text).text))
+            }
         }
         return out
+    }
+
+    /** Whether [commented] is [plain] with comments among it: the same elements by tag and texts, in order. */
+    private fun sameExceptComments(commented: List<KiteXmlNode>, plain: List<KiteXmlNode>): Boolean {
+        var next = 0
+        for (c in commented) {
+            if (c is KiteXmlNode.Comment) continue
+            val p = plain.getOrNull(next++) ?: return false
+            val same = when (c) {
+                is KiteXmlNode.Element -> p is KiteXmlNode.Element && p.tag == c.tag
+                is KiteXmlNode.Text -> p is KiteXmlNode.Text && p.text == c.text
+                is KiteXmlNode.Comment -> false
+            }
+            if (!same) return false
+        }
+        return next == plain.size
     }
 
     companion object {

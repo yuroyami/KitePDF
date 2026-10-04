@@ -1,8 +1,10 @@
 package io.github.yuroyami.kitepdf.javascript
 
+import io.github.yuroyami.kitepdf.core.KiteLocation
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
 /**
  * The objects of a chapter's DOM have the shape a browser gives them: collections that are live
@@ -160,5 +162,79 @@ class DomInterfaceTest {
         )
         assertEquals(listOf("nodes XMLDocument,$nodes") + rest, logged(body, script))
         assertEquals(listOf("nodes HTMLDocument,$nodes") + rest, logged(body, script, html = true))
+    }
+
+    @Test
+    fun a_comment_is_a_node_of_its_own_that_the_page_does_not_show() {
+        // The tree kept no comment, and createComment made a text node (#544).
+        val body = """<div id="q">x<!-- c -->y</div><p id="w"><!--first--><span>s</span></p>"""
+        val script = """
+            var out = [];
+            function log(k, v) { out.push(k + ' ' + v); }
+            var q = document.getElementById('q'), w = document.getElementById('w');
+            log('parsed', [q.childNodes.length, q.childNodes[1].nodeType, q.childNodes[1].nodeName, q.childNodes[1].data, q.innerHTML, q.textContent,
+              q.children.length].join('|'));
+            var c = document.createComment('made');
+            log('created', [c.nodeType, c.nodeName, c.data, c.nodeValue, c.textContent, c.length, Object.prototype.toString.call(c),
+              c instanceof CharacterData, c instanceof Text, c.ownerDocument === document, c.parentNode === null].join('|'));
+            q.appendChild(c);
+            c.appendData('!');
+            log('serialized', q.innerHTML + '|' + q.outerHTML);
+            c.nodeValue = 'set';
+            log('nodeValue', c.data + '|' + c.cloneNode().data + '|' + String(c.previousSibling.nodeType));
+            q.innerHTML = 'a<!--b-->c<p id="e"><!--d--></p>';
+            log('innerHTML', [q.childNodes.length, q.childNodes[1].nodeType, q.childNodes[1].data, document.getElementById('e').firstChild.nodeType,
+              q.innerHTML].join('|'));
+            log('selectors', [document.querySelector('#e:empty') !== null, document.querySelector('#w > span:first-child') !== null,
+              w.firstChild.nodeType, w.firstElementChild.tagName, w.childElementCount, w.childNodes.length].join('|'));
+            var slot = document.createComment('slot');
+            q.appendChild(slot);
+            var b = document.createElement('b');
+            b.textContent = 'filled';
+            q.replaceChild(b, slot);
+            log('replaced', q.innerHTML);
+            console.log(out.join('\n'));
+        """.trimIndent()
+        assertEquals(
+            listOf(
+                "parsed 3|8|#comment| c |x<!-- c -->y|xy|0",
+                "created 8|#comment|made|made|made|4|[object Comment]|true|false|true|true",
+                "serialized x<!-- c -->y<!--made!-->|<div id=\"q\">x<!-- c -->y<!--made!--></div>",
+                "nodeValue set|set|3",
+                "innerHTML 4|8|b|8|a<!--b-->c<p id=\"e\"><!--d--></p>",
+                "selectors true|true|8|SPAN|1|2",
+                "replaced a<!--b-->c<p id=\"e\"><!--d--></p><b>filled</b>",
+            ),
+            logged(body, script, html = true),
+        )
+        // An XHTML chapter's markup is serialized as HTML is, where a browser gives each element
+        // its xmlns, so the lines that serialize are left to the HTML chapter above.
+        val xhtml = logged(body, script).filter { it.split(' ').first() in setOf("parsed", "created", "nodeValue", "selectors") }
+        assertEquals(
+            listOf(
+                "parsed 3|8|#comment| c |x<!-- c -->y|xy|0",
+                "created 8|#comment|made|made|made|4|[object Comment]|true|false|true|true",
+                "nodeValue set|set|3",
+                "selectors true|true|8|span|1|2",
+            ),
+            xhtml,
+        )
+        // The page shows none of them, those of the markup and those a script adds alike.
+        val book = ScriptBooks.chapter(
+            """<p id="q">x<!-- hidden -->y</p><p id="r">z</p><script src="dom.js"></script>""",
+            extraFiles = mapOf(
+                "dom.js" to """
+                    var r = document.getElementById('r');
+                    r.appendChild(document.createComment('late'));
+                    r.insertBefore(document.createComment('early'), r.firstChild);
+                    r.appendChild(document.createTextNode('!'));
+                """.trimIndent(),
+            ),
+        )
+        val runner = EpubScriptRunner(book).also { runners += it }
+        runner.chapterOpened(0)
+        assertEquals(emptyList(), runner.failures.map { it.message })
+        val text = book.page(KiteLocation(0, 0)).textContent().plainText
+        assertTrue("xy" in text && "z!" in text && "hidden" !in text && "late" !in text && "early" !in text, text)
     }
 }

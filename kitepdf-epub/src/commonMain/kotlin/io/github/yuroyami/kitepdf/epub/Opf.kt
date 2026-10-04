@@ -203,6 +203,7 @@ internal object Opf {
             }
             is KiteXmlToken.Text -> if (capture != null) captured.append(t.text)
             is KiteXmlToken.Close -> commit()
+            is KiteXmlToken.Comment -> {}
         }
 
         return OpfPackage(

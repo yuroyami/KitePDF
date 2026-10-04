@@ -5,8 +5,9 @@ package io.github.yuroyami.kitepdf.core.xml
  * (X)HTML content, and for SVG.
  *
  * Comments, the XML/DOCTYPE prologue, CDATA delimiters and processing
- * instructions are skipped, and malformed markup is salvaged rather than
- * rejected, because real files are messy. Names lose their namespace prefix
+ * instructions are skipped, but for the comments of a caller that asks for
+ * them, and malformed markup is salvaged rather than rejected, because real
+ * files are messy. Names lose their namespace prefix
  * and are lowercased, so `<epub:switch epub:type="x">` reads as tag `switch`
  * with attribute `type`.
  *
@@ -23,6 +24,8 @@ public sealed class KiteXmlToken {
     ) : KiteXmlToken()
     public data class Close(public val name: String) : KiteXmlToken()
     public data class Text(public val text: String) : KiteXmlToken()
+    /** A comment's data, the text between `<!--` and `-->`, which only a tokenizer asked to keep them gives. */
+    public data class Comment(public val text: String) : KiteXmlToken()
 }
 
 public object KiteXml {
@@ -30,9 +33,10 @@ public object KiteXml {
     /**
      * The flat token stream: start tags with attributes, end tags, and text.
      * Tag soup is salvaged, never rejected. Use [parse] for a tree; callers
-     * that need HTML's implied end tags fold the tokens themselves.
+     * that need HTML's implied end tags fold the tokens themselves. A comment is
+     * a [KiteXmlToken.Comment] for [keepComments], and is skipped otherwise.
      */
-    public fun tokenize(xml: String): List<KiteXmlToken> {
+    public fun tokenize(xml: String, keepComments: Boolean = false): List<KiteXmlToken> {
         val out = ArrayList<KiteXmlToken>()
         var i = 0
         val n = xml.length
@@ -45,7 +49,12 @@ public object KiteXml {
             val c = xml[i]
             if (c == '<' && (rawText == null || opensInRawText(xml, i, rawText))) {
                 when {
-                    xml.startsWith("<!--", i) -> { i = xml.indexOf("-->", i).let { if (it < 0) n else it + 3 } }
+                    xml.startsWith("<!--", i) -> {
+                        // The end is the first --> after <!, so <!--> and <!---> are empty comments, as HTML has them.
+                        val end = xml.indexOf("-->", i + 2)
+                        if (keepComments) out.add(KiteXmlToken.Comment(if (end < 0) xml.substring(i + 4) else xml.substring(minOf(i + 4, end), end)))
+                        i = if (end < 0) n else end + 3
+                    }
                     xml.startsWith("<![CDATA[", i) -> {
                         val end = xml.indexOf("]]>", i)
                         val stop = if (end < 0) n else end
@@ -231,16 +240,17 @@ public object KiteXml {
      * nothing matches, so a stray `</b>` cannot truncate the document.
      *
      * This is the XML reading; HTML's implied end tags (`<p>`, `<li>`, table
-     * rows) are not applied, so use it for XML and SVG, not for tag soup.
+     * rows) are not applied, so use it for XML and SVG, not for tag soup. The
+     * tree has a [KiteXmlNode.Comment] for each comment for [keepComments].
      */
-    public fun parse(xml: String): KiteXmlNode.Element {
+    public fun parse(xml: String, keepComments: Boolean = false): KiteXmlNode.Element {
         val root = KiteXmlNode.Element("#root", emptyMap())
         val stack = ArrayList<KiteXmlNode.Element>().apply { add(root) }
         // Per-tag open positions make hostile unmatched/outer close tags O(n)
         // overall. Repeated indexOfLast scans made a deeply nested malformed
         // document quadratic.
         val openPositions = HashMap<String, ArrayList<Int>>()
-        for (t in tokenize(xml)) when (t) {
+        for (t in tokenize(xml, keepComments)) when (t) {
             is KiteXmlToken.Open -> {
                 val el = KiteXmlNode.Element(t.name, t.attrs)
                 el.parent = stack.last()
@@ -260,6 +270,7 @@ public object KiteXml {
                 }
             }
             is KiteXmlToken.Text -> stack.last().children.add(KiteXmlNode.Text(t.text))
+            is KiteXmlToken.Comment -> stack.last().children.add(KiteXmlNode.Comment(t.text))
         }
         return root
     }

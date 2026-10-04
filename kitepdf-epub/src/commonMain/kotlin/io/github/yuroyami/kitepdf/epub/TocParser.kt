@@ -125,6 +125,7 @@ internal object TocParser {
         fun walk(e: KiteXmlNode.Element) {
             for (c in e.children) when (c) {
                 is KiteXmlNode.Text -> out.append(c.text)
+                is KiteXmlNode.Comment -> {}
                 is KiteXmlNode.Element -> when (c.tag) {
                     in NON_TEXT -> out.append(alternativeOf(c))
                     "ol" -> Unit // the entries under it have labels of their own

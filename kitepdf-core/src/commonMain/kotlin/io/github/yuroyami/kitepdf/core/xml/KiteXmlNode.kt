@@ -5,9 +5,10 @@ package io.github.yuroyami.kitepdf.core.xml
  * stream; a tree builder folds it into this so callers can reason about
  * nesting instead of a stack of open tags.
  *
- * Only two node kinds: an [Element] (tag + attributes + ordered children) and a
- * [Text] leaf. Comments, processing instructions and the prologue never reach
- * here, [KiteXml] drops them. Tags and attribute names arrive lowercased with
+ * An [Element] (tag + attributes + ordered children), a [Text] leaf, and a
+ * [Comment], which only a parse that asks for comments makes, as a script
+ * layer does. Processing instructions and the prologue never reach here,
+ * [KiteXml] drops them. Tags and attribute names arrive lowercased with
  * their namespace prefix stripped, so `epub:type` reads as `type`.
  */
 public sealed class KiteXmlNode {
@@ -30,4 +31,10 @@ public sealed class KiteXmlNode {
 
     /** A text leaf. A script layer changes [text] on a tree of its own, as [Element.attrs] (#41). */
     public class Text(public var text: String) : KiteXmlNode()
+
+    /**
+     * A comment and its data, which a parse keeps only when asked, so a layout never sees one. A
+     * script layer changes [text] on a tree of its own, as [Text.text] (#544).
+     */
+    public class Comment(public var text: String) : KiteXmlNode()
 }

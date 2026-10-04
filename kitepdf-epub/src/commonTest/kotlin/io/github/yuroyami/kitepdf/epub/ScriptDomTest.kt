@@ -105,4 +105,29 @@ class ScriptDomTest {
         assertEquals("y", laidA.attrs["class"], "a later change does not reach the layout's copy")
         assertTrue(copy.children.isNotEmpty())
     }
+
+    @Test
+    fun the_comments_of_a_second_parse_join_the_live_tree_and_leave_the_snapshot() {
+        val markup = "<!--top--><html><body><p id=\"a\">x<!-- c -->y<b>z</b><!--end--></p></body></html>"
+        val dom = ScriptDom(HtmlParser.parse(markup), commented = HtmlParser.parse(markup, keepComments = true))
+        val a = checkNotNull(dom.byId("a"))
+        assertEquals(listOf(3, 8, 3, 1, 8), a.children.map(dom::kind))
+        assertEquals(8, dom.kind(dom.root.children.first()))
+        assertSame(a, dom.parentOf(a.children[1]))
+        assertEquals("xyz", dom.textOf(a), "an element's text has no comment in it")
+        assertEquals("x<!-- c -->y<b>z</b><!--end-->", dom.html(a, outer = false))
+        val laid = checkNotNull(dom.toLayout[a])
+        assertSame(a, dom.fromLayout[laid], "the elements still map to the layout's")
+        val snapshot = dom.snapshot()
+        assertTrue(snapshot.children.none { it is KiteXmlNode.Comment })
+        assertEquals(listOf("x", "y", "b"), checkNotNull(dom.toLayout[a]).children.map { if (it is KiteXmlNode.Text) it.text else (it as KiteXmlNode.Element).tag })
+    }
+
+    @Test
+    fun an_element_whose_second_parse_differs_keeps_no_comments() {
+        val dom = ScriptDom(HtmlParser.parse("<p id=\"a\">x<i>y</i></p>"), commented = HtmlParser.parse("<p id=\"a\">x<!--c--><b>y</b></p>", keepComments = true))
+        val a = checkNotNull(dom.byId("a"))
+        assertEquals(listOf(3, 1), a.children.map(dom::kind))
+        assertEquals("i", (a.children[1] as KiteXmlNode.Element).tag, "the layout's tree wins")
+    }
 }

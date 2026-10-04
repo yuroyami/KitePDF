@@ -234,6 +234,9 @@ public class EpubDocument internal constructor(
      */
     internal fun sourceChapterTree(chapter: Int): KiteXmlNode.Element = parsed.spine(chapter).tree
 
+    /** [chapter]'s document as parsed with its comments, which [sourceChapterTree] drops (#544). */
+    internal fun commentedChapterTree(chapter: Int): KiteXmlNode.Element = parsed.commentedTree(chapter)
+
     /** Whether [other] is a document over the same book, whose scripts' changes it shares (#41). */
     internal fun sharesBookWith(other: EpubDocument): Boolean = other.parsed === parsed
 

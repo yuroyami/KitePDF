@@ -188,6 +188,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   chapter, and so does its test of the element interfaces, but for the half of it that parses
   each element with `DOMParser` (#543) (#538).
 
+- A book's scripts see the comments of their chapter, where the tree dropped them and
+  `createComment` made a text node, so a script that walked `childNodes` to a comment, as a
+  template engine or a lazy loader marks its places, found none. A comment is a `Comment`, a
+  `CharacterData` of `nodeType` 8 and `nodeName` `#comment`, which `innerHTML`, `outerHTML`,
+  `insertAdjacentHTML` and `document.write` parse and serialize, and an element's `textContent`
+  leaves out. The page shows none of them: the tree of a chapter's scripts takes its comments
+  from a second parse of the chapter that keeps them, and the tree it hands the layout drops them
+  again (#544).
+
 - `childNodes`, `children`, the collections of `getElementsByTagName`, `getElementsByClassName`
   and `getElementsByName`, and those of a form, a select, a table, a row, a map and the document
   are live in a book's scripts: each is the same object on each read and follows the tree as it
@@ -327,6 +336,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - `kitepdf-javascript` depends on `kitepdf-epub`, whose scripts it now runs (#41).
+
+- `KiteXml.tokenize` and `KiteXml.parse` in `kitepdf-core` take `keepComments`, false by
+  default, and give a comment as the new `KiteXmlToken.Comment` and `KiteXmlNode.Comment` when
+  it is true. Without it they read a document as before, but a `when` over either sealed class
+  needs a branch for the new kind (#544).
 
 - `KitePageRasterizer` keeps the coverage of the glyphs it draws from their own outlines,
   up to 4 MB, as MuPDF keeps its glyph cache. It fills each glyph's path once for each size

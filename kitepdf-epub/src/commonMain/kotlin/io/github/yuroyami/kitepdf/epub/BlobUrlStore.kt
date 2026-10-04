@@ -128,6 +128,7 @@ internal class BlobUrlStore {
                         for (child in node.children) walk(child)
                     }
                     is KiteXmlNode.Text -> scan(node.text)
+                    is KiteXmlNode.Comment -> {}
                 }
             }
             walk(tree)
