@@ -11,6 +11,8 @@ val kitepdfVersion: String = providers.gradleProperty("kitepdfVersion").orNull
 dependencies {
     testImplementation("io.github.yuroyami:kitepdf:$kitepdfVersion")
     testImplementation("io.github.yuroyami:kitepdf-native-renderer:$kitepdfVersion")
+    // The script layer, the one module with a dependency from outside the build, KiteJS (#556).
+    testImplementation("io.github.yuroyami:kitepdf-javascript:$kitepdfVersion")
     testImplementation(kotlin("test"))
 }
 
