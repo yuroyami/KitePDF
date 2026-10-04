@@ -137,6 +137,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- A table of contents entry made of an image takes the image's text alternative as its label,
+  its `alt` before its `title`, as EPUB Reading Systems 3.3 asks, where it had an empty one; an
+  SVG gives its `title` and MathML its `alttext`, a link with nothing else gives its own `title`,
+  and a label's white space collapses. A heading over a list of entries, `<li><span>Plates</span>
+  <ol>...`, no longer takes the label and link of its first entry (#526).
+
+- `EpubDocument.linkTarget` ignores an `epub:type` on the head, on an element in it, or on the
+  html element, as EPUB 3.3 asks, so a link to a `<title epub:type="footnote">` is a place in the
+  chapter, of kind `OTHER` with no text, and not an empty footnote (#527).
+
 - A fixed-layout page reads its viewport tag as EPUB Reading Systems 3.3 asks: the first
   `<meta name="viewport">` of a chapter sizes it and a later one is ignored, the first `width`
   and `height` in it count, and a value is the number it starts with whatever unit follows, so

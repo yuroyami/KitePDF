@@ -128,6 +128,39 @@ class MetadataTocTest {
     }
 
     @Test
+    fun a_nav_label_takes_the_text_alternative_of_its_images() {
+        // EPUB Reading Systems 3.3, 7: non-text content in a label reads as its alternative text,
+        // the alt before the title (#526).
+        val opf = """<?xml version="1.0"?>
+            <package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="id">
+              <metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:identifier id="id">x</dc:identifier></metadata>
+              <manifest>
+                <item id="nav" href="nav.xhtml" properties="nav" media-type="application/xhtml+xml"/>
+                <item id="c1" href="ch1.xhtml" media-type="application/xhtml+xml"/>
+              </manifest>
+              <spine><itemref idref="c1"/></spine>
+            </package>"""
+        val nav = bytes("""<?xml version="1.0"?><html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops"><body>
+            <nav epub:type="toc"><ol>
+              <li><a href="ch1.xhtml#a">
+                  <img src="abbey.jpg" alt="The Abbey of S&#233;nanque" title="Image of the Abbey"/>
+              </a></li>
+              <li><a href="ch1.xhtml#b">Part <img src="one.png" alt="One"/>:   the
+                  start</a></li>
+              <li><a href="ch1.xhtml#c"><img src="t.png" title="Only a title"/></a></li>
+              <li><a href="ch1.xhtml#d" title="The link's own title"><img src="x.png"/></a></li>
+              <li><a href="ch1.xhtml#e"><svg xmlns="http://www.w3.org/2000/svg"><title>A drawing</title></svg></a></li>
+              <li><span>Plates <img src="p.png" alt="I"/></span><ol><li><a href="ch1.xhtml#f">First</a></li></ol></li>
+            </ol></nav>
+            </body></html>""")
+        val doc = EpubDocument.open(pkg(opf, listOf("OEBPS/nav.xhtml" to nav, "OEBPS/ch1.xhtml" to chapter("a"))))
+        assertEquals(
+            listOf("The Abbey of S\u00E9nanque", "Part One: the start", "Only a title", "The link's own title", "A drawing", "Plates I"),
+            doc.tableOfContents.entries.map { it.label },
+        )
+    }
+
+    @Test
     fun epub2_ncx_toc_fallback() {
         val opf = """<?xml version="1.0"?>
             <package xmlns="http://www.idpf.org/2007/opf" version="2.0" unique-identifier="id">

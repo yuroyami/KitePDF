@@ -7,8 +7,11 @@ import kotlin.test.assertNull
 /** Note, glossary and bibliography links say what they are for, and their targets read in place (#227). */
 class EpubLinkTargetTest {
 
-    /** A book of XHTML chapters, each given as its body markup, in spine order. */
-    private fun book(vararg chapters: Pair<String, String>): EpubDocument {
+    /**
+     * A book of XHTML chapters, each given as its body markup, in spine order. Each has [head] in
+     * its head and [htmlAttributes] on its html element.
+     */
+    private fun book(vararg chapters: Pair<String, String>, head: String = "", htmlAttributes: String = ""): EpubDocument {
         val container = """<?xml version="1.0"?><container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">""" +
             """<rootfiles><rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/></rootfiles></container>"""
         val items = chapters.indices.joinToString("") { """<item id="c$it" href="${chapters[it].first}" media-type="application/xhtml+xml"/>""" }
@@ -17,7 +20,7 @@ class EpubLinkTargetTest {
             """<manifest>$items</manifest><spine>$refs</spine></package>"""
         val files = chapters.map { (name, body) ->
             "OEBPS/$name" to ("""<?xml version="1.0"?><html xmlns="http://www.w3.org/1999/xhtml" """ +
-                """xmlns:epub="http://www.idpf.org/2007/ops"><body>$body</body></html>""").encodeToByteArray()
+                """xmlns:epub="http://www.idpf.org/2007/ops" $htmlAttributes><head>$head</head><body>$body</body></html>""").encodeToByteArray()
         }
         return EpubDocument.open(
             EpubFixtures.storedZip(
@@ -103,6 +106,25 @@ class EpubLinkTargetTest {
     fun a_mime_type_on_a_link_is_not_a_semantic_type() {
         val doc = book("one.xhtml" to """<p><a type="text/html" href="#x">plain</a></p><p id="x">X</p>""")
         assertEquals(EpubLinkKind.LINK, doc.pages[0].links.single().kind)
+    }
+
+    @Test
+    fun an_epub_type_in_the_head_or_on_the_html_element_means_nothing() {
+        // EPUB 3.3 does not allow epub:type on the head or what it holds, and a reading system
+        // ignores it there, so a target there is a place in the chapter and no more (#527).
+        val doc = book(
+            "one.xhtml" to """<p><a epub:type="noteref" href="#the_note">1</a></p><p id="body">Body.</p>""",
+            head = """<title id="the_note" epub:type="footnote">A title</title>""",
+            htmlAttributes = """id="root" epub:type="footnote"""",
+        )
+        for (fragment in listOf("the_note", "root")) {
+            val target = doc.linkTarget("OEBPS/one.xhtml#$fragment")!!
+            assertEquals(EpubTargetKind.OTHER, target.kind, fragment)
+            assertNull(target.type, fragment)
+            assertEquals("", target.text, fragment)
+            assertEquals(0, doc.locate(target.bookmark).chapter)
+        }
+        assertEquals(EpubTargetKind.OTHER, doc.linkTarget("OEBPS/one.xhtml#body")!!.kind)
     }
 
     @Test

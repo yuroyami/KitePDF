@@ -8,11 +8,11 @@ The reading system under test is the library and its viewer together: `kitepdf-e
 
 | Level | Tests | Passes | Fails | Not applicable |
 |---|---|---|---|---|
-| must | 140 | 95 | 41 | 4 |
-| should | 38 | 14 | 23 | 1 |
+| must | 140 | 96 | 40 | 4 |
+| should | 38 | 16 | 21 | 1 |
 | may | 1 | 0 | 1 | 0 |
 | deprecated | 27 | 20 | 6 | 1 |
-| all | 206 | 129 | 71 | 6 |
+| all | 206 | 132 | 68 | 6 |
 
 ## How the results are known
 
@@ -163,8 +163,8 @@ KITEPDF_EPUB_TESTS=$PWD/../epub-tests/tests ./gradlew :kitepdf-compose-viewer:jv
 |---|---|---|---|
 | [`nav-access`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/nav-access) | must | Passes | Checked: The table of contents has the one entry, which the outline panel lists. |
 | [`nav-activation`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/nav-activation) | must | Passes | Checked: The entry for the second document goes to it, and it shows the pass sentence. |
-| [`nav-non-text_img`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/nav-non-text_img) | should | Fails ([#526](https://github.com/yuroyami/KitePDF/issues/526)) | Checked: The entry made of an image takes the image's `alt` as its label; today the label is empty. |
-| [`nav-non-text_img_title`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/nav-non-text_img_title) | should | Fails ([#526](https://github.com/yuroyami/KitePDF/issues/526)) | Checked: The entry made of an image takes its `alt`, not its `title`, as its label; today the label is empty. |
+| [`nav-non-text_img`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/nav-non-text_img) | should | Passes | Checked: The entry made of an image takes the image's `alt` as its label. |
+| [`nav-non-text_img_title`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/nav-non-text_img_title) | should | Passes | Checked: The entry made of an image takes its `alt`, not its `title`, as its label. |
 | [`nav-spine_in-spine`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/nav-spine_in-spine) | must | Passes | Checked: The navigation document in the spine shows both links, and the table of contents has both entries. |
 | [`nav-spine_in-spine-hidden-toc-css`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/nav-spine_in-spine-hidden-toc-css) | must | Passes | Checked: The table of contents has both entries, while the page hides the second as its CSS says. |
 | [`nav-spine_in-spine-hidden-toc-html`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/nav-spine_in-spine-hidden-toc-html) | must | Passes | Checked: The table of contents has both entries, while the page hides the second as its `hidden` says. |
@@ -176,7 +176,7 @@ KITEPDF_EPUB_TESTS=$PWD/../epub-tests/tests ./gradlew :kitepdf-compose-viewer:jv
 | Test | Level | Result | How it is known |
 |---|---|---|---|
 | [`pss-support`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/pss-support) | may | Fails | Judged: The note reference and its footnote are found (`linkTarget`), but `KiteDocView` shows no popup of its own; the app builds one from `onLinkTap`. |
-| [`pss-support_ignore-title`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/pss-support_ignore-title) | must | Fails ([#527](https://github.com/yuroyami/KitePDF/issues/527)) | Checked: A link to the head's `title` is not a footnote; today the title's `epub:type` makes it one. |
+| [`pss-support_ignore-title`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/pss-support_ignore-title) | must | Passes | Checked: A link to the head's `title` is not a footnote, while the note in the body is one. |
 
 ## Scripting
 
