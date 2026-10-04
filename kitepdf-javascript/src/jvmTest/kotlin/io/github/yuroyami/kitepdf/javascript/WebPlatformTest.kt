@@ -47,11 +47,6 @@ class WebPlatformTest {
 
     private val gaps = listOf(
         Gap(
-            "kitejs#67, a generator function has a null prototype",
-            "Object.getPrototypeOf(function* () {}) === null",
-            setOf("Custom [Symbol.iterator]"),
-        ),
-        Gap(
             "kitejs#68, an accessor with set: undefined ignores a strict write",
             "(function () { 'use strict'; var o = Object.defineProperty({}, 'z', { get: function () { return 1; }, set: undefined }); " +
                 "try { o.z = 2; return true; } catch (e) { return false; } })()",

@@ -173,6 +173,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The DOM of a book's scripts no longer runs what a script patched. It is JavaScript in the
+  chapter's realm, and since a chapter's built-ins are writable (#537), a book that patched
+  `Array.prototype.push`, `Map.prototype.get`, `Object.defineProperty` or the `next` of the
+  generator prototype, or hung a getter on `Object.prototype`, changed what `appendChild`, an
+  event's dispatch or `URLSearchParams` did, and could see the host functions on `__kite`. The
+  DOM now takes every built-in it calls before the book's first script runs and calls them
+  uncurried, as Node does with its primordials: its descriptors, dictionaries and tables have no
+  prototype, its iterations step generators by the `next` it took, its checks of an interface
+  read the prototype chain and not `Symbol.hasInstance`, its own algorithms call one another and
+  not the public methods a script can replace, the host table is a frozen copy that no script
+  can reach, and the entry points the reader calls cannot be replaced. A test runs one chapter
+  with and without a script that replaces every method of every built-in the DOM could reach and
+  checks the two logs are the same, and another reads the DOM's source and fails on a call of a
+  method by name, as Node's `prefer-primordials` rule does (#540).
+
 - A book's scripts can add to and wrap the built-in objects, as a browser's can, so a polyfill
   such as core-js, which Babel's output loads, no longer stops at its first line. A chapter's
   engine ran with the built-ins sealed, as a PDF's does, where the seal guarded nothing, since

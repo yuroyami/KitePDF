@@ -651,11 +651,14 @@ class EpubScriptTest {
                 reader.readAsText(new Blob(['\u00FEsoup ', new Uint8Array([0xC3, 0xA9])], { type: 'text/plain;charset=iso-8859-1' }));
                 log.push('state ' + reader.readyState);
                 new Blob(['text']).text().then(function (t) { console.log('then ' + t); });
+                Blob.prototype.text.call({}).catch(function (e) { console.log('catch ' + e.name); });
             </script>""",
         )
         val scripts = runner(book, console = console)
         scripts.chapterOpened(0)
-        assertEquals(emptyList(), console, "nothing is read while the script runs")
+        assertEquals(emptyList(), scripts.failures.map { it.message })
+        assertEquals(listOf("log: catch TypeError"), console, "nothing is read while the script runs, and a read of no blob rejects at once")
+        console.clear()
         drain(scripts)
         assertEquals(
             // The reader's tasks were queued first. The text decodes as windows-1252, which the label names.
@@ -690,5 +693,300 @@ class EpubScriptTest {
         scripts.chapterOpened(0)
         assertEquals(emptyList(), scripts.failures.map { it.message })
         assertEquals(listOf("log: HI! 1-2 1 2 5 false"), console)
+    }
+
+    /**
+     * A chapter that runs [WORKLOAD], a script that calls the DOM and no built-in of the engine,
+     * after [POISON] when [poisoned], with a tap on its label. Answers what the chapter logged
+     * and the failures of its scripts.
+     */
+    private fun runWorkload(poisoned: Boolean): Pair<List<String>, List<String?>> {
+        val console = ArrayList<String>()
+        val book = ScriptBooks.chapter(
+            """<label id="tapme" for="check2" style="display: block">Tap here</label><input type="checkbox" id="check2"/>""" +
+                """<div id="box"><p>Start</p></div><span id="target">x</span>""" +
+                """<form id="form"><input type="radio" name="r" id="r1" checked="checked"/><input type="radio" name="r" id="r2"/>""" +
+                """<select id="sel"><option value="a">A</option><option>B</option></select>""" +
+                """<button id="submit" type="submit">S</button><button id="reset" type="reset">R</button>""" +
+                """<button id="off" type="button" disabled="disabled">Off</button></form>""" +
+                """<input type="checkbox" id="check"/><label id="label" for="check">Check</label>""" +
+                """<details id="details"><summary id="summary">More</summary><p>Inside</p></details>""" +
+                (if (poisoned) "<script src=\"poison.js\"></script>" else "") + "<script src=\"work.js\"></script>",
+            extraFiles = mapOf("poison.js" to POISON, "work.js" to WORKLOAD),
+        )
+        val page = book.page(KiteLocation(0, 0))
+        val scripts = runner(book, console = console)
+        scripts.chapterOpened(0)
+        drain(scripts)
+        val (x, y) = page.centreOf("Tap here")
+        scripts.tap(page, x, y)
+        drain(scripts)
+        return console to scripts.failures.map { it.message }
+    }
+
+    @Test
+    fun the_dom_answers_alike_when_a_book_patches_every_built_in_it_calls() {
+        // A browser's DOM is native code, which a script that patches a built-in does not reach.
+        // This DOM is JavaScript in the book's realm, so it takes the built-ins it calls before the
+        // book runs (#540). The poison replaces every method and accessor of the built-ins and the
+        // global constructors, adds keys to Object.prototype that its tables and dictionaries must
+        // not inherit, and replaces the methods of the DOM's own objects that its algorithms used
+        // to call, so any of them that the DOM still called would throw or answer otherwise.
+        val (plain, plainFailures) = runWorkload(poisoned = false)
+        assertEquals(emptyList(), plainFailures)
+        assertEquals(
+            listOf(
+                "log: host undefined",
+                "log: tree EM P P 2 1 2",
+                "log: after 2 One box",
+                "log: attrs 1 2 y z true background-color: red; margin-top: .5em !important; 0.5em important 2 true",
+                "log: events capture target:2 bubble object:3 capture bubble object:3 ",
+                "log: event false false false",
+                "log: stop first false true",
+                "log: label click:true change true",
+                "log: radio false true",
+                "log: select a B 1",
+                "log: form submit reset off:false",
+                "log: details toggle true",
+                "log: url https://example.com/base/a/b?x=1&y=2&z=3#h /base/a/b x=1;y=2;z=3; x1 y2 z3 a=1&b=2 c=3 false",
+                "log: text 104,195,169,undefined hé 2/2 97,98 windows-1252 aGk= hi",
+                "log: blob 3 text/plain 2 x/y f.txt 5 3 |",
+                "log: exception SyntaxError 12 true 8 0",
+                "log: doc New title|a=1; b=2|v|block|loading|2",
+                "log: features true undefined false",
+                "log: micro",
+                "log: loaded interactive true",
+                "log: window load",
+                "log: reader start:false load:2/2:true bc",
+                "log: timer x",
+                "log: tap focus click change true",
+            ),
+            plain,
+        )
+        val (poisoned, poisonedFailures) = runWorkload(poisoned = true)
+        assertEquals(emptyList(), poisonedFailures)
+        assertEquals(plain, poisoned)
+    }
+
+    private companion object {
+        /** A script that calls the DOM and no method of the engine's built-ins, only its syntax. */
+        val WORKLOAD = """
+            function log(s) { console.log(s); }
+            log('host ' + typeof __kite);
+            var box = document.getElementById('box');
+            box.innerHTML = '<p class="a b">One</p><p class="b">Two</p>';
+            var em = document.createElementNS('http://www.w3.org/1999/xhtml', 'em');
+            em.textContent = 'new';
+            box.prepend(em);
+            var kids = box.children, names = '';
+            for (var i = 0; i < kids.length; i++) names += kids[i].tagName + ' ';
+            log('tree ' + names + box.getElementsByClassName('b').length + ' ' + box.getElementsByClassName(' a  b ').length + ' ' +
+                box.getElementsByTagName('p').length);
+            em.remove();
+            log('after ' + box.childElementCount + ' ' + box.firstElementChild.textContent + ' ' + kids[1].parentElement.id);
+
+            var t = document.getElementById('target');
+            t.setAttribute('data-foo-bar', '1');
+            t.dataset.bazQux = '2';
+            t.classList.add('x', 'y');
+            t.classList.remove('x');
+            t.classList.toggle('z');
+            t.style.backgroundColor = 'red';
+            t.style.setProperty('margin-top', '.5em', 'important');
+            log('attrs ' + t.dataset.fooBar + ' ' + t.getAttribute('data-baz-qux') + ' ' + t.className + ' ' + t.classList.contains('y') + ' ' +
+                t.getAttribute('style') + ' ' + t.style.marginTop + ' ' + t.style.getPropertyPriority('margin-top') + ' ' + t.style.length + ' ' +
+                ('color' in t.style));
+
+            var order = '', p = box.firstElementChild;
+            box.addEventListener('ping', function () { order += 'capture '; }, true);
+            box.addEventListener('ping', function () { order += 'bubble '; });
+            box.addEventListener('ping', { handleEvent: function (e) { order += 'object:' + e.eventPhase + ' '; } });
+            p.addEventListener('ping', function (e) { order += 'target:' + e.eventPhase + ' '; }, { once: true });
+            p.dispatchEvent(new CustomEvent('ping', { bubbles: true, detail: 3 }));
+            p.dispatchEvent(new CustomEvent('ping', { bubbles: true }));
+            log('events ' + order);
+            var plain = new Event('plain');
+            log('event ' + plain.bubbles + ' ' + plain.cancelable + ' ' + plain.composed);
+            var stopped = '';
+            box.addEventListener('halt', function () { stopped += 'outer '; });
+            p.addEventListener('halt', function (e) { stopped += 'first '; e.stopImmediatePropagation(); });
+            p.addEventListener('halt', function () { stopped += 'second '; });
+            var halt = new Event('halt', { bubbles: true, cancelable: true });
+            halt.preventDefault();
+            var notPrevented = p.dispatchEvent(halt);
+            log('stop ' + stopped + notPrevented + ' ' + halt.defaultPrevented);
+
+            var check = document.getElementById('check'), changes = '';
+            check.addEventListener('change', function () { changes += 'change '; });
+            check.addEventListener('click', function () { changes += 'click:' + check.hasAttribute('checked') + ' '; });
+            document.getElementById('label').click();
+            log('label ' + changes + check.hasAttribute('checked'));
+            document.getElementById('r2').click();
+            log('radio ' + document.getElementById('r1').hasAttribute('checked') + ' ' + document.getElementById('r2').hasAttribute('checked'));
+            var sel = document.getElementById('sel');
+            var before = sel.value;
+            sel.value = 'B';
+            log('select ' + before + ' ' + sel.value + ' ' + sel.selectedIndex);
+            var form = document.getElementById('form'), formLog = '', offClicked = false;
+            form.addEventListener('submit', function (e) { formLog += 'submit '; e.preventDefault(); });
+            form.addEventListener('reset', function () { formLog += 'reset '; });
+            document.getElementById('off').addEventListener('click', function () { offClicked = true; });
+            document.getElementById('submit').click();
+            document.getElementById('reset').click();
+            document.getElementById('off').click();
+            log('form ' + formLog + 'off:' + offClicked);
+            var details = document.getElementById('details'), toggled = '';
+            details.addEventListener('toggle', function () { toggled += 'toggle '; });
+            document.getElementById('summary').click();
+            log('details ' + toggled + details.hasAttribute('open'));
+
+            var u = new URL('a/b?x=1&y=2#h', 'https://example.com/base/');
+            u.searchParams.append('z', '3');
+            u.searchParams.sort();
+            var pairs = '';
+            u.searchParams.forEach(function (v, k) { pairs += k + '=' + v + ';'; });
+            var it = u.searchParams.entries(), step, entries = '';
+            while (!(step = it.next()).done) entries += step.value[0] + step.value[1] + ' ';
+            log('url ' + u.href + ' ' + u.pathname + ' ' + pairs + ' ' + entries + new URLSearchParams([['a', '1'], ['b', '2']]).toString() + ' ' +
+                new URLSearchParams({ c: '3' }).toString() + ' ' + URL.canParse('no scheme'));
+
+            var enc = new TextEncoder().encode('hé');
+            var dst = new Uint8Array(2), into = new TextEncoder().encodeInto('abc', dst);
+            log('text ' + enc[0] + ',' + enc[1] + ',' + enc[2] + ',' + enc[3] + ' ' + new TextDecoder('utf-8').decode(enc) + ' ' + into.read + '/' + into.written +
+                ' ' + dst[0] + ',' + dst[1] + ' ' + new TextDecoder('latin1').encoding + ' ' + btoa('hi') + ' ' + atob('aGk='));
+
+            var blob = new Blob(['ab', new Uint8Array([99])], { type: 'Text/Plain' });
+            var part = blob.slice(1, 3, 'X/Y');
+            var file = new File([blob], 'f.txt', { lastModified: 5 });
+            log('blob ' + blob.size + ' ' + blob.type + ' ' + part.size + ' ' + part.type + ' ' + file.name + ' ' + file.lastModified + ' ' + file.size + ' ' +
+                new Blob(['x']).type + '|');
+
+            var name = '', code = 0;
+            try { box.matches(''); } catch (e) { name = e.name; code = e.code; log('exception ' + name + ' ' + code + ' ' + (e instanceof DOMException) + ' ' +
+                new DOMException('m', 'NotFoundError').code + ' ' + new DOMException('m', 'toString').code); }
+
+            document.title = ' New   title ';
+            document.cookie = 'a=1; path=/';
+            document.cookie = 'b = 2';
+            localStorage.k = 'v';
+            log('doc ' + document.title + '|' + document.cookie + '|' + localStorage.k + '|' + getComputedStyle(box).display + '|' + document.readyState + '|' +
+                document.getElementsByName('r').length);
+
+            queueMicrotask(function () { log('micro'); });
+            document.addEventListener('DOMContentLoaded', function () { log('loaded ' + document.readyState + ' ' + (document.getElementById('written') !== null)); });
+            window.addEventListener('load', function () { log('window load'); });
+            document.writeln('<i id="written">w</i>');
+
+            var reader = new FileReader(), events = '';
+            reader.addEventListener('loadstart', function (e) { events += 'start:' + e.bubbles + ' '; });
+            reader.onload = function (e) { events += 'load:' + e.loaded + '/' + e.total + ':' + e.lengthComputable + ' '; };
+            reader.addEventListener('loadend', function () { log('reader ' + events + reader.result); });
+            reader.readAsText(part.slice(0, 2));
+            setTimeout(function (x) { log('timer ' + x); }, 0, 'x');
+
+            var tapme = document.getElementById('tapme'), check2 = document.getElementById('check2'), tapped = '';
+            tapme.addEventListener('focus', function () { tapped += 'focus '; });
+            check2.addEventListener('click', function () { tapped += 'click '; });
+            check2.addEventListener('change', function () { tapped += 'change '; log('tap ' + tapped + check2.hasAttribute('checked')); });
+            var rs = navigator.epubReadingSystem;
+            log('features ' + rs.hasFeature('dom-manipulation') + ' ' + rs.hasFeature('toString') + ' ' + rs.hasFeature('touch-events'));
+            try { window.__kite_step = null; } catch (e) {}
+            try { delete window.__kite_tap; } catch (e) {}
+        """.trimIndent()
+
+        /**
+         * A script that patches what a book can of the engine's built-ins, so each throws when it
+         * runs, but the iterator of an array, which Web IDL's own algorithms call.
+         */
+        val POISON = """
+            (function () {
+              var ownKeys = Reflect.ownKeys, describe = Object.getOwnPropertyDescriptor, define = Object.defineProperty, protoOf = Object.getPrototypeOf;
+              var NativeError = Error, NativeString = String;
+              // What ran, in the message of what it throws.
+              function poisonedAs(what) { return function () { throw new NativeError('a patched built-in ran: ' + what); }; }
+              var poisoned = poisonedAs('a DOM method or a key of Object.prototype');
+              var arrayIterator = protoOf([][Symbol.iterator]()), iterator = Symbol.iterator;
+              // What the engine itself calls, so a book that patches it breaks the engine and not the DOM alone.
+              var engineCalls = { __proto__: null, 'String.prototype': { __proto__: null, toString: 1, valueOf: 1 } };
+              function poison(name, o, keep) {
+                var keys = ownKeys(o), engine = engineCalls[name];
+                for (var i = 0; i < keys.length; i++) {
+                  var k = keys[i];
+                  if (k === keep || (engine && typeof k === 'string' && engine[k])) continue;
+                  var d, as = poisonedAs(name + '.' + NativeString(k));
+                  // KiteJS 0.2.0 hands out a placeholder that no script can read as the value of a
+                  // property it builds lazily, such as Array.prototype[Symbol.unscopables].
+                  try { d = describe(o, k); if (d) typeof d.value; } catch (e) { continue; }
+                  // KiteJS 0.2.0 lists the symbol methods of RegExp.prototype and Date.prototype
+                  // as strings that name no property (kitejs#76), so it cannot reach them.
+                  if (d === undefined) continue;
+                  if (!d.configurable) continue;
+                  if (d.get || d.set) define(o, k, { __proto__: null, get: as, set: as, configurable: true });
+                  else if (typeof d.value === 'function') define(o, k, { __proto__: null, value: as, writable: true, configurable: true });
+                }
+              }
+              var targets = [['Object', Object], ['Object.prototype', Object.prototype], ['Function.prototype', Function.prototype],
+                ['Array', Array], ['String', String], ['String.prototype', String.prototype], ['Number', Number],
+                ['Number.prototype', Number.prototype], ['Boolean.prototype', Boolean.prototype], ['Symbol', Symbol],
+                ['Symbol.prototype', Symbol.prototype], ['RegExp', RegExp], ['RegExp.prototype', RegExp.prototype], ['Map', Map],
+                ['Map.prototype', Map.prototype], ['WeakMap', WeakMap], ['WeakMap.prototype', WeakMap.prototype], ['Set.prototype', Set.prototype],
+                ['WeakSet.prototype', WeakSet.prototype], ['Promise', Promise], ['Promise.prototype', Promise.prototype], ['Math', Math],
+                ['JSON', JSON], ['Reflect', Reflect], ['Date', Date], ['Date.prototype', Date.prototype], ['Error', Error],
+                ['Error.prototype', Error.prototype], ['ArrayBuffer', ArrayBuffer], ['ArrayBuffer.prototype', ArrayBuffer.prototype],
+                ['DataView.prototype', DataView.prototype], ['%TypedArray%', protoOf(Uint8Array)], ['%TypedArray%.prototype', protoOf(Uint8Array.prototype)],
+                ['Uint8Array.prototype', Uint8Array.prototype], ['%GeneratorPrototype%', protoOf(protoOf((function* () {})()))],
+                ['%MapIteratorPrototype%', protoOf(new Map().entries())], ['%StringIteratorPrototype%', protoOf(''[Symbol.iterator]())]];
+              if (typeof SharedArrayBuffer === 'function') targets[targets.length] = ['SharedArrayBuffer.prototype', SharedArrayBuffer.prototype];
+              // What the DOM's algorithms called by name on its own objects: a script may replace these.
+              var storage = protoOf(localStorage);
+              var dom = [
+                [Element.prototype, ['closest', 'querySelector', 'querySelectorAll', 'localName', 'insertAdjacentHTML']],
+                [Document.prototype, ['querySelector', 'querySelectorAll', 'createElement', 'write', 'body', 'head', 'documentElement']],
+                [DocumentFragment.prototype, ['querySelector', 'querySelectorAll']],
+                [Node.prototype, ['contains', 'appendChild', 'insertBefore', 'removeChild', 'parentNode', 'nodeType', 'firstChild']],
+                [HTMLElement.prototype, ['focus', 'blur']],
+                [HTMLInputElement.prototype, ['checked', 'type', 'disabled', 'form']],
+                [HTMLButtonElement.prototype, ['type', 'form', 'disabled']],
+                [HTMLSelectElement.prototype, ['options', 'multiple']],
+                [HTMLOptionElement.prototype, ['selected', 'value']],
+                [HTMLFormElement.prototype, ['elements']],
+                [HTMLLabelElement.prototype, ['control']],
+                [HTMLDetailsElement.prototype, ['open']],
+                [location, ['href', 'toString']],
+                [storage, ['getItem', 'setItem', 'removeItem']]
+              ];
+              for (var j = 0; j < dom.length; j++) {
+                var o = dom[j][0], keys = dom[j][1];
+                for (var n = 0; n < keys.length; n++) {
+                  var d = describe(o, keys[n]);
+                  if (d && (d.get || d.set)) define(o, keys[n], { __proto__: null, get: poisoned, set: poisoned, configurable: true });
+                  else define(o, keys[n], { __proto__: null, value: poisoned, writable: true, configurable: true });
+                }
+              }
+              // The controls that the DOM clicks or focuses itself, for a label or a tap.
+              var controls = ['check', 'check2', 'tapme'];
+              for (var c = 0; c < controls.length; c++) {
+                var el = document.getElementById(controls[c]);
+                el.click = poisoned;
+                el.focus = poisoned;
+              }
+              // Keys that the DOM's own tables and dictionaries must not inherit.
+              var junk = { __proto__: null, bubbles: true, cancelable: true, composed: true, detail: 'junk', view: 'junk', relatedTarget: 'junk',
+                lengthComputable: false, loaded: 7, total: 7, fatal: true, ignoreBOM: true, stream: true, get: poisoned, set: poisoned,
+                has: poisoned, ownKeys: poisoned, getOwnPropertyDescriptor: poisoned, deleteProperty: poisoned, value: 'junk',
+                writable: true, enumerable: true, configurable: true, p: poisoned, div: poisoned, label: poisoned, ping: ['junk'],
+                'dom-manipulation': false, NotFoundError: 99, load: 0, onclick: poisoned, onping: poisoned, next: poisoned };
+              var junkKeys = ownKeys(junk);
+              for (var p = 0; p < targets.length; p++) poison(targets[p][0], targets[p][1]);
+              poison('Array.prototype', Array.prototype, iterator);
+              poison('%ArrayIteratorPrototype%', arrayIterator, 'next');
+              for (var q = 0; q < junkKeys.length; q++) {
+                define(Object.prototype, junkKeys[q], { __proto__: null, value: junk[junkKeys[q]], writable: true, enumerable: true, configurable: true });
+              }
+              define(Array.prototype, 'junk', { __proto__: null, value: 'junk', writable: true, enumerable: true, configurable: true });
+              // The global bindings of the constructors stay: KiteJS 0.2.0 takes the prototype of a literal and of a
+              // primitive from them. The DOM shadows them, which DomPreludeSourceTest checks.
+            })();
+        """.trimIndent()
     }
 }
