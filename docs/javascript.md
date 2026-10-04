@@ -171,9 +171,17 @@ shows. A chapter without scripts takes no engine.
 A chapter's built-in objects are writable, as a browser's are, so a polyfill can add a method the
 engine lacks and a library can wrap one it has
 ([#537](https://github.com/yuroyami/KitePDF/issues/537)). A script that breaks a built-in breaks
-only its own chapter. The DOM below still calls the built-ins the book patched, so a patch that
-changes what a method does changes the DOM too
-([#540](https://github.com/yuroyami/KitePDF/issues/540)).
+only its own chapter. The DOM below is JavaScript in the same realm, and it takes every built-in it
+calls before the book's first script runs, as Node takes its primordials, so a patched method or a
+getter that a script hangs on `Object.prototype` changes nothing the DOM does
+([#540](https://github.com/yuroyami/KitePDF/issues/540)). Two holes are in the engine itself, which
+calls what a script can replace: KiteJS takes the prototype of a literal, of a primitive and of an
+error it throws from the global binding of its constructor, so a book that replaces `window.String`
+or `window.Object` changes every literal, the DOM's too
+([yuroyami/kitejs#77](https://github.com/yuroyami/KiteJS/issues/77)), and a method of
+`String.prototype` called on a string reads the string back through `String.prototype.toString`, so
+a book that patches that method runs its patch inside every string method
+([yuroyami/kitejs#78](https://github.com/yuroyami/KiteJS/issues/78)).
 
 At most eight chapters keep their engines open at once (`EpubScriptRunner.LIVE_CHAPTERS`), and
 one on JavaScript and WebAssembly, where every engine shares the page's one thread. Opening one
