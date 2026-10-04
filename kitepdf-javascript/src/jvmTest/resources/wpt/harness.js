@@ -187,6 +187,9 @@ function assert_false(actual, description) { check(actual === false, description
 function assert_greater_than(actual, expected, description) {
   check(typeof actual === typeof expected && actual > expected, description, 'expected a number greater than ' + show(expected) + ' but got ' + show(actual));
 }
+function assert_in_array(actual, expected, description) {
+  check(expected.indexOf(actual) !== -1, description, 'value ' + show(actual) + ' not in array ' + show(expected));
+}
 function assert_class_string(object, name, description) {
   var actual = Object.prototype.toString.call(object);
   check(actual === '[object ' + name + ']', description, 'expected [object ' + name + '] but got ' + actual);

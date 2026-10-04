@@ -100,11 +100,8 @@ class WebPlatformTest {
             "typeof ReadableStream === 'undefined'",
             names = Regex("^Blob\\.(stream|textStream)\\(\\)|^Reading Blob\\.stream|^textStream method existence"),
         ),
-        Gap(
-            "#538, an element has no class string",
-            "Object.prototype.toString.call(document.body) !== '[object HTMLBodyElement]'",
-            setOf("HTMLBodyElement in fileBits", "Using object fileName"),
-        ),
+        // Each element is made twice, by createElement and by parsing a document; the second needs DOMParser.
+        Gap("#543, DOMParser is missing", "typeof DOMParser === 'undefined'", names = Regex(": useParser$")),
         Gap(
             "kitejs#71, an arrow function cannot take a rest parameter",
             "(function () { try { Function('return (...a) => a'); return false; } catch (e) { return true; } })()",
@@ -152,6 +149,9 @@ class WebPlatformTest {
         "reading-data-section/filereader_readAsText_blob_type_charset.any.js", "reading-data-section/filereader_readystate.any.js",
         "reading-data-section/filereader_result.any.js",
     ).map { "FileAPI/$it" }
+
+    private val reflectionFiles = listOf("embedded", "forms", "grouping", "metadata", "misc", "obsolete", "sections", "tabular", "text")
+        .map { "html/dom/reflection-$it.html" }
 
     /** The files of this folder that stand in for scripts of web-platform-tests that a test names, null where `harness.js` does. */
     private val standIns = mapOf(
@@ -206,15 +206,16 @@ class WebPlatformTest {
      * The console of a chapter whose scripts are [files], in order, and the failures of its
      * scripts, once the harness logged its count or nothing is left to wait for. The chapter's
      * clock runs as the real one does and jumps over each wait for a timer, so a test that waits
-     * seconds takes none, and a call still has the runner's time limit.
+     * seconds takes none. A call has a minute, as a reflection page runs thousands of
+     * tests in the one call that loads it.
      */
-    private fun chapter(files: Map<String, String>): Pair<List<String>, List<String>> {
+    private fun chapter(files: Map<String, String>, html: Boolean = false): Pair<List<String>, List<String>> {
         val console = ArrayList<String>()
-        val book = ScriptBooks.chapter(files.keys.joinToString("") { "<script src=\"$it\"></script>" }, extraFiles = files)
+        val book = ScriptBooks.chapter(files.keys.joinToString("") { "<script src=\"$it\"></script>" }, extraFiles = files, html = html)
         val started = TimeSource.Monotonic.markNow()
         var skipped = 0L
         val clock = { started.elapsedNow().inWholeMilliseconds + skipped }
-        val runner = EpubScriptRunner(book, onConsole = { level, message -> console += "$level: $message" }, clock = clock).also { runners += it }
+        val runner = EpubScriptRunner(book, EpubScriptPolicy(budgetMillis = 60_000), onConsole = { level, message -> console += "$level: $message" }, clock = clock).also { runners += it }
         runner.chapterOpened(0)
         while (runner.hasTimers && console.none { it.startsWith("log: DONE ") } && skipped < MAX_WAIT_MILLIS) {
             skipped += runner.pumpTimers(clock()) ?: break
@@ -235,19 +236,47 @@ class WebPlatformTest {
     /** What a file did: the names of its tests that fail, the names of those that pass, and the failures of its scripts that did not run. */
     private class FileRun(val failing: List<String>, val passing: List<String>, val broken: List<String>)
 
-    /** Runs the file at [path], a query after it naming the variant. */
+    /**
+     * The scripts of the page [source] at [path], in order, as names and sources: each `<script>`
+     * element's file, from the folder of the page or the root of web-platform-tests, or its own
+     * text, but for those of testharness.js, which `harness.js` stands in for.
+     */
+    private fun pageScripts(path: String, source: String): Map<String, String> {
+        val scripts = LinkedHashMap<String, String>()
+        val folder = path.substringBeforeLast('/', "")
+        val element = Regex("<script(?:\\s+src=(?:\"([^\"]*)\"|'([^']*)'|([^\\s>]+)))?[^>]*>(.*?)</script>", RegexOption.DOT_MATCHES_ALL)
+        for ((i, m) in element.findAll(source).withIndex()) {
+            val src = m.groupValues.drop(1).take(3).firstOrNull { it.isNotEmpty() }
+            when {
+                src == null -> scripts["inline-$i.js"] = m.groupValues[4]
+                src.startsWith("/resources/testharness") -> {}
+                else -> {
+                    val file = if (src.startsWith("/")) src.removePrefix("/") else normalized("/$folder/$src").removePrefix("/")
+                    scripts[file.replace('/', '-')] = resource(file)
+                }
+            }
+        }
+        return scripts
+    }
+
+    /** Runs the file at [path], a query after it naming the variant. A page, a `.html` file, runs in an HTML chapter with its scripts. */
     private fun run(path: String): FileRun {
         val file = path.substringBefore('?')
         val variant = path.substringAfter('?', "")
         val name = file.substringAfterLast('/')
         val source = resource(file)
+        val page = file.endsWith(".html")
         val scripts = linkedMapOf("harness.js" to resource("harness.js"), "data.js" to harnessData)
         if (variant.isNotEmpty()) scripts["variant.js"] = "Object.defineProperty(location, 'search', { value: '?$variant', configurable: true });"
-        for (script in metaScripts(file, source)) scripts[script.replace('/', '-')] = resource(script)
-        scripts[name] = source
-        val (console, failures) = chapter(scripts)
+        if (page) {
+            scripts += pageScripts(file, source)
+        } else {
+            for (script in metaScripts(file, source)) scripts[script.replace('/', '-')] = resource(script)
+            scripts[name] = source
+        }
+        val (console, failures) = chapter(scripts, html = page)
         val done = console.singleOrNull { it.startsWith("log: DONE ") }
-        assertTrue(done != null, "$name did not finish:\n" + console.joinToString("\n"))
+        assertTrue(done != null, "$name did not finish: $failures\n" + console.takeLast(20).joinToString("\n"))
         val (passed, failed) = done.removePrefix("log: DONE ").split(' ').map { it.toInt() }
         val failing = console.filter { it.startsWith("log: FAIL ") }.map { it.removePrefix("log: FAIL ") }
         val passing = console.filter { it.startsWith("log: PASS ") }.map { it.removePrefix("log: PASS ") }
@@ -302,6 +331,12 @@ class WebPlatformTest {
 
     @Test
     fun the_file_api_tests_pass_but_for_known_gaps() = check(fileApiFiles, atLeast = 300)
+
+    @Test
+    fun the_reflection_tests_pass_but_for_known_gaps() = check(reflectionFiles, atLeast = 59_000)
+
+    @Test
+    fun the_interface_tests_pass_but_for_known_gaps() = check(listOf("html/semantics/interfaces.html"), atLeast = 300)
 
     private companion object {
         /** How long a chapter may wait on its timers in all, on its clock: past the harness's own ten seconds. */

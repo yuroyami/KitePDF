@@ -207,7 +207,9 @@ public class EpubScriptSession(
             null
         }
         val engine: KiteScriptEngine get() = checkNotNull(opened)
-        val dom = ScriptDom(document.sourceChapterTree(chapter))
+        /** The chapter's media type, which makes its document an HTML or an XML one (#541). */
+        val contentType: String = document.resourceType(document.chapterPath(chapter))?.lowercase() ?: "application/xhtml+xml"
+        val dom = ScriptDom(document.sourceChapterTree(chapter), html = contentType == "text/html")
 
         /** The timers and frames its scripts wait on. */
         var timers = 0
@@ -342,8 +344,11 @@ public class EpubScriptSession(
             fun id(node: KiteXmlNode?): Int? = node?.let(dom::idOf)
 
             def("root") { dom.idOf(dom.root) }
+            def("version") { dom.version.toDouble() }
+            def("contentType") { contentType }
             def("kind") { args -> node(args, 0)?.let(dom::kind) }
             def("tag") { args -> element(args, 0)?.tag.orEmpty() }
+            def("name") { args -> element(args, 0)?.let(dom::nameOf)?.let { listOf(it.namespace, it.prefix, it.localName) } }
             def("parent") { args -> node(args, 0)?.let(dom::parentOf)?.let(dom::idOf) }
             def("children") { args -> element(args, 0)?.children?.map(dom::idOf) }
             def("attr") { args -> element(args, 0)?.attrs?.get(string(args, 1)) }
@@ -352,7 +357,8 @@ public class EpubScriptSession(
             def("attrNames") { args -> element(args, 0)?.attrs?.keys?.toList().orEmpty() }
             def("text") { args -> node(args, 0)?.let(dom::textOf).orEmpty() }
             def("setText") { args -> node(args, 0)?.let { dom.setText(it, string(args, 1)) }; null }
-            def("create") { args -> dom.idOf(dom.createElement(string(args, 0))) }
+            def("create") { args -> dom.idOf(dom.createElement(string(args, 0), args.getOrNull(1) as? String, args.getOrNull(2) as? String)) }
+            def("createDocument") { dom.idOf(dom.createDocument()) }
             def("createText") { args -> dom.idOf(KiteXmlNode.Text(string(args, 0))) }
             def("createFragment") { dom.idOf(dom.createFragment()) }
             def("insert") { args ->

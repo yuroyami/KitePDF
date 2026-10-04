@@ -44,15 +44,31 @@ internal object ScriptBooks {
         ),
     )
 
-    /** A reflowable book of one chapter whose body is [body], on pages 300 by 200 points. */
-    fun chapter(body: String, extraFiles: Map<String, String> = emptyMap()): EpubDocument = book(
-        items = listOf(Item("chapter.xhtml", "application/xhtml+xml", properties = "scripted", spine = true)) +
-            extraFiles.keys.map { Item(it, if (it.endsWith(".js")) "text/javascript" else "application/xhtml+xml", spine = it.endsWith(".xhtml")) },
-        files = mapOf("chapter.xhtml" to xhtml(body = body)) + extraFiles,
-        settings = EpubSettings(pageWidth = 300.0, pageHeight = 200.0, margin = 20.0),
-    )
+    /**
+     * A reflowable book of one chapter whose body is [body], on pages 300 by 200 points: an XHTML
+     * chapter, or for [html] an HTML one, which the manifest serves as text/html.
+     */
+    fun chapter(body: String, extraFiles: Map<String, String> = emptyMap(), html: Boolean = false): EpubDocument {
+        val name = if (html) "chapter.html" else "chapter.xhtml"
+        return book(
+            items = listOf(Item(name, if (html) "text/html" else "application/xhtml+xml", properties = "scripted", spine = true)) +
+                extraFiles.keys.map { Item(it, typeOf(it), spine = it.endsWith(".xhtml")) },
+            files = mapOf(name to if (html) html(body = body) else xhtml(body = body)) + extraFiles,
+            settings = EpubSettings(pageWidth = 300.0, pageHeight = 200.0, margin = 20.0),
+        )
+    }
+
+    /** The media type the manifest gives a file of a test book, by its extension. */
+    private fun typeOf(href: String): String = when {
+        href.endsWith(".js") -> "text/javascript"
+        href.endsWith(".css") -> "text/css"
+        else -> "application/xhtml+xml"
+    }
 
     class Item(val href: String, val type: String, val properties: String? = null, val spine: Boolean = false)
+
+    fun html(head: String = "", body: String): String =
+        """<!DOCTYPE html><html><head><meta charset="utf-8"><title>Scripted</title>$head</head><body>$body</body></html>"""
 
     fun xhtml(head: String = "", body: String): String =
         """<?xml version="1.0" encoding="UTF-8"?><html xmlns="http://www.w3.org/1999/xhtml"><head><title>Scripted</title>$head</head><body>$body</body></html>"""

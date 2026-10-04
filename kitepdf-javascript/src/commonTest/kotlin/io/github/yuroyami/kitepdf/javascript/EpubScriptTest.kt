@@ -321,15 +321,15 @@ class EpubScriptTest {
             "\"paragraphs\":2",
             "\"second\":\"Two\"",
             "\"html\":\"<b>bold</b> text\"",
-            "\"first\":\"B\"",
-            "\"order\":\"EM,B,#text\"",
+            "\"first\":\"b\"",
+            "\"order\":\"em,b,#text\"",
             "\"after\":2",
             "\"dataAttr\":\"1\"",
             "\"classes\":\"x y\"",
             "\"style\":\"background-color: red;\"",
             "\"display\":\"block\"",
             "\"weight\":\"700\"",
-            "\"closest\":\"BODY\"",
+            "\"closest\":\"body\"",
             "\"matches\":true",
             "\"events\":\"body capture,target,body bubble\"",
             "\"stored\":\"v\"",
@@ -616,6 +616,30 @@ class EpubScriptTest {
     }
 
     @Test
+    fun a_link_that_a_script_sets_up_through_its_properties_loads_its_style_sheet() {
+        // HTMLLinkElement reflects rel and href (#538). Without the interface, the two assignments
+        // set plain properties of the object and no attribute, so the sheet never loaded.
+        val book = ScriptBooks.chapter(
+            "<p id=\"text\">Linked.</p><script src=\"link.js\"></script>",
+            extraFiles = mapOf(
+                "blue.css" to "#text { background: ${ScriptBooks.BLUE}; }",
+                "link.js" to """
+                    var link = document.createElement('link');
+                    link.rel = 'stylesheet';
+                    link.href = 'blue.css';
+                    document.head.appendChild(link);
+                """.trimIndent(),
+            ),
+        )
+        val page = book.page(KiteLocation(0, 0))
+        assertFalse(page.paintsBlue(), "nothing before the script runs")
+        val scripts = runner(book)
+        scripts.chapterOpened(0)
+        assertEquals(emptyList(), scripts.failures.map { it.message })
+        assertTrue(page.paintsBlue(), "the rule of the linked sheet")
+    }
+
+    @Test
     fun a_blob_url_names_the_books_origin_and_loads_nothing_once_its_chapter_closes() {
         val console = ArrayList<String>()
         val book = ScriptBooks.chapter(
@@ -737,7 +761,7 @@ class EpubScriptTest {
         assertEquals(
             listOf(
                 "log: host undefined",
-                "log: tree EM P P 2 1 2",
+                "log: tree em p p 2 1 2",
                 "log: after 2 One box",
                 "log: attrs 1 2 y z true background-color: red; margin-top: .5em !important; 0.5em important 2 true",
                 "log: events capture target:2 bubble object:3 capture bubble object:3 ",

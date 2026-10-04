@@ -48,7 +48,7 @@ class ScriptDomTest {
         val dom = ScriptDom(source)
         val body = dom.body()
         val fragment = dom.createFragment()
-        val em = dom.createElement("em")
+        val em = dom.createElement("em", ScriptDom.XHTML_NS, null)
         assertNull(dom.insert(fragment, em, null))
         assertNull(dom.insert(fragment, KiteXmlNode.Text("tail"), null))
         assertEquals(11, dom.kind(fragment))
