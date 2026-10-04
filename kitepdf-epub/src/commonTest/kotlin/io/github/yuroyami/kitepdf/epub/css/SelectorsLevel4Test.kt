@@ -121,6 +121,14 @@ class SelectorsLevel4Test {
     }
 
     @Test
+    fun a_radio_group_with_a_checked_radio_has_none_indeterminate() {
+        val checked = """<form><input type="radio" name="g" id="r1" checked=""/><input type="radio" name="g" id="r2"/></form>"""
+        assertEquals(emptySet(), redIds(checked, ":indeterminate{color:red}"))
+        val none = """<form><input type="radio" name="g" id="r1"/><input type="radio" name="g" id="r2"/><input type="radio" name="h" id="r3" checked=""/></form>"""
+        assertEquals(setOf("r1", "r2"), redIds(none, ":indeterminate{color:red}"))
+    }
+
+    @Test
     fun a_selector_list_parses_as_a_browser_reads_it() {
         val valid = listOf(
             "p:nth-child(2n+ 1)", "p:nth-child(2n -1)", "p:nth-child(-n- 3)", "p:nth-child(+n)", "p:nth-child(N)", "p:nth-child(-0n+0)",
