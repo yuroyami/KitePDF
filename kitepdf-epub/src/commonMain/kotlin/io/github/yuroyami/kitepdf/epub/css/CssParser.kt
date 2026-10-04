@@ -23,49 +23,89 @@ internal object CssParser {
         val css = stripComments(text)
         val rules = ArrayList<StyleRule>()
         val faces = ArrayList<FontFaceRule>()
-        parseInto(css, 0, css.length, origin, rules, faces, 0)
+        parseInto(css, 0, css.length, origin, rules, faces, 0, Sheet())
         return ParsedCss(rules, faces)
     }
 
-    private fun parseInto(css: String, start: Int, end: Int, origin: Origin, out: ArrayList<StyleRule>, faces: ArrayList<FontFaceRule>, nesting: Int) {
+    /**
+     * What a style sheet declares for the rules after it: its namespace prefixes, with the default
+     * namespace under the empty prefix, which only `@namespace` rules before any other rule but
+     * `@charset` and `@import` declare (CSS Namespaces, 2).
+     */
+    private class Sheet {
+        val namespaces = HashMap<String, String>()
+        var ruled = false
+    }
+
+    private fun parseInto(css: String, start: Int, end: Int, origin: Origin, out: ArrayList<StyleRule>, faces: ArrayList<FontFaceRule>, nesting: Int, sheet: Sheet) {
         var i = start
         while (i < end) {
             while (i < end && css[i].isWhitespace()) i++
+            // The `<!--` and `-->` that hide an old style element's text from browsers that knew no CSS (CSS Syntax 3, 5.4.1).
+            if (css.startsWith("<!--", i)) { i += 4; continue }
+            if (css.startsWith("-->", i)) { i += 3; continue }
             if (i >= end) break
-            if (css[i] == '@') { i = handleAtRule(css, i, end, origin, out, faces, nesting); continue }
+            if (css[i] == '@') { i = handleAtRule(css, i, end, origin, out, faces, nesting, sheet); continue }
             val brace = css.indexOf('{', i)
             if (brace < 0 || brace >= end) break
             val prelude = css.substring(i, brace).trim()
             val close = matchBrace(css, brace, end)
             val body = css.substring(brace + 1, close)
-            val selectors = prelude.split(',').mapNotNull { Selector.parse(it.trim()) }
+            sheet.ruled = true
+            // A selector list with one invalid selector drops the whole rule (Selectors 4, 3.1), and one the
+            // layout draws nothing for, as `::first-line`, stays valid and leaves the rest of the list.
+            val selectors = Selector.parseList(prelude, sheet.namespaces)?.filterNot { it.otherPseudoElement }.orEmpty()
             val decls = parseDeclarations(body)
             if (selectors.isNotEmpty() && decls.isNotEmpty()) out.add(StyleRule(selectors, decls, origin))
             i = close + 1
         }
     }
 
-    private fun handleAtRule(css: String, at: Int, end: Int, origin: Origin, out: ArrayList<StyleRule>, faces: ArrayList<FontFaceRule>, nesting: Int): Int {
+    private fun handleAtRule(css: String, at: Int, end: Int, origin: Origin, out: ArrayList<StyleRule>, faces: ArrayList<FontFaceRule>, nesting: Int, sheet: Sheet): Int {
         var j = at + 1
         while (j < end && (css[j].isLetterOrDigit() || css[j] == '-')) j++
         val keyword = css.substring(at + 1, j).lowercase()
         val brace = css.indexOf('{', at)
         val semi = css.indexOf(';', at)
         // No block (e.g. @import ...;): skip to the semicolon.
-        if (brace < 0 || brace >= end || (semi in 0 until brace)) return if (semi < 0 || semi >= end) end else semi + 1
+        if (brace < 0 || brace >= end || (semi in 0 until brace)) {
+            val stop = if (semi < 0 || semi >= end) end else semi
+            when (keyword) {
+                "namespace" -> if (!sheet.ruled && nesting == 0) namespaceRule(css.substring(j, stop))?.let { (prefix, uri) -> sheet.namespaces[prefix] = uri }
+                "charset", "import" -> {}
+                else -> sheet.ruled = true
+            }
+            return if (stop >= end) end else stop + 1
+        }
+        sheet.ruled = true
         val close = matchBrace(css, brace, end)
         when (keyword) {
             "media", "supports" -> {
                 if (nesting >= MAX_NESTING) {
                     kiteWarn { "epub: CSS blocks nested beyond $MAX_NESTING levels are skipped" }
                 } else {
-                    parseInto(css, brace + 1, close, origin, out, faces, nesting + 1) // flatten: always-matching
+                    parseInto(css, brace + 1, close, origin, out, faces, nesting + 1, sheet) // flatten: always-matching
                 }
             }
             "font-face" -> parseFontFace(css.substring(brace + 1, close))?.let { faces.add(it) }
             // @page / @keyframes / unknown: skip the whole block.
         }
         return close + 1
+    }
+
+    /** The prefix, empty for the default, and the namespace of an `@namespace` rule's [text], or null when it is not valid (CSS Namespaces, 3). */
+    private fun namespaceRule(text: String): Pair<String, String>? {
+        val tokens = CssTokenizer(text).tokens().filter { it.type != CssToken.WHITESPACE }
+        var k = 0
+        val prefix = if (tokens.getOrNull(0)?.type == CssToken.IDENT) { k = 1; tokens[0].value } else ""
+        val t = tokens.getOrNull(k) ?: return null
+        val uri = when {
+            t.type == CssToken.STRING || t.type == CssToken.URL -> { k++; t.value }
+            t.type == CssToken.FUNCTION && asciiEquals(t.value, "url") && tokens.getOrNull(k + 1)?.type == CssToken.STRING &&
+                tokens.getOrNull(k + 2)?.type == CssToken.RIGHT_PAREN -> { k += 3; tokens[k - 2].value }
+            else -> return null
+        }
+        return if (k == tokens.size) prefix to uri else null
     }
 
     private fun parseFontFace(body: String): FontFaceRule? {

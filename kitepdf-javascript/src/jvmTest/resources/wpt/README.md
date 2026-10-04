@@ -27,6 +27,10 @@ commit `1d99362b6bca46cc06e731ece8e022f0f1c21695`, unchanged:
   two harness scripts and the nine `elements-*.js` tables they load.
 - `html/semantics/interfaces.html` and `interfaces.js`, the tests of the interface of each
   element that `document.createElement` makes.
+- `dom/nodes`: the tests of `querySelector`, `querySelectorAll`, `matches`,
+  `webkitMatchesSelector` and `closest` of the DOM Standard, which run the selectors of
+  `selectors.js` and others of their own: the twelve pages that the commands below fetch, the
+  scripts they load, and the two documents, HTML and XHTML, that their frames load.
 
 `WebPlatformTest` runs each file in a chapter of its own, after `harness.js`, a file of this
 folder that is not from web-platform-tests: it stands in for testharness.js, and logs the count
@@ -38,7 +42,13 @@ the `subsetTestByKey` of `/common/subset-tests-by-key.js`. A file named with a `
 `single-byte-decoder.any.js?TextDecoder`, runs with that query as `location.search`, the
 variant web-platform-tests runs it in. A page, a `.html` file, runs in a chapter served as
 `text/html`, with its `<script>` elements in order, each from the page's folder or from the root
-of this one, and `harness.js` in place of testharness.js and testharnessreport.js. The data that
+of this one, and `harness.js` in place of testharness.js and testharnessreport.js. A page of
+`dom/nodes`, whose tests query its own markup, is the chapter itself, served as XHTML for a `.xht`
+page; a book's chapter has no frame, so a page whose tests run in the document a frame loads runs
+as that document, its scripts at the end of the body until they leave it, and the frame's `load`
+handed the chapter's own document. `harness.js` has `setup` with `single_test`, `done`,
+`assert_idl_attribute`, and the realm's `DOMException` as the second argument of
+`assert_throws_dom`. The data that
 `url-constructor`, `url-origin` and `url-setters` fetch is the parser's test data in
 `kitepdf-epub/src/jvmTest/resources/wpt-url`, from the same commit. The test files are under
 the 3-Clause BSD License of the web-platform-tests contributors, in `LICENSE.md`.
@@ -97,5 +107,15 @@ for f in reflection original-harness new-harness; do
 done
 for f in interfaces.html interfaces.js; do
   curl --create-dirs -o html/semantics/$f $W/html/semantics/$f
+done
+for f in selectors.js ParentNode-querySelector-All.js ParentNode-querySelector-All.html \
+  ParentNode-querySelector-All-xht.xht ParentNode-querySelector-All-content.html \
+  ParentNode-querySelector-All-content.xht ParentNode-querySelector-case-insensitive.html \
+  ParentNode-querySelector-escapes.html ParentNode-querySelector-scope.html \
+  ParentNode-querySelectors-exclusive.html ParentNode-querySelectors-namespaces.html \
+  ParentNode-querySelectors-space-and-dash-attribute-value.html Element-matches.js \
+  Element-matches-init.js Element-matches.html Element-webkitMatchesSelector.html \
+  Element-matches-namespaced-elements.html Element-closest.html; do
+  curl --create-dirs -o dom/nodes/$f $W/dom/nodes/$f
 done
 ```

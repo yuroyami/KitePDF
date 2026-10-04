@@ -470,25 +470,38 @@ function elementIds(id) {
   if (all) for (var i = 0; i < all.length; i++) if (K.kind(all[i]) === 1) ArrayPush(out, all[i]);
   return out;
 }
-function queryAll(id, selectors) {
-  var found = K.query(id, String(selectors), true);
-  if (found == null) throw new DOMException('not a valid selector: ' + selectors, 'SyntaxError');
+/* The elements at and below [id] that the selector list [selectors] matches, all of them or the
+   first. A list that does not parse throws the SyntaxError of a call of [what], or of no call
+   when the prelude asks itself. */
+function queryAll(id, selectors, what) {
+  var found = K.query(id, selectors, true);
+  if (found == null) throw invalidSelector(selectors, what);
   return found;
 }
-function queryFirst(id, selectors) {
-  var found = K.query(id, String(selectors), false);
-  if (found == null) throw new DOMException('not a valid selector: ' + selectors, 'SyntaxError');
+function queryFirst(id, selectors, what) {
+  var found = K.query(id, selectors, false);
+  if (found == null) throw invalidSelector(selectors, what);
   return found.length ? found[0] : null;
 }
-function matchesId(id, selectors) {
-  var r = K.matches(id, String(selectors));
-  if (r == null) throw new DOMException('not a valid selector: ' + selectors, 'SyntaxError');
+function matchesId(id, selectors, what) {
+  var r = K.matches(id, selectors);
+  if (r == null) throw invalidSelector(selectors, what);
   return r;
 }
-/* The element at [id] or its nearest ancestor that matches [selectors], or null. */
-function closestId(id, selectors) {
-  for (var t = id; t != null && K.kind(t) === 1; t = K.parent(t)) if (matchesId(t, selectors)) return t;
-  return null;
+/* The element at [id] or its nearest ancestor that matches [selectors], with [id] as :scope, or null. */
+function closestId(id, selectors, what) {
+  var found = K.closest(id, selectors);
+  if (found == null) throw invalidSelector(selectors, what);
+  return found.length ? found[0] : null;
+}
+function invalidSelector(selectors, what) {
+  return new DOMException((what ? what + ': ' : '') + "'" + selectors + "' is not a valid selector.", 'SyntaxError');
+}
+/* The selector list a script hands [what], which takes one, as a DOMString (Web IDL 3.2.10). */
+function selectorsArg(args, what) {
+  needArgs(args, 1, what);
+  if (typeof args[0] === 'symbol') throw new TypeError(what + ': Cannot convert a Symbol value to a string');
+  return String(args[0]);
 }
 function attrOf(el, name) { return K.attr(idOf(el), name); }
 function tagOf(el) { return K.kind(idOf(el)) === 1 ? K.tag(el.__id) : ''; }
@@ -1597,7 +1610,7 @@ function Document() {
   return madeDocument(K.createDocument(), ObjectGetPrototypeOf(this), false, 'application/xml');
 }
 Document.prototype = ObjectCreate(Node.prototype);
-ParentNode(Document.prototype);
+ParentNode(Document.prototype, 'Document');
 defineHandlers(Document.prototype, GLOBAL_HANDLERS);
 defineHandlers(Document.prototype, ['readystatechange', 'visibilitychange']);
 /* The first child of [parent] that is an HTML element named [local], as an id, or null. */
@@ -1831,7 +1844,7 @@ function DocumentFragment() {
   return wrap(K.createFragment());
 }
 DocumentFragment.prototype = ObjectCreate(Node.prototype);
-ParentNode(DocumentFragment.prototype);
+ParentNode(DocumentFragment.prototype, 'DocumentFragment');
 DocumentFragment.prototype.getElementById = function (elementId) { return wrap(queryFirst(idOf(this), '[id=' + selectorString(domString(elementId)) + ']')); };
 defineInterface(DocumentFragment, 'DocumentFragment', Node, 0);
 

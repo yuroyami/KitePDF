@@ -195,11 +195,12 @@ function appendNodes(id, args, what) {
 }
 /* The elements under [id] whose qualified name is [name], of the DOM Standard, 4.4: in an HTML
    document, an HTML element matches the name lowercased. A plain name is looked up by the host's
-   selectors, whose tags are lowercased, and the rest among every element. */
+   selectors, whose type selector finds every element of that name and more, and the rest among
+   every element. */
 function byTagName(id, name) {
   if (name === '*') return queryAll(id, '*');
   var lower = asciiLowerCase(name), html = isHtmlDocument(ownerDocId(id));
-  var found = RegExpTest(RE_TYPE_NAME, name) ? queryAll(id, lower) : queryAll(id, '*');
+  var found = RegExpTest(RE_TYPE_NAME, name) ? queryAll(id, name) : queryAll(id, '*');
   return listFilter(found, function (e) {
     var n = nameOf(e);
     return html && n.ns === XHTML_NS ? n.qualified === lower : n.qualified === name;
@@ -222,7 +223,7 @@ function byClassNames(id, names) {
     return true;
   });
 }
-function ParentNode(proto) {
+function ParentNode(proto, iface) {
   def(proto, 'children', function () {
     var id = idOf(this);
     return cachedList(this, 'children', function () { return liveElements(function () { return elementIds(id); }); });
@@ -236,8 +237,14 @@ function ParentNode(proto) {
     for (var i = 0; i < nodes.length; i++) insertNode(id, nodes[i], first, 'prepend');
   };
   proto.replaceChildren = function () { var id = idOf(this); K.setText(id, ''); appendNodes(id, arguments, 'replaceChildren'); };
-  proto.querySelector = function (selectors) { return wrap(queryFirst(idOf(this), selectors)); };
-  proto.querySelectorAll = function (selectors) { return staticNodes(queryAll(idOf(this), selectors)); };
+  proto.querySelector = function (selectors) {
+    var id = idOf(this), what = "Failed to execute 'querySelector' on '" + iface + "'";
+    return wrap(queryFirst(id, selectorsArg(arguments, what), what));
+  };
+  proto.querySelectorAll = function (selectors) {
+    var id = idOf(this), what = "Failed to execute 'querySelectorAll' on '" + iface + "'";
+    return staticNodes(queryAll(id, selectorsArg(arguments, what), what));
+  };
   proto.getElementsByTagName = function (name) {
     var id = idOf(this), n = domString(name);
     return cachedList(this, 'tag ' + n, function () { return liveElements(function () { return byTagName(id, n); }); });
@@ -294,7 +301,7 @@ defineInterface(Comment, 'Comment', CharacterData, 0);
 function Element() { illegal('Element'); }
 Element.prototype = ObjectCreate(Node.prototype);
 ChildNode(Element.prototype);
-ParentNode(Element.prototype);
+ParentNode(Element.prototype, 'Element');
 def(Element.prototype, 'tagName', function () { return tagNameOf(idOf(this)); });
 def(Element.prototype, 'localName', function () { return nameOf(idOf(this)).local; });
 def(Element.prototype, 'namespaceURI', function () { return nameOf(idOf(this)).ns; });
@@ -363,9 +370,19 @@ reflect(Element.prototype, 'slot', 'slot');
 /* classList, whose setter sets its value ([PutForwards=value]). */
 def(Element.prototype, 'classList', function () { idOf(this); return tokenList(this, 'class'); },
   function (v) { idOf(this); tokenList(this, 'class').value = v; });
-Element.prototype.matches = function (selectors) { return matchesId(idOf(this), selectors); };
-Element.prototype.webkitMatchesSelector = Element.prototype.matches;
-Element.prototype.closest = function (selectors) { return wrap(closestId(idOf(this), selectors)); };
+Element.prototype.matches = function (selectors) {
+  var id = idOf(this), what = "Failed to execute 'matches' on 'Element'";
+  return matchesId(id, selectorsArg(arguments, what), what);
+};
+/* An alias of matches, which browsers keep, and which names itself in its errors. */
+Element.prototype.webkitMatchesSelector = function (selectors) {
+  var id = idOf(this), what = "Failed to execute 'webkitMatchesSelector' on 'Element'";
+  return matchesId(id, selectorsArg(arguments, what), what);
+};
+Element.prototype.closest = function (selectors) {
+  var id = idOf(this), what = "Failed to execute 'closest' on 'Element'";
+  return wrap(closestId(id, selectorsArg(arguments, what), what));
+};
 def(Element.prototype, 'innerHTML', function () { return K.html(idOf(this), false); }, function (v) { K.setHtml(idOf(this), v == null ? '' : String(v)); });
 def(Element.prototype, 'outerHTML', function () { return K.html(idOf(this), true); }, function (v) {
   var p = K.parent(idOf(this)); if (p == null) return;
