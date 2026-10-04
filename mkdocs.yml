@@ -102,5 +102,6 @@ nav:
   - Reference:
       - Recipes: recipes.md
       - Platform support: platforms.md
+      - EPUB conformance: epub-conformance.md
       - About & status: about.md
       - API reference ▸: https://yuroyami.github.io/KitePDF/api/

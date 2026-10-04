@@ -67,3 +67,6 @@ readium-kt-toolkit/
 
 # Local remediation plans and tracker snapshots.
 /SOLISTIC_PLANS/
+
+# The W3C EPUB test suite, checked out for EpubConformanceTest (#497).
+.epub-tests/

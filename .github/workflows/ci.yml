@@ -55,6 +55,25 @@ jobs:
       - name: Verify the licensed public documents
         run: python3 tools/corpus.py verify
 
+      # The W3C EPUB test suite at the commit docs/epub-conformance.json answers.
+      # EpubConformanceTest runs it and fails without it on CI (#497).
+      - name: Cache the pinned W3C EPUB test suite
+        id: epub-tests-cache
+        uses: actions/cache@v4
+        with:
+          path: .epub-tests
+          key: epub-tests-54092b4233253e9aac80e93ec4782b380b4b3403
+
+      - name: Check out the pinned W3C EPUB test suite
+        if: steps.epub-tests-cache.outputs.cache-hit != 'true'
+        uses: actions/checkout@v4
+        with:
+          repository: w3c/epub-tests
+          ref: 54092b4233253e9aac80e93ec4782b380b4b3403
+          path: .epub-tests
+          sparse-checkout: tests
+          persist-credentials: false
+
       # Distribution packages can disable ICC, changing CMYK scores for the
       # same renderer. Keep the oracle version and colour management fixed.
       - name: Cache colour-managed MuPDF 1.27.2

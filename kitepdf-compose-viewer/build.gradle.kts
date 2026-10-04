@@ -16,6 +16,20 @@ tasks.withType<Test>().configureEach {
     systemProperty("java.awt.headless", "true")
 }
 
+// EpubConformanceTest runs the W3C EPUB test suite against the implementation report (#497).
+// The suite is a checkout of w3c/epub-tests at the pinned commit: CI makes one under
+// .epub-tests, and KITEPDF_EPUB_TESTS points elsewhere. Without it the test skips, except on CI.
+tasks.withType<Test>().configureEach {
+    val suite = providers.environmentVariable("KITEPDF_EPUB_TESTS")
+        .orElse(rootProject.layout.projectDirectory.dir(".epub-tests/tests").asFile.path)
+    systemProperty("kitepdf.epubTests", suite.get())
+    inputs.property("epubTestSuite", suite)
+    inputs.property("epubTestSuitePresent", suite.map { File(it).isDirectory })
+    inputs.property("continuousIntegration", providers.environmentVariable("CI").orElse(""))
+    inputs.files(rootProject.file("docs/epub-conformance.json"), rootProject.file("docs/epub-conformance.md"))
+        .withPropertyName("epubConformanceReport").withPathSensitivity(PathSensitivity.RELATIVE)
+}
+
 /** Host-OS Skiko native runtime, needed by jvmTest to rasterize an ImageBitmap headlessly. */
 fun currentOsSkikoRuntime(): Provider<MinimalExternalModuleDependency> {
     val os = OperatingSystem.current()

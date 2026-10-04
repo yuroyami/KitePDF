@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- An implementation report against the W3C EPUB 3 test suite (w3c/epub-tests at 54092b42),
+  in the suite's own format (`docs/epub-conformance.json`), and a docs page that lists its 206
+  tests by section and level with each result, how it is known and the issue for each gap.
+  `EpubConformanceTest` packs every test book and decides 157 of the results through the API;
+  CI checks the suite out and fails when a result moves away from the report. KitePDF passes
+  91 of the 140 must tests and 14 of the 38 should tests today (#497).
+
 - `KiteCanvas.rasterStep(region, ctm, step)` runs a `KiteRasterStep` on the device pixels
   of a region: the step reads the backdrop, has content painted into rasters of the box
   through the canvas, works on the pixels in plain Kotlin and draws the result back in a
