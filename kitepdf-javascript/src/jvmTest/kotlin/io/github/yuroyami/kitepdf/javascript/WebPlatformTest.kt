@@ -112,17 +112,38 @@ class WebPlatformTest {
             "typeof HashChangeEvent === 'undefined'",
             names = Regex("^(Document|In-document Element)\\.[A-Za-z]+: :target pseudo-class"),
         ),
-        // In an XML document an attribute keeps the case its markup gives it, and [title] does not match tItLe.
+        // An element's attributes are a proxy: the tests of its own properties ask hasOwnProperty of it, and a
+        // for-in over it reaches a key that its ownKeys trap built at run time, which crashes the engine.
         Gap(
-            "#545, an attribute's name loses its case",
-            "(function () { var a = document.createElementNS('http://www.w3.org/1999/xhtml', 'a'); a.setAttribute('tItLe', ''); " +
-                "return a.matches('[title]'); })()",
-            names = Regex("not matching title attribute, case sensitivity: #attr-presence \\[\\*\\|TiTlE\\]$"),
+            "KiteJS 0.2.0 asks a proxy's has trap for hasOwnProperty and crashes on a key its ownKeys trap built (D-91, fixed after it)",
+            "Object.prototype.hasOwnProperty.call(new Proxy({}, { has: function () { return true; }, " +
+                "getOwnPropertyDescriptor: function () { return undefined; } }), 'a')",
+            setOf(
+                "dom/nodes/attributes.html",
+                "Own property correctness with basic attributes",
+                "Own property correctness with non-namespaced attribute before same-name namespaced one",
+                "Own property correctness with namespaced attribute before same-name non-namespaced one",
+                "Own property correctness with two namespaced attributes with the same name-with-prefix",
+            ),
+        ),
+        // Setting style sets cssText, whose setter sits on the prototype of the style's proxy target.
+        Gap(
+            "KiteJS 0.2.0 makes Reflect.set write an own property past an inherited setter (D-89, fixed after it)",
+            "(function () { var o = Object.create({ set x(v) { this.y = v; } }); Reflect.set(o, 'x', 1); return o.y !== 1; })()",
+            setOf("Toggling element with inline style should make inline style disappear"),
         ),
         Gap(
             "kitejs#11, a const in a for head",
             "(function () { try { Function('for (const x of []) {}'); return false; } catch (e) { return true; } })()",
-            setOf("dom/nodes/Element-matches-namespaced-elements.html"),
+            setOf("dom/nodes/Element-matches-namespaced-elements.html", "dom/nodes/Element-setAttributeNodeNS.html", "dom/nodes/name-validation.html"),
+        ),
+        // The page has no body element, and an HTML parser makes one. The probe asks for the head and body that
+        // the fragment parser makes for an html element of an HTML document.
+        Gap(
+            "#547, a page without a body element has no document.body",
+            "(function () { var h = document.implementation.createHTMLDocument('').documentElement; h.innerHTML = '<p>x</p>'; " +
+                "return h.firstChild.localName !== 'head'; })()",
+            setOf("First set attribute is returned with mapped attribute set first"),
         ),
         Gap(
             "kitejs#71, an arrow function cannot take a rest parameter",
@@ -185,11 +206,22 @@ class WebPlatformTest {
     ).map { "dom/nodes/$it" }
 
     /**
+     * The tests of attributes of the DOM Standard: their names, namespaces and prefixes, `Attr`,
+     * `NamedNodeMap`, and the methods of `Element` and `Document` that read and set them (#545).
+     */
+    private val attributeFiles = listOf(
+        "attributes.html", "Attr-prefix.html", "Attr-prefix-xhtml.xhtml", "Document-createAttribute.html",
+        "Element-hasAttribute.html", "Element-hasAttributes.html", "Element-removeAttribute.html",
+        "Element-removeAttributeNS.html", "Element-setAttribute.html", "Element-setAttribute-crbug-1138487.html",
+        "Element-setAttributeNodeNS.html", "attributes-namednodemap.html", "name-validation.html",
+    ).map { "dom/nodes/$it" }
+
+    /**
      * The pages whose markup is part of the test, which run as the chapter's own document. The
      * others run their scripts in a chapter of their own, as an HTML page that leaves out `<body>`
      * has no `document.body` until #547.
      */
-    private val markupPages: Set<String> = selectorFiles.toSet()
+    private val markupPages: Set<String> = (selectorFiles + attributeFiles).toSet()
 
     /**
      * A page whose tests run in a frame it makes, as [document], the page the frame loads; [start]
@@ -345,7 +377,7 @@ class WebPlatformTest {
                         .let { "<script src=\"$it\"></script>" }
                 }
             }
-            return open(ScriptBooks.page(markup, files, html = !path.endsWith(".xht")))
+            return open(ScriptBooks.page(markup, files, html = !isXhtml(path)))
         }
         files["frame-before.js"] = "var harnessAsyncTest = async_test; async_test = function () {};"
         files += pageScripts(path, source)
@@ -358,8 +390,11 @@ class WebPlatformTest {
         val document = resource(frame.document)
         val scripts = files.keys.joinToString("") { "<script src=\"$it\"></script>" }
         val end = document.lastIndexOf("</body>")
-        return open(ScriptBooks.page(document.substring(0, end) + scripts + document.substring(end), files, html = !frame.document.endsWith(".xht")))
+        return open(ScriptBooks.page(document.substring(0, end) + scripts + document.substring(end), files, html = !isXhtml(frame.document)))
     }
+
+    /** Whether the page at [path] is served as XHTML, as web-platform-tests serves a `.xht` or `.xhtml` file. */
+    private fun isXhtml(path: String): Boolean = path.endsWith(".xht") || path.endsWith(".xhtml")
 
     /** Runs the file at [path], a query after it naming the variant. A page, a `.html` file, runs in an HTML chapter with its scripts. */
     private fun run(path: String): FileRun {
@@ -367,7 +402,7 @@ class WebPlatformTest {
         val variant = path.substringAfter('?', "")
         val name = file.substringAfterLast('/')
         val source = resource(file)
-        val page = file.endsWith(".html") || file.endsWith(".xht")
+        val page = file.endsWith(".html") || isXhtml(file)
         val scripts = linkedMapOf("harness.js" to resource("harness.js"), "data.js" to harnessData)
         if (variant.isNotEmpty()) scripts["variant.js"] = "Object.defineProperty(location, 'search', { value: '?$variant', configurable: true });"
         if (page) {
@@ -442,6 +477,9 @@ class WebPlatformTest {
 
     @Test
     fun the_selector_tests_pass_but_for_known_gaps() = check(selectorFiles, atLeast = 5_300)
+
+    @Test
+    fun the_attribute_tests_pass_but_for_known_gaps() = check(attributeFiles, atLeast = 120)
 
     private companion object {
         /** How long a chapter may wait on its timers in all, on its clock: past the harness's own ten seconds. */

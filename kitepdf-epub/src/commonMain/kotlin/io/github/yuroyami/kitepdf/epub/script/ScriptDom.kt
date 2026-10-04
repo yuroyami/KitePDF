@@ -4,6 +4,7 @@ import io.github.yuroyami.kitepdf.core.xml.KiteXmlNode
 import io.github.yuroyami.kitepdf.epub.HtmlParser
 import io.github.yuroyami.kitepdf.epub.css.Selector
 import io.github.yuroyami.kitepdf.epub.css.SelectorTree
+import io.github.yuroyami.kitepdf.epub.css.asciiLower
 
 /**
  * The live tree a chapter's scripts read and change (#41): a copy of the chapter's parse that
@@ -15,6 +16,11 @@ import io.github.yuroyami.kitepdf.epub.css.SelectorTree
  *
  * The tree has the comments of [commented], the chapter parsed again with them, which the layout's
  * tree drops, and a snapshot drops them again, so a layout never sees one (#544).
+ *
+ * Each element's attributes are a list of [Attribute], with the namespace, prefix and local name
+ * that the document's parser gives each, from the names [commented] keeps as written, and its map
+ * is what the layout reads, keyed as the layout's parser keys it: by the local name of what the
+ * markup writes, lowercased (#545).
  */
 internal class ScriptDom(
     source: KiteXmlNode.Element,
@@ -41,6 +47,20 @@ internal class ScriptDom(
     class Name(val namespace: String?, val prefix: String?, val localName: String)
 
     private val names = HashMap<KiteXmlNode.Element, Name>()
+
+    /**
+     * An attribute as the DOM has it (DOM Standard, 4.9.2): its [namespace], [prefix] and [localName],
+     * with the case its markup or a script gave them, which the layout's map does not keep (#545).
+     */
+    class Attribute(val namespace: String?, val prefix: String?, val localName: String, val value: String) {
+        val qualifiedName: String get() = if (prefix == null) localName else "$prefix:$localName"
+    }
+
+    /** The attributes of each element, in order, each list replaced and never changed. */
+    private val attributeLists = HashMap<KiteXmlNode.Element, List<Attribute>>()
+
+    /** The attributes of the elements of a parse as the markup writes them, until [nameTree] names them. */
+    private val written = HashMap<KiteXmlNode.Element, Map<String, String>>()
 
     /** Each element of the layout's tree, to its element here. */
     var fromLayout: Map<KiteXmlNode.Element, KiteXmlNode.Element> = emptyMap()
@@ -77,17 +97,169 @@ internal class ScriptDom(
         root = copy(source, null, from, to, link = true, commented = commented)
         fromLayout = from
         toLayout = to
-        for (c in root.children) if (c is KiteXmlNode.Element) nameTree(c, root)
+        for (c in root.children) if (c is KiteXmlNode.Element) nameTree(c, root, emptyMap(), relayout = false)
+        written.clear()
     }
 
     /** The name of [el]: the one it was made with, or else the one its place in the tree gives it. */
     fun nameOf(el: KiteXmlNode.Element): Name = names.getOrPut(el) { parsedName(el, el.parent) }
 
-    /** Names [el] and the elements under it as the parser names them, with [parent] above it. */
-    private fun nameTree(el: KiteXmlNode.Element, parent: KiteXmlNode.Element?) {
-        names[el] = parsedName(el, parent)
-        for (c in el.children) if (c is KiteXmlNode.Element) nameTree(c, el)
+    /**
+     * Names [el] and the elements under it, and their attributes as [written] has them, as the parser
+     * names them, with [parent] above it and the namespace prefixes of [scope] declared. Each element
+     * whose attributes are named takes the layout's map of them too when [relayout].
+     */
+    private fun nameTree(el: KiteXmlNode.Element, parent: KiteXmlNode.Element?, scope: Map<String, String>, relayout: Boolean) {
+        val raw = written.remove(el)
+        var inScope = scope
+        // An XML parser names an element by the declarations of its own attributes, and HTML's names
+        // the attributes of an SVG or a MathML element by the element's namespace.
+        if (raw != null && !html) {
+            inScope = declared(raw, scope)
+            attributeLists[el] = xmlAttributes(raw, inScope)
+        }
+        val name = parsedName(el, parent)
+        names[el] = name
+        if (raw != null && html) attributeLists[el] = htmlAttributes(raw, name.namespace)
+        if (raw != null && relayout) el.attrs = layoutAttributes(attributes(el))
+        for (c in el.children) if (c is KiteXmlNode.Element) nameTree(c, el, inScope, relayout)
     }
+
+    /** [scope] with the prefixes that the `xmlns:` attributes of [raw] declare, and without those they undeclare. */
+    private fun declared(raw: Map<String, String>, scope: Map<String, String>): Map<String, String> {
+        if (raw.keys.none { it.startsWith("xmlns:") }) return scope
+        val out = HashMap(scope)
+        for ((name, value) in raw) if (isDeclaration(name)) {
+            if (value.isEmpty()) out.remove(name.substring(6)) else out[name.substring(6)] = value
+        }
+        return out
+    }
+
+    /** The prefixes in scope at [context], as its `xmlns:` attributes and those of the elements above it declare them. */
+    private fun scopeAt(context: KiteXmlNode.Element?): Map<String, String> {
+        val chain = generateSequence(context) { it.parent }.takeWhile { !it.tag.startsWith('#') }.toList().asReversed()
+        val out = HashMap<String, String>()
+        for (e in chain) for (a in attributes(e)) if (a.namespace == XMLNS_NS && a.prefix == "xmlns") {
+            if (a.value.isEmpty()) out.remove(a.localName) else out[a.localName] = a.value
+        }
+        return out
+    }
+
+    /**
+     * The attributes of an element of an XML document whose markup writes [raw], with the prefixes of
+     * [scope], as Namespaces in XML names them: its declarations first, in the namespace of `xmlns`,
+     * as the parser hands them over apart, then the others in order, a prefixed one in the namespace
+     * its prefix is declared for. A name a namespace-aware parser would refuse, of a prefix that is
+     * not declared or of two colons, is salvaged as the whole local name of an attribute in no
+     * namespace, and of two with one namespace and local name the first is kept.
+     */
+    private fun xmlAttributes(raw: Map<String, String>, scope: Map<String, String>): List<Attribute> {
+        val out = ArrayList<Attribute>(raw.size)
+        for ((name, value) in raw) when {
+            name == "xmlns" -> out += Attribute(XMLNS_NS, null, name, value)
+            isDeclaration(name) -> out += Attribute(XMLNS_NS, "xmlns", name.substring(6), value)
+        }
+        for ((name, value) in raw) {
+            if (name == "xmlns" || isDeclaration(name)) continue
+            val colon = name.indexOf(':')
+            val prefix = name.takeIf { colon > 0 && colon < name.length - 1 && name.indexOf(':', colon + 1) < 0 }?.substring(0, colon)
+            val namespace = if (prefix == "xml") XML_NS else prefix?.let(scope::get)
+            val attribute = if (namespace == null) Attribute(null, null, name, value) else Attribute(namespace, prefix, name.substring(colon + 1), value)
+            if (out.none { it.namespace == attribute.namespace && it.localName == attribute.localName }) out += attribute
+        }
+        return out
+    }
+
+    /**
+     * The attributes of an element in [namespace] of an HTML document whose markup writes [raw], as
+     * HTML's parser names them (13.2.5.33 and 13.2.6.3): lowercased, the first of two with one name
+     * kept, and on an SVG or a MathML element with the case of SVG's and MathML's own names and the
+     * namespaces of the `xlink:`, `xml:` and `xmlns` attributes.
+     */
+    private fun htmlAttributes(raw: Map<String, String>, namespace: String?): List<Attribute> {
+        val out = ArrayList<Attribute>(raw.size)
+        val seen = HashSet<String>()
+        for ((written, value) in raw) {
+            val name = asciiLower(written)
+            if (!seen.add(name)) continue
+            out += when (namespace) {
+                SVG_NS -> foreignAttribute(SVG_ATTRIBUTE_CASE[name] ?: name, value)
+                MATHML_NS -> foreignAttribute(if (name == "definitionurl") "definitionURL" else name, value)
+                else -> Attribute(null, null, name, value)
+            }
+        }
+        return out
+    }
+
+    /** An attribute [name] of an SVG or a MathML element of an HTML document, adjusted as HTML's parser adjusts a foreign attribute. */
+    private fun foreignAttribute(name: String, value: String): Attribute = when (name) {
+        "xlink:actuate", "xlink:arcrole", "xlink:href", "xlink:role", "xlink:show", "xlink:title", "xlink:type" ->
+            Attribute(XLINK_NS, "xlink", name.substring(6), value)
+        "xml:lang", "xml:space" -> Attribute(XML_NS, "xml", name.substring(4), value)
+        "xmlns" -> Attribute(XMLNS_NS, null, name, value)
+        "xmlns:xlink" -> Attribute(XMLNS_NS, "xmlns", "xlink", value)
+        else -> Attribute(null, null, name, value)
+    }
+
+    /** Whether [name] declares a namespace prefix, as `xmlns:p` does. */
+    private fun isDeclaration(name: String): Boolean = name.length > 6 && name.startsWith("xmlns:") && name.indexOf(':', 6) < 0
+
+    /**
+     * The attributes of [el], in order. An element no parse or script named them for has those of its
+     * layout map, `xmlns` in its namespace and the others in none.
+     */
+    fun attributes(el: KiteXmlNode.Element): List<Attribute> = attributeLists.getOrPut(el) {
+        el.attrs.map { (name, value) -> if (name == "xmlns") Attribute(XMLNS_NS, null, name, value) else Attribute(null, null, name, value) }
+    }
+
+    /** The value of [el]'s attribute [localName] in [namespace], null for none, or null when it has none. */
+    fun attr(el: KiteXmlNode.Element, localName: String, namespace: String? = null): String? =
+        attributes(el).firstOrNull { it.namespace == namespace && it.localName == localName }?.value
+
+    /** The first attribute of [el] whose qualified name is [qualifiedName], or null (DOM Standard, 4.9). */
+    fun attrNamed(el: KiteXmlNode.Element, qualifiedName: String): Attribute? = attributes(el).firstOrNull { it.qualifiedName == qualifiedName }
+
+    /**
+     * Sets [el]'s attribute [localName] in [namespace] to [value]: one it has keeps its place, and its
+     * prefix unless [replace] puts the attribute of [prefix] in its place, and a new one goes last with
+     * [prefix] (DOM Standard, 4.9: set an attribute value, and set an attribute).
+     */
+    fun setAttr(
+        el: KiteXmlNode.Element,
+        localName: String,
+        value: String,
+        namespace: String? = null,
+        prefix: String? = null,
+        replace: Boolean = false,
+    ) {
+        val list = attributes(el)
+        val at = list.indexOfFirst { it.namespace == namespace && it.localName == localName }
+        val out = ArrayList(list)
+        if (at >= 0) out[at] = Attribute(namespace, if (replace) prefix else list[at].prefix, localName, value)
+        else out += Attribute(namespace, prefix, localName, value)
+        setAttributes(el, out)
+    }
+
+    /** Takes [el]'s attribute [localName] in [namespace] off, if it has one. */
+    fun removeAttr(el: KiteXmlNode.Element, localName: String, namespace: String? = null) {
+        val list = attributes(el)
+        val at = list.indexOfFirst { it.namespace == namespace && it.localName == localName }
+        if (at < 0) return
+        setAttributes(el, list.filterIndexed { i, _ -> i != at })
+    }
+
+    private fun setAttributes(el: KiteXmlNode.Element, list: List<Attribute>) {
+        attributeLists[el] = list
+        el.attrs = layoutAttributes(list)
+        changed()
+    }
+
+    /**
+     * [list] as the layout's parser would key it, by the local name of each qualified name, lowercased,
+     * the last of two with one key winning.
+     */
+    private fun layoutAttributes(list: List<Attribute>): Map<String, String> =
+        LinkedHashMap<String, String>(list.size).apply { for (a in list) put(a.qualifiedName.substringAfterLast(':').lowercase(), a.value) }
 
     /**
      * The name a parser gives [el] under [parent]. Its namespace is the one an `xmlns` attribute
@@ -98,7 +270,7 @@ internal class ScriptDom(
      */
     private fun parsedName(el: KiteXmlNode.Element, parent: KiteXmlNode.Element?): Name {
         val outer = parent?.takeIf { it !== root && it.tag != FRAGMENT && it !in documents }?.let(::nameOf)
-        val declared = if (html) null else el.attrs["xmlns"]
+        val declared = if (html) null else attr(el, "xmlns", XMLNS_NS)
         val namespace = when {
             declared != null -> declared.ifEmpty { null }
             el.tag == "svg" -> SVG_NS
@@ -107,7 +279,7 @@ internal class ScriptDom(
             outer.namespace == SVG_NS && (parent.tag == "foreignobject" || (html && (parent.tag == "desc" || parent.tag == "title"))) -> XHTML_NS
             outer.namespace == MATHML_NS && parent.tag in MATHML_TEXT && el.tag != "mglyph" && el.tag != "malignmark" -> XHTML_NS
             outer.namespace == MATHML_NS && parent.tag == "annotation-xml" &&
-                parent.attrs["encoding"]?.lowercase().let { it == "text/html" || it == "application/xhtml+xml" } -> XHTML_NS
+                attr(parent, "encoding")?.lowercase().let { it == "text/html" || it == "application/xhtml+xml" } -> XHTML_NS
             else -> outer.namespace
         }
         return Name(namespace, null, if (namespace == SVG_NS) SVG_TAG_CASE[el.tag] ?: el.tag else el.tag)
@@ -157,17 +329,6 @@ internal class ScriptDom(
                 if (text.isNotEmpty()) append(node, KiteXmlNode.Text(text))
             }
         }
-        changed()
-    }
-
-    fun setAttr(el: KiteXmlNode.Element, name: String, value: String) {
-        el.attrs = LinkedHashMap(el.attrs).apply { put(name, value) }
-        changed()
-    }
-
-    fun removeAttr(el: KiteXmlNode.Element, name: String) {
-        if (name !in el.attrs) return
-        el.attrs = LinkedHashMap(el.attrs).apply { remove(name) }
         changed()
     }
 
@@ -266,14 +427,17 @@ internal class ScriptDom(
         is KiteXmlNode.Element -> {
             val out = KiteXmlNode.Element(if (node === root) FRAGMENT else node.tag, node.attrs)
             fragments.add(out)
-            if (node !== root) names[out] = nameOf(node)
+            if (node !== root) {
+                names[out] = nameOf(node)
+                attributeLists[out] = attributes(node)
+            }
             if (deep) for (c in node.children) append(out, clone(c, true))
             out
         }
     }
 
     /** The first element whose `id` is [id], in tree order. */
-    fun byId(id: String): KiteXmlNode.Element? = find(root) { it.attrs["id"] == id }
+    fun byId(id: String): KiteXmlNode.Element? = find(root) { attr(it, "id") == id }
 
     private fun find(el: KiteXmlNode.Element, predicate: (KiteXmlNode.Element) -> Boolean): KiteXmlNode.Element? {
         for (c in el.children) if (c is KiteXmlNode.Element) {
@@ -343,10 +507,26 @@ internal class ScriptDom(
             return x.localName == y.localName && x.namespace == y.namespace
         }
 
-        override fun attribute(el: KiteXmlNode.Element, namespace: String?, local: String, lower: String, test: (String) -> Boolean): Boolean =
-            el.attrs[lower]?.let(test) ?: false
+        /**
+         * An HTML document compares a selector's name lowercased with the name of an HTML element's
+         * attribute, as HTML has it (4.16.2), and with that of another element's ignoring case, as
+         * Blink does; an XML document compares the two as they are.
+         */
+        override fun attribute(el: KiteXmlNode.Element, namespace: String?, local: String, lower: String, test: (String) -> Boolean): Boolean {
+            val ofHtml = html && nameOf(el).namespace == XHTML_NS
+            for (a in attributes(el)) {
+                if (namespace != null && (a.namespace ?: "") != namespace) continue
+                val same = when {
+                    !html -> a.localName == local
+                    ofHtml -> a.localName == lower
+                    else -> asciiLower(a.localName) == lower
+                }
+                if (same && test(a.value)) return true
+            }
+            return false
+        }
 
-        override fun attr(el: KiteXmlNode.Element, name: String): String? = el.attrs[name]
+        override fun attr(el: KiteXmlNode.Element, name: String): String? = this@ScriptDom.attr(el, name)
     }
 
     /** [node] as HTML: its children only, or the element itself too when [outer]. */
@@ -364,13 +544,22 @@ internal class ScriptDom(
             is KiteXmlNode.Comment -> out.append("<!--").append(node.text).append("-->")
             is KiteXmlNode.Element -> {
                 out.append('<').append(node.tag)
-                for ((k, v) in node.attrs) out.append(' ').append(k).append("=\"").append(escape(v, attribute = true)).append('"')
+                for (a in attributes(node)) out.append(' ').append(serializedName(a)).append("=\"").append(escape(a.value, attribute = true)).append('"')
                 out.append('>')
                 if (node.tag in VOID) return
                 for (c in node.children) serialize(c, out)
                 out.append("</").append(node.tag).append('>')
             }
         }
+    }
+
+    /** The name HTML's serializer writes for [a] (13.3): its local name, with the prefix of the namespace HTML knows it in. */
+    private fun serializedName(a: Attribute): String = when (a.namespace) {
+        null -> a.localName
+        XML_NS -> "xml:" + a.localName
+        XMLNS_NS -> if (a.localName == "xmlns") "xmlns" else "xmlns:" + a.localName
+        XLINK_NS -> "xlink:" + a.localName
+        else -> a.qualifiedName
     }
 
     /** Parses [html] and puts what it holds in place of [el]'s children. */
@@ -418,17 +607,25 @@ internal class ScriptDom(
         return at
     }
 
-    /** The nodes [html] holds, their elements named as the parser names them under [context]. */
+    /** The nodes [html] holds, their elements and attributes named as the parser names them under [context]. */
     private fun parse(html: String, context: KiteXmlNode.Element?): List<KiteXmlNode> {
-        val parsed = HtmlParser.parse(html, keepComments = true).children.toList()
+        val parsed = HtmlParser.parse(html, keepComments = true, keepNames = true).children.toList()
+        val scope = if (this.html) emptyMap() else scopeAt(context)
         for (c in parsed) {
             if (c is KiteXmlNode.Element) {
                 c.parent = null
-                nameTree(c, context)
+                recordWritten(c)
+                nameTree(c, context, scope, relayout = true)
             }
             registerTexts(c)
         }
         return parsed
+    }
+
+    /** Records the attributes of [el] and of the elements under it as a parse that keeps their names writes them. */
+    private fun recordWritten(el: KiteXmlNode.Element) {
+        written[el] = el.attrs
+        for (c in el.children) if (c is KiteXmlNode.Element) recordWritten(c)
     }
 
     /** Records the parent of every text node and comment under [node], which the parser does not keep. */
@@ -471,6 +668,7 @@ internal class ScriptDom(
         val out = KiteXmlNode.Element(el.tag, el.attrs)
         out.parent = parent
         if (link) { from[el] = out; to[out] = el } else { from[out] = el; to[el] = out }
+        if (link && commented != null) written[out] = commented.attrs
         fun add(child: KiteXmlNode) {
             out.children.add(child)
             if (link && child !is KiteXmlNode.Element) leafParents[child] = out
@@ -516,6 +714,9 @@ internal class ScriptDom(
         const val XHTML_NS = "http://www.w3.org/1999/xhtml"
         const val SVG_NS = "http://www.w3.org/2000/svg"
         const val MATHML_NS = "http://www.w3.org/1998/Math/MathML"
+        const val XML_NS = "http://www.w3.org/XML/1998/namespace"
+        const val XMLNS_NS = "http://www.w3.org/2000/xmlns/"
+        const val XLINK_NS = "http://www.w3.org/1999/xlink"
 
         /** The MathML elements whose content is HTML's, its text integration points. */
         private val MATHML_TEXT = setOf("mi", "mo", "mn", "ms", "mtext")
@@ -527,6 +728,18 @@ internal class ScriptDom(
             "feDistantLight", "feDropShadow", "feFlood", "feFuncA", "feFuncB", "feFuncG", "feFuncR", "feGaussianBlur", "feImage",
             "feMerge", "feMergeNode", "feMorphology", "feOffset", "fePointLight", "feSpecularLighting", "feSpotLight", "feTile",
             "feTurbulence", "foreignObject", "glyphRef", "linearGradient", "radialGradient", "textPath",
+        ).associateBy { it.lowercase() }
+
+        /** The names of SVG's attributes whose case HTML's parser restores, by their lowercased form (13.2.6.3). */
+        private val SVG_ATTRIBUTE_CASE = listOf(
+            "attributeName", "attributeType", "baseFrequency", "baseProfile", "calcMode", "clipPathUnits", "diffuseConstant",
+            "edgeMode", "filterUnits", "glyphRef", "gradientTransform", "gradientUnits", "kernelMatrix", "kernelUnitLength",
+            "keyPoints", "keySplines", "keyTimes", "lengthAdjust", "limitingConeAngle", "markerHeight", "markerUnits",
+            "markerWidth", "maskContentUnits", "maskUnits", "numOctaves", "pathLength", "patternContentUnits", "patternTransform",
+            "patternUnits", "pointsAtX", "pointsAtY", "pointsAtZ", "preserveAlpha", "preserveAspectRatio", "primitiveUnits", "refX",
+            "refY", "repeatCount", "repeatDur", "requiredExtensions", "requiredFeatures", "specularConstant", "specularExponent",
+            "spreadMethod", "startOffset", "stdDeviation", "stitchTiles", "surfaceScale", "systemLanguage", "tableValues", "targetX",
+            "targetY", "textLength", "viewBox", "viewTarget", "xChannelSelector", "yChannelSelector", "zoomAndPan",
         ).associateBy { it.lowercase() }
 
         private val VOID = setOf("area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "param", "source", "track", "wbr")

@@ -56,8 +56,9 @@ function validLocalName(name, what) {
   }
   return name;
 }
-/* The namespace, prefix and local name of [qualifiedName] in [ns], by validate and extract of the DOM Standard, 1.4. */
-function extractName(ns, qualifiedName, what) {
+/* The namespace, prefix and local name of [qualifiedName] in [ns], by validate and extract of the DOM
+   Standard, 1.4, for an attribute when [attribute], whose local name is any but a few characters. */
+function extractName(ns, qualifiedName, what, attribute) {
   ns = ns == null || ns === '' ? null : domString(ns);
   var prefix = null, local = qualifiedName, colon = StringIndexOf(qualifiedName, ':');
   if (colon >= 0) {
@@ -67,7 +68,7 @@ function extractName(ns, qualifiedName, what) {
       throw new DOMException(what + ": The qualified name provided ('" + qualifiedName + "') contains the invalid prefix '" + prefix + "'.", 'InvalidCharacterError');
     }
   }
-  validLocalName(local, what);
+  if (attribute) validAttributeName(local, what); else validLocalName(local, what);
   function namespaceError(message) { throw new DOMException(what + ': ' + message, 'NamespaceError'); }
   if (prefix !== null && ns === null) namespaceError("The namespace URI provided ('') is not valid for the qualified name provided ('" + qualifiedName + "').");
   if (prefix === 'xml' && ns !== XML_NS) namespaceError("The prefix 'xml' is only for the namespace '" + XML_NS + "'.");
@@ -306,58 +307,132 @@ def(Element.prototype, 'tagName', function () { return tagNameOf(idOf(this)); })
 def(Element.prototype, 'localName', function () { return nameOf(idOf(this)).local; });
 def(Element.prototype, 'namespaceURI', function () { return nameOf(idOf(this)).ns; });
 def(Element.prototype, 'prefix', function () { return nameOf(idOf(this)).prefix; });
-/* The name of an attribute as the host keeps it: lowercased, as the parser lowercases it. */
-function attrName(name) { return StringToLowerCase(domString(name)); }
-function localPart(name) { return RegExpReplace(RE_PREFIX, domString(name), ''); }
-function getAttr(el, name) { var v = K.attr(idOf(el), attrName(name)); return v == null ? null : v; }
-function setAttr(el, name, value) {
-  var id = idOf(el), n = attrName(name);
-  settle(el);
-  K.setAttr(id, n, domString(value));
-  attributeChanged(el, n, true);
+/* ---- attributes, of the DOM Standard, 4.9 (#545) ----
+   An attribute has a namespace, a prefix and a local name, which the host keeps with the case the
+   document's parser or a script gave them. The host answers an attribute by its namespace and
+   local name, '' standing for no namespace and no prefix, and the first by its qualified name, as
+   [namespace, prefix, local name, value]. */
+/* [ns] as the host takes a namespace: '' for none, which the empty string means too. */
+function nsKey(ns) { return ns == null ? '' : domString(ns); }
+/* [name] as the methods that take a qualified name compare it: lowercased on an HTML element of an HTML document. */
+function attrQualifiedName(el, name) {
+  var n = domString(name), id = idOf(el);
+  return namespaceOfId(id) === XHTML_NS && isHtmlDocument(ownerDocId(id)) ? asciiLowerCase(n) : n;
 }
-function removeAttr(el, name) {
-  var id = idOf(el), n = attrName(name);
-  if (K.attr(id, n) == null) return;
-  settle(el);
-  K.removeAttr(id, n);
-  attributeChanged(el, n, false);
+/* [name], or an InvalidCharacterError when it is no valid attribute name. */
+function validAttributeName(name, what) {
+  if (!RegExpTest(RE_ATTRIBUTE_NAME, name)) throw new DOMException(what + ": '" + name + "' is not a valid attribute name.", 'InvalidCharacterError');
+  return name;
 }
-Element.prototype.getAttribute = function (name) { return getAttr(this, name); };
-Element.prototype.getAttributeNS = function (ns, name) { return getAttr(this, localPart(name)); };
-Element.prototype.setAttribute = function (name, value) {
-  needArgs(arguments, 2, "Failed to execute 'setAttribute' on 'Element'");
-  var n = domString(name);
-  if (!RegExpTest(RE_ATTRIBUTE_NAME, n)) {
-    throw new DOMException("Failed to execute 'setAttribute' on 'Element': '" + n + "' is not a valid attribute name.", 'InvalidCharacterError');
-  }
-  setAttr(this, n, value);
+/* The first attribute of [el] whose qualified name is [name], or null. */
+function attrNamed(el, name) { return K.attrNamed(idOf(el), attrQualifiedName(el, name)); }
+/* The attribute of [el] in [ns] of the local name [local], or null. */
+function attrEntry(el, ns, local) {
+  var list = K.attrList(idOf(el));
+  for (var i = 0; i < list.length; i += 4) if (list[i] === ns && list[i + 2] === local) return [ns, list[i + 1], local, list[i + 3]];
+  return null;
+}
+function getAttr(el, name) { var a = attrNamed(el, name); return a == null ? null : a[3]; }
+/* Sets [el]'s attribute [local] in no namespace to [value], as HTML's reflection does. */
+function setAttr(el, local, value) {
+  settle(el);
+  K.setAttr(idOf(el), local, domString(value));
+  attributeChanged(el, local, true);
+}
+/* Sets [el]'s attribute [local] in [ns]: one it has keeps its prefix unless [replace], and a new one has [prefix]. */
+function setAttrNS(el, ns, prefix, local, value, replace) {
+  settle(el);
+  K.setAttrNS(idOf(el), ns, prefix, local, value, !!replace);
+  if (ns === '') attributeChanged(el, local, true);
+}
+function removeAttr(el, local) { removeAttrNS(el, '', local); }
+/* Takes [el]'s attribute [local] in [ns] off, and its Attr with it, which keeps its value. */
+function removeAttrNS(el, ns, local) {
+  var id = idOf(el);
+  if (K.attrNS(id, ns, local) == null) return;
+  settle(el);
+  detachCachedAttr(el, ns, local);
+  K.removeAttrNS(id, ns, local);
+  if (ns === '') attributeChanged(el, local, false);
+}
+Element.prototype.getAttribute = function (qualifiedName) {
+  needArgs(arguments, 1, "Failed to execute 'getAttribute' on 'Element'");
+  return getAttr(this, qualifiedName);
 };
-Element.prototype.setAttributeNS = function (ns, name, value) { setAttr(this, localPart(name), value); };
-Element.prototype.removeAttribute = function (name) { removeAttr(this, name); };
-Element.prototype.removeAttributeNS = function (ns, name) { removeAttr(this, localPart(name)); };
-Element.prototype.hasAttribute = function (name) { return getAttr(this, name) !== null; };
-Element.prototype.hasAttributeNS = function (ns, name) { return getAttr(this, localPart(name)) !== null; };
+Element.prototype.getAttributeNS = function (namespace, localName) {
+  needArgs(arguments, 2, "Failed to execute 'getAttributeNS' on 'Element'");
+  var v = K.attrNS(idOf(this), nsKey(namespace), domString(localName));
+  return v == null ? null : v;
+};
+Element.prototype.setAttribute = function (qualifiedName, value) {
+  var what = "Failed to execute 'setAttribute' on 'Element'";
+  needArgs(arguments, 2, what);
+  var n = attrQualifiedName(this, validAttributeName(domString(qualifiedName), what)), v = domString(value);
+  var a = K.attrNamed(idOf(this), n);
+  if (a == null) setAttr(this, n, v); else setAttrNS(this, a[0], a[1], a[2], v);
+};
+Element.prototype.setAttributeNS = function (namespace, qualifiedName, value) {
+  var what = "Failed to execute 'setAttributeNS' on 'Element'";
+  needArgs(arguments, 3, what);
+  var n = extractName(namespace, domString(qualifiedName), what, true);
+  setAttrNS(this, nsKey(n.ns), n.prefix === null ? '' : n.prefix, n.local, domString(value));
+};
+Element.prototype.removeAttribute = function (qualifiedName) {
+  needArgs(arguments, 1, "Failed to execute 'removeAttribute' on 'Element'");
+  var a = attrNamed(this, qualifiedName);
+  if (a != null) removeAttrNS(this, a[0], a[2]);
+};
+Element.prototype.removeAttributeNS = function (namespace, localName) {
+  needArgs(arguments, 2, "Failed to execute 'removeAttributeNS' on 'Element'");
+  removeAttrNS(this, nsKey(namespace), domString(localName));
+};
+Element.prototype.hasAttribute = function (qualifiedName) {
+  needArgs(arguments, 1, "Failed to execute 'hasAttribute' on 'Element'");
+  return attrNamed(this, qualifiedName) != null;
+};
+Element.prototype.hasAttributeNS = function (namespace, localName) {
+  needArgs(arguments, 2, "Failed to execute 'hasAttributeNS' on 'Element'");
+  return K.attrNS(idOf(this), nsKey(namespace), domString(localName)) != null;
+};
 Element.prototype.hasAttributes = function () { return K.attrNames(idOf(this)).length > 0; };
 Element.prototype.getAttributeNames = function () { return listSlice(K.attrNames(idOf(this))); };
-Element.prototype.toggleAttribute = function (name, force) {
-  var has = getAttr(this, name) !== null;
-  var want = force === undefined ? !has : !!force;
-  if (want && !has) setAttr(this, name, '');
-  if (!want && has) removeAttr(this, name);
-  return want;
+Element.prototype.toggleAttribute = function (qualifiedName, force) {
+  var what = "Failed to execute 'toggleAttribute' on 'Element'";
+  needArgs(arguments, 1, what);
+  var n = attrQualifiedName(this, validAttributeName(domString(qualifiedName), what)), a = K.attrNamed(idOf(this), n);
+  if (a == null) {
+    if (force === undefined || force) { setAttr(this, n, ''); return true; }
+    return false;
+  }
+  if (force === undefined || !force) { removeAttrNS(this, a[0], a[2]); return false; }
+  return true;
 };
 def(Element.prototype, 'attributes', function () { idOf(this); return attributesOf(this); });
-Element.prototype.getAttributeNode = function (name) { return namedAttr(wrap(idOf(this)), name); };
-Element.prototype.getAttributeNodeNS = function (ns, name) { return namedAttr(wrap(idOf(this)), localPart(name)); };
-Element.prototype.setAttributeNode = function (attr) { return setAttrNode(wrap(idOf(this)), attr); };
-Element.prototype.setAttributeNodeNS = Element.prototype.setAttributeNode;
+Element.prototype.getAttributeNode = function (qualifiedName) {
+  needArgs(arguments, 1, "Failed to execute 'getAttributeNode' on 'Element'");
+  return namedAttr(wrap(idOf(this)), qualifiedName);
+};
+Element.prototype.getAttributeNodeNS = function (namespace, localName) {
+  needArgs(arguments, 2, "Failed to execute 'getAttributeNodeNS' on 'Element'");
+  var el = wrap(idOf(this)), a = attrEntry(el, nsKey(namespace), domString(localName));
+  return a == null ? null : attrNode(el, a);
+};
+Element.prototype.setAttributeNode = function (attr) {
+  var what = "Failed to execute 'setAttributeNode' on 'Element'";
+  needArgs(arguments, 1, what);
+  return setAttrNode(wrap(idOf(this)), attrArg(attr, what), what);
+};
+Element.prototype.setAttributeNodeNS = function (attr) {
+  var what = "Failed to execute 'setAttributeNodeNS' on 'Element'";
+  needArgs(arguments, 1, what);
+  return setAttrNode(wrap(idOf(this)), attrArg(attr, what), what);
+};
 Element.prototype.removeAttributeNode = function (attr) {
-  var el = wrap(idOf(this)), s = attrOfNode(attr);
-  if (s.owner !== el) throw new DOMException("Failed to execute 'removeAttributeNode' on 'Element': The node provided is owned by another element.", 'NotFoundError');
-  var name = s.name;
-  detachAttr(attr);
-  removeAttr(el, name);
+  var what = "Failed to execute 'removeAttributeNode' on 'Element'";
+  needArgs(arguments, 1, what);
+  var el = wrap(idOf(this)), s = attrOfNode(attrArg(attr, what));
+  if (s.owner !== el) throw new DOMException(what + ': The node provided is owned by another element.', 'NotFoundError');
+  removeAttrNS(el, s.ns, s.local);
   return attr;
 };
 /* The IDL attribute [prop] that reflects the content attribute [attr] as a string. */
@@ -875,7 +950,8 @@ function tokenList(el, attr, supported) {
 
 /* ---- Attr and NamedNodeMap, of the DOM Standard, 4.9.1 and 4.9.2 ----
    An attribute of an element is one Attr while it is there; one that was taken off, or made by
-   createAttribute, keeps its name and value for itself. */
+   createAttribute, keeps its name and value for itself. An Attr keeps its namespace and prefix as
+   the host does, '' for none (#545). */
 var attrs = new WeakMap();
 var Attr = abstractInterface('Attr', Node);
 function attrOfNode(a) {
@@ -883,46 +959,56 @@ function attrOfNode(a) {
   if (s === undefined) throw new TypeError('Illegal invocation');
   return s;
 }
-function newAttr(name, value, owner) {
-  var a = ObjectCreate(Attr.prototype);
-  WeakMapSet(attrs, a, { __proto__: null, name: name, value: value, owner: owner });
+/* [a] as an argument of the type Attr, or a TypeError. */
+function attrArg(a, what) {
+  if (a === null || typeof a !== 'object' || WeakMapGet(attrs, a) === undefined) throw new TypeError(what + ": parameter 1 is not of type 'Attr'.");
   return a;
 }
-/* The Attr of [el]'s attribute [name], which it has. */
+function newAttr(ns, prefix, local, value, owner) {
+  var a = ObjectCreate(Attr.prototype);
+  WeakMapSet(attrs, a, { __proto__: null, ns: ns, prefix: prefix, local: local, value: value, owner: owner });
+  return a;
+}
+function attrQualified(s) { return s.prefix === '' ? s.local : s.prefix + ':' + s.local; }
+/* The Attr of [el]'s attribute [entry], as the host answers one, which it has. */
 var attrNodes = new WeakMap();
 function attrNodeCache(el) {
   var cache = WeakMapGet(attrNodes, el);
   if (cache === undefined) { cache = ObjectCreate(null); WeakMapSet(attrNodes, el, cache); }
   return cache;
 }
-function attrNode(el, name) {
-  var cache = attrNodeCache(el);
-  var a = cache[name];
-  if (a && attrOfNode(a).owner === el) return a;
-  return (cache[name] = newAttr(name, null, el));
+function attrNode(el, entry) {
+  var cache = attrNodeCache(el), key = entry[0] + '\u0000' + entry[2], a = cache[key];
+  if (a && attrOfNode(a).owner === el) { attrOfNode(a).prefix = entry[1]; return a; }
+  return (cache[key] = newAttr(entry[0], entry[1], entry[2], null, el));
 }
-function attrValue(s) { if (s.owner === null) return s.value; var v = K.attr(s.owner.__id, s.name); return v == null ? s.value || '' : v; }
-/* Takes [a] off its element, which keeps no attribute of its name. */
+function attrValue(s) { if (s.owner === null) return s.value; var v = K.attrNS(s.owner.__id, s.ns, s.local); return v == null ? s.value || '' : v; }
+/* Takes [a] off its element, keeping its value. */
 function detachAttr(a) {
   var s = attrOfNode(a);
   if (s.owner === null) return;
   s.value = attrValue(s);
-  var cache = attrNodeCache(s.owner);
-  if (cache[s.name] === a) cache[s.name] = undefined;
+  var cache = attrNodeCache(s.owner), key = s.ns + '\u0000' + s.local;
+  if (cache[key] === a) cache[key] = undefined;
   s.owner = null;
 }
-def(Attr.prototype, 'name', function () { return attrOfNode(this).name; });
-def(Attr.prototype, 'localName', function () { return attrOfNode(this).name; });
-def(Attr.prototype, 'nodeName', function () { return attrOfNode(this).name; });
-def(Attr.prototype, 'namespaceURI', function () { attrOfNode(this); return null; });
-def(Attr.prototype, 'prefix', function () { attrOfNode(this); return null; });
+/* Takes the Attr of [el]'s attribute [local] in [ns] off, if one was made, before the attribute goes. */
+function detachCachedAttr(el, ns, local) {
+  var cache = WeakMapGet(attrNodes, el), a = cache === undefined ? undefined : cache[ns + '\u0000' + local];
+  if (a) detachAttr(a);
+}
+def(Attr.prototype, 'name', function () { return attrQualified(attrOfNode(this)); });
+def(Attr.prototype, 'localName', function () { return attrOfNode(this).local; });
+def(Attr.prototype, 'nodeName', function () { return attrQualified(attrOfNode(this)); });
+def(Attr.prototype, 'namespaceURI', function () { var ns = attrOfNode(this).ns; return ns === '' ? null : ns; });
+def(Attr.prototype, 'prefix', function () { var p = attrOfNode(this).prefix; return p === '' ? null : p; });
 def(Attr.prototype, 'ownerElement', function () { return attrOfNode(this).owner; });
 def(Attr.prototype, 'specified', function () { attrOfNode(this); return true; });
 def(Attr.prototype, 'nodeType', function () { attrOfNode(this); return 2; });
 function attrText(name) {
   def(Attr.prototype, name, function () { return attrValue(attrOfNode(this)); }, function (v) {
     var s = attrOfNode(this), value = v === null && name !== 'value' ? '' : domString(v);
-    if (s.owner === null) s.value = value; else setAttr(s.owner, s.name, value);
+    if (s.owner === null) s.value = value; else setAttrNS(s.owner, s.ns, s.prefix, s.local, value);
   });
 }
 attrText('value'); attrText('nodeValue'); attrText('textContent');
@@ -936,7 +1022,7 @@ def(Attr.prototype, 'previousSibling', function () { attrOfNode(this); return nu
 def(Attr.prototype, 'nextSibling', function () { attrOfNode(this); return null; });
 def(Attr.prototype, 'isConnected', function () { var s = attrOfNode(this); return s.owner !== null && K.connected(s.owner.__id); });
 Attr.prototype.hasChildNodes = function () { attrOfNode(this); return false; };
-Attr.prototype.cloneNode = function () { var s = attrOfNode(this); return newAttr(s.name, attrValue(s), null); };
+Attr.prototype.cloneNode = function () { var s = attrOfNode(this); return newAttr(s.ns, s.prefix, s.local, attrValue(s), null); };
 Attr.prototype.isSameNode = function (other) { attrOfNode(this); return this === other; };
 Attr.prototype.contains = function (other) { attrOfNode(this); return this === other; };
 Attr.prototype.getRootNode = function () { attrOfNode(this); return this; };
@@ -950,43 +1036,86 @@ function mapOwner(map) {
   if (s.owner === null) throw new TypeError('Illegal invocation');
   return s.owner;
 }
-/* The Attr of [el]'s attribute [name], or null when it has none of that name. */
-function namedAttr(el, name) { var n = attrName(name); return K.attr(idOf(el), n) == null ? null : attrNode(el, n); }
-/* Takes [el]'s attribute [name] off, as removeNamedItem does, and answers its Attr. */
-function removeNamedAttr(el, name) {
-  var n = attrName(name);
-  if (K.attr(idOf(el), n) == null) throw new DOMException("Failed to execute 'removeNamedItem' on 'NamedNodeMap': No item with name '" + n + "' was found.", 'NotFoundError');
-  var a = attrNode(el, n);
-  detachAttr(a);
-  removeAttr(el, n);
+/* The Attr of [el]'s first attribute of the qualified name [name], or null when it has none. */
+function namedAttr(el, name) { var a = attrNamed(el, name); return a == null ? null : attrNode(el, a); }
+/* Takes the attribute [entry] of [el] off, as removeNamedItem and removeNamedItemNS do, and answers its Attr. */
+function removeAttrEntry(el, entry) {
+  var a = attrNode(el, entry);
+  removeAttrNS(el, entry[0], entry[2]);
   return a;
 }
-NamedNodeMap.prototype.getNamedItem = function (name) { return namedAttr(mapOwner(this), name); };
-NamedNodeMap.prototype.getNamedItemNS = function (ns, localName) { return namedAttr(mapOwner(this), localName); };
-NamedNodeMap.prototype.setNamedItem = function (attr) { return setAttrNode(mapOwner(this), attr); };
-NamedNodeMap.prototype.setNamedItemNS = NamedNodeMap.prototype.setNamedItem;
-NamedNodeMap.prototype.removeNamedItem = function (name) { return removeNamedAttr(mapOwner(this), name); };
-NamedNodeMap.prototype.removeNamedItemNS = function (ns, localName) { return removeNamedAttr(mapOwner(this), localName); };
+NamedNodeMap.prototype.getNamedItem = function (qualifiedName) {
+  needArgs(arguments, 1, "Failed to execute 'getNamedItem' on 'NamedNodeMap'");
+  return namedAttr(mapOwner(this), qualifiedName);
+};
+NamedNodeMap.prototype.getNamedItemNS = function (namespace, localName) {
+  needArgs(arguments, 2, "Failed to execute 'getNamedItemNS' on 'NamedNodeMap'");
+  var el = mapOwner(this), a = attrEntry(el, nsKey(namespace), domString(localName));
+  return a == null ? null : attrNode(el, a);
+};
+NamedNodeMap.prototype.setNamedItem = function (attr) {
+  var what = "Failed to execute 'setNamedItem' on 'NamedNodeMap'";
+  needArgs(arguments, 1, what);
+  return setAttrNode(mapOwner(this), attrArg(attr, what), what);
+};
+NamedNodeMap.prototype.setNamedItemNS = function (attr) {
+  var what = "Failed to execute 'setNamedItemNS' on 'NamedNodeMap'";
+  needArgs(arguments, 1, what);
+  return setAttrNode(mapOwner(this), attrArg(attr, what), what);
+};
+NamedNodeMap.prototype.removeNamedItem = function (qualifiedName) {
+  var what = "Failed to execute 'removeNamedItem' on 'NamedNodeMap'";
+  needArgs(arguments, 1, what);
+  var el = mapOwner(this), a = attrNamed(el, qualifiedName);
+  if (a == null) throw new DOMException(what + ": No item with name '" + domString(qualifiedName) + "' was found.", 'NotFoundError');
+  return removeAttrEntry(el, a);
+};
+NamedNodeMap.prototype.removeNamedItemNS = function (namespace, localName) {
+  var what = "Failed to execute 'removeNamedItemNS' on 'NamedNodeMap'";
+  needArgs(arguments, 2, what);
+  var el = mapOwner(this), ns = nsKey(namespace), local = domString(localName), a = attrEntry(el, ns, local);
+  if (a == null) throw new DOMException(what + ": No item with namespace '" + ns + "' and local name '" + local + "' was found.", 'NotFoundError');
+  return removeAttrEntry(el, a);
+};
 iterableList(NamedNodeMap.prototype, false);
 defineInterface(NamedNodeMap, 'NamedNodeMap');
-/* Sets the attribute [attr] stands for on [el], and answers the Attr it replaced, or null. */
-function setAttrNode(el, attr) {
+/* Sets the attribute [attr] stands for on [el], in place of the one of its namespace and local name,
+   and answers the Attr it replaced, or null (DOM Standard, 4.9: set an attribute). */
+function setAttrNode(el, attr, what) {
   var s = attrOfNode(attr);
-  if (s.owner !== null && s.owner !== el) throw new DOMException("Failed to execute 'setAttributeNode' on 'Element': The node provided is an attribute node that is already an attribute of another Element; attribute nodes must be explicitly cloned.", 'InUseAttributeError');
-  if (s.owner === el) return attr;
-  var old = K.attr(idOf(el), s.name) == null ? null : attrNode(el, s.name);
+  if (s.owner !== null && s.owner !== el) throw new DOMException(what + ': The node provided is an attribute node that is already an attribute of another Element; attribute nodes must be explicitly cloned.', 'InUseAttributeError');
+  var entry = attrEntry(el, s.ns, s.local), old = entry == null ? null : attrNode(el, entry);
+  if (old === attr) return attr;
+  var value = attrValue(s);
   if (old !== null) detachAttr(old);
-  setAttr(el, s.name, s.value || '');
-  attrNodeCache(el)[s.name] = attr;
+  setAttrNS(el, s.ns, s.prefix, s.local, value, true);
+  attrNodeCache(el)[s.ns + '\u0000' + s.local] = attr;
   s.owner = el;
   return old;
 }
+/* The attributes of [el], as the host lists them, each [namespace, prefix, local name, value]. */
+function attrEntries(el) {
+  var list = K.attrList(el.__id), out = [];
+  for (var i = 0; i < list.length; i += 4) ArrayPush(out, [list[i], list[i + 1], list[i + 2], list[i + 3]]);
+  return out;
+}
+/* The names of the named properties of [el]'s NamedNodeMap (DOM Standard, 4.9.1): the qualified names of
+   [entries], once each, less those with an uppercase ASCII letter on an HTML element of an HTML document. */
+function attrPropertyNames(el, entries) {
+  var id = el.__id, lower = namespaceOfId(id) === XHTML_NS && isHtmlDocument(ownerDocId(id)), out = [];
+  for (var i = 0; i < entries.length; i++) {
+    var e = entries[i], q = e[1] === '' ? e[2] : e[1] + ':' + e[2];
+    if (lower && RegExpTest(RE_ASCII_UPPER, q)) continue;
+    if (ArrayIndexOf(out, q) < 0) ArrayPush(out, q);
+  }
+  return out;
+}
 function attributesOf(el) {
   return cachedList(el, 'attributes', function () {
-    var map = makeList(NamedNodeMap.prototype, LIVE, function () { return listSlice(K.attrNames(el.__id)); },
-      function (name) { return attrNode(el, name); },
-      function (names, key) { return ArrayIndexOf(names, key) >= 0 ? attrNode(el, key) : undefined; },
-      function (names) { return listSlice(names); });
+    var map = makeList(NamedNodeMap.prototype, LIVE, function () { return attrEntries(el); },
+      function (entry) { return attrNode(el, entry); },
+      function (entries, key) { return ArrayIndexOf(attrPropertyNames(el, entries), key) >= 0 ? namedAttr(el, key) : undefined; },
+      function (entries) { return attrPropertyNames(el, entries); });
     WeakMapGet(lists, map).owner = el;
     return map;
   });

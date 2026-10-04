@@ -116,4 +116,16 @@ class KiteXmlTest {
         )
         assertEquals("#a <b> c", KiteXml.parse("<!--a <b> c", keepComments = true).children.joinToString { "#" + (it as KiteXmlNode.Comment).text })
     }
+
+    @Test
+    fun attribute_names_are_kept_as_written_only_when_asked_for() {
+        val markup = "<svg:svg xlink:href=\"a\" viewBox=\"0 0 1 1\" ID=\"x\" id=\"y\" id=\"z\"/>"
+        val plain = KiteXml.tokenize(markup).single() as KiteXmlToken.Open
+        assertEquals("svg", plain.name)
+        assertEquals(listOf("href" to "a", "viewbox" to "0 0 1 1", "id" to "z"), plain.attrs.toList())
+        // The tag name loses its prefix and case either way, and of two attributes with one name the first wins.
+        val kept = KiteXml.tokenize(markup, keepNames = true).single() as KiteXmlToken.Open
+        assertEquals("svg", kept.name)
+        assertEquals(listOf("xlink:href" to "a", "viewBox" to "0 0 1 1", "ID" to "x", "id" to "y"), kept.attrs.toList())
+    }
 }
