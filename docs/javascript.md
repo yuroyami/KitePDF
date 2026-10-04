@@ -188,6 +188,15 @@ one on JavaScript and WebAssembly, where every engine shares the page's one thre
 more closes the engine of the chapter used least recently, as a reading system unloads the
 chapters the reader left. That chapter keeps what its scripts made of it, and when it opens
 again its scripts start over from its markup, as a page does when it loads again.
+`EpubScriptSession.unloadChapters()` unloads them all at once.
+
+On JavaScript and WebAssembly the runners of every book and form take turns on that one thread
+too ([#553](https://github.com/yuroyami/KitePDF/issues/553)), so an app may show two scripted
+documents at once: a runner that needs an engine closes the one another runner has open, unless
+a script of that runner is running. A book's runner unloads its chapters. A `PdfScriptRunner`
+opens its engine again at its next script and runs the document's own scripts again first, since
+they define what its fields' scripts call, so its fields keep their values and what its scripts
+kept in variables of their own starts over.
 
 They see a DOM over the chapter: `document` with `getElementById`, `querySelector`,
 `querySelectorAll` and the other finders, `createElement` and fragments; nodes and elements with

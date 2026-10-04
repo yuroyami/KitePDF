@@ -32,7 +32,12 @@ import io.github.yuroyami.kitepdf.core.script.KiteScriptException
  *
  * A runner can be called from any thread. A KiteJS engine belongs to the thread that opened it, so
  * the runner opens its engine on a thread of its own and runs every call there, one at a time and
- * in order. [close] stops that thread. The callbacks below run on it too.
+ * in order. [close] stops that thread. The callbacks below run on it too. JavaScript and
+ * WebAssembly have one thread, which holds one open engine, so there the runners of every
+ * document take turns (#553): another runner that needs the thread closes this one's engine, and
+ * this runner's next script opens it again and runs the document's own scripts again first, since
+ * they define what its fields' scripts call. The fields keep their values; what the scripts kept
+ * in variables of their own starts over.
  *
  * Scripts are untrusted input, so [policy] decides whether they run at all and how long they may
  * take, and anything that reaches outside the document arrives at [onRequest] for the host to
@@ -66,18 +71,14 @@ public class PdfScriptRunner(
     engine: KiteScriptEngine? = null,
 ) : io.github.yuroyami.kitepdf.PdfScriptHandler, AutoCloseable {
 
-    /**
-     * The engine, opened when the first script runs rather than when the runner is made, and
-     * always on [scriptThread].
-     */
+    /** The caller's engine, when it gave one. */
     private val engineSource = engine
-    private val ownEngine: KiteScriptEngine by lazy {
-        engineSource ?: KiteJsScriptEngine(
-            instructionBudget = policy.instructionBudget,
-            deadline = { deadlinePassed() },
-            clock = clock,
-        )
-    }
+
+    /**
+     * The engine while it is open: opened when the first script runs rather than when the runner
+     * is made, and always on [scriptThread].
+     */
+    private var openEngine: KiteScriptEngine? = null
 
     /** The thread the runner's own engine lives on, started by the first call (#355). */
     private val scriptThread = lazy { startScriptThread() }
@@ -89,10 +90,31 @@ public class PdfScriptRunner(
     /** True once the document's own scripts ran, which happens once per runner (#365). */
     private var documentOpenRan = false
 
+    /** How many calls of this runner the script thread is inside, so its engine stays open while a script runs. */
+    private var busy = 0
+
+    /** Closes the engine when another runner opens one on the thread they share; the next script opens it again. */
+    private val engineUser = EngineUser {
+        if (busy > 0) return@EngineUser false
+        openEngine?.let { engine ->
+            openEngine = null
+            runCatching { engine.close() }
+        }
+        true
+    }
+
     /** Runs [block] on the thread the engine belongs to, and waits for it. */
     private fun <T> onScriptThread(block: () -> T): T {
         check(!closed) { "the script runner is closed" }
-        return if (engineSource != null) block() else scriptThread.value.call(block)
+        val counted = {
+            busy++
+            try {
+                block()
+            } finally {
+                busy--
+            }
+        }
+        return if (engineSource != null) counted() else scriptThread.value.call(counted)
     }
 
     private val host = PdfScriptHost(
@@ -120,7 +142,7 @@ public class PdfScriptRunner(
      */
     public val asmReports: List<String>
         get() = onScriptThread {
-            if (!started) emptyList() else (ownEngine as? KiteJsScriptEngine)?.asmReports.orEmpty()
+            (openEngine as? KiteJsScriptEngine)?.asmReports.orEmpty()
         }
 
     private val failureList = ArrayList<KiteScriptException>()
@@ -133,7 +155,11 @@ public class PdfScriptRunner(
         failureList.add(failure)
         failureCopy = failureList.toList()
     }
+    /** True once an engine opened, so timers may be waiting and a closed engine is opened again. */
     private var started = false
+
+    /** True once the document's own scripts ran, so an engine opened again runs them again. */
+    private var documentScriptsRan = false
     private var eventStartedAt: Long = 0
     private var documentSpent: Long = 0
 
@@ -156,13 +182,35 @@ public class PdfScriptRunner(
             host.fileName = value
         }
 
-    private fun prepare() {
-        if (started) return
+    /**
+     * Opens the engine and gives it the Acrobat API, unless it is open. False when it would not
+     * open, which is recorded, so the script does not run.
+     */
+    private fun prepare(): Boolean {
+        if (openEngine != null) return true
+        val engine = engineSource ?: try {
+            // Where every engine shares one thread, another runner's engine closes first (#553).
+            scriptThread.value.makeRoom(engineUser)
+            KiteJsScriptEngine(
+                instructionBudget = policy.instructionBudget,
+                deadline = { deadlinePassed() },
+                clock = clock,
+            )
+        } catch (failure: RuntimeException) {
+            recordFailure(KiteScriptException("the engine did not open: ${failure.message}", failure))
+            return false
+        }
+        val again = started
         started = true
+        openEngine = engine
         host.calculateNow = { runCalculations() }
-        host.bind(ownEngine)
-        ownEngine.evaluate(AcrobatApi.SOURCE, "acrobat-api")
-        ownEngine.evaluate(AformApi.SOURCE, "af-helpers")
+        host.bind(engine)
+        engine.evaluate(AcrobatApi.SOURCE, "acrobat-api")
+        engine.evaluate(AformApi.SOURCE, "af-helpers")
+        // An engine that closed to make room for another runner's opens again here. The
+        // document's own scripts define what its fields' scripts call, so they run again first.
+        if (again && documentScriptsRan) runDocumentScripts()
+        return true
     }
 
     /* ─── documents and pages ───────────────────────────────────────────── */
@@ -253,6 +301,7 @@ public class PdfScriptRunner(
      */
     public fun runDocumentScripts(): List<KiteScriptException> = onScriptThread {
         val before = failureList.size
+        documentScriptsRan = true
         for ((name, source) in document.documentJavaScripts.entries.sortedBy { it.key }) {
             evaluate(source, name)
         }
@@ -586,12 +635,14 @@ public class PdfScriptRunner(
     /* ─── the engine ────────────────────────────────────────────────────── */
 
     private fun dispatch(script: String, name: String, info: Map<String, Any?>): PdfScriptHost.EventResult {
+        // An event that never reaches its script, as when the engine would not open, changes nothing.
+        val unchanged = PdfScriptHost.EventResult(rc = true, value = info["value"] as? String ?: "", change = info["change"] as? String ?: "")
+        val engine = openEngine ?: return unchanged
         try {
-            ownEngine.defineValue("__kiteEventInfo", info)
+            engine.defineValue("__kiteEventInfo", info)
         } catch (e: KiteScriptException) {
-            // The event never reached its script, so it changes nothing.
             recordFailure(e)
-            return PdfScriptHost.EventResult(rc = true, value = info["value"] as? String ?: "", change = info["change"] as? String ?: "")
+            return unchanged
         }
         // The script runs as a function body, which is where a field's script lives in Acrobat,
         // so its own `var` declarations stay out of the global scope.
@@ -600,11 +651,12 @@ public class PdfScriptRunner(
     }
 
     private fun evaluate(source: String, name: String): String? {
-        prepare()
+        if (!prepare()) return null
         if (!policy.enabled) return null
+        val engine = openEngine ?: return null
         eventStartedAt = now()
         return try {
-            ownEngine.evaluate(source, name)
+            engine.evaluate(source, name)
         } catch (e: KiteScriptException) {
             recordFailure(e)
             null
@@ -688,12 +740,19 @@ public class PdfScriptRunner(
         closed = true
         // Nothing to close when no script ever ran, because no engine was ever opened.
         if (engineSource != null || !scriptThread.isInitialized()) {
-            if (started) ownEngine.close()
+            openEngine?.close()
             return
         }
         val thread = scriptThread.value
         try {
-            thread.call { if (started) ownEngine.close() }
+            thread.call {
+                try {
+                    openEngine?.close()
+                } finally {
+                    openEngine = null
+                    thread.leave(engineUser)
+                }
+            }
         } finally {
             thread.close()
         }

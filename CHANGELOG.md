@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `EpubScriptSession.unloadChapters()` closes the engine of every chapter and keeps the session
+  open, as a reading system unloads chapters: each starts over from its markup when next used.
+  `EpubScriptRunner` calls it to make room for another runner where engines share one thread (#553).
+
 - A book's scripts have `Blob`, `File` and `FileReader` of the File API, and
   `URL.createObjectURL` and `URL.revokeObjectURL`. A `FileReader` reads in tasks of its own, with
   its events in the order the API gives, and `readAsText` takes the charset of the blob's type
@@ -172,6 +176,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   a rebuild (#472).
 
 ### Fixed
+
+- On JavaScript and WebAssembly two scripted documents can be open at once. The page's one
+  thread holds one open KiteJS engine, and nothing made the runners share it, so while one runner
+  had an engine open the next one's would not open: a second book's scripts never ran, and a
+  second `PdfScriptRunner` threw out of each call. The runners now take turns there: one that
+  needs an engine closes the one another runner has open, unless a script of that runner is
+  running. A book's runner unloads its chapters, which start over from their markup when next
+  used, and a PDF runner opens its engine again at its next script and runs the document's own
+  scripts again first. A PDF engine that will not open is now a recorded failure, as a chapter's
+  is, and not an exception (#553).
 
 - An attribute in a book's scripts has the namespace, prefix and local name the DOM Standard
   gives it, where it had only the lower-cased local name the layout keys it by, so the

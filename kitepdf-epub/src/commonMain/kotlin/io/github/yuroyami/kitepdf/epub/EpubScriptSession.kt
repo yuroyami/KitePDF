@@ -48,7 +48,7 @@ import kotlin.math.roundToLong
  * chapters the reader left (#498). Opening one more closes the engine of the chapter used least
  * recently, whose pages keep what its scripts made of them. When that chapter opens again, its
  * scripts start over from its own markup, as a page does when it loads again, and so does a
- * chapter that an earlier session's scripts changed.
+ * chapter that an earlier session's scripts changed. [unloadChapters] closes them all at once.
  *
  * @param engineFor opens the engine of one chapter's scripts, the first time it opens. The
  *   session closes it in [close], or when it makes room for another chapter. An engine that
@@ -146,6 +146,20 @@ public class EpubScriptSession(
     override fun onNavigate(listener: (href: String) -> Unit): () -> Unit {
         lock.withLock { navigationListeners.add(listener) }
         return { lock.withLock { navigationListeners.remove(listener) } }
+    }
+
+    /**
+     * Closes every chapter's engine and keeps the session open, as a reading system unloads the
+     * chapters it has to. Each keeps what its scripts made of it, and when it is next used its
+     * scripts start over from its markup, as when it makes room for another chapter. A host whose
+     * engines share one thread with another session's calls it to make room there.
+     */
+    public fun unloadChapters() {
+        if (closed || chapters.isEmpty()) return
+        val hadTimers = chapters.values.any { it.timers > 0 }
+        for (scripts in chapters.values) scripts.close()
+        chapters.clear()
+        if (hadTimers) timersChanged()
     }
 
     /** Closes every chapter's engine. The chapters keep what the scripts made of them. */
