@@ -82,7 +82,7 @@ Each published module keeps a dump of its public API in its `api/` directory. A 
 
 CI runs `checkKotlinAbi` on macOS, the one host that compiles every target, and fails when the code and the dump differ. A diff in `api/` that the change did not intend is an accidental API change.
 
-`consumer-test/` is an application that depends on KitePDF the way a user's does: by coordinates, from a repository, never from the source tree. It opens a PDF, a book and an SVG and draws them, so a broken POM, a missing dependency or a packaging mistake fails there. CI publishes the JVM artifacts to Maven Local and runs it on every push. Before a release, run the same two steps:
+`consumer-test/` is an application that depends on KitePDF the way a user's does: by coordinates, from a repository, never from the source tree. It opens a PDF, a book and an SVG and draws them, and runs a book's script and a form's through `kitepdf-javascript`, whose engine, KiteJS, comes from Maven Central, so a broken POM, a missing dependency or a packaging mistake fails there. CI publishes the JVM artifacts to Maven Local and runs it on every push. Before a release, run the same two steps:
 
 ```bash
 ./gradlew publishKotlinMultiplatformPublicationToMavenLocal publishJvmPublicationToMavenLocal -PRELEASE_SIGNING_ENABLED=false
