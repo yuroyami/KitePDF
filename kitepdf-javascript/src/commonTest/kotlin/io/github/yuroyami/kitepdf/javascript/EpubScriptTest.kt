@@ -2,6 +2,7 @@ package io.github.yuroyami.kitepdf.javascript
 
 import io.github.yuroyami.kitepdf.core.KiteLocation
 import io.github.yuroyami.kitepdf.core.render.RecordingCanvas
+import io.github.yuroyami.kitepdf.core.script.KiteScriptEngine
 import io.github.yuroyami.kitepdf.epub.EpubDocument
 import io.github.yuroyami.kitepdf.epub.EpubPage
 import io.github.yuroyami.kitepdf.epub.EpubScriptSession
@@ -36,6 +37,14 @@ class EpubScriptTest {
 
     private fun EpubPage.paintsRed() = fills(this).any { it.color.r > 0.9 && it.color.g < 0.1 && it.color.b < 0.1 }
     private fun EpubPage.paintsBlue() = fills(this).any { it.color.b > 0.9 && it.color.r < 0.1 && it.color.g < 0.1 }
+
+    /** [engine], which reports to [onClose] when it closes. */
+    private class ClosingEngine(private val engine: KiteScriptEngine, private val onClose: () -> Unit) : KiteScriptEngine by engine {
+        override fun close() {
+            engine.close()
+            onClose()
+        }
+    }
 
     /** The middle of the first line of [page]'s text that holds [text], in display space. */
     private fun EpubPage.centreOf(text: String): Pair<Double, Double> {
@@ -465,6 +474,47 @@ class EpubScriptTest {
         } finally {
             session.close()
         }
+    }
+
+    @Test
+    fun unloaded_chapters_close_their_engines_and_start_over_when_used_again() {
+        val book = ScriptBooks.chapter(
+            """<p>Markup.</p><script>var runs = (Number(localStorage.getItem('runs')) || 0) + 1; localStorage.setItem('runs', String(runs));
+                var p = document.createElement('p'); p.textContent = 'Added by run ' + runs + '.'; document.body.appendChild(p);
+                setTimeout(function () {}, 1000);</script>""",
+        )
+        val opened = ArrayList<Int>()
+        val closed = ArrayList<Int>()
+        val session = EpubScriptSession(
+            book,
+            engineFor = { chapter ->
+                opened += chapter
+                ClosingEngine(KiteJsScriptEngine()) { closed += chapter }
+            },
+        )
+        try {
+            var timerReports = 0
+            session.onTimersChanged { timerReports++ }
+            fun text() = book.page(KiteLocation(0, 0)).textContent().plainText
+            session.chapterOpened(0)
+            assertTrue(session.hasTimers)
+            val reportsBefore = timerReports
+
+            session.unloadChapters()
+            assertEquals(listOf(0), closed, "the engine closed")
+            assertFalse(session.hasTimers, "and its timers went with it")
+            assertTrue(timerReports > reportsBefore, "which the listeners heard")
+            assertTrue("Added by run 1." in text(), "the chapter keeps what its scripts made of it")
+
+            session.chapterOpened(0)
+            assertEquals(listOf(0, 0), opened)
+            assertTrue("Added by run 2." in text() && "Added by run 1." !in text(), "the scripts ran again over the markup: ${text()}")
+            assertEquals(emptyList(), session.failures.map { it.message })
+        } finally {
+            session.close()
+        }
+        session.unloadChapters()
+        assertEquals(listOf(0, 0), closed, "a closed session has nothing more to unload")
     }
 
     @Test

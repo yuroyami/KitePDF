@@ -51,7 +51,9 @@ public class EpubScriptPolicy(
  *
  * At most [LIVE_CHAPTERS] chapters keep their engines open, and on JavaScript and WebAssembly,
  * which have one thread for every engine, one: opening another closes the engine of the chapter
- * used least recently, whose scripts start over from its markup when it opens again.
+ * used least recently, whose scripts start over from its markup when it opens again. There the
+ * runners of every book and document take turns too: a runner that opens an engine first closes
+ * the one another runner has open, unless a script of that runner is running.
  *
  * @param onConsole gets what scripts print with `console`, and what `alert`, `confirm` and
  *   `prompt` would have shown, on one of the runner's threads.
@@ -81,6 +83,16 @@ public class EpubScriptRunner(
     /** The session, made on the script thread by the first call that needs it. */
     @kotlin.concurrent.Volatile
     private var session: EpubScriptSession? = null
+
+    /** How many calls of this runner the script thread is inside, so its engines stay open while a script runs. */
+    private var busy = 0
+
+    /** Unloads the chapters when another runner opens an engine on the thread they share. */
+    private val engineUser = EngineUser {
+        if (busy > 0) return@EngineUser false
+        session?.unloadChapters()
+        true
+    }
 
     private val lock = KiteLock()
     private val timerListeners = ArrayList<() -> Unit>()
@@ -122,7 +134,12 @@ public class EpubScriptRunner(
         return scriptThread.value.call {
             if (closed) return@call null
             callStartedAt = now()
-            block(sessionHere())
+            busy++
+            try {
+                block(sessionHere())
+            } finally {
+                busy--
+            }
         }
     }
 
@@ -130,6 +147,8 @@ public class EpubScriptRunner(
     private fun sessionHere(): EpubScriptSession = session ?: EpubScriptSession(
         document,
         engineFor = {
+            // Where every engine shares one thread, another runner's engine closes first (#553).
+            scriptThread.value.makeRoom(engineUser)
             ThreadedScriptEngine(startScriptThread()) {
                 // A book's scripts polyfill and patch the built-ins as in a browser, and each chapter has an
                 // engine of its own, so the seal would guard nothing (#537).
@@ -163,7 +182,13 @@ public class EpubScriptRunner(
         if (!scriptThread.isInitialized()) return
         val thread = scriptThread.value
         try {
-            thread.call { session?.close() }
+            thread.call {
+                try {
+                    session?.close()
+                } finally {
+                    thread.leave(engineUser)
+                }
+            }
         } finally {
             thread.close()
         }
