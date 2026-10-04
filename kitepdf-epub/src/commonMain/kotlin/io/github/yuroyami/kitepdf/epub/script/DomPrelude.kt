@@ -443,6 +443,7 @@ function wrap(id) {
   var kind = K.kind(id), proto;
   if (kind === 1) proto = protoFor(id);
   else if (kind === 3) proto = Text.prototype;
+  else if (kind === 8) proto = Comment.prototype;
   else if (kind === 11) proto = DocumentFragment.prototype;
   else if (id === rootId) proto = HTML_DOCUMENT ? HTMLDocument.prototype : XMLDocument.prototype;
   else { proto = MapGet(documentProtos, id); if (proto === undefined) proto = XMLDocument.prototype; }
@@ -1735,7 +1736,10 @@ Document.prototype.createTextNode = function (data) {
   needArgs(arguments, 1, "Failed to execute 'createTextNode' on 'Document'");
   return madeBy(idOf(this), K.createText(domString(data)));
 };
-Document.prototype.createComment = function () { return madeBy(idOf(this), K.createText('')); };
+Document.prototype.createComment = function (data) {
+  needArgs(arguments, 1, "Failed to execute 'createComment' on 'Document'");
+  return madeBy(idOf(this), K.createComment(domString(data)));
+};
 Document.prototype.createDocumentFragment = function () { return madeBy(idOf(this), K.createFragment()); };
 Document.prototype.createAttribute = function (localName) {
   var what = "Failed to execute 'createAttribute' on 'Document'", id = idOf(this), name = domString(localName);

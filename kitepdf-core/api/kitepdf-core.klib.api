@@ -2725,6 +2725,14 @@ sealed class io.github.yuroyami.kitepdf.core.render/SoftMask { // io.github.yuro
 }
 
 sealed class io.github.yuroyami.kitepdf.core.xml/KiteXmlNode { // io.github.yuroyami.kitepdf.core.xml/KiteXmlNode|null[0]
+    final class Comment : io.github.yuroyami.kitepdf.core.xml/KiteXmlNode { // io.github.yuroyami.kitepdf.core.xml/KiteXmlNode.Comment|null[0]
+        constructor <init>(kotlin/String) // io.github.yuroyami.kitepdf.core.xml/KiteXmlNode.Comment.<init>|<init>(kotlin.String){}[0]
+
+        final var text // io.github.yuroyami.kitepdf.core.xml/KiteXmlNode.Comment.text|{}text[0]
+            final fun <get-text>(): kotlin/String // io.github.yuroyami.kitepdf.core.xml/KiteXmlNode.Comment.text.<get-text>|<get-text>(){}[0]
+            final fun <set-text>(kotlin/String) // io.github.yuroyami.kitepdf.core.xml/KiteXmlNode.Comment.text.<set-text>|<set-text>(kotlin.String){}[0]
+    }
+
     final class Element : io.github.yuroyami.kitepdf.core.xml/KiteXmlNode { // io.github.yuroyami.kitepdf.core.xml/KiteXmlNode.Element|null[0]
         constructor <init>(kotlin/String, kotlin.collections/Map<kotlin/String, kotlin/String>, kotlin.collections/MutableList<io.github.yuroyami.kitepdf.core.xml/KiteXmlNode> = ...) // io.github.yuroyami.kitepdf.core.xml/KiteXmlNode.Element.<init>|<init>(kotlin.String;kotlin.collections.Map<kotlin.String,kotlin.String>;kotlin.collections.MutableList<io.github.yuroyami.kitepdf.core.xml.KiteXmlNode>){}[0]
 
@@ -2762,6 +2770,19 @@ sealed class io.github.yuroyami.kitepdf.core.xml/KiteXmlToken { // io.github.yur
         final fun equals(kotlin/Any?): kotlin/Boolean // io.github.yuroyami.kitepdf.core.xml/KiteXmlToken.Close.equals|equals(kotlin.Any?){}[0]
         final fun hashCode(): kotlin/Int // io.github.yuroyami.kitepdf.core.xml/KiteXmlToken.Close.hashCode|hashCode(){}[0]
         final fun toString(): kotlin/String // io.github.yuroyami.kitepdf.core.xml/KiteXmlToken.Close.toString|toString(){}[0]
+    }
+
+    final class Comment : io.github.yuroyami.kitepdf.core.xml/KiteXmlToken { // io.github.yuroyami.kitepdf.core.xml/KiteXmlToken.Comment|null[0]
+        constructor <init>(kotlin/String) // io.github.yuroyami.kitepdf.core.xml/KiteXmlToken.Comment.<init>|<init>(kotlin.String){}[0]
+
+        final val text // io.github.yuroyami.kitepdf.core.xml/KiteXmlToken.Comment.text|{}text[0]
+            final fun <get-text>(): kotlin/String // io.github.yuroyami.kitepdf.core.xml/KiteXmlToken.Comment.text.<get-text>|<get-text>(){}[0]
+
+        final fun component1(): kotlin/String // io.github.yuroyami.kitepdf.core.xml/KiteXmlToken.Comment.component1|component1(){}[0]
+        final fun copy(kotlin/String = ...): io.github.yuroyami.kitepdf.core.xml/KiteXmlToken.Comment // io.github.yuroyami.kitepdf.core.xml/KiteXmlToken.Comment.copy|copy(kotlin.String){}[0]
+        final fun equals(kotlin/Any?): kotlin/Boolean // io.github.yuroyami.kitepdf.core.xml/KiteXmlToken.Comment.equals|equals(kotlin.Any?){}[0]
+        final fun hashCode(): kotlin/Int // io.github.yuroyami.kitepdf.core.xml/KiteXmlToken.Comment.hashCode|hashCode(){}[0]
+        final fun toString(): kotlin/String // io.github.yuroyami.kitepdf.core.xml/KiteXmlToken.Comment.toString|toString(){}[0]
     }
 
     final class Open : io.github.yuroyami.kitepdf.core.xml/KiteXmlToken { // io.github.yuroyami.kitepdf.core.xml/KiteXmlToken.Open|null[0]
@@ -3024,8 +3045,8 @@ final object io.github.yuroyami.kitepdf.core.text/TextEncoding { // io.github.yu
 }
 
 final object io.github.yuroyami.kitepdf.core.xml/KiteXml { // io.github.yuroyami.kitepdf.core.xml/KiteXml|null[0]
-    final fun parse(kotlin/String): io.github.yuroyami.kitepdf.core.xml/KiteXmlNode.Element // io.github.yuroyami.kitepdf.core.xml/KiteXml.parse|parse(kotlin.String){}[0]
-    final fun tokenize(kotlin/String): kotlin.collections/List<io.github.yuroyami.kitepdf.core.xml/KiteXmlToken> // io.github.yuroyami.kitepdf.core.xml/KiteXml.tokenize|tokenize(kotlin.String){}[0]
+    final fun parse(kotlin/String, kotlin/Boolean = ...): io.github.yuroyami.kitepdf.core.xml/KiteXmlNode.Element // io.github.yuroyami.kitepdf.core.xml/KiteXml.parse|parse(kotlin.String;kotlin.Boolean){}[0]
+    final fun tokenize(kotlin/String, kotlin/Boolean = ...): kotlin.collections/List<io.github.yuroyami.kitepdf.core.xml/KiteXmlToken> // io.github.yuroyami.kitepdf.core.xml/KiteXml.tokenize|tokenize(kotlin.String;kotlin.Boolean){}[0]
 }
 
 final object io.github.yuroyami.kitepdf.core.zip/Crc32 { // io.github.yuroyami.kitepdf.core.zip/Crc32|null[0]

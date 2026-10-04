@@ -147,6 +147,7 @@ internal object MathParser {
         fun walk(n: KiteXmlNode) {
             when (n) {
                 is KiteXmlNode.Text -> sb.append(n.text)
+                is KiteXmlNode.Comment -> {}
                 is KiteXmlNode.Element -> if (n.tag == "mglyph") n.attrs["alt"]?.let(sb::append) else n.children.forEach(::walk)
             }
         }

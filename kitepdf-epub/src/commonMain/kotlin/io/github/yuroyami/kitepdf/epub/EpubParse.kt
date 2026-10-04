@@ -212,6 +212,13 @@ internal class ParsedEpub(
         return spineLock.withLock { spineCache[chapter] ?: built.also { spineCache[chapter] = it } }
     }
 
+    /**
+     * [chapter]'s document parsed again with its comments, which [spine]'s tree drops, for the DOM
+     * of its scripts, which has them (#544). It is not kept: a chapter's scripts read it once.
+     */
+    fun commentedTree(chapter: Int): KiteXmlNode.Element =
+        HtmlParser.parse(zip.readText(spinePaths[chapter]) ?: "", keepComments = true).also(::resolveSwitches)
+
     /** Whether [chapter]'s document has been parsed yet. For tests and diagnostics. */
     fun isSpineParsed(chapter: Int): Boolean =
         chapter in spinePaths.indices && spineLock.withLock { spineCache[chapter] } != null

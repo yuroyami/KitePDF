@@ -189,6 +189,7 @@ internal class BoxBuilder(
         fun place(child: KiteXmlNode): BuildFrame? {
             when (child) {
                 is KiteXmlNode.Text -> inl.appendText(child.text, style)
+                is KiteXmlNode.Comment -> {}
                 is KiteXmlNode.Element -> {
                     if (child.tag == "br") { inl.addBreak(); return null }
                     if (child.tag == "img" || child.tag == "image") {
@@ -686,6 +687,7 @@ internal class BoxBuilder(
             val childAncestors = listOf(el) + ancestors
             for (child in el.children) when (child) {
                 is KiteXmlNode.Text -> inl.appendText(child.text, style)
+                is KiteXmlNode.Comment -> {}
                 is KiteXmlNode.Element -> {
                     if (child.tag == "br") { inl.addBreak(); continue }
                     if (child.tag == "img" || child.tag == "image") {
@@ -805,6 +807,7 @@ internal class BoxBuilder(
         fun collectText(e: KiteXmlNode.Element) {
             for (c in e.children) when (c) {
                 is KiteXmlNode.Text -> reading.append(c.text)
+                is KiteXmlNode.Comment -> {}
                 is KiteXmlNode.Element -> if (c.tag != "rp") collectText(c)
             }
         }
@@ -815,6 +818,7 @@ internal class BoxBuilder(
         try {
             for (c in el.children) when (c) {
                 is KiteXmlNode.Text -> inl.appendText(c.text, style)
+                is KiteXmlNode.Comment -> {}
                 is KiteXmlNode.Element -> when {
                     c.tag == "rt" || c.tag == "rp" -> {}
                     c.tag == "br" -> inl.addBreak()

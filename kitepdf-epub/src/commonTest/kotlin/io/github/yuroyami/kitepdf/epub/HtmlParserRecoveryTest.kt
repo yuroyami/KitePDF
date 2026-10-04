@@ -10,6 +10,7 @@ class HtmlParserRecoveryTest {
     private fun assertTree(expected: String, markup: String) {
         fun serialize(node: KiteXmlNode): String = when (node) {
             is KiteXmlNode.Text -> node.text
+            is KiteXmlNode.Comment -> "<!--${node.text}-->"
             is KiteXmlNode.Element -> "<${node.tag}>" + node.children.joinToString("") { serialize(it) } + "</${node.tag}>"
         }
         val root = HtmlParser.parse(markup)

@@ -2540,11 +2540,19 @@ public final class io/github/yuroyami/kitepdf/core/text/TextEncoding {
 
 public final class io/github/yuroyami/kitepdf/core/xml/KiteXml {
 	public static final field INSTANCE Lio/github/yuroyami/kitepdf/core/xml/KiteXml;
-	public final fun parse (Ljava/lang/String;)Lio/github/yuroyami/kitepdf/core/xml/KiteXmlNode$Element;
-	public final fun tokenize (Ljava/lang/String;)Ljava/util/List;
+	public final fun parse (Ljava/lang/String;Z)Lio/github/yuroyami/kitepdf/core/xml/KiteXmlNode$Element;
+	public static synthetic fun parse$default (Lio/github/yuroyami/kitepdf/core/xml/KiteXml;Ljava/lang/String;ZILjava/lang/Object;)Lio/github/yuroyami/kitepdf/core/xml/KiteXmlNode$Element;
+	public final fun tokenize (Ljava/lang/String;Z)Ljava/util/List;
+	public static synthetic fun tokenize$default (Lio/github/yuroyami/kitepdf/core/xml/KiteXml;Ljava/lang/String;ZILjava/lang/Object;)Ljava/util/List;
 }
 
 public abstract class io/github/yuroyami/kitepdf/core/xml/KiteXmlNode {
+}
+
+public final class io/github/yuroyami/kitepdf/core/xml/KiteXmlNode$Comment : io/github/yuroyami/kitepdf/core/xml/KiteXmlNode {
+	public fun <init> (Ljava/lang/String;)V
+	public final fun getText ()Ljava/lang/String;
+	public final fun setText (Ljava/lang/String;)V
 }
 
 public final class io/github/yuroyami/kitepdf/core/xml/KiteXmlNode$Element : io/github/yuroyami/kitepdf/core/xml/KiteXmlNode {
@@ -2574,6 +2582,17 @@ public final class io/github/yuroyami/kitepdf/core/xml/KiteXmlToken$Close : io/g
 	public static synthetic fun copy$default (Lio/github/yuroyami/kitepdf/core/xml/KiteXmlToken$Close;Ljava/lang/String;ILjava/lang/Object;)Lio/github/yuroyami/kitepdf/core/xml/KiteXmlToken$Close;
 	public fun equals (Ljava/lang/Object;)Z
 	public final fun getName ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/github/yuroyami/kitepdf/core/xml/KiteXmlToken$Comment : io/github/yuroyami/kitepdf/core/xml/KiteXmlToken {
+	public fun <init> (Ljava/lang/String;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;)Lio/github/yuroyami/kitepdf/core/xml/KiteXmlToken$Comment;
+	public static synthetic fun copy$default (Lio/github/yuroyami/kitepdf/core/xml/KiteXmlToken$Comment;Ljava/lang/String;ILjava/lang/Object;)Lio/github/yuroyami/kitepdf/core/xml/KiteXmlToken$Comment;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getText ()Ljava/lang/String;
 	public fun hashCode ()I
 	public fun toString ()Ljava/lang/String;
 }

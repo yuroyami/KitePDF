@@ -421,6 +421,7 @@ public class SvgImage private constructor(
             if (d > MAX_DEPTH) return
             val first = chars.size
             for (child in node.children) when (child) {
+                is KiteXmlNode.Comment -> Unit
                 is KiteXmlNode.Text -> for (raw in child.text) {
                     val ch = if (raw == '\n' || raw == '\r' || raw == '\t') ' ' else raw
                     if (ch != ' ') { chars.add(Ch(ch, p)); afterSpace = false }

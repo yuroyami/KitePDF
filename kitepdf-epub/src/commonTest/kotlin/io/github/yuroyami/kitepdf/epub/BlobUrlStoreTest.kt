@@ -21,6 +21,7 @@ class BlobUrlStoreTest {
             out.children += when (c) {
                 is KiteXmlNode.Element -> c.copy(out)
                 is KiteXmlNode.Text -> KiteXmlNode.Text(c.text)
+                is KiteXmlNode.Comment -> KiteXmlNode.Comment(c.text)
             }
         }
         return out

@@ -19,6 +19,7 @@ class KiteXmlTest {
             when (it) {
                 is KiteXmlNode.Text -> it.text
                 is KiteXmlNode.Element -> it.text()
+                is KiteXmlNode.Comment -> ""
             }
         }
 
@@ -100,5 +101,19 @@ class KiteXmlTest {
     fun an_unclosed_element_still_yields_its_content() {
         val root = KiteXml.parse("<a><b>text")
         assertTrue("text" in root.first("b")!!.text())
+    }
+
+    @Test
+    fun a_comment_is_kept_only_when_asked_for() {
+        val markup = "<p>x<!-- c -->y<!---->z<!-->w<!--->v</p>"
+        assertEquals(listOf("x", "y", "z", "w", "v"), KiteXml.tokenize(markup).filterIsInstance<KiteXmlToken.Text>().map { it.text })
+        assertTrue(KiteXml.tokenize(markup).none { it is KiteXmlToken.Comment })
+        // <!--> and <!---> end at once, as HTML reads them.
+        val kept = KiteXml.parse(markup, keepComments = true).first("p")!!.children
+        assertEquals(
+            listOf("x", "# c ", "y", "#", "z", "#", "w", "#", "v"),
+            kept.map { if (it is KiteXmlNode.Comment) "#" + it.text else (it as KiteXmlNode.Text).text },
+        )
+        assertEquals("#a <b> c", KiteXml.parse("<!--a <b> c", keepComments = true).children.joinToString { "#" + (it as KiteXmlNode.Comment).text })
     }
 }

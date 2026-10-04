@@ -232,6 +232,10 @@ an XHTML page: a tag name keeps its case, so `tagName` is `p` and an SVG gradien
 `text/html` is an `HTMLDocument`, where an HTML element's `tagName` is upper case and
 `createElement` lowercases its argument. `document.contentType` says which it is.
 
+The tree of a chapter's scripts has the chapter's comments, which `childNodes`, `nodeType` 8 and
+`innerHTML` show as a browser does, and `createComment` makes one. The page has none of them,
+since a comment draws nothing, and an element's `textContent` leaves them out.
+
 A tap goes to the element under it as `pointerdown`, `mousedown`, `pointerup`, `mouseup` and
 `click`. `tap` answers true when a script prevented the click, and then a viewer does not follow
 a link there. A script that changes its chapter has it laid out again from the changed tree as
@@ -327,8 +331,7 @@ Streams Standard, so `Blob.stream()` ([#536](https://github.com/yuroyami/KitePDF
 message, `MessageChannel` and `structuredClone`
 ([#534](https://github.com/yuroyami/KitePDF/issues/534)); `FormData`
 ([#531](https://github.com/yuroyami/KitePDF/issues/531)); `DOMParser` and `XMLSerializer`
-([#543](https://github.com/yuroyami/KitePDF/issues/543)); comments, which the tree drops, so
-`createComment` makes a text node ([#544](https://github.com/yuroyami/KitePDF/issues/544)); and the syntax KiteJS does not have yet, `class`
+([#543](https://github.com/yuroyami/KitePDF/issues/543)); and the syntax KiteJS does not have yet, `class`
 ([KiteJS#2](https://github.com/yuroyami/KiteJS/issues/2)), `const` in the head of a `for` loop
 ([KiteJS#11](https://github.com/yuroyami/KiteJS/issues/11)) and `async`
 ([KiteJS#12](https://github.com/yuroyami/KiteJS/issues/12)). A script that uses one fails to

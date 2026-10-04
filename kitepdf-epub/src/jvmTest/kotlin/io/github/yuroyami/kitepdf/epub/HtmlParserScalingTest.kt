@@ -68,6 +68,7 @@ class HtmlParserScalingTest {
                     for (index in node.children.indices.reversed()) pending.add(node.children[index])
                 }
                 is KiteXmlNode.Text -> text.append(node.text)
+                is KiteXmlNode.Comment -> {}
             }
         }
         assertEquals(units * shape.elementsPerUnit + 3, elements, "${shape.name} at $units units")

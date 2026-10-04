@@ -189,6 +189,7 @@ private fun noteText(holder: KiteXmlNode.Element): String {
     fun walk(n: KiteXmlNode) {
         when (n) {
             is KiteXmlNode.Text -> line.append(n.text)
+            is KiteXmlNode.Comment -> {}
             is KiteXmlNode.Element -> {
                 if (n.tag in SKIPPED_TAGS || isBackLink(n)) return
                 if (n.tag == "br") { endLine(); return }

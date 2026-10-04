@@ -209,7 +209,7 @@ public class EpubScriptSession(
         val engine: KiteScriptEngine get() = checkNotNull(opened)
         /** The chapter's media type, which makes its document an HTML or an XML one (#541). */
         val contentType: String = document.resourceType(document.chapterPath(chapter))?.lowercase() ?: "application/xhtml+xml"
-        val dom = ScriptDom(document.sourceChapterTree(chapter), html = contentType == "text/html")
+        val dom = ScriptDom(document.sourceChapterTree(chapter), html = contentType == "text/html", commented = document.commentedChapterTree(chapter))
 
         /** The timers and frames its scripts wait on. */
         var timers = 0
@@ -360,6 +360,7 @@ public class EpubScriptSession(
             def("create") { args -> dom.idOf(dom.createElement(string(args, 0), args.getOrNull(1) as? String, args.getOrNull(2) as? String)) }
             def("createDocument") { dom.idOf(dom.createDocument()) }
             def("createText") { args -> dom.idOf(KiteXmlNode.Text(string(args, 0))) }
+            def("createComment") { args -> dom.idOf(KiteXmlNode.Comment(string(args, 0))) }
             def("createFragment") { dom.idOf(dom.createFragment()) }
             def("insert") { args ->
                 val parent = element(args, 0) ?: return@def "HierarchyRequestError"

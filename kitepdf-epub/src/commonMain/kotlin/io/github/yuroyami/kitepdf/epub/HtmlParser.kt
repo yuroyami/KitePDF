@@ -54,13 +54,14 @@ internal object HtmlParser {
     /**
      * Parse [xhtml] into a synthetic `#root` element holding the document. An element nested
      * deeper than [MAX_DEPTH] moves up to that level, or above a table part, and keeps its text.
+     * Comments are dropped unless [keepComments] asks for them, as a script's DOM does (#544).
      */
-    fun parse(xhtml: String): KiteXmlNode.Element {
+    fun parse(xhtml: String, keepComments: Boolean = false): KiteXmlNode.Element {
         val root = KiteXmlNode.Element("#root", emptyMap())
         val stack = OpenElements().apply { add(root) }
         var warned = false
 
-        for (t in KiteXml.tokenize(xhtml)) when (t) {
+        for (t in KiteXml.tokenize(xhtml, keepComments)) when (t) {
             is KiteXmlToken.Open -> {
                 implicitClose(stack, t.name)
                 val el = KiteXmlNode.Element(t.name, t.attrs)
@@ -85,6 +86,7 @@ internal object HtmlParser {
                 if (idx >= 1) stack.popTo(idx)
             }
             is KiteXmlToken.Text -> stack.last().children.add(KiteXmlNode.Text(t.text))
+            is KiteXmlToken.Comment -> stack.last().children.add(KiteXmlNode.Comment(t.text))
         }
         return root
     }
@@ -160,7 +162,7 @@ internal fun KiteXmlNode.Element.elementParent(): KiteXmlNode.Element? =
 
 /** Every text node under this element, in document order, joined as written. */
 internal fun KiteXmlNode.Element.textContent(): String = buildString {
-    fun rec(n: KiteXmlNode) { when (n) { is KiteXmlNode.Text -> append(n.text); is KiteXmlNode.Element -> n.children.forEach(::rec) } }
+    fun rec(n: KiteXmlNode) { when (n) { is KiteXmlNode.Text -> append(n.text); is KiteXmlNode.Element -> n.children.forEach(::rec); is KiteXmlNode.Comment -> {} } }
     rec(this@textContent)
 }
 
