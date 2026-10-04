@@ -12,13 +12,20 @@ package io.github.yuroyami.kitepdf.epub.script
  */
 internal val DOM_PRELUDE: String = buildString {
     append(DOM_PRELUDE_HEAD)
+    append(DOM_PRELUDE_NODES)
+    append(DOM_PRELUDE_COLLECTIONS)
     append(DOM_PRELUDE_URL)
     append(DOM_PRELUDE_ENCODING)
     append(DOM_PRELUDE_FILE)
+    append(DOM_PRELUDE_REFLECTION)
+    append(DOM_PRELUDE_ELEMENTS)
+    append(DOM_PRELUDE_FORMS)
     append(DOM_PRELUDE_TAIL)
 }
 
-/** The first part of [DOM_PRELUDE]: the helpers, the nodes and the style objects. */
+/**
+ * The first part of [DOM_PRELUDE]: the built-ins it takes, its helpers, the interface objects of Web IDL, events and event handlers.
+ */
 private const val DOM_PRELUDE_HEAD: String = """(function (global) {
 /* ---- the built-ins the DOM calls (#540) ----
    A browser's DOM is native code, so a page that patches a built-in changes its own code and not
@@ -40,13 +47,17 @@ var String = global.String, Number = global.Number, Error = global.Error, TypeEr
   parseInt = global.parseInt, isNaN = global.isNaN, isFinite = global.isFinite;
 var uncurry = Function.prototype.bind.bind(Function.prototype.call);
 function getter(proto, name) { var d = Object.getOwnPropertyDescriptor(proto, name); return d && d.get ? uncurry(d.get) : null; }
-var ReflectApply = Reflect.apply, ReflectOwnKeys = Reflect.ownKeys;
+var ReflectApply = Reflect.apply, ReflectOwnKeys = Reflect.ownKeys, ReflectSet = Reflect.set,
+  ReflectHas = Reflect.has, ReflectDefineProperty = Reflect.defineProperty, ReflectDeleteProperty = Reflect.deleteProperty;
 var ObjectCreate = Object.create, ObjectDefineProperty = Object.defineProperty, ObjectFreeze = Object.freeze,
   ObjectGetOwnPropertyDescriptor = Object.getOwnPropertyDescriptor, ObjectGetPrototypeOf = Object.getPrototypeOf,
   ObjectKeys = Object.keys, ObjectSetPrototypeOf = Object.setPrototypeOf, ObjectHasOwn = uncurry(Object.prototype.hasOwnProperty);
-var MathCeil = Math.ceil, MathFloor = Math.floor, MathMax = Math.max, MathMin = Math.min, MathRound = Math.round;
+var MathCeil = Math.ceil, MathFloor = Math.floor, MathMax = Math.max, MathMin = Math.min, MathRound = Math.round, MathPow = Math.pow;
 var ArrayIndexOf = uncurry(Array.prototype.indexOf), ArrayJoin = uncurry(Array.prototype.join),
   ArrayPush = uncurry(Array.prototype.push), ArrayShift = uncurry(Array.prototype.shift), ArraySort = uncurry(Array.prototype.sort);
+/* The iteration methods of Array.prototype, which Web IDL makes the methods of an iterable list such as a NodeList. */
+var ArrayValues = Array.prototype[Symbol.iterator], ArrayEntries = Array.prototype.entries, ArrayKeys = Array.prototype.keys,
+  ArrayForEach = Array.prototype.forEach;
 var StringCharAt = uncurry(String.prototype.charAt), StringCharCodeAt = uncurry(String.prototype.charCodeAt),
   StringFromCharCode = String.fromCharCode, StringIndexOf = uncurry(String.prototype.indexOf),
   StringSubstring = uncurry(String.prototype.substring), StringToLowerCase = uncurry(String.prototype.toLowerCase),
@@ -82,7 +93,10 @@ var RE_UPPER = hardened(/[A-Z]/g), RE_VENDOR = hardened(/^(webkit|moz|ms|o)-/), 
   RE_BARE_FRACTION = hardened(/(^|[\s,(\/+*-])\.(\d)/g), RE_DASHED = hardened(/-([a-z])/g), RE_ERROR_CODE = hardened(/(\w+) (\d+)/g),
   RE_SPACE = hardened(/\s/), RE_IMPORTANT = hardened(/!\s*important$/i), RE_DIGITS = hardened(/^\d+$/),
   RE_PREFIX = hardened(/^.*:/), RE_WHITESPACE_RUN = hardened(/\s+/g), RE_QUOTE = hardened(/"/g), RE_EPUB_SCHEME = hardened(/^epub:\/\//),
-  RE_FRAGMENT = hardened(/#.*/), RE_CRLF = hardened(/\r\n?/g), RE_PRINTABLE = hardened(/^[\x20-\x7E]*$/), RE_CAPITAL = hardened(/^[A-Z]/);
+  RE_FRAGMENT = hardened(/#.*/), RE_CRLF = hardened(/\r\n?/g), RE_PRINTABLE = hardened(/^[\x20-\x7E]*$/), RE_CAPITAL = hardened(/^[A-Z]/),
+  RE_TYPE_NAME = hardened(/^[A-Za-z][A-Za-z0-9-]*$/), RE_ATTRIBUTE_NAME = hardened(/^[^\0\t\n\f\r \/>=]+$/),
+  RE_CUSTOM_ELEMENT = hardened(/^[a-z](?:[-.0-9_a-z\u00B7\u00C0-\u00D6\u00D8-\u00F6\u00F8-\u037D\u037F-\u1FFF\u200C\u200D\u203F\u2040\u2070-\u218F\u2C00-\u2FEF\u3001-\uD7FF\uF900-\uFDCF\uFDF0-\uFFFD]|[\uD800-\uDB7F][\uDC00-\uDFFF])*$/),
+  RE_ELEMENT_NAME = hardened(/^(?:[A-Za-z][^\0\t\n\f\r />]*|[:_\u0080-\uFFFF][-.0-9:A-Z_a-z\u0080-\uFFFF]*)$/);
 /* The host's functions, in a table of the DOM's own, and the global that held them gone, so a
    script neither replaces nor calls one. */
 var K = (function (host) {
@@ -136,6 +150,8 @@ function asciiTokens(s) {
 }
 
 var wrappers = new Map();
+/* The object under each form's proxy. */
+var formTargets = new WeakMap();
 var rootId = K.root();
 
 function def(proto, name, get, set) {
@@ -226,21 +242,98 @@ function cssValue(value) {
 function camel(name) {
   return RegExpReplace(RE_DASHED, String(name), function (m, c) { return StringToUpperCase(c); });
 }
-function list(items) {
-  hidden(items, 'item', function (i) { return this[i] === undefined ? null : this[i]; });
-  return items;
-}
-
 /* A value as a WebIDL DOMString. */
 function domString(v) {
   if (typeof v === 'symbol') throw new TypeError('Cannot convert a Symbol value to a string');
   return String(v);
 }
-/* An interface prototype object: its constructor property, and its class string. */
-function interfaceProto(ctor, proto, name) {
-  ObjectDefineProperty(proto, 'constructor', { __proto__: null, value: ctor, writable: true, configurable: true });
+/* A string with its ASCII letters lowercased, or uppercased, and no other letter changed, as the
+   DOM and HTML change case (Infra, 4.7). */
+function asciiCase(s, from, to) {
+  var out = '', start = 0;
+  for (var i = 0; i < s.length; i++) {
+    var c = StringCharCodeAt(s, i);
+    if (c >= from && c <= from + 25) {
+      out += StringSubstring(s, start, i) + StringFromCharCode(c - from + to);
+      start = i + 1;
+    }
+  }
+  return start ? out + StringSubstring(s, start) : s;
+}
+function asciiLowerCase(s) { return asciiCase(s, 65, 97); }
+function asciiUpperCase(s) { return asciiCase(s, 97, 65); }
+/* A value as a WebIDL unsigned long, and as a long, of Web IDL, 3.2.4: the number, truncated and
+   wrapped around 2 to the 32nd. */
+function unsignedLong(v) {
+  var x = +v;
+  if (x !== x || x === Infinity || x === -Infinity) return 0;
+  x = x < 0 ? MathCeil(x) : MathFloor(x);
+  x = x % 4294967296;
+  return x < 0 ? x + 4294967296 : x + 0;
+}
+function webIdlLong(v) { var x = unsignedLong(v); return x >= 2147483648 ? x - 4294967296 : x; }
+/* A value as a WebIDL double, which no infinity or NaN is. */
+function webIdlDouble(v, what) {
+  var x = +v;
+  if (!isFinite(x)) throw new TypeError(what + ': The provided double value is non-finite.');
+  return x;
+}
+/* Throws, as a call of [what] with fewer than [count] arguments does. */
+function needArgs(args, count, what) {
+  if (args.length < count) {
+    throw new TypeError(what + ': ' + count + ' argument' + (count > 1 ? 's' : '') + ' required, but only ' + args.length + ' present.');
+  }
+}
+
+/* ---- interface objects, of Web IDL, 3.7 (#538) ----
+   An interface is a function named after it, whose prototype property, which a script cannot
+   replace, holds the members of the interface and its class string, and whose own prototype is
+   the interface it inherits from. Each one is a property of the global that a for-in does not
+   see. An interface without a constructor throws when called. */
+var INTERFACES = [];
+/* Makes [ctor] the interface object [name], which inherits from [parent] when given, and whose
+   length is [length], or the count of its parameters. */
+function defineInterface(ctor, name, parent, length) {
+  var proto = ctor.prototype;
+  ObjectDefineProperty(ctor, 'name', { __proto__: null, value: name, configurable: true });
+  if (length !== undefined) ObjectDefineProperty(ctor, 'length', { __proto__: null, value: length, configurable: true });
+  if (parent) {
+    if (ObjectGetPrototypeOf(ctor) !== parent) ObjectSetPrototypeOf(ctor, parent);
+    if (ObjectGetPrototypeOf(proto) !== parent.prototype) ObjectSetPrototypeOf(proto, parent.prototype);
+  }
+  ObjectDefineProperty(proto, 'constructor', { __proto__: null, value: ctor, writable: true, enumerable: false, configurable: true });
   if (SymbolToStringTag) ObjectDefineProperty(proto, SymbolToStringTag, { __proto__: null, value: name, configurable: true });
-  ObjectDefineProperty(ctor, 'prototype', { __proto__: null, value: proto, writable: false });
+  ObjectDefineProperty(ctor, 'prototype', { __proto__: null, writable: false, enumerable: false, configurable: false });
+  ArrayPush(INTERFACES, { __proto__: null, name: name, ctor: ctor });
+  return ctor;
+}
+/* Makes [proto] the prototype of the interface object [ctor], named [name]. */
+function interfaceProto(ctor, proto, name) {
+  ctor.prototype = proto;
+  defineInterface(ctor, name);
+}
+/* An interface object without a constructor, whose prototype inherits from [parent]'s. */
+function abstractInterface(name, parent) {
+  var I = function () { illegal(name); };
+  I.prototype = ObjectCreate(parent ? parent.prototype : ObjectGetPrototypeOf({}));
+  return I;
+}
+function illegal(name) { throw new TypeError("Failed to construct '" + name + "': Illegal constructor"); }
+/* Throws unless [self] is the object that new made for [ctor], as a constructor called without
+   new does; [made] tells an object it made already. */
+function needNew(self, ctor, name, made) {
+  if (!isA(self, ctor) || self === global || made(self)) {
+    throw new TypeError("Failed to construct '" + name + "': Please use the 'new' operator, this DOM object constructor cannot be called as a function.");
+  }
+}
+/* The constants [names] of an interface, numbered from [first], on its interface object and its prototype. */
+function constants(ctor, names, first) {
+  for (var i = 0; i < names.length; i++) {
+    if (!names[i]) continue;
+    var d = { __proto__: null, value: first + i, writable: false, enumerable: true, configurable: false };
+    ObjectDefineProperty(ctor, names[i], d);
+    ObjectDefineProperty(ctor.prototype, names[i], d);
+  }
 }
 
 /* DOMException, of Web IDL, 3.14 (#530). An instance is an Error underneath, so it has what
@@ -341,21 +434,27 @@ function idOf(node) {
   if (!isNode(node)) throw new TypeError('parameter is not a Node');
   return node.__id;
 }
+/* The node of the host's [id], made the first time with the prototype of its interface. A form
+   is a proxy, whose controls are its named and indexed properties. */
 function wrap(id) {
   if (id == null) return null;
   var w = MapGet(wrappers, id);
   if (w) return w;
-  var kind = K.kind(id);
-  var proto = kind === 9 ? Document.prototype : kind === 3 ? Text.prototype : kind === 11 ? DocumentFragment.prototype : protoFor(K.tag(id));
+  var kind = K.kind(id), proto;
+  if (kind === 1) proto = protoFor(id);
+  else if (kind === 3) proto = Text.prototype;
+  else if (kind === 11) proto = DocumentFragment.prototype;
+  else if (id === rootId) proto = HTML_DOCUMENT ? HTMLDocument.prototype : XMLDocument.prototype;
+  else { proto = MapGet(documentProtos, id); if (proto === undefined) proto = XMLDocument.prototype; }
   w = ObjectCreate(proto);
   ObjectDefineProperty(w, '__id', { __proto__: null, value: id });
+  if (proto === HTMLFormElement.prototype) {
+    var target = w;
+    w = new Proxy(target, FORM_HANDLER);
+    WeakMapSet(formTargets, w, target);
+  }
   MapSet(wrappers, id, w);
   return w;
-}
-function wraps(ids) {
-  var out = [];
-  if (ids) for (var i = 0; i < ids.length; i++) ArrayPush(out, wrap(ids[i]));
-  return list(out);
 }
 function listenersOf(t) {
   if (!t.__listeners) hidden(t, '__listeners', ObjectCreate(null));
@@ -414,7 +513,11 @@ function removeEntry(t, type, entry) {
   entry.removed = true;
   if (at >= 0) listRemoveAt(entries, at);
 }
-function EventTarget() {}
+/* EventTarget, of the DOM Standard, 2.7, which a script may construct. */
+function EventTarget() {
+  needNew(this, EventTarget, 'EventTarget', function (t) { return isNode(t) || ObjectHasOwn(t, '__listeners'); });
+  hidden(this, '__listeners', ObjectCreate(null));
+}
 EventTarget.prototype.addEventListener = function (type, fn, options) {
   if (fn == null) return;
   var capture = options === true || !!(options && typeof options === 'object' && options.capture);
@@ -430,8 +533,13 @@ EventTarget.prototype.dispatchEvent = function (event) {
   event.isTrusted = false;
   return dispatch(this, event);
 };
+defineInterface(EventTarget, 'EventTarget');
 
+/* An event, of the DOM Standard, 2.2, whose constructor takes its type and then a dictionary. */
+function eventMade(e) { return ObjectHasOwn(e, '__stop'); }
 function Event(type, init) {
+  needNew(this, Event, 'Event', eventMade);
+  needArgs(arguments, 1, "Failed to construct 'Event'");
   init = init || { __proto__: null };
   this.type = String(type);
   this.bubbles = !!init.bubbles;
@@ -446,7 +554,7 @@ function Event(type, init) {
   hidden(this, '__stop', false);
   hidden(this, '__stopNow', false);
 }
-Event.NONE = 0; Event.CAPTURING_PHASE = 1; Event.AT_TARGET = 2; Event.BUBBLING_PHASE = 3;
+constants(Event, ['NONE', 'CAPTURING_PHASE', 'AT_TARGET', 'BUBBLING_PHASE'], 0);
 function preventDefaultOf(event) { if (event.cancelable) event.defaultPrevented = true; }
 function initEventOf(event, type, bubbles, cancelable) { event.type = String(type); event.bubbles = !!bubbles; event.cancelable = !!cancelable; }
 Event.prototype.preventDefault = function () { preventDefaultOf(this); };
@@ -457,19 +565,22 @@ Event.prototype.composedPath = function () { var out = []; for (var t = this.tar
 def(Event.prototype, 'srcElement', function () { return this.target; });
 def(Event.prototype, 'returnValue', function () { return !this.defaultPrevented; }, function (v) { if (!v) preventDefaultOf(this); });
 def(Event.prototype, 'cancelBubble', function () { return this.__stop; }, function (v) { if (v) this.__stop = true; });
+defineInterface(Event, 'Event', null, 1);
 
-function subEvent(parent, fill) {
+/* The interface [name] of an event that inherits from [parent], whose dictionary [fill] reads. */
+function subEvent(parent, name, fill) {
   var E = function (type, init) {
+    needNew(this, E, name, eventMade);
+    needArgs(arguments, 1, "Failed to construct '" + name + "'");
     init = init || { __proto__: null };
     ReflectApply(parent, this, [type, init]);
     ReflectApply(fill, this, [init]);
   };
   E.prototype = ObjectCreate(parent.prototype);
-  E.prototype.constructor = E;
-  return E;
+  return defineInterface(E, name, parent, 1);
 }
-var UIEvent = subEvent(Event, function (init) { this.view = init.view || null; this.detail = init.detail || 0; });
-var MouseEvent = subEvent(UIEvent, function (init) {
+var UIEvent = subEvent(Event, 'UIEvent', function (init) { this.view = init.view || null; this.detail = init.detail || 0; });
+var MouseEvent = subEvent(UIEvent, 'MouseEvent', function (init) {
   this.clientX = init.clientX || 0; this.clientY = init.clientY || 0;
   this.screenX = init.screenX || 0; this.screenY = init.screenY || 0;
   this.pageX = init.pageX === undefined ? this.clientX : init.pageX; this.pageY = init.pageY === undefined ? this.clientY : init.pageY;
@@ -479,19 +590,23 @@ var MouseEvent = subEvent(UIEvent, function (init) {
   this.relatedTarget = init.relatedTarget || null;
 });
 MouseEvent.prototype.getModifierState = function () { return false; };
-var PointerEvent = subEvent(MouseEvent, function (init) {
+var PointerEvent = subEvent(MouseEvent, 'PointerEvent', function (init) {
   this.pointerId = init.pointerId || 0; this.pointerType = init.pointerType || '';
   this.isPrimary = !!init.isPrimary; this.width = init.width || 1; this.height = init.height || 1; this.pressure = init.pressure || 0;
 });
-var KeyboardEvent = subEvent(UIEvent, function (init) {
+var KeyboardEvent = subEvent(UIEvent, 'KeyboardEvent', function (init) {
   this.key = init.key || ''; this.code = init.code || ''; this.keyCode = init.keyCode || 0; this.which = this.keyCode;
   this.ctrlKey = !!init.ctrlKey; this.shiftKey = !!init.shiftKey; this.altKey = !!init.altKey; this.metaKey = !!init.metaKey;
   this.repeat = !!init.repeat;
 });
-var FocusEvent = subEvent(UIEvent, function (init) { this.relatedTarget = init.relatedTarget || null; });
-var InputEvent = subEvent(UIEvent, function (init) { this.data = init.data === undefined ? null : init.data; this.inputType = init.inputType || ''; });
-var CustomEvent = subEvent(Event, function (init) { this.detail = init.detail === undefined ? null : init.detail; });
+var FocusEvent = subEvent(UIEvent, 'FocusEvent', function (init) { this.relatedTarget = init.relatedTarget || null; });
+var InputEvent = subEvent(UIEvent, 'InputEvent', function (init) { this.data = init.data === undefined ? null : init.data; this.inputType = init.inputType || ''; });
+var CustomEvent = subEvent(Event, 'CustomEvent', function (init) { this.detail = init.detail === undefined ? null : init.detail; });
 CustomEvent.prototype.initCustomEvent = function (type, bubbles, cancelable, detail) { initEventOf(this, type, bubbles, cancelable); this.detail = detail; };
+var TouchEvent = subEvent(UIEvent, 'TouchEvent', function (init) {
+  this.touches = init.touches || []; this.targetTouches = init.targetTouches || []; this.changedTouches = init.changedTouches || [];
+  this.ctrlKey = !!init.ctrlKey; this.shiftKey = !!init.shiftKey; this.altKey = !!init.altKey; this.metaKey = !!init.metaKey;
+});
 
 function parentTarget(t) {
   if (t === global) return null;
@@ -624,7 +739,7 @@ function reach(el) {
   reachedIds[id] = true;
   pendingIds[id] = false;
   var names = K.attrNames(id);
-  for (var i = 0; i < names.length; i++) attributeChanged(el, names[i], true);
+  for (var i = 0; i < names.length; i++) handlerAttributeChanged(el, names[i], true);
 }
 /* Reaches [el], unless it is an element of the markup that the parser has yet to reach. A node
    that is no element has no handler attributes, and is marked reached as it is. */
@@ -643,6 +758,13 @@ function reachMarkup(count) {
 }
 /* A content attribute [name] of [el] was set, or removed: a handler attribute sets its handler. */
 function attributeChanged(el, name, set) {
+  // Setting or removing the nonce attribute sets the element's nonce (HTML, 2.6.3), and setting
+  // async ends the forced async of a script element a script made (HTML, 4.12.1).
+  if (name === 'nonce') WeakMapSet(nonces, el, set ? K.attr(el.__id, 'nonce') : '');
+  if (name === 'async' && set) WeakMapSet(forceAsync, el, false);
+  handlerAttributeChanged(el, name, set);
+}
+function handlerAttributeChanged(el, name, set) {
   if (StringSubstring(name, 0, 2) !== 'on') return;
   var type = StringSubstring(name, 2), t = handlerTarget(el, type);
   if (t) setHandler(t, type, set ? RAW : null, el);
@@ -669,11 +791,65 @@ function handlerValue(t, type) {
     } else {
       var scoped = new Function('__kiteDocument', '__kiteForm', '__kiteScope',
         'with (__kiteDocument) { with (__kiteForm) { with (__kiteScope) { return function (event) {\n' + code + '\n}; } } }');
-      fn = ReflectApply(scoped, null, [document, formOwnerOf(source) || ObjectCreate(null), source]);
+      fn = ReflectApply(scoped, null, [document, formScope(formOwnerOf(source)), source]);
     }
   } catch (e) { report(e); }
   source.__compiled[key] = { __proto__: null, code: code, fn: fn };
   return fn;
+}
+/* The value of [key] along the prototype chain of [t], a getter run on [receiver]: OrdinaryGet of
+   ECMAScript, 10.1.8.1, for a proxy's get trap. Reflect.get would do, but that of KiteJS 0.2.0
+   answers a key that nothing has with an object of its own, not undefined, and runs a getter on
+   [t] alone. */
+function receiverGet(t, key, receiver) {
+  for (var o = t; o !== null; o = ObjectGetPrototypeOf(o)) {
+    var d = ObjectGetOwnPropertyDescriptor(o, key);
+    if (d === undefined) continue;
+    if (ObjectHasOwn(d, 'value')) return d.value;
+    return d.get === undefined ? undefined : ReflectApply(d.get, receiver, []);
+  }
+  return undefined;
+}
+/* The fields of the property descriptor [desc] that a defineProperty trap is handed, in an object
+   of their own: the engine makes it an ordinary object (ECMAScript, 10.5.6), so a get or a value
+   that a book adds to Object.prototype would join it on its way to Reflect.defineProperty. */
+function ownDescriptor(desc) {
+  var d = { __proto__: null };
+  if (ObjectHasOwn(desc, 'value')) d.value = desc.value;
+  if (ObjectHasOwn(desc, 'writable')) d.writable = desc.writable;
+  if (ObjectHasOwn(desc, 'get')) d.get = desc.get;
+  if (ObjectHasOwn(desc, 'set')) d.set = desc.set;
+  if (ObjectHasOwn(desc, 'enumerable')) d.enumerable = desc.enumerable;
+  if (ObjectHasOwn(desc, 'configurable')) d.configurable = desc.configurable;
+  return d;
+}
+/* Sets a property as an assignment on [receiver] does, its target being [t]. */
+function receiverSet(t, key, value, receiver) {
+  for (var o = t; o !== null; o = ObjectGetPrototypeOf(o)) {
+    var d = ObjectGetOwnPropertyDescriptor(o, key);
+    if (d === undefined) continue;
+    if (ObjectHasOwn(d, 'value')) {
+      if (!d.writable) return false;
+      break;
+    }
+    if (d.set === undefined) return false;
+    ReflectApply(d.set, receiver, [value]);
+    return true;
+  }
+  return ReflectSet(t, key, value);
+}
+/* Whether the engine's with statement binds a name by asking the object whether it has it, as
+   an object environment record does (ECMAScript, 9.1.1.2.1), and not by reading it: one that reads
+   it finds every name in a form's proxy, which answers undefined for a name it lacks. */
+var WITH_ASKS_HAS = (function () {
+  var probe = new Proxy(ObjectCreate(null), { __proto__: null, get: function () { return 1; } });
+  try { return ReflectApply(new Function('probe', 'outer', 'with (probe) { return outer; }'), null, [probe, 0]) === 0; } catch (e) { return false; }
+})();
+/* The scope of a handler for its element's form owner [form]: the form, whose controls are named
+   properties, or its object alone, without them, on an engine whose with reads every name. */
+function formScope(form) {
+  if (form === null) return ObjectCreate(null);
+  return WITH_ASKS_HAS ? form : WeakMapGet(formTargets, form);
 }
 var FORM_ASSOCIATED = nameSet(['button', 'fieldset', 'img', 'input', 'object', 'output', 'select', 'textarea']);
 function formOwnerOf(el) { return FORM_ASSOCIATED[tagOf(el)] ? formOf(el) : null; }
@@ -700,370 +876,6 @@ function defineHandler(proto, type, toWindow) {
   });
 }
 
-/* ---- nodes ---- */
-
-function Node() {}
-Node.prototype = ObjectCreate(EventTarget.prototype);
-Node.prototype.constructor = Node;
-Node.ELEMENT_NODE = 1; Node.TEXT_NODE = 3; Node.COMMENT_NODE = 8; Node.DOCUMENT_NODE = 9; Node.DOCUMENT_FRAGMENT_NODE = 11;
-def(Node.prototype, 'nodeType', function () { return K.kind(idOf(this)); });
-def(Node.prototype, 'nodeName', function () {
-  var kind = K.kind(idOf(this));
-  return kind === 3 ? '#text' : kind === 9 ? '#document' : kind === 11 ? '#document-fragment' : StringToUpperCase(K.tag(this.__id));
-});
-def(Node.prototype, 'parentNode', function () { return wrap(K.parent(idOf(this))); });
-def(Node.prototype, 'parentElement', function () { var p = K.parent(idOf(this)); return p == null || p === rootId || K.kind(p) !== 1 ? null : wrap(p); });
-def(Node.prototype, 'childNodes', function () { return wraps(K.children(idOf(this))); });
-def(Node.prototype, 'firstChild', function () { var c = K.children(idOf(this)); return c && c.length ? wrap(c[0]) : null; });
-def(Node.prototype, 'lastChild', function () { var c = K.children(idOf(this)); return c && c.length ? wrap(c[c.length - 1]) : null; });
-/* The sibling of [id] [step] places along, an element if [elementsOnly], as an id, or null. */
-function siblingId(id, step, elementsOnly) {
-  var p = K.parent(id);
-  if (p == null) return null;
-  var c = K.children(p);
-  for (var i = ArrayIndexOf(c, id) + step; i >= 0 && i < c.length; i += step) {
-    if (!elementsOnly || K.kind(c[i]) === 1) return c[i];
-  }
-  return null;
-}
-def(Node.prototype, 'nextSibling', function () { return wrap(siblingId(idOf(this), 1, false)); });
-def(Node.prototype, 'previousSibling', function () { return wrap(siblingId(idOf(this), -1, false)); });
-def(Node.prototype, 'ownerDocument', function () { return this === document ? null : document; });
-def(Node.prototype, 'isConnected', function () { return K.connected(idOf(this)); });
-def(Node.prototype, 'textContent', function () { return this === document ? null : K.text(idOf(this)); },
-  function (v) { if (this !== document) K.setText(idOf(this), v == null ? '' : String(v)); });
-def(Node.prototype, 'nodeValue', function () { return K.kind(idOf(this)) === 3 ? K.text(this.__id) : null; },
-  function (v) { if (K.kind(idOf(this)) === 3) K.setText(this.__id, v == null ? '' : String(v)); });
-Node.prototype.hasChildNodes = function () { var c = K.children(idOf(this)); return !!(c && c.length); };
-Node.prototype.appendChild = function (child) { return insertNode(idOf(this), child, null, 'appendChild'); };
-Node.prototype.insertBefore = function (child, ref) { return insertNode(idOf(this), child, ref, 'insertBefore'); };
-Node.prototype.removeChild = function (child) { return removeNode(idOf(this), child, 'removeChild'); };
-Node.prototype.replaceChild = function (child, old) {
-  var id = idOf(this);
-  insertNode(id, child, old, 'replaceChild');
-  removeNode(id, old, 'replaceChild');
-  return old;
-};
-Node.prototype.cloneNode = function (deep) { return wrap(K.clone(idOf(this), !!deep)); };
-Node.prototype.contains = function (other) {
-  if (other == null) return false;
-  var self = idOf(this);
-  for (var t = idOf(other); t != null; t = K.parent(t)) if (t === self) return true;
-  return false;
-};
-Node.prototype.isSameNode = function (other) { return this === other; };
-Node.prototype.normalize = function () {};
-Node.prototype.getRootNode = function () { var t = idOf(this), p; while ((p = K.parent(t)) != null) t = p; return wrap(t); };
-
-/* The nodes of a call such as append(), a string made a text node, as the DOM converts them. */
-function nodesFrom(args) {
-  var out = [];
-  for (var i = 0; i < args.length; i++) ArrayPush(out, isNode(args[i]) ? args[i] : textNode(args[i]));
-  return out;
-}
-function ChildNode(proto) {
-  proto.remove = function () { var p = K.parent(idOf(this)); if (p != null) K.remove(p, this.__id); };
-  proto.before = function () {
-    var p = K.parent(idOf(this)); if (p == null) return;
-    var nodes = nodesFrom(arguments);
-    for (var i = 0; i < nodes.length; i++) insertNode(p, nodes[i], this, 'before');
-  };
-  proto.after = function () {
-    var p = K.parent(idOf(this)); if (p == null) return;
-    var next = wrap(siblingId(this.__id, 1, false)), nodes = nodesFrom(arguments);
-    for (var i = 0; i < nodes.length; i++) insertNode(p, nodes[i], next, 'after');
-  };
-  proto.replaceWith = function () {
-    var p = K.parent(idOf(this)); if (p == null) return;
-    var nodes = nodesFrom(arguments);
-    for (var i = 0; i < nodes.length; i++) insertNode(p, nodes[i], this, 'replaceWith');
-    removeNode(p, this, 'replaceWith');
-  };
-}
-function appendNodes(id, args, what) {
-  var nodes = nodesFrom(args);
-  for (var i = 0; i < nodes.length; i++) insertNode(id, nodes[i], null, what);
-}
-/* The elements under [id] whose classes hold every one of [names], in tree order. */
-function byClassNames(id, names) {
-  var wanted = asciiTokens(String(names));
-  if (!wanted.length) return list([]);
-  var all = queryAll(id, '*'), out = [];
-  for (var i = 0; i < all.length; i++) {
-    var have = asciiTokens(K.attr(all[i], 'class') || ''), every = true;
-    for (var j = 0; j < wanted.length && every; j++) every = ArrayIndexOf(have, wanted[j]) >= 0;
-    if (every) ArrayPush(out, wrap(all[i]));
-  }
-  return list(out);
-}
-function ParentNode(proto) {
-  def(proto, 'children', function () { return list(listMap(elementIds(idOf(this)), wrap)); });
-  def(proto, 'childElementCount', function () { return elementIds(idOf(this)).length; });
-  def(proto, 'firstElementChild', function () { var c = elementIds(idOf(this)); return c.length ? wrap(c[0]) : null; });
-  def(proto, 'lastElementChild', function () { var c = elementIds(idOf(this)); return c.length ? wrap(c[c.length - 1]) : null; });
-  proto.append = function () { appendNodes(idOf(this), arguments, 'append'); };
-  proto.prepend = function () {
-    var id = idOf(this), c = K.children(id), first = c && c.length ? wrap(c[0]) : null, nodes = nodesFrom(arguments);
-    for (var i = 0; i < nodes.length; i++) insertNode(id, nodes[i], first, 'prepend');
-  };
-  proto.replaceChildren = function () { var id = idOf(this); K.setText(id, ''); appendNodes(id, arguments, 'replaceChildren'); };
-  proto.querySelector = function (selectors) { return wrap(queryFirst(idOf(this), selectors)); };
-  proto.querySelectorAll = function (selectors) { return wraps(queryAll(idOf(this), selectors)); };
-  proto.getElementsByTagName = function (name) { return wraps(queryAll(idOf(this), name === '*' ? '*' : StringToLowerCase(String(name)))); };
-  proto.getElementsByClassName = function (names) { return byClassNames(idOf(this), names); };
-}
-
-function CharacterData() {}
-CharacterData.prototype = ObjectCreate(Node.prototype);
-def(CharacterData.prototype, 'data', function () { return K.text(idOf(this)); }, function (v) { K.setText(idOf(this), v == null ? '' : String(v)); });
-def(CharacterData.prototype, 'length', function () { return K.text(idOf(this)).length; });
-ChildNode(CharacterData.prototype);
-function Text() { throw new TypeError('use document.createTextNode'); }
-Text.prototype = ObjectCreate(CharacterData.prototype);
-Text.prototype.constructor = Text;
-def(Text.prototype, 'wholeText', function () { return K.text(idOf(this)); });
-
-/* ---- elements ---- */
-
-function Element() { throw new TypeError('use document.createElement'); }
-Element.prototype = ObjectCreate(Node.prototype);
-Element.prototype.constructor = Element;
-ChildNode(Element.prototype);
-ParentNode(Element.prototype);
-def(Element.prototype, 'tagName', function () { return StringToUpperCase(K.tag(idOf(this))); });
-def(Element.prototype, 'localName', function () { return K.tag(idOf(this)); });
-def(Element.prototype, 'namespaceURI', function () { return 'http://www.w3.org/1999/xhtml'; });
-function attrName(name) { return StringToLowerCase(String(name)); }
-function localPart(name) { return RegExpReplace(RE_PREFIX, String(name), ''); }
-function getAttr(el, name) { var v = K.attr(idOf(el), attrName(name)); return v == null ? null : v; }
-function setAttr(el, name, value) {
-  var id = idOf(el), n = attrName(name);
-  settle(el);
-  K.setAttr(id, n, String(value));
-  attributeChanged(el, n, true);
-}
-function removeAttr(el, name) {
-  var id = idOf(el), n = attrName(name);
-  if (K.attr(id, n) == null) return;
-  settle(el);
-  K.removeAttr(id, n);
-  attributeChanged(el, n, false);
-}
-Element.prototype.getAttribute = function (name) { return getAttr(this, name); };
-Element.prototype.getAttributeNS = function (ns, name) { return getAttr(this, localPart(name)); };
-Element.prototype.setAttribute = function (name, value) { setAttr(this, name, value); };
-Element.prototype.setAttributeNS = function (ns, name, value) { setAttr(this, localPart(name), value); };
-Element.prototype.removeAttribute = function (name) { removeAttr(this, name); };
-Element.prototype.removeAttributeNS = function (ns, name) { removeAttr(this, localPart(name)); };
-Element.prototype.hasAttribute = function (name) { return getAttr(this, name) !== null; };
-Element.prototype.hasAttributes = function () { return K.attrNames(idOf(this)).length > 0; };
-Element.prototype.getAttributeNames = function () { return listSlice(K.attrNames(idOf(this))); };
-Element.prototype.toggleAttribute = function (name, force) {
-  var has = getAttr(this, name) !== null;
-  var want = force === undefined ? !has : !!force;
-  if (want && !has) setAttr(this, name, '');
-  if (!want && has) removeAttr(this, name);
-  return want;
-};
-def(Element.prototype, 'attributes', function () {
-  var id = idOf(this);
-  return list(listMap(K.attrNames(id), function (n) { return { name: n, localName: n, value: K.attr(id, n), specified: true }; }));
-});
-function reflect(proto, prop, attr) {
-  def(proto, prop, function () { var v = K.attr(idOf(this), attr); return v == null ? '' : v; }, function (v) { K.setAttr(idOf(this), attr, String(v)); });
-}
-function reflectBool(proto, prop, attr) {
-  def(proto, prop, function () { return K.attr(idOf(this), attr) != null; }, function (v) { if (v) K.setAttr(idOf(this), attr, ''); else K.removeAttr(idOf(this), attr); });
-}
-reflect(Element.prototype, 'id', 'id');
-reflect(Element.prototype, 'className', 'class');
-reflect(Element.prototype, 'slot', 'slot');
-def(Element.prototype, 'classList', function () { return tokens(this, 'class'); });
-Element.prototype.matches = function (selectors) { return matchesId(idOf(this), selectors); };
-Element.prototype.webkitMatchesSelector = Element.prototype.matches;
-Element.prototype.closest = function (selectors) { return wrap(closestId(idOf(this), selectors)); };
-def(Element.prototype, 'innerHTML', function () { return K.html(idOf(this), false); }, function (v) { K.setHtml(idOf(this), v == null ? '' : String(v)); });
-def(Element.prototype, 'outerHTML', function () { return K.html(idOf(this), true); }, function (v) {
-  var p = K.parent(idOf(this)); if (p == null) return;
-  check(K.insertHtml(this.__id, 'beforebegin', v == null ? '' : String(v)), 'outerHTML');
-  removeNode(p, this, 'outerHTML');
-});
-Element.prototype.insertAdjacentHTML = function (position, html) { check(K.insertHtml(idOf(this), String(position), String(html)), 'insertAdjacentHTML'); };
-/* Puts [node] at [position] of [el], as insertAdjacentElement does; null where el has no parent to put it by. */
-function insertAdjacent(el, position, node, what) {
-  var id = idOf(el), p = K.parent(id);
-  switch (StringToLowerCase(String(position))) {
-    case 'beforebegin': if (p == null) return null; insertNode(p, node, el, what); break;
-    case 'afterbegin': var c = K.children(id); insertNode(id, node, c && c.length ? wrap(c[0]) : null, what); break;
-    case 'beforeend': insertNode(id, node, null, what); break;
-    case 'afterend': if (p == null) return null; insertNode(p, node, wrap(siblingId(id, 1, false)), what); break;
-    default: throw new DOMException('not a position: ' + position, 'SyntaxError');
-  }
-  return node;
-}
-Element.prototype.insertAdjacentElement = function (position, el) { return insertAdjacent(this, position, el, 'insertAdjacentElement'); };
-Element.prototype.insertAdjacentText = function (position, text) { insertAdjacent(this, position, textNode(text), 'insertAdjacentText'); };
-def(Element.prototype, 'nextElementSibling', function () { return wrap(siblingId(idOf(this), 1, true)); });
-def(Element.prototype, 'previousElementSibling', function () { return wrap(siblingId(idOf(this), -1, true)); });
-function rect(el) {
-  var r = K.rect(idOf(el)) || [0, 0, 0, 0];
-  return { x: r[0], y: r[1], width: r[2], height: r[3], left: r[0], top: r[1], right: r[0] + r[2], bottom: r[1] + r[3],
-    toJSON: function () { return { x: r[0], y: r[1], width: r[2], height: r[3] }; } };
-}
-Element.prototype.getBoundingClientRect = function () { return rect(this); };
-Element.prototype.getClientRects = function () { var r = rect(this); return list(r.width || r.height ? [r] : []); };
-def(Element.prototype, 'clientWidth', function () { return MathRound(rect(this).width); });
-def(Element.prototype, 'clientHeight', function () { return MathRound(rect(this).height); });
-def(Element.prototype, 'scrollWidth', function () { return MathRound(rect(this).width); });
-def(Element.prototype, 'scrollHeight', function () { return MathRound(rect(this).height); });
-def(Element.prototype, 'scrollTop', function () { return 0; }, function () {});
-def(Element.prototype, 'scrollLeft', function () { return 0; }, function () {});
-Element.prototype.scrollIntoView = function () {};
-Element.prototype.scrollTo = function () {};
-/* A promise that is already fulfilled, made by the Promise this DOM took. */
-function resolved(v) { return new Promise(function (resolve) { resolve(v); }); }
-/* A promise that is already rejected with [e], made the same way. */
-function rejected(e) { return new Promise(function (resolve, reject) { reject(e); }); }
-Element.prototype.animate = function () { return { finished: resolved(), cancel: function () {}, play: function () {}, pause: function () {} }; };
-
-/* True when [s] holds ASCII whitespace, which no token of a DOMTokenList may. */
-function hasAsciiSpace(s) {
-  for (var i = 0; i < s.length; i++) {
-    var c = StringCharCodeAt(s, i);
-    if (c === 32 || c === 9 || c === 10 || c === 12 || c === 13) return true;
-  }
-  return false;
-}
-function tokens(el, attr) {
-  function read() { return asciiTokens(K.attr(idOf(el), attr) || ''); }
-  function write(items) { K.setAttr(idOf(el), attr, ArrayJoin(items, ' ')); }
-  function valid(t) {
-    t = String(t);
-    if (!t.length) throw new DOMException('an empty token', 'SyntaxError');
-    if (hasAsciiSpace(t)) throw new DOMException('a token with a space: ' + t, 'InvalidCharacterError');
-    return t;
-  }
-  function add(args) { var r = read(); for (var i = 0; i < args.length; i++) { var t = valid(args[i]); if (ArrayIndexOf(r, t) < 0) ArrayPush(r, t); } write(r); }
-  function remove(args) {
-    var r = read();
-    for (var i = 0; i < args.length; i++) { var t = valid(args[i]); var k = ArrayIndexOf(r, t); while (k >= 0) { listRemoveAt(r, k); k = ArrayIndexOf(r, t); } }
-    write(r);
-  }
-  var api = {
-    item: function (i) { var r = read(); return i < r.length ? r[i] : null; },
-    contains: function (t) { return ArrayIndexOf(read(), String(t)) >= 0; },
-    add: function () { add(arguments); },
-    remove: function () { remove(arguments); },
-    toggle: function (t, force) {
-      t = valid(t);
-      var has = ArrayIndexOf(read(), t) >= 0;
-      var want = force === undefined ? !has : !!force;
-      if (want && !has) add([t]);
-      if (!want && has) remove([t]);
-      return want;
-    },
-    replace: function (a, b) { var r = read(), k = ArrayIndexOf(r, valid(a)); if (k < 0) return false; r[k] = valid(b); write(r); return true; },
-    forEach: function (fn, self) { var r = read(); for (var i = 0; i < r.length; i++) ReflectApply(fn, self, [r[i], i, api]); },
-    toString: function () { return K.attr(idOf(el), attr) || ''; },
-    supports: function () { return true; }
-  };
-  def(api, 'length', function () { return read().length; });
-  def(api, 'value', function () { return K.attr(idOf(el), attr) || ''; }, function (v) { K.setAttr(idOf(el), attr, String(v)); });
-  return api;
-}
-
-function parseStyle(text) {
-  var out = [];
-  var parts = [], depth = 0, quote = '', start = 0;
-  for (var i = 0; i < text.length; i++) {
-    var c = StringCharAt(text, i);
-    if (quote) { if (c === quote) quote = ''; }
-    else if (c === '"' || c === "'") quote = c;
-    else if (c === '(') depth++;
-    else if (c === ')') depth--;
-    else if (c === ';' && depth === 0) { ArrayPush(parts, StringSubstring(text, start, i)); start = i + 1; }
-  }
-  ArrayPush(parts, StringSubstring(text, start));
-  for (var j = 0; j < parts.length; j++) {
-    var colon = StringIndexOf(parts[j], ':');
-    if (colon < 0) continue;
-    var name = StringToLowerCase(StringTrim(StringSubstring(parts[j], 0, colon)));
-    var value = StringTrim(StringSubstring(parts[j], colon + 1));
-    var important = RegExpTest(RE_IMPORTANT, value);
-    if (important) value = StringTrim(RegExpReplace(RE_IMPORTANT, value, ''));
-    if (name.length) ArrayPush(out, { name: name, value: value, important: important });
-  }
-  return out;
-}
-function styleOf(el) {
-  if (el.__style) return el.__style;
-  function read() { return parseStyle(K.attr(idOf(el), 'style') || ''); }
-  function write(decls) {
-    var text = '';
-    for (var i = 0; i < decls.length; i++) text += (i ? '; ' : '') + decls[i].name + ': ' + decls[i].value + (decls[i].important ? ' !important' : '');
-    if (text.length) K.setAttr(idOf(el), 'style', text + ';'); else K.removeAttr(idOf(el), 'style');
-  }
-  function valueOf(name) {
-    var d = read(); name = StringToLowerCase(String(name));
-    for (var i = d.length - 1; i >= 0; i--) if (d[i].name === name) return cssValue(d[i].value);
-    return '';
-  }
-  function priorityOf(name) {
-    var d = read(); name = StringToLowerCase(String(name));
-    for (var i = d.length - 1; i >= 0; i--) if (d[i].name === name) return d[i].important ? 'important' : '';
-    return '';
-  }
-  function removeProperty(name) {
-    name = StringToLowerCase(String(name));
-    var old = valueOf(name);
-    write(listFilter(read(), function (x) { return x.name !== name; }));
-    return old;
-  }
-  function setProperty(name, value, priority) {
-    name = StringToLowerCase(String(name));
-    if (value == null || String(value) === '') { removeProperty(name); return; }
-    var d = listFilter(read(), function (x) { return x.name !== name; });
-    ArrayPush(d, { name: name, value: String(value), important: StringToLowerCase(String(priority || '')) === 'important' });
-    write(d);
-  }
-  function itemAt(i) { var d = read(); return i < d.length ? d[i].name : ''; }
-  var decl = {
-    getPropertyValue: function (name) { return valueOf(name); },
-    getPropertyPriority: function (name) { return priorityOf(name); },
-    setProperty: function (name, value, priority) { setProperty(name, value, priority); },
-    removeProperty: function (name) { return removeProperty(name); },
-    item: function (i) { return itemAt(i); }
-  };
-  function setCssText(v) { if (v == null || v === '') K.removeAttr(idOf(el), 'style'); else K.setAttr(idOf(el), 'style', String(v)); }
-  def(decl, 'cssText', function () { return K.attr(idOf(el), 'style') || ''; }, setCssText);
-  def(decl, 'length', function () { return read().length; });
-  // A key that names no CSS property is a plain property of the object, as in a browser. A CSS
-  // property comes before what the object inherits, as an accessor of the prototype would.
-  var own = ObjectCreate(null);
-  var style = new Proxy(decl, {
-    __proto__: null,
-    get: function (target, key) {
-      if (typeof key !== 'string' || ObjectHasOwn(target, key)) return target[key];
-      if (RegExpTest(RE_DIGITS, key)) return itemAt(Number(key));
-      var name = cssProperty(key);
-      if (name) return valueOf(name);
-      return key in own ? own[key] : target[key];
-    },
-    set: function (target, key, value) {
-      if (typeof key !== 'string') return false;
-      if (key === 'cssText') { setCssText(value); return true; }
-      if (ObjectHasOwn(target, key)) return false;
-      var name = cssProperty(key);
-      if (name) setProperty(name, value); else own[key] = value;
-      return true;
-    },
-    has: function (target, key) {
-      return key in target || (typeof key === 'string' && (cssProperty(key) !== null || key in own));
-    }
-  });
-  hidden(el, '__style', style);
-  return style;
-}
 """
 
 /**
@@ -1087,9 +899,6 @@ function usv(v) {
     from = i + 1;
   }
   return from ? out + StringSubstring(s, from) : s;
-}
-function needArgs(args, n, what) {
-  if (args.length < n) throw new TypeError(what + ': ' + n + ' argument' + (n > 1 ? 's' : '') + ' required, but only ' + args.length + ' present.');
 }
 /* A WebIDL sequence, from what the iterator of an object gives, each value converted as it
    comes. [method] is the iterator's method where a union has read it already, as WebIDL reads
@@ -1300,9 +1109,13 @@ if (SymbolToStringTag) {
   ObjectDefineProperty(SP, SymbolToStringTag, { __proto__: null, value: 'URLSearchParams', configurable: true });
   ObjectDefineProperty(ParamsIterator.prototype, SymbolToStringTag, { __proto__: null, value: 'URLSearchParams Iterator', configurable: true });
 }
+defineInterface(URL, 'URL', null, 1);
+defineInterface(URLSearchParams, 'URLSearchParams', null, 0);
 """
 
-/** The part of [DOM_PRELUDE] for bytes and text: TextEncoder, TextDecoder, atob and btoa. */
+/**
+ * The part of [DOM_PRELUDE] for bytes and text: TextEncoder, TextDecoder, atob and btoa.
+ */
 private const val DOM_PRELUDE_ENCODING: String = """/* ---- TextEncoder and TextDecoder of the Encoding Standard, atob and btoa of HTML (#532) ---- */
 
 /* A WebIDL dictionary argument: undefined and null are empty, and anything else must be an object. */
@@ -1445,7 +1258,9 @@ function btoa(data) {
 }
 """
 
-/** The part of [DOM_PRELUDE] for files: Blob, File, FileReader, ProgressEvent and blob URLs. */
+/**
+ * The part of [DOM_PRELUDE] for files: Blob, File, FileReader, ProgressEvent and blob URLs.
+ */
 private const val DOM_PRELUDE_FILE: String = """/* ---- Blob, File, FileReader and blob URLs, of the File API (#533) ---- */
 
 /* A blob's bytes and type live in a weak map that the methods read, so no script reaches them,
@@ -1588,7 +1403,7 @@ function progressNumber(v) {
   if (x !== x || x === Infinity || x === -Infinity) throw new TypeError('The provided double value is non-finite.');
   return x;
 }
-var ProgressEvent = subEvent(Event, function (init) {
+var ProgressEvent = subEvent(Event, 'ProgressEvent', function (init) {
   this.lengthComputable = !!init.lengthComputable;
   this.loaded = progressNumber(init.loaded);
   this.total = progressNumber(init.total);
@@ -1696,252 +1511,10 @@ URL.revokeObjectURL = function (url) {
 };
 """
 
-/** The rest of [DOM_PRELUDE]: elements, events, the document, the window and what the host calls. */
-private const val DOM_PRELUDE_TAIL: String = """function datasetOf(el) {
-  if (el.__dataset) return el.__dataset;
-  function attr(key) { return 'data-' + kebab(key); }
-  var ds = new Proxy({}, {
-    __proto__: null,
-    get: function (t, key) { if (typeof key !== 'string') return undefined; var v = K.attr(el.__id, attr(key)); return v == null ? undefined : v; },
-    set: function (t, key, value) { if (typeof key !== 'string') return false; K.setAttr(el.__id, attr(key), String(value)); return true; },
-    has: function (t, key) { return typeof key === 'string' && K.attr(el.__id, attr(key)) != null; },
-    deleteProperty: function (t, key) { if (typeof key === 'string') K.removeAttr(el.__id, attr(key)); return true; },
-    ownKeys: function () {
-      var data = listFilter(K.attrNames(el.__id), function (n) { return StringIndexOf(n, 'data-') === 0; });
-      return listMap(data, function (n) { return camel(StringSubstring(n, 5)); });
-    },
-    getOwnPropertyDescriptor: function (t, key) {
-      if (typeof key !== 'string') return undefined;
-      var v = K.attr(el.__id, attr(key));
-      return v == null ? undefined : { __proto__: null, value: v, writable: true, enumerable: true, configurable: true };
-    }
-  });
-  hidden(el, '__dataset', ds);
-  return ds;
-}
-
-function HTMLElement() { throw new TypeError('use document.createElement'); }
-HTMLElement.prototype = ObjectCreate(Element.prototype);
-HTMLElement.prototype.constructor = HTMLElement;
-defineHandlers(HTMLElement.prototype, GLOBAL_HANDLERS);
-def(HTMLElement.prototype, 'style', function () { return styleOf(this); }, function (v) { styleOf(this).cssText = v; });
-def(HTMLElement.prototype, 'dataset', function () { return datasetOf(this); });
-reflectBool(HTMLElement.prototype, 'hidden', 'hidden');
-reflect(HTMLElement.prototype, 'title', 'title');
-reflect(HTMLElement.prototype, 'lang', 'lang');
-reflect(HTMLElement.prototype, 'dir', 'dir');
-reflect(HTMLElement.prototype, 'accessKey', 'accesskey');
-def(HTMLElement.prototype, 'tabIndex', function () { var v = parseInt(K.attr(idOf(this), 'tabindex'), 10); return isNaN(v) ? -1 : v; }, function (v) { K.setAttr(idOf(this), 'tabindex', String(v)); });
-def(HTMLElement.prototype, 'innerText', function () { return K.text(idOf(this)); }, function (v) { K.setText(idOf(this), v == null ? '' : String(v)); });
-def(HTMLElement.prototype, 'outerText', function () { return K.text(idOf(this)); });
-def(HTMLElement.prototype, 'offsetWidth', function () { return MathRound(rect(this).width); });
-def(HTMLElement.prototype, 'offsetHeight', function () { return MathRound(rect(this).height); });
-def(HTMLElement.prototype, 'offsetLeft', function () { return MathRound(rect(this).left); });
-def(HTMLElement.prototype, 'offsetTop', function () { return MathRound(rect(this).top); });
-def(HTMLElement.prototype, 'offsetParent', function () { idOf(this); return bodyOf(rootId); });
-function* focusSteps(el) {
-  if (document.__active === el) return;
-  var before = document.__active;
-  document.__active = el;
-  if (before && before !== el) {
-    for (var a = dispatchSteps(before, new FocusEvent('blur', { __proto__: null, relatedTarget: el })); !GeneratorNext(a).done;) yield;
-    for (var b = dispatchSteps(before, new FocusEvent('focusout', { __proto__: null, bubbles: true, relatedTarget: el })); !GeneratorNext(b).done;) yield;
-  }
-  for (var c = dispatchSteps(el, new FocusEvent('focus', { __proto__: null, relatedTarget: before || null })); !GeneratorNext(c).done;) yield;
-  for (var d = dispatchSteps(el, new FocusEvent('focusin', { __proto__: null, bubbles: true, relatedTarget: before || null })); !GeneratorNext(d).done;) yield;
-}
-HTMLElement.prototype.focus = function () { drain(focusSteps(this)); };
-HTMLElement.prototype.blur = function () {
-  if (document.__active !== this) return;
-  document.__active = null;
-  fireEvent(this, new FocusEvent('blur'));
-  fireEvent(this, new FocusEvent('focusout', { __proto__: null, bubbles: true }));
-};
-function* clickSteps(el) {
-  if (el.__clicking) return;
-  hidden(el, '__clicking', true);
-  try {
-    var click = new MouseEvent('click', { __proto__: null, bubbles: true, cancelable: true, composed: true, view: global, detail: 1 });
-    for (var g = activateSteps(el, click, false); !GeneratorNext(g).done;) yield;
-  } finally { el.__clicking = false; }
-}
-HTMLElement.prototype.click = function () { drain(clickSteps(this)); };
-
-function elementType(parent, setup) {
-  var T = function () { throw new TypeError('use document.createElement'); };
-  T.prototype = ObjectCreate(parent.prototype);
-  T.prototype.constructor = T;
-  if (setup) setup(T.prototype);
-  return T;
-}
-function liveValue(proto, attr) {
-  def(proto, 'value', function () { return this.__value !== undefined ? this.__value : (K.attr(idOf(this), attr) || ''); },
-    function (v) { hidden(this, '__value', v == null ? '' : String(v)); });
-  def(proto, 'defaultValue', function () { return K.attr(idOf(this), attr) || ''; }, function (v) { K.setAttr(idOf(this), attr, String(v)); });
-}
-/* What the DOM's own algorithms read of a form control: its state, not the attributes of its
-   prototype, which a script can redefine. */
-function inputType(el) { return StringToLowerCase(K.attr(el.__id, 'type') || 'text'); }
-function buttonType(el) { return StringToLowerCase(K.attr(el.__id, 'type') || 'submit'); }
-function disabledOf(el) { return K.attr(el.__id, 'disabled') != null; }
-function formOf(el) { return wrap(closestId(el.__id, 'form')); }
-function checkedOf(el) { return el.__checked !== undefined ? el.__checked : K.attr(el.__id, 'checked') != null; }
-function setChecked(el, v) {
-  hidden(el, '__checked', !!v);
-  // The rendering follows the checkedness, so a selector and the page see it.
-  if (v) K.setAttr(el.__id, 'checked', ''); else K.removeAttr(el.__id, 'checked');
-  if (v && inputType(el) === 'radio') uncheckGroup(el);
-}
-function selectedOf(option) { return option.__selected !== undefined ? option.__selected : K.attr(option.__id, 'selected') != null; }
-function optionValue(option) { var v = K.attr(option.__id, 'value'); return v == null ? StringTrim(K.text(option.__id)) : v; }
-function labelControl(label) {
-  var f = K.attr(label.__id, 'for');
-  return wrap(f ? K.byId(f) : queryFirst(label.__id, 'input, select, textarea, button'));
-}
-var HTMLAnchorElement = elementType(HTMLElement, function (p) {
-  reflect(p, 'href', 'href'); reflect(p, 'target', 'target'); reflect(p, 'rel', 'rel'); reflect(p, 'download', 'download');
-  def(p, 'text', function () { return K.text(idOf(this)); }, function (v) { K.setText(idOf(this), String(v)); });
-  p.toString = function () { return K.attr(idOf(this), 'href') || ''; };
-});
-var HTMLAreaElement = elementType(HTMLElement, function (p) { reflect(p, 'href', 'href'); reflect(p, 'alt', 'alt'); });
-var HTMLImageElement = elementType(HTMLElement, function (p) {
-  reflect(p, 'src', 'src'); reflect(p, 'alt', 'alt'); reflect(p, 'srcset', 'srcset');
-  def(p, 'width', function () { return parseInt(K.attr(idOf(this), 'width'), 10) || MathRound(rect(this).width); }, function (v) { K.setAttr(idOf(this), 'width', String(v)); });
-  def(p, 'height', function () { return parseInt(K.attr(idOf(this), 'height'), 10) || MathRound(rect(this).height); }, function (v) { K.setAttr(idOf(this), 'height', String(v)); });
-  def(p, 'complete', function () { return true; });
-  def(p, 'naturalWidth', function () { return parseInt(K.attr(idOf(this), 'width'), 10) || 0; });
-  def(p, 'naturalHeight', function () { return parseInt(K.attr(idOf(this), 'height'), 10) || 0; });
-});
-var HTMLInputElement = elementType(HTMLElement, function (p) {
-  liveValue(p, 'value');
-  def(p, 'type', function () { idOf(this); return inputType(this); }, function (v) { K.setAttr(idOf(this), 'type', String(v)); });
-  def(p, 'checked', function () { idOf(this); return checkedOf(this); }, function (v) { idOf(this); setChecked(this, v); });
-  reflectBool(p, 'defaultChecked', 'checked');
-  reflectBool(p, 'disabled', 'disabled'); reflectBool(p, 'readOnly', 'readonly'); reflectBool(p, 'required', 'required');
-  reflect(p, 'name', 'name'); reflect(p, 'placeholder', 'placeholder');
-  def(p, 'form', function () { idOf(this); return formOf(this); });
-  p.select = function () {};
-  p.setSelectionRange = function () {};
-  p.checkValidity = function () { return true; };
-  p.reportValidity = function () { return true; };
-});
-/* The other radio buttons of the group of [input] that are checked: those of its form, or else
-   of the document, with its name. */
-function radioGroup(input) {
-  var name = K.attr(input.__id, 'name'), out = [];
-  if (!name) return out;
-  var form = closestId(input.__id, 'form');
-  var all = queryAll(form == null ? rootId : form, 'input');
-  for (var i = 0; i < all.length; i++) {
-    var other = wrap(all[i]);
-    if (other !== input && inputType(other) === 'radio' && K.attr(all[i], 'name') === name && checkedOf(other)) ArrayPush(out, other);
-  }
-  return out;
-}
-function uncheckGroup(input) {
-  var group = radioGroup(input);
-  for (var i = 0; i < group.length; i++) {
-    hidden(group[i], '__checked', false);
-    K.removeAttr(group[i].__id, 'checked');
-  }
-}
-var HTMLTextAreaElement = elementType(HTMLElement, function (p) {
-  def(p, 'value', function () { return this.__value !== undefined ? this.__value : K.text(idOf(this)); }, function (v) { hidden(this, '__value', v == null ? '' : String(v)); });
-  def(p, 'defaultValue', function () { return K.text(idOf(this)); }, function (v) { K.setText(idOf(this), String(v)); });
-  reflectBool(p, 'disabled', 'disabled'); reflect(p, 'name', 'name');
-  def(p, 'form', function () { idOf(this); return formOf(this); });
-});
-var HTMLButtonElement = elementType(HTMLElement, function (p) {
-  liveValue(p, 'value');
-  def(p, 'type', function () { idOf(this); return buttonType(this); }, function (v) { K.setAttr(idOf(this), 'type', String(v)); });
-  reflectBool(p, 'disabled', 'disabled'); reflect(p, 'name', 'name');
-  def(p, 'form', function () { idOf(this); return formOf(this); });
-});
-var HTMLOptionElement = elementType(HTMLElement, function (p) {
-  def(p, 'value', function () { idOf(this); return optionValue(this); }, function (v) { K.setAttr(idOf(this), 'value', String(v)); });
-  def(p, 'text', function () { return K.text(idOf(this)); }, function (v) { K.setText(idOf(this), String(v)); });
-  def(p, 'selected', function () { idOf(this); return selectedOf(this); }, function (v) { hidden(this, '__selected', !!v); });
-  reflectBool(p, 'disabled', 'disabled');
-});
-function optionsOf(select) { return listMap(queryAll(select.__id, 'option'), wrap); }
-function selectedIndexOf(select) {
-  var o = optionsOf(select);
-  for (var i = 0; i < o.length; i++) if (selectedOf(o[i])) return i;
-  return o.length && K.attr(select.__id, 'multiple') == null ? 0 : -1;
-}
-var HTMLSelectElement = elementType(HTMLElement, function (p) {
-  def(p, 'options', function () { return list(optionsOf(wrap(idOf(this)))); });
-  def(p, 'selectedIndex', function () { idOf(this); return selectedIndexOf(this); },
-    function (v) { var o = optionsOf(wrap(idOf(this))); for (var i = 0; i < o.length; i++) hidden(o[i], '__selected', i === v); });
-  def(p, 'value', function () { idOf(this); var i = selectedIndexOf(this); return i < 0 ? '' : optionValue(optionsOf(this)[i]); },
-    function (v) { var o = optionsOf(wrap(idOf(this))), s = String(v); for (var i = 0; i < o.length; i++) hidden(o[i], '__selected', optionValue(o[i]) === s); });
-  reflectBool(p, 'multiple', 'multiple'); reflectBool(p, 'disabled', 'disabled'); reflect(p, 'name', 'name');
-  def(p, 'form', function () { idOf(this); return formOf(this); });
-});
-var HTMLFormElement = elementType(HTMLElement, function (p) {
-  def(p, 'elements', function () { return wraps(queryAll(idOf(this), 'input, select, textarea, button')); });
-  reflect(p, 'action', 'action'); reflect(p, 'method', 'method'); reflect(p, 'name', 'name');
-  p.submit = function () {};
-  p.requestSubmit = function () { fireEvent(this, new Event('submit', { __proto__: null, bubbles: true, cancelable: true })); };
-  p.reset = function () { idOf(this); drain(resetSteps(this)); };
-  p.checkValidity = function () { return true; };
-});
-function* resetSteps(form) {
-  var g = dispatchSteps(form, new Event('reset', { __proto__: null, bubbles: true, cancelable: true })), r;
-  while (!(r = GeneratorNext(g)).done) yield;
-  if (!r.value) return;
-  var all = queryAll(form.__id, 'input, select, textarea, button');
-  for (var i = 0; i < all.length; i++) { var el = wrap(all[i]); delete el.__value; delete el.__checked; }
-}
-var HTMLLabelElement = elementType(HTMLElement, function (p) {
-  reflect(p, 'htmlFor', 'for');
-  def(p, 'control', function () { idOf(this); return labelControl(this); });
-});
-var HTMLDetailsElement = elementType(HTMLElement, function (p) { reflectBool(p, 'open', 'open'); });
-var HTMLDialogElement = elementType(HTMLElement, function (p) {
-  reflectBool(p, 'open', 'open');
-  p.show = function () { K.setAttr(idOf(this), 'open', ''); };
-  p.showModal = function () { K.setAttr(idOf(this), 'open', ''); };
-  p.close = function (value) {
-    K.removeAttr(idOf(this), 'open');
-    this.returnValue = value === undefined ? '' : String(value);
-    fireEvent(this, new Event('close'));
-  };
-});
-var HTMLMediaElement = elementType(HTMLElement, function (p) {
-  reflect(p, 'src', 'src');
-  p.play = function () { return resolved(); };
-  p.pause = function () {};
-  p.load = function () {};
-  def(p, 'paused', function () { return true; });
-  def(p, 'currentTime', function () { return 0; }, function () {});
-});
-var HTMLCanvasElement = elementType(HTMLElement, function (p) {
-  p.getContext = function () { return null; };
-  def(p, 'width', function () { return parseInt(K.attr(idOf(this), 'width'), 10) || 300; }, function (v) { K.setAttr(idOf(this), 'width', String(v)); });
-  def(p, 'height', function () { return parseInt(K.attr(idOf(this), 'height'), 10) || 150; }, function (v) { K.setAttr(idOf(this), 'height', String(v)); });
-});
-var HTMLScriptElement = elementType(HTMLElement, function (p) {
-  reflect(p, 'src', 'src'); reflect(p, 'type', 'type');
-  def(p, 'text', function () { return K.text(idOf(this)); }, function (v) { K.setText(idOf(this), String(v)); });
-});
-/* The window handlers of a body element are the window's, read and set through it. */
-var HTMLBodyElement = elementType(HTMLElement, function (p) { defineHandlers(p, BODY_WINDOW_HANDLERS, true); });
-var HTMLIFrameElement = elementType(HTMLElement, function (p) {
-  reflect(p, 'src', 'src');
-  def(p, 'contentWindow', function () { return null; });
-  def(p, 'contentDocument', function () { return null; });
-});
-var TYPES = {
-  __proto__: null,
-  a: HTMLAnchorElement, area: HTMLAreaElement, img: HTMLImageElement, input: HTMLInputElement, textarea: HTMLTextAreaElement,
-  button: HTMLButtonElement, option: HTMLOptionElement, select: HTMLSelectElement, form: HTMLFormElement, label: HTMLLabelElement,
-  details: HTMLDetailsElement, dialog: HTMLDialogElement, audio: HTMLMediaElement, video: HTMLMediaElement,
-  canvas: HTMLCanvasElement, script: HTMLScriptElement, iframe: HTMLIFrameElement, body: HTMLBodyElement
-};
-function protoFor(tag) { var T = TYPES[tag]; return T ? T.prototype : HTMLElement.prototype; }
-
-/* ---- activation: what a click does once its listeners ran ---- */
+/**
+ * The rest of [DOM_PRELUDE]: activation, the document, the window and what the host calls.
+ */
+private const val DOM_PRELUDE_TAIL: String = """/* ---- activation: what a click does once its listeners ran ---- */
 
 function fireEvent(target, event) { return dispatch(target, event); }
 function control(el) {
@@ -1952,10 +1525,6 @@ function control(el) {
     if (tag === 'a' && K.attr(t, 'href') != null) return wrap(t);
   }
   return null;
-}
-function containsId(ancestor, id) {
-  for (var t = id; t != null; t = K.parent(t)) if (t === ancestor) return true;
-  return false;
 }
 /**
  * A click on [target], with the activation of the control it lands in: a check box or a radio
@@ -1989,7 +1558,7 @@ function* activateSteps(target, click, trusted) {
     for (var b = dispatchSteps(c, new Event('change', { __proto__: null, bubbles: true })); !GeneratorNext(b).done;) yield;
   } else if (tag === 'label') {
     var labelled = labelControl(c);
-    if (labelled && labelled !== target && !containsId(labelled.__id, target.__id)) {
+    if (labelled && labelled !== target && !isInclusiveAncestor(labelled.__id, target.__id)) {
       for (var l = clickSteps(labelled); !GeneratorNext(l).done;) yield;
     }
   } else if (tag === 'summary') {
@@ -2011,22 +1580,49 @@ function activate(target, click, trusted) { return drain(activateSteps(target, c
 
 /* ---- the document ---- */
 
-function Document() {}
+/* Document, of the DOM Standard, 4.5, which a script may construct, and XMLDocument and
+   HTMLDocument, which it may not. The chapter is an HTMLDocument when it was served as text/html
+   and an XMLDocument when served as XHTML, as a browser makes them (#541). */
+var documentProtos = new Map();
+/* Records the document [id] that a script made, of the interface whose prototype is [proto]. */
+function madeDocument(id, proto, html, contentType) {
+  MapSet(documentProtos, id, proto);
+  MapSet(madeDocuments, id, { __proto__: null, html: html, contentType: contentType });
+  madeDocumentCount++;
+  return wrap(id);
+}
+function Document() {
+  needNew(this, Document, 'Document', isNode);
+  return madeDocument(K.createDocument(), ObjectGetPrototypeOf(this), false, 'application/xml');
+}
 Document.prototype = ObjectCreate(Node.prototype);
-Document.prototype.constructor = Document;
 ParentNode(Document.prototype);
 defineHandlers(Document.prototype, GLOBAL_HANDLERS);
 defineHandlers(Document.prototype, ['readystatechange', 'visibilitychange']);
-/* The first child of [parent] that is a [tag] element, as an id, or null. */
-function childByTag(parent, tag) {
+/* The first child of [parent] that is an HTML element named [local], as an id, or null. */
+function childByTag(parent, local) {
   if (parent == null) return null;
   var c = elementIds(parent);
-  for (var i = 0; i < c.length; i++) if (K.tag(c[i]) === tag) return c[i];
+  for (var i = 0; i < c.length; i++) if (isHtml(c[i], local)) return c[i];
   return null;
 }
 function documentElementId(doc) { var c = elementIds(doc); return c.length ? c[0] : null; }
-function headOf(doc) { return wrap(childByTag(documentElementId(doc), 'head')); }
-function bodyOf(doc) { return wrap(childByTag(documentElementId(doc), 'body')); }
+/* The html element of a document, as an id: its document element when that is one. */
+function htmlElementOf(doc) { var e = documentElementId(doc); return e != null && isHtml(e, 'html') ? e : null; }
+function headOf(doc) { return wrap(childByTag(htmlElementOf(doc), 'head')); }
+function bodyOf(doc) {
+  var html = htmlElementOf(doc), c = html == null ? [] : elementIds(html);
+  for (var i = 0; i < c.length; i++) if (isHtml(c[i], 'body') || isHtml(c[i], 'frameset')) return wrap(c[i]);
+  return null;
+}
+/* The node [id] that the document [docId] made, which is that document's until a tree holds it. */
+function madeBy(docId, id) {
+  if (docId !== rootId) MapSet(nodeDocuments, id, docId);
+  var node = wrap(id);
+  // A script element that the parser did not make runs as if async until its async is set (HTML, 4.12.1).
+  if (K.kind(id) === 1 && isHtml(id, 'script')) WeakMapSet(forceAsync, node, true);
+  return node;
+}
 def(Document.prototype, 'documentElement', function () { return wrap(documentElementId(idOf(this))); });
 def(Document.prototype, 'head', function () { return headOf(idOf(this)); });
 def(Document.prototype, 'body', function () { return bodyOf(idOf(this)); });
@@ -2036,81 +1632,214 @@ def(Document.prototype, 'title', function () {
 }, function (v) {
   var id = idOf(this), t = queryFirst(id, 'title');
   if (t == null) {
-    var h = childByTag(documentElementId(id), 'head');
+    var h = childByTag(htmlElementOf(id), 'head');
     if (h == null) return;
-    t = K.create('title');
+    t = htmlElementId('title');
     check(K.insert(h, t, null), 'title');
   }
-  K.setText(t, String(v));
+  K.setText(t, domString(v));
 });
+def(Document.prototype, 'dir', function () {
+  var html = htmlElementOf(idOf(this));
+  return html == null ? '' : enumState(ENUMS.dir, K.attr(html, 'dir'));
+}, function (v) { var html = htmlElementOf(idOf(this)); if (html != null) setAttr(wrap(html), 'dir', domString(v)); });
+/* The colors of the body element that a document reflects, of HTML, 16.3.6. */
+(function (pairs) {
+  for (var i = 0; i < pairs.length; i += 2) (function (prop, attr) {
+    def(Document.prototype, prop, function () {
+      var body = bodyOf(idOf(this)), v = body === null || !isHtml(body.__id, 'body') ? null : K.attr(body.__id, attr);
+      return v == null ? '' : v;
+    }, function (v) {
+      var body = bodyOf(idOf(this));
+      if (body !== null && isHtml(body.__id, 'body')) setAttr(body, attr, v === null ? '' : domString(v));
+    });
+  })(pairs[i], pairs[i + 1]);
+})(['fgColor', 'text', 'linkColor', 'link', 'vlinkColor', 'vlink', 'alinkColor', 'alink', 'bgColor', 'bgcolor']);
 def(Document.prototype, 'readyState', function () { return this.__ready || 'loading'; });
-def(Document.prototype, 'defaultView', function () { return global; });
-def(Document.prototype, 'location', function () { return location; }, function (v) { navigate(v); });
-def(Document.prototype, 'URL', function () { return K.location(); });
-def(Document.prototype, 'documentURI', function () { return K.location(); });
-def(Document.prototype, 'baseURI', function () { return K.location(); });
-def(Document.prototype, 'characterSet', function () { return 'UTF-8'; });
-def(Document.prototype, 'contentType', function () { return 'application/xhtml+xml'; });
-def(Document.prototype, 'compatMode', function () { return 'CSS1Compat'; });
-def(Document.prototype, 'visibilityState', function () { return 'visible'; });
-def(Document.prototype, 'hidden', function () { return false; });
-def(Document.prototype, 'activeElement', function () { return this.__active || bodyOf(idOf(this)); });
+def(Document.prototype, 'defaultView', function () { return idOf(this) === rootId ? global : null; });
+def(Document.prototype, 'location', function () { return idOf(this) === rootId ? location : null; }, function (v) { if (idOf(this) === rootId) navigate(v); });
+def(Document.prototype, 'URL', function () { return idOf(this) === rootId ? K.location() : 'about:blank'; });
+def(Document.prototype, 'documentURI', function () { return idOf(this) === rootId ? K.location() : 'about:blank'; });
+def(Document.prototype, 'domain', function () { idOf(this); return originHost; }, function () { idOf(this); });
+def(Document.prototype, 'referrer', function () { idOf(this); return ''; });
+def(Document.prototype, 'lastModified', function () { idOf(this); return '01/01/1970 00:00:00'; });
+function utf8() { idOf(this); return 'UTF-8'; }
+def(Document.prototype, 'characterSet', utf8);
+def(Document.prototype, 'charset', utf8);
+def(Document.prototype, 'inputEncoding', utf8);
+def(Document.prototype, 'contentType', function () { return documentContentType(idOf(this)); });
+def(Document.prototype, 'compatMode', function () { idOf(this); return 'CSS1Compat'; });
+def(Document.prototype, 'designMode', function () { idOf(this); return 'off'; }, function () { idOf(this); });
+def(Document.prototype, 'visibilityState', function () { idOf(this); return 'visible'; });
+def(Document.prototype, 'hidden', function () { idOf(this); return false; });
+def(Document.prototype, 'activeElement', function () { return idOf(this) === rootId ? this.__active || bodyOf(rootId) : null; });
 def(Document.prototype, 'currentScript', function () { return this.__script || null; });
+def(Document.prototype, 'implementation', function () {
+  var id = idOf(this);
+  return cachedList(this, 'implementation', function () { var i = ObjectCreate(DOMImplementation.prototype); WeakMapSet(implementations, i, id); return i; });
+});
 def(Document.prototype, 'cookie', function () {
   var c = this.__cookies, out = [];
   if (c) { var keys = ObjectKeys(c); for (var i = 0; i < keys.length; i++) ArrayPush(out, keys[i] + '=' + c[keys[i]]); }
   return ArrayJoin(out, '; ');
 }, function (v) {
   if (!this.__cookies) hidden(this, '__cookies', ObjectCreate(null));
-  var pair = String(v), end = StringIndexOf(pair, ';');
+  var pair = domString(v), end = StringIndexOf(pair, ';');
   if (end >= 0) pair = StringSubstring(pair, 0, end);
   var eq = StringIndexOf(pair, '=');
   if (eq > 0) this.__cookies[StringTrim(StringSubstring(pair, 0, eq))] = StringTrim(StringSubstring(pair, eq + 1));
 });
+/* The live collections of a document, of HTML, 3.1.3: the HTML elements [selector] matches that [keep] keeps. */
+function documentCollection(prop, selector, keep) {
+  def(Document.prototype, prop, function () {
+    var id = idOf(this);
+    return cachedList(this, prop, function () {
+      return liveElements(function () { return listFilter(queryAll(id, selector), function (e) { return nameOf(e).ns === XHTML_NS && (!keep || keep(e)); }); });
+    });
+  });
+}
+documentCollection('images', 'img');
+documentCollection('embeds', 'embed');
+documentCollection('plugins', 'embed');
+documentCollection('links', 'a[href], area[href]');
+documentCollection('forms', 'form');
+documentCollection('scripts', 'script');
+documentCollection('anchors', 'a[name]');
+def(Document.prototype, 'applets', function () { idOf(this); return cachedList(this, 'applets', function () { return liveElements(function () { return []; }); }); });
 /* A CSS string of [value], for a selector that matches an attribute's value. */
 function selectorString(value) { return '"' + RegExpReplace(RE_QUOTE, String(value), '\\"') + '"'; }
-Document.prototype.getElementById = function (id) { return wrap(K.byId(String(id))); };
-Document.prototype.getElementsByName = function (name) { return wraps(queryAll(idOf(this), '[name=' + selectorString(name) + ']')); };
-Document.prototype.createElement = function (tag) { return wrap(K.create(StringToLowerCase(String(tag)))); };
-Document.prototype.createElementNS = function (ns, tag) { return wrap(K.create(StringToLowerCase(localPart(tag)))); };
-Document.prototype.createTextNode = function (data) { return textNode(data); };
-Document.prototype.createComment = function () { return wrap(K.createText('')); };
-Document.prototype.createDocumentFragment = function () { return wrap(K.createFragment()); };
-Document.prototype.createEvent = function (kind) {
-  var k = StringToLowerCase(String(kind));
-  return StringIndexOf(k, 'mouse') === 0 ? new MouseEvent('') : StringIndexOf(k, 'custom') === 0 ? new CustomEvent('')
-    : StringIndexOf(k, 'keyboard') === 0 ? new KeyboardEvent('') : new Event('');
+Document.prototype.getElementById = function (elementId) {
+  var id = idOf(this), v = domString(elementId);
+  return wrap(id === rootId ? K.byId(v) : queryFirst(id, '[id=' + selectorString(v) + ']'));
 };
-Document.prototype.hasFocus = function () { return true; };
+Document.prototype.getElementsByName = function (name) {
+  var id = idOf(this), n = domString(name);
+  return cachedList(this, 'name ' + n, function () {
+    return liveNodes(function () { return listFilter(queryAll(id, '[name]'), function (e) { return K.attr(e, 'name') === n && nameOf(e).ns === XHTML_NS; }); });
+  });
+};
+Document.prototype.createElement = function (localName) {
+  var docId = idOf(this), what = "Failed to execute 'createElement' on 'Document'";
+  needArgs(arguments, 1, what);
+  var local = validLocalName(domString(localName), what), html = isHtmlDocument(docId);
+  if (html) local = asciiLowerCase(local);
+  var ns = html || documentContentType(docId) === 'application/xhtml+xml' ? XHTML_NS : null;
+  return madeBy(docId, createElementId({ __proto__: null, ns: ns, prefix: null, local: local }));
+};
+Document.prototype.createElementNS = function (namespace, qualifiedName) {
+  var docId = idOf(this), what = "Failed to execute 'createElementNS' on 'Document'";
+  needArgs(arguments, 2, what);
+  return madeBy(docId, createElementId(extractName(namespace, domString(qualifiedName), what)));
+};
+Document.prototype.createTextNode = function (data) {
+  needArgs(arguments, 1, "Failed to execute 'createTextNode' on 'Document'");
+  return madeBy(idOf(this), K.createText(domString(data)));
+};
+Document.prototype.createComment = function () { return madeBy(idOf(this), K.createText('')); };
+Document.prototype.createDocumentFragment = function () { return madeBy(idOf(this), K.createFragment()); };
+Document.prototype.createAttribute = function (localName) {
+  var what = "Failed to execute 'createAttribute' on 'Document'", id = idOf(this), name = domString(localName);
+  needArgs(arguments, 1, what);
+  if (!RegExpTest(RE_ATTRIBUTE_NAME, name)) throw new DOMException(what + ": The localName provided ('" + name + "') contains an invalid character.", 'InvalidCharacterError');
+  return newAttr(isHtmlDocument(id) ? asciiLowerCase(name) : name, '', null);
+};
+/* The interfaces createEvent makes, by the names of DOM Standard, 4.5, in lower case. */
+var EVENT_INTERFACES = {
+  __proto__: null, event: Event, events: Event, htmlevents: Event, svgevents: Event, uievent: UIEvent, uievents: UIEvent,
+  mouseevent: MouseEvent, mouseevents: MouseEvent, keyboardevent: KeyboardEvent, focusevent: FocusEvent, customevent: CustomEvent,
+  touchevent: TouchEvent
+};
+Document.prototype.createEvent = function (interfaceName) {
+  idOf(this);
+  var name = domString(interfaceName), E = EVENT_INTERFACES[asciiLowerCase(name)];
+  if (E === undefined) throw new DOMException("Failed to execute 'createEvent' on 'Document': The provided event type ('" + name + "') is invalid.", 'NotSupportedError');
+  return new E('');
+};
+Document.prototype.hasFocus = function () { return idOf(this) === rootId; };
 /* What document.write() writes: after the running script, or else at the end of the body. */
 function writeHtml(doc, html) {
   var at = doc.__script;
   if (at) { K.write(at.__id, html); return; }
-  var body = childByTag(documentElementId(idOf(doc)), 'body');
-  if (body != null) check(K.insertHtml(body, 'beforeend', html), 'write');
+  var body = bodyOf(idOf(doc));
+  if (body !== null) check(K.insertHtml(body.__id, 'beforeend', html), 'write');
 }
-Document.prototype.write = function () { writeHtml(this, ArrayJoin(arguments, '')); };
-Document.prototype.writeln = function () { writeHtml(this, ArrayJoin(arguments, '') + '\n'); };
-Document.prototype.open = function () { return this; };
-Document.prototype.close = function () {};
-Document.prototype.elementFromPoint = function () { return null; };
-Document.prototype.execCommand = function () { return false; };
-Document.prototype.getSelection = function () { return selection(); };
-Document.prototype.importNode = function (node, deep) { return wrap(K.clone(idOf(node), !!deep)); };
-Document.prototype.adoptNode = function (node) { return node; };
+Document.prototype.write = function () { idOf(this); writeHtml(this, ArrayJoin(listMap(arguments, domString), '')); };
+Document.prototype.writeln = function () { idOf(this); writeHtml(this, ArrayJoin(listMap(arguments, domString), '') + '\n'); };
+Document.prototype.open = function () { idOf(this); return this; };
+Document.prototype.close = function () { idOf(this); };
+Document.prototype.elementFromPoint = function () { idOf(this); return null; };
+Document.prototype.elementsFromPoint = function () { idOf(this); return []; };
+Document.prototype.execCommand = function () { idOf(this); return false; };
+Document.prototype.queryCommandSupported = function () { idOf(this); return false; };
+Document.prototype.getSelection = function () { return idOf(this) === rootId ? selection : null; };
+Document.prototype.importNode = function (node, deep) { return madeBy(idOf(this), K.clone(idOf(node), !!deep)); };
+Document.prototype.adoptNode = function (node) {
+  var docId = idOf(this), id = idOf(node);
+  if (K.kind(id) === 9) throw new DOMException("Failed to execute 'adoptNode' on 'Document': The node provided is a document, which may not be adopted.", 'NotSupportedError');
+  var p = K.parent(id);
+  if (p != null) K.remove(p, id);
+  return madeBy(docId, id);
+};
+defineInterface(Document, 'Document', Node, 0);
+var XMLDocument = abstractInterface('XMLDocument', Document);
+defineInterface(XMLDocument, 'XMLDocument', Document);
+var HTMLDocument = abstractInterface('HTMLDocument', Document);
+defineInterface(HTMLDocument, 'HTMLDocument', Document);
 
-function DocumentFragment() { return wrap(K.createFragment()); }
+/* DOMImplementation, of the DOM Standard, 4.5.1. */
+var implementations = new WeakMap();
+var DOMImplementation = abstractInterface('DOMImplementation');
+function implementationOf(i) {
+  var id = i !== null && typeof i === 'object' ? WeakMapGet(implementations, i) : undefined;
+  if (id === undefined) throw new TypeError('Illegal invocation');
+  return id;
+}
+DOMImplementation.prototype.createDocumentType = function () {
+  implementationOf(this);
+  throw new DOMException("Failed to execute 'createDocumentType' on 'DOMImplementation': A document type is not supported.", 'NotSupportedError');
+};
+DOMImplementation.prototype.createDocument = function (namespace, qualifiedName) {
+  implementationOf(this);
+  var what = "Failed to execute 'createDocument' on 'DOMImplementation'";
+  needArgs(arguments, 2, what);
+  var ns = namespace == null || namespace === '' ? null : domString(namespace), q = qualifiedName === null ? '' : domString(qualifiedName);
+  var name = q === '' ? null : extractName(ns, q, what);
+  var doc = madeDocument(K.createDocument(), XMLDocument.prototype, false,
+    ns === XHTML_NS ? 'application/xhtml+xml' : ns === SVG_NS ? 'image/svg+xml' : 'application/xml');
+  if (name !== null) insertNode(doc.__id, madeBy(doc.__id, createElementId(name)), null, what);
+  return doc;
+};
+DOMImplementation.prototype.createHTMLDocument = function (title) {
+  implementationOf(this);
+  var doc = madeDocument(K.createDocument(), HTMLDocument.prototype, true, 'text/html'), id = doc.__id;
+  function element(parent, local) { var e = htmlElementId(local); MapSet(nodeDocuments, e, id); check(K.insert(parent, e, null), 'createHTMLDocument'); return e; }
+  var html = element(id, 'html'), head = element(html, 'head');
+  if (title !== undefined) K.setText(element(head, 'title'), domString(title));
+  element(html, 'body');
+  return doc;
+};
+DOMImplementation.prototype.hasFeature = function () { implementationOf(this); return true; };
+defineInterface(DOMImplementation, 'DOMImplementation');
+
+/* DocumentFragment, of the DOM Standard, 4.7, which a script may construct. */
+function DocumentFragment() {
+  needNew(this, DocumentFragment, 'DocumentFragment', isNode);
+  return wrap(K.createFragment());
+}
 DocumentFragment.prototype = ObjectCreate(Node.prototype);
-DocumentFragment.prototype.constructor = DocumentFragment;
 ParentNode(DocumentFragment.prototype);
-DocumentFragment.prototype.getElementById = function (id) { return wrap(queryFirst(idOf(this), '[id=' + selectorString(id) + ']')); };
+DocumentFragment.prototype.getElementById = function (elementId) { return wrap(queryFirst(idOf(this), '[id=' + selectorString(domString(elementId)) + ']')); };
+defineInterface(DocumentFragment, 'DocumentFragment', Node, 0);
 
 var document = wrap(rootId);
 
 /* ---- the window ---- */
 
-var location = {};
-function navigate(v) { K.navigate(String(v)); }
+/* Location, of HTML, 7.10.5, whose members are the instance's own ([LegacyUnforgeable]). */
+var Location = abstractInterface('Location');
+defineInterface(Location, 'Location');
+var location = ObjectCreate(Location.prototype);
+function navigate(v) { K.navigate(usv(v)); }
 def(location, 'href', function () { return K.location(); }, navigate);
 def(location, 'protocol', function () { return 'epub:'; });
 /* The book's origin, the same in each of its chapters (#500). */
@@ -2124,32 +1853,79 @@ def(location, 'pathname', function () { return RegExpReplace(RE_FRAGMENT, String
 def(location, 'search', function () { return ''; });
 var locationHash = '';
 def(location, 'hash', function () { return locationHash; }, function (v) {
-  v = String(v);
+  v = domString(v);
   locationHash = v && StringCharAt(v, 0) !== '#' ? '#' + v : v;
   navigate(locationHash);
 });
-location.assign = navigate;
-location.replace = navigate;
-location.reload = function () {};
-location.toString = function () { return K.location(); };
+hidden(location, 'assign', function (url) { navigate(url); });
+hidden(location, 'replace', function (url) { navigate(url); });
+hidden(location, 'reload', function () {});
+hidden(location, 'toString', function () { return K.location(); });
 
-function Storage(kind) { hidden(this, '__kind', kind); }
-function storageGet(s, key) { var v = K.storage(s.__kind, 'get', String(key), null); return v == null ? null : v; }
-function storageSet(s, key, value) { K.storage(s.__kind, 'set', String(key), String(value)); }
-function storageRemove(s, key) { K.storage(s.__kind, 'remove', String(key), null); }
-Storage.prototype.getItem = function (key) { return storageGet(this, key); };
-Storage.prototype.setItem = function (key, value) { storageSet(this, key, value); };
-Storage.prototype.removeItem = function (key) { storageRemove(this, key); };
-Storage.prototype.clear = function () { K.storage(this.__kind, 'clear', null, null); };
-Storage.prototype.key = function (i) { var v = K.storage(this.__kind, 'key', String(i), null); return v == null ? null : v; };
-def(Storage.prototype, 'length', function () { return Number(K.storage(this.__kind, 'length', null, null)); });
+/* Storage, of HTML, 12.2.1: a legacy platform object of Web IDL, 3.9, whose keys are its named
+   properties, which an assignment sets whatever the object inherits. */
+var Storage = abstractInterface('Storage');
+var storageKinds = new WeakMap();
+function storageKind(s) {
+  var k = s !== null && typeof s === 'object' ? WeakMapGet(storageKinds, s) : undefined;
+  if (k === undefined) throw new TypeError('Illegal invocation');
+  return k;
+}
+function storageGet(kind, key) { var v = K.storage(kind, 'get', key, null); return v == null ? null : v; }
+function storageSet(kind, key, value) { K.storage(kind, 'set', key, value); }
+function storageRemove(kind, key) { K.storage(kind, 'remove', key, null); }
+function storageLength(kind) { return +K.storage(kind, 'length', null, null); }
+function storageKey(kind, i) { var v = K.storage(kind, 'key', String(i), null); return v == null ? null : v; }
+function storageKeys(kind) { var out = [], n = storageLength(kind); for (var i = 0; i < n; i++) ArrayPush(out, storageKey(kind, i)); return out; }
+Storage.prototype.getItem = function (key) { var k = storageKind(this); needArgs(arguments, 1, "Failed to execute 'getItem' on 'Storage'"); return storageGet(k, domString(key)); };
+Storage.prototype.setItem = function (key, value) { var k = storageKind(this); needArgs(arguments, 2, "Failed to execute 'setItem' on 'Storage'"); storageSet(k, domString(key), domString(value)); };
+Storage.prototype.removeItem = function (key) { var k = storageKind(this); needArgs(arguments, 1, "Failed to execute 'removeItem' on 'Storage'"); storageRemove(k, domString(key)); };
+Storage.prototype.clear = function () { K.storage(storageKind(this), 'clear', null, null); };
+Storage.prototype.key = function (index) { var k = storageKind(this); needArgs(arguments, 1, "Failed to execute 'key' on 'Storage'"); return storageKey(k, unsignedLong(index)); };
+def(Storage.prototype, 'length', function () { return storageLength(storageKind(this)); });
+defineInterface(Storage, 'Storage');
+/* The value of the named property [key] of a storage, or undefined where the object has a property of that name. */
+function storageNamed(t, key) { return typeof key === 'string' && !ReflectHas(t, key) ? storageGet(WeakMapGet(storageKinds, t), key) : null; }
+var STORAGE_HANDLER = {
+  __proto__: null,
+  get: function (t, key, receiver) { var v = storageNamed(t, key); return v !== null ? v : receiverGet(t, key, receiver); },
+  set: function (t, key, value) {
+    if (typeof key !== 'string') return ReflectSet(t, key, value);
+    storageSet(WeakMapGet(storageKinds, t), key, domString(value));
+    return true;
+  },
+  has: function (t, key) { return storageNamed(t, key) !== null || ReflectHas(t, key); },
+  ownKeys: function (t) {
+    var out = storageKeys(WeakMapGet(storageKinds, t)), own = ReflectOwnKeys(t);
+    for (var i = 0; i < own.length; i++) ArrayPush(out, own[i]);
+    return out;
+  },
+  getOwnPropertyDescriptor: function (t, key) {
+    if (typeof key === 'string' && !ObjectHasOwn(t, key)) {
+      var v = storageGet(WeakMapGet(storageKinds, t), key);
+      if (v !== null) return { __proto__: null, value: v, writable: true, enumerable: true, configurable: true };
+    }
+    return ObjectGetOwnPropertyDescriptor(t, key);
+  },
+  defineProperty: function (t, key, desc) {
+    var d = ownDescriptor(desc);
+    if (typeof key !== 'string') return ReflectDefineProperty(t, key, d);
+    if (ObjectHasOwn(d, 'get') || ObjectHasOwn(d, 'set')) return false;
+    storageSet(WeakMapGet(storageKinds, t), key, domString(d.value));
+    return true;
+  },
+  deleteProperty: function (t, key) {
+    if (storageNamed(t, key) === null) return ReflectDeleteProperty(t, key);
+    storageRemove(WeakMapGet(storageKinds, t), key);
+    return true;
+  },
+  preventExtensions: function () { return false; }
+};
 function storage(kind) {
-  return new Proxy(new Storage(kind), {
-    __proto__: null,
-    get: function (t, key) { if (typeof key !== 'string' || key in t) return t[key]; return storageGet(t, key); },
-    set: function (t, key, value) { if (typeof key !== 'string') return false; storageSet(t, key, value); return true; },
-    deleteProperty: function (t, key) { if (typeof key === 'string') storageRemove(t, key); return true; }
-  });
+  var t = ObjectCreate(Storage.prototype), p = new Proxy(t, STORAGE_HANDLER);
+  WeakMapSet(storageKinds, t, kind);
+  WeakMapSet(storageKinds, p, kind);
+  return p;
 }
 
 /* The event loop (#535). A task is a function that makes the steps it runs, such as a timer's
@@ -2301,51 +2077,97 @@ var readingSystem = {
   hasFeature: function (feature) { return features[String(feature)]; }
 };
 ObjectFreeze(readingSystem);
-var navigator = { userAgent: 'KitePDF', appName: 'KitePDF', language: 'en', languages: ['en'], platform: '', onLine: false, cookieEnabled: true, maxTouchPoints: 1 };
+/* The interface of an object of the window, whose members [members] defines on its prototype,
+   and the one object of it that the window holds. */
+function windowObject(name, parent, members) {
+  var I = abstractInterface(name, parent);
+  members(I.prototype, I);
+  defineInterface(I, name, parent);
+  var o = ObjectCreate(I.prototype);
+  if (parent === EventTarget) hidden(o, '__listeners', ObjectCreate(null));
+  return o;
+}
+/* A getter of a fixed value on [p], which checks that its this is an object of the interface. */
+function fixed(I, name, value) { def(I.prototype, name, function () { if (!isA(this, I)) throw new TypeError('Illegal invocation'); return value; }); }
+var LANGUAGES = ObjectFreeze(['en']);
+var navigator = windowObject('Navigator', null, function (p, I) {
+  var values = ['userAgent', 'KitePDF', 'appCodeName', 'Mozilla', 'appName', 'Netscape', 'appVersion', '', 'platform', '', 'product', 'Gecko',
+    'productSub', '20030107', 'vendor', '', 'vendorSub', '', 'language', 'en', 'languages', LANGUAGES, 'onLine', false, 'cookieEnabled', true,
+    'maxTouchPoints', 1, 'hardwareConcurrency', 1, 'pdfViewerEnabled', false, 'webdriver', false, 'doNotTrack', null];
+  for (var i = 0; i < values.length; i += 2) fixed(I, values[i], values[i + 1]);
+  p.javaEnabled = function () { return false; };
+});
 ObjectDefineProperty(navigator, 'epubReadingSystem', { __proto__: null, value: readingSystem, enumerable: true });
-function selection() { return { rangeCount: 0, toString: function () { return ''; }, removeAllRanges: function () {}, addRange: function () {} }; }
-/* A computed style, which answers its CSS properties through the host. */
+var viewport = K.viewport();
+var screen = windowObject('Screen', EventTarget, function (p, I) {
+  var values = ['width', viewport[0], 'height', viewport[1], 'availWidth', viewport[0], 'availHeight', viewport[1], 'availLeft', 0,
+    'availTop', 0, 'colorDepth', 24, 'pixelDepth', 24];
+  for (var i = 0; i < values.length; i += 2) fixed(I, values[i], values[i + 1]);
+});
+var history = windowObject('History', null, function (p, I) {
+  fixed(I, 'length', 1);
+  fixed(I, 'state', null);
+  def(p, 'scrollRestoration', function () { return 'auto'; }, function () {});
+  p.back = p.forward = p.go = p.pushState = p.replaceState = function () {};
+});
+var performance = windowObject('Performance', EventTarget, function (p, I) {
+  p.now = function () { return K.now(); };
+  fixed(I, 'timeOrigin', 0);
+  p.mark = p.measure = p.clearMarks = p.clearMeasures = function () {};
+  p.getEntries = p.getEntriesByName = p.getEntriesByType = function () { return []; };
+  p.toJSON = function () { return { timeOrigin: 0 }; };
+});
+var selection = windowObject('Selection', null, function (p, I) {
+  var values = ['anchorNode', null, 'anchorOffset', 0, 'focusNode', null, 'focusOffset', 0, 'isCollapsed', true, 'rangeCount', 0, 'type', 'None',
+    'direction', 'none'];
+  for (var i = 0; i < values.length; i += 2) fixed(I, values[i], values[i + 1]);
+  p.toString = function () { return ''; };
+  p.removeAllRanges = p.empty = p.addRange = p.removeRange = p.collapse = p.collapseToStart = p.collapseToEnd = p.extend =
+    p.selectAllChildren = p.deleteFromDocument = p.setBaseAndExtent = p.setPosition = p.modify = function () {};
+  p.containsNode = function () { return false; };
+  p.getRangeAt = function (index) {
+    throw new DOMException("Failed to execute 'getRangeAt' on 'Selection': " + unsignedLong(index) + ' is not a valid index.', 'IndexSizeError');
+  };
+});
+/* MediaQueryList, of CSSOM View, 4.2, whose query matches nothing a page can tell. */
+var mediaQueries = new WeakMap();
+var MediaQueryList = abstractInterface('MediaQueryList', EventTarget);
+def(MediaQueryList.prototype, 'media', function () { var m = WeakMapGet(mediaQueries, this); if (m === undefined) throw new TypeError('Illegal invocation'); return m; });
+def(MediaQueryList.prototype, 'matches', function () { if (!WeakMapHas(mediaQueries, this)) throw new TypeError('Illegal invocation'); return false; });
+MediaQueryList.prototype.addListener = function (callback) { if (callback != null) addListener(this, 'change', callback, false, false); };
+MediaQueryList.prototype.removeListener = function (callback) { if (callback != null) removeListener(this, 'change', callback, false); };
+defineHandlers(MediaQueryList.prototype, ['change']);
+defineInterface(MediaQueryList, 'MediaQueryList', EventTarget);
+function matchMedia(query) {
+  needArgs(arguments, 1, "Failed to execute 'matchMedia' on 'Window'");
+  var m = ObjectCreate(MediaQueryList.prototype);
+  hidden(m, '__listeners', ObjectCreate(null));
+  WeakMapSet(mediaQueries, m, StringTrim(domString(query)));
+  return m;
+}
+/* getComputedStyle of the window, of CSSOM, 9: the computed style of an element, which the host answers. */
 function computedStyle(el) {
-  var id = idOf(el);
-  function valueOf(name) { return K.computed(id, StringToLowerCase(String(name))) || ''; }
-  var decl = { getPropertyValue: function (name) { return valueOf(name); } };
-  return new Proxy(decl, {
-    __proto__: null,
-    get: function (t, key) { if (typeof key !== 'string' || key in t) return t[key]; var name = cssProperty(key); return name ? valueOf(name) : undefined; },
-    has: function (t, key) { return key in t || (typeof key === 'string' && cssProperty(key) !== null); }
-  });
+  needArgs(arguments, 1, "Failed to execute 'getComputedStyle' on 'Window'");
+  return makeStyle(wrap(idOf(el)), true);
 }
 
-var viewport = K.viewport();
+/* Window, of HTML, 7.2: the global's prototype, with the named properties object between it and
+   EventTarget. The members of a [Global] interface are the global's own. */
+var Window = abstractInterface('Window', EventTarget);
+defineInterface(Window, 'Window', EventTarget);
+var WindowProperties = ObjectCreate(EventTarget.prototype);
+if (SymbolToStringTag) ObjectDefineProperty(WindowProperties, SymbolToStringTag, { __proto__: null, value: 'WindowProperties', configurable: true });
+ObjectSetPrototypeOf(Window.prototype, WindowProperties);
+ObjectSetPrototypeOf(global, Window.prototype);
+
 var api = {
   window: global, self: global, top: global, parent: global, frames: global, opener: null, frameElement: null, origin: origin,
-  document: document, location: location, console: console,
-  URL: URL, URLSearchParams: URLSearchParams, webkitURL: URL,
-  TextEncoder: TextEncoder, TextDecoder: TextDecoder, atob: atob, btoa: btoa,
-  Blob: Blob, File: File, FileReader: FileReader, ProgressEvent: ProgressEvent,
-  navigator: navigator,
-  screen: { width: viewport[0], height: viewport[1], availWidth: viewport[0], availHeight: viewport[1], colorDepth: 24 },
-  history: { length: 1, state: null, back: function () {}, forward: function () {}, go: function () {}, pushState: function () {}, replaceState: function () {} },
+  document: document, location: location, console: console, atob: atob, btoa: btoa,
+  navigator: navigator, clientInformation: navigator, screen: screen, history: history, performance: performance,
   innerWidth: viewport[0], innerHeight: viewport[1], outerWidth: viewport[0], outerHeight: viewport[1],
-  devicePixelRatio: 1, scrollX: 0, scrollY: 0, pageXOffset: 0, pageYOffset: 0,
-  performance: { now: function () { return K.now(); }, timeOrigin: 0, mark: function () {}, measure: function () {} },
+  devicePixelRatio: 1, scrollX: 0, scrollY: 0, pageXOffset: 0, pageYOffset: 0, screenX: 0, screenY: 0, screenLeft: 0, screenTop: 0,
+  name: '', status: '', closed: false, length: 0, isSecureContext: true, crossOriginIsolated: false,
   localStorage: storage('local'), sessionStorage: storage('session'),
-  EventTarget: EventTarget, Event: Event, UIEvent: UIEvent, MouseEvent: MouseEvent, PointerEvent: PointerEvent,
-  KeyboardEvent: KeyboardEvent, FocusEvent: FocusEvent, InputEvent: InputEvent, CustomEvent: CustomEvent, TouchEvent: UIEvent,
-  Node: Node, CharacterData: CharacterData, Text: Text, Element: Element, HTMLElement: HTMLElement, Document: Document,
-  HTMLDocument: Document, DocumentFragment: DocumentFragment, DOMException: DOMException, QuotaExceededError: QuotaExceededError,
-  HTMLAnchorElement: HTMLAnchorElement, HTMLImageElement: HTMLImageElement, HTMLInputElement: HTMLInputElement,
-  HTMLTextAreaElement: HTMLTextAreaElement, HTMLButtonElement: HTMLButtonElement, HTMLSelectElement: HTMLSelectElement,
-  HTMLOptionElement: HTMLOptionElement, HTMLFormElement: HTMLFormElement, HTMLLabelElement: HTMLLabelElement,
-  HTMLDetailsElement: HTMLDetailsElement, HTMLDialogElement: HTMLDialogElement, HTMLMediaElement: HTMLMediaElement,
-  HTMLAudioElement: HTMLMediaElement, HTMLVideoElement: HTMLMediaElement, HTMLCanvasElement: HTMLCanvasElement,
-  HTMLScriptElement: HTMLScriptElement, HTMLIFrameElement: HTMLIFrameElement, HTMLBodyElement: HTMLBodyElement,
-  Image: function (w, h) {
-    var img = K.create('img');
-    if (w !== undefined) K.setAttr(img, 'width', String(w));
-    if (h !== undefined) K.setAttr(img, 'height', String(h));
-    return wrap(img);
-  },
   setTimeout: function (fn, ms) { return schedule(fn, ms, listSlice(arguments, 2), false); },
   setInterval: function (fn, ms) { return schedule(fn, ms, listSlice(arguments, 2), true); },
   clearTimeout: clearTimer, clearInterval: clearTimer,
@@ -2356,28 +2178,21 @@ var api = {
   confirm: function (message) { K.console('confirm', message === undefined ? '' : String(message)); return false; },
   prompt: function (message) { K.console('prompt', message === undefined ? '' : String(message)); return null; },
   getComputedStyle: computedStyle,
-  matchMedia: function (query) {
-    var noop = function () {};
-    return { matches: false, media: String(query), onchange: null, addListener: noop, removeListener: noop, addEventListener: noop, removeEventListener: noop };
-  },
-  getSelection: selection,
+  matchMedia: matchMedia,
+  getSelection: function () { return selection; },
   scrollTo: function () {}, scrollBy: function () {}, scroll: function () {}, print: function () {}, focus: function () {}, blur: function () {},
+  stop: function () {}, moveTo: function () {}, moveBy: function () {}, resizeTo: function () {}, resizeBy: function () {},
   open: function (url) { if (url) navigate(url); return null; },
   close: function () {},
-  postMessage: function () {},
-  addEventListener: EventTarget.prototype.addEventListener,
-  removeEventListener: EventTarget.prototype.removeEventListener,
-  dispatchEvent: EventTarget.prototype.dispatchEvent
+  postMessage: function () {}
 };
-/* An interface object, or a constructor such as Image, is a property of the global that a for-in
-   does not see, as Web IDL, 3.7, defines it; the rest are plain properties. */
-(function (names) {
-  for (var i = 0; i < names.length; i++) {
-    var name = names[i];
-    if (typeof api[name] === 'function' && RegExpTest(RE_CAPITAL, name)) hidden(global, name, api[name]);
-    else global[name] = api[name];
-  }
-})(ObjectKeys(api));
+(function (names) { for (var i = 0; i < names.length; i++) global[names[i]] = api[names[i]]; })(ObjectKeys(api));
+/* The interface objects, and the constructors such as Image, are properties of the global that a
+   for-in does not see, as Web IDL, 3.7, defines them. */
+(function () {
+  for (var i = 0; i < INTERFACES.length; i++) hidden(global, INTERFACES[i].name, INTERFACES[i].ctor);
+  hidden(global, 'webkitURL', URL);
+})();
 hidden(global, '__listeners', ObjectCreate(null));
 defineHandlers(global, GLOBAL_HANDLERS);
 defineHandlers(global, WINDOW_HANDLERS);

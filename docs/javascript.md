@@ -209,6 +209,29 @@ answer where the element is on its page, in CSS pixels; when the script changed 
 since it was laid out, it is laid out again first, as a browser does, so an element the script
 just added has its size.
 
+Each object of the DOM has the interface a browser gives it, with its class string, so
+`String(document.body)` is `[object HTMLBodyElement]`, and each interface is a property of the
+window, so `document.body instanceof HTMLBodyElement` holds. An element of HTML has the interface HTML
+names for its tag, such as `HTMLDivElement`, `HTMLHeadingElement` for `h1` to `h6` and
+`HTMLUnknownElement` for a name HTML does not have, with each attribute that reflects its markup
+reading and writing it with the type, the default and the keywords HTML gives it. An element of
+SVG has its SVG interface and one of MathML is a `MathMLElement`. `WebPlatformTest` runs HTML's
+reflection tests, some 59,000 of them, and its test of the element interfaces in a chapter.
+
+`childNodes`, `children`, the collections of `getElementsByTagName`, `getElementsByClassName` and
+`getElementsByName`, and those of a form, a select, a table, a row, a map and the document, such
+as `elements`, `options`, `rows`, `forms` and `links`, are live: each is the same object on each
+read and follows the tree as it changes, so a loop that removes `childNodes[0]` until none is
+left ends. A collection is a `NodeList` or an `HTMLCollection`, not an array, and an
+`HTMLCollection` also answers the `id` or `name` of an element. `querySelectorAll` answers a
+`NodeList` of the elements found when it ran.
+
+A chapter whose manifest item is `application/xhtml+xml` is an `XMLDocument`, as a browser opens
+an XHTML page: a tag name keeps its case, so `tagName` is `p` and an SVG gradient's is
+`linearGradient`, and `createElement` keeps the case of its argument. A chapter served as
+`text/html` is an `HTMLDocument`, where an HTML element's `tagName` is upper case and
+`createElement` lowercases its argument. `document.contentType` says which it is.
+
 A tap goes to the element under it as `pointerdown`, `mousedown`, `pointerup`, `mouseup` and
 `click`. `tap` answers true when a script prevented the click, and then a viewer does not follow
 a link there. A script that changes its chapter has it laid out again from the changed tree as
@@ -286,8 +309,7 @@ its scripts made, as a page that unloads does.
 `WebPlatformTest` runs the File API tests of web-platform-tests in a chapter. Those that fail wait
 on `MessageChannel` ([#534](https://github.com/yuroyami/KitePDF/issues/534)), on streams, as
 `Blob.stream()` and `Blob.textStream()` do ([#536](https://github.com/yuroyami/KitePDF/issues/536)),
-on an element's class string ([#538](https://github.com/yuroyami/KitePDF/issues/538)), or on the
-engine: `Float16Array` and `async` functions, which nine of the files are written in.
+or on the engine: `Float16Array` and `async` functions, which nine of the files are written in.
 
 Nothing reaches outside the book. There is no `fetch` or `XMLHttpRequest`. A change of
 `location`, `window.open` and a script's own click on a link go to the listeners of
@@ -304,7 +326,9 @@ Streams Standard, so `Blob.stream()` ([#536](https://github.com/yuroyami/KitePDF
 `postMessage`, which drops each
 message, `MessageChannel` and `structuredClone`
 ([#534](https://github.com/yuroyami/KitePDF/issues/534)); `FormData`
-([#531](https://github.com/yuroyami/KitePDF/issues/531)); and the syntax KiteJS does not have yet, `class`
+([#531](https://github.com/yuroyami/KitePDF/issues/531)); `DOMParser` and `XMLSerializer`
+([#543](https://github.com/yuroyami/KitePDF/issues/543)); comments, which the tree drops, so
+`createComment` makes a text node ([#544](https://github.com/yuroyami/KitePDF/issues/544)); and the syntax KiteJS does not have yet, `class`
 ([KiteJS#2](https://github.com/yuroyami/KiteJS/issues/2)), `const` in the head of a `for` loop
 ([KiteJS#11](https://github.com/yuroyami/KiteJS/issues/11)) and `async`
 ([KiteJS#12](https://github.com/yuroyami/KiteJS/issues/12)). A script that uses one fails to

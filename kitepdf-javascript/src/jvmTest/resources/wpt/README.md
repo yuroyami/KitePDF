@@ -22,6 +22,11 @@ commit `1d99362b6bca46cc06e731ece8e022f0f1c21695`, unchanged:
   iframe, `fetch` or `XMLHttpRequest`, and `idlharness.any.js` needs the IDL files and
   idlharness.js of web-platform-tests.
 - `common/gc.js`, which `Blob-stream.any.js` loads.
+- `html/dom`: the reflection tests of HTML, which check each IDL attribute of each element
+  against its content attribute. The nine `reflection-*.html` pages, with `reflection.js`, the
+  two harness scripts and the nine `elements-*.js` tables they load.
+- `html/semantics/interfaces.html` and `interfaces.js`, the tests of the interface of each
+  element that `document.createElement` makes.
 
 `WebPlatformTest` runs each file in a chapter of its own, after `harness.js`, a file of this
 folder that is not from web-platform-tests: it stands in for testharness.js, and logs the count
@@ -31,10 +36,12 @@ it. `sab.js` stands in for `/common/sab.js`, whose own copy makes a shared buffe
 writes its promise tests as async functions, which KiteJS cannot parse yet; and `harness.js` has
 the `subsetTestByKey` of `/common/subset-tests-by-key.js`. A file named with a `?` query, such as
 `single-byte-decoder.any.js?TextDecoder`, runs with that query as `location.search`, the
-variant web-platform-tests runs it in. The data that `url-constructor`, `url-origin` and
-`url-setters` fetch is the parser's test data in `kitepdf-epub/src/jvmTest/resources/wpt-url`,
-from the same commit. The test files are under the 3-Clause BSD License of the
-web-platform-tests contributors, in `LICENSE.md`.
+variant web-platform-tests runs it in. A page, a `.html` file, runs in a chapter served as
+`text/html`, with its `<script>` elements in order, each from the page's folder or from the root
+of this one, and `harness.js` in place of testharness.js and testharnessreport.js. The data that
+`url-constructor`, `url-origin` and `url-setters` fetch is the parser's test data in
+`kitepdf-epub/src/jvmTest/resources/wpt-url`, from the same commit. The test files are under
+the 3-Clause BSD License of the web-platform-tests contributors, in `LICENSE.md`.
 
 To take a newer copy, at the commit the data is at:
 
@@ -81,4 +88,14 @@ for f in blob/Blob-array-buffer blob/Blob-bytes blob/Blob-constructor-detached-b
   curl --create-dirs -o FileAPI/$f.any.js $W/FileAPI/$f.any.js
 done
 curl -o common/gc.js $W/common/gc.js
+for f in embedded forms grouping metadata misc obsolete sections tabular text; do
+  curl --create-dirs -o html/dom/reflection-$f.html $W/html/dom/reflection-$f.html
+  curl -o html/dom/elements-$f.js $W/html/dom/elements-$f.js
+done
+for f in reflection original-harness new-harness; do
+  curl -o html/dom/$f.js $W/html/dom/$f.js
+done
+for f in interfaces.html interfaces.js; do
+  curl --create-dirs -o html/semantics/$f $W/html/semantics/$f
+done
 ```

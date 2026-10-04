@@ -17,9 +17,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   style sheet, an `@import` or a font loads from it as from a file of the book: the store sits on
   the book, so another document over it finds the blob too, and what a chapter shows keeps its
   blob after the script revokes the URL, while a chapter whose engine closes revokes the rest.
-  337 tests of web-platform-tests in `FileAPI/` pass in a chapter; the rest wait on
-  `MessageChannel` (#534), streams (#536), element class strings (#538) and KiteJS, for `async`
-  functions and `Float16Array` (#533).
+  339 tests of web-platform-tests in `FileAPI/` pass in a chapter; the rest wait on
+  `MessageChannel` (#534), streams (#536) and KiteJS, for `async` functions and `Float16Array`
+  (#533).
 
 - A book's scripts have `TextEncoder` and `TextDecoder` of the Encoding Standard, with every
   encoding and label of its table: UTF-8, UTF-16, the 28 single-byte encodings, gb18030, GBK,
@@ -172,6 +172,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   a rebuild (#472).
 
 ### Fixed
+
+- The objects of a book's scripts have the interfaces a browser gives them, with their class
+  strings, where `String(document.body)` was `[object Object]` and only sixteen element
+  interfaces existed. Each element of HTML has the interface HTML names for its tag, and
+  `HTMLUnknownElement` for a name HTML does not have, with every attribute HTML reflects read and
+  written by the type, the default and the keywords HTML gives it; an element of SVG has its SVG
+  interface and one of MathML is a `MathMLElement`. The document, the window, `location`,
+  `navigator`, the storages, an element's `style`, its attributes and its rectangles have their
+  interfaces too, each a property of the window that a `for`-`in` does not list. An element's
+  `style` is a `CSSStyleDeclaration` with `cssText`, `setProperty` and its priority,
+  `removeProperty` and custom properties, and the document has the members of HTML's `Document`,
+  such as `URL`, `characterSet`, `compatMode`, `forms` and `createEvent`, with `new Document()`
+  and `document.implementation`. The 59,683 reflection tests of web-platform-tests pass in a
+  chapter, and so does its test of the element interfaces, but for the half of it that parses
+  each element with `DOMParser` (#543) (#538).
+
+- `childNodes`, `children`, the collections of `getElementsByTagName`, `getElementsByClassName`
+  and `getElementsByName`, and those of a form, a select, a table, a row, a map and the document
+  are live in a book's scripts: each is the same object on each read and follows the tree as it
+  changes, where each read made an array of the nodes there at that moment, so a loop that
+  emptied a parent through the `childNodes` it held never ended, and a script that called `.map`
+  on one worked here and in no browser. A `NodeList` and an `HTMLCollection` are legacy platform
+  objects of Web IDL, with indexed properties and, for a collection, named ones, and
+  `querySelectorAll` answers a static `NodeList` (#542).
+
+- `tagName` and `nodeName` keep their case in an XHTML chapter, which a book's scripts now see as
+  an `XMLDocument`, as a browser opens one, where every chapter had upper-case names. A chapter
+  served as `text/html` is an `HTMLDocument`, whose HTML elements have upper-case names and whose
+  `createElement` lowercases its argument. An element's namespace and local name are the ones a
+  parser gives it, so an SVG element keeps the case of its name, such as `linearGradient`, and
+  `createElementNS` keeps the prefix and name it is given (#541).
 
 - An event handler of a book's scripts runs at its place among the listeners of its target, where
   it ran before every listener whatever their order. HTML gives a handler the place it took when
