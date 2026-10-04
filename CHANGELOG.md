@@ -173,6 +173,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- An event handler of a book's scripts runs at its place among the listeners of its target, where
+  it ran before every listener whatever their order. HTML gives a handler the place it took when
+  it was first set: setting it again keeps the place, null or a removed attribute takes it out,
+  and setting it once more puts it at the end, so a listener that stops the event now keeps a
+  later handler from running. A handler of the markup takes its place when the parser would make
+  its element, so a script adds its listeners ahead of the handlers of the elements after it. The
+  handlers of an element are those of HTML's GlobalEventHandlers, the window's add
+  WindowEventHandlers, the body's window handlers such as `onload` are the window's through
+  `document.body` too, and the document has `onreadystatechange`. The code of an attribute sees
+  the form of its control, as a browser compiles it, and a window handler no longer sees the
+  document's names. A handler set to an object keeps it, and any other value is null (#539).
+
 - The DOM of a book's scripts no longer runs what a script patched. It is JavaScript in the
   chapter's realm, and since a chapter's built-ins are writable (#537), a book that patched
   `Array.prototype.push`, `Map.prototype.get`, `Object.defineProperty` or the `next` of the

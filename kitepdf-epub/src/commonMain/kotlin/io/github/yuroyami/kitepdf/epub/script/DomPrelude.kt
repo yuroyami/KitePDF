@@ -396,17 +396,23 @@ function tagOf(el) { return K.kind(idOf(el)) === 1 ? K.tag(el.__id) : ''; }
 /* ---- events ---- */
 
 function addListener(t, type, fn, capture, once) {
+  settleTarget(t);
   var all = listenersOf(t);
   var entries = all[type] || (all[type] = []);
   for (var i = 0; i < entries.length; i++) if (entries[i].fn === fn && entries[i].capture === capture) return;
-  ArrayPush(entries, { fn: fn, capture: capture, once: once, removed: false });
+  ArrayPush(entries, { __proto__: null, fn: fn, handler: null, capture: capture, once: once, removed: false });
 }
 function removeListener(t, type, fn, capture) {
   var entries = listenersOf(t)[type];
   if (!entries) return;
   for (var i = 0; i < entries.length; i++) {
-    if (entries[i].fn === fn && entries[i].capture === capture) { entries[i].removed = true; listRemoveAt(entries, i); return; }
+    if (entries[i].fn === fn && entries[i].capture === capture) { removeEntry(t, type, entries[i]); return; }
   }
+}
+function removeEntry(t, type, entry) {
+  var entries = listenersOf(t)[type], at = entries ? ArrayIndexOf(entries, entry) : -1;
+  entry.removed = true;
+  if (at >= 0) listRemoveAt(entries, at);
 }
 function EventTarget() {}
 EventTarget.prototype.addEventListener = function (type, fn, options) {
@@ -518,13 +524,7 @@ function* dispatchSteps(target, event) {
 }
 function* invokeSteps(t, event, phase) {
   event.currentTarget = t;
-  if (phase !== 1) {
-    var h = handlerOf(t, event.type);
-    if (h) {
-      if (call(h, t, event) === false) preventDefaultOf(event);
-      yield;
-    }
-  }
+  settleTarget(t);
   var entries = listSlice(listenersOf(t)[event.type] || []);
   for (var i = 0; i < entries.length && !event.__stopNow; i++) {
     var l = entries[i];
@@ -532,7 +532,7 @@ function* invokeSteps(t, event, phase) {
     if (phase === 1 && !l.capture) continue;
     if (phase === 3 && l.capture) continue;
     if (l.once) removeListener(t, event.type, l.fn, l.capture);
-    call(l.fn, t, event);
+    if (l.handler !== null) runHandler(t, event); else call(l.fn, t, event);
     yield;
   }
 }
@@ -554,44 +554,149 @@ function call(fn, t, event) {
   return undefined;
 }
 
-var HANDLED = ['abort', 'animationend', 'animationstart', 'blur', 'change', 'click', 'contextmenu', 'dblclick', 'error',
-  'focus', 'input', 'keydown', 'keypress', 'keyup', 'load', 'mousedown', 'mouseenter', 'mouseleave', 'mousemove', 'mouseout',
-  'mouseover', 'mouseup', 'pointerdown', 'pointermove', 'pointerup', 'pointercancel', 'reset', 'resize', 'scroll', 'select',
-  'submit', 'toggle', 'touchcancel', 'touchend', 'touchmove', 'touchstart', 'transitionend', 'wheel'];
-var BODY_TO_WINDOW = { __proto__: null, load: 1, error: 1, resize: 1, scroll: 1, focus: 1, blur: 1 };
+/* ---- event handlers ----
+   An event handler is an entry of its target's list of event listeners (HTML, 8.1.8.1), at the
+   place it took when it was first set: setting it again keeps the place, and setting it to null
+   takes it out. Its value is a function, an object, null, or RAW, the code of the content
+   attribute of its element, compiled when the handler is read. A content attribute sets its
+   handler when it is set, and the markup's attributes when the parser reaches their element: the
+   reading system reaches the elements before each script as that script is about to run, and the
+   rest before DOMContentLoaded, so a script adds its listeners ahead of the handlers of the
+   markup after it (#539). An element a script made has its attributes from the start. */
+var GLOBAL_HANDLERS = splitOn('abort animationcancel animationend animationiteration animationstart auxclick beforeinput ' +
+  'beforematch beforetoggle blur cancel canplay canplaythrough change click close command contextlost contextmenu ' +
+  'contextrestored copy cuechange cut dblclick drag dragend dragenter dragleave dragover dragstart drop durationchange ' +
+  'emptied ended error focus formdata gotpointercapture input invalid keydown keypress keyup load loadeddata ' +
+  'loadedmetadata loadstart lostpointercapture mousedown mouseenter mouseleave mousemove mouseout mouseover mouseup paste ' +
+  'pause play playing pointercancel pointerdown pointerenter pointerleave pointermove pointerout pointerover ' +
+  'pointerrawupdate pointerup progress ratechange reset resize scroll scrollend securitypolicyviolation seeked seeking ' +
+  'select selectionchange selectstart slotchange stalled submit suspend timeupdate toggle touchcancel touchend touchmove ' +
+  'touchstart transitioncancel transitionend transitionrun transitionstart volumechange waiting webkitanimationend ' +
+  'webkitanimationiteration webkitanimationstart webkittransitionend wheel', ' ');
+var WINDOW_HANDLER_NAMES = 'afterprint beforeprint beforeunload hashchange languagechange message messageerror offline ' +
+  'online pagehide pagereveal pageshow pageswap popstate rejectionhandled storage unhandledrejection unload';
+var WINDOW_HANDLERS = splitOn(WINDOW_HANDLER_NAMES, ' ');
+/* The handlers of a body element that are its window's: the window-reflecting set and WindowEventHandlers. */
+var BODY_WINDOW_HANDLERS = splitOn('blur error focus load resize scroll ' + WINDOW_HANDLER_NAMES, ' ');
+function nameSet(names) {
+  var out = ObjectCreate(null);
+  for (var i = 0; i < names.length; i++) out[names[i]] = true;
+  return out;
+}
+var IS_GLOBAL_HANDLER = nameSet(GLOBAL_HANDLERS), BODY_TO_WINDOW = nameSet(BODY_WINDOW_HANDLERS);
+var RAW = ObjectFreeze(ObjectCreate(null));
+/* The markup's elements with handler attributes, in tree order, and how many of them the parser reached. */
+var markup = [], markupReached = 0, pendingIds = ObjectCreate(null), reachedIds = ObjectCreate(null);
 
-/* The handler that an on attribute of [t] compiles to, in the scopes HTML gives it: the
-   document, then the element, whose properties name variables of the code. */
-function handlerOf(t, type) {
-  var key = 'on' + type;
-  if (t.__handlers && ObjectHasOwn(t.__handlers, key)) return t.__handlers[key];
-  var source = t;
-  if (t === global) { if (!BODY_TO_WINDOW[type]) return null; source = bodyOf(rootId); }
-  if (source == null || !isNode(source) || source === document) return null;
-  var code = K.attr(source.__id, key);
+/* The target whose handler [type] a content attribute of [el] sets: its window for a window
+   handler of a body element, or null when [type] names no handler of an element. */
+function handlerTarget(el, type) {
+  if (tagOf(el) === 'body' && BODY_TO_WINDOW[type]) return global;
+  return IS_GLOBAL_HANDLER[type] ? el : null;
+}
+function handlerState(t, type, make) {
+  var all = t.__handlers;
+  if (!all) {
+    if (!make) return null;
+    all = ObjectCreate(null);
+    hidden(t, '__handlers', all);
+  }
+  if (!all[type] && make) all[type] = { __proto__: null, value: null, source: null, entry: null };
+  return all[type] || null;
+}
+/* Sets the handler [type] of [t] to [value], RAW for the content attribute of [source]; null takes it out of the list. */
+function setHandler(t, type, value, source) {
+  var st = handlerState(t, type, true);
+  st.value = value;
+  st.source = source;
+  if (value === null) {
+    if (st.entry) removeEntry(t, type, st.entry);
+    st.entry = null;
+  } else if (!st.entry) {
+    st.entry = { __proto__: null, fn: null, handler: type, capture: false, once: false, removed: false };
+    var all = listenersOf(t);
+    ArrayPush(all[type] || (all[type] = []), st.entry);
+  }
+}
+/* The parser reaches [el]: each handler attribute it has sets its handler. */
+function reach(el) {
+  var id = el.__id;
+  reachedIds[id] = true;
+  pendingIds[id] = false;
+  var names = K.attrNames(id);
+  for (var i = 0; i < names.length; i++) attributeChanged(el, names[i], true);
+}
+/* Reaches [el], unless it is an element of the markup that the parser has yet to reach. A node
+   that is no element has no handler attributes, and is marked reached as it is. */
+function settle(el) {
+  if (!el || !isNode(el) || reachedIds[el.__id] || pendingIds[el.__id]) return;
+  if (K.kind(el.__id) === 1) reach(el); else reachedIds[el.__id] = true;
+}
+/* Settles what sets the handlers of [t]: the body element for the window. */
+function settleTarget(t) { settle(t === global ? bodyOf(rootId) : t); }
+/* The parser reaches the first [count] elements of the markup with handler attributes. */
+function reachMarkup(count) {
+  for (; markupReached < count && markupReached < markup.length; markupReached++) {
+    var id = markup[markupReached];
+    if (pendingIds[id] && !reachedIds[id]) reach(wrap(id));
+  }
+}
+/* A content attribute [name] of [el] was set, or removed: a handler attribute sets its handler. */
+function attributeChanged(el, name, set) {
+  if (StringSubstring(name, 0, 2) !== 'on') return;
+  var type = StringSubstring(name, 2), t = handlerTarget(el, type);
+  if (t) setHandler(t, type, set ? RAW : null, el);
+}
+/* The current value of the handler [type] of [t]: RAW compiles the attribute of its element, in
+   the scopes HTML gives it, which for an element's handler are the document, the element's form
+   owner and the element, whose properties name variables of the code. */
+function handlerValue(t, type) {
+  var st = handlerState(t, type, false), source;
+  if (st && st.value !== RAW) return st.value;
+  if (st) source = st.source;
+  else if (t === global) source = BODY_TO_WINDOW[type] ? bodyOf(rootId) : null;
+  else source = isNode(t) && K.kind(t.__id) === 1 && handlerTarget(t, type) === t ? t : null;
+  if (!source) return null;
+  var key = 'on' + type, code = K.attr(source.__id, key);
   if (code == null) return null;
   if (!source.__compiled) hidden(source, '__compiled', ObjectCreate(null));
   var cached = source.__compiled[key];
   if (cached && cached.code === code) return cached.fn;
   var fn = null;
   try {
-    var scoped = new Function('__kiteDocument', '__kiteScope',
-      'with (__kiteDocument) { with (__kiteScope) { return function (event) {\n' + code + '\n}; } }');
-    fn = ReflectApply(scoped, null, [document, t === global ? ObjectCreate(null) : source]);
+    if (t === global) {
+      fn = type === 'error' ? new Function('event', 'source', 'lineno', 'colno', 'error', code) : new Function('event', code);
+    } else {
+      var scoped = new Function('__kiteDocument', '__kiteForm', '__kiteScope',
+        'with (__kiteDocument) { with (__kiteForm) { with (__kiteScope) { return function (event) {\n' + code + '\n}; } } }');
+      fn = ReflectApply(scoped, null, [document, formOwnerOf(source) || ObjectCreate(null), source]);
+    }
   } catch (e) { report(e); }
-  source.__compiled[key] = { code: code, fn: fn };
+  source.__compiled[key] = { __proto__: null, code: code, fn: fn };
   return fn;
 }
-function defineHandlers(target, types) {
-  types = types || HANDLED;
-  for (var i = 0; i < types.length; i++) defineHandler(target, 'on' + types[i], types[i]);
+var FORM_ASSOCIATED = nameSet(['button', 'fieldset', 'img', 'input', 'object', 'output', 'select', 'textarea']);
+function formOwnerOf(el) { return FORM_ASSOCIATED[tagOf(el)] ? formOf(el) : null; }
+/* Runs the handler of [t] for [event], as the listener HTML makes of a handler: a value that
+   cannot be called does nothing, and an answer of false cancels the event. */
+function runHandler(t, event) {
+  var h = handlerValue(t, event.type), r;
+  if (typeof h !== 'function') return;
+  try { r = ReflectApply(h, t, [event]); } catch (e) { report(e); return; }
+  if (r === false) preventDefaultOf(event);
 }
-function defineHandler(target, key, type) {
-  def(target, key, function () {
-    return this.__handlers && ObjectHasOwn(this.__handlers, key) ? this.__handlers[key] : handlerOf(this, type);
-  }, function (fn) {
-    if (!this.__handlers) hidden(this, '__handlers', ObjectCreate(null));
-    this.__handlers[key] = typeof fn === 'function' ? fn : null;
+/* The IDL attributes of the handlers [types] on [proto], which are the window's for [toWindow]. */
+function defineHandlers(proto, types, toWindow) {
+  for (var i = 0; i < types.length; i++) defineHandler(proto, types[i], toWindow);
+}
+function defineHandler(proto, type, toWindow) {
+  def(proto, 'on' + type, function () {
+    return handlerValue(toWindow ? global : this, type);
+  }, function (v) {
+    var t = toWindow ? global : this;
+    settleTarget(t);
+    // An object is kept, callable or not, and anything else is null ([LegacyTreatNonObjectAsNull]).
+    setHandler(t, type, v !== null && (typeof v === 'object' || typeof v === 'function') ? v : null, null);
   });
 }
 
@@ -731,8 +836,19 @@ def(Element.prototype, 'namespaceURI', function () { return 'http://www.w3.org/1
 function attrName(name) { return StringToLowerCase(String(name)); }
 function localPart(name) { return RegExpReplace(RE_PREFIX, String(name), ''); }
 function getAttr(el, name) { var v = K.attr(idOf(el), attrName(name)); return v == null ? null : v; }
-function setAttr(el, name, value) { K.setAttr(idOf(el), attrName(name), String(value)); }
-function removeAttr(el, name) { K.removeAttr(idOf(el), attrName(name)); }
+function setAttr(el, name, value) {
+  var id = idOf(el), n = attrName(name);
+  settle(el);
+  K.setAttr(id, n, String(value));
+  attributeChanged(el, n, true);
+}
+function removeAttr(el, name) {
+  var id = idOf(el), n = attrName(name);
+  if (K.attr(id, n) == null) return;
+  settle(el);
+  K.removeAttr(id, n);
+  attributeChanged(el, n, false);
+}
 Element.prototype.getAttribute = function (name) { return getAttr(this, name); };
 Element.prototype.getAttributeNS = function (ns, name) { return getAttr(this, localPart(name)); };
 Element.prototype.setAttribute = function (name, value) { setAttr(this, name, value); };
@@ -1607,7 +1723,7 @@ private const val DOM_PRELUDE_TAIL: String = """function datasetOf(el) {
 function HTMLElement() { throw new TypeError('use document.createElement'); }
 HTMLElement.prototype = ObjectCreate(Element.prototype);
 HTMLElement.prototype.constructor = HTMLElement;
-defineHandlers(HTMLElement.prototype);
+defineHandlers(HTMLElement.prototype, GLOBAL_HANDLERS);
 def(HTMLElement.prototype, 'style', function () { return styleOf(this); }, function (v) { styleOf(this).cssText = v; });
 def(HTMLElement.prototype, 'dataset', function () { return datasetOf(this); });
 reflectBool(HTMLElement.prototype, 'hidden', 'hidden');
@@ -1809,6 +1925,8 @@ var HTMLScriptElement = elementType(HTMLElement, function (p) {
   reflect(p, 'src', 'src'); reflect(p, 'type', 'type');
   def(p, 'text', function () { return K.text(idOf(this)); }, function (v) { K.setText(idOf(this), String(v)); });
 });
+/* The window handlers of a body element are the window's, read and set through it. */
+var HTMLBodyElement = elementType(HTMLElement, function (p) { defineHandlers(p, BODY_WINDOW_HANDLERS, true); });
 var HTMLIFrameElement = elementType(HTMLElement, function (p) {
   reflect(p, 'src', 'src');
   def(p, 'contentWindow', function () { return null; });
@@ -1819,7 +1937,7 @@ var TYPES = {
   a: HTMLAnchorElement, area: HTMLAreaElement, img: HTMLImageElement, input: HTMLInputElement, textarea: HTMLTextAreaElement,
   button: HTMLButtonElement, option: HTMLOptionElement, select: HTMLSelectElement, form: HTMLFormElement, label: HTMLLabelElement,
   details: HTMLDetailsElement, dialog: HTMLDialogElement, audio: HTMLMediaElement, video: HTMLMediaElement,
-  canvas: HTMLCanvasElement, script: HTMLScriptElement, iframe: HTMLIFrameElement
+  canvas: HTMLCanvasElement, script: HTMLScriptElement, iframe: HTMLIFrameElement, body: HTMLBodyElement
 };
 function protoFor(tag) { var T = TYPES[tag]; return T ? T.prototype : HTMLElement.prototype; }
 
@@ -1897,7 +2015,8 @@ function Document() {}
 Document.prototype = ObjectCreate(Node.prototype);
 Document.prototype.constructor = Document;
 ParentNode(Document.prototype);
-defineHandlers(Document.prototype);
+defineHandlers(Document.prototype, GLOBAL_HANDLERS);
+defineHandlers(Document.prototype, ['readystatechange', 'visibilitychange']);
 /* The first child of [parent] that is a [tag] element, as an id, or null. */
 function childByTag(parent, tag) {
   if (parent == null) return null;
@@ -2220,7 +2339,7 @@ var api = {
   HTMLOptionElement: HTMLOptionElement, HTMLFormElement: HTMLFormElement, HTMLLabelElement: HTMLLabelElement,
   HTMLDetailsElement: HTMLDetailsElement, HTMLDialogElement: HTMLDialogElement, HTMLMediaElement: HTMLMediaElement,
   HTMLAudioElement: HTMLMediaElement, HTMLVideoElement: HTMLMediaElement, HTMLCanvasElement: HTMLCanvasElement,
-  HTMLScriptElement: HTMLScriptElement, HTMLIFrameElement: HTMLIFrameElement,
+  HTMLScriptElement: HTMLScriptElement, HTMLIFrameElement: HTMLIFrameElement, HTMLBodyElement: HTMLBodyElement,
   Image: function (w, h) {
     var img = K.create('img');
     if (w !== undefined) K.setAttr(img, 'width', String(w));
@@ -2260,7 +2379,8 @@ var api = {
   }
 })(ObjectKeys(api));
 hidden(global, '__listeners', ObjectCreate(null));
-defineHandlers(global);
+defineHandlers(global, GLOBAL_HANDLERS);
+defineHandlers(global, WINDOW_HANDLERS);
 
 /* ---- what the host calls ---- */
 
@@ -2269,10 +2389,19 @@ defineHandlers(global);
 function hostEntry(name, fn) {
   ObjectDefineProperty(global, name, { __proto__: null, value: fn, writable: false, enumerable: false, configurable: false });
 }
-hostEntry('__kite_current', function (id) { hidden(document, '__script', id == null ? null : wrap(id)); });
+/* The markup's elements with handler attributes, in tree order, for the parser to reach (#539). */
+hostEntry('__kite_markup', function (ids) {
+  for (var i = 0; i < ids.length; i++) { ArrayPush(markup, ids[i]); pendingIds[ids[i]] = true; }
+});
+/* The script about to run, or null once it ran, and how many of those elements come before its end. */
+hostEntry('__kite_current', function (id, reached) {
+  if (reached != null) reachMarkup(reached);
+  hidden(document, '__script', id == null ? null : wrap(id));
+});
 /* Each of these starts what the reading system runs and answers as step() does; the host calls
    __kite_step() for the rest while the answer is MORE (#535). */
 function* loadedSteps() {
+  reachMarkup(markup.length);
   hidden(document, '__ready', 'interactive');
   for (var a = dispatchSteps(document, new Event('readystatechange')); !GeneratorNext(a).done;) yield;
   for (var b = dispatchSteps(document, new Event('DOMContentLoaded', { __proto__: null, bubbles: true })); !GeneratorNext(b).done;) yield;
