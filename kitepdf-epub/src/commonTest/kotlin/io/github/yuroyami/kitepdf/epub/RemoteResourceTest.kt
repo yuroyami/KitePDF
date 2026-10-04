@@ -1,7 +1,9 @@
 package io.github.yuroyami.kitepdf.epub
 
 import io.github.yuroyami.kitepdf.core.KiteLocation
+import io.github.yuroyami.kitepdf.core.KiteLock
 import io.github.yuroyami.kitepdf.core.render.RecordingCanvas
+import io.github.yuroyami.kitepdf.core.withLock
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.test.runTest
@@ -22,14 +24,23 @@ class RemoteResourceTest {
     private val pictureUrl = "https://images.example.com/pic.bmp"
     private val fontUrl = "https://fonts.example.com/square.ttf"
 
-    /** A fetcher that serves [files] by URL, and records each URL it is asked for. */
+    /**
+     * A fetcher that serves [files] by URL, and records each URL it is asked for. The book runs
+     * its fetches on several threads at once, so the record takes a lock, or one of two URLs
+     * asked at the same moment can go missing from it.
+     */
     private class FakeFetcher(
         private val files: Map<String, ByteArray>,
         private val gate: CompletableDeferred<Unit>? = null,
     ) : EpubResourceFetcher {
-        val asked = ArrayList<String>()
+        private val lock = KiteLock()
+        private val record = ArrayList<String>()
+
+        /** The URLs asked for so far, in the order they were asked. */
+        val asked: List<String> get() = lock.withLock { record.toList() }
+
         override suspend fun fetch(url: String): ByteArray? {
-            asked += url
+            lock.withLock { record += url }
             gate?.await()
             return files[url]
         }
