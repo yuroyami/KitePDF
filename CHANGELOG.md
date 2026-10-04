@@ -151,6 +151,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `DOMException` in a book's scripts is the one of Web IDL: its `name`, `message` and `code` are
+  getters of its prototype that refuse an object that is not one, `code` is the legacy code of
+  the name, the 25 legacy constants sit on the constructor and the prototype, it must be called
+  with `new`, and an instance is an `Error` underneath, with what the engine gives one. A script
+  that tells errors apart by `e.code === DOMException.NOT_FOUND_ERR` now does. Its derived
+  `QuotaExceededError`, with `quota` and `requested`, is there too, and an interface object is a
+  property of `window` that a `for`-`in` does not list, as in a browser. The `DOMException`
+  tests of web-platform-tests run in a chapter (#530).
+
 - A tag whose quoted attribute value holds a `>`, such as `onclick="if (n > 0) next()"`, no
   longer ends at it, which spilled the rest of the tag into the text and broke the handler, and
   the code of a `<script>` or `<style>` keeps a `<` that opens no tag, as an HTML tokenizer reads

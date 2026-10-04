@@ -115,12 +115,102 @@ function list(items) {
   return items;
 }
 
-function DOMException(message, name) {
-  this.message = message === undefined ? '' : String(message);
-  this.name = name || 'Error';
+/* A value as a WebIDL DOMString. */
+function domString(v) {
+  if (typeof v === 'symbol') throw new TypeError('Cannot convert a Symbol value to a string');
+  return String(v);
 }
-DOMException.prototype = Object.create(Error.prototype);
-DOMException.prototype.constructor = DOMException;
+/* An interface prototype object: its constructor property, and its class string. */
+function interfaceProto(ctor, proto, name) {
+  Object.defineProperty(proto, 'constructor', { value: ctor, writable: true, configurable: true });
+  if (typeof Symbol.toStringTag === 'symbol') Object.defineProperty(proto, Symbol.toStringTag, { value: name, configurable: true });
+  Object.defineProperty(ctor, 'prototype', { value: proto, writable: false });
+}
+
+/* DOMException, of Web IDL, 3.14 (#530). An instance is an Error underneath, so it has what
+   the engine gives an Error, and its stack starts where the script made it, as in a browser.
+   Its name and message live in a weak map that the getters of the prototype read. A call
+   without new is told apart as one whose this is no fresh object of the class. */
+var exceptions = new WeakMap();
+var DOM_ERROR_CODES = Object.create(null);
+('IndexSizeError 1 HierarchyRequestError 3 WrongDocumentError 4 InvalidCharacterError 5 ' +
+  'NoModificationAllowedError 7 NotFoundError 8 NotSupportedError 9 InUseAttributeError 10 ' +
+  'InvalidStateError 11 SyntaxError 12 InvalidModificationError 13 NamespaceError 14 ' +
+  'InvalidAccessError 15 TypeMismatchError 17 SecurityError 18 NetworkError 19 AbortError 20 ' +
+  'URLMismatchError 21 QuotaExceededError 22 TimeoutError 23 InvalidNodeTypeError 24 ' +
+  'DataCloneError 25').replace(/(\w+) (\d+)/g, function (m, name, code) { DOM_ERROR_CODES[name] = +code; });
+function newException(self, ctor, message, name) {
+  var e = new Error();
+  Object.setPrototypeOf(e, Object.getPrototypeOf(self));
+  if (typeof Error.captureStackTrace === 'function') Error.captureStackTrace(e, ctor);
+  exceptions.set(e, { name: name, message: message });
+  return e;
+}
+function DOMException() {
+  if (!(this instanceof DOMException) || exceptions.has(this)) throw new TypeError("Failed to construct 'DOMException': Please use the 'new' operator.");
+  var message = arguments.length > 0 && arguments[0] !== undefined ? domString(arguments[0]) : '';
+  var name = arguments.length > 1 && arguments[1] !== undefined ? domString(arguments[1]) : 'Error';
+  return newException(this, DOMException, message, name);
+}
+function exceptionOf(e) {
+  var data = exceptions.get(Object(e));
+  if (data === undefined) throw new TypeError('Illegal invocation');
+  return data;
+}
+interfaceProto(DOMException, Object.create(Error.prototype), 'DOMException');
+def(DOMException.prototype, 'name', function () { return exceptionOf(this).name; });
+def(DOMException.prototype, 'message', function () { return exceptionOf(this).message; });
+def(DOMException.prototype, 'code', function () { var c = DOM_ERROR_CODES[exceptionOf(this).name]; return c === undefined ? 0 : c; });
+['INDEX_SIZE_ERR', 'DOMSTRING_SIZE_ERR', 'HIERARCHY_REQUEST_ERR', 'WRONG_DOCUMENT_ERR', 'INVALID_CHARACTER_ERR',
+  'NO_DATA_ALLOWED_ERR', 'NO_MODIFICATION_ALLOWED_ERR', 'NOT_FOUND_ERR', 'NOT_SUPPORTED_ERR', 'INUSE_ATTRIBUTE_ERR',
+  'INVALID_STATE_ERR', 'SYNTAX_ERR', 'INVALID_MODIFICATION_ERR', 'NAMESPACE_ERR', 'INVALID_ACCESS_ERR',
+  'VALIDATION_ERR', 'TYPE_MISMATCH_ERR', 'SECURITY_ERR', 'NETWORK_ERR', 'ABORT_ERR', 'URL_MISMATCH_ERR',
+  'QUOTA_EXCEEDED_ERR', 'TIMEOUT_ERR', 'INVALID_NODE_TYPE_ERR', 'DATA_CLONE_ERR'].forEach(function (name, i) {
+  Object.defineProperty(DOMException, name, { value: i + 1, enumerable: true });
+  Object.defineProperty(DOMException.prototype, name, { value: i + 1, enumerable: true });
+});
+
+/* QuotaExceededError, the DOMException that Web IDL derives for a quota (3.14.3), whose name
+   gives code 22. */
+var quotas = new WeakMap();
+/* A member of the options as a WebIDL double, or null when it is missing. */
+function quotaMember(options, key) {
+  var v = options == null ? undefined : options[key];
+  if (v === undefined) return null;
+  v = +v;
+  if (!isFinite(v)) throw new TypeError("Failed to construct 'QuotaExceededError': The provided " + key + " is not a finite number.");
+  return v;
+}
+function QuotaExceededError() {
+  if (!(this instanceof QuotaExceededError) || exceptions.has(this)) throw new TypeError("Failed to construct 'QuotaExceededError': Please use the 'new' operator.");
+  var message = arguments.length > 0 && arguments[0] !== undefined ? domString(arguments[0]) : '';
+  var options = arguments[1];
+  if (options != null && typeof options !== 'object' && typeof options !== 'function') {
+    throw new TypeError("Failed to construct 'QuotaExceededError': The options are not an object.");
+  }
+  // The dictionary is converted whole, its members in lexicographic order, before any step runs.
+  var quota = quotaMember(options, 'quota');
+  var requested = quotaMember(options, 'requested');
+  if ((quota !== null && quota < 0) || (requested !== null && requested < 0)) {
+    throw new RangeError("Failed to construct 'QuotaExceededError': A quota or a requested amount is negative.");
+  }
+  if (quota !== null && requested !== null && requested < quota) {
+    throw new RangeError("Failed to construct 'QuotaExceededError': The requested amount is less than the quota.");
+  }
+  var e = newException(this, QuotaExceededError, message, 'QuotaExceededError');
+  quotas.set(e, { quota: quota, requested: requested });
+  return e;
+}
+function quotaOf(e) {
+  var data = quotas.get(Object(e));
+  if (data === undefined) throw new TypeError('Illegal invocation');
+  return data;
+}
+Object.setPrototypeOf(QuotaExceededError, DOMException);
+interfaceProto(QuotaExceededError, Object.create(DOMException.prototype), 'QuotaExceededError');
+def(QuotaExceededError.prototype, 'quota', function () { return quotaOf(this).quota; });
+def(QuotaExceededError.prototype, 'requested', function () { return quotaOf(this).requested; });
+
 function check(error, what) {
   if (error != null) throw new DOMException(what + ': ' + error, error);
 }
@@ -1277,7 +1367,7 @@ var api = {
   EventTarget: EventTarget, Event: Event, UIEvent: UIEvent, MouseEvent: MouseEvent, PointerEvent: PointerEvent,
   KeyboardEvent: KeyboardEvent, FocusEvent: FocusEvent, InputEvent: InputEvent, CustomEvent: CustomEvent, TouchEvent: UIEvent,
   Node: Node, CharacterData: CharacterData, Text: Text, Element: Element, HTMLElement: HTMLElement, Document: Document,
-  HTMLDocument: Document, DocumentFragment: DocumentFragment, DOMException: DOMException,
+  HTMLDocument: Document, DocumentFragment: DocumentFragment, DOMException: DOMException, QuotaExceededError: QuotaExceededError,
   HTMLAnchorElement: HTMLAnchorElement, HTMLImageElement: HTMLImageElement, HTMLInputElement: HTMLInputElement,
   HTMLTextAreaElement: HTMLTextAreaElement, HTMLButtonElement: HTMLButtonElement, HTMLSelectElement: HTMLSelectElement,
   HTMLOptionElement: HTMLOptionElement, HTMLFormElement: HTMLFormElement, HTMLLabelElement: HTMLLabelElement,
@@ -1315,7 +1405,12 @@ var api = {
   removeEventListener: EventTarget.prototype.removeEventListener,
   dispatchEvent: EventTarget.prototype.dispatchEvent
 };
-for (var name in api) global[name] = api[name];
+/* An interface object, or a constructor such as Image, is a property of the global that a for-in
+   does not see, as Web IDL, 3.7, defines it; the rest are plain properties. */
+for (var name in api) {
+  if (typeof api[name] === 'function' && /^[A-Z]/.test(name)) hidden(global, name, api[name]);
+  else global[name] = api[name];
+}
 hidden(global, '__listeners', {});
 defineHandlers(global);
 

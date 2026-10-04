@@ -211,7 +211,14 @@ book's root as it stops at a site's, so a script cannot build an address above t
 URL of the book has the book's origin, so `new URL(location.href).origin` is `location.origin`.
 Host names go through UTS #46 of Unicode 17, with Punycode, IPv4 and IPv6 hosts as a browser
 reads them. The web-platform-tests of the standard check it: `WhatwgUrlTest` runs its URL,
-setter and host data against the parser, and `UrlWptTest` runs its JavaScript tests in a chapter.
+setter and host data against the parser, and `WebPlatformTest` runs its JavaScript tests in a chapter.
+
+`DOMException` is the one of Web IDL, with `name`, `message` and the legacy `code` as getters of
+its prototype, the 25 legacy constants such as `NOT_FOUND_ERR` and the derived
+`QuotaExceededError`. An instance is an `Error` underneath, so it has a stack where an `Error`
+has one. The DOM methods throw one with the name the DOM Standard gives, such as `SyntaxError`
+for a selector that does not parse, and `WebPlatformTest` runs the `DOMException` tests of
+web-platform-tests in a chapter.
 
 Nothing reaches outside the book. There is no `fetch` or `XMLHttpRequest`. A change of
 `location`, `window.open` and a script's own click on a link go to the listeners of
