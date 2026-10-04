@@ -6,6 +6,9 @@ paginated pages, and render them through the exact same canvas seam; the
 Compose viewer, the headless rasterizers, search, and text selection all work
 identically for both formats.
 
+How the reader does against the W3C EPUB 3 test suite, test by test, with the
+issue for each gap, is on [EPUB conformance](epub-conformance.md).
+
 ## Opening a book
 
 ```kotlin

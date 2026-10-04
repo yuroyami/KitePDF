@@ -60,3 +60,5 @@ Things a previous change taught the hard way. One line each. Delete a line when 
 - A KiteJS host function that returns Kotlin `null` gives the script `undefined`, not `null`, so a script-side check written `=== null` never matches. The EPUB DOM prelude compares host answers with `== null` (#41).
 - A JVM class file holds no string constant over 64 KB, so a longer Kotlin literal fails the compile with "UTF8 string too large". The EPUB DOM prelude is two constants joined at run time for it.
 - An element's `style` that answers every key as a CSS property hands a string to a script that probes for a method, so jQuery 1.7.1 called `style.removeAttribute` and threw. Answer CSS property names only.
+- The W3C EPUB test suite and its reports key a test by its folder name, and three folders carry another `dc:identifier` (`lay-pp-svg-icb_multi`, `ocf-font_obfuscation_bis`, `pkg-unique-id_duplicate`). Key on the folder.
+- A recorded glyph run's text-to-device y runs up the page, while an EPUB page's link and embed rectangles run down it. A check that mixes them looks for a superscript below its base.

@@ -96,7 +96,8 @@ internal fun spreadPlan(state: KiteDocViewState, layout: KiteDocLayout.Spread, l
     }
 }
 
-private fun epubSide(document: EpubDocument, chapter: Int, page: Int, landscape: Boolean): SpreadSide? {
+/** The side page [page] of [chapter] asks for in a spread, from the chapter's rendition properties. */
+internal fun epubSide(document: EpubDocument, chapter: Int, page: Int, landscape: Boolean): SpreadSide? {
     val rendition = runCatching { document.renditionOf(chapter) }.getOrNull() ?: return null
     when (rendition.spread) {
         EpubSpread.NONE -> return SpreadSide.ALONE
