@@ -120,9 +120,7 @@ public class EpubScriptSession(
         val target = page.elementAt(x, y)?.let { scripts.dom.fromLayout[it] }
             ?: scripts.dom.root.children.firstOrNull { it is KiteXmlNode.Element }
             ?: scripts.dom.root
-        val prevented = scripts.call("tap") {
-            scripts.engine.evaluate("__kite_tap(${scripts.dom.idOf(target)}, ${x / PT_PER_PX}, ${y / PT_PER_PX})", "tap") == "true"
-        } ?: false
+        val prevented = scripts.steps("tap", "__kite_tap(${scripts.dom.idOf(target)}, ${x / PT_PER_PX}, ${y / PT_PER_PX})") == "true"
         scripts.commit()
         return prevented
     }
@@ -131,9 +129,8 @@ public class EpubScriptSession(
         var next: Long? = null
         for (scripts in chapters.values.toList()) {
             if (scripts.timers == 0) continue
-            val wait = scripts.call("timers") {
-                scripts.engine.evaluate("__kite_pump(${now()})", "timers")?.toDoubleOrNull()
-            }
+            scripts.steps("timers", "__kite_pump(${now()})")
+            val wait = scripts.call("timers") { scripts.engine.evaluate("__kite_wait()", "timers")?.toDoubleOrNull() }
             scripts.commit()
             if (wait != null && wait >= 0) next = minOf(next ?: Long.MAX_VALUE, wait.roundToLong())
         }
@@ -231,6 +228,18 @@ public class EpubScriptSession(
             }
         }
 
+        /**
+         * Runs [entry], one of the prelude's starts, then each callback it has left in a call of
+         * its own (#535). The engine runs the promise jobs of a call once it returns, so the jobs
+         * of each callback run before the next one, as HTML runs a microtask checkpoint after
+         * each callback it invokes. Answers what the steps returned, or null when a call failed.
+         */
+        fun steps(what: String, entry: String): String? {
+            var answer = call(what) { engine.evaluate(entry, what) }
+            while (answer == MORE) answer = call(what) { engine.evaluate("__kite_step()", what) }
+            return answer
+        }
+
         /** Hands the layout the tree as the scripts left it, when they changed it. */
         fun commit() {
             if (!dom.dirty) return
@@ -262,7 +271,7 @@ public class EpubScriptSession(
             // Scripts run here, so `noscript` content does not show, as in a browser that runs them.
             for (noscript in elementsIn(dom.root, "noscript")) dom.remove(null, noscript)
             for (script in elementsIn(dom.root, "script")) runScript(script)
-            call("load") { engine.evaluate("__kite_loaded()", "load") }
+            steps("load", "__kite_loaded()")
             commit()
         }
 
@@ -475,6 +484,9 @@ public class EpubScriptSession(
 
         /** CSS pixels are 0.75 points, the unit of the layout and of display space. */
         private const val PT_PER_PX = 0.75
+
+        /** What a start of the prelude and `__kite_step()` answer while a callback is left to run. */
+        private const val MORE = "more"
 
         /**
          * The host of a book's origin: 64 bits of an FNV-1a hash of [identifier], in hex. A book

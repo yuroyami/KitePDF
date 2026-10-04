@@ -132,6 +132,90 @@ class EpubScriptTest {
     }
 
     @Test
+    fun the_promise_jobs_of_a_timer_run_before_the_next_timer_does() {
+        var now = 0L
+        val console = ArrayList<String>()
+        val book = ScriptBooks.chapter(
+            """<p>Order.</p><script>
+            setTimeout(function () { console.log('first'); Promise.resolve().then(function () { console.log('its job'); }); }, 10);
+            setTimeout(function () { console.log('second'); }, 10);
+            </script>""",
+        )
+        val scripts = runner(book, console = console, clock = { now })
+        scripts.chapterOpened(0)
+        now = 10
+        scripts.pumpTimers(now)
+        // HTML runs each timer as a task of its own, and the microtasks a task queued before the next one.
+        assertEquals(listOf("log: first", "log: its job", "log: second"), console)
+    }
+
+    @Test
+    fun the_promise_jobs_of_a_listener_run_before_the_next_listener_of_a_tap() {
+        val console = ArrayList<String>()
+        val book = ScriptBooks.buttonPage(
+            button = """<button id="go" type="button">Go</button>""",
+            script = """
+            var go = document.getElementById('go');
+            go.addEventListener('click', function () { console.log('first'); Promise.resolve().then(function () { console.log('its job'); }); });
+            go.addEventListener('click', function () { console.log('second'); });
+            """,
+        )
+        val page = book.page(KiteLocation(0, 0))
+        val scripts = runner(book, console = console)
+        scripts.chapterOpened(0)
+        scripts.tap(page, 52.5, 90.0)
+        // A listener the browser calls is a callback of its own, and the microtasks it queued run after it returns.
+        assertEquals(listOf("log: first", "log: its job", "log: second"), console)
+    }
+
+    @Test
+    fun the_promise_jobs_of_a_scripts_own_dispatch_wait_until_the_script_is_done() {
+        val console = ArrayList<String>()
+        val book = ScriptBooks.chapter(
+            """<p id="p">Order.</p><script>
+            var p = document.getElementById('p');
+            p.addEventListener('ping', function () { console.log('first'); Promise.resolve().then(function () { console.log('its job'); }); });
+            p.addEventListener('ping', function () { console.log('second'); });
+            p.dispatchEvent(new Event('ping'));
+            console.log('dispatched');
+            </script>""",
+        )
+        runner(book, console = console).chapterOpened(0)
+        assertEquals(listOf("log: first", "log: second", "log: dispatched", "log: its job"), console)
+    }
+
+    @Test
+    fun the_promise_jobs_of_a_load_listener_run_before_the_next_listener() {
+        val console = ArrayList<String>()
+        val book = ScriptBooks.chapter(
+            """<p>Order.</p><script>
+            document.addEventListener('DOMContentLoaded', function () { console.log('first'); Promise.resolve().then(function () { console.log('its job'); }); });
+            document.addEventListener('DOMContentLoaded', function () { console.log('second'); });
+            </script>""",
+        )
+        runner(book, console = console).chapterOpened(0)
+        assertEquals(listOf("log: first", "log: its job", "log: second"), console)
+    }
+
+    @Test
+    fun a_frame_that_an_earlier_callback_of_its_frame_cancels_does_not_run() {
+        var now = 0L
+        val console = ArrayList<String>()
+        val book = ScriptBooks.chapter(
+            """<p>Frames.</p><script>
+            var second;
+            requestAnimationFrame(function () { console.log('first'); cancelAnimationFrame(second); });
+            second = requestAnimationFrame(function () { console.log('second'); });
+            </script>""",
+        )
+        val scripts = runner(book, console = console, clock = { now })
+        scripts.chapterOpened(0)
+        now = 16
+        assertEquals(null, scripts.pumpTimers(now), "nothing waits once the frame ran")
+        assertEquals(listOf("log: first"), console)
+    }
+
+    @Test
     fun a_script_that_never_returns_stops_at_the_budget_and_the_page_still_works() {
         val book = ScriptBooks.buttonPage(script = "while (true) {}")
         val page = book.page(KiteLocation(0, 0))

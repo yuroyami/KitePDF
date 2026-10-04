@@ -6,8 +6,8 @@ package io.github.yuroyami.kitepdf.epub.script
  * number there, and an object here. It runs before the chapter's own scripts, in the global
  * scope that is their `window`.
  *
- * Written in the JavaScript every engine of the library runs: functions and prototypes, no
- * `class`, no `async`. The source is kept in two literals joined at run time, since a JVM class
+ * Written in the JavaScript every engine of the library runs: functions, prototypes and
+ * generators, no `class`, no `async`. The source is kept in two literals joined at run time, since a JVM class
  * file holds no string constant over 64 KB.
  */
 internal val DOM_PRELUDE: String = buildString {
@@ -330,26 +330,35 @@ function parentTarget(t) {
   var p = K.parent(t.__id);
   return p == null ? null : wrap(p);
 }
-function dispatch(target, event) {
+/* Dispatch, and whatever else runs a script's callbacks for the reading system, is a generator
+   that yields after each callback (#535). The host runs what the reading system starts, a tap or
+   a task, one callback to a call, so the promise jobs of a callback run before the next one, as
+   HTML runs a microtask checkpoint once a callback it invoked returns. A script's own
+   dispatchEvent or click() runs the same steps at once, as in a browser, where the jobs of its
+   listeners wait until the script is done. */
+function* dispatchSteps(target, event) {
   event.target = target;
   var path = [];
   for (var t = target; t; t = parentTarget(t)) path.push(t);
   event.eventPhase = 1;
-  for (var i = path.length - 1; i > 0 && !event.__stop; i--) invoke(path[i], event, 1);
-  if (!event.__stop) { event.eventPhase = 2; invoke(path[0], event, 2); }
+  for (var i = path.length - 1; i > 0 && !event.__stop; i--) yield* invokeSteps(path[i], event, 1);
+  if (!event.__stop) { event.eventPhase = 2; yield* invokeSteps(path[0], event, 2); }
   if (event.bubbles) {
     event.eventPhase = 3;
-    for (var j = 1; j < path.length && !event.__stop; j++) invoke(path[j], event, 3);
+    for (var j = 1; j < path.length && !event.__stop; j++) yield* invokeSteps(path[j], event, 3);
   }
   event.eventPhase = 0;
   event.currentTarget = null;
   return !event.defaultPrevented;
 }
-function invoke(t, event, phase) {
+function* invokeSteps(t, event, phase) {
   event.currentTarget = t;
   if (phase !== 1) {
     var h = handlerOf(t, event.type);
-    if (h && call(h, t, event) === false) event.preventDefault();
+    if (h) {
+      if (call(h, t, event) === false) event.preventDefault();
+      yield;
+    }
   }
   var entries = (listenersOf(t)[event.type] || []).slice();
   for (var i = 0; i < entries.length && !event.__stopNow; i++) {
@@ -359,8 +368,17 @@ function invoke(t, event, phase) {
     if (phase === 3 && l.capture) continue;
     if (l.once) t.removeEventListener(event.type, l.fn, l.capture);
     call(l.fn, t, event);
+    yield;
   }
 }
+/* Runs steps through to their end at once, and answers what they return. */
+function drain(steps) {
+  for (;;) {
+    var r = steps.next();
+    if (r.done) return r.value;
+  }
+}
+function dispatch(target, event) { return drain(dispatchSteps(target, event)); }
 function call(fn, t, event) {
   try {
     if (typeof fn === 'function') return fn.call(t, event);
@@ -1098,26 +1116,31 @@ def(HTMLElement.prototype, 'offsetHeight', function () { return Math.round(rect(
 def(HTMLElement.prototype, 'offsetLeft', function () { return Math.round(rect(this).left); });
 def(HTMLElement.prototype, 'offsetTop', function () { return Math.round(rect(this).top); });
 def(HTMLElement.prototype, 'offsetParent', function () { return document.body; });
-HTMLElement.prototype.focus = function () {
-  if (document.__active === this) return;
+function* focusSteps(el) {
+  if (document.__active === el) return;
   var before = document.__active;
-  document.__active = this;
-  if (before && before !== this) { fireEvent(before, new FocusEvent('blur', { relatedTarget: this })); fireEvent(before, new FocusEvent('focusout', { bubbles: true, relatedTarget: this })); }
-  fireEvent(this, new FocusEvent('focus', { relatedTarget: before || null }));
-  fireEvent(this, new FocusEvent('focusin', { bubbles: true, relatedTarget: before || null }));
-};
+  document.__active = el;
+  if (before && before !== el) {
+    yield* dispatchSteps(before, new FocusEvent('blur', { relatedTarget: el }));
+    yield* dispatchSteps(before, new FocusEvent('focusout', { bubbles: true, relatedTarget: el }));
+  }
+  yield* dispatchSteps(el, new FocusEvent('focus', { relatedTarget: before || null }));
+  yield* dispatchSteps(el, new FocusEvent('focusin', { bubbles: true, relatedTarget: before || null }));
+}
+HTMLElement.prototype.focus = function () { drain(focusSteps(this)); };
 HTMLElement.prototype.blur = function () {
   if (document.__active !== this) return;
   document.__active = null;
   fireEvent(this, new FocusEvent('blur', {}));
   fireEvent(this, new FocusEvent('focusout', { bubbles: true }));
 };
-HTMLElement.prototype.click = function () {
-  if (this.__clicking) return;
-  hidden(this, '__clicking', true);
-  try { activate(this, new MouseEvent('click', { bubbles: true, cancelable: true, composed: true, view: global, detail: 1 }), false); }
-  finally { this.__clicking = false; }
-};
+function* clickSteps(el) {
+  if (el.__clicking) return;
+  hidden(el, '__clicking', true);
+  try { yield* activateSteps(el, new MouseEvent('click', { bubbles: true, cancelable: true, composed: true, view: global, detail: 1 }), false); }
+  finally { el.__clicking = false; }
+}
+HTMLElement.prototype.click = function () { drain(clickSteps(this)); };
 
 function elementType(parent, setup) {
   var T = function () { throw new TypeError('use document.createElement'); };
@@ -1213,13 +1236,14 @@ var HTMLFormElement = elementType(HTMLElement, function (p) {
   reflect(p, 'action', 'action'); reflect(p, 'method', 'method'); reflect(p, 'name', 'name');
   p.submit = function () {};
   p.requestSubmit = function () { if (fireEvent(this, new Event('submit', { bubbles: true, cancelable: true }))) {} };
-  p.reset = function () {
-    if (!fireEvent(this, new Event('reset', { bubbles: true, cancelable: true }))) return;
-    var all = this.elements;
-    for (var i = 0; i < all.length; i++) { delete all[i].__value; delete all[i].__checked; }
-  };
+  p.reset = function () { drain(resetSteps(this)); };
   p.checkValidity = function () { return true; };
 });
+function* resetSteps(form) {
+  if (!(yield* dispatchSteps(form, new Event('reset', { bubbles: true, cancelable: true })))) return;
+  var all = form.elements;
+  for (var i = 0; i < all.length; i++) { delete all[i].__value; delete all[i].__checked; }
+}
 var HTMLLabelElement = elementType(HTMLElement, function (p) {
   reflect(p, 'htmlFor', 'for');
   def(p, 'control', function () { var f = this.getAttribute('for'); return f ? document.getElementById(f) : this.querySelector('input, select, textarea, button'); });
@@ -1280,7 +1304,7 @@ function control(el) {
  * submit button submits its form. A link opens only for a [synthetic] click, since the viewer
  * follows the links of a reader's tap itself.
  */
-function activate(target, click, trusted) {
+function* activateSteps(target, click, trusted) {
   var c = control(target);
   if (c && (c.localName === 'input' || c.localName === 'button' || c.localName === 'select' || c.localName === 'textarea') && c.disabled) return false;
   var undo = null;
@@ -1298,29 +1322,32 @@ function activate(target, click, trusted) {
     undo = function () { c.checked = was; for (var j = 0; j < group.length; j++) group[j].checked = true; };
   }
   click.isTrusted = trusted;
-  var ok = dispatch(target, click);
+  var ok = yield* dispatchSteps(target, click);
   if (!ok) { if (undo) undo(); return true; }
   if (undo && c.checked !== undefined) {
-    fireEvent(c, new InputEvent('input', { bubbles: true }));
-    fireEvent(c, new Event('change', { bubbles: true }));
+    yield* dispatchSteps(c, new InputEvent('input', { bubbles: true }));
+    yield* dispatchSteps(c, new Event('change', { bubbles: true }));
   } else if (c && c.localName === 'label') {
     var labelled = c.control;
-    if (labelled && labelled !== target && !labelled.contains(target)) labelled.click();
+    if (labelled && labelled !== target && !labelled.contains(target)) {
+      if (labelled.click === HTMLElement.prototype.click) yield* clickSteps(labelled); else labelled.click();
+    }
   } else if (c && c.localName === 'summary') {
     var details = c.parentNode;
     if (details && details.localName === 'details' && details.querySelector('summary') === c) {
       details.open = !details.open;
-      fireEvent(details, new Event('toggle', {}));
+      yield* dispatchSteps(details, new Event('toggle', {}));
     }
   } else if (c && c.localName === 'button' && c.type === 'submit' && c.form) {
-    fireEvent(c.form, new Event('submit', { bubbles: true, cancelable: true }));
+    yield* dispatchSteps(c.form, new Event('submit', { bubbles: true, cancelable: true }));
   } else if (c && c.localName === 'button' && c.type === 'reset' && c.form) {
-    c.form.reset();
+    yield* resetSteps(c.form);
   } else if (c && c.localName === 'a' && !trusted) {
     K.navigate(c.getAttribute('href'));
   }
   return false;
 }
+function activate(target, click, trusted) { return drain(activateSteps(target, click, trusted)); }
 
 /* ---- the document ---- */
 
@@ -1436,21 +1463,108 @@ function storage(kind) {
   });
 }
 
+/* The event loop (#535). A task is a function that makes the steps it runs, such as a timer's
+   callback or the events of a FileReader. A pump queues the timers that fell due, then runs the
+   tasks queued by then and the animation frames after them, and the host takes each callback in
+   a call of its own. A task queued meanwhile waits for the next pump. */
 var timers = [];
 var frames = [];
+var tasks = [];
 var nextTimer = 1;
-function timersChanged() { K.timers(timers.length + frames.length); }
+/* The animation frames being run, whose callbacks a callback before them can still cancel. */
+var running = [];
+/* The pump's time, which a frame callback is given and from which an interval counts. */
+var pumpNow = 0;
+function timersChanged() { K.timers(timers.length + frames.length + tasks.length); }
+function queueTask(task) {
+  tasks.push(task);
+  timersChanged();
+}
 function schedule(fn, ms, args, repeat) {
   if (typeof fn !== 'function') { var code = String(fn); fn = new Function(code); }
   ms = Number(ms) || 0;
   if (ms < 0) ms = 0;
-  var t = { id: nextTimer++, due: K.now() + ms, fn: fn, args: args, every: repeat ? Math.max(ms, 1) : 0 };
+  var t = { id: nextTimer++, due: K.now() + ms, fn: fn, args: args, every: repeat ? Math.max(ms, 1) : 0, queued: false };
   timers.push(t);
   timersChanged();
   return t.id;
 }
 function clearTimer(id) {
   for (var i = 0; i < timers.length; i++) if (timers[i].id === id) { timers.splice(i, 1); timersChanged(); return; }
+}
+function* callbackSteps(fn, self, args) {
+  try { fn.apply(self, args); } catch (e) { report(e); }
+  yield;
+}
+/* The task of a timer that fell due. A timer cleared since does not run, as HTML checks the map
+   of active timers when the task runs. */
+function timerTask(t) {
+  return function* () {
+    t.queued = false;
+    var at = timers.indexOf(t);
+    if (at < 0) return;
+    if (t.every) t.due = pumpNow + t.every; else timers.splice(at, 1);
+    yield* callbackSteps(t.fn, global, t.args);
+  };
+}
+function* frameSteps() {
+  running = frames;
+  frames = [];
+  for (var i = 0; i < running.length; i++) {
+    if (running[i].cancelled) continue;
+    yield* callbackSteps(running[i].fn, global, [pumpNow]);
+  }
+  running = [];
+}
+function requestFrame(fn) {
+  var id = nextTimer++;
+  frames.push({ id: id, fn: fn, cancelled: false });
+  timersChanged();
+  return id;
+}
+function cancelFrame(id) {
+  for (var i = 0; i < running.length; i++) if (running[i].id === id) running[i].cancelled = true;
+  for (var j = 0; j < frames.length; j++) if (frames[j].id === id) { frames.splice(j, 1); timersChanged(); return; }
+}
+
+/* What the host is running: the steps of a tap, of the load events or of the task at hand. Each
+   call of step() runs them to their next callback and answers MORE, or, once they are done,
+   what they returned. During a pump, the tasks it counted run one after the other, then the
+   frames. */
+var MORE = 'more';
+var current = null;
+var budget = 0;
+var framesDue = false;
+var outcome;
+function step() {
+  for (;;) {
+    if (!current) {
+      if (budget > 0 && tasks.length) {
+        budget--;
+        current = tasks.shift()();
+      } else if (framesDue) {
+        budget = 0;
+        framesDue = false;
+        current = frameSteps();
+      } else {
+        budget = 0;
+        timersChanged();
+        return outcome;
+      }
+    }
+    var r;
+    try { r = current.next(); } catch (e) { report(e); r = { done: true, value: undefined }; }
+    if (!r.done) return MORE;
+    current = null;
+    outcome = r.value;
+  }
+}
+function begin(steps) {
+  current = steps;
+  budget = 0;
+  framesDue = false;
+  outcome = undefined;
+  return step();
 }
 
 var console = {};
@@ -1512,8 +1626,8 @@ var api = {
   setTimeout: function (fn, ms) { return schedule(fn, ms, Array.prototype.slice.call(arguments, 2), false); },
   setInterval: function (fn, ms) { return schedule(fn, ms, Array.prototype.slice.call(arguments, 2), true); },
   clearTimeout: clearTimer, clearInterval: clearTimer,
-  requestAnimationFrame: function (fn) { var id = nextTimer++; frames.push({ id: id, fn: fn }); timersChanged(); return id; },
-  cancelAnimationFrame: function (id) { for (var i = 0; i < frames.length; i++) if (frames[i].id === id) { frames.splice(i, 1); timersChanged(); return; } },
+  requestAnimationFrame: requestFrame,
+  cancelAnimationFrame: cancelFrame,
   queueMicrotask: function (fn) { Promise.resolve().then(function () { try { fn(); } catch (e) { report(e); } }); },
   alert: function (message) { K.console('alert', message === undefined ? '' : String(message)); },
   confirm: function (message) { K.console('confirm', message === undefined ? '' : String(message)); return false; },
@@ -1551,47 +1665,56 @@ defineHandlers(global);
 /* ---- what the host calls ---- */
 
 global.__kite_current = function (id) { hidden(document, '__script', id == null ? null : wrap(id)); };
-global.__kite_loaded = function () {
+/* Each of these starts what the reading system runs and answers as step() does; the host calls
+   __kite_step() for the rest while the answer is MORE (#535). */
+function* loadedSteps() {
   hidden(document, '__ready', 'interactive');
-  fireEvent(document, new Event('readystatechange', {}));
-  fireEvent(document, new Event('DOMContentLoaded', { bubbles: true }));
+  yield* dispatchSteps(document, new Event('readystatechange', {}));
+  yield* dispatchSteps(document, new Event('DOMContentLoaded', { bubbles: true }));
   document.__ready = 'complete';
-  fireEvent(document, new Event('readystatechange', {}));
+  yield* dispatchSteps(document, new Event('readystatechange', {}));
   var load = new Event('load', {});
   load.target = document;
-  fireEvent(global, load);
-  fireEvent(global, new Event('pageshow', {}));
-};
-global.__kite_tap = function (id, x, y) {
+  yield* dispatchSteps(global, load);
+  yield* dispatchSteps(global, new Event('pageshow', {}));
+}
+function* tapSteps(id, x, y) {
   var target = wrap(id);
   var init = { bubbles: true, cancelable: true, composed: true, view: global, detail: 1, clientX: x, clientY: y, screenX: x, screenY: y,
     button: 0, buttons: 1, pointerId: 1, pointerType: 'touch', isPrimary: true };
-  function trusted(e) { e.isTrusted = true; return dispatch(target, e); }
-  trusted(new PointerEvent('pointerdown', init));
-  trusted(new MouseEvent('mousedown', init));
+  function trusted(e) { e.isTrusted = true; return dispatchSteps(target, e); }
+  yield* trusted(new PointerEvent('pointerdown', init));
+  yield* trusted(new MouseEvent('mousedown', init));
   if (target.focus && target !== document) {
     var c = control(target);
-    if (c && c.focus) c.focus();
+    if (c && c.focus === HTMLElement.prototype.focus) yield* focusSteps(c);
+    else if (c && c.focus) c.focus();
   }
   init.buttons = 0;
-  trusted(new PointerEvent('pointerup', init));
-  trusted(new MouseEvent('mouseup', init));
-  return activate(target, new MouseEvent('click', init), true);
-};
+  yield* trusted(new PointerEvent('pointerup', init));
+  yield* trusted(new MouseEvent('mouseup', init));
+  return yield* activateSteps(target, new MouseEvent('click', init), true);
+}
+global.__kite_step = step;
+global.__kite_loaded = function () { return begin(loadedSteps()); };
+global.__kite_tap = function (id, x, y) { return begin(tapSteps(id, x, y)); };
+/* Queues the timers due by [now], in the order they fell due, and runs what is queued. */
 global.__kite_pump = function (now) {
-  var due = timers.filter(function (t) { return t.due <= now; }).sort(function (a, b) { return a.due - b.due || a.id - b.id; });
+  pumpNow = now;
+  var due = timers.filter(function (t) { return t.due <= now && !t.queued; }).sort(function (a, b) { return a.due - b.due || a.id - b.id; });
   for (var i = 0; i < due.length; i++) {
-    var t = due[i];
-    var at = timers.indexOf(t);
-    if (at < 0) continue;
-    if (t.every) t.due = now + t.every; else timers.splice(at, 1);
-    try { t.fn.apply(global, t.args); } catch (e) { report(e); }
+    due[i].queued = true;
+    tasks.push(timerTask(due[i]));
   }
-  var ready = frames;
-  frames = [];
-  for (var j = 0; j < ready.length; j++) { try { ready[j].fn.call(global, now); } catch (e) { report(e); } }
-  timersChanged();
-  if (frames.length) return 0;
+  current = null;
+  budget = tasks.length;
+  framesDue = true;
+  outcome = undefined;
+  return step();
+};
+/* Milliseconds until the next pump has work: 0 for a task or a frame waiting, -1 for nothing. */
+global.__kite_wait = function () {
+  if (tasks.length || frames.length) return 0;
   if (!timers.length) return -1;
   var next = Infinity;
   for (var k = 0; k < timers.length; k++) if (timers[k].due < next) next = timers[k].due;

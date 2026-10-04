@@ -161,6 +161,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- In a book's scripts, the promise jobs of a callback the reader calls run before its next
+  callback, as HTML runs a microtask checkpoint after each one. Before, a timer's jobs waited for
+  every timer due in the same round, and a listener's jobs for every listener of the tap or of
+  the load events. Each such callback now runs in a call of its own into the engine. A script's
+  own `dispatchEvent` still runs its listeners at once. An animation frame that an earlier
+  callback of its frame cancels no longer runs (#535).
+
 - `DOMException` in a book's scripts is the one of Web IDL: its `name`, `message` and `code` are
   getters of its prototype that refuse an object that is not one, `code` is the legacy code of
   the name, the 25 legacy constants sit on the constructor and the prototype, it must be called
