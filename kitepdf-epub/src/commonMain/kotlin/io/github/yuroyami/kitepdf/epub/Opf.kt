@@ -133,10 +133,37 @@ internal object Opf {
         var captureRefines: String? = null
         val media = HashMap<String, MutableList<String>>()
         val overlayDurations = HashMap<String, Double>()
+        // The text of the element being captured, which a comment or a CDATA section can split.
+        val captured = StringBuilder()
+
+        fun commit() {
+            val name = capture ?: return
+            capture = null
+            val value = metadataValue(captured)
+            captured.clear()
+            if (value.isEmpty()) return
+            when (name) {
+                "title" -> if (title == null) title = value
+                "creator" -> creators.add(value)
+                "language" -> if (language == null) language = value
+                "identifier" -> { identifiers.add(value); if (captureIdIsUnique && uniqueId == null) uniqueId = value }
+                "primaryWritingMode" -> if (primaryWritingMode == null) primaryWritingMode = value
+                else -> {
+                    if (name.startsWith("rendition:")) renditionValues.getOrPut(name.removePrefix("rendition:")) { value }
+                    if (name.startsWith("media:")) {
+                        val refines = captureRefines
+                        when {
+                            refines == null -> media.getOrPut(name) { ArrayList() }.add(value)
+                            name == "media:duration" -> SmilClock.seconds(value)?.let { overlayDurations.getOrPut(refines) { it } }
+                        }
+                    }
+                }
+            }
+        }
 
         for (t in KiteXml.tokenize(xml)) when (t) {
             is KiteXmlToken.Open -> {
-                capture = null
+                commit()
                 when (t.name) {
                     "package" -> uidRef = t.attrs["unique-identifier"]
                     "item" -> {
@@ -154,47 +181,28 @@ internal object Opf {
                         val property = t.attrs["property"]
                         if (property != null && property.startsWith("rendition:")) capture = property
                         t.attrs["name"]?.takeIf { it.startsWith("rendition:") }?.let { name ->
-                            t.attrs["content"]?.trim()?.let { renditionValues.getOrPut(name.removePrefix("rendition:")) { it } }
+                            t.attrs["content"]?.let { renditionValues.getOrPut(name.removePrefix("rendition:")) { metadataValue(it) } }
                         }
-                        if (t.attrs["name"] == "fixed-layout" && t.attrs["content"]?.equals("true", true) == true) {
+                        if (t.attrs["name"] == "fixed-layout" && t.attrs["content"]?.let(::metadataValue).equals("true", true)) {
                             renditionValues.getOrPut("layout") { "pre-paginated" }
                         }
                         if (property != null && property.startsWith("media:")) {
                             capture = property
-                            captureRefines = t.attrs["refines"]?.trim()?.removePrefix("#")
+                            captureRefines = t.attrs["refines"]?.let(::metadataValue)?.removePrefix("#")
                         }
                         if (t.attrs["property"] == "primary-writing-mode") capture = "primaryWritingMode"
-                        if (t.attrs["name"] == "primary-writing-mode") primaryWritingMode = t.attrs["content"]?.trim()
+                        if (t.attrs["name"] == "primary-writing-mode") primaryWritingMode = t.attrs["content"]?.let(::metadataValue)
                     }
                     "title" -> capture = "title"
                     "creator" -> capture = "creator"
                     "language" -> capture = "language"
                     "identifier" -> { capture = "identifier"; captureIdIsUnique = t.attrs["id"] == uidRef }
                 }
+                // An element that closes itself has no text to capture.
+                if (t.selfClose) capture = null
             }
-            is KiteXmlToken.Text -> when (capture) {
-                "title" -> if (title == null) title = t.text.trim()
-                "creator" -> t.text.trim().takeIf { it.isNotEmpty() }?.let { creators.add(it) }
-                "language" -> if (language == null) language = t.text.trim()
-                "identifier" -> t.text.trim().takeIf { it.isNotEmpty() }?.let {
-                    identifiers.add(it); if (captureIdIsUnique && uniqueId == null) uniqueId = it
-                }
-                "primaryWritingMode" -> if (primaryWritingMode == null) primaryWritingMode = t.text.trim()
-                else -> {
-                    val name = capture
-                    if (name != null && name.startsWith("rendition:")) renditionValues.getOrPut(name.removePrefix("rendition:")) { t.text.trim() }
-                    if (name != null && name.startsWith("media:")) {
-                        val value = t.text.trim()
-                        val refines = captureRefines
-                        when {
-                            value.isEmpty() -> Unit
-                            refines == null -> media.getOrPut(name) { ArrayList() }.add(value)
-                            name == "media:duration" -> SmilClock.seconds(value)?.let { overlayDurations.getOrPut(refines) { it } }
-                        }
-                    }
-                }
-            }
-            is KiteXmlToken.Close -> capture = null
+            is KiteXmlToken.Text -> if (capture != null) captured.append(t.text)
+            is KiteXmlToken.Close -> commit()
         }
 
         return OpfPackage(
@@ -212,6 +220,13 @@ internal object Opf {
         )
     }
 }
+
+/**
+ * A package metadata value with the ASCII white space at its ends stripped and each run inside
+ * collapsed to one space, as EPUB 3.3 asks a reading system to read every metadata value (#515).
+ */
+internal fun metadataValue(raw: CharSequence): String =
+    raw.split(' ', '\t', '\n', '\u000C', '\r').filter { it.isNotEmpty() }.joinToString(" ")
 
 /** The longest `fallback` chain followed; a longer one is a mistake or a trap. */
 internal const val MAX_FALLBACK_HOPS = 16

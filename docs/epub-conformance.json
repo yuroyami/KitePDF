@@ -150,7 +150,7 @@
     "pkg-manifest-unknown": true,
     "pkg-manifest-unlisted-resource": false,
     "pkg-meta-unknown": true,
-    "pkg-meta-whitespace": false,
+    "pkg-meta-whitespace": true,
     "pkg-spine-duplicate-item-hyperlink": true,
     "pkg-spine-duplicate-item-rendering": true,
     "pkg-spine-duplicate-item-ui": true,
