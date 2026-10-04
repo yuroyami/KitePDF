@@ -238,6 +238,24 @@ class EpubScriptTest {
     }
 
     @Test
+    fun the_budget_leaves_out_the_dom_the_library_sets_up() {
+        // A clock that moves a second each time it is read, so the deadline, asked every so many
+        // instructions, finds a budget of twenty seconds spent at its twenty-first look. Opening
+        // the chapter reads the clock about forty times, most of them while the DOM is set up, and a
+        // tap about ten, the same on every platform, so only the book's loop should be stopped (#554).
+        var now = 0L
+        val book = ScriptBooks.buttonPage(script = "while (true) {}")
+        val page = book.page(KiteLocation(0, 0))
+        val scripts = runner(book, EpubScriptPolicy(budgetMillis = 20_000), clock = { now += 1_000; now })
+        scripts.chapterOpened(0)
+        assertEquals(1, scripts.failures.size, "${scripts.failures.map { it.message }}")
+        assertTrue("did not start" !in scripts.failures.single().message.orEmpty(), "${scripts.failures.map { it.message }}")
+
+        scripts.tap(page, 52.5, 90.0)
+        assertTrue(page.paintsBlue(), "the page's own script ran before the loop, and its button works")
+    }
+
+    @Test
     fun a_script_outside_the_book_does_not_run() {
         val book = ScriptBooks.buttonPage(head = """<script src="https://example.org/tracker.js"></script>""")
         val scripts = runner(book)

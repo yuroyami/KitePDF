@@ -177,6 +177,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The budget of `EpubScriptPolicy` no longer counts the DOM the library sets up in a chapter's
+  engine. That setup takes a few hundred milliseconds, and seconds on a slow device or the first
+  time on the web, and when it outlived the budget the engine stopped it, so no script of the
+  chapter ran, not even one that would have finished at once. The budget of opening a chapter
+  now starts once the DOM is ready, and `EpubScriptSession` says that it evaluates its DOM
+  first in each engine (#554).
+
 - On JavaScript and WebAssembly two scripted documents can be open at once. The page's one
   thread holds one open KiteJS engine, and nothing made the runners share it, so while one runner
   had an engine open the next one's would not open: a second book's scripts never ran, and a
