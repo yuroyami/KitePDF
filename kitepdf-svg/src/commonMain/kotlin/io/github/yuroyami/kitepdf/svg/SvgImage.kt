@@ -1574,6 +1574,8 @@ public class SvgImage private constructor(
     private fun rect(a: Map<String, String>, paint: Paint): KitePath {
         val x = pLen(a, "x", paint); val y = pLen(a, "y", paint)
         val w = pLen(a, "width", paint); val h = pLen(a, "height", paint)
+        // SVG 2, 10.2: no width or height disables the rect, and a negative one is an error (#561).
+        if (!(w > 0.0) || !(h > 0.0)) return KitePath(emptyList())
         var rx = a["rx"]?.let { parseLen(it, paint.fontSize, paint.viewportWidth) } ?: -1.0
         var ry = a["ry"]?.let { parseLen(it, paint.fontSize, paint.viewportHeight) } ?: -1.0
         if (rx < 0 && ry >= 0) rx = ry

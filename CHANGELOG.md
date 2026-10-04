@@ -177,6 +177,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- An EPUB chapter decodes each picture once, however many elements name it. Each `<img>` held its
+  own decoded copy, so a picture used all through a chapter cost its pixels once per use, and a
+  page that named an 800 by 1158 picture 1,651 times ran a 3 GB heap out of memory (#560).
+
+- An SVG `rect` with a negative width or height paints nothing, as SVG 2 says, instead of
+  throwing out of the whole render, and one with no width or height paints no empty fill (#561).
+
 - The budget of `EpubScriptPolicy` no longer counts the DOM the library sets up in a chapter's
   engine. That setup takes a few hundred milliseconds, and seconds on a slow device or the first
   time on the web, and when it outlived the budget the engine stopped it, so no script of the

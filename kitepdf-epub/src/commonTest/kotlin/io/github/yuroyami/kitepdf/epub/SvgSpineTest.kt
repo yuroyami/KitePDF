@@ -87,7 +87,8 @@ class SvgSpineTest {
     fun a_fixed_layout_svg_page_takes_its_size_from_the_view_box() {
         // EPUB 3.3, 8.2.2.6: an SVG fixed-layout document gives its page size in viewBox,
         // in CSS pixels. 600 by 800 pixels is 450 by 600 points.
-        val doc = EpubDocument.open(book(plate.replace("width=\"600\" height=\"800\" ", ""), fixedLayout = true))
+        // Only the root loses its size: the rect keeps its own, which a rect needs to paint (#561).
+        val doc = EpubDocument.open(book(plate.replaceFirst("width=\"600\" height=\"800\" ", ""), fixedLayout = true))
         val page = doc.pages[1]
         assertEquals(450.0, page.width, 1e-9)
         assertEquals(600.0, page.height, 1e-9)

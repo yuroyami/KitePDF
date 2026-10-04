@@ -31,6 +31,17 @@ class SvgImageTest {
     }
 
     @Test
+    fun a_rect_without_room_paints_nothing_and_the_rest_still_paints() {
+        // SVG 2, 10.2: a width or height of zero disables the rect, and a negative one is an
+        // error, which leaves it at zero. A negative one threw out of the whole render.
+        for (size in listOf("""width="-1" height="20"""", """width="20" height="-1"""", """width="0" height="20"""", """width="-5" height="-5" rx="2"""")) {
+            val f = fills("""<svg width="40" height="40"><rect x="1" y="1" $size fill="red"/><circle cx="20" cy="20" r="5" fill="blue"/></svg>""")
+            assertEquals(1, f.size, "only the circle paints ($size)")
+            assertTrue(f[0].color.b > 0.9, "the one fill is the circle's ($size)")
+        }
+    }
+
+    @Test
     fun default_fill_is_black() {
         val f = fills("""<svg width="10" height="10"><circle cx="5" cy="5" r="4"/></svg>""")
         assertEquals(1, f.size)
