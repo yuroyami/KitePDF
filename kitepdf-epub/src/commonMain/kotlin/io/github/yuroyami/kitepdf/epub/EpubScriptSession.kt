@@ -277,7 +277,18 @@ public class EpubScriptSession(
             }
             // Scripts run here, so `noscript` content does not show, as in a browser that runs them.
             for (noscript in elementsIn(dom.root, "noscript")) dom.remove(null, noscript)
-            for (script in elementsIn(dom.root, "script")) runScript(script)
+            // A parser makes an element when it reaches its start tag, and a handler attribute takes
+            // its place in the listener list then (#539): the elements before a script are made
+            // before it runs, those after it once it ran.
+            val handlers = ArrayList<Int>()
+            val scripts = ArrayList<Pair<KiteXmlNode.Element, Int>>()
+            fun walk(e: KiteXmlNode.Element) {
+                if (e.attrs.keys.any { it.length > 2 && it.startsWith("on") }) handlers.add(dom.idOf(e))
+                if (e.tag == "script") scripts.add(e to handlers.size) else for (c in e.children) if (c is KiteXmlNode.Element) walk(c)
+            }
+            walk(dom.root)
+            if (handlers.isNotEmpty()) call("markup") { engine.evaluate("__kite_markup([${handlers.joinToString(",")}])", "markup") }
+            for ((script, reached) in scripts) runScript(script, reached)
             steps("load", "__kite_loaded()")
             commit()
         }
@@ -294,8 +305,11 @@ public class EpubScriptSession(
             return out
         }
 
-        /** Runs one classic script, inline or from the zip. A module and a data block do not run. */
-        private fun runScript(script: KiteXmlNode.Element) {
+        /**
+         * Runs one classic script, inline or from the zip, once the parser reached the first
+         * [reached] elements of the markup with handler attributes. A module and a data block do not run.
+         */
+        private fun runScript(script: KiteXmlNode.Element, reached: Int) {
             val type = script.attrs["type"]?.substringBefore(';')?.trim()?.lowercase().orEmpty()
             if (type.isNotEmpty() && type !in SCRIPT_TYPES) return
             val src = script.attrs["src"]?.trim()
@@ -315,7 +329,7 @@ public class EpubScriptSession(
                 "${document.chapterPath(chapter)}#script" to dom.textOf(script)
             }
             val id = dom.idOf(script)
-            call("current") { engine.evaluate("__kite_current($id)", "current") }
+            call("current") { engine.evaluate("__kite_current($id, $reached)", "current") }
             call(name) { engine.evaluate(withoutCommentMarks(source), name) }
             call("current") { engine.evaluate("__kite_current(null)", "current") }
         }

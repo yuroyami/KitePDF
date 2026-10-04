@@ -224,6 +224,17 @@ and their jobs wait until the script is done, as in a browser. The timers that f
 run in the order they fell due, and a timer or a frame that an earlier callback cancels does not
 run.
 
+An `on` handler is an entry of its target's list of listeners, as HTML makes it: it takes its
+place in the list when it is first set, keeps that place when it is set again, and leaves the list
+when it is set to null or its attribute is removed, so a listener added before it runs before it
+and one that calls `stopImmediatePropagation()` keeps it from running. A handler of the markup
+takes its place when a browser's parser would have made its element, so a script adds its
+listeners after the handlers of the elements before it and ahead of those after it. The code of
+an `on` attribute runs with the names of the document, the form of its control and the element in
+scope, and a window handler from an attribute of the body with the global names alone. The window
+handlers of the body element, `onload` among them, are the window's, through the element or the
+window alike, and `document.onreadystatechange` runs as the document's state changes.
+
 Each book has an origin of its own, shared by its chapters: `epub://` and a host made from the
 package's unique identifier, so the book has it each time it opens. `self.origin` and
 `location.origin` answer it, and `location.href` is the origin and the chapter's path.
