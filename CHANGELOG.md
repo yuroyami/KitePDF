@@ -177,6 +177,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Hebrew and Arabic in a host font read the right way round in the Compose viewer. The layout
+  hands the canvas each run in the order it draws, and the text engine ran the bidi algorithm on
+  it again, so every right-to-left word showed its letters reversed, and Arabic letters took
+  their joining forms from the wrong neighbours. A right-to-left part now goes to the engine in
+  logical order under a right-to-left override (#486).
 - An EPUB chapter decodes each picture once, however many elements name it. Each `<img>` held its
   own decoded copy, so a picture used all through a chapter cost its pixels once per use, and a
   page that named an 800 by 1158 picture 1,651 times ran a 3 GB heap out of memory (#560).
