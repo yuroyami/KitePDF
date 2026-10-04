@@ -89,7 +89,7 @@ function hardened(re) {
   return re;
 }
 /* The regular expressions of the DOM. */
-var RE_UPPER = hardened(/[A-Z]/g), RE_VENDOR = hardened(/^(webkit|moz|ms|o)-/), RE_VENDOR_ANY = hardened(/^-(webkit|moz|ms|o|epub)-/),
+var RE_UPPER = hardened(/[A-Z]/g), RE_ASCII_UPPER = hardened(/[A-Z]/), RE_VENDOR = hardened(/^(webkit|moz|ms|o)-/), RE_VENDOR_ANY = hardened(/^-(webkit|moz|ms|o|epub)-/),
   RE_BARE_FRACTION = hardened(/(^|[\s,(\/+*-])\.(\d)/g), RE_DASHED = hardened(/-([a-z])/g), RE_ERROR_CODE = hardened(/(\w+) (\d+)/g),
   RE_SPACE = hardened(/\s/), RE_IMPORTANT = hardened(/!\s*important$/i), RE_DIGITS = hardened(/^\d+$/),
   RE_PREFIX = hardened(/^.*:/), RE_WHITESPACE_RUN = hardened(/\s+/g), RE_QUOTE = hardened(/"/g), RE_EPUB_SCHEME = hardened(/^epub:\/\//),
@@ -752,7 +752,7 @@ function reach(el) {
   var id = el.__id;
   reachedIds[id] = true;
   pendingIds[id] = false;
-  var names = K.attrNames(id);
+  var names = plainAttrNames(id);
   for (var i = 0; i < names.length; i++) handlerAttributeChanged(el, names[i], true);
 }
 /* Reaches [el], unless it is an element of the markup that the parser has yet to reach. A node
@@ -770,7 +770,13 @@ function reachMarkup(count) {
     if (pendingIds[id] && !reachedIds[id]) reach(wrap(id));
   }
 }
-/* A content attribute [name] of [el] was set, or removed: a handler attribute sets its handler. */
+/* The local names of the attributes of [id] in no namespace, in order: those HTML gives a meaning (#545). */
+function plainAttrNames(id) {
+  var list = K.attrList(id), out = [];
+  for (var i = 0; i < list.length; i += 4) if (list[i] === '') ArrayPush(out, list[i + 2]);
+  return out;
+}
+/* A content attribute [name] of [el] in no namespace was set, or removed: a handler attribute sets its handler. */
 function attributeChanged(el, name, set) {
   // Setting or removing the nonce attribute sets the element's nonce (HTML, 2.6.3), and setting
   // async ends the forced async of a script element a script made (HTML, 4.12.1).
@@ -1755,10 +1761,18 @@ Document.prototype.createComment = function (data) {
 };
 Document.prototype.createDocumentFragment = function () { return madeBy(idOf(this), K.createFragment()); };
 Document.prototype.createAttribute = function (localName) {
-  var what = "Failed to execute 'createAttribute' on 'Document'", id = idOf(this), name = domString(localName);
+  var what = "Failed to execute 'createAttribute' on 'Document'", id = idOf(this);
   needArgs(arguments, 1, what);
+  var name = domString(localName);
   if (!RegExpTest(RE_ATTRIBUTE_NAME, name)) throw new DOMException(what + ": The localName provided ('" + name + "') contains an invalid character.", 'InvalidCharacterError');
-  return newAttr(isHtmlDocument(id) ? asciiLowerCase(name) : name, '', null);
+  return newAttr('', '', isHtmlDocument(id) ? asciiLowerCase(name) : name, '', null);
+};
+Document.prototype.createAttributeNS = function (namespace, qualifiedName) {
+  var what = "Failed to execute 'createAttributeNS' on 'Document'";
+  idOf(this);
+  needArgs(arguments, 2, what);
+  var n = extractName(namespace, domString(qualifiedName), what, true);
+  return newAttr(nsKey(n.ns), n.prefix === null ? '' : n.prefix, n.local, '', null);
 };
 /* The interfaces createEvent makes, by the names of DOM Standard, 4.5, in lower case. */
 var EVENT_INTERFACES = {

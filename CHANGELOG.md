@@ -173,6 +173,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- An attribute in a book's scripts has the namespace, prefix and local name the DOM Standard
+  gives it, where it had only the lower-cased local name the layout keys it by, so the
+  `getAttribute('epub:type')` of a footnote script read nothing while `getAttribute('type')`
+  answered for it, `svg.getAttribute('viewbox')` answered in an XHTML chapter, the `NS` methods
+  ignored the namespace, an `Attr` had no prefix or namespace, and `[title]` matched `tItLe` in
+  an XHTML chapter. An XHTML chapter names its attributes as XML does, a declared prefix to its
+  namespace, and an HTML chapter as HTML's parser does, lower-cased, with the case table of SVG
+  and the foreign attributes of `xlink:`, `xml:` and `xmlns`. `setAttribute`, `setAttributeNS`,
+  `toggleAttribute`, the `Attr` of `getAttributeNode` and `createAttributeNS`, and
+  `NamedNodeMap`, with its named properties, follow the standard, and `outerHTML` writes each
+  name as the serializer of HTML does. The layout reads the attributes as before. The attribute
+  tests of web-platform-tests' `dom/nodes` run in a chapter, and pass but for five that wait on
+  fixes KiteJS made after 0.2.0 (#545).
+
 - A checked radio button no longer matches `:indeterminate` when the other buttons of its group
   are unchecked, as the group it looked in for a checked button left the radio itself out (#551).
 
@@ -364,6 +378,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   default, and give a comment as the new `KiteXmlToken.Comment` and `KiteXmlNode.Comment` when
   it is true. Without it they read a document as before, but a `when` over either sealed class
   needs a branch for the new kind (#544).
+
+- `KiteXml.tokenize` in `kitepdf-core` takes `keepNames`, false by default, and keeps each
+  attribute's name as the markup writes it, with its prefix and its case, when it is true, where
+  it gives the lower-cased local name otherwise. Of two attributes with one name the first then
+  wins, as in HTML's tokenizer (#545).
 
 - `KitePageRasterizer` keeps the coverage of the glyphs it draws from their own outlines,
   up to 4 MB, as MuPDF keeps its glyph cache. It fills each glyph's path once for each size

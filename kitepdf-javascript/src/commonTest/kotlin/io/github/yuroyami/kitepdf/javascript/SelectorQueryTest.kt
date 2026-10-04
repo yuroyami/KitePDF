@@ -233,13 +233,12 @@ class SelectorQueryTest {
             ),
             logged(caseBody, caseScript, html = true),
         )
-        // The case of an attribute's name in an XHTML chapter is #545's: the tree keeps it lowercased.
         assertEquals(
             listOf(
-                "linearGradient=1", "lineargradient=0", "LINEARGRADIENT=0", "svg[viewBox]=1", "P=0", "[type=CHECKBOX]=0",
-                "svg[preserveAspectRatio=xmidymid]=0", "svg[preserveAspectRatio=xMidYMid]=1", "m false|false|false",
+                "linearGradient=1", "lineargradient=0", "LINEARGRADIENT=0", "svg[viewBox]=1", "svg[viewbox]=0", "svg[VIEWBOX]=0", "P=0",
+                "p[ID]=0", "[type=CHECKBOX]=0", "svg[preserveAspectRatio=xmidymid]=0", "svg[preserveAspectRatio=xMidYMid]=1", "m false|false|false",
             ),
-            logged(caseBody, caseScript, html = false).filterNot { it.startsWith("svg[viewbox]") || it.startsWith("svg[VIEWBOX]") || it.startsWith("p[ID]") },
+            logged(caseBody, caseScript, html = false),
         )
     }
 }

@@ -293,10 +293,10 @@ function dataAttribute(name, check) {
 }
 /* The names of [el]'s data attributes as a DOMStringMap gives them, in the order of the attributes. */
 function dataNames(el) {
-  var all = K.attrNames(idOf(el)), out = [];
+  var all = plainAttrNames(idOf(el)), out = [];
   for (var i = 0; i < all.length; i++) {
     var n = all[i];
-    if (StringSubstring(n, 0, 5) !== 'data-' || RegExpTest(RE_UPPER, n)) continue;
+    if (StringSubstring(n, 0, 5) !== 'data-' || RegExpTest(RE_ASCII_UPPER, n)) continue;
     var name = '', s = StringSubstring(n, 5);
     for (var j = 0; j < s.length; j++) {
       var c = StringCharCodeAt(s, j), d = j + 1 < s.length ? StringCharCodeAt(s, j + 1) : 0;

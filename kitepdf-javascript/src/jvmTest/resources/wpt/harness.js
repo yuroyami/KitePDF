@@ -211,7 +211,19 @@ function assert_throws_js(constructor, fn, description) {
   check(false, description, 'did not throw');
 }
 /* The DOMException constructor of the realm the error comes from may come before the function, as testharness.js takes it. */
+/* The names that the legacy codes of DOMException stand for, which assert_throws_dom takes as testharness.js does. */
+var legacyCodeNames = {
+  INDEX_SIZE_ERR: 'IndexSizeError', HIERARCHY_REQUEST_ERR: 'HierarchyRequestError', WRONG_DOCUMENT_ERR: 'WrongDocumentError',
+  INVALID_CHARACTER_ERR: 'InvalidCharacterError', NO_MODIFICATION_ALLOWED_ERR: 'NoModificationAllowedError',
+  NOT_FOUND_ERR: 'NotFoundError', NOT_SUPPORTED_ERR: 'NotSupportedError', INUSE_ATTRIBUTE_ERR: 'InUseAttributeError',
+  INVALID_STATE_ERR: 'InvalidStateError', SYNTAX_ERR: 'SyntaxError', INVALID_MODIFICATION_ERR: 'InvalidModificationError',
+  NAMESPACE_ERR: 'NamespaceError', INVALID_ACCESS_ERR: 'InvalidAccessError', TYPE_MISMATCH_ERR: 'TypeMismatchError',
+  SECURITY_ERR: 'SecurityError', NETWORK_ERR: 'NetworkError', ABORT_ERR: 'AbortError', URL_MISMATCH_ERR: 'URLMismatchError',
+  QUOTA_EXCEEDED_ERR: 'QuotaExceededError', TIMEOUT_ERR: 'TimeoutError', INVALID_NODE_TYPE_ERR: 'InvalidNodeTypeError',
+  DATA_CLONE_ERR: 'DataCloneError'
+};
 function assert_throws_dom(name, constructorOrFn, fnOrDescription, description) {
+  if (Object.prototype.hasOwnProperty.call(legacyCodeNames, name)) name = legacyCodeNames[name];
   var constructor = DOMException, fn = constructorOrFn;
   if (typeof fnOrDescription === 'function') { constructor = constructorOrFn; fn = fnOrDescription; } else description = fnOrDescription;
   try { fn(); } catch (e) {

@@ -2542,8 +2542,8 @@ public final class io/github/yuroyami/kitepdf/core/xml/KiteXml {
 	public static final field INSTANCE Lio/github/yuroyami/kitepdf/core/xml/KiteXml;
 	public final fun parse (Ljava/lang/String;Z)Lio/github/yuroyami/kitepdf/core/xml/KiteXmlNode$Element;
 	public static synthetic fun parse$default (Lio/github/yuroyami/kitepdf/core/xml/KiteXml;Ljava/lang/String;ZILjava/lang/Object;)Lio/github/yuroyami/kitepdf/core/xml/KiteXmlNode$Element;
-	public final fun tokenize (Ljava/lang/String;Z)Ljava/util/List;
-	public static synthetic fun tokenize$default (Lio/github/yuroyami/kitepdf/core/xml/KiteXml;Ljava/lang/String;ZILjava/lang/Object;)Ljava/util/List;
+	public final fun tokenize (Ljava/lang/String;ZZ)Ljava/util/List;
+	public static synthetic fun tokenize$default (Lio/github/yuroyami/kitepdf/core/xml/KiteXml;Ljava/lang/String;ZZILjava/lang/Object;)Ljava/util/List;
 }
 
 public abstract class io/github/yuroyami/kitepdf/core/xml/KiteXmlNode {

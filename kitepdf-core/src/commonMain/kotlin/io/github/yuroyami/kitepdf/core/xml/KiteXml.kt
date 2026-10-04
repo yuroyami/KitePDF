@@ -35,8 +35,13 @@ public object KiteXml {
      * Tag soup is salvaged, never rejected. Use [parse] for a tree; callers
      * that need HTML's implied end tags fold the tokens themselves. A comment is
      * a [KiteXmlToken.Comment] for [keepComments], and is skipped otherwise.
+     *
+     * For [keepNames], an attribute keeps its name as the markup writes it, with
+     * its prefix and its case, and of two with one name the first wins, as HTML's
+     * tokenizer has it, for a caller that names attributes as a DOM does. Tag names
+     * lose their prefix and case either way.
      */
-    public fun tokenize(xml: String, keepComments: Boolean = false): List<KiteXmlToken> {
+    public fun tokenize(xml: String, keepComments: Boolean = false, keepNames: Boolean = false): List<KiteXmlToken> {
         val out = ArrayList<KiteXmlToken>()
         var i = 0
         val n = xml.length
@@ -66,7 +71,7 @@ public object KiteXml {
                     else -> {
                         val end = tagEnd(xml, i + 1)
                         if (end < 0) { i = n } else {
-                            val token = parseTag(xml.substring(i + 1, end))
+                            val token = parseTag(xml.substring(i + 1, end), keepNames)
                             if (token != null) {
                                 out.add(token)
                                 // Only an element that closes is read raw, so one left open does not take the rest as text.
@@ -143,7 +148,7 @@ public object KiteXml {
         return xml.indexOf('>', from)
     }
 
-    private fun parseTag(body: String): KiteXmlToken? {
+    private fun parseTag(body: String, keepNames: Boolean): KiteXmlToken? {
         val t = body.trim()
         if (t.isEmpty()) return null
         if (t.startsWith("/")) return KiteXmlToken.Close(localName(t.substring(1).trim()))
@@ -151,11 +156,11 @@ public object KiteXml {
         val core = if (selfClose) t.dropLast(1).trim() else t
         val sp = core.indexOfFirst { it == ' ' || it == '\t' || it == '\n' || it == '\r' }
         val name = localName(if (sp < 0) core else core.substring(0, sp))
-        val attrs = if (sp < 0) emptyMap() else parseAttrs(core.substring(sp + 1))
+        val attrs = if (sp < 0) emptyMap() else parseAttrs(core.substring(sp + 1), keepNames)
         return KiteXmlToken.Open(name, attrs, selfClose)
     }
 
-    private fun parseAttrs(s: String): Map<String, String> {
+    private fun parseAttrs(s: String, keepNames: Boolean): Map<String, String> {
         val attrs = LinkedHashMap<String, String>()
         var i = 0
         val n = s.length
@@ -164,7 +169,10 @@ public object KiteXml {
             val keyStart = i
             while (i < n && s[i] != '=' && !s[i].isWhitespace()) i++
             if (i <= keyStart) { i++; continue }
-            val key = localName(s.substring(keyStart, i))
+            val written = s.substring(keyStart, i)
+            val key = if (keepNames) written else localName(written)
+            // A name that is already there keeps its first value when names are kept as written.
+            val keep = !keepNames || key !in attrs
             while (i < n && s[i].isWhitespace()) i++
             if (i < n && s[i] == '=') {
                 i++
@@ -173,14 +181,14 @@ public object KiteXml {
                     val q = s[i]; i++
                     val vStart = i
                     while (i < n && s[i] != q) i++
-                    attrs[key] = decodeEntities(s.substring(vStart, i))
+                    if (keep) attrs[key] = decodeEntities(s.substring(vStart, i))
                     if (i < n) i++
                 } else {
                     val vStart = i
                     while (i < n && !s[i].isWhitespace()) i++
-                    attrs[key] = decodeEntities(s.substring(vStart, i))
+                    if (keep) attrs[key] = decodeEntities(s.substring(vStart, i))
                 }
-            } else {
+            } else if (keep) {
                 attrs[key] = ""
             }
         }

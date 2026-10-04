@@ -54,14 +54,16 @@ internal object HtmlParser {
     /**
      * Parse [xhtml] into a synthetic `#root` element holding the document. An element nested
      * deeper than [MAX_DEPTH] moves up to that level, or above a table part, and keeps its text.
-     * Comments are dropped unless [keepComments] asks for them, as a script's DOM does (#544).
+     * Comments are dropped unless [keepComments] asks for them, as a script's DOM does (#544), and an
+     * attribute keeps its name as written, prefix and case, for [keepNames], which a script's DOM names
+     * as its document's parser would (#545).
      */
-    fun parse(xhtml: String, keepComments: Boolean = false): KiteXmlNode.Element {
+    fun parse(xhtml: String, keepComments: Boolean = false, keepNames: Boolean = false): KiteXmlNode.Element {
         val root = KiteXmlNode.Element("#root", emptyMap())
         val stack = OpenElements().apply { add(root) }
         var warned = false
 
-        for (t in KiteXml.tokenize(xhtml, keepComments)) when (t) {
+        for (t in KiteXml.tokenize(xhtml, keepComments, keepNames)) when (t) {
             is KiteXmlToken.Open -> {
                 implicitClose(stack, t.name)
                 val el = KiteXmlNode.Element(t.name, t.attrs)

@@ -232,6 +232,16 @@ an XHTML page: a tag name keeps its case, so `tagName` is `p` and an SVG gradien
 `text/html` is an `HTMLDocument`, where an HTML element's `tagName` is upper case and
 `createElement` lowercases its argument. `document.contentType` says which it is.
 
+An attribute has its namespace, its prefix and its local name, as the DOM Standard gives it. An
+XHTML chapter names its attributes as XML does, so `viewBox` keeps its case and `xlink:href` is
+`href` in the XLink namespace once the prefix is declared, and an HTML chapter names them as
+HTML's parser does: lower case, with SVG's names such as `viewBox` and MathML's `definitionURL`
+given their case back, and `xlink:`, `xml:` and `xmlns` attributes of a foreign element put in
+their namespaces. `getAttribute` finds an attribute by its qualified name, lower-cased first on an
+HTML element of an HTML chapter, and `getAttributeNS` by its namespace and local name.
+`element.attributes` is a live `NamedNodeMap` of `Attr` nodes, whose named properties are the
+qualified names, and the layout reads the attributes by their local names, as it always has.
+
 The tree of a chapter's scripts has the chapter's comments, which `childNodes`, `nodeType` 8 and
 `innerHTML` show as a browser does, and `createComment` makes one. The page has none of them,
 since a comment draws nothing, and an element's `textContent` leaves them out.

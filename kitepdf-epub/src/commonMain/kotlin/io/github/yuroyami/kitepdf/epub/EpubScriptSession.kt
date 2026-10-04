@@ -285,7 +285,7 @@ public class EpubScriptSession(
             val handlers = ArrayList<Int>()
             val scripts = ArrayList<Pair<KiteXmlNode.Element, Int>>()
             fun walk(e: KiteXmlNode.Element) {
-                if (e.attrs.keys.any { it.length > 2 && it.startsWith("on") }) handlers.add(dom.idOf(e))
+                if (dom.attributes(e).any { it.namespace == null && it.localName.length > 2 && it.localName.startsWith("on") }) handlers.add(dom.idOf(e))
                 if (e.tag == "script") scripts.add(e to handlers.size) else for (c in e.children) if (c is KiteXmlNode.Element) walk(c)
             }
             walk(dom.root)
@@ -312,9 +312,9 @@ public class EpubScriptSession(
          * [reached] elements of the markup with handler attributes. A module and a data block do not run.
          */
         private fun runScript(script: KiteXmlNode.Element, reached: Int) {
-            val type = script.attrs["type"]?.substringBefore(';')?.trim()?.lowercase().orEmpty()
+            val type = dom.attr(script, "type")?.substringBefore(';')?.trim()?.lowercase().orEmpty()
             if (type.isNotEmpty() && type !in SCRIPT_TYPES) return
-            val src = script.attrs["src"]?.trim()
+            val src = dom.attr(script, "src")?.trim()
             val (name, source) = if (!src.isNullOrEmpty()) {
                 val path = EpubDocument.resolvePath(document.chapterDir(chapter), src)
                 if (isRemoteUrl(path)) {
@@ -341,6 +341,9 @@ public class EpubScriptSession(
             fun node(args: List<Any?>, i: Int): KiteXmlNode? = (args.getOrNull(i) as? Double)?.let { dom.node(it.toInt()) }
             fun element(args: List<Any?>, i: Int): KiteXmlNode.Element? = node(args, i) as? KiteXmlNode.Element
             fun string(args: List<Any?>, i: Int): String = args.getOrNull(i)?.toString().orEmpty()
+            // A namespace or a prefix, which the prelude passes as the empty string for none.
+            fun nullable(args: List<Any?>, i: Int): String? = string(args, i).ifEmpty { null }
+            fun flat(a: ScriptDom.Attribute): List<String> = listOf(a.namespace.orEmpty(), a.prefix.orEmpty(), a.localName, a.value)
             fun id(node: KiteXmlNode?): Int? = node?.let(dom::idOf)
 
             def("root") { dom.idOf(dom.root) }
@@ -351,10 +354,20 @@ public class EpubScriptSession(
             def("name") { args -> element(args, 0)?.let(dom::nameOf)?.let { listOf(it.namespace, it.prefix, it.localName) } }
             def("parent") { args -> node(args, 0)?.let(dom::parentOf)?.let(dom::idOf) }
             def("children") { args -> element(args, 0)?.children?.map(dom::idOf) }
-            def("attr") { args -> element(args, 0)?.attrs?.get(string(args, 1)) }
+            // An attribute by its local name in no namespace, which is what HTML reflects and reads.
+            def("attr") { args -> element(args, 0)?.let { dom.attr(it, string(args, 1)) } }
             def("setAttr") { args -> element(args, 0)?.let { dom.setAttr(it, string(args, 1), string(args, 2)) }; null }
             def("removeAttr") { args -> element(args, 0)?.let { dom.removeAttr(it, string(args, 1)) }; null }
-            def("attrNames") { args -> element(args, 0)?.attrs?.keys?.toList().orEmpty() }
+            // An attribute by its namespace and local name, and the first by its qualified name (#545).
+            def("attrNS") { args -> element(args, 0)?.let { dom.attr(it, string(args, 2), nullable(args, 1)) } }
+            def("setAttrNS") { args ->
+                element(args, 0)?.let { dom.setAttr(it, string(args, 3), string(args, 4), nullable(args, 1), nullable(args, 2), args.getOrNull(5) == true) }
+                null
+            }
+            def("removeAttrNS") { args -> element(args, 0)?.let { dom.removeAttr(it, string(args, 2), nullable(args, 1)) }; null }
+            def("attrNamed") { args -> element(args, 0)?.let { dom.attrNamed(it, string(args, 1)) }?.let(::flat) }
+            def("attrNames") { args -> element(args, 0)?.let(dom::attributes)?.map { it.qualifiedName }.orEmpty() }
+            def("attrList") { args -> element(args, 0)?.let(dom::attributes)?.flatMap(::flat).orEmpty() }
             def("text") { args -> node(args, 0)?.let(dom::textOf).orEmpty() }
             def("setText") { args -> node(args, 0)?.let { dom.setText(it, string(args, 1)) }; null }
             def("create") { args -> dom.idOf(dom.createElement(string(args, 0), args.getOrNull(1) as? String, args.getOrNull(2) as? String)) }

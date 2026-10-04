@@ -213,11 +213,12 @@ internal class ParsedEpub(
     }
 
     /**
-     * [chapter]'s document parsed again with its comments, which [spine]'s tree drops, for the DOM
-     * of its scripts, which has them (#544). It is not kept: a chapter's scripts read it once.
+     * [chapter]'s document parsed again with its comments, which [spine]'s tree drops, and its
+     * attribute names as written, which it lowercases without their prefix, for the DOM of its
+     * scripts, which has both (#544, #545). It is not kept: a chapter's scripts read it once.
      */
     fun commentedTree(chapter: Int): KiteXmlNode.Element =
-        HtmlParser.parse(zip.readText(spinePaths[chapter]) ?: "", keepComments = true).also(::resolveSwitches)
+        HtmlParser.parse(zip.readText(spinePaths[chapter]) ?: "", keepComments = true, keepNames = true).also(::resolveSwitches)
 
     /** Whether [chapter]'s document has been parsed yet. For tests and diagnostics. */
     fun isSpineParsed(chapter: Int): Boolean =
@@ -712,7 +713,7 @@ internal fun resolveSwitches(el: KiteXmlNode.Element) {
             continue
         }
         val branches = child.children.filterIsInstance<KiteXmlNode.Element>()
-        val chosen = branches.firstOrNull { it.tag == "case" && it.attrs["required-namespace"]?.trim() in SWITCH_NAMESPACES }
+        val chosen = branches.firstOrNull { it.tag == "case" && requiredNamespace(it)?.trim() in SWITCH_NAMESPACES }
             ?: branches.firstOrNull { it.tag == "default" }
         val replacement = chosen?.children.orEmpty()
         el.children.removeAt(i)
@@ -721,6 +722,14 @@ internal fun resolveSwitches(el: KiteXmlNode.Element) {
         // The branch may hold a switch of its own, so the loop reads the new children too.
     }
 }
+
+/**
+ * The `required-namespace` of [case], in a tree whose attribute names are lowercased without their
+ * prefix or in one that keeps them as written (#545): the last attribute whose name is that once
+ * lowercased without its prefix, as the first tree keeps it, so both trees take the same branch.
+ */
+private fun requiredNamespace(case: KiteXmlNode.Element): String? =
+    case.attrs.entries.lastOrNull { it.key.substringAfterLast(':').lowercase() == "required-namespace" }?.value
 
 /** The namespaces a `case` may require for this engine to render it: XHTML, SVG and MathML (#32). */
 private val SWITCH_NAMESPACES = setOf("http://www.w3.org/1999/xhtml", "http://www.w3.org/2000/svg", "http://www.w3.org/1998/Math/MathML")
