@@ -11,6 +11,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNotSame
+import kotlin.test.assertTrue
 
 /** Immutable resource identities survive re-layout, while independent books remain distinct (#371). */
 class ImageIdentityTest {
@@ -58,5 +59,21 @@ class ImageIdentityTest {
         bitmaps.convert(image(EpubDocument.open(bytes)))
         bitmaps.convert(image(EpubDocument.open(bytes)))
         assertEquals(2, bitmaps.conversions)
+    }
+
+    @Test
+    fun one_file_that_many_elements_name_decodes_once_per_layout() {
+        // An ornament or a bullet picture used all through a chapter: each use held its own
+        // decoded pixels, so a large picture named a thousand times filled the heap.
+        val document = EpubDocument.open(
+            EpubFixtures.epubFoldered(
+                bodies = listOf("<p>" + "<img src=\"../pic.bmp\" width=\"10\" height=\"10\" alt=\"\"/>".repeat(30) + "</p>"),
+                extraEntries = listOf("OEBPS/pic.bmp" to EpubFixtures.bmp2x1()),
+            ),
+        )
+        val drawn = RecordingCanvas().also { document.page(KiteLocation(0, 0)).renderTo(it, KiteMatrix.IDENTITY) }
+            .calls.filterIsInstance<RecordingCanvas.Call.Image>().map { it.image }
+        assertEquals(30, drawn.size)
+        assertTrue(drawn.all { it === drawn.first() }, "every use draws the one decoded image")
     }
 }

@@ -574,8 +574,15 @@ public class EpubDocument internal constructor(
         private val fonts = fontsFor(chapter)
         /** A chapter that scripts run in keeps the boxes a tap can land on (#41). */
         private val hits = parsed.tracksElements(chapter)
-        private val image: (String) -> KiteImageData? = { path -> loadImage(path) { url -> layoutBytes(chapter, url) } }
-        private val svg: (String) -> SvgImage? = { path -> loadSvg(path) { url -> layoutBytes(chapter, url) } }
+        /** Each picture once per layout, however many elements name it (#560). */
+        private val images = HashMap<String, KiteImageData?>()
+        private val svgs = HashMap<String, SvgImage?>()
+        private val image: (String) -> KiteImageData? = { path ->
+            if (path in images) images[path] else loadImage(path) { url -> layoutBytes(chapter, url) }.also { images[path] = it }
+        }
+        private val svg: (String) -> SvgImage? = { path ->
+            if (path in svgs) svgs[path] else loadSvg(path) { url -> layoutBytes(chapter, url) }.also { svgs[path] = it }
+        }
         private var stage = 0
         private var build: BoxBuilder.Run? = null
         private var docRoot: BlockBox? = null
