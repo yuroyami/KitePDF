@@ -157,7 +157,8 @@ internal object EpubConformanceChecks {
 
     private fun publicationResources() {
         check("pub-data-urls_browsing-context") { images(0).isNotEmpty() }
-        check("pub-data-urls_top-level-content") { chapters == 2 && images(0).isNotEmpty() }
+        // The data URL is an SVG, drawn as its paths: the plum outline of its badge.
+        check("pub-data-urls_top-level-content") { chapters == 2 && fills(0).any { it.isRgb(0x65 / 255.0, 0x2d / 255.0, 0x59 / 255.0) } }
         check("pub-file-urls") {
             val frames = (0 until pages(0)).flatMap { page(0, it).embeds }.filter { it.kind == EpubEmbedKind.FRAME }
             frames.size == 3 && frames.all { it.href.startsWith("file:") && doc.resource(it.href) == null }

@@ -377,6 +377,15 @@ left of a page moves whole to the next one. Only an object taller than a page
 goes on from page to page, and its `isWhole` is false there. `book.chapterPath(chapter)`
 names the zip path of a chapter's own document.
 
+### Resources inside the markup
+
+A document can carry a small resource in itself as a `data:` URL: an image
+source, a CSS `url()` for a background or a font, an SVG `href`. They load as a
+file of the book does, Base64 or percent-encoded. `book.resource(url)` gives the
+bytes of one and `book.resourceType(url)` its media type, and `KiteDataUrl` in
+`kitepdf-core` decodes one by itself. A script cannot open a `data:` URL as a page
+of its own, as EPUB Reading Systems 3.3 asks.
+
 ### Resources on the web
 
 A book can name an image, a font or a background by an `https` URL instead of a

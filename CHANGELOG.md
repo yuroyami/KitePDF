@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `KiteDataUrl` in `kitepdf-core` decodes a `data:` URL as the WHATWG Fetch standard does: its
+  media type, and its body percent-decoded, then Base64-decoded when it says so, forgiving white
+  space and missing padding. `KiteDataUrl.isDataUrl` and `KiteDataUrl.essenceOf` answer without
+  decoding. `SvgImage` uses it for an `<image>` and no longer boxes each byte (#514).
+
 - An implementation report against the W3C EPUB 3 test suite (w3c/epub-tests at 54092b42),
   in the suite's own format (`docs/epub-conformance.json`), and a docs page that lists its 206
   tests by section and level with each result, how it is known and the issue for each gap.
@@ -136,6 +141,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   a rebuild (#472).
 
 ### Fixed
+
+- A resource that an EPUB document carries in a `data:` URL loads: an image source, a CSS
+  background, a font of an `@font-face`, a stylesheet or an `@import`, a script and an SVG image
+  draw from the bytes the URL holds, as EPUB 3.3 allows. `EpubDocument.resource` and
+  `resourceType` answer for one. A script that sets `location` to a `data:` URL is refused with a
+  failure, since EPUB Reading Systems 3.3 never opens one as a page (#514).
 
 - A table of contents entry made of an image takes the image's text alternative as its label,
   its `alt` before its `title`, as EPUB Reading Systems 3.3 asks, where it had an empty one; an

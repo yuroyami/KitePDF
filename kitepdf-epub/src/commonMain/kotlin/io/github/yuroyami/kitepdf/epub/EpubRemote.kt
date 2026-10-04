@@ -1,5 +1,6 @@
 package io.github.yuroyami.kitepdf.epub
 
+import io.github.yuroyami.kitepdf.core.KiteDataUrl
 import io.github.yuroyami.kitepdf.core.KiteLock
 import io.github.yuroyami.kitepdf.core.withLock
 import kotlinx.coroutines.CancellationException
@@ -50,9 +51,13 @@ internal fun isRemoteUrl(href: String): Boolean =
 /** True for an `https` URL, the only scheme a remote resource is fetched over (EPUB Reading Systems 3.3, 3.3). */
 internal fun isHttpsUrl(href: String): Boolean = href.startsWith("https://", ignoreCase = true)
 
-/** True when [path] names an SVG file: a remote URL by its path without its query, as it is fetched with one. */
+/**
+ * True when [path] names an SVG file: a remote URL by its path without its query, as it is fetched
+ * with one, and a data URL by the media type it declares (#514).
+ */
 internal fun namesSvg(path: String): Boolean =
-    (if (isRemoteUrl(path)) path.substringBefore('?') else path).endsWith(".svg", ignoreCase = true)
+    KiteDataUrl.essenceOf(path)?.let { it == "image/svg+xml" }
+        ?: (if (isRemoteUrl(path)) path.substringBefore('?') else path).endsWith(".svg", ignoreCase = true)
 
 /** The remote URLs that one chapter names (#38): [layout] holds those its layout needs, and [all] every one. */
 internal class RemoteRefs(val layout: List<String>, val all: List<String>)

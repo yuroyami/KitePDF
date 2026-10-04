@@ -1,5 +1,6 @@
 package io.github.yuroyami.kitepdf.epub
 
+import io.github.yuroyami.kitepdf.core.KiteDataUrl
 import io.github.yuroyami.kitepdf.core.KiteLock
 import io.github.yuroyami.kitepdf.core.script.KiteScriptEngine
 import io.github.yuroyami.kitepdf.core.script.KiteScriptException
@@ -365,6 +366,12 @@ public class EpubScriptSession(
             def("navigate") { args ->
                 // An address under the book's own origin is a path in the book, from its root.
                 val href = string(args, 0).let { if (it.startsWith("$origin/")) it.substring(origin.length) else it }
+                // A data URL never opens as a page of its own (EPUB Reading Systems 3.3, 3.4), as a
+                // browser will not navigate its top frame to one (#514).
+                if (KiteDataUrl.isDataUrl(href)) {
+                    recordFailure(KiteScriptException("chapter $chapter: a script may not open a data: URL as a page"))
+                    return@def null
+                }
                 navigate(resolveLinkHref(href, document.chapterPath(chapter)) { EpubDocument.resolvePath(document.chapterDir(chapter), it) })
                 null
             }

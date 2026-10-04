@@ -81,6 +81,19 @@ public final class io/github/yuroyami/kitepdf/core/KiteCaret {
 	public final fun getVertical ()Z
 }
 
+public final class io/github/yuroyami/kitepdf/core/KiteDataUrl {
+	public static final field Companion Lio/github/yuroyami/kitepdf/core/KiteDataUrl$Companion;
+	public final fun getBytes ()[B
+	public final fun getEssence ()Ljava/lang/String;
+	public final fun getMediaType ()Ljava/lang/String;
+}
+
+public final class io/github/yuroyami/kitepdf/core/KiteDataUrl$Companion {
+	public final fun decode (Ljava/lang/String;)Lio/github/yuroyami/kitepdf/core/KiteDataUrl;
+	public final fun essenceOf (Ljava/lang/String;)Ljava/lang/String;
+	public final fun isDataUrl (Ljava/lang/String;)Z
+}
+
 public abstract interface class io/github/yuroyami/kitepdf/core/KiteDocument {
 	public fun bookmarkOf (Lio/github/yuroyami/kitepdf/core/KiteLocation;)Lio/github/yuroyami/kitepdf/core/KiteBookmark;
 	public fun getChapterCount ()I

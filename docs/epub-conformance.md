@@ -8,11 +8,11 @@ The reading system under test is the library and its viewer together: `kitepdf-e
 
 | Level | Tests | Passes | Fails | Not applicable |
 |---|---|---|---|---|
-| must | 140 | 96 | 40 | 4 |
+| must | 140 | 98 | 38 | 4 |
 | should | 38 | 16 | 21 | 1 |
 | may | 1 | 0 | 1 | 0 |
 | deprecated | 27 | 20 | 6 | 1 |
-| all | 206 | 132 | 68 | 6 |
+| all | 206 | 134 | 66 | 6 |
 
 ## How the results are known
 
@@ -76,8 +76,8 @@ KITEPDF_EPUB_TESTS=$PWD/../epub-tests/tests ./gradlew :kitepdf-compose-viewer:jv
 
 | Test | Level | Result | How it is known |
 |---|---|---|---|
-| [`pub-data-urls_browsing-context`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/pub-data-urls_browsing-context) | must | Fails ([#514](https://github.com/yuroyami/KitePDF/issues/514)) | Checked: The image whose source is a `data:` URL draws; today it does not. |
-| [`pub-data-urls_top-level-content`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/pub-data-urls_top-level-content) | must | Fails ([#514](https://github.com/yuroyami/KitePDF/issues/514)) | Checked: The fixed-layout page draws the image of its `data:` URL; today it does not. |
+| [`pub-data-urls_browsing-context`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/pub-data-urls_browsing-context) | must | Passes | Checked: The image whose source is a `data:` URL draws. |
+| [`pub-data-urls_top-level-content`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/pub-data-urls_top-level-content) | must | Passes | Checked: The fixed-layout page draws the SVG of its `data:` URL in place, and the book keeps its two pages. |
 | [`pub-external-links`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/pub-external-links) | should | Fails ([#519](https://github.com/yuroyami/KitePDF/issues/519)) | Judged: `KiteDocView` hands the web link to `onLinkTap` and does nothing more; it neither asks the reader nor opens a browser. |
 | [`pub-external-links_consent`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/pub-external-links_consent) | should | Fails ([#519](https://github.com/yuroyami/KitePDF/issues/519)) | Judged: `KiteDocView` hands the mail link to `onLinkTap` and does nothing more; it neither asks the reader nor opens a mail app. |
 | [`pub-file-urls`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/pub-file-urls) | must | Passes | Checked: The three iframes point at `file:` URLs, none of which the book can read, and their boxes stay empty. |

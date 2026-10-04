@@ -1,5 +1,6 @@
 package io.github.yuroyami.kitepdf.epub
 
+import io.github.yuroyami.kitepdf.core.KiteDataUrl
 import io.github.yuroyami.kitepdf.core.KiteCancellation
 import io.github.yuroyami.kitepdf.svg.SvgImage
 
@@ -1216,9 +1217,10 @@ public class EpubDocument internal constructor(
     /**
      * The bytes of the book's file at [path], a zip path as [EpubMedia.sources], [EpubMedia.poster]
      * and [EpubLink.href] give it, or null when the book has no such file. The feed for a player of
-     * the book's media (#29). A fragment after `#` is ignored.
+     * the book's media (#29). A fragment after `#` is ignored. A `data:` URL, as a page gives one
+     * for a resource the document carries in itself, gives the bytes it holds (#514).
      */
-    public fun resource(path: String): ByteArray? = parsed.zip.read(path.substringBefore('#'))
+    public fun resource(path: String): ByteArray? = parsed.read(path)
 
     /** The media type that the manifest gives the file at [path], or null when it gives none. */
     public fun resourceType(path: String): String? = parsed.mediaTypeOf(path.substringBefore('#'))
@@ -1248,7 +1250,7 @@ public class EpubDocument internal constructor(
 
     /** The bytes of the file at [path] in the archive, or, for a remote URL, those [remote] gives (#38). */
     private fun bytesAt(path: String, remote: (String) -> ByteArray?): ByteArray? =
-        if (isRemoteUrl(path)) remote(path) else parsed.zip.read(path)
+        if (isRemoteUrl(path)) remote(path) else parsed.read(path)
 
     private val pinLock = KiteLock()
 
@@ -1338,7 +1340,7 @@ public class EpubDocument internal constructor(
      */
     internal fun svgResource(baseDir: String, href: String, chapter: Int): ByteArray? =
         resolvePath(baseDir, href.substringBefore('#')).let { path ->
-            if (isRemoteUrl(path)) paintBytes(chapter, path) else parsed.zip.read(path)
+            if (isRemoteUrl(path)) paintBytes(chapter, path) else parsed.read(path)
         }
 
     /** The directory of [chapter]'s own document, for inline SVG references. */
@@ -1386,6 +1388,8 @@ public class EpubDocument internal constructor(
         internal fun resolvePath(baseDir: String, href: String): String {
             val trimmed = href.trim()
             if (isRemoteUrl(trimmed)) return trimmed.substringBefore('#')
+            // A data URL carries its resource with it, so it is its own path (#514).
+            if (KiteDataUrl.isDataUrl(trimmed)) return trimmed
             val clean = percentDecode(href.substringBefore('#').substringBefore('?'))
             val stack = ArrayList<String>()
             if (!clean.startsWith("/") && baseDir.isNotEmpty()) for (seg in baseDir.split('/')) if (seg.isNotEmpty()) stack.add(seg)

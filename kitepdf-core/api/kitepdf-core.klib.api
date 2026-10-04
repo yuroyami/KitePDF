@@ -1862,6 +1862,21 @@ final class io.github.yuroyami.kitepdf.core/KiteCaret { // io.github.yuroyami.ki
         final fun <get-vertical>(): kotlin/Boolean // io.github.yuroyami.kitepdf.core/KiteCaret.vertical.<get-vertical>|<get-vertical>(){}[0]
 }
 
+final class io.github.yuroyami.kitepdf.core/KiteDataUrl { // io.github.yuroyami.kitepdf.core/KiteDataUrl|null[0]
+    final val bytes // io.github.yuroyami.kitepdf.core/KiteDataUrl.bytes|{}bytes[0]
+        final fun <get-bytes>(): kotlin/ByteArray // io.github.yuroyami.kitepdf.core/KiteDataUrl.bytes.<get-bytes>|<get-bytes>(){}[0]
+    final val essence // io.github.yuroyami.kitepdf.core/KiteDataUrl.essence|{}essence[0]
+        final fun <get-essence>(): kotlin/String // io.github.yuroyami.kitepdf.core/KiteDataUrl.essence.<get-essence>|<get-essence>(){}[0]
+    final val mediaType // io.github.yuroyami.kitepdf.core/KiteDataUrl.mediaType|{}mediaType[0]
+        final fun <get-mediaType>(): kotlin/String // io.github.yuroyami.kitepdf.core/KiteDataUrl.mediaType.<get-mediaType>|<get-mediaType>(){}[0]
+
+    final object Companion { // io.github.yuroyami.kitepdf.core/KiteDataUrl.Companion|null[0]
+        final fun decode(kotlin/String): io.github.yuroyami.kitepdf.core/KiteDataUrl? // io.github.yuroyami.kitepdf.core/KiteDataUrl.Companion.decode|decode(kotlin.String){}[0]
+        final fun essenceOf(kotlin/String): kotlin/String? // io.github.yuroyami.kitepdf.core/KiteDataUrl.Companion.essenceOf|essenceOf(kotlin.String){}[0]
+        final fun isDataUrl(kotlin/String): kotlin/Boolean // io.github.yuroyami.kitepdf.core/KiteDataUrl.Companion.isDataUrl|isDataUrl(kotlin.String){}[0]
+    }
+}
+
 final class io.github.yuroyami.kitepdf.core/KiteLink { // io.github.yuroyami.kitepdf.core/KiteLink|null[0]
     constructor <init>(io.github.yuroyami.kitepdf.core/KiteRectangle, kotlin/String? = ..., io.github.yuroyami.kitepdf.core/KiteBookmark? = ..., kotlin/Function0<kotlin/Double?>? = ...) // io.github.yuroyami.kitepdf.core/KiteLink.<init>|<init>(io.github.yuroyami.kitepdf.core.KiteRectangle;kotlin.String?;io.github.yuroyami.kitepdf.core.KiteBookmark?;kotlin.Function0<kotlin.Double?>?){}[0]
 
