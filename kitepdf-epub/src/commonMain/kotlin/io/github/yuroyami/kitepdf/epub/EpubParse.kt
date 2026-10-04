@@ -1,5 +1,7 @@
 package io.github.yuroyami.kitepdf.epub
 
+import io.github.yuroyami.kitepdf.core.KiteDataUrl
+import io.github.yuroyami.kitepdf.core.text.TextEncoding
 import io.github.yuroyami.kitepdf.core.xml.KiteXml
 import io.github.yuroyami.kitepdf.core.xml.KiteXmlNode
 import io.github.yuroyami.kitepdf.core.xml.KiteXmlToken
@@ -348,8 +350,11 @@ internal class ParsedEpub(
         opf.items.associateBy { EpubDocument.resolvePath(opf.baseDir, it.href) }
     }
 
-    /** The media type that the manifest gives the file at [path], or null. */
-    fun mediaTypeOf(path: String): String? = itemsByPath[path]?.mediaType
+    /** The media type that the manifest gives the file at [path], or that a data URL declares, or null. */
+    fun mediaTypeOf(path: String): String? = KiteDataUrl.essenceOf(path) ?: itemsByPath[path]?.mediaType
+
+    /** The bytes of the file at [path], or of the data URL [path] is (#514). A fragment is ignored. */
+    fun read(path: String): ByteArray? = readAt(zip, path)
 
     /**
      * The zip paths of the items that the fallback chain of the item at [path] names after it,
@@ -363,7 +368,7 @@ internal class ParsedEpub(
     /** One stylesheet's rules, parsed once however many chapters link it. */
     private fun sheetRules(path: String): List<StyleRule> {
         sheetLock.withLock { sheetCache[path] }?.let { return it }
-        val text = zip.readText(path) ?: ""
+        val text = readTextAt(zip, path) ?: ""
         val rules = CssParser.parse(absoluteUrls(inlineImports(zip, text, dirOf(path), 0, hashSetOf(path)), dirOf(path)), Origin.AUTHOR)
         return sheetLock.withLock { sheetCache.getOrPut(path) { sheetCount++; rules } }
     }
@@ -419,7 +424,7 @@ internal class ParsedEpub(
     /** The program of the font file at [path], parsed on first use and shared by every face after. */
     private fun programAt(path: String): FontProgram? {
         programLock.withLock { if (programCache.containsKey(path)) return programCache[path] }
-        val raw = zip.read(path) ?: return null
+        val raw = readAt(zip, path) ?: return null
         val bytes = obfuscation[path]?.let { Deobfuscate.deobfuscate(raw, it, opf.uniqueId ?: "") } ?: raw
         val parsed = FontProgram.parse(bytes)
         // Parsing ran outside the lock; the first to publish wins, as for chapters.
@@ -564,11 +569,19 @@ internal class ParsedEpub(
             return IMPORT_RE.replace(css) { m ->
                 val path = EpubDocument.resolvePath(baseDir, m.groupValues[1])
                 if (!visited.add(path)) ""
-                else zip.readText(path)?.let { absoluteUrls(inlineImports(zip, it, dirOf(path), depth + 1, visited), dirOf(path)) } ?: ""
+                else readTextAt(zip, path)?.let { absoluteUrls(inlineImports(zip, it, dirOf(path), depth + 1, visited), dirOf(path)) } ?: ""
             }
         }
 
         private fun dirOf(path: String): String = path.substringBeforeLast('/', "")
+
+        /** The bytes of the file at [path] in [zip], or of the data URL [path] is (#514). */
+        private fun readAt(zip: ZipReader, path: String): ByteArray? =
+            if (KiteDataUrl.isDataUrl(path)) KiteDataUrl.decode(path)?.bytes else zip.read(path.substringBefore('#'))
+
+        /** The text of the file at [path] in [zip], or of the data URL [path] is (#514). */
+        private fun readTextAt(zip: ZipReader, path: String): String? =
+            if (KiteDataUrl.isDataUrl(path)) KiteDataUrl.decode(path)?.let { TextEncoding.decode(it.bytes) } else zip.readText(path)
 
         /**
          * [css] with every relative `url()` made absolute against [baseDir], with a leading slash,

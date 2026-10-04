@@ -1,5 +1,6 @@
 package io.github.yuroyami.kitepdf.svg
 
+import io.github.yuroyami.kitepdf.core.KiteDataUrl
 import io.github.yuroyami.kitepdf.core.KiteCancellation
 import io.github.yuroyami.kitepdf.core.xml.KiteXml
 import io.github.yuroyami.kitepdf.core.xml.KiteXmlNode
@@ -364,7 +365,7 @@ public class SvgImage private constructor(
     ) {
         if (!paint.visible) return
         val href = el.attrs["href"]?.trim()?.takeIf { it.isNotEmpty() } ?: return
-        val bytes = if (href.startsWith("data:")) dataUri(href) else load?.invoke(href)
+        val bytes = if (KiteDataUrl.isDataUrl(href)) KiteDataUrl.decode(href)?.bytes else load?.invoke(href)
         val image = bytes?.let { KiteImageData.fromEncodedImage(it) } ?: return
         // A missing, auto or unreadable size is auto: it takes the intrinsic size,
         // or the other side through the intrinsic aspect ratio (#263). An explicit
@@ -1355,7 +1356,7 @@ public class SvgImage private constructor(
             val moved = compose(ctm, KiteMatrix.translation(box[0], box[1]))
             return scope.render { walk(target, moved, paint.copy(filterDepth = paint.filterDepth + 1), canvas, load, depth + 1, stop) }
         }
-        val bytes = if (href.startsWith("data:")) dataUri(href) else load?.invoke(href)
+        val bytes = if (KiteDataUrl.isDataUrl(href)) KiteDataUrl.decode(href)?.bytes else load?.invoke(href)
         val image = bytes?.let { KiteImageData.fromEncodedImage(it) } ?: return null
         val iw = image.width.toDouble()
         val ih = image.height.toDouble()
@@ -1464,15 +1465,6 @@ public class SvgImage private constructor(
         if (!s.startsWith("url(")) return null
         return s.removePrefix("url(").substringBefore(')').trim().trim('"', '\'').removePrefix("#")
             .takeIf { it.isNotEmpty() }
-    }
-
-    /** The payload of a `data:` URI, Base64 or percent-encoded. */
-    private fun dataUri(uri: String): ByteArray? {
-        val comma = uri.indexOf(',')
-        if (comma < 0) return null
-        val meta = uri.substring(5, comma)
-        val payload = uri.substring(comma + 1)
-        return if (";base64" in meta) decodeBase64(payload) else percentDecode(payload)
     }
 
     private fun resolvePaint(el: KiteXmlNode.Element, p: Paint, container: Boolean = false): Paint {
@@ -1676,44 +1668,6 @@ public class SvgImage private constructor(
             "svg", "g", "a", "switch", "use", "image", "text", "path", "rect",
             "circle", "ellipse", "line", "polyline", "polygon", "foreignobject",
         )
-
-        /** Standard Base64, tolerant of whitespace and missing padding. */
-        private fun decodeBase64(text: String): ByteArray? {
-            val out = ArrayList<Byte>(text.length * 3 / 4 + 3)
-            var acc = 0
-            var bits = 0
-            for (c in text) {
-                if (c == '=') break
-                if (c.isWhitespace()) continue
-                val v = when (c) {
-                    in 'A'..'Z' -> c - 'A'
-                    in 'a'..'z' -> c - 'a' + 26
-                    in '0'..'9' -> c - '0' + 52
-                    '+', '-' -> 62
-                    '/', '_' -> 63
-                    else -> return null
-                }
-                acc = (acc shl 6) or v
-                bits += 6
-                if (bits >= 8) { bits -= 8; out.add(((acc shr bits) and 0xFF).toByte()) }
-            }
-            return if (out.isEmpty()) null else out.toByteArray()
-        }
-
-        private fun percentDecode(text: String): ByteArray {
-            val out = ArrayList<Byte>(text.length)
-            var i = 0
-            while (i < text.length) {
-                val c = text[i]
-                if (c == '%' && i + 2 < text.length) {
-                    val v = text.substring(i + 1, i + 3).toIntOrNull(16)
-                    if (v != null) { out.add(v.toByte()); i += 3; continue }
-                }
-                for (b in c.toString().encodeToByteArray()) out.add(b)
-                i++
-            }
-            return out.toByteArray()
-        }
 
         /** True when [bytes] open like an SVG file. */
         public fun isSvg(bytes: ByteArray): Boolean {

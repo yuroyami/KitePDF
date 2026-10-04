@@ -163,6 +163,18 @@ class EpubScriptTest {
     }
 
     @Test
+    fun a_script_cannot_open_a_data_url_as_a_page() {
+        // EPUB Reading Systems 3.3, 3.4: a data URL never opens in a top-level browsing context (#514).
+        val book = ScriptBooks.buttonPage(button = """<button id="go" type="button" onclick="location.href = 'data:text/html,%3Cp%3EPhish'">Go</button>""")
+        val scripts = runner(book)
+        val asked = ArrayList<String>()
+        scripts.onNavigate { asked += it }
+        scripts.tap(book.page(KiteLocation(0, 0)), 52.5, 90.0)
+        assertEquals(emptyList(), asked)
+        assertTrue(scripts.failures.any { "data: URL" in it.message.orEmpty() }, "${scripts.failures.map { it.message }}")
+    }
+
+    @Test
     fun noscript_content_does_not_show_once_scripts_run() {
         val book = ScriptBooks.chapter("""<p>Always.</p><noscript><p>Only without scripts.</p></noscript><script>var x = 1;</script>""")
         val page = book.page(KiteLocation(0, 0))
