@@ -254,6 +254,66 @@ class EpubScriptTest {
         for (part in expected) assertTrue(part in logged, "$part in $logged")
     }
 
+    @Test
+    fun a_script_parses_urls_as_the_url_standard_does() {
+        // URL and URLSearchParams of the WHATWG URL Standard (#520). A path that climbs above the
+        // container root stays at the root of the book's origin, as the W3C tests ocf-url_parse-* ask.
+        val console = ArrayList<String>()
+        val book = ScriptBooks.chapter(
+            "<p>x</p><script src=\"url.js\"></script>",
+            extraFiles = mapOf(
+                "url.js" to """
+                    var r = {};
+                    try {
+                      var root = new URL('../..', document.documentURI);
+                      r.root = String(root) === location.origin + '/';
+                      r.leak = new URL('../../../../../media/imgs/monastery.jpg', root).href === location.origin + '/media/imgs/monastery.jpg';
+                      r.absolute = new URL('/media/imgs/monastery.jpg', root).pathname;
+                      r.sameOrigin = new URL(location.href).origin === location.origin;
+                      var u = new URL('https://user:pw@EXAMPLE.com:443/a/./b/../c?x=1&y=a+b#frag');
+                      r.parts = [u.protocol, u.username, u.host, u.port, u.pathname, u.search, u.hash, u.origin].join('|');
+                      r.y = u.searchParams.get('y');
+                      u.searchParams.append('z', '\u00e9 &');
+                      r.href = u.href;
+                      u.pathname = '/new path';
+                      u.port = '8080';
+                      r.set = u.href;
+                      r.idna = new URL('http://\uff27\uff4f.com/').host + ',' + new URL('https://fa\u00df.ExAmPlE/').host;
+                      r.ipv6 = new URL('http://[0:0::1]/').host;
+                      r.canParse = URL.canParse('nope') + ',' + URL.canParse('/x', 'https://a/');
+                      r.params = new URLSearchParams({ b: '2', a: '1' }).toString();
+                      var sp = new URLSearchParams('?q=1&q=2&s=%20t');
+                      sp.sort();
+                      r.sorted = sp.toString() + ';' + sp.getAll('q').join(',') + ';' + sp.size;
+                      r.iter = Array.from(new URLSearchParams('a=1&b=2')).join(';');
+                      try { new URL('nope'); r.invalid = 'parsed'; } catch (e) { r.invalid = e instanceof TypeError; }
+                    } catch (e) { r.error = String(e); }
+                    console.log(JSON.stringify(r));
+                """.trimIndent(),
+            ),
+        )
+        runner(book, console = console).chapterOpened(0)
+        val logged = console.single { it.startsWith("log: ") }.removePrefix("log: ")
+        val expected = listOf(
+            "\"root\":true",
+            "\"leak\":true",
+            "\"absolute\":\"/media/imgs/monastery.jpg\"",
+            "\"sameOrigin\":true",
+            "\"parts\":\"https:|user|example.com||/a/c|?x=1&y=a+b|#frag|https://example.com\"",
+            "\"y\":\"a b\"",
+            "\"href\":\"https://user:pw@example.com/a/c?x=1&y=a+b&z=%C3%A9+%26#frag\"",
+            "\"set\":\"https://user:pw@example.com:8080/new%20path?x=1&y=a+b&z=%C3%A9+%26#frag\"",
+            "\"idna\":\"go.com,xn--fa-hia.example\"",
+            "\"ipv6\":\"[::1]\"",
+            "\"canParse\":\"false,true\"",
+            "\"params\":\"b=2&a=1\"",
+            "\"sorted\":\"q=1&q=2&s=+t;1,2;3\"",
+            "\"iter\":\"a,1;b,2\"",
+            "\"invalid\":true",
+        )
+        for (part in expected) assertTrue(part in logged, "$part in $logged")
+    }
+
     /** A fixed-layout book of [count] pages like [ScriptBooks.buttonPage], each with scripts of its own. */
     private fun buttonPages(count: Int): EpubDocument = ScriptBooks.book(
         metadata = """<meta property="rendition:layout">pre-paginated</meta>""",

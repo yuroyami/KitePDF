@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- A book's scripts have `URL` and `URLSearchParams` of the WHATWG URL Standard, over a URL
+  parser of its own in `kitepdf-epub`: special schemes and their ports, `..` that stops at the
+  root, so an address resolved against a chapter stays inside the book, IPv4 and IPv6 hosts, host
+  names through UTS #46 and NFC of Unicode 17 with Punycode, and percent-encoding of each part.
+  A URL of the book has the book's origin. The web-platform-tests of the standard run against
+  it, its URL, setter and host data on the parser and its JavaScript tests in a chapter, and so
+  do Unicode's IdnaTestV2 and NormalizationTest. The W3C tests `ocf-url_parse-leaking-relative`
+  and `ocf-url_parse-path-absolute` pass (#520).
+
 - `KiteDataUrl` in `kitepdf-core` decodes a `data:` URL as the WHATWG Fetch standard does: its
   media type, and its body percent-decoded, then Base64-decoded when it says so, forgiving white
   space and missing padding. `KiteDataUrl.isDataUrl` and `KiteDataUrl.essenceOf` answer without

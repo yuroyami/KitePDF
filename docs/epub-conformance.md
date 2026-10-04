@@ -8,11 +8,11 @@ The reading system under test is the library and its viewer together: `kitepdf-e
 
 | Level | Tests | Passes | Fails | Not applicable |
 |---|---|---|---|---|
-| must | 140 | 98 | 38 | 4 |
+| must | 140 | 100 | 36 | 4 |
 | should | 38 | 16 | 21 | 1 |
 | may | 1 | 0 | 1 | 0 |
 | deprecated | 27 | 20 | 6 | 1 |
-| all | 206 | 134 | 66 | 6 |
+| all | 206 | 136 | 64 | 6 |
 
 ## How the results are known
 
@@ -43,8 +43,8 @@ KITEPDF_EPUB_TESTS=$PWD/../epub-tests/tests ./gradlew :kitepdf-compose-viewer:jv
 | [`ocf-url_link-relative`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/ocf-url_link-relative) | must | Passes | Checked: The image with a relative path draws, 1000 by 562 pixels. |
 | [`ocf-url_manifest`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/ocf-url_manifest) | must | Passes | Checked: The chapter at EPUB/foo opens and shows the pass sentence. |
 | [`ocf-url_origin`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/ocf-url_origin) | must | Fails ([#521](https://github.com/yuroyami/KitePDF/issues/521)) | Checked: Two openings of the book, standing for two readers, show different origins; today both show the one origin hashed from the identifier. |
-| [`ocf-url_parse-leaking-relative`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/ocf-url_parse-leaking-relative) | must | Fails ([#520](https://github.com/yuroyami/KitePDF/issues/520)) | Checked: After the scripts run, the page shows the image address that `URL` resolves under the book's origin; today the script stops on `URL is not defined`. |
-| [`ocf-url_parse-path-absolute`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/ocf-url_parse-path-absolute) | must | Fails ([#520](https://github.com/yuroyami/KitePDF/issues/520)) | Checked: After the scripts run, the page shows the path-absolute address that `URL` resolves under the book's origin; today the script stops on `URL is not defined`. |
+| [`ocf-url_parse-leaking-relative`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/ocf-url_parse-leaking-relative) | must | Passes | Checked: After the scripts run, the page shows the image address that `URL` resolves under the book's origin, which stays at the root of the book however many `..` segments climb above it. |
+| [`ocf-url_parse-path-absolute`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/ocf-url_parse-path-absolute) | must | Passes | Checked: After the scripts run, the page shows the path-absolute address that `URL` resolves under the book's origin, from the root of the book. |
 | [`ocf-url_relative`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/ocf-url_relative) | must | Passes | Checked: The chapter at foo/BAR/qux opens and shows the pass sentence. |
 | [`ocf-zip-comp`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/ocf-zip-comp) | must | Passes | Checked: The test book re-packed with its entries marked as bzip2 does not open: `EpubDocument.open` throws `EpubFormatException`. The folder itself can only hold Deflate. |
 | [`ocf-zip-mult`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/ocf-zip-mult) | must | Passes | Checked: The test book whose end record says it is the second segment of a split archive does not open: `EpubDocument.open` throws `EpubFormatException`. |

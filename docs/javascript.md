@@ -204,6 +204,15 @@ Each book has an origin of its own, shared by its chapters: `epub://` and a host
 package's unique identifier, so the book has it each time it opens. `self.origin` and
 `location.origin` answer it, and `location.href` is the origin and the chapter's path.
 
+`URL` and `URLSearchParams` are the WHATWG URL Standard's, with every getter and setter,
+`URL.canParse`, `URL.parse` and `toJSON`, and a `searchParams` that writes itself back to the
+query. A URL against the chapter's address resolves inside the book, and `..` stops at the
+book's root as it stops at a site's, so a script cannot build an address above the container. A
+URL of the book has the book's origin, so `new URL(location.href).origin` is `location.origin`.
+Host names go through UTS #46 of Unicode 17, with Punycode, IPv4 and IPv6 hosts as a browser
+reads them. The web-platform-tests of the standard check it: `WhatwgUrlTest` runs its URL,
+setter and host data against the parser, and `UrlWptTest` runs its JavaScript tests in a chapter.
+
 Nothing reaches outside the book. There is no `fetch` or `XMLHttpRequest`. A change of
 `location`, `window.open` and a script's own click on a link go to the listeners of
 `onNavigate`, with a zip path and its fragment for a place in the book; an address under the
