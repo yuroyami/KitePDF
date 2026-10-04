@@ -12,6 +12,7 @@ package io.github.yuroyami.kitepdf.epub.script
  */
 internal val DOM_PRELUDE: String = buildString {
     append(DOM_PRELUDE_HEAD)
+    append(DOM_PRELUDE_URL)
     append(DOM_PRELUDE_TAIL)
 }
 
@@ -618,6 +619,223 @@ function styleOf(el) {
 }
 """
 
+/**
+ * The `URL` and `URLSearchParams` of [DOM_PRELUDE], of the WHATWG URL Standard (#520), over
+ * [WhatwgUrl]: the host parses and serializes, and the list of a `URLSearchParams` lives here.
+ */
+private const val DOM_PRELUDE_URL: String = """/* ---- URL and URLSearchParams, of the URL Standard (#520) ---- */
+
+/* A value as a WebIDL USVString: a lone surrogate becomes U+FFFD. */
+function usv(v) {
+  if (typeof v === 'symbol') throw new TypeError('Cannot convert a Symbol value to a string');
+  var s = String(v), out = '', from = 0;
+  for (var i = 0; i < s.length; i++) {
+    var c = s.charCodeAt(i);
+    if (c < 0xD800 || c > 0xDFFF) continue;
+    if (c <= 0xDBFF && i + 1 < s.length) {
+      var d = s.charCodeAt(i + 1);
+      if (d >= 0xDC00 && d <= 0xDFFF) { i++; continue; }
+    }
+    out += s.substring(from, i) + '�';
+    from = i + 1;
+  }
+  return from ? out + s.substring(from) : s;
+}
+function needArgs(args, n, what) {
+  if (args.length < n) throw new TypeError(what + ': ' + n + ' argument' + (n > 1 ? 's' : '') + ' required, but only ' + args.length + ' present.');
+}
+/* The name-value pairs of an application/x-www-form-urlencoded string. */
+function formList(text) {
+  var flat = text == null || text === '' ? [] : K.formParse(text), list = [];
+  for (var i = 0; i + 1 < flat.length; i += 2) list.push([flat[i], flat[i + 1]]);
+  return list;
+}
+
+/* The URL class. Its record is the host's: __parts holds what the host answers of it, as
+   href, origin, protocol, username, password, host, hostname, port, pathname, search, hash,
+   then the raw query. */
+var URL_PARTS = ['href', 'origin', 'protocol', 'username', 'password', 'host', 'hostname', 'port', 'pathname', 'search', 'hash'];
+function parseUrl(url, base) { return K.url(usv(url), base === undefined ? null : usv(base)); }
+function initUrl(u, parts) {
+  hidden(u, '__parts', parts);
+  var params = Object.create(URLSearchParams.prototype);
+  hidden(params, '__list', formList(parts[11]));
+  hidden(params, '__url', u);
+  hidden(u, '__params', params);
+  return u;
+}
+function URL(url, base) {
+  if (!(this instanceof URL)) throw new TypeError("Failed to construct 'URL': Please use the 'new' operator.");
+  needArgs(arguments, 1, "Failed to construct 'URL'");
+  var parts = parseUrl(url, base);
+  if (parts == null) throw new TypeError("Failed to construct 'URL': Invalid URL");
+  initUrl(this, parts);
+}
+function urlOf(u) {
+  if (u == null || typeof u !== 'object' || !u.__parts) throw new TypeError('Illegal invocation');
+  return u;
+}
+function setUrlPart(u, name, value) {
+  var v = usv(value), parts = K.urlSet(u.__parts[0], name, v);
+  if (parts == null) {
+    if (name === 'href') throw new TypeError("Failed to set the 'href' property on 'URL': Invalid URL");
+    return;
+  }
+  u.__parts = parts;
+  if (name === 'href') u.__params.__list = formList(parts[11]);
+  if (name === 'search') u.__params.__list = v === '' ? [] : formList(v.charAt(0) === '?' ? v.substring(1) : v);
+}
+URL_PARTS.forEach(function (name, i) {
+  def(URL.prototype, name, function () { return urlOf(this).__parts[i]; },
+    name === 'origin' ? undefined : function (v) { setUrlPart(urlOf(this), name, v); });
+});
+def(URL.prototype, 'searchParams', function () { return urlOf(this).__params; });
+URL.prototype.toJSON = function () { return urlOf(this).__parts[0]; };
+URL.prototype.toString = function () { return urlOf(this).__parts[0]; };
+URL.canParse = function (url, base) {
+  needArgs(arguments, 1, "Failed to execute 'canParse' on 'URL'");
+  return parseUrl(url, base) != null;
+};
+URL.parse = function (url, base) {
+  needArgs(arguments, 1, "Failed to execute 'parse' on 'URL'");
+  var parts = parseUrl(url, base);
+  return parts == null ? null : initUrl(Object.create(URL.prototype), parts);
+};
+
+/* The URLSearchParams class: a list of name-value pairs that writes itself back to the query
+   of the URL it belongs to, if any. */
+function paramsOf(p) {
+  if (p == null || typeof p !== 'object' || !p.__list) throw new TypeError('Illegal invocation');
+  return p;
+}
+function iterate(obj, each) {
+  var method = obj[Symbol.iterator];
+  if (typeof method !== 'function') throw new TypeError("Failed to construct 'URLSearchParams': The object must have a callable @@iterator property.");
+  var it = method.call(obj), step;
+  while (!(step = it.next()).done) each(step.value);
+}
+function URLSearchParams(init) {
+  if (!(this instanceof URLSearchParams)) throw new TypeError("Failed to construct 'URLSearchParams': Please use the 'new' operator.");
+  var list = [];
+  if (init !== null && (typeof init === 'object' || typeof init === 'function')) {
+    if (init[Symbol.iterator] != null) {
+      iterate(init, function (pair) {
+        if (pair === null || (typeof pair !== 'object' && typeof pair !== 'function')) throw new TypeError("Failed to construct 'URLSearchParams': The provided value cannot be converted to a sequence.");
+        var items = [];
+        iterate(pair, function (item) { items.push(item); });
+        if (items.length !== 2) throw new TypeError("Failed to construct 'URLSearchParams': Sequence initializer must only contain pair elements");
+        list.push([usv(items[0]), usv(items[1])]);
+      });
+    } else {
+      /* A WebIDL record: two keys that are one scalar value string keep the place of the
+         first and the value of the last. */
+      var keys = typeof Reflect === 'object' && Reflect.ownKeys ? Reflect.ownKeys(init) : Object.keys(init), at = new Map();
+      for (var i = 0; i < keys.length; i++) {
+        var d = Object.getOwnPropertyDescriptor(init, keys[i]);
+        if (!d || !d.enumerable) continue;
+        var key = usv(keys[i]), value = usv(init[keys[i]]);
+        if (at.has(key)) list[at.get(key)][1] = value;
+        else { at.set(key, list.length); list.push([key, value]); }
+      }
+    }
+  } else if (init !== undefined) {
+    var s = usv(init);
+    list = formList(s.charAt(0) === '?' ? s.substring(1) : s);
+  }
+  hidden(this, '__list', list);
+  hidden(this, '__url', null);
+}
+function serializeParams(list) {
+  var flat = [];
+  for (var i = 0; i < list.length; i++) flat.push(list[i][0], list[i][1]);
+  return K.formSerialize(flat);
+}
+/* The update steps: the URL's query becomes the serialized list, or null when that is empty. */
+function updateParams(p) {
+  var u = p.__url;
+  if (!u) return;
+  var parts = K.urlSet(u.__parts[0], 'query', serializeParams(p.__list));
+  if (parts != null) u.__parts = parts;
+}
+var SP = URLSearchParams.prototype;
+SP.append = function (name, value) {
+  needArgs(arguments, 2, "Failed to execute 'append' on 'URLSearchParams'");
+  var p = paramsOf(this);
+  p.__list.push([usv(name), usv(value)]);
+  updateParams(p);
+};
+SP['delete'] = function (name, value) {
+  needArgs(arguments, 1, "Failed to execute 'delete' on 'URLSearchParams'");
+  var p = paramsOf(this), n = usv(name), v = value === undefined ? undefined : usv(value);
+  p.__list = p.__list.filter(function (e) { return !(e[0] === n && (v === undefined || e[1] === v)); });
+  updateParams(p);
+};
+SP.get = function (name) {
+  needArgs(arguments, 1, "Failed to execute 'get' on 'URLSearchParams'");
+  var list = paramsOf(this).__list, n = usv(name);
+  for (var i = 0; i < list.length; i++) if (list[i][0] === n) return list[i][1];
+  return null;
+};
+SP.getAll = function (name) {
+  needArgs(arguments, 1, "Failed to execute 'getAll' on 'URLSearchParams'");
+  var n = usv(name);
+  return paramsOf(this).__list.filter(function (e) { return e[0] === n; }).map(function (e) { return e[1]; });
+};
+SP.has = function (name, value) {
+  needArgs(arguments, 1, "Failed to execute 'has' on 'URLSearchParams'");
+  var n = usv(name), v = value === undefined ? undefined : usv(value);
+  return paramsOf(this).__list.some(function (e) { return e[0] === n && (v === undefined || e[1] === v); });
+};
+SP.set = function (name, value) {
+  needArgs(arguments, 2, "Failed to execute 'set' on 'URLSearchParams'");
+  var p = paramsOf(this), n = usv(name), v = usv(value), found = false;
+  p.__list = p.__list.filter(function (e) {
+    if (e[0] !== n) return true;
+    if (found) return false;
+    found = true;
+    e[1] = v;
+    return true;
+  });
+  if (!found) p.__list.push([n, v]);
+  updateParams(p);
+};
+/* A stable sort by name, in code units. */
+SP.sort = function () {
+  var p = paramsOf(this);
+  p.__list = p.__list.map(function (e, i) { return [e, i]; }).sort(function (a, b) {
+    return a[0][0] < b[0][0] ? -1 : a[0][0] > b[0][0] ? 1 : a[1] - b[1];
+  }).map(function (x) { return x[0]; });
+  updateParams(p);
+};
+SP.toString = function () { return serializeParams(paramsOf(this).__list); };
+def(SP, 'size', function () { return paramsOf(this).__list.length; });
+SP.forEach = function (callback, thisArg) {
+  needArgs(arguments, 1, "Failed to execute 'forEach' on 'URLSearchParams'");
+  if (typeof callback !== 'function') throw new TypeError("Failed to execute 'forEach' on 'URLSearchParams': The callback provided as parameter 1 is not a function.");
+  var p = paramsOf(this);
+  for (var i = 0; i < p.__list.length; i++) callback.call(thisArg, p.__list[i][1], p.__list[i][0], p);
+};
+/* The iterators of a pair iterable, live over the list as WebIDL's are. */
+function ParamsIterator(p, kind) { hidden(this, '__p', p); hidden(this, '__kind', kind); hidden(this, '__at', 0); }
+ParamsIterator.prototype = Object.create(Object.getPrototypeOf(Object.getPrototypeOf([][Symbol.iterator]())));
+hidden(ParamsIterator.prototype, 'next', function () {
+  var list = this.__p.__list;
+  if (this.__at >= list.length) return { value: undefined, done: true };
+  var e = list[this.__at++];
+  return { value: this.__kind === 'keys' ? e[0] : this.__kind === 'values' ? e[1] : [e[0], e[1]], done: false };
+});
+SP.entries = function () { return new ParamsIterator(paramsOf(this), 'entries'); };
+SP.keys = function () { return new ParamsIterator(paramsOf(this), 'keys'); };
+SP.values = function () { return new ParamsIterator(paramsOf(this), 'values'); };
+hidden(SP, Symbol.iterator, SP.entries);
+if (typeof Symbol.toStringTag === 'symbol') {
+  Object.defineProperty(URL.prototype, Symbol.toStringTag, { value: 'URL', configurable: true });
+  Object.defineProperty(SP, Symbol.toStringTag, { value: 'URLSearchParams', configurable: true });
+  Object.defineProperty(ParamsIterator.prototype, Symbol.toStringTag, { value: 'URLSearchParams Iterator', configurable: true });
+}
+
+"""
+
 /** The rest of [DOM_PRELUDE]: elements, events, the document, the window and what the host calls. */
 private const val DOM_PRELUDE_TAIL: String = """function datasetOf(el) {
   if (el.__dataset) return el.__dataset;
@@ -1048,6 +1266,7 @@ var viewport = K.viewport();
 var api = {
   window: global, self: global, top: global, parent: global, frames: global, opener: null, frameElement: null, origin: origin,
   document: document, location: location, console: console,
+  URL: URL, URLSearchParams: URLSearchParams, webkitURL: URL,
   navigator: navigator,
   screen: { width: viewport[0], height: viewport[1], availWidth: viewport[0], availHeight: viewport[1], colorDepth: 24 },
   history: { length: 1, state: null, back: function () {}, forward: function () {}, go: function () {}, pushState: function () {}, replaceState: function () {} },

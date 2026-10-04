@@ -9,6 +9,7 @@ import io.github.yuroyami.kitepdf.core.xml.KiteXmlNode
 import io.github.yuroyami.kitepdf.epub.css.CssPosition
 import io.github.yuroyami.kitepdf.epub.script.DOM_PRELUDE
 import io.github.yuroyami.kitepdf.epub.script.ScriptDom
+import io.github.yuroyami.kitepdf.epub.script.WhatwgUrl
 import kotlin.math.roundToLong
 
 /**
@@ -377,12 +378,32 @@ public class EpubScriptSession(
             }
             def("location") { "$origin/" + document.chapterPath(chapter) }
             def("origin") { origin }
+            // The URL Standard (#520): a parse against an optional base, a setter of the URL class
+            // on a serialized URL, and the application/x-www-form-urlencoded parser and serializer
+            // over flat name-value lists.
+            def("url") { args -> WhatwgUrl.parse(string(args, 0), args.getOrNull(1)?.toString())?.let(::urlParts) }
+            def("urlSet") { args -> WhatwgUrl.parse(string(args, 0))?.takeIf { it.set(string(args, 1), string(args, 2)) }?.let(::urlParts) }
+            def("formParse") { args -> WhatwgUrl.parseForm(string(args, 0)).flatMap { listOf(it.first, it.second) } }
+            def("formSerialize") { args ->
+                val flat = (args.getOrNull(0) as? List<*>).orEmpty().map { it?.toString().orEmpty() }
+                WhatwgUrl.serializeForm(flat.chunked(2).filter { it.size == 2 }.map { it[0] to it[1] })
+            }
             def("timers") { args ->
                 timers = (args.getOrNull(0) as? Double)?.toInt() ?: 0
                 timersChanged()
                 null
             }
         }
+
+        /**
+         * What the `URL` class of the prelude reads of [url]: its href, its origin, the parts its
+         * getters answer and the raw query. The book's own scheme has a tuple origin, so a URL in
+         * the book has the origin that `location.origin` gives.
+         */
+        private fun urlParts(url: WhatwgUrl): List<String?> = listOf(
+            url.href(), url.origin(tupleScheme = "epub"), url.protocol, url.username, url.password, url.hostWithPort,
+            url.hostname, url.portString, url.pathname, url.search, url.hash, url.query,
+        )
 
         /** What `getComputedStyle` answers for [property] of [el]: the cascade's value, in CSS pixels. */
         private fun computed(el: KiteXmlNode.Element, property: String): String {
