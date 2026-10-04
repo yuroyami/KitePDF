@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- A book's scripts have `TextEncoder` and `TextDecoder` of the Encoding Standard, with every
+  encoding and label of its table: UTF-8, UTF-16, the 28 single-byte encodings, gb18030, GBK,
+  Big5, EUC-JP, ISO-2022-JP, Shift_JIS, EUC-KR, `replacement` and `x-user-defined`, with `fatal`,
+  `ignoreBOM`, streaming and `encodeInto` as the standard says, and `atob` and `btoa` of the HTML
+  Standard. The decoders are `WhatwgEncoding` in `kitepdf-epub`, over the standard's indexes,
+  which `tools/generate_encoding_tables.py` packs. 11,249 tests of web-platform-tests in
+  `encoding/` pass in a chapter, and all of `atob`'s; the rest wait on KiteJS, for
+  `SharedArrayBuffer`, `Float16Array` and a rest parameter in an arrow function, and on
+  `MessageChannel` (#534) (#532).
+
 - A book's scripts have `URL` and `URLSearchParams` of the WHATWG URL Standard, over a URL
   parser of its own in `kitepdf-epub`: special schemes and their ports, `..` that stops at the
   root, so an address resolved against a chapter stays inside the book, IPv4 and IPv6 hosts, host

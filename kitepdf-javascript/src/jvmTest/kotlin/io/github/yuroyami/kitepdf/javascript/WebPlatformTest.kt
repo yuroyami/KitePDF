@@ -10,15 +10,18 @@ import kotlin.test.assertTrue
 /**
  * Interfaces that a book's scripts see, against their JavaScript tests in web-platform-tests, run
  * in a chapter as a browser runs them in a page: the `URL` and `URLSearchParams` of the URL
- * Standard (#520) and the `DOMException` of Web IDL (#530).
+ * Standard (#520), the `DOMException` of Web IDL (#530), and the `TextEncoder` and
+ * `TextDecoder` of the Encoding Standard and the `atob` and `btoa` of HTML (#532).
  *
  * Each test file runs in a book of its own, after `harness.js`, a small stand-in for
  * testharness.js whose `fetch` answers from the test data that the URL parser's own test reads
- * in kitepdf-epub, and before `report.js`, which logs the count.
+ * in kitepdf-epub, and the scripts its META lines name, and before `report.js`, which logs the
+ * count. A file named with a query runs as that variant of it, the query in `location.search`.
  *
  * A test that a known gap fails is listed in [gaps] with the issue that tracks it, and a probe
- * that is true while the gap is there. While it is, the test has to fail; once it is not, the
- * test has to pass, so the list stays true.
+ * that is true while the gap is there, as is a file that a gap keeps from running at all. While
+ * the gap is there, the test has to fail; once it is not, the test has to pass, so the list stays
+ * true.
  */
 class WebPlatformTest {
 
@@ -29,8 +32,14 @@ class WebPlatformTest {
         runners.forEach { it.close() }
     }
 
-    /** A known gap: [probe] is a script expression that is true while it is there, and [tests] are the names it fails. */
-    private class Gap(val issue: String, val probe: String, val tests: Set<String>)
+    /**
+     * A known gap: [probe] is a script expression that is true while it is there, and [tests] are
+     * the names of the tests it fails and the paths of the files it keeps from running, as are the
+     * names that [names] finds a match in.
+     */
+    private class Gap(val issue: String, val probe: String, val tests: Set<String> = emptySet(), val names: Regex? = null) {
+        fun covers(test: String): Boolean = test in tests || names?.containsMatchIn(test) == true
+    }
 
     private val gaps = listOf(
         Gap(
@@ -53,6 +62,20 @@ class WebPlatformTest {
             setOf("URL.searchParams setter, invalid values"),
         ),
         Gap("#531, FormData is missing", "typeof FormData === 'undefined'", setOf("URLSearchParams constructor, FormData.")),
+        // Each test of the encoding folder that takes a buffer runs once over each kind of buffer.
+        Gap("kitejs#72, SharedArrayBuffer is missing", "typeof SharedArrayBuffer === 'undefined'", names = Regex("SharedArrayBuffer")),
+        Gap(
+            "kitejs#73, Float16Array is missing",
+            "typeof Float16Array === 'undefined'",
+            setOf("Invalid encodeInto() destination: Float16Array, backed by: ArrayBuffer"),
+        ),
+        // The test detaches a buffer by transferring it through a port.
+        Gap("#534, MessageChannel is missing", "typeof MessageChannel === 'undefined'", setOf("encodeInto() and a detached output buffer")),
+        Gap(
+            "kitejs#71, an arrow function cannot take a rest parameter",
+            "(function () { try { Function('return (...a) => a'); return false; } catch (e) { return true; } })()",
+            setOf("encoding/textdecoder-mistakes.any.js"),
+        ),
     )
 
     /** The test files that KiteJS 0.2.0 cannot parse, as each has a const in a for head (kitejs#11, fixed after it). */
@@ -72,6 +95,26 @@ class WebPlatformTest {
         "DOMException-constructor-behavior.any.js", "DOMException-custom-bindings.any.js",
     ).map { "webidl/$it" }
 
+    private val encodingFiles = listOf(
+        "api-basics.any.js", "api-invalid-label.any.js", "api-replacement-encodings.any.js", "api-surrogates-utf8.any.js",
+        "encodeInto.any.js", "iso-2022-jp-decoder.any.js", "single-byte-decoder.any.js?TextDecoder", "textdecoder-arguments.any.js",
+        "textdecoder-byte-order-marks.any.js", "textdecoder-copy.any.js", "textdecoder-eof.any.js", "textdecoder-fatal-single-byte.any.js",
+        "textdecoder-fatal-streaming.any.js", "textdecoder-fatal.any.js", "textdecoder-ignorebom.any.js", "textdecoder-labels.any.js",
+        "textdecoder-mistakes.any.js", "textdecoder-streaming.any.js", "textdecoder-utf16-surrogates.any.js",
+        "textencoder-constructor-non-utf.any.js", "textencoder-utf16-surrogates.any.js",
+    ).map { "encoding/$it" }
+
+    /** The files of this folder that stand in for scripts of web-platform-tests that a test names, null where `harness.js` does. */
+    private val standIns = mapOf("/common/sab.js" to "sab.js", "/common/subset-tests-by-key.js" to null)
+
+    /**
+     * The scripts that the META lines of [source] name, as paths of `resources/wpt`: a path from
+     * the root of web-platform-tests, or from the folder of the file at [path].
+     */
+    private fun metaScripts(path: String, source: String): List<String> = source.lines()
+        .mapNotNull { Regex("^// META: script=(\\S+)").find(it)?.groupValues?.get(1) }
+        .mapNotNull { if (it in standIns) standIns[it] else if (it.startsWith("/")) it.removePrefix("/") else path.substringBeforeLast('/') + "/" + it }
+
     /** A file of `resources/wpt`, by its path there. */
     private fun resource(path: String): String =
         checkNotNull(javaClass.getResourceAsStream("/wpt/$path")) { "no resource $path" }.readBytes().decodeToString()
@@ -85,9 +128,11 @@ class WebPlatformTest {
 
     /** What the harness's `fetch` answers: each JSON file the tests load, as a JavaScript literal. */
     private val harnessData: String by lazy {
-        listOf("urltestdata.json", "urltestdata-javascript-only.json", "setters_tests.json").joinToString(",\n", "var harnessData = {\n", "\n};") {
+        val urlData = listOf("urltestdata.json", "urltestdata-javascript-only.json", "setters_tests.json").map {
             "\"resources/$it\": " + File(data, it).readText()
         }
+        val base64 = "\"../../../fetch/data-urls/resources/base64.json\": " + resource("fetch/data-urls/resources/base64.json")
+        (urlData + base64).joinToString(",\n", "var harnessData = {\n", "\n};")
     }
 
     /** The console of a chapter whose scripts are [files], in order, and the failures of its scripts. */
@@ -109,36 +154,50 @@ class WebPlatformTest {
         gaps.filterIndexed { i, _ -> answers[i] == "true" }
     }
 
-    /** The names of the tests of the file at [path] that fail, and how many pass. A script that does not run at all fails the file. */
-    private fun run(path: String): Pair<List<String>, Int> {
-        val name = path.substringAfterLast('/')
-        val (console, failures) = chapter(
-            linkedMapOf("harness.js" to resource("harness.js"), "data.js" to harnessData, name to resource(path), "report.js" to resource("report.js")),
-        )
-        assertTrue(failures.isEmpty(), "$name does not run: $failures")
+    /** What a file did: the names of its tests that fail, the names of those that pass, and the failures of its scripts that did not run. */
+    private class FileRun(val failing: List<String>, val passing: List<String>, val broken: List<String>)
+
+    /** Runs the file at [path], a query after it naming the variant. */
+    private fun run(path: String): FileRun {
+        val file = path.substringBefore('?')
+        val variant = path.substringAfter('?', "")
+        val name = file.substringAfterLast('/')
+        val source = resource(file)
+        val scripts = linkedMapOf("harness.js" to resource("harness.js"), "data.js" to harnessData)
+        if (variant.isNotEmpty()) scripts["variant.js"] = "Object.defineProperty(location, 'search', { value: '?$variant', configurable: true });"
+        for (script in metaScripts(file, source)) scripts[script.replace('/', '-')] = resource(script)
+        scripts[name] = source
+        scripts["report.js"] = resource("report.js")
+        val (console, failures) = chapter(scripts)
         val done = console.singleOrNull { it.startsWith("log: DONE ") }
         assertTrue(done != null, "$name did not finish:\n" + console.joinToString("\n"))
         val (passed, failed) = done.removePrefix("log: DONE ").split(' ').map { it.toInt() }
         val failing = console.filter { it.startsWith("log: FAIL ") }.map { it.removePrefix("log: FAIL ") }
+        val passing = console.filter { it.startsWith("log: PASS ") }.map { it.removePrefix("log: PASS ") }
         assertEquals(failed, failing.size)
-        return failing to passed
+        assertEquals(passed, passing.size)
+        return FileRun(failing, passing, failures)
     }
 
     /** Runs [paths], and fails on a test that fails without an open gap, or that passes while its gap is open. */
     private fun check(paths: List<String>, atLeast: Int) {
-        val expected = openGaps.flatMap { gap -> gap.tests.map { it to gap.issue } }.toMap()
+        fun expected(test: String) = openGaps.any { it.covers(test) }
         val unexpected = ArrayList<String>()
-        val seen = HashSet<String>()
+        val stale = ArrayList<String>()
         var passed = 0
         for (path in paths) {
-            val (failing, ok) = run(path)
-            passed += ok
-            for (failure in failing) {
-                val test = failure.substringBefore(" :: ")
-                if (test in expected) seen += test else unexpected += "$path: $failure"
+            val run = run(path)
+            passed += run.passing.size
+            if (run.broken.isNotEmpty()) {
+                if (!expected(path)) unexpected += "$path does not run: ${run.broken}"
+            } else if (expected(path)) {
+                stale += path
             }
+            for (failure in run.failing) {
+                if (!expected(failure.substringBefore(" :: "))) unexpected += "$path: $failure"
+            }
+            stale += run.passing.filter { expected(it) }
         }
-        val stale = expected.filterKeys { test -> test !in seen && paths.any { test in resource(it) } }
         assertTrue(passed >= atLeast, "only $passed tests passed")
         assertTrue(unexpected.isEmpty(), "${unexpected.size} failures, $passed passed:\n" + unexpected.take(60).joinToString("\n"))
         assertTrue(stale.isEmpty(), "these pass although their gap is open, so its probe is wrong: $stale")
@@ -157,4 +216,10 @@ class WebPlatformTest {
 
     @Test
     fun the_dom_exception_tests_pass() = check(domExceptionFiles, atLeast = 100)
+
+    @Test
+    fun the_atob_and_btoa_tests_pass() = check(listOf("html/webappapis/atob/base64.any.js"), atLeast = 300)
+
+    @Test
+    fun the_encoding_tests_pass_but_for_known_gaps() = check(encodingFiles, atLeast = 1000)
 }

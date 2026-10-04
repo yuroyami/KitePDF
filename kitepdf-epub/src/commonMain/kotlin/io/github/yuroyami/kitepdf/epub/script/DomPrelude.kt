@@ -13,6 +13,7 @@ package io.github.yuroyami.kitepdf.epub.script
 internal val DOM_PRELUDE: String = buildString {
     append(DOM_PRELUDE_HEAD)
     append(DOM_PRELUDE_URL)
+    append(DOM_PRELUDE_ENCODING)
     append(DOM_PRELUDE_TAIL)
 }
 
@@ -926,6 +927,138 @@ if (typeof Symbol.toStringTag === 'symbol') {
 
 """
 
+/** The part of [DOM_PRELUDE] for bytes and text: TextEncoder, TextDecoder, atob and btoa. */
+private const val DOM_PRELUDE_ENCODING: String = """/* ---- TextEncoder and TextDecoder of the Encoding Standard, atob and btoa of HTML (#532) ---- */
+
+/* A WebIDL dictionary argument: undefined and null are empty, and anything else must be an object. */
+function idlDictionary(v, what, type) {
+  if (v === undefined || v === null) return {};
+  if (typeof v !== 'object' && typeof v !== 'function') throw new TypeError(what + ": The provided value is not of type '" + type + "'.");
+  return v;
+}
+/* The getters that read a buffer or a view by its internal slots, as WebIDL reads them. */
+function getterOf(proto, name) { var d = Object.getOwnPropertyDescriptor(proto, name); return d && d.get; }
+var TYPED_ARRAY = Object.getPrototypeOf(Uint8Array.prototype);
+var typedArrayTag = getterOf(TYPED_ARRAY, Symbol.toStringTag);
+var arrayBufferLength = getterOf(ArrayBuffer.prototype, 'byteLength');
+var sharedBufferLength = typeof SharedArrayBuffer === 'function' ? getterOf(SharedArrayBuffer.prototype, 'byteLength') : null;
+function isBuffer(v, length) {
+  if (!length || v === null || typeof v !== 'object') return false;
+  try { length.call(v); return true; } catch (e) { return false; }
+}
+/* A Uint8Array over the bytes of a WebIDL AllowSharedBufferSource, or null for any other value.
+   A detached buffer holds no bytes. */
+function bufferView(v) {
+  try {
+    if (ArrayBuffer.isView(v)) {
+      var view = typedArrayTag.call(v) === undefined ? DataView.prototype : TYPED_ARRAY;
+      return new Uint8Array(getterOf(view, 'buffer').call(v), getterOf(view, 'byteOffset').call(v), getterOf(view, 'byteLength').call(v));
+    }
+    if (isBuffer(v, arrayBufferLength) || isBuffer(v, sharedBufferLength)) return new Uint8Array(v);
+  } catch (e) {
+    return new Uint8Array(0);
+  }
+  return null;
+}
+/* Bytes as the host takes them: a string with a code unit for each byte. */
+function byteString(view) {
+  var out = '';
+  for (var i = 0, n = view.length; i < n; i += 8192) out += String.fromCharCode.apply(null, view.subarray(i, Math.min(n, i + 8192)));
+  return out;
+}
+/* The bytes of a string from the host, a code unit for each byte. */
+function bytesOf(s) {
+  var out = new Uint8Array(s.length);
+  for (var i = 0; i < s.length; i++) out[i] = s.charCodeAt(i);
+  return out;
+}
+
+/* TextDecoder. Its decoder lives in the host, which hands back the state it keeps between two
+   calls of a stream; that state, the encoding and the options live in a weak map. */
+var textDecoders = new WeakMap();
+function textDecoderOf(d) {
+  var data = textDecoders.get(Object(d));
+  if (data === undefined) throw new TypeError('Illegal invocation');
+  return data;
+}
+function TextDecoder() {
+  if (!(this instanceof TextDecoder) || textDecoders.has(this)) throw new TypeError("Failed to construct 'TextDecoder': Please use the 'new' operator.");
+  var label = arguments.length > 0 && arguments[0] !== undefined ? domString(arguments[0]) : 'utf-8';
+  // The members of a dictionary are read in lexicographic order.
+  var options = idlDictionary(arguments[1], "Failed to construct 'TextDecoder'", 'TextDecoderOptions');
+  var fatal = !!options.fatal;
+  var ignoreBOM = !!options.ignoreBOM;
+  var encoding = K.encoding(label);
+  if (encoding == null || encoding === 'replacement') {
+    throw new RangeError("Failed to construct 'TextDecoder': The encoding label provided ('" + label + "') is invalid.");
+  }
+  textDecoders.set(this, { encoding: encoding, fatal: fatal, ignoreBOM: ignoreBOM, state: null, doNotFlush: false });
+}
+interfaceProto(TextDecoder, {}, 'TextDecoder');
+def(TextDecoder.prototype, 'encoding', function () { return textDecoderOf(this).encoding.toLowerCase(); });
+def(TextDecoder.prototype, 'fatal', function () { return textDecoderOf(this).fatal; });
+def(TextDecoder.prototype, 'ignoreBOM', function () { return textDecoderOf(this).ignoreBOM; });
+/* The input is converted before the options and its bytes copied after them, as WebIDL and the
+   method's steps order it, so a getter of the options that detaches the buffer empties it. */
+TextDecoder.prototype.decode = function () {
+  var d = textDecoderOf(this), input = arguments[0], view = null;
+  if (input !== undefined) {
+    view = bufferView(input);
+    if (view === null) throw new TypeError("Failed to execute 'decode' on 'TextDecoder': The provided value is not of type '(ArrayBuffer or ArrayBufferView)'.");
+  }
+  var stream = !!idlDictionary(arguments[1], "Failed to execute 'decode' on 'TextDecoder'", 'TextDecodeOptions').stream;
+  if (!d.doNotFlush) d.state = null;
+  d.doNotFlush = stream;
+  var result = K.decode(d.encoding, d.fatal, d.ignoreBOM, d.state, view === null ? '' : byteString(view), !stream);
+  d.state = result.slice(1);
+  if (result[0] == null) throw new TypeError("Failed to execute 'decode' on 'TextDecoder': The encoded data was not valid.");
+  return result[0];
+};
+
+/* TextEncoder, which encodes UTF-8 alone. */
+var textEncoders = new WeakMap();
+function textEncoderOf(e) {
+  if (!textEncoders.has(Object(e))) throw new TypeError('Illegal invocation');
+}
+function TextEncoder() {
+  if (!(this instanceof TextEncoder) || textEncoders.has(this)) throw new TypeError("Failed to construct 'TextEncoder': Please use the 'new' operator.");
+  textEncoders.set(this, true);
+}
+interfaceProto(TextEncoder, {}, 'TextEncoder');
+def(TextEncoder.prototype, 'encoding', function () { textEncoderOf(this); return 'utf-8'; });
+TextEncoder.prototype.encode = function () {
+  textEncoderOf(this);
+  var input = arguments[0];
+  return bytesOf(K.encode(input === undefined ? '' : usv(input)));
+};
+TextEncoder.prototype.encodeInto = function (source, destination) {
+  textEncoderOf(this);
+  needArgs(arguments, 2, "Failed to execute 'encodeInto' on 'TextEncoder'");
+  var text = usv(source);
+  if (typedArrayTag.call(destination) !== 'Uint8Array') {
+    throw new TypeError("Failed to execute 'encodeInto' on 'TextEncoder': parameter 2 is not of type 'Uint8Array'.");
+  }
+  var result = K.encodeInto(text, getterOf(TYPED_ARRAY, 'length').call(destination)), bytes = result[1];
+  for (var i = 0; i < bytes.length; i++) destination[i] = bytes.charCodeAt(i);
+  return { read: result[0], written: bytes.length };
+};
+
+/* atob and btoa, of the HTML Standard: forgiving base64 between bytes and a string of them. */
+function atob(data) {
+  needArgs(arguments, 1, "Failed to execute 'atob' on 'Window'");
+  var out = K.atob(domString(data));
+  if (out == null) throw new DOMException("Failed to execute 'atob' on 'Window': The string to be decoded is not correctly encoded.", 'InvalidCharacterError');
+  return out;
+}
+function btoa(data) {
+  needArgs(arguments, 1, "Failed to execute 'btoa' on 'Window'");
+  var out = K.btoa(domString(data));
+  if (out == null) throw new DOMException("Failed to execute 'btoa' on 'Window': The string to be encoded contains characters outside of the Latin1 range.", 'InvalidCharacterError');
+  return out;
+}
+
+"""
+
 /** The rest of [DOM_PRELUDE]: elements, events, the document, the window and what the host calls. */
 private const val DOM_PRELUDE_TAIL: String = """function datasetOf(el) {
   if (el.__dataset) return el.__dataset;
@@ -1357,6 +1490,7 @@ var api = {
   window: global, self: global, top: global, parent: global, frames: global, opener: null, frameElement: null, origin: origin,
   document: document, location: location, console: console,
   URL: URL, URLSearchParams: URLSearchParams, webkitURL: URL,
+  TextEncoder: TextEncoder, TextDecoder: TextDecoder, atob: atob, btoa: btoa,
   navigator: navigator,
   screen: { width: viewport[0], height: viewport[1], availWidth: viewport[0], availHeight: viewport[1], colorDepth: 24 },
   history: { length: 1, state: null, back: function () {}, forward: function () {}, go: function () {}, pushState: function () {}, replaceState: function () {} },

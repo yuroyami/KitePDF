@@ -220,6 +220,19 @@ has one. The DOM methods throw one with the name the DOM Standard gives, such as
 for a selector that does not parse, and `WebPlatformTest` runs the `DOMException` tests of
 web-platform-tests in a chapter.
 
+`TextEncoder` and `TextDecoder` are the Encoding Standard's, with every encoding and label of its
+table: UTF-8, UTF-16, the 28 single-byte encodings, gb18030 and GBK, Big5, EUC-JP, ISO-2022-JP,
+Shift_JIS, EUC-KR, `replacement` and `x-user-defined`, each with the error mode the standard
+gives it. `fatal`, `ignoreBOM`, `{ stream: true }` across calls and `encodeInto` behave as the
+standard says. `atob` and `btoa` are the HTML Standard's, with forgiving base64, and throw an
+`InvalidCharacterError`. The decoders live in Kotlin over the standard's own indexes, and
+`WebPlatformTest` runs the `encoding` tests and the `atob` tests of web-platform-tests in a
+chapter. The `encoding` tests that fail wait on `MessageChannel`
+([#534](https://github.com/yuroyami/KitePDF/issues/534)) or on the engine: `SharedArrayBuffer`
+([KiteJS#72](https://github.com/yuroyami/KiteJS/issues/72)), `Float16Array`
+([KiteJS#73](https://github.com/yuroyami/KiteJS/issues/73)) and a rest parameter in an arrow
+function ([KiteJS#71](https://github.com/yuroyami/KiteJS/issues/71)).
+
 Nothing reaches outside the book. There is no `fetch` or `XMLHttpRequest`. A change of
 `location`, `window.open` and a script's own click on a link go to the listeners of
 `onNavigate`, with a zip path and its fragment for a place in the book; an address under the
@@ -230,7 +243,11 @@ otherwise grow it for as long as the book is open.
 Not there yet: the documents of `<iframe>` and `<object>` elements, whose boxes stay as they are;
 form controls drawn on the page, since an `<input>` has no box yet, though scripts read and set
 its value and checkedness; drawing on a `<canvas>`, whose `getContext` answers `null`
-([#501](https://github.com/yuroyami/KitePDF/issues/501)); and the syntax KiteJS does not have yet, `class`
+([#501](https://github.com/yuroyami/KitePDF/issues/501)); `Blob`, `File` and `FileReader`
+([#533](https://github.com/yuroyami/KitePDF/issues/533)); `postMessage`, which drops each
+message, `MessageChannel` and `structuredClone`
+([#534](https://github.com/yuroyami/KitePDF/issues/534)); `FormData`
+([#531](https://github.com/yuroyami/KitePDF/issues/531)); and the syntax KiteJS does not have yet, `class`
 ([KiteJS#2](https://github.com/yuroyami/KiteJS/issues/2)), `const` in the head of a `for` loop
 ([KiteJS#11](https://github.com/yuroyami/KiteJS/issues/11)) and `async`
 ([KiteJS#12](https://github.com/yuroyami/KiteJS/issues/12)). A script that uses one fails to
