@@ -106,9 +106,9 @@ internal class RemoteResources(chapters: Int) {
     fun request(url: String, fetcher: EpubResourceFetcher): Deferred<ByteArray?>? {
         if (!isHttpsUrl(url)) return null
         val fetch = lock.withLock {
+            inFlight[url]?.let { return it }
             landedBytes[url]?.let { return CompletableDeferred(it) }
             if (url in failed) return null
-            inFlight[url]?.let { return it }
             // Started lazily, so it is in the table before it can finish and leave it.
             scope.async(start = CoroutineStart.LAZY) { fetchOne(url, fetcher) }.also { inFlight[url] = it }
         }
@@ -143,7 +143,6 @@ internal class RemoteResources(chapters: Int) {
             }
         } finally {
             lock.withLock {
-                inFlight.remove(url)
                 val bytes = got
                 if (bytes == null || bytes.isEmpty() || held + bytes.size > MAX_REMOTE_BYTES) {
                     failed += url
@@ -154,8 +153,11 @@ internal class RemoteResources(chapters: Int) {
                     painters.remove(url)?.forEach { versions[it]++ }
                 }
             }
+            if (got != null) landed.update { it + 1 }
+            // The fetch leaves the table only once it is counted, so a request in between gets
+            // this fetch to await, not landed bytes ahead of their count (#567).
+            lock.withLock { inFlight.remove(url) }
         }
-        if (got != null) landed.update { it + 1 }
         return got
     }
 
