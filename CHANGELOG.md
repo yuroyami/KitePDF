@@ -207,6 +207,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- A no-break space no longer collapses into the space beside it or lets a line break there, so
+  the run of them that a book converted from a word processor puts before a paragraph indents
+  it, and a number stays on the line of its unit in `10&nbsp;km`, as it does with a narrow
+  no-break or a figure space. An ideographic space indents a Japanese paragraph again, keeps its
+  full width between two sentences, hangs at the end of a line and stretches like a character
+  when the line is justified, and the em, en, thin and hair spaces keep their widths too. A
+  zero-width space is now a place where a line may break, where it used to glue the words on its
+  two sides into one (#577).
+
 - A CSS declaration whose value KitePDF cannot read no longer undoes the one before it: the
   style resolver used to keep only the last value of each property and drop it when it could not
   read it, so `width: 90%; width: calc(...)` or a vendor keyword after a standard one lost both,
