@@ -424,6 +424,7 @@ internal class BoxBuilder(
             color = pc.style.color, valign = pc.style.verticalAlign, underline = pc.style.underline,
             fontFamilyNames = pc.style.fontFamilyNames,
             lineThrough = pc.style.lineThrough,
+            overline = pc.style.overline,
         )
         return BlockBox(pc.style, listOf(TextBlockBox(pc.style, listOf(run))))
     }
@@ -1018,7 +1019,7 @@ internal class BoxBuilder(
         }
 
         private fun samePaint(a: InlineRun, b: InlineRun): Boolean =
-            a.underline == b.underline && a.lineThrough == b.lineThrough && a.backgroundColor == b.backgroundColor
+            a.underline == b.underline && a.lineThrough == b.lineThrough && a.overline == b.overline && a.backgroundColor == b.backgroundColor
 
         private fun makeRun(text: String, style: ComputedStyle) = InlineRun(
             text = text, fontSizePt = style.fontSizePt,
@@ -1038,6 +1039,7 @@ internal class BoxBuilder(
             lineBreak = style.lineBreak,
             textOrientation = style.textOrientation,
             lineThrough = style.lineThrough,
+            overline = style.overline,
             backgroundColor = style.backgroundColor.takeIf { style.display == Display.INLINE || style.display == Display.INLINE_BLOCK }
                 ?: backgroundColor,
         )

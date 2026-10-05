@@ -229,6 +229,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- EPUB chapters draw `text-decoration: overline`, which the style resolver used to drop, so an
+  overline drew nothing and `underline overline` drew the underline alone. The line runs just over
+  the text, with the colour and size of the element that draws it, and in vertical text it runs
+  right of the column, or left of it when `text-underline-position: right` takes the right for the
+  underline (#578).
+
 - Text copied or searched from a `<pre>` block, or any element with `white-space: pre` or
   `pre-wrap`, keeps the spaces its layout kept: a run of spaces used to read as one and the
   indentation at the start of a line was lost, so a code listing came out flat. The line text now

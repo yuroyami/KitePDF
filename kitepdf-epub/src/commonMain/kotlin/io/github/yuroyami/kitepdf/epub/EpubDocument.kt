@@ -2255,8 +2255,8 @@ public class EpubPage internal constructor(
 
     /**
      * CSS Text Decoration 3: a line keeps the colour and size of the element that draws
-     * it (2.3, 2.5). An underline stays on the line's baseline unless that element is
-     * raised itself; a line-through crosses the text it decorates (#271). [at] places
+     * it (2.3, 2.5). An underline or an overline stays on the line's baseline unless that
+     * element is raised itself; a line-through crosses the text it decorates (#271, #578). [at] places
      * the run's start at a baseline shifted toward line-over.
      */
     private fun paintRunLines(run: PlacedRun, canvas: KiteCanvas, vertical: Boolean, at: (shift: Double) -> KiteMatrix) {
@@ -2266,6 +2266,10 @@ public class EpubPage internal constructor(
         }
         run.lineThrough?.let {
             rectFill(canvas, at(run.baselineShift), 0.0, 0.3 * run.fontSize, run.paintWidth, it.sizePt * 0.05, it.color)
+        }
+        run.overline?.let {
+            val ctm = at(if (it.raised) run.baselineShift else 0.0)
+            rectFill(canvas, ctm, 0.0, overlineEm(it.position, vertical) * it.sizePt, run.paintWidth, it.sizePt * 0.05, it.color)
         }
     }
 
@@ -2280,6 +2284,18 @@ public class EpubPage internal constructor(
         vertical && position.side == UnderlineSide.RIGHT -> UPRIGHT_CENTER + 0.55
         position.under || vertical && position.side == UnderlineSide.LEFT -> -0.3
         else -> -0.15
+    }
+
+    /**
+     * Where an overline's lower edge sits, in ems of its decorating element up from the baseline,
+     * toward line-over (CSS Text Decoration 3, 2.4, #578): just over the layout's em box, which ends
+     * 0.8 em up in horizontal text and at the right edge of the column in vertical text. A vertical
+     * underline that [position] moves to the right sends the overline to the left (3.4).
+     */
+    private fun overlineEm(position: UnderlinePosition, vertical: Boolean): Double = when {
+        !vertical -> 0.8
+        position.side == UnderlineSide.RIGHT -> -0.3
+        else -> UPRIGHT_CENTER + 0.55
     }
 
     /**

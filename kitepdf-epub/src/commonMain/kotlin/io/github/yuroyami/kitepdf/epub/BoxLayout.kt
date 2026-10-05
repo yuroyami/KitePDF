@@ -2092,6 +2092,7 @@ internal class BoxLayout(
         // walk in placeRuns without entering the glyph advance stream.
         var padBefore: Double = 0.0, var padAfter: Double = 0.0,
         val lineThrough: DecorationLine? = null,
+        val overline: DecorationLine? = null,
         val backgroundColor: CssBackground? = null,
         // The bidi level of the character, from [bidiLevels]; odd for right to left.
         val level: Int = 0,
@@ -2315,7 +2316,7 @@ internal class BoxLayout(
                     Cell(c, penAdvance1000(f, gid, c, run.textOrientation) * cellFs / 1000.0, cellFs, spec, run.color, shift, run.underline, f, gid,
                         rubyGroup = run.rubyGroup, rubyText = run.rubyText, href = run.href, speech = run.speech, ids = run.ids,
                         element = run.element,
-                        lineThrough = run.lineThrough, backgroundColor = run.backgroundColor, level = level, src = src,
+                        lineThrough = run.lineThrough, overline = run.overline, backgroundColor = run.backgroundColor, level = level, src = src,
                         orientation = run.textOrientation)
                 } else {
                     // An upright letter of the generic font takes one em down the column (#508).
@@ -2324,7 +2325,7 @@ internal class BoxLayout(
                     Cell(c, advance, cellFs, spec, run.color, shift, run.underline,
                         rubyGroup = run.rubyGroup, rubyText = run.rubyText, href = run.href, speech = run.speech, ids = run.ids,
                         element = run.element,
-                        lineThrough = run.lineThrough, backgroundColor = run.backgroundColor, level = level, src = src,
+                        lineThrough = run.lineThrough, overline = run.overline, backgroundColor = run.backgroundColor, level = level, src = src,
                         orientation = run.textOrientation)
                 }
                 // letter-spacing: added to every glyph advance, kept in sync
@@ -2354,7 +2355,7 @@ internal class BoxLayout(
                     cp, w + spacing, fs, spec, run.color, shift, run.underline, face, face?.gidFor(' '.code) ?: -1,
                     rubyGroup = run.rubyGroup, rubyText = run.rubyText, href = run.href, speech = run.speech, ids = run.ids,
                     element = run.element,
-                    lineThrough = run.lineThrough, backgroundColor = run.backgroundColor, level = level, src = src,
+                    lineThrough = run.lineThrough, overline = run.overline, backgroundColor = run.backgroundColor, level = level, src = src,
                 )
             }
             var at = 0
@@ -2396,7 +2397,7 @@ internal class BoxLayout(
                         tokens.add(Token.Space(Cell(
                             ' '.code, sw + run.wordSpacingPt + run.letterSpacingPt, fs, spec, run.color, shift, run.underline,
                             href = run.href, speech = run.speech, ids = run.ids, element = run.element,
-                            lineThrough = run.lineThrough, backgroundColor = run.backgroundColor, level = level,
+                            lineThrough = run.lineThrough, overline = run.overline, backgroundColor = run.backgroundColor, level = level,
                         )))
                     }
                     // keep-all: CJK letters join the word like Latin ones. A break may still come
@@ -2517,7 +2518,7 @@ internal class BoxLayout(
                     base.spec, base.color, base.shift, base.underline, face, g.gid, kernAfter1000 = spacing,
                     rubyGroup = base.rubyGroup, rubyText = base.rubyText, href = base.href, speech = base.speech, ids = base.ids,
                     element = base.element,
-                    lineThrough = base.lineThrough, backgroundColor = base.backgroundColor, level = base.level,
+                    lineThrough = base.lineThrough, overline = base.overline, backgroundColor = base.backgroundColor, level = base.level,
                     src = base.src, orientation = base.orientation,
                 ).also {
                     it.ligComponents = g.components; it.text = text
@@ -2708,7 +2709,7 @@ internal class BoxLayout(
         return Cell(
             '-'.code, hyphenWidth(c), c.fontSize, c.spec, c.color, c.shift, c.underline, face, face?.gidFor('-'.code) ?: -1,
             href = c.href, speech = c.speech, ids = c.ids, element = c.element,
-            lineThrough = c.lineThrough, backgroundColor = c.backgroundColor, level = c.level, orientation = c.orientation,
+            lineThrough = c.lineThrough, overline = c.overline, backgroundColor = c.backgroundColor, level = c.level, orientation = c.orientation,
         )
     }
 
@@ -2749,10 +2750,10 @@ internal class BoxLayout(
             if (isGap(c.cp)) {
                 closeGroup(x)
                 val width = c.width + if (isWordSeparator(c.cp)) extraPerSpace else 0.0
-                if (c.underline != null || c.lineThrough != null || c.backgroundColor != null) {
+                if (c.underline != null || c.lineThrough != null || c.overline != null || c.backgroundColor != null) {
                     out.add(PlacedRun(
                         emptyList(), x, c.fontSize, c.spec, c.color, c.shift, c.underline,
-                        lineThrough = c.lineThrough, backgroundColor = c.backgroundColor, paintWidth = width, element = c.element,
+                        lineThrough = c.lineThrough, overline = c.overline, backgroundColor = c.backgroundColor, paintWidth = width, element = c.element,
                     ))
                 }
                 spaces++; spacesWidth += width
@@ -2794,7 +2795,7 @@ internal class BoxLayout(
             out.add(PlacedRun(
                 glyphs, startX, fs, spec, col, sh, ul,
                 hasOutlines = face != null, unitsPerEm = face?.unitsPerEm ?: 1000,
-                href = c.href, speech = c.speech, ids = c.ids, lineThrough = c.lineThrough, backgroundColor = c.backgroundColor,
+                href = c.href, speech = c.speech, ids = c.ids, lineThrough = c.lineThrough, overline = c.overline, backgroundColor = c.backgroundColor,
                 paintWidth = x - startX, element = c.element, spacesBefore = spaces, spacesWidth = spacesWidth,
                 orientation = c.orientation,
             ))
@@ -2851,7 +2852,7 @@ internal class BoxLayout(
     private fun samePaint(c: Cell, other: Cell): Boolean =
         c.spec == other.spec && c.fontSize == other.fontSize && c.color == other.color &&
             c.shift == other.shift && c.underline == other.underline && c.face === other.face &&
-            c.lineThrough == other.lineThrough && c.backgroundColor == other.backgroundColor
+            c.lineThrough == other.lineThrough && c.overline == other.overline && c.backgroundColor == other.backgroundColor
 
     private fun glyphFor(c: Cell): TextGlyph {
         // A letter stood upright by text-orientation advances an em down the column and sits in the
