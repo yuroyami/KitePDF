@@ -17,6 +17,7 @@ import io.github.yuroyami.kitepdf.media.MediaBooks.firstPage
 import io.github.yuroyami.kitepdf.media.MediaBooks.fixture
 import io.github.yuroyami.kiteplayer.KitePlayer
 import io.github.yuroyami.kiteplayer.LoopMode
+import io.github.yuroyami.kiteplayer.PlaybackStatus
 import kotlinx.coroutines.runBlocking
 import kotlin.math.abs
 import kotlin.test.AfterTest
@@ -113,5 +114,55 @@ class MediaOverlaySceneTest {
         onNodeWithContentDescription("Play").performClick()
         waitUntil(timeoutMillis = 30_000) { onAllNodesWithContentDescription("Play").fetchSemanticsNodes().isEmpty() }
         assertTrue(onAllNodesWithContentDescription("Video").fetchSemanticsNodes().isEmpty(), "a video surface for nothing")
+    }
+
+    @Test
+    fun a_video_without_controls_pauses_on_a_tap_and_shows_its_bar() = runComposeUiTest {
+        // HTML, 4.8.11 lets a reading system offer controls the element does not ask for, and WCAG
+        // 2.2, 2.2.2 asks for a way to pause what moves for more than five seconds (#480). The clip
+        // loops, so it never stops by itself.
+        val doc = book("""<video src="clip.mp4" width="160" height="120" loop="loop"></video>""", files = mapOf("clip.mp4" to fixture("clip.mp4")))
+        setContent {
+            KiteDocView(rememberKiteDocViewState(doc), Modifier.size(400.dp, 600.dp), pageOverlay = { KiteMediaOverlay(newPlayer = ::newPlayer) })
+        }
+        waitUntil(timeoutMillis = 10_000) { onAllNodesWithContentDescription("Play").fetchSemanticsNodes().isNotEmpty() }
+        onNodeWithContentDescription("Play").performClick()
+        waitUntil(timeoutMillis = 30_000) { players.isNotEmpty() && players[0].state.value.status.isActive }
+        val player = players.single()
+        assertTrue(onAllNodesWithContentDescription("Pause").fetchSemanticsNodes().isEmpty(), "a video without controls shows no bar while it plays")
+
+        onNodeWithContentDescription("Video").performClick()
+        // The player takes the command on its own thread, so its state turns after Compose is idle.
+        val paused = runCatching { waitUntil(timeoutMillis = 10_000) { player.state.value.status == PlaybackStatus.Paused } }.isSuccess
+        assertTrue(paused, "a tap did not pause the video")
+        waitUntil(timeoutMillis = 10_000) { onAllNodesWithContentDescription("Play").fetchSemanticsNodes().isNotEmpty() }
+
+        onNodeWithContentDescription("Play").performClick()
+        waitUntil(timeoutMillis = 10_000) { player.state.value.status.isActive }
+        // Once it plays on for a moment, the bar goes again.
+        waitUntil(timeoutMillis = 10_000) { onAllNodesWithContentDescription("Pause").fetchSemanticsNodes().isEmpty() }
+        assertTrue(player.state.value.status.isActive, "the video stopped before its bar went")
+    }
+
+    @Test
+    fun an_autoplay_video_without_controls_turns_its_sound_on_at_the_first_tap() = runComposeUiTest {
+        // Only a touch turns on the sound that autoplay muted, so without one the video stays mute for good (#480).
+        val doc = book(
+            """<video src="clip.mp4" width="160" height="120" autoplay="autoplay" loop="loop"></video>""",
+            files = mapOf("clip.mp4" to fixture("clip.mp4")),
+        )
+        setContent {
+            KiteDocView(rememberKiteDocViewState(doc), Modifier.size(400.dp, 600.dp), pageOverlay = { KiteMediaOverlay(newPlayer = ::newPlayer) })
+        }
+        waitUntil(timeoutMillis = 30_000) { onAllNodesWithContentDescription("Video").fetchSemanticsNodes().isNotEmpty() }
+        val player = players.single()
+        waitUntil(timeoutMillis = 30_000) { player.state.value.status.isActive }
+        assertTrue(player.state.value.muted, "autoplay starts muted")
+
+        onNodeWithContentDescription("Video").performClick()
+        val unmuted = runCatching { waitUntil(timeoutMillis = 10_000) { !player.state.value.muted } }.isSuccess
+        assertTrue(unmuted, "the first tap did not turn the sound on")
+        assertTrue(player.state.value.status.isActive, "the first tap paused instead")
+        waitUntil(timeoutMillis = 10_000) { onAllNodesWithContentDescription("Pause").fetchSemanticsNodes().isNotEmpty() }
     }
 }

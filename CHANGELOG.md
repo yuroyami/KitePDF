@@ -180,6 +180,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- A `<video>` without `controls` in `KiteMediaOverlay` can be paused: a tap pauses and plays it
+  again, and shows the transport bar while it stays paused and for three seconds once it plays.
+  Before, nothing on such a video took a tap once it played, so a looping one played until its
+  page left the screen, and an `autoplay` one stayed muted for good. Its first tap now turns on
+  the sound that autoplay muted, as the first touch of a video with controls does (#480).
 - In `KiteDocLayout.Spread`, a page that asks for one side of a spread and has no partner sits in
   that half with the other half empty, such as an EPUB's `page-spread-right` first page or a
   `page-spread-left` last page, or the first page of a PDF whose `/PageLayout` puts it on the
