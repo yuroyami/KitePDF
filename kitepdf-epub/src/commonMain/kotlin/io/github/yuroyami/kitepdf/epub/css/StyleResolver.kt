@@ -568,6 +568,7 @@ internal class StyleResolver(
                 val s = v.lowercase()
                 b.ownUnderline = "underline" in s
                 b.ownLineThrough = "line-through" in s
+                b.ownOverline = "overline" in s
             }
             "text-decoration-color" -> b.decorationColor = CssValues.color(v)
             "border-top-width" -> borderW(b, v)?.let { b.borderTopW = it }
@@ -929,6 +930,7 @@ internal class StyleResolver(
         // Non-inherited → initial values.
         var ownUnderline = false
         var ownLineThrough = false
+        var ownOverline = false
         var decorationColor: RgbColor? = null
         var display = Display.INLINE
         var backgroundColor: CssBackground? = null
@@ -1008,6 +1010,8 @@ internal class StyleResolver(
             val own = DecorationLine(decorationColor ?: color, fontSizePt, raised = verticalAlign != CssVAlign.BASELINE)
             val underline = if (ownUnderline) own.copy(position = underlinePosition) else parent.underline.takeIf { inherits }
             val lineThrough = if (ownLineThrough) own else parent.lineThrough.takeIf { inherits }
+            // An overline switches sides with a vertical underline that moves to the right (3.4).
+            val overline = if (ownOverline) own.copy(position = underlinePosition) else parent.overline.takeIf { inherits }
             return ComputedStyle(
                 // CSS 9.7: an out-of-flow box is blockified, which is how
                 // `<img style="position:absolute">` gets a box of its own instead
@@ -1057,6 +1061,7 @@ internal class StyleResolver(
                 lineBreak = lineBreak,
                 textOrientation = textOrientation,
                 underlinePosition = underlinePosition,
+                overline = overline,
             )
         }
     }

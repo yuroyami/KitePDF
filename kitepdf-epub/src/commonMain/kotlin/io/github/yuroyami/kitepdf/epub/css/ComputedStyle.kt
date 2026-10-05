@@ -224,6 +224,8 @@ internal data class ComputedStyle(
     val textOrientation: TextOrientation = TextOrientation.MIXED,
     /** `text-underline-position` or `-epub-text-underline-position` (CSS Text Decoration 3, 3.4, #508). Inherited. */
     val underlinePosition: UnderlinePosition = UnderlinePosition.AUTO,
+    /** Propagated overline (CSS Text Decoration 3, 2.1, #578). */
+    val overline: DecorationLine? = null,
 ) {
     val mono: Boolean get() = fontFamily == GenericFont.MONO
 

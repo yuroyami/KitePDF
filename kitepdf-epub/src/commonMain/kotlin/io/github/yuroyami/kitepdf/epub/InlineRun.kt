@@ -75,6 +75,7 @@ internal data class InlineRun(
     val imageAlt: String? = null,
     val imageObjectFit: ObjectFit = ObjectFit.FILL,
     val lineThrough: DecorationLine? = null,
+    val overline: DecorationLine? = null,
     /** Inline box background, including the nearest painted inline ancestor. */
     val backgroundColor: CssBackground? = null,
     /** The pronunciation of the element this run's text belongs to, or null (#39). */
