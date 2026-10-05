@@ -247,6 +247,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `SkiaCanvas` looks up the host face of a font once and keeps it. It asked the host again on
+  every run of host text, walking the candidate families with a fontconfig match for each one the
+  host lacks, 1.7 ms a run for serif and 5 ms for sans-serif on Linux, so eight pages of an Arabic
+  book took 2.3 s, nine tenths of it in that lookup. They now take 80 ms (#590).
+
 - `AwtCanvas`, `AndroidNativeCanvas`, `SkiaCanvas` and `Canvas2dCanvas` draw a run of host-font
   text whose letters join or reorder, such as an Arabic word or a Devanagari syllable, as one
   string that the platform's text engine shapes, fitted to the width the document gives it. Each

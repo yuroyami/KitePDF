@@ -49,6 +49,18 @@ internal object SkiaSystemFonts {
      * the language that draws [FontSpec.languageSample].
      */
     fun resolve(spec: FontSpec, style: FontStyle): Typeface? {
+        // A lookup takes a millisecond or more, and a page asks for the face on every run of host text (#590).
+        val key = FaceKey(spec.family, style.weight, style.width, style.slant, spec.language, codePoint = -1)
+        cacheLock.withLock { if (key in faces) return faces[key] }
+        val face = lookUp(spec, style)
+        cacheLock.withLock {
+            if (faces.size >= FACE_CACHE_SIZE) faces.clear()
+            faces[key] = face
+        }
+        return face
+    }
+
+    private fun lookUp(spec: FontSpec, style: FontStyle): Typeface? {
         val sample = spec.languageSample ?: return resolve(spec.family, style)
         val language = spec.language ?: return resolve(spec.family, style)
         val cjk = try {
@@ -69,26 +81,29 @@ internal object SkiaSystemFonts {
      */
     fun fallback(spec: FontSpec, style: FontStyle, codePoint: Int): Typeface? {
         // A host lookup takes a fifth of a millisecond, and a page of Arabic asks for each letter in every run.
-        val key = FallbackKey(spec.family, style.weight, style.width, style.slant, spec.language, codePoint)
-        fallbackLock.withLock { if (key in fallbacks) return fallbacks[key] }
+        val key = FaceKey(spec.family, style.weight, style.width, style.slant, spec.language, codePoint)
+        cacheLock.withLock { if (key in fallbacks) return fallbacks[key] }
         val face = try {
             FontMgr.default.matchFamilyStyleCharacter(genericName(spec.family), style, spec.language?.let { arrayOf(it) }, codePoint)
         } catch (t: Throwable) {
             null
         }
-        fallbackLock.withLock {
+        cacheLock.withLock {
             if (fallbacks.size >= FALLBACK_CACHE_SIZE) fallbacks.clear()
             fallbacks[key] = face
         }
         return face
     }
 
-    private data class FallbackKey(
+    /** What a face is looked up by. [codePoint] is the character of a [fallback], or -1 for the face of [resolve]. */
+    private data class FaceKey(
         val family: KiteFontFamily, val weight: Int, val width: Int, val slant: FontSlant, val language: String?, val codePoint: Int,
     )
 
-    private val fallbackLock = KiteLock()
-    private val fallbacks = HashMap<FallbackKey, Typeface?>()
+    private val cacheLock = KiteLock()
+    private val faces = HashMap<FaceKey, Typeface?>()
+    private val fallbacks = HashMap<FaceKey, Typeface?>()
+    private const val FACE_CACHE_SIZE = 256
     private const val FALLBACK_CACHE_SIZE = 4096
 
     private fun genericName(family: KiteFontFamily): String = when (family) {
