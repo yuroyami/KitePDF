@@ -312,7 +312,12 @@ internal class Type1Font private constructor(
             return decryptStream(raw, seed = 55665)
         }
 
+        /**
+         * A charstring or subroutine decrypted with seed 4330, without its [lenIV] random bytes.
+         * A negative [lenIV] says the program is not encrypted, as FreeType reads it (#597).
+         */
         private fun decryptCharstring(input: ByteArray, lenIV: Int): ByteArray {
+            if (lenIV < 0) return input
             val decrypted = decryptStream(input, seed = 4330)
             return if (decrypted.size > lenIV) decrypted.copyOfRange(lenIV, decrypted.size) else ByteArray(0)
         }
