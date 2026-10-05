@@ -60,7 +60,26 @@ internal data class CssBackground(val color: RgbColor, val alpha: Double = 1.0)
  * line (2.5), so the line takes its size from that element too (#271). [raised] is true
  * when that element has its own `vertical-align`: its lines then follow its shifted text.
  */
-internal data class DecorationLine(val color: RgbColor, val sizePt: Double, val raised: Boolean = false)
+internal data class DecorationLine(
+    val color: RgbColor,
+    val sizePt: Double,
+    val raised: Boolean = false,
+    /** The decorating element's `text-underline-position`; a descendant's own value does not move the line. */
+    val position: UnderlinePosition = UnderlinePosition.AUTO,
+)
+
+/**
+ * `text-underline-position` or `-epub-text-underline-position` (CSS Text Decoration 3, 3.4, #508).
+ * [under] sets the line below the descenders. In vertical text [side] puts it on that side of the
+ * column, as for `under`; horizontal text ignores [side].
+ */
+internal data class UnderlinePosition(val under: Boolean = false, val side: UnderlineSide? = null) {
+    companion object {
+        val AUTO = UnderlinePosition()
+    }
+}
+
+internal enum class UnderlineSide { LEFT, RIGHT }
 
 /**
  * The fully-resolved style of one element: the cascade's output. Lengths are in
@@ -203,6 +222,8 @@ internal data class ComputedStyle(
     val lineBreak: LineBreak = LineBreak.AUTO,
     /** `text-orientation` or `-epub-text-orientation` (CSS Writing Modes 3, 5.1, #508). Inherited. */
     val textOrientation: TextOrientation = TextOrientation.MIXED,
+    /** `text-underline-position` or `-epub-text-underline-position` (CSS Text Decoration 3, 3.4, #508). Inherited. */
+    val underlinePosition: UnderlinePosition = UnderlinePosition.AUTO,
 ) {
     val mono: Boolean get() = fontFamily == GenericFont.MONO
 

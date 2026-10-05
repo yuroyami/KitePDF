@@ -534,6 +534,10 @@ internal class StyleResolver(
                 "upright" -> b.textOrientation = TextOrientation.UPRIGHT
                 "sideways", "sideways-right" -> b.textOrientation = TextOrientation.SIDEWAYS
             }
+            "text-underline-position", "-epub-text-underline-position", "-webkit-text-underline-position" -> when (v.trim().lowercase()) {
+                "inherit", "unset" -> b.underlinePosition = b.parent.underlinePosition
+                else -> parseUnderlinePosition(v)?.let { b.underlinePosition = it }
+            }
             "text-align-last", "-epub-text-align-last" -> when (v.trim().lowercase()) {
                 "auto", "initial", "unset" -> b.textAlignLast = null
                 else -> parseAlign(v)?.let { b.textAlignLast = it }
@@ -848,6 +852,24 @@ internal class StyleResolver(
     }
 
     /**
+     * `text-underline-position`: `auto`, `from-font`, or `under` with or without one of `left` and
+     * `right`, in either order, or null for anything else (CSS Text Decoration 3 and 4, #508).
+     * `from-font` has no font metric here to read, so it places the line as `auto` does.
+     */
+    private fun parseUnderlinePosition(v: String): UnderlinePosition? {
+        val words = v.trim().lowercase().split(' ', '\t', '\n').filter { it.isNotEmpty() }
+        if (words.singleOrNull() in setOf("auto", "from-font", "initial")) return UnderlinePosition.AUTO
+        var under = false
+        var side: UnderlineSide? = null
+        for (w in words) when (w) {
+            "under" -> { if (under) return null; under = true }
+            "left", "right" -> { if (side != null) return null; side = if (w == "left") UnderlineSide.LEFT else UnderlineSide.RIGHT }
+            else -> return null
+        }
+        return if (under || side != null) UnderlinePosition(under, side) else null
+    }
+
+    /**
      * `text-transform`: a case, `full-width` (EPUB's `-epub-fullwidth`), both, or `none`, or null
      * for a value that holds another word (CSS Text 3, 2.1, #508). `full-size-kana` is read and
      * has no effect.
@@ -893,7 +915,7 @@ internal class StyleResolver(
     }
 
     /** Mutable working style: inherited fields seeded from the parent, the rest initial. */
-    private inner class Builder(private val parent: ComputedStyle) {
+    private inner class Builder(val parent: ComputedStyle) {
         var fontSizePt = parent.fontSizePt
         var bold = parent.bold
         var italic = parent.italic
@@ -968,6 +990,7 @@ internal class StyleResolver(
         var wordBreak = parent.wordBreak // inherited
         var lineBreak = parent.lineBreak // inherited
         var textOrientation = parent.textOrientation // inherited
+        var underlinePosition = parent.underlinePosition // inherited
 
         fun build(): ComputedStyle {
             // CSS Flexible Box Layout 1, 4: an in-flow child of a flex container is a flex item. It is
@@ -983,7 +1006,7 @@ internal class StyleResolver(
             // contents of an inline block or of a floated or positioned box (#265).
             val inherits = display != Display.INLINE_BLOCK && !outOfFlow
             val own = DecorationLine(decorationColor ?: color, fontSizePt, raised = verticalAlign != CssVAlign.BASELINE)
-            val underline = if (ownUnderline) own else parent.underline.takeIf { inherits }
+            val underline = if (ownUnderline) own.copy(position = underlinePosition) else parent.underline.takeIf { inherits }
             val lineThrough = if (ownLineThrough) own else parent.lineThrough.takeIf { inherits }
             return ComputedStyle(
                 // CSS 9.7: an out-of-flow box is blockified, which is how
@@ -1033,6 +1056,7 @@ internal class StyleResolver(
                 fullWidth = fullWidth,
                 lineBreak = lineBreak,
                 textOrientation = textOrientation,
+                underlinePosition = underlinePosition,
             )
         }
     }

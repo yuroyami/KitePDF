@@ -22,7 +22,7 @@
     "css-epub-text-emphasis": false,
     "css-epub-text-orientation": true,
     "css-epub-text-transform": true,
-    "css-epub-text-underline-position": false,
+    "css-epub-text-underline-position": true,
     "css-epub-word-break": true,
     "css-epub-writing-mode": true,
     "fxl-layout-duplication": "n/a",

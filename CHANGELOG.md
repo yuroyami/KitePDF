@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- EPUB chapters read `text-underline-position` and `-epub-text-underline-position`. `under` sets
+  the underline below the descenders instead of just under the baseline where they cross it, and
+  in vertical text `left` and `under` draw it clear of the column on the left while `right` draws
+  it on the right, where it used to touch every column on the left. The value is the one of the
+  element that draws the line, so a descendant's own value does not move it (#508).
+
 - EPUB chapters read `text-orientation` and `-epub-text-orientation`, with EPUB's
   `vertical-right` and `sideways-right` as `mixed` and `sideways`. In vertical text `upright`
   stands every letter up, one an em down the column and set in the middle of it, with no

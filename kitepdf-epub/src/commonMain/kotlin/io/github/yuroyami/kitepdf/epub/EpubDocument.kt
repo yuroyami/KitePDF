@@ -16,6 +16,8 @@ import io.github.yuroyami.kitepdf.epub.css.ObjectFit
 import io.github.yuroyami.kitepdf.epub.css.StyleResolver
 import io.github.yuroyami.kitepdf.epub.css.StyleRule
 import io.github.yuroyami.kitepdf.epub.css.TextOrientation
+import io.github.yuroyami.kitepdf.epub.css.UnderlinePosition
+import io.github.yuroyami.kitepdf.epub.css.UnderlineSide
 import io.github.yuroyami.kitepdf.core.render.KiteFunction
 import io.github.yuroyami.kitepdf.core.render.KiteColorSpace
 import io.github.yuroyami.kitepdf.core.render.KiteShading
@@ -1846,7 +1848,7 @@ public class EpubPage internal constructor(
                     fontSpec = run.fontSpec, textToDevice = ctm.concat(tm),
                     color = run.color, alpha = 1.0, blendMode = KiteBlendMode.Normal,
                 )
-                paintRunLines(run, canvas) { shift -> ctm.concat(KiteMatrix.translation(margin + run.x, base + shift)) }
+                paintRunLines(run, canvas, vertical = false) { shift -> ctm.concat(KiteMatrix.translation(margin + run.x, base + shift)) }
             }
             // Inline images: bottom on the baseline, next to the text runs.
             for (im in line.images) {
@@ -1990,7 +1992,7 @@ public class EpubPage internal constructor(
                         k = j
                     }
                 }
-                paintRunLines(run, canvas) { shift -> runTransform(run, shift) }
+                paintRunLines(run, canvas, vertical = true) { shift -> runTransform(run, shift) }
             }
             // Replaced content stays upright. Its physical width occupies the
             // line-over side of the baseline, while its height advances the inline pen.
@@ -2257,14 +2259,27 @@ public class EpubPage internal constructor(
      * raised itself; a line-through crosses the text it decorates (#271). [at] places
      * the run's start at a baseline shifted toward line-over.
      */
-    private fun paintRunLines(run: PlacedRun, canvas: KiteCanvas, at: (shift: Double) -> KiteMatrix) {
+    private fun paintRunLines(run: PlacedRun, canvas: KiteCanvas, vertical: Boolean, at: (shift: Double) -> KiteMatrix) {
         run.underline?.let {
             val ctm = at(if (it.raised) run.baselineShift else 0.0)
-            rectFill(canvas, ctm, 0.0, -0.15 * it.sizePt, run.paintWidth, it.sizePt * 0.05, it.color)
+            rectFill(canvas, ctm, 0.0, underlineEm(it.position, vertical) * it.sizePt, run.paintWidth, it.sizePt * 0.05, it.color)
         }
         run.lineThrough?.let {
             rectFill(canvas, at(run.baselineShift), 0.0, 0.3 * run.fontSize, run.paintWidth, it.sizePt * 0.05, it.color)
         }
+    }
+
+    /**
+     * Where an underline's lower edge sits, in ems of its decorating element up from the baseline,
+     * toward line-over (CSS Text Decoration 3, 3.4, #508). `auto` keeps it just under the baseline,
+     * where descenders cross it, and `under` clears the descenders of a 0.25 em deep face. Vertical
+     * text puts `under` and `left` on the left, the line-under side, and `right` past the right edge
+     * of the column, where an upright glyph's em box ends at [UPRIGHT_CENTER] + 0.5.
+     */
+    private fun underlineEm(position: UnderlinePosition, vertical: Boolean): Double = when {
+        vertical && position.side == UnderlineSide.RIGHT -> UPRIGHT_CENTER + 0.55
+        position.under || vertical && position.side == UnderlineSide.LEFT -> -0.3
+        else -> -0.15
     }
 
     /**
