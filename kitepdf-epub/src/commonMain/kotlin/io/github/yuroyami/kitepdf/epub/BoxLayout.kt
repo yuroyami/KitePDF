@@ -1826,14 +1826,17 @@ internal class BoxLayout(
             val (lineWidth, interiorSpaces) = measure(cells)
             val firstIndent = if (i == 0) style.textIndentPt else 0.0
             val slack = (lineAvail - lineWidth - firstIndent).coerceAtLeast(0.0)
-            val justify = align == TextAlign.JUSTIFY && i != cellLines.lastIndex && interiorSpaces > 0
+            // The last line, and a line that a forced break ends, are not stretched (CSS Text 3,
+            // text-align-last, #573).
+            val lastOfRun = i == cellLines.lastIndex || ends.getOrNull(i) == KiteLineEnd.HARD
+            val justify = align == TextAlign.JUSTIFY && !lastOfRun && interiorSpaces > 0
             val extraPerSpace = if (justify) slack / interiorSpaces else 0.0
             // Spaceless CJK lines justify between characters: with no interior
             // spaces to stretch, the slack spreads across the inter-cell gaps
             // (JIS-style inter-character expansion). Latin-only spaceless lines
             // (one long word) are left ragged, as every real reader does.
             val stretched = justify ||
-                align == TextAlign.JUSTIFY && i != cellLines.lastIndex && interiorSpaces == 0 && justifyCjk(cells, slack)
+                align == TextAlign.JUSTIFY && !lastOfRun && interiorSpaces == 0 && justifyCjk(cells, slack)
             // A justified paragraph sets a line it does not stretch, its last one among them, at the
             // start edge, as text-align-last: auto asks: the right one in right-to-left text (#572).
             val alignOffset = when {

@@ -190,6 +190,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- A justified paragraph no longer stretches a line that a `<br>` ends, so a short line of verse
+  or of an address keeps its natural width at the start of its line, as CSS asks of the last
+  line and of every line before a forced break (#573).
+
 - A right-to-left paragraph indents its first line from the right edge, where its lines start,
   and a justified one sets its last line, and any other line it does not stretch, at the right
   edge too. The indent used to sit at the left end of the first line, so an Arabic or Hebrew
