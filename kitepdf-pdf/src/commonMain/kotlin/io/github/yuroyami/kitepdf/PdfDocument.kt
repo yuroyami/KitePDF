@@ -69,6 +69,11 @@ public class PdfDocument private constructor(
     @property:KiteRawApi public val xref: Map<Long, XrefEntry>,
     @property:KiteRawApi public val trailer: PdfDictionary,
     private val security: StandardSecurityHandler?,
+    /**
+     * True when [xref] was rebuilt by a byte scan because the file's own table was broken.
+     * An incremental save then appends a table of its own instead of naming the broken one (#586).
+     */
+    internal val isRepaired: Boolean = false,
 ) : IndirectResolver, KiteDocument {
 
     /**
@@ -1066,7 +1071,7 @@ public class PdfDocument private constructor(
             val repaired = PdfRepair.rebuild(reader)
             val sec = buildSecurityHandler(repaired.entries, repaired.trailer, bytes, password)
             val candidates = repaired.roots.asSequence().map { root ->
-                finish(PdfDocument(version, bytes, repaired.entries, repaired.trailerWith(root), sec))
+                finish(PdfDocument(version, bytes, repaired.entries, repaired.trailerWith(root), sec, isRepaired = true))
             }
             return candidates.firstOrNull { isStructurallyUsable(it) }
                 // Without its password an encrypted file reads its objects as ciphertext, so

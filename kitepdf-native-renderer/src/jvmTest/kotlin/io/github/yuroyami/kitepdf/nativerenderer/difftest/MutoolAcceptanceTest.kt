@@ -49,6 +49,34 @@ class MutoolAcceptanceTest {
         }
     }
 
+    /**
+     * A file that KitePDF opened through repair, saved incrementally, opens in mutool without a
+     * repair, whether its objects were plain or packed in object streams (#586).
+     */
+    @Test
+    fun an_incremental_save_of_a_repaired_file_is_accepted() {
+        assumeTrue("mutool not found, skipping oracle validation.", MuPdfOracle.binary != null)
+        val tool = MuPdfOracle.binary!!
+
+        val plain = PdfBuilder().page { text(StandardFont.Helvetica, 24.0, 72.0, 700.0, "Base page") }.build()
+        val packed = PdfDocument.open(plain).edit().saveRewritten(useObjectStreams = true)
+        for ((what, base) in mapOf("plain" to plain, "packed" to packed)) {
+            // Junk after the header moves every object, so the table's offsets are all short.
+            val damaged = base.copyOfRange(0, 9) + "% junk  \n".toByteArray() + base.copyOfRange(9, base.size)
+            val doc = PdfDocument.open(damaged)
+            val saved = doc.edit().apply {
+                stampPage(doc.pages[0]) { text(StandardFont.CourierBold, 36.0, 150.0, 400.0, "STAMP") }
+            }.saveIncremental()
+            val file = File.createTempFile("kite-repaired-$what-", ".pdf").apply { deleteOnExit(); writeBytes(saved) }
+            val png = File.createTempFile("kite-repaired-", ".png").apply { deleteOnExit() }
+            MutoolAcceptance.assertAccepted(
+                MutoolAcceptance.run(tool, "draw", "-r", "72", "-F", "png", "-o", png.absolutePath, file.absolutePath, "1"),
+                "the incremental save of a repaired $what file",
+            )
+            MutoolAcceptance.assertAccepted(MutoolAcceptance.run(tool, "show", file.absolutePath, "grep"), "every object of it")
+        }
+    }
+
     @Test
     fun the_lines_mutool_prints_for_a_repair_are_complaints() {
         // Recorded from mutool 1.27.2 drawing a file whose page offset was 37 bytes off.
